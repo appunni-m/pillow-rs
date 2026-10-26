@@ -154,6 +154,43 @@ fn gpu_transform_fixed_affine_bounds(
     Some((*values.iter().min()?, *values.iter().max()?))
 }
 
+fn gpu_transform_nearest_fixed_coordinates(
+    coefficients: [f64; 6],
+    luma16_mode: bool,
+) -> Option<[i64; 6]> {
+    let [a, b, c, d, e, f] = coefficients;
+    // Keep this encoding byte-for-byte identical to `prepare_batch` and
+    // `sample_nearest_fixed`; the integer bounds cover all four corners and
+    // therefore every affine destination coordinate.
+    let step_x_x = gpu_transform_fixed_coordinate(a)?;
+    let step_y_x = gpu_transform_fixed_coordinate(b)?;
+    if luma16_mode && !gpu_transform_luma16_coefficients_are_exact(coefficients) {
+        // Keep the fill-only proof on the same exact coordinate plan as the
+        // in-bounds mode-5 admission. A fractional coefficient that rounds
+        // differently in 16.16 could move an edge sample across the boundary.
+        return None;
+    }
+    let origin_x_value = if luma16_mode {
+        c + 0.5
+    } else {
+        c + a * 0.5 + b * 0.5
+    };
+    let origin_x = gpu_transform_fixed_coordinate(origin_x_value)?;
+    let step_x_y = gpu_transform_fixed_coordinate(d)?;
+    let step_y_y = gpu_transform_fixed_coordinate(e)?;
+    let origin_y_value = if luma16_mode {
+        f + 0.5
+    } else {
+        f + d * 0.5 + e * 0.5
+    };
+    let origin_y = gpu_transform_fixed_coordinate(origin_y_value)?;
+    let coordinates = [step_x_x, step_y_x, origin_x, step_x_y, step_y_y, origin_y];
+    coordinates
+        .into_iter()
+        .all(|value| i32::try_from(value).is_ok())
+        .then_some(coordinates)
+}
+
 fn gpu_transform_all_fill_nearest_is_exact(
     coefficients: [f64; 6],
     mode: Option<&str>,
@@ -161,51 +198,12 @@ fn gpu_transform_all_fill_nearest_is_exact(
     h: u32,
     source_dimensions: (u32, u32),
 ) -> bool {
-    let [a, b, c, d, e, f] = coefficients;
-    // Keep this encoding byte-for-byte identical to `prepare_batch` and
-    // `sample_nearest_fixed`; the integer bounds cover all four corners and
-    // therefore every affine destination coordinate.
-    let Some(step_x_x) = gpu_transform_fixed_coordinate(a) else {
-        return false;
-    };
-    let Some(step_y_x) = gpu_transform_fixed_coordinate(b) else {
-        return false;
-    };
     let luma16_mode = matches!(mode, Some("I;16" | "I;16L" | "I;16B" | "I;16N"));
-    if luma16_mode && !gpu_transform_luma16_coefficients_are_exact(coefficients) {
-        // Keep the fill-only proof on the same exact coordinate plan as the
-        // in-bounds mode-5 admission. A fractional coefficient that rounds
-        // differently in 16.16 could move an edge sample across the boundary.
-        return false;
-    }
-    let origin_x_value = if luma16_mode {
-        c + 0.5
-    } else {
-        c + a * 0.5 + b * 0.5
-    };
-    let Some(origin_x) = gpu_transform_fixed_coordinate(origin_x_value) else {
+    let Some([step_x_x, step_y_x, origin_x, step_x_y, step_y_y, origin_y]) =
+        gpu_transform_nearest_fixed_coordinates(coefficients, luma16_mode)
+    else {
         return false;
     };
-    let Some(step_x_y) = gpu_transform_fixed_coordinate(d) else {
-        return false;
-    };
-    let Some(step_y_y) = gpu_transform_fixed_coordinate(e) else {
-        return false;
-    };
-    let origin_y_value = if luma16_mode {
-        f + 0.5
-    } else {
-        f + d * 0.5 + e * 0.5
-    };
-    let Some(origin_y) = gpu_transform_fixed_coordinate(origin_y_value) else {
-        return false;
-    };
-    if [step_x_x, step_y_x, origin_x, step_x_y, step_y_y, origin_y]
-        .into_iter()
-        .any(|value| i32::try_from(value).is_err())
-    {
-        return false;
-    }
     let max_x = i128::from(w.saturating_sub(1));
     let max_y = i128::from(h.saturating_sub(1));
     if !gpu_transform_fixed_affine_fits_i32(origin_x, step_x_x, step_y_x, max_x, max_y)
