@@ -112,9 +112,7 @@ pub(in super::super::super) fn simd_projective_nearest_transform_bytes(
     // destination pixel centers and its COORD macro truncates nonnegative
     // coordinates toward zero, returning -1 for any negative coordinate.
     let nearest_coordinate = |value: f64| {
-        if !value.is_finite() {
-            -1
-        } else if value < 0.0 {
+        if !value.is_finite() || value < 0.0 {
             -1
         } else {
             value as i64
