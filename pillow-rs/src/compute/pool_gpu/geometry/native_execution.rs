@@ -1,5 +1,17 @@
 use super::*;
 
+#[cfg(target_endian = "little")]
+struct NativeByteFlipSubmission<'a> {
+    cached: &'a CachedPipeline,
+    bind_group: &'a wgpu::BindGroup,
+    width: u32,
+    height: u32,
+    channels: u8,
+    dispatch: NativeByteFlipDispatch,
+    dimensions: CheckedDims,
+    padded_row_bytes: usize,
+}
+
 impl GpuInner {
     #[cfg(target_endian = "little")]
     fn execute_packed_rgb_transpose(
@@ -52,6 +64,175 @@ impl GpuInner {
     }
 
     #[cfg(target_endian = "little")]
+    #[inline(always)]
+    fn upload_native_byte_flip_rows(
+        &self,
+        image: &DynamicImage,
+        dispatch: NativeByteFlipDispatch,
+        padded_row_bytes: usize,
+        buffers: &mut BufferPool,
+    ) -> Result<(), PilError> {
+        let upload_size = NonZeroU64::new(dispatch.transfer_bytes)
+            .ok_or_else(|| PilError::ValueError("GPU native Flip input is empty".into()))?;
+        let mut upload = self
+            .queue
+            .write_buffer_with(&buffers.buf_a, 0, upload_size)
+            .ok_or_else(|| {
+                PilError::InternalError("GPU native Flip staging allocation failed".into())
+            })?;
+        upload.fill(0);
+        let raw = image.as_bytes();
+        if padded_row_bytes == dispatch.row_bytes {
+            upload[..raw.len()].copy_from_slice(raw);
+        } else {
+            for row in 0..image.height() as usize {
+                let source_start = row * dispatch.row_bytes;
+                let target_start = row * padded_row_bytes;
+                upload[target_start..target_start + dispatch.row_bytes]
+                    .copy_from_slice(&raw[source_start..source_start + dispatch.row_bytes]);
+            }
+        }
+        drop(upload);
+        Ok(())
+    }
+
+    #[cfg(target_endian = "little")]
+    #[inline(always)]
+    fn native_byte_flip_bind_group(
+        &self,
+        cached: &CachedPipeline,
+        buffers: &BufferPool,
+        transfer_bytes: u64,
+    ) -> Result<wgpu::BindGroup, PilError> {
+        Ok(self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("gpu_native_byte_flip"),
+            layout: &cached.bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: ranged_binding(
+                        &buffers.buf_a,
+                        Some(BufferRange {
+                            offset: 0,
+                            size: transfer_bytes,
+                        }),
+                    )?,
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: ranged_binding(
+                        &buffers.buf_b,
+                        Some(BufferRange {
+                            offset: 0,
+                            size: transfer_bytes,
+                        }),
+                    )?,
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: ranged_binding(
+                        &buffers.params_arena.buffer,
+                        Some(BufferRange {
+                            offset: 0,
+                            size: 16,
+                        }),
+                    )?,
+                },
+            ],
+        }))
+    }
+
+    #[cfg(target_endian = "little")]
+    #[inline(always)]
+    fn submit_native_byte_flip(
+        &self,
+        buffers: &mut BufferPool,
+        submission: NativeByteFlipSubmission<'_>,
+    ) -> Result<DynamicImage, PilError> {
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("gpu_native_byte_flip"),
+            });
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("gpu_native_byte_flip"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&submission.cached.pipeline);
+            pass.set_bind_group(0, submission.bind_group, &[]);
+            crate::compute::record_gpu_shader_dispatch(
+                submission.cached.variant_name,
+                submission.cached.shader_file,
+                u64::from(submission.dispatch.groups_x) * u64::from(submission.dispatch.groups_y),
+            );
+            pass.dispatch_workgroups(
+                submission.dispatch.groups_x,
+                submission.dispatch.groups_y,
+                1,
+            );
+        }
+        let readback = self.prepare_readback(&buffers.buf_b, submission.dispatch.transfer_bytes)?;
+        if let ReadbackTarget::Staging(staging) = &readback {
+            encoder.copy_buffer_to_buffer(
+                &buffers.buf_b,
+                0,
+                &staging.buffer,
+                0,
+                submission.dispatch.transfer_bytes,
+            );
+        }
+        self.queue.submit(Some(encoder.finish()));
+        self.poll_device("GPU native Flip submission")?;
+        let result = self.readback_with(
+            submission.dispatch.transfer_bytes,
+            readback.buffer(buffers, false),
+            |mapped| {
+                if mapped.len() != submission.dispatch.transfer_bytes as usize {
+                    return Err(PilError::InternalError(
+                        "GPU native Flip readback length mismatch".into(),
+                    ));
+                }
+                let mut bytes = Vec::with_capacity(submission.dimensions.total_bytes());
+                for row in mapped
+                    .chunks_exact(submission.padded_row_bytes)
+                    .take(submission.height as usize)
+                {
+                    bytes.extend_from_slice(&row[..submission.dispatch.row_bytes]);
+                }
+                if bytes.len() != submission.dimensions.total_bytes() {
+                    return Err(PilError::InternalError(
+                        "GPU native Flip omitted a source row".into(),
+                    ));
+                }
+                crate::compute::record_pipeline_allocation(bytes.len());
+                crate::image_utils::raw_bytes_to_image(
+                    submission.width,
+                    submission.height,
+                    bytes,
+                    usize::from(submission.channels),
+                )
+            },
+        )?;
+        crate::compute::record_pipeline_resource_telemetry(PipelineResourceTelemetry {
+            upload_bytes: submission.dispatch.transfer_bytes,
+            readback_bytes: submission.dispatch.transfer_bytes,
+            parameter_bytes: 16,
+            retained_cache_bytes: buffers.retained_bytes(),
+            full_frame_copy_count: 1
+                + u64::from(!self.direct_primary_readback)
+                + u64::from(matches!(&readback, ReadbackTarget::Staging(_))),
+            mode_conversion_count: 0,
+            ..PipelineResourceTelemetry::default()
+        });
+        crate::compute::record_pipeline_dispatch_count(1);
+        if let ReadbackTarget::Staging(staging) = readback {
+            self.recycle_staging(staging);
+        }
+        Ok(result)
+    }
+
+    #[cfg(target_endian = "little")]
     pub(in crate::compute::pool_gpu) fn execute_native_byte_flip(
         &self,
         image: &DynamicImage,
@@ -96,26 +277,7 @@ impl GpuInner {
             16,
             limits.min_uniform_buffer_offset_alignment as usize,
         );
-        let upload_size = NonZeroU64::new(dispatch.transfer_bytes)
-            .ok_or_else(|| PilError::ValueError("GPU native Flip input is empty".into()))?;
-        let mut upload = self
-            .queue
-            .write_buffer_with(&buffers.buf_a, 0, upload_size)
-            .ok_or_else(|| {
-                PilError::InternalError("GPU native Flip staging allocation failed".into())
-            })?;
-        upload.fill(0);
-        if padded_row_bytes == dispatch.row_bytes {
-            upload[..raw.len()].copy_from_slice(raw);
-        } else {
-            for row in 0..height as usize {
-                let source_start = row * dispatch.row_bytes;
-                let target_start = row * padded_row_bytes;
-                upload[target_start..target_start + dispatch.row_bytes]
-                    .copy_from_slice(&raw[source_start..source_start + dispatch.row_bytes]);
-            }
-        }
-        drop(upload);
+        self.upload_native_byte_flip_rows(image, dispatch, padded_row_bytes, buffers)?;
 
         let parameters = [
             height,
@@ -133,110 +295,21 @@ impl GpuInner {
             "flip_native_byte_rows.wgsl",
             include_str!("../shaders/flip_native_byte_rows.wgsl"),
         )?;
-        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("gpu_native_byte_flip"),
-            layout: &cached.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: ranged_binding(
-                        &buffers.buf_a,
-                        Some(BufferRange {
-                            offset: 0,
-                            size: dispatch.transfer_bytes,
-                        }),
-                    )?,
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: ranged_binding(
-                        &buffers.buf_b,
-                        Some(BufferRange {
-                            offset: 0,
-                            size: dispatch.transfer_bytes,
-                        }),
-                    )?,
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: ranged_binding(
-                        &buffers.params_arena.buffer,
-                        Some(BufferRange {
-                            offset: 0,
-                            size: 16,
-                        }),
-                    )?,
-                },
-            ],
-        });
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("gpu_native_byte_flip"),
-            });
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("gpu_native_byte_flip"),
-                timestamp_writes: None,
-            });
-            pass.set_pipeline(&cached.pipeline);
-            pass.set_bind_group(0, &bind_group, &[]);
-            crate::compute::record_gpu_shader_dispatch(
-                cached.variant_name,
-                cached.shader_file,
-                u64::from(dispatch.groups_x) * u64::from(dispatch.groups_y),
-            );
-            pass.dispatch_workgroups(dispatch.groups_x, dispatch.groups_y, 1);
-        }
-        let readback = self.prepare_readback(&buffers.buf_b, dispatch.transfer_bytes)?;
-        if let ReadbackTarget::Staging(staging) = &readback {
-            encoder.copy_buffer_to_buffer(
-                &buffers.buf_b,
-                0,
-                &staging.buffer,
-                0,
-                dispatch.transfer_bytes,
-            );
-        }
-        self.queue.submit(Some(encoder.finish()));
-        self.poll_device("GPU native Flip submission")?;
-        let result = self.readback_with(
-            dispatch.transfer_bytes,
-            readback.buffer(buffers, false),
-            |mapped| {
-                if mapped.len() != dispatch.transfer_bytes as usize {
-                    return Err(PilError::InternalError(
-                        "GPU native Flip readback length mismatch".into(),
-                    ));
-                }
-                let mut bytes = Vec::with_capacity(dimensions.total_bytes());
-                for row in mapped.chunks_exact(padded_row_bytes).take(height as usize) {
-                    bytes.extend_from_slice(&row[..dispatch.row_bytes]);
-                }
-                if bytes.len() != dimensions.total_bytes() {
-                    return Err(PilError::InternalError(
-                        "GPU native Flip omitted a source row".into(),
-                    ));
-                }
-                crate::compute::record_pipeline_allocation(bytes.len());
-                crate::image_utils::raw_bytes_to_image(width, height, bytes, usize::from(channels))
+        let bind_group =
+            self.native_byte_flip_bind_group(&cached, buffers, dispatch.transfer_bytes)?;
+        let result = self.submit_native_byte_flip(
+            buffers,
+            NativeByteFlipSubmission {
+                cached: &cached,
+                bind_group: &bind_group,
+                width,
+                height,
+                channels,
+                dispatch,
+                dimensions,
+                padded_row_bytes,
             },
         )?;
-        crate::compute::record_pipeline_resource_telemetry(PipelineResourceTelemetry {
-            upload_bytes: dispatch.transfer_bytes,
-            readback_bytes: dispatch.transfer_bytes,
-            parameter_bytes: 16,
-            retained_cache_bytes: buffers.retained_bytes(),
-            full_frame_copy_count: 1
-                + u64::from(!self.direct_primary_readback)
-                + u64::from(matches!(&readback, ReadbackTarget::Staging(_))),
-            mode_conversion_count: 0,
-            ..PipelineResourceTelemetry::default()
-        });
-        crate::compute::record_pipeline_dispatch_count(1);
-        if let ReadbackTarget::Staging(staging) = readback {
-            self.recycle_staging(staging);
-        }
         Ok(crate::image::preserve_mode(image, result))
     }
 

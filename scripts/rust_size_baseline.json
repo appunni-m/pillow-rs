@@ -148,12 +148,6 @@
       "signature": "fn execute_native_transpose_with_upload( &self, op: &PipelineOp, input: NativeTransposeInput<'_>, buffers: &mut BufferPool, mapped_input: bool, ) -> Result<DynamicImage, PilError> {"
     },
     {
-      "lines": 177,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/geometry/native_execution.rs",
-      "signature": "pub(in crate::compute::pool_gpu) fn execute_native_byte_flip( &self, image: &DynamicImage, format: NativeFlipFormat, dispatch: NativeByteFlipDispatch, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
-    },
-    {
       "lines": 385,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/logical_mode_admission.rs",
