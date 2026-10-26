@@ -2,6 +2,147 @@ use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
 use crate::raster::{DynamicImage, RgbaImage};
 
+#[inline]
+fn affine_f32_bilinear_horizontal(left: f32, right: f32, distance: f64) -> f64 {
+    // Geometry.c's FLOAT32 path subtracts the f32 samples before promoting
+    // that difference, then uses an f64 fused multiply-add.
+    f64::from(right - left).mul_add(distance, f64::from(left))
+}
+
+#[inline]
+fn affine_f32_bicubic_horizontal(samples: [f32; 4], distance: f64) -> f64 {
+    // The native filter computes the polynomial coefficients in f32 (the
+    // source type) and evaluates the Horner chain in f64 with FMA. Keep the
+    // coefficient order from Geometry.c's BICUBIC macro.
+    let [v1, v2, v3, v4] = samples;
+    let p1 = f64::from(v2);
+    let p2 = f64::from(v3 - v1);
+    let p3 = f64::from((v1 - v2).mul_add(2.0, v3) - v4);
+    let p4 = f64::from((v2 - v1 - v3) + v4);
+    let inner = distance.mul_add(p4, p3);
+    let middle = distance.mul_add(inner, p2);
+    distance.mul_add(middle, p1)
+}
+
+#[inline]
+fn affine_f32_bicubic_vertical(samples: [f64; 4], distance: f64) -> f64 {
+    // Vertical rows are already f64 intermediates in Geometry.c, so the same
+    // Horner expression keeps all coefficient arithmetic in f64.
+    let [v1, v2, v3, v4] = samples;
+    let p1 = v2;
+    let p2 = -v1 + v3;
+    let p3 = (v1 - v2).mul_add(2.0, v3) - v4;
+    let p4 = -v1 + v2 - v3 + v4;
+    let inner = distance.mul_add(p4, p3);
+    let middle = distance.mul_add(inner, p2);
+    distance.mul_add(middle, p1)
+}
+
+#[inline(always)]
+fn transform_affine_f32_pixels(
+    source: &[f32],
+    source_dimensions: (u32, u32),
+    destination_dimensions: (u32, u32),
+    affine: [f64; 6],
+    filter: &ResampleFilter,
+    fill_word: f32,
+    output: &mut [f32],
+) {
+    let (src_w, src_h) = source_dimensions;
+    let (dst_w, dst_h) = destination_dimensions;
+    let (a, b, c, d, e, f) = (
+        affine[0], affine[1], affine[2], affine[3], affine[4], affine[5],
+    );
+    let src_w_i = i64::from(src_w);
+    let src_h_i = i64::from(src_h);
+
+    for dy in 0..dst_h {
+        for dx in 0..dst_w {
+            let output_index = (dy as usize) * dst_w as usize + dx as usize;
+            let xin = f64::from(dx) + 0.5;
+            let yin = f64::from(dy) + 0.5;
+            // Pillow's Geometry.c affine callback is compiled as a multiply
+            // followed by fused multiply-add, then a separate translation
+            // add. Keep `b * yin`/`e * yin` out of the fused term with the
+            // translation: a one-ULP coordinate change can select a wildly
+            // different FLOAT32 neighbour at a map boundary.
+            let sx = a.mul_add(xin, b * yin) + c;
+            let sy = d.mul_add(xin, e * yin) + f;
+
+            if !sx.is_finite()
+                || !sy.is_finite()
+                || sx < 0.0
+                || sx >= f64::from(src_w)
+                || sy < 0.0
+                || sy >= f64::from(src_h)
+            {
+                continue;
+            }
+
+            if matches!(filter, ResampleFilter::Nearest) {
+                let ix = sx as i64;
+                let iy = sy as i64;
+                if ix >= 0 && ix < src_w_i && iy >= 0 && iy < src_h_i {
+                    output[output_index] = source[(iy as usize) * src_w as usize + ix as usize];
+                }
+                continue;
+            }
+
+            let sample_x = sx - 0.5;
+            let sample_y = sy - 0.5;
+            let floor_x = sample_x.floor() as i64;
+            let floor_y = sample_y.floor() as i64;
+            let dx_fraction = sample_x - floor_x as f64;
+            let dy_fraction = sample_y - floor_y as f64;
+
+            match filter {
+                ResampleFilter::Bilinear => {
+                    let x0 = floor_x.clamp(0, src_w_i - 1) as usize;
+                    let x1 = (floor_x + 1).clamp(0, src_w_i - 1) as usize;
+                    let y0 = floor_y.clamp(0, src_h_i - 1) as usize;
+                    let y1 = (floor_y + 1).clamp(0, src_h_i - 1) as usize;
+                    let top = affine_f32_bilinear_horizontal(
+                        source[y0 * src_w as usize + x0],
+                        source[y0 * src_w as usize + x1],
+                        dx_fraction,
+                    );
+                    let bottom = affine_f32_bilinear_horizontal(
+                        source[y1 * src_w as usize + x0],
+                        source[y1 * src_w as usize + x1],
+                        dx_fraction,
+                    );
+                    output[output_index] = (bottom - top).mul_add(dy_fraction, top) as f32;
+                }
+                ResampleFilter::Bicubic => {
+                    let x = floor_x - 1;
+                    let y = floor_y - 1;
+                    let mut rows = [0.0f64; 4];
+                    for row in 0..4i64 {
+                        let yy = y + row;
+                        if row > 0 && (yy < 0 || yy >= src_h_i) {
+                            rows[row as usize] = rows[row as usize - 1];
+                            continue;
+                        }
+                        let cy = yy.clamp(0, src_h_i - 1) as usize;
+                        let samples = [
+                            source[cy * src_w as usize + (x).clamp(0, src_w_i - 1) as usize],
+                            source[cy * src_w as usize + (x + 1).clamp(0, src_w_i - 1) as usize],
+                            source[cy * src_w as usize + (x + 2).clamp(0, src_w_i - 1) as usize],
+                            source[cy * src_w as usize + (x + 3).clamp(0, src_w_i - 1) as usize],
+                        ];
+                        rows[row as usize] = affine_f32_bicubic_horizontal(samples, dx_fraction);
+                    }
+                    output[output_index] = affine_f32_bicubic_vertical(rows, dy_fraction) as f32;
+                }
+                // Image.transform accepts only nearest, bilinear, and bicubic
+                // filters. Keep an internal fallback deterministic if a direct
+                // Rust caller constructs another descriptor.
+                _ => output[output_index] = source.first().copied().unwrap_or(fill_word),
+            }
+        }
+    }
+}
+
 /// Apply Pillow's FLOAT32 affine transform filters to an explicit `F` image.
 ///
 /// `F` images use the four-byte `RgbaImage` transport internally, but their
@@ -57,131 +198,15 @@ pub(super) fn transform_affine_f32(
         .map(|color| f32::from_le_bytes([color.0, color.1, color.2, color.3]))
         .unwrap_or(0.0);
     let mut output = vec![fill_word; output_len];
-    let (a, b, c, d, e, f) = (data[0], data[1], data[2], data[3], data[4], data[5]);
-    let src_w_i = i64::from(src_w);
-    let src_h_i = i64::from(src_h);
-
-    #[inline]
-    fn bilinear_horizontal(left: f32, right: f32, distance: f64) -> f64 {
-        // Geometry.c's FLOAT32 path subtracts the f32 samples before
-        // promoting that difference, then uses an f64 fused multiply-add.
-        f64::from(right - left).mul_add(distance, f64::from(left))
-    }
-
-    #[inline]
-    fn bicubic_horizontal(samples: [f32; 4], distance: f64) -> f64 {
-        // The native filter computes the polynomial coefficients in f32 (the
-        // source type) and evaluates the Horner chain in f64 with FMA.  Keep
-        // the coefficient order from Geometry.c's BICUBIC macro.
-        let [v1, v2, v3, v4] = samples;
-        let p1 = f64::from(v2);
-        let p2 = f64::from(v3 - v1);
-        let p3 = f64::from((v1 - v2).mul_add(2.0, v3) - v4);
-        let p4 = f64::from((v2 - v1 - v3) + v4);
-        let inner = distance.mul_add(p4, p3);
-        let middle = distance.mul_add(inner, p2);
-        distance.mul_add(middle, p1)
-    }
-
-    #[inline]
-    fn bicubic_vertical(samples: [f64; 4], distance: f64) -> f64 {
-        // Vertical rows are already f64 intermediates in Geometry.c, so the
-        // same Horner expression keeps all coefficient arithmetic in f64.
-        let [v1, v2, v3, v4] = samples;
-        let p1 = v2;
-        let p2 = -v1 + v3;
-        let p3 = (v1 - v2).mul_add(2.0, v3) - v4;
-        let p4 = -v1 + v2 - v3 + v4;
-        let inner = distance.mul_add(p4, p3);
-        let middle = distance.mul_add(inner, p2);
-        distance.mul_add(middle, p1)
-    }
-
-    for dy in 0..dst_h {
-        for dx in 0..dst_w {
-            let output_index = (dy as usize) * dst_w as usize + dx as usize;
-            let xin = f64::from(dx) + 0.5;
-            let yin = f64::from(dy) + 0.5;
-            // Pillow's Geometry.c affine callback is compiled as a multiply
-            // followed by fused multiply-add, then a separate translation
-            // add. Keep `b * yin`/`e * yin` out of the fused term with the
-            // translation: a one-ULP coordinate change can select a wildly
-            // different FLOAT32 neighbour at a map boundary.
-            let sx = a.mul_add(xin, b * yin) + c;
-            let sy = d.mul_add(xin, e * yin) + f;
-
-            if !sx.is_finite()
-                || !sy.is_finite()
-                || sx < 0.0
-                || sx >= f64::from(src_w)
-                || sy < 0.0
-                || sy >= f64::from(src_h)
-            {
-                continue;
-            }
-
-            if matches!(filter, ResampleFilter::Nearest) {
-                let ix = sx as i64;
-                let iy = sy as i64;
-                if ix >= 0 && ix < src_w_i && iy >= 0 && iy < src_h_i {
-                    output[output_index] = source[(iy as usize) * src_w as usize + ix as usize];
-                }
-                continue;
-            }
-
-            let sample_x = sx - 0.5;
-            let sample_y = sy - 0.5;
-            let floor_x = sample_x.floor() as i64;
-            let floor_y = sample_y.floor() as i64;
-            let dx_fraction = sample_x - floor_x as f64;
-            let dy_fraction = sample_y - floor_y as f64;
-
-            match filter {
-                ResampleFilter::Bilinear => {
-                    let x0 = floor_x.clamp(0, src_w_i - 1) as usize;
-                    let x1 = (floor_x + 1).clamp(0, src_w_i - 1) as usize;
-                    let y0 = floor_y.clamp(0, src_h_i - 1) as usize;
-                    let y1 = (floor_y + 1).clamp(0, src_h_i - 1) as usize;
-                    let top = bilinear_horizontal(
-                        source[y0 * src_w as usize + x0],
-                        source[y0 * src_w as usize + x1],
-                        dx_fraction,
-                    );
-                    let bottom = bilinear_horizontal(
-                        source[y1 * src_w as usize + x0],
-                        source[y1 * src_w as usize + x1],
-                        dx_fraction,
-                    );
-                    output[output_index] = (bottom - top).mul_add(dy_fraction, top) as f32;
-                }
-                ResampleFilter::Bicubic => {
-                    let x = floor_x - 1;
-                    let y = floor_y - 1;
-                    let mut rows = [0.0f64; 4];
-                    for row in 0..4i64 {
-                        let yy = y + row;
-                        if row > 0 && (yy < 0 || yy >= src_h_i) {
-                            rows[row as usize] = rows[row as usize - 1];
-                            continue;
-                        }
-                        let cy = yy.clamp(0, src_h_i - 1) as usize;
-                        let samples = [
-                            source[cy * src_w as usize + (x).clamp(0, src_w_i - 1) as usize],
-                            source[cy * src_w as usize + (x + 1).clamp(0, src_w_i - 1) as usize],
-                            source[cy * src_w as usize + (x + 2).clamp(0, src_w_i - 1) as usize],
-                            source[cy * src_w as usize + (x + 3).clamp(0, src_w_i - 1) as usize],
-                        ];
-                        rows[row as usize] = bicubic_horizontal(samples, dx_fraction);
-                    }
-                    output[output_index] = bicubic_vertical(rows, dy_fraction) as f32;
-                }
-                // Image.transform accepts only nearest, bilinear, and bicubic
-                // filters. Keep an internal fallback deterministic if a direct
-                // Rust caller constructs another descriptor.
-                _ => output[output_index] = source.first().copied().unwrap_or(fill_word),
-            }
-        }
-    }
+    transform_affine_f32_pixels(
+        &source,
+        (src_w, src_h),
+        (dst_w, dst_h),
+        [data[0], data[1], data[2], data[3], data[4], data[5]],
+        filter,
+        fill_word,
+        &mut output,
+    );
 
     let bytes = output
         .into_iter()
