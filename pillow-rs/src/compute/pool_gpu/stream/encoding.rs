@@ -1,5 +1,7 @@
 //! Command encoding for already-admitted explicit GPU graphs.
 
+use super::super::batch_operation_planning::NativePackedChannelOutputDispatch;
+use super::super::pipeline_cache::CachedPipeline;
 use super::super::{
     AuxiliaryImages, BufferPool, GpuAuxiliaryCache, GpuInner, ReusableGpuBuffer, StagingBuffer,
     aligned_bytes, create_sized_buffer, gpu_dispatch_count, gpu_working_set_bytes, op_output_dims,
@@ -848,6 +850,56 @@ fn encode_relocation_stage(
     Ok(!current_a)
 }
 
+#[inline(always)]
+fn encode_rgb_blur_dispatch(
+    gpu: &GpuInner,
+    encoder: &mut wgpu::CommandEncoder,
+    buffers: &BufferPool,
+    uniform: &wgpu::Buffer,
+    cached: &CachedPipeline,
+    plan: NativePackedChannelOutputDispatch,
+    current_a: bool,
+    bind_group_label: &'static str,
+    pass_label: &'static str,
+) -> bool {
+    let (input, output) = if current_a {
+        (&buffers.buf_a, &buffers.buf_b)
+    } else {
+        (&buffers.buf_b, &buffers.buf_a)
+    };
+    let bind = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some(bind_group_label),
+        layout: &cached.bind_group_layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: input.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: output.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: uniform.as_entire_binding(),
+            },
+        ],
+    });
+    let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+        label: Some(pass_label),
+        timestamp_writes: None,
+    });
+    pass.set_pipeline(&cached.pipeline);
+    pass.set_bind_group(0, &bind, &[]);
+    pass.dispatch_workgroups(plan.groups_x, plan.groups_y, 1);
+    crate::compute::record_gpu_shader_dispatch(
+        cached.variant_name,
+        cached.shader_file,
+        u64::from(plan.groups_x) * u64::from(plan.groups_y),
+    );
+    !current_a
+}
+
 fn encode_rgb_blur_stage(
     gpu: &GpuInner,
     encoder: &mut wgpu::CommandEncoder,
@@ -890,42 +942,17 @@ fn encode_rgb_blur_stage(
             "box_blur_hv_rgb_radius_one_packed.wgsl",
             include_str!("../shaders/box_blur_hv_rgb_radius_one_packed.wgsl"),
         )?;
-        let (input, output) = if current_a {
-            (&buffers.buf_a, &buffers.buf_b)
-        } else {
-            (&buffers.buf_b, &buffers.buf_a)
-        };
-        let bind = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("gpu_stream_rgb_blur_fused_bind"),
-            layout: &cached.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: input.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: output.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: uniform.as_entire_binding(),
-                },
-            ],
-        });
-        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("gpu_stream_rgb_blur_fused"),
-            timestamp_writes: None,
-        });
-        pass.set_pipeline(&cached.pipeline);
-        pass.set_bind_group(0, &bind, &[]);
-        pass.dispatch_workgroups(plan.groups_x, plan.groups_y, 1);
-        crate::compute::record_gpu_shader_dispatch(
-            cached.variant_name,
-            cached.shader_file,
-            u64::from(plan.groups_x) * u64::from(plan.groups_y),
-        );
-        return Ok(!current_a);
+        return Ok(encode_rgb_blur_dispatch(
+            gpu,
+            encoder,
+            buffers,
+            &uniform,
+            &cached,
+            plan,
+            current_a,
+            "gpu_stream_rgb_blur_fused_bind",
+            "gpu_stream_rgb_blur_fused",
+        ));
     }
     let passes = GpuInner::blur_pass_count(stage.op)
         .ok_or_else(|| PilError::InternalError("missing native RGB blur pass count".into()))?;
@@ -943,42 +970,17 @@ fn encode_rgb_blur_stage(
     ] {
         let cached = gpu.resolve_pipeline(key, file, source)?;
         for _ in 0..passes {
-            let (input, output) = if current_a {
-                (&buffers.buf_a, &buffers.buf_b)
-            } else {
-                (&buffers.buf_b, &buffers.buf_a)
-            };
-            let bind = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("gpu_stream_rgb_blur_bind"),
-                layout: &cached.bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: input.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: output.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: uniform.as_entire_binding(),
-                    },
-                ],
-            });
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("gpu_stream_rgb_blur"),
-                timestamp_writes: None,
-            });
-            pass.set_pipeline(&cached.pipeline);
-            pass.set_bind_group(0, &bind, &[]);
-            pass.dispatch_workgroups(plan.groups_x, plan.groups_y, 1);
-            crate::compute::record_gpu_shader_dispatch(
-                cached.variant_name,
-                cached.shader_file,
-                u64::from(plan.groups_x) * u64::from(plan.groups_y),
+            current_a = encode_rgb_blur_dispatch(
+                gpu,
+                encoder,
+                buffers,
+                &uniform,
+                &cached,
+                plan,
+                current_a,
+                "gpu_stream_rgb_blur_bind",
+                "gpu_stream_rgb_blur",
             );
-            current_a = !current_a;
         }
     }
     Ok(current_a)

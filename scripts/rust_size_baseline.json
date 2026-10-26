@@ -280,12 +280,6 @@
       "signature": "fn encode_graph( plan: &Plan<'_>, gpu: &'static GpuInner, encoder: &mut wgpu::CommandEncoder, ) -> Result<EncodedGraph, PilError> {"
     },
     {
-      "lines": 124,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/stream/encoding.rs",
-      "signature": "fn encode_rgb_blur_stage( gpu: &GpuInner, encoder: &mut wgpu::CommandEncoder, buffers: &BufferPool, stage: &Stage<'_>, mut current_a: bool, ) -> Result<bool, PilError> {"
-    },
-    {
       "lines": 129,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/tests/mod.rs",
