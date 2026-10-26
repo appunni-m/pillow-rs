@@ -7,13 +7,17 @@ fn color_mode_name(mode: &ColorMode) -> &'static str {
     match mode {
         ColorMode::L => "L",
         ColorMode::LA => "LA",
+        ColorMode::LaPremultiplied => "La",
         ColorMode::RGB => "RGB",
         ColorMode::RGBA => "RGBA",
+        ColorMode::RgbPremultiplied => "RGBa",
+        ColorMode::Rgbx => "RGBX",
         ColorMode::CMYK => "CMYK",
         ColorMode::YCbCr => "YCbCr",
         ColorMode::HSV => "HSV",
         ColorMode::I => "I",
         ColorMode::F => "F",
+        ColorMode::I16 => "I;16",
         ColorMode::P => "P",
         ColorMode::Mode1 => "1",
     }

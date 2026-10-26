@@ -23,6 +23,7 @@ pub(super) struct GpuBatchResourceTelemetryOptions<'a> {
     pub(super) native_cover_input_channels: Option<u8>,
     pub(super) packed_luma_colorize: bool,
     pub(super) packed_luma_convert: bool,
+    pub(super) native_alpha_convert_input: bool,
     pub(super) packed_luma_transform_input: bool,
     pub(super) packed_luma_point: bool,
     pub(super) packed_luma_putdata: bool,
@@ -52,6 +53,12 @@ impl GpuBatchResourceTelemetryOptions<'_> {
                 .ok_or_else(|| PilError::ValueError("GPU native RGB input is too large".into()))?;
             u64::try_from(transfer_bytes)
                 .map_err(|_| PilError::ValueError("GPU native RGB input is too large".into()))
+        } else if self.native_alpha_convert_input {
+            let raw_bytes = CheckedDims::new(width, height, 2)?.total_bytes();
+            let transfer_bytes = padded_transfer_bytes(raw_bytes)
+                .ok_or_else(|| PilError::ValueError("GPU native LA input is too large".into()))?;
+            u64::try_from(transfer_bytes)
+                .map_err(|_| PilError::ValueError("GPU native LA input is too large".into()))
         } else if self.native_sharpness_l_input {
             compact_luma8_transfer_bytes(width, height)
         } else if self.packed_native_byte_filter && matches!(self.mode, Some("LA")) {

@@ -20,6 +20,8 @@ pub(super) fn mode_code(img: &DynamicImage) -> u32 {
 pub(super) fn execution_mode_code(img: &DynamicImage, logical_mode: Option<&str>) -> u32 {
     match logical_mode {
         Some("CMYK") => 4,
+        Some("RGBa") => 9,
+        Some("La") => 10,
         Some("I;16" | "I;16L" | "I;16B" | "I;16N") => 5,
         Some("I") => 7,
         // F stores one little-endian f32 sample in the four-byte transport.
@@ -128,16 +130,55 @@ pub(super) fn gpu_packed_luma_convert_input(
     image: &DynamicImage,
     logical_mode: Option<&str>,
 ) -> bool {
-    matches!(
-        ops,
-        [PipelineOp::Convert {
-            mode: ColorMode::RGBA,
-            ..
-        }]
-    ) && matches!(image, DynamicImage::ImageLuma8(_))
-        && matches!(logical_mode, None | Some("L"))
+    matches!(image, DynamicImage::ImageLuma8(_))
+        && matches!(
+            ops,
+            [PipelineOp::Convert {
+                mode: ColorMode::RGBA | ColorMode::I16,
+                matrix: None,
+                dither: None,
+            }]
+        )
+        && matches!(logical_mode, None | Some("L" | "1"))
         && image.width() != 0
         && image.height() != 0
+}
+
+/// Keep two-band alpha modes in their native interleaved LA storage for the
+/// conversion kernels. The Convert shader expands each native sample pair in
+/// registers; the host never converts LA/La to an RGBA image for convenience.
+#[cfg(target_endian = "little")]
+pub(super) fn gpu_native_alpha_convert_input(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    logical_mode: Option<&str>,
+) -> bool {
+    let target_is_supported = matches!(
+        ops,
+        [PipelineOp::Convert {
+            mode: ColorMode::LaPremultiplied | ColorMode::Rgbx | ColorMode::LA,
+            matrix: None,
+            dither: None,
+        }]
+    );
+    target_is_supported
+        && matches!(logical_mode, Some("LA" | "La"))
+        && matches!(image, DynamicImage::ImageLumaA8(_))
+        && image.width() != 0
+        && image.height() != 0
+        && (image.width() as usize)
+            .checked_mul(image.height() as usize)
+            .and_then(|pixels| pixels.checked_mul(2))
+            == Some(image.as_bytes().len())
+}
+
+#[cfg(not(target_endian = "little"))]
+pub(super) fn gpu_native_alpha_convert_input(
+    _ops: &[PipelineOp],
+    _image: &DynamicImage,
+    _logical_mode: Option<&str>,
+) -> bool {
+    false
 }
 
 /// Admit a singleton native-L transform that can unpack source bytes from

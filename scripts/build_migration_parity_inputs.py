@@ -38892,6 +38892,7 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "resize-pipeline",
             "chain": "resize-verify",
+            "observe_receiver": True,
         },
         {
             "surface": "PIL.Image.Image",
@@ -38900,6 +38901,7 @@ def build_nuanced_cases(
             "name": "opened-rgb-resize-pipeline",
             "scenario_asset": "image/rgb-small.png",
             "chain": "opened-rgb-resize-verify",
+            "observe_receiver": True,
         },
         {
             "surface": "PIL.Image.Image",
@@ -38908,6 +38910,7 @@ def build_nuanced_cases(
             "name": "p-resize-pipeline",
             "mode": "P",
             "chain": "p-resize-verify",
+            "observe_receiver": True,
         },
         {
             "surface": "PIL.Image.Image",
@@ -38916,6 +38919,7 @@ def build_nuanced_cases(
             "name": "p-putpalette-resize-pipeline",
             "mode": "P",
             "chain": "p-putpalette-resize",
+            "observe_receiver": True,
         },
         {
             "surface": "PIL.Image.Image",
@@ -38932,6 +38936,7 @@ def build_nuanced_cases(
             "name": "p-resize-putalpha-pipeline",
             "mode": "P",
             "chain": "p-resize-putalpha-verify",
+            "observe_receiver": True,
         },
         {
             "surface": "PIL.Image.Image",

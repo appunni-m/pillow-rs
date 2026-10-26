@@ -22,65 +22,21 @@ pub fn op_convert(
 ) -> Result<DynamicImage, PilError> {
     match mode {
         ColorMode::L => super::grayscale::op_grayscale(img, source_mode),
-        ColorMode::LA => {
-            let gray = pil_grayscale(img)?;
-            let (w, h) = gray.dimensions();
-            let mut ga = crate::raster::GrayAlphaImage::new(w, h);
-            if ga.as_raw().capacity() != 0 {
-                crate::compute::record_pipeline_allocation(ga.as_raw().capacity());
-            }
-            // Pillow retains alpha for both LA -> LA and RGBA -> LA. The
-            // public same-mode shortcut usually avoids a queued LA conversion,
-            // but an explicit PipelineOp must preserve the same samples.
-            // PA's two bytes are palette indices/alpha, so its raw transport
-            // must still pass through the palette-expansion boundary first.
-            let source_alpha = match img {
-                DynamicImage::ImageLumaA8(_) if matches!(source_mode, None | Some("LA")) => Some(
-                    img.as_bytes()
-                        .chunks_exact(2)
-                        .map(|pixel| pixel[1])
-                        .collect::<Vec<_>>(),
-                ),
-                DynamicImage::ImageRgba8(_) if source_mode != Some("RGBX") => Some(
-                    img.as_bytes()
-                        .chunks_exact(4)
-                        .map(|pixel| pixel[3])
-                        .collect::<Vec<_>>(),
-                ),
-                _ => None,
-            };
-            if let Some(alpha) = &source_alpha {
-                if alpha.capacity() != 0 {
-                    crate::compute::record_pipeline_allocation(alpha.capacity());
-                }
-            }
-            for (index, (gap, gp)) in ga.pixels_mut().zip(gray.pixels()).enumerate() {
-                gap[0] = gp[0];
-                gap[1] = source_alpha
-                    .as_ref()
-                    .and_then(|alpha| alpha.get(index))
-                    .copied()
-                    .unwrap_or(255);
-            }
-            Ok(DynamicImage::ImageLumaA8(ga))
-        }
+        ColorMode::LaPremultiplied => convert_to_premultiplied_luma(img, source_mode),
+        ColorMode::RgbPremultiplied => convert_to_premultiplied_rgb(img, source_mode),
+        ColorMode::Rgbx => convert_to_rgbx_native(img, source_mode),
+        ColorMode::LA => convert_to_luma_alpha(img, source_mode),
         ColorMode::RGB if source_mode == Some("CMYK") => {
             // CMYK occupies the same four-byte transport as RGBA, but its
             // samples are C/M/Y/K. Do not discard K as if it were alpha.
             Ok(crate::color::cmyk_to_rgb(img))
         }
+        ColorMode::RGB if source_mode == Some("RGBa") => convert_premultiplied_rgb_to_rgb(img),
         ColorMode::RGB => Ok(DynamicImage::ImageRgb8(img.to_rgb8())),
-        ColorMode::RGBA => {
-            let mut rgba = img.to_rgba8();
-            if source_mode == Some("RGBX") {
-                // Pillow treats RGBX's fourth byte as padding on conversion;
-                // RGBA output receives a newly supplied opaque alpha band.
-                for pixel in rgba.pixels_mut() {
-                    pixel[3] = 255;
-                }
-            }
-            Ok(DynamicImage::ImageRgba8(rgba))
-        }
+        ColorMode::RGBA => convert_to_rgba(img, source_mode),
+        ColorMode::I if is_luma16_source(img, source_mode) => convert_luma16_to_scalar(img, false),
+        ColorMode::F if is_luma16_source(img, source_mode) => convert_luma16_to_scalar(img, true),
+        ColorMode::I16 => convert_luma8_to_luma16(img, source_mode),
         ColorMode::I => Ok(convert_rgb_to_i(img)),
         ColorMode::F => Ok(convert_rgb_to_f(img)),
         ColorMode::CMYK => Ok(convert_to_cmyk(img)),
@@ -111,6 +67,248 @@ pub fn op_convert(
             "deferred conversion mode must be materialized first".into(),
         )),
     }
+}
+
+fn convert_to_luma_alpha(
+    img: &DynamicImage,
+    source_mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    if source_mode == Some("La") {
+        let DynamicImage::ImageLumaA8(source) = img else {
+            return Err(PilError::ValueError(
+                "La conversion requires LA storage".into(),
+            ));
+        };
+        let mut output = source.clone();
+        for pixel in output.pixels_mut() {
+            pixel[0] = unpremultiply_byte(pixel[0], pixel[1]);
+        }
+        return Ok(DynamicImage::ImageLumaA8(output));
+    }
+    let gray = pil_grayscale(img)?;
+    let (width, height) = gray.dimensions();
+    let mut output = crate::raster::GrayAlphaImage::new(width, height);
+    if output.as_raw().capacity() != 0 {
+        crate::compute::record_pipeline_allocation(output.as_raw().capacity());
+    }
+    // Pillow retains alpha for both LA -> LA and RGBA -> LA. The public
+    // same-mode shortcut usually avoids this queued conversion, but an
+    // explicit PipelineOp must preserve those samples.
+    let source_alpha = match img {
+        DynamicImage::ImageLumaA8(_) if matches!(source_mode, None | Some("LA")) => Some(
+            img.as_bytes()
+                .chunks_exact(2)
+                .map(|pixel| pixel[1])
+                .collect::<Vec<_>>(),
+        ),
+        DynamicImage::ImageRgba8(_) if source_mode != Some("RGBX") => Some(
+            img.as_bytes()
+                .chunks_exact(4)
+                .map(|pixel| pixel[3])
+                .collect::<Vec<_>>(),
+        ),
+        _ => None,
+    };
+    if let Some(alpha) = &source_alpha {
+        if alpha.capacity() != 0 {
+            crate::compute::record_pipeline_allocation(alpha.capacity());
+        }
+    }
+    for (index, (target, gray_pixel)) in output.pixels_mut().zip(gray.pixels()).enumerate() {
+        target[0] = gray_pixel[0];
+        target[1] = source_alpha
+            .as_ref()
+            .and_then(|alpha| alpha.get(index))
+            .copied()
+            .unwrap_or(255);
+    }
+    Ok(DynamicImage::ImageLumaA8(output))
+}
+
+fn convert_premultiplied_rgb_to_rgb(img: &DynamicImage) -> Result<DynamicImage, PilError> {
+    let DynamicImage::ImageRgba8(source) = img else {
+        return Err(PilError::ValueError(
+            "RGBa conversion requires RGBA storage".into(),
+        ));
+    };
+    let mut output = crate::raster::RgbImage::new(source.width(), source.height());
+    for (target, pixel) in output.pixels_mut().zip(source.pixels()) {
+        target[0] = unpremultiply_byte(pixel[0], pixel[3]);
+        target[1] = unpremultiply_byte(pixel[1], pixel[3]);
+        target[2] = unpremultiply_byte(pixel[2], pixel[3]);
+    }
+    Ok(DynamicImage::ImageRgb8(output))
+}
+
+fn convert_to_rgba(
+    img: &DynamicImage,
+    source_mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    if source_mode == Some("RGBa") {
+        let DynamicImage::ImageRgba8(source) = img else {
+            return Err(PilError::ValueError(
+                "RGBa conversion requires RGBA storage".into(),
+            ));
+        };
+        let mut output = source.clone();
+        for pixel in output.pixels_mut() {
+            pixel[0] = unpremultiply_byte(pixel[0], pixel[3]);
+            pixel[1] = unpremultiply_byte(pixel[1], pixel[3]);
+            pixel[2] = unpremultiply_byte(pixel[2], pixel[3]);
+        }
+        return Ok(DynamicImage::ImageRgba8(output));
+    }
+    let mut output = img.to_rgba8();
+    if source_mode == Some("RGBX") {
+        // RGBX's fourth byte is padding; RGBA receives a new opaque alpha.
+        for pixel in output.pixels_mut() {
+            pixel[3] = 255;
+        }
+    }
+    Ok(DynamicImage::ImageRgba8(output))
+}
+
+fn convert_luma8_to_luma16(
+    img: &DynamicImage,
+    source_mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    let DynamicImage::ImageLuma8(source) = img else {
+        return Err(PilError::ValueError(
+            "I;16 conversion requires L or binary input".into(),
+        ));
+    };
+    let binary = source_mode == Some("1");
+    let samples = source.pixels().map(|pixel| {
+        u16::from(if binary && pixel[0] != 0 {
+            255
+        } else {
+            pixel[0]
+        })
+    });
+    let output =
+        crate::raster::ImageBuffer::from_raw(source.width(), source.height(), samples.collect())
+            .ok_or_else(|| PilError::InternalError("I;16 conversion shape mismatch".into()))?;
+    Ok(DynamicImage::ImageLuma16(output))
+}
+
+fn convert_to_premultiplied_luma(
+    img: &DynamicImage,
+    source_mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    match (source_mode, img) {
+        (Some("LA"), DynamicImage::ImageLumaA8(source)) => {
+            let mut output = source.clone();
+            for pixel in output.pixels_mut() {
+                pixel[0] = premultiply_byte(pixel[0], pixel[1]);
+            }
+            Ok(DynamicImage::ImageLumaA8(output))
+        }
+        (Some("RGBa"), DynamicImage::ImageRgba8(source)) => {
+            let mut output = crate::raster::GrayAlphaImage::new(source.width(), source.height());
+            for (target, pixel) in output.pixels_mut().zip(source.pixels()) {
+                let red = unpremultiply_byte(pixel[0], pixel[3]);
+                let green = unpremultiply_byte(pixel[1], pixel[3]);
+                let blue = unpremultiply_byte(pixel[2], pixel[3]);
+                target[0] = crate::color::rgb_to_luma_u8(red, green, blue);
+                target[1] = 255;
+            }
+            Ok(DynamicImage::ImageLumaA8(output))
+        }
+        _ => Err(PilError::ValueError(
+            "premultiplied La conversion requires LA or RGBa input".into(),
+        )),
+    }
+}
+
+fn convert_to_premultiplied_rgb(
+    img: &DynamicImage,
+    source_mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    match (source_mode, img) {
+        (Some("RGBA"), DynamicImage::ImageRgba8(source)) => {
+            let mut output = source.clone();
+            for pixel in output.pixels_mut() {
+                pixel[0] = premultiply_byte(pixel[0], pixel[3]);
+                pixel[1] = premultiply_byte(pixel[1], pixel[3]);
+                pixel[2] = premultiply_byte(pixel[2], pixel[3]);
+            }
+            Ok(DynamicImage::ImageRgba8(output))
+        }
+        _ => Err(PilError::ValueError(
+            "premultiplied RGBa conversion requires RGBA input".into(),
+        )),
+    }
+}
+
+fn convert_to_rgbx_native(
+    img: &DynamicImage,
+    source_mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    match (source_mode, img) {
+        (Some("RGBA"), DynamicImage::ImageRgba8(source)) => {
+            let mut output = source.clone();
+            for pixel in output.pixels_mut() {
+                pixel[3] = 255;
+            }
+            Ok(DynamicImage::ImageRgba8(output))
+        }
+        (Some("RGBa"), DynamicImage::ImageRgba8(source)) => {
+            let mut output = source.clone();
+            for pixel in output.pixels_mut() {
+                pixel[0] = unpremultiply_byte(pixel[0], pixel[3]);
+                pixel[1] = unpremultiply_byte(pixel[1], pixel[3]);
+                pixel[2] = unpremultiply_byte(pixel[2], pixel[3]);
+                pixel[3] = 255;
+            }
+            Ok(DynamicImage::ImageRgba8(output))
+        }
+        (Some("LA"), DynamicImage::ImageLumaA8(source)) => {
+            let mut output = crate::raster::RgbaImage::new(source.width(), source.height());
+            for (target, pixel) in output.pixels_mut().zip(source.pixels()) {
+                target.0 = [pixel[0], pixel[0], pixel[0], 255];
+            }
+            Ok(DynamicImage::ImageRgba8(output))
+        }
+        _ => Err(PilError::ValueError(
+            "RGBX conversion has invalid source mode".into(),
+        )),
+    }
+}
+
+#[inline]
+fn premultiply_byte(value: u8, alpha: u8) -> u8 {
+    ((u16::from(value) * u16::from(alpha) + 127) / 255) as u8
+}
+
+#[inline]
+fn unpremultiply_byte(value: u8, alpha: u8) -> u8 {
+    if alpha == 0 {
+        value
+    } else {
+        ((u32::from(value) * 255 / u32::from(alpha)).min(255)) as u8
+    }
+}
+
+fn is_luma16_source(img: &DynamicImage, source_mode: Option<&str>) -> bool {
+    matches!(img, DynamicImage::ImageLuma16(_))
+        && matches!(source_mode, Some("I;16" | "I;16L" | "I;16B" | "I;16N"))
+}
+
+fn convert_luma16_to_scalar(img: &DynamicImage, as_float: bool) -> Result<DynamicImage, PilError> {
+    let DynamicImage::ImageLuma16(samples) = img else {
+        return Err(PilError::InternalError(
+            "I;16 scalar conversion received non-16-bit pixels".into(),
+        ));
+    };
+    let mut output = crate::raster::RgbaImage::new(samples.width(), samples.height());
+    for (pixel, sample) in output.pixels_mut().zip(samples.pixels()) {
+        pixel.0 = if as_float {
+            f32::from(sample[0]).to_le_bytes()
+        } else {
+            i32::from(sample[0]).to_le_bytes()
+        };
+    }
+    Ok(DynamicImage::ImageRgba8(output))
 }
 
 fn convert_to_cmyk(img: &DynamicImage) -> DynamicImage {

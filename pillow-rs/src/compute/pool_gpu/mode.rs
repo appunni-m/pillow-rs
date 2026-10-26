@@ -141,6 +141,10 @@ pub(super) fn gpu_convert_target_mode_code(mode: &ColorMode) -> Option<u32> {
         ColorMode::HSV => Some(6),
         ColorMode::I => Some(7),
         ColorMode::F => Some(8),
+        ColorMode::I16 => Some(9),
+        ColorMode::RgbPremultiplied => Some(10),
+        ColorMode::LaPremultiplied => Some(11),
+        ColorMode::Rgbx => Some(12),
         ColorMode::P | ColorMode::Mode1 => None,
     }
 }
@@ -152,9 +156,13 @@ pub(super) fn gpu_convert_target_mode_code(mode: &ColorMode) -> Option<u32> {
 /// corresponding mode code.
 pub(super) fn gpu_mode_after_op(mode: u32, op: &PipelineOp) -> u32 {
     match op {
-        PipelineOp::Convert { mode: target, .. } => {
-            gpu_convert_target_mode_code(target).unwrap_or(mode)
-        }
+        PipelineOp::Convert { mode: target, .. } => match target {
+            ColorMode::I16 => 5,
+            ColorMode::RgbPremultiplied => 9,
+            ColorMode::LaPremultiplied => 10,
+            ColorMode::Rgbx => 6,
+            _ => gpu_convert_target_mode_code(target).unwrap_or(mode),
+        },
         PipelineOp::Grayscale | PipelineOp::ExtractBand { .. } | PipelineOp::Constant { .. } => 0,
         PipelineOp::Colorize { .. } => 2,
         PipelineOp::EffectNoise { .. } => 0,
@@ -255,7 +263,10 @@ pub(super) fn gpu_output_color_type(mode: &ColorMode) -> Option<crate::raster::C
         ColorMode::LA => Some(crate::raster::ColorType::La8),
         ColorMode::RGB => Some(crate::raster::ColorType::Rgb8),
         ColorMode::RGBA => Some(crate::raster::ColorType::Rgba8),
+        ColorMode::LaPremultiplied => Some(crate::raster::ColorType::La8),
+        ColorMode::RgbPremultiplied | ColorMode::Rgbx => Some(crate::raster::ColorType::Rgba8),
         ColorMode::CMYK | ColorMode::I | ColorMode::F => Some(crate::raster::ColorType::Rgba8),
+        ColorMode::I16 => Some(crate::raster::ColorType::L16),
         ColorMode::YCbCr | ColorMode::HSV => Some(crate::raster::ColorType::Rgb8),
         _ => None,
     }
@@ -375,6 +386,10 @@ pub(super) fn gpu_logical_mode_after_op(
             ColorMode::HSV => Some("HSV"),
             ColorMode::I => Some("I"),
             ColorMode::F => Some("F"),
+            ColorMode::I16 => Some("I;16"),
+            ColorMode::LaPremultiplied => Some("La"),
+            ColorMode::RgbPremultiplied => Some("RGBa"),
+            ColorMode::Rgbx => Some("RGBX"),
             ColorMode::P => Some("P"),
             ColorMode::Mode1 => Some("1"),
         },

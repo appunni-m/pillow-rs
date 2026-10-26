@@ -21,6 +21,7 @@ pub(super) struct GpuBatchUploadOptions<'a> {
     pub(super) packed_native_byte_filter: bool,
     pub(super) packed_luma_colorize: bool,
     pub(super) packed_luma_convert: bool,
+    pub(super) native_alpha_convert_input: bool,
     pub(super) packed_luma_transform_input: bool,
     pub(super) packed_luma_point: bool,
     pub(super) packed_luma_putdata: bool,
@@ -76,7 +77,9 @@ impl GpuInner {
             buffers.upload_luma16(&self.queue, image, options.mode)?;
             return Ok(true);
         }
-        if options.native_luma16_convert || options.native_luma16_paste {
+        if (options.native_luma16_convert && matches!(image, DynamicImage::ImageLuma16(_)))
+            || options.native_luma16_paste
+        {
             let DynamicImage::ImageLuma16(image) = image else {
                 return Err(PilError::InternalError(
                     "GPU typed operation was admitted without an ImageLuma16 source".into(),
@@ -98,6 +101,10 @@ impl GpuInner {
         options: GpuBatchUploadOptions<'_>,
     ) -> Result<bool, PilError> {
         let (width, height) = image.dimensions();
+        if options.native_alpha_convert_input {
+            buffers.upload_native_channel_bytes(&self.queue, width, height, 2, image.as_bytes())?;
+            return Ok(true);
+        }
         if options.packed_la_pad {
             buffers.upload_native_channel_bytes(&self.queue, width, height, 2, image.as_bytes())?;
             return Ok(true);

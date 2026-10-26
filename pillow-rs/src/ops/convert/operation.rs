@@ -188,7 +188,7 @@ fn try_convert_prestandard(
     colors: Option<u32>,
 ) -> Result<Option<Image>, PilError> {
     // Core stores bilevel pixels as 0/1 while Pillow's "1" path uses 0/255.
-    if source_mode == "1" && target_mode != "1" {
+    if source_mode == "1" && target_mode != "1" && !is_luma16_mode(target_mode) {
         let materialized = image.materialize()?;
         let mut gray = crate::raster::GrayImage::new(materialized.width(), materialized.height());
         for (output, input) in gray.pixels_mut().zip(materialized.to_luma8().pixels()) {

@@ -376,6 +376,11 @@ fn mode_specific_flags(
             matrix: None,
             dither: None,
         } if mode == "RGB" => flags.rgb = true,
+        PipelineOp::Convert {
+            mode: ColorMode::LA,
+            matrix: None,
+            dither: None,
+        } if mode == "RGB" => flags.rgb = true,
         _ => return Ok(None),
     }
     Ok(Some(flags))

@@ -1,8 +1,9 @@
 // Convert between color modes.
 // Source mode is params.mode; target mode is params.target_mode.
 // Source mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA, 4=CMYK, 5=I;16*,
-// 6=RGBX. Target mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA, 4=CMYK,
-// 5=YCbCr, 6=HSV, 7=I, 8=F.
+// 6=RGBX, 9=RGBa, 10=La. Target mode codes: 0=L, 1=LA, 2=RGB,
+// 3=RGBA, 4=CMYK, 5=YCbCr, 6=HSV, 7=I, 8=F, 9=I;16*,
+// 10=RGBa, 11=La, 12=RGBX.
 // RGBX has RGBA-sized storage, but its fourth byte is padding and is ignored.
 // I;16* uses the low 16 bits of one transport word as an unsigned sample.
 // Packed u32 RGBA: byte0=R (luma/value for L/LA), byte1=G, byte2=B, byte3=A
@@ -21,14 +22,16 @@ struct Params {
     height: u32,
     mode: u32,         // source mode
     _pad: u32,
-    target_mode: u32,  // 0=L, 1=LA, 2=RGB, 3=RGBA, 4=CMYK, 5=YCbCr, 6=HSV, 7=I, 8=F
+    target_mode: u32,  // 0=L, 1=LA, 2=RGB, 3=RGBA, 4=CMYK, 5=YCbCr, 6=HSV, 7=I, 8=F, 9=I;16*
 }
 
 // ── Mode helpers (for target mode) ──
 
-fn target_has_g(m: u32) -> bool { return m >= 2u; }
-fn target_has_b(m: u32) -> bool { return m >= 2u; }
-fn target_has_a(m: u32) -> bool { return m == 1u || m == 3u || m == 4u; }
+fn target_has_g(m: u32) -> bool { return m >= 2u && m != 11u; }
+fn target_has_b(m: u32) -> bool { return m >= 2u && m != 11u; }
+fn target_has_a(m: u32) -> bool {
+    return m == 1u || m == 3u || m == 4u || m == 10u || m == 11u || m == 12u;
+}
 
 // Pillow's exact rounded BT.601 luma. The decimal 299/587/114 form differs
 // from PIL's fixed-point conversion at boundary values.
@@ -56,19 +59,24 @@ fn muldiv255(a: u32, b: u32) -> u32 {
     return ((value >> 8u) + value) >> 8u;
 }
 
+fn unpremultiply_byte(value: u32, alpha: u32) -> u32 {
+    if alpha == 0u { return value; }
+    return min(255u, value * 255u / alpha);
+}
+
 fn source_rgb_r(src: u32, r: u32) -> u32 {
     return r;
 }
 
 fn source_rgb_g(src: u32, r: u32, g: u32) -> u32 {
-    if src == 0u || src == 1u {
+    if src == 0u || src == 1u || src == 10u {
         return r;
     }
     return g;
 }
 
 fn source_rgb_b(src: u32, r: u32, b: u32) -> u32 {
-    if src == 0u || src == 1u {
+    if src == 0u || src == 1u || src == 10u {
         return r;
     }
     return b;
@@ -211,25 +219,38 @@ fn integer_sum_to_f32_bits(sum: u32) -> u32 {
 @group(0) @binding(1) var<storage, read_write> output: array<u32>;
 @group(0) @binding(2) var<uniform> params: Params;
 
+fn native_byte(byte_index: u32) -> u32 {
+    return (input[byte_index >> 2u] >> ((byte_index & 3u) * 8u)) & 0xffu;
+}
+
 @compute @workgroup_size(16, 16)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     if gid.x >= params.width || gid.y >= params.height { return; }
 
     let idx = gid.y * params.width + gid.x;
     let src = params.mode;
-    let native_rgb_to_rgba = params._pad == 2u && src == 2u && params.target_mode == 3u;
+    let dst = params.target_mode;
+    let native_rgb_input = (params._pad & 2u) == 2u && src == 2u;
+    let native_rgb_to_rgba = native_rgb_input && params.target_mode == 3u;
     var pixel = 0u;
     if !native_rgb_to_rgba {
         pixel = input[idx];
     }
-    if params._pad == 1u && src == 0u {
+    if (params._pad & 1u) == 1u && src == 0u {
         // Native L input is packed four samples per storage word. Expand only
         // the current sample in registers; do not widen the source on host.
         let packed = input[idx / 4u];
         let luma = (packed >> ((idx % 4u) * 8u)) & 0xffu;
         pixel = luma | (luma << 8u) | (luma << 16u) | (255u << 24u);
     }
-    if native_rgb_to_rgba {
+    if (params._pad & 8u) == 8u && (src == 1u || src == 10u) {
+        // LA/La upload remains two bytes per pixel. Expand the native luma and
+        // alpha samples in registers for this pixel's conversion only.
+        let luma = native_byte(idx * 2u);
+        let alpha = native_byte(idx * 2u + 1u);
+        pixel = luma | (alpha << 24u);
+    }
+    if native_rgb_input {
         // Native RGB input is a packed three-byte stream. A pixel can cross a
         // u32 boundary; the checked host admission keeps this byte index in
         // range and the uploader pads the final storage word.
@@ -240,7 +261,32 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         if shift > 8u {
             packed = packed | (input[word_index + 1u] << (32u - shift));
         }
-        output[idx] = (packed & 0x00ffffffu) | 0xff000000u;
+        pixel = (packed & 0x00ffffffu) | 0xff000000u;
+        if native_rgb_to_rgba {
+            output[idx] = pixel;
+            return;
+        }
+    }
+
+    // Native I;16 → I/F preserves the unsigned numeric sample. These scalar
+    // Pillow targets use one complete little-endian word per pixel in the
+    // packed transport, so widen the low sixteen bits directly on-device.
+    if src == 5u && dst == 7u {
+        output[idx] = pixel & 0xffffu;
+        return;
+    }
+    if src == 5u && dst == 8u {
+        output[idx] = bitcast<u32>(f32(pixel & 0xffffu));
+        return;
+    }
+    if dst == 9u {
+        var sample = pixel & 0xffu;
+        if src == 0u && (params._pad & 2u) == 2u {
+            // Pillow's mode 1 converter expands each nonzero sample to 255
+            // before converting it to unsigned 16-bit luma.
+            sample = select(0u, 255u, sample != 0u);
+        }
+        output[idx] = sample;
         return;
     }
 
@@ -260,7 +306,6 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let rgb_r = source_rgb_r(src, r);
     let rgb_g = source_rgb_g(src, r, g);
     let rgb_b = source_rgb_b(src, r, b);
-    let dst = params.target_mode;
     if dst == 7u {
         let l = bt601_luma(rgb_r, rgb_g, rgb_b);
         output[idx] = bitcast<u32>(i32(l));
@@ -308,6 +353,28 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         else if dst == 1u { /* RGBA→LA: luma to R, keep A */ let l = bt601_luma(r, g, b); out_r = l; out_g = l; out_b = l; }
         else if dst == 2u { /* RGBA→RGB: drop A */ out_a = 255u; }
         else if dst == 3u { /* RGBA→RGBA: passthrough */ }
+    }
+    // RGBa is four native premultiplied samples. Only the exact admitted
+    // RGB/RGBA/La/RGBX conversions reach this shader branch.
+    else if src == 9u {
+        let red = unpremultiply_byte(r, a);
+        let green = unpremultiply_byte(g, a);
+        let blue = unpremultiply_byte(b, a);
+        if dst == 2u {
+            out_r = red; out_g = green; out_b = blue; out_a = 255u;
+        } else if dst == 3u {
+            out_r = red; out_g = green; out_b = blue;
+        } else if dst == 11u {
+            out_r = bt601_luma(red, green, blue);
+            out_g = 0u; out_b = 0u; out_a = 255u;
+        } else if dst == 12u {
+            out_r = red; out_g = green; out_b = blue; out_a = 255u;
+        }
+    }
+    // La is a two-byte premultiplied luma/alpha source. Its only admitted
+    // conversion restores straight-alpha LA samples.
+    else if src == 10u && dst == 1u {
+        out_r = unpremultiply_byte(r, a);
     }
     // CMYK's fourth byte is black ink, not alpha. Pillow's C/M/Y/K to RGB
     // path uses the same rounded MULDIV255 arithmetic as color::cmyk_to_rgb.
@@ -381,6 +448,25 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             out_b = 255u - b;
             out_a = 0u;
         }
+    }
+    if dst == 10u {
+        if src == 3u {
+            out_r = muldiv255(r, a);
+            out_g = muldiv255(g, a);
+            out_b = muldiv255(b, a);
+            out_a = a;
+        } else if src == 2u {
+            out_r = r; out_g = g; out_b = b; out_a = 255u;
+        }
+    }
+    if dst == 11u && src == 1u {
+        out_r = muldiv255(r, a);
+        out_g = 0u; out_b = 0u; out_a = a;
+    }
+    if dst == 12u && src == 1u {
+        out_g = r; out_b = r; out_a = 255u;
+    } else if dst == 12u && (src == 3u || src == 6u) {
+        out_a = 255u;
     }
     // I;16* → byte modes. Pillow clips the unsigned sample to 255 rather
     // than scaling the full 0..65535 range. The source upload places the

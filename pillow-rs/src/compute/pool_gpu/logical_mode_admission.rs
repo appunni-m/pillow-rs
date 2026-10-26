@@ -11,7 +11,7 @@ pub(super) fn gpu_logical_mode_is_supported(
     inspect_auxiliary_modes: bool,
 ) -> bool {
     mode.is_none_or(|logical_mode| {
-        matches!(logical_mode, "L" | "LA" | "RGB" | "RGBA")
+        gpu_native_logical_mode_is_supported(ops, img, logical_mode)
                 || (logical_mode == "1"
                     && img.is_none_or(|img| matches!(img, DynamicImage::ImageLuma8(_)))
                     && matches!(ops, [PipelineOp::Flip]))
@@ -479,4 +479,52 @@ pub(super) fn gpu_logical_mode_is_supported(
                             )
                         }))
     })
+}
+
+fn gpu_native_logical_mode_is_supported(
+    ops: &[PipelineOp],
+    img: Option<&DynamicImage>,
+    logical_mode: &str,
+) -> bool {
+    if matches!(logical_mode, "L" | "LA" | "RGB" | "RGBA") {
+        return true;
+    }
+    match logical_mode {
+        "1" => {
+            img.is_some_and(|image| matches!(image, DynamicImage::ImageLuma8(_)))
+                && matches!(
+                    ops,
+                    [PipelineOp::Convert {
+                        mode: ColorMode::I16,
+                        ..
+                    }]
+                )
+        }
+        "La" => {
+            img.is_none_or(|image| matches!(image, DynamicImage::ImageLumaA8(_)))
+                && matches!(
+                    ops,
+                    [PipelineOp::Convert {
+                        mode: ColorMode::LA,
+                        matrix: None,
+                        dither: None,
+                    }]
+                )
+        }
+        "RGBa" => {
+            img.is_none_or(|image| matches!(image, DynamicImage::ImageRgba8(_)))
+                && matches!(
+                    ops,
+                    [PipelineOp::Convert {
+                        mode: ColorMode::LaPremultiplied
+                            | ColorMode::RGBA
+                            | ColorMode::RGB
+                            | ColorMode::Rgbx,
+                        matrix: None,
+                        dither: None,
+                    }]
+                )
+        }
+        _ => false,
+    }
 }

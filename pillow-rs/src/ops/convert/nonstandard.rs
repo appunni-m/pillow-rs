@@ -122,7 +122,7 @@ pub(super) fn try_convert_to_palette_alpha(
 /// strict SIMD/GPU parity run cannot count an eager CPU path as backend work.
 /// The normal conversion path stays telemetry-free, and Parallel CPU keeps its
 /// own execution profile.
-fn with_eager_cpu_convert_receipt<T>(
+pub(super) fn with_eager_cpu_convert_receipt<T>(
     execute: impl FnOnce() -> Result<T, PilError>,
     output_bytes: impl FnOnce(&T) -> usize,
 ) -> Result<T, PilError> {
@@ -147,7 +147,7 @@ fn with_eager_cpu_convert_receipt<T>(
     }
 }
 
-fn eager_convert_image_bytes(image: &Image) -> usize {
+pub(super) fn eager_convert_image_bytes(image: &Image) -> usize {
     match image {
         Image::Loaded(data) => data.image.as_bytes().len(),
         Image::Paletted(data) => data.indices.as_raw().len(),

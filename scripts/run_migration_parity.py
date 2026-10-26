@@ -59,6 +59,7 @@ try:
         PIPELINE_MUTATING_OPS as _PIPELINE_MUTATING_OPS,
         PIPELINE_RESULT_OPS as _PIPELINE_RESULT_OPS,
         TERMINAL_OBSERVATION_OPS as _TERMINAL_OBSERVATION_OPS,
+        workflow_operation_is_proven_noop,
         workflow_pipeline_observation_gaps,
     )
 except ModuleNotFoundError:  # imported as ``scripts.run_migration_parity`` in tests
@@ -77,6 +78,7 @@ except ModuleNotFoundError:  # imported as ``scripts.run_migration_parity`` in t
         PIPELINE_MUTATING_OPS as _PIPELINE_MUTATING_OPS,
         PIPELINE_RESULT_OPS as _PIPELINE_RESULT_OPS,
         TERMINAL_OBSERVATION_OPS as _TERMINAL_OBSERVATION_OPS,
+        workflow_operation_is_proven_noop,
         workflow_pipeline_observation_gaps,
     )
 
@@ -2476,6 +2478,8 @@ def classify_pipeline_case(
 
     def definitely_eager(step: dict[str, Any]) -> bool:
         key = (step.get("surface"), step.get("operation"))
+        if workflow_operation_is_proven_noop(case, step):
+            return True
         if key == ("PIL.ImageDraw.ImageDraw", "bitmap"):
             return bitmap_unpaletted_tuple_fill_is_noop(step)
         if key == ("PIL.ImageDraw.ImageDraw", "line"):

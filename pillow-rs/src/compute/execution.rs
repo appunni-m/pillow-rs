@@ -391,6 +391,12 @@ pub(crate) fn execute_prepared(
     img: &DynamicImage,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    // A pure conversion of an empty image has no samples to transform. Return
+    // the correctly typed empty storage directly; this is not a CPU fallback
+    // and must not publish a fabricated backend receipt.
+    if let Some(result) = empty_convert_result(ops, img) {
+        return Ok(result);
+    }
     // Quantize returns a palette-index pipeline with an intentionally empty
     // operation list so its palette metadata can remain attached to the
     // lazy result.  There is no backend work at this boundary and therefore
@@ -409,6 +415,52 @@ pub(crate) fn execute_prepared(
     }
     validate_explicit_simd_support(prepared, ops, img, mode)?;
     execute_prepared_on_backend(prepared, ops, img, mode, timed, backend_start)
+}
+
+fn empty_convert_result(ops: &[PipelineOp], img: &DynamicImage) -> Option<DynamicImage> {
+    if img.width() != 0 && img.height() != 0 {
+        return None;
+    }
+    let [
+        PipelineOp::Convert {
+            mode,
+            matrix: None,
+            dither: None,
+        },
+    ] = ops
+    else {
+        return None;
+    };
+    let width = img.width();
+    let height = img.height();
+    Some(match mode {
+        crate::pipeline::ColorMode::L => {
+            DynamicImage::ImageLuma8(crate::raster::GrayImage::new(width, height))
+        }
+        crate::pipeline::ColorMode::LA => {
+            DynamicImage::ImageLumaA8(crate::raster::GrayAlphaImage::new(width, height))
+        }
+        crate::pipeline::ColorMode::LaPremultiplied => {
+            DynamicImage::ImageLumaA8(crate::raster::GrayAlphaImage::new(width, height))
+        }
+        crate::pipeline::ColorMode::RGB
+        | crate::pipeline::ColorMode::YCbCr
+        | crate::pipeline::ColorMode::HSV => {
+            DynamicImage::ImageRgb8(crate::raster::RgbImage::new(width, height))
+        }
+        crate::pipeline::ColorMode::RGBA
+        | crate::pipeline::ColorMode::RgbPremultiplied
+        | crate::pipeline::ColorMode::Rgbx
+        | crate::pipeline::ColorMode::CMYK
+        | crate::pipeline::ColorMode::I
+        | crate::pipeline::ColorMode::F => {
+            DynamicImage::ImageRgba8(crate::raster::RgbaImage::new(width, height))
+        }
+        crate::pipeline::ColorMode::I16 => {
+            DynamicImage::ImageLuma16(crate::raster::ImageBuffer::new(width, height))
+        }
+        crate::pipeline::ColorMode::P | crate::pipeline::ColorMode::Mode1 => return None,
+    })
 }
 
 fn reset_execution_telemetry() {

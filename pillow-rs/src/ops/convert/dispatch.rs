@@ -14,6 +14,34 @@ pub(super) fn try_convert_early_modes(
     palette: Option<&str>,
     colors: Option<u32>,
 ) -> Result<Option<Image>, PilError> {
+    if source_mode == "RGB" && matches!(target_mode, "La" | "RGBX" | "RGBa") {
+        // An opaque RGB source needs no alpha arithmetic for these three
+        // destinations. Reuse the native LA/RGBA converters and carry the
+        // Pillow mode tag on the lazy result so SIMD and GPU can execute the
+        // pixel work instead of materializing through the eager mode adapter.
+        let (pipeline_mode, explicit_mode) = match target_mode {
+            "La" => (ColorMode::LA, "La"),
+            "RGBX" => (ColorMode::RGBA, "RGBX"),
+            "RGBa" => (ColorMode::RGBA, "RGBa"),
+            _ => unreachable!(),
+        };
+        let mut result = Image::push_op(
+            image,
+            PipelineOp::Convert {
+                mode: pipeline_mode,
+                matrix: None,
+                dither: None,
+            },
+        );
+        if let Image::Pipeline {
+            explicit_mode: mode,
+            ..
+        } = &mut result
+        {
+            *mode = Some(explicit_mode.to_owned());
+        }
+        return Ok(Some(result));
+    }
     if source_mode == "CMYK" && target_mode == "RGB" {
         return Ok(Some(Image::push_op(
             image,
@@ -26,6 +54,29 @@ pub(super) fn try_convert_early_modes(
     }
     if source_mode == target_mode {
         return Ok(Some(image.copy()));
+    }
+    let native_alpha_target = match (source_mode, target_mode) {
+        ("LA", "La") | ("RGBa", "La") => Some(ColorMode::LaPremultiplied),
+        ("La", "LA") => Some(ColorMode::LA),
+        ("RGBA", "RGBa") => Some(ColorMode::RgbPremultiplied),
+        ("RGBa", "RGBA") => Some(ColorMode::RGBA),
+        ("RGBa", "RGB") => Some(ColorMode::RGB),
+        ("RGBa", "RGBX") | ("RGBA", "RGBX") | ("LA", "RGBX") => Some(ColorMode::Rgbx),
+        _ => None,
+    };
+    if let Some(mode) = native_alpha_target {
+        let mut result = Image::push_op(
+            image,
+            PipelineOp::Convert {
+                mode,
+                matrix: None,
+                dither: None,
+            },
+        );
+        if let Image::Pipeline { explicit_mode, .. } = &mut result {
+            *explicit_mode = Some(target_mode.to_owned());
+        }
+        return Ok(Some(result));
     }
     if target_mode == "LAB" {
         return Ok(Some(convert_to_lab(image, source_mode)?));
@@ -89,19 +140,28 @@ fn convert_from_premultiplied(
     if source_mode != "La" && !(source_mode == "RGBa" && !matches!(target_mode, "P" | "PA")) {
         return Ok(None);
     }
-    let straight =
-        crate::ops::pil_resize::unpremultiply_alpha(image.materialized_shared()?.as_ref());
-    if matches!((source_mode, target_mode), ("La", "LA") | ("RGBa", "RGBA")) {
-        return Ok(Some(Image::from_dynamic(straight, None)));
-    }
-    let rgb = Image::from_dynamic(DynamicImage::ImageRgb8(straight.to_rgb8()), None);
-    Ok(Some(rgb.convert(
-        target_mode,
-        None,
-        dither,
-        palette,
-        colors,
-    )?))
+    super::nonstandard::with_eager_cpu_convert_receipt(
+        || {
+            let straight =
+                crate::ops::pil_resize::unpremultiply_alpha(image.materialized_shared()?.as_ref());
+            if matches!((source_mode, target_mode), ("La", "LA") | ("RGBa", "RGBA")) {
+                return Ok(Some(Image::from_dynamic(straight, None)));
+            }
+            let rgb = Image::from_dynamic(DynamicImage::ImageRgb8(straight.to_rgb8()), None);
+            Ok(Some(rgb.convert(
+                target_mode,
+                None,
+                dither,
+                palette,
+                colors,
+            )?))
+        },
+        |result| {
+            result
+                .as_ref()
+                .map_or(0, super::nonstandard::eager_convert_image_bytes)
+        },
+    )
 }
 
 fn convert_to_premultiplied(
@@ -118,31 +178,41 @@ fn convert_to_premultiplied(
     if source_mode == "P" {
         return Err(PilError::ValueError("conversion not supported".into()));
     }
-    if matches!((source_mode, target_mode), ("RGBA", "RGBa") | ("LA", "La")) {
-        let premultiplied =
-            crate::ops::pil_resize::premultiply_alpha(image.materialized_shared()?.as_ref());
-        return Ok(Some(Image::from_dynamic(
-            premultiplied,
-            Some(target_mode.to_owned()),
-        )));
-    }
-    if matches!(source_mode, "1" | "L" | "LA" | "I" | "F") || is_luma16_mode(source_mode) {
-        return Err(PilError::ValueError(format!(
-            "conversion from L to {target_mode} not supported"
-        )));
-    }
-    // RGB has direct opaque RGBa/La converters; RGBA->La normalizes through RGB.
-    let rgb = image.convert("RGB", None, dither, palette, colors)?;
-    let rgb = rgb.materialized_shared()?;
-    let converted = if target_mode == "RGBa" {
-        DynamicImage::ImageRgba8(rgb.to_rgba8())
-    } else {
-        DynamicImage::ImageLumaA8(color::pil_grayscale_alpha(&rgb)?)
-    };
-    Ok(Some(Image::from_dynamic(
-        converted,
-        Some(target_mode.to_owned()),
-    )))
+    super::nonstandard::with_eager_cpu_convert_receipt(
+        || {
+            if matches!((source_mode, target_mode), ("RGBA", "RGBa") | ("LA", "La")) {
+                let premultiplied = crate::ops::pil_resize::premultiply_alpha(
+                    image.materialized_shared()?.as_ref(),
+                );
+                return Ok(Some(Image::from_dynamic(
+                    premultiplied,
+                    Some(target_mode.to_owned()),
+                )));
+            }
+            if matches!(source_mode, "1" | "L" | "LA" | "I" | "F") || is_luma16_mode(source_mode) {
+                return Err(PilError::ValueError(format!(
+                    "conversion from L to {target_mode} not supported"
+                )));
+            }
+            // RGB has direct opaque RGBa/La converters; RGBA->La normalizes through RGB.
+            let rgb = image.convert("RGB", None, dither, palette, colors)?;
+            let rgb = rgb.materialized_shared()?;
+            let converted = if target_mode == "RGBa" {
+                DynamicImage::ImageRgba8(rgb.to_rgba8())
+            } else {
+                DynamicImage::ImageLumaA8(color::pil_grayscale_alpha(&rgb)?)
+            };
+            Ok(Some(Image::from_dynamic(
+                converted,
+                Some(target_mode.to_owned()),
+            )))
+        },
+        |result| {
+            result
+                .as_ref()
+                .map_or(0, super::nonstandard::eager_convert_image_bytes)
+        },
+    )
 }
 
 fn convert_to_rgbx(
@@ -153,26 +223,31 @@ fn convert_to_rgbx(
     palette: Option<&str>,
     colors: Option<u32>,
 ) -> Result<Image, PilError> {
-    // LA/PA preserve alpha in X; RGBA's direct converter supplies 255.
-    let base_mode = if matches!(source_mode, "LA" | "PA") {
-        "RGBA"
-    } else {
-        "RGB"
-    };
-    let converted = image.convert(base_mode, None, dither, palette, colors)?;
-    let mut rgba = converted.materialized_shared()?.to_rgba8();
-    if source_mode == "P" {
-        if let Some(alpha) = image.palette_alpha() {
-            let indices = image.materialized_shared()?;
-            for (pixel, &index) in rgba.pixels_mut().zip(indices.as_bytes()) {
-                pixel[3] = alpha.get(usize::from(index)).copied().unwrap_or(255);
+    super::nonstandard::with_eager_cpu_convert_receipt(
+        || {
+            // LA/PA preserve alpha in X; RGBA's direct converter supplies 255.
+            let base_mode = if matches!(source_mode, "LA" | "PA") {
+                "RGBA"
+            } else {
+                "RGB"
+            };
+            let converted = image.convert(base_mode, None, dither, palette, colors)?;
+            let mut rgba = converted.materialized_shared()?.to_rgba8();
+            if source_mode == "P" {
+                if let Some(alpha) = image.palette_alpha() {
+                    let indices = image.materialized_shared()?;
+                    for (pixel, &index) in rgba.pixels_mut().zip(indices.as_bytes()) {
+                        pixel[3] = alpha.get(usize::from(index)).copied().unwrap_or(255);
+                    }
+                }
             }
-        }
-    }
-    Ok(Image::from_dynamic(
-        DynamicImage::ImageRgba8(rgba),
-        Some(target_mode.to_owned()),
-    ))
+            Ok(Image::from_dynamic(
+                DynamicImage::ImageRgba8(rgba),
+                Some(target_mode.to_owned()),
+            ))
+        },
+        super::nonstandard::eager_convert_image_bytes,
+    )
 }
 
 fn convert_pa_to_p(image: &Image) -> Result<Image, PilError> {

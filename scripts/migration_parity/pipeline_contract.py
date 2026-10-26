@@ -8,6 +8,9 @@ SIMD, and GPU runs.
 
 from __future__ import annotations
 
+import math
+import struct
+
 PIPELINE_ALWAYS_OPS = frozenset(
     {
         ("PIL.Image", "alpha_composite"),
@@ -167,6 +170,223 @@ TERMINAL_OBSERVATION_OPS = frozenset(
     }
 )
 
+
+def workflow_operation_is_proven_noop(
+    case: dict[str, object], step: dict[str, object]
+) -> bool:
+    """Recognize a narrow set of workflow-proven branches that queue no work.
+
+    This is shared by receipt classification and observation-boundary checks.
+    It intentionally uses only literal workflow inputs and mirrors explicit
+    early returns in the public implementation; unknown sources or arguments
+    remain in the backend-proof cohort.
+    """
+
+    steps = case.get("steps")
+    if not isinstance(steps, list):
+        return False
+    steps_by_id = {
+        candidate.get("step_id"): candidate
+        for candidate in steps
+        if isinstance(candidate, dict)
+        and isinstance(candidate.get("step_id"), str)
+    }
+
+    def literal(arguments: object, name: str) -> object | None:
+        if not isinstance(arguments, dict):
+            return None
+        value = arguments.get(name)
+        if isinstance(value, dict) and value.get("kind") == "literal":
+            return value.get("value")
+        return None
+
+    def binding_id(value: object) -> str | None:
+        if isinstance(value, dict) and value.get("kind") == "binding":
+            step_id = value.get("step_id")
+            return step_id if isinstance(step_id, str) else None
+        return None
+
+    def argument_source(
+        source_step: dict[str, object], name: str
+    ) -> dict[str, object] | None:
+        arguments = source_step.get("arguments")
+        if not isinstance(arguments, dict):
+            return None
+        step_id = binding_id(arguments.get(name))
+        source = steps_by_id.get(step_id) if step_id is not None else None
+        return source if isinstance(source, dict) else None
+
+    def receiver_source(source_step: dict[str, object]) -> dict[str, object] | None:
+        step_id = binding_id(source_step.get("receiver"))
+        source = steps_by_id.get(step_id) if step_id is not None else None
+        return source if isinstance(source, dict) else None
+
+    def source_size(source_step: dict[str, object] | None) -> tuple[int, int] | None:
+        if source_step is None or (source_step.get("surface"), source_step.get("operation")) not in {
+            ("PIL.Image", "new"),
+            ("PIL.Image", "fromarray"),
+            ("PIL.Image", "frombuffer"),
+            ("PIL.Image", "frombytes"),
+            ("PIL.Image", "fromstring"),
+        }:
+            return None
+        size = literal(source_step.get("arguments"), "size")
+        if not (
+            isinstance(size, (list, tuple))
+            and len(size) == 2
+            and all(isinstance(value, int) and not isinstance(value, bool) for value in size)
+        ):
+            return None
+        return size[0], size[1]
+
+    def source_mode(source_step: dict[str, object] | None) -> str | None:
+        if source_step is None:
+            return None
+        mode = literal(source_step.get("arguments"), "mode")
+        return mode if isinstance(mode, str) else None
+
+    key = (step.get("surface"), step.get("operation"))
+    arguments = step.get("arguments")
+
+    if key == ("PIL.ImageDraw.ImageDraw", "line"):
+        points = literal(arguments, "xy")
+        if not isinstance(points, (list, tuple)):
+            return False
+        return (
+            len(points) == 0
+            or (
+                len(points) == 1
+                and isinstance(points[0], (list, tuple))
+                and len(points[0]) == 2
+            )
+            or (
+                len(points) == 2
+                and all(
+                    isinstance(value, (int, float)) and not isinstance(value, bool)
+                    for value in points
+                )
+            )
+        )
+
+    if key == ("PIL.ImageDraw.ImageDraw", "shape"):
+        shape = literal(arguments, "shape")
+        if (
+            isinstance(shape, dict)
+            and shape.get("protocol") == "outline"
+            and shape.get("commands") == []
+        ):
+            return True
+        if isinstance(shape, (list, tuple)) and (
+            len(shape) == 0
+            or (
+                len(shape) == 1
+                and isinstance(shape[0], (list, tuple))
+                and len(shape[0]) == 2
+            )
+            or (
+                len(shape) == 2
+                and all(
+                    isinstance(value, (int, float)) and not isinstance(value, bool)
+                    for value in shape
+                )
+            )
+        ):
+            return True
+        draw = receiver_source(step)
+        image = argument_source(draw, "im") if draw is not None else None
+        mode = source_mode(image)
+        if mode not in {"1", "L", "P"} or not isinstance(arguments, dict):
+            return False
+
+        def absent_or_none(name: str) -> bool:
+            if name not in arguments:
+                return True
+            value = arguments[name]
+            return (
+                isinstance(value, dict)
+                and value.get("kind") == "literal"
+                and value.get("value") is None
+            )
+
+        return absent_or_none("fill") and absent_or_none("outline")
+
+    if key == ("PIL.ImageOps", "pad"):
+        output_size = literal(arguments, "size")
+        image = argument_source(step, "image")
+        input_size = source_size(image)
+        return (
+            input_size is not None
+            and isinstance(output_size, (list, tuple))
+            and len(output_size) == 2
+            and all(isinstance(value, int) and not isinstance(value, bool) for value in output_size)
+            and input_size == tuple(output_size)
+            and input_size[0] > 0
+            and input_size[1] > 0
+        )
+
+    if key == ("PIL.Image.Image", "resize"):
+        source = receiver_source(step)
+        size = literal(arguments, "size")
+        box = literal(arguments, "box")
+        resample = literal(arguments, "resample")
+        if not (
+            source_mode(source) == "F"
+            and resample in (0, "NEAREST", "nearest")
+            and isinstance(size, (list, tuple))
+            and len(size) == 2
+            and all(isinstance(value, int) and not isinstance(value, bool) for value in size)
+            and source_size(source) == tuple(size)
+            and all(value > 0 for value in size)
+            and isinstance(box, (list, tuple))
+            and len(box) == 4
+            and all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in box)
+        ):
+            return False
+
+        def f32(value: float) -> float:
+            return struct.unpack("<f", struct.pack("<f", value))[0]
+
+        def axis_maps_identity(source_extent: int, start: float, end: float) -> bool:
+            start = f32(start)
+            end = f32(end)
+            scale = float(f32(f32(end) - f32(start))) / source_extent
+            if not math.isfinite(scale):
+                return False
+            last = source_extent - 1
+            coordinate = start + scale * 0.5
+            for expected in range(source_extent):
+                sample = math.floor(coordinate)
+                if min(max(sample, 0), last) != expected:
+                    return False
+                coordinate += scale
+            return True
+
+        try:
+            left, top, right, bottom = (float(value) for value in box)
+            return axis_maps_identity(size[0], left, right) and axis_maps_identity(
+                size[1], top, bottom
+            )
+        except (OverflowError, ValueError, struct.error):
+            return False
+
+    if key == ("PIL.Image.Image", "convert"):
+        source = receiver_source(step)
+        size = source_size(source)
+        target = literal(arguments, "mode")
+        matrix = literal(arguments, "matrix")
+        return (
+            size is not None
+            and (size[0] == 0 or size[1] == 0)
+            and isinstance(target, str)
+            and target in {
+                "L", "LA", "La", "RGB", "RGBA", "RGBX", "RGBa", "CMYK",
+                "YCbCr", "HSV", "I", "F", "I;16", "I;16L", "I;16B", "I;16N",
+            }
+            and matrix is None
+        )
+
+    return False
+
 DIRECT_CPU_DRAW_OPS = frozenset(
     {
         ("PIL.ImageDraw.ImageDraw", "text"),
@@ -275,6 +495,8 @@ def workflow_pipeline_observation_gaps(
         )
 
         key = (step.get("surface"), step.get("operation"))
+        if workflow_operation_is_proven_noop(case, step):
+            continue
         if key in PIPELINE_RESULT_OPS and key[0] != "PIL.ImageFilter":
             target = _pipeline_image_target(step, steps_by_id)
             candidates.append((index, step, target))

@@ -328,6 +328,10 @@ fn format_geometry_params(op: &PipelineOp) -> Option<Vec<u32>> {
                 ColorMode::F => 8,
                 ColorMode::P => 9,
                 ColorMode::Mode1 => 10,
+                ColorMode::I16 => 9,
+                ColorMode::RgbPremultiplied => 10,
+                ColorMode::LaPremultiplied => 11,
+                ColorMode::Rgbx => 12,
             };
             vec![code]
         }

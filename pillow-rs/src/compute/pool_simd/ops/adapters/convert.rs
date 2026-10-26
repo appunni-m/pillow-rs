@@ -3,6 +3,8 @@
 //! Keep mode and architecture dispatch here; focused kernels perform native
 //! byte-layout work and report the path used to the registry-facing adapter.
 
+#[path = "convert/alpha.rs"]
+mod alpha;
 #[path = "convert/cmyk.rs"]
 mod cmyk;
 #[cfg(all(test, target_arch = "x86_64"))]
@@ -17,7 +19,7 @@ use super::{
 use crate::error::PilError;
 use crate::pipeline::{ColorMode, PipelineOp};
 use crate::raster::DynamicImage;
-use wide::u16x8;
+use wide::{u8x16, u16x8, u16x16, u32x8};
 
 use self::cmyk::native_cmyk_to_rgb_bytes;
 #[cfg(feature = "parallel")]
@@ -91,7 +93,13 @@ fn native_convert_luma16_supported(
 ) -> bool {
     matches!(
         target,
-        ColorMode::L | ColorMode::LA | ColorMode::RGB | ColorMode::RGBA | ColorMode::CMYK
+        ColorMode::L
+            | ColorMode::LA
+            | ColorMode::RGB
+            | ColorMode::RGBA
+            | ColorMode::CMYK
+            | ColorMode::I
+            | ColorMode::F
     ) && matches!(mode, Some("I;16" | "I;16L" | "I;16B" | "I;16N"))
         && matches!(img, DynamicImage::ImageLuma16(_))
         && (img.width() as usize)
@@ -126,7 +134,7 @@ fn native_convert_luma16_bytes(
         ColorMode::L => 1,
         ColorMode::LA => 2,
         ColorMode::RGB => 3,
-        ColorMode::RGBA | ColorMode::CMYK => 4,
+        ColorMode::RGBA | ColorMode::CMYK | ColorMode::I | ColorMode::F => 4,
         _ => return None,
     };
     let mut output = Vec::with_capacity(pixels * output_channels);
@@ -140,9 +148,37 @@ fn native_convert_luma16_bytes(
                 0
             }
         });
-        let samples = u16x8::new(samples)
+        let sample_lanes = u16x8::new(samples);
+        if matches!(target, ColorMode::I) {
+            for &value in u32x8::from(sample_lanes).to_array().iter().take(active) {
+                output.extend_from_slice(&(value as i32).to_le_bytes());
+            }
+            vector_blocks = vector_blocks.saturating_add(1);
+            continue;
+        }
+        if matches!(target, ColorMode::F) {
+            // A u16 is exactly representable as f32. Form its IEEE exponent
+            // and mantissa with vector integer operations to avoid a scalar
+            // lane conversion masquerading as SIMD execution.
+            let values = u32x8::from(sample_lanes);
+            let mut bits = u32x8::splat(0);
+            for exponent in 0..16u32 {
+                let base = 1u32 << exponent;
+                let range =
+                    values.simd_ge(u32x8::splat(base)) & values.simd_lt(u32x8::splat(base << 1));
+                let mantissa = (values - u32x8::splat(base)) << (23 - exponent);
+                let encoded = u32x8::splat((exponent + 127) << 23) | mantissa;
+                bits = range.select(encoded, bits);
+            }
+            for &value in bits.to_array().iter().take(active) {
+                output.extend_from_slice(&value.to_le_bytes());
+            }
+            vector_blocks = vector_blocks.saturating_add(1);
+            continue;
+        }
+        let samples = sample_lanes
             .simd_gt(u16x8::splat(u16::from(u8::MAX)))
-            .select(u16x8::splat(u16::from(u8::MAX)), u16x8::new(samples))
+            .select(u16x8::splat(u16::from(u8::MAX)), sample_lanes)
             .to_array()
             .map(|value| value as u8);
         for &value in samples.iter().take(active) {
@@ -234,6 +270,16 @@ pub(super) fn native_convert_supported_for_image(
     if matrix.is_some() {
         return false;
     }
+    if alpha::supports_image(img, target, mode, matrix) {
+        return true;
+    }
+    if matches!(target, ColorMode::I16) {
+        return matches!(mode, Some("1" | "L"))
+            && matches!(img, DynamicImage::ImageLuma8(_))
+            && (img.width() as usize)
+                .checked_mul(img.height() as usize)
+                .is_some_and(|pixels| img.as_bytes().len() == pixels);
+    }
     if matches!(target, ColorMode::RGB) && mode == Some("CMYK") {
         let Some(pixel_count) = (img.width() as usize).checked_mul(img.height() as usize) else {
             return false;
@@ -303,6 +349,23 @@ pub(super) fn native_convert_supported_for_shape(
     if matrix.is_some() {
         return false;
     }
+    if alpha::supports_shape(
+        shape.layout,
+        shape.width,
+        shape.height,
+        target,
+        mode,
+        matrix,
+    ) {
+        return true;
+    }
+    if matches!(target, ColorMode::I16) {
+        return matches!(mode, Some("1" | "L"))
+            && shape.layout == SimdLayout::Luma8
+            && (shape.width as usize)
+                .checked_mul(shape.height as usize)
+                .is_some();
+    }
     if matches!(target, ColorMode::RGB) && mode == Some("CMYK") {
         return shape.layout == SimdLayout::Rgba8
             && (shape.width as usize)
@@ -312,7 +375,13 @@ pub(super) fn native_convert_supported_for_shape(
     }
     if matches!(
         target,
-        ColorMode::L | ColorMode::LA | ColorMode::RGB | ColorMode::RGBA | ColorMode::CMYK
+        ColorMode::L
+            | ColorMode::LA
+            | ColorMode::RGB
+            | ColorMode::RGBA
+            | ColorMode::CMYK
+            | ColorMode::I
+            | ColorMode::F
     ) && matches!(mode, Some("I;16" | "I;16L" | "I;16B" | "I;16N"))
         && matches!(shape.layout, SimdLayout::Luma16)
     {
@@ -355,6 +424,9 @@ fn try_source_special_conversion(
     matrix: Option<&[f64]>,
     mode: Option<&str>,
 ) -> Result<Option<DynamicImage>, PilError> {
+    if let Some(converted) = alpha::try_convert(img, target, mode, matrix)? {
+        return Ok(Some(converted));
+    }
     if (img.width() == 0 || img.height() == 0)
         && native_convert_supported_for_image(img, target, matrix, mode)
     {
@@ -394,7 +466,7 @@ fn try_source_special_conversion(
             ColorMode::L => 1,
             ColorMode::LA => 2,
             ColorMode::RGB => 3,
-            ColorMode::RGBA | ColorMode::CMYK => 4,
+            ColorMode::RGBA | ColorMode::CMYK | ColorMode::I | ColorMode::F => 4,
             _ => return Err(simd_unsupported("Convert")),
         };
         return finish_vector_conversion(
@@ -489,6 +561,41 @@ pub(crate) fn simd_convert(
     else {
         return Err(PilError::ValueError("expected Convert op".into()));
     };
+    if matches!(target, ColorMode::I16) {
+        if matrix.is_some() || !matches!(mode, Some("1" | "L")) {
+            return Err(simd_unsupported("Convert"));
+        }
+        let DynamicImage::ImageLuma8(source) = img else {
+            return Err(simd_unsupported("Convert"));
+        };
+        let pixels = (img.width() as usize)
+            .checked_mul(img.height() as usize)
+            .ok_or_else(|| simd_unsupported("Convert"))?;
+        if source.as_raw().len() != pixels {
+            return Err(simd_unsupported("Convert"));
+        }
+        let mut output = Vec::with_capacity(pixels);
+        for start in (0..pixels).step_by(16) {
+            let active = (pixels - start).min(16);
+            let lanes =
+                std::array::from_fn(|lane| source.as_raw().get(start + lane).copied().unwrap_or(0));
+            let bytes = u8x16::new(lanes);
+            let samples = if mode == Some("1") {
+                bytes
+                    .simd_eq(u8x16::ZERO)
+                    .select(u8x16::ZERO, u8x16::splat(255))
+            } else {
+                bytes
+            };
+            output.extend(u16x16::from(samples).to_array().into_iter().take(active));
+        }
+        crate::compute::record_pipeline_operation_vector_blocks(pixels.div_ceil(16) as u64);
+        crate::compute::record_pipeline_operation_scalar_tail(0);
+        crate::compute::record_pipeline_operation_path("vector");
+        let image = crate::raster::ImageBuffer::from_raw(img.width(), img.height(), output)
+            .ok_or_else(|| PilError::InternalError("SIMD I;16 output shape mismatch".into()))?;
+        return Ok(DynamicImage::ImageLuma16(image));
+    }
     if let Some(result) = try_source_special_conversion(img, target, matrix.as_deref(), mode)? {
         return Ok(result);
     }

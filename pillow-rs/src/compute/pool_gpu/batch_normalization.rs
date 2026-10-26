@@ -58,6 +58,7 @@ pub(super) struct NormalizedGpuBatch {
 pub(super) struct BatchInputLayoutCandidates {
     pub(super) packed_luma_colorize: bool,
     pub(super) packed_luma_convert: bool,
+    pub(super) native_alpha_convert_input: bool,
     pub(super) packed_luma_transform_input: bool,
     pub(super) native_rgb_compact_input: bool,
     pub(super) native_la_transform_input: bool,
@@ -174,6 +175,7 @@ fn batch_input_layout_candidates(
     // four-samples-per-word source. Other targets and prefixes keep standard
     // RGBA transport and the existing shader contract.
     let packed_luma_convert = gpu_packed_luma_convert_input(ops, image, mode);
+    let native_alpha_convert_input = gpu_native_alpha_convert_input(ops, image, mode);
     let packed_luma_transform_input = gpu_packed_luma_transform_input(ops, image, mode);
     let native_rgb_compact_input =
         gpu_native_rgb_compact_input(ops, image, mode, host_autocontrast_rgb_lut);
@@ -202,6 +204,7 @@ fn batch_input_layout_candidates(
     BatchInputLayoutCandidates {
         packed_luma_colorize,
         packed_luma_convert,
+        native_alpha_convert_input,
         packed_luma_transform_input,
         native_rgb_compact_input,
         native_la_transform_input,

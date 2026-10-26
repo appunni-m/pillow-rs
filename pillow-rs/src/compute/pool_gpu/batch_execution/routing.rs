@@ -1,4 +1,5 @@
 use super::super::*;
+use crate::raster::ColorType;
 
 impl GpuPool {
     fn execute_exact_host_result(
@@ -82,6 +83,7 @@ impl GpuPool {
         let BatchInputLayoutCandidates {
             packed_luma_colorize,
             packed_luma_convert,
+            native_alpha_convert_input,
             packed_luma_transform_input,
             native_rgb_compact_input: native_rgb_compact_input_candidate,
             native_la_transform_input,
@@ -540,6 +542,7 @@ impl GpuPool {
                 packed_native_byte_filter,
                 packed_luma_colorize,
                 packed_luma_convert,
+                native_alpha_convert_input,
                 packed_luma_transform_input,
                 packed_luma_point,
                 packed_luma_putdata,
@@ -640,6 +643,7 @@ impl GpuPool {
             final_is_a
         );
         let output_layout = GpuBatchOutputLayout::from_operations(ops, img.color());
+        let native_luma16_output = output_layout.output_color_type == Some(ColorType::L16);
         // All command buffers are submitted before registering the mapping. The
         // batch owns A/B exclusively until the mapped view is dropped and the
         // selected primary or staging buffer has been unmapped.
@@ -657,7 +661,7 @@ impl GpuPool {
             gpu.readback_to_native_channels(final_w, final_h, 2, readback_buffer)?
         } else if native_luma16 {
             gpu.readback_to_luma16(final_w, final_h, readback_buffer, mode)?
-        } else if native_luma16_paste {
+        } else if native_luma16_paste || native_luma16_output {
             gpu.readback_to_luma16_numeric(final_w, final_h, readback_buffer)?
         } else if output_layout.native_luma8_extract
             || output_layout.native_luma8_grayscale
@@ -717,6 +721,7 @@ impl GpuPool {
                 native_cover_input_channels,
                 packed_luma_colorize,
                 packed_luma_convert,
+                native_alpha_convert_input,
                 packed_luma_transform_input,
                 packed_luma_point,
                 packed_luma_putdata,
@@ -740,6 +745,7 @@ impl GpuPool {
             || native_sharpness_l_input
             || native_sharpness_la_input
             || native_cover_packed_output.is_some()
+            || native_luma16_output
             || packed_luma_pad
             || packed_la_pad
         {

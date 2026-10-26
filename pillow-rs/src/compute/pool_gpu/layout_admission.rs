@@ -77,28 +77,44 @@ pub(super) fn gpu_luma16_geometry_is_supported(
 /// Keep the conversion terminal: once it emits L/LA/RGB/RGBA bytes, the batch
 /// mode changes and the typed source contract no longer applies.
 pub(super) fn gpu_luma16_convert_is_supported(ops: &[PipelineOp], image: &DynamicImage) -> bool {
-    matches!(image, DynamicImage::ImageLuma16(_))
-        && !ops.is_empty()
-        && ops
-            .iter()
-            .filter(|op| matches!(op, PipelineOp::Convert { .. }))
-            .count()
-            == 1
-        && ops.iter().all(|op| match op {
-            PipelineOp::Offset { .. }
-            | PipelineOp::Flip
-            | PipelineOp::Mirror
-            | PipelineOp::Transpose { .. }
-            | PipelineOp::Crop { .. }
-            | PipelineOp::CropBorder { .. }
-            | PipelineOp::Duplicate => true,
-            PipelineOp::Convert {
-                mode: target,
+    if ops.is_empty() {
+        return false;
+    }
+    if matches!(image, DynamicImage::ImageLuma8(_)) {
+        return matches!(
+            ops,
+            [PipelineOp::Convert {
+                mode: ColorMode::I16,
                 matrix: None,
                 dither: None,
-            } => gpu_standard_color_mode_code(target).is_some(),
-            _ => false,
-        })
+            }]
+        );
+    }
+    if !matches!(image, DynamicImage::ImageLuma16(_)) {
+        return false;
+    }
+    let direct = matches!(ops, [PipelineOp::Convert { mode, matrix: None, dither: None }]
+        if gpu_standard_color_mode_code(mode).is_some()
+            || matches!(mode, ColorMode::I | ColorMode::F));
+    // I;16N historically converts through clipped L before producing I/F.
+    // Keep that two-step contract on-device instead of materializing the
+    // intermediate on the host.
+    let clipped_scalar = matches!(
+        ops,
+        [
+            PipelineOp::Convert {
+                mode: ColorMode::L,
+                matrix: None,
+                dither: None,
+            },
+            PipelineOp::Convert {
+                mode: ColorMode::I | ColorMode::F,
+                matrix: None,
+                dither: None,
+            }
+        ]
+    );
+    direct || clipped_scalar
 }
 
 /// The GPU Paste shader has a separate numeric-u16 branch for one typed

@@ -331,6 +331,9 @@ pub(super) fn gpu_color_after_op(
             Some(3) => crate::raster::ColorType::Rgba8,
             Some(4) | Some(7) | Some(8) => crate::raster::ColorType::Rgba8,
             Some(5) | Some(6) => crate::raster::ColorType::Rgb8,
+            Some(9) => crate::raster::ColorType::L16,
+            Some(10) | Some(12) => crate::raster::ColorType::Rgba8,
+            Some(11) => crate::raster::ColorType::La8,
             _ => current,
         },
         PipelineOp::Grayscale | PipelineOp::ExtractBand { .. } | PipelineOp::Constant { .. } => {

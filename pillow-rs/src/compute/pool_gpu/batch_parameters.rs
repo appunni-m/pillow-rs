@@ -66,6 +66,17 @@ fn apply_operation_source_flags(
     context: BatchOperationParameterContext<'_>,
     params: &mut [u32],
 ) -> Result<(), PilError> {
+    if context.logical_mode == Some("1")
+        && matches!(
+            context.op,
+            PipelineOp::Convert {
+                mode: ColorMode::I16,
+                ..
+            }
+        )
+    {
+        params[3] |= 2;
+    }
     if let PipelineOp::Paste { mask, .. } = context.op {
         set_paste_mask_flags(context, mask.as_ref(), params);
     }
@@ -159,7 +170,28 @@ fn append_operation_layout_params(
     } else if context.layouts.packed_luma_convert
         && matches!(context.op, PipelineOp::Convert { .. })
     {
-        params[3] = 1;
+        params[3] = 1 | (u32::from(context.logical_mode == Some("1")) << 1);
+    } else if matches!(
+        (context.logical_mode, context.op),
+        (
+            Some("LA"),
+            PipelineOp::Convert {
+                mode: ColorMode::LaPremultiplied | ColorMode::Rgbx,
+                matrix: None,
+                dither: None,
+            }
+        ) | (
+            Some("La"),
+            PipelineOp::Convert {
+                mode: ColorMode::LA,
+                matrix: None,
+                dither: None,
+            }
+        )
+    ) {
+        // Bit 3 tells convert.wgsl that LA bytes remain in native two-byte
+        // storage and must be unpacked per pixel on-device.
+        params[3] = 8;
     } else if context.layouts.native_rgb_compact_input
         && matches!(context.op, PipelineOp::Convert { .. })
     {

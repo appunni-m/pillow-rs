@@ -112,10 +112,16 @@ pub enum ColorMode {
     L,
     /// 8-bit luma plus alpha.
     LA,
+    /// Premultiplied 8-bit luma plus alpha (`La`).
+    LaPremultiplied,
     /// 8-bit red, green, and blue.
     RGB,
     /// 8-bit red, green, blue, and alpha.
     RGBA,
+    /// Premultiplied 8-bit red, green, blue, and alpha (`RGBa`).
+    RgbPremultiplied,
+    /// RGB bytes with an opaque padding byte (`RGBX`).
+    Rgbx,
     /// Cyan, magenta, yellow, and key/black.
     CMYK,
     /// Luma and chroma channels.
@@ -126,6 +132,8 @@ pub enum ColorMode {
     I,
     /// 32-bit floating-point pixels.
     F,
+    /// Unsigned 16-bit luma samples used by `I;16*` conversions.
+    I16,
     /// Palette-indexed pixels.
     P,
     /// Pillow mode `"1"` binary pixels.

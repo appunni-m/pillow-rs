@@ -379,6 +379,10 @@ fn gpu_pixel_shader_contract(op: &PipelineOp) -> Option<bool> {
                         | ColorMode::HSV
                         | ColorMode::I
                         | ColorMode::F
+                        | ColorMode::I16
+                        | ColorMode::LaPremultiplied
+                        | ColorMode::RgbPremultiplied
+                        | ColorMode::Rgbx
                 )
         }
         // Autocontrast and Equalize are admitted here because the GPU pool
