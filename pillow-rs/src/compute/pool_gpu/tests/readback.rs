@@ -29,9 +29,6 @@ fn gpu_primary_readback_admission_excludes_unshared_or_unavailable_memory() {
 
 #[test]
 fn gpu_primary_readback_matches_staged_shader_results_and_reuse() {
-    use crate::compute::registry;
-    use crate::pipeline::TransposeMethod;
-
     let Some(gpu) = primary_readback_test_gpu() else {
         return;
     };
@@ -40,103 +37,115 @@ fn gpu_primary_readback_matches_staged_shader_results_and_reuse() {
     for direct in [false, true] {
         let mut buffers = super::BufferPool::new(&gpu.device, 17 * 15, direct);
         for operation_count in [1, 2, super::MAX_GPU_OPS_PER_SUBMISSION + 1] {
-            let bytes: Vec<u8> = (0usize..17 * 15 * 4)
-                .map(|index| {
-                    index
-                        .wrapping_mul(113)
-                        .wrapping_add(index / 7)
-                        .wrapping_add(operation_count) as u8
-                })
-                .collect();
-            let source = DynamicImage::ImageRgba8(RgbaImage::from_raw(17, 15, bytes).unwrap());
-            let mut ops = vec![PipelineOp::Transpose {
-                method: TransposeMethod::Transpose,
-            }];
-            ops.extend((1..operation_count).map(|_| PipelineOp::Duplicate));
-            let expected = ops.iter().fold(source.clone(), |image, op| {
-                registry::execute_cpu(op, &image, Some("RGBA")).unwrap()
-            });
-            let auxiliary: Vec<_> = ops
-                .iter()
-                .map(|_| super::AuxiliaryImages {
-                    second: None,
-                    third: None,
-                })
-                .collect();
-            buffers.upload_standard_image(&gpu.queue, &source).unwrap();
-            let (final_is_a, width, height, readback, _, dispatches, _) = gpu
-                .execute_batch_impl(
-                    &ops,
-                    &auxiliary,
-                    17,
-                    15,
-                    3,
-                    false,
-                    false,
-                    false,
-                    false,
-                    false,
-                    false,
-                    false,
-                    false,
-                    false,
-                    false,
-                    false,
-                    false,
-                    false,
-                    false,
-                    false,
-                    false,
-                    false,
-                    false,
-                    false,
-                    None,
-                    None,
-                    None,
-                    Some("RGBA"),
-                    None,
-                    None,
-                    false,
-                    false,
-                    false,
-                    false,
-                    false,
-                    false,
-                    None,
-                    &mut buffers,
-                )
-                .unwrap();
-            assert_eq!(dispatches, operation_count as u64);
-            assert_eq!(final_is_a, operation_count % 2 == 0);
-            assert_eq!(matches!(readback, super::ReadbackTarget::Primary), direct);
-            assert_eq!(
-                readback.full_frame_copy_count(true),
-                if direct { 1 } else { 2 }
-            );
-            assert_eq!(
-                readback.full_frame_copy_count(false),
-                if direct { 0 } else { 1 }
-            );
-            let actual = gpu
-                .readback_to_image(width, height, readback.buffer(&buffers, final_is_a), false)
-                .unwrap();
-            assert_eq!(actual.color(), expected.color());
-            assert_eq!(actual.dimensions(), expected.dimensions());
-            assert_eq!(
-                actual.as_bytes(),
-                expected.as_bytes(),
-                "direct={direct} ops={operation_count}"
-            );
-            // No returned image may retain a view into the next GPU write.
-            gpu.queue.write_buffer(&buffers.buf_a, 0, &[0, 0, 0, 0]);
-            gpu.queue.write_buffer(&buffers.buf_b, 0, &[0, 0, 0, 0]);
-            gpu.queue.submit(std::iter::empty());
-            gpu.poll_device("GPU readback reuse test").unwrap();
-            assert_eq!(actual.as_bytes(), expected.as_bytes());
-            // These test-owned working sets never enter the global pool,
-            // so staged resources cannot alter its immutable device policy.
+            assert_primary_readback_case(gpu, direct, operation_count, &mut buffers);
         }
     }
+}
+
+fn assert_primary_readback_case(
+    gpu: &super::GpuInner,
+    direct: bool,
+    operation_count: usize,
+    buffers: &mut super::BufferPool,
+) {
+    use crate::compute::registry;
+    use crate::pipeline::TransposeMethod;
+
+    let bytes: Vec<u8> = (0usize..17 * 15 * 4)
+        .map(|index| {
+            index
+                .wrapping_mul(113)
+                .wrapping_add(index.checked_div(7).expect("nonzero fixture divisor"))
+                .wrapping_add(operation_count) as u8
+        })
+        .collect();
+    let source = DynamicImage::ImageRgba8(RgbaImage::from_raw(17, 15, bytes).unwrap());
+    let mut ops = vec![PipelineOp::Transpose {
+        method: TransposeMethod::Transpose,
+    }];
+    ops.extend((1..operation_count).map(|_| PipelineOp::Duplicate));
+    let expected = ops.iter().fold(source.clone(), |image, op| {
+        registry::execute_cpu(op, &image, Some("RGBA")).unwrap()
+    });
+    let auxiliary: Vec<_> = ops
+        .iter()
+        .map(|_| super::AuxiliaryImages {
+            second: None,
+            third: None,
+        })
+        .collect();
+    buffers.upload_standard_image(&gpu.queue, &source).unwrap();
+    let (final_is_a, width, height, readback, _, dispatches, _) = gpu
+        .execute_batch_impl(
+            &ops,
+            &auxiliary,
+            17,
+            15,
+            3,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            None,
+            None,
+            None,
+            Some("RGBA"),
+            None,
+            None,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            None,
+            buffers,
+        )
+        .unwrap();
+    assert_eq!(dispatches, operation_count as u64);
+    assert_eq!(final_is_a, operation_count.is_multiple_of(2));
+    assert_eq!(matches!(readback, super::ReadbackTarget::Primary), direct);
+    assert_eq!(
+        readback.full_frame_copy_count(true),
+        if direct { 1 } else { 2 }
+    );
+    assert_eq!(
+        readback.full_frame_copy_count(false),
+        if direct { 0 } else { 1 }
+    );
+    let actual = gpu
+        .readback_to_image(width, height, readback.buffer(buffers, final_is_a), false)
+        .unwrap();
+    assert_eq!(actual.color(), expected.color());
+    assert_eq!(actual.dimensions(), expected.dimensions());
+    assert_eq!(
+        actual.as_bytes(),
+        expected.as_bytes(),
+        "direct={direct} ops={operation_count}"
+    );
+    // No returned image may retain a view into the next GPU write.
+    gpu.queue.write_buffer(&buffers.buf_a, 0, &[0, 0, 0, 0]);
+    gpu.queue.write_buffer(&buffers.buf_b, 0, &[0, 0, 0, 0]);
+    gpu.queue.submit(std::iter::empty());
+    gpu.poll_device("GPU readback reuse test").unwrap();
+    assert_eq!(actual.as_bytes(), expected.as_bytes());
+    // These test-owned working sets never enter the global pool,
+    // so staged resources cannot alter its immutable device policy.
 }
 
 #[test]
