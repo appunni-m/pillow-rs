@@ -29,6 +29,8 @@ use crate::error::PilError;
 use crate::pipeline::{PipelineOp, TransposeMethod};
 use crate::raster::{DynamicImage, ImageBuffer, Luma};
 
+type NativeTransposeResult = (Vec<u8>, u32, u32, u64, u64, &'static str);
+
 pub(super) fn supports_for_image(img: &DynamicImage, mode: Option<&str>) -> bool {
     let native_copy = native_copy_layout(img, mode);
     let native_luma16_transpose = native_luma16_transpose_layout(img, mode);
@@ -287,7 +289,7 @@ pub(super) fn native_transpose_bytes(
     height: u32,
     channels: usize,
     method: TransposeMethod,
-) -> Option<(Vec<u8>, u32, u32, u64, u64, &'static str)> {
+) -> Option<NativeTransposeResult> {
     let width = usize::try_from(width).ok()?;
     let height = usize::try_from(height).ok()?;
     let pixels = width.checked_mul(height)?;

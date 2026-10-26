@@ -7,6 +7,9 @@ use crate::raster::{DynamicImage, GenericImageView};
 
 use super::thumbnail::{reduce_f_thumbnail, reduce_i_thumbnail};
 
+type SparseRgbReduction = (DynamicImage, Option<Vec<bool>>);
+type SparseRgbReductionResult = Result<Option<SparseRgbReduction>, PilError>;
+
 /// Reduce native RGB blocks without the generic per-channel mode checks.
 ///
 /// Keep Pillow's 24-bit reciprocal-and-amend rounding unchanged. Interior,
@@ -26,7 +29,7 @@ fn try_reduce_sparse_2x2(
     factors: (u32, u32),
     source_dimensions: (u32, u32),
     output_dimensions: (u32, u32),
-) -> Result<Option<(DynamicImage, Option<Vec<bool>>)>, PilError> {
+) -> SparseRgbReductionResult {
     let ((fx, fy), (width, height), (new_width, new_height)) =
         (factors, source_dimensions, output_dimensions);
     if fx != 2 || fy != 2 || width % 2 != 0 || height % 2 != 0 {

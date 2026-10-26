@@ -2,15 +2,18 @@ use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::ResampleFilter;
 
+type ResizeBounds = (f64, f64, f64, f64);
+type ReducingGapResult = Result<(Image, ResizeBounds), PilError>;
+
 pub(super) fn apply_reducing_gap(
     mut source: Image,
-    mut bounds: (f64, f64, f64, f64),
+    mut bounds: ResizeBounds,
     gap: f64,
     filter: ResampleFilter,
     mode: &str,
     output_size: (u32, u32),
     source_size: (u32, u32),
-) -> Result<(Image, (f64, f64, f64, f64)), PilError> {
+) -> ReducingGapResult {
     let factor = |extent: f64, output: u32| -> Result<u32, PilError> {
         let value = extent / f64::from(output) / gap;
         if value.is_nan() {

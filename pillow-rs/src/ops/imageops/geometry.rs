@@ -1,5 +1,7 @@
 use super::*;
 
+type AspectDimensions = ((u32, u32), (u32, u32));
+
 fn resolve_centering(input: CenteringInput) -> Result<(f64, f64), PilError> {
     match input {
         CenteringInput::Default => Ok((0.5, 0.5)),
@@ -132,7 +134,7 @@ fn pad_containment_dimensions(
 /// `ZeroDivisionError` at this public boundary.  Rounded-zero output axes are
 /// deliberately returned for the later resize validation step: Pillow parses
 /// the resampling filter before `Image.resize` rejects those dimensions.
-fn contain_dimensions(image: &Image, w: u32, h: u32) -> Result<((u32, u32), (u32, u32)), PilError> {
+fn contain_dimensions(image: &Image, w: u32, h: u32) -> Result<AspectDimensions, PilError> {
     let source = image.size()?;
     if source.1 == 0 || h == 0 {
         return Err(PilError::ZeroDivisionError("division by zero".into()));
@@ -163,7 +165,7 @@ fn validate_aspect_resize_dimensions(
 /// the destination ratio is also zero. If the destination has positive width,
 /// Pillow divides by the source width while calculating the covering height
 /// and raises `ZeroDivisionError` before filter validation.
-fn cover_dimensions(image: &Image, w: u32, h: u32) -> Result<((u32, u32), (u32, u32)), PilError> {
+fn cover_dimensions(image: &Image, w: u32, h: u32) -> Result<AspectDimensions, PilError> {
     let source = image.size()?;
     if source.1 == 0 || h == 0 {
         return Err(PilError::ZeroDivisionError("division by zero".into()));

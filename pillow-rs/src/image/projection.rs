@@ -6,6 +6,8 @@ use crate::raster::DynamicImage;
 
 use super::Image;
 
+type ProjectionAxes = (Vec<u32>, Vec<u32>);
+
 fn projection_terminal_backend(
     backend: Option<crate::compute::Backend>,
 ) -> Result<Option<crate::compute::Backend>, PilError> {
@@ -536,7 +538,7 @@ impl Image {
         &self,
         img: &DynamicImage,
         mode: &str,
-    ) -> Result<Option<(Vec<u32>, Vec<u32>)>, PilError> {
+    ) -> Result<Option<ProjectionAxes>, PilError> {
         if !matches!(self, Image::Loaded(_) | Image::Paletted(_)) {
             return Ok(None);
         }

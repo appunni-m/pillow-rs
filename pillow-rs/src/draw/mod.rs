@@ -10,6 +10,9 @@ use crate::raster::{DynamicImage, RgbaImage};
 use crate::error::PilError;
 use crate::image::Image;
 
+type DrawColor = (u8, u8, u8, u8);
+type ShapeInks = (Option<DrawColor>, Option<DrawColor>);
+
 /// Drawing context for Pillow-style image mutation.
 ///
 /// This is the Rust equivalent of `ImageDraw.Draw(image)`. Methods queue or
@@ -519,7 +522,7 @@ impl Draw {
         &self,
         fill: Option<(u8, u8, u8, u8)>,
         outline: Option<(u8, u8, u8, u8)>,
-    ) -> (Option<(u8, u8, u8, u8)>, Option<(u8, u8, u8, u8)>) {
+    ) -> ShapeInks {
         if fill.is_none() && outline.is_none() {
             if self.orig_mode.as_deref() == Some("PA") {
                 return (None, Some((255, 255, 255, 255)));

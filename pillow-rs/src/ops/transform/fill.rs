@@ -2,6 +2,8 @@ use super::TransformFill;
 use crate::error::PilError;
 use crate::image::Image;
 
+type TransformFillResult = ((u8, u8, u8, u8), Option<u8>);
+
 fn transform_component(value: i64) -> Result<u8, PilError> {
     u8::try_from(value).map_err(|_| PilError::ValueError("bytes must be in range(0, 256)".into()))
 }
@@ -183,7 +185,7 @@ impl Image {
     pub(crate) fn public_transform_fill(
         &self,
         fillcolor: Option<TransformFill>,
-    ) -> Result<((u8, u8, u8, u8), Option<u8>), PilError> {
+    ) -> Result<TransformFillResult, PilError> {
         let mode = self.mode()?;
         let palette_mode = self.has_palette_mode();
         let default_palette_fill = palette_mode.then_some(0);

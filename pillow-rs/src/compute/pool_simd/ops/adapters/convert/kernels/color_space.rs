@@ -5,6 +5,17 @@ use crate::raster::DynamicImage;
 use std::sync::OnceLock;
 use wide::{f32x8, f64x8, i32x8, u8x16};
 
+type NativeYcbcrTables = (
+    &'static [i32; 256],
+    &'static [i32; 256],
+    &'static [i32; 256],
+    &'static [i32; 256],
+    &'static [i32; 256],
+    &'static [i32; 256],
+    &'static [i32; 256],
+    &'static [i32; 256],
+);
+
 /// Convert native byte luma/RGB-family samples to Pillow's four-byte CMYK
 /// representation. Convert.c's RGB inverse is C=255-R, M=255-G, Y=255-B,
 /// K=0; its luma branch is C=M=Y=0, K=255-L. Keep the input and output in
@@ -69,16 +80,7 @@ fn native_ycbcr_table(coeff: f64) -> [i32; 256] {
     table
 }
 
-fn native_ycbcr_tables() -> (
-    &'static [i32; 256],
-    &'static [i32; 256],
-    &'static [i32; 256],
-    &'static [i32; 256],
-    &'static [i32; 256],
-    &'static [i32; 256],
-    &'static [i32; 256],
-    &'static [i32; 256],
-) {
+fn native_ycbcr_tables() -> NativeYcbcrTables {
     static Y_R: OnceLock<[i32; 256]> = OnceLock::new();
     static Y_G: OnceLock<[i32; 256]> = OnceLock::new();
     static Y_B: OnceLock<[i32; 256]> = OnceLock::new();

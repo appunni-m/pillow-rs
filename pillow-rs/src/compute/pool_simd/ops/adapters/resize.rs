@@ -5,6 +5,8 @@ pub(super) const SIMD_RESIZE_LANES: usize = 8;
 pub(super) const SIMD_RESIZE_NEAREST_BYTES: usize = 16;
 pub(super) const SIMD_F64_LANES: usize = 8;
 
+type AspectDimensions = fn(u32, u32, u32, u32) -> Option<(u32, u32)>;
+
 #[path = "resize/coordinates.rs"]
 mod coordinates;
 #[path = "resize/kernels/f32.rs"]
@@ -561,7 +563,7 @@ fn native_aspect_resize_bytes(
     target_height: u32,
     filter: ResampleFilter,
     mode: Option<&str>,
-    dimensions: fn(u32, u32, u32, u32) -> Option<(u32, u32)>,
+    dimensions: AspectDimensions,
     parallel_pixel_threshold: usize,
     vectorize_tail: bool,
     operation: &str,
