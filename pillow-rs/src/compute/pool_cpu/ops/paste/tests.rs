@@ -477,59 +477,74 @@ fn native_masked_i16_paste_blends_only_the_first_storage_byte() {
             ("RGBa", true, true),
         ] {
             for alpha in [0u8, 128, 255] {
-                let destination_value = 0x1234u16;
-                let source_value = 0xabcdu16;
-                let destination =
-                    DynamicImage::ImageLuma16(crate::raster::ImageBuffer::from_pixel(
-                        1,
-                        1,
-                        crate::raster::Luma([destination_value]),
-                    ));
-                let source = Arc::new(crate::Image::from_dynamic(
-                    DynamicImage::ImageLuma16(crate::raster::ImageBuffer::from_pixel(
-                        1,
-                        1,
-                        crate::raster::Luma([source_value]),
-                    )),
-                    Some(mode.to_owned()),
-                ));
-                let mask_bytes = if mask_mode == "L" {
-                    vec![alpha]
-                } else {
-                    vec![255, 0, 17, alpha]
-                };
-                let mask = Arc::new(crate::Image::from_dynamic(
-                    native_byte_image(mask_mode, 1, 1, mask_bytes),
-                    Some(mask_mode.to_owned()),
-                ));
-                let result = op_paste(
-                    &destination,
-                    &source,
-                    0,
-                    0,
-                    &Some(mask),
+                assert_native_masked_i16_paste_case(
+                    mode,
+                    shift,
+                    mask_mode,
                     mask_alpha,
-                    Some(mode),
-                )
-                .unwrap_or_else(|error| panic!("masked {mode} paste with {mask_mode}: {error}"));
-
-                let source_byte = u32::from(((source_value >> shift) & 0xff) as u8);
-                let destination_byte = u32::from(((destination_value >> shift) & 0xff) as u8);
-                let mask_value = u32::from(alpha);
-                let blended = if premultiplied {
-                    let scaled = destination_byte * (255 - mask_value) + 128;
-                    ((((scaled >> 8) + scaled) >> 8) + source_byte) as u8
-                } else {
-                    ((source_byte * mask_value + destination_byte * (255 - mask_value) + 127) / 255)
-                        as u8
-                };
-                let expected =
-                    (destination_value & !(0xffu16 << shift)) | (u16::from(blended) << shift);
-                let DynamicImage::ImageLuma16(result) = result else {
-                    panic!("masked {mode} paste changed the physical image type");
-                };
-                assert_eq!(result.as_raw()[0], expected, "{mode}/{mask_mode}/{alpha}");
+                    premultiplied,
+                    alpha,
+                );
             }
         }
     }
+}
+
+fn assert_native_masked_i16_paste_case(
+    mode: &str,
+    shift: u32,
+    mask_mode: &str,
+    mask_alpha: bool,
+    premultiplied: bool,
+    alpha: u8,
+) {
+    let destination_value = 0x1234u16;
+    let source_value = 0xabcdu16;
+    let destination = DynamicImage::ImageLuma16(crate::raster::ImageBuffer::from_pixel(
+        1,
+        1,
+        crate::raster::Luma([destination_value]),
+    ));
+    let source = Arc::new(crate::Image::from_dynamic(
+        DynamicImage::ImageLuma16(crate::raster::ImageBuffer::from_pixel(
+            1,
+            1,
+            crate::raster::Luma([source_value]),
+        )),
+        Some(mode.to_owned()),
+    ));
+    let mask_bytes = if mask_mode == "L" {
+        vec![alpha]
+    } else {
+        vec![255, 0, 17, alpha]
+    };
+    let mask = Arc::new(crate::Image::from_dynamic(
+        native_byte_image(mask_mode, 1, 1, mask_bytes),
+        Some(mask_mode.to_owned()),
+    ));
+    let result = op_paste(
+        &destination,
+        &source,
+        0,
+        0,
+        &Some(mask),
+        mask_alpha,
+        Some(mode),
+    )
+    .unwrap_or_else(|error| panic!("masked {mode} paste with {mask_mode}: {error}"));
+
+    let source_byte = u32::from(((source_value >> shift) & 0xff) as u8);
+    let destination_byte = u32::from(((destination_value >> shift) & 0xff) as u8);
+    let mask_value = u32::from(alpha);
+    let blended = if premultiplied {
+        let scaled = destination_byte * (255 - mask_value) + 128;
+        ((((scaled >> 8) + scaled) >> 8) + source_byte) as u8
+    } else {
+        ((source_byte * mask_value + destination_byte * (255 - mask_value) + 127) / 255) as u8
+    };
+    let expected = (destination_value & !(0xffu16 << shift)) | (u16::from(blended) << shift);
+    let DynamicImage::ImageLuma16(result) = result else {
+        panic!("masked {mode} paste changed the physical image type");
+    };
+    assert_eq!(result.as_raw()[0], expected, "{mode}/{mask_mode}/{alpha}");
 }
