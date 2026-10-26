@@ -25,101 +25,66 @@ fn projective_nearest_images() -> (DynamicImage, DynamicImage, DynamicImage) {
 }
 
 fn projective_nearest_ops() -> ProjectiveNearestOps {
-    let perspective = PipelineOp::Transform {
-        w: 8,
-        h: 8,
-        method: TransformMethod::Perspective,
-        data: Arc::from(vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]),
-        filter: ResampleFilter::Nearest,
-        fill: Some((7, 0, 0, 255)),
-        fill_is_none: false,
-        palette_fill: Some(7),
-    };
-    let quad = PipelineOp::Transform {
-        w: 8,
-        h: 8,
-        method: TransformMethod::Quad,
-        data: Arc::from(vec![0.0, 0.0, 8.0, 0.0, 8.0, 8.0, 0.0, 8.0]),
-        filter: ResampleFilter::Nearest,
-        fill: Some((7, 0, 0, 255)),
-        fill_is_none: false,
-        palette_fill: Some(7),
-    };
-    let quad_direct = PipelineOp::Transform {
-        w: 8,
-        h: 8,
-        method: TransformMethod::Quad,
-        data: Arc::from(vec![0.0, 0.0, 0.0, 8.0, 8.0, 8.0, 8.0, 0.0]),
-        filter: ResampleFilter::Nearest,
-        fill: Some((7, 0, 0, 255)),
-        fill_is_none: false,
-        palette_fill: Some(7),
-    };
-    let quad_constant = PipelineOp::Transform {
-        w: 8,
-        h: 8,
-        method: TransformMethod::Quad,
-        data: Arc::from(vec![3.0, 4.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0]),
-        filter: ResampleFilter::Nearest,
-        fill: Some((7, 0, 0, 255)),
-        fill_is_none: false,
-        palette_fill: None,
-    };
-    let quad_constant_fill = PipelineOp::Transform {
-        w: 8,
-        h: 8,
-        method: TransformMethod::Quad,
-        data: Arc::from(vec![-1.0, 5.0, -1.0, 5.0, -1.0, 5.0, -1.0, 5.0]),
-        filter: ResampleFilter::Nearest,
-        fill: Some((7, 0, 0, 255)),
-        fill_is_none: false,
-        palette_fill: None,
-    };
-    let mesh = PipelineOp::Transform {
-        w: 8,
-        h: 8,
-        method: TransformMethod::Mesh,
-        data: Arc::from(vec![
-            0.0, 0.0, 8.0, 8.0, 0.0, 0.0, 8.0, 0.0, 8.0, 8.0, 0.0, 8.0,
-        ]),
-        filter: ResampleFilter::Nearest,
-        fill: Some((7, 0, 0, 255)),
-        fill_is_none: false,
-        palette_fill: Some(7),
-    };
-    let mesh_constant = PipelineOp::Transform {
-        w: 8,
-        h: 8,
-        method: TransformMethod::Mesh,
-        data: Arc::from(vec![
-            0.0, 0.0, 8.0, 8.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0,
-        ]),
-        filter: ResampleFilter::Nearest,
-        fill: Some((7, 0, 0, 255)),
-        fill_is_none: false,
-        palette_fill: None,
-    };
-    let mesh_constant_fill = PipelineOp::Transform {
-        w: 8,
-        h: 8,
-        method: TransformMethod::Mesh,
-        data: Arc::from(vec![
-            0.0, 0.0, 8.0, 8.0, -1.0, 5.0, -1.0, 5.0, -1.0, 5.0, -1.0, 5.0,
-        ]),
-        filter: ResampleFilter::Nearest,
-        fill: Some((7, 0, 0, 255)),
-        fill_is_none: false,
-        palette_fill: None,
-    };
     ProjectiveNearestOps {
-        perspective,
-        quad,
-        quad_direct,
-        quad_constant,
-        quad_constant_fill,
-        mesh,
-        mesh_constant,
-        mesh_constant_fill,
+        perspective: projective_nearest_op(
+            TransformMethod::Perspective,
+            vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+            Some(7),
+        ),
+        quad: projective_nearest_op(
+            TransformMethod::Quad,
+            vec![0.0, 0.0, 8.0, 0.0, 8.0, 8.0, 0.0, 8.0],
+            Some(7),
+        ),
+        quad_direct: projective_nearest_op(
+            TransformMethod::Quad,
+            vec![0.0, 0.0, 0.0, 8.0, 8.0, 8.0, 8.0, 0.0],
+            Some(7),
+        ),
+        quad_constant: projective_nearest_op(
+            TransformMethod::Quad,
+            vec![3.0, 4.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0],
+            None,
+        ),
+        quad_constant_fill: projective_nearest_op(
+            TransformMethod::Quad,
+            vec![-1.0, 5.0, -1.0, 5.0, -1.0, 5.0, -1.0, 5.0],
+            None,
+        ),
+        mesh: projective_nearest_op(
+            TransformMethod::Mesh,
+            vec![0.0, 0.0, 8.0, 8.0, 0.0, 0.0, 8.0, 0.0, 8.0, 8.0, 0.0, 8.0],
+            Some(7),
+        ),
+        mesh_constant: projective_nearest_op(
+            TransformMethod::Mesh,
+            vec![0.0, 0.0, 8.0, 8.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0, 3.0, 4.0],
+            None,
+        ),
+        mesh_constant_fill: projective_nearest_op(
+            TransformMethod::Mesh,
+            vec![
+                0.0, 0.0, 8.0, 8.0, -1.0, 5.0, -1.0, 5.0, -1.0, 5.0, -1.0, 5.0,
+            ],
+            None,
+        ),
+    }
+}
+
+fn projective_nearest_op(
+    method: TransformMethod,
+    data: Vec<f64>,
+    palette_fill: Option<u8>,
+) -> PipelineOp {
+    PipelineOp::Transform {
+        w: 8,
+        h: 8,
+        method,
+        data: Arc::from(data),
+        filter: ResampleFilter::Nearest,
+        fill: Some((7, 0, 0, 255)),
+        fill_is_none: false,
+        palette_fill,
     }
 }
 
