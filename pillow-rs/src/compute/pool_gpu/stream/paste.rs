@@ -2,7 +2,7 @@
 
 use super::super::{BufferPool, GpuInner, create_sized_buffer, plan_extract_band_dispatch};
 use super::encoding::EncodedGraph;
-use super::graph::{Stage, planned_channels};
+use super::graph::{Plan, Stage, planned_channels};
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
@@ -142,15 +142,7 @@ fn masked_paste_parameters(stage: &Stage<'_>) -> Result<(u32, [u32; 16]), PilErr
             .map_err(|_| PilError::ValueError("GPU masked Paste height is invalid".into()))?,
     );
     let source_is_broadcast = (source_plan.width, source_plan.height) == (1, 1) && region != (1, 1);
-    if region != (mask_plan.width, mask_plan.height)
-        || (!source_is_broadcast && (source_plan.width, source_plan.height) != region)
-        || source_plan.mode != stage.mode
-        || mask_plan.mode != "L"
-    {
-        return Err(PilError::ValueError(
-            "GPU masked Paste source or mask layout changed after admission".into(),
-        ));
-    }
+    validate_masked_paste_plans(stage, source_plan, mask_plan, region, source_is_broadcast)?;
     let destination = CheckedDims::new(stage.width, stage.height, channels)?;
     let destination_bytes = u32::try_from(destination.total_bytes())
         .map_err(|_| PilError::ValueError("GPU masked Paste output is too large".into()))?;
@@ -174,6 +166,25 @@ fn masked_paste_parameters(stage: &Stage<'_>) -> Result<(u32, [u32; 16]), PilErr
         0,
     ];
     Ok((destination_bytes, parameters))
+}
+
+fn validate_masked_paste_plans(
+    stage: &Stage<'_>,
+    source_plan: &Plan<'_>,
+    mask_plan: &Plan<'_>,
+    region: (u32, u32),
+    source_is_broadcast: bool,
+) -> Result<(), PilError> {
+    if region != (mask_plan.width, mask_plan.height)
+        || (!source_is_broadcast && (source_plan.width, source_plan.height) != region)
+        || source_plan.mode != stage.mode
+        || mask_plan.mode != "L"
+    {
+        return Err(PilError::ValueError(
+            "GPU masked Paste source or mask layout changed after admission".into(),
+        ));
+    }
+    Ok(())
 }
 
 pub(super) fn encode_masked_paste_stage(
