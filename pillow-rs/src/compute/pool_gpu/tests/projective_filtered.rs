@@ -574,7 +574,28 @@ fn projective_filtered_integer_constants_native_gpu_preserve_pixels() {
     let previous = Backend::set_pipeline_telemetry_enabled(true);
     let source_size = (16, 16);
     let output_size = (9, 7);
-    let maps = [
+    let maps = integer_constant_projective_maps();
+    for (mode, channels) in [
+        ("L", 1usize),
+        ("RGB", 3usize),
+        ("PA", 2usize),
+        ("CMYK", 4usize),
+        ("HSV", 3usize),
+        ("YCbCr", 3usize),
+        ("RGBX", 4usize),
+        ("RGBa", 4usize),
+    ] {
+        if !assert_integer_constant_projective_mode(mode, channels, source_size, output_size, &maps)
+        {
+            Backend::set_pipeline_telemetry_enabled(previous);
+            return;
+        }
+    }
+    Backend::set_pipeline_telemetry_enabled(previous);
+}
+
+fn integer_constant_projective_maps() -> [(i32, TransformData); 3] {
+    [
         (
             2,
             TransformData::Affine(vec![0.0, 0.0, 3.0, 0.0, 0.0, 5.0, 0.0, 0.0]),
@@ -590,87 +611,83 @@ fn projective_filtered_integer_constants_native_gpu_preserve_pixels() {
                 vec![3.0, 5.0, 3.0, 5.0, 3.0, 5.0, 3.0, 5.0],
             )]),
         ),
-    ];
-    for (mode, channels) in [
-        ("L", 1usize),
-        ("RGB", 3usize),
-        ("PA", 2usize),
-        ("CMYK", 4usize),
-        ("HSV", 3usize),
-        ("YCbCr", 3usize),
-        ("RGBX", 4usize),
-        ("RGBa", 4usize),
-    ] {
-        let bytes = (0..source_size.0 as usize * source_size.1 as usize * channels)
-            .map(|index| (index * 53 + 17) as u8)
+    ]
+}
+
+fn assert_integer_constant_projective_mode(
+    mode: &str,
+    channels: usize,
+    source_size: (u32, u32),
+    output_size: (u32, u32),
+    maps: &[(i32, TransformData); 3],
+) -> bool {
+    let bytes = (0..channels.saturating_mul(256))
+        .map(|index| index.wrapping_mul(53).wrapping_add(17) as u8)
+        .collect::<Vec<_>>();
+    let mut source = Image::frombytes(if mode == "PA" { "LA" } else { mode }, source_size, &bytes)
+        .expect("integer-constant projective source");
+    if mode == "PA" {
+        let palette = (0usize..768)
+            .map(|index| index.wrapping_mul(19).wrapping_add(7) as u8)
             .collect::<Vec<_>>();
-        let mut source =
-            Image::frombytes(if mode == "PA" { "LA" } else { mode }, source_size, &bytes)
-                .expect("integer-constant projective source");
-        if mode == "PA" {
-            let palette = (0..768)
-                .map(|index| (index * 19 + 7) as u8)
-                .collect::<Vec<_>>();
-            source
-                .putpalette(&palette, "RGB")
-                .expect("integer-constant PA palette");
-        }
-        let fill = match mode {
-            "L" => TransformFill::Scalar(199),
-            "RGB" => TransformFill::Components(vec![199, 71, 17]),
-            "PA" => TransformFill::Components(vec![199, 71]),
-            "CMYK" | "RGBX" | "RGBa" => TransformFill::Components(vec![199, 71, 17, 233]),
-            "HSV" | "YCbCr" => TransformFill::Components(vec![199, 71, 17]),
-            _ => unreachable!(),
-        };
-        for filter in [ResampleFilter::Bilinear, ResampleFilter::Bicubic] {
-            for (method, data) in &maps {
-                let transformed = source
-                    .transform_public(
-                        output_size,
-                        *method,
-                        Some(data.clone()),
-                        match filter {
-                            ResampleFilter::Bilinear => 2,
-                            ResampleFilter::Bicubic => 3,
-                            _ => unreachable!(),
-                        },
-                        0,
-                        Some(fill.clone()),
-                    )
-                    .expect("integer-constant projective transform");
-                let expected = transformed
-                    .clone()
-                    .use_backend(Backend::Cpu)
-                    .tobytes()
-                    .expect("CPU integer-constant projective transform");
-                let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
-                    Ok(actual) => actual,
-                    Err(error)
-                        if error.to_string().contains("GPU adapter not available")
-                            || error
-                                .to_string()
-                                .contains("GPU device initialization failed") =>
-                    {
-                        Backend::set_pipeline_telemetry_enabled(previous);
-                        return;
-                    }
-                    Err(error) => {
-                        panic!("native GPU integer-constant projective transform failed: {error}")
-                    }
-                };
-                assert_eq!(
-                    actual, expected,
-                    "native {mode} method={method} filter={filter:?} integer constant"
-                );
-                let telemetry = Backend::take_pipeline_telemetry()
-                    .expect("integer-constant projective transform must publish telemetry");
-                assert_eq!(telemetry.0, Some(Backend::Gpu));
-                assert_eq!(telemetry.1, Backend::Gpu);
-                assert_eq!(telemetry.6, Some(1));
-                assert_eq!(telemetry.7, None);
-            }
+        source
+            .putpalette(&palette, "RGB")
+            .expect("integer-constant PA palette");
+    }
+    let fill = match mode {
+        "L" => TransformFill::Scalar(199),
+        "RGB" => TransformFill::Components(vec![199, 71, 17]),
+        "PA" => TransformFill::Components(vec![199, 71]),
+        "CMYK" | "RGBX" | "RGBa" => TransformFill::Components(vec![199, 71, 17, 233]),
+        "HSV" | "YCbCr" => TransformFill::Components(vec![199, 71, 17]),
+        _ => unreachable!(),
+    };
+    for filter in [ResampleFilter::Bilinear, ResampleFilter::Bicubic] {
+        for (method, data) in maps {
+            let transformed = source
+                .transform_public(
+                    output_size,
+                    *method,
+                    Some(data.clone()),
+                    match filter {
+                        ResampleFilter::Bilinear => 2,
+                        ResampleFilter::Bicubic => 3,
+                        _ => unreachable!(),
+                    },
+                    0,
+                    Some(fill.clone()),
+                )
+                .expect("integer-constant projective transform");
+            let expected = transformed
+                .clone()
+                .use_backend(Backend::Cpu)
+                .tobytes()
+                .expect("CPU integer-constant projective transform");
+            let actual = match transformed.use_backend(Backend::Gpu).tobytes() {
+                Ok(actual) => actual,
+                Err(error)
+                    if error.to_string().contains("GPU adapter not available")
+                        || error
+                            .to_string()
+                            .contains("GPU device initialization failed") =>
+                {
+                    return false;
+                }
+                Err(error) => {
+                    panic!("native GPU integer-constant projective transform failed: {error}")
+                }
+            };
+            assert_eq!(
+                actual, expected,
+                "native {mode} method={method} filter={filter:?} integer constant"
+            );
+            let telemetry = Backend::take_pipeline_telemetry()
+                .expect("integer-constant projective transform must publish telemetry");
+            assert_eq!(telemetry.0, Some(Backend::Gpu));
+            assert_eq!(telemetry.1, Backend::Gpu);
+            assert_eq!(telemetry.6, Some(1));
+            assert_eq!(telemetry.7, None);
         }
     }
-    Backend::set_pipeline_telemetry_enabled(previous);
+    true
 }
