@@ -261,7 +261,153 @@ fn write_native_rgb_put_alpha_parameters(
     Ok(())
 }
 
+#[cfg(target_endian = "little")]
+fn native_put_alpha_data_bind_group(
+    device: &wgpu::Device,
+    cached: &CachedPipeline,
+    buffers: &BufferPool,
+    input_transfer_bytes: u64,
+    mask_transfer_bytes: u64,
+    output_transfer_bytes: u64,
+    label: &'static str,
+) -> Result<wgpu::BindGroup, PilError> {
+    Ok(device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some(label),
+        layout: &cached.bind_group_layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: ranged_binding(
+                    &buffers.buf_a,
+                    Some(BufferRange {
+                        offset: 0,
+                        size: input_transfer_bytes,
+                    }),
+                )?,
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: ranged_binding(
+                    &buffers.img3_arena.buffer,
+                    Some(BufferRange {
+                        offset: 0,
+                        size: mask_transfer_bytes,
+                    }),
+                )?,
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: ranged_binding(
+                    &buffers.buf_b,
+                    Some(BufferRange {
+                        offset: 0,
+                        size: output_transfer_bytes,
+                    }),
+                )?,
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: ranged_binding(
+                    &buffers.params_arena.buffer,
+                    Some(BufferRange {
+                        offset: 0,
+                        size: 16,
+                    }),
+                )?,
+            },
+        ],
+    }))
+}
+
+#[cfg(target_endian = "little")]
+struct NativePutAlphaDataSubmission<'a> {
+    cached: &'a CachedPipeline,
+    bind_group: &'a wgpu::BindGroup,
+    width: u32,
+    height: u32,
+    groups_x: u32,
+    groups_y: u32,
+    input_transfer_bytes: u64,
+    mask_transfer_bytes: u64,
+    output_bytes: usize,
+    output_transfer_bytes: u64,
+    encoder_label: &'static str,
+    submission_stage: &'static str,
+    readback_error: &'static str,
+}
+
 impl GpuInner {
+    #[cfg(target_endian = "little")]
+    fn execute_native_put_alpha_data(
+        &self,
+        buffers: &mut BufferPool,
+        submission: NativePutAlphaDataSubmission<'_>,
+    ) -> Result<DynamicImage, PilError> {
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some(submission.encoder_label),
+            });
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some(submission.encoder_label),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&submission.cached.pipeline);
+            pass.set_bind_group(0, submission.bind_group, &[]);
+            crate::compute::record_gpu_shader_dispatch(
+                submission.cached.variant_name,
+                submission.cached.shader_file,
+                u64::from(submission.groups_x) * u64::from(submission.groups_y),
+            );
+            pass.dispatch_workgroups(submission.groups_x, submission.groups_y, 1);
+        }
+        let readback = self.prepare_readback(&buffers.buf_b, submission.output_transfer_bytes)?;
+        if let ReadbackTarget::Staging(staging) = &readback {
+            encoder.copy_buffer_to_buffer(
+                &buffers.buf_b,
+                0,
+                &staging.buffer,
+                0,
+                submission.output_transfer_bytes,
+            );
+        }
+        self.queue.submit(Some(encoder.finish()));
+        self.poll_device(submission.submission_stage)?;
+        let result = self.readback_with(
+            submission.output_transfer_bytes,
+            readback.buffer(buffers, false),
+            |mapped| {
+                if mapped.len() != submission.output_transfer_bytes as usize {
+                    return Err(PilError::InternalError(submission.readback_error.into()));
+                }
+                let bytes = mapped[..submission.output_bytes].to_vec();
+                crate::compute::record_pipeline_allocation(bytes.len());
+                crate::image_utils::raw_bytes_to_image(
+                    submission.width,
+                    submission.height,
+                    bytes,
+                    4,
+                )
+            },
+        )?;
+        crate::compute::record_pipeline_resource_telemetry(PipelineResourceTelemetry {
+            upload_bytes: submission.input_transfer_bytes,
+            auxiliary_bytes: submission.mask_transfer_bytes,
+            readback_bytes: submission.output_transfer_bytes,
+            parameter_bytes: 16,
+            retained_cache_bytes: buffers.retained_bytes(),
+            full_frame_copy_count: 2 + u64::from(matches!(&readback, ReadbackTarget::Staging(_))),
+            mode_conversion_count: 0,
+            ..PipelineResourceTelemetry::default()
+        });
+        crate::compute::record_pipeline_dispatch_count(1);
+        if let ReadbackTarget::Staging(staging) = readback {
+            self.recycle_staging(staging);
+        }
+        Ok(result)
+    }
+
     /// Add scalar alpha to native RGB samples and write the required RGBA
     /// result without first expanding the host upload to four bytes per pixel.
     #[cfg(target_endian = "little")]
@@ -447,112 +593,33 @@ impl GpuInner {
             "put_alpha_data_native_rgb.wgsl",
             include_str!("../shaders/put_alpha_data_native_rgb.wgsl"),
         )?;
-        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("gpu_put_alpha_data_native_rgb"),
-            layout: &cached.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: ranged_binding(
-                        &buffers.buf_a,
-                        Some(BufferRange {
-                            offset: 0,
-                            size: dispatch.rgb_transfer_bytes,
-                        }),
-                    )?,
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: ranged_binding(
-                        &buffers.img3_arena.buffer,
-                        Some(BufferRange {
-                            offset: 0,
-                            size: dispatch.mask_transfer_bytes,
-                        }),
-                    )?,
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: ranged_binding(
-                        &buffers.buf_b,
-                        Some(BufferRange {
-                            offset: 0,
-                            size: dispatch.output_transfer_bytes,
-                        }),
-                    )?,
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: ranged_binding(
-                        &buffers.params_arena.buffer,
-                        Some(BufferRange {
-                            offset: 0,
-                            size: 16,
-                        }),
-                    )?,
-                },
-            ],
-        });
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("gpu_put_alpha_data_native_rgb"),
-            });
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("gpu_put_alpha_data_native_rgb"),
-                timestamp_writes: None,
-            });
-            pass.set_pipeline(&cached.pipeline);
-            pass.set_bind_group(0, &bind_group, &[]);
-            crate::compute::record_gpu_shader_dispatch(
-                cached.variant_name,
-                cached.shader_file,
-                u64::from(dispatch.groups_x) * u64::from(dispatch.groups_y),
-            );
-            pass.dispatch_workgroups(dispatch.groups_x, dispatch.groups_y, 1);
-        }
-        let readback = self.prepare_readback(&buffers.buf_b, dispatch.output_transfer_bytes)?;
-        if let ReadbackTarget::Staging(staging) = &readback {
-            encoder.copy_buffer_to_buffer(
-                &buffers.buf_b,
-                0,
-                &staging.buffer,
-                0,
-                dispatch.output_transfer_bytes,
-            );
-        }
-        self.queue.submit(Some(encoder.finish()));
-        self.poll_device("GPU native RGB PutAlphaData submission")?;
-        let result = self.readback_with(
+        let bind_group = native_put_alpha_data_bind_group(
+            &self.device,
+            &cached,
+            buffers,
+            dispatch.rgb_transfer_bytes,
+            dispatch.mask_transfer_bytes,
             dispatch.output_transfer_bytes,
-            readback.buffer(buffers, false),
-            |mapped| {
-                if mapped.len() != dispatch.output_transfer_bytes as usize {
-                    return Err(PilError::InternalError(
-                        "GPU native RGB PutAlphaData readback length mismatch".into(),
-                    ));
-                }
-                let bytes = mapped[..dispatch.output_bytes].to_vec();
-                crate::compute::record_pipeline_allocation(bytes.len());
-                crate::image_utils::raw_bytes_to_image(width, height, bytes, 4)
-            },
+            "gpu_put_alpha_data_native_rgb",
         )?;
-        crate::compute::record_pipeline_resource_telemetry(PipelineResourceTelemetry {
-            upload_bytes: dispatch.rgb_transfer_bytes,
-            auxiliary_bytes: dispatch.mask_transfer_bytes,
-            readback_bytes: dispatch.output_transfer_bytes,
-            parameter_bytes: 16,
-            retained_cache_bytes: buffers.retained_bytes(),
-            full_frame_copy_count: 2 + u64::from(matches!(&readback, ReadbackTarget::Staging(_))),
-            mode_conversion_count: 0,
-            ..PipelineResourceTelemetry::default()
-        });
-        crate::compute::record_pipeline_dispatch_count(1);
-        if let ReadbackTarget::Staging(staging) = readback {
-            self.recycle_staging(staging);
-        }
-        Ok(result)
+        self.execute_native_put_alpha_data(
+            buffers,
+            NativePutAlphaDataSubmission {
+                cached: &cached,
+                bind_group: &bind_group,
+                width,
+                height,
+                groups_x: dispatch.groups_x,
+                groups_y: dispatch.groups_y,
+                input_transfer_bytes: dispatch.rgb_transfer_bytes,
+                mask_transfer_bytes: dispatch.mask_transfer_bytes,
+                output_bytes: dispatch.output_bytes,
+                output_transfer_bytes: dispatch.output_transfer_bytes,
+                encoder_label: "gpu_put_alpha_data_native_rgb",
+                submission_stage: "GPU native RGB PutAlphaData submission",
+                readback_error: "GPU native RGB PutAlphaData readback length mismatch",
+            },
+        )
     }
 
     /// Replace the alpha byte in native RGBA pixels from a packed L mask.
@@ -635,111 +702,32 @@ impl GpuInner {
             "put_alpha_data_native_rgba.wgsl",
             include_str!("../shaders/put_alpha_data_native_rgba.wgsl"),
         )?;
-        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("gpu_put_alpha_data_native_rgba"),
-            layout: &cached.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: ranged_binding(
-                        &buffers.buf_a,
-                        Some(BufferRange {
-                            offset: 0,
-                            size: dispatch.rgba_transfer_bytes,
-                        }),
-                    )?,
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: ranged_binding(
-                        &buffers.img3_arena.buffer,
-                        Some(BufferRange {
-                            offset: 0,
-                            size: dispatch.mask_transfer_bytes,
-                        }),
-                    )?,
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: ranged_binding(
-                        &buffers.buf_b,
-                        Some(BufferRange {
-                            offset: 0,
-                            size: dispatch.output_transfer_bytes,
-                        }),
-                    )?,
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: ranged_binding(
-                        &buffers.params_arena.buffer,
-                        Some(BufferRange {
-                            offset: 0,
-                            size: 16,
-                        }),
-                    )?,
-                },
-            ],
-        });
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("gpu_put_alpha_data_native_rgba"),
-            });
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("gpu_put_alpha_data_native_rgba"),
-                timestamp_writes: None,
-            });
-            pass.set_pipeline(&cached.pipeline);
-            pass.set_bind_group(0, &bind_group, &[]);
-            crate::compute::record_gpu_shader_dispatch(
-                cached.variant_name,
-                cached.shader_file,
-                u64::from(dispatch.groups_x) * u64::from(dispatch.groups_y),
-            );
-            pass.dispatch_workgroups(dispatch.groups_x, dispatch.groups_y, 1);
-        }
-        let readback = self.prepare_readback(&buffers.buf_b, dispatch.output_transfer_bytes)?;
-        if let ReadbackTarget::Staging(staging) = &readback {
-            encoder.copy_buffer_to_buffer(
-                &buffers.buf_b,
-                0,
-                &staging.buffer,
-                0,
-                dispatch.output_transfer_bytes,
-            );
-        }
-        self.queue.submit(Some(encoder.finish()));
-        self.poll_device("GPU native RGBA PutAlphaData submission")?;
-        let result = self.readback_with(
+        let bind_group = native_put_alpha_data_bind_group(
+            &self.device,
+            &cached,
+            buffers,
+            dispatch.rgba_transfer_bytes,
+            dispatch.mask_transfer_bytes,
             dispatch.output_transfer_bytes,
-            readback.buffer(buffers, false),
-            |mapped| {
-                if mapped.len() != dispatch.output_transfer_bytes as usize {
-                    return Err(PilError::InternalError(
-                        "GPU native RGBA PutAlphaData readback length mismatch".into(),
-                    ));
-                }
-                let bytes = mapped[..dispatch.rgba_bytes].to_vec();
-                crate::compute::record_pipeline_allocation(bytes.len());
-                crate::image_utils::raw_bytes_to_image(width, height, bytes, 4)
-            },
+            "gpu_put_alpha_data_native_rgba",
         )?;
-        crate::compute::record_pipeline_resource_telemetry(PipelineResourceTelemetry {
-            upload_bytes: dispatch.rgba_transfer_bytes,
-            auxiliary_bytes: dispatch.mask_transfer_bytes,
-            readback_bytes: dispatch.output_transfer_bytes,
-            parameter_bytes: 16,
-            retained_cache_bytes: buffers.retained_bytes(),
-            full_frame_copy_count: 2 + u64::from(matches!(&readback, ReadbackTarget::Staging(_))),
-            mode_conversion_count: 0,
-            ..PipelineResourceTelemetry::default()
-        });
-        crate::compute::record_pipeline_dispatch_count(1);
-        if let ReadbackTarget::Staging(staging) = readback {
-            self.recycle_staging(staging);
-        }
-        Ok(result)
+        self.execute_native_put_alpha_data(
+            buffers,
+            NativePutAlphaDataSubmission {
+                cached: &cached,
+                bind_group: &bind_group,
+                width,
+                height,
+                groups_x: dispatch.groups_x,
+                groups_y: dispatch.groups_y,
+                input_transfer_bytes: dispatch.rgba_transfer_bytes,
+                mask_transfer_bytes: dispatch.mask_transfer_bytes,
+                output_bytes: dispatch.rgba_bytes,
+                output_transfer_bytes: dispatch.output_transfer_bytes,
+                encoder_label: "gpu_put_alpha_data_native_rgba",
+                submission_stage: "GPU native RGBA PutAlphaData submission",
+                readback_error: "GPU native RGBA PutAlphaData readback length mismatch",
+            },
+        )
     }
 }

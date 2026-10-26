@@ -214,18 +214,6 @@
       "signature": "fn build_pipeline( device: &wgpu::Device, variant_name: &'static str, shader_file: &'static str, shader_source: &str, ) -> Option<CachedPipeline> {"
     },
     {
-      "lines": 175,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/point_ops/native_alpha.rs",
-      "signature": "pub(in crate::compute::pool_gpu) fn execute_native_rgb_put_alpha_data( &self, image: &DynamicImage, mask: &DynamicImage, dispatch: NativeRgbPutAlphaDataDispatch, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
-    },
-    {
-      "lines": 173,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/point_ops/native_alpha.rs",
-      "signature": "pub(in crate::compute::pool_gpu) fn execute_native_rgba_put_alpha_data( &self, image: &DynamicImage, mask: &DynamicImage, dispatch: NativeRgbaPutAlphaDataDispatch, buffers: &mut BufferPool, ) -> Result<DynamicImage, PilError> {"
-    },
-    {
       "lines": 301,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/projection.rs",
@@ -618,11 +606,6 @@
     "pillow-rs/src/compute/pool_gpu/pipeline_cache.rs": {
       "owner": "lazytrot",
       "reason": "Moved GPU shader pipeline construction and cache lookup into a focused module; continue reducing under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/point_ops/native_alpha.rs": {
-      "owner": "lazytrot",
-      "reason": "Moved native PutAlpha GPU executors beside point-operation execution; continue refactoring under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"
     },
     "pillow-rs/src/compute/pool_gpu/projection.rs": {
