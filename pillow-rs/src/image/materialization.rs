@@ -125,6 +125,39 @@ impl Image {
     /// pixel values (indices) are safe. Color-dependent ops (filters, enhance,
     /// convert) need RGB.
     fn is_palette_safe_op(op: &PipelineOp) -> bool {
+        if Self::palette_preserves_raw_samples(op) {
+            return true;
+        }
+        match op {
+            PipelineOp::CompositeModule { other, .. } => {
+                // PIL.Image.composite starts from image2 and pastes image1
+                // into it. P and PA operands are both blended as raw sample
+                // bytes; PA is not included in has_palette_mode because that
+                // helper intentionally means a single-byte palette index.
+                other.has_palette_mode() || other.explicit_mode() == Some("PA")
+            }
+            PipelineOp::PutPixel {
+                palette_index: true,
+                ..
+            } => true,
+            PipelineOp::Rotate { fill: None, .. } => true,
+            PipelineOp::Resize { filter, .. } | PipelineOp::ResizeBoxed { filter, .. } => {
+                matches!(filter, ResampleFilter::Nearest)
+            }
+            PipelineOp::Thumbnail { filter, .. } => {
+                matches!(filter, ResampleFilter::Nearest)
+            }
+            PipelineOp::Transform {
+                method: TransformMethod::Affine,
+                filter: ResampleFilter::Nearest,
+                palette_fill,
+                ..
+            } => palette_fill.is_some(),
+            _ => false,
+        }
+    }
+
+    fn palette_preserves_raw_samples(op: &PipelineOp) -> bool {
         match op {
             // ImageChops.duplicate keeps source samples and palette metadata,
             // but remains a pipeline operation so backend selection is
@@ -152,7 +185,7 @@ impl Image {
             | PipelineOp::DrawPieslice { .. }
             | PipelineOp::DrawPoint { .. }
             // ImageChops.invert applies 255-index directly to P samples. Its
-            // newly allocated core image intentionally has no palette.
+            // newly allocated core intentionally has no palette.
             | PipelineOp::InvertChops
             // Pillow's Chops.c arithmetic also operates on raw indexed
             // samples for P/PA images. The result remains indexed, but its
@@ -192,48 +225,24 @@ impl Image {
             | PipelineOp::PutAlpha {
                 mode: crate::pipeline::PixelMode::P | crate::pipeline::PixelMode::PA,
                 ..
-            } => true,
-            PipelineOp::PutAlphaData {
+            }
+            | PipelineOp::PutAlphaData {
                 mode: crate::pipeline::PixelMode::P | crate::pipeline::PixelMode::PA,
                 ..
-            } => true,
+            }
             // Pillow keeps P/PA images indexed through ImageOps.pad. The
             // resize step uses nearest-neighbour samples for these modes,
             // and the pad fill is another raw index/alpha pair.
-            PipelineOp::Pad { .. } => true,
+            | PipelineOp::Pad { .. }
             // ImageOps.scale delegates to the resize path. Indexed P/PA
             // samples force nearest-neighbour scaling and remain indexed;
             // expanding them here would change the public result mode before
             // the SIMD/CPU resize adapter can preserve the raw samples.
-            PipelineOp::Scale { .. } => true,
+            | PipelineOp::Scale { .. }
             // Pillow's PA bands are the raw index and alpha bytes. Extracting
             // either band must happen before palette expansion, just like the
             // corresponding ImagingCore band operation.
-            PipelineOp::ExtractBand { .. } => true,
-            PipelineOp::CompositeModule { other, .. } => {
-                // PIL.Image.composite starts from image2 and pastes image1
-                // into it. P and PA operands are both blended as raw sample
-                // bytes; PA is not included in has_palette_mode because that
-                // helper intentionally means a single-byte palette index.
-                other.has_palette_mode() || other.explicit_mode() == Some("PA")
-            }
-            PipelineOp::PutPixel {
-                palette_index: true,
-                ..
-            } => true,
-            PipelineOp::Rotate { fill: None, .. } => true,
-            PipelineOp::Resize { filter, .. } | PipelineOp::ResizeBoxed { filter, .. } => {
-                matches!(filter, ResampleFilter::Nearest)
-            }
-            PipelineOp::Thumbnail { filter, .. } => {
-                matches!(filter, ResampleFilter::Nearest)
-            }
-            PipelineOp::Transform {
-                method: TransformMethod::Affine,
-                filter: ResampleFilter::Nearest,
-                palette_fill,
-                ..
-            } => palette_fill.is_some(),
+            | PipelineOp::ExtractBand { .. } => true,
             _ => false,
         }
     }
