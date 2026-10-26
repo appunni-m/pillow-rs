@@ -287,7 +287,25 @@ fn palette_alpha_projective_nearest_native_gpu_preserves_pairs() {
         .expect("PA palette");
     assert_eq!(source.mode().expect("PA mode"), "PA");
 
-    let cases = [
+    let cases = palette_alpha_nearest_cases();
+    let previous = Backend::set_pipeline_telemetry_enabled(true);
+    if !run_palette_alpha_nearest_cases(&source, cases) {
+        Backend::set_pipeline_telemetry_enabled(previous);
+        return;
+    }
+    let constant_cases = palette_alpha_constant_cases();
+    if !run_palette_alpha_constant_cases(&source, constant_cases) {
+        Backend::set_pipeline_telemetry_enabled(previous);
+        return;
+    }
+    Backend::set_pipeline_telemetry_enabled(previous);
+}
+
+type PaletteAlphaNearestCase = ((u32, u32), [f64; 8], Option<TransformFill>);
+type PaletteAlphaConstantCase = ((u32, u32), i32, TransformData, Option<TransformFill>);
+
+fn palette_alpha_nearest_cases() -> [PaletteAlphaNearestCase; 10] {
+    [
         ((7, 5), [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0], None),
         (
             (9, 6),
@@ -334,9 +352,10 @@ fn palette_alpha_projective_nearest_native_gpu_preserves_pairs() {
             [0.0, -1.0, 5.0, -1.0, 0.0, 7.0, 0.0, 0.0],
             Some(TransformFill::Components(vec![61, 233])),
         ),
-    ];
+    ]
+}
 
-    let previous = Backend::set_pipeline_telemetry_enabled(true);
+fn run_palette_alpha_nearest_cases(source: &Image, cases: [PaletteAlphaNearestCase; 10]) -> bool {
     for (size, matrix, fill) in cases {
         let transformed = source
             .transform_public(
@@ -361,8 +380,7 @@ fn palette_alpha_projective_nearest_native_gpu_preserves_pairs() {
                         .to_string()
                         .contains("GPU device initialization failed") =>
             {
-                Backend::set_pipeline_telemetry_enabled(previous);
-                return;
+                return false;
             }
             Err(error) => panic!("native GPU PA projective transform failed: {error}"),
         };
@@ -374,7 +392,11 @@ fn palette_alpha_projective_nearest_native_gpu_preserves_pairs() {
         assert_eq!(telemetry.6, Some(1));
         assert_eq!(telemetry.7, None);
     }
-    let constant_cases = [
+    true
+}
+
+fn palette_alpha_constant_cases() -> [PaletteAlphaConstantCase; 6] {
+    [
         (
             (9, 6),
             3,
@@ -420,7 +442,13 @@ fn palette_alpha_projective_nearest_native_gpu_preserves_pairs() {
             )]),
             Some(TransformFill::Components(vec![199, 71])),
         ),
-    ];
+    ]
+}
+
+fn run_palette_alpha_constant_cases(
+    source: &Image,
+    constant_cases: [PaletteAlphaConstantCase; 6],
+) -> bool {
     for (size, method, data, fill) in constant_cases {
         let transformed = source
             .transform_public(size, method, Some(data), 0, 0, fill)
@@ -440,8 +468,7 @@ fn palette_alpha_projective_nearest_native_gpu_preserves_pairs() {
                         .to_string()
                         .contains("GPU device initialization failed") =>
             {
-                Backend::set_pipeline_telemetry_enabled(previous);
-                return;
+                return false;
             }
             Err(error) => panic!("native GPU PA constant projective transform failed: {error}"),
         };
@@ -453,7 +480,7 @@ fn palette_alpha_projective_nearest_native_gpu_preserves_pairs() {
         assert_eq!(telemetry.6, Some(1));
         assert_eq!(telemetry.7, None);
     }
-    Backend::set_pipeline_telemetry_enabled(previous);
+    true
 }
 
 #[test]
