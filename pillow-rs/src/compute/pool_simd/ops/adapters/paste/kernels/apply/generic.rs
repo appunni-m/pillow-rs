@@ -190,9 +190,7 @@ fn copy_rows(context: &mut NativePasteApplyContext<'_>) -> Option<(u64, u64)> {
         let source_row = &source[source_row_start..source_row_start + region_row_bytes];
         let destination_row =
             &mut destination[destination_row_start..destination_row_start + region_row_bytes];
-        let Some((blocks, tail)) = copy_native_bytes(source_row, destination_row) else {
-            return None;
-        };
+        let (blocks, tail) = copy_native_bytes(source_row, destination_row)?;
         vector_blocks = vector_blocks.saturating_add(blocks);
         scalar_tail = scalar_tail.saturating_add(tail);
     }

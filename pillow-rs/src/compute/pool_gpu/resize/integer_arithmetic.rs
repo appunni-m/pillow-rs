@@ -88,21 +88,12 @@ pub(in crate::compute::pool_gpu) fn gpu_f_resize_integer_sample_bits(
         Ok(value) => value,
         Err(_) => return None,
     };
-    let Some(&source_start) = coeffs.xmin.get(output_index) else {
-        return None;
-    };
-    let Some(&count) = coeffs.count.get(output_index) else {
-        return None;
-    };
-    let Some(&weight_start) = coeffs.offsets.get(output_index) else {
-        return None;
-    };
-    let Some(weights) = coeffs
+    let &source_start = coeffs.xmin.get(output_index)?;
+    let &count = coeffs.count.get(output_index)?;
+    let &weight_start = coeffs.offsets.get(output_index)?;
+    let weights = coeffs
         .weights
-        .get(weight_start..weight_start.saturating_add(count))
-    else {
-        return None;
-    };
+        .get(weight_start..weight_start.saturating_add(count))?;
     let source_start = match usize::try_from(source_start) {
         Ok(value) => value,
         Err(_) => return None,

@@ -39,9 +39,7 @@ fn native_byte_transform<F>(
 where
     F: Fn(u8x16) -> u8x16,
 {
-    let Some(channels) = native_byte_layout(img, mode) else {
-        return None;
-    };
+    let channels = native_byte_layout(img, mode)?;
     if !has_nonempty_byte_data(img, channels) {
         return None;
     }

@@ -223,12 +223,9 @@ fn native_module_blend(
     let channels = native_module_blend_pair_channels(img, other, mode, other_mode)?;
     let left = img.as_bytes();
     let right = other.as_bytes();
-    let Some(expected_len) = (img.width() as usize)
+    let expected_len = (img.width() as usize)
         .checked_mul(img.height() as usize)
-        .and_then(|pixels| pixels.checked_mul(channels))
-    else {
-        return None;
-    };
+        .and_then(|pixels| pixels.checked_mul(channels))?;
     if left.len() != right.len()
         || left.len() != expected_len
         || !left.len().is_multiple_of(channels)

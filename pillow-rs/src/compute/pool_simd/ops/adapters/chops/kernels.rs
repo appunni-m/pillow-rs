@@ -161,12 +161,9 @@ pub(super) fn native_chops_blend(
     screen: bool,
 ) -> Option<DynamicImage> {
     let channels = native_chops_pair_channels(img, other, mode)?;
-    let Some(expected_len) = (img.width() as usize)
+    let expected_len = (img.width() as usize)
         .checked_mul(img.height() as usize)
-        .and_then(|pixels| pixels.checked_mul(channels))
-    else {
-        return None;
-    };
+        .and_then(|pixels| pixels.checked_mul(channels))?;
     if img.as_bytes().len() != expected_len || other.as_bytes().len() != expected_len {
         return None;
     }
@@ -224,13 +221,10 @@ where
     if left.len() != right.len() || !left.len().is_multiple_of(channels) {
         return None;
     }
-    let Some(expected_len) = img
+    let expected_len = img
         .width()
         .checked_mul(img.height())
-        .and_then(|pixels| pixels.checked_mul(channels as u32))
-    else {
-        return None;
-    };
+        .and_then(|pixels| pixels.checked_mul(channels as u32))?;
     if expected_len as usize != left.len() {
         return None;
     }

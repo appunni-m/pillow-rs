@@ -82,9 +82,7 @@ pub(crate) fn simd_initial_mode(
     ops: &[PipelineOp],
     final_mode: Option<&str>,
 ) -> Option<String> {
-    let Some(final_mode) = final_mode else {
-        return None;
-    };
+    let final_mode = final_mode?;
     // `PA` shares the two-byte `LumaA8` storage with `LA`, but its first byte
     // is a palette index rather than luma.  Keep the logical tag at this
     // boundary; replacing it with the concrete raster mode would make a

@@ -686,11 +686,8 @@ pub(super) fn gpu_shader_work_items(
         );
     }
     if matches!(op, PipelineOp::Pad { .. }) {
-        let Some(((resize_w, resize_h), _)) =
-            gpu_pad_geometry(op, source_dimensions.0, source_dimensions.1)
-        else {
-            return None;
-        };
+        let ((resize_w, resize_h), _) =
+            gpu_pad_geometry(op, source_dimensions.0, source_dimensions.1)?;
         // Horizontal resize visits source rows for every intermediate
         // column. The fused RGBX vertical pass and the ordinary final
         // placement each visit the destination canvas once; the unfused path

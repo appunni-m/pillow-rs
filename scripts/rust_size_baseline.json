@@ -352,12 +352,6 @@
       "signature": "pub(in crate::compute::pool_gpu) fn gpu_f_resize_relocate_words( bytes: &[u8], dimensions: (u32, u32), op: &PipelineOp, ) -> Option<(Vec<u8>, (u32, u32))> {"
     },
     {
-      "lines": 101,
-      "occurrence": 1,
-      "path": "pillow-rs/src/compute/pool_gpu/resize/integer_arithmetic.rs",
-      "signature": "pub(in crate::compute::pool_gpu) fn gpu_f_resize_integer_sample_bits( bytes: &[u8], source_dimensions: (u32, u32), coeffs: &FilterCoeffs, output_index: usize, horizontal: bool, line: usize, ) -> Option<u32> {"
-    },
-    {
       "lines": 134,
       "occurrence": 1,
       "path": "pillow-rs/src/compute/pool_gpu/resize/ordered_float.rs",
@@ -923,11 +917,6 @@
     "pillow-rs/src/compute/pool_gpu/resize/float_exactness.rs": {
       "owner": "lazytrot",
       "reason": "Relocated F-mode exact resize admission proofs with existing long functions; continue reducing under pillow-rs#ras2.",
-      "reduction_task": "pillow-rs#ras2"
-    },
-    "pillow-rs/src/compute/pool_gpu/resize/integer_arithmetic.rs": {
-      "owner": "lazytrot",
-      "reason": "Relocated GPU F-mode integer resize arithmetic with existing long helper functions; continue reducing under pillow-rs#ras2.",
       "reduction_task": "pillow-rs#ras2"
     },
     "pillow-rs/src/compute/pool_gpu/resize/ordered_float.rs": {
