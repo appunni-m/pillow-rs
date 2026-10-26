@@ -170,6 +170,192 @@ pub(super) fn transform_affine_rgb_nearest(
     Ok(Some(DynamicImage::ImageRgb8(image)))
 }
 
+#[inline(always)]
+fn transform_affine_fixed_nearest_pixels(
+    raw: &[u8],
+    output: &mut [u8],
+    source_dimensions: (u32, u32),
+    destination_dimensions: (u32, u32),
+    channels: usize,
+    steps: [i64; 6],
+    fill_color: (u8, u8, u8, u8),
+) {
+    let (sw, sh) = source_dimensions;
+    let (dst_w, dst_h) = destination_dimensions;
+    let [a, b, c, d, e, f] = steps;
+    let fill = [fill_color.0, fill_color.1, fill_color.2, fill_color.3];
+    for y in 0..dst_h {
+        let mut sx = c + i64::from(y) * b;
+        let mut sy = f + i64::from(y) * e;
+        for x in 0..dst_w {
+            let ix = sx >> 16;
+            let iy = sy >> 16;
+            let index = (y as usize * dst_w as usize + x as usize) * channels;
+            let pixel = &mut output[index..index + channels];
+            if ix >= 0 && ix < i64::from(sw) && iy >= 0 && iy < i64::from(sh) {
+                let source = (iy as usize * sw as usize + ix as usize) * channels;
+                pixel.copy_from_slice(&raw[source..source + channels]);
+            } else {
+                pixel.copy_from_slice(&fill[..channels]);
+            }
+            sx += a;
+            sy += d;
+        }
+    }
+}
+
+#[inline(always)]
+fn transform_affine_generic_pixels(
+    raw: &[u8],
+    output: &mut [u8],
+    source_dimensions: (u32, u32),
+    destination_dimensions: (u32, u32),
+    affine: [f64; 6],
+    channels: usize,
+    fill_color: (u8, u8, u8, u8),
+    nearest: bool,
+    bicubic: bool,
+) {
+    let (dst_w, dst_h) = destination_dimensions;
+    let [aff_a, aff_b, aff_c, aff_d, aff_e, aff_f] = affine;
+    for dy in 0..dst_h {
+        for dx in 0..dst_w {
+            // Geometry.c's affine_transform() evaluates destination pixel
+            // centers before applying the matrix. The nearest filter then
+            // truncates non-negative coordinates, while interpolating filters
+            // subtract 0.5 inside their own filter prologue.
+            // Keep the same grouping as Geometry.c's affine_transform()
+            // expression as compiled by clang: the first product is fused
+            // with the second product, then the translation is added. A
+            // reassociated plain expression can move an edge coordinate by
+            // one ULP after an LA/RGBA premultiplied round trip.
+            let sx = aff_a.mul_add(dx as f64 + 0.5, aff_b * (dy as f64 + 0.5)) + aff_c;
+            let sy = aff_d.mul_add(dx as f64 + 0.5, aff_e * (dy as f64 + 0.5)) + aff_f;
+            let out_idx = (dy * dst_w + dx) as usize * channels;
+            transform_affine_generic_pixel(
+                raw,
+                &mut output[out_idx..out_idx + channels],
+                source_dimensions,
+                sx,
+                sy,
+                channels,
+                fill_color,
+                nearest,
+                bicubic,
+            );
+        }
+    }
+}
+
+#[inline(always)]
+fn transform_affine_generic_pixel(
+    raw: &[u8],
+    output_pixel: &mut [u8],
+    source_dimensions: (u32, u32),
+    sx: f64,
+    sy: f64,
+    channels: usize,
+    fill_color: (u8, u8, u8, u8),
+    nearest: bool,
+    bicubic: bool,
+) {
+    let (sw, sh) = source_dimensions;
+    if nearest {
+        // Matches Geometry.c's COORD(): negative coordinates are rejected
+        // and non-negative values use C's truncating cast.
+        let ix = if sx < 0.0 { -1 } else { sx as i64 };
+        let iy = if sy < 0.0 { -1 } else { sy as i64 };
+        if ix >= 0 && ix < sw as i64 && iy >= 0 && iy < sh as i64 {
+            let in_idx = (iy as u32 * sw + ix as u32) as usize * channels;
+            output_pixel.copy_from_slice(&raw[in_idx..in_idx + channels]);
+        } else {
+            for ch in 0..channels.min(4) {
+                output_pixel[ch] = match ch {
+                    0 => fill_color.0,
+                    1 => fill_color.1,
+                    2 => fill_color.2,
+                    _ => fill_color.3,
+                };
+            }
+        }
+    } else if sw > 0 && sh > 0 && sx >= 0.0 && sx < sw as f64 && sy >= 0.0 && sy < sh as f64 {
+        // Matches Geometry.c's BILINEAR_HEAD(): bounds are checked in center
+        // space, then the filter moves to surrounding sample corners.
+        let sample_x = sx - 0.5;
+        let sample_y = sy - 0.5;
+        if bicubic {
+            // Pillow's BICUBIC_BODY uses four horizontally clipped taps and a
+            // sequential vertical fallback: an out-of-range row repeats the
+            // previous row rather than independently clamping every row.
+            let x_floor = sample_x.floor() as i64;
+            let y_floor = sample_y.floor() as i64;
+            let x = x_floor - 1;
+            let y = y_floor - 1;
+            let fx = sample_x - x_floor as f64;
+            let fy = sample_y - y_floor as f64;
+            for ch in 0..channels {
+                let mut rows = [0.0; 4];
+                for row in 0..4 {
+                    let yy = y + row as i64;
+                    if row == 0 || (yy >= 0 && yy < sh as i64) {
+                        let y_index = yy.clamp(0, sh as i64 - 1) as usize;
+                        let samples = [
+                            raw[(y_index * sw as usize + x.clamp(0, sw as i64 - 1) as usize)
+                                * channels
+                                + ch] as f64,
+                            raw[(y_index * sw as usize + (x + 1).clamp(0, sw as i64 - 1) as usize)
+                                * channels
+                                + ch] as f64,
+                            raw[(y_index * sw as usize + (x + 2).clamp(0, sw as i64 - 1) as usize)
+                                * channels
+                                + ch] as f64,
+                            raw[(y_index * sw as usize + (x + 3).clamp(0, sw as i64 - 1) as usize)
+                                * channels
+                                + ch] as f64,
+                        ];
+                        rows[row] = cubic_sample(samples, fx);
+                    } else {
+                        rows[row] = rows[row - 1];
+                    }
+                }
+                output_pixel[ch] = cubic_sample(rows, fy).clamp(0.0, 255.0) as u8;
+            }
+        } else {
+            let x_floor = sample_x.floor() as i64;
+            let y_floor = sample_y.floor() as i64;
+            let x0 = x_floor.clamp(0, sw as i64 - 1) as u32;
+            let y0 = y_floor.clamp(0, sh as i64 - 1) as u32;
+            let x1 = (x_floor + 1).clamp(0, sw as i64 - 1) as u32;
+            let y1 = (y_floor + 1).clamp(0, sh as i64 - 1) as u32;
+            let fx = sample_x - x_floor as f64;
+            let fy = sample_y - y_floor as f64;
+            for ch in 0..channels {
+                let p00 = raw[(y0 * sw + x0) as usize * channels + ch] as f64;
+                let p10 = raw[(y0 * sw + x1) as usize * channels + ch] as f64;
+                let p01 = raw[(y1 * sw + x0) as usize * channels + ch] as f64;
+                let p11 = raw[(y1 * sw + x1) as usize * channels + ch] as f64;
+                // Geometry.c interpolates each row and then interpolates
+                // those results; a four-term sum can differ by one ULP.
+                let top = (p10 - p00).mul_add(fx, p00);
+                let bottom = (p11 - p01).mul_add(fx, p01);
+                let value = (bottom - top).mul_add(fy, top);
+                // Pillow's byte transform truncates toward zero. Rounding
+                // makes exact halfway samples one value too high.
+                output_pixel[ch] = value.clamp(0.0, 255.0) as u8;
+            }
+        }
+    } else {
+        for ch in 0..channels.min(4) {
+            output_pixel[ch] = match ch {
+                0 => fill_color.0,
+                1 => fill_color.1,
+                2 => fill_color.2,
+                _ => fill_color.3,
+            };
+        }
+    }
+}
+
 /// Apply an affine transform working on the native number of channels.
 /// When `nearest` is true, uses nearest-neighbor sampling.
 pub(super) fn transform_affine_generic(
@@ -201,159 +387,32 @@ pub(super) fn transform_affine_generic(
     });
 
     let mut out = vec![0u8; (dst_w * dst_h) as usize * channels];
+    let affine = [aff_a, aff_b, aff_c, aff_d, aff_e, aff_f];
 
-    if nearest
-        && let Some([a, b, c, d, e, f]) =
-            affine_nearest_fixed([aff_a, aff_b, aff_c, aff_d, aff_e, aff_f], dst_w, dst_h)
-    {
-        let fill = [fill_color.0, fill_color.1, fill_color.2, fill_color.3];
-        for y in 0..dst_h {
-            let mut sx = c + i64::from(y) * b;
-            let mut sy = f + i64::from(y) * e;
-            for x in 0..dst_w {
-                let ix = sx >> 16;
-                let iy = sy >> 16;
-                let index = (y as usize * dst_w as usize + x as usize) * channels;
-                let pixel = &mut out[index..index + channels];
-                if ix >= 0 && ix < i64::from(sw) && iy >= 0 && iy < i64::from(sh) {
-                    let source = (iy as usize * sw as usize + ix as usize) * channels;
-                    pixel.copy_from_slice(&raw[source..source + channels]);
-                } else {
-                    pixel.copy_from_slice(&fill[..channels]);
-                }
-                sx += a;
-                sy += d;
-            }
-        }
+    if nearest && let Some(steps) = affine_nearest_fixed(affine, dst_w, dst_h) {
+        transform_affine_fixed_nearest_pixels(
+            raw,
+            &mut out,
+            (sw, sh),
+            (dst_w, dst_h),
+            channels,
+            steps,
+            fill_color,
+        );
         return crate::image_utils::raw_bytes_to_image(dst_w, dst_h, out, channels);
     }
 
-    for dy in 0..dst_h {
-        for dx in 0..dst_w {
-            // Geometry.c's affine_transform() evaluates destination pixel
-            // centers before applying the matrix. The nearest filter then
-            // truncates non-negative coordinates, while interpolating filters
-            // subtract 0.5 inside their own filter prologue.
-            // Keep the same grouping as Geometry.c's affine_transform()
-            // expression as compiled by clang: the first product is fused
-            // with the second product, then the translation is added. A
-            // reassociated plain expression can move an edge coordinate by
-            // one ULP after an LA/RGBA premultiplied round trip.
-            let sx = aff_a.mul_add(dx as f64 + 0.5, aff_b * (dy as f64 + 0.5)) + aff_c;
-            let sy = aff_d.mul_add(dx as f64 + 0.5, aff_e * (dy as f64 + 0.5)) + aff_f;
-            let out_idx = (dy * dst_w + dx) as usize * channels;
-
-            if nearest {
-                // Matches Geometry.c's COORD(): negative coordinates are
-                // rejected and non-negative values use C's truncating cast,
-                // rather than round-to-nearest.
-                let ix = if sx < 0.0 { -1 } else { sx as i64 };
-                let iy = if sy < 0.0 { -1 } else { sy as i64 };
-                if ix >= 0 && ix < sw as i64 && iy >= 0 && iy < sh as i64 {
-                    let in_idx = (iy as u32 * sw + ix as u32) as usize * channels;
-                    out[out_idx..out_idx + channels]
-                        .copy_from_slice(&raw[in_idx..in_idx + channels]);
-                } else {
-                    for ch in 0..channels.min(4) {
-                        out[out_idx + ch] = match ch {
-                            0 => fill_color.0,
-                            1 => fill_color.1,
-                            2 => fill_color.2,
-                            _ => fill_color.3,
-                        };
-                    }
-                }
-            } else if sw > 0 && sh > 0 && sx >= 0.0 && sx < sw as f64 && sy >= 0.0 && sy < sh as f64
-            {
-                // Matches Geometry.c's BILINEAR_HEAD(): bounds are checked
-                // in center space, then the filter moves to the surrounding
-                // sample corners. XCLIP/YCLIP keep the half-pixel border
-                // valid without indexing a negative floor coordinate.
-                let sample_x = sx - 0.5;
-                let sample_y = sy - 0.5;
-                if bicubic {
-                    // Pillow's src/libImaging/Geometry.c BICUBIC_HEAD/BODY
-                    // uses four horizontally clipped taps and a sequential
-                    // vertical fallback: an out-of-range row repeats the
-                    // previously computed row, rather than independently
-                    // clamping every row. The native BICUBIC macro is a
-                    // fused Horner evaluation, mirrored by `cubic_sample`.
-                    let x_floor = sample_x.floor() as i64;
-                    let y_floor = sample_y.floor() as i64;
-                    let x = x_floor - 1;
-                    let y = y_floor - 1;
-                    let fx = sample_x - x_floor as f64;
-                    let fy = sample_y - y_floor as f64;
-                    for ch in 0..channels {
-                        let mut rows = [0.0; 4];
-                        for row in 0..4 {
-                            let yy = y + row as i64;
-                            if row == 0 || (yy >= 0 && yy < sh as i64) {
-                                let y_index = yy.clamp(0, sh as i64 - 1) as usize;
-                                let samples = [
-                                    raw[(y_index * sw as usize
-                                        + x.clamp(0, sw as i64 - 1) as usize)
-                                        * channels
-                                        + ch] as f64,
-                                    raw[(y_index * sw as usize
-                                        + (x + 1).clamp(0, sw as i64 - 1) as usize)
-                                        * channels
-                                        + ch] as f64,
-                                    raw[(y_index * sw as usize
-                                        + (x + 2).clamp(0, sw as i64 - 1) as usize)
-                                        * channels
-                                        + ch] as f64,
-                                    raw[(y_index * sw as usize
-                                        + (x + 3).clamp(0, sw as i64 - 1) as usize)
-                                        * channels
-                                        + ch] as f64,
-                                ];
-                                rows[row] = cubic_sample(samples, fx);
-                            } else {
-                                rows[row] = rows[row - 1];
-                            }
-                        }
-                        out[out_idx + ch] = cubic_sample(rows, fy).clamp(0.0, 255.0) as u8;
-                    }
-                } else {
-                    let x_floor = sample_x.floor() as i64;
-                    let y_floor = sample_y.floor() as i64;
-                    let x0 = x_floor.clamp(0, sw as i64 - 1) as u32;
-                    let y0 = y_floor.clamp(0, sh as i64 - 1) as u32;
-                    let x1 = (x_floor + 1).clamp(0, sw as i64 - 1) as u32;
-                    let y1 = (y_floor + 1).clamp(0, sh as i64 - 1) as u32;
-                    let fx = sample_x - x_floor as f64;
-                    let fy = sample_y - y_floor as f64;
-                    for ch in 0..channels {
-                        let p00 = raw[(y0 * sw + x0) as usize * channels + ch] as f64;
-                        let p10 = raw[(y0 * sw + x1) as usize * channels + ch] as f64;
-                        let p01 = raw[(y1 * sw + x0) as usize * channels + ch] as f64;
-                        let p11 = raw[(y1 * sw + x1) as usize * channels + ch] as f64;
-                        // Geometry.c's BILINEAR_BODY interpolates each row
-                        // first and then interpolates those two results. The
-                        // equivalent four-term weighted sum can differ by
-                        // one ULP on premultiplied LA/RGBA samples.
-                        let top = (p10 - p00).mul_add(fx, p00);
-                        let bottom = (p11 - p01).mul_add(fx, p01);
-                        let v = (bottom - top).mul_add(fy, top);
-                        // Pillow's ImagingTransformAffine byte path stores the
-                        // weighted sample by truncating toward zero; rounding
-                        // here turns exact half-way samples one value too high.
-                        out[out_idx + ch] = v.clamp(0.0, 255.0) as u8;
-                    }
-                }
-            } else {
-                for ch in 0..channels.min(4) {
-                    out[out_idx + ch] = match ch {
-                        0 => fill_color.0,
-                        1 => fill_color.1,
-                        2 => fill_color.2,
-                        _ => fill_color.3,
-                    };
-                }
-            }
-        }
-    }
+    transform_affine_generic_pixels(
+        raw,
+        &mut out,
+        (sw, sh),
+        (dst_w, dst_h),
+        affine,
+        channels,
+        fill_color,
+        nearest,
+        bicubic,
+    );
 
     Ok(match channels {
         1 => DynamicImage::ImageLuma8(GrayImage::from_raw(dst_w, dst_h, out).ok_or_else(|| {
