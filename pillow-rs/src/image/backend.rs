@@ -274,15 +274,7 @@ impl Image {
                                 .and_then(|m| m.as_ref().ok().and_then(|m| m.clone()))
                         })
                         .unwrap_or_else(|| image_mode_name(pixels.color().into()).to_owned());
-                    return Ok(GpuPendingGraph {
-                        source: self,
-                        width: pixels.width(),
-                        height: pixels.height(),
-                        mode: pixel_mode,
-                        cached: Some(pixels),
-                        encoded_bytes: 0,
-                        ops: Vec::new(),
-                    });
+                    return Ok(self.gpu_cached_pending_graph(pixels, pixel_mode));
                 }
                 let (mut graph, skip) = if let Some(prefix) = ops.prefix_cache()
                     && let Some(pixels) = prefix.materialized.get()
@@ -292,15 +284,7 @@ impl Image {
                         .clone()
                         .unwrap_or_else(|| image_mode_name(pixels.color().into()).to_owned());
                     (
-                        GpuPendingGraph {
-                            source: self,
-                            width: pixels.width(),
-                            height: pixels.height(),
-                            mode: pixel_mode,
-                            cached: Some(pixels),
-                            encoded_bytes: 0,
-                            ops: Vec::new(),
-                        },
+                        self.gpu_cached_pending_graph(pixels, pixel_mode),
                         prefix.ops_len,
                     )
                 } else {
@@ -348,6 +332,23 @@ impl Image {
             _ => Err(PilError::ValueError(
                 "GPU source has no proven native byte header/layout".into(),
             )),
+        }
+    }
+
+    #[cfg(feature = "gpu")]
+    fn gpu_cached_pending_graph(
+        &self,
+        pixels: Arc<DynamicImage>,
+        mode: String,
+    ) -> GpuPendingGraph<'_> {
+        GpuPendingGraph {
+            source: self,
+            width: pixels.width(),
+            height: pixels.height(),
+            mode,
+            cached: Some(pixels),
+            encoded_bytes: 0,
+            ops: Vec::new(),
         }
     }
 
