@@ -8,6 +8,7 @@ use super::super::super::super::{
     gpu_native_sharpness_l_input, gpu_native_sharpness_la_input, gpu_native_sharpness_rgb_input,
     gpu_result_as_color_type, put_alpha_output,
 };
+use super::super::super::BatchExecutionConfig;
 use super::{GpuBatchExecutionRoute, StandardGpuRoutePlan};
 use crate::compute::registry;
 use crate::error::PilError;
@@ -172,9 +173,7 @@ impl GpuBatchExecutionRoute<'_> {
                 None
             };
         let initial_input = mapped_native_input.as_ref().map(|input| &input.buffer);
-        let input = upload.input;
-        let packed = upload.packed;
-        let proofs = &self.prepared.resize_proofs;
+        let config = self.batch_execution_config(standard, upload, initial_input);
         let (
             final_is_a,
             final_w,
@@ -183,46 +182,7 @@ impl GpuBatchExecutionRoute<'_> {
             mut resource_telemetry,
             dispatch_count,
             native_expand_output,
-        ) = self.gpu.execute_batch_impl(
-            self.ops(),
-            &self.prepared.auxiliary_images,
-            upload.dimensions.0,
-            upload.dimensions.1,
-            upload.mode_code,
-            input.packed_luma_colorize,
-            input.packed_luma_convert,
-            input.packed_luma_transform_input,
-            standard.packed_luma_transform_output,
-            standard.native_rgb_compact_input,
-            standard.native_rgb_packed_output,
-            standard.native_la_transform_output,
-            packed.packed_luma_point,
-            packed.packed_luma_putdata,
-            packed.packed_luma_order_statistic,
-            packed.packed_native_byte_filter,
-            packed.packed_luma_pad,
-            packed.packed_la_pad,
-            upload.native_extract_band_channels.is_some(),
-            upload.native_grayscale_rgb_input,
-            upload.native_sharpness_l_input,
-            upload.native_sharpness_la_input,
-            upload.native_sharpness_rgb_input,
-            upload.native_reduce_rgb_input,
-            upload.native_expand_channels,
-            upload.native_cover_input_channels,
-            standard.native_cover_packed_output,
-            self.mode(),
-            self.prepared.contrast_mean,
-            proofs.constant_bits,
-            proofs.box_copy_is_exact,
-            proofs.identity_is_exact,
-            proofs.box_average_is_exact,
-            proofs.dyadic_is_exact,
-            proofs.f64_is_exact,
-            proofs.f64_ordered_is_exact,
-            initial_input,
-            &mut buffers,
-        )?;
+        ) = self.gpu.execute_batch_config(&config, &mut buffers)?;
         resource_telemetry.fused_operation_count =
             resource_telemetry
                 .fused_operation_count
@@ -250,6 +210,55 @@ impl GpuBatchExecutionRoute<'_> {
             dispatch_count,
             native_expand_output,
         })
+    }
+
+    fn batch_execution_config<'a>(
+        &'a self,
+        standard: &StandardGpuRoutePlan,
+        upload: &GpuBatchUploadPlan,
+        initial_input: Option<&'a wgpu::Buffer>,
+    ) -> BatchExecutionConfig<'a> {
+        let input = upload.input;
+        let packed = upload.packed;
+        let proofs = &self.prepared.resize_proofs;
+        BatchExecutionConfig {
+            ops: self.ops(),
+            auxiliary_images: &self.prepared.auxiliary_images,
+            dimensions: upload.dimensions,
+            mode: upload.mode_code,
+            packed_luma_colorize: input.packed_luma_colorize,
+            packed_luma_convert: input.packed_luma_convert,
+            packed_luma_transform_input: input.packed_luma_transform_input,
+            packed_luma_transform_output: standard.packed_luma_transform_output,
+            native_rgb_compact_input: standard.native_rgb_compact_input,
+            native_rgb_packed_output: standard.native_rgb_packed_output,
+            native_la_transform_output: standard.native_la_transform_output,
+            packed_luma_point: packed.packed_luma_point,
+            packed_luma_putdata: packed.packed_luma_putdata,
+            packed_luma_order_statistic: packed.packed_luma_order_statistic,
+            packed_native_byte_filter: packed.packed_native_byte_filter,
+            packed_luma_pad: packed.packed_luma_pad,
+            packed_la_pad: packed.packed_la_pad,
+            native_extract_band: upload.native_extract_band_channels.is_some(),
+            native_grayscale_rgb_input: upload.native_grayscale_rgb_input,
+            native_sharpness_l_input: upload.native_sharpness_l_input,
+            native_sharpness_la_input: upload.native_sharpness_la_input,
+            native_sharpness_rgb_input: upload.native_sharpness_rgb_input,
+            native_reduce_rgb_input: upload.native_reduce_rgb_input,
+            native_expand_channels: upload.native_expand_channels,
+            native_cover_input_channels: upload.native_cover_input_channels,
+            native_cover_packed_output: standard.native_cover_packed_output,
+            logical_mode: self.mode(),
+            contrast_mean: self.prepared.contrast_mean,
+            f_resize_constant_bits: proofs.constant_bits,
+            f_resize_box_copy_is_exact: proofs.box_copy_is_exact,
+            f_resize_identity_is_exact: proofs.identity_is_exact,
+            f_resize_box_average_is_exact: proofs.box_average_is_exact,
+            f_resize_dyadic_is_exact: proofs.dyadic_is_exact,
+            f_resize_f64_is_exact: proofs.f64_is_exact,
+            f_resize_f64_ordered_is_exact: proofs.f64_ordered_is_exact,
+            initial_input,
+        }
     }
 
     fn readback_and_finalize(
@@ -298,46 +307,17 @@ impl GpuBatchExecutionRoute<'_> {
         native_luma16_output: bool,
         readback_buffer: &wgpu::Buffer,
     ) -> Result<DynamicImage, PilError> {
+        if let Some(result) = self.decode_specialized_readback(
+            submission,
+            standard,
+            upload,
+            native_luma16_output,
+            readback_buffer,
+        )? {
+            return Ok(result);
+        }
         let packed = upload.packed;
-        let mode = self.mode();
-        if let Some(dispatch) = standard.native_cover_packed_output {
-            self.gpu.readback_to_cover_native_bytes(
-                submission.final_w,
-                submission.final_h,
-                dispatch,
-                readback_buffer,
-            )
-        } else if standard.native_rgb_packed_output {
-            self.gpu.readback_to_native_channels(
-                submission.final_w,
-                submission.final_h,
-                3,
-                readback_buffer,
-            )
-        } else if packed.packed_la_pad
-            || standard.native_la_transform_output
-            || (packed.packed_native_byte_filter && matches!(mode, Some("LA")))
-        {
-            self.gpu.readback_to_native_channels(
-                submission.final_w,
-                submission.final_h,
-                2,
-                readback_buffer,
-            )
-        } else if upload.native_luma16 {
-            self.gpu.readback_to_luma16(
-                submission.final_w,
-                submission.final_h,
-                readback_buffer,
-                mode,
-            )
-        } else if upload.native_luma16_paste || native_luma16_output {
-            self.gpu.readback_to_luma16_numeric(
-                submission.final_w,
-                submission.final_h,
-                readback_buffer,
-            )
-        } else if output_layout.native_luma8_extract
+        if output_layout.native_luma8_extract
             || output_layout.native_luma8_grayscale
             || output_layout.native_luma8_constant
             || standard.packed_luma_transform_output
@@ -376,6 +356,72 @@ impl GpuBatchExecutionRoute<'_> {
                 output_layout.native_rgb,
             )
         }
+    }
+
+    fn decode_specialized_readback(
+        &self,
+        submission: &GpuBatchSubmission,
+        standard: &StandardGpuRoutePlan,
+        upload: &GpuBatchUploadPlan,
+        native_luma16_output: bool,
+        readback_buffer: &wgpu::Buffer,
+    ) -> Result<Option<DynamicImage>, PilError> {
+        let packed = upload.packed;
+        let mode = self.mode();
+        if let Some(dispatch) = standard.native_cover_packed_output {
+            return self
+                .gpu
+                .readback_to_cover_native_bytes(
+                    submission.final_w,
+                    submission.final_h,
+                    dispatch,
+                    readback_buffer,
+                )
+                .map(Some);
+        }
+        if standard.native_rgb_packed_output {
+            return self
+                .gpu
+                .readback_to_native_channels(
+                    submission.final_w,
+                    submission.final_h,
+                    3,
+                    readback_buffer,
+                )
+                .map(Some);
+        }
+        if packed.packed_la_pad
+            || standard.native_la_transform_output
+            || (packed.packed_native_byte_filter && matches!(mode, Some("LA")))
+        {
+            return self
+                .gpu
+                .readback_to_native_channels(
+                    submission.final_w,
+                    submission.final_h,
+                    2,
+                    readback_buffer,
+                )
+                .map(Some);
+        }
+        if upload.native_luma16 {
+            return self
+                .gpu
+                .readback_to_luma16(
+                    submission.final_w,
+                    submission.final_h,
+                    readback_buffer,
+                    mode,
+                )
+                .map(Some);
+        }
+        if upload.native_luma16_paste || native_luma16_output {
+            return self
+                .gpu
+                .readback_to_luma16_numeric(submission.final_w, submission.final_h, readback_buffer)
+                .map(Some);
+        }
+        Ok(None)
     }
 
     fn record_readback_telemetry(

@@ -136,6 +136,7 @@ struct BatchExecutionState {
 }
 
 impl GpuInner {
+    #[cfg(test)]
     pub(super) fn execute_batch_impl(
         &self,
         ops: &[PipelineOp],
@@ -177,27 +178,6 @@ impl GpuInner {
         initial_input: Option<&wgpu::Buffer>,
         buffers: &mut BufferPool,
     ) -> GpuBatchExecutionResult {
-        if let Some(result) = self.try_execute_f_resize_tiled(
-            ops,
-            (w, h),
-            logical_mode,
-            f_resize_f64_is_exact,
-            f_resize_f64_ordered_is_exact,
-            buffers,
-        ) {
-            return result;
-        }
-        gpu_log!(
-            "[GPU] batch_impl: {} ops, start dims {}x{}",
-            ops.len(),
-            w,
-            h
-        );
-        if ops.len() != auxiliary_images.len() {
-            return Err(PilError::InternalError(
-                "GPU operation and auxiliary-image counts differ".into(),
-            ));
-        }
         let config = BatchExecutionConfig {
             ops,
             auxiliary_images,
@@ -236,8 +216,37 @@ impl GpuInner {
             f_resize_f64_ordered_is_exact,
             initial_input,
         };
-        let (estimates, auxiliary_cache) = self.prepare_batch_execution(&config, buffers)?;
-        self.execute_batch_chunks(&config, &estimates, &auxiliary_cache, buffers)
+        self.execute_batch_config(&config, buffers)
+    }
+
+    fn execute_batch_config(
+        &self,
+        config: &BatchExecutionConfig<'_>,
+        buffers: &mut BufferPool,
+    ) -> GpuBatchExecutionResult {
+        if let Some(result) = self.try_execute_f_resize_tiled(
+            config.ops,
+            config.dimensions,
+            config.logical_mode,
+            config.f_resize_f64_is_exact,
+            config.f_resize_f64_ordered_is_exact,
+            buffers,
+        ) {
+            return result;
+        }
+        gpu_log!(
+            "[GPU] batch_impl: {} ops, start dims {}x{}",
+            config.ops.len(),
+            config.dimensions.0,
+            config.dimensions.1
+        );
+        if config.ops.len() != config.auxiliary_images.len() {
+            return Err(PilError::InternalError(
+                "GPU operation and auxiliary-image counts differ".into(),
+            ));
+        }
+        let (estimates, auxiliary_cache) = self.prepare_batch_execution(config, buffers)?;
+        self.execute_batch_chunks(config, &estimates, &auxiliary_cache, buffers)
     }
 
     fn try_execute_f_resize_tiled(

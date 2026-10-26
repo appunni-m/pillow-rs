@@ -232,29 +232,11 @@ impl GpuBatchExecutionRoute<'_> {
         #[cfg(not(target_endian = "little"))]
         let native_hsv_pad: Option<super::super::super::NativeHsvPadDispatch> = None;
 
-        if native_masked_byte_paste.is_none()
-            && native_hsv_pad.is_none()
-            && !self.packed_plan.packed_luma_order_statistic
-            && gpu_dispatch_dimensions_require_cpu(
-                ops,
-                img.dimensions(),
-                limits.max_compute_workgroups_per_dimension,
-                mode,
-                self.packed_plan.packed_luma_pad,
-            )
-        {
-            gpu_log!("[GPU] dispatch preflight routed batch to CPU: adapter workgroup limit");
-            return self
-                .prepared
-                .pool
-                .preflight_failure(
-                    ops,
-                    img,
-                    mode,
-                    self.prepared.allow_cpu_fallback,
-                    "adapter workgroup limit",
-                )
-                .map(Some);
+        if let Some(result) = self.preflight_compact_route(
+            limits,
+            native_masked_byte_paste.is_some() || native_hsv_pad.is_some(),
+        )? {
+            return Ok(Some(result));
         }
         if let Some(plan) = native_masked_byte_paste {
             let mut buffers = self.gpu.acquire_buffers(plan.dispatch.word_count)?;
@@ -284,6 +266,40 @@ impl GpuBatchExecutionRoute<'_> {
         Ok(None)
     }
 
+    fn preflight_compact_route(
+        &self,
+        limits: &wgpu::Limits,
+        has_native_route: bool,
+    ) -> Result<Option<DynamicImage>, PilError> {
+        let ops = self.ops();
+        let img = self.img();
+        let mode = self.mode();
+        if !has_native_route
+            && !self.packed_plan.packed_luma_order_statistic
+            && gpu_dispatch_dimensions_require_cpu(
+                ops,
+                img.dimensions(),
+                limits.max_compute_workgroups_per_dimension,
+                mode,
+                self.packed_plan.packed_luma_pad,
+            )
+        {
+            gpu_log!("[GPU] dispatch preflight routed batch to CPU: adapter workgroup limit");
+            return self
+                .prepared
+                .pool
+                .preflight_failure(
+                    ops,
+                    img,
+                    mode,
+                    self.prepared.allow_cpu_fallback,
+                    "adapter workgroup limit",
+                )
+                .map(Some);
+        }
+        Ok(None)
+    }
+
     fn plan_standard_route(
         &self,
         limits: &wgpu::Limits,
@@ -294,6 +310,46 @@ impl GpuBatchExecutionRoute<'_> {
         let auxiliary_images = &self.prepared.auxiliary_images;
         let input = self.input_layouts();
         let capacity = gpu_batch_capacity(ops, img, auxiliary_images, mode)?;
+        let outputs = self.plan_standard_outputs(limits, capacity, input);
+        if gpu_buffer_capacity_exceeds_limits(
+            capacity,
+            limits.max_storage_buffer_binding_size,
+            limits.max_buffer_size,
+        ) {
+            gpu_log!(
+                "[GPU] dispatch preflight routed batch to CPU: image buffer exceeds adapter limits"
+            );
+            return self
+                .prepared
+                .pool
+                .preflight_failure(
+                    ops,
+                    img,
+                    mode,
+                    self.prepared.allow_cpu_fallback,
+                    "image buffer exceeds adapter limits",
+                )
+                .map(BatchRouteStage::Return);
+        }
+        Ok(BatchRouteStage::Continue(StandardGpuRoutePlan {
+            capacity,
+            packed_luma_transform_output: outputs.packed_luma_transform_output,
+            native_rgb_compact_input: outputs.native_rgb_compact_input,
+            native_rgb_packed_output: outputs.native_rgb_packed_output,
+            native_la_transform_output: outputs.native_la_transform_output,
+            native_cover_packed_output: outputs.native_cover_packed_output,
+        }))
+    }
+
+    fn plan_standard_outputs(
+        &self,
+        limits: &wgpu::Limits,
+        capacity: u32,
+        input: BatchInputLayoutCandidates,
+    ) -> StandardGpuRouteOutputs {
+        let ops = self.ops();
+        let img = self.img();
+        let mode = self.mode();
         let packed_luma_transform_output = input.packed_luma_transform_input
             && plan_native_luma_transform_output(
                 ops,
@@ -362,34 +418,13 @@ impl GpuBatchExecutionRoute<'_> {
             limits.max_buffer_size,
             capacity,
         );
-        if gpu_buffer_capacity_exceeds_limits(
-            capacity,
-            limits.max_storage_buffer_binding_size,
-            limits.max_buffer_size,
-        ) {
-            gpu_log!(
-                "[GPU] dispatch preflight routed batch to CPU: image buffer exceeds adapter limits"
-            );
-            return self
-                .prepared
-                .pool
-                .preflight_failure(
-                    ops,
-                    img,
-                    mode,
-                    self.prepared.allow_cpu_fallback,
-                    "image buffer exceeds adapter limits",
-                )
-                .map(BatchRouteStage::Return);
-        }
-        Ok(BatchRouteStage::Continue(StandardGpuRoutePlan {
-            capacity,
+        StandardGpuRouteOutputs {
             packed_luma_transform_output,
             native_rgb_compact_input,
             native_rgb_packed_output,
             native_la_transform_output,
             native_cover_packed_output,
-        }))
+        }
     }
 
     fn try_native_geometry_routes(
@@ -464,6 +499,14 @@ impl GpuBatchExecutionRoute<'_> {
 #[derive(Clone, Copy)]
 struct StandardGpuRoutePlan {
     capacity: u32,
+    packed_luma_transform_output: bool,
+    native_rgb_compact_input: bool,
+    native_rgb_packed_output: bool,
+    native_la_transform_output: bool,
+    native_cover_packed_output: Option<NativeCoverPackedOutputDispatch>,
+}
+
+struct StandardGpuRouteOutputs {
     packed_luma_transform_output: bool,
     native_rgb_compact_input: bool,
     native_rgb_packed_output: bool,
