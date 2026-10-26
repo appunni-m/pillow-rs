@@ -8,73 +8,87 @@ fn set_pipeline_telemetry_field(object: &js_sys::Object, name: &str, value: &JsV
     let _ = js_sys::Reflect::set(object, &JsValue::from_str(name), value);
 }
 
-fn pipeline_resource_telemetry_to_js(resource: pillow_rs::PipelineResourceTelemetry) -> JsValue {
-    let object = js_sys::Object::new();
+fn set_transfer_resource_fields(
+    object: &js_sys::Object,
+    resource: &pillow_rs::PipelineResourceTelemetry,
+) {
     set_pipeline_telemetry_field(
-        &object,
+        object,
         "upload_bytes",
         &JsValue::from_f64(resource.upload_bytes as f64),
     );
     set_pipeline_telemetry_field(
-        &object,
+        object,
         "readback_bytes",
         &JsValue::from_f64(resource.readback_bytes as f64),
     );
     set_pipeline_telemetry_field(
-        &object,
+        object,
         "auxiliary_bytes",
         &JsValue::from_f64(resource.auxiliary_bytes as f64),
     );
     set_pipeline_telemetry_field(
-        &object,
+        object,
         "parameter_bytes",
         &JsValue::from_f64(resource.parameter_bytes as f64),
     );
     set_pipeline_telemetry_field(
-        &object,
+        object,
         "retained_cache_bytes",
         &JsValue::from_f64(resource.retained_cache_bytes as f64),
     );
     set_pipeline_telemetry_field(
-        &object,
+        object,
         "full_frame_copy_count",
         &JsValue::from_f64(resource.full_frame_copy_count as f64),
     );
     set_pipeline_telemetry_field(
-        &object,
+        object,
         "mode_conversion_count",
         &JsValue::from_f64(resource.mode_conversion_count as f64),
     );
+}
+
+fn set_host_resource_fields(
+    object: &js_sys::Object,
+    resource: &pillow_rs::PipelineResourceTelemetry,
+) {
     set_pipeline_telemetry_field(
-        &object,
+        object,
         "host_buffer_count",
         &JsValue::from_f64(resource.host_buffer_count as f64),
     );
     set_pipeline_telemetry_field(
-        &object,
+        object,
         "host_buffer_bytes",
         &JsValue::from_f64(resource.host_buffer_bytes as f64),
     );
     set_pipeline_telemetry_field(
-        &object,
+        object,
         "peak_live_host_bytes",
         &JsValue::from_f64(resource.peak_live_host_bytes as f64),
     );
     set_pipeline_telemetry_field(
-        &object,
+        object,
         "fused_operation_count",
         &JsValue::from_f64(resource.fused_operation_count as f64),
     );
     set_pipeline_telemetry_field(
-        &object,
+        object,
         "host_allocation_count",
         &JsValue::from_f64(resource.host_allocation_count as f64),
     );
     set_pipeline_telemetry_field(
-        &object,
+        object,
         "host_allocated_bytes",
         &JsValue::from_f64(resource.host_allocated_bytes as f64),
     );
+}
+
+fn pipeline_resource_telemetry_to_js(resource: pillow_rs::PipelineResourceTelemetry) -> JsValue {
+    let object = js_sys::Object::new();
+    set_transfer_resource_fields(&object, &resource);
+    set_host_resource_fields(&object, &resource);
     object.into()
 }
 
