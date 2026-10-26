@@ -438,6 +438,46 @@ fn registered_pipeline_spec(op: &PipelineOp) -> Result<PreparationPipelineSpec, 
     Ok((base_key, shader_file, source))
 }
 
+#[cfg(target_endian = "little")]
+#[inline(always)]
+fn direct_alpha_composite_rgba_bytes<'a>(
+    ops: &[PipelineOp],
+    auxiliary_images: &'a [AuxiliaryImages],
+    logical_mode: Option<&str>,
+    dimensions: (u32, u32),
+) -> Result<Option<&'a [u8]>, PilError> {
+    let (width, height) = dimensions;
+    if !can_fuse_gpu_alpha_composite_mirror(ops, 0, logical_mode, dimensions)
+        || width == 0
+        || height == 0
+    {
+        return Ok(None);
+    }
+    match auxiliary_images
+        .first()
+        .and_then(|auxiliary| auxiliary.second.as_deref())
+    {
+        Some(DynamicImage::ImageRgba8(rgba)) => {
+            let expected_bytes = CheckedDims::new(width, height, 4)?.total_bytes();
+            Ok((rgba.as_raw().len() == expected_bytes).then_some(rgba.as_raw().as_slice()))
+        }
+        _ => Ok(None),
+    }
+}
+
+#[inline(always)]
+fn validate_batch_operation_count(
+    ops: &[PipelineOp],
+    auxiliary_images: &[AuxiliaryImages],
+) -> Result<(), PilError> {
+    if ops.len() != auxiliary_images.len() {
+        return Err(PilError::InternalError(
+            "GPU operation and auxiliary-image counts differ".into(),
+        ));
+    }
+    Ok(())
+}
+
 impl GpuInner {
     pub(super) fn prepare_batch<'a>(
         &self,
@@ -479,11 +519,7 @@ impl GpuInner {
         buffers: &'a mut BufferPool,
         auxiliary_cache: &GpuAuxiliaryCache,
     ) -> Result<PreparedGpuBatch<'a>, PilError> {
-        if ops.len() != auxiliary_images.len() {
-            return Err(PilError::InternalError(
-                "GPU operation and auxiliary-image counts differ".into(),
-            ));
-        }
+        validate_batch_operation_count(ops, auxiliary_images)?;
 
         // A full-frame RGBA composite has one already-packed auxiliary image.
         // Put its bytes directly into the reusable device arena instead of
@@ -491,27 +527,8 @@ impl GpuInner {
         // specialized pair is deliberately narrow; all other image formats
         // and operation graphs retain the general pack-and-arena path.
         #[cfg(target_endian = "little")]
-        let direct_alpha_composite_rgba = if can_fuse_gpu_alpha_composite_mirror(
-            ops,
-            0,
-            logical_mode,
-            (w, h),
-        ) && w != 0
-            && h != 0
-        {
-            match auxiliary_images
-                .first()
-                .and_then(|auxiliary| auxiliary.second.as_deref())
-            {
-                Some(DynamicImage::ImageRgba8(rgba)) => {
-                    let expected_bytes = CheckedDims::new(w, h, 4)?.total_bytes();
-                    (rgba.as_raw().len() == expected_bytes).then_some(rgba.as_raw().as_slice())
-                }
-                _ => None,
-            }
-        } else {
-            None
-        };
+        let direct_alpha_composite_rgba =
+            direct_alpha_composite_rgba_bytes(ops, auxiliary_images, logical_mode, (w, h))?;
         #[cfg(target_endian = "big")]
         let direct_alpha_composite_rgba: Option<&[u8]> = None;
 
