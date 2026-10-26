@@ -1,5 +1,9 @@
 use super::*;
 
+fn f_resize_u32_words_to_bytes(words: &[u32]) -> Vec<u8> {
+    words.iter().flat_map(|word| word.to_le_bytes()).collect()
+}
+
 #[test]
 fn f_resize_ordered_shader_admission_checks_geometry_and_coefficients() {
     let source = Image::frombytes("F", (32, 24), &vec![0; 32 * 24 * 4]).expect("F source");
@@ -500,10 +504,6 @@ fn f_resize_f64_native_preserves_proven_negative_zero_output() {
 
 #[test]
 fn f_resize_f64_native_preserves_special_value_outputs() {
-    fn bytes(words: &[u32]) -> Vec<u8> {
-        words.iter().flat_map(|word| word.to_le_bytes()).collect()
-    }
-
     // Marker 9 handles special values in the coefficient reducer without
     // relaxed-f32 arithmetic.  Include a signaling NaN to verify the
     // Pillow/C quieting rule, infinities with both signs, and an
@@ -555,40 +555,59 @@ fn f_resize_f64_native_preserves_special_value_outputs() {
 
     let previous = Backend::set_pipeline_telemetry_enabled(true);
     for (source_dimensions, destination, filter, words) in cases {
-        let source = Image::frombytes("F", source_dimensions, &bytes(&words))
-            .expect("F special-value source");
-        let expected = source
-            .resize(destination, Some(filter.clone()), None)
-            .expect("CPU special-value resize operation")
-            .use_backend(Backend::Cpu)
-            .tobytes()
-            .expect("CPU special-value F resize");
-        let actual = match source
-            .resize(destination, Some(filter), None)
-            .expect("GPU special-value resize operation")
-            .use_backend(Backend::Gpu)
-            .tobytes()
-        {
-            Ok(actual) => actual,
-            Err(error)
-                if error.to_string().contains("GPU adapter not available")
-                    || error
-                        .to_string()
-                        .contains("GPU device initialization failed") =>
-            {
-                Backend::set_pipeline_telemetry_enabled(previous);
-                return;
-            }
-            Err(error) => panic!("native GPU special-value F resize failed: {error}"),
-        };
-        assert_eq!(actual, expected, "native GPU special-value F resize");
-        let telemetry = Backend::take_pipeline_telemetry()
-            .expect("native GPU special-value F resize must publish a receipt");
-        assert_eq!(telemetry.0, Some(Backend::Gpu));
-        assert_eq!(telemetry.1, Backend::Gpu);
-        assert_eq!(telemetry.7, None);
+        if !assert_native_gpu_special_value_f_resize_case(
+            source_dimensions,
+            destination,
+            filter,
+            words,
+            previous,
+        ) {
+            return;
+        }
     }
     Backend::set_pipeline_telemetry_enabled(previous);
+}
+
+fn assert_native_gpu_special_value_f_resize_case(
+    source_dimensions: (u32, u32),
+    destination: (i64, i64),
+    filter: ResampleInput,
+    words: Vec<u32>,
+    previous: bool,
+) -> bool {
+    let source = Image::frombytes("F", source_dimensions, &f_resize_u32_words_to_bytes(&words))
+        .expect("F special-value source");
+    let expected = source
+        .resize(destination, Some(filter.clone()), None)
+        .expect("CPU special-value resize operation")
+        .use_backend(Backend::Cpu)
+        .tobytes()
+        .expect("CPU special-value F resize");
+    let actual = match source
+        .resize(destination, Some(filter), None)
+        .expect("GPU special-value resize operation")
+        .use_backend(Backend::Gpu)
+        .tobytes()
+    {
+        Ok(actual) => actual,
+        Err(error)
+            if error.to_string().contains("GPU adapter not available")
+                || error
+                    .to_string()
+                    .contains("GPU device initialization failed") =>
+        {
+            Backend::set_pipeline_telemetry_enabled(previous);
+            return false;
+        }
+        Err(error) => panic!("native GPU special-value F resize failed: {error}"),
+    };
+    assert_eq!(actual, expected, "native GPU special-value F resize");
+    let telemetry = Backend::take_pipeline_telemetry()
+        .expect("native GPU special-value F resize must publish a receipt");
+    assert_eq!(telemetry.0, Some(Backend::Gpu));
+    assert_eq!(telemetry.1, Backend::Gpu);
+    assert_eq!(telemetry.7, None);
+    true
 }
 
 #[test]
