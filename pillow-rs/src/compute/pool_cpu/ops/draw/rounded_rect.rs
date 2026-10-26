@@ -146,7 +146,7 @@ fn draw_rounded_rect_fill<C: DrawCanvas>(
             None,
             1,
         );
-    } else if x1 - radius - 1 >= x0 + radius + 1 {
+    } else if x1 - radius - 1 > x0 + radius {
         draw_rect_on_canvas(
             canvas,
             x0 + radius + 1,

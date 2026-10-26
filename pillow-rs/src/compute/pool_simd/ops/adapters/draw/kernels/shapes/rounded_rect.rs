@@ -47,7 +47,7 @@ fn write_rounded_rect_fill(
             geometry.y1.saturating_sub(geometry.radius + 1),
             fill,
         )?;
-    } else if geometry.x1 - geometry.radius - 1 >= geometry.x0 + geometry.radius + 1 {
+    } else if geometry.x1 - geometry.radius - 1 > geometry.x0 + geometry.radius {
         simd_write_rect_spans(
             writer,
             geometry.x0.saturating_add(geometry.radius + 1),
