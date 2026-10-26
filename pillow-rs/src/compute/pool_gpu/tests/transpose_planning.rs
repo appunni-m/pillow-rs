@@ -26,7 +26,13 @@ fn gpu_packed_rgb_transpose_layout_bounds_and_padding() {
 #[cfg(target_endian = "little")]
 fn gpu_native_byte_flip_dispatch_bounds_padded_rows_and_grid() {
     assert_native_byte_flip_padded_row_plans();
+    assert_native_byte_flip_exact_axis_limit();
+    assert_native_byte_flip_grid_boundaries();
+    assert_native_byte_flip_rejected_limits();
+}
 
+#[cfg(target_endian = "little")]
+fn assert_native_byte_flip_exact_axis_limit() {
     let exact_axis = super::plan_native_byte_flip_dispatch(
         256,
         1,
@@ -50,7 +56,10 @@ fn gpu_native_byte_flip_dispatch_bounds_padded_rows_and_grid() {
         )
         .is_none()
     );
+}
 
+#[cfg(target_endian = "little")]
+fn assert_native_byte_flip_grid_boundaries() {
     let below_default_axis = super::plan_native_byte_flip_dispatch(
         4092,
         4096,
@@ -87,8 +96,6 @@ fn gpu_native_byte_flip_dispatch_bounds_padded_rows_and_grid() {
     )
     .unwrap();
     assert_eq!(two_dimensional_grid.groups_y, 2);
-
-    assert_native_byte_flip_rejected_limits();
 }
 
 #[cfg(target_endian = "little")]
