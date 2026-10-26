@@ -153,7 +153,7 @@ fn load_truetype_with_index(
     layout_engine: Option<String>,
     variant_source: Option<&FreeTypeFont>,
 ) -> Result<FreeTypeFont, PilError> {
-    if !(size > 0.0) {
+    if size.partial_cmp(&0.0) != Some(std::cmp::Ordering::Greater) {
         return Err(PilError::ValueError(format!(
             "font size must be greater than 0, not {}",
             if size.fract() == 0.0 {
