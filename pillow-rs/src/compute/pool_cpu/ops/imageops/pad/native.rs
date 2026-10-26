@@ -418,6 +418,21 @@ struct NativePadBytesLayout<'a> {
     output_dims: CheckedDims,
 }
 
+fn native_pad_byte_source_stride(
+    source_len: usize,
+    source_width: usize,
+    source_height: usize,
+    channels: usize,
+) -> Result<Option<usize>, PilError> {
+    let Some(source_stride) = source_width.checked_mul(channels) else {
+        return Err(PilError::ValueError("pad source stride overflow".into()));
+    };
+    let Some(expected_source_len) = source_stride.checked_mul(source_height) else {
+        return Err(PilError::ValueError("pad source length overflow".into()));
+    };
+    Ok((source_len == expected_source_len).then_some(source_stride))
+}
+
 fn native_pad_byte_layout<'a>(
     resized: &'a DynamicImage,
     w: u32,
@@ -436,16 +451,12 @@ fn native_pad_byte_layout<'a>(
         .map_err(|_| PilError::ValueError("pad source width overflow".into()))?;
     let source_height = usize::try_from(nh)
         .map_err(|_| PilError::ValueError("pad source height overflow".into()))?;
-    let Some(source_stride) = source_width.checked_mul(channels) else {
-        return Err(PilError::ValueError("pad source stride overflow".into()));
-    };
-    let Some(expected_source_len) = source_stride.checked_mul(source_height) else {
-        return Err(PilError::ValueError("pad source length overflow".into()));
-    };
     let source = resized.as_bytes();
-    if source.len() != expected_source_len {
+    let Some(source_stride) =
+        native_pad_byte_source_stride(source.len(), source_width, source_height, channels)?
+    else {
         return Ok(None);
-    }
+    };
     let copy_width = source_width.min(width);
     let copy_height = source_height.min(height);
     let (offset_x, offset_y) = native_pad_offsets(w, h, nw, nh, centering);
