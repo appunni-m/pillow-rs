@@ -157,6 +157,7 @@ impl Image {
         }
     }
 
+    #[inline(always)]
     fn palette_preserves_raw_samples(op: &PipelineOp) -> bool {
         match op {
             // ImageChops.duplicate keeps source samples and palette metadata,
