@@ -5,7 +5,7 @@ use super::prelude::{
     execute_max_filter_with_mode, execute_median_filter_with_mode, execute_min_filter_with_mode,
     execute_rank_filter_with_mode,
 };
-fn register_part_1(m: &mut Registry) {
+fn register_convolution_filters(m: &mut Registry) {
     m.insert(
         "Filter3x3",
         gpu_entry!(
@@ -49,7 +49,9 @@ fn register_part_1(m: &mut Registry) {
             "filter_5x5.wgsl"
         ),
     );
+}
 
+fn register_blur_filters(m: &mut Registry) {
     m.insert(
         "GaussianBlur",
         gpu_entry!(
@@ -89,7 +91,7 @@ fn register_part_1(m: &mut Registry) {
     );
 }
 
-fn register_part_2(m: &mut Registry) {
+fn register_median_filter(m: &mut Registry) {
     m.insert(
         "MedianFilter",
         gpu_entry!(
@@ -106,7 +108,9 @@ fn register_part_2(m: &mut Registry) {
             "median_filter.wgsl"
         ),
     );
+}
 
+fn register_min_max_rank_filters(m: &mut Registry) {
     m.insert(
         "MaxFilter",
         gpu_entry!(
@@ -160,7 +164,9 @@ fn register_part_2(m: &mut Registry) {
 }
 
 pub(super) fn register(m: &mut Registry) -> Result<(), PilError> {
-    register_part_1(m);
-    register_part_2(m);
+    register_convolution_filters(m);
+    register_blur_filters(m);
+    register_median_filter(m);
+    register_min_max_rank_filters(m);
     Ok(())
 }
