@@ -290,69 +290,26 @@ pub(crate) fn resize_i(
     resize_i_with_fma(img, dst_w, dst_h, filter, &PortableFma)
 }
 
-pub(crate) fn resize_i_with_fma<F: F64MulAdd>(
-    img: &DynamicImage,
-    dst_w: u32,
-    dst_h: u32,
-    filter: &ResampleFilter,
-    fma: &F,
-) -> Result<DynamicImage, PilError> {
-    let (sw, sh) = img.dimensions();
-
-    if dst_w == 0 || dst_h == 0 || sw == 0 || sh == 0 {
-        return Ok(DynamicImage::new_rgba8(dst_w, dst_h));
-    }
-    if (dst_w, dst_h) == (sw, sh) {
-        return Ok(img.clone());
-    }
-
-    let (_, _, source_bytes) = i32_sample_bytes_from_native_storage(img)?;
-    let source_pixels = CheckedDims::new_allow_empty(sw, sh, 4)?.total_pixels();
-    let src_ints = i32_samples_from_le_bytes(source_bytes, source_pixels);
-
-    let (kernel, support) = resample_kernel(filter);
-    let sw_f = sw as f64;
-    let sh_f = sh as f64;
-    let dw_f = dst_w as f64;
-    let dh_f = dst_h as f64;
-
-    // PIL-compatible scale factor for kernel widening during downscaling
-    let _sx_scale = (sw_f / dw_f).max(1.0);
-    let _sy_scale = (sh_f / dh_f).max(1.0);
-
-    let output_dims = CheckedDims::new(dst_w, dst_h, 4)?;
+#[inline(always)]
+fn resize_i_nearest(
+    src_ints: &[i32],
+    source_size: (u32, u32),
+    destination_size: (u32, u32),
+    output_dims: CheckedDims,
+    coordinate_scales: (f64, f64, f64, f64),
+) -> DynamicImage {
+    let (sw, sh) = source_size;
+    let (dst_w, dst_h) = destination_size;
+    let (sw_f, sh_f, dw_f, dh_f) = coordinate_scales;
     let output_stride = output_dims.row_stride();
-
-    // NEAREST: Pillow's mode-I path uses the same half-destination-pixel
-    // point samples as its native point resampler:
-    //   sx = (int)((dx + 0.5) * sw/dw)
-    //   sy = (int)((dy + 0.5) * sh/dh)
-    //
-    // The older affine-style formula shifts a downsampled I image by one
-    // source row/column at the leading edge.  That only becomes visible when
-    // a public pipeline composes a typed filter with a non-integral resize,
-    // so keep the correction in the native I branch rather than changing the
-    // byte-image transform contract.
-    if matches!(filter, ResampleFilter::Nearest) {
-        let mut output_bytes = output_dims.alloc_buffer();
-        #[cfg(feature = "parallel")]
-        crate::par_rows_mut_typed!(
-            &mut output_bytes,
-            output_stride,
-            dst_h as usize,
-            |_row_start, _row_end, dy, row| {
-                let sy = ((f64::from(dy) + 0.5) * sh_f / dh_f).floor() as i64;
-                let sy = sy.clamp(0, sh as i64 - 1) as u32;
-                for (dx, output) in row.chunks_exact_mut(4).enumerate() {
-                    let sx = ((dx as f64 + 0.5) * sw_f / dw_f).floor() as i64;
-                    let sx = sx.clamp(0, sw as i64 - 1) as u32;
-                    output.copy_from_slice(&src_ints[(sy * sw + sx) as usize].to_le_bytes());
-                }
-            }
-        );
-        #[cfg(not(feature = "parallel"))]
-        for (dy, row) in output_bytes.chunks_mut(output_stride).enumerate() {
-            let sy = ((dy as f64 + 0.5) * sh_f / dh_f).floor() as i64;
+    let mut output_bytes = output_dims.alloc_buffer();
+    #[cfg(feature = "parallel")]
+    crate::par_rows_mut_typed!(
+        &mut output_bytes,
+        output_stride,
+        dst_h as usize,
+        |_row_start, _row_end, dy, row| {
+            let sy = ((f64::from(dy) + 0.5) * sh_f / dh_f).floor() as i64;
             let sy = sy.clamp(0, sh as i64 - 1) as u32;
             for (dx, output) in row.chunks_exact_mut(4).enumerate() {
                 let sx = ((dx as f64 + 0.5) * sw_f / dw_f).floor() as i64;
@@ -360,30 +317,51 @@ pub(crate) fn resize_i_with_fma<F: F64MulAdd>(
                 output.copy_from_slice(&src_ints[(sy * sw + sx) as usize].to_le_bytes());
             }
         }
-        let out = crate::raster::RgbaImage::from_raw(dst_w, dst_h, output_bytes)
-            .expect("resize_i output shape must match its dimensions");
-        return Ok(DynamicImage::ImageRgba8(out));
-    }
-
-    // PIL: for INT32 images, coefficients stay as double-precision (not fixed-point).
-    // Use f64 accumulation + ROUND_UP matching PIL's ImagingResample for 32-bit types.
-    let h_coeffs_f64 = precompute_coeffs_f64(dst_w, sw, kernel, support);
-    let v_coeffs_f64 = precompute_coeffs_f64(dst_h, sh, kernel, support);
-    #[cfg(not(feature = "parallel"))]
-    let h_eight_tap_weights = resize_i_contiguous_eight_tap_weights(&h_coeffs_f64.weights);
-
-    #[cfg(not(feature = "parallel"))]
-    return resize_i_streaming_with_fma(
-        &src_ints,
-        sw,
-        dst_w,
-        dst_h,
-        &h_coeffs_f64,
-        &v_coeffs_f64,
-        h_eight_tap_weights.as_ref(),
-        fma,
     );
+    #[cfg(not(feature = "parallel"))]
+    for (dy, row) in output_bytes.chunks_mut(output_stride).enumerate() {
+        let sy = ((dy as f64 + 0.5) * sh_f / dh_f).floor() as i64;
+        let sy = sy.clamp(0, sh as i64 - 1) as u32;
+        for (dx, output) in row.chunks_exact_mut(4).enumerate() {
+            let sx = ((dx as f64 + 0.5) * sw_f / dw_f).floor() as i64;
+            let sx = sx.clamp(0, sw as i64 - 1) as u32;
+            output.copy_from_slice(&src_ints[(sy * sw + sx) as usize].to_le_bytes());
+        }
+    }
+    let out = crate::raster::RgbaImage::from_raw(dst_w, dst_h, output_bytes)
+        .expect("resize_i output shape must match its dimensions");
+    DynamicImage::ImageRgba8(out)
+}
 
+#[cfg(feature = "parallel")]
+struct ResizeIParallelInput<'a> {
+    src_ints: &'a [i32],
+    source_width: u32,
+    source_height: u32,
+    destination_width: u32,
+    destination_height: u32,
+    horizontal: &'a crate::ops::pil_resize::FilterCoeffsF64,
+    vertical: &'a crate::ops::pil_resize::FilterCoeffsF64,
+    output_dims: CheckedDims,
+}
+
+#[cfg(feature = "parallel")]
+#[inline(always)]
+fn resize_i_parallel<F: F64MulAdd>(
+    input: ResizeIParallelInput<'_>,
+    fma: &F,
+) -> Result<DynamicImage, PilError> {
+    let ResizeIParallelInput {
+        src_ints,
+        source_width: sw,
+        source_height: sh,
+        destination_width: dst_w,
+        destination_height: dst_h,
+        horizontal: h_coeffs_f64,
+        vertical: v_coeffs_f64,
+        output_dims,
+    } = input;
+    let output_stride = output_dims.row_stride();
     // ImagingResample stores the horizontal INT32 pass in an INT32 image
     // before the vertical pass. Keeping this buffer as f64 changes overflow
     // cases (the C cast saturates to INT32_MIN on the supported platforms).
@@ -458,6 +436,93 @@ pub(crate) fn resize_i_with_fma<F: F64MulAdd>(
         .ok_or_else(|| PilError::ValueError("resize_i: failed to create output buffer".into()))?;
     #[cfg(feature = "parallel")]
     Ok(DynamicImage::ImageRgba8(out))
+}
+
+pub(crate) fn resize_i_with_fma<F: F64MulAdd>(
+    img: &DynamicImage,
+    dst_w: u32,
+    dst_h: u32,
+    filter: &ResampleFilter,
+    fma: &F,
+) -> Result<DynamicImage, PilError> {
+    let (sw, sh) = img.dimensions();
+
+    if dst_w == 0 || dst_h == 0 || sw == 0 || sh == 0 {
+        return Ok(DynamicImage::new_rgba8(dst_w, dst_h));
+    }
+    if (dst_w, dst_h) == (sw, sh) {
+        return Ok(img.clone());
+    }
+
+    let (_, _, source_bytes) = i32_sample_bytes_from_native_storage(img)?;
+    let source_pixels = CheckedDims::new_allow_empty(sw, sh, 4)?.total_pixels();
+    let src_ints = i32_samples_from_le_bytes(source_bytes, source_pixels);
+
+    let (kernel, support) = resample_kernel(filter);
+    let sw_f = sw as f64;
+    let sh_f = sh as f64;
+    let dw_f = dst_w as f64;
+    let dh_f = dst_h as f64;
+
+    // PIL-compatible scale factor for kernel widening during downscaling.
+    let _sx_scale = (sw_f / dw_f).max(1.0);
+    let _sy_scale = (sh_f / dh_f).max(1.0);
+
+    let output_dims = CheckedDims::new(dst_w, dst_h, 4)?;
+
+    // NEAREST: Pillow's mode-I path uses the same half-destination-pixel
+    // point samples as its native point resampler:
+    //   sx = (int)((dx + 0.5) * sw/dw)
+    //   sy = (int)((dy + 0.5) * sh/dh)
+    //
+    // The older affine-style formula shifts a downsampled I image by one
+    // source row/column at the leading edge.  That only becomes visible when
+    // a public pipeline composes a typed filter with a non-integral resize,
+    // so keep the correction in the native I branch rather than changing the
+    // byte-image transform contract.
+    if matches!(filter, ResampleFilter::Nearest) {
+        return Ok(resize_i_nearest(
+            &src_ints,
+            (sw, sh),
+            (dst_w, dst_h),
+            output_dims,
+            (sw_f, sh_f, dw_f, dh_f),
+        ));
+    }
+
+    // PIL: for INT32 images, coefficients stay as double-precision (not fixed-point).
+    // Use f64 accumulation + ROUND_UP matching PIL's ImagingResample for 32-bit types.
+    let h_coeffs_f64 = precompute_coeffs_f64(dst_w, sw, kernel, support);
+    let v_coeffs_f64 = precompute_coeffs_f64(dst_h, sh, kernel, support);
+    #[cfg(not(feature = "parallel"))]
+    let h_eight_tap_weights = resize_i_contiguous_eight_tap_weights(&h_coeffs_f64.weights);
+
+    #[cfg(not(feature = "parallel"))]
+    return resize_i_streaming_with_fma(
+        &src_ints,
+        sw,
+        dst_w,
+        dst_h,
+        &h_coeffs_f64,
+        &v_coeffs_f64,
+        h_eight_tap_weights.as_ref(),
+        fma,
+    );
+
+    #[cfg(feature = "parallel")]
+    resize_i_parallel(
+        ResizeIParallelInput {
+            src_ints: &src_ints,
+            source_width: sw,
+            source_height: sh,
+            destination_width: dst_w,
+            destination_height: dst_h,
+            horizontal: &h_coeffs_f64,
+            vertical: &v_coeffs_f64,
+            output_dims,
+        },
+        fma,
+    )
 }
 
 /// Borrow I-mode's little-endian four-byte carrier after validating its
