@@ -83,6 +83,28 @@ fn native_byte_pipeline_spec(op: &PipelineOp) -> Result<NativeBytePipelineSpec, 
             include_str!("../../shaders/posterize.wgsl"),
             Some(u32::from(*bits)),
         ),
+        _ => {
+            return native_byte_composite_pipeline_spec(op)
+                .ok_or_else(|| PilError::InternalError("unrecognized native byte stage".into()));
+        }
+    };
+    Ok(spec)
+}
+
+fn native_byte_composite_pipeline_spec(op: &PipelineOp) -> Option<NativeBytePipelineSpec> {
+    match op {
+        PipelineOp::Multiply { .. }
+        | PipelineOp::Screen { .. }
+        | PipelineOp::Overlay { .. }
+        | PipelineOp::HardLight { .. }
+        | PipelineOp::SoftLight { .. }
+        | PipelineOp::BlendModule { .. } => native_byte_blend_pipeline_spec(op),
+        _ => native_byte_arithmetic_pipeline_spec(op),
+    }
+}
+
+fn native_byte_blend_pipeline_spec(op: &PipelineOp) -> Option<NativeBytePipelineSpec> {
+    let spec = match op {
         PipelineOp::Multiply { .. } => (
             "Multiply",
             "multiply.wgsl",
@@ -113,6 +135,19 @@ fn native_byte_pipeline_spec(op: &PipelineOp) -> Result<NativeBytePipelineSpec, 
             include_str!("../../shaders/soft_light.wgsl"),
             None,
         ),
+        PipelineOp::BlendModule { alpha, .. } => (
+            "BlendModule",
+            "blend_module.wgsl",
+            include_str!("../../shaders/blend_module.wgsl"),
+            Some((*alpha as f32).to_bits()),
+        ),
+        _ => return None,
+    };
+    Some(spec)
+}
+
+fn native_byte_arithmetic_pipeline_spec(op: &PipelineOp) -> Option<NativeBytePipelineSpec> {
+    let spec = match op {
         PipelineOp::Difference { .. } => (
             "Difference",
             "difference.wgsl",
@@ -143,19 +178,9 @@ fn native_byte_pipeline_spec(op: &PipelineOp) -> Result<NativeBytePipelineSpec, 
             include_str!("../../shaders/subtract_modulo.wgsl"),
             None,
         ),
-        PipelineOp::BlendModule { alpha, .. } => (
-            "BlendModule",
-            "blend_module.wgsl",
-            include_str!("../../shaders/blend_module.wgsl"),
-            Some((*alpha as f32).to_bits()),
-        ),
-        _ => {
-            return Err(PilError::InternalError(
-                "unrecognized native byte stage".into(),
-            ));
-        }
+        _ => return None,
     };
-    Ok(spec)
+    Some(spec)
 }
 
 fn encode_native_byte_dispatch(
