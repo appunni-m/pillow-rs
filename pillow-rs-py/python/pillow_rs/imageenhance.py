@@ -26,10 +26,7 @@ class Color(_Enhance):
             self.degenerate = image
         else:
             self.degenerate = Image(image._rust_image.color_degenerate())
-            self.degenerate._info = image._info.copy()
-            self.degenerate._native_info = image._native_info
-            self.degenerate._native_info_rebaseline = True
-            self.degenerate._native_info_omitted = image._native_info_omitted
+            self.degenerate._copy_info_state_from(image)
             if image.mode in ("RGB", "P") and "transparency" in image.info:
                 transparency = image.info["transparency"]
                 if isinstance(transparency, bytes):
@@ -54,10 +51,7 @@ class Color(_Enhance):
             and not self.degenerate._transpose_loads_info
         ):
             result = self.degenerate.copy()
-            result._info = self.degenerate._info.copy()
-            result._native_info = self.degenerate._native_info
-            result._native_info_rebaseline = True
-            result._native_info_omitted = self.degenerate._native_info_omitted
+            result._copy_info_state_from(self.degenerate)
             return result
 
         # Blend(degenerate, image, 1.0) is an independent copy of image. Keep
@@ -75,10 +69,7 @@ class Color(_Enhance):
             and not self.degenerate._transpose_loads_info
         ):
             result = self.image.copy()
-            result._info = self.degenerate._info.copy()
-            result._native_info = self.degenerate._native_info
-            result._native_info_rebaseline = True
-            result._native_info_omitted = self.degenerate._native_info_omitted
+            result._copy_info_state_from(self.degenerate)
             return result
         from .operations import blend
         return blend(self.degenerate, self.image, factor)

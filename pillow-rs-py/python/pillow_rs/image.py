@@ -254,16 +254,24 @@ class Image:
         if self._native_info is not None:
             self.info
 
+    def _copy_info_state_from(self, source):
+        """Copy the public info mapping and its lazy-merge bookkeeping.
+
+        The mapping is shallow-copied, so nested values keep Pillow's identity
+        semantics. The native snapshot stays shared until the result rebases it.
+        """
+        self._info = source._info.copy()
+        self._native_info = source._native_info
+        self._native_info_rebaseline = True
+        self._native_info_omitted = source._native_info_omitted
+
     def _new(self, rust_image):
         """Wrap a derived image with Pillow's shallow metadata-copy semantics."""
         if self._transpose_loads_info:
             self.load()
             self.info
         result = Image(rust_image)
-        result._info = self._info.copy()
-        result._native_info = self._native_info
-        result._native_info_rebaseline = True
-        result._native_info_omitted = self._native_info_omitted
+        result._copy_info_state_from(self)
         return result
 
     def _ensure_materialized(self):
