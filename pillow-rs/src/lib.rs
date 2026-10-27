@@ -379,6 +379,8 @@ pub use crate::ops::module_fns::eval_validated as image_eval_validated;
 pub use crate::ops::module_fns::frombytes as image_frombytes;
 pub use crate::ops::module_fns::frombytes_owned as image_frombytes_owned;
 pub use crate::ops::module_fns::linear_gradient as image_linear_gradient;
+#[doc(hidden)]
+pub use crate::ops::module_fns::make_float_lut as image_eval_float_lut;
 pub use crate::ops::module_fns::make_lut;
 pub use crate::ops::module_fns::merge as image_merge;
 pub use crate::ops::module_fns::merge_inputs as image_merge_inputs;

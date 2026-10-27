@@ -226,6 +226,21 @@ pub fn eval_float(image: &Image, lut: &[f64]) -> Result<Image, PilError> {
     Image::frombytes("F", size, &raw)
 }
 
+/// Builds a floating-point point-operation LUT from a host callback.
+///
+/// The callback remains in its owning runtime. Core controls the Pillow byte
+/// sample order and returns the values without rounding or clamping.
+pub fn make_float_lut<E, F>(mut callback: F) -> Result<Vec<f64>, E>
+where
+    F: FnMut(u32) -> Result<f64, E>,
+{
+    let mut table = Vec::with_capacity(256);
+    for sample in 0..256u32 {
+        table.push(callback(sample)?);
+    }
+    Ok(table)
+}
+
 /// Builds a Pillow point/eval lookup table from a host callback.
 ///
 /// The callback is only responsible for producing one integer result for each

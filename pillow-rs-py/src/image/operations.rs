@@ -435,11 +435,9 @@ impl PyImage {
             let source_mode = self.inner.mode().map_err(map_error)?;
             if matches!(source_mode.as_str(), "1" | "L" | "P") {
                 let lut = if input.is_callable() {
-                    let mut values = Vec::with_capacity(256);
-                    for sample in 0..256u32 {
-                        values.push(input.call1((sample,))?.extract::<f64>()?);
-                    }
-                    values
+                    pillow_rs::image_eval_float_lut(|sample| {
+                        input.call1((sample,))?.extract::<f64>()
+                    })?
                 } else {
                     input.extract::<Vec<f64>>()?
                 };
