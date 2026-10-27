@@ -23,6 +23,15 @@ it must not implement an alternate image algorithm. Core runtime logic is
 Rust. Native Pillow, FreeType, and codec libraries are test oracles, never
 runtime substitutes for missing implementation.
 
+Host bindings own inspection and conversion of host objects. They pass
+host-neutral Rust values to core for shared Pillow semantics, validation, and
+algorithms. Shared input contracts may retain enough type and value information
+to reproduce Pillow-compatible errors; they must not expose PyO3, Python, or
+JavaScript runtime types. Keep Python and JavaScript extraction and exception
+translation in their respective bindings. Existing Python-prefixed Rust paths
+for shared inputs are hidden compatibility aliases; remove them only with an
+explicit breaking-release decision.
+
 ## Image and backend boundaries
 
 An image retains its native mode and layout. Drawing writes the native pixel

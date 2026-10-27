@@ -92,12 +92,12 @@ pub(crate) fn imageops_color_from_python(
 
 pub(crate) fn convert_mode_input_from_python(
     value: Option<&Bound<'_, PyAny>>,
-) -> PyResult<pillow_rs::PythonConvertModeInput> {
+) -> PyResult<pillow_rs::ConvertModeInput> {
     match value {
-        None => Ok(pillow_rs::PythonConvertModeInput::None),
+        None => Ok(pillow_rs::ConvertModeInput::None),
         Some(value) => match value.extract::<String>() {
-            Ok(value) => Ok(pillow_rs::PythonConvertModeInput::Name(value)),
-            Err(_) => Ok(pillow_rs::PythonConvertModeInput::Invalid(
+            Ok(value) => Ok(pillow_rs::ConvertModeInput::Name(value)),
+            Err(_) => Ok(pillow_rs::ConvertModeInput::Invalid(
                 value.get_type().name()?.to_string(),
             )),
         },
@@ -106,12 +106,12 @@ pub(crate) fn convert_mode_input_from_python(
 
 pub(crate) fn convert_palette_input_from_python(
     value: Option<&Bound<'_, PyAny>>,
-) -> PyResult<pillow_rs::PythonConvertPaletteInput> {
+) -> PyResult<pillow_rs::ConvertPaletteInput> {
     match value {
-        None => Ok(pillow_rs::PythonConvertPaletteInput::None),
+        None => Ok(pillow_rs::ConvertPaletteInput::None),
         Some(value) => match value.extract::<String>() {
-            Ok(value) => Ok(pillow_rs::PythonConvertPaletteInput::Name(value)),
-            Err(_) => Ok(pillow_rs::PythonConvertPaletteInput::Invalid(
+            Ok(value) => Ok(pillow_rs::ConvertPaletteInput::Name(value)),
+            Err(_) => Ok(pillow_rs::ConvertPaletteInput::Invalid(
                 value.get_type().name()?.to_string(),
             )),
         },

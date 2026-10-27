@@ -7,68 +7,66 @@ pub(super) fn parse_dither(s: Option<&str>) -> Result<Option<DitherMethod>, PilE
         Some("NONE") | Some("none") => Ok(Some(DitherMethod::None)),
         Some("FLOYDSTEINBERG") | Some("floydsteinberg") => Ok(Some(DitherMethod::FloydSteinberg)),
         None => Ok(Some(DitherMethod::FloydSteinberg)), // PIL default: FloydSteinberg dither
-        // Pillow's Python converter rejects string dither values before the C
-        // converter interprets the integer enum.
+        // Pillow-compatible conversion accepts the dither as an integer enum,
+        // even though this internal parser also handles symbolic names.
         _ => Err(PilError::TypeError(
             "'str' object cannot be interpreted as an integer".into(),
         )),
     }
 }
 
-/// Host-neutral Python-facing dither input.
+/// Host-neutral dither argument in Pillow's conversion contract.
 #[derive(Debug, Clone)]
-pub enum PythonDitherInput {
+pub enum DitherInput {
     /// No dither argument was supplied.
     None,
-    /// Python integer enum; zero disables dithering and non-zero selects
+    /// Integer enum; zero disables dithering and non-zero selects
     /// Floyd-Steinberg.
     Integer(u32),
-    /// Python string, which Pillow rejects for this entry point.
+    /// String value, which Pillow rejects for this entry point.
     Name(String),
     /// A value of another host type. The type name is used in Pillow's
     /// compatibility diagnostic.
     Invalid(String),
 }
 
-/// Validates a Python-facing dither argument that arrived as a string.
+/// Validates a dither string against Pillow's integer-enum contract.
 ///
-/// Pillow's Python API accepts the dither enum as an integer, even though the
-/// shared Rust/JavaScript API uses symbolic strings internally. Parse the
-/// symbolic value through the same core helper, then preserve Pillow's Python
-/// type error for the host string input.
+/// Pillow-compatible conversion accepts the dither enum as an integer, while
+/// the lower-level Rust conversion API uses symbolic strings internally. Keep
+/// this distinction in the shared core contract so each binding reports the
+/// same error for a string argument.
 ///
 /// # Errors
 ///
-/// Always returns [`PilError::TypeError`] because Python strings are not valid
-/// dither enum arguments.
-pub fn validate_python_convert_dither(value: &str) -> Result<(), PilError> {
+/// Always returns [`PilError::TypeError`] because strings are not valid dither
+/// enum arguments in the Pillow-compatible conversion API.
+pub fn validate_convert_dither(value: &str) -> Result<(), PilError> {
     let _ = parse_dither(Some(value));
     Err(PilError::TypeError(
         "'str' object cannot be interpreted as an integer".into(),
     ))
 }
 
-/// Normalizes a Python-facing dither value into the symbolic core form.
-pub fn normalize_python_convert_dither(
-    value: PythonDitherInput,
-) -> Result<Option<String>, PilError> {
+/// Normalizes the host-extracted dither value into the symbolic core form.
+pub fn normalize_convert_dither(value: DitherInput) -> Result<Option<String>, PilError> {
     match value {
-        PythonDitherInput::None => Ok(None),
-        PythonDitherInput::Integer(value) => Ok(Some(if value == 0 {
+        DitherInput::None => Ok(None),
+        DitherInput::Integer(value) => Ok(Some(if value == 0 {
             "NONE".to_owned()
         } else {
             "FLOYDSTEINBERG".to_owned()
         })),
-        PythonDitherInput::Name(value) => validate_python_convert_dither(&value).map(|_| None),
-        PythonDitherInput::Invalid(type_name) => Err(PilError::TypeError(format!(
+        DitherInput::Name(value) => validate_convert_dither(&value).map(|_| None),
+        DitherInput::Invalid(type_name) => Err(PilError::TypeError(format!(
             "'{type_name}' object cannot be interpreted as an integer"
         ))),
     }
 }
 
-/// Host-neutral destination mode input for the Python conversion wrapper.
+/// Host-neutral destination-mode argument for Pillow-compatible conversion.
 #[derive(Debug, Clone)]
-pub enum PythonConvertModeInput {
+pub enum ConvertModeInput {
     /// No destination mode was supplied.
     None,
     /// A destination mode name.
@@ -77,9 +75,9 @@ pub enum PythonConvertModeInput {
     Invalid(String),
 }
 
-/// Host-neutral palette input for the Python conversion wrapper.
+/// Host-neutral palette argument for Pillow-compatible conversion.
 #[derive(Debug, Clone)]
-pub enum PythonConvertPaletteInput {
+pub enum ConvertPaletteInput {
     /// No palette object was supplied.
     None,
     /// A symbolic palette name.
@@ -90,19 +88,19 @@ pub enum PythonConvertPaletteInput {
 
 /// Pillow-compatible image mode conversion methods.
 impl Image {
-    /// Applies Python's default-mode, palette, and matrix validation before
+    /// Applies Pillow's default-mode, palette, and matrix validation before
     /// entering the shared conversion implementation.
     pub fn convert_with_input(
         &self,
-        mode: PythonConvertModeInput,
+        mode: ConvertModeInput,
         matrix: Option<Vec<f64>>,
-        dither: PythonDitherInput,
-        palette: PythonConvertPaletteInput,
+        dither: DitherInput,
+        palette: ConvertPaletteInput,
         colors: Option<u32>,
     ) -> Result<Image, PilError> {
         let source_mode = self.mode()?;
         let target_mode = match mode {
-            PythonConvertModeInput::None => {
+            ConvertModeInput::None => {
                 if source_mode != "P" {
                     return Ok(self.copy());
                 }
@@ -112,8 +110,8 @@ impl Image {
                 }
                 target
             }
-            PythonConvertModeInput::Name(target) => target,
-            PythonConvertModeInput::Invalid(type_name) => {
+            ConvertModeInput::Name(target) => target,
+            ConvertModeInput::Invalid(type_name) => {
                 return Err(PilError::TypeError(format!(
                     "argument 1 must be str, not {type_name}"
                 )));
@@ -139,20 +137,20 @@ impl Image {
         }
 
         let palette = match palette {
-            PythonConvertPaletteInput::None => None,
-            PythonConvertPaletteInput::Name(name) => Some(name),
+            ConvertPaletteInput::None => None,
+            ConvertPaletteInput::Name(name) => Some(name),
             // Pillow accepts and ignores palette values for the public
             // conversion paths exercised here; only the target mode and
             // dither/matrix inputs affect conversion dispatch.
-            PythonConvertPaletteInput::Invalid(_) => None,
+            ConvertPaletteInput::Invalid(_) => None,
         };
-        // Keep Python's dither coercion in the Rust core. Pillow ignores the
+        // Keep Pillow's dither coercion in the Rust core. Pillow ignores the
         // argument on a same-mode no-op and on matrix conversions, and reports
         // matrix/mode errors before it attempts to interpret the dither enum.
         let dither = if matrix.is_some() {
             None
         } else {
-            normalize_python_convert_dither(dither)?
+            normalize_convert_dither(dither)?
         };
         self.convert(
             &target_mode,

@@ -14,7 +14,7 @@ mod support;
 mod tests;
 
 pub use input::{
-    PythonConvertModeInput, PythonConvertPaletteInput, PythonDitherInput,
-    normalize_python_convert_dither, validate_python_convert_dither,
+    ConvertModeInput, ConvertPaletteInput, DitherInput, normalize_convert_dither,
+    validate_convert_dither,
 };
 pub use mode::parse_mode;

@@ -253,23 +253,35 @@ pub use crate::image::FormattedPixelValue;
 pub use crate::image::Image;
 pub use crate::image::ImageInfoValue;
 pub use crate::image::ImagingCoreBytesInput;
+pub use crate::image::NewColorInput;
+pub use crate::image::OpenFormatsInput;
+pub use crate::image::OpenModeInput;
 pub use crate::image::PaletteTransparency;
 pub use crate::image::PutAlphaInput;
 pub use crate::image::PutDataInput;
 pub use crate::image::PutDataValue;
 pub use crate::image::PutDataValueKind;
 pub use crate::image::PutPixelValue;
-pub use crate::image::PythonNewColorInput;
-pub use crate::image::PythonOpenFormatsInput;
-pub use crate::image::PythonOpenModeInput;
+// Preserve the original public Rust paths after adopting host-neutral names.
+// Remove these aliases only as part of an explicit breaking-release decision.
+#[doc(hidden)]
+pub use crate::image::NewColorInput as PythonNewColorInput;
+#[doc(hidden)]
+pub use crate::image::OpenFormatsInput as PythonOpenFormatsInput;
+#[doc(hidden)]
+pub use crate::image::OpenModeInput as PythonOpenModeInput;
 pub use crate::image::StatResult;
 pub use crate::image::StatValue;
 pub use crate::image::imaging_core_to_bytes;
 pub use crate::image::prepare_exif_compat;
 pub use crate::image::stat_from_histogram;
 pub use crate::image::stat_from_list;
-pub use crate::image::validate_python_open_inputs;
-pub use crate::image::validate_python_open_source_bytes;
+pub use crate::image::validate_open_inputs;
+#[doc(hidden)]
+pub use crate::image::validate_open_inputs as validate_python_open_inputs;
+pub use crate::image::validate_open_source_bytes;
+#[doc(hidden)]
+pub use crate::image::validate_open_source_bytes as validate_python_open_source_bytes;
 pub use crate::image_sequence::ImageSequenceIterator;
 pub use crate::ops::analysis::ImageAnalysisMask;
 pub use crate::ops::analysis::validate_transparency_mask;
@@ -296,11 +308,21 @@ pub use crate::ops::chops::screen as chops_screen;
 pub use crate::ops::chops::soft_light as chops_soft_light;
 pub use crate::ops::chops::subtract as chops_subtract;
 pub use crate::ops::chops::subtract_modulo as chops_subtract_modulo;
-pub use crate::ops::convert::PythonConvertModeInput;
-pub use crate::ops::convert::PythonConvertPaletteInput;
-pub use crate::ops::convert::PythonDitherInput;
-pub use crate::ops::convert::normalize_python_convert_dither;
-pub use crate::ops::convert::validate_python_convert_dither;
+pub use crate::ops::convert::ConvertModeInput;
+#[doc(hidden)]
+pub use crate::ops::convert::ConvertModeInput as PythonConvertModeInput;
+pub use crate::ops::convert::ConvertPaletteInput;
+#[doc(hidden)]
+pub use crate::ops::convert::ConvertPaletteInput as PythonConvertPaletteInput;
+pub use crate::ops::convert::DitherInput;
+#[doc(hidden)]
+pub use crate::ops::convert::DitherInput as PythonDitherInput;
+pub use crate::ops::convert::normalize_convert_dither;
+#[doc(hidden)]
+pub use crate::ops::convert::normalize_convert_dither as normalize_python_convert_dither;
+pub use crate::ops::convert::validate_convert_dither;
+#[doc(hidden)]
+pub use crate::ops::convert::validate_convert_dither as validate_python_convert_dither;
 pub use crate::ops::filter::prepare_kernel;
 pub use crate::ops::filter::validate_kernel_coefficients;
 pub use crate::ops::imageops::CenteringInput;
@@ -330,6 +352,8 @@ pub use crate::ops::imageops::invert_ops as imageops_invert;
 pub use crate::ops::imageops::mirror as imageops_mirror;
 pub use crate::ops::imageops::pad as imageops_pad;
 pub use crate::ops::imageops::pad_with_input as imageops_pad_with_input;
+#[doc(hidden)]
+pub use crate::ops::imageops::pad_with_input_and_containment as imageops_pad_with_input_and_containment;
 pub use crate::ops::imageops::posterize as imageops_posterize;
 pub use crate::ops::imageops::scale_with_input as imageops_scale_with_input;
 pub use crate::ops::imageops::solarize as imageops_solarize;
@@ -369,10 +393,16 @@ pub use crate::ops::param_filters::color3dlut_repr;
 pub use crate::ops::param_filters::color3dlut_transform_table;
 pub use crate::ops::param_filters::prepare_color3dlut;
 pub use crate::ops::paste::AlphaCompositeBox;
+pub use crate::ops::paste::PasteBoxInput;
+#[doc(hidden)]
+pub use crate::ops::paste::PasteBoxInput as PythonPasteBox;
+pub use crate::ops::paste::PasteMaskInput;
+#[doc(hidden)]
+pub use crate::ops::paste::PasteMaskInput as PythonPasteMask;
 pub use crate::ops::paste::PasteSource;
-pub use crate::ops::paste::PythonPasteBox;
-pub use crate::ops::paste::PythonPasteMask;
-pub use crate::ops::paste::PythonPasteSource;
+pub use crate::ops::paste::PasteSourceInput;
+#[doc(hidden)]
+pub use crate::ops::paste::PasteSourceInput as PythonPasteSource;
 pub use crate::ops::quantize::QuantizePalette;
 pub use crate::ops::resize::ResampleInput;
 pub use crate::ops::resize::parse_resample;
@@ -380,7 +410,9 @@ pub use crate::ops::resize::parse_resample_input;
 pub use crate::ops::rotate::RotateExpandInput;
 pub use crate::ops::rotate::RotatePointInput;
 pub use crate::ops::rotate::RotateResampleInput;
-pub use crate::ops::rotate::normalize_python_rotate;
+pub use crate::ops::rotate::normalize_rotate;
+#[doc(hidden)]
+pub use crate::ops::rotate::normalize_rotate as normalize_python_rotate;
 pub use crate::ops::transform::ReduceBox;
 pub use crate::ops::transform::ReduceFactor;
 pub use crate::ops::transform::TransformData;

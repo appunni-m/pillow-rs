@@ -217,19 +217,21 @@ fn ops_pad(
     filter: Option<&Bound<'_, PyAny>>,
     color: Option<&Bound<'_, PyAny>>,
     centering: &Bound<'_, PyAny>,
-) -> PyResult<PyImage> {
+) -> PyResult<(PyImage, bool)> {
     let filter = resample_input_from_python(filter)?;
     let centering = centering_from_python(centering);
     let color = imageops_color_from_python(color);
 
     let inner = image.borrow().inner.clone();
-    let rs = Python::attach(|py| {
+    let (rs, uses_contain_result) = Python::attach(|py| {
         py.detach(|| {
-            pillow_rs::imageops_pad_with_input(&inner, size.0, size.1, filter, color, centering)
+            pillow_rs::imageops_pad_with_input_and_containment(
+                &inner, size.0, size.1, filter, color, centering,
+            )
         })
     })
     .map_err(map_error)?;
-    Ok(PyImage { inner: rs })
+    Ok((PyImage { inner: rs }, uses_contain_result))
 }
 
 #[pyfunction]

@@ -106,3 +106,6 @@ class Sharpness(_Enhance):
 
     def _apply(self, factor):
         return self.image._rust_image.enhance_sharpness(factor)
+
+    def enhance(self, factor: float):
+        return self.image._new(self._apply(factor))

@@ -4,8 +4,8 @@ use super::input::{
     coordinate, invalid_component_error, paste_scalar_source, paste_source_from_color_string,
 };
 use super::types::{
-    AlphaCompositeBox, PastePlacement, PasteSource, PythonPasteBox, PythonPasteMask,
-    PythonPasteSource, ResolvedPasteColor,
+    AlphaCompositeBox, PasteBoxInput, PasteMaskInput, PastePlacement, PasteSource,
+    PasteSourceInput, ResolvedPasteColor,
 };
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
@@ -25,16 +25,16 @@ impl Image {
     /// mask errors, and the actual paste path all remain shared Rust logic.
     pub fn paste_with_input(
         &mut self,
-        source: PythonPasteSource,
-        box_input: PythonPasteBox,
-        mask_input: PythonPasteMask,
+        source: PasteSourceInput,
+        box_input: PasteBoxInput,
+        mask_input: PasteMaskInput,
     ) -> Result<(), PilError> {
         let destination_mode = self.mode()?;
         let source = match source {
-            PythonPasteSource::Image(image) => PasteSource::from_parts(Some(*image), 0, 0, 0, 255),
-            PythonPasteSource::Scalar(value) => paste_scalar_source(value, &destination_mode),
-            PythonPasteSource::Float(value) => PasteSource::RawFloat(value),
-            PythonPasteSource::Components(values) => match values.as_slice() {
+            PasteSourceInput::Image(image) => PasteSource::from_parts(Some(*image), 0, 0, 0, 255),
+            PasteSourceInput::Scalar(value) => paste_scalar_source(value, &destination_mode),
+            PasteSourceInput::Float(value) => PasteSource::RawFloat(value),
+            PasteSourceInput::Components(values) => match values.as_slice() {
                 [value] => paste_scalar_source(*value, &destination_mode),
                 [luma, alpha] => match (u8::try_from(*luma), u8::try_from(*alpha)) {
                     (Ok(luma), Ok(alpha)) => PasteSource::LumaAlpha(luma, alpha),
@@ -55,19 +55,19 @@ impl Image {
                 },
                 _ => return Err(invalid_component_error(&destination_mode)),
             },
-            PythonPasteSource::String(value) => {
+            PasteSourceInput::String(value) => {
                 paste_source_from_color_string(&value, &destination_mode)?
             }
-            PythonPasteSource::Invalid => {
+            PasteSourceInput::Invalid => {
                 return Err(invalid_component_error(&destination_mode));
             }
         };
 
         let abbreviated_mask = match &box_input {
-            PythonPasteBox::Image(mask) => Some((**mask).clone()),
+            PasteBoxInput::Image(mask) => Some((**mask).clone()),
             _ => None,
         };
-        if abbreviated_mask.is_some() && !matches!(&mask_input, PythonPasteMask::None) {
+        if abbreviated_mask.is_some() && !matches!(&mask_input, PasteMaskInput::None) {
             return Err(PilError::ValueError(
                 "If using second argument as mask, third argument must be None".to_owned(),
             ));
@@ -76,9 +76,9 @@ impl Image {
             Some(image)
         } else {
             match mask_input {
-                PythonPasteMask::None => None,
-                PythonPasteMask::Image(image) => Some(*image),
-                PythonPasteMask::Invalid(type_name) => {
+                PasteMaskInput::None => None,
+                PasteMaskInput::Image(image) => Some(*image),
+                PasteMaskInput::Invalid(type_name) => {
                     return Err(PilError::AttributeError(format!(
                         "'{type_name}' object has no attribute 'load'"
                     )));
@@ -87,10 +87,10 @@ impl Image {
         };
 
         match box_input {
-            PythonPasteBox::None | PythonPasteBox::Image(_) => {
+            PasteBoxInput::None | PasteBoxInput::Image(_) => {
                 self.paste_at(source, None, mask.as_ref())
             }
-            PythonPasteBox::Values(values) => match values.as_slice() {
+            PasteBoxInput::Values(values) => match values.as_slice() {
                 [x, y] => {
                     // Pillow rejects a two-coordinate solid-color paste for
                     // lack of a region size before it validates the unused
@@ -120,7 +120,7 @@ impl Image {
                     values.len()
                 ))),
             },
-            PythonPasteBox::Invalid { length, type_name } => match length {
+            PasteBoxInput::Invalid { length, type_name } => match length {
                 Some(length) => Err(PilError::TypeError(format!(
                     "argument 2 must be sequence of length 4, not {length}"
                 ))),

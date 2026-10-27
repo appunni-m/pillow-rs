@@ -144,45 +144,44 @@ fn chops_offset_c_long_overflow() -> JsValue {
     ))
 }
 
-pub(crate) fn js_python_dither(value: &JsValue) -> pillow_rs::PythonDitherInput {
+pub(crate) fn js_dither_input(value: &JsValue) -> pillow_rs::DitherInput {
     if value.is_null() || value.is_undefined() {
-        return pillow_rs::PythonDitherInput::None;
+        return pillow_rs::DitherInput::None;
     }
-    // The Python facade receives a tuple for sequence-valued dither inputs.
-    // Preserve that public type name at the host boundary so the shared
-    // validator reports Pillow's tuple/int error instead of JavaScript's list.
+    // Map JavaScript arrays to Pillow's tuple error wording so the shared
+    // validator preserves the same conversion contract as the Python binding.
     if value.is_array() {
-        return pillow_rs::PythonDitherInput::Invalid("tuple".to_owned());
+        return pillow_rs::DitherInput::Invalid("tuple".to_owned());
     }
     if let Some(value) = js_integer(value) {
         return u32::try_from(value)
-            .map(pillow_rs::PythonDitherInput::Integer)
-            .unwrap_or_else(|_| pillow_rs::PythonDitherInput::Invalid("int".to_owned()));
+            .map(pillow_rs::DitherInput::Integer)
+            .unwrap_or_else(|_| pillow_rs::DitherInput::Invalid("int".to_owned()));
     }
     if let Some(value) = value.as_string() {
-        return pillow_rs::PythonDitherInput::Name(value);
+        return pillow_rs::DitherInput::Name(value);
     }
-    pillow_rs::PythonDitherInput::Invalid(js_value_type_name(value))
+    pillow_rs::DitherInput::Invalid(js_value_type_name(value))
 }
 
-pub(crate) fn js_convert_mode(value: &JsValue) -> pillow_rs::PythonConvertModeInput {
+pub(crate) fn js_convert_mode(value: &JsValue) -> pillow_rs::ConvertModeInput {
     if value.is_null() || value.is_undefined() {
-        return pillow_rs::PythonConvertModeInput::None;
+        return pillow_rs::ConvertModeInput::None;
     }
     value
         .as_string()
-        .map(pillow_rs::PythonConvertModeInput::Name)
-        .unwrap_or_else(|| pillow_rs::PythonConvertModeInput::Invalid(js_value_type_name(value)))
+        .map(pillow_rs::ConvertModeInput::Name)
+        .unwrap_or_else(|| pillow_rs::ConvertModeInput::Invalid(js_value_type_name(value)))
 }
 
-pub(crate) fn js_convert_palette(value: &JsValue) -> pillow_rs::PythonConvertPaletteInput {
+pub(crate) fn js_convert_palette(value: &JsValue) -> pillow_rs::ConvertPaletteInput {
     if value.is_null() || value.is_undefined() {
-        return pillow_rs::PythonConvertPaletteInput::None;
+        return pillow_rs::ConvertPaletteInput::None;
     }
     value
         .as_string()
-        .map(pillow_rs::PythonConvertPaletteInput::Name)
-        .unwrap_or_else(|| pillow_rs::PythonConvertPaletteInput::Invalid(js_value_type_name(value)))
+        .map(pillow_rs::ConvertPaletteInput::Name)
+        .unwrap_or_else(|| pillow_rs::ConvertPaletteInput::Invalid(js_value_type_name(value)))
 }
 
 pub(crate) fn js_optional_matrix(value: &JsValue) -> Result<Option<Vec<f64>>, JsValue> {

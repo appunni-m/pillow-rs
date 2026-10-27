@@ -45,8 +45,8 @@ pub use channel_access::{ChannelSelector, PutAlphaInput};
 mod color_count;
 mod construction;
 pub use construction::{
-    PythonNewColorInput, PythonOpenFormatsInput, PythonOpenModeInput, validate_python_open_inputs,
-    validate_python_open_source_bytes,
+    NewColorInput, OpenFormatsInput, OpenModeInput, validate_open_inputs,
+    validate_open_source_bytes,
 };
 mod data_access;
 pub(crate) use data_access::ScalarImageSamples;

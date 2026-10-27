@@ -141,7 +141,7 @@ pub(crate) fn exact_rgb_tuple_from_python(value: &Bound<'_, PyAny>) -> Option<[u
 
 pub(crate) fn new_color_input_from_python(
     color: Option<&Bound<'_, PyAny>>,
-) -> pillow_rs::PythonNewColorInput {
+) -> pillow_rs::NewColorInput {
     let (hex, single, rgb, rgba, la, int32_val, float_val) = if let Some(value) = color {
         (
             value.extract::<String>().ok(),
@@ -155,7 +155,7 @@ pub(crate) fn new_color_input_from_python(
     } else {
         (None, None, None, None, None, None, None)
     };
-    pillow_rs::PythonNewColorInput::from_parts(
+    pillow_rs::NewColorInput::from_parts(
         hex,
         single,
         rgb,

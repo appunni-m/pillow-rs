@@ -372,7 +372,7 @@ class Image:
         rust_image = self._rust_image.convert(
             mode, matrix=matrix, dither=dither, palette=palette, colors=colors
         )
-        img = Image(rust_image)
+        img = self._new(rust_image)
         img._info.update(
             self._rust_image.converted_compatibility_info(img.mode)
         )
@@ -390,13 +390,13 @@ class Image:
         self._rust_image.paste(im, box, mask)
 
     def split(self) -> Tuple["Image", ...]:
-        return tuple(map(Image, self._rust_image.split()))
+        return tuple(self._new(image) for image in self._rust_image.split())
 
     def getbands(self) -> Tuple[str, ...]:
         return self._rust_image.getbands()
 
     def copy(self) -> "Image":
-        return Image(self._rust_image.copy())
+        return self._new(self._rust_image.copy())
 
     def filter(self, filter_type) -> "Image":
         return self._new(self._rust_image.filter(filter_type))
@@ -450,10 +450,9 @@ class Image:
     def quantize(self, colors: int = 256, method=None, kmeans: int = 0,
                  palette=None, dither: int = 1):
         """Reduce colors using median cut algorithm."""
-        result = Image(
+        return self._new(
             self._rust_image.quantize(colors, method, kmeans, dither != 0, palette)
         )
-        return result
 
     def getbbox(self, *, alpha_only: bool = True):
         """Bounding box of non-zero regions."""
@@ -480,7 +479,7 @@ class Image:
 
     def reduce(self, factor, box=None):
         """Reduce image by integer factor through the Rust core."""
-        return Image(self._rust_image.reduce(factor, box))
+        return self._new(self._rust_image.reduce(factor, box))
 
     def load(self):
         """Load pixel data and return a mutable Pillow-style pixel view."""
@@ -545,11 +544,11 @@ class Image:
 
     def point(self, lut, mode=None):
         """Apply lookup table or function to each pixel."""
-        return Image(self._rust_image.point(lut, mode))
+        return self._new(self._rust_image.point(lut, mode))
 
     def effect_spread(self, distance):
         """Simple spread/blur effect."""
-        return Image(self._rust_image.effect_spread(distance))
+        return self._new(self._rust_image.effect_spread(distance))
 
     def apply_transparency(self):
         """Commit P-mode transparency to its palette without changing pixels."""
@@ -801,7 +800,7 @@ class Image:
 
     def remap_palette(self, dest_map, source_palette=None):
         """Remap image palette using destination map."""
-        return Image(
+        return self._new(
             self._rust_image.remap_palette(list(dest_map), source_palette)
         )
 
@@ -811,7 +810,9 @@ class Image:
 
     def transform(self, size, method, data=None, resample=0, fill=1, fillcolor=None):
         """General affine/perspective/mesh transform delegated to Rust."""
-        return Image(self._rust_image.transform(size, method, data, resample, fill, fillcolor))
+        return self._new(
+            self._rust_image.transform(size, method, data, resample, fill, fillcolor)
+        )
 
     def verify(self):
         """Verify file contents. Raises exception if corrupted."""

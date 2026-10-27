@@ -82,14 +82,14 @@ impl PyImage {
         py: Python<'_>,
     ) -> PyResult<PyImage> {
         let dither = match dither {
-            None => pillow_rs::PythonDitherInput::None,
+            None => pillow_rs::DitherInput::None,
             Some(value) => {
                 if let Ok(int_value) = value.extract::<u32>() {
-                    pillow_rs::PythonDitherInput::Integer(int_value)
+                    pillow_rs::DitherInput::Integer(int_value)
                 } else if let Ok(string_value) = value.extract::<String>() {
-                    pillow_rs::PythonDitherInput::Name(string_value)
+                    pillow_rs::DitherInput::Name(string_value)
                 } else {
-                    pillow_rs::PythonDitherInput::Invalid(value.get_type().name()?.to_string())
+                    pillow_rs::DitherInput::Invalid(value.get_type().name()?.to_string())
                 }
             }
         };

@@ -22,7 +22,7 @@ impl PyImage {
         let input = match color {
             Some(value) if mode == "RGB" && value.is_exact_instance_of::<PyTuple>() => {
                 match value.extract::<(u8, u8, u8)>() {
-                    Ok(rgb) => pillow_rs::PythonNewColorInput::from_parts(
+                    Ok(rgb) => pillow_rs::NewColorInput::from_parts(
                         None,
                         None,
                         Some(rgb),
@@ -59,8 +59,7 @@ impl PyImage {
     ) -> PyResult<Self> {
         let mode = open_mode_input_from_python(mode)?;
         let formats = open_formats_input_from_python(formats)?;
-        let format_names =
-            pillow_rs::validate_python_open_inputs(mode, formats).map_err(map_error)?;
+        let format_names = pillow_rs::validate_open_inputs(mode, formats).map_err(map_error)?;
         let format_refs = format_names
             .as_deref()
             .map(|names| names.iter().map(String::as_str).collect::<Vec<_>>());
@@ -84,7 +83,7 @@ impl PyImage {
     #[classmethod]
     fn validate_open_source(_cls: &Bound<'_, PyType>, fp: &Bound<'_, PyAny>) -> PyResult<()> {
         if let Ok(bytes) = fp.cast::<PyBytes>() {
-            pillow_rs::validate_python_open_source_bytes(bytes.as_bytes()).map_err(map_error)?;
+            pillow_rs::validate_open_source_bytes(bytes.as_bytes()).map_err(map_error)?;
         }
         Ok(())
     }
@@ -96,7 +95,7 @@ impl PyImage {
         mode: Option<&Bound<'_, PyAny>>,
         formats: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
-        pillow_rs::validate_python_open_inputs(
+        pillow_rs::validate_open_inputs(
             open_mode_input_from_python(mode)?,
             open_formats_input_from_python(formats)?,
         )

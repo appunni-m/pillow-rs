@@ -121,7 +121,6 @@ PIPELINE_MUTATING_OPS = frozenset(
         ("PIL.Image.Image", "paste"),
         ("PIL.Image.Image", "putalpha"),
         ("PIL.Image.Image", "putpixel"),
-        ("PIL.Image.Image", "remap_palette"),
         ("PIL.Image.Image", "thumbnail"),
         ("PIL.ImageDraw.ImageDraw", "arc"),
         ("PIL.ImageDraw.ImageDraw", "bitmap"),

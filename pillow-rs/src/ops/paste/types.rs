@@ -13,21 +13,21 @@ pub enum PasteSource {
     Rgb(u8, u8, u8),
     /// Paste a four-band pixel value.
     Rgba(u8, u8, u8, u8),
-    /// Paste a Python integer before mode-specific Pillow coercion.
+    /// Paste an integer before mode-specific Pillow coercion.
     RawScalar(i64),
-    /// Paste a Python floating-point scalar in an `F` destination.
+    /// Paste a floating-point scalar in an `F` destination.
     RawFloat(f64),
-    /// Paste a Python two-component tuple before component clipping.
+    /// Paste a two-component tuple before component clipping.
     RawLumaAlpha(i64, i64),
-    /// Paste a Python three-component tuple before component clipping.
+    /// Paste a three-component tuple before component clipping.
     RawRgb(i64, i64, i64),
-    /// Paste a Python four-component tuple before component clipping.
+    /// Paste a four-component tuple before component clipping.
     RawRgba(i64, i64, i64, i64),
 }
 
-/// Host-neutral source input for the Python `Image.paste` wrapper.
+/// Host-neutral source argument for Pillow-compatible `Image.paste`.
 #[derive(Debug, Clone)]
-pub enum PythonPasteSource {
+pub enum PasteSourceInput {
     /// Another image object.
     Image(Box<Image>),
     /// A scalar color value before mode-specific validation.
@@ -42,9 +42,9 @@ pub enum PythonPasteSource {
     Invalid,
 }
 
-/// Host-neutral box input for the Python `Image.paste` wrapper.
+/// Host-neutral box argument for Pillow-compatible `Image.paste`.
 #[derive(Debug, Clone)]
-pub enum PythonPasteBox {
+pub enum PasteBoxInput {
     /// No second argument was supplied.
     None,
     /// The abbreviated `(image, mask)` form.
@@ -60,9 +60,9 @@ pub enum PythonPasteBox {
     },
 }
 
-/// Host-neutral mask input for the Python `Image.paste` wrapper.
+/// Host-neutral mask argument for Pillow-compatible `Image.paste`.
 #[derive(Debug, Clone)]
-pub enum PythonPasteMask {
+pub enum PasteMaskInput {
     /// No mask was supplied.
     None,
     /// An image mask.
@@ -74,7 +74,7 @@ pub enum PythonPasteMask {
 /// Host-neutral coordinate input for public `Image.alpha_composite` calls.
 #[derive(Debug, Clone)]
 pub enum AlphaCompositeBox {
-    /// A Python list/tuple represented as integer coordinates.
+    /// A list/tuple represented as integer coordinates.
     Values(Vec<i64>),
     /// A value that was not an integer coordinate sequence.
     Invalid,

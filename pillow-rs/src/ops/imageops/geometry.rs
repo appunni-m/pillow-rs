@@ -502,6 +502,20 @@ pub fn pad_with_input(
     color: ImageOpsColor,
     centering: CenteringInput,
 ) -> Result<Image, PilError> {
+    pad_with_input_and_containment(image, w, h, filter, color, centering)
+        .map(|(result, _is_contained)| result)
+}
+
+/// `ImageOps.pad` plus whether the result is its metadata-preserving contain
+/// result or a newly created padded canvas.
+pub fn pad_with_input_and_containment(
+    image: &Image,
+    w: u32,
+    h: u32,
+    filter: Option<ResampleInput>,
+    color: ImageOpsColor,
+    centering: CenteringInput,
+) -> Result<(Image, bool), PilError> {
     let filter_was_none = filter.is_none();
     let color_was_none = matches!(&color, ImageOpsColor::None);
     let filter = parse_imageops_filter(filter)?;
@@ -539,17 +553,20 @@ pub fn pad_with_input(
             // already has the requested size. Match Image.copy semantics
             // (including clearing source format metadata) without scheduling
             // a no-op Pad pass on CPU, SIMD, or GPU.
-            return Ok(image.copy());
+            return Ok((image.copy(), true));
         }
-        return Ok(Image::push_op(
-            image,
-            PipelineOp::Pad {
-                w,
-                h,
-                filter,
-                color: None,
-                centering: (0.5, 0.5),
-            },
+        return Ok((
+            Image::push_op(
+                image,
+                PipelineOp::Pad {
+                    w,
+                    h,
+                    filter,
+                    color: None,
+                    centering: (0.5, 0.5),
+                },
+            ),
+            true,
         ));
     }
 
@@ -557,17 +574,20 @@ pub fn pad_with_input(
     let centering = resolve_pad_centering(centering, width_padded, height_padded)?;
     let color = resolve_imageops_color(color, &image.mode()?)?;
     if filter_was_none && color_was_none && centering == (0.5, 0.5) {
-        return pad(image, w, h, None, color, centering);
+        return pad(image, w, h, None, color, centering).map(|result| (result, false));
     }
-    Ok(Image::push_op(
-        image,
-        PipelineOp::Pad {
-            w,
-            h,
-            filter,
-            color,
-            centering,
-        },
+    Ok((
+        Image::push_op(
+            image,
+            PipelineOp::Pad {
+                w,
+                h,
+                filter,
+                color,
+                centering,
+            },
+        ),
+        false,
     ))
 }
 

@@ -85,7 +85,7 @@ pub enum RotatePointInput {
     Values(Vec<f64>),
     /// A non-subscriptable value classified at the binding boundary.
     Invalid {
-        /// Python type name used in Pillow's diagnostic.
+        /// Host type name used in Pillow's diagnostic.
         type_name: String,
         /// Python truth value, used to preserve rotate's fast-path ordering.
         truthy: bool,
@@ -120,16 +120,16 @@ impl RotatePointInput {
     }
 }
 
-/// Validates the Python-facing rotate arguments and returns the effective
+/// Validates Pillow-compatible rotate arguments and returns the effective
 /// expansion flag.
-pub fn normalize_python_rotate(
+pub fn normalize_rotate(
     resample: RotateResampleInput,
     expand: RotateExpandInput,
 ) -> Result<bool, PilError> {
-    normalize_python_rotate_at_angle(1.0, resample, expand)
+    normalize_rotate_at_angle(1.0, resample, expand)
 }
 
-fn normalize_python_rotate_at_angle(
+fn normalize_rotate_at_angle(
     angle: f64,
     resample: RotateResampleInput,
     expand: RotateExpandInput,
@@ -156,7 +156,7 @@ fn normalize_python_rotate_at_angle(
 }
 
 impl Image {
-    /// Applies the Python-facing rotate contract before queuing rotation.
+    /// Applies the Pillow-compatible rotate contract before queuing rotation.
     pub fn rotate_with_input(
         &self,
         angle: f64,
@@ -186,9 +186,9 @@ impl Image {
         // 360 degrees. Route every other angle through the public normalizer;
         // its contract is specifically the non-zero-angle path.
         let expand = if normalized_angle % 360.0 != 0.0 {
-            normalize_python_rotate(resample, expand)?
+            normalize_rotate(resample, expand)?
         } else {
-            normalize_python_rotate_at_angle(normalized_angle, resample, expand)?
+            normalize_rotate_at_angle(normalized_angle, resample, expand)?
         };
         // Pillow forces nearest-neighbour sampling for indexed images even
         // when the caller supplies BILINEAR/BICUBIC. Treat that effective
@@ -232,7 +232,7 @@ impl Image {
         let center = center.into_values();
         let translate = translate.into_values();
         // The ordinary nearest-neighbor call has the same normalized contract
-        // as the public core method. Reuse it after Python-facing validation so
+        // as the public core method. Reuse it after Pillow-compatible validation so
         // the Python and WASM entry points share one rotation constructor.
         if nearest && center.is_none() && translate.is_none() {
             return self.rotate_with_options(

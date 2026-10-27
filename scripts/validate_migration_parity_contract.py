@@ -862,6 +862,26 @@ def _literal_type(value: Any) -> str:
         return "sequence"
     if isinstance(value, dict):
         protocol = value.get("protocol")
+        if protocol == "image-with-info":
+            size = value.get("size")
+            assignment = value.get("assignment", "update")
+            if (
+                set(value).issubset(
+                    {"protocol", "mode", "size", "color", "info", "assignment"}
+                )
+                and isinstance(value.get("mode"), str)
+                and bool(value["mode"])
+                and isinstance(size, list)
+                and len(size) == 2
+                and all(type(dimension) is int and dimension >= 0 for dimension in size)
+                and "color" in value
+                and isinstance(value.get("info"), dict)
+                and isinstance(assignment, str)
+                and assignment in {"update", "replace"}
+            ):
+                # The runner constructs a real public Image before passing this
+                # input to an operation, so its declared workflow type is image.
+                return "image"
         if (
             protocol == "public-index"
             and set(value) == {"protocol", "value"}

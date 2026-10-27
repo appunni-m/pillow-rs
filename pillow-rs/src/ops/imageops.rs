@@ -18,7 +18,8 @@ pub(crate) use color::resolve_imageops_color;
 pub use exif::{exif_get_orientation, exif_remove_orientation, exif_transpose};
 pub use geometry::{
     contain, contain_with_input, cover, cover_with_input, crop, expand, expand_with_input, fit,
-    fit_with_input, pad, pad_with_input, scale_with_input, validate_deform_resample,
+    fit_with_input, pad, pad_with_input, pad_with_input_and_containment, scale_with_input,
+    validate_deform_resample,
 };
 pub use point::*;
 

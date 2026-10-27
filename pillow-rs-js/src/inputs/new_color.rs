@@ -3,14 +3,14 @@ use crate::{err, js_float_array};
 pub(crate) fn js_new_color_input(
     mode: &str,
     value: Option<&JsValue>,
-) -> Result<pillow_rs::PythonNewColorInput, JsValue> {
+) -> Result<pillow_rs::NewColorInput, JsValue> {
     let Some(value) = value else {
-        return Ok(pillow_rs::PythonNewColorInput::from_parts(
+        return Ok(pillow_rs::NewColorInput::from_parts(
             None, None, None, None, None, None, None, false,
         ));
     };
     if let Some(text) = value.as_string() {
-        return Ok(pillow_rs::PythonNewColorInput::from_parts(
+        return Ok(pillow_rs::NewColorInput::from_parts(
             Some(text),
             None,
             None,
@@ -32,10 +32,10 @@ pub(crate) fn js_new_color_input(
     )))
 }
 
-fn js_new_color_number(mode: &str, number: f64) -> Result<pillow_rs::PythonNewColorInput, JsValue> {
+fn js_new_color_number(mode: &str, number: f64) -> Result<pillow_rs::NewColorInput, JsValue> {
     if !number.is_finite() {
         if mode == "F" {
-            return Ok(pillow_rs::PythonNewColorInput::from_parts(
+            return Ok(pillow_rs::NewColorInput::from_parts(
                 None,
                 None,
                 None,
@@ -54,7 +54,7 @@ fn js_new_color_number(mode: &str, number: f64) -> Result<pillow_rs::PythonNewCo
         (number.fract() == 0.0 && number >= f64::from(i32::MIN) && number <= f64::from(i32::MAX))
             .then_some(number as i32);
     let single = (number.fract() == 0.0 && (0.0..=255.0).contains(&number)).then_some(number as u8);
-    Ok(pillow_rs::PythonNewColorInput::from_parts(
+    Ok(pillow_rs::NewColorInput::from_parts(
         None,
         single,
         None,
@@ -66,7 +66,7 @@ fn js_new_color_number(mode: &str, number: f64) -> Result<pillow_rs::PythonNewCo
     ))
 }
 
-fn js_new_color_sequence(values: Vec<f64>) -> Result<pillow_rs::PythonNewColorInput, JsValue> {
+fn js_new_color_sequence(values: Vec<f64>) -> Result<pillow_rs::NewColorInput, JsValue> {
     if !values
         .iter()
         .all(|number| number.is_finite() && number.fract() == 0.0)
@@ -85,7 +85,7 @@ fn js_new_color_sequence(values: Vec<f64>) -> Result<pillow_rs::PythonNewColorIn
             ))
         })?;
     match values.as_slice() {
-        [r, g, b] => Ok(pillow_rs::PythonNewColorInput::from_parts(
+        [r, g, b] => Ok(pillow_rs::NewColorInput::from_parts(
             None,
             None,
             Some((*r, *g, *b)),
@@ -95,7 +95,7 @@ fn js_new_color_sequence(values: Vec<f64>) -> Result<pillow_rs::PythonNewColorIn
             None,
             true,
         )),
-        [r, g, b, a] => Ok(pillow_rs::PythonNewColorInput::from_parts(
+        [r, g, b, a] => Ok(pillow_rs::NewColorInput::from_parts(
             None,
             None,
             None,
@@ -105,7 +105,7 @@ fn js_new_color_sequence(values: Vec<f64>) -> Result<pillow_rs::PythonNewColorIn
             None,
             true,
         )),
-        [luma, alpha] => Ok(pillow_rs::PythonNewColorInput::from_parts(
+        [luma, alpha] => Ok(pillow_rs::NewColorInput::from_parts(
             None,
             None,
             None,

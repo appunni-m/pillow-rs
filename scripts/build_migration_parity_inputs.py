@@ -43218,6 +43218,7 @@ def build_nuanced_cases(
     cases.extend(getprojection_cmyk_parity_cases(surface_id))
     cases.extend(putpixel_input_parity_cases(surface_id))
     cases.extend(solarize_threshold_parity_cases(surface_id))
+    cases.extend(metadata_result_parity_cases(surface_id))
     cases.extend(image_blend_native_parity_cases(surface_id))
     cases.extend(lab_constructor_parity_cases(surface_id))
     cases.extend(frombytes_bytearray_parity_cases(surface_id))
@@ -47971,6 +47972,322 @@ def release_cleanup_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             "observations": [receiver, "materialize"],
         })
     return cases
+
+
+def metadata_result_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Expose shallow info-copy behavior on result-producing public APIs."""
+
+    def image_with_info(
+        tag: str,
+        mode: str = "RGB",
+        size: tuple[int, int] = (4, 4),
+    ) -> dict[str, Any]:
+        color: Any = {
+            "L": 37,
+            "1": 1,
+            "RGB": [17, 91, 203],
+            "RGBA": [17, 91, 203, 255],
+        }[mode]
+        return {
+            "protocol": "image-with-info",
+            "mode": mode,
+            "size": list(size),
+            "color": color,
+            "info": {"tag": tag, "nested": {"label": tag}},
+        }
+
+    def make_case(
+        operation_surface: str,
+        operation: str,
+        suffix: str,
+        steps: list[dict[str, Any]],
+        observed: list[str] | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "case_id": f"{operation_surface}.{operation}.nuanced.{suffix}",
+            "surface": operation_surface,
+            "operation": operation,
+            "covers": [f"{operation_surface}.{operation}.behavior.default"],
+            "assets": [],
+            "steps": steps,
+            "observations": observed or ["call"],
+        }
+
+    def unary_case(
+        operation_surface: str,
+        operation: str,
+        *,
+        mode: str = "RGB",
+        arguments: dict[str, Any] | None = None,
+        suffix: str = "info-map-copy",
+    ) -> dict[str, Any]:
+        image = literal(image_with_info(f"{operation} source", mode))
+        if operation_surface == "PIL.Image.Image":
+            receiver = image
+            call_arguments = arguments or {}
+        else:
+            receiver = None
+            call_arguments = {"image": image, **(arguments or {})}
+        return make_case(
+            operation_surface,
+            operation,
+            suffix,
+            [
+                {
+                    "step_id": "call",
+                    "surface": operation_surface,
+                    "operation": operation,
+                    "receiver": receiver,
+                    "arguments": call_arguments,
+                }
+            ],
+        )
+
+    def module_case(
+        operation_surface: str,
+        operation: str,
+        arguments: dict[str, Any],
+        suffix: str = "info-map-copy",
+    ) -> dict[str, Any]:
+        return make_case(
+            operation_surface,
+            operation,
+            suffix,
+            [
+                {
+                    "step_id": "call",
+                    "surface": operation_surface,
+                    "operation": operation,
+                    "receiver": None,
+                    "arguments": arguments,
+                }
+            ],
+        )
+
+    if surface_id == "PIL.Image.Image":
+        return [
+            unary_case("PIL.Image.Image", "copy"),
+            unary_case(
+                "PIL.Image.Image", "convert", arguments={"mode": literal("L")}
+            ),
+            unary_case(
+                "PIL.Image.Image", "quantize", arguments={"colors": literal(4)}
+            ),
+            unary_case(
+                "PIL.Image.Image", "reduce", arguments={"factor": literal(2)}
+            ),
+            unary_case(
+                "PIL.Image.Image",
+                "point",
+                mode="L",
+                arguments={"lut": literal(list(range(256)))},
+            ),
+            unary_case(
+                "PIL.Image.Image",
+                "effect_spread",
+                arguments={"distance": literal(0)},
+            ),
+            unary_case("PIL.Image.Image", "split"),
+            unary_case(
+                "PIL.Image.Image", "getchannel", arguments={"channel": literal(0)}
+            ),
+            unary_case(
+                "PIL.Image.Image",
+                "transform",
+                arguments={
+                    "size": literal([4, 4]),
+                    "method": literal(0),
+                    "data": literal([1, 0, 0, 0, 1, 0]),
+                },
+            ),
+            unary_case(
+                "PIL.Image.Image",
+                "remap_palette",
+                mode="L",
+                arguments={"dest_map": literal(list(range(256)))},
+            ),
+        ]
+
+    if surface_id == "PIL.ImageOps":
+        cases = [
+            unary_case("PIL.ImageOps", "flip"),
+            unary_case("PIL.ImageOps", "mirror"),
+            unary_case(
+                "PIL.ImageOps", "posterize", arguments={"bits": literal(4)}
+            ),
+            unary_case(
+                "PIL.ImageOps", "solarize", arguments={"threshold": literal(128)}
+            ),
+            unary_case(
+                "PIL.ImageOps", "crop", arguments={"border": literal(1)}
+            ),
+            unary_case(
+                "PIL.ImageOps", "scale", arguments={"factor": literal(1.5)}
+            ),
+            unary_case(
+                "PIL.ImageOps",
+                "contain",
+                arguments={"size": literal([3, 2]), "method": literal(0)},
+            ),
+            unary_case(
+                "PIL.ImageOps",
+                "cover",
+                arguments={"size": literal([3, 2]), "method": literal(0)},
+            ),
+            unary_case(
+                "PIL.ImageOps",
+                "fit",
+                arguments={"size": literal([3, 2]), "method": literal(0)},
+            ),
+            unary_case(
+                "PIL.ImageOps",
+                "colorize",
+                mode="L",
+                arguments={"black": literal("black"), "white": literal("white")},
+            ),
+            unary_case("PIL.ImageOps", "exif_transpose"),
+            unary_case(
+                "PIL.ImageOps", "expand", arguments={"border": literal(1)},
+                suffix="new-canvas-clears-info",
+            ),
+        ]
+        pad_steps = []
+        for step_id, size in (("exact-fit", [4, 4]), ("padded-canvas", [6, 4])):
+            pad_steps.append(
+                {
+                    "step_id": step_id,
+                    "surface": "PIL.ImageOps",
+                    "operation": "pad",
+                    "receiver": None,
+                    "arguments": {
+                        "image": literal(image_with_info(f"pad {step_id}")),
+                        "size": literal(size),
+                        "method": literal(0),
+                    },
+                }
+            )
+        cases.append(
+            make_case(
+                "PIL.ImageOps", "pad", "metadata-branch",
+                pad_steps, ["exact-fit", "padded-canvas"],
+            )
+        )
+        return cases
+
+    if surface_id == "PIL.ImageChops":
+        cases = [
+            unary_case("PIL.ImageChops", "invert"),
+            unary_case("PIL.ImageChops", "duplicate"),
+            unary_case(
+                "PIL.ImageChops", "offset",
+                arguments={"xoffset": literal(1), "yoffset": literal(0)},
+            ),
+            unary_case(
+                "PIL.ImageChops", "constant",
+                arguments={"value": literal(1)},
+                suffix="new-image-clears-info",
+            ),
+        ]
+        binary_ops = (
+            "add", "subtract", "multiply", "screen", "darker", "lighter",
+            "difference", "add_modulo", "subtract_modulo", "blend",
+            "logical_and", "logical_or", "logical_xor", "hard_light",
+            "soft_light", "overlay",
+        )
+        for operation in binary_ops:
+            mode = "1" if operation.startswith("logical_") else "RGB"
+            arguments = {
+                "image1": literal(image_with_info(f"{operation} first", mode)),
+                "image2": literal(image_with_info(f"{operation} second", mode)),
+            }
+            if operation == "blend":
+                arguments["alpha"] = literal(0.5)
+            cases.append(module_case("PIL.ImageChops", operation, arguments))
+        cases.append(
+            module_case(
+                "PIL.ImageChops",
+                "composite",
+                {
+                    "image1": literal(image_with_info("chops composite first")),
+                    "image2": literal(image_with_info("chops composite base")),
+                    "mask": literal(image_with_info("chops composite mask", "L")),
+                },
+            )
+        )
+        return cases
+
+    if surface_id == "PIL.Image":
+        cases = [
+            module_case(
+                "PIL.Image", "blend",
+                {
+                    "im1": literal(image_with_info("blend first")),
+                    "im2": literal(image_with_info("blend second")),
+                    "alpha": literal(0.5),
+                },
+            ),
+            module_case(
+                "PIL.Image", "composite",
+                {
+                    "image1": literal(image_with_info("composite first")),
+                    "image2": literal(image_with_info("composite base")),
+                    "mask": literal(image_with_info("composite mask", "L")),
+                },
+            ),
+            module_case(
+                "PIL.Image", "alpha_composite",
+                {
+                    "im1": literal(image_with_info("alpha first", "RGBA")),
+                    "im2": literal(image_with_info("alpha second", "RGBA")),
+                },
+            ),
+            module_case(
+                "PIL.Image", "merge",
+                {
+                    "mode": literal("RGB"),
+                    "bands": literal(
+                        [
+                            image_with_info("merge first band", "L"),
+                            image_with_info("merge second band", "L"),
+                            image_with_info("merge third band", "L"),
+                        ]
+                    ),
+                },
+            ),
+        ]
+        return cases
+
+    if surface_id == "PIL.ImageEnhance":
+        cases = []
+        for name in ("Brightness", "Contrast", "Color", "Sharpness"):
+            cases.append(
+                make_case(
+                    f"PIL.ImageEnhance.{name}",
+                    "enhance",
+                    "info-propagation",
+                    [
+                        {
+                            "step_id": "enhancer",
+                            "surface": "PIL.ImageEnhance",
+                            "operation": name,
+                            "receiver": None,
+                            "arguments": {
+                                "image": literal(image_with_info(f"{name} source"))
+                            },
+                        },
+                        {
+                            "step_id": "call",
+                            "surface": f"PIL.ImageEnhance.{name}",
+                            "operation": "enhance",
+                            "receiver": binding("enhancer"),
+                            "arguments": {"factor": literal(0.5)},
+                        },
+                    ],
+                )
+            )
+        return cases
+
+    return []
 
 
 def build_crash_quarantine_cases(

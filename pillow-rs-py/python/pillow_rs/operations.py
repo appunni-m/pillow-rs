@@ -54,30 +54,19 @@ def convert(image: Image, mode: str) -> Image:
 
 def merge(mode: str, bands):
     """Merge single-band images into a multi-band image."""
-    from . import _core
-    return Image(_core.image_merge(mode, bands))
+    return bands[0]._new(_core.image_merge(mode, bands))
 
 
 def blend(im1: Image, im2: Image, alpha: float) -> Image:
     """Linear interpolation between two images."""
-    from . import _core
-    result = Image(_core.image_blend(im1._rust_image, im2._rust_image, alpha))
-    # Pillow's im1._new copies first-image metadata even when alpha is 1.
-    # Nested values retain their identity; the returned mapping is independent.
-    if im1._transpose_loads_info:
-        im1.load()
-        im1.info
-    result._info = im1._info.copy()
-    result._native_info = im1._native_info
-    result._native_info_rebaseline = True
-    result._native_info_omitted = im1._native_info_omitted
-    return result
+    return im1._new(_core.image_blend(im1._rust_image, im2._rust_image, alpha))
 
 
 def composite(image1: Image, image2: Image, mask: Image) -> Image:
     """Composite image1 over image2 using mask."""
-    from . import _core
-    return Image(_core.image_composite(image1._rust_image, image2._rust_image, mask._rust_image))
+    return image2._new(
+        _core.image_composite(image1._rust_image, image2._rust_image, mask._rust_image)
+    )
 
 
 def alpha_composite(im1: Image, im2: Image) -> Image:
@@ -86,8 +75,7 @@ def alpha_composite(im1: Image, im2: Image) -> Image:
     PIL: ``Image.alpha_composite(im1, im2)`` composites im2 over im1
     and returns a new RGBA image.
     """
-    from . import _core
-    return Image(_core.image_alpha_composite(im1._rust_image, im2._rust_image))
+    return im1._new(_core.image_alpha_composite(im1._rust_image, im2._rust_image))
 
 
 def fromarray(obj, mode=None):

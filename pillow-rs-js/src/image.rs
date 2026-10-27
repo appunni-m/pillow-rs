@@ -311,7 +311,7 @@ impl Image {
             .convert_with_input(
                 js_convert_mode(&mode),
                 matrix,
-                js_python_dither(&dither),
+                js_dither_input(&dither),
                 js_convert_palette(&palette),
                 colors,
             )

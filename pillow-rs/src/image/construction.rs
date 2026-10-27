@@ -88,7 +88,7 @@ impl Image {
 
 /// Host-neutral values extracted for a public `Image.new` color argument.
 #[derive(Debug, Clone)]
-pub struct PythonNewColorInput {
+pub struct NewColorInput {
     string: Option<String>,
     single: Option<u8>,
     rgb: Option<(u8, u8, u8)>,
@@ -99,7 +99,7 @@ pub struct PythonNewColorInput {
     provided: bool,
 }
 
-impl PythonNewColorInput {
+impl NewColorInput {
     /// Builds a constructor input from binding-level type extraction only.
     #[allow(clippy::too_many_arguments)]
     pub fn from_parts(
@@ -125,9 +125,9 @@ impl PythonNewColorInput {
     }
 }
 
-/// Host-neutral mode input for the Python `Image.open` wrapper.
+/// Host-neutral mode argument for Pillow-compatible image opening.
 #[derive(Debug, Clone)]
-pub enum PythonOpenModeInput {
+pub enum OpenModeInput {
     /// No mode override was supplied.
     None,
     /// A mode value extracted from the host.
@@ -136,9 +136,9 @@ pub enum PythonOpenModeInput {
     Invalid(String),
 }
 
-/// Host-neutral format allow-list input for the Python `Image.open` wrapper.
+/// Host-neutral format allow-list argument for Pillow-compatible image opening.
 #[derive(Debug, Clone)]
-pub enum PythonOpenFormatsInput {
+pub enum OpenFormatsInput {
     /// No format allow-list was supplied.
     None,
     /// A list or tuple of format names.
@@ -147,34 +147,34 @@ pub enum PythonOpenFormatsInput {
     Invalid(String),
 }
 
-/// Validates the Python `Image.open` mode and format arguments.
-pub fn validate_python_open_inputs(
-    mode: PythonOpenModeInput,
-    formats: PythonOpenFormatsInput,
+/// Validates Pillow-compatible image-open mode and format arguments.
+pub fn validate_open_inputs(
+    mode: OpenModeInput,
+    formats: OpenFormatsInput,
 ) -> Result<Option<Vec<String>>, PilError> {
     match mode {
-        PythonOpenModeInput::None => {}
-        PythonOpenModeInput::Name(name) if name == "r" => {}
-        PythonOpenModeInput::Name(name) => {
+        OpenModeInput::None => {}
+        OpenModeInput::Name(name) if name == "r" => {}
+        OpenModeInput::Name(name) => {
             return Err(PilError::ValueError(format!("bad mode '{name}'")));
         }
-        PythonOpenModeInput::Invalid(value) => {
+        OpenModeInput::Invalid(value) => {
             // Pillow formats a non-string mode with its value directly; the
             // quotes are reserved for an invalid string mode.
             return Err(PilError::ValueError(format!("bad mode {value}")));
         }
     }
     match formats {
-        PythonOpenFormatsInput::None => Ok(None),
-        PythonOpenFormatsInput::Names(names) => Ok(Some(names)),
-        PythonOpenFormatsInput::Invalid(_) => Err(PilError::TypeError(
+        OpenFormatsInput::None => Ok(None),
+        OpenFormatsInput::Names(names) => Ok(Some(names)),
+        OpenFormatsInput::Invalid(_) => Err(PilError::TypeError(
             "formats must be a list or tuple".to_owned(),
         )),
     }
 }
 
 /// Validates byte paths before the binding translates decode failures.
-pub fn validate_python_open_source_bytes(data: &[u8]) -> Result<(), PilError> {
+pub fn validate_open_source_bytes(data: &[u8]) -> Result<(), PilError> {
     if data.contains(&0) {
         return Err(PilError::ValueError("embedded null byte".to_owned()));
     }
@@ -278,7 +278,7 @@ impl Image {
         if mode == "P" {
             // A tuple color allocates palette entry zero. Scalar P fills use
             // `new_palette_index` because this resolved tuple no longer carries
-            // the Python argument's scalar-versus-tuple distinction.
+            // the argument's scalar-versus-tuple distinction.
             return Ok(Image::Paletted(PalettedData {
                 indices: crate::raster::GrayImage::from_pixel(
                     width,
@@ -427,14 +427,14 @@ impl Image {
 
     /// Creates an image using Pillow's host-facing `Image.new` color rules.
     ///
-    /// Bindings extract host values into [`PythonNewColorInput`]; this method
+    /// Bindings extract host values into [`NewColorInput`]; this method
     /// owns mode-specific color resolution and the distinction between scalar
     /// and tuple-created palette images.
     pub fn new_with_input(
         width: u32,
         height: u32,
         mode: &str,
-        input: PythonNewColorInput,
+        input: NewColorInput,
     ) -> Result<Self, PilError> {
         let color = crate::color::resolve_new_color(
             mode,

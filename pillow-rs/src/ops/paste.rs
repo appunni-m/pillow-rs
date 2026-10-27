@@ -5,6 +5,4 @@ mod input;
 mod operations;
 mod types;
 
-pub use types::{
-    AlphaCompositeBox, PasteSource, PythonPasteBox, PythonPasteMask, PythonPasteSource,
-};
+pub use types::{AlphaCompositeBox, PasteBoxInput, PasteMaskInput, PasteSource, PasteSourceInput};

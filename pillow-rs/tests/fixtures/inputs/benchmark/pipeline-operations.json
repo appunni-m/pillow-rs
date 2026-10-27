@@ -66919,21 +66919,10 @@
                 ]
               }
             }
-          },
-          {
-            "step_id": "observe-pipeline-output-setup-image-1",
-            "surface": "PIL.Image.Image",
-            "operation": "tobytes",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "setup-image-1"
-            },
-            "arguments": {}
           }
         ],
         "observations": [
-          "call",
-          "observe-pipeline-output-setup-image-1"
+          "call"
         ]
       },
       "measurement": {
@@ -67283,21 +67272,10 @@
                 ]
               }
             }
-          },
-          {
-            "step_id": "observe-pipeline-output-setup-image-1",
-            "surface": "PIL.Image.Image",
-            "operation": "tobytes",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "setup-image-1"
-            },
-            "arguments": {}
           }
         ],
         "observations": [
-          "call",
-          "observe-pipeline-output-setup-image-1"
+          "call"
         ]
       },
       "measurement": {

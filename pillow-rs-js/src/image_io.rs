@@ -274,7 +274,7 @@ impl Image {
             .paste_with_input(
                 js_paste_source(&source),
                 js_paste_box(box_value.as_ref()),
-                pillow_rs::PythonPasteMask::Image(Box::new(mask.inner.clone())),
+                pillow_rs::PasteMaskInput::Image(Box::new(mask.inner.clone())),
             )
             .map_err(err)
     }
@@ -607,27 +607,27 @@ pub fn from_array_fn(
 /// Opens encoded bytes, optionally restricting the decoder to selected formats.
 pub fn open_fn(data: Vec<u8>, mode: JsValue, formats: JsValue) -> Result<Image, JsValue> {
     let mode = if mode.is_null() || mode.is_undefined() {
-        pillow_rs::PythonOpenModeInput::None
+        pillow_rs::OpenModeInput::None
     } else if let Some(name) = mode.as_string() {
-        pillow_rs::PythonOpenModeInput::Name(name)
+        pillow_rs::OpenModeInput::Name(name)
     } else {
-        pillow_rs::PythonOpenModeInput::Invalid(js_value_display(&mode))
+        pillow_rs::OpenModeInput::Invalid(js_value_display(&mode))
     };
     let formats = if formats.is_null() || formats.is_undefined() {
-        pillow_rs::PythonOpenFormatsInput::None
+        pillow_rs::OpenFormatsInput::None
     } else if formats.is_array() {
         let values = js_sys::Array::from(&formats)
             .iter()
             .map(|value| value.as_string())
             .collect::<Option<Vec<_>>>();
         match values {
-            Some(values) => pillow_rs::PythonOpenFormatsInput::Names(values),
-            None => pillow_rs::PythonOpenFormatsInput::Invalid(js_value_type_name(&formats)),
+            Some(values) => pillow_rs::OpenFormatsInput::Names(values),
+            None => pillow_rs::OpenFormatsInput::Invalid(js_value_type_name(&formats)),
         }
     } else {
-        pillow_rs::PythonOpenFormatsInput::Invalid(js_value_type_name(&formats))
+        pillow_rs::OpenFormatsInput::Invalid(js_value_type_name(&formats))
     };
-    let format_names = pillow_rs::validate_python_open_inputs(mode, formats).map_err(err)?;
+    let format_names = pillow_rs::validate_open_inputs(mode, formats).map_err(err)?;
     let format_refs = format_names
         .as_ref()
         .map(|values| values.iter().map(String::as_str).collect::<Vec<_>>());
@@ -640,27 +640,27 @@ pub fn open_fn(data: Vec<u8>, mode: JsValue, formats: JsValue) -> Result<Image, 
 /// Validates the optional mode and format-list arguments used by `openFn`.
 pub fn validate_open_inputs(mode: JsValue, formats: JsValue) -> Result<(), JsValue> {
     let mode = if mode.is_null() || mode.is_undefined() {
-        pillow_rs::PythonOpenModeInput::None
+        pillow_rs::OpenModeInput::None
     } else if let Some(name) = mode.as_string() {
-        pillow_rs::PythonOpenModeInput::Name(name)
+        pillow_rs::OpenModeInput::Name(name)
     } else {
-        pillow_rs::PythonOpenModeInput::Invalid(js_value_display(&mode))
+        pillow_rs::OpenModeInput::Invalid(js_value_display(&mode))
     };
     let formats = if formats.is_null() || formats.is_undefined() {
-        pillow_rs::PythonOpenFormatsInput::None
+        pillow_rs::OpenFormatsInput::None
     } else if formats.is_array() {
         let values = js_sys::Array::from(&formats)
             .iter()
             .map(|value| value.as_string())
             .collect::<Option<Vec<_>>>();
         match values {
-            Some(values) => pillow_rs::PythonOpenFormatsInput::Names(values),
-            None => pillow_rs::PythonOpenFormatsInput::Invalid(js_value_type_name(&formats)),
+            Some(values) => pillow_rs::OpenFormatsInput::Names(values),
+            None => pillow_rs::OpenFormatsInput::Invalid(js_value_type_name(&formats)),
         }
     } else {
-        pillow_rs::PythonOpenFormatsInput::Invalid(js_value_type_name(&formats))
+        pillow_rs::OpenFormatsInput::Invalid(js_value_type_name(&formats))
     };
-    pillow_rs::validate_python_open_inputs(mode, formats)
+    pillow_rs::validate_open_inputs(mode, formats)
         .map(|_| ())
         .map_err(err)
 }
@@ -668,7 +668,7 @@ pub fn validate_open_inputs(mode: JsValue, formats: JsValue) -> Result<(), JsVal
 #[wasm_bindgen(js_name = "validateOpenSource")]
 /// Validates that the supplied bytes can be used as an image source.
 pub fn validate_open_source(data: Vec<u8>) -> Result<(), JsValue> {
-    pillow_rs::validate_python_open_source_bytes(&data)
+    pillow_rs::validate_open_source_bytes(&data)
         .map(|_| ())
         .map_err(err)
 }

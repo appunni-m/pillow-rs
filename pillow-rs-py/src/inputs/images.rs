@@ -33,38 +33,38 @@ pub(crate) fn merge_inputs_from_python(
         .collect()
 }
 
-pub(crate) fn paste_source_from_python(value: &Bound<'_, PyAny>) -> pillow_rs::PythonPasteSource {
+pub(crate) fn paste_source_from_python(value: &Bound<'_, PyAny>) -> pillow_rs::PasteSourceInput {
     if let Some(image) = image_from_python(value) {
-        return pillow_rs::PythonPasteSource::Image(Box::new(image));
+        return pillow_rs::PasteSourceInput::Image(Box::new(image));
     }
     if let Ok(value) = value.extract::<i64>() {
-        return pillow_rs::PythonPasteSource::Scalar(value);
+        return pillow_rs::PasteSourceInput::Scalar(value);
     }
     if let Ok(value) = value.extract::<f64>() {
-        return pillow_rs::PythonPasteSource::Float(value);
+        return pillow_rs::PasteSourceInput::Float(value);
     }
     if let Ok(values) = value.extract::<Vec<i64>>() {
-        return pillow_rs::PythonPasteSource::Components(values);
+        return pillow_rs::PasteSourceInput::Components(values);
     }
     if let Ok(value) = value.extract::<String>() {
-        return pillow_rs::PythonPasteSource::String(value);
+        return pillow_rs::PasteSourceInput::String(value);
     }
-    pillow_rs::PythonPasteSource::Invalid
+    pillow_rs::PasteSourceInput::Invalid
 }
 
 pub(crate) fn paste_box_from_python(
     value: Option<&Bound<'_, PyAny>>,
-) -> PyResult<pillow_rs::PythonPasteBox> {
+) -> PyResult<pillow_rs::PasteBoxInput> {
     let Some(value) = value else {
-        return Ok(pillow_rs::PythonPasteBox::None);
+        return Ok(pillow_rs::PasteBoxInput::None);
     };
     if let Some(image) = image_from_python(value) {
-        return Ok(pillow_rs::PythonPasteBox::Image(Box::new(image)));
+        return Ok(pillow_rs::PasteBoxInput::Image(Box::new(image)));
     }
     if let Ok(values) = value.extract::<Vec<i64>>() {
-        return Ok(pillow_rs::PythonPasteBox::Values(values));
+        return Ok(pillow_rs::PasteBoxInput::Values(values));
     }
-    Ok(pillow_rs::PythonPasteBox::Invalid {
+    Ok(pillow_rs::PasteBoxInput::Invalid {
         length: value.len().ok(),
         type_name: value.get_type().name()?.to_string(),
     })
@@ -72,46 +72,44 @@ pub(crate) fn paste_box_from_python(
 
 pub(crate) fn paste_mask_from_python(
     value: Option<&Bound<'_, PyAny>>,
-) -> PyResult<pillow_rs::PythonPasteMask> {
+) -> PyResult<pillow_rs::PasteMaskInput> {
     let Some(value) = value else {
-        return Ok(pillow_rs::PythonPasteMask::None);
+        return Ok(pillow_rs::PasteMaskInput::None);
     };
     if let Some(image) = image_from_python(value) {
-        return Ok(pillow_rs::PythonPasteMask::Image(Box::new(image)));
+        return Ok(pillow_rs::PasteMaskInput::Image(Box::new(image)));
     }
-    Ok(pillow_rs::PythonPasteMask::Invalid(
+    Ok(pillow_rs::PasteMaskInput::Invalid(
         value.get_type().name()?.to_string(),
     ))
 }
 
 pub(crate) fn open_mode_input_from_python(
     value: Option<&Bound<'_, PyAny>>,
-) -> PyResult<pillow_rs::PythonOpenModeInput> {
+) -> PyResult<pillow_rs::OpenModeInput> {
     let Some(value) = value else {
-        return Ok(pillow_rs::PythonOpenModeInput::None);
+        return Ok(pillow_rs::OpenModeInput::None);
     };
     if let Ok(name) = value.extract::<String>() {
-        return Ok(pillow_rs::PythonOpenModeInput::Name(name));
+        return Ok(pillow_rs::OpenModeInput::Name(name));
     }
-    Ok(pillow_rs::PythonOpenModeInput::Invalid(
-        value.str()?.to_string(),
-    ))
+    Ok(pillow_rs::OpenModeInput::Invalid(value.str()?.to_string()))
 }
 
 pub(crate) fn open_formats_input_from_python(
     value: Option<&Bound<'_, PyAny>>,
-) -> PyResult<pillow_rs::PythonOpenFormatsInput> {
+) -> PyResult<pillow_rs::OpenFormatsInput> {
     let Some(value) = value else {
-        return Ok(pillow_rs::PythonOpenFormatsInput::None);
+        return Ok(pillow_rs::OpenFormatsInput::None);
     };
     if value.cast::<PyList>().is_err() && value.cast::<PyTuple>().is_err() {
-        return Ok(pillow_rs::PythonOpenFormatsInput::Invalid(
+        return Ok(pillow_rs::OpenFormatsInput::Invalid(
             value.get_type().name()?.to_string(),
         ));
     }
     match value.extract::<Vec<String>>() {
-        Ok(names) => Ok(pillow_rs::PythonOpenFormatsInput::Names(names)),
-        Err(_) => Ok(pillow_rs::PythonOpenFormatsInput::Invalid(
+        Ok(names) => Ok(pillow_rs::OpenFormatsInput::Names(names)),
+        Err(_) => Ok(pillow_rs::OpenFormatsInput::Invalid(
             value.get_type().name()?.to_string(),
         )),
     }
