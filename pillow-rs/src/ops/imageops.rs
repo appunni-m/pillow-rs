@@ -68,7 +68,7 @@ pub enum SolarizeInput {
     /// A built-in numeric threshold, including NaN and infinities.
     Threshold(f64),
     /// Results of `sample < threshold` for samples 0 through 255.
-    /// Bindings retain host comparison order and exceptions for custom objects.
+    /// Bindings provide the host comparison callback; core fixes its sample order.
     Comparisons(Box<[bool; 256]>),
 }
 

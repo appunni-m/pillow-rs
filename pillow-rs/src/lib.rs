@@ -357,6 +357,8 @@ pub use crate::ops::imageops::pad_with_input_and_containment as imageops_pad_wit
 pub use crate::ops::imageops::posterize as imageops_posterize;
 pub use crate::ops::imageops::scale_with_input as imageops_scale_with_input;
 pub use crate::ops::imageops::solarize as imageops_solarize;
+#[doc(hidden)]
+pub use crate::ops::imageops::solarize_comparison_table as imageops_solarize_comparison_table;
 pub use crate::ops::imageops::solarize_with_input as imageops_solarize_with_input;
 pub use crate::ops::imageops::validate_colorize_mode as imageops_validate_colorize_mode;
 pub use crate::ops::imageops::validate_deform_resample as imageops_validate_deform_resample;

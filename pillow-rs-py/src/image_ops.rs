@@ -86,10 +86,9 @@ fn ops_solarize(image: &Bound<'_, PyImage>, threshold: &Bound<'_, PyAny>) -> PyR
     } else if threshold.is_exact_instance_of::<PyFloat>() {
         pillow_rs::SolarizeInput::Threshold(threshold.extract::<f64>()?)
     } else {
-        let mut below = Box::new([false; 256]);
-        for (sample, result) in below.iter_mut().enumerate() {
-            *result = sample.into_pyobject_or_pyerr(py)?.lt(threshold)?;
-        }
+        let below = pillow_rs::imageops_solarize_comparison_table(|sample| {
+            sample.into_pyobject_or_pyerr(py)?.lt(threshold)
+        })?;
         pillow_rs::SolarizeInput::Comparisons(below)
     };
     // Custom comparisons can mutate the input image. Snapshot its current

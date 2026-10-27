@@ -240,6 +240,22 @@ pub fn solarize_with_input(image: &Image, input: SolarizeInput) -> Result<Image,
     crate::ops::module_fns::eval_replicated(image, &lut, if mode == "L" { 1 } else { 3 })
 }
 
+/// Builds the 256 host-defined threshold comparisons in byte sample order.
+///
+/// The host callback remains in its owning runtime so custom comparison
+/// behavior and its error type are preserved. Core controls the sample order.
+#[doc(hidden)]
+pub fn solarize_comparison_table<E, F>(mut compare: F) -> Result<Box<[bool; 256]>, E>
+where
+    F: FnMut(usize) -> Result<bool, E>,
+{
+    let mut below = Box::new([false; 256]);
+    for (sample, result) in below.iter_mut().enumerate() {
+        *result = compare(sample)?;
+    }
+    Ok(below)
+}
+
 /// Converts an image to grayscale using Pillow-compatible BT.601 luma.
 ///
 /// # Errors
