@@ -52347,7 +52347,7 @@
     {
       "workload_id": "pipeline-chain.matrix-027",
       "covers": [
-        "PIL.Image.Image.verify.performance.standard"
+        "PIL.Image.Image.resize.performance.standard"
       ],
       "subjects": [
         {
@@ -52604,7 +52604,7 @@
     {
       "workload_id": "pipeline-chain.matrix-029",
       "covers": [
-        "PIL.Image.Image.verify.performance.standard"
+        "PIL.Image.Image.resize.performance.standard"
       ],
       "subjects": [
         {
@@ -52732,7 +52732,7 @@
     {
       "workload_id": "pipeline-chain.matrix-030",
       "covers": [
-        "PIL.Image.Image.verify.performance.standard"
+        "PIL.Image.Image.filter.performance.standard"
       ],
       "subjects": [
         {
@@ -52866,7 +52866,7 @@
     {
       "workload_id": "pipeline-chain.matrix-031",
       "covers": [
-        "PIL.Image.Image.verify.performance.standard"
+        "PIL.Image.Image.crop.performance.standard"
       ],
       "subjects": [
         {
@@ -53293,7 +53293,7 @@
     {
       "workload_id": "pipeline-chain.matrix-034",
       "covers": [
-        "PIL.Image.Image.verify.performance.standard"
+        "PIL.Image.Image.filter.performance.standard"
       ],
       "subjects": [
         {
@@ -53443,7 +53443,7 @@
     {
       "workload_id": "pipeline-chain.matrix-035",
       "covers": [
-        "PIL.Image.Image.getdata.performance.standard"
+        "PIL.Image.Image.transpose.performance.standard"
       ],
       "subjects": [
         {

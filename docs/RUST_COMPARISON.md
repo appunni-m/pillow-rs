@@ -4,7 +4,7 @@
 **Latest release: [12.2.3](https://github.com/appunni-m/pillow-rs/releases/tag/v12.2.3).**
 <!-- /release:summary -->
 
-Updated 2026-10-25. This page compares the `pillow-rs` 12.2.3 Rust crate
+Updated 2026-10-26. This page compares the `pillow-rs` 12.2.3 Rust crate
 with the `image` 0.25.10 crate from the [image-rs project](https://github.com/image-rs/image).
 The projects overlap on raster operations, but have different API goals and
 should not be treated as drop-in replacements.
@@ -27,35 +27,41 @@ operation and mode in the compatibility guide. For projects that need typed
 Rust pixel buffers and image codecs, compare the `image` crate's enabled
 features with the application's format and deployment needs.
 
-## Rust CPU benchmark against image-rs
+## Rust CPU and SIMD benchmarks against image-rs
 
 This is a native Rust comparison, separate from the Python-versus-Pillow and
 Pillow-SIMD results in the [benchmark guide](BENCHMARKING.md). It compares
-three operations whose output bytes matched exactly before timing. Image setup
-is outside the timed region; each output is materialized into an owned image.
+four operations using three subjects: pillow-rs locked to serial CPU, pillow-rs
+locked to SIMD, and `image` with default features disabled. Each subject's
+output bytes must match exactly before timing. Input construction is outside
+the timed region; output allocation and materialization remain inside it.
 
-| Workload | pillow-rs CPU median (µs) | image-rs median (µs) | image-rs / pillow-rs |
-| --- | ---: | ---: | ---: |
-| RGB crop, 1024×768 → 832×672 | 200–342 | 401–692 | 1.88–2.03× |
-| RGB horizontal flip, 1024×768 | 571–932 | 837–1,646 | 1.44–1.77× |
-| RGB 90° counter-clockwise rotation, 1024×768 | 663–750 | 901–954 | 1.27–1.39× |
+| Workload | pillow-rs CPU median (µs) | pillow-rs SIMD median (µs) | SIMD proof | image-rs median (µs) | image-rs / CPU | image-rs / SIMD |
+| --- | ---: | ---: | --- | ---: | ---: | ---: |
+| RGB crop, 1024×768 → 832×672 | 167.88–184.12 | — | `native-copy`, 0 vector blocks; timing withheld | 379.57–388.46 | 2.11–2.28× | — |
+| RGB horizontal flip, 1024×768 | 535.02–540.13 | 258.39–267.92 | `native-copy`, 147,456 vector blocks | 796.52–811.97 | 1.49–1.50× | 3.01–3.08× |
+| RGB 90° counter-clockwise rotation, 1024×768 | 581.15–603.05 | 371.99–417.43 | `native-copy`, 196,608 vector blocks | 861.04–872.87 | 1.45–1.48× | 2.09–2.31× |
+| RGB 180° rotation, 1024×768 | 437.34–479.62 | 257.70–276.72 | `native-copy`, 147,456 vector blocks | 749.12–774.36 | 1.61–1.71× | 2.80–2.91× |
 
-These ranges are the medians from three separate process runs on an Apple M3 Pro,
-macOS 15.7.7, with rustc 1.96.1. Each process warmed each implementation four
-times, then took 21 alternating samples of 20 calls per implementation. The
-table gives the range of the two process medians, not a confidence interval.
-Absolute timings moved between runs, while pillow-rs was faster in all three
-paired comparisons. A ratio above 1 means the image-rs time was higher.
+These ranges are medians from three separate process runs on an Apple M3 Pro,
+macOS 15.7.7, with rustc 1.96.1. Each process used four warmups, then 21
+alternating samples of 20 calls per measured subject. Ratios are calculated from
+paired medians within each process; the ranges are not confidence intervals.
+Absolute timings varied between runs. Ratios above 1 mean image-rs took longer.
 
 The benchmark uses a fixed patterned RGB buffer and the direct Rust APIs. It
-builds pillow-rs with `--no-default-features`, locks each operation to
-`Backend::Cpu`, and pins image-rs to 0.25.10 with default features disabled.
-This excludes Python, codecs, GPU, Rayon, and input construction. The harness
-checks byte equality before it records timings and refuses to compare a
-workload whose outputs differ. Its current coverage is intentionally narrow;
-these measurements do not predict performance for other operations, modes,
-image sizes, architectures, or feature sets. Reproduction steps are in the
-[contributor benchmark guide](../CONTRIBUTING.md#performance-work).
+builds pillow-rs with `--no-default-features` and pins image-rs to 0.25.10 with
+default features disabled. This excludes Python, codecs, GPU, Rayon, and input
+construction. Before timing, the harness checks exact byte equality and an
+untimed execution receipt for each pillow-rs backend. SIMD timings require the
+requested and actual backend to be SIMD, no fallback, and positive vector-block
+evidence for the operation. Crop runs under the SIMD backend but records a
+`native-copy` path with zero vector blocks, so its SIMD latency is withheld.
+Telemetry is disabled during timed samples. The measured SIMD rows use
+`native-copy` kernels with positive vector-block counts. The coverage is
+intentionally narrow; these measurements do not predict performance for other
+operations, modes, image sizes, architectures, or feature sets. Reproduce with
+the command in the [contributor performance guide](../CONTRIBUTING.md#performance-work).
 
 ## Choosing between them
 

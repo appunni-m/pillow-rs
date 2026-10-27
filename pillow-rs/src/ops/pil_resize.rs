@@ -37,8 +37,6 @@ pub(crate) use float::{
 pub(crate) use integer_modes::pil_resize_luma_i32_into_window;
 pub(crate) use luma16::{luma16_resample_big_endian, luma16_resample_read, luma16_resample_write};
 pub(crate) use resize::{pil_preserve_mode, pil_resize, pil_resize_rgbx_into_window};
-#[allow(unused_imports)]
-pub(crate) use samples::i32_samples_borrowed_from_le_bytes;
 pub(crate) use samples::{
     f32_samples_borrowed_from_le_bytes, f32_samples_from_le_bytes, i32_samples_from_le_bytes,
 };

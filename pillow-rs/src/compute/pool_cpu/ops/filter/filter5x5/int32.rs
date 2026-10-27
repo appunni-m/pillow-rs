@@ -149,7 +149,16 @@ fn filter_5x5_i32_row(
 
 #[path = "int32/bounded_binomial.rs"]
 mod bounded_binomial;
-pub(super) use bounded_binomial::*;
+use bounded_binomial::I32_UNIFORM_FILTER5X5_MAX_PIXELS;
+#[cfg(not(feature = "parallel"))]
+use bounded_binomial::{
+    I32_BINOMIAL_FILTER5X5_MAX_ABS_SAMPLE, i32_filter5x5_binomial_kernel_is_applicable,
+    i32_filter5x5_bounded_binomial_kernel_is_applicable,
+};
+#[cfg(feature = "parallel")]
+use bounded_binomial::{
+    filter_5x5_i32_bounded_binomial, i32_filter5x5_bounded_binomial_is_applicable,
+};
 
 #[inline]
 fn read_i32_pixel_le(raw: &[u8], pixel_index: usize) -> i32 {

@@ -265,7 +265,11 @@ fn convert_to_rgbx_native(
         (Some("LA"), DynamicImage::ImageLumaA8(source)) => {
             let mut output = crate::raster::RgbaImage::new(source.width(), source.height());
             for (target, pixel) in output.pixels_mut().zip(source.pixels()) {
-                target.0 = [pixel[0], pixel[0], pixel[0], 255];
+                // Pillow's LA -> RGBX converter replicates luma and carries
+                // the source alpha into the fourth byte. RGBX treats that
+                // byte as padding after the conversion, but this conversion
+                // itself preserves LA's stored sample.
+                target.0 = [pixel[0], pixel[0], pixel[0], pixel[1]];
             }
             Ok(DynamicImage::ImageRgba8(output))
         }

@@ -21,9 +21,9 @@ const MAX_RADIUS: u32 = 64u;
 const FIXED_BIAS: u32 = 8388608u;
 const TILE_SIZE: u32 = 16u;
 
-fn mode_has_g(m: u32) -> bool { return m >= 2u; }
-fn mode_has_b(m: u32) -> bool { return m >= 2u; }
-fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
+fn mode_has_g(m: u32) -> bool { return m >= 2u && m != 10u; }
+fn mode_has_b(m: u32) -> bool { return m >= 2u && m != 10u; }
+fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u || m == 9u || m == 10u; }
 
 fn pixel_channel(pixel: u32, shift: u32) -> u32 {
     return (pixel >> shift) & 0xffu;

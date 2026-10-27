@@ -345,4 +345,3 @@ fn assert_gpu_packed_luma_point_rejections(
         Some("L")
     ));
 }
-

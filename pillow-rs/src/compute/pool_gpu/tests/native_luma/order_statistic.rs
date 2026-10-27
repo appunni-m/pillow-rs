@@ -129,4 +129,3 @@ fn assert_gpu_packed_luma_order_statistic_rejects_other_inputs(median: &Pipeline
         Some("L")
     ));
 }
-

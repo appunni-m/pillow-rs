@@ -339,6 +339,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         else if dst == 1u { /* LA→LA: passthrough */ }
         else if dst == 2u { /* LA→RGB: replicate R to G,B, drop A */ out_g = r; out_b = r; out_a = 255u; }
         else if dst == 3u { /* LA→RGBA: replicate R to G,B, keep A */ out_g = r; out_b = r; }
+        else if dst == 12u { /* LA→RGBX: replicate R to G,B and preserve A */ out_g = r; out_b = r; }
     }
     // RGB (2) → anything
     else if src == 2u {
@@ -464,7 +465,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         out_g = 0u; out_b = 0u; out_a = a;
     }
     if dst == 12u && src == 1u {
-        out_g = r; out_b = r; out_a = 255u;
+        out_g = r; out_b = r;
     } else if dst == 12u && (src == 3u || src == 6u) {
         out_a = 255u;
     }

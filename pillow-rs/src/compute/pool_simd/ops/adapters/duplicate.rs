@@ -7,6 +7,10 @@ use super::{
     preserve_mode, shape_native_copy_channels, simd_unsupported,
 };
 use crate::raster::GenericImageView;
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+use fearless_simd::prelude::SimdBase;
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+use fearless_simd::{Level, Neon, u8x16 as SafeU8x16};
 
 pub(super) fn supports_for_image(img: &DynamicImage, mode: Option<&str>) -> bool {
     native_copy_layout(img, mode).is_some_and(|channels| has_nonempty_byte_data(img, channels))
@@ -24,40 +28,38 @@ pub(super) fn supports_for_shape(shape: SimdImageShape, mode: Option<&str>) -> b
     })
 }
 
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+fearless_simd::kernel!(
+    #[inline(always)]
+    fn copy_native_lanes_neon(neon: Neon, source: &[u8; 16], output: &mut [u8; 16]) {
+        SafeU8x16::<Neon>::from_slice(neon, source).store_array(output);
+    }
+);
+
 /// Duplicate an image through its native byte layout.
 ///
 /// Unlike the packed scalar adapter, this preserves raw P/PA samples and the
-/// fourth CMYK byte. The NEON path copies directly into uninitialized output
-/// storage, so it does not first zero every byte before overwriting it.
+/// fourth CMYK byte. Safe vector loads append fully initialized lane arrays to
+/// the final allocation without a separate zero-fill pass.
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-#[allow(unsafe_code)]
 pub(super) fn simd_copy_native_bytes(source: &[u8]) -> (Vec<u8>, u64, u64) {
-    use core::arch::aarch64 as neon;
-
     let vector_len = source.len() / 64 * 64;
     let scalar_tail = source.len() - vector_len;
+    let neon = Level::new()
+        .as_neon()
+        .expect("AArch64 NEON target configuration has a NEON execution token");
     let mut output = Vec::<u8>::with_capacity(source.len());
 
-    // SAFETY: `output` has capacity for the full source but its length is
-    // still zero. Each NEON load/store covers a complete 16-byte block within
-    // `vector_len`; the remaining bytes are copied with the exact bounded
-    // scalar-tail length. The source is immutable and cannot overlap the new
-    // allocation. After these writes, every byte in `0..source.len()` is
-    // initialized before the vector length is published.
-    unsafe {
-        let source_ptr = source.as_ptr();
-        let output_ptr = output.as_mut_ptr();
-        for offset in (0..vector_len).step_by(64) {
-            let block = neon::vld1q_u8_x4(source_ptr.add(offset));
-            neon::vst1q_u8_x4(output_ptr.add(offset), block);
+    for block in source[..vector_len].chunks_exact(64) {
+        let mut copied = [0u8; 64];
+        let source_lanes = block.as_chunks::<16>().0;
+        let output_lanes = copied.as_chunks_mut::<16>().0;
+        for (source, destination) in source_lanes.iter().zip(output_lanes) {
+            copy_native_lanes_neon(neon, source, destination);
         }
-        std::ptr::copy_nonoverlapping(
-            source_ptr.add(vector_len),
-            output_ptr.add(vector_len),
-            scalar_tail,
-        );
-        output.set_len(source.len());
+        output.extend_from_slice(&copied);
     }
+    output.extend_from_slice(&source[vector_len..]);
 
     (output, (vector_len / 16) as u64, scalar_tail as u64)
 }

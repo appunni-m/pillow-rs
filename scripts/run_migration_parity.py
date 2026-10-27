@@ -393,7 +393,7 @@ def current_command_cwd() -> str:
 
 
 def json_safe(value: Any) -> Any:
-    """Convert values to JSON while preserving public NaN bit identity."""
+    """Convert values to JSON while preserving non-finite float identity."""
 
     if value is None or isinstance(value, (bool, int, str)):
         return value
@@ -402,7 +402,7 @@ def json_safe(value: Any) -> Any:
             # F-mode values expose NaN sign and payload through Python floats.
             return {"$float64_bits": struct.pack(">d", value).hex()}
         if math.isinf(value):
-            return "Infinity" if value > 0 else "-Infinity"
+            return {"$float64_bits": struct.pack(">d", value).hex()}
         return value
     if isinstance(value, bytes):
         return {

@@ -6,6 +6,32 @@
 
 use wide::u8x16;
 
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+use fearless_simd::prelude::{SimdBase, SimdInterleaved};
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+use fearless_simd::{Level, Neon, u8x16 as SafeU8x16};
+
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+fearless_simd::kernel!(
+    #[inline(always)]
+    fn store_rgba_channel_neon(neon: Neon, channel: usize, source: &[u8], output: &mut [u8]) {
+        let (source_blocks, source_tail) = source.as_chunks::<64>();
+        let (output_blocks, output_tail) = output.as_chunks_mut::<16>();
+        debug_assert!(source_tail.is_empty());
+        debug_assert!(output_tail.is_empty());
+        for (source_block, output_block) in source_blocks.iter().zip(output_blocks) {
+            let channels = SafeU8x16::<Neon>::load_four_interleaved(neon, source_block);
+            let selected = match channel {
+                0 => channels[0],
+                1 => channels[1],
+                2 => channels[2],
+                _ => channels[3],
+            };
+            selected.store_array(output_block);
+        }
+    }
+);
+
 #[cfg(target_arch = "x86_64")]
 #[path = "native_channel/cmyk_ssse3.rs"]
 mod cmyk_ssse3;
@@ -98,148 +124,105 @@ pub(crate) fn extract_rgb_channel_bytes(
     }
 }
 
-/// Extract one selected byte from packed RGB with one NEON structure load.
-/// `vld3q_u8` deinterleaves 16 RGB pixels directly into three byte vectors,
-/// avoiding the temporary lane arrays and three separate swizzles in the
-/// generic portable gather.
+/// Extract one selected byte from packed RGB with safe SIMD lane selection.
+/// Each vector block gathers sixteen samples from three contiguous source
+/// vectors, and the scalar tail handles only the remaining pixels.
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-#[allow(unsafe_code)]
 #[inline]
 fn gather_rgb_channel_neon_into<const CHANNEL: usize>(
     source: &[u8],
     output: &mut [u8],
 ) -> (u64, u64) {
-    let pixel_count = source.len() / 3;
-    debug_assert_eq!(output.len(), pixel_count);
-    debug_assert_eq!(source.len() % 3, 0);
-
-    // SAFETY: the source has complete RGB triples and the caller provides a
-    // distinct writable output slice with one initialized byte per pixel.
-    unsafe { gather_rgb_channel_neon_raw::<CHANNEL>(source, output.as_mut_ptr()) }
-}
-
-#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-#[allow(unsafe_code)]
-#[inline]
-fn gather_rgb_channel_neon<const CHANNEL: usize>(source: &[u8]) -> (Vec<u8>, u64, u64) {
-    let pixel_count = source.len() / 3;
-    let mut output = Vec::<u8>::with_capacity(pixel_count);
-    debug_assert_eq!(source.len() % 3, 0);
-
-    // SAFETY: the vector reserves one byte per pixel; the kernel below writes
-    // every output byte before the vector length is published.
-    let (vector_blocks, scalar_tail) =
-        unsafe { gather_rgb_channel_neon_raw::<CHANNEL>(source, output.as_mut_ptr()) };
-    // SAFETY: the kernel initializes the complete vector prefix and scalar
-    // tail before returning.
-    unsafe { output.set_len(pixel_count) };
-    (output, vector_blocks, scalar_tail)
-}
-
-#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-#[allow(unsafe_code)]
-#[inline]
-unsafe fn gather_rgb_channel_neon_raw<const CHANNEL: usize>(
-    source: &[u8],
-    output: *mut u8,
-) -> (u64, u64) {
     const LANES: usize = 16;
     const CHANNELS: usize = 3;
-    let pixel_count = source.len() / CHANNELS;
-    let vector_pixels = pixel_count / LANES * LANES;
+    let pixel_count = source.len() / 3;
+    debug_assert_eq!(output.len(), pixel_count);
     debug_assert_eq!(source.len() % CHANNELS, 0);
     debug_assert!(CHANNEL < CHANNELS);
 
-    macro_rules! extract_rgb_block {
-        ($pixel:expr) => {{
-            // SAFETY: callers reserve or provide `pixel_count` output bytes,
-            // and every block is bounded by `vector_pixels`. The source offset
-            // reads exactly 48 initialized bytes from a complete RGB block.
-            let input =
-                unsafe { core::arch::aarch64::vld3q_u8(source.as_ptr().add($pixel * CHANNELS)) };
-            let channel = if CHANNEL == 0 {
-                input.0
-            } else if CHANNEL == 1 {
-                input.1
-            } else {
-                input.2
-            };
-            // SAFETY: the selected store writes 16 bytes within the validated
-            // output prefix at `$pixel`.
-            unsafe { core::arch::aarch64::vst1q_u8(output.add($pixel), channel) };
-        }};
+    let (source_blocks, source_tail) = source.as_chunks::<48>();
+    let (output_blocks, output_tail) = output.as_chunks_mut::<LANES>();
+    for (source_block, output_block) in source_blocks.iter().zip(output_blocks) {
+        let source_vectors = [
+            u8x16::new(
+                source_block[..LANES]
+                    .try_into()
+                    .expect("complete RGB vector"),
+            ),
+            u8x16::new(
+                source_block[LANES..LANES * 2]
+                    .try_into()
+                    .expect("complete RGB vector"),
+            ),
+            u8x16::new(
+                source_block[LANES * 2..]
+                    .try_into()
+                    .expect("complete RGB vector"),
+            ),
+            u8x16::splat(0),
+        ];
+        let channel = gather_interleaved_channel::<CHANNELS, CHANNEL>(&source_vectors);
+        output_block.copy_from_slice(&channel.to_array());
     }
 
-    let unrolled_pixels = vector_pixels / (LANES * 4) * (LANES * 4);
-    for pixel in (0..unrolled_pixels).step_by(LANES * 4) {
-        extract_rgb_block!(pixel);
-        extract_rgb_block!(pixel + LANES);
-        extract_rgb_block!(pixel + LANES * 2);
-        extract_rgb_block!(pixel + LANES * 3);
+    for (pixel, output_sample) in source_tail.chunks_exact(CHANNELS).zip(output_tail) {
+        *output_sample = pixel[CHANNEL];
     }
-    for pixel in (unrolled_pixels..vector_pixels).step_by(LANES) {
-        extract_rgb_block!(pixel);
-    }
-    for pixel in vector_pixels..pixel_count {
-        // SAFETY: `pixel` is within `pixel_count`, the caller guarantees
-        // writable storage for every pixel, and the source/output do not
-        // overlap.
-        unsafe {
-            output.add(pixel).write(source[pixel * CHANNELS + CHANNEL]);
-        }
-    }
-
     (
-        (vector_pixels / LANES) as u64,
-        (pixel_count - vector_pixels) as u64,
+        (source_blocks.len() * LANES) as u64 / LANES as u64,
+        (pixel_count % LANES) as u64,
     )
 }
 
-/// Extract one selected byte from packed LA with one NEON structure load.
-/// `vld2q_u8` deinterleaves sixteen luminance/alpha pixels directly into two
-/// byte vectors, so channel extraction writes the result in one pass.
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-#[allow(unsafe_code)]
+#[inline]
+fn gather_rgb_channel_neon<const CHANNEL: usize>(source: &[u8]) -> (Vec<u8>, u64, u64) {
+    let pixel_count = source.len() / 3;
+    let mut output = vec![0; pixel_count];
+    let (vector_blocks, scalar_tail) = gather_rgb_channel_neon_into::<CHANNEL>(source, &mut output);
+    (output, vector_blocks, scalar_tail)
+}
+
+/// Extract one selected byte from packed LA with safe SIMD lane selection.
+/// Each vector block gathers sixteen luminance or alpha samples from two
+/// contiguous source vectors.
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 #[inline]
 fn gather_la_channel_neon_into<const CHANNEL: usize>(
     source: &[u8],
     output: &mut [u8],
 ) -> (u64, u64) {
-    const CHANNELS: usize = 2;
     const LANES: usize = 16;
-    let pixel_count = source.len() / CHANNELS;
+    const LANES_BYTES: usize = LANES * 2;
+    let pixel_count = source.len() / 2;
     let vector_pixels = pixel_count / LANES * LANES;
     debug_assert_eq!(output.len(), pixel_count);
 
-    macro_rules! extract_la_block {
-        ($pixel:expr) => {{
-            let input = core::arch::aarch64::vld2q_u8(source.as_ptr().add($pixel * CHANNELS));
-            let channel = if CHANNEL == 0 { input.0 } else { input.1 };
-            core::arch::aarch64::vst1q_u8(output.as_mut_ptr().add($pixel), channel);
-        }};
+    let (source_blocks, source_tail) = source.as_chunks::<LANES_BYTES>();
+    let (output_blocks, output_tail) = output.as_chunks_mut::<LANES>();
+    debug_assert!(source_tail.len() < LANES_BYTES);
+    debug_assert!(output_tail.len() < LANES);
+    for (source_block, output_block) in source_blocks.iter().zip(output_blocks) {
+        let source_vectors = [
+            u8x16::new(
+                source_block[..LANES]
+                    .try_into()
+                    .expect("complete LA vector"),
+            ),
+            u8x16::new(
+                source_block[LANES..]
+                    .try_into()
+                    .expect("complete LA vector"),
+            ),
+            u8x16::splat(0),
+            u8x16::splat(0),
+        ];
+        let channel = gather_interleaved_channel::<2, CHANNEL>(&source_vectors);
+        output_block.copy_from_slice(&channel.to_array());
     }
 
-    // SAFETY: Each structure load starts at `2 * pixel` and reads exactly
-    // `2 * LANES` initialized source bytes. The unrolled and remainder loops
-    // visit sixteen-pixel-aligned offsets bounded by `vector_pixels`; each
-    // load and 16-byte store fits its allocation. The caller validates an
-    // output slice with exactly `pixel_count` writable bytes and selects only
-    // channel 0 or 1.
-    unsafe {
-        let unrolled_pixels = vector_pixels / (LANES * 4) * (LANES * 4);
-        for pixel in (0..unrolled_pixels).step_by(LANES * 4) {
-            extract_la_block!(pixel);
-            extract_la_block!(pixel + LANES);
-            extract_la_block!(pixel + LANES * 2);
-            extract_la_block!(pixel + LANES * 3);
-        }
-        for pixel in (unrolled_pixels..vector_pixels).step_by(LANES) {
-            extract_la_block!(pixel);
-        }
-    }
-
-    for pixel in vector_pixels..pixel_count {
-        output[pixel] = source[pixel * CHANNELS + CHANNEL];
+    for (pixel, output_sample) in source_tail.chunks_exact(2).zip(output_tail) {
+        *output_sample = pixel[CHANNEL];
     }
     (
         (vector_pixels / LANES) as u64,
@@ -259,7 +242,6 @@ fn gather_la_channel_neon<const CHANNEL: usize>(source: &[u8]) -> (Vec<u8>, u64,
 /// structure load. `vld4q_u8` deinterleaves sixteen pixels directly into four
 /// byte vectors, including CMYK and other four-byte native carriers.
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-#[allow(unsafe_code)]
 #[inline]
 fn gather_rgba_channel_neon_into<const CHANNEL: usize>(
     source: &[u8],
@@ -270,40 +252,24 @@ fn gather_rgba_channel_neon_into<const CHANNEL: usize>(
     let pixel_count = source.len() / CHANNELS;
     let vector_pixels = pixel_count / LANES * LANES;
     debug_assert_eq!(output.len(), pixel_count);
-
-    macro_rules! extract_rgba_block {
-        ($pixel:expr) => {{
-            let input = core::arch::aarch64::vld4q_u8(source.as_ptr().add($pixel * CHANNELS));
-            let channel = match CHANNEL {
-                0 => input.0,
-                1 => input.1,
-                2 => input.2,
-                _ => input.3,
-            };
-            core::arch::aarch64::vst1q_u8(output.as_mut_ptr().add($pixel), channel);
-        }};
-    }
-
-    // SAFETY: Each structure load starts at `4 * pixel` and reads exactly
-    // `4 * LANES` initialized source bytes. Both loops use sixteen-pixel
-    // offsets bounded by `vector_pixels`, so every load and store stays within
-    // its allocation. The caller validates an output slice with exactly
-    // `pixel_count` writable bytes and clamps the channel to 0..4.
-    unsafe {
-        let unrolled_pixels = vector_pixels / (LANES * 4) * (LANES * 4);
-        for pixel in (0..unrolled_pixels).step_by(LANES * 4) {
-            extract_rgba_block!(pixel);
-            extract_rgba_block!(pixel + LANES);
-            extract_rgba_block!(pixel + LANES * 2);
-            extract_rgba_block!(pixel + LANES * 3);
+    let Some(neon) = Level::new().as_neon() else {
+        for (pixel, output_sample) in source.chunks_exact(CHANNELS).zip(output) {
+            *output_sample = pixel[CHANNEL];
         }
-        for pixel in (unrolled_pixels..vector_pixels).step_by(LANES) {
-            extract_rgba_block!(pixel);
-        }
-    }
+        return (0, pixel_count as u64);
+    };
+    store_rgba_channel_neon(
+        neon,
+        CHANNEL,
+        &source[..vector_pixels * CHANNELS],
+        &mut output[..vector_pixels],
+    );
 
-    for pixel in vector_pixels..pixel_count {
-        output[pixel] = source[pixel * CHANNELS + CHANNEL];
+    for (pixel, output_sample) in source[vector_pixels * CHANNELS..]
+        .chunks_exact(CHANNELS)
+        .zip(&mut output[vector_pixels..])
+    {
+        *output_sample = pixel[CHANNEL];
     }
     (
         (vector_pixels / LANES) as u64,

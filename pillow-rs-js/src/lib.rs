@@ -6,9 +6,6 @@
 #![allow(clippy::redundant_clone)]
 // WASM binding conventions differ from standard Rust naming
 #![allow(non_snake_case)]
-#![allow(dead_code)]
-#![allow(unused_variables)]
-
 //! pillow-rs WASM — full Pillow API for the browser. Thin delegation to pillow-rs.
 mod inputs;
 mod values;

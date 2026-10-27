@@ -216,21 +216,15 @@ fn expand_la_to_rgbx(image: &DynamicImage) -> Result<DynamicImage, PilError> {
     let input = source.as_raw();
     let mut output = Vec::with_capacity(input.len().saturating_mul(2));
     let mut vector_blocks = 0u64;
-    const FIRST: [u8; 16] = [0, 0, 0, 0, 2, 2, 2, 0, 4, 4, 4, 0, 6, 6, 6, 0];
-    const SECOND: [u8; 16] = [8, 8, 8, 0, 10, 10, 10, 0, 12, 12, 12, 0, 14, 14, 14, 0];
-    let pad_mask = u8x16::new([0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255]);
+    const FIRST: [u8; 16] = [0, 0, 0, 1, 2, 2, 2, 3, 4, 4, 4, 5, 6, 6, 6, 7];
+    const SECOND: [u8; 16] = [8, 8, 8, 9, 10, 10, 10, 11, 12, 12, 12, 13, 14, 14, 14, 15];
     for start in (0..input.len()).step_by(16) {
         let active_bytes = (input.len() - start).min(16);
         let active_pixels = active_bytes / 2;
         let lanes = std::array::from_fn(|lane| input.get(start + lane).copied().unwrap_or(0));
         let source = u8x16::new(lanes);
-        let first = pad_mask
-            .simd_ne(u8x16::ZERO)
-            .select(u8x16::splat(255), source.swizzle_relaxed(u8x16::new(FIRST)));
-        let second = pad_mask.simd_ne(u8x16::ZERO).select(
-            u8x16::splat(255),
-            source.swizzle_relaxed(u8x16::new(SECOND)),
-        );
+        let first = source.swizzle_relaxed(u8x16::new(FIRST));
+        let second = source.swizzle_relaxed(u8x16::new(SECOND));
         let first = first.to_array();
         let second = second.to_array();
         let first_len = active_pixels.min(4) * 4;

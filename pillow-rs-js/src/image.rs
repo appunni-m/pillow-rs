@@ -9,6 +9,7 @@ pub struct Image {
     pub(crate) inner: RsImage,
 }
 
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 /// Resolved image layout for an array descriptor.
 pub struct ArrayDescriptorLayout {
@@ -20,6 +21,7 @@ pub struct ArrayDescriptorLayout {
     mode_reinterprets_dtype: bool,
 }
 
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 impl ArrayDescriptorLayout {
     /// Returns the image mode selected for the descriptor.
@@ -59,6 +61,7 @@ impl ArrayDescriptorLayout {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen(js_name = "resolveArrayLayout")]
 /// Resolves an array shape, dtype string, and optional image mode to an image layout.
 ///

@@ -3,10 +3,13 @@
 #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
 use super::super::{native_channel, simd_pack_u16x16};
 use crate::raster::DynamicImage;
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+use fearless_simd::prelude::{SimdBase, SimdInterleaved, SimdNarrow, SimdWiden};
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+use fearless_simd::{Level, Neon, u8x16 as SafeU8x16, u16x8 as SafeU16x8};
 #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
 use wide::{u8x16, u16x16};
 
-#[allow(unsafe_code)]
 pub(super) fn native_cmyk_to_rgb_bytes(img: &DynamicImage) -> Option<(Vec<u8>, u64, u64)> {
     let DynamicImage::ImageRgba8(source) = img else {
         return None;
@@ -27,71 +30,23 @@ pub(super) fn native_cmyk_to_rgb_bytes(img: &DynamicImage) -> Option<(Vec<u8>, u
 }
 
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-#[allow(unsafe_code)]
 fn native_cmyk_to_rgb_neon(
     source: &crate::raster::RgbaImage,
     pixels: usize,
     output_capacity: usize,
 ) -> Option<(Vec<u8>, u64, u64)> {
-    use core::arch::aarch64 as neon;
-
-    #[inline(always)]
-    fn muldiv255_neon(value: neon::uint8x16_t, ink: neon::uint8x16_t) -> neon::uint8x16_t {
-        // SAFETY: this helper is called only inside the AArch64 NEON
-        // specialization selected for a target compiled with NEON.
-        unsafe {
-            let round = |product: neon::uint16x8_t| {
-                let value = neon::vaddq_u16(product, neon::vdupq_n_u16(128));
-                neon::vshrq_n_u16(neon::vaddq_u16(neon::vshrq_n_u16(value, 8), value), 8)
-            };
-            let low = round(neon::vmull_u8(
-                neon::vget_low_u8(value),
-                neon::vget_low_u8(ink),
-            ));
-            let high = round(neon::vmull_u8(
-                neon::vget_high_u8(value),
-                neon::vget_high_u8(ink),
-            ));
-            neon::vcombine_u8(neon::vqmovn_u16(low), neon::vqmovn_u16(high))
-        }
-    }
-
-    let mut output = vec![0u8; output_capacity];
+    let neon = Level::new()
+        .as_neon()
+        .expect("AArch64 NEON target configuration has a NEON execution token");
     let vector_pixels = pixels / 16 * 16;
-    for pixel_start in (0..vector_pixels).step_by(16) {
-        let source_start = pixel_start * 4;
-        let output_start = pixel_start * 3;
-        // SAFETY: the checked four-byte source length leaves 64 readable
-        // bytes for every 16-pixel block; the output allocation leaves
-        // 48 writable bytes at the matching three-byte destination.
-        let (red, green, blue) = unsafe {
-            let samples = neon::vld4q_u8(source.as_raw().as_ptr().add(source_start));
-            let (cyan, magenta, yellow, black) = (samples.0, samples.1, samples.2, samples.3);
-            let ink = neon::vsubq_u8(neon::vdupq_n_u8(255), black);
-            let red = neon::vsubq_u8(ink, muldiv255_neon(cyan, ink));
-            let green = neon::vsubq_u8(ink, muldiv255_neon(magenta, ink));
-            let blue = neon::vsubq_u8(ink, muldiv255_neon(yellow, ink));
-            (red, green, blue)
-        };
-        let mut red_lanes = [0u8; 16];
-        let mut green_lanes = [0u8; 16];
-        let mut blue_lanes = [0u8; 16];
-        // SAFETY: each local lane array has exactly sixteen writable
-        // bytes, matching the vector store width.
-        unsafe {
-            neon::vst1q_u8(red_lanes.as_mut_ptr(), red);
-            neon::vst1q_u8(green_lanes.as_mut_ptr(), green);
-            neon::vst1q_u8(blue_lanes.as_mut_ptr(), blue);
-        }
-        for (lane, rgb) in output[output_start..output_start + 48]
-            .chunks_exact_mut(3)
-            .enumerate()
-        {
-            rgb[0] = red_lanes[lane];
-            rgb[1] = green_lanes[lane];
-            rgb[2] = blue_lanes[lane];
-        }
-    }
+    let vector_source_len = vector_pixels.checked_mul(4)?;
+    let vector_output_len = vector_pixels.checked_mul(3)?;
+    let mut output = vec![0u8; output_capacity];
+    native_cmyk_to_rgb_neon_kernel(
+        neon,
+        &source.as_raw()[..vector_source_len],
+        &mut output[..vector_output_len],
+    );
     for pixel in vector_pixels..pixels {
         let source_start = pixel * 4;
         let output_start = pixel * 3;
@@ -107,6 +62,47 @@ fn native_cmyk_to_rgb_neon(
         (pixels - vector_pixels) as u64,
     ))
 }
+
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[inline(always)]
+fn muldiv255_neon(neon: Neon, value: SafeU8x16<Neon>, ink: SafeU8x16<Neon>) -> SafeU8x16<Neon> {
+    let (value_low, value_high) = value.widen();
+    let (ink_low, ink_high) = ink.widen();
+    let round = |product: SafeU16x8<Neon>| {
+        let value = product + SafeU16x8::<Neon>::splat(neon, 128);
+        ((value >> 8u32) + value) >> 8u32
+    };
+    round(value_low * ink_low).narrow(round(value_high * ink_high))
+}
+
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+fearless_simd::kernel!(
+    #[inline(always)]
+    fn native_cmyk_to_rgb_neon_kernel(neon: Neon, source: &[u8], output: &mut [u8]) {
+        let (source_blocks, source_tail) = source.as_chunks::<64>();
+        let (output_blocks, output_tail) = output.as_chunks_mut::<48>();
+        debug_assert!(source_tail.is_empty());
+        debug_assert!(output_tail.is_empty());
+        for (source_block, output_block) in source_blocks.iter().zip(output_blocks) {
+            let channels = SafeU8x16::<Neon>::load_four_interleaved(neon, source_block);
+            let ink = SafeU8x16::<Neon>::splat(neon, 255) - channels[3];
+            let red = ink - muldiv255_neon(neon, channels[0], ink);
+            let green = ink - muldiv255_neon(neon, channels[1], ink);
+            let blue = ink - muldiv255_neon(neon, channels[2], ink);
+            let mut red_lanes = [0; 16];
+            let mut green_lanes = [0; 16];
+            let mut blue_lanes = [0; 16];
+            red.store_array(&mut red_lanes);
+            green.store_array(&mut green_lanes);
+            blue.store_array(&mut blue_lanes);
+            for (lane, rgb) in output_block.chunks_exact_mut(3).enumerate() {
+                rgb[0] = red_lanes[lane];
+                rgb[1] = green_lanes[lane];
+                rgb[2] = blue_lanes[lane];
+            }
+        }
+    }
+);
 
 #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
 #[allow(unsafe_code)] // SSSE3 calls require the runtime-checked full-block path below.

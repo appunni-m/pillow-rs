@@ -651,13 +651,15 @@ def validate_reused_parity(
     manifest: Path,
     cases: list[dict[str, Any]],
     *,
-    selected_profiles_by_case: dict[str, set[str]],
+    selected_profiles_by_case: dict[str, set[str]] | None = None,
     report_path: Path,
     attestation: dict[str, Any],
     expected_inputs: list[dict[str, str]],
 ) -> dict[tuple[str, str], str]:
     """Validate a report-bound parity superset and return its runtime hashes."""
 
+    if selected_profiles_by_case is None:
+        selected_profiles_by_case = selected_parity_profiles_by_case(cases)
     summary = parity.get("summary", {})
     comparisons = parity.get("comparisons", [])
     schema = parity.get("schema")
@@ -821,12 +823,14 @@ def run_parity(
     timeout: int,
     cases: list[dict[str, Any]],
     *,
-    selected_profiles_by_case: dict[str, set[str]],
+    selected_profiles_by_case: dict[str, set[str]] | None = None,
     attestation_output: Path | None = None,
     producer_attestation_output: Path | None = None,
 ) -> dict[str, Any]:
     if producer_attestation_output is not None and attestation_output is None:
         raise ValueError("parity producer attestations require execution attestations")
+    if selected_profiles_by_case is None:
+        selected_profiles_by_case = selected_parity_profiles_by_case(cases)
     script = ROOT / "scripts" / "run_migration_parity.py"
     output.parent.mkdir(parents=True, exist_ok=True)
     backend_results: list[dict[str, Any]] = []
@@ -1952,19 +1956,50 @@ def parity_profile_for_subject(subject_profile: str) -> str:
     return "python-cpu" if subject_profile == "python-parallel-cpu" else subject_profile
 
 
+def profile_applies_to_case(profile: str, case: dict[str, Any]) -> bool:
+    """Return whether a parity case declares support for this target profile.
+
+    Older input records have no per-case profile list and remain applicable to
+    every active target. Parallel CPU inherits the serial CPU case contract.
+    """
+
+    declared_profiles = case.get("target_profiles")
+    if declared_profiles is None:
+        return True
+    if not isinstance(declared_profiles, (list, tuple)):
+        return False
+    return parity_profile_for_subject(profile) in declared_profiles
+
+
+def selected_parity_profiles_by_case(
+    cases: list[dict[str, Any]],
+) -> dict[str, set[str]]:
+    """Select active parity lanes that each supplied case actually covers."""
+
+    return {
+        case["case_id"]: {
+            parity_profile_for_subject(profile)
+            for profile in TARGET_PROFILES
+            if profile_applies_to_case(profile, case)
+        }
+        for case in cases
+    }
+
+
 def applicable_parity_profiles(
     target_profiles: list[str],
+    case: dict[str, Any],
     *,
     active_profiles: tuple[str, ...] | list[str] | None = None,
 ) -> list[str]:
     """Return this workload's selected profiles covered by its parity case."""
 
-    requested = {parity_profile_for_subject(profile) for profile in target_profiles}
+    requested = set(target_profiles)
     active = TARGET_PROFILES if active_profiles is None else active_profiles
     return [
         profile
         for profile in active
-        if parity_profile_for_subject(profile) in requested
+        if profile in requested and profile_applies_to_case(profile, case)
     ]
 
 
@@ -2166,6 +2201,7 @@ def run(args: argparse.Namespace) -> int:
             requested_profiles = {
                 parity_profile_for_subject(profile)
                 for profile in workload_target_profiles(workload)
+                if profile_applies_to_case(profile, cases_by_id[case_id])
             }
             requested_parity_profiles_by_case.setdefault(case_id, set()).update(
                 requested_profiles
@@ -2189,7 +2225,8 @@ def run(args: argparse.Namespace) -> int:
             continue
         workload_id = workload["workload_id"]
         parity_profiles_by_workload[workload_id] = applicable_parity_profiles(
-            workload_target_profiles(workload)
+            workload_target_profiles(workload),
+            workload_cases[workload_id],
         )
     parity_output = args.parity_output.resolve()
     reuse_runtime_hashes: dict[tuple[str, str], str] = {}

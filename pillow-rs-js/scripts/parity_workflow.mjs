@@ -2484,7 +2484,13 @@ function callStep(wasm, step, bindings, operations, assets, owned, displayViewer
 
 function jsonSafe(value) {
     if (value === undefined || value === null) return value ?? null;
-    if (typeof value === 'number' && !Number.isFinite(value)) return String(value);
+    if (typeof value === 'number' && !Number.isFinite(value)) {
+        return {
+            __pillow_rs_nonfinite_result__: Number.isNaN(value)
+                ? 'NaN'
+                : value > 0 ? 'Infinity' : '-Infinity',
+        };
+    }
     if (typeof value === 'string' || typeof value === 'boolean' || typeof value === 'number') return value;
     if (value instanceof Uint8Array || value instanceof Uint32Array || value instanceof Int32Array || value instanceof Float64Array) return Array.from(value, jsonSafe);
     if (Array.isArray(value)) return value.map(jsonSafe);

@@ -159,7 +159,6 @@ pub fn op_alpha_composite_mirror(
 
 // ── Merge ──
 
-#[allow(unsafe_code)]
 #[cfg(not(feature = "parallel"))]
 fn interleave_rgb_luma_bands(red: &[u8], green: &[u8], blue: &[u8]) -> Result<Vec<u8>, PilError> {
     if red.len() != green.len() || red.len() != blue.len() {
@@ -171,23 +170,33 @@ fn interleave_rgb_luma_bands(red: &[u8], green: &[u8], blue: &[u8]) -> Result<Ve
         .len()
         .checked_mul(3)
         .ok_or_else(|| PilError::ValueError("merge: output length overflow".into()))?;
-    let mut output: Vec<u8> = Vec::with_capacity(output_len);
-
-    // SAFETY: the new Vec has capacity for `output_len`; each input length is
-    // equal, and the loop writes exactly three initialized bytes for each
-    // input sample. `index * 3 + 2` is below `output_len` because the
-    // multiplication above succeeded and `index < red.len()`. The output
-    // allocation cannot overlap any borrowed input. The Vec length remains
-    // zero until the entire buffer is initialized.
-    unsafe {
-        let destination = output.as_mut_ptr();
-        for index in 0..red.len() {
-            let offset = index * 3;
-            destination.add(offset).write(red[index]);
-            destination.add(offset + 1).write(green[index]);
-            destination.add(offset + 2).write(blue[index]);
+    const PIXELS_PER_CHUNK: usize = 64;
+    let mut output = Vec::with_capacity(output_len);
+    let mut red_chunks = red.chunks_exact(PIXELS_PER_CHUNK);
+    let mut green_chunks = green.chunks_exact(PIXELS_PER_CHUNK);
+    let mut blue_chunks = blue.chunks_exact(PIXELS_PER_CHUNK);
+    for ((red_chunk, green_chunk), blue_chunk) in red_chunks
+        .by_ref()
+        .zip(green_chunks.by_ref())
+        .zip(blue_chunks.by_ref())
+    {
+        let mut pixels = [[0; 3]; PIXELS_PER_CHUNK];
+        for ((pixel, &red), (&green, &blue)) in pixels
+            .iter_mut()
+            .zip(red_chunk)
+            .zip(green_chunk.iter().zip(blue_chunk))
+        {
+            *pixel = [red, green, blue];
         }
-        output.set_len(output_len);
+        output.extend_from_slice(pixels.as_flattened());
+    }
+    for ((&red, &green), &blue) in red_chunks
+        .remainder()
+        .iter()
+        .zip(green_chunks.remainder())
+        .zip(blue_chunks.remainder())
+    {
+        output.extend([red, green, blue]);
     }
     Ok(output)
 }

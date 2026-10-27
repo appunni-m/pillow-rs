@@ -7,7 +7,7 @@ contract and indexed input mappings only; it contains no measured result.
 generator: scripts/generate_migration_parity_docs.py@1
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@3
-manifest_sha256: fc368cc87723cb70e454e2d7322cce35ac46aacc0060ac61a4f90f77e81bfc48
+manifest_sha256: 4f615d2cf2e203e385ec44ae8869388ee6bd69afb45dedcf736b3b60a619defb
 statement_status: declared
 ```
 
@@ -15,12 +15,12 @@ statement_status: declared
 
 - Scope: `pillow-rs-selected-public-contract` (`full`)
 - Oracle: `Pillow 12.2.0`
-- Target profiles: `python-cpu`, `python-simd`, `python-gpu`, `python-parallel-cpu`
+- Target profiles: `python-cpu`, `python-simd`, `python-gpu`, `python-parallel-cpu`, `python-gpu-fault-contract`
 - Parity cases and requirements are shared across target profiles; the runner selects the backend and records it in the result.
-- Public surfaces: 25
-- Operations: 212
-- Requirements: 1818
-- Indexed parity cases: 17308
+- Public surfaces: 27
+- Operations: 214
+- Requirements: 1820
+- Indexed parity cases: 17339
 - Indexed coverage plans: 25
 - Indexed benchmark workloads: 1032
 
@@ -28,6 +28,8 @@ statement_status: declared
 
 | Surface | Operation | Kind | Source path | Target path | Requirements |
 | --- | --- | --- | --- | --- | ---: |
+| `PIL` | `GpuBatchExecutor` | `type` | `PIL.GpuBatchExecutor` | `pillow_rs.gpu_batch.GpuBatchExecutor` | 1 |
+| `PIL.GpuBatchExecutor` | `submit` | `method` | `PIL.GpuBatchExecutor.submit` | `pillow_rs.gpu_batch.GpuBatchExecutor.submit` | 1 |
 | `PIL.Image` | `alpha_composite` | `function` | `PIL.Image.alpha_composite` | `pillow_rs.alpha_composite` | 7 |
 | `PIL.Image` | `blend` | `function` | `PIL.Image.blend` | `pillow_rs.blend` | 11 |
 | `PIL.Image` | `composite` | `function` | `PIL.Image.composite` | `pillow_rs.composite` | 13 |
@@ -249,6 +251,6 @@ accepted as input truth.
 
 | Lane | Documents |
 | --- | ---: |
-| parity | 25 |
-| coverage | 25 |
-| benchmark | 26 |
+| parity | 27 |
+| coverage | 27 |
+| benchmark | 28 |

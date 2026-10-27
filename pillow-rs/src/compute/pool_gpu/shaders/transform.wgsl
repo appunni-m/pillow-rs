@@ -22,7 +22,7 @@
 //
 // Mode-aware: channel selection per mode.
 // Mode codes: 0=L/P/1, 1=LA/PA, 2=RGB, 3=RGBA, 4=CMYK, 5=I;16*,
-// 6=RGBX, 7=I, 8=F.
+// 6=RGBX, 7=I, 8=F, 9=RGBa, 10=La.
 
 struct Params {
     width: u32,      // source width
@@ -50,10 +50,10 @@ struct Params {
 }
 
 fn mode_has_g(m: u32) -> bool {
-    return m == 2u || m == 3u || m == 4u || m == 6u;
+    return m == 2u || m == 3u || m == 4u || m == 6u || m == 9u;
 }
 fn mode_has_b(m: u32) -> bool {
-    return m == 2u || m == 3u || m == 4u || m == 6u;
+    return m == 2u || m == 3u || m == 4u || m == 6u || m == 9u;
 }
 fn mode_has_fourth(m: u32) -> bool {
     // CMYK's fourth byte is K and RGBX's fourth byte is padding. I/F use
@@ -63,7 +63,7 @@ fn mode_has_fourth(m: u32) -> bool {
     return m == 4u || m == 6u || m == 7u || m == 8u;
 }
 fn mode_has_a(m: u32) -> bool {
-    return m == 1u || m == 3u;
+    return m == 1u || m == 3u || m == 9u || m == 10u;
 }
 
 // The native RGB transport keeps three bytes per source pixel in input.

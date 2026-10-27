@@ -51687,10 +51687,39 @@ def build_pipeline_benchmark_document(
         if not case_id.startswith("pipeline-composition.matrix-"):
             continue
         case = cases_by_id[case_id]
+        performance_surface = case["surface"]
+        performance_operation = case["operation"]
+        terminal_reads = {
+            "getbbox",
+            "getcolors",
+            "getdata",
+            "getextrema",
+            "getpixel",
+            "getprojection",
+            "histogram",
+            "tobytes",
+            "verify",
+        }
+        if performance_operation in terminal_reads:
+            for step in reversed(case["steps"]):
+                step_surface = step.get("surface")
+                step_operation = step.get("operation")
+                if step_operation in terminal_reads:
+                    continue
+                operation_definition = operations.get((step_surface, step_operation))
+                requirement_id = (
+                    f"{step_surface}.{step_operation}.performance.standard"
+                )
+                if operation_definition is not None and requirement_id in {
+                    item["id"] for item in operation_definition["requirements"]
+                }:
+                    performance_surface = step_surface
+                    performance_operation = step_operation
+                    break
         requirement = _performance_requirement(
             operations,
-            case["surface"],
-            case["operation"],
+            performance_surface,
+            performance_operation,
         )
         workload_id = f"pipeline-chain.{slug(case_id.removeprefix('pipeline-composition.'))}"
         chain_workloads.append(

@@ -117,7 +117,7 @@ fn vertical_pass_col_hsv_i32(
 }
 
 #[cfg(not(feature = "parallel"))]
-pub(super) fn pil_resize_hsv_i32(
+pub(in crate::ops::pil_resize) fn pil_resize_hsv_i32(
     img: &DynamicImage,
     output_width: u32,
     output_height: u32,

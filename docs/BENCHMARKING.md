@@ -2,6 +2,9 @@
 
 This is the contributor guide for collecting and interpreting measurements.
 For comparisons, start with [benchmark results](https://appunni-m.github.io/pillow-rs/benchmarks/).
+The native Rust CPU/SIMD comparison against the `image` crate has its own
+[pillow-rs and image-rs page](RUST_COMPARISON.md); it is separate from the
+Python/Pillow benchmark subjects described here.
 The [Pillow-SIMD x86 comparison](PILLOW_SIMD_BENCHMARKS.md) is a separate
 version-matched cohort for the operations where the repository has suitable
 full-size, parity-backed workloads.

@@ -128,8 +128,8 @@ fn assert_native_transpose_metrics(
     height: usize,
     channels: usize,
     swapped: bool,
-    source_len: usize,
-    method: &TransposeMethod,
+    _source_len: usize,
+    _method: &TransposeMethod,
     kernel_path: &str,
     blocks: u64,
     tail: u64,
@@ -147,7 +147,7 @@ fn assert_native_transpose_metrics(
         let tiles = (width / tile) * (height / tile);
         #[cfg(feature = "parallel")]
         let uses_collect =
-            transpose_native_collect_admitted(width, height, channels, source_len, method);
+            transpose_native_collect_admitted(width, height, channels, _source_len, _method);
         #[cfg(not(feature = "parallel"))]
         let uses_collect = false;
         if uses_collect {

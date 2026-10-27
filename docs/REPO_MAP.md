@@ -124,6 +124,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |-- blur/
 |   |   |   |       |   |   |-- box_rows.rs
 |   |   |   |       |   |   |-- line.rs
+|   |   |   |       |   |   |-- radius_one/
+|   |   |   |       |   |   |   `-- vertical.rs
 |   |   |   |       |   |   |-- radius_one.rs
 |   |   |   |       |   |   `-- tests.rs
 |   |   |   |       |   |-- blur.rs
@@ -133,9 +135,11 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |-- filter3x3.rs
 |   |   |   |       |   |-- filter5x5/
 |   |   |   |       |   |   |-- int32/
+|   |   |   |       |   |   |   |-- bounded_binomial.rs
 |   |   |   |       |   |   |   `-- tests.rs
 |   |   |   |       |   |   |-- int32.rs
 |   |   |   |       |   |   |-- native_bytes/
+|   |   |   |       |   |   |   |-- binomial.rs
 |   |   |   |       |   |   |   `-- tests.rs
 |   |   |   |       |   |   `-- native_bytes.rs
 |   |   |   |       |   |-- filter5x5.rs
@@ -144,6 +148,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- i32_cross_smooth.rs
 |   |   |   |       |   |   `-- mod.rs
 |   |   |   |       |   |-- rank/
+|   |   |   |       |   |   |-- float.rs
 |   |   |   |       |   |   `-- tests.rs
 |   |   |   |       |   |-- rank.rs
 |   |   |   |       |   |-- rgb_blur_ring.rs
@@ -172,6 +177,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |-- paste.rs
 |   |   |   |       |-- put.rs
 |   |   |   |       |-- reduce/
+|   |   |   |       |   |-- kernels/
+|   |   |   |       |   |   `-- rgb.rs
+|   |   |   |       |   |-- kernels.rs
 |   |   |   |       |   `-- tests.rs
 |   |   |   |       |-- reduce.rs
 |   |   |   |       |-- resize/
@@ -183,17 +191,22 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   `-- tests.rs
 |   |   |   |       |-- resize.rs
 |   |   |   |       |-- rotate/
+|   |   |   |       |   |-- affine/
+|   |   |   |       |   |   `-- coordinates.rs
 |   |   |   |       |   |-- affine.rs
 |   |   |   |       |   |-- cubic.rs
 |   |   |   |       |   |-- scalar.rs
 |   |   |   |       |   `-- tests.rs
 |   |   |   |       |-- rotate.rs
 |   |   |   |       |-- thumbnail/
+|   |   |   |       |   |-- fusion.rs
 |   |   |   |       |   `-- tests.rs
 |   |   |   |       |-- thumbnail.rs
 |   |   |   |       |-- transform/
 |   |   |   |       |   |-- affine.rs
 |   |   |   |       |   |-- projective.rs
+|   |   |   |       |   |-- scalar/
+|   |   |   |       |   |   `-- projective.rs
 |   |   |   |       |   |-- scalar.rs
 |   |   |   |       |   `-- tests.rs
 |   |   |   |       |-- transform.rs
@@ -214,6 +227,10 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |-- batch_encoding.rs
 |   |   |   |   |-- batch_estimates.rs
 |   |   |   |   |-- batch_execution/
+|   |   |   |   |   |-- routing/
+|   |   |   |   |   |   |-- execution/
+|   |   |   |   |   |   |   `-- standard.rs
+|   |   |   |   |   |   `-- execution.rs
 |   |   |   |   |   `-- routing.rs
 |   |   |   |   |-- batch_execution.rs
 |   |   |   |   |-- batch_native_routes.rs
@@ -222,16 +239,23 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |-- batch_operations.rs
 |   |   |   |   |-- batch_output.rs
 |   |   |   |   |-- batch_parameters.rs
+|   |   |   |   |-- batch_pipeline/
+|   |   |   |   |   `-- blur_sources.rs
 |   |   |   |   |-- batch_pipeline.rs
 |   |   |   |   |-- batch_preflight.rs
 |   |   |   |   |-- batch_preparation.rs
 |   |   |   |   |-- batch_resize_coefficients.rs
 |   |   |   |   |-- batch_segmentation.rs
 |   |   |   |   |-- batch_telemetry.rs
+|   |   |   |   |-- batch_upload/
+|   |   |   |   |   `-- packing.rs
 |   |   |   |   |-- batch_upload.rs
 |   |   |   |   |-- device.rs
 |   |   |   |   |-- fusion.rs
 |   |   |   |   |-- geometry/
+|   |   |   |   |   |-- native_execution/
+|   |   |   |   |   |   |-- flip.rs
+|   |   |   |   |   |   `-- transpose.rs
 |   |   |   |   |   `-- native_execution.rs
 |   |   |   |   |-- geometry.rs
 |   |   |   |   |-- layout_admission.rs
@@ -241,11 +265,21 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |-- native_composite.rs
 |   |   |   |   |-- native_dispatch.rs
 |   |   |   |   |-- native_hsv_pad.rs
+|   |   |   |   |-- native_input/
+|   |   |   |   |   `-- channels.rs
 |   |   |   |   |-- native_input.rs
 |   |   |   |   |-- native_paste/
+|   |   |   |   |   |-- execution/
+|   |   |   |   |   |   `-- rgb_to_rgba.rs
 |   |   |   |   |   |-- execution.rs
+|   |   |   |   |   |-- masked_execution/
+|   |   |   |   |   |   `-- byte_paste.rs
 |   |   |   |   |   `-- masked_execution.rs
 |   |   |   |   |-- native_paste.rs
+|   |   |   |   |-- operation_admission/
+|   |   |   |   |   |-- auxiliary_modes.rs
+|   |   |   |   |   |-- safety.rs
+|   |   |   |   |   `-- work_items.rs
 |   |   |   |   |-- operation_admission.rs
 |   |   |   |   |-- operation_support.rs
 |   |   |   |   |-- pipeline_cache.rs
@@ -257,7 +291,10 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |-- readback.rs
 |   |   |   |   |-- resize/
 |   |   |   |   |   |-- compact_box.rs
+|   |   |   |   |   |-- float_exactness/
+|   |   |   |   |   |   `-- word_paths.rs
 |   |   |   |   |   |-- float_exactness.rs
+|   |   |   |   |   |-- float_exactness_f64.rs
 |   |   |   |   |   |-- float_fast_paths.rs
 |   |   |   |   |   |-- integer.rs
 |   |   |   |   |   |-- integer_arithmetic.rs
@@ -265,7 +302,11 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |-- mod.rs
 |   |   |   |   |   |-- ordered_float.rs
 |   |   |   |   |   `-- tiled.rs
+|   |   |   |   |-- resource_pool/
+|   |   |   |   |   `-- auxiliary_cache.rs
 |   |   |   |   |-- resource_pool.rs
+|   |   |   |   |-- rgb_merge/
+|   |   |   |   |   `-- execution.rs
 |   |   |   |   |-- rgb_merge.rs
 |   |   |   |   |-- shaders/
 |   |   |   |   |   |-- add.wgsl
@@ -419,6 +460,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   `-- transpose_rgb_tiled.wgsl
 |   |   |   |   |-- stream/
 |   |   |   |   |   |-- dispatch.rs
+|   |   |   |   |   |-- encoding/
+|   |   |   |   |   |   `-- stage_encoding.rs
 |   |   |   |   |   |-- encoding.rs
 |   |   |   |   |   |-- graph/
 |   |   |   |   |   |   |-- layout.rs
@@ -435,23 +478,43 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |-- native_effects.rs
 |   |   |   |   |   |-- native_filters.rs
 |   |   |   |   |   |-- native_layout_planners.rs
+|   |   |   |   |   |-- native_luma/
+|   |   |   |   |   |   |-- extract_band.rs
+|   |   |   |   |   |   |-- mode_admission.rs
+|   |   |   |   |   |   |-- native_byte_filter.rs
+|   |   |   |   |   |   `-- order_statistic.rs
 |   |   |   |   |   |-- native_luma.rs
 |   |   |   |   |   |-- native_luma_transfer.rs
 |   |   |   |   |   |-- native_operations.rs
 |   |   |   |   |   |-- native_padding.rs
 |   |   |   |   |   |-- native_paste_execution.rs
+|   |   |   |   |   |-- native_paste_planning/
+|   |   |   |   |   |   |-- masked_paste_execution.rs
+|   |   |   |   |   |   |-- masked_paste_planners.rs
+|   |   |   |   |   |   `-- packing_and_native_planners.rs
 |   |   |   |   |   |-- native_paste_planning.rs
 |   |   |   |   |   |-- native_transform.rs
+|   |   |   |   |   |-- palette_projective/
+|   |   |   |   |   |   |-- palette_alpha_gpu.rs
+|   |   |   |   |   |   |-- palette_alpha_mesh.rs
+|   |   |   |   |   |   `-- palette_alpha_proofs.rs
 |   |   |   |   |   |-- palette_projective.rs
 |   |   |   |   |   |-- pipeline_fusion.rs
 |   |   |   |   |   |-- point_merge.rs
+|   |   |   |   |   |-- projective_filtered/
+|   |   |   |   |   |   `-- palette_partial_mesh.rs
 |   |   |   |   |   |-- projective_filtered.rs
 |   |   |   |   |   |-- projective_nearest_execution.rs
+|   |   |   |   |   |-- projective_nearest_execution_cases.rs
 |   |   |   |   |   |-- projective_nearest_proofs.rs
 |   |   |   |   |   |-- putalpha_planners.rs
 |   |   |   |   |   |-- readback.rs
 |   |   |   |   |   |-- resize_compact_box.rs
 |   |   |   |   |   |-- resize_float_execution.rs
+|   |   |   |   |   |-- resize_float_proofs/
+|   |   |   |   |   |   |-- box_and_average_proofs.rs
+|   |   |   |   |   |   |-- dyadic_and_f64_proofs.rs
+|   |   |   |   |   |   `-- finite_words_and_integer_rounding.rs
 |   |   |   |   |   |-- resize_float_proofs.rs
 |   |   |   |   |   |-- resize_geometry.rs
 |   |   |   |   |   |-- resize_integer.rs
@@ -469,6 +532,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |-- thumbnail.rs
 |   |   |   |   |-- transform/
 |   |   |   |   |   |-- geometry.rs
+|   |   |   |   |   |-- projective_admission/
+|   |   |   |   |   |   `-- geometry_words.rs
 |   |   |   |   |   |-- projective_admission.rs
 |   |   |   |   |   |-- projective_exactness.rs
 |   |   |   |   |   `-- safety.rs
@@ -492,12 +557,14 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |-- box_blur.rs
 |   |   |   |   |   |   |-- chops/
 |   |   |   |   |   |   |   |-- kernels/
-|   |   |   |   |   |   |   |   `-- fused_multiply_screen.rs
+|   |   |   |   |   |   |   |   |-- fused_multiply_screen.rs
+|   |   |   |   |   |   |   |   `-- tests.rs
 |   |   |   |   |   |   |   `-- kernels.rs
 |   |   |   |   |   |   |-- chops.rs
 |   |   |   |   |   |   |-- color3dlut.rs
 |   |   |   |   |   |   |-- colorize.rs
 |   |   |   |   |   |   |-- convert/
+|   |   |   |   |   |   |   |-- alpha.rs
 |   |   |   |   |   |   |   |-- cmyk.rs
 |   |   |   |   |   |   |   |-- kernels/
 |   |   |   |   |   |   |   |   |-- color_space.rs
@@ -534,6 +601,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |-- effects.rs
 |   |   |   |   |   |   |-- enhance/
 |   |   |   |   |   |   |   |-- point.rs
+|   |   |   |   |   |   |   |-- sharpness.rs
 |   |   |   |   |   |   |   `-- tests.rs
 |   |   |   |   |   |   |-- enhance.rs
 |   |   |   |   |   |   |-- expand/
@@ -579,6 +647,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |-- mandelbrot.rs
 |   |   |   |   |   |   |-- median_filter/
 |   |   |   |   |   |   |   |-- extrema.rs
+|   |   |   |   |   |   |   |-- float.rs
 |   |   |   |   |   |   |   |-- kernels.rs
 |   |   |   |   |   |   |   `-- tests.rs
 |   |   |   |   |   |   |-- median_filter.rs
@@ -629,11 +698,15 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |   `-- kernels.rs
 |   |   |   |   |   |   |-- put_pixel.rs
 |   |   |   |   |   |   |-- reduce/
+|   |   |   |   |   |   |   |-- kernels.rs
 |   |   |   |   |   |   |   `-- tests.rs
 |   |   |   |   |   |   |-- reduce.rs
 |   |   |   |   |   |   |-- resize/
+|   |   |   |   |   |   |   |-- aspect.rs
 |   |   |   |   |   |   |   |-- coordinates.rs
 |   |   |   |   |   |   |   |-- kernels/
+|   |   |   |   |   |   |   |   |-- f32/
+|   |   |   |   |   |   |   |   |   `-- boxed.rs
 |   |   |   |   |   |   |   |   |-- f32.rs
 |   |   |   |   |   |   |   |   |-- i32/
 |   |   |   |   |   |   |   |   |   `-- neon.rs
@@ -645,6 +718,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |   |   |-- u8_cover_i32.rs
 |   |   |   |   |   |   |   |   |-- u8_nearest.rs
 |   |   |   |   |   |   |   |   `-- u8_plan.rs
+|   |   |   |   |   |   |   |-- support/
+|   |   |   |   |   |   |   |   |-- aspect.rs
+|   |   |   |   |   |   |   |   `-- resize.rs
 |   |   |   |   |   |   |   |-- support.rs
 |   |   |   |   |   |   |   `-- tests.rs
 |   |   |   |   |   |   |-- resize.rs
@@ -700,6 +776,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |-- scalar/
 |   |   |   |   |   |   |-- chops.rs
 |   |   |   |   |   |   |-- convert.rs
+|   |   |   |   |   |   |-- filters/
+|   |   |   |   |   |   |   `-- box_blur.rs
 |   |   |   |   |   |   |-- filters.rs
 |   |   |   |   |   |   |-- histogram.rs
 |   |   |   |   |   |   |-- layout.rs
@@ -733,6 +811,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       `-- transform.rs
 |   |   |   |-- registry.rs
 |   |   |   |-- telemetry/
+|   |   |   |   |-- eager_cpu.rs
 |   |   |   |   `-- origins.rs
 |   |   |   |-- telemetry.rs
 |   |   |   |-- thumbnail_fusion.rs
@@ -746,6 +825,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- geometry.rs
 |   |   |   |-- mod.rs
 |   |   |   |-- primitives.rs
+|   |   |   |-- text/
+|   |   |   |   `-- composition.rs
 |   |   |   `-- text.rs
 |   |   |-- error.rs
 |   |   |-- font/
@@ -756,12 +837,17 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- default_aileron.ttf
 |   |   |   |-- imagingft/
 |   |   |   |   |-- layout.rs
+|   |   |   |   |-- render/
+|   |   |   |   |   `-- bitmap.rs
 |   |   |   |   |-- render.rs
 |   |   |   |   `-- variation.rs
 |   |   |   |-- imagingft.rs
 |   |   |   |-- mod.rs
+|   |   |   |-- pilfont/
+|   |   |   |   `-- tests.rs
 |   |   |   |-- pilfont.rs
-|   |   |   `-- public_api.rs
+|   |   |   |-- public_api.rs
+|   |   |   `-- text_output.rs
 |   |   |-- format.rs
 |   |   |-- image/
 |   |   |   |-- backend.rs
@@ -776,21 +862,31 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- color_count.rs
 |   |   |   |-- construction.rs
 |   |   |   |-- data_access/
+|   |   |   |   |-- get.rs
+|   |   |   |   |-- put.rs
 |   |   |   |   `-- putdata_shared_bytes_tests.rs
 |   |   |   |-- data_access.rs
 |   |   |   |-- encode.rs
 |   |   |   |-- entropy.rs
+|   |   |   |-- materialization/
+|   |   |   |   `-- lifecycle.rs
 |   |   |   |-- materialization.rs
 |   |   |   |-- metadata.rs
 |   |   |   |-- palette.rs
 |   |   |   |-- pipeline_admission.rs
+|   |   |   |-- pipeline_ops/
+|   |   |   |   `-- dimensions.rs
 |   |   |   |-- pipeline_ops.rs
 |   |   |   |-- pixel_access.rs
 |   |   |   |-- projection/
+|   |   |   |   |-- cmyk.rs
 |   |   |   |   |-- getprojection_cmyk_tests.rs
-|   |   |   |   `-- getprojection_rgb_pipeline_tests.rs
+|   |   |   |   |-- getprojection_rgb_pipeline_tests.rs
+|   |   |   |   `-- putpixel_pipeline.rs
 |   |   |   |-- projection.rs
 |   |   |   |-- statistics/
+|   |   |   |   |-- colors.rs
+|   |   |   |   |-- extrema.rs
 |   |   |   |   `-- result.rs
 |   |   |   `-- statistics.rs
 |   |   |-- image.rs
@@ -832,8 +928,12 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- lut_softlight.bin
 |   |   |   |-- mod.rs
 |   |   |   |-- module_fns/
-|   |   |   |   `-- point.rs
+|   |   |   |   |-- point.rs
+|   |   |   |   `-- tests.rs
 |   |   |   |-- module_fns.rs
+|   |   |   |-- param_filters/
+|   |   |   |   |-- color3dlut_transform_tests.rs
+|   |   |   |   `-- unsharp_tests.rs
 |   |   |   |-- param_filters.rs
 |   |   |   |-- paste/
 |   |   |   |   |-- color.rs
@@ -843,16 +943,26 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- paste.rs
 |   |   |   |-- pil_resize/
 |   |   |   |   |-- alpha.rs
+|   |   |   |   |-- boxed/
+|   |   |   |   |   |-- boxed_f_resize_eight_tap_tests.rs
+|   |   |   |   |   `-- boxed_f_resize_fma_tests.rs
 |   |   |   |   |-- boxed.rs
 |   |   |   |   |-- coefficients.rs
 |   |   |   |   |-- filters.rs
 |   |   |   |   |-- float.rs
 |   |   |   |   |-- horizontal_passes.rs
+|   |   |   |   |-- integer_modes/
+|   |   |   |   |   |-- cmyk.rs
+|   |   |   |   |   `-- hsv.rs
 |   |   |   |   |-- integer_modes.rs
 |   |   |   |   |-- integer_modes_tests.rs
 |   |   |   |   |-- luma16.rs
 |   |   |   |   |-- resize.rs
 |   |   |   |   |-- samples.rs
+|   |   |   |   |-- vertical_passes/
+|   |   |   |   |   |-- resize_transpose_tests.rs
+|   |   |   |   |   |-- rgb_vertical_pass_tests.rs
+|   |   |   |   |   `-- transpose.rs
 |   |   |   |   `-- vertical_passes.rs
 |   |   |   |-- pil_resize.rs
 |   |   |   |-- quantize/
@@ -879,7 +989,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   `-- utils.rs
 |   |   |-- par.rs
 |   |   |-- pipeline/
-|   |   |   `-- support.rs
+|   |   |   |-- support.rs
+|   |   |   `-- transpose_tests.rs
 |   |   |-- pipeline.rs
 |   |   `-- raster/
 |   |       |-- buffer/
@@ -916,6 +1027,10 @@ It is a navigation aid, not an API-support or coverage claim.
 |   `-- src/
 |       |-- backend.rs
 |       |-- color.rs
+|       |-- draw/
+|       |   |-- bitmap.rs
+|       |   |-- shapes.rs
+|       |   `-- text.rs
 |       |-- draw.rs
 |       |-- effects.rs
 |       |-- font.rs
@@ -926,6 +1041,16 @@ It is a navigation aid, not an API-support or coverage claim.
 |       |-- image_chops.rs
 |       |-- image_io.rs
 |       |-- image_ops.rs
+|       |-- inputs/
+|       |   |-- common.rs
+|       |   |-- draw.rs
+|       |   |-- filter.rs
+|       |   |-- font.rs
+|       |   |-- new_color.rs
+|       |   |-- paste.rs
+|       |   |-- pixel.rs
+|       |   |-- rotate.rs
+|       |   `-- transform.rs
 |       |-- inputs.rs
 |       |-- lib.rs
 |       |-- palette.rs
@@ -965,6 +1090,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |       |-- backend.rs
 |       |-- draw.rs
 |       |-- errors.rs
+|       |-- font/
+|       |   `-- pilfont.rs
 |       |-- font.rs
 |       |-- getcolors.rs
 |       |-- gpu_batch.rs
@@ -983,6 +1110,14 @@ It is a navigation aid, not an API-support or coverage claim.
 |       |-- image_color.rs
 |       |-- image_filter.rs
 |       |-- image_ops.rs
+|       |-- inputs/
+|       |   |-- filters.rs
+|       |   |-- images.rs
+|       |   |-- masks.rs
+|       |   |-- ops.rs
+|       |   |-- paths.rs
+|       |   `-- pixels.rs
+|       |-- inputs.rs
 |       |-- lib.rs
 |       |-- putdata.rs
 |       |-- save_options.rs
@@ -1008,6 +1143,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- check_docs_examples.py
     |-- check_docs_registry.py
     |-- check_implementation_structure.py
+    |-- check_large_files.py
     |-- check_migration_parity_inputs.py
     |-- check_pipeline_benchmark_budgets.py
     |-- check_public_api_boundary.py

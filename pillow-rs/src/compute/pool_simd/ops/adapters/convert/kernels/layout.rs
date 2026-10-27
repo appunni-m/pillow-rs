@@ -5,6 +5,11 @@ use super::super::NativeConvertLayout;
 use crate::raster::DynamicImage;
 use wide::{u8x16, u16x16};
 
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+use fearless_simd::prelude::{SimdBase, SimdInterleaved};
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+use fearless_simd::{Level, Neon, u8x16 as SafeU8x16};
+
 #[inline]
 pub(in crate::compute::pool_simd::ops::adapters) fn native_convert_layout_block(
     input: &[u8],
@@ -388,7 +393,6 @@ fn native_rgb_to_rgba_block(source: &[u8], start_pixel: usize, active_pixels: us
 /// pixels, or one portable vector shuffle per four pixels. The conversion
 /// writes directly into its final allocation: collecting fixed-size blocks and
 /// flattening them afterward copied the entire expanded image a second time.
-#[allow(unsafe_code)]
 pub(in crate::compute::pool_simd::ops::adapters) fn native_rgb_to_rgba_bytes(
     img: &DynamicImage,
 ) -> Option<(Vec<u8>, u64, u64)> {
@@ -413,7 +417,7 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_rgb_to_rgba_bytes(
     #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
     {
         let vector_pixels = pixels / 16 * 16;
-        let vectors = unsafe { native_rgb_to_rgba_neon(source, &mut output, vector_pixels) };
+        let vectors = native_rgb_to_rgba_neon(source, &mut output, vector_pixels);
         for pixel in vector_pixels..pixels {
             let source_offset = pixel * 3;
             output.extend_from_slice(&source[source_offset..source_offset + 3]);
@@ -446,41 +450,47 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_rgb_to_rgba_bytes(
     }
 }
 
-/// Interleave sixteen packed RGB pixels with an opaque alpha vector directly
-/// into the spare capacity of `output`.
-///
-/// # Safety
-/// The caller passes a multiple of sixteen no larger than the validated source
-/// pixel count, and `source` contains at least `pixels * 3` initialized bytes.
-/// `output` must be empty and have capacity for at least `pixels * 4` bytes. The
-/// source and destination allocations must be distinct. Every iteration reads
-/// exactly 48 source bytes and writes exactly 64 bytes in the reserved output;
-/// this function sets the output length only after it initializes the complete
-/// vector prefix.
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-#[allow(unsafe_code)]
-#[inline]
-unsafe fn native_rgb_to_rgba_neon(source: &[u8], output: &mut Vec<u8>, pixels: usize) -> usize {
-    use core::arch::aarch64 as neon;
-
-    debug_assert!(pixels.is_multiple_of(16));
-    let alpha;
-    // SAFETY: the function contract proves each RGB structure load and RGBA
-    // structure store is within the validated source and reserved destination
-    // allocations. Each loop iteration covers sixteen pixels.
-    unsafe {
-        alpha = neon::vdupq_n_u8(u8::MAX);
-        for pixel in (0..pixels).step_by(16) {
-            let rgb = neon::vld3q_u8(source.as_ptr().add(pixel * 3));
-            let rgba = neon::uint8x16x4_t(rgb.0, rgb.1, rgb.2, alpha);
-            neon::vst4q_u8(output.as_mut_ptr().add(pixel * 4), rgba);
-        }
+fearless_simd::kernel!(
+    #[inline(always)]
+    fn append_rgb_to_rgba_neon(neon: Neon, source: &[u8; 48], output: &mut Vec<u8>) {
+        let source_lanes = source.as_chunks::<16>().0;
+        let rgb_lanes = [
+            u8x16::new(source_lanes[0]),
+            u8x16::new(source_lanes[1]),
+            u8x16::new(source_lanes[2]),
+            u8x16::splat(0),
+        ];
+        let red = SafeU8x16::<Neon>::load_array(
+            neon,
+            native_channel::gather_interleaved_channel::<3, 0>(&rgb_lanes).to_array(),
+        );
+        let green = SafeU8x16::<Neon>::load_array(
+            neon,
+            native_channel::gather_interleaved_channel::<3, 1>(&rgb_lanes).to_array(),
+        );
+        let blue = SafeU8x16::<Neon>::load_array(
+            neon,
+            native_channel::gather_interleaved_channel::<3, 2>(&rgb_lanes).to_array(),
+        );
+        let alpha = SafeU8x16::<Neon>::splat(neon, u8::MAX);
+        let mut output_block = [0u8; 64];
+        SafeU8x16::<Neon>::store_four_interleaved([red, green, blue, alpha], &mut output_block);
+        output.extend_from_slice(&output_block);
     }
+);
 
-    let initialized_bytes = pixels * 4;
-    // SAFETY: every byte in the vector prefix was written by the complete
-    // sixteen-pixel stores above; the caller appends the scalar tail afterward.
-    unsafe { output.set_len(initialized_bytes) };
+/// Interleave complete RGB blocks with safe SIMD loads and stores.
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+fn native_rgb_to_rgba_neon(source: &[u8], output: &mut Vec<u8>, pixels: usize) -> usize {
+    let neon = Level::new()
+        .as_neon()
+        .expect("AArch64 NEON target configuration has a NEON execution token");
+    debug_assert!(pixels.is_multiple_of(16));
+    for block in source[..pixels * 3].chunks_exact(48) {
+        let source_block: &[u8; 48] = block.try_into().expect("complete RGB vector block");
+        append_rgb_to_rgba_neon(neon, source_block, output);
+    }
     pixels / 16
 }
 

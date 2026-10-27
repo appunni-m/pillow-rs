@@ -5,7 +5,7 @@ use super::{
 /// Resize the four stored C/M/Y/K bytes with narrow, exact fixed-point sums.
 /// CMYK shares an `ImageRgba8` carrier, but none of its channels are alpha.
 #[cfg(not(feature = "parallel"))]
-pub(super) fn pil_resize_cmyk_i32(
+pub(in crate::ops::pil_resize) fn pil_resize_cmyk_i32(
     img: &DynamicImage,
     output_width: u32,
     output_height: u32,

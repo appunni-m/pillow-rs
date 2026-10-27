@@ -7,7 +7,7 @@ lane inputs, and it does not turn missing evidence into a pass.
 generator: scripts/generate_migration_parity_docs.py@1
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@3
-manifest_sha256: fc368cc87723cb70e454e2d7322cce35ac46aacc0060ac61a4f90f77e81bfc48
+manifest_sha256: 4f615d2cf2e203e385ec44ae8869388ee6bd69afb45dedcf736b3b60a619defb
 lane: coverage
 ```
 
@@ -23,22 +23,27 @@ lane: coverage
 | `coverage_input_mapping` | `python-simd` | 0 | 0 | `not_proven` |
 | `coverage_input_mapping` | `python-gpu` | 0 | 0 | `not_proven` |
 | `coverage_input_mapping` | `python-parallel-cpu` | 0 | 0 | `not_proven` |
+| `coverage_input_mapping` | `python-gpu-fault-contract` | 0 | 0 | `not_proven` |
 | `function_coverage` | `python-cpu` | 0 | 0 | `not_proven` |
 | `function_coverage` | `python-simd` | 0 | 0 | `not_proven` |
 | `function_coverage` | `python-gpu` | 0 | 0 | `not_proven` |
 | `function_coverage` | `python-parallel-cpu` | 0 | 0 | `not_proven` |
+| `function_coverage` | `python-gpu-fault-contract` | 0 | 0 | `not_proven` |
 | `line_coverage` | `python-cpu` | 0 | 0 | `not_proven` |
 | `line_coverage` | `python-simd` | 0 | 0 | `not_proven` |
 | `line_coverage` | `python-gpu` | 0 | 0 | `not_proven` |
 | `line_coverage` | `python-parallel-cpu` | 0 | 0 | `not_proven` |
+| `line_coverage` | `python-gpu-fault-contract` | 0 | 0 | `not_proven` |
 | `branch_coverage` | `python-cpu` | 0 | 0 | `not_proven` |
 | `branch_coverage` | `python-simd` | 0 | 0 | `not_proven` |
 | `branch_coverage` | `python-gpu` | 0 | 0 | `not_proven` |
 | `branch_coverage` | `python-parallel-cpu` | 0 | 0 | `not_proven` |
+| `branch_coverage` | `python-gpu-fault-contract` | 0 | 0 | `not_proven` |
 | `region_coverage` | `python-cpu` | 0 | 0 | `not_proven` |
 | `region_coverage` | `python-simd` | 0 | 0 | `not_proven` |
 | `region_coverage` | `python-gpu` | 0 | 0 | `not_proven` |
 | `region_coverage` | `python-parallel-cpu` | 0 | 0 | `not_proven` |
+| `region_coverage` | `python-gpu-fault-contract` | 0 | 0 | `not_proven` |
 
 ## Interpretation
 

@@ -197,7 +197,38 @@ fn append_operation_layout_params(
     {
         params[3] = 2;
     }
+    if context.op_mode == 9 && operation_uses_native_rgba_word_count(context.op) {
+        // These shaders share their native byte kernel with the general
+        // packed batch path. That path has one complete u32 per RGBa pixel,
+        // so publish the valid word count instead of the default row offset
+        // (zero), which would make the shader skip every pixel.
+        let pixel_count = CheckedDims::new(width, height, 1)?.total_pixels();
+        params[3] = u32::try_from(pixel_count).map_err(|_| {
+            PilError::ValueError("GPU RGBa operation exceeds shader indexing limits".into())
+        })?;
+    }
     Ok(())
+}
+
+fn operation_uses_native_rgba_word_count(op: &PipelineOp) -> bool {
+    matches!(
+        op,
+        PipelineOp::Add { .. }
+            | PipelineOp::Subtract { .. }
+            | PipelineOp::Multiply { .. }
+            | PipelineOp::Screen { .. }
+            | PipelineOp::Darker { .. }
+            | PipelineOp::Lighter { .. }
+            | PipelineOp::Difference { .. }
+            | PipelineOp::Overlay { .. }
+            | PipelineOp::HardLight { .. }
+            | PipelineOp::SoftLight { .. }
+            | PipelineOp::AddModulo { .. }
+            | PipelineOp::SubtractModulo { .. }
+            | PipelineOp::BlendModule { .. }
+            | PipelineOp::Posterize { .. }
+            | PipelineOp::Solarize { .. }
+    )
 }
 
 fn set_packed_luma_point_params(

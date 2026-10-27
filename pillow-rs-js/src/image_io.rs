@@ -170,12 +170,6 @@ impl Image {
             .map_err(err)
     }
 
-    /// Encode DynamicImage to PNG bytes.
-    fn encode_png(img: &mut RsImage) -> Result<Vec<u8>, JsValue> {
-        img.to_png_bytes()
-            .map_err(|error| JsValue::from_str(&error.to_string()))
-    }
-
     #[wasm_bindgen(js_name = "show")]
     /// Does nothing in the WASM binding because it has no desktop display service.
     pub fn show(&self) {}

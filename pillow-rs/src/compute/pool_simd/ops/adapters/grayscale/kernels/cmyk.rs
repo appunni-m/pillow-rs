@@ -7,6 +7,10 @@ use super::simd_pack_u16x16;
 #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
 use crate::compute::pool_simd::ops::native_channel::gather_interleaved_channel;
 use crate::raster::DynamicImage;
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+use fearless_simd::prelude::{SimdBase, SimdInterleaved, SimdNarrow, SimdWiden};
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+use fearless_simd::{Level, Neon, u8x16 as SafeU8x16, u16x8 as SafeU16x8};
 #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
 use wide::{u8x16, u16x16};
 
@@ -14,81 +18,74 @@ use wide::{u8x16, u16x16};
 /// This fuses the exact integer CMYK-to-RGB conversion with the luma formula,
 /// so the path never materializes the intermediate RGB image.
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-#[allow(unsafe_code)]
 #[inline(always)]
-fn cmyk_grayscale_block_neon(source: &[u8]) -> [u8; 16] {
-    use core::arch::aarch64 as neon;
+fn cmyk_muldiv255_neon(
+    neon: Neon,
+    value: SafeU8x16<Neon>,
+    ink: SafeU8x16<Neon>,
+) -> SafeU8x16<Neon> {
+    let (value_low, value_high) = value.widen();
+    let (ink_low, ink_high) = ink.widen();
+    let round = |product: SafeU16x8<Neon>| {
+        let value = product + SafeU16x8::<Neon>::splat(neon, 128);
+        ((value >> 8u32) + value) >> 8u32
+    };
+    round(value_low * ink_low).narrow(round(value_high * ink_high))
+}
 
-    macro_rules! muldiv255 {
-        ($sample:expr, $ink:expr) => {{
-            let product = neon::vaddq_u16(neon::vmulq_u16($sample, $ink), neon::vdupq_n_u16(128));
-            let biased = neon::vaddq_u16(neon::vshrq_n_u16(product, 8), product);
-            neon::vshrq_n_u16(biased, 8)
-        }};
-    }
-    macro_rules! luma_half {
-        ($cyan:expr, $magenta:expr, $yellow:expr, $black:expr $(,)?) => {{
-            let cyan = neon::vmovl_u8($cyan);
-            let magenta = neon::vmovl_u8($magenta);
-            let yellow = neon::vmovl_u8($yellow);
-            let black = neon::vmovl_u8($black);
-            let ink = neon::vsubq_u16(neon::vdupq_n_u16(255), black);
-            let red = neon::vsubq_u16(ink, muldiv255!(cyan, ink));
-            let green = neon::vsubq_u16(ink, muldiv255!(magenta, ink));
-            let blue = neon::vsubq_u16(ink, muldiv255!(yellow, ink));
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[inline(always)]
+fn cmyk_luma_neon(
+    neon: Neon,
+    red: SafeU8x16<Neon>,
+    green: SafeU8x16<Neon>,
+    blue: SafeU8x16<Neon>,
+) -> SafeU8x16<Neon> {
+    let (red_low, red_high) = red.widen();
+    let (green_low, green_high) = green.widen();
+    let (blue_low, blue_high) = blue.widen();
+    let luma_half = |red: SafeU16x8<Neon>, green: SafeU16x8<Neon>, blue: SafeU16x8<Neon>| {
+        // Pillow's exact coefficients split at bit 8. The biased residual
+        // stays in 2,933..62,603, and base plus carry stays within u16.
+        let base = red * SafeU16x8::<Neon>::splat(neon, 77)
+            + green * SafeU16x8::<Neon>::splat(neon, 150)
+            + blue * SafeU16x8::<Neon>::splat(neon, 29);
+        let residual = green * SafeU16x8::<Neon>::splat(neon, 70)
+            + blue * SafeU16x8::<Neon>::splat(neon, 47)
+            - red * SafeU16x8::<Neon>::splat(neon, 117)
+            + SafeU16x8::<Neon>::splat(neon, 32_768);
+        (base + (residual >> 8u32)) >> 8u32
+    };
+    luma_half(red_low, green_low, blue_low).narrow(luma_half(red_high, green_high, blue_high))
+}
 
-            // Pillow's exact luma coefficients split at bit 8. The u16
-            // residual uses wrapping subtraction, but its final biased value
-            // is 2,933..62,603; base plus carry is also within u16. These
-            // lanes therefore need neither widening nor saturation.
-            let base = neon::vaddq_u16(
-                neon::vaddq_u16(neon::vmulq_n_u16(red, 77), neon::vmulq_n_u16(green, 150)),
-                neon::vmulq_n_u16(blue, 29),
-            );
-            let residual = neon::vaddq_u16(
-                neon::vaddq_u16(
-                    neon::vsubq_u16(neon::vmulq_n_u16(green, 70), neon::vmulq_n_u16(red, 117)),
-                    neon::vmulq_n_u16(blue, 47),
-                ),
-                neon::vdupq_n_u16(32_768),
-            );
-            let carry = neon::vshrq_n_u16(residual, 8);
-            let rounded = neon::vshrq_n_u16(neon::vaddq_u16(base, carry), 8);
-            neon::vmovn_u16(rounded)
-        }};
-    }
-
-    // SAFETY: This private helper is called only with a complete 64-byte
-    // `chunks_exact(64)` block or a 64-byte zero-padded tail. `vld4q_u8` reads
-    // exactly those 64 initialized bytes and deinterleaves them into four
-    // sixteen-sample channels. The local output array holds sixteen writable
-    // bytes for the matching `vst1q_u8` store.
-    unsafe {
-        let channels = neon::vld4q_u8(source.as_ptr());
-        let low = luma_half!(
-            neon::vget_low_u8(channels.0),
-            neon::vget_low_u8(channels.1),
-            neon::vget_low_u8(channels.2),
-            neon::vget_low_u8(channels.3),
-        );
-        let high = luma_half!(
-            neon::vget_high_u8(channels.0),
-            neon::vget_high_u8(channels.1),
-            neon::vget_high_u8(channels.2),
-            neon::vget_high_u8(channels.3),
-        );
-        let pixels = neon::vcombine_u8(low, high);
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+fearless_simd::kernel!(
+    #[inline(always)]
+    fn cmyk_grayscale_block_neon(neon: Neon, source: &[u8; 64]) -> [u8; 16] {
+        let [cyan, magenta, yellow, black] = SafeU8x16::<Neon>::load_four_interleaved(neon, source);
+        let ink = SafeU8x16::<Neon>::splat(neon, 255) - black;
+        let red = ink - cmyk_muldiv255_neon(neon, cyan, ink);
+        let green = ink - cmyk_muldiv255_neon(neon, magenta, ink);
+        let blue = ink - cmyk_muldiv255_neon(neon, yellow, ink);
+        let luma = cmyk_luma_neon(neon, red, green, blue);
         let mut output = [0u8; 16];
-        neon::vst1q_u8(output.as_mut_ptr(), pixels);
+        luma.store_array(&mut output);
         output
     }
-}
+);
 
 #[inline(always)]
 fn cmyk_grayscale_block(source: &[u8]) -> [u8; 16] {
     #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
     {
-        cmyk_grayscale_block_neon(source)
+        let neon = Level::new()
+            .as_neon()
+            .expect("AArch64 NEON target configuration has a NEON execution token");
+        let source = source
+            .try_into()
+            .expect("complete CMYK grayscale vector block");
+        cmyk_grayscale_block_neon(neon, source)
     }
 
     #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]

@@ -8,18 +8,45 @@
 use super::{PyImage, map_error};
 use bytes::Bytes;
 use pillow_rs::{PutDataInput, PutDataValue, PutDataValueKind};
+use pyo3::PyTypeInfo;
 use pyo3::exceptions::{PySystemError, PyTypeError};
 use pyo3::prelude::{Bound, PyAny, PyResult};
 use pyo3::types::{
-    PyAnyMethods, PyBytes, PyBytesMethods, PyInt, PyList, PyListMethods, PyTuple, PyTupleMethods,
+    PyAnyMethods, PyBytes, PyBytesMethods, PyDict, PyFloat, PyInt, PyList, PyListMethods, PyTuple,
+    PyTupleMethods, PyType, PyTypeMethods,
 };
 
-#[allow(unsafe_code)]
-fn python_is_sequence(value: &Bound<'_, PyAny>) -> bool {
-    // SAFETY: `Bound` guarantees a non-null, GIL-bound borrowed pointer for
-    // this call. `PySequence_Check` only inspects the object's type slots and
-    // neither steals a reference nor stores the pointer.
-    unsafe { pyo3::ffi::PySequence_Check(value.as_ptr()) != 0 }
+fn python_is_sequence(value: &Bound<'_, PyAny>) -> PyResult<bool> {
+    // Exact numbers are common pixel values and cannot provide the sequence
+    // protocol. Keep this fast path ahead of the type inspection below.
+    if value.cast_exact::<PyInt>().is_ok() || value.cast_exact::<PyFloat>().is_ok() {
+        return Ok(false);
+    }
+
+    let ty = value.get_type();
+    // CPython's sequence check excludes dict subclasses even when they define
+    // `__getitem__`.
+    if ty.is_subclass_of::<PyDict>()? {
+        return Ok(false);
+    }
+
+    // CPython treats Python classes with `__getitem__` as sequences. Inspect
+    // the type's MRO dictionaries through the built-in `type.__getattribute__`
+    // so a custom metaclass cannot run callbacks during this preflight. This
+    // preserves support for duck-typed sequences without invoking `__len__`,
+    // `__iter__`, or `__getitem__` before the existing validation order.
+    let type_getattribute = PyType::type_object(value.py()).getattr("__getattribute__")?;
+    let mro = type_getattribute
+        .call1((ty, "__mro__"))?
+        .cast_into::<PyTuple>()?;
+
+    for base in mro.iter() {
+        let namespace = type_getattribute.call1((base, "__dict__"))?;
+        if namespace.contains("__getitem__")? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 fn putdata_value_from_python(
@@ -27,7 +54,7 @@ fn putdata_value_from_python(
     kind: PutDataValueKind,
 ) -> PyResult<PutDataValue> {
     if matches!(kind, PutDataValueKind::Numeric) {
-        if python_is_sequence(value) {
+        if python_is_sequence(value)? {
             // Preserve the shape distinction for the core's canonical
             // "sequence must be flattened" error instead of terminating in
             // the binding before putdata_bytes sees the value.
@@ -276,7 +303,7 @@ pub(crate) fn putdata_formatted(
     scale: f64,
     offset: f64,
 ) -> PyResult<()> {
-    if !python_is_sequence(data) {
+    if !python_is_sequence(data)? {
         return Err(PyTypeError::new_err("argument must be a sequence"));
     }
     let entry_count = data

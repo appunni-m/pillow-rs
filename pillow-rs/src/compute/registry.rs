@@ -76,7 +76,7 @@ pub struct OpEntry {
 
 impl OpEntry {
     /// Creates a registry entry with only a CPU implementation.
-    #[cfg_attr(feature = "gpu", allow(dead_code))]
+    #[cfg(not(feature = "gpu"))]
     pub const fn cpu_only(f: CpuOpFn) -> Self {
         OpEntry {
             cpu_fn: Some(f),

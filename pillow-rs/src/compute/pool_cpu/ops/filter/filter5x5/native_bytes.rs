@@ -513,6 +513,8 @@ pub(crate) use binomial::binomial5x5_parameters_match;
 pub(super) use binomial::{
     filter_5x5_binomial_la_parallel_rows, filter_5x5_binomial_luma_parallel_rows,
 };
+#[cfg(not(feature = "parallel"))]
+pub(super) use binomial::{filter_5x5_binomial_la_rows, filter_5x5_binomial_luma_rows};
 
 #[cfg(test)]
 #[path = "native_bytes/tests.rs"]

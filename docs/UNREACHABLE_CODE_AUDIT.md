@@ -106,9 +106,11 @@ the strict target or inspect the execution sidecar before crediting a backend.
 `scripts/run_all_backend_tests.py` records receipts for its full SIMD and GPU
 lanes. Its full-corpus lanes permit fallback so the parity result remains
 available while unsupported routes are inventoried. The artifact distinguishes
-`passed_with_backend_gaps`, and the all-backends command now exits nonzero for
-that status or when full GPU parity is skipped. Case-filtered SIMD/GPU lanes
-are strict and reject fallback or missing terminal proof.
+`passed_with_backend_gaps`; the all-backends command returns success for both
+`passed` and `passed_with_backend_gaps`, and fails when full GPU parity is
+skipped. A successful process exit therefore proves the shared parity gate,
+not complete native SIMD/GPU execution. Case-filtered SIMD/GPU lanes are strict
+and reject fallback or missing terminal proof.
 
 `scripts/run_all_backend_tests.py::public_case_ids` also builds one shared
 ordinary-parity denominator and forwards an explicit case filter to CPU, SIMD,
@@ -117,17 +119,17 @@ fixed `PIL.ImageFilter.GaussianBlur.nuanced.backend-noise-l-65x47-radius-2`
 case, including when the full-lane filter omits it. The all-backend SIMD and
 full GPU lanes intentionally allow documented fallback and collect receipts;
 fallback or incomplete receipt coverage changes the result to
-`passed_with_backend_gaps` and returns a nonzero exit code. Setting
+`passed_with_backend_gaps`, which currently returns exit code zero. Setting
 `MIGRATION_GPU_FULL=0` runs only the smoke gate, reports the
 full GPU lane as skipped, and returns nonzero. The JS/WASM runner separately
-excludes target-only fault contracts and
-native platform-viewer workflows at runner level; those exclusions do not alter
-the CPU/SIMD/GPU fixture set.
+excludes target-only fault contracts at runner level. Platform-viewer workflows
+use the shared `capture-platform-viewer` protocol and are included in the
+JS/WASM denominator; they are no longer filtered out of those lanes.
 
 The canonical fixture generator rebuilt 27 indexed parity JSON files and 129
 binary assets on 2026-10-25. `scripts/check_migration_parity_inputs.py`
-confirmed the generated inputs reproduce exactly; these generated payloads
-are ignored and are not committed. Five older profile-tagged trial inputs
+confirmed the generated inputs reproduce exactly; these generated payloads are
+ignored and are not committed. Five older profile-tagged trial inputs
 (`getbbox-i-rowor-20261018.json`, `getbbox-f-filled-1024x768.json`,
 `convolution-uniform-color-trial-20261014.json`, `convert-cmyk-trial.json`, and
 `getdata-hsv-band2-x86-20261014.json`) are outside the canonical input index
@@ -245,7 +247,7 @@ fallback bug.
 | Script | Current route | Bypass and disposition |
 | --- | --- | --- |
 | `scripts/test_chops_affine_parity.py` | **Repaired.** Selects active ImageChops fixture IDs and sends the identical case set to the standard Python runner for CPU, strict SIMD, and strict GPU, then Node and browser WASM runners. | Previously made direct `enable_backend()` calls and compared results without recording the actual backend. All five lanes now pass 22/22; SIMD/GPU receipts prove native execution for the eight pipeline-applicable cases. |
-| `scripts/run_all_backend_tests.py` | Multi-lane orchestrator launches CPU, SIMD, and GPU Python parity runs plus Node/browser WASM against one case filter. | It clears inherited profile/benchmark overrides. Case-filtered SIMD/GPU runs are strict; full-corpus runs record fallback gaps, and now return nonzero if backend proof is incomplete or full GPU parity is skipped. The nine-case Screen audit passed every lane with actual SIMD/GPU receipts. |
+| `scripts/run_all_backend_tests.py` | Multi-lane orchestrator launches CPU, SIMD, and GPU Python parity runs plus Node/browser WASM against one case filter. | It clears inherited profile/benchmark overrides. Case-filtered SIMD/GPU runs are strict; full-corpus runs record fallback gaps and return zero for `passed_with_backend_gaps`. Read `backend_coverage` or run a strict lane before claiming native backend proof. The nine-case Screen audit passed every lane with actual SIMD/GPU receipts. |
 | `scripts/test_grayscale_rgb_domain.py` | Custom exhaustive Pillow/target diagnostic enumerating all 16,777,216 RGB triples in 256 blocks. It uses `lock_target_image_pipeline`, strict backend settings, checks one native receipt per block, and compares exact output bytes. | Inputs and output comparisons bypass the active fixture matrix, though backend locking/receipts are strict. Keep it classified as supplemental exhaustive evidence, not fixture parity or benchmark evidence. On 2026-10-24, Pillow 12.2.0, CPU, SIMD, and GPU produced exact output; each target backend recorded 256 native receipts. SIMD reported 1,048,576 vector blocks with no scalar tails; GPU reported 256 dispatches. Artifacts are under `build/migration-parity/backend-bypass-audit-20261024/grayscale-rgb-domain/`. |
 | `scripts/test_font_variant_parity.py` | Isolated source and target subprocesses compare font creation, mutable source/path settings, variants, and rendered observations. | It uses a fixture font asset but owns the scenarios and result dictionary; it has no active parity case IDs, backend option, or execution receipts, so it proves only the default Python route. It is not wired to a Make target. |
 | `scripts/test_getdata_sequence_parity.py` | Inline Pillow/target probes compare indexes, slices, banded modes, palette snapshots, and errors. | It has no generated case IDs or backend option/receipt and proves only the default Python route. It is not wired to a Make target. |
@@ -270,6 +272,40 @@ These API calls do not enqueue compute `PipelineOp`s, so their SIMD/GPU profile
 runs are parity checks with backend execution classified not applicable. The
 strict backend claim applies to actual deferred image work, not to forcing a
 GPU dispatch for a host-side sequence or font operation.
+
+## Cross-runtime parity follow-up — 2026-10-25
+
+The shared Python, SIMD, GPU, Node/WASM, and browser/WASM campaign after
+`dd2cb9d2d` passed 17,338 cases per lane. It fixed the previously missing
+platform-viewer workflows and the observed text, draw, font, resize, and
+transform mismatches. Its execution receipts still showed native backend
+coverage gaps, so those parity passes do not prove that every pipeline case
+used SIMD or GPU.
+
+Reviewing the JS workflow's value marshalling found two further lossy paths,
+corrected in the current worktree:
+
+| Finding | Evidence | Disposition |
+| --- | --- | --- |
+| Non-finite JS results were serialized as the strings `NaN`, `Infinity`, and `-Infinity`; the comparator also normalized source NaN to the string `NaN`. A numeric non-finite result could compare equal to a literal string. | `pillow-rs-js/scripts/parity_workflow.mjs::jsonSafe`, `scripts/run_migration_js_parity.py::decode_js_result` and `normalize_js_observable`. | JS results now use a typed non-finite marker; comparison canonicalizes NaN payloads and infinity signs without converting them to text. |
+| Python float input tagging used `repr()`, which emits `inf` and `-inf`; JavaScript `Number()` does not parse those spellings as infinities. | `scripts/run_migration_js_parity.py::python_numeric_js_value` and the JS `decodeInputValue` path. | Non-finite values now use JavaScript's `NaN`, `Infinity`, and `-Infinity` spellings. No new fixture was added for this edge in this review. |
+| The generated parity pages were stale: digest `fc368cc8…`, 17,308 cases, versus the current manifest's digest `4f615d2c…` and 17,339 indexed records (including the fault contract). | The generated parity status and public contract pages versus `pillow-rs/tests/fixtures/manifest.yaml`. | Regenerated all four migration status/specification pages with `make migration-parity-docs`. They now match the active manifest, but report zero compatible evidence IDs, 1,060 `not_proven` operation outcomes, and three stale/incompatible artifacts. The earlier 17,338 ordinary-case campaign is not ingested as compatible evidence. |
+
+One additional source-structure review candidate remains in the SIMD facade
+guard. `scripts/check_backend_boundaries.py::simd_facade_violations` checks
+allowed function names and direct `img`/`shape` spellings, but it does not
+prove that every allowed facade function is a forwarding-only body. An
+implementation could stay inside an allowed dispatcher name or use an alias
+and evade the intended placement rule. This is a static structure-gate gap,
+not evidence of a current pixel mismatch; the pending local checker/test edits
+were left untouched.
+
+The all-backends command currently returns zero for
+`passed_with_backend_gaps`: CPU fallback can preserve a shared parity result,
+but the status does not prove native backend coverage. A caller that needs a
+SIMD/GPU execution guarantee must inspect `backend_coverage` or use the strict
+backend target. This remains an explicit CI limitation; no fallback is counted
+as acceleration evidence.
 
 ## Historical operation-to-family and fixture snapshot — 2026-10-21
 

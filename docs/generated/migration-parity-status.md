@@ -7,22 +7,23 @@ lane inputs, and it does not turn missing evidence into a pass.
 generator: scripts/generate_migration_parity_docs.py@1
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@3
-manifest_sha256: fc368cc87723cb70e454e2d7322cce35ac46aacc0060ac61a4f90f77e81bfc48
+manifest_sha256: 4f615d2cf2e203e385ec44ae8869388ee6bd69afb45dedcf736b3b60a619defb
 lane: parity
 ```
 
 ## Evidence state
 
 - Compatible evidence IDs: none
-- Operation outcomes: not_proven=848
+- Operation outcomes: not_proven=1060
 - Stale/incompatible artifacts: 3
 
 | Dimension | Target profile | Covered | Total | Evidence ID |
 | --- | --- | ---: | ---: | --- |
-| `parity_outcome` | `python-cpu` | 0 | 17308 | `not_proven` |
-| `parity_outcome` | `python-simd` | 0 | 17308 | `not_proven` |
-| `parity_outcome` | `python-gpu` | 0 | 17308 | `not_proven` |
-| `parity_outcome` | `python-parallel-cpu` | 0 | 17308 | `not_proven` |
+| `parity_outcome` | `python-cpu` | 0 | 17339 | `not_proven` |
+| `parity_outcome` | `python-simd` | 0 | 17339 | `not_proven` |
+| `parity_outcome` | `python-gpu` | 0 | 17339 | `not_proven` |
+| `parity_outcome` | `python-parallel-cpu` | 0 | 17339 | `not_proven` |
+| `parity_outcome` | `python-gpu-fault-contract` | 0 | 17339 | `not_proven` |
 
 ## Interpretation
 

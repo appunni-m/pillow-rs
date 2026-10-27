@@ -7,7 +7,7 @@ lane inputs, and it does not turn missing evidence into a pass.
 generator: scripts/generate_migration_parity_docs.py@1
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@3
-manifest_sha256: fc368cc87723cb70e454e2d7322cce35ac46aacc0060ac61a4f90f77e81bfc48
+manifest_sha256: 4f615d2cf2e203e385ec44ae8869388ee6bd69afb45dedcf736b3b60a619defb
 lane: benchmark
 ```
 
@@ -23,10 +23,12 @@ lane: benchmark
 | `benchmark_input_mapping` | `python-simd` | 5 | 5 | `not_proven` |
 | `benchmark_input_mapping` | `python-gpu` | 4 | 4 | `not_proven` |
 | `benchmark_input_mapping` | `python-parallel-cpu` | 0 | 0 | `not_proven` |
+| `benchmark_input_mapping` | `python-gpu-fault-contract` | 0 | 0 | `not_proven` |
 | `benchmark_budget_outcome` | `python-cpu` | 0 | 211 | `not_proven` |
 | `benchmark_budget_outcome` | `python-simd` | 0 | 5 | `not_proven` |
 | `benchmark_budget_outcome` | `python-gpu` | 0 | 4 | `not_proven` |
 | `benchmark_budget_outcome` | `python-parallel-cpu` | 0 | 0 | `not_proven` |
+| `benchmark_budget_outcome` | `python-gpu-fault-contract` | 0 | 0 | `not_proven` |
 
 ## Interpretation
 

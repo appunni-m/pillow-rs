@@ -76,9 +76,10 @@ evidence.
 The focused native Rust comparison in [the image-rs comparison](docs/RUST_COMPARISON.md)
 uses the `image_rs_comparison` bench target. Run it with
 `cargo bench -p pillow-rs --bench image_rs_comparison --no-default-features`.
-It pins `image` 0.25.10 without default features, locks pillow-rs to its serial
-CPU backend, and checks exact output bytes before timing. Repeat it on the
-target machine before applying the documented results elsewhere.
+It pins `image` 0.25.10 without default features, measures pillow-rs CPU and
+SIMD separately, and checks exact output bytes plus actual-backend/vector
+receipts before timing. Repeat it on the target machine before applying the
+documented results elsewhere.
 
 [Coverage](docs/COVERAGE.md) explains collection receipts and changed-line
 claims. [Benchmarking](docs/BENCHMARKING.md) explains controlled comparisons.

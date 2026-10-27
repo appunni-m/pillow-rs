@@ -1,3 +1,4 @@
+#[cfg(feature = "parallel")]
 use super::read_i32_pixel_le;
 // A native I-mode convolution can amortize a uniformity proof over a larger
 // image than the byte filters: each interior output otherwise reads and

@@ -12,7 +12,8 @@
 //   output is storage read_write.
 //
 // Mode-aware: only paste active channels.
-// Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA, 4=CMYK, 5=I;16*, 6=RGBX.
+// Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA, 4=CMYK, 5=I;16*, 6=RGBX,
+// 9=RGBa, 10=La.
 
 struct Params {
     width: u32,
@@ -27,9 +28,9 @@ struct Params {
     mask_alpha: u32,
 }
 
-fn mode_has_g(m: u32) -> bool { return m >= 2u; }
-fn mode_has_b(m: u32) -> bool { return m >= 2u; }
-fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u || m == 4u || m == 6u || m == 7u || m == 8u; }
+fn mode_has_g(m: u32) -> bool { return m >= 2u && m != 10u; }
+fn mode_has_b(m: u32) -> bool { return m >= 2u && m != 10u; }
+fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u || m == 4u || m == 6u || m == 7u || m == 8u || m == 9u || m == 10u; }
 
 @group(0) @binding(0) var<storage, read> input_dst: array<u32>;
 @group(0) @binding(1) var<storage, read> input_src: array<u32>;

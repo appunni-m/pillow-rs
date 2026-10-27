@@ -98,4 +98,3 @@ fn extract_band_native_gpu_preserves_raw_color_mode_channels() {
     }
     Backend::set_pipeline_telemetry_enabled(previous);
 }
-

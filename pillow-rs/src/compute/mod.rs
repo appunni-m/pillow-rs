@@ -97,8 +97,6 @@ pub(crate) use eager::{
 };
 #[cfg(test)]
 use execution::execute_automatic_simd_segments;
-#[allow(unused_imports)]
-pub(crate) use execution::validate_backend_support;
 pub(crate) use execution::{
     PreparedExecution, execute_prepared, execute_prepared_cpu_terminal, execute_prepared_shared,
     execute_prepared_simd_terminal, prepare_execution,

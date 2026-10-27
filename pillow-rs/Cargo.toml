@@ -60,6 +60,7 @@ csscolorparser = "0.8"
 wgpu = { version = "24", optional = true }
 pollster = { version = "0.3", optional = true }
 bytemuck = { version = "1", features = ["derive"] }
+fearless_simd = "1.2.0"
 wide = "1.6.1"
 
 # Rayon is opt-in through the default-off `parallel` feature. Use it only for
@@ -68,9 +69,9 @@ wide = "1.6.1"
 rayon = { version = "1", optional = true }
 
 [dev-dependencies]
-# Keep the Rust-to-Rust comparison serial and codec-independent. The bench
-# uses image's pixel operations only; its default Rayon and format features are
-# deliberately excluded.
+# Keep the Rust-to-Rust comparison codec-independent. The image-rs subject is
+# serial because its default Rayon and format features are deliberately excluded;
+# pillow-rs CPU and SIMD are measured as separate subjects.
 image = { version = "=0.25.10", default-features = false }
 
 [[bench]]

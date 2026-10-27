@@ -66,3 +66,6 @@ docs/evidence/**/*.md
 docs/evidence/**/SHA256SUMS*
 docs/evidence/**/*.sha256
 docs/evidence/**/*checksum*
+
+# Editor swap files are local transient state.
+*.swp

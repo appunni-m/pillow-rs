@@ -9,10 +9,9 @@ use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::DynamicImage;
 
-use super::{
-    Image, MaterializationCache, PipelineModeCache, PipelineOps, image_mode_name,
-    materialization_cache,
-};
+use super::{Image, PipelineOps, image_mode_name, materialization_cache};
+#[cfg(feature = "gpu")]
+use super::{MaterializationCache, PipelineModeCache};
 
 impl Image {
     /// Locks this image pipeline to one compute backend.

@@ -254,7 +254,13 @@ def python_numeric_js_value(value: Any) -> Any:
     if isinstance(value, int) and abs(value) > (1 << 53) - 1:
         return {"__pillow_rs_python_int__": str(value)}
     if isinstance(value, float):
-        return {"__pillow_rs_python_float__": repr(value)}
+        if math.isnan(value):
+            encoded = "NaN"
+        elif math.isinf(value):
+            encoded = "Infinity" if value > 0 else "-Infinity"
+        else:
+            encoded = repr(value)
+        return {"__pillow_rs_python_float__": encoded}
     if isinstance(value, list):
         return [python_numeric_js_value(item) for item in value]
     if isinstance(value, dict):
@@ -323,11 +329,21 @@ def typed_image_transform_fill_cases(cases: list[dict[str, Any]]) -> list[dict[s
 
 
 def decode_js_result(value: Any) -> Any:
-    """Restore float values whose decimal JSON form would otherwise parse as int."""
+    """Restore tagged floating-point results after JSON transport."""
 
     if isinstance(value, dict):
         if set(value) == {"__pillow_rs_float_result__"}:
             return float(value["__pillow_rs_float_result__"])
+        if set(value) == {"__pillow_rs_nonfinite_result__"}:
+            marker = value["__pillow_rs_nonfinite_result__"]
+            if marker not in {"NaN", "Infinity", "-Infinity"}:
+                raise ValueError(f"unknown JS non-finite result marker: {marker!r}")
+            bits = {
+                "NaN": "7ff8000000000000",
+                "Infinity": "7ff0000000000000",
+                "-Infinity": "fff0000000000000",
+            }[marker]
+            return {"$float64_bits": bits}
         return {key: decode_js_result(item) for key, item in value.items()}
     if isinstance(value, list):
         return [decode_js_result(item) for item in value]
@@ -335,7 +351,7 @@ def decode_js_result(value: Any) -> Any:
 
 
 def normalize_js_observable(value: Any) -> Any:
-    """Compare Python float NaNs as the single NaN value exposed by JS Number."""
+    """Compare non-finite numbers by numeric kind, never as text values."""
 
     if isinstance(value, dict):
         if set(value) == {"$float64_bits"}:
@@ -345,11 +361,28 @@ def normalize_js_observable(value: Any) -> Any:
                 return value
             exponent = bits & 0x7FF0000000000000
             mantissa = bits & 0x000FFFFFFFFFFFFF
-            if exponent == 0x7FF0000000000000 and mantissa:
-                return "NaN"
+            if exponent == 0x7FF0000000000000:
+                if mantissa:
+                    return {"$float64_special": "NaN"}
+                return {
+                    "$float64_special": "-Infinity"
+                    if bits & 0x8000000000000000
+                    else "Infinity"
+                }
+        if set(value) == {"$float64_special"} and value["$float64_special"] in {
+            "NaN",
+            "Infinity",
+            "-Infinity",
+        }:
+            return value
         return {key: normalize_js_observable(item) for key, item in value.items()}
     if isinstance(value, list):
         return [normalize_js_observable(item) for item in value]
+    if isinstance(value, float):
+        if math.isnan(value):
+            return {"$float64_special": "NaN"}
+        if math.isinf(value):
+            return {"$float64_special": "Infinity" if value > 0 else "-Infinity"}
     return value
 
 

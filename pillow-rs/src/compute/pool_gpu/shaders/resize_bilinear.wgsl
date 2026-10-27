@@ -22,9 +22,9 @@ struct Params {
 @group(0) @binding(1) var<storage, read_write> output: array<u32>;
 @group(0) @binding(2) var<uniform> params: Params;
 
-fn mode_has_g(m: u32) -> bool { return m >= 2u; }
-fn mode_has_b(m: u32) -> bool { return m >= 2u; }
-fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
+fn mode_has_g(m: u32) -> bool { return m >= 2u && m != 10u; }
+fn mode_has_b(m: u32) -> bool { return m >= 2u && m != 10u; }
+fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u || m == 9u || m == 10u; }
 
 // Linear interpolation between two f32 values
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
