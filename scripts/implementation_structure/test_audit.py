@@ -72,7 +72,7 @@ class PathClassificationTests(unittest.TestCase):
     def test_rust_size_baseline_is_quality_tool_configuration(self) -> None:
         result = classify_path("scripts/rust_size_baseline.json")
         self.assertEqual(result["assessment"], "supported_tool_configuration")
-        self.assertEqual(result["rule"], "rust_function_size_ratchet_baseline")
+        self.assertEqual(result["rule"], "quality_tool_ratchet_baseline")
 
     def test_workflow_test_importing_tool_package_is_reviewed_for_colocation(self) -> None:
         result = classify_path(

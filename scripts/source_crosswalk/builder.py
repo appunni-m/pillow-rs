@@ -52,7 +52,7 @@ from .rust_calls import (
     core_public_api_node,
     core_image_method_index,
     core_draw_method_index,
-    direct_pipeline_variant_references,
+    pipeline_variant_references_through_public_module_reexports,
     crate_root_api_routes,
     resolve_public_api_call,
     top_level_function_definitions,
@@ -322,6 +322,35 @@ def build_crosswalk(root: Path = ROOT) -> dict[str, Any]:
     core_method_pipeline_routes = 0
     receiver_method_seeds: list[dict[str, Any]] = []
     routed_python_bindings = {**public_bindings, **callback_bindings}
+    pending_python_methods = list(routed_python_bindings.items())
+    while pending_python_methods:
+        caller_id, caller = pending_python_methods.pop()
+        owner = python_method_owner(python_index, caller)
+        if owner is None:
+            continue
+        _, class_binding = owner
+        for method_name, method in class_binding.members.items():
+            if method.kind != "python_method":
+                continue
+            for call_line in direct_self_method_call_lines(caller, method_name):
+                method_id = f"python-binding:{method.path}:{method.line}:{method.name}"
+                nodes.setdefault(method_id, {"id": method_id, **python_index.node(method)})
+                edges.append(
+                    {
+                        "from": caller_id,
+                        "relation": "may_dispatch_to_python_method",
+                        "to": method_id,
+                        "site": {"path": caller.path, "line": call_line},
+                        "definition_site": {"path": method.path, "line": method.line},
+                        "call_expression": f"self.{method_name}(...)",
+                        "evidence_kind": "python_ast_direct_self_method_call_and_same_class_member",
+                        "status": "same_class_method_dispatch_candidate",
+                        "runtime_dispatch_target_proven": False,
+                    }
+                )
+                if method_id not in routed_python_bindings:
+                    routed_python_bindings[method_id] = method
+                    pending_python_methods.append((method_id, method))
     for binding_node_id, binding in sorted(routed_python_bindings.items()):
         for call in python_native_calls(binding, python_index):
             python_native_call_count += 1
@@ -697,8 +726,11 @@ def build_crosswalk(root: Path = ROOT) -> dict[str, Any]:
     for core_node in [
         node for node in nodes.values() if node.get("kind") == "core_public_api_route"
     ]:
-        for reference in direct_pipeline_variant_references(
-            root, core_node["path"], core_node["symbol"]
+        for reference in pipeline_variant_references_through_public_module_reexports(
+            root,
+            core_node["path"],
+            core_node["symbol"],
+            rust_modules["module_edges"],
         ):
             if reference["variant"] not in pipeline_variant_names:
                 findings.append(

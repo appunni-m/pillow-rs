@@ -1255,7 +1255,6 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- test_pillow_simd_benchmark.py
     |-- test_pillow_simd_suite_compatibility.py
     |-- test_profile_migration_benchmark.py
-    |-- test_putdata_sequence_parity.py
     |-- test_receipt_state.py
     |-- test_release_tools.py
     |-- test_rust_size_policy.py

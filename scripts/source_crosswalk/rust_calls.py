@@ -13,6 +13,10 @@ PUBLIC_REEXPORT = re.compile(
     r"(?m)^\s*pub\s+use\s+crate::((?:[A-Za-z_][A-Za-z0-9_]*::)*)"
     r"([A-Za-z_][A-Za-z0-9_]*)(?:\s+as\s+([A-Za-z_][A-Za-z0-9_]*))?\s*;"
 )
+PUBLIC_MODULE_REEXPORT = re.compile(
+    r"(?m)^\s*pub(?:\s*\([^)]*\))?\s+use\s+"
+    r"(?:self::)?([A-Za-z_][A-Za-z0-9_]*)::([^;]+);"
+)
 PUBLIC_FUNCTION = re.compile(
     r"(?m)^\s*pub\s+(?:(?:async|unsafe)\s+)*fn\s+"
     r"([A-Za-z_][A-Za-z0-9_]*)(?:\s*<[^;{}]*>)?\s*\("
@@ -421,6 +425,71 @@ def direct_pipeline_variant_references(
             )
         )
     return references
+
+
+def pipeline_variant_references_through_public_module_reexports(
+    root: Path,
+    source_path: str,
+    function_symbol: str,
+    module_edges: list[dict[str, Any]],
+    visited: frozenset[tuple[str, str]] = frozenset(),
+) -> list[dict[str, Any]]:
+    """Follow unambiguous public child-module re-exports to the function body."""
+    key = (source_path, function_symbol)
+    if key in visited:
+        return []
+    direct = direct_pipeline_variant_references(root, source_path, function_symbol)
+    if direct:
+        return direct
+
+    path = root / source_path
+    if not path.is_file():
+        return []
+    source = code_only(path.read_text(encoding="utf-8"))
+    next_visited = visited | {key}
+    resolved: dict[tuple[str, int, str], dict[str, Any]] = {}
+    for reexport in PUBLIC_MODULE_REEXPORT.finditer(source):
+        module_name = reexport.group(1)
+        exported_items = reexport.group(2).strip()
+        child_symbol = _reexported_symbol(exported_items, function_symbol)
+        if child_symbol is None:
+            continue
+        targets = [
+            edge.get("to")
+            for edge in module_edges
+            if edge.get("from") == source_path
+            and edge.get("module") == module_name
+            and edge.get("resolution") == "resolved"
+            and isinstance(edge.get("to"), str)
+        ]
+        if len(targets) != 1:
+            continue
+        for reference in pipeline_variant_references_through_public_module_reexports(
+            root, targets[0], child_symbol, module_edges, next_visited
+        ):
+            resolved[(reference["path"], reference["line"], reference["variant"])] = reference
+    definition_sites = {
+        (reference["path"], reference["function_symbol"])
+        for reference in resolved.values()
+    }
+    return list(resolved.values()) if len(definition_sites) == 1 else []
+
+
+def _reexported_symbol(exported_items: str, public_symbol: str) -> str | None:
+    """Return a child symbol exposed by a wildcard, named, or aliased re-export."""
+    if exported_items == "*":
+        return public_symbol
+    if exported_items.startswith("{") and exported_items.endswith("}"):
+        items = exported_items[1:-1].split(",")
+    else:
+        items = [exported_items]
+    for item in items:
+        names = [name.strip() for name in item.strip().split(" as ", maxsplit=1)]
+        source_symbol = names[0].split("::")[-1].strip()
+        visible_symbol = names[-1]
+        if visible_symbol == public_symbol:
+            return source_symbol
+    return None
 
 
 def direct_pipeline_variant_references_at(

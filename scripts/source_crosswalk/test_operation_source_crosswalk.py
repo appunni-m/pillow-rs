@@ -834,25 +834,44 @@ class WorkspaceCrosswalkTests(unittest.TestCase):
         )
         self.assertEqual(
             cpu_filter["operation_crosswalk"]["status"],
-            "possible_route_via_dynamic_python_callback_candidate",
+            "no_direct_static_edge",
         )
         self.assertNotIn(
             "PIL.Image.Image.filter",
             cpu_filter["operation_crosswalk"]["public_operation_ids"],
         )
-        self.assertIn(
-            "PIL.Image.Image.filter",
-            cpu_filter["operation_crosswalk"]["possible_public_operation_ids"],
-        )
-        self.assertIn(
-            cpu_filter["path"],
+        for filter_path in (
+            "pillow-rs/src/compute/pool_cpu/ops/filter/blur.rs",
+            "pillow-rs/src/compute/pool_cpu/ops/filter/filter3x3.rs",
+            "pillow-rs/src/compute/pool_cpu/ops/filter/filter5x5.rs",
+            "pillow-rs/src/compute/pool_cpu/ops/filter/rank.rs",
+        ):
+            filter_implementation = next(
+                item for item in source_files if item["path"] == filter_path
+            )
+            self.assertEqual(
+                filter_implementation["operation_crosswalk"]["status"],
+                "possible_route_via_dynamic_python_callback_candidate",
+            )
+            self.assertIn(
+                "PIL.Image.Image.filter",
+                filter_implementation["operation_crosswalk"]["possible_public_operation_ids"],
+            )
+        possible_filter_paths = {
+            item["path"]
+            for item in report["review_queues"][
+                "operation_graph_possible_dynamic_callback_routes"
+            ]
+        }
+        self.assertTrue(
             {
-                item["path"]
-                for item in report["review_queues"][
-                    "operation_graph_possible_dynamic_callback_routes"
-                ]
-            },
+                "pillow-rs/src/compute/pool_cpu/ops/filter/blur.rs",
+                "pillow-rs/src/compute/pool_cpu/ops/filter/filter3x3.rs",
+                "pillow-rs/src/compute/pool_cpu/ops/filter/filter5x5.rs",
+                "pillow-rs/src/compute/pool_cpu/ops/filter/rank.rs",
+            }.issubset(possible_filter_paths)
         )
+        self.assertNotIn(cpu_filter["path"], possible_filter_paths)
         simd_filter = next(
             item for item in source_files
             if item["path"] == "pillow-rs/src/compute/pool_simd/ops/adapters/filter.rs"
@@ -897,9 +916,9 @@ class WorkspaceCrosswalkTests(unittest.TestCase):
             all("not an unused-code finding" in item["operation_crosswalk"]["reason_for_review"]
                 for item in no_edge)
         )
-        self.assertEqual(report["inventory"]["manifest_operation_count"], 212)
-        self.assertEqual(report["summary"]["public_operations"], 212)
-        self.assertEqual(report["summary"]["public_operations_with_python_bindings"], 212)
+        self.assertEqual(report["inventory"]["manifest_operation_count"], 214)
+        self.assertEqual(report["summary"]["public_operations"], 214)
+        self.assertEqual(report["summary"]["public_operations_with_python_bindings"], 214)
         self.assertEqual(report["summary"]["unmapped_public_operation_bindings"], 0)
         self.assertGreater(report["summary"]["python_binding_native_calls"], 0)
         self.assertGreater(

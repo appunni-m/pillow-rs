@@ -296,6 +296,18 @@ def classify_path(
             "rule": "package_boundary_file",
             "reason": "Package manifests, package-level guides, and lifecycle metadata stay at their owning package root.",
         }
+    if path == "pillow-rs-js/public.js":
+        return {
+            "assessment": "supported_package_root_role",
+            "rule": "javascript_public_entrypoint",
+            "reason": "The browser package entry point adapts generated core bindings to the public JavaScript API.",
+        }
+    if path.startswith("pillow-rs-js/host/") and path.endswith(".js"):
+        return {
+            "assessment": "matches_binding_module_shape",
+            "rule": "javascript_host_integration",
+            "reason": "JavaScript host I/O and display integrations are grouped under the binding package's host layer.",
+        }
     if path == "scripts/test_operation_source_crosswalk.py" and re.search(
         r"(?m)^\s*(?:from|import)\s+source_crosswalk\b", content
     ):

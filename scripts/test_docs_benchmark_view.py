@@ -367,12 +367,11 @@ class BenchmarkViewTests(unittest.TestCase):
         # Pin the complete generated catalog so additions and removals must
         # keep both public benchmark tables current. These counts match the
         # checked-in generated input catalog.
-        # The current catalog adds three material operation workloads plus
-        # composed AutoContrast, GaussianBlur, GetChannel, GetColors, and
-        # GetProjection cases to the previous 684-workload snapshot.
-        self.assertEqual(len(workloads), 700)
+        # Keep the rendered catalog aligned with the checked-in workload
+        # input; additions and removals must update the public benchmark view.
+        self.assertEqual(len(workloads), 736)
         self.assertEqual(categories.count("operations"), 203)
-        self.assertEqual(categories.count("pipelines"), 497)
+        self.assertEqual(categories.count("pipelines"), 533)
 
     def test_all_observations_retained_without_mutating_snapshot(self):
         snapshot=dict(rows=[row('FreeType',20),row(),row('unknown',None)],environment={'os':'Test'},measured_at='2026-09-16')
