@@ -53,6 +53,7 @@ try:
         TARGET_ID,
         TARGET_FEATURES,
         TIMED_SOURCE_FLAG,
+        classify_pipeline_case,
         ensure_generated_parity_inputs,
         git_dirty,
         git_revision,
@@ -85,6 +86,7 @@ except ModuleNotFoundError:  # imported as ``scripts.run_migration_benchmark`` i
         TARGET_ID,
         TARGET_FEATURES,
         TIMED_SOURCE_FLAG,
+        classify_pipeline_case,
         ensure_generated_parity_inputs,
         git_dirty,
         git_revision,
@@ -1373,6 +1375,7 @@ def execution_result(
     execution_records: list[dict[str, Any]],
     policy: dict[str, Any],
     errors: list[dict[str, Any]] | None = None,
+    case: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     errors = list(errors or [])
     if subject_kind == "oracle":
@@ -1510,7 +1513,25 @@ def execution_result(
         and partial_count == 0
         and not has_partial
     )
-    if all_not_applicable or host_boundary_without_backend_receipt:
+    workflow_status = (
+        classify_pipeline_case(case, [], result=None).get("status")
+        if case is not None and not errors
+        else None
+    )
+    workflow_without_backend_work = (
+        workflow_status == "not_applicable"
+        and not actual_counts
+        and not fallback_counts
+        and not completed_candidates
+        and not cached_candidates
+        and not terminal_records
+        and partial_count == 0
+    )
+    if (
+        all_not_applicable
+        or host_boundary_without_backend_receipt
+        or workflow_without_backend_work
+    ):
         # Public lifecycle/draw/metadata calls can be valid benchmark timings
         # without entering the compute-pipeline telemetry boundary. Keep that
         # distinction explicit instead of calling the row ``not_proven`` (or
@@ -1591,6 +1612,7 @@ def subject_result(
     execution_records: list[dict[str, Any]],
     policy: dict[str, Any],
     errors: list[dict[str, Any]] | None = None,
+    case: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     warmup = int(policy["warmup_iterations"])
     iterations = int(policy["measurement_iterations"])
@@ -1617,6 +1639,7 @@ def subject_result(
         execution_records,
         policy,
         errors,
+        case=case,
     )
     if len(measured) != iterations * samples or len(measured_phases) != iterations * samples:
         return {
@@ -2700,6 +2723,7 @@ def run(args: argparse.Namespace) -> int:
                     ),
                     workload["measurement"],
                     errors_for(kind, subject_id),
+                    case=workload_cases[workload_id],
                 )
                 for kind, subject_id in (
                     (subject["kind"], subject["id"])
