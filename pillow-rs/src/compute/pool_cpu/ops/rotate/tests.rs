@@ -1,11 +1,9 @@
-#[cfg(not(feature = "parallel"))]
 use super::affine::fixed_coordinate_in_bounds_span;
-#[cfg(not(feature = "parallel"))]
+
 use crate::ops::rotate::nearest_contiguous_rgb_run_len;
 use crate::pipeline::ResampleFilter;
 use crate::raster::{DynamicImage, GenericImageView, GrayImage, RgbImage, RgbaImage};
 
-#[cfg(not(feature = "parallel"))]
 #[test]
 fn rotate_contiguous_rgb_run_length_matches_fixed_point_scan() {
     let x_steps = [1, 32_768, 65_526, 65_536, 65_537, 98_304, 131_072, 655_360];
@@ -46,7 +44,7 @@ fn rotate_contiguous_rgb_run_length_matches_fixed_point_scan() {
         }
     }
 }
-#[cfg(not(feature = "parallel"))]
+
 #[test]
 fn rotate_positive_step_span_matches_signed_fixed_point_bounds() {
     let origins = [

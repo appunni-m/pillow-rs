@@ -41,24 +41,6 @@ pub(crate) fn execute_crop(
         let source_stride = iw as usize * channels;
         let output_stride = width as usize * channels;
         let output_dims = CheckedDims::new(width, height, channels as u8)?;
-        #[cfg(feature = "parallel")]
-        if output_dims.total_bytes() >= 4 * 1024 * 1024 && output_stride != 0 {
-            let mut output = output_dims.alloc_buffer();
-            crate::par_rows_mut!(
-                &mut output,
-                output_stride,
-                height as usize,
-                |_row_start, _row_end, y, row| {
-                    let source_start =
-                        (top as usize + y as usize) * source_stride + left as usize * channels;
-                    row.copy_from_slice(&source[source_start..source_start + output_stride]);
-                }
-            );
-            return raw_bytes_to_image(width, height, output, channels);
-        }
-
-        // Every output row comes from one source-row span, so
-        // avoid zero-filling a destination immediately before copying it.
         let mut output = Vec::with_capacity(output_dims.total_bytes());
         crate::compute::record_pipeline_allocation(output_dims.total_bytes());
         for y in 0..height as usize {

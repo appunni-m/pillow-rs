@@ -16,7 +16,6 @@ mod kernels;
 pub(crate) use fusion::execute_rgb_putpixel_thumbnail_fusion;
 
 enum ThumbnailPreparation {
-    #[cfg(not(feature = "parallel"))]
     Completed(DynamicImage),
     Ready {
         image: DynamicImage,
@@ -58,7 +57,6 @@ pub(crate) fn execute_thumbnail(
         explicit_mode,
     )?;
     let (work_img, resize_box) = match preparation {
-        #[cfg(not(feature = "parallel"))]
         ThumbnailPreparation::Completed(result) => return Ok(preserve_mode(img, result)),
         ThumbnailPreparation::Ready { image, resize_box } => (image, resize_box),
     };
@@ -194,7 +192,6 @@ fn prepare_thumbnail_work_image(
                 // I has a serial even 2x2 path that streams directly into its
                 // resize kernel. Native F/I samples call the active scalar
                 // reducers directly; other modes use Reduce's family router.
-                #[cfg(not(feature = "parallel"))]
                 (Some("I"), DynamicImage::ImageRgba8(_))
                     if factor_x == 2 && factor_y == 2 && cur_w % 2 == 0 && cur_h % 2 == 0 =>
                 {

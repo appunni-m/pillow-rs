@@ -80,7 +80,7 @@ pub(super) fn execute_axis_swap(
     }
     let output_dims = CheckedDims::new(height, width, channels as u8)?;
     let mut output = output_dims.alloc_buffer();
-    #[cfg(all(target_arch = "x86_64", not(feature = "parallel")))]
+    #[cfg(target_arch = "x86_64")]
     if super::transpose_arch::try_rotate270_rgba_tiled(
         img,
         method,
@@ -92,9 +92,6 @@ pub(super) fn execute_axis_swap(
         return raw_bytes_to_image(height, width, output, channels).map(Some);
     }
 
-    #[cfg(feature = "parallel")]
-    let tile_size = TRANSPOSE_TILE_SIZE;
-    #[cfg(not(feature = "parallel"))]
     let tile_size = if channels == 4 {
         super::TRANSPOSE_RGBA_TILE_SIZE
     } else {

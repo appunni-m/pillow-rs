@@ -1,16 +1,14 @@
 //! Serial F-mode vertical resampling and packed-byte materialization.
 
-#[cfg(not(feature = "parallel"))]
 use super::{F64MulAdd, FilterCoeffsF64};
-#[cfg(not(feature = "parallel"))]
+
 use crate::checked_dims::CheckedDims;
-#[cfg(not(feature = "parallel"))]
+
 use crate::error::PilError;
-#[cfg(not(feature = "parallel"))]
+
 use crate::pipeline::ResampleFilter;
 use crate::raster::DynamicImage;
 
-#[cfg(not(feature = "parallel"))]
 #[inline]
 pub(super) fn accumulate_row<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     source: &[f32],
@@ -35,7 +33,6 @@ pub(super) fn accumulate_row<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     }
 }
 
-#[cfg(not(feature = "parallel"))]
 pub(super) fn vertical_pass_packed<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     source: &[f32],
     output: &mut [[u8; 4]],
@@ -61,7 +58,6 @@ pub(super) fn vertical_pass_packed<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     }
 }
 
-#[cfg(not(feature = "parallel"))]
 pub(super) fn packed_vertical_output<F: F64MulAdd>(
     intermediate: &[f32],
     source_height: u32,
@@ -138,19 +134,7 @@ pub(super) fn nearest(
     }
 
     let mut output = vec![0.0f32; (destination_width * destination_height) as usize];
-    #[cfg(feature = "parallel")]
-    crate::par_rows_mut_typed!(
-        &mut output,
-        destination_width as usize,
-        destination_height as usize,
-        |_row_start, _row_end, y, row| {
-            let sy = yintab[y as usize];
-            for (out, &sx) in row.iter_mut().zip(&xintab) {
-                *out = source[(sy * source_width + sx) as usize];
-            }
-        }
-    );
-    #[cfg(not(feature = "parallel"))]
+
     for (y, row) in output.chunks_mut(destination_width as usize).enumerate() {
         let sy = yintab[y];
         for (out, &sx) in row.iter_mut().zip(&xintab) {

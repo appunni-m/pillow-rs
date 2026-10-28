@@ -15,7 +15,7 @@ use super::super::resample_kernel;
 
 #[path = "f/float_resize.rs"]
 mod float_resize;
-#[cfg(all(test, not(feature = "parallel")))]
+#[cfg(test)]
 #[path = "f/float_resize_tests.rs"]
 mod float_resize_tests;
 
@@ -155,7 +155,6 @@ pub(crate) fn f_resize_horizontal_sample<const FINITE_OPERANDS: bool, F: F64MulA
     accumulator as f32
 }
 
-#[cfg(not(feature = "parallel"))]
 pub(crate) fn f_resize_contiguous_eight_tap_coefficients(
     coefficients: &FilterCoeffsF64,
 ) -> Option<(usize, Vec<(usize, [f64; 8])>)> {
@@ -273,25 +272,6 @@ pub(crate) fn f_resize_horizontal_pass<const FINITE_OPERANDS: bool, F: F64MulAdd
     coefficients: &FilterCoeffsF64,
     fma: &F,
 ) {
-    #[cfg(feature = "parallel")]
-    crate::par_rows_mut_typed!(
-        output,
-        destination_width,
-        _source_height,
-        |_row_start, _row_end, source_y, row| {
-            let source_row_start = source_y as usize * source_width;
-            let source_row = &source[source_row_start..source_row_start + source_width];
-            for (destination_x, output) in row.iter_mut().enumerate() {
-                *output = f_resize_horizontal_sample::<FINITE_OPERANDS, _>(
-                    source_row,
-                    coefficients.xmin[destination_x],
-                    &coefficients.weights[destination_x],
-                    fma,
-                );
-            }
-        }
-    );
-    #[cfg(not(feature = "parallel"))]
     {
         let eight_tap_coefficients = f_resize_contiguous_eight_tap_coefficients(coefficients);
         for (source_y, row) in output.chunks_mut(destination_width).enumerate() {
@@ -354,29 +334,6 @@ pub(crate) fn f_resize_vertical_pass<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     coefficients: &FilterCoeffsF64,
     fma: &F,
 ) {
-    #[cfg(feature = "parallel")]
-    crate::par_rows_mut_typed!(
-        output,
-        destination_width,
-        _destination_height,
-        |_row_start, _row_end, destination_y, row| {
-            let source_y = coefficients.xmin[destination_y as usize];
-            let weights = &coefficients.weights[destination_y as usize];
-            for (source_x, output) in row.iter_mut().enumerate() {
-                // Pillow stores the f32 accumulator directly; retain its
-                // signed-zero result at this observable pass boundary.
-                *output = f_resize_vertical_sample::<FINITE_OPERANDS, _>(
-                    source,
-                    destination_width,
-                    source_y,
-                    source_x,
-                    weights,
-                    fma,
-                );
-            }
-        }
-    );
-    #[cfg(not(feature = "parallel"))]
     {
         // Keep one f64 accumulator per output column and visit source rows in
         // tap order. Each column still receives the same ordered FMA sequence
@@ -423,29 +380,9 @@ pub(crate) fn resize_f_tall_order<F: F64MulAdd>(
     let destination_height_usize = destination_height as usize;
     let mut vertical_output = vec![0.0f32; source_width_usize * destination_height_usize];
 
-    // This is the first pass in Pillow's tall-image branch.  Each destination
-    // row is independent, so retain the normal row-parallel CPU contract.
-    #[cfg(feature = "parallel")]
-    crate::par_rows_mut_typed!(
-        &mut vertical_output,
-        source_width_usize,
-        destination_height_usize,
-        |_row_start, _row_end, destination_y, row| {
-            let y0 = vertical.xmin[destination_y as usize];
-            let weights = &vertical.weights[destination_y as usize];
-            for (source_x, output) in row.iter_mut().enumerate() {
-                *output = f_resize_vertical_sample::<false, _>(
-                    src_floats,
-                    source_width_usize,
-                    y0,
-                    source_x,
-                    weights,
-                    fma,
-                );
-            }
-        }
-    );
-    #[cfg(not(feature = "parallel"))]
+    // This is the first pass in Pillow's tall-image branch. Each destination
+    // row is independent, so process rows in order without sharing state.
+
     for (destination_y, row) in vertical_output.chunks_mut(source_width_usize).enumerate() {
         let y0 = vertical.xmin[destination_y];
         let weights = &vertical.weights[destination_y];
@@ -467,34 +404,7 @@ pub(crate) fn resize_f_tall_order<F: F64MulAdd>(
     let horizontal = precompute_coeffs_f64(destination_width, source_width, kernel, support);
     let destination_width_usize = destination_width as usize;
     let mut output = vec![0.0f32; destination_width_usize * destination_height_usize];
-    #[cfg(feature = "parallel")]
-    crate::par_rows_mut_typed!(
-        &mut output,
-        destination_width_usize,
-        destination_height_usize,
-        |_row_start, _row_end, destination_y, row| {
-            let source_row_start = destination_y as usize * source_width_usize;
-            for (destination_x, output) in row.iter_mut().enumerate() {
-                let x0 = horizontal.xmin[destination_x];
-                let vector_product_count = (horizontal.weights[destination_x].len()
-                    / F_RESIZE_VECTOR_WIDTH)
-                    * F_RESIZE_VECTOR_WIDTH;
-                let mut accumulator = 0.0f64;
-                for (offset, &weight) in horizontal.weights[destination_x].iter().enumerate() {
-                    let source_x = (x0 + offset as i64) as usize;
-                    f_resize_accumulate::<false, _>(
-                        &mut accumulator,
-                        weight,
-                        vertical_output[source_row_start + source_x],
-                        offset < vector_product_count,
-                        fma,
-                    );
-                }
-                *output = accumulator as f32;
-            }
-        }
-    );
-    #[cfg(not(feature = "parallel"))]
+
     for (destination_y, row) in output.chunks_mut(destination_width_usize).enumerate() {
         let source_row_start = destination_y * source_width_usize;
         for (destination_x, output) in row.iter_mut().enumerate() {
@@ -684,17 +594,6 @@ fn resize_f_resample<F: F64MulAdd>(
             );
         }
     } else {
-        #[cfg(feature = "parallel")]
-        crate::par_rows_mut_typed!(
-            &mut intermediate,
-            dst_w as usize,
-            sh as usize,
-            |_row_start, _row_end, sy, row| {
-                let source_start = (sy * sw) as usize;
-                row.copy_from_slice(&src_floats[source_start..source_start + sw as usize]);
-            }
-        );
-        #[cfg(not(feature = "parallel"))]
         for (sy, row) in intermediate.chunks_mut(dst_w as usize).enumerate() {
             let source_start = sy * sw as usize;
             row.copy_from_slice(&src_floats[source_start..source_start + sw as usize]);
@@ -705,7 +604,7 @@ fn resize_f_resample<F: F64MulAdd>(
     // each rounded sample into its packed pixel slot and flatten the array
     // vector without copying, instead of allocating an F32 output and then
     // allocating and filling a second byte vector.
-    #[cfg(not(feature = "parallel"))]
+
     if needs_vertical {
         return float_resize::packed_vertical_output(
             &intermediate,

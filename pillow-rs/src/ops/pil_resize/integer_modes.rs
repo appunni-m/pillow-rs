@@ -1,23 +1,15 @@
-#[cfg(not(feature = "parallel"))]
 use super::alpha::{premultiply_channel, unpremultiply_channel};
-#[cfg(not(feature = "parallel"))]
 use super::boxed::raw_to_dynamic_owned;
-#[cfg(not(feature = "parallel"))]
 use super::coefficients::{fixed_point_to_u8_i32, resize_u8_coefficients_fit_i32};
 #[cfg(all(test, not(feature = "parallel")))]
 use super::horizontal_passes::{horizontal_pass_rows, horizontal_pass_rows_alpha};
-#[cfg(not(feature = "parallel"))]
 use super::vertical_passes::{should_transpose_vertical, transpose_resize_intermediate};
 #[cfg(all(test, not(feature = "parallel")))]
 use super::vertical_passes::{vertical_pass_rows, vertical_pass_rows_alpha};
-#[cfg(not(feature = "parallel"))]
 use super::*;
-#[cfg(not(feature = "parallel"))]
 use crate::pipeline::ResampleFilter;
-#[cfg(not(feature = "parallel"))]
 use crate::raster::DynamicImage;
 
-#[cfg(not(feature = "parallel"))]
 fn resize_coefficients_fit_source(coeffs: &FilterCoeffs, source_extent: usize) -> bool {
     if coeffs.xmin.len() != coeffs.count.len() || coeffs.xmin.len() != coeffs.offsets.len() {
         return false;
@@ -34,7 +26,6 @@ fn resize_coefficients_fit_source(coeffs: &FilterCoeffs, source_extent: usize) -
         })
 }
 
-#[cfg(not(feature = "parallel"))]
 fn horizontal_pass_luma_i32(source_row: &[u8], coeffs: &FilterCoeffs, output_row: &mut [u8]) {
     for (output_x, output) in output_row.iter_mut().enumerate() {
         let weights = coeffs.weights_for(output_x);
@@ -70,7 +61,6 @@ fn horizontal_pass_luma_i32(source_row: &[u8], coeffs: &FilterCoeffs, output_row
     }
 }
 
-#[cfg(not(feature = "parallel"))]
 fn vertical_pass_luma_i32(
     intermediate: &[u8],
     source_height: usize,
@@ -166,7 +156,6 @@ fn vertical_pass_luma_i32(
     }
 }
 
-#[cfg(not(feature = "parallel"))]
 pub(super) fn pil_resize_luma_i32(
     img: &DynamicImage,
     output_width: u32,
@@ -189,7 +178,6 @@ pub(super) fn pil_resize_luma_i32(
     Some(output)
 }
 
-#[cfg(not(feature = "parallel"))]
 fn pil_resize_luma_i32_into(
     img: &DynamicImage,
     output_width: usize,
@@ -245,7 +233,6 @@ fn pil_resize_luma_i32_into(
 /// Resize native L bytes directly into a caller-owned full-width output
 /// window. ImageOps.pad uses this to avoid materializing the contained image
 /// before copying its rows into the final canvas.
-#[cfg(not(feature = "parallel"))]
 pub(crate) fn pil_resize_luma_i32_into_window(
     img: &DynamicImage,
     output_width: u32,
@@ -272,7 +259,6 @@ pub(crate) fn pil_resize_luma_i32_into_window(
     .is_some()
 }
 
-#[cfg(not(feature = "parallel"))]
 fn horizontal_pass_la_i32(source_row: &[u8], coeffs: &FilterCoeffs, output_row: &mut [u8]) {
     for (output_x, output_pixel) in output_row.chunks_exact_mut(2).enumerate() {
         let weights = coeffs.weights_for(output_x);
@@ -303,7 +289,6 @@ fn horizontal_pass_la_i32(source_row: &[u8], coeffs: &FilterCoeffs, output_row: 
     }
 }
 
-#[cfg(not(feature = "parallel"))]
 fn vertical_pass_la_i32(
     intermediate: &[u8],
     output_width: usize,
@@ -360,7 +345,6 @@ fn vertical_pass_la_i32(
     }
 }
 
-#[cfg(not(feature = "parallel"))]
 pub(super) fn pil_resize_la_i32(
     img: &DynamicImage,
     output_width: u32,
@@ -419,7 +403,6 @@ pub(super) fn pil_resize_la_i32(
     Some(output)
 }
 
-#[cfg(not(feature = "parallel"))]
 fn horizontal_pass_rgba_i32(source_row: &[u8], coeffs: &FilterCoeffs, output_row: &mut [u8]) {
     for (output_x, output_pixel) in output_row.chunks_exact_mut(4).enumerate() {
         let weights = coeffs.weights_for(output_x);
@@ -441,7 +424,6 @@ fn horizontal_pass_rgba_i32(source_row: &[u8], coeffs: &FilterCoeffs, output_row
     }
 }
 
-#[cfg(not(feature = "parallel"))]
 fn vertical_pass_rgba_i32(
     intermediate: &[u8],
     output_width: usize,
@@ -474,7 +456,6 @@ fn vertical_pass_rgba_i32(
     }
 }
 
-#[cfg(not(feature = "parallel"))]
 pub(super) fn pil_resize_rgba_i32(
     img: &DynamicImage,
     output_width: u32,
@@ -535,13 +516,9 @@ pub(super) fn pil_resize_rgba_i32(
     Some(output)
 }
 
-#[cfg(not(feature = "parallel"))]
 mod cmyk;
-#[cfg(not(feature = "parallel"))]
 mod hsv;
-#[cfg(not(feature = "parallel"))]
 pub(super) use cmyk::pil_resize_cmyk_i32;
-#[cfg(not(feature = "parallel"))]
 pub(super) use hsv::pil_resize_hsv_i32;
 
 #[cfg(all(test, not(feature = "parallel")))]

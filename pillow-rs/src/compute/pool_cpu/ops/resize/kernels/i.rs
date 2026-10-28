@@ -1,7 +1,7 @@
 /// Resize an I-mode image (32-bit signed integers stored as RGBA8 bytes LE).
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
-#[cfg(not(feature = "parallel"))]
+
 use crate::ops::pil_resize::FilterCoeffsF64;
 #[cfg(target_arch = "x86_64")]
 use crate::ops::pil_resize::X86FmaToken;
@@ -44,7 +44,6 @@ pub(crate) fn resize_i_sum_eight<F: F64MulAdd>(
 }
 
 #[inline(always)]
-#[cfg(not(feature = "parallel"))]
 pub(crate) fn resize_i_sum_eight_contiguous<F: F64MulAdd>(
     weights: &[f64; 8],
     source: &[i32],
@@ -65,7 +64,6 @@ pub(crate) fn resize_i_sum_eight_contiguous<F: F64MulAdd>(
 }
 
 #[inline(always)]
-#[cfg(not(feature = "parallel"))]
 pub(crate) fn resize_i_sum_general<F: F64MulAdd>(
     weights: &[f64],
     first_sample: usize,
@@ -82,14 +80,12 @@ pub(crate) fn resize_i_sum_general<F: F64MulAdd>(
 /// Convert a serial I-resize accumulator with Pillow's sign-aware half offset.
 /// Casting to i32 already truncates, so avoid a separate float truncation step.
 #[inline(always)]
-#[cfg(not(feature = "parallel"))]
 pub(crate) fn resize_i_round_up_to_i32(value: f64) -> i32 {
     (value + 0.5_f64.copysign(value)) as i32
 }
 
 /// Copy one contiguous run of eight-tap coefficients into a dense fixed-width
 /// table so row resampling does not reclassify the same horizontal spans.
-#[cfg(not(feature = "parallel"))]
 pub(crate) fn resize_i_contiguous_eight_tap_weights(
     coefficients: &[Vec<f64>],
 ) -> Option<(usize, Vec<[f64; 8]>)> {
@@ -111,7 +107,6 @@ pub(crate) fn resize_i_contiguous_eight_tap_weights(
     Some((first, fixed_width))
 }
 
-#[cfg(not(feature = "parallel"))]
 pub(crate) fn resize_i_horizontal_row<F: F64MulAdd>(
     source_row: &[i32],
     output_row: &mut [i32],
@@ -167,7 +162,6 @@ pub(crate) fn resize_i_horizontal_row<F: F64MulAdd>(
     }
 }
 
-#[cfg(not(feature = "parallel"))]
 pub(crate) fn resize_i_streaming_vertical_pass<F: F64MulAdd>(
     source: &[i32],
     source_width: usize,
@@ -225,7 +219,6 @@ pub(crate) fn resize_i_streaming_vertical_pass<F: F64MulAdd>(
     }
 }
 
-#[cfg(not(feature = "parallel"))]
 pub(crate) fn resize_i_streaming_with_fma<F: F64MulAdd>(
     source: &[i32],
     source_width: u32,
@@ -303,22 +296,7 @@ fn resize_i_nearest(
     let (sw_f, sh_f, dw_f, dh_f) = coordinate_scales;
     let output_stride = output_dims.row_stride();
     let mut output_bytes = output_dims.alloc_buffer();
-    #[cfg(feature = "parallel")]
-    crate::par_rows_mut_typed!(
-        &mut output_bytes,
-        output_stride,
-        dst_h as usize,
-        |_row_start, _row_end, dy, row| {
-            let sy = ((f64::from(dy) + 0.5) * sh_f / dh_f).floor() as i64;
-            let sy = sy.clamp(0, sh as i64 - 1) as u32;
-            for (dx, output) in row.chunks_exact_mut(4).enumerate() {
-                let sx = ((dx as f64 + 0.5) * sw_f / dw_f).floor() as i64;
-                let sx = sx.clamp(0, sw as i64 - 1) as u32;
-                output.copy_from_slice(&src_ints[(sy * sw + sx) as usize].to_le_bytes());
-            }
-        }
-    );
-    #[cfg(not(feature = "parallel"))]
+
     for (dy, row) in output_bytes.chunks_mut(output_stride).enumerate() {
         let sy = ((dy as f64 + 0.5) * sh_f / dh_f).floor() as i64;
         let sy = sy.clamp(0, sh as i64 - 1) as u32;
@@ -331,111 +309,6 @@ fn resize_i_nearest(
     let out = crate::raster::RgbaImage::from_raw(dst_w, dst_h, output_bytes)
         .expect("resize_i output shape must match its dimensions");
     DynamicImage::ImageRgba8(out)
-}
-
-#[cfg(feature = "parallel")]
-struct ResizeIParallelInput<'a> {
-    src_ints: &'a [i32],
-    source_width: u32,
-    source_height: u32,
-    destination_width: u32,
-    destination_height: u32,
-    horizontal: &'a crate::ops::pil_resize::FilterCoeffsF64,
-    vertical: &'a crate::ops::pil_resize::FilterCoeffsF64,
-    output_dims: CheckedDims,
-}
-
-#[cfg(feature = "parallel")]
-#[inline(always)]
-fn resize_i_parallel<F: F64MulAdd>(
-    input: ResizeIParallelInput<'_>,
-    fma: &F,
-) -> Result<DynamicImage, PilError> {
-    let ResizeIParallelInput {
-        src_ints,
-        source_width: sw,
-        source_height: sh,
-        destination_width: dst_w,
-        destination_height: dst_h,
-        horizontal: h_coeffs_f64,
-        vertical: v_coeffs_f64,
-        output_dims,
-    } = input;
-    let output_stride = output_dims.row_stride();
-    // ImagingResample stores the horizontal INT32 pass in an INT32 image
-    // before the vertical pass. Keeping this buffer as f64 changes overflow
-    // cases (the C cast saturates to INT32_MIN on the supported platforms).
-    #[cfg(feature = "parallel")]
-    let mut intermediate: Vec<i32> = vec![0; (sh * dst_w) as usize];
-
-    // Horizontal pass: f64 accumulation, matching PIL's double-precision path
-    #[cfg(feature = "parallel")]
-    crate::par_rows_mut_typed!(
-        &mut intermediate,
-        dst_w as usize,
-        sh as usize,
-        |_row_start, _row_end, sy, row| {
-            let src_row_base = (sy * sw) as usize;
-            for (dx, output) in row.iter_mut().enumerate() {
-                let x0 = h_coeffs_f64.xmin[dx];
-                let weights = &h_coeffs_f64.weights[dx];
-                let accumulator = if let Ok(weights) = <&[f64; 8]>::try_from(weights.as_slice()) {
-                    resize_i_sum_eight(weights, x0 as usize, |sx| src_ints[src_row_base + sx], fma)
-                } else {
-                    let mut accumulator: f64 = 0.0;
-                    for (cix, &weight) in weights.iter().enumerate() {
-                        let sx = (x0 + cix as i64) as usize;
-                        accumulator =
-                            resize_i_mul_add(fma, weight, src_ints[src_row_base + sx], accumulator);
-                    }
-                    accumulator
-                };
-                *output = round_up(accumulator) as i32;
-            }
-        }
-    );
-    // Vertical pass
-    #[cfg(feature = "parallel")]
-    let mut output_bytes = output_dims.alloc_buffer();
-    #[cfg(feature = "parallel")]
-    crate::par_rows_mut!(
-        &mut output_bytes,
-        output_stride,
-        dst_h as usize,
-        |_row_start, _row_end, dy, row| {
-            let output_y = dy as usize;
-            let y0 = v_coeffs_f64.xmin[output_y];
-            let weights = &v_coeffs_f64.weights[output_y];
-            for (dx, output) in row.chunks_exact_mut(4).enumerate() {
-                let accumulator = if let Ok(weights) = <&[f64; 8]>::try_from(weights.as_slice()) {
-                    resize_i_sum_eight(
-                        weights,
-                        y0 as usize,
-                        |sy| intermediate[sy * dst_w as usize + dx],
-                        fma,
-                    )
-                } else {
-                    let mut accumulator: f64 = 0.0;
-                    for (cix, &weight) in weights.iter().enumerate() {
-                        let sy = (y0 + cix as i64) as usize;
-                        accumulator = resize_i_mul_add(
-                            fma,
-                            weight,
-                            intermediate[(sy * dst_w as usize) + dx],
-                            accumulator,
-                        );
-                    }
-                    accumulator
-                };
-                output.copy_from_slice(&(round_up(accumulator) as i32).to_le_bytes());
-            }
-        }
-    );
-    #[cfg(feature = "parallel")]
-    let out = crate::raster::RgbaImage::from_raw(dst_w, dst_h, output_bytes)
-        .ok_or_else(|| PilError::ValueError("resize_i: failed to create output buffer".into()))?;
-    #[cfg(feature = "parallel")]
-    Ok(DynamicImage::ImageRgba8(out))
 }
 
 pub(crate) fn resize_i_with_fma<F: F64MulAdd>(
@@ -494,10 +367,9 @@ pub(crate) fn resize_i_with_fma<F: F64MulAdd>(
     // Use f64 accumulation + ROUND_UP matching PIL's ImagingResample for 32-bit types.
     let h_coeffs_f64 = precompute_coeffs_f64(dst_w, sw, kernel, support);
     let v_coeffs_f64 = precompute_coeffs_f64(dst_h, sh, kernel, support);
-    #[cfg(not(feature = "parallel"))]
+
     let h_eight_tap_weights = resize_i_contiguous_eight_tap_weights(&h_coeffs_f64.weights);
 
-    #[cfg(not(feature = "parallel"))]
     return resize_i_streaming_with_fma(
         &src_ints,
         sw,
@@ -508,21 +380,6 @@ pub(crate) fn resize_i_with_fma<F: F64MulAdd>(
         h_eight_tap_weights.as_ref(),
         fma,
     );
-
-    #[cfg(feature = "parallel")]
-    resize_i_parallel(
-        ResizeIParallelInput {
-            src_ints: &src_ints,
-            source_width: sw,
-            source_height: sh,
-            destination_width: dst_w,
-            destination_height: dst_h,
-            horizontal: &h_coeffs_f64,
-            vertical: &v_coeffs_f64,
-            output_dims,
-        },
-        fma,
-    )
 }
 
 /// Borrow I-mode's little-endian four-byte carrier after validating its

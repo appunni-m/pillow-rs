@@ -380,28 +380,7 @@ fn execute_reduce_rgb_general(
     mut output: Vec<u8>,
 ) -> Result<Option<SparseRgbReduction>, PilError> {
     let output_stride = context.output_width as usize * 3;
-    #[cfg(feature = "parallel")]
-    {
-        const REDUCE_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
-        let input_pixels = (_width as usize).saturating_mul(_height as usize);
-        if input_pixels >= REDUCE_PARALLEL_PIXEL_THRESHOLD {
-            crate::par_rows_mut!(
-                &mut output,
-                output_stride,
-                new_height as usize,
-                |_row_start, _row_end, y, row| {
-                    process_reduce_rgb_row(context, y, row);
-                }
-            );
-        } else {
-            for y in 0..new_height {
-                let start = y as usize * output_stride;
-                process_reduce_rgb_row(context, y, &mut output[start..start + output_stride]);
-            }
-        }
-    }
 
-    #[cfg(not(feature = "parallel"))]
     for y in 0..new_height {
         let start = y as usize * output_stride;
         process_reduce_rgb_row(context, y, &mut output[start..start + output_stride]);
@@ -452,26 +431,6 @@ fn reduce_rgb_dense_even_2x2(
         }
     };
 
-    #[cfg(feature = "parallel")]
-    {
-        const REDUCE_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
-        let input_pixels = (_width as usize).saturating_mul(_height as usize);
-        if input_pixels >= REDUCE_PARALLEL_PIXEL_THRESHOLD {
-            crate::par_rows_mut!(
-                output,
-                output_stride,
-                new_height as usize,
-                |_row_start, _row_end, y, row| { process_row(y as usize, row) }
-            );
-        } else {
-            for y in 0..new_height as usize {
-                let start = y * output_stride;
-                process_row(y, &mut output[start..start + output_stride]);
-            }
-        }
-    }
-
-    #[cfg(not(feature = "parallel"))]
     for y in 0..new_height as usize {
         let start = y * output_stride;
         process_row(y, &mut output[start..start + output_stride]);

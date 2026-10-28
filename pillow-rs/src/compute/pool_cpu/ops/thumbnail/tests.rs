@@ -1,5 +1,5 @@
 use super::super::reduce::{reduce_f_thumbnail, reduce_i_thumbnail};
-#[cfg(not(feature = "parallel"))]
+
 use super::resize_i;
 use super::{
     execute_rgb_putpixel_thumbnail_fusion, execute_thumbnail,
@@ -188,7 +188,7 @@ fn i_thumbnail_2x2_row_path_matches_multiple_wrapping_quartets() {
     }
     assert_eq!(output.as_bytes(), expected);
 }
-#[cfg(not(feature = "parallel"))]
+
 #[test]
 fn i_thumbnail_streaming_2x2_matches_materialized_reduce_and_resize() {
     let samples: Vec<i32> = (0..32 * 24)

@@ -4,7 +4,6 @@ use super::{
 };
 /// Resize the four stored C/M/Y/K bytes with narrow, exact fixed-point sums.
 /// CMYK shares an `ImageRgba8` carrier, but none of its channels are alpha.
-#[cfg(not(feature = "parallel"))]
 pub(in crate::ops::pil_resize) fn pil_resize_cmyk_i32(
     img: &DynamicImage,
     output_width: u32,
@@ -53,11 +52,33 @@ pub(in crate::ops::pil_resize) fn pil_resize_cmyk_i32(
         horizontal_pass_row_cmyk_i32(source_row, horizontal, output_width, output_row);
     }
 
+    let mut output = vec![0; output_len];
+    vertical_pass_cmyk_i32(
+        &intermediate,
+        intermediate_stride,
+        output_height,
+        vertical,
+        &mut output,
+    )?;
+
+    Some(raw_to_dynamic_owned(
+        output,
+        output_width as u32,
+        output_height as u32,
+        4,
+    ))
+}
+
+fn vertical_pass_cmyk_i32(
+    vertical_source: &[u8],
+    intermediate_stride: usize,
+    output_height: usize,
+    vertical: &FilterCoeffs,
+    output: &mut [u8],
+) -> Option<()> {
     // CMYK vertical taps read four row-major streams. Keeping those streams
     // contiguous lets the output-x loop reuse cache lines and avoids a full
     // intermediate-frame transpose/copy.
-    let vertical_source = &intermediate;
-    let mut output = vec![0; output_len];
     for output_y in 0..output_height {
         let output_start = output_y.checked_mul(intermediate_stride)?;
         let output_row =
@@ -116,15 +137,9 @@ pub(in crate::ops::pil_resize) fn pil_resize_cmyk_i32(
         }
     }
 
-    Some(raw_to_dynamic_owned(
-        output,
-        output_width as u32,
-        output_height as u32,
-        4,
-    ))
+    Some(())
 }
 
-#[cfg(not(feature = "parallel"))]
 fn horizontal_pass_row_cmyk_i32(
     source_row: &[u8],
     coeffs: &FilterCoeffs,
@@ -187,7 +202,6 @@ fn horizontal_pass_row_cmyk_i32(
     }
 }
 
-#[cfg(not(feature = "parallel"))]
 fn vertical_pass_col_cmyk_i32(
     intermediate: &[u8],
     source_stride: usize,

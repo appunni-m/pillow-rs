@@ -3,7 +3,7 @@
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image_utils::raw_bytes_to_image;
-#[cfg(not(feature = "parallel"))]
+
 use crate::ops::rotate::nearest_contiguous_rgb_run_len;
 use crate::pipeline::ResampleFilter;
 use crate::raster::{DynamicImage, GenericImageView};
@@ -15,7 +15,7 @@ use super::scalar::rotate_arbitrary_scalar;
 
 #[path = "affine/coordinates.rs"]
 mod coordinates;
-#[cfg(not(feature = "parallel"))]
+
 pub(crate) use coordinates::*;
 
 pub(crate) fn affine_nearest_fixed(
@@ -58,7 +58,6 @@ pub(crate) fn affine_nearest_fixed(
         );
     };
 
-    #[cfg(not(feature = "parallel"))]
     if channels == 3 {
         affine_nearest_fixed_rgb(
             source,
@@ -79,7 +78,6 @@ pub(crate) fn affine_nearest_fixed(
         return;
     }
 
-    #[cfg(not(feature = "parallel"))]
     if channels == 4 {
         affine_nearest_fixed_rgba(
             source,
@@ -100,31 +98,8 @@ pub(crate) fn affine_nearest_fixed(
         return;
     }
 
-    #[cfg(feature = "parallel")]
-    const PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
     let output_stride = destination_width as usize * channels;
-    #[cfg(feature = "parallel")]
-    if (destination_width as usize).saturating_mul(destination_height as usize)
-        >= PARALLEL_PIXEL_THRESHOLD
-    {
-        crate::par_rows_mut!(
-            output,
-            output_stride,
-            destination_height as usize,
-            |_row_start, _row_end, y, row| {
-                process_row(y, row);
-            }
-        );
-    } else {
-        for (y, row) in output
-            .chunks_exact_mut(output_stride)
-            .take(destination_height as usize)
-            .enumerate()
-        {
-            process_row(y as u32, row);
-        }
-    }
-    #[cfg(not(feature = "parallel"))]
+
     for (y, row) in output
         .chunks_exact_mut(output_stride)
         .take(destination_height as usize)
@@ -200,7 +175,6 @@ fn affine_nearest_fixed_process_row(
     }
 }
 
-#[cfg(not(feature = "parallel"))]
 #[inline(always)]
 fn affine_nearest_fixed_rgb(
     source: &[u8],
@@ -302,7 +276,6 @@ fn affine_nearest_fixed_rgb(
     }
 }
 
-#[cfg(not(feature = "parallel"))]
 #[inline(always)]
 fn affine_nearest_fixed_rgba(
     source: &[u8],

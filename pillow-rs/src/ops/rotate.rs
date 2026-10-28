@@ -3,10 +3,8 @@ use crate::image::Image;
 use crate::ops::imageops::ImageOpsColor;
 use crate::pipeline::{PipelineOp, ResampleFilter};
 
-#[cfg(not(feature = "parallel"))]
 #[path = "rotate/nearest.rs"]
 mod nearest;
-#[cfg(not(feature = "parallel"))]
 pub(crate) use self::nearest::nearest_contiguous_rgb_run_len;
 
 /// Host-neutral resampling input for Pillow's rotate wrapper.

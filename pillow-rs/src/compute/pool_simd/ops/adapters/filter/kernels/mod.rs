@@ -2,7 +2,6 @@ mod byte_layouts;
 mod i32_three_by_three;
 mod l;
 mod la;
-#[cfg(not(feature = "parallel"))]
 mod rgb_blur_ring;
 mod three_by_three;
 mod uniform_rgb;
@@ -35,7 +34,6 @@ pub(super) fn scan_uniform_rgb(raw: &[u8], width: usize, height: usize) -> Optio
     })
 }
 
-#[cfg(not(feature = "parallel"))]
 pub(super) fn apply_rgb_blur_ring(
     raw: &[u8],
     width: usize,

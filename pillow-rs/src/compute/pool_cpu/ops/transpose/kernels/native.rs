@@ -8,16 +8,16 @@ use crate::raster::DynamicImage;
 
 #[path = "native_dispatch.rs"]
 mod native_transpose;
-#[cfg(all(target_arch = "x86_64", not(feature = "parallel")))]
+#[cfg(target_arch = "x86_64")]
 #[path = "arch.rs"]
 mod transpose_arch;
-#[cfg(all(target_arch = "x86_64", not(feature = "parallel")))]
+#[cfg(target_arch = "x86_64")]
 #[path = "rgba_x86_64.rs"]
 mod transpose_rgba_x86_64;
 
 /// Execute a Transpose operation.
 pub(in crate::compute::pool_cpu::ops::transpose) const TRANSPOSE_TILE_SIZE: u32 = 32;
-#[cfg(not(feature = "parallel"))]
+
 const TRANSPOSE_RGBA_TILE_SIZE: u32 = 16;
 const TRANSPOSE_TILE_THRESHOLD_PIXELS: usize = 256 * 1024;
 
@@ -47,8 +47,7 @@ pub(in crate::compute::pool_cpu::ops::transpose) fn transpose_bytes_tiled<const 
     let tile_size = tile_size as usize;
     let output_stride = height * CHANNELS;
     let source_stride = width * CHANNELS;
-    #[cfg(feature = "parallel")]
-    let tile_stride = output_stride * tile_size;
+
     let tile_rows = width.div_ceil(tile_size);
     let (reverse_x, reverse_y) = match method {
         TransposeMethod::Transpose => (false, false),
@@ -88,17 +87,6 @@ pub(in crate::compute::pool_cpu::ops::transpose) fn transpose_bytes_tiled<const 
         }
     };
 
-    #[cfg(feature = "parallel")]
-    crate::par_rows_mut!(
-        output,
-        tile_stride,
-        tile_rows,
-        |_row_start, _row_end, tile_index, rows| {
-            process_tile(tile_index as usize, rows);
-        }
-    );
-
-    #[cfg(not(feature = "parallel"))]
     for tile_index in 0..tile_rows {
         let output_y_start = tile_index * tile_size;
         let output_y_end = (output_y_start + tile_size).min(width);
@@ -176,26 +164,7 @@ pub(super) fn transpose_bytes_rows<const CHANNELS: usize>(
             }
         }
     };
-    #[cfg(feature = "parallel")]
-    if dimensions.total_pixels() >= TRANSPOSE_TILE_THRESHOLD_PIXELS {
-        // Group complete rows by bytes, so a tall one-pixel image does not
-        // create a task per tiny row. Checked output dimensions bound stride
-        // and every full group; the final group may contain fewer rows.
-        let rows_per_group = (32 * 1024usize).div_ceil(stride).min(height);
-        let group_stride = rows_per_group * stride;
-        let groups = height.div_ceil(rows_per_group);
-        crate::par_rows_mut!(
-            output,
-            group_stride,
-            groups,
-            |_row_start, _row_end, group, rows| {
-                copy_rows(group as usize * rows_per_group, rows);
-            }
-        );
-    } else {
-        copy_rows(0, output);
-    }
-    #[cfg(not(feature = "parallel"))]
+
     copy_rows(0, output);
 }
 

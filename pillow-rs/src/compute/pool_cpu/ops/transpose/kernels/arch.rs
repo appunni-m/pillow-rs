@@ -3,7 +3,7 @@
 use crate::pipeline::TransposeMethod;
 use crate::raster::DynamicImage;
 
-#[cfg(all(target_arch = "x86_64", not(feature = "parallel")))]
+#[cfg(target_arch = "x86_64")]
 pub(super) fn try_rotate270_rgba_tiled(
     image: &DynamicImage,
     method: &TransposeMethod,

@@ -208,35 +208,13 @@ fn fused_multiply_screen(
     let left_bytes = img.as_bytes();
     let right_bytes = other.as_bytes();
     let mut output = vec![0u8; left_bytes.len()];
-    let row_stride = width as usize * channels;
-    if row_stride != 0 {
-        #[cfg(feature = "parallel")]
-        crate::par_rows_mut!(
-            &mut output,
-            row_stride,
-            height as usize,
-            |row_start, row_end, _y, row| {
-                let left_row = &left_bytes[row_start..row_end];
-                let right_row = &right_bytes[row_start..row_end];
-                for ((destination, &left), &right) in
-                    row.iter_mut().zip(left_row.iter()).zip(right_row.iter())
-                {
-                    let multiplied = (left as u32 * right as u32 / 255) as u8;
-                    *destination =
-                        (255u32 - ((255 - multiplied as u32) * (255 - right as u32) / 255)) as u8;
-                }
-            }
-        );
-        #[cfg(not(feature = "parallel"))]
-        for ((destination, &left), &right) in output
-            .iter_mut()
-            .zip(left_bytes.iter())
-            .zip(right_bytes.iter())
-        {
-            let multiplied = (left as u32 * right as u32 / 255) as u8;
-            *destination =
-                (255u32 - ((255 - multiplied as u32) * (255 - right as u32) / 255)) as u8;
-        }
+    for ((destination, &left), &right) in output
+        .iter_mut()
+        .zip(left_bytes.iter())
+        .zip(right_bytes.iter())
+    {
+        let multiplied = (left as u32 * right as u32 / 255) as u8;
+        *destination = (255u32 - ((255 - multiplied as u32) * (255 - right as u32) / 255)) as u8;
     }
 
     let result =

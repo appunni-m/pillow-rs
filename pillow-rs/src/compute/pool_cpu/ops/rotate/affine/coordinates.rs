@@ -1,4 +1,3 @@
-#[cfg(not(feature = "parallel"))]
 pub(crate) fn ceil_div_positive_denominator(value: i128, denominator: i128) -> Option<i128> {
     if denominator <= 0 {
         return None;
@@ -11,7 +10,6 @@ pub(crate) fn ceil_div_positive_denominator(value: i128, denominator: i128) -> O
     }
 }
 
-#[cfg(not(feature = "parallel"))]
 pub(crate) fn fixed_coordinate_in_bounds_span(
     origin: i64,
     step: i64,
@@ -35,7 +33,6 @@ pub(crate) fn fixed_coordinate_in_bounds_span(
     Some((first_in_bounds as usize, first_past_bounds as usize))
 }
 
-#[cfg(not(feature = "parallel"))]
 pub(crate) fn nearest_positive_step_in_bounds_span(
     y: u32,
     destination_width: u32,
@@ -76,14 +73,12 @@ pub(crate) fn nearest_positive_step_in_bounds_span(
     Some((start, end, source_x, source_y))
 }
 
-#[cfg(not(feature = "parallel"))]
 pub(crate) fn fill_rgb_pixels(bytes: &mut [u8], fill_pixel: [u8; 3]) {
     for pixel in bytes.chunks_exact_mut(3) {
         pixel.copy_from_slice(&fill_pixel);
     }
 }
 
-#[cfg(not(feature = "parallel"))]
 pub(crate) fn fill_rgba_pixels(bytes: &mut [u8], fill_pixel: [u8; 4]) {
     for pixel in bytes.chunks_exact_mut(4) {
         pixel.copy_from_slice(&fill_pixel);

@@ -262,34 +262,6 @@ pub fn pil_resize_boxed(
     filter: ResampleFilter,
     explicit_mode: Option<&str>,
 ) -> DynamicImage {
-    pil_resize_boxed_with_parallel_pixel_threshold(
-        img,
-        dst_w,
-        dst_h,
-        box_left,
-        box_top,
-        box_right,
-        box_bottom,
-        filter,
-        explicit_mode,
-        0,
-    )
-}
-
-/// Box-based resize with an operation-specific cutoff for Rayon row dispatch.
-/// A zero threshold preserves the general resize scheduler behavior.
-pub(crate) fn pil_resize_boxed_with_parallel_pixel_threshold(
-    img: &DynamicImage,
-    dst_w: u32,
-    dst_h: u32,
-    box_left: f64,
-    box_top: f64,
-    box_right: f64,
-    box_bottom: f64,
-    filter: ResampleFilter,
-    explicit_mode: Option<&str>,
-    parallel_pixel_threshold: usize,
-) -> DynamicImage {
     pil_resize_boxed_with_hints(
         img,
         dst_w,
@@ -300,7 +272,7 @@ pub(crate) fn pil_resize_boxed_with_parallel_pixel_threshold(
         box_bottom,
         filter,
         explicit_mode,
-        parallel_pixel_threshold,
+        0,
         None,
     )
 }

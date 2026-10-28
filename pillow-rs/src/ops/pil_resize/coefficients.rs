@@ -36,7 +36,6 @@ pub(super) fn fixed_point_to_u8(sum: i64) -> u8 {
     }
 }
 
-#[cfg(not(feature = "parallel"))]
 #[inline]
 pub(super) fn fixed_point_to_u8_i32(sum: i32) -> u8 {
     let value = (sum + (1_i32 << (PRECISION_BITS - 1))) >> PRECISION_BITS;
@@ -75,7 +74,6 @@ impl FilterCoeffs {
 
 /// Prove every ordered byte-sample partial sum, including Pillow's rounding
 /// bias, fits in i32 before selecting the narrow HSV resize kernel.
-#[cfg(not(feature = "parallel"))]
 pub(super) fn resize_u8_coefficients_fit_i32(coeffs: &FilterCoeffs) -> bool {
     if coeffs.count.len() != coeffs.offsets.len() {
         return false;

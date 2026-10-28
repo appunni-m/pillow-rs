@@ -502,7 +502,6 @@ pub(super) fn uniform_rgb_5x5_identity(
 /// Execute Pillow's RGB 5x5 BLUR ring with vectorized vertical sums and
 /// channel-interleaved horizontal taps. Only the exact native kernel enters;
 /// smaller images keep the existing lower-overhead route.
-#[cfg(not(feature = "parallel"))]
 pub(super) fn rgb_blur_ring_5x5(
     image: &DynamicImage,
     kernel: &[f32; 25],
@@ -704,7 +703,6 @@ pub(crate) fn simd_filter_5x5(
     if let Some(result) = uniform_rgb_5x5_identity(img, kernel, *scale, *offset, mode) {
         return Ok(result);
     }
-    #[cfg(not(feature = "parallel"))]
     if let Some(result) = rgb_blur_ring_5x5(img, kernel, *scale, *offset, mode) {
         return Ok(result);
     }

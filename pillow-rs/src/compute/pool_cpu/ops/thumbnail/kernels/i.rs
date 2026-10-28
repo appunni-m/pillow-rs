@@ -1,26 +1,24 @@
 //! Serial CPU I-mode thumbnail resize that fuses reducing-gap and resampling.
 
-#[cfg(not(feature = "parallel"))]
 use crate::checked_dims::CheckedDims;
-#[cfg(not(feature = "parallel"))]
+
 use crate::compute::pool_cpu::ops::resize::{
     i32_sample_bytes_from_native_storage, resample_kernel, resize_i_contiguous_eight_tap_weights,
     resize_i_horizontal_row, resize_i_round_up_to_i32, resize_i_sum_eight, resize_i_sum_general,
 };
-#[cfg(not(feature = "parallel"))]
+
 use crate::error::PilError;
-#[cfg(all(target_arch = "x86_64", not(feature = "parallel")))]
+#[cfg(target_arch = "x86_64")]
 use crate::ops::pil_resize::X86FmaToken;
-#[cfg(not(feature = "parallel"))]
+
 use crate::ops::pil_resize::{
     F64MulAdd, PortableFma, i32_samples_from_le_bytes, precompute_coeffs_f64, round_up,
 };
-#[cfg(not(feature = "parallel"))]
+
 use crate::pipeline::ResampleFilter;
-#[cfg(not(feature = "parallel"))]
+
 use crate::raster::DynamicImage;
 
-#[cfg(not(feature = "parallel"))]
 pub(in crate::compute::pool_cpu::ops::thumbnail) fn resize_i_thumbnail_reduce2x2(
     img: &DynamicImage,
     dst_w: u32,
@@ -38,7 +36,6 @@ pub(in crate::compute::pool_cpu::ops::thumbnail) fn resize_i_thumbnail_reduce2x2
 /// resize ring. Pillow still rounds and stores each reduced sample and each
 /// horizontal intermediate as INT32; this only removes the full reduced image
 /// buffer between those exact stages.
-#[cfg(not(feature = "parallel"))]
 fn resize_i_thumbnail_reduce2x2_with_fma<F: F64MulAdd>(
     img: &DynamicImage,
     dst_w: u32,

@@ -43,11 +43,7 @@ pub(crate) use self::color3dlut::simd_color3dlut;
 use self::color3dlut::{color3dlut_supported_for_image, color3dlut_supported_for_shape};
 pub(crate) use self::colorize::simd_colorize;
 mod flip;
-#[cfg(all(
-    not(feature = "parallel"),
-    target_arch = "aarch64",
-    target_feature = "neon"
-))]
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 pub(crate) use self::filter::native_filter_3x3_la_binomial_rows;
 use self::filter::{
     native_filter_3x3_channel_block_integer, native_filter_3x3_luma_block_integer,

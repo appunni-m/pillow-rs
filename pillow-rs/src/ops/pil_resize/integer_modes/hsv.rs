@@ -2,7 +2,6 @@ use super::{
     DynamicImage, FilterCoeffs, fixed_point_to_u8_i32, raw_to_dynamic_owned,
     should_transpose_vertical, transpose_resize_intermediate,
 };
-#[cfg(not(feature = "parallel"))]
 fn horizontal_pass_row_hsv_i32(
     source_row: &[u8],
     coeffs: &FilterCoeffs,
@@ -54,7 +53,6 @@ fn horizontal_pass_row_hsv_i32(
     }
 }
 
-#[cfg(not(feature = "parallel"))]
 fn vertical_pass_col_hsv_i32(
     intermediate: &[u8],
     source_rows: usize,
@@ -116,7 +114,6 @@ fn vertical_pass_col_hsv_i32(
     ]
 }
 
-#[cfg(not(feature = "parallel"))]
 pub(in crate::ops::pil_resize) fn pil_resize_hsv_i32(
     img: &DynamicImage,
     output_width: u32,
