@@ -31,6 +31,7 @@ import os
 from pathlib import Path
 import selectors
 import subprocess
+import struct
 import sys
 import tempfile
 from typing import Any
@@ -43,6 +44,7 @@ try:
         build_operation_index,
         compare_case,
         classify_pipeline_case,
+        comparison_policy,
         load_cases,
         load_manifest,
         receipt_is_meaningful,
@@ -59,6 +61,7 @@ except ModuleNotFoundError:  # imported as ``scripts.run_migration_js_parity``
         build_operation_index,
         compare_case,
         classify_pipeline_case,
+        comparison_policy,
         load_cases,
         load_manifest,
         receipt_is_meaningful,
@@ -347,6 +350,23 @@ def decode_js_result(value: Any) -> Any:
     if isinstance(value, dict):
         if set(value) == {"__pillow_rs_float_result__"}:
             return float(value["__pillow_rs_float_result__"])
+        if set(value) == {"__pillow_rs_nan_payload_result__"}:
+            encoded = value["__pillow_rs_nan_payload_result__"]
+            if not isinstance(encoded, str) or len(encoded) != 16:
+                raise ValueError("JavaScript NaN payload marker must contain 16 hex digits")
+            try:
+                bits = int(encoded, 16)
+            except (TypeError, ValueError) as error:
+                raise ValueError("invalid JavaScript NaN payload bits") from error
+            exponent = bits & 0x7FF0000000000000
+            mantissa = bits & 0x000FFFFFFFFFFFFF
+            if (
+                format(bits, "016x") != encoded.lower()
+                or exponent != 0x7FF0000000000000
+                or mantissa == 0
+            ):
+                raise ValueError("JavaScript NaN payload marker is not a binary64 NaN")
+            return {"$float64_bits": encoded.lower()}
         if set(value) == {"__pillow_rs_nonfinite_result__"}:
             marker = value["__pillow_rs_nonfinite_result__"]
             if marker not in {"NaN", "Infinity", "-Infinity"}:
@@ -363,8 +383,10 @@ def decode_js_result(value: Any) -> Any:
     return value
 
 
-def normalize_js_observable(value: Any) -> Any:
-    """Compare non-finite numbers by numeric kind, never as text values."""
+def normalize_js_observable(
+    value: Any, *, preserve_nan_payload: bool = False
+) -> Any:
+    """Normalize non-finite values unless the comparison requires NaN bits."""
 
     if isinstance(value, dict):
         if set(value) == {"$float64_bits"}:
@@ -376,7 +398,11 @@ def normalize_js_observable(value: Any) -> Any:
             mantissa = bits & 0x000FFFFFFFFFFFFF
             if exponent == 0x7FF0000000000000:
                 if mantissa:
-                    return {"$float64_special": "NaN"}
+                    return (
+                        value
+                        if preserve_nan_payload
+                        else {"$float64_special": "NaN"}
+                    )
                 return {
                     "$float64_special": "-Infinity"
                     if bits & 0x8000000000000000
@@ -388,15 +414,56 @@ def normalize_js_observable(value: Any) -> Any:
             "-Infinity",
         }:
             return value
-        return {key: normalize_js_observable(item) for key, item in value.items()}
+        return {
+            key: normalize_js_observable(
+                item, preserve_nan_payload=preserve_nan_payload
+            )
+            for key, item in value.items()
+        }
     if isinstance(value, list):
-        return [normalize_js_observable(item) for item in value]
+        return [
+            normalize_js_observable(
+                item, preserve_nan_payload=preserve_nan_payload
+            )
+            for item in value
+        ]
     if isinstance(value, float):
         if math.isnan(value):
+            if preserve_nan_payload:
+                return {"$float64_bits": struct.pack(">d", value).hex()}
             return {"$float64_special": "NaN"}
         if math.isinf(value):
             return {"$float64_special": "Infinity" if value > 0 else "-Infinity"}
     return value
+
+
+def normalize_js_workflow(
+    case: dict[str, Any],
+    workflow: dict[str, Any],
+    operation_index: dict[tuple[str, str], dict[str, Any]],
+) -> dict[str, Any]:
+    """Apply the case's NaN policy to JS results before parity comparison."""
+
+    normalized = copy.deepcopy(workflow)
+    observations = {
+        item["step_id"]: item
+        for item in normalized.get("observations", [])
+        if isinstance(item, dict) and isinstance(item.get("step_id"), str)
+    }
+    for step in case.get("steps", []):
+        observation = observations.get(step["step_id"])
+        if observation is None or "value" not in observation:
+            continue
+        policy = comparison_policy(operation_index, step, case)
+        preserve_nan_payload = policy.get("kind", "exact") in {
+            "exact",
+            "ordered",
+            "unordered",
+        }
+        observation["value"] = normalize_js_observable(
+            observation["value"], preserve_nan_payload=preserve_nan_payload
+        )
+    return normalized
 
 
 def js_asset_payload(
@@ -1512,8 +1579,8 @@ def run_streaming(args: argparse.Namespace, output: Path) -> int:
             }
             outcome, diffs = compare_case(
                 case,
-                normalize_js_observable(source_results[case_id]),
-                normalize_js_observable(public_target),
+                normalize_js_workflow(case, source_results[case_id], operation_index),
+                normalize_js_workflow(case, public_target, operation_index),
                 operation_index,
             )
             stream.write_comparison(
@@ -1799,8 +1866,10 @@ def run(args: argparse.Namespace) -> int:
             }
             outcome, diffs = compare_case(
                 case,
-                normalize_js_observable(source_results[case["case_id"]]),
-                normalize_js_observable(public_target),
+                normalize_js_workflow(
+                    case, source_results[case["case_id"]], operation_index
+                ),
+                normalize_js_workflow(case, public_target, operation_index),
                 operation_index,
             )
             comparisons.append(
