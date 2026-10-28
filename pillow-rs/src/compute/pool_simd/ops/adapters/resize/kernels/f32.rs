@@ -2,9 +2,9 @@
 
 use super::super::{SIMD_F64_LANES, SIMD_RESIZE_LANES, simd_unsupported};
 use super::{boxed_nearest_indices, resize_nearest_indices};
-use crate::compute::pool_cpu::ops::geometry::resample_kernel;
 use crate::error::PilError;
 use crate::image::preserve_mode;
+use crate::ops::pil_resize::resample_kernel;
 use crate::ops::pil_resize::{
     f32_samples_from_le_bytes, precompute_coeffs_f64, precompute_coeffs_f64_boxed,
 };

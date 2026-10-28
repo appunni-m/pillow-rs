@@ -5,10 +5,10 @@ use super::super::resize::{
 };
 use super::super::{SIMD_RESIZE_LANES, simd_unsupported};
 use crate::checked_dims::CheckedDims;
-use crate::compute::pool_cpu::ops::geometry::resample_kernel;
 use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::ops::pil_resize::i32_samples_from_le_bytes;
+use crate::ops::pil_resize::resample_kernel;
 use crate::ops::pil_resize::{precompute_coeffs_f64, round_up};
 use crate::pipeline::ResampleFilter;
 use crate::raster::DynamicImage;

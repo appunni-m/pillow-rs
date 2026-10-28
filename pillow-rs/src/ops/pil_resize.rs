@@ -14,6 +14,7 @@ mod integer_modes;
 mod luma16;
 mod resize;
 mod samples;
+mod typed_filters;
 mod vertical_passes;
 
 pub(crate) use alpha::{premultiply_alpha, unpremultiply_alpha, unpremultiply_channel};
@@ -40,3 +41,4 @@ pub(crate) use resize::{pil_preserve_mode, pil_resize, pil_resize_rgbx_into_wind
 pub(crate) use samples::{
     f32_samples_borrowed_from_le_bytes, f32_samples_from_le_bytes, i32_samples_from_le_bytes,
 };
+pub(crate) use typed_filters::resample_kernel;

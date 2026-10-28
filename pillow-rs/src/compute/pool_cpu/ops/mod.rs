@@ -24,7 +24,6 @@ pub(crate) mod enhance;
 pub(crate) mod eval;
 #[path = "../legacy/ops/filter/mod.rs"]
 pub(crate) mod filter;
-#[path = "../legacy/ops/geometry.rs"]
 pub(crate) mod geometry;
 pub(crate) mod grayscale;
 #[path = "../legacy/ops/imageops/mod.rs"]
@@ -35,7 +34,6 @@ pub(crate) mod paste;
 pub(crate) mod put;
 #[path = "../legacy/ops/reduce/mod.rs"]
 pub(crate) mod reduce;
-#[path = "../legacy/ops/resize/mod.rs"]
 pub(crate) mod resize;
 #[path = "../legacy/ops/rotate/mod.rs"]
 pub(crate) mod rotate;

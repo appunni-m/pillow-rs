@@ -171,7 +171,7 @@ pub(super) fn vertical_block(
 #[cfg(test)]
 mod tests {
     use super::{SIMD_RESIZE_LANES, horizontal_block, round_up_i32x2, vertical_block};
-    use crate::compute::pool_cpu::ops::geometry::resample_kernel;
+    use crate::ops::pil_resize::resample_kernel;
     use crate::ops::pil_resize::{precompute_coeffs_f64, round_up};
     use crate::pipeline::ResampleFilter;
     use crate::raster::{DynamicImage, RgbaImage};
