@@ -2676,20 +2676,32 @@ def classify_pipeline_case(
         return box[2] <= box[0] or box[3] <= box[1]
 
     def exif_transpose_is_known_noop(step: dict[str, Any]) -> bool:
-        """Return whether a new image proves EXIF transpose has no orientation."""
+        """Return whether the workflow proves EXIF transpose has no orientation."""
 
         if (step.get("surface"), step.get("operation")) != (
             "PIL.ImageOps",
             "exif_transpose",
         ):
             return False
+        image_value = _workflow_literal(step.get("arguments"), "image")
+        if (
+            isinstance(image_value, dict)
+            and image_value.get("protocol") == "image-with-info"
+        ):
+            info = image_value.get("info")
+            return isinstance(info, dict) and not any(
+                isinstance(key, str) and key.casefold() == "exif" for key in info
+            )
         source = argument_binding(step, "image")
         if source is None:
             return False
-        if (source.get("surface"), source.get("operation")) == (
-            "PIL.Image",
-            "new",
-        ):
+        if (
+            source.get("surface"),
+            source.get("operation"),
+        ) in {
+            ("PIL.Image", "new"),
+            ("PIL.Image", "frombytes"),
+        }:
             return True
         if (source.get("surface"), source.get("operation")) != (
             "PIL.Image",
@@ -2860,11 +2872,11 @@ def classify_pipeline_case(
             # not shrink a known source.
             return thumbnail_is_no_shrink(step)
         if key == ("PIL.ImageOps", "exif_transpose"):
-            # ``ImageOps.exif_transpose`` copies a freshly-created image with
-            # no EXIF record (or returns None in-place).  Fixed opened JPEG/
-            # TIFF payloads can prove the same no-orientation branch by
-            # mirroring ``Image::getexif`` and ``exif_get_orientation``;
-            # unknown opened sources remain conservative.
+            # Pixel-only constructors and image-with-info inputs without a
+            # top-level exif value cannot supply an orientation record. Fixed
+            # opened JPEG/TIFF payloads can prove the same branch by mirroring
+            # ``Image::getexif`` and ``exif_get_orientation``; unknown opened
+            # sources and metadata-bearing literals remain conservative.
             return exif_transpose_is_known_noop(step)
         if key == ("PIL.Image.Image", "putpixel"):
             # A degenerate/out-of-source crop creates a new blank canvas and
