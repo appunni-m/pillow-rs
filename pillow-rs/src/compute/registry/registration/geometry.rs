@@ -88,10 +88,10 @@ fn register_part_2(m: &mut Registry) {
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             _mode: Option<&str>|
+             mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if let PipelineOp::Transpose { method } = op {
-                    execute_transpose(img, method)
+                    execute_transpose(img, method, mode)
                 } else {
                     Err(PilError::ValueError("expected Transpose op".into()))
                 }
