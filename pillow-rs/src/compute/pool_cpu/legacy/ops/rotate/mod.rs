@@ -8,11 +8,11 @@ use crate::ops::pil_resize::{premultiply_alpha, unpremultiply_alpha};
 use crate::pipeline::ResampleFilter;
 use crate::raster::{DynamicImage, GenericImageView};
 
-#[path = "rotate/affine.rs"]
+#[path = "affine.rs"]
 mod affine;
-#[path = "rotate/cubic.rs"]
+#[path = "cubic.rs"]
 mod cubic;
-#[path = "rotate/scalar.rs"]
+#[path = "scalar.rs"]
 mod scalar;
 
 pub(super) use affine::*;
@@ -185,5 +185,5 @@ pub(crate) fn execute_rotate(
 }
 
 #[cfg(test)]
-#[path = "rotate/tests.rs"]
+#[path = "tests.rs"]
 mod tests;

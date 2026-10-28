@@ -686,5 +686,5 @@ pub(super) fn reduce_i_thumbnail(
 }
 
 #[cfg(test)]
-#[path = "thumbnail/tests.rs"]
+#[path = "tests.rs"]
 mod tests;

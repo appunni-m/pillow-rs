@@ -8,11 +8,11 @@ use crate::ops::pil_resize::{
 use crate::pipeline::ResampleFilter;
 use crate::raster::DynamicImage;
 
-#[path = "resize/filter.rs"]
+#[path = "filter.rs"]
 mod filter;
-#[path = "resize/float.rs"]
+#[path = "float.rs"]
 mod float;
-#[path = "resize/integer.rs"]
+#[path = "integer.rs"]
 mod integer;
 
 pub(crate) use filter::resample_kernel;
@@ -124,5 +124,5 @@ pub(crate) fn execute_resize_boxed(
 }
 
 #[cfg(test)]
-#[path = "resize/tests.rs"]
+#[path = "tests.rs"]
 mod tests;

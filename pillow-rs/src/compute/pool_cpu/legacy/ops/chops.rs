@@ -12,7 +12,7 @@ const CHOPS_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
 // ── Blend mode lookup tables (generated from PIL C implementation) ──
 
 static OVERLAY_LUT: [u8; 65536] = {
-    let bytes = include_bytes!("../../../../src/ops/lut_overlay.bin");
+    let bytes = include_bytes!("../../../../../src/ops/lut_overlay.bin");
     let mut arr = [0u8; 65536];
     let mut i = 0;
     while i < 65536 {
@@ -23,7 +23,7 @@ static OVERLAY_LUT: [u8; 65536] = {
 };
 
 static HARD_LIGHT_LUT: [u8; 65536] = {
-    let bytes = include_bytes!("../../../../src/ops/lut_hardlight.bin");
+    let bytes = include_bytes!("../../../../../src/ops/lut_hardlight.bin");
     let mut arr = [0u8; 65536];
     let mut i = 0;
     while i < 65536 {
@@ -34,7 +34,7 @@ static HARD_LIGHT_LUT: [u8; 65536] = {
 };
 
 static SOFT_LIGHT_LUT: [u8; 65536] = {
-    let bytes = include_bytes!("../../../../src/ops/lut_softlight.bin");
+    let bytes = include_bytes!("../../../../../src/ops/lut_softlight.bin");
     let mut arr = [0u8; 65536];
     let mut i = 0;
     while i < 65536 {

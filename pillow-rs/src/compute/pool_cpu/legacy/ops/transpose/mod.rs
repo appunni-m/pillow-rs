@@ -6,13 +6,13 @@ use crate::image_utils::raw_bytes_to_image;
 use crate::pipeline::TransposeMethod;
 use crate::raster::DynamicImage;
 
-#[path = "transpose/native.rs"]
+#[path = "native.rs"]
 mod native_transpose;
 #[cfg(all(target_arch = "x86_64", not(feature = "parallel")))]
-#[path = "transpose/arch.rs"]
+#[path = "arch.rs"]
 mod transpose_arch;
 #[cfg(all(target_arch = "x86_64", not(feature = "parallel")))]
-#[path = "transpose/kernels/transpose_rgba/x86_64.rs"]
+#[path = "kernels/transpose_rgba/x86_64.rs"]
 mod transpose_rgba_x86_64;
 
 /// Execute a Transpose operation.
@@ -225,5 +225,5 @@ pub(crate) fn execute_transpose(
 }
 
 #[cfg(test)]
-#[path = "transpose/tests.rs"]
+#[path = "tests.rs"]
 mod tests;

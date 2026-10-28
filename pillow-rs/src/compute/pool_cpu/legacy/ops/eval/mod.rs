@@ -2,7 +2,7 @@ use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
 
-#[path = "eval/tests.rs"]
+#[path = "tests.rs"]
 #[cfg(test)]
 mod tests;
 

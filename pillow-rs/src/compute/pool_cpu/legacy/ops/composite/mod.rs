@@ -7,7 +7,7 @@ use crate::raster::{
 };
 use std::sync::Arc;
 
-#[path = "composite/tests.rs"]
+#[path = "tests.rs"]
 #[cfg(test)]
 mod tests;
 

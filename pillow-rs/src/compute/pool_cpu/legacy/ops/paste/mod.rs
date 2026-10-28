@@ -8,12 +8,12 @@ use crate::checked_dims::CheckedDims;
 #[cfg(feature = "parallel")]
 use super::effects::EFFECT_PARALLEL_PIXEL_THRESHOLD;
 
-#[path = "paste/kernels.rs"]
+#[path = "kernels.rs"]
 mod kernels;
-#[path = "paste/layout.rs"]
+#[path = "layout.rs"]
 mod layout;
 #[cfg(test)]
-#[path = "paste/tests.rs"]
+#[path = "tests.rs"]
 mod tests;
 
 use kernels::{

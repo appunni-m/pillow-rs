@@ -617,5 +617,5 @@ pub(crate) fn execute_reduce(
 }
 
 #[cfg(test)]
-#[path = "reduce/tests.rs"]
+#[path = "tests.rs"]
 mod tests;

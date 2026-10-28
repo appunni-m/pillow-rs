@@ -4,14 +4,14 @@ use crate::ops::pil_resize::{premultiply_alpha, unpremultiply_alpha};
 use crate::pipeline::{ResampleFilter, TransformMethod};
 use crate::raster::DynamicImage;
 
-#[path = "transform/affine.rs"]
+#[path = "affine.rs"]
 mod affine;
-#[path = "transform/projective.rs"]
+#[path = "projective.rs"]
 mod projective;
-#[path = "transform/scalar.rs"]
+#[path = "scalar.rs"]
 mod scalar;
 #[cfg(test)]
-#[path = "transform/tests.rs"]
+#[path = "tests.rs"]
 mod tests;
 
 use affine::{
