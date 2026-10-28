@@ -12,7 +12,6 @@ pub(crate) mod color;
 pub(crate) mod color3dlut;
 #[path = "../legacy/ops/composite/mod.rs"]
 pub(crate) mod composite;
-#[path = "../legacy/ops/crop.rs"]
 pub(crate) mod crop;
 #[path = "../legacy/ops/draw/mod.rs"]
 pub(crate) mod draw;

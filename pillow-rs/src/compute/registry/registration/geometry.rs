@@ -35,7 +35,7 @@ fn register_crop_rotate(m: &mut Registry) {
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             _mode: Option<&str>|
+             mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if let PipelineOp::Crop {
                     left,
@@ -44,7 +44,7 @@ fn register_crop_rotate(m: &mut Registry) {
                     bottom,
                 } = op
                 {
-                    execute_crop(img, *left, *top, *right, *bottom)
+                    execute_crop(img, *left, *top, *right, *bottom, mode)
                 } else {
                     Err(PilError::ValueError("expected Crop op".into()))
                 }
