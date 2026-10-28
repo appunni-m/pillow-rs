@@ -94,100 +94,158 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- phase_telemetry.rs
 |   |   |   |-- pool_cpu/
 |   |   |   |   |-- batch_execution.rs
+|   |   |   |   |-- legacy/
+|   |   |   |   |   `-- ops/
+|   |   |   |   |       |-- chops.rs
+|   |   |   |   |       |-- color.rs
+|   |   |   |   |       |-- color3dlut.rs
+|   |   |   |   |       |-- color_convert_allocation_tests.rs
+|   |   |   |   |       |-- composite/
+|   |   |   |   |       |   |-- mod.rs
+|   |   |   |   |       |   `-- tests.rs
+|   |   |   |   |       |-- crop.rs
+|   |   |   |   |       |-- draw/
+|   |   |   |   |       |   |-- arcs.rs
+|   |   |   |   |       |   |-- canvas.rs
+|   |   |   |   |       |   |-- clipping.rs
+|   |   |   |   |       |   |-- dispatch.rs
+|   |   |   |   |       |   |-- ellipse.rs
+|   |   |   |   |       |   |-- mod.rs
+|   |   |   |   |       |   |-- operations.rs
+|   |   |   |   |       |   |-- polygon.rs
+|   |   |   |   |       |   |-- primitives.rs
+|   |   |   |   |       |   `-- rounded_rect.rs
+|   |   |   |   |       |-- effects.rs
+|   |   |   |   |       |-- enhance.rs
+|   |   |   |   |       |-- eval/
+|   |   |   |   |       |   |-- mod.rs
+|   |   |   |   |       |   `-- tests.rs
+|   |   |   |   |       |-- filter/
+|   |   |   |   |       |   |-- blur/
+|   |   |   |   |       |   |   |-- box_rows.rs
+|   |   |   |   |       |   |   |-- line.rs
+|   |   |   |   |       |   |   |-- radius_one/
+|   |   |   |   |       |   |   |   `-- vertical.rs
+|   |   |   |   |       |   |   |-- radius_one.rs
+|   |   |   |   |       |   |   `-- tests.rs
+|   |   |   |   |       |   |-- blur.rs
+|   |   |   |   |       |   |-- convolution.rs
+|   |   |   |   |       |   |-- filter3x3/
+|   |   |   |   |       |   |   `-- tests.rs
+|   |   |   |   |       |   |-- filter3x3.rs
+|   |   |   |   |       |   |-- filter5x5/
+|   |   |   |   |       |   |   |-- int32/
+|   |   |   |   |       |   |   |   |-- bounded_binomial.rs
+|   |   |   |   |       |   |   |   `-- tests.rs
+|   |   |   |   |       |   |   |-- int32.rs
+|   |   |   |   |       |   |   |-- native_bytes/
+|   |   |   |   |       |   |   |   |-- binomial.rs
+|   |   |   |   |       |   |   |   `-- tests.rs
+|   |   |   |   |       |   |   `-- native_bytes.rs
+|   |   |   |   |       |   |-- filter5x5.rs
+|   |   |   |   |       |   |-- kernels/
+|   |   |   |   |       |   |   |-- blur_line_steps.rs
+|   |   |   |   |       |   |   |-- i32_cross_smooth.rs
+|   |   |   |   |       |   |   `-- mod.rs
+|   |   |   |   |       |   |-- mod.rs
+|   |   |   |   |       |   |-- rank/
+|   |   |   |   |       |   |   |-- float.rs
+|   |   |   |   |       |   |   `-- tests.rs
+|   |   |   |   |       |   |-- rank.rs
+|   |   |   |   |       |   |-- rgb_blur_ring.rs
+|   |   |   |   |       |   |-- uniform_box.rs
+|   |   |   |   |       |   |-- uniform_box_tests.rs
+|   |   |   |   |       |   `-- uniform_image.rs
+|   |   |   |   |       |-- geometry.rs
+|   |   |   |   |       |-- grayscale.rs
+|   |   |   |   |       |-- imageops/
+|   |   |   |   |       |   |-- colorize.rs
+|   |   |   |   |       |   |-- expand.rs
+|   |   |   |   |       |   |-- geometry.rs
+|   |   |   |   |       |   |-- histogram.rs
+|   |   |   |   |       |   |-- mod.rs
+|   |   |   |   |       |   |-- pad/
+|   |   |   |   |       |   |   |-- native.rs
+|   |   |   |   |       |   |   `-- tests.rs
+|   |   |   |   |       |   |-- pad.rs
+|   |   |   |   |       |   `-- pixel.rs
+|   |   |   |   |       |-- mod.rs
+|   |   |   |   |       |-- paste/
+|   |   |   |   |       |   |-- kernels.rs
+|   |   |   |   |       |   |-- layout.rs
+|   |   |   |   |       |   |-- mod.rs
+|   |   |   |   |       |   `-- tests.rs
+|   |   |   |   |       |-- put.rs
+|   |   |   |   |       |-- reduce/
+|   |   |   |   |       |   |-- kernels/
+|   |   |   |   |       |   |   `-- rgb.rs
+|   |   |   |   |       |   |-- kernels.rs
+|   |   |   |   |       |   |-- mod.rs
+|   |   |   |   |       |   `-- tests.rs
+|   |   |   |   |       |-- resize/
+|   |   |   |   |       |   |-- filter.rs
+|   |   |   |   |       |   |-- float.rs
+|   |   |   |   |       |   |-- float_resize.rs
+|   |   |   |   |       |   |-- float_resize_tests.rs
+|   |   |   |   |       |   |-- integer.rs
+|   |   |   |   |       |   |-- mod.rs
+|   |   |   |   |       |   `-- tests.rs
+|   |   |   |   |       |-- rotate/
+|   |   |   |   |       |   |-- affine/
+|   |   |   |   |       |   |   `-- coordinates.rs
+|   |   |   |   |       |   |-- affine.rs
+|   |   |   |   |       |   |-- cubic.rs
+|   |   |   |   |       |   |-- mod.rs
+|   |   |   |   |       |   |-- scalar.rs
+|   |   |   |   |       |   `-- tests.rs
+|   |   |   |   |       |-- thumbnail/
+|   |   |   |   |       |   |-- fusion.rs
+|   |   |   |   |       |   |-- mod.rs
+|   |   |   |   |       |   `-- tests.rs
+|   |   |   |   |       |-- transform/
+|   |   |   |   |       |   |-- affine.rs
+|   |   |   |   |       |   |-- mod.rs
+|   |   |   |   |       |   |-- projective.rs
+|   |   |   |   |       |   |-- scalar/
+|   |   |   |   |       |   |   `-- projective.rs
+|   |   |   |   |       |   |-- scalar.rs
+|   |   |   |   |       |   `-- tests.rs
+|   |   |   |   |       `-- transpose/
+|   |   |   |   |           |-- arch.rs
+|   |   |   |   |           |-- kernels/
+|   |   |   |   |           |   `-- transpose_rgba/
+|   |   |   |   |           |       `-- x86_64.rs
+|   |   |   |   |           |-- mod.rs
+|   |   |   |   |           |-- native.rs
+|   |   |   |   |           `-- tests.rs
 |   |   |   |   |-- mod.rs
 |   |   |   |   `-- ops/
-|   |   |   |       |-- chops.rs
-|   |   |   |       |-- color.rs
-|   |   |   |       |-- color3dlut.rs
-|   |   |   |       |-- color_convert_allocation_tests.rs
-|   |   |   |       |-- composite/
-|   |   |   |       |   `-- tests.rs
-|   |   |   |       |-- composite.rs
 |   |   |   |       |-- crop.rs
-|   |   |   |       |-- draw/
-|   |   |   |       |   |-- arcs.rs
-|   |   |   |       |   |-- canvas.rs
-|   |   |   |       |   |-- clipping.rs
-|   |   |   |       |   |-- dispatch.rs
-|   |   |   |       |   |-- ellipse.rs
-|   |   |   |       |   |-- operations.rs
-|   |   |   |       |   |-- polygon.rs
-|   |   |   |       |   |-- primitives.rs
-|   |   |   |       |   `-- rounded_rect.rs
-|   |   |   |       |-- draw.rs
-|   |   |   |       |-- effects.rs
-|   |   |   |       |-- enhance.rs
-|   |   |   |       |-- eval/
-|   |   |   |       |   `-- tests.rs
-|   |   |   |       |-- eval.rs
-|   |   |   |       |-- filter/
-|   |   |   |       |   |-- blur/
-|   |   |   |       |   |   |-- box_rows.rs
-|   |   |   |       |   |   |-- line.rs
-|   |   |   |       |   |   |-- radius_one/
-|   |   |   |       |   |   |   `-- vertical.rs
-|   |   |   |       |   |   |-- radius_one.rs
-|   |   |   |       |   |   `-- tests.rs
-|   |   |   |       |   |-- blur.rs
-|   |   |   |       |   |-- convolution.rs
-|   |   |   |       |   |-- filter3x3/
-|   |   |   |       |   |   `-- tests.rs
-|   |   |   |       |   |-- filter3x3.rs
-|   |   |   |       |   |-- filter5x5/
-|   |   |   |       |   |   |-- int32/
-|   |   |   |       |   |   |   |-- bounded_binomial.rs
-|   |   |   |       |   |   |   `-- tests.rs
-|   |   |   |       |   |   |-- int32.rs
-|   |   |   |       |   |   |-- native_bytes/
-|   |   |   |       |   |   |   |-- binomial.rs
-|   |   |   |       |   |   |   `-- tests.rs
-|   |   |   |       |   |   `-- native_bytes.rs
-|   |   |   |       |   |-- filter5x5.rs
-|   |   |   |       |   |-- kernels/
-|   |   |   |       |   |   |-- blur_line_steps.rs
-|   |   |   |       |   |   |-- i32_cross_smooth.rs
-|   |   |   |       |   |   `-- mod.rs
-|   |   |   |       |   |-- rank/
-|   |   |   |       |   |   |-- float.rs
-|   |   |   |       |   |   `-- tests.rs
-|   |   |   |       |   |-- rank.rs
-|   |   |   |       |   |-- rgb_blur_ring.rs
-|   |   |   |       |   |-- uniform_box.rs
-|   |   |   |       |   |-- uniform_box_tests.rs
-|   |   |   |       |   `-- uniform_image.rs
-|   |   |   |       |-- filter.rs
 |   |   |   |       |-- geometry.rs
+|   |   |   |       |-- grayscale/
+|   |   |   |       |   `-- kernels/
+|   |   |   |       |       `-- ycbcr.rs
 |   |   |   |       |-- grayscale.rs
-|   |   |   |       |-- imageops/
-|   |   |   |       |   |-- colorize.rs
-|   |   |   |       |   |-- expand.rs
-|   |   |   |       |   |-- geometry.rs
-|   |   |   |       |   |-- histogram.rs
-|   |   |   |       |   |-- pad/
-|   |   |   |       |   |   |-- native.rs
-|   |   |   |       |   |   `-- tests.rs
-|   |   |   |       |   |-- pad.rs
-|   |   |   |       |   `-- pixel.rs
-|   |   |   |       |-- imageops.rs
 |   |   |   |       |-- mod.rs
-|   |   |   |       |-- paste/
-|   |   |   |       |   |-- kernels.rs
-|   |   |   |       |   |-- layout.rs
-|   |   |   |       |   `-- tests.rs
-|   |   |   |       |-- paste.rs
-|   |   |   |       |-- put.rs
 |   |   |   |       |-- reduce/
 |   |   |   |       |   |-- kernels/
+|   |   |   |       |   |   |-- default.rs
+|   |   |   |       |   |   |-- f.rs
+|   |   |   |       |   |   |-- i.rs
 |   |   |   |       |   |   `-- rgb.rs
 |   |   |   |       |   |-- kernels.rs
 |   |   |   |       |   `-- tests.rs
 |   |   |   |       |-- reduce.rs
 |   |   |   |       |-- resize/
-|   |   |   |       |   |-- filter.rs
-|   |   |   |       |   |-- float.rs
-|   |   |   |       |   |-- float_resize.rs
-|   |   |   |       |   |-- float_resize_tests.rs
-|   |   |   |       |   |-- integer.rs
+|   |   |   |       |   |-- kernels/
+|   |   |   |       |   |   |-- default.rs
+|   |   |   |       |   |   |-- f/
+|   |   |   |       |   |   |   |-- float_resize.rs
+|   |   |   |       |   |   |   `-- float_resize_tests.rs
+|   |   |   |       |   |   |-- f.rs
+|   |   |   |       |   |   |-- i.rs
+|   |   |   |       |   |   `-- one.rs
+|   |   |   |       |   |-- kernels.rs
 |   |   |   |       |   `-- tests.rs
 |   |   |   |       |-- resize.rs
 |   |   |   |       |-- rotate/
@@ -198,24 +256,13 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |-- scalar.rs
 |   |   |   |       |   `-- tests.rs
 |   |   |   |       |-- rotate.rs
-|   |   |   |       |-- thumbnail/
-|   |   |   |       |   |-- fusion.rs
-|   |   |   |       |   `-- tests.rs
-|   |   |   |       |-- thumbnail.rs
-|   |   |   |       |-- transform/
-|   |   |   |       |   |-- affine.rs
-|   |   |   |       |   |-- projective.rs
-|   |   |   |       |   |-- scalar/
-|   |   |   |       |   |   `-- projective.rs
-|   |   |   |       |   |-- scalar.rs
-|   |   |   |       |   `-- tests.rs
-|   |   |   |       |-- transform.rs
 |   |   |   |       |-- transpose/
-|   |   |   |       |   |-- arch.rs
 |   |   |   |       |   |-- kernels/
-|   |   |   |       |   |   `-- transpose_rgba/
-|   |   |   |       |   |       `-- x86_64.rs
-|   |   |   |       |   |-- native.rs
+|   |   |   |       |   |   |-- arch.rs
+|   |   |   |       |   |   |-- native.rs
+|   |   |   |       |   |   |-- native_dispatch.rs
+|   |   |   |       |   |   `-- rgba_x86_64.rs
+|   |   |   |       |   |-- kernels.rs
 |   |   |   |       |   `-- tests.rs
 |   |   |   |       `-- transpose.rs
 |   |   |   |-- pool_gpu/
@@ -944,6 +991,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |-- luma16.rs
 |   |   |   |   |-- resize.rs
 |   |   |   |   |-- samples.rs
+|   |   |   |   |-- typed_filters.rs
 |   |   |   |   |-- vertical_passes/
 |   |   |   |   |   |-- resize_transpose_tests.rs
 |   |   |   |   |   |-- rgb_vertical_pass_tests.rs

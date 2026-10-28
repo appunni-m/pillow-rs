@@ -34,7 +34,6 @@ pub(crate) mod put;
 pub(crate) mod reduce;
 pub(crate) mod resize;
 pub(crate) mod rotate;
-#[path = "../legacy/ops/thumbnail/mod.rs"]
 pub(crate) mod thumbnail;
 #[path = "../legacy/ops/transform/mod.rs"]
 pub(crate) mod transform;
