@@ -2,6 +2,7 @@
 //! Keep source scanning, bind-group reuse, dispatch, and readback together.
 
 use super::*;
+use std::borrow::Cow;
 
 fn projection_source_is_zero(source: &[u8]) -> bool {
     let zero = u8x16::splat(0);
@@ -43,6 +44,11 @@ fn projection_dispatch_fits_limits(
     let Some(output_bytes) = output_words.checked_mul(4) else {
         return false;
     };
+    let Some(source_bytes) = pixels.checked_mul(u64::from(channels)) else {
+        return false;
+    };
+    // Storage reads are u32-aligned, including the final RGB pixel's tail.
+    let source_words = source_bytes.div_ceil(4);
     let capacity_words = pixels.max(output_words).max(1);
     let Some(capacity_bytes) = capacity_words.checked_mul(4) else {
         return false;
@@ -57,6 +63,7 @@ fn projection_dispatch_fits_limits(
             _ => false,
         })));
     pixels <= u64::from(GPU_BUFFER_CAPACITY)
+        && source_words <= capacity_words
         && capacity_words <= u64::from(GPU_BUFFER_CAPACITY)
         && capacity_bytes <= limits.max_buffer_size
         && capacity_bytes <= u64::from(limits.max_storage_buffer_binding_size)
@@ -100,7 +107,6 @@ impl GpuPool {
         if image.width() == 0
             || image.height() == 0
             || ops.len() > 128
-            || dimensions.total_bytes() % 4 != 0
             || !ops
                 .iter()
                 .all(|op| matches!(op, PipelineOp::PutPixel { .. }))
@@ -244,7 +250,7 @@ impl GpuInner {
             width,
             height,
             dimensions,
-            byte_len: source_bytes,
+            transfer_byte_len: source_bytes,
         } = projection_source(image, channels)?;
         // A zero-filled source contributes no projected pixels. The sparse
         // override kernel can handle this case without transferring or
@@ -252,8 +258,8 @@ impl GpuInner {
         // A constructor-proven zero fill avoids the CPU preflight scan. Other
         // sources still require an exact scan before the zero-upload shader
         // route can be admitted.
-        let source_is_zero =
-            !ops.is_empty() && (source_is_known_zero || projection_source_is_zero(source));
+        let source_is_zero = !ops.is_empty()
+            && (source_is_known_zero || projection_source_is_zero(source.as_ref()));
         let overrides = collect_projection_overrides(ops, width, height, channels)?;
         let output = projection_output_layout(width, height, &dimensions, source_is_zero)?;
         let mut buffers = self.acquire_buffers(output.capacity_words)?;
@@ -267,7 +273,7 @@ impl GpuInner {
         );
         self.prepare_projection_uploads(
             &mut buffers,
-            source,
+            source.as_ref(),
             source_bytes,
             source_is_zero,
             &params,
@@ -496,14 +502,17 @@ impl GpuInner {
 }
 
 struct ProjectionSource<'a> {
-    bytes: &'a [u8],
+    bytes: Cow<'a, [u8]>,
     width: u32,
     height: u32,
     dimensions: CheckedDims,
-    byte_len: usize,
+    transfer_byte_len: usize,
 }
 
-fn projection_source(image: &DynamicImage, channels: u8) -> Result<ProjectionSource<'_>, PilError> {
+fn projection_source(
+    image: &DynamicImage,
+    channels: u8,
+) -> Result<ProjectionSource<'_>, PilError> {
     let bytes: &[u8] = match (channels, image) {
         (3, DynamicImage::ImageRgb8(pixels)) => pixels.as_raw(),
         (4, DynamicImage::ImageRgba8(pixels)) => pixels.as_raw(),
@@ -521,12 +530,24 @@ fn projection_source(image: &DynamicImage, channels: u8) -> Result<ProjectionSou
             "GPU projection source is not tightly packed".into(),
         ));
     }
+    let transfer_byte_len = byte_len
+        .checked_add(std::mem::size_of::<u32>() - 1)
+        .map(|aligned| aligned & !(std::mem::size_of::<u32>() - 1))
+        .ok_or_else(|| PilError::ValueError("GPU projection source is too large".into()))?;
+    // Keep aligned buffers borrowed; pad only a trailing partial storage word.
+    let bytes = if transfer_byte_len == byte_len {
+        Cow::Borrowed(bytes)
+    } else {
+        let mut padded = bytes.to_vec();
+        padded.resize(transfer_byte_len, 0);
+        Cow::Owned(padded)
+    };
     Ok(ProjectionSource {
         bytes,
         width,
         height,
         dimensions,
-        byte_len,
+        transfer_byte_len,
     })
 }
 
