@@ -31,7 +31,6 @@ pub(crate) mod imageops;
 pub(crate) mod paste;
 #[path = "../legacy/ops/put.rs"]
 pub(crate) mod put;
-#[path = "../legacy/ops/reduce/mod.rs"]
 pub(crate) mod reduce;
 pub(crate) mod resize;
 pub(crate) mod rotate;
