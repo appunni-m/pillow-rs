@@ -43,16 +43,22 @@ The constructor takes mode, width, height, and RGBA color components.
 `Uint8Array`, not an encoded image file. The generated TypeScript declarations
 define the JavaScript names and argument types.
 
+Images also expose a mutable `info` object for host metadata. Operations that
+derive an image preserve a shallow copy of that object where their Pillow
+counterpart does; nested values retain their references. Newly created canvases
+start with their own empty metadata object.
+
 ## Initialization and browser assets
 
 Node resolves `node.js` and loads the bundled WASM bytes from disk. A browser
-bundler resolves the generated web module. Call and await `init()` before
+bundler resolves the public wrapper around the generated web module. Call and await `init()` before
 constructing images in either environment.
 
 If your bundler relocates the WASM asset, pass the emitted URL through the
 initializer's `module_or_path` option. Serve the asset with the correct URL
 and a WebAssembly-compatible response; an HTML fallback page is not a WASM
-module. Do not ship private `pkg/` imports as the application's package API.
+module. The package entrypoint adds the JavaScript metadata wrapper around the
+generated bindings; do not import private `pkg/` paths directly.
 
 The JavaScript
 API is not Python syntax: for example, use `resize(width, height)` and

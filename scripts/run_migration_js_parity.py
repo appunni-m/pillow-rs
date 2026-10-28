@@ -179,9 +179,22 @@ DRAW_METHODS = {
     "rectangle",
     "rounded_rectangle",
 }
-# ``alpha_composite`` is an Image.Image mutator in the current JS binding;
-# there is no static ``PIL.Image.alpha_composite`` export to dispatch here.
 IMAGE_FUNCTIONS = {"blend", "composite", "merge"}
+# Static operations with concrete dispatch in the shared WASM workflow.
+IMAGE_STATIC_OPERATIONS = {
+    "new",
+    "open",
+    "fromarray",
+    "frombuffer",
+    "frombytes",
+    "alpha_composite",
+    "effect_mandelbrot",
+    "effect_noise",
+    "eval",
+    "linear_gradient",
+    "radial_gradient",
+    *IMAGE_FUNCTIONS,
+}
 
 # These operations consume the process-global Darwin-compatible RNG in the
 # Rust core.  Restarting the JS host between ordinary chunks resets that
@@ -648,7 +661,7 @@ def compatible_case(
         elif surface == "PIL.ImageOps":
             if operation not in OPS_METHODS:
                 return f"imageops-method-not-exported:{operation}"
-        elif surface == "PIL.Image" and operation in {"new", *IMAGE_FUNCTIONS}:
+        elif surface == "PIL.Image" and operation in IMAGE_STATIC_OPERATIONS:
             pass
         elif surface == "PIL.ImageDraw" and operation == "Draw":
             pass

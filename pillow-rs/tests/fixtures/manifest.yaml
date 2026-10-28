@@ -13334,11 +13334,11 @@ surfaces:
           kind: literal
           value: null
       result:
-        shape: record
+        shape: handle
         observations:
-        - path: value
+        - path: value.type
           value_types:
-          - record
+          - string
           comparison:
             kind: exact
         error:

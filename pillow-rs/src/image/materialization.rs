@@ -289,7 +289,8 @@ impl Image {
             || (source.explicit_mode() == Some("PA")
                 && matches!(op, PipelineOp::PutPixel { .. }))
             // PA resize filters the raw index/alpha pair without expanding
-            // the palette. Preserve that palette for later conversions.
+            // the palette. The newly allocated Pillow image does not carry
+            // the source palette object, so output metadata clears it below.
             || (source.explicit_mode() == Some("PA")
                 && matches!(op, PipelineOp::Resize { .. } | PipelineOp::ResizeBoxed { .. }))
             || (source.explicit_mode() == Some("PA")

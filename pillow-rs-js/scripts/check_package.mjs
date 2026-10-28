@@ -11,11 +11,11 @@ if (manifest.name !== 'pillow-rs') {
 if (manifest.exports?.['.']?.node !== './node.js') {
     throw new Error('package root must select node.js under the node condition');
 }
-if (manifest.exports?.['.']?.browser !== './pkg/core/pillow_rs_js.js') {
-    throw new Error('package root must select the generated web module in browsers');
+if (manifest.exports?.['.']?.browser !== './public.js') {
+    throw new Error('package root must select the public wrapper module in browsers');
 }
-if (manifest.browser !== './pkg/core/pillow_rs_js.js') {
-    throw new Error('legacy browser package resolution must select the generated web module');
+if (manifest.browser !== './public.js') {
+    throw new Error('legacy browser package resolution must select the public wrapper module');
 }
 
 const report = JSON.parse(
@@ -26,6 +26,7 @@ const required = [
     'README.md',
     'LICENSE',
     'node.js',
+    'host/display/imageshow.js',
     'index.d.ts',
     'pkg/core/pillow_rs_js.js',
     'pkg/core/pillow_rs_js.d.ts',

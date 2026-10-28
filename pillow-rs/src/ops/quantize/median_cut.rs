@@ -285,13 +285,13 @@ impl QuantHash {
 pub(crate) fn median_cut_quantize_rgb(pixels: &[u8], n_colors: usize) -> (Vec<u8>, Vec<[u8; 3]>) {
     let n = pixels.len() / 3;
     if n == 0 {
-        return (Vec::new(), vec![[0u8; 3]; 1]);
+        return (Vec::new(), Vec::new());
     }
 
     let n_colors = n_colors.clamp(1, 256);
     let first = [pixels[0], pixels[1], pixels[2]];
     if pixels[..n * 3].chunks_exact(3).all(|pixel| pixel == first) {
-        return (vec![0u8; n], vec![first; n_colors]);
+        return (vec![0u8; n], vec![first]);
     }
 
     let (entries, scale) = build_histogram(pixels, n);
@@ -314,9 +314,8 @@ pub(crate) fn median_cut_quantize_rgb(pixels: &[u8], n_colors: usize) -> (Vec<u8
         return (vec![0u8; n], vec![[0u8; 3]; 1]);
     }
 
-    let final_palette = pad_palette(palette, n_colors);
-    let indices = map_pixels_to_palette(pixels, &final_palette, &tree, scale);
-    (indices, final_palette)
+    let indices = map_pixels_to_palette(pixels, &palette, &tree, scale);
+    (indices, palette)
 }
 
 fn build_histogram(pixels: &[u8], pixel_count: usize) -> (Vec<HistEntry>, u32) {
@@ -424,12 +423,6 @@ fn collect_tree_leaves(tree: &[MedianCutNode], idx: usize, leaves: &mut Vec<usiz
         (None, None) => leaves.push(idx),
         (_, _) => unreachable!("node must have both or no children"),
     }
-}
-
-fn pad_palette(mut palette: Vec<[u8; 3]>, n_colors: usize) -> Vec<[u8; 3]> {
-    let last = *palette.last().expect("non-empty palette");
-    palette.resize(n_colors, last);
-    palette
 }
 
 // ── Helper: check if HistEntry falls inside VBox ──

@@ -298,6 +298,51 @@ impl Image {
         ))
     }
 
+    fn putdata_requested_backend(&self) -> Option<crate::compute::Backend> {
+        if !crate::compute::Backend::pipeline_telemetry_enabled() {
+            return None;
+        }
+        self.backend().or_else(|| {
+            crate::compute::preferred_active_backend()
+                .ok()
+                .flatten()
+                .and_then(|(backend, only_active)| only_active.then_some(backend))
+        })
+    }
+
+    fn putdata_l16_value_at(
+        &mut self,
+        pixel_index: usize,
+        value: &PutDataValue,
+        scale: f64,
+        offset: f64,
+        requested_backend: Option<crate::compute::Backend>,
+    ) -> Result<(), PilError> {
+        let sample = putdata_l16_sample(value, scale, offset)?;
+        self.load()?;
+        if let Image::Loaded(data) = self {
+            let image = Arc::make_mut(&mut data.image);
+            let destination = image
+                .as_mut_luma16()
+                .ok_or_else(|| PilError::InternalError("putdata I;16 storage mismatch".into()))?;
+            let pixel = destination.as_mut().get_mut(pixel_index).ok_or_else(|| {
+                PilError::InternalError("putdata I;16 offset out of bounds".into())
+            })?;
+            *pixel = sample;
+            data.known_zero_fill = false;
+            crate::compute::record_eager_cpu_operation_receipt_with_reason(
+                "PutData",
+                requested_backend,
+                0,
+                "per-item writes must be visible before the next sequence value is coerced",
+            );
+            return Ok(());
+        }
+        Err(PilError::InternalError(
+            "putdata I;16 did not materialize writable storage".into(),
+        ))
+    }
+
     /// Writes one normalized `putdata` value immediately at a pixel offset.
     ///
     /// Host-language bindings use this form while coercing values because
@@ -321,6 +366,13 @@ impl Image {
         scale: f64,
         offset: f64,
     ) -> Result<(), PilError> {
+        // This public helper is the callback-preserving path: writes are
+        // visible before the binding coerces the next value, so they execute
+        // directly on host storage even when SIMD/GPU is requested. Capture
+        // the request before `load()` consumes a locked pipeline so telemetry
+        // can report the actual CPU route as a backend gap.
+        let requested_backend = self.putdata_requested_backend();
+
         let (width, height) = self.size()?;
         let pixel_count = (width as usize)
             .checked_mul(height as usize)
@@ -331,23 +383,7 @@ impl Image {
 
         let mode_name = self.mode()?;
         if is_l16_mode(&mode_name) {
-            let sample = putdata_l16_sample(value, scale, offset)?;
-            self.load()?;
-            if let Image::Loaded(data) = self {
-                let image = Arc::make_mut(&mut data.image);
-                let destination = image.as_mut_luma16().ok_or_else(|| {
-                    PilError::InternalError("putdata I;16 storage mismatch".into())
-                })?;
-                let pixel = destination.as_mut().get_mut(pixel_index).ok_or_else(|| {
-                    PilError::InternalError("putdata I;16 offset out of bounds".into())
-                })?;
-                *pixel = sample;
-                data.known_zero_fill = false;
-                return Ok(());
-            }
-            return Err(PilError::InternalError(
-                "putdata I;16 did not materialize writable storage".into(),
-            ));
+            return self.putdata_l16_value_at(pixel_index, value, scale, offset, requested_backend);
         }
         let mode = crate::pipeline::PixelMode::from_name(&mode_name).ok_or_else(|| {
             PilError::ValueError(format!("unsupported putdata mode: {mode_name}"))
@@ -413,6 +449,12 @@ impl Image {
                 ));
             }
         }
+        crate::compute::record_eager_cpu_operation_receipt_with_reason(
+            "PutData",
+            requested_backend,
+            0,
+            "per-item writes must be visible before the next sequence value is coerced",
+        );
         Ok(())
     }
 }

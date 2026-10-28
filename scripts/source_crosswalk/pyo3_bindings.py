@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .python_bindings import Binding, ModuleRef, PythonBindingIndex
+from .python_bindings import Binding, ModuleRef, PythonBindingIndex, SymbolRef
 from .rust_calls import (
     direct_public_api_calls,
     direct_receiver_aliases,
@@ -270,7 +270,7 @@ def struct_field_type(source: str, struct_name: str, field_name: str) -> dict[st
 def python_native_calls(
     binding: Binding, index: PythonBindingIndex
 ) -> list[PythonNativeCall]:
-    """Return explicit calls through imported `_core` and Rust Image handles."""
+    """Return explicit calls through `_core`, native-class aliases, and Rust handles."""
     if not isinstance(binding.node, (ast.FunctionDef, ast.AsyncFunctionDef)):
         return []
 
@@ -280,6 +280,45 @@ def python_native_calls(
         for name, value in module_bindings.items()
         if isinstance(value, ModuleRef) and value.module.endswith("._core")
     }
+    module_source = index.files.get(binding.module)
+    if module_source is not None:
+        module_tree = module_source[1]
+        importer_names = {
+            alias.asname or alias.name
+            for node in module_tree.body
+            if isinstance(node, ast.ImportFrom) and node.module == "importlib"
+            for alias in node.names
+            if alias.name == "import_module"
+        }
+        for node in ast.walk(module_tree):
+            if isinstance(node, ast.Assign):
+                assigned = {
+                    name.id
+                    for target in node.targets
+                    for name in ast.walk(target)
+                    if isinstance(name, ast.Name)
+                }
+                value = node.value
+            elif isinstance(node, ast.AnnAssign):
+                assigned = {
+                    name.id
+                    for name in ast.walk(node.target)
+                    if isinstance(name, ast.Name)
+                }
+                value = node.value
+            else:
+                continue
+            if (
+                "_core" in assigned
+                and isinstance(value, ast.Call)
+                and isinstance(value.func, ast.Name)
+                and value.func.id in importer_names
+                and value.args
+                and isinstance(value.args[0], ast.Constant)
+                and isinstance(value.args[0].value, str)
+                and value.args[0].value in {"._core", "._core_parallel"}
+            ):
+                core_names.add("_core")
     for node in ast.walk(binding.node):
         if isinstance(node, ast.ImportFrom):
             core_import = any(item.name == "_core" for item in node.names)
@@ -298,6 +337,18 @@ def python_native_calls(
         "_rust_pilfont": "PyPilFont",
         "_rust_outline": "PyOutline",
     }
+    native_class_owners = {
+        "Image": "PyImage",
+        "ImageDraw": "PyDraw",
+        "Outline": "PyOutline",
+    }
+    # Bindings commonly import `_core.Image` under an internal alias such as
+    # `RustImage`; calls on that alias are still direct PyO3 receiver calls.
+    for name, value in module_bindings.items():
+        if isinstance(value, SymbolRef) and value.module.endswith("._core"):
+            owner = native_class_owners.get(value.name)
+            if owner is not None:
+                handle_owners[name] = owner
     callback_image_parameter = None
     if (
         binding.kind == "python_method"

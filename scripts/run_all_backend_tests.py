@@ -809,6 +809,11 @@ def backend_coverage_report(lanes: list[dict[str, Any]]) -> dict[str, Any]:
             or not isinstance(summary, dict)
         ):
             reasons.append("terminal execution evidence is missing")
+            # Without a valid sidecar, the selected cases cannot be assigned
+            # to either the pipeline-applicable or not-applicable cohort.
+            # Preserve them as indeterminate so the emitted partition remains
+            # complete while the lane stays explicitly not proven.
+            pipeline_indeterminate_cases = selected
         else:
             required_summary = {
                 "selected",

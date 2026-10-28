@@ -62,14 +62,15 @@ pub(crate) use telemetry::{
     cancel_eager_cpu_operation_telemetry, capture_active_origin, enter_operation_origins,
     execute_eager_simd_bytes, finish_eager_cpu_operation_telemetry,
     finish_pipeline_operation_telemetry, host_resource_telemetry,
-    record_eager_cpu_operation_receipt, record_pipeline_allocation,
-    record_pipeline_backend_fallback, record_pipeline_operation_handoff,
-    record_pipeline_operation_mode_conversion, record_pipeline_operation_path,
-    record_pipeline_operation_scalar_tail, record_pipeline_operation_unsupported,
-    record_pipeline_operation_vector_blocks, record_pipeline_resize_coeff_cache_hit,
-    record_pipeline_resize_coeff_cache_miss, record_pipeline_resource_telemetry,
-    reset_pipeline_allocation_telemetry, reset_pipeline_operation_telemetry,
-    take_pipeline_allocation_telemetry, take_pipeline_operation_telemetry,
+    record_eager_cpu_operation_receipt, record_eager_cpu_operation_receipt_with_reason,
+    record_pipeline_allocation, record_pipeline_backend_fallback,
+    record_pipeline_operation_handoff, record_pipeline_operation_mode_conversion,
+    record_pipeline_operation_path, record_pipeline_operation_scalar_tail,
+    record_pipeline_operation_unsupported, record_pipeline_operation_vector_blocks,
+    record_pipeline_resize_coeff_cache_hit, record_pipeline_resize_coeff_cache_miss,
+    record_pipeline_resource_telemetry, reset_pipeline_allocation_telemetry,
+    reset_pipeline_operation_telemetry, take_pipeline_allocation_telemetry,
+    take_pipeline_operation_telemetry,
 };
 #[cfg(feature = "gpu")]
 pub(crate) use telemetry::{

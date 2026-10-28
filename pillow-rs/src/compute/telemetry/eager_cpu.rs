@@ -22,6 +22,14 @@ pub(crate) fn begin_eager_cpu_operation_telemetry(
     operation: &'static str,
     requested_backend: Option<Backend>,
 ) -> EagerCpuOperationTelemetry {
+    begin_eager_cpu_operation_telemetry_with_reason(operation, requested_backend, None)
+}
+
+pub(crate) fn begin_eager_cpu_operation_telemetry_with_reason(
+    operation: &'static str,
+    requested_backend: Option<Backend>,
+    fallback_detail: Option<&str>,
+) -> EagerCpuOperationTelemetry {
     let timed = pipeline_telemetry_enabled();
     if !timed {
         return EagerCpuOperationTelemetry {
@@ -46,8 +54,11 @@ pub(crate) fn begin_eager_cpu_operation_telemetry(
         requested_backend,
         fallback_reason: requested_backend
             .filter(|backend| *backend != Backend::Cpu)
-            .map(|backend| {
-                format!("{operation} ran on the host CPU while {backend:?} was requested")
+            .map(|backend| match fallback_detail {
+                Some(detail) => format!(
+                    "{operation} ran on the host CPU while {backend:?} was requested: {detail}"
+                ),
+                None => format!("{operation} ran on the host CPU while {backend:?} was requested"),
             }),
     }
 }
@@ -60,6 +71,22 @@ pub(crate) fn record_eager_cpu_operation_receipt(
     output_bytes: usize,
 ) {
     let telemetry = begin_eager_cpu_operation_telemetry(operation, requested_backend);
+    finish_eager_cpu_operation_telemetry(telemetry, output_bytes);
+}
+
+/// Record a host-owned operation with a specific reason that prevents use of
+/// the requested accelerated backend.
+pub(crate) fn record_eager_cpu_operation_receipt_with_reason(
+    operation: &'static str,
+    requested_backend: Option<Backend>,
+    output_bytes: usize,
+    fallback_detail: &'static str,
+) {
+    let telemetry = begin_eager_cpu_operation_telemetry_with_reason(
+        operation,
+        requested_backend,
+        Some(fallback_detail),
+    );
     finish_eager_cpu_operation_telemetry(telemetry, output_bytes);
 }
 

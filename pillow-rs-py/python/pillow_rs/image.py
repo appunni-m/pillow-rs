@@ -594,7 +594,7 @@ class Image:
         return _ExifCompat(raw, loaded_exif=self.format != "TIFF")
 
     def getim(self):
-        """Return the Rust-owned capsule-shaped internal-image handle."""
+        """Return the live Rust-owned internal-image handle."""
         return self._rust_image.getim()
 
     def getpalette(self, rawmode="RGB"):

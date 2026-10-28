@@ -486,7 +486,12 @@ def _validate_comparison(value: Any, path: str) -> None:
         delta = comparison["maximum_channel_delta"]
         if type(delta) is not int or delta < 0 or (comparison["pixel_mode"] in {"exact", "nondeterministic"} and delta != 0) or (comparison["pixel_mode"] == "bounded_delta" and delta <= 0):
             raise _error(f"{path}.comparison.maximum_channel_delta", "invalid image delta")
-        if comparison["metadata_mode"] not in {"exact", "declared_only", "ignored"}:
+        if comparison["metadata_mode"] not in {
+            "exact",
+            "declared_only",
+            "ignored",
+            "dynamic_lab_icc_datetime",
+        }:
             raise _error(f"{path}.comparison.metadata_mode", "unsupported metadata policy")
         if (comparison["pixel_mode"] != "exact" or comparison["metadata_mode"] != "exact") and (not isinstance(comparison["reason"], str) or not comparison["reason"]):
             raise _error(f"{path}.comparison.reason", "relaxed image policy requires a reason")
@@ -753,6 +758,12 @@ def _validate_descriptor(
         _exact(descriptor, {"kind", "value"}, path)
         literal = descriptor["value"]
         _reject_nested_display_protocol(literal, f"{path}.value")
+        _validate_putdata_literal(
+            literal,
+            f"{path}.value",
+            prior_steps,
+            prior_image_steps,
+        )
         if (
             isinstance(literal, dict)
             and literal.get("protocol") == "capture-viewer"
@@ -847,6 +858,158 @@ def _validate_asset(asset: Any, path: str, asset_ids: set[str], fixture_root: Pa
     return asset_id
 
 
+def _validate_putdata_literal(
+    value: Any,
+    path: str,
+    prior_steps: set[str],
+    prior_image_steps: set[str],
+) -> None:
+    """Validate input-only Python protocol values used by putdata parity."""
+
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            _validate_putdata_literal(
+                item,
+                f"{path}[{index}]",
+                prior_steps,
+                prior_image_steps,
+            )
+        return
+    if not isinstance(value, dict):
+        return
+
+    protocol = value.get("protocol")
+    if isinstance(protocol, str) and protocol.startswith("putdata-"):
+        if protocol == "putdata-custom-index":
+            _exact(value, {"protocol", "value"}, path)
+            if type(value["value"]) is not int:
+                raise _error(f"{path}.value", "expected integer value")
+            return
+        if protocol == "putdata-mutation-container":
+            _exact(
+                value,
+                {"protocol", "container", "items", "reported_length", "mutation"},
+                path,
+            )
+            if value["container"] not in {"list", "sequence"}:
+                raise _error(f"{path}.container", "expected list or sequence")
+            items = _list(value["items"], f"{path}.items")
+            if not items:
+                raise _error(f"{path}.items", "expected at least one item")
+            length = value["reported_length"]
+            if length is not None and (type(length) is not int or length < 0):
+                raise _error(f"{path}.reported_length", "expected null or non-negative integer")
+            mutation = _exact(
+                value["mutation"],
+                {"trigger_index", "target_index", "replacement", "return_value"},
+                f"{path}.mutation",
+            )
+            for name in ("trigger_index", "target_index"):
+                index = mutation[name]
+                if type(index) is not int or not 0 <= index < len(items):
+                    raise _error(f"{path}.mutation.{name}", "index is outside items")
+            if mutation["trigger_index"] == mutation["target_index"]:
+                raise _error(f"{path}.mutation", "trigger and target must differ")
+            if type(mutation["return_value"]) not in {int, float}:
+                raise _error(f"{path}.mutation.return_value", "expected a number")
+            _validate_putdata_literal(
+                mutation["replacement"],
+                f"{path}.mutation.replacement",
+                prior_steps,
+                prior_image_steps,
+            )
+            for index, item in enumerate(items):
+                _validate_putdata_literal(
+                    item,
+                    f"{path}.items[{index}]",
+                    prior_steps,
+                    prior_image_steps,
+                )
+            return
+        if protocol == "putdata-sequence":
+            _exact(value, {"protocol", "items", "reported_length"}, path)
+            items = _list(value["items"], f"{path}.items")
+            length = value["reported_length"]
+            if length is not None and (type(length) is not int or length < 0):
+                raise _error(f"{path}.reported_length", "expected null or non-negative integer")
+            for index, item in enumerate(items):
+                _validate_putdata_literal(
+                    item,
+                    f"{path}.items[{index}]",
+                    prior_steps,
+                    prior_image_steps,
+                )
+            return
+        if protocol == "putdata-iterator-only":
+            _exact(value, {"protocol", "items"}, path)
+            for index, item in enumerate(_list(value["items"], f"{path}.items")):
+                _validate_putdata_literal(
+                    item,
+                    f"{path}.items[{index}]",
+                    prior_steps,
+                    prior_image_steps,
+                )
+            return
+        if protocol == "putdata-bytes-subclass":
+            _exact(value, {"protocol", "values", "reported_length", "iteration"}, path)
+            for field in ("values", "iteration"):
+                for index, item in enumerate(_list(value[field], f"{path}.{field}")):
+                    if type(item) is not int or not 0 <= item <= 255:
+                        raise _error(f"{path}.{field}[{index}]", "expected byte value")
+            if type(value["reported_length"]) is not int or value["reported_length"] < 0:
+                raise _error(f"{path}.reported_length", "expected non-negative integer")
+            return
+        if protocol == "putdata-getitem-only":
+            _exact(value, {"protocol", "value"}, path)
+            _validate_putdata_literal(
+                value["value"], f"{path}.value", prior_steps, prior_image_steps
+            )
+            return
+        if protocol in {"putdata-read-pixel", "putdata-image-pixel-coercion"}:
+            fields = (
+                {"protocol", "image_step_id", "xy", "channel"}
+                if protocol == "putdata-read-pixel"
+                else {
+                    "protocol",
+                    "image_step_id",
+                    "xy",
+                    "channel",
+                    "conversion",
+                }
+            )
+            _exact(value, fields, path)
+            image_step_id = _string(value["image_step_id"], f"{path}.image_step_id")
+            if image_step_id not in prior_steps or image_step_id not in prior_image_steps:
+                raise _error(f"{path}.image_step_id", "must reference an earlier image result")
+            xy = _list(value["xy"], f"{path}.xy")
+            if len(xy) != 2 or any(type(coordinate) is not int for coordinate in xy):
+                raise _error(f"{path}.xy", "expected two integer coordinates")
+            channel = value["channel"]
+            if channel is not None and (type(channel) is not int or channel < 0):
+                raise _error(f"{path}.channel", "expected null or non-negative integer")
+            if protocol == "putdata-image-pixel-coercion" and value["conversion"] not in {
+                "float",
+                "index",
+            }:
+                raise _error(f"{path}.conversion", "expected float or index")
+            return
+        if protocol == "putdata-raise":
+            _exact(value, {"protocol", "type", "message"}, path)
+            if value["type"] != "RuntimeError":
+                raise _error(f"{path}.type", "only RuntimeError is supported")
+            _string(value["message"], f"{path}.message")
+            return
+        raise _error(f"{path}.protocol", "unsupported putdata input protocol")
+
+    for key, item in value.items():
+        _validate_putdata_literal(
+            item,
+            f"{path}.{key}",
+            prior_steps,
+            prior_image_steps,
+        )
+
+
 def _literal_type(value: Any) -> str:
     if value is None:
         return "null"
@@ -896,6 +1059,17 @@ def _literal_type(value: Any) -> str:
             return "sequence"
         if value.get("protocol") == "sequence" and isinstance(value.get("items"), list):
             return "sequence"
+        if protocol in {
+            "putdata-mutation-container",
+            "putdata-sequence",
+            "putdata-bytes-subclass",
+            "putdata-getitem-only",
+        }:
+            return "sequence"
+        if protocol == "putdata-iterator-only":
+            # This input intentionally implements only iteration and should
+            # reach Image.putdata's public sequence rejection.
+            return "record"
         if (
             value.get("protocol") == "text-repeat"
             and isinstance(value.get("text"), str)

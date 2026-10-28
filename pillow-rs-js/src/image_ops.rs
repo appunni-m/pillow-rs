@@ -339,24 +339,18 @@ pub fn color3dlut_new(
 }
 
 #[wasm_bindgen(js_name = "color3DLUTGenerate")]
-/// Generates a Color3DLUT table using a supported named callback.
+/// Generates a Color3DLUT table by invoking a JavaScript callback.
 pub fn color3dlut_generate(
     size_x: u32,
     size_y: u32,
     size_z: u32,
     channels: u32,
-    callback: String,
+    callback: js_sys::Function,
 ) -> Result<Vec<f64>, JsValue> {
     pillow_rs::color3dlut_generate_table(
         (size_x, size_y, size_z),
         channels,
-        |values| match callback.as_str() {
-            "color3dlut-generate-identity" => Ok(values.to_vec()),
-            "color3dlut-short-result" => Ok(values.iter().copied().take(2).collect()),
-            _ => Err(err(pillow_rs::PilError::NotImplementedError(format!(
-                "unsupported Color3DLUT callback: {callback}"
-            )))),
-        },
+        |values| call_float_callback(&callback, values),
         err,
     )
 }

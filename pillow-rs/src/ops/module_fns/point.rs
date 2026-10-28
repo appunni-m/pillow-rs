@@ -160,6 +160,59 @@ pub fn eval_point_transform(image: &Image, scale: f64, offset: f64) -> Result<Im
     Ok(Image::from_dynamic(result, Some(mode)))
 }
 
+/// Applies a host callback to each scalar sample in an integer or float image.
+///
+/// Unlike byte-valued point operations, scalar images do not have a bounded
+/// 256-entry lookup table. The caller owns the callback; Rust owns image
+/// materialization, sample decoding, and output conversion.
+pub fn eval_point_callable<F>(image: &Image, mut callback: F) -> Result<Image, PilError>
+where
+    F: FnMut(f64) -> Result<f64, PilError>,
+{
+    let mode = image.mode()?;
+    if !matches!(
+        mode.as_str(),
+        "I" | "I;16" | "I;16L" | "I;16B" | "I;16N" | "F"
+    ) {
+        return Err(PilError::ValueError(
+            "point operation not supported for this mode".to_owned(),
+        ));
+    }
+
+    let mut result = image.materialize()?;
+    match mode.as_str() {
+        "I" => {
+            let pixels = result.as_mut_rgba8().ok_or_else(|| {
+                PilError::InternalError("I image has no four-byte scalar storage".to_owned())
+            })?;
+            for pixel in pixels.pixels_mut() {
+                let value = f64::from(i32::from_le_bytes(pixel.0));
+                pixel.0 = (callback(value)? as i32).to_le_bytes();
+            }
+        }
+        "F" => {
+            let pixels = result.as_mut_rgba8().ok_or_else(|| {
+                PilError::InternalError("F image has no four-byte scalar storage".to_owned())
+            })?;
+            for pixel in pixels.pixels_mut() {
+                let value = f64::from(f32::from_le_bytes(pixel.0));
+                pixel.0 = (callback(value)? as f32).to_le_bytes();
+            }
+        }
+        "I;16" | "I;16L" | "I;16B" | "I;16N" => {
+            let pixels = result.as_mut_luma16().ok_or_else(|| {
+                PilError::InternalError("I;16 image has no 16-bit scalar storage".to_owned())
+            })?;
+            for pixel in pixels.pixels_mut() {
+                pixel.0[0] = callback(f64::from(pixel.0[0]))? as u16;
+            }
+        }
+        _ => unreachable!("scalar point mode was validated above"),
+    }
+
+    Ok(Image::from_dynamic(result, Some(mode)))
+}
+
 /// Validates and applies a pre-expanded Pillow lookup table.
 ///
 /// Pillow requires exactly 256 entries per image band for a non-callable LUT.

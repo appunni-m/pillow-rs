@@ -592,6 +592,13 @@ def result_shape(
     if endpoint.kind == "type":
         return "handle", ["handle"]
 
+    if endpoint.source_path == "PIL.ImageDraw.Draw":
+        # The constructor returns a live drawing-context object. Its
+        # implementation-specific fields (ImagingDraw versus RustDraw) are
+        # not a portable record; parity checks the real handle type and its
+        # association with the supplied image.
+        return "handle", ["handle"]
+
     if endpoint.source_path == "PIL.ImageSequence.Iterator.__iter__":
         # Pillow annotates this protocol method with the iterator class name;
         # the parity value is still a public handle, not a sequence to drain.

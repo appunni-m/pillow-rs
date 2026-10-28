@@ -469,6 +469,158 @@ class PublicSequenceValue:
         return self._items[index]
 
 
+class PutDataDynamicSequenceValue:
+    """Sequence input whose indexed values can observe live public images."""
+
+    def __init__(
+        self,
+        items: list[Any],
+        *,
+        bindings: dict[str, Any],
+        reported_length: int | None = None,
+    ):
+        self._items = items
+        self._bindings = bindings
+        self._reported_length = reported_length
+
+    def __len__(self) -> int:
+        return (
+            len(self._items)
+            if self._reported_length is None
+            else self._reported_length
+        )
+
+    def __getitem__(self, index: int) -> Any:
+        if index < 0 or index >= len(self._items):
+            raise IndexError(index)
+        value = self._items[index]
+        if isinstance(value, dict) and value.get("protocol") == "putdata-read-pixel":
+            return _putdata_read_pixel(value, self._bindings)
+        if isinstance(value, dict) and value.get("protocol") == "putdata-raise":
+            raise RuntimeError(value["message"])
+        return value
+
+
+class PutDataListMutationValue:
+    """Float-convertible value that mutates a later item in its source list."""
+
+    def __init__(
+        self,
+        items: list[Any],
+        *,
+        target_index: int,
+        replacement: Any,
+        return_value: float,
+    ):
+        self._items = items
+        self._target_index = target_index
+        self._replacement = replacement
+        self._return_value = return_value
+
+    def __float__(self) -> float:
+        self._items[self._target_index] = self._replacement
+        return self._return_value
+
+
+class PutDataImagePixelCoercion:
+    """Float/index callback that reads a pixel through the public Image API."""
+
+    def __init__(self, value: dict[str, Any], bindings: dict[str, Any]):
+        self._value = value
+        self._bindings = bindings
+
+    def __float__(self) -> float:
+        return float(_putdata_read_pixel(self._value, self._bindings))
+
+    def __index__(self) -> int:
+        return int(_putdata_read_pixel(self._value, self._bindings))
+
+
+class PutDataGetItemOnlyValue:
+    """Nested sequence protocol object without ``__len__`` or ``__iter__``."""
+
+    def __init__(self, value: Any):
+        self._value = value
+
+    def __getitem__(self, index: int) -> Any:
+        if index == 0:
+            return self._value
+        raise IndexError(index)
+
+
+class PutDataIteratorOnlyValue:
+    """Iterable input that deliberately lacks the Python sequence protocol."""
+
+    def __init__(self, items: list[Any]):
+        self._items = items
+
+    def __iter__(self):
+        return iter(self._items)
+
+
+class PutDataBytesSubclass(bytes):
+    """Bytes subclass with independent raw storage, length, and iteration."""
+
+    def __new__(
+        cls,
+        values: list[int],
+        reported_length: int,
+        iteration_values: list[int],
+    ):
+        value = super().__new__(cls, bytes(values))
+        value._reported_length = reported_length
+        value._iteration_values = iteration_values
+        return value
+
+    def __len__(self) -> int:
+        return self._reported_length
+
+    def __iter__(self):
+        return iter(self._iteration_values)
+
+
+def _putdata_read_pixel(value: dict[str, Any], bindings: dict[str, Any]) -> Any:
+    image = bindings[value["image_step_id"]]
+    pixel = image.getpixel(tuple(value["xy"]))
+    channel = value.get("channel")
+    if channel is not None:
+        pixel = pixel[channel] if isinstance(pixel, tuple) else pixel
+    return pixel
+
+
+def _decode_putdata_mutation_container(
+    value: dict[str, Any],
+    *,
+    side: str,
+    preserve_lists: bool,
+    bindings: dict[str, Any] | None,
+) -> Any:
+    items = [
+        decode_literal(item, side=side, preserve_lists=preserve_lists, bindings=bindings)
+        for item in value["items"]
+    ]
+    mutation = value["mutation"]
+    mutator = PutDataListMutationValue(
+        items,
+        target_index=mutation["target_index"],
+        replacement=decode_literal(
+            mutation["replacement"],
+            side=side,
+            preserve_lists=preserve_lists,
+            bindings=bindings,
+        ),
+        return_value=mutation["return_value"],
+    )
+    items[mutation["trigger_index"]] = mutator
+    if value["container"] == "list":
+        return items
+    return PutDataDynamicSequenceValue(
+        items,
+        bindings=bindings or {},
+        reported_length=value.get("reported_length"),
+    )
+
+
 class PutDataCustomIndexValue:
     """Public scalar with ``__index__`` used to test putdata ordering."""
 
@@ -529,10 +681,16 @@ def decode_literal(
     *,
     side: str = "source",
     preserve_lists: bool = False,
+    bindings: dict[str, Any] | None = None,
 ) -> Any:
     if isinstance(value, list):
         converted = [
-            decode_literal(item, side=side, preserve_lists=preserve_lists)
+            decode_literal(
+                item,
+                side=side,
+                preserve_lists=preserve_lists,
+                bindings=bindings,
+            )
             for item in value
         ]
         # JSON has one sequence representation.  The public Pillow contract
@@ -549,8 +707,68 @@ def decode_literal(
                     "invalid-argument-type requires only a value field"
                 )
             return decode_literal(
-                value["value"], side=side, preserve_lists=preserve_lists
+                value["value"],
+                side=side,
+                preserve_lists=preserve_lists,
+                bindings=bindings,
             )
+        if protocol == "putdata-mutation-container":
+            return _decode_putdata_mutation_container(
+                value,
+                side=side,
+                preserve_lists=preserve_lists,
+                bindings=bindings,
+            )
+        if protocol == "putdata-sequence":
+            items = [
+                decode_literal(
+                    item,
+                    side=side,
+                    preserve_lists=preserve_lists,
+                    bindings=bindings,
+                )
+                for item in value["items"]
+            ]
+            return PutDataDynamicSequenceValue(
+                items,
+                bindings=bindings or {},
+                reported_length=value["reported_length"],
+            )
+        if protocol == "putdata-iterator-only":
+            return PutDataIteratorOnlyValue(
+                [
+                    decode_literal(
+                        item,
+                        side=side,
+                        preserve_lists=preserve_lists,
+                        bindings=bindings,
+                    )
+                    for item in value["items"]
+                ]
+            )
+        if protocol == "putdata-bytes-subclass":
+            return PutDataBytesSubclass(
+                value["values"],
+                value["reported_length"],
+                value["iteration"],
+            )
+        if protocol == "putdata-getitem-only":
+            return PutDataGetItemOnlyValue(
+                decode_literal(
+                    value["value"],
+                    side=side,
+                    preserve_lists=preserve_lists,
+                    bindings=bindings,
+                )
+            )
+        if protocol == "putdata-image-pixel-coercion":
+            if bindings is None:
+                raise ValueError("putdata image pixel coercion requires workflow bindings")
+            return PutDataImagePixelCoercion(value, bindings)
+        if protocol in {"putdata-read-pixel", "putdata-raise"}:
+            # The sequence adapter evaluates these protocol records when the
+            # source's __getitem__ is called, preserving materialization order.
+            return value
         if protocol == "outline":
             return decode_outline(value, side=side)
         if protocol == "numpy-array":
@@ -564,7 +782,15 @@ def decode_literal(
             if not isinstance(items, list):
                 raise ValueError("sequence requires an items list")
             return PublicSequenceValue(
-                tuple(decode_literal(item, side=side) for item in items)
+                tuple(
+                    decode_literal(
+                        item,
+                        side=side,
+                        preserve_lists=preserve_lists,
+                        bindings=bindings,
+                    )
+                    for item in items
+                )
             )
         if protocol == "putdata-custom-index":
             value = value.get("value")
@@ -580,7 +806,15 @@ def decode_literal(
             items = value.get("items")
             if not isinstance(items, list):
                 raise ValueError("list requires an items list")
-            return [decode_literal(item, side=side) for item in items]
+            return [
+                decode_literal(
+                    item,
+                    side=side,
+                    preserve_lists=preserve_lists,
+                    bindings=bindings,
+                )
+                for item in items
+            ]
         if protocol == "getmesh":
             return DeformerValue(value)
         if protocol == "public-class":
@@ -834,6 +1068,7 @@ def resolve_descriptor(
             value,
             side=side,
             preserve_lists=preserve_lists,
+            bindings=bindings,
         )
     if kind == "binding":
         return bindings[descriptor["step_id"]]
@@ -1112,6 +1347,16 @@ def _metadata(value: Any, name: str) -> Any:
         return None
 
 
+def _serialized_palette(value: Any) -> Any:
+    """Serialize the public palette table instead of its opaque wrapper."""
+
+    getpalette = getattr(value, "getpalette", None)
+    if not callable(getpalette):
+        return None
+    palette = getpalette()
+    return None if palette is None else json_safe(bytes(palette))
+
+
 def _decode_display_file_captures(
     value: Any,
     *,
@@ -1293,12 +1538,20 @@ def _serialize_image_record(
         "size": json_safe(getattr(value, "size", None)),
         "format": _metadata(value, "format"),
         "info": _metadata(value, "info"),
-        "palette": _metadata(value, "palette"),
+        "palette": _serialized_palette(value),
         "bytes": base64.b64encode(raw).decode("ascii"),
     }
 
 
-def serialize_value(value: Any, shape: str, *, side: str, surface: str, operation: str) -> Any:
+def serialize_value(
+    value: Any,
+    shape: str,
+    *,
+    side: str,
+    surface: str,
+    operation: str,
+    expected_handle: Any = None,
+) -> Any:
     """Serialize the declared public result shape, never an implementation repr."""
 
     if shape == "none":
@@ -1386,10 +1639,33 @@ def serialize_value(value: Any, shape: str, *, side: str, surface: str, operatio
     if shape == "handle":
         if value is None:
             return None
+        if surface == "PIL.ImageDraw" and operation == "Draw":
+            expected_type = "ImageDraw" if side == "source" else "Draw"
+            actual_type = type(value).__name__
+            if actual_type != expected_type:
+                raise TypeError(
+                    f"ImageDraw.Draw returned {actual_type}, expected {expected_type} for {side}"
+                )
+            if expected_handle is None or getattr(value, "_image", None) is not expected_handle:
+                raise TypeError("ImageDraw.Draw did not retain the supplied image")
+            return {"type": "ImageDraw"}
+        if surface == "PIL.Image.Image" and operation == "getim":
+            expected_type = "PyCapsule" if side == "source" else "Image"
+            actual_type = type(value).__name__
+            if actual_type != expected_type:
+                raise TypeError(
+                    "getim returned "
+                    f"{actual_type}, expected {expected_type} for {side}"
+                )
+            if side == "target" and value is not expected_handle:
+                raise TypeError("getim did not return the receiver's live Rust image")
+            # The reference returns an opaque PyCapsule; Rust bindings return
+            # their live image object. Their process-local representations
+            # cannot be compared, so verify the reference capsule type and
+            # target receiver identity before comparing the portable handle
+            # contract.
+            return {"type": "ImageCoreHandle"}
         type_name = type(value).__name__
-        # The target's Draw class is the public ImageDraw.ImageDraw endpoint.
-        if side == "target" and surface == "PIL.ImageDraw" and operation == "Draw":
-            type_name = "ImageDraw"
         return {"type": type_name}
     if shape == "value":
         return json_safe(value)
@@ -1411,17 +1687,6 @@ def serialize_value(value: Any, shape: str, *, side: str, surface: str, operatio
         except TypeError:
             return json_safe(value)
     if shape in {"mapping", "record"}:
-        if side == "target" and surface == "PIL.ImageDraw" and operation == "Draw":
-            return {
-                "palette": None,
-                "_image": None,
-                "im": None,
-                "draw": None,
-                "mode": getattr(value, "_orig_mode", None),
-                "ink": -1,
-                "fontmode": "L",
-                "fill": False,
-            }
         if isinstance(value, dict):
             if surface == "PIL.Image.Image" and operation == "info":
                 value = _decode_display_file_captures(value, side=side)
@@ -3297,7 +3562,11 @@ def run_case(
             # exposing a bounded failure state to the benchmark runner.
             "status": (
                 "completed"
-                if blocked_reason is None and not timed_observation_errors
+                if (
+                    blocked_reason is None
+                    and not timed_observation_errors
+                    and not strict_execution_errors
+                )
                 else "not_run"
             ),
             "observations": [],
@@ -3334,12 +3603,31 @@ def run_case(
         opdef = operation_definition(operation_index, step["surface"], step["operation"])
         shape = opdef["source"]["result"]["shape"]
         try:
+            expected_handle = None
+            receiver_descriptor = step.get("receiver")
+            if step["surface"] == "PIL.ImageDraw" and step["operation"] == "Draw":
+                image_descriptor = step.get("arguments", {}).get("im")
+                if (
+                    isinstance(image_descriptor, dict)
+                    and image_descriptor.get("kind") == "binding"
+                ):
+                    expected_handle = bindings[image_descriptor["step_id"]]
+            elif (
+                side == "target"
+                and step["surface"] == "PIL.Image.Image"
+                and step["operation"] == "getim"
+                and isinstance(receiver_descriptor, dict)
+                and receiver_descriptor.get("kind") == "binding"
+            ):
+                receiver = bindings[receiver_descriptor["step_id"]]
+                expected_handle = getattr(receiver, "_rust_image", receiver)
             value = serialize_value(
                 result["_value"],
                 shape,
                 side=side,
                 surface=step["surface"],
                 operation=step["operation"],
+                expected_handle=expected_handle,
             )
             if pipeline_execution_api is not None and pipeline_execution_sink is not None:
                 receipt = pipeline_execution_api.take_pipeline_telemetry()
@@ -3382,8 +3670,10 @@ def run_case(
         observations.append(
             {"step_id": observation_id, "status": "ok", "value": value}
         )
-    workflow_complete = blocked_reason is None and all(
-        observation.get("status") == "ok" for observation in observations
+    workflow_complete = (
+        blocked_reason is None
+        and not strict_execution_errors
+        and all(observation.get("status") == "ok" for observation in observations)
     )
     if (
         workflow_complete
@@ -3424,7 +3714,7 @@ def run_case(
     execution_errors.extend(strict_execution_errors)
     return {
         "case_id": case["case_id"],
-        "status": "completed",
+        "status": "completed" if workflow_complete else "not_run",
         "observations": observations,
         # This private diagnostic is consumed by the target-side receipt
         # evidence writer; ``run_side`` strips it from public observations.
@@ -3977,12 +4267,7 @@ def _diff(path: str, kind: str, source: Any, target: Any, message: str) -> dict[
 
 
 def _lab_profile_datetime(profile: bytes) -> _dt.datetime | None:
-    """Parse the live creation time from Pillow's generated LAB profile.
-
-    LittleCMS rebuilds this canonical 572-byte profile for each RGB-to-LAB
-    conversion and stamps ICC's dateTimeNumber header field. All other bytes
-    remain deterministic and are still compared exactly.
-    """
+    """Parse LittleCMS's live dateTimeNumber from its canonical LAB profile."""
 
     if (
         len(profile) != 572
@@ -3994,7 +4279,10 @@ def _lab_profile_datetime(profile: bytes) -> _dt.datetime | None:
         or profile[36:40] != b"acsp"
     ):
         return None
-    fields = [int.from_bytes(profile[offset : offset + 2], "big") for offset in range(24, 36, 2)]
+    fields = [
+        int.from_bytes(profile[offset : offset + 2], "big")
+        for offset in range(24, 36, 2)
+    ]
     try:
         return _dt.datetime(*fields)
     except ValueError:
@@ -4004,7 +4292,7 @@ def _lab_profile_datetime(profile: bytes) -> _dt.datetime | None:
 def _image_with_lab_profile_datetime_cleared(
     image: dict[str, Any], profile: bytes
 ) -> dict[str, Any]:
-    """Copy an image record with only ICC dateTimeNumber cleared."""
+    """Copy an image record with only the ICC dateTimeNumber cleared."""
 
     normalized_profile = profile[:24] + bytes(12) + profile[36:]
     info = dict(image["info"])
@@ -4017,7 +4305,7 @@ def _image_with_lab_profile_datetime_cleared(
 
 
 def _same_lab_image_except_creation_time(source: Any, target: Any) -> bool:
-    """Allow only a valid, near-contemporaneous LAB ICC creation time to vary."""
+    """Compare a LAB image exactly except for its live ICC creation time."""
 
     if (
         not isinstance(source, dict)
@@ -4049,9 +4337,9 @@ def _same_lab_image_except_creation_time(source: Any, target: Any) -> bool:
     source_time = _lab_profile_datetime(profiles[0])
     target_time = _lab_profile_datetime(profiles[1])
     assert source_time is not None and target_time is not None
-    # Source and target run in separate adapter processes. A one-day bound
-    # accommodates long CI batches and a UTC midnight crossing while still
-    # rejecting a stale or unrelated profile timestamp.
+    # Pillow and pillow-rs execute in separate adapter processes. The profile
+    # timestamp is therefore not a shared expected value; retain a bounded
+    # check to reject stale profiles while allowing a midnight crossing.
     if abs(source_time - target_time) > _dt.timedelta(days=1):
         return False
 
@@ -4103,6 +4391,10 @@ def compare_value(source: Any, target: Any, policy: dict[str, Any], path: str) -
             if source_length != target_length:
                 return [_diff(path, "image_size_mismatch", source_bytes, target_bytes, "stable image byte lengths differ")]
             return []
+        if metadata_mode == "dynamic_lab_icc_datetime":
+            if _same_lab_image_except_creation_time(source, target):
+                return []
+            return [_diff(path, "image_mismatch", source, target, "LAB image pixels or stable metadata differ")]
         if metadata_mode == "ignored" and isinstance(source, dict) and isinstance(target, dict):
             left = source.get("bytes")
             right = target.get("bytes")
@@ -4110,8 +4402,6 @@ def compare_value(source: Any, target: Any, policy: dict[str, Any], path: str) -
                 return []
             return [_diff(path, "image_mismatch", source, target, "image pixel bytes mismatch")]
         if source == target:
-            return []
-        if _same_lab_image_except_creation_time(source, target):
             return []
         return [_diff(path, "image_mismatch", source, target, "declared image comparison mismatch")]
     if kind == "text":

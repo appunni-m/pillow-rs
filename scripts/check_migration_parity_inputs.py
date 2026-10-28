@@ -4,17 +4,22 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
-import shutil
+import sys
 import tempfile
 from pathlib import Path
+
+sys.dont_write_bytecode = True
 
 from build_migration_parity_inputs import (
     CRASH_QUARANTINE_RELATIVE,
     DEFAULT_MANIFEST,
     FIXTURE_ROOT,
     build_inputs,
+    indexed_generated_asset_paths,
     load_manifest,
+    prepare_asset_overlay,
 )
 from validate_migration_parity_contract import validate_inputs
 
@@ -102,39 +107,62 @@ def main() -> None:
     quarantine = active_root / CRASH_QUARANTINE_RELATIVE
     with tempfile.TemporaryDirectory(prefix="migration-parity-inputs-") as directory:
         generated_root = Path(directory)
-        build_inputs(manifest, generated_root, FIXTURE_ROOT / "assets")
+        generated_assets_root = prepare_asset_overlay(
+            generated_root / "assets",
+            FIXTURE_ROOT / "assets",
+        )
+        build_inputs(manifest, generated_root, generated_assets_root)
         generated_quarantine = generated_root / CRASH_QUARANTINE_RELATIVE
-        if quarantine.is_file() and quarantine.read_bytes() != generated_quarantine.read_bytes():
+        if not quarantine.is_file():
+            raise SystemExit(
+                f"missing crash quarantine input: {CRASH_QUARANTINE_RELATIVE}"
+            )
+        if quarantine.read_bytes() != generated_quarantine.read_bytes():
             raise SystemExit(
                 f"input drift in crash quarantine: {CRASH_QUARANTINE_RELATIVE} differs from generator"
             )
-        if not quarantine.is_file():
-            quarantine.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(generated_quarantine, quarantine)
         validate_crash_quarantine(quarantine)
         if args.quarantine_only:
             validate_crash_quarantine(generated_quarantine)
             print("crash quarantine inputs reproduce exactly (static check only)")
             return
-        for lane_paths in manifest["input_index"].values():
+        for lane, lane_paths in manifest["input_index"].items():
             for relative in lane_paths:
                 active = active_root / relative
-                if active.is_file():
-                    continue
-                generated = generated_root / relative
-                active.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(generated, active)
-        generated_assets = generated_root / "assets"
+                if not active.is_file():
+                    raise SystemExit(f"missing indexed {lane} input: {relative}")
+        generated_assets = generated_root / "assets" / "generated"
         if generated_assets.exists():
             for generated in generated_assets.rglob("*"):
                 if not generated.is_file():
                     continue
                 relative = generated.relative_to(generated_assets)
-                active = active_root / "assets" / relative
+                active = active_root / "assets" / "generated" / relative
                 if not active.is_file():
-                    active.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(generated, active)
+                    raise SystemExit(
+                        f"missing generated parity asset: assets/generated/{relative.as_posix()}"
+                    )
         validate_inputs(manifest, active_root)
+        referenced_assets = indexed_generated_asset_paths(active_root, manifest)
+        active_generated_assets = active_root / "assets" / "generated"
+        active_asset_paths = {
+            path.relative_to(active_generated_assets).as_posix()
+            for path in active_generated_assets.rglob("*")
+            if path.is_file()
+        }
+        if active_asset_paths != referenced_assets:
+            raise SystemExit(
+                "generated asset cache differs from indexed references: "
+                f"unreferenced={sorted(active_asset_paths - referenced_assets)}, "
+                f"missing={sorted(referenced_assets - active_asset_paths)}"
+            )
+        for relative in sorted(referenced_assets):
+            asset_path = active_generated_assets / relative
+            digest = hashlib.sha256(asset_path.read_bytes()).hexdigest()
+            if Path(relative).stem != digest:
+                raise SystemExit(
+                    f"generated asset is not content-addressed: {relative}"
+                )
         for lane, relative_paths in manifest["input_index"].items():
             for relative in relative_paths:
                 active = active_root / relative
@@ -149,10 +177,10 @@ def main() -> None:
             )
             for generated in generated_paths:
                 relative = generated.relative_to(generated_assets)
-                active = active_root / "assets" / relative
-                if not active.is_file() or active.read_bytes() != generated.read_bytes():
+                active = active_root / "assets" / "generated" / relative
+                if active.read_bytes() != generated.read_bytes():
                     raise SystemExit(
-                        f"asset drift: assets/{relative.as_posix()} differs from generator"
+                        f"asset drift: assets/generated/{relative.as_posix()} differs from generator"
                     )
     print("migration parity inputs and crash quarantine reproduce exactly")
 

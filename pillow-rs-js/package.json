@@ -8,22 +8,24 @@
   },
   "homepage": "https://github.com/appunni-m/pillow-rs#readme",
   "main": "./node.js",
-  "module": "./pkg/core/pillow_rs_js.js",
-  "browser": "./pkg/core/pillow_rs_js.js",
+  "module": "./public.js",
+  "browser": "./public.js",
   "types": "./index.d.ts",
   "exports": {
     ".": {
       "types": "./index.d.ts",
       "node": "./node.js",
-      "browser": "./pkg/core/pillow_rs_js.js",
-      "import": "./pkg/core/pillow_rs_js.js",
-      "default": "./pkg/core/pillow_rs_js.js"
+      "browser": "./public.js",
+      "import": "./public.js",
+      "default": "./public.js"
     },
     "./package.json": "./package.json"
   },
   "files": [
     "pkg/",
     "node.js",
+    "public.js",
+    "host/",
     "index.d.ts",
     "README.md",
     "LICENSE"

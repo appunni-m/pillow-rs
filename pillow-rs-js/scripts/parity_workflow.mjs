@@ -5,55 +5,20 @@
 // so a Node-only change cannot silently make the browser lane exercise a
 // different API contract.
 
+import {
+    ImageDraw as PublicImageDraw,
+    ImageShow as PublicImageShow,
+    Outline,
+} from '../public.js';
+
 function key(surface, operation) {
     return `${surface}::${operation}`;
 }
 
-// Python's Image.info mapping belongs to the host wrapper rather than the
-// Rust pixel object. Preserve the identity of an observed mapping across
-// loads, and shallow-copy it across operations whose wrappers preserve info.
-const imageInfo = new WeakMap();
 const getdataViews = new WeakMap();
 const multiBandGetdataModes = new Set([
     'LA', 'La', 'RGB', 'RGBA', 'RGBa', 'RGBX', 'CMYK', 'HSV', 'PA', 'YCbCr', 'LAB',
 ]);
-
-function imageInfoValue(image) {
-    if (!imageInfo.has(image)) {
-        imageInfo.set(image, { value: {}, native: null, omitted: new Set(), rebaseline: false });
-    }
-    const state = imageInfo.get(image);
-    const native = image.compatibilityInfo();
-    const previous = state.native;
-    if (previous != null) {
-        if (state.rebaseline) {
-            for (const name of Object.keys(previous)) {
-                if (!Object.hasOwn(native, name)) state.omitted.add(name);
-            }
-        }
-        for (const name of Object.keys(native)) state.omitted.delete(name);
-        for (const name of state.omitted) native[name] = previous[name];
-    }
-    if (previous == null || state.rebaseline) {
-        for (const [name, value] of Object.entries(native)) {
-            if ((previous == null || !Object.hasOwn(previous, name))
-                && !Object.hasOwn(state.value, name)) state.value[name] = value;
-        }
-    } else {
-        for (const name of Object.keys(previous)) {
-            if (!Object.hasOwn(native, name)) delete state.value[name];
-        }
-        for (const [name, value] of Object.entries(native)) {
-            if (!Object.hasOwn(previous, name)
-                || JSON.stringify(value) !== JSON.stringify(previous[name])) state.value[name] = value;
-        }
-    }
-    // A baseline must not alias mutable arrays or dictionaries exposed to the
-    // caller. Unchanged decoder metadata must preserve caller edits/deletions.
-    state.native = structuredClone(native);
-    state.rebaseline = false;
-    return state.value;
-}
 
 function liveGetdataView(image, mode) {
     // Match Pillow's eager load/error boundary even though later observation
@@ -152,12 +117,48 @@ function decodeInputValue(value) {
             const sequence = (value.items ?? []).map(decodeInputValue);
             return pythonSequence(sequence, value.protocol === 'list' ? 'list' : 'sequence');
         }
-        if (value.protocol === 'putdata-custom-index') {
-            // Preserve the distinction between an actual JavaScript number
-            // and a Python object that only implements __index__.  Pillow's
-            // getink path accepts the former as a packed integer but rejects
-            // the latter as a non-tuple color.
-            return { __pillow_rs_putdata_custom_index__: value.value };
+        if (value.protocol === 'putdata-sequence') {
+            return {
+                __pillow_rs_sequence_input__: {
+                    reported_length: value.reported_length,
+                    items: (value.items ?? []).map(decodeInputValue),
+                },
+            };
+        }
+        if (value.protocol === 'outline') {
+            const outline = new Outline();
+            for (const command of value.commands ?? []) {
+                const method = outline[command.name];
+                if (typeof method !== 'function') {
+                    throw unsupportedError(`unknown outline command: ${command.name}`);
+                }
+                method.apply(outline, (command.args ?? []).map(decodeInputValue));
+            }
+            return outline;
+        }
+        if (value.protocol === 'putdata-mutation-container') {
+            return {
+                __pillow_rs_mutation_input__: {
+                    container: value.container,
+                    items: (value.items ?? []).map(decodeInputValue),
+                    reported_length: value.reported_length,
+                    mutation: {
+                        ...value.mutation,
+                        replacement: decodeInputValue(value.mutation?.replacement),
+                    },
+                },
+            };
+        }
+        if (value.protocol === 'putdata-bytes-subclass') {
+            const bytes = Uint8Array.from(value.values ?? []);
+            Object.defineProperty(bytes, 'length', {
+                configurable: true,
+                value: Number(value.reported_length),
+            });
+            return bytes;
+        }
+        if (value.protocol === 'putdata-getitem-only') {
+            return [decodeInputValue(value.value)];
         }
         if (value.protocol === 'text-repeat') {
             return String(value.text ?? '').repeat(Number(value.repeat ?? 0));
@@ -202,6 +203,115 @@ function argsOf(step, bindings, assets) {
     return result;
 }
 
+function materializeInputImages(wasm, value, owned) {
+    if (value?.__pillow_rs_image_with_info__) {
+        const input = value.__pillow_rs_image_with_info__;
+        const image = newImage(wasm, input);
+        if (input.assignment === 'replace') image.info = input.info;
+        else Object.assign(image.info, input.info);
+        owned.add(image);
+        return image;
+    }
+    if (Array.isArray(value)) {
+        for (let index = 0; index < value.length; index += 1) {
+            value[index] = materializeInputImages(wasm, value[index], owned);
+        }
+        return value;
+    }
+    if (
+        value != null
+        && typeof value === 'object'
+        && !ArrayBuffer.isView(value)
+        && (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null)
+    ) {
+        for (const [name, item] of Object.entries(value)) {
+            const property = Object.getOwnPropertyDescriptor(value, name);
+            if (!property || !Object.hasOwn(property, 'value') || !property.writable) continue;
+            value[name] = materializeInputImages(wasm, item, owned);
+        }
+    }
+    return value;
+}
+
+function putdataPixelValue(item, bindings) {
+    const image = bindings[item.image_step_id];
+    const pixel = image.getpixelFormatted(item.xy[0], item.xy[1]);
+    return item.channel == null || !Array.isArray(pixel)
+        ? pixel
+        : pixel[item.channel];
+}
+
+function putdataSequenceError(item) {
+    const error = new Error(String(item.message ?? ''));
+    error.name = String(item.type ?? 'Error');
+    return error;
+}
+
+function materializePutdataScalar(value, bindings) {
+    if (value?.protocol === 'putdata-image-pixel-coercion') {
+        return {
+            valueOf() {
+                return putdataPixelValue(value, bindings);
+            },
+        };
+    }
+    if (Array.isArray(value)) {
+        return value.map((item) => materializePutdataScalar(item, bindings));
+    }
+    if (value != null && typeof value === 'object' && value.protocol === 'putdata-getitem-only') {
+        return [materializePutdataScalar(value.value, bindings)];
+    }
+    return value;
+}
+
+function materializePutdataInput(value, bindings) {
+    const sequence = value?.__pillow_rs_sequence_input__;
+    if (sequence) {
+        return {
+            length: sequence.reported_length == null
+                ? sequence.items.length
+                : Number(sequence.reported_length),
+            *[Symbol.iterator]() {
+                for (const raw of sequence.items) {
+                    if (raw?.protocol === 'putdata-read-pixel') {
+                        yield putdataPixelValue(raw, bindings);
+                    } else if (raw?.protocol === 'putdata-raise') {
+                        throw putdataSequenceError(raw);
+                    } else {
+                        yield materializePutdataScalar(raw, bindings);
+                    }
+                }
+            },
+        };
+    }
+
+    const mutation = value?.__pillow_rs_mutation_input__;
+    if (mutation) {
+        const items = mutation.items.map((item) => materializePutdataScalar(item, bindings));
+        const { trigger_index: triggerIndex, target_index: targetIndex } = mutation.mutation;
+        items[triggerIndex] = {
+            valueOf() {
+                items[targetIndex] = materializePutdataScalar(
+                    mutation.mutation.replacement,
+                    bindings,
+                );
+                return Number(mutation.mutation.return_value);
+            },
+        };
+        if (mutation.container === 'list') return items;
+        return {
+            length: mutation.reported_length == null
+                ? items.length
+                : Number(mutation.reported_length),
+            *[Symbol.iterator]() {
+                yield* items;
+            },
+        };
+    }
+
+    return materializePutdataScalar(value, bindings);
+}
+
 function asBytes(value) {
     if (value?.__pillow_rs_asset_path__) {
         throw namedError(
@@ -221,6 +331,23 @@ function asBytes(value) {
 
 function callableName(value) {
     return value?.__pillow_rs_callable__ ?? null;
+}
+
+function callableFunction(value) {
+    if (Array.isArray(value) && value.length === 1) return callableFunction(value[0]);
+    if (typeof value === 'function') return value;
+    switch (callableName(value)) {
+        case 'identity-callable': return (sample) => sample;
+        case 'clamp-shift-callable': return (sample) => sample + 100;
+        case 'point-affine-shift-callable': return (sample) => sample + 1;
+        case 'point-affine-scale-callable': return (sample) => sample * 0.5;
+        case 'point-byte-float-callable': return (sample) => sample + 0.5;
+        case 'color3dlut-generate-identity': return (r, g, b) => [r, g, b];
+        case 'color3dlut-transform-identity': return (...values) => values.slice(-3);
+        case 'color3dlut-transform-rgba': return (...values) => [...values.slice(-3), 1.0];
+        case 'color3dlut-short-result': return (...values) => values.slice(0, 2);
+        default: return null;
+    }
 }
 
 function assetPath(value) {
@@ -533,22 +660,6 @@ function enhancerDescriptor(type, image) {
     return descriptor(type, state);
 }
 
-function callableLut(value) {
-    const name = callableName(value);
-    if (!name) return null;
-    const lut = new Uint8Array(256);
-    for (let index = 0; index < lut.length; index += 1) {
-        let result = index;
-        if (name === 'clamp-shift-callable') result = index + 100;
-        else if (name === 'point-affine-shift-callable') result = index + 1;
-        else if (name === 'point-affine-scale-callable') result = index * 0.5;
-        else if (name === 'point-byte-float-callable') result = index + 0.5;
-        else if (name !== 'identity-callable') return null;
-        lut[index] = Math.max(0, Math.min(255, Math.round(result)));
-    }
-    return lut;
-}
-
 function quantizeDither(value) {
     if (value == null) return null;
     if (typeof value === 'boolean') return value;
@@ -563,8 +674,6 @@ function quantizeDither(value) {
 
 function evalLut(args) {
     const lut = args.lut ?? args.args;
-    if (callableName(lut)) return callableLut(lut);
-    if (Array.isArray(lut) && lut.length === 1 && callableName(lut[0])) return callableLut(lut[0]);
     if (Array.isArray(lut) && lut.length === 1 && lut[0] === 'identity') {
         throw namedError('TypeError', "type str doesn't define __round__ method");
     }
@@ -577,8 +686,7 @@ function evalLut(args) {
 
 function validateEvalLut(args) {
     const lut = args.lut ?? args.args;
-    if (callableName(lut)) return;
-    if (Array.isArray(lut) && lut.length === 1 && callableName(lut[0])) return;
+    if (callableFunction(lut)) return;
     if (Array.isArray(lut) && lut.length === 1 && lut[0] === 'identity') {
         throw namedError('TypeError', "type str doesn't define __round__ method");
     }
@@ -589,15 +697,6 @@ function validateEvalLut(args) {
         // Image.eval delegates to Image.point, whose public error omits the
         // lower-level expected/actual detail that the Rust evaluator uses.
         throw namedError('ValueError', 'wrong number of lut entries');
-    }
-}
-
-function affineCallable(value) {
-    switch (callableName(value)) {
-        case 'point-affine-shift-callable': return [1, 1];
-        case 'point-affine-scale-callable': return [0.5, 0];
-        case 'point-byte-float-callable': return [1, 0.5];
-        default: return null;
     }
 }
 
@@ -776,6 +875,7 @@ function markImagePalette(value) {
 }
 
 function outlinePoints(value, wasm) {
+    if (value instanceof Outline) return value.toPoints();
     if (value?.protocol !== 'outline') return value;
     const points = [];
     for (const command of value.commands ?? []) {
@@ -996,23 +1096,11 @@ function imageMethod(receiver, operation, args, wasm, owned) {
                 args.palette ?? null,
                 args.colors ?? null,
             );
-            // Pillow carries a palette transparency marker through P -> L/RGB
-            // conversion even though the result no longer has a palette. The
-            // Rust result owns the pixels; retain this binding-level metadata
-            // for the serializer just as the Python facade updates Image.info.
-            if (typeof receiver.convertedCompatibilityInfo === 'function') {
-                result.__pillow_rs_converted_info__ = jsonSafe(
-                    receiver.convertedCompatibilityInfo(result.mode),
-                );
-            }
             return result;
         }
         case 'copy': return receiver.copy();
         case 'crop': return receiver.cropWithInput(args.box ?? null);
-        // Pillow's draft() mutates decoder state and returns None. The WASM
-        // image handle has no decoder-state mutation to expose here, so the
-        // public parity result is still None rather than a new image handle.
-        case 'draft': return null;
+        case 'draft': return receiver.draft(args.mode, args.size);
         case 'effect_spread': return receiver.effectSpread(args.distance);
         case 'entropy': {
             const mask = args.mask;
@@ -1051,7 +1139,10 @@ function imageMethod(receiver, operation, args, wasm, owned) {
         }
         case 'getpixel': return receiver.getpixelFormatted(args.xy[0], args.xy[1]);
         case 'getextrema': return pythonTuple(receiver.getextremaFormatted());
-        case 'getpalette': return receiver.getpalette(args.rawmode ?? null);
+        case 'getpalette':
+            return args.rawmode === undefined
+                ? receiver.getpalette()
+                : receiver.getpalette(args.rawmode);
         case 'getprojection': return receiver.getprojection();
         case 'get_flattened_data': return receiver.getdataFormatted(args.band ?? null);
         case 'histogram': {
@@ -1068,10 +1159,7 @@ function imageMethod(receiver, operation, args, wasm, owned) {
             if (isImage(mask, wasm)) return receiver.histogramWithInput(mask);
             return receiver.histogramInvalidInput(publicValueType(mask));
         }
-        case 'load': {
-            receiver.load();
-            return { __pillow_rs_handle_type__: 'PixelAccess' };
-        }
+        case 'load': return receiver.load();
         case 'max_filter': return receiver.maxFilter(args.size);
         case 'median_filter': return receiver.medianFilter(args.size);
         case 'min_filter': return receiver.minFilter(args.size);
@@ -1079,21 +1167,13 @@ function imageMethod(receiver, operation, args, wasm, owned) {
         case 'filter': return applyFilter(receiver, args.filter, wasm);
         case 'point': {
             const lut = args.lut ?? args.args;
-            // Pillow's callable point path accepts one 256-entry table and
-            // replicates it for multiband images; an explicit byte LUT must
-            // already contain one table per band. Scalar modes are the only
-            // modes where the affine callable shortcut is valid.
-            const scalarMode = ['I', 'I;16', 'I;16L', 'I;16B', 'I;16N', 'F'].includes(receiver.mode);
-            const affine = scalarMode ? affineCallable(lut) : null;
-            if (affine) return receiver.pointWithTransform(affine[0], affine[1]);
+            const callback = callableFunction(lut);
+            if (callback) return receiver.point(callback, args.mode ?? null);
             if (args.mode === 'F') {
                 const values = Array.isArray(lut) && lut.length === 1 && Array.isArray(lut[0])
                     ? lut[0]
                     : lut;
                 return receiver.pointWithMode(Float64Array.from(values ?? []), args.mode);
-            }
-            if (callableName(lut) || (Array.isArray(lut) && lut.length === 1 && callableName(lut[0]))) {
-                return receiver.eval(evalLut(args));
             }
             return receiver.point(evalLut(args));
         }
@@ -1102,11 +1182,14 @@ function imageMethod(receiver, operation, args, wasm, owned) {
             if (isImage(alpha, wasm)) return receiver.putalphaImageInput(alpha);
             return receiver.putalphaInput(alpha);
         }
-        case 'putdata': return receiver.putdataValues(
-            args.data,
-            args.scale == null ? null : Number(args.scale),
-            args.offset == null ? null : Number(args.offset),
-        );
+        case 'putdata': {
+            const data = args.data?.__pillow_rs_getdata__ ?? args.data;
+            return receiver.putdataValues(
+                data,
+                args.scale == null ? null : Number(args.scale),
+                args.offset == null ? null : Number(args.offset),
+            );
+        }
         case 'putpalette': return receiver.putpalette(Uint8Array.from(args.data), args.rawmode ?? null);
         case 'putpixel': {
             return putpixelMethod(receiver, args);
@@ -1136,7 +1219,10 @@ function imageMethod(receiver, operation, args, wasm, owned) {
         case 'reduce': {
             return receiver.reduceWithInput(args.factor, args.box ?? null);
         }
-        case 'remap_palette': return receiver.remapPalette(Uint8Array.from(args.dest_map));
+        case 'remap_palette': return receiver.remapPalette(
+            Uint8Array.from(args.dest_map),
+            args.source_palette == null ? null : Uint8Array.from(args.source_palette),
+        );
         case 'resize': return receiver.resizeWithInput(
             args.size,
             args.resample ?? null,
@@ -1214,7 +1300,13 @@ function imageMethod(receiver, operation, args, wasm, owned) {
             return typeof value === 'string' ? JSON.parse(value) : value;
         }
         case 'get_child_images': return receiver.getChildImages();
-        case 'getim': return receiver.getim() ?? { __pillow_rs_handle_type__: 'PyCapsule' };
+        case 'getim': {
+            const handle = receiver.getim();
+            if (handle !== receiver || typeof handle?.toBytes !== 'function') {
+                throw namedError('TypeError', 'getim must return the live image handle');
+            }
+            return handle;
+        }
         case 'has_transparency_data': return receiver.hasTransparencyData();
         case 'save': {
             const fp = args.fp;
@@ -1256,20 +1348,8 @@ function imageMethod(receiver, operation, args, wasm, owned) {
             // updates any dictionary reference captured by an earlier step.
             if (receiver.format === 'WEBP') {
                 receiver.load();
-                imageInfoValue(receiver);
             }
-            const result = receiver.transpose(transposeName(args.method));
-            if (imageInfo.has(receiver)) {
-                // Pillow's Image._new makes a shallow copy of the mapping.
-                const source = imageInfo.get(receiver);
-                imageInfo.set(result, {
-                    value: { ...source.value },
-                    native: structuredClone(source.native),
-                    omitted: new Set(source.omitted),
-                    rebaseline: true,
-                });
-            }
-            return result;
+            return receiver.transpose(transposeName(args.method));
         }
         case 'toqimage':
         case 'toqpixmap': throw namedError('ImportError', 'Qt bindings are not installed');
@@ -1285,7 +1365,6 @@ function optionalColor(value, mode) {
 }
 
 function drawMethod(receiver, operation, args, wasm) {
-    const mode = receiver.image.mode;
     const width = args.width ?? null;
     if (operation === 'bitmap') {
         const [x, y] = args.xy ?? [];
@@ -1633,27 +1712,6 @@ const chopsMap = {
     subtract_modulo: 'subtractModulo',
 };
 
-function imageShowBaseMode(mode) {
-    // Mirror PIL.ImageShow.Viewer.show's call to Image.getmodebase for the
-    // modes represented by the shared display workflows.
-    switch (mode) {
-        case '1':
-        case 'L':
-        case 'LA':
-        case 'I':
-        case 'F':
-        case 'I;16': return 'L';
-        case 'P': return 'P';
-        case 'PA':
-        case 'RGB':
-        case 'RGBA':
-        case 'CMYK':
-        case 'YCbCr':
-        case 'HSV': return 'RGB';
-        default: throw namedError('ValueError', `unsupported image mode ${mode}`);
-    }
-}
-
 function pngZlibFlevel(encoded) {
     if (!(encoded instanceof Uint8Array)
         || encoded.length < 8
@@ -1687,163 +1745,276 @@ function pngZlibFlevel(encoded) {
     return null;
 }
 
-function platformViewerProcessCalls(viewer, options) {
-    const path = '<display-file>';
-    const title = options.title;
-    const calls = [];
-    const record = (kind, args, kwargs = {}) => {
-        calls.push({ kind, args, kwargs });
+function decodeDisplayPpm(encoded) {
+    let cursor = 0;
+    const whitespace = (byte) => byte === 9 || byte === 10 || byte === 11
+        || byte === 12 || byte === 13 || byte === 32;
+    const token = () => {
+        while (cursor < encoded.length) {
+            if (whitespace(encoded[cursor])) {
+                cursor += 1;
+                continue;
+            }
+            if (encoded[cursor] === 35) {
+                while (cursor < encoded.length && encoded[cursor] !== 10) cursor += 1;
+                continue;
+            }
+            break;
+        }
+        const start = cursor;
+        while (cursor < encoded.length && !whitespace(encoded[cursor])) cursor += 1;
+        return new TextDecoder().decode(encoded.subarray(start, cursor));
     };
-    switch (viewer.viewer_class) {
-        case 'WindowsViewer':
-            record(
-                'Popen',
-                `start "Pillow" /WAIT "${path}" && ping -n 4 127.0.0.1 >NUL && del /f "${path}"`,
-                { shell: true, creationflags: 0 },
-            );
-            break;
-        case 'MacViewer':
-            record('call', ['open', '-a', 'Preview.app', path]);
-            record('Popen', [
-                '<python>',
-                '-c',
-                'import os, sys, time; time.sleep(20); os.remove(sys.argv[1])',
-                path,
-            ]);
-            break;
-        case 'XDGViewer':
-            record('Popen', ['xdg-open', path]);
-            break;
-        case 'DisplayViewer': {
-            const args = ['display'];
-            if (title) args.push('-title', title);
-            args.push(path);
-            record('Popen', args);
-            break;
-        }
-        case 'GmDisplayViewer':
-            record('Popen', ['gm', 'display', path]);
-            break;
-        case 'EogViewer':
-            record('Popen', ['eog', '-n', path]);
-            break;
-        case 'XVViewer': {
-            const args = ['xv'];
-            if (title) args.push('-name', title);
-            args.push(path);
-            record('Popen', args);
-            break;
-        }
-        default:
-            throw namedError('ValueError', 'capture-platform-viewer viewer_class is unsupported');
+    const magic = token();
+    if (magic !== 'P5' && magic !== 'P6') {
+        throw namedError('ValueError', 'unsupported captured display file');
     }
-    return calls;
+    const width = Number(token());
+    const height = Number(token());
+    const maxValue = Number(token());
+    if (!Number.isSafeInteger(width) || width < 0
+        || !Number.isSafeInteger(height) || height < 0 || maxValue !== 255) {
+        throw namedError('ValueError', 'invalid captured PPM header');
+    }
+    if (encoded[cursor] === 13 && encoded[cursor + 1] === 10) cursor += 2;
+    else if (whitespace(encoded[cursor])) cursor += 1;
+    else throw namedError('ValueError', 'missing captured PPM pixel separator');
+    const channels = magic === 'P5' ? 1 : 3;
+    const pixels = encoded.subarray(cursor);
+    if (pixels.length !== width * height * channels) {
+        throw namedError('ValueError', 'captured PPM pixel data has an invalid length');
+    }
+    return {
+        file_format: 'PPM',
+        mode: channels === 1 ? 'L' : 'RGB',
+        size: [width, height],
+        pixels: bytesRecord(pixels),
+    };
 }
 
-function imageShowMethod(wasm, operation, args, viewers) {
-    if (operation === 'register') {
-        const viewer = args.viewer;
-        if (!['capture-viewer', 'capture-platform-viewer'].includes(viewer?.protocol)) {
-            throw unsupportedError('PIL.ImageShow viewer is not supported by this WASM workflow');
+function decodeDisplayFile(encoded, wasm) {
+    if (encoded[0] === 0x89 && encoded[1] === 0x50
+        && encoded[2] === 0x4e && encoded[3] === 0x47) {
+        const decoded = wasm.openFn(encoded, null, null);
+        try {
+            const result = {
+                file_format: 'PNG',
+                mode: String(decoded.mode),
+                size: Array.from(decoded.size()),
+                pixels: bytesRecord(decoded.toBytes()),
+            };
+            const flevel = pngZlibFlevel(encoded);
+            if (flevel !== null) result.png_zlib_flevel = flevel;
+            return result;
+        } finally {
+            decoded.free();
         }
-        // Pillow instantiates a Viewer subclass during registration. The
-        // input-only capture protocol carries the resulting instance state.
-        if (Number(args.order ?? 1) > 0) viewers.push(viewer);
-        else viewers.unshift(viewer);
+    }
+    return decodeDisplayPpm(encoded);
+}
+
+function appendDisplayCallback(image, callback, wasm) {
+    if (!isImage(image, wasm)) {
+        throw namedError('ValueError', 'display viewer image_step_id does not refer to an image');
+    }
+    const info = image.info;
+    if (info.display_callbacks == null) info.display_callbacks = [];
+    if (!Array.isArray(info.display_callbacks)) {
+        throw namedError('TypeError', "image.info['display_callbacks'] must be a list");
+    }
+    info.display_callbacks.push(callback);
+}
+
+function createDisplayRuntime() {
+    const files = new Map();
+    const calls = [];
+    let nextFile = 0;
+    const normalizePath = (value, path) => {
+        if (typeof value === 'string') return value.replaceAll(path, '<display-file>');
+        if (Array.isArray(value)) return value.map((item) => normalizePath(item, path));
+        if (value != null && typeof value === 'object') {
+            return Object.fromEntries(
+                Object.entries(value).map(([key, item]) => [key, normalizePath(item, path)]),
+            );
+        }
+        return value;
+    };
+    const recordProcess = (kind, viewer, args, kwargs = {}) => {
+        const path = [...files.keys()].at(-1) ?? '';
+        calls.push({
+            kind,
+            args: normalizePath(args, path),
+            kwargs: normalizePath(kwargs, path),
+        });
+        if (viewer.launch_failure === 'file-not-found') {
+            throw namedError('FileNotFoundError', 'injected viewer executable is unavailable');
+        }
+        return 0;
+    };
+    const runtime = {
+        calls,
+        writeTemp(bytes, suffix = '') {
+            const path = `/display-file-${nextFile++}${suffix}`;
+            files.set(path, Uint8Array.from(bytes));
+            return path;
+        },
+        exists(path) { return files.has(path); },
+        readFile(path) {
+            const bytes = files.get(path);
+            if (bytes === undefined) throw namedError('FileNotFoundError', path);
+            return bytes.slice();
+        },
+        remove(path) { files.delete(path); },
+        Popen(args, kwargs = {}) { return recordProcess('Popen', this, args, kwargs); },
+        call(args, kwargs = {}) { return recordProcess('call', this, args, kwargs); },
+        system(args, kwargs = {}) { return recordProcess('system', this, args, kwargs); },
+        pythonExecutable: '<python>',
+        scheduleRemove: null,
+        clear() { files.clear(); calls.length = 0; },
+    };
+    return runtime;
+}
+
+function captureViewer(spec, bindings, wasm, displayRuntime) {
+    const image = bindings[spec.image_step_id];
+    if (!isImage(image, wasm)) {
+        throw namedError('ValueError', 'capture-viewer image_step_id does not resolve to an image');
+    }
+    class CaptureViewer extends PublicImageShow.Viewer {}
+    Object.defineProperties(CaptureViewer, {
+        format: { value: spec.format ?? null },
+        options: {
+            value: spec.format === 'PNG'
+                ? { compress_level: 1, save_all: true }
+                : {},
+        },
+    });
+    function recordPixels(shownImage, options) {
+        appendDisplayCallback(image, {
+            viewer_id: spec.viewer_id,
+            title: options.title ?? null,
+            mode: String(shownImage.mode),
+            size: Array.from(shownImage.size()),
+            pixels: bytesRecord(shownImage.toBytes()),
+            options: { ...options },
+            save_options: { ...this.options },
+        }, wasm);
+        return spec.accept;
+    }
+    if (spec.hook === 'show') {
+        CaptureViewer.prototype.show = function showCapture(shownImage, options = {}) {
+            return recordPixels.call(this, shownImage, options);
+        };
+    } else if (spec.hook === 'show_image') {
+        CaptureViewer.prototype.showImage = function captureShowImage(shownImage, options = {}) {
+            return recordPixels.call(this, shownImage, options);
+        };
+    } else {
+        CaptureViewer.prototype.showFile = function captureShowFile(path, options = {}) {
+            try {
+                const encoded = displayRuntime.readFile(path);
+                appendDisplayCallback(image, {
+                    viewer_id: spec.viewer_id,
+                    title: options.title ?? null,
+                    options: { ...options },
+                    save_options: { ...this.options },
+                    ...decodeDisplayFile(encoded, wasm),
+                }, wasm);
+                return spec.accept;
+            } finally {
+                displayRuntime.remove(path);
+            }
+        };
+    }
+    return spec.registration === 'class' ? CaptureViewer : new CaptureViewer();
+}
+
+function capturePlatformViewer(spec, bindings, wasm, displayRuntime) {
+    const image = bindings[spec.image_step_id];
+    if (!isImage(image, wasm)) {
+        throw namedError('ValueError', 'capture-platform-viewer image_step_id does not refer to an image');
+    }
+    const BaseViewer = PublicImageShow[spec.viewer_class];
+    if (typeof BaseViewer !== 'function') {
+        throw namedError('ValueError', 'capture-platform-viewer viewer_class is unsupported');
+    }
+    class CapturedPlatformViewer extends BaseViewer {
+        constructor() {
+            super();
+            this.launch_failure = spec.launch_failure;
+        }
+
+        showFile(path, options = {}) {
+            const start = displayRuntime.calls.length;
+            let result = null;
+            let error = null;
+            try {
+                result = BaseViewer.prototype.showFile.call(this, path, options);
+                return result;
+            } catch (caught) {
+                error = {
+                    class: String(caught?.name ?? 'Error'),
+                    message: String(caught?.message ?? caught),
+                };
+                throw caught;
+            } finally {
+                const event = {
+                    viewer_id: spec.viewer_id,
+                    viewer_class: spec.viewer_class,
+                    options: { ...options },
+                    save_options: { ...this.options },
+                    process_calls: displayRuntime.calls.slice(start),
+                    result,
+                    error,
+                };
+                try {
+                    Object.assign(event, decodeDisplayFile(displayRuntime.readFile(path), wasm));
+                } finally {
+                    displayRuntime.remove(path);
+                    appendDisplayCallback(image, event, wasm);
+                }
+            }
+        }
+    }
+    return CapturedPlatformViewer;
+}
+
+function imageShowMethod(wasm, operation, args, bindings, displayRuntime) {
+    if (operation === 'register') {
+        const spec = args.viewer;
+        let viewer;
+        if (spec?.protocol === 'capture-viewer') {
+            viewer = captureViewer(spec, bindings, wasm, displayRuntime);
+        } else if (spec?.protocol === 'capture-platform-viewer') {
+            viewer = capturePlatformViewer(spec, bindings, wasm, displayRuntime);
+        } else {
+            throw unsupportedError('PIL.ImageShow viewer protocol is unsupported by this workflow');
+        }
+        PublicImageShow.register(viewer, args.order ?? 1);
         return null;
     }
     if (operation !== 'show') {
         throw unsupportedError(`static operation is not exported by this WASM facade: PIL.ImageShow.${operation}`);
     }
-
-    const image = args.image;
-    if (!isImage(image, wasm)) {
+    if (!isImage(args.image, wasm)) {
         throw namedError('TypeError', 'image must be a Pillow image');
     }
-    const options = args.options ?? {};
-    const callbackOptions = { title: args.title ?? null, ...options };
-    for (const viewer of viewers) {
-        let shownImage = image;
-        let convertedImage = null;
-        try {
-            const platformViewer = viewer.protocol === 'capture-platform-viewer';
-            const format = platformViewer ? 'PNG' : viewer.format;
-            const hook = platformViewer ? 'show_file' : viewer.hook;
-            const saveOptions = format === 'PNG'
-                ? { compress_level: 1, save_all: true }
-                : {};
-            // Overrides of show_image and show_file pass through Pillow's
-            // base Viewer.show mode conversion. PPM files then apply the
-            // additional L/RGB conversion performed by ImageShow._dump_image.
-            if (hook !== 'show') {
-                const mode = image.mode;
-                const preserveMode = mode === '1' || mode === 'RGBA'
-                    || (format === 'PNG' && (mode === 'I;16' || mode === 'LA'));
-                const baseMode = imageShowBaseMode(mode);
-                let outputMode = preserveMode ? mode : baseMode;
-                if (hook === 'show_file' && format !== 'PNG') {
-                    if (outputMode === '1') outputMode = 'L';
-                    else if (outputMode !== 'L' && outputMode !== 'RGB') outputMode = 'RGB';
-                }
-                if (mode !== outputMode) {
-                    convertedImage = image.convertWithInput(outputMode, null, null, null, null);
-                    shownImage = convertedImage;
-                }
-            }
-
-            const callback = {
-                viewer_id: viewer.viewer_id,
-                ...(!platformViewer ? { title: callbackOptions.title ?? null } : {}),
-                mode: String(shownImage.mode),
-                size: Array.from(shownImage.size()),
-                pixels: bytesRecord(shownImage.toBytes()),
-                options: callbackOptions,
-                save_options: saveOptions,
-            };
-            if (platformViewer) {
-                const encoded = shownImage.saveWithOptions('PNG', ['compress_level', '1']);
-                const flevel = pngZlibFlevel(encoded);
-                const processCalls = platformViewerProcessCalls(viewer, callbackOptions);
-                if (viewer.launch_failure === 'file-not-found') {
-                    throw namedError('FileNotFoundError', 'injected viewer executable is unavailable');
-                }
-                callback.viewer_class = viewer.viewer_class;
-                callback.options = callbackOptions;
-                callback.process_calls = processCalls;
-                callback.result = 1;
-                callback.error = null;
-                callback.file_format = 'PNG';
-                if (flevel !== null) callback.png_zlib_flevel = flevel;
-            } else if (hook === 'show_file') {
-                callback.file_format = format ?? 'PPM';
-                if (format === 'PNG') {
-                    const encoded = shownImage.saveWithOptions('PNG', ['compress_level', '1']);
-                    const flevel = pngZlibFlevel(encoded);
-                    if (flevel !== null) callback.png_zlib_flevel = flevel;
-                }
-            }
-
-            const info = imageInfoValue(image);
-            if (info.display_callbacks == null) info.display_callbacks = [];
-            if (!Array.isArray(info.display_callbacks)) {
-                throw namedError('TypeError', "image.info['display_callbacks'] must be a list");
-            }
-            info.display_callbacks.push(callback);
-        } finally {
-            if (convertedImage) convertedImage.free();
-        }
-        if (viewer.protocol === 'capture-platform-viewer' || Boolean(viewer.accept)) return true;
-    }
-    return false;
+    return PublicImageShow.show(args.image, args.title ?? null, args.options ?? {});
 }
 
-function staticMethod(wasm, surface, operation, args, receiver = null, displayViewers = []) {
+function staticMethod(
+    wasm,
+    surface,
+    operation,
+    args,
+    receiver = null,
+    bindings = {},
+    displayRuntime,
+) {
     if (surface === 'PIL.ImageShow') {
-        return imageShowMethod(wasm, operation, args, displayViewers);
+        return imageShowMethod(wasm, operation, args, bindings, displayRuntime);
     }
-    if (surface === 'PIL.ImageDraw' && operation === 'Outline') {
-        return { protocol: 'outline', commands: [] };
-    }
+    if (surface === 'PIL.ImageDraw' && operation === 'Outline') return new Outline();
     if (surface === 'PIL.ImagePalette' && operation === 'ImagePalette') {
         return markImagePalette(wasm.ImagePalette.newWithInput(
             args.mode ?? null,
@@ -2023,7 +2194,10 @@ function staticMethod(wasm, surface, operation, args, receiver = null, displayVi
         }
         if (operation === 'eval') {
             validateEvalLut(args);
-            return wasm.evalFn(args.image, evalLut(args), args.image.mode === 'F' ? 1 : 1);
+            const callback = callableFunction(args.lut ?? args.args);
+            return callback
+                ? args.image.point(callback)
+                : wasm.evalFn(args.image, evalLut(args), 1);
         }
         if (operation === 'linear_gradient') return wasm.linearGradientFn(args.mode);
         if (operation === 'radial_gradient') return wasm.radialGradientFn(args.mode);
@@ -2046,30 +2220,7 @@ function staticMethod(wasm, surface, operation, args, receiver = null, displayVi
         }
     }
     if (surface === 'PIL.ImageDraw' && operation === 'Draw') {
-        const draw = new wasm.ImageDraw(args.im, args.mode ?? null);
-        Object.defineProperty(draw, '__pillow_rs_draw_record__', {
-            value: {
-                _image: null,
-                draw: null,
-                fill: false,
-                fontmode: 'L',
-                im: null,
-                ink: -1,
-                mode: args.mode ?? args.im.mode ?? null,
-                palette: null,
-            },
-            enumerable: false,
-            configurable: false,
-        });
-        // Pillow mutates the Image object passed to Draw().  The WASM Draw
-        // handle owns a Rust image snapshot, so retain the public image
-        // handle and copy the drawn result back after each primitive.
-        Object.defineProperty(draw, '__pillow_rs_source_image__', {
-            value: args.im,
-            enumerable: false,
-            configurable: false,
-        });
-        return draw;
+        return new PublicImageDraw(args.im, args.mode ?? null);
     }
     if (surface === 'PIL.ImageChops') {
         const name = chopsMap[operation];
@@ -2118,7 +2269,7 @@ function staticMethod(wasm, surface, operation, args, receiver = null, displayVi
         const generated = wasm.color3DLUTGenerate(
             Number(checkedSize[0]), Number(checkedSize[1]), Number(checkedSize[2]),
             channels,
-            callableName(args.callback) ?? '',
+            callableFunction(args.callback),
         );
         const table = wasm.color3DLUTNew(
             Array.from(generated),
@@ -2144,7 +2295,7 @@ function staticMethod(wasm, surface, operation, args, receiver = null, displayVi
             channelsIn,
             channelsOut,
             Boolean(args.with_normals ?? false),
-            callableName(args.callback) ?? '',
+            callableFunction(args.callback),
         );
         return filterObject('Color3DLUT', {
             size: receiver.size,
@@ -2349,18 +2500,20 @@ function staticMethod(wasm, surface, operation, args, receiver = null, displayVi
     throw unsupportedError(`static operation is not exported by this WASM facade: ${surface}.${operation}`);
 }
 
-function callStep(wasm, step, bindings, operations, assets, owned, displayViewers) {
-    const args = argsOf(step, bindings, assets);
-    let receiver = step.receiver ? resolveDescriptor(step.receiver, bindings, assets) : null;
-    if (receiver?.__pillow_rs_image_with_info__) {
-        const input = receiver.__pillow_rs_image_with_info__;
-        receiver = newImage(wasm, input);
-        imageInfo.set(receiver, {
-            value: input.info,
-            native: receiver.compatibilityInfo(),
-            omitted: new Set(),
-            rebaseline: false,
-        });
+function callStep(wasm, step, bindings, operations, assets, owned, displayRuntime) {
+    const args = Object.fromEntries(
+        Object.entries(argsOf(step, bindings, assets))
+            .map(([name, value]) => [name, materializeInputImages(wasm, value, owned)]),
+    );
+    const receiver = step.receiver
+        ? materializeInputImages(
+            wasm,
+            resolveDescriptor(step.receiver, bindings, assets),
+            owned,
+        )
+        : null;
+    if (step.surface === 'PIL.Image.Image' && step.operation === 'putdata') {
+        args.data = materializePutdataInput(args.data, bindings);
     }
     const info = operations[key(step.surface, step.operation)] ?? {};
     if (info.kind === 'property_get'
@@ -2370,13 +2523,6 @@ function callStep(wasm, step, bindings, operations, assets, owned, displayViewer
         return receiver.hasTransparencyData();
     }
     if (info.kind === 'property_get') {
-        if (
-            step.surface === 'PIL.Image.Image'
-            && step.operation === 'info'
-            && typeof receiver?.compatibilityInfo === 'function'
-        ) {
-            return imageInfoValue(receiver);
-        }
         if (typeof receiver?.toObject === 'function') return receiver.toObject()[step.operation] ?? null;
         if (step.operation === 'size' && typeof receiver?.size === 'function') return receiver.size();
         // Python's list exposes ``count`` as a bound method.  The workflow
@@ -2423,26 +2569,15 @@ function callStep(wasm, step, bindings, operations, assets, owned, displayViewer
                 );
             }
             if (step.operation === 'show') {
-                imageShowMethod(wasm, 'show', {
-                    image: receiver,
-                    title: args.title ?? null,
-                    options: {},
-                }, displayViewers);
                 // PIL.Image.Image.show delegates to ImageShow.show but does
                 // not return the viewer's boolean result.
-                return receiver.show();
+                return receiver.show(args.title ?? null);
             }
             const value = imageMethod(receiver, step.operation, args, wasm, owned);
-            if (imageInfo.has(receiver)) imageInfoValue(receiver);
             return value;
         }
         if (step.surface === 'PIL.ImageDraw.ImageDraw') {
-            const value = drawMethod(receiver, step.operation, args, wasm);
-            const sourceImage = receiver.__pillow_rs_source_image__;
-            if (sourceImage && typeof sourceImage.replaceFrom === 'function') {
-                sourceImage.replaceFrom(receiver.image);
-            }
-            return value;
+            return drawMethod(receiver, step.operation, args, wasm);
         }
         if (step.surface === 'PIL.ImageFont.FreeTypeFont') {
             return fontMethod(receiver, step.operation, args);
@@ -2479,7 +2614,15 @@ function callStep(wasm, step, bindings, operations, assets, owned, displayViewer
             return receiver.image[method](Number(args.factor));
         }
     }
-    return staticMethod(wasm, step.surface, step.operation, args, receiver, displayViewers);
+    return staticMethod(
+        wasm,
+        step.surface,
+        step.operation,
+        args,
+        receiver,
+        bindings,
+        displayRuntime,
+    );
 }
 
 function jsonSafe(value) {
@@ -2505,6 +2648,11 @@ function jsonSafe(value) {
                 data: base64(value.data),
             };
         }
+        const prototype = Object.getPrototypeOf(value);
+        if (prototype !== Object.prototype && prototype !== null
+            && Object.keys(value).length === 0) {
+            return null;
+        }
         const result = {};
         for (const [name, item] of Object.entries(value)) result[name] = jsonSafe(item);
         return result;
@@ -2522,19 +2670,16 @@ function isPublicImage(value) {
 function imageValue(value) {
     if (value == null) return null;
     const raw = asBytes(value.toBytes());
-    const info = typeof value.compatibilityInfo === 'function'
-        ? jsonSafe(imageInfoValue(value))
-        : {};
-    if (value.__pillow_rs_converted_info__ && typeof value.__pillow_rs_converted_info__ === 'object') {
-        Object.assign(info, value.__pillow_rs_converted_info__);
-    }
+    const palette = typeof value.getpalette === 'function' ? value.getpalette() : null;
     return {
         kind: 'image',
         mode: value.mode,
         size: Array.from(value.size()),
         format: value.format ?? null,
-        info,
-        palette: null,
+        info: jsonSafe(value.info ?? null),
+        palette: palette == null
+            ? null
+            : { kind: 'bytes', encoding: 'base64', data: base64(palette) },
         bytes: base64(raw),
     };
 }
@@ -2567,7 +2712,14 @@ function color3dlutValue(value) {
     };
 }
 
-function serialize(value, shape, receiverMode = null) {
+function serialize(
+    value,
+    shape,
+    receiverMode = null,
+    surface = null,
+    operation = null,
+    expectedImage = null,
+) {
     if (shape === 'none') return null;
     if (shape === 'image') return imageSequenceValue(value);
     if (shape === 'mask') {
@@ -2644,12 +2796,25 @@ function serialize(value, shape, receiverMode = null) {
     if (shape === 'bytes') return value == null ? null : { kind: 'bytes', encoding: 'base64', data: base64(value) };
     if (shape === 'handle') {
         if (value == null) return null;
+        if (surface === 'PIL.ImageDraw' && operation === 'Draw') {
+            if (!(value instanceof PublicImageDraw)) {
+                throw new TypeError('ImageDraw.Draw did not return the live drawing context');
+            }
+            return { type: 'ImageDraw' };
+        }
+        if (surface === 'PIL.Image.Image' && operation === 'getim') {
+            if (value.constructor?.name !== 'Image' || typeof value.toBytes !== 'function') {
+                throw new TypeError('getim did not return a live image handle');
+            }
+            if (expectedImage == null || value !== expectedImage) {
+                throw new TypeError('getim did not return the receiver image');
+            }
+            return { type: 'ImageCoreHandle' };
+        }
         return { type: value.__pillow_rs_handle_type__ ?? value.constructor?.name ?? 'Object' };
     }
     if (value?.__pillow_rs_filter__ === 'Color3DLUT') return color3dlutValue(value);
     if (shape === 'mapping' || shape === 'record') {
-        if (value?.protocol === 'outline') return null;
-        if (value?.__pillow_rs_draw_record__) return jsonSafe(value.__pillow_rs_draw_record__);
         if (value?.__pillow_rs_imagepalette__) {
             return {
                 mode: value.mode ?? 'RGB',
@@ -2858,7 +3023,9 @@ function runCase(wasm, item, operations, assets, executionSink) {
     let terminalReceiptIndex = null;
     const observationIds = item.observations ?? [];
     const owned = new Set();
-    const displayViewers = [];
+    const registeredViewers = PublicImageShow._viewers.splice(0);
+    const displayRuntime = createDisplayRuntime();
+    const restoreDisplayRuntime = PublicImageShow._setRuntime(displayRuntime);
     // A previous workflow cannot leave an unassociated receipt in a healthy
     // run, but clear it at the case boundary so a malformed host extension
     // cannot make the next case appear to have executed a pipeline.
@@ -2870,7 +3037,7 @@ function runCase(wasm, item, operations, assets, executionSink) {
         }
         let stepExecutionStatus = 'completed';
         try {
-            const value = callStep(wasm, step, bindings, operations, assets, owned, displayViewers);
+            const value = callStep(wasm, step, bindings, operations, assets, owned, displayRuntime);
             if (value && typeof value.free === 'function') owned.add(value);
             bindings[step.step_id] = value;
             results[step.step_id] = { step_id: step.step_id, status: 'ok', value };
@@ -2925,7 +3092,28 @@ function runCase(wasm, item, operations, assets, executionSink) {
                 ? bindings[step.receiver.step_id]
                 : null;
             const mode = step.operation === 'getpixel' ? receiver?.mode ?? null : null;
-            observations.push({ step_id: observationId, status: 'ok', value: serialize(result.value, info.shape, mode) });
+            const imageDescriptor = step.arguments?.im;
+            const expectedImage = step.surface === 'PIL.ImageDraw'
+                && step.operation === 'Draw'
+                && imageDescriptor?.kind === 'binding'
+                ? bindings[imageDescriptor.step_id]
+                : step.surface === 'PIL.Image.Image'
+                    && step.operation === 'getim'
+                    && step.receiver?.kind === 'binding'
+                    ? bindings[step.receiver.step_id]
+                    : null;
+            observations.push({
+                step_id: observationId,
+                status: 'ok',
+                value: serialize(
+                    result.value,
+                    info.shape,
+                    mode,
+                    step.surface,
+                    step.operation,
+                    expectedImage,
+                ),
+            });
             observationSucceeded = true;
         } catch (error) {
             observations.push({ step_id: observationId, status: 'error', error: publicError(error) });
@@ -2969,9 +3157,12 @@ function runCase(wasm, item, operations, assets, executionSink) {
     for (const value of owned) {
         try { value.free(); } catch (_) { /* best-effort wasm handle cleanup */ }
     }
+    PublicImageShow._viewers.push(...registeredViewers);
+    restoreDisplayRuntime();
+    displayRuntime.clear();
     return {
         case_id: item.case_id,
-        status: 'completed',
+        status: workflowComplete ? 'completed' : 'not_run',
         observations,
         // The Python evidence aggregator uses setup/call errors to distinguish
         // a validation boundary from a deferred pipeline that never emitted a

@@ -1,7 +1,45 @@
 use crate::Image;
 use crate::inputs::*;
 use crate::values::*;
+use js_sys::Function;
 use wasm_bindgen::prelude::{JsValue, wasm_bindgen};
+
+fn point_callback_error(error: JsValue) -> pillow_rs::PilError {
+    let message = error
+        .as_string()
+        .or_else(|| {
+            js_sys::Reflect::get(&error, &JsValue::from_str("message"))
+                .ok()
+                .and_then(|value| value.as_string())
+        })
+        .unwrap_or_else(|| format!("{error:?}"));
+    pillow_rs::PilError::ValueError(format!("LUT function failed: {message}"))
+}
+
+fn point_callback_number(callback: &Function, sample: f64) -> Result<f64, pillow_rs::PilError> {
+    let value = callback
+        .call1(&JsValue::NULL, &JsValue::from_f64(sample))
+        .map_err(point_callback_error)?;
+    value.as_f64().ok_or_else(|| {
+        pillow_rs::PilError::TypeError("point callback result must be a number".to_owned())
+    })
+}
+
+fn point_callback_integer(callback: &Function, sample: u32) -> Result<i32, pillow_rs::PilError> {
+    let value = callback
+        .call1(&JsValue::NULL, &JsValue::from(sample))
+        .map_err(point_callback_error)?;
+    let value = value.as_f64().ok_or_else(|| {
+        pillow_rs::PilError::ValueError("LUT function must return an integer".to_owned())
+    })?;
+    let rounded = value.round_ties_even();
+    if !rounded.is_finite() || rounded < f64::from(i32::MIN) || rounded > f64::from(i32::MAX) {
+        return Err(pillow_rs::PilError::ValueError(
+            "LUT function must return an integer".to_owned(),
+        ));
+    }
+    Ok(rounded as i32)
+}
 
 #[wasm_bindgen]
 impl Image {
@@ -188,6 +226,45 @@ impl Image {
         pillow_rs::image_eval_validated(&self.inner, &lut)
             .map(|i| Image { inner: i })
             .map_err(err)
+    }
+    /// Applies a JavaScript callback to each source value and returns the result.
+    #[wasm_bindgen(js_name = "pointWithCallback")]
+    pub fn point_with_callback(
+        &self,
+        callback: Function,
+        mode: Option<String>,
+    ) -> Result<Image, JsValue> {
+        let source_mode = self.inner.mode().map_err(err)?;
+        if mode.as_deref() == Some("F") && matches!(source_mode.as_str(), "1" | "L" | "P") {
+            let lut = pillow_rs::image_eval_float_lut(|sample| {
+                let value = callback.call1(&JsValue::NULL, &JsValue::from(sample))?;
+                value.as_f64().ok_or_else(|| {
+                    err(pillow_rs::PilError::TypeError(
+                        "point callback result must be a number".to_owned(),
+                    ))
+                })
+            })?;
+            return pillow_rs::image_eval_float(&self.inner, &lut)
+                .map(|i| Image { inner: i })
+                .map_err(err);
+        }
+
+        if matches!(
+            source_mode.as_str(),
+            "I" | "I;16" | "I;16L" | "I;16B" | "I;16N" | "F"
+        ) {
+            return pillow_rs::image_eval_point_callable(&self.inner, |sample| {
+                point_callback_number(&callback, sample)
+            })
+            .map(|i| Image { inner: i })
+            .map_err(err);
+        }
+
+        pillow_rs::image_eval_callable(&self.inner, |sample| {
+            point_callback_integer(&callback, sample)
+        })
+        .map(|i| Image { inner: i })
+        .map_err(err)
     }
     /// Applies the floating-output form of Pillow's `Image.point` operation.
     ///

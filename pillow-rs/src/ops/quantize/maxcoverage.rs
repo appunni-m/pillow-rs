@@ -177,7 +177,7 @@ pub(crate) fn maxcoverage_quantize_rgb(
     let pixel_list: Vec<[u8; 3]> = pixels.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect();
     let n_quant = n_colors.clamp(1, 256);
     if n_pixels == 0 {
-        return (Vec::new(), vec![[0u8; 3]; 1]);
+        return (Vec::new(), Vec::new());
     }
 
     // MAXCOVERAGE's palette loop emits the same furthest pixel for every

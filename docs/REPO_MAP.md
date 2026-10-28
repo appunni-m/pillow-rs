@@ -772,22 +772,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   `-- cmyk_ssse3.rs
 |   |   |   |   |   |-- native_channel.rs
 |   |   |   |   |   |-- native_filter.rs
-|   |   |   |   |   |-- native_merge.rs
-|   |   |   |   |   |-- scalar/
-|   |   |   |   |   |   |-- chops.rs
-|   |   |   |   |   |   |-- convert.rs
-|   |   |   |   |   |   |-- filters/
-|   |   |   |   |   |   |   `-- box_blur.rs
-|   |   |   |   |   |   |-- filters.rs
-|   |   |   |   |   |   |-- histogram.rs
-|   |   |   |   |   |   |-- layout.rs
-|   |   |   |   |   |   |-- lut.rs
-|   |   |   |   |   |   |-- merge.rs
-|   |   |   |   |   |   |-- mutation.rs
-|   |   |   |   |   |   |-- point.rs
-|   |   |   |   |   |   |-- resize.rs
-|   |   |   |   |   |   `-- transform.rs
-|   |   |   |   |   `-- scalar.rs
+|   |   |   |   |   `-- native_merge.rs
 |   |   |   |   |-- point_batch.rs
 |   |   |   |   `-- put_pixel_batch.rs
 |   |   |   |-- registry/

@@ -21,6 +21,12 @@ import json
 import random
 import re
 import struct
+import sys
+
+# Fixture generation is an explicit, reproducible operation. Do not leave
+# Python bytecode caches alongside the generator or its imported helpers.
+sys.dont_write_bytecode = True
+
 import zlib
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -5677,8 +5683,9 @@ class WorkflowBuilder:
                 image_step = self.ensure_image(mode="RGB")
                 palette_step = self.ensure_image(mode="P", label="palette")
                 # Image.new("P", ...) is a valid palette argument even before
-                # putpalette attaches entries. Keep this public edge separate
-                # so the target must preserve Pillow's empty-palette result.
+                # putpalette attaches entries. Pillow's resulting pixel buffer
+                # is uninitialized, so its pixel values are not a defined
+                # reference. Keep the edge and check its stable image contract.
                 self.scenario_values["palette"] = binding(palette_step)
                 receiver_step = image_step
             elif chain == "quantize-palette-unsupported-source":
@@ -35066,9 +35073,9 @@ def build_nuanced_cases(
                     "maximum_channel_delta": 0,
                     "metadata_mode": "exact",
                     "reason": (
-                        "Pillow's empty palette mapping leaves the output pixel "
-                        "buffer uninitialized; compare stable image metadata and "
-                        "the deterministic byte length only."
+                        "Pillow leaves the empty-palette quantize pixel buffer "
+                        "uninitialized; verify exact image metadata and byte "
+                        "length while other quantize cases compare every pixel"
                     ),
                 }
             },
@@ -43517,6 +43524,415 @@ def putdata_materialized_parity_cases(surface_id: str) -> list[dict[str, Any]]:
     ]
 
 
+def putdata_sequence_contract_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Keep Python sequence, callback, and bytes-subclass behavior in parity."""
+    if surface_id != "PIL.Image.Image":
+        return []
+
+    def make_case(
+        label: str,
+        mode: str,
+        size: list[int],
+        color: Any,
+        data: dict[str, Any],
+        *,
+        scale: int | float | None = None,
+        offset: int | float | None = None,
+        palette_alpha: bool = False,
+        operation_steps: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        setup_mode = "P" if palette_alpha else mode
+        steps: list[dict[str, Any]] = [
+            {
+                "step_id": "setup-image",
+                "surface": "PIL.Image",
+                "operation": "new",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal(setup_mode),
+                    "size": literal(size),
+                    "color": literal(color),
+                },
+            }
+        ]
+        if palette_alpha:
+            steps.extend(
+                [
+                    {
+                        "step_id": "setup-palette",
+                        "surface": "PIL.Image.Image",
+                        "operation": "putpalette",
+                        "receiver": binding("setup-image"),
+                        "arguments": {
+                            "data": literal(
+                                [255, 0, 0, 0, 255, 0, 0, 0, 255]
+                            ),
+                            "rawmode": literal("RGB"),
+                        },
+                    },
+                    {
+                        "step_id": "setup-alpha",
+                        "surface": "PIL.Image.Image",
+                        "operation": "putalpha",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"alpha": literal(77)},
+                    },
+                ]
+            )
+        steps.extend(
+            operation_steps
+            or [
+                {
+                    "step_id": "call",
+                    "surface": "PIL.Image.Image",
+                    "operation": "putdata",
+                    "receiver": binding("setup-image"),
+                    "arguments": {
+                        "data": data,
+                        **(
+                            {"scale": literal(scale)}
+                            if scale is not None
+                            else {}
+                        ),
+                        **(
+                            {"offset": literal(offset)}
+                            if offset is not None
+                            else {}
+                        ),
+                    },
+                }
+            ]
+        )
+        steps.append(
+            {
+                "step_id": "observe-receiver",
+                "surface": "PIL.Image.Image",
+                "operation": "tobytes",
+                "receiver": binding("setup-image"),
+                "arguments": {},
+            }
+        )
+        return {
+            "case_id": f"PIL.Image.Image.putdata.contract.{label}",
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "covers": ["PIL.Image.Image.putdata.behavior.default"],
+            "assets": [],
+            "steps": steps,
+            "observations": [
+                *[step["step_id"] for step in steps if step["operation"] == "putdata"],
+                "observe-receiver",
+            ],
+        }
+
+    def image_pixel(image_step_id: str, *, channel: int | None = None) -> dict[str, Any]:
+        return {
+            "protocol": "putdata-image-pixel-coercion",
+            "image_step_id": image_step_id,
+            "xy": [0, 0],
+            "channel": channel,
+            "conversion": "float" if channel is None else "index",
+        }
+
+    cases = [
+        make_case(
+            "exact-list-reads-later-items-live",
+            "L",
+            [3, 1],
+            9,
+            literal(
+                {
+                    "protocol": "putdata-mutation-container",
+                    "container": "list",
+                    "items": [1, 0, 3],
+                    "reported_length": None,
+                    "mutation": {
+                        "trigger_index": 1,
+                        "target_index": 2,
+                        "replacement": 7,
+                        "return_value": 2.0,
+                    },
+                }
+            ),
+        ),
+        make_case(
+            "generic-sequence-materializes-before-callbacks",
+            "L",
+            [3, 1],
+            9,
+            literal(
+                {
+                    "protocol": "putdata-mutation-container",
+                    "container": "sequence",
+                    "items": [1, 0, 3],
+                    "reported_length": None,
+                    "mutation": {
+                        "trigger_index": 1,
+                        "target_index": 2,
+                        "replacement": 7,
+                        "return_value": 2.0,
+                    },
+                }
+            ),
+        ),
+        make_case(
+            "generic-sequence-length-hint-and-read-order",
+            "L",
+            [2, 1],
+            9,
+            literal(
+                {
+                    "protocol": "putdata-sequence",
+                    "reported_length": 1,
+                    "items": [
+                        1,
+                        {
+                            "protocol": "putdata-read-pixel",
+                            "image_step_id": "setup-image",
+                            "xy": [0, 0],
+                            "channel": None,
+                        },
+                    ],
+                }
+            ),
+        ),
+        make_case(
+            "outer-sequence-materialization-error-is-atomic",
+            "L",
+            [2, 1],
+            91,
+            literal(
+                {
+                    "protocol": "putdata-sequence",
+                    "reported_length": 2,
+                    "items": [
+                        1,
+                        {
+                            "protocol": "putdata-raise",
+                            "type": "RuntimeError",
+                            "message": "not propagated",
+                        },
+                    ],
+                }
+            ),
+        ),
+        make_case(
+            "nested-getitem-only-value-is-not-a-pixel-sequence",
+            "L",
+            [2, 1],
+            91,
+            literal(
+                {
+                    "protocol": "list",
+                    "items": [
+                        1,
+                        {"protocol": "putdata-getitem-only", "value": 7},
+                    ],
+                }
+            ),
+        ),
+        make_case(
+            "coercion-callback-observes-prior-l-write",
+            "L",
+            [2, 1],
+            9,
+            literal(
+                {
+                    "protocol": "list",
+                    "items": [1, image_pixel("setup-image")],
+                }
+            ),
+        ),
+        make_case(
+            "coercion-callback-observes-prior-rgb-write",
+            "RGB",
+            [2, 1],
+            [9, 9, 9],
+            literal(
+                {
+                    "protocol": "list",
+                    "items": [
+                        [1, 2, 3],
+                        [image_pixel("setup-image", channel=0), 5, 6],
+                    ],
+                }
+            ),
+        ),
+        make_case(
+            "iterator-only-object-is-rejected",
+            "L",
+            [2, 1],
+            91,
+            literal(
+                {"protocol": "putdata-iterator-only", "items": [1, 2]}
+            ),
+        ),
+        make_case(
+            "oversized-sequence-rejected-before-item-access",
+            "L",
+            [1, 1],
+            9,
+            literal(
+                {
+                    "protocol": "putdata-sequence",
+                    "reported_length": 2,
+                    "items": [
+                        {
+                            "protocol": "putdata-raise",
+                            "type": "RuntimeError",
+                            "message": "oversized sequence was iterated",
+                        }
+                    ],
+                }
+            ),
+        ),
+        make_case(
+            "bytes-subclass-uses-raw-storage",
+            "L",
+            [2, 1],
+            0,
+            literal(
+                {
+                    "protocol": "putdata-bytes-subclass",
+                    "values": [1, 2],
+                    "reported_length": 2,
+                    "iteration": [9, 9],
+                }
+            ),
+            scale=2,
+        ),
+        make_case(
+            "bytes-subclass-reported-length-long",
+            "L",
+            [4, 1],
+            9,
+            literal(
+                {
+                    "protocol": "putdata-bytes-subclass",
+                    "values": [1, 2, 3],
+                    "reported_length": 4,
+                    "iteration": [9, 9],
+                }
+            ),
+        ),
+        make_case(
+            "bytes-subclass-reported-length-short",
+            "L",
+            [4, 1],
+            9,
+            literal(
+                {
+                    "protocol": "putdata-bytes-subclass",
+                    "values": [1, 2, 3],
+                    "reported_length": 2,
+                    "iteration": [9, 9],
+                }
+            ),
+        ),
+        make_case(
+            "bytes-subclass-reported-length-with-scale-offset",
+            "L",
+            [4, 1],
+            9,
+            literal(
+                {
+                    "protocol": "putdata-bytes-subclass",
+                    "values": [1, 2, 3],
+                    "reported_length": 4,
+                    "iteration": [9, 9],
+                }
+            ),
+            scale=2,
+            offset=1,
+        ),
+        make_case(
+            "mixed-packed-integer-then-float-preserves-prefix",
+            "RGB",
+            [2, 1],
+            [9, 9, 9],
+            literal({"protocol": "list", "items": [0x00030201, 1.5]}),
+        ),
+        make_case(
+            "pa-noninteger-singleton-tuple-error-order",
+            "PA",
+            [1, 1],
+            7,
+            sequence_literal([[1.5]]),
+            palette_alpha=True,
+        ),
+    ]
+
+    source_step = {
+        "step_id": "setup-source",
+        "surface": "PIL.Image",
+        "operation": "new",
+        "receiver": None,
+        "arguments": {
+            "mode": literal("L"),
+            "size": literal([2, 1]),
+            "color": literal(0),
+        },
+    }
+    source_pixels_step = {
+        "step_id": "setup-source-pixels",
+        "surface": "PIL.Image.Image",
+        "operation": "putdata",
+        "receiver": binding("setup-source"),
+        "arguments": {"data": literal([1, 2])},
+    }
+    destination_step = {
+        "step_id": "setup-destination",
+        "surface": "PIL.Image",
+        "operation": "new",
+        "receiver": None,
+        "arguments": {
+            "mode": literal("L"),
+            "size": literal([2, 1]),
+            "color": literal(91),
+        },
+    }
+    getdata_step = {
+        "step_id": "getdata",
+        "surface": "PIL.Image.Image",
+        "operation": "getdata",
+        "receiver": binding("setup-source"),
+        "arguments": {},
+    }
+    putdata_step = {
+        "step_id": "call",
+        "surface": "PIL.Image.Image",
+        "operation": "putdata",
+        "receiver": binding("setup-destination"),
+        "arguments": {"data": binding("getdata")},
+    }
+    output_step = {
+        "step_id": "observe-receiver",
+        "surface": "PIL.Image.Image",
+        "operation": "tobytes",
+        "receiver": binding("setup-destination"),
+        "arguments": {},
+    }
+    cases.append(
+        {
+            "case_id": "PIL.Image.Image.putdata.contract.public-imaging-core-sequence",
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "covers": ["PIL.Image.Image.putdata.behavior.default"],
+            "assets": [],
+            "steps": [
+                source_step,
+                source_pixels_step,
+                destination_step,
+                getdata_step,
+                putdata_step,
+                output_step,
+            ],
+            "observations": ["call", "observe-receiver"],
+        }
+    )
+    return cases
+
+
 
 def putpixel_input_parity_cases(surface_id: str) -> list[dict[str, Any]]:
     """Retain mode, packed-ink, host-shape and coordinate boundary failures."""
@@ -43619,10 +44035,30 @@ def convert_mode_audit_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             steps[0]["operation"] = "new"
             steps[0]["arguments"].pop("data")
             assets = []
-        return {"case_id": f"{surface_id}.convert.nuanced.mode-audit-{mode}-to-{target}-{label}",
-                "surface": surface_id, "operation": "convert",
-                "covers": [f"{surface_id}.convert.behavior.default"],
-                "assets": assets, "steps": steps, "observations": ["call", "materialize"]}
+        case = {
+            "case_id": f"{surface_id}.convert.nuanced.mode-audit-{mode}-to-{target}-{label}",
+            "surface": surface_id,
+            "operation": "convert",
+            "covers": [f"{surface_id}.convert.behavior.default"],
+            "assets": assets,
+            "steps": steps,
+            "observations": ["call", "materialize"],
+        }
+        if target == "LAB":
+            case["comparisons"] = {
+                "call": {
+                    "kind": "image",
+                    "pixel_mode": "exact",
+                    "maximum_channel_delta": 0,
+                    "metadata_mode": "dynamic_lab_icc_datetime",
+                    "reason": (
+                        "LittleCMS creates an ICC profile timestamp at runtime; "
+                        "compare all pixels and profile bytes exactly except the "
+                        "validated dateTimeNumber field"
+                    ),
+                }
+            }
+        return case
 
     for mode, channels in modes.items():
         sizes = [(17, 3)]
@@ -48400,6 +48836,400 @@ def ensure_pipeline_execution_observations(case: dict[str, Any]) -> None:
         observations.append(observation_id)
 
 
+def _patterned_pixel(mode: str, index: int, seed: int) -> Any:
+    value = (index * 73 + seed) % 251 + 1
+    if mode == "1":
+        return (index + seed) % 2
+    if mode in {"L", "P"}:
+        return value
+    if mode in {"LA", "PA"}:
+        return (value, (index * 41 + seed * 3) % 256)
+    if mode in {"RGB", "YCbCr", "HSV"}:
+        return (
+            value,
+            (index * 47 + seed * 3) % 256,
+            (index * 61 + seed * 7) % 256,
+        )
+    if mode in {"RGBA", "RGBX", "RGBa", "CMYK"}:
+        alpha = (index * 29 + seed * 5) % 176 + 80
+        red = value if mode != "RGBa" else value % alpha
+        green = (index * 47 + seed * 3) % 256
+        blue = (index * 61 + seed * 7) % 256
+        if mode == "RGBa":
+            green %= alpha
+            blue %= alpha
+        return (red, green, blue, alpha)
+    if mode == "I":
+        return index * 101 + seed
+    if mode.startswith("I;16"):
+        return (index * 1009 + seed) % 65536
+    if mode == "F":
+        return ((index * 37 + seed) % 4093) / 257.0
+    raise ValueError(f"no mode-correct parity pattern for {mode!r}")
+
+
+def _patterned_pixels(
+    mode: str,
+    size: Any,
+    *,
+    seed_text: str,
+) -> list[Any]:
+    """Return a small, deterministic, mode-correct nonuniform pixel pattern."""
+
+    if (
+        not isinstance(size, list)
+        or len(size) != 2
+        or any(not isinstance(dimension, int) or dimension <= 0 for dimension in size)
+    ):
+        raise ValueError(f"cannot pattern an image with invalid size: {size!r}")
+    width, height = size
+    if width * height > 4096:
+        raise ValueError(f"refusing to inline a large parity pattern: {size!r}")
+    seed = int.from_bytes(hashlib.sha256(seed_text.encode("utf-8")).digest()[:2], "big")
+    return [
+        _patterned_pixel(mode, index, seed)
+        for index in range(width * height)
+    ]
+
+
+def _patterned_raw_bytes(
+    mode: str,
+    size: list[int],
+    *,
+    seed_text: str,
+) -> bytes | None:
+    """Encode byte-addressed modes for a reusable content-addressed asset."""
+
+    if (
+        not isinstance(size, list)
+        or len(size) != 2
+        or any(not isinstance(dimension, int) or dimension <= 0 for dimension in size)
+    ):
+        raise ValueError(f"cannot pattern an image with invalid size: {size!r}")
+    width, height = size
+    seed = int.from_bytes(hashlib.sha256(seed_text.encode("utf-8")).digest()[:2], "big")
+    if mode == "1":
+        row_bytes = (width + 7) // 8
+        raw = bytearray(row_bytes * height)
+        for index in range(width * height):
+            if _patterned_pixel(mode, index, seed):
+                row, column = divmod(index, width)
+                raw[row * row_bytes + column // 8] |= 1 << (7 - column % 8)
+        return bytes(raw)
+    if mode in {"L", "P"}:
+        return bytes(
+            _patterned_pixel(mode, index, seed)
+            for index in range(width * height)
+        )
+    if mode in {
+        "LA",
+        "PA",
+        "RGB",
+        "RGBA",
+        "RGBX",
+        "RGBa",
+        "CMYK",
+        "YCbCr",
+        "HSV",
+    }:
+        return bytes(
+            channel
+            for index in range(width * height)
+            for channel in _patterned_pixel(mode, index, seed)
+        )
+    return None
+
+
+def _write_content_addressed_asset(data: bytes, assets_root: Path) -> tuple[str, str]:
+    digest = hashlib.sha256(data).hexdigest()
+    relative = Path("generated") / f"{digest}.bin"
+    asset_path = assets_root / relative
+    asset_path.parent.mkdir(parents=True, exist_ok=True)
+    if asset_path.exists():
+        if asset_path.read_bytes() != data:
+            raise ValueError(f"content-addressed asset mismatch: {relative}")
+    else:
+        asset_path.write_bytes(data)
+    return relative.as_posix(), digest
+
+
+def _binding_step_ids(value: Any) -> set[str]:
+    if isinstance(value, dict):
+        kind = value.get("kind")
+        if kind == "binding" and isinstance(value.get("step_id"), str):
+            return {value["step_id"]}
+        if kind == "bindings":
+            return {
+                item for item in value.get("step_ids", []) if isinstance(item, str)
+            }
+        if kind in {"literal", "asset", "bytes"}:
+            return set()
+        return set().union(*(_binding_step_ids(child) for child in value.values()))
+    if isinstance(value, list):
+        return set().union(*(_binding_step_ids(child) for child in value))
+    return set()
+
+
+def _seed_image_pattern(
+    case: dict[str, Any],
+    image_step_id: str,
+    assets_root: Path,
+) -> None:
+    steps = case["steps"]
+    image_step = next(
+        (step for step in steps if step.get("step_id") == image_step_id), None
+    )
+    if image_step is None:
+        raise ValueError(f"{case['case_id']}: missing pattern image {image_step_id}")
+    arguments = image_step.get("arguments", {})
+    mode_argument = arguments.get("mode", {})
+    size_argument = arguments.get("size", {})
+    mode = mode_argument.get("value")
+    size = size_argument.get("value")
+    if not isinstance(mode, str):
+        raise ValueError(f"{case['case_id']}: {image_step_id} has no literal mode")
+    seed_text = f"parity-pixel-pattern-v1:{mode}:{size}:{image_step_id}"
+    data = _patterned_raw_bytes(mode, size, seed_text=seed_text)
+    if data is not None:
+        relative, digest = _write_content_addressed_asset(data, assets_root)
+        asset_id = f"parity-pattern-{image_step_id}"
+        case_assets = case.setdefault("assets", [])
+        existing_asset = next(
+            (asset for asset in case_assets if asset.get("id") == asset_id),
+            None,
+        )
+        asset = {
+            "id": asset_id,
+            "kind": "ref_bytes",
+            "path": relative,
+            "sha256": digest,
+            "media_type": "application/octet-stream",
+        }
+        if existing_asset is None:
+            case_assets.append(asset)
+        elif existing_asset != asset:
+            raise ValueError(f"{case['case_id']}: conflicting pattern asset {asset_id}")
+        image_step["operation"] = "frombytes"
+        image_step["arguments"] = {
+            "mode": mode_argument,
+            "size": size_argument,
+            "data": asset_value(asset_id),
+        }
+        return
+
+    pixels = _patterned_pixels(mode, size, seed_text=seed_text)
+    pattern_step_id = f"setup-pattern-{image_step_id}"
+    if any(step.get("step_id") == pattern_step_id for step in steps):
+        return
+    steps.insert(
+        steps.index(image_step) + 1,
+        {
+            "step_id": pattern_step_id,
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "receiver": binding(image_step_id),
+            "arguments": {"data": literal(pixels)},
+        },
+    )
+
+
+def _insert_observation_after(
+    case: dict[str, Any],
+    anchor_step_id: str,
+    surface: str,
+    operation: str,
+    receiver_step_id: str,
+) -> str:
+    steps = case["steps"]
+    observation_id = f"observe-{anchor_step_id}-{operation}"
+    existing = next(
+        (step for step in steps if step.get("step_id") == observation_id), None
+    )
+    if existing is None:
+        anchor_index = next(
+            index
+            for index, step in enumerate(steps)
+            if step.get("step_id") == anchor_step_id
+        )
+        steps.insert(
+            anchor_index + 1,
+            {
+                "step_id": observation_id,
+                "surface": surface,
+                "operation": operation,
+                "receiver": binding(receiver_step_id),
+                "arguments": {},
+            },
+        )
+    elif (
+        existing.get("surface") != surface
+        or existing.get("operation") != operation
+        or existing.get("receiver") != binding(receiver_step_id)
+    ):
+        raise ValueError(f"{case['case_id']}: conflicting observation {observation_id}")
+    observations = case.setdefault("observations", [])
+    if observation_id not in observations:
+        observations.append(observation_id)
+    return observation_id
+
+
+def strengthen_pixel_parity_cases(
+    cases: list[dict[str, Any]],
+    operations: dict[tuple[str, str], dict[str, Any]],
+    assets_root: Path,
+) -> None:
+    """Strengthen weak image observations using the shared public workflow."""
+
+    for case in cases:
+        steps = case.get("steps", [])
+        original_steps = list(steps)
+        case_surface = case.get("surface")
+        case_operation = case.get("operation")
+        case_id = case.get("case_id", "")
+        is_direct_operation_case = (
+            isinstance(case_id, str)
+            and isinstance(case_surface, str)
+            and isinstance(case_operation, str)
+            and case_id.startswith(f"{case_surface}.{case_operation}.")
+        )
+        producers = {
+            step["step_id"]: step
+            for step in steps
+            if step.get("surface") == "PIL.Image"
+            and step.get("operation") == "new"
+            and isinstance(step.get("step_id"), str)
+        }
+
+        if case.get("case_id", "").endswith(".behavior.default"):
+            operation = operations.get((case["surface"], case["operation"]))
+            result = (
+                operation.get("source", {}).get("result", {}).get("shape")
+                if operation is not None
+                else None
+            )
+            if result == "image" and case["operation"] != "new":
+                used = set().union(
+                    *(
+                        _binding_step_ids(
+                            {"receiver": step.get("receiver"), "arguments": step.get("arguments", {})}
+                        )
+                        for step in steps
+                    )
+                )
+                for image_step_id in producers:
+                    if image_step_id in used:
+                        _seed_image_pattern(case, image_step_id, assets_root)
+
+        for step in original_steps:
+            surface = step.get("surface")
+            operation = step.get("operation")
+            step_id = step.get("step_id")
+            if not isinstance(step_id, str):
+                continue
+            receiver = step.get("receiver")
+            receiver_id = (
+                receiver.get("step_id")
+                if isinstance(receiver, dict) and receiver.get("kind") == "binding"
+                else None
+            )
+
+            if (
+                is_direct_operation_case
+                and case_surface == "PIL.Image.Image"
+                and case_operation == "load"
+                and surface == "PIL.Image.Image"
+                and operation == "load"
+            ):
+                if isinstance(receiver_id, str):
+                    _insert_observation_after(
+                        case,
+                        step_id,
+                        "PIL.Image.Image",
+                        "tobytes",
+                        receiver_id,
+                    )
+
+            if (
+                is_direct_operation_case
+                and case_surface == "PIL.Image.Image"
+                and case_operation == "putdata"
+                and surface == "PIL.Image.Image"
+                and operation == "putdata"
+            ):
+                if isinstance(receiver_id, str):
+                    _insert_observation_after(
+                        case,
+                        step_id,
+                        "PIL.Image.Image",
+                        "tobytes",
+                        receiver_id,
+                    )
+                if case.get("operation") == "putdata" and case.get("case_id", "").endswith(
+                    ".putdata.behavior.default"
+                ):
+                    referenced = _binding_step_ids(step.get("arguments", {}))
+                    for image_step_id in producers:
+                        if image_step_id in referenced:
+                            _seed_image_pattern(case, image_step_id, assets_root)
+
+            if (
+                is_direct_operation_case
+                and case_surface == "PIL.Image.Image"
+                and case_operation == "putpalette"
+                and surface == "PIL.Image.Image"
+                and operation == "putpalette"
+            ):
+                if isinstance(receiver_id, str):
+                    _insert_observation_after(
+                        case,
+                        step_id,
+                        "PIL.Image.Image",
+                        "getpalette",
+                        receiver_id,
+                    )
+                    _insert_observation_after(
+                        case,
+                        step_id,
+                        "PIL.Image.Image",
+                        "tobytes",
+                        receiver_id,
+                    )
+
+            if (
+                is_direct_operation_case
+                and case_surface == "PIL.ImageDraw.ImageDraw"
+                and case_operation == "line"
+                and surface == "PIL.ImageDraw.ImageDraw"
+                and operation == "line"
+                and isinstance(receiver_id, str)
+            ):
+                draw_step = next(
+                    (candidate for candidate in steps if candidate.get("step_id") == receiver_id),
+                    None,
+                )
+                image = draw_step.get("arguments", {}).get("im") if draw_step else None
+                image_id = (
+                    image.get("step_id")
+                    if isinstance(image, dict) and image.get("kind") == "binding"
+                    else None
+                )
+                if not isinstance(image_id, str):
+                    raise ValueError(f"{case['case_id']}: cannot resolve line image")
+                if (
+                    case.get("surface") == "PIL.ImageDraw.ImageDraw"
+                    and case.get("operation") == "line"
+                    and image_id in producers
+                ):
+                    _seed_image_pattern(case, image_id, assets_root)
+                _insert_observation_after(
+                    case,
+                    step_id,
+                    "PIL.Image.Image",
+                    "tobytes",
+                    image_id,
+                )
+
+
 def _externalize_large_inline_assets(value: Any, assets_root: Path) -> int:
     """Move large generated byte assets out of oversized input documents.
 
@@ -48454,6 +49284,88 @@ def _externalize_large_inline_assets(value: Any, assets_root: Path) -> int:
     return 0
 
 
+def prepare_asset_overlay(destination: Path, source: Path) -> Path:
+    """Expose canonical source assets while keeping generated writes local."""
+
+    destination = destination.resolve()
+    source = source.resolve()
+    if destination == source:
+        return destination
+    if not source.is_dir():
+        raise FileNotFoundError(f"active parity asset directory is missing: {source}")
+    destination.mkdir(parents=True, exist_ok=True)
+    for entry in source.iterdir():
+        target = destination / entry.name
+        if entry.name != "generated":
+            if not target.exists():
+                target.symlink_to(entry, target_is_directory=entry.is_dir())
+            continue
+        target.mkdir(parents=True, exist_ok=True)
+        for source_file in entry.rglob("*"):
+            if not source_file.is_file():
+                continue
+            relative = source_file.relative_to(entry)
+            target_file = target / relative
+            target_file.parent.mkdir(parents=True, exist_ok=True)
+            if not target_file.exists():
+                target_file.symlink_to(source_file)
+    return destination
+
+
+def indexed_generated_asset_paths(
+    input_root: Path,
+    manifest: dict[str, Any],
+) -> set[str]:
+    """Return generated-cache paths referenced by the indexed input corpus."""
+
+    input_paths = {
+        relative
+        for lane_paths in manifest["input_index"].values()
+        for relative in lane_paths
+    }
+    input_paths.add(CRASH_QUARANTINE_RELATIVE)
+    referenced: set[str] = set()
+
+    def visit(value: Any) -> None:
+        if isinstance(value, dict):
+            asset_path = value.get("path")
+            if (
+                value.get("kind") in {"ref", "ref_bytes"}
+                and isinstance(asset_path, str)
+                and asset_path.startswith("generated/")
+            ):
+                referenced.add(asset_path.removeprefix("generated/"))
+            for child in value.values():
+                visit(child)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child)
+
+    for relative in sorted(input_paths):
+        path = input_root / relative
+        if not path.is_file():
+            raise FileNotFoundError(f"missing indexed parity input: {relative}")
+        visit(json.loads(path.read_text(encoding="utf-8")))
+    return referenced
+
+
+def prune_unreferenced_generated_assets(
+    assets_root: Path,
+    referenced_paths: set[str],
+) -> None:
+    """Remove stale generated cache entries without touching source assets."""
+
+    generated_root = assets_root / "generated"
+    if not generated_root.is_dir():
+        return
+    for path in generated_root.rglob("*"):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(generated_root).as_posix()
+        if relative not in referenced_paths:
+            path.unlink()
+
+
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(payload, indent=2, sort_keys=False) + "\n"
@@ -48467,7 +49379,10 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
                 f"{path}: input exceeds the {MAX_INPUT_JSON_BYTES}-byte size limit "
                 f"after externalizing {externalized} large assets"
             )
-    path.write_text(text, encoding="utf-8")
+    encoded = text.encode("utf-8")
+    if path.is_file() and path.read_bytes() == encoded:
+        return
+    path.write_bytes(encoded)
 
 
 def benchmark_subjects() -> list[dict[str, str]]:
@@ -49476,6 +50391,43 @@ def build_pipeline_workflow(
     return workflow
 
 
+def _restore_benchmark_only_constant_inputs(workflow: dict[str, Any]) -> None:
+    """Keep the pre-existing isolated benchmark workflows unchanged."""
+
+    pattern_asset_ids = {
+        asset.get("id")
+        for asset in workflow.get("assets", [])
+        if isinstance(asset, dict)
+        and isinstance(asset.get("id"), str)
+        and asset["id"].startswith("parity-pattern-")
+    }
+    retained_steps = []
+    for step in workflow.get("steps", []):
+        if str(step.get("step_id", "")).startswith("setup-pattern-"):
+            continue
+        arguments = step.get("arguments", {})
+        data = arguments.get("data", {})
+        asset_id = data.get("asset_id") if isinstance(data, dict) else None
+        if (
+            step.get("operation") == "frombytes"
+            and isinstance(asset_id, str)
+            and asset_id in pattern_asset_ids
+        ):
+            step["operation"] = "new"
+            step["arguments"] = {
+                "mode": arguments["mode"],
+                "size": arguments["size"],
+                "color": literal(0),
+            }
+        retained_steps.append(step)
+    workflow["steps"] = retained_steps
+    workflow["assets"] = [
+        asset
+        for asset in workflow.get("assets", [])
+        if asset.get("id") not in pattern_asset_ids
+    ]
+
+
 def _scalar_convert_benchmark_workloads(
     operations: dict[tuple[str, str], dict[str, Any]],
     cases_by_id: dict[str, dict[str, Any]],
@@ -49615,8 +50567,22 @@ def build_pipeline_parity_case(
         if case_signature(existing) == signature:
             if requirement_id not in existing["covers"]:
                 existing["covers"].append(requirement_id)
+            if variant == "ConvertLab":
+                existing["comparisons"] = {
+                    "call": {
+                        "kind": "image",
+                        "pixel_mode": "exact",
+                        "maximum_channel_delta": 0,
+                        "metadata_mode": "dynamic_lab_icc_datetime",
+                        "reason": (
+                            "LittleCMS creates an ICC profile timestamp at runtime; "
+                            "compare all pixels and profile bytes exactly except the "
+                            "validated dateTimeNumber field"
+                        ),
+                    }
+                }
             return existing
-    return {
+    case = {
         "case_id": f"pipeline-case.{slug(variant)}.materialized-smoke",
         "surface": spec.surface,
         "operation": spec.operation,
@@ -49625,6 +50591,21 @@ def build_pipeline_parity_case(
         "steps": workflow["steps"],
         "observations": workflow["observations"],
     }
+    if variant == "ConvertLab":
+        case["comparisons"] = {
+            "call": {
+                "kind": "image",
+                "pixel_mode": "exact",
+                "maximum_channel_delta": 0,
+                "metadata_mode": "dynamic_lab_icc_datetime",
+                "reason": (
+                    "LittleCMS creates an ICC profile timestamp at runtime; "
+                    "compare all pixels and profile bytes exactly except the "
+                    "validated dateTimeNumber field"
+                ),
+            }
+        }
+    return case
 
 
 def _filter_blur_rgb_noise_parity_case(
@@ -50581,6 +51562,10 @@ def _workflow_benchmark_context(
         1
         for step in workflow.get("steps", [])
         if step.get("step_id") != "materialize"
+        and not (
+            str(step.get("step_id", "")).startswith("observe-")
+            and step.get("operation") == "getpalette"
+        )
         and not str(step.get("step_id", "")).startswith("setup")
         and step.get("operation") not in {"new", "tobytes"}
     )
@@ -50598,18 +51583,101 @@ def _workflow_benchmark_context(
 
 
 def _resize_source_images(
-    workflow: dict[str, Any], width: int, height: int
+    workflow: dict[str, Any],
+    width: int,
+    height: int,
 ) -> dict[str, Any]:
-    """Create a benchmark-only size variant by changing public Image.new inputs."""
+    """Create a size variant without copying a full-sized pattern asset."""
 
     resized = copy.deepcopy(workflow)
-    for step in resized.get("steps", []):
-        if step.get("operation") != "new":
+    steps = resized.get("steps", [])
+    inserted_steps: list[tuple[int, list[dict[str, Any]]]] = []
+    referenced_pattern_assets: set[str] = set()
+    for index, step in enumerate(steps):
+        arguments = step.get("arguments", {})
+        size = arguments.get("size")
+        if not isinstance(size, dict) or size.get("kind") != "literal":
             continue
-        size = step.get("arguments", {}).get("size")
-        if isinstance(size, dict) and size.get("kind") == "literal":
+        if step.get("operation") == "new":
             size["value"] = [width, height]
+            continue
+        if step.get("operation") != "frombytes":
+            continue
+        data = arguments.get("data", {})
+        asset_id = data.get("asset_id") if isinstance(data, dict) else None
+        if not isinstance(asset_id, str) or not asset_id.startswith("parity-pattern-"):
+            continue
+        mode = _literal_workflow_value(arguments.get("mode"))
+        if not isinstance(mode, str):
+            raise ValueError(f"{step.get('step_id')}: patterned source has no mode")
+        seed_text = (
+            f"parity-pixel-pattern-v1:{mode}:[{width}, {height}]:"
+            f"{asset_id.removeprefix('parity-pattern-')}"
+        )
+        seed = int.from_bytes(
+            hashlib.sha256(seed_text.encode("utf-8")).digest()[:2], "big"
+        )
+        image_step_id = step["step_id"]
+        step["operation"] = "new"
+        step["arguments"] = {
+            "mode": literal(mode),
+            "size": literal([width, height]),
+            "color": literal(0),
+        }
+        points = list(
+            dict.fromkeys(
+                (
+                    (0, 0),
+                    (width - 1, 0),
+                    (0, height - 1),
+                    (width - 1, height - 1),
+                    (width // 2, height // 2),
+                )
+            )
+        )
+        pattern_steps = [
+            {
+                "step_id": f"setup-pattern-{image_step_id}-{point_index}",
+                "surface": "PIL.Image.Image",
+                "operation": "putpixel",
+                "receiver": binding(image_step_id),
+                "arguments": {
+                    "xy": literal([x, y]),
+                    "value": literal(_patterned_pixel(mode, y * width + x, seed)),
+                },
+            }
+            for point_index, (x, y) in enumerate(points)
+        ]
+        inserted_steps.append((index, pattern_steps))
+        referenced_pattern_assets.add(asset_id)
+    for index, pattern_steps in reversed(inserted_steps):
+        steps[index + 1 : index + 1] = pattern_steps
+    used_asset_ids = set().union(*(_binding_step_ids(step) for step in steps))
+    used_asset_ids.update(
+        step.get("arguments", {}).get("data", {}).get("asset_id")
+        for step in steps
+        if isinstance(step.get("arguments", {}).get("data"), dict)
+    )
+    resized["assets"] = [
+        asset
+        for asset in resized.get("assets", [])
+        if asset.get("id") not in referenced_pattern_assets
+        or asset.get("id") in used_asset_ids
+    ]
     return resized
+
+
+def _has_resizable_image_source(workflow: dict[str, Any]) -> bool:
+    for step in workflow.get("steps", []):
+        if step.get("operation") == "new":
+            return True
+        if step.get("operation") != "frombytes":
+            continue
+        data = step.get("arguments", {}).get("data", {})
+        asset_id = data.get("asset_id") if isinstance(data, dict) else None
+        if isinstance(asset_id, str) and asset_id.startswith("parity-pattern-"):
+            return True
+    return False
 
 
 def _alpha_resize_benchmark_workflow(spec: dict[str, Any]) -> dict[str, Any]:
@@ -51824,10 +52892,7 @@ def build_pipeline_benchmark_document(
             "RGBA",
         }:
             continue
-        if not any(
-            step.get("operation") == "new"
-            for step in base["input"].get("steps", [])
-        ):
+        if not _has_resizable_image_source(base["input"]):
             continue
         if context["mode"] in {"LA", "RGBA"} and base["workload_id"].endswith(
             ("putpixel.benchmark-materialized", "putdata.benchmark-materialized")
@@ -54820,7 +55885,7 @@ def build_pipeline_benchmark_document(
         subjects=benchmark_subjects(),
         context_builder=_workflow_benchmark_context,
     )
-    return {
+    document = {
         "schema": "migration-parity/benchmark-input@1",
         "workloads": [
             *operation_workloads,
@@ -55325,6 +56390,11 @@ def build_pipeline_benchmark_document(
             },
         ],
     }
+    for workload in document["workloads"]:
+        input_spec = workload.get("input", {})
+        if input_spec.get("kind") == "workflow":
+            _restore_benchmark_only_constant_inputs(input_spec)
+    return document
 
 
 def _benchmark_success_workflow(workload_id: str) -> dict[str, Any] | None:
@@ -55753,6 +56823,15 @@ def build_inputs(
         counts.setdefault("nuanced_parity_cases", 0)
         counts["nuanced_parity_cases"] += added_nuanced_cases
 
+        strengthen_pixel_parity_cases(parity_cases, operations, active_assets_root)
+        if surface_id == "PIL.Image.Image":
+            # These protocol contracts stay in the canonical parity corpus,
+            # while remaining outside managed backend coverage selection.
+            putdata_contract_cases = putdata_sequence_contract_parity_cases(
+                surface_id
+            )
+            parity_cases.extend(putdata_contract_cases)
+            counts["putdata_sequence_contract_cases"] = len(putdata_contract_cases)
         for case in parity_cases:
             ensure_pipeline_execution_observations(case)
 
@@ -57744,6 +58823,19 @@ def build_inputs(
                 f"missing={sorted(indexed[lane] - generated[lane])}, "
                 f"extra={sorted(generated[lane] - indexed[lane])}"
             )
+    referenced_assets = indexed_generated_asset_paths(output_root, manifest)
+    prune_unreferenced_generated_assets(active_assets_root, referenced_assets)
+    generated_assets = active_assets_root / "generated"
+    available_assets = {
+        path.relative_to(generated_assets).as_posix()
+        for path in generated_assets.rglob("*")
+        if path.is_file()
+    } if generated_assets.is_dir() else set()
+    missing_assets = referenced_assets - available_assets
+    if missing_assets:
+        raise ValueError(
+            f"generated parity assets are missing: {sorted(missing_assets)}"
+        )
     return counts
 
 
@@ -57763,10 +58855,15 @@ def main() -> None:
     )
     args = parser.parse_args()
     manifest = load_manifest(args.manifest.resolve())
+    output_root = args.output_root.resolve()
+    assets_root = prepare_asset_overlay(
+        output_root / "assets",
+        FIXTURE_ROOT / "assets",
+    )
     counts = build_inputs(
         manifest,
-        args.output_root.resolve(),
-        FIXTURE_ROOT / "assets",
+        output_root,
+        assets_root,
     )
     print(json.dumps(counts, sort_keys=True))
 

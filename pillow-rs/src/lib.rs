@@ -375,6 +375,7 @@ pub use crate::ops::module_fns::effect_spread as image_effect_spread;
 pub use crate::ops::module_fns::eval as image_eval;
 pub use crate::ops::module_fns::eval_callable as image_eval_callable;
 pub use crate::ops::module_fns::eval_float as image_eval_float;
+pub use crate::ops::module_fns::eval_point_callable as image_eval_point_callable;
 pub use crate::ops::module_fns::eval_point_transform as image_eval_point_transform;
 pub use crate::ops::module_fns::eval_replicated_for_image as image_eval_replicated_for_image;
 pub use crate::ops::module_fns::eval_validated as image_eval_validated;

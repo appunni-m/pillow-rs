@@ -137,14 +137,10 @@ impl PyImage {
         self.inner.getxmp()
     }
 
-    fn getim(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        // The pure-Rust core owns the unsupported-handle decision. The binding
-        // only creates a named capsule so the Python result keeps Pillow's
-        // observable shape; its payload is deliberately not an Imaging pointer.
-        let _ = self.inner.getim();
-        Ok(PyCapsule::new_with_value(py, 0u8, c"PIL Imaging")?
-            .into_any()
-            .unbind())
+    fn getim(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        // This is the live Rust-owned image object. Do not fabricate a Pillow
+        // Imaging capsule: the core has no compatible C pointer to expose.
+        slf
     }
 
     /// Return getdata formatted as PIL expects.

@@ -35,7 +35,7 @@ const report = {
     build: 'wasm-pack --target web --release',
     debug_hooks: false,
     package_entrypoints: {
-        browser: './pkg/core/pillow_rs_js.js',
+        browser: './public.js',
         node: './node.js',
     },
     variants: rows,

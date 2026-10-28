@@ -13,8 +13,9 @@ use crate::pipeline::PipelineOp;
 
 mod point;
 pub use point::{
-    EvalInputKind, eval, eval_callable, eval_float, eval_point_transform, eval_replicated,
-    eval_replicated_for_image, eval_validated, make_float_lut, make_lut, validate_eval_input,
+    EvalInputKind, eval, eval_callable, eval_float, eval_point_callable, eval_point_transform,
+    eval_replicated, eval_replicated_for_image, eval_validated, make_float_lut, make_lut,
+    validate_eval_input,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -410,6 +411,11 @@ pub fn composite(image1: &Image, image2: &Image, mask: &Image) -> Result<Image, 
             // The output begins as image2.copy(), so palette ownership follows
             // image2 even when image1 was converted to P for the paste.
             *palette = Some(image2.extract_palette().unwrap_or_default());
+            *palette_alpha = image2.palette_alpha();
+        } else if output_mode == "PA" {
+            // Image.composite starts with image2.copy(); Pillow preserves the
+            // destination PA image's palette on that newly allocated result.
+            *palette = image2.extract_palette();
             *palette_alpha = image2.palette_alpha();
         } else {
             *palette = None;

@@ -963,7 +963,8 @@
           "pipeline-composition.draw-batch-rgba-alpha",
           "pipeline-composition.matrix-022",
           "pipeline-composition.matrix-023",
-          "pipeline-composition.matrix-024"
+          "pipeline-composition.matrix-024",
+          "pipeline-case.drawline.materialized-smoke"
         ],
         "command_ids": []
       },

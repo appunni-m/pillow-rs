@@ -38,7 +38,18 @@ def lab_image(
 
 class LabProfileTimestampComparisonTests(unittest.TestCase):
     def compare(self, source: dict[str, object], target: dict[str, object]):
-        return compare_value(source, target, {"kind": "image"}, "call.value")
+        return compare_value(
+            source,
+            target,
+            {
+                "kind": "image",
+                "pixel_mode": "exact",
+                "maximum_channel_delta": 0,
+                "metadata_mode": "dynamic_lab_icc_datetime",
+                "reason": "LittleCMS creates the ICC profile timestamp at runtime.",
+            },
+            "call.value",
+        )
 
     def test_live_timestamp_may_cross_a_second(self) -> None:
         source = lab_image((2026, 9, 26, 23, 59, 59))

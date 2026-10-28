@@ -12,10 +12,21 @@ fn putdata_uint8_values(
     offset: Option<f64>,
 ) -> Result<(), JsValue> {
     let bytes = js_sys::Uint8Array::new(data).to_vec();
+    let entry_count = js_sys::Reflect::get(data, &JsValue::from_str("length"))?
+        .as_f64()
+        .and_then(|length| {
+            (length.is_finite() && length >= 0.0 && length.fract() == 0.0)
+                .then_some(length as usize)
+        })
+        .ok_or_else(|| {
+            err(pillow_rs::PilError::TypeError(
+                "sequence length must be an integer".to_owned(),
+            ))
+        })?;
     let scale = scale.unwrap_or(1.0);
     let offset = offset.unwrap_or(0.0);
     if image
-        .putdata_bytes_fast_path(&bytes, bytes.len(), scale, offset)
+        .putdata_bytes_fast_path(&bytes, entry_count, scale, offset)
         .map_err(err)?
     {
         return Ok(());
@@ -23,6 +34,8 @@ fn putdata_uint8_values(
     let kind = image.putdata_value_kind().map_err(err)?;
     let values = bytes
         .into_iter()
+        .chain(std::iter::repeat(0))
+        .take(entry_count)
         .map(|value| match kind {
             pillow_rs::PutDataValueKind::Numeric => {
                 pillow_rs::PutDataValue::Number(f64::from(value))
@@ -38,7 +51,7 @@ fn putdata_uint8_values(
 fn putdata_value_from_js(
     value: &JsValue,
     kind: pillow_rs::PutDataValueKind,
-) -> Result<pillow_rs::PutDataValue, pillow_rs::PilError> {
+) -> Result<pillow_rs::PutDataValue, JsValue> {
     if let Some(number) = value.as_f64() {
         return match kind {
             pillow_rs::PutDataValueKind::Numeric => Ok(pillow_rs::PutDataValue::Number(number)),
@@ -52,6 +65,29 @@ fn putdata_value_from_js(
             }
         };
     }
+
+    if value.is_object() && !value.is_null() {
+        let value_of = js_sys::Reflect::get(value, &JsValue::from_str("valueOf"))?;
+        if let Ok(function) = value_of.dyn_into::<js_sys::Function>() {
+            let primitive = function.call0(value)?;
+            if let Some(number) = primitive.as_f64() {
+                return match kind {
+                    pillow_rs::PutDataValueKind::Numeric => {
+                        Ok(pillow_rs::PutDataValue::Number(number))
+                    }
+                    pillow_rs::PutDataValueKind::Components { .. }
+                        if number.is_finite() && number.fract() == 0.0 =>
+                    {
+                        Ok(pillow_rs::PutDataValue::Packed(number as i64))
+                    }
+                    pillow_rs::PutDataValueKind::Components { .. } => {
+                        Ok(pillow_rs::PutDataValue::Number(number))
+                    }
+                };
+            }
+        }
+    }
+
     if let Some(values) = js_integer_array(value) {
         if values.len() == 1 {
             return Ok(pillow_rs::PutDataValue::Packed(values[0]));
@@ -60,38 +96,123 @@ fn putdata_value_from_js(
             values.into_iter().map(i128::from).collect(),
         ));
     }
-    if value.is_object()
-        && !value.is_array()
-        && matches!(
-            kind,
-            pillow_rs::PutDataValueKind::Components { channels: 2 }
-        )
-        && js_sys::Reflect::has(
-            value,
-            &JsValue::from_str("__pillow_rs_putdata_custom_index__"),
-        )
-        .unwrap_or(false)
-    {
-        return Err(pillow_rs::PilError::TypeError(
-            "color must be int or tuple".to_owned(),
-        ));
-    }
     if value.is_array() && js_sys::Array::from(value).length() == 1 {
         if matches!(
             kind,
             pillow_rs::PutDataValueKind::Components { channels: 2 }
         ) {
-            return Err(pillow_rs::PilError::SystemError(
+            return Err(err(pillow_rs::PilError::SystemError(
                 "new style getargs format but argument is not a tuple".to_owned(),
-            ));
+            )));
         }
-        return Err(pillow_rs::PilError::TypeError(
+        return Err(err(pillow_rs::PilError::TypeError(
             "color must be int, or tuple of one, three or four elements".to_owned(),
-        ));
+        )));
     }
-    Err(pillow_rs::PilError::TypeError(
+    Err(err(pillow_rs::PilError::TypeError(
         "color must be int or tuple".to_owned(),
-    ))
+    )))
+}
+
+fn putdata_length(data: &JsValue) -> Result<usize, JsValue> {
+    let value = js_sys::Reflect::get(data, &JsValue::from_str("length"))?;
+    let Some(length) = value.as_f64() else {
+        return Err(err(pillow_rs::PilError::TypeError(
+            "argument must be a sequence".to_owned(),
+        )));
+    };
+    if !length.is_finite() || length < 0.0 || length.fract() != 0.0 {
+        return Err(err(pillow_rs::PilError::TypeError(
+            "sequence length must be an integer".to_owned(),
+        )));
+    }
+    usize::try_from(length as u128).map_err(|_| {
+        err(pillow_rs::PilError::TypeError(
+            "sequence length must be an integer".to_owned(),
+        ))
+    })
+}
+
+fn plain_numeric_array_value(value: &JsValue, kind: pillow_rs::PutDataValueKind) -> bool {
+    if value.as_f64().is_some() {
+        return true;
+    }
+    let pillow_rs::PutDataValueKind::Components { channels } = kind else {
+        return false;
+    };
+    if !value.is_array() {
+        return false;
+    }
+    let Ok(length) = putdata_length(value) else {
+        return false;
+    };
+    if length != channels {
+        return false;
+    }
+    let object: &js_sys::Object = value.unchecked_ref();
+    (0..length).all(|index| {
+        let descriptor =
+            js_sys::Object::get_own_property_descriptor(object, &JsValue::from_f64(index as f64));
+        if descriptor.is_null() || descriptor.is_undefined() {
+            return false;
+        }
+        let Ok(component) = js_sys::Reflect::get(&descriptor, &JsValue::from_str("value")) else {
+            return false;
+        };
+        component
+            .as_f64()
+            .is_some_and(|number| number.is_finite() && number.fract() == 0.0)
+    })
+}
+
+fn simple_putdata_array(data: &JsValue, kind: pillow_rs::PutDataValueKind) -> bool {
+    let Ok(length) = putdata_length(data) else {
+        return false;
+    };
+    let object: &js_sys::Object = data.unchecked_ref();
+    (0..length).all(|index| {
+        let descriptor =
+            js_sys::Object::get_own_property_descriptor(object, &JsValue::from_f64(index as f64));
+        if descriptor.is_null() || descriptor.is_undefined() {
+            return false;
+        }
+        let Ok(value) = js_sys::Reflect::get(&descriptor, &JsValue::from_str("value")) else {
+            return false;
+        };
+        plain_numeric_array_value(&value, kind)
+    })
+}
+
+fn collect_putdata_sequence(data: &JsValue, length: usize) -> Result<Vec<JsValue>, JsValue> {
+    let mut values = Vec::with_capacity(length);
+    match js_sys::try_iter(data) {
+        Ok(Some(iterator)) => {
+            for value in iterator {
+                values.push(value.map_err(|_| {
+                    err(pillow_rs::PilError::TypeError(
+                        "argument must be a sequence".to_owned(),
+                    ))
+                })?);
+            }
+        }
+        Ok(None) => {
+            for index in 0..length {
+                values.push(
+                    js_sys::Reflect::get(data, &JsValue::from_f64(index as f64)).map_err(|_| {
+                        err(pillow_rs::PilError::TypeError(
+                            "argument must be a sequence".to_owned(),
+                        ))
+                    })?,
+                );
+            }
+        }
+        Err(_) => {
+            return Err(err(pillow_rs::PilError::TypeError(
+                "argument must be a sequence".to_owned(),
+            )));
+        }
+    }
+    Ok(values)
 }
 
 fn putdata_array_values(
@@ -100,20 +221,53 @@ fn putdata_array_values(
     scale: Option<f64>,
     offset: Option<f64>,
 ) -> Result<(), JsValue> {
-    if !data.is_array() {
+    if !data.is_array() && (!data.is_object() || data.is_null()) {
         return Err(err(pillow_rs::PilError::TypeError(
             "argument must be a sequence".to_owned(),
         )));
     }
+    let length = putdata_length(data)?;
+    image.validate_putdata_length(length).map_err(err)?;
     let kind = image.putdata_value_kind().map_err(err)?;
-    let values = js_sys::Array::from(data)
-        .iter()
-        .map(|value| putdata_value_from_js(&value, kind))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(err)?;
+
+    if data.is_array() && simple_putdata_array(data, kind) {
+        let mut values = Vec::with_capacity(length);
+        for index in 0..length {
+            let value = js_sys::Reflect::get(data, &JsValue::from_f64(index as f64))?;
+            values.push(putdata_value_from_js(&value, kind)?);
+        }
+        return image
+            .putdata_values(&values, scale.unwrap_or(1.0), offset.unwrap_or(0.0))
+            .map_err(err);
+    }
+
+    let scale = scale.unwrap_or(1.0);
+    let offset = offset.unwrap_or(0.0);
+    if data.is_array() {
+        for index in 0..length {
+            let value =
+                js_sys::Reflect::get(data, &JsValue::from_f64(index as f64)).map_err(|_| {
+                    err(pillow_rs::PilError::TypeError(
+                        "argument must be a sequence".to_owned(),
+                    ))
+                })?;
+            let value = putdata_value_from_js(&value, kind)?;
+            image
+                .putdata_value_at(index, &value, scale, offset)
+                .map_err(err)?;
+        }
+        return Ok(());
+    }
+
+    let raw_values = collect_putdata_sequence(data, length)?;
     image
-        .putdata_values(&values, scale.unwrap_or(1.0), offset.unwrap_or(0.0))
-        .map_err(err)
+        .validate_putdata_length(raw_values.len())
+        .map_err(err)?;
+    let values = raw_values
+        .iter()
+        .map(|value| putdata_value_from_js(value, kind))
+        .collect::<Result<Vec<_>, _>>()?;
+    image.putdata_values(&values, scale, offset).map_err(err)
 }
 
 #[wasm_bindgen]
@@ -179,11 +333,9 @@ impl Image {
     pub fn close(&self) {}
 
     #[wasm_bindgen(js_name = "draftFn")]
-    /// Returns a clone of this image; decoder-specific draft optimization is unavailable.
-    pub fn draft_fn(&self, _m: &str, _w: u32, _h: u32) -> Image {
-        Image {
-            inner: self.inner.clone(),
-        }
+    /// Returns `null`; WASM images have no decoder state for draft optimization.
+    pub fn draft_fn(&self, _m: &str, _w: u32, _h: u32) -> JsValue {
+        JsValue::null()
     }
 
     #[wasm_bindgen(js_name = "toqimage")]
@@ -293,6 +445,39 @@ impl Image {
         }
         putdata_array_values(&mut self.inner, &data, scale, offset)
     }
+
+    /// Reports whether a plain array can use the callback-free bulk path.
+    #[wasm_bindgen(js_name = "__putdataArrayIsSimple")]
+    pub fn putdata_array_is_simple(&self, data: JsValue) -> Result<bool, JsValue> {
+        if !data.is_array() {
+            return Ok(false);
+        }
+        let kind = self.inner.putdata_value_kind().map_err(err)?;
+        Ok(simple_putdata_array(&data, kind))
+    }
+
+    /// Validates the public sequence length before value access or coercion.
+    #[wasm_bindgen(js_name = "__validatePutdataLength")]
+    pub fn validate_putdata_length(&self, length: usize) -> Result<(), JsValue> {
+        self.inner.validate_putdata_length(length).map_err(err)
+    }
+
+    /// Applies one already-coerced public value before the next list item is read.
+    #[wasm_bindgen(js_name = "__putdataValueAt")]
+    pub fn putdata_value_at(
+        &mut self,
+        index: usize,
+        value: JsValue,
+        scale: Option<f64>,
+        offset: Option<f64>,
+    ) -> Result<(), JsValue> {
+        let kind = self.inner.putdata_value_kind().map_err(err)?;
+        let value = putdata_value_from_js(&value, kind)?;
+        self.inner
+            .putdata_value_at(index, &value, scale.unwrap_or(1.0), offset.unwrap_or(0.0))
+            .map_err(err)
+    }
+
     /// Writes raw bytes to the image using the core `putdata` semantics.
     #[wasm_bindgen(js_name = "putdata")]
     pub fn putdata(&mut self, d: Vec<u8>) -> Result<(), JsValue> {
@@ -399,7 +584,7 @@ impl Image {
     }
     // More methods
     #[wasm_bindgen(js_name = "getpalette")]
-    /// Returns palette bytes, optionally converted to `rawmode`.
+    /// Returns palette bytes in the palette's natural layout by default, or in the requested `rawmode`.
     pub fn getpalette(&self, rawmode: Option<String>) -> Result<Option<Vec<u8>>, JsValue> {
         self.inner
             .getpalette_with_input(rawmode.as_deref())
@@ -469,11 +654,9 @@ impl Image {
         self.inner.has_transparency_data()
     }
     #[wasm_bindgen(js_name = "draft")]
-    /// Returns a clone of this image; decoder-specific draft optimization is unavailable.
-    pub fn draft(&self) -> Image {
-        Image {
-            inner: self.inner.clone(),
-        }
+    /// Returns `null`; WASM images have no decoder state for draft optimization.
+    pub fn draft(&self) -> JsValue {
+        JsValue::null()
     }
     #[wasm_bindgen(js_name = "putpixelRaw")]
     /// Writes the supplied RGBA components at `(x, y)` using the image's pixel mode.

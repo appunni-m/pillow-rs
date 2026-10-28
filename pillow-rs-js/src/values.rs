@@ -258,3 +258,22 @@ pub(crate) fn js_float_array(value: &JsValue) -> Option<Vec<f64>> {
         .map(|item| item.as_f64())
         .collect()
 }
+
+pub(crate) fn call_float_callback(
+    callback: &js_sys::Function,
+    values: &[f64],
+) -> Result<Vec<f64>, JsValue> {
+    let arguments = js_sys::Array::new();
+    for value in values {
+        arguments.push(&JsValue::from_f64(*value));
+    }
+    let result = callback.apply(&JsValue::NULL, &arguments)?;
+    if let Some(value) = result.as_f64() {
+        return Ok(vec![value]);
+    }
+    js_float_array(&result).ok_or_else(|| {
+        err(pillow_rs::PilError::TypeError(
+            "Color3DLUT callback must return a number sequence".to_owned(),
+        ))
+    })
+}

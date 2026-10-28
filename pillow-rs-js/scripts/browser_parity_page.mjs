@@ -1,4 +1,4 @@
-import * as wasm from '/pkg/core/pillow_rs_js.js';
+import * as wasm from '/public.js';
 import { runWorkflow } from '/scripts/parity_workflow.mjs';
 
 // The browser runner supplies a bounded deadline for this optional capability

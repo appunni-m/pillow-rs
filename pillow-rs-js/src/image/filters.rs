@@ -187,10 +187,8 @@ impl Image {
             .map_err(err)
     }
 
-    /// Transform a Color3DLUT table using a named parity-corpus callback.
-    /// Table traversal, callback-result slice semantics, and final length
-    /// validation remain in the shared Rust core; this binding only decodes
-    /// the callback asset name used by the JS host.
+    /// Transforms a Color3DLUT table using the supplied JavaScript callback.
+    /// Table traversal and callback-result slice semantics remain in Rust.
     #[allow(clippy::too_many_arguments)] // Preserve the established WASM call signature.
     #[wasm_bindgen(js_name = "color3DLUTTransform")]
     pub fn color3dlut_transform(
@@ -201,7 +199,7 @@ impl Image {
         channels_in: u32,
         channels_out: JsValue,
         with_normals: bool,
-        callback: String,
+        callback: js_sys::Function,
     ) -> Result<Vec<f64>, JsValue> {
         let size = (size_x, size_y, size_z);
         let input = pillow_rs::prepare_color3dlut(table, size, channels_in).map_err(err)?;
@@ -219,20 +217,7 @@ impl Image {
             &input,
             channels_out,
             with_normals,
-            |values| match callback.as_str() {
-                "color3dlut-transform-identity" => {
-                    Ok(values[values.len().saturating_sub(3)..].to_vec())
-                }
-                "color3dlut-transform-rgba" => {
-                    let mut result = values[values.len().saturating_sub(3)..].to_vec();
-                    result.push(1.0);
-                    Ok(result)
-                }
-                "color3dlut-short-result" => Ok(values.iter().copied().take(2).collect()),
-                _ => Err(err(pillow_rs::PilError::NotImplementedError(format!(
-                    "unsupported Color3DLUT callback: {callback}"
-                )))),
-            },
+            |values| call_float_callback(&callback, values),
             err,
         )?;
         pillow_rs::color3dlut_prepare_table(
@@ -345,9 +330,9 @@ impl Image {
     }
     /// Returns a copy of the image with its palette remapped by `mapping`.
     #[wasm_bindgen(js_name = "remapPalette")]
-    pub fn remap(&mut self, m: Vec<u8>) -> Result<Image, JsValue> {
+    pub fn remap(&mut self, m: Vec<u8>, source_palette: Option<Vec<u8>>) -> Result<Image, JsValue> {
         self.inner
-            .remap_palette(&m)
+            .remap_palette_with_source(&m, source_palette.as_deref())
             .map(|i| Image { inner: i })
             .map_err(err)
     }

@@ -569,11 +569,22 @@ fn pipeline_output_palette(
     palette_safe: bool,
     indexed_chops_result_without_palette: bool,
 ) -> (Option<Vec<u8>>, Option<Vec<u8>>) {
+    let palette_dropped_by_pa_operation = source.explicit_mode() == Some("PA")
+        && match op {
+            PipelineOp::Resize { filter, .. }
+            | PipelineOp::ResizeBoxed { filter, .. }
+            | PipelineOp::Thumbnail { filter, .. }
+            | PipelineOp::Fit { filter, .. }
+            | PipelineOp::Contain { filter, .. }
+            | PipelineOp::Cover { filter, .. } => {
+                !matches!(filter, crate::pipeline::ResampleFilter::Nearest)
+            }
+            PipelineOp::Filter3x3 { .. } | PipelineOp::Filter5x5 { .. } => true,
+            _ => false,
+        };
     let preserve_palette = palette_safe
-        && !matches!(
-            op,
-            PipelineOp::ExtractBand { .. } | PipelineOp::Merge { .. }
-        );
+        && !matches!(op, PipelineOp::ExtractBand { .. })
+        && !palette_dropped_by_pa_operation;
     let palette = if indexed_chops_result_without_palette {
         Some(Vec::new())
     } else if preserve_palette {

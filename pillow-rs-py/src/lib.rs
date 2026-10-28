@@ -21,7 +21,6 @@ use pyo3::types::PyAnyMethods;
 use pyo3::types::PyBool;
 use pyo3::types::PyBytes;
 use pyo3::types::PyBytesMethods;
-use pyo3::types::PyCapsule;
 use pyo3::types::PyDict;
 use pyo3::types::PyDictMethods;
 use pyo3::types::PyFloat;
