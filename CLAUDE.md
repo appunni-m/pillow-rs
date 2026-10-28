@@ -117,6 +117,9 @@
 
 ## Git integration
 
+- Use the `kata` CLI to search for, create, and track repository issues. Use
+  `pillow-rs#<short_id>` references and follow `kata quickstart` for the issue
+  lifecycle; close work only after it is complete and verified.
 - Default to one completed work item per commit/push checkpoint. Count an item
   after its focused verification; keep separate in-progress experiments out of
   that checkpoint. Increase the batch only when the user explicitly requests it.
