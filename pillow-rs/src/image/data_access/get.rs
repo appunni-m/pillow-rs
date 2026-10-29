@@ -1,6 +1,6 @@
 use super::{
     DynamicImage, FormattedImageData, Image, PilError, PipelineOp, ScalarImageSamples,
-    image_mode_name, is_l16_mode, pillow_band_count, select_interleaved_band,
+    is_l16_mode, pillow_band_count, select_interleaved_band,
     select_interleaved_band_into, select_lab_band, select_lab_band_into, validated_band_index,
 };
 impl Image {
@@ -140,22 +140,21 @@ impl Image {
                 crate::compute::record_eager_cpu_operation_receipt(
                     "GetData",
                     requested_backend,
-                    data.indices.as_raw().len(),
+                    data.indices.as_bytes().len(),
                 );
-                Ok(Some(data.indices.as_raw()))
+                Ok(Some(data.indices.as_bytes()))
             }
-            // Preserve `mode()` precedence while avoiding its owned String in
-            // this eligibility-only check.
+            // Preserve mode precedence without formatting a Pillow spelling.
             Image::Loaded(data)
                 if matches!(
-                    data.explicit_mode
-                        .as_deref()
-                        .unwrap_or_else(|| image_mode_name(data.decoded_mode)),
-                    "1" | "L"
+                    data.explicit_mode.unwrap_or(data.image.mode()),
+                    crate::raster::Mode::One | crate::raster::Mode::ImageLuma8
                 ) =>
             {
                 let values: Option<&[u8]> = match data.image.as_ref() {
-                    DynamicImage::ImageLuma8(image) => Some(image.as_raw().as_slice()),
+                    DynamicImage::One(image) | DynamicImage::ImageLuma8(image) => {
+                        Some(image.as_raw().as_slice())
+                    }
                     _ => None,
                 };
                 if let Some(values) = values {
@@ -267,7 +266,7 @@ impl Image {
             crate::compute::begin_eager_cpu_operation_telemetry("GetData", selected_backend);
         let result = (|| {
             if let Image::Paletted(data) = self {
-                output.copy_from_slice(data.indices.as_raw());
+                output.copy_from_slice(data.indices.as_bytes());
                 return Ok(());
             }
 

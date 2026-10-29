@@ -191,7 +191,7 @@ impl GpuBatchResourceTelemetryOptions<'_> {
                         || self.native_luma16_paste
                         || !matches!(
                             image,
-                            DynamicImage::ImageRgba8(_) | DynamicImage::ImageLuma16(_)
+                            DynamicImage::ImageRgba8(_) | DynamicImage::ImageI16(_)
                         )),
             )
         }

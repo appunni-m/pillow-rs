@@ -160,7 +160,7 @@ impl Image {
     pub fn tobytes_formatted(&self, mode: &str) -> Result<Vec<u8>, PilError> {
         // Fast path for Paletted: return raw index bytes
         if let Image::Paletted(data) = self {
-            return Ok(data.indices.as_raw().to_vec());
+            return Ok(data.indices.as_bytes().to_vec());
         }
         let img = self.materialized_shared()?;
 

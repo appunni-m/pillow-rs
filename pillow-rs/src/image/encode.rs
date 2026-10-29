@@ -92,7 +92,7 @@ impl Image {
             return Ok(DecodedImage::with_mode(
                 data.indices.width(),
                 data.indices.height(),
-                data.indices.as_raw().to_vec(),
+                data.indices.as_bytes().to_vec(),
                 ImageMode::P8,
             )
             .with_palette(palette));

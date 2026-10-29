@@ -436,6 +436,7 @@ pub use crate::pipeline::TransformMethod;
 pub use crate::pipeline::TransposeMethod;
 pub use crate::raster::ConvertBuffer;
 pub use crate::raster::DynamicImage;
+pub use crate::raster::Mode;
 pub use crate::raster::EncodableLayout;
 pub use crate::raster::Enlargeable;
 pub use crate::raster::EnumeratePixels;

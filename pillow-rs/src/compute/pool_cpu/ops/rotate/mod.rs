@@ -1,0 +1,33 @@
+//! Rotate mode strategies, geometry helpers, and native interpolation kernels.
+
+pub(crate) mod f32;
+pub(crate) mod i16;
+pub(crate) mod i16b;
+pub(crate) mod i16l;
+pub(crate) mod i16n;
+pub(crate) mod i32;
+pub(crate) mod la_premultiplied8;
+pub(crate) mod lab8;
+pub(crate) mod luma8;
+pub(crate) mod luma_a16;
+pub(crate) mod luma_a8;
+pub(crate) mod one;
+pub(crate) mod ops;
+pub(crate) mod palette8;
+pub(crate) mod palette_alpha8;
+pub(crate) mod rgb16;
+pub(crate) mod rgb32f;
+pub(crate) mod rgb8;
+pub(crate) mod rgb_premultiplied8;
+pub(crate) mod rgba16;
+pub(crate) mod rgba32f;
+pub(crate) mod rgba8;
+pub(crate) mod rgbx8;
+pub(crate) mod cmyk8;
+pub(crate) mod hsv8;
+pub(crate) mod ycbcr8;
+pub(crate) mod helpers;
+
+#[cfg(test)]
+#[path = "tests.rs"]
+mod tests;

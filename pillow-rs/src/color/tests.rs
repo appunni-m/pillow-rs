@@ -1,5 +1,3 @@
-#[cfg(target_arch = "x86_64")]
-use super::gather_interleaved_channel_ssse3_into;
 use super::grayscale::{
     cmyk_muldiv255_byte, grayscale_rgb_bytes, grayscale_rgb_pixel, grayscale_rgb_pixel_delta,
     grayscale_rgb_pixel_lookup,
@@ -13,38 +11,6 @@ use crate::compute::Backend;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, RgbaImage};
 
-#[cfg(target_arch = "x86_64")]
-#[test]
-fn ssse3_direct_channel_gather_covers_vector_boundaries() {
-    if !std::is_x86_feature_detected!("ssse3") {
-        return;
-    }
-
-    for channels in 2..=4 {
-        for pixel_count in [0, 1, 15, 16, 17, 31, 32, 33] {
-            let source: Vec<u8> = (0..pixel_count * channels)
-                .map(|index| u8::try_from((index * 73 + 19) % 256).expect("sample byte fits"))
-                .collect();
-            for channel in 0..channels {
-                let mut output = vec![0xA5; pixel_count];
-                let (vector_blocks, scalar_tail) =
-                    gather_interleaved_channel_ssse3_into(&source, &mut output, channels, channel)
-                        .expect("SSSE3 must be available on this test CPU");
-                let expected: Vec<u8> = source
-                    .chunks_exact(channels)
-                    .map(|pixel| pixel[channel])
-                    .collect();
-
-                assert_eq!(
-                    output, expected,
-                    "channels={channels} channel={channel} pixels={pixel_count}"
-                );
-                assert_eq!(vector_blocks, (pixel_count / 16) as u64);
-                assert_eq!(scalar_tail, (pixel_count % 16) as u64);
-            }
-        }
-    }
-}
 
 #[test]
 fn getcolor_accepts_pillow_mapping_and_lowercase_alpha_modes() {

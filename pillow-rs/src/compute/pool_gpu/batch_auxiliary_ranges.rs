@@ -80,7 +80,7 @@ impl GpuBatchAuxiliaryPreparation<'_> {
             return Ok(Some(range));
         }
         if gpu_luma16_paste_source(self.op, self.op_mode, second) {
-            let DynamicImage::ImageLuma16(source) = second.as_ref() else {
+            let DynamicImage::ImageI16(source) = second.as_ref() else {
                 return Err(PilError::InternalError(
                     "GPU typed Paste source was admitted without an ImageLuma16 buffer".into(),
                 ));

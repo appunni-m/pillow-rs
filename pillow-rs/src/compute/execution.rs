@@ -4,10 +4,13 @@ use super::automatic_segments;
 use super::backend_state::{active_lock, pools};
 #[cfg(feature = "gpu")]
 use super::pool_gpu;
+// TODO(pillow-rs#3ptb): route remaining SIMD-only segments and their mode
+// transitions through the injected CPU architecture strategy before removing
+// the independent SIMD executor.
 use super::pool_simd;
 use super::registry;
 use super::{
-    Backend, BackendImpl, DynamicImage, PilError, PipelineOp, PipelineResourceTelemetry,
+    Backend, BackendImpl, DynamicImage, ExecutionContext, PilError, PipelineOp, PipelineResourceTelemetry,
     PipelineTelemetry, begin_pipeline_operation_telemetry, elapsed_ns,
     finish_pipeline_operation_telemetry, host_resource_telemetry, pipeline_telemetry_enabled,
     pipeline_timestamp, record_pipeline_allocation, record_pipeline_backend_fallback,
@@ -21,6 +24,7 @@ use super::{
 };
 use std::sync::Arc;
 use std::time::Instant;
+use crate::compute::registry::support::PaletteInput;
 
 mod terminals;
 pub(crate) use terminals::{execute_prepared_cpu_terminal, execute_prepared_simd_terminal};
@@ -125,12 +129,17 @@ fn is_simd_capability_error(error: &PilError) -> bool {
 pub(crate) struct PreparedExecution {
     requested_backend: Option<Backend>,
     selected_backend: Backend,
+    context: ExecutionContext,
     route_ns: u64,
     validation_ns: u64,
     fallback_reason: Option<String>,
 }
 
 impl PreparedExecution {
+    pub(crate) fn context(&self) -> &ExecutionContext {
+        &self.context
+    }
+
     pub(crate) fn is_serial_cpu_without_fallback(&self) -> bool {
         self.selected_backend == Backend::Cpu && self.fallback_reason.is_none()
     }
@@ -144,6 +153,28 @@ impl PreparedExecution {
     }
 }
 
+/// Executes one family-prepared CPU operation using the pipeline's routed context.
+pub(crate) fn execute_prepared_cpu_arch_operation(
+    prepared: &PreparedExecution,
+    op: &PipelineOp,
+    input: crate::compute::registry::support::OperationInputs<'_>,
+) -> Result<DynamicImage, PilError> {
+    super::eager::execute_cpu_arch_operation(
+        registry::variant_key(op),
+        input.image,
+        prepared.context,
+        prepared.requested_backend,
+        prepared.route_ns,
+        prepared.validation_ns,
+        prepared.fallback_reason.clone(),
+        |context| {
+            let operation = registry::prepare_cpu(op, input, context)?;
+            let selection = *operation.selection();
+            operation.execute().map(|result| (result, selection))
+        },
+    )
+}
+
 /// Performs the route and validation phases before a source image is
 /// materialized. Keeping this separate preserves the explicit-backend contract
 /// while allowing the actual backend phase to be measured later.
@@ -155,6 +186,7 @@ pub(crate) fn prepare_execution(
     let route_start = timed.then(pipeline_timestamp).flatten();
     let (selected_backend, fallback_reason, support_checked) =
         route_decision(ops, requested_backend)?;
+    let context = ExecutionContext::for_routed_backend(selected_backend);
     let route_ns = elapsed_ns(route_start);
 
     let validation_start = timed.then(pipeline_timestamp).flatten();
@@ -166,6 +198,7 @@ pub(crate) fn prepare_execution(
     Ok(PreparedExecution {
         requested_backend,
         selected_backend,
+        context,
         route_ns,
         validation_ns,
         fallback_reason,
@@ -274,6 +307,11 @@ pub(crate) fn merge_pipeline_resource_telemetry(
         .saturating_add(next.host_allocated_bytes);
 }
 
+// TODO(pillow-rs#3ptb): fold these segments into CPU execution-context
+// selection after CPU family strategies own the archived SIMD contracts.
+// Preserve or deliberately retire the current routing/receipt semantics
+// during that move; this path still depends on the separate SIMD pool.
+///
 /// Execute an automatic CPU/SIMD pipeline as contiguous host-resident
 /// segments.
 ///
@@ -288,6 +326,23 @@ pub(super) fn execute_automatic_simd_segments(
     ops: &[PipelineOp],
     img: &DynamicImage,
     mode: Option<&str>,
+) -> Result<
+    (
+        DynamicImage,
+        Backend,
+        Option<String>,
+        Option<PipelineResourceTelemetry>,
+    ),
+    PilError,
+> {
+    execute_automatic_simd_segments_with_palette(ops, img, mode, PaletteInput::default())
+}
+
+fn execute_automatic_simd_segments_with_palette(
+    ops: &[PipelineOp],
+    img: &DynamicImage,
+    mode: Option<&str>,
+    palette: PaletteInput<'_>,
 ) -> Result<
     (
         DynamicImage,
@@ -339,7 +394,18 @@ pub(super) fn execute_automatic_simd_segments(
         }
         let pool = if backend == Backend::Simd { simd } else { cpu };
         let segment_ops = &ops[index..end];
-        let next = pool.execute_batch(segment_ops, input, op_mode)?;
+        let next = if backend == Backend::Cpu {
+            let context = ExecutionContext::for_routed_backend(Backend::Cpu);
+            pool.execute_batch_with_context_and_palette(
+                segment_ops,
+                input,
+                op_mode,
+                &context,
+                palette,
+            )?
+        } else {
+            pool.execute_batch(segment_ops, input, op_mode)?
+        };
         merge_pipeline_resource_telemetry(&mut resources, take_pipeline_resource_telemetry());
         current = Some(next);
         previous_backend = Some(backend);
@@ -373,6 +439,18 @@ pub(crate) fn execute_prepared(
     img: &DynamicImage,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    execute_prepared_with_palette(prepared, ops, img, mode, PaletteInput::default())
+}
+
+/// Executes a prepared pipeline with palette metadata resolved by its image
+/// wrapper. The mode-bearing raster still owns the current mode identity.
+pub(crate) fn execute_prepared_with_palette(
+    prepared: &PreparedExecution,
+    ops: &[PipelineOp],
+    img: &DynamicImage,
+    mode: Option<&str>,
+    palette: PaletteInput<'_>,
+) -> Result<DynamicImage, PilError> {
     // A pure conversion of an empty image has no samples to transform. Return
     // the correctly typed empty storage directly; this is not a CPU fallback
     // and must not publish a fabricated backend receipt.
@@ -393,10 +471,10 @@ pub(crate) fn execute_prepared(
     }
     let backend_start = timed.then(pipeline_timestamp).flatten();
     if prepared.requested_backend.is_none() && prepared.selected_backend == Backend::Simd {
-        return execute_automatic_simd(prepared, ops, img, mode, timed, backend_start);
+        return execute_automatic_simd(prepared, ops, img, mode, palette, timed, backend_start);
     }
     validate_explicit_simd_support(prepared, ops, img, mode)?;
-    execute_prepared_on_backend(prepared, ops, img, mode, timed, backend_start)
+    execute_prepared_on_backend(prepared, ops, img, mode, palette, timed, backend_start)
 }
 
 fn empty_convert_result(ops: &[PipelineOp], img: &DynamicImage) -> Option<DynamicImage> {
@@ -439,7 +517,7 @@ fn empty_convert_result(ops: &[PipelineOp], img: &DynamicImage) -> Option<Dynami
             DynamicImage::ImageRgba8(crate::raster::RgbaImage::new(width, height))
         }
         crate::pipeline::ColorMode::I16 => {
-            DynamicImage::ImageLuma16(crate::raster::ImageBuffer::new(width, height))
+            DynamicImage::ImageI16(crate::raster::ImageBuffer::new(width, height))
         }
         crate::pipeline::ColorMode::P | crate::pipeline::ColorMode::Mode1 => return None,
     })
@@ -459,11 +537,12 @@ fn execute_automatic_simd(
     ops: &[PipelineOp],
     img: &DynamicImage,
     mode: Option<&str>,
+    palette: PaletteInput<'_>,
     timed: bool,
     backend_start: Option<Instant>,
 ) -> Result<DynamicImage, PilError> {
     let (result, actual_backend, mixed_reason, mut resource) =
-        execute_automatic_simd_segments(ops, img, mode)?;
+        execute_automatic_simd_segments_with_palette(ops, img, mode, palette)?;
     if timed {
         let allocation = take_pipeline_allocation_telemetry();
         if let Some(resource) = resource.as_mut() {
@@ -520,6 +599,7 @@ fn execute_prepared_on_backend(
     ops: &[PipelineOp],
     img: &DynamicImage,
     mode: Option<&str>,
+    palette: PaletteInput<'_>,
     timed: bool,
     backend_start: Option<Instant>,
 ) -> Result<DynamicImage, PilError> {
@@ -542,6 +622,7 @@ fn execute_prepared_on_backend(
         ops,
         img,
         mode,
+        palette,
         timed,
         &mut execution_backend,
         &mut fallback_reason,
@@ -575,6 +656,7 @@ fn execute_pool_with_simd_recovery(
     ops: &[PipelineOp],
     img: &DynamicImage,
     mode: Option<&str>,
+    palette: PaletteInput<'_>,
     timed: bool,
     effective_backend: &mut Backend,
     fallback_reason: &mut Option<String>,
@@ -582,7 +664,13 @@ fn execute_pool_with_simd_recovery(
     let execution = if prepared.requested_backend == Some(Backend::Gpu) {
         pool.execute_batch_strict(ops, img, mode)
     } else {
-        pool.execute_batch(ops, img, mode)
+        pool.execute_batch_with_context_and_palette(
+            ops,
+            img,
+            mode,
+            prepared.context(),
+            palette,
+        )
     };
     match execution {
         Err(error)
@@ -590,7 +678,15 @@ fn execute_pool_with_simd_recovery(
                 && prepared.requested_backend != Some(Backend::Simd)
                 && is_simd_capability_error(&error) =>
         {
-            retry_simd_capability_failure(ops, img, mode, timed, effective_backend, fallback_reason)
+            retry_simd_capability_failure(
+                ops,
+                img,
+                mode,
+                palette,
+                timed,
+                effective_backend,
+                fallback_reason,
+            )
         }
         result => result,
     }
@@ -600,6 +696,7 @@ fn retry_simd_capability_failure(
     ops: &[PipelineOp],
     img: &DynamicImage,
     mode: Option<&str>,
+    palette: PaletteInput<'_>,
     timed: bool,
     effective_backend: &mut Backend,
     fallback_reason: &mut Option<String>,
@@ -621,7 +718,8 @@ fn retry_simd_capability_failure(
         .iter()
         .find(|candidate| candidate.name() == Backend::Cpu)
         .ok_or_else(|| PilError::ValueError("CPU backend not available".into()))?;
-    cpu.execute_batch(ops, img, mode)
+    let context = ExecutionContext::for_routed_backend(Backend::Cpu);
+    cpu.execute_batch_with_context_and_palette(ops, img, mode, &context, palette)
 }
 
 fn record_prepared_backend_telemetry(
@@ -687,6 +785,17 @@ pub(crate) fn execute_prepared_shared(
     ops: &[PipelineOp],
     img: &Arc<DynamicImage>,
     mode: Option<&str>,
+) -> Result<Arc<DynamicImage>, PilError> {
+    execute_prepared_shared_with_palette(prepared, ops, img, mode, PaletteInput::default())
+}
+
+/// Shared-result counterpart to [`execute_prepared_with_palette`].
+pub(crate) fn execute_prepared_shared_with_palette(
+    prepared: &PreparedExecution,
+    ops: &[PipelineOp],
+    img: &Arc<DynamicImage>,
+    mode: Option<&str>,
+    palette: PaletteInput<'_>,
 ) -> Result<Arc<DynamicImage>, PilError> {
     if matches!(prepared.selected_backend, Backend::Cpu | Backend::Simd)
         && mode == Some("I")
@@ -761,5 +870,5 @@ pub(crate) fn execute_prepared_shared(
         }
     }
 
-    execute_prepared(prepared, ops, img, mode).map(Arc::new)
+    execute_prepared_with_palette(prepared, ops, img, mode, palette).map(Arc::new)
 }

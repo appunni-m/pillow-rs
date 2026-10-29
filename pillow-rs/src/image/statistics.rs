@@ -65,9 +65,9 @@ impl Image {
     ///
     /// Returns [`PilError`] when materialization fails.
     pub fn stat(&self) -> Result<Vec<Vec<f64>>, PilError> {
-        let explicit_mode = self.explicit_mode();
-        let is_f = explicit_mode == Some("F");
-        let is_i = explicit_mode == Some("I");
+        let mode = self.known_mode_identity();
+        let is_f = mode == Some(crate::raster::Mode::ImageF32);
+        let is_i = mode == Some(crate::raster::Mode::ImageI32);
 
         if is_f || is_i {
             let img = self.materialized_shared()?;
@@ -76,7 +76,15 @@ impl Image {
 
         let img = self.materialized_shared()?;
         let is_l16_stat = img.color() == crate::raster::ColorType::L16
-            && matches!(explicit_mode, Some(mode) if is_l16_mode(mode));
+            && matches!(
+                mode,
+                Some(
+                    crate::raster::Mode::ImageI16
+                        | crate::raster::Mode::ImageI16L
+                        | crate::raster::Mode::ImageI16B
+                        | crate::raster::Mode::ImageI16N
+                )
+            );
         if is_l16_stat
             || matches!(
                 img.color(),

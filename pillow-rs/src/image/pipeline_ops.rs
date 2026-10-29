@@ -4,7 +4,7 @@ use std::sync::{Arc, OnceLock};
 
 use crate::error::PilError;
 use crate::pipeline::{ColorMode, PipelineOp, PixelMode};
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, Mode};
 
 use super::Image;
 
@@ -278,13 +278,13 @@ fn op_preserves_mode(op: &PipelineOp) -> bool {
     )
 }
 
-fn known_putalpha_mode(mode: PixelMode) -> Option<&'static str> {
+fn known_putalpha_mode(mode: PixelMode) -> Option<Mode> {
     match mode {
-        PixelMode::YCbCr | PixelMode::HSV | PixelMode::RGB => Some("RGBA"),
-        PixelMode::L | PixelMode::LA => Some("LA"),
-        PixelMode::RGBA => Some("RGBA"),
-        PixelMode::P | PixelMode::PA => Some("PA"),
-        PixelMode::CMYK => Some("RGBA"),
+        PixelMode::YCbCr | PixelMode::HSV | PixelMode::RGB => Some(Mode::ImageRgba8),
+        PixelMode::L | PixelMode::LA => Some(Mode::ImageLumaA8),
+        PixelMode::RGBA => Some(Mode::ImageRgba8),
+        PixelMode::P | PixelMode::PA => Some(Mode::ImagePaletteAlpha8),
+        PixelMode::CMYK => Some(Mode::ImageRgba8),
         // Palette putalpha is tagged as PA in push_op before this planner is
         // reached. Public putalpha also rejects 1/I/F, YCbCr, and HSV before
         // queueing; keep this fallback for malformed/internal descriptors.
@@ -298,44 +298,38 @@ fn known_putalpha_mode(mode: PixelMode) -> Option<&'static str> {
 /// materialization fallback and therefore cannot change public behavior. The
 /// mode cache is separate from the pixel cache because metadata reads must not
 /// publish or expose a partially executed image.
-pub(crate) fn known_pipeline_op_mode(op: &PipelineOp, current: &str) -> Option<String> {
+pub(crate) fn known_pipeline_op_mode(op: &PipelineOp, current: Mode) -> Option<Mode> {
     if op_preserves_mode(op) {
-        return Some(current.to_owned());
+        return Some(current);
     }
-    Some(
-        match op {
-            PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. }
-                if matches!(current, "P" | "PA") =>
-            {
-                "RGB"
-            }
-            PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. } => current,
-            // Public convert and merge constructors attach `explicit_mode`
-            // for non-raster-native targets (including CMYK, YCbCr, HSV, I,
-            // F, P, and 1). `Image::mode` returns that tag before reaching
-            // this planner, so only these four raster-native modes are live
-            // here. Keep the fallback conservative for malformed/internal
-            // descriptors instead of manufacturing metadata.
-            PipelineOp::Convert { mode, .. } | PipelineOp::Merge { mode, .. } => match mode {
-                ColorMode::L => "L",
-                ColorMode::LA => "LA",
-                ColorMode::RGB => "RGB",
-                ColorMode::RGBA => "RGBA",
-                _ => return None,
-            },
-            PipelineOp::ConvertLab { .. } => "LAB",
-            PipelineOp::Grayscale => "L",
-            PipelineOp::Colorize { .. } => "RGB",
-            PipelineOp::Constant { .. } => "L",
-            PipelineOp::PutAlpha { mode, .. } | PipelineOp::PutAlphaData { mode, .. } => {
-                known_putalpha_mode(*mode)?
-            }
-            PipelineOp::ExtractBand { .. } => "L",
-            PipelineOp::EffectNoise { .. } => "L",
-            _ => return None,
+    match op {
+        PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. }
+            if matches!(current, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8) =>
+        {
+            Some(Mode::ImageRgb8)
         }
-        .to_owned(),
-    )
+        PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. } => Some(current),
+        // The public wrapper records explicit target modes for conversions
+        // whose identity is not recoverable from a generic raster carrier.
+        PipelineOp::Convert { mode, .. } | PipelineOp::Merge { mode, .. } => match mode {
+            ColorMode::L => Some(Mode::ImageLuma8),
+            ColorMode::LA => Some(Mode::ImageLumaA8),
+            ColorMode::RGB => Some(Mode::ImageRgb8),
+            ColorMode::RGBA => Some(Mode::ImageRgba8),
+            _ => None,
+        },
+        PipelineOp::ConvertLab { .. } => Some(Mode::ImageLab8),
+        PipelineOp::Grayscale => Some(Mode::ImageLuma8),
+        PipelineOp::Colorize { .. } => Some(Mode::ImageRgb8),
+        PipelineOp::Constant { .. } => Some(Mode::ImageLuma8),
+        PipelineOp::PutAlpha { mode, .. } | PipelineOp::PutAlphaData { mode, .. } => {
+            known_putalpha_mode(*mode)
+        }
+        PipelineOp::ExtractBand { .. } | PipelineOp::EffectNoise { .. } => {
+            Some(Mode::ImageLuma8)
+        }
+        _ => None,
+    }
 }
 
 /// Rounds a non-negative dimension using Python's ties-to-even rule.
@@ -388,11 +382,11 @@ pub struct PipelinePrefixCache {
 /// a failing source-header lookup.
 pub type PipelineShapeCache = Arc<OnceLock<Result<Option<(u32, u32)>, PilError>>>;
 
-/// Shared once-initialized logical output mode for a lazy pipeline node.
+/// Shared once-initialized Pillow-owned output identity for a lazy pipeline node.
 ///
 /// `None` means that the operation list contains a mode transition whose
 /// representation cannot be described without materializing pixels.
-pub type PipelineModeCache = Arc<OnceLock<Result<Option<String>, PilError>>>;
+pub type PipelineModeCache = Arc<OnceLock<Result<Option<Mode>, PilError>>>;
 
 pub(crate) fn materialization_cache() -> MaterializationCache {
     Arc::new(OnceLock::new())
@@ -410,7 +404,7 @@ struct PipelineOutputMetadata {
     source_is_paletted: bool,
     palette_safe: bool,
     promotes_p_to_pa: bool,
-    explicit_mode: Option<String>,
+    explicit_mode: Option<Mode>,
     palette: Option<Vec<u8>>,
     palette_alpha: Option<Vec<u8>>,
 }
@@ -457,7 +451,7 @@ fn new_pipeline_node(
     source: Arc<Image>,
     ops: PipelineOps,
     backend: Option<crate::compute::Backend>,
-    explicit_mode: Option<String>,
+    explicit_mode: Option<Mode>,
     palette: Option<Vec<u8>>,
     palette_alpha: Option<Vec<u8>>,
 ) -> Image {
@@ -482,7 +476,7 @@ fn append_pipeline_op(
     materialized: &MaterializationCache,
     op: PipelineOp,
     source_is_paletted: bool,
-    explicit_mode: Option<String>,
+    explicit_mode: Option<Mode>,
     palette: Option<Vec<u8>>,
     palette_alpha: Option<Vec<u8>>,
 ) -> Image {
@@ -521,24 +515,24 @@ fn pipeline_output_mode(
     source_is_paletted: bool,
     palette_safe: bool,
     putalpha_mode: Option<PixelMode>,
-) -> Option<String> {
+) -> Option<Mode> {
+    let source_mode = source.known_mode_identity();
     let explicit_mode = if matches!(
         op,
         PipelineOp::ExtractBand { .. } | PipelineOp::Merge { .. }
     ) {
         None
     } else if source_is_paletted {
-        if source.explicit_mode() == Some("PA") && matches!(op, PipelineOp::PutPixel { .. }) {
+        if source_mode == Some(Mode::ImagePaletteAlpha8)
+            && matches!(op, PipelineOp::PutPixel { .. })
+        {
             // PA writes keep the raw index/alpha sample layout even when no
             // RGB palette is attached, so later conversion still sees PA.
-            Some("PA".to_owned())
+            Some(Mode::ImagePaletteAlpha8)
         } else {
-            palette_safe.then(|| {
-                if source.explicit_mode() == Some("PA") {
-                    "PA".to_owned()
-                } else {
-                    "P".to_owned()
-                }
+            palette_safe.then(|| match source_mode {
+                Some(Mode::ImagePaletteAlpha8) => Mode::ImagePaletteAlpha8,
+                _ => Mode::ImagePalette8,
             })
         }
     } else {
@@ -550,14 +544,14 @@ fn pipeline_output_mode(
             | PipelineOp::Convert { .. }
             | PipelineOp::ConvertLab { .. }
             | PipelineOp::ExtractBand { .. } => None,
-            _ => source.explicit_mode().map(str::to_owned),
+            _ => source_mode,
         }
     };
 
     // Keep putalpha's output-mode promotion here so P becomes PA without
     // expanding its indices, while CMYK becomes ordinary RGBA without a tag.
     match putalpha_mode {
-        Some(PixelMode::P | PixelMode::PA) => Some("PA".to_owned()),
+        Some(PixelMode::P | PixelMode::PA) => Some(Mode::ImagePaletteAlpha8),
         Some(PixelMode::CMYK) => None,
         _ => explicit_mode,
     }
@@ -569,7 +563,8 @@ fn pipeline_output_palette(
     palette_safe: bool,
     indexed_chops_result_without_palette: bool,
 ) -> (Option<Vec<u8>>, Option<Vec<u8>>) {
-    let palette_dropped_by_pa_operation = source.explicit_mode() == Some("PA")
+    let palette_dropped_by_pa_operation =
+        source.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
         && match op {
             PipelineOp::Resize { filter, .. }
             | PipelineOp::ResizeBoxed { filter, .. }
@@ -629,7 +624,7 @@ impl Image {
                 if source_is_paletted
                     && (!palette_safe
                         || promotes_p_to_pa
-                        || source.explicit_mode() == Some("PA")) =>
+                        || source.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)) =>
             {
                 new_pipeline_node(
                     Arc::new(source.clone()),
@@ -676,13 +671,13 @@ impl Image {
     pub(crate) fn push_mode_changing_op(
         source: &Image,
         op: PipelineOp,
-        output_mode: &str,
+        explicit_mode: Mode,
     ) -> Image {
         Image::Pipeline {
             source: Arc::new(source.clone()),
             ops: PipelineOps::one(op),
             format: None,
-            explicit_mode: Some(output_mode.to_owned()),
+            explicit_mode: Some(explicit_mode),
             backend: source.backend(),
             palette: None,
             palette_alpha: None,

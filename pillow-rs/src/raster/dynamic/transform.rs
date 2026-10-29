@@ -122,14 +122,13 @@ fn offset_luma16(
     image: &ImageBuffer<Luma<u16>, Vec<u16>>,
     xoffset: i32,
     yoffset: i32,
-    mode: Option<&str>,
+    big_endian: bool,
 ) -> ImageBuffer<Luma<u16>, Vec<u16>> {
     let (width, height) = image.dimensions();
     if width == 0 || height == 0 {
         return ImageBuffer::new(width, height);
     }
 
-    let big_endian = mode == Some("I;16B");
     let mut source = Vec::with_capacity(image.as_raw().len() * 2);
     for &sample in image.as_raw() {
         let bytes = if big_endian {
@@ -168,6 +167,38 @@ fn offset_luma16(
     ImageBuffer::from_vec(width, height, pixels).expect("offset preserves the source dimensions")
 }
 
+macro_rules! map_mode_preserving {
+    ($image:expr, $operation:ident $(, $argument:expr)* $(,)?) => {
+        match $image {
+            DynamicImage::One(image) => DynamicImage::One($operation(image $(, $argument)*)),
+            DynamicImage::ImageLuma8(image) => DynamicImage::ImageLuma8($operation(image $(, $argument)*)),
+            DynamicImage::ImageLumaA8(image) => DynamicImage::ImageLumaA8($operation(image $(, $argument)*)),
+            DynamicImage::ImageLaPremultiplied8(image) => DynamicImage::ImageLaPremultiplied8($operation(image $(, $argument)*)),
+            DynamicImage::ImagePalette8(image) => DynamicImage::ImagePalette8($operation(image $(, $argument)*)),
+            DynamicImage::ImagePaletteAlpha8(image) => DynamicImage::ImagePaletteAlpha8($operation(image $(, $argument)*)),
+            DynamicImage::ImageRgb8(image) => DynamicImage::ImageRgb8($operation(image $(, $argument)*)),
+            DynamicImage::ImageRgba8(image) => DynamicImage::ImageRgba8($operation(image $(, $argument)*)),
+            DynamicImage::ImageRgbPremultiplied8(image) => DynamicImage::ImageRgbPremultiplied8($operation(image $(, $argument)*)),
+            DynamicImage::ImageRgbx8(image) => DynamicImage::ImageRgbx8($operation(image $(, $argument)*)),
+            DynamicImage::ImageCmyk8(image) => DynamicImage::ImageCmyk8($operation(image $(, $argument)*)),
+            DynamicImage::ImageYCbCr8(image) => DynamicImage::ImageYCbCr8($operation(image $(, $argument)*)),
+            DynamicImage::ImageLab8(image) => DynamicImage::ImageLab8($operation(image $(, $argument)*)),
+            DynamicImage::ImageHsv8(image) => DynamicImage::ImageHsv8($operation(image $(, $argument)*)),
+            DynamicImage::ImageI32(image) => DynamicImage::ImageI32($operation(image $(, $argument)*)),
+            DynamicImage::ImageF32(image) => DynamicImage::ImageF32($operation(image $(, $argument)*)),
+            DynamicImage::ImageI16(image) => DynamicImage::ImageI16($operation(image $(, $argument)*)),
+            DynamicImage::ImageI16L(image) => DynamicImage::ImageI16L($operation(image $(, $argument)*)),
+            DynamicImage::ImageI16B(image) => DynamicImage::ImageI16B($operation(image $(, $argument)*)),
+            DynamicImage::ImageI16N(image) => DynamicImage::ImageI16N($operation(image $(, $argument)*)),
+            DynamicImage::ImageLumaA16(image) => DynamicImage::ImageLumaA16($operation(image $(, $argument)*)),
+            DynamicImage::ImageRgb16(image) => DynamicImage::ImageRgb16($operation(image $(, $argument)*)),
+            DynamicImage::ImageRgba16(image) => DynamicImage::ImageRgba16($operation(image $(, $argument)*)),
+            DynamicImage::ImageRgb32F(image) => DynamicImage::ImageRgb32F($operation(image $(, $argument)*)),
+            DynamicImage::ImageRgba32F(image) => DynamicImage::ImageRgba32F($operation(image $(, $argument)*)),
+        }
+    };
+}
+
 impl DynamicImage {
     /// Matches Pillow's `libImaging/Offset.c` dispatch for 16-bit luma.
     ///
@@ -179,256 +210,56 @@ impl DynamicImage {
         &self,
         xoffset: i32,
         yoffset: i32,
-        mode: Option<&str>,
     ) -> DynamicImage {
         match self {
-            DynamicImage::ImageLuma8(image) => {
-                DynamicImage::ImageLuma8(offset_image(image, xoffset, yoffset))
-            }
-            DynamicImage::ImageLumaA8(image) => {
-                DynamicImage::ImageLumaA8(offset_image(image, xoffset, yoffset))
-            }
-            DynamicImage::ImageRgb8(image) => {
-                DynamicImage::ImageRgb8(offset_image(image, xoffset, yoffset))
-            }
-            DynamicImage::ImageRgba8(image) => {
-                DynamicImage::ImageRgba8(offset_image(image, xoffset, yoffset))
-            }
-            DynamicImage::ImageLuma16(image) => {
-                DynamicImage::ImageLuma16(offset_luma16(image, xoffset, yoffset, mode))
-            }
-            DynamicImage::ImageLumaA16(image) => {
-                DynamicImage::ImageLumaA16(offset_image(image, xoffset, yoffset))
-            }
-            DynamicImage::ImageRgb16(image) => {
-                DynamicImage::ImageRgb16(offset_image(image, xoffset, yoffset))
-            }
-            DynamicImage::ImageRgba16(image) => {
-                DynamicImage::ImageRgba16(offset_image(image, xoffset, yoffset))
-            }
-            DynamicImage::ImageRgb32F(image) => {
-                DynamicImage::ImageRgb32F(offset_image(image, xoffset, yoffset))
-            }
-            DynamicImage::ImageRgba32F(image) => {
-                DynamicImage::ImageRgba32F(offset_image(image, xoffset, yoffset))
-            }
+            DynamicImage::ImageI16(image) => DynamicImage::ImageI16(offset_luma16(
+                image, xoffset, yoffset, false,
+            )),
+            DynamicImage::ImageI16L(image) => DynamicImage::ImageI16L(offset_luma16(
+                image, xoffset, yoffset, false,
+            )),
+            DynamicImage::ImageI16B(image) => DynamicImage::ImageI16B(offset_luma16(
+                image, xoffset, yoffset, true,
+            )),
+            DynamicImage::ImageI16N(image) => DynamicImage::ImageI16N(offset_luma16(
+                image, xoffset, yoffset, false,
+            )),
+            image => map_mode_preserving!(image, offset_image, xoffset, yoffset),
         }
     }
 
     /// Flip the image horizontally (mirror).
     #[must_use]
     pub fn fliph(&self) -> DynamicImage {
-        match self {
-            DynamicImage::ImageLuma8(p) => {
-                let (w, h) = p.dimensions();
-                DynamicImage::ImageLuma8(GrayImage::from_fn(w, h, |x, y| {
-                    *p.get_pixel(w.saturating_sub(1).saturating_sub(x), y)
-                }))
-            }
-            DynamicImage::ImageLumaA8(p) => {
-                let (w, h) = p.dimensions();
-                DynamicImage::ImageLumaA8(GrayAlphaImage::from_fn(w, h, |x, y| {
-                    *p.get_pixel(w.saturating_sub(1).saturating_sub(x), y)
-                }))
-            }
-            DynamicImage::ImageRgb8(p) => {
-                let (w, h) = p.dimensions();
-                DynamicImage::ImageRgb8(RgbImage::from_fn(w, h, |x, y| {
-                    *p.get_pixel(w.saturating_sub(1).saturating_sub(x), y)
-                }))
-            }
-            DynamicImage::ImageRgba8(p) => {
-                let (w, h) = p.dimensions();
-                DynamicImage::ImageRgba8(RgbaImage::from_fn(w, h, |x, y| {
-                    *p.get_pixel(w.saturating_sub(1).saturating_sub(x), y)
-                }))
-            }
-            DynamicImage::ImageLuma16(p) => DynamicImage::ImageLuma16(flip_horizontal(p)),
-            DynamicImage::ImageLumaA16(p) => DynamicImage::ImageLumaA16(flip_horizontal(p)),
-            DynamicImage::ImageRgb16(p) => DynamicImage::ImageRgb16(flip_horizontal(p)),
-            DynamicImage::ImageRgba16(p) => DynamicImage::ImageRgba16(flip_horizontal(p)),
-            DynamicImage::ImageRgb32F(p) => DynamicImage::ImageRgb32F(flip_horizontal(p)),
-            DynamicImage::ImageRgba32F(p) => DynamicImage::ImageRgba32F(flip_horizontal(p)),
-        }
+        map_mode_preserving!(self, flip_horizontal)
     }
 
     /// Flip the image vertically.
     #[must_use]
     pub fn flipv(&self) -> DynamicImage {
-        match self {
-            DynamicImage::ImageLuma8(p) => DynamicImage::ImageLuma8(flip_vertical(p)),
-            DynamicImage::ImageLumaA8(p) => DynamicImage::ImageLumaA8(flip_vertical(p)),
-            DynamicImage::ImageRgb8(p) => DynamicImage::ImageRgb8(flip_vertical(p)),
-            DynamicImage::ImageRgba8(p) => DynamicImage::ImageRgba8(flip_vertical(p)),
-            DynamicImage::ImageLuma16(p) => DynamicImage::ImageLuma16(flip_vertical(p)),
-            DynamicImage::ImageLumaA16(p) => DynamicImage::ImageLumaA16(flip_vertical(p)),
-            DynamicImage::ImageRgb16(p) => DynamicImage::ImageRgb16(flip_vertical(p)),
-            DynamicImage::ImageRgba16(p) => DynamicImage::ImageRgba16(flip_vertical(p)),
-            DynamicImage::ImageRgb32F(p) => DynamicImage::ImageRgb32F(flip_vertical(p)),
-            DynamicImage::ImageRgba32F(p) => DynamicImage::ImageRgba32F(flip_vertical(p)),
-        }
+        map_mode_preserving!(self, flip_vertical)
     }
 
     /// Rotate the image 90 degrees clockwise.
     #[must_use]
     pub fn rotate90(&self) -> DynamicImage {
-        match self {
-            DynamicImage::ImageLuma8(p) => {
-                let (w, h) = p.dimensions();
-                DynamicImage::ImageLuma8(GrayImage::from_fn(h, w, |x, y| {
-                    *p.get_pixel(y, h.saturating_sub(1).saturating_sub(x))
-                }))
-            }
-            DynamicImage::ImageLumaA8(p) => {
-                let (w, h) = p.dimensions();
-                DynamicImage::ImageLumaA8(GrayAlphaImage::from_fn(h, w, |x, y| {
-                    *p.get_pixel(y, h.saturating_sub(1).saturating_sub(x))
-                }))
-            }
-            DynamicImage::ImageRgb8(p) => {
-                let (w, h) = p.dimensions();
-                DynamicImage::ImageRgb8(RgbImage::from_fn(h, w, |x, y| {
-                    *p.get_pixel(y, h.saturating_sub(1).saturating_sub(x))
-                }))
-            }
-            DynamicImage::ImageRgba8(p) => {
-                let (w, h) = p.dimensions();
-                DynamicImage::ImageRgba8(RgbaImage::from_fn(h, w, |x, y| {
-                    *p.get_pixel(y, h.saturating_sub(1).saturating_sub(x))
-                }))
-            }
-            DynamicImage::ImageLuma16(p) => DynamicImage::ImageLuma16(rotate_clockwise(p)),
-            DynamicImage::ImageLumaA16(p) => DynamicImage::ImageLumaA16(rotate_clockwise(p)),
-            DynamicImage::ImageRgb16(p) => DynamicImage::ImageRgb16(rotate_clockwise(p)),
-            DynamicImage::ImageRgba16(p) => DynamicImage::ImageRgba16(rotate_clockwise(p)),
-            DynamicImage::ImageRgb32F(p) => DynamicImage::ImageRgb32F(rotate_clockwise(p)),
-            DynamicImage::ImageRgba32F(p) => DynamicImage::ImageRgba32F(rotate_clockwise(p)),
-        }
+        map_mode_preserving!(self, rotate_clockwise)
     }
 
     /// Rotate the image 180 degrees.
     #[must_use]
     pub fn rotate180(&self) -> DynamicImage {
-        match self {
-            DynamicImage::ImageLuma8(p) => {
-                let (w, h) = p.dimensions();
-                DynamicImage::ImageLuma8(GrayImage::from_fn(w, h, |x, y| {
-                    *p.get_pixel(
-                        w.saturating_sub(1).saturating_sub(x),
-                        h.saturating_sub(1).saturating_sub(y),
-                    )
-                }))
-            }
-            DynamicImage::ImageLumaA8(p) => {
-                let (w, h) = p.dimensions();
-                DynamicImage::ImageLumaA8(GrayAlphaImage::from_fn(w, h, |x, y| {
-                    *p.get_pixel(
-                        w.saturating_sub(1).saturating_sub(x),
-                        h.saturating_sub(1).saturating_sub(y),
-                    )
-                }))
-            }
-            DynamicImage::ImageRgb8(p) => {
-                let (w, h) = p.dimensions();
-                DynamicImage::ImageRgb8(RgbImage::from_fn(w, h, |x, y| {
-                    *p.get_pixel(
-                        w.saturating_sub(1).saturating_sub(x),
-                        h.saturating_sub(1).saturating_sub(y),
-                    )
-                }))
-            }
-            DynamicImage::ImageRgba8(p) => {
-                let (w, h) = p.dimensions();
-                DynamicImage::ImageRgba8(RgbaImage::from_fn(w, h, |x, y| {
-                    *p.get_pixel(
-                        w.saturating_sub(1).saturating_sub(x),
-                        h.saturating_sub(1).saturating_sub(y),
-                    )
-                }))
-            }
-            DynamicImage::ImageLuma16(p) => DynamicImage::ImageLuma16(rotate_half_turn(p)),
-            DynamicImage::ImageLumaA16(p) => DynamicImage::ImageLumaA16(rotate_half_turn(p)),
-            DynamicImage::ImageRgb16(p) => DynamicImage::ImageRgb16(rotate_half_turn(p)),
-            DynamicImage::ImageRgba16(p) => DynamicImage::ImageRgba16(rotate_half_turn(p)),
-            DynamicImage::ImageRgb32F(p) => DynamicImage::ImageRgb32F(rotate_half_turn(p)),
-            DynamicImage::ImageRgba32F(p) => DynamicImage::ImageRgba32F(rotate_half_turn(p)),
-        }
+        map_mode_preserving!(self, rotate_half_turn)
     }
 
     /// Rotate the image 270 degrees clockwise (90 degrees counter-clockwise).
     #[must_use]
     pub fn rotate270(&self) -> DynamicImage {
-        match self {
-            DynamicImage::ImageLuma8(p) => {
-                let (w, h) = p.dimensions();
-                DynamicImage::ImageLuma8(GrayImage::from_fn(h, w, |x, y| {
-                    *p.get_pixel(w.saturating_sub(1).saturating_sub(y), x)
-                }))
-            }
-            DynamicImage::ImageLumaA8(p) => {
-                let (w, h) = p.dimensions();
-                DynamicImage::ImageLumaA8(GrayAlphaImage::from_fn(h, w, |x, y| {
-                    *p.get_pixel(w.saturating_sub(1).saturating_sub(y), x)
-                }))
-            }
-            DynamicImage::ImageRgb8(p) => {
-                let (w, h) = p.dimensions();
-                DynamicImage::ImageRgb8(RgbImage::from_fn(h, w, |x, y| {
-                    *p.get_pixel(w.saturating_sub(1).saturating_sub(y), x)
-                }))
-            }
-            DynamicImage::ImageRgba8(p) => {
-                let (w, h) = p.dimensions();
-                DynamicImage::ImageRgba8(RgbaImage::from_fn(h, w, |x, y| {
-                    *p.get_pixel(w.saturating_sub(1).saturating_sub(y), x)
-                }))
-            }
-            DynamicImage::ImageLuma16(p) => DynamicImage::ImageLuma16(rotate_counter_clockwise(p)),
-            DynamicImage::ImageLumaA16(p) => {
-                DynamicImage::ImageLumaA16(rotate_counter_clockwise(p))
-            }
-            DynamicImage::ImageRgb16(p) => DynamicImage::ImageRgb16(rotate_counter_clockwise(p)),
-            DynamicImage::ImageRgba16(p) => DynamicImage::ImageRgba16(rotate_counter_clockwise(p)),
-            DynamicImage::ImageRgb32F(p) => DynamicImage::ImageRgb32F(rotate_counter_clockwise(p)),
-            DynamicImage::ImageRgba32F(p) => {
-                DynamicImage::ImageRgba32F(rotate_counter_clockwise(p))
-            }
-        }
+        map_mode_preserving!(self, rotate_counter_clockwise)
     }
 
     /// Apply a diagonal transpose while retaining the image's native pixel type.
     pub(crate) fn transpose_diagonal(&self, transverse: bool) -> DynamicImage {
-        match self {
-            DynamicImage::ImageLuma8(image) => {
-                DynamicImage::ImageLuma8(transpose_diagonal(image, transverse))
-            }
-            DynamicImage::ImageLumaA8(image) => {
-                DynamicImage::ImageLumaA8(transpose_diagonal(image, transverse))
-            }
-            DynamicImage::ImageRgb8(image) => {
-                DynamicImage::ImageRgb8(transpose_diagonal(image, transverse))
-            }
-            DynamicImage::ImageRgba8(image) => {
-                DynamicImage::ImageRgba8(transpose_diagonal(image, transverse))
-            }
-            DynamicImage::ImageLuma16(image) => {
-                DynamicImage::ImageLuma16(transpose_diagonal(image, transverse))
-            }
-            DynamicImage::ImageLumaA16(image) => {
-                DynamicImage::ImageLumaA16(transpose_diagonal(image, transverse))
-            }
-            DynamicImage::ImageRgb16(image) => {
-                DynamicImage::ImageRgb16(transpose_diagonal(image, transverse))
-            }
-            DynamicImage::ImageRgba16(image) => {
-                DynamicImage::ImageRgba16(transpose_diagonal(image, transverse))
-            }
-            DynamicImage::ImageRgb32F(image) => {
-                DynamicImage::ImageRgb32F(transpose_diagonal(image, transverse))
-            }
-            DynamicImage::ImageRgba32F(image) => {
-                DynamicImage::ImageRgba32F(transpose_diagonal(image, transverse))
-            }
-        }
+        map_mode_preserving!(self, transpose_diagonal, transverse)
     }
 }

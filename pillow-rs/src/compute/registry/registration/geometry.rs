@@ -1,7 +1,7 @@
 //! Geometry operation registration.
 use super::prelude::{
-    DynamicImage, PilError, PipelineOp, Registry, execute_crop, execute_reduce, execute_resize,
-    execute_resize_boxed, execute_rotate, execute_thumbnail, execute_transpose,
+    DynamicImage, PilError, PipelineOp, Registry, execute_resize,
+    execute_resize_boxed, execute_thumbnail,
 };
 fn register_resize(m: &mut Registry) {
     m.insert(
@@ -33,22 +33,7 @@ fn register_crop_rotate(m: &mut Registry) {
     m.insert(
         "Crop",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             _mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::Crop {
-                    left,
-                    top,
-                    right,
-                    bottom,
-                } = op
-                {
-                    execute_crop(img, *left, *top, *right, *bottom)
-                } else {
-                    Err(PilError::ValueError("expected Crop op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::crop::ops::prepare_pipeline,
             "crop.wgsl"
         ),
     );
@@ -56,27 +41,7 @@ fn register_crop_rotate(m: &mut Registry) {
     m.insert(
         "Rotate",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::Rotate {
-                    angle,
-                    expand,
-                    fill,
-                    center,
-                    translate,
-                    filter,
-                    nearest,
-                } = op
-                {
-                    execute_rotate(
-                        img, *angle, *expand, *fill, *center, *translate, *filter, *nearest, mode,
-                    )
-                } else {
-                    Err(PilError::ValueError("expected Rotate op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::rotate::ops::prepare_pipeline,
             "rotate.wgsl"
         ),
     );
@@ -86,16 +51,7 @@ fn register_part_2(m: &mut Registry) {
     m.insert(
         "Transpose",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             _mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::Transpose { method } = op {
-                    execute_transpose(img, method)
-                } else {
-                    Err(PilError::ValueError("expected Transpose op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::transpose::ops::prepare_transpose_pipeline,
             "transpose.wgsl"
         ),
     );
@@ -120,16 +76,7 @@ fn register_part_2(m: &mut Registry) {
     m.insert(
         "Reduce",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::Reduce { x_factor, y_factor } = op {
-                    execute_reduce(img, *x_factor, *y_factor, mode)
-                } else {
-                    Err(PilError::ValueError("expected Reduce op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::reduce::ops::prepare_pipeline,
             "reduce.wgsl"
         ),
     );

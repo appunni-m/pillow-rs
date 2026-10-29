@@ -92,7 +92,7 @@ impl Image {
             .ok_or_else(|| PilError::ValueError("palette conversion failed".to_owned()))?;
 
         Ok(Image::Paletted(PalettedData {
-            indices,
+            indices: DynamicImage::ImagePalette8(indices),
             palette: palette_bytes,
             palette_alpha: palette_image.palette_alpha().unwrap_or_default(),
             source_format: None,
@@ -124,7 +124,7 @@ impl Image {
         let image = self.materialize()?;
         let (width, height) = (image.width(), image.height());
         let is_rgba = matches!(image.color(), crate::raster::ColorType::Rgba8)
-            || self.explicit_mode() == Some("RGBA");
+            || self.known_mode_identity() == Some(crate::raster::Mode::ImageRgba8);
         validate_method(is_rgba, method)?;
         if method == 3 {
             return Err(PilError::ValueError(
@@ -132,6 +132,8 @@ impl Image {
             ));
         }
 
+        // TODO(cpu-migration): give quantize leaf selectors the typed mode
+        // identity instead of the compatibility string consumed below.
         let quantized = quantize_by_method(
             &image,
             self.explicit_mode(),
@@ -323,11 +325,11 @@ fn build_paletted_image(
     Ok(Image::Pipeline {
         source: Arc::new(Image::from_dynamic(
             DynamicImage::ImageLuma8(output),
-            Some("P".to_string()),
+            Some(crate::raster::Mode::ImagePalette8),
         )),
         ops: PipelineOps::empty(),
         format: None,
-        explicit_mode: Some("P".to_string()),
+        explicit_mode: Some(crate::raster::Mode::ImagePalette8),
         backend: None,
         palette: Some(quantized.palette),
         palette_alpha: quantized.alpha,

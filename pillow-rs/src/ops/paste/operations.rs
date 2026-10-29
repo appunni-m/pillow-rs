@@ -529,8 +529,8 @@ fn resolve_solid_source(
                 crate::raster::Luma([sample]),
             );
             Ok(Image::from_dynamic(
-                crate::raster::DynamicImage::ImageLuma16(pixels),
-                Some(destination_mode.to_owned()),
+                crate::raster::DynamicImage::ImageI16(pixels),
+                crate::image::mode_boundary::parse_pillow_mode(&destination_mode),
             ))
         }
         ResolvedPasteColor::Bytes(color) => Image::new(width, height, destination_mode, color),

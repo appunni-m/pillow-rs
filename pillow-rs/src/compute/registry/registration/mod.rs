@@ -1,4 +1,10 @@
 //! Operation registration, split into focused initializer modules.
+//!
+//! TODO(pillow-rs#3ptb): replace the old direct-result callbacks in the
+//! `chops`, `color`, `draw`, `effects`, `enhance`, `filter`, `geometry`,
+//! `module_fns`, and `transform` registrations with family-owned prepared
+//! callbacks as those CPU owners are migrated. Keep each existing operation
+//! key and GPU shader paired with its replacement.
 
 use super::{OpEntry, SimdOpFn};
 use crate::error::PilError;

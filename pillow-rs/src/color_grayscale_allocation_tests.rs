@@ -100,7 +100,7 @@ fn empty_native_layouts_record_no_grayscale_allocations() -> Result<(), PilError
 #[test]
 fn luma16_grayscale_fallback_records_rgb_and_gray_buffers() -> Result<(), PilError> {
     let _telemetry = AllocationTelemetryGuard::enable();
-    let source = DynamicImage::ImageLuma16(ImageBuffer::from_fn(WIDTH, HEIGHT, |x, _| {
+    let source = DynamicImage::ImageI16(ImageBuffer::from_fn(WIDTH, HEIGHT, |x, _| {
         crate::raster::Luma([if x % 2 == 0 { 0 } else { u16::MAX }])
     }));
     let expected: Vec<u8> = (0..HEIGHT)

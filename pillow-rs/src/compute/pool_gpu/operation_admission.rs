@@ -332,7 +332,7 @@ pub(super) fn gpu_auxiliary_layout_is_supported_for_op(
         && current_color == crate::raster::ColorType::L16
         && matches!(op, PipelineOp::Paste { .. })
     {
-        matches!(image, DynamicImage::ImageLuma16(_))
+        matches!(image, DynamicImage::ImageI16(_))
     } else {
         gpu_image_layout_is_supported(image)
     }
@@ -413,8 +413,10 @@ pub(super) fn gpu_color_after_op(
         }
         PipelineOp::Colorize { .. } => crate::raster::ColorType::Rgb8,
         PipelineOp::Color3DLut { target_mode, .. } => match target_mode {
-            PixelMode::RGB => crate::raster::ColorType::Rgb8,
-            PixelMode::RGBA | PixelMode::CMYK => crate::raster::ColorType::Rgba8,
+            crate::raster::Mode::ImageRgb8 => crate::raster::ColorType::Rgb8,
+            crate::raster::Mode::ImageRgba8 | crate::raster::Mode::ImageCmyk8 => {
+                crate::raster::ColorType::Rgba8
+            }
             _ => current,
         },
         PipelineOp::ConvertLab { .. } => crate::raster::ColorType::Rgb8,

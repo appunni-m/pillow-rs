@@ -377,6 +377,8 @@ impl Draw {
     /// image's raw DynamicImage mode differs from the logical PIL mode
     /// (e.g. "P" stored as Luma8, "CMYK" stored as Rgba8).
     pub fn new(image: Image, explicit_mode: Option<String>) -> Self {
+        // TODO(cpu-migration): accept `Option<Mode>` and keep string parsing
+        // in the binding adapter.
         let original_mode = image.mode().ok();
         let draw_mode = explicit_mode.or_else(|| original_mode.clone());
         Draw {
@@ -568,7 +570,10 @@ impl Draw {
             Some("F") | Some("I") | Some("CMYK") => self.orig_mode.clone(),
             _ => None,
         };
-        self.image = Image::from_dynamic(DynamicImage::ImageRgba8(canvas), explicit);
+        self.image = Image::from_dynamic(
+            DynamicImage::ImageRgba8(canvas),
+            explicit.as_deref().and_then(crate::image::mode_boundary::parse_pillow_mode),
+        );
     }
 
     /// Returns the current drawn image with original mode semantics restored.

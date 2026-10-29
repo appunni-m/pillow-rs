@@ -4,9 +4,11 @@ use std::sync::Arc;
 
 use image_slash_star::{Decoded, DecodedImage, ImageFormat, ImageInfo};
 
+use super::codec_adapter::decoded_to_dynamic;
+
 use crate::error::PilError;
 use crate::pipeline::{PipelineOp, ResampleFilter, TransformMethod};
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, Mode};
 
 use super::{
     Image, ImageMode, LoadedData, PalettedData, PipelinePrefixCache, expand_palette,
@@ -20,10 +22,10 @@ fn image_from_materialized(
     info: Option<ImageInfo>,
     exif: Option<Vec<u8>>,
 ) -> Result<Image, PilError> {
-    let mode = info
+    let decoded_mode = info
         .as_ref()
         .map_or_else(|| image.color().into(), |info| info.mode);
-    if mode == ImageMode::P8 {
+    if image.mode() == Mode::ImagePalette8 || decoded_mode == ImageMode::P8 {
         let palette = info
             .as_ref()
             .and_then(|info| info.palette.clone())
@@ -31,7 +33,7 @@ fn image_from_materialized(
                 PilError::PaletteError("decoded P-mode image has no retained palette".to_owned())
             })?;
         return Ok(Image::Paletted(PalettedData {
-            indices: image.as_ref().clone().to_luma8(),
+            indices: DynamicImage::ImagePalette8(image.to_luma8()),
             palette: padded_palette(&palette.rgb),
             palette_alpha: palette.alpha,
             source_format,
@@ -40,17 +42,11 @@ fn image_from_materialized(
             materialized: materialization_cache(),
         }));
     }
-    let explicit_mode = match mode {
-        ImageMode::L1 | ImageMode::Cmyk8 | ImageMode::F32 | ImageMode::I32 => {
-            Some(image_mode_name(mode).to_owned())
-        }
-        _ => None,
-    };
     Ok(Image::Loaded(LoadedData {
         image,
         known_zero_fill: false,
-        explicit_mode,
-        decoded_mode: mode,
+        explicit_mode: None,
+        decoded_mode,
         palette: None,
         palette_alpha: None,
         source_format,
@@ -80,40 +76,6 @@ fn map_deferred_decode_error(error: image_slash_star::ImageError) -> PilError {
     }
 }
 
-fn decoded_to_dynamic(decoded: &Decoded<DecodedImage>) -> Result<DynamicImage, PilError> {
-    let content = &decoded.content;
-    match content.mode {
-        ImageMode::P8 => crate::raster::GrayImage::from_raw(
-            content.width,
-            content.height,
-            content.pixels.clone(),
-        )
-        .map(DynamicImage::ImageLuma8)
-        .ok_or_else(|| PilError::DimensionError("invalid indexed buffer".to_owned())),
-        ImageMode::L1 => {
-            let row_bytes = content.width.div_ceil(8) as usize;
-            let mut unpacked = Vec::with_capacity(content.width as usize * content.height as usize);
-            for row in content.pixels.chunks_exact(row_bytes) {
-                for x in 0..content.width as usize {
-                    let bit = (row[x / 8] >> (7 - (x % 8))) & 1;
-                    unpacked.push(if bit == 0 { 0 } else { 255 });
-                }
-            }
-            crate::raster::GrayImage::from_raw(content.width, content.height, unpacked)
-                .map(DynamicImage::ImageLuma8)
-                .ok_or_else(|| PilError::DimensionError("invalid packed bilevel buffer".to_owned()))
-        }
-        ImageMode::Cmyk8 | ImageMode::F32 | ImageMode::I32 => crate::raster::RgbaImage::from_raw(
-            content.width,
-            content.height,
-            content.pixels.clone(),
-        )
-        .map(DynamicImage::ImageRgba8)
-        .ok_or_else(|| PilError::DimensionError("invalid four-byte buffer".to_owned())),
-        mode => DynamicImage::from_decoded(content)
-            .ok_or_else(|| PilError::ValueError(format!("unsupported decoded mode {mode:?}"))),
-    }
-}
 
 impl Image {
     // ── Materialize ──
@@ -134,7 +96,7 @@ impl Image {
                 // into it. P and PA operands are both blended as raw sample
                 // bytes; PA is not included in has_palette_mode because that
                 // helper intentionally means a single-byte palette index.
-                other.has_palette_mode() || other.explicit_mode() == Some("PA")
+                other.has_palette_mode() || other.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
             }
             PipelineOp::PutPixel {
                 palette_index: true,
@@ -286,14 +248,14 @@ impl Image {
             // operation does not depend on the RGB palette, but a later
             // conversion does, so keep the palette attached to the lazy
             // pipeline while the raw PA samples are updated.
-            || (source.explicit_mode() == Some("PA")
+            || (source.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
                 && matches!(op, PipelineOp::PutPixel { .. }))
             // PA resize filters the raw index/alpha pair without expanding
             // the palette. The newly allocated Pillow image does not carry
             // the source palette object, so output metadata clears it below.
-            || (source.explicit_mode() == Some("PA")
+            || (source.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
                 && matches!(op, PipelineOp::Resize { .. } | PipelineOp::ResizeBoxed { .. }))
-            || (source.explicit_mode() == Some("PA")
+            || (source.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
                 && matches!(
                     op,
                     PipelineOp::Filter3x3 { .. } | PipelineOp::Filter5x5 { .. }
@@ -305,29 +267,38 @@ impl Image {
             // different semantics; this source-specific case carries the
             // already-normalized PA index/alpha pair through the
             // native-channel rotate kernel.
-            || (source.explicit_mode() == Some("PA")
+            || (source.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
                 && matches!(op, PipelineOp::Rotate { .. }))
             // Pillow keeps P rotation in its native index layout, including a
             // fillcolor. The rotate backend forces nearest sampling for P and
             // interprets the first normalized fill component as the raw index.
-            || (source.explicit_mode() == Some("P")
+            || (source.known_mode_identity() == Some(Mode::ImagePalette8)
                 && matches!(op, PipelineOp::Rotate { .. }))
             // Pillow's ImagingTransform applies affine/projective sampling to
             // native P/PA samples and preserves the indexed mode. Keep this
             // channel-wise operation indexed so a retained RGB palette is not
             // expanded to RGBA before the transform runs.
-            || (matches!(source.explicit_mode(), Some("P") | Some("PA"))
+            || (matches!(
+                source.known_mode_identity(),
+                Some(Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
+            )
                 && matches!(op, PipelineOp::Transform { .. }))
             // Pillow's ImageOps.fit keeps P/PA images indexed through the
             // boxed resize. P uses nearest-neighbour samples regardless of
             // the requested kernel; PA resamples its raw index/alpha bands.
-            || (matches!(source.explicit_mode(), Some("P") | Some("PA"))
+            || (matches!(
+                source.known_mode_identity(),
+                Some(Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
+            )
                 && matches!(op, PipelineOp::Fit { .. }))
             // Pillow's ImageOps.contain/cover are resize wrappers. Their
             // indexed paths preserve P/PA samples and the source mode while
             // applying the requested kernel (P still forces nearest inside
             // the resize implementation).
-            || (matches!(source.explicit_mode(), Some("P") | Some("PA"))
+            || (matches!(
+                source.known_mode_identity(),
+                Some(Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
+            )
                 && matches!(op, PipelineOp::Contain { .. } | PipelineOp::Cover { .. }))
     }
 
@@ -335,21 +306,7 @@ impl Image {
     /// visible luma samples. Lazy inputs use cached header metadata so the
     /// first queued operation does not need to decode merely to preserve mode.
     pub(crate) fn has_palette_mode(&self) -> bool {
-        match self {
-            Image::Paletted(_) => true,
-            Image::Bytes {
-                info: Some(info), ..
-            } => info.mode == ImageMode::P8,
-            Image::Pipeline {
-                explicit_mode: Some(mode),
-                ..
-            }
-            | Image::Loaded(LoadedData {
-                explicit_mode: Some(mode),
-                ..
-            }) => mode == "P",
-            _ => false,
-        }
+        self.known_mode_identity() == Some(Mode::ImagePalette8)
     }
 
     /// Whether samples are palette indices, optionally paired with per-pixel
@@ -359,7 +316,8 @@ impl Image {
     /// `apply_transparency`, P encoding, and palette-index `putpixel` implement
     /// Pillow behavior that applies only to single-band P images.
     pub(super) fn has_palette_samples(&self) -> bool {
-        self.has_palette_mode() || self.explicit_mode() == Some("PA")
+        self.has_palette_mode()
+            || self.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
     }
 
     /// Decodes or executes this image into a concrete pixel buffer.
@@ -402,7 +360,7 @@ impl Image {
                 Ok(Image::Loaded(LoadedData {
                     decoded_mode: image.color().into(),
                     known_zero_fill: false,
-                    explicit_mode: self.explicit_mode().map(str::to_owned),
+                    explicit_mode: None,
                     palette: self.palette(),
                     palette_alpha: self.palette_alpha(),
                     source_format: None,
@@ -424,7 +382,7 @@ impl Image {
             Image::Loaded(data) => Ok(Arc::clone(&data.image)),
             Image::Paletted(data) => data
                 .materialized
-                .get_or_init(|| Ok(Arc::new(DynamicImage::ImageLuma8(data.indices.clone()))))
+                .get_or_init(|| Ok(Arc::new(data.indices.clone())))
                 .clone(),
             Image::Bytes {
                 source,
@@ -482,7 +440,7 @@ impl Image {
     fn evaluate_pipeline(
         source: &Image,
         ops: &[PipelineOp],
-        explicit_mode: &Option<String>,
+        explicit_mode: &Option<Mode>,
         backend: Option<crate::compute::Backend>,
         palette: &Option<Vec<u8>>,
         palette_alpha: &Option<Vec<u8>>,
@@ -504,18 +462,28 @@ impl Image {
                         prefix_ops,
                         explicit_mode,
                         &prepared,
-                        &None,
-                        &None,
+                        palette,
+                        palette_alpha,
                     )
                 })
                 .clone()?;
             let suffix_ops = &ops[prefix_cache.ops_len..];
             let prepared = crate::compute::prepare_execution(suffix_ops, backend)?;
-            return crate::compute::execute_prepared_shared(
+            let resolved_palette = palette.clone().or_else(|| source.extract_palette());
+            let resolved_alpha = palette_alpha
+                .clone()
+                .or_else(|| source.palette_alpha())
+                .unwrap_or_default();
+            let inputs = crate::compute::registry::support::PaletteInput {
+                rgb: resolved_palette.as_deref(),
+                alpha: &resolved_alpha,
+            };
+            return crate::compute::execute_prepared_shared_with_palette(
                 &prepared,
                 suffix_ops,
                 &prefix_image,
-                explicit_mode.as_deref(),
+                super::mode_boundary::pillow_mode_name_opt(*explicit_mode),
+                inputs,
             );
         }
         let prepared = crate::compute::prepare_execution(ops, backend)?;
@@ -535,7 +503,7 @@ impl Image {
     pub(super) fn evaluate_pipeline_uncached(
         source: &Image,
         ops: &[PipelineOp],
-        explicit_mode: &Option<String>,
+        explicit_mode: &Option<Mode>,
         backend: Option<crate::compute::Backend>,
         palette: &Option<Vec<u8>>,
         palette_alpha: &Option<Vec<u8>>,
@@ -554,119 +522,166 @@ impl Image {
         )
     }
 
-    fn evaluate_pipeline_with_image(
+    fn evaluate_palette_grayscale(
         source: &Image,
         img: &DynamicImage,
-        shared_img: &Arc<DynamicImage>,
         ops: &[PipelineOp],
-        explicit_mode: &Option<String>,
         prepared: &crate::compute::PreparedExecution,
         palette: &Option<Vec<u8>>,
         palette_alpha: &Option<Vec<u8>>,
-    ) -> Result<Arc<DynamicImage>, PilError> {
-        if source.has_palette_samples() {
-            let all_safe = ops
-                .iter()
-                .all(|op| Self::is_palette_safe_op_for_source(source, op));
-            if all_safe {
-                let palette_mode = if explicit_mode.as_deref() == Some("PA")
-                    || source.explicit_mode() == Some("PA")
-                {
-                    "PA"
-                } else {
-                    "P"
-                };
-                let result =
-                    crate::compute::execute_prepared(prepared, ops, img, Some(palette_mode))?;
-                return Ok(Arc::new(result));
-            }
+    ) -> Result<Option<Arc<DynamicImage>>, PilError> {
+        if !source.has_palette_samples()
+            || ops.len() != 1
+            || !matches!(ops.first(), Some(PipelineOp::Grayscale))
+            || prepared.context().backend() != crate::compute::Backend::Cpu
+        {
+            return Ok(None);
+        }
 
-            let palette_mode = if source.explicit_mode() == Some("PA") {
+        let palette_rgb = palette.clone().or_else(|| source.extract_palette());
+        let palette_alpha = palette_alpha
+            .clone()
+            .or_else(|| source.palette_alpha())
+            .unwrap_or_default();
+        let input = crate::compute::registry::support::OperationInputs {
+            image: img,
+            palette: crate::compute::registry::support::PaletteInput {
+                rgb: palette_rgb.as_deref(),
+                alpha: &palette_alpha,
+            },
+        };
+        let result = crate::compute::execute_prepared_cpu_arch_operation(
+            prepared,
+            &ops[0],
+            input,
+        )?;
+        Ok(Some(Arc::new(result)))
+    }
+
+    fn evaluate_palette_pipeline(
+        source: &Image,
+        img: &DynamicImage,
+        ops: &[PipelineOp],
+        explicit_mode: &Option<Mode>,
+        prepared: &crate::compute::PreparedExecution,
+        palette: &Option<Vec<u8>>,
+        palette_alpha: &Option<Vec<u8>>,
+        explicit_mode_name: Option<&str>,
+    ) -> Result<Option<Arc<DynamicImage>>, PilError> {
+        if !source.has_palette_samples() {
+            return Ok(None);
+        }
+        let all_safe = ops
+            .iter()
+            .all(|op| Self::is_palette_safe_op_for_source(source, op));
+        if all_safe {
+            let palette_mode = if *explicit_mode == Some(Mode::ImagePaletteAlpha8)
+                || source.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
+            {
                 "PA"
             } else {
                 "P"
             };
-
-            // PA always expands through a palette before color-dependent
-            // operations, even when no palette is attached. Pillow's
-            // libImaging/Convert.c indexed path treats an empty PA palette
-            // as all black; falling through to the raw LA bytes would
-            // incorrectly expose the index as grayscale (for example, index
-            // 7 would become RGB(7, 7, 7)).
-            let palette = palette.clone().or_else(|| source.extract_palette());
-            if palette_mode == "PA" {
-                let expanded = expand_palette_alpha(
-                    &img.to_luma_alpha8(),
-                    palette.as_deref().unwrap_or_default(),
-                );
-                let result = crate::compute::execute_prepared(
-                    prepared,
-                    ops,
-                    &expanded,
-                    explicit_mode.as_deref(),
-                )?;
-                return Ok(Arc::new(result));
-            }
-            if let Some(palette) = palette {
-                let palette_alpha = palette_alpha
-                    .clone()
-                    .or_else(|| source.palette_alpha())
-                    .unwrap_or_default();
-                let expanded = expand_palette(&img.to_luma8(), &palette, &palette_alpha);
-                let result = crate::compute::execute_prepared(
-                    prepared,
-                    ops,
-                    &expanded,
-                    explicit_mode.as_deref(),
-                )?;
-                return Ok(Arc::new(result));
-            }
+            let resolved_palette = palette.clone().or_else(|| source.extract_palette());
+            let resolved_alpha = palette_alpha
+                .clone()
+                .or_else(|| source.palette_alpha())
+                .unwrap_or_default();
+            let inputs = crate::compute::registry::support::PaletteInput {
+                rgb: resolved_palette.as_deref(),
+                alpha: &resolved_alpha,
+            };
+            let result = crate::compute::execute_prepared_with_palette(
+                prepared,
+                ops,
+                img,
+                Some(palette_mode),
+                inputs,
+            )?;
+            return Ok(Some(Arc::new(result)));
         }
 
-        // RemapPalette's kernel needs the source mode to distinguish L samples
-        // from P indices. The pipeline remains P-tagged for the result, but
-        // passing that destination tag into the kernel would skip the public
-        // L-source path and reinterpret luma values as palette indices.
-        let remap_source_mode =
-            if ops.len() == 1 && matches!(ops.first(), Some(PipelineOp::RemapPalette { .. })) {
-                Some(source.mode()?)
-            } else {
-                None
-            };
-        // A one-step conversion still needs the source-only mode tag at the
-        // executor boundary. RGBX and RGBa share RGBA storage, but their fourth
-        // byte has different Pillow semantics; the pipeline output tag is the
-        // destination and cannot stand in for that source tag.
-        let convert_source_mode =
-            if ops.len() == 1 && matches!(ops.first(), Some(PipelineOp::Convert { .. })) {
-                // The concrete buffer is still in the source layout when a
-                // one-step conversion begins. In particular, RGB -> CMYK/HSV/
-                // YCbCr carries a nonstandard destination tag on the lazy result,
-                // but preflight and the adapter must inspect the source mode.
-                Some(source.mode()?)
-            } else {
-                None
-            };
-        // Encoded I;16 inputs decode to the generic Luma16 buffer while their
-        // source-only mode remains in the lazy Bytes header. Preserve that
-        // mode at the executor boundary so a strict SIMD resize can select
-        // the native two-byte sample kernel instead of rejecting the image as
-        // an untagged layout.
-        let source_luma16_mode = if remap_source_mode.is_none()
-            && convert_source_mode.is_none()
-            && explicit_mode.is_none()
-            && matches!(img, DynamicImage::ImageLuma16(_))
+        let palette_mode = if source.known_mode_identity() == Some(Mode::ImagePaletteAlpha8) {
+            "PA"
+        } else {
+            "P"
+        };
+
+        // PA always expands through a palette before color-dependent
+        // operations, even when no palette is attached. Pillow's
+        // libImaging/Convert.c indexed path treats an empty PA palette
+        // as all black; falling through to the raw LA bytes would
+        // incorrectly expose the index as grayscale (for example, index
+        // 7 would become RGB(7, 7, 7)).
+        let palette = palette.clone().or_else(|| source.extract_palette());
+        if palette_mode == "PA" {
+            let expanded = expand_palette_alpha(
+                &img.to_luma_alpha8(),
+                palette.as_deref().unwrap_or_default(),
+            );
+            let result = crate::compute::execute_prepared(
+                prepared,
+                ops,
+                &expanded,
+                explicit_mode_name,
+            )?;
+            return Ok(Some(Arc::new(result)));
+        }
+        if let Some(palette) = palette {
+            let palette_alpha = palette_alpha
+                .clone()
+                .or_else(|| source.palette_alpha())
+                .unwrap_or_default();
+            let expanded = expand_palette(&img.to_luma8(), &palette, &palette_alpha);
+            let result = crate::compute::execute_prepared(
+                prepared,
+                ops,
+                &expanded,
+                explicit_mode_name,
+            )?;
+            return Ok(Some(Arc::new(result)));
+        }
+        Ok(None)
+    }
+
+    fn compatibility_execution_mode(
+        source: &Image,
+        img: &DynamicImage,
+        ops: &[PipelineOp],
+        explicit_mode: &Option<Mode>,
+        explicit_mode_name: Option<&str>,
+    ) -> Result<Option<String>, PilError> {
+        // RemapPalette needs the source mode to distinguish L samples from P
+        // indices; its pipeline result may stay P-tagged.
+        let remap_source_mode = if ops.len() == 1
+            && matches!(ops.first(), Some(PipelineOp::RemapPalette { .. }))
         {
             Some(source.mode()?)
         } else {
             None
         };
-        // A flattened pipeline still starts with the root source buffer.  A
-        // terminal Convert/Colorize/etc. may set `explicit_mode` to the
-        // destination mode, but that tag must not be used to interpret the
-        // bytes written by earlier setup operations such as PutPixel.  Keep
-        // the source layout as the initial GPU mode and let the batch planner
-        // advance it after each representable mode-changing operation.
+        // A one-step conversion also needs the source tag. RGBX and RGBa share
+        // storage but have different fourth-byte semantics.
+        let convert_source_mode = if ops.len() == 1
+            && matches!(ops.first(), Some(PipelineOp::Convert { .. }))
+        {
+            Some(source.mode()?)
+        } else {
+            None
+        };
+        // Encoded I;16 input uses generic Luma16 storage but retains its exact
+        // source identity in the lazy image header.
+        let source_luma16_mode = if remap_source_mode.is_none()
+            && convert_source_mode.is_none()
+            && explicit_mode.is_none()
+            && matches!(img, DynamicImage::ImageI16(_))
+        {
+            Some(source.mode()?)
+        } else {
+            None
+        };
+        // Flattened pipelines start from the root buffer; an explicit output
+        // mode must not reinterpret setup operations such as PutPixel.
         let initial_source_mode = if remap_source_mode.is_none()
             && convert_source_mode.is_none()
             && source_luma16_mode.is_none()
@@ -675,23 +690,88 @@ impl Image {
         } else {
             None
         };
-        let execution_mode = remap_source_mode
-            .as_deref()
-            .or(convert_source_mode.as_deref())
-            .or(source_luma16_mode.as_deref())
-            .or(initial_source_mode.as_deref())
-            .or(explicit_mode.as_deref());
-        // RGBX uses RGBA storage but its fourth byte is padding, not an alpha
-        // sample. The native SIMD Convert kernel carries that logical source
-        // tag and supplies opaque alpha while gathering; do not normalize the
-        // whole frame here just to rewrite the padding byte.
-        crate::compute::execute_prepared_shared(prepared, ops, shared_img, execution_mode)
+        let mode = remap_source_mode
+            .or(convert_source_mode)
+            .or(source_luma16_mode)
+            .or(initial_source_mode)
+            .or_else(|| explicit_mode_name.map(str::to_owned));
+        Ok(mode)
+    }
+
+    fn evaluate_pipeline_with_image(
+        source: &Image,
+        img: &DynamicImage,
+        shared_img: &Arc<DynamicImage>,
+        ops: &[PipelineOp],
+        explicit_mode: &Option<Mode>,
+        prepared: &crate::compute::PreparedExecution,
+        palette: &Option<Vec<u8>>,
+        palette_alpha: &Option<Vec<u8>>,
+    ) -> Result<Arc<DynamicImage>, PilError> {
+        if let Some(result) = Self::evaluate_palette_grayscale(
+            source,
+            img,
+            ops,
+            prepared,
+            palette,
+            palette_alpha,
+        )? {
+            return Ok(result);
+        }
+        // TODO(cpu-migration): keep prepared execution typed through the pool;
+        // this projection is needed only by the legacy string-mode executor.
+        let explicit_mode_name = super::mode_boundary::pillow_mode_name_opt(*explicit_mode);
+        if let Some(result) = Self::evaluate_palette_pipeline(
+            source,
+            img,
+            ops,
+            explicit_mode,
+            prepared,
+            palette,
+            palette_alpha,
+            explicit_mode_name,
+        )? {
+            return Ok(result);
+        }
+        // RGBX carries padding rather than alpha; keep its source spelling at
+        // the compatibility executor boundary instead of normalizing pixels.
+        let execution_mode = Self::compatibility_execution_mode(
+            source,
+            img,
+            ops,
+            explicit_mode,
+            explicit_mode_name,
+        )?;
+        let resolved_palette = if palette.is_none() {
+            source.extract_palette()
+        } else {
+            None
+        };
+        let resolved_alpha = if palette_alpha.is_none() {
+            source.palette_alpha()
+        } else {
+            None
+        };
+        let inputs = crate::compute::registry::support::PaletteInput {
+            rgb: palette.as_deref().or(resolved_palette.as_deref()),
+            alpha: palette_alpha
+                .as_deref()
+                .or(resolved_alpha.as_deref())
+                .unwrap_or_default(),
+        };
+        crate::compute::execute_prepared_shared_with_palette(
+            prepared,
+            ops,
+            shared_img,
+            execution_mode.as_deref(),
+            inputs,
+        )
     }
 
     fn materialize_uncached(&self) -> Result<DynamicImage, PilError> {
         match self {
             Image::Loaded(data) => Ok(data.image.as_ref().clone()),
-            Image::Paletted(data) => Ok(DynamicImage::ImageLuma8(data.indices.clone())),
+            Image::Paletted(data) => Ok(data.indices.clone()),
             Image::Bytes { source, .. } => decoded_to_dynamic(
                 &image_slash_star::decode(source.bytes()).map_err(map_deferred_decode_error)?,
             ),
@@ -713,7 +793,21 @@ impl Image {
                     palette,
                     palette_alpha,
                 )
-                .map(|image| image.as_ref().clone())
+                .and_then(|image| {
+                    let image = image.as_ref().clone();
+                    let Some(mode) = explicit_mode else {
+                        return Ok(image);
+                    };
+                    let Some(name) = super::mode_boundary::pillow_mode_name(*mode) else {
+                        return Ok(image);
+                    };
+                    image.with_mode(*mode).map_err(|_| {
+                        PilError::InternalError(format!(
+                            "pipeline output storage does not match Pillow mode {}",
+                            name
+                        ))
+                    })
+                })
             }
         }
     }

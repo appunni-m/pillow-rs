@@ -37,11 +37,7 @@ pub(crate) use conversion::{
 };
 pub(crate) use grayscale::{
     cmyk_to_binary_truncate, cmyk_to_grayscale, cmyk_to_grayscale_truncate, pil_grayscale,
-    pil_grayscale_alpha, pil_grayscale_truncate, rgb_to_luma_u8,
-};
-#[cfg(target_arch = "x86_64")]
-pub(crate) use grayscale::{
-    gather_interleaved_channel_ssse3_bytes, gather_interleaved_channel_ssse3_into,
+    pil_grayscale_alpha, pil_grayscale_truncate, rgb_to_luma_u8, grayscale_rgb_bytes,
 };
 pub(crate) use mode::color_type_to_mode;
 pub use palette::{
@@ -50,3 +46,7 @@ pub use palette::{
 };
 pub use parse::{color_has_explicit_alpha, parse_color_str, parse_color_str_unclamped};
 pub use resolve::{ColorValue, getcolor, resolve_new_color};
+
+pub(crate) use grayscale::cmyk_muldiv255_byte as grayscale_cmyk_muldiv255_byte;
+pub(crate) use conversion::hsv_buffer_to_rgb;
+pub(crate) use conversion::cmyk_buffer_to_rgb;

@@ -100,7 +100,8 @@ impl Image {
         // therefore uses nearest-neighbor sampling regardless of the public
         // filter code. Keep the operation palette-safe so materialization does
         // not expand P into RGB before the backend runs.
-        let filter = if self.has_palette_mode() || self.explicit_mode() == Some("1") {
+        let filter = if self.has_palette_mode()
+            || self.known_mode_identity() == Some(crate::raster::Mode::One) {
             ResampleFilter::Nearest
         } else {
             requested_filter

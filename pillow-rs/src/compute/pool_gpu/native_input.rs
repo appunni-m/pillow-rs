@@ -15,7 +15,7 @@ pub(super) fn mode_code(img: &DynamicImage) -> u32 {
         DynamicImage::ImageLumaA8(_) => 1,
         DynamicImage::ImageRgb8(_) => 2,
         DynamicImage::ImageRgba8(_) => 3,
-        DynamicImage::ImageLuma16(_) => 5,
+        DynamicImage::ImageI16(_) => 5,
         _ => 3, // fallback: treat as RGBA
     }
 }

@@ -1,0 +1,32 @@
+//! ImagePaletteAlpha8 semantics composed with its serial architecture strategy.
+
+use crate::compute::{ExecutionContext, registry::support::{ModeSupport, OperationId, OutputModeRule, StrategyInputs, PaletteInput, SupportAssessment, InputContract}};
+use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
+use crate::error::PilError;
+use crate::raster::{DynamicImage, Mode};
+use super::default::grayscale_impl;
+
+pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
+    OperationId::Grayscale, Mode::ImagePaletteAlpha8,
+    OutputModeRule::Fixed(Mode::ImageLuma8), &[InputContract::PaletteMetadata, InputContract::CheckedByteDimensions { bytes_per_pixel: 1, allow_empty: true }], &[],
+);
+
+pub(crate) enum ArchitectureStrategy<'a> { Default(grayscale_impl::Kernel<'a>) }
+pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
+
+pub(crate) fn assess(input: StrategyInputs, ctx: &ExecutionContext) -> Result<SupportAssessment, PilError> {
+    SUPPORT.assess(ctx, input)
+}
+
+pub(crate) fn prepare<'a>(input: &'a grayscale_impl::Input, palette: PaletteInput<'_>, ctx: &ExecutionContext) -> Result<Strategy<'a>, PilError> {
+    let implementation = grayscale_impl::prepare(input, palette)?;
+    let facts = StrategyInputs { width: input.width(), height: input.height(), byte_len: Some(input.as_raw().len()), palette: palette.knowledge(), request: Default::default() };
+    let selection = SUPPORT.select(ctx, facts)?;
+    Ok(Prepared::new(ArchitectureStrategy::Default(implementation), selection))
+}
+
+pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
+    match strategy.implementation {
+            ArchitectureStrategy::Default(input) => grayscale_impl::execute(input).map(DynamicImage::ImageLuma8),
+    }
+}

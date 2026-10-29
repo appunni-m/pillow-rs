@@ -1,4 +1,7 @@
 //! Eligibility rules for adjacent automatic CPU/SIMD execution segments.
+//!
+//! TODO(pillow-rs#3ptb): replace these pool-level segment rules with prepared
+//! mode/architecture strategies injected through `ExecutionContext`.
 
 use super::pool_simd::ops::adapters;
 use super::{Backend, BackendImpl, DynamicImage, PilError};

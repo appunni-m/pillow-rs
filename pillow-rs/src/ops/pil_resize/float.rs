@@ -329,7 +329,7 @@ pub(super) fn pixel_at(img: &DynamicImage, x: u32, y: u32) -> [f64; 4] {
             let p = rgba.get_pixel(x, y);
             [p[0] as f64, p[1] as f64, p[2] as f64, p[3] as f64]
         }
-        DynamicImage::ImageLuma16(image) => {
+        DynamicImage::ImageI16(image) => {
             // The image model deliberately clips I;16 samples instead of
             // applying the generic normalized u16-to-u8 conversion.
             let value = image.get_pixel(x, y)[0].min(u16::from(u8::MAX)) as u8;

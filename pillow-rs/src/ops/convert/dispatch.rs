@@ -38,7 +38,7 @@ pub(super) fn try_convert_early_modes(
             ..
         } = &mut result
         {
-            *mode = Some(explicit_mode.to_owned());
+            *mode = crate::image::mode_boundary::parse_pillow_mode(explicit_mode);
         }
         return Ok(Some(result));
     }
@@ -74,7 +74,7 @@ pub(super) fn try_convert_early_modes(
             },
         );
         if let Image::Pipeline { explicit_mode, .. } = &mut result {
-            *explicit_mode = Some(target_mode.to_owned());
+            *explicit_mode = crate::image::mode_boundary::parse_pillow_mode(target_mode);
         }
         return Ok(Some(result));
     }
@@ -124,7 +124,7 @@ fn convert_to_lab(image: &Image, source_mode: &str) -> Result<Image, PilError> {
         },
     );
     if let Image::Pipeline { explicit_mode, .. } = &mut result {
-        *explicit_mode = Some("LAB".to_owned());
+        *explicit_mode = Some(crate::raster::Mode::ImageLab8);
     }
     Ok(result)
 }
@@ -188,7 +188,7 @@ fn convert_to_premultiplied(
                 );
                 return Ok(Some(Image::from_dynamic(
                     premultiplied,
-                    Some(target_mode.to_owned()),
+                    crate::image::mode_boundary::parse_pillow_mode(target_mode),
                 )));
             }
             if matches!(source_mode, "1" | "L" | "LA" | "I" | "F") || is_luma16_mode(source_mode) {
@@ -206,7 +206,7 @@ fn convert_to_premultiplied(
             };
             Ok(Some(Image::from_dynamic(
                 converted,
-                Some(target_mode.to_owned()),
+                crate::image::mode_boundary::parse_pillow_mode(target_mode),
             )))
         },
         |result| {
@@ -245,7 +245,7 @@ fn convert_to_rgbx(
             }
             Ok(Image::from_dynamic(
                 DynamicImage::ImageRgba8(rgba),
-                Some(target_mode.to_owned()),
+                crate::image::mode_boundary::parse_pillow_mode(target_mode),
             ))
         },
         super::nonstandard::eager_convert_image_bytes,
@@ -259,7 +259,7 @@ fn convert_pa_to_p(image: &Image) -> Result<Image, PilError> {
             image.materialized_shared()?.to_luma8(),
         )),
         known_zero_fill: false,
-        explicit_mode: Some("P".to_owned()),
+        explicit_mode: Some(crate::raster::Mode::ImagePalette8),
         decoded_mode: crate::raster::ColorType::L8.into(),
         palette: image.palette(),
         palette_alpha: image.palette_alpha(),

@@ -25,7 +25,7 @@ pub(super) fn gpu_luma16_geometry_is_supported(
     image: &DynamicImage,
     logical_mode: Option<&str>,
 ) -> bool {
-    if !matches!(image, DynamicImage::ImageLuma16(_)) || ops.is_empty() {
+    if !matches!(image, DynamicImage::ImageI16(_)) || ops.is_empty() {
         return false;
     }
     // A filtered resize is admitted only as a pure, single operation whose
@@ -90,7 +90,7 @@ pub(super) fn gpu_luma16_convert_is_supported(ops: &[PipelineOp], image: &Dynami
             }]
         );
     }
-    if !matches!(image, DynamicImage::ImageLuma16(_)) {
+    if !matches!(image, DynamicImage::ImageI16(_)) {
         return false;
     }
     let direct = matches!(ops, [PipelineOp::Convert { mode, matrix: None, dither: None }]
@@ -123,11 +123,11 @@ pub(super) fn gpu_luma16_convert_is_supported(ops: &[PipelineOp], image: &Dynami
 /// changing the representation. Mask validation is handled after auxiliary
 /// images are materialized, where the concrete L/RGBA mask layout is known.
 pub(super) fn gpu_luma16_paste_is_supported(ops: &[PipelineOp], image: &DynamicImage) -> bool {
-    matches!(image, DynamicImage::ImageLuma16(_)) && matches!(ops, [PipelineOp::Paste { .. }])
+    matches!(image, DynamicImage::ImageI16(_)) && matches!(ops, [PipelineOp::Paste { .. }])
 }
 
 pub(super) fn gpu_luma16_paste_source(op: &PipelineOp, mode: u32, image: &DynamicImage) -> bool {
     mode == 5
         && matches!(op, PipelineOp::Paste { .. })
-        && matches!(image, DynamicImage::ImageLuma16(_))
+        && matches!(image, DynamicImage::ImageI16(_))
 }

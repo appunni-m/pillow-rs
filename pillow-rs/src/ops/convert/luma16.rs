@@ -58,7 +58,7 @@ pub(super) fn try_convert_from_luma16(
             )
         };
         if let Image::Pipeline { explicit_mode, .. } = &mut result {
-            *explicit_mode = Some(target_mode.to_owned());
+            *explicit_mode = crate::image::mode_boundary::parse_pillow_mode(target_mode);
         }
         return Ok(Some(result));
     }
@@ -66,7 +66,7 @@ pub(super) fn try_convert_from_luma16(
         || {
             if source_mode != "I;16N" && matches!(target_mode, "I" | "F") {
                 let source = image.materialized_shared()?;
-                let DynamicImage::ImageLuma16(samples) = source.as_ref() else {
+                let DynamicImage::ImageI16(samples) = source.as_ref() else {
                     return Err(PilError::InternalError(
                         "invalid unsigned-16 storage".into(),
                     ));
@@ -81,7 +81,7 @@ pub(super) fn try_convert_from_luma16(
                 }
                 return Ok(Some(Image::from_dynamic(
                     DynamicImage::ImageRgba8(result),
-                    Some(target_mode.to_owned()),
+                    crate::image::mode_boundary::parse_pillow_mode(target_mode),
                 )));
             }
             // Other destinations retry through clipped L; P uses identity gray indices.
@@ -120,7 +120,7 @@ pub(super) fn try_convert_to_luma16(
             },
         );
         if let Image::Pipeline { explicit_mode, .. } = &mut result {
-            *explicit_mode = Some(target_mode.to_owned());
+            *explicit_mode = crate::image::mode_boundary::parse_pillow_mode(target_mode);
         }
         return Ok(Some(result));
     }
@@ -135,8 +135,8 @@ pub(super) fn try_convert_to_luma16(
                 convert_luma_to_luma16(image, source_mode)?
             };
             Ok(Some(Image::from_dynamic(
-                DynamicImage::ImageLuma16(samples),
-                Some(target_mode.to_owned()),
+                DynamicImage::ImageI16(samples),
+                crate::image::mode_boundary::parse_pillow_mode(target_mode),
             )))
         },
         |result| {

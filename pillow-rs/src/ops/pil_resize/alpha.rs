@@ -24,23 +24,27 @@ pub(crate) fn premultiply_alpha(img: &DynamicImage) -> DynamicImage {
     }
 }
 
+pub(crate) fn unpremultiply_rgba(rgba: &crate::raster::RgbaImage) -> crate::raster::RgbaImage {
+    let mut out = rgba.clone();
+    for p in out.pixels_mut() {
+        let Some(alpha) = std::num::NonZeroU32::new(u32::from(p[3])) else {
+            continue;
+        };
+        // Pillow's RGBa -> RGBA conversion uses integer
+        // `(255 * value) / alpha` truncation. Keep the multiply
+        // before division: using `255.0 / alpha` and a floating
+        // multiply can land one ULP below an exact integer.
+        p[0] = (u32::from(p[0]) * 255 / alpha.get()).min(255) as u8;
+        p[1] = (u32::from(p[1]) * 255 / alpha.get()).min(255) as u8;
+        p[2] = (u32::from(p[2]) * 255 / alpha.get()).min(255) as u8;
+    }
+    out
+}
+
 pub(crate) fn unpremultiply_alpha(img: &DynamicImage) -> DynamicImage {
     match img {
-        DynamicImage::ImageRgba8(rgba) => {
-            let mut out = rgba.clone();
-            for p in out.pixels_mut() {
-                let Some(alpha) = std::num::NonZeroU32::new(u32::from(p[3])) else {
-                    continue;
-                };
-                // Pillow's RGBa -> RGBA conversion uses integer
-                // `(255 * value) / alpha` truncation. Keep the multiply
-                // before division: using `255.0 / alpha` and a floating
-                // multiply can land one ULP below an exact integer.
-                p[0] = (u32::from(p[0]) * 255 / alpha.get()).min(255) as u8;
-                p[1] = (u32::from(p[1]) * 255 / alpha.get()).min(255) as u8;
-                p[2] = (u32::from(p[2]) * 255 / alpha.get()).min(255) as u8;
-            }
-            DynamicImage::ImageRgba8(out)
+        DynamicImage::ImageRgba8(rgba) | DynamicImage::ImageRgbPremultiplied8(rgba) => {
+            DynamicImage::ImageRgba8(unpremultiply_rgba(rgba))
         }
         DynamicImage::ImageLumaA8(la) => {
             let mut out = la.clone();

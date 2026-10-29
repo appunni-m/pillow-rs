@@ -36,6 +36,8 @@ impl Image {
         _palette: Option<&str>,
         _colors: Option<u32>,
     ) -> Result<Image, PilError> {
+        // TODO(cpu-migration): accept `Mode` in Rust and keep Pillow string
+        // parsing in the host bindings; this wrapper still routes by `&str`.
         let src_mode = self.mode()?;
         validate_convert_request(&src_mode, mode, matrix.is_some())?;
         if let Some(converted) =
@@ -150,7 +152,7 @@ impl Image {
                 ..
             } = &mut result
         {
-            *em_field = Some(em.to_string());
+            *em_field = Some(em);
         }
         Ok(result)
     }

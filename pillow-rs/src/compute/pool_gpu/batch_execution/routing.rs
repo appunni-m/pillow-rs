@@ -123,7 +123,7 @@ impl GpuPool {
             && img.width() != 0
             && img.height() != 0
         {
-            crate::compute::pool_cpu::ops::effects::effect_spread_advance_identity_rng(
+            crate::compute::helpers::effects::effect_spread_advance_identity_rng(
                 img.width(),
                 img.height(),
             )?;

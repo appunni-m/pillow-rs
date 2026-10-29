@@ -201,7 +201,7 @@ pub(in crate::compute::pool_gpu) fn gpu_luma16_resize_f64_is_exact(
     if matches!(filter, ResampleFilter::Nearest) || *w == 0 || *h == 0 {
         return false;
     }
-    let DynamicImage::ImageLuma16(pixels) = image else {
+    let DynamicImage::ImageI16(pixels) = image else {
         return false;
     };
     let source_dimensions = image.dimensions();

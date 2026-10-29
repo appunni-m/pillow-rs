@@ -56,7 +56,14 @@ fn eager_getchannel_tiny_rgb(
                 // The ExtractBand kernel records its output allocation;
                 // manual accounting would count it twice.
                 false,
-                || crate::compute::registry::execute_cpu(&operation, image, Some(mode)),
+                |ctx| crate::compute::registry::execute_cpu(
+                    &operation,
+                    crate::compute::registry::support::OperationInputs {
+                        image,
+                        palette: crate::compute::registry::support::PaletteInput::default(),
+                    },
+                    ctx,
+                ),
             )?))
         }
         crate::compute::Backend::Simd => {
@@ -130,7 +137,6 @@ impl Image {
         if mode == "L"
             && ch == 0
             && matches!(self, Image::Loaded(_))
-            && !cfg!(feature = "parallel")
             && let Some((crate::compute::Backend::Cpu, _)) =
                 crate::compute::preferred_active_backend()?
         {
@@ -148,9 +154,8 @@ impl Image {
         // Tiny RGB images can extract their band directly instead of paying
         // for a one-operation pipeline and its later materialization. Keep
         // full-frame work on the pipeline path, and retain lazy execution for
-        // pending graphs, SIMD, GPU, and opt-in Parallel CPU profiles.
+        // pending graphs and routes without an eager implementation.
         if matches!(self, Image::Loaded(_))
-            && !cfg!(feature = "parallel")
             && mode == "RGB"
             && u64::from(img.width()) * u64::from(img.height()) <= 256
             && let Some((backend, _)) = crate::compute::preferred_active_backend()?

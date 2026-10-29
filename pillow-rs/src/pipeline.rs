@@ -35,6 +35,7 @@
 //!   operation needs more than the pipeline source image.
 
 use crate::image::Image;
+use crate::raster::Mode;
 use bytes::Bytes;
 use std::sync::Arc;
 
@@ -484,6 +485,8 @@ pub enum PipelineOp {
         /// Original Pillow mode spelling. The raster core uses canonical
         /// storage variants for aliases such as `LAB` and `RGBa`, while this
         /// tag keeps target-specific encoding and backend admission exact.
+        /// TODO(cpu-migration): replace this compatibility string with the
+        /// target `raster::Mode` and keep codec spelling at the host boundary.
         logical_mode: String,
         /// Band images.
         bands: Arc<[Image]>,
@@ -524,10 +527,12 @@ pub enum PipelineOp {
         table: Arc<[f64]>,
         /// Number of output channels.
         channels: u32,
-        /// Logical Pillow mode of the input samples.
-        source_mode: PixelMode,
-        /// Logical Pillow mode requested for the output samples.
-        target_mode: PixelMode,
+        /// Exact source identity captured by the Pillow image wrapper.
+        /// TODO(cpu-migration): remove this snapshot after GPU parameter
+        /// encoding derives it from the prepared mode transition.
+        source_mode: Mode,
+        /// Exact output identity selected by the caller.
+        target_mode: Mode,
     },
     /// Apply a geometric transform.
     Transform {

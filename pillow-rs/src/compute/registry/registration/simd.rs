@@ -1,4 +1,19 @@
 //! Simd operation registration.
+//!
+//! TODO(pillow-rs#3ptb): retire the independent SIMD registrations after CPU
+//! architecture strategies own every pipeline, eager, fusion, and compatibility
+//! route. This file still registers the former SIMD adapter set; reconcile each
+//! route with its operation-owned CPU strategy before removing it. Colorize
+//! now has an all-mode CPU Default strategy and native-L SSE2, NEON, and Wasm
+//! SIMD128 strategies; its separate adapter route remains until callers use
+//! the injected CPU context. Posterize and Solarize have prepared L/RGB CPU
+//! architecture kernels; their independent adapter routes remain until all
+//! callers reach the injected CPU context. Autocontrast and Equalize now have
+//! prepared L/RGB CPU architecture kernels; their separate histogram adapters
+//! remain until the same callers are rewired. CropBorder and Color3DLut also have
+//! prepared CPU owners, but their adapter/caller compatibility routes need
+//! audit. TODO(pillow-rs#3ptb): retire each registration only after those routes
+//! are reconciled with its prepared CPU owner.
 use super::prelude::{PilError, Registry, adapters};
 use super::simd_set;
 fn register_section_a(m: &mut Registry) -> Result<(), PilError> {

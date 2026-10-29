@@ -12,10 +12,6 @@
 // ============================================================================
 
 use crate::raster::DynamicImage;
-use crate::raster::GrayAlphaImage;
-use crate::raster::GrayImage;
-use crate::raster::RgbImage;
-use crate::raster::RgbaImage;
 
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
@@ -58,7 +54,7 @@ pub(crate) fn raw_bytes_to_image_allow_empty(
 fn raw_bytes_to_image_with_empty(
     width: u32,
     height: u32,
-    mut data: Vec<u8>,
+    data: Vec<u8>,
     channels: usize,
     allow_empty: bool,
 ) -> Result<DynamicImage, PilError> {
@@ -67,47 +63,41 @@ fn raw_bytes_to_image_with_empty(
             "raw_bytes_to_image: unsupported channel count {channels}"
         )));
     }
-
     let dims = if allow_empty {
         CheckedDims::new_allow_empty(width, height, channels as u8)?
     } else {
         CheckedDims::new(width, height, channels as u8)?
     };
+    match channels {
+        1 => typed_bytes_to_buffer(dims, data).map(DynamicImage::ImageLuma8),
+        2 => typed_bytes_to_buffer(dims, data).map(DynamicImage::ImageLumaA8),
+        3 => typed_bytes_to_buffer(dims, data).map(DynamicImage::ImageRgb8),
+        4 => typed_bytes_to_buffer(dims, data).map(DynamicImage::ImageRgba8),
+        _ => unreachable!("channel count was validated above"),
+    }
+}
 
+/// Finalizes a known native byte layout using the canonical length/shape contract.
+///
+/// The caller supplies dimensions checked for its concrete pixel type. This
+/// retains the original errors and truncation without recovering image identity
+/// from a channel count; the operation's strategy constructs the exact variant.
+pub(crate) fn typed_bytes_to_buffer<P: crate::raster::Pixel<Subpixel = u8>>(
+    dims: CheckedDims, mut data: Vec<u8>,
+) -> Result<crate::raster::ImageBuffer<P, Vec<u8>>, PilError> {
     if data.len() < dims.total_bytes() {
         return Err(PilError::ValueError(format!(
             "raw_bytes_to_image: expected {} bytes for {}×{}×{}, got {}",
-            dims.total_bytes(),
-            dims.width,
-            dims.height,
-            dims.channels,
-            data.len()
+            dims.total_bytes(), dims.width, dims.height, dims.channels, data.len(),
         )));
     }
-
     data.truncate(dims.total_bytes());
-
-    // Channels 1-4 are the only valid counts. The match arms correspond
-    // exactly to the image crate's DynamicImage variants.
-    Ok(match channels {
-        1 => {
-            DynamicImage::ImageLuma8(GrayImage::from_raw(width, height, data).ok_or_else(|| {
-                PilError::InternalError("raw_bytes_to_image: L buffer shape mismatch".to_string())
-            })?)
-        }
-        2 => DynamicImage::ImageLumaA8(GrayAlphaImage::from_raw(width, height, data).ok_or_else(
-            || PilError::InternalError("raw_bytes_to_image: LA buffer shape mismatch".to_string()),
-        )?),
-        3 => DynamicImage::ImageRgb8(RgbImage::from_raw(width, height, data).ok_or_else(|| {
-            PilError::InternalError("raw_bytes_to_image: RGB buffer shape mismatch".to_string())
-        })?),
-        4 => {
-            DynamicImage::ImageRgba8(RgbaImage::from_raw(width, height, data).ok_or_else(|| {
-                PilError::InternalError(
-                    "raw_bytes_to_image: RGBA buffer shape mismatch".to_string(),
-                )
-            })?)
-        }
-        _ => unreachable!("channel count was validated above"),
-    })
+    let reason = match P::CHANNEL_COUNT {
+        1 => "raw_bytes_to_image: L buffer shape mismatch",
+        2 => "raw_bytes_to_image: LA buffer shape mismatch",
+        3 => "raw_bytes_to_image: RGB buffer shape mismatch",
+        _ => "raw_bytes_to_image: RGBA buffer shape mismatch",
+    };
+    crate::raster::ImageBuffer::from_raw(dims.width, dims.height, data)
+        .ok_or_else(|| PilError::InternalError(reason.into()))
 }

@@ -36,7 +36,7 @@ fn transform_all_fill_proof_tracks_float_and_typed_bounds() {
     let in_bounds = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0];
     let rgba = DynamicImage::ImageRgba8(RgbaImage::from_raw(16, 16, vec![0; 16 * 16 * 4]).unwrap());
     let rgb = DynamicImage::ImageRgb8(RgbImage::from_raw(16, 16, vec![0; 16 * 16 * 3]).unwrap());
-    let luma16 = DynamicImage::ImageLuma16(
+    let luma16 = DynamicImage::ImageI16(
         ImageBuffer::<Luma<u16>, Vec<u16>>::from_raw(16, 16, vec![0; 16 * 16]).unwrap(),
     );
 

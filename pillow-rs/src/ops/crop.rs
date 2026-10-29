@@ -210,10 +210,12 @@ impl Image {
         let mode = self.mode()?;
         if mode == "P" {
             return Ok(Image::Paletted(PalettedData {
-                indices: crate::raster::GrayImage::from_pixel(
+                indices: crate::raster::DynamicImage::ImagePalette8(
+                    crate::raster::GrayImage::from_pixel(
                     width,
                     height,
                     crate::raster::Luma([0]),
+                    ),
                 ),
                 palette: self.palette().unwrap_or_default(),
                 palette_alpha: self.palette_alpha().unwrap_or_default(),

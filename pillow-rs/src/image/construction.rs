@@ -8,9 +8,12 @@ use image_slash_star::EncodedImage;
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::format::parse_format_str;
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, Mode};
 
 use super::{Image, LoadedData, PalettedData, l16_uses_big_endian, materialization_cache};
+
+// TODO(cpu-migration): make mode inputs to `new`, `new_with_input`, `frombytes`,
+// and `from_generated_dynamic` typed; host bindings should parse Pillow strings.
 
 const MODE1_BYTE_PIXELS: [[u8; 8]; 256] = {
     let mut table = [[0; 8]; 256];
@@ -200,7 +203,14 @@ enum FromBytesMode {
 
 impl Image {
     /// Wraps operation-created pixels without claiming an encoded source.
-    pub(crate) fn from_dynamic(image: DynamicImage, explicit_mode: Option<String>) -> Self {
+    pub(crate) fn from_dynamic(image: DynamicImage, explicit_mode: Option<Mode>) -> Self {
+        let (image, explicit_mode) = match explicit_mode {
+            Some(mode) => match image.with_mode(mode) {
+                Ok(image) => (image, None),
+                Err(image) => (image, Some(mode)),
+            },
+            None => (image, None),
+        };
         let decoded_mode = image.color().into();
         Self::Loaded(LoadedData {
             image: Arc::new(image),
@@ -222,12 +232,12 @@ impl Image {
     /// modes use the native four-byte buffer with an explicit mode override.
     pub(crate) fn from_generated_dynamic(image: DynamicImage, mode: &str) -> Self {
         if mode == "P" {
-            let indices = match image {
-                DynamicImage::ImageLuma8(indices) => indices,
-                other => other.to_luma8(),
+            let indices = match image.with_mode(Mode::ImagePalette8) {
+                Ok(DynamicImage::ImagePalette8(indices)) => indices,
+                Ok(other) | Err(other) => other.to_luma8(),
             };
             return Self::Paletted(PalettedData {
-                indices,
+                indices: DynamicImage::ImagePalette8(indices),
                 palette: Vec::new(),
                 palette_alpha: Vec::new(),
                 source_format: None,
@@ -236,7 +246,12 @@ impl Image {
                 materialized: materialization_cache(),
             });
         }
-        let explicit_mode = matches!(mode, "1" | "I" | "F").then(|| mode.to_owned());
+        let explicit_mode = match mode {
+            "1" => Some(Mode::One),
+            "I" => Some(Mode::ImageI32),
+            "F" => Some(Mode::ImageF32),
+            _ => None,
+        };
         Self::from_dynamic(image, explicit_mode)
     }
 
@@ -280,11 +295,11 @@ impl Image {
             // `new_palette_index` because this resolved tuple no longer carries
             // the argument's scalar-versus-tuple distinction.
             return Ok(Image::Paletted(PalettedData {
-                indices: crate::raster::GrayImage::from_pixel(
+                indices: DynamicImage::ImagePalette8(crate::raster::GrayImage::from_pixel(
                     width,
                     height,
                     crate::raster::Luma([0u8]),
-                ),
+                )),
                 // Pillow retains one structural RGB entry here. Keeping 768
                 // zero-padded bytes would make getpalette() invent trailing
                 // black entries now that palette length is exact.
@@ -317,7 +332,7 @@ impl Image {
                 | "I;16B"
                 | "I;16N"
         ) {
-            Some(mode.to_string())
+            super::mode_boundary::parse_pillow_mode(mode)
         } else {
             None
         };
@@ -373,7 +388,7 @@ impl Image {
             // native in the raster and apply the requested raw byte order only
             // when the public byte representation is requested.
             "I;16" | "I;16L" | "I;16B" | "I;16N" => {
-                DynamicImage::ImageLuma16(crate::raster::ImageBuffer::from_pixel(
+                DynamicImage::ImageI16(crate::raster::ImageBuffer::from_pixel(
                     width,
                     height,
                     crate::raster::Luma([u16::from_le_bytes([color.0, color.1])]),
@@ -477,11 +492,11 @@ impl Image {
     /// the image retains an empty palette.
     pub fn new_palette_index(width: u32, height: u32, index: u8) -> Self {
         Image::Paletted(PalettedData {
-            indices: crate::raster::GrayImage::from_pixel(
+            indices: DynamicImage::ImagePalette8(crate::raster::GrayImage::from_pixel(
                 width,
                 height,
                 crate::raster::Luma([index]),
-            ),
+            )),
             palette: Vec::new(),
             palette_alpha: Vec::new(),
             source_format: None,
@@ -552,9 +567,13 @@ impl Image {
             // because there are no samples to decode. Reuse the established
             // empty-image constructors while keeping CheckedDims strict for
             // all non-empty allocations.
-            if matches!(frombytes_mode, FromBytesMode::P) {
+            if matches!(frombytes_mode, FromBytesMode::ImagePalette8) {
                 return Ok(Image::Paletted(PalettedData {
-                    indices: crate::raster::GrayImage::from_pixel(w, h, crate::raster::Luma([0u8])),
+                    indices: DynamicImage::ImagePalette8(crate::raster::GrayImage::from_pixel(
+                        w,
+                        h,
+                        crate::raster::Luma([0u8]),
+                    )),
                     palette: Vec::new(),
                     palette_alpha: Vec::new(),
                     source_format: None,
@@ -565,12 +584,12 @@ impl Image {
             }
             if matches!(frombytes_mode, FromBytesMode::L16) {
                 return Ok(Self::from_dynamic(
-                    DynamicImage::ImageLuma16(crate::raster::ImageBuffer::from_pixel(
+                    DynamicImage::ImageI16(crate::raster::ImageBuffer::from_pixel(
                         w,
                         h,
                         crate::raster::Luma([0u16]),
                     )),
-                    Some(mode.to_owned()),
+                    super::mode_boundary::parse_pillow_mode(mode),
                 ));
             }
             return Self::new(w, h, mode, (0, 0, 0, 0));
@@ -639,7 +658,7 @@ impl Image {
                         }
                     })
                     .collect();
-                DynamicImage::ImageLuma16(
+                DynamicImage::ImageI16(
                     crate::raster::ImageBuffer::from_raw(w, h, pixels)
                         .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
                 )
@@ -658,8 +677,11 @@ impl Image {
             ),
             FromBytesMode::P => {
                 return Ok(Image::Paletted(PalettedData {
-                    indices: crate::raster::GrayImage::from_raw(w, h, data.into_owned())
-                        .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
+                    indices: DynamicImage::ImagePalette8(
+                        crate::raster::GrayImage::from_raw(w, h, data.into_owned()).ok_or_else(
+                            || PilError::ValueError("frombytes: buffer error".into()),
+                        )?,
+                    ),
                     // Raw P bytes are indices only. Pillow does not synthesize
                     // palette entries until a palette is explicitly attached.
                     palette: Vec::new(),
@@ -689,23 +711,7 @@ impl Image {
                 )
             }
         };
-        let explicit_mode = match frombytes_mode {
-            FromBytesMode::Mode1
-            | FromBytesMode::Cmyk
-            | FromBytesMode::Lab
-            | FromBytesMode::Hsv
-            | FromBytesMode::YCbCr
-            | FromBytesMode::I
-            | FromBytesMode::F => Some(mode.to_string()),
-            FromBytesMode::Rgba if matches!(mode, "RGBa" | "RGBX") => Some(mode.to_string()),
-            FromBytesMode::LA if matches!(mode, "La" | "PA") => Some(mode.to_string()),
-            FromBytesMode::L16 => Some(mode.to_string()),
-            FromBytesMode::L
-            | FromBytesMode::LA
-            | FromBytesMode::Rgb
-            | FromBytesMode::Rgba
-            | FromBytesMode::P => None,
-        };
+        let explicit_mode = super::mode_boundary::parse_pillow_mode(mode);
         Ok(Image::from_dynamic(img, explicit_mode))
     }
 

@@ -1,28 +1,18 @@
 //! Imageops operation registration.
+// TODO(pillow-rs#3ptb): replace the remaining direct-result callbacks for
+// Contain, Cover, Fit, Pad, Scale, and Expand with operation-owned prepared
+// plans. For Expand, retain the exact mode/output identity and P/PA raw-sample
+// behavior when wiring its legacy native-byte paths. The two histogram
+// operations now enter through their CPU plans.
 use super::prelude::{
-    DynamicImage, PilError, PipelineOp, Registry, op_autocontrast, op_colorize, op_contain,
-    op_cover, op_crop_border, op_equalize, op_equalize_with_mask, op_expand, op_fit, op_flip,
-    op_invert, op_mirror, op_pad, op_posterize, op_scale, op_solarize,
+    DynamicImage, PilError, PipelineOp, Registry, op_contain, op_cover,
+    op_fit, op_pad, op_scale,
 };
 fn register_autocontrast_equalize(m: &mut Registry) {
     m.insert(
         "Autocontrast",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let Some(m) = mode
-                    && (m == "LA" || m == "RGBA")
-                {
-                    return Err(PilError::OsError(format!("not supported for mode {m}")));
-                }
-                if let PipelineOp::Autocontrast { cutoff, mask } = op {
-                    op_autocontrast(img, *cutoff, mask.as_ref())
-                } else {
-                    Err(PilError::ValueError("expected Autocontrast op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::imageops::autocontrast::prepare_pipeline,
             "autocontrast.wgsl"
         ),
     );
@@ -30,21 +20,7 @@ fn register_autocontrast_equalize(m: &mut Registry) {
     m.insert(
         "Equalize",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let Some(m) = mode
-                    && (m == "LA" || m == "RGBA")
-                {
-                    return Err(PilError::OsError(format!("not supported for mode {m}")));
-                }
-                match op {
-                    PipelineOp::Equalize => op_equalize(img),
-                    PipelineOp::EqualizeMasked { mask } => op_equalize_with_mask(img, Some(mask)),
-                    _ => Err(PilError::ValueError("expected Equalize op".into())),
-                }
-            },
+            crate::compute::pool_cpu::ops::imageops::equalize::prepare_pipeline,
             "equalize.wgsl"
         ),
     );
@@ -54,16 +30,7 @@ fn register_invert_flip(m: &mut Registry) {
     m.insert(
         "Invert",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             _mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if matches!(op, PipelineOp::Invert) {
-                    op_invert(img)
-                } else {
-                    Err(PilError::ValueError("expected Invert op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::imageops::ops::prepare_invert_pipeline,
             "invert.wgsl"
         ),
     );
@@ -71,16 +38,7 @@ fn register_invert_flip(m: &mut Registry) {
     m.insert(
         "Flip",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if matches!(op, PipelineOp::Flip) {
-                    op_flip(img, mode)
-                } else {
-                    Err(PilError::ValueError("expected Flip op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::transpose::ops::prepare_flip_pipeline,
             "flip.wgsl"
         ),
     );
@@ -90,16 +48,7 @@ fn register_mirror_posterize_solarize(m: &mut Registry) {
     m.insert(
         "Mirror",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             _mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if matches!(op, PipelineOp::Mirror) {
-                    op_mirror(img)
-                } else {
-                    Err(PilError::ValueError("expected Mirror op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::transpose::ops::prepare_mirror_pipeline,
             "mirror.wgsl"
         ),
     );
@@ -107,16 +56,7 @@ fn register_mirror_posterize_solarize(m: &mut Registry) {
     m.insert(
         "Posterize",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             _mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::Posterize { bits } = op {
-                    op_posterize(img, *bits)
-                } else {
-                    Err(PilError::ValueError("expected Posterize op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::imageops::ops::prepare_posterize_pipeline,
             "posterize.wgsl"
         ),
     );
@@ -124,16 +64,7 @@ fn register_mirror_posterize_solarize(m: &mut Registry) {
     m.insert(
         "Solarize",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             _mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::Solarize { threshold } = op {
-                    op_solarize(img, *threshold)
-                } else {
-                    Err(PilError::ValueError("expected Solarize op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::imageops::ops::prepare_solarize_pipeline,
             "solarize.wgsl"
         ),
     );
@@ -143,16 +74,7 @@ fn register_grayscale(m: &mut Registry) {
     m.insert(
         "Grayscale",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if matches!(op, PipelineOp::Grayscale) {
-                    crate::compute::pool_cpu::ops::grayscale::op_grayscale(img, mode)
-                } else {
-                    Err(PilError::ValueError("expected Grayscale op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::grayscale::ops::prepare_pipeline,
             "grayscale.wgsl"
         ),
     );
@@ -162,24 +84,7 @@ fn register_part_3(m: &mut Registry) {
     m.insert(
         "Colorize",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             _mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::Colorize {
-                    black,
-                    white,
-                    mid,
-                    blackpoint,
-                    midpoint,
-                    whitepoint,
-                } = op
-                {
-                    op_colorize(img, black, white, *mid, *blackpoint, *midpoint, *whitepoint)
-                } else {
-                    Err(PilError::ValueError("expected Colorize op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::imageops::ops::prepare_colorize_pipeline,
             "colorize.wgsl"
         ),
     );
@@ -290,16 +195,7 @@ fn register_scale_expand(m: &mut Registry) {
     m.insert(
         "Expand",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::Expand { border, fill } = op {
-                    op_expand(img, *border, *fill, mode)
-                } else {
-                    Err(PilError::ValueError("expected Expand op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::imageops::ops::prepare_expand_pipeline,
             "expand.wgsl"
         ),
     );
@@ -309,16 +205,7 @@ fn register_part_5(m: &mut Registry) {
     m.insert(
         "CropBorder",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             _mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::CropBorder { border } = op {
-                    op_crop_border(img, *border)
-                } else {
-                    Err(PilError::ValueError("expected CropBorder op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::imageops::ops::prepare_crop_border_pipeline,
             "crop_border.wgsl"
         ),
     );

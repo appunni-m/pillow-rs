@@ -72,7 +72,7 @@ impl GpuInner {
             return Ok(true);
         }
         if options.native_luma16 {
-            let DynamicImage::ImageLuma16(image) = image else {
+            let DynamicImage::ImageI16(image) = image else {
                 return Err(PilError::InternalError(
                     "GPU typed layout was admitted without an ImageLuma16 source".into(),
                 ));
@@ -80,10 +80,10 @@ impl GpuInner {
             buffers.upload_luma16(&self.queue, image, options.mode)?;
             return Ok(true);
         }
-        if (options.native_luma16_convert && matches!(image, DynamicImage::ImageLuma16(_)))
+        if (options.native_luma16_convert && matches!(image, DynamicImage::ImageI16(_)))
             || options.native_luma16_paste
         {
-            let DynamicImage::ImageLuma16(image) = image else {
+            let DynamicImage::ImageI16(image) = image else {
                 return Err(PilError::InternalError(
                     "GPU typed operation was admitted without an ImageLuma16 source".into(),
                 ));

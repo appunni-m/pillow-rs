@@ -1,21 +1,19 @@
-pub(crate) mod chops;
-pub(crate) mod color;
+//! Mode-aware CPU operation families.
+//!
+//! TODO(pillow-rs#3ptb): add these remaining active owners from
+//! `docs/IMPLEMENTATION_STRUCTURE.md`: `resize`, `thumbnail`, `color`, `filter`,
+//! `geometry`, `chops`, `enhance`, `paste`, `composite`, `transform`, and `draw`.
+//! Rewire their registry and direct callers without importing the archive.
+//! Reduce's remaining architecture and later Parallel CPU follow-ups are
+//! documented beside its mode strategies.
+
 pub(crate) mod color3dlut;
-pub(crate) mod composite;
 pub(crate) mod crop;
-pub(crate) mod draw;
 pub(crate) mod effects;
-pub(crate) mod enhance;
 pub(crate) mod eval;
-pub(crate) mod filter;
-pub(crate) mod geometry;
 pub(crate) mod grayscale;
 pub(crate) mod imageops;
-pub(crate) mod paste;
 pub(crate) mod put;
 pub(crate) mod reduce;
-pub(crate) mod resize;
 pub(crate) mod rotate;
-pub(crate) mod thumbnail;
-pub(crate) mod transform;
 pub(crate) mod transpose;

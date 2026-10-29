@@ -1,8 +1,15 @@
 use crate::error::PilError;
 
-pub(super) fn explicit_mode_for(mode: &str) -> Option<String> {
+pub(super) fn explicit_mode_for(mode: &str) -> Option<crate::raster::Mode> {
     match mode {
-        "1" | "P" | "CMYK" | "HSV" | "YCbCr" | "I" | "F" | "LAB" => Some(mode.to_string()),
+        "1" => Some(crate::raster::Mode::One),
+        "P" => Some(crate::raster::Mode::ImagePalette8),
+        "CMYK" => Some(crate::raster::Mode::ImageCmyk8),
+        "HSV" => Some(crate::raster::Mode::ImageHsv8),
+        "YCbCr" => Some(crate::raster::Mode::ImageYCbCr8),
+        "I" => Some(crate::raster::Mode::ImageI32),
+        "F" => Some(crate::raster::Mode::ImageF32),
+        "LAB" => Some(crate::raster::Mode::ImageLab8),
         _ => None,
     }
 }

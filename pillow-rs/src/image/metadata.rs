@@ -5,7 +5,7 @@ use image_slash_star::{ImageFormat, ImageInfo, ImageMode};
 use crate::color::color_type_to_mode;
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
-use crate::raster::{DynamicImage, GenericImageView};
+use crate::raster::{DynamicImage, GenericImageView, Mode};
 
 use super::{
     Image, ImageInfoValue, PaletteTransparency, PalettedData, known_pipeline_op_dimensions,
@@ -147,7 +147,7 @@ impl Image {
         // Pillow's Image.convert("LAB") stores the generated output profile
         // in the result's info dictionary. Carry it on the conversion op so
         // the profile's creation timestamp stays tied to that conversion.
-        if self.explicit_mode() == Some("LAB")
+        if self.known_mode_identity() == Some(Mode::ImageLab8)
             && let Some(profile) = self.pipeline_lab_icc_profile()
         {
             fields.push((
@@ -275,7 +275,7 @@ impl Image {
     /// Returns conversion-time transparency metadata in Pillow's public
     /// scalar, byte-string, or tuple representation.
     pub fn converted_transparency_info(&self, target_mode: &str) -> Option<ImageInfoValue> {
-        if matches!(target_mode, "LA" | "RGBA") && self.explicit_mode() == Some("PA") {
+        if matches!(target_mode, "LA" | "RGBA") && self.known_mode_identity() == Some(Mode::ImagePaletteAlpha8) {
             return self.pending_transparency_info();
         }
         let transparency = self.converted_palette_transparency(target_mode)?;
@@ -330,7 +330,7 @@ impl Image {
 
     /// Returns the observable Pillow palette mode.
     pub fn palette_mode(&self) -> Option<&'static str> {
-        (self.has_palette_mode() || self.explicit_mode() == Some("PA")).then(|| {
+        (self.has_palette_mode() || self.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)).then(|| {
             if self.pending_palette_transparency().is_none()
                 && self.palette_alpha().is_some_and(|alpha| !alpha.is_empty())
             {
@@ -430,7 +430,7 @@ impl Image {
             clear_palette_info_alpha(&mut info);
             let exif = self.exif_metadata();
             *self = Image::Paletted(PalettedData {
-                indices,
+                indices: DynamicImage::ImagePalette8(indices),
                 palette,
                 palette_alpha,
                 source_format,
@@ -658,6 +658,27 @@ impl Image {
         Ok((img.width(), img.height()))
     }
 
+    /// Returns a known exact raster identity without materializing pixels.
+    pub(crate) fn known_mode_identity(&self) -> Option<Mode> {
+        match self {
+            Image::Loaded(data) => data.explicit_mode.or(Some(data.image.mode())),
+            Image::Paletted(_) => Some(Mode::ImagePalette8),
+            Image::Bytes { info: Some(info), .. } => {
+                super::mode_boundary::parse_pillow_mode(image_mode_name(info.mode))
+            }
+            Image::Pipeline {
+                explicit_mode: Some(mode),
+                ..
+            } => Some(*mode),
+            Image::Pipeline { mode, .. } => mode
+                .get()
+                .and_then(|result| result.as_ref().ok())
+                .copied()
+                .flatten(),
+            Image::Bytes { info: None, .. } => None,
+        }
+    }
+
     /// Returns the Pillow mode string for this image.
     ///
     /// # Errors
@@ -668,9 +689,9 @@ impl Image {
         match self {
             Image::Paletted(_) => return Ok("P".to_owned()),
             Image::Loaded(data) => {
-                return Ok(data
-                    .explicit_mode
-                    .clone()
+                return Ok(super::mode_boundary::pillow_mode_name_opt(data.explicit_mode)
+                    .or_else(|| super::mode_boundary::pillow_mode_name(data.image.mode()))
+                    .map(str::to_owned)
                     .unwrap_or_else(|| image_mode_name(data.decoded_mode).to_owned()));
             }
             Image::Bytes {
@@ -679,7 +700,11 @@ impl Image {
             Image::Pipeline {
                 explicit_mode: Some(mode),
                 ..
-            } => return Ok(mode.clone()),
+            } => {
+                if let Some(name) = super::mode_boundary::pillow_mode_name(*mode) {
+                    return Ok(name.to_owned());
+                }
+            }
             Image::Pipeline {
                 source,
                 ops,
@@ -688,12 +713,25 @@ impl Image {
                 ..
             } => {
                 let planned = mode.get_or_init(|| {
-                    let mut current = source.mode()?;
+                    let mut current = if let Some(mode) = source.known_mode_identity() {
+                        mode
+                    } else {
+                        // TODO(cpu-migration): derive a typed identity directly
+                        // from every encoded header/decode state before using
+                        // the compatibility string fallback below.
+                        let source_name = source.mode()?;
+                        let Some(mode) =
+                            super::mode_boundary::parse_pillow_mode(&source_name)
+                        else {
+                            return Ok(None);
+                        };
+                        mode
+                    };
                     if ops.mode_preserving() {
                         return Ok(Some(current));
                     }
                     for op in ops.iter() {
-                        let Some(next) = known_pipeline_op_mode(op, &current) else {
+                        let Some(next) = known_pipeline_op_mode(op, current) else {
                             return Ok(None);
                         };
                         current = next;
@@ -701,7 +739,9 @@ impl Image {
                     Ok(Some(current))
                 });
                 if let Some(mode) = planned.as_ref().map_err(Clone::clone)? {
-                    return Ok(mode.clone());
+                    if let Some(name) = super::mode_boundary::pillow_mode_name(*mode) {
+                        return Ok(name.to_owned());
+                    }
                 }
             }
             _ => {}
@@ -719,9 +759,9 @@ impl Image {
     pub(crate) fn mode_from_materialized(&self, image: &DynamicImage) -> String {
         match self {
             Image::Paletted(_) => "P".to_owned(),
-            Image::Loaded(data) => data
-                .explicit_mode
-                .clone()
+            Image::Loaded(data) => super::mode_boundary::pillow_mode_name_opt(data.explicit_mode)
+                .or_else(|| super::mode_boundary::pillow_mode_name(image.mode()))
+                .map(str::to_owned)
                 .unwrap_or_else(|| image_mode_name(data.decoded_mode).to_owned()),
             Image::Bytes {
                 info: Some(info), ..
@@ -729,7 +769,9 @@ impl Image {
             Image::Pipeline {
                 explicit_mode: Some(mode),
                 ..
-            } => mode.clone(),
+            } => super::mode_boundary::pillow_mode_name(*mode)
+                .unwrap_or_else(|| image_mode_name(image.color().into()))
+                .to_owned(),
             _ => color_type_to_mode(image.color()).to_owned(),
         }
     }

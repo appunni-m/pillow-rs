@@ -150,7 +150,7 @@ pub(super) fn with_eager_cpu_convert_receipt<T>(
 pub(super) fn eager_convert_image_bytes(image: &Image) -> usize {
     match image {
         Image::Loaded(data) => data.image.as_bytes().len(),
-        Image::Paletted(data) => data.indices.as_raw().len(),
+        Image::Paletted(data) => data.indices.as_bytes().len(),
         Image::Bytes { .. } | Image::Pipeline { .. } => 0,
     }
 }

@@ -42,7 +42,7 @@ impl GpuBatchOutputLayout {
                 }
                 PipelineOp::Color3DLut { target_mode, .. } => {
                     put_alpha_mode = None;
-                    output_color_type = gpu_pixel_mode_color_type(*target_mode);
+                    output_color_type = gpu_raster_mode_color_type(*target_mode);
                 }
                 PipelineOp::EffectNoise { .. } => {
                     put_alpha_mode = None;

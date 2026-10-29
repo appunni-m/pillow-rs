@@ -3,6 +3,7 @@
 use super::{registry, variant_key};
 use crate::error::PilError;
 use crate::pipeline::{ColorMode, PipelineOp, PixelMode};
+use crate::raster::Mode;
 
 /// Returns whether the GPU backend has an implementation for `op`.
 #[cfg(feature = "gpu")]
@@ -501,11 +502,11 @@ fn gpu_auxiliary_shader_contract(op: &PipelineOp) -> Option<bool> {
                     == size.0 as usize * size.1 as usize * size.2 as usize * *channels as usize
                 && matches!(
                     source_mode,
-                    PixelMode::RGB | PixelMode::RGBA | PixelMode::CMYK
+                    Mode::ImageRgb8 | Mode::ImageRgba8 | Mode::ImageCmyk8
                 )
                 && matches!(
                     target_mode,
-                    PixelMode::RGB | PixelMode::RGBA | PixelMode::CMYK
+                    Mode::ImageRgb8 | Mode::ImageRgba8 | Mode::ImageCmyk8
                 )
                 && table.iter().all(|value| value.is_finite())
         }

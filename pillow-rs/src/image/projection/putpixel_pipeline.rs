@@ -424,7 +424,7 @@ impl Image {
         if !matches!(source.as_ref(), Image::Loaded(_) | Image::Bytes { .. }) {
             return Ok(None);
         }
-        let mode = match explicit_mode.as_deref() {
+        let mode = match super::super::mode_boundary::pillow_mode_name_opt(*explicit_mode) {
             Some("RGB") => "RGB",
             Some("CMYK") => "CMYK",
             Some(_) => return Ok(None),

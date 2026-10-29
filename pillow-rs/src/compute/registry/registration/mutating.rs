@@ -1,22 +1,10 @@
 //! Mutating operation registration.
-use super::prelude::{
-    DynamicImage, PilError, PipelineOp, Registry, op_color3dlut, op_put_alpha, op_put_alpha_data,
-    op_put_data, op_put_pixel,
-};
+use super::prelude::{PilError, Registry};
 fn register_part_1(m: &mut Registry) {
     m.insert(
         "PutPixel",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             _mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::PutPixel { x, y, color, .. } = op {
-                    op_put_pixel(img, *x, *y, *color)
-                } else {
-                    Err(PilError::ValueError("expected PutPixel op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::put::ops::prepare_pixel_pipeline,
             "put_pixel.wgsl"
         ),
     );
@@ -24,20 +12,7 @@ fn register_part_1(m: &mut Registry) {
     m.insert(
         "PutData",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             _mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::PutData {
-                    data,
-                    mode: data_mode,
-                } = op
-                {
-                    op_put_data(img, data, *data_mode)
-                } else {
-                    Err(PilError::ValueError("expected PutData op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::put::ops::prepare_data_pipeline,
             "put_data.wgsl"
         ),
     );
@@ -45,23 +20,7 @@ fn register_part_1(m: &mut Registry) {
     m.insert(
         "Color3DLut",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             _mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::Color3DLut {
-                    size,
-                    table,
-                    channels,
-                    source_mode,
-                    target_mode,
-                } = op
-                {
-                    op_color3dlut(img, *size, table, *channels, *source_mode, *target_mode)
-                } else {
-                    Err(PilError::ValueError("expected Color3DLut op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::color3dlut::ops::prepare_pipeline,
             "color_3dlut.wgsl"
         ),
     );
@@ -71,20 +30,7 @@ fn register_part_2(m: &mut Registry) {
     m.insert(
         "PutAlpha",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             _mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::PutAlpha {
-                    alpha,
-                    mode: alpha_mode,
-                } = op
-                {
-                    Ok(op_put_alpha(img, *alpha, *alpha_mode))
-                } else {
-                    Err(PilError::ValueError("expected PutAlpha op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::put::ops::prepare_alpha_pipeline,
             "put_alpha.wgsl"
         ),
     );
@@ -92,16 +38,7 @@ fn register_part_2(m: &mut Registry) {
     m.insert(
         "PutAlphaData",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             _mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::PutAlphaData { mask, mode } = op {
-                    Ok(op_put_alpha_data(img, mask, *mode))
-                } else {
-                    Err(PilError::ValueError("expected PutAlphaData op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::put::ops::prepare_alpha_data_pipeline,
             "put_alpha_data.wgsl"
         ),
     );

@@ -399,7 +399,9 @@ impl Image {
         self.load()?;
         match self {
             Image::Paletted(data) if mode == crate::pipeline::PixelMode::P => {
-                data.indices.as_mut()[pixel_index] = bytes[0];
+                data.indices
+                    .as_bytes_mut()
+                    .expect("P mode uses a byte-addressable index buffer")[pixel_index] = bytes[0];
                 data.materialized = materialization_cache();
             }
             Image::Loaded(data) => {

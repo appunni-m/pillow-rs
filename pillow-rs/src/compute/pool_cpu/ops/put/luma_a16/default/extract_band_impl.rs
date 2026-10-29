@@ -1,0 +1,20 @@
+//! Original serial ExtractBand algorithm for `ImageLumaA16`.
+
+use crate::error::PilError;
+use crate::raster::DynamicImage;
+use super::super::super::helpers::extract_band::{self as helpers, CheckedBand};
+
+pub(crate) type Input = crate::raster::ImageBuffer<crate::raster::LumaA<u16>, Vec<u16>>;
+pub(crate) type Kernel<'a> = CheckedBand<'a, crate::raster::LumaA<u16>>;
+
+#[inline]
+pub(crate) fn prepare(input: &Input, index: u8) -> Result<Kernel<'_>, PilError> {
+    CheckedBand::new(input, index)
+}
+
+#[inline]
+pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
+    // This core-only LA16 strategy maps its two logical bands directly.
+    let channel = input.index.min(1);
+    helpers::native(input, Some(channel))
+}

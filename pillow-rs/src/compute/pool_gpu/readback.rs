@@ -440,7 +440,7 @@ impl GpuInner {
         }
         let image = ImageBuffer::<Luma<u16>, Vec<u16>>::from_raw(w, h, pixels)
             .ok_or_else(|| PilError::ValueError("bad typed readback buffer".into()))?;
-        Ok(DynamicImage::ImageLuma16(image))
+        Ok(DynamicImage::ImageI16(image))
     }
 
     /// Read back the numeric-u16 representation used by typed Paste. Unlike
@@ -479,6 +479,6 @@ impl GpuInner {
         }
         let image = ImageBuffer::<Luma<u16>, Vec<u16>>::from_raw(w, h, pixels)
             .ok_or_else(|| PilError::ValueError("bad typed readback buffer".into()))?;
-        Ok(DynamicImage::ImageLuma16(image))
+        Ok(DynamicImage::ImageI16(image))
     }
 }

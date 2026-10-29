@@ -8,6 +8,7 @@ pub(crate) mod buffer;
 pub(crate) mod color;
 pub(crate) mod dynamic;
 pub(crate) mod error;
+pub mod mode;
 pub(crate) mod traits;
 
 pub use self::buffer::{
@@ -20,6 +21,7 @@ pub use self::color::{
 };
 pub use self::dynamic::DynamicImage;
 pub use self::error::Rect;
+pub use self::mode::Mode;
 pub use self::traits::{
     EncodableLayout, Enlargeable, GenericImage, GenericImageView, Pixel, Primitive,
 };

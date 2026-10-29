@@ -32,7 +32,7 @@ use image_slash_star::{EncodedImage, ImageFormat, ImageInfo, ImageMode};
 use std::sync::Arc;
 
 use crate::pipeline::PipelineOp;
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, Mode};
 
 mod backend;
 pub use backend::preserve_mode;
@@ -43,6 +43,7 @@ pub use byte_export::{ImagingCoreBytesInput, imaging_core_to_bytes};
 mod channel_access;
 pub use channel_access::{ChannelSelector, PutAlphaInput};
 mod color_count;
+pub(crate) mod codec_adapter;
 mod construction;
 pub use construction::{
     NewColorInput, OpenFormatsInput, OpenModeInput, validate_open_inputs,
@@ -55,6 +56,7 @@ mod encode;
 mod entropy;
 mod materialization;
 mod metadata;
+pub(crate) mod mode_boundary;
 use metadata::image_mode_name;
 pub use metadata::{ExifCompatFields, prepare_exif_compat};
 mod palette;
@@ -86,8 +88,8 @@ pub use statistics::{StatResult, StatValue, stat_from_histogram, stat_from_list}
 /// are black when the indexed image must be expanded for color operations.
 #[derive(Debug, Clone)]
 pub struct PalettedData {
-    /// One palette index byte per pixel.
-    pub indices: crate::raster::GrayImage,
+    /// Mode-tagged palette index bytes, one byte per pixel.
+    pub indices: DynamicImage,
     /// Retained palette data as RGB triples.
     pub palette: Vec<u8>,
     /// Optional per-entry alpha values retained from the encoded palette.
@@ -141,8 +143,11 @@ pub struct LoadedData {
     /// True only while constructor-created RGB/CMYK samples are known zero.
     /// Direct in-place data mutators clear this provenance.
     pub(crate) known_zero_fill: bool,
-    /// Pillow mode override for layouts not represented by `DynamicImage`.
-    pub explicit_mode: Option<String>,
+    /// Logical mode for storage whose backing raster carrier cannot express it.
+    ///
+    /// TODO(cpu-migration): remove this fallback once every construction and
+    /// decode adapter creates the matching `DynamicImage` variant directly.
+    pub explicit_mode: Option<Mode>,
     /// Exact decoded sample mode before operation-buffer adaptation.
     pub decoded_mode: ImageMode,
     /// Palette RGB entries attached to a `PA` image.
@@ -314,7 +319,7 @@ pub enum Image {
     /// Lazy pipeline — operations recorded, not executed.
     /// source: the input image (loaded or another pipeline).
     /// ops: the operations to apply, in order.
-    /// explicit_mode: PIL mode override (e.g. "1", "P") preserved from source.
+    /// explicit_mode: logical output identity retained before materialization.
     Pipeline {
         /// Input image feeding the operation pipeline.
         source: Arc<Image>,
@@ -322,8 +327,11 @@ pub enum Image {
         ops: PipelineOps,
         /// Output format inherited from the source when known.
         format: Option<ImageFormat>,
-        /// Explicit Pillow mode preserved across lazy operations.
-        explicit_mode: Option<String>,
+        /// Pillow mode identity retained for a pending pipeline output.
+        ///
+        /// TODO(cpu-migration): consolidate this with `PipelineModeCache` once
+        /// each mode-changing operation declares its output `Mode` when queued.
+        explicit_mode: Option<Mode>,
         /// Locked backend for this pipeline. None = use global active set.
         backend: Option<crate::compute::Backend>,
         /// Quantize palette (RGB triples) — populated after Quantize op materializes.

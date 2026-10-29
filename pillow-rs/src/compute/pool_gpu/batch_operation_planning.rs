@@ -201,7 +201,7 @@ pub(super) fn plan_native_luma_transform_output(
     }
     let affine: [f64; 6] = data.get(..6)?.try_into().ok()?;
     let [step_x, step_y, origin_x, step_x_y, step_y_y, origin_y] =
-        crate::compute::pool_cpu::ops::effects::affine_nearest_fixed(affine, *w, *h)?;
+        crate::compute::helpers::geometry::affine_nearest_fixed(affine, *w, *h)?;
     let max_x = i128::from(*w - 1);
     let max_y = i128::from(*h - 1);
     let coords_fit = |step_x: i64, step_y: i64, origin: i64| {
@@ -270,7 +270,7 @@ pub(super) fn plan_native_transform_output(
     }
     let affine: [f64; 6] = data.get(..6)?.try_into().ok()?;
     let [step_x, step_y, origin_x, step_x_y, step_y_y, origin_y] =
-        crate::compute::pool_cpu::ops::effects::affine_nearest_fixed(affine, *w, *h)?;
+        crate::compute::helpers::geometry::affine_nearest_fixed(affine, *w, *h)?;
     let max_x = i128::from(*w - 1);
     let max_y = i128::from(*h - 1);
     if !affine_coordinate_bounds_fit(step_x, step_y, origin_x, max_x, max_y)

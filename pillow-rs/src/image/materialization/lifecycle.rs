@@ -18,7 +18,7 @@ impl Image {
             return Ok(rgb);
         }
         // Pipeline-based P-mode images need palette→RGB conversion
-        if matches!(self, Image::Pipeline { .. }) && self.explicit_mode() == Some("P") {
+        if matches!(self, Image::Pipeline { .. }) && self.known_mode_identity() == Some(crate::raster::Mode::ImagePalette8) {
             let img = self.materialize()?; // Luma8 indices
             if let Some(palette) = self.palette() {
                 let indices = img.to_luma8();
@@ -33,7 +33,7 @@ impl Image {
     pub(crate) fn paletted_to_rgb(&self) -> Option<DynamicImage> {
         if let Image::Paletted(data) = self {
             Some(expand_palette(
-                &data.indices,
+                &data.indices.to_luma8(),
                 &data.palette,
                 &data.palette_alpha,
             ))
@@ -64,11 +64,11 @@ impl Image {
                 palette_alpha,
                 ..
             } => {
-                if explicit_mode.as_deref() == Some("P") {
+                if *explicit_mode == Some(crate::raster::Mode::ImagePalette8) {
                     if let Some(palette) = palette {
                         let indices = self.materialized_shared()?.as_ref().clone().to_luma8();
                         Image::Paletted(PalettedData {
-                            indices,
+                            indices: DynamicImage::ImagePalette8(indices),
                             palette: palette.clone(),
                             palette_alpha: palette_alpha.clone().unwrap_or_default(),
                             source_format: *format,
@@ -87,7 +87,7 @@ impl Image {
                     Image::Loaded(LoadedData {
                         image,
                         known_zero_fill: false,
-                        explicit_mode: explicit_mode.clone(),
+                        explicit_mode: None,
                         decoded_mode,
                         palette: palette.clone(),
                         palette_alpha: palette_alpha.clone(),

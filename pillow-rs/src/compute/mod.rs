@@ -29,10 +29,13 @@ use crate::raster::DynamicImage;
 
 #[path = "automatic_segments.rs"]
 mod automatic_segments;
+pub(crate) mod helpers;
 #[path = "backend_state.rs"]
 mod backend_state;
 mod eager;
 mod execution;
+mod execution_context;
+pub use execution_context::{Architecture, ExecutionContext};
 #[path = "phase_telemetry.rs"]
 mod phase_telemetry;
 #[path = "telemetry.rs"]
@@ -85,7 +88,8 @@ pub(crate) use backend_state::{
 };
 pub(crate) use eager::{
     begin_eager_cpu_mandelbrot_telemetry, execute_eager_cpu_getprojection,
-    execute_eager_cpu_image_operation, execute_eager_cpu_shared_result,
+    execute_eager_cpu_arch_image_operation, execute_eager_cpu_image_operation,
+    execute_eager_cpu_shared_result,
     execute_eager_simd_getprojection, execute_eager_simd_image_operation,
     finish_eager_cpu_mandelbrot_telemetry, simd_cmyk_projection,
     simd_cmyk_projection_from_positive_writes, simd_rgb_projection, simd_unsharp_blend_rgb_150,
@@ -99,8 +103,10 @@ pub(crate) use eager::{
 #[cfg(test)]
 use execution::execute_automatic_simd_segments;
 pub(crate) use execution::{
-    PreparedExecution, execute_prepared, execute_prepared_cpu_terminal, execute_prepared_shared,
-    execute_prepared_simd_terminal, prepare_execution,
+    PreparedExecution, execute_prepared, execute_prepared_cpu_arch_operation,
+    execute_prepared_cpu_terminal, execute_prepared_shared,
+    execute_prepared_shared_with_palette, execute_prepared_simd_terminal,
+    execute_prepared_with_palette, prepare_execution,
 };
 #[cfg(feature = "gpu")]
 pub(crate) use execution::{
@@ -297,6 +303,36 @@ pub(crate) trait BackendImpl: Send + Sync {
         img: &DynamicImage,
         mode: Option<&str>,
     ) -> Result<DynamicImage, PilError>;
+    /// Executes a batch with the context selected at the routing boundary.
+    ///
+    /// Backends that have not adopted context-driven strategy selection keep
+    /// their existing executor through this default. CPU overrides it so each
+    /// operation consumes the same injected backend and architecture choice.
+    fn execute_batch_with_context(
+        &self,
+        ops: &[PipelineOp],
+        img: &DynamicImage,
+        mode: Option<&str>,
+        _context: &ExecutionContext,
+    ) -> Result<DynamicImage, PilError> {
+        self.execute_batch(ops, img, mode)
+    }
+    /// Executes a context-routed batch with wrapper-owned palette inputs.
+    ///
+    /// Most backends do not consume palette metadata and retain their current
+    /// executor. CPU overrides this boundary so exact P/PA strategies receive
+    /// the palette resolved by the image wrapper.
+    fn execute_batch_with_context_and_palette(
+        &self,
+        ops: &[PipelineOp],
+        img: &DynamicImage,
+        mode: Option<&str>,
+        context: &ExecutionContext,
+        palette: registry::support::PaletteInput<'_>,
+    ) -> Result<DynamicImage, PilError> {
+        let _ = palette;
+        self.execute_batch_with_context(ops, img, mode, context)
+    }
     /// Executes a sequence without allowing the backend to recover through a
     /// different implementation.  Explicit backend locks use this boundary
     /// for capability audits; automatic routing continues to use
@@ -327,9 +363,11 @@ pub use pool_gpu::stream::{
     BatchError, BatchErrorKind, BatchKey, BatchOutput, BatchResult, GpuBatchConfig,
     GpuBatchExecutor, GpuBatchStats, GpuImage,
 };
+// TODO(pillow-rs#3ptb): route SIMD architecture selection through CPU operation
+// strategies, then retire this separate pool and its adapter re-exports. Do
+// not restore the archived pool as an active module.
 mod pool_simd;
 pub(crate) use pool_simd::ops::adapters::simd_extract_band_into;
-pub(crate) use pool_simd::ops::adapters::simd_grayscale_with_evidence;
 
 pub(crate) mod registry;
 

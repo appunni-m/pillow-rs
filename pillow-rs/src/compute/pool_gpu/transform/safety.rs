@@ -63,7 +63,7 @@ pub(in crate::compute::pool_gpu) fn gpu_transform_all_fill_is_exact(
     let source_layout_is_valid = match mode {
         Some("I" | "F") => matches!(image, DynamicImage::ImageRgba8(_)),
         Some("I;16" | "I;16L" | "I;16B" | "I;16N") => {
-            matches!(image, DynamicImage::ImageLuma16(_))
+            matches!(image, DynamicImage::ImageI16(_))
         }
         _ => gpu_image_layout_is_supported(image),
     };

@@ -437,6 +437,9 @@ impl Image {
         threshold: i32,
     ) -> Result<Image, PilError> {
         self.validate_filter("UnsharpMask")?;
+        // TODO(cpu-migration): keep this filter on `known_mode_identity()`
+        // through mode selection and result construction instead of round-tripping
+        // through Pillow mode strings.
         let mode = self.mode()?;
         let simd_blend_selected = match self.backend() {
             Some(backend) => backend == crate::compute::Backend::Simd,
@@ -519,7 +522,10 @@ impl Image {
             }
         }
 
-        Ok(Image::from_dynamic(blurred, Some(mode)))
+        Ok(Image::from_dynamic(
+            blurred,
+            crate::image::mode_boundary::parse_pillow_mode(&mode),
+        ))
     }
 
     /// Applies a maximum filter over an odd neighborhood.
@@ -586,7 +592,7 @@ impl Image {
         // For palette images: extract palette before materialize
         let palette = self.palette();
         let palette_alpha = self.palette_alpha();
-        let explicit = self.explicit_mode().map(|s| s.to_string());
+        let explicit = self.known_mode_identity();
 
         let img = self.materialize()?;
         let half = (size / 2) as i32;
@@ -636,7 +642,7 @@ impl Image {
             // preserving the palette and index buffer exactly.
             let indices = result.into_luma8();
             return Ok(Image::Paletted(crate::image::PalettedData {
-                indices,
+                indices: DynamicImage::ImagePalette8(indices),
                 palette: pal,
                 palette_alpha: palette_alpha.unwrap_or_default(),
                 source_format: None,
@@ -645,7 +651,7 @@ impl Image {
                 materialized: crate::image::materialization_cache(),
             }));
         }
-        // Preserve explicit mode (e.g. "1", "P" via explicit_mode)
+        // Preserve the exact raster identity while rebuilding filtered bytes.
         if explicit.is_some() {
             return Ok(Image::from_dynamic(result, explicit));
         }
@@ -684,7 +690,7 @@ impl Image {
     pub fn color3dlut(
         &self,
         input: PreparedColor3DLut,
-        target_mode: Option<&str>,
+        target_mode: Option<crate::raster::Mode>,
     ) -> Result<Image, PilError> {
         self.validate_filter("Color3DLUT")?;
         let PreparedColor3DLut {
@@ -692,30 +698,23 @@ impl Image {
             table,
             channels,
         } = input;
-        let source_name = self.mode()?;
-        let source_mode = match source_name.as_str() {
-            "RGB" => PixelMode::RGB,
-            "RGBA" => PixelMode::RGBA,
-            "CMYK" => PixelMode::CMYK,
+        let source_mode = match self.known_mode_identity() {
+            Some(mode @ (crate::raster::Mode::ImageRgb8
+            | crate::raster::Mode::ImageRgba8
+            | crate::raster::Mode::ImageCmyk8)) => mode,
             _ => return Err(PilError::ValueError("image has wrong mode".into())),
         };
-        let target_name = target_mode.unwrap_or(source_name.as_str());
-        let target = match target_mode {
-            Some("RGB") => PixelMode::RGB,
-            Some("RGBA") => PixelMode::RGBA,
-            Some("CMYK") => PixelMode::CMYK,
-            Some(_) => {
-                return Err(PilError::ValueError("unrecognized image mode".into()));
-            }
-            None => source_mode,
+        let target_mode = target_mode.unwrap_or(source_mode);
+        let target_channels = match target_mode {
+            crate::raster::Mode::ImageRgb8 => 3,
+            crate::raster::Mode::ImageRgba8 | crate::raster::Mode::ImageCmyk8 => 4,
+            _ => return Err(PilError::ValueError("unrecognized image mode".into())),
         };
-        if target.channels() < channels as usize {
+        if target_channels < channels as usize {
             return Err(PilError::ValueError("image has wrong mode".into()));
         }
 
-        // Color3DLUT stores its output mode in `explicit_mode`; Image::mode
-        // therefore returns it directly instead of entering the metadata
-        // planner for this operation.
+        // Color3DLUT records the exact output identity before lazy execution.
         Ok(Image::push_mode_changing_op(
             self,
             PipelineOp::Color3DLut {
@@ -723,9 +722,9 @@ impl Image {
                 table: table.into(),
                 channels,
                 source_mode,
-                target_mode: target,
+                target_mode,
             },
-            target_name,
+            target_mode,
         ))
     }
 }

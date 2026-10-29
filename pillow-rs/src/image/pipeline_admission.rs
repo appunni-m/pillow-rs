@@ -31,7 +31,9 @@ impl Image {
         if !backend_is_unambiguous {
             return false;
         }
-        if !matches!(explicit_mode.as_deref(), None | Some("RGB")) || ops.is_empty() {
+        if !matches!(*explicit_mode, None | Some(crate::raster::Mode::ImageRgb8))
+            || ops.is_empty()
+        {
             return false;
         }
         let Image::Loaded(source) = source.as_ref() else {
@@ -101,7 +103,7 @@ impl Image {
                     source.image.as_ref(),
                     ops.as_slice(),
                     &thumbnail,
-                    explicit_mode.as_deref(),
+                    super::mode_boundary::pillow_mode_name_opt(*explicit_mode),
                 )
             }
             crate::compute::Backend::Simd => {
@@ -109,7 +111,7 @@ impl Image {
                     source.image.as_ref(),
                     ops.as_slice(),
                     &thumbnail,
-                    explicit_mode.as_deref(),
+                    super::mode_boundary::pillow_mode_name_opt(*explicit_mode),
                 )
             }
             crate::compute::Backend::Gpu => false,

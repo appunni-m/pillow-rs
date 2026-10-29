@@ -1,446 +1,559 @@
-# Repository-wide file structure standard
+# Implementation structure
 
-This is the repository-wide standard for first-party maintained files in
-every area: Rust and binding source, tests, scripts and tools, documentation,
-benchmark evidence, fixtures, generated inputs, shaders, and workflows.
-It is the single source for repository path and file-placement rules. Other
-guides may explain ownership, behavior, or commands and link here, but must not
-define a competing layout. Before introducing a path this standard does not
-cover, update the standard first; record a concrete, scoped exception when a
-real package boundary requires one.
-Ignored build outputs, virtual environments, dependency caches, and vendored
-third-party trees are outside the layout contract. Keep real package and
-lifecycle boundaries at the top level, then organize each owner's contents by
-domain, coherent family or concern, and concrete responsibility. A mode,
-architecture, or other variant is a final level only when it represents a
-distinct supported path. Root manifests, project-wide configuration, and
-genuinely standalone entry points stay at the root because they govern or
-start the whole owner.
+Status: required target structure, not a statement that migration is complete.
+The restart baseline is `3f9dfd4036caa061eabcf2255c9f34a745df9c7e`.
+The execution order and completion gates are in the
+[CPU refactor plan](CPU_REFACTOR_PLAN.md).
 
-The standard keeps related work together without creating a file for every
-helper or collecting unrelated work in large catch-all modules. Every new file
-and every directory touched during structural work follows the same order.
-This applies to every new maintained file and every directory created or
-reshaped. Existing paths that do not yet fit are migration debt, not alternate
-standards: align a touched area when the move preserves behavior and makes
-ownership clearer. Record a concrete reason when it must stay put. Do not
-mass-move files only to make the tree look uniform.
+This file is the placement authority for this refactor. Existing layouts and
+older architecture descriptions are migration inputs, not alternate designs.
+Do not restructure unrelated parts of the repository during the CPU phase.
 
-## The repository path standard
+Every operation must expose an explicit, typed support contract at its entry
+point. Mode and architecture strategies implement that contract. Folder
+placement separates implementation ownership; support is declared in code and
+is inspectable without reading folders or running an operation. Section 3
+defines the required support and strategy interfaces. These are target design
+requirements; their presence here does not mean they are implemented yet.
 
-Use this order for maintained files and directories:
+## 1. Backend, architecture, and mode
 
-```text
-<owner>/<domain-or-layer>/<family-or-concern>/<responsibility>/<mode-or-variant>
-```
+- Backend selects the executor: CPU, later Parallel CPU, or GPU.
+- Architecture selects a CPU implementation: `default`, `neon`, `sse2`,
+  `sse3`, `ssse3`, `avx`, `avx2`, `wasm_simd128`, or another specifically
+  implemented instruction set.
+- SIMD is folded into CPU. Maintained vector implementations belong to
+  `pool_cpu`, with architecture expressed by context. There is no independent
+  SIMD executor or maintained `pool_simd` implementation after the CPU phase.
+- Mode comes from the Pillow-owned `raster::DynamicImage` value. Backend and
+  architecture belong to execution context, not to image pixel metadata.
+- Parallel scheduling belongs to `pool_parallel` after the CPU completion gate.
+  CPU remains serial, including when the Cargo `parallel` feature is enabled.
 
-Before adding or moving a file, identify its owner, domain, family or concern,
-and responsibility. Add a final mode or architecture level only if it selects
-a distinct supported implementation. Omit levels with no real meaning; do not
-compensate by using generic buckets such as `common/`, `misc/`, or `helpers/`.
-The path must make clear both who owns the file and what role it plays.
+If existing public APIs accept `simd`, translate that request once at the
+routing boundary to CPU with an eligible architecture. Preserve public API
+compatibility through this narrow adapter; do not retain a second SIMD registry,
+pool, or execution path. Report the actual backend and architecture separately.
 
-The path segments have stable meanings across the tree:
+## 2. Mode-bearing raster
 
-- **Owner** says which crate, tool, or maintained subtree owns behavior, such as `pillow-rs`,
-  `pillow-rs-py`, `pillow-rs-js`, `pillow-rs-parallel`, or a repository tool.
-- **Domain or layer** says what the code does there, such as `ops`, `adapters`,
-  `kernels`, `shaders`, `tests`, `inputs`, or `evidence`. Existing package and
-  backend segments may be nested here when they represent real ownership.
-- **Family or concern** uses one stable lowercase `snake_case` token for the
-  coherent operation family, tool, document topic, test suite, or workflow
-  group.
-- **Responsibility** names a concrete role, such as an orchestrator, kernel,
-  test, parity case, benchmark workload, or immutable result.
-- **Mode or architecture** appears only when it selects a distinct supported
-  path, such as `ycbcr`, `rgba`, `avx2`, or `neon`.
+`pillow-rs/src/raster/dynamic.rs` owns the materialized image enum.
+Its flat variants carry the exact mode identity and the appropriate buffer.
+The enum discriminant is the stored identity; do not add a separately stored
+`Mode` plus `PixelStorage` pair to each materialized image.
 
-The hierarchy is uniform; filenames follow the conventions of their owning
-language or artifact format. Rust and Python module stems use `snake_case`,
-JavaScript follows the package's established module convention, documentation
-uses the established Markdown naming convention, and stable case/workload IDs
-remain governed by the migration manifest. Do not encode a second owner or
-layer in a filename when the directory already states it. Keep the same family
-identity traceable across these conventions instead of forcing every artifact
-to have an identical spelling.
+For example, `ImageLuma8(buffer)`, `ImagePalette8(buffer)`,
+`ImageRgba8(buffer)`, and `ImageCmyk8(buffer)`
+must remain distinct even when their payload buffers have identical physical
+layouts.
 
-Do not reverse this order, make a second generic bucket in a package, or use a
-file's location as a substitute for an explicit backend/profile selection. If
-a concern is too small to need a directory, keep its focused module flat; once
-it has distinct child roles, add the concern directory below its owner and keep
-its name. Omit a level only when it has no real responsibility in that area;
-never invent empty directories to force equal path depth. In Rust this is the
-same module-tree pattern used by `grayscale.rs` and
-`grayscale/kernels/ycbcr.rs`.
+Construction, decode adaptation, and explicit conversion choose the variant
+once. Clone, crop, transpose, and other mode-preserving operations preserve the
+identity. Conversion, quantization, band extraction, alpha insertion, and any
+other mode-changing operation construct the exact resulting variant.
 
-## One family name across operation layers
+The materialized enum and the payload-free `raster::Mode` selector must have
+these same 25 identities. `DynamicImage::mode()` reads the existing variant
+tag and returns `Mode`; it does not inspect samples or add another stored tag.
+Use the same variant names for both enums, with buffers only on `DynamicImage`.
 
-Use the same stable family name at every layer. A family groups public
-operations that share a coherent algorithm and implementation contract. The
-name should let a maintainer trace from the Python/JS API through core semantics,
-backend selection, a mode/architecture kernel, and the parity/benchmark evidence
-that covers it. Keep operation IDs and workload IDs authoritative in the
-migration manifest; source layout is a traceability aid, not another API list.
-
-The repository-level shape for image operations is:
-
-```text
-pillow-rs/src/ops/<family>.rs                         # core Pillow semantics
-pillow-rs/src/compute/pool_<backend>/ops/adapters.rs  # backend facade
-pillow-rs/src/compute/pool_<backend>/ops/adapters/
-  <family>.rs                                         # family orchestrator
-  <family>/kernels/<mode>[_<architecture>].rs        # focused hot loops
-pillow-rs/src/compute/pool_gpu/shaders/<family>/      # matching GPU shaders
-pillow-rs-py/src/lib.rs                               # native binding entry
-pillow-rs-py/python/pillow_rs/<family>.py              # Python wrapper, if split
-pillow-rs-js/src/lib.rs                               # JavaScript/WASM entry
-pillow-rs-js/src/<family>.rs                          # binding module, if split
-pillow-rs/tests/fixtures/inputs/<domain>/              # maintained specs and selected inputs
-build/migration-parity/                               # ignored run products; outside this contract
-target/evidence/raw/<family>/<experiment>-<backend>-<arch>-<date>/ # ignored receipts
-```
-
-## Applying the shared standard across repository owners
-
-Top-level directories continue to mark real ownership boundaries such as the
-Rust core, Python package, JavaScript package, migration tooling, docs, and
-generated evidence. Inside those boundaries, keep the owner, domain/layer,
-family, responsibility, and optional mode/architecture in the same order.
-File depth follows the layer's real responsibilities, while ownership and
-family identity stay consistent. A small family stays in one focused module;
-non-image code follows the same order, such as `scripts/source_crosswalk/` for
-one tool's parser stages or `pillow-rs/src/raster/traits/` for raster
-contracts. Skip a level when it has no distinct work; do not invent empty
-directories to make paths equally deep.
-
-At repository root, preserve package and workflow ownership boundaries:
-
-| Owner | Contents and internal rhythm |
-| --- | --- |
-| `pillow-rs/` | Image semantics in `src/ops/<family>.rs`; data/model domains such as `raster/`, `draw/`, and `font/`; backend implementations below `src/compute/pool_<profile>/`; Rust benchmark targets in `benches/`; tests beside internal code or in `tests/<suite>/`. |
-| `pillow-rs-py/`, `pillow-rs-js/` | Host conversion and delegation by family where a module boundary exists; keep crate-root registration together until family-specific work warrants a module. |
-| `pillow-rs-parallel/` | Companion-wheel packaging and release metadata for the optional Parallel CPU binding; it owns no image algorithms. |
-| `scripts/` | Small standalone commands can remain one file; multi-stage workflows live in `scripts/<workflow>/` with an entry point and focused stage modules. Keep test modules beside the workflow they exercise. |
-| `tools/` | Standalone maintained tools stay under a tool-specific owner and concern; ignored build products do not define source layout. |
-| `.githooks/` | Keep tracked Git hooks small; they enforce repository checks by invoking maintained scripts, and are enabled through an explicit setup target. |
-| `.claude/` | Repository-local agents and skills stay grouped by workflow or domain, with examples and references beneath the owning skill. |
-| `site-assets/` | Documentation-site assets stay grouped by site concern when a concern has multiple maintained files; small shared assets may remain at this owner level. |
-| `pillow-rs/tests/fixtures/` | Keep the public fixture manifest and input index authoritative; deterministic parity inputs and generated binary assets are rebuilt by the fixture generator and ignored. |
-| `target/evidence/raw/` | Ignored local reports, samples, matrices, and receipts; publish successful benchmark artifacts through the docs workflow. |
-| `.github/workflows/` | One workflow per lifecycle purpose (CI, docs, benchmarks, release); shared behavior belongs in maintained scripts or composite actions rather than copied workflow bodies. |
-
-Reviewed quality-tool ratchet baselines stay beside their enforcing checkers,
-for example `scripts/rust_size_baseline.json` and
-`scripts/public_api_boundary_baseline.json`.
-
-Cargo examples stay as named targets in `pillow-rs/examples/`, and Rust benchmark
-targets stay in `pillow-rs/benches/`. Embedded assets stay with their owning domain (`src/font/`, `src/data/`) or operation family
-(`src/ops/lut_<family>.*`); do not create a generic asset bucket. Package
-manifests and lifecycle metadata stay at their package roots.
-
-Root manifests and project-wide configuration remain at the root because they
-govern multiple owners. Ignored `build/`, `target/`, and cache products are not
-maintained source. Keep raw reports, manifests, samples, profiler output, and
-intermediate receipts under ignored `target/evidence/raw/`, grouped by family,
-experiment, backend, architecture, and date. Benchmark snapshots are generated
-by Actions and passed to the documentation build as artifacts. If no eligible
-artifact is available, the site shows that results are unavailable; it does
-not commit or substitute a historical snapshot. Historical campaign notes may
-identify run outputs that are absent from a fresh checkout. Record reviewed
-conclusions in maintained documentation.
-
-The root ownership map remains the one in `docs/REPO_MAP.md`; this document
-defines the internal path rhythm. Do not introduce a second top-level bucket
-for operations or a parallel hand-maintained list of families.
-
-| Layer | Placement rule |
-| --- | --- |
-| Core semantics | `pillow-rs/src/ops/<family>.rs`; family-only child modules live under `ops/<family>/` when needed. |
-| Serial CPU and SIMD execution | Stay in the selected `compute/pool_cpu/ops/` or `compute/pool_simd/ops/` owner. Route through the pool's family entry point; put distinct mode/architecture loops under that family's `kernels/`. |
-| Parallel CPU execution | Keep Rayon scheduling at the CPU family call site under `pool_cpu/ops/<family>.rs` and shared row/tile scheduling helpers in `pillow-rs/src/par.rs`. This is a separate execution profile, not a duplicate source owner: do not add `pool_parallel/` or copy kernels unless a distinct algorithm contract requires it. Keep the feature gate and profile identity explicit. |
-| GPU execution | Keep family admission/dispatch with the GPU operation path and shaders under `pool_gpu/shaders/<family>/`. Keep pipeline selection and receipts explicit. |
-| Python and JavaScript | Keep conversion and delegation in their package owners. Use the same family name for a dedicated wrapper/module; existing multi-family user-facing modules and crate-root registration remain valid when they are the natural boundary. |
-| Parity and benchmark inputs | Keep the existing migration manifest as the operation/workload authority. Add cases and workloads through its established input tree and preserve stable IDs; do not create parallel per-layer operation lists. |
-| Tests and evidence | Keep tests beside the implementation they prove; put substantial contract cases in a focused family test module. Keep public parity in the migration workflow, concise measured findings in maintained docs, and raw reports and receipts under ignored `target/evidence/raw/`. |
-| Generators and inventory | Keep tools in their owning `scripts/` or `tools/` area, grouped by concern when a workflow has multiple files. Generate operation/source mappings from authoritative manifests and registration code. |
-
-Shared low-level code belongs in the nearest existing owner whose callers use
-the same contract. A directory should represent a meaningful package, layer,
-family, or tool concern; it should not be added merely to make every path the
-same length. Facades contain registration, routing, or re-exports, while
-executable work stays in the family implementation. The path grammar and
-family token stay stable even when a package has no module for a particular
-role.
-
-Bindings stay thin: they own host conversion, I/O, validation, and delegation;
-the core owns image algorithms. A binding family module is created when it has
-real family-specific conversion or delegation work. It is not a second home
-for image semantics. One-file binding crates can keep their registration glue
-at the crate root until a real module boundary is needed.
-
-When a backend has a real dispatch facade and family orchestrators, use this
-shape for its SIMD implementation:
-
-```text
-pillow-rs/src/compute/pool_<backend>/ops/
-  adapters.rs                         # dispatch and re-exports only
-  adapters/
-    <family>.rs                       # family validation, mode/backend choice,
-                                      # receipt and result materialization
-    <family>/
-      kernels.rs                      # optional inline kernel-family entry
-      kernels/
-        <mode>.rs                      # mode-specific hot loop, when distinct
-        <mode>_<architecture>.rs       # architecture-specific path, when real
-```
-
-Every layer uses the same family name and keeps its responsibilities in the
-same order; adapters and kernel directories appear only when those are real
-roles. In Rust, `kernels.rs` is a narrow inline family entry when sibling files
-under `kernels/` implement distinct paths. Keep it to static forwarding or
-re-exports; do not add runtime dispatch to a pixel loop. For example,
-`pool_simd/ops/adapters/grayscale.rs` orchestrates the family and
-`pool_simd/ops/adapters/grayscale/kernels/ycbcr.rs` owns its YCbCr vector loop.
-The family file and its same-named directory are one Rust module tree: the
-file is the orchestrator, and the directory holds its focused children. A
-direct serial implementation can live at
-`pool_cpu/ops/grayscale.rs`; it does not need a forwarding adapter. A GPU family
-keeps its admission and dispatch in the GPU operation owner and its shader
-stages under `pool_gpu/shaders/<family>/`. Keep the core semantic module at
-`ops/<family>.rs`; do not move a hot loop into core just because a backend
-adapter can call it or add an empty adapter to equalize path depth.
-
-GPU shader sources are grouped below `pool_gpu/shaders/<family>/`; keep shader
-selection and dispatch in the matching family adapter. A CPU implementation
-must not be labelled SIMD because it shares an adapter, and Rayon work belongs
-to the separate Parallel CPU profile. The profile name never determines source
-placement: architecture-specific code belongs with the family kernel that
-executes it.
-
-Existing code does not all have this shape yet. Treat it as the standard for
-all new work and the destination for incremental moves when a family is changed.
-Do not mass-move files just to make the tree look uniform: each move must keep
-the executed backend and hot loops clear, preserve parity, and compare full
-public-call latency on the affected workloads. Until a family is migrated, its
-current entry path must remain explicit and be recorded as a migration
-candidate in generated inventory or a documented exception. The generated
-source crosswalk records that path and marks uncertain edges for review; do
-not maintain a second hand-written operation inventory to stand in for it.
-
-The generated crosswalk is available with
-`make operation-source-crosswalk`. It writes the ignored
-`target/operation-source-crosswalk.json`; run
-`make operation-source-crosswalk-test` for the focused parser and completeness
-contracts. The CLI shim stays in `scripts/build_operation_source_crosswalk.py`;
-its parser and graph stages live in the focused `scripts/source_crosswalk/`
-package. Keep a tool that has multiple source domains organized this way: one
-builder/orchestrator and separate modules for each source language or
-registration layer, instead of growing one catch-all file.
-
-Schema `pillow-rs/operation-source-crosswalk@8` maps manifest public IDs to
-Python definitions, explicit Python `_core` and Rust-image callsites to
-registered PyO3 declarations, and direct PyO3 crate-root function calls through
-literal Rust public re-exports or root function definitions to their owning
-core module and directly referenced `PipelineOp` variants in those function
-bodies to their registered pipeline route. It follows `PyImage.inner` and
-`PyDraw.draw` calls only when the field type resolves to a supported `pillow_rs`
-type and one inherent method matches. It follows direct `self.method()` calls
-from those methods, clone-derived local aliases with an exact initializer, and
-unique unqualified helper calls within the same core module. Literal
-`PipelineOp` references in reached methods and helper functions connect to the
-registered pipeline route. It also maps imported CPU operation symbols in
-registry expressions to function definitions, SIMD keys to adapter definitions
-or macro invocations, and registry defaults to GPU shaders. Each Rust file
-includes its public-operation route status, a family ID where its path
-identifies one, and the path-role assessment from this guide.
-Shader assets without a discovered literal reference and source files with no
-complete static public-operation route remain investigation candidates. The
-generated `review_queues.operation_graph_source_without_public_route` list
-makes those source paths directly discoverable while retaining their distinct
-status and per-file evidence. Candidate Python callback routes are also listed
-at `review_queues.operation_graph_possible_dynamic_callback_routes`; they remain
-uncertain and do not count as statically reached code. These entries are review
-signals only; they are not dead-code findings and do not authorize removal. The
-inventory covers Rust source files in the three workspace crates, Cargo target roots,
-statically resolved `mod` and `#[path]` edges, cfg attributes, re-export
-declarations, and literal `include!`, `include_str!`, and `include_bytes!`
-references. A literal PyO3 callback method name records checked-in Python
-implementations as dynamic candidates; those edges do not count as a public
-static route because the runtime object is not fixed. Static links do not prove
-runtime execution or backend selection. Local name shadowing, complete helper
-call resolution, `PipelineOp` admission, cfg effects, macro expansion, build
-output, and runtime loading remain outside the current call-graph proof.
-Missing routes are classified for investigation, never as unused code.
-
-The ignored report includes `source.crosswalk_input_sha256`, a fingerprint of
-the source, shared path classifier, and generator files used to build it; a
-dirty Git flag alone is not enough to identify a generated snapshot. Run
-`make operation-source-crosswalk` to refresh the report. Static operation
-mappings and module edges help locate ownership and unmapped files, but do not
-prove dynamic reachability, Python operations with no static route,
-`PipelineOp` admission, runtime capability, actual backend execution, parity,
-or performance. The generated report states those
-limits; findings never instruct automatic deletion. Keep adding explicit
-source edges and conditional-path review flags without duplicating the
-manifest's operation denominator.
-
-## Structure and reachability review
-
-An implementation file is not unused merely because one architecture cannot
-compile or execute it. Architecture gates, feature selection, macro-generated
-references, runtime registration, and public re-exports can all make a valid
-path hard to see from a simple text search. Inventory tooling should report
-findings with their evidence and classify them for investigation, including:
-
-- public operations with no mapped core/backend implementation;
-- adapters with no public, pipeline, or declared test entry point;
-- kernels with no reachable adapter path for their declared mode or target
-  architecture;
-- source files that have no confirmed operation, support, test, generated, or
-  platform role;
-- paths that are architecture- or feature-specific and still need a native
-  runner to prove reachability.
-
-These are review flags, not deletion instructions. Preserve the finding, the
-reference search or build evidence, and its architecture/feature scope. Remove
-code only after proving there is no supported public route, generated
-registration, supported target, or retained compatibility contract that needs
-it.
-
-The operation/workload/parity manifest remains the behavior denominator. A
-generated source crosswalk may reference it, but it must not create a second,
-independently maintained public-operation inventory. Baseline evidence proves
-what was measured; it does not by itself prove that a source file is reachable
-or useful.
-
-## Initial structural migration candidates
-
-A first-pass source-tree review found these paths that should converge toward
-the standard as their families are next changed. This list records migration
-work, not permission to move files mechanically:
-
-| Current shape | Standard destination | Migration guard |
+| Rust variant | Pillow spelling | Required mode folder |
 | --- | --- | --- |
-| `pillow-rs/src/compute/pool_simd/ops/adapters.rs` still contains central routing, shared backend helpers, and remaining unextracted families. Filter3x3 and Filter5x5 image and shape admission live in `adapters/filter.rs`, with focused filter and UnsharpMask tests in `adapters/filter/tests.rs`. Crop and CropBorder admission live in `adapters/crop.rs`. Expand admission lives in `adapters/expand.rs`, with focused contract tests in `adapters/expand/tests.rs`. SIMD Duplicate owns its native-copy adapter and image/shape admission in `adapters/duplicate.rs`, with an AArch64/NEON contract test in `adapters/duplicate/tests.rs`; shared image and shape layouts plus capability predicates live in `adapters/layout.rs`; raw byte transforms, fill and copy kernels, and the shared native identity-copy adapter live in `adapters/native_bytes.rs`. Shared byte normalization and narrowing operations live in `adapters/native_arithmetic.rs`. Neighborhood zero/uniform guards and vector helpers shared by Resize and filters live in `adapters/neighborhood.rs`. SIMD pipeline mode tracking and strict shape-only preflight live in `adapters/pipeline.rs`. SIMD Paste and CompositeModule adapters live in `adapters/paste/mod.rs`, with image/shape admission and plans under `paste/plan.rs`, native row kernels under `paste/kernels/`, and focused contract tests in `paste/tests.rs`. SIMD PutData owns its native prefix-copy adapter and mode/channel admission in `adapters/put_data.rs`; shared Paste layout selection and actual-layout validation remain under `paste/plan.rs`. SIMD ImageChops owns its adapters and stored-sample operand materialization in `adapters/chops.rs`, including Constant and the fused Multiply→Screen pipeline path, and its byte kernels under `chops/kernels/`; SIMD Offset owns image/shape admission in `adapters/offset.rs`, with byte and Luma16 kernels under `offset/kernels/`; Flip and Mirror admission live in `adapters/flip.rs`; SIMD Rotate owns native layout selection, affine geometry, and image/shape admission in `adapters/rotate.rs`, with native samplers under `rotate/kernels/`, Rotate/Transform interpolation helpers in `rotate/interpolation.rs`, and focused geometry tests in `rotate/tests.rs`; SIMD Pad owns offset/filter rules and image/shape admission in `adapters/pad.rs`, with focused contract tests in `adapters/pad/tests.rs`; SIMD Invert and InvertChops own native byte inversion and image/shape admission in `adapters/effects.rs`, with focused Invert tests in `adapters/effects/tests.rs`; SIMD Solarize and Posterize own their adapters and family admission in `adapters/enhance/point.rs`, with enhancement routing in `adapters/enhance.rs` and focused contract tests in `adapters/enhance/tests.rs`. LUT table mapping and native point-LUT operations live in `adapters/lut.rs`, with focused tests in `adapters/lut/tests.rs`. Shared native-byte transforms, copy/mirror kernels, row traversal, and Luma16 reconstruction live in `adapters/native_bytes.rs` and are re-exported to adapters that share those contracts. SIMD BoxBlur owns image/shape admission, rolling row/transpose kernels, native L/LA/RGB/RGBA plus architecture kernels under `adapters/box_blur/kernels/`, and focused contract tests in `adapters/box_blur/tests.rs`; SIMD Merge owns its adapter and focused tests in `adapters/merge.rs` and `adapters/merge/tests.rs`; SIMD Grayscale owns native mode handling in `adapters/grayscale.rs`, with focused tests in `adapters/grayscale/tests.rs`; SIMD Convert owns mode conversion in `adapters/convert.rs`, with focused tests in `adapters/convert/tests.rs` and x86 packing tests in `adapters/convert/tests/cmyk_packing.rs`; MaxFilter, MinFilter, MedianFilter, and RankFilter admission lives in `adapters/median_filter.rs`, with a focused RankFilter contract test in `adapters/median_filter/tests.rs`; GaussianBlur shares the L and RGB passes plus the LA vertical pass and scalar pixel helper, uses the BoxBlur route for general cases, and has focused contract tests in `adapters/gaussian_blur/tests.rs`. Pad, Contain, Cover, and Resize share channel selectors and aspect-dimension checks in `resize/support.rs`; SIMD resampling lane widths are owned by `adapters/resize.rs`. Focused Resize contract tests live in `adapters/resize/tests.rs`. | Keep only operation-family routing and genuinely shared helpers in the facade; put each family orchestrator under `ops/adapters/<family>.rs` and distinct loops under that family's `kernels/`. | Move one family at a time; preserve the executed SIMD path, exact affected parity, receipts, and full public-call latency. |
-| `pillow-rs/src/compute/pool_simd/ops/native_filter.rs` holds a byte-block loader used by Filter3x3, Filter5x5, and Sharpness; an LA binomial row loop used by serial AArch64 CPU and SIMD; and an I32 row/vector loop used by SIMD production code (the CPU reference is test-only). | Keep the shared loader and LA loop single-sourced in the current native filter owner. Move the SIMD-only I32 row/vector implementation to `pool_simd/ops/adapters/filter/kernels/i32.rs`, re-export it through that family's `kernels/mod.rs`, and point the CPU differential test at the same implementation. | Preserve the direct SIMD call, vector receipt, and zero-fallback behavior. Use the exact Filter5x5 parity cases and materialized L/LA/I workloads listed below on CPU and SIMD, including terminal materialization. |
-| `pillow-rs/src/compute/pool_gpu/mod.rs` is the GPU facade and lazy device/backend coordinator. | Keep buffer and staging lifecycle in `resource_pool.rs`, readback selection and decoding in `readback.rs`, batch planning/encoding/execution in their focused modules, and each operation in its family module. | Preserve admission, receipts, resource lifetimes, batching, and fallback rules; verify affected Pillow parity and GPU latency/throughput before closing the refactor. |
-| GPU shader assets are mostly direct children of `pillow-rs/src/compute/pool_gpu/shaders/`. | `pool_gpu/shaders/<family>/<stage-or-mode>.wgsl`. | Update include/registration paths with their owning family and verify the exact GPU receipt; retain shader files whose references are macro- or build-generated. |
-| CPU `effects.rs` owns randomized effects and stable compatibility re-exports for extracted operation families; `composite.rs`, `eval.rs`, `paste.rs`, `put.rs`, `color3dlut.rs`, and `transform.rs` own their CPU families. Transform keeps scalar arithmetic, affine sampling, projective sampling, and its focused tests in `transform/`. `imageops.rs` remains a multi-family migration debt. `filter.rs` declares focused blur, rank, Filter3x3, and Filter5x5 modules; convolution arithmetic is shared in `filter/convolution.rs`, with signed-I and native-byte Filter5x5 paths under `filter/filter5x5/`. | Keep `effects.rs` as the randomized-effects family and compatibility facade; keep extracted operation implementations in their family modules, with transform helpers grouped by algorithm responsibility. Split remaining CPU modules only when family and shared-helper boundaries are clear. | Preserve call paths, exact arithmetic, backend selection, and mode-specific semantics while reducing file size. |
-| `filter/rgb_blur_ring.rs` and `filter/uniform_box.rs` contain executable Filter5x5 loops, while `filter/kernels/i32_cross_smooth.rs` contains the Filter3x3 signed-I loop. Their declarations now live with their family facades, but the support files remain beside the shared filter root. | Keep each loop single-sourced; decide whether moving these support files under their owning family improves placement without adding a layer to the hot path. | When these helpers are next changed, trace CPU and SIMD callers first; preserve exact parity, receipts, and full-call CPU/SIMD latency. Do not duplicate a loop to satisfy path shape. |
-| `pillow-rs-js/scripts/run_parity.mjs`, `run_browser_parity.mjs`, `parity_workflow.mjs`, and `browser_parity_page.mjs` form a multi-file parity workflow directly under `scripts/`. | Group the parity entry points, shared workflow, and browser page under `pillow-rs-js/scripts/parity/`. | Move as one workflow when it is next changed; retain the same Node/browser entry paths and run the package-local parity checks. |
-| `pillow-rs/src/ops/imageops.rs` combines public ImageOps functions for histogram/effects, geometry, resize composition, and EXIF handling. | Keep `imageops.rs` as the public orchestration facade where needed; place distinct family implementations under `ops/imageops/<family>.rs` when their contracts have a clear boundary. | Trace the public exports and call paths first; split incrementally, preserving Pillow error ordering, laziness, exact parity, and affected public-call latency. |
-| `pillow-rs/src/compute/pool_cpu/ops/color.rs` combines conversion, LAB conversion, palette remapping, and band extraction. | Keep only shared color dispatch in the family entry point; move distinct operation contracts to focused `pool_cpu/ops/<family>.rs` modules when their ownership is confirmed. | Use the generated source crosswalk to preserve registrations and route each move through the affected parity cases and full-call latency guards. |
-| SIMD ImageChops owns stored-byte behavior, image/shape operand admission, direct adapters, and owned-intermediate execution in `pillow-rs/src/compute/pool_simd/ops/adapters/chops.rs`; its vector loops live in `chops/kernels.rs`. Shared `simd_div255`, packed-u16 conversion, and operand materialization remain in the facade because other SIMD families use them. | Keep ImageChops mode/layout admission, pair validation, direct adapters, in-place execution, and operation kernels together in the family. | Preserve CMYK K as a sample, HSV/YCbCr and RGBa/RGBX stored-byte semantics, pair mode/size checks, exact fallback behavior, vector receipts, and affected public-call latency. |
-| SIMD Resize owns direct and boxed mode dispatch, zero-source handling, and the Scale/Contain/Cover/Fit adapters in `pillow-rs/src/compute/pool_simd/ops/adapters/resize.rs`; shared image/shape admission and aspect-resize planning are in `resize/support.rs` and are reused by Pad. Its F-mode direct and boxed kernels are in `resize/kernels/f32.rs`, I32 kernels are in `resize/kernels/i32.rs`, Luma16 is in `resize/kernels/luma16.rs`, native-byte convolution orchestration is in `resize/kernels/u8.rs`, shared separable convolution rows are in `resize/kernels/u8_convolution.rs`, checked i32 Cover rows are in `resize/kernels/u8_cover_i32.rs`, byte coefficient validation and horizontal plans are in `resize/kernels/u8_plan.rs`, native-byte nearest is in `resize/kernels/u8_nearest.rs`, and boxed native-byte convolution is in `resize/kernels/u8_boxed_convolution.rs`; the I32 NEON kernel remains in `resize/kernels/i32/neon.rs`. Thumbnail reuses the Resize native-byte convolution route. | Keep Resize orchestration in its family module and put mode-specific loops in the matching kernel modules. Keep helpers shared with unextracted paths in place until their callers move together. | Preserve direct Resize and Thumbnail routes, exact parity, actual SIMD/NEON receipts, and full-call latency for every moved path. |
+| `One` | `1` | `one` |
+| `ImageLuma8` | `L` | `luma8` |
+| `ImageLumaA8` | `LA` | `luma_a8` |
+| `ImageLaPremultiplied8` | `La` | `la_premultiplied8` |
+| `ImagePalette8` | `P` | `palette8` |
+| `ImagePaletteAlpha8` | `PA` | `palette_alpha8` |
+| `ImageRgb8` | `RGB` | `rgb8` |
+| `ImageRgba8` | `RGBA` | `rgba8` |
+| `ImageRgbPremultiplied8` | `RGBa` | `rgb_premultiplied8` |
+| `ImageRgbx8` | `RGBX` | `rgbx8` |
+| `ImageCmyk8` | `CMYK` | `cmyk8` |
+| `ImageYCbCr8` | `YCbCr` | `ycbcr8` |
+| `ImageLab8` | `LAB` | `lab8` |
+| `ImageHsv8` | `HSV` | `hsv8` |
+| `ImageI32` | `I` | `i32` |
+| `ImageF32` | `F` | `f32` |
+| `ImageI16` | `I;16` | `i16` |
+| `ImageI16L` | `I;16L` | `i16l` |
+| `ImageI16B` | `I;16B` | `i16b` |
+| `ImageI16N` | `I;16N` | `i16n` |
+| `ImageLumaA16` | Internal representation | `luma_a16` |
+| `ImageRgb16` | Internal representation | `rgb16` |
+| `ImageRgba16` | Internal representation | `rgba16` |
+| `ImageRgb32F` | Internal representation | `rgb32f` |
+| `ImageRgba32F` | Internal representation | `rgba32f` |
 
-Completed under `pillow-rs#wtxv`: serial CPU geometry now has family modules at `pool_cpu/ops/{crop,reduce,resize,rotate,thumbnail,transpose}.rs`; focused kernels and tests live in their family directories, and `geometry.rs` remains a compatibility re-export facade.
+Case-sensitive modes must not collide after folder normalization. In particular,
+`LA` differs from `La`, and `RGBA` differs from `RGBa`. Keep the four `I;16*`
+identities distinct even when numeric processing shares a helper.
 
-Completed under `pillow-rs#rxcj`: SIMD Thumbnail now has a family adapter at
-`pool_simd/ops/adapters/thumbnail.rs`, with its fused RGB PutPixel→Thumbnail
-path and F32/I32 reduction kernels under `thumbnail/kernels/`. SIMD Offset's
-byte and Luma16 kernels are under `pool_simd/ops/adapters/offset/kernels/`.
-BoxBlur owns `box_blur.rs`, its focused contract tests in `box_blur/tests.rs`,
-and its L, LA, RGB, RGBA, AVX2, and NEON kernels.
-GaussianBlur shares its Luma and RGB passes plus the LA vertical pass and scalar
-pixel helper; Transpose owns
-`transpose.rs` for admission and orientation, with portable tiled kernels in
-`transpose/kernels/portable.rs` and its RGBA AVX2 kernel in
-`transpose/kernels/rgba_avx2.rs`, with aligned and parallel odd-width contract
-tests under `transpose/tests.rs` and `transpose/odd_tests.rs`; GaussianBlur owns
-`gaussian_blur.rs` with its RGBA uniform kernel and focused contract test in
-`gaussian_blur/tests.rs`.
+The five internal high-depth identities participate in Rust strategy selection
+and support reporting. They do not introduce new accepted Pillow strings.
+Do not narrow, normalize, or discard them to fit the new enum.
 
-SIMD Draw now keeps its operation adapter in `pool_simd/ops/adapters/draw.rs`.
-The native byte span path and line/point/rectangle kernels live in
-`draw/kernels/spans.rs`; scan-converted shapes and polygons live in
-`draw/kernels/shapes.rs`. PutPixel continues to call Draw's shared byte-vector
-writer directly.
+Keep existing sample representation and arithmetic during the migration.
+In particular, replacing the existing raw four-byte carriers for `I` and `F`
+with a different numeric representation is not required by this refactor.
+Preserve byte-order behavior, palette indices, palette alpha, LAB conventions,
+and straight versus premultiplied alpha semantics.
 
-Refresh this candidate list as structural work lands. The source crosswalk tracks
-implementation references; it cannot by itself declare a path misplaced or
-unused. The full-tree structure inventory classifies every maintained path;
-the changed-path audit reports new filesystem candidates with reasons. Both
-preserve architecture, feature, and macro-generated paths for review.
+`raster/mode.rs` owns the payload-free selector used by Rust construction,
+conversion parameters, lazy output metadata, and support queries. It must not
+become a second independently mutable tag on a materialized image. Read the
+image's enum tag rather than inferring identity from channels, `ColorType`,
+buffer contents, or string overrides.
 
-`make implementation-structure-inventory` writes the ignored
-`target/implementation-structure-inventory.json` for every tracked and
-non-ignored untracked maintained path. It reports paths with a recognized
-shape, an explicit supported root role, documented migration debt, a review
-candidate, or no specific layout rule yet. An unclassified path is not silently
-considered compliant: this target writes the full report, then fails if any
-maintained path has no layout rule. Resolve it into the shared standard or
-document a concrete exception and migration trigger. Documented migration debt
-and review candidates remain visible but non-blocking because their evidence
-may refer to immutable paths or need ownership review. Keep their totals visible
-when tracking repo-wide convergence. Findings are never move or delete
-instructions.
+Python accepts Pillow's case-sensitive strings and converts them to the typed
+selector before calling core operation APIs. Other host bindings or explicit
+I/O adapters own their corresponding parsing and formatting boundaries. Core
+operation parameters, support declarations, and CPU strategies use enums;
+they must not accept string-based modes. Preserve existing invalid-string
+errors at the public boundary. Adapt decoded image-slash-star metadata once
+at the decode boundary. Keep codec objects and Pillow raster objects separate;
+do not add Pillow execution metadata to image-slash-star types.
 
-`make implementation-structure-audit` remains the pre-change view for added,
-copied, renamed, and untracked maintained paths relative to `HEAD`; it writes
-`target/implementation-structure-review.json`. Use it to catch new drift while
-the full inventory records existing migration debt. Both commands use this
-single guide and produce ignored reports. Run
-`make implementation-structure-audit-test` for the focused path-contract and
-inventory-scope checks. `make docs-check` runs those contracts and generates
-the whole-tree inventory in CI alongside the repository map check. This keeps
-the guide and its inventory rules on the regular contributor validation path.
+### 2.1. Mode ownership and codec boundaries
 
-The SIMD Filter5x5 seam now follows the family pattern: `adapters.rs` re-exports
-the family entry, `adapters/filter.rs` owns admission, mode routing, receipts,
-and materialization, and SIMD-only mode kernels live under
-`adapters/filter/kernels/`. The RGB 150% UnsharpMask blend used by
-`ops/param_filters.rs` also lives in that kernel family. The byte loader is
-shared across filter families; the LA-binomial row loop has serial AArch64 CPU
-and SIMD production callers.
-The I32 row/vector loop has a SIMD production caller, while CPU reaches it only
-from a target-gated differential test, so it is a candidate to move into the
-Filter family tree after the listed guards are run. ARM64 and native x86 layout
-evidence is in `docs/evidence/filter/filter5x5-family-layout-20261019/`.
+Decision: `pillow-rs` owns the canonical operation-facing `raster::Mode`.
+Rust callers use that enum directly; Python translates its Pillow strings to
+that same enum before delegation. A codec's pixel-format descriptor is not a
+second authority for operation mode selection.
 
-Before moving the SIMD-only I32 row/vector helper out of `native_filter.rs`,
-freeze these exact parity cases: `PIL.Image.Image.filter.nuanced.rgb-blur-5x5-noise-1024x768`,
-`PIL.Image.Image.filter.nuanced.l-mode-kernel-5x5-noise-1024x768`,
-`PIL.Image.Image.filter.nuanced.la-mode-kernel-5x5-noise-1024x768`, and
-`PIL.Image.Image.filter.nuanced.i-mode-kernel-5x5-noise-1024x768`. Compare the
-CPU and SIMD profiles for `pipeline-matrix.expanded.filter5x5.1024x768`,
-`pipeline-op.filter.material-l-noise-5x5-1024x768`,
-`pipeline-op.filter.material-la-noise-5x5-1024x768`, and
-`pipeline-op.filter.material-i-noise-5x5-1024x768`. Require the actual SIMD
-vector receipt, zero fallback, and full-call timing through terminal
-materialization. These guards are for the proposed move; this documentation
-change did not move or benchmark the kernel.
+`pillow-rs` owns `raster::Mode`, the mode-bearing `raster::DynamicImage`,
+mode transitions, and the mode contracts used by operation strategies.
+These are Pillow semantics: identical storage can represent distinct modes
+such as luma and palette indices, or straight alpha, premultiplied alpha,
+padding, and CMYK. A generic pixel-buffer type cannot establish that identity.
 
-## Performance-preserving changes
+This identity is independent of backend. CPU, the later Parallel CPU backend,
+and GPU consume the same Pillow-owned enum; they must not define backend-local
+copies of Mode. The enum names every representable identity, not the modes
+supported by every operation. Each operation declares that narrower contract.
 
-Changing files or adapter boundaries does not establish performance. Before
-accepting a reuse or layout change that affects execution, retain the exact
-parity result and compare the full public call on the same workload, mode,
-backend, runner, and source/build identity. Include allocation, transfers,
-synchronization, and terminal materialization in the declared timing boundary.
-Verify the actual backend receipt and reject any fallback. Keep CPU, SIMD,
-Parallel CPU, and GPU results separate. Do not average away a per-operation or
-per-mode regression.
+image-slash-star owns its codecs, encoded/decoded image types, buffers, and
+format metadata. Its own mode or pixel-format descriptors retain their codec
+role; do not alias or re-export one as the Pillow-owned `raster::Mode`, add
+Pillow strategy metadata to its types, or require that repository to implement
+this refactor's mode model.
 
-The RGBA PutPixel batch now follows the family shape: `adapters.rs` re-exports
-`adapters/put_pixel.rs`, which owns admission, output materialization, and
-receipts; `put_pixel/kernels/rgba_batch.rs` retains the ordered masked stores.
-The selected ARM64 whole-workflow A1/B1 runs both passed exact parity on the
-1024×768 and 16×16 RGBA seeded-corners workloads. The 1024×768 SIMD median was
-1.185 ms before and 0.958 ms after; same-run Pillow medians were 1.785 ms and
-1.570 ms. The small SIMD guard was 0.119 ms before and 0.116 ms after, against
-Pillow at 0.115 ms and 0.114 ms. This single pair does not establish a speedup;
-it found no latency regression. Receipts showed actual SIMD, NEON deinterleave,
-terminal completion, and no fallback. The focused `SimdPool` test also verified
-all four PutPixel vector receipts, ordered output equality, and fused-operation
-accounting. Full reports are under
-`docs/evidence/put_pixel/family-layout-arm64-20261020/`.
+The ownership boundary is explicit:
 
-SIMD Offset now follows the same family shape: `adapters.rs` re-exports
-`adapters/offset.rs`, which owns operation admission and receipts;
-`offset/kernels/byte.rs` contains the native byte path, and
-`offset/kernels/luma16.rs` preserves Pillow's byte-oriented `I;16*` behavior.
-Shared native-copy layout and byte-conversion helpers remain in `adapters.rs`
-because Flip, Mirror, and Crop still use them. The selected CPU, strict-SIMD,
-and GPU-requested parity cases passed before and after the move. Full-call
-benchmark receipts and the focused GPU repeat are recorded in
-`docs/evidence/geometry/offset-simd-family-layout-arm64-20261022/`.
+| Concern | Owner | Required boundary |
+| --- | --- | --- |
+| Pillow mode identity and transitions | `pillow-rs` raster and operation contracts | Flat `DynamicImage` variants and the matching typed `Mode` selector |
+| Pixel buffers, codecs, and format metadata | image-slash-star | Keep its types independent; translate through Pillow-owned adapters |
+| Pillow string spellings | Python binding and explicit I/O boundaries | Parse once before typed Rust operation calls; format only for external output |
+| Backend and architecture selection | `pillow-rs` compute context | Inject the resolved policy into operation preparation and execution |
+| Supported mode/architecture combinations | Each operation | Declare them at the operation entry point and bind them to executable strategies |
+
+Pillow-owned and codec-owned types with similar names remain distinct types.
+Reusing a buffer does not transfer ownership of Pillow semantics to the codec
+repository. A matching physical layout is insufficient to select or change a
+Pillow mode; the adapter or explicit conversion must establish that identity.
+
+The Pillow-owned decode adapter performs this translation once:
+
+```text
+image-slash-star decoded image and format metadata
+    -> Pillow decode adapter
+        -> pillow-rs raster::DynamicImage with exact mode identity
+            -> operation mode strategy
+```
+
+Use decoded metadata and the existing explicit construction/decode policy to
+choose the variant, preserving samples, palettes, alpha, and byte order.
+Preserve the existing rejection contract when the input cannot be represented;
+do not defer ambiguous mode recovery to CPU implementations. Encoding performs
+the corresponding translation at the codec boundary, preserving existing
+explicit conversion requirements and errors.
+
+The Python binding owns Pillow string parsing/formatting and passes the typed
+Pillow selector to Rust. Core operations use the Pillow-owned image identity
+and typed parameters. Backend and Architecture remain execution-context
+dependencies; neither belongs to codec metadata or the image's mode identity.
+
+Public Rust APIs that accept a mode use this same Pillow-owned enum. Python's
+string spelling is a boundary representation of that identity, not another
+mode model. The operation reads the materialized image's variant; it does not
+reconstruct a mode from the upstream buffer type, channel count, or spelling.
+
+Use this same enum type in Rust operation arguments, operation support
+descriptors, and prepared mode strategies. A support query must classify the
+identity that execution will consume, without translating through a string or
+an image-slash-star descriptor. Review these API signatures together with the
+Python parsing and codec adapters to verify the ownership boundary.
+
+## 3. Injected execution context
+
+`pillow-rs/src/compute/execution_context.rs` owns the backend and architecture
+context and its construction policy. Construct it once when a pipeline or eager
+operation is routed. Pass the selected context through registry dispatch,
+admission, batch execution, fusion, fallbacks, and nested operations.
+
+Backend may be explicitly requested or resolved from existing runtime policy.
+Explicit selection takes precedence over automatic routing according to the
+existing public contract. Leaf functions must not re-read global backend state
+or construct a fresh default context.
+
+Determine available architecture implementations from compile-time target and
+feature configuration. A statically guaranteed target can select its
+architecture without runtime detection. A portable binary that includes
+optional instructions may detect capabilities once when initializing the
+architecture policy, then inject the validated selection. Static analysis
+cannot establish the instruction support of every machine running a portable
+binary. Never execute AVX, AVX2, SSSE3, or another optional instruction set
+without its required capability guarantee.
+
+`Architecture::Default` selects the ordinary serial implementation. SSE3 and
+SSSE3 are different instruction sets and must not share a misleading label.
+An implementation requiring additional capabilities, such as FMA, must declare
+them precisely. Do not assume a higher-numbered architecture can call every
+lower-level kernel without checking the actual requirements centrally.
+
+Context-aware selection matches the operation, image variant, and architecture
+outside pixel loops. A validated specialization may also have existing shape,
+alignment, or parameter requirements. If it cannot handle a supported image,
+call the matching mode's default implementation through a bounded, explicit
+fallback. Preserve the image identity and operation arguments. Do not recursively
+reroute through global backend selection.
+
+Avoid parallel booleans, repeated feature detection, string mode parameters,
+and per-pixel dispatch. Use direct calls to typed implementations after routing.
+Pass helpers only the context or prepared dependencies they actually need;
+helpers that need neither must not manufacture a selection decision.
+
+### 3.1. Operation-level support is the front door
+
+Every operation has a typed `OperationSupport` descriptor, available through
+its operation identity and through the corresponding `PipelineOp` value.
+Direct operations outside `PipelineOp` expose the same contract. A family
+containing several operations must report each operation independently;
+one sibling's implementation must never imply support for another sibling.
+
+The descriptor at the operation's entry point must make these facts visible:
+
+| Contract field | Required information |
+| --- | --- |
+| Operation | Typed identity, including variants whose parameter contracts differ |
+| Modes | Exhaustive classification of all 25 source identities, with rejection reasons |
+| Other inputs | Destination, secondary-image, mask, band, palette, and alpha constraints where relevant |
+| Result | Preserved or explicitly derived output mode and metadata requirements |
+| Backend and architecture | Registered strategies, exact instruction requirements, and build availability |
+| Request guards | Existing shape, alignment, filter, parameter, or content conditions on a strategy |
+| Fallback | Explicit same-mode Default strategy and the conditions selecting it |
+| Implementation | Stable strategy identity linking the declaration to its executable implementation |
+
+Supported combinations are relations between inputs. Listing two modes
+individually does not imply every binary combination or conversion between
+them is supported. Reject invalid requests with the existing public error.
+Every new `Mode` must require explicit classification by each operation;
+use exhaustive, explicitly named supported and rejected arms. Do not infer
+support from storage layout.
+
+The top-level view must include rejected identities even when they have no
+implementation folder. For each accepted identity, show the output contract,
+Default implementation, declared specializations, and their availability or
+guards. Keep declared support, eligibility for a particular request, actual
+selection, and verification evidence distinct; a single supported boolean
+cannot express this contract.
+
+The following illustrates the planned interface; these APIs are not yet
+implemented or validated:
+
+```rust
+let support = OperationId::Resize.support(); // Full operation contract.
+let support = op.support();                 // Same descriptor via PipelineOp.
+let assessment = op.assess(&input_metadata, &ctx);
+let prepared = op.prepare(&inputs, &ctx)?;
+let selection = prepared.selection();       // Actual route and fallback reason.
+let output = prepared.execute()?;
+```
+
+`support()` describes declared strategies and availability in the current
+build without executing the operation. `assess()` applies the same eligibility
+rules to a particular request. Its typed outcome is ready with a selection,
+rejected with a reason, or deferred with the unresolved guards. Unmaterialized
+inputs or unavailable content facts must remain deferred until preparation
+can establish them; a mode-only query cannot promise request admission.
+
+`prepare()` completes validation, injects dependencies, and returns an
+operation-specific executable plan or the existing error. The plan retains
+the validated inputs and actual selection. Admission and execution consume
+this decision; execution must not independently choose a different strategy.
+Borrow or move inputs and prepared dependencies according to existing ownership;
+do not clone pixel buffers merely to carry strategy or context. Avoid repeating
+expensive preparation solely for a support query.
+
+Make requested and selected backend/architecture, implementation identity,
+and fallback reason inspectable on the plan and execution receipt. Distinguish
+an absent specialization, a feature-disabled build, unavailable hardware,
+and a failed eligibility guard. A declared strategy's parity/performance
+evidence is a separate status; implementation registration does not prove it.
+
+### 3.2. Compose mode and architecture strategies
+
+Use the Strategy pattern at both levels, with explicit composition:
+
+```text
+Operation contract + request + injected ExecutionContext
+    -> exact mode strategy
+        -> eligible architecture strategy, or declared Default fallback
+            -> prepared typed execution plan
+                -> original algorithm and typed pixel loops
+```
+
+A mode strategy owns the operation's semantics for one exact mode: input
+contracts, output identity, and prepared dependencies such as palettes,
+masks, coefficients, or border behavior. It composes an architecture strategy
+implementing those semantics. Distinct identities such as palette indices and
+luma remain distinct mode strategies even when a proven common helper is reused.
+
+Core operation support may be a superset of Pillow. Preserve Pillow-defined
+behavior exactly, and keep any additional mode or behavior as an explicit
+native-mode strategy with its own declared input/output contract. Put a nearby
+`// NO_PILLOW_SUPPORT: <reason>` comment at the implementation of each such
+extension so it is not mistaken for Pillow parity. Report core extensions
+separately from Pillow-defined parity evidence; the extension must not rely on
+casting samples or converting to another mode merely to reuse an algorithm.
+
+An architecture strategy owns the concrete implementation for that mode and
+its exact capability/eligibility requirements. It receives typed buffers and
+prepared dependencies. It must not infer the mode, choose the backend, probe
+hardware, or introduce parallel scheduling inside its algorithm.
+
+Represent runtime choices with operation-specific concrete strategy types and
+closed enums. For example, a `PreparedResize` enum selects a concrete mode
+strategy, whose architecture enum selects Default, Neon, or an implemented
+AVX strategy. Match once at each selection/execution boundary, outside the
+pixel loops, then call concrete functions directly. An operation-specific
+trait may express a shared contract where useful; the Strategy pattern does
+not require heap allocation or trait-object dispatch. Avoid a universal
+untyped strategy that moves mode branching back into helpers.
+
+Context supplies the already validated backend and architecture policy;
+the operation composes its eligible strategy from that context and its inputs.
+Keep the context immutable. Record a narrower operation-specific selection
+on the plan rather than rebuilding context or repeating feature detection.
+Nested operations use the injected context and their own declared strategies.
+
+Every supported CPU operation/mode has an executable serial Default strategy.
+Fallback is bounded and explicit: a missing or ineligible specialization may
+select that same mode's Default strategy. It must preserve arguments, output
+identity, and errors. Invalid requests are rejected; execution failures are
+not a reason to silently retry another implementation. Do not add fallback
+mode conversions or recursive backend rerouting.
+
+### 3.3. One declaration drives support and execution
+
+Place each operation's support declaration beside its entry point in family
+`ops.rs`, with its exhaustive mode classification visible there. Each mode's
+`ops.rs` declares the concrete architecture strategies it composes, including
+requirements, guards, constructor, and Default fallback. The operation-level
+descriptor exposes these linked declarations so a caller can inspect the
+entire operation without traversing its implementation directories.
+
+Use one typed registration/declaration to bind support to executable strategy
+constructors and selection arms. A small compile-time declaration macro may
+generate repetitive exhaustive matches and descriptor entries where needed;
+do not keep an independent hand-maintained support boolean/table alongside
+different dispatch logic. Keep registration and introspection outside pixel
+loops and preserve direct calls, inlining, and allocation boundaries.
+
+The compute registry aggregates operation contracts and delegates admission
+and preparation to their owners. Shared support types belong to
+`compute/registry/support.rs`, exported deliberately from the registry facade.
+The registry must not reimplement per-mode eligibility or architecture policy.
+Keep `mod.rs` files limited to declarations and exports.
+
+Derive any top-level support matrix from these operation descriptors. Show
+rejected modes and unavailable architectures with reasons, as well as usable
+specializations and Default fallbacks. Folder existence, a non-null registry
+function pointer, and successful compilation are insufficient support claims.
+
+Acceptance is reviewed from the operation's entry point. A caller must be able
+to enumerate all 25 identities, inspect their input/output contracts, and see
+declared architectures, build availability, and fallback/rejection reasons
+without opening implementation folders or materializing pixels. Request facts
+that require pixels remain explicit deferred guards. For a prepared request,
+the same interface must expose the selected implementation and fallback reason;
+execution must consume that prepared selection. This is a required API contract
+for the migration, not a claim that every operation already implements it.
+The descriptor must also distinguish Pillow-defined support from intentional
+core-only extensions, including extensions unavailable through Pillow's
+string-mode API.
+
+## 4. Exact CPU placement
+
+The implementation path is:
+
+```text
+pillow-rs/src/compute/pool_cpu/ops/<family>/<mode>/<arch>/<files>
+```
+
+`<family>` is the owner listed below, `<mode>` uses the exact mapping above,
+and `<arch>` is `default` or the actual instruction set implemented there.
+The `default` folder is required for the new architecture-based layout; this
+supersedes the earlier design in which serial CPU had no architecture level.
+Do not insert an additional operation or `kernels` directory into this path.
+Different operations in one family use appropriately named implementation
+files within the selected mode and architecture.
+
+Example structure; architecture folders exist only for real implementations:
+
+```text
+pool_cpu/
+├── mod.rs
+├── executor.rs
+├── batch_execution.rs
+├── helpers/
+│   └── <support category>/
+│       ├── mod.rs
+│       └── <specific support>.rs
+├── ops/
+│   ├── mod.rs
+│   └── resize/
+│       ├── mod.rs
+│       ├── ops.rs
+│       ├── helpers/
+│       │   ├── mod.rs
+│       │   └── coefficients.rs
+│       └── rgba8/
+│           ├── mod.rs
+│           ├── ops.rs
+│           ├── default/
+│           │   ├── mod.rs
+│           │   └── resize_impl.rs
+│           └── neon/
+│               ├── mod.rs
+│               └── resize_impl.rs
+└── legacy/
+    └── <preserved original source tree>
+```
+
+- Every `mod.rs` created or migrated for this CPU structure contains only module
+  declarations and deliberate exports. The pool facade lives in `executor.rs`;
+  `mod.rs` re-exports it. Do not put algorithms or orchestration in `mod.rs`,
+  or add a sibling `<family>.rs`.
+- Family `ops.rs` exposes each operation's support contract and composes the
+  exact mode strategy. Mode `ops.rs` exposes and selects its architecture
+  strategies. Keep their functions small and limited to orchestration;
+  inline direct forwarding when appropriate. Follow Section 3's shared
+  declaration contract rather than introducing independent support checks.
+- Implementation files own the original algorithm and typed loops. Their names
+  describe the operation, such as `resize_impl.rs` or `color3dlut_impl.rs`.
+- Create mode folders only for actual supported implementations. Handle rejected
+  modes explicitly at the family boundary using the existing error contract.
+  Do not create twenty empty mode folders for every family.
+- Create architecture folders only for real kernels. Missing specialization
+  means an explicit call to that mode's default implementation.
+- Architecture-specific compile gates and target-feature annotations remain
+  necessary for safe compilation. They must not substitute for context-driven
+  selection or cause repeated runtime capability probing in leaf code.
+
+## 5. Family ownership
+
+This table assigns the baseline's 84 `PipelineOp` variants to target owners.
+It is a migration map, not a replacement for the source enum or parity manifest.
+Public CPU operations that bypass `PipelineOp` must also be inventoried and
+migrated into their corresponding owner.
+
+| Family | Pipeline operation ownership |
+| --- | --- |
+| `resize` | `Resize`, `ResizeBoxed` |
+| `crop` | `Crop` |
+| `rotate` | `Rotate` |
+| `transpose` | `Transpose`, `Flip`, `Mirror` |
+| `thumbnail` | `Thumbnail` |
+| `reduce` | `Reduce` |
+| `color` | `Convert`, `ConvertLab`, `RemapPalette` |
+| `color3dlut` | `Color3DLut` |
+| `filter` | `Filter3x3`, `Filter5x5`, `GaussianBlur`, `BoxBlur`, `BoxBlurXY`, `MedianFilter`, `MaxFilter`, `MinFilter`, `RankFilter` |
+| `imageops` | `Autocontrast`, `Equalize`, `EqualizeMasked`, `Invert`, `Posterize`, `Solarize`, `Colorize`, `Expand`, `CropBorder` |
+| `geometry` | `Contain`, `Cover`, `Fit`, `Pad`, `Scale` |
+| `grayscale` | `Grayscale` |
+| `chops` | `Add`, `Subtract`, `Multiply`, `Screen`, `Darker`, `Lighter`, `Difference`, `Overlay`, `HardLight`, `SoftLight`, `AddModulo`, `SubtractModulo`, `LogicalAnd`, `LogicalOr`, `LogicalXor`, `Constant`, `Offset`, `Duplicate`, `InvertChops` |
+| `enhance` | `Brightness`, `Contrast`, `ColorSaturation`, `Sharpness` |
+| `effects` | `EffectSpread`, `EffectNoise` |
+| `paste` | `Paste` |
+| `composite` | `AlphaComposite`, `Merge`, `BlendModule`, `CompositeModule` |
+| `eval` | `Eval` |
+| `transform` | `Transform` |
+| `put` | `PutPixel`, `PutData`, `PutAlpha`, `PutAlphaData`, `ExtractBand` |
+| `draw` | `DrawLine`, `DrawRectangle`, `DrawRoundedRect`, `DrawEllipse`, `DrawCircle`, `DrawPolygon`, `DrawArc`, `DrawChord`, `DrawPieslice`, `DrawPoint` |
+
+## 6. Shared code and composition
+
+Use the narrowest scope that owns a real shared contract:
+
+- One implementation: ordinary helper files beside that implementation.
+- One mode, several architectures: `<family>/<mode>/helpers/`.
+- One family, several modes: `<family>/helpers/`.
+- Several CPU families: `pool_cpu/helpers/<support category>/<support>.rs`.
+- Several backends: `compute/helpers/<support category>/<support>.rs` for
+  execution support, or `raster/` for pixel-model support.
+
+Each helper directory has a simple `mod.rs`. Create a directory only for a real
+group of support code. Shared helpers must not hide mode inference, backend
+selection, architecture detection, or parallel scheduling.
+
+Reuse a CPU kernel directly when the algorithm and semantics are identical.
+Do not copy an identical implementation into each mode or architecture merely
+to fill the tree. Keep genuinely distinct loops specialized and preserve
+inlining and existing arithmetic order. Do not add trait-object dispatch to
+pixel loops to reduce source duplication.
+
+Do not cast, convert, or retag an image into a different mode merely to reuse
+another mode's implementation. A mode strategy must process its own native
+buffer and return the declared output identity. Share a helper only when it
+operates directly on the native sample representation and preserves the exact
+mode's semantics; do not round-trip through an intermediate raster. A
+conversion that is part of the operation's defined Pillow behavior is allowed,
+but it must be explicit in that operation's contract and output-mode rule.
+
+Inject palettes, masks, prepared coefficients, and other operation dependencies
+at the appropriate boundary. Secondary images carry their own exact modes;
+validate required relationships once. Operations must not silently convert all
+inputs to RGBA to share a kernel.
+
+## 7. Legacy and other backends
+
+Before rebuilding, move all existing `pool_cpu` source into
+`pool_cpu/legacy/`, preserving relative paths and contents from the restart
+baseline. Recreate only the maintained facade and new structure outside it.
+When folding SIMD, preserve its original source under
+`pool_cpu/legacy/pool_simd/` before retiring the old pool.
+
+Legacy is reference-only: no `mod legacy`, `#[path]`, `include!`, generated
+module, build-script wiring, or runtime import may activate it. Do not use
+`legacy_2` or the external `pillow-rs-bad` checkout as a runtime dependency.
+The external checkout is optional historical reference, not the baseline.
+Record original-to-new ownership and preserve backups without editing them.
+
+Remove dead code from maintained modules after accounting for feature-specific
+and architecture-specific reachability. Keep uncertain findings reviewable.
+Inventory tools may identify legacy as an archive; they must continue checking
+all maintained implementation files and must not conceal size violations.
+
+Parallel CPU later follows the same mode/architecture organization under
+`pool_parallel`. It owns Rayon and scheduling, injects its backend context, and
+composes reusable serial CPU kernels. GPU algorithms, shader organization,
+CUDA, and TileLang work are subsequent work, outside this CPU migration.
+Mechanical compatibility edits needed for shared type changes must be recorded;
+they are not evidence that another backend has been validated.
+
+## 8. Enforcement
+
+Keep first-party Rust files at or below 1,000 physical lines and functions at
+or below 100 Clippy-counted body lines. Preserve assertions, fixture identities,
+public error behavior, exact arithmetic, and existing performance contracts.
+
+Update path-classification rules, source maps, and relevant contributor docs
+to describe this structure. Do not weaken checks or create blanket exceptions
+to make an old layout pass. Other maintained files keep their existing owners;
+this CPU plan does not authorize unrelated repository-wide file moves.
+
+No build, test, formatter, checkstyle, lint, parity, benchmark, or coverage
+campaign runs during implementation. Complete the code and the source review
+first. The ordered validation gates in the refactor plan govern what runs next.

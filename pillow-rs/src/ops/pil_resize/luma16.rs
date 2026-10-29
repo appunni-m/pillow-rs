@@ -18,7 +18,7 @@ pub(super) fn pil_resize_luma16_nearest(
     let sh = img.height();
     let mut result = ImageBuffer::new(dst_w, dst_h);
     if sw == 0 || sh == 0 {
-        return DynamicImage::ImageLuma16(result);
+        return DynamicImage::ImageI16(result);
     }
     let (left, top, scale_x, scale_y) = match bounds {
         Some((left, top, right, bottom)) => (
@@ -48,7 +48,7 @@ pub(super) fn pil_resize_luma16_nearest(
         yo += scale_y;
     }
 
-    DynamicImage::ImageLuma16(result)
+    DynamicImage::ImageI16(result)
 }
 
 /// Pillow's `Resample.c` uses a separate byte-oriented implementation for
@@ -206,5 +206,5 @@ pub(super) fn pil_resize_luma16(
         }
     }
 
-    DynamicImage::ImageLuma16(output)
+    DynamicImage::ImageI16(output)
 }

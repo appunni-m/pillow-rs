@@ -165,22 +165,17 @@ pub(super) fn operational_palette(data: &PalettedData) -> Vec<u8> {
 }
 
 impl Image {
-    /// Returns the explicit Pillow mode tag carried by this image.
-    ///
-    /// Some Pillow modes cannot be represented by the generic raster variants
-    /// alone. This method exposes the side-channel mode tag for modes such as
-    /// `"1"`, `"P"`, `"CMYK"`, `"HSV"`, `"YCbCr"`, `"I"`, and `"F"`.
+    /// Returns the exact Pillow mode carried by materialized pixels or a lazy
+    /// pipeline's pending output.
     pub fn explicit_mode(&self) -> Option<&str> {
         match self {
-            Image::Loaded(LoadedData {
-                explicit_mode: Some(m),
-                ..
-            }) => Some(m.as_str()),
+            Image::Loaded(data) => super::mode_boundary::pillow_mode_name_opt(data.explicit_mode)
+                .or_else(|| super::mode_boundary::pillow_mode_name(data.image.mode())),
             Image::Paletted(_) => Some("P"),
             Image::Pipeline {
                 explicit_mode: Some(m),
                 ..
-            } => Some(m.as_str()),
+            } => super::mode_boundary::pillow_mode_name(*m),
             _ => None,
         }
     }
@@ -375,7 +370,7 @@ impl Image {
 
         *self = match mode.as_str() {
             "L" | "P" => Image::Paletted(PalettedData {
-                indices: materialized.to_luma8(),
+                indices: DynamicImage::ImagePalette8(materialized.to_luma8()),
                 palette,
                 palette_alpha,
                 source_format,
@@ -389,7 +384,7 @@ impl Image {
                 Image::Loaded(LoadedData {
                     image: Arc::new(image),
                     known_zero_fill: false,
-                    explicit_mode: Some("PA".to_owned()),
+                    explicit_mode: Some(crate::raster::Mode::ImagePaletteAlpha8),
                     decoded_mode,
                     palette: Some(palette),
                     palette_alpha: Some(palette_alpha),
@@ -518,7 +513,7 @@ impl Image {
             ..
         } = &mut result
         {
-            *explicit_mode = Some("P".to_owned());
+            *explicit_mode = Some(crate::raster::Mode::ImagePalette8);
             *palette = Some(remapped_palette);
             *palette_alpha = remapped_alpha;
         }

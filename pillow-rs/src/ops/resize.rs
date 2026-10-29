@@ -236,6 +236,8 @@ impl Image {
         Ok(None)
     }
 
+    // TODO(cpu-migration): pass the exact `Mode` to the legacy resampling
+    // helpers instead of projecting mode identity into string branches.
     fn resize_with_filter(
         &self,
         (w, h): (u32, u32),
@@ -243,7 +245,8 @@ impl Image {
     ) -> Result<Image, PilError> {
         // Only single-band indexed samples force nearest. PA retains the
         // requested filter over its independent raw index and alpha bands.
-        if self.has_palette_mode() || self.explicit_mode() == Some("1") {
+        if self.has_palette_mode()
+            || self.known_mode_identity() == Some(crate::raster::Mode::One) {
             filter = ResampleFilter::Nearest;
         }
         Ok(Image::push_op(self, PipelineOp::Resize { w, h, filter }))
@@ -336,7 +339,10 @@ impl Image {
     ) -> Result<(), PilError> {
         // PIL forces NEAREST for indexed samples, including PA's raw
         // index/alpha pairs, to preserve the sample layout.
-        if self.has_palette_mode() || matches!(self.explicit_mode(), Some("1") | Some("PA")) {
+        if self.has_palette_mode() || matches!(
+            self.known_mode_identity(),
+            Some(crate::raster::Mode::One | crate::raster::Mode::ImagePaletteAlpha8)
+        ) {
             *filter = ResampleFilter::Nearest;
         }
         let new_self = Image::push_op(
@@ -538,7 +544,10 @@ mod tests {
             panic!("putpixel must create a pipeline");
         };
         assert_eq!(*backend, None);
-        assert!(matches!(explicit_mode.as_deref(), None | Some("RGB")));
+        assert!(matches!(
+            explicit_mode,
+            None | Some(crate::raster::Mode::ImageRgb8)
+        ));
         assert!(matches!(source.as_ref(), CoreImage::Loaded(_)));
         assert!(ops.iter().all(|op| matches!(
             op,
@@ -568,7 +577,7 @@ mod tests {
         let mut reference = CoreImage::new(1024, 768, "RGB", (0, 0, 0, 255)).unwrap();
         reference.putpixel(2, 3, 180, 120, 60, 255).unwrap();
         let materialized_reference = reference.materialize().unwrap();
-        let mut expected = CoreImage::from_dynamic(materialized_reference, Some("RGB".into()));
+        let mut expected = CoreImage::from_dynamic(materialized_reference, Some(crate::raster::Mode::ImageRgb8));
         expected
             .thumbnail((256, 256), Some(super::ResampleInput::Code(2)))
             .unwrap();

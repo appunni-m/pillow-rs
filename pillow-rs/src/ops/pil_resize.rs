@@ -16,7 +16,7 @@ mod resize;
 mod samples;
 mod vertical_passes;
 
-pub(crate) use alpha::{premultiply_alpha, unpremultiply_alpha, unpremultiply_channel};
+pub(crate) use alpha::{premultiply_alpha, unpremultiply_alpha, unpremultiply_channel, unpremultiply_rgba};
 pub(crate) use boxed::{
     pil_resize_boxed, pil_resize_boxed_with_parallel_pixel_threshold,
     pil_resize_boxed_with_sparse_rgb_rows,

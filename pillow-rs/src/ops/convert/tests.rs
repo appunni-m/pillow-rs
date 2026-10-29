@@ -39,7 +39,7 @@ fn integer_to_rgb_clamps_native_i_samples_and_broadcasts_them() {
             crate::raster::RgbaImage::from_raw(samples.len() as u32, 1, source_bytes)
                 .expect("valid I-mode carrier"),
         ),
-        Some("I".to_owned()),
+        Some(crate::raster::Mode::ImageI32),
     );
 
     let converted = source
@@ -68,7 +68,7 @@ fn float_to_rgb_clamps_and_truncates_native_f_samples() {
             crate::raster::RgbaImage::from_raw(samples.len() as u32, 1, source_bytes)
                 .expect("valid F-mode carrier"),
         ),
-        Some("F".to_owned()),
+        Some(crate::raster::Mode::ImageF32),
     );
 
     let converted = source

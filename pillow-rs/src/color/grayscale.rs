@@ -60,137 +60,6 @@ pub fn pil_grayscale_truncate(img: &DynamicImage) -> Result<crate::raster::GrayI
     pil_grayscale_inner(img, false)
 }
 
-/// Gather a selected byte from tightly packed 2-, 3-, or 4-channel pixels
-/// with SSSE3 when available. The counters report complete sixteen-pixel
-/// vector blocks and any scalar tail.
-#[cfg(target_arch = "x86_64")]
-#[allow(unsafe_code)]
-pub(crate) fn gather_interleaved_channel_ssse3_bytes(
-    source: &[u8],
-    channels: usize,
-    channel: usize,
-) -> Option<(Vec<u8>, u64, u64)> {
-    if !(2..=4).contains(&channels)
-        || channel >= channels
-        || source.len() % channels != 0
-        || !std::is_x86_feature_detected!("ssse3")
-    {
-        return None;
-    }
-
-    // SAFETY: the wrapper validates the packed channel layout and checks that
-    // the running CPU supports SSSE3 before entering the target-feature loop.
-    Some(unsafe { gather_interleaved_channel_ssse3(source, channels, channel) })
-}
-
-/// Gather a selected byte directly into the caller's final output buffer.
-///
-/// Returns `None` when the layout, output shape, or CPU does not support the
-/// SSSE3 path, allowing the caller to retain its existing fallback.
-#[cfg(target_arch = "x86_64")]
-#[allow(unsafe_code)]
-pub(crate) fn gather_interleaved_channel_ssse3_into(
-    source: &[u8],
-    output: &mut [u8],
-    channels: usize,
-    channel: usize,
-) -> Option<(u64, u64)> {
-    if !(2..=4).contains(&channels)
-        || channel >= channels
-        || source.len() % channels != 0
-        || output.len() != source.len() / channels
-        || !std::is_x86_feature_detected!("ssse3")
-    {
-        return None;
-    }
-
-    // SAFETY: the checks above validate the packed layout, exact output size,
-    // and runtime SSSE3 support before entering the target-feature loop.
-    Some(unsafe {
-        gather_interleaved_channel_ssse3_into_raw(source, output.as_mut_ptr(), channels, channel)
-    })
-}
-
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "ssse3")]
-#[allow(unsafe_code)]
-unsafe fn gather_interleaved_channel_ssse3(
-    source: &[u8],
-    channels: usize,
-    channel: usize,
-) -> (Vec<u8>, u64, u64) {
-    let pixel_count = source.len() / channels;
-    let mut output = Vec::<u8>::with_capacity(pixel_count);
-    // SAFETY: the public wrapper checked the channel layout and SSSE3
-    // support, and the vector has capacity for every output pixel.
-    let (vector_blocks, scalar_tail) = unsafe {
-        gather_interleaved_channel_ssse3_into_raw(source, output.as_mut_ptr(), channels, channel)
-    };
-    // SAFETY: the raw helper initializes all `pixel_count` output bytes before
-    // returning successfully.
-    unsafe { output.set_len(pixel_count) };
-    debug_assert_eq!(output.len(), pixel_count);
-    (output, vector_blocks, scalar_tail)
-}
-
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "ssse3")]
-#[allow(unsafe_code)]
-/// # Safety
-///
-/// The caller must establish SSSE3 support, validate `channels` as 2 through
-/// 4, validate `channel < channels`, ensure the source length is divisible by
-/// `channels`, provide writable output for every source pixel, and ensure the
-/// output region does not overlap the source region.
-unsafe fn gather_interleaved_channel_ssse3_into_raw(
-    source: &[u8],
-    output: *mut u8,
-    channels: usize,
-    channel: usize,
-) -> (u64, u64) {
-    use core::arch::x86_64::{
-        _mm_loadu_si128, _mm_or_si128, _mm_setzero_si128, _mm_shuffle_epi8, _mm_storeu_si128,
-    };
-
-    const LANES: usize = 16;
-    let pixel_count = source.len() / channels;
-    let vector_pixels = pixel_count / LANES * LANES;
-    let selectors: [[i8; LANES]; 4] = std::array::from_fn(|block| {
-        std::array::from_fn(|lane| {
-            let source_index = lane * channels + channel;
-            if source_index / LANES == block {
-                (source_index % LANES) as i8
-            } else {
-                i8::MIN
-            }
-        })
-    });
-    // SAFETY: the caller proved runtime SSSE3 support and non-overlapping
-    // source/output regions. For each complete group of sixteen output pixels,
-    // `channels * 16` source bytes are available; each unaligned load stays in
-    // that range, each selector is a readable 16-byte stack array, and the
-    // 16-byte store fits the writable output region.
-    unsafe {
-        for pixel in (0..vector_pixels).step_by(LANES) {
-            let source_ptr = source.as_ptr().add(pixel * channels);
-            let mut selected = _mm_setzero_si128();
-            for block in 0..channels {
-                let input = _mm_loadu_si128(source_ptr.add(block * LANES).cast());
-                let selector = _mm_loadu_si128(selectors[block].as_ptr().cast());
-                selected = _mm_or_si128(selected, _mm_shuffle_epi8(input, selector));
-            }
-            _mm_storeu_si128(output.add(pixel).cast(), selected);
-        }
-        for pixel in vector_pixels..pixel_count {
-            *output.add(pixel) = source[pixel * channels + channel];
-        }
-    }
-    (
-        (vector_pixels / LANES) as u64,
-        (pixel_count - vector_pixels) as u64,
-    )
-}
-
 fn pil_grayscale_inner(
     img: &DynamicImage,
     round: bool,
@@ -238,7 +107,7 @@ fn pil_grayscale_inner(
         .ok_or_else(|| PilError::InternalError("pil_grayscale buffer mismatch".to_string()))
 }
 
-pub(super) fn grayscale_rgb_bytes<const CHANNELS: usize>(
+pub(crate) fn grayscale_rgb_bytes<const CHANNELS: usize>(
     source: &[u8],
     dims: CheckedDims,
     rounding: u32,
@@ -257,7 +126,7 @@ pub(super) fn grayscale_rgb_bytes<const CHANNELS: usize>(
 }
 
 #[inline(always)]
-pub(super) fn grayscale_rgb_pixel(pixel: &[u8], rounding: u32) -> u8 {
+pub(crate) fn grayscale_rgb_pixel(pixel: &[u8], rounding: u32) -> u8 {
     #[cfg(target_arch = "x86_64")]
     {
         grayscale_rgb_pixel_lookup(pixel, rounding)
@@ -309,7 +178,7 @@ pub(super) fn grayscale_rgb_pixel_delta(pixel: &[u8], rounding: u32) -> u8 {
 }
 
 #[inline(always)]
-pub(super) fn cmyk_muldiv255_byte(channel: u8, ink: u8) -> u8 {
+pub(crate) fn cmyk_muldiv255_byte(channel: u8, ink: u8) -> u8 {
     // For byte inputs, t <= 65,153 and t + (t >> 8) <= 65,407, so Pillow's
     // exact MULDIV255 identity fits entirely in u16.
     let t = u16::from(channel) * u16::from(ink) + 128;
@@ -321,54 +190,12 @@ pub(super) fn cmyk_muldiv255_byte(channel: u8, ink: u8) -> u8 {
 /// The input is stored as RGBA where channels mean `C`, `M`, `Y`, and `K`.
 /// Output dimensions match the input and each output pixel is an `L` byte.
 pub fn cmyk_to_grayscale(img: &DynamicImage) -> Result<crate::raster::GrayImage, PilError> {
-    let (w, h) = (img.width(), img.height());
-    let cmyk = match img {
-        // CMYK already occupies this four-byte storage. Read its C/M/Y/K
-        // samples directly instead of cloning them through `to_rgba8()`.
-        DynamicImage::ImageRgba8(image) => Cow::Borrowed(image.as_raw().as_slice()),
-        _ => Cow::Owned(img.to_rgba8().into_raw()),
+    use crate::compute::pool_cpu::ops::grayscale::cmyk8::default::grayscale_impl;
+    let source = match img {
+        DynamicImage::ImageCmyk8(source) | DynamicImage::ImageRgba8(source) => Cow::Borrowed(source),
+        _ => Cow::Owned(img.to_rgba8()),
     };
-    // Pillow's ImageEnhance.Contrast.__init__ converts CMYK to L before
-    // ImageStat.Stat computes its midpoint.  That conversion preserves a
-    // valid zero-area image, so use the empty-result allocation boundary here
-    // rather than rejecting the dimensions before the enhancement can return
-    // its empty CMYK result.
-    let dims = CheckedDims::new_allow_empty(w, h, 1)?;
-    let expected_source_bytes = dims
-        .total_pixels()
-        .checked_mul(4)
-        .ok_or_else(|| PilError::InternalError("CMYK grayscale size overflow".to_string()))?;
-    if cmyk.len() != expected_source_bytes {
-        return Err(PilError::InternalError(
-            "cmyk_to_grayscale source buffer mismatch".to_string(),
-        ));
-    }
-    // The validated source contains exactly one four-byte sample per output
-    // pixel. Collecting writes the final grayscale bytes once and avoids
-    // zero-initializing a buffer that is immediately overwritten.
-    let gray: Vec<u8> = cmyk
-        .chunks_exact(4)
-        .map(|p| {
-            let c = p[0];
-            let m = p[1];
-            let y_ = p[2];
-            let nk = u8::MAX - p[3];
-            // For byte inks, rounded `muldiv255(ink, nk)` is bounded by `nk`, so
-            // reconstructed RGB channels remain in [0, 255]. Pillow's luma
-            // weights sum to 65,536; substituting the channel conversions fuses
-            // three rounded CMYK components into one exact luma subtraction.
-            let weighted_ink = 19_595 * u32::from(cmyk_muldiv255_byte(c, nk))
-                + 38_470 * u32::from(cmyk_muldiv255_byte(m, nk))
-                + 7_471 * u32::from(cmyk_muldiv255_byte(y_, nk));
-            let luma_ink = (weighted_ink + 32_767) >> 16;
-            (u32::from(nk) - luma_ink) as u8
-        })
-        .collect();
-    if !gray.is_empty() {
-        crate::compute::record_pipeline_allocation(gray.len());
-    }
-    crate::raster::GrayImage::from_raw(w, h, gray)
-        .ok_or_else(|| PilError::InternalError("cmyk_to_grayscale buffer mismatch".to_string()))
+    grayscale_impl::execute(grayscale_impl::prepare(source.as_ref())?)
 }
 
 /// Converts CMYK storage to Pillow's truncated binary-conversion luminance.

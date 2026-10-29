@@ -125,6 +125,8 @@ const SMOOTH: FilterKernel =
 impl Image {
     /// Validates whether a Python-facing filter may run for this image mode.
     pub fn validate_filter(&self, filter_name: &str) -> Result<(), PilError> {
+        // TODO(cpu-migration): classify filter support from exact `Mode` values
+        // rather than projecting the source identity into Pillow strings.
         let mode = self.mode()?;
         // Pillow's ImagingUnsharpMask accepts only byte modes with native
         // band storage. Keep the native operation's wrong-mode error for
@@ -174,7 +176,7 @@ impl Image {
         self.validate_filter(filter_type)?;
         // I-mode: push the filter op directly — the CPU registry handles I-mode dispatch.
         // by operating on int32 pixel values with no [0,255] clipping.
-        if self.explicit_mode() == Some("I") {
+        if self.known_mode_identity() == Some(crate::raster::Mode::ImageI32) {
             return self.filter_push(filter_type);
         }
         // Mode "1" (binary): stored as Luma8 (0/255), filter applies on L data.

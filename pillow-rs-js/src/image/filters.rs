@@ -181,8 +181,17 @@ impl Image {
     ) -> Result<Image, JsValue> {
         let input = pillow_rs::prepare_color3dlut(table, (size_x, size_y, size_z), channels)
             .map_err(err)?;
+        let target_mode = target_mode
+            .map(|name| {
+                pillow_rs::Mode::from_pillow_name(&name).ok_or_else(|| {
+                    err(pillow_rs::PilError::ValueError(
+                        "unrecognized image mode".into(),
+                    ))
+                })
+            })
+            .transpose()?;
         self.inner
-            .color3dlut(input, target_mode.as_deref())
+            .color3dlut(input, target_mode)
             .map(|i| Image { inner: i })
             .map_err(err)
     }

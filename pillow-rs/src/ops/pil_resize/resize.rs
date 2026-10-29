@@ -269,7 +269,7 @@ pub fn pil_resize(
     // Pillow keeps I;16* samples in the native 16-bit resize path.  The
     // generic pixel accessor below is byte-oriented and would otherwise
     // convert this mode to RGBA8 before preserving only its mode label.
-    if let DynamicImage::ImageLuma16(luma) = img {
+    if let DynamicImage::ImageI16(luma) = img {
         return pil_resize_luma16(luma, dst_w, dst_h, filter, explicit_mode, None);
     }
 
@@ -492,7 +492,7 @@ mod typed_nearest_tests {
 
     fn typed_integer_images() -> [DynamicImage; 4] {
         [
-            DynamicImage::ImageLuma16(
+            DynamicImage::ImageI16(
                 ImageBuffer::from_raw(3, 2, vec![0, 1, 32_768, 65_535, 257, 65_407])
                     .expect("L16 samples"),
             ),
@@ -629,7 +629,7 @@ mod typed_nearest_tests {
 
             // L16 has its own native nearest path. The other typed layouts
             // exercise pixel_at from the generic affine-nearest fallback.
-            if matches!(image, DynamicImage::ImageLuma16(_)) {
+            if matches!(image, DynamicImage::ImageI16(_)) {
                 continue;
             }
             let byte_mode = typed_public_byte_mode(&image);

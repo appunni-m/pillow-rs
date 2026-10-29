@@ -44,6 +44,25 @@ fn cmyk_to_rgb_row(source: &[u8], output: &mut [u8]) {
     }
 }
 
+fn cmyk_to_rgb_rows(source: &[u8], output: &mut RgbImage) {
+    if output.width() == 0 || output.height() == 0 {
+        return;
+    }
+    let source_stride = output.width() as usize * 4;
+    let output_stride = output.width() as usize * 3;
+    for (source, destination) in source.chunks_exact(source_stride)
+        .zip(output.as_mut().chunks_exact_mut(output_stride)) {
+        cmyk_to_rgb_row(source, destination);
+    }
+}
+
+/// Original serial CMYK conversion over a mode-selected native buffer.
+pub(crate) fn cmyk_buffer_to_rgb(source: &crate::raster::RgbaImage) -> RgbImage {
+    let mut output = RgbImage::new(source.width(), source.height());
+    cmyk_to_rgb_rows(source.as_raw(), &mut output);
+    output
+}
+
 /// Converts CMYK storage to RGB using Pillow-compatible integer arithmetic.
 ///
 /// The input is an RGBA buffer interpreted as `C`, `M`, `Y`, `K`. The returned
@@ -61,10 +80,10 @@ pub fn cmyk_to_rgb(img: &DynamicImage) -> DynamicImage {
     if w == 0 || h == 0 {
         return DynamicImage::ImageRgb8(out);
     }
-    let source_stride = w as usize * 4;
-    let output_stride = w as usize * 3;
     #[cfg(feature = "parallel")]
     if w as usize * h as usize >= CMYK_TO_RGB_PARALLEL_PIXEL_THRESHOLD {
+        let source_stride = w as usize * 4;
+        let output_stride = w as usize * 3;
         crate::par_rows_mut!(
             out.as_mut(),
             output_stride,
@@ -76,12 +95,7 @@ pub fn cmyk_to_rgb(img: &DynamicImage) -> DynamicImage {
         );
         return DynamicImage::ImageRgb8(out);
     }
-    for (source, output) in cmyk
-        .chunks_exact(source_stride)
-        .zip(out.as_mut().chunks_exact_mut(output_stride))
-    {
-        cmyk_to_rgb_row(source, output);
-    }
+    cmyk_to_rgb_rows(&cmyk, &mut out);
     DynamicImage::ImageRgb8(out)
 }
 
@@ -101,6 +115,14 @@ pub fn cmyk_to_rgb(img: &DynamicImage) -> DynamicImage {
 ///   Then round all to nearest integer, CLIP8
 /// ```
 pub fn hsv_to_rgb(img: &DynamicImage) -> DynamicImage {
+    let source = match img {
+        DynamicImage::ImageHsv8(source) | DynamicImage::ImageRgb8(source) => Cow::Borrowed(source),
+        _ => Cow::Owned(img.to_rgb8()),
+    };
+    DynamicImage::ImageRgb8(hsv_buffer_to_rgb(source.as_ref()))
+}
+
+pub(crate) fn hsv_buffer_to_rgb(input: &RgbImage) -> RgbImage {
     use std::sync::OnceLock;
 
     static FACTORS: OnceLock<Vec<[f32; 3]>> = OnceLock::new();
@@ -128,13 +150,8 @@ pub fn hsv_to_rgb(img: &DynamicImage) -> DynamicImage {
         table
     });
 
-    let (w, h) = (img.width(), img.height());
-    let rgb = match img {
-        DynamicImage::ImageRgb8(rgb) => Cow::Borrowed(rgb.as_raw().as_slice()),
-        _ => Cow::Owned(img.to_rgb8().into_raw()),
-    };
-    let mut out = Vec::with_capacity(rgb.len());
-    for ip in rgb.chunks_exact(3) {
+    let mut out = Vec::with_capacity(input.as_raw().len());
+    for ip in input.as_raw().chunks_exact(3) {
         let v = ip[2] as f32;
         let factor = factors[ip[0] as usize * 256 + ip[1] as usize];
         let r = (v * factor[0]).round().clamp(0.0, 255.0) as u8;
@@ -142,10 +159,8 @@ pub fn hsv_to_rgb(img: &DynamicImage) -> DynamicImage {
         let b = (v * factor[2]).round().clamp(0.0, 255.0) as u8;
         out.extend_from_slice(&[r, g, b]);
     }
-    DynamicImage::ImageRgb8(
-        RgbImage::from_raw(w, h, out)
-            .expect("HSV-to-RGB output preserves the source's RGB dimensions"),
-    )
+    RgbImage::from_raw(input.width(), input.height(), out)
+        .expect("HSV-to-RGB output preserves the source's RGB dimensions")
 }
 
 /// Converts RGB to HSV using Pillow's `rgb2hsv` precision behavior.
@@ -437,34 +452,12 @@ pub fn f_to_rgb(img: &DynamicImage) -> DynamicImage {
 /// become zero, values at or above 255 become 255, and interior values are
 /// truncated rather than rounded.
 pub fn i_to_l(img: &DynamicImage) -> DynamicImage {
-    let (w, h) = (img.width(), img.height());
-    let rgba = match img {
-        // I mode is already stored as four little-endian bytes per sample.
-        // Borrow that scalar carrier rather than cloning the whole frame.
-        DynamicImage::ImageRgba8(rgba) => Cow::Borrowed(rgba.as_raw().as_slice()),
-        _ => Cow::Owned(img.to_rgba8().into_raw()),
+    use crate::compute::pool_cpu::ops::grayscale::i32::default::grayscale_impl;
+    let source = match img {
+        DynamicImage::ImageI32(source) | DynamicImage::ImageRgba8(source) => Cow::Borrowed(source),
+        _ => Cow::Owned(img.to_rgba8()),
     };
-    // I storage is a packed little-endian i32 stream. When its byte buffer is
-    // naturally aligned, view it as words so the hot loop avoids rebuilding
-    // each value from four indexed bytes. Preserve the byte-wise path for
-    // unusual alignment or malformed internal buffers.
-    let output = match bytemuck::try_cast_slice::<u8, i32>(rgba.as_ref()) {
-        Ok(values) => values
-            .iter()
-            .map(|&value| i32::from_le(value).clamp(0, 255) as u8)
-            .collect(),
-        Err(_) => rgba
-            .chunks_exact(4)
-            .map(|ip| {
-                let value = i32::from_le_bytes([ip[0], ip[1], ip[2], ip[3]]);
-                value.clamp(0, 255) as u8
-            })
-            .collect(),
-    };
-    DynamicImage::ImageLuma8(
-        crate::raster::GrayImage::from_raw(w, h, output)
-            .expect("I to L output matches the source dimensions"),
-    )
+    DynamicImage::ImageLuma8(grayscale_impl::execute(source.as_ref()))
 }
 
 /// Converts Pillow `F` storage to the intermediate `L` image used by
@@ -473,24 +466,12 @@ pub fn i_to_l(img: &DynamicImage) -> DynamicImage {
 /// This is the `f2l` path in Pillow's `Convert.c`, including truncation of
 /// interior floating-point samples.
 pub fn f_to_l(img: &DynamicImage) -> DynamicImage {
-    let (w, h) = (img.width(), img.height());
-    let rgba = match img {
-        // F mode is already stored as four little-endian bytes per sample.
-        // Borrow that scalar carrier rather than cloning the whole frame.
-        DynamicImage::ImageRgba8(rgba) => Cow::Borrowed(rgba.as_raw().as_slice()),
-        _ => Cow::Owned(img.to_rgba8().into_raw()),
+    use crate::compute::pool_cpu::ops::grayscale::f32::default::grayscale_impl;
+    let source = match img {
+        DynamicImage::ImageF32(source) | DynamicImage::ImageRgba8(source) => Cow::Borrowed(source),
+        _ => Cow::Owned(img.to_rgba8()),
     };
-    let output = rgba
-        .chunks_exact(4)
-        .map(|ip| {
-            let value = f32::from_le_bytes([ip[0], ip[1], ip[2], ip[3]]);
-            value.clamp(0.0, 255.0) as u8
-        })
-        .collect();
-    DynamicImage::ImageLuma8(
-        crate::raster::GrayImage::from_raw(w, h, output)
-            .expect("F to L output matches the source dimensions"),
-    )
+    DynamicImage::ImageLuma8(grayscale_impl::execute(source.as_ref()))
 }
 
 /// Converts Pillow `I` storage to `F` storage using the direct `i2f` path.

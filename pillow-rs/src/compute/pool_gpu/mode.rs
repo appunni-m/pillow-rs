@@ -1,4 +1,5 @@
 use super::*;
+use crate::raster::Mode;
 
 pub(super) fn gpu_resize_channel_count(mode: u32) -> u32 {
     match mode {
@@ -167,7 +168,7 @@ pub(super) fn gpu_mode_after_op(mode: u32, op: &PipelineOp) -> u32 {
         PipelineOp::Colorize { .. } => 2,
         PipelineOp::EffectNoise { .. } => 0,
         PipelineOp::Color3DLut { target_mode, .. } => {
-            gpu_pixel_mode_code(*target_mode).unwrap_or(mode)
+            gpu_raster_mode_code(*target_mode).unwrap_or(mode)
         }
         // LAB shares RGB's native three-byte storage after its fixed-point
         // transform, so later packed-byte shaders use the RGB mode code.
@@ -176,11 +177,11 @@ pub(super) fn gpu_mode_after_op(mode: u32, op: &PipelineOp) -> u32 {
     }
 }
 
-pub(super) fn gpu_pixel_mode_code(mode: PixelMode) -> Option<u32> {
+pub(super) fn gpu_raster_mode_code(mode: Mode) -> Option<u32> {
     match mode {
-        PixelMode::RGB => Some(2),
-        PixelMode::RGBA => Some(3),
-        PixelMode::CMYK => Some(4),
+        Mode::ImageRgb8 => Some(2),
+        Mode::ImageRgba8 => Some(3),
+        Mode::ImageCmyk8 => Some(4),
         _ => None,
     }
 }
@@ -272,10 +273,10 @@ pub(super) fn gpu_output_color_type(mode: &ColorMode) -> Option<crate::raster::C
     }
 }
 
-pub(super) fn gpu_pixel_mode_color_type(mode: PixelMode) -> Option<crate::raster::ColorType> {
+pub(super) fn gpu_raster_mode_color_type(mode: Mode) -> Option<crate::raster::ColorType> {
     match mode {
-        PixelMode::RGB => Some(crate::raster::ColorType::Rgb8),
-        PixelMode::RGBA | PixelMode::CMYK => Some(crate::raster::ColorType::Rgba8),
+        Mode::ImageRgb8 => Some(crate::raster::ColorType::Rgb8),
+        Mode::ImageRgba8 | Mode::ImageCmyk8 => Some(crate::raster::ColorType::Rgba8),
         _ => None,
     }
 }
@@ -411,7 +412,7 @@ pub(super) fn gpu_logical_mode_after_op(
             DynamicImage::ImageLumaA8(_) => Some("LA".to_owned()),
             DynamicImage::ImageRgb8(_) => Some("RGB".to_owned()),
             DynamicImage::ImageRgba8(_) => Some("RGBA".to_owned()),
-            DynamicImage::ImageLuma16(_) => None,
+            DynamicImage::ImageI16(_) => None,
             _ => None,
         })
 }

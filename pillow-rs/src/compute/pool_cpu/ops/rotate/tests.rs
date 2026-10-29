@@ -1,13 +1,27 @@
-#[cfg(not(feature = "parallel"))]
-use super::affine::fixed_coordinate_in_bounds_span;
-#[cfg(not(feature = "parallel"))]
-use crate::ops::rotate::nearest_contiguous_rgb_run_len;
+use super::helpers::nearest::{contiguous_three_byte_run_len, fixed_coordinate_in_bounds_span};
+use super::ops::{self, RotateRequest};
+use crate::compute::{Architecture, Backend, ExecutionContext};
 use crate::pipeline::ResampleFilter;
 use crate::raster::{DynamicImage, GenericImageView, GrayImage, RgbImage, RgbaImage};
 
-#[cfg(not(feature = "parallel"))]
+fn default_context() -> ExecutionContext {
+    ExecutionContext::new(Backend::Cpu, Architecture::Default)
+}
+
+fn request(angle: f64, expand: bool, filter: ResampleFilter, nearest: bool) -> RotateRequest {
+    RotateRequest {
+        angle,
+        expand,
+        fill: None,
+        center: None,
+        translate: None,
+        filter,
+        nearest,
+    }
+}
+
 #[test]
-fn rotate_contiguous_rgb_run_length_matches_fixed_point_scan() {
+fn contiguous_three_byte_run_length_matches_fixed_point_scan() {
     let x_steps = [1, 32_768, 65_526, 65_536, 65_537, 98_304, 131_072, 655_360];
     let y_steps = [0, 1, 1_144, 65_535, 65_536, 100_000];
     let x_fractions = [0, 1, 5, 9, 10, 32_767, 65_525, 65_535];
@@ -33,12 +47,12 @@ fn rotate_contiguous_rgb_run_length_matches_fixed_point_scan() {
                             .unwrap_or(0);
 
                         assert_eq!(
-                            nearest_contiguous_rgb_run_len(
-                                source_x, source_y, x_step, y_step, remaining
+                            contiguous_three_byte_run_len(
+                                source_x, source_y, x_step, y_step, remaining,
                             ),
                             Some(expected),
                             "x_step={x_step}, y_step={y_step}, x_fraction={x_fraction}, \
-                                 y_fraction={y_fraction}, remaining={remaining}"
+                             y_fraction={y_fraction}, remaining={remaining}"
                         );
                     }
                 }
@@ -46,9 +60,9 @@ fn rotate_contiguous_rgb_run_length_matches_fixed_point_scan() {
         }
     }
 }
-#[cfg(not(feature = "parallel"))]
+
 #[test]
-fn rotate_positive_step_span_matches_signed_fixed_point_bounds() {
+fn positive_step_span_matches_signed_fixed_point_bounds() {
     let origins = [
         i64::MIN,
         -1_000_001,
@@ -78,16 +92,15 @@ fn rotate_positive_step_span_matches_signed_fixed_point_bounds() {
                         destination_length,
                     )
                     .expect("positive step has a representable clipped span");
-                    let fixed_source_limit = i128::from(source_length) * (1 << 16);
                     for x in 0..destination_length as usize {
                         let coordinate = i128::from(origin)
                             + i128::try_from(x).expect("small test coordinate") * i128::from(step);
-                        let expected =
-                            coordinate >> 16 >= 0 && coordinate >> 16 < i128::from(source_length);
+                        let expected = coordinate >> 16 >= 0
+                            && coordinate >> 16 < i128::from(source_length);
                         assert_eq!(
                             (span.0..span.1).contains(&x),
                             expected,
-                            "source={source_length}, destination={destination_length}, origin={origin}, step={step}, x={x}, limit={fixed_source_limit}"
+                            "source={source_length}, destination={destination_length}, origin={origin}, step={step}, x={x}"
                         );
                     }
                 }
@@ -95,6 +108,7 @@ fn rotate_positive_step_span_matches_signed_fixed_point_bounds() {
         }
     }
 }
+
 #[test]
 fn rotate_near_right_angle_uses_affine_sampling() {
     let rgb = DynamicImage::ImageRgb8(
@@ -105,45 +119,31 @@ fn rotate_near_right_angle_uses_affine_sampling() {
         RgbaImage::from_raw(2, 1, vec![10, 20, 30, 40, 50, 60, 70, 80])
             .expect("RGBA source shape must be valid"),
     );
+    let context = default_context();
 
-    // Pillow only selects its transpose fast path for an exact 90°
-    // multiple.  Rounding 89.9° or 90.1° into that path moves the source
-    // pixel selected at the edge and diverges from Geometry.c's affine
-    // nearest sampler.
-    let rgb_output = super::execute_rotate(
+    let rgb_output = ops::execute(
         &rgb,
-        89.9,
-        false,
-        None,
-        None,
-        None,
-        ResampleFilter::Nearest,
-        true,
-        Some("RGB"),
+        request(89.9, false, ResampleFilter::Nearest, true),
+        &context,
     )
     .expect("near-right RGB rotation");
     assert_eq!(rgb_output.dimensions(), (2, 1));
     assert_eq!(rgb_output.as_bytes(), &[10, 20, 30, 0, 0, 0]);
 
-    let rgba_output = super::execute_rotate(
+    let rgba_output = ops::execute(
         &rgba,
-        90.1,
-        false,
-        None,
-        None,
-        None,
-        ResampleFilter::Nearest,
-        true,
-        Some("RGBA"),
+        request(90.1, false, ResampleFilter::Nearest, true),
+        &context,
     )
     .expect("near-right RGBA rotation");
     assert_eq!(rgba_output.dimensions(), (2, 1));
     assert_eq!(rgba_output.as_bytes(), &[50, 60, 70, 80, 0, 0, 0, 0]);
 }
+
 #[cfg(target_endian = "little")]
 #[test]
 fn f_rotate_bicubic_uses_scalar_filter() {
-    let source = DynamicImage::ImageRgba8(
+    let source = DynamicImage::ImageF32(
         RgbaImage::from_raw(
             2,
             2,
@@ -154,16 +154,10 @@ fn f_rotate_bicubic_uses_scalar_filter() {
         )
         .expect("F source shape must be valid"),
     );
-    let output = super::execute_rotate(
+    let output = ops::execute(
         &source,
-        45.0,
-        true,
-        None,
-        None,
-        None,
-        ResampleFilter::Bicubic,
-        false,
-        Some("F"),
+        request(45.0, true, ResampleFilter::Bicubic, false),
+        &default_context(),
     )
     .expect("F bicubic rotation must succeed");
     assert_eq!(output.dimensions(), (4, 4));
@@ -191,21 +185,16 @@ fn f_rotate_bicubic_uses_scalar_filter() {
         .collect();
     assert_eq!(output.as_bytes(), expected);
 }
+
 #[test]
 fn byte_rotate_bicubic_uses_geometry_c_horner() {
     let source = DynamicImage::ImageLuma8(
         GrayImage::from_raw(2, 2, vec![0, 1, 2, 3]).expect("L source shape must be valid"),
     );
-    let output = super::execute_rotate(
+    let output = ops::execute(
         &source,
-        45.0,
-        true,
-        None,
-        None,
-        None,
-        ResampleFilter::Bicubic,
-        false,
-        Some("L"),
+        request(45.0, true, ResampleFilter::Bicubic, false),
+        &default_context(),
     )
     .expect("L bicubic rotation must succeed");
     assert_eq!(output.dimensions(), (4, 4));

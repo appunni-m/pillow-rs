@@ -1,16 +1,38 @@
 use super::*;
+use crate::raster::Mode;
+
+fn mode_identity(image: &Image) -> Result<Mode, PilError> {
+    match image.known_mode_identity() {
+        Some(mode) => Ok(mode),
+        // TODO(cpu-migration): make every lazy pipeline expose its exact Mode
+        // before operation admission so validation never has to materialize.
+        None => Ok(image.materialized_shared()?.mode()),
+    }
+}
+
+fn mode_label(mode: Mode) -> &'static str {
+    match mode {
+        Mode::ImageLumaA16 => "LA",
+        Mode::ImageRgb16 | Mode::ImageRgb32F => "RGB",
+        Mode::ImageRgba16 | Mode::ImageRgba32F => "RGBA",
+        _ => mode.pillow_name().unwrap_or("unknown"),
+    }
+}
 
 fn validate_autocontrast_mode(image: &Image) -> Result<(), PilError> {
-    let mode = image.mode()?;
+    let mode = mode_identity(image)?;
     // Pillow 12.2.0 `ImageOps._lut` accepts only "L" and "RGB"; "P" raises
     // NotImplementedError and every other mode raises the OSError below.
-    if mode == "P" {
+    if mode == Mode::ImagePalette8 {
         return Err(PilError::NotImplementedError(
             "mode P support coming soon".into(),
         ));
     }
-    if mode != "L" && mode != "RGB" {
-        return Err(PilError::OsError(format!("not supported for mode {mode}")));
+    if !matches!(mode, Mode::ImageLuma8 | Mode::ImageRgb8) {
+        return Err(PilError::OsError(format!(
+            "not supported for mode {}",
+            mode_label(mode)
+        )));
     }
     Ok(())
 }
@@ -62,11 +84,14 @@ pub fn autocontrast_with_mask(
 /// Returns [`PilError::OsError`] for alpha modes that Pillow does not support,
 /// or another [`PilError`] when mode detection fails.
 pub fn equalize(image: &Image) -> Result<Image, PilError> {
-    let mode = image.mode()?;
+    let mode = mode_identity(image)?;
     // Pillow 12.2.0 converts "P" to "RGB" before building the LUT and then
     // `_lut` accepts only "L" and "RGB"; all other modes raise the OSError.
-    if mode != "L" && mode != "RGB" && mode != "P" {
-        return Err(PilError::OsError(format!("not supported for mode {mode}")));
+    if !matches!(mode, Mode::ImageLuma8 | Mode::ImageRgb8 | Mode::ImagePalette8) {
+        return Err(PilError::OsError(format!(
+            "not supported for mode {}",
+            mode_label(mode)
+        )));
     }
     Ok(Image::push_op(image, PipelineOp::Equalize))
 }
@@ -82,9 +107,12 @@ pub fn equalize_with_mask(image: &Image, mask: ImageOpsMask) -> Result<Image, Pi
             validate_imageops_mask(image, ImageOpsMask::Image(mask.clone()))?;
             // Retain equalize's mode validation after mask validation, matching
             // Pillow's histogram-before-LUT error order.
-            let mode = image.mode()?;
-            if mode != "L" && mode != "RGB" && mode != "P" {
-                return Err(PilError::OsError(format!("not supported for mode {mode}")));
+            let mode = mode_identity(image)?;
+            if !matches!(mode, Mode::ImageLuma8 | Mode::ImageRgb8 | Mode::ImagePalette8) {
+                return Err(PilError::OsError(format!(
+                    "not supported for mode {}",
+                    mode_label(mode)
+                )));
             }
             Ok(Image::push_op(
                 image,
@@ -96,6 +124,22 @@ pub fn equalize_with_mask(image: &Image, mask: ImageOpsMask) -> Result<Image, Pi
     }
 }
 
+fn invert_for_mode(image: &Image, mode: Mode) -> Result<Image, PilError> {
+    // Pillow's ImageOps._lut path rejects CMYK before creating the result.
+    // Keep this separate from ImageChops.invert, which has a different mode
+    // contract and is implemented by the chops module.
+    if mode == Mode::ImageCmyk8 {
+        return Err(PilError::OsError("not supported for mode CMYK".into()));
+    }
+    if matches!(mode, Mode::ImageLumaA8 | Mode::ImagePaletteAlpha8 | Mode::ImageRgba8) {
+        return Err(PilError::OsError(format!(
+            "not supported for mode {}",
+            mode_label(mode)
+        )));
+    }
+    Ok(Image::push_op(image, PipelineOp::Invert))
+}
+
 /// Inverts all pixel values.
 ///
 /// # Errors
@@ -103,17 +147,7 @@ pub fn equalize_with_mask(image: &Image, mask: ImageOpsMask) -> Result<Image, Pi
 /// Returns [`PilError::OsError`] for alpha modes that Pillow does not support,
 /// or another [`PilError`] when mode detection fails.
 pub fn invert(image: &Image) -> Result<Image, PilError> {
-    let mode = image.mode()?;
-    // Pillow's ImageOps._lut path rejects CMYK before creating the result.
-    // Keep this separate from ImageChops.invert, which has a different mode
-    // contract and is implemented by the chops module.
-    if mode == "CMYK" {
-        return Err(PilError::OsError(format!("not supported for mode {mode}")));
-    }
-    if matches!(mode.as_str(), "LA" | "PA" | "RGBA") {
-        return Err(PilError::OsError(format!("not supported for mode {mode}")));
-    }
-    Ok(Image::push_op(image, PipelineOp::Invert))
+    invert_for_mode(image, mode_identity(image)?)
 }
 
 /// Inverts through the `ImageOps.invert` compatibility path.
@@ -125,13 +159,13 @@ pub fn invert(image: &Image) -> Result<Image, PilError> {
 /// Returns [`PilError::NotImplementedError`] for `P` mode, or errors from
 /// the underlying inversion operation.
 pub fn invert_ops(image: &Image) -> Result<Image, PilError> {
-    let mode = image.mode()?;
-    if mode == "P" {
+    let mode = mode_identity(image)?;
+    if mode == Mode::ImagePalette8 {
         return Err(PilError::NotImplementedError(
             "mode P support coming soon".into(),
         ));
     }
-    invert(image)
+    invert_for_mode(image, mode)
 }
 
 /// Flips an image vertically.
@@ -163,17 +197,20 @@ pub fn mirror(image: &Image) -> Result<Image, PilError> {
 /// Returns [`PilError::OsError`] for alpha modes that Pillow does not support,
 /// or another [`PilError`] when mode detection fails.
 pub fn posterize(image: &Image, bits: u8) -> Result<Image, PilError> {
-    let mode = image.mode()?;
+    let mode = mode_identity(image)?;
     // ImageOps.posterize delegates to `_lut`, whose public contract is the
     // same as autocontrast: P is a named unsupported path and all other modes
     // outside L/RGB raise OSError before a pipeline is created.
-    if mode == "P" {
+    if mode == Mode::ImagePalette8 {
         return Err(PilError::NotImplementedError(
             "mode P support coming soon".into(),
         ));
     }
-    if mode != "L" && mode != "RGB" {
-        return Err(PilError::OsError(format!("not supported for mode {mode}")));
+    if !matches!(mode, Mode::ImageLuma8 | Mode::ImageRgb8) {
+        return Err(PilError::OsError(format!(
+            "not supported for mode {}",
+            mode_label(mode)
+        )));
     }
     Ok(Image::push_op(
         image,
@@ -206,16 +243,19 @@ pub fn solarize(image: &Image, threshold: u8) -> Result<Image, PilError> {
 /// must evaluate custom comparisons before calling this function so their
 /// exceptions and mutations precede image validation, as they do in Pillow.
 pub fn solarize_with_input(image: &Image, input: SolarizeInput) -> Result<Image, PilError> {
-    let mode = image.mode()?;
+    let mode = mode_identity(image)?;
     // Pillow 12.2.0 exposes P as an explicit unsupported ImageOps._lut path;
     // this must be raised at the call, before deferred pipeline execution.
-    if mode == "P" {
+    if mode == Mode::ImagePalette8 {
         return Err(PilError::NotImplementedError(
             "mode P support coming soon".into(),
         ));
     }
-    if mode != "L" && mode != "RGB" {
-        return Err(PilError::OsError(format!("not supported for mode {mode}")));
+    if !matches!(mode, Mode::ImageLuma8 | Mode::ImageRgb8) {
+        return Err(PilError::OsError(format!(
+            "not supported for mode {}",
+            mode_label(mode)
+        )));
     }
     let lut = match input {
         SolarizeInput::Threshold(threshold) if threshold <= 255.0 || threshold.is_nan() => {
@@ -237,7 +277,14 @@ pub fn solarize_with_input(image: &Image, input: SolarizeInput) -> Result<Image,
             })
             .collect(),
     };
-    crate::ops::module_fns::eval_replicated(image, &lut, if mode == "L" { 1 } else { 3 })
+    // TODO(cpu-migration): preserve this high-threshold/custom-comparison
+    // Solarize route when Eval receives its prepared CPU owner; these requests
+    // deliberately become a LUT operation rather than PipelineOp::Solarize.
+    crate::ops::module_fns::eval_replicated(
+        image,
+        &lut,
+        if mode == Mode::ImageLuma8 { 1 } else { 3 },
+    )
 }
 
 /// Builds the 256 host-defined threshold comparisons in byte sample order.
@@ -263,7 +310,7 @@ where
 /// Returns [`PilError::ValueError`] for Pillow's unsupported `La` to `L`
 /// conversion. Other materialization failures may be reported lazily.
 pub fn grayscale(image: &Image) -> Result<Image, PilError> {
-    if image.mode()? == "La" {
+    if mode_identity(image)? == Mode::ImageLaPremultiplied8 {
         return Err(PilError::ValueError(
             "conversion from La to L not supported".into(),
         ));
@@ -281,8 +328,8 @@ pub fn grayscale(image: &Image) -> Result<Image, PilError> {
 /// Returns [`PilError::AssertionError`] when the source mode is not `"L"`, or
 /// another [`PilError`] when mode detection fails.
 pub fn validate_colorize_mode(image: &Image) -> Result<(), PilError> {
-    let mode = image.mode()?;
-    if mode != "L" {
+    let mode = mode_identity(image)?;
+    if mode != Mode::ImageLuma8 {
         // PIL raises AssertionError for non-L modes before resolving colors.
         return Err(PilError::AssertionError(String::new()));
     }

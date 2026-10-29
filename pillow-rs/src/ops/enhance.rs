@@ -5,6 +5,9 @@ use crate::image::Image;
 use crate::pipeline::PipelineOp;
 use crate::raster::DynamicImage;
 
+// TODO(cpu-migration): replace Pillow-string mode projections and branches in
+// enhancer setup with typed `Mode` decisions and output identities.
+
 pub(crate) struct ContrastBase {
     #[cfg(feature = "gpu")]
     pub(crate) mean: u8,
@@ -207,7 +210,10 @@ impl Image {
                 bytes,
                 4,
             )?;
-            return Ok(Image::from_dynamic(image, Some(mode)));
+            return Ok(Image::from_dynamic(
+                image,
+                crate::image::mode_boundary::parse_pillow_mode(&mode),
+            ));
         }
         base = base.convert(&mode, None, None, None, None)?;
         base.load()?;
@@ -266,7 +272,9 @@ impl Image {
                 )?;
                 return Ok(Image::from_dynamic(
                     image,
-                    matches!(mode.as_str(), "RGBX" | "CMYK").then_some(mode),
+                    matches!(mode.as_str(), "RGBX" | "CMYK")
+                        .then(|| self.known_mode_identity())
+                        .flatten(),
                 ));
             }
         }

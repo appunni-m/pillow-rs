@@ -336,9 +336,17 @@ impl PyImage {
     ) -> PyResult<PyImage> {
         let input =
             pillow_rs::prepare_color3dlut(table, size, channels.unwrap_or(3)).map_err(map_error)?;
-        let target_mode = target_mode.map(str::to_owned);
+        let target_mode = target_mode
+            .map(|name| {
+                pillow_rs::Mode::from_pillow_name(name).ok_or_else(|| {
+                    map_error(pillow_rs::PilError::ValueError(
+                        "unrecognized image mode".into(),
+                    ))
+                })
+            })
+            .transpose()?;
         let rs = py
-            .detach(|| self.inner.color3dlut(input, target_mode.as_deref()))
+            .detach(|| self.inner.color3dlut(input, target_mode))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }

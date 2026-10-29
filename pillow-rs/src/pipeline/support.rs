@@ -18,7 +18,7 @@ pub enum ResampleFilter {
 }
 
 /// Pillow transpose operation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransposeMethod {
     /// Mirror left-to-right.
     FlipLeftRight,
@@ -106,6 +106,10 @@ pub enum TransformMethod {
 ///
 /// This enum carries mode intent through the pipeline before conversion to a
 /// concrete image-buffer representation.
+///
+/// TODO(cpu-migration): use the canonical `raster::Mode` for operation mode
+/// inputs and retain narrower payload descriptors only where their distinct
+/// input semantics require them.
 #[derive(Debug, Clone)]
 pub enum ColorMode {
     /// 8-bit luma.
@@ -140,12 +144,13 @@ pub enum ColorMode {
     Mode1,
 }
 
-/// Logical Pillow sample layout for mutating pixel operations.
+/// Existing normalized-byte payload descriptor for mutating pipeline operations.
 ///
-/// `DynamicImage` cannot distinguish raw `P`, `CMYK`, `I`, or `F` samples
-/// from the standard buffers used to store them. Mutating operations carry
-/// this mode alongside their bytes so every compute backend interprets the
-/// same samples without relying on output-mode metadata.
+/// The source identity belongs to the Pillow-owned `DynamicImage` variant.
+/// This older descriptor remains while pipeline producers and GPU consumers
+/// migrate to the canonical raster `Mode`; it must not override that identity.
+/// A direct PutData request can specify a different payload layout, retaining
+/// its existing serial conversion contract. New CPU strategies take `Mode`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
 pub enum PixelMode {
@@ -176,7 +181,33 @@ pub enum PixelMode {
 }
 
 impl PixelMode {
+    /// Adapts the existing pipeline payload descriptor to the canonical raster selector.
+    ///
+    /// CPU strategies consume only the Pillow-owned Mode. This adapter remains
+    /// at registration while pipeline producers and other backends are migrated;
+    /// it does not infer or override the source DynamicImage identity.
+    pub(crate) const fn raster_mode(self) -> crate::raster::Mode {
+        use crate::raster::Mode;
+        match self {
+            Self::L => Mode::ImageLuma8,
+            Self::LA => Mode::ImageLumaA8,
+            Self::RGB => Mode::ImageRgb8,
+            Self::RGBA => Mode::ImageRgba8,
+            Self::P => Mode::ImagePalette8,
+            Self::PA => Mode::ImagePaletteAlpha8,
+            Self::CMYK => Mode::ImageCmyk8,
+            Self::Mode1 => Mode::One,
+            Self::YCbCr => Mode::ImageYCbCr8,
+            Self::HSV => Mode::ImageHsv8,
+            Self::I => Mode::ImageI32,
+            Self::F => Mode::ImageF32,
+        }
+    }
+
     /// Parses a Pillow mode name used by the core image API.
+    ///
+    /// TODO(cpu-migration): parse mode strings in host adapters and pass a
+    /// typed mode into Rust operation APIs.
     pub(crate) fn from_name(mode: &str) -> Option<Self> {
         match mode {
             "1" => Some(Self::Mode1),

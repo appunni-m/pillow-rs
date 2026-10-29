@@ -153,7 +153,7 @@ fn large_rgb_grayscale_getcolors_matches_pillow_slot_order() {
     }
     let rgb = RgbImage::from_raw(256, 256, raw)
         .expect("RGB test data must contain exactly three bytes per pixel");
-    let image = Image::from_dynamic(DynamicImage::ImageRgb8(rgb.clone()), Some("RGB".into()));
+    let image = Image::from_dynamic(DynamicImage::ImageRgb8(rgb.clone()), Some(crate::raster::Mode::ImageRgb8));
     let maxcolors = 1_000_000;
     let (code_mask, code_polynomial) =
         pillow_color_table_parameters(maxcolors).expect("test limit has a Pillow table");

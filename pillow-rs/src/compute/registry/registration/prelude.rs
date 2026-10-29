@@ -1,4 +1,7 @@
 //! Shared imports for registry initialization modules.
+//!
+//! TODO(pillow-rs#3ptb): retire this direct CPU facade import map as the
+//! remaining registrations move to operation-owned prepared callbacks.
 
 pub(super) use super::Registry;
 pub(super) use crate::compute::pool_cpu::ops::chops::{
@@ -9,16 +12,14 @@ pub(super) use crate::compute::pool_cpu::ops::chops::{
     op_chops_subtract_modulo,
 };
 pub(super) use crate::compute::pool_cpu::ops::color::{
-    op_convert, op_convert_lab, op_extract_band, op_remap_palette,
+    op_convert, op_convert_lab, op_remap_palette,
 };
 pub(super) use crate::compute::pool_cpu::ops::draw::{
     op_draw_arc, op_draw_chord, op_draw_circle, op_draw_ellipse, op_draw_line, op_draw_pieslice,
     op_draw_point, op_draw_polygon, op_draw_rectangle, op_draw_rounded_rect,
 };
 pub(super) use crate::compute::pool_cpu::ops::effects::{
-    op_alpha_composite, op_blend_module, op_color3dlut, op_composite_module, op_effect_noise,
-    op_effect_spread, op_eval, op_merge, op_paste, op_put_alpha, op_put_alpha_data, op_put_data,
-    op_put_pixel, op_transform,
+    op_alpha_composite, op_blend_module, op_composite_module, op_merge, op_paste, op_transform,
 };
 pub(super) use crate::compute::pool_cpu::ops::enhance::{
     op_enhance_brightness, op_enhance_color_saturation, op_enhance_contrast, op_enhance_sharpness,
@@ -29,13 +30,10 @@ pub(super) use crate::compute::pool_cpu::ops::filter::{
     execute_min_filter_with_mode, execute_rank_filter_with_mode,
 };
 pub(super) use crate::compute::pool_cpu::ops::geometry::{
-    execute_crop, execute_reduce, execute_resize, execute_resize_boxed, execute_rotate,
-    execute_thumbnail, execute_transpose,
+    execute_resize, execute_resize_boxed, execute_thumbnail,
 };
 pub(super) use crate::compute::pool_cpu::ops::imageops::{
-    op_autocontrast, op_colorize, op_contain, op_cover, op_crop_border, op_equalize,
-    op_equalize_with_mask, op_expand, op_fit, op_flip, op_invert, op_mirror, op_pad, op_posterize,
-    op_scale, op_solarize,
+    op_contain, op_cover, op_fit, op_pad, op_scale,
 };
 pub(super) use crate::compute::pool_simd::ops::adapters;
 pub(super) use crate::error::PilError;

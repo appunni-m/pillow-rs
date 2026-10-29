@@ -245,7 +245,7 @@ fn gpu_nearest_affine_request_is_supported(
         // exact host path avoids silently treating a bilinear request as a
         // nearest relocation.
         || (float_mode && !matches!(filter, ResampleFilter::Nearest))
-        || (luma16_mode && !matches!(image, DynamicImage::ImageLuma16(_)))
+        || (luma16_mode && !matches!(image, DynamicImage::ImageI16(_)))
         || (indexed_mode && !matches!(image, DynamicImage::ImageLuma8(_)))
         || (palette_alpha_mode && !matches!(image, DynamicImage::ImageLumaA8(_)))
         || (raw_packed_mode && !matches!(image, DynamicImage::ImageRgba8(_)))

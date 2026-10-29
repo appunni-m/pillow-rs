@@ -1,6 +1,6 @@
 //! Effects operation registration.
 use super::prelude::{
-    DynamicImage, PilError, PipelineOp, Registry, op_alpha_composite, op_effect_spread, op_paste,
+    DynamicImage, PilError, PipelineOp, Registry, op_alpha_composite, op_paste,
 };
 fn register_part_1(m: &mut Registry) {
     // Pillow 12.2.0 libImaging/Effects.c:117-159 consumes process-global
@@ -10,16 +10,7 @@ fn register_part_1(m: &mut Registry) {
     m.insert(
         "EffectSpread",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             _mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::EffectSpread { distance } = op {
-                    op_effect_spread(img, *distance)
-                } else {
-                    Err(PilError::ValueError("expected EffectSpread op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::effects::ops::prepare_spread_pipeline,
             "effect_spread.wgsl"
         ),
     );

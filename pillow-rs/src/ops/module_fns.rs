@@ -11,6 +11,9 @@ use crate::image::Image;
 use crate::ops::convert::parse_mode;
 use crate::pipeline::PipelineOp;
 
+// TODO(cpu-migration): accept `Mode` for merge and gradient inputs after host
+// bindings perform Pillow spelling conversion.
+
 mod point;
 pub use point::{
     EvalInputKind, eval, eval_callable, eval_float, eval_point_callable, eval_point_transform,
@@ -280,7 +283,7 @@ pub fn merge(mode: &str, bands: &[Image]) -> Result<Image, PilError> {
         && mode != "RGB"
         && mode != "RGBA"
     {
-        *tag = Some(mode.to_owned());
+        *tag = crate::image::mode_boundary::parse_pillow_mode(mode);
     }
     Ok(result)
 }
@@ -406,7 +409,7 @@ pub fn composite(image1: &Image, image2: &Image, mask: &Image) -> Result<Image, 
         ..
     } = result
     {
-        *explicit_mode = image2.explicit_mode().map(str::to_owned);
+        *explicit_mode = image2.known_mode_identity();
         if output_mode == "P" {
             // The output begins as image2.copy(), so palette ownership follows
             // image2 even when image1 was converted to P for the paste.

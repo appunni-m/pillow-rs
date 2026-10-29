@@ -15,7 +15,7 @@ pub(super) fn convert_to_binary(
         let output = crate::color::cmyk_to_binary_truncate(source.as_ref())?;
         return Ok(Image::from_dynamic(
             DynamicImage::ImageLuma8(output),
-            Some("1".to_owned()),
+            Some(crate::raster::Mode::One),
         ));
     }
     let source = image.materialize()?;
@@ -29,7 +29,7 @@ pub(super) fn convert_to_binary(
     }
     Ok(Image::from_dynamic(
         DynamicImage::ImageLuma8(output),
-        Some("1".to_owned()),
+        Some(crate::raster::Mode::One),
     ))
 }
 

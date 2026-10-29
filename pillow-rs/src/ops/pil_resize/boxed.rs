@@ -396,7 +396,7 @@ fn pil_resize_boxed_early_paths(
         return (Some(img.crop_imm(left, top, dst_w, dst_h)), needs_alpha);
     }
 
-    if let DynamicImage::ImageLuma16(luma) = img {
+    if let DynamicImage::ImageI16(luma) = img {
         // A two-byte typed sample cannot enter the generic four-byte pixel
         // transport. Reuse the native u16 passes with boxed coefficients.
         return (

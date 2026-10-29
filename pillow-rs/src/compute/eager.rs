@@ -1,11 +1,14 @@
 //! Direct eager operations that select CPU, SIMD, or GPU without a lazy pipeline.
+//!
+//! TODO(pillow-rs#3ptb): replace the remaining direct SIMD adapter calls with
+//! CPU-family strategies selected by the injected execution context.
 
 use super::backend_state::active_lock;
 #[cfg(feature = "gpu")]
 use super::pool_gpu;
 use super::pool_simd;
 use super::{
-    Backend, DynamicImage, PilError, PipelineOp, PipelineResourceTelemetry, PipelineTelemetry,
+    Backend, DynamicImage, ExecutionContext, PilError, PipelineOp, PipelineResourceTelemetry, PipelineTelemetry,
     begin_pipeline_operation_telemetry, elapsed_ns, finish_pipeline_operation_telemetry,
     host_resource_telemetry, pipeline_telemetry_enabled, pipeline_timestamp,
     record_pipeline_allocation, record_pipeline_operation_handoff,
@@ -283,15 +286,18 @@ pub(crate) fn execute_eager_cpu_image_operation(
     operation: &'static str,
     input: &DynamicImage,
     manual_output_allocation: bool,
-    execute: impl FnOnce() -> Result<DynamicImage, PilError>,
+    execute: impl FnOnce(&ExecutionContext) -> Result<DynamicImage, PilError>,
 ) -> Result<DynamicImage, PilError> {
     let timed = pipeline_telemetry_enabled();
     if timed {
         reset_eager_image_operation_telemetry();
     }
 
+    let route_start = timed.then(pipeline_timestamp).flatten();
+    let context = ExecutionContext::for_routed_backend(Backend::Cpu);
+    let route_ns = elapsed_ns(route_start);
     let backend_start = timed.then(pipeline_timestamp).flatten();
-    let result = match execute() {
+    let result = match execute(&context) {
         Ok(result) => result,
         Err(error) => {
             if timed {
@@ -338,7 +344,7 @@ pub(crate) fn execute_eager_cpu_image_operation(
             requested_backend: Some(Backend::Cpu),
             actual_backend: Backend::Cpu,
             operation_count: 1,
-            route_ns: 0,
+            route_ns,
             validation_ns: 0,
             backend_ns,
             dispatch_count,
@@ -349,6 +355,162 @@ pub(crate) fn execute_eager_cpu_image_operation(
         });
     }
     Ok(result)
+}
+
+/// Executes a prepared CPU architecture strategy for one eager image operation.
+///
+/// The active operation frame surrounds preparation and execution so a selected
+/// vector implementation can attach its block and tail evidence to this receipt.
+pub(crate) fn execute_eager_cpu_arch_image_operation(
+    operation: &'static str,
+    input: &DynamicImage,
+    requested_backend: Backend,
+    execute: impl FnOnce(
+        &ExecutionContext,
+    ) -> Result<(DynamicImage, crate::compute::registry::support::StrategySelection), PilError>,
+) -> Result<DynamicImage, PilError> {
+    let timed = pipeline_telemetry_enabled();
+    let route_start = timed.then(pipeline_timestamp).flatten();
+    let context = ExecutionContext::for_routed_backend(requested_backend);
+    let route_ns = elapsed_ns(route_start);
+    execute_cpu_arch_operation(
+        operation,
+        input,
+        context,
+        Some(requested_backend),
+        route_ns,
+        0,
+        None,
+        execute,
+    )
+}
+
+/// Executes one CPU architecture strategy with caller-routed context and phase timings.
+pub(crate) fn execute_cpu_arch_operation(
+    operation: &'static str,
+    input: &DynamicImage,
+    context: ExecutionContext,
+    requested_backend: Option<Backend>,
+    route_ns: u64,
+    validation_ns: u64,
+    routed_fallback_reason: Option<String>,
+    execute: impl FnOnce(
+        &ExecutionContext,
+    ) -> Result<(DynamicImage, crate::compute::registry::support::StrategySelection), PilError>,
+) -> Result<DynamicImage, PilError> {
+    let timed = pipeline_telemetry_enabled();
+    if timed {
+        reset_eager_image_operation_telemetry();
+    }
+
+    if context.backend() != Backend::Cpu {
+        if timed {
+            discard_eager_image_operation_telemetry();
+        }
+        return Err(PilError::InternalError(
+            "CPU architecture execution received a non-CPU context".into(),
+        ));
+    }
+
+    if timed {
+        begin_pipeline_operation_telemetry(operation);
+    }
+    let backend_start = timed.then(pipeline_timestamp).flatten();
+    let (result, selection) = match execute(&context) {
+        Ok(result) => result,
+        Err(error) => {
+            if timed {
+                discard_eager_image_operation_telemetry();
+            }
+            return Err(error);
+        }
+    };
+    let backend_ns = elapsed_ns(backend_start);
+
+    if timed {
+        record_cpu_arch_operation_telemetry(
+            operation,
+            input,
+            &result,
+            selection,
+            requested_backend,
+            route_ns,
+            validation_ns,
+            backend_ns,
+            routed_fallback_reason,
+        );
+    }
+    Ok(result)
+}
+
+fn record_cpu_arch_operation_telemetry(
+    operation: &'static str,
+    input: &DynamicImage,
+    result: &DynamicImage,
+    selection: crate::compute::registry::support::StrategySelection,
+    requested_backend: Option<Backend>,
+    route_ns: u64,
+    validation_ns: u64,
+    backend_ns: u64,
+    routed_fallback_reason: Option<String>,
+) {
+    let mode_conversion = u64::from(input.mode() != result.mode());
+    if selection.implementation.architecture == crate::compute::Architecture::Default {
+        record_pipeline_operation_path("cpu");
+    }
+    record_pipeline_operation_mode_conversion(mode_conversion);
+    finish_pipeline_operation_telemetry();
+
+    let mut resource = host_resource_telemetry(input);
+    resource.mode_conversion_count = mode_conversion;
+    let output_bytes = result.as_bytes().len();
+    let output_bytes_u64 = output_bytes as u64;
+    resource.host_buffer_count = resource
+        .host_buffer_count
+        .saturating_add(u64::from(output_bytes != 0));
+    resource.host_buffer_bytes = resource.host_buffer_bytes.saturating_add(output_bytes_u64);
+    resource.peak_live_host_bytes = resource
+        .peak_live_host_bytes
+        .max((input.as_bytes().len() as u64).saturating_add(output_bytes_u64));
+    let allocation = take_pipeline_allocation_telemetry();
+    resource.host_allocation_count = allocation.allocation_count;
+    resource.host_allocated_bytes = allocation.allocated_bytes;
+    record_pipeline_resource_telemetry(resource);
+    let resource = take_pipeline_resource_telemetry();
+    let _ = take_pipeline_backend_override();
+    let dispatch_count = take_pipeline_dispatch_count();
+    let _ = take_pipeline_resize_coeff_cache_stats();
+    let fallback_reason = selection.fallback.map_or_else(
+        || {
+            routed_fallback_reason.or_else(|| {
+                (requested_backend == Some(Backend::Simd)
+                    && selection.requested_architecture == crate::compute::Architecture::Default)
+                    .then(|| format!("{operation} used CPU Default for a SIMD request"))
+            })
+        },
+        |reason| {
+            Some(format!(
+                "{operation} selected {:?} after {reason:?} for requested {:?}",
+                selection.implementation.architecture,
+                selection.requested_architecture,
+            ))
+        },
+    );
+    // TODO(pillow-rs#3ptb): include the selected Architecture in the
+    // operation receipt; PipelineTelemetry currently records backend/path only.
+    record_pipeline_telemetry(PipelineTelemetry {
+        requested_backend,
+        actual_backend: Backend::Cpu,
+        operation_count: 1,
+        route_ns,
+        validation_ns,
+        backend_ns,
+        dispatch_count,
+        fallback_reason,
+        resource,
+        resize_coeff_cache_hits: 0,
+        resize_coeff_cache_misses: 0,
+    });
 }
 
 /// Execute a CPU operation whose independent result shares immutable pixels

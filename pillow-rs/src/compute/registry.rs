@@ -27,6 +27,8 @@
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::DynamicImage;
+use super::{Backend, ExecutionContext};
+use self::support::OperationInputs;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
@@ -35,6 +37,9 @@ mod gpu_params;
 #[cfg(feature = "gpu")]
 mod gpu_support;
 mod registration;
+mod prepared;
+pub use prepared::PreparedOperation;
+pub mod support;
 #[cfg(feature = "gpu")]
 pub use gpu_params::extract_params;
 #[cfg(feature = "gpu")]
@@ -50,11 +55,17 @@ pub(crate) use gpu_support::{
 
 // ── Op function types ────────────────────────────────────────────────────────────
 
-/// CPU operation function signature used by registry entries.
-pub type CpuOpFn =
-    fn(img: &DynamicImage, op: &PipelineOp, mode: Option<&str>) -> Result<DynamicImage, PilError>;
+/// CPU preparation callback receiving exact image identity and injected policy.
+///
+/// The operation owns validation and concrete strategy selection. The returned
+/// plan retains borrowed inputs and executes without selecting again.
+pub type CpuOpFn = for<'a> fn(
+    input: OperationInputs<'a>,
+    op: &'a PipelineOp,
+    ctx: &ExecutionContext,
+) -> Result<PreparedOperation<'a>, PilError>;
 
-/// SIMD operation function — same signature as CPU but vectorized internally.
+/// Existing vector callback, pending retirement of the separate SIMD registry.
 pub type SimdOpFn =
     fn(img: &DynamicImage, op: &PipelineOp, mode: Option<&str>) -> Result<DynamicImage, PilError>;
 
@@ -62,7 +73,7 @@ pub type SimdOpFn =
 
 /// Backend implementations registered for one pipeline operation.
 pub struct OpEntry {
-    /// CPU implementation, present for operations supported by scalar fallback.
+    /// CPU preparation callback, present for operations with a serial fallback.
     pub cpu_fn: Option<CpuOpFn>,
     /// Embedded WGSL shader file name for GPU execution.
     #[cfg(feature = "gpu")]
@@ -307,17 +318,21 @@ pub fn simd_supports(op: &PipelineOp) -> Result<bool, PilError> {
         .is_some_and(|entry| entry.simd_fn.is_some()))
 }
 
-/// Executes one operation on the scalar CPU backend.
+/// Prepares one operation using its exact mode and the injected CPU context.
 ///
 /// # Errors
 ///
 /// Returns [`PilError::ValueError`] when the operation is unknown to the
-/// registry or has no CPU implementation.
-pub fn execute_cpu(
-    op: &PipelineOp,
-    img: &DynamicImage,
-    mode: Option<&str>,
-) -> Result<DynamicImage, PilError> {
+/// registry or has no CPU implementation. Propagates the operation's existing
+/// input errors. A context for another backend is an internal routing error.
+pub fn prepare_cpu<'a>(
+    op: &'a PipelineOp,
+    input: OperationInputs<'a>,
+    ctx: &ExecutionContext,
+) -> Result<PreparedOperation<'a>, PilError> {
+    if ctx.backend() != Backend::Cpu {
+        return Err(PilError::InternalError("CPU preparation received a context for another backend".into()));
+    }
     let key = variant_key(op);
     let entry = registry()?
         .get(key)
@@ -325,7 +340,23 @@ pub fn execute_cpu(
     let f = entry
         .cpu_fn
         .ok_or_else(|| PilError::ValueError(format!("CPU: no impl for {}", key)))?;
-    f(img, op, mode)
+    f(input, op, ctx)
+}
+
+/// Prepares and executes one operation with the supplied image and context.
+///
+/// Use [`prepare_cpu`] when the caller needs to inspect the selection before
+/// consuming the plan.
+///
+/// # Errors
+///
+/// Propagates preparation and execution errors without rerouting or retrying.
+pub fn execute_cpu<'a>(
+    op: &'a PipelineOp,
+    input: OperationInputs<'a>,
+    ctx: &ExecutionContext,
+) -> Result<DynamicImage, PilError> {
+    prepare_cpu(op, input, ctx)?.execute()
 }
 
 fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> {

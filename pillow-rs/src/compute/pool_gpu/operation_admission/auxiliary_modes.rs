@@ -103,7 +103,7 @@ fn gpu_luma16_paste_auxiliary_modes_are_safe(
     let source_is_luma16 = auxiliary
         .second
         .as_deref()
-        .is_some_and(|source| matches!(source, DynamicImage::ImageLuma16(_)));
+        .is_some_and(|source| matches!(source, DynamicImage::ImageI16(_)));
     let mask_is_supported = matches!(
         (mask_alpha, auxiliary.third.as_deref()),
         (false, None)

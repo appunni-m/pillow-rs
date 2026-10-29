@@ -133,7 +133,7 @@ pub(super) fn convert_to_palette_alpha(
             let (rgb, alpha) = split_rgba_for_palette(source.as_ref())?;
             let (width, height) = rgb.dimensions();
             let quantized =
-                Image::from_dynamic(DynamicImage::ImageRgb8(rgb), Some("RGB".to_owned()))
+                Image::from_dynamic(DynamicImage::ImageRgb8(rgb), Some(crate::raster::Mode::ImageRgb8))
                     // Image.convert("PA") calls RGB.quantize() without a method;
                     // RGB therefore uses MEDIANCUT (method 0), not RGBA's FASTOCTREE
                     // default.  The palette-index order is observable in PA bytes.
@@ -191,7 +191,7 @@ pub(super) fn convert_to_palette_alpha(
     Ok(Image::Loaded(crate::image::LoadedData {
         image: std::sync::Arc::new(DynamicImage::ImageLumaA8(pa)),
         known_zero_fill: false,
-        explicit_mode: Some("PA".to_owned()),
+        explicit_mode: Some(crate::raster::Mode::ImagePaletteAlpha8),
         decoded_mode: crate::raster::ColorType::La8.into(),
         palette,
         palette_alpha: None,
@@ -232,7 +232,7 @@ pub(super) fn convert_to_web_palette(
     let source = crate::image::LoadedData {
         image: Arc::new(DynamicImage::ImageLuma8(output)),
         known_zero_fill: false,
-        explicit_mode: Some("P".to_owned()),
+        explicit_mode: Some(crate::raster::Mode::ImagePalette8),
         decoded_mode: crate::raster::ColorType::L8.into(),
         palette: None,
         palette_alpha: None,
@@ -244,7 +244,7 @@ pub(super) fn convert_to_web_palette(
         source: Arc::new(Image::Loaded(source)),
         ops: PipelineOps::empty(),
         format: None,
-        explicit_mode: Some("P".to_owned()),
+        explicit_mode: Some(crate::raster::Mode::ImagePalette8),
         backend: None,
         palette: Some(palette_bytes),
         palette_alpha: None,

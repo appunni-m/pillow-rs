@@ -201,7 +201,7 @@ impl PilFontMask {
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?;
                 Ok(Image::from_dynamic(
                     crate::raster::DynamicImage::ImageLuma8(image),
-                    Some("1".to_owned()),
+                    Some(crate::raster::Mode::One),
                 ))
             }
         }

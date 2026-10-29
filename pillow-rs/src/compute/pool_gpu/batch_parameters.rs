@@ -703,7 +703,7 @@ fn append_color_3d_lut_params(
     context: BatchOperationParameterContext<'_>,
     size: (u32, u32, u32),
     channels: u32,
-    source_mode: PixelMode,
+    source_mode: crate::raster::Mode,
     params: &mut Vec<u32>,
 ) {
     let scale = |extent: u32| {
@@ -718,7 +718,7 @@ fn append_color_3d_lut_params(
         scale(size.1),
         scale(size.2),
     ]);
-    params[2] = gpu_pixel_mode_code(source_mode).unwrap_or(context.op_mode);
+    params[2] = gpu_raster_mode_code(source_mode).unwrap_or(context.op_mode);
 }
 
 fn append_fit_params(

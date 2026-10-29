@@ -113,17 +113,11 @@ impl Image {
     /// Try applying ImageOps.grayscale immediately for the bounded native-RGB
     /// CPU/SIMD path. Other inputs keep the ordinary lazy pipeline semantics.
     pub(crate) fn try_grayscale_eager_rgb(&self) -> Result<Option<Image>, PilError> {
-        if cfg!(feature = "parallel") {
-            return Ok(None);
-        }
         let Image::Loaded(data) = self else {
             return Ok(None);
         };
-        let logical_mode = data
-            .explicit_mode
-            .as_deref()
-            .unwrap_or_else(|| image_mode_name(data.decoded_mode));
-        if logical_mode != "RGB" {
+        let logical_mode = data.explicit_mode.unwrap_or(data.image.mode());
+        if logical_mode != crate::raster::Mode::ImageRgb8 {
             return Ok(None);
         }
 
@@ -142,24 +136,27 @@ impl Image {
             return Ok(None);
         };
         let operation = PipelineOp::Grayscale;
+        let inputs = crate::compute::registry::support::OperationInputs {
+            image: image.as_ref(),
+            palette: crate::compute::registry::support::PaletteInput {
+                rgb: data.palette.as_deref(),
+                alpha: data.palette_alpha.as_deref().unwrap_or_default(),
+            },
+        };
         let grayscale = match backend {
-            crate::compute::Backend::Cpu => crate::compute::execute_eager_cpu_image_operation(
-                "Grayscale",
-                image.as_ref(),
-                false,
-                || crate::compute::registry::execute_cpu(&operation, image.as_ref(), Some("RGB")),
-            )?,
-            crate::compute::Backend::Simd => crate::compute::execute_eager_simd_image_operation(
-                "Grayscale",
-                image.as_ref(),
-                || {
-                    crate::compute::simd_grayscale_with_evidence(
-                        image.as_ref(),
-                        &operation,
-                        Some("RGB"),
-                    )
-                },
-            )?,
+            crate::compute::Backend::Cpu | crate::compute::Backend::Simd => {
+                crate::compute::execute_eager_cpu_arch_image_operation(
+                    "Grayscale",
+                    image.as_ref(),
+                    backend,
+                    |ctx| {
+                        let prepared =
+                            crate::compute::registry::prepare_cpu(&operation, inputs, ctx)?;
+                        let selection = *prepared.selection();
+                        prepared.execute().map(|output| (output, selection))
+                    },
+                )?
+            }
             crate::compute::Backend::Gpu => return Ok(None),
         };
 
@@ -184,7 +181,10 @@ pub(crate) struct GpuResultMetadata {
 #[cfg(feature = "gpu")]
 impl GpuResultMetadata {
     pub(crate) fn materialize(&self, image: DynamicImage, mode: &str) -> Image {
-        let mut result = Image::from_dynamic(image, Some(mode.to_owned()));
+        let mut result = Image::from_dynamic(
+            image,
+            super::mode_boundary::parse_pillow_mode(mode),
+        );
         if let Image::Loaded(data) = &mut result {
             data.info = self.info.clone();
             data.exif = self.exif.clone();
@@ -261,7 +261,7 @@ impl Image {
                 ops,
                 materialized,
                 *backend,
-                explicit_mode.as_deref(),
+                super::mode_boundary::pillow_mode_name_opt(*explicit_mode),
                 palette.is_some(),
                 mode,
                 depth,
@@ -271,10 +271,10 @@ impl Image {
                 cached: Some(data.image.clone()),
                 width: data.image.width(),
                 height: data.image.height(),
-                mode: data
-                    .explicit_mode
-                    .clone()
-                    .unwrap_or_else(|| image_mode_name(data.decoded_mode).to_owned()),
+                mode: super::mode_boundary::pillow_mode_name_opt(data.explicit_mode)
+                    .or_else(|| super::mode_boundary::pillow_mode_name(data.image.mode()))
+                    .unwrap_or_else(|| image_mode_name(data.decoded_mode))
+                    .to_owned(),
                 encoded_bytes: 0,
                 ops: Vec::new(),
             }),
@@ -326,7 +326,15 @@ impl Image {
                 .map(str::to_owned)
                 .or_else(|| {
                     mode.get()
-                        .and_then(|m| m.as_ref().ok().and_then(|m| m.clone()))
+                        .and_then(|cached| {
+                            cached.as_ref().ok().and_then(|cached_mode| {
+                                cached_mode
+                                    .as_ref()
+                                    .copied()
+                                    .and_then(super::mode_boundary::pillow_mode_name)
+                                    .map(str::to_owned)
+                            })
+                        })
                 })
                 .unwrap_or_else(|| image_mode_name(pixels.color().into()).to_owned());
             return Ok(self.gpu_cached_pending_graph(pixels, pixel_mode));

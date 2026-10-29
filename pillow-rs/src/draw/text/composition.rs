@@ -173,7 +173,7 @@ impl Draw {
                 crate::raster::DynamicImage::ImageRgb8(
                     crate::raster::DynamicImage::ImageRgba8(canvas).to_rgb8(),
                 ),
-                Some(mode),
+                crate::image::mode_boundary::parse_pillow_mode(&mode),
             );
         } else {
             self.set_image(canvas);
@@ -237,7 +237,7 @@ impl Draw {
         }
         self.image = Image::from_dynamic(
             crate::raster::DynamicImage::ImageLuma8(luma),
-            Some("1".to_string()),
+            Some(crate::raster::Mode::One),
         );
         Ok(())
     }
@@ -314,7 +314,7 @@ impl Draw {
         }
         self.image = Image::from_dynamic(
             crate::raster::DynamicImage::ImageLumaA8(la),
-            Some("LA".to_string()),
+            Some(crate::raster::Mode::ImageLumaA8),
         );
         Ok(())
     }
@@ -366,7 +366,7 @@ impl Draw {
         }
         self.image = Image::from_dynamic(
             crate::raster::DynamicImage::ImageRgba8(rgba),
-            Some("CMYK".to_string()),
+            Some(crate::raster::Mode::ImageCmyk8),
         );
         Ok(())
     }
@@ -423,7 +423,7 @@ impl Draw {
             }
         }
         self.image = Image::Paletted(crate::image::PalettedData {
-            indices,
+            indices: crate::raster::DynamicImage::ImagePalette8(indices),
             palette,
             palette_alpha,
             source_format,
@@ -462,7 +462,7 @@ impl Draw {
         }
         self.image = Image::from_dynamic(
             crate::raster::DynamicImage::ImageLuma8(luma),
-            Some("P".to_string()),
+            Some(crate::raster::Mode::ImagePalette8),
         );
         Ok(())
     }
@@ -497,7 +497,7 @@ impl Draw {
         }
         self.image = Image::from_dynamic(
             crate::raster::DynamicImage::ImageRgba8(rgba),
-            Some(mode.to_string()),
+            crate::image::mode_boundary::parse_pillow_mode(&mode),
         );
         Ok(())
     }

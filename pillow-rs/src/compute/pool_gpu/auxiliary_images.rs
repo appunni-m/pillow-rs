@@ -43,7 +43,7 @@ fn extract_effect_spread_or_lut_auxiliary(
             let (width, height) = primary_dimensions.ok_or_else(|| {
                 PilError::InternalError("GPU EffectSpread is missing primary dimensions".into())
             })?;
-            let mapping = crate::compute::pool_cpu::ops::effects::effect_spread_mapping(
+            let mapping = crate::compute::helpers::effects::effect_spread_mapping(
                 width, height, *distance,
             )?;
             let mut bytes = Vec::with_capacity(mapping.len().saturating_mul(4));
@@ -165,7 +165,7 @@ pub(super) fn extract_second_image(
             PilError::InternalError("GPU EffectNoise is missing primary dimensions".into())
         })?;
         let values =
-            crate::compute::pool_cpu::ops::effects::effect_noise_values(width, height, *sigma)?;
+            crate::compute::helpers::effects::effect_noise_values(width, height, *sigma)?;
         let mut bytes = Vec::with_capacity(values.len().saturating_mul(4));
         for value in values {
             bytes.extend_from_slice(&[value, 0, 0, 255]);

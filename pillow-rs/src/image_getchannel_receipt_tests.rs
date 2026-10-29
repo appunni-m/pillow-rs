@@ -215,8 +215,15 @@ fn direct_cpu_eager_same_mode_records_no_conversion() -> Result<(), PilError> {
     let image = Image::frombytes("L", (2, 1), &[17, 231])?;
     let input = image.materialize()?;
     let (result, receipt, operations) = capture_telemetry(|| {
-        compute::execute_eager_cpu_image_operation("Grayscale", &input, false, || {
-            compute::registry::execute_cpu(&PipelineOp::Grayscale, &input, Some("L"))
+        compute::execute_eager_cpu_image_operation("Grayscale", &input, false, |ctx| {
+            compute::registry::execute_cpu(
+                &PipelineOp::Grayscale,
+                compute::registry::support::OperationInputs {
+                    image: &input,
+                    palette: compute::registry::support::PaletteInput::default(),
+                },
+                ctx,
+            )
         })
     });
     assert_eq!(result?.as_bytes(), &[17, 231]);
@@ -243,10 +250,17 @@ fn failed_cpu_eager_operation_clears_mode_conversion_receipt() -> Result<(), Pil
     let image = Image::frombytes("RGB", (2, 1), &[0, 0, 0, 255, 255, 255])?;
     let input = image.materialize()?;
     let (result, receipt, operations) = capture_telemetry(|| {
-        compute::execute_eager_cpu_image_operation("Grayscale", &input, false, || {
-            compute::registry::execute_cpu(&PipelineOp::Grayscale, &input, Some("RGB"))
+        compute::execute_eager_cpu_image_operation("Grayscale", &input, false, |ctx| {
+            compute::registry::execute_cpu(
+                &PipelineOp::Grayscale,
+                compute::registry::support::OperationInputs {
+                    image: &input,
+                    palette: compute::registry::support::PaletteInput::default(),
+                },
+                ctx,
+            )
         })?;
-        compute::execute_eager_cpu_image_operation("Grayscale", &input, false, || {
+        compute::execute_eager_cpu_image_operation("Grayscale", &input, false, |_ctx| {
             Err(PilError::ValueError("receipt test failure".into()))
         })
     });

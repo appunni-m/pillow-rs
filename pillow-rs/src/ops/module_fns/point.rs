@@ -157,7 +157,10 @@ pub fn eval_point_transform(image: &Image, scale: f64, offset: f64) -> Result<Im
         _ => unreachable!("scalar point transform mode was validated above"),
     }
 
-    Ok(Image::from_dynamic(result, Some(mode)))
+    Ok(Image::from_dynamic(
+        result,
+        crate::image::mode_boundary::parse_pillow_mode(&mode),
+    ))
 }
 
 /// Applies a host callback to each scalar sample in an integer or float image.
@@ -210,7 +213,10 @@ where
         _ => unreachable!("scalar point mode was validated above"),
     }
 
-    Ok(Image::from_dynamic(result, Some(mode)))
+    Ok(Image::from_dynamic(
+        result,
+        crate::image::mode_boundary::parse_pillow_mode(&mode),
+    ))
 }
 
 /// Validates and applies a pre-expanded Pillow lookup table.

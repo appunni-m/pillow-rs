@@ -4,7 +4,7 @@ use crate::error::PilError;
 use crate::raster::GenericImageView;
 
 use super::{
-    Arc, DynamicImage, FormattedPixelValue, Image, PipelineOp, PutDataValue, image_mode_name,
+    Arc, DynamicImage, FormattedPixelValue, Image, PipelineOp, PutDataValue,
     is_l16_mode, pillow_band_count,
 };
 
@@ -56,12 +56,7 @@ impl Image {
         let Image::Loaded(data) = self else {
             return Ok(None);
         };
-        if data
-            .explicit_mode
-            .as_deref()
-            .unwrap_or_else(|| image_mode_name(data.decoded_mode))
-            != "RGB"
-        {
+        if data.explicit_mode.unwrap_or(data.image.mode()) != crate::raster::Mode::ImageRgb8 {
             return Ok(None);
         }
         if x >= data.image.width() || y >= data.image.height() {
@@ -152,7 +147,7 @@ impl Image {
         if x >= w || y >= h {
             return Err(PilError::IndexError("image index out of range".into()));
         }
-        let (r, g, b) = if self.explicit_mode() == Some("LAB") {
+        let (r, g, b) = if self.known_mode_identity() == Some(crate::raster::Mode::ImageLab8) {
             // The public LAB bands expose signed A/B values, while the shared
             // RGB8 raster stores them with Pillow's unsigned +128 bias.
             (r, g.wrapping_add(128), b.wrapping_add(128))
@@ -265,6 +260,7 @@ impl Image {
     ///
     /// Returns the same errors as [`Image::putpixel`].
     pub fn putpixel_mode(&mut self, x: u32, y: u32, v: u8, mode: &str) -> Result<(), PilError> {
+        // TODO(cpu-migration): take `Mode` directly from typed Rust callers.
         if is_l16_mode(mode) {
             return self.putpixel_l16(x, y, i64::from(v));
         }
@@ -412,14 +408,14 @@ impl Image {
                         .all(|(&byte, &value)| f64::from(byte) == value)
             })
         {
-            return Ok(if self.explicit_mode() == Some("PA") {
+            return Ok(if self.known_mode_identity() == Some(crate::raster::Mode::ImagePaletteAlpha8) {
                 PutPixelValue::Components(vec![index as i64, 255])
             } else {
                 PutPixelValue::Integer(index as i64)
             });
         }
         let channels = if rgba { 4 } else { 3 };
-        if self.explicit_mode() == Some("PA") && palette.len() / channels >= 256 {
+        if self.known_mode_identity() == Some(crate::raster::Mode::ImagePaletteAlpha8) && palette.len() / channels >= 256 {
             return Err(PilError::ValueError(
                 "cannot allocate more than 256 colors".into(),
             ));
@@ -434,7 +430,7 @@ impl Image {
         values: &[i64],
         reserved: &[u32],
     ) -> Result<PutPixelValue, PilError> {
-        let pa = self.explicit_mode() == Some("PA");
+        let pa = self.known_mode_identity() == Some(crate::raster::Mode::ImagePaletteAlpha8);
         let alpha = values.get(3).copied().unwrap_or(255);
         let rgba_palette = self.palette_mode() == Some("RGBA");
         if !pa && !rgba_palette && alpha != 255 {
