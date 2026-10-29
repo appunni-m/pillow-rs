@@ -33,6 +33,7 @@ mod automatic_segments;
 mod backend_state;
 mod eager;
 mod execution;
+mod execution_context;
 #[path = "phase_telemetry.rs"]
 mod phase_telemetry;
 #[path = "telemetry.rs"]
@@ -152,7 +153,11 @@ pub enum Backend {
     Gpu = 1,
     /// SIMD implementation for operations with vectorized adapters.
     Simd = 2,
+    /// Rayon-backed CPU implementation when the `parallel` feature is enabled.
+    ParallelCpu = 3,
 }
+
+pub(crate) use execution_context::{Architecture, ExecutionContext};
 
 /// One completed pipeline timing sample and its backend/resource counters.
 ///
@@ -174,13 +179,25 @@ pub type PipelineTelemetrySample = (
 impl Backend {
     /// Parses a backend name used by CLI, environment, or binding-layer options.
     ///
-    /// Accepted values are `"cpu"`, `"gpu"`, and `"simd"`, case-insensitive.
+    /// Accepted values are `"cpu"`, `"gpu"`, `"simd"`, and
+    /// `"parallel-cpu"`, case-insensitive.
     pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "cpu" => Some(Self::Cpu),
             "gpu" => Some(Self::Gpu),
             "simd" => Some(Self::Simd),
+            "parallel-cpu" | "parallel_cpu" => Some(Self::ParallelCpu),
             _ => None,
+        }
+    }
+
+    /// Return the priority used by automatic backend activation order.
+    pub(crate) const fn priority(self) -> u8 {
+        match self {
+            Self::Cpu => 0,
+            Self::ParallelCpu => 25,
+            Self::Simd => 50,
+            Self::Gpu => 100,
         }
     }
 
@@ -275,7 +292,7 @@ pub(crate) trait BackendImpl: Send + Sync {
     /// Returns backend preference. Larger values are selected first.
     fn priority(&self) -> u8; // higher = preferred
     /// Returns whether this backend can execute one pipeline operation.
-    fn supports(&self, op: &PipelineOp) -> Result<bool, PilError>;
+    fn supports(&self, context: &ExecutionContext, op: &PipelineOp) -> Result<bool, PilError>;
     /// Returns whether this backend can execute `op` for this concrete image
     /// and logical mode.  Operation-only registry support is deliberately not
     /// enough for backends whose implementation depends on layout, mode, or
@@ -283,16 +300,18 @@ pub(crate) trait BackendImpl: Send + Sync {
     /// the operation-only answer.
     fn supports_for_image(
         &self,
+        context: &ExecutionContext,
         op: &PipelineOp,
         img: &DynamicImage,
         mode: Option<&str>,
     ) -> Result<bool, PilError> {
         let _ = (img, mode);
-        self.supports(op)
+        self.supports(context, op)
     }
     /// Executes a sequence of operations against one image buffer.
     fn execute_batch(
         &self,
+        context: &ExecutionContext,
         ops: &[PipelineOp],
         img: &DynamicImage,
         mode: Option<&str>,
@@ -303,11 +322,12 @@ pub(crate) trait BackendImpl: Send + Sync {
     /// [`Self::execute_batch`] and may select the CPU fallback.
     fn execute_batch_strict(
         &self,
+        context: &ExecutionContext,
         ops: &[PipelineOp],
         img: &DynamicImage,
         mode: Option<&str>,
     ) -> Result<DynamicImage, PilError> {
-        self.execute_batch(ops, img, mode)
+        self.execute_batch(context, ops, img, mode)
     }
     /// Returns a backend-native dispatch count when it can be reported without
     /// estimating or instrumenting the backend. Most backends currently do not
@@ -328,8 +348,10 @@ pub use pool_gpu::stream::{
     GpuBatchExecutor, GpuBatchStats, GpuImage,
 };
 mod pool_simd;
-pub(crate) use pool_simd::ops::adapters::simd_extract_band_into;
-pub(crate) use pool_simd::ops::adapters::simd_grayscale_with_evidence;
+pub(crate) use pool_simd::ops::adapters::{
+    simd_extract_band_into, simd_extract_band_into_in_context, simd_grayscale_with_evidence,
+    simd_grayscale_with_evidence_in_context,
+};
 
 pub(crate) mod registry;
 
@@ -351,8 +373,8 @@ pub(crate) fn clear_gpu_batch_test_fault() {
 #[cfg(test)]
 mod tests {
     use super::{
-        Backend, PilError, execute_automatic_simd_segments, execute_eager_simd_image_operation,
-        simd_extract_band_into,
+        Backend, ExecutionContext, PilError, execute_automatic_simd_segments,
+        execute_eager_simd_image_operation, simd_extract_band_into_in_context,
     };
     use crate::pipeline::{PipelineOp, ResampleFilter, TransformMethod};
     use crate::raster::{DynamicImage, Rgb, RgbImage};
@@ -380,10 +402,11 @@ mod tests {
             RgbImage::from_raw(37, 1, raw).expect("RGB source shape must be valid"),
         );
         let previous = Backend::set_pipeline_telemetry_enabled(true);
-        let result = execute_eager_simd_image_operation("ExtractBand", &image, || {
+        let context = ExecutionContext::for_backend(Backend::Simd);
+        let result = execute_eager_simd_image_operation(&context, "ExtractBand", &image, || {
             let mut output = crate::checked_dims::CheckedDims::new(37, 1, 1)?.alloc_buffer();
             let (vector_blocks, scalar_tail, path) =
-                simd_extract_band_into(&image, 1, Some("RGB"), &mut output)?;
+                simd_extract_band_into_in_context(&context, &image, 1, Some("RGB"), &mut output)?;
             let output = crate::raster::GrayImage::from_raw(37, 1, output).ok_or_else(|| {
                 PilError::InternalError("SIMD ExtractBand buffer shape mismatch".into())
             })?;
@@ -449,8 +472,13 @@ mod tests {
         ];
 
         let (_result, actual_backend, fallback_reason, _resource) =
-            execute_automatic_simd_segments(&ops, &source, Some("RGB"))
-                .expect("mixed SIMD/CPU pipeline should execute");
+            execute_automatic_simd_segments(
+                &ExecutionContext::for_backend(Backend::Simd),
+                &ops,
+                &source,
+                Some("RGB"),
+            )
+            .expect("mixed SIMD/CPU pipeline should execute");
 
         assert_eq!(actual_backend, Backend::Cpu);
         assert_eq!(

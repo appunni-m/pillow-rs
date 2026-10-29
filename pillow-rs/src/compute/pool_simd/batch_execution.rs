@@ -1,14 +1,21 @@
 use super::{finish_simd_batch, ops, point_batch, put_pixel_batch};
 use crate::compute::registry;
+use crate::compute::{Backend, ExecutionContext};
 use crate::error::PilError;
 use crate::pipeline::{PipelineOp, TransposeTransform};
 use crate::raster::DynamicImage;
 
 pub(super) fn execute_batch(
+    context: &ExecutionContext,
     ops: &[PipelineOp],
     img: &DynamicImage,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    if context.backend() != Backend::Simd || !context.architecture().supports_simd() {
+        return Err(PilError::NotImplementedError(
+            "SIMD architecture is unavailable for the selected execution context".into(),
+        ));
+    }
     log::debug!(
         "[SIMD] {} op(s) {}x{}: {:?}",
         ops.len(),
@@ -25,24 +32,23 @@ pub(super) fn execute_batch(
         let input = current.as_ref().unwrap_or(img);
         let op = &ops[index];
         let op_mode = current_mode.as_deref();
-        ensure_supported(input, op, op_mode)?;
+        ensure_supported(context, input, op, op_mode)?;
 
-        if let Some(step) = try_fusions(ops, index, input, op_mode, &mut resources)? {
+        if let Some(step) = try_fusions(context, ops, index, input, op_mode, &mut resources)? {
             apply_step(step, &mut current, &mut current_mode, &mut index);
             continue;
         }
 
-        if current
-            .as_ref()
-            .is_some_and(|owned| ops::adapters::simd_in_place_supported(owned, op, op_mode))
-        {
-            execute_in_place(&mut current, op, op_mode)?;
+        if current.as_ref().is_some_and(|owned| {
+            ops::adapters::simd_in_place_supported_in_context(context, owned, op, op_mode)
+        }) {
+            execute_in_place(context, &mut current, op, op_mode)?;
             current_mode = ops::adapters::simd_mode_after_op(op, op_mode);
             index += 1;
             continue;
         }
 
-        let next = execute_single(input, op, op_mode, &mut resources)?;
+        let next = execute_single(context, input, op, op_mode, &mut resources)?;
         current = Some(next);
         current_mode = ops::adapters::simd_mode_after_op(op, op_mode);
         index += 1;
@@ -84,6 +90,7 @@ fn output_step(
 }
 
 fn try_fusions(
+    context: &ExecutionContext,
     ops: &[PipelineOp],
     index: usize,
     input: &DynamicImage,
@@ -91,23 +98,25 @@ fn try_fusions(
     resources: &mut crate::compute::PipelineResourceTelemetry,
 ) -> Result<Option<BatchStep>, PilError> {
     if matches!(&ops[index], PipelineOp::PutPixel { .. })
-        && let Some(step) = try_put_pixel(ops, index, input, op_mode, resources)?
+        && let Some(step) = try_put_pixel(context, ops, index, input, op_mode, resources)?
     {
         return Ok(Some(step));
     }
-    if let Some(step) = try_multiply_screen(ops, index, input, op_mode, resources)? {
+    if let Some(step) = try_multiply_screen(context, ops, index, input, op_mode, resources)? {
         return Ok(Some(step));
     }
-    if let Some(step) = try_alpha_composite_mirror(ops, index, input, op_mode, resources)? {
+    if let Some(step) = try_alpha_composite_mirror(context, ops, index, input, op_mode, resources)?
+    {
         return Ok(Some(step));
     }
-    if let Some(step) = try_transpose_run(ops, index, input, op_mode, resources)? {
+    if let Some(step) = try_transpose_run(context, ops, index, input, op_mode, resources)? {
         return Ok(Some(step));
     }
-    try_point_batch(ops, index, input, op_mode, resources)
+    try_point_batch(context, ops, index, input, op_mode, resources)
 }
 
 fn try_put_pixel(
+    context: &ExecutionContext,
     ops: &[PipelineOp],
     index: usize,
     input: &DynamicImage,
@@ -115,7 +124,7 @@ fn try_put_pixel(
     resources: &mut crate::compute::PipelineResourceTelemetry,
 ) -> Result<Option<BatchStep>, PilError> {
     let Some((next, mode, next_index)) =
-        put_pixel_batch::try_execute(input, ops, index, op_mode, resources)?
+        put_pixel_batch::try_execute(context, input, ops, index, op_mode, resources)?
     else {
         return Ok(None);
     };
@@ -127,6 +136,7 @@ fn try_put_pixel(
 }
 
 fn try_multiply_screen(
+    context: &ExecutionContext,
     ops: &[PipelineOp],
     index: usize,
     input: &DynamicImage,
@@ -145,7 +155,7 @@ fn try_multiply_screen(
     else {
         return Ok(None);
     };
-    ensure_supported(input, &ops[index + 1], op_mode)?;
+    ensure_supported(context, input, &ops[index + 1], op_mode)?;
     let Some((fused, vector_blocks, scalar_tail)) =
         ops::adapters::simd_fused_multiply_screen(input, first_other, second_other, op_mode)?
     else {
@@ -171,6 +181,7 @@ fn try_multiply_screen(
 }
 
 fn try_alpha_composite_mirror(
+    context: &ExecutionContext,
     ops: &[PipelineOp],
     index: usize,
     input: &DynamicImage,
@@ -199,7 +210,7 @@ fn try_alpha_composite_mirror(
     {
         return Ok(None);
     }
-    ensure_supported(input, &ops[index + 1], op_mode)?;
+    ensure_supported(context, input, &ops[index + 1], op_mode)?;
 
     crate::compute::begin_pipeline_operation_telemetry("AlphaComposite");
     crate::compute::begin_pipeline_operation_telemetry("Mirror");
@@ -233,6 +244,7 @@ fn try_alpha_composite_mirror(
 }
 
 fn try_transpose_run(
+    context: &ExecutionContext,
     ops: &[PipelineOp],
     index: usize,
     input: &DynamicImage,
@@ -246,7 +258,7 @@ fn try_transpose_run(
     if consumed == 1 {
         return Ok(None);
     }
-    ensure_all_supported(input, &ops[index..index + consumed], op_mode)?;
+    ensure_all_supported(context, input, &ops[index..index + consumed], op_mode)?;
     if matches!(combined, TransposeTransform::Identity) {
         if !super::transpose_identity_can_reuse(input) {
             return Ok(None);
@@ -265,7 +277,13 @@ fn try_transpose_run(
         unreachable!("identity was handled above")
     };
     let fused = PipelineOp::Transpose { method };
-    let next = execute_fused_transpose(input, &fused, op_mode, &ops[index..index + consumed])?;
+    let next = execute_fused_transpose(
+        context,
+        input,
+        &fused,
+        op_mode,
+        &ops[index..index + consumed],
+    )?;
     crate::compute::account_host_buffer_boundary(resources, input, &next);
     resources.fused_operation_count = resources
         .fused_operation_count
@@ -304,6 +322,7 @@ fn record_transpose_identity(ops: &[PipelineOp]) {
 }
 
 fn execute_fused_transpose(
+    context: &ExecutionContext,
     input: &DynamicImage,
     fused: &PipelineOp,
     op_mode: Option<&str>,
@@ -313,13 +332,16 @@ fn execute_fused_transpose(
     let entry = registry::registry()?
         .get(key)
         .ok_or_else(|| PilError::ValueError(format!("SIMD: unknown op {}", key)))?;
-    let f = entry
-        .simd_fn
-        .ok_or_else(|| PilError::ValueError(format!("SIMD: no native impl for {}", key)))?;
+    if entry.simd_fn.is_none() {
+        return Err(PilError::ValueError(format!(
+            "SIMD: no native impl for {}",
+            key
+        )));
+    }
     for op in original_ops {
         crate::compute::begin_pipeline_operation_telemetry(registry::variant_key(op));
     }
-    let next = match f(input, fused, op_mode) {
+    let next = match ops::adapters::simd_execute_in_context(context, input, fused, op_mode) {
         Ok(next) => next,
         Err(error) => {
             finish_failed_fusion(original_ops.len());
@@ -334,6 +356,7 @@ fn execute_fused_transpose(
 }
 
 fn try_point_batch(
+    context: &ExecutionContext,
     ops: &[PipelineOp],
     index: usize,
     input: &DynamicImage,
@@ -343,12 +366,12 @@ fn try_point_batch(
     let Some((consumed, lut)) = point_batch::fused(&ops[index..], input, op_mode) else {
         return Ok(None);
     };
-    ensure_all_supported(input, &ops[index..index + consumed], op_mode)?;
+    ensure_all_supported(context, input, &ops[index..index + consumed], op_mode)?;
     let original_ops = &ops[index..index + consumed];
     for op in original_ops {
         crate::compute::begin_pipeline_operation_telemetry(registry::variant_key(op));
     }
-    let next = match execute_point_lut(input, op_mode, lut) {
+    let next = match execute_point_lut(context, input, op_mode, lut) {
         Ok(next) => next,
         Err(error) => {
             finish_failed_fusion(consumed);
@@ -372,10 +395,16 @@ fn try_point_batch(
 }
 
 fn execute_point_lut(
+    context: &ExecutionContext,
     input: &DynamicImage,
     op_mode: Option<&str>,
     lut: Vec<u8>,
 ) -> Result<DynamicImage, PilError> {
+    if context.backend() != Backend::Simd || !context.architecture().supports_simd() {
+        return Err(PilError::NotImplementedError(
+            "SIMD architecture is unavailable for the selected execution context".into(),
+        ));
+    }
     if let Some(native) = ops::adapters::native_point_lut(input, op_mode, &lut) {
         return Ok(native);
     }
@@ -384,6 +413,7 @@ fn execute_point_lut(
 }
 
 fn execute_in_place(
+    context: &ExecutionContext,
     current: &mut Option<DynamicImage>,
     op: &PipelineOp,
     op_mode: Option<&str>,
@@ -392,7 +422,7 @@ fn execute_in_place(
         .take()
         .expect("current.is_some() guarantees an owned image");
     crate::compute::begin_pipeline_operation_telemetry(registry::variant_key(op));
-    match ops::adapters::simd_execute_in_place(&mut owned, op, op_mode) {
+    match ops::adapters::simd_execute_in_place_in_context(context, &mut owned, op, op_mode) {
         Ok(true) => {
             crate::compute::finish_pipeline_operation_telemetry();
             *current = Some(owned);
@@ -416,6 +446,7 @@ fn execute_in_place(
 }
 
 fn execute_single(
+    context: &ExecutionContext,
     input: &DynamicImage,
     op: &PipelineOp,
     op_mode: Option<&str>,
@@ -425,11 +456,14 @@ fn execute_single(
     let entry = registry::registry()?
         .get(key)
         .ok_or_else(|| PilError::ValueError(format!("SIMD: unknown op {}", key)))?;
-    let f = entry
-        .simd_fn
-        .ok_or_else(|| PilError::ValueError(format!("SIMD: no native impl for {}", key)))?;
+    if entry.simd_fn.is_none() {
+        return Err(PilError::ValueError(format!(
+            "SIMD: no native impl for {}",
+            key
+        )));
+    }
     crate::compute::begin_pipeline_operation_telemetry(key);
-    let next = match f(input, op, op_mode) {
+    let next = match ops::adapters::simd_execute_in_context(context, input, op, op_mode) {
         Ok(next) => next,
         Err(error) => {
             crate::compute::record_pipeline_operation_path("unsupported");
@@ -443,11 +477,12 @@ fn execute_single(
 }
 
 fn ensure_supported(
+    context: &ExecutionContext,
     input: &DynamicImage,
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<(), PilError> {
-    if ops::adapters::simd_supports_for_image(input, op, mode) {
+    if ops::adapters::simd_supports_for_image_in_context(context, input, op, mode) {
         return Ok(());
     }
     let key = registry::variant_key(op);
@@ -458,15 +493,16 @@ fn ensure_supported(
 }
 
 fn ensure_all_supported(
+    context: &ExecutionContext,
     input: &DynamicImage,
     ops: &[PipelineOp],
     mode: Option<&str>,
 ) -> Result<(), PilError> {
     if let Some(unsupported) = ops
         .iter()
-        .find(|op| !ops::adapters::simd_supports_for_image(input, op, mode))
+        .find(|op| !ops::adapters::simd_supports_for_image_in_context(context, input, op, mode))
     {
-        return ensure_supported(input, unsupported, mode);
+        return ensure_supported(context, input, unsupported, mode);
     }
     Ok(())
 }

@@ -2,6 +2,7 @@
 
 #[test]
 fn native_rgb_merge_borrows_auxiliary_bands_from_full_channel_list() {
+    use crate::compute::{Backend, ExecutionContext};
     use crate::pipeline::ColorMode;
     use crate::raster::{DynamicImage, GrayImage};
 
@@ -27,7 +28,14 @@ fn native_rgb_merge_borrows_auxiliary_bands_from_full_channel_list() {
     assert!(std::sync::Arc::ptr_eq(&owners[0], &shared_green));
 
     let (merged, vector_blocks, scalar_tail, path) =
-        super::native_merge_bytes(&first, &ColorMode::RGB, &bands, Some("L"), "RGB")
+        super::native_merge_bytes(
+            &ExecutionContext::for_backend(Backend::Simd),
+            &first,
+            &ColorMode::RGB,
+            &bands,
+            Some("L"),
+            "RGB",
+        )
             .expect("native SIMD merge")
             .expect("native RGB/L merge should be admitted");
     assert_eq!(
@@ -42,6 +50,7 @@ fn native_rgb_merge_borrows_auxiliary_bands_from_full_channel_list() {
 #[cfg(target_arch = "x86_64")]
 #[test]
 fn ssse3_native_rgb_merge_interleaves_exact_blocks_and_tails() {
+    use crate::compute::{Backend, ExecutionContext};
     if !std::is_x86_feature_detected!("ssse3") {
         return;
     }
@@ -61,8 +70,9 @@ fn ssse3_native_rgb_merge_interleaves_exact_blocks_and_tails() {
             .collect::<Vec<_>>();
         let bands = [&red[..], &green[..], &blue[..]];
 
+        let context = ExecutionContext::for_backend(Backend::Simd);
         let (actual, vector_blocks, scalar_tail, path) =
-            super::native_merge_interleave(pixels as u32, 1, pixels, 3, &bands)
+            super::native_merge_interleave(&context, pixels as u32, 1, pixels, 3, &bands)
                 .expect("native RGB merge should succeed");
 
         assert_eq!(actual.as_bytes(), expected, "pixel count {pixels}");

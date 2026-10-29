@@ -4,6 +4,7 @@
 //! kernels in this family module; operation adapters validate public inputs and
 //! delegate the byte movement here.
 
+use crate::compute::{Architecture, ExecutionContext};
 use wide::u8x16;
 
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
@@ -64,62 +65,83 @@ pub(crate) fn gather_interleaved_channel<const CHANNELS: usize, const CHANNEL: u
 
 #[inline(always)]
 pub(crate) fn gather_channel_into<const CHANNELS: usize, const CHANNEL: usize>(
+    context: &ExecutionContext,
     source: &[u8],
     output: &mut [u8],
 ) -> (u64, u64) {
-    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-    if CHANNELS == 2 {
-        return gather_la_channel_neon_into::<CHANNEL>(source, output);
-    }
-    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-    if CHANNELS == 3 {
-        return gather_rgb_channel_neon_into::<CHANNEL>(source, output);
-    }
-    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-    if CHANNELS == 4 {
-        return gather_rgba_channel_neon_into::<CHANNEL>(source, output);
-    }
-    #[cfg(target_arch = "x86_64")]
-    if let Some((vector_blocks, scalar_tail)) =
-        crate::color::gather_interleaved_channel_ssse3_into(source, output, CHANNELS, CHANNEL)
-    {
-        return (vector_blocks, scalar_tail);
+    match context.architecture() {
+        Architecture::Neon =>
+        {
+            #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+            match CHANNELS {
+                2 => return gather_la_channel_neon_into::<CHANNEL>(source, output),
+                3 => return gather_rgb_channel_neon_into::<CHANNEL>(source, output),
+                4 => return gather_rgba_channel_neon_into::<CHANNEL>(source, output),
+                _ => {}
+            }
+        }
+        Architecture::Ssse3 | Architecture::Avx2 => {
+            #[cfg(target_arch = "x86_64")]
+            if let Some((vector_blocks, scalar_tail)) =
+                crate::color::gather_interleaved_channel_ssse3_into(
+                    context, source, output, CHANNELS, CHANNEL,
+                )
+            {
+                return (vector_blocks, scalar_tail);
+            }
+        }
+        _ => {}
     }
     let (gathered, vector_blocks, scalar_tail) =
-        crate::compute::pool_cpu::ops::imageops::gather_native_channel::<CHANNELS, CHANNEL>(source);
+        crate::compute::pool_cpu::ops::imageops::gather_native_channel::<CHANNELS, CHANNEL>(
+            context, source,
+        );
     output.copy_from_slice(&gathered);
     (vector_blocks, scalar_tail)
 }
 
 #[inline(always)]
 pub(crate) fn gather_channel<const CHANNELS: usize, const CHANNEL: usize>(
+    context: &ExecutionContext,
     source: &[u8],
 ) -> (Vec<u8>, u64, u64) {
-    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-    if CHANNELS == 2 {
-        return gather_la_channel_neon::<CHANNEL>(source);
+    match context.architecture() {
+        Architecture::Neon =>
+        {
+            #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+            match CHANNELS {
+                2 => return gather_la_channel_neon::<CHANNEL>(source),
+                3 => return gather_rgb_channel_neon::<CHANNEL>(source),
+                4 => return gather_rgba_channel_neon::<CHANNEL>(source),
+                _ => {}
+            }
+        }
+        Architecture::Ssse3 | Architecture::Avx2 => {
+            #[cfg(target_arch = "x86_64")]
+            if let Some(result) = crate::color::gather_interleaved_channel_ssse3_bytes(
+                context, source, CHANNELS, CHANNEL,
+            ) {
+                return result;
+            }
+        }
+        _ => {}
     }
-    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-    if CHANNELS == 3 {
-        return gather_rgb_channel_neon::<CHANNEL>(source);
-    }
-    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-    if CHANNELS == 4 {
-        return gather_rgba_channel_neon::<CHANNEL>(source);
-    }
-    crate::compute::pool_cpu::ops::imageops::gather_native_channel::<CHANNELS, CHANNEL>(source)
+    crate::compute::pool_cpu::ops::imageops::gather_native_channel::<CHANNELS, CHANNEL>(
+        context, source,
+    )
 }
 
 /// Return one RGB channel in newly allocated, fully initialized storage.
 /// Const-specialized dispatch keeps channel selection outside the pixel loop.
 pub(crate) fn extract_rgb_channel_bytes(
+    context: &ExecutionContext,
     source: &[u8],
     channel: usize,
 ) -> Option<(Vec<u8>, u64, u64)> {
     match channel {
-        0 => Some(gather_channel::<3, 0>(source)),
-        1 => Some(gather_channel::<3, 1>(source)),
-        2 => Some(gather_channel::<3, 2>(source)),
+        0 => Some(gather_channel::<3, 0>(context, source)),
+        1 => Some(gather_channel::<3, 1>(context, source)),
+        2 => Some(gather_channel::<3, 2>(context, source)),
         _ => None,
     }
 }
@@ -289,6 +311,7 @@ fn gather_rgba_channel_neon<const CHANNEL: usize>(source: &[u8]) -> (Vec<u8>, u6
 /// Dispatch one validated native channel extraction to its const-specialized
 /// kernel. The adapter checks layout, channel index, and buffer lengths first.
 pub(crate) fn extract_channel_into(
+    context: &ExecutionContext,
     source: &[u8],
     output: &mut [u8],
     channels: usize,
@@ -299,15 +322,15 @@ pub(crate) fn extract_channel_into(
             output.copy_from_slice(source);
             (0, 0)
         }
-        (2, 0) => gather_channel_into::<2, 0>(source, output),
-        (2, 1) => gather_channel_into::<2, 1>(source, output),
-        (3, 0) => gather_channel_into::<3, 0>(source, output),
-        (3, 1) => gather_channel_into::<3, 1>(source, output),
-        (3, 2) => gather_channel_into::<3, 2>(source, output),
-        (4, 0) => gather_channel_into::<4, 0>(source, output),
-        (4, 1) => gather_channel_into::<4, 1>(source, output),
-        (4, 2) => gather_channel_into::<4, 2>(source, output),
-        (4, 3) => gather_channel_into::<4, 3>(source, output),
+        (2, 0) => gather_channel_into::<2, 0>(context, source, output),
+        (2, 1) => gather_channel_into::<2, 1>(context, source, output),
+        (3, 0) => gather_channel_into::<3, 0>(context, source, output),
+        (3, 1) => gather_channel_into::<3, 1>(context, source, output),
+        (3, 2) => gather_channel_into::<3, 2>(context, source, output),
+        (4, 0) => gather_channel_into::<4, 0>(context, source, output),
+        (4, 1) => gather_channel_into::<4, 1>(context, source, output),
+        (4, 2) => gather_channel_into::<4, 2>(context, source, output),
+        (4, 3) => gather_channel_into::<4, 3>(context, source, output),
         _ => unreachable!("native extraction validates channel layout and index"),
     }
 }

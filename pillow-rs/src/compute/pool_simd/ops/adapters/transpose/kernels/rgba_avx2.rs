@@ -7,11 +7,13 @@ use core::arch::x86_64::{
     _mm256_setzero_si256, _mm256_storeu_si256, _mm256_unpackhi_epi32, _mm256_unpackhi_epi64,
     _mm256_unpacklo_epi32, _mm256_unpacklo_epi64,
 };
+use crate::compute::{Architecture, ExecutionContext};
 
 const TILE: usize = 8;
 const CHANNELS: usize = 4;
 
 pub(super) fn transpose_rgba(
+    context: &ExecutionContext,
     source: &[u8],
     output: &mut [u8],
     width: usize,
@@ -24,7 +26,7 @@ pub(super) fn transpose_rgba(
         || height < TILE
         || source.len() != expected_bytes
         || output.len() != expected_bytes
-        || !std::is_x86_feature_detected!("avx2")
+        || context.architecture() != Architecture::Avx2
     {
         return None;
     }
@@ -32,7 +34,7 @@ pub(super) fn transpose_rgba(
     let full_rows = width / TILE * TILE;
     let full_columns = height / TILE * TILE;
 
-    // SAFETY: AVX2 is detected above. The full-tile bounds ensure every
+    // SAFETY: the selected context establishes AVX2 support. The full-tile bounds ensure every
     // unaligned load and store stays within the validated source and output
     // slices; each tile owns disjoint output rows and byte spans.
     unsafe {

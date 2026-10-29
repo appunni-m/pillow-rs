@@ -5,6 +5,7 @@
 //! `kernels` submodule so adapter control flow stays separate from SIMD work.
 
 use super::{SimdImageShape, SimdLayout, simd_unsupported};
+use crate::compute::{Backend, ExecutionContext};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::DynamicImage;
@@ -85,16 +86,28 @@ pub(crate) fn simd_grayscale_with_evidence(
     _op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<(DynamicImage, u64, u64, &'static str), PilError> {
+    simd_grayscale_with_evidence_in_context(
+        &ExecutionContext::for_backend(Backend::Simd),
+        img,
+        mode,
+    )
+}
+
+pub(crate) fn simd_grayscale_with_evidence_in_context(
+    context: &ExecutionContext,
+    img: &DynamicImage,
+    mode: Option<&str>,
+) -> Result<(DynamicImage, u64, u64, &'static str), PilError> {
     let Some(channels) = native_grayscale_layout(img, mode) else {
         return Err(simd_unsupported("Grayscale"));
     };
     let (output, vector_blocks, scalar_tail) = if mode == Some("YCbCr") {
-        let Some(result) = native_ycbcr_grayscale_bytes(img) else {
+        let Some(result) = native_ycbcr_grayscale_bytes(context, img) else {
             return Err(simd_unsupported("Grayscale"));
         };
         result
     } else if mode == Some("CMYK") {
-        let Some(result) = native_cmyk_grayscale_bytes(img) else {
+        let Some(result) = native_cmyk_grayscale_bytes(context, img) else {
             return Err(simd_unsupported("Grayscale"));
         };
         result
@@ -102,7 +115,7 @@ pub(crate) fn simd_grayscale_with_evidence(
         let unpremultiplied =
             matches!(mode, Some("RGBa")).then(|| crate::ops::pil_resize::unpremultiply_alpha(img));
         let source = unpremultiplied.as_ref().unwrap_or(img);
-        let Some(result) = native_grayscale_bytes(source, channels) else {
+        let Some(result) = native_grayscale_bytes(context, source, channels) else {
             return Err(simd_unsupported("Grayscale"));
         };
         result
@@ -110,7 +123,7 @@ pub(crate) fn simd_grayscale_with_evidence(
     let path = if vector_blocks == 0 {
         "scalar-control"
     } else if mode == Some("YCbCr") {
-        native_ycbcr_grayscale_path()
+        native_ycbcr_grayscale_path(context)
     } else if channels == 1 {
         "native-copy"
     } else {
@@ -131,7 +144,17 @@ pub(crate) fn simd_grayscale(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let (result, vector_blocks, scalar_tail, path) = simd_grayscale_with_evidence(img, op, mode)?;
+    simd_grayscale_in_context(&ExecutionContext::for_backend(Backend::Simd), img, op, mode)
+}
+
+pub(crate) fn simd_grayscale_in_context(
+    context: &ExecutionContext,
+    img: &DynamicImage,
+    _op: &PipelineOp,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    let (result, vector_blocks, scalar_tail, path) =
+        simd_grayscale_with_evidence_in_context(context, img, mode)?;
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
     crate::compute::record_pipeline_operation_path(path);

@@ -7,6 +7,7 @@
 use super::super::native_channel as native_channel_kernels;
 use super::{SimdImageShape, shape_channels, simd_unsupported};
 use crate::checked_dims::CheckedDims;
+use crate::compute::{Architecture, Backend, ExecutionContext};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, GenericImageView, GrayImage};
@@ -66,26 +67,18 @@ pub(super) fn supports_for_shape(shape: SimdImageShape, index: u8, mode: Option<
     })
 }
 
-fn extract_band_path(_channels: usize, pixel_count: usize, vector_blocks: u64) -> &'static str {
+fn extract_band_path(
+    context: &ExecutionContext,
+    pixel_count: usize,
+    vector_blocks: u64,
+) -> &'static str {
     if pixel_count == 0 {
         "scalar-control"
     } else if vector_blocks != 0 {
-        #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-        {
-            if matches!(_channels, 2..=4) {
-                "neon-deinterleave"
-            } else {
-                "vector-gather"
-            }
-        }
-        #[cfg(target_arch = "x86_64")]
-        {
-            "ssse3-gather"
-        }
-        #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
-        #[cfg(not(target_arch = "x86_64"))]
-        {
-            "vector-gather"
+        match context.architecture() {
+            Architecture::Neon => "neon-deinterleave",
+            Architecture::Ssse3 | Architecture::Avx2 => "ssse3-gather",
+            _ => "vector-gather",
         }
     } else {
         "scalar-gather"
@@ -99,6 +92,15 @@ fn extract_band_path(_channels: usize, pixel_count: usize, vector_blocks: u64) -
 /// Typed samples are deliberately left on the exact CPU implementation and
 /// recorded as an internal fallback rather than being mislabeled as SIMD.
 pub fn simd_extract_band(
+    img: &DynamicImage,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    simd_extract_band_in_context(&ExecutionContext::for_backend(Backend::Simd), img, op, mode)
+}
+
+pub(crate) fn simd_extract_band_in_context(
+    context: &ExecutionContext,
     img: &DynamicImage,
     op: &PipelineOp,
     mode: Option<&str>,
@@ -124,7 +126,7 @@ pub fn simd_extract_band(
         }
         let channel = usize::from(*index).min(channels - 1);
         let (output, vector_blocks, scalar_tail) =
-            native_channel_kernels::extract_rgb_channel_bytes(source, channel)
+            native_channel_kernels::extract_rgb_channel_bytes(context, source, channel)
                 .ok_or_else(|| simd_unsupported("ExtractBand"))?;
         if output.len() != pixel_count {
             return Err(PilError::InternalError(
@@ -132,12 +134,12 @@ pub fn simd_extract_band(
             ));
         }
         crate::compute::record_pipeline_allocation(output.len());
-        let path = extract_band_path(channels, pixel_count, vector_blocks);
+        let path = extract_band_path(context, pixel_count, vector_blocks);
         (output, vector_blocks, scalar_tail, path)
     } else {
         let mut output = dimensions.alloc_buffer();
         let (vector_blocks, scalar_tail, path) =
-            simd_extract_band_into(img, *index, mode, &mut output)?;
+            simd_extract_band_into_in_context(context, img, *index, mode, &mut output)?;
         (output, vector_blocks, scalar_tail, path)
     };
     if vector_blocks != 0 {
@@ -158,6 +160,22 @@ pub fn simd_extract_band(
 /// a scalar tail produced the output. Callers must provide exactly one byte
 /// for every source pixel.
 pub fn simd_extract_band_into(
+    img: &DynamicImage,
+    index: u8,
+    mode: Option<&str>,
+    output: &mut [u8],
+) -> Result<(u64, u64, &'static str), PilError> {
+    simd_extract_band_into_in_context(
+        &ExecutionContext::for_backend(Backend::Simd),
+        img,
+        index,
+        mode,
+        output,
+    )
+}
+
+pub(crate) fn simd_extract_band_into_in_context(
+    context: &ExecutionContext,
     img: &DynamicImage,
     index: u8,
     mode: Option<&str>,
@@ -194,8 +212,8 @@ pub fn simd_extract_band_into(
     // portable vector gather. A scalar tail handles only the final partial
     // block.
     let (vector_blocks, scalar_tail) =
-        native_channel_kernels::extract_channel_into(source, output, channels, channel);
-    let path = extract_band_path(channels, pixel_count, vector_blocks);
+        native_channel_kernels::extract_channel_into(context, source, output, channels, channel);
+    let path = extract_band_path(context, pixel_count, vector_blocks);
     Ok((vector_blocks, scalar_tail, path))
 }
 

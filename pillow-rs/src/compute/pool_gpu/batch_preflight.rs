@@ -150,6 +150,7 @@ pub(super) fn gpu_batch_resize_proofs(
 impl GpuPool {
     pub(super) fn preflight_packed_dispatches(
         &self,
+        context: &ExecutionContext,
         ops: &[PipelineOp],
         image: &DynamicImage,
         mode: Option<&str>,
@@ -161,7 +162,7 @@ impl GpuPool {
             gpu_log!(
                 "[GPU] dispatch preflight routed packed-L Pad to CPU: adapter workgroup limit"
             );
-            return self.packed_dispatch_preflight_failure(ops, image, mode, allow_cpu_fallback);
+            return self.packed_dispatch_preflight_failure(context, ops, image, mode, allow_cpu_fallback);
         }
         plan.packed_la_pad = plan.packed_la_pad_requested
             && matches!(ops, [op @ PipelineOp::Pad { .. }]
@@ -174,31 +175,33 @@ impl GpuPool {
             gpu_log!(
                 "[GPU] dispatch preflight routed packed-LA Pad to CPU: adapter workgroup limit"
             );
-            return self.packed_dispatch_preflight_failure(ops, image, mode, allow_cpu_fallback);
+            return self.packed_dispatch_preflight_failure(context, ops, image, mode, allow_cpu_fallback);
         }
         if plan.packed_luma_order_statistic_requested && !plan.packed_luma_order_statistic {
             gpu_log!(
                 "[GPU] dispatch preflight routed packed L order statistic to CPU: adapter workgroup limit"
             );
-            return self.packed_dispatch_preflight_failure(ops, image, mode, allow_cpu_fallback);
+            return self.packed_dispatch_preflight_failure(context, ops, image, mode, allow_cpu_fallback);
         }
         if plan.packed_native_byte_filter_requested && !plan.packed_native_byte_filter {
             gpu_log!(
                 "[GPU] dispatch preflight routed packed native blur to CPU: adapter workgroup limit"
             );
-            return self.packed_dispatch_preflight_failure(ops, image, mode, allow_cpu_fallback);
+            return self.packed_dispatch_preflight_failure(context, ops, image, mode, allow_cpu_fallback);
         }
         Ok(BatchPackedDispatchPreflight::Continue(plan))
     }
 
     fn packed_dispatch_preflight_failure(
         &self,
+        context: &ExecutionContext,
         ops: &[PipelineOp],
         image: &DynamicImage,
         mode: Option<&str>,
         allow_cpu_fallback: bool,
     ) -> Result<BatchPackedDispatchPreflight, PilError> {
         self.preflight_failure(
+            context,
             ops,
             image,
             mode,
@@ -210,6 +213,7 @@ impl GpuPool {
 
     pub(super) fn preflight_resolved_batch_inputs(
         &self,
+        context: &ExecutionContext,
         ops: &[PipelineOp],
         image: &DynamicImage,
         auxiliary_images: &[AuxiliaryImages],
@@ -224,6 +228,7 @@ impl GpuPool {
                 );
                 return self
                     .preflight_failure(
+                        context,
                         ops,
                         image,
                         mode,
@@ -243,6 +248,7 @@ impl GpuPool {
             );
             return self
                 .preflight_failure(
+                    context,
                     ops,
                     image,
                     mode,
@@ -271,7 +277,7 @@ impl GpuPool {
                         "Contrast midpoint requires the current host image"
                     };
                     return self
-                        .preflight_failure(ops, image, mode, allow_cpu_fallback, reason)
+                        .preflight_failure(context, ops, image, mode, allow_cpu_fallback, reason)
                         .map(BatchResolvedInputPreflight::Return);
                 }
             }
@@ -284,6 +290,7 @@ impl GpuPool {
 
     pub(super) fn preflight_batch_contract(
         &self,
+        context: &ExecutionContext,
         ops: &[PipelineOp],
         image: &DynamicImage,
         mode: Option<&str>,
@@ -292,6 +299,7 @@ impl GpuPool {
         f_pad_f64_is_exact: bool,
     ) -> Result<BatchContractPreflight, PilError> {
         if let Some(image) = self.preflight_batch_layout(
+            context,
             ops,
             image,
             mode,
@@ -302,11 +310,12 @@ impl GpuPool {
             return Ok(BatchContractPreflight::Return(image));
         }
 
-        self.preflight_batch_operations(ops, image, mode, allow_cpu_fallback)
+        self.preflight_batch_operations(context, ops, image, mode, allow_cpu_fallback)
     }
 
     fn preflight_batch_layout(
         &self,
+        context: &ExecutionContext,
         ops: &[PipelineOp],
         image: &DynamicImage,
         mode: Option<&str>,
@@ -337,6 +346,7 @@ impl GpuPool {
             );
             return self
                 .preflight_failure(
+                    context,
                     ops,
                     image,
                     mode,
@@ -361,6 +371,7 @@ impl GpuPool {
         {
             return self
                 .preflight_failure(
+                    context,
                     ops,
                     image,
                     mode,
@@ -379,6 +390,7 @@ impl GpuPool {
             );
             return self
                 .preflight_failure(
+                    context,
                     ops,
                     image,
                     mode,
@@ -398,6 +410,7 @@ impl GpuPool {
             );
             return self
                 .preflight_failure(
+                    context,
                     ops,
                     image,
                     mode,
@@ -412,6 +425,7 @@ impl GpuPool {
 
     fn preflight_batch_operations(
         &self,
+        context: &ExecutionContext,
         ops: &[PipelineOp],
         image: &DynamicImage,
         mode: Option<&str>,
@@ -428,6 +442,7 @@ impl GpuPool {
             if !registry::gpu_supports(op)? && !i_mode_filter {
                 return self
                     .preflight_failure(
+                        context,
                         ops,
                         image,
                         mode,
@@ -443,7 +458,7 @@ impl GpuPool {
         if let Err(error) = validate_gpu_operations(ops, image, mode) {
             let reason = error.to_string();
             return self
-                .preflight_failure(ops, image, mode, allow_cpu_fallback, &reason)
+                .preflight_failure(context, ops, image, mode, allow_cpu_fallback, &reason)
                 .map(BatchContractPreflight::Return);
         }
 
@@ -456,6 +471,7 @@ impl GpuPool {
             );
             return self
                 .preflight_failure(
+                    context,
                     ops,
                     image,
                     mode,

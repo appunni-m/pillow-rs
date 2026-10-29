@@ -1,6 +1,7 @@
 //! Serial CPU I-mode thumbnail resize that fuses reducing-gap and resampling.
 
 use crate::checked_dims::CheckedDims;
+use crate::compute::ExecutionContext;
 
 use crate::compute::pool_cpu::ops::resize::{
     i32_sample_bytes_from_native_storage, resample_kernel, resize_i_contiguous_eight_tap_weights,
@@ -20,15 +21,18 @@ use crate::pipeline::ResampleFilter;
 use crate::raster::DynamicImage;
 
 pub(in crate::compute::pool_cpu::ops::thumbnail) fn resize_i_thumbnail_reduce2x2(
+    context: &ExecutionContext,
     img: &DynamicImage,
     dst_w: u32,
     dst_h: u32,
     filter: ResampleFilter,
 ) -> Result<DynamicImage, PilError> {
     #[cfg(target_arch = "x86_64")]
-    if let Some(fma) = X86FmaToken::detect() {
+    if let Some(fma) = X86FmaToken::from_context(context) {
         return resize_i_thumbnail_reduce2x2_with_fma(img, dst_w, dst_h, filter, &fma);
     }
+    #[cfg(not(target_arch = "x86_64"))]
+    let _ = context;
     resize_i_thumbnail_reduce2x2_with_fma(img, dst_w, dst_h, filter, &PortableFma)
 }
 

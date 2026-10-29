@@ -2,7 +2,6 @@
 
 use super::uniform_image::{SMALL_UNIFORM_BYTE_MAX_PIXELS, native_small_uniform_byte_image};
 use super::{CheckedDims, DynamicImage, PilError, preserve_mode, raw_bytes_to_image};
-use std::borrow::Cow;
 
 /// Push one source index into a monotonic queue used by a byte min/max line.
 /// The queue stores indices rather than samples so stale values can be

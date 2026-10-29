@@ -216,12 +216,14 @@ impl Image {
                 // allocation instead of allocating an intermediate L image
                 // and copying that image back into the binding buffer.
                 let image = self.materialized_shared()?;
+                let context = crate::compute::ExecutionContext::for_backend(backend);
                 return crate::compute::execute_eager_simd_bytes(
                     "GetData",
                     image.as_ref(),
                     output,
                     |output| {
-                        crate::compute::simd_extract_band_into(
+                        crate::compute::simd_extract_band_into_in_context(
+                            &context,
                             image.as_ref(),
                             backend_band,
                             Some(mode),

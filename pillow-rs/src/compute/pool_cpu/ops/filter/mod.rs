@@ -39,6 +39,7 @@ pub(crate) use filter5x5::filter_5x5_byte_row;
 
 pub(crate) use filter5x5::rgb_blur_ring5x5_parameters_match;
 pub(crate) use filter5x5::{
-    binomial5x5_parameters_match, execute_filter5x5, la_single_outlier5x5_parameters_match,
-    uniform_i32_filter5x5_is_identity, uniform5x5_parameters_match,
+    binomial5x5_parameters_match, execute_filter5x5, execute_filter5x5_in_context,
+    la_single_outlier5x5_parameters_match, uniform_i32_filter5x5_is_identity,
+    uniform5x5_parameters_match,
 };

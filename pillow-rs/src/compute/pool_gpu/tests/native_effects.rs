@@ -53,7 +53,9 @@ fn assert_luma_equalize_packed_case(width: u32, height: u32) {
     let expected = crate::compute::registry::execute_cpu(&op, &source, Some("L"))
         .unwrap_or_else(|error| panic!("CPU L Equalize {width}x{height}: {error}"));
     let actual = super::GpuPool
-        .execute_batch_strict(std::slice::from_ref(&op), &source, Some("L"))
+        .execute_batch_strict(
+            &crate::compute::ExecutionContext::for_backend(crate::compute::Backend::Gpu),
+std::slice::from_ref(&op), &source, Some("L"))
         .unwrap_or_else(|error| panic!("GPU L Equalize {width}x{height}: {error}"));
     assert!(
         matches!(&actual, DynamicImage::ImageLuma8(_)),

@@ -1,5 +1,6 @@
 use super::histogram::{apply_native_luma_lut_row, native_luma_lut_tables};
 use super::*;
+use crate::image::Mode;
 
 #[inline]
 fn apply_autocontrast_row(
@@ -41,7 +42,17 @@ pub fn op_autocontrast(
     img: &DynamicImage,
     cutoff: f64,
     mask: Option<&std::sync::Arc<crate::image::Image>>,
+    mode: Mode,
 ) -> Result<DynamicImage, PilError> {
+    match (mode, img) {
+        (Mode::ImageLuma8, DynamicImage::ImageLuma8(_))
+        | (Mode::ImageRgb8, DynamicImage::ImageRgb8(_)) => {}
+        (Mode::ImagePalette8, DynamicImage::ImageLuma8(_)) => {
+            // NO_PILLOW_SUPPORT: Pillow 12.2 rejects P in ImageOps._lut. This
+            // strategy analyzes native indices and retains the P mode.
+        }
+        (unsupported, _) => return Err(unsupported_lut_mode(unsupported)),
+    }
     let channels = img.color().channel_count() as usize;
     let (w, h) = (img.width(), img.height());
     // Pillow's ImageOps.autocontrast preserves an empty image instead of
@@ -93,25 +104,28 @@ pub fn op_autocontrast(
 
 /// Equalize: histogram equalization matching PIL's algorithm.
 /// Build LUT from non-zero histogram bins, using PIL's step formula.
-pub fn op_equalize(img: &DynamicImage) -> Result<DynamicImage, PilError> {
-    op_equalize_with_mask(img, None)
+pub fn op_equalize(img: &DynamicImage, mode: Mode) -> Result<DynamicImage, PilError> {
+    op_equalize_with_mask(img, None, mode)
 }
 
 /// Equalize with a validated histogram mask, retaining native L/RGB storage.
 pub(crate) fn op_equalize_with_mask(
     img: &DynamicImage,
     mask: Option<&std::sync::Arc<crate::image::Image>>,
+    mode: Mode,
 ) -> Result<DynamicImage, PilError> {
     let mask = mask.map(|mask| mask.materialized_shared()).transpose()?;
-    let converted;
-    let source = if matches!(
-        img,
-        DynamicImage::ImageLuma8(_) | DynamicImage::ImageRgb8(_)
-    ) {
-        img
-    } else {
-        converted = DynamicImage::ImageRgb8(img.to_rgb8());
-        &converted
+    let palette_expansion = mode == Mode::ImagePalette8;
+    let source = match (mode, img) {
+        (Mode::ImageLuma8, DynamicImage::ImageLuma8(_))
+        | (Mode::ImageRgb8, DynamicImage::ImageRgb8(_))
+        | (Mode::ImagePalette8, DynamicImage::ImageRgb8(_)) => img,
+        (Mode::ImagePalette8, _) => {
+            return Err(PilError::ValueError(
+                "palette equalize requires its native RGB expansion".into(),
+            ));
+        }
+        (unsupported, _) => return Err(unsupported_lut_mode(unsupported)),
     };
     let channels = usize::from(source.color().channel_count());
     let lut = equalize_lut(source, channels, mask.as_deref())
@@ -119,38 +133,54 @@ pub(crate) fn op_equalize_with_mask(
     let result = if crate::compute::pool_cpu::point_lut_is_identity(&lut, channels) {
         source.clone()
     } else {
-        super::super::effects::op_eval(source, &lut)?
+        let eval_mode = if palette_expansion {
+            Mode::ImageRgb8
+        } else {
+            mode
+        };
+        super::super::effects::op_eval(source, &lut, eval_mode)?
     };
-    Ok(preserve_mode(img, result))
+    if palette_expansion {
+        Ok(result)
+    } else {
+        Ok(preserve_mode(img, result))
+    }
 }
 
 /// Invert: subtract each pixel value from 255 (all channels, matching PIL's point()).
-pub fn op_invert(img: &DynamicImage) -> Result<DynamicImage, PilError> {
-    let channels = img.color().channel_count() as usize;
-    let (w, h) = (img.width(), img.height());
-    let raw = img.as_bytes();
-    let out = raw.iter().map(|value| u8::MAX - *value).collect();
-    let result = match channels {
-        1 => crate::raster::GrayImage::from_raw(w, h, out)
-            .map(DynamicImage::ImageLuma8)
-            .ok_or_else(|| PilError::InternalError("invert L buffer shape mismatch".to_string()))?,
-        2 => crate::raster::GrayAlphaImage::from_raw(w, h, out)
-            .map(DynamicImage::ImageLumaA8)
-            .ok_or_else(|| {
-                PilError::InternalError("invert LA buffer shape mismatch".to_string())
-            })?,
-        3 => crate::raster::RgbImage::from_raw(w, h, out)
-            .map(DynamicImage::ImageRgb8)
-            .ok_or_else(|| {
-                PilError::InternalError("invert RGB buffer shape mismatch".to_string())
-            })?,
-        _ => crate::raster::RgbaImage::from_raw(w, h, out)
-            .map(DynamicImage::ImageRgba8)
-            .ok_or_else(|| {
-                PilError::InternalError("invert RGBA buffer shape mismatch".to_string())
-            })?,
-    };
-    Ok(result)
+pub fn op_invert(img: &DynamicImage, mode: Mode) -> Result<DynamicImage, PilError> {
+    match (mode, img) {
+        (Mode::One | Mode::ImageLuma8, DynamicImage::ImageLuma8(source)) => {
+            let mut gray = source.clone();
+            apply_point_bytes(gray.as_mut(), |samples| {
+                for sample in samples {
+                    *sample = u8::MAX - *sample;
+                }
+            });
+            Ok(DynamicImage::ImageLuma8(gray))
+        }
+        (Mode::ImageRgb8, DynamicImage::ImageRgb8(source)) => {
+            let mut rgb = source.clone();
+            apply_point_bytes(rgb.as_mut(), |samples| {
+                for sample in samples {
+                    *sample = u8::MAX - *sample;
+                }
+            });
+            Ok(DynamicImage::ImageRgb8(rgb))
+        }
+        (Mode::ImagePalette8, DynamicImage::ImageLuma8(source)) => {
+            // NO_PILLOW_SUPPORT: Pillow 12.2 rejects P in ImageOps._lut. This
+            // extension inverts native indices and preserves the palette.
+            let mut indices = source.clone();
+            apply_point_bytes(indices.as_mut(), |samples| {
+                for sample in samples {
+                    *sample = u8::MAX - *sample;
+                }
+            });
+            Ok(DynamicImage::ImageLuma8(indices))
+        }
+        (unsupported, _) => Err(unsupported_lut_mode(unsupported)),
+    }
 }
 
 /// Copy complete native rows in reverse order. The caller selects a
@@ -342,11 +372,9 @@ pub fn op_mirror(img: &DynamicImage) -> Result<DynamicImage, PilError> {
 }
 
 /// Posterize: reduce the number of bits per channel.
-pub fn op_posterize(img: &DynamicImage, bits: u8) -> Result<DynamicImage, PilError> {
+pub fn op_posterize(img: &DynamicImage, bits: u8, mode: Mode) -> Result<DynamicImage, PilError> {
     let mask = !((1u8 << (8 - bits)) - 1);
-    if let DynamicImage::ImageLuma8(source) = img {
-        // ImageOps.posterize accepts native L bytes. Expanding L to RGB and
-        // then narrowing it back triples the working set and memory traffic.
+    if let (Mode::ImageLuma8, DynamicImage::ImageLuma8(source)) = (mode, img) {
         let mut gray = source.clone();
         apply_point_bytes(gray.as_mut(), |row| {
             for value in row {
@@ -356,70 +384,89 @@ pub fn op_posterize(img: &DynamicImage, bits: u8) -> Result<DynamicImage, PilErr
         return Ok(DynamicImage::ImageLuma8(gray));
     }
 
-    if let DynamicImage::ImageRgb8(source) = img {
-        // Transform borrowed native RGB bytes into the final result in one pass.
-        let bytes = source
-            .as_raw()
-            .iter()
-            .map(|&channel| channel & mask)
-            .collect();
-        let rgb = crate::raster::RgbImage::from_raw(source.width(), source.height(), bytes)
-            .ok_or_else(|| PilError::InternalError("posterize RGB buffer mismatch".into()))?;
-        return Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)));
+    if let (Mode::ImageRgb8, DynamicImage::ImageRgb8(source)) = (mode, img) {
+        let mut rgb = source.clone();
+        apply_point_bytes(rgb.as_mut(), |samples| {
+            for sample in samples {
+                *sample &= mask;
+            }
+        });
+        return Ok(DynamicImage::ImageRgb8(rgb));
     }
-    let mut rgb = img.to_rgb8();
-
-    for channel in rgb.as_mut() {
-        *channel &= mask;
+    if let (Mode::ImagePalette8, DynamicImage::ImageLuma8(source)) = (mode, img) {
+        // NO_PILLOW_SUPPORT: Pillow 12.2 rejects P in ImageOps._lut. Apply
+        // posterize to native palette indices and retain the attached palette.
+        let mut indices = source.clone();
+        apply_point_bytes(indices.as_mut(), |samples| {
+            for sample in samples {
+                *sample &= mask;
+            }
+        });
+        return Ok(DynamicImage::ImageLuma8(indices));
     }
-    Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
+    Err(unsupported_lut_mode(mode))
 }
 
 /// Solarize: invert pixels where value >= threshold.
 /// PIL uses >=, not >.
-pub fn op_solarize(img: &DynamicImage, threshold: u8) -> Result<DynamicImage, PilError> {
-    if matches!(
-        img,
-        DynamicImage::ImageLuma8(_) | DynamicImage::ImageRgb8(_)
-    ) {
-        // Every stored byte is a color sample in the public L/RGB contract.
-        // Write the result once instead of expanding L to RGB and converting back.
-        let bytes = img
-            .as_bytes()
-            .iter()
-            .map(|&value| {
-                if value >= threshold {
-                    255 - value
-                } else {
-                    value
-                }
-            })
-            .collect();
-        let channels = if matches!(img, DynamicImage::ImageLuma8(_)) {
-            1
-        } else {
-            3
-        };
-        return crate::image_utils::raw_bytes_to_image_allow_empty(
-            img.width(),
-            img.height(),
-            bytes,
-            channels,
-        );
-    }
-    let t = threshold;
-    let mut rgb = img.to_rgb8();
-    apply_point_bytes(rgb.as_mut(), |row| {
-        for pixel in row.chunks_exact_mut(3) {
-            for channel in pixel {
-                if *channel >= t {
-                    // PIL uses >=, not >
-                    *channel = u8::MAX - *channel;
+pub fn op_solarize(img: &DynamicImage, threshold: u8, mode: Mode) -> Result<DynamicImage, PilError> {
+    if let (Mode::ImageLuma8, DynamicImage::ImageLuma8(source)) = (mode, img) {
+        let mut gray = source.clone();
+        apply_point_bytes(gray.as_mut(), |samples| {
+            for sample in samples {
+                if *sample >= threshold {
+                    *sample = u8::MAX - *sample;
                 }
             }
-        }
-    });
-    Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
+        });
+        return Ok(DynamicImage::ImageLuma8(gray));
+    }
+    if let (Mode::ImageRgb8, DynamicImage::ImageRgb8(source)) = (mode, img) {
+        let mut rgb = source.clone();
+        apply_point_bytes(rgb.as_mut(), |samples| {
+            for sample in samples {
+                if *sample >= threshold {
+                    *sample = u8::MAX - *sample;
+                }
+            }
+        });
+        return Ok(DynamicImage::ImageRgb8(rgb));
+    }
+    if let (Mode::ImagePalette8, DynamicImage::ImageLuma8(source)) = (mode, img) {
+        // NO_PILLOW_SUPPORT: Pillow 12.2 rejects P in ImageOps._lut. Apply
+        // solarize to native palette indices and retain the attached palette.
+        let mut indices = source.clone();
+        apply_point_bytes(indices.as_mut(), |samples| {
+            for sample in samples {
+                if *sample >= threshold {
+                    *sample = u8::MAX - *sample;
+                }
+            }
+        });
+        return Ok(DynamicImage::ImageLuma8(indices));
+    }
+    if let (Mode::One, DynamicImage::ImageLuma8(source)) = (mode, img) {
+        // NO_PILLOW_SUPPORT: Pillow 12.2 routes mode 1 through ImageOps._lut,
+        // which rejects it. This native-byte extension preserves 0/255 samples.
+        let mut bilevel = source.clone();
+        apply_point_bytes(bilevel.as_mut(), |samples| {
+            for sample in samples {
+                if *sample >= threshold {
+                    *sample = u8::MAX - *sample;
+                }
+            }
+        });
+        return Ok(DynamicImage::ImageLuma8(bilevel));
+    }
+    Err(unsupported_lut_mode(mode))
+}
+
+fn unsupported_lut_mode(mode: Mode) -> PilError {
+    if mode == Mode::ImagePalette8 {
+        return PilError::NotImplementedError("mode P support coming soon".into());
+    }
+    let name = mode.pillow_name().unwrap_or("internal");
+    PilError::OsError(format!("not supported for mode {name}"))
 }
 
 /// Gather one byte channel from tightly packed native pixels. x86_64 uses an
@@ -428,6 +475,7 @@ pub fn op_solarize(img: &DynamicImage, threshold: u8) -> Result<DynamicImage, Pi
 #[cfg(test)]
 mod posterize_tests {
     use super::op_posterize;
+    use crate::image::Mode;
     use crate::raster::{DynamicImage, GrayImage, RgbImage};
 
     #[test]
@@ -452,8 +500,8 @@ mod posterize_tests {
                 .iter()
                 .map(|value| value & mask)
                 .collect::<Vec<_>>();
-            let result_luma = op_posterize(&luma, bits).unwrap();
-            let result_rgb = op_posterize(&rgb, bits).unwrap();
+            let result_luma = op_posterize(&luma, bits, Mode::ImageLuma8).unwrap();
+            let result_rgb = op_posterize(&rgb, bits, Mode::ImageRgb8).unwrap();
 
             assert!(matches!(result_luma, DynamicImage::ImageLuma8(_)));
             assert!(matches!(result_rgb, DynamicImage::ImageRgb8(_)));

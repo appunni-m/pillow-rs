@@ -1,5 +1,5 @@
 use super::{
-    DynamicImage, Image, LoadedData, PalettedData, PilError, expand_palette,
+    DynamicImage, Image, LoadedData, Mode, PalettedData, PilError, expand_palette,
     image_from_materialized, map_codec_error, materialization_cache,
 };
 impl Image {
@@ -84,8 +84,10 @@ impl Image {
                 } else {
                     let image = self.materialized_shared()?;
                     let decoded_mode = image.color().into();
+                    let mode = Mode::for_image(&image, explicit_mode.as_deref());
                     Image::Loaded(LoadedData {
                         image,
+                        mode,
                         known_zero_fill: false,
                         explicit_mode: explicit_mode.clone(),
                         decoded_mode,

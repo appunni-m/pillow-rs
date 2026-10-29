@@ -6,7 +6,7 @@ use crate::error::PilError;
 use crate::pipeline::{ColorMode, PipelineOp, PixelMode};
 use crate::raster::DynamicImage;
 
-use super::Image;
+use super::{Image, Mode};
 
 mod dimensions;
 pub(super) use dimensions::known_pipeline_op_dimensions;
@@ -304,9 +304,7 @@ pub(crate) fn known_pipeline_op_mode(op: &PipelineOp, current: &str) -> Option<S
     }
     Some(
         match op {
-            PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. }
-                if matches!(current, "P" | "PA") =>
-            {
+            PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. } if current == "P" => {
                 "RGB"
             }
             PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. } => current,
@@ -461,11 +459,16 @@ fn new_pipeline_node(
     palette: Option<Vec<u8>>,
     palette_alpha: Option<Vec<u8>>,
 ) -> Image {
+    let mode_selector = explicit_mode
+        .as_deref()
+        .and_then(Mode::from_pillow_name)
+        .or_else(|| ops.mode_preserving().then(|| source.known_mode_selector()).flatten());
     Image::Pipeline {
         source,
         ops,
         format: None,
         explicit_mode,
+        mode_selector,
         backend,
         palette,
         palette_alpha,
@@ -678,11 +681,13 @@ impl Image {
         op: PipelineOp,
         output_mode: &str,
     ) -> Image {
+        let mode_selector = Mode::from_pillow_name(output_mode);
         Image::Pipeline {
             source: Arc::new(source.clone()),
             ops: PipelineOps::one(op),
             format: None,
             explicit_mode: Some(output_mode.to_owned()),
+            mode_selector,
             backend: source.backend(),
             palette: None,
             palette_alpha: None,

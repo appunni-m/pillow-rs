@@ -20,6 +20,7 @@ pub(super) use crate::compute::pool_cpu::ops::effects::{
     op_effect_spread, op_eval, op_merge, op_paste, op_put_alpha, op_put_alpha_data, op_put_data,
     op_put_pixel, op_transform,
 };
+pub(super) use crate::compute::pool_cpu::ops::expand::op_expand_with_mode;
 pub(super) use crate::compute::pool_cpu::ops::enhance::{
     op_enhance_brightness, op_enhance_color_saturation, op_enhance_contrast, op_enhance_sharpness,
 };
@@ -34,7 +35,7 @@ pub(super) use crate::compute::pool_cpu::ops::geometry::{
 };
 pub(super) use crate::compute::pool_cpu::ops::imageops::{
     op_autocontrast, op_colorize, op_contain, op_cover, op_crop_border, op_equalize,
-    op_equalize_with_mask, op_expand, op_fit, op_flip, op_invert, op_mirror, op_pad, op_posterize,
+    op_equalize_with_mask, op_fit, op_flip, op_invert, op_mirror, op_pad, op_posterize,
     op_scale, op_solarize,
 };
 pub(super) use crate::compute::pool_simd::ops::adapters;

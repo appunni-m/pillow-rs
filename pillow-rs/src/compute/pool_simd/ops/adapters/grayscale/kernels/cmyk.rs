@@ -2,10 +2,9 @@
 
 #[cfg(feature = "parallel")]
 use super::super::super::simd_rows_mut_serial;
-#[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
 use super::simd_pack_u16x16;
-#[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
 use crate::compute::pool_simd::ops::native_channel::gather_interleaved_channel;
+use crate::compute::{Architecture, ExecutionContext};
 use crate::raster::DynamicImage;
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 use fearless_simd::prelude::{SimdBase, SimdInterleaved, SimdNarrow, SimdWiden};
@@ -76,66 +75,68 @@ fearless_simd::kernel!(
 );
 
 #[inline(always)]
-fn cmyk_grayscale_block(source: &[u8]) -> [u8; 16] {
-    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-    {
-        let neon = Level::new()
-            .as_neon()
-            .expect("AArch64 NEON target configuration has a NEON execution token");
-        let source = source
-            .try_into()
-            .expect("complete CMYK grayscale vector block");
-        cmyk_grayscale_block_neon(neon, source)
-    }
-
-    #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
-    {
-        let load = |offset| {
-            u8x16::new(
-                source[offset..offset + 16]
+fn cmyk_grayscale_block(context: &ExecutionContext, source: &[u8]) -> [u8; 16] {
+    match context.architecture() {
+        Architecture::Neon => {
+            #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+            {
+                let neon = Level::new()
+                    .as_neon()
+                    .expect("AArch64 NEON target configuration has a NEON execution token");
+                let source = source
                     .try_into()
-                    .expect("complete CMYK grayscale vector"),
-            )
-        };
-        let blocks = [load(0), load(16), load(32), load(48)];
-        let c = u16x16::from(gather_interleaved_channel::<4, 0>(&blocks));
-        let m = u16x16::from(gather_interleaved_channel::<4, 1>(&blocks));
-        let y = u16x16::from(gather_interleaved_channel::<4, 2>(&blocks));
-        let k = u16x16::from(gather_interleaved_channel::<4, 3>(&blocks));
-        let nk = u16x16::splat(255) - k;
-        let muldiv255 = |value: u16x16| {
-            let value = value + u16x16::splat(128);
-            ((value >> 8u32) + value) >> 8u32
-        };
-        let r = nk - muldiv255(c * nk);
-        let g = nk - muldiv255(m * nk);
-        let b = nk - muldiv255(y * nk);
-
-        // Exact Pillow luma coefficients, decomposed at bit 8 to keep all
-        // intermediates within u16 lanes.
-        let base = r * const { u16x16::splat(77) }
-            + g * const { u16x16::splat(150) }
-            + b * const { u16x16::splat(29) };
-        let residual = g * const { u16x16::splat(70) } + b * const { u16x16::splat(47) }
-            - r * const { u16x16::splat(117) }
-            + const { u16x16::splat(32768) };
-        simd_pack_u16x16((base + (residual >> 8u32)) >> 8u32).to_array()
+                    .expect("complete CMYK grayscale vector block");
+                return cmyk_grayscale_block_neon(neon, source);
+            }
+        }
+        _ => {}
     }
+
+    let load = |offset| {
+        u8x16::new(
+            source[offset..offset + 16]
+                .try_into()
+                .expect("complete CMYK grayscale vector"),
+        )
+    };
+    let blocks = [load(0), load(16), load(32), load(48)];
+    let c = u16x16::from(gather_interleaved_channel::<4, 0>(&blocks));
+    let m = u16x16::from(gather_interleaved_channel::<4, 1>(&blocks));
+    let y = u16x16::from(gather_interleaved_channel::<4, 2>(&blocks));
+    let k = u16x16::from(gather_interleaved_channel::<4, 3>(&blocks));
+    let nk = u16x16::splat(255) - k;
+    let muldiv255 = |value: u16x16| {
+        let value = value + u16x16::splat(128);
+        ((value >> 8u32) + value) >> 8u32
+    };
+    let r = nk - muldiv255(c * nk);
+    let g = nk - muldiv255(m * nk);
+    let b = nk - muldiv255(y * nk);
+
+    // Exact Pillow luma coefficients, decomposed at bit 8 to keep all
+    // intermediates within u16 lanes.
+    let base = r * const { u16x16::splat(77) }
+        + g * const { u16x16::splat(150) }
+        + b * const { u16x16::splat(29) };
+    let residual = g * const { u16x16::splat(70) } + b * const { u16x16::splat(47) }
+        - r * const { u16x16::splat(117) }
+        + const { u16x16::splat(32768) };
+    simd_pack_u16x16((base + (residual >> 8u32)) >> 8u32).to_array()
 }
 
 #[cfg(feature = "parallel")]
 #[inline]
-fn cmyk_grayscale_row(source: &[u8], output: &mut [u8]) {
+fn cmyk_grayscale_row(context: &ExecutionContext, source: &[u8], output: &mut [u8]) {
     let mut input_blocks = source.chunks_exact(64);
     let mut output_blocks = output.chunks_exact_mut(16);
     for (input, output) in input_blocks.by_ref().zip(output_blocks.by_ref()) {
-        output.copy_from_slice(&cmyk_grayscale_block(input));
+        output.copy_from_slice(&cmyk_grayscale_block(context, input));
     }
     let tail = output_blocks.into_remainder();
     if !tail.is_empty() {
         let mut padded = [0u8; 64];
         padded[..input_blocks.remainder().len()].copy_from_slice(input_blocks.remainder());
-        tail.copy_from_slice(&cmyk_grayscale_block(&padded)[..tail.len()]);
+        tail.copy_from_slice(&cmyk_grayscale_block(context, &padded)[..tail.len()]);
     }
 }
 
@@ -145,6 +146,7 @@ const SIMD_CMYK_GRAYSCALE_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
 /// Fused native-layout CMYK-to-luma conversion. Complete pixels use sixteen
 /// SIMD lanes; the final partial block is padded and writes only active pixels.
 pub(in crate::compute::pool_simd::ops::adapters) fn native_cmyk_grayscale_bytes(
+    context: &ExecutionContext,
     img: &DynamicImage,
 ) -> Option<(Vec<u8>, u64, u64)> {
     let DynamicImage::ImageRgba8(source) = img else {
@@ -167,6 +169,7 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_cmyk_grayscale_bytes(
             |_row_start, _row_end, y, row| {
                 let source_start = y as usize * source_stride;
                 cmyk_grayscale_row(
+                    context,
                     &source.as_raw()[source_start..source_start + source_stride],
                     row,
                 );
@@ -180,14 +183,14 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_cmyk_grayscale_bytes(
     let mut input_blocks = source.as_raw().chunks_exact(64);
     let mut output_blocks = output.chunks_exact_mut(16);
     for (input, output) in input_blocks.by_ref().zip(output_blocks.by_ref()) {
-        output.copy_from_slice(&cmyk_grayscale_block(input));
+        output.copy_from_slice(&cmyk_grayscale_block(context, input));
         vector_blocks = vector_blocks.saturating_add(1);
     }
     let tail = output_blocks.into_remainder();
     if !tail.is_empty() {
         let mut padded = [0u8; 64];
         padded[..input_blocks.remainder().len()].copy_from_slice(input_blocks.remainder());
-        tail.copy_from_slice(&cmyk_grayscale_block(&padded)[..tail.len()]);
+        tail.copy_from_slice(&cmyk_grayscale_block(context, &padded)[..tail.len()]);
         vector_blocks = vector_blocks.saturating_add(1);
     }
     Some((output, vector_blocks, 0))

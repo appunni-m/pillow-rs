@@ -3,6 +3,9 @@
 //! invert, flip, mirror, posterize, solarize, grayscale, colorize,
 //! contain, cover, fit, pad, scale, expand, and crop border.
 
+// TODO(pillow-rs#3ptb): Move the remaining ImageOps families out of this shared
+// facade and declare each family's exhaustive Mode strategy at its entry point.
+
 use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
 
 /// Python 3's round() (banker's rounding): rounds half to even.
@@ -21,12 +24,11 @@ fn bankers_round(x: f64) -> f64 {
     }
 }
 
-use super::geometry::execute_resize;
+use super::geometry::execute_resize_in_context;
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::ops::pil_resize::pil_resize;
-use crate::ops::pil_resize::pil_resize_boxed;
 
 use crate::ops::pil_resize::pil_resize_luma_i32_into_window;
 use crate::ops::pil_resize::pil_resize_rgbx_into_window;
@@ -34,17 +36,17 @@ use crate::pipeline::ResampleFilter;
 use wide::u8x16;
 
 mod colorize;
-mod expand;
 mod geometry;
 mod histogram;
 mod pad;
 mod pixel;
 
 pub(crate) use colorize::{colorize_lut, gather_native_channel, op_colorize};
-pub(crate) use expand::op_expand;
-pub(crate) use geometry::{op_contain, op_cover, op_crop_border, op_fit, op_scale};
+pub(crate) use geometry::{
+    op_contain, op_cover, op_crop_border, op_fit, op_fit_in_context, op_scale,
+};
 pub(crate) use histogram::{autocontrast_lut, equalize_lut};
-pub(crate) use pad::op_pad;
+pub(crate) use pad::{op_pad, op_pad_in_context};
 pub(crate) use pixel::{
     op_autocontrast, op_equalize, op_equalize_with_mask, op_flip, op_invert, op_mirror,
     op_posterize, op_solarize,

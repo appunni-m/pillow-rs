@@ -109,7 +109,7 @@ class RustFamilyPathTests(unittest.TestCase):
             "core:geometry",
         )
         self.assertEqual(
-            rust_family_for_path("pillow-rs/src/compute/pool_cpu/ops/grayscale.rs"),
+            rust_family_for_path("pillow-rs/src/compute/pool_cpu/ops/grayscale/ops.rs"),
             "cpu:grayscale",
         )
         self.assertEqual(
@@ -736,7 +736,7 @@ class WorkspaceCrosswalkTests(unittest.TestCase):
         )
         cpu_grayscale = next(
             item for item in source_files
-            if item["path"] == "pillow-rs/src/compute/pool_cpu/ops/grayscale.rs"
+            if item["path"] == "pillow-rs/src/compute/pool_cpu/ops/grayscale/ops.rs"
         )
         self.assertEqual(
             cpu_grayscale["operation_crosswalk"]["status"],

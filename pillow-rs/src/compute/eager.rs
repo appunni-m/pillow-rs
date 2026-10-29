@@ -5,10 +5,10 @@ use super::backend_state::active_lock;
 use super::pool_gpu;
 use super::pool_simd;
 use super::{
-    Backend, DynamicImage, PilError, PipelineOp, PipelineResourceTelemetry, PipelineTelemetry,
-    begin_pipeline_operation_telemetry, elapsed_ns, finish_pipeline_operation_telemetry,
-    host_resource_telemetry, pipeline_telemetry_enabled, pipeline_timestamp,
-    record_pipeline_allocation, record_pipeline_operation_handoff,
+    Backend, DynamicImage, ExecutionContext, PilError, PipelineOp, PipelineResourceTelemetry,
+    PipelineTelemetry, begin_pipeline_operation_telemetry, elapsed_ns,
+    finish_pipeline_operation_telemetry, host_resource_telemetry, pipeline_telemetry_enabled,
+    pipeline_timestamp, record_pipeline_allocation, record_pipeline_operation_handoff,
     record_pipeline_operation_mode_conversion, record_pipeline_operation_path,
     record_pipeline_operation_scalar_tail, record_pipeline_operation_vector_blocks,
     record_pipeline_resource_telemetry, record_pipeline_telemetry,
@@ -280,11 +280,19 @@ pub(crate) fn execute_eager_gpu_rgb_getprojection(
 /// Set `manual_output_allocation` when the closure does not record its result
 /// buffer through the normal allocation telemetry hook.
 pub(crate) fn execute_eager_cpu_image_operation(
+    context: &ExecutionContext,
     operation: &'static str,
     input: &DynamicImage,
     manual_output_allocation: bool,
     execute: impl FnOnce() -> Result<DynamicImage, PilError>,
 ) -> Result<DynamicImage, PilError> {
+    if context.backend() != Backend::Cpu || !context.architecture().supports_cpu() {
+        return Err(PilError::InternalError(format!(
+            "eager CPU operation received {:?}/{:?} context",
+            context.backend(),
+            context.architecture()
+        )));
+    }
     let timed = pipeline_telemetry_enabled();
     if timed {
         reset_eager_image_operation_telemetry();
@@ -407,10 +415,18 @@ pub(crate) fn execute_eager_cpu_shared_result<T>(
 /// the vector and buffer evidence for its native kernel. The closure accounts
 /// its checked image-buffer allocations through the normal allocation hooks.
 pub(crate) fn execute_eager_simd_image_operation(
+    context: &ExecutionContext,
     operation: &'static str,
     input: &DynamicImage,
     execute: impl FnOnce() -> Result<(DynamicImage, u64, u64, &'static str), PilError>,
 ) -> Result<DynamicImage, PilError> {
+    if context.backend() != Backend::Simd || !context.architecture().supports_simd() {
+        return Err(PilError::InternalError(format!(
+            "eager SIMD operation received {:?}/{:?} context",
+            context.backend(),
+            context.architecture()
+        )));
+    }
     let timed = pipeline_telemetry_enabled();
     if timed {
         reset_eager_image_operation_telemetry();

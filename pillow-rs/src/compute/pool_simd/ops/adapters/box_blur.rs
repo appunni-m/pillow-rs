@@ -22,6 +22,7 @@ use super::{
     shape_native_byte_channels, simd_unsupported,
 };
 use crate::error::PilError;
+use crate::compute::{Architecture, Backend, ExecutionContext};
 use crate::pipeline::PipelineOp;
 use crate::raster::DynamicImage;
 
@@ -115,6 +116,7 @@ struct BoxBlurPlan {
 }
 
 pub(super) fn simd_pil_box_blur(
+    context: &ExecutionContext,
     img: &DynamicImage,
     radius: f32,
     passes: u32,
@@ -123,6 +125,7 @@ pub(super) fn simd_pil_box_blur(
     gaussian_rgba_kernel_candidate: bool,
 ) -> Result<DynamicImage, PilError> {
     simd_pil_box_blur_xy(
+        context,
         img,
         radius,
         radius,
@@ -134,6 +137,7 @@ pub(super) fn simd_pil_box_blur(
 }
 
 pub(super) fn simd_pil_box_blur_xy(
+    context: &ExecutionContext,
     img: &DynamicImage,
     radius_x: f32,
     radius_y: f32,
@@ -151,6 +155,7 @@ pub(super) fn simd_pil_box_blur_xy(
     }
     crate::compute::record_pipeline_operation_path("vector");
     let plan = make_box_blur_plan(
+        context,
         img,
         radius_x,
         radius_y,
@@ -167,7 +172,7 @@ pub(super) fn simd_pil_box_blur_xy(
     {
         return Ok(result);
     }
-    execute_general_box_blur(img, &dimensions, mode, channels, plan)
+    execute_general_box_blur(context, img, &dimensions, mode, channels, plan)
 }
 
 fn valid_box_blur_input(
@@ -200,6 +205,7 @@ fn blur_axis(radius: f32) -> BlurAxis {
 }
 
 fn make_box_blur_plan(
+    context: &ExecutionContext,
     img: &DynamicImage,
     radius_x: f32,
     radius_y: f32,
@@ -210,19 +216,15 @@ fn make_box_blur_plan(
 ) -> BoxBlurPlan {
     let horizontal = blur_axis(radius_x);
     let vertical = blur_axis(radius_y);
-    let architecture_supported = {
-        #[cfg(target_arch = "aarch64")]
-        {
-            true
-        }
-        #[cfg(target_arch = "x86_64")]
-        {
-            std::is_x86_feature_detected!("avx2")
-        }
-        #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
-        {
-            false
-        }
+    let architecture_supported = match context.architecture() {
+        Architecture::Neon => cfg!(all(target_arch = "aarch64", target_feature = "neon")),
+        Architecture::Avx2 => cfg!(target_arch = "x86_64"),
+        Architecture::Scalar
+        | Architecture::PortableSimd
+        | Architecture::Ssse3
+        | Architecture::Wgpu
+        | Architecture::Cuda
+        | Architecture::TileLang => false,
     };
     let rgba_layout = channels == 4
         && matches!(img, DynamicImage::ImageRgba8(_))
@@ -342,6 +344,7 @@ fn try_small_radius_box_blur(
 }
 
 fn execute_general_box_blur(
+    context: &ExecutionContext,
     img: &DynamicImage,
     dimensions: &CheckedDims,
     mode: Option<&str>,
@@ -380,7 +383,7 @@ fn execute_general_box_blur(
     )? {
         return Ok(result);
     }
-    run_transposed_vertical_passes(img, dimensions, channels, plan, &mut work, &mut scratch)
+    run_transposed_vertical_passes(context, img, dimensions, channels, plan, &mut work, &mut scratch)
 }
 
 fn try_rgba_radius_one(
@@ -528,6 +531,7 @@ fn try_rgba_vertical_radius_one(
 }
 
 fn run_transposed_vertical_passes(
+    context: &ExecutionContext,
     img: &DynamicImage,
     dimensions: &CheckedDims,
     channels: usize,
@@ -537,6 +541,7 @@ fn run_transposed_vertical_passes(
 ) -> Result<DynamicImage, PilError> {
     let (width, height) = (dimensions.width as usize, dimensions.height as usize);
     let transposed_with_avx2 = simd_blur_transpose_rows(
+        context,
         work,
         scratch,
         width,
@@ -574,6 +579,7 @@ fn run_transposed_vertical_passes(
         }
     }
     let restored_with_avx2 = simd_blur_transpose_rows(
+        context,
         work,
         scratch,
         height,
@@ -608,6 +614,23 @@ pub(crate) fn simd_box_blur(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    simd_box_blur_in_context(
+        &ExecutionContext::for_backend(Backend::Simd),
+        img,
+        op,
+        mode,
+    )
+}
+
+pub(super) fn simd_box_blur_in_context(
+    context: &ExecutionContext,
+    img: &DynamicImage,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    if context.backend() != Backend::Simd || !context.architecture().supports_simd() {
+        return Err(simd_unsupported("BoxBlur"));
+    }
     let channels =
         simd_native_blur_channels(img, mode).ok_or_else(|| simd_unsupported("BoxBlur"))?;
     let pixel_count = (img.width() as usize).saturating_mul(img.height() as usize);
@@ -619,7 +642,7 @@ pub(crate) fn simd_box_blur(
             native_copy_image_bytes(img, mode)?.ok_or_else(|| simd_unsupported("BoxBlur"))
         }
         PipelineOp::BoxBlur { radius } => {
-            simd_pil_box_blur(img, *radius as f32, 1, channels, mode, false)
+            simd_pil_box_blur(context, img, *radius as f32, 1, channels, mode, false)
         }
         PipelineOp::BoxBlurXY {
             radius_x,
@@ -632,7 +655,16 @@ pub(crate) fn simd_box_blur(
             radius_x,
             radius_y,
             passes,
-        } => simd_pil_box_blur_xy(img, *radius_x, *radius_y, *passes, channels, mode, false),
+        } => simd_pil_box_blur_xy(
+            context,
+            img,
+            *radius_x,
+            *radius_y,
+            *passes,
+            channels,
+            mode,
+            false,
+        ),
         _ => Err(PilError::ValueError("expected BoxBlur op".into())),
     }
 }

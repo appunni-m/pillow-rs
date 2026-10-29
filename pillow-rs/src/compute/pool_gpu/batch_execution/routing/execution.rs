@@ -31,6 +31,7 @@ impl PreparedGpuBatchRoute<'_> {
             candidates,
         );
         let packed_plan = match self.pool.preflight_packed_dispatches(
+            self.context,
             self.ops(),
             self.img,
             self.mode,
@@ -289,6 +290,7 @@ impl GpuBatchExecutionRoute<'_> {
                 .prepared
                 .pool
                 .preflight_failure(
+                    self.prepared.context,
                     ops,
                     img,
                     mode,
@@ -323,6 +325,7 @@ impl GpuBatchExecutionRoute<'_> {
                 .prepared
                 .pool
                 .preflight_failure(
+                    self.prepared.context,
                     ops,
                     img,
                     mode,
@@ -482,6 +485,7 @@ impl GpuBatchExecutionRoute<'_> {
         self.prepared
             .pool
             .preflight_failure(
+                self.prepared.context,
                 self.ops(),
                 self.img(),
                 self.mode(),

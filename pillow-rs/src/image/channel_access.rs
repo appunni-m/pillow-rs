@@ -50,41 +50,61 @@ fn eager_getchannel_tiny_rgb(
     let operation = PipelineOp::ExtractBand { index: channel };
     match backend {
         crate::compute::Backend::Cpu => {
+            let context =
+                crate::compute::ExecutionContext::for_backend(crate::compute::Backend::Cpu);
             Ok(Some(crate::compute::execute_eager_cpu_image_operation(
+                &context,
                 "ExtractBand",
                 image,
                 // The ExtractBand kernel records its output allocation;
                 // manual accounting would count it twice.
                 false,
-                || crate::compute::registry::execute_cpu(&operation, image, Some(mode)),
+                || {
+                    crate::compute::registry::execute_cpu_in_context(
+                        &context,
+                        &operation,
+                        image,
+                        Some(mode),
+                    )
+                },
             )?))
         }
         crate::compute::Backend::Simd => {
-            crate::compute::execute_eager_simd_image_operation("ExtractBand", image, || {
-                let (width, height) = image.dimensions();
-                let mut output =
-                    crate::checked_dims::CheckedDims::new_allow_empty(width, height, 1)?
-                        .alloc_buffer();
-                let (vector_blocks, scalar_tail, path) = crate::compute::simd_extract_band_into(
-                    image,
-                    channel,
-                    Some(mode),
-                    &mut output,
-                )?;
-                let output =
-                    crate::raster::GrayImage::from_raw(width, height, output).ok_or_else(|| {
-                        PilError::InternalError("SIMD ExtractBand buffer shape mismatch".into())
-                    })?;
-                Ok((
-                    DynamicImage::ImageLuma8(output),
-                    vector_blocks,
-                    scalar_tail,
-                    path,
-                ))
-            })
+            let context =
+                crate::compute::ExecutionContext::for_backend(crate::compute::Backend::Simd);
+            crate::compute::execute_eager_simd_image_operation(
+                &context,
+                "ExtractBand",
+                image,
+                || {
+                    let (width, height) = image.dimensions();
+                    let mut output =
+                        crate::checked_dims::CheckedDims::new_allow_empty(width, height, 1)?
+                            .alloc_buffer();
+                    let (vector_blocks, scalar_tail, path) =
+                        crate::compute::simd_extract_band_into_in_context(
+                            &context,
+                            image,
+                            channel,
+                            Some(mode),
+                            &mut output,
+                        )?;
+                    let output = crate::raster::GrayImage::from_raw(width, height, output)
+                        .ok_or_else(|| {
+                            PilError::InternalError("SIMD ExtractBand buffer shape mismatch".into())
+                        })?;
+                    Ok((
+                        DynamicImage::ImageLuma8(output),
+                        vector_blocks,
+                        scalar_tail,
+                        path,
+                    ))
+                },
+            )
             .map(Some)
         }
         crate::compute::Backend::Gpu => Ok(None),
+        crate::compute::Backend::ParallelCpu => Ok(None),
     }
 }
 

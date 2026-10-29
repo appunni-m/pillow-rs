@@ -20,6 +20,7 @@ pub(in crate::compute::pool_simd::ops::adapters) use self::portable::{
 #[cfg(target_arch = "x86_64")]
 #[inline]
 pub(super) fn transpose_rgba(
+    context: &crate::compute::ExecutionContext,
     source: &[u8],
     output: &mut [u8],
     width: usize,
@@ -27,5 +28,5 @@ pub(super) fn transpose_rgba(
     reverse_x: bool,
     reverse_y: bool,
 ) -> Option<(u64, u64)> {
-    rgba_avx2::transpose_rgba(source, output, width, height, reverse_x, reverse_y)
+    rgba_avx2::transpose_rgba(context, source, output, width, height, reverse_x, reverse_y)
 }

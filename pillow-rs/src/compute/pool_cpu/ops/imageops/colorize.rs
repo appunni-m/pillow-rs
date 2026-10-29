@@ -1,19 +1,21 @@
 use super::*;
+use crate::compute::ExecutionContext;
 
 pub(crate) fn gather_native_channel<const CHANNELS: usize, const CHANNEL: usize>(
+    _context: &ExecutionContext,
     source: &[u8],
 ) -> (Vec<u8>, u64, u64) {
     #[cfg(target_arch = "x86_64")]
     {
         let pixel_count = source.len() / CHANNELS;
-        if let Some(gathered) =
-            crate::color::gather_interleaved_channel_ssse3_bytes(source, CHANNELS, CHANNEL)
-        {
+        if let Some(gathered) = crate::color::gather_interleaved_channel_ssse3_bytes(
+            _context, source, CHANNELS, CHANNEL,
+        ) {
             return gathered;
         }
 
-        // The portable wide shuffle lowers to scalar code on baseline x86_64
-        // builds without SSSE3. Keep that path honestly scalar in telemetry.
+        // Baseline x86_64 builds without a selected SSSE3 target use scalar
+        // extraction, so telemetry reports that path honestly.
         let output = source
             .chunks_exact(CHANNELS)
             .map(|pixel| pixel[CHANNEL])

@@ -6,7 +6,6 @@ use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::image_utils::raw_bytes_to_image;
 use crate::raster::DynamicImage;
-use std::borrow::Cow;
 
 #[path = "kernels/mod.rs"]
 mod kernels;
@@ -172,15 +171,15 @@ fn filter_3x3_i32(
     scale: f32,
     offset: f32,
 ) -> Result<DynamicImage, PilError> {
-    // I-mode stores one little-endian i32 in each four-byte pixel. Borrow that
-    // exact carrier instead of cloning it through the RGBA accessor; retain
-    // the old widening route for callers with a different concrete variant.
+    // I-mode stores one little-endian i32 in each four-byte carrier. A
+    // mismatched storage variant is not widened into this mode's kernel.
     let (w_u32, h_u32) = (img.width(), img.height());
-    let raw: Cow<'_, [u8]> = match img {
-        DynamicImage::ImageRgba8(rgba) => Cow::Borrowed(rgba.as_raw()),
-        _ => Cow::Owned(img.to_rgba8().into_raw()),
+    let DynamicImage::ImageRgba8(rgba) = img else {
+        return Err(PilError::ValueError(
+            "I-mode filter requires four-byte scalar storage".into(),
+        ));
     };
-    let raw = raw.as_ref();
+    let raw = rgba.as_raw();
     let (w, h) = (w_u32 as i32, h_u32 as i32);
 
     // The C filter receives the raw f32 divisor, including zero and negative

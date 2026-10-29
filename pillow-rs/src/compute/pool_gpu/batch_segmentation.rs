@@ -3,6 +3,7 @@ use super::*;
 impl GpuPool {
     pub(super) fn execute_batch_segments_if_needed(
         &self,
+        context: &ExecutionContext,
         ops: &[PipelineOp],
         image: &DynamicImage,
         mode: Option<&str>,
@@ -25,7 +26,7 @@ impl GpuPool {
 
         let (prefix, suffix) = ops.split_at(mode_index + 1);
         let prefix_result =
-            self.execute_batch_with_policy(prefix, image, mode, allow_cpu_fallback)?;
+            self.execute_batch_with_policy(context, prefix, image, mode, allow_cpu_fallback)?;
         // A recursive segment publishes its own receipt counters. Drain them
         // before executing the suffix so the outer benchmark sample can
         // retain one aggregate rather than only the final segment's counts.
@@ -45,6 +46,7 @@ impl GpuPool {
 
         let next_mode = gpu_logical_mode_after_op(mode, &prefix[mode_index], &prefix_result);
         let suffix_result = self.execute_batch_with_policy(
+            context,
             suffix,
             &prefix_result,
             next_mode.as_deref(),

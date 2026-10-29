@@ -2,10 +2,84 @@
 
 use crate::error::PilError;
 use crate::raster::{
-    DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, RgbImage, RgbaImage,
+    DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, ImageBuffer, RgbImage, RgbaImage,
 };
-use std::borrow::Cow;
 use std::sync::{Mutex, OnceLock};
+
+#[inline(always)]
+fn relocate_samples<T: Copy, const CHANNELS: usize>(samples: &[T], mapping: &[u32]) -> Vec<T> {
+    let mut output = Vec::with_capacity(samples.len());
+    for &source_pixel in mapping {
+        let start = source_pixel as usize * CHANNELS;
+        output.extend_from_slice(&samples[start..start + CHANNELS]);
+    }
+    output
+}
+
+fn relocate_native_pixels(img: &DynamicImage, mapping: &[u32]) -> Result<DynamicImage, PilError> {
+    if mapping.is_empty() {
+        return Ok(img.clone());
+    }
+    let (width, height) = img.dimensions();
+    let invalid_buffer = || PilError::ValueError("effect_spread buffer error".into());
+    let output = match img {
+        DynamicImage::ImageLuma8(image) => DynamicImage::ImageLuma8(
+            GrayImage::from_raw(width, height, relocate_samples::<_, 1>(image.as_raw(), mapping))
+                .ok_or_else(invalid_buffer)?,
+        ),
+        DynamicImage::ImageLumaA8(image) => DynamicImage::ImageLumaA8(
+            GrayAlphaImage::from_raw(
+                width,
+                height,
+                relocate_samples::<_, 2>(image.as_raw(), mapping),
+            )
+            .ok_or_else(invalid_buffer)?,
+        ),
+        DynamicImage::ImageRgb8(image) => DynamicImage::ImageRgb8(
+            RgbImage::from_raw(width, height, relocate_samples::<_, 3>(image.as_raw(), mapping))
+                .ok_or_else(invalid_buffer)?,
+        ),
+        DynamicImage::ImageRgba8(image) => DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(width, height, relocate_samples::<_, 4>(image.as_raw(), mapping))
+                .ok_or_else(invalid_buffer)?,
+        ),
+        DynamicImage::ImageLuma16(image) => DynamicImage::ImageLuma16(
+            ImageBuffer::from_raw(width, height, relocate_samples::<_, 1>(image.as_raw(), mapping))
+                .ok_or_else(invalid_buffer)?,
+        ),
+        // NO_PILLOW_SUPPORT: EffectSpread also relocates the internal LA16,
+        // RGB16, RGBA16, RGB32F, and RGBA32F samples without narrowing them.
+        DynamicImage::ImageLumaA16(image) => DynamicImage::ImageLumaA16(
+            ImageBuffer::from_raw(width, height, relocate_samples::<_, 2>(image.as_raw(), mapping))
+                .ok_or_else(invalid_buffer)?,
+        ),
+        DynamicImage::ImageRgb16(image) => DynamicImage::ImageRgb16(
+            ImageBuffer::from_raw(width, height, relocate_samples::<_, 3>(image.as_raw(), mapping))
+                .ok_or_else(invalid_buffer)?,
+        ),
+        DynamicImage::ImageRgba16(image) => DynamicImage::ImageRgba16(
+            ImageBuffer::from_raw(width, height, relocate_samples::<_, 4>(image.as_raw(), mapping))
+                .ok_or_else(invalid_buffer)?,
+        ),
+        DynamicImage::ImageRgb32F(image) => DynamicImage::ImageRgb32F(
+            crate::raster::Rgb32FImage::from_raw(
+                width,
+                height,
+                relocate_samples::<_, 3>(image.as_raw(), mapping),
+            )
+            .ok_or_else(invalid_buffer)?,
+        ),
+        DynamicImage::ImageRgba32F(image) => DynamicImage::ImageRgba32F(
+            crate::raster::Rgba32FImage::from_raw(
+                width,
+                height,
+                relocate_samples::<_, 4>(image.as_raw(), mapping),
+            )
+            .ok_or_else(invalid_buffer)?,
+        ),
+    };
+    Ok(output)
+}
 
 pub(super) fn apply_effect_rows<F>(
     bytes: &mut [u8],
@@ -126,17 +200,7 @@ pub fn op_effect_spread(img: &DynamicImage, distance: u32) -> Result<DynamicImag
     // process-global stream identical by jumping over the same two draws per
     // pixel, then copy the native dynamic image once instead of building a
     // u32 relocation map and gathering every sample.
-    if distance == 1
-        && img.width() != 0
-        && img.height() != 0
-        && matches!(
-            img,
-            DynamicImage::ImageLuma8(_)
-                | DynamicImage::ImageLumaA8(_)
-                | DynamicImage::ImageRgb8(_)
-                | DynamicImage::ImageRgba8(_)
-        )
-    {
+    if distance == 1 && img.width() != 0 && img.height() != 0 {
         i32::try_from(img.width())
             .map_err(|_| PilError::ValueError("effect_spread width is too large".into()))?;
         i32::try_from(img.height())
@@ -145,48 +209,7 @@ pub fn op_effect_spread(img: &DynamicImage, distance: u32) -> Result<DynamicImag
         return Ok(img.clone());
     }
     let mapping = effect_spread_mapping(img.width(), img.height(), distance)?;
-    // Relocation copies stored samples verbatim, so keep byte images in their
-    // native layout. In particular, the four-byte carrier can represent RGBA,
-    // RGBa, CMYK, RGBX, I, or F; spread does not interpret those bytes as colors.
-    // Preserve the existing numeric down-conversion for LA16 and uncommon
-    // storage variants until their output contracts have dedicated paths.
-    let (w, h) = img.dimensions();
-    let (input_pixels, stride): (Cow<'_, [u8]>, usize) = match img {
-        DynamicImage::ImageLuma8(luma) => (Cow::Borrowed(luma.as_raw()), 1),
-        DynamicImage::ImageLumaA8(la) => (Cow::Borrowed(la.as_raw()), 2),
-        DynamicImage::ImageLumaA16(_) => (Cow::Owned(img.to_luma_alpha8().into_raw()), 2),
-        DynamicImage::ImageRgb8(rgb) => (Cow::Borrowed(rgb.as_raw()), 3),
-        DynamicImage::ImageRgba8(rgba) => (Cow::Borrowed(rgba.as_raw()), 4),
-        _ => (Cow::Owned(img.to_rgba8().into_raw()), 4),
-    };
-    let mut out_pixels = vec![0u8; input_pixels.len()];
-    for (destination, &source) in mapping.iter().enumerate() {
-        let source = source as usize;
-        let destination_base = destination * stride;
-        let source_base = source * stride;
-        out_pixels[destination_base..destination_base + stride]
-            .copy_from_slice(&input_pixels[source_base..source_base + stride]);
-    }
-    // Reconstruct DynamicImage from the output pixel data
-    let result = match stride {
-        1 => DynamicImage::ImageLuma8(
-            GrayImage::from_raw(w, h, out_pixels)
-                .ok_or_else(|| PilError::ValueError("effect_spread buffer error".into()))?,
-        ),
-        2 => DynamicImage::ImageLumaA8(
-            GrayAlphaImage::from_raw(w, h, out_pixels)
-                .ok_or_else(|| PilError::ValueError("effect_spread buffer error".into()))?,
-        ),
-        3 => DynamicImage::ImageRgb8(
-            RgbImage::from_raw(w, h, out_pixels)
-                .ok_or_else(|| PilError::ValueError("effect_spread buffer error".into()))?,
-        ),
-        _ => DynamicImage::ImageRgba8(
-            RgbaImage::from_raw(w, h, out_pixels)
-                .ok_or_else(|| PilError::ValueError("effect_spread buffer error".into()))?,
-        ),
-    };
-    Ok(result)
+    relocate_native_pixels(img, &mapping)
 }
 
 /// Build the exact per-pixel relocation map used by Pillow's spread effect.

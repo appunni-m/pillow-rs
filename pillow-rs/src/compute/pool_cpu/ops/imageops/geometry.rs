@@ -1,4 +1,5 @@
 use super::*;
+use crate::compute::{Backend, ExecutionContext};
 
 /// Contain: resize to fit within (w, h) preserving aspect ratio.
 /// PIL: adjusts one dimension using round(), does not truncate.
@@ -99,6 +100,28 @@ pub fn op_fit(
     centering: (f64, f64),
     explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    op_fit_in_context(
+        &ExecutionContext::for_backend(Backend::Cpu),
+        img,
+        w,
+        h,
+        filter,
+        bleed,
+        centering,
+        explicit_mode,
+    )
+}
+
+pub(crate) fn op_fit_in_context(
+    context: &ExecutionContext,
+    img: &DynamicImage,
+    w: u32,
+    h: u32,
+    filter: ResampleFilter,
+    bleed: f64,
+    centering: (f64, f64),
+    explicit_mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
     let (iw, ih) = (img.width(), img.height());
     // ImageOps.fit performs these divisions before Image.resize sees the
     // boxed target. Keep the eager public checks mirrored here for callers
@@ -154,7 +177,8 @@ pub fn op_fit(
     } else {
         filter
     };
-    let result = pil_resize_boxed(
+    let result = crate::ops::pil_resize::pil_resize_boxed_in_context(
+        context,
         img,
         w,
         h,

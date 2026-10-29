@@ -30,6 +30,8 @@ impl NativeDrawCanvas {
             DynamicImage::ImageLuma16(pixels) => {
                 Self::L16(pixels.clone(), l16_draw_uses_big_endian(mode))
             }
+            // TODO(pillow-rs#3ptb): Add native draw strategies for these
+            // storage modes. Do not widen them to RGBA to share the draw path.
             _ => Self::Rgba(image.to_rgba8()),
         }
     }

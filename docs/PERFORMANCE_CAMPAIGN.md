@@ -31584,7 +31584,7 @@ unrelated legacy paths; touched legacy areas align incrementally and remaining
 paths are visible through the source crosswalk for review.
 
 Grayscale now follows the standard at its CPU and SIMD ownership boundaries:
-serial CPU dispatch is in `pool_cpu/ops/grayscale.rs`; architecture-specific
+serial CPU mode dispatch is in `pool_cpu/ops/grayscale/ops.rs`; architecture-specific
 RGB AVX2 and YCbCr SSSE3 loops are in the SIMD grayscale family kernels; core
 shared color semantics remain in `color.rs`. SIMD paths retain their own
 specialized loops and are the only paths reporting vector execution. The

@@ -384,6 +384,7 @@ pub fn composite(image1: &Image, image2: &Image, mask: &Image) -> Result<Image, 
         _ => return Err(PilError::ValueError("bad transparency mask".into())),
     };
     let output_mode = image2.mode()?;
+    let output_mode_selector = image2.mode_selector()?;
     let source = if image1.mode()? == output_mode {
         image1.clone()
     } else {
@@ -401,12 +402,14 @@ pub fn composite(image1: &Image, image2: &Image, mask: &Image) -> Result<Image, 
     );
     if let Image::Pipeline {
         ref mut explicit_mode,
+        ref mut mode_selector,
         ref mut palette,
         ref mut palette_alpha,
         ..
     } = result
     {
         *explicit_mode = image2.explicit_mode().map(str::to_owned);
+        *mode_selector = Some(output_mode_selector);
         if output_mode == "P" {
             // The output begins as image2.copy(), so palette ownership follows
             // image2 even when image1 was converted to P for the paste.

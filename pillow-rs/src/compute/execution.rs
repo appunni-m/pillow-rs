@@ -7,7 +7,8 @@ use super::pool_gpu;
 use super::pool_simd;
 use super::registry;
 use super::{
-    Backend, BackendImpl, DynamicImage, PilError, PipelineOp, PipelineResourceTelemetry,
+    Backend, BackendImpl, DynamicImage, ExecutionContext, PilError, PipelineOp,
+    PipelineResourceTelemetry,
     PipelineTelemetry, begin_pipeline_operation_telemetry, elapsed_ns,
     finish_pipeline_operation_telemetry, host_resource_telemetry, pipeline_telemetry_enabled,
     pipeline_timestamp, record_pipeline_allocation, record_pipeline_backend_fallback,
@@ -34,11 +35,11 @@ pub(crate) use terminals::{
 fn route_decision(
     ops: &[PipelineOp],
     explicit: Option<Backend>,
-) -> Result<(Backend, Option<String>, bool), PilError> {
+) -> Result<(ExecutionContext, Option<String>, bool), PilError> {
     if let Some(b) = explicit {
         // An explicit request must still cross the normal validation boundary;
         // callers may request an inactive or unsupported backend deliberately.
-        return Ok((b, None, false));
+        return Ok((ExecutionContext::for_backend(b), None, false));
     }
     // Snapshot activation policy before walking the operation list. Support
     // checks can inspect registry metadata and may grow as the descriptor
@@ -48,10 +49,11 @@ fn route_decision(
     let mut fallback_reason = None;
     for pool in pools() {
         if active_set.contains(&pool.name()) {
+            let context = ExecutionContext::for_backend(pool.name());
             let mut supports_all = true;
             let mut supports_any = false;
             for op in ops {
-                if pool.supports(op)? {
+                if pool.supports(&context, op)? {
                     supports_any = true;
                 } else {
                     supports_all = false;
@@ -73,19 +75,19 @@ fn route_decision(
                 }
             }
             if pool.name() == Backend::Simd && supports_any {
-                return Ok((pool.name(), fallback_reason, true));
+                return Ok((context, fallback_reason, true));
             }
             if supports_all {
                 // The support scan above is the validation pass for automatic
                 // routing. Carry that fact to preparation so the same
                 // registry queries are not repeated immediately before the
                 // backend executor runs.
-                return Ok((pool.name(), fallback_reason, true));
+                return Ok((context, fallback_reason, true));
             }
         }
     }
     Ok((
-        Backend::Cpu,
+        ExecutionContext::for_backend(Backend::Cpu),
         fallback_reason.or_else(|| {
             active_set
                 .iter()
@@ -101,6 +103,7 @@ fn backend_label(backend: Backend) -> &'static str {
         Backend::Cpu => "CPU",
         Backend::Gpu => "GPU",
         Backend::Simd => "SIMD",
+        Backend::ParallelCpu => "Parallel CPU",
     }
 }
 
@@ -124,7 +127,7 @@ fn is_simd_capability_error(error: &PilError) -> bool {
 #[derive(Debug, Clone)]
 pub(crate) struct PreparedExecution {
     requested_backend: Option<Backend>,
-    selected_backend: Backend,
+    context: ExecutionContext,
     route_ns: u64,
     validation_ns: u64,
     fallback_reason: Option<String>,
@@ -132,15 +135,15 @@ pub(crate) struct PreparedExecution {
 
 impl PreparedExecution {
     pub(crate) fn is_serial_cpu_without_fallback(&self) -> bool {
-        self.selected_backend == Backend::Cpu && self.fallback_reason.is_none()
+        self.context.backend() == Backend::Cpu && self.fallback_reason.is_none()
     }
 
     pub(crate) fn is_simd_without_fallback(&self) -> bool {
-        self.selected_backend == Backend::Simd && self.fallback_reason.is_none()
+        self.context.backend() == Backend::Simd && self.fallback_reason.is_none()
     }
 
     pub(crate) fn is_gpu_without_fallback(&self) -> bool {
-        self.selected_backend == Backend::Gpu && self.fallback_reason.is_none()
+        self.context.backend() == Backend::Gpu && self.fallback_reason.is_none()
     }
 }
 
@@ -153,19 +156,19 @@ pub(crate) fn prepare_execution(
 ) -> Result<PreparedExecution, PilError> {
     let timed = pipeline_telemetry_enabled();
     let route_start = timed.then(pipeline_timestamp).flatten();
-    let (selected_backend, fallback_reason, support_checked) =
+    let (context, fallback_reason, support_checked) =
         route_decision(ops, requested_backend)?;
     let route_ns = elapsed_ns(route_start);
 
     let validation_start = timed.then(pipeline_timestamp).flatten();
     if !support_checked {
-        validate_backend_support(selected_backend, ops)?;
+        validate_backend_support_in_context(&context, ops)?;
     }
     let validation_ns = elapsed_ns(validation_start);
 
     Ok(PreparedExecution {
         requested_backend,
-        selected_backend,
+        context,
         route_ns,
         validation_ns,
         fallback_reason,
@@ -183,12 +186,20 @@ pub(crate) fn prepare_execution(
 /// Returns [`PilError::ValueError`] for an unavailable backend or the first
 /// operation without a native implementation on the selected backend.
 pub fn validate_backend_support(backend: Backend, ops: &[PipelineOp]) -> Result<(), PilError> {
+    validate_backend_support_in_context(&ExecutionContext::for_backend(backend), ops)
+}
+
+fn validate_backend_support_in_context(
+    context: &ExecutionContext,
+    ops: &[PipelineOp],
+) -> Result<(), PilError> {
+    let backend = context.backend();
     let pool = pools()
         .iter()
         .find(|pool| pool.name() == backend)
         .ok_or_else(|| PilError::ValueError(format!("Backend {:?} not available", backend)))?;
     for op in ops {
-        if pool.supports(op)? {
+        if pool.supports(context, op)? {
             continue;
         }
         // GPU strict parity must reach the executor even when a public
@@ -228,6 +239,7 @@ pub fn validate_backend_support(backend: Backend, ops: &[PipelineOp]) -> Result<
             Backend::Cpu => "CPU",
             Backend::Gpu => "GPU",
             Backend::Simd => "SIMD",
+            Backend::ParallelCpu => "Parallel CPU",
         };
         return Err(PilError::ValueError(format!(
             "{name}: no native impl for {}",
@@ -285,6 +297,7 @@ pub(crate) fn merge_pipeline_resource_telemetry(
 /// backend is entered with stale capability information and no Python-level
 /// materialization is needed at a CPU↔SIMD boundary.
 pub(super) fn execute_automatic_simd_segments(
+    context: &ExecutionContext,
     ops: &[PipelineOp],
     img: &DynamicImage,
     mode: Option<&str>,
@@ -313,11 +326,12 @@ pub(super) fn execute_automatic_simd_segments(
     let mut resources = None;
     let mut index = 0usize;
     let mut current_mode = pool_simd::ops::adapters::simd_initial_mode(img, ops, mode);
+    let cpu_context = context.routed_to(Backend::Cpu);
 
     while index < ops.len() {
         let input = current.as_ref().unwrap_or(img);
         let op_mode = current_mode.as_deref();
-        let backend = if simd.supports_for_image(&ops[index], input, op_mode)? {
+        let backend = if simd.supports_for_image(context, &ops[index], input, op_mode)? {
             Backend::Simd
         } else {
             fallback_reason.get_or_insert_with(|| simd_host_control_reason(&ops[index]));
@@ -330,6 +344,8 @@ pub(super) fn execute_automatic_simd_segments(
             backend,
             input,
             op_mode,
+            context,
+            &cpu_context,
             simd.as_ref(),
             cpu.as_ref(),
         )?;
@@ -338,8 +354,13 @@ pub(super) fn execute_automatic_simd_segments(
             record_pipeline_operation_handoff(1);
         }
         let pool = if backend == Backend::Simd { simd } else { cpu };
+        let pool_context = if backend == Backend::Simd {
+            context
+        } else {
+            &cpu_context
+        };
         let segment_ops = &ops[index..end];
-        let next = pool.execute_batch(segment_ops, input, op_mode)?;
+        let next = pool.execute_batch(pool_context, segment_ops, input, op_mode)?;
         merge_pipeline_resource_telemetry(&mut resources, take_pipeline_resource_telemetry());
         current = Some(next);
         previous_backend = Some(backend);
@@ -392,7 +413,7 @@ pub(crate) fn execute_prepared(
         reset_execution_telemetry();
     }
     let backend_start = timed.then(pipeline_timestamp).flatten();
-    if prepared.requested_backend.is_none() && prepared.selected_backend == Backend::Simd {
+    if prepared.requested_backend.is_none() && prepared.context.backend() == Backend::Simd {
         return execute_automatic_simd(prepared, ops, img, mode, timed, backend_start);
     }
     validate_explicit_simd_support(prepared, ops, img, mode)?;
@@ -463,7 +484,7 @@ fn execute_automatic_simd(
     backend_start: Option<Instant>,
 ) -> Result<DynamicImage, PilError> {
     let (result, actual_backend, mixed_reason, mut resource) =
-        execute_automatic_simd_segments(ops, img, mode)?;
+        execute_automatic_simd_segments(&prepared.context, ops, img, mode)?;
     if timed {
         let allocation = take_pipeline_allocation_telemetry();
         if let Some(resource) = resource.as_mut() {
@@ -500,7 +521,7 @@ fn validate_explicit_simd_support(
     img: &DynamicImage,
     mode: Option<&str>,
 ) -> Result<(), PilError> {
-    if prepared.selected_backend != Backend::Simd
+    if prepared.context.backend() != Backend::Simd
         || prepared.requested_backend != Some(Backend::Simd)
     {
         return Ok(());
@@ -523,14 +544,14 @@ fn execute_prepared_on_backend(
     timed: bool,
     backend_start: Option<Instant>,
 ) -> Result<DynamicImage, PilError> {
-    let effective_backend = prepared.selected_backend;
+    let effective_backend = prepared.context.backend();
     let pool = pools()
         .iter()
         .find(|pool| pool.name() == effective_backend)
         .ok_or_else(|| {
             PilError::ValueError(format!(
                 "Backend {:?} not available",
-                prepared.selected_backend
+                prepared.context.backend()
             ))
         })?;
     let estimated_dispatch_count = timed.then(|| pool.dispatch_count(ops)).flatten();
@@ -580,9 +601,9 @@ fn execute_pool_with_simd_recovery(
     fallback_reason: &mut Option<String>,
 ) -> Result<DynamicImage, PilError> {
     let execution = if prepared.requested_backend == Some(Backend::Gpu) {
-        pool.execute_batch_strict(ops, img, mode)
+        pool.execute_batch_strict(&prepared.context, ops, img, mode)
     } else {
-        pool.execute_batch(ops, img, mode)
+        pool.execute_batch(&prepared.context, ops, img, mode)
     };
     match execution {
         Err(error)
@@ -621,7 +642,7 @@ fn retry_simd_capability_failure(
         .iter()
         .find(|candidate| candidate.name() == Backend::Cpu)
         .ok_or_else(|| PilError::ValueError("CPU backend not available".into()))?;
-    cpu.execute_batch(ops, img, mode)
+    cpu.execute_batch(&ExecutionContext::for_backend(Backend::Cpu), ops, img, mode)
 }
 
 fn record_prepared_backend_telemetry(
@@ -688,7 +709,10 @@ pub(crate) fn execute_prepared_shared(
     img: &Arc<DynamicImage>,
     mode: Option<&str>,
 ) -> Result<Arc<DynamicImage>, PilError> {
-    if matches!(prepared.selected_backend, Backend::Cpu | Backend::Simd)
+    if matches!(
+        prepared.context.backend(),
+        Backend::Cpu | Backend::Simd | Backend::ParallelCpu
+    )
         && mode == Some("I")
         && ops.len() == 1
         && let PipelineOp::Filter3x3 {
@@ -701,7 +725,7 @@ pub(crate) fn execute_prepared_shared(
         let normalized_kernel = std::array::from_fn(|index| kernel[index] / scale);
         let timed = pipeline_telemetry_enabled();
         let backend_start = timed.then(pipeline_timestamp).flatten();
-        let identity = match prepared.selected_backend {
+        let identity = match prepared.context.backend() {
             Backend::Cpu => {
                 crate::compute::pool_cpu::ops::filter::uniform_i32_filter3x3_is_identity(
                     img.as_bytes(),
@@ -721,6 +745,15 @@ pub(crate) fn execute_prepared_shared(
                 )
             }
             Backend::Gpu => false,
+            Backend::ParallelCpu => {
+                crate::compute::pool_cpu::ops::filter::uniform_i32_filter3x3_is_identity(
+                    img.as_bytes(),
+                    img.width() as usize,
+                    img.height() as usize,
+                    &normalized_kernel,
+                    offset + 0.5,
+                )
+            }
         };
         if identity {
             if timed {
@@ -731,12 +764,13 @@ pub(crate) fn execute_prepared_shared(
                 let _ = take_pipeline_dispatch_count();
                 let _ = take_pipeline_resize_coeff_cache_stats();
                 begin_pipeline_operation_telemetry(registry::variant_key(&ops[0]));
-                record_pipeline_operation_path(if prepared.selected_backend == Backend::Cpu {
-                    "cpu"
-                } else {
-                    "scalar-control"
+                record_pipeline_operation_path(match prepared.context.backend() {
+                    Backend::Cpu => "cpu",
+                    Backend::ParallelCpu => "parallel-cpu",
+                    Backend::Simd => "scalar-control",
+                    Backend::Gpu => "gpu-control",
                 });
-                if prepared.selected_backend == Backend::Simd {
+                if prepared.context.backend() == Backend::Simd {
                     let bytes = img.as_bytes().len();
                     record_pipeline_operation_vector_blocks((bytes / 16) as u64);
                     record_pipeline_operation_scalar_tail((bytes % 16) as u64);
@@ -745,7 +779,7 @@ pub(crate) fn execute_prepared_shared(
                 let _ = take_pipeline_allocation_telemetry();
                 record_pipeline_telemetry(PipelineTelemetry {
                     requested_backend: prepared.requested_backend,
-                    actual_backend: prepared.selected_backend,
+                    actual_backend: prepared.context.backend(),
                     operation_count: ops.len(),
                     route_ns: prepared.route_ns,
                     validation_ns: prepared.validation_ns,

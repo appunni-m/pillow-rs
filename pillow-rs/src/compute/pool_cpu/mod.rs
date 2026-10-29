@@ -1,7 +1,7 @@
 //! CPU worker pool — implements BackendImpl for CPU backend.
 
 use crate::compute::registry;
-use crate::compute::{Backend, BackendImpl};
+use crate::compute::{Backend, BackendImpl, ExecutionContext};
 use crate::error::PilError;
 use crate::image::{Image, preserve_mode};
 use crate::pipeline::PipelineOp;
@@ -244,20 +244,28 @@ impl BackendImpl for CpuPool {
     }
 
     fn priority(&self) -> u8 {
-        0
+        Backend::Cpu.priority()
     }
 
-    fn supports(&self, op: &PipelineOp) -> Result<bool, PilError> {
+    fn supports(
+        &self,
+        context: &ExecutionContext,
+        op: &PipelineOp,
+    ) -> Result<bool, PilError> {
+        if context.backend() != Backend::Cpu || !context.architecture().supports_cpu() {
+            return Ok(false);
+        }
         registry::cpu_supports(op)
     }
 
     fn execute_batch(
         &self,
+        context: &ExecutionContext,
         ops: &[PipelineOp],
         img: &DynamicImage,
         mode: Option<&str>,
     ) -> Result<DynamicImage, PilError> {
-        batch_execution::execute_batch(ops, img, mode)
+        batch_execution::execute_batch(context, ops, img, mode)
     }
 }
 
@@ -301,7 +309,14 @@ mod tests {
                         ];
                         let intermediate = registry::execute_cpu(&ops[0], &source, Some(mode))?;
                         let expected = registry::execute_cpu(&ops[1], &intermediate, Some(mode))?;
-                        let actual = CpuPool.execute_batch(&ops, &source, Some(mode))?;
+                        let actual = CpuPool.execute_batch(
+                            &crate::compute::ExecutionContext::for_backend(
+                                crate::compute::Backend::Cpu,
+                            ),
+                            &ops,
+                            &source,
+                            Some(mode),
+                        )?;
                         assert_eq!(actual.dimensions(), expected.dimensions());
                         assert_eq!(
                             actual.as_bytes(),
@@ -363,7 +378,12 @@ mod tests {
             ];
             let composite = registry::execute_cpu(&operations[0], &destination, Some("RGBA"))?;
             let expected = registry::execute_cpu(&operations[1], &composite, Some("RGBA"))?;
-            let actual = CpuPool.execute_batch(&operations, &destination, Some("RGBA"))?;
+            let actual = CpuPool.execute_batch(
+                &crate::compute::ExecutionContext::for_backend(crate::compute::Backend::Cpu),
+                &operations,
+                &destination,
+                Some("RGBA"),
+            )?;
             assert_eq!(actual.dimensions(), expected.dimensions());
             assert_eq!(actual.as_bytes(), expected.as_bytes(), "{width}x{height}");
         }

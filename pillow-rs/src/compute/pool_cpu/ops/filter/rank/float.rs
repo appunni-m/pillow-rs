@@ -1,4 +1,4 @@
-use super::{CheckedDims, Cow, DynamicImage, PilError, SMALL_RANK_AREA, preserve_mode};
+use super::{CheckedDims, DynamicImage, PilError, SMALL_RANK_AREA, preserve_mode};
 #[inline]
 pub(super) fn native_uniform_f_mode_image(raw: &[u8], width: usize, height: usize) -> bool {
     let Some(pixel_count) = width.checked_mul(height) else {
@@ -151,23 +151,15 @@ pub(super) fn rank_filter_f_impl(
     } = window;
 
     // F-mode stores each scalar as one little-endian f32 in the four-byte
-    // carrier. Borrow that storage directly and retain the accessor only for
-    // mismatched internal variants.
-    let raw: Cow<'_, [u8]> = match img {
-        DynamicImage::ImageRgba8(rgba) => Cow::Borrowed(rgba.as_raw()),
-        _ => Cow::Owned(img.to_rgba8().into_raw()),
+    // carrier. Reject a mismatched storage variant instead of converting it.
+    let DynamicImage::ImageRgba8(rgba) = img else {
+        return Err(PilError::ValueError(
+            "F-mode rank filter requires four-byte scalar storage".into(),
+        ));
     };
-    let raw = raw.as_ref();
+    let raw = rgba.as_raw();
     if area > 1 && native_uniform_f_mode_image(raw, w_u32 as usize, h_u32 as usize) {
-        let result = match img {
-            DynamicImage::ImageRgba8(_) => img.clone(),
-            _ => DynamicImage::ImageRgba8(
-                crate::raster::RgbaImage::from_raw(w_u32, h_u32, raw.to_vec()).ok_or_else(
-                    || PilError::ValueError("rank_filter_impl(F): buffer error".into()),
-                )?,
-            ),
-        };
-        return Ok(preserve_mode(img, result));
+        return Ok(img.clone());
     }
     let mut out = CheckedDims::new(w as u32, h as u32, 4)?.alloc_buffer();
     if area <= SMALL_RANK_AREA {

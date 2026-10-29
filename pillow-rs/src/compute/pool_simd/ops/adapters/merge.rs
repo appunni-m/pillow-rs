@@ -7,6 +7,7 @@
 use super::super::native_merge;
 use super::{SimdImageShape, SimdLayout, simd_unsupported};
 use crate::error::PilError;
+use crate::compute::{Architecture, Backend, ExecutionContext};
 use crate::image::Image;
 use crate::pipeline::{ColorMode, PipelineOp};
 use crate::raster::{DynamicImage, GenericImageView};
@@ -128,6 +129,7 @@ pub(super) fn supports_shape_contract(
 }
 #[allow(unsafe_code)] // The x86 dispatch checks SSSE3 before calling its target-feature kernel.
 pub(super) fn native_merge_interleave(
+    context: &ExecutionContext,
     width: u32,
     height: u32,
     pixels: usize,
@@ -137,22 +139,46 @@ pub(super) fn native_merge_interleave(
     let output_len = pixels
         .checked_mul(channels)
         .ok_or_else(|| PilError::ValueError("SIMD merge output length overflow".into()))?;
-    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
     if channels == 3 && pixels >= 16 {
-        let (image, vector_blocks, scalar_tail) =
-            native_merge::rgb_interleave_neon(width, height, pixels, output_len, band_bytes)?;
-        crate::compute::record_pipeline_allocation(output_len);
-        return Ok((image, vector_blocks, scalar_tail, "neon-interleave"));
-    }
-    #[cfg(target_arch = "x86_64")]
-    if channels == 3 && pixels >= 16 && std::is_x86_feature_detected!("ssse3") {
-        // SAFETY: the runtime feature probe above guarantees SSSE3 support;
-        // native_merge_bytes validates the three equal-length L bands.
-        let (image, vector_blocks, scalar_tail) = unsafe {
-            native_merge::rgb_interleave_ssse3(width, height, pixels, output_len, band_bytes)?
-        };
-        crate::compute::record_pipeline_allocation(output_len);
-        return Ok((image, vector_blocks, scalar_tail, "ssse3-interleave"));
+        match context.architecture() {
+            Architecture::Neon => {
+                #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+                {
+                    let (image, blocks, tail) = native_merge::rgb_interleave_neon(
+                        width,
+                        height,
+                        pixels,
+                        output_len,
+                        band_bytes,
+                    )?;
+                    crate::compute::record_pipeline_allocation(output_len);
+                    return Ok((image, blocks, tail, "neon-interleave"));
+                }
+            }
+            Architecture::Ssse3 | Architecture::Avx2 => {
+                #[cfg(target_arch = "x86_64")]
+                {
+                    // SAFETY: the selected context establishes SSSE3 support;
+                    // native_merge_bytes validates the three equal-length L bands.
+                    let (image, blocks, tail) = unsafe {
+                        native_merge::rgb_interleave_ssse3(
+                            width,
+                            height,
+                            pixels,
+                            output_len,
+                            band_bytes,
+                        )?
+                    };
+                    crate::compute::record_pipeline_allocation(output_len);
+                    return Ok((image, blocks, tail, "ssse3-interleave"));
+                }
+            }
+            Architecture::Scalar
+            | Architecture::PortableSimd
+            | Architecture::Wgpu
+            | Architecture::Cuda
+            | Architecture::TileLang => {}
+        }
     }
 
     let mut output = vec![0u8; output_len];
@@ -234,6 +260,7 @@ pub(super) fn native_merge_rgb_luma_owners(
 /// color conversion. Complete channel groups use vector shuffles; only the
 /// final incomplete group is scalar.
 pub(super) fn native_merge_bytes(
+    context: &ExecutionContext,
     img: &DynamicImage,
     target_mode: &ColorMode,
     bands: &[Image],
@@ -267,7 +294,7 @@ pub(super) fn native_merge_bytes(
             band_bytes.push(image.as_raw().as_slice());
         }
         let (result, vector_blocks, scalar_tail, path) =
-            native_merge_interleave(width, height, pixels, channels, &band_bytes)?;
+            native_merge_interleave(context, width, height, pixels, channels, &band_bytes)?;
         return Ok(Some((result, vector_blocks, scalar_tail, path)));
     }
 
@@ -284,7 +311,7 @@ pub(super) fn native_merge_bytes(
     }
     let band_byte_slices: Vec<&[u8]> = band_bytes.iter().map(Vec::as_slice).collect();
     let (result, vector_blocks, scalar_tail, path) =
-        native_merge_interleave(width, height, pixels, channels, &band_byte_slices)?;
+        native_merge_interleave(context, width, height, pixels, channels, &band_byte_slices)?;
     Ok(Some((result, vector_blocks, scalar_tail, path)))
 }
 
@@ -293,6 +320,23 @@ pub(crate) fn simd_merge(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    simd_merge_in_context(
+        &ExecutionContext::for_backend(Backend::Simd),
+        img,
+        op,
+        mode,
+    )
+}
+
+pub(super) fn simd_merge_in_context(
+    context: &ExecutionContext,
+    img: &DynamicImage,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    if context.backend() != Backend::Simd || !context.architecture().supports_simd() {
+        return Err(simd_unsupported("Merge"));
+    }
     let PipelineOp::Merge {
         mode: target_mode,
         bands,
@@ -302,7 +346,7 @@ pub(crate) fn simd_merge(
         return Err(PilError::ValueError("expected Merge op".into()));
     };
     let Some((result, vector_blocks, scalar_tail, path)) =
-        native_merge_bytes(img, target_mode, bands, mode, logical_mode)?
+        native_merge_bytes(context, img, target_mode, bands, mode, logical_mode)?
     else {
         return Err(simd_unsupported("Merge"));
     };

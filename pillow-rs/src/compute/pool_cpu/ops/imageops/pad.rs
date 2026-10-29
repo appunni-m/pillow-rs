@@ -1,4 +1,6 @@
 use super::*;
+use crate::compute::{Backend, ExecutionContext};
+use crate::image::Mode;
 
 mod native;
 use native::{pad_native_bytes, pad_native_rows};
@@ -25,6 +27,28 @@ pub fn op_pad(
     centering: (f64, f64),
     explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    op_pad_in_context(
+        &ExecutionContext::for_backend(Backend::Cpu),
+        img,
+        w,
+        h,
+        filter,
+        color,
+        centering,
+        explicit_mode,
+    )
+}
+
+pub(crate) fn op_pad_in_context(
+    context: &ExecutionContext,
+    img: &DynamicImage,
+    w: u32,
+    h: u32,
+    filter: ResampleFilter,
+    color: Option<(u8, u8, u8, u8)>,
+    centering: (f64, f64),
+    explicit_mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
     let plan = build_pad_plan(img, w, h, filter, color, explicit_mode)?;
     if let Some(padded) = pad_identity_source(img, &plan, centering, explicit_mode)? {
         return Ok(padded);
@@ -37,7 +61,7 @@ pub fn op_pad(
         return Ok(padded);
     }
 
-    let resized_storage = resize_pad_content(img, &plan, explicit_mode)?;
+    let resized_storage = resize_pad_content(context, img, &plan, explicit_mode)?;
     let resized = resized_storage.as_ref().unwrap_or(img);
     if plan.content_width == plan.width && plan.content_height == plan.height {
         return Ok(preserve_mode(img, resized.clone()));
@@ -270,6 +294,7 @@ fn resize_window(
 }
 
 fn resize_pad_content(
+    context: &ExecutionContext,
     img: &DynamicImage,
     plan: &PadPlan,
     explicit_mode: Option<&str>,
@@ -291,12 +316,15 @@ fn resize_pad_content(
         return Ok(None);
     }
     let source = if explicit_mode == Some("F") && matches!(img, DynamicImage::ImageRgba8(_)) {
-        execute_resize(
+        execute_resize_in_context(
+            context,
             img,
             new_width.max(1),
             new_height.max(1),
             &plan.resize_filter,
-            explicit_mode,
+            explicit_mode
+                .and_then(Mode::from_pillow_name)
+                .unwrap_or_else(|| Mode::for_image(img, None)),
         )?
     } else {
         pil_resize(
@@ -417,6 +445,9 @@ fn pad_rgba_compat(
     offset_x: usize,
     offset_y: usize,
 ) -> Result<DynamicImage, PilError> {
+    // TODO(pillow-rs#3ptb): Replace this widening path with native per-mode
+    // fill and row-copy strategies; Pad must not convert solely to reuse an
+    // RGBA canvas.
     let source_rgba = resized.to_rgba8();
     let width = plan.width as usize;
     let height = plan.height as usize;

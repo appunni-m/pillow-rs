@@ -1,6 +1,7 @@
 //! Focused guards for the native x86 CMYK RGB packing path.
 
 use super::cmyk::native_cmyk_to_rgb_bytes;
+use crate::compute::{Backend, ExecutionContext};
 use crate::raster::{DynamicImage, RgbImage, RgbaImage};
 
 #[test]
@@ -29,6 +30,7 @@ fn rgb16_packing_preserves_channel_order_across_output_blocks() {
 
 #[test]
 fn cmyk_conversion_preserves_rounding_length_and_vector_tails() {
+    let context = ExecutionContext::for_backend(Backend::Simd);
     const SAMPLES: [[u8; 4]; 8] = [
         [0, 0, 0, 0],
         [255, 255, 255, 0],
@@ -53,14 +55,15 @@ fn cmyk_conversion_preserves_rounding_length_and_vector_tails() {
             .collect();
         let image =
             DynamicImage::ImageRgba8(RgbaImage::from_raw(pixels as u32, 1, source).unwrap());
-        let (output, vector_blocks, scalar_tail) = native_cmyk_to_rgb_bytes(&image).unwrap();
+        let (output, vector_blocks, scalar_tail) =
+            native_cmyk_to_rgb_bytes(&context, &image).unwrap();
         assert_eq!(output, expected, "pixel count {pixels}");
         assert_eq!(output.len(), pixels * 3);
         assert_eq!(vector_blocks, pixels.div_ceil(16) as u64);
         assert_eq!(scalar_tail, 0);
     }
     let wrong_layout = DynamicImage::ImageRgb8(RgbImage::new(16, 1));
-    assert!(native_cmyk_to_rgb_bytes(&wrong_layout).is_none());
+    assert!(native_cmyk_to_rgb_bytes(&context, &wrong_layout).is_none());
     let extra_storage = DynamicImage::ImageRgba8(RgbaImage::from_raw(1, 1, vec![0; 8]).unwrap());
-    assert!(native_cmyk_to_rgb_bytes(&extra_storage).is_none());
+    assert!(native_cmyk_to_rgb_bytes(&context, &extra_storage).is_none());
 }

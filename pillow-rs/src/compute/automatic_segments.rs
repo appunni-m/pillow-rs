@@ -1,7 +1,7 @@
 //! Eligibility rules for adjacent automatic CPU/SIMD execution segments.
 
 use super::pool_simd::ops::adapters;
-use super::{Backend, BackendImpl, DynamicImage, PilError};
+use super::{Backend, BackendImpl, DynamicImage, ExecutionContext, PilError};
 use crate::pipeline::PipelineOp;
 
 pub(super) fn preserves_native_contract(op: &PipelineOp) -> bool {
@@ -22,6 +22,8 @@ pub(super) fn segment_end(
     backend: Backend,
     input: &DynamicImage,
     mode: Option<&str>,
+    simd_context: &ExecutionContext,
+    cpu_context: &ExecutionContext,
     simd: &dyn BackendImpl,
     cpu: &dyn BackendImpl,
 ) -> Result<usize, PilError> {
@@ -33,7 +35,7 @@ pub(super) fn segment_end(
         // transform is checked against this original image layout.
         while end < ops.len()
             && can_extend(&ops[end - 1], &ops[end])
-            && simd.supports_for_image(&ops[end], input, mode)?
+            && simd.supports_for_image(simd_context, &ops[end], input, mode)?
         {
             end += 1;
         }
@@ -44,9 +46,9 @@ pub(super) fn segment_end(
         // can return to the vector path without replaying this segment.
         while end < ops.len()
             && preserves_native_contract(&ops[end - 1])
-            && !simd.supports_for_image(&ops[end], input, mode)?
+            && !simd.supports_for_image(simd_context, &ops[end], input, mode)?
         {
-            if !cpu.supports(&ops[end])? {
+            if !cpu.supports_for_image(cpu_context, &ops[end], input, mode)? {
                 break;
             }
             end += 1;

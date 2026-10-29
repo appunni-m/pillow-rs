@@ -190,6 +190,7 @@ pub(super) fn convert_to_palette_alpha(
 
     Ok(Image::Loaded(crate::image::LoadedData {
         image: std::sync::Arc::new(DynamicImage::ImageLumaA8(pa)),
+        mode: crate::image::Mode::ImagePaletteAlpha8,
         known_zero_fill: false,
         explicit_mode: Some("PA".to_owned()),
         decoded_mode: crate::raster::ColorType::La8.into(),
@@ -231,6 +232,7 @@ pub(super) fn convert_to_web_palette(
     }
     let source = crate::image::LoadedData {
         image: Arc::new(DynamicImage::ImageLuma8(output)),
+        mode: crate::image::Mode::ImagePalette8,
         known_zero_fill: false,
         explicit_mode: Some("P".to_owned()),
         decoded_mode: crate::raster::ColorType::L8.into(),
@@ -245,6 +247,7 @@ pub(super) fn convert_to_web_palette(
         ops: PipelineOps::empty(),
         format: None,
         explicit_mode: Some("P".to_owned()),
+        mode_selector: Some(crate::image::Mode::ImagePalette8),
         backend: None,
         palette: Some(palette_bytes),
         palette_alpha: None,

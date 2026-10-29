@@ -97,6 +97,22 @@ class PathClassificationTests(unittest.TestCase):
             "matches_cpu_family_shape",
         )
         self.assertEqual(
+            classify_path("pillow-rs/src/compute/pool_cpu/ops/grayscale/mod.rs")["rule"],
+            "cpu_family_orchestrator",
+        )
+        self.assertEqual(
+            classify_path("pillow-rs/src/compute/pool_cpu/ops/grayscale/ops.rs")["rule"],
+            "cpu_family_orchestrator",
+        )
+        self.assertEqual(
+            classify_path("pillow-rs/src/compute/pool_cpu/ops/grayscale/one/ops.rs")["rule"],
+            "cpu_mode_strategy",
+        )
+        self.assertEqual(
+            classify_path("pillow-rs/src/compute/pool_cpu/ops/grayscale/one/kernels/default.rs")["rule"],
+            "cpu_family_kernel",
+        )
+        self.assertEqual(
             classify_path("pillow-rs/src/compute/pool_simd/ops/adapters/resize/kernels/l_avx2.rs")["assessment"],
             "matches_family_kernel_shape",
         )

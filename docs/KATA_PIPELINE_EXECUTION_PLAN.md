@@ -309,7 +309,7 @@ row below; they are intentionally not inferred from a shader filename.
 | `Rotate` | `pool_cpu/ops/rotate.rs` | Lower exact right-angle cases to the existing orientation path and arbitrary angles to transform/resample stages; preserve fill, center, expansion, and rounding rules. |
 | `Transpose` | `pool_cpu/ops/transpose.rs` | Keep current D4 composition/cancellation. Make composed orientation a plan lowering and reuse its destination buffer rules. |
 | `Thumbnail` | `pool_cpu/ops/thumbnail.rs` | Represent resize/reduce decisions in one semantic node. Avoid an intermediate only where the existing Pillow rounding and intermediate-size behavior are unchanged. |
-| `Reduce` | `pool_cpu/ops/reduce.rs` | Shape-changing reduction node. Carry factors, partial edge blocks, alpha behavior, and exact fixed-point semantics to all backends. |
+| `Reduce` | `pool_cpu/ops/reduce/ops.rs` | Shape-changing reduction node. Carry factors, partial edge blocks, alpha behavior, and exact fixed-point semantics to all backends. |
 | `Contain` | `pool_cpu/ops/imageops.rs` | Geometry wrapper lowered to the existing checked size/resize path. Preserve aspect-ratio and dimension rounding; do not add a second resize algorithm. |
 | `Cover` | `pool_cpu/ops/imageops.rs` | Geometry wrapper plus exact crop. Plan the crop offset with resize so an unnecessary full-size intermediate can be avoided only when output pixels remain exact. |
 | `Fit` | `pool_cpu/ops/imageops.rs` | Keep fractional crop/centering/bleed in the descriptor; lower to existing resize/crop kernels only after exact coordinate proof. |

@@ -1,6 +1,6 @@
 //! Geometry operation registration.
 use super::prelude::{
-    DynamicImage, PilError, PipelineOp, Registry, execute_crop, execute_reduce, execute_resize,
+    DynamicImage, PilError, PipelineOp, Registry, execute_crop, execute_resize,
     execute_resize_boxed, execute_rotate, execute_thumbnail, execute_transpose,
 };
 fn register_resize(m: &mut Registry) {
@@ -125,7 +125,25 @@ fn register_part_2(m: &mut Registry) {
              mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if let PipelineOp::Reduce { x_factor, y_factor } = op {
-                    execute_reduce(img, *x_factor, *y_factor, mode)
+                    match mode {
+                        Some(name) => {
+                            let mode = crate::image::Mode::from_pillow_name(name).ok_or_else(|| {
+                                PilError::ValueError(format!("unsupported Pillow mode: {name}"))
+                            })?;
+                            crate::compute::pool_cpu::ops::reduce::execute_reduce_with_mode(
+                                img,
+                                *x_factor,
+                                *y_factor,
+                                mode,
+                            )
+                        }
+                        None => crate::compute::pool_cpu::ops::reduce::execute_reduce(
+                            img,
+                            *x_factor,
+                            *y_factor,
+                            None,
+                        ),
+                    }
                 } else {
                     Err(PilError::ValueError("expected Reduce op".into()))
                 }

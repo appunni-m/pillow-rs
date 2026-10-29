@@ -72,8 +72,13 @@ pub(crate) struct X86FmaToken {
 
 #[cfg(target_arch = "x86_64")]
 impl X86FmaToken {
+    #[cfg(test)]
     pub(crate) fn detect() -> Option<Self> {
         std::is_x86_feature_detected!("fma").then_some(Self { _private: () })
+    }
+
+    pub(crate) fn from_context(context: &crate::compute::ExecutionContext) -> Option<Self> {
+        context.uses_cpu_fma().then_some(Self { _private: () })
     }
 
     #[allow(unsafe_code)]

@@ -221,21 +221,47 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |-- mod.rs
 |   |   |   |   `-- ops/
 |   |   |   |       |-- crop.rs
+|   |   |   |       |-- eval/
+|   |   |   |       |   |-- kernels/
+|   |   |   |       |   |   |-- default.rs
+|   |   |   |       |   |   `-- mod.rs
+|   |   |   |       |   |-- mod.rs
+|   |   |   |       |   |-- ops.rs
+|   |   |   |       |   `-- tests.rs
+|   |   |   |       |-- enhance/
+|   |   |   |       |   |-- kernels/
+|   |   |   |       |   |   |-- default.rs
+|   |   |   |       |   |   `-- mod.rs
+|   |   |   |       |   |-- mod.rs
+|   |   |   |       |   |-- ops.rs
+|   |   |   |       |   `-- tests.rs
+|   |   |   |       |-- expand/
+|   |   |   |       |   |-- mod.rs
+|   |   |   |       |   |-- ops.rs
+|   |   |   |       |   |-- kernels/
+|   |   |   |       |   |   |-- default.rs
+|   |   |   |       |   |   `-- mod.rs
+|   |   |   |       |   `-- tests.rs
 |   |   |   |       |-- geometry.rs
 |   |   |   |       |-- grayscale/
-|   |   |   |       |   `-- kernels/
-|   |   |   |       |       `-- ycbcr.rs
-|   |   |   |       |-- grayscale.rs
+|   |   |   |       |   |-- kernels/
+|   |   |   |       |   |   `-- ycbcr.rs
+|   |   |   |       |   |-- mod.rs
+|   |   |   |       |   |-- ops.rs
+|   |   |   |       |   `-- tests.rs
 |   |   |   |       |-- mod.rs
 |   |   |   |       |-- reduce/
 |   |   |   |       |   |-- kernels/
 |   |   |   |       |   |   |-- default.rs
 |   |   |   |       |   |   |-- f.rs
+|   |   |   |       |   |   |-- high_depth.rs
 |   |   |   |       |   |   |-- i.rs
+|   |   |   |       |   |   |-- luma16.rs
+|   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- rgb.rs
-|   |   |   |       |   |-- kernels.rs
+|   |   |   |       |   |-- mod.rs
+|   |   |   |       |   |-- ops.rs
 |   |   |   |       |   `-- tests.rs
-|   |   |   |       |-- reduce.rs
 |   |   |   |       |-- resize/
 |   |   |   |       |   |-- kernels/
 |   |   |   |       |   |   |-- default.rs

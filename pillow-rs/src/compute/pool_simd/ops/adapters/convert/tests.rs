@@ -276,8 +276,9 @@ fn rgba_to_rgb_dispatch_reports_the_ssse3_kernel() {
         RgbaImage::from_raw(32, 1, (0..128).map(|byte| byte as u8).collect())
             .expect("RGBA source has four bytes per pixel"),
     );
+    let context = crate::compute::ExecutionContext::for_backend(crate::compute::Backend::Simd);
     let (_, vector_blocks, scalar_tail, path) =
-        super::native_rgba_to_rgb_bytes(&image).expect("SSSE3 conversion is available");
+        super::native_rgba_to_rgb_bytes(&context, &image).expect("SSSE3 conversion is available");
 
     assert_eq!(path, "ssse3-rgba-to-rgb");
     assert_eq!(vector_blocks, 2);

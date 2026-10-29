@@ -1,5 +1,7 @@
 //! x86 AVX2 implementation of the RGB-to-L grayscale loop.
 
+use crate::compute::{Architecture, ExecutionContext};
+
 /// Convert interleaved RGB bytes with AVX2 when the running CPU supports it.
 ///
 /// Returns `None` when the operation cannot use the kernel. The output keeps
@@ -7,12 +9,16 @@
 /// trailing incomplete RGB samples are ignored, and excess samples are unused.
 #[cfg(target_arch = "x86_64")]
 #[allow(unsafe_code)] // Isolated target-feature entry point for the checked SIMD kernel.
-pub(super) fn grayscale_rgb_avx2(source: &[u8], expected_pixels: usize) -> Option<(Vec<u8>, u64)> {
-    if !std::is_x86_feature_detected!("avx2") {
+pub(super) fn grayscale_rgb_avx2(
+    context: &ExecutionContext,
+    source: &[u8],
+    expected_pixels: usize,
+) -> Option<(Vec<u8>, u64)> {
+    if context.architecture() != Architecture::Avx2 {
         return None;
     }
 
-    // SAFETY: runtime feature detection established AVX2 support. The inner
+    // SAFETY: the routing context selected AVX2 after host detection. The inner
     // function reads complete 48-byte blocks from `source` or a fully
     // initialized 48-byte tail buffer and stores into a 16-byte local array.
     Some(unsafe { grayscale_rgb_avx2_inner(source, expected_pixels) })
@@ -171,6 +177,7 @@ unsafe fn grayscale_rgb_avx2_inner(source: &[u8], expected_pixels: usize) -> (Ve
 mod tests {
     use super::grayscale_rgb_avx2;
     use crate::color::rgb_to_luma_u8;
+    use crate::compute::{Backend, ExecutionContext};
 
     #[cfg(target_arch = "x86_64")]
     #[test]
@@ -186,8 +193,9 @@ mod tests {
             source.push((value >> 8) as u8);
             source.push(value as u8);
         }
+        let context = ExecutionContext::for_backend(Backend::Simd);
         let (actual, vector_blocks) =
-            grayscale_rgb_avx2(&source, PIXELS).expect("AVX2 grayscale kernel");
+            grayscale_rgb_avx2(&context, &source, PIXELS).expect("AVX2 grayscale kernel");
         assert_eq!(vector_blocks, (PIXELS / 16) as u64);
         assert_eq!(actual.len(), PIXELS);
         for (index, pixel) in source.chunks_exact(3).enumerate() {
@@ -200,7 +208,7 @@ mod tests {
 
         let short_source: Vec<u8> = (0..59).map(|index| (index * 37 + 11) as u8).collect();
         let (tail, vector_blocks) =
-            grayscale_rgb_avx2(&short_source, 21).expect("AVX2 tail kernel");
+            grayscale_rgb_avx2(&context, &short_source, 21).expect("AVX2 tail kernel");
         let mut expected: Vec<u8> = short_source
             .chunks_exact(3)
             .take(21)
@@ -211,7 +219,7 @@ mod tests {
         assert_eq!(vector_blocks, 2);
 
         let (prefix, vector_blocks) =
-            grayscale_rgb_avx2(&short_source, 5).expect("AVX2 bounded kernel");
+            grayscale_rgb_avx2(&context, &short_source, 5).expect("AVX2 bounded kernel");
         assert_eq!(prefix, expected[..5]);
         assert_eq!(vector_blocks, 1);
     }

@@ -386,8 +386,10 @@ impl Image {
             "LA" | "PA" => {
                 let image = DynamicImage::ImageLumaA8(materialized.to_luma_alpha8());
                 let decoded_mode = image.color().into();
+                let mode = super::Mode::for_image(&image, Some("PA"));
                 Image::Loaded(LoadedData {
                     image: Arc::new(image),
+                    mode,
                     known_zero_fill: false,
                     explicit_mode: Some("PA".to_owned()),
                     decoded_mode,
@@ -513,12 +515,14 @@ impl Image {
         );
         if let Image::Pipeline {
             explicit_mode,
+            mode_selector,
             palette,
             palette_alpha,
             ..
         } = &mut result
         {
             *explicit_mode = Some("P".to_owned());
+            *mode_selector = Some(super::Mode::ImagePalette8);
             *palette = Some(remapped_palette);
             *palette_alpha = remapped_alpha;
         }

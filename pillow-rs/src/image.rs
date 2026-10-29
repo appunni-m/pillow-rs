@@ -57,6 +57,8 @@ mod materialization;
 mod metadata;
 use metadata::image_mode_name;
 pub use metadata::{ExifCompatFields, prepare_exif_compat};
+mod mode;
+pub use mode::Mode;
 mod palette;
 pub(crate) use palette::{expand_palette, expand_palette_alpha};
 use palette::{operational_palette, padded_palette};
@@ -138,9 +140,15 @@ pub enum ImageInfoValue {
 pub struct LoadedData {
     /// Operation-ready pixel storage.
     pub image: Arc<DynamicImage>,
+    /// Pillow-owned mode selector computed when this wrapper is constructed.
+    pub mode: Mode,
     /// True only while constructor-created RGB/CMYK samples are known zero.
     /// Direct in-place data mutators clear this provenance.
     pub(crate) known_zero_fill: bool,
+    /// TODO(pillow-rs#3ptb): Remove this compatibility string after all callers
+    /// use the canonical pillow-rs-owned `mode` selector. Keep
+    /// image-slash-star ImageMode as codec metadata and translate only at
+    /// decode/encode boundaries.
     /// Pillow mode override for layouts not represented by `DynamicImage`.
     pub explicit_mode: Option<String>,
     /// Exact decoded sample mode before operation-buffer adaptation.
@@ -323,7 +331,11 @@ pub enum Image {
         /// Output format inherited from the source when known.
         format: Option<ImageFormat>,
         /// Explicit Pillow mode preserved across lazy operations.
+        /// TODO(pillow-rs#3ptb): Replace this and `PipelineModeCache` with the
+        /// precomputed typed `Mode` selector.
         explicit_mode: Option<String>,
+        /// Typed mode carried from the source or mode-changing operation when known.
+        mode_selector: Option<Mode>,
         /// Locked backend for this pipeline. None = use global active set.
         backend: Option<crate::compute::Backend>,
         /// Quantize palette (RGB triples) — populated after Quantize op materializes.

@@ -1,27 +1,34 @@
 //! x86 SSSE3 kernel for native RGBA-to-RGB layout conversion.
 
+use crate::compute::{Architecture, ExecutionContext};
 use crate::raster::DynamicImage;
 
 /// Drop alpha from sixteen RGBA pixels and pack their RGB bytes directly into
 /// the final output buffer. SSSE3 is checked before entering the target-feature
 /// function; unsupported CPUs retain the generic vector conversion.
 #[allow(unsafe_code)]
-pub(super) fn native_rgba_to_rgb_bytes(img: &DynamicImage) -> Option<(Vec<u8>, u64, u64)> {
+pub(super) fn native_rgba_to_rgb_bytes(
+    context: &ExecutionContext,
+    img: &DynamicImage,
+) -> Option<(Vec<u8>, u64, u64)> {
+    if !matches!(
+        context.architecture(),
+        Architecture::Ssse3 | Architecture::Avx2
+    ) {
+        return None;
+    }
     let DynamicImage::ImageRgba8(rgba) = img else {
         return None;
     };
     let pixels = (img.width() as usize).checked_mul(img.height() as usize)?;
     let source_bytes = pixels.checked_mul(4)?;
     let output_bytes = pixels.checked_mul(3)?;
-    if output_bytes > isize::MAX as usize
-        || rgba.as_raw().len() != source_bytes
-        || !std::is_x86_feature_detected!("ssse3")
-    {
+    if output_bytes > isize::MAX as usize || rgba.as_raw().len() != source_bytes {
         return None;
     }
 
     // SAFETY: the layout and lengths are checked above, and runtime detection
-    // confirms SSSE3. The target-feature function writes only complete
+    // confirms the selected context includes SSSE3. The target-feature function writes only complete
     // sixteen-pixel output blocks before exposing their initialized prefix.
     unsafe { rgba_to_rgb_ssse3(rgba.as_raw(), pixels, output_bytes) }
 }
@@ -99,6 +106,9 @@ mod tests {
         if !std::is_x86_feature_detected!("ssse3") {
             return;
         }
+        let context = crate::compute::ExecutionContext::for_backend(
+            crate::compute::Backend::Simd,
+        );
         for pixels in [1usize, 3, 4, 15, 16, 17, 31, 32, 33, 1023, 1024, 1025] {
             let source: Vec<u8> = (0..pixels * 4)
                 .map(|byte| ((byte * 73 + 19) % 256) as u8)
@@ -110,7 +120,7 @@ mod tests {
             let expected = op_convert(&image, &ColorMode::RGB, Some("RGBA"))
                 .expect("CPU RGBA to RGB conversion");
             let (actual, vector_blocks, scalar_tail) =
-                native_rgba_to_rgb_bytes(&image).expect("SSSE3 RGBA to RGB conversion");
+                native_rgba_to_rgb_bytes(&context, &image).expect("SSSE3 RGBA to RGB conversion");
 
             assert_eq!(actual, expected.as_bytes(), "pixel count {pixels}");
             assert_eq!(vector_blocks, (pixels / 16) as u64, "pixel count {pixels}");

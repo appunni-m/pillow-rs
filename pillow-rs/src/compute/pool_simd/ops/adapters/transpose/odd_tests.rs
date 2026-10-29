@@ -173,6 +173,7 @@ fn assert_native_odd_collect_payload_method(
     height: usize,
     method: TransposeMethod,
 ) {
+    let context = crate::compute::ExecutionContext::for_backend(crate::compute::Backend::Simd);
     let swapped = matches!(
         method,
         TransposeMethod::Rotate90
@@ -183,7 +184,14 @@ fn assert_native_odd_collect_payload_method(
     let expected = odd_transpose_reference(source, width, height, &method);
     let _ = crate::compute::Backend::take_pipeline_allocation_telemetry();
     let (actual, out_width, out_height, vectors, tail, _) =
-        native_transpose_bytes(source, width as u32, height as u32, 4, method.clone())
+        native_transpose_bytes(
+            &context,
+            source,
+            width as u32,
+            height as u32,
+            4,
+            method.clone(),
+        )
             .expect("odd native four-byte transpose");
     let allocations = crate::compute::Backend::take_pipeline_allocation_telemetry();
     assert_eq!(actual, expected, "{width}x{height} {method:?}");
@@ -266,8 +274,9 @@ fn transpose_native_odd_collect_boundaries_keep_fallback_exact() {
             admitted,
         );
         let expected = odd_transpose_reference(&source, width, height, &method);
+        let context = crate::compute::ExecutionContext::for_backend(crate::compute::Backend::Simd);
         let (actual, out_width, out_height, vectors, tail, _) =
-            native_transpose_bytes(&source, width as u32, height as u32, 4, method)
+            native_transpose_bytes(&context, &source, width as u32, height as u32, 4, method)
                 .expect("odd transpose boundary");
         assert_eq!(actual, expected, "{width}x{height}");
         assert_eq!((out_width, out_height), (height as u32, width as u32));

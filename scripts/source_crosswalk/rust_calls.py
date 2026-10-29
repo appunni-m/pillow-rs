@@ -629,6 +629,8 @@ def rust_family_for_path(path: str) -> str | None:
         relative = parts[len(cpu_ops_prefix.rstrip("/").split("/")):]
         if rule in {
             "cpu_family_module",
+            "cpu_family_orchestrator",
+            "cpu_mode_strategy",
             "cpu_family_kernel",
             "cpu_filter_helper_outside_kernel_layer",
         } and relative:

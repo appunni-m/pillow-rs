@@ -1,14 +1,23 @@
 use super::{fused_multiply_screen, fused_point_batch, ops};
 use crate::compute::registry;
+use crate::compute::{Backend, ExecutionContext};
 use crate::error::PilError;
 use crate::pipeline::{PipelineOp, TransposeTransform};
 use crate::raster::{DynamicImage, GenericImageView};
 
 pub(super) fn execute_batch(
+    context: &ExecutionContext,
     ops: &[PipelineOp],
     img: &DynamicImage,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    if context.backend() != Backend::Cpu || !context.architecture().supports_cpu() {
+        return Err(PilError::InternalError(format!(
+            "CPU operation router received {:?}/{:?} context",
+            context.backend(),
+            context.architecture()
+        )));
+    }
     let mut result = None;
     let mut current_mode = mode.map(str::to_owned);
     let mut resources = crate::compute::host_resource_telemetry(img);
@@ -25,8 +34,14 @@ pub(super) fn execute_batch(
             continue;
         }
         if matches!(&ops[index], PipelineOp::Transpose { .. })
-            && let Some(step) =
-                try_transpose_run(ops, index, input, current_mode.as_deref(), &mut resources)?
+            && let Some(step) = try_transpose_run(
+                context,
+                ops,
+                index,
+                input,
+                current_mode.as_deref(),
+                &mut resources,
+            )?
         {
             apply_step(step, &mut result, &mut current_mode, &mut index);
             continue;
@@ -71,15 +86,20 @@ pub(super) fn execute_batch(
             apply_step(step, &mut result, &mut current_mode, &mut index);
             continue;
         }
-        if let Some(step) =
-            try_point_batch(ops, index, input, current_mode.as_deref(), &mut resources)?
-        {
+        if let Some(step) = try_point_batch(
+            context,
+            ops,
+            index,
+            input,
+            current_mode.as_deref(),
+            &mut resources,
+        )? {
             apply_step(step, &mut result, &mut current_mode, &mut index);
             continue;
         }
 
         let op = &ops[index];
-        let next = execute_single(op, input, current_mode.as_deref(), &mut resources)?;
+        let next = execute_single(context, op, input, current_mode.as_deref(), &mut resources)?;
         result = Some(next);
         current_mode = crate::compute::pool_simd::ops::adapters::simd_mode_after_op(
             op,
@@ -213,6 +233,7 @@ fn try_put_pixel(
 }
 
 fn try_transpose_run(
+    context: &ExecutionContext,
     ops: &[PipelineOp],
     index: usize,
     input: &DynamicImage,
@@ -253,7 +274,12 @@ fn try_transpose_run(
         for _ in 0..consumed {
             crate::compute::begin_pipeline_operation_telemetry("Transpose");
         }
-        let next = registry::execute_cpu(&PipelineOp::Transpose { method }, input, mode);
+        let next = registry::execute_cpu_in_context(
+            context,
+            &PipelineOp::Transpose { method },
+            input,
+            mode,
+        );
         finish_cpu_operations(consumed);
         let next = next?;
         crate::compute::account_host_buffer_boundary(resources, input, &next);
@@ -387,6 +413,7 @@ fn try_multiply_screen(
 }
 
 fn try_point_batch(
+    context: &ExecutionContext,
     ops: &[PipelineOp],
     index: usize,
     input: &DynamicImage,
@@ -408,7 +435,7 @@ fn try_point_batch(
         {
             Ok(input.clone())
         }
-        _ => registry::execute_cpu(&fused, input, mode),
+        _ => registry::execute_cpu_in_context(context, &fused, input, mode),
     };
     let next = match next {
         Ok(next) => next,
@@ -430,13 +457,15 @@ fn try_point_batch(
 }
 
 fn execute_single(
+    context: &ExecutionContext,
     op: &PipelineOp,
     input: &DynamicImage,
     mode: Option<&str>,
     resources: &mut crate::compute::PipelineResourceTelemetry,
 ) -> Result<DynamicImage, PilError> {
     crate::compute::begin_pipeline_operation_telemetry(registry::variant_key(op));
-    let next = match registry::execute_cpu(op, input, mode) {
+    let execution = registry::execute_cpu_in_context(context, op, input, mode);
+    let next = match execution {
         Ok(next) => next,
         Err(error) => {
             finish_cpu_operations(1);

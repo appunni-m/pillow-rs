@@ -1,5 +1,6 @@
 //! Contextual admission checks for native SIMD operations.
 
+use crate::compute::{Architecture, Backend, ExecutionContext};
 use crate::pipeline::PipelineOp;
 use crate::raster::DynamicImage;
 
@@ -110,10 +111,22 @@ fn support_family(op: &PipelineOp) -> SupportFamily {
 /// Scalar-only legacy adapters are rejected before execution so automatic
 /// routing can select CPU and strict SIMD requests fail before pixel work.
 pub(crate) fn simd_supports_for_image(
+    context: &ExecutionContext,
     img: &DynamicImage,
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> bool {
+    if context.backend() != Backend::Simd
+        || !matches!(
+            context.architecture(),
+            Architecture::PortableSimd
+                | Architecture::Neon
+                | Architecture::Ssse3
+                | Architecture::Avx2
+        )
+    {
+        return false;
+    }
     if !crate::compute::registry::simd_supports(op).unwrap_or(false) {
         return false;
     }

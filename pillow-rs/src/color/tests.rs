@@ -10,6 +10,8 @@ use super::{
 };
 use crate::checked_dims::CheckedDims;
 use crate::compute::Backend;
+#[cfg(target_arch = "x86_64")]
+use crate::compute::ExecutionContext;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, RgbaImage};
 
@@ -19,6 +21,7 @@ fn ssse3_direct_channel_gather_covers_vector_boundaries() {
     if !std::is_x86_feature_detected!("ssse3") {
         return;
     }
+    let context = ExecutionContext::for_backend(Backend::Simd);
 
     for channels in 2..=4 {
         for pixel_count in [0, 1, 15, 16, 17, 31, 32, 33] {
@@ -27,9 +30,14 @@ fn ssse3_direct_channel_gather_covers_vector_boundaries() {
                 .collect();
             for channel in 0..channels {
                 let mut output = vec![0xA5; pixel_count];
-                let (vector_blocks, scalar_tail) =
-                    gather_interleaved_channel_ssse3_into(&source, &mut output, channels, channel)
-                        .expect("SSSE3 must be available on this test CPU");
+                let (vector_blocks, scalar_tail) = gather_interleaved_channel_ssse3_into(
+                    &context,
+                    &source,
+                    &mut output,
+                    channels,
+                    channel,
+                )
+                .expect("SSSE3 must be available on this test CPU");
                 let expected: Vec<u8> = source
                     .chunks_exact(channels)
                     .map(|pixel| pixel[channel])

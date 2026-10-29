@@ -2,6 +2,7 @@
 
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
+use crate::image::Mode;
 use crate::image_utils::raw_bytes_to_image;
 use crate::raster::{DynamicImage, GenericImageView};
 
@@ -39,9 +40,9 @@ pub(in crate::compute::pool_cpu::ops::reduce) fn execute_reduce_rgb(
     img: &DynamicImage,
     x_factor: u32,
     y_factor: u32,
-    explicit_mode: Option<&str>,
+    mode: Mode,
 ) -> Result<Option<DynamicImage>, PilError> {
-    execute_reduce_rgb_with_sparse_rows(img, x_factor, y_factor, explicit_mode)
+    execute_reduce_rgb_with_sparse_rows(img, x_factor, y_factor, mode)
         .map(|reduced| reduced.map(|(image, _)| image))
 }
 
@@ -69,9 +70,9 @@ pub(in crate::compute::pool_cpu::ops) fn execute_reduce_rgb_with_sparse_rows(
     img: &DynamicImage,
     x_factor: u32,
     y_factor: u32,
-    explicit_mode: Option<&str>,
+    mode: Mode,
 ) -> SparseRgbReductionResult {
-    if explicit_mode != Some("RGB") || !matches!(img, DynamicImage::ImageRgb8(_)) {
+    if mode != Mode::ImageRgb8 || !matches!(img, DynamicImage::ImageRgb8(_)) {
         return Ok(None);
     }
 

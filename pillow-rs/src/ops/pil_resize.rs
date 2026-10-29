@@ -18,7 +18,9 @@ mod typed_filters;
 mod vertical_passes;
 
 pub(crate) use alpha::{premultiply_alpha, unpremultiply_alpha, unpremultiply_channel};
-pub(crate) use boxed::{pil_resize_boxed, pil_resize_boxed_with_sparse_rgb_rows};
+pub(crate) use boxed::{
+    pil_resize_boxed, pil_resize_boxed_in_context, pil_resize_boxed_with_sparse_rgb_rows,
+};
 pub(crate) use coefficients::{
     FilterCoeffs, FilterCoeffsF64, compact_resize_coeffs_to_source_span, precompute_coeffs,
     precompute_coeffs_boxed, precompute_coeffs_boxed_for_filter, precompute_coeffs_f64,

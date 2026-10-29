@@ -26,6 +26,7 @@ use super::{
     shape_has_empty_native_bytes, shape_luma16_transpose_layout, shape_native_copy_channels,
 };
 use crate::error::PilError;
+use crate::compute::{Architecture, Backend, ExecutionContext};
 use crate::pipeline::{PipelineOp, TransposeMethod};
 use crate::raster::{DynamicImage, ImageBuffer, Luma};
 
@@ -52,6 +53,7 @@ pub(super) fn supports_for_shape(shape: SimdImageShape, mode: Option<&str>) -> b
 #[inline]
 #[cfg(target_arch = "x86_64")]
 pub(super) fn rgba_avx2(
+    context: &ExecutionContext,
     source: &[u8],
     output: &mut [u8],
     width: usize,
@@ -59,7 +61,8 @@ pub(super) fn rgba_avx2(
     channels: usize,
     method: &TransposeMethod,
 ) -> Option<(u64, u64)> {
-    if channels != 4
+    if context.architecture() != Architecture::Avx2
+        || channels != 4
         || !matches!(
             method,
             TransposeMethod::Rotate90
@@ -79,7 +82,7 @@ pub(super) fn rgba_avx2(
         method,
         TransposeMethod::Rotate270 | TransposeMethod::Transverse
     );
-    kernels::transpose_rgba(source, output, width, height, reverse_x, reverse_y)
+    kernels::transpose_rgba(context, source, output, width, height, reverse_x, reverse_y)
 }
 
 #[cfg(feature = "parallel")]
@@ -284,6 +287,7 @@ fn gathered_source_column(
 }
 
 pub(super) fn native_transpose_bytes(
+    context: &ExecutionContext,
     bytes: &[u8],
     width: u32,
     height: u32,
@@ -335,19 +339,21 @@ pub(super) fn native_transpose_bytes(
     crate::compute::record_transpose_output_allocation_timing(allocation_started);
     #[cfg(target_arch = "x86_64")]
     {
-        let avx2_started = crate::compute::pipeline_phase_timestamp();
-        if let Some((blocks, tail)) =
-            rgba_avx2(source, &mut output, width, height, channels, &method)
-        {
-            crate::compute::record_transpose_avx2_executor_timing(avx2_started);
-            return Some((
-                output,
-                out_width as u32,
-                out_height as u32,
-                blocks,
-                tail,
-                "avx2-transpose",
-            ));
+        if context.architecture() == Architecture::Avx2 {
+            let avx2_started = crate::compute::pipeline_phase_timestamp();
+            if let Some((blocks, tail)) =
+                rgba_avx2(context, source, &mut output, width, height, channels, &method)
+            {
+                crate::compute::record_transpose_avx2_executor_timing(avx2_started);
+                return Some((
+                    output,
+                    out_width as u32,
+                    out_height as u32,
+                    blocks,
+                    tail,
+                    "avx2-transpose",
+                ));
+            }
         }
     }
 
@@ -398,6 +404,7 @@ pub(super) fn native_transpose_bytes(
 /// `ImageLuma16` storage is host-native, and the public mode boundary handles
 /// the requested `I;16B`/`I;16L` byte order.
 fn native_transpose_luma16(
+    context: &ExecutionContext,
     img: &DynamicImage,
     mode: Option<&str>,
     method: TransposeMethod,
@@ -406,7 +413,7 @@ fn native_transpose_luma16(
         return None;
     }
     let (bytes, width, height, vector_blocks, scalar_tail, _) =
-        native_transpose_bytes(img.as_bytes(), img.width(), img.height(), 2, method)?;
+        native_transpose_bytes(context, img.as_bytes(), img.width(), img.height(), 2, method)?;
     let mut chunks = bytes.chunks_exact(2);
     let samples = chunks
         .by_ref()
@@ -425,12 +432,13 @@ fn native_transpose_luma16(
 
 /// Apply transpose while retaining the native 8-bit DynamicImage variant.
 pub(super) fn native_transpose(
+    context: &ExecutionContext,
     img: &DynamicImage,
     mode: Option<&str>,
     method: TransposeMethod,
 ) -> Option<(DynamicImage, u64, u64, &'static str)> {
     if matches!(img, DynamicImage::ImageLuma16(_)) {
-        return native_transpose_luma16(img, mode, method).map(
+        return native_transpose_luma16(context, img, mode, method).map(
             |(result, vector_blocks, scalar_tail)| {
                 (result, vector_blocks, scalar_tail, "native-copy")
             },
@@ -451,7 +459,7 @@ pub(super) fn native_transpose(
         _ => return None,
     };
     let (bytes, width, height, vector_blocks, scalar_tail, kernel_path) =
-        native_transpose_bytes(img.as_bytes(), img.width(), img.height(), channels, method)?;
+        native_transpose_bytes(context, img.as_bytes(), img.width(), img.height(), channels, method)?;
     let result = if img.width() == 0 || img.height() == 0 {
         crate::image_utils::raw_bytes_to_image_allow_empty(width, height, bytes, channels).ok()?
     } else {
@@ -471,11 +479,28 @@ pub(crate) fn simd_transpose(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    simd_transpose_in_context(
+        &ExecutionContext::for_backend(Backend::Simd),
+        img,
+        op,
+        mode,
+    )
+}
+
+pub(super) fn simd_transpose_in_context(
+    context: &ExecutionContext,
+    img: &DynamicImage,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    if context.backend() != Backend::Simd || !context.architecture().supports_simd() {
+        return Err(super::simd_unsupported("Transpose"));
+    }
     let PipelineOp::Transpose { method } = op else {
         return Err(PilError::ValueError("expected Transpose op".into()));
     };
     if let Some((result, vector_blocks, scalar_tail, kernel_path)) =
-        native_transpose(img, mode, method.clone())
+        native_transpose(context, img, mode, method.clone())
     {
         crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
         crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);

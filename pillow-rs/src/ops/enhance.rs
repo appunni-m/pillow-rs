@@ -1,7 +1,7 @@
 //! Pillow `ImageEnhance`-style adjustment methods.
 
 use crate::error::PilError;
-use crate::image::Image;
+use crate::image::{Image, Mode};
 use crate::pipeline::PipelineOp;
 use crate::raster::DynamicImage;
 
@@ -15,10 +15,21 @@ pub(crate) struct ContrastBase {
 
 /// Per-pixel L/LA round trip for canonical byte modes, before float blending.
 pub(crate) fn color_pixel_base(pixel: &[u8], mode: Option<&str>) -> [u8; 4] {
+    let mode = match mode {
+        Some(name) => Mode::from_pillow_name(name).unwrap_or(Mode::ImageRgb8),
+        None => Mode::ImageRgb8,
+    };
+    color_pixel_base_for_mode(pixel, mode)
+}
+
+/// Native-mode form used by backend strategies after the wrapper selected the
+/// logical mode. The compatibility-string adapter above remains for existing
+/// SIMD and GPU callers during their migration.
+pub(crate) fn color_pixel_base_for_mode(pixel: &[u8], mode: Mode) -> [u8; 4] {
     if pixel.len() <= 2 {
         return [pixel[0], *pixel.get(1).unwrap_or(&0), 0, 0];
     }
-    let cmyk = mode == Some("CMYK");
+    let cmyk = mode == Mode::ImageCmyk8;
     let gray = if cmyk {
         let nk = 255 - u32::from(pixel[3]);
         let rgb = |c: u8| (nk - crate::color::muldiv255(u32::from(c), nk)) as u8;
@@ -33,7 +44,7 @@ pub(crate) fn color_pixel_base(pixel: &[u8], mode: Option<&str>) -> [u8; 4] {
             gray,
             gray,
             gray,
-            if mode == Some("RGBX") {
+            if mode == Mode::ImageRgbx8 {
                 255
             } else {
                 *pixel.get(3).unwrap_or(&255)
@@ -44,13 +55,23 @@ pub(crate) fn color_pixel_base(pixel: &[u8], mode: Option<&str>) -> [u8; 4] {
 
 /// Native-mode equivalent of convert-to-L, rounded mean, and L-to-source base.
 pub(crate) fn contrast_base(img: &DynamicImage, mode: Option<&str>) -> Option<ContrastBase> {
+    let mode = match mode {
+        Some(name) => Mode::from_pillow_name(name)?,
+        None => Mode::for_image(img, None),
+    };
+    contrast_base_for_mode(img, mode)
+}
+
+/// Native-mode form used by CPU's operation strategy. Logical mode selection
+/// stays outside this shared byte-LUT helper.
+pub(crate) fn contrast_base_for_mode(img: &DynamicImage, mode: Mode) -> Option<ContrastBase> {
     let (channels, alpha, cmyk) = match (img, mode) {
-        (DynamicImage::ImageLuma8(_), None | Some("L")) => (1, None, false),
-        (DynamicImage::ImageLumaA8(_), None | Some("LA")) => (2, Some(1), false),
-        (DynamicImage::ImageRgb8(_), None | Some("RGB")) => (3, None, false),
-        (DynamicImage::ImageRgba8(_), None | Some("RGBA")) => (4, Some(3), false),
-        (DynamicImage::ImageRgba8(_), Some("RGBX")) => (4, None, false),
-        (DynamicImage::ImageRgba8(_), Some("CMYK")) => (4, None, true),
+        (DynamicImage::ImageLuma8(_), Mode::ImageLuma8) => (1, None, false),
+        (DynamicImage::ImageLumaA8(_), Mode::ImageLumaA8) => (2, Some(1), false),
+        (DynamicImage::ImageRgb8(_), Mode::ImageRgb8) => (3, None, false),
+        (DynamicImage::ImageRgba8(_), Mode::ImageRgba8) => (4, Some(3), false),
+        (DynamicImage::ImageRgba8(_), Mode::ImageRgbx8) => (4, None, false),
+        (DynamicImage::ImageRgba8(_), Mode::ImageCmyk8) => (4, None, true),
         _ => return None,
     };
     let source = img.as_bytes();

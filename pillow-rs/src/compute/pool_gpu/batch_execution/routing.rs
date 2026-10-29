@@ -5,6 +5,7 @@ mod execution;
 impl GpuPool {
     fn execute_exact_host_result(
         &self,
+        context: &ExecutionContext,
         ops: &[PipelineOp],
         img: &DynamicImage,
         mode: Option<&str>,
@@ -18,7 +19,8 @@ impl GpuPool {
         crate::compute::record_pipeline_backend_fallback(format!(
             "exact host semantic control: {reason}"
         ));
-        let exact = crate::compute::CpuPool.execute_batch(ops, img, mode)?;
+        let cpu_context = context.routed_to(Backend::Cpu);
+        let exact = crate::compute::CpuPool.execute_batch(&cpu_context, ops, img, mode)?;
 
         // Keep the GPU parity lane honest when the result can use the
         // ordinary packed transport: the host implementation determines the
@@ -30,13 +32,14 @@ impl GpuPool {
             return Ok(exact);
         }
         let copied = self
-            .execute_batch_with_policy(&[PipelineOp::Duplicate], &exact, None, false)
+            .execute_batch_with_policy(context, &[PipelineOp::Duplicate], &exact, None, false)
             .unwrap_or_else(|_| exact.clone());
         Ok(crate::image::preserve_mode(&exact, copied))
     }
 
     pub(in crate::compute::pool_gpu) fn preflight_failure(
         &self,
+        context: &ExecutionContext,
         ops: &[PipelineOp],
         img: &DynamicImage,
         mode: Option<&str>,
@@ -46,7 +49,8 @@ impl GpuPool {
         if allow_cpu_fallback {
             crate::compute::record_pipeline_backend_fallback(reason);
             let cpu = crate::compute::CpuPool;
-            return cpu.execute_batch(ops, img, mode);
+            let cpu_context = context.routed_to(Backend::Cpu);
+            return cpu.execute_batch(&cpu_context, ops, img, mode);
         }
 
         // An explicitly locked GPU is a parity lane, not a permission to
@@ -57,11 +61,12 @@ impl GpuPool {
         // inputs produce Pillow-compatible errors and valid inputs retain
         // their pixels while the native GPU implementation is completed.
         // Automatic routing still takes the normal CPU fallback branch above.
-        self.execute_exact_host_result(ops, img, mode, reason)
+        self.execute_exact_host_result(context, ops, img, mode, reason)
     }
 
     fn preflight_batch_route(
         &self,
+        context: &ExecutionContext,
         ops: &[PipelineOp],
         img: &DynamicImage,
         mode: Option<&str>,
@@ -98,11 +103,12 @@ impl GpuPool {
             proofs.f64_is_exact || proofs.f64_ordered_is_exact,
         ) {
             return self
-                .execute_exact_host_result(ops, img, mode, reason)
+                .execute_exact_host_result(context, ops, img, mode, reason)
                 .map(BatchRouteStage::Return);
         }
 
         let empty_two_input_noop = match self.preflight_batch_contract(
+            context,
             ops,
             img,
             mode,
@@ -136,6 +142,7 @@ impl GpuPool {
 
     fn preflight_batch_auxiliary_inputs(
         &self,
+        context: &ExecutionContext,
         ops: &[PipelineOp],
         img: &DynamicImage,
         mode: Option<&str>,
@@ -146,6 +153,7 @@ impl GpuPool {
         // surface their materialization errors here.
         let auxiliary_images = resolve_batch_auxiliary_images(ops, img, mode)?;
         let contrast_mean = match self.preflight_resolved_batch_inputs(
+            context,
             ops,
             img,
             &auxiliary_images,
@@ -166,6 +174,7 @@ impl GpuPool {
 
     pub(in crate::compute::pool_gpu) fn execute_batch_with_policy(
         &self,
+        context: &ExecutionContext,
         ops: &[PipelineOp],
         img: &DynamicImage,
         mode: Option<&str>,
@@ -180,17 +189,25 @@ impl GpuPool {
         };
         let ops = normalized.dispatch_ops.as_slice();
         if let Some(result) =
-            self.execute_batch_segments_if_needed(ops, img, mode, allow_cpu_fallback)?
+            self.execute_batch_segments_if_needed(context, ops, img, mode, allow_cpu_fallback)?
         {
             return Ok(result);
         }
         let resize_proofs = gpu_batch_resize_proofs(&normalized.dispatch_ops, img, mode);
         let preflight =
-            match self.preflight_batch_route(ops, img, mode, allow_cpu_fallback, &resize_proofs)? {
+            match self.preflight_batch_route(
+                context,
+                ops,
+                img,
+                mode,
+                allow_cpu_fallback,
+                &resize_proofs,
+            )? {
                 BatchRouteStage::Continue(empty_two_input_noop) => empty_two_input_noop,
                 BatchRouteStage::Return(image) => return Ok(image),
             };
         let (auxiliary_images, contrast_mean) = match self.preflight_batch_auxiliary_inputs(
+            context,
             ops,
             img,
             mode,
@@ -202,6 +219,7 @@ impl GpuPool {
         };
         PreparedGpuBatchRoute {
             pool: self,
+            context,
             img,
             mode,
             allow_cpu_fallback,
@@ -216,6 +234,7 @@ impl GpuPool {
 
 pub(super) struct PreparedGpuBatchRoute<'a> {
     pool: &'a GpuPool,
+    context: &'a ExecutionContext,
     img: &'a DynamicImage,
     mode: Option<&'a str>,
     allow_cpu_fallback: bool,

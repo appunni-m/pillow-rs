@@ -1,7 +1,8 @@
 //! Imageops operation registration.
 use super::prelude::{
     DynamicImage, PilError, PipelineOp, Registry, op_autocontrast, op_colorize, op_contain,
-    op_cover, op_crop_border, op_equalize, op_equalize_with_mask, op_expand, op_fit, op_flip,
+    op_cover, op_crop_border, op_equalize, op_equalize_with_mask, op_expand_with_mode, op_fit,
+    op_flip,
     op_invert, op_mirror, op_pad, op_posterize, op_scale, op_solarize,
 };
 fn register_autocontrast_equalize(m: &mut Registry) {
@@ -12,13 +13,8 @@ fn register_autocontrast_equalize(m: &mut Registry) {
              op: &PipelineOp,
              mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
-                if let Some(m) = mode
-                    && (m == "LA" || m == "RGBA")
-                {
-                    return Err(PilError::OsError(format!("not supported for mode {m}")));
-                }
                 if let PipelineOp::Autocontrast { cutoff, mask } = op {
-                    op_autocontrast(img, *cutoff, mask.as_ref())
+                    op_autocontrast(img, *cutoff, mask.as_ref(), operation_mode(img, mode))
                 } else {
                     Err(PilError::ValueError("expected Autocontrast op".into()))
                 }
@@ -40,8 +36,10 @@ fn register_autocontrast_equalize(m: &mut Registry) {
                     return Err(PilError::OsError(format!("not supported for mode {m}")));
                 }
                 match op {
-                    PipelineOp::Equalize => op_equalize(img),
-                    PipelineOp::EqualizeMasked { mask } => op_equalize_with_mask(img, Some(mask)),
+                    PipelineOp::Equalize => op_equalize(img, operation_mode(img, mode)),
+                    PipelineOp::EqualizeMasked { mask } => {
+                        op_equalize_with_mask(img, Some(mask), operation_mode(img, mode))
+                    }
                     _ => Err(PilError::ValueError("expected Equalize op".into())),
                 }
             },
@@ -56,10 +54,10 @@ fn register_invert_flip(m: &mut Registry) {
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             _mode: Option<&str>|
+             mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if matches!(op, PipelineOp::Invert) {
-                    op_invert(img)
+                    op_invert(img, operation_mode(img, mode))
                 } else {
                     Err(PilError::ValueError("expected Invert op".into()))
                 }
@@ -109,10 +107,10 @@ fn register_mirror_posterize_solarize(m: &mut Registry) {
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             _mode: Option<&str>|
+             mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if let PipelineOp::Posterize { bits } = op {
-                    op_posterize(img, *bits)
+                    op_posterize(img, *bits, operation_mode(img, mode))
                 } else {
                     Err(PilError::ValueError("expected Posterize op".into()))
                 }
@@ -126,10 +124,10 @@ fn register_mirror_posterize_solarize(m: &mut Registry) {
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             _mode: Option<&str>|
+             mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if let PipelineOp::Solarize { threshold } = op {
-                    op_solarize(img, *threshold)
+                    op_solarize(img, *threshold, operation_mode(img, mode))
                 } else {
                     Err(PilError::ValueError("expected Solarize op".into()))
                 }
@@ -137,6 +135,13 @@ fn register_mirror_posterize_solarize(m: &mut Registry) {
             "solarize.wgsl"
         ),
     );
+}
+
+fn operation_mode(img: &DynamicImage, mode: Option<&str>) -> crate::image::Mode {
+    // TODO(pillow-rs#3ptb): Pass the wrapper's precomputed Mode through the
+    // registry callback instead of adapting its compatibility string here.
+    mode.and_then(crate::image::Mode::from_pillow_name)
+        .unwrap_or_else(|| crate::image::Mode::for_image(img, None))
 }
 
 fn register_grayscale(m: &mut Registry) {
@@ -148,7 +153,10 @@ fn register_grayscale(m: &mut Registry) {
              mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if matches!(op, PipelineOp::Grayscale) {
-                    crate::compute::pool_cpu::ops::grayscale::op_grayscale(img, mode)
+                    crate::compute::pool_cpu::ops::grayscale::op_grayscale_with_mode(
+                        img,
+                        operation_mode(img, mode),
+                    )
                 } else {
                     Err(PilError::ValueError("expected Grayscale op".into()))
                 }
@@ -295,7 +303,7 @@ fn register_scale_expand(m: &mut Registry) {
              mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if let PipelineOp::Expand { border, fill } = op {
-                    op_expand(img, *border, *fill, mode)
+                    op_expand_with_mode(img, *border, *fill, operation_mode(img, mode))
                 } else {
                     Err(PilError::ValueError("expected Expand op".into()))
                 }

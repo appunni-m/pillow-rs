@@ -252,6 +252,7 @@ pub use crate::image::FormattedImageData;
 pub use crate::image::FormattedPixelValue;
 pub use crate::image::Image;
 pub use crate::image::ImageInfoValue;
+pub use crate::image::Mode;
 pub use crate::image::ImagingCoreBytesInput;
 pub use crate::image::NewColorInput;
 pub use crate::image::OpenFormatsInput;

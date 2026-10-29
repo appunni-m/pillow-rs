@@ -1,6 +1,7 @@
 //! CPU implementation for Pillow's 5x5 convolution filter.
 
 use super::uniform_image::{SMALL_UNIFORM_BYTE_MAX_PIXELS, native_small_uniform_byte_image};
+use crate::compute::{Backend, ExecutionContext};
 use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::image_utils::raw_bytes_to_image;
@@ -10,7 +11,6 @@ use crate::raster::DynamicImage;
 mod int32;
 #[path = "filter5x5/native_bytes.rs"]
 mod native_bytes;
-use int32::filter_5x5_i32;
 
 #[path = "rgb_blur_ring.rs"]
 mod rgb_blur_ring;
@@ -233,9 +233,27 @@ pub fn execute_filter5x5(
     offset: f32,
     explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    execute_filter5x5_in_context(
+        &ExecutionContext::for_backend(Backend::Cpu),
+        img,
+        kernel,
+        scale,
+        offset,
+        explicit_mode,
+    )
+}
+
+pub fn execute_filter5x5_in_context(
+    execution_context: &ExecutionContext,
+    img: &DynamicImage,
+    kernel: &[f32; 25],
+    scale: f32,
+    offset: f32,
+    explicit_mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
     // I-mode: operate directly on int32 pixel values (no [0,255] clipping)
     if explicit_mode == Some("I") {
-        return filter_5x5_i32(img, kernel, scale, offset);
+        return int32::filter_5x5_i32_in_context(execution_context, img, kernel, scale, offset);
     }
     // Normalize once, outside the pixel loop. The row helper keeps all five
     // tap groups in the same order as the original scalar implementation.

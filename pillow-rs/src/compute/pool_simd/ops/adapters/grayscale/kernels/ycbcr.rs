@@ -2,12 +2,14 @@
 
 use crate::checked_dims::CheckedDims;
 use crate::compute::pool_simd::ops::native_channel;
+use crate::compute::{Architecture, ExecutionContext};
 use crate::raster::DynamicImage;
 
 /// Extract the Y sample from each exact native YCbCr byte triple. Use a
 /// platform-specific vector deinterleave where available and keep incomplete
 /// groups on the scalar tail.
 pub(in crate::compute::pool_simd::ops::adapters) fn native_ycbcr_grayscale_bytes(
+    context: &ExecutionContext,
     img: &DynamicImage,
 ) -> Option<(Vec<u8>, u64, u64)> {
     let DynamicImage::ImageRgb8(source) = img else {
@@ -18,14 +20,22 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_ycbcr_grayscale_bytes
         return None;
     }
     #[cfg(target_arch = "x86_64")]
-    if let Some(output) = super::ycbcr_ssse3::ycbcr_luma_ssse3_bytes(source.as_raw()) {
-        return Some(output);
+    if matches!(
+        context.architecture(),
+        Architecture::Ssse3 | Architecture::Avx2
+    ) {
+        if let Some(output) = super::ycbcr_ssse3::ycbcr_luma_ssse3_bytes(context, source.as_raw()) {
+            return Some(output);
+        }
     }
     #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-    {
+    if context.architecture() == Architecture::Neon {
         let pixels = dims.total_pixels();
         if pixels == 0 {
-            return Some(native_channel::gather_channel::<3, 0>(source.as_raw()));
+            return Some(native_channel::gather_channel::<3, 0>(
+                context,
+                source.as_raw(),
+            ));
         }
         let vector_pixels = pixels / 16 * 16;
         let input = source.as_raw();
@@ -71,35 +81,26 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_ycbcr_grayscale_bytes
             (pixels - vector_pixels) as u64,
         ))
     }
-    #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
-    Some(native_channel::gather_channel::<3, 0>(source.as_raw()))
+    Some(native_channel::gather_channel::<3, 0>(
+        context,
+        source.as_raw(),
+    ))
 }
 
-pub(in crate::compute::pool_simd::ops::adapters) fn native_ycbcr_grayscale_path() -> &'static str {
-    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-    {
-        "neon-deinterleave"
-    }
-    #[cfg(target_arch = "x86_64")]
-    {
-        if std::is_x86_feature_detected!("ssse3") {
-            "ssse3-deinterleave"
-        } else {
-            "vector-gather"
-        }
-    }
-    #[cfg(not(any(
-        all(target_arch = "aarch64", target_feature = "neon"),
-        target_arch = "x86_64"
-    )))]
-    {
-        "vector-gather"
+pub(in crate::compute::pool_simd::ops::adapters) fn native_ycbcr_grayscale_path(
+    context: &ExecutionContext,
+) -> &'static str {
+    match context.architecture() {
+        Architecture::Neon => "neon-deinterleave",
+        Architecture::Ssse3 | Architecture::Avx2 => "ssse3-deinterleave",
+        _ => "vector-gather",
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::native_ycbcr_grayscale_bytes;
+    use crate::compute::{Backend, ExecutionContext};
     use crate::raster::{DynamicImage, RgbImage};
 
     #[test]
@@ -116,7 +117,8 @@ mod tests {
                 RgbImage::from_raw(pixels as u32, 1, source).expect("YCbCr triples"),
             );
             let (actual, vector_blocks, scalar_tail) =
-                native_ycbcr_grayscale_bytes(&image).expect("native YCbCr extraction");
+                native_ycbcr_grayscale_bytes(&ExecutionContext::for_backend(Backend::Simd), &image)
+                    .expect("native YCbCr extraction");
 
             assert_eq!(actual, expected, "pixel count {pixels}");
             #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]

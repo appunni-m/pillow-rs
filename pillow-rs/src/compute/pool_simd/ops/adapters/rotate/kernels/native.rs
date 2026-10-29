@@ -7,6 +7,7 @@ use super::super::{
     native_rotate_layout, rotate_discrete_fast_angle, rotate_fill_sample, simd_rotate_geometry,
 };
 use crate::error::PilError;
+use crate::compute::ExecutionContext;
 use crate::image::preserve_mode;
 use crate::raster::{DynamicImage, GenericImageView};
 use wide::u8x16;
@@ -34,6 +35,7 @@ pub(in crate::compute::pool_simd::ops::adapters::rotate) fn native_identity_rota
 /// classified as `native-copy`; the non-expanded path additionally records
 /// its complete native-byte vector blocks.
 pub(in crate::compute::pool_simd::ops::adapters::rotate) fn simd_right_angle_rotate_native(
+    context: &ExecutionContext,
     img: &DynamicImage,
     angle: f64,
     expand: bool,
@@ -60,7 +62,7 @@ pub(in crate::compute::pool_simd::ops::adapters::rotate) fn simd_right_angle_rot
     };
     if expand || degree == 180 {
         let Some((result, vector_blocks, scalar_tail, kernel_path)) =
-            native_transpose(img, mode, method)
+            native_transpose(context, img, mode, method)
         else {
             return Ok(None);
         };

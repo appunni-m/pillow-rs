@@ -2,6 +2,7 @@
 
 use super::simd_pack_u16x16;
 use crate::compute::pool_simd::ops::native_channel::gather_interleaved_channel;
+use crate::compute::{Architecture, ExecutionContext};
 use crate::raster::DynamicImage;
 use wide::{u8x16, u16x16};
 
@@ -108,11 +109,6 @@ fn grayscale_rgb_neon_bytes(source: &[u8], pixels: usize) -> (Vec<u8>, u64) {
 
 #[inline(always)]
 fn grayscale_block<const CHANNELS: usize>(source: &[u8]) -> [u8; 16] {
-    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-    if CHANNELS == 3 {
-        return grayscale_rgb_block_neon(source);
-    }
-
     let load = |offset| {
         u8x16::new(
             source[offset..offset + 16]
@@ -178,6 +174,7 @@ fn grayscale_interleaved<const CHANNELS: usize>(source: &[u8]) -> Vec<u8> {
 /// Convert admitted native bytes to L. Complete groups use direct vector
 /// loads and deinterleaving; only the final partial group needs padding.
 pub(in crate::compute::pool_simd::ops::adapters) fn native_grayscale_bytes(
+    context: &ExecutionContext,
     img: &DynamicImage,
     channels: usize,
 ) -> Option<(Vec<u8>, u64, u64)> {
@@ -195,35 +192,7 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_grayscale_bytes(
             grayscale_interleaved::<2>(source),
             pixels.div_ceil(16) as u64,
         ),
-        3 => {
-            #[cfg(target_arch = "x86_64")]
-            {
-                if let Some((output, vector_blocks)) =
-                    super::rgb_avx2::grayscale_rgb_avx2(source, pixels)
-                {
-                    (output, vector_blocks)
-                } else {
-                    (
-                        grayscale_interleaved::<3>(source),
-                        pixels.div_ceil(16) as u64,
-                    )
-                }
-            }
-            #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-            {
-                grayscale_rgb_neon_bytes(source, pixels)
-            }
-            #[cfg(not(any(
-                target_arch = "x86_64",
-                all(target_arch = "aarch64", target_feature = "neon")
-            )))]
-            {
-                (
-                    grayscale_interleaved::<3>(source),
-                    pixels.div_ceil(16) as u64,
-                )
-            }
-        }
+        3 => grayscale_rgb_bytes_for_architecture(context, source, pixels),
         4 => (
             grayscale_interleaved::<4>(source),
             pixels.div_ceil(16) as u64,
@@ -231,4 +200,28 @@ pub(in crate::compute::pool_simd::ops::adapters) fn native_grayscale_bytes(
         _ => return None,
     };
     Some((output, vector_blocks, 0))
+}
+
+fn grayscale_rgb_bytes_for_architecture(
+    context: &ExecutionContext,
+    source: &[u8],
+    pixels: usize,
+) -> (Vec<u8>, u64) {
+    match context.architecture() {
+        Architecture::Avx2 => {
+            #[cfg(target_arch = "x86_64")]
+            if let Some(result) = super::rgb_avx2::grayscale_rgb_avx2(context, source, pixels) {
+                return result;
+            }
+        }
+        Architecture::Neon => {
+            #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+            return grayscale_rgb_neon_bytes(source, pixels);
+        }
+        _ => {}
+    }
+    (
+        grayscale_interleaved::<3>(source),
+        pixels.div_ceil(16) as u64,
+    )
 }

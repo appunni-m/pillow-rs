@@ -386,7 +386,21 @@ def classify_path(
                 "expected_shape": "pillow-rs/src/compute/pool_cpu/ops/filter/kernels/<kernel>.rs or a documented shared filter helper",
                 "reason": "This executable Filter child currently sits beside the kernels directory; call sites must establish whether it is a kernel or a shared family helper.",
             }
-        if len(relative) >= 3 and relative[1] == "kernels":
+        if len(relative) == 2 and relative[1] in {"mod.rs", "ops.rs"}:
+            return {
+                "assessment": "matches_cpu_family_shape",
+                "rule": "cpu_family_orchestrator",
+                "reason": "The family module exports a simple mod.rs and keeps support declaration and mode/architecture selection in ops.rs.",
+            }
+        if len(relative) == 3 and relative[2] == "ops.rs":
+            return {
+                "assessment": "matches_cpu_family_shape",
+                "rule": "cpu_mode_strategy",
+                "reason": "A mode-specific CPU implementation is owned by its mode strategy module.",
+            }
+        if (len(relative) >= 3 and relative[1] == "kernels") or (
+            len(relative) >= 4 and relative[2] == "kernels"
+        ):
             return {
                 "assessment": "matches_cpu_kernel_shape",
                 "rule": "cpu_family_kernel",

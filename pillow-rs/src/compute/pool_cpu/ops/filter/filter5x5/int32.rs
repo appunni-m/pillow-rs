@@ -3,11 +3,11 @@
 use super::super::convolution::pillow_kernel_row_5;
 #[cfg(test)]
 use super::execute_filter5x5;
+use crate::compute::ExecutionContext;
 use crate::error::PilError;
 
 use crate::ops::pil_resize::i32_samples_from_le_bytes;
 use crate::raster::DynamicImage;
-use std::borrow::Cow;
 
 trait F32MulAdd {
     fn mul_add(&self, sample: f32, weight: f32, accumulator: f32) -> f32;
@@ -29,8 +29,8 @@ struct X86F32FmaToken {
 
 #[cfg(target_arch = "x86_64")]
 impl X86F32FmaToken {
-    fn detect() -> Option<Self> {
-        std::is_x86_feature_detected!("fma").then_some(Self { _private: () })
+    fn from_context(context: &ExecutionContext) -> Option<Self> {
+        context.uses_cpu_fma().then_some(Self { _private: () })
     }
 }
 
@@ -40,7 +40,8 @@ impl F32MulAdd for X86F32FmaToken {
     #[inline(always)]
     fn mul_add(&self, sample: f32, weight: f32, accumulator: f32) -> f32 {
         let mut result = accumulator;
-        // SAFETY: this token is created only after runtime FMA detection. The
+        // SAFETY: this token is created only from the CPU routing context,
+        // whose FMA architecture was detected once before execution. The
         // I-mode ring selects it only when finite coefficients and the full
         // i32 input range prove that every intermediate stays finite.
         unsafe {
@@ -160,7 +161,8 @@ fn read_i32_pixel_le(raw: &[u8], pixel_index: usize) -> i32 {
 
 /// Convert each I-mode sample to f32 once, then reuse five source rows while
 /// evaluating the scalar convolution in Pillow's original FMA order.
-fn filter_5x5_i32_f32_ring(
+fn filter_5x5_i32_f32_ring_in_context(
+    context: &ExecutionContext,
     raw: &[u8],
     width: usize,
     height: usize,
@@ -169,7 +171,7 @@ fn filter_5x5_i32_f32_ring(
 ) -> Option<Vec<u8>> {
     #[cfg(target_arch = "x86_64")]
     if i32_filter_f32_fma_is_safe(kernel, offset)
-        && let Some(fma) = X86F32FmaToken::detect()
+        && let Some(fma) = X86F32FmaToken::from_context(context)
     {
         return filter_5x5_i32_f32_ring_with_fma(raw, width, height, kernel, offset, &fma);
     }
@@ -603,6 +605,7 @@ pub(crate) fn uniform_i32_filter5x5_is_identity(
 }
 
 fn filter_5x5_i32_fast_path(
+    context: &ExecutionContext,
     raw: &[u8],
     width: usize,
     height: usize,
@@ -632,7 +635,7 @@ fn filter_5x5_i32_fast_path(
         }
     }
 
-    filter_5x5_i32_f32_ring(raw, width, height, kernel, offset)
+    filter_5x5_i32_f32_ring_in_context(context, raw, width, height, kernel, offset)
 }
 
 fn filter_5x5_i32_image(width: u32, height: u32, raw: Vec<u8>) -> Result<DynamicImage, PilError> {
@@ -647,15 +650,31 @@ pub(super) fn filter_5x5_i32(
     scale: f32,
     offset: f32,
 ) -> Result<DynamicImage, PilError> {
-    // I-mode stores one little-endian i32 word per four-byte pixel. Borrow a
-    // matching carrier directly, keeping the existing accessor fallback for
-    // mismatched internal variants.
+    filter_5x5_i32_in_context(
+        &ExecutionContext::for_backend(Backend::Cpu),
+        img,
+        kernel,
+        scale,
+        offset,
+    )
+}
+
+pub(super) fn filter_5x5_i32_in_context(
+    context: &ExecutionContext,
+    img: &DynamicImage,
+    kernel: &[f32; 25],
+    scale: f32,
+    offset: f32,
+) -> Result<DynamicImage, PilError> {
+    // I-mode stores one little-endian i32 word per four-byte carrier. Reject a
+    // mismatched storage variant instead of converting it into this mode.
     let (w_u32, h_u32) = (img.width(), img.height());
-    let raw: Cow<'_, [u8]> = match img {
-        DynamicImage::ImageRgba8(rgba) => Cow::Borrowed(rgba.as_raw()),
-        _ => Cow::Owned(img.to_rgba8().into_raw()),
+    let DynamicImage::ImageRgba8(rgba) = img else {
+        return Err(PilError::ValueError(
+            "I-mode filter requires four-byte scalar storage".into(),
+        ));
     };
-    let raw = raw.as_ref();
+    let raw = rgba.as_raw();
     let (w, h) = (w_u32 as i32, h_u32 as i32);
 
     // See the 3x3 path: preserve the raw C f32 divisor, including zero,
@@ -667,7 +686,8 @@ pub(super) fn filter_5x5_i32(
     // Select the integer factorization only when every sample is proven to
     // preserve Pillow's f32 arithmetic exactly.
 
-    if let Some(output) = filter_5x5_i32_fast_path(raw, w_u32 as usize, h_u32 as usize, &kd, offset)
+    if let Some(output) =
+        filter_5x5_i32_fast_path(context, raw, w_u32 as usize, h_u32 as usize, &kd, offset)
     {
         return filter_5x5_i32_image(w_u32, h_u32, output);
     }

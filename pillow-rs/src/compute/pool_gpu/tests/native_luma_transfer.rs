@@ -49,7 +49,9 @@ fn colorize_gpu_packs_luma_upload_and_keeps_exact_rgb() {
     let expected = crate::compute::registry::execute_cpu(&op, &source, Some("L"))
         .expect("CPU Colorize reference");
     let actual = super::GpuPool
-        .execute_batch_strict(std::slice::from_ref(&op), &source, Some("L"))
+        .execute_batch_strict(
+            &crate::compute::ExecutionContext::for_backend(crate::compute::Backend::Gpu),
+std::slice::from_ref(&op), &source, Some("L"))
         .expect("strict GPU Colorize");
     assert_eq!(actual.color(), expected.color());
     assert_eq!(actual.dimensions(), expected.dimensions());
@@ -101,7 +103,9 @@ fn constant_gpu_packs_flat_luma_and_reads_back_aligned_tail() {
         let expected = crate::compute::registry::execute_cpu(&op, &source, Some("RGBA"))
             .expect("CPU Constant reference");
         let actual = super::GpuPool
-            .execute_batch_strict(std::slice::from_ref(&op), &source, Some("RGBA"))
+            .execute_batch_strict(
+            &crate::compute::ExecutionContext::for_backend(crate::compute::Backend::Gpu),
+std::slice::from_ref(&op), &source, Some("RGBA"))
             .expect("strict GPU Constant");
 
         assert_eq!(actual.color(), expected.color());

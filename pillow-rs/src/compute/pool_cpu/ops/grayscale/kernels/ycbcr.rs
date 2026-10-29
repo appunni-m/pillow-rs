@@ -3,15 +3,18 @@
 use crate::checked_dims::CheckedDims;
 use crate::raster::{DynamicImage, GrayImage};
 
-/// Copy Y from exact native YCbCr byte triples. Empty or mismatched storage
-/// returns `None` so the family orchestrator can use its established fallback.
+/// Copy Y from exact native YCbCr byte triples. Mismatched storage returns
+/// `None`; the family must not convert another mode to reach this kernel.
 pub(super) fn luma(image: &DynamicImage) -> Option<GrayImage> {
     let DynamicImage::ImageRgb8(source) = image else {
         return None;
     };
     let dims = CheckedDims::new(image.width(), image.height(), 3).ok()?;
     let pixels = dims.total_pixels();
-    if pixels == 0 || source.as_raw().len() != dims.total_bytes() {
+    if pixels == 0 {
+        return Some(GrayImage::new(image.width(), image.height()));
+    }
+    if source.as_raw().len() != dims.total_bytes() {
         return None;
     }
     // Keep CPU execution serial and portable. SSSE3 belongs to the explicit

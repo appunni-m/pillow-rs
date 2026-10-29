@@ -74,10 +74,18 @@ fn register_composite_eval(m: &mut Registry) {
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             _mode: Option<&str>|
+             mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if let PipelineOp::Eval { lut } = op {
-                    op_eval(img, lut)
+                    // TODO(pillow-rs#3ptb): Pass the wrapper's cached Mode
+                    // directly through CpuOpFn instead of parsing this name.
+                    let mode = match mode {
+                        Some(name) => crate::image::Mode::from_pillow_name(name).ok_or_else(|| {
+                            PilError::ValueError(format!("unsupported Pillow mode: {name}"))
+                        })?,
+                        None => crate::image::Mode::for_image(img, None),
+                    };
+                    op_eval(img, lut, mode)
                 } else {
                     Err(PilError::ValueError("expected Eval op".into()))
                 }

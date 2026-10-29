@@ -1,4 +1,4 @@
-use super::{Backend, PilError, execute_automatic_simd_segments};
+use super::{Backend, ExecutionContext, PilError, execute_automatic_simd_segments};
 use crate::compute::registry;
 use crate::pipeline::{PipelineOp, TransposeMethod};
 use crate::raster::{DynamicImage, GenericImageView, RgbaImage};
@@ -60,7 +60,12 @@ fn automatic_simd_composes_consecutive_transposes() -> Result<(), PilError> {
     let previous = Backend::set_pipeline_telemetry_enabled(true);
     Backend::reset_pipeline_allocation_telemetry();
     crate::compute::reset_pipeline_operation_telemetry();
-    let result = execute_automatic_simd_segments(&ops, &source, Some("RGBA"));
+    let result = execute_automatic_simd_segments(
+        &ExecutionContext::for_backend(Backend::Simd),
+        &ops,
+        &source,
+        Some("RGBA"),
+    );
     let operation_records = crate::compute::take_pipeline_operation_telemetry();
     let allocations = Backend::take_pipeline_allocation_telemetry();
     Backend::set_pipeline_telemetry_enabled(previous);

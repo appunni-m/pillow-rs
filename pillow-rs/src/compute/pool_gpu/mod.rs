@@ -12,7 +12,7 @@ macro_rules! gpu_log {
 
 use crate::checked_dims::CheckedDims;
 use crate::compute::registry;
-use crate::compute::{Backend, BackendImpl, PipelineResourceTelemetry};
+use crate::compute::{Architecture, Backend, BackendImpl, ExecutionContext, PipelineResourceTelemetry};
 use crate::error::PilError;
 use crate::ops::pil_resize::{
     FilterCoeffs, FilterCoeffsF64, compact_resize_coeffs_to_source_span, filter_from_resample,
@@ -202,7 +202,14 @@ impl BackendImpl for GpuPool {
         100
     }
 
-    fn supports(&self, op: &PipelineOp) -> Result<bool, PilError> {
+    fn supports(
+        &self,
+        context: &ExecutionContext,
+        op: &PipelineOp,
+    ) -> Result<bool, PilError> {
+        if context.backend() != Backend::Gpu || context.architecture() != Architecture::Wgpu {
+            return Ok(false);
+        }
         let healthy = match GPU.get() {
             Some(Ok(gpu)) => gpu.failure_detail().is_none(),
             Some(Err(_)) => false,
@@ -211,22 +218,48 @@ impl BackendImpl for GpuPool {
         Ok(healthy && Self::descriptor_supports(op)?)
     }
 
+    fn supports_for_image(
+        &self,
+        context: &ExecutionContext,
+        op: &PipelineOp,
+        _img: &DynamicImage,
+        _mode: Option<&str>,
+    ) -> Result<bool, PilError> {
+        self.supports(context, op)
+    }
+
     fn execute_batch(
         &self,
+        context: &ExecutionContext,
         ops: &[PipelineOp],
         img: &DynamicImage,
         mode: Option<&str>,
     ) -> Result<DynamicImage, PilError> {
-        self.execute_batch_with_policy(ops, img, mode, true)
+        if context.backend() != Backend::Gpu || context.architecture() != Architecture::Wgpu {
+            return Err(PilError::InternalError(format!(
+                "GPU operation router received {:?}/{:?} context",
+                context.backend(),
+                context.architecture()
+            )));
+        }
+        self.execute_batch_with_policy(context, ops, img, mode, true)
     }
 
     fn execute_batch_strict(
         &self,
+        context: &ExecutionContext,
         ops: &[PipelineOp],
         img: &DynamicImage,
         mode: Option<&str>,
     ) -> Result<DynamicImage, PilError> {
-        self.execute_batch_with_policy(ops, img, mode, false)
+        if context.backend() != Backend::Gpu || context.architecture() != Architecture::Wgpu {
+            return Err(PilError::InternalError(format!(
+                "GPU operation router received {:?}/{:?} context",
+                context.backend(),
+                context.architecture()
+            )));
+        }
+        self.execute_batch_with_policy(context, ops, img, mode, false)
     }
 }
 

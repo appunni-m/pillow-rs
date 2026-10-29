@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::error::PilError;
-use crate::image::preserve_mode;
+use crate::image::{Mode, preserve_mode};
 use crate::ops::pil_resize::pil_resize_boxed;
 use crate::pipeline::{PipelineOp, ResampleFilter};
 use crate::raster::{DynamicImage, GenericImageView, RgbImage};
@@ -39,7 +39,7 @@ pub(crate) fn execute_rgb_putpixel_thumbnail_fusion(
     let pixel_overrides = collect_rgb_pixel_overrides(putpixel_ops, source_width, source_height)?;
 
     let Some((reduced_image, mut sparse_nonzero_rows)) =
-        execute_reduce_rgb_with_sparse_rows(img, 2, 2, Some("RGB"))?
+        execute_reduce_rgb_with_sparse_rows(img, 2, 2, Mode::ImageRgb8)?
     else {
         return Err(PilError::InternalError(
             "RGB thumbnail reduction rejected its native source".into(),

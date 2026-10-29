@@ -9,6 +9,7 @@ use super::{
     CheckedDims, DynamicImage, PilError, PipelineOp, SIMD_BOX_BLUR_SCALE, native_copy_image_bytes,
     native_small_uniform_byte_image, preserve_mode, simd_pil_box_blur, simd_unsupported,
 };
+use crate::compute::{Backend, ExecutionContext};
 
 #[path = "gaussian_blur/kernels/la.rs"]
 mod la;
@@ -305,6 +306,23 @@ pub(crate) fn simd_gaussian_blur(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    simd_gaussian_blur_in_context(
+        &ExecutionContext::for_backend(Backend::Simd),
+        img,
+        op,
+        mode,
+    )
+}
+
+pub(super) fn simd_gaussian_blur_in_context(
+    context: &ExecutionContext,
+    img: &DynamicImage,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    if context.backend() != Backend::Simd || !context.architecture().supports_simd() {
+        return Err(simd_unsupported("GaussianBlur"));
+    }
     if let PipelineOp::GaussianBlur { sigma } = op {
         let channels =
             simd_native_blur_channels(img, mode).ok_or_else(|| simd_unsupported("GaussianBlur"))?;
@@ -343,7 +361,7 @@ pub(crate) fn simd_gaussian_blur(
         {
             return simd_pil_gaussian_blur_rgb_radius_one(img, blur_radius, mode);
         }
-        return simd_pil_box_blur(img, blur_radius, 3, channels, mode, true);
+        return simd_pil_box_blur(context, img, blur_radius, 3, channels, mode, true);
     }
     Err(PilError::ValueError("expected GaussianBlur op".into()))
 }

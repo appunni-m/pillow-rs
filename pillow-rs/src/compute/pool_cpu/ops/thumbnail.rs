@@ -1,15 +1,16 @@
 //! CPU Thumbnail family orchestration with wrapper-owned Pillow mode routing.
 
+use crate::compute::{Backend, ExecutionContext};
 use crate::error::PilError;
 use crate::image::preserve_mode;
-use crate::ops::pil_resize::{pil_resize, pil_resize_boxed};
+use crate::ops::pil_resize::{pil_resize, pil_resize_boxed_in_context};
 use crate::pipeline::{PipelineOp, ResampleFilter};
 use crate::raster::{DynamicImage, GenericImageView};
 
 use super::reduce::{
     execute_reduce, execute_reduce_rgb_with_sparse_rows, reduce_f_thumbnail, reduce_i_thumbnail,
 };
-use super::resize::{resize_f, resize_i, resize_i_boxed};
+use super::resize::{resize_f_in_context, resize_i_boxed_in_context, resize_i_in_context};
 
 mod fusion;
 mod kernels;
@@ -28,6 +29,24 @@ enum ThumbnailPreparation {
 /// Matches PIL's thumbnail behavior including the reducing_gap optimization
 /// (default reducing_gap=2.0) for non-NEAREST filters.
 pub(crate) fn execute_thumbnail(
+    img: &DynamicImage,
+    w: u32,
+    h: u32,
+    filter: &ResampleFilter,
+    explicit_mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    execute_thumbnail_in_context(
+        &ExecutionContext::for_backend(Backend::Cpu),
+        img,
+        w,
+        h,
+        filter,
+        explicit_mode,
+    )
+}
+
+pub(crate) fn execute_thumbnail_in_context(
+    context: &ExecutionContext,
     img: &DynamicImage,
     w: u32,
     h: u32,
@@ -55,12 +74,14 @@ pub(crate) fn execute_thumbnail(
         (new_w, new_h),
         effective_filter,
         explicit_mode,
+        context,
     )?;
     let (work_img, resize_box) = match preparation {
         ThumbnailPreparation::Completed(result) => return Ok(preserve_mode(img, result)),
         ThumbnailPreparation::Ready { image, resize_box } => (image, resize_box),
     };
     let result = resize_prepared_thumbnail(
+        context,
         &work_img,
         (cur_w, cur_h),
         (new_w, new_h),
@@ -73,6 +94,7 @@ pub(crate) fn execute_thumbnail(
 
 #[inline(always)]
 fn resize_prepared_thumbnail(
+    context: &ExecutionContext,
     work_img: &DynamicImage,
     (cur_w, cur_h): (u32, u32),
     (new_w, new_h): (u32, u32),
@@ -97,14 +119,15 @@ fn resize_prepared_thumbnail(
                 && new_w < work_img.width()
                 && new_h < work_img.height() =>
         {
-            resize_f(work_img, new_w, new_h, &effective_filter)?
+            resize_f_in_context(context, work_img, new_w, new_h, &effective_filter)?
         }
         (Some("F"), DynamicImage::ImageRgba8(_), Some((left, top, right, bottom))) => {
             // Image.resize adjusts the source box after its reducing-gap pass.
             // Keep that fractional box for F as well; resizing the complete
             // ceil-sized reduction includes partial edge samples that Pillow
             // deliberately excludes from the final convolution.
-            pil_resize_boxed(
+            crate::ops::pil_resize::pil_resize_boxed_in_context(
+                context,
                 work_img,
                 new_w,
                 new_h,
@@ -117,10 +140,11 @@ fn resize_prepared_thumbnail(
             )
         }
         (Some("F"), DynamicImage::ImageRgba8(_), None) => {
-            resize_f(work_img, new_w, new_h, &effective_filter)?
+            resize_f_in_context(context, work_img, new_w, new_h, &effective_filter)?
         }
         (Some("I"), DynamicImage::ImageRgba8(_), Some((left, top, right, bottom))) => {
-            resize_i_boxed(
+            resize_i_boxed_in_context(
+                context,
                 work_img,
                 new_w,
                 new_h,
@@ -132,9 +156,10 @@ fn resize_prepared_thumbnail(
             )?
         }
         (Some("I"), DynamicImage::ImageRgba8(_), None) => {
-            resize_i(work_img, new_w, new_h, &effective_filter)?
+            resize_i_in_context(context, work_img, new_w, new_h, &effective_filter)?
         }
-        (_, _, Some((left, top, right, bottom))) => pil_resize_boxed(
+        (_, _, Some((left, top, right, bottom))) => pil_resize_boxed_in_context(
+            context,
             work_img,
             new_w,
             new_h,
@@ -151,6 +176,7 @@ fn resize_prepared_thumbnail(
 }
 
 fn prepare_thumbnail_work_image(
+    context: &ExecutionContext,
     img: &DynamicImage,
     (cur_w, cur_h): (u32, u32),
     (new_w, new_h): (u32, u32),
@@ -163,6 +189,8 @@ fn prepare_thumbnail_work_image(
     // Skip reducing_gap for modes with alpha (LA, RGBA) to avoid premultiply
     // issues. F/I use RGBA storage internally but are scalar modes, and CMYK
     // uses the same four-byte storage without an alpha channel.
+    // TODO(pillow-rs#3ptb): Select alpha and scalar behavior from the wrapper's
+    // cached Mode, not the carrier color plus compatibility mode string.
     let has_alpha = matches!(
         img.color(),
         crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
@@ -197,6 +225,7 @@ fn prepare_thumbnail_work_image(
                 {
                     return Ok(ThumbnailPreparation::Completed(
                         kernels::i::resize_i_thumbnail_reduce2x2(
+                            context,
                             img,
                             new_w,
                             new_h,

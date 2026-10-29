@@ -1,5 +1,5 @@
 use crate::error::PilError;
-use crate::image::Image;
+use crate::image::{Image, Mode};
 use crate::raster::{DynamicImage, GenericImageView};
 
 use super::mode::is_luma16_mode;
@@ -57,8 +57,14 @@ pub(super) fn try_convert_from_luma16(
                 },
             )
         };
-        if let Image::Pipeline { explicit_mode, .. } = &mut result {
+        if let Image::Pipeline {
+            explicit_mode,
+            mode_selector,
+            ..
+        } = &mut result
+        {
             *explicit_mode = Some(target_mode.to_owned());
+            *mode_selector = Mode::from_pillow_name(target_mode);
         }
         return Ok(Some(result));
     }
@@ -119,8 +125,14 @@ pub(super) fn try_convert_to_luma16(
                 dither: None,
             },
         );
-        if let Image::Pipeline { explicit_mode, .. } = &mut result {
+        if let Image::Pipeline {
+            explicit_mode,
+            mode_selector,
+            ..
+        } = &mut result
+        {
             *explicit_mode = Some(target_mode.to_owned());
+            *mode_selector = Mode::from_pillow_name(target_mode);
         }
         return Ok(Some(result));
     }

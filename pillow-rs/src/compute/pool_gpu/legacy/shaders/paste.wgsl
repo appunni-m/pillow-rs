@@ -1,0 +1,216 @@
+// Paste: composite source image into destination at (paste_x, paste_y)
+// with optional mask blending.
+// Per-pixel dispatch (16x16 workgroups) over the destination image.
+//
+// CPU reference: paste source image into destination at (x,y)
+// with optional mask. For each destination pixel in paste rect:
+//   if mask provided: out = (src * mask + dst * (255-mask)) / 255
+//   else: direct copy of src over dst (same as mask=255)
+//
+// 5-binding layout (buf_img3): input_dst, input_src, input_mask, output, params.
+//   input_dst, input_src, input_mask are storage read.
+//   output is storage read_write.
+//
+// Mode-aware: only paste active channels.
+// Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA, 4=CMYK, 5=I;16*, 6=RGBX,
+// 9=RGBa, 10=La.
+
+struct Params {
+    width: u32,
+    height: u32,
+    mode: u32,
+    paste_flags: u32,
+    src_w: u32,
+    src_h: u32,
+    paste_x: i32,
+    paste_y: i32,
+    has_mask: u32,
+    mask_alpha: u32,
+}
+
+fn mode_has_g(m: u32) -> bool { return m >= 2u && m != 10u; }
+fn mode_has_b(m: u32) -> bool { return m >= 2u && m != 10u; }
+fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u || m == 4u || m == 6u || m == 7u || m == 8u || m == 9u || m == 10u; }
+
+@group(0) @binding(0) var<storage, read> input_dst: array<u32>;
+@group(0) @binding(1) var<storage, read> input_src: array<u32>;
+@group(0) @binding(2) var<storage, read> input_mask: array<u32>;
+@group(0) @binding(3) var<storage, read_write> output: array<u32>;
+@group(0) @binding(4) var<uniform> params: Params;
+
+fn div255(value: u32) -> u32 {
+    return ((value >> 8u) + value) >> 8u;
+}
+
+fn blend_channel(src: u32, dst: u32, mask: u32, premultiplied: bool) -> u32 {
+    if premultiplied {
+        // Pillow's RGBa mask path uses PREBLEND and narrows the sum to a byte.
+        return (div255(dst * (255u - mask) + 128u) + src) & 0xffu;
+    }
+    // Pillow's BLEND macro rounds the weighted byte sum to nearest.
+    return (src * mask + dst * (255u - mask) + 127u) / 255u;
+}
+
+fn blend_pixel(src: u32, dst: u32, mask: u32, mode: u32, flags: u32) -> u32 {
+    let premultiplied_mask = (flags & 1u) != 0u;
+    if mode == 5u {
+        if (flags & 4u) != 0u {
+            return select(dst, src, mask != 0u);
+        }
+        let source = src & 0xffffu;
+        let destination = dst & 0xffffu;
+        return (source * mask + destination * (255u - mask) + 127u) / 255u;
+    }
+    let sr = src & 0xffu;
+    let sg = (src >> 8u) & 0xffu;
+    let sb = (src >> 16u) & 0xffu;
+    let sa = (src >> 24u) & 0xffu;
+
+    let dr = dst & 0xffu;
+    let dg = (dst >> 8u) & 0xffu;
+    let db = (dst >> 16u) & 0xffu;
+    let da = (dst >> 24u) & 0xffu;
+
+    let out_r = blend_channel(sr, dr, mask, premultiplied_mask);
+    let out_g = select(dg, blend_channel(sg, dg, mask, premultiplied_mask), mode_has_g(mode));
+    let out_b = select(db, blend_channel(sb, db, mask, premultiplied_mask), mode_has_b(mode));
+    let out_a = select(da, blend_channel(sa, da, mask, premultiplied_mask), mode_has_a(mode));
+
+    return out_r | (out_g << 8u) | (out_b << 16u) | (out_a << 24u);
+}
+
+fn blend_luma16_masked_bytes(
+    dst: u32,
+    source_y: u32,
+    destination_x: u32,
+    params: Params,
+) -> u32 {
+    let paste_x = params.paste_x;
+    var destination_left = 0u;
+    var source_left = 0u;
+    if paste_x >= 0i {
+        destination_left = min(u32(paste_x), params.width);
+    } else {
+        source_left = min(0u - bitcast<u32>(paste_x), params.src_w);
+    }
+    let copy_width = min(params.src_w - source_left, params.width - destination_left);
+    if copy_width == 0u {
+        return dst;
+    }
+
+    let first_byte_shift = select(0u, 8u, (params.paste_flags & 2u) != 0u);
+    let premultiplied_mask = (params.paste_flags & 1u) != 0u;
+    var result = dst;
+    for (var lane = 0u; lane < 2u; lane++) {
+        let destination_byte_offset = destination_x * 2u + lane;
+        if destination_byte_offset < destination_left
+            || destination_byte_offset >= destination_left + copy_width {
+            continue;
+        }
+        let iteration = destination_byte_offset - destination_left;
+        let source_byte_offset = source_left + iteration;
+        let source_x = source_byte_offset / 2u;
+        let source_word = input_src[source_y * params.src_w + source_x];
+        let source_shift = select(
+            8u - first_byte_shift,
+            first_byte_shift,
+            source_byte_offset % 2u == 0u,
+        );
+        let destination_shift = select(
+            8u - first_byte_shift,
+            first_byte_shift,
+            destination_byte_offset % 2u == 0u,
+        );
+        let mask_pixel = input_mask[source_y * params.src_w + source_byte_offset];
+        let mask_value = select(
+            mask_pixel & 0xffu,
+            (mask_pixel >> 24u) & 0xffu,
+            params.mask_alpha != 0u,
+        );
+        let source_byte = (source_word >> source_shift) & 0xffu;
+        let destination_byte = (result >> destination_shift) & 0xffu;
+        let blended = blend_channel(source_byte, destination_byte, mask_value, premultiplied_mask);
+        let byte_mask = 0xffu << destination_shift;
+        result = (result & ~byte_mask) | (blended << destination_shift);
+    }
+    return result;
+}
+
+@compute @workgroup_size(16, 16)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+    if gid.x >= params.width || gid.y >= params.height { return; }
+
+    let dst_idx = gid.y * params.width + gid.x;
+    let dst_pixel = input_dst[dst_idx];
+
+    // Compute corresponding source pixel coordinates without signed
+    // subtraction. A public paste offset may be i32::MIN, for which
+    // `gid - paste_x` would overflow before the overlap check.
+    var inside_x = true;
+    var inside_y = true;
+    var sx: u32 = 0u;
+    var sy: u32 = 0u;
+    if params.paste_x >= 0i {
+        let paste_x = u32(params.paste_x);
+        if gid.x < paste_x {
+            inside_x = false;
+        } else {
+            sx = gid.x - paste_x;
+        }
+    } else {
+        let distance_x = 0u - bitcast<u32>(params.paste_x);
+        if distance_x > 0xffffffffu - gid.x {
+            inside_x = false;
+        } else {
+            sx = gid.x + distance_x;
+        }
+    }
+    if params.paste_y >= 0i {
+        let paste_y = u32(params.paste_y);
+        if gid.y < paste_y {
+            inside_y = false;
+        } else {
+            sy = gid.y - paste_y;
+        }
+    } else {
+        let distance_y = 0u - bitcast<u32>(params.paste_y);
+        if distance_y > 0xffffffffu - gid.y {
+            inside_y = false;
+        } else {
+            sy = gid.y + distance_y;
+        }
+    }
+
+    // Pillow's 8-bit masks advance the I;16 image row by one byte per image
+    // pixel. That legacy stride can touch an adjacent sample, so handle it
+    // before the ordinary horizontal overlap test.
+    if params.mode == 5u
+        && params.has_mask == 1u
+        && (params.paste_flags & 4u) == 0u
+        && inside_y
+        && sy < params.src_h {
+        output[dst_idx] = blend_luma16_masked_bytes(dst_pixel, sy, gid.x, params);
+        return;
+    }
+
+    // Check if this destination pixel overlaps the source rectangle
+    if inside_x && inside_y && sx < params.src_w && sy < params.src_h {
+        let src_idx = sy * params.src_w + sx;
+        let src_pixel = input_src[src_idx];
+
+        var mask_val: u32 = 255u;
+        if params.has_mask == 1u {
+            let mask_pixel = input_mask[src_idx];
+            mask_val = select(
+                mask_pixel & 0xffu,
+                (mask_pixel >> 24u) & 0xffu,
+                params.mask_alpha != 0u,
+            );
+        }
+
+        output[dst_idx] = blend_pixel(src_pixel, dst_pixel, mask_val, params.mode, params.paste_flags);
+    } else {
+        // Outside paste region: pass destination through unchanged
+        output[dst_idx] = dst_pixel;
+    }
+}

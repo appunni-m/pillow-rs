@@ -1,12 +1,13 @@
 //! SIMD orchestration for adjacent native `PutPixel` operations.
 
 use super::ops::adapters;
-use crate::compute::PipelineResourceTelemetry;
+use crate::compute::{ExecutionContext, PipelineResourceTelemetry};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::DynamicImage;
 
 pub(super) fn try_execute(
+    context: &ExecutionContext,
     input: &DynamicImage,
     ops: &[PipelineOp],
     index: usize,
@@ -20,7 +21,13 @@ pub(super) fn try_execute(
     let putpixel_ops = &ops[index..end];
 
     if let Some(thumbnail_op @ PipelineOp::Thumbnail { .. }) = ops.get(end)
-        && let Some(next) = try_putpixel_thumbnail(input, putpixel_ops, thumbnail_op, mode)?
+        && let Some(next) = try_putpixel_thumbnail(
+            context,
+            input,
+            putpixel_ops,
+            thumbnail_op,
+            mode,
+        )?
     {
         crate::compute::account_host_buffer_boundary(resources, input, &next);
         resources.fused_operation_count = resources
@@ -30,7 +37,7 @@ pub(super) fn try_execute(
         return Ok(Some((next, next_mode, end + 1)));
     }
 
-    if let Some(next) = try_putpixel_run(input, putpixel_ops, mode)? {
+    if let Some(next) = try_putpixel_run(context, input, putpixel_ops, mode)? {
         crate::compute::account_host_buffer_boundary(resources, input, &next);
         resources.fused_operation_count = resources
             .fused_operation_count
@@ -44,6 +51,7 @@ pub(super) fn try_execute(
 }
 
 fn try_putpixel_thumbnail(
+    context: &ExecutionContext,
     input: &DynamicImage,
     putpixel_ops: &[PipelineOp],
     thumbnail_op: &PipelineOp,
@@ -51,9 +59,9 @@ fn try_putpixel_thumbnail(
 ) -> Result<Option<DynamicImage>, PilError> {
     let prefix_supported = putpixel_ops
         .iter()
-        .all(|op| adapters::simd_supports_for_image(input, op, mode));
+        .all(|op| adapters::simd_supports_for_image_in_context(context, input, op, mode));
     if !prefix_supported
-        || !adapters::simd_supports_for_image(input, thumbnail_op, mode)
+        || !adapters::simd_supports_for_image_in_context(context, input, thumbnail_op, mode)
         || !adapters::simd_rgb_putpixel_thumbnail_fusion_supported(
             input,
             putpixel_ops,
@@ -92,6 +100,7 @@ fn try_putpixel_thumbnail(
 }
 
 fn try_putpixel_run(
+    context: &ExecutionContext,
     input: &DynamicImage,
     putpixel_ops: &[PipelineOp],
     mode: Option<&str>,
@@ -99,7 +108,9 @@ fn try_putpixel_run(
     if putpixel_ops.len() <= 1
         || !putpixel_ops
             .iter()
-            .all(|op| super::ops::adapters::simd_supports_for_image(input, op, mode))
+            .all(|op| {
+                super::ops::adapters::simd_supports_for_image_in_context(context, input, op, mode)
+            })
         || !super::ops::adapters::simd_rgba_putpixel_batch_supported(input, putpixel_ops, mode)
     {
         return Ok(None);

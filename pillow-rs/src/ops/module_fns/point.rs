@@ -221,15 +221,38 @@ where
 ///
 /// # Errors
 ///
-/// Returns an image/materialization error when the band count cannot be read,
-/// or [`PilError::ValueError`] when the table length does not equal
-/// `256 * image_band_count`.
+/// Returns [`PilError::ValueError`] when the mode has no byte-LUT strategy or
+/// the table length does not equal `256 * mode_band_count`.
 pub fn eval_validated(image: &Image, lut: &[u8]) -> Result<Image, PilError> {
-    let mode = image.mode()?;
-    if matches!(
-        mode.as_str(),
-        "I" | "I;16" | "I;16L" | "I;16B" | "I;16N" | "F"
-    ) {
+    let mode = image.mode_selector()?;
+    let n_bands = match mode {
+        crate::image::Mode::One
+        | crate::image::Mode::ImageLuma8
+        | crate::image::Mode::ImagePalette8 => 1,
+        crate::image::Mode::ImageLumaA8
+        | crate::image::Mode::ImageLaPremultiplied8
+        | crate::image::Mode::ImagePaletteAlpha8 => 2,
+        crate::image::Mode::ImageRgb8
+        | crate::image::Mode::ImageYCbCr8
+        | crate::image::Mode::ImageLab8
+        | crate::image::Mode::ImageHsv8 => 3,
+        crate::image::Mode::ImageRgba8
+        | crate::image::Mode::ImageRgbPremultiplied8
+        | crate::image::Mode::ImageRgbx8
+        | crate::image::Mode::ImageCmyk8 => 4,
+        crate::image::Mode::ImageI32
+        | crate::image::Mode::ImageF32
+        | crate::image::Mode::ImageI16
+        | crate::image::Mode::ImageI16L
+        | crate::image::Mode::ImageI16B
+        | crate::image::Mode::ImageI16N
+        | crate::image::Mode::ImageLumaA16
+        | crate::image::Mode::ImageRgb16
+        | crate::image::Mode::ImageRgba16
+        | crate::image::Mode::ImageRgb32F
+        | crate::image::Mode::ImageRgba32F => 0,
+    };
+    if n_bands == 0 {
         // Pillow routes callable transforms for scalar images through the
         // affine path, but rejects a byte LUT before entering the Imaging
         // point kernel. Keep that public error boundary here so a scalar
@@ -238,7 +261,6 @@ pub fn eval_validated(image: &Image, lut: &[u8]) -> Result<Image, PilError> {
             "point operation not supported for this mode".to_owned(),
         ));
     }
-    let n_bands = image.getbands()?.len();
     let expected = 256 * n_bands;
     if lut.len() != expected {
         return Err(PilError::ValueError("wrong number of lut entries".into()));

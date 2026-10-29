@@ -537,6 +537,7 @@ pub(crate) fn simd_transpose_interleaved_rows(
 
 #[inline]
 pub(crate) fn simd_blur_transpose_rows(
+    context: &crate::compute::ExecutionContext,
     source: &[u8],
     destination: &mut [u8],
     width: usize,
@@ -559,6 +560,7 @@ pub(crate) fn simd_blur_transpose_rows(
         if use_gaussian_rgba_kernel && channels == 4 {
             let started = crate::compute::pipeline_phase_timestamp();
             if let Some((blocks, tail)) = transpose::rgba_avx2(
+                context,
                 source,
                 destination,
                 width,

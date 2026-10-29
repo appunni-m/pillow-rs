@@ -9,6 +9,7 @@ use super::vertical_passes::{
     vertical_pass_rows, vertical_pass_rows_alpha, vertical_pass_rows_sparse_rgb,
 };
 use super::*;
+use crate::compute::{Backend, ExecutionContext};
 use crate::pipeline::ResampleFilter;
 use crate::raster::DynamicImage;
 
@@ -49,6 +50,7 @@ fn f_boxed_nearest_axis_maps_identity(
 /// while each separable accumulation follows Pillow's f64-kernel/f32-store
 /// order.
 fn pil_resize_f_boxed(
+    context: &ExecutionContext,
     img: &DynamicImage,
     dst_w: u32,
     dst_h: u32,
@@ -59,11 +61,13 @@ fn pil_resize_f_boxed(
     filter: ResampleFilter,
 ) -> DynamicImage {
     #[cfg(target_arch = "x86_64")]
-    if let Some(fma) = X86FmaToken::detect() {
+    if let Some(fma) = X86FmaToken::from_context(context) {
         return pil_resize_f_boxed_with_fma::<_, true>(
             img, dst_w, dst_h, box_left, box_top, box_right, box_bottom, filter, &fma,
         );
     }
+    #[cfg(not(target_arch = "x86_64"))]
+    let _ = context;
     pil_resize_f_boxed_with_fma::<_, true>(
         img,
         dst_w,
@@ -262,7 +266,34 @@ pub fn pil_resize_boxed(
     filter: ResampleFilter,
     explicit_mode: Option<&str>,
 ) -> DynamicImage {
+    pil_resize_boxed_in_context(
+        &ExecutionContext::for_backend(Backend::Cpu),
+        img,
+        dst_w,
+        dst_h,
+        box_left,
+        box_top,
+        box_right,
+        box_bottom,
+        filter,
+        explicit_mode,
+    )
+}
+
+pub(crate) fn pil_resize_boxed_in_context(
+    context: &ExecutionContext,
+    img: &DynamicImage,
+    dst_w: u32,
+    dst_h: u32,
+    box_left: f64,
+    box_top: f64,
+    box_right: f64,
+    box_bottom: f64,
+    filter: ResampleFilter,
+    explicit_mode: Option<&str>,
+) -> DynamicImage {
     pil_resize_boxed_with_hints(
+        context,
         img,
         dst_w,
         dst_h,
@@ -293,6 +324,7 @@ pub(crate) fn pil_resize_boxed_with_sparse_rgb_rows(
     nonzero_source_rows: &[bool],
 ) -> DynamicImage {
     pil_resize_boxed_with_hints(
+        &ExecutionContext::for_backend(Backend::Cpu),
         img,
         dst_w,
         dst_h,
@@ -309,6 +341,7 @@ pub(crate) fn pil_resize_boxed_with_sparse_rgb_rows(
 
 #[inline(always)]
 fn pil_resize_boxed_early_paths(
+    context: &ExecutionContext,
     img: &DynamicImage,
     dst_w: u32,
     dst_h: u32,
@@ -387,7 +420,7 @@ fn pil_resize_boxed_early_paths(
     if explicit_mode == Some("F") && matches!(img, DynamicImage::ImageRgba8(_)) {
         return (
             Some(pil_resize_f_boxed(
-                img, dst_w, dst_h, box_left, box_top, box_right, box_bottom, filter,
+                context, img, dst_w, dst_h, box_left, box_top, box_right, box_bottom, filter,
             )),
             needs_alpha,
         );
@@ -618,6 +651,7 @@ fn pil_resize_boxed_vertical_pass(
 }
 
 fn pil_resize_boxed_with_hints(
+    context: &ExecutionContext,
     img: &DynamicImage,
     dst_w: u32,
     dst_h: u32,
@@ -631,6 +665,7 @@ fn pil_resize_boxed_with_hints(
     sparse_rgb_nonzero_rows: Option<&[bool]>,
 ) -> DynamicImage {
     let (early_output, needs_alpha) = pil_resize_boxed_early_paths(
+        context,
         img,
         dst_w,
         dst_h,

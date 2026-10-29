@@ -143,24 +143,43 @@ impl Image {
         };
         let operation = PipelineOp::Grayscale;
         let grayscale = match backend {
-            crate::compute::Backend::Cpu => crate::compute::execute_eager_cpu_image_operation(
-                "Grayscale",
-                image.as_ref(),
-                false,
-                || crate::compute::registry::execute_cpu(&operation, image.as_ref(), Some("RGB")),
-            )?,
-            crate::compute::Backend::Simd => crate::compute::execute_eager_simd_image_operation(
-                "Grayscale",
-                image.as_ref(),
-                || {
-                    crate::compute::simd_grayscale_with_evidence(
-                        image.as_ref(),
-                        &operation,
-                        Some("RGB"),
-                    )
-                },
-            )?,
+            crate::compute::Backend::Cpu => {
+                let context =
+                    crate::compute::ExecutionContext::for_backend(crate::compute::Backend::Cpu);
+                crate::compute::execute_eager_cpu_image_operation(
+                    &context,
+                    "Grayscale",
+                    image.as_ref(),
+                    false,
+                    || {
+                        crate::compute::registry::execute_cpu_in_context(
+                            &context,
+                            &operation,
+                            image.as_ref(),
+                            Some("RGB"),
+                        )
+                    },
+                )?
+            }
+            crate::compute::Backend::Simd => {
+                let context =
+                    crate::compute::ExecutionContext::for_backend(crate::compute::Backend::Simd);
+                crate::compute::execute_eager_simd_image_operation(
+                    &context,
+                    "Grayscale",
+                    image.as_ref(),
+                    || {
+                        crate::compute::simd_grayscale_with_evidence_in_context(
+                            &context,
+                            image.as_ref(),
+                            &operation,
+                            Some("RGB"),
+                        )
+                    },
+                )?
+            }
             crate::compute::Backend::Gpu => return Ok(None),
+            crate::compute::Backend::ParallelCpu => return Ok(None),
         };
 
         let mut result = Image::from_dynamic(grayscale, None);

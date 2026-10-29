@@ -193,7 +193,7 @@ pub(crate) fn execute_prepared_gpu_cmyk_projection_terminal(
     input: &DynamicImage,
     source_is_known_zero: bool,
 ) -> Result<(Vec<u32>, Vec<u32>), PilError> {
-    if prepared.selected_backend != Backend::Gpu || prepared.fallback_reason.is_some() {
+    if prepared.context.backend() != Backend::Gpu || prepared.fallback_reason.is_some() {
         return Err(PilError::InternalError(
             "GPU projection terminal was called without an admitted GPU route".into(),
         ));
@@ -255,7 +255,7 @@ pub(crate) fn execute_prepared_gpu_rgb_projection_terminal(
     input: &DynamicImage,
     source_is_known_zero: bool,
 ) -> Result<(Vec<u32>, Vec<u32>), PilError> {
-    if prepared.selected_backend != Backend::Gpu || prepared.fallback_reason.is_some() {
+    if prepared.context.backend() != Backend::Gpu || prepared.fallback_reason.is_some() {
         return Err(PilError::InternalError(
             "GPU projection terminal was called without an admitted GPU route".into(),
         ));

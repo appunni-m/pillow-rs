@@ -9,7 +9,7 @@ use crate::pipeline::{PipelineOp, ResampleFilter, TransformMethod};
 use crate::raster::DynamicImage;
 
 use super::{
-    Image, ImageMode, LoadedData, PalettedData, PipelinePrefixCache, expand_palette,
+    Image, ImageMode, LoadedData, Mode, PalettedData, PipelinePrefixCache, expand_palette,
     expand_palette_alpha, image_mode_name, materialization_cache, padded_palette,
     take_cached_materialization, validate_scalar_storage,
 };
@@ -20,10 +20,10 @@ fn image_from_materialized(
     info: Option<ImageInfo>,
     exif: Option<Vec<u8>>,
 ) -> Result<Image, PilError> {
-    let mode = info
+    let decoded_mode = info
         .as_ref()
         .map_or_else(|| image.color().into(), |info| info.mode);
-    if mode == ImageMode::P8 {
+    if decoded_mode == ImageMode::P8 {
         let palette = info
             .as_ref()
             .and_then(|info| info.palette.clone())
@@ -40,17 +40,19 @@ fn image_from_materialized(
             materialized: materialization_cache(),
         }));
     }
-    let explicit_mode = match mode {
+    let explicit_mode = match decoded_mode {
         ImageMode::L1 | ImageMode::Cmyk8 | ImageMode::F32 | ImageMode::I32 => {
-            Some(image_mode_name(mode).to_owned())
+            Some(image_mode_name(decoded_mode).to_owned())
         }
         _ => None,
     };
+    let mode = super::Mode::for_image(&image, explicit_mode.as_deref());
     Ok(Image::Loaded(LoadedData {
         image,
+        mode,
         known_zero_fill: false,
         explicit_mode,
-        decoded_mode: mode,
+        decoded_mode,
         palette: None,
         palette_alpha: None,
         source_format,
@@ -113,6 +115,58 @@ fn decoded_to_dynamic(decoded: &Decoded<DecodedImage>) -> Result<DynamicImage, P
         mode => DynamicImage::from_decoded(content)
             .ok_or_else(|| PilError::ValueError(format!("unsupported decoded mode {mode:?}"))),
     }
+}
+
+fn retained_palette(
+    source: &Image,
+    palette: &Option<Vec<u8>>,
+    palette_alpha: &Option<Vec<u8>>,
+) -> (Vec<u8>, Vec<u8>) {
+    (
+        palette.clone().or_else(|| source.extract_palette()).unwrap_or_default(),
+        palette_alpha
+            .clone()
+            .or_else(|| source.palette_alpha())
+            .unwrap_or_default(),
+    )
+}
+
+fn expanded_palette_mode(image: &DynamicImage) -> Result<&'static str, PilError> {
+    match image {
+        DynamicImage::ImageRgb8(_) => Ok("RGB"),
+        DynamicImage::ImageRgba8(_) => Ok("RGBA"),
+        _ => Err(PilError::InternalError(
+            "palette expansion did not produce RGB or RGBA samples".to_owned(),
+        )),
+    }
+}
+
+fn palette_conversion_ignores_alpha(ops: &[PipelineOp]) -> bool {
+    matches!(
+        ops.first(),
+        Some(PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. })
+    )
+}
+
+fn palette_native_prefix_len(source: &Image, mode: Mode, ops: &[PipelineOp]) -> (usize, bool) {
+    if mode != Mode::ImagePalette8 {
+        return (0, true);
+    }
+    let mut prefix_len = 0;
+    let mut current_mode = "P".to_owned();
+    for op in ops {
+        if !Image::is_palette_safe_op_for_source(source, op) {
+            break;
+        }
+        let next_mode = super::known_pipeline_op_mode(op, &current_mode)
+            .unwrap_or_else(|| current_mode.clone());
+        if next_mode != "P" {
+            return (prefix_len, false);
+        }
+        current_mode = next_mode;
+        prefix_len += 1;
+    }
+    (prefix_len, true)
 }
 
 impl Image {
@@ -282,6 +336,17 @@ impl Image {
     /// accepted.
     pub(super) fn is_palette_safe_op_for_source(source: &Image, op: &PipelineOp) -> bool {
         Self::is_palette_safe_op(op)
+            // NO_PILLOW_SUPPORT: Pillow ImageOps._lut rejects P; CPU
+            // Autocontrast, Invert, Posterize, and Solarize operate on native
+            // indices and keep the source palette attached.
+            || (source.explicit_mode() == Some("P")
+                && matches!(
+                    op,
+                    PipelineOp::Autocontrast { .. }
+                        | PipelineOp::Invert
+                        | PipelineOp::Posterize { .. }
+                        | PipelineOp::Solarize { .. }
+                ))
             // PA.putpixel writes the native index/alpha sample pair. The
             // operation does not depend on the RGB palette, but a later
             // conversion does, so keep the palette attached to the lazy
@@ -399,10 +464,13 @@ impl Image {
             }
             Image::Pipeline { .. } => {
                 let image = self.materialized_shared()?;
+                let explicit_mode = self.explicit_mode().map(str::to_owned);
+                let mode = super::Mode::for_image(&image, explicit_mode.as_deref());
                 Ok(Image::Loaded(LoadedData {
                     decoded_mode: image.color().into(),
+                    mode,
                     known_zero_fill: false,
-                    explicit_mode: self.explicit_mode().map(str::to_owned),
+                    explicit_mode,
                     palette: self.palette(),
                     palette_alpha: self.palette_alpha(),
                     source_format: None,
@@ -565,62 +633,14 @@ impl Image {
         palette_alpha: &Option<Vec<u8>>,
     ) -> Result<Arc<DynamicImage>, PilError> {
         if source.has_palette_samples() {
-            let all_safe = ops
-                .iter()
-                .all(|op| Self::is_palette_safe_op_for_source(source, op));
-            if all_safe {
-                let palette_mode = if explicit_mode.as_deref() == Some("PA")
-                    || source.explicit_mode() == Some("PA")
-                {
-                    "PA"
-                } else {
-                    "P"
-                };
-                let result =
-                    crate::compute::execute_prepared(prepared, ops, img, Some(palette_mode))?;
-                return Ok(Arc::new(result));
-            }
-
-            let palette_mode = if source.explicit_mode() == Some("PA") {
-                "PA"
-            } else {
-                "P"
-            };
-
-            // PA always expands through a palette before color-dependent
-            // operations, even when no palette is attached. Pillow's
-            // libImaging/Convert.c indexed path treats an empty PA palette
-            // as all black; falling through to the raw LA bytes would
-            // incorrectly expose the index as grayscale (for example, index
-            // 7 would become RGB(7, 7, 7)).
-            let palette = palette.clone().or_else(|| source.extract_palette());
-            if palette_mode == "PA" {
-                let expanded = expand_palette_alpha(
-                    &img.to_luma_alpha8(),
-                    palette.as_deref().unwrap_or_default(),
-                );
-                let result = crate::compute::execute_prepared(
-                    prepared,
-                    ops,
-                    &expanded,
-                    explicit_mode.as_deref(),
-                )?;
-                return Ok(Arc::new(result));
-            }
-            if let Some(palette) = palette {
-                let palette_alpha = palette_alpha
-                    .clone()
-                    .or_else(|| source.palette_alpha())
-                    .unwrap_or_default();
-                let expanded = expand_palette(&img.to_luma8(), &palette, &palette_alpha);
-                let result = crate::compute::execute_prepared(
-                    prepared,
-                    ops,
-                    &expanded,
-                    explicit_mode.as_deref(),
-                )?;
-                return Ok(Arc::new(result));
-            }
+            return Self::evaluate_palette_pipeline(
+                source,
+                img,
+                ops,
+                prepared,
+                palette,
+                palette_alpha,
+            );
         }
 
         // RemapPalette's kernel needs the source mode to distinguish L samples
@@ -686,6 +706,151 @@ impl Image {
         // tag and supplies opaque alpha while gathering; do not normalize the
         // whole frame here just to rewrite the padding byte.
         crate::compute::execute_prepared_shared(prepared, ops, shared_img, execution_mode)
+    }
+
+    fn evaluate_palette_pipeline(
+        source: &Image,
+        img: &Arc<DynamicImage>,
+        ops: &[PipelineOp],
+        prepared: &crate::compute::PreparedExecution,
+        palette: &Option<Vec<u8>>,
+        palette_alpha: &Option<Vec<u8>>,
+    ) -> Result<Arc<DynamicImage>, PilError> {
+        let (palette_mode, palette_mode_name) = match source.mode_selector()? {
+            Mode::ImagePalette8 => (Mode::ImagePalette8, "P"),
+            Mode::ImagePaletteAlpha8 => (Mode::ImagePaletteAlpha8, "PA"),
+            mode => {
+                return Err(PilError::InternalError(format!(
+                    "palette samples carry incompatible mode {mode:?}"
+                )));
+            }
+        };
+        if ops
+            .iter()
+            .all(|op| Self::is_palette_safe_op_for_source(source, op))
+        {
+            return crate::compute::execute_prepared_shared(
+                prepared,
+                ops,
+                img,
+                Some(palette_mode_name),
+            );
+        }
+
+        let (prefix_len, prefix_keeps_p_mode) =
+            palette_native_prefix_len(source, palette_mode, ops);
+        if !prefix_keeps_p_mode {
+            // TODO(pillow-rs#3ptb): Route manually constructed flattened
+            // pipelines with P->PA/L transitions through an intermediate
+            // typed mode node. Image::push_op already creates that boundary.
+        } else if prefix_len > 0 && prefix_len < ops.len() {
+            return Self::execute_palette_prefix_and_color_suffix(
+                source,
+                img,
+                prepared,
+                ops,
+                prefix_len,
+                palette,
+                palette_alpha,
+            );
+        }
+
+        Self::execute_palette_pipeline_after_expansion(
+            source,
+            img,
+            ops,
+            prepared,
+            palette_mode,
+            palette,
+            palette_alpha,
+        )
+    }
+
+    fn execute_palette_prefix_and_color_suffix(
+        source: &Image,
+        img: &Arc<DynamicImage>,
+        prepared: &crate::compute::PreparedExecution,
+        ops: &[PipelineOp],
+        prefix_len: usize,
+        palette: &Option<Vec<u8>>,
+        palette_alpha: &Option<Vec<u8>>,
+    ) -> Result<Arc<DynamicImage>, PilError> {
+        // TODO(pillow-rs#3ptb): Aggregate telemetry across the indexed
+        // prefix and the color suffix instead of retaining only the last
+        // executor receipt.
+        let (indexed_prefix, suffix_ops) = ops.split_at(prefix_len);
+        let indexed = crate::compute::execute_prepared_shared(
+            prepared,
+            indexed_prefix,
+            img,
+            Some("P"),
+        )?;
+        let DynamicImage::ImageLuma8(indices) = indexed.as_ref() else {
+            return Err(PilError::InternalError(
+                "P-mode prefix did not produce native index samples".to_owned(),
+            ));
+        };
+        let (palette, palette_alpha) = retained_palette(source, palette, palette_alpha);
+        let expansion_alpha = if palette_conversion_ignores_alpha(suffix_ops) {
+            &[]
+        } else {
+            &palette_alpha
+        };
+        let expanded = expand_palette(indices, &palette, expansion_alpha);
+        let expanded_mode = expanded_palette_mode(&expanded)?;
+        crate::compute::execute_prepared_shared(
+            prepared,
+            suffix_ops,
+            &Arc::new(expanded),
+            Some(expanded_mode),
+        )
+    }
+
+    fn execute_palette_pipeline_after_expansion(
+        source: &Image,
+        img: &Arc<DynamicImage>,
+        ops: &[PipelineOp],
+        prepared: &crate::compute::PreparedExecution,
+        palette_mode: Mode,
+        palette: &Option<Vec<u8>>,
+        palette_alpha: &Option<Vec<u8>>,
+    ) -> Result<Arc<DynamicImage>, PilError> {
+        let (palette, palette_alpha) = retained_palette(source, palette, palette_alpha);
+        let expanded = match palette_mode {
+            Mode::ImagePaletteAlpha8 => {
+                let DynamicImage::ImageLumaA8(indices_alpha) = img.as_ref() else {
+                    return Err(PilError::InternalError(
+                        "PA image did not contain native index-alpha samples".to_owned(),
+                    ));
+                };
+                expand_palette_alpha(indices_alpha, &palette)
+            }
+            Mode::ImagePalette8 => {
+                let DynamicImage::ImageLuma8(indices) = img.as_ref() else {
+                    return Err(PilError::InternalError(
+                        "P image did not contain native index samples".to_owned(),
+                    ));
+                };
+                let expansion_alpha = if palette_conversion_ignores_alpha(ops) {
+                    &[]
+                } else {
+                    &palette_alpha
+                };
+                expand_palette(indices, &palette, expansion_alpha)
+            }
+            _ => {
+                return Err(PilError::InternalError(
+                    "palette materialization lost its indexed mode".to_owned(),
+                ));
+            }
+        };
+        let expanded_mode = expanded_palette_mode(&expanded)?;
+        crate::compute::execute_prepared_shared(
+            prepared,
+            ops,
+            &Arc::new(expanded),
+            Some(expanded_mode),
+        )
     }
 
     fn materialize_uncached(&self) -> Result<DynamicImage, PilError> {

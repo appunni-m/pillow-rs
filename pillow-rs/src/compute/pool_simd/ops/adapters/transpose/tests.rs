@@ -2,6 +2,7 @@
 
 use super::TransposeMethod;
 use super::native_transpose_bytes;
+use crate::compute::{Backend, ExecutionContext};
 #[cfg(feature = "parallel")]
 use super::{
     TransposeNativeCollectCounters, TransposeNativeRowCache, transpose_native_collect_admitted,
@@ -40,7 +41,9 @@ fn assert_native_transpose_method(
         (width, height)
     };
     let expected = expected_transpose_bytes(source, width, height, channels, &method);
+    let context = ExecutionContext::for_backend(Backend::Simd);
     let (actual, actual_width, actual_height, blocks, tail, kernel_path) = native_transpose_bytes(
+        &context,
         source,
         width as u32,
         height as u32,
@@ -200,10 +203,24 @@ fn transpose_native_tiles_preserve_float_payload_bits() {
         .flat_map(|index| patterns[index % patterns.len()].to_ne_bytes())
         .collect();
     let (transposed, width, height, _, _, _) =
-        native_transpose_bytes(&source, 7, 5, 4, TransposeMethod::Transpose)
+        native_transpose_bytes(
+            &ExecutionContext::for_backend(Backend::Simd),
+            &source,
+            7,
+            5,
+            4,
+            TransposeMethod::Transpose,
+        )
             .expect("packed F transpose");
     let (restored, _, _, _, _, _) =
-        native_transpose_bytes(&transposed, width, height, 4, TransposeMethod::Transpose)
+        native_transpose_bytes(
+            &ExecutionContext::for_backend(Backend::Simd),
+            &transposed,
+            width,
+            height,
+            4,
+            TransposeMethod::Transpose,
+        )
             .expect("inverse packed F transpose");
     assert_eq!(restored, source);
 }

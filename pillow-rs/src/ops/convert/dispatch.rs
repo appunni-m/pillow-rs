@@ -1,6 +1,6 @@
 use crate::color;
 use crate::error::PilError;
-use crate::image::Image;
+use crate::image::{Image, Mode};
 use crate::pipeline::{ColorMode, PipelineOp};
 use crate::raster::DynamicImage;
 
@@ -19,10 +19,10 @@ pub(super) fn try_convert_early_modes(
         // destinations. Reuse the native LA/RGBA converters and carry the
         // Pillow mode tag on the lazy result so SIMD and GPU can execute the
         // pixel work instead of materializing through the eager mode adapter.
-        let (pipeline_mode, explicit_mode) = match target_mode {
-            "La" => (ColorMode::LA, "La"),
-            "RGBX" => (ColorMode::RGBA, "RGBX"),
-            "RGBa" => (ColorMode::RGBA, "RGBa"),
+        let (pipeline_mode, explicit_mode, mode_selector) = match target_mode {
+            "La" => (ColorMode::LA, "La", Mode::ImageLaPremultiplied8),
+            "RGBX" => (ColorMode::RGBA, "RGBX", Mode::ImageRgbx8),
+            "RGBa" => (ColorMode::RGBA, "RGBa", Mode::ImageRgbPremultiplied8),
             _ => unreachable!(),
         };
         let mut result = Image::push_op(
@@ -34,11 +34,13 @@ pub(super) fn try_convert_early_modes(
             },
         );
         if let Image::Pipeline {
-            explicit_mode: mode,
+            explicit_mode: output_mode,
+            mode_selector: output_selector,
             ..
         } = &mut result
         {
-            *mode = Some(explicit_mode.to_owned());
+            *output_mode = Some(explicit_mode.to_owned());
+            *output_selector = Some(mode_selector);
         }
         return Ok(Some(result));
     }
@@ -73,8 +75,14 @@ pub(super) fn try_convert_early_modes(
                 dither: None,
             },
         );
-        if let Image::Pipeline { explicit_mode, .. } = &mut result {
+        if let Image::Pipeline {
+            explicit_mode,
+            mode_selector,
+            ..
+        } = &mut result
+        {
             *explicit_mode = Some(target_mode.to_owned());
+            *mode_selector = Mode::from_pillow_name(target_mode);
         }
         return Ok(Some(result));
     }
@@ -123,8 +131,14 @@ fn convert_to_lab(image: &Image, source_mode: &str) -> Result<Image, PilError> {
             icc_profile: crate::lab::pillow_lab_icc_profile().into(),
         },
     );
-    if let Image::Pipeline { explicit_mode, .. } = &mut result {
+    if let Image::Pipeline {
+        explicit_mode,
+        mode_selector,
+        ..
+    } = &mut result
+    {
         *explicit_mode = Some("LAB".to_owned());
+        *mode_selector = Some(Mode::ImageLab8);
     }
     Ok(result)
 }
@@ -258,6 +272,7 @@ fn convert_pa_to_p(image: &Image) -> Result<Image, PilError> {
         image: std::sync::Arc::new(DynamicImage::ImageLuma8(
             image.materialized_shared()?.to_luma8(),
         )),
+        mode: crate::image::Mode::ImagePalette8,
         known_zero_fill: false,
         explicit_mode: Some("P".to_owned()),
         decoded_mode: crate::raster::ColorType::L8.into(),

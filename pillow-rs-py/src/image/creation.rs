@@ -19,6 +19,8 @@ impl PyImage {
         size: (u32, u32),
         color: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
+        // TODO(pillow-rs#3ptb): Parse the Python Pillow mode spelling
+        // into the core-owned Mode enum before calling the typed Rust API.
         let input = match color {
             Some(value) if mode == "RGB" && value.is_exact_instance_of::<PyTuple>() => {
                 match value.extract::<(u8, u8, u8)>() {

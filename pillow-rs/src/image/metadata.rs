@@ -8,9 +8,31 @@ use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, GenericImageView};
 
 use super::{
-    Image, ImageInfoValue, PaletteTransparency, PalettedData, known_pipeline_op_dimensions,
-    known_pipeline_op_mode, materialization_cache,
+    Image, ImageInfoValue, Mode, PaletteTransparency, PalettedData,
+    known_pipeline_op_dimensions, known_pipeline_op_mode, materialization_cache,
 };
+
+fn mode_selector_from_codec(mode: ImageMode) -> Mode {
+    // TODO(pillow-rs#3ptb): Preserve any codec-visible I;16 byte-order
+    // distinction before using this selector for a lazy, not-yet-decoded image.
+    match mode {
+        ImageMode::L1 => Mode::One,
+        ImageMode::P8 => Mode::ImagePalette8,
+        ImageMode::L8 => Mode::ImageLuma8,
+        ImageMode::La8 => Mode::ImageLumaA8,
+        ImageMode::Rgb8 => Mode::ImageRgb8,
+        ImageMode::Rgba8 => Mode::ImageRgba8,
+        ImageMode::Cmyk8 => Mode::ImageCmyk8,
+        ImageMode::L16 => Mode::ImageI16,
+        ImageMode::La16 => Mode::ImageLumaA16,
+        ImageMode::Rgb16 => Mode::ImageRgb16,
+        ImageMode::Rgba16 => Mode::ImageRgba16,
+        ImageMode::Rgb32F => Mode::ImageRgb32F,
+        ImageMode::Rgba32F => Mode::ImageRgba32F,
+        ImageMode::F32 => Mode::ImageF32,
+        ImageMode::I32 => Mode::ImageI32,
+    }
+}
 
 /// Prepared fields for Pillow's lightweight public EXIF compatibility object.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -79,6 +101,83 @@ pub(super) const fn image_mode_name(mode: ImageMode) -> &'static str {
 }
 
 impl Image {
+    pub(crate) fn known_mode_selector(&self) -> Option<Mode> {
+        match self {
+            Image::Paletted(_) => Some(Mode::ImagePalette8),
+            Image::Loaded(data) => Some(data.mode),
+            Image::Bytes {
+                info: Some(info), ..
+            } => Some(mode_selector_from_codec(info.mode)),
+            Image::Pipeline {
+                mode_selector: Some(mode), ..
+            } => Some(*mode),
+            Image::Pipeline {
+                source,
+                ops,
+                explicit_mode,
+                mode_selector: None,
+                ..
+            } => explicit_mode
+                .as_deref()
+                .and_then(Mode::from_pillow_name)
+                .or_else(|| ops.mode_preserving().then(|| source.known_mode_selector()).flatten()),
+            _ => None,
+        }
+    }
+
+    /// Returns the Pillow-owned typed mode selector for this image.
+    ///
+    /// The selector distinguishes logical Pillow modes that share one raster
+    /// storage variant. Internal high-depth identities are included even when
+    /// they have no public Pillow mode spelling.
+    pub fn mode_selector(&self) -> Result<Mode, PilError> {
+        if let Some(mode) = self.known_mode_selector() {
+            return Ok(mode);
+        }
+        match self {
+            Image::Pipeline {
+                explicit_mode: Some(name), ..
+            } => Mode::from_pillow_name(name).ok_or_else(|| {
+                PilError::ValueError(format!("unsupported Pillow mode selector: {name}"))
+            }),
+            Image::Pipeline {
+                source,
+                ops,
+                explicit_mode: None,
+                ..
+            } if ops.mode_preserving() => source.mode_selector(),
+            Image::Pipeline {
+                source,
+                ops,
+                explicit_mode: None,
+                mode,
+                ..
+            } => {
+                let planned = mode.get_or_init(|| {
+                    let mut current = source.mode()?;
+                    for op in ops.iter() {
+                        let Some(next) = known_pipeline_op_mode(op, &current) else {
+                            return Ok(None);
+                        };
+                        current = next;
+                    }
+                    Ok(Some(current))
+                });
+                if let Some(name) = planned.as_ref().map_err(Clone::clone)?
+                    && let Some(mode) = Mode::from_pillow_name(name)
+                {
+                    return Ok(mode);
+                }
+                let image = self.materialized_shared()?;
+                Ok(Mode::for_image(&image, self.explicit_mode()))
+            }
+            _ => {
+                let image = self.materialized_shared()?;
+                Ok(Mode::for_image(&image, self.explicit_mode()))
+            }
+        }
+    }
+
     /// Returns pending Pillow `info["transparency"]` metadata for a P image.
     ///
     /// PNG's compact single-transparent-index form is reported as an integer;
@@ -669,8 +768,9 @@ impl Image {
             Image::Paletted(_) => return Ok("P".to_owned()),
             Image::Loaded(data) => {
                 return Ok(data
-                    .explicit_mode
-                    .clone()
+                    .mode
+                    .pillow_name()
+                    .map(str::to_owned)
                     .unwrap_or_else(|| image_mode_name(data.decoded_mode).to_owned()));
             }
             Image::Bytes {
@@ -720,8 +820,9 @@ impl Image {
         match self {
             Image::Paletted(_) => "P".to_owned(),
             Image::Loaded(data) => data
-                .explicit_mode
-                .clone()
+                .mode
+                .pillow_name()
+                .map(str::to_owned)
                 .unwrap_or_else(|| image_mode_name(data.decoded_mode).to_owned()),
             Image::Bytes {
                 info: Some(info), ..

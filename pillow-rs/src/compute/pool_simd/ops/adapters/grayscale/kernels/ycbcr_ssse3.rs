@@ -1,5 +1,7 @@
 //! x86 SSSE3 implementation of native YCbCr Y-channel extraction.
 
+use crate::compute::{Architecture, ExecutionContext};
+
 /// Gather the first byte from native YCbCr triples using SSSE3 when present.
 ///
 /// The returned counters describe sixteen-pixel vector blocks and scalar-tail
@@ -7,11 +9,19 @@
 /// image dimensions before constructing an image from the output.
 #[cfg(target_arch = "x86_64")]
 #[allow(unsafe_code)]
-pub(super) fn ycbcr_luma_ssse3_bytes(source: &[u8]) -> Option<(Vec<u8>, u64, u64)> {
-    if source.len() % 3 != 0 || !std::is_x86_feature_detected!("ssse3") {
+pub(super) fn ycbcr_luma_ssse3_bytes(
+    context: &ExecutionContext,
+    source: &[u8],
+) -> Option<(Vec<u8>, u64, u64)> {
+    if source.len() % 3 != 0
+        || !matches!(
+            context.architecture(),
+            Architecture::Ssse3 | Architecture::Avx2
+        )
+    {
         return None;
     }
-    // SAFETY: the runtime feature check above proves SSSE3 is available.
+    // SAFETY: the routing context selected SSSE3 after host feature detection.
     Some(unsafe { gather_ycbcr_luma_ssse3(source) })
 }
 

@@ -558,6 +558,9 @@ pub fn op_composite_module(
     mask_alpha: bool,
     explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    // TODO(pillow-rs#3ptb): Declare the mode-pair contract and replace any
+    // non-semantic widening below with a native strategy. Preserve explicit
+    // Pillow operand conversion rules only where the operation requires them.
     // PIL composite: copy image2, then paste image1 onto it with mask at (0,0).
     // The output uses image2's size. Smaller images are pasted into the top-left.
     // Paste.c uses the alpha byte for LA/RGBA/RGBa masks and the luma byte for

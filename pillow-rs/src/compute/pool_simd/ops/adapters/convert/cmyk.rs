@@ -3,6 +3,7 @@
 #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
 use super::super::{native_channel, simd_pack_u16x16};
 use crate::raster::DynamicImage;
+use crate::compute::{Architecture, ExecutionContext};
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 use fearless_simd::prelude::{SimdBase, SimdInterleaved, SimdNarrow, SimdWiden};
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
@@ -10,7 +11,10 @@ use fearless_simd::{Level, Neon, u8x16 as SafeU8x16, u16x8 as SafeU16x8};
 #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
 use wide::{u8x16, u16x16};
 
-pub(super) fn native_cmyk_to_rgb_bytes(img: &DynamicImage) -> Option<(Vec<u8>, u64, u64)> {
+pub(super) fn native_cmyk_to_rgb_bytes(
+    context: &ExecutionContext,
+    img: &DynamicImage,
+) -> Option<(Vec<u8>, u64, u64)> {
     let DynamicImage::ImageRgba8(source) = img else {
         return None;
     };
@@ -19,13 +23,41 @@ pub(super) fn native_cmyk_to_rgb_bytes(img: &DynamicImage) -> Option<(Vec<u8>, u
         return None;
     }
     let output_capacity = pixels.checked_mul(3)?;
-    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-    {
-        native_cmyk_to_rgb_neon(source, pixels, output_capacity)
-    }
-    #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
-    {
-        native_cmyk_to_rgb_wide(source, output_capacity)
+    match context.architecture() {
+        Architecture::Neon => {
+            #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+            {
+                native_cmyk_to_rgb_neon(source, pixels, output_capacity)
+            }
+            #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
+            {
+                None
+            }
+        }
+        Architecture::Avx2 | Architecture::Ssse3 => {
+            #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
+            {
+                native_cmyk_to_rgb_wide(source, output_capacity, true)
+            }
+            #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+            {
+                None
+            }
+        }
+        Architecture::PortableSimd => {
+            #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
+            {
+                native_cmyk_to_rgb_wide(source, output_capacity, false)
+            }
+            #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+            {
+                None
+            }
+        }
+        Architecture::Scalar
+        | Architecture::Wgpu
+        | Architecture::Cuda
+        | Architecture::TileLang => None,
     }
 }
 
@@ -105,22 +137,21 @@ fearless_simd::kernel!(
 );
 
 #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
-#[allow(unsafe_code)] // SSSE3 calls require the runtime-checked full-block path below.
+#[allow(unsafe_code)] // SSSE3 calls require the context-checked full-block path below.
 fn native_cmyk_to_rgb_wide(
     source: &crate::raster::RgbaImage,
     output_capacity: usize,
+    use_ssse3: bool,
 ) -> Option<(Vec<u8>, u64, u64)> {
     let mut output = Vec::with_capacity(output_capacity);
     let mut vector_blocks = 0u64;
-    #[cfg(target_arch = "x86_64")]
-    let ssse3_available = std::is_x86_feature_detected!("ssse3");
     for source_block in source.as_raw().chunks(64) {
         let active_pixels = source_block.len() / 4;
         #[cfg(target_arch = "x86_64")]
-        let channels = if active_pixels == 16 && ssse3_available {
+        let channels = if active_pixels == 16 && use_ssse3 {
             let full_block: &[u8; 64] = source_block.try_into().ok()?;
             // SAFETY: the complete block is exactly 64 bytes and the
-            // runtime check above establishes SSSE3 support.
+            // ExecutionContext established SSSE3 support before selecting this kernel.
             Some(unsafe { native_channel::deinterleave_cmyk_16_ssse3(full_block).map(u8x16::new) })
         } else {
             None

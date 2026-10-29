@@ -7,6 +7,11 @@
 
 use super::native_channel;
 use super::native_filter::native_filter_load_byte_block;
+use crate::compute::registry;
+use crate::compute::{Backend, ExecutionContext};
+use crate::error::PilError;
+use crate::pipeline::PipelineOp;
+use crate::raster::DynamicImage;
 
 mod alpha_composite;
 mod box_blur;
@@ -36,8 +41,66 @@ mod filter;
 mod histogram;
 mod layout;
 mod support;
-pub(crate) use self::support::simd_supports_for_image;
 use self::support::simd_supports_for_shape;
+
+/// Resolve image support using the backend and architecture selected by the
+/// pipeline router.
+pub(crate) fn simd_supports_for_image_in_context(
+    context: &ExecutionContext,
+    img: &DynamicImage,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> bool {
+    support::simd_supports_for_image(context, img, op, mode)
+}
+
+/// Execute one registry operation after the context has selected the SIMD
+/// backend and supported host architecture.
+pub(crate) fn simd_execute_in_context(
+    context: &ExecutionContext,
+    img: &DynamicImage,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    if context.backend() != Backend::Simd || !context.architecture().supports_simd() {
+        return Err(PilError::NotImplementedError(
+            "SIMD architecture is unavailable for the selected execution context".into(),
+        ));
+    }
+    match op {
+        PipelineOp::BoxBlur { .. } | PipelineOp::BoxBlurXY { .. } => {
+            return box_blur::simd_box_blur_in_context(context, img, op, mode);
+        }
+        PipelineOp::GaussianBlur { .. } => {
+            return gaussian_blur::simd_gaussian_blur_in_context(context, img, op, mode);
+        }
+        PipelineOp::Convert { .. } => {
+            return convert::simd_convert_in_context(context, img, op, mode);
+        }
+        PipelineOp::Merge { .. } => {
+            return merge::simd_merge_in_context(context, img, op, mode);
+        }
+        PipelineOp::Grayscale => {
+            return grayscale::simd_grayscale_in_context(context, img, op, mode);
+        }
+        PipelineOp::ExtractBand { .. } => {
+            return extract_band::simd_extract_band_in_context(context, img, op, mode);
+        }
+        PipelineOp::Transpose { .. } => {
+            return transpose::simd_transpose_in_context(context, img, op, mode);
+        }
+        PipelineOp::Rotate { .. } => {
+            return rotate::simd_rotate_in_context(context, img, op, mode);
+        }
+        _ => {}
+    }
+    let key = registry::variant_key(op);
+    let function = registry::registry()?
+        .get(key)
+        .and_then(|entry| entry.simd_fn)
+        .ok_or_else(|| PilError::ValueError(format!("SIMD: no native impl for {key}")))?;
+    function(img, op, mode)
+}
 mod lut;
 pub(crate) use self::color3dlut::simd_color3dlut;
 use self::color3dlut::{color3dlut_supported_for_image, color3dlut_supported_for_shape};
@@ -288,6 +351,17 @@ pub(crate) fn simd_in_place_supported(
     }
 }
 
+pub(crate) fn simd_in_place_supported_in_context(
+    context: &ExecutionContext,
+    img: &DynamicImage,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> bool {
+    context.backend() == Backend::Simd
+        && context.architecture().supports_simd()
+        && simd_in_place_supported(img, op, mode)
+}
+
 /// Reuse an owned SIMD-segment buffer for operations whose native byte
 /// contract is unchanged.  Shape-changing operations deliberately return
 /// `false` and continue through their allocating native kernel.
@@ -338,6 +412,18 @@ pub(crate) fn simd_execute_in_place(
         | PipelineOp::Subtract { .. } => chops::execute_in_place(img, op, mode),
         _ => Ok(false),
     }
+}
+
+pub(crate) fn simd_execute_in_place_in_context(
+    context: &ExecutionContext,
+    img: &mut DynamicImage,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> Result<bool, PilError> {
+    if context.backend() != Backend::Simd || !context.architecture().supports_simd() {
+        return Ok(false);
+    }
+    simd_execute_in_place(img, op, mode)
 }
 
 // ── Native rank-family extrema ─────────────────────────────────────────────

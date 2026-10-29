@@ -11,6 +11,7 @@ use self::kernels::{
     simd_nearest_rotate_native, simd_right_angle_rotate_native, simd_typed_bilinear_rotate_native,
 };
 use super::{SimdImageShape, SimdLayout, simd_unsupported};
+use crate::compute::{Backend, ExecutionContext};
 use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::pipeline::{PipelineOp, ResampleFilter};
@@ -616,6 +617,23 @@ pub(crate) fn simd_rotate(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    simd_rotate_in_context(
+        &ExecutionContext::for_backend(Backend::Simd),
+        img,
+        op,
+        mode,
+    )
+}
+
+pub(super) fn simd_rotate_in_context(
+    context: &ExecutionContext,
+    img: &DynamicImage,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    if context.backend() != Backend::Simd || !context.architecture().supports_simd() {
+        return Err(simd_unsupported("Rotate"));
+    }
     let PipelineOp::Rotate {
         angle,
         expand,
@@ -651,7 +669,16 @@ pub(crate) fn simd_rotate(
         img.width(),
         img.height(),
     ) && let Some(result) =
-        simd_right_angle_rotate_native(img, *angle, *expand, *fill, *center, *translate, mode)?
+        simd_right_angle_rotate_native(
+            context,
+            img,
+            *angle,
+            *expand,
+            *fill,
+            *center,
+            *translate,
+            mode,
+        )?
     {
         return Ok(result);
     }

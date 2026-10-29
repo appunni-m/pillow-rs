@@ -481,7 +481,9 @@ fn assert_ycbcr_grayscale_case(operation: &PipelineOp, width: u32, height: u32) 
         .unwrap_or_else(|error| panic!("CPU YCbCr grayscale {width}x{height}: {error}"));
     let _ = Backend::take_pipeline_allocation_telemetry();
     let actual = super::GpuPool
-        .execute_batch_strict(std::slice::from_ref(operation), &source, Some("YCbCr"))
+        .execute_batch_strict(
+            &crate::compute::ExecutionContext::for_backend(crate::compute::Backend::Gpu),
+std::slice::from_ref(operation), &source, Some("YCbCr"))
         .unwrap_or_else(|error| panic!("GPU YCbCr grayscale {width}x{height}: {error}"));
     assert!(matches!(&actual, DynamicImage::ImageLuma8(_)));
     assert_eq!(

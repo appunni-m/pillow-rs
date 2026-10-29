@@ -24,6 +24,7 @@
 //! - Specialized shader variants may map from one higher-level
 //!   [`crate::pipeline::PipelineOp`] variant.
 
+use crate::compute::{Backend, ExecutionContext};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::DynamicImage;
@@ -326,6 +327,99 @@ pub fn execute_cpu(
         .cpu_fn
         .ok_or_else(|| PilError::ValueError(format!("CPU: no impl for {}", key)))?;
     f(img, op, mode)
+}
+
+/// Execute one CPU operation with the backend and architecture selected by
+/// pipeline routing. Architecture-specific families consume this context at
+/// their orchestration boundary; ordinary scalar operations keep using their
+/// registered implementation unchanged.
+pub(crate) fn execute_cpu_in_context(
+    context: &ExecutionContext,
+    op: &PipelineOp,
+    img: &DynamicImage,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    if !matches!(context.backend(), Backend::Cpu | Backend::ParallelCpu)
+        || !context.architecture().supports_cpu()
+    {
+        return Err(PilError::InternalError(format!(
+            "CPU operation registry received {:?}/{:?} context",
+            context.backend(),
+            context.architecture()
+        )));
+    }
+
+    match op {
+        PipelineOp::Resize { w, h, filter } => {
+            let mode = resize_mode(img, mode)?;
+            crate::compute::pool_cpu::ops::resize::execute_resize_in_context(
+                context, img, *w, *h, filter, mode,
+            )
+        }
+        PipelineOp::ResizeBoxed {
+            w,
+            h,
+            filter,
+            box_coords,
+        } => {
+            let mode = resize_mode(img, mode)?;
+            crate::compute::pool_cpu::ops::resize::execute_resize_boxed_in_context(
+                context,
+                img,
+                *w,
+                *h,
+                *filter,
+                *box_coords,
+                mode,
+            )
+        }
+        PipelineOp::Thumbnail { w, h, filter } => {
+            crate::compute::pool_cpu::ops::thumbnail::execute_thumbnail_in_context(
+                context, img, *w, *h, filter, mode,
+            )
+        }
+        PipelineOp::Fit {
+            w,
+            h,
+            filter,
+            bleed,
+            centering,
+        } => crate::compute::pool_cpu::ops::imageops::op_fit_in_context(
+            context, img, *w, *h, *filter, *bleed, *centering, mode,
+        ),
+        PipelineOp::Filter5x5 {
+            kernel,
+            scale,
+            offset,
+        } => crate::compute::pool_cpu::ops::filter::execute_filter5x5_in_context(
+            context, img, kernel, *scale, *offset, mode,
+        ),
+        PipelineOp::Pad {
+            w,
+            h,
+            filter,
+            color,
+            centering,
+        } => crate::compute::pool_cpu::ops::imageops::op_pad_in_context(
+            context, img, *w, *h, *filter, *color, *centering, mode,
+        ),
+        // TODO(pillow-rs#3ptb): This fallback drops the routed context.
+        // Replace registry callbacks with contextual family strategies so
+        // every CPU operation receives its backend and architecture without
+        // growing this per-operation dispatch list.
+        _ => execute_cpu(op, img, mode),
+    }
+}
+
+fn resize_mode(
+    image: &DynamicImage,
+    pillow_mode: Option<&str>,
+) -> Result<crate::image::Mode, PilError> {
+    match pillow_mode {
+        Some(name) => crate::image::Mode::from_pillow_name(name)
+            .ok_or_else(|| PilError::ValueError(format!("unsupported Pillow mode: {name}"))),
+        None => Ok(crate::image::Mode::for_image(image, None)),
+    }
 }
 
 fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> {

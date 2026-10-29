@@ -2,6 +2,8 @@ use std::borrow::Cow;
 
 use super::conversion::muldiv255;
 use crate::checked_dims::CheckedDims;
+#[cfg(target_arch = "x86_64")]
+use crate::compute::{Architecture, ExecutionContext};
 use crate::error::PilError;
 use crate::raster::DynamicImage;
 
@@ -60,12 +62,13 @@ pub fn pil_grayscale_truncate(img: &DynamicImage) -> Result<crate::raster::GrayI
     pil_grayscale_inner(img, false)
 }
 
-/// Gather a selected byte from tightly packed 2-, 3-, or 4-channel pixels
-/// with SSSE3 when available. The counters report complete sixteen-pixel
-/// vector blocks and any scalar tail.
+/// Gather a selected byte from packed pixels with the SSSE3 kernel when the
+/// injected architecture context selects it. Counters report vector blocks
+/// and any scalar tail.
 #[cfg(target_arch = "x86_64")]
 #[allow(unsafe_code)]
 pub(crate) fn gather_interleaved_channel_ssse3_bytes(
+    context: &ExecutionContext,
     source: &[u8],
     channels: usize,
     channel: usize,
@@ -73,23 +76,27 @@ pub(crate) fn gather_interleaved_channel_ssse3_bytes(
     if !(2..=4).contains(&channels)
         || channel >= channels
         || source.len() % channels != 0
-        || !std::is_x86_feature_detected!("ssse3")
+        || !matches!(
+            context.architecture(),
+            Architecture::Ssse3 | Architecture::Avx2
+        )
     {
         return None;
     }
 
-    // SAFETY: the wrapper validates the packed channel layout and checks that
-    // the running CPU supports SSSE3 before entering the target-feature loop.
+    // SAFETY: the injected routing context selected an SSSE3-capable target
+    // and the wrapper validates the packed channel layout before dispatch.
     Some(unsafe { gather_interleaved_channel_ssse3(source, channels, channel) })
 }
 
 /// Gather a selected byte directly into the caller's final output buffer.
 ///
-/// Returns `None` when the layout, output shape, or CPU does not support the
-/// SSSE3 path, allowing the caller to retain its existing fallback.
+/// Returns `None` when the layout, output shape, or selected architecture does
+/// not support the SSSE3 path, allowing the caller to use its fallback.
 #[cfg(target_arch = "x86_64")]
 #[allow(unsafe_code)]
 pub(crate) fn gather_interleaved_channel_ssse3_into(
+    context: &ExecutionContext,
     source: &[u8],
     output: &mut [u8],
     channels: usize,
@@ -99,13 +106,16 @@ pub(crate) fn gather_interleaved_channel_ssse3_into(
         || channel >= channels
         || source.len() % channels != 0
         || output.len() != source.len() / channels
-        || !std::is_x86_feature_detected!("ssse3")
+        || !matches!(
+            context.architecture(),
+            Architecture::Ssse3 | Architecture::Avx2
+        )
     {
         return None;
     }
 
-    // SAFETY: the checks above validate the packed layout, exact output size,
-    // and runtime SSSE3 support before entering the target-feature loop.
+    // SAFETY: the injected routing context selected an SSSE3-capable target;
+    // the checks above validate the packed layout and exact output size.
     Some(unsafe {
         gather_interleaved_channel_ssse3_into_raw(source, output.as_mut_ptr(), channels, channel)
     })

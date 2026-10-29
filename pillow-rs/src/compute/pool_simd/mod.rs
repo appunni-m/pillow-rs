@@ -11,7 +11,7 @@
 //! - Ops live in `ops/` mirroring `pool_cpu/ops/`
 
 use crate::compute::registry;
-use crate::compute::{Backend, BackendImpl};
+use crate::compute::{Architecture, Backend, BackendImpl, ExecutionContext};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 #[cfg(feature = "gpu")]
@@ -121,32 +121,53 @@ impl BackendImpl for SimdPool {
     }
 
     fn priority(&self) -> u8 {
-        50 // Above CPU (0), below GPU (100)
+        Backend::Simd.priority()
     }
 
-    fn supports(&self, op: &PipelineOp) -> Result<bool, PilError> {
+    fn supports(
+        &self,
+        context: &ExecutionContext,
+        op: &PipelineOp,
+    ) -> Result<bool, PilError> {
+        if context.backend() != Backend::Simd || !context.architecture().supports_simd() {
+            return Ok(false);
+        }
         registry::simd_supports(op)
     }
 
     fn supports_for_image(
         &self,
+        context: &ExecutionContext,
         op: &PipelineOp,
         img: &DynamicImage,
         mode: Option<&str>,
     ) -> Result<bool, PilError> {
-        if !self.supports(op)? {
+        if context.backend() != Backend::Simd
+            || !context.architecture().supports_simd()
+            || !self.supports(context, op)?
+        {
             return Ok(false);
         }
-        Ok(ops::adapters::simd_supports_for_image(img, op, mode))
+        Ok(ops::adapters::simd_supports_for_image_in_context(
+            context, img, op, mode,
+        ))
     }
 
     fn execute_batch(
         &self,
+        context: &ExecutionContext,
         ops: &[PipelineOp],
         img: &DynamicImage,
         mode: Option<&str>,
     ) -> Result<DynamicImage, PilError> {
-        batch_execution::execute_batch(ops, img, mode)
+        if context.backend() != Backend::Simd
+            || !context.architecture().supports_simd()
+        {
+            return Err(PilError::NotImplementedError(
+                "SIMD architecture is unavailable for the selected execution context".into(),
+            ));
+        }
+        batch_execution::execute_batch(context, ops, img, mode)
     }
 }
 
@@ -177,7 +198,7 @@ fn finish_simd_batch(
 #[cfg(test)]
 mod transpose_tests {
     use super::SimdPool;
-    use crate::compute::{Backend, BackendImpl, CpuPool, registry};
+    use crate::compute::{Backend, BackendImpl, CpuPool, ExecutionContext, registry};
     use crate::error::PilError;
     use crate::image::Image;
     use crate::image_utils::raw_bytes_to_image_allow_empty;
@@ -223,7 +244,8 @@ mod transpose_tests {
             registry::execute_cpu(op, &input, mode)
         })?;
         for backend in [&CpuPool as &dyn BackendImpl, &SimdPool] {
-            let actual = backend.execute_batch(&ops, source, mode)?;
+            let context = ExecutionContext::for_backend(backend.name());
+            let actual = backend.execute_batch(&context, &ops, source, mode)?;
             assert_eq!(actual.color(), expected.color(), "{methods:?} {mode:?}");
             assert_eq!(
                 actual.dimensions(),
@@ -335,18 +357,35 @@ mod transpose_tests {
         );
         let ops = transpose_ops(&[TransposeMethod::Rotate90, TransposeMethod::Rotate270]);
         assert!(matches!(
-            SimdPool.execute_batch(&ops, &source, None),
+            SimdPool.execute_batch(
+                &ExecutionContext::for_backend(Backend::Simd),
+                &ops,
+                &source,
+                None,
+            ),
             Err(PilError::NotImplementedError(_))
         ));
         let empty = DynamicImage::ImageLuma16(
             ImageBuffer::<Luma<u16>, Vec<u16>>::from_raw(0, 7, Vec::new()).unwrap(),
         );
         assert!(matches!(
-            SimdPool.execute_batch(&ops, &empty, Some("I;16")),
+            SimdPool.execute_batch(
+                &ExecutionContext::for_backend(Backend::Simd),
+                &ops,
+                &empty,
+                Some("I;16"),
+            ),
             Err(PilError::NotImplementedError(_))
         ));
         // CPU can preserve the actual float raster variant without interpreting its NaNs.
-        let result = CpuPool.execute_batch(&ops, &source, None).unwrap();
+        let result = CpuPool
+            .execute_batch(
+                &ExecutionContext::for_backend(Backend::Cpu),
+                &ops,
+                &source,
+                None,
+            )
+            .unwrap();
         assert_eq!(result.color(), source.color());
         assert_eq!(result.as_bytes(), source.as_bytes());
     }
@@ -402,7 +441,8 @@ mod transpose_tests {
     ) -> Result<(DynamicImage, Vec<u8>), PilError> {
         crate::compute::reset_pipeline_operation_telemetry();
         Backend::reset_pipeline_allocation_telemetry();
-        let mut result = backend.execute_batch(identity, source, Some("RGB"))?;
+        let context = ExecutionContext::for_backend(backend.name());
+        let mut result = backend.execute_batch(&context, identity, source, Some("RGB"))?;
         let records = crate::compute::take_pipeline_operation_telemetry();
         assert_eq!(records.len(), 2);
         for record in records {
@@ -453,7 +493,8 @@ mod transpose_tests {
                 vec![PipelineOp::Invert, identity[0].clone(), identity[1].clone()]
             };
             crate::compute::reset_pipeline_operation_telemetry();
-            let actual = backend.execute_batch(&ops, source, Some("RGB"))?;
+            let context = ExecutionContext::for_backend(backend.name());
+            let actual = backend.execute_batch(&context, &ops, source, Some("RGB"))?;
             assert_eq!(actual.as_bytes(), expected_invert.as_bytes());
             let records = crate::compute::take_pipeline_operation_telemetry();
             assert_eq!(records.len(), 3);
@@ -549,7 +590,12 @@ mod palette_normalization_tests {
             (1, vec![192; 256]),
         ] {
             let actual = super::SimdPool
-                .execute_batch(&[PipelineOp::ExtractBand { index }], &source, Some("PA"))
+                .execute_batch(
+                    &ExecutionContext::for_backend(Backend::Simd),
+                    &[PipelineOp::ExtractBand { index }],
+                    &source,
+                    Some("PA"),
+                )
                 .expect("SIMD PA channel extraction");
             let DynamicImage::ImageLuma8(actual) = actual else {
                 panic!("ExtractBand must return one-band L storage");
@@ -619,9 +665,10 @@ mod alpha_composite_mirror_tests {
                 },
                 PipelineOp::Mirror,
             ];
-            let composite = SimdPool.execute_batch(&operations[..1], &destination, Some("RGBA"))?;
-            let expected = SimdPool.execute_batch(&operations[1..], &composite, Some("RGBA"))?;
-            let actual = SimdPool.execute_batch(&operations, &destination, Some("RGBA"))?;
+            let context = ExecutionContext::for_backend(Backend::Simd);
+            let composite = SimdPool.execute_batch(&context, &operations[..1], &destination, Some("RGBA"))?;
+            let expected = SimdPool.execute_batch(&context, &operations[1..], &composite, Some("RGBA"))?;
+            let actual = SimdPool.execute_batch(&context, &operations, &destination, Some("RGBA"))?;
             assert_eq!(
                 (actual.width(), actual.height()),
                 (expected.width(), expected.height())

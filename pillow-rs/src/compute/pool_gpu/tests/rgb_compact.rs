@@ -331,7 +331,9 @@ fn assert_rgb_transform_case(
     let expected = crate::compute::registry::execute_cpu(op, source, mode)
         .unwrap_or_else(|error| panic!("CPU {name}: {error}"));
     let actual = super::GpuPool
-        .execute_batch_strict(std::slice::from_ref(op), source, mode)
+        .execute_batch_strict(
+            &crate::compute::ExecutionContext::for_backend(crate::compute::Backend::Gpu),
+std::slice::from_ref(op), source, mode)
         .unwrap_or_else(|error| panic!("GPU {name}: {error}"));
     assert_eq!(actual.color(), expected.color(), "{name} mode");
     assert_eq!(
@@ -421,7 +423,9 @@ fn assert_rgb_autocontrast_packed_case(width: u32, height: u32) {
     let expected = crate::compute::registry::execute_cpu(&op, &source, Some("RGB"))
         .unwrap_or_else(|error| panic!("CPU RGB AutoContrast {width}x{height}: {error}"));
     let actual = super::GpuPool
-        .execute_batch_strict(std::slice::from_ref(&op), &source, Some("RGB"))
+        .execute_batch_strict(
+            &crate::compute::ExecutionContext::for_backend(crate::compute::Backend::Gpu),
+std::slice::from_ref(&op), &source, Some("RGB"))
         .unwrap_or_else(|error| panic!("GPU RGB AutoContrast {width}x{height}: {error}"));
     assert_eq!(actual.color(), expected.color(), "{width}x{height} mode");
     assert_eq!(
@@ -516,7 +520,9 @@ fn assert_rgb_equalize_packed_case(width: u32, height: u32) {
     let expected = crate::compute::registry::execute_cpu(&op, &source, Some("RGB"))
         .unwrap_or_else(|error| panic!("CPU RGB Equalize {width}x{height}: {error}"));
     let actual = super::GpuPool
-        .execute_batch_strict(std::slice::from_ref(&op), &source, Some("RGB"))
+        .execute_batch_strict(
+            &crate::compute::ExecutionContext::for_backend(crate::compute::Backend::Gpu),
+std::slice::from_ref(&op), &source, Some("RGB"))
         .unwrap_or_else(|error| panic!("GPU RGB Equalize {width}x{height}: {error}"));
     assert_eq!(actual.color(), expected.color(), "{width}x{height} mode");
     assert_eq!(

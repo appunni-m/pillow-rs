@@ -70,7 +70,7 @@ a concern is too small to need a directory, keep its focused module flat; once
 it has distinct child roles, add the concern directory below its owner and keep
 its name. Omit a level only when it has no real responsibility in that area;
 never invent empty directories to force equal path depth. In Rust this is the
-same module-tree pattern used by `grayscale.rs` and
+same module-tree pattern used by `grayscale/mod.rs`, `grayscale/ops.rs`, and
 `grayscale/kernels/ycbcr.rs`.
 
 ## One family name across operation layers
@@ -156,8 +156,7 @@ for operations or a parallel hand-maintained list of families.
 | Layer | Placement rule |
 | --- | --- |
 | Core semantics | `pillow-rs/src/ops/<family>.rs`; family-only child modules live under `ops/<family>/` when needed. |
-| Serial CPU and SIMD execution | Stay in the selected `compute/pool_cpu/ops/` or `compute/pool_simd/ops/` owner. Route through the pool's family entry point; put distinct mode/architecture loops under that family's `kernels/`. |
-| Parallel CPU execution | Keep Rayon scheduling at the CPU family call site under `pool_cpu/ops/<family>.rs` and shared row/tile scheduling helpers in `pillow-rs/src/par.rs`. This is a separate execution profile, not a duplicate source owner: do not add `pool_parallel/` or copy kernels unless a distinct algorithm contract requires it. Keep the feature gate and profile identity explicit. |
+| CPU, SIMD, Parallel CPU, and GPU execution | Each backend has its own owner under `pillow-rs/src/compute/pool_<backend>/ops/` and routes through a family entry point. CPU is the serial fallback for SIMD architectures without an implementation. Parallel CPU lives at `pillow-rs/src/compute/pool_parallel/ops/<family>.rs`; it owns Rayon scheduling and may call serial CPU implementations through composition instead of copying algorithms. Put distinct mode or architecture loops under the family that executes them. |
 | GPU execution | Keep family admission/dispatch with the GPU operation path and shaders under `pool_gpu/shaders/<family>/`. Keep pipeline selection and receipts explicit. |
 | Python and JavaScript | Keep conversion and delegation in their package owners. Use the same family name for a dedicated wrapper/module; existing multi-family user-facing modules and crate-root registration remain valid when they are the natural boundary. |
 | Parity and benchmark inputs | Keep the existing migration manifest as the operation/workload authority. Add cases and workloads through its established input tree and preserve stable IDs; do not create parallel per-layer operation lists. |
@@ -177,6 +176,77 @@ the core owns image algorithms. A binding family module is created when it has
 real family-specific conversion or delegation work. It is not a second home
 for image semantics. One-file binding crates can keep their registration glue
 at the crate root until a real module boundary is needed.
+
+The pipeline injects an immutable Pillow-owned execution context containing
+the selected backend and architecture through planning, admission, and family
+execution. Operation code dispatches from that context instead of carrying
+parallel booleans or repeatedly inferring the architecture. Keep Pillow mode
+with the Pillow-owned image/wrapper state and pass it explicitly at the family
+boundary; do not add Pillow mode to image-slash-star's `DynamicImage`. CPU,
+Parallel CPU, SIMD, and GPU select their backend-owned family entry points
+through this context. SIMD architecture selection lives at the family boundary
+and falls back to the CPU family when that architecture has no implementation.
+The context is constructed once at the pipeline routing boundary and passed
+through operation orchestration; helpers and kernels receive only the subset of
+context they need, rather than re-selecting a backend or architecture.
+
+Pillow mode is a pillow-rs-owned enum carried with its image wrapper and lazy
+pipeline state. `image-slash-star::ImageMode` remains codec sample metadata;
+decode and encode adapters translate between that metadata and Pillow mode at
+the boundary. Python may accept Pillow's string spellings, but its binding
+parses them before calling typed Rust operations. Core operation strategies do
+not infer logical mode from raster storage or carry mode strings through inner
+helpers.
+
+Every operation family declares its complete mode support at the operation
+entry point. The declaration enumerates every Pillow mode identity and gives
+each one an explicit supported strategy or an unsupported outcome, including
+the input/output mode and storage contract, architecture requirements, guards,
+and fallback or rejection reason. Runtime admission, support introspection,
+and prepared execution use that same declaration so the reported capability
+cannot drift from the selected implementation. A directory is not itself a
+support declaration.
+
+Compose strategy in two steps: the mode selects the algorithm and sample
+semantics; the injected architecture selects an eligible implementation of
+that mode. If an architecture-specific path is unavailable or its guards fail,
+fall back to that mode's exact default implementation. Never fall back by
+changing the logical mode or widening samples solely to reach a shared kernel.
+Do not cast pixels between modes to reduce duplication or reuse an algorithm.
+Implement the operation over each supported mode's native samples and channel
+layout; share only arithmetic or traversal that has the same native contract.
+An operation whose specified behavior changes mode (such as explicit color
+conversion) performs that conversion as part of its own semantics, not as an
+implementation shortcut for an unrelated operation.
+Pillow parity is the compatibility baseline, not a cap on core support. A
+strategy may intentionally support an additional mode or behavior; mark that
+path with a nearby `// NO_PILLOW_SUPPORT:` comment and report it as a core
+extension, separate from Pillow-defined parity.
+Place distinct mode and architecture implementations under the owning family
+only when they are real paths. Keep the operation module's support declaration
+and orchestration visible at its top level, keep `mod.rs` to simple module
+exports, and put helpers outside strategy-specific paths only when multiple
+strategies share the same contract.
+
+For CPU families with distinct mode strategies, keep the family root as one
+directory instead of pairing a `<family>.rs` file with a same-named directory:
+
+```text
+pillow-rs/src/compute/pool_cpu/ops/<family>/
+  mod.rs                       # simple exports
+  ops.rs                       # support declaration and mode/arch orchestration
+  <mode>/
+    ops.rs                     # implementation for this logical mode
+    kernels/
+      default.rs               # serial CPU implementation
+      <architecture>.rs        # only for a real architecture-specific kernel
+```
+
+Omit mode or architecture modules that do not select distinct implementations;
+do not add a parallel strategy under `pool_cpu`. Rayon scheduling belongs to the
+separate `pool_parallel` backend. Keep family support exhaustive even when some
+modes intentionally use one shared implementation, so support remains visible
+without reading the filesystem tree.
 
 When a backend has a real dispatch facade and family orchestrators, use this
 shape for its SIMD implementation:
@@ -203,8 +273,8 @@ re-exports; do not add runtime dispatch to a pixel loop. For example,
 `pool_simd/ops/adapters/grayscale/kernels/ycbcr.rs` owns its YCbCr vector loop.
 The family file and its same-named directory are one Rust module tree: the
 file is the orchestrator, and the directory holds its focused children. A
-direct serial implementation can live at
-`pool_cpu/ops/grayscale.rs`; it does not need a forwarding adapter. A GPU family
+direct serial implementation can live in
+`pool_cpu/ops/grayscale/ops.rs`; it does not need a forwarding adapter. A GPU family
 keeps its admission and dispatch in the GPU operation owner and its shader
 stages under `pool_gpu/shaders/<family>/`. Keep the core semantic module at
 `ops/<family>.rs`; do not move a hot loop into core just because a backend
@@ -212,9 +282,12 @@ adapter can call it or add an empty adapter to equalize path depth.
 
 GPU shader sources are grouped below `pool_gpu/shaders/<family>/`; keep shader
 selection and dispatch in the matching family adapter. A CPU implementation
-must not be labelled SIMD because it shares an adapter, and Rayon work belongs
-to the separate Parallel CPU profile. The profile name never determines source
-placement: architecture-specific code belongs with the family kernel that
+must not be labelled SIMD because it shares an adapter. Rayon scheduling and
+parallel-only execution belong under
+`pillow-rs/src/compute/pool_parallel/ops/<family>.rs`; serial
+algorithms remain owned by CPU and are reused by composition where semantics
+match. The selected backend and architecture come from the injected execution
+context; architecture-specific code belongs with the family kernel that
 executes it.
 
 Existing code does not all have this shape yet. Treat it as the standard for
@@ -325,7 +398,7 @@ work, not permission to move files mechanically:
 | `pillow-rs/src/compute/pool_simd/ops/native_filter.rs` holds a byte-block loader used by Filter3x3, Filter5x5, and Sharpness; an LA binomial row loop used by serial AArch64 CPU and SIMD; and an I32 row/vector loop used by SIMD production code (the CPU reference is test-only). | Keep the shared loader and LA loop single-sourced in the current native filter owner. Move the SIMD-only I32 row/vector implementation to `pool_simd/ops/adapters/filter/kernels/i32.rs`, re-export it through that family's `kernels/mod.rs`, and point the CPU differential test at the same implementation. | Preserve the direct SIMD call, vector receipt, and zero-fallback behavior. Use the exact Filter5x5 parity cases and materialized L/LA/I workloads listed below on CPU and SIMD, including terminal materialization. |
 | `pillow-rs/src/compute/pool_gpu/mod.rs` is the GPU facade and lazy device/backend coordinator. | Keep buffer and staging lifecycle in `resource_pool.rs`, readback selection and decoding in `readback.rs`, batch planning/encoding/execution in their focused modules, and each operation in its family module. | Preserve admission, receipts, resource lifetimes, batching, and fallback rules; verify affected Pillow parity and GPU latency/throughput before closing the refactor. |
 | GPU shader assets are mostly direct children of `pillow-rs/src/compute/pool_gpu/shaders/`. | `pool_gpu/shaders/<family>/<stage-or-mode>.wgsl`. | Update include/registration paths with their owning family and verify the exact GPU receipt; retain shader files whose references are macro- or build-generated. |
-| CPU `effects.rs` owns randomized effects and stable compatibility re-exports for extracted operation families; `composite.rs`, `eval.rs`, `paste.rs`, `put.rs`, `color3dlut.rs`, and `transform.rs` own their CPU families. Transform keeps scalar arithmetic, affine sampling, projective sampling, and its focused tests in `transform/`. `imageops.rs` remains a multi-family migration debt. `filter.rs` declares focused blur, rank, Filter3x3, and Filter5x5 modules; convolution arithmetic is shared in `filter/convolution.rs`, with signed-I and native-byte Filter5x5 paths under `filter/filter5x5/`. | Keep `effects.rs` as the randomized-effects family and compatibility facade; keep extracted operation implementations in their family modules, with transform helpers grouped by algorithm responsibility. Split remaining CPU modules only when family and shared-helper boundaries are clear. | Preserve call paths, exact arithmetic, backend selection, and mode-specific semantics while reducing file size. |
+| CPU `effects.rs` owns randomized effects and stable compatibility re-exports for extracted operation families; `composite/`, `eval/`, `expand/`, `grayscale/`, `paste/`, `put/`, `color3dlut/`, and `transform/` own their CPU families. Eval declares its mode strategies in `eval/ops.rs` and shares one native byte-LUT kernel at `eval/kernels/default.rs` because its supported byte modes use the same channel-major sample contract. Expand keeps exhaustive mode/carrier routing in `expand/ops.rs`; its serial native byte, u16, and f32 sample-copy kernels live in `expand/kernels/default.rs`, and its internal high-depth strategies are marked `NO_PILLOW_SUPPORT`. Grayscale declares its exhaustive mode routes and carrier guards in `grayscale/ops.rs`, with the YCbCr gather kernel under `grayscale/kernels/`. Reduce owns a folder family at `reduce/`, with typed mode routing in `reduce/ops.rs`, kernels under `reduce/kernels/`, and internal high-depth sample reducers marked `NO_PILLOW_SUPPORT`. Transform keeps scalar arithmetic, affine sampling, projective sampling, and its focused tests in `transform/`. `imageops.rs` remains a multi-family migration debt. `filter.rs` declares focused blur, rank, Filter3x3, and Filter5x5 modules; convolution arithmetic is shared in `filter/convolution.rs`, with signed-I and native-byte Filter5x5 paths under `filter/filter5x5/`. | Keep `effects.rs` as the randomized-effects family and compatibility facade; keep extracted operation implementations in their family modules, with transform helpers grouped by algorithm responsibility. Split remaining CPU modules only when family and shared-helper boundaries are clear. | Preserve call paths, exact arithmetic, backend selection, and mode-specific semantics while reducing file size. |
 | `filter/rgb_blur_ring.rs` and `filter/uniform_box.rs` contain executable Filter5x5 loops, while `filter/kernels/i32_cross_smooth.rs` contains the Filter3x3 signed-I loop. Their declarations now live with their family facades, but the support files remain beside the shared filter root. | Keep each loop single-sourced; decide whether moving these support files under their owning family improves placement without adding a layer to the hot path. | When these helpers are next changed, trace CPU and SIMD callers first; preserve exact parity, receipts, and full-call CPU/SIMD latency. Do not duplicate a loop to satisfy path shape. |
 | `pillow-rs-js/scripts/run_parity.mjs`, `run_browser_parity.mjs`, `parity_workflow.mjs`, and `browser_parity_page.mjs` form a multi-file parity workflow directly under `scripts/`. | Group the parity entry points, shared workflow, and browser page under `pillow-rs-js/scripts/parity/`. | Move as one workflow when it is next changed; retain the same Node/browser entry paths and run the package-local parity checks. |
 | `pillow-rs/src/ops/imageops.rs` combines public ImageOps functions for histogram/effects, geometry, resize composition, and EXIF handling. | Keep `imageops.rs` as the public orchestration facade where needed; place distinct family implementations under `ops/imageops/<family>.rs` when their contracts have a clear boundary. | Trace the public exports and call paths first; split incrementally, preserving Pillow error ordering, laziness, exact parity, and affected public-call latency. |
@@ -333,7 +406,7 @@ work, not permission to move files mechanically:
 | SIMD ImageChops owns stored-byte behavior, image/shape operand admission, direct adapters, and owned-intermediate execution in `pillow-rs/src/compute/pool_simd/ops/adapters/chops.rs`; its vector loops live in `chops/kernels.rs`. Shared `simd_div255`, packed-u16 conversion, and operand materialization remain in the facade because other SIMD families use them. | Keep ImageChops mode/layout admission, pair validation, direct adapters, in-place execution, and operation kernels together in the family. | Preserve CMYK K as a sample, HSV/YCbCr and RGBa/RGBX stored-byte semantics, pair mode/size checks, exact fallback behavior, vector receipts, and affected public-call latency. |
 | SIMD Resize owns direct and boxed mode dispatch, zero-source handling, and the Scale/Contain/Cover/Fit adapters in `pillow-rs/src/compute/pool_simd/ops/adapters/resize.rs`; shared image/shape admission and aspect-resize planning are in `resize/support.rs` and are reused by Pad. Its F-mode direct and boxed kernels are in `resize/kernels/f32.rs`, I32 kernels are in `resize/kernels/i32.rs`, Luma16 is in `resize/kernels/luma16.rs`, native-byte convolution orchestration is in `resize/kernels/u8.rs`, shared separable convolution rows are in `resize/kernels/u8_convolution.rs`, checked i32 Cover rows are in `resize/kernels/u8_cover_i32.rs`, byte coefficient validation and horizontal plans are in `resize/kernels/u8_plan.rs`, native-byte nearest is in `resize/kernels/u8_nearest.rs`, and boxed native-byte convolution is in `resize/kernels/u8_boxed_convolution.rs`; the I32 NEON kernel remains in `resize/kernels/i32/neon.rs`. Thumbnail reuses the Resize native-byte convolution route. | Keep Resize orchestration in its family module and put mode-specific loops in the matching kernel modules. Keep helpers shared with unextracted paths in place until their callers move together. | Preserve direct Resize and Thumbnail routes, exact parity, actual SIMD/NEON receipts, and full-call latency for every moved path. |
 
-Completed under `pillow-rs#wtxv`: serial CPU geometry now has family modules at `pool_cpu/ops/{crop,reduce,resize,rotate,thumbnail,transpose}.rs`; focused kernels and tests live in their family directories, and `geometry.rs` remains a compatibility re-export facade.
+Completed under `pillow-rs#wtxv`: serial CPU geometry now has family modules at `pool_cpu/ops/{crop,reduce,resize,rotate,thumbnail,transpose}.rs`; focused kernels and tests live in their family directories, and `geometry.rs` remains a compatibility re-export facade. Resize has since been promoted to the folder family `pool_cpu/ops/resize/`: `mod.rs` exports the family, `ops.rs` declares all 25 mode/carrier paths and preserves the mode, and the distinct `one/`, `i/`, and `f/` strategies own their kernels. I/F each separate the injected-context FMA path under `kernels/fma.rs` from the portable default kernel. Registry support/admission integration and cached-Mode routing are still pending; the migrated source has not been verified.
 
 Completed under `pillow-rs#rxcj`: SIMD Thumbnail now has a family adapter at
 `pool_simd/ops/adapters/thumbnail.rs`, with its fused RGB PutPixel→Thumbnail

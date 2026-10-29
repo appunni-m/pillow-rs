@@ -201,9 +201,27 @@ enum FromBytesMode {
 impl Image {
     /// Wraps operation-created pixels without claiming an encoded source.
     pub(crate) fn from_dynamic(image: DynamicImage, explicit_mode: Option<String>) -> Self {
+        let mode = super::Mode::for_image(&image, explicit_mode.as_deref());
+        Self::from_dynamic_with_selector(image, mode, explicit_mode)
+    }
+
+    /// Wraps operation-created pixels with an already selected logical mode.
+    /// This keeps backend orchestration from formatting the enum as a Pillow
+    /// string merely to reconstruct wrapper state.
+    pub(crate) fn from_dynamic_with_mode(image: DynamicImage, mode: super::Mode) -> Self {
+        let explicit_mode = mode.pillow_name().map(str::to_owned);
+        Self::from_dynamic_with_selector(image, mode, explicit_mode)
+    }
+
+    fn from_dynamic_with_selector(
+        image: DynamicImage,
+        mode: super::Mode,
+        explicit_mode: Option<String>,
+    ) -> Self {
         let decoded_mode = image.color().into();
         Self::Loaded(LoadedData {
             image: Arc::new(image),
+            mode,
             known_zero_fill: false,
             explicit_mode,
             decoded_mode,
@@ -264,6 +282,9 @@ impl Image {
 
     #[allow(clippy::too_many_arguments)]
     /// Creates a new image with the requested Pillow mode, dimensions, and fill color.
+    ///
+    /// TODO(pillow-rs#3ptb): Take the pillow-rs-owned Mode enum here; parse
+    /// Pillow strings in the host binding before calling this typed Rust API.
     ///
     /// # Errors
     ///

@@ -2,6 +2,8 @@
 
 #[cfg(feature = "gpu")]
 use super::GpuPool;
+#[cfg(feature = "parallel")]
+use super::ParallelCpuPool;
 use super::{Backend, BackendImpl, CpuPool, SimdPool};
 use crate::error::PilError;
 use std::collections::HashSet;
@@ -66,7 +68,7 @@ pub fn backend_enabled(b: Backend) -> Result<bool, PilError> {
 pub fn active_backends() -> Result<Vec<Backend>, PilError> {
     let a = active_lock()?;
     let mut v: Vec<Backend> = a.iter().copied().collect();
-    v.sort_by_key(|b| std::cmp::Reverse(*b as u8));
+    v.sort_by_key(|backend| std::cmp::Reverse(backend.priority()));
     Ok(v)
 }
 
@@ -77,6 +79,8 @@ pub(super) fn pools() -> &'static [Box<dyn BackendImpl>] {
     POOLS.get_or_init(|| {
         let mut v: Vec<Box<dyn BackendImpl>> = vec![
             Box::new(CpuPool),
+            #[cfg(feature = "parallel")]
+            Box::new(ParallelCpuPool),
             #[cfg(feature = "gpu")]
             Box::new(GpuPool),
             Box::new(SimdPool),
@@ -108,7 +112,12 @@ pub(crate) fn simd_is_only_active_backend() -> bool {
 /// without allocating the sorted vector returned by [`active_backends`].
 pub(crate) fn preferred_active_backend() -> Result<Option<(Backend, bool)>, PilError> {
     let active = active_lock()?;
-    let selected = [Backend::Gpu, Backend::Simd, Backend::Cpu]
+    let selected = [
+        Backend::Gpu,
+        Backend::Simd,
+        Backend::ParallelCpu,
+        Backend::Cpu,
+    ]
         .into_iter()
         .find(|backend| active.contains(backend));
     Ok(selected.map(|backend| (backend, active.len() == 1)))

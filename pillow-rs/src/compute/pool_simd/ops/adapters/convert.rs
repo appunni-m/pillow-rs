@@ -17,6 +17,7 @@ use super::{
     simd_unsupported,
 };
 use crate::error::PilError;
+use crate::compute::{Backend, ExecutionContext};
 use crate::pipeline::{ColorMode, PipelineOp};
 use crate::raster::DynamicImage;
 use wide::{u8x16, u16x8, u16x16, u32x8};
@@ -419,6 +420,7 @@ fn finish_vector_conversion(
 }
 
 fn try_source_special_conversion(
+    context: &ExecutionContext,
     img: &DynamicImage,
     target: &ColorMode,
     matrix: Option<&[f64]>,
@@ -447,7 +449,7 @@ fn try_source_special_conversion(
             return Err(simd_unsupported("Convert"));
         }
         let (output, vector_blocks, scalar_tail) =
-            native_cmyk_to_rgb_bytes(img).ok_or_else(|| simd_unsupported("Convert"))?;
+            native_cmyk_to_rgb_bytes(context, img).ok_or_else(|| simd_unsupported("Convert"))?;
         return finish_vector_conversion(
             img,
             output,
@@ -484,6 +486,7 @@ fn try_source_special_conversion(
 }
 
 fn try_layout_special_conversion(
+    context: &ExecutionContext,
     img: &DynamicImage,
     target: &ColorMode,
     layout: NativeConvertLayout,
@@ -492,7 +495,8 @@ fn try_layout_special_conversion(
     if matches!(target, ColorMode::RGB)
         && matches!(mode, None | Some("RGBA"))
         && matches!(img, DynamicImage::ImageRgba8(_))
-        && let Some((output, vector_blocks, scalar_tail, path)) = native_rgba_to_rgb_bytes(img)
+        && let Some((output, vector_blocks, scalar_tail, path)) =
+            native_rgba_to_rgb_bytes(context, img)
     {
         return finish_vector_conversion(img, output, 3, vector_blocks, scalar_tail, path, false)
             .map(Some);
@@ -502,7 +506,8 @@ fn try_layout_special_conversion(
         && matches!(img, DynamicImage::ImageRgb8(_))
         && matches!(mode, None | Some("RGB"))
     {
-        let Some((output, vector_blocks, scalar_tail)) = grayscale::native_grayscale_bytes(img, 3)
+        let Some((output, vector_blocks, scalar_tail)) =
+            grayscale::native_grayscale_bytes(context, img, 3)
         else {
             return Err(simd_unsupported("Convert"));
         };
@@ -544,6 +549,23 @@ pub(crate) fn simd_convert(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    simd_convert_in_context(
+        &ExecutionContext::for_backend(Backend::Simd),
+        img,
+        op,
+        mode,
+    )
+}
+
+pub(super) fn simd_convert_in_context(
+    context: &ExecutionContext,
+    img: &DynamicImage,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    if context.backend() != Backend::Simd || !context.architecture().supports_simd() {
+        return Err(simd_unsupported("Convert"));
+    }
     let PipelineOp::Convert {
         mode: target,
         matrix,
@@ -587,7 +609,13 @@ pub(crate) fn simd_convert(
             .ok_or_else(|| PilError::InternalError("SIMD I;16 output shape mismatch".into()))?;
         return Ok(DynamicImage::ImageLuma16(image));
     }
-    if let Some(result) = try_source_special_conversion(img, target, matrix.as_deref(), mode)? {
+    if let Some(result) = try_source_special_conversion(
+        context,
+        img,
+        target,
+        matrix.as_deref(),
+        mode,
+    )? {
         return Ok(result);
     }
     let Some(layout) = native_convert_layout(img, target, mode) else {
@@ -596,7 +624,7 @@ pub(crate) fn simd_convert(
     if !native_convert_supported_for_image(img, target, matrix.as_deref(), mode) {
         return Err(simd_unsupported("Convert"));
     }
-    if let Some(result) = try_layout_special_conversion(img, target, layout, mode)? {
+    if let Some(result) = try_layout_special_conversion(context, img, target, layout, mode)? {
         return Ok(result);
     }
     let Some((output, vector_blocks, scalar_tail)) = native_convert_bytes(img, layout) else {

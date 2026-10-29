@@ -147,7 +147,7 @@ mod tests {
 
     #[test]
     fn simd_pool_batches_adjacent_rgba_putpixels_and_reports_each_vector_store() {
-        use crate::compute::{Backend, BackendImpl};
+        use crate::compute::{Backend, BackendImpl, ExecutionContext};
 
         struct RestoreTelemetry(bool);
         impl Drop for RestoreTelemetry {
@@ -168,7 +168,12 @@ mod tests {
         let _restore = RestoreTelemetry(Backend::set_pipeline_telemetry_enabled(true));
         crate::compute::reset_pipeline_operation_telemetry();
         let result = crate::compute::pool_simd::SimdPool
-            .execute_batch(&ops, &source, Some("RGBA"))
+            .execute_batch(
+                &ExecutionContext::for_backend(Backend::Simd),
+                &ops,
+                &source,
+                Some("RGBA"),
+            )
             .unwrap();
         let receipts = crate::compute::take_pipeline_operation_telemetry();
         assert_eq!(receipts.len(), ops.len());

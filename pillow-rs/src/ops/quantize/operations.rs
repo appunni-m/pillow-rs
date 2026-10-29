@@ -328,6 +328,7 @@ fn build_paletted_image(
         ops: PipelineOps::empty(),
         format: None,
         explicit_mode: Some("P".to_string()),
+        mode_selector: Some(crate::image::Mode::ImagePalette8),
         backend: None,
         palette: Some(quantized.palette),
         palette_alpha: quantized.alpha,
