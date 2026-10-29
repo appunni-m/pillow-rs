@@ -3,6 +3,19 @@
 use crate::raster::{GenericImageView, ImageBuffer, Pixel};
 use crate::pipeline::TransposeMethod;
 
+/// An identity transpose run may defer its required owned output until the
+/// batch terminal only when the input contains exactly its logical pixels.
+/// Oversized raw carriers must pass through a real transpose so trailing
+/// samples are discarded with the same normalization as a single operation.
+pub(crate) fn identity_can_defer_output(image: &crate::raster::DynamicImage) -> bool {
+    crate::checked_dims::CheckedDims::new_allow_empty(
+        image.width(),
+        image.height(),
+        image.color().bytes_per_pixel(),
+    )
+    .is_ok_and(|dims| dims.total_bytes() == image.as_bytes().len())
+}
+
 const TRANSPOSE_TILE_SIZE: usize = 32;
 const TRANSPOSE_RGBA_TILE_SIZE: usize = 16;
 const TRANSPOSE_TILE_THRESHOLD_PIXELS: usize = 256 * 1024;
