@@ -142,4 +142,35 @@ impl Mode {
             | Self::ImageRgba32F => None,
         }
     }
+
+    /// Returns the old storage-facing spelling used by unmigrated backend
+    /// callbacks. Internal identities deliberately map to their carrier's
+    /// spelling only at this compatibility boundary; mode-aware CPU families
+    /// must use `self` directly.
+    pub(crate) fn compatibility_name(self) -> &'static str {
+        match self {
+            Self::One => "1",
+            Self::ImageLuma8 => "L",
+            Self::ImageLumaA8 | Self::ImageLumaA16 => "LA",
+            Self::ImageLaPremultiplied8 => "La",
+            Self::ImagePalette8 => "P",
+            Self::ImagePaletteAlpha8 => "PA",
+            Self::ImageRgb8 => "RGB",
+            Self::ImageRgba8 => "RGBA",
+            Self::ImageRgbPremultiplied8 => "RGBa",
+            Self::ImageRgbx8 => "RGBX",
+            Self::ImageCmyk8 => "CMYK",
+            Self::ImageYCbCr8 => "YCbCr",
+            Self::ImageLab8 => "LAB",
+            Self::ImageHsv8 => "HSV",
+            Self::ImageI32 => "I",
+            Self::ImageF32 => "F",
+            Self::ImageI16 => "I;16",
+            Self::ImageI16L => "I;16L",
+            Self::ImageI16B => "I;16B",
+            Self::ImageI16N => "I;16N",
+            Self::ImageRgb16 | Self::ImageRgb32F => "RGB",
+            Self::ImageRgba16 | Self::ImageRgba32F => "RGBA",
+        }
+    }
 }

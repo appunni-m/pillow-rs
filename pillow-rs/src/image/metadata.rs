@@ -117,10 +117,19 @@ impl Image {
                 explicit_mode,
                 mode_selector: None,
                 ..
-            } => explicit_mode
-                .as_deref()
-                .and_then(Mode::from_pillow_name)
-                .or_else(|| ops.mode_preserving().then(|| source.known_mode_selector()).flatten()),
+            } => {
+                if let Some(mode) = explicit_mode
+                    .as_deref()
+                    .and_then(Mode::from_pillow_name)
+                {
+                    return Some(mode);
+                }
+                let mut mode = source.known_mode_selector()?;
+                for op in ops.iter() {
+                    mode = super::known_pipeline_op_mode_selector(op, mode)?;
+                }
+                Some(mode)
+            }
             _ => None,
         }
     }
@@ -147,27 +156,12 @@ impl Image {
                 ..
             } if ops.mode_preserving() => source.mode_selector(),
             Image::Pipeline {
-                source,
-                ops,
                 explicit_mode: None,
-                mode,
                 ..
             } => {
-                let planned = mode.get_or_init(|| {
-                    let mut current = source.mode()?;
-                    for op in ops.iter() {
-                        let Some(next) = known_pipeline_op_mode(op, &current) else {
-                            return Ok(None);
-                        };
-                        current = next;
-                    }
-                    Ok(Some(current))
-                });
-                if let Some(name) = planned.as_ref().map_err(Clone::clone)?
-                    && let Some(mode) = Mode::from_pillow_name(name)
-                {
-                    return Ok(mode);
-                }
+                // TODO(pillow-rs#3ptb): Add typed output-mode declarations
+                // for every transition that still reaches materialization;
+                // this carrier-derived result is only a compatibility path.
                 let image = self.materialized_shared()?;
                 Ok(Mode::for_image(&image, self.explicit_mode()))
             }

@@ -131,10 +131,10 @@ fn retained_palette(
     )
 }
 
-fn expanded_palette_mode(image: &DynamicImage) -> Result<&'static str, PilError> {
+fn expanded_palette_mode(image: &DynamicImage) -> Result<Mode, PilError> {
     match image {
-        DynamicImage::ImageRgb8(_) => Ok("RGB"),
-        DynamicImage::ImageRgba8(_) => Ok("RGBA"),
+        DynamicImage::ImageRgb8(_) => Ok(Mode::ImageRgb8),
+        DynamicImage::ImageRgba8(_) => Ok(Mode::ImageRgba8),
         _ => Err(PilError::InternalError(
             "palette expansion did not produce RGB or RGBA samples".to_owned(),
         )),
@@ -465,7 +465,7 @@ impl Image {
             Image::Pipeline { .. } => {
                 let image = self.materialized_shared()?;
                 let explicit_mode = self.explicit_mode().map(str::to_owned);
-                let mode = super::Mode::for_image(&image, explicit_mode.as_deref());
+                let mode = self.mode_selector()?;
                 Ok(Image::Loaded(LoadedData {
                     decoded_mode: image.color().into(),
                     mode,
@@ -507,7 +507,6 @@ impl Image {
             Image::Pipeline {
                 source,
                 ops,
-                explicit_mode,
                 backend,
                 palette,
                 palette_alpha,
@@ -519,7 +518,6 @@ impl Image {
                     Self::evaluate_pipeline(
                         source,
                         ops.as_slice(),
-                        explicit_mode,
                         *backend,
                         palette,
                         palette_alpha,
@@ -550,7 +548,6 @@ impl Image {
     fn evaluate_pipeline(
         source: &Image,
         ops: &[PipelineOp],
-        explicit_mode: &Option<String>,
         backend: Option<crate::compute::Backend>,
         palette: &Option<Vec<u8>>,
         palette_alpha: &Option<Vec<u8>>,
@@ -570,7 +567,6 @@ impl Image {
                         source_image.as_ref(),
                         &source_image,
                         prefix_ops,
-                        explicit_mode,
                         &prepared,
                         &None,
                         &None,
@@ -583,7 +579,7 @@ impl Image {
                 &prepared,
                 suffix_ops,
                 &prefix_image,
-                explicit_mode.as_deref(),
+                source.mode_selector()?,
             );
         }
         let prepared = crate::compute::prepare_execution(ops, backend)?;
@@ -593,7 +589,6 @@ impl Image {
             source_image.as_ref(),
             &source_image,
             ops,
-            explicit_mode,
             &prepared,
             palette,
             palette_alpha,
@@ -603,7 +598,6 @@ impl Image {
     pub(super) fn evaluate_pipeline_uncached(
         source: &Image,
         ops: &[PipelineOp],
-        explicit_mode: &Option<String>,
         backend: Option<crate::compute::Backend>,
         palette: &Option<Vec<u8>>,
         palette_alpha: &Option<Vec<u8>>,
@@ -615,7 +609,6 @@ impl Image {
             source_image.as_ref(),
             &source_image,
             ops,
-            explicit_mode,
             &prepared,
             palette,
             palette_alpha,
@@ -627,7 +620,6 @@ impl Image {
         img: &DynamicImage,
         shared_img: &Arc<DynamicImage>,
         ops: &[PipelineOp],
-        explicit_mode: &Option<String>,
         prepared: &crate::compute::PreparedExecution,
         palette: &Option<Vec<u8>>,
         palette_alpha: &Option<Vec<u8>>,
@@ -643,69 +635,12 @@ impl Image {
             );
         }
 
-        // RemapPalette's kernel needs the source mode to distinguish L samples
-        // from P indices. The pipeline remains P-tagged for the result, but
-        // passing that destination tag into the kernel would skip the public
-        // L-source path and reinterpret luma values as palette indices.
-        let remap_source_mode =
-            if ops.len() == 1 && matches!(ops.first(), Some(PipelineOp::RemapPalette { .. })) {
-                Some(source.mode()?)
-            } else {
-                None
-            };
-        // A one-step conversion still needs the source-only mode tag at the
-        // executor boundary. RGBX and RGBa share RGBA storage, but their fourth
-        // byte has different Pillow semantics; the pipeline output tag is the
-        // destination and cannot stand in for that source tag.
-        let convert_source_mode =
-            if ops.len() == 1 && matches!(ops.first(), Some(PipelineOp::Convert { .. })) {
-                // The concrete buffer is still in the source layout when a
-                // one-step conversion begins. In particular, RGB -> CMYK/HSV/
-                // YCbCr carries a nonstandard destination tag on the lazy result,
-                // but preflight and the adapter must inspect the source mode.
-                Some(source.mode()?)
-            } else {
-                None
-            };
-        // Encoded I;16 inputs decode to the generic Luma16 buffer while their
-        // source-only mode remains in the lazy Bytes header. Preserve that
-        // mode at the executor boundary so a strict SIMD resize can select
-        // the native two-byte sample kernel instead of rejecting the image as
-        // an untagged layout.
-        let source_luma16_mode = if remap_source_mode.is_none()
-            && convert_source_mode.is_none()
-            && explicit_mode.is_none()
-            && matches!(img, DynamicImage::ImageLuma16(_))
-        {
-            Some(source.mode()?)
-        } else {
-            None
-        };
-        // A flattened pipeline still starts with the root source buffer.  A
-        // terminal Convert/Colorize/etc. may set `explicit_mode` to the
-        // destination mode, but that tag must not be used to interpret the
-        // bytes written by earlier setup operations such as PutPixel.  Keep
-        // the source layout as the initial GPU mode and let the batch planner
-        // advance it after each representable mode-changing operation.
-        let initial_source_mode = if remap_source_mode.is_none()
-            && convert_source_mode.is_none()
-            && source_luma16_mode.is_none()
-        {
-            Some(source.mode()?)
-        } else {
-            None
-        };
-        let execution_mode = remap_source_mode
-            .as_deref()
-            .or(convert_source_mode.as_deref())
-            .or(source_luma16_mode.as_deref())
-            .or(initial_source_mode.as_deref())
-            .or(explicit_mode.as_deref());
-        // RGBX uses RGBA storage but its fourth byte is padding, not an alpha
-        // sample. The native SIMD Convert kernel carries that logical source
-        // tag and supplies opaque alpha while gathering; do not normalize the
-        // whole frame here just to rewrite the padding byte.
-        crate::compute::execute_prepared_shared(prepared, ops, shared_img, execution_mode)
+        crate::compute::execute_prepared_shared(
+            prepared,
+            ops,
+            shared_img,
+            source.mode_selector()?,
+        )
     }
 
     fn evaluate_palette_pipeline(
@@ -716,9 +651,9 @@ impl Image {
         palette: &Option<Vec<u8>>,
         palette_alpha: &Option<Vec<u8>>,
     ) -> Result<Arc<DynamicImage>, PilError> {
-        let (palette_mode, palette_mode_name) = match source.mode_selector()? {
-            Mode::ImagePalette8 => (Mode::ImagePalette8, "P"),
-            Mode::ImagePaletteAlpha8 => (Mode::ImagePaletteAlpha8, "PA"),
+        let palette_mode = match source.mode_selector()? {
+            Mode::ImagePalette8 => Mode::ImagePalette8,
+            Mode::ImagePaletteAlpha8 => Mode::ImagePaletteAlpha8,
             mode => {
                 return Err(PilError::InternalError(format!(
                     "palette samples carry incompatible mode {mode:?}"
@@ -733,7 +668,7 @@ impl Image {
                 prepared,
                 ops,
                 img,
-                Some(palette_mode_name),
+                palette_mode,
             );
         }
 
@@ -783,7 +718,7 @@ impl Image {
             prepared,
             indexed_prefix,
             img,
-            Some("P"),
+            Mode::ImagePalette8,
         )?;
         let DynamicImage::ImageLuma8(indices) = indexed.as_ref() else {
             return Err(PilError::InternalError(
@@ -802,7 +737,7 @@ impl Image {
             prepared,
             suffix_ops,
             &Arc::new(expanded),
-            Some(expanded_mode),
+            expanded_mode,
         )
     }
 
@@ -849,7 +784,7 @@ impl Image {
             prepared,
             ops,
             &Arc::new(expanded),
-            Some(expanded_mode),
+            expanded_mode,
         )
     }
 
@@ -863,7 +798,6 @@ impl Image {
             Image::Pipeline {
                 source,
                 ops,
-                explicit_mode,
                 backend,
                 palette,
                 palette_alpha,
@@ -873,7 +807,6 @@ impl Image {
                 Self::evaluate_pipeline_uncached(
                     source,
                     ops,
-                    explicit_mode,
                     *backend,
                     palette,
                     palette_alpha,

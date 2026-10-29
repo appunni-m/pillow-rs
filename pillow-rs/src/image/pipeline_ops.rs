@@ -322,6 +322,7 @@ pub(crate) fn known_pipeline_op_mode(op: &PipelineOp, current: &str) -> Option<S
                 _ => return None,
             },
             PipelineOp::ConvertLab { .. } => "LAB",
+            PipelineOp::RemapPalette { .. } => "P",
             PipelineOp::Grayscale => "L",
             PipelineOp::Colorize { .. } => "RGB",
             PipelineOp::Constant { .. } => "L",
@@ -334,6 +335,52 @@ pub(crate) fn known_pipeline_op_mode(op: &PipelineOp, current: &str) -> Option<S
         }
         .to_owned(),
     )
+}
+
+/// Computes the logical mode after one operation without converting the mode
+/// selector to a Pillow string. Unknown transitions stay unknown until their
+/// owning operation declares its output mode.
+pub(crate) fn known_pipeline_op_mode_selector(op: &PipelineOp, current: Mode) -> Option<Mode> {
+    if matches!(
+        op,
+        PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. }
+    ) && current == Mode::ImagePalette8
+    {
+        return Some(Mode::ImageRgb8);
+    }
+    if op_preserves_mode(op) {
+        return Some(current);
+    }
+
+    match op {
+        PipelineOp::Convert { mode, .. } | PipelineOp::Merge { mode, .. } => Some(match mode {
+            ColorMode::L => Mode::ImageLuma8,
+            ColorMode::LA => Mode::ImageLumaA8,
+            ColorMode::LaPremultiplied => Mode::ImageLaPremultiplied8,
+            ColorMode::RGB => Mode::ImageRgb8,
+            ColorMode::RGBA => Mode::ImageRgba8,
+            ColorMode::RgbPremultiplied => Mode::ImageRgbPremultiplied8,
+            ColorMode::Rgbx => Mode::ImageRgbx8,
+            ColorMode::CMYK => Mode::ImageCmyk8,
+            ColorMode::YCbCr => Mode::ImageYCbCr8,
+            ColorMode::HSV => Mode::ImageHsv8,
+            ColorMode::I => Mode::ImageI32,
+            ColorMode::F => Mode::ImageF32,
+            ColorMode::I16 => Mode::ImageI16,
+            ColorMode::P => Mode::ImagePalette8,
+            ColorMode::Mode1 => Mode::One,
+        }),
+        PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. } => Some(current),
+        PipelineOp::ConvertLab { .. } => Some(Mode::ImageLab8),
+        PipelineOp::RemapPalette { .. } => Some(Mode::ImagePalette8),
+        PipelineOp::Grayscale | PipelineOp::Constant { .. } | PipelineOp::ExtractBand { .. }
+        | PipelineOp::EffectNoise { .. } => Some(Mode::ImageLuma8),
+        PipelineOp::Colorize { .. } => Some(Mode::ImageRgb8),
+        PipelineOp::PutAlpha { mode, .. } | PipelineOp::PutAlphaData { mode, .. } => {
+            known_putalpha_mode(*mode).and_then(Mode::from_pillow_name)
+        }
+        _ => None,
+    }
 }
 
 /// Rounds a non-negative dimension using Python's ties-to-even rule.
@@ -462,7 +509,13 @@ fn new_pipeline_node(
     let mode_selector = explicit_mode
         .as_deref()
         .and_then(Mode::from_pillow_name)
-        .or_else(|| ops.mode_preserving().then(|| source.known_mode_selector()).flatten());
+        .or_else(|| {
+            let mut mode = source.known_mode_selector()?;
+            for op in ops.iter() {
+                mode = known_pipeline_op_mode_selector(op, mode)?;
+            }
+            Some(mode)
+        });
     Image::Pipeline {
         source,
         ops,

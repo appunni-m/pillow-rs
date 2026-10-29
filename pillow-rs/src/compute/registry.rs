@@ -26,6 +26,7 @@
 
 use crate::compute::{Backend, ExecutionContext};
 use crate::error::PilError;
+use crate::image::Mode;
 use crate::pipeline::PipelineOp;
 use crate::raster::DynamicImage;
 use std::collections::HashMap;
@@ -408,6 +409,79 @@ pub(crate) fn execute_cpu_in_context(
         // every CPU operation receives its backend and architecture without
         // growing this per-operation dispatch list.
         _ => execute_cpu(op, img, mode),
+    }
+}
+
+/// Executes migrated CPU families with the wrapper's precomputed mode.
+/// Remaining compatibility families receive the explicitly mapped carrier
+/// spelling at the final adapter boundary; their owner-local TODOs track that
+/// migration debt.
+pub(crate) fn execute_cpu_in_context_with_mode(
+    context: &ExecutionContext,
+    op: &PipelineOp,
+    img: &DynamicImage,
+    mode: Mode,
+) -> Result<DynamicImage, PilError> {
+    if !matches!(context.backend(), Backend::Cpu | Backend::ParallelCpu)
+        || !context.architecture().supports_cpu()
+    {
+        return Err(PilError::InternalError(format!(
+            "CPU operation registry received {:?}/{:?} context",
+            context.backend(),
+            context.architecture()
+        )));
+    }
+
+    match op {
+        PipelineOp::Resize { w, h, filter } => {
+            crate::compute::pool_cpu::ops::resize::execute_resize_in_context(
+                context, img, *w, *h, filter, mode,
+            )
+        }
+        PipelineOp::ResizeBoxed {
+            w,
+            h,
+            filter,
+            box_coords,
+        } => crate::compute::pool_cpu::ops::resize::execute_resize_boxed_in_context(
+            context,
+            img,
+            *w,
+            *h,
+            *filter,
+            *box_coords,
+            mode,
+        ),
+        PipelineOp::Reduce {
+            x_factor,
+            y_factor,
+        } => crate::compute::pool_cpu::ops::reduce::execute_reduce_with_mode(
+            img, *x_factor, *y_factor, mode,
+        ),
+        PipelineOp::Grayscale => {
+            crate::compute::pool_cpu::ops::grayscale::op_grayscale_with_mode(img, mode)
+        }
+        PipelineOp::Eval { lut } => crate::compute::pool_cpu::ops::eval::op_eval(img, lut, mode),
+        PipelineOp::Expand { border, fill } => {
+            crate::compute::pool_cpu::ops::expand::op_expand_with_mode(img, *border, *fill, mode)
+        }
+        PipelineOp::Brightness { factor } => {
+            crate::compute::pool_cpu::ops::enhance::op_enhance_brightness(img, *factor, mode)
+        }
+        PipelineOp::Contrast { factor } => {
+            crate::compute::pool_cpu::ops::enhance::op_enhance_contrast(img, *factor, mode)
+        }
+        PipelineOp::ColorSaturation { factor } => {
+            crate::compute::pool_cpu::ops::enhance::op_enhance_color_saturation(
+                img, *factor, mode,
+            )
+        }
+        PipelineOp::Sharpness { factor } => {
+            crate::compute::pool_cpu::ops::enhance::op_enhance_sharpness(img, *factor, mode)
+        }
+        // TODO(pillow-rs#3ptb): Replace this compatibility call with the
+        // operation's typed mode strategy before completing CPU routing.
+        _ => execute_cpu_in_context(context, op, img, Some(mode.compatibility_name())),
     }
 }
 

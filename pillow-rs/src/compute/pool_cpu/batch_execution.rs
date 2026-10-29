@@ -2,6 +2,7 @@ use super::{fused_multiply_screen, fused_point_batch, ops};
 use crate::compute::registry;
 use crate::compute::{Backend, ExecutionContext};
 use crate::error::PilError;
+use crate::image::Mode;
 use crate::pipeline::{PipelineOp, TransposeTransform};
 use crate::raster::{DynamicImage, GenericImageView};
 
@@ -11,6 +12,31 @@ pub(super) fn execute_batch(
     img: &DynamicImage,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    execute_batch_inner(context, ops, img, mode.map(str::to_owned), None)
+}
+
+pub(super) fn execute_batch_with_mode(
+    context: &ExecutionContext,
+    ops: &[PipelineOp],
+    img: &DynamicImage,
+    mode: Mode,
+) -> Result<DynamicImage, PilError> {
+    execute_batch_inner(
+        context,
+        ops,
+        img,
+        Some(mode.compatibility_name().to_owned()),
+        Some(mode),
+    )
+}
+
+fn execute_batch_inner(
+    context: &ExecutionContext,
+    ops: &[PipelineOp],
+    img: &DynamicImage,
+    mode: Option<String>,
+    mut mode_selector: Option<Mode>,
+) -> Result<DynamicImage, PilError> {
     if context.backend() != Backend::Cpu || !context.architecture().supports_cpu() {
         return Err(PilError::InternalError(format!(
             "CPU operation router received {:?}/{:?} context",
@@ -18,12 +44,15 @@ pub(super) fn execute_batch(
             context.architecture()
         )));
     }
-    let mut result = None;
-    let mut current_mode = mode.map(str::to_owned);
-    let mut resources = crate::compute::host_resource_telemetry(img);
     let allow_untagged_multiply_fusion = mode.is_none();
+    let mut result = None;
+    let mut current_mode = mode;
+    let mut resources = crate::compute::host_resource_telemetry(img);
     let mut index = 0;
 
+    // TODO(pillow-rs#3ptb): Pass `mode_selector` through the PutPixel, Draw,
+    // AlphaComposite/Mirror, and Multiply/Screen fusion owners. Those
+    // mode-preserving fusions still inspect the compatibility spelling.
     while index < ops.len() {
         let input = result.as_ref().unwrap_or(img);
         if matches!(&ops[index], PipelineOp::PutPixel { .. })
@@ -40,6 +69,7 @@ pub(super) fn execute_batch(
                 index,
                 input,
                 current_mode.as_deref(),
+                mode_selector,
                 &mut resources,
             )?
         {
@@ -92,6 +122,7 @@ pub(super) fn execute_batch(
             index,
             input,
             current_mode.as_deref(),
+            mode_selector,
             &mut resources,
         )? {
             apply_step(step, &mut result, &mut current_mode, &mut index);
@@ -99,12 +130,22 @@ pub(super) fn execute_batch(
         }
 
         let op = &ops[index];
-        let next = execute_single(context, op, input, current_mode.as_deref(), &mut resources)?;
+        let next = execute_single(
+            context,
+            op,
+            input,
+            current_mode.as_deref(),
+            mode_selector,
+            &mut resources,
+        )?;
         result = Some(next);
         current_mode = crate::compute::pool_simd::ops::adapters::simd_mode_after_op(
             op,
             current_mode.as_deref(),
         );
+        mode_selector = mode_selector.and_then(|mode| {
+            crate::image::known_pipeline_op_mode_selector(op, mode)
+        });
         index += 1;
     }
 
@@ -238,6 +279,7 @@ fn try_transpose_run(
     index: usize,
     input: &DynamicImage,
     mode: Option<&str>,
+    mode_selector: Option<Mode>,
     resources: &mut crate::compute::PipelineResourceTelemetry,
 ) -> Result<Option<BatchStep>, PilError> {
     let PipelineOp::Transpose { method } = &ops[index] else {
@@ -274,12 +316,8 @@ fn try_transpose_run(
         for _ in 0..consumed {
             crate::compute::begin_pipeline_operation_telemetry("Transpose");
         }
-        let next = registry::execute_cpu_in_context(
-            context,
-            &PipelineOp::Transpose { method },
-            input,
-            mode,
-        );
+        let fused = PipelineOp::Transpose { method };
+        let next = execute_cpu_with_mode(context, &fused, input, mode, mode_selector);
         finish_cpu_operations(consumed);
         let next = next?;
         crate::compute::account_host_buffer_boundary(resources, input, &next);
@@ -418,6 +456,7 @@ fn try_point_batch(
     index: usize,
     input: &DynamicImage,
     mode: Option<&str>,
+    mode_selector: Option<Mode>,
     resources: &mut crate::compute::PipelineResourceTelemetry,
 ) -> Result<Option<BatchStep>, PilError> {
     let Some((consumed, fused)) = fused_point_batch(&ops[index..], input, mode) else {
@@ -435,7 +474,7 @@ fn try_point_batch(
         {
             Ok(input.clone())
         }
-        _ => registry::execute_cpu_in_context(context, &fused, input, mode),
+        _ => execute_cpu_with_mode(context, &fused, input, mode, mode_selector),
     };
     let next = match next {
         Ok(next) => next,
@@ -461,10 +500,11 @@ fn execute_single(
     op: &PipelineOp,
     input: &DynamicImage,
     mode: Option<&str>,
+    mode_selector: Option<Mode>,
     resources: &mut crate::compute::PipelineResourceTelemetry,
 ) -> Result<DynamicImage, PilError> {
     crate::compute::begin_pipeline_operation_telemetry(registry::variant_key(op));
-    let execution = registry::execute_cpu_in_context(context, op, input, mode);
+    let execution = execute_cpu_with_mode(context, op, input, mode, mode_selector);
     let next = match execution {
         Ok(next) => next,
         Err(error) => {
@@ -475,6 +515,19 @@ fn execute_single(
     finish_cpu_operations(1);
     crate::compute::account_host_buffer_boundary(resources, input, &next);
     Ok(next)
+}
+
+fn execute_cpu_with_mode(
+    context: &ExecutionContext,
+    op: &PipelineOp,
+    input: &DynamicImage,
+    mode_name: Option<&str>,
+    mode_selector: Option<Mode>,
+) -> Result<DynamicImage, PilError> {
+    match mode_selector {
+        Some(mode) => registry::execute_cpu_in_context_with_mode(context, op, input, mode),
+        None => registry::execute_cpu_in_context(context, op, input, mode_name),
+    }
 }
 
 fn finish_cpu_operations(count: usize) {

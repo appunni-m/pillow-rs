@@ -84,7 +84,7 @@ impl Image {
                 } else {
                     let image = self.materialized_shared()?;
                     let decoded_mode = image.color().into();
-                    let mode = Mode::for_image(&image, explicit_mode.as_deref());
+                    let mode = self.mode_selector()?;
                     Image::Loaded(LoadedData {
                         image,
                         mode,
@@ -127,7 +127,6 @@ impl Image {
             Image::Pipeline {
                 source,
                 ops,
-                explicit_mode,
                 backend,
                 palette,
                 palette_alpha,
@@ -137,7 +136,6 @@ impl Image {
                 Self::evaluate_pipeline_uncached(
                     source,
                     ops,
-                    explicit_mode,
                     *backend,
                     palette,
                     palette_alpha,

@@ -3,7 +3,7 @@
 use crate::compute::registry;
 use crate::compute::{Backend, BackendImpl, ExecutionContext};
 use crate::error::PilError;
-use crate::image::{Image, preserve_mode};
+use crate::image::{Image, Mode, preserve_mode};
 use crate::pipeline::PipelineOp;
 use crate::raster::{
     DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, RgbImage, RgbaImage,
@@ -266,6 +266,16 @@ impl BackendImpl for CpuPool {
         mode: Option<&str>,
     ) -> Result<DynamicImage, PilError> {
         batch_execution::execute_batch(context, ops, img, mode)
+    }
+
+    fn execute_batch_with_mode(
+        &self,
+        context: &ExecutionContext,
+        ops: &[PipelineOp],
+        img: &DynamicImage,
+        mode: Mode,
+    ) -> Result<DynamicImage, PilError> {
+        batch_execution::execute_batch_with_mode(context, ops, img, mode)
     }
 }
 

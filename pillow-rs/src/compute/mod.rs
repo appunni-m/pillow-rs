@@ -24,6 +24,7 @@
 //! source of truth used by the routing and execution phases.
 
 use crate::error::PilError;
+use crate::image::Mode;
 use crate::pipeline::PipelineOp;
 use crate::raster::DynamicImage;
 
@@ -316,6 +317,30 @@ pub(crate) trait BackendImpl: Send + Sync {
         img: &DynamicImage,
         mode: Option<&str>,
     ) -> Result<DynamicImage, PilError>;
+    /// Executes with the wrapper's precomputed mode selector.
+    ///
+    /// Backends still awaiting typed-mode migration pass through an explicit
+    /// storage-facing compatibility spelling here. CPU overrides this method
+    /// and retains the selector through each operation in the batch.
+    fn execute_batch_with_mode(
+        &self,
+        context: &ExecutionContext,
+        ops: &[PipelineOp],
+        img: &DynamicImage,
+        mode: Mode,
+    ) -> Result<DynamicImage, PilError> {
+        self.execute_batch(context, ops, img, Some(mode.compatibility_name()))
+    }
+    /// Executes a strict backend batch with the wrapper's typed mode.
+    fn execute_batch_strict_with_mode(
+        &self,
+        context: &ExecutionContext,
+        ops: &[PipelineOp],
+        img: &DynamicImage,
+        mode: Mode,
+    ) -> Result<DynamicImage, PilError> {
+        self.execute_batch_strict(context, ops, img, Some(mode.compatibility_name()))
+    }
     /// Executes a sequence without allowing the backend to recover through a
     /// different implementation.  Explicit backend locks use this boundary
     /// for capability audits; automatic routing continues to use

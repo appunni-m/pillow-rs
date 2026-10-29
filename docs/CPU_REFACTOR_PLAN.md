@@ -121,28 +121,37 @@ were found. The archive remains an inert reference and was not changed.
 
 The payload-free core `Mode` enum now exists in `pillow-rs/src/image/mode.rs`.
 `LoadedData` computes it once, lazy pipeline nodes carry it when known, and
-`Image::mode_selector()` exposes it. CPU registry and most operation entry
-points still pass mode strings, and constructors are not yet typed. Eval now
-receives a `Mode` strategy and maps native byte samples without widening or
-inferring channel count from storage; the registry temporarily parses its
-existing mode string at the callback. Reduce now declares its exhaustive
-typed mode strategy in the family folder and validates every mode/carrier pair.
+`Image::mode_selector()` exposes it. Pipeline materialization now starts batch
+execution from the source wrapper's cached `Mode`; the serial CPU executor keeps
+that selector through statically known mode transitions. Resize, Reduce,
+Grayscale, Eval, Expand, and the four Enhance operations receive typed `Mode`
+directly at their CPU strategy entry. Compatibility `CpuOpFn` and `SimdOpFn`
+callbacks still accept strings, and unconverted CPU families cross an explicit
+carrier-name adapter at the registry boundary. Constructors and direct
+operation APIs are not fully typed yet. Eval now maps native byte samples
+without widening or inferring channel count from storage; its support table
+still needs to become the shared reporting/admission contract. Reduce now
+declares its exhaustive typed mode strategy in the family folder and validates
+every mode/carrier pair.
 The four `I;16*` identities use native `u16` averaging; internal LA16, RGB16,
 RGBA16, RGB32F, and RGBA32F use typed native sample reducers and carry a nearby
 `NO_PILLOW_SUPPORT` marker. Grayscale also declares exhaustive Mode dispatch
 and carrier checks. Outstanding TODOs cover the CPU registry's context-dropping
-fallback, the remaining string-based registry mode handoff, native mode paths
-for Composite, Draw, Pad, and Thumbnail, plus the remaining per-family support
-declarations. Enhance now lives under `pool_cpu/ops/enhance/`; its four
+fallback, remaining string-based direct APIs, native mode paths for Composite,
+Draw, Pad, Thumbnail, Transpose, and fused PutPixel/Draw/AlphaComposite/Mirror/
+Multiply/Screen routes, plus the remaining per-family support declarations.
+Automatic SIMD segmentation and GPU still receive the temporary carrier-name
+adapter. Mode transitions without a typed declaration can still reach a
+materialization/storage-derived compatibility path; add a typed output
+declaration at each owner before removing it. Enhance now lives under
+`pool_cpu/ops/enhance/`; its four
 operation entry points take `Mode`, and the family declares exhaustive mode
 strategies with carrier validation. Brightness uses native byte, u16, i32, and
 f32 sample kernels; ColorSaturation and Sharpness use native byte, u16, i32,
 and f32 samples with direct mode-specific channel rules. Core-only One/P/PA and
 internal high-depth paths carry nearby `NO_PILLOW_SUPPORT` markers. Contrast
 still uses the conversion-defined fallback for noncanonical modes and has an
-owner-local TODO. The registry currently translates its compatibility mode
-string when calling Enhance; remove that bridge when the registry carries
-cached `Mode`. Reduce's compatibility string and untagged storage-derived
+owner-local TODO. Reduce's direct string adapter and untagged storage-derived
 alpha path remain TODOs until all callers forward cached Mode.
 Expand now lives in its own family folder. `expand/ops.rs` declares all 25
 mode/carrier pairs and orchestrates execution; serial native byte, u16, and f32
@@ -165,8 +174,12 @@ output mode, I/F/One strategy, and scalar-FMA eligibility with the context's
 default fallback. The distinct `one/`, `i/`, and `f/` mode strategies own their
 default kernels; I and F put x86 scalar-FMA entry kernels under `kernels/fma.rs`.
 The archived numeric resampling arithmetic and boxed I passes were relocated
-without changing their arithmetic order. The registry still translates its
-compatibility string to `Mode`, direct registry callbacks retain a string
+without changing their arithmetic order. The main CPU prepared-batch path now
+passes cached `Mode` directly; direct registry callbacks retain a string
 adapter, and support reporting/admission do not yet consume the same contract.
 These paths remain TODOs under `pillow-rs#3ptb`; this Resize migration is
 incomplete and unvalidated.
+
+The typed-mode routing checkpoint is unvalidated. No build, formatter,
+checkstyle, lint, test, parity, benchmark, or coverage command has been run for
+it.

@@ -20,6 +20,7 @@ use super::{
     take_pipeline_backend_override, take_pipeline_dispatch_count,
     take_pipeline_resize_coeff_cache_stats, take_pipeline_resource_telemetry,
 };
+use crate::image::Mode;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -417,7 +418,50 @@ pub(crate) fn execute_prepared(
         return execute_automatic_simd(prepared, ops, img, mode, timed, backend_start);
     }
     validate_explicit_simd_support(prepared, ops, img, mode)?;
-    execute_prepared_on_backend(prepared, ops, img, mode, timed, backend_start)
+    execute_prepared_on_backend(prepared, ops, img, mode, None, timed, backend_start)
+}
+
+/// Executes a prepared batch with the Pillow wrapper's cached logical mode.
+pub(crate) fn execute_prepared_with_mode(
+    prepared: &PreparedExecution,
+    ops: &[PipelineOp],
+    img: &DynamicImage,
+    mode: Mode,
+) -> Result<DynamicImage, PilError> {
+    if let Some(result) = empty_convert_result(ops, img) {
+        return Ok(result);
+    }
+    if ops.is_empty() {
+        return Ok(img.clone());
+    }
+    let timed = pipeline_telemetry_enabled();
+    if timed {
+        reset_execution_telemetry();
+    }
+    let backend_start = timed.then(pipeline_timestamp).flatten();
+    let compatibility_mode = mode.compatibility_name();
+    if prepared.requested_backend.is_none() && prepared.context.backend() == Backend::Simd {
+        // TODO(pillow-rs#3ptb): Carry typed Mode through automatic SIMD
+        // segmentation when that backend is folded into CPU architecture paths.
+        return execute_automatic_simd(
+            prepared,
+            ops,
+            img,
+            Some(compatibility_mode),
+            timed,
+            backend_start,
+        );
+    }
+    validate_explicit_simd_support(prepared, ops, img, Some(compatibility_mode))?;
+    execute_prepared_on_backend(
+        prepared,
+        ops,
+        img,
+        Some(compatibility_mode),
+        Some(mode),
+        timed,
+        backend_start,
+    )
 }
 
 fn empty_convert_result(ops: &[PipelineOp], img: &DynamicImage) -> Option<DynamicImage> {
@@ -541,6 +585,7 @@ fn execute_prepared_on_backend(
     ops: &[PipelineOp],
     img: &DynamicImage,
     mode: Option<&str>,
+    mode_selector: Option<Mode>,
     timed: bool,
     backend_start: Option<Instant>,
 ) -> Result<DynamicImage, PilError> {
@@ -563,6 +608,7 @@ fn execute_prepared_on_backend(
         ops,
         img,
         mode,
+        mode_selector,
         timed,
         &mut execution_backend,
         &mut fallback_reason,
@@ -596,14 +642,20 @@ fn execute_pool_with_simd_recovery(
     ops: &[PipelineOp],
     img: &DynamicImage,
     mode: Option<&str>,
+    mode_selector: Option<Mode>,
     timed: bool,
     effective_backend: &mut Backend,
     fallback_reason: &mut Option<String>,
 ) -> Result<DynamicImage, PilError> {
-    let execution = if prepared.requested_backend == Some(Backend::Gpu) {
-        pool.execute_batch_strict(&prepared.context, ops, img, mode)
-    } else {
-        pool.execute_batch(&prepared.context, ops, img, mode)
+    let execution = match mode_selector {
+        Some(mode) if prepared.requested_backend == Some(Backend::Gpu) => {
+            pool.execute_batch_strict_with_mode(&prepared.context, ops, img, mode)
+        }
+        Some(mode) => pool.execute_batch_with_mode(&prepared.context, ops, img, mode),
+        None if prepared.requested_backend == Some(Backend::Gpu) => {
+            pool.execute_batch_strict(&prepared.context, ops, img, mode)
+        }
+        None => pool.execute_batch(&prepared.context, ops, img, mode),
     };
     match execution {
         Err(error)
@@ -611,7 +663,15 @@ fn execute_pool_with_simd_recovery(
                 && prepared.requested_backend != Some(Backend::Simd)
                 && is_simd_capability_error(&error) =>
         {
-            retry_simd_capability_failure(ops, img, mode, timed, effective_backend, fallback_reason)
+            retry_simd_capability_failure(
+                ops,
+                img,
+                mode,
+                mode_selector,
+                timed,
+                effective_backend,
+                fallback_reason,
+            )
         }
         result => result,
     }
@@ -621,6 +681,7 @@ fn retry_simd_capability_failure(
     ops: &[PipelineOp],
     img: &DynamicImage,
     mode: Option<&str>,
+    mode_selector: Option<Mode>,
     timed: bool,
     effective_backend: &mut Backend,
     fallback_reason: &mut Option<String>,
@@ -642,7 +703,15 @@ fn retry_simd_capability_failure(
         .iter()
         .find(|candidate| candidate.name() == Backend::Cpu)
         .ok_or_else(|| PilError::ValueError("CPU backend not available".into()))?;
-    cpu.execute_batch(&ExecutionContext::for_backend(Backend::Cpu), ops, img, mode)
+    match mode_selector {
+        Some(mode) => cpu.execute_batch_with_mode(
+            &ExecutionContext::for_backend(Backend::Cpu),
+            ops,
+            img,
+            mode,
+        ),
+        None => cpu.execute_batch(&ExecutionContext::for_backend(Backend::Cpu), ops, img, mode),
+    }
 }
 
 fn record_prepared_backend_telemetry(
@@ -707,13 +776,13 @@ pub(crate) fn execute_prepared_shared(
     prepared: &PreparedExecution,
     ops: &[PipelineOp],
     img: &Arc<DynamicImage>,
-    mode: Option<&str>,
+    mode: Mode,
 ) -> Result<Arc<DynamicImage>, PilError> {
     if matches!(
         prepared.context.backend(),
         Backend::Cpu | Backend::Simd | Backend::ParallelCpu
     )
-        && mode == Some("I")
+        && mode == Mode::ImageI32
         && ops.len() == 1
         && let PipelineOp::Filter3x3 {
             kernel,
@@ -795,5 +864,5 @@ pub(crate) fn execute_prepared_shared(
         }
     }
 
-    execute_prepared(prepared, ops, img, mode).map(Arc::new)
+    execute_prepared_with_mode(prepared, ops, img, mode).map(Arc::new)
 }
