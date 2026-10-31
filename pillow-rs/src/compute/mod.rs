@@ -89,11 +89,12 @@ pub(crate) use backend_state::{
 };
 pub(crate) use eager::{
     begin_eager_cpu_mandelbrot_telemetry, execute_eager_cpu_getprojection,
+    execute_eager_cpu_linear_gradient, execute_eager_cpu_radial_gradient,
     execute_eager_cpu_arch_bytes, execute_eager_cpu_arch_image_operation,
     execute_eager_cpu_image_operation,
     execute_eager_cpu_shared_result,
     finish_eager_cpu_mandelbrot_telemetry,
-    try_simd_linear_gradient, try_simd_mandelbrot, try_simd_radial_gradient,
+    try_simd_mandelbrot,
 };
 #[cfg(feature = "gpu")]
 pub(crate) use eager::{

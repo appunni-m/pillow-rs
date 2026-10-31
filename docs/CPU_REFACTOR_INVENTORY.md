@@ -3,12 +3,13 @@
 Status: baseline inventory captured; the 98 CPU and 182 SIMD files are preserved below pool_cpu/legacy; maintained implementation is in progress.
 Baseline commit: 3f9dfd4036caa061eabcf2255c9f34a745df9c7e
 Working checkout: `/Users/lazytrot/work/pillow-rs`, branch
-`codex/cpu-mode-aware-refactor-backup-20261029` at `2ea7cd97c`, one local WIP
-checkpoint above `origin/codex/cpu-mode-aware-refactor-backup-20261029` at
-`204221686`. The checkpoint is explicitly unverified. The current source-only
-continuation is not yet committed. Eval, ImageOps Expand, Geometry, Crop,
-Effects, and projection source work is recorded below. No build, formatter,
-checkstyle, lint, test, parity, benchmark, or coverage command has run.
+`codex/cpu-mode-aware-refactor-backup-20261029` at `866843c0d`, two local WIP
+checkpoints above `origin/codex/cpu-mode-aware-refactor-backup-20261029` at
+`204221686`. Both checkpoints are explicitly unverified. The current
+LinearGradient continuation is source-only and uncommitted. Eval, ImageOps
+Expand, Geometry, Crop, Effects, projection, and direct LinearGradient source
+work is recorded below. No build, formatter, checkstyle, lint, test, parity,
+benchmark, or coverage command has run.
 Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related parity/performance findings; remains open).
 
 ## Current source-only continuation
@@ -73,6 +74,20 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   second context. Searches of maintained source find no calls to the archived
   SIMD RGB/CMYK projection adapters or old SIMD terminal executor. GPU terminal
   support and admission still have an explicit TODO. Source-only; unverified.
+- Direct LinearGradient now has one operation-level contract classifying all
+  25 identities, with exact One, L, P, I, and F strategies and the existing
+  ValueError for other modes. Each accepted mode constructs its own exact
+  `DynamicImage` variant through a Default implementation; the archived
+  `wide::u8x16` row fill is selected through the injected CPU architecture
+  context for compiled SSE2, NEON, and Wasm SIMD128 implementations. The public
+  entry no longer converts `Mode` back to a Pillow string or branches between
+  the separate SIMD pool and serial loops. RadialGradient now has the same
+  exhaustive mode contract for One, L, P, I, and F, with native mode-specific
+  outputs; its shared distance formula and fixed L template are separate from
+  the L architecture copy strategy. Both public entries use the injected
+  architecture context and no longer branch through the separate SIMD pool.
+  Mandelbrot remains on the legacy direct generator path and needs an
+  operation-owned migration. Source-only; unverified.
 
 This inventory records the source and evidence denominator before rebuilding pool_cpu. It is a migration ledger, not a claim that the listed mode literals prove support. Each function's exact mode support, output identity, rejection behavior, shared helpers, and architecture fallback must be confirmed from its implementation before it is copied into the maintained tree. The source path lists are taken from the baseline Git tree, so every archived file can be checked against 3f9dfd403.
 
@@ -1048,7 +1063,7 @@ none of the listed edges is completion evidence.
 | `compute/automatic_segments.rs`, `compute/execution.rs` | Replace pool capability checks, segment splitting, `simd_initial_mode`, `simd_mode_after_op`, and unsupported-op scans with prepared CPU support and exact mode transitions. |
 | `compute/execution/terminals.rs`, `image/projection/putpixel_pipeline.rs` | The fused RGB/CMYK projection terminal now executes the CPU mode/architecture strategies and reuses its prepared context. Remaining work is to replace legacy SIMD backend admission with the injected CPU architecture route and keep GPU terminal support separate. |
 | `compute/registry/registration/prelude.rs`, `compute/registry/registration/simd.rs` | Remove the adapter import and independent operation registrations as each operation owner supplies its prepared CPU strategy and compatibility route. |
-| `compute/eager.rs`, `image/projection.rs` | Eager RGB/CMYK GetProjection now uses the operation-owned CPU strategy. Migrate LinearGradient, RadialGradient, and Mandelbrot generation to exact-mode CPU architecture strategies with injected context. |
+| `compute/eager.rs`, `image/projection.rs`, `ops/module_fns.rs` | Eager RGB/CMYK GetProjection and direct LinearGradient now use operation-owned CPU strategies. Migrate RadialGradient and Mandelbrot to exact-mode CPU architecture strategies; reconcile their direct callers and receipts. |
 | `compute/thumbnail_fusion.rs`, `image/pipeline_admission.rs` | Replace separate SIMD RGB PutPixel/Thumbnail admission with the CPU thumbnail family's prepared fusion contract. |
 | `compute/pool_gpu/fusion.rs` | Resolved: adjacent transpose composition now uses the shared `pipeline::TransposeTransform` algebra rather than the separate pool helper. |
 | `image/channel_access.rs`, `image/data_access/get.rs` | Resolved for eager ExtractBand: both compatibility SIMD requests use prepared CPU mode/architecture strategies; GetData retains its direct caller-owned output slice. |

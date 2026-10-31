@@ -1,21 +1,251 @@
 //! Effect operation contracts and exact-mode strategy composition.
 //!
-//! TODO(pillow-rs#3ptb): the CPU pool/executor must route pipeline, eager, and
-//! compatibility calls through these prepared strategies with its injected
-//! context. Retire the former SIMD registrations after that routing replaces
-//! their callers. Rayon scheduling remains owned by pool_parallel.
+//! TODO(pillow-rs#3ptb): retire the remaining compatibility SIMD registrations
+//! after every pipeline and compatibility caller uses the prepared CPU
+//! strategies with its injected context. Rayon scheduling remains owned by
+//! pool_parallel.
 
 use crate::compute::registry::support::{
     InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport,
-    StrategySelection,
+    RejectionKind, StrategySelection,
 };
 use crate::compute::ExecutionContext;
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
+use crate::compute::pool_cpu::ops::effects::helpers::generator::GeneratedImage;
 
 pub(crate) const SPREAD_INPUTS: &[InputContract] = &[InputContract::EffectSpreadDistance];
 pub(crate) const NOISE_INPUTS: &[InputContract] = &[InputContract::EffectNoiseSigma];
+const NO_INPUTS: &[InputContract] = &[];
+
+pub(crate) enum PreparedLinearGradient {
+    One(super::one::ops::LinearGradientStrategy),
+    ImageLuma8(super::luma8::ops::LinearGradientStrategy),
+    ImagePalette8(super::palette8::ops::LinearGradientStrategy),
+    ImageI32(super::i32::ops::LinearGradientStrategy),
+    ImageF32(super::f32::ops::LinearGradientStrategy),
+}
+
+pub(crate) enum PreparedRadialGradient {
+    One(super::one::ops::RadialGradientStrategy),
+    ImageLuma8(super::luma8::ops::RadialGradientStrategy),
+    ImagePalette8(super::palette8::ops::RadialGradientStrategy),
+    ImageI32(super::i32::ops::RadialGradientStrategy),
+    ImageF32(super::f32::ops::RadialGradientStrategy),
+}
+
+fn rejected_gradient_mode(mode: Mode) -> ModeSupport {
+    ModeSupport::Rejected {
+        mode,
+        reason: "image has wrong mode",
+        kind: RejectionKind::ValueError,
+    }
+}
+
+fn classify_linear_gradient(mode: Mode) -> ModeSupport {
+    match mode {
+        Mode::One => super::one::ops::LINEAR_GRADIENT_SUPPORT,
+        Mode::ImageLuma8 => super::luma8::ops::LINEAR_GRADIENT_SUPPORT,
+        Mode::ImagePalette8 => super::palette8::ops::LINEAR_GRADIENT_SUPPORT,
+        Mode::ImageI32 => super::i32::ops::LINEAR_GRADIENT_SUPPORT,
+        Mode::ImageF32 => super::f32::ops::LINEAR_GRADIENT_SUPPORT,
+        Mode::ImageLumaA8
+        | Mode::ImageLaPremultiplied8
+        | Mode::ImagePaletteAlpha8
+        | Mode::ImageRgb8
+        | Mode::ImageRgba8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8
+        | Mode::ImageYCbCr8
+        | Mode::ImageLab8
+        | Mode::ImageHsv8
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N
+        | Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => rejected_gradient_mode(mode),
+    }
+}
+
+fn classify_radial_gradient(mode: Mode) -> ModeSupport {
+    match mode {
+        Mode::One => super::one::ops::RADIAL_GRADIENT_SUPPORT,
+        Mode::ImageLuma8 => super::luma8::ops::RADIAL_GRADIENT_SUPPORT,
+        Mode::ImagePalette8 => super::palette8::ops::RADIAL_GRADIENT_SUPPORT,
+        Mode::ImageI32 => super::i32::ops::RADIAL_GRADIENT_SUPPORT,
+        Mode::ImageF32 => super::f32::ops::RADIAL_GRADIENT_SUPPORT,
+        Mode::ImageLumaA8
+        | Mode::ImageLaPremultiplied8
+        | Mode::ImagePaletteAlpha8
+        | Mode::ImageRgb8
+        | Mode::ImageRgba8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8
+        | Mode::ImageYCbCr8
+        | Mode::ImageLab8
+        | Mode::ImageHsv8
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N
+        | Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => rejected_gradient_mode(mode),
+    }
+}
+
+/// Exhaustive support contract for direct eager LinearGradient construction.
+pub(crate) static LINEAR_GRADIENT_SUPPORT: OperationSupport = OperationSupport::new(
+    OperationId::LinearGradient,
+    NO_INPUTS,
+    classify_linear_gradient,
+);
+
+/// Exhaustive support contract for direct eager RadialGradient construction.
+pub(crate) static RADIAL_GRADIENT_SUPPORT: OperationSupport = OperationSupport::new(
+    OperationId::RadialGradient,
+    NO_INPUTS,
+    classify_radial_gradient,
+);
+
+impl PreparedLinearGradient {
+    pub(crate) fn selection(&self) -> &StrategySelection {
+        match self {
+            Self::One(plan) => plan.selection(),
+            Self::ImageLuma8(plan) => plan.selection(),
+            Self::ImagePalette8(plan) => plan.selection(),
+            Self::ImageI32(plan) => plan.selection(),
+            Self::ImageF32(plan) => plan.selection(),
+        }
+    }
+
+    pub(crate) fn execute(self) -> Result<GeneratedImage, PilError> {
+        match self {
+            Self::One(plan) => super::one::ops::execute_linear_gradient(plan),
+            Self::ImageLuma8(plan) => super::luma8::ops::execute_linear_gradient(plan),
+            Self::ImagePalette8(plan) => super::palette8::ops::execute_linear_gradient(plan),
+            Self::ImageI32(plan) => super::i32::ops::execute_linear_gradient(plan),
+            Self::ImageF32(plan) => super::f32::ops::execute_linear_gradient(plan),
+        }
+    }
+}
+
+impl PreparedRadialGradient {
+    pub(crate) fn selection(&self) -> &StrategySelection {
+        match self {
+            Self::One(plan) => plan.selection(),
+            Self::ImageLuma8(plan) => plan.selection(),
+            Self::ImagePalette8(plan) => plan.selection(),
+            Self::ImageI32(plan) => plan.selection(),
+            Self::ImageF32(plan) => plan.selection(),
+        }
+    }
+
+    pub(crate) fn execute(self) -> Result<GeneratedImage, PilError> {
+        match self {
+            Self::One(plan) => super::one::ops::execute_radial_gradient(plan),
+            Self::ImageLuma8(plan) => super::luma8::ops::execute_radial_gradient(plan),
+            Self::ImagePalette8(plan) => super::palette8::ops::execute_radial_gradient(plan),
+            Self::ImageI32(plan) => super::i32::ops::execute_radial_gradient(plan),
+            Self::ImageF32(plan) => super::f32::ops::execute_radial_gradient(plan),
+        }
+    }
+}
+
+pub(crate) fn prepare_linear_gradient(
+    mode: Mode,
+    ctx: &ExecutionContext,
+) -> Result<PreparedLinearGradient, PilError> {
+    let selection = LINEAR_GRADIENT_SUPPORT.for_mode(mode).select_serial(ctx)?;
+    match mode {
+        Mode::One => super::one::ops::prepare_linear_gradient(selection)
+            .map(PreparedLinearGradient::One),
+        Mode::ImageLuma8 => super::luma8::ops::prepare_linear_gradient(selection)
+            .map(PreparedLinearGradient::ImageLuma8),
+        Mode::ImagePalette8 => super::palette8::ops::prepare_linear_gradient(selection)
+            .map(PreparedLinearGradient::ImagePalette8),
+        Mode::ImageI32 => super::i32::ops::prepare_linear_gradient(selection)
+            .map(PreparedLinearGradient::ImageI32),
+        Mode::ImageF32 => super::f32::ops::prepare_linear_gradient(selection)
+            .map(PreparedLinearGradient::ImageF32),
+        Mode::ImageLumaA8
+        | Mode::ImageLaPremultiplied8
+        | Mode::ImagePaletteAlpha8
+        | Mode::ImageRgb8
+        | Mode::ImageRgba8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8
+        | Mode::ImageYCbCr8
+        | Mode::ImageLab8
+        | Mode::ImageHsv8
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N
+        | Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => Err(PilError::InternalError(
+            "rejected LinearGradient mode produced a strategy selection".into(),
+        )),
+    }
+}
+
+pub(crate) fn prepare_radial_gradient(
+    mode: Mode,
+    ctx: &ExecutionContext,
+) -> Result<PreparedRadialGradient, PilError> {
+    let selection = RADIAL_GRADIENT_SUPPORT.for_mode(mode).select_serial(ctx)?;
+    match mode {
+        Mode::One => Ok(PreparedRadialGradient::One(
+            super::one::ops::prepare_radial_gradient(selection),
+        )),
+        Mode::ImageLuma8 => super::luma8::ops::prepare_radial_gradient(selection)
+            .map(PreparedRadialGradient::ImageLuma8),
+        Mode::ImagePalette8 => Ok(PreparedRadialGradient::ImagePalette8(
+            super::palette8::ops::prepare_radial_gradient(selection),
+        )),
+        Mode::ImageI32 => Ok(PreparedRadialGradient::ImageI32(
+            super::i32::ops::prepare_radial_gradient(selection),
+        )),
+        Mode::ImageF32 => Ok(PreparedRadialGradient::ImageF32(
+            super::f32::ops::prepare_radial_gradient(selection),
+        )),
+        Mode::ImageLumaA8
+        | Mode::ImageLaPremultiplied8
+        | Mode::ImagePaletteAlpha8
+        | Mode::ImageRgb8
+        | Mode::ImageRgba8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8
+        | Mode::ImageYCbCr8
+        | Mode::ImageLab8
+        | Mode::ImageHsv8
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N
+        | Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => Err(PilError::InternalError(
+            "rejected RadialGradient mode produced a strategy selection".into(),
+        )),
+    }
+}
 
 macro_rules! declare_effect_modes {
     ($($mode:ident => $module:ident),+ $(,)?) => {

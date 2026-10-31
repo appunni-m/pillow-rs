@@ -156,6 +156,10 @@ pub enum OperationId {
     EffectSpread,
     /// Generate Pillow's L-mode Gaussian noise using the process-global stream.
     EffectNoise,
+    /// Construct a fixed 256 by 256 typed linear-gradient raster.
+    LinearGradient,
+    /// Construct a fixed 256 by 256 typed radial-gradient raster.
+    RadialGradient,
     /// Alpha-composite one same-sized LA or RGBA image over another.
     AlphaComposite,
     /// One normalized native-byte pixel write with caller-validated coordinates.
@@ -271,6 +275,8 @@ impl OperationId {
             Self::RemapPalette => &crate::compute::pool_cpu::ops::color::ops::REMAP_PALETTE_SUPPORT,
             Self::EffectSpread => &crate::compute::pool_cpu::ops::effects::ops::EFFECT_SPREAD_SUPPORT,
             Self::EffectNoise => &crate::compute::pool_cpu::ops::effects::ops::EFFECT_NOISE_SUPPORT,
+            Self::LinearGradient => &crate::compute::pool_cpu::ops::effects::ops::LINEAR_GRADIENT_SUPPORT,
+            Self::RadialGradient => &crate::compute::pool_cpu::ops::effects::ops::RADIAL_GRADIENT_SUPPORT,
             Self::AlphaComposite => {
                 &crate::compute::pool_cpu::ops::composite::ops::ALPHA_COMPOSITE_SUPPORT
             }

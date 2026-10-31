@@ -1,10 +1,7 @@
 //! Direct eager operations that select CPU, SIMD, or GPU without a lazy pipeline.
 //!
-//! TODO(pillow-rs#3ptb): migrate eager linear/radial/Mandelbrot generators
-//! from separate SIMD adapters into their CPU family/mode architecture
-//! strategies.
-//! TODO(pillow-rs#3ptb): pass the injected execution context through the
-//! remaining generator entry points and receipts.
+//! TODO(pillow-rs#3ptb): migrate eager Mandelbrot from the separate SIMD
+//! adapter into its CPU family/mode architecture strategy and injected receipt.
 
 use super::backend_state::active_lock;
 #[cfg(feature = "gpu")]
@@ -24,8 +21,12 @@ use super::{
     take_pipeline_dispatch_count, take_pipeline_resize_coeff_cache_stats,
     take_pipeline_resource_telemetry, take_pipeline_telemetry,
 };
-use crate::raster::Mode;
 use std::time::Instant;
+
+mod generators;
+pub(crate) use generators::{
+    execute_eager_cpu_linear_gradient, execute_eager_cpu_radial_gradient,
+};
 
 fn reset_eager_image_operation_telemetry() {
     reset_pipeline_allocation_telemetry();
@@ -625,93 +626,6 @@ pub(crate) fn gpu_rgb_projection_terminal_supported(
     ops: &[PipelineOp],
 ) -> bool {
     pool_gpu::GpuPool::rgb_projection_terminal_supported(image, ops)
-}
-
-/// Try the eager `Image.linear_gradient` constructor on the active SIMD
-/// backend.
-///
-/// Eager module-level generators do not have a source image on which to hang
-/// a deferred pipeline.  Keep their backend boundary here so strict SIMD
-/// parity can observe the actual data-plane executor and so an unsupported
-/// SIMD contract returns an error instead of silently entering the CPU loop.
-pub(crate) fn try_simd_linear_gradient(mode: Mode) -> Result<Option<DynamicImage>, PilError> {
-    let timed = pipeline_telemetry_enabled();
-    let route_start = timed.then(pipeline_timestamp).flatten();
-    let active_set = active_lock()?.clone();
-    let route_ns = elapsed_ns(route_start);
-    if !active_set.contains(&Backend::Simd) {
-        return Ok(None);
-    }
-
-    if timed {
-        reset_eager_image_operation_telemetry();
-    }
-    let validation_start = timed.then(pipeline_timestamp).flatten();
-    let requested_backend = (active_set.len() == 1).then_some(Backend::Simd);
-    let validation_ns = elapsed_ns(validation_start);
-    if timed {
-        begin_pipeline_operation_telemetry("LinearGradient");
-    }
-    let backend_start = timed.then(pipeline_timestamp).flatten();
-    let mode_name = mode
-        .pillow_name()
-        .ok_or_else(|| PilError::ValueError("image has wrong mode".into()))?;
-    let result = pool_simd::ops::adapters::simd_linear_gradient_generate(mode_name);
-    let backend_ns = elapsed_ns(backend_start);
-
-    if timed {
-        record_eager_simd_generator_telemetry(
-            requested_backend,
-            route_ns,
-            validation_ns,
-            backend_ns,
-            &result,
-        );
-    }
-
-    result.map(Some)
-}
-
-/// Try the eager native-L `Image.radial_gradient` generator on SIMD.
-///
-/// Other modes stay on their established constructors until they have their
-/// own format-specific vector kernels.
-pub(crate) fn try_simd_radial_gradient(mode: Mode) -> Result<Option<DynamicImage>, PilError> {
-    if mode != Mode::ImageLuma8 {
-        return Ok(None);
-    }
-    let timed = pipeline_telemetry_enabled();
-    let route_start = timed.then(pipeline_timestamp).flatten();
-    let active_set = active_lock()?.clone();
-    let route_ns = elapsed_ns(route_start);
-    if !active_set.contains(&Backend::Simd) {
-        return Ok(None);
-    }
-
-    if timed {
-        reset_eager_image_operation_telemetry();
-    }
-    let validation_start = timed.then(pipeline_timestamp).flatten();
-    let requested_backend = (active_set.len() == 1).then_some(Backend::Simd);
-    let validation_ns = elapsed_ns(validation_start);
-    if timed {
-        begin_pipeline_operation_telemetry("RadialGradient");
-    }
-    let backend_start = timed.then(pipeline_timestamp).flatten();
-    let result = pool_simd::ops::adapters::simd_radial_gradient_generate();
-    let backend_ns = elapsed_ns(backend_start);
-
-    if timed {
-        record_eager_simd_generator_telemetry(
-            requested_backend,
-            route_ns,
-            validation_ns,
-            backend_ns,
-            &result,
-        );
-    }
-
-    result.map(Some)
 }
 
 /// Execute the eager Mandelbrot generator on the SIMD backend when its native

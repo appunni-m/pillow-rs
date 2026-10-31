@@ -131,3 +131,105 @@ pub(crate) fn execute_noise(plan: NoiseStrategy<'_>) -> Result<DynamicImage, Pil
         NoiseImplementation::WasmSimd128(kernel) => wasm_noise::execute(kernel).map(DynamicImage::ImageLuma8),
     }
 }
+
+static LINEAR_GRADIENT_ARCHITECTURES: [ImplementationSupport; 3] =
+    strategy::vector_architectures_for(
+        OperationId::LinearGradient,
+        Mode::ImageLuma8,
+        StrategyGuard::Always,
+    );
+
+pub(crate) const LINEAR_GRADIENT_SUPPORT: ModeSupport = ModeSupport::cpu(
+    OperationId::LinearGradient,
+    Mode::ImageLuma8,
+    OutputModeRule::Fixed(Mode::ImageLuma8),
+    &[],
+    &LINEAR_GRADIENT_ARCHITECTURES,
+);
+
+pub(crate) enum LinearGradientImplementation {
+    Default,
+    Sse2,
+    Neon,
+    WasmSimd128,
+}
+pub(crate) type LinearGradientStrategy = Prepared<LinearGradientImplementation>;
+
+pub(crate) fn prepare_linear_gradient(
+    selection: crate::compute::registry::support::StrategySelection,
+) -> Result<LinearGradientStrategy, PilError> {
+    let implementation = match selection.implementation.architecture {
+        Architecture::Default => LinearGradientImplementation::Default,
+        Architecture::Sse2 => LinearGradientImplementation::Sse2,
+        Architecture::Neon => LinearGradientImplementation::Neon,
+        Architecture::WasmSimd128 => LinearGradientImplementation::WasmSimd128,
+        architecture => return Err(PilError::InternalError(format!(
+            "unexpected {architecture:?} architecture selected for LinearGradient mode ImageLuma8"
+        ))),
+    };
+    Ok(Prepared::new(implementation, selection))
+}
+
+pub(crate) fn execute_linear_gradient(
+    plan: LinearGradientStrategy,
+) -> Result<crate::compute::pool_cpu::ops::effects::helpers::generator::GeneratedImage, PilError> {
+    match plan.implementation {
+        LinearGradientImplementation::Default => super::default::linear_gradient_impl::execute(),
+        LinearGradientImplementation::Sse2 => super::sse2::linear_gradient_impl::execute(),
+        LinearGradientImplementation::Neon => super::neon::linear_gradient_impl::execute(),
+        LinearGradientImplementation::WasmSimd128 => {
+            super::wasm_simd128::linear_gradient_impl::execute()
+        }
+    }
+}
+
+static RADIAL_GRADIENT_ARCHITECTURES: [ImplementationSupport; 3] =
+    strategy::vector_architectures_for(
+        OperationId::RadialGradient,
+        Mode::ImageLuma8,
+        StrategyGuard::Always,
+    );
+
+pub(crate) const RADIAL_GRADIENT_SUPPORT: ModeSupport = ModeSupport::cpu(
+    OperationId::RadialGradient,
+    Mode::ImageLuma8,
+    OutputModeRule::Fixed(Mode::ImageLuma8),
+    &[],
+    &RADIAL_GRADIENT_ARCHITECTURES,
+);
+
+pub(crate) enum RadialGradientImplementation {
+    Default,
+    Sse2,
+    Neon,
+    WasmSimd128,
+}
+pub(crate) type RadialGradientStrategy = Prepared<RadialGradientImplementation>;
+
+pub(crate) fn prepare_radial_gradient(
+    selection: crate::compute::registry::support::StrategySelection,
+) -> Result<RadialGradientStrategy, PilError> {
+    let implementation = match selection.implementation.architecture {
+        Architecture::Default => RadialGradientImplementation::Default,
+        Architecture::Sse2 => RadialGradientImplementation::Sse2,
+        Architecture::Neon => RadialGradientImplementation::Neon,
+        Architecture::WasmSimd128 => RadialGradientImplementation::WasmSimd128,
+        architecture => return Err(PilError::InternalError(format!(
+            "unexpected {architecture:?} architecture selected for RadialGradient mode ImageLuma8"
+        ))),
+    };
+    Ok(Prepared::new(implementation, selection))
+}
+
+pub(crate) fn execute_radial_gradient(
+    plan: RadialGradientStrategy,
+) -> Result<crate::compute::pool_cpu::ops::effects::helpers::generator::GeneratedImage, PilError> {
+    match plan.implementation {
+        RadialGradientImplementation::Default => super::default::radial_gradient_impl::execute(),
+        RadialGradientImplementation::Sse2 => super::sse2::radial_gradient_impl::execute(),
+        RadialGradientImplementation::Neon => super::neon::radial_gradient_impl::execute(),
+        RadialGradientImplementation::WasmSimd128 => {
+            super::wasm_simd128::radial_gradient_impl::execute()
+        }
+    }
+}
