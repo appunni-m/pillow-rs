@@ -1,10 +1,10 @@
 //! Filter support contracts and prepared CPU dispatch.
 //!
-//! TODO(pillow-rs#3ptb): compare general blur and BoxBlur mode routes against
-//! the archive; add ModeFilter mode, palette, and backend-fallback parity cases;
-//! include the RGBA radius-seven small-shape architecture fallback; cover the
-//! exact-binomial I32 AVX/FMA route and ineligible-request Default fallback;
-//! finish the public Filter caller audit. Keep Rayon out of this serial owner.
+//! TODO(pillow-rs#3ptb): add ModeFilter mode, palette, and backend-fallback
+//! parity cases; include the RGBA radius-seven small-shape architecture
+//! fallback; cover the exact-binomial I32 AVX/FMA route and ineligible-request
+//! Default fallback; finish the public Filter caller audit. Keep Rayon out of
+//! this serial owner.
 
 use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{
