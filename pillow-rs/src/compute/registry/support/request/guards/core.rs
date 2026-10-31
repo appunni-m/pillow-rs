@@ -360,8 +360,8 @@ pub(super) fn filter_rgba_gaussian_blur_radius_seven_guard(
     if !sigma.is_finite()
         || sigma == 0.0
         || !(7.0..8.0).contains(&radius)
-        || input.width < 64
-        || input.height < 64
+        || input.width == 0
+        || input.height == 0
     {
         return GuardAssessment::Ineligible;
     }

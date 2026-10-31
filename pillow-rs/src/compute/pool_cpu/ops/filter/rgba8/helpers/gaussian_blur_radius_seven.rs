@@ -1,5 +1,9 @@
 //! Shared RGBA GaussianBlur radius-seven horizontal vector kernel.
 
+use crate::compute::{Architecture, ExecutionContext};
+use crate::error::PilError;
+use crate::pipeline::TransposeMethod;
+use crate::raster::{DynamicImage, RgbaImage};
 use wide::u32x8;
 
 const CHANNELS: usize = 4;
@@ -20,6 +24,44 @@ pub(super) trait RadiusSevenHorizontalKernel {
         output_start: usize,
     );
 }
+
+/// Transpose RGBA storage through the architecture strategy selected by context.
+pub(super) fn transpose_rgba_in_place(
+    work: &mut Vec<u8>,
+    scratch: &mut Vec<u8>,
+    width: u32,
+    height: u32,
+    context: &ExecutionContext,
+) -> Result<(), PilError> {
+    let image = RgbaImage::from_raw(width, height, std::mem::take(work)).ok_or_else(|| {
+        PilError::InternalError("RGBA GaussianBlur transpose input shape mismatch".into())
+    })?;
+    let source = DynamicImage::ImageRgba8(image);
+    let strategy = crate::compute::pool_cpu::ops::transpose::ops::prepare_transpose(
+        &source,
+        &TransposeMethod::Transpose,
+        context,
+    )?;
+    if strategy.selection().implementation.architecture == Architecture::Avx2 {
+        strategy.execute_rgba_avx2_into(scratch)?;
+        let DynamicImage::ImageRgba8(input) = source else {
+            return Err(PilError::InternalError(
+                "RGBA GaussianBlur transpose source changed mode".into(),
+            ));
+        };
+        *work = input.into_raw();
+        std::mem::swap(work, scratch);
+    } else {
+        let DynamicImage::ImageRgba8(transposed) = strategy.execute()? else {
+            return Err(PilError::InternalError(
+                "RGBA GaussianBlur transpose changed mode".into(),
+            ));
+        };
+        *work = transposed.into_raw();
+    }
+    Ok(())
+}
+
 #[derive(Clone, Copy)]
 enum BlurRegion {
     Leading,

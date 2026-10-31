@@ -198,8 +198,6 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute_architecture_blur(
         }
         if radius == 7
             && fractional_weight != 0
-            && image.width() >= 64
-            && image.height() >= 64
             && matches!(selection.implementation.architecture, Architecture::Avx2 | Architecture::Neon)
         {
             return execute_gaussian_blur(image, sigma, selection, context);
@@ -309,7 +307,7 @@ fn execute_gaussian_blur(
         Architecture::Neon => {
             #[cfg(target_arch = "aarch64")]
             {
-                super::neon::execute_gaussian_blur_radius_seven(image, sigma)
+                super::neon::execute_gaussian_blur_radius_seven(image, sigma, context)
             }
             #[cfg(not(target_arch = "aarch64"))]
             {

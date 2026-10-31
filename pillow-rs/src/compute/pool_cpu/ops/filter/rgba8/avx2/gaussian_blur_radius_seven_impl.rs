@@ -1,9 +1,8 @@
 //! RGBA radius-seven GaussianBlur orchestration for AVX2.
 
 use crate::checked_dims::CheckedDims;
-use crate::compute::{Architecture, ExecutionContext};
+use crate::compute::ExecutionContext;
 use crate::error::PilError;
-use crate::pipeline::TransposeMethod;
 use crate::raster::{DynamicImage, RgbaImage};
 
 use super::gaussian_blur_radius_seven::Avx2Kernel;
@@ -34,8 +33,8 @@ pub(super) fn execute_gaussian_blur_radius_seven(
     }
 
     let dimensions = CheckedDims::new(input.width(), input.height(), 4)?;
-    if dimensions.width < 64
-        || dimensions.height < 64
+    if dimensions.width == 0
+        || dimensions.height == 0
         || input.as_raw().len() != dimensions.total_bytes()
     {
         return Err(PilError::InternalError(
@@ -51,7 +50,7 @@ pub(super) fn execute_gaussian_blur_radius_seven(
         whole_weight,
         fractional_weight,
     );
-    transpose_in_place(
+    super::super::helpers::transpose_rgba_in_place(
         &mut work,
         &mut scratch,
         input.width(),
@@ -68,7 +67,7 @@ pub(super) fn execute_gaussian_blur_radius_seven(
         whole_weight,
         fractional_weight,
     );
-    transpose_in_place(
+    super::super::helpers::transpose_rgba_in_place(
         &mut work,
         &mut scratch,
         transposed_dims.width,
@@ -80,7 +79,6 @@ pub(super) fn execute_gaussian_blur_radius_seven(
     crate::compute::record_pipeline_operation_path("avx2-transpose");
     Ok(DynamicImage::ImageRgba8(output))
 }
-
 fn blur_passes<K: super::super::helpers::RadiusSevenHorizontalKernel>(
     mut work: Vec<u8>,
     mut scratch: Vec<u8>,
@@ -103,35 +101,4 @@ fn blur_passes<K: super::super::helpers::RadiusSevenHorizontalKernel>(
         std::mem::swap(&mut work, &mut scratch);
     }
     (work, scratch)
-}
-
-fn transpose_in_place(
-    work: &mut Vec<u8>,
-    scratch: &mut Vec<u8>,
-    width: u32,
-    height: u32,
-    context: &ExecutionContext,
-) -> Result<(), PilError> {
-    let image = RgbaImage::from_raw(width, height, std::mem::take(work))
-        .ok_or_else(|| PilError::InternalError("RGBA GaussianBlur transpose input shape mismatch".into()))?;
-    let source = DynamicImage::ImageRgba8(image);
-    let strategy = crate::compute::pool_cpu::ops::transpose::ops::prepare_transpose(
-        &source,
-        &TransposeMethod::Transpose,
-        context,
-    )?;
-    if strategy.selection().implementation.architecture != Architecture::Avx2 {
-        return Err(PilError::InternalError(
-            "RGBA GaussianBlur AVX2 strategy did not retain AVX2 for transpose".into(),
-        ));
-    }
-    strategy.execute_rgba_avx2_into(scratch)?;
-    let DynamicImage::ImageRgba8(input) = source else {
-        return Err(PilError::InternalError(
-            "RGBA GaussianBlur AVX2 transpose source changed mode".into(),
-        ));
-    };
-    *work = input.into_raw();
-    std::mem::swap(work, scratch);
-    Ok(())
 }
