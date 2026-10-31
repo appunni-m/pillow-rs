@@ -7,6 +7,10 @@ use crate::error::PilError;
 use crate::raster::{Mode, RgbImage};
 
 use super::super::ops::ProjectionOutput;
+use super::super::helpers::get_data::{
+    self as get_data_helpers, GetDataOutput, GetDataRequest,
+};
+use super::default::get_data_impl;
 
 const SSE2_REQUIRES: &[Architecture] = &[Architecture::Sse2];
 const NEON_REQUIRES: &[Architecture] = &[Architecture::Neon];
@@ -45,6 +49,30 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     &[],
     ARCHITECTURES,
 );
+
+pub(crate) fn execute_get_data(
+    image: &RgbImage,
+    selection: StrategySelection,
+    request: GetDataRequest<'_>,
+) -> Result<GetDataOutput, PilError> {
+    let architecture =
+        get_data_helpers::selected_architecture(selection, Mode::ImageRgb8, &request)?;
+    match architecture {
+        Architecture::Default => match request {
+            GetDataRequest::Full => {
+                Ok(GetDataOutput::Bytes(get_data_impl::get_data(image)?))
+            }
+            GetDataRequest::Band { index, output } => {
+                get_data_impl::write_band(image, index, output)?;
+                Ok(GetDataOutput::BandWritten)
+            }
+        },
+        architecture => Err(get_data_helpers::missing_architecture(
+            Mode::ImageRgb8,
+            architecture,
+        )),
+    }
+}
 
 pub(crate) fn execute(
     image: &RgbImage,

@@ -67,8 +67,7 @@ use palette::{operational_palette, padded_palette};
 mod pipeline_admission;
 mod pipeline_ops;
 use data_access::{
-    decode_float_samples, decode_integer_samples, is_l16_mode, l16_uses_big_endian,
-    pillow_band_count, validate_scalar_storage,
+    is_l16_mode, l16_uses_big_endian, pillow_band_count, validate_scalar_storage,
 };
 pub use pipeline_ops::{
     MaterializationCache, PipelineModeCache, PipelineOps, PipelinePrefixCache, PipelineShapeCache,
@@ -264,39 +263,6 @@ pub enum FormattedExtrema {
     Integer((i32, i32)),
     /// A 32-bit floating-point scalar image's `(minimum, maximum)` pair.
     Float((f64, f64)),
-}
-
-/// Copy one channel from a tightly packed interleaved byte raster.
-#[inline]
-fn select_interleaved_band(data: &[u8], bands: usize, band: usize) -> Vec<u8> {
-    data.chunks_exact(bands).map(|pixel| pixel[band]).collect()
-}
-
-#[inline]
-fn select_interleaved_band_into(data: &[u8], bands: usize, band: usize, output: &mut [u8]) {
-    let selected = data.iter().skip(band).step_by(bands);
-    for (destination, source) in output.iter_mut().zip(selected) {
-        *destination = *source;
-    }
-}
-
-#[inline]
-fn select_lab_band(data: &[u8], band: usize) -> Vec<u8> {
-    let mut output = vec![0; data.len() / 3];
-    select_lab_band_into(data, band, &mut output);
-    output
-}
-
-#[inline]
-fn select_lab_band_into(data: &[u8], band: usize, output: &mut [u8]) {
-    for (destination, pixel) in output.iter_mut().zip(data.chunks_exact(3)) {
-        *destination = match band {
-            0 => pixel[0],
-            1 => pixel[1].wrapping_sub(128),
-            2 => pixel[2].wrapping_sub(128),
-            _ => unreachable!("LAB has exactly three bands"),
-        };
-    }
 }
 
 /// Core image value used by Pillow-style operations.

@@ -11,25 +11,12 @@ use crate::raster::{DynamicImage, Mode};
 
 use super::{
     FormattedImageData, Image, PutDataInput, PutDataValue, PutDataValueKind, image_mode_name,
-    materialization_cache, select_interleaved_band, select_interleaved_band_into, select_lab_band,
-    select_lab_band_into,
+    materialization_cache,
 };
 
 pub(crate) enum ScalarImageSamples {
     Integer(Vec<i32>),
     Float(Vec<f64>),
-}
-
-pub(super) fn decode_integer_samples(raw: &[u8]) -> Vec<i32> {
-    raw.chunks_exact(4)
-        .map(|sample| i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]))
-        .collect()
-}
-
-pub(super) fn decode_float_samples(raw: &[u8]) -> Vec<f64> {
-    raw.chunks_exact(4)
-        .map(|sample| f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]) as f64)
-        .collect()
 }
 
 pub(super) fn validate_scalar_storage(image: &DynamicImage, mode: Mode) -> Result<(), PilError> {

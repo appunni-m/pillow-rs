@@ -11,8 +11,8 @@ use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 
 use super::{
-    FormattedExtrema, FormattedPixelValue, Image, ScalarImageSamples, decode_float_samples,
-    decode_integer_samples, is_l16_identity, pillow_band_count,
+    FormattedExtrema, FormattedPixelValue, Image, ScalarImageSamples, is_l16_identity,
+    pillow_band_count,
 };
 
 impl Image {
@@ -535,42 +535,19 @@ impl Image {
 
     /// Reads the retained four-byte scalar storage for `I` and `F` modes.
     pub(crate) fn scalar_samples(&self, mode: Mode) -> Result<ScalarImageSamples, PilError> {
-        match mode {
-            Mode::ImageI32 => self
-                .read_scalar_storage(mode, decode_integer_samples)
-                .map(ScalarImageSamples::Integer),
-            Mode::ImageF32 => self
-                .read_scalar_storage(mode, decode_float_samples)
-                .map(ScalarImageSamples::Float),
-            _ => Err(PilError::ValueError("image has wrong mode".into())),
+        if !matches!(mode, Mode::ImageI32 | Mode::ImageF32) {
+            return Err(PilError::ValueError("image has wrong mode".into()));
         }
-    }
-
-    fn read_scalar_storage<T>(
-        &self,
-        mode: Mode,
-        decode: impl FnOnce(&[u8]) -> T,
-    ) -> Result<T, PilError> {
         let img = self.materialized_shared()?;
-        let (mode_name, storage_matches) = match (mode, img.as_ref()) {
-            (Mode::ImageI32, DynamicImage::ImageI32(_)) => ("I", true),
-            (Mode::ImageF32, DynamicImage::ImageF32(_)) => ("F", true),
-            (Mode::ImageI32, _) => ("I", false),
-            (Mode::ImageF32, _) => ("F", false),
-            _ => ("scalar", false),
-        };
-        if !storage_matches {
-            return Err(PilError::InternalError(format!(
-                "{mode_name} image has invalid scalar storage"
-            )));
-        }
-        let expected = CheckedDims::new(img.width(), img.height(), 4)?.total_bytes();
-        let raw = img.as_bytes();
-        if raw.len() != expected {
-            return Err(PilError::InternalError(format!(
-                "{mode_name} image has invalid scalar storage"
-            )));
-        }
-        Ok(decode(raw))
+        let context = crate::compute::ExecutionContext::for_routed_backend(
+            crate::compute::Backend::Cpu,
+        );
+        let selection = crate::compute::pool_cpu::ops::analysis::ops::select_get_data(
+            mode, &context,
+        )?;
+        crate::compute::pool_cpu::ops::analysis::ops::get_data_scalar_samples(
+            img.as_ref(),
+            selection,
+        )
     }
 }

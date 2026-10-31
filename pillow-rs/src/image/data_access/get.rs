@@ -1,381 +1,8 @@
 use super::{
     DynamicImage, FormattedImageData, Image, PilError, PipelineOp, ScalarImageSamples,
-    select_interleaved_band_into, select_lab_band_into, validated_band_index,
+    validated_band_index,
 };
-use crate::raster::{FromPrimitive, Mode};
-
-fn native_sample_count(width: u32, height: u32, channels: u8) -> Result<usize, PilError> {
-    Ok(crate::checked_dims::CheckedDims::new_allow_empty(width, height, channels)?.total_bytes())
-}
-
-fn mode_carrier_mismatch(mode: Mode) -> PilError {
-    PilError::InternalError(format!(
-        "GetData mode {mode:?} does not match its native raster carrier"
-    ))
-}
-
-fn narrow_native_samples<T: Copy>(
-    samples: &[T],
-    width: u32,
-    height: u32,
-    channels: u8,
-    mode: Mode,
-    convert: impl Fn(T) -> u8,
-) -> Result<Vec<u8>, PilError> {
-    let sample_count = native_sample_count(width, height, channels)?;
-    let samples = samples
-        .get(..sample_count)
-        .ok_or_else(|| mode_carrier_mismatch(mode))?;
-    Ok(samples.iter().copied().map(convert).collect())
-}
-
-fn getdata_byte_modes(image: &DynamicImage, mode: Mode) -> Result<Vec<u8>, PilError> {
-    let output = match (mode, image) {
-        (Mode::One, DynamicImage::One(image))
-        | (Mode::ImageLuma8, DynamicImage::ImageLuma8(image))
-        | (Mode::ImagePalette8, DynamicImage::ImagePalette8(image)) => {
-            image.as_raw().clone()
-        }
-        (Mode::ImageLumaA8, DynamicImage::ImageLumaA8(image))
-        | (Mode::ImageLaPremultiplied8, DynamicImage::ImageLaPremultiplied8(image))
-        | (Mode::ImagePaletteAlpha8, DynamicImage::ImagePaletteAlpha8(image)) => {
-            image.as_raw().clone()
-        }
-        (Mode::ImageRgb8, DynamicImage::ImageRgb8(image))
-        | (Mode::ImageYCbCr8, DynamicImage::ImageYCbCr8(image))
-        | (Mode::ImageHsv8, DynamicImage::ImageHsv8(image)) => image.as_raw().clone(),
-        (Mode::ImageLab8, DynamicImage::ImageLab8(image)) => {
-            let mut output = image.as_raw().clone();
-            for pixel in output.chunks_exact_mut(3) {
-                pixel[1] = pixel[1].wrapping_sub(128);
-                pixel[2] = pixel[2].wrapping_sub(128);
-            }
-            output
-        }
-        (Mode::ImageRgba8, DynamicImage::ImageRgba8(image))
-        | (Mode::ImageRgbPremultiplied8, DynamicImage::ImageRgbPremultiplied8(image))
-        | (Mode::ImageRgbx8, DynamicImage::ImageRgbx8(image))
-        | (Mode::ImageCmyk8, DynamicImage::ImageCmyk8(image))
-        | (Mode::ImageI32, DynamicImage::ImageI32(image))
-        | (Mode::ImageF32, DynamicImage::ImageF32(image)) => image.as_raw().clone(),
-        _ => return Err(mode_carrier_mismatch(mode)),
-    };
-    Ok(output)
-}
-
-fn getdata_unsigned_luma16(image: &DynamicImage, mode: Mode) -> Result<Vec<u8>, PilError> {
-    let image = match (mode, image) {
-        (Mode::ImageI16, DynamicImage::ImageI16(image))
-        | (Mode::ImageI16L, DynamicImage::ImageI16L(image))
-        | (Mode::ImageI16B, DynamicImage::ImageI16B(image))
-        | (Mode::ImageI16N, DynamicImage::ImageI16N(image)) => image,
-        _ => return Err(mode_carrier_mismatch(mode)),
-    };
-    let count = native_sample_count(image.width(), image.height(), 1)?;
-    let samples = image
-        .as_raw()
-        .get(..count)
-        .ok_or_else(|| mode_carrier_mismatch(mode))?;
-    Ok(samples
-        .iter()
-        .map(|sample| (*sample).min(u16::from(u8::MAX)) as u8)
-        .collect())
-}
-
-fn getdata_internal_high_depth(image: &DynamicImage, mode: Mode) -> Result<Vec<u8>, PilError> {
-    let output = match (mode, image) {
-        // NO_PILLOW_SUPPORT: internal high-depth identities are Rust-only;
-        // GetData narrows their native samples at this byte-return boundary.
-        (Mode::ImageLumaA16, DynamicImage::ImageLumaA16(image)) => narrow_native_samples(
-            image.as_raw(),
-            image.width(),
-            image.height(),
-            2,
-            mode,
-            u8::from_primitive,
-        )?,
-        (Mode::ImageRgb16, DynamicImage::ImageRgb16(image)) => narrow_native_samples(
-            image.as_raw(),
-            image.width(),
-            image.height(),
-            3,
-            mode,
-            u8::from_primitive,
-        )?,
-        (Mode::ImageRgba16, DynamicImage::ImageRgba16(image)) => narrow_native_samples(
-            image.as_raw(),
-            image.width(),
-            image.height(),
-            4,
-            mode,
-            u8::from_primitive,
-        )?,
-        (Mode::ImageRgb32F, DynamicImage::ImageRgb32F(image)) => narrow_native_samples(
-            image.as_raw(),
-            image.width(),
-            image.height(),
-            3,
-            mode,
-            u8::from_primitive,
-        )?,
-        (Mode::ImageRgba32F, DynamicImage::ImageRgba32F(image)) => narrow_native_samples(
-            image.as_raw(),
-            image.width(),
-            image.height(),
-            4,
-            mode,
-            u8::from_primitive,
-        )?,
-        _ => return Err(mode_carrier_mismatch(mode)),
-    };
-    Ok(output)
-}
-
-fn getdata_mode_bytes(
-    image: &DynamicImage,
-    selection: crate::compute::registry::support::StrategySelection,
-) -> Result<Vec<u8>, PilError> {
-    // TODO(pillow-rs#3ptb): move these exact-mode byte/sample implementations
-    // into analysis/<mode>/default and keep this API as selection orchestration.
-    let mode = selection.implementation.mode;
-    if selection.implementation.operation != crate::compute::registry::support::OperationId::GetData
-        || image.mode() != mode
-    {
-        return Err(PilError::InternalError(
-            "GetData selection did not match its mode-bearing raster".into(),
-        ));
-    }
-    match mode {
-        Mode::One
-        | Mode::ImageLuma8
-        | Mode::ImageLumaA8
-        | Mode::ImageLaPremultiplied8
-        | Mode::ImagePalette8
-        | Mode::ImagePaletteAlpha8
-        | Mode::ImageRgb8
-        | Mode::ImageRgba8
-        | Mode::ImageRgbPremultiplied8
-        | Mode::ImageRgbx8
-        | Mode::ImageCmyk8
-        | Mode::ImageYCbCr8
-        | Mode::ImageLab8
-        | Mode::ImageHsv8
-        | Mode::ImageI32
-        | Mode::ImageF32 => getdata_byte_modes(image, mode),
-        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
-            getdata_unsigned_luma16(image, mode)
-        }
-        Mode::ImageLumaA16
-        | Mode::ImageRgb16
-        | Mode::ImageRgba16
-        | Mode::ImageRgb32F
-        | Mode::ImageRgba32F => getdata_internal_high_depth(image, mode),
-    }
-}
-
-fn validate_getdata_band_output(image: &DynamicImage, output: &[u8]) -> Result<(), PilError> {
-    let expected = crate::checked_dims::CheckedDims::new_allow_empty(
-        image.width(),
-        image.height(),
-        1,
-    )?
-    .total_pixels();
-    if output.len() != expected {
-        return Err(PilError::InternalError(
-            "getdata band output length mismatch".into(),
-        ));
-    }
-    Ok(())
-}
-
-fn write_getdata_byte_band(
-    image: &DynamicImage,
-    mode: Mode,
-    band: usize,
-    output: &mut [u8],
-) -> Result<(), PilError> {
-    match (mode, image) {
-        (Mode::One, DynamicImage::One(image))
-        | (Mode::ImageLuma8, DynamicImage::ImageLuma8(image))
-        | (Mode::ImagePalette8, DynamicImage::ImagePalette8(image)) if band == 0 => {
-            output.copy_from_slice(image.as_raw());
-        }
-        (Mode::ImageLumaA8, DynamicImage::ImageLumaA8(image))
-        | (Mode::ImageLaPremultiplied8, DynamicImage::ImageLaPremultiplied8(image))
-        | (Mode::ImagePaletteAlpha8, DynamicImage::ImagePaletteAlpha8(image)) => {
-            select_interleaved_band_into(image.as_raw(), 2, band, output);
-        }
-        (Mode::ImageRgb8, DynamicImage::ImageRgb8(image))
-        | (Mode::ImageYCbCr8, DynamicImage::ImageYCbCr8(image))
-        | (Mode::ImageHsv8, DynamicImage::ImageHsv8(image)) => {
-            select_interleaved_band_into(image.as_raw(), 3, band, output);
-        }
-        (Mode::ImageLab8, DynamicImage::ImageLab8(image)) => {
-            select_lab_band_into(image.as_raw(), band, output);
-        }
-        (Mode::ImageRgba8, DynamicImage::ImageRgba8(image))
-        | (Mode::ImageRgbPremultiplied8, DynamicImage::ImageRgbPremultiplied8(image))
-        | (Mode::ImageRgbx8, DynamicImage::ImageRgbx8(image))
-        | (Mode::ImageCmyk8, DynamicImage::ImageCmyk8(image)) => {
-            select_interleaved_band_into(image.as_raw(), 4, band, output);
-        }
-        (Mode::ImageI32, DynamicImage::ImageI32(image))
-        | (Mode::ImageF32, DynamicImage::ImageF32(image)) => {
-            select_interleaved_band_into(image.as_raw(), 4, 0, output);
-        }
-        _ => return Err(mode_carrier_mismatch(mode)),
-    }
-    Ok(())
-}
-
-fn write_getdata_unsigned_luma16_band(
-    image: &DynamicImage,
-    mode: Mode,
-    band: usize,
-    output: &mut [u8],
-) -> Result<(), PilError> {
-    let image = match (mode, image) {
-        (Mode::ImageI16, DynamicImage::ImageI16(image))
-        | (Mode::ImageI16L, DynamicImage::ImageI16L(image))
-        | (Mode::ImageI16B, DynamicImage::ImageI16B(image))
-        | (Mode::ImageI16N, DynamicImage::ImageI16N(image)) => image,
-        _ => return Err(mode_carrier_mismatch(mode)),
-    };
-    write_native_sample_band(
-        image.as_raw(),
-        image.width(),
-        image.height(),
-        1,
-        band,
-        mode,
-        output,
-        |sample| sample.min(u16::from(u8::MAX)) as u8,
-    )
-}
-
-fn write_native_sample_band<T: Copy>(
-    samples: &[T],
-    width: u32,
-    height: u32,
-    channels: u8,
-    band: usize,
-    mode: Mode,
-    output: &mut [u8],
-    convert: impl Fn(T) -> u8,
-) -> Result<(), PilError> {
-    let count = native_sample_count(width, height, channels)?;
-    let samples = samples
-        .get(..count)
-        .ok_or_else(|| mode_carrier_mismatch(mode))?;
-    for (destination, sample) in output
-        .iter_mut()
-        .zip(samples.iter().skip(band).step_by(usize::from(channels)))
-    {
-        *destination = convert(*sample);
-    }
-    Ok(())
-}
-
-fn write_getdata_internal_band(
-    image: &DynamicImage,
-    mode: Mode,
-    band: usize,
-    output: &mut [u8],
-) -> Result<(), PilError> {
-    // NO_PILLOW_SUPPORT: these internal high-depth modes expose native bands
-    // through this byte API without changing or retagging their raster.
-    match (mode, image) {
-        (Mode::ImageLumaA16, DynamicImage::ImageLumaA16(image)) => write_native_sample_band(
-            image.as_raw(), image.width(), image.height(), 2, band, mode, output, u8::from_primitive,
-        ),
-        (Mode::ImageRgb16, DynamicImage::ImageRgb16(image)) => write_native_sample_band(
-            image.as_raw(), image.width(), image.height(), 3, band, mode, output, u8::from_primitive,
-        ),
-        (Mode::ImageRgba16, DynamicImage::ImageRgba16(image)) => write_native_sample_band(
-            image.as_raw(), image.width(), image.height(), 4, band, mode, output, u8::from_primitive,
-        ),
-        (Mode::ImageRgb32F, DynamicImage::ImageRgb32F(image)) => write_native_sample_band(
-            image.as_raw(), image.width(), image.height(), 3, band, mode, output, u8::from_primitive,
-        ),
-        (Mode::ImageRgba32F, DynamicImage::ImageRgba32F(image)) => write_native_sample_band(
-            image.as_raw(), image.width(), image.height(), 4, band, mode, output, u8::from_primitive,
-        ),
-        _ => Err(mode_carrier_mismatch(mode)),
-    }
-}
-
-// TODO(pillow-rs#3ptb): move the exact-mode band sample writers into
-// analysis/<mode>/default and leave the Image API responsible for selection.
-fn write_getdata_band_samples(
-    image: &DynamicImage,
-    mode: Mode,
-    band: usize,
-    output: &mut [u8],
-) -> Result<(), PilError> {
-    validate_getdata_band_output(image, output)?;
-    match mode {
-        Mode::One
-        | Mode::ImageLuma8
-        | Mode::ImageLumaA8
-        | Mode::ImageLaPremultiplied8
-        | Mode::ImagePalette8
-        | Mode::ImagePaletteAlpha8
-        | Mode::ImageRgb8
-        | Mode::ImageRgba8
-        | Mode::ImageRgbPremultiplied8
-        | Mode::ImageRgbx8
-        | Mode::ImageCmyk8
-        | Mode::ImageYCbCr8
-        | Mode::ImageLab8
-        | Mode::ImageHsv8
-        | Mode::ImageI32
-        | Mode::ImageF32 => write_getdata_byte_band(image, mode, band, output),
-        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
-            write_getdata_unsigned_luma16_band(image, mode, band, output)
-        }
-        Mode::ImageLumaA16
-        | Mode::ImageRgb16
-        | Mode::ImageRgba16
-        | Mode::ImageRgb32F
-        | Mode::ImageRgba32F => write_getdata_internal_band(image, mode, band, output),
-    }
-}
-
-fn getdata_band_bytes(
-    image: &DynamicImage,
-    mode: Mode,
-    band: usize,
-    selection: crate::compute::registry::support::StrategySelection,
-) -> Result<Vec<u8>, PilError> {
-    if selection.implementation.operation
-        != crate::compute::registry::support::OperationId::GetDataBand
-        || selection.implementation.mode != mode
-        || image.mode() != mode
-    {
-        return Err(PilError::InternalError(
-            "GetDataBand selection did not match its mode-bearing raster".into(),
-        ));
-    }
-    let dimensions = crate::checked_dims::CheckedDims::new_allow_empty(
-        image.width(),
-        image.height(),
-        1,
-    )?;
-    let mut output = dimensions.alloc_buffer();
-    write_getdata_band_samples(image, mode, band, &mut output)?;
-    Ok(output)
-}
-
-fn getdata_unsigned_luma16_values(image: &DynamicImage, mode: Mode) -> Result<Vec<i32>, PilError> {
-    let samples = match (mode, image) {
-        (Mode::ImageI16, DynamicImage::ImageI16(image))
-        | (Mode::ImageI16L, DynamicImage::ImageI16L(image))
-        | (Mode::ImageI16B, DynamicImage::ImageI16B(image))
-        | (Mode::ImageI16N, DynamicImage::ImageI16N(image)) => image.as_raw(),
-        _ => return Err(mode_carrier_mismatch(mode)),
-    };
-    Ok(samples.iter().copied().map(i32::from).collect())
-}
+use crate::raster::Mode;
 
 impl Image {
     fn getdata_band(&self, image: &DynamicImage, band: i32) -> Result<Vec<u8>, PilError> {
@@ -404,7 +31,11 @@ impl Image {
         if !crate::compute::pool_cpu::ops::analysis::ops::supports_get_data_band_into(mode) {
             // These scalar modes intentionally have no caller-owned band
             // buffer API. Keep their established direct byte conversion.
-            return getdata_band_bytes(image, mode, band_index, selection);
+            return crate::compute::pool_cpu::ops::analysis::ops::get_data_band(
+                image,
+                band_index,
+                selection,
+            );
         }
 
         let dimensions = crate::checked_dims::CheckedDims::new_allow_empty(
@@ -437,7 +68,7 @@ impl Image {
         let selection = crate::compute::pool_cpu::ops::analysis::ops::select_get_data(
             img.mode(), &context,
         )?;
-        getdata_mode_bytes(img.as_ref(), selection)
+        crate::compute::pool_cpu::ops::analysis::ops::get_data(img.as_ref(), selection)
     }
 
     /// Return the number of samples produced by Pillow's formatted band read.
@@ -483,16 +114,9 @@ impl Image {
         if requested_backend.is_some_and(|backend| backend != crate::compute::Backend::Cpu) {
             return Ok(None);
         }
-        let (mode, values) = match self {
-            Image::Paletted(data) => (Mode::ImagePalette8, data.indices.as_bytes()),
-            Image::Loaded(data) => match data.image.as_ref() {
-                // Preserve exact mode identity without formatting a Pillow spelling.
-                DynamicImage::One(image) => (Mode::One, image.as_raw().as_slice()),
-                DynamicImage::ImageLuma8(image) => {
-                    (Mode::ImageLuma8, image.as_raw().as_slice())
-                }
-                _ => return Ok(None),
-            },
+        let mode = match self {
+            Image::Paletted(_) => Mode::ImagePalette8,
+            Image::Loaded(data) => data.image.mode(),
             _ => return Ok(None),
         };
         let context = crate::compute::ExecutionContext::for_routed_backend(
@@ -501,6 +125,26 @@ impl Image {
         let selection = crate::compute::pool_cpu::ops::analysis::ops::select_get_data(
             mode, &context,
         )?;
+        let values = match self {
+            Image::Paletted(data) => {
+                crate::compute::pool_cpu::ops::analysis::ops::get_data_palette_indices_view(
+                    data.indices.as_bytes(),
+                    selection,
+                )?
+            }
+            Image::Loaded(data) => {
+                let Some(values) =
+                    crate::compute::pool_cpu::ops::analysis::ops::get_data_band_byte_view(
+                        data.image.as_ref(),
+                        selection,
+                    )?
+                else {
+                    return Ok(None);
+                };
+                values
+            }
+            _ => return Ok(None),
+        };
         crate::compute::record_eager_cpu_operation_receipt_with_selection(
             "GetData",
             requested_backend,
@@ -644,12 +288,21 @@ impl Image {
             crate::compute::begin_eager_cpu_operation_telemetry("GetData", selected_backend);
         let result = (|| {
             if let Image::Paletted(data) = self {
-                output.copy_from_slice(data.indices.as_bytes());
-                return Ok(());
+                return crate::compute::pool_cpu::ops::analysis::ops::get_data_palette_indices_band_into(
+                    data.indices.as_bytes(),
+                    band,
+                    selection,
+                    output,
+                );
             }
 
             let img = self.materialized_shared()?;
-            write_getdata_band_samples(img.as_ref(), img.mode(), band, output)
+            crate::compute::pool_cpu::ops::analysis::ops::get_data_band_into(
+                img.as_ref(),
+                band,
+                selection,
+                output,
+            )
         })();
         if result.is_ok() {
             crate::compute::finish_eager_cpu_operation_telemetry_with_selection(
@@ -679,8 +332,17 @@ impl Image {
                 return Err(PilError::ValueError("image has wrong mode".into()));
             }
             let image = self.materialized_shared()?;
+            let context = crate::compute::ExecutionContext::for_routed_backend(
+                crate::compute::Backend::Cpu,
+            );
+            let selection = crate::compute::pool_cpu::ops::analysis::ops::select_get_data(
+                mode, &context,
+            )?;
             return Ok(FormattedImageData::IntegerScalars(
-                getdata_unsigned_luma16_values(image.as_ref(), mode)?,
+                crate::compute::pool_cpu::ops::analysis::ops::get_data_integer_samples(
+                    image.as_ref(),
+                    selection,
+                )?,
             ));
         }
         if matches!(mode, Mode::ImageI32 | Mode::ImageF32) {
