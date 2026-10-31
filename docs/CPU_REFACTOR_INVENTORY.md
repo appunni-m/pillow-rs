@@ -83,6 +83,75 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   errors and did not retry on CPU; the prepared architecture owner likewise
   returns its leaf error directly. This observable error difference remains a
   source-review TODO. No validation has run.
+- RGB→I;16/I;16L/I;16B/I;16N is Pillow-supported, not a core-only extension.
+  The baseline `try_convert_to_luma16` accepts all four target spellings and
+  routes RGB through the `L` conversion before widening each byte to native
+  `u16`. The maintained RGB8 Default owner applies the same rounded BT.601
+  fixed-point projection (`19595/38470/7471`, bias `32768`) with
+  `rgb_to_luma_u8`, widens each resulting sample to `u16`, and constructs the
+  exact requested I;16 `DynamicImage` variant. No RGB8 architecture strategy
+  is declared for these targets, so they remain Default-only. The direct owner
+  removes the archived intermediate L conversion/materialization step; verify
+  that this execution and allocation-boundary change is permitted by the
+  preserved Convert contract before closing source review. No validation has
+  run.
+- RGB→I/F is source-reviewed against both archived executors. The archived CPU
+  and maintained Default owners use the same fixed-point rounded luma formula
+  for I, then write the signed value as little-endian i32 into the four-byte
+  native carrier. Both use the same integer-weighted `(299R + 587G + 114B) /
+  1000.0f32` formula for F and emit little-endian f32 bytes. The archived wide
+  Convert kernel and maintained `native_rgb` kernel gather eight RGB pixels,
+  run the same lane equations, zero-fill inactive tail lanes, and emit only
+  active results. Both return the exact I/F identity. The archived adapter
+  accepted exact native RGB bytes and handled empty images as `scalar-control`;
+  the maintained support declaration admits the exact I/F targets for the
+  RGB8 owner, and its zero-block path records the same empty control receipt.
+  SSE2/NEON selections use these eight-lane kernels, with the Default strategy
+  retained for fallback. No arithmetic or tail difference was found in this
+  slice; parity and benchmark validation remain pending.
+- RGB→LA is source-reviewed across the archived CPU, archived SIMD, and
+  maintained mode owners. The archived CPU path used Pillow's rounded L
+  grayscale conversion and filled the LA alpha byte with 255. Its SIMD path
+  used eight-pixel fixed-point luma blocks, zero-filled inactive lanes, and
+  interleaved opaque alpha. The maintained Default owner applies the same
+  rounded `rgb_to_luma_u8` equation while emitting `[L, 255]`; the selected
+  architecture owner calls the eight-lane `native_rgb::to_luma_alpha_opaque`
+  kernel with the same active-lane output. Both return exact `ImageLumaA8`.
+  Empty images remain accepted: the archived path records scalar-control and
+  the maintained zero-block vector helper records scalar-control, although the
+  new support guard can retain the requested architecture selection. The
+  Default route no longer materializes the intermediate L raster, so its
+  allocation boundary differs from the archived CPU path; resolve this against
+  the preservation contract before source review is closed. RGB→La shares the
+  byte arithmetic but remains an explicitly core-only target with its own
+  exact output identity. No validation has run.
+- RGB→L is source-reviewed against the actual archived Convert route. Its
+  `try_layout_special_conversion` delegated exact RGB8 input to the archived
+  Grayscale kernel selector, so the generic eight-lane Convert luma helper was
+  not the executed path. The maintained RGB8 Convert owner delegates to the
+  same Grayscale architecture kernels: AVX2 and NEON retain their specialized
+  16-pixel loops, while SSE2/SSSE3/Wasm use the archived 16-pixel interleaved
+  `wide` loop; all use the same rounded Pillow luma result and padded active
+  tail. The Default route reuses the same serial grayscale kernel as the
+  archived CPU route. Both SIMD routes preserve exact `ImageLuma8`; zero-block
+  execution records scalar-control in the archived adapter and maintained
+  `vector_output`. The typed declaration selects each concrete architecture
+  from the injected context and retains Default fallback. No source difference
+  was found for this route; parity and performance validation remain pending.
+- RGB→CMYK/YCbCr/HSV is source-reviewed across the archived CPU, archived
+  Convert SIMD, and maintained mode owners. CMYK keeps the direct inverse
+  channels `[255-R, 255-G, 255-B, 0]`; its archived and maintained vector
+  kernels process four pixels per block. YCbCr keeps the same eight lookup
+  tables, fixed-point shift, neutral offset, and clamp in eight-pixel blocks.
+  HSV keeps the same eight-pixel wide-float route, red-then-green-then-blue
+  maximum tie order, and intermediate f32 hue narrowing before wrap and byte
+  truncation. The maintained Default owners call the existing native RGB
+  conversions; SSE2/NEON owners call the corresponding native vector helpers.
+  All preserve padded inactive lanes, active-only stores, scalar-control for
+  empty input, and exact `ImageCmyk8`, `ImageYCbCr8`, or `ImageHsv8` identity.
+  No source arithmetic or tail difference was found; the broader audit still
+  needs to reconcile archived executor build availability with every declared
+  Architecture row. Parity and performance validation remain pending.
 - RGB→RGB identity is source-reviewed. The archived generic layout route and
   maintained SSE2/NEON mode owners both copy native triplets through five-pixel
   `u8x16` blocks, including a padded final block, and preserve the exact
