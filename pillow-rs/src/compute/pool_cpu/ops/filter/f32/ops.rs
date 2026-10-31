@@ -7,6 +7,10 @@ use crate::compute::registry::support::{
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 
+// TODO(pillow-rs#3ptb): Reconcile the F32 architecture sorter with Default's
+// comparator-sensitive handling of NaNs and mixed signed zero samples before
+// declaring its strategy parity-complete. The archived vector route has no
+// equivalent content guard.
 pub(super) const MODE: Mode = Mode::ImageF32;
 
 macro_rules! rank_vector_architectures {
