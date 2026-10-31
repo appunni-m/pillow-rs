@@ -201,7 +201,9 @@ impl PipelineOps {
 ///
 /// This metadata is deliberately conservative.  Returning `false` only
 /// means that a later mode query may materialize; it never changes execution
-/// semantics.  The fast path is important for lazy native-mode chains such as
+/// semantics. This classification also gates reusable pipeline prefixes, so
+/// only operations whose output contract preserves the current mode belong
+/// here. The fast path is important for lazy native-mode chains such as
 /// repeated `ImageOps.invert`, whose validation needs the source mode but not
 /// the pixels.
 fn op_preserves_mode(op: &PipelineOp) -> bool {
@@ -235,6 +237,7 @@ fn op_preserves_mode(op: &PipelineOp) -> bool {
             | PipelineOp::Pad { .. }
             | PipelineOp::Scale { .. }
             | PipelineOp::Expand { .. }
+            | PipelineOp::Transform { .. }
             | PipelineOp::CropBorder { .. }
             | PipelineOp::Add { .. }
             | PipelineOp::Subtract { .. }
@@ -260,6 +263,9 @@ fn op_preserves_mode(op: &PipelineOp) -> bool {
             | PipelineOp::Sharpness { .. }
             | PipelineOp::EffectSpread { .. }
             | PipelineOp::Paste { .. }
+            | PipelineOp::AlphaComposite { .. }
+            | PipelineOp::BlendModule { .. }
+            | PipelineOp::CompositeModule { .. }
             | PipelineOp::DrawLine { .. }
             | PipelineOp::DrawRectangle { .. }
             | PipelineOp::DrawRoundedRect { .. }
@@ -312,6 +318,8 @@ pub(crate) fn known_pipeline_op_mode(op: &PipelineOp, current: Mode) -> Option<M
         // Convert and Merge both carry their exact typed output identity.
         PipelineOp::Convert { mode, .. } => Some(*mode),
         PipelineOp::Merge { mode, .. } => Some(*mode),
+        PipelineOp::RemapPalette { .. } => Some(Mode::ImagePalette8),
+        PipelineOp::Color3DLut { target_mode, .. } => Some(*target_mode),
         PipelineOp::ConvertLab { .. } => Some(Mode::ImageLab8),
         PipelineOp::Grayscale => Some(Mode::ImageLuma8),
         PipelineOp::Colorize { .. } => Some(Mode::ImageRgb8),

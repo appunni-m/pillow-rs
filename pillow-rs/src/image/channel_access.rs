@@ -58,24 +58,7 @@ fn eager_getchannel_tiny_rgb(
 ) -> Result<Option<DynamicImage>, PilError> {
     let operation = PipelineOp::ExtractBand { index: channel };
     match backend {
-        crate::compute::Backend::Cpu => {
-            Ok(Some(crate::compute::execute_eager_cpu_image_operation(
-                "ExtractBand",
-                image,
-                // The ExtractBand kernel records its output allocation;
-                // manual accounting would count it twice.
-                false,
-                |ctx| crate::compute::registry::execute_cpu(
-                    &operation,
-                    crate::compute::registry::support::OperationInputs {
-                        image,
-                        palette: crate::compute::registry::support::PaletteInput::default(),
-                    },
-                    ctx,
-                ),
-            )?))
-        }
-        crate::compute::Backend::Simd =>
+        crate::compute::Backend::Cpu | crate::compute::Backend::Simd => {
             crate::compute::execute_eager_cpu_arch_image_operation(
                 "ExtractBand",
                 image,
@@ -93,7 +76,8 @@ fn eager_getchannel_tiny_rgb(
                     prepared.execute().map(|result| (result, selection))
                 },
             )
-            .map(Some),
+            .map(Some)
+        }
         crate::compute::Backend::Gpu => Ok(None),
     }
 }

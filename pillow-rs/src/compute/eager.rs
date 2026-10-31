@@ -171,6 +171,7 @@ pub(crate) fn execute_eager_gpu_rgb_getprojection(
 /// retaining the same backend and host-buffer evidence as pipeline dispatch.
 /// Set `manual_output_allocation` when the closure does not record its result
 /// buffer through the normal allocation telemetry hook.
+#[cfg(test)]
 pub(crate) fn execute_eager_cpu_image_operation(
     operation: &'static str,
     input: &DynamicImage,

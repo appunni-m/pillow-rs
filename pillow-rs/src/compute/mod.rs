@@ -87,9 +87,11 @@ pub(crate) use eager::{
     execute_eager_cpu_getprojection, execute_eager_cpu_linear_gradient,
     execute_eager_cpu_mandelbrot, execute_eager_cpu_radial_gradient,
     execute_eager_cpu_arch_bytes, execute_eager_cpu_arch_image_operation,
-    execute_eager_cpu_arch_image_operation_with_route, execute_eager_cpu_image_operation,
+    execute_eager_cpu_arch_image_operation_with_route,
     execute_eager_cpu_shared_result,
 };
+#[cfg(test)]
+pub(crate) use eager::execute_eager_cpu_image_operation;
 #[cfg(feature = "gpu")]
 pub(crate) use eager::{
     execute_eager_gpu_rgb_getprojection, gpu_cmyk_projection_terminal_supported,
