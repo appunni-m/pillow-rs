@@ -7,9 +7,11 @@
 //! and ColorSaturation have typed strategies for their queued modes. Eager
 //! conversion modes and full support review remain pending. Preserve direct
 //! eager conversions before retiring the remaining Pillow-string routes.
-//! Add the remaining owners from `docs/IMPLEMENTATION_STRUCTURE.md` for
-//! `paste`, `transform`, and `draw`; migrate Merge, BlendModule, and
-//! CompositeModule into the Composite owner.
+//! Paste now has exhaustive mode strategies with Default and shared vector
+//! routes; its archived architecture-tuned NEON blends and RGB/RGBA shuffles
+//! remain TODOs in the Paste vector helper. Add the remaining owners from
+//! `docs/IMPLEMENTATION_STRUCTURE.md` for `transform` and `draw`; migrate
+//! Merge, BlendModule, and CompositeModule into the Composite owner.
 //! Complete current owners and rewire every registry and direct caller without
 //! importing the archive.
 //! Resize has exhaustive prepared support and exact-mode dispatch for all 25
@@ -35,6 +37,7 @@ pub(crate) mod geometry;
 pub(crate) mod grayscale;
 pub(crate) mod imageops;
 pub(crate) mod put;
+pub(crate) mod paste;
 pub(crate) mod reduce;
 pub(crate) mod resize;
 pub(crate) mod rotate;

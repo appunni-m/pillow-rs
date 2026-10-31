@@ -3,9 +3,9 @@
 Status: baseline inventory captured; the 98 CPU and 182 SIMD files are preserved below pool_cpu/legacy; maintained implementation and source review remain in progress. The separate SIMD executor and adapter registry were removed from the active module graph on 2026-10-31; `Backend::Simd` is now a CPU-plus-Architecture compatibility request. The source change is unverified.
 Baseline commit: 3f9dfd4036caa061eabcf2255c9f34a745df9c7e
 Working checkout: `/Users/lazytrot/work/pillow-rs`, branch
-`codex/cpu-mode-aware-refactor-backup-20261029` at `954e1b5a8`, five local
-commits above `origin/codex/cpu-mode-aware-refactor-backup-20261029`. The
-current GetData source continuation is uncommitted and unverified. Earlier
+`codex/cpu-mode-aware-refactor-backup-20261029` at `c841d3d0d`, six local
+commits above `origin/codex/cpu-mode-aware-refactor-backup-20261029`. GetData's
+typed mode migration is committed but unverified. Earlier
 Eval, ImageOps Expand, Geometry, Crop, Effects, projection, and direct gradient
 work is recorded below. No build, formatter, checkstyle, lint, test, parity,
 benchmark, or coverage command has run for the current migration state.
@@ -102,6 +102,102 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   band API still needs the prepared backend/architecture route, and the
   caller-owned path still needs a direct support declaration that derives its
   CPU/GPU selection. Source-only; unverified.
+
+### Paste source audit (maintained strategy not yet written)
+
+- Public admission lives in `pillow-rs/src/ops/paste/operations.rs`. It reads
+  the destination's typed `Mode`, validates placement and source/mask region
+  dimensions, derives `mask_alpha` from the exact mask mode, then queues
+  `PipelineOp::Paste`; output preserves destination identity and metadata.
+  `1`/`L` masks use their luma sample; `LA`/`RGBA`/`RGBa` masks use the alpha
+  sample, with `RGBa` retaining its premultiplied PREBLEND rule. Other masks
+  return `ValueError("bad transparency mask")`. `resolve_image_source`
+  preserves same-mode inputs, preserves `LA`/`RGBA`/`RGBa` carriers for an RGB
+  destination, preserves an unmasked RGB source for RGBA output, and promotes
+  P indices to opaque PA. Other conversions are explicit at this wrapper
+  boundary. Solid sources are built in the exact destination mode, including
+  raw I/F bytes and typed I;16 values.
+- The baseline CPU implementation is `pool_cpu/legacy/ops/paste.rs`, with row
+  kernels in `paste/kernels.rs` and typed/mask layout helpers in
+  `paste/layout.rs`. `paste_native_rows` copies the clipped intersection of
+  exact same-mode byte samples; its byte layouts are 1/L/P (1 byte),
+  LA/La/PA (2), RGB/HSV/YCbCr/LAB (3), and RGBA/RGBa/RGBX/CMYK/I/F (4).
+  P/PA sources materialize their index plane. The unmasked RGB-to-RGBA kernel
+  copies RGB and writes alpha 255. Empty overlap returns the original
+  destination. The archived CPU `paste_native_masked` fast path owns
+  1/L/P/LA/PA/RGB/HSV/RGBA/CMYK; its non-binary 1/P requests and the remaining
+  byte modes flow through `paste_rgba_fallback`. The maintained implementation
+  must preserve those raw-sample results with exact-mode loops, not widen a
+  raster to RGBA for kernel reuse.
+- For same-mode byte storage, L masks apply
+  `(source*mask + destination*(255-mask) + 127)/255` independently to every
+  stored byte, including RGBA alpha, CMYK K, and both LA/PA samples. `1`
+  masks copy the entire sample when nonzero. LA/RGBA masks select their alpha
+  byte; RGBa masks select premultiplied alpha and use Pillow PREBLEND
+  `((((destination*(255-mask)+128)>>8) + destination*(255-mask)+128)>>8) +
+  source`, including at a zero mask. For the RGB destination's retained
+  LA/RGBA/RGBa source routes, the archived fallback expands LA luma into the
+  three RGB channels or drops the source's fourth byte, then blends only the
+  destination RGB bytes; source alpha is not copied into the RGB result.
+- All four I;16 identities use the typed u16 carrier. Unmasked and binary-mask
+  routes copy complete samples. A fractional byte mask advances the image8
+  pointer by one byte per pixel and blends only that byte, preserving the
+  other byte. I;16L, I;16B, native I;16, and I;16N each select byte order
+  explicitly; RGBa masks keep PREBLEND at zero. Do not normalize this to a
+  u16 blend. I/F preserve their raw four-byte carrier and blend those bytes.
+  No archived exact-mode Paste strategy exists for the five internal
+  high-depth identities. The maintained implementation adds native typed
+  strategies for them and marks each core-only route with a nearby
+  `NO_PILLOW_SUPPORT` comment.
+- The archived SIMD adapter is `legacy/pool_simd/ops/adapters/paste/`. Its
+  native-copy planner covers the 14 byte identities `1`, L, P, LA, PA, RGB,
+  HSV, YCbCr, RGBA, CMYK, RGBa, RGBX, I, and F, plus all four I;16 identities.
+  (La and LAB have CPU Default behavior but no SIMD Paste plan.) Its planner
+  admits binary-mask copy for every listed layout and fractional masks for
+  L/LA/PA/RGB/HSV/RGBA/CMYK/I;16. It includes a `Broadcast` source layout for
+  the 1x1 masked bitmap source and direct unmasked RGBA-to-RGB and RGB-to-RGBA
+  routes. The 8/16-lane `wide` copy/blend kernels keep scalar tails; explicit
+  AArch64 NEON blocks exist for L/LA/RGBA/RGB/CMYK L-mask blends. I;16 uses
+  eight u16 lanes and preserves the selected stored byte. Its adapter also
+  contains `simd_composite_module`, which reuses these native mask/copy kernels;
+  the maintained CompositeModule owner may call shared Paste helpers directly.
+  Rayon row scheduling in either archive does not belong to CPU and remains a
+  later `pool_parallel` concern.
+- Maintained placement and caller rewiring: `pool_cpu/ops/paste/` now has
+  family orchestration, all 25 exact mode owners, shared input/byte-layout
+  helpers, per-mode Default implementations, and architecture-selected SSE2,
+  NEON, and Wasm SIMD128 routes for byte identities and the four I;16 modes.
+  `OperationId::Paste` has an exhaustive support contract, closed prepared
+  plan, and `prepare_pipeline`; the effects registry calls it directly and the
+  old `op_paste` import is removed. The shared `PipelineOp::Paste` GPU route
+  remains intact. Host-value normalization stays in
+  `pillow-rs/src/ops/paste`, preserving its calls from `Image::paste`,
+  `Image::paste_at`, `paste_bitmap_solid_masked_at`, `draw/bitmap.rs`, and
+  `ops/crop.rs`.
+- Archived function destinations: CPU `op_paste` becomes family orchestration;
+  `paste_region`, checked row geometry, and compact source expansion become
+  the Paste input/region plan; native row copy and RGB-to-RGBA copy become
+  exact mode Default implementations; masked L/LA/PA/RGB/HSV/RGBA/CMYK rows
+  become their exact mode Default kernels; I;16 fallback becomes four exact
+  typed mode implementations sharing only byte-order-aware sample helpers.
+  SIMD `plan.rs` becomes linked input/architecture guards; `apply.rs` and
+  `apply/generic.rs` become shared vector row helpers; `blend.rs` becomes
+  shared DIV255/PREBLEND vector arithmetic; `apply/{l,la,pa,rgb,rgba,cmyk_l}.rs`
+  maps to exact mode/architecture implementations; `luma.rs` and
+  `rgb_cmyk.rs` contain the explicit NEON kernels; `luma16.rs` maps to the four
+  I;16 architecture owners; and `rgb_to_rgba.rs` plus `mod.rs`'s RGBA-to-RGB
+  path map to exact cross-mode source strategies. SIMD test source cases are
+  retained as review inputs and will be reconstructed with the maintained
+  operation after source implementation. The existing CPU and SIMD tests in
+  `legacy/` remain inert.
+- The archived CPU, SIMD, and public caller review for Paste is complete and
+  recorded above. Maintained support is mode-specific and drives prepared
+  strategy selection. Shared `wide` kernels implement the selected vector
+  routes; archived explicit NEON blends and RGB/RGBA shuffle kernels remain a
+  tracked optimization TODO beside `helpers/vector.rs`. Five internal
+  high-depth identities have typed core-only implementations marked
+  `NO_PILLOW_SUPPORT`. No build, formatter, checkstyle, lint, test, parity,
+  benchmark, or coverage command has run for Paste.
 
 This inventory records the source and evidence denominator before rebuilding pool_cpu. It is a migration ledger, not a claim that the listed mode literals prove support. Each function's exact mode support, output identity, rejection behavior, shared helpers, and architecture fallback must be confirmed from its implementation before it is copied into the maintained tree. The source path lists are taken from the baseline Git tree, so every archived file can be checked against 3f9dfd403.
 

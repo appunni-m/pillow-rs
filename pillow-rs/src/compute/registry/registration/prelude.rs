@@ -10,7 +10,7 @@ pub(super) use crate::compute::pool_cpu::ops::draw::{
     op_draw_point, op_draw_polygon, op_draw_rectangle, op_draw_rounded_rect,
 };
 pub(super) use crate::compute::pool_cpu::ops::effects::{
-    op_blend_module, op_composite_module, op_merge, op_paste, op_transform,
+    op_blend_module, op_composite_module, op_merge, op_transform,
 };
 pub(super) use crate::error::PilError;
 pub(super) use crate::pipeline::PipelineOp;

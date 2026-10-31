@@ -257,6 +257,17 @@ pub enum RequestFacts {
         /// Secondary raster identity and dimensions.
         other: SecondaryInputFacts,
     },
+    /// Exact source, optional mask, and region facts for a Paste request.
+    Paste {
+        /// Source raster identity and dimensions after public normalization.
+        source: SecondaryInputFacts,
+        /// Optional mask raster identity and dimensions.
+        mask: Option<SecondaryInputFacts>,
+        /// Requested paste region dimensions.
+        region: (u32, u32),
+        /// Whether mask values come from the mask alpha sample.
+        mask_alpha: bool,
+    },
     /// Typed Rotate parameters retained for architecture eligibility guards.
     Rotate {
         /// Exact normalized angle bits supplied by the public operation.
@@ -656,6 +667,24 @@ impl StrategyInputs {
     #[must_use]
     pub const fn with_same_mode_secondary_image(mut self, other: SecondaryInputFacts) -> Self {
         self.request = RequestFacts::SameModeSecondaryImage { other };
+        self
+    }
+
+    /// Supplies the exact source and optional mask metadata for Paste.
+    #[must_use]
+    pub const fn with_paste(
+        mut self,
+        source: SecondaryInputFacts,
+        mask: Option<SecondaryInputFacts>,
+        region: (u32, u32),
+        mask_alpha: bool,
+    ) -> Self {
+        self.request = RequestFacts::Paste {
+            source,
+            mask,
+            region,
+            mask_alpha,
+        };
         self
     }
 

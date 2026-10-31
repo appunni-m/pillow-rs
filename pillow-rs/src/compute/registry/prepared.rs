@@ -129,6 +129,7 @@ declare_prepared_operations! {
     Filter, filter, PreparedFilter, from_filter;
     Chops, chops, PreparedChops, from_chops;
     AlphaComposite, composite, PreparedAlphaComposite, from_alpha_composite;
+    Paste, paste, PreparedPaste, from_paste;
 }
 
 impl PreparedOperation<'_> {

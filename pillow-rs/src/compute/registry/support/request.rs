@@ -9,6 +9,34 @@ mod guards;
 
 pub use facts::{PixelWriteRunFacts, RequestFacts, SecondaryInputFacts, StrategyInputs};
 
+/// One mask mode accepted by the native Paste input contract.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PasteMaskRule {
+    /// Exact mask raster identity.
+    pub mode: Mode,
+    /// Whether this mode supplies the mask from its alpha sample.
+    pub alpha: bool,
+}
+
+/// Exact secondary-image, mask, and compact-source rules for Paste.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PasteInputRules {
+    /// Source identities accepted after public wrapper normalization.
+    pub source_modes: &'static [Mode],
+    /// Source identities admitted only without a mask, such as RGB into RGBA.
+    pub unmasked_only_sources: &'static [Mode],
+    /// Source identities allowed to use the 1x1 masked bitmap broadcast form.
+    pub compact_sources: &'static [Mode],
+    /// Mask identities allowed for the compact broadcast form.
+    pub compact_masks: &'static [Mode],
+    /// Exact mask identities and alpha selectors accepted for ordinary Paste.
+    pub masks: &'static [PasteMaskRule],
+    /// Existing source identity or shape mismatch error.
+    pub source_rejection: &'static str,
+    /// Existing mask identity or selector error.
+    pub mask_rejection: &'static str,
+}
+
 /// Output channel capacity for one exact operation target mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ModeChannelCapacity {
@@ -141,6 +169,11 @@ pub enum InputContract {
         mode: Mode,
         /// Existing rejection for an identity or size mismatch.
         rejection_reason: &'static str,
+    },
+    /// Paste's exact source/mask relation, including its compact bitmap form.
+    PasteInputs {
+        /// Mode-specific source, mask, and size rules bound to execution.
+        rules: &'static PasteInputRules,
     },
     /// A semantic source-buffer requirement; failure rejects instead of falling back.
     ExactNativeBytes {

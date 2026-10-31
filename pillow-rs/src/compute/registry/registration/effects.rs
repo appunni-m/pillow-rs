@@ -1,7 +1,5 @@
 //! Effects operation registration.
-use super::prelude::{
-    PilError, PipelineOp, Registry, op_paste,
-};
+use super::prelude::{PilError, Registry};
 fn register_part_1(m: &mut Registry) {
     // Pillow 12.2.0 libImaging/Effects.c:117-159 consumes process-global
     // rand() sequentially and performs collision-prone scatter writes. The GPU
@@ -18,22 +16,7 @@ fn register_part_1(m: &mut Registry) {
     m.insert(
         "Paste",
         gpu_entry!(
-            |img, op, _mode| {
-                if let PipelineOp::Paste {
-                    source,
-                    x,
-                    y,
-                    w: _,
-                    h: _,
-                    mask,
-                    mask_alpha,
-                } = op
-                {
-                    op_paste(img, source, *x as i64, *y as i64, mask, *mask_alpha, _mode)
-                } else {
-                    Err(PilError::ValueError("expected Paste op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::paste::ops::prepare_pipeline,
             "paste.wgsl"
         ),
     );

@@ -10,8 +10,9 @@ use crate::raster::{DynamicImage, Mode};
 mod request;
 use request::GuardAssessment;
 pub use request::{
-    BandIndexRule, InputContract, ModeChannelCapacity, PaletteKnowledge, PixelWriteRunFacts,
-    RequestFacts, SecondaryInputFacts, StrategyGuard, StrategyInputs, UnresolvedGuard,
+    BandIndexRule, InputContract, ModeChannelCapacity, PaletteKnowledge, PasteInputRules,
+    PasteMaskRule, PixelWriteRunFacts, RequestFacts, SecondaryInputFacts, StrategyGuard,
+    StrategyInputs, UnresolvedGuard,
 };
 
 /// Palette dependencies resolved by the Pillow image wrapper before execution.
@@ -164,6 +165,8 @@ pub enum OperationId {
     EffectMandelbrot,
     /// Alpha-composite one same-sized LA or RGBA image over another.
     AlphaComposite,
+    /// Paste a normalized source into a native destination mode.
+    Paste,
     /// One normalized native-byte pixel write with caller-validated coordinates.
     PutPixel,
     /// An ordered run of adjacent native-byte writes that clones its source once.
@@ -283,6 +286,7 @@ impl OperationId {
             Self::AlphaComposite => {
                 &crate::compute::pool_cpu::ops::composite::ops::ALPHA_COMPOSITE_SUPPORT
             }
+            Self::Paste => &crate::compute::pool_cpu::ops::paste::ops::SUPPORT,
             Self::PutPixel => &crate::compute::pool_cpu::ops::put::ops::PUT_PIXEL_SUPPORT,
             Self::PutPixelBatch => &crate::compute::pool_cpu::ops::put::ops::PUT_PIXEL_BATCH_SUPPORT,
             Self::PutData => &crate::compute::pool_cpu::ops::put::ops::PUT_DATA_SUPPORT,

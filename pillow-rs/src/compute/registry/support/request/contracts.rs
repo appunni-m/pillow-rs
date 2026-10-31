@@ -1,7 +1,8 @@
 //! Semantic request and input contracts for operation strategies.
 
 use super::{
-    InputContract, PaletteKnowledge, RequestFacts, StrategyInputs, UnresolvedGuard,
+    InputContract, PaletteKnowledge, PasteInputRules, PasteMaskRule, RequestFacts,
+    StrategyInputs, UnresolvedGuard,
 };
 use crate::error::PilError;
 use crate::raster::Mode;
@@ -62,6 +63,7 @@ pub(super) fn assess(
         InputContract::SameModeSecondaryImage { mode, rejection_reason } => {
             assess_same_mode_secondary_image(input, mode, rejection_reason)
         }
+        InputContract::PasteInputs { rules } => assess_paste_inputs(input, rules),
         InputContract::CropBorder => assess_crop_border(contract, input),
         InputContract::ByteDataPayload { modes, rejection_reason } => {
             assess_byte_data_payload(contract, input, modes, rejection_reason)
@@ -78,6 +80,62 @@ pub(super) fn assess(
         | InputContract::ExtractBandIndex(_)
         | InputContract::CallerValidatedPixelCoordinates
         | InputContract::OrderedPixelWrites => Ok(None),
+    }
+}
+
+fn assess_paste_inputs(
+    input: StrategyInputs,
+    rules: &'static PasteInputRules,
+) -> Result<Option<UnresolvedGuard>, PilError> {
+    let RequestFacts::Paste {
+        source,
+        mask,
+        region,
+        mask_alpha,
+    } = input.request else {
+        if input.request == RequestFacts::Unspecified {
+            return Ok(Some(UnresolvedGuard::InputContract(
+                InputContract::PasteInputs { rules },
+            )));
+        }
+        return Err(wrong_request("Paste"));
+    };
+
+    if !rules.source_modes.contains(&source.mode)
+        || (mask.is_some() && rules.unmasked_only_sources.contains(&source.mode))
+    {
+        return Err(PilError::ValueError(rules.source_rejection.into()));
+    }
+    if let Some(mask) = mask {
+        let valid_mask = rules
+            .masks
+            .iter()
+            .any(|rule: &PasteMaskRule| rule.mode == mask.mode && rule.alpha == mask_alpha);
+        if !valid_mask {
+            return Err(PilError::ValueError(rules.mask_rejection.into()));
+        }
+        if (mask.width, mask.height) != region {
+            return Err(PilError::ValueError(rules.source_rejection.into()));
+        }
+    } else if mask_alpha {
+        return Err(PilError::ValueError(rules.mask_rejection.into()));
+    }
+
+    if (source.width, source.height) == region {
+        return Ok(None);
+    }
+    let compact = source.width == 1
+        && source.height == 1
+        && mask.is_some_and(|mask| {
+            !mask_alpha
+                && rules.compact_sources.contains(&source.mode)
+                && rules.compact_masks.contains(&mask.mode)
+                && (mask.width, mask.height) == region
+        });
+    if compact {
+        Ok(None)
+    } else {
+        Err(PilError::ValueError(rules.source_rejection.into()))
     }
 }
 
