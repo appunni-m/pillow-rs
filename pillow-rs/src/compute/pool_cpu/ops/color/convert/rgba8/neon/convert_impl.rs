@@ -13,6 +13,7 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
         Mode::ImageRgbx8 => super::super::helpers::opaque_padding::execute(source)
             .map(DynamicImage::ImageRgbx8),
         Mode::ImageLumaA8
+        | Mode::ImageRgba8
         | Mode::ImageRgbPremultiplied8
         | Mode::ImageCmyk8
         | Mode::ImageYCbCr8

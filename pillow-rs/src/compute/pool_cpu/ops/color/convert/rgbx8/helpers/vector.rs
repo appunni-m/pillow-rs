@@ -6,6 +6,7 @@ use crate::raster::{DynamicImage, Mode, RgbImage, RgbaImage};
 
 pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, PilError> {
     match target {
+        Mode::ImageRgb8 => convert_rgb(source),
         Mode::ImageLumaA8 => convert_luma_alpha(source),
         Mode::ImageRgba8 => crate::compute::pool_cpu::ops::color::convert::rgba8::helpers::opaque_padding::execute(source)
             .map(DynamicImage::ImageRgba8),
@@ -18,6 +19,15 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
             "Convert selected an undeclared RGBX vector target".into(),
         )),
     }
+}
+
+fn convert_rgb(source: &RgbaImage) -> Result<DynamicImage, PilError> {
+    let (output, blocks, allocation) =
+        crate::compute::pool_cpu::ops::color::convert::helpers::four_byte_layout::drop_fourth_byte(
+            source, "RGBX",
+        )?;
+    record_vector_output(blocks, allocation);
+    Ok(DynamicImage::ImageRgb8(output))
 }
 
 fn convert_luma_alpha(source: &RgbaImage) -> Result<DynamicImage, PilError> {

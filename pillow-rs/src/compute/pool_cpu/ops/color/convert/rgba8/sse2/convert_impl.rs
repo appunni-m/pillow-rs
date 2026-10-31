@@ -6,10 +6,11 @@ use crate::raster::{DynamicImage, Mode, RgbaImage};
 pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, PilError> {
     match target {
         Mode::ImageLuma8 => luma8(source),
-        Mode::ImageRgbx8 => super::super::helpers::opaque_padding::execute(source)
-            .map(DynamicImage::ImageRgbx8),
-        Mode::ImageLumaA8
+        Mode::ImageRgb8
+        | Mode::ImageRgba8
+        | Mode::ImageLumaA8
         | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
         | Mode::ImageCmyk8
         | Mode::ImageYCbCr8
         | Mode::ImageHsv8

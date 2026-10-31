@@ -5,12 +5,14 @@ pub(crate) mod premultiply;
 #[cfg(any(
     target_arch = "x86_64",
     all(target_arch = "x86", target_feature = "sse2"),
-    all(target_arch = "aarch64", target_feature = "neon")
+    all(target_arch = "aarch64", target_feature = "neon"),
+    all(target_arch = "wasm32", target_feature = "simd128")
 ))]
 pub(crate) mod luma_alpha;
 #[cfg(any(
     target_arch = "x86_64",
     all(target_arch = "x86", target_feature = "sse2"),
-    all(target_arch = "aarch64", target_feature = "neon")
+    all(target_arch = "aarch64", target_feature = "neon"),
+    all(target_arch = "wasm32", target_feature = "simd128")
 ))]
 pub(crate) mod vector;

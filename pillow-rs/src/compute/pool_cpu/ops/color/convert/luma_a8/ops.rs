@@ -17,6 +17,7 @@ const SSE2_AVAILABLE: bool = cfg!(any(
     target_arch = "x86_64",
     all(target_arch = "x86", target_feature = "sse2")
 ));
+const WASM_SIMD128_AVAILABLE: bool = cfg!(all(target_arch = "wasm32", target_feature = "simd128"));
 
 const fn sse2(guard: StrategyGuard) -> ImplementationSupport {
     ImplementationSupport::cpu(
@@ -40,7 +41,18 @@ const fn neon(guard: StrategyGuard) -> ImplementationSupport {
     )
 }
 
-static ARCHITECTURES: [ImplementationSupport; 22] = [
+const fn wasm_simd128(guard: StrategyGuard) -> ImplementationSupport {
+    ImplementationSupport::cpu(
+        OperationId::Convert,
+        Mode::ImageLumaA8,
+        Architecture::WasmSimd128,
+        WASM_SIMD128_AVAILABLE,
+        &[Architecture::WasmSimd128],
+        guard,
+    )
+}
+
+static ARCHITECTURES: [ImplementationSupport; 33] = [
     sse2(StrategyGuard::ConvertTargetMode(Mode::ImageLuma8)),
     neon(StrategyGuard::ConvertTargetMode(Mode::ImageLuma8)),
     sse2(StrategyGuard::ConvertTargetMode(Mode::ImageLumaA8)),
@@ -63,6 +75,19 @@ static ARCHITECTURES: [ImplementationSupport; 22] = [
     neon(StrategyGuard::ConvertTargetMode(Mode::ImageI32)),
     sse2(StrategyGuard::ConvertTargetMode(Mode::ImageF32)),
     neon(StrategyGuard::ConvertTargetMode(Mode::ImageF32)),
+    wasm_simd128(StrategyGuard::ConvertTargetMode(Mode::ImageLuma8)),
+    wasm_simd128(StrategyGuard::ConvertTargetMode(Mode::ImageLumaA8)),
+    wasm_simd128(StrategyGuard::ConvertTargetModeNonEmpty(
+        Mode::ImageLaPremultiplied8,
+    )),
+    wasm_simd128(StrategyGuard::ConvertTargetMode(Mode::ImageRgb8)),
+    wasm_simd128(StrategyGuard::ConvertTargetMode(Mode::ImageRgba8)),
+    wasm_simd128(StrategyGuard::ConvertTargetMode(Mode::ImageRgbx8)),
+    wasm_simd128(StrategyGuard::ConvertTargetMode(Mode::ImageCmyk8)),
+    wasm_simd128(StrategyGuard::ConvertTargetMode(Mode::ImageYCbCr8)),
+    wasm_simd128(StrategyGuard::ConvertTargetMode(Mode::ImageHsv8)),
+    wasm_simd128(StrategyGuard::ConvertTargetMode(Mode::ImageI32)),
+    wasm_simd128(StrategyGuard::ConvertTargetMode(Mode::ImageF32)),
 ];
 
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
@@ -82,6 +107,8 @@ pub(crate) fn execute(
         Architecture::Default => super::default::convert_impl::execute(source, target),
         Architecture::Sse2 => super::sse2::convert_impl::execute(source, target),
         Architecture::Neon => super::neon::convert_impl::execute(source, target),
+        #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+        Architecture::WasmSimd128 => super::wasm_simd128::convert_impl::execute(source, target),
         _ => Err(PilError::InternalError(
             "Convert selected an undeclared LA architecture".into(),
         )),

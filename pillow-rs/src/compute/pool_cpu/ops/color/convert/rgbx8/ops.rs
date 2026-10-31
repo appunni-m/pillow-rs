@@ -18,6 +18,7 @@ const SSE2_AVAILABLE: bool = cfg!(any(
     target_arch = "x86_64",
     all(target_arch = "x86", target_feature = "sse2")
 ));
+const WASM_SIMD128_AVAILABLE: bool = cfg!(all(target_arch = "wasm32", target_feature = "simd128"));
 
 macro_rules! architecture_targets {
     ($architecture:ident, $available:expr, $requirements:expr; $($target:ident),+ $(,)?) => {
@@ -32,7 +33,7 @@ macro_rules! architecture_targets {
     };
 }
 
-static ARCHITECTURES: [ImplementationSupport; 21] = [
+static ARCHITECTURES: [ImplementationSupport; 30] = [
     ImplementationSupport::cpu(
         OperationId::Convert,
         Mode::ImageRgbx8,
@@ -104,6 +105,14 @@ static ARCHITECTURES: [ImplementationSupport; 21] = [
     ImplementationSupport::cpu(
         OperationId::Convert,
         Mode::ImageRgbx8,
+        Architecture::Sse2,
+        SSE2_AVAILABLE,
+        &[Architecture::Sse2],
+        StrategyGuard::ConvertTargetMode(Mode::ImageRgb8),
+    ),
+    ImplementationSupport::cpu(
+        OperationId::Convert,
+        Mode::ImageRgbx8,
         Architecture::Neon,
         cfg!(all(target_arch = "aarch64", target_feature = "neon")),
         &[Architecture::Neon],
@@ -125,6 +134,19 @@ static ARCHITECTURES: [ImplementationSupport; 21] = [
         Neon,
         cfg!(all(target_arch = "aarch64", target_feature = "neon")),
         &[Architecture::Neon];
+        ImageLumaA8,
+        ImageRgba8,
+        ImageCmyk8,
+        ImageYCbCr8,
+        ImageHsv8,
+        ImageI32,
+        ImageF32,
+    ),
+    architecture_targets!(
+        WasmSimd128,
+        WASM_SIMD128_AVAILABLE,
+        &[Architecture::WasmSimd128];
+        ImageRgb8,
         ImageLumaA8,
         ImageRgba8,
         ImageCmyk8,
@@ -196,9 +218,7 @@ pub(crate) unsafe fn execute(
         #[cfg(any(target_arch = "x86_64", all(target_arch = "x86", target_feature = "sse2")))]
         Architecture::Sse2 => super::sse2::convert_impl::execute(source, target),
         #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
-        Architecture::WasmSimd128 if target == Mode::ImageLuma8 => {
-            super::wasm_simd128::convert_impl::execute(source)
-        }
+        Architecture::WasmSimd128 => super::wasm_simd128::convert_impl::execute(source, target),
         #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
         Architecture::Neon => super::neon::convert_impl::execute(source, target),
         _ => Err(PilError::InternalError(
