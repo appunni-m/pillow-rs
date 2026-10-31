@@ -2,16 +2,13 @@
 //!
 //! Exact mode support and prepared strategy composition for enhancement ops.
 //!
-//! TODO(pillow-rs#3ptb): add Contrast strategies for One,
-//! ImagePalette8, ImagePaletteAlpha8,
-//! ImageI32, ImageF32, ImageI16, ImageI16L, ImageI16B, ImageI16N,
-//! ImageLumaA16, ImageRgb16, ImageRgba16, ImageRgb32F, and ImageRgba32F.
-//! Audit each mode's `contrast_degenerate` and Blend route; add strategies only
-//! for accepted compositions, preserving conversion and output behavior.
-//! ImageLaPremultiplied8 remains rejected by the public L-base conversion with
-//! its exact error exposed by this contract.
-//! ImageRgbPremultiplied8 remains rejected by the public L-to-RGBa base
-//! conversion; its exact error is exposed by this contract. The archived
+//! The remaining exact modes do not have a successful Contrast composition:
+//! One, indexed, numeric, and I;16 identities reach Blend after their existing
+//! base conversion, where Blend rejects them with `image has wrong mode`; the
+//! five internal high-depth identities reject the L-to-source base conversion
+//! with the same error. La and RGBa retain their distinct base-conversion
+//! errors. Keep this conversion-first wrapper route so eager error timing and
+//! output behavior remain unchanged. The archived
 //! Contrast LUT path now has mode/architecture owners
 //! for L, LA, RGB, RGBA, RGBX, and CMYK. `Image::enhance_color` also retains
 //! conversion/blend routes for modes outside its six native strategies; add
@@ -20,7 +17,11 @@
 //! declarations and preserve an explicitly pinned backend on the final lazy
 //! blend. The public
 //! `Image::enhance_sharpness` entry queues work for the prepared CPU strategies;
-//! compare those owners with archived vector/admission paths. No standalone
+//! TODO(pillow-rs#3ptb): compare all 22 accepted modes' Default implementations
+//! and six byte-mode vector kernels against the archived CPU/SIMD behavior,
+//! including exact output identities, then finish the wrapper/registry/context
+//! caller trace and migrate any uncovered retained path.
+//! No standalone
 //! SIMD registration remains active, and compatibility requests enter through
 //! CPU context selection.
 //! ImageI32 and ImageF32 Sharpness read and write their exact little-endian

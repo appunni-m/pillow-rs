@@ -1505,9 +1505,12 @@ Before any validation command, update this ledger with exact baseline-source to 
   per-channel 256-entry LUT; non-finite factors apply the same f32 blend to the
   typed native base, preserving the conversion path's alpha behavior. The
   prepared operation contract now explicitly classifies all 25 identities:
-  the nine queued byte modes have native Default strategies, La and RGBa report
-  their exact base-conversion rejections, and the other 14 have no prepared
-  route while public calls use their existing conversion/Blend composition.
+  the nine queued byte modes have native Default strategies; La and RGBa report
+  their exact base-conversion rejections. One, P, PA, I, F, and all four I;16
+  identities construct the existing same-mode base, then Blend rejects them
+  with `image has wrong mode`. The five internal high-depth identities reject
+  the L-to-source base conversion with that same error. The wrapper retains its
+  conversion-first error timing; no extra Contrast strategy is warranted.
   L, LA, RGB, RGBA, and CMYK now compose their
   Default route with the archived native-byte LUT kernel under SSE2, NEON, or
   Wasm SIMD128. RGBX now uses the same four-byte LUT kernel through its exact
@@ -1518,13 +1521,14 @@ Before any validation command, update this ledger with exact baseline-source to 
   length, and the archived eight-byte minimum. Its shared mode kernel keeps
   the archived layout: one- and three-byte channels use sixteen-pixel blocks;
   two- and four-byte channels use sixteen-byte interleaved blocks. YCbCr and
-  HSV remain Default-only, matching archived SIMD admission. Add prepared
-  strategies for the remaining exact modes and route
-  `Image::enhance_contrast` through them only after preserving current
-  conversions, errors, and output identity. Source mode classification and
-  conversion/Blend paths still need full review. The archived SIMD adapter is
-  inactive; its eligible LUT kernel now lives under exact mode/architecture
-  owners. The
+  HSV remain Default-only, matching archived SIMD admission. Source review of
+  all remaining identities found no additional successful Contrast route:
+  One/P/PA/I/F/I;16 reach the existing Blend rejection after base construction;
+  the five internal high-depth modes reject the L-to-source base conversion;
+  La and RGBa retain their distinct conversion errors. Keep those exact
+  rejections rather than adding strategies that change behavior. The archived
+  SIMD adapter is inactive; its eligible LUT kernel now lives under exact
+  mode/architecture owners. The
   public wrapper now asks the same `OperationId::Contrast` declaration as
   prepared execution whether the exact `Mode` has a queued strategy, instead
   of maintaining a second mode list. It does not compare Pillow spellings to
@@ -1568,15 +1572,27 @@ Before any validation command, update this ledger with exact baseline-source to 
   helper and is selected through exact L/LA/RGB/RGBA/RGBX/CMYK mode owners for
   SSE2, AVX, AVX2, AVX+FMA, AVX2+FMA, NEON, and Wasm SIMD128. Its guard retains
   the finite-factor, exact-layout, and minimum 3x3 requirements; border pixels
-  remain a scalar tail. Remaining work is operation/mode/architecture source
-  review; its public wrapper queues through the prepared owner and no separate
-  compatibility SIMD registration is active. No validation has run.
+  remain a scalar tail. Source review confirms the archived SIMD admission set
+  is exactly L/LA/RGB/RGBA/RGBX/CMYK and the active prepared guard preserves its
+  finite-factor, exact-byte-length, and 3x3 boundary. The six architecture
+  owners had a declaration-count mismatch (three entries declared for the
+  seven entries returned and executed); their arrays now declare all seven.
+  The baseline public wrapper's One/P/PA rejections match the active contract.
+  Still compare all 22 accepted Default mode implementations and the six vector
+  kernels against the archive, including output identities, and finish the
+  wrapper/registry/context caller trace. The public wrapper queues through the
+  prepared owner and no separate compatibility SIMD registration is active.
+  No validation has run.
 - Contrast registration enters the prepared owner for the nine queued byte
   modes. LAB composes its exact Convert-to-L, rounded mean, L-to-RGB Convert,
   ConvertLab, and BlendModule strategies under the injected context. La and
-  RGBa expose their exact base-conversion rejections. The other 14 identities
-  still need source review to determine which conversion/Blend compositions
-  succeed and therefore need exact-mode strategy owners. The
+  RGBa expose their exact base-conversion rejections. Source review of the
+  other 14 identities confirms their existing conversion-first wrapper path
+  cannot complete: One, P, PA, I, F, and the four I;16 modes reach Blend's
+  `image has wrong mode` rejection; the five internal high-depth modes receive
+  that error while converting the constant L base back to the source mode.
+  They remain explicit prepared-route rejections; do not add strategies that
+  would change this public behavior. The
   archived LUT kernel comparison is
   source-reviewed for the five admitted modes; parity is pending. Sharpness's
   public wrapper queues to its prepared callback and each accepted mode has a
@@ -2221,7 +2237,7 @@ an implementation.
 | `ops/convert/operation.rs` | Separately route matrix Convert through a GPU-owned matrix strategy when GPU declares it; the current typed eager wrapper deliberately executes this CPU-owned operation on CPU while GPU support remains outside the CPU migration. |
 | `compute/pool_cpu/ops/composite/ops.rs`, `compute/pool_cpu/ops/draw/ops.rs`, `compute/pool_cpu/ops/paste/ops.rs`, `compute/pool_cpu/ops/transform/ops.rs` | Keep each family source/caller review beside its operation owner: finish Composite and Transform source review; finish Draw mode/error review and direct Bitmap/text routes; map retained Paste SIMD cases into parity and complete its operation/caller source review. `compute/pool_cpu/ops/mod.rs` only exports operation families. |
 | `compute/pool_cpu/ops/geometry/pad/ops.rs` | Move any remaining archived full-width convolution modes into exact mode/architecture Resize owners, and finish checking every padded mode against its same-mode Default fallback and prepared context. |
-| `compute/pool_cpu/ops/enhance/ops.rs` | Audit the 14 remaining Contrast identities against their exact conversion and Blend outcomes; add prepared strategies only for accepted compositions and preserve exact errors for rejected routes. Review Sharpness's exact-mode contracts against the archive. Expand parity across every operation × exact Mode × Architecture. |
+| `compute/pool_cpu/ops/enhance/ops.rs` | Contrast source review is complete: nine remaining identities reach Blend's preserved wrong-mode rejection, five internal high-depth identities reject while converting the constant base, and La/RGBa retain their exact conversion errors. Sharpness still needs a one-to-one review of 22 Default mode implementations and six vector kernels against archived arithmetic/output identity, then a wrapper→registry→prepared-context caller trace; its six architecture list cardinalities were corrected to seven. Expand parity across every operation × exact Mode × Architecture. |
 | `compute/pool_cpu/ops/filter/ops.rs` | Compare the migrated Gaussian/box blur vector kernels and RGBA uniform proof against every archived mode route; review every Filter5x5 Default path and direct/eager Filter caller. Native-byte extrema/rank strategies and L/F32 rank vector strategies are represented in their exact mode owners. |
 | `compute/pool_cpu/ops/resize/ops.rs`, `compute/pool_cpu/ops/resize/{i32,f32}/ops.rs`, `compute/registry/registration/geometry.rs`, `ops/pil_resize/{resize,boxed,luma16,float}.rs` | The prepared path now preserves float32-bound identity/crop shortcuts and unchanged-axis float pass elision; native I;16 Default and vector paths preserve exact output identity for empty source extents. Still review boxed validation/error ordering, and remove or isolate uncalled generic full-operation wrappers that infer mode/select runtime features while retaining low-level helpers used by strategies; move any retained Rayon scheduling to `pool_parallel`; keep the GPU Pillow-string helper as separate migration debt. Public direct and nested geometry callers already enter prepared plans with injected context. All 14 byte modes declare ordinary nearest vector strategies. ImageLuma8 and eleven other byte modes declare unboxed filtered SSE2, NEON, and Wasm SIMD128 strategies when both coefficient axes satisfy the checked i32 bound; One and P remain nearest-only. Pad composes the exact ImageLuma8 strategies into its output window. All byte modes declare boxed nearest strategies, with filtered boxed convolution for all except One/P. I32/F32 filtered Resize and all four unboxed I;16 vector routes are declared with their Default fallbacks; I32 also declares NEON for unboxed nearest. Boxed I;16 remains Default. Thumbnail prepares nested Reduce/Resize work with the same context. |
 | `compute/pool_cpu/ops/eval/ops.rs` | Compare the archived SIMD vector/admission paths against the prepared CPU strategies and migrate any missing mode/architecture case. Move archived Rayon scheduling to `pool_parallel`. Direct scalar point and float-LUT calls enter declared exact-mode CPU strategies. |

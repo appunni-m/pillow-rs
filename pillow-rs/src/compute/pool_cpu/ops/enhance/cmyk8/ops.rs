@@ -227,7 +227,7 @@ const SHARPNESS_INPUTS: &[crate::compute::registry::support::InputContract] = &[
         mismatch_reason: "Sharpness source bytes did not match its dimensions",
     },
 ];
-const SHARPNESS_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 3] =
+const SHARPNESS_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 7] =
     crate::compute::pool_cpu::ops::enhance::helpers::strategy::sharpness_architectures(
         crate::compute::registry::support::OperationId::Sharpness,
         crate::raster::Mode::ImageCmyk8,
