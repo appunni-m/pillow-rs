@@ -294,7 +294,9 @@ pub(crate) fn getcolor_for_mode(
             let (h, s, v) = rgb_to_hsv_i32(r, g, b);
             ColorValue::Hsv(h, s, v)
         }
-        Mode::ImageLumaA8 | Mode::ImageLumaA16 => ColorValue::GrayAlpha(luma, a),
+        Mode::ImageLumaA8 => ColorValue::GrayAlpha(luma, a),
+        // NO_PILLOW_SUPPORT: internal high-depth LA uses its native channels.
+        Mode::ImageLumaA16 => ColorValue::GrayAlpha(luma, a),
         Mode::One
         | Mode::ImageLuma8
         | Mode::ImageLaPremultiplied8
@@ -304,18 +306,17 @@ pub(crate) fn getcolor_for_mode(
         | Mode::ImageI16L
         | Mode::ImageI16B
         | Mode::ImageI16N => ColorValue::Gray(luma),
-        Mode::ImagePaletteAlpha8
-        | Mode::ImageRgba8
-        | Mode::ImageRgba16
-        | Mode::ImageRgba32F => ColorValue::Rgba(r, g, b, a),
+        Mode::ImagePaletteAlpha8 | Mode::ImageRgba8 => ColorValue::Rgba(r, g, b, a),
+        // NO_PILLOW_SUPPORT: internal high-depth RGBA uses its native channels.
+        Mode::ImageRgba16 | Mode::ImageRgba32F => ColorValue::Rgba(r, g, b, a),
         Mode::ImagePalette8
         | Mode::ImageRgb8
         | Mode::ImageRgbPremultiplied8
         | Mode::ImageRgbx8
         | Mode::ImageCmyk8
         | Mode::ImageYCbCr8
-        | Mode::ImageLab8
-        | Mode::ImageRgb16
-        | Mode::ImageRgb32F => ColorValue::Rgb(r, g, b),
+        | Mode::ImageLab8 => ColorValue::Rgb(r, g, b),
+        // NO_PILLOW_SUPPORT: internal high-depth RGB uses its native channels.
+        Mode::ImageRgb16 | Mode::ImageRgb32F => ColorValue::Rgb(r, g, b),
     }
 }

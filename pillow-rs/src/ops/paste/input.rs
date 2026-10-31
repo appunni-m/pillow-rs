@@ -36,10 +36,9 @@ pub(super) fn paste_source_from_color_string(
     // destination mode before entering Paste.c. Preserve that distinction
     // from tuple colors: luma/alpha and RGBA modes carry different arities.
     let (r, g, b, a) = crate::color::parse_color_str_unclamped(value)?;
-    let mode_name = mode
-        .pillow_name()
-        .ok_or_else(|| PilError::ValueError("unsupported paste destination mode".into()))?;
-    let color = crate::color::getcolor(r, g, b, a, mode_name)?;
+    // NO_PILLOW_SUPPORT: Rust-only high-depth modes resolve colors through
+    // their exact native mode contract without adding Pillow spellings.
+    let color = crate::color::getcolor_for_mode(r, g, b, a, mode);
     match color {
         crate::color::ColorValue::Gray(value) => {
             Ok(PasteSource::Scalar(byte_color(i64::from(value))?))

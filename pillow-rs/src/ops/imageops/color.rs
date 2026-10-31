@@ -23,15 +23,13 @@ fn resolve_named_color(name: &str, mode: Mode) -> Result<(u8, u8, u8, u8), PilEr
         // zero; only scalar colors are raw palette indices.
         return Ok((0, 0, 0, u8::MAX));
     }
-    // TODO(pillow-rs#3ptb): give the shared color parser a typed Mode entry
-    // point so this image operation does not cross back to a Pillow spelling.
-    let value = crate::color::getcolor(
+    let value = crate::color::getcolor_for_mode(
         i32::from(red),
         i32::from(green),
         i32::from(blue),
         i32::from(alpha),
-        mode.pillow_name().unwrap_or("unknown"),
-    )?;
+        mode,
+    );
     Ok(color_value(value, mode))
 }
 

@@ -1,12 +1,14 @@
 # CPU refactor source and evidence inventory
 
-Status: baseline inventory captured; the 98 CPU and 182 SIMD files are preserved below pool_cpu/legacy; maintained implementation and source review remain in progress. The separate SIMD executor and adapter registry were removed from the active module graph on 2026-10-31; `Backend::Simd` is now a CPU-plus-Architecture compatibility request. RGB8 Wasm SIMD Convert strategies are restored from archived portable-vector routes, Default RGB→LA/I;16 staging preserves the archived L scratch allocation, and reviewed Convert empty routes retain their archived receipts. The RGBA/RGBa-to-LA vector kernel now lives in a shared native four-byte helper used by both exact mode strategies. The RGBX-to-La/RGBa routes and their inventory were committed in `baf192167`; all current CPU source remains unverified.
+Status: baseline inventory captured; the 98 CPU and 182 SIMD files are preserved below pool_cpu/legacy; maintained implementation and source review remain in progress. The separate SIMD executor and adapter registry were removed from the active module graph on 2026-10-31; `Backend::Simd` is now a CPU-plus-Architecture compatibility request. RGB8 Wasm SIMD Convert strategies are restored from archived portable-vector routes, Default RGB→LA/I;16 staging preserves the archived L scratch allocation, and reviewed Convert empty routes retain their archived receipts. The RGBA/RGBa-to-LA vector kernel now lives in a shared native four-byte helper used by both exact mode strategies. The RGBX-to-La/RGBa routes and their inventory were committed in `baf192167`; `0b34e9a9b` exposes same-mode Convert identity in all 25 source contracts, including palette-preserving P/PA and CoreOnly internal high-depth identities. The current uncommitted source-only follow-up removes ImageOps/Paste mode-to-string color resolution in favor of the exact-Mode resolver, with internal high-depth results marked `NO_PILLOW_SUPPORT`. Cross-mode lazy P/PA output still lacks terminal palette metadata. All current CPU source remains unverified.
 Baseline commit: 3f9dfd4036caa061eabcf2255c9f34a745df9c7e
 Working checkout: `/Users/lazytrot/work/pillow-rs`, branch `develop` at
-`baf192167`; the shared RGBA/RGBa-to-LA kernel, Convert empty-target and
-target-assessment corrections, and RGBX-to-La/RGBa strategy routes are
-committed. Convert's P/PA source matrix is being reconciled against Pillow's
-`frompalette` and `topalette` paths; this source remains unverified.
+`0b34e9a9b`; the shared RGBA/RGBa-to-LA kernel, Convert empty-target and
+target-assessment corrections, RGBX-to-La/RGBa strategy routes, and the
+same-mode identity contract are committed. The working tree also has an
+uncommitted typed color-resolution change in ImageOps and Paste. Convert's P/PA
+source matrix is being reconciled against Pillow's `frompalette` and
+`topalette` paths; this source remains unverified.
 The baseline archive was rechecked on
 2026-10-31: all 98 CPU files and 182 SIMD files from
 `3f9dfd4036caa061eabcf2255c9f34a745df9c7e` match their preserved contents under
@@ -388,6 +390,10 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   P indices to opaque PA. Other conversions are explicit at this wrapper
   boundary. Solid sources are built in the exact destination mode, including
   raw I/F bytes and typed I;16 values.
+- Named Paste colors now pass their exact destination `Mode` to
+  `color::getcolor_for_mode` after parsing color text; the core no longer
+  converts the mode to a Pillow spelling for this route. Internal high-depth
+  results are marked `NO_PILLOW_SUPPORT` in the shared typed resolver.
 - The baseline CPU implementation is `pool_cpu/legacy/ops/paste.rs`, with row
   kernels in `paste/kernels.rs` and typed/mask layout helpers in
   `paste/layout.rs`. `paste_native_rows` copies the clipped intersection of
@@ -2101,6 +2107,7 @@ Remaining put-family work includes typed wrapper boundaries and complete test/ca
 - `imageops/ops.rs` owns an exhaustive classifier for all 25 exact modes. The byte modes have per-mode strategy owners and preserve their exact mode identity. Numeric I/F and internal high-depth carriers retain their existing shape-error behavior for bytewise Invert, Posterize, and Solarize. Invert's LA, PA, RGBA, and CMYK routes are explicitly CoreOnly because the Pillow wrapper rejects those four identities; each owner has a nearby `NO_PILLOW_SUPPORT` comment.
 - CropBorder declares CoreOnly support for the five internal high-depth identities with nearby `NO_PILLOW_SUPPORT` comments and preserves each exact raster mode. Colorize declares Pillow support only for exact `ImageLuma8`; its other 24 mode identities are explicitly rejected with the same empty `AssertionError` as the public wrapper. This removes the legacy non-L-to-L projection from the prepared path and keeps Colorize native to its actual Pillow input mode.
 - Each mode's `default/invert_impl.rs` performs the same `255 - byte` transform as `legacy/ops/imageops/pixel.rs::op_invert`; the scalar byte loop is shared in `imageops/helpers/pixel.rs`. Strategy preparation receives `ExecutionContext`, and registry preparation now returns the closed `PreparedOperation` plan.
+- Named Expand and Pad colors now stay on the typed `Mode` path through `color::getcolor_for_mode`; they no longer format a Pillow spelling only to resolve the same mode again. The shared resolver marks its internal high-depth color results `NO_PILLOW_SUPPORT`; operation support still decides whether a core-only route can execute.
 - Source review compared the archived native-byte adapter's exact One/L/P, LA/PA, RGB, and RGBA/CMYK admissions and its SSE2/NEON/Wasm SIMD128 wide-kernel path. Maintained mode owners retain native-byte inversion and same-mode output. The Pillow wrapper rejects LA/PA/RGBA/CMYK, so their explicit `NO_PILLOW_SUPPORT` routes are CoreOnly; LA/PA/RGBA invert every stored byte to match their Default semantics, while the archived ImageOps adapter preserved alpha. CMYK inverts all four bytes in both paths. The separate SIMD registration is no longer active.
 - The public Invert wrapper and point-run fusion callers have been source-reviewed; fusion composes LUTs through prepared Eval under the same exact mode and injected context. The archived owned-buffer in-place Invert path is restored for Invert and InvertChops: exact-mode support and injected context select the architecture before the owned intermediate is mutated in place; caller-owned input remains untouched. Operation × exact Mode × Architecture parity remains pending, including CoreOnly routes through target-side parity cases.
 - Posterize and Solarize now declare all 25 modes at `imageops/ops.rs`, with prepared strategies for L, RGB, and core-only P. P applies each transform directly to index bytes, preserves its palette, and is marked `NO_PILLOW_SUPPORT` because Pillow's ImageOps `_lut` rejects that mode; other unsupported identities retain Pillow's mode-specific `OsError`. Default kernels are mode-owned; L, RGB, and P declare SSE2, NEON, and Wasm SIMD128 strategies using the exact-mode `NativePointwiseBytes` guard and shared vector transform. Prepared execution matches the selected architecture. Public wrappers queue typed operations; custom/high-threshold Solarize uses single-band Eval, whose palette-aware pipeline keeps P indexes and metadata attached. Point-run fusion composes through prepared Eval under the exact mode and injected context. Operation × exact Mode × Architecture parity remains pending, with P handled as a target-only core extension.
@@ -2484,8 +2491,6 @@ an implementation.
 | `compute/eager.rs` (module TODO) | Audit remaining eager image operations for direct paths that bypass their prepared CPU mode/architecture owners, then route any gaps through the injected context. |
 | `compute/pool_cpu/ops/put/ops.rs` | Prepared PutPixel/PutData/PutAlpha/PutAlphaData callbacks are consumed by the serial CPU batch path; the contiguous RGB PutPixel+Thumbnail fusion is wired. Audit direct value-at mutation and wrapper metadata paths for context bypasses, and complete the cross-mode conversion review. |
 | `compute/pool_cpu/ops/put/ops.rs` | Audit the noted cross-mode conversions; implement native-mode paths or retain only conversions required by the operation's Pillow semantics. |
-| `compute/registry/registration/mod.rs` | Replace remaining direct-result registrations for `chops`, `color`, `draw`, `effects`, `enhance`, `filter`, `module_fns`, and `transform` with prepared family plans. Pad now uses the prepared ImageOps geometry callback. |
-| `compute/registry/registration/prelude.rs` | Retire the direct CPU facade import map after every remaining registration uses its family-owned prepared callback. |
 | `compute/registry/registration/imageops.rs` | Pad uses the prepared geometry owner. Contain, Cover, Fit, and Scale use the Geometry owner and nested prepared Resize plans; Expand uses its prepared CPU owner. Complete the archived Pad mode/kernel review and verify all direct callers use the injected context. |
 | `compute/registry/registration/simd.rs` | Removed from the active tree. Compare all archived adapter groups with the assigned CPU mode/architecture owners and migrate any missing strategy or fallback. |
 | `compute/pool_cpu/ops/crop/ops.rs` | Expand parity across every exact Mode × available Architecture, including archived SIMD admissions, Default fallbacks, I;16 vector blocks/tails, and CropBorder empty/error contracts. The archived source comparison is complete; the ordinary byte row-copy algorithm is the mode-owned Default `ByteCrop`. |
@@ -2499,12 +2504,10 @@ an implementation.
 | `image/materialization.rs` | Keep typed prepared plans flowing through the serial pool and preserve resolved operation dependencies on wrapper-to-pool routes. Single-operation lazy P/PA grayscale now prepares before wrapper-wide expansion. |
 | `image/construction.rs`, `image/mode_boundary.rs`, `image/pixel_access.rs` | Convert remaining core string-taking constructors, generated-image and pixel-mutation entry points to typed `Mode`; keep Pillow string parsing at host/API boundaries. |
 | `image.rs` | Remove the remaining fallback mode identity and reconcile exact materialized and cached pipeline mode ownership. |
-| `draw/mod.rs` | Accept typed `Mode` for the drawing entry point and keep Pillow string parsing at the host boundary. |
 | `image/metadata.rs` | Complete direct exact-mode projection for every supported encoded header before decoding, while keeping `DynamicImage` authoritative after materialization. |
 | `ops/filter.rs` | Classify filter support from exact `Mode` identities. |
 | `compute/pool_cpu/ops/filter/ops.rs`, `compute/pool_cpu/ops/filter/luma8/ops.rs` | Compare migrated Gaussian/box blur and byte-rank vector kernels against their archived routes; review Filter5x5 Default and L rank-window paths; reconcile all direct/eager Filter callers; finish archived mode/kernel review and direct-caller reconciliation. No separate SIMD registrations remain active. F32 rank vector strategy is represented in `f32/ops.rs`. |
 | `ops/imageops/point.rs::mode_identity` | Remove the materialization fallback after all lazy pipelines carry an exact cached `Mode` through admission and transitions. |
-| `ops/module_fns.rs` | Accept typed modes for merge and gradient inputs after host conversion. |
 | `ops/param_filters.rs` | Keep parameter-filter mode selection on `known_mode_identity()` and typed strategy dispatch. |
 | `ops/resize.rs` | Pass exact `Mode` identity through the existing resampling implementation. |
 | `pipeline/support.rs` | Replace remaining mode string metadata and compatibility parsing with typed `Mode` at host boundaries. |
