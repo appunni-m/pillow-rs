@@ -225,10 +225,8 @@ fn try_convert_prestandard(
     )? {
         return Ok(Some(converted));
     }
-    // TODO(pillow-rs#3ptb): expose this nested source-normalization plus
-    // ConvertLab route in Convert's top-level source/target contract, preserving
-    // Pillow scope for Pillow identities and CoreOnly for internal ones. Keep
-    // La's existing "conversion from La to L not supported" rejection explicit.
+    // Convert::SUPPORT declares this source-to-LAB composition and its child
+    // ConvertLab operation; this wrapper builds the corresponding lazy graph.
     super::luma16::try_convert_to_luma16(image, source_mode, target_mode)
 }
 
