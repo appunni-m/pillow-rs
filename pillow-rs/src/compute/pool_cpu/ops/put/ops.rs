@@ -3,10 +3,10 @@
 //! Pipeline callbacks for PutPixel, PutData, PutAlpha, and PutAlphaData are
 //! registered and consumed by the serial CPU batch executor. Consecutive
 //! PutPixel runs also compose with the prepared RGB Thumbnail fusion.
-//! TODO(pillow-rs#3ptb): finish auditing direct value-at mutation and wrapper
-//! metadata paths for Backend/Architecture context bypasses, and finish the
-//! mode-specific conversion review below. The immediate PutData callback path
-//! now writes exact DynamicImage byte storage after checking planned identity.
+//! TODO(pillow-rs#3ptb): finish auditing wrapper metadata paths for
+//! Backend/Architecture context bypasses, and finish the mode-specific
+//! conversion review below. Immediate PutData callbacks use their own exact-mode
+//! support declaration and a sequence-scoped CPU Default execution context.
 //! GetData's direct output-buffer route uses the prepared ExtractBand strategy.
 //! TODO(pillow-rs#3ptb): finish reviewing cross-mode conversions in PutData,
 //! PutAlpha, PutAlphaData, and ExtractBand against the archived contract. Keep
@@ -219,6 +219,93 @@ pub(crate) static EXTRACT_BAND_SUPPORT: OperationSupport = OperationSupport::new
 pub(crate) static PUT_DATA_SUPPORT: OperationSupport = OperationSupport::new(
     OperationId::PutData, &[], classify_data_mode,
 );
+
+const PUT_DATA_VALUE_AT_INPUTS: &[crate::compute::registry::support::InputContract] =
+    &[crate::compute::registry::support::InputContract::CallerValidatedPixelIndex];
+
+fn classify_data_value_at_mode(mode: Mode) -> ModeSupport {
+    match mode {
+        Mode::One
+        | Mode::ImageLuma8
+        | Mode::ImageLumaA8
+        | Mode::ImagePalette8
+        | Mode::ImagePaletteAlpha8
+        | Mode::ImageRgb8
+        | Mode::ImageRgba8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8
+        | Mode::ImageYCbCr8
+        | Mode::ImageHsv8
+        | Mode::ImageI32
+        | Mode::ImageF32
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N => ModeSupport::cpu(
+            OperationId::PutDataValueAt,
+            mode,
+            crate::compute::registry::support::OutputModeRule::Preserve,
+            PUT_DATA_VALUE_AT_INPUTS,
+            &[],
+        ),
+        Mode::ImageLaPremultiplied8 => ModeSupport::Rejected {
+            mode,
+            reason: "unsupported putdata mode: La",
+            kind: crate::compute::registry::support::RejectionKind::ValueError,
+        },
+        Mode::ImageLab8 => ModeSupport::Rejected {
+            mode,
+            reason: "unsupported putdata mode: LAB",
+            kind: crate::compute::registry::support::RejectionKind::ValueError,
+        },
+        Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => ModeSupport::Rejected {
+            mode,
+            reason: "unsupported putdata mode: unknown",
+            kind: crate::compute::registry::support::RejectionKind::ValueError,
+        },
+    }
+}
+
+pub(crate) static PUT_DATA_VALUE_AT_SUPPORT: OperationSupport = OperationSupport::new(
+    OperationId::PutDataValueAt,
+    &[],
+    classify_data_value_at_mode,
+);
+
+pub(crate) fn select_put_data_value_at(
+    mode: Mode,
+    context: &ExecutionContext,
+) -> Result<StrategySelection, PilError> {
+    PUT_DATA_VALUE_AT_SUPPORT.for_mode(mode).select_serial(context)
+}
+
+pub(crate) fn execute_put_data_value_at(
+    image: &mut DynamicImage,
+    pixel_index: usize,
+    input: super::helpers::put_data_value_at::ValueAtInput,
+    selection: StrategySelection,
+) -> Result<(), PilError> {
+    let mode = image.mode();
+    if selection.implementation.operation != OperationId::PutDataValueAt
+        || selection.implementation.mode != mode
+    {
+        return Err(PilError::InternalError(
+            "putdata value-at strategy does not match its raster mode".into(),
+        ));
+    }
+    if selection.implementation.architecture != crate::compute::Architecture::Default {
+        return Err(PilError::InternalError(
+            "unbound putdata value-at architecture".into(),
+        ));
+    }
+    super::helpers::put_data_value_at::execute(image, mode, pixel_index, input)
+}
+
 pub(crate) static PUT_ALPHA_SUPPORT: OperationSupport = OperationSupport::new(
     OperationId::PutAlpha, &[], classify_alpha_mode,
 );

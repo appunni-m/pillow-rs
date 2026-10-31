@@ -189,6 +189,17 @@ pub enum PutDataValueKind {
     },
 }
 
+/// Reusable execution state for callback-driven, synchronous PutData writes.
+///
+/// Bindings retain this token while coercing sequence items without holding
+/// the mutable image borrow, then pass it into each completed pixel write.
+#[doc(hidden)]
+#[derive(Clone, Copy)]
+pub struct PutDataExecutionContext {
+    pub(crate) context: crate::compute::ExecutionContext,
+    pub(crate) selection: Option<crate::compute::registry::support::StrategySelection>,
+}
+
 /// Callback-free bulk values extracted by a host-language binding.
 ///
 /// Python and other bindings remain responsible for protocol iteration and

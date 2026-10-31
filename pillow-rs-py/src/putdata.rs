@@ -7,7 +7,7 @@
 
 use super::{PyImage, map_error};
 use bytes::Bytes;
-use pillow_rs::{PutDataInput, PutDataValue, PutDataValueKind};
+use pillow_rs::{PutDataExecutionContext, PutDataInput, PutDataValue, PutDataValueKind};
 use pyo3::PyTypeInfo;
 use pyo3::exceptions::{PySystemError, PyTypeError};
 use pyo3::prelude::{Bound, PyAny, PyResult};
@@ -222,13 +222,14 @@ fn write_item(
     kind: PutDataValueKind,
     scale: f64,
     offset: f64,
+    context: &mut PutDataExecutionContext,
 ) -> PyResult<()> {
     // No PyImage borrow may span coercion: __index__ and __float__ can
     // re-enter this same public image and must observe earlier writes.
     let value = putdata_value_from_python(&item, kind)?;
     slf.try_borrow_mut()?
         .inner
-        .putdata_value_at(pixel_index, &value, scale, offset)
+        .putdata_value_at_with_context(pixel_index, &value, scale, offset, context)
         .map_err(map_error)
 }
 
@@ -239,6 +240,7 @@ fn putdata_exact_sequence(
     kind: PutDataValueKind,
     scale: f64,
     offset: f64,
+    context: &mut PutDataExecutionContext,
 ) -> PyResult<bool> {
     // CPython's PySequence_Fast retains exact lists and tuples instead of
     // copying them. Read each exact-list item only when its pixel is due so
@@ -252,6 +254,7 @@ fn putdata_exact_sequence(
                 kind,
                 scale,
                 offset,
+                context,
             )?;
         }
         return Ok(true);
@@ -265,6 +268,7 @@ fn putdata_exact_sequence(
                 kind,
                 scale,
                 offset,
+                context,
             )?;
         }
         return Ok(true);
@@ -279,6 +283,7 @@ fn putdata_generic_sequence(
     kind: PutDataValueKind,
     scale: f64,
     offset: f64,
+    context: &mut PutDataExecutionContext,
 ) -> PyResult<()> {
     // Pillow calls PySequence_Fast before coercing any pixel. Materialize
     // generic sequence items first, map iteration failures to its fixed
@@ -292,7 +297,7 @@ fn putdata_generic_sequence(
     }
 
     for (pixel_index, item) in items.into_iter().take(entry_count).enumerate() {
-        write_item(slf, pixel_index, item, kind, scale, offset)?;
+        write_item(slf, pixel_index, item, kind, scale, offset, context)?;
     }
     Ok(())
 }
@@ -322,8 +327,12 @@ pub(crate) fn putdata_formatted(
     if putdata_bulk(slf, data, entry_count, kind, scale, offset)? {
         return Ok(());
     }
-    if putdata_exact_sequence(slf, data, entry_count, kind, scale, offset)? {
+    let mut context = {
+        let image = slf.try_borrow()?;
+        image.inner.putdata_execution_context()
+    };
+    if putdata_exact_sequence(slf, data, entry_count, kind, scale, offset, &mut context)? {
         return Ok(());
     }
-    putdata_generic_sequence(slf, data, entry_count, kind, scale, offset)
+    putdata_generic_sequence(slf, data, entry_count, kind, scale, offset, &mut context)
 }

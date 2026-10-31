@@ -260,6 +260,7 @@ pub use crate::image::OpenModeInput;
 pub use crate::image::PaletteTransparency;
 pub use crate::image::PutAlphaInput;
 pub use crate::image::PutDataInput;
+pub use crate::image::PutDataExecutionContext;
 pub use crate::image::PutDataValue;
 pub use crate::image::PutDataValueKind;
 pub use crate::image::PutPixelValue;

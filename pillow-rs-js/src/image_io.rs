@@ -249,6 +249,7 @@ fn putdata_array_values(
     let scale = scale.unwrap_or(1.0);
     let offset = offset.unwrap_or(0.0);
     if data.is_array() {
+        let mut context = image.putdata_execution_context();
         for index in 0..length {
             let value =
                 js_sys::Reflect::get(data, &JsValue::from_f64(index as f64)).map_err(|_| {
@@ -258,7 +259,7 @@ fn putdata_array_values(
                 })?;
             let value = putdata_value_from_js(&value, kind)?;
             image
-                .putdata_value_at(index, &value, scale, offset)
+                .putdata_value_at_with_context(index, &value, scale, offset, &mut context)
                 .map_err(err)?;
         }
         return Ok(());

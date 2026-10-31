@@ -185,6 +185,8 @@ pub enum OperationId {
     PutPixelBatch,
     /// Replace a normalized byte prefix, retaining the direct payload-layout contract.
     PutData,
+    /// Write one normalized putdata value synchronously before the next value is coerced.
+    PutDataValueAt,
     /// Insert or replace a constant alpha sample using the exact source identity.
     PutAlpha,
     /// Replace per-pixel alpha from a mode-bearing secondary image.
@@ -316,6 +318,9 @@ impl OperationId {
             Self::PutPixel => &crate::compute::pool_cpu::ops::put::ops::PUT_PIXEL_SUPPORT,
             Self::PutPixelBatch => &crate::compute::pool_cpu::ops::put::ops::PUT_PIXEL_BATCH_SUPPORT,
             Self::PutData => &crate::compute::pool_cpu::ops::put::ops::PUT_DATA_SUPPORT,
+            Self::PutDataValueAt => {
+                &crate::compute::pool_cpu::ops::put::ops::PUT_DATA_VALUE_AT_SUPPORT
+            }
             Self::PutAlpha => &crate::compute::pool_cpu::ops::put::ops::PUT_ALPHA_SUPPORT,
             Self::PutAlphaData => &crate::compute::pool_cpu::ops::put::ops::PUT_ALPHA_DATA_SUPPORT,
             Self::GetProjection => &crate::compute::pool_cpu::ops::analysis::ops::SUPPORT,

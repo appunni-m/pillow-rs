@@ -91,6 +91,27 @@ pub(crate) fn record_eager_cpu_operation_receipt_with_reason(
     finish_eager_cpu_operation_telemetry(telemetry, output_bytes);
 }
 
+/// Record a host-owned operation with its reason and prepared strategy.
+pub(crate) fn record_eager_cpu_operation_receipt_with_selection(
+    operation: &'static str,
+    requested_backend: Option<Backend>,
+    output_bytes: usize,
+    fallback_detail: &'static str,
+    selection: crate::compute::registry::support::StrategySelection,
+) {
+    let telemetry = begin_eager_cpu_operation_telemetry_with_reason(
+        operation,
+        requested_backend,
+        Some(fallback_detail),
+    );
+    finish_eager_cpu_operation_telemetry_with_selection(
+        telemetry,
+        output_bytes,
+        operation,
+        selection,
+    );
+}
+
 /// Finish a host terminal-read receipt after the caller has filled its final
 /// output buffer. The timing report still covers the complete Python call and
 /// result materialization; this receipt identifies the executor and accounts

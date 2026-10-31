@@ -136,6 +136,8 @@ pub enum InputContract {
     ExtractBandIndex(BandIndexRule),
     /// Image.putpixel validates coordinates before constructing the internal write.
     CallerValidatedPixelCoordinates,
+    /// Image.putdata validates the flattened pixel index before the direct write.
+    CallerValidatedPixelIndex,
     /// Internal batch execution retains ordered variant/bounds checks and last-write-wins.
     OrderedPixelWrites,
     /// Normalize a secondary mask with the existing typed-to-L conversion,

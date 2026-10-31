@@ -1,6 +1,6 @@
 use super::{
     Arc, Bytes, CheckedDims, Image, PilError, PipelineOp, PutDataInput, PutDataValue,
-    PutDataValueKind, is_l16_identity, l16_identity_uses_big_endian,
+    PutDataExecutionContext, PutDataValueKind, is_l16_identity, l16_identity_uses_big_endian,
     materialization_cache, putdata_byte_width, putdata_bytes, unsupported_putdata_mode,
     putdata_clip_u8, putdata_l16_sample,
 };
@@ -89,8 +89,15 @@ impl Image {
         if is_l16_identity(image_mode) {
             // Keep I;16 out of PixelMode's byte-oriented deferred path. Its
             // generic fallback widens to RGBA8 and loses the 16-bit sample.
+            let mut context = self.putdata_execution_context();
             for (pixel_index, value) in values.iter().enumerate() {
-                self.putdata_value_at(pixel_index, value, scale, offset)?;
+                self.putdata_value_at_with_context(
+                    pixel_index,
+                    value,
+                    scale,
+                    offset,
+                    &mut context,
+                )?;
             }
             return Ok(());
         }
@@ -316,37 +323,37 @@ impl Image {
         })
     }
 
-    fn putdata_l16_value_at(
-        &mut self,
-        pixel_index: usize,
-        value: &PutDataValue,
-        scale: f64,
-        offset: f64,
-        requested_backend: Option<crate::compute::Backend>,
-    ) -> Result<(), PilError> {
-        let sample = putdata_l16_sample(value, scale, offset)?;
-        self.load()?;
-        if let Image::Loaded(data) = self {
-            let image = Arc::make_mut(&mut data.image);
-            let destination = image
-                .as_mut_luma16()
-                .ok_or_else(|| PilError::InternalError("putdata I;16 storage mismatch".into()))?;
-            let pixel = destination.as_mut().get_mut(pixel_index).ok_or_else(|| {
-                PilError::InternalError("putdata I;16 offset out of bounds".into())
-            })?;
-            *pixel = sample;
-            data.known_zero_fill = false;
-            crate::compute::record_eager_cpu_operation_receipt_with_reason(
-                "PutData",
-                requested_backend,
-                0,
-                "per-item writes must be visible before the next sequence value is coerced",
-            );
-            return Ok(());
+
+    /// Creates the CPU Default execution context for synchronous value writes.
+    ///
+    /// Bindings retain this value across callback-driven sequence processing
+    /// and pass it to [`Image::putdata_value_at_with_context`].
+    #[doc(hidden)]
+    pub fn putdata_execution_context(&self) -> PutDataExecutionContext {
+        PutDataExecutionContext {
+            context: crate::compute::ExecutionContext::for_routed_backend(
+                crate::compute::Backend::Cpu,
+            ),
+            selection: None,
         }
-        Err(PilError::InternalError(
-            "putdata I;16 did not materialize writable storage".into(),
-        ))
+    }
+
+    fn putdata_value_at_selection(
+        &self,
+        mode: Mode,
+        context: &mut PutDataExecutionContext,
+    ) -> Result<crate::compute::registry::support::StrategySelection, PilError> {
+        if let Some(selection) = context.selection
+            && selection.implementation.mode == mode
+        {
+            return Ok(selection);
+        }
+        let selection = crate::compute::pool_cpu::ops::put::ops::select_put_data_value_at(
+            mode,
+            &context.context,
+        )?;
+        context.selection = Some(selection);
+        Ok(selection)
     }
 
     /// Writes one normalized `putdata` value immediately at a pixel offset.
@@ -372,6 +379,24 @@ impl Image {
         scale: f64,
         offset: f64,
     ) -> Result<(), PilError> {
+        let mut context = self.putdata_execution_context();
+        self.putdata_value_at_with_context(pixel_index, value, scale, offset, &mut context)
+    }
+
+    /// Applies one normalized value using the shared callback-sequence context.
+    ///
+    /// The binding creates one context per host sequence and passes it through
+    /// each synchronous write after coercing that value without holding the
+    /// image borrow. A changed exact mode refreshes the cached mode strategy.
+    #[doc(hidden)]
+    pub fn putdata_value_at_with_context(
+        &mut self,
+        pixel_index: usize,
+        value: &PutDataValue,
+        scale: f64,
+        offset: f64,
+        context: &mut PutDataExecutionContext,
+    ) -> Result<(), PilError> {
         // This public helper is the callback-preserving path: writes are
         // visible before the binding coerces the next value, so they execute
         // directly on host storage even when SIMD/GPU is requested. Capture
@@ -388,57 +413,38 @@ impl Image {
         }
 
         let image_mode = self.mode_identity()?;
-        if is_l16_identity(image_mode) {
-            return self.putdata_l16_value_at(pixel_index, value, scale, offset, requested_backend);
-        }
-        let bytes_per_pixel =
+        let input = if is_l16_identity(image_mode) {
+            crate::compute::pool_cpu::ops::put::helpers::put_data_value_at::ValueAtInput::Luma16(
+                putdata_l16_sample(value, scale, offset)?,
+            )
+        } else {
             putdata_byte_width(image_mode).ok_or_else(|| unsupported_putdata_mode(image_mode))?;
-        let bytes = putdata_bytes(image_mode, std::slice::from_ref(value), scale, offset)?;
-        let start = pixel_index
-            .checked_mul(bytes_per_pixel)
-            .ok_or_else(|| PilError::DimensionError("putdata byte offset overflow".into()))?;
-        let end = start
-            .checked_add(bytes.len())
-            .ok_or_else(|| PilError::DimensionError("putdata byte offset overflow".into()))?;
+            let bytes = putdata_bytes(image_mode, std::slice::from_ref(value), scale, offset)?;
+            crate::compute::pool_cpu::ops::put::helpers::put_data_value_at::ValueAtInput::Bytes(
+                bytes,
+            )
+        };
+        let selection = self.putdata_value_at_selection(image_mode, context)?;
 
         self.load()?;
         match self {
             Image::Paletted(data) if image_mode == Mode::ImagePalette8 => {
-                data.indices
-                    .as_bytes_mut()
-                    .expect("P mode uses a byte-addressable index buffer")[pixel_index] = bytes[0];
+                crate::compute::pool_cpu::ops::put::ops::execute_put_data_value_at(
+                    &mut data.indices,
+                    pixel_index,
+                    input,
+                    selection,
+                )?;
                 data.materialized = materialization_cache();
             }
             Image::Loaded(data) => {
                 let image = Arc::make_mut(&mut data.image);
-                let mismatch = match image_mode {
-                    Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => {
-                        "putdata L storage mismatch"
-                    }
-                    Mode::ImageLumaA8 | Mode::ImagePaletteAlpha8 => {
-                        "putdata LA storage mismatch"
-                    }
-                    Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageHsv8 => {
-                        "putdata RGB storage mismatch"
-                    }
-                    Mode::ImageRgba8
-                    | Mode::ImageRgbPremultiplied8
-                    | Mode::ImageRgbx8
-                    | Mode::ImageCmyk8
-                    | Mode::ImageI32
-                    | Mode::ImageF32 => "putdata RGBA storage mismatch",
-                    _ => "putdata byte-addressable storage mismatch",
-                };
-                if image.mode() != image_mode {
-                    return Err(PilError::InternalError(mismatch.into()));
-                }
-                let samples = image
-                    .as_bytes_mut()
-                    .ok_or_else(|| PilError::InternalError(mismatch.into()))?;
-                let destination = samples.get_mut(start..end).ok_or_else(|| {
-                    PilError::InternalError("putdata storage offset out of bounds".into())
-                })?;
-                destination.copy_from_slice(&bytes);
+                crate::compute::pool_cpu::ops::put::ops::execute_put_data_value_at(
+                    image,
+                    pixel_index,
+                    input,
+                    selection,
+                )?;
                 data.known_zero_fill = false;
             }
             _ => {
@@ -447,11 +453,12 @@ impl Image {
                 ));
             }
         }
-        crate::compute::record_eager_cpu_operation_receipt_with_reason(
+        crate::compute::record_eager_cpu_operation_receipt_with_selection(
             "PutData",
             requested_backend,
             0,
             "per-item writes must be visible before the next sequence value is coerced",
+            selection,
         );
         Ok(())
     }

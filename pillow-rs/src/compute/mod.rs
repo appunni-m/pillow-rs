@@ -61,6 +61,7 @@ pub(crate) use telemetry::{
     finish_eager_cpu_operation_telemetry_with_selection,
     finish_pipeline_operation_telemetry, host_resource_telemetry,
     record_eager_cpu_operation_receipt, record_eager_cpu_operation_receipt_with_reason,
+    record_eager_cpu_operation_receipt_with_selection,
     record_pipeline_allocation, record_pipeline_backend_fallback,
     clear_pipeline_operation_architecture, record_pipeline_operation_architecture,
     record_pipeline_operation_handoff, record_pipeline_operation_mode_conversion,

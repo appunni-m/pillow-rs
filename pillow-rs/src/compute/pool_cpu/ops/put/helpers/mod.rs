@@ -3,6 +3,7 @@ pub(crate) mod extract_band_strategy;
 pub(crate) mod put_pixel;
 pub(crate) mod put_pixel_strategy;
 pub(crate) mod put_data;
+pub(crate) mod put_data_value_at;
 pub(crate) mod put_data_strategy;
 pub(crate) mod put_alpha;
 pub(crate) mod put_alpha_strategy;
