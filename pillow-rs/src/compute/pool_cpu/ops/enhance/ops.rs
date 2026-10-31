@@ -17,13 +17,16 @@
 //! declarations and preserve an explicitly pinned backend on the final lazy
 //! blend. The public
 //! `Image::enhance_sharpness` entry queues work for the prepared CPU strategies;
-//! TODO(pillow-rs#3ptb): compare all 22 accepted modes' Default implementations
-//! and six byte-mode vector kernels against the archived CPU/SIMD behavior,
-//! including exact output identities, then finish the wrapper/registry/context
-//! caller trace and migrate any uncovered retained path.
-//! No standalone
-//! SIMD registration remains active, and compatibility requests enter through
-//! CPU context selection.
+//! Source review traces this route through registry preparation, injected
+//! context, exact DynamicImage mode, and selected architecture. All 22 accepted
+//! modes return their exact typed output; One/P/PA retain their declared
+//! rejections. The six Pillow-native byte modes preserve the archived Default
+//! channel, border, alpha, and RGBX behavior, and their seven vector entries
+//! route through the matching mode-owned kernels. The other 16 accepted modes
+//! are exact native extensions marked `NO_PILLOW_SUPPORT` in their owners.
+//! TODO(pillow-rs#3ptb): include Sharpness in the frozen CPU parity matrix after
+//! source migration is complete. No standalone SIMD registration remains
+//! active, and compatibility requests enter through CPU context selection.
 //! ImageI32 and ImageF32 Sharpness read and write their exact little-endian
 //! scalar samples in the existing four-byte carrier; these native routes are
 //! core extensions and are not reported as Pillow parity.

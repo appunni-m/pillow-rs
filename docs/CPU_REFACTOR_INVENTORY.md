@@ -1577,12 +1577,17 @@ Before any validation command, update this ledger with exact baseline-source to 
   finite-factor, exact-byte-length, and 3x3 boundary. The six architecture
   owners had a declaration-count mismatch (three entries declared for the
   seven entries returned and executed); their arrays now declare all seven.
-  The baseline public wrapper's One/P/PA rejections match the active contract.
-  Still compare all 22 accepted Default mode implementations and the six vector
-  kernels against the archive, including output identities, and finish the
-  wrapper/registry/context caller trace. The public wrapper queues through the
-  prepared owner and no separate compatibility SIMD registration is active.
-  No validation has run.
+  Source tracing is complete from public wrapper through registry preparation,
+  injected execution context, exact `DynamicImage` matching, and selected
+  architecture. All 22 accepted arms return their exact typed output; the
+  baseline One/P/PA rejections match the active contract. The six Pillow-native
+  byte modes preserve the archived Default channel, border, alpha, and RGBX
+  behavior, and route to their mode-owned kernels for all seven declared
+  architecture entries. The other 16 accepted modes are native extensions
+  marked `NO_PILLOW_SUPPORT` in their exact-mode owners. Sharpness remains in
+  the frozen CPU parity matrix after source migration is complete. The public
+  wrapper queues through the prepared owner and no separate compatibility SIMD
+  registration is active. No validation has run.
 - Contrast registration enters the prepared owner for the nine queued byte
   modes. LAB composes its exact Convert-to-L, rounded mean, L-to-RGB Convert,
   ConvertLab, and BlendModule strategies under the injected context. La and
@@ -2237,7 +2242,7 @@ an implementation.
 | `ops/convert/operation.rs` | Separately route matrix Convert through a GPU-owned matrix strategy when GPU declares it; the current typed eager wrapper deliberately executes this CPU-owned operation on CPU while GPU support remains outside the CPU migration. |
 | `compute/pool_cpu/ops/composite/ops.rs`, `compute/pool_cpu/ops/draw/ops.rs`, `compute/pool_cpu/ops/paste/ops.rs`, `compute/pool_cpu/ops/transform/ops.rs` | Keep each family source/caller review beside its operation owner: finish Composite and Transform source review; finish Draw mode/error review and direct Bitmap/text routes; map retained Paste SIMD cases into parity and complete its operation/caller source review. `compute/pool_cpu/ops/mod.rs` only exports operation families. |
 | `compute/pool_cpu/ops/geometry/pad/ops.rs` | Move any remaining archived full-width convolution modes into exact mode/architecture Resize owners, and finish checking every padded mode against its same-mode Default fallback and prepared context. |
-| `compute/pool_cpu/ops/enhance/ops.rs` | Contrast source review is complete: nine remaining identities reach Blend's preserved wrong-mode rejection, five internal high-depth identities reject while converting the constant base, and La/RGBa retain their exact conversion errors. Sharpness still needs a one-to-one review of 22 Default mode implementations and six vector kernels against archived arithmetic/output identity, then a wrapper→registry→prepared-context caller trace; its six architecture list cardinalities were corrected to seven. Expand parity across every operation × exact Mode × Architecture. |
+| `compute/pool_cpu/ops/enhance/ops.rs` | Contrast source review is complete: nine remaining identities reach Blend's preserved wrong-mode rejection, five internal high-depth identities reject while converting the constant base, and La/RGBa retain their exact conversion errors. Sharpness source review traces wrapper→registry→injected context→exact mode→architecture, confirms exact output identity for all 22 accepted modes and archived native behavior for the six Pillow-supported byte modes, and records explicit `NO_PILLOW_SUPPORT` markers on the other 16 native extensions. The six byte-mode architecture lists and dispatches cover all seven declared entries. Keep Sharpness in the frozen CPU parity matrix after source migration is complete. Expand parity across every operation × exact Mode × Architecture. |
 | `compute/pool_cpu/ops/filter/ops.rs` | Compare the migrated Gaussian/box blur vector kernels and RGBA uniform proof against every archived mode route; review every Filter5x5 Default path and direct/eager Filter caller. Native-byte extrema/rank strategies and L/F32 rank vector strategies are represented in their exact mode owners. |
 | `compute/pool_cpu/ops/resize/ops.rs`, `compute/pool_cpu/ops/resize/{i32,f32}/ops.rs`, `compute/registry/registration/geometry.rs`, `ops/pil_resize/{resize,boxed,luma16,float}.rs` | The prepared path now preserves float32-bound identity/crop shortcuts and unchanged-axis float pass elision; native I;16 Default and vector paths preserve exact output identity for empty source extents. Still review boxed validation/error ordering, and remove or isolate uncalled generic full-operation wrappers that infer mode/select runtime features while retaining low-level helpers used by strategies; move any retained Rayon scheduling to `pool_parallel`; keep the GPU Pillow-string helper as separate migration debt. Public direct and nested geometry callers already enter prepared plans with injected context. All 14 byte modes declare ordinary nearest vector strategies. ImageLuma8 and eleven other byte modes declare unboxed filtered SSE2, NEON, and Wasm SIMD128 strategies when both coefficient axes satisfy the checked i32 bound; One and P remain nearest-only. Pad composes the exact ImageLuma8 strategies into its output window. All byte modes declare boxed nearest strategies, with filtered boxed convolution for all except One/P. I32/F32 filtered Resize and all four unboxed I;16 vector routes are declared with their Default fallbacks; I32 also declares NEON for unboxed nearest. Boxed I;16 remains Default. Thumbnail prepares nested Reduce/Resize work with the same context. |
 | `compute/pool_cpu/ops/eval/ops.rs` | Compare the archived SIMD vector/admission paths against the prepared CPU strategies and migrate any missing mode/architecture case. Move archived Rayon scheduling to `pool_parallel`. Direct scalar point and float-LUT calls enter declared exact-mode CPU strategies. |
