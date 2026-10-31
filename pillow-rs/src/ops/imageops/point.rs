@@ -194,19 +194,11 @@ pub fn mirror(image: &Image) -> Result<Image, PilError> {
 ///
 /// # Errors
 ///
-/// Returns [`PilError::OsError`] for alpha modes that Pillow does not support,
-/// or another [`PilError`] when mode detection fails.
+/// Returns [`PilError::OsError`] for modes outside L/RGB/P, or another
+/// [`PilError`] when mode detection fails. P is a core-only native-index path.
 pub fn posterize(image: &Image, bits: u8) -> Result<Image, PilError> {
     let mode = mode_identity(image)?;
-    // ImageOps.posterize delegates to `_lut`, whose public contract is the
-    // same as autocontrast: P is a named unsupported path and all other modes
-    // outside L/RGB raise OSError before a pipeline is created.
-    if mode == Mode::ImagePalette8 {
-        return Err(PilError::NotImplementedError(
-            "mode P support coming soon".into(),
-        ));
-    }
-    if !matches!(mode, Mode::ImageLuma8 | Mode::ImageRgb8) {
+    if !matches!(mode, Mode::ImageLuma8 | Mode::ImageRgb8 | Mode::ImagePalette8) {
         return Err(PilError::OsError(format!(
             "not supported for mode {}",
             mode_label(mode)
@@ -224,8 +216,8 @@ pub fn posterize(image: &Image, bits: u8) -> Result<Image, PilError> {
 ///
 /// # Errors
 ///
-/// Returns [`PilError::OsError`] for modes other than L and RGB,
-/// or another [`PilError`] when mode detection fails.
+/// Returns [`PilError::OsError`] for modes outside L/RGB/P, or another
+/// [`PilError`] when mode detection fails. P is a core-only native-index path.
 pub fn solarize(image: &Image, threshold: u8) -> Result<Image, PilError> {
     solarize_with_input(image, SolarizeInput::Threshold(f64::from(threshold)))
 }
@@ -238,20 +230,13 @@ pub fn solarize(image: &Image, threshold: u8) -> Result<Image, PilError> {
 ///
 /// # Errors
 ///
-/// Returns [`PilError::NotImplementedError`] for P, [`PilError::OsError`] for
-/// other modes outside L/RGB, or an error when mode detection fails. Bindings
-/// must evaluate custom comparisons before calling this function so their
+/// Returns [`PilError::OsError`] for modes outside L/RGB/P, or an error when
+/// mode detection fails. P is a core-only native-index path. Bindings must
+/// evaluate custom comparisons before calling this function so their
 /// exceptions and mutations precede image validation, as they do in Pillow.
 pub fn solarize_with_input(image: &Image, input: SolarizeInput) -> Result<Image, PilError> {
     let mode = mode_identity(image)?;
-    // Pillow 12.2.0 exposes P as an explicit unsupported ImageOps._lut path;
-    // this must be raised at the call, before deferred pipeline execution.
-    if mode == Mode::ImagePalette8 {
-        return Err(PilError::NotImplementedError(
-            "mode P support coming soon".into(),
-        ));
-    }
-    if !matches!(mode, Mode::ImageLuma8 | Mode::ImageRgb8) {
+    if !matches!(mode, Mode::ImageLuma8 | Mode::ImageRgb8 | Mode::ImagePalette8) {
         return Err(PilError::OsError(format!(
             "not supported for mode {}",
             mode_label(mode)
@@ -282,7 +267,11 @@ pub fn solarize_with_input(image: &Image, input: SolarizeInput) -> Result<Image,
     crate::ops::module_fns::eval_replicated(
         image,
         &lut,
-        if mode == Mode::ImageLuma8 { 1 } else { 3 },
+        if matches!(mode, Mode::ImageLuma8 | Mode::ImagePalette8) {
+            1
+        } else {
+            3
+        },
     )
 }
 

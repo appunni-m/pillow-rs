@@ -300,6 +300,7 @@ const SOLARIZE_RGB_INPUTS: &[InputContract] = &[
 fn classify_native_byte_point_mode(
     operation: OperationId,
     mode: Mode,
+    palette_support: ModeSupport,
     luma_inputs: &'static [InputContract],
     rgb_inputs: &'static [InputContract],
     luma_architectures: &'static [ImplementationSupport],
@@ -320,14 +321,7 @@ fn classify_native_byte_point_mode(
             rgb_inputs,
             rgb_architectures,
         ),
-        // TODO(pillow-rs#3ptb): add palette-index LUT strategies once its
-        // palette/identity contract is migrated; preserve the current public
-        // NotImplementedError until that work is complete.
-        Mode::ImagePalette8 => ModeSupport::Rejected {
-            mode,
-            reason: "mode P support coming soon",
-            kind: RejectionKind::NotImplementedError,
-        },
+        Mode::ImagePalette8 => palette_support,
         Mode::One
         | Mode::ImageLumaA8
         | Mode::ImageLaPremultiplied8
@@ -415,6 +409,7 @@ fn classify_posterize_mode(mode: Mode) -> ModeSupport {
     classify_native_byte_point_mode(
         OperationId::Posterize,
         mode,
+        super::palette8::ops::POSTERIZE_SUPPORT,
         POSTERIZE_LUMA_INPUTS,
         POSTERIZE_RGB_INPUTS,
         &POSTERIZE_LUMA_ARCHITECTURES,
@@ -422,7 +417,7 @@ fn classify_posterize_mode(mode: Mode) -> ModeSupport {
     )
 }
 
-/// Exhaustive native-mode and parameter contract for Pillow Posterize.
+/// Exhaustive Posterize contract, including the core-only P index strategy.
 pub(crate) static POSTERIZE_SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::Posterize, POSTERIZE_INPUTS, classify_posterize_mode);
 
@@ -430,6 +425,7 @@ fn classify_solarize_mode(mode: Mode) -> ModeSupport {
     classify_native_byte_point_mode(
         OperationId::Solarize,
         mode,
+        super::palette8::ops::SOLARIZE_SUPPORT,
         SOLARIZE_LUMA_INPUTS,
         SOLARIZE_RGB_INPUTS,
         &SOLARIZE_LUMA_ARCHITECTURES,
@@ -437,7 +433,7 @@ fn classify_solarize_mode(mode: Mode) -> ModeSupport {
     )
 }
 
-/// Exhaustive native-mode contract for Pillow Solarize.
+/// Exhaustive Solarize contract, including the core-only P index strategy.
 pub(crate) static SOLARIZE_SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::Solarize, SOLARIZE_INPUTS, classify_solarize_mode);
 
@@ -605,6 +601,7 @@ pub(crate) fn prepare_colorize_pipeline<'a>(
 
 enum NativeBytePointSource<'a> {
     Luma(&'a crate::raster::GrayImage),
+    Palette(&'a crate::raster::GrayImage),
     Rgb(&'a crate::raster::RgbImage),
 }
 
@@ -655,6 +652,18 @@ impl PreparedPosterize<'_> {
             (NativeBytePointSource::Luma(input), PointArchitecture::WasmSimd128) => {
                 super::luma8::wasm_simd128::posterize_impl::execute(input, self.bits)
             }
+            (NativeBytePointSource::Palette(input), PointArchitecture::Default) => {
+                super::palette8::default::posterize_impl::execute(input, self.bits)
+            }
+            (NativeBytePointSource::Palette(input), PointArchitecture::Sse2) => {
+                super::palette8::sse2::posterize_impl::execute(input, self.bits)
+            }
+            (NativeBytePointSource::Palette(input), PointArchitecture::Neon) => {
+                super::palette8::neon::posterize_impl::execute(input, self.bits)
+            }
+            (NativeBytePointSource::Palette(input), PointArchitecture::WasmSimd128) => {
+                super::palette8::wasm_simd128::posterize_impl::execute(input, self.bits)
+            }
             (NativeBytePointSource::Rgb(input), PointArchitecture::Default) => {
                 super::rgb8::default::posterize_impl::execute(input, self.bits)
             }
@@ -698,6 +707,18 @@ impl PreparedSolarize<'_> {
             (NativeBytePointSource::Luma(input), PointArchitecture::WasmSimd128) => {
                 super::luma8::wasm_simd128::solarize_impl::execute(input, self.threshold)
             }
+            (NativeBytePointSource::Palette(input), PointArchitecture::Default) => {
+                super::palette8::default::solarize_impl::execute(input, self.threshold)
+            }
+            (NativeBytePointSource::Palette(input), PointArchitecture::Sse2) => {
+                super::palette8::sse2::solarize_impl::execute(input, self.threshold)
+            }
+            (NativeBytePointSource::Palette(input), PointArchitecture::Neon) => {
+                super::palette8::neon::solarize_impl::execute(input, self.threshold)
+            }
+            (NativeBytePointSource::Palette(input), PointArchitecture::WasmSimd128) => {
+                super::palette8::wasm_simd128::solarize_impl::execute(input, self.threshold)
+            }
             (NativeBytePointSource::Rgb(input), PointArchitecture::Default) => {
                 super::rgb8::default::solarize_impl::execute(input, self.threshold)
             }
@@ -732,6 +753,7 @@ fn mode_selection(
 fn native_byte_point_source(image: &DynamicImage) -> Result<NativeBytePointSource<'_>, PilError> {
     match image {
         DynamicImage::ImageLuma8(input) => Ok(NativeBytePointSource::Luma(input)),
+        DynamicImage::ImagePalette8(input) => Ok(NativeBytePointSource::Palette(input)),
         DynamicImage::ImageRgb8(input) => Ok(NativeBytePointSource::Rgb(input)),
         _ => Err(PilError::InternalError(
             "native-byte point support and mode dispatch disagree".into(),

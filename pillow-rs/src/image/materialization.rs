@@ -238,6 +238,13 @@ impl Image {
     /// accepted.
     pub(super) fn is_palette_safe_op_for_source(source: &Image, op: &PipelineOp) -> bool {
         Self::is_palette_safe_op(op)
+            // Core-only P Posterize/Solarize strategies transform their
+            // native index bytes and retain the source palette.
+            || (source.known_mode_identity() == Some(Mode::ImagePalette8)
+                && matches!(op, PipelineOp::Posterize { .. } | PipelineOp::Solarize { .. }))
+            // A single-band Eval LUT over P maps indices, not palette colors.
+            || (source.known_mode_identity() == Some(Mode::ImagePalette8)
+                && matches!(op, PipelineOp::Eval { lut } if lut.len() == 256))
             // PA.putpixel writes the native index/alpha sample pair. The
             // operation does not depend on the RGB palette, but a later
             // conversion does, so keep the palette attached to the lazy

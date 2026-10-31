@@ -55,7 +55,8 @@ impl ImageOps {
     /// # Errors
     ///
     /// Returns an error when the table does not contain 256 entries or the
-    /// image mode is unsupported by Pillow's `ImageOps.solarize`.
+    /// image mode is unsupported by the core operation. P uses a core-only
+    /// native-index strategy; Pillow's `ImageOps.solarize` does not support P.
     #[wasm_bindgen(js_name = "solarizeWithComparisons")]
     pub fn sol_with_comparisons(img: &Image, below: Vec<u8>) -> Result<Image, JsValue> {
         if below.len() != 256 {

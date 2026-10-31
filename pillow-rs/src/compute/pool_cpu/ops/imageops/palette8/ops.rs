@@ -1,3 +1,47 @@
 use crate::compute::pool_cpu::ops::imageops::helpers::strategy::declare_invert_native_mode;
+use crate::compute::pool_cpu::ops::imageops::helpers::strategy;
+use crate::compute::registry::support::{
+    ImplementationSupport, InputContract, ModeSupport, OperationId, OutputModeRule,
+};
+use crate::raster::Mode;
 
 declare_invert_native_mode!(ImagePalette8, super::Input, 1, 1);
+
+const POSTERIZE_INPUTS: &[InputContract] = &[
+    InputContract::PosterizeBits,
+    InputContract::CheckedByteDimensions {
+        bytes_per_pixel: 1,
+        allow_empty: true,
+    },
+];
+const SOLARIZE_INPUTS: &[InputContract] = &[InputContract::CheckedByteDimensions {
+    bytes_per_pixel: 1,
+    allow_empty: true,
+}];
+
+static POSTERIZE_ARCHITECTURES: [ImplementationSupport; 3] =
+    strategy::native_byte_point_architectures(OperationId::Posterize, Mode::ImagePalette8, 1);
+static SOLARIZE_ARCHITECTURES: [ImplementationSupport; 3] =
+    strategy::native_byte_point_architectures(OperationId::Solarize, Mode::ImagePalette8, 1);
+
+// NO_PILLOW_SUPPORT: Pillow's ImageOps._lut rejects P. These native strategies
+// transform palette indices and preserve the Rust image's attached palette.
+pub(crate) const POSTERIZE_SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
+    OperationId::Posterize,
+    Mode::ImagePalette8,
+    OutputModeRule::Preserve,
+    POSTERIZE_INPUTS,
+    &POSTERIZE_ARCHITECTURES,
+    "Posterize applies its byte lookup table directly to native palette indices",
+);
+
+// NO_PILLOW_SUPPORT: Pillow's ImageOps._lut rejects P; this native strategy
+// solarizes index bytes and preserves the Rust image's attached palette.
+pub(crate) const SOLARIZE_SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
+    OperationId::Solarize,
+    Mode::ImagePalette8,
+    OutputModeRule::Preserve,
+    SOLARIZE_INPUTS,
+    &SOLARIZE_ARCHITECTURES,
+    "Solarize applies its byte lookup table directly to native palette indices",
+);
