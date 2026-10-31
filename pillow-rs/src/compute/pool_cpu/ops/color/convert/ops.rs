@@ -246,9 +246,10 @@ fn classify_mode(mode: Mode) -> ModeSupport {
 ///
 /// Convert-to-LAB is a wrapper composition: each source mode selects its
 /// declared RGB normalization route, then the RGB8 ConvertLab operation runs.
-// TODO(pillow-rs#3ptb): compare each archived SIMD Convert source/target path
-// and edge guard with these mode/Architecture declarations; migrate any gaps
-// and relocate the archived SIMD cases beside their maintained strategies.
+// TODO(pillow-rs#3ptb): finish the archived SIMD Convert source/target and
+// edge-guard comparison, excluding the alpha, CMYK, and I;16 routes recorded
+// in the inventory. Reconcile their empty-input selection differences, then
+// migrate any uncovered layout, color-space, typed, or scalar-control path.
 const CONVERT_CHILDREN: &[OperationId] = &[OperationId::ConvertLab];
 
 pub(crate) static SUPPORT: OperationSupport = OperationSupport::composed(

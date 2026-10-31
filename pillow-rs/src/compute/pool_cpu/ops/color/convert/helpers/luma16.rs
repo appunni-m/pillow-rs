@@ -7,19 +7,9 @@ use crate::raster::{
     DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, ImageBuffer, Luma, LumaA, Mode,
     Rgb, RgbImage, Rgba, RgbaImage,
 };
-use wide::{f32x8, u16x8, u32x8};
+use wide::{u16x8, u32x8};
 
 type Samples = ImageBuffer<Luma<u16>, Vec<u16>>;
-
-trait ScalarConversion {
-    const CLIP_SCALAR: bool;
-
-    fn to_i32(sample: u16) -> i32;
-    fn to_f32(sample: u16) -> f32;
-}
-
-struct NativeScalar;
-struct ClippedLumaScalar;
 
 const SSE2_AVAILABLE: bool = cfg!(any(
     target_arch = "x86_64",
@@ -67,34 +57,7 @@ pub(crate) const fn architecture_support(mode: Mode) -> [ImplementationSupport; 
     ]
 }
 
-impl ScalarConversion for NativeScalar {
-    const CLIP_SCALAR: bool = false;
-
-    #[inline]
-    fn to_i32(sample: u16) -> i32 {
-        i32::from(sample)
-    }
-
-    #[inline]
-    fn to_f32(sample: u16) -> f32 {
-        f32::from(sample)
-    }
-}
-
-impl ScalarConversion for ClippedLumaScalar {
-    const CLIP_SCALAR: bool = true;
-
-    #[inline]
-    fn to_i32(sample: u16) -> i32 {
-        i32::from(sample.min(u16::from(u8::MAX)))
-    }
-
-    #[inline]
-    fn to_f32(sample: u16) -> f32 {
-        f32::from(sample.min(u16::from(u8::MAX)))
-    }
-}
-
+/// Converts a native u16 raster; I;16N changes decode byte order, not sample range.
 pub(crate) fn execute_mode(
     source: &Samples,
     source_mode: Mode,
@@ -103,10 +66,7 @@ pub(crate) fn execute_mode(
     if is_luma16_target(target) {
         return execute_i16_target(source, source_mode, target);
     }
-    if source_mode == Mode::ImageI16N {
-        return execute::<ClippedLumaScalar>(source, target);
-    }
-    execute::<NativeScalar>(source, target)
+    execute(source, target)
 }
 
 pub(crate) fn from_luma8_samples<I>(
@@ -166,17 +126,10 @@ pub(crate) fn execute_native_vector(
     source: &Samples,
     target: Mode,
 ) -> Result<DynamicImage, PilError> {
-    execute_vector::<NativeScalar>(source, target)
+    execute_vector(source, target)
 }
 
-pub(crate) fn execute_native_order_vector(
-    source: &Samples,
-    target: Mode,
-) -> Result<DynamicImage, PilError> {
-    execute_vector::<ClippedLumaScalar>(source, target)
-}
-
-fn execute<S: ScalarConversion>(source: &Samples, target: Mode) -> Result<DynamicImage, PilError> {
+fn execute(source: &Samples, target: Mode) -> Result<DynamicImage, PilError> {
     match target {
         Mode::ImageLuma8 => Ok(DynamicImage::ImageLuma8(to_luma(source))),
         Mode::ImageLumaA8 => Ok(DynamicImage::ImageLumaA8(to_luma_alpha(source))),
@@ -185,8 +138,8 @@ fn execute<S: ScalarConversion>(source: &Samples, target: Mode) -> Result<Dynami
         Mode::ImageCmyk8 => Ok(DynamicImage::ImageCmyk8(to_cmyk(source))),
         Mode::ImageYCbCr8 => Ok(DynamicImage::ImageYCbCr8(to_ycbcr(source))),
         Mode::ImageHsv8 => Ok(DynamicImage::ImageHsv8(to_hsv(source))),
-        Mode::ImageI32 => Ok(DynamicImage::ImageI32(to_i32::<S>(source))),
-        Mode::ImageF32 => Ok(DynamicImage::ImageF32(to_f32::<S>(source))),
+        Mode::ImageI32 => Ok(DynamicImage::ImageI32(to_i32(source))),
+        Mode::ImageF32 => Ok(DynamicImage::ImageF32(to_f32(source))),
         _ => Err(PilError::ValueError("image has wrong mode".into())),
     }
 }
@@ -227,10 +180,7 @@ pub(crate) const fn is_luma16_target(target: Mode) -> bool {
     )
 }
 
-fn execute_vector<S: ScalarConversion>(
-    source: &Samples,
-    target: Mode,
-) -> Result<DynamicImage, PilError> {
+fn execute_vector(source: &Samples, target: Mode) -> Result<DynamicImage, PilError> {
     let target_channels = vector_target_channels(target)?;
     let source_dims = CheckedDims::new_allow_empty(source.width(), source.height(), 1)?;
     if source.as_raw().len() != source_dims.total_pixels() {
@@ -245,7 +195,7 @@ fn execute_vector<S: ScalarConversion>(
         let active = (source_dims.total_pixels() - start).min(8);
         let lanes = std::array::from_fn(|lane| source.as_raw().get(start + lane).copied().unwrap_or(0));
         let samples = u16x8::new(lanes);
-        append_target_samples::<S>(target, samples, active, &mut output);
+        append_target_samples(target, samples, active, &mut output);
         vector_blocks = vector_blocks.saturating_add(1);
     }
     finish_vector(source, target, output, output_dims.total_bytes(), vector_blocks)
@@ -261,7 +211,7 @@ fn vector_target_channels(target: Mode) -> Result<u8, PilError> {
     }
 }
 
-fn append_target_samples<S: ScalarConversion>(
+fn append_target_samples(
     target: Mode,
     samples: u16x8,
     active: usize,
@@ -269,10 +219,10 @@ fn append_target_samples<S: ScalarConversion>(
 ) {
     if target == Mode::ImageI32 {
         for value in samples.to_array().into_iter().take(active) {
-            output.extend_from_slice(&S::to_i32(value).to_le_bytes());
+            output.extend_from_slice(&i32::from(value).to_le_bytes());
         }
     } else if target == Mode::ImageF32 {
-        append_float_samples::<S>(samples, active, output);
+        append_float_samples(samples, active, output);
     } else {
         let clipped = samples
             .simd_gt(u16x8::splat(u16::from(u8::MAX)))
@@ -283,15 +233,8 @@ fn append_target_samples<S: ScalarConversion>(
     }
 }
 
-fn append_float_samples<S: ScalarConversion>(samples: u16x8, active: usize, output: &mut Vec<u8>) {
+fn append_float_samples(samples: u16x8, active: usize, output: &mut Vec<u8>) {
     let samples = u32x8::from(samples);
-    if S::CLIP_SCALAR {
-        let clipped = samples
-            .simd_gt(u32x8::splat(u32::from(u8::MAX)))
-            .select(u32x8::splat(u32::from(u8::MAX)), samples);
-        append_f32_bytes(f32x8::new(clipped.to_array().map(|value| value as f32)).to_array(), active, output);
-        return;
-    }
     let mut bits = u32x8::splat(0);
     for exponent in 0..16u32 {
         let base = 1u32 << exponent;
@@ -408,15 +351,15 @@ fn to_hsv(source: &Samples) -> RgbImage {
     })
 }
 
-fn to_i32<S: ScalarConversion>(source: &Samples) -> RgbaImage {
+fn to_i32(source: &Samples) -> RgbaImage {
     RgbaImage::from_fn(source.width(), source.height(), |x, y| {
-        Rgba(S::to_i32(source.get_pixel(x, y)[0]).to_le_bytes())
+        Rgba(i32::from(source.get_pixel(x, y)[0]).to_le_bytes())
     })
 }
 
-fn to_f32<S: ScalarConversion>(source: &Samples) -> RgbaImage {
+fn to_f32(source: &Samples) -> RgbaImage {
     RgbaImage::from_fn(source.width(), source.height(), |x, y| {
-        Rgba(S::to_f32(source.get_pixel(x, y)[0]).to_le_bytes())
+        Rgba(f32::from(source.get_pixel(x, y)[0]).to_le_bytes())
     })
 }
 
