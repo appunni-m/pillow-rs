@@ -316,66 +316,10 @@ pub(super) fn horizontal_pass_boxed_rows(
     intermediate: &mut [u8],
     premultiplied_alpha: bool,
     parallel_pixel_threshold: usize,
-    sparse_rgb_nonzero_rows: Option<&[bool]>,
 ) {
     let source_stride = source_width as usize * channels;
     let output_stride = output_width as usize * channels;
     if source_row_count == 0 || output_stride == 0 {
-        return;
-    }
-
-    if let Some(nonzero_rows) = sparse_rgb_nonzero_rows {
-        #[cfg(feature = "parallel")]
-        if (source_row_count as usize).saturating_mul(output_width as usize)
-            >= parallel_pixel_threshold
-        {
-            crate::par_rows_mut!(
-                intermediate,
-                output_stride,
-                source_row_count as usize,
-                |_row_start, _row_end, row_index, row| {
-                    let source_y = first_source_row as usize + row_index as usize;
-                    let source_start = source_y * source_stride;
-                    let source_row = &work_bytes[source_start..source_start + source_stride];
-                    if !nonzero_rows.get(source_y).copied().unwrap_or(true) {
-                        row[..output_stride].fill(0);
-                    } else {
-                        horizontal_pass_row(
-                            source_row,
-                            source_width,
-                            channels,
-                            coeffs,
-                            output_width,
-                            &mut row[..output_stride],
-                        );
-                    }
-                }
-            );
-            return;
-        }
-
-        #[cfg(not(feature = "parallel"))]
-        let _ = parallel_pixel_threshold;
-
-        for row_index in 0..source_row_count as usize {
-            let source_y = first_source_row as usize + row_index;
-            let source_start = source_y * source_stride;
-            let output_start = row_index * output_stride;
-            let source_row = &work_bytes[source_start..source_start + source_stride];
-            let output_row = &mut intermediate[output_start..output_start + output_stride];
-            if !nonzero_rows.get(source_y).copied().unwrap_or(true) {
-                output_row.fill(0);
-            } else {
-                horizontal_pass_row(
-                    source_row,
-                    source_width,
-                    channels,
-                    coeffs,
-                    output_width,
-                    output_row,
-                );
-            }
-        }
         return;
     }
 

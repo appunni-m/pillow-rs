@@ -2,6 +2,7 @@
 
 use crate::error::PilError;
 use crate::image::Image;
+use crate::raster::Mode;
 
 #[inline(always)]
 fn mask_includes_pixel(mask: Option<&[u8]>, index: usize) -> bool {
@@ -19,14 +20,19 @@ fn mask_includes_pixel(mask: Option<&[u8]>, index: usize) -> bool {
 /// logical `u16` samples to 8-bit luminance values.
 fn histogram_l16_pillow(
     img: &crate::raster::DynamicImage,
-    mode: &str,
+    mode: Mode,
     mask_raw: Option<&[u8]>,
 ) -> Vec<u32> {
     let samples = img.to_luma16();
     let width = img.width() as usize;
     let height = img.height() as usize;
     let mut hist = vec![0u32; 256];
-    let big_endian = mode == "I;16B" || (mode != "I;16L" && cfg!(target_endian = "big"));
+    let big_endian = match mode {
+        Mode::ImageI16B => true,
+        Mode::ImageI16L => false,
+        Mode::ImageI16 | Mode::ImageI16N => cfg!(target_endian = "big"),
+        _ => false,
+    };
     for y in 0..height {
         for x in 0..width {
             if matches!(mask_raw, Some(mask) if mask[y * width + x] == 0) {
@@ -116,10 +122,10 @@ fn histogram_f_pillow(img: &crate::raster::DynamicImage) -> Vec<u32> {
 
 fn histogram_special_mode(
     image: &crate::raster::DynamicImage,
-    mode: &str,
+    mode: Mode,
     mask_raw: Option<&[u8]>,
 ) -> Result<Option<Vec<u32>>, PilError> {
-    if matches!(mode, "I" | "F") {
+    if matches!(mode, Mode::ImageI32 | Mode::ImageF32) {
         if mask_raw.is_some() {
             // Pillow's masked scalar histogram call uses the byte-image entry
             // point and rejects I/F images as the wrong mode.
@@ -128,14 +134,17 @@ fn histogram_special_mode(
         if image.width() == 0 || image.height() == 0 {
             return Err(PilError::ValueError("min/max not given".into()));
         }
-        return Ok(Some(if mode == "I" {
+        return Ok(Some(if mode == Mode::ImageI32 {
             histogram_i_pillow(image)
         } else {
             histogram_f_pillow(image)
         }));
     }
     if image.color() == crate::raster::ColorType::L16
-        && matches!(mode, "I;16" | "I;16L" | "I;16B" | "I;16N")
+        && matches!(
+            mode,
+            Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N
+        )
     {
         return Ok(Some(histogram_l16_pillow(image, mode, mask_raw)));
     }
@@ -276,7 +285,7 @@ fn histogram_converted_bytes(
 
 fn histogram_materialized(
     image: &crate::raster::DynamicImage,
-    mode: &str,
+    mode: Mode,
     masked: bool,
     mask_raw: Option<&[u8]>,
 ) -> Result<Vec<u32>, PilError> {
@@ -315,8 +324,8 @@ impl Image {
             if (mask_image.width(), mask_image.height()) != (image.width(), image.height()) {
                 return Err(PilError::ValueError("images do not match".into()));
             }
-            let mode = mask.mode()?;
-            if mode != "1" && mode != "L" {
+            let mode = mask_image.mode();
+            if !matches!(mode, Mode::One | Mode::ImageLuma8) {
                 return Err(PilError::ValueError("bad transparency mask".into()));
             }
             Some(mask_image)
@@ -340,6 +349,6 @@ impl Image {
             (_, Some(raw)) => Some(raw.as_slice()),
             _ => None,
         };
-        histogram_materialized(&image, &mode, mask_image.is_some(), mask_raw)
+        histogram_materialized(&image, mode, mask_image.is_some(), mask_raw)
     }
 }

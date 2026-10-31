@@ -5,10 +5,10 @@
 //! Coordinates are integer pixel coordinates. Colors are normalized RGBA byte
 //! tuples before mode-specific drawing rules are applied.
 
-use crate::raster::{DynamicImage, Mode, RgbaImage};
-
+use crate::compute::{Backend, ExecutionContext};
 use crate::error::PilError;
 use crate::image::Image;
+use crate::raster::{DynamicImage, Mode};
 
 type DrawColor = (u8, u8, u8, u8);
 type ShapeInks = (Option<DrawColor>, Option<DrawColor>);
@@ -418,6 +418,24 @@ impl Draw {
         }
     }
 
+    /// Resolves eager drawing through CPU while preserving SIMD's architecture request.
+    pub(crate) fn cpu_execution_context(
+        &self,
+    ) -> Result<(Option<Backend>, ExecutionContext), PilError> {
+        let requested_backend = match self.image.backend() {
+            Some(backend) => Some(backend),
+            None => crate::compute::preferred_active_backend()?.map(|(backend, _)| backend),
+        };
+        let routed_backend = match requested_backend {
+            Some(Backend::Gpu) | None => Backend::Cpu,
+            Some(backend) => backend,
+        };
+        Ok((
+            requested_backend,
+            ExecutionContext::for_routed_backend(routed_backend),
+        ))
+    }
+
     /// Validate Pillow's optional draw-mode override against the destination.
     ///
     /// RGB images may be drawn through an RGBA context for alpha blending. All
@@ -610,66 +628,6 @@ impl Draw {
             Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => None,
             _ => None,
         }
-    }
-
-    /// Restore a drawn RGBA canvas to the exact selected raster mode.
-    fn set_image(&mut self, canvas: RgbaImage) -> Result<(), PilError> {
-        let mode = self.draw_mode.or(self.orig_mode).unwrap_or(Mode::ImageRgba8);
-        let canvas = DynamicImage::ImageRgba8(canvas);
-        let image = match mode {
-            Mode::One => DynamicImage::One(canvas.to_luma8()),
-            Mode::ImageLuma8 => DynamicImage::ImageLuma8(canvas.to_luma8()),
-            Mode::ImageLumaA8 => DynamicImage::ImageLumaA8(canvas.to_luma_alpha8()),
-            Mode::ImageLaPremultiplied8 => {
-                DynamicImage::ImageLaPremultiplied8(canvas.to_luma_alpha8())
-            }
-            Mode::ImagePalette8 => DynamicImage::ImagePalette8(canvas.to_luma8()),
-            Mode::ImagePaletteAlpha8 => {
-                DynamicImage::ImagePaletteAlpha8(canvas.to_luma_alpha8())
-            }
-            Mode::ImageRgb8 => DynamicImage::ImageRgb8(canvas.to_rgb8()),
-            Mode::ImageRgba8 => canvas,
-            Mode::ImageRgbPremultiplied8 => DynamicImage::ImageRgbPremultiplied8(
-                match canvas {
-                    DynamicImage::ImageRgba8(image) => image,
-                    _ => unreachable!("draw canvas is RGBA"),
-                },
-            ),
-            Mode::ImageRgbx8 => DynamicImage::ImageRgbx8(match canvas {
-                DynamicImage::ImageRgba8(image) => image,
-                _ => unreachable!("draw canvas is RGBA"),
-            }),
-            Mode::ImageCmyk8 => DynamicImage::ImageCmyk8(match canvas {
-                DynamicImage::ImageRgba8(image) => image,
-                _ => unreachable!("draw canvas is RGBA"),
-            }),
-            Mode::ImageYCbCr8 => DynamicImage::ImageYCbCr8(canvas.to_rgb8()),
-            Mode::ImageLab8 => DynamicImage::ImageLab8(canvas.to_rgb8()),
-            Mode::ImageHsv8 => DynamicImage::ImageHsv8(canvas.to_rgb8()),
-            Mode::ImageI32 => DynamicImage::ImageI32(match canvas {
-                DynamicImage::ImageRgba8(image) => image,
-                _ => unreachable!("draw canvas is RGBA"),
-            }),
-            Mode::ImageF32 => DynamicImage::ImageF32(match canvas {
-                DynamicImage::ImageRgba8(image) => image,
-                _ => unreachable!("draw canvas is RGBA"),
-            }),
-            Mode::ImageI16 => DynamicImage::ImageI16(canvas.to_luma16()),
-            Mode::ImageI16L => DynamicImage::ImageI16L(canvas.to_luma16()),
-            Mode::ImageI16B => DynamicImage::ImageI16B(canvas.to_luma16()),
-            Mode::ImageI16N => DynamicImage::ImageI16N(canvas.to_luma16()),
-            Mode::ImageLumaA16
-            | Mode::ImageRgb16
-            | Mode::ImageRgba16
-            | Mode::ImageRgb32F
-            | Mode::ImageRgba32F => {
-                // NO_PILLOW_SUPPORT: Draw's byte canvas has no contract for
-                // these internal high-depth modes.
-                return Err(PilError::ValueError("unsupported image mode".into()));
-            }
-        };
-        self.image = Image::from_dynamic(image);
-        Ok(())
     }
 
     /// Returns the current drawn image with original mode semantics restored.

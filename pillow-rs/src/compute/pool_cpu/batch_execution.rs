@@ -28,8 +28,12 @@ pub(super) fn execute_batch(
     let mut resources = host_resource_telemetry(image);
     let mut index = 0;
     while index < ops.len() {
-        let input = result.as_ref().unwrap_or(image);
-        if let Some(step) = execute_fused_run(ops, index, input, context)? {
+        let fused = {
+            let input = result.as_ref().unwrap_or(image);
+            execute_fused_run(ops, index, input, context)?
+        };
+        if let Some(step) = fused {
+            let input = result.as_ref().unwrap_or(image);
             if let Some(next) = step.output {
                 account_host_buffer_boundary(&mut resources, input, &next);
                 result = Some(next);
@@ -42,6 +46,25 @@ pub(super) fn execute_batch(
         }
 
         let op = &ops[index];
+        if matches!(op, PipelineOp::Invert | PipelineOp::InvertChops)
+            && let Some(mut owned) = result.take()
+        {
+            if let Some(plan) = prepare_owned_invert(&owned, op, context) {
+                begin_pipeline_operation_telemetry(crate::compute::registry::variant_key(op));
+                if let Err(error) = execute_owned_invert(&mut owned, &plan) {
+                    finish_failed_prepared_run(std::slice::from_ref(op), plan.architecture);
+                    return Err(error);
+                }
+                crate::compute::record_pipeline_operation_architecture(plan.architecture);
+                finish_pipeline_operation_telemetry();
+                result = Some(owned);
+                index += 1;
+                continue;
+            }
+            result = Some(owned);
+        }
+
+        let input = result.as_ref().unwrap_or(image);
         begin_pipeline_operation_telemetry(crate::compute::registry::variant_key(op));
         let operation_palette = match input.mode() {
             crate::raster::Mode::ImagePalette8 | crate::raster::Mode::ImagePaletteAlpha8 => {
@@ -97,6 +120,80 @@ pub(super) fn execute_batch(
     Ok(output)
 }
 
+struct OwnedInvertPlan {
+    mode: crate::raster::Mode,
+    architecture: Architecture,
+    channels: usize,
+}
+
+fn prepare_owned_invert(
+    image: &DynamicImage,
+    op: &PipelineOp,
+    context: &ExecutionContext,
+) -> Option<OwnedInvertPlan> {
+    let mode = image.mode();
+    let support = match op {
+        PipelineOp::Invert => crate::compute::pool_cpu::ops::imageops::ops::INVERT_SUPPORT
+            .for_mode(mode),
+        PipelineOp::InvertChops => {
+            crate::compute::pool_cpu::ops::chops::ops::INVERT_SUPPORT.for_mode(mode)
+        }
+        _ => return None,
+    };
+    let channels = match mode {
+        crate::raster::Mode::One
+        | crate::raster::Mode::ImageLuma8
+        | crate::raster::Mode::ImagePalette8 => 1,
+        crate::raster::Mode::ImageLumaA8
+        | crate::raster::Mode::ImageLaPremultiplied8
+        | crate::raster::Mode::ImagePaletteAlpha8 => 2,
+        crate::raster::Mode::ImageRgb8
+        | crate::raster::Mode::ImageYCbCr8
+        | crate::raster::Mode::ImageLab8
+        | crate::raster::Mode::ImageHsv8 => 3,
+        crate::raster::Mode::ImageRgba8
+        | crate::raster::Mode::ImageRgbPremultiplied8
+        | crate::raster::Mode::ImageRgbx8
+        | crate::raster::Mode::ImageCmyk8 => 4,
+        _ => return None,
+    };
+    let selection = super::ops::imageops::helpers::strategy::select_invert_strategy(
+        support,
+        image.width(),
+        image.height(),
+        image.as_bytes().len(),
+        context,
+    )
+    .ok()?;
+    let architecture = selection.implementation.architecture;
+    (architecture != Architecture::Default).then_some(OwnedInvertPlan {
+        mode,
+        architecture,
+        channels,
+    })
+}
+
+fn execute_owned_invert(image: &mut DynamicImage, plan: &OwnedInvertPlan) -> Result<(), PilError> {
+    if image.mode() != plan.mode {
+        return Err(PilError::InternalError(
+            "owned Invert mode changed after strategy preparation".into(),
+        ));
+    }
+    let (width, height) = image.dimensions();
+    let Some(bytes) = image.as_bytes_mut() else {
+        return Err(PilError::InternalError(
+            "owned Invert strategy has no mutable native bytes".into(),
+        ));
+    };
+    crate::compute::pool_cpu::helpers::bytes::native_invert::invert_in_place(
+        bytes,
+        width,
+        height,
+        plan.channels,
+        true,
+    )
+}
+
 struct FusedStep {
     output: Option<DynamicImage>,
     next_index: usize,
@@ -109,6 +206,55 @@ fn execute_fused_run(
     image: &DynamicImage,
     context: &ExecutionContext,
 ) -> Result<Option<FusedStep>, PilError> {
+    if crate::compute::pool_cpu::ops::draw::is_draw_op(&ops[start]) {
+        let end = draw_run_end(ops, start);
+        if end - start == 1 {
+            return Ok(None);
+        }
+        let run = &ops[start..end];
+        let selection = match super::ops::draw::ops::prepare_batch(image, run, context) {
+            Ok(selection) => selection,
+            Err(error) => {
+                finish_failed_unprepared_run(run);
+                return Err(error);
+            }
+        };
+        let architecture = selection.implementation.architecture;
+        let output = match super::ops::draw::ops::execute_batch(
+            image,
+            run,
+            image.mode(),
+            selection,
+        ) {
+            Ok(output) => output,
+            Err(error) => {
+                for op in run {
+                    record_fused_operation_telemetry(
+                        op,
+                        architecture,
+                        if architecture == Architecture::Default { "cpu" } else { "vector" },
+                        0,
+                        0,
+                    );
+                }
+                return Err(error);
+            }
+        };
+        for op in run {
+            record_fused_operation_telemetry(
+                op,
+                architecture,
+                if architecture == Architecture::Default { "cpu" } else { "vector" },
+                0,
+                0,
+            );
+        }
+        return Ok(Some(FusedStep {
+            output: Some(output),
+            next_index: end,
+            operations: run.len(),
+        }));
+    }
     if let Some(step) = execute_chops_multiply_screen_run(ops, start, image, context)? {
         return Ok(Some(step));
     }
@@ -149,6 +295,14 @@ fn execute_fused_run(
         }));
     }
     Ok(None)
+}
+
+fn draw_run_end(ops: &[PipelineOp], start: usize) -> usize {
+    let mut end = start + 1;
+    while end < ops.len() && crate::compute::pool_cpu::ops::draw::is_draw_op(&ops[end]) {
+        end += 1;
+    }
+    end
 }
 
 fn execute_alpha_composite_mirror_run(
@@ -290,28 +444,23 @@ fn execute_rgb_putpixel_thumbnail_run(
     let Some(thumbnail) = ops.get(putpixel_end) else {
         return Ok(None);
     };
-    if !crate::compute::cpu_rgb_putpixel_thumbnail_fusion_supported(
+    let Some(plan) = super::ops::thumbnail::ops::prepare_rgb_putpixel_thumbnail(
         image,
         &ops[start..putpixel_end],
         thumbnail,
-        Some(image.mode()),
         context,
-    ) {
+    )? else {
         return Ok(None);
-    }
+    };
 
     let end = putpixel_end + 1;
     let fused_ops = &ops[start..end];
+    let architecture = plan.architecture();
     for op in fused_ops {
         begin_pipeline_operation_telemetry(crate::compute::registry::variant_key(op));
     }
-    let output = super::ops::thumbnail::ops::execute_rgb_putpixel_thumbnail(
-        image,
-        &ops[start..putpixel_end],
-        thumbnail,
-        context,
-    );
-    finish_cpu_operation_telemetry(fused_ops, Some(Architecture::Default));
+    let output = plan.execute();
+    finish_cpu_operation_telemetry(fused_ops, Some(architecture));
     output.map(|output| {
         Some(FusedStep {
             output: Some(output),
@@ -516,15 +665,20 @@ fn finish_cpu_operation_telemetry(
     ops: &[PipelineOp],
     architecture: Option<Architecture>,
 ) {
+    let path = match architecture {
+        Some(Architecture::Default) | None => "cpu",
+        Some(_) => "vector",
+    };
     for _ in ops {
         if let Some(architecture) = architecture {
             crate::compute::record_pipeline_operation_architecture(architecture);
         }
-        record_pipeline_operation_path("cpu");
+        record_pipeline_operation_path(path);
         finish_pipeline_operation_telemetry();
     }
 }
 
-// TODO(pillow-rs#3ptb): migrate PutPixel+Thumbnail, AlphaComposite+Mirror,
-// and Draw batches to prepared CPU strategies. PutPixel, transpose,
-// Multiply+Screen, and byte-point runs plus identity terminals are active.
+// TODO(pillow-rs#3ptb): finish the remaining prepared-batch caller review.
+// RGB PutPixel+Thumbnail binds its sparse reduction to the exact prepared RGB
+// Resize/ResizeBoxed strategy. Draw runs, AlphaComposite+Mirror, transpose,
+// Multiply+Screen, PutPixel, and byte-point runs have prepared CPU paths.

@@ -1,10 +1,7 @@
 //! Operation registration, split into focused initializer modules.
 //!
-//! TODO(pillow-rs#3ptb): replace the old direct-result callbacks in the
-//! `chops`, `color`, `draw`, `effects`, `enhance`, `geometry`,
-//! `module_fns`, and `transform` registrations with family-owned prepared
-//! callbacks as those CPU owners are migrated. Keep each existing operation
-//! key and GPU shader paired with its replacement.
+//! CPU callbacks prepare operation-owned mode and architecture strategies.
+//! Keep each existing operation key paired with its GPU shader metadata.
 use super::OpEntry;
 use crate::error::PilError;
 use std::collections::HashMap;
@@ -29,12 +26,6 @@ macro_rules! gpu_entry {
 macro_rules! gpu_entry {
     ($f:expr, $shader:literal) => {
         $crate::compute::registry::OpEntry::cpu_only($f as $crate::compute::registry::CpuOpFn)
-    };
-}
-
-macro_rules! draw_entry {
-    ($entries:ident, $key:expr, $func:expr) => {
-        $entries.insert($key, gpu_entry!($func, "draw.wgsl"));
     };
 }
 

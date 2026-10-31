@@ -1,5 +1,9 @@
 //! Luma-alpha source-mode support and architecture selection for Convert.
 
+crate::compute::pool_cpu::ops::color::convert::helpers::binary::declare_mode_strategy!(
+    crate::raster::Mode::ImageLumaA8
+);
+
 use crate::compute::{
     Architecture,
     registry::support::{
@@ -64,7 +68,7 @@ static ARCHITECTURES: [ImplementationSupport; 22] = [
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::Convert,
     Mode::ImageLumaA8,
-    crate::compute::registry::support::OutputModeRule::ByTargetMode,
+    crate::compute::registry::support::OutputModeRule::ByTargetModeWithPalette,
     &super::super::ops::LA_INPUTS,
     &ARCHITECTURES,
 );
@@ -80,6 +84,19 @@ pub(crate) fn execute(
         Architecture::Neon => super::neon::convert_impl::execute(source, target),
         _ => Err(PilError::InternalError(
             "Convert selected an undeclared LA architecture".into(),
+        )),
+    }
+}
+
+pub(crate) fn execute_palette_target(
+    source: &GrayAlphaImage,
+    target: Mode,
+    selection: StrategySelection,
+) -> Result<super::super::ops::PreparedConvertOutput, PilError> {
+    match selection.implementation.architecture {
+        Architecture::Default => super::default::convert_impl::execute_palette_target(source, target),
+        _ => Err(PilError::InternalError(
+            "Convert selected an undeclared LA palette architecture".into(),
         )),
     }
 }

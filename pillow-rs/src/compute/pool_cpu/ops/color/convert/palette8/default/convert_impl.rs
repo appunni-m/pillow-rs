@@ -26,6 +26,27 @@ pub(crate) fn execute(
     }
 }
 
+pub(crate) fn execute_palette_target(
+    source: &GrayImage,
+    palette: PaletteInput<'_>,
+    target: Mode,
+) -> Result<super::super::super::ops::PreparedConvertOutput, PilError> {
+    if target != Mode::ImagePaletteAlpha8 {
+        return Err(PilError::ValueError("image has wrong mode".into()));
+    }
+    let mut output = GrayAlphaImage::new(source.width(), source.height());
+    for (destination, index) in output.pixels_mut().zip(source.pixels()) {
+        let alpha = super::super::super::helpers::palette::alpha(index[0], palette);
+        *destination = LumaA([index[0], alpha]);
+    }
+    Ok(super::super::super::ops::PreparedConvertOutput {
+        image: DynamicImage::ImagePaletteAlpha8(output),
+        palette: palette.rgb.map(|entries| entries.to_vec()),
+        palette_alpha: None,
+        wrapper_metadata: Some(super::super::super::ops::ConvertWrapperMetadata::ExifOnly),
+    })
+}
+
 fn luma(source: &GrayImage, palette: PaletteInput<'_>) -> GrayImage {
     let mut output = GrayImage::new(source.width(), source.height());
     for (destination, index) in output.pixels_mut().zip(source.pixels()) {

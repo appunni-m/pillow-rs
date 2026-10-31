@@ -11,6 +11,8 @@ use crate::error::PilError;
 use crate::raster::{DynamicImage, GrayAlphaImage, Mode};
 use super::default;
 
+pub(crate) const MODE: Mode = Mode::ImageLumaA8;
+
 const INPUTS: &[InputContract] = &[InputContract::SameModeSecondaryImage {
     mode: Mode::ImageLumaA8,
     rejection_reason: "images do not match",
@@ -85,11 +87,11 @@ impl Strategy<'_> {
                 default::alpha_composite_impl::execute(source, self.destination)?
             }
             #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
-            ArchitectureStrategy::Sse2 => execute_vector(source, self.destination)?,
+            ArchitectureStrategy::Sse2 => super::sse2::alpha_composite_impl::execute(source, self.destination)?,
             #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-            ArchitectureStrategy::Neon => execute_vector(source, self.destination)?,
+            ArchitectureStrategy::Neon => super::neon::alpha_composite_impl::execute(source, self.destination)?,
             #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
-            ArchitectureStrategy::WasmSimd128 => execute_vector(source, self.destination)?,
+            ArchitectureStrategy::WasmSimd128 => super::wasm_simd128::alpha_composite_impl::execute(source, self.destination)?,
         };
         Ok(DynamicImage::ImageLumaA8(output))
     }
@@ -117,19 +119,58 @@ pub(crate) fn prepare<'a>(
     Ok(Strategy { destination, source, architecture, selection })
 }
 
-fn execute_vector(
-    source: &GrayAlphaImage,
-    destination: &GrayAlphaImage,
-) -> Result<GrayAlphaImage, PilError> {
-    let (width, height) = destination.dimensions();
-    let output = crate::compute::pool_cpu::ops::composite::helpers::alpha_composite_vector::apply::<2>(
-        source.as_raw(),
-        destination.as_raw(),
-        width,
-        height,
-        "LA",
+pub(crate) fn merge(
+    source: &DynamicImage,
+    remaining: &[Arc<DynamicImage>],
+    selection: &StrategySelection,
+) -> Result<DynamicImage, PilError> {
+    super::super::helpers::strategy::require_operation_mode(
+        selection,
+        OperationId::Merge,
+        MODE,
     )?;
-    GrayAlphaImage::from_raw(width, height, output)
-        .ok_or_else(|| PilError::InternalError("LA AlphaComposite output shape mismatch".into()))
+    match selection.implementation.architecture {
+        Architecture::Default => super::default::operations::merge(source, remaining),
+        #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
+        Architecture::Sse2 => super::sse2::merge_impl::merge(source, remaining),
+        #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+        Architecture::Neon => super::neon::merge_impl::merge(source, remaining),
+        #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+        Architecture::WasmSimd128 => super::wasm_simd128::merge_impl::merge(source, remaining),
+        architecture => Err(PilError::InternalError(format!(
+            "unbound {architecture:?} Merge strategy for mode {MODE:?}"
+        ))),
+    }
+}
+
+pub(crate) fn blend(
+    source: &DynamicImage,
+    other: &DynamicImage,
+    alpha: f64,
+    selection: &StrategySelection,
+) -> Result<DynamicImage, PilError> {
+    super::super::helpers::blend::execute_selected(
+        source, other, MODE, 2, alpha, selection,
+    )
+}
+
+pub(crate) fn composite(
+    source: &DynamicImage,
+    destination: &DynamicImage,
+    mask: &DynamicImage,
+    mask_alpha: bool,
+    selection: &StrategySelection,
+) -> Result<DynamicImage, PilError> {
+    super::super::helpers::composite::execute_selected(
+        source,
+        destination,
+        mask,
+        mask_alpha,
+        MODE,
+        crate::compute::pool_cpu::ops::composite::ops::CompositeLayout::Byte {
+            channels: 2,
+        },
+        selection,
+    )
 }
 

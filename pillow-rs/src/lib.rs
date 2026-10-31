@@ -2,9 +2,9 @@
 //!
 //! `pillow-rs` is the runtime-independent image crate used by the Python and
 //! WebAssembly bindings in this workspace. It takes Rust primitives, image
-//! buffers, mode strings, and font bytes as input; binding crates are
-//! responsible for translating Python objects, JavaScript objects, file paths,
-//! and host I/O before calling into this crate.
+//! buffers, typed raster modes, and font bytes as input; binding crates are
+//! responsible for translating Pillow mode strings, Python objects, JavaScript
+//! objects, file paths, and host I/O before calling into this crate.
 //!
 //! # Design Boundary
 //!
@@ -21,11 +21,11 @@
 //!
 //! # Modes And Layout
 //!
-//! Public image APIs use Pillow mode strings such as `"L"`, `"RGB"`, `"RGBA"`,
-//! `"CMYK"`, `"P"`, and `"1"`. Core operations normalize those modes into Rust
-//! image buffers before dispatching to CPU architecture strategies or the GPU
-//! backend. Raw byte APIs return tightly packed pixels in the image's current
-//! mode unless a method says otherwise.
+//! Rust image APIs use the Pillow-owned [`Mode`] enum, and materialized images
+//! carry their exact identity in [`crate::raster::DynamicImage`]. Python and
+//! JavaScript bindings parse Pillow mode strings before calling typed core
+//! operations. Raw byte APIs return tightly packed pixels in the image's
+//! current mode unless a method says otherwise.
 //!
 //! # Feature Flags
 //!
@@ -63,7 +63,7 @@
 //! use pillow_rs::{Image, Mode};
 //!
 //! let rgb = Image::new(2, 2, Mode::ImageRgb8, (255, 0, 0, 255)).unwrap();
-//! let gray = rgb.convert("L", None, None, None, None).unwrap();
+//! let gray = rgb.convert(Mode::ImageLuma8, None, None, None, None).unwrap();
 //! assert_eq!(gray.mode().unwrap(), "L");
 //! assert_eq!(gray.tobytes().unwrap().len(), 4);
 //! ```

@@ -36,8 +36,6 @@ pub use execution_context::{Architecture, ExecutionContext};
 mod phase_telemetry;
 #[path = "telemetry.rs"]
 mod telemetry;
-#[path = "thumbnail_fusion.rs"]
-mod thumbnail_fusion;
 #[cfg(test)]
 #[path = "transpose_tests.rs"]
 mod transpose_tests;
@@ -60,6 +58,7 @@ pub(crate) use telemetry::{
     begin_eager_cpu_operation_telemetry, begin_pipeline_operation_telemetry,
     cancel_eager_cpu_operation_telemetry, capture_active_origin, enter_operation_origins,
     finish_eager_cpu_operation_telemetry,
+    finish_eager_cpu_operation_telemetry_with_selection,
     finish_pipeline_operation_telemetry, host_resource_telemetry,
     record_eager_cpu_operation_receipt, record_eager_cpu_operation_receipt_with_reason,
     record_pipeline_allocation, record_pipeline_backend_fallback,
@@ -88,7 +87,7 @@ pub(crate) use eager::{
     execute_eager_cpu_getprojection, execute_eager_cpu_linear_gradient,
     execute_eager_cpu_mandelbrot, execute_eager_cpu_radial_gradient,
     execute_eager_cpu_arch_bytes, execute_eager_cpu_arch_image_operation,
-    execute_eager_cpu_image_operation,
+    execute_eager_cpu_arch_image_operation_with_route, execute_eager_cpu_image_operation,
     execute_eager_cpu_shared_result,
 };
 #[cfg(feature = "gpu")]
@@ -111,9 +110,6 @@ pub(crate) use execution::{
 pub(crate) use phase_telemetry::record_transpose_avx2_executor_timing;
 pub(crate) use phase_telemetry::{
     pipeline_phase_timestamp, record_transpose_output_allocation_timing,
-};
-pub(crate) use thumbnail_fusion::{
-    cpu_rgb_putpixel_thumbnail_fusion_supported,
 };
 
 /// Return `(multiplier, offset)` when a 256-entry byte LUT is exactly the

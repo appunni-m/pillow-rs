@@ -1,5 +1,9 @@
 //! I;16 source-mode support and architecture selection for Convert.
 
+crate::compute::pool_cpu::ops::color::convert::helpers::binary::declare_mode_strategy!(
+    crate::raster::Mode::ImageI16
+);
+
 use crate::compute::{Architecture, registry::support::{
     ModeSupport, OperationId, StrategySelection,
 }};
@@ -11,8 +15,8 @@ type Samples = ImageBuffer<Luma<u16>, Vec<u16>>;
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::Convert,
     Mode::ImageI16,
-    crate::compute::registry::support::OutputModeRule::ByTargetMode,
-    &super::super::ops::OTHER_INPUTS,
+    crate::compute::registry::support::OutputModeRule::ByTargetModeWithPalette,
+    &super::super::ops::I16_INPUTS,
     &ARCHITECTURES,
 );
 
@@ -34,6 +38,21 @@ pub(crate) fn execute(
         Architecture::WasmSimd128 => super::wasm_simd128::convert_impl::execute(source, target),
         _ => Err(PilError::InternalError(
             "Convert selected an undeclared I;16 architecture".into(),
+        )),
+    }
+}
+
+pub(crate) fn execute_palette_target(
+    source: &Samples,
+    target: Mode,
+    selection: StrategySelection,
+) -> Result<super::super::ops::PreparedConvertOutput, PilError> {
+    match selection.implementation.architecture {
+        Architecture::Default => {
+            super::super::helpers::luma16::execute_palette_target(source, target)
+        }
+        _ => Err(PilError::InternalError(
+            "Convert selected an undeclared I;16 palette architecture".into(),
         )),
     }
 }

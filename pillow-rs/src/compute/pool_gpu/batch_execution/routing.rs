@@ -18,7 +18,15 @@ impl GpuPool {
         crate::compute::record_pipeline_backend_fallback(format!(
             "exact host semantic control: {reason}"
         ));
-        let exact = crate::compute::CpuPool.execute_batch(ops, img, mode)?;
+        let cpu_context = crate::compute::ExecutionContext::for_routed_backend(
+            crate::compute::Backend::Cpu,
+        );
+        let exact = crate::compute::CpuPool.execute_batch_with_context(
+            ops,
+            img,
+            mode,
+            &cpu_context,
+        )?;
 
         // Keep the GPU parity lane honest when the result can use the
         // ordinary packed transport: the host implementation determines the
@@ -46,7 +54,10 @@ impl GpuPool {
         if allow_cpu_fallback {
             crate::compute::record_pipeline_backend_fallback(reason);
             let cpu = crate::compute::CpuPool;
-            return cpu.execute_batch(ops, img, mode);
+            let context = crate::compute::ExecutionContext::for_routed_backend(
+                crate::compute::Backend::Cpu,
+            );
+            return cpu.execute_batch_with_context(ops, img, mode, &context);
         }
 
         // An explicitly locked GPU is a parity lane, not a permission to
@@ -144,7 +155,16 @@ impl GpuPool {
     ) -> Result<BatchRouteStage<ResolvedBatchAuxiliaryInputs>, PilError> {
         // Resolve nested images before GPU work so locked nested pipelines
         // surface their materialization errors here.
-        let auxiliary_images = resolve_batch_auxiliary_images(ops, img, mode)?;
+        let draw_context = ops
+            .iter()
+            .any(crate::compute::pool_cpu::ops::draw::is_draw_op)
+            .then(|| {
+                // GPU auxiliary extraction needs the native Draw preview before
+                // admission; prepare that explicit CPU Default route here.
+                crate::compute::ExecutionContext::for_routed_backend(crate::compute::Backend::Cpu)
+            });
+        let auxiliary_images =
+            resolve_batch_auxiliary_images(ops, img, draw_context.as_ref())?;
         let contrast_mean = match self.preflight_resolved_batch_inputs(
             ops,
             img,

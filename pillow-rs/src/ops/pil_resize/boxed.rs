@@ -2,9 +2,7 @@ use super::alpha::premultiply_channel;
 use super::coefficients::BOXED_ZERO_FAST_PATH_MAX_PIXELS;
 use super::float::{f_resize_boxed_horizontal_pass, f_resize_boxed_vertical_pass};
 use super::horizontal_passes::horizontal_pass_boxed_rows;
-use super::vertical_passes::{
-    vertical_pass_rows, vertical_pass_rows_alpha, vertical_pass_rows_sparse_rgb,
-};
+use super::vertical_passes::{vertical_pass_rows, vertical_pass_rows_alpha};
 use super::*;
 use crate::pipeline::ResampleFilter;
 use crate::raster::{DynamicImage, Mode};
@@ -294,38 +292,6 @@ pub(crate) fn pil_resize_boxed_with_parallel_pixel_threshold(
         box_bottom,
         filter,
         parallel_pixel_threshold,
-        None,
-    )
-}
-
-/// Boxed RGB resize for a sparse 2×2 thumbnail reduction. `nonzero_source_rows`
-/// is produced by the reducer while it visits active blocks, so the resize can
-/// skip zero rows without an additional whole-image scan.
-pub(crate) fn pil_resize_boxed_with_sparse_rgb_rows(
-    img: &DynamicImage,
-    dst_w: u32,
-    dst_h: u32,
-    box_left: f64,
-    box_top: f64,
-    box_right: f64,
-    box_bottom: f64,
-    filter: ResampleFilter,
-    nonzero_source_rows: &[bool],
-) -> DynamicImage {
-    pil_resize_boxed_with_hints(
-        img,
-        dst_w,
-        dst_h,
-        box_left,
-        box_top,
-        box_right,
-        box_bottom,
-        filter,
-        // This sparse-row helper serves the serial CPU Thumbnail strategy.
-        // A maximum threshold keeps the shared row scheduler out of Rayon
-        // even when the optional `parallel` feature is enabled.
-        usize::MAX,
-        Some(nonzero_source_rows),
     )
 }
 
@@ -520,7 +486,6 @@ fn pil_resize_boxed_horizontal_pass(
     intermediate: &mut [u8],
     needs_alpha: bool,
     parallel_pixel_threshold: usize,
-    sparse_rgb_nonzero_rows: Option<&[bool]>,
     need_horizontal: bool,
 ) {
     if !need_horizontal {
@@ -557,7 +522,6 @@ fn pil_resize_boxed_horizontal_pass(
             intermediate,
             needs_alpha,
             parallel_pixel_threshold,
-            sparse_rgb_nonzero_rows,
         );
     }
 }
@@ -565,14 +529,12 @@ fn pil_resize_boxed_horizontal_pass(
 #[inline(always)]
 fn pil_resize_boxed_vertical_pass(
     intermediate: &[u8],
-    first_source_row: u32,
     intermediate_rows: u32,
     dst_w: u32,
     dst_h: u32,
     channels: usize,
     v_coeffs: &FilterCoeffs,
     needs_alpha: bool,
-    sparse_rgb_nonzero_rows: Option<&[bool]>,
     parallel_pixel_threshold: usize,
     need_vertical: bool,
     out_bytes: &mut [u8],
@@ -596,17 +558,6 @@ fn pil_resize_boxed_vertical_pass(
             let output_len = out_bytes.len();
             out_bytes.copy_from_slice(&intermediate[..output_len]);
         }
-    } else if let Some(nonzero_rows) = sparse_rgb_nonzero_rows {
-        vertical_pass_rows_sparse_rgb(
-            intermediate,
-            dst_w,
-            dst_h,
-            v_coeffs,
-            first_source_row,
-            nonzero_rows,
-            out_bytes,
-            parallel_pixel_threshold,
-        );
     } else if needs_alpha {
         vertical_pass_rows_alpha(
             intermediate,
@@ -642,7 +593,6 @@ fn pil_resize_boxed_with_hints(
     box_bottom: f64,
     filter: ResampleFilter,
     parallel_pixel_threshold: usize,
-    sparse_rgb_nonzero_rows: Option<&[bool]>,
 ) -> DynamicImage {
     let (early_output, needs_alpha) = pil_resize_boxed_early_paths(
         img,
@@ -666,13 +616,6 @@ fn pil_resize_boxed_with_hints(
         crate::raster::ColorType::Rgb8 => 3usize,
         _ => 4usize,
     };
-    let sparse_rgb_nonzero_rows = sparse_rgb_nonzero_rows.filter(|rows| {
-        matches!(img, DynamicImage::ImageRgb8(_))
-            && img.mode() == Mode::ImageRgb8
-            && !needs_alpha
-            && rows.len() == sh as usize
-    });
-
     // A bounded all-zero byte source remains zero through every normalized
     // Pillow resampling filter, including alpha premultiplication.
     if let Some(output) = pil_resize_boxed_zero_fast_path(img, dst_w, dst_h, channels) {
@@ -723,7 +666,6 @@ fn pil_resize_boxed_with_hints(
         &mut intermediate,
         needs_alpha,
         parallel_pixel_threshold,
-        sparse_rgb_nonzero_rows,
         need_horizontal,
     );
 
@@ -731,14 +673,12 @@ fn pil_resize_boxed_with_hints(
     let mut out_bytes = vec![0u8; (dst_w * dst_h) as usize * channels];
     pil_resize_boxed_vertical_pass(
         &intermediate,
-        first_source_row,
         intermediate_rows,
         dst_w,
         dst_h,
         channels,
         &v_coeffs,
         needs_alpha,
-        sparse_rgb_nonzero_rows,
         parallel_pixel_threshold,
         need_vertical,
         &mut out_bytes,

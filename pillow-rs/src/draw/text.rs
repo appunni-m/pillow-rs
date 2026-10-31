@@ -1,7 +1,7 @@
-use super::{Draw, Mode, blend_u8, pil_blend};
+use super::{Draw, Mode};
+use crate::compute::ExecutionContext;
+use crate::compute::registry::support::StrategySelection;
 use crate::error::PilError;
-use crate::image::Image;
-use crate::raster::Rgba;
 
 mod composition;
 
@@ -266,13 +266,54 @@ impl Draw {
         fill: (u8, u8, u8, u8),
         options: &crate::font::ImageFontTextOptions,
     ) -> Result<(u32, u32), PilError> {
+        self.validate_text_options(options)?;
+        let (requested_backend, context) = self.cpu_execution_context()?;
+        let telemetry =
+            crate::compute::begin_eager_cpu_operation_telemetry("DrawText", requested_backend);
+        let result =
+            self.text_with_options_inner_selected(x, y, text, font, fill, options, &context);
+        match result {
+            Ok((dimensions, selection)) => {
+                let output_bytes = self
+                    .image
+                    .materialized_shared()
+                    .map_or(0, |image| image.as_bytes().len());
+                if let Some(selection) = selection {
+                    crate::compute::finish_eager_cpu_operation_telemetry_with_selection(
+                        telemetry,
+                        output_bytes,
+                        "DrawText",
+                        selection,
+                    );
+                } else {
+                    crate::compute::finish_eager_cpu_operation_telemetry(telemetry, output_bytes);
+                }
+                Ok(dimensions)
+            }
+            Err(error) => {
+                crate::compute::cancel_eager_cpu_operation_telemetry(telemetry);
+                Err(error)
+            }
+        }
+    }
+
+    fn text_with_options_inner_selected(
+        &mut self,
+        x: i32,
+        y: i32,
+        text: &str,
+        font: &crate::font::FreeTypeFont,
+        fill: (u8, u8, u8, u8),
+        options: &crate::font::ImageFontTextOptions,
+        context: &ExecutionContext,
+    ) -> Result<((u32, u32), Option<StrategySelection>), PilError> {
         if options.stroke_width != 0.0
             && let Some(stroke_fill) = options.stroke_fill
             && stroke_fill != fill
         {
             let mut stroke_options = options.clone();
             stroke_options.ink = Some(Self::pack_text_ink(stroke_fill));
-            self.text_render_and_compose(
+            let (_, stroke_selection) = self.text_render_and_compose(
                 x,
                 y,
                 text,
@@ -281,6 +322,7 @@ impl Draw {
                 options.stroke_fill_is_integer,
                 &stroke_options,
                 false,
+                context,
             )?;
 
             let mut fill_options = options.clone();
@@ -288,7 +330,7 @@ impl Draw {
             fill_options.stroke_filled = false;
             fill_options.stroke_fill = None;
             fill_options.ink = Some(Self::pack_text_ink(fill));
-            return self.text_render_and_compose(
+            let (width, height, fill_selection) = self.text_render_and_compose(
                 x,
                 y,
                 text,
@@ -297,9 +339,11 @@ impl Draw {
                 options.text_fill_is_integer,
                 &fill_options,
                 true,
-            );
+                context,
+            )?;
+            return Ok(((width, height), fill_selection.or(stroke_selection)));
         }
-        self.text_render_and_compose(
+        let (width, height, selection) = self.text_render_and_compose(
             x,
             y,
             text,
@@ -308,7 +352,9 @@ impl Draw {
             options.text_fill_is_integer,
             options,
             false,
-        )
+            context,
+        )?;
+        Ok(((width, height), selection))
     }
 
     fn text_render_and_compose(
@@ -321,11 +367,14 @@ impl Draw {
         fill_is_integer: bool,
         options: &crate::font::ImageFontTextOptions,
         blend_rgba_overlay: bool,
-    ) -> Result<(u32, u32), PilError> {
+        context: &ExecutionContext,
+    ) -> Result<(u32, u32, Option<StrategySelection>), PilError> {
         let mode = self.effective_mode();
+        // Read the current typed raster identity, including pending outputs.
+        let raster_mode = self.image.mode_identity()?;
         self.validate_text_options(options)?;
         let binary = matches!(
-            mode,
+            raster_mode,
             Mode::One | Mode::ImagePalette8 | Mode::ImageI32 | Mode::ImageF32
         );
         let mut options = options.clone();
@@ -348,74 +397,56 @@ impl Draw {
         }
 
         // ImageFont rendering always uses alpha=255 so glyph coverage is preserved.
-        // Mode-specific alpha handling (e.g., LA alpha=0 for int fills) is done
-        // in text_compose_direct / text_compose_rgba.
-        let render_fill = (fill.0, fill.1, fill.2, 255u8);
         let (w, h, mask, offset) = font.getmask2_with_options(text, &options)?;
         if w == 0 || h == 0 {
-            return Ok((w, h));
+            return Ok((w, h, None));
         }
+        let support = crate::compute::pool_cpu::ops::draw::ops::SUPPORT.for_mode(raster_mode);
+        let palette = if raster_mode == Mode::ImagePalette8 && self.image.has_nonempty_palette() {
+            crate::compute::registry::support::PaletteKnowledge::Present
+        } else {
+            crate::compute::registry::support::PaletteKnowledge::Absent
+        };
+        let mask_kind = if color_mask {
+            crate::compute::registry::support::DrawTextMaskKind::Rgba
+        } else {
+            crate::compute::registry::support::DrawTextMaskKind::Coverage
+        };
+        let selection = crate::compute::pool_cpu::ops::draw::ops::select_text_strategy(
+            support,
+            context,
+            raster_mode,
+            mode,
+            options.embedded_color,
+            mask_kind,
+            fill_is_integer,
+            options.ink,
+            palette,
+        )?;
+        crate::compute::pool_cpu::ops::draw::ops::validate_direct_selection(
+            selection,
+            raster_mode,
+        )?;
+        let execution_mode = selection.implementation.mode;
         let draw_x = x.saturating_add(offset.0);
         let draw_y = y.saturating_add(offset.1);
-
-        // Keep RGB text on its native three-byte canvas, including an explicit
-        // RGBA draw context over an RGB image. Pillow uses glyph coverage to
-        // blend RGB in both cases and ignores the fill alpha on an RGB target;
-        // expanding the full image and grayscale mask to RGBA only to narrow
-        // them again adds work without changing those semantics.
-        let rgba_blend_rgb = self.alpha_blend_rgb();
-        let rgb_target = (mode == Mode::ImageRgb8 && !rgba_blend_rgb)
-            || (mode == Mode::ImageRgba8 && rgba_blend_rgb);
-        if rgb_target
-            && self.text_compose_rgb_native(draw_x, draw_y, w, h, &mask, fill, color_mask)?
-        {
-            return Ok((w, h));
-        }
-
-        let pixels = if color_mask {
-            mask
-        } else {
-            text_mask_to_rgba(mask, render_fill)
-        };
-
-        match mode {
-            Mode::ImageRgb8 | Mode::ImageRgba8 => self.text_compose_rgba(
-                draw_x,
-                draw_y,
-                w,
-                h,
-                &pixels,
-                fill,
-                self.alpha_blend_rgb(),
-                color_mask,
-                blend_rgba_overlay,
-            ),
-            _ => self.text_compose_direct(
-                draw_x,
-                draw_y,
-                w,
-                h,
-                &pixels,
-                &mode,
+        let output = crate::compute::pool_cpu::ops::draw::ops::apply_text(
+            selection,
+            crate::compute::pool_cpu::ops::draw::TextComposeInput {
+                image: self.image.materialize()?,
+                x: draw_x,
+                y: draw_y,
+                width: w,
+                height: h,
+                pixels: std::borrow::Cow::Borrowed(&mask),
+                mask_kind,
                 fill,
                 fill_is_integer,
-            ),
-        }?;
-        Ok((w, h))
+                blend_rgba_overlay,
+                palette,
+            },
+        )?;
+        self.apply_text_output(execution_mode, palette, output)?;
+        Ok((w, h, Some(selection)))
     }
-}
-
-fn text_mask_to_rgba(mask: Vec<u8>, fill: (u8, u8, u8, u8)) -> Vec<u8> {
-    let mut pixels = vec![0u8; mask.len() * 4];
-    for (index, coverage) in mask.into_iter().enumerate() {
-        if coverage == 0 {
-            continue;
-        }
-        let offset = index * 4;
-        pixels[offset] = fill.0;
-        pixels[offset + 1] = fill.1;
-        pixels[offset + 2] = fill.2;
-        pixels[offset + 3] = coverage;
-    }
-    pixels
 }

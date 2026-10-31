@@ -1,11 +1,13 @@
 //! Rotate entry point and exhaustive exact-mode strategy composition.
 //!
-//! TODO(pillow-rs#3ptb): route pipeline, eager, and compatibility callers
-//! through the injected CPU context. All byte-backed exact modes declare
+//! Public rotation calls enqueue a typed `PipelineOp::Rotate`; the operation
+//! registry prepares this family with the routed CPU context. Complete the
+//! archived behavior and per-mode caller review under `pillow-rs#3ptb` before
+//! treating the family as source-reviewed. Byte-backed exact modes declare
 //! native-byte nearest strategies; byte modes also declare their archived
 //! bilinear kernel where supported. Three-byte modes retain the contiguous-run
 //! copy fast path. Each mode's Default strategy remains its same-mode fallback.
-//! Core-only mode support is valid when marked `NO_PILLOW_SUPPORT` beside its
+//! Core-only mode support is marked `NO_PILLOW_SUPPORT` beside its
 //! implementation.
 
 use crate::compute::registry::support::{

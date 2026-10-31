@@ -258,9 +258,30 @@ pub(crate) fn execute_eager_cpu_arch_image_operation(
         &ExecutionContext,
     ) -> Result<(DynamicImage, crate::compute::registry::support::StrategySelection), PilError>,
 ) -> Result<DynamicImage, PilError> {
+    execute_eager_cpu_arch_image_operation_with_route(
+        operation,
+        input,
+        requested_backend,
+        requested_backend,
+        None,
+        execute,
+    )
+}
+
+/// Executes a CPU architecture strategy while retaining the original routed backend receipt.
+pub(crate) fn execute_eager_cpu_arch_image_operation_with_route(
+    operation: &'static str,
+    input: &DynamicImage,
+    requested_backend: Backend,
+    execution_backend: Backend,
+    fallback_reason: Option<String>,
+    execute: impl FnOnce(
+        &ExecutionContext,
+    ) -> Result<(DynamicImage, crate::compute::registry::support::StrategySelection), PilError>,
+) -> Result<DynamicImage, PilError> {
     let timed = pipeline_telemetry_enabled();
     let route_start = timed.then(pipeline_timestamp).flatten();
-    let context = ExecutionContext::for_routed_backend(requested_backend);
+    let context = ExecutionContext::for_routed_backend(execution_backend);
     let route_ns = elapsed_ns(route_start);
     execute_cpu_arch_operation(
         operation,
@@ -269,7 +290,7 @@ pub(crate) fn execute_eager_cpu_arch_image_operation(
         Some(requested_backend),
         route_ns,
         0,
-        None,
+        fallback_reason,
         execute,
     )
 }

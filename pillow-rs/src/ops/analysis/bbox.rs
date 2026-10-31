@@ -2,6 +2,7 @@
 
 use crate::error::PilError;
 use crate::image::Image;
+use crate::raster::Mode;
 
 struct Bounds {
     width: usize,
@@ -324,12 +325,12 @@ fn getbbox_luma_alpha8_bounds(
 
 fn getbbox_rgba8_bounds(
     image: &crate::raster::RgbaImage,
-    mode: &str,
+    mode: Mode,
     alpha_only: bool,
 ) -> Option<(u32, u32, u32, u32)> {
     // CMYK and RGBX also use four-byte storage but Pillow inspects all stored
     // bands for those modes. Only RGBA/RGBa select band 3 alone.
-    let has_alpha = matches!(mode, "RGBA" | "RGBa");
+    let has_alpha = matches!(mode, Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8);
     let (width, height) = image.dimensions();
     let mut bounds = Bounds::new(width, height);
     for (index, pixel) in image.pixels().enumerate() {
@@ -379,7 +380,7 @@ fn getbbox_converted_bounds(
 
 fn getbbox_native_bounds(
     image: &crate::raster::DynamicImage,
-    mode: &str,
+    mode: Mode,
     alpha_only: bool,
 ) -> Option<(u32, u32, u32, u32)> {
     match image {
@@ -483,16 +484,19 @@ impl Image {
         }
 
         let mode = Image::mode_from_materialized(&image);
-        let bounds = if mode == "I" {
+        let bounds = if mode == Mode::ImageI32 {
             getbbox_i_bounds(&image)
-        } else if mode == "F" {
+        } else if mode == Mode::ImageF32 {
             getbbox_f_bounds(&image)
         } else if image.color() == crate::raster::ColorType::L16
-            && matches!(mode.as_str(), "I;16" | "I;16L" | "I;16B" | "I;16N")
+            && matches!(
+                mode,
+                Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N
+            )
         {
             getbbox_l16_byte_bounds(&image)
         } else {
-            getbbox_native_bounds(&image, &mode, alpha_only)
+            getbbox_native_bounds(&image, mode, alpha_only)
         };
         Ok(bounds)
     }

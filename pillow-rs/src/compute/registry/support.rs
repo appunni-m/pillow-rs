@@ -10,9 +10,9 @@ use crate::raster::{DynamicImage, Mode};
 mod request;
 use request::GuardAssessment;
 pub use request::{
-    BandIndexRule, InputContract, ModeChannelCapacity, PaletteKnowledge, PasteInputRules,
-    PasteMaskRule, PixelWriteRunFacts, RequestFacts, SecondaryInputFacts, StrategyGuard,
-    StrategyInputs, UnresolvedGuard,
+    BandIndexRule, DrawRequestKind, DrawTextMaskKind, InputContract, MergeBandModeRule,
+    ModeChannelCapacity, PaletteKnowledge, PasteInputRules, PasteMaskRule, PixelWriteRunFacts,
+    RequestFacts, SecondaryInputFacts, StrategyGuard, StrategyInputs, UnresolvedGuard,
 };
 
 /// Palette dependencies resolved by the Pillow image wrapper before execution.
@@ -73,6 +73,8 @@ impl OperationInputs<'_> {
 /// Identity of an operation with its own strategy and parameter contract.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum OperationId {
+    /// Draw one Pillow primitive directly into the mode-bearing raster.
+    Draw,
     /// A crop with coordinates normalized by the image API.
     Crop,
     /// Remove an equal border from all edges, allowing valid empty output.
@@ -101,6 +103,8 @@ pub enum OperationId {
     Thumbnail,
     /// Rotate by an arbitrary angle with a typed mode and interpolation strategy.
     Rotate,
+    /// Apply an affine, perspective, quadrilateral, or mesh transform.
+    Transform,
     /// Reduce native sample blocks while preserving the declared output mode.
     Reduce,
     /// Pillow's source-mode conversion to an eight-bit luma image.
@@ -151,6 +155,8 @@ pub enum OperationId {
     ConvertLab,
     /// Convert one exact source mode to a typed target mode.
     Convert,
+    /// Apply Pillow's RGB conversion matrix to one exact source mode.
+    ConvertMatrix,
     /// Remap native L/P samples into a P index plane with reordered palette metadata.
     RemapPalette,
     /// Relocate native pixels using Pillow's process-global random stream.
@@ -165,6 +171,12 @@ pub enum OperationId {
     EffectMandelbrot,
     /// Alpha-composite one same-sized LA or RGBA image over another.
     AlphaComposite,
+    /// Merge native single-band images into one exact target mode.
+    Merge,
+    /// Blend two compatible Pillow byte-mode images.
+    BlendModule,
+    /// Composite a source image over a destination canvas through a mask.
+    CompositeModule,
     /// Paste a normalized source into a native destination mode.
     Paste,
     /// One normalized native-byte pixel write with caller-validated coordinates.
@@ -232,6 +244,7 @@ impl OperationId {
     #[must_use]
     pub fn support(self) -> &'static OperationSupport {
         match self {
+            Self::Draw => &crate::compute::pool_cpu::ops::draw::ops::SUPPORT,
             Self::Crop => &crate::compute::pool_cpu::ops::crop::ops::SUPPORT,
             Self::CropBorder => &crate::compute::pool_cpu::ops::imageops::ops::CROP_BORDER_SUPPORT,
             Self::Flip => &crate::compute::pool_cpu::ops::transpose::ops::FLIP_SUPPORT,
@@ -246,6 +259,7 @@ impl OperationId {
             Self::Scale => &crate::compute::pool_cpu::ops::geometry::ops::SCALE_SUPPORT,
             Self::Thumbnail => &crate::compute::pool_cpu::ops::thumbnail::ops::SUPPORT,
             Self::Rotate => &crate::compute::pool_cpu::ops::rotate::ops::SUPPORT,
+            Self::Transform => &crate::compute::pool_cpu::ops::transform::ops::SUPPORT,
             Self::Reduce => &crate::compute::pool_cpu::ops::reduce::ops::SUPPORT,
             Self::Grayscale => &crate::compute::pool_cpu::ops::grayscale::ops::SUPPORT,
             Self::Eval => &crate::compute::pool_cpu::ops::eval::ops::SUPPORT,
@@ -276,6 +290,9 @@ impl OperationId {
             Self::ExtractBand => &crate::compute::pool_cpu::ops::put::ops::EXTRACT_BAND_SUPPORT,
             Self::Color3DLut => &crate::compute::pool_cpu::ops::color3dlut::ops::SUPPORT,
             Self::Convert => &crate::compute::pool_cpu::ops::color::convert::ops::SUPPORT,
+            Self::ConvertMatrix => {
+                &crate::compute::pool_cpu::ops::color::convert::ops::MATRIX_SUPPORT
+            }
             Self::ConvertLab => &crate::compute::pool_cpu::ops::color::ops::SUPPORT,
             Self::RemapPalette => &crate::compute::pool_cpu::ops::color::ops::REMAP_PALETTE_SUPPORT,
             Self::EffectSpread => &crate::compute::pool_cpu::ops::effects::ops::EFFECT_SPREAD_SUPPORT,
@@ -285,6 +302,15 @@ impl OperationId {
             Self::EffectMandelbrot => &crate::compute::pool_cpu::ops::effects::ops::MANDELBROT_SUPPORT,
             Self::AlphaComposite => {
                 &crate::compute::pool_cpu::ops::composite::ops::ALPHA_COMPOSITE_SUPPORT
+            }
+            Self::Merge => {
+                &crate::compute::pool_cpu::ops::composite::ops::MERGE_SUPPORT
+            }
+            Self::BlendModule => {
+                &crate::compute::pool_cpu::ops::composite::ops::BLEND_MODULE_SUPPORT
+            }
+            Self::CompositeModule => {
+                &crate::compute::pool_cpu::ops::composite::ops::COMPOSITE_MODULE_SUPPORT
             }
             Self::Paste => &crate::compute::pool_cpu::ops::paste::ops::SUPPORT,
             Self::PutPixel => &crate::compute::pool_cpu::ops::put::ops::PUT_PIXEL_SUPPORT,
@@ -339,6 +365,8 @@ pub enum OutputModeRule {
     ByPayload(&'static [PayloadOutput]),
     /// Output identity supplied as a typed target-mode operation parameter.
     ByTargetMode,
+    /// Target-mode output whose palette bytes are returned alongside the raster.
+    ByTargetModeWithPalette,
 }
 
 /// An operation-owned relation between a typed payload and its output identity.

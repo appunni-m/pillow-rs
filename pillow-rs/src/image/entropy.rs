@@ -1,6 +1,7 @@
 //! Pillow-compatible entropy methods for [`Image`].
 
 use crate::error::PilError;
+use crate::raster::Mode;
 
 use super::Image;
 
@@ -23,8 +24,8 @@ impl Image {
             if (mask_image.width(), mask_image.height()) != (img.width(), img.height()) {
                 return Err(PilError::ValueError("images do not match".into()));
             }
-            let mode = mask.mode()?;
-            if mode != "1" && mode != "L" {
+            let mode = mask_image.mode();
+            if !matches!(mode, Mode::One | Mode::ImageLuma8) {
                 return Err(PilError::ValueError("bad transparency mask".into()));
             }
             Some(mask_image)

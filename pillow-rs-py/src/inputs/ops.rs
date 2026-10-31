@@ -96,8 +96,10 @@ pub(crate) fn convert_mode_input_from_python(
     match value {
         None => Ok(pillow_rs::ConvertModeInput::None),
         Some(value) => match value.extract::<String>() {
-            Ok(value) => Ok(pillow_rs::ConvertModeInput::Name(value)),
-            Err(_) => Ok(pillow_rs::ConvertModeInput::Invalid(
+            Ok(value) => Ok(pillow_rs::Mode::from_pillow_name(&value)
+                .map(pillow_rs::ConvertModeInput::Mode)
+                .unwrap_or_else(|| pillow_rs::ConvertModeInput::InvalidName(value))),
+            Err(_) => Ok(pillow_rs::ConvertModeInput::InvalidType(
                 value.get_type().name()?.to_string(),
             )),
         },
@@ -241,12 +243,12 @@ pub(crate) fn palette_transform_fill_from_python(
 
 pub(crate) fn transform_fill_from_python(
     value: Option<&Bound<'_, PyAny>>,
-    mode: &str,
+    mode: pillow_rs::Mode,
 ) -> PyResult<Option<pillow_rs::TransformFill>> {
     let Some(value) = value else {
         return Ok(None);
     };
-    if mode == "P" {
+    if mode == pillow_rs::Mode::ImagePalette8 {
         return palette_transform_fill_from_python(value).map(Some);
     }
     if let Ok(value) = value.extract::<i64>() {

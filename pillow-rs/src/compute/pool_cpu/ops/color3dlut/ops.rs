@@ -1,9 +1,11 @@
 //! Color3DLut support declaration and prepared mode-strategy composition.
 //!
-//! TODO(pillow-rs#3ptb): compare every archived Color3DLut architecture,
-//! eligibility, and output-mode case against these prepared CPU strategies;
-//! add any missing strategy here. The public Image method enters this plan
-//! through the registry as its CPU execution entry point.
+//! TODO(pillow-rs#3ptb): expand parity over every declared source/target Mode,
+//! channel count, and available Architecture, including the eight-pixel
+//! Default fallback, core-only native source modes, and rejected LUT shapes.
+//! Source comparison with the archived CPU/SIMD adapters is complete. The
+//! public Image method enters this plan through the registry as its CPU
+//! execution entry point.
 
 use crate::compute::{ExecutionContext, registry::support::{
     InputContract, ModeChannelCapacity, ModeSupport, OperationId, OperationInputs,

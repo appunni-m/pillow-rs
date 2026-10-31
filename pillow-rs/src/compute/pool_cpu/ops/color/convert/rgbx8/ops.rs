@@ -1,5 +1,9 @@
 //! RGBX source-mode support and architecture selection for Convert.
 
+crate::compute::pool_cpu::ops::color::convert::helpers::binary::declare_mode_strategy!(
+    crate::raster::Mode::ImageRgbx8
+);
+
 use crate::compute::{
     Architecture,
     registry::support::{
@@ -7,6 +11,7 @@ use crate::compute::{
     },
 };
 use crate::error::PilError;
+use crate::pipeline::DitherMethod;
 use crate::raster::{DynamicImage, Mode, RgbaImage};
 
 const SSE2_AVAILABLE: bool = cfg!(any(
@@ -133,10 +138,26 @@ static ARCHITECTURES: [ImplementationSupport; 21] = [
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::Convert,
     Mode::ImageRgbx8,
-    crate::compute::registry::support::OutputModeRule::ByTargetMode,
-    &super::super::ops::OTHER_INPUTS,
+    crate::compute::registry::support::OutputModeRule::ByTargetModeWithPalette,
+    &super::super::ops::RGBX_INPUTS,
     &ARCHITECTURES,
 );
+
+pub(crate) fn execute_palette_target(
+    source: &RgbaImage,
+    target: Mode,
+    dither: Option<DitherMethod>,
+    selection: StrategySelection,
+) -> Result<super::super::ops::PreparedConvertOutput, PilError> {
+    match selection.implementation.architecture {
+        Architecture::Default => {
+            super::default::convert_impl::execute_palette_target(source, target, dither)
+        }
+        _ => Err(PilError::InternalError(
+            "Convert selected an undeclared RGBX palette architecture".into(),
+        )),
+    }
+}
 
 /// Executes the RGBX strategy selected from this mode's support declaration.
 ///

@@ -10,7 +10,7 @@ use super::super::color_count::{
 };
 use super::super::{FormattedPixelValue, Image};
 use crate::error::PilError;
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, Mode};
 
 impl Image {
     #[allow(clippy::type_complexity)]
@@ -174,7 +174,7 @@ impl Image {
     /// four-byte samples through the byte-oriented RGBA view.
     pub(super) fn getcolors_scalar(
         maxcolors: u32,
-        mode: &str,
+        mode: Mode,
         img: &DynamicImage,
     ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {
         let (code_mask, code_polynomial) = pillow_color_table_parameters(maxcolors)
@@ -182,7 +182,7 @@ impl Image {
         let max_distinct_colors = maxcolors as usize;
         let bytes = img.as_bytes();
         let pixel_count = pillow_image_pixel_count(img);
-        let has_repeated_prefix = if mode == "I" {
+        let has_repeated_prefix = if mode == Mode::ImageI32 {
             scalar_i_prefix_has_long_run(bytes)
         } else {
             scalar_prefix_has_repeated_samples(bytes)
@@ -238,7 +238,7 @@ impl Image {
     }
 
     fn scalar_color_domain_counts(
-        mode: &str,
+        mode: Mode,
         bytes: &[u8],
         max_distinct_colors: usize,
         code_mask: u32,
@@ -247,12 +247,12 @@ impl Image {
         has_repeated_prefix: bool,
     ) -> ScalarColorDomainCounts {
         let direct_table_slots = pillow_color_direct_table_slots(code_mask, pixel_count);
-        if mode == "I"
+        if mode == Mode::ImageI32
             && pixel_count >= 4096
             && has_repeated_prefix
             && direct_table_slots
                 .is_some_and(|slots| slots > SCALAR_I_REPEATED_RUN_MIN_DIRECT_SLOTS)
-            && scalar_byte_domain_is_plausible("I", bytes)
+            && scalar_byte_domain_is_plausible(Mode::ImageI32, bytes)
         {
             match getcolors_scalar_i_repeated_runs(
                 bytes,
@@ -348,13 +348,13 @@ impl Image {
     fn format_scalar_color_counts(
         counts: PillowColorCounts,
         distinct_colors: usize,
-        mode: &str,
+        mode: Mode,
     ) -> Vec<(u32, FormattedPixelValue)> {
         counts
             .into_slot_order(distinct_colors)
             .into_iter()
             .map(|(_, (pixel, count))| {
-                let value = if mode == "I" {
+                let value = if mode == Mode::ImageI32 {
                     FormattedPixelValue::Integer(i32::from_ne_bytes(pixel.to_ne_bytes()))
                 } else {
                     FormattedPixelValue::Float(f32::from_bits(pixel) as f64)

@@ -33,7 +33,12 @@ pub(crate) fn execute<F: F64MulAdd>(
         filter,
         bounds,
     );
-    let (need_horizontal, need_vertical) = pass_requirements(source_size, destination_size, bounds);
+    let (need_horizontal, need_vertical) =
+        super::super::super::helpers::coefficients::resample_pass_requirements(
+            source_size,
+            destination_size,
+            bounds,
+        );
     let intermediate_dims = CheckedDims::new_allow_empty(width, source_height, 1)?;
     let mut intermediate = vec![0.0; intermediate_dims.total_pixels()];
     if need_horizontal {
@@ -121,26 +126,6 @@ fn execute_tall<F: F64MulAdd>(
         fma,
     );
     encode(width, height, &output)
-}
-
-fn pass_requirements(
-    source: (u32, u32),
-    destination: (u32, u32),
-    bounds: Bounds,
-) -> (bool, bool) {
-    match bounds {
-        Some((left, top, right, bottom)) => {
-            let left = left as f32 as f64;
-            let top = top as f32 as f64;
-            let right = right as f32 as f64;
-            let bottom = bottom as f32 as f64;
-            (
-                destination.0 != source.0 || left != 0.0 || right != f64::from(destination.0),
-                destination.1 != source.1 || top != 0.0 || bottom != f64::from(destination.1),
-            )
-        }
-        None => (destination.0 != source.0, destination.1 != source.1),
-    }
 }
 
 fn horizontal_pass<const FINITE_OPERANDS: bool, F: F64MulAdd>(

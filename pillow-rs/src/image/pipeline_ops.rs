@@ -309,16 +309,9 @@ pub(crate) fn known_pipeline_op_mode(op: &PipelineOp, current: Mode) -> Option<M
             Some(Mode::ImageRgb8)
         }
         PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. } => Some(current),
-        // Convert carries the exact typed output identity. Merge retains its
-        // legacy subset until its mode contract is migrated.
+        // Convert and Merge both carry their exact typed output identity.
         PipelineOp::Convert { mode, .. } => Some(*mode),
-        PipelineOp::Merge { mode, .. } => match mode {
-            ColorMode::L => Some(Mode::ImageLuma8),
-            ColorMode::LA => Some(Mode::ImageLumaA8),
-            ColorMode::RGB => Some(Mode::ImageRgb8),
-            ColorMode::RGBA => Some(Mode::ImageRgba8),
-            _ => None,
-        },
+        PipelineOp::Merge { mode, .. } => Some(*mode),
         PipelineOp::ConvertLab { .. } => Some(Mode::ImageLab8),
         PipelineOp::Grayscale => Some(Mode::ImageLuma8),
         PipelineOp::Colorize { .. } => Some(Mode::ImageRgb8),

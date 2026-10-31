@@ -159,10 +159,7 @@ impl Image {
         }
         let (w, h) = positive_dimensions(size, "height and width must be > 0")?;
         let (source_w, source_h) = self.size()?;
-        let mode = match self.known_mode_identity() {
-            Some(mode) => mode,
-            None => self.materialized_shared()?.mode(),
-        };
+        let mode = self.mode_identity()?;
         let full_box = (0.0, 0.0, f64::from(source_w), f64::from(source_h));
         let mut bounds = box_coords.unwrap_or(full_box);
         if (w, h) == (source_w, source_h) && bounds == full_box {

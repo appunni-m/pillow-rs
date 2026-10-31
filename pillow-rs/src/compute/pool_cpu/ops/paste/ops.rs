@@ -1,4 +1,10 @@
 //! Paste operation support and exact-mode strategy orchestration.
+//!
+//! Exact L-mask NEON subkernel guards are declared beside each byte mode's
+//! architecture support; the same-mode generic vector strategy remains the
+//! fallback for other requests. TODO(pillow-rs#3ptb): move Rayon clipping to
+//! `pool_parallel`, cover mode-by-architecture paths and telemetry in parity,
+//! and finish per-mode source review.
 
 use std::sync::Arc;
 
@@ -10,7 +16,6 @@ use crate::compute::registry::support::{
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
-
 
 pub(crate) enum PreparedPaste<'a> {
     One(super::one::ops::Strategy<'a>),
@@ -155,7 +160,13 @@ pub(crate) fn prepare_pipeline<'a>(
     let mask_facts = mask.as_deref().map(secondary_facts);
     let facts = input
         .facts()
-        .with_paste(source_facts, mask_facts, (width, height), *mask_alpha);
+        .with_paste(
+            source_facts,
+            mask_facts,
+            (i64::from(*x), i64::from(*y)),
+            (width, height),
+            *mask_alpha,
+        );
     let mode_support = classify_mode(input.mode());
     let selection = match mode_support.assess(context, facts)? {
         SupportAssessment::Ready(selection) => selection,

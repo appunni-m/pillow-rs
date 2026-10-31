@@ -1,7 +1,7 @@
-//! Architecture selection for the RGB Thumbnail strategy.
+//! Prepared RGB PutPixel/Thumbnail fusion over native RGB samples.
 
-use crate::compute::{Architecture, Backend, ExecutionContext};
-use crate::compute::registry::support::{ModeSupport, OperationId};
+use crate::compute::{Backend, ExecutionContext};
+use crate::compute::registry::support::{ModeSupport, OperationId, StrategySelection};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
@@ -18,15 +18,36 @@ pub(crate) fn execute_putpixel_thumbnail(
     writes: &[PipelineOp],
     thumbnail: &PipelineOp,
     context: &ExecutionContext,
+    resize_selection: StrategySelection,
 ) -> Result<DynamicImage, PilError> {
-    match (context.backend(), context.architecture(), image.mode()) {
-        (Backend::Cpu, Architecture::Default, Mode::ImageRgb8) => {
-            super::default::rgb_putpixel_thumbnail_impl::execute_rgb_putpixel_thumbnail(
-                image, writes, thumbnail,
-            )
-        }
-        _ => Err(PilError::InternalError(
+    if context.backend() != Backend::Cpu || image.mode() != Mode::ImageRgb8 {
+        return Err(PilError::InternalError(
             "RGB PutPixel thumbnail fusion reached an unsupported strategy".into(),
-        )),
+        ));
     }
+    let reduced = super::helpers::putpixel_thumbnail::prepare(image, writes, thumbnail)?;
+    let (source_width, source_height) = reduced.source_dimensions;
+    let (output_width, output_height) = reduced.output_dimensions;
+    let bounds = (resize_selection.implementation.operation == OperationId::ResizeBoxed)
+        .then_some((
+            0.0,
+            0.0,
+            f64::from(source_width) / 2.0,
+            f64::from(source_height) / 2.0,
+        ));
+    let reduced_image = DynamicImage::ImageRgb8(reduced.image);
+    let inputs = crate::compute::registry::support::OperationInputs {
+        image: &reduced_image,
+        palette: crate::compute::registry::support::PaletteInput::default(),
+    };
+    let resize = crate::compute::pool_cpu::ops::resize::ops::prepare_direct_with_selection(
+        inputs,
+        output_width,
+        output_height,
+        reduced.filter,
+        bounds,
+        context,
+        resize_selection,
+    )?;
+    resize.execute_rgb8_with_sparse_rows(reduced.sparse_nonzero_rows.as_deref())
 }

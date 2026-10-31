@@ -123,8 +123,7 @@ pub(super) fn gpu_native_rgb_luma_merge_bands<'a>(
     }
     let [
         PipelineOp::Merge {
-            mode: ColorMode::RGB,
-            logical_mode,
+            mode: crate::raster::Mode::ImageRgb8,
             bands,
         },
     ] = ops
@@ -132,8 +131,7 @@ pub(super) fn gpu_native_rgb_luma_merge_bands<'a>(
         return None;
     };
     let dimensions = image.dimensions();
-    (logical_mode == "RGB"
-        && bands.len() == 3
+    (bands.len() == 3
         && bands.iter().all(|band| {
             band.size().ok() == Some(dimensions) && band.mode().ok().as_deref() == Some("L")
         }))

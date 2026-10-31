@@ -315,7 +315,9 @@ mod i32_uniform_filter_ownership_tests {
             .unwrap();
 
         assert_eq!(filtered.tobytes().unwrap(), source);
-        filtered.putpixel_mode_scalar(0, 0, 99.0, "I").unwrap();
+        filtered
+            .putpixel_mode_scalar(0, 0, 99.0, crate::raster::Mode::ImageI32)
+            .unwrap();
 
         let mut expected = source.clone();
         expected[..4].copy_from_slice(&99i32.to_le_bytes());

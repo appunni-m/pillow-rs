@@ -26,15 +26,13 @@ fn palette_first_rgb_merge_admission_is_narrow() {
     let l0 = Image::frombytes(crate::raster::Mode::ImageLuma8, (2, 1), &[32, 33]).expect("G band");
     let l1 = Image::frombytes(crate::raster::Mode::ImageLuma8, (2, 1), &[48, 49]).expect("B band");
     let rgb = PipelineOp::Merge {
-        mode: ColorMode::RGB,
-        logical_mode: "RGB".to_owned(),
+        mode: crate::raster::Mode::ImageRgb8,
         bands: vec![palette.clone(), l0.clone(), l1.clone()].into(),
     };
     assert!(gpu_palette_first_rgb_merge_is_supported(&[rgb], Some("P")));
 
     let lab = PipelineOp::Merge {
-        mode: ColorMode::RGB,
-        logical_mode: "LAB".to_owned(),
+        mode: crate::raster::Mode::ImageLab8,
         bands: vec![palette, l0, l1].into(),
     };
     assert!(!gpu_palette_first_rgb_merge_is_supported(&[lab], Some("P")));
@@ -83,8 +81,7 @@ fn native_rgb_luma_merge_admission_requires_exact_l_planes() {
     let image =
         DynamicImage::ImageLuma8(GrayImage::from_raw(2, 1, vec![1, 2]).expect("native L source"));
     let supported = PipelineOp::Merge {
-        mode: ColorMode::RGB,
-        logical_mode: "RGB".to_owned(),
+        mode: crate::raster::Mode::ImageRgb8,
         bands: vec![first.clone(), green.clone(), blue.clone()].into(),
     };
     assert!(
@@ -97,8 +94,7 @@ fn native_rgb_luma_merge_admission_requires_exact_l_planes() {
     );
 
     let lab = PipelineOp::Merge {
-        mode: ColorMode::RGB,
-        logical_mode: "LAB".to_owned(),
+        mode: crate::raster::Mode::ImageLab8,
         bands: vec![first, green, blue].into(),
     };
     assert!(
@@ -114,7 +110,8 @@ fn palette_first_rgb_merge_native_gpu_preserves_index_bytes() {
         .expect("palette");
     let green = Image::frombytes(crate::raster::Mode::ImageLuma8, (2, 1), &[32, 33]).expect("G band");
     let blue = Image::frombytes(crate::raster::Mode::ImageLuma8, (2, 1), &[48, 49]).expect("B band");
-    let merged = crate::image_merge("RGB", &[palette, green, blue]).expect("RGB merge");
+    let merged = crate::image_merge(crate::raster::Mode::ImageRgb8, &[palette, green, blue])
+        .expect("RGB merge");
     let expected = merged
         .clone()
         .use_backend(Backend::Cpu)
@@ -165,7 +162,11 @@ fn native_rgb_luma_merge_gpu_preserves_odd_tail_and_compact_transfer() {
         let green_image = Image::frombytes(crate::raster::Mode::ImageLuma8, (width, height), &green).expect("G band");
         let blue_image = Image::frombytes(crate::raster::Mode::ImageLuma8, (width, height), &blue).expect("B band");
         let merged =
-            crate::image_merge("RGB", &[red_image, green_image, blue_image]).expect("RGB merge");
+            crate::image_merge(
+                crate::raster::Mode::ImageRgb8,
+                &[red_image, green_image, blue_image],
+            )
+            .expect("RGB merge");
         let expected = merged
             .clone()
             .use_backend(Backend::Cpu)

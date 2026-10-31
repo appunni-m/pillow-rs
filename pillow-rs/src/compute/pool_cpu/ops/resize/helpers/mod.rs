@@ -1,6 +1,7 @@
 //! Shared typed kernels for Resize modes with identical sample arithmetic.
 
 pub(crate) mod typed_nearest;
+pub(crate) mod boxed_crop;
 pub(crate) mod coefficients;
 pub(crate) mod strategy;
 pub(crate) mod luma16;

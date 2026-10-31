@@ -48,6 +48,13 @@ const WEB_PALETTE: [u8; 678] = [
     255,
 ];
 
+/// Builds the palette whose entries map each index to the same grayscale byte.
+pub(crate) fn identity_grayscale_palette() -> Vec<u8> {
+    (0u8..=u8::MAX)
+        .flat_map(|value| [value, value, value])
+        .collect()
+}
+
 /// Quantizes RGB pixels to Pillow's default web palette.
 ///
 /// `pixels` is tightly packed RGB data for a `w` by `h` image. When `dither` is

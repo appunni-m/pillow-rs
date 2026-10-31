@@ -2,7 +2,8 @@ use super::{
     Backend, Instant, PipelineResourceTelemetry, PipelineTelemetry,
     begin_pipeline_operation_telemetry, elapsed_ns, finish_pipeline_operation_telemetry,
     pipeline_telemetry_enabled, record_pipeline_operation_path, record_pipeline_resource_telemetry,
-    record_pipeline_telemetry, reset_pipeline_allocation_telemetry,
+    record_pipeline_operation_architecture, record_pipeline_telemetry,
+    reset_pipeline_allocation_telemetry,
     reset_pipeline_operation_telemetry, take_pipeline_backend_override,
     take_pipeline_dispatch_count, take_pipeline_resize_coeff_cache_stats,
     take_pipeline_resource_telemetry, take_pipeline_telemetry,
@@ -124,6 +125,31 @@ pub(crate) fn finish_eager_cpu_operation_telemetry(
         resize_coeff_cache_hits: 0,
         resize_coeff_cache_misses: 0,
     });
+}
+
+/// Finish a host operation receipt with its prepared architecture selection.
+pub(crate) fn finish_eager_cpu_operation_telemetry_with_selection(
+    mut telemetry: EagerCpuOperationTelemetry,
+    output_bytes: usize,
+    operation: &'static str,
+    selection: crate::compute::registry::support::StrategySelection,
+) {
+    if !telemetry.timed {
+        return;
+    }
+
+    record_pipeline_operation_architecture(selection.implementation.architecture);
+    if let Some(reason) = selection.fallback {
+        let selected_fallback = format!(
+            "{operation} selected {:?} after strategy fallback: {reason:?}",
+            selection.implementation.architecture,
+        );
+        telemetry.fallback_reason = Some(match telemetry.fallback_reason.take() {
+            Some(existing) => format!("{existing}; {selected_fallback}"),
+            None => selected_fallback,
+        });
+    }
+    finish_eager_cpu_operation_telemetry(telemetry, output_bytes);
 }
 
 /// Discard a failed host terminal read without leaving a live operation frame

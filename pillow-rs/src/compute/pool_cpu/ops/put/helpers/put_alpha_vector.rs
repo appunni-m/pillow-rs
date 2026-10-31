@@ -199,13 +199,10 @@ pub(crate) fn simd_put_alpha_rgb_constant_bytes(
     let output_length = pixels.checked_mul(4)?;
     let mut output = Vec::with_capacity(output_length);
     let vector_pixels = pixels / 4 * 4;
-    const SHUFFLE: [u8; 16] = [0, 1, 2, 12, 3, 4, 5, 13, 6, 7, 8, 14, 9, 10, 11, 15];
     for block in source[..vector_pixels * 3].chunks_exact(12) {
-        let mut padded = [alpha; 16];
-        padded[..12].copy_from_slice(block);
-        let packed = u8x16::new(padded)
-            .swizzle_relaxed(u8x16::new(SHUFFLE))
-            .to_array();
+        let packed = crate::compute::pool_cpu::helpers::channel::rgba::rgb_to_rgba_block(
+            block, alpha,
+        );
         output.extend_from_slice(&packed);
     }
     for pixel in vector_pixels..pixels {

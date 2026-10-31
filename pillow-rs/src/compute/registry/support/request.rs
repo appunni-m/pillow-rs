@@ -7,7 +7,10 @@ mod contracts;
 mod facts;
 mod guards;
 
-pub use facts::{PixelWriteRunFacts, RequestFacts, SecondaryInputFacts, StrategyInputs};
+pub use facts::{
+    DrawRequestKind, DrawTextMaskKind, PixelWriteRunFacts, RequestFacts, SecondaryInputFacts,
+    StrategyInputs,
+};
 
 /// One mask mode accepted by the native Paste input contract.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,6 +49,15 @@ pub struct ModeChannelCapacity {
     pub channels: u8,
 }
 
+/// How one Merge target accepts the identity of its source bands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MergeBandModeRule {
+    /// A single band must have the exact target identity.
+    ExactTarget,
+    /// Every band is L, except that the first may be a raw P index plane.
+    LumaOrFirstPalette,
+}
+
 /// Input requirements exposed by an operation's support contract.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputContract {
@@ -71,6 +83,8 @@ pub enum InputContract {
     EffectMandelbrotParameters,
     /// Rotate receives normalized angle, filter, fill, center, and translation facts.
     Rotate,
+    /// Transform receives a method, coefficient shape, filter, and finite-input fact.
+    TransformParameters,
     /// Eval receives exactly 256 byte-LUT entries for each native band.
     ByteLutEntries {
         /// Number of byte bands in this exact mode's native representation.
@@ -170,6 +184,25 @@ pub enum InputContract {
         /// Existing rejection for an identity or size mismatch.
         rejection_reason: &'static str,
     },
+    /// Draw's bitmap mask and raster/context mode relation.
+    DrawInputs {
+        /// Exact mask identities accepted by Draw.bitmap.
+        bitmap_masks: &'static [Mode],
+        /// FreeType mask representations accepted by direct Draw.text.
+        text_mask_kinds: &'static [DrawTextMaskKind],
+        /// Exact raster identities whose direct Draw path consults palette metadata.
+        palette_modes: &'static [Mode],
+        /// Whether an RGBA drawing context may target an RGB raster.
+        allow_rgba_context_on_rgb: bool,
+        /// Exact context modes accepted for embedded-color glyphs.
+        embedded_color_modes: &'static [Mode],
+        /// Existing drawing-context mismatch rejection.
+        mode_rejection: &'static str,
+        /// Existing bitmap-mask rejection.
+        mask_rejection: &'static str,
+        /// Existing embedded-color rejection.
+        embedded_color_rejection: &'static str,
+    },
     /// Paste's exact source/mask relation, including its compact bitmap form.
     PasteInputs {
         /// Mode-specific source, mask, and size rules bound to execution.
@@ -188,6 +221,57 @@ pub enum InputContract {
     OddRankWindow {
         /// Whether this operation requires a caller-selected rank inside the window.
         rank_required: bool,
+    },
+    /// Merge's exact band count, accepted source identities, and size contract.
+    MergeBandLayout {
+        /// Required number of input bands.
+        band_count: usize,
+        /// Accepted source band identity rule.
+        mode_rule: MergeBandModeRule,
+        /// Existing error when the number of bands is wrong.
+        count_rejection: &'static str,
+        /// Existing error when one or more band identities are wrong.
+        mode_rejection: &'static str,
+        /// Existing error when band dimensions differ.
+        size_rejection: &'static str,
+    },
+    /// Native-byte Blend pairs admitted by the fused architecture kernel.
+    BlendNativeVector {
+        /// Number of bytes stored per source pixel.
+        channels: u8,
+        /// Exact secondary identities with byte arithmetic matching this kernel.
+        compatible_modes: &'static [Mode],
+    },
+    /// Native-byte Composite layout and mask contract for the portable vector kernel.
+    CompositeNativeByteVector {
+        /// Exact destination/source mode owned by this strategy.
+        mode: Mode,
+        /// Number of bytes stored per image pixel.
+        channels: u8,
+    },
+    /// Blend's allowed secondary modes and the existing mode/size errors.
+    BlendInputs {
+        /// Exact secondary modes accepted by this source-mode family.
+        compatible_modes: &'static [Mode],
+        /// Secondary modes reported as an unsupported image mode.
+        wrong_mode_modes: &'static [Mode],
+        /// Existing rejection for an unsupported secondary mode.
+        wrong_mode_rejection: &'static str,
+        /// Existing rejection for incompatible families or dimensions.
+        mismatch_rejection: &'static str,
+    },
+    /// Composite's exact destination mode, mask selector, and size contract.
+    CompositeInputs {
+        /// Masks that provide their sample from luma.
+        luma_masks: &'static [Mode],
+        /// Masks that provide their sample from alpha.
+        alpha_masks: &'static [Mode],
+        /// Existing rejection for a destination-mode mismatch.
+        mode_rejection: &'static str,
+        /// Existing rejection for an invalid mask mode or selector.
+        mask_rejection: &'static str,
+        /// Existing rejection for a source/mask size mismatch.
+        size_rejection: &'static str,
     },
 }
 
@@ -221,7 +305,10 @@ pub enum PaletteKnowledge {
 pub enum StrategyGuard {
     /// No additional request condition.
     Always,
-    /// Filtered Resize has work for the scalar x86 FMA implementation.
+    /// The exact mode's Draw batch has native-byte SIMD span work.
+    DrawNativeSpans,
+    /// Filtered Resize has work for the scalar x86 FMA implementation; exact
+    /// boxed identity and crop paths remain on Default.
     ResizeFilteredFma,
     /// ImageI32 Thumbnail can stream one even 2x2 reducing-gap pass.
     ThumbnailI32Stream2x2,
@@ -237,12 +324,16 @@ pub enum StrategyGuard {
         /// Physical byte channels in the exact mode's storage.
         channels: u8,
     },
-    /// Boxed native-byte Resize has valid bounds, dimensions, and coefficients.
+    /// Boxed native-byte Resize has valid bounds, dimensions, and coefficients;
+    /// exact crop paths use the mode's Default shortcut.
     ResizeByteBoxedVector {
         /// Physical byte channels in the exact mode's storage.
         channels: u8,
+        /// Whether filtered straight alpha prevents an integer-crop shortcut.
+        straight_alpha: bool,
     },
-    /// Boxed native-byte nearest Resize with valid bounds and dimensions.
+    /// Boxed native-byte nearest Resize with valid bounds and dimensions;
+    /// exact crop paths use the mode's Default shortcut.
     ResizeByteBoxedNearestVector {
         /// Physical byte channels in the exact mode's storage.
         channels: u8,
@@ -251,6 +342,11 @@ pub enum StrategyGuard {
     ResizeI32Neon,
     /// Native byte Brightness kernel with a finite factor and exact storage.
     BrightnessVector {
+        /// Physical byte channels in this exact mode's stored pixel.
+        channels: u8,
+    },
+    /// Native-byte Contrast LUT kernel with a finite factor and exact storage.
+    ContrastNativeBytesVectorizable {
         /// Physical byte channels in this exact mode's stored pixel.
         channels: u8,
     },
@@ -325,9 +421,27 @@ pub enum StrategyGuard {
         /// Physical number of byte channels in this particular implementation.
         channels: u8,
     },
+    /// NEON's exact-mode L-mask Paste subkernel for nonbroadcast clipped rows.
+    PasteLMaskNeon {
+        /// Destination mode owned by the specialized row kernel.
+        mode: Mode,
+        /// Native source and destination bytes per pixel.
+        channels: u8,
+        /// Minimum width of the clipped destination row, in pixels.
+        minimum_clipped_width: u32,
+    },
     /// AlphaComposite's eight-pixel vector kernel over exact native LA or RGBA bytes.
     AlphaCompositeVector {
         /// Physical number of byte channels in the exact mode's stored pixel.
+        channels: u8,
+    },
+    /// RGB Merge's sixteen-pixel native L/P plane interleaver.
+    MergeRgbInterleave,
+    /// Portable native L/P plane interleave with at least one complete block.
+    MergeNativeInterleave {
+        /// Exact output mode owned by this strategy.
+        target_mode: Mode,
+        /// Native output channels and number of input bands.
         channels: u8,
     },
     /// Finite, non-discrete nearest or bilinear Rotate over native byte rows.
@@ -337,6 +451,24 @@ pub enum StrategyGuard {
         /// Whether the exact mode forces nearest sampling (for example, `1` or `P`).
         force_nearest: bool,
         /// Whether this mode's architecture strategy also implements bilinear sampling.
+        bilinear: bool,
+    },
+    /// Declared native-byte Transform kernels with exact source and output layouts.
+    TransformByteKernels {
+        /// Physical number of bytes in each exact mode sample.
+        channels: u8,
+        /// Whether this exact mode has an affine-nearest implementation.
+        affine_nearest: bool,
+        /// Whether this exact mode has an affine-bilinear implementation.
+        affine_bilinear: bool,
+        /// Whether this exact mode has a projective/quad-nearest implementation.
+        projective_nearest: bool,
+    },
+    /// Native typed I;16 affine sampling with the archived nearest/byte-filter contract.
+    TransformI16Affine {
+        /// Whether this exact I;16 identity has an affine-nearest kernel.
+        nearest: bool,
+        /// Whether this exact I;16 identity has an affine-bilinear kernel.
         bilinear: bool,
     },
     /// SIMD Expand layout used by the archived byte-fill/copy strategy.
@@ -476,6 +608,7 @@ impl StrategyGuard {
     pub(super) fn assess(self, input: StrategyInputs) -> GuardAssessment {
         match self {
             Self::Always => GuardAssessment::Satisfied,
+            Self::DrawNativeSpans => guards::draw_native_spans_guard(input),
             Self::ResizeFilteredFma => guards::resize_filtered_fma_guard(input),
             Self::ThumbnailI32Stream2x2 => guards::thumbnail_i32_stream_guard(input),
             Self::ResizeLuma16Vector => guards::resize_luma16_vector_guard(input),
@@ -485,8 +618,8 @@ impl StrategyGuard {
             Self::ResizeByteNativeVector { channels } => {
                 guards::resize_byte_native_vector_guard(input, channels)
             }
-            Self::ResizeByteBoxedVector { channels } => {
-                guards::resize_byte_boxed_vector_guard(input, channels)
+            Self::ResizeByteBoxedVector { channels, straight_alpha } => {
+                guards::resize_byte_boxed_vector_guard(input, channels, straight_alpha)
             }
             Self::ResizeByteBoxedNearestVector { channels } => {
                 guards::resize_byte_boxed_nearest_vector_guard(input, channels)
@@ -494,6 +627,9 @@ impl StrategyGuard {
             Self::ResizeI32Neon => guards::resize_i32_neon_guard(input),
             Self::BrightnessVector { channels } => {
                 guards::brightness_vector_guard(input, channels)
+            }
+            Self::ContrastNativeBytesVectorizable { channels } => {
+                guards::contrast_vector_guard(input, channels)
             }
             Self::SharpnessNativeBytesVectorizable { channels } => {
                 guards::sharpness_vector_guard(input, channels)
@@ -543,6 +679,21 @@ impl StrategyGuard {
                 guards::extract_band_bytes_guard(input, channels),
             Self::RotateVectorBytes { channels, force_nearest, bilinear } =>
                 guards::rotate_vector_bytes_guard(input, channels, force_nearest, bilinear),
+            Self::TransformByteKernels {
+                channels,
+                affine_nearest,
+                affine_bilinear,
+                projective_nearest,
+            } => guards::transform_byte_kernels_guard(
+                input,
+                channels,
+                affine_nearest,
+                affine_bilinear,
+                projective_nearest,
+            ),
+            Self::TransformI16Affine { nearest, bilinear } => {
+                guards::transform_i16_affine_guard(input, nearest, bilinear)
+            }
             Self::PutPixelSpan { channels } => guards::pixel_span_guard(input, channels),
             Self::RgbaPixelWriteRun => guards::pixel_write_run_guard(input),
             Self::TransposeRgbaAvx2 => guards::rgba_transpose_avx2_guard(input),
@@ -572,8 +723,20 @@ impl StrategyGuard {
             Self::EffectNoiseVector => guards::effect_noise_vector_guard(input),
             Self::EffectMandelbrotVector => guards::effect_mandelbrot_vector_guard(input),
             Self::NativeBytes { channels } => guards::native_bytes_guard(input, channels),
+            Self::PasteLMaskNeon { mode, channels, minimum_clipped_width } => {
+                guards::paste_l_mask_neon_guard(input, mode, channels, minimum_clipped_width)
+            }
             Self::AlphaCompositeVector { channels } => {
                 guards::alpha_composite_vector_guard(input, channels)
+            }
+            Self::MergeRgbInterleave => guards::merge_rgb_interleave_guard(input),
+            Self::MergeNativeInterleave { target_mode, channels } =>
+                guards::merge_native_interleave_guard(input, target_mode, channels),
+            Self::BlendNativeVector { channels, compatible_modes } => {
+                guards::blend_native_vector_guard(input, channels, compatible_modes)
+            }
+            Self::CompositeNativeByteVector { mode, channels } => {
+                guards::composite_native_byte_vector_guard(input, mode, channels)
             }
             Self::ExpandVector { channels } => guards::expand_vector_guard(input, channels),
             Self::CheckedNativeBytes { channels } =>

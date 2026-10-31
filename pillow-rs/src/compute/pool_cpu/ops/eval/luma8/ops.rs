@@ -62,7 +62,7 @@ pub(crate) fn prepare<'a>(
     lut: &'a [u8],
     ctx: &ExecutionContext,
 ) -> Result<Strategy<'a>, PilError> {
-    let facts = strategy::point_float_facts(
+    let facts = strategy::facts(
         input.width(),
         input.height(),
         input.as_raw().len(),
@@ -116,7 +116,12 @@ pub(crate) fn execute_float_lut(
     lut: &[f64],
     ctx: &ExecutionContext,
 ) -> Result<DynamicImage, PilError> {
-    let facts = strategy::facts(input.width(), input.height(), input.as_raw().len(), lut.len());
+    let facts = strategy::point_float_facts(
+        input.width(),
+        input.height(),
+        input.as_raw().len(),
+        lut.len(),
+    );
     let selection = strategy::select(FLOAT_LUT_SUPPORT, facts, ctx)?;
     match selection.implementation.architecture {
         Architecture::Default => super::default::eval_float_impl::execute(input, lut)

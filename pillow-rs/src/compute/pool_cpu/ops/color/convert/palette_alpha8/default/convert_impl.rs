@@ -14,6 +14,18 @@ pub(crate) fn execute(
 ) -> Result<DynamicImage, PilError> {
     match target {
         Mode::ImageLuma8 => Ok(DynamicImage::ImageLuma8(luma(source, palette))),
+        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
+            super::super::super::helpers::luma16::from_luma8_samples(
+                source.width(),
+                source.height(),
+                target,
+                source.pixels().map(|pixel| {
+                    let [red, green, blue] =
+                        super::super::super::helpers::palette::color(pixel[0], palette);
+                    crate::color::rgb_to_luma_u8(red, green, blue)
+                }),
+            )
+        }
         Mode::ImageLumaA8 => Ok(DynamicImage::ImageLumaA8(luma_alpha(source, palette))),
         Mode::ImageRgb8 => Ok(DynamicImage::ImageRgb8(rgb(source, palette))),
         Mode::ImageRgba8 => Ok(DynamicImage::ImageRgba8(rgba(source, palette))),
@@ -24,6 +36,27 @@ pub(crate) fn execute(
         Mode::ImageF32 => Ok(DynamicImage::ImageF32(to_f32(source, palette))),
         _ => Err(PilError::ValueError("image has wrong mode".into())),
     }
+}
+
+pub(crate) fn execute_palette_target(
+    source: &GrayAlphaImage,
+    target: Mode,
+) -> Result<super::super::super::ops::PreparedConvertOutput, PilError> {
+    if target != Mode::ImagePalette8 {
+        return Err(PilError::ValueError("image has wrong mode".into()));
+    }
+    let mut output = GrayImage::new(source.width(), source.height());
+    for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
+        destination[0] = pixel[0];
+    }
+    Ok(super::super::super::ops::PreparedConvertOutput {
+        image: DynamicImage::ImagePalette8(output),
+        palette: None,
+        palette_alpha: None,
+        wrapper_metadata: Some(
+            super::super::super::ops::ConvertWrapperMetadata::PreserveSourceLoaded,
+        ),
+    })
 }
 
 fn luma(source: &GrayAlphaImage, palette: PaletteInput<'_>) -> GrayImage {

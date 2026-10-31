@@ -6,6 +6,7 @@ use super::convolution::{
 };
 use super::plan::{ResizeHorizontalPlan, build_resize_horizontal_plan};
 use crate::checked_dims::CheckedDims;
+use crate::compute::pool_cpu::ops::resize::helpers::boxed_crop::narrow_valid_bounds;
 use crate::compute::pool_cpu::ops::resize::helpers::coefficients::{
     byte_coefficients_fit_i32, byte_coefficients_fit_source,
 };
@@ -21,11 +22,19 @@ pub(super) fn execute<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA: b
     destination_size: (u32, u32),
     bounds: (f64, f64, f64, f64),
     filter: ResampleFilter,
+    sparse_source_rows: Option<&[bool]>,
 ) -> Result<Vec<u8>, PilError> {
     if matches!(filter, ResampleFilter::Nearest) {
         return Err(invalid_boxed_plan());
     }
     validate_channels::<CHANNELS, PREMULTIPLY_STRAIGHT_ALPHA>()?;
+    if let Some(rows) = sparse_source_rows
+        && usize::try_from(source_size.1).ok() != Some(rows.len())
+    {
+        return Err(PilError::InternalError(
+            "boxed native-byte Resize received invalid sparse row facts".into(),
+        ));
+    }
     let plan = BoxedResizePlan::new::<CHANNELS>(
         source,
         source_size,
@@ -45,11 +54,13 @@ pub(super) fn execute<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA: b
         &plan,
         &mut intermediate,
         &mut premultiplied_row,
+        sparse_source_rows,
     )?;
     let vertical = vertical_stage::<CHANNELS, PREMULTIPLY_STRAIGHT_ALPHA>(
         &intermediate,
         &plan,
         &mut output,
+        sparse_source_rows,
     )?;
     super::telemetry::record_vector_work(horizontal.0, vertical.0, horizontal.1, vertical.1);
     Ok(output)
@@ -164,33 +175,6 @@ impl BoxedResizePlan {
     }
 }
 
-fn narrow_valid_bounds(
-    source_size: (u32, u32),
-    bounds: (f64, f64, f64, f64),
-) -> Option<(f64, f64, f64, f64)> {
-    let bounds = (
-        f64::from(bounds.0 as f32),
-        f64::from(bounds.1 as f32),
-        f64::from(bounds.2 as f32),
-        f64::from(bounds.3 as f32),
-    );
-    if !bounds.0.is_finite()
-        || !bounds.1.is_finite()
-        || !bounds.2.is_finite()
-        || !bounds.3.is_finite()
-        || bounds.0 < 0.0
-        || bounds.1 < 0.0
-        || bounds.2 > f64::from(source_size.0 as f32)
-        || bounds.3 > f64::from(source_size.1 as f32)
-        || bounds.2 < bounds.0
-        || bounds.3 < bounds.1
-    {
-        None
-    } else {
-        Some(bounds)
-    }
-}
-
 fn validate_coefficients(
     horizontal: &FilterCoeffs,
     vertical: &FilterCoeffs,
@@ -249,6 +233,7 @@ struct HorizontalRows<'a, const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPH
     intermediate_stride: usize,
     first_source_row: usize,
     output_width: usize,
+    sparse_source_rows: Option<&'a [bool]>,
 }
 
 fn horizontal_stage<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA: bool>(
@@ -256,6 +241,7 @@ fn horizontal_stage<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA: boo
     resize: &BoxedResizePlan,
     intermediate: &mut [u8],
     premultiplied_row: &mut [u8],
+    sparse_source_rows: Option<&[bool]>,
 ) -> Result<(u64, u64), PilError> {
     if !resize.need_horizontal {
         copy_horizontal_identity::<CHANNELS, PREMULTIPLY_STRAIGHT_ALPHA>(
@@ -273,6 +259,7 @@ fn horizontal_stage<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA: boo
         intermediate_stride: resize.intermediate_stride,
         first_source_row: resize.first_source_row,
         output_width: resize.output_width,
+        sparse_source_rows,
     };
     process_horizontal_rows(&rows, resize.intermediate_rows, intermediate, premultiplied_row)
 }
@@ -299,6 +286,12 @@ fn process_horizontal_rows<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALP
         let output_row = intermediate
             .get_mut(output_start..output_end)
             .ok_or_else(invalid_boxed_plan)?;
+        if let Some(sparse_rows) = rows.sparse_source_rows
+            && !*sparse_rows.get(source_y).ok_or_else(invalid_boxed_plan)?
+        {
+            output_row.fill(0);
+            continue;
+        }
         let (blocks, tail) = boxed_horizontal_row(rows, source_y, output_row, premultiplied_row)?;
         vector_blocks = vector_blocks.saturating_add(blocks);
         scalar_tail = scalar_tail.saturating_add(tail);
@@ -378,12 +371,15 @@ struct VerticalRows<'a> {
     output_width: usize,
     source_height: usize,
     output_stride: usize,
+    first_source_row: usize,
+    sparse_source_rows: Option<&'a [bool]>,
 }
 
 fn vertical_stage<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA: bool>(
     intermediate: &[u8],
     resize: &BoxedResizePlan,
     output: &mut [u8],
+    sparse_source_rows: Option<&[bool]>,
 ) -> Result<(u64, u64), PilError> {
     if !resize.need_vertical {
         copy_vertical_identity::<CHANNELS, PREMULTIPLY_STRAIGHT_ALPHA>(intermediate, output)?;
@@ -395,6 +391,8 @@ fn vertical_stage<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA: bool>
         output_width: resize.output_width,
         source_height: resize.intermediate_rows,
         output_stride: resize.output_dims.row_stride(),
+        first_source_row: resize.first_source_row,
+        sparse_source_rows,
     };
     process_vertical_rows::<CHANNELS, PREMULTIPLY_STRAIGHT_ALPHA>(
         &rows,
@@ -420,6 +418,19 @@ fn process_vertical_rows<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA
         let output_row = output
             .get_mut(output_start..output_end)
             .ok_or_else(invalid_boxed_plan)?;
+        if let Some(sparse_rows) = rows.sparse_source_rows
+            && !super::active_rows::vertical_row_touches_source(
+                rows.coefficients,
+                rows.source_height,
+                rows.first_source_row,
+                sparse_rows,
+                output_y,
+            )
+            .ok_or_else(invalid_boxed_plan)?
+        {
+            output_row.fill(0);
+            continue;
+        }
         let (blocks, tail) = resize_vertical_vector_row::<
             CHANNELS,
             PREMULTIPLY_STRAIGHT_ALPHA,

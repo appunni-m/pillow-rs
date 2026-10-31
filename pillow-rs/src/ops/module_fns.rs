@@ -7,12 +7,8 @@ use std::sync::Arc;
 
 use crate::error::PilError;
 use crate::image::Image;
-use crate::ops::convert::parse_mode;
 use crate::pipeline::PipelineOp;
 use crate::raster::Mode;
-
-// TODO(pillow-rs#3ptb): accept `Mode` for merge after host bindings perform
-// Pillow spelling conversion.
 
 mod point;
 pub use point::{
@@ -62,21 +58,29 @@ pub fn alpha_composite(im1: &Image, im2: &Image) -> Result<Image, PilError> {
     Ok(result)
 }
 
-fn validate_merge_shape(mode: &str, band_count: usize) -> Result<(), PilError> {
+fn validate_merge_shape(mode: Mode, band_count: usize) -> Result<(), PilError> {
     let n_expected = match mode {
-        "1" | "I" | "F" | "P" | "I;16" | "I;16L" | "I;16B" | "I;16N" => 1,
-        "RGB" => 3,
-        "RGBA" => 4,
-        "RGBX" | "RGBa" => 4,
-        "CMYK" => 4,
-        "LA" | "La" | "PA" => 2,
-        "YCbCr" | "HSV" | "LAB" => 3,
-        "L" => 1,
-        _ => {
-            // Pillow 12.2 looks up the mode in ``ImageMode.getmode`` before
-            // validating the band sequence, so an unknown mode is surfaced as
-            // ``KeyError(mode)`` rather than a generic value error.
-            return Err(PilError::KeyError(mode.to_owned()));
+        Mode::One
+        | Mode::ImageLuma8
+        | Mode::ImagePalette8
+        | Mode::ImageI32
+        | Mode::ImageF32
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N => 1,
+        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => 3,
+        Mode::ImageRgba8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8 => 4,
+        Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => 2,
+        Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => {
+            return Err(PilError::ValueError("image has wrong mode".to_owned()));
         }
     };
 
@@ -86,26 +90,42 @@ fn validate_merge_shape(mode: &str, band_count: usize) -> Result<(), PilError> {
     Ok(())
 }
 
-fn validate_merge_band_modes(mode: &str, bands: &[Image]) -> Result<(), PilError> {
+fn validate_merge_band_modes(mode: Mode, bands: &[Image]) -> Result<(), PilError> {
     // Pillow's ``Image.merge`` accepts an L image for every band.  For
     // multi-band outputs it also accepts a P image only in the first
     // position, where the indexed core is treated as a single-byte band;
     // later P bands fail in ``ImagingMerge`` with ``mode mismatch``.  The
     // single-band L path has its own ``images do not match`` error.
     for (index, band) in bands.iter().enumerate() {
-        let band_mode = band.mode()?;
+        let band_mode = band.mode_identity()?;
         let valid = match mode {
             // ImagingMerge requires a source core with the exact scalar mode
             // for these destinations; an L/P band is not coerced to 1/I/F.
-            "1" | "I" | "F" | "P" | "I;16" | "I;16L" | "I;16B" | "I;16N" => band_mode == mode,
-            "L" => band_mode == "L",
-            _ => band_mode == "L" || (index == 0 && band_mode == "P"),
+            Mode::One
+            | Mode::ImageI32
+            | Mode::ImageF32
+            | Mode::ImagePalette8
+            | Mode::ImageI16
+            | Mode::ImageI16L
+            | Mode::ImageI16B
+            | Mode::ImageI16N => band_mode == mode,
+            Mode::ImageLuma8 => band_mode == Mode::ImageLuma8,
+            _ => band_mode == Mode::ImageLuma8
+                || (index == 0 && band_mode == Mode::ImagePalette8),
         };
         if !valid {
             return Err(
                 if matches!(
                     mode,
-                    "L" | "1" | "I" | "F" | "P" | "I;16" | "I;16L" | "I;16B" | "I;16N"
+                    Mode::ImageLuma8
+                        | Mode::One
+                        | Mode::ImageI32
+                        | Mode::ImageF32
+                        | Mode::ImagePalette8
+                        | Mode::ImageI16
+                        | Mode::ImageI16L
+                        | Mode::ImageI16B
+                        | Mode::ImageI16N
                 ) {
                     PilError::ValueError("images do not match".into())
                 } else {
@@ -115,27 +135,6 @@ fn validate_merge_band_modes(mode: &str, bands: &[Image]) -> Result<(), PilError
         }
     }
     Ok(())
-}
-
-/// Parses the mode names accepted specifically by Pillow's `Image.merge`.
-///
-/// The raster core stores `La`/`PA` as `LA`, `RGBX`/`RGBa` as `RGBA`, and
-/// `LAB` as RGB bytes. The public mode tag remains attached to the pipeline so
-/// callers still observe the requested Pillow spelling; conversion continues
-/// to use its narrower, independently validated mode parser.
-fn parse_merge_mode(mode: &str) -> Result<crate::pipeline::ColorMode, PilError> {
-    match mode {
-        "La" | "PA" => Ok(crate::pipeline::ColorMode::LA),
-        "RGBX" | "RGBa" => Ok(crate::pipeline::ColorMode::RGBA),
-        "LAB" => Ok(crate::pipeline::ColorMode::RGB),
-        // DynamicImage carries all I;16* variants as native unsigned-16
-        // luma. The requested spelling remains on PipelineOp::logical_mode
-        // and the public explicit mode tag; mapping here lets the executor
-        // take its existing typed scalar identity path without narrowing to
-        // a four-byte I buffer.
-        "I;16" | "I;16L" | "I;16B" | "I;16N" => Ok(crate::pipeline::ColorMode::I),
-        _ => parse_mode(mode),
-    }
 }
 
 fn validate_merge_band_sizes(bands: &[Image]) -> Result<(), PilError> {
@@ -172,29 +171,27 @@ pub enum MergeInput {
 ///
 /// Returns [`PilError::ValueError`] when `mode` is unsupported or `bands` has
 /// the wrong length.
-pub fn merge(mode: &str, bands: &[Image]) -> Result<Image, PilError> {
+pub fn merge(mode: Mode, bands: &[Image]) -> Result<Image, PilError> {
     validate_merge_shape(mode, bands.len())?;
     validate_merge_band_modes(mode, bands)?;
     validate_merge_band_sizes(bands)?;
 
-    let mode_enum = parse_merge_mode(mode)?;
     let mut result = Image::push_op(
         &bands[0],
         PipelineOp::Merge {
-            mode: mode_enum,
-            logical_mode: mode.to_owned(),
+            mode,
             bands: bands.to_vec().into(),
         },
     );
     if let Image::Pipeline {
         explicit_mode: tag, ..
     } = &mut result
-        && mode != "L"
-        && mode != "LA"
-        && mode != "RGB"
-        && mode != "RGBA"
+        && !matches!(
+            mode,
+            Mode::ImageLuma8 | Mode::ImageLumaA8 | Mode::ImageRgb8 | Mode::ImageRgba8
+        )
     {
-        *tag = crate::image::mode_boundary::parse_pillow_mode(mode);
+        *tag = Some(mode);
     }
     Ok(result)
 }
@@ -206,7 +203,7 @@ pub fn merge(mode: &str, bands: &[Image]) -> Result<Image, PilError> {
 /// type name. They must not decide whether a missing item means a mode error,
 /// an arity error, or an invalid band. Preserve that ordering here and let the
 /// existing mode/arity validation remain the single source of truth.
-pub fn merge_inputs(mode: &str, bands: &[MergeInput]) -> Result<Image, PilError> {
+pub fn merge_inputs(mode: Mode, bands: &[MergeInput]) -> Result<Image, PilError> {
     validate_merge_shape(mode, bands.len())?;
     let mut images = Vec::with_capacity(bands.len());
     for band in bands {
@@ -232,17 +229,29 @@ pub fn merge_inputs(mode: &str, bands: &[MergeInput]) -> Result<Image, PilError>
 /// Returns [`PilError::ValueError`] for incompatible modes or unequal dimensions, or
 /// another [`PilError`] when metadata lookup fails.
 pub fn blend(image1: &Image, image2: &Image, alpha: f64) -> Result<Image, PilError> {
-    let mode1 = image1.mode()?;
-    let mode2 = image2.mode()?;
-    let compatible = match mode1.as_str() {
-        "L" => mode2 == "L",
-        "LA" | "La" => matches!(mode2.as_str(), "LA" | "La"),
-        "RGB" | "LAB" | "HSV" | "YCbCr" => {
-            matches!(mode2.as_str(), "RGB" | "LAB" | "HSV" | "YCbCr")
+    let mode1 = image1.mode_identity()?;
+    let mode2 = image2.mode_identity()?;
+    let compatible = match mode1 {
+        Mode::ImageLuma8 => mode2 == Mode::ImageLuma8,
+        Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 => {
+            matches!(mode2, Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8)
         }
-        "RGBA" | "CMYK" | "RGBa" | "RGBX" => {
-            matches!(mode2.as_str(), "RGBA" | "CMYK" | "RGBa" | "RGBX")
+        Mode::ImageRgb8 | Mode::ImageLab8 | Mode::ImageHsv8 | Mode::ImageYCbCr8 => {
+            matches!(
+                mode2,
+                Mode::ImageRgb8 | Mode::ImageLab8 | Mode::ImageHsv8 | Mode::ImageYCbCr8
+            )
         }
+        Mode::ImageRgba8
+        | Mode::ImageCmyk8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8 => matches!(
+            mode2,
+            Mode::ImageRgba8
+                | Mode::ImageCmyk8
+                | Mode::ImageRgbPremultiplied8
+                | Mode::ImageRgbx8
+        ),
         _ => false,
     };
     if !compatible {
@@ -250,9 +259,22 @@ pub fn blend(image1: &Image, image2: &Image, alpha: f64) -> Result<Image, PilErr
         // second images) as ``image has wrong mode``. Other type-family
         // mismatches are reported as ``images do not match``.
         let wrong_mode = !matches!(
-            mode1.as_str(),
-            "L" | "LA" | "La" | "RGB" | "LAB" | "HSV" | "YCbCr" | "RGBA" | "CMYK" | "RGBa" | "RGBX"
-        ) || matches!(mode2.as_str(), "1" | "P" | "PA");
+            mode1,
+            Mode::ImageLuma8
+                | Mode::ImageLumaA8
+                | Mode::ImageLaPremultiplied8
+                | Mode::ImageRgb8
+                | Mode::ImageLab8
+                | Mode::ImageHsv8
+                | Mode::ImageYCbCr8
+                | Mode::ImageRgba8
+                | Mode::ImageCmyk8
+                | Mode::ImageRgbPremultiplied8
+                | Mode::ImageRgbx8
+        ) || matches!(
+            mode2,
+            Mode::One | Mode::ImagePalette8 | Mode::ImagePaletteAlpha8
+        );
         return Err(PilError::ValueError(
             if wrong_mode {
                 "image has wrong mode"
@@ -292,18 +314,18 @@ pub fn composite(image1: &Image, image2: &Image, mask: &Image) -> Result<Image, 
     if (w1, h1) != (wm, hm) {
         return Err(PilError::ValueError("images do not match".into()));
     }
-    let mask_alpha = match mask.mode()?.as_str() {
-        "1" | "L" => false,
-        "LA" | "RGBA" | "RGBa" => true,
+    let mask_alpha = match mask.mode_identity()? {
+        Mode::One | Mode::ImageLuma8 => false,
+        Mode::ImageLumaA8 | Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8 => true,
         _ => return Err(PilError::ValueError("bad transparency mask".into())),
     };
-    let output_mode = image2.mode()?;
-    let source = if image1.mode()? == output_mode {
+    let output_mode = image2.mode_identity()?;
+    let source = if image1.mode_identity()? == output_mode {
         image1.clone()
     } else {
         // Pillow 12.2 PIL.Image.composite starts from image2.copy(), then
         // Image.paste converts image1 to the destination mode before blending.
-        image1.convert(&output_mode, None, None, None, None)?
+        image1.convert(output_mode, None, None, None, None)?
     };
     let mut result = Image::push_op(
         &source,
@@ -321,12 +343,12 @@ pub fn composite(image1: &Image, image2: &Image, mask: &Image) -> Result<Image, 
     } = result
     {
         *explicit_mode = image2.known_mode_identity();
-        if output_mode == "P" {
+        if output_mode == Mode::ImagePalette8 {
             // The output begins as image2.copy(), so palette ownership follows
             // image2 even when image1 was converted to P for the paste.
             *palette = Some(image2.extract_palette().unwrap_or_default());
             *palette_alpha = image2.palette_alpha();
-        } else if output_mode == "PA" {
+        } else if output_mode == Mode::ImagePaletteAlpha8 {
             // Image.composite starts with image2.copy(); Pillow preserves the
             // destination PA image's palette on that newly allocated result.
             *palette = image2.extract_palette();

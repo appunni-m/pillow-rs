@@ -169,6 +169,42 @@ impl PixelMode {
         }
     }
 
+    /// Maps a materialized Pillow raster identity to its byte-payload layout.
+    ///
+    /// The result intentionally collapses identities that share a payload
+    /// layout. Callers must retain the original `Mode` for strategy selection
+    /// and output identity.
+    pub(crate) const fn from_raster_mode(mode: crate::raster::Mode) -> Option<Self> {
+        use crate::raster::Mode;
+        match mode {
+            Mode::One => Some(Self::Mode1),
+            Mode::ImageLuma8 => Some(Self::L),
+            Mode::ImageLumaA8 => Some(Self::LA),
+            Mode::ImageLaPremultiplied8 => None,
+            Mode::ImagePalette8 => Some(Self::P),
+            Mode::ImagePaletteAlpha8 => Some(Self::PA),
+            Mode::ImageRgb8 => Some(Self::RGB),
+            Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8 | Mode::ImageRgbx8 => {
+                Some(Self::RGBA)
+            }
+            Mode::ImageCmyk8 => Some(Self::CMYK),
+            Mode::ImageYCbCr8 => Some(Self::YCbCr),
+            Mode::ImageHsv8 => Some(Self::HSV),
+            Mode::ImageI32 => Some(Self::I),
+            Mode::ImageF32 => Some(Self::F),
+            Mode::ImageI16
+            | Mode::ImageI16L
+            | Mode::ImageI16B
+            | Mode::ImageI16N
+            | Mode::ImageLab8
+            | Mode::ImageLumaA16
+            | Mode::ImageRgb16
+            | Mode::ImageRgba16
+            | Mode::ImageRgb32F
+            | Mode::ImageRgba32F => None,
+        }
+    }
+
     /// Parses a Pillow mode name used by the core image API.
     ///
     /// TODO(pillow-rs#3ptb): parse mode strings in host adapters and pass a

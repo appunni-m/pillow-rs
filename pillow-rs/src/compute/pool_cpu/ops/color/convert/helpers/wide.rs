@@ -1,10 +1,17 @@
-//! Portable wide-lane arithmetic shared by exact Convert mode strategies.
+//! Portable wide-lane arithmetic shared by exact CPU mode strategies.
 
 use wide::{i16x8, u8x16, u16x8, u16x16};
 
 #[inline]
 pub(crate) fn div255_u16x16(value: u16x16) -> u16x16 {
     const ONE: u16x16 = u16x16::splat(1);
+    let incremented = value + ONE;
+    (incremented + (incremented >> 8u32)) >> 8u32
+}
+
+#[inline]
+pub(crate) fn div255_u16x8(value: u16x8) -> u16x8 {
+    const ONE: u16x8 = u16x8::splat(1);
     let incremented = value + ONE;
     (incremented + (incremented >> 8u32)) >> 8u32
 }

@@ -1,7 +1,5 @@
 //! Module fns operation registration.
-use super::prelude::{
-    DynamicImage, PilError, PipelineOp, Registry, op_blend_module, op_composite_module, op_merge,
-};
+use super::prelude::{PilError, Registry};
 fn register_merge_blend(m: &mut Registry) {
     // Merge packs the remaining single-band images into one auxiliary storage
     // range. The GPU planner validates the band count, modes, and dimensions
@@ -10,25 +8,7 @@ fn register_merge_blend(m: &mut Registry) {
     m.insert(
         "Merge",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             _source_mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::Merge {
-                    mode,
-                    logical_mode: target_mode,
-                    bands,
-                } = op
-                {
-                    let arc_bands: Vec<std::sync::Arc<crate::image::Image>> = bands
-                        .iter()
-                        .map(|im| std::sync::Arc::new(im.clone()))
-                        .collect();
-                    op_merge(img, mode, &arc_bands, Some(target_mode))
-                } else {
-                    Err(PilError::ValueError("expected Merge op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::composite::ops::prepare_merge_pipeline,
             "merge.wgsl"
         ),
     );
@@ -36,13 +16,7 @@ fn register_merge_blend(m: &mut Registry) {
     m.insert(
         "BlendModule",
         gpu_entry!(
-            |img, op, mode| {
-                if let PipelineOp::BlendModule { other, alpha } = op {
-                    op_blend_module(img, other, *alpha, mode)
-                } else {
-                    Err(PilError::ValueError("expected BlendModule op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::composite::ops::prepare_blend_pipeline,
             "blend_module.wgsl"
         ),
     );
@@ -52,18 +26,7 @@ fn register_composite_eval(m: &mut Registry) {
     m.insert(
         "CompositeModule",
         gpu_entry!(
-            |img, op, mode| {
-                if let PipelineOp::CompositeModule {
-                    other,
-                    mask,
-                    mask_alpha,
-                } = op
-                {
-                    op_composite_module(img, other, mask, *mask_alpha, mode)
-                } else {
-                    Err(PilError::ValueError("expected CompositeModule op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::composite::ops::prepare_composite_pipeline,
             "composite_module.wgsl"
         ),
     );

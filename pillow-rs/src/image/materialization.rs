@@ -330,7 +330,7 @@ impl Image {
     pub(crate) fn materialized_shared_for_ops(&self) -> Result<Arc<DynamicImage>, PilError> {
         let image = self.materialized_shared()?;
         let mode = Self::mode_from_materialized(&image);
-        validate_scalar_storage(&image, &mode)?;
+        validate_scalar_storage(&image, mode)?;
         Ok(image)
     }
 

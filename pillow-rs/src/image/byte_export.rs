@@ -5,8 +5,9 @@ use crate::format::parse_format_str;
 
 use std::sync::Arc;
 
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, Mode};
 
+use super::data_access::{is_l16_identity, l16_identity_uses_big_endian};
 use super::{Image, is_l16_mode, l16_uses_big_endian};
 
 /// Host-neutral input for converting Pillow's scalar `ImagingCore` view to bytes.
@@ -91,6 +92,17 @@ fn pack_mode1_rows(pixels: &[u8], width: usize, height: usize) -> Vec<u8> {
     packed
 }
 
+fn l16_bytes_in_mode_order(bytes: &[u8], mode_is_big_endian: bool) -> Vec<u8> {
+    if cfg!(target_endian = "big") == mode_is_big_endian {
+        return bytes.to_vec();
+    }
+    let mut ordered = Vec::with_capacity(bytes.len());
+    for sample in bytes.chunks_exact(2) {
+        ordered.extend_from_slice(&[sample[1], sample[0]]);
+    }
+    ordered
+}
+
 #[cfg(test)]
 mod tests;
 
@@ -127,8 +139,31 @@ impl Image {
     /// Returns [`PilError`] when materialization or mode-specific byte packing
     /// fails.
     pub fn tobytes(&self) -> Result<Vec<u8>, PilError> {
-        let mode = self.mode()?;
-        self.tobytes_formatted(&mode)
+        self.tobytes_mode(self.mode_identity()?)
+    }
+
+    fn tobytes_mode(&self, mode: Mode) -> Result<Vec<u8>, PilError> {
+        if let Image::Paletted(data) = self {
+            return Ok(data.indices.as_bytes().to_vec());
+        }
+        let image = self.materialized_shared()?;
+        if matches!(mode, Mode::ImageI32 | Mode::ImageF32) {
+            return Ok(image.as_bytes().to_vec());
+        }
+        if is_l16_identity(mode) {
+            return Ok(l16_bytes_in_mode_order(
+                image.as_bytes(),
+                l16_identity_uses_big_endian(mode),
+            ));
+        }
+        if mode == Mode::One {
+            return Ok(pack_mode1_rows(
+                image.as_bytes(),
+                image.width() as usize,
+                image.height() as usize,
+            ));
+        }
+        Ok(image.as_bytes().to_vec())
     }
 
     /// Returns one byte per logical image sample.
@@ -141,7 +176,7 @@ impl Image {
     ///
     /// Returns [`PilError`] when the image cannot be materialized.
     pub fn tobytes_unpacked(&self) -> Result<Vec<u8>, PilError> {
-        if self.mode()? == "1" {
+        if self.mode_identity()? == crate::raster::Mode::One {
             return Ok(self.materialized_shared()?.to_luma8().into_raw());
         }
         self.tobytes()
@@ -164,34 +199,8 @@ impl Image {
         }
         let img = self.materialized_shared()?;
 
-        // F/I modes: stored as RGBA8 internally (f32/i32 LE bytes packed as RGBA).
-        // Read the raw bytes directly — img.as_bytes() already contains the correct
-        // f32/i32 LE representation (4 bytes per pixel).
-        if matches!(mode, "F" | "I") {
-            return Ok(img.as_bytes().to_vec());
-        }
-
-        if is_l16_mode(mode) {
-            let native_is_big = cfg!(target_endian = "big");
-            let raw_is_big = l16_uses_big_endian(mode);
-            let bytes = img.as_bytes();
-            if native_is_big == raw_is_big {
-                return Ok(bytes.to_vec());
-            }
-            let mut swapped = Vec::with_capacity(bytes.len());
-            for sample in bytes.chunks_exact(2) {
-                swapped.extend_from_slice(&[sample[1], sample[0]]);
-            }
-            return Ok(swapped);
-        }
-
-        // For mode "1" images, pack 8 pixels per byte (MSB first) matching PIL.
-        if mode == "1" && img.color() == crate::raster::ColorType::L8 {
-            return Ok(pack_mode1_rows(
-                img.as_bytes(),
-                img.width() as usize,
-                img.height() as usize,
-            ));
+        if let Some(mode) = Mode::from_pillow_name(mode) {
+            return self.tobytes_mode(mode);
         }
         Ok(img.as_bytes().to_vec())
     }
@@ -229,7 +238,7 @@ impl Image {
         // Pillow's default Image.tobytes() path uses the image's current mode
         // without a raw-mode override. Keep that public route on the canonical
         // core entry point; explicit raw modes still use the packer below.
-        if args.is_empty() && self.mode()? == mode {
+        if args.is_empty() && self.mode_identity()?.pillow_name() == Some(mode) {
             return self.tobytes();
         }
         let mut data = self.tobytes_formatted(mode)?;
@@ -290,7 +299,7 @@ impl Image {
         // The default encoder checks the image mode before materialization,
         // even when a binding supplies a different mode override. For every
         // remaining override, tobytes_formatted exposes the storage unchanged.
-        self.mode()?;
+        self.mode_identity()?;
         self.materialized_shared().map(ImageByteExport::Shared)
     }
 }
@@ -305,8 +314,7 @@ impl Image {
     ///
     /// Returns [`PilError`] when mode detection or materialization fails.
     pub fn tobitmap(&self) -> Result<Vec<u8>, PilError> {
-        let mode = self.mode()?;
-        if mode != "1" {
+        if self.mode_identity()? != crate::raster::Mode::One {
             return Err(PilError::ValueError("not a bitmap".to_owned()));
         }
         let img = self.materialized_shared()?;

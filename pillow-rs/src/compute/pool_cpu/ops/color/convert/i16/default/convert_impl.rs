@@ -6,5 +6,5 @@ use crate::raster::{DynamicImage, ImageBuffer, Luma, Mode};
 type Samples = ImageBuffer<Luma<u16>, Vec<u16>>;
 
 pub(crate) fn execute(source: &Samples, target: Mode) -> Result<DynamicImage, PilError> {
-    super::super::super::helpers::luma16::execute_native(source, target)
+    super::super::super::helpers::luma16::execute_mode(source, Mode::ImageI16, target)
 }

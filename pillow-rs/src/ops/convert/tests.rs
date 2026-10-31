@@ -44,7 +44,7 @@ fn integer_to_rgb_clamps_native_i_samples_and_broadcasts_them() {
     .expect("tag valid I-mode carrier");
 
     let converted = source
-        .convert("RGB", None, None, None, None)
+        .convert(crate::raster::Mode::ImageRgb8, None, None, None, None)
         .expect("I to RGB conversion");
 
     assert_eq!(converted.mode().expect("converted mode"), "RGB");
@@ -74,7 +74,7 @@ fn float_to_rgb_clamps_and_truncates_native_f_samples() {
     .expect("tag valid F-mode carrier");
 
     let converted = source
-        .convert("RGB", None, None, None, None)
+        .convert(crate::raster::Mode::ImageRgb8, None, None, None, None)
         .expect("F to RGB conversion");
 
     assert_eq!(converted.mode().expect("converted mode"), "RGB");
@@ -88,21 +88,26 @@ fn float_to_rgb_clamps_and_truncates_native_f_samples() {
 
 #[test]
 fn luma8_to_luma16_conversion_and_paste_preserve_numeric_sample() {
-    for mode in ["I;16", "I;16L", "I;16B", "I;16N"] {
+    for (mode, pillow_name) in [
+        (crate::raster::Mode::ImageI16, "I;16"),
+        (crate::raster::Mode::ImageI16L, "I;16L"),
+        (crate::raster::Mode::ImageI16B, "I;16B"),
+        (crate::raster::Mode::ImageI16N, "I;16N"),
+    ] {
         let source = Image::new(1, 1, crate::raster::Mode::ImageLuma8, (17, 17, 17, 255)).expect("source image");
         let converted = source
             .convert(mode, None, None, None, None)
             .expect("I;16 conversion");
-        assert_eq!(converted.mode().expect("converted mode"), mode);
+        assert_eq!(converted.mode().expect("converted mode"), pillow_name);
         assert_eq!(
             converted.tobytes().expect("converted bytes"),
             match mode {
-                "I;16B" => vec![0, 17],
+                crate::raster::Mode::ImageI16B => vec![0, 17],
                 _ => vec![17, 0],
             }
         );
 
-        let mut destination = Image::new(1, 1, crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (0, 0, 0, 255)).expect("destination image");
+        let mut destination = Image::new(1, 1, mode, (0, 0, 0, 255)).expect("destination image");
         destination
             .paste(
                 PasteSource::Image(Box::new(source)),
@@ -113,7 +118,7 @@ fn luma8_to_luma16_conversion_and_paste_preserve_numeric_sample() {
         assert_eq!(
             destination.tobytes().expect("pasted bytes"),
             match mode {
-                "I;16B" => vec![0, 17],
+                crate::raster::Mode::ImageI16B => vec![0, 17],
                 _ => vec![17, 0],
             }
         );

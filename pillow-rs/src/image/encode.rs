@@ -35,15 +35,25 @@ impl Image {
     ) -> Result<Vec<u8>, PilError> {
         let save_format = parse_format_str(format)?;
         let upper_format = format.to_ascii_uppercase();
-        let mode = self.mode()?;
+        let mode = self.mode_identity()?;
         // Pillow's encoders reject unsupported mode/format combinations with
         // an OSError naming both; replicate the public messages exactly.
         let rejection = match upper_format.as_str() {
-            "PNG" if mode == "F" => Some("cannot write mode F as PNG"),
-            "PNG" if mode == "CMYK" => Some("cannot write mode CMYK as PNG"),
-            "BMP" if mode == "I" => Some("cannot write mode I as BMP"),
-            "BMP" if mode == "F" => Some("cannot write mode F as BMP"),
-            "BMP" if mode == "CMYK" => Some("cannot write mode CMYK as BMP"),
+            "PNG" if mode == crate::raster::Mode::ImageF32 => {
+                Some("cannot write mode F as PNG")
+            }
+            "PNG" if mode == crate::raster::Mode::ImageCmyk8 => {
+                Some("cannot write mode CMYK as PNG")
+            }
+            "BMP" if mode == crate::raster::Mode::ImageI32 => {
+                Some("cannot write mode I as BMP")
+            }
+            "BMP" if mode == crate::raster::Mode::ImageF32 => {
+                Some("cannot write mode F as BMP")
+            }
+            "BMP" if mode == crate::raster::Mode::ImageCmyk8 => {
+                Some("cannot write mode CMYK as BMP")
+            }
             _ => None,
         };
         if let Some(message) = rejection {

@@ -14,4 +14,5 @@ pub(crate) use fixed_palette::map_pixels_to_fixed_palette;
 pub(crate) use maxcoverage::{kmeans_refine, maxcoverage_quantize_rgb};
 pub(crate) use median_cut::median_cut_quantize_rgb;
 pub(crate) use octree::{quantize_octree_rgb, quantize_octree_rgba};
-pub(crate) use web_palette::web_palette_quantize;
+pub(crate) use operations::quantize_rgba_samples;
+pub(crate) use web_palette::{identity_grayscale_palette, web_palette_quantize};

@@ -1,32 +1,7 @@
 //! Materialized input guards for declared implementation strategies.
 
 use super::super::{GuardAssessment, RequestFacts, StrategyGuard, StrategyInputs};
-use crate::compute::pool_cpu::ops::resize::helpers::coefficients::{
-    byte_coefficients_fit_i32, byte_coefficients_fit_source,
-};
-use crate::ops::pil_resize::{precompute_coeffs, precompute_coeffs_boxed_for_filter};
-use crate::pipeline::TransposeMethod;
 use crate::raster::Mode;
-
-pub(super) fn resize_filtered_fma_guard(input: StrategyInputs) -> GuardAssessment {
-    match input.request {
-        RequestFacts::Resize { width, height, filter, boxed, .. } => {
-            let has_filtered_work = !matches!(filter, crate::pipeline::ResampleFilter::Nearest)
-                && input.width != 0
-                && input.height != 0
-                && width != 0
-                && height != 0
-                && (boxed || (input.width, input.height) != (width, height));
-            if has_filtered_work {
-                GuardAssessment::Satisfied
-            } else {
-                GuardAssessment::Ineligible
-            }
-        }
-        RequestFacts::Unspecified => GuardAssessment::Deferred,
-        _ => GuardAssessment::Ineligible,
-    }
-}
 
 pub(super) fn thumbnail_i32_stream_guard(input: StrategyInputs) -> GuardAssessment {
     let (width, height, filter) = match input.request {
@@ -85,298 +60,6 @@ pub(super) fn reduce_f32_vector_guard(input: StrategyInputs) -> GuardAssessment 
     }
 }
 
-pub(super) fn resize_luma16_vector_guard(input: StrategyInputs) -> GuardAssessment {
-    let (width, height) = match input.request {
-        RequestFacts::Resize { width, height, boxed: false, .. } => (width, height),
-        RequestFacts::Unspecified => return GuardAssessment::Deferred,
-        _ => return GuardAssessment::Ineligible,
-    };
-    if width == 0 || height == 0 {
-        return GuardAssessment::Ineligible;
-    }
-    let layout = checked_native_bytes_guard(input, 2);
-    if !matches!(layout, GuardAssessment::Satisfied) {
-        return layout;
-    }
-    let output_width = match usize::try_from(width) {
-        Ok(width) => width,
-        Err(_) => return GuardAssessment::Ineligible,
-    };
-    let output_height = match usize::try_from(height) {
-        Ok(height) => height,
-        Err(_) => return GuardAssessment::Ineligible,
-    };
-    let source_height = match usize::try_from(input.height) {
-        Ok(height) => height,
-        Err(_) => return GuardAssessment::Ineligible,
-    };
-    if output_width.checked_mul(output_height).is_none()
-        || source_height.checked_mul(output_width).is_none()
-    {
-        GuardAssessment::Ineligible
-    } else {
-        GuardAssessment::Satisfied
-    }
-}
-
-pub(super) fn resize_i32_neon_guard(input: StrategyInputs) -> GuardAssessment {
-    let (width, height) = match input.request {
-        RequestFacts::Resize {
-            width,
-            height,
-            boxed: false,
-            ..
-        } => (width, height),
-        RequestFacts::Unspecified => return GuardAssessment::Deferred,
-        _ => return GuardAssessment::Ineligible,
-    };
-    if input.width == 0
-        || input.height == 0
-        || width == 0
-        || height == 0
-        || (input.width, input.height) == (width, height)
-    {
-        return GuardAssessment::Ineligible;
-    }
-    let layout = checked_native_bytes_guard(input, 4);
-    if !matches!(layout, GuardAssessment::Satisfied) {
-        return layout;
-    }
-    let output_pixels = match (width as usize).checked_mul(height as usize) {
-        Some(pixels) => pixels,
-        None => return GuardAssessment::Ineligible,
-    };
-    let intermediate_samples = (input.height as usize).checked_mul(width as usize);
-    if output_pixels.checked_mul(4).is_some() && intermediate_samples.is_some() {
-        GuardAssessment::Satisfied
-    } else {
-        GuardAssessment::Ineligible
-    }
-}
-
-pub(super) fn resize_byte_nearest_vector_guard(
-    input: StrategyInputs,
-    channels: u8,
-) -> GuardAssessment {
-    if !(1..=4).contains(&channels) {
-        return GuardAssessment::Ineligible;
-    }
-    let (width, height) = match input.request {
-        RequestFacts::Resize {
-            width,
-            height,
-            filter: crate::pipeline::ResampleFilter::Nearest,
-            boxed: false,
-            ..
-        } => (width, height),
-        RequestFacts::Unspecified => return GuardAssessment::Deferred,
-        _ => return GuardAssessment::Ineligible,
-    };
-    if width == 0
-        || height == 0
-        || input.width == 0
-        || input.height == 0
-        || (input.width, input.height) == (width, height)
-    {
-        return GuardAssessment::Ineligible;
-    }
-    let layout = checked_native_bytes_guard(input, channels);
-    if !matches!(layout, GuardAssessment::Satisfied) {
-        return layout;
-    }
-    if crate::checked_dims::CheckedDims::new(width, height, channels).is_ok() {
-        GuardAssessment::Satisfied
-    } else {
-        GuardAssessment::Ineligible
-    }
-}
-
-pub(super) fn resize_byte_filtered_vector_guard(
-    input: StrategyInputs,
-    channels: u8,
-) -> GuardAssessment {
-    if !(1..=4).contains(&channels) {
-        return GuardAssessment::Ineligible;
-    }
-    let (width, height, filter) = match input.request {
-        RequestFacts::Resize {
-            width,
-            height,
-            filter,
-            boxed: false,
-            ..
-        } => (width, height, filter),
-        RequestFacts::Unspecified => return GuardAssessment::Deferred,
-        _ => return GuardAssessment::Ineligible,
-    };
-    if matches!(filter, crate::pipeline::ResampleFilter::Nearest)
-        || width == 0
-        || height == 0
-        || input.width == 0
-        || input.height == 0
-        || (input.width, input.height) == (width, height)
-    {
-        return GuardAssessment::Ineligible;
-    }
-    let source_layout = checked_native_bytes_guard(input, channels);
-    if !matches!(source_layout, GuardAssessment::Satisfied) {
-        return source_layout;
-    }
-    if crate::checked_dims::CheckedDims::new(width, input.height, channels).is_err()
-        || crate::checked_dims::CheckedDims::new(width, height, channels).is_err()
-    {
-        return GuardAssessment::Ineligible;
-    }
-    let horizontal = precompute_coeffs(width, input.width, filter);
-    let vertical = precompute_coeffs(height, input.height, filter);
-    let coefficients_fit = match (
-        usize::try_from(input.width),
-        usize::try_from(input.height),
-    ) {
-        (Ok(source_width), Ok(source_height)) => {
-            byte_coefficients_fit_source(&horizontal, source_width)
-                && byte_coefficients_fit_source(&vertical, source_height)
-                && byte_coefficients_fit_i32(&horizontal)
-                && byte_coefficients_fit_i32(&vertical)
-        }
-        _ => false,
-    };
-    if coefficients_fit {
-        GuardAssessment::Satisfied
-    } else {
-        GuardAssessment::Ineligible
-    }
-}
-
-pub(super) fn resize_byte_native_vector_guard(
-    input: StrategyInputs,
-    channels: u8,
-) -> GuardAssessment {
-    match input.request {
-        RequestFacts::Resize {
-            filter: crate::pipeline::ResampleFilter::Nearest,
-            ..
-        } => resize_byte_nearest_vector_guard(input, channels),
-        RequestFacts::Resize { .. } => resize_byte_filtered_vector_guard(input, channels),
-        RequestFacts::Unspecified => GuardAssessment::Deferred,
-        _ => GuardAssessment::Ineligible,
-    }
-}
-
-pub(super) fn resize_byte_boxed_nearest_vector_guard(
-    input: StrategyInputs,
-    channels: u8,
-) -> GuardAssessment {
-    match input.request {
-        RequestFacts::Resize {
-            filter: crate::pipeline::ResampleFilter::Nearest,
-            boxed: true,
-            ..
-        } => resize_byte_boxed_vector_guard(input, channels),
-        RequestFacts::Unspecified => GuardAssessment::Deferred,
-        _ => GuardAssessment::Ineligible,
-    }
-}
-
-pub(super) fn resize_byte_boxed_vector_guard(
-    input: StrategyInputs,
-    channels: u8,
-) -> GuardAssessment {
-    if !(1..=4).contains(&channels) {
-        return GuardAssessment::Ineligible;
-    }
-    let (width, height, filter, bounds_bits) = match input.request {
-        RequestFacts::Resize {
-            width,
-            height,
-            filter,
-            boxed: true,
-            box_bounds_bits: Some(bounds),
-        } => (width, height, filter, bounds),
-        RequestFacts::Unspecified => return GuardAssessment::Deferred,
-        _ => return GuardAssessment::Ineligible,
-    };
-    if width == 0 || height == 0 || input.width == 0 || input.height == 0 {
-        return GuardAssessment::Ineligible;
-    }
-    let layout = checked_native_bytes_guard(input, channels);
-    if !matches!(layout, GuardAssessment::Satisfied) {
-        return layout;
-    }
-    if crate::checked_dims::CheckedDims::new(width, height, channels).is_err()
-        || crate::checked_dims::CheckedDims::new(width, input.height, channels).is_err()
-    {
-        return GuardAssessment::Ineligible;
-    }
-
-    let bounds = (
-        f64::from(f64::from_bits(bounds_bits.0) as f32),
-        f64::from(f64::from_bits(bounds_bits.1) as f32),
-        f64::from(f64::from_bits(bounds_bits.2) as f32),
-        f64::from(f64::from_bits(bounds_bits.3) as f32),
-    );
-    if !bounds.0.is_finite()
-        || !bounds.1.is_finite()
-        || !bounds.2.is_finite()
-        || !bounds.3.is_finite()
-        || bounds.0 < 0.0
-        || bounds.1 < 0.0
-        || bounds.2 > f64::from(input.width as f32)
-        || bounds.3 > f64::from(input.height as f32)
-        || bounds.2 < bounds.0
-        || bounds.3 < bounds.1
-    {
-        return GuardAssessment::Ineligible;
-    }
-
-    let full_source_identity = input.width == width
-        && input.height == height
-        && bounds.0 == 0.0
-        && bounds.1 == 0.0
-        && bounds.2 == f64::from(input.width as f32)
-        && bounds.3 == f64::from(input.height as f32);
-    if full_source_identity
-        || u64::from(input.height) > u64::from(input.width) * 100 && height < input.height
-    {
-        return GuardAssessment::Ineligible;
-    }
-    if matches!(filter, crate::pipeline::ResampleFilter::Nearest) {
-        return GuardAssessment::Satisfied;
-    }
-
-    let horizontal = precompute_coeffs_boxed_for_filter(
-        width,
-        input.width,
-        bounds.0,
-        bounds.2,
-        filter,
-    );
-    let vertical = precompute_coeffs_boxed_for_filter(
-        height,
-        input.height,
-        bounds.1,
-        bounds.3,
-        filter,
-    );
-    let coefficient_shape_is_valid = match (
-        usize::try_from(input.width),
-        usize::try_from(input.height),
-    ) {
-        (Ok(source_width), Ok(source_height)) => {
-            byte_coefficients_fit_source(&horizontal, source_width)
-                && byte_coefficients_fit_source(&vertical, source_height)
-                && byte_coefficients_fit_i32(&horizontal)
-                && byte_coefficients_fit_i32(&vertical)
-        }
-        _ => false,
-    };
-    if coefficient_shape_is_valid {
-        GuardAssessment::Satisfied
-    } else {
-        GuardAssessment::Ineligible
-    }
-}
-
 pub(super) fn brightness_vector_guard(
     input: StrategyInputs,
     channels: u8,
@@ -396,6 +79,33 @@ pub(super) fn brightness_vector_guard(
     }
     match (expected, input.byte_len) {
         (Some(expected), Some(actual)) if expected != 0 && actual == expected => {
+            GuardAssessment::Satisfied
+        }
+        (Some(_), None) => GuardAssessment::Deferred,
+        _ => GuardAssessment::Ineligible,
+    }
+}
+
+pub(super) fn contrast_vector_guard(
+    input: StrategyInputs,
+    channels: u8,
+) -> GuardAssessment {
+    let factor_bits = match input.request {
+        RequestFacts::Contrast { factor_bits } => factor_bits,
+        RequestFacts::Unspecified => return GuardAssessment::Deferred,
+        _ => return GuardAssessment::Ineligible,
+    };
+    let factor = f64::from_bits(factor_bits);
+    if !factor.is_finite() || !(factor as f32).is_finite() {
+        return GuardAssessment::Ineligible;
+    }
+    let expected = input
+        .width
+        .checked_mul(input.height)
+        .and_then(|pixels| pixels.checked_mul(u32::from(channels)))
+        .and_then(|bytes| usize::try_from(bytes).ok());
+    match (expected, input.byte_len) {
+        (Some(expected), Some(actual)) if expected >= 8 && actual == expected => {
             GuardAssessment::Satisfied
         }
         (Some(_), None) => GuardAssessment::Deferred,
@@ -833,6 +543,95 @@ pub(super) fn rotate_vector_bytes_guard(
         return GuardAssessment::Ineligible;
     }
     layout
+}
+
+pub(super) fn transform_byte_kernels_guard(
+    input: StrategyInputs,
+    channels: u8,
+    affine_nearest: bool,
+    affine_bilinear: bool,
+    projective_nearest: bool,
+) -> GuardAssessment {
+    if !(1..=4).contains(&channels) {
+        return GuardAssessment::Ineligible;
+    }
+    let facts = match input.request {
+        RequestFacts::Transform { .. } => input.request,
+        RequestFacts::Unspecified => return GuardAssessment::Deferred,
+        _ => return GuardAssessment::Ineligible,
+    };
+    let RequestFacts::Transform {
+        method,
+        data_len,
+        filter,
+        coefficients_finite,
+        output_width,
+        output_height,
+    } = facts
+    else {
+        return GuardAssessment::Ineligible;
+    };
+    let supported_request = match method {
+        0 if filter == crate::pipeline::ResampleFilter::Nearest => affine_nearest && data_len == 6,
+        0 if filter == crate::pipeline::ResampleFilter::Bilinear => {
+            affine_bilinear && data_len == 6 && input.width != 0 && input.height != 0
+        }
+        1 | 2 if filter == crate::pipeline::ResampleFilter::Nearest => {
+            projective_nearest && data_len == 8 && input.width != 0 && input.height != 0
+        }
+        _ => false,
+    };
+    if !supported_request
+        || !coefficients_finite
+        || output_width == 0
+        || output_height == 0
+        || crate::checked_dims::CheckedDims::new(output_width, output_height, channels).is_err()
+    {
+        return GuardAssessment::Ineligible;
+    }
+    checked_native_bytes_guard(input, channels)
+}
+
+pub(super) fn transform_i16_affine_guard(
+    input: StrategyInputs,
+    nearest: bool,
+    bilinear: bool,
+) -> GuardAssessment {
+    let facts = match input.request {
+        RequestFacts::Transform { .. } => input.request,
+        RequestFacts::Unspecified => return GuardAssessment::Deferred,
+        _ => return GuardAssessment::Ineligible,
+    };
+    let RequestFacts::Transform {
+        method,
+        data_len,
+        filter,
+        coefficients_finite,
+        output_width,
+        output_height,
+    } = facts
+    else {
+        return GuardAssessment::Ineligible;
+    };
+    let supported_filter = match filter {
+        crate::pipeline::ResampleFilter::Nearest => nearest,
+        crate::pipeline::ResampleFilter::Bilinear => bilinear,
+        _ => false,
+    };
+    if method != 0
+        || data_len != 6
+        || !supported_filter
+        || !coefficients_finite
+        || input.width == 0
+        || input.height == 0
+        || output_width == 0
+        || output_height == 0
+        || crate::checked_dims::CheckedDims::new(input.width, input.height, 2).is_err()
+        || crate::checked_dims::CheckedDims::new(output_width, output_height, 2).is_err()
+    {
+        return GuardAssessment::Ineligible;
+    }
+    checked_native_bytes_guard(input, 2)
 }
 
 fn rotate_nearest_geometry_supported(

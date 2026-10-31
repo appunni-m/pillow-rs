@@ -82,7 +82,7 @@ fn interpolate_channel(
 #[inline(always)]
 pub(super) fn write_pixel(
     pixel: [u8; 4],
-    source_mode: Mode,
+    preserve_source_fourth: bool,
     prepared: &[i16],
     size: (usize, usize, usize),
     scales: [u32; 3],
@@ -116,52 +116,8 @@ pub(super) fn write_pixel(
             .clamp(0, 255) as u8;
     }
     if channels == 3 && target_channels == 4 {
-        output[3] = if matches!(source_mode, Mode::ImageRgba8 | Mode::ImageCmyk8) {
-            pixel[3]
-        } else {
-            255
-        };
+        output[3] = if preserve_source_fourth { pixel[3] } else { 255 };
     }
-}
-
-pub(crate) fn apply(
-    image: &DynamicImage,
-    source_mode: Mode,
-    size: (u32, u32, u32),
-    table: &[f64],
-    channels: u32,
-    target_mode: Mode,
-) -> Result<DynamicImage, PilError> {
-    let (sx, sy, sz) = (size.0 as usize, size.1 as usize, size.2 as usize);
-    let channels = channels as usize;
-    let target_channels = match target_mode {
-        Mode::ImageRgb8 => 3,
-        Mode::ImageRgba8 | Mode::ImageCmyk8 => 4,
-        _ => return Err(PilError::InternalError(
-            "validated color3dlut target mode was not RGB, RGBA, or CMYK".into(),
-        )),
-    };
-    let scales = color_scales((sx, sy, sz));
-    let prepared = prepare_table(table);
-    let (width, height) = image.dimensions();
-    let mut output = vec![0u8; (width * height) as usize * 4];
-
-    for y in 0..height {
-        for x in 0..width {
-            let offset = ((y * width + x) as usize) * 4;
-            write_pixel(
-                image.get_pixel(x, y).0,
-                source_mode,
-                &prepared,
-                (sx, sy, sz),
-                scales,
-                channels,
-                target_channels,
-                &mut output[offset..offset + 4],
-            );
-        }
-    }
-    image_from_rgba_bytes(width, height, output, target_mode)
 }
 
 /// Applies the same LUT arithmetic directly to a native three-byte raster.
@@ -171,7 +127,6 @@ pub(crate) fn apply(
 /// the source mode to RGB.
 pub(crate) fn apply_native_rgb_samples(
     image: &RgbImage,
-    source_mode: Mode,
     size: (u32, u32, u32),
     table: &[f64],
     channels: u32,
@@ -216,7 +171,7 @@ pub(crate) fn apply_native_rgb_samples(
     {
         write_pixel(
             [source_pixel[0], source_pixel[1], source_pixel[2], 255],
-            source_mode,
+            false,
             &prepared,
             size,
             scales,
@@ -228,29 +183,68 @@ pub(crate) fn apply_native_rgb_samples(
     image_from_native_bytes(width, height, output, target_mode)
 }
 
-fn image_from_rgba_bytes(
-    width: u32,
-    height: u32,
-    bytes: Vec<u8>,
+/// Applies the scalar LUT directly to a native four-byte source carrier.
+///
+/// The mode owner supplies the exact typed buffer and the operation preserves
+/// the source's fourth sample when a three-channel table expands to four
+/// output channels. This is alpha for RGBA and K for CMYK; the byte kernel
+/// does not reinterpret or convert either source mode.
+pub(crate) fn apply_native_rgba_samples(
+    image: &RgbaImage,
+    size: (u32, u32, u32),
+    table: &[f64],
+    channels: u32,
     target_mode: Mode,
 ) -> Result<DynamicImage, PilError> {
-    let rgba = RgbaImage::from_raw(width, height, bytes)
-        .ok_or_else(|| PilError::InternalError("color3dlut output size mismatch".into()))?;
-    match target_mode {
-        Mode::ImageRgb8 => Ok(DynamicImage::ImageRgb8(RgbImage::from_fn(
-            width,
-            height,
-            |x, y| {
-                let pixel = rgba.get_pixel(x, y);
-                crate::raster::Rgb([pixel[0], pixel[1], pixel[2]])
-            },
-        ))),
-        Mode::ImageRgba8 => Ok(DynamicImage::ImageRgba8(rgba)),
-        Mode::ImageCmyk8 => Ok(DynamicImage::ImageCmyk8(rgba)),
-        _ => Err(PilError::InternalError(
+    let (width, height) = image.dimensions();
+    let source_len = usize::try_from(width)
+        .ok()
+        .and_then(|width| {
+            usize::try_from(height)
+                .ok()
+                .and_then(|height| width.checked_mul(height))
+        })
+        .and_then(|pixels| pixels.checked_mul(4))
+        .ok_or_else(|| PilError::DimensionError("Color3DLut source size overflows".into()))?;
+    let source = image.as_raw();
+    if source.len() != source_len {
+        return Err(PilError::InternalError(
+            "native Color3DLut source shape mismatch".into(),
+        ));
+    }
+    let target_channels = match target_mode {
+        Mode::ImageRgb8 => 3,
+        Mode::ImageRgba8 | Mode::ImageCmyk8 => 4,
+        _ => return Err(PilError::InternalError(
             "validated color3dlut target mode was not RGB, RGBA, or CMYK".into(),
         )),
+    };
+    let output_dimensions = crate::checked_dims::CheckedDims::new_allow_empty(
+        width,
+        height,
+        target_channels as u8,
+    )?;
+    let size = (size.0 as usize, size.1 as usize, size.2 as usize);
+    let channels = channels as usize;
+    let scales = color_scales(size);
+    let prepared = prepare_table(table);
+    let mut output = output_dimensions.alloc_buffer();
+    for (source_pixel, output_pixel) in source
+        .chunks_exact(4)
+        .zip(output.chunks_exact_mut(target_channels))
+    {
+        write_pixel(
+            [source_pixel[0], source_pixel[1], source_pixel[2], source_pixel[3]],
+            true,
+            &prepared,
+            size,
+            scales,
+            channels,
+            target_channels,
+            output_pixel,
+        );
     }
+    image_from_native_bytes(width, height, output, target_mode)
 }
 
 pub(super) fn image_from_native_bytes(

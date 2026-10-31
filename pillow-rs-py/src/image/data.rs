@@ -5,13 +5,20 @@ use pyo3::pymethods;
 fn prepare_palette_putpixel<'py>(
     image: &mut pillow_rs::Image,
     value: &Bound<'py, PyAny>,
-    mode: &str,
+    mode: pillow_rs::Mode,
     info: Option<&Bound<'py, PyDict>>,
 ) -> PyResult<(Option<pillow_rs::PutPixelValue>, Option<Bound<'py, PyAny>>)> {
-    let palette_color = matches!(mode, "P" | "PA")
+    let is_palette = matches!(
+        mode,
+        pillow_rs::Mode::ImagePalette8 | pillow_rs::Mode::ImagePaletteAlpha8
+    );
+    let palette_color = is_palette
         && (value.is_instance_of::<PyList>() || value.is_instance_of::<PyTuple>())
         && matches!(value.len()?, 3 | 4);
-    let deferred_alpha = if palette_color && mode == "PA" && value.len()? == 4 {
+    let deferred_alpha = if palette_color
+        && mode == pillow_rs::Mode::ImagePaletteAlpha8
+        && value.len()? == 4
+    {
         Some(value.get_item(3)?)
     } else {
         None
@@ -19,8 +26,13 @@ fn prepare_palette_putpixel<'py>(
     let prepared = if palette_color {
         // The palette wrapper precedes coordinate parsing. PA's alpha
         // conversion happens later, after allocation and bounds checks.
-        let rgb_only = mode == "PA" || image.palette_mode() != Some("RGBA");
-        if mode == "P" && rgb_only && value.len()? == 4 && !value.get_item(3)?.eq(255)? {
+        let rgb_only = mode == pillow_rs::Mode::ImagePaletteAlpha8
+            || image.palette_mode() != Some("RGBA");
+        if mode == pillow_rs::Mode::ImagePalette8
+            && rgb_only
+            && value.len()? == 4
+            && !value.get_item(3)?.eq(255)?
+        {
             return Err(PyValueError::new_err(
                 "cannot add non-opaque RGBA color to RGB palette",
             ));
@@ -171,10 +183,15 @@ impl PyImage {
             return Ok(bytes.into());
         }
 
-        let mode = self.inner.mode().map_err(map_error)?;
+        let mode = self.inner.mode_identity().map_err(map_error)?;
         if !matches!(
-            mode.as_str(),
-            "I" | "F" | "I;16" | "I;16L" | "I;16B" | "I;16N"
+            mode,
+            pillow_rs::Mode::ImageI32
+                | pillow_rs::Mode::ImageF32
+                | pillow_rs::Mode::ImageI16
+                | pillow_rs::Mode::ImageI16L
+                | pillow_rs::Mode::ImageI16B
+                | pillow_rs::Mode::ImageI16N
         ) {
             let values = py.detach(|| self.inner.getdata(None)).map_err(map_error)?;
             return Ok(PyBytes::new(py, &values).into());
@@ -257,15 +274,15 @@ impl PyImage {
         value: &Bound<'_, PyAny>,
         info: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<()> {
-        let mode = self.inner.mode().map_err(map_error)?;
+        let mode = self.inner.mode_identity().map_err(map_error)?;
         let (prepared, deferred_alpha) =
-            prepare_palette_putpixel(&mut self.inner, value, &mode, info)?;
+            prepare_palette_putpixel(&mut self.inner, value, mode, info)?;
         let (x, y) = putpixel_coordinates_in_bounds(&self.inner, xy)?;
         // `putpixel_value_from_python` must retain flexible coercion and error
         // ordering for arbitrary sequences. Ordinary RGB byte tuples contain
         // exact built-in ints, so write those native channels directly and
         // skip constructing a temporary component vector.
-        if mode == "RGB"
+        if mode == pillow_rs::Mode::ImageRgb8
             && prepared.is_none()
             && let Some([r, g, b]) = exact_rgb_tuple_from_python(value)
         {
@@ -279,9 +296,9 @@ impl PyImage {
                 pillow_rs::PutPixelValue::Components(values)
             }
             Some(value) => value,
-            None => putpixel_value_from_python(value, &mode)?,
+            None => putpixel_value_from_python(value, mode)?,
         };
-        let result = if mode == "RGB" {
+        let result = if mode == pillow_rs::Mode::ImageRgb8 {
             match value {
                 pillow_rs::PutPixelValue::Integer(value) => {
                     // The mode was already resolved above for Python value

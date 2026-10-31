@@ -293,8 +293,11 @@ impl Image {
     /// Converts the image to `mode`, optionally selecting a dithering method.
     #[wasm_bindgen(js_name = "convert")]
     pub fn convert(&self, m: &str, dither: Option<String>) -> Result<Image, JsValue> {
+        let mode = pillow_rs::Mode::from_pillow_name(m).ok_or_else(|| {
+            err(pillow_rs::PilError::ValueError("image has wrong mode".to_owned()))
+        })?;
         self.inner
-            .convert(m, None, dither.as_deref(), None, None)
+            .convert(mode, None, dither.as_deref(), None, None)
             .map(|i| Image { inner: i })
             .map_err(err)
     }

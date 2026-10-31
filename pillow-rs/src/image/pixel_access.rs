@@ -1,11 +1,11 @@
 //! Pixel access and mutation methods for [`Image`].
 
 use crate::error::PilError;
-use crate::raster::GenericImageView;
+use crate::raster::{GenericImageView, Mode};
 
 use super::{
     Arc, DynamicImage, FormattedPixelValue, Image, PipelineOp, PutDataValue,
-    is_l16_mode, pillow_band_count,
+    is_l16_identity, pillow_band_count,
 };
 
 /// Host-neutral value extracted for a public `Image.putpixel` call.
@@ -73,7 +73,7 @@ impl Image {
         let img = self.materialized_shared()?;
         let mode = Self::mode_from_materialized(&img);
         let (width, height) = (img.width(), img.height());
-        if is_l16_mode(&mode) {
+        if is_l16_identity(mode) {
             if x >= width || y >= height {
                 return Err(PilError::IndexError("image index out of range".into()));
             }
@@ -89,7 +89,7 @@ impl Image {
                 .map(|value| FormattedPixelValue::Integer(i32::from(value)))
                 .ok_or_else(|| PilError::InternalError("I;16 pixel index out of bounds".into()));
         }
-        if mode == "I" || mode == "F" {
+        if matches!(mode, Mode::ImageI32 | Mode::ImageF32) {
             if x >= width || y >= height {
                 return Err(PilError::IndexError("image index out of range".into()));
             }
@@ -106,7 +106,7 @@ impl Image {
             let sample = img.as_bytes().get(offset..end).ok_or_else(|| {
                 PilError::InternalError("scalar pixel index out of bounds".into())
             })?;
-            if mode == "I" {
+            if mode == Mode::ImageI32 {
                 return Ok(FormattedPixelValue::Integer(i32::from_le_bytes([
                     sample[0], sample[1], sample[2], sample[3],
                 ])));
@@ -117,17 +117,24 @@ impl Image {
         }
 
         let (r, g, b, a) = self.getpixel(x, y)?;
-        Ok(match mode.as_str() {
-            "L" | "1" | "P" => FormattedPixelValue::Scalar(r),
-            "LA" | "La" | "PA" => FormattedPixelValue::Components(vec![r, a]),
-            "RGB" => FormattedPixelValue::Components(vec![r, g, b]),
+        Ok(match mode {
+            Mode::ImageLuma8 | Mode::One | Mode::ImagePalette8 => {
+                FormattedPixelValue::Scalar(r)
+            }
+            Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => {
+                FormattedPixelValue::Components(vec![r, a])
+            }
+            Mode::ImageRgb8 => FormattedPixelValue::Components(vec![r, g, b]),
             // Pillow stores LAB A/B samples in the unsigned byte image as
             // values biased by 128. Merge applies that native C encoding;
             // decode it again at the public pixel boundary.
-            "LAB" => {
+            Mode::ImageLab8 => {
                 FormattedPixelValue::Components(vec![r, g.wrapping_sub(128), b.wrapping_sub(128)])
             }
-            "RGBA" | "RGBa" | "RGBX" | "CMYK" => FormattedPixelValue::Components(vec![r, g, b, a]),
+            Mode::ImageRgba8
+            | Mode::ImageRgbPremultiplied8
+            | Mode::ImageRgbx8
+            | Mode::ImageCmyk8 => FormattedPixelValue::Components(vec![r, g, b, a]),
             _ => FormattedPixelValue::Components(vec![r, g, b]),
         })
     }
@@ -252,19 +259,18 @@ impl Image {
 
     /// Queues a Pillow-style single-integer pixel write.
     ///
-    /// Binding crates use this path when host input is a scalar instead of a
-    /// color tuple. `mode` decides how the scalar expands into the internal
-    /// RGBA tuple before the same [`Image::putpixel`] pipeline path is used.
+    /// Typed Rust callers use this path when they have already selected the
+    /// exact mode strategy for a scalar input. `mode` decides how the scalar
+    /// expands before the same [`Image::putpixel`] pipeline path is used.
     ///
     /// # Errors
     ///
     /// Returns the same errors as [`Image::putpixel`].
-    pub fn putpixel_mode(&mut self, x: u32, y: u32, v: u8, mode: &str) -> Result<(), PilError> {
-        // TODO(pillow-rs#3ptb): take `Mode` directly from typed Rust callers.
-        if is_l16_mode(mode) {
+    pub fn putpixel_mode(&mut self, x: u32, y: u32, v: u8, mode: Mode) -> Result<(), PilError> {
+        if is_l16_identity(mode) {
             return self.putpixel_l16(x, y, i64::from(v));
         }
-        if mode == "P" {
+        if mode == Mode::ImagePalette8 {
             let (w, h) = self.size()?;
             if x >= w || y >= h {
                 return Err(PilError::IndexError("image index out of range".into()));
@@ -281,16 +287,16 @@ impl Image {
             return Ok(());
         }
         let (r, g, b, a) = match mode {
-            "L" | "1" => (v, v, v, 255),
+            Mode::ImageLuma8 | Mode::One => (v, v, v, 255),
             // A scalar PA write supplies the palette index and leaves the
             // alpha sample transparent, matching Pillow's getink expansion.
-            "LA" | "PA" => (v, 0, 0, 0),
-            "RGB" => (v, 0, 0, 255),
+            Mode::ImageLumaA8 | Mode::ImagePaletteAlpha8 => (v, 0, 0, 0),
+            Mode::ImageRgb8 => (v, 0, 0, 255),
             // Pillow treats a scalar as the first sample for every
             // three-band mode, including YCbCr and HSV; the remaining
             // samples are zero rather than copies of the scalar.
-            "YCbCr" | "HSV" => (v, 0, 0, 255),
-            "RGBA" | "RGBX" | "CMYK" => (v, 0, 0, 0),
+            Mode::ImageYCbCr8 | Mode::ImageHsv8 => (v, 0, 0, 255),
+            Mode::ImageRgba8 | Mode::ImageRgbx8 | Mode::ImageCmyk8 => (v, 0, 0, 0),
             _ => (v, v, v, 255),
         };
         self.putpixel(x, y, r, g, b, a)
@@ -340,9 +346,9 @@ impl Image {
         x: u32,
         y: u32,
         value: f64,
-        mode: &str,
+        mode: Mode,
     ) -> Result<(), PilError> {
-        if !matches!(mode, "I" | "F") {
+        if !matches!(mode, Mode::ImageI32 | Mode::ImageF32) {
             return self.putpixel_mode(x, y, value as u8, mode);
         }
         let (width, height) = self.size()?;
@@ -543,22 +549,22 @@ impl Image {
     /// Applies Pillow's public `putpixel` scalar/tuple normalization.
     pub fn putpixel_value(&mut self, x: u32, y: u32, value: PutPixelValue) -> Result<(), PilError> {
         let value = self.prepare_putpixel_palette(value, &[])?;
-        let mode = self.mode()?;
+        let mode = self.mode_identity()?;
         match value {
             PutPixelValue::Integer(value) => {
-                if is_l16_mode(&mode) {
+                if is_l16_identity(mode) {
                     return self.putpixel_l16(x, y, value);
                 }
-                if mode == "I" {
+                if mode == Mode::ImageI32 {
                     // getink narrows the signed integer before storage. Going
                     // through f64 first loses low bits and saturates on cast.
-                    return self.putpixel_mode_scalar(x, y, f64::from(value as i32), &mode);
+                    return self.putpixel_mode_scalar(x, y, f64::from(value as i32), mode);
                 }
-                if mode == "F" {
-                    return self.putpixel_mode_scalar(x, y, value as f64, &mode);
+                if mode == Mode::ImageF32 {
+                    return self.putpixel_mode_scalar(x, y, value as f64, mode);
                 }
-                if matches!(mode.as_str(), "1" | "L" | "P") {
-                    return self.putpixel_mode(x, y, value.clamp(0, 255) as u8, &mode);
+                if matches!(mode, Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8) {
+                    return self.putpixel_mode(x, y, value.clamp(0, 255) as u8, mode);
                 }
                 // Multiband integer ink is ABGR, including alpha in bits
                 // 24..31 for two-band images. A singleton tuple takes this
@@ -567,17 +573,17 @@ impl Image {
                 self.putpixel(x, y, bytes[0], bytes[1], bytes[2], bytes[3])
             }
             PutPixelValue::Float(value) => {
-                if mode == "F" {
-                    self.putpixel_mode_scalar(x, y, value, &mode)
+                if mode == Mode::ImageF32 {
+                    self.putpixel_mode_scalar(x, y, value, mode)
                 } else {
-                    Err(if mode.len() == 1 {
+                    Err(if mode.pillow_name().is_some_and(|name| name.len() == 1) {
                         PilError::TypeError("color must be int or single-element tuple".into())
                     } else {
                         PilError::TypeError("color must be int or tuple".into())
                     })
                 }
             }
-            PutPixelValue::Invalid => Err(if mode.len() == 1 {
+            PutPixelValue::Invalid => Err(if mode.pillow_name().is_some_and(|name| name.len() == 1) {
                 PilError::TypeError("color must be int or single-element tuple".into())
             } else {
                 // Pillow routes non-integral component sequences through its
@@ -590,9 +596,9 @@ impl Image {
                 if let [value] = values.as_slice() {
                     return self.putpixel_value(x, y, PutPixelValue::Integer(*value));
                 }
-                let bands = pillow_band_count(&mode);
-                let palette_color =
-                    matches!(mode.as_str(), "P" | "PA") && matches!(values.len(), 3 | 4);
+                let bands = pillow_band_count(mode);
+                let palette_color = matches!(mode, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
+                    && matches!(values.len(), 3 | 4);
                 if !palette_color
                     && ((bands == 1)
                         || (bands == 2 && values.len() != 2)
@@ -621,8 +627,10 @@ impl Image {
                 }
             }
             PutPixelValue::FloatComponents(values) => match values.as_slice() {
-                [value] if mode == "F" => self.putpixel_mode_scalar(x, y, *value, &mode),
-                _ => Err(if mode.len() == 1 {
+                [value] if mode == Mode::ImageF32 => {
+                    self.putpixel_mode_scalar(x, y, *value, mode)
+                }
+                _ => Err(if mode.pillow_name().is_some_and(|name| name.len() == 1) {
                     PilError::TypeError("color must be int or single-element tuple".into())
                 } else {
                     PilError::TypeError(

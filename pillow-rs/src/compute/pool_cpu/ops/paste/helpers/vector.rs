@@ -1,9 +1,4 @@
 //! Shared 128-bit masked Paste kernels for declared CPU architectures.
-//!
-//! TODO(pillow-rs#3ptb): restore the archived architecture-tuned NEON mask
-//! blends for L/LA/RGB/RGBA/CMYK and dedicated RGB-to-RGBA/RGBA-to-RGB
-//! shuffles. Keep these shared kernels as the exact fallback until those
-//! specialized paths are migrated and measured.
 
 use crate::compute::pool_cpu::ops::paste::helpers::bytes::{
     FourBytesToRgb, LumaAlphaToRgb, Native, RgbToRgba, SourceMap,
@@ -11,7 +6,7 @@ use crate::compute::pool_cpu::ops::paste::helpers::bytes::{
 use crate::compute::pool_cpu::ops::paste::helpers::plan::BytePlan;
 use crate::compute::pool_cpu::ops::paste::helpers::{bytes, layout::SourceLayout};
 use crate::error::PilError;
-use wide::{u8x16, u16x16};
+use wide::{u8x16, u16x8, u16x16};
 
 struct VectorRow<'a> {
     source: &'a [u8],
@@ -326,6 +321,40 @@ fn blend_block(
         crate::compute::pool_cpu::ops::color::convert::helpers::wide::div255_u16x16(weighted)
     };
     values.to_array().map(|value| value as u8)
+}
+
+/// Blends eight stored byte samples with an already expanded L mask.
+#[inline(always)]
+pub(crate) fn blend_l_masked_block8(
+    source: [u8; 8],
+    destination: [u8; 8],
+    mask: [u8; 8],
+) -> [u8; 8] {
+    let source = u16x8::new(source.map(u16::from));
+    let destination = u16x8::new(destination.map(u16::from));
+    let mask = u16x8::new(mask.map(u16::from));
+    let inverse = u16x8::splat(255) - mask;
+    let weighted = source * mask + destination * inverse + u16x8::splat(127);
+    crate::compute::pool_cpu::ops::color::convert::helpers::wide::div255_u16x8(weighted)
+        .to_array()
+        .map(|value| value as u8)
+}
+
+/// Blends sixteen stored byte samples with an already expanded L mask.
+#[inline(always)]
+pub(crate) fn blend_l_masked_block16(
+    source: [u8; 16],
+    destination: [u8; 16],
+    mask: [u8; 16],
+) -> [u8; 16] {
+    let source = u16x16::new(source.map(u16::from));
+    let destination = u16x16::new(destination.map(u16::from));
+    let mask = u16x16::new(mask.map(u16::from));
+    let inverse = u16x16::splat(255) - mask;
+    let weighted = source * mask + destination * inverse + u16x16::splat(127);
+    crate::compute::pool_cpu::ops::color::convert::helpers::wide::div255_u16x16(weighted)
+        .to_array()
+        .map(|value| value as u8)
 }
 
 fn checked_stride(width: usize, channels: usize) -> Result<usize, PilError> {

@@ -2,3 +2,4 @@
 
 pub(crate) mod alpha_composite_impl;
 pub(crate) mod alpha_composite_mirror_impl;
+pub(crate) mod operations;

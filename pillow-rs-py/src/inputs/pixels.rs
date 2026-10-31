@@ -6,7 +6,7 @@ use pyo3::types::{PyAnyMethods, PyFloat, PySequenceMethods, PyTupleMethods, PyTy
 
 pub(crate) fn putpixel_value_from_python(
     value: &Bound<'_, PyAny>,
-    mode: &str,
+    mode: pillow_rs::Mode,
 ) -> PyResult<pillow_rs::PutPixelValue> {
     use pillow_rs::PutPixelValue;
     let tuple = value.cast::<PyTuple>().ok();
@@ -15,7 +15,7 @@ pub(crate) fn putpixel_value_from_python(
     } else {
         value.clone()
     };
-    if mode == "F" {
+    if mode == pillow_rs::Mode::ImageF32 {
         return scalar.extract::<f64>().map(PutPixelValue::Float);
     }
     if scalar.is_instance_of::<PyInt>() {
@@ -37,12 +37,16 @@ pub(crate) fn putpixel_value_from_python(
 
 pub(crate) fn putpixel_component_shape_from_python(
     value: &Bound<'_, PyAny>,
-    mode: &str,
+    mode: pillow_rs::Mode,
     tuple_length: Option<usize>,
 ) -> PyResult<(usize, bool)> {
     // Only P/PA's public palette wrapper accepts RGB(A) lists. Ordinary
     // getink accepts tuples, and unwraps a singleton before numeric coercion.
-    let palette_list = matches!(mode, "P" | "PA")
+    let palette_mode = matches!(
+        mode,
+        pillow_rs::Mode::ImagePalette8 | pillow_rs::Mode::ImagePaletteAlpha8
+    );
+    let palette_list = palette_mode
         && value.is_instance_of::<PyList>()
         && matches!(value.len()?, 3 | 4);
     let length = if palette_list {
@@ -50,8 +54,18 @@ pub(crate) fn putpixel_component_shape_from_python(
     } else {
         tuple_length
     };
-    let palette_color = matches!(mode, "P" | "PA") && matches!(length, Some(3 | 4));
-    let single_band = matches!(mode, "1" | "L" | "P" | "I") || mode.starts_with("I;16");
+    let palette_color = palette_mode && matches!(length, Some(3 | 4));
+    let single_band = matches!(
+        mode,
+        pillow_rs::Mode::One
+            | pillow_rs::Mode::ImageLuma8
+            | pillow_rs::Mode::ImagePalette8
+            | pillow_rs::Mode::ImageI32
+            | pillow_rs::Mode::ImageI16
+            | pillow_rs::Mode::ImageI16L
+            | pillow_rs::Mode::ImageI16B
+            | pillow_rs::Mode::ImageI16N
+    );
     if single_band && !palette_color {
         return Err(PyTypeError::new_err(
             "color must be int or single-element tuple",
@@ -60,7 +74,12 @@ pub(crate) fn putpixel_component_shape_from_python(
     let Some(length) = length else {
         return Err(PyTypeError::new_err("color must be int or tuple"));
     };
-    let two_band = matches!(mode, "LA" | "La" | "PA");
+    let two_band = matches!(
+        mode,
+        pillow_rs::Mode::ImageLumaA8
+            | pillow_rs::Mode::ImageLaPremultiplied8
+            | pillow_rs::Mode::ImagePaletteAlpha8
+    );
     if !palette_color
         && ((two_band && !matches!(length, 1 | 2)) || (!two_band && !matches!(length, 3 | 4)))
     {

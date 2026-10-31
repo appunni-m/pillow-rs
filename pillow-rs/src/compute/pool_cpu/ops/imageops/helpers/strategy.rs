@@ -329,6 +329,15 @@ macro_rules! declare_invert_mode {
 
 macro_rules! declare_invert_native_mode {
     ($mode:ident, $input:ty, $channels:expr, $bytes_per_pixel:expr) => {
+        declare_invert_native_mode!(
+            $mode,
+            $input,
+            $channels,
+            $bytes_per_pixel,
+            None
+        );
+    };
+    ($mode:ident, $input:ty, $channels:expr, $bytes_per_pixel:expr, $core_only_reason:expr) => {
         const ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 3] = [
             crate::compute::registry::support::ImplementationSupport::cpu(
                 crate::compute::registry::support::OperationId::Invert,
@@ -362,8 +371,8 @@ macro_rules! declare_invert_native_mode {
             ),
         ];
 
-        pub(crate) const SUPPORT: crate::compute::registry::support::ModeSupport =
-            crate::compute::registry::support::ModeSupport::cpu(
+        pub(crate) const SUPPORT: crate::compute::registry::support::ModeSupport = match $core_only_reason {
+            Some(reason) => crate::compute::registry::support::ModeSupport::cpu_core_only(
                 crate::compute::registry::support::OperationId::Invert,
                 crate::raster::Mode::$mode,
                 crate::compute::registry::support::OutputModeRule::Preserve,
@@ -372,7 +381,19 @@ macro_rules! declare_invert_native_mode {
                     allow_empty: true,
                 }],
                 &ARCHITECTURES,
-            );
+                reason,
+            ),
+            None => crate::compute::registry::support::ModeSupport::cpu(
+                crate::compute::registry::support::OperationId::Invert,
+                crate::raster::Mode::$mode,
+                crate::compute::registry::support::OutputModeRule::Preserve,
+                &[crate::compute::registry::support::InputContract::CheckedByteDimensions {
+                    bytes_per_pixel: $bytes_per_pixel,
+                    allow_empty: true,
+                }],
+                &ARCHITECTURES,
+            ),
+        };
 
         pub(crate) enum ArchitectureStrategy<'a> {
             Default(&'a $input),

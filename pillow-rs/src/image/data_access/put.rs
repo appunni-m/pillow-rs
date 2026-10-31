@@ -1,8 +1,15 @@
 use super::{
     Arc, Bytes, CheckedDims, Image, PilError, PipelineOp, PixelMode, PutDataInput, PutDataValue,
-    PutDataValueKind, is_l16_mode, l16_uses_big_endian, materialization_cache, putdata_bytes,
+    PutDataValueKind, is_l16_identity, l16_identity_uses_big_endian,
+    materialization_cache, putdata_bytes,
     putdata_clip_u8, putdata_l16_sample,
 };
+use crate::raster::Mode;
+
+fn mode_name(mode: Mode) -> &'static str {
+    mode.pillow_name().unwrap_or("unknown")
+}
+
 impl Image {
     /// Queues replacement pixel data from a flat byte sequence.
     ///
@@ -14,9 +21,9 @@ impl Image {
     /// Currently returns `Ok(())`; materialization reports invalid byte length
     /// or mode mismatches.
     pub fn putdata(&mut self, data: &[u8]) -> Result<(), PilError> {
-        let mode_name = self.mode()?;
-        let mode = crate::pipeline::PixelMode::from_name(&mode_name).ok_or_else(|| {
-            PilError::ValueError(format!("unsupported putdata mode: {mode_name}"))
+        let image_mode = self.mode_identity()?;
+        let mode = PixelMode::from_raster_mode(image_mode).ok_or_else(|| {
+            PilError::ValueError(format!("unsupported putdata mode: {}", mode_name(image_mode)))
         })?;
         let new_self = Image::push_op(
             self,
@@ -48,13 +55,13 @@ impl Image {
         if scale != 1.0 || offset != 0.0 || data.len() != entry_count {
             return Ok(false);
         }
-        let mode_name = self.mode()?;
-        if !matches!(mode_name.as_str(), "1" | "L" | "P") {
+        let image_mode = self.mode_identity()?;
+        if !matches!(image_mode, Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8) {
             return Ok(false);
         }
         self.validate_putdata_length(entry_count)?;
-        let mode = PixelMode::from_name(&mode_name).ok_or_else(|| {
-            PilError::ValueError(format!("unsupported putdata mode: {mode_name}"))
+        let mode = PixelMode::from_raster_mode(image_mode).ok_or_else(|| {
+            PilError::ValueError(format!("unsupported putdata mode: {}", mode_name(image_mode)))
         })?;
         let new_self = Image::push_op(self, PipelineOp::PutData { data, mode });
         *self = new_self;
@@ -81,8 +88,8 @@ impl Image {
     ) -> Result<(), PilError> {
         self.validate_putdata_length(values.len())?;
 
-        let mode_name = self.mode()?;
-        if is_l16_mode(&mode_name) {
+        let image_mode = self.mode_identity()?;
+        if is_l16_identity(image_mode) {
             // Keep I;16 out of PixelMode's byte-oriented deferred path. Its
             // generic fallback widens to RGBA8 and loses the 16-bit sample.
             for (pixel_index, value) in values.iter().enumerate() {
@@ -90,8 +97,8 @@ impl Image {
             }
             return Ok(());
         }
-        let mode = crate::pipeline::PixelMode::from_name(&mode_name).ok_or_else(|| {
-            PilError::ValueError(format!("unsupported putdata mode: {mode_name}"))
+        let mode = PixelMode::from_raster_mode(image_mode).ok_or_else(|| {
+            PilError::ValueError(format!("unsupported putdata mode: {}", mode_name(image_mode)))
         })?;
         let data = putdata_bytes(mode, values, scale, offset)?;
         self.putdata(&data)
@@ -103,15 +110,23 @@ impl Image {
     /// need to inspect Python protocol behavior, but it does not need to
     /// duplicate the list of numeric and multiband mode names.
     pub fn putdata_value_kind(&self) -> Result<PutDataValueKind, PilError> {
-        let mode_name = self.mode()?;
+        let image_mode = self.mode_identity()?;
         if matches!(
-            mode_name.as_str(),
-            "1" | "L" | "P" | "I" | "I;16" | "I;16L" | "I;16B" | "I;16N" | "F"
+            image_mode,
+            Mode::One
+                | Mode::ImageLuma8
+                | Mode::ImagePalette8
+                | Mode::ImageI32
+                | Mode::ImageI16
+                | Mode::ImageI16L
+                | Mode::ImageI16B
+                | Mode::ImageI16N
+                | Mode::ImageF32
         ) {
             return Ok(PutDataValueKind::Numeric);
         }
-        let mode = crate::pipeline::PixelMode::from_name(&mode_name).ok_or_else(|| {
-            PilError::ValueError(format!("unsupported putdata mode: {mode_name}"))
+        let mode = PixelMode::from_raster_mode(image_mode).ok_or_else(|| {
+            PilError::ValueError(format!("unsupported putdata mode: {}", mode_name(image_mode)))
         })?;
         Ok(PutDataValueKind::Components {
             channels: mode.channels(),
@@ -215,12 +230,12 @@ impl Image {
         scale: f64,
         offset: f64,
     ) -> Result<bool, PilError> {
-        let mode_name = self.mode()?;
-        if is_l16_mode(&mode_name) {
+        let image_mode = self.mode_identity()?;
+        if is_l16_identity(image_mode) {
             self.putdata_l16_bytes(data, scale, offset)?;
             return Ok(true);
         }
-        if matches!(mode_name.as_str(), "1" | "L" | "P") {
+        if matches!(image_mode, Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8) {
             if scale == 1.0 && offset == 0.0 && data.len() == entry_count {
                 // Bytes already contain the exact one-byte samples Pillow
                 // stores for these modes. Queue them directly instead of
@@ -262,7 +277,7 @@ impl Image {
         self.validate_putdata_length(data.len())?;
         let (width, height) = self.size()?;
         let dimensions = CheckedDims::new(width, height, 2)?;
-        let mode = self.mode()?;
+        let mode = self.mode_identity()?;
         let mut raw = dimensions.alloc_buffer();
         let width = width as usize;
         let row_stride = width
@@ -284,7 +299,7 @@ impl Image {
                 .as_mut_luma16()
                 .ok_or_else(|| PilError::InternalError("putdata I;16 storage mismatch".into()))?;
             for (pixel, sample) in destination.as_mut().iter_mut().zip(raw.chunks_exact(2)) {
-                *pixel = if l16_uses_big_endian(&mode) {
+                *pixel = if l16_identity_uses_big_endian(mode) {
                     u16::from_be_bytes([sample[0], sample[1]])
                 } else {
                     u16::from_le_bytes([sample[0], sample[1]])
@@ -381,12 +396,12 @@ impl Image {
             return Err(PilError::TypeError("too many data entries".into()));
         }
 
-        let mode_name = self.mode()?;
-        if is_l16_mode(&mode_name) {
+        let image_mode = self.mode_identity()?;
+        if is_l16_identity(image_mode) {
             return self.putdata_l16_value_at(pixel_index, value, scale, offset, requested_backend);
         }
-        let mode = crate::pipeline::PixelMode::from_name(&mode_name).ok_or_else(|| {
-            PilError::ValueError(format!("unsupported putdata mode: {mode_name}"))
+        let mode = PixelMode::from_raster_mode(image_mode).ok_or_else(|| {
+            PilError::ValueError(format!("unsupported putdata mode: {}", mode_name(image_mode)))
         })?;
         let bytes = putdata_bytes(mode, std::slice::from_ref(value), scale, offset)?;
         let start = pixel_index
@@ -398,7 +413,7 @@ impl Image {
 
         self.load()?;
         match self {
-            Image::Paletted(data) if mode == crate::pipeline::PixelMode::P => {
+            Image::Paletted(data) if image_mode == Mode::ImagePalette8 => {
                 data.indices
                     .as_bytes_mut()
                     .expect("P mode uses a byte-addressable index buffer")[pixel_index] = bytes[0];

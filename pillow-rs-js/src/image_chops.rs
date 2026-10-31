@@ -174,6 +174,8 @@ impl ImageChops {
 #[wasm_bindgen(js_name = "merge")]
 /// Merges image bands into a new image in the requested mode.
 pub fn merge(mode: &str, bands: Vec<Image>) -> Result<Image, JsValue> {
+    let mode = pillow_rs::Mode::from_pillow_name(mode)
+        .ok_or_else(|| err(pillow_rs::PilError::KeyError(mode.to_owned())))?;
     let imgs: Vec<RsImage> = bands.iter().map(|b| b.inner.clone()).collect();
     pillow_rs::image_merge(mode, &imgs)
         .map(|i| Image { inner: i })
@@ -213,6 +215,8 @@ pub fn merge_with_input(
     // workflow therefore supplies image handles as a typed Vec and preserves
     // the first non-image's public type separately; validation/order remains
     // in the shared core contract.
+    let mode = pillow_rs::Mode::from_pillow_name(mode)
+        .ok_or_else(|| err(pillow_rs::PilError::KeyError(mode.to_owned())))?;
     let mut inputs = bands
         .into_iter()
         .map(|image| pillow_rs::MergeInput::Image(Box::new(image.inner)))

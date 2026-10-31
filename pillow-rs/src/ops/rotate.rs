@@ -2,6 +2,7 @@ use crate::error::PilError;
 use crate::image::Image;
 use crate::ops::imageops::ImageOpsColor;
 use crate::pipeline::{PipelineOp, ResampleFilter};
+use crate::raster::Mode;
 
 /// Host-neutral resampling input for Pillow's rotate wrapper.
 #[derive(Debug, Clone)]
@@ -188,8 +189,9 @@ impl Image {
         // when the caller supplies BILINEAR/BICUBIC. Treat that effective
         // choice as part of the queued operation so the fast path and lazy
         // geometry planner see the same contract as the native rotate call.
-        let source_mode = self.mode()?;
-        let nearest = requested_nearest || matches!(source_mode.as_str(), "1" | "P");
+        let source_mode = self.mode_identity()?;
+        let nearest = requested_nearest
+            || matches!(source_mode, Mode::One | Mode::ImagePalette8);
         let filter = if nearest {
             ResampleFilter::Nearest
         } else {
@@ -210,7 +212,10 @@ impl Image {
                     ImageOpsColor::None => unreachable!(),
                 };
                 let (fill, _) = self.public_transform_fill(Some(fill))?;
-                Some(if matches!(source_mode.as_str(), "LA" | "La" | "PA") {
+                Some(if matches!(
+                    source_mode,
+                    Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8
+                ) {
                     (fill.0, fill.0, fill.0, fill.1)
                 } else {
                     fill

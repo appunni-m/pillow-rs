@@ -23,6 +23,28 @@ pub(crate) fn execute_boxed<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_AL
         destination_size,
         bounds,
         filter,
+        None,
+    )
+}
+
+pub(crate) fn execute_boxed_with_sparse_rows<
+    const CHANNELS: usize,
+    const PREMULTIPLY_STRAIGHT_ALPHA: bool,
+>(
+    source: &[u8],
+    source_size: (u32, u32),
+    destination_size: (u32, u32),
+    bounds: (f64, f64, f64, f64),
+    filter: ResampleFilter,
+    sparse_source_rows: &[bool],
+) -> Result<Vec<u8>, PilError> {
+    boxed::execute::<CHANNELS, PREMULTIPLY_STRAIGHT_ALPHA>(
+        source,
+        source_size,
+        destination_size,
+        bounds,
+        filter,
+        Some(sparse_source_rows),
     )
 }
 
@@ -31,6 +53,46 @@ pub(crate) fn execute<const CHANNELS: usize, const PREMULTIPLIED_ALPHA: bool, co
     source_size: (u32, u32),
     destination_size: (u32, u32),
     filter: ResampleFilter,
+) -> Result<Vec<u8>, PilError> {
+    execute_with_row_facts::<CHANNELS, PREMULTIPLIED_ALPHA, USE_BOUNDED_I32>(
+        source,
+        source_size,
+        destination_size,
+        filter,
+        None,
+    )
+}
+
+pub(crate) fn execute_with_sparse_rows<
+    const CHANNELS: usize,
+    const PREMULTIPLIED_ALPHA: bool,
+    const USE_BOUNDED_I32: bool,
+>(
+    source: &[u8],
+    source_size: (u32, u32),
+    destination_size: (u32, u32),
+    filter: ResampleFilter,
+    sparse_source_rows: &[bool],
+) -> Result<Vec<u8>, PilError> {
+    execute_with_row_facts::<CHANNELS, PREMULTIPLIED_ALPHA, USE_BOUNDED_I32>(
+        source,
+        source_size,
+        destination_size,
+        filter,
+        Some(sparse_source_rows),
+    )
+}
+
+fn execute_with_row_facts<
+    const CHANNELS: usize,
+    const PREMULTIPLIED_ALPHA: bool,
+    const USE_BOUNDED_I32: bool,
+>(
+    source: &[u8],
+    source_size: (u32, u32),
+    destination_size: (u32, u32),
+    filter: ResampleFilter,
+    sparse_source_rows: Option<&[bool]>,
 ) -> Result<Vec<u8>, PilError> {
     validate_channels::<CHANNELS, PREMULTIPLIED_ALPHA, USE_BOUNDED_I32>()?;
     if matches!(filter, ResampleFilter::Nearest) {
@@ -58,6 +120,11 @@ pub(crate) fn execute<const CHANNELS: usize, const PREMULTIPLIED_ALPHA: bool, co
         .map_err(|_| PilError::DimensionError("Resize width is too large".into()))?;
     let output_height = usize::try_from(destination_size.1)
         .map_err(|_| PilError::DimensionError("Resize height is too large".into()))?;
+    if sparse_source_rows.is_some_and(|rows| rows.len() != source_height) {
+        return Err(PilError::InternalError(
+            "native-byte Resize received invalid sparse row facts".into(),
+        ));
+    }
     validate_coefficients(&horizontal, &vertical, source_width, source_height)?;
     let plan = plan::build_resize_horizontal_plan::<CHANNELS>(&horizontal, output_width)
         .ok_or_else(invalid_kernel_plan)?;
@@ -89,6 +156,7 @@ pub(crate) fn execute<const CHANNELS: usize, const PREMULTIPLIED_ALPHA: bool, co
         &plan,
         &mut premultiplied_row,
         &mut intermediate,
+        sparse_source_rows,
     )
     .ok_or_else(invalid_kernel_plan)?;
     let (vertical_blocks, vertical_tail) = vertical_pass::<
@@ -102,6 +170,7 @@ pub(crate) fn execute<const CHANNELS: usize, const PREMULTIPLIED_ALPHA: bool, co
         output_height,
         &vertical,
         &mut output,
+        sparse_source_rows,
     )
     .ok_or_else(invalid_kernel_plan)?;
     telemetry::record_vector_work(
@@ -165,6 +234,7 @@ fn horizontal_pass<const CHANNELS: usize, const PREMULTIPLIED_ALPHA: bool, const
     plan: &plan::ResizeHorizontalPlan,
     premultiplied_row: &mut [u8],
     intermediate: &mut [u8],
+    sparse_source_rows: Option<&[bool]>,
 ) -> Option<(u64, u64)> {
     let mut vector_blocks = 0_u64;
     let mut scalar_tail = 0_u64;
@@ -173,6 +243,10 @@ fn horizontal_pass<const CHANNELS: usize, const PREMULTIPLIED_ALPHA: bool, const
         let source_row = source.get(source_start..source_start.checked_add(source_stride)?)?;
         let output_start = source_y.checked_mul(output_stride)?;
         let output_row = intermediate.get_mut(output_start..output_start.checked_add(output_stride)?)?;
+        if sparse_source_rows.is_some_and(|rows| !rows[source_y]) {
+            output_row.fill(0);
+            continue;
+        }
         let (blocks, tail) = convolution::resize_horizontal_convolution_row::<
             CHANNELS,
             PREMULTIPLIED_ALPHA,
@@ -198,6 +272,7 @@ fn vertical_pass<const CHANNELS: usize, const PREMULTIPLIED_ALPHA: bool, const U
     output_height: usize,
     coefficients: &crate::ops::pil_resize::FilterCoeffs,
     output: &mut [u8],
+    sparse_source_rows: Option<&[bool]>,
 ) -> Option<(u64, u64)> {
     let mut vector_blocks = 0_u64;
     let mut scalar_tail = 0_u64;
@@ -205,6 +280,18 @@ fn vertical_pass<const CHANNELS: usize, const PREMULTIPLIED_ALPHA: bool, const U
         let output_start = output_y.checked_mul(output_width)?.checked_mul(CHANNELS)?;
         let row_len = output_width.checked_mul(CHANNELS)?;
         let output_row = output.get_mut(output_start..output_start.checked_add(row_len)?)?;
+        if let Some(rows) = sparse_source_rows
+            && !super::active_rows::vertical_row_touches_source(
+                coefficients,
+                source_height,
+                0,
+                rows,
+                output_y,
+            )?
+        {
+            output_row.fill(0);
+            continue;
+        }
         let (blocks, tail) = if USE_BOUNDED_I32 {
             bounded_i32::resize_vertical_bounded_i32_vector_row::<
                 CHANNELS,

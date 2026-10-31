@@ -274,3 +274,48 @@ pub fn getcolor(
     }
     Ok(ColorValue::Rgb(r, g, b))
 }
+
+/// Resolve parsed RGB components using an exact raster mode identity.
+///
+/// Unlike [`getcolor`], this operation path does not round-trip through a
+/// Pillow mode spelling. Internal raster identities use their documented
+/// carrier's color result; operation support still decides whether they can
+/// execute a requested transform.
+pub(crate) fn getcolor_for_mode(
+    r: i32,
+    g: i32,
+    b: i32,
+    a: i32,
+    mode: Mode,
+) -> ColorValue {
+    let luma = (r * 19595 + g * 38470 + b * 7471 + 0x8000) >> 16;
+    match mode {
+        Mode::ImageHsv8 => {
+            let (h, s, v) = rgb_to_hsv_i32(r, g, b);
+            ColorValue::Hsv(h, s, v)
+        }
+        Mode::ImageLumaA8 | Mode::ImageLumaA16 => ColorValue::GrayAlpha(luma, a),
+        Mode::One
+        | Mode::ImageLuma8
+        | Mode::ImageLaPremultiplied8
+        | Mode::ImageI32
+        | Mode::ImageF32
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N => ColorValue::Gray(luma),
+        Mode::ImagePaletteAlpha8
+        | Mode::ImageRgba8
+        | Mode::ImageRgba16
+        | Mode::ImageRgba32F => ColorValue::Rgba(r, g, b, a),
+        Mode::ImagePalette8
+        | Mode::ImageRgb8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8
+        | Mode::ImageYCbCr8
+        | Mode::ImageLab8
+        | Mode::ImageRgb16
+        | Mode::ImageRgb32F => ColorValue::Rgb(r, g, b),
+    }
+}

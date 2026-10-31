@@ -22,7 +22,7 @@ use pillow_rs::{Image, Mode};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let image = Image::new(4, 4, Mode::ImageRgb8, (0, 128, 255, 255))?;
     assert_eq!(image.size()?, (4, 4));
-    let gray = image.convert("L", None, None, None, None)?;
+    let gray = image.convert(Mode::ImageLuma8, None, None, None, None)?;
     assert_eq!(gray.tobytes()?.len(), 16);
     Ok(())
 }
@@ -52,7 +52,8 @@ For a side-by-side Rust API and feature comparison with image-rs, see
 
 ## Ownership and I/O
 
-Core APIs accept image values, byte buffers, mode strings, and font bytes.
+Core APIs accept image values, byte buffers, typed raster modes, and font bytes.
+Python and JavaScript adapters parse Pillow mode strings before calling Rust.
 Applications own filesystem and network I/O. Use the root crate's public
 re-exports instead of private implementation module paths.
 

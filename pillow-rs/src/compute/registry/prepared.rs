@@ -43,6 +43,7 @@ macro_rules! declare_prepared_operations {
                     | Implementation::Fit(plan)
                     | Implementation::Scale(plan) => plan.composed_selections(),
                     Implementation::Pad(plan) => plan.composed_selections(),
+                    Implementation::Thumbnail(plan) => plan.composed_selections(),
                     _ => &[],
                 }
             }
@@ -87,6 +88,7 @@ macro_rules! declare_prepared_operations {
 }
 
 declare_prepared_operations! {
+    Draw, draw, PreparedDraw, from_draw;
     Crop, crop, PreparedCrop, from_crop;
     CropBorder, imageops, PreparedCropBorder, from_crop_border;
     Resize, resize, PreparedResize, from_resize;
@@ -100,6 +102,7 @@ declare_prepared_operations! {
     Mirror, transpose, PreparedMirror, from_mirror;
     Transpose, transpose, PreparedTranspose, from_transpose;
     Rotate, rotate, PreparedRotate, from_rotate;
+    Transform, transform, PreparedTransform, from_transform;
     Reduce, reduce, PreparedReduce, from_reduce;
     Grayscale, grayscale, PreparedGrayscale, from_grayscale;
     Eval, eval, PreparedEval, from_eval;
@@ -129,10 +132,26 @@ declare_prepared_operations! {
     Filter, filter, PreparedFilter, from_filter;
     Chops, chops, PreparedChops, from_chops;
     AlphaComposite, composite, PreparedAlphaComposite, from_alpha_composite;
+    Merge, composite, PreparedMerge, from_merge;
+    BlendModule, composite, PreparedBlendModule, from_blend_module;
+    CompositeModule, composite, PreparedCompositeModule, from_composite_module;
     Paste, paste, PreparedPaste, from_paste;
 }
 
 impl PreparedOperation<'_> {
+    /// Executes Convert while retaining palette metadata for the Image wrapper.
+    pub(crate) fn execute_convert_output(
+        self,
+    ) -> Result<crate::compute::pool_cpu::ops::color::convert::ops::PreparedConvertOutput, PilError>
+    {
+        match self.implementation {
+            Implementation::Convert(plan) => plan.execute_with_output(),
+            _ => Err(PilError::InternalError(
+                "palette output requested from a non-Convert prepared operation".into(),
+            )),
+        }
+    }
+
     /// Returns the filter owner's prepared identity proof when it can share the input Arc.
     pub(crate) fn shared_identity_proof(&self) -> Option<bool> {
         match &self.implementation {

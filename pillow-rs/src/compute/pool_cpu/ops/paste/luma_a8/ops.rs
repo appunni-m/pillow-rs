@@ -22,8 +22,12 @@ const RULES: PasteInputRules = PasteInputRules {
 };
 const INPUTS: &[InputContract] = &[InputContract::PasteInputs { rules: &RULES }];
 
-static ARCHITECTURES: [ImplementationSupport; 3] =
-    super::super::helpers::strategy::cpu_architectures_for(Mode::ImageLumaA8, 2);
+static ARCHITECTURES: [ImplementationSupport; 4] =
+    super::super::helpers::strategy::cpu_architectures_for_l_mask_neon(
+        Mode::ImageLumaA8,
+        2,
+        8,
+    );
 
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::Paste,

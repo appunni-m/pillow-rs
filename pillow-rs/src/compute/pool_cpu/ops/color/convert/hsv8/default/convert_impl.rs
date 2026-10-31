@@ -1,6 +1,7 @@
 //! Direct destination kernels from native H, S, V samples.
 
 use crate::error::PilError;
+use crate::pipeline::DitherMethod;
 use crate::raster::{
     DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, Luma, LumaA, Mode, RgbImage,
     Rgba, RgbaImage,
@@ -9,6 +10,18 @@ use crate::raster::{
 pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, PilError> {
     match target {
         Mode::ImageLuma8 => Ok(DynamicImage::ImageLuma8(luma(source))),
+        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
+            super::super::super::helpers::luma16::from_luma8_samples(
+                source.width(),
+                source.height(),
+                target,
+                source.pixels().map(|pixel| {
+                    let [red, green, blue] =
+                        crate::color::hsv_pixel_to_rgb(pixel[0], pixel[1], pixel[2]);
+                    crate::color::rgb_to_luma_u8(red, green, blue)
+                }),
+            )
+        }
         Mode::ImageLumaA8 => Ok(DynamicImage::ImageLumaA8(luma_alpha(source))),
         Mode::ImageRgb8 => Ok(DynamicImage::ImageRgb8(rgb(source))),
         Mode::ImageRgba8 => Ok(DynamicImage::ImageRgba8(rgba(source))),
@@ -19,6 +32,31 @@ pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, P
         Mode::ImageF32 => Ok(DynamicImage::ImageF32(to_f32(source))),
         _ => Err(PilError::ValueError("image has wrong mode".into())),
     }
+}
+
+pub(crate) fn execute_palette_target(
+    source: &RgbImage,
+    target: Mode,
+    dither: Option<DitherMethod>,
+) -> Result<super::super::super::ops::PreparedConvertOutput, PilError> {
+    if !matches!(target, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8) {
+        return Err(PilError::ValueError("image has wrong mode".into()));
+    }
+    let metadata = if target == Mode::ImagePaletteAlpha8 {
+        super::super::super::ops::ConvertWrapperMetadata::ExifOnly
+    } else {
+        super::super::super::ops::ConvertWrapperMetadata::Drop
+    };
+    crate::compute::pool_cpu::ops::color::convert::helpers::palette::web_palette_from_pixels(
+        source.width(),
+        source.height(),
+        source.pixels().map(|pixel| {
+            crate::color::hsv_pixel_to_rgb(pixel[0], pixel[1], pixel[2])
+        }),
+        !matches!(dither, Some(DitherMethod::None)),
+        target,
+        metadata,
+    )
 }
 
 fn luma(source: &RgbImage) -> GrayImage {

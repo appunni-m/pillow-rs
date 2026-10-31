@@ -1,10 +1,23 @@
 //! Pillow `ImageEnhance`-style adjustment methods.
 
+use crate::compute::helpers::enhance::contrast_base;
+use crate::compute::registry::support::{ModeSupport, OperationId};
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
-use crate::compute::helpers::enhance::contrast_base;
+
+fn mode_support(operation: OperationId, mode: Mode) -> ModeSupport {
+    operation.support().for_mode(mode)
+}
+
+/// Keeps a source pipeline's explicit backend on a newly built fallback graph.
+fn inherit_pipeline_backend(source: &Image, output: Image) -> Image {
+    match source.backend() {
+        Some(backend) => output.use_backend(backend),
+        None => output,
+    }
+}
 
 fn exact_mode(image: &Image) -> Result<Mode, PilError> {
     image.mode_identity()
@@ -22,18 +35,16 @@ fn uppercase_a_band(mode: Mode) -> Option<usize> {
     }
 }
 
-fn validate_mode(image: &Image, palette_rejects: bool) -> Result<Mode, PilError> {
+fn validate_operation_mode(image: &Image, operation: OperationId) -> Result<Mode, PilError> {
     let mode = exact_mode(image)?;
-    if mode == Mode::One {
-        return Err(PilError::ValueError("image has wrong mode".into()));
+    match mode_support(operation, mode) {
+        ModeSupport::Supported { .. } => Ok(mode),
+        ModeSupport::Rejected { reason, kind, .. } => Err(kind.into_error(reason)),
     }
-    if palette_rejects && mode == Mode::ImagePalette8 {
-        return Err(PilError::ValueError("cannot filter palette images".into()));
-    }
-    if matches!(mode, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8) {
-        return Err(PilError::ValueError("image has wrong mode".into()));
-    }
-    Ok(mode)
+}
+
+fn has_prepared_mode_strategy(operation: OperationId, mode: Mode) -> bool {
+    matches!(mode_support(operation, mode), ModeSupport::Supported { .. })
 }
 
 impl Image {
@@ -67,7 +78,7 @@ impl Image {
             pixel.putpalette(&palette, "RGB")?;
         }
         pixel.putpixel_value(0, 0, value)?;
-        let gray = pixel.convert("L", None, None, None, None)?;
+        let gray = pixel.convert(Mode::ImageLuma8, None, None, None, None)?;
         let gray = gray.materialized_shared()?.as_bytes()[0];
         Ok(if mode_identity == Mode::ImageRgb8 {
             crate::image::ImageInfoValue::IntegerTuple(vec![i64::from(gray); 3])
@@ -86,8 +97,11 @@ impl Image {
     /// Returns conversion or materialization failures during construction.
     pub fn color_degenerate(&self) -> Result<Image, PilError> {
         let mode = exact_mode(self)?;
-        let pillow_mode = self.mode()?;
-        let intermediate = if uppercase_a_band(mode).is_some() { "LA" } else { "L" };
+        let intermediate = if uppercase_a_band(mode).is_some() {
+            Mode::ImageLumaA8
+        } else {
+            Mode::ImageLuma8
+        };
         if matches!(mode, Mode::ImageLuma8 | Mode::ImageLumaA8) {
             return Ok(self.clone());
         }
@@ -124,7 +138,7 @@ impl Image {
             )?;
             return Ok(Image::from_dynamic_with_mode(image, Some(mode))?);
         }
-        base = base.convert(&pillow_mode, None, None, None, None)?;
+        base = base.convert(mode, None, None, None, None)?;
         base.load()?;
         Ok(base)
     }
@@ -138,7 +152,7 @@ impl Image {
     /// Currently returns `Ok(Image)`; deferred pipeline execution reports later
     /// materialization failures.
     pub fn enhance_brightness(&self, factor: f64) -> Result<Image, PilError> {
-        validate_mode(self, false)?;
+        validate_operation_mode(self, OperationId::Brightness)?;
         Ok(Image::push_op(self, PipelineOp::Brightness { factor }))
     }
 
@@ -154,7 +168,7 @@ impl Image {
     /// Returns the source/destination conversion error or a materialization
     /// error. Modes rejected by blending can still construct a base image.
     pub fn contrast_degenerate(&self) -> Result<Image, PilError> {
-        let mode = self.mode()?;
+        let mode = exact_mode(self)?;
         let source = self.materialized_shared()?;
         if let Some(base) = contrast_base(&source) {
             // Only the base is observable: avoid an intermediate grayscale
@@ -175,7 +189,7 @@ impl Image {
             return Ok(Image::from_dynamic_with_mode(image, Some(source.mode()))?);
         }
 
-        let gray = self.convert("L", None, None, None, None)?;
+        let gray = self.convert(Mode::ImageLuma8, None, None, None, None)?;
         let gray = gray.materialized_shared()?;
         let samples = gray.as_bytes();
         let mean = if samples.is_empty() {
@@ -193,7 +207,7 @@ impl Image {
                 "conversion from L to RGBa not supported".into(),
             ));
         } else if source.mode() != Mode::ImageLuma8 {
-            base = base.convert(&mode, None, None, None, None)?;
+            base = base.convert(mode, None, None, None, None)?;
         }
         if let Some(alpha) = uppercase_a_band(source.mode()) {
             base.putalpha_data(&self.getchannel(alpha as i32)?)?;
@@ -213,24 +227,16 @@ impl Image {
     /// Returns mode or conversion errors for unsupported layouts. Supported
     /// byte modes may defer base construction and execution until materialization.
     pub fn enhance_contrast(&self, factor: f64) -> Result<Image, PilError> {
-        if matches!(
-            exact_mode(self)?,
-            Mode::ImageLuma8
-                | Mode::ImageLumaA8
-                | Mode::ImageRgb8
-                | Mode::ImageRgba8
-                | Mode::ImageRgbx8
-                | Mode::ImageCmyk8
-                | Mode::ImageHsv8
-                | Mode::ImageYCbCr8
-        ) {
+        let mode = exact_mode(self)?;
+        if has_prepared_mode_strategy(OperationId::Contrast, mode) {
             // The one-shot core API retains its lazy graph so a later backend
             // choice also governs any pending source operations. Stateful host
             // enhancers separately retain contrast_degenerate() at construction.
             return Ok(Image::push_op(self, PipelineOp::Contrast { factor }));
         }
         let degenerate = self.contrast_degenerate()?;
-        crate::ops::module_fns::blend(&degenerate, self, factor)
+        let blended = crate::ops::module_fns::blend(&degenerate, self, factor)?;
+        Ok(inherit_pipeline_backend(self, blended))
     }
 
     /// Adjusts color saturation by `factor`.
@@ -242,19 +248,13 @@ impl Image {
     /// Returns mode or base-conversion errors. Deferred pipeline execution can
     /// report additional materialization failures.
     pub fn enhance_color(&self, factor: f64) -> Result<Image, PilError> {
-        if matches!(
-            exact_mode(self)?,
-            Mode::ImageLuma8
-                | Mode::ImageLumaA8
-                | Mode::ImageRgb8
-                | Mode::ImageRgba8
-                | Mode::ImageRgbx8
-                | Mode::ImageCmyk8
-        ) {
+        let mode = exact_mode(self)?;
+        if has_prepared_mode_strategy(OperationId::ColorSaturation, mode) {
             return Ok(Image::push_op(self, PipelineOp::ColorSaturation { factor }));
         }
         let base = self.color_degenerate()?;
-        crate::ops::module_fns::blend(&base, self, factor)
+        let blended = crate::ops::module_fns::blend(&base, self, factor)?;
+        Ok(inherit_pipeline_backend(self, blended))
     }
 
     /// Adjusts sharpness by `factor`.
@@ -267,7 +267,7 @@ impl Image {
     /// Currently returns `Ok(Image)`; deferred pipeline execution reports later
     /// materialization failures.
     pub fn enhance_sharpness(&self, factor: f64) -> Result<Image, PilError> {
-        validate_mode(self, true)?;
+        validate_operation_mode(self, OperationId::Sharpness)?;
         Ok(Image::push_op(self, PipelineOp::Sharpness { factor }))
     }
 }
@@ -278,7 +278,10 @@ mod tests {
 
     #[test]
     fn rgb_color_degenerate_matches_convert_roundtrip_across_vector_tails() {
-        for (mode, channels, intermediate) in [("RGB", 3usize, "L"), ("RGBA", 4, "LA")] {
+        for (mode, channels, intermediate) in [
+            (crate::raster::Mode::ImageRgb8, 3usize, crate::raster::Mode::ImageLuma8),
+            (crate::raster::Mode::ImageRgba8, 4, crate::raster::Mode::ImageLumaA8),
+        ] {
             for pixel_count in 1..=17usize {
                 let bytes: Vec<u8> = (0..pixel_count * channels)
                     .map(|index| {
@@ -288,7 +291,7 @@ mod tests {
                             .wrapping_add(29)) as u8
                     })
                     .collect();
-                let source = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (pixel_count as u32, 1), &bytes)
+                let source = Image::frombytes(mode, (pixel_count as u32, 1), &bytes)
                     .expect("varied native color source");
                 let mut expected = source
                     .convert(intermediate, None, None, None, None)
@@ -301,11 +304,11 @@ mod tests {
                     .color_degenerate()
                     .expect("construct optimized color base");
                 actual.load().expect("materialize optimized color base");
-                assert_eq!(actual.mode().expect("optimized mode"), mode);
+                assert_eq!(actual.mode_identity().expect("optimized mode"), mode);
                 assert_eq!(
                     actual.tobytes().expect("optimized bytes"),
                     expected.tobytes().expect("reference bytes"),
-                    "{mode} with {pixel_count} pixels"
+                    "{mode:?} with {pixel_count} pixels"
                 );
             }
         }

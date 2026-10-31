@@ -95,18 +95,71 @@ impl ScalarConversion for ClippedLumaScalar {
     }
 }
 
-pub(crate) fn execute_native(
+pub(crate) fn execute_mode(
     source: &Samples,
+    source_mode: Mode,
     target: Mode,
 ) -> Result<DynamicImage, PilError> {
+    if is_luma16_target(target) {
+        return execute_i16_target(source, source_mode, target);
+    }
+    if source_mode == Mode::ImageI16N {
+        return execute::<ClippedLumaScalar>(source, target);
+    }
     execute::<NativeScalar>(source, target)
 }
 
-pub(crate) fn execute_native_order(
+pub(crate) fn from_luma8_samples<I>(
+    width: u32,
+    height: u32,
+    target: Mode,
+    samples: I,
+) -> Result<DynamicImage, PilError>
+where
+    I: Iterator<Item = u8>,
+{
+    from_u16_samples(width, height, target, samples.map(u16::from))
+}
+
+pub(crate) fn from_u16_samples<I>(
+    width: u32,
+    height: u32,
+    target: Mode,
+    samples: I,
+) -> Result<DynamicImage, PilError>
+where
+    I: Iterator<Item = u16>,
+{
+    let values = samples.collect::<Vec<_>>();
+    let output = Samples::from_raw(width, height, values)
+        .ok_or_else(|| PilError::InternalError("I;16 Convert output shape mismatch".into()))?;
+    match target {
+        Mode::ImageI16 => Ok(DynamicImage::ImageI16(output)),
+        Mode::ImageI16L => Ok(DynamicImage::ImageI16L(output)),
+        Mode::ImageI16B => Ok(DynamicImage::ImageI16B(output)),
+        Mode::ImageI16N => Ok(DynamicImage::ImageI16N(output)),
+        _ => Err(PilError::InternalError(
+            "I;16 Convert selected an undeclared target mode".into(),
+        )),
+    }
+}
+
+pub(crate) fn execute_palette_target(
     source: &Samples,
     target: Mode,
-) -> Result<DynamicImage, PilError> {
-    execute::<ClippedLumaScalar>(source, target)
+) -> Result<super::super::ops::PreparedConvertOutput, PilError> {
+    // Match DynamicImage::to_luma8's saturating u16-to-u8 mapping without
+    // materializing an intermediate L raster before building palette indices.
+    // TODO(pillow-rs#3ptb): cover every exact I;16 source, P/PA target, and
+    // requested Architecture in CPU parity.
+    super::luma8::execute_palette_target(
+        source.width(),
+        source.height(),
+        target,
+        source
+            .pixels()
+            .map(|pixel| pixel[0].min(u16::from(u8::MAX)) as u8),
+    )
 }
 
 pub(crate) fn execute_native_vector(
@@ -136,6 +189,42 @@ fn execute<S: ScalarConversion>(source: &Samples, target: Mode) -> Result<Dynami
         Mode::ImageF32 => Ok(DynamicImage::ImageF32(to_f32::<S>(source))),
         _ => Err(PilError::ValueError("image has wrong mode".into())),
     }
+}
+
+fn execute_i16_target(
+    source: &Samples,
+    source_mode: Mode,
+    target: Mode,
+) -> Result<DynamicImage, PilError> {
+    if source_mode == target {
+        return Ok(match target {
+            Mode::ImageI16 => DynamicImage::ImageI16(source.clone()),
+            Mode::ImageI16L => DynamicImage::ImageI16L(source.clone()),
+            Mode::ImageI16B => DynamicImage::ImageI16B(source.clone()),
+            Mode::ImageI16N => DynamicImage::ImageI16N(source.clone()),
+            _ => {
+                return Err(PilError::InternalError(
+                    "I;16 Convert selected an undeclared target mode".into(),
+                ));
+            }
+        });
+    }
+    from_luma8_samples(
+        source.width(),
+        source.height(),
+        target,
+        source
+            .as_raw()
+            .iter()
+            .map(|sample| sample.min(u16::from(u8::MAX)) as u8),
+    )
+}
+
+pub(crate) const fn is_luma16_target(target: Mode) -> bool {
+    matches!(
+        target,
+        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N
+    )
 }
 
 fn execute_vector<S: ScalarConversion>(

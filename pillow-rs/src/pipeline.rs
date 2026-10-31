@@ -480,14 +480,8 @@ pub enum PipelineOp {
     // ── Module fns ──
     /// Merge bands into a multi-band image.
     Merge {
-        /// Destination color mode.
-        mode: ColorMode,
-        /// Original Pillow mode spelling. The raster core uses canonical
-        /// storage variants for aliases such as `LAB` and `RGBa`, while this
-        /// tag keeps target-specific encoding and backend admission exact.
-        /// TODO(pillow-rs#3ptb): replace this compatibility string with the
-        /// target `raster::Mode` and keep codec spelling at the host boundary.
-        logical_mode: String,
+        /// Exact destination mode identity, including aliases with shared storage.
+        mode: Mode,
         /// Band images.
         bands: Arc<[Image]>,
     },

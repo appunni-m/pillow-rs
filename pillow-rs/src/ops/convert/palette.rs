@@ -1,11 +1,13 @@
+#[cfg(test)]
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use crate::color;
+use crate::compute::Backend;
+use crate::compute::registry::support::{OperationInputs, PaletteInput};
 use crate::error::PilError;
-use crate::image::{Image, PipelineOps};
+use crate::image::{Image, LoadedData, PipelineOps};
 use crate::pipeline::DitherMethod;
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, Mode};
 
 /// Per-entry alpha table Pillow applies when converting a palette image to an
 /// alpha band: a single transparent index becomes 0 with everything else 255,
@@ -23,29 +25,11 @@ pub(super) fn palette_alpha_for_convert(img: &Image) -> Option<Vec<u8>> {
     }
     // `putpalette(..., rawmode="RGBA")` stores attached alpha on the
     // committed palette rather than in pending `info["transparency"]`.
-    // Pillow's P->LA conversion consumes both representations.
+    // Pillow's P->PA conversion consumes both representations.
     img.palette_alpha().filter(|alpha| !alpha.is_empty())
 }
 
-/// Convert a source image to Pillow's palette-plus-alpha representation.
-///
-/// Pillow's `Convert.c` treats `PA` as an indexed destination, not as a
-/// spelling of `LA`: RGB-family and CMYK/HSV/YCbCr sources are mapped through
-/// the default WEB palette, RGBA keeps the source alpha bytes, and scalar or
-/// indexed sources retain their byte/index values. Scalar sources also receive
-/// Pillow's identity grayscale palette, so a later `PA` expansion resolves an
-/// index back to the original scalar value. Keeping those paths explicit also
-/// avoids feeding `PA` into the ordinary scalar pipeline, which has no palette
-/// storage to attach to its result.
-fn identity_grayscale_palette() -> Vec<u8> {
-    (0u8..=u8::MAX)
-        .flat_map(|value| [value, value, value])
-        .collect()
-}
-
-/// Splits RGBA bytes for Pillow's RGBA-to-PA conversion without widening or
-/// copying an already materialized RGBA source.  Pillow quantizes RGB only,
-/// then carries the original alpha bytes into the PA result.
+#[cfg(test)]
 pub(super) fn split_rgba_for_palette(
     source: &DynamicImage,
 ) -> Result<(crate::raster::RgbImage, Vec<u8>), PilError> {
@@ -79,172 +63,180 @@ pub(super) fn split_rgba_for_palette(
     Ok((rgb, alpha))
 }
 
-pub(super) fn convert_to_palette_alpha(
+/// Attach a prepared P/PA raster and its wrapper-owned metadata to an `Image`.
+///
+/// Keep the generated palette and metadata policy outside the pixel kernel so
+/// each exact source-mode strategy can return its native index raster.
+pub(super) fn convert_prepared_palette(
     image: &Image,
-    source_mode: &str,
-    dither: Option<DitherMethod>,
+    source_mode: Mode,
+    target: Mode,
+    dither: Option<&str>,
 ) -> Result<Image, PilError> {
-    // Keep shared source storage for read-only conversions while preserving
-    // the logical-mode validation performed by Image::materialize().
-    let source = image.materialized_shared_for_ops()?;
-    let (indices, palette, alpha) = match source_mode {
-        "P" => {
-            let indices = source.to_luma8();
-            let table = palette_alpha_for_convert(image);
-            let alpha = indices
-                .pixels()
-                .map(|pixel| {
-                    table
-                        .as_ref()
-                        .and_then(|values| values.get(usize::from(pixel[0])))
-                        .copied()
-                        .unwrap_or(255)
-                })
-                .collect();
-            (indices, image.palette(), alpha)
-        }
-        "1" | "L" | "LA" => {
-            let indices = source.to_luma8();
-            let alpha = vec![255; indices.width() as usize * indices.height() as usize];
-            (indices, Some(identity_grayscale_palette()), alpha)
-        }
-        "I" => {
-            // I->P is a direct clamped scalar-to-index conversion.  The
-            // intermediate RGB helper preserves that value without applying
-            // the I->L scaling formula used by ordinary grayscale conversion.
-            let indices = color::i_to_rgb(&source).to_luma8();
-            let alpha = vec![255; indices.width() as usize * indices.height() as usize];
-            (indices, Some(identity_grayscale_palette()), alpha)
-        }
-        "F" => {
-            // F->P truncates the clamped float value to an index, matching the
-            // existing F->RGB helper because all three broadcast channels are
-            // identical.
-            let indices = color::f_to_rgb(&source).to_luma8();
-            let alpha = vec![255; indices.width() as usize * indices.height() as usize];
-            (indices, Some(identity_grayscale_palette()), alpha)
-        }
-        "RGBA" => {
-            // Pillow's Python conversion splits RGBA into RGB and alpha,
-            // quantizes only the RGB image, then merges the original alpha
-            // band into PA.  Quantizing RGBA and moving transparent entries
-            // afterward produces different palette-index order for valid
-            // images with distinct transparent and visible colors.
-            let (rgb, alpha) = split_rgba_for_palette(source.as_ref())?;
-            let (width, height) = rgb.dimensions();
-            let quantized = Image::from_dynamic(DynamicImage::ImageRgb8(rgb))
-                // Image.convert("PA") calls RGB.quantize() without a method;
-                // RGB therefore uses MEDIANCUT (method 0), not RGBA's FASTOCTREE
-                // default. The palette-index order is observable in PA bytes.
-                .quantize(256, 0, None, true, 0)?;
-            let index_bytes = quantized.materialize()?.to_luma8().into_raw();
-            let palette = quantized.palette();
-            let indices = crate::raster::GrayImage::from_raw(width, height, index_bytes)
-                .ok_or_else(|| PilError::ValueError("palette conversion failed".to_owned()))?;
-            (indices, palette, alpha)
-        }
-        "CMYK" | "HSV" | "YCbCr" => {
-            let source_palette = image.palette();
-            let rgb =
-                color::convert_from_nonstandard(source_mode, &source, source_palette.as_deref())
-                    .unwrap_or_else(|| source.to_rgb8().into())
-                    .to_rgb8();
-            let (width, height) = rgb.dimensions();
-            let dither = !matches!(dither, Some(DitherMethod::None));
-            let (indices, palette) = crate::ops::quantize::web_palette_quantize(
-                &rgb.clone().into_raw(),
-                width,
-                height,
-                dither,
-            )?;
-            let indices = crate::raster::GrayImage::from_raw(width, height, indices)
-                .ok_or_else(|| PilError::ValueError("palette conversion failed".to_owned()))?;
-            let alpha = vec![255; width as usize * height as usize];
-            (indices, Some(palette), alpha)
-        }
-        _ => {
-            let rgb = source.to_rgb8();
-            let (width, height) = rgb.dimensions();
-            let dither = !matches!(dither, Some(DitherMethod::None));
-            let (indices, palette) = crate::ops::quantize::web_palette_quantize(
-                &rgb.clone().into_raw(),
-                width,
-                height,
-                dither,
-            )?;
-            let indices = crate::raster::GrayImage::from_raw(width, height, indices)
-                .ok_or_else(|| PilError::ValueError("palette conversion failed".to_owned()))?;
-            let alpha = vec![255; width as usize * height as usize];
-            (indices, Some(palette), alpha)
-        }
-    };
-
-    let (width, height) = indices.dimensions();
-    let index_bytes = indices.into_raw();
-    let mut pa = crate::raster::GrayAlphaImage::new(width, height);
-    for (position, output) in pa.pixels_mut().enumerate() {
-        output[0] = index_bytes[position];
-        output[1] = alpha.get(position).copied().unwrap_or(255);
-    }
-
-    Ok(Image::Loaded(crate::image::LoadedData {
-        image: std::sync::Arc::new(DynamicImage::ImagePaletteAlpha8(pa)),
-        known_zero_fill: false,
-        palette,
-        palette_alpha: None,
-        // Pillow's mode conversion returns a detached image and does not
-        // carry the source decoder format or transient info dictionary into
-        // the result.  Retain only EXIF, matching the existing P/PA path.
-        source_format: None,
-        info: None,
-        exif: image.exif_metadata(),
-    }))
-}
-
-pub(super) fn convert_to_web_palette(
-    image: &Image,
-    source_mode: &str,
-    dither_enum: Option<DitherMethod>,
-) -> Result<Image, PilError> {
-    if source_mode == "RGBA" {
-        return image.quantize(256, 0, None, true, 2);
-    }
-    let source = image.materialize()?;
-    let (width, height) = (source.width(), source.height());
-    let (indices, palette_bytes) = if matches!(source_mode, "1" | "L" | "LA") {
-        // Pillow maps L/1 samples directly to P indices and installs the
-        // identity grayscale palette; LA drops alpha on this path.
-        let indices = source.to_luma8().into_raw();
-        let palette = identity_grayscale_palette();
-        (indices, palette)
+    let is_scalar_source = matches!(source_mode, Mode::ImageI32 | Mode::ImageF32);
+    let should_parse_dither =
+        !(source_mode == Mode::ImagePaletteAlpha8 && target == Mode::ImagePalette8);
+    let source_normalizes_before_palette = is_scalar_source
+        || (target == Mode::ImagePalette8
+            && matches!(
+                source_mode,
+                Mode::ImageCmyk8 | Mode::ImageHsv8 | Mode::ImageYCbCr8
+            ));
+    let parse_before_materialize = should_parse_dither
+        && (target == Mode::ImagePaletteAlpha8 || !source_normalizes_before_palette);
+    let mut prepared_dither = if parse_before_materialize {
+        super::input::parse_dither(dither)?
     } else {
-        let rgb_raw = source.to_rgb8().into_raw();
-        let dither = !matches!(dither_enum, Some(DitherMethod::None));
-        crate::ops::quantize::web_palette_quantize(&rgb_raw, width, height, dither)?
+        None
     };
-    let mut output = crate::raster::GrayImage::new(width, height);
-    for (index, pixel) in output.pixels_mut().enumerate() {
-        pixel[0] = indices.get(index).copied().unwrap_or(0);
+    let source = image.materialized_shared_for_ops()?;
+    if should_parse_dither && !parse_before_materialize {
+        // Scalar I/F and nonstandard-to-P conversions normalized their source
+        // before parsing dither; retain that validation order in the prepared route.
+        prepared_dither = super::input::parse_dither(dither)?;
     }
-    let source = crate::image::LoadedData {
-        image: Arc::new(DynamicImage::ImagePalette8(output)),
-        known_zero_fill: false,
-        palette: None,
-        palette_alpha: None,
-        source_format: image.source_format(),
-        info: image.image_info(),
-        exif: image.exif_metadata(),
+    let source_palette = if matches!(source_mode, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8) {
+        image.palette()
+    } else {
+        None
     };
-    Ok(Image::Pipeline {
-        source: Arc::new(Image::Loaded(source)),
-        ops: PipelineOps::empty(),
-        format: None,
-        explicit_mode: Some(crate::raster::Mode::ImagePalette8),
-        backend: None,
-        palette: Some(palette_bytes),
-        palette_alpha: None,
-        materialized: crate::image::materialization_cache(),
-        shape: crate::image::pipeline_shape_cache(),
-        mode: crate::image::pipeline_mode_cache(),
-    })
+    let palette_alpha = match source_mode {
+        Mode::ImagePalette8 => palette_alpha_for_convert(image).unwrap_or_default(),
+        Mode::ImagePaletteAlpha8 => image.palette_alpha().unwrap_or_default(),
+        _ => Vec::new(),
+    };
+    let input = OperationInputs {
+        image: source.as_ref(),
+        palette: PaletteInput {
+            rgb: source_palette.as_deref(),
+            alpha: &palette_alpha,
+        },
+    };
+    let operation = crate::pipeline::PipelineOp::Convert {
+        mode: target,
+        matrix: None,
+        dither: prepared_dither,
+    };
+    let selected_backend = crate::compute::preferred_active_backend()?
+        .map(|(backend, _)| backend)
+        .unwrap_or(Backend::Cpu);
+    let execution_backend = if selected_backend == Backend::Gpu {
+        Backend::Cpu
+    } else {
+        selected_backend
+    };
+    let fallback_reason = (selected_backend == Backend::Gpu)
+        .then(|| "Convert palette metadata is produced by the CPU wrapper route".to_owned());
+    let mut palette_output = None;
+    let raster = crate::compute::execute_eager_cpu_arch_image_operation_with_route(
+        "Convert",
+        source.as_ref(),
+        selected_backend,
+        execution_backend,
+        fallback_reason,
+        |context| {
+            let prepared = crate::compute::registry::prepare_cpu(&operation, input, context)?;
+            let selection = *prepared.selection();
+            let output = prepared.execute_convert_output()?;
+            palette_output = Some((
+                output.palette,
+                output.palette_alpha,
+                output.wrapper_metadata,
+            ));
+            Ok((output.image, selection))
+        },
+    )?;
+    let (palette, palette_alpha, wrapper_metadata) = palette_output.ok_or_else(|| {
+        PilError::InternalError("prepared palette conversion omitted its result metadata".into())
+    })?;
+    let wrapper_metadata = wrapper_metadata.ok_or_else(|| {
+        PilError::InternalError(
+            "prepared palette conversion omitted wrapper metadata policy".into(),
+        )
+    })?;
+    wrap_prepared_palette(
+        image,
+        target,
+        raster,
+        palette,
+        palette_alpha,
+        wrapper_metadata,
+    )
 }
+
+fn wrap_prepared_palette(
+    image: &Image,
+    target: Mode,
+    raster: DynamicImage,
+    palette: Option<Vec<u8>>,
+    palette_alpha: Option<Vec<u8>>,
+    metadata: crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata,
+) -> Result<Image, PilError> {
+    let (source_format, info, exif) = match metadata {
+        crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata::PreserveSource
+        | crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata::PreserveSourceLoaded => {
+            (image.source_format(), image.image_info(), image.exif_metadata())
+        }
+        crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata::ExifOnly => {
+            (None, None, image.exif_metadata())
+        }
+        crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata::Drop => {
+            (None, None, None)
+        }
+    };
+    match target {
+        Mode::ImagePalette8 => {
+            if matches!(
+                metadata,
+                crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata::PreserveSourceLoaded
+            ) {
+                return Ok(Image::Loaded(LoadedData {
+                    image: Arc::new(raster),
+                    known_zero_fill: false,
+                    palette: image.palette(),
+                    palette_alpha: image.palette_alpha(),
+                    source_format,
+                    info,
+                    exif,
+                }));
+            }
+            let palette = palette.ok_or_else(|| {
+                PilError::InternalError("prepared P conversion omitted RGB entries".into())
+            })?;
+            let source = LoadedData {
+                image: Arc::new(raster),
+                known_zero_fill: false,
+                palette: None,
+                palette_alpha: None,
+                source_format,
+                info,
+                exif,
+            };
+            Ok(Image::Pipeline {
+                source: Arc::new(Image::Loaded(source)),
+                ops: PipelineOps::empty(),
+                format: None,
+                explicit_mode: Some(Mode::ImagePalette8),
+                backend: None,
+                palette: Some(palette),
+                palette_alpha,
+                materialized: crate::image::materialization_cache(),
+                shape: crate::image::pipeline_shape_cache(),
+                mode: crate::image::pipeline_mode_cache(),
+            })
+        }
+        Mode::ImagePaletteAlpha8 => Ok(Image::Loaded(LoadedData {
+            image: Arc::new(raster),
+            known_zero_fill: false,
+            palette,
+            palette_alpha,
+            source_format,
+            info,
+            exif,
+        })),
+        _ => Err(PilError::InternalError(
+            "prepared palette wrapper received a non-palette target".into(),
+        )),
+    }
+}
+

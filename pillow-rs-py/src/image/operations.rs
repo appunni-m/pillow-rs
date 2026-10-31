@@ -509,8 +509,8 @@ impl PyImage {
         py: Python<'_>,
     ) -> PyResult<PyImage> {
         let data = transform_data_from_python(data)?;
-        let mode = self.inner.mode().map_err(map_error)?;
-        let fillcolor = transform_fill_from_python(fillcolor, &mode)?;
+        let mode = self.inner.mode_identity().map_err(map_error)?;
+        let fillcolor = transform_fill_from_python(fillcolor, mode)?;
         let resample = resample.unwrap_or(0);
         let fill = fill.unwrap_or(1);
         py.detach(|| {

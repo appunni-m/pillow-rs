@@ -1,8 +1,11 @@
 //! Typed band extraction and native writes with exhaustive source-mode strategies.
 //!
-//! TODO(pillow-rs#3ptb): connect these prepared plans to the serial pool/batch
-//! executor and thumbnail fusion, and migrate the remaining public metadata
-//! boundaries. GetData's direct output-buffer route now uses the prepared
+//! Pipeline callbacks for PutPixel, PutData, PutAlpha, and PutAlphaData are
+//! registered and consumed by the serial CPU batch executor. Consecutive
+//! PutPixel runs also compose with the prepared RGB Thumbnail fusion.
+//! TODO(pillow-rs#3ptb): audit direct value-at mutation and wrapper metadata
+//! paths for context bypasses, and finish the mode-specific conversion review
+//! below. GetData's direct output-buffer route now uses the prepared
 //! ExtractBand mode/architecture strategy.
 //! TODO(pillow-rs#3ptb): finish reviewing cross-mode conversions in PutData,
 //! PutAlpha, PutAlphaData, and ExtractBand against the archived contract. Keep

@@ -1,7 +1,10 @@
 //! Serial RGB8 source conversions over the native triplet samples.
 
 use crate::error::PilError;
-use crate::raster::{DynamicImage, GenericImageView, GrayAlphaImage, Mode, RgbImage, Rgba, RgbaImage};
+use crate::pipeline::DitherMethod;
+use crate::raster::{
+    DynamicImage, GenericImageView, GrayAlphaImage, LumaA, Mode, RgbImage, Rgba, RgbaImage,
+};
 
 pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, PilError> {
     match target {
@@ -17,6 +20,16 @@ pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, P
             convert_luma_alpha(source, Mode::ImageLaPremultiplied8)
         }
         Mode::ImageRgb8 => Ok(DynamicImage::ImageRgb8(source.clone())),
+        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
+            super::super::super::helpers::luma16::from_luma8_samples(
+                source.width(),
+                source.height(),
+                target,
+                source.pixels().map(|pixel| {
+                    crate::color::rgb_to_luma_u8(pixel[0], pixel[1], pixel[2])
+                }),
+            )
+        }
         Mode::ImageRgba8 => Ok(DynamicImage::ImageRgba8(RgbaImage::from_fn(
             source.width(),
             source.height(),
@@ -56,6 +69,40 @@ pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, P
         Mode::ImageF32 => Ok(crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_f32_rgb8(source)),
         _ => Err(PilError::ValueError("image has wrong mode".into())),
     }
+}
+
+pub(crate) fn execute_palette_target(
+    source: &RgbImage,
+    target: Mode,
+    dither: Option<DitherMethod>,
+) -> Result<super::super::super::ops::PreparedConvertOutput, PilError> {
+    if !matches!(target, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8) {
+        return Err(PilError::ValueError("image has wrong mode".into()));
+    }
+    let dither = !matches!(dither, Some(DitherMethod::None));
+    if target == Mode::ImagePaletteAlpha8 {
+        return crate::compute::pool_cpu::ops::color::convert::helpers::palette::web_alpha_from_rgb_samples(
+            source.width(),
+            source.height(),
+            source.as_raw(),
+            dither,
+            |_| u8::MAX,
+        );
+    }
+    let (indices, palette) = crate::ops::quantize::web_palette_quantize(
+        source.as_raw(),
+        source.width(),
+        source.height(),
+        dither,
+    )?;
+    let indices = crate::raster::GrayImage::from_raw(source.width(), source.height(), indices)
+        .ok_or_else(|| PilError::ValueError("palette conversion failed".into()))?;
+    Ok(super::super::super::ops::PreparedConvertOutput {
+        image: DynamicImage::ImagePalette8(indices),
+        palette: Some(palette),
+        palette_alpha: None,
+        wrapper_metadata: Some(super::super::super::ops::ConvertWrapperMetadata::PreserveSource),
+    })
 }
 
 fn convert_luma_alpha(source: &RgbImage, target: Mode) -> Result<DynamicImage, PilError> {

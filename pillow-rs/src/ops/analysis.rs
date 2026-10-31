@@ -5,6 +5,7 @@
 
 use crate::error::PilError;
 use crate::image::Image;
+use crate::raster::Mode;
 
 /// Host-neutral optional mask input for image analysis operations.
 #[derive(Debug, Clone)]
@@ -24,9 +25,9 @@ mod histogram;
 
 /// Validate a Pillow transparency/statistics mask without touching host types.
 pub fn validate_transparency_mask(image: &Image, mask: &Image) -> Result<(), PilError> {
-    let mode = mask.mode()?;
+    let mode = mask.mode_identity()?;
     let size = mask.size()?;
-    if !matches!(mode.as_str(), "1" | "L") {
+    if !matches!(mode, Mode::One | Mode::ImageLuma8) {
         return Err(PilError::ValueError("bad transparency mask".into()));
     }
     // Pillow's ImageOps mask path distinguishes an unsupported mode from a

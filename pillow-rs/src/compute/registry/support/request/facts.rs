@@ -4,12 +4,53 @@ use crate::pipeline::{ResampleFilter, TransposeMethod};
 use crate::raster::Mode;
 use super::{ModeChannelCapacity, PaletteKnowledge};
 
+/// Direct or batched Draw request being prepared by the shared family owner.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DrawRequestKind {
+    /// Primitive geometry represented by `PipelineOp` span requests.
+    GeometryBatch,
+    /// A direct mode-owned bitmap-mask blend.
+    Bitmap,
+    /// Direct text glyph composition into the mode-owned raster.
+    Text,
+}
+
+/// Pixel representation returned by FreeType for a direct Draw text request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DrawTextMaskKind {
+    /// One byte of glyph coverage per pixel, including expanded bilevel masks.
+    Coverage,
+    /// Four bytes per pixel: FreeType ink RGB followed by glyph coverage alpha.
+    Rgba,
+}
+
 /// Operation parameters needed by an implementation's declared eligibility guard.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum RequestFacts {
     /// A mode-only query has not supplied operation-specific parameters.
     #[default]
     Unspecified,
+    /// Request kind and vector eligibility for the shared Draw owner.
+    Draw {
+        /// Direct Draw operation or pipeline geometry batch being selected.
+        kind: DrawRequestKind,
+        /// Every geometry operation satisfies the native span guard.
+        all_geometry_spans_eligible: bool,
+        /// Exact destination identity for direct Bitmap validation.
+        raster_mode: Option<Mode>,
+        /// Pillow drawing context, including the RGBA-on-RGB exception.
+        context_mode: Option<Mode>,
+        /// Exact bitmap mask identity for direct Bitmap validation.
+        bitmap_mask_mode: Option<Mode>,
+        /// Embedded-color font request for direct Text validation.
+        embedded_color: Option<bool>,
+        /// Exact FreeType mask representation consumed by the Text owner.
+        text_mask_kind: Option<DrawTextMaskKind>,
+        /// Whether the resolved text fill originated as an integer ink.
+        text_fill_is_integer: Option<bool>,
+        /// Packed FreeType foreground ink, when the text mask uses one.
+        text_ink: Option<i64>,
+    },
     /// Normalized high-bit count for native-byte Posterize strategies.
     Posterize {
         /// Number of high bits retained per sample.
@@ -126,6 +167,21 @@ pub enum RequestFacts {
         /// Float32-narrowed box request bits, when the caller supplied bounds.
         box_bounds_bits: Option<(u64, u64, u64, u64)>,
     },
+    /// Transform request facts captured before architecture strategy selection.
+    Transform {
+        /// 0 affine, 1 perspective, 2 quadrilateral, 3 mesh.
+        method: u8,
+        /// Number of coefficients supplied by the operation.
+        data_len: usize,
+        /// Sampling filter requested by the operation.
+        filter: ResampleFilter,
+        /// Whether all transform coefficients are finite.
+        coefficients_finite: bool,
+        /// Requested output width.
+        output_width: u32,
+        /// Requested output height.
+        output_height: u32,
+    },
     /// Odd square filter window and optional caller-selected rank.
     FilterWindow {
         /// Positive odd side length.
@@ -178,6 +234,11 @@ pub enum RequestFacts {
     },
     /// Brightness factor retained for exact architecture eligibility.
     Brightness {
+        /// Factor bit pattern supplied by the operation.
+        factor_bits: u64,
+    },
+    /// Contrast factor retained for exact architecture eligibility.
+    Contrast {
         /// Factor bit pattern supplied by the operation.
         factor_bits: u64,
     },
@@ -243,6 +304,37 @@ pub enum RequestFacts {
         /// Output mode selected by the caller.
         target_mode: Mode,
     },
+    /// Exact source-band metadata and dimensions for Pillow's Merge contract.
+    MergeBands {
+        /// Exact requested output identity.
+        target_mode: Mode,
+        /// Number of supplied image bands.
+        band_count: usize,
+        /// Identity of the first supplied band.
+        first_mode: Mode,
+        /// Whether every remaining band has Pillow's required L identity.
+        remaining_modes_are_luma: bool,
+        /// Whether every supplied band has the first band's dimensions.
+        dimensions_match: bool,
+    },
+    /// Exact secondary raster and blend factor for Pillow Blend.
+    BlendInputs {
+        /// Materialized secondary mode and dimensions.
+        other: SecondaryInputFacts,
+        /// Exact f64 alpha bits retained for architecture guards.
+        alpha_bits: u64,
+    },
+    /// Exact source, destination, and mask facts for Image.composite.
+    CompositeInputs {
+        /// Exact source identity used by this mode strategy.
+        source_mode: Mode,
+        /// Destination canvas identity and dimensions.
+        destination: SecondaryInputFacts,
+        /// Mask identity and dimensions.
+        mask: SecondaryInputFacts,
+        /// Whether the wrapper selected the mask's alpha sample.
+        mask_alpha: bool,
+    },
     /// Exact secondary image identity and shape for Chops byte operations.
     ChopsBinary {
         /// Materialized secondary raster facts.
@@ -263,6 +355,8 @@ pub enum RequestFacts {
         source: SecondaryInputFacts,
         /// Optional mask raster identity and dimensions.
         mask: Option<SecondaryInputFacts>,
+        /// Exact destination-relative paste position.
+        position: (i64, i64),
         /// Requested paste region dimensions.
         region: (u32, u32),
         /// Whether mask values come from the mask alpha sample.
@@ -357,6 +451,58 @@ pub struct StrategyInputs {
 }
 
 impl StrategyInputs {
+    /// Supplies exact band identities and shapes to the declared Merge contract.
+    #[must_use]
+    pub const fn with_merge_bands(
+        mut self,
+        target_mode: Mode,
+        band_count: usize,
+        first_mode: Mode,
+        remaining_modes_are_luma: bool,
+        dimensions_match: bool,
+    ) -> Self {
+        self.request = RequestFacts::MergeBands {
+            target_mode,
+            band_count,
+            first_mode,
+            remaining_modes_are_luma,
+            dimensions_match,
+        };
+        self
+    }
+
+    /// Supplies the secondary image and alpha to the declared Blend contract.
+    #[must_use]
+    pub const fn with_blend_inputs(
+        mut self,
+        other: SecondaryInputFacts,
+        alpha: f64,
+    ) -> Self {
+        self.request = RequestFacts::BlendInputs {
+            other,
+            alpha_bits: alpha.to_bits(),
+        };
+        self
+    }
+
+    /// Supplies the destination and normalized mask to the Composite contract.
+    #[must_use]
+    pub const fn with_composite_inputs(
+        mut self,
+        source_mode: Mode,
+        destination: SecondaryInputFacts,
+        mask: SecondaryInputFacts,
+        mask_alpha: bool,
+    ) -> Self {
+        self.request = RequestFacts::CompositeInputs {
+            source_mode,
+            destination,
+            mask,
+            mask_alpha,
+        };
+        self
+    }
+
     /// Supplies the band index to the same guard used by assessment and preparation.
     #[must_use]
     pub const fn with_extract_band_index(mut self, index: u8) -> Self {
@@ -584,6 +730,15 @@ impl StrategyInputs {
         self
     }
 
+    /// Supplies Contrast's factor to its declared vector eligibility guard.
+    #[must_use]
+    pub const fn with_contrast(mut self, factor: f64) -> Self {
+        self.request = RequestFacts::Contrast {
+            factor_bits: factor.to_bits(),
+        };
+        self
+    }
+
     /// Supplies Sharpness's factor to its declared vector eligibility guard.
     #[must_use]
     pub const fn with_sharpness(mut self, factor: f64) -> Self {
@@ -676,12 +831,14 @@ impl StrategyInputs {
         mut self,
         source: SecondaryInputFacts,
         mask: Option<SecondaryInputFacts>,
+        position: (i64, i64),
         region: (u32, u32),
         mask_alpha: bool,
     ) -> Self {
         self.request = RequestFacts::Paste {
             source,
             mask,
+            position,
             region,
             mask_alpha,
         };

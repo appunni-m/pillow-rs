@@ -6,14 +6,17 @@
 //!
 //! Mode-specific filter, reducing-gap, and I32/F32 resize decisions are
 //! selected through `mode_strategy` before execution.
-//! TODO(pillow-rs#3ptb): finish comparing the archived Thumbnail adapter paths
-//! with the exact mode-owned Reduce/Resize and fused strategies, then retire
-//! its compatibility callers. F32's even 2x2 vector reduction now runs through
-//! its nested exact-mode Reduce strategy; general I32 reduction is scalar.
-//! TODO(pillow-rs#3ptb): expose the nested Reduce/Resize architecture choices
-//! in Thumbnail's own support and selection receipt. Until the composite
-//! contract can represent those child choices, its operation receipt stays
-//! architecture-unspecified rather than reporting the outer serial declaration.
+//! The archived mode branches are source-reviewed against these owners: `1`
+//! and `P` force nearest; `LA`, `La`, `PA`, and `RGBA` skip reducing-gap; F32
+//! and I32 use exact typed owners; all other modes compose native Reduce and
+//! Resize. No active caller uses the archived adapter.
+//! TODO(pillow-rs#3ptb): complete Thumbnail parity for every declared exact
+//! mode and architecture in the operation × mode × architecture matrix.
+//! F32's even 2x2 vector reduction runs through its nested exact-mode Reduce
+//! strategy; general I32 reduction is scalar.
+//! Thumbnail's support contract links its conditional Reduce and Resize
+//! children; the prepared receipt records the concrete children selected for
+//! the exact mode, request, and injected architecture context.
 
 // NO_PILLOW_SUPPORT: The internal high-depth raster identities use their
 // native Reduce and Resize strategies, but Pillow does not expose those modes.
@@ -30,6 +33,11 @@ use super::mode_strategy::ThumbnailModeStrategy;
 
 pub(super) const INPUTS: &[crate::compute::registry::support::InputContract] =
     &[crate::compute::registry::support::InputContract::Thumbnail];
+const COMPOSED_OPERATIONS: &[OperationId] = &[
+    OperationId::Reduce,
+    OperationId::Resize,
+    OperationId::ResizeBoxed,
+];
 
 fn classify_mode(mode: Mode) -> ModeSupport {
     match mode {
@@ -63,24 +71,26 @@ fn classify_mode(mode: Mode) -> ModeSupport {
 
 /// Exhaustive typed source-mode support for Thumbnail's prepared strategies.
 pub(crate) static SUPPORT: OperationSupport =
-    OperationSupport::new(OperationId::Thumbnail, INPUTS, classify_mode);
+    OperationSupport::composed(
+        OperationId::Thumbnail,
+        INPUTS,
+        classify_mode,
+        COMPOSED_OPERATIONS,
+    );
 
 /// Whether a validated RGB PutPixel prefix can use Thumbnail's sparse 2x2 path.
 pub(crate) fn rgb_putpixel_fusion_supported(
     image: &DynamicImage,
     writes: &[PipelineOp],
     thumbnail: &PipelineOp,
-    mode: Option<Mode>,
     context: &ExecutionContext,
 ) -> bool {
     if context.backend() != Backend::Cpu
-        || context.architecture() != Architecture::Default
         || !matches!(image, DynamicImage::ImageRgb8(_))
     {
         return false;
     }
-    if !matches!(mode, None | Some(Mode::ImageRgb8))
-        || writes.is_empty()
+    if writes.is_empty()
         || !writes.iter().all(|op| {
             matches!(
                 op,
@@ -113,25 +123,90 @@ pub(crate) fn rgb_putpixel_fusion_supported(
     factor_x == 2 && factor_y == 2
 }
 
-/// Execute the admitted RGB-only scalar PutPixel/Thumbnail strategy.
-pub(crate) fn execute_rgb_putpixel_thumbnail(
-    image: &DynamicImage,
-    writes: &[PipelineOp],
-    thumbnail: &PipelineOp,
+/// One admitted RGB PutPixel/Thumbnail fusion with a prepared Resize strategy.
+pub(crate) struct PreparedRgbPutPixelThumbnail<'a> {
+    image: &'a DynamicImage,
+    writes: &'a [PipelineOp],
+    thumbnail: &'a PipelineOp,
+    context: ExecutionContext,
+    resize_selection: StrategySelection,
+}
+
+impl PreparedRgbPutPixelThumbnail<'_> {
+    pub(crate) fn architecture(&self) -> Architecture {
+        self.resize_selection.implementation.architecture
+    }
+
+    pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
+        super::rgb8::ops::execute_putpixel_thumbnail(
+            self.image,
+            self.writes,
+            self.thumbnail,
+            &self.context,
+            self.resize_selection,
+        )
+    }
+}
+
+/// Select the supported fusion and its exact child Resize strategy.
+pub(crate) fn prepare_rgb_putpixel_thumbnail<'a>(
+    image: &'a DynamicImage,
+    writes: &'a [PipelineOp],
+    thumbnail: &'a PipelineOp,
     context: &ExecutionContext,
-) -> Result<DynamicImage, PilError> {
-    if !rgb_putpixel_fusion_supported(
+) -> Result<Option<PreparedRgbPutPixelThumbnail<'a>>, PilError> {
+    if !rgb_putpixel_fusion_supported(image, writes, thumbnail, context) {
+        return Ok(None);
+    }
+    let inputs = OperationInputs {
+        image,
+        palette: crate::compute::registry::support::PaletteInput::default(),
+    };
+    let prepared = prepare_pipeline(inputs, thumbnail, context)?;
+    let boxed_resize_selection = prepared
+        .composed_selections()
+        .iter()
+        .find(|selection| {
+            selection.implementation.operation == OperationId::ResizeBoxed
+                && selection.implementation.mode == Mode::ImageRgb8
+        })
+        .copied()
+        .ok_or_else(|| {
+            PilError::InternalError(
+                "RGB Thumbnail fusion has no prepared boxed Resize strategy".into(),
+            )
+        })?;
+    let PipelineOp::Thumbnail { w, h, filter } = thumbnail else {
+        return Err(PilError::InternalError(
+            "prepared RGB Thumbnail changed after admission".into(),
+        ));
+    };
+    let reduced_facts = reduced_resize_facts(inputs, (2, 2))?.with_resize(
+        (*w).max(1).min(inputs.image.width()),
+        (*h).max(1).min(inputs.image.height()),
+        *filter,
+        false,
+    );
+    let unboxed_resize_selection = select_child_mode(
+        &crate::compute::pool_cpu::ops::resize::ops::SUPPORT,
+        Mode::ImageRgb8,
+        reduced_facts,
+        context,
+    )?;
+    let resize_selection = if unboxed_resize_selection.implementation.architecture
+        == Architecture::Default
+    {
+        boxed_resize_selection
+    } else {
+        unboxed_resize_selection
+    };
+    Ok(Some(PreparedRgbPutPixelThumbnail {
         image,
         writes,
         thumbnail,
-        Some(image.mode()),
-        context,
-    ) {
-        return Err(PilError::InternalError(
-            "unsupported RGB PutPixel thumbnail fusion request".into(),
-        ));
-    }
-    super::rgb8::ops::execute_putpixel_thumbnail(image, writes, thumbnail, context)
+        context: *context,
+        resize_selection,
+    }))
 }
 
 /// Thumbnail plan retaining resolved mode policy, bounds, and backend policy.
@@ -143,11 +218,19 @@ pub(crate) struct PreparedThumbnail<'a> {
     output: (u32, u32),
     factors: (u32, u32),
     effective_filter: ResampleFilter,
-    reduce: bool,
     use_unboxed_resize: bool,
     stream_i32: bool,
     context: ExecutionContext,
     selection: StrategySelection,
+    reduce_plan: Option<crate::compute::pool_cpu::ops::reduce::ops::PreparedReduce<'a>>,
+    resize_selection: Option<StrategySelection>,
+    composed_selections: Vec<StrategySelection>,
+}
+
+struct ThumbnailChildren<'a> {
+    reduce_plan: Option<crate::compute::pool_cpu::ops::reduce::ops::PreparedReduce<'a>>,
+    resize_selection: Option<StrategySelection>,
+    selections: Vec<StrategySelection>,
 }
 
 struct ThumbnailResizeRequest {
@@ -161,6 +244,10 @@ struct ThumbnailResizeRequest {
 impl PreparedThumbnail<'_> {
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
+    }
+
+    pub(crate) fn composed_selections(&self) -> &[StrategySelection] {
+        &self.composed_selections
     }
 
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
@@ -218,7 +305,21 @@ pub(crate) fn prepare_pipeline<'a>(
         && mode_strategy.streams_i32_thumbnail(source, output, effective_filter, reduce);
     let use_unboxed_resize = factors == (1, 1)
         || mode_strategy.uses_unboxed_resize(source, output, factors);
+    let resize_request = ThumbnailResizeRequest {
+        source,
+        output,
+        factors,
+        filter: effective_filter,
+        use_unboxed_resize,
+    };
     let selection = select_mode(inputs, mode, *w, *h, *filter, context)?;
+    let children = prepare_composed_strategies(
+        inputs,
+        mode,
+        resize_request,
+        stream_i32,
+        context,
+    )?;
     Ok(crate::compute::registry::PreparedOperation::from_thumbnail(
         PreparedThumbnail {
             inputs,
@@ -228,13 +329,129 @@ pub(crate) fn prepare_pipeline<'a>(
             output,
             factors,
             effective_filter,
-            reduce,
             use_unboxed_resize,
             stream_i32,
             context: *context,
             selection,
+            reduce_plan: children.reduce_plan,
+            resize_selection: children.resize_selection,
+            composed_selections: children.selections,
         },
     ))
+}
+
+fn prepare_composed_strategies<'a>(
+    inputs: OperationInputs<'a>,
+    mode: Mode,
+    request: ThumbnailResizeRequest,
+    stream_i32: bool,
+    context: &ExecutionContext,
+) -> Result<ThumbnailChildren<'a>, PilError> {
+    if stream_i32 {
+        return Ok(ThumbnailChildren {
+            reduce_plan: None,
+            resize_selection: None,
+            selections: Vec::new(),
+        });
+    }
+
+    let reduce_plan = if request.factors != (1, 1) {
+        Some(crate::compute::pool_cpu::ops::reduce::ops::prepare(
+            inputs,
+            request.factors,
+            context,
+        )?)
+    } else {
+        None
+    };
+    let mut selections = Vec::with_capacity(2);
+    if let Some(plan) = &reduce_plan {
+        selections.push(*plan.selection());
+    }
+
+    let mut resize_facts = reduced_resize_facts(inputs, request.factors)?;
+    resize_facts = match request.use_unboxed_resize {
+        true => resize_facts.with_resize(
+            request.output.0,
+            request.output.1,
+            request.filter,
+            false,
+        ),
+        false => resize_facts.with_boxed_resize(
+            request.output.0,
+            request.output.1,
+            request.filter,
+            (
+                0.0,
+                0.0,
+                f64::from(request.source.0) / f64::from(request.factors.0),
+                f64::from(request.source.1) / f64::from(request.factors.1),
+            ),
+        ),
+    };
+    let support = match request.use_unboxed_resize {
+        true => &crate::compute::pool_cpu::ops::resize::ops::SUPPORT,
+        false => &crate::compute::pool_cpu::ops::resize::ops::BOXED_SUPPORT,
+    };
+    let resize_selection = select_child_mode(support, mode, resize_facts, context)?;
+    selections.push(resize_selection);
+    Ok(ThumbnailChildren {
+        reduce_plan,
+        resize_selection: Some(resize_selection),
+        selections,
+    })
+}
+
+fn reduced_resize_facts(
+    inputs: OperationInputs<'_>,
+    factors: (u32, u32),
+) -> Result<crate::compute::registry::support::StrategyInputs, PilError> {
+    let mut facts = inputs.facts();
+    if factors == (1, 1) {
+        return Ok(facts);
+    }
+
+    let width = facts.width.div_ceil(factors.0);
+    let height = facts.height.div_ceil(factors.1);
+    let source_pixels = (facts.width as usize).checked_mul(facts.height as usize);
+    let output_pixels = (width as usize).checked_mul(height as usize);
+    facts.byte_len = match (source_pixels, output_pixels, facts.byte_len) {
+        (Some(0), _, Some(_)) => Some(0),
+        (Some(source_pixels), Some(output_pixels), Some(source_bytes)) => {
+            let bytes_per_pixel = source_bytes
+                .checked_div(source_pixels)
+                .filter(|_| source_bytes.is_multiple_of(source_pixels))
+                .ok_or_else(|| {
+                    PilError::InternalError("Thumbnail source layout has no pixel size".into())
+                })?;
+            Some(output_pixels.checked_mul(bytes_per_pixel).ok_or_else(|| {
+                PilError::InternalError("Thumbnail reduced byte length overflowed".into())
+            })?)
+        }
+        _ => {
+            return Err(PilError::InternalError(
+                "Thumbnail reduced layout facts are unresolved".into(),
+            ));
+        }
+    };
+    facts.width = width;
+    facts.height = height;
+    Ok(facts)
+}
+
+fn select_child_mode(
+    support: &'static OperationSupport,
+    mode: Mode,
+    facts: crate::compute::registry::support::StrategyInputs,
+    context: &ExecutionContext,
+) -> Result<StrategySelection, PilError> {
+    match support.for_mode(mode).assess(context, facts)? {
+        SupportAssessment::Ready(selection) => Ok(selection),
+        SupportAssessment::Rejected { reason, kind, .. } => Err(kind.into_error(reason)),
+        SupportAssessment::Deferred { .. } => Err(PilError::InternalError(
+            "Thumbnail child strategy remained unresolved after materialization".into(),
+        )),
+    }
 }
 
 fn execute_thumbnail(plan: PreparedThumbnail<'_>) -> Result<DynamicImage, PilError> {
@@ -259,16 +476,18 @@ fn execute_thumbnail(plan: PreparedThumbnail<'_>) -> Result<DynamicImage, PilErr
         );
     }
 
-    let (work_image, factors) = if plan.reduce {
-        let work_image = reduce_to_thumbnail_work_image(
-            plan.inputs,
-            plan.factors,
-            &plan.context,
-        )?;
-        (work_image, plan.factors)
+    let factors = if plan.factors == (1, 1) {
+        (1, 1)
     } else {
-        (image.clone(), (1, 1))
+        plan.factors
     };
+    let work_image = match plan.reduce_plan {
+        Some(reduce_plan) => reduce_plan.execute()?,
+        None => image.clone(),
+    };
+    let resize_selection = plan.resize_selection.ok_or_else(|| {
+        PilError::InternalError("Thumbnail is missing its prepared Resize strategy".into())
+    })?;
     resize_thumbnail_work_image(
         &work_image,
         plan.inputs.palette,
@@ -279,56 +498,34 @@ fn execute_thumbnail(plan: PreparedThumbnail<'_>) -> Result<DynamicImage, PilErr
             filter,
             use_unboxed_resize: plan.use_unboxed_resize,
         },
+        resize_selection,
         &plan.context,
     )
-}
-
-fn reduce_to_thumbnail_work_image(
-    inputs: OperationInputs<'_>,
-    factors: (u32, u32),
-    context: &ExecutionContext,
-) -> Result<DynamicImage, PilError> {
-    if factors == (1, 1) {
-        return Ok(inputs.image.clone());
-    }
-    let reduced = crate::compute::pool_cpu::ops::reduce::ops::prepare(
-        inputs,
-        factors,
-        context,
-    )?
-    .execute()?;
-    Ok(reduced)
 }
 
 fn resize_thumbnail_work_image(
     image: &DynamicImage,
     palette: crate::compute::registry::support::PaletteInput<'_>,
     request: ThumbnailResizeRequest,
+    selection: StrategySelection,
     context: &ExecutionContext,
 ) -> Result<DynamicImage, PilError> {
     let inputs = OperationInputs { image, palette };
-    if request.use_unboxed_resize {
-        let op = PipelineOp::Resize {
-            w: request.output.0,
-            h: request.output.1,
-            filter: request.filter,
-        };
-        return crate::compute::pool_cpu::ops::resize::ops::prepare_pipeline(
-            inputs, &op, context,
-        )?
-        .execute();
-    }
-    let op = PipelineOp::ResizeBoxed {
-        w: request.output.0,
-        h: request.output.1,
-        filter: request.filter,
-        box_coords: (
-            0.0,
-            0.0,
-            f64::from(request.source.0) / f64::from(request.factors.0),
-            f64::from(request.source.1) / f64::from(request.factors.1),
-        ),
-    };
-    crate::compute::pool_cpu::ops::resize::ops::prepare_pipeline(inputs, &op, context)?.execute()
+    let bounds = (!request.use_unboxed_resize).then_some((
+        0.0,
+        0.0,
+        f64::from(request.source.0) / f64::from(request.factors.0),
+        f64::from(request.source.1) / f64::from(request.factors.1),
+    ));
+    crate::compute::pool_cpu::ops::resize::ops::prepare_direct_with_selection(
+        inputs,
+        request.output.0,
+        request.output.1,
+        request.filter,
+        bounds,
+        context,
+        selection,
+    )
+    .execute()
 }
 

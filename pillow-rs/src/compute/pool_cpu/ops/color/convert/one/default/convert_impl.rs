@@ -14,3 +14,18 @@ pub(crate) fn execute(source: &GrayImage, target: Mode) -> Result<DynamicImage, 
         samples,
     )
 }
+
+pub(crate) fn execute_palette_target(
+    source: &GrayImage,
+    target: Mode,
+) -> Result<super::super::super::ops::PreparedConvertOutput, PilError> {
+    let samples = source
+        .pixels()
+        .map(|pixel| if pixel[0] == 0 { 0 } else { u8::MAX });
+    super::super::super::helpers::luma8::execute_palette_target(
+        source.width(),
+        source.height(),
+        target,
+        samples,
+    )
+}

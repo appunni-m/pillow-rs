@@ -13,10 +13,18 @@ pub fn gpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
     // output contract. LAB additionally needs an A/B +128 byte encoding, and
     // scalar/P targets need non-byte output handling; route those cases to
     // the exact CPU implementation before device work begins.
-    if let PipelineOp::Merge { logical_mode, .. } = op
+    if let PipelineOp::Merge { mode, .. } = op
         && matches!(
-            logical_mode.as_str(),
-            "LAB" | "P" | "1" | "I" | "F" | "I;16" | "I;16L" | "I;16B" | "I;16N"
+            mode,
+            Mode::ImageLab8
+                | Mode::ImagePalette8
+                | Mode::One
+                | Mode::ImageI32
+                | Mode::ImageF32
+                | Mode::ImageI16
+                | Mode::ImageI16L
+                | Mode::ImageI16B
+                | Mode::ImageI16N
         )
     {
         return Ok(false);

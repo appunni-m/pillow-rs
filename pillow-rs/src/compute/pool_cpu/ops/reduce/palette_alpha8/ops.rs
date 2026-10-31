@@ -10,7 +10,7 @@ use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 
 const INPUTS: &[InputContract] =
-    &[InputContract::ReduceFactors { identity_only: true }];
+    &[InputContract::ReduceFactors { identity_only: false }];
 
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(OperationId::Reduce, Mode::ImagePaletteAlpha8, OutputModeRule::Preserve, INPUTS, &[]);
 

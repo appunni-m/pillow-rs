@@ -99,6 +99,8 @@ pub fn radial_gradient(mode: &str) -> Result<Image, JsValue> {
 #[wasm_bindgen(js_name = "mergeFn")]
 /// Merges the supplied band images into a new image in the requested mode.
 pub fn merge_fn(mode: &str, bands: Vec<Image>) -> Result<Image, JsValue> {
+    let mode = pillow_rs::Mode::from_pillow_name(mode)
+        .ok_or_else(|| err(pillow_rs::PilError::KeyError(mode.to_owned())))?;
     let inner_bands: Vec<pillow_rs::Image> = bands.iter().map(|b| b.inner.clone()).collect();
     pillow_rs::image_merge(mode, &inner_bands)
         .map(|i| Image { inner: i })

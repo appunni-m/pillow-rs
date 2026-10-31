@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 /// Clipped source/destination intersection for one paste region.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct PasteRegion {
@@ -7,6 +9,23 @@ pub(crate) struct PasteRegion {
     pub(crate) destination_top: u32,
     pub(crate) width: u32,
     pub(crate) height: u32,
+}
+
+/// Computes one interleaved byte row range without overflowing its extent.
+#[must_use]
+pub(crate) fn checked_row_range(
+    row: u32,
+    left: u32,
+    width: u32,
+    channels: usize,
+    stride: usize,
+) -> Option<Range<usize>> {
+    let row = usize::try_from(row).ok()?;
+    let left = usize::try_from(left).ok()?.checked_mul(channels)?;
+    let width = usize::try_from(width).ok()?.checked_mul(channels)?;
+    let start = row.checked_mul(stride)?.checked_add(left)?;
+    let end = start.checked_add(width)?;
+    Some(start..end)
 }
 
 impl PasteRegion {

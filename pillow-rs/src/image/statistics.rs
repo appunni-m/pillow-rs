@@ -12,7 +12,7 @@ use crate::raster::{DynamicImage, Mode};
 
 use super::{
     FormattedExtrema, FormattedPixelValue, Image, ScalarImageSamples, decode_float_samples,
-    decode_integer_samples, is_l16_mode, pillow_band_count,
+    decode_integer_samples, is_l16_identity, pillow_band_count,
 };
 
 impl Image {
@@ -420,14 +420,14 @@ impl Image {
         // must not be overwritten by this terminal CPU scan.
         let eager_receipt_eligible =
             crate::compute::Backend::pipeline_telemetry_enabled() && self.is_materialized();
-        let mode = self.mode()?;
-        if is_l16_mode(&mode) {
+        let mode = self.mode_identity()?;
+        if is_l16_identity(mode) {
             // Pillow's ImagingCore rejects unsigned 16-bit luma modes here;
             // this is the public mode contract, independent of TIFF decoding.
             return Err(PilError::ValueError("image has wrong mode".into()));
         }
         let img = self.materialized_shared()?;
-        if mode == "I" || mode == "F" {
+        if matches!(mode, Mode::ImageI32 | Mode::ImageF32) {
             let telemetry = if eager_receipt_eligible {
                 match crate::compute::preferred_active_backend() {
                     Ok(selected) => Some(crate::compute::begin_eager_cpu_operation_telemetry(
@@ -439,7 +439,7 @@ impl Image {
             } else {
                 None
             };
-            let result = Self::getcolors_scalar(maxcolors, &mode, &img);
+            let result = Self::getcolors_scalar(maxcolors, mode, &img);
             if let Some(telemetry) = telemetry {
                 if result.is_ok() {
                     crate::compute::finish_eager_cpu_operation_telemetry(telemetry, 0);
@@ -450,7 +450,7 @@ impl Image {
             return result;
         }
         // For 1, L, P modes, PIL uses histogram (pixel value ascending)
-        if mode == "1" || mode == "L" || mode == "P" {
+        if matches!(mode, Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8) {
             return Self::getcolors_histogram(maxcolors, &img);
         }
         Self::getcolors_multiband(maxcolors, img.as_ref())
@@ -465,8 +465,8 @@ impl Image {
         if maxcolors >= 0 {
             return self.getcolors(maxcolors as u32);
         }
-        let mode = self.mode()?;
-        if is_l16_mode(&mode) {
+        let mode = self.mode_identity()?;
+        if is_l16_identity(mode) {
             return Err(PilError::ValueError("image has wrong mode".into()));
         }
         self.materialized_shared()?;
@@ -496,8 +496,9 @@ impl Image {
     /// Returns extrema using Pillow's one-pair versus per-band result shape.
     pub fn getextrema_formatted(&self) -> Result<FormattedExtrema, PilError> {
         let (width, height) = self.size()?;
+        let mode = self.mode_identity()?;
         if width == 0 || height == 0 {
-            let bands = pillow_band_count(&self.mode()?);
+            let bands = pillow_band_count(mode);
             return Ok(if bands == 1 {
                 FormattedExtrema::Empty
             } else {
@@ -505,22 +506,21 @@ impl Image {
             });
         }
 
-        let mode = self.mode()?;
-        if mode == "I" {
+        if mode == Mode::ImageI32 {
             let image = self.materialized_shared()?;
             return extrema::integer(image.as_ref());
         }
-        if matches!(mode.as_str(), "I;16L" | "I;16B" | "I;16N") {
+        if matches!(mode, Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N) {
             // Pillow exposes the native I;16 mode to getextrema, but the
             // explicit byte-order variants are rejected by ImagingCore with
             // the public wrong-mode error.
             return Err(PilError::ValueError("image has wrong mode".into()));
         }
-        if is_l16_mode(&mode) {
+        if is_l16_identity(mode) {
             let image = self.materialized_shared()?;
             return extrema::luma16(image.as_ref());
         }
-        if mode == "F" {
+        if mode == Mode::ImageF32 {
             let image = self.materialized_shared()?;
             return extrema::float(image.as_ref());
         }

@@ -7,7 +7,7 @@ use bytes::Bytes;
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::pipeline::{PipelineOp, PixelMode};
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, Mode};
 
 use super::{
     FormattedImageData, Image, PutDataInput, PutDataValue, PutDataValueKind, image_mode_name,
@@ -32,8 +32,8 @@ pub(super) fn decode_float_samples(raw: &[u8]) -> Vec<f64> {
         .collect()
 }
 
-pub(super) fn validate_scalar_storage(image: &DynamicImage, mode: &str) -> Result<(), PilError> {
-    if !matches!(mode, "I" | "F") {
+pub(super) fn validate_scalar_storage(image: &DynamicImage, mode: Mode) -> Result<(), PilError> {
+    if !matches!(mode, Mode::ImageI32 | Mode::ImageF32) {
         return Ok(());
     }
     // Pillow permits empty scalar images from `Image.frombytes`. CheckedDims
@@ -47,7 +47,8 @@ pub(super) fn validate_scalar_storage(image: &DynamicImage, mode: &str) -> Resul
     };
     if image.as_bytes().len() != expected {
         return Err(PilError::InternalError(format!(
-            "{mode} image has invalid scalar storage"
+            "{} image has invalid scalar storage",
+            mode.pillow_name().unwrap_or("unknown")
         )));
     }
     Ok(())
@@ -76,6 +77,19 @@ pub(super) fn l16_uses_big_endian(mode: &str) -> bool {
         "I;16B" => true,
         "I;16L" => false,
         "I;16" | "I;16N" => cfg!(target_endian = "big"),
+        _ => false,
+    }
+}
+
+pub(super) const fn is_l16_identity(mode: Mode) -> bool {
+    matches!(mode, Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N)
+}
+
+pub(super) const fn l16_identity_uses_big_endian(mode: Mode) -> bool {
+    match mode {
+        Mode::ImageI16B => true,
+        Mode::ImageI16L => false,
+        Mode::ImageI16 | Mode::ImageI16N => cfg!(target_endian = "big"),
         _ => false,
     }
 }
@@ -201,11 +215,19 @@ fn putdata_bytes(
     Ok(data)
 }
 
-pub(super) fn pillow_band_count(mode: &str) -> usize {
+pub(super) const fn pillow_band_count(mode: Mode) -> usize {
     match mode {
-        "L" | "1" | "P" | "I" | "F" | "I;16" | "I;16L" | "I;16B" | "I;16N" => 1,
-        "LA" | "La" | "PA" => 2,
-        "RGB" | "YCbCr" | "HSV" | "LAB" => 3,
+        Mode::One
+        | Mode::ImageLuma8
+        | Mode::ImagePalette8
+        | Mode::ImageI32
+        | Mode::ImageF32
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N => 1,
+        Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => 2,
+        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageHsv8 | Mode::ImageLab8 => 3,
         _ => 4,
     }
 }

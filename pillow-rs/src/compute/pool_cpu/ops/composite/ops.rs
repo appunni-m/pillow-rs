@@ -1,18 +1,28 @@
-//! AlphaComposite support contract and exact-mode strategy orchestration.
-//!
-//! The preserved serial entry point ignores `dest` and `src`; retain that
-//! behavior until the frozen CPU cases establish the offset contract.
+//! Composite operation contracts and exact-mode strategy orchestration.
+
+mod blend;
+mod composite_module;
+mod merge;
+
+pub(crate) use blend::{BLEND_MODULE_SUPPORT, PreparedBlendModule, prepare_blend_pipeline};
+pub(crate) use composite_module::{
+    COMPOSITE_MODULE_SUPPORT, PreparedCompositeModule, prepare_composite_pipeline,
+};
+pub(crate) use merge::{MERGE_SUPPORT, PreparedMerge, prepare_merge_pipeline};
 
 use std::sync::Arc;
 
 use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{
     ModeSupport, OperationId, OperationInputs, OperationSupport, RejectionKind,
-    StrategySelection, SupportAssessment,
+    SecondaryInputFacts, StrategyInputs, StrategySelection, SupportAssessment,
 };
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
+
+// TODO(pillow-rs#3ptb): finish source review and expand parity across every
+// operation, exact mode, and architecture route, including fallback reasons.
 
 pub(crate) enum PreparedAlphaComposite<'a> {
     ImageLumaA8(super::luma_a8::ops::Strategy<'a>),
@@ -179,3 +189,59 @@ pub(crate) fn prepare_mirror_fusion<'a>(
     let selection = *prepared.selection();
     super::rgba8::ops::prepare_mirror_fusion(destination, source, selection, ctx)
 }
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum MergeLayout {
+    Identity,
+    Two,
+    Three { lab_encoding: bool },
+    Four,
+}
+
+impl MergeLayout {
+    pub(crate) const fn channels(self) -> u8 {
+        match self {
+            Self::Identity => 1,
+            Self::Two => 2,
+            Self::Three { .. } => 3,
+            Self::Four => 4,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum CompositeLayout {
+    Byte { channels: u8 },
+    U16 { channels: u8 },
+    I32,
+    F32 { channels: u8 },
+}
+
+fn select_support(
+    support: ModeSupport,
+    facts: StrategyInputs,
+    ctx: &ExecutionContext,
+    operation: &'static str,
+) -> Result<StrategySelection, PilError> {
+    match support.assess(ctx, facts)? {
+        SupportAssessment::Ready(selection) => Ok(selection),
+        SupportAssessment::Rejected { reason, kind, .. } => Err(kind.into_error(reason)),
+        SupportAssessment::Deferred { .. } => Err(PilError::InternalError(
+            format!("{operation} preparation received unresolved input facts"),
+        )),
+    }
+}
+
+fn secondary_facts(image: &DynamicImage) -> SecondaryInputFacts {
+    SecondaryInputFacts {
+        mode: image.mode(),
+        width: image.width(),
+        height: image.height(),
+        byte_len: Some(image.as_bytes().len()),
+    }
+}
+
+
+pub(crate) use blend::prepare_blend_module;
+pub(crate) use composite_module::prepare_composite_module;
+pub(crate) use merge::prepare_merge;

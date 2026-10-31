@@ -2,6 +2,7 @@
 
 use super::super::FormattedPixelValue;
 use super::pillow_table::{PillowColorCounts, pillow_color_components, pillow_color_pixel};
+use crate::raster::Mode;
 
 pub(in crate::image) enum RgbGrayscaleColorCounts {
     NotGrayscale,
@@ -15,9 +16,9 @@ pub(in crate::image) enum ScalarColorDomainCounts {
     Colors(Vec<(u32, FormattedPixelValue)>),
 }
 
-fn scalar_byte_domain_index(mode: &str, pixel: u32) -> Option<usize> {
+fn scalar_byte_domain_index(mode: Mode, pixel: u32) -> Option<usize> {
     match mode {
-        "I" => {
+        Mode::ImageI32 => {
             let value = i32::from_ne_bytes(pixel.to_ne_bytes());
             if (0..=255).contains(&value) {
                 usize::try_from(value).ok()
@@ -25,7 +26,7 @@ fn scalar_byte_domain_index(mode: &str, pixel: u32) -> Option<usize> {
                 None
             }
         }
-        "F" => {
+        Mode::ImageF32 => {
             if pixel == 0 {
                 return Some(0);
             }
@@ -53,7 +54,7 @@ fn scalar_byte_domain_index(mode: &str, pixel: u32) -> Option<usize> {
     }
 }
 
-pub(in crate::image) fn scalar_byte_domain_is_plausible(mode: &str, bytes: &[u8]) -> bool {
+pub(in crate::image) fn scalar_byte_domain_is_plausible(mode: Mode, bytes: &[u8]) -> bool {
     let sample_count = bytes.len() / 4;
     if sample_count == 0 {
         return true;
@@ -86,7 +87,7 @@ pub(in crate::image) fn scalar_byte_domain_is_plausible(mode: &str, bytes: &[u8]
 }
 
 pub(in crate::image) fn getcolors_scalar_byte_domain(
-    mode: &str,
+    mode: Mode,
     bytes: &[u8],
     maxcolors: usize,
     code_mask: u32,
@@ -127,7 +128,7 @@ pub(in crate::image) fn getcolors_scalar_byte_domain(
 
 #[inline]
 fn scalar_byte_domain_counts(
-    mode: &str,
+    mode: Mode,
     histogram: &[u32; 256],
     first_seen: Vec<u8>,
     maxcolors: usize,
@@ -141,7 +142,7 @@ fn scalar_byte_domain_counts(
     let mut distinct_colors = 0usize;
     for value in first_seen {
         let index = usize::from(value);
-        let pixel = if mode == "I" {
+        let pixel = if mode == Mode::ImageI32 {
             u32::from_ne_bytes(i32::from(value).to_ne_bytes())
         } else {
             f32::from(value).to_bits()
@@ -169,7 +170,7 @@ fn scalar_byte_domain_counts(
             .into_slot_order(distinct_colors)
             .into_iter()
             .map(|(_, (pixel, count))| {
-                let value = if mode == "I" {
+                let value = if mode == Mode::ImageI32 {
                     FormattedPixelValue::Integer(i32::from_ne_bytes(pixel.to_ne_bytes()))
                 } else {
                     FormattedPixelValue::Float(f32::from_bits(pixel) as f64)

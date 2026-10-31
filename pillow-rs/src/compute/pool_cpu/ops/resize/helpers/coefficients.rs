@@ -39,6 +39,26 @@ pub(crate) fn for_resize(
     }
 }
 
+pub(crate) fn resample_pass_requirements(
+    source: (u32, u32),
+    destination: (u32, u32),
+    bounds: BoxBounds,
+) -> (bool, bool) {
+    match bounds {
+        Some((left, top, right, bottom)) => {
+            let left = left as f32 as f64;
+            let top = top as f32 as f64;
+            let right = right as f32 as f64;
+            let bottom = bottom as f32 as f64;
+            (
+                destination.0 != source.0 || left != 0.0 || right != f64::from(destination.0),
+                destination.1 != source.1 || top != 0.0 || bottom != f64::from(destination.1),
+            )
+        }
+        None => (destination.0 != source.0, destination.1 != source.1),
+    }
+}
+
 pub(crate) fn byte_coefficients_fit_i32(coefficients: &FilterCoeffs) -> bool {
     if coefficients.count.len() != coefficients.offsets.len()
         || coefficients.xmin.len() != coefficients.offsets.len()

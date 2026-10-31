@@ -77,6 +77,23 @@ pub(super) const fn image_mode_name(mode: ImageMode) -> &'static str {
     }
 }
 
+/// Translates codec mode metadata into Pillow-owned raster identity.
+pub(super) const fn raster_mode_from_image_mode(mode: ImageMode) -> Option<Mode> {
+    match mode {
+        ImageMode::L1 => Some(Mode::One),
+        ImageMode::P8 => Some(Mode::ImagePalette8),
+        ImageMode::L8 => Some(Mode::ImageLuma8),
+        ImageMode::La8 | ImageMode::La16 => Some(Mode::ImageLumaA8),
+        ImageMode::Rgb8 | ImageMode::Rgb16 | ImageMode::Rgb32F => Some(Mode::ImageRgb8),
+        ImageMode::Rgba8 | ImageMode::Rgba16 | ImageMode::Rgba32F => Some(Mode::ImageRgba8),
+        ImageMode::Cmyk8 => Some(Mode::ImageCmyk8),
+        ImageMode::L16 => Some(Mode::ImageI16),
+        ImageMode::F32 => Some(Mode::ImageF32),
+        ImageMode::I32 => Some(Mode::ImageI32),
+        _ => None,
+    }
+}
+
 impl Image {
     /// Returns pending Pillow `info["transparency"]` metadata for a P image.
     ///
@@ -343,10 +360,7 @@ impl Image {
     /// Returns whether mode, pending metadata, or a committed palette carries
     /// transparency data.
     pub fn has_transparency_data(&self) -> bool {
-        if self
-            .mode()
-            .is_ok_and(|mode| matches!(mode.as_str(), "LA" | "La" | "PA" | "RGBA" | "RGBa"))
-        {
+        if self.mode_identity().is_ok_and(Mode::has_alpha) {
             return true;
         }
         self.pending_palette_transparency().is_some()
@@ -592,30 +606,30 @@ impl Image {
     /// image data is sufficient to determine the bands.
     pub fn getbands(&self) -> Result<Vec<String>, PilError> {
         // Pillow's Image.getbands -> ImagingCore.getbands derives names from
-        // canonical mode metadata without touching pixel storage. `mode()`
-        // already preserves explicit tags for non-standard modes and can read
-        // a decoder header before pixel data is available, so this handles
-        // truncated lazy images without a duplicate pixel-channel fallback.
-        let mode = self.mode()?;
-        let bands: Vec<&str> = match mode.as_str() {
-            "CMYK" => vec!["C", "M", "Y", "K"],
-            "YCbCr" => vec!["Y", "Cb", "Cr"],
-            "HSV" => vec!["H", "S", "V"],
-            "LAB" => vec!["L", "A", "B"],
-            "PA" => vec!["P", "A"],
-            "La" => vec!["L", "a"],
-            "RGBa" => vec!["R", "G", "B", "a"],
-            "RGBX" => vec!["R", "G", "B", "X"],
-            "I" | "F" | "P" | "1" => {
-                vec![mode.as_str()]
-            }
+        // canonical mode metadata without touching pixel storage. The exact
+        // mode identity preserves explicit tags and can read a decoder header
+        // before pixel data is available.
+        let mode = self.mode_identity()?;
+        let bands: Vec<&str> = match mode {
+            Mode::ImageCmyk8 => vec!["C", "M", "Y", "K"],
+            Mode::ImageYCbCr8 => vec!["Y", "Cb", "Cr"],
+            Mode::ImageHsv8 => vec!["H", "S", "V"],
+            Mode::ImageLab8 => vec!["L", "A", "B"],
+            Mode::ImagePaletteAlpha8 => vec!["P", "A"],
+            Mode::ImageLaPremultiplied8 => vec!["L", "a"],
+            Mode::ImageRgbPremultiplied8 => vec!["R", "G", "B", "a"],
+            Mode::ImageRgbx8 => vec!["R", "G", "B", "X"],
+            Mode::ImageI32 => vec!["I"],
+            Mode::ImageF32 => vec!["F"],
+            Mode::ImagePalette8 => vec!["P"],
+            Mode::One => vec!["1"],
             // Pillow exposes all unsigned 16-bit luma variants as one logical
             // band named "I", regardless of their byte order.
-            "I;16" | "I;16L" | "I;16B" | "I;16N" => vec!["I"],
-            "L" => vec!["L"],
-            "LA" => vec!["L", "A"],
-            "RGB" => vec!["R", "G", "B"],
-            "RGBA" => vec!["R", "G", "B", "A"],
+            Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => vec!["I"],
+            Mode::ImageLuma8 => vec!["L"],
+            Mode::ImageLumaA8 => vec!["L", "A"],
+            Mode::ImageRgb8 => vec!["R", "G", "B"],
+            Mode::ImageRgba8 => vec!["R", "G", "B", "A"],
             _ => Vec::new(),
         };
         Ok(bands.into_iter().map(str::to_string).collect())
@@ -670,7 +684,7 @@ impl Image {
                 .map(|image| image.mode())
                 .or_else(|| {
                     info.as_ref().and_then(|info| {
-                        super::mode_boundary::parse_pillow_mode(image_mode_name(info.mode))
+                        raster_mode_from_image_mode(info.mode)
                     })
                 }),
             Image::Pipeline {
@@ -712,13 +726,7 @@ impl Image {
                 let mut current = if let Some(mode) = source.known_mode_identity() {
                     mode
                 } else {
-                    // TODO(pillow-rs#3ptb): derive encoded identities from the
-                    // codec adapter without passing through Pillow strings.
-                    let source_name = source.mode()?;
-                    let Some(mode) = super::mode_boundary::parse_pillow_mode(&source_name) else {
-                        return Ok(None);
-                    };
-                    mode
+                    source.mode_identity()?
                 };
                 if ops.mode_preserving() {
                     return Ok(Some(current));
@@ -764,16 +772,7 @@ impl Image {
                     let mut current = if let Some(mode) = source.known_mode_identity() {
                         mode
                     } else {
-                        // TODO(pillow-rs#3ptb): derive a typed identity directly
-                        // from every encoded header/decode state before using
-                        // the compatibility string fallback below.
-                        let source_name = source.mode()?;
-                        let Some(mode) =
-                            super::mode_boundary::parse_pillow_mode(&source_name)
-                        else {
-                            return Ok(None);
-                        };
-                        mode
+                        source.mode_identity()?
                     };
                     if ops.mode_preserving() {
                         return Ok(Some(current));
@@ -795,7 +794,9 @@ impl Image {
             _ => {}
         }
         let img = self.materialized_shared()?;
-        Ok(Self::mode_from_materialized(&img))
+        Ok(super::mode_boundary::pillow_mode_name(Self::mode_from_materialized(&img))
+            .unwrap_or("unknown")
+            .to_owned())
     }
 
     /// Returns the mode after the caller has already materialized this image.
@@ -805,10 +806,8 @@ impl Image {
     /// operation cannot fail; keeping this path infallible also makes it clear
     /// that mode selection does not trigger a second decode. The materialized
     /// [`DynamicImage`] variant is the mode authority, including for pipelines.
-    pub(crate) fn mode_from_materialized(image: &DynamicImage) -> String {
-        super::mode_boundary::pillow_mode_name(image.mode())
-            .unwrap_or("unknown")
-            .to_owned()
+    pub(crate) fn mode_from_materialized(image: &DynamicImage) -> Mode {
+        image.mode()
     }
 }
 

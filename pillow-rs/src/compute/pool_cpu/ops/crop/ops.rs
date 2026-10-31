@@ -1,11 +1,18 @@
 //! Crop entry point, exhaustive mode support, and prepared strategy composition.
 //!
-//! TODO(pillow-rs#3ptb): finish the archived SIMD crop source review. Confirm
-//! its admitted modes, eligibility guards, and error order against these CPU
-//! contracts, and add any missing behavior here. Its ordinary native-byte
-//! path is the same row-span copy as each exact mode's Default `ByteCrop`; the
-//! archived I;16 vector copy now has mode/architecture strategies. `CropBorder`
-//! composes nonempty requests over this prepared crop family.
+//! TODO(pillow-rs#3ptb): expand parity across every exact mode and available
+//! architecture, including the archived SIMD admissions, unsupported-mode
+//! fallbacks, I;16 vector-copy tails, and CropBorder empty/error cases. Source
+//! review found the archived ordinary-byte SIMD route only copied row spans;
+//! it admitted 1/L/P, LA/PA, RGB/HSV/YCbCr, and RGBA/CMYK/RGBa/RGBX/I/F when
+//! storage matched. The active Default `ByteCrop` preserves the same native
+//! byte layout for all exact byte modes. The archived direct I;16 route copied
+//! opaque two-byte samples with vector blocks and a scalar tail; those four
+//! exact identities now select that kernel by architecture. Archived
+//! CropBorder admitted only the ordinary byte layouts, accepted empty outputs,
+//! and preserved width-before-height errors. The maintained owner preserves
+//! that public validation order and uses a typed Default for empty outputs;
+//! its nonempty I;16 vector route is a native extension.
 
 // NO_PILLOW_SUPPORT: The five internal high-depth raster identities below use
 // exact typed sample-copy strategies even though Pillow has no mode spellings

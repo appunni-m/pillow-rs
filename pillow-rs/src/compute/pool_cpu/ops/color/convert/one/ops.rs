@@ -1,5 +1,9 @@
 //! Bilevel source-mode support and Default Convert strategy.
 
+crate::compute::pool_cpu::ops::color::convert::helpers::binary::declare_mode_strategy!(
+    crate::raster::Mode::One
+);
+
 use crate::compute::{
     Architecture,
     registry::support::{
@@ -61,7 +65,7 @@ static ARCHITECTURES: [ImplementationSupport; 12] = [
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::Convert,
     Mode::One,
-    OutputModeRule::ByTargetMode,
+    OutputModeRule::ByTargetModeWithPalette,
     &super::super::ops::LUMA_INPUTS,
     &ARCHITECTURES,
 );
@@ -87,6 +91,19 @@ pub(crate) fn execute(
         }
         _ => Err(PilError::InternalError(
             "Convert selected an undeclared One architecture".into(),
+        )),
+    }
+}
+
+pub(crate) fn execute_palette_target(
+    source: &GrayImage,
+    target: Mode,
+    selection: StrategySelection,
+) -> Result<super::super::ops::PreparedConvertOutput, PilError> {
+    match selection.implementation.architecture {
+        Architecture::Default => super::default::convert_impl::execute_palette_target(source, target),
+        _ => Err(PilError::InternalError(
+            "Convert selected an undeclared One palette architecture".into(),
         )),
     }
 }

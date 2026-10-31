@@ -43,6 +43,59 @@ pub(crate) const fn cpu_architectures_for(
     ]
 }
 
+/// Declares the generic architecture vector route and its eligible L-mask NEON subkernel.
+///
+/// The two NEON entries share one architecture identity: the first makes the
+/// exact subkernel admission visible in support introspection, and the second
+/// retains the generic vector fallback for every other valid Paste request.
+pub(crate) const fn cpu_architectures_for_l_mask_neon(
+    mode: Mode,
+    channels: u8,
+    minimum_clipped_width: u32,
+) -> [ImplementationSupport; 4] {
+    [
+        ImplementationSupport::cpu(
+            OperationId::Paste,
+            mode,
+            Architecture::Sse2,
+            cfg!(all(
+                any(target_arch = "x86", target_arch = "x86_64"),
+                target_feature = "sse2"
+            )),
+            &[Architecture::Sse2],
+            StrategyGuard::NativeBytes { channels },
+        ),
+        ImplementationSupport::cpu(
+            OperationId::Paste,
+            mode,
+            Architecture::Neon,
+            cfg!(all(target_arch = "aarch64", target_feature = "neon")),
+            &[Architecture::Neon],
+            StrategyGuard::PasteLMaskNeon {
+                mode,
+                channels,
+                minimum_clipped_width,
+            },
+        ),
+        ImplementationSupport::cpu(
+            OperationId::Paste,
+            mode,
+            Architecture::Neon,
+            cfg!(all(target_arch = "aarch64", target_feature = "neon")),
+            &[Architecture::Neon],
+            StrategyGuard::NativeBytes { channels },
+        ),
+        ImplementationSupport::cpu(
+            OperationId::Paste,
+            mode,
+            Architecture::WasmSimd128,
+            cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
+            &[Architecture::WasmSimd128],
+            StrategyGuard::NativeBytes { channels },
+        ),
+    ]
+}
+
 macro_rules! byte_architecture_impl {
     ($channels:literal, $image_type:path, $variant:ident) => {
         pub(crate) fn execute(

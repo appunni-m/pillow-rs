@@ -1,15 +1,23 @@
 //! Internal RGBA32F support and architecture selection for Convert.
 
+crate::compute::pool_cpu::ops::color::convert::helpers::binary::declare_mode_strategy!(
+    crate::raster::Mode::ImageRgba32F
+);
+
 use crate::compute::{Architecture, registry::support::{
     InputContract, ModeSupport, OperationId, OutputModeRule, StrategySelection,
 }};
 use crate::error::PilError;
+use crate::pipeline::DitherMethod;
 use crate::raster::{DynamicImage, ImageBuffer, Mode, Rgba};
 
 type Source = ImageBuffer<Rgba<f32>, Vec<f32>>;
 
 const TARGETS: &[Mode] = &[
+    Mode::One,
     Mode::ImageLuma8, Mode::ImageLumaA8, Mode::ImageRgb8, Mode::ImageRgba8,
+    Mode::ImagePalette8, Mode::ImagePaletteAlpha8,
+    Mode::ImageI16, Mode::ImageI16L, Mode::ImageI16B, Mode::ImageI16N,
     Mode::ImageCmyk8, Mode::ImageYCbCr8, Mode::ImageHsv8, Mode::ImageI32,
     Mode::ImageF32,
 ];
@@ -20,11 +28,11 @@ const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     rejection_reason: "image has wrong mode",
 }];
 
-// NO_PILLOW_SUPPORT: RGBA32F is an internal storage identity without a Pillow mode spelling.
+// NO_PILLOW_SUPPORT: RGBA32F and its native P/PA conversion targets are core-only.
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
     OperationId::Convert,
     Mode::ImageRgba32F,
-    OutputModeRule::ByTargetMode,
+    OutputModeRule::ByTargetModeWithPalette,
     INPUTS,
     &[],
     "native conversion support for an internal raster mode",
@@ -39,6 +47,22 @@ pub(crate) fn execute(
         Architecture::Default => super::default::convert_impl::execute(source, target),
         _ => Err(PilError::InternalError(
             "Convert selected an undeclared RGBA32F architecture".into(),
+        )),
+    }
+}
+
+pub(crate) fn execute_palette_target(
+    source: &Source,
+    target: Mode,
+    dither: Option<DitherMethod>,
+    selection: StrategySelection,
+) -> Result<super::super::ops::PreparedConvertOutput, PilError> {
+    match selection.implementation.architecture {
+        Architecture::Default => {
+            super::default::convert_impl::execute_palette_target(source, target, dither)
+        }
+        _ => Err(PilError::InternalError(
+            "Convert selected an undeclared RGBA32F palette architecture".into(),
         )),
     }
 }

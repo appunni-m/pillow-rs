@@ -1,10 +1,15 @@
 //! RGB8 source-mode support and architecture selection for Convert.
 
+crate::compute::pool_cpu::ops::color::convert::helpers::binary::declare_mode_strategy!(
+    crate::raster::Mode::ImageRgb8
+);
+
 use crate::compute::{Architecture, ExecutionContext, registry::support::{
     ImplementationSupport, InputContract, ModeSupport, OperationId, OperationInputs,
     OutputModeRule, StrategyGuard, StrategySelection,
 }};
 use crate::error::PilError;
+use crate::pipeline::DitherMethod;
 use crate::raster::{DynamicImage, Mode, RgbImage};
 
 const SSE2_AVAILABLE: bool = cfg!(any(
@@ -13,8 +18,15 @@ const SSE2_AVAILABLE: bool = cfg!(any(
 ));
 
 const TARGETS: &[Mode] = &[
+    Mode::One,
     Mode::ImageLuma8,
     Mode::ImageLumaA8,
+    Mode::ImagePalette8,
+    Mode::ImagePaletteAlpha8,
+    Mode::ImageI16,
+    Mode::ImageI16L,
+    Mode::ImageI16B,
+    Mode::ImageI16N,
     Mode::ImageLaPremultiplied8,
     Mode::ImageRgb8,
     Mode::ImageRgba8,
@@ -272,7 +284,7 @@ static ARCHITECTURES: [ImplementationSupport; 27] = [
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::Convert,
     Mode::ImageRgb8,
-    OutputModeRule::ByTargetMode,
+    OutputModeRule::ByTargetModeWithPalette,
     INPUTS,
     &ARCHITECTURES,
 );
@@ -348,6 +360,22 @@ pub(crate) unsafe fn execute(
         }
         _ => Err(PilError::InternalError(
             "Convert selected an undeclared RGB8 architecture".into(),
+        )),
+    }
+}
+
+pub(crate) fn execute_palette_target(
+    source: &RgbImage,
+    target: Mode,
+    dither: Option<DitherMethod>,
+    selection: StrategySelection,
+) -> Result<super::super::ops::PreparedConvertOutput, PilError> {
+    match selection.implementation.architecture {
+        Architecture::Default => {
+            super::default::convert_impl::execute_palette_target(source, target, dither)
+        }
+        _ => Err(PilError::InternalError(
+            "Convert selected an undeclared RGB8 palette architecture".into(),
         )),
     }
 }

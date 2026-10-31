@@ -1,5 +1,9 @@
 //! La source-mode support and architecture selection for Convert.
 
+crate::compute::pool_cpu::ops::color::convert::helpers::binary::declare_mode_strategy!(
+    crate::raster::Mode::ImageLaPremultiplied8
+);
+
 use crate::compute::{Architecture, registry::support::{
     ImplementationSupport, ModeSupport, OperationId, OutputModeRule, StrategyGuard,
     StrategySelection,

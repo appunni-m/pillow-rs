@@ -8,6 +8,7 @@
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image::Image;
+use crate::raster::Mode;
 use std::sync::{Arc, OnceLock};
 
 const GLYPH_COUNT: usize = 256;
@@ -236,9 +237,9 @@ impl PilFont {
     ) -> Result<Self, PilError> {
         let (mode, bitmap_width, bitmap_height, bitmap, render_error) = match glyph_image {
             PilFontGlyphImage::Image(image) => {
-                let mode = match image.mode()?.as_str() {
-                    "1" => PilFontMode::One,
-                    "L" => PilFontMode::Luma,
+                let mode = match image.mode_identity()? {
+                    Mode::One => PilFontMode::One,
+                    Mode::ImageLuma8 => PilFontMode::Luma,
                     _ => return Err(PilError::TypeError("invalid font image mode".into())),
                 };
                 let bitmap = image.materialize()?.to_luma8();

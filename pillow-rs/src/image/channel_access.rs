@@ -3,8 +3,8 @@
 use std::sync::Arc;
 
 use crate::error::PilError;
-use crate::pipeline::PipelineOp;
-use crate::raster::{DynamicImage, GenericImageView};
+use crate::pipeline::{PipelineOp, PixelMode};
+use crate::raster::{DynamicImage, GenericImageView, Mode};
 
 use super::Image;
 
@@ -32,12 +32,22 @@ pub enum PutAlphaInput {
     Invalid(String),
 }
 
-fn putalpha_conversion_target(mode: &str) -> Option<&'static str> {
+fn putalpha_conversion_target(mode: Mode) -> Option<&'static str> {
     match mode {
-        "1" | "I" | "I;16" | "I;16L" | "I;16B" | "I;16N" | "F" => Some("LA"),
-        "YCbCr" | "HSV" => Some("RGBA"),
+        Mode::One
+        | Mode::ImageI32
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N
+        | Mode::ImageF32 => Some("LA"),
+        Mode::ImageYCbCr8 | Mode::ImageHsv8 => Some("RGBA"),
         _ => None,
     }
+}
+
+fn mode_name(mode: Mode) -> &'static str {
+    mode.pillow_name().unwrap_or("unknown")
 }
 
 #[inline(always)]
@@ -96,11 +106,11 @@ impl Image {
     /// Returns [`PilError::ValueError`] when `channel` is out of range, or
     /// another [`PilError`] when materialization fails.
     pub fn getchannel(&self, channel: i32) -> Result<Image, PilError> {
-        let mode = self.mode()?;
+        let mode = self.mode_identity()?;
         // Pillow's ImagingCore getchannel entry point rejects scalar I/F
         // storage before band extraction; it does not expose those four-byte
         // samples through the byte-oriented ExtractBand operation.
-        if matches!(mode.as_str(), "I" | "F") {
+        if matches!(mode, Mode::ImageI32 | Mode::ImageF32) {
             return Err(PilError::ValueError("image has wrong mode".into()));
         }
         // Validate channel index (requires materialized image for band count)
@@ -127,7 +137,7 @@ impl Image {
         // allocating a second full-frame buffer. Keep other backends and
         // non-exact storage on the normal extraction path so their execution
         // and trailing-sample behavior remain unchanged.
-        if mode == "L"
+        if mode == Mode::ImageLuma8
             && ch == 0
             && matches!(self, Image::Loaded(_))
             && let Some((crate::compute::Backend::Cpu, _)) =
@@ -149,7 +159,7 @@ impl Image {
         // full-frame work on the pipeline path, and retain lazy execution for
         // pending graphs and routes without an eager implementation.
         if matches!(self, Image::Loaded(_))
-            && mode == "RGB"
+            && mode == Mode::ImageRgb8
             && u64::from(img.width()) * u64::from(img.height()) <= 256
             && let Some((backend, _)) = crate::compute::preferred_active_backend()?
         {
@@ -218,17 +228,18 @@ impl Image {
     /// Currently returns `Ok(())`; materialization reports later pipeline
     /// failures.
     pub fn putalpha(&mut self, alpha: u8) -> Result<(), PilError> {
-        let mode_name = self.mode()?;
-        if let Some(target) = putalpha_conversion_target(&mode_name) {
+        let image_mode = self.mode_identity()?;
+        let image_mode_name = mode_name(image_mode);
+        if let Some(target) = putalpha_conversion_target(image_mode) {
             // Pillow Image.py derives the alpha mode from getmodebase(), then
             // surfaces the exact failed core conversion when neither in-place
             // setmode nor ImagingConvert supports this source/target pair.
             return Err(PilError::ValueError(format!(
-                "conversion from {mode_name} to {target} not supported"
+                "conversion from {image_mode_name} to {target} not supported"
             )));
         }
-        let mode = crate::pipeline::PixelMode::from_name(&mode_name).ok_or_else(|| {
-            PilError::ValueError(format!("unsupported putalpha mode: {mode_name}"))
+        let mode = PixelMode::from_raster_mode(image_mode).ok_or_else(|| {
+            PilError::ValueError(format!("unsupported putalpha mode: {image_mode_name}"))
         })?;
         let new_self = Image::push_op(self, PipelineOp::PutAlpha { alpha, mode });
         *self = new_self;
@@ -250,25 +261,26 @@ impl Image {
     /// image-backed ``Image.putalpha``.
     pub fn putalpha_data(&mut self, mask: &Image) -> Result<(), PilError> {
         let mask_img = mask.materialize()?;
-        let mask_mode = mask.mode()?;
-        if mask_mode != "1" && mask_mode != "L" {
+        let mask_mode = mask_img.mode();
+        if !matches!(mask_mode, Mode::One | Mode::ImageLuma8) {
             return Err(PilError::ValueError("illegal image mode".into()));
         }
         if (mask_img.width(), mask_img.height()) != (self.size()?.0, self.size()?.1) {
             return Err(PilError::ValueError("images do not match".into()));
         }
         let mask_luma = mask_img.to_luma8();
-        let mode_name = self.mode()?;
-        if let Some(target) = putalpha_conversion_target(&mode_name) {
+        let image_mode = self.mode_identity()?;
+        let image_mode_name = mode_name(image_mode);
+        if let Some(target) = putalpha_conversion_target(image_mode) {
             // Keep image-backed alpha on the same failed conversion path as
             // scalar alpha. Pillow rejects these source/target pairs before
             // queuing the alpha-data operation.
             return Err(PilError::ValueError(format!(
-                "conversion from {mode_name} to {target} not supported"
+                "conversion from {image_mode_name} to {target} not supported"
             )));
         }
-        let mode = crate::pipeline::PixelMode::from_name(&mode_name).ok_or_else(|| {
-            PilError::ValueError(format!("unsupported putalpha mode: {mode_name}"))
+        let mode = PixelMode::from_raster_mode(image_mode).ok_or_else(|| {
+            PilError::ValueError(format!("unsupported putalpha mode: {image_mode_name}"))
         })?;
         let new_self = Image::push_op(
             self,

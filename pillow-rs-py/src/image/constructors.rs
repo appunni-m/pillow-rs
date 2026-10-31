@@ -5,6 +5,8 @@ use pyo3::{pyfunction, wrap_pyfunction};
 
 #[pyfunction]
 fn image_merge(mode: &str, bands: &Bound<'_, PyAny>) -> PyResult<PyImage> {
+    let mode = pillow_rs::Mode::from_pillow_name(mode)
+        .ok_or_else(|| map_error(pillow_rs::PilError::KeyError(mode.to_owned())))?;
     let inputs = merge_inputs_from_python(bands)?;
     let rs = pillow_rs::image_merge_inputs(mode, &inputs).map_err(map_error)?;
     Ok(PyImage { inner: rs })

@@ -8,16 +8,20 @@
 //! ImageI16B, ImageI16N, ImageLumaA16, ImageRgb16, ImageRgba16, ImageRgb32F,
 //! and ImageRgba32F. Route their eager `Image::enhance_contrast` conversion
 //! paths through those strategies while preserving conversion and rejection
-//! behavior. Sharpness's native-byte vector kernel belongs to its exact mode
-//! and architecture owners. TODO: route any remaining direct enhancement
-//! callers through their prepared CPU strategies and compare those owners with
-//! the archived vector/admission paths. There is no active separate SIMD
-//! registration; compatibility requests enter through CPU context selection.
+//! behavior. The archived Contrast LUT path now has mode/architecture owners
+//! for L, LA, RGB, RGBA, RGBX, and CMYK. `Image::enhance_color` also retains
+//! conversion/blend routes for modes outside its six native strategies; add
+//! exact-mode strategies only after preserving their conversion, error, and
+//! output contracts. The enhancer wrappers consult the operation support
+//! declarations and preserve an explicitly pinned backend on the final lazy
+//! blend. The public
+//! `Image::enhance_sharpness` entry queues work for the prepared CPU strategies;
+//! compare those owners with archived vector/admission paths. No standalone
+//! SIMD registration remains active, and compatibility requests enter through
+//! CPU context selection.
 //! ImageI32 and ImageF32 Sharpness read and write their exact little-endian
 //! scalar samples in the existing four-byte carrier; these native routes are
 //! core extensions and are not reported as Pillow parity.
-//! TODO(pillow-rs#3ptb): confirm every Brightness and ColorSaturation eager
-//! caller passes the routed CPU architecture context into these mode strategies.
 
 use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{
@@ -38,7 +42,25 @@ macro_rules! declare_color_saturation_modes {
         fn classify_color_saturation_mode(mode: Mode) -> ModeSupport {
             match mode {
                 $(Mode::$mode => super::$module::ops::COLOR_SATURATION_SUPPORT,)+
-                mode => ModeSupport::Rejected {
+                Mode::One
+                | Mode::ImageLaPremultiplied8
+                | Mode::ImagePalette8
+                | Mode::ImagePaletteAlpha8
+                | Mode::ImageRgbPremultiplied8
+                | Mode::ImageYCbCr8
+                | Mode::ImageLab8
+                | Mode::ImageHsv8
+                | Mode::ImageI32
+                | Mode::ImageF32
+                | Mode::ImageI16
+                | Mode::ImageI16L
+                | Mode::ImageI16B
+                | Mode::ImageI16N
+                | Mode::ImageLumaA16
+                | Mode::ImageRgb16
+                | Mode::ImageRgba16
+                | Mode::ImageRgb32F
+                | Mode::ImageRgba32F => ModeSupport::Rejected {
                     mode,
                     reason: "image has wrong mode",
                     kind: RejectionKind::ValueError,
@@ -56,7 +78,27 @@ macro_rules! declare_color_saturation_modes {
                 $(DynamicImage::$mode(source) => super::$module::ops::prepare_color_saturation(
                     source, facts.with_color_saturation(factor), factor, context,
                 ).map(PreparedColorSaturation::$mode),)+
-                _ => Err(rejected_color_saturation_error(image.mode())),
+                DynamicImage::One(_)
+                | DynamicImage::ImageLaPremultiplied8(_)
+                | DynamicImage::ImagePalette8(_)
+                | DynamicImage::ImagePaletteAlpha8(_)
+                | DynamicImage::ImageRgbPremultiplied8(_)
+                | DynamicImage::ImageYCbCr8(_)
+                | DynamicImage::ImageLab8(_)
+                | DynamicImage::ImageHsv8(_)
+                | DynamicImage::ImageI32(_)
+                | DynamicImage::ImageF32(_)
+                | DynamicImage::ImageI16(_)
+                | DynamicImage::ImageI16L(_)
+                | DynamicImage::ImageI16B(_)
+                | DynamicImage::ImageI16N(_)
+                | DynamicImage::ImageLumaA16(_)
+                | DynamicImage::ImageRgb16(_)
+                | DynamicImage::ImageRgba16(_)
+                | DynamicImage::ImageRgb32F(_)
+                | DynamicImage::ImageRgba32F(_) => {
+                    Err(rejected_color_saturation_error(image.mode()))
+                }
             }
         }
 
@@ -96,7 +138,23 @@ macro_rules! declare_contrast_modes {
         fn classify_contrast_mode(mode: Mode) -> ModeSupport {
             match mode {
                 $(Mode::$mode => super::$module::ops::CONTRAST_SUPPORT,)+
-                mode => ModeSupport::Rejected {
+                Mode::One
+                | Mode::ImageLaPremultiplied8
+                | Mode::ImagePalette8
+                | Mode::ImagePaletteAlpha8
+                | Mode::ImageRgbPremultiplied8
+                | Mode::ImageLab8
+                | Mode::ImageI32
+                | Mode::ImageF32
+                | Mode::ImageI16
+                | Mode::ImageI16L
+                | Mode::ImageI16B
+                | Mode::ImageI16N
+                | Mode::ImageLumaA16
+                | Mode::ImageRgb16
+                | Mode::ImageRgba16
+                | Mode::ImageRgb32F
+                | Mode::ImageRgba32F => ModeSupport::Rejected {
                     mode,
                     reason: "image has wrong mode",
                     kind: RejectionKind::ValueError,
@@ -114,7 +172,25 @@ macro_rules! declare_contrast_modes {
                 $(DynamicImage::$mode(source) => super::$module::ops::prepare_contrast(
                     source, facts, factor, context,
                 ).map(PreparedContrast::$mode),)+
-                _ => Err(rejected_contrast_error(image.mode())),
+                DynamicImage::One(_)
+                | DynamicImage::ImageLaPremultiplied8(_)
+                | DynamicImage::ImagePalette8(_)
+                | DynamicImage::ImagePaletteAlpha8(_)
+                | DynamicImage::ImageRgbPremultiplied8(_)
+                | DynamicImage::ImageLab8(_)
+                | DynamicImage::ImageI32(_)
+                | DynamicImage::ImageF32(_)
+                | DynamicImage::ImageI16(_)
+                | DynamicImage::ImageI16L(_)
+                | DynamicImage::ImageI16B(_)
+                | DynamicImage::ImageI16N(_)
+                | DynamicImage::ImageLumaA16(_)
+                | DynamicImage::ImageRgb16(_)
+                | DynamicImage::ImageRgba16(_)
+                | DynamicImage::ImageRgb32F(_)
+                | DynamicImage::ImageRgba32F(_) => {
+                    Err(rejected_contrast_error(image.mode()))
+                }
             }
         }
 
@@ -171,7 +247,11 @@ macro_rules! declare_brightness_modes {
             match image {
                 $(DynamicImage::$mode(source) => super::$module::ops::prepare(source, facts, factor, context)
                     .map(PreparedBrightness::$mode),)+
-                _ => Err(rejected_error(image.mode())),
+                DynamicImage::One(_)
+                | DynamicImage::ImagePalette8(_)
+                | DynamicImage::ImagePaletteAlpha8(_) => {
+                    Err(rejected_error(image.mode()))
+                }
             }
         }
 
@@ -383,7 +463,11 @@ fn prepare_sharpness_mode(
         DynamicImage::ImageRgba16(source) => super::rgba16::ops::prepare_sharpness(source, facts, factor, context).map(PreparedSharpness::ImageRgba16),
         DynamicImage::ImageRgb32F(source) => super::rgb32f::ops::prepare_sharpness(source, facts, factor, context).map(PreparedSharpness::ImageRgb32F),
         DynamicImage::ImageRgba32F(source) => super::rgba32f::ops::prepare_sharpness(source, facts, factor, context).map(PreparedSharpness::ImageRgba32F),
-        _ => Err(rejected_sharpness_error(image.mode())),
+        DynamicImage::One(_)
+        | DynamicImage::ImagePalette8(_)
+        | DynamicImage::ImagePaletteAlpha8(_) => {
+            Err(rejected_sharpness_error(image.mode()))
+        }
     }
 }
 
@@ -500,7 +584,12 @@ pub(crate) fn prepare_contrast<'a>(
     factor: f64,
     context: &ExecutionContext,
 ) -> Result<PreparedContrast<'a>, PilError> {
-    prepare_contrast_mode(input.image, input.facts(), factor, context)
+    prepare_contrast_mode(
+        input.image,
+        input.facts().with_contrast(factor),
+        factor,
+        context,
+    )
 }
 
 pub(crate) fn prepare_contrast_pipeline<'a>(

@@ -18,7 +18,7 @@ struct Color3DLutKernel<'a> {
     size: (usize, usize, usize),
     scales: [u32; 3],
     channels: usize,
-    source_mode: Mode,
+    preserve_source_fourth: bool,
 }
 
 #[inline]
@@ -153,7 +153,7 @@ impl Color3DLutKernel<'_> {
             for lane in 0..8 {
                 let input_offset = (first_pixel + lane) * self.source_channels;
                 let output_offset = (first_pixel + lane) * self.target_channels;
-                output[output_offset + 3] = if self.source_channels == 4 {
+                output[output_offset + 3] = if self.preserve_source_fourth {
                     self.source[input_offset + 3]
                 } else {
                     255
@@ -174,7 +174,7 @@ impl Color3DLutKernel<'_> {
             let output_offset = pixel_index * self.target_channels;
             super::lut::write_pixel(
                 pixel,
-                self.source_mode,
+                self.preserve_source_fourth,
                 self.prepared,
                 self.size,
                 self.scales,
@@ -243,7 +243,7 @@ pub(crate) fn apply(
         size,
         scales,
         channels,
-        source_mode,
+        preserve_source_fourth: matches!(source_mode, Mode::ImageRgba8 | Mode::ImageCmyk8),
     };
     let vector_end = pixels - pixels % 8;
     for pixel in (0..vector_end).step_by(8) {

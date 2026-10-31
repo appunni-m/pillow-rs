@@ -181,7 +181,10 @@ mod tests {
     #[test]
     fn pad_cmyk_color_keeps_black_ink_component() {
         assert_eq!(
-            resolve_imageops_color(ImageOpsColor::Components(vec![17, 83, 149, 31]), "CMYK")
+            resolve_imageops_color(
+                ImageOpsColor::Components(vec![17, 83, 149, 31]),
+                crate::raster::Mode::ImageCmyk8,
+            )
                 .expect("four-component CMYK fill is valid"),
             Some((17, 83, 149, 31))
         );
@@ -190,22 +193,28 @@ mod tests {
     #[test]
     fn pad_rgbx_color_resolution_preserves_pillow_fourth_byte_rules() {
         assert_eq!(
-            resolve_imageops_color(ImageOpsColor::Components(vec![17, 83, 149, 31]), "RGBX")
+            resolve_imageops_color(
+                ImageOpsColor::Components(vec![17, 83, 149, 31]),
+                crate::raster::Mode::ImageRgbx8,
+            )
                 .expect("four-component RGBX fill is valid"),
             Some((17, 83, 149, 31))
         );
         assert_eq!(
-            resolve_imageops_color(ImageOpsColor::Components(vec![17, 83, 149]), "RGBX")
+            resolve_imageops_color(
+                ImageOpsColor::Components(vec![17, 83, 149]),
+                crate::raster::Mode::ImageRgbx8,
+            )
                 .expect("three-component RGBX fill is valid"),
             Some((17, 83, 149, u8::MAX))
         );
         assert_eq!(
-            resolve_imageops_color(ImageOpsColor::Scalar(17), "RGBX")
+            resolve_imageops_color(ImageOpsColor::Scalar(17), crate::raster::Mode::ImageRgbx8)
                 .expect("scalar RGBX fill is valid"),
             Some((17, 0, 0, 0))
         );
         assert_eq!(
-            resolve_imageops_color(ImageOpsColor::None, "RGBX")
+            resolve_imageops_color(ImageOpsColor::None, crate::raster::Mode::ImageRgbx8)
                 .expect("default RGBX fill is valid"),
             None
         );

@@ -610,6 +610,8 @@ impl Image {
     ///
     /// `size` is the LUT grid size, `table` contains the LUT values, and
     /// `channels` is the number of output channels.
+    /// Core-only YCbCr, LAB, and HSV sources require an explicit RGB, RGBA, or
+    /// CMYK `target_mode`.
     ///
     /// # Errors
     ///
@@ -630,6 +632,11 @@ impl Image {
             Some(mode @ (crate::raster::Mode::ImageRgb8
             | crate::raster::Mode::ImageRgba8
             | crate::raster::Mode::ImageCmyk8)) => mode,
+            // NO_PILLOW_SUPPORT: Core callers may apply Color3DLut directly
+            // to native YCbCr, LAB, and HSV samples without converting modes.
+            Some(mode @ (crate::raster::Mode::ImageYCbCr8
+            | crate::raster::Mode::ImageLab8
+            | crate::raster::Mode::ImageHsv8)) => mode,
             _ => return Err(PilError::ValueError("image has wrong mode".into())),
         };
         let target_mode = target_mode.unwrap_or(source_mode);

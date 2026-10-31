@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::error::PilError;
 use crate::image::{Image, PalettedData, PipelineOps};
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, Mode};
 
 use super::input::QuantizePalette;
 use super::{
@@ -29,13 +29,13 @@ impl Image {
         if !(1..=256).contains(&colors) {
             return Err(PilError::ValueError("bad number of colors".to_owned()));
         }
-        let source_mode = self.mode()?;
+        let source_mode = self.mode_identity()?;
         let method = match method {
             Some(method) => method,
-            None if source_mode == "RGBA" => 2,
+            None if source_mode == Mode::ImageRgba8 => 2,
             None => 0,
         };
-        if source_mode == "RGBA" && method != 2 && method != 3 {
+        if source_mode == Mode::ImageRgba8 && method != 2 && method != 3 {
             return Err(PilError::ValueError(
                 "Fast Octree (method == 2) and libimagequant (method == 3) \
                  are the only valid methods for quantizing RGBA images"
@@ -43,12 +43,12 @@ impl Image {
             ));
         }
         if let QuantizePalette::Image(palette_image) = &palette {
-            if palette_image.mode()? != "P" {
+            if palette_image.mode_identity()? != Mode::ImagePalette8 {
                 return Err(PilError::ValueError(
                     "bad mode for palette image".to_owned(),
                 ));
             }
-            if !matches!(source_mode.as_str(), "RGB" | "L") {
+            if !matches!(source_mode, Mode::ImageRgb8 | Mode::ImageLuma8) {
                 return Err(PilError::ValueError(
                     "only RGB or L mode images can be quantized to a palette".to_owned(),
                 ));
@@ -132,11 +132,9 @@ impl Image {
             ));
         }
 
-        // TODO(pillow-rs#3ptb): give quantize leaf selectors the typed mode
-        // identity instead of the compatibility string consumed below.
         let quantized = quantize_by_method(
             &image,
-            self.explicit_mode(),
+            self.explicit_mode_identity(),
             width,
             height,
             colors as usize,
@@ -174,7 +172,7 @@ fn validate_method(is_rgba: bool, method: u32) -> Result<(), PilError> {
 
 fn quantize_by_method(
     image: &DynamicImage,
-    explicit_mode: Option<&str>,
+    explicit_mode: Option<Mode>,
     width: u32,
     height: u32,
     n_colors: usize,
@@ -198,31 +196,49 @@ fn quantize_rgba(
     height: u32,
     n_colors: usize,
 ) -> Result<QuantizedColors, PilError> {
-    let (indices, palette) = match image {
+    let (indices, palette, alpha) = match image {
         DynamicImage::ImageRgba8(rgba) => {
-            quantize_octree_rgba(rgba.as_raw(), width, height, n_colors, true)?
+            quantize_rgba_samples(rgba.as_raw(), width, height, n_colors)?
         }
         _ => {
             let rgba = image.to_rgba8();
-            quantize_octree_rgba(rgba.as_raw(), width, height, n_colors, true)?
+            quantize_rgba_samples(rgba.as_raw(), width, height, n_colors)?
         }
     };
     Ok(QuantizedColors {
         indices,
-        palette: rgba_palette_rgb(&palette),
-        alpha: Some(rgba_palette_alpha(&palette)),
+        palette,
+        alpha: Some(alpha),
     })
+}
+
+/// Applies the public RGBA FASTOCTREE policy to native samples and returns
+/// separate Pillow RGB palette entries and per-entry alpha.
+pub(crate) fn quantize_rgba_samples(
+    samples: &[u8],
+    width: u32,
+    height: u32,
+    colors: usize,
+) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>), PilError> {
+    let (indices, palette) = quantize_octree_rgba(samples, width, height, colors, true)?;
+    Ok((
+        indices,
+        rgba_palette_rgb(&palette),
+        rgba_palette_alpha(&palette),
+    ))
 }
 
 fn quantize_octree(
     image: &DynamicImage,
-    explicit_mode: Option<&str>,
+    explicit_mode: Option<Mode>,
     width: u32,
     height: u32,
     n_colors: usize,
 ) -> Result<QuantizedColors, PilError> {
     let (indices, palette) = match image {
-        DynamicImage::ImageRgb8(rgb) if matches!(explicit_mode, None | Some("RGB")) => {
+        DynamicImage::ImageRgb8(rgb)
+            if matches!(explicit_mode, None | Some(Mode::ImageRgb8)) =>
+        {
             quantize_octree_rgb(rgb.as_raw(), width, height, n_colors)?
         }
         _ => {
@@ -264,12 +280,13 @@ fn quantize_maxcoverage(
 
 fn quantize_median_cut(
     image: &DynamicImage,
-    explicit_mode: Option<&str>,
+    explicit_mode: Option<Mode>,
     n_colors: usize,
     kmeans: u32,
 ) -> Result<QuantizedColors, PilError> {
     let native_rgb =
-        matches!(image, DynamicImage::ImageRgb8(_)) && matches!(explicit_mode, None | Some("RGB"));
+        matches!(image, DynamicImage::ImageRgb8(_))
+            && matches!(explicit_mode, None | Some(Mode::ImageRgb8));
     let converted_rgb = (!native_rgb).then(|| image.to_rgb8());
     let pixels = match converted_rgb.as_ref() {
         Some(rgb) => rgb.as_raw().as_slice(),

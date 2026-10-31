@@ -165,18 +165,25 @@ pub(super) fn operational_palette(data: &PalettedData) -> Vec<u8> {
 }
 
 impl Image {
+    /// Returns a mode explicitly carried by this materialized wrapper or
+    /// pending pipeline, without projecting it through a Pillow spelling.
+    pub(crate) fn explicit_mode_identity(&self) -> Option<crate::raster::Mode> {
+        match self {
+            Image::Loaded(data) => Some(data.image.mode()),
+            Image::Paletted(_) => Some(crate::raster::Mode::ImagePalette8),
+            Image::Pipeline {
+                explicit_mode: Some(mode),
+                ..
+            } => Some(*mode),
+            _ => None,
+        }
+    }
+
     /// Returns the exact Pillow mode carried by materialized pixels or a lazy
     /// pipeline's pending output.
     pub fn explicit_mode(&self) -> Option<&str> {
-        match self {
-            Image::Loaded(data) => super::mode_boundary::pillow_mode_name(data.image.mode()),
-            Image::Paletted(_) => Some("P"),
-            Image::Pipeline {
-                explicit_mode: Some(m),
-                ..
-            } => super::mode_boundary::pillow_mode_name(*m),
-            _ => None,
-        }
+        self.explicit_mode_identity()
+            .and_then(super::mode_boundary::pillow_mode_name)
     }
 
     /// Returns attached palette data as RGB triples.
@@ -193,6 +200,24 @@ impl Image {
                 .as_ref()
                 .and_then(|info| info.palette.as_ref())
                 .map(|palette| palette.rgb.clone()),
+        }
+    }
+
+    /// Returns whether a nonempty RGB palette is attached without cloning it.
+    pub(crate) fn has_nonempty_palette(&self) -> bool {
+        match self {
+            Image::Paletted(data) => !data.palette.is_empty(),
+            Image::Loaded(data) => data
+                .palette
+                .as_ref()
+                .is_some_and(|palette| !palette.is_empty()),
+            Image::Pipeline { palette, .. } => palette
+                .as_ref()
+                .is_some_and(|palette| !palette.is_empty()),
+            Image::Bytes { info, .. } => info
+                .as_ref()
+                .and_then(|info| info.palette.as_ref())
+                .is_some_and(|palette| !palette.rgb.is_empty()),
         }
     }
 
@@ -319,7 +344,12 @@ impl Image {
     ) -> Result<Option<Vec<u8>>, PilError> {
         let rawmode = rawmode.or_else(|| self.palette_mode()).unwrap_or("RGB");
         let palette = self.getpalette_rawmode(rawmode)?;
-        if palette.is_none() && matches!(self.mode()?.as_str(), "P" | "PA") {
+        if palette.is_none()
+            && matches!(
+                self.mode_identity()?,
+                Mode::ImagePalette8 | Mode::ImagePaletteAlpha8
+            )
+        {
             return Ok(Some(Vec::new()));
         }
         Ok(palette)
@@ -439,8 +469,8 @@ impl Image {
         dest_map: &[u8],
         source_palette: Option<&[u8]>,
     ) -> Result<Image, PilError> {
-        let mode = self.mode()?;
-        if !matches!(mode.as_str(), "L" | "P") {
+        let mode = self.mode_identity()?;
+        if !matches!(mode, Mode::ImageLuma8 | Mode::ImagePalette8) {
             return Err(PilError::ValueError("illegal image mode".to_owned()));
         }
         if dest_map.len() > 256 {
@@ -449,7 +479,7 @@ impl Image {
             ));
         }
 
-        let uses_attached_palette = source_palette.is_none() && mode == "P";
+        let uses_attached_palette = source_palette.is_none() && mode == Mode::ImagePalette8;
         // Pillow's Image.remap_palette treats every explicit palette longer
         // than 768 bytes as interleaved RGBA, regardless of the source mode.
         let source_bands = if source_palette.is_some_and(|palette| palette.len() > 768) {
@@ -459,7 +489,7 @@ impl Image {
         };
         let source_palette = source_palette.map_or_else(
             || {
-                if mode == "P" {
+                if mode == Mode::ImagePalette8 {
                     self.extract_palette().unwrap_or_default()
                 } else {
                     (0u8..=u8::MAX)

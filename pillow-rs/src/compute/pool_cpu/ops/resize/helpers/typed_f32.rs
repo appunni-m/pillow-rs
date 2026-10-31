@@ -15,9 +15,8 @@ pub(crate) fn resize<P: Pixel<Subpixel = f32>>(
         return super::typed_nearest::resize(input, destination_width, destination_height, bounds);
     }
     let (source_width, source_height) = input.dimensions();
-    let mut output = ImageBuffer::new(destination_width, destination_height);
     if source_width == 0 || source_height == 0 || destination_width == 0 || destination_height == 0 {
-        return output;
+        return ImageBuffer::new(destination_width, destination_height);
     }
 
     let channel_count = usize::from(P::CHANNEL_COUNT);
@@ -27,21 +26,35 @@ pub(crate) fn resize<P: Pixel<Subpixel = f32>>(
         filter,
         bounds,
     );
+    let (need_horizontal, need_vertical) = coefficients::resample_pass_requirements(
+        (source_width, source_height),
+        (destination_width, destination_height),
+        bounds,
+    );
     let mut intermediate = ImageBuffer::<P, Vec<f32>>::new(destination_width, source_height);
-    for source_y in 0..source_height {
-        let source_start = source_y as usize * source_width as usize * channel_count;
-        let source_end = source_start + source_width as usize * channel_count;
-        let intermediate_start = source_y as usize * destination_width as usize * channel_count;
-        let intermediate_end = intermediate_start + destination_width as usize * channel_count;
-        horizontal_pass(
-            &input.as_raw()[source_start..source_end],
-            &horizontal,
-            destination_width,
-            channel_count,
-            &mut intermediate[intermediate_start..intermediate_end],
-        );
+    if need_horizontal {
+        for source_y in 0..source_height {
+            let source_start = source_y as usize * source_width as usize * channel_count;
+            let source_end = source_start + source_width as usize * channel_count;
+            let intermediate_start = source_y as usize * destination_width as usize * channel_count;
+            let intermediate_end = intermediate_start + destination_width as usize * channel_count;
+            horizontal_pass(
+                &input.as_raw()[source_start..source_end],
+                &horizontal,
+                destination_width,
+                channel_count,
+                &mut intermediate[intermediate_start..intermediate_end],
+            );
+        }
+    } else {
+        intermediate.copy_from_slice(input.as_raw());
     }
 
+    if !need_vertical {
+        return intermediate;
+    }
+
+    let mut output = ImageBuffer::new(destination_width, destination_height);
     for destination_y in 0..destination_height {
         let output_start = destination_y as usize * destination_width as usize * channel_count;
         let output_end = output_start + destination_width as usize * channel_count;

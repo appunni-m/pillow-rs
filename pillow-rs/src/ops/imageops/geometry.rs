@@ -244,8 +244,8 @@ pub fn expand_with_input(
     border: u32,
     fill: ImageOpsColor,
 ) -> Result<Image, PilError> {
-    let mode = image.mode()?;
-    let fill = resolve_imageops_color(fill, &mode)?.unwrap_or((0, 0, 0, 0));
+    let mode = image.mode_identity()?;
+    let fill = resolve_imageops_color(fill, mode)?.unwrap_or((0, 0, 0, 0));
     expand(image, border, fill)
 }
 
@@ -572,7 +572,7 @@ pub fn pad_with_input_and_containment(
 
     let (width_padded, height_padded) = containment_axes.unwrap_or((true, true));
     let centering = resolve_pad_centering(centering, width_padded, height_padded)?;
-    let color = resolve_imageops_color(color, &image.mode()?)?;
+    let color = resolve_imageops_color(color, image.mode_identity()?)?;
     if filter_was_none && color_was_none && centering == (0.5, 0.5) {
         return pad(image, w, h, None, color, centering).map(|result| (result, false));
     }

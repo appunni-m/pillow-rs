@@ -1,0 +1,42 @@
+//! Mode-specific CPU drawing strategies.
+
+mod helpers;
+pub(crate) use helpers::bitmap_mask::BitmapMask;
+pub(crate) use helpers::bitmap_region::BitmapRegion;
+pub(crate) use helpers::gray_alpha_bitmap;
+pub(crate) use helpers::gray_alpha_text;
+pub(crate) use helpers::i16_bitmap;
+pub(crate) use helpers::numeric_text;
+pub(crate) use helpers::raw_four_band_bitmap;
+pub(crate) use helpers::three_band_bitmap;
+pub(crate) use helpers::three_band_text;
+pub(crate) use helpers::text_result::{TextComposeInput, TextComposeResult};
+pub(crate) use helpers::text_coords;
+pub(crate) mod ops;
+pub(crate) mod one;
+pub(crate) mod luma8;
+pub(crate) mod luma_a8;
+pub(crate) mod la_premultiplied8;
+pub(crate) mod palette8;
+pub(crate) mod palette_alpha8;
+pub(crate) mod rgb8;
+pub(crate) mod rgba8;
+pub(crate) mod rgb_premultiplied8;
+pub(crate) mod rgbx8;
+pub(crate) mod cmyk8;
+pub(crate) mod ycbcr8;
+pub(crate) mod lab8;
+pub(crate) mod hsv8;
+pub(crate) mod i32;
+pub(crate) mod f32;
+pub(crate) mod i16;
+pub(crate) mod i16l;
+pub(crate) mod i16b;
+pub(crate) mod i16n;
+pub(crate) mod luma_a16;
+pub(crate) mod rgb16;
+pub(crate) mod rgba16;
+pub(crate) mod rgb32f;
+pub(crate) mod rgba32f;
+
+pub(crate) use ops::{execute_draw_batch, is_draw_op};

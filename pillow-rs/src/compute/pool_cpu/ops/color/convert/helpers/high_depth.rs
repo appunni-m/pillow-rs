@@ -1,10 +1,12 @@
 //! Monomorphized native-pixel conversions for internal high-depth modes.
 
 use crate::error::PilError;
+use crate::pipeline::DitherMethod;
 use crate::raster::{
     DynamicImage, FromColor, GenericImageView, GrayAlphaImage, GrayImage, ImageBuffer, Luma,
     LumaA, Mode, Pixel, Primitive, Rgb, RgbImage, Rgba, RgbaImage,
 };
+use crate::compute::pool_cpu::ops::grayscale::helpers::luma::ToGrayByte;
 
 pub(crate) trait HighDepthPixel: Pixel
 where
@@ -74,6 +76,83 @@ where
         Mode::ImageF32 => Ok(DynamicImage::ImageF32(to_f32(source))),
         _ => Err(PilError::ValueError("image has wrong mode".into())),
     }
+}
+
+// NO_PILLOW_SUPPORT: typed I;16 targets from internal high-depth modes are
+// core extensions; convert native samples to the same luma bytes directly.
+pub(crate) fn execute_i16_from_gray<P>(
+    source: &ImageBuffer<P, Vec<P::Subpixel>>,
+    target: Mode,
+) -> Result<DynamicImage, PilError>
+where
+    P: Pixel,
+    P::Subpixel: ToGrayByte,
+{
+    super::luma16::from_luma8_samples(
+        source.width(),
+        source.height(),
+        target,
+        source
+            .pixels()
+            .map(|pixel| pixel.channels()[0].to_gray_byte()),
+    )
+}
+
+// NO_PILLOW_SUPPORT: typed I;16 targets from internal high-depth modes are
+// core extensions; match the native RGB grayscale loop without an L raster.
+pub(crate) fn execute_i16_from_rgb<P>(
+    source: &ImageBuffer<P, Vec<P::Subpixel>>,
+    target: Mode,
+) -> Result<DynamicImage, PilError>
+where
+    P: Pixel,
+    P::Subpixel: ToGrayByte,
+{
+    super::luma16::from_luma8_samples(
+        source.width(),
+        source.height(),
+        target,
+        source.pixels().map(|pixel| {
+            let channels = pixel.channels();
+            let rgb = [
+                channels[0].to_gray_byte(),
+                channels[1].to_gray_byte(),
+                channels[2].to_gray_byte(),
+            ];
+            crate::color::grayscale_rgb_pixel(&rgb, 32768)
+        }),
+    )
+}
+
+// NO_PILLOW_SUPPORT: native high-depth source pixels converted to P/PA are a
+// Rust-only extension; Pillow has no public mode identity for these sources.
+// TODO(pillow-rs#3ptb): add target-only parity coverage across CPU Architecture
+// requests and assert the exact P/PA result identity and Default fallback.
+pub(crate) fn execute_palette_target<P>(
+    source: &ImageBuffer<P, Vec<P::Subpixel>>,
+    target: Mode,
+    dither: Option<DitherMethod>,
+) -> Result<super::super::ops::PreparedConvertOutput, PilError>
+where
+    P: HighDepthPixel,
+    P::Subpixel: Primitive,
+{
+    if !matches!(target, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8) {
+        return Err(PilError::ValueError("image has wrong mode".into()));
+    }
+    let metadata = if target == Mode::ImagePaletteAlpha8 {
+        super::super::ops::ConvertWrapperMetadata::ExifOnly
+    } else {
+        super::super::ops::ConvertWrapperMetadata::PreserveSource
+    };
+    crate::compute::pool_cpu::ops::color::convert::helpers::palette::web_palette_from_pixels(
+        source.width(),
+        source.height(),
+        source.pixels().map(|pixel| pixel.rgb8().0),
+        !matches!(dither, Some(DitherMethod::None)),
+        target,
+        metadata,
+    )
 }
 
 fn luma<P: HighDepthPixel>(source: &ImageBuffer<P, Vec<P::Subpixel>>) -> GrayImage

@@ -1,6 +1,7 @@
 //! Direct conversions from RGBX samples; the fourth byte is never alpha.
 
 use crate::error::PilError;
+use crate::pipeline::DitherMethod;
 use crate::raster::{
     DynamicImage, GenericImageView, GrayAlphaImage, LumaA, Mode, Rgb, RgbImage, Rgba,
     RgbaImage,
@@ -13,6 +14,16 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
             let kernel = crate::compute::pool_cpu::ops::grayscale::rgbx8::default::grayscale_impl::prepare(source)?;
             crate::compute::pool_cpu::ops::grayscale::rgbx8::default::grayscale_impl::execute(kernel)
                 .map(DynamicImage::ImageLuma8)
+        }
+        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
+            super::super::super::helpers::luma16::from_luma8_samples(
+                width,
+                height,
+                target,
+                source.pixels().map(|pixel| {
+                    crate::color::rgb_to_luma_u8(pixel[0], pixel[1], pixel[2])
+                }),
+            )
         }
         Mode::ImageLumaA8 => {
             let mut output = GrayAlphaImage::new(width, height);
@@ -58,6 +69,31 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
         Mode::ImageF32 => Ok(DynamicImage::ImageF32(scalar_f32(source))),
         _ => Err(PilError::ValueError("image has wrong mode".into())),
     }
+}
+
+pub(crate) fn execute_palette_target(
+    source: &RgbaImage,
+    target: Mode,
+    dither: Option<DitherMethod>,
+) -> Result<super::super::super::ops::PreparedConvertOutput, PilError> {
+    if !matches!(target, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8) {
+        return Err(PilError::ValueError("image has wrong mode".into()));
+    }
+    let metadata = if target == Mode::ImagePaletteAlpha8 {
+        super::super::super::ops::ConvertWrapperMetadata::ExifOnly
+    } else {
+        super::super::super::ops::ConvertWrapperMetadata::PreserveSource
+    };
+    crate::compute::pool_cpu::ops::color::convert::helpers::palette::web_palette_from_pixels(
+        source.width(),
+        source.height(),
+        source
+            .pixels()
+            .map(|pixel| [pixel[0], pixel[1], pixel[2]]),
+        !matches!(dither, Some(DitherMethod::None)),
+        target,
+        metadata,
+    )
 }
 
 fn scalar_i32(source: &RgbaImage) -> RgbaImage {

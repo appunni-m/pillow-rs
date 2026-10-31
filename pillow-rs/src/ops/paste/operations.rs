@@ -297,7 +297,10 @@ impl Image {
         position: (i32, i32),
         mask: &Image,
     ) -> Result<(), PilError> {
-        if !matches!(mask.mode()?.as_str(), "1" | "L") {
+        if !matches!(
+            mask.mode_identity()?,
+            Mode::One | Mode::ImageLuma8
+        ) {
             return Err(PilError::ValueError("bad transparency mask".to_owned()));
         }
         self.paste_impl(
@@ -453,9 +456,9 @@ fn paste_mask_uses_alpha(mask: Option<&Image>) -> Result<bool, PilError> {
     let Some(mask_image) = mask else {
         return Ok(false);
     };
-    match mask_image.mode()?.as_str() {
-        "1" | "L" => Ok(false),
-        "LA" | "RGBA" | "RGBa" => Ok(true),
+    match mask_image.mode_identity()? {
+        Mode::One | Mode::ImageLuma8 => Ok(false),
+        Mode::ImageLumaA8 | Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8 => Ok(true),
         _ => Err(PilError::ValueError("bad transparency mask".to_owned())),
     }
 }
@@ -502,10 +505,7 @@ fn resolve_image_source(
         Ok(promoted)
     } else {
         // Convert before backend execution so every backend receives identical bytes.
-        let mode_name = destination_mode
-            .pillow_name()
-            .ok_or_else(|| PilError::ValueError("unsupported paste destination mode".into()))?;
-        image.convert(mode_name, None, None, None, None)
+        image.convert(destination_mode, None, None, None, None)
     }
 }
 

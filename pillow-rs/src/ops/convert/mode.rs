@@ -1,44 +1,60 @@
-use crate::error::PilError;
 use crate::raster::Mode;
 
-/// Parses a Pillow mode string into a pipeline color mode.
-///
-/// # Errors
-///
-/// Returns [`PilError::ValueError`] when `s` is not one of the modes supported
-/// by core conversion.
-pub fn parse_mode(s: &str) -> Result<Mode, PilError> {
-    match s {
-        "L" => Ok(Mode::ImageLuma8),
-        "LA" => Ok(Mode::ImageLumaA8),
-        "RGB" => Ok(Mode::ImageRgb8),
-        "RGBA" => Ok(Mode::ImageRgba8),
-        "CMYK" => Ok(Mode::ImageCmyk8),
-        "YCbCr" => Ok(Mode::ImageYCbCr8),
-        "HSV" => Ok(Mode::ImageHsv8),
-        "I" => Ok(Mode::ImageI32),
-        "F" => Ok(Mode::ImageF32),
-        "P" => Ok(Mode::ImagePalette8),
-        "1" => Ok(Mode::One),
-        _ => Err(PilError::ValueError(format!("Unknown mode: {}", s))),
-    }
+/// Whether this identity uses Pillow's unsigned 16-bit luma carrier.
+pub(super) const fn is_luma16_mode(mode: Mode) -> bool {
+    matches!(
+        mode,
+        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N
+    )
 }
 
-pub(super) fn is_luma16_mode(mode: &str) -> bool {
-    matches!(mode, "I;16" | "I;16L" | "I;16B" | "I;16N")
+/// Modes whose sample storage needs Pillow-specific color or scalar handling.
+pub(super) const fn is_nonstandard_mode(mode: Mode) -> bool {
+    matches!(
+        mode,
+        Mode::ImageCmyk8
+            | Mode::ImageHsv8
+            | Mode::ImageYCbCr8
+            | Mode::ImageI32
+            | Mode::ImageF32
+            | Mode::ImagePalette8
+            | Mode::ImagePaletteAlpha8
+    )
 }
 
-/// Modes that require special handling when converting FROM them.
-/// These modes store pixel data in a non-standard interpretation within
-/// standard DynamicImage variants (e.g., CMYK values stored as RGBA).
-pub(super) fn is_nonstandard_mode(mode: &str) -> bool {
-    matches!(mode, "CMYK" | "HSV" | "YCbCr" | "I" | "F" | "P" | "PA")
+/// Whether Convert currently has a Pillow-defined destination for this mode.
+/// Internal high-depth raster identities remain representable but unsupported
+/// by this operation until they have an explicit native conversion contract.
+pub(super) const fn is_convert_target_mode(mode: Mode) -> bool {
+    matches!(
+        mode,
+        Mode::One
+            | Mode::ImageLuma8
+            | Mode::ImageLumaA8
+            | Mode::ImageLaPremultiplied8
+            | Mode::ImagePalette8
+            | Mode::ImagePaletteAlpha8
+            | Mode::ImageRgb8
+            | Mode::ImageRgba8
+            | Mode::ImageRgbPremultiplied8
+            | Mode::ImageRgbx8
+            | Mode::ImageCmyk8
+            | Mode::ImageYCbCr8
+            | Mode::ImageLab8
+            | Mode::ImageHsv8
+            | Mode::ImageI32
+            | Mode::ImageF32
+            | Mode::ImageI16
+            | Mode::ImageI16L
+            | Mode::ImageI16B
+            | Mode::ImageI16N
+    )
 }
 
 /// Extracts the Y band of a YCbCr image as luma bytes.
 ///
-/// Pillow's C converter (`src/libImaging/Convert.c`) maps YCbCr to L and "1"
-/// through the Y channel directly rather than through the RGB luminance.
+/// Pillow's C converter (`src/libImaging/Convert.c`) maps YCbCr to L and `1`
+/// through the Y channel directly rather than through RGB luminance.
 pub(super) fn ycbcr_luma8(img: &crate::raster::DynamicImage) -> crate::raster::GrayImage {
     let rgb = img.to_rgb8();
     crate::raster::GrayImage::from_fn(rgb.width(), rgb.height(), |x, y| {

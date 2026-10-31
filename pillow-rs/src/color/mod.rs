@@ -46,6 +46,7 @@ pub use palette::{
 };
 pub use parse::{color_has_explicit_alpha, parse_color_str, parse_color_str_unclamped};
 pub use resolve::{ColorValue, getcolor, resolve_new_color};
+pub(crate) use resolve::getcolor_for_mode;
 
 pub(crate) use grayscale::cmyk_muldiv255_byte as grayscale_cmyk_muldiv255_byte;
 pub(crate) use conversion::hsv_buffer_to_rgb;

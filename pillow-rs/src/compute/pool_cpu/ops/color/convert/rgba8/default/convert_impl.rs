@@ -30,6 +30,16 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
             Ok(DynamicImage::ImageRgb8(output))
         }
         Mode::ImageRgba8 => Ok(DynamicImage::ImageRgba8(source.clone())),
+        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
+            super::super::super::helpers::luma16::from_luma8_samples(
+                width,
+                height,
+                target,
+                source.pixels().map(|pixel| {
+                    crate::color::rgb_to_luma_u8(pixel[0], pixel[1], pixel[2])
+                }),
+            )
+        }
         Mode::ImageRgbPremultiplied8 => {
             let mut output = RgbaImage::new(width, height);
             for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
@@ -77,6 +87,61 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
         Mode::ImageF32 => Ok(DynamicImage::ImageF32(scalar_f32(source))),
         _ => Err(PilError::ValueError("image has wrong mode".into())),
     }
+}
+
+pub(crate) fn execute_palette_target(
+    source: &RgbaImage,
+    target: Mode,
+) -> Result<super::super::super::ops::PreparedConvertOutput, PilError> {
+    if !matches!(target, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8) {
+        return Err(PilError::ValueError("image has wrong mode".into()));
+    }
+    let width = source.width();
+    let height = source.height();
+    if target == Mode::ImagePalette8 {
+        let (indices, palette, palette_alpha) =
+            crate::ops::quantize::quantize_rgba_samples(source.as_raw(), width, height, 256)?;
+        return crate::compute::pool_cpu::ops::color::convert::helpers::palette::palette_index_output(
+            width,
+            height,
+            indices,
+            palette,
+            Some(palette_alpha),
+            super::super::super::ops::ConvertWrapperMetadata::Drop,
+        );
+    }
+    let pixel_count = (width as usize)
+        .checked_mul(height as usize)
+        .ok_or_else(|| PilError::ValueError("palette conversion failed".into()))?;
+    let rgb_length = pixel_count
+        .checked_mul(3)
+        .ok_or_else(|| PilError::ValueError("palette conversion failed".into()))?;
+    let rgba_length = pixel_count
+        .checked_mul(4)
+        .ok_or_else(|| PilError::ValueError("palette conversion failed".into()))?;
+    let input = source
+        .as_raw()
+        .get(..rgba_length)
+        .ok_or_else(|| PilError::ValueError("palette conversion failed".into()))?;
+    // Pillow's RGBA-to-PA route median-cuts RGB samples and merges the
+    // original alpha afterward; quantizing RGBA changes observable indices.
+    let mut rgb_samples = Vec::with_capacity(rgb_length);
+    for pixel in input.chunks_exact(4) {
+        rgb_samples.extend_from_slice(&pixel[..3]);
+    }
+    let (indices, palette) = crate::ops::quantize::median_cut_quantize_rgb(&rgb_samples, 256);
+    let palette: Vec<u8> = palette
+        .into_iter()
+        .flat_map(|color| color.into_iter())
+        .collect();
+    crate::compute::pool_cpu::ops::color::convert::helpers::palette::palette_alpha_output(
+        width,
+        height,
+        indices,
+        palette,
+        |position| input[position * 4 + 3],
+        super::super::super::ops::ConvertWrapperMetadata::ExifOnly,
+    )
 }
 
 fn scalar_i32(source: &RgbaImage) -> RgbaImage {

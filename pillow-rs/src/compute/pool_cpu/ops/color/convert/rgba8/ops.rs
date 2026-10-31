@@ -1,9 +1,14 @@
 //! RGBA8 source-mode support and architecture selection for Convert.
 
+crate::compute::pool_cpu::ops::color::convert::helpers::binary::declare_mode_strategy!(
+    crate::raster::Mode::ImageRgba8
+);
+
 use crate::compute::{
     Architecture,
     registry::support::{
-        ImplementationSupport, ModeSupport, OperationId, StrategyGuard, StrategySelection,
+        ImplementationSupport, ModeSupport, OperationId, OutputModeRule, StrategyGuard,
+        StrategySelection,
     },
 };
 use crate::error::PilError;
@@ -145,10 +150,25 @@ static ARCHITECTURES: [ImplementationSupport; 23] = [
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::Convert,
     Mode::ImageRgba8,
-    crate::compute::registry::support::OutputModeRule::ByTargetMode,
+    OutputModeRule::ByTargetModeWithPalette,
     &super::super::ops::RGBA_INPUTS,
     &ARCHITECTURES,
 );
+
+pub(crate) fn execute_palette_target(
+    source: &RgbaImage,
+    target: Mode,
+    selection: StrategySelection,
+) -> Result<super::super::ops::PreparedConvertOutput, PilError> {
+    match selection.implementation.architecture {
+        Architecture::Default => {
+            super::default::convert_impl::execute_palette_target(source, target)
+        }
+        _ => Err(PilError::InternalError(
+            "Convert selected an undeclared RGBA palette architecture".into(),
+        )),
+    }
+}
 
 /// Executes the RGBA8 strategy selected from this mode's support declaration.
 ///

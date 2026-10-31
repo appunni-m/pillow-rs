@@ -10,7 +10,12 @@ pub(crate) fn execute(
     channels: u32,
     target_mode: Mode,
 ) -> Result<DynamicImage, PilError> {
-    super::super::super::helpers::lut::apply(
-        image, Mode::ImageCmyk8, size, table, channels, target_mode,
+    let DynamicImage::ImageCmyk8(image) = image else {
+        return Err(PilError::InternalError(
+            "CMYK Color3DLut received another raster mode".into(),
+        ));
+    };
+    super::super::super::helpers::lut::apply_native_rgba_samples(
+        image, size, table, channels, target_mode,
     )
 }

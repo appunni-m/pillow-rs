@@ -1,7 +1,7 @@
 //! Eval operation contract and exact-mode prepared strategy composition.
 //!
-//! TODO(pillow-rs#3ptb): compare the archived Eval vector/admission paths with
-//! these prepared mode/architecture strategies and migrate any missing case.
+//! TODO(pillow-rs#3ptb): expand parity across each exact byte mode, supported
+//! architecture, LUT shape, and native-row tail after the CPU source review.
 //! TODO(pillow-rs#3ptb): move the archived Rayon row path to the later
 //! `pool_parallel` owner; do not move its scheduling into this CPU family.
 use crate::compute::registry::support::{
@@ -24,7 +24,28 @@ fn classify_float_mode(mode: Mode) -> ModeSupport {
         Mode::One => super::one::ops::FLOAT_LUT_SUPPORT,
         Mode::ImageLuma8 => super::luma8::ops::FLOAT_LUT_SUPPORT,
         Mode::ImagePalette8 => super::palette8::ops::FLOAT_LUT_SUPPORT,
-        mode => ModeSupport::Rejected {
+        Mode::ImageLumaA8
+        | Mode::ImageLaPremultiplied8
+        | Mode::ImagePaletteAlpha8
+        | Mode::ImageRgb8
+        | Mode::ImageRgba8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8
+        | Mode::ImageYCbCr8
+        | Mode::ImageLab8
+        | Mode::ImageHsv8
+        | Mode::ImageI32
+        | Mode::ImageF32
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N
+        | Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => ModeSupport::Rejected {
             mode,
             reason: POINT_FLOAT_ERROR,
             kind: RejectionKind::ValueError,

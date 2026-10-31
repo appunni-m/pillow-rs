@@ -170,8 +170,12 @@ pub(crate) fn js_convert_mode(value: &JsValue) -> pillow_rs::ConvertModeInput {
     }
     value
         .as_string()
-        .map(pillow_rs::ConvertModeInput::Name)
-        .unwrap_or_else(|| pillow_rs::ConvertModeInput::Invalid(js_value_type_name(value)))
+        .map(|name| {
+            pillow_rs::Mode::from_pillow_name(&name)
+                .map(pillow_rs::ConvertModeInput::Mode)
+                .unwrap_or_else(|| pillow_rs::ConvertModeInput::InvalidName(name))
+        })
+        .unwrap_or_else(|| pillow_rs::ConvertModeInput::InvalidType(js_value_type_name(value)))
 }
 
 pub(crate) fn js_convert_palette(value: &JsValue) -> pillow_rs::ConvertPaletteInput {

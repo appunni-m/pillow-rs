@@ -2,6 +2,7 @@ use super::{TransformData, TransformFill};
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::ResampleFilter;
+use crate::raster::Mode;
 
 const TRANSFORM_RESAMPLE_GUIDANCE: &str = concat!(
     "Use Image.Resampling.NEAREST (0), Image.Resampling.BILINEAR (2) or ",
@@ -96,17 +97,17 @@ impl Image {
     ) -> Result<Image, PilError> {
         let requested_filter = parse_transform_resample(resample)?;
         let fill_is_none = fillcolor.is_none();
+        let mode = self.mode_identity()?;
         // Pillow's indexed affine transform keeps the raw palette index and
         // therefore uses nearest-neighbor sampling regardless of the public
         // filter code. Keep the operation palette-safe so materialization does
         // not expand P into RGB before the backend runs.
-        let filter = if self.has_palette_mode()
-            || self.known_mode_identity() == Some(crate::raster::Mode::One) {
+        let filter = if matches!(mode, Mode::ImagePalette8 | Mode::One) {
             ResampleFilter::Nearest
         } else {
             requested_filter
         };
-        let (fill, palette_fill) = self.public_transform_fill(fillcolor)?;
+        let (fill, palette_fill) = super::fill::public_transform_fill(fillcolor, mode)?;
         self.apply_public_transform_method(
             size,
             method,

@@ -1,12 +1,8 @@
 //! ImageOps support contracts and prepared mode/architecture dispatch.
 //!
-//! TODO(pillow-rs#3ptb): audit direct eager and fusion callers for Colorize,
-//! Autocontrast, Equalize, CropBorder, Invert, Posterize, Solarize, and Expand.
-//! Route any caller that bypasses the prepared CPU mode/architecture plans
-//! through its owner, and migrate any missing archived behavior. No separate
-//! SIMD pool or registration is active. Autocontrast/Equalize and
-//! Posterize/Solarize kernels are declared under their exact mode owners; the
-//! maintained Invert strategies match Default's all-byte semantics.
+//! Public ImageOps wrappers route through prepared exact-mode CPU plans.
+//! Batch-fused point operations use prepared Eval, and owned-intermediate
+//! Invert uses the exact mode and architecture selected by its support plan.
 
 use crate::compute::{
     Architecture,
@@ -22,7 +18,6 @@ use crate::compute::pool_cpu::ops::crop::helpers::strategy::luma16_copy_architec
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
-use std::borrow::Cow;
 
 pub(crate) use super::autocontrast::PreparedAutocontrast;
 pub(crate) use super::equalize::PreparedEqualize;
@@ -281,7 +276,7 @@ fn rejection_error(mode: Mode) -> PilError {
     }
 }
 
-/// Complete support contract for Pillow's bytewise Invert operation.
+/// Exact-mode support contract for ImageOps Invert and its CoreOnly routes.
 pub(crate) static INVERT_SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::Invert, &[], classify_mode);
 
@@ -450,28 +445,29 @@ macro_rules! declare_colorize_modes {
     ($($mode:ident),+ $(,)?) => {
         fn classify_colorize_mode(mode: Mode) -> ModeSupport {
             match mode {
-                $(Mode::$mode => ModeSupport::cpu(
+                Mode::ImageLuma8 => ModeSupport::cpu(
                     OperationId::Colorize,
-                    Mode::$mode,
+                    Mode::ImageLuma8,
                     OutputModeRule::Fixed(Mode::ImageRgb8),
                     &[],
-                    colorize_architectures(Mode::$mode),
-                ),)+
+                    &COLORIZE_LUMA_ARCHITECTURES,
+                ),
+                $(Mode::$mode => rejected_colorize_mode(mode),)+
             }
         }
     };
 }
 
-fn colorize_architectures(mode: Mode) -> &'static [ImplementationSupport] {
-    match mode {
-        Mode::ImageLuma8 => &COLORIZE_LUMA_ARCHITECTURES,
-        _ => &[],
+fn rejected_colorize_mode(mode: Mode) -> ModeSupport {
+    ModeSupport::Rejected {
+        mode,
+        reason: "",
+        kind: RejectionKind::AssertionError,
     }
 }
 
 declare_colorize_modes! {
     One,
-    ImageLuma8,
     ImageLumaA8,
     ImageLaPremultiplied8,
     ImagePalette8,
@@ -497,15 +493,13 @@ declare_colorize_modes! {
     ImageRgba32F,
 }
 
-/// Complete source-mode and fixed-output contract for Pillow Colorize.
-// NO_PILLOW_SUPPORT: Colorize's typed strategies also accept the five internal
-// high-depth modes and explicitly produce ImageRgb8.
+/// Pillow's exact `L` source mode and fixed-RGB output contract for Colorize.
 pub(crate) static COLORIZE_SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::Colorize, &[], classify_colorize_mode);
 
 /// Prepared Colorize input, LUT, and exact source-mode selection.
 pub(crate) struct PreparedColorize<'a> {
-    source: Cow<'a, [u8]>,
+    source: &'a [u8],
     width: u32,
     height: u32,
     lut: [[u8; 256]; 3],
@@ -523,23 +517,20 @@ impl PreparedColorize<'_> {
         match (mode, architecture) {
             (Mode::ImageLuma8, Architecture::Default) => {
                 super::luma8::default::colorize_impl::execute(
-                    self.source.as_ref(), self.width, self.height, &self.lut,
+                    self.source, self.width, self.height, &self.lut,
                 )
             }
             (Mode::ImageLuma8, Architecture::Sse2) => super::luma8::sse2::colorize_impl::execute(
-                self.source.as_ref(), self.width, self.height, &self.lut,
+                self.source, self.width, self.height, &self.lut,
             ),
             (Mode::ImageLuma8, Architecture::Neon) => super::luma8::neon::colorize_impl::execute(
-                self.source.as_ref(), self.width, self.height, &self.lut,
+                self.source, self.width, self.height, &self.lut,
             ),
             (Mode::ImageLuma8, Architecture::WasmSimd128) => {
                 super::luma8::wasm_simd128::colorize_impl::execute(
-                    self.source.as_ref(), self.width, self.height, &self.lut,
+                    self.source, self.width, self.height, &self.lut,
                 )
             }
-            (_, Architecture::Default) => super::helpers::colorize::execute_default(
-                self.source.as_ref(), self.width, self.height, &self.lut,
-            ),
             _ => Err(PilError::InternalError(
                 "colorize selection has no matching CPU kernel".into(),
             )),
@@ -559,8 +550,12 @@ fn prepare_colorize<'a>(
 ) -> Result<PreparedColorize<'a>, PilError> {
     let selection = mode_selection(&COLORIZE_SUPPORT, image, RequestFacts::Unspecified, ctx)?;
     let source = match image {
-        DynamicImage::ImageLuma8(gray) => Cow::Borrowed(gray.as_raw()),
-        _ => Cow::Owned(image.to_luma8().into_raw()),
+        DynamicImage::ImageLuma8(gray) => gray.as_raw(),
+        _ => {
+            return Err(PilError::InternalError(
+                "Colorize support and mode dispatch disagree".into(),
+            ));
+        }
     };
     let lut = super::helpers::colorize::lookup_tables(
         black,

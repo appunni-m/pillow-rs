@@ -1,6 +1,7 @@
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::DitherMethod;
+use crate::raster::Mode;
 
 pub(super) fn parse_dither(s: Option<&str>) -> Result<Option<DitherMethod>, PilError> {
     match s {
@@ -69,10 +70,13 @@ pub fn normalize_convert_dither(value: DitherInput) -> Result<Option<String>, Pi
 pub enum ConvertModeInput {
     /// No destination mode was supplied.
     None,
-    /// A destination mode name.
-    Name(String),
+    /// A destination mode parsed by the host binding.
+    Mode(Mode),
+    /// A string that is not a Pillow mode, retained only for Pillow's error
+    /// ordering and message at the external compatibility boundary.
+    InvalidName(String),
     /// A value of another host type.
-    Invalid(String),
+    InvalidType(String),
 }
 
 /// Host-neutral palette argument for Pillow-compatible conversion.
@@ -98,20 +102,26 @@ impl Image {
         palette: ConvertPaletteInput,
         colors: Option<u32>,
     ) -> Result<Image, PilError> {
-        let source_mode = self.mode()?;
+        let source_mode = self.mode_identity()?;
         let target_mode = match mode {
             ConvertModeInput::None => {
-                if source_mode != "P" {
+                if source_mode != Mode::ImagePalette8 {
                     return Ok(self.copy());
                 }
-                let mut target = self.palette_mode().unwrap_or("RGB").to_owned();
-                if target == "RGB" && self.has_transparency_data() {
-                    target = "RGBA".to_owned();
+                if self.has_transparency_data() {
+                    Mode::ImageRgba8
+                } else {
+                    Mode::ImageRgb8
                 }
-                target
             }
-            ConvertModeInput::Name(target) => target,
-            ConvertModeInput::Invalid(type_name) => {
+            ConvertModeInput::Mode(target) => target,
+            ConvertModeInput::InvalidName(_) => {
+                if matrix.is_some() {
+                    return Err(PilError::ValueError("illegal conversion".to_owned()));
+                }
+                return Err(PilError::ValueError("image has wrong mode".to_owned()));
+            }
+            ConvertModeInput::InvalidType(type_name) => {
                 return Err(PilError::TypeError(format!(
                     "argument 1 must be str, not {type_name}"
                 )));
@@ -124,7 +134,7 @@ impl Image {
         // Pillow rejects matrix conversions to unsupported target modes before
         // it validates the coefficient count. This ordering is observable for
         // an invalid mode paired with a short matrix.
-        if matrix.is_some() && !matches!(target_mode.as_str(), "L" | "RGB") {
+        if matrix.is_some() && !matches!(target_mode, Mode::ImageLuma8 | Mode::ImageRgb8) {
             return Err(PilError::ValueError("illegal conversion".to_owned()));
         }
         if let Some(matrix) = matrix.as_ref()
@@ -153,7 +163,7 @@ impl Image {
             normalize_convert_dither(dither)?
         };
         self.convert(
-            &target_mode,
+            target_mode,
             matrix,
             dither.as_deref(),
             palette.as_deref(),

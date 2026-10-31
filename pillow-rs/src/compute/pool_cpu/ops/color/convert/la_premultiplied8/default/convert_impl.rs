@@ -21,3 +21,4 @@ pub(crate) fn execute(
     }
     Ok(DynamicImage::ImageLumaA8(output))
 }
+

@@ -1,7 +1,9 @@
 //! Materialized input guards for declared implementation strategies.
 
 mod core;
+mod draw;
 mod mutation;
+mod resize;
 
 pub(super) use core::{
     brightness_vector_guard,
@@ -22,6 +24,12 @@ pub(super) use core::{
     filter_unsharp_rgb150_guard,
     native_bytes_guard,
     reduce_f32_vector_guard,
+    rotate_vector_bytes_guard,
+    transform_byte_kernels_guard,
+    sharpness_vector_guard,
+    thumbnail_i32_stream_guard,
+};
+pub(super) use resize::{
     resize_byte_boxed_nearest_vector_guard,
     resize_byte_boxed_vector_guard,
     resize_byte_nearest_vector_guard,
@@ -29,19 +37,21 @@ pub(super) use core::{
     resize_filtered_fma_guard,
     resize_i32_neon_guard,
     resize_luma16_vector_guard,
-    rotate_vector_bytes_guard,
-    sharpness_vector_guard,
-    thumbnail_i32_stream_guard,
 };
+pub(super) use draw::draw_native_spans_guard;
 pub(super) use mutation::{
     alpha_composite_vector_guard,
     alpha_mask_guard,
+    blend_native_vector_guard,
     color3dlut_guard,
+    composite_native_byte_vector_guard,
     effect_noise_vector_guard,
     effect_spread_bytes_guard,
     expand_vector_guard,
     exact_native_rows_guard,
     extract_band_bytes_guard,
+    merge_native_interleave_guard,
+    merge_rgb_interleave_guard,
     native_byte_prefix_guard,
     native_crop_border_bytes_guard,
     native_crop_bytes_guard,
@@ -50,6 +60,7 @@ pub(super) use mutation::{
     native_transpose_bytes_guard,
     pixel_span_guard,
     pixel_write_run_guard,
+    paste_l_mask_neon_guard,
     put_alpha_bytes_guard,
     put_data_native_guard,
     reduce_native_byte_vector_guard,

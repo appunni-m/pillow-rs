@@ -7,8 +7,9 @@ mod eager_cpu;
 pub(super) use eager_cpu::pipeline_timestamp;
 pub(crate) use eager_cpu::{
     begin_eager_cpu_operation_telemetry, cancel_eager_cpu_operation_telemetry,
-    finish_eager_cpu_operation_telemetry, record_eager_cpu_operation_receipt,
-    record_eager_cpu_operation_receipt_with_reason,
+    finish_eager_cpu_operation_telemetry,
+    finish_eager_cpu_operation_telemetry_with_selection,
+    record_eager_cpu_operation_receipt, record_eager_cpu_operation_receipt_with_reason,
 };
 
 use crate::raster::DynamicImage;

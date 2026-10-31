@@ -1,12 +1,26 @@
 //! LAB8 source-mode support and architecture selection for Convert.
 
+crate::compute::pool_cpu::ops::color::convert::helpers::binary::declare_mode_strategy!(
+    crate::raster::Mode::ImageLab8
+);
+
 use crate::compute::{Architecture, registry::support::{
     InputContract, ModeSupport, OperationId, OutputModeRule, StrategySelection,
 }};
 use crate::error::PilError;
+use crate::pipeline::DitherMethod;
 use crate::raster::{DynamicImage, Mode, RgbImage};
 
-const TARGETS: &[Mode] = &[Mode::ImageLab8];
+const TARGETS: &[Mode] = &[
+    Mode::One,
+    Mode::ImageLab8,
+    Mode::ImageI16,
+    Mode::ImageI16L,
+    Mode::ImageI16B,
+    Mode::ImageI16N,
+    Mode::ImagePalette8,
+    Mode::ImagePaletteAlpha8,
+];
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: TARGETS,
     core_only_targets: &[],
@@ -14,14 +28,31 @@ const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     rejection_reason: "image has wrong mode",
 }];
 
-// TODO(pillow-rs#3ptb): add the native LAB-to-color transform before admitting non-identity targets.
+// TODO(pillow-rs#3ptb): compare remaining LAB source/target pairs with archived
+// Convert behavior, then add matching native routes or preserve rejection.
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::Convert,
     Mode::ImageLab8,
-    OutputModeRule::ByTargetMode,
+    OutputModeRule::ByTargetModeWithPalette,
     INPUTS,
     &[],
 );
+
+pub(crate) fn execute_palette_target(
+    source: &RgbImage,
+    target: Mode,
+    dither: Option<DitherMethod>,
+    selection: StrategySelection,
+) -> Result<super::super::ops::PreparedConvertOutput, PilError> {
+    match selection.implementation.architecture {
+        Architecture::Default => {
+            super::default::convert_impl::execute_palette_target(source, target, dither)
+        }
+        _ => Err(PilError::InternalError(
+            "Convert selected an undeclared LAB palette architecture".into(),
+        )),
+    }
+}
 
 pub(crate) fn execute(
     source: &RgbImage,

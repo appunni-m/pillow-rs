@@ -20,7 +20,6 @@ pub(crate) fn execute(
     };
     lut::apply_native_rgb_samples(
         image,
-        Mode::ImageYCbCr8,
         size,
         table,
         channels,

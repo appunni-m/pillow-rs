@@ -135,12 +135,21 @@ const CONTRAST_INPUTS: &[crate::compute::registry::support::InputContract] =
         mismatch_reason: "Contrast source bytes did not match its dimensions",
     }];
 
-/// Exact-mode support for native Contrast blending.
-pub(crate) const CONTRAST_SUPPORT: crate::compute::registry::support::ModeSupport =
-    crate::compute::registry::support::ModeSupport::serial(
+const CONTRAST_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 3] =
+    crate::compute::pool_cpu::ops::enhance::helpers::strategy::contrast_architectures(
         crate::compute::registry::support::OperationId::Contrast,
         crate::raster::Mode::ImageCmyk8,
+        CONTRAST_CHANNELS,
+    );
+
+/// Exact-mode support for native Contrast blending.
+pub(crate) const CONTRAST_SUPPORT: crate::compute::registry::support::ModeSupport =
+    crate::compute::registry::support::ModeSupport::cpu(
+        crate::compute::registry::support::OperationId::Contrast,
+        crate::raster::Mode::ImageCmyk8,
+        crate::compute::registry::support::OutputModeRule::Preserve,
         CONTRAST_INPUTS,
+        &CONTRAST_ARCHITECTURES,
     );
 
 pub(crate) type ContrastStrategy<'a> =
@@ -190,6 +199,18 @@ pub(crate) fn execute_contrast(
             factor,
         )
         .map(crate::raster::DynamicImage::ImageCmyk8),
+        crate::compute::Architecture::Sse2 => super::sse2::contrast_impl::execute(
+            source, &base, factor,
+        )
+        .map(crate::raster::DynamicImage::ImageCmyk8),
+        crate::compute::Architecture::Neon => super::neon::contrast_impl::execute(
+            source, &base, factor,
+        )
+        .map(crate::raster::DynamicImage::ImageCmyk8),
+        crate::compute::Architecture::WasmSimd128 => {
+            super::wasm_simd128::contrast_impl::execute(source, &base, factor)
+                .map(crate::raster::DynamicImage::ImageCmyk8)
+        }
         architecture => Err(crate::error::PilError::InternalError(format!(
             "unexpected {architecture:?} architecture selected for Contrast mode {}",
             crate::raster::Mode::ImageCmyk8.pillow_name().unwrap_or("internal"),

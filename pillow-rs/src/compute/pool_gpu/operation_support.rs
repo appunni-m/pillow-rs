@@ -174,16 +174,14 @@ pub(super) fn gpu_palette_first_rgb_merge_is_supported(
     }
     let [
         PipelineOp::Merge {
-            mode: ColorMode::RGB,
-            logical_mode,
+            mode: Mode::ImageRgb8,
             bands,
         },
     ] = ops
     else {
         return false;
     };
-    logical_mode == "RGB"
-        && bands.len() == 3
+    bands.len() == 3
         && bands
             .first()
             .is_some_and(|band| band.mode().ok().as_deref() == Some("P"))

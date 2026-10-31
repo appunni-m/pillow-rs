@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use super::grayscale::cmyk_muldiv255_byte;
-use crate::raster::{DynamicImage, RgbImage};
+use crate::raster::{DynamicImage, Mode, RgbImage};
 
 #[cfg(feature = "parallel")]
 const CMYK_TO_RGB_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
@@ -680,25 +680,25 @@ pub fn pa_to_rgb(img: &DynamicImage, palette: Option<&[u8]>) -> DynamicImage {
 
 /// Converts a non-standard Pillow mode into a standard RGB-family image.
 ///
-/// `palette` supplies `P` mode RGB triples when `src_mode == "P"`.
+/// `palette` supplies `P` mode RGB triples when `src_mode` is `ImagePalette8`.
 ///
 /// # Returns
 ///
 /// `Some(image)` for modes that need reinterpretation (`CMYK`, `HSV`, `YCbCr`,
 /// `I`, `F`, `P`, `PA`) and `None` for modes that are already standard.
 pub fn convert_from_nonstandard(
-    src_mode: &str,
+    src_mode: Mode,
     img: &DynamicImage,
     palette: Option<&[u8]>,
 ) -> Option<DynamicImage> {
     match src_mode {
-        "CMYK" => Some(cmyk_to_rgb(img)),
-        "HSV" => Some(hsv_to_rgb(img)),
-        "YCbCr" => Some(ycbcr_to_rgb(img)),
-        "I" => Some(i_to_rgb(img)),
-        "F" => Some(f_to_rgb(img)),
-        "P" => Some(p_to_rgb(img, palette)),
-        "PA" => Some(pa_to_rgb(img, palette)),
+        Mode::ImageCmyk8 => Some(cmyk_to_rgb(img)),
+        Mode::ImageHsv8 => Some(hsv_to_rgb(img)),
+        Mode::ImageYCbCr8 => Some(ycbcr_to_rgb(img)),
+        Mode::ImageI32 => Some(i_to_rgb(img)),
+        Mode::ImageF32 => Some(f_to_rgb(img)),
+        Mode::ImagePalette8 => Some(p_to_rgb(img, palette)),
+        Mode::ImagePaletteAlpha8 => Some(pa_to_rgb(img, palette)),
         _ => None,
     }
 }

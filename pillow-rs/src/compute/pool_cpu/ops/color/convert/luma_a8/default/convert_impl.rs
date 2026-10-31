@@ -86,6 +86,26 @@ pub(crate) fn execute(
             }
             Ok(DynamicImage::ImageF32(output))
         }
+        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
+            super::super::super::helpers::luma16::from_luma8_samples(
+                width,
+                height,
+                target,
+                source.pixels().map(|pixel| pixel[0]),
+            )
+        }
         _ => Err(PilError::ValueError("image has wrong mode".into())),
     }
+}
+
+pub(crate) fn execute_palette_target(
+    source: &GrayAlphaImage,
+    target: Mode,
+) -> Result<super::super::super::ops::PreparedConvertOutput, PilError> {
+    super::super::super::helpers::luma8::execute_palette_target(
+        source.width(),
+        source.height(),
+        target,
+        source.pixels().map(|pixel| pixel[0]),
+    )
 }

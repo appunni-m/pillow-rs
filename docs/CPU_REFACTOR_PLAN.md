@@ -277,10 +277,11 @@ formatter, lint, test, parity, benchmark, or coverage command.
   flags, repeated CPU detection, or separate SIMD executor.
 - Inspect the actual tree against the guide. Keep orchestration out of
   `mod.rs` and retain ordinary named implementation files in architecture owners.
-- Finish compatibility edits, meaningful type/context contract tests when
-  needed, path-classification rules, source crosswalks, maps, and documentation.
-  Preserve existing parity inputs, expected outputs, and assertions; only
-  mechanical test import/type wiring may follow the new API.
+- Finish compatibility edits, path-classification rules, source crosswalks,
+  maps, and documentation. Do not add, move, or run unit tests for this migration;
+  validate operation behavior and strategy selection through the expanded
+  parity matrix. Preserve existing parity inputs, expected outputs, and
+  assertions while adding the operation × exact Mode × Architecture cases.
 - Review file and function size by reading/splitting source. Target 1,000
   physical lines per Rust file and 100 Clippy-counted body lines per function.
   The exact automated function-size proof belongs to the next stage.
@@ -302,12 +303,13 @@ adding blanket exclusions, suppressing warnings, or inflating size baselines.
 2. Run `make quality`, the consolidated static gate containing formatting,
    checkstyle/Clippy, documentation, and repository checks. Do not separately
    repeat the same successful gate through its `lint` alias.
-3. Run the structure and crosswalk contract checks affected by their changes,
-   plus meaningful affected Rust tests through existing targets or focused
-   native commands when no appropriate target exists. Include focused strategy
-   contracts for exhaustive support classification, assessment/preparation
-   agreement, unavailable/ineligible architecture fallbacks, preserved errors,
-   and actual implementation selection without hidden mode conversions.
+3. Run the structure and crosswalk contract checks affected by their changes.
+   Do not add, move, or run unit-test suites for this refactor, including
+   source-tool `*-test` targets. Use the structural inventory generators and
+   audits for placement/crosswalk integrity. Prove operation behavior and
+   strategy routing through the parity matrix, including preserved errors,
+   exact mode identity, support rejection, architecture eligibility, and
+   Default fallback.
 4. Build the CPU parity target with `make build-parity`. Keep Rayon opt-in and
    disabled for this CPU build. This target avoids installing the replacement
    `PIL` over the live Pillow oracle.
@@ -319,8 +321,7 @@ Useful maintained inventory targets are:
 
 ```sh
 make implementation-structure-audit implementation-structure-inventory
-make repo-map-update repo-map-check
-make operation-source-crosswalk operation-source-crosswalk-test
+make repo-map-update repo-map-check operation-source-crosswalk
 ```
 
 After a repair, rerun failed or directly affected checks. Do not rerun successful
@@ -345,11 +346,32 @@ from the baseline Makefile; it has not been executed for this plan.
 
 The architecture-aware CPU runner must make its chosen architecture explicit
 in evidence, using the prepared plan's actual selection and fallback reason.
-Run the complete suite for Default and each independently selected
-CPU architecture route executable on the available host; unsupported
-specializations use the documented Default fallback. Adapt architecture
-selection plumbing as needed, without changing test cases or their assertions.
-Cross-compilation is not a substitute for execution on another architecture.
+Before this stage, add runner-controlled architecture selection at the target
+execution boundary and carry it through `ExecutionContext`; do not let mode
+implementations read runner environment or infer architecture themselves.
+The target receipt must report the context's requested architecture and each
+prepared operation's actual implementation/fallback. Keep fixtures and source
+oracle cases backend-neutral, and execute target cases once per selected
+architecture profile.
+
+Expand parity coverage to the full operation-by-mode-by-architecture
+cross-product: exercise every operation request against all 25 exact `Mode`
+identities and every CPU `Architecture` selector, including Default. Execute
+each specialization that is available on the host; for unavailable or
+ineligible routes, assert the documented Default fallback or rejection and
+its reason. Supported routes must prove output and exact-mode identity;
+declared rejections must prove their existing error contract. Cases should
+include the operation's relevant complete and partial blocks, vector tails,
+empty dimensions, and mode-specific edge semantics. For operations with
+secondary image modes, include the mode combinations that affect support or
+dispatch. Cross-compilation is not a substitute for execution on another
+architecture.
+
+The Resize portion must include full-source box identity, integer-aligned
+crop, fractional boxes, each unchanged-axis pass-elision case, F32 crops with
+NaN/Inf samples, filtered versus nearest straight-alpha crops, reducing-gap
+exceptions, and native I;16 byte-order/empty-shape cases. These are parity
+inputs across the complete Resize mode-by-architecture matrix, not unit tests.
 
 Success requires all selected CPU cases to pass, zero implementation failures,
 zero infrastructure errors, and complete applicable execution evidence. Report
@@ -390,7 +412,7 @@ Record a CPU completion report containing:
 - A top-level per-operation support view derived from the typed strategy
   declarations, including rejected combinations, build availability, guards,
   implementation identities, and selection/fallback receipts.
-- Quality, compilation, affected-test, full CPU parity, execution-receipt,
+- Quality, compilation, focused parity, full CPU parity, execution-receipt,
   and benchmark results bound to source/build identities.
 - All unresolved issues, unavailable architectures, and validation limitations.
   CPU implementation, compilation, quality, or parity failures block handoff.
@@ -412,7 +434,7 @@ experiments into that commit or force-push history as part of this goal.
 
 Run the following to continue the current `pillow-rs` work. Starting the goal
 authorizes its implementation and ordered validation stages; it does not
-authorize another reset, changing the agreed structure, or relaxing tests.
+authorize another reset, changing the agreed structure, or reducing the parity matrix.
 
 ```text
 /goal In /Users/lazytrot/work/pillow-rs, continue docs/CPU_REFACTOR_PLAN.md

@@ -2,8 +2,7 @@
 
 use crate::error::PilError;
 use crate::raster::{
-    DynamicImage, GrayAlphaImage, GrayImage, ImageBuffer, Luma, LumaA, Mode, Rgb, RgbImage,
-    Rgba, RgbaImage,
+    DynamicImage, GrayAlphaImage, GrayImage, LumaA, Mode, Rgb, RgbImage, Rgba, RgbaImage,
 };
 
 pub(crate) fn execute<I>(
@@ -26,7 +25,43 @@ where
         Mode::ImageI32 => Ok(DynamicImage::ImageI32(to_i32(width, height, samples))),
         Mode::ImageF32 => Ok(DynamicImage::ImageF32(to_f32(width, height, samples))),
         Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
-            to_i16(width, height, target, samples)
+            super::luma16::from_luma8_samples(width, height, target, samples)
+        }
+        _ => Err(PilError::ValueError("image has wrong mode".into())),
+    }
+}
+
+pub(crate) fn execute_palette_target<I>(
+    width: u32,
+    height: u32,
+    target: Mode,
+    samples: I,
+) -> Result<super::super::ops::PreparedConvertOutput, PilError>
+where
+    I: Iterator<Item = u8>,
+{
+    let identity_palette = crate::ops::quantize::identity_grayscale_palette();
+    match target {
+        Mode::ImagePalette8 => {
+            let indices = to_luma8(width, height, samples);
+            Ok(super::super::ops::PreparedConvertOutput {
+                image: DynamicImage::ImagePalette8(indices),
+                palette: Some(identity_palette),
+                palette_alpha: None,
+                wrapper_metadata: Some(super::super::ops::ConvertWrapperMetadata::PreserveSource),
+            })
+        }
+        Mode::ImagePaletteAlpha8 => {
+            let mut output = GrayAlphaImage::new(width, height);
+            for (destination, sample) in output.pixels_mut().zip(samples) {
+                *destination = LumaA([sample, u8::MAX]);
+            }
+            Ok(super::super::ops::PreparedConvertOutput {
+                image: DynamicImage::ImagePaletteAlpha8(output),
+                palette: Some(identity_palette),
+                palette_alpha: None,
+                wrapper_metadata: Some(super::super::ops::ConvertWrapperMetadata::ExifOnly),
+            })
         }
         _ => Err(PilError::ValueError("image has wrong mode".into())),
     }
@@ -107,21 +142,3 @@ fn to_f32<I: Iterator<Item = u8>>(width: u32, height: u32, samples: I) -> RgbaIm
     output
 }
 
-fn to_i16<I: Iterator<Item = u8>>(
-    width: u32,
-    height: u32,
-    target: Mode,
-    samples: I,
-) -> Result<DynamicImage, PilError> {
-    let mut output = ImageBuffer::<Luma<u16>, Vec<u16>>::new(width, height);
-    for (pixel, sample) in output.pixels_mut().zip(samples) {
-        pixel[0] = u16::from(sample);
-    }
-    Ok(match target {
-        Mode::ImageI16 => DynamicImage::ImageI16(output),
-        Mode::ImageI16L => DynamicImage::ImageI16L(output),
-        Mode::ImageI16B => DynamicImage::ImageI16B(output),
-        Mode::ImageI16N => DynamicImage::ImageI16N(output),
-        _ => return Err(PilError::InternalError("invalid I;16 Convert target".into())),
-    })
-}

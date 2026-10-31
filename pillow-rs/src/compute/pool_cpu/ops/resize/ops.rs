@@ -1,10 +1,11 @@
 //! Resize operation contracts and prepared mode-strategy selection.
 //!
-//! TODO(pillow-rs#3ptb): route direct/eager and nested geometry callers through
-//! prepared plans, then verify boxed-bound validation order against the
-//! preserved CPU behavior. One and P keep nearest-only vector strategies and
-//! use their serial mode-specific Default routes for filtered requests. Rayon
-//! scheduling belongs to the later Parallel CPU backend.
+//! TODO(pillow-rs#3ptb): compare boxed float32-bound crop/pass-elision and
+//! validation/error ordering against the preserved CPU behavior, including
+//! public Resize's reducing-gap wrapper. Public and nested geometry callers
+//! now enter prepared plans with the injected context. One and P keep
+//! nearest-only vector strategies and use their serial mode-specific Default
+//! routes for filtered requests. Rayon scheduling belongs to Parallel CPU.
 
 use crate::compute::{
     Architecture, ExecutionContext,
@@ -90,10 +91,14 @@ const fn boxed_byte_mode_architectures(
     channels: u8,
     nearest_only: bool,
 ) -> [ImplementationSupport; 3] {
+    let straight_alpha = matches!(mode, Mode::ImageLumaA8 | Mode::ImageRgba8);
     let guard = if nearest_only {
         StrategyGuard::ResizeByteBoxedNearestVector { channels }
     } else {
-        StrategyGuard::ResizeByteBoxedVector { channels }
+        StrategyGuard::ResizeByteBoxedVector {
+            channels,
+            straight_alpha,
+        }
     };
     [
         ImplementationSupport::cpu(
@@ -514,6 +519,17 @@ impl PreparedResize<'_> {
     }
 
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
+        if self.selection.implementation.architecture == Architecture::Default
+            && let ResizeRequest::Boxed { filter, bounds } = self.request
+            && let Some(cropped) = super::helpers::boxed_crop::execute_default(
+                self.image,
+                (self.width, self.height),
+                filter,
+                bounds,
+            )
+        {
+            return Ok(cropped);
+        }
         let (filter, bounds) = match self.request {
             ResizeRequest::Standard { filter } => (filter, None),
             ResizeRequest::Boxed { filter, bounds } => (filter, Some(bounds)),
@@ -527,6 +543,51 @@ impl PreparedResize<'_> {
             bounds,
             self.selection,
         )
+    }
+
+    /// Executes the prepared RGB Resize strategy with exact active source-row
+    /// facts supplied by Thumbnail's sparse reducing-gap fusion.
+    pub(crate) fn execute_rgb8_with_sparse_rows(
+        self,
+        sparse_source_rows: Option<&[bool]>,
+    ) -> Result<DynamicImage, PilError> {
+        let Some(sparse_source_rows) = sparse_source_rows else {
+            return self.execute();
+        };
+        let (filter, bounds) = match self.request {
+            ResizeRequest::Standard { filter } => (filter, None),
+            ResizeRequest::Boxed { filter, bounds } => (filter, Some(bounds)),
+        };
+        let expected_operation = if bounds.is_some() {
+            OperationId::ResizeBoxed
+        } else {
+            OperationId::Resize
+        };
+        if self.selection.implementation.operation != expected_operation
+            || self.selection.implementation.mode != Mode::ImageRgb8
+            || self.selection.requested_backend != self.context.backend()
+            || self.selection.requested_architecture != self.context.architecture()
+        {
+            return Err(PilError::InternalError(
+                "sparse RGB Thumbnail resize received an incompatible selection".into(),
+            ));
+        }
+        let DynamicImage::ImageRgb8(image) = self.image else {
+            return Err(PilError::InternalError(
+                "sparse RGB Thumbnail resize received a different mode".into(),
+            ));
+        };
+        let output = super::rgb8::ops::resize_with_sparse_rows(
+            &self.context,
+            self.selection.implementation.architecture,
+            image,
+            self.width,
+            self.height,
+            bounds,
+            filter,
+            sparse_source_rows,
+        )?;
+        Ok(DynamicImage::ImageRgb8(output))
     }
 }
 
@@ -767,6 +828,36 @@ pub(crate) fn prepare_direct<'a>(
     let support = if boxed { &BOXED_SUPPORT } else { &SUPPORT };
     let facts = resize_request_facts(inputs.facts(), width, height, filter, bounds);
     let selected = selection(support, inputs.mode(), facts, ctx)?;
+    prepare_direct_with_selection(inputs, width, height, filter, bounds, ctx, selected)
+}
+
+/// Binds a previously assessed exact-mode Resize selection to its image input.
+///
+/// Composite operations use this after materializing an intermediate raster;
+/// the stored support decision is retained rather than selected a second time.
+pub(crate) fn prepare_direct_with_selection<'a>(
+    inputs: OperationInputs<'a>,
+    width: u32,
+    height: u32,
+    filter: ResampleFilter,
+    bounds: Option<(f64, f64, f64, f64)>,
+    ctx: &ExecutionContext,
+    selected: StrategySelection,
+) -> Result<PreparedResize<'a>, PilError> {
+    let expected_operation = if bounds.is_some() {
+        OperationId::ResizeBoxed
+    } else {
+        OperationId::Resize
+    };
+    if selected.implementation.operation != expected_operation
+        || selected.implementation.mode != inputs.mode()
+        || selected.requested_backend != ctx.backend()
+        || selected.requested_architecture != ctx.architecture()
+    {
+        return Err(PilError::InternalError(
+            "prepared Resize selection does not match its bound request".into(),
+        ));
+    }
     let request = match bounds {
         Some(bounds) => ResizeRequest::Boxed { filter, bounds },
         None => ResizeRequest::Standard { filter },

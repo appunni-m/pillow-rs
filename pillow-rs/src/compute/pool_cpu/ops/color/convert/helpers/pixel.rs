@@ -1,7 +1,6 @@
 //! Native sample arithmetic shared by Convert's exact target strategies.
 
-use crate::error::PilError;
-use crate::raster::{DynamicImage, ImageBuffer, Luma, Mode, RgbImage, Rgba, RgbaImage};
+use crate::raster::{DynamicImage, Mode, RgbImage, Rgba, RgbaImage};
 
 #[inline]
 pub(crate) fn premultiply_byte(value: u8, alpha: u8) -> u8 {
@@ -67,36 +66,6 @@ pub(crate) fn scalar_f32_rgb8(rgb: &RgbImage) -> DynamicImage {
 pub(crate) fn scalar_f32_rgb(red: u8, green: u8, blue: u8) -> [u8; 4] {
     let sum = i32::from(red) * 299 + i32::from(green) * 587 + i32::from(blue) * 114;
     (sum as f32 / 1000.0_f32).to_le_bytes()
-}
-
-pub(crate) fn luma16(image: &DynamicImage, target: Mode) -> Result<DynamicImage, PilError> {
-    let (width, height, samples) = match image {
-        DynamicImage::One(source) => (
-            source.width(),
-            source.height(),
-            source.pixels().map(|pixel| u16::from(if pixel[0] != 0 { 255 } else { pixel[0] }))
-                .collect::<Vec<_>>(),
-        ),
-        DynamicImage::ImageLuma8(source) => (
-            source.width(),
-            source.height(),
-            source.pixels().map(|pixel| u16::from(pixel[0])).collect::<Vec<_>>(),
-        ),
-        _ => {
-            return Err(PilError::ValueError(
-                "I;16 conversion requires L or binary input".into(),
-            ));
-        }
-    };
-    let output = ImageBuffer::<Luma<u16>, Vec<u16>>::from_raw(width, height, samples)
-        .ok_or_else(|| PilError::InternalError("I;16 conversion shape mismatch".into()))?;
-    Ok(match target {
-        Mode::ImageI16 => DynamicImage::ImageI16(output),
-        Mode::ImageI16L => DynamicImage::ImageI16L(output),
-        Mode::ImageI16B => DynamicImage::ImageI16B(output),
-        Mode::ImageI16N => DynamicImage::ImageI16N(output),
-        _ => return Err(PilError::InternalError("invalid I;16 Convert target".into())),
-    })
 }
 
 fn native_luma16(image: &DynamicImage) -> Option<(u32, u32, &[u16])> {

@@ -79,6 +79,49 @@ pub(crate) fn invert(
     )))
 }
 
+/// Invert an owned native image buffer without allocating a replacement.
+///
+/// The caller must select the exact mode and architecture strategy first.
+/// Row tails use the same padded vector path as `invert`, and storage after
+/// the checked image prefix remains untouched.
+pub(crate) fn invert_in_place(
+    source: &mut [u8],
+    width: u32,
+    height: u32,
+    channels: usize,
+    invert_alpha: bool,
+) -> Result<(), PilError> {
+    let dims = CheckedDims::new_allow_empty(width, height, channels as u8)?;
+    if source.len() < dims.total_bytes() {
+        return Err(PilError::InternalError(
+            "invert native byte prefix is short".into(),
+        ));
+    }
+    if source.is_empty() {
+        crate::compute::record_pipeline_operation_path("native-copy");
+        return Ok(());
+    }
+    let row_bytes = (width as usize)
+        .checked_mul(channels)
+        .ok_or_else(|| PilError::InternalError("invert native row size overflow".into()))?;
+    let height = height as usize;
+    if row_bytes == 0 || height == 0 {
+        crate::compute::record_pipeline_operation_vector_blocks(0);
+        crate::compute::record_pipeline_operation_path("vector");
+        return Ok(());
+    }
+
+    let mask = active_mask(channels, invert_alpha)?;
+    let expected_bytes = dims.total_bytes();
+    for row in source[..expected_bytes].chunks_exact_mut(row_bytes) {
+        transform_row(row, mask);
+    }
+    let vector_blocks = row_bytes.div_ceil(16).saturating_mul(height);
+    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks as u64);
+    crate::compute::record_pipeline_operation_path("vector");
+    Ok(())
+}
+
 fn active_mask(channels: usize, invert_alpha: bool) -> Result<[u8; 16], PilError> {
     match channels {
         1 | 3 => Ok(ALL),

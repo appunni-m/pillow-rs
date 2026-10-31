@@ -283,7 +283,7 @@ pub(super) fn extract_auxiliary_images(
 pub(super) fn resolve_batch_auxiliary_images(
     ops: &[PipelineOp],
     image: &DynamicImage,
-    mode: Option<&str>,
+    draw_context: Option<&crate::compute::ExecutionContext>,
 ) -> Result<Vec<AuxiliaryImages>, PilError> {
     let mut dimensions = image.dimensions();
     let mut images = Vec::with_capacity(ops.len());
@@ -295,10 +295,13 @@ pub(super) fn resolve_batch_auxiliary_images(
     for op in ops {
         let rendered = if draw_preview_valid && crate::compute::pool_cpu::ops::draw::is_draw_op(op)
         {
+            let context = draw_context.ok_or_else(|| {
+                PilError::InternalError("GPU Draw preview has no CPU execution context".into())
+            })?;
             Some(crate::compute::pool_cpu::ops::draw::execute_draw_batch(
                 draw_preview.as_ref().unwrap_or(image),
                 std::slice::from_ref(op),
-                mode,
+                context,
             )?)
         } else {
             None

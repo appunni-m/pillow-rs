@@ -19,6 +19,256 @@ pub(super) fn alpha_composite_vector_guard(
     checked_native_bytes_guard(input, channels)
 }
 
+pub(super) fn paste_l_mask_neon_guard(
+    input: StrategyInputs,
+    mode: Mode,
+    channels: u8,
+    minimum_clipped_width: u32,
+) -> GuardAssessment {
+    let exact_channels = match mode {
+        Mode::ImageLuma8 => 1,
+        Mode::ImageLumaA8 => 2,
+        Mode::ImageRgb8 => 3,
+        Mode::ImageRgba8 | Mode::ImageCmyk8 => 4,
+        _ => return GuardAssessment::Ineligible,
+    };
+    if exact_channels != channels {
+        return GuardAssessment::Ineligible;
+    }
+    let (source, mask, position, region, mask_alpha) = match input.request {
+        RequestFacts::Paste { source, mask, position, region, mask_alpha } => {
+            (source, mask, position, region, mask_alpha)
+        }
+        RequestFacts::Unspecified => return GuardAssessment::Deferred,
+        _ => return GuardAssessment::Ineligible,
+    };
+    let Some(mask) = mask else {
+        return GuardAssessment::Ineligible;
+    };
+    if source.mode != mode
+        || (source.width, source.height) != region
+        || mask.mode != Mode::ImageLuma8
+        || (mask.width, mask.height) != region
+        || mask_alpha
+    {
+        return GuardAssessment::Ineligible;
+    }
+    let (clipped_width, clipped_height) =
+        clipped_paste_size(position, region, (input.width, input.height));
+    if clipped_width < minimum_clipped_width || clipped_height == 0 {
+        return GuardAssessment::Ineligible;
+    }
+    let destination_layout = checked_native_bytes_guard(input, channels);
+    if !matches!(destination_layout, GuardAssessment::Satisfied) {
+        return destination_layout;
+    }
+    let Some(region_pixels) = (region.0 as usize).checked_mul(region.1 as usize) else {
+        return GuardAssessment::Ineligible;
+    };
+    let Some(source_bytes) = region_pixels.checked_mul(usize::from(channels)) else {
+        return GuardAssessment::Ineligible;
+    };
+    match (source.byte_len, mask.byte_len) {
+        (Some(source_len), Some(mask_len))
+            if source_len == source_bytes && mask_len == region_pixels =>
+        {
+            GuardAssessment::Satisfied
+        }
+        (None, _) | (_, None) => GuardAssessment::Deferred,
+        _ => GuardAssessment::Ineligible,
+    }
+}
+
+fn clipped_paste_size(
+    position: (i64, i64),
+    region: (u32, u32),
+    destination: (u32, u32),
+) -> (u32, u32) {
+    let source_left = position.0.saturating_neg().max(0).min(i64::from(region.0)) as u32;
+    let source_top = position.1.saturating_neg().max(0).min(i64::from(region.1)) as u32;
+    let destination_left = position.0.max(0).min(i64::from(destination.0)) as u32;
+    let destination_top = position.1.max(0).min(i64::from(destination.1)) as u32;
+    (
+        region.0.saturating_sub(source_left).min(destination.0.saturating_sub(destination_left)),
+        region.1.saturating_sub(source_top).min(destination.1.saturating_sub(destination_top)),
+    )
+}
+
+pub(super) fn merge_rgb_interleave_guard(input: StrategyInputs) -> GuardAssessment {
+    let RequestFacts::MergeBands {
+        target_mode: Mode::ImageRgb8,
+        band_count: 3,
+        first_mode,
+        remaining_modes_are_luma: true,
+        dimensions_match: true,
+    } = input.request
+    else {
+        return if input.request == RequestFacts::Unspecified {
+            GuardAssessment::Deferred
+        } else {
+            GuardAssessment::Ineligible
+        };
+    };
+    if !matches!(first_mode, Mode::ImageLuma8 | Mode::ImagePalette8) {
+        return GuardAssessment::Ineligible;
+    }
+    let Some(pixels) = (input.width as usize).checked_mul(input.height as usize) else {
+        return GuardAssessment::Ineligible;
+    };
+    if pixels < 16 {
+        return GuardAssessment::Ineligible;
+    }
+    match input.byte_len {
+        None => GuardAssessment::Deferred,
+        Some(length) if length == pixels => GuardAssessment::Satisfied,
+        Some(_) => GuardAssessment::Ineligible,
+    }
+}
+
+pub(super) fn merge_native_interleave_guard(
+    input: StrategyInputs,
+    target_mode: Mode,
+    channels: u8,
+) -> GuardAssessment {
+    let minimum_pixels = match channels {
+        2 => 8,
+        3 | 4 => 4,
+        _ => return GuardAssessment::Ineligible,
+    };
+    let RequestFacts::MergeBands {
+        target_mode: requested_mode,
+        band_count,
+        first_mode,
+        remaining_modes_are_luma,
+        dimensions_match,
+    } = input.request
+    else {
+        return if input.request == RequestFacts::Unspecified {
+            GuardAssessment::Deferred
+        } else {
+            GuardAssessment::Ineligible
+        };
+    };
+    if requested_mode != target_mode
+        || band_count != usize::from(channels)
+        || !matches!(first_mode, Mode::ImageLuma8 | Mode::ImagePalette8)
+        || !remaining_modes_are_luma
+        || !dimensions_match
+    {
+        return GuardAssessment::Ineligible;
+    }
+    let Some(pixels) = (input.width as usize).checked_mul(input.height as usize) else {
+        return GuardAssessment::Ineligible;
+    };
+    if pixels < minimum_pixels {
+        return GuardAssessment::Ineligible;
+    }
+    match input.byte_len {
+        None => GuardAssessment::Deferred,
+        Some(length) if length == pixels => GuardAssessment::Satisfied,
+        Some(_) => GuardAssessment::Ineligible,
+    }
+}
+
+pub(super) fn blend_native_vector_guard(
+    input: StrategyInputs,
+    channels: u8,
+    compatible_modes: &'static [Mode],
+) -> GuardAssessment {
+    if !(1..=4).contains(&channels) {
+        return GuardAssessment::Ineligible;
+    }
+    let (other, alpha) = match input.request {
+        RequestFacts::BlendInputs { other, alpha_bits } => {
+            (other, f64::from_bits(alpha_bits))
+        }
+        RequestFacts::Unspecified => return GuardAssessment::Deferred,
+        _ => return GuardAssessment::Ineligible,
+    };
+    if !compatible_modes.contains(&other.mode)
+        || (other.width, other.height) != (input.width, input.height)
+        || !alpha.is_finite()
+        || !(alpha as f32).is_finite()
+    {
+        return GuardAssessment::Ineligible;
+    }
+    let Some(pixels) = (input.width as usize).checked_mul(input.height as usize) else {
+        return GuardAssessment::Ineligible;
+    };
+    let Some(expected_bytes) = pixels.checked_mul(usize::from(channels)) else {
+        return GuardAssessment::Ineligible;
+    };
+    if expected_bytes != 0 && expected_bytes < 8 {
+        return GuardAssessment::Ineligible;
+    }
+    match (input.byte_len, other.byte_len) {
+        (Some(source), Some(secondary))
+            if source == expected_bytes && secondary == expected_bytes =>
+        {
+            GuardAssessment::Satisfied
+        }
+        (None, _) | (_, None) => GuardAssessment::Deferred,
+        _ => GuardAssessment::Ineligible,
+    }
+}
+
+pub(super) fn composite_native_byte_vector_guard(
+    input: StrategyInputs,
+    mode: Mode,
+    channels: u8,
+) -> GuardAssessment {
+    if !(1..=4).contains(&channels) {
+        return GuardAssessment::Ineligible;
+    }
+    let (source_mode, destination, mask) = match input.request {
+        RequestFacts::CompositeInputs { source_mode, destination, mask, .. } => {
+            (source_mode, destination, mask)
+        }
+        RequestFacts::Unspecified => return GuardAssessment::Deferred,
+        _ => return GuardAssessment::Ineligible,
+    };
+    if source_mode != mode
+        || destination.mode != mode
+        || (mask.width, mask.height) != (input.width, input.height)
+    {
+        return GuardAssessment::Ineligible;
+    }
+    let mask_channels = match mask.mode {
+        Mode::One | Mode::ImageLuma8 => 1,
+        Mode::ImageLumaA8 => 2,
+        Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8 => 4,
+        _ => return GuardAssessment::Ineligible,
+    };
+    let Some(source_pixels) = (input.width as usize).checked_mul(input.height as usize) else {
+        return GuardAssessment::Ineligible;
+    };
+    let Some(destination_pixels) =
+        (destination.width as usize).checked_mul(destination.height as usize)
+    else {
+        return GuardAssessment::Ineligible;
+    };
+    let Some(source_bytes) = source_pixels.checked_mul(usize::from(channels)) else {
+        return GuardAssessment::Ineligible;
+    };
+    let Some(destination_bytes) = destination_pixels.checked_mul(usize::from(channels)) else {
+        return GuardAssessment::Ineligible;
+    };
+    let Some(mask_bytes) = source_pixels.checked_mul(mask_channels) else {
+        return GuardAssessment::Ineligible;
+    };
+    match (input.byte_len, destination.byte_len, mask.byte_len) {
+        (Some(source), Some(destination), Some(mask))
+            if source == source_bytes
+                && destination == destination_bytes
+                && mask == mask_bytes =>
+        {
+            GuardAssessment::Satisfied
+        }
+        (None, _, _) | (_, None, _) | (_, _, None) => GuardAssessment::Deferred,
+        _ => GuardAssessment::Ineligible,
+    }
+}
+
 pub(super) fn put_alpha_bytes_guard(
     input: StrategyInputs,
     channels: u8,
@@ -383,6 +633,7 @@ pub(super) fn pixel_span_guard(input: StrategyInputs, channels: u8) -> GuardAsse
         | RequestFacts::ImageOpsMask { .. }
         | RequestFacts::Color3DLut { .. } | RequestFacts::Transpose { .. }
         | RequestFacts::Brightness { .. }
+        | RequestFacts::Contrast { .. }
         | RequestFacts::Sharpness { .. }
         | RequestFacts::ColorSaturation { .. }
         | RequestFacts::Rotate { .. }
@@ -408,6 +659,9 @@ pub(super) fn pixel_span_guard(input: StrategyInputs, channels: u8) -> GuardAsse
         | RequestFacts::Pad { .. }
         | RequestFacts::Scale { .. }
         | RequestFacts::ConvertTarget { .. }
+        | RequestFacts::MergeBands { .. }
+        | RequestFacts::BlendInputs { .. }
+        | RequestFacts::CompositeInputs { .. }
         | RequestFacts::ChopsBinary { .. }
         | RequestFacts::CropBorder { .. }
         | RequestFacts::Crop { .. }
@@ -441,6 +695,7 @@ pub(super) fn pixel_write_run_guard(input: StrategyInputs) -> GuardAssessment {
         | RequestFacts::ImageOpsMask { .. }
         | RequestFacts::Color3DLut { .. } | RequestFacts::Transpose { .. }
         | RequestFacts::Brightness { .. }
+        | RequestFacts::Contrast { .. }
         | RequestFacts::Sharpness { .. }
         | RequestFacts::ColorSaturation { .. }
         | RequestFacts::Rotate { .. }
@@ -466,6 +721,9 @@ pub(super) fn pixel_write_run_guard(input: StrategyInputs) -> GuardAssessment {
         | RequestFacts::Pad { .. }
         | RequestFacts::Scale { .. }
         | RequestFacts::ConvertTarget { .. }
+        | RequestFacts::MergeBands { .. }
+        | RequestFacts::BlendInputs { .. }
+        | RequestFacts::CompositeInputs { .. }
         | RequestFacts::ChopsBinary { .. }
         | RequestFacts::CropBorder { .. }
         | RequestFacts::Crop { .. }
