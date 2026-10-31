@@ -197,6 +197,12 @@ pub enum OperationId {
     PutAlphaData,
     /// Return horizontal and vertical non-zero sample projections.
     GetProjection,
+    /// Read the complete stored image into a host-owned byte sequence.
+    GetData,
+    /// Read one logical band into an allocated host-owned byte sequence.
+    GetDataBand,
+    /// Fill a caller-owned byte buffer with one logical band.
+    GetDataBandInto,
     /// Blend native Pillow samples with the same-mode black brightness base.
     Brightness,
     /// Blend native samples with Pillow's contrast-degenerate base.
@@ -334,6 +340,13 @@ impl OperationId {
             Self::PutAlpha => &crate::compute::pool_cpu::ops::put::ops::PUT_ALPHA_SUPPORT,
             Self::PutAlphaData => &crate::compute::pool_cpu::ops::put::ops::PUT_ALPHA_DATA_SUPPORT,
             Self::GetProjection => &crate::compute::pool_cpu::ops::analysis::ops::SUPPORT,
+            Self::GetData => &crate::compute::pool_cpu::ops::analysis::ops::GET_DATA_SUPPORT,
+            Self::GetDataBand => {
+                &crate::compute::pool_cpu::ops::analysis::ops::GET_DATA_BAND_SUPPORT
+            }
+            Self::GetDataBandInto => {
+                &crate::compute::pool_cpu::ops::analysis::ops::GET_DATA_BAND_INTO_SUPPORT
+            }
             Self::Brightness => &crate::compute::pool_cpu::ops::enhance::ops::SUPPORT,
             Self::Contrast => {
                 &crate::compute::pool_cpu::ops::enhance::ops::CONTRAST_SUPPORT

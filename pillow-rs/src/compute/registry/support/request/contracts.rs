@@ -86,6 +86,7 @@ pub(super) fn assess(
         | InputContract::CallerValidatedPixelCoordinates
         | InputContract::CallerValidatedPixelIndex
         | InputContract::CallerValidatedRawI16ByteRows
+        | InputContract::CallerValidatedGetDataBandIndex { .. }
         | InputContract::OrderedPixelWrites => Ok(None),
     }
 }

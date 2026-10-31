@@ -131,7 +131,20 @@ fn getdata_internal_high_depth(image: &DynamicImage, mode: Mode) -> Result<Vec<u
     Ok(output)
 }
 
-fn getdata_mode_bytes(image: &DynamicImage, mode: Mode) -> Result<Vec<u8>, PilError> {
+fn getdata_mode_bytes(
+    image: &DynamicImage,
+    selection: crate::compute::registry::support::StrategySelection,
+) -> Result<Vec<u8>, PilError> {
+    // TODO(pillow-rs#3ptb): move these exact-mode byte/sample implementations
+    // into analysis/<mode>/default and keep this API as selection orchestration.
+    let mode = selection.implementation.mode;
+    if selection.implementation.operation != crate::compute::registry::support::OperationId::GetData
+        || image.mode() != mode
+    {
+        return Err(PilError::InternalError(
+            "GetData selection did not match its mode-bearing raster".into(),
+        ));
+    }
     match mode {
         Mode::One
         | Mode::ImageLuma8
@@ -157,26 +170,6 @@ fn getdata_mode_bytes(image: &DynamicImage, mode: Mode) -> Result<Vec<u8>, PilEr
         | Mode::ImageRgba16
         | Mode::ImageRgb32F
         | Mode::ImageRgba32F => getdata_internal_high_depth(image, mode),
-    }
-}
-
-fn getdata_band_count(mode: Mode) -> usize {
-    match mode {
-        Mode::One
-        | Mode::ImageLuma8
-        | Mode::ImagePalette8
-        | Mode::ImageI32
-        | Mode::ImageF32
-        | Mode::ImageI16
-        | Mode::ImageI16L
-        | Mode::ImageI16B
-        | Mode::ImageI16N => 1,
-        Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8
-        | Mode::ImageLumaA16 => 2,
-        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8
-        | Mode::ImageRgb16 | Mode::ImageRgb32F => 3,
-        Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8 | Mode::ImageRgbx8
-        | Mode::ImageCmyk8 | Mode::ImageRgba16 | Mode::ImageRgba32F => 4,
     }
 }
 
@@ -311,6 +304,8 @@ fn write_getdata_internal_band(
     }
 }
 
+// TODO(pillow-rs#3ptb): move the exact-mode band sample writers into
+// analysis/<mode>/default and leave the Image API responsible for selection.
 fn write_getdata_band_samples(
     image: &DynamicImage,
     mode: Mode,
@@ -350,7 +345,17 @@ fn getdata_band_bytes(
     image: &DynamicImage,
     mode: Mode,
     band: usize,
+    selection: crate::compute::registry::support::StrategySelection,
 ) -> Result<Vec<u8>, PilError> {
+    if selection.implementation.operation
+        != crate::compute::registry::support::OperationId::GetDataBand
+        || selection.implementation.mode != mode
+        || image.mode() != mode
+    {
+        return Err(PilError::InternalError(
+            "GetDataBand selection did not match its mode-bearing raster".into(),
+        ));
+    }
     let dimensions = crate::checked_dims::CheckedDims::new_allow_empty(
         image.width(),
         image.height(),
@@ -378,19 +383,28 @@ impl Image {
         // Keep this check in the core so every binding observes the same
         // contract instead of silently clamping to RGBA channel 3.
         let mode = image.mode();
-        let band_index = validated_band_index(band, getdata_band_count(mode))?;
-        if matches!(
-            mode,
-            Mode::ImageI16
-                | Mode::ImageI16L
-                | Mode::ImageI16B
-                | Mode::ImageI16N
-                | Mode::ImageI32
-                | Mode::ImageF32
-        ) {
+        let band_index = validated_band_index(
+            band,
+            crate::compute::pool_cpu::ops::analysis::ops::get_data_band_count(mode),
+        )?;
+        let context = crate::compute::ExecutionContext::for_routed_backend(
+            crate::compute::Backend::Cpu,
+        );
+        let selection = crate::compute::pool_cpu::ops::analysis::ops::select_get_data_band(
+            mode, &context,
+        )?;
+        if selection.implementation.operation
+            != crate::compute::registry::support::OperationId::GetDataBand
+            || selection.implementation.mode != mode
+        {
+            return Err(PilError::InternalError(
+                "GetDataBand selection did not match its DynamicImage mode".into(),
+            ));
+        }
+        if !crate::compute::pool_cpu::ops::analysis::ops::supports_get_data_band_into(mode) {
             // These scalar modes intentionally have no caller-owned band
             // buffer API. Keep their established direct byte conversion.
-            return getdata_band_bytes(image, mode, band_index);
+            return getdata_band_bytes(image, mode, band_index, selection);
         }
 
         let dimensions = crate::checked_dims::CheckedDims::new_allow_empty(
@@ -417,7 +431,13 @@ impl Image {
         if let Some(band) = band {
             return self.getdata_band(&img, band);
         }
-        getdata_mode_bytes(img.as_ref(), img.mode())
+        let context = crate::compute::ExecutionContext::for_routed_backend(
+            crate::compute::Backend::Cpu,
+        );
+        let selection = crate::compute::pool_cpu::ops::analysis::ops::select_get_data(
+            img.mode(), &context,
+        )?;
+        getdata_mode_bytes(img.as_ref(), selection)
     }
 
     /// Return the number of samples produced by Pillow's formatted band read.
@@ -438,18 +458,8 @@ impl Image {
     }
 
     fn getdata_band_len_for_mode(&self, mode: Mode, band: i32) -> Result<usize, PilError> {
-        if matches!(
-            mode,
-            Mode::ImageI16
-                | Mode::ImageI16L
-                | Mode::ImageI16B
-                | Mode::ImageI16N
-                | Mode::ImageI32
-                | Mode::ImageF32
-        ) {
-            return Err(PilError::ValueError("image has wrong mode".into()));
-        }
-        let band_count = getdata_band_count(mode);
+        let band_count =
+            crate::compute::pool_cpu::ops::analysis::ops::get_data_band_into_count(mode)?;
         validated_band_index(band, band_count)?;
         let (width, height) = self.size()?;
         Ok(crate::checked_dims::CheckedDims::new_allow_empty(width, height, 1)?.total_pixels())
@@ -473,39 +483,32 @@ impl Image {
         if requested_backend.is_some_and(|backend| backend != crate::compute::Backend::Cpu) {
             return Ok(None);
         }
-        match self {
-            Image::Paletted(data) => {
-                crate::compute::record_eager_cpu_operation_receipt(
-                    "GetData",
-                    requested_backend,
-                    data.indices.as_bytes().len(),
-                );
-                Ok(Some(data.indices.as_bytes()))
-            }
-            // Preserve mode precedence without formatting a Pillow spelling.
-            Image::Loaded(data)
-                if matches!(
-                    data.image.mode(),
-                    crate::raster::Mode::One | crate::raster::Mode::ImageLuma8
-                ) =>
-            {
-                let values: Option<&[u8]> = match data.image.as_ref() {
-                    DynamicImage::One(image) | DynamicImage::ImageLuma8(image) => {
-                        Some(image.as_raw().as_slice())
-                    }
-                    _ => None,
-                };
-                if let Some(values) = values {
-                    crate::compute::record_eager_cpu_operation_receipt(
-                        "GetData",
-                        requested_backend,
-                        values.len(),
-                    );
+        let (mode, values) = match self {
+            Image::Paletted(data) => (Mode::ImagePalette8, data.indices.as_bytes()),
+            Image::Loaded(data) => match data.image.as_ref() {
+                // Preserve exact mode identity without formatting a Pillow spelling.
+                DynamicImage::One(image) => (Mode::One, image.as_raw().as_slice()),
+                DynamicImage::ImageLuma8(image) => {
+                    (Mode::ImageLuma8, image.as_raw().as_slice())
                 }
-                Ok(values)
-            }
-            _ => Ok(None),
-        }
+                _ => return Ok(None),
+            },
+            _ => return Ok(None),
+        };
+        let context = crate::compute::ExecutionContext::for_routed_backend(
+            crate::compute::Backend::Cpu,
+        );
+        let selection = crate::compute::pool_cpu::ops::analysis::ops::select_get_data(
+            mode, &context,
+        )?;
+        crate::compute::record_eager_cpu_operation_receipt_with_selection(
+            "GetData",
+            requested_backend,
+            values.len(),
+            "GetData borrows the exact native byte carrier",
+            selection,
+        );
+        Ok(Some(values))
     }
 
     /// Fill a caller-owned buffer with Pillow's formatted band-read bytes.
@@ -530,98 +533,111 @@ impl Image {
                 "getdata band output length mismatch".into(),
             ));
         }
-        let selected_backend = match self.backend() {
-            Some(backend) => Some(backend),
-            None => crate::compute::preferred_active_backend()?.map(|(backend, _)| backend),
-        };
-        if selected_backend == Some(crate::compute::Backend::Simd)
-            && matches!(self, Image::Loaded(_))
-        {
-            let image = self.materialized_shared()?;
-            let operation = PipelineOp::ExtractBand {
-                index: backend_band,
-            };
-            let handled = crate::compute::execute_eager_cpu_arch_bytes(
-                "GetData",
-                image.as_ref(),
-                crate::compute::Backend::Simd,
-                output,
-                |context, output| {
-                    let prepared = crate::compute::registry::prepare_cpu(
-                        &operation,
-                        crate::compute::registry::support::OperationInputs {
-                            image: image.as_ref(),
-                            palette: crate::compute::registry::support::PaletteInput::default(),
-                        },
-                        context,
-                    )?;
-                    let selection = *prepared.selection();
-                    let Some(output_work) = prepared.execute_into(output)? else {
-                        return Ok(None);
-                    };
-                    Ok(Some((selection, output_work)))
-                },
-            )?;
-            if handled.is_some() {
-                return Ok(());
-            }
+        let selected_backend = self.selected_getdata_backend()?;
+        if self.try_getdata_band_simd_sink(backend_band, selected_backend, output)? {
+            return Ok(());
         }
-
-        // TODO(pillow-rs#3ptb): expose GetData's direct support contract and
-        // derive CPU architecture/GPU terminal selection from that declaration.
-        let backend_native = match selected_backend {
-            Some(crate::compute::Backend::Simd) => matches!(
-                mode,
-                Mode::ImageLumaA8
-                    | Mode::ImagePaletteAlpha8
-                    | Mode::ImageRgb8
-                    | Mode::ImageRgba8
-                    | Mode::ImageRgbPremultiplied8
-                    | Mode::ImageRgbx8
-                    | Mode::ImageCmyk8
-                    | Mode::ImageHsv8
-                    | Mode::ImageYCbCr8
-            ),
-            Some(crate::compute::Backend::Gpu) => !matches!(
-                mode,
-                Mode::ImagePalette8 | Mode::ImageLab8 | Mode::ImageI32 | Mode::ImageF32
-            ),
-            Some(crate::compute::Backend::Cpu) | None => false,
-        };
-        if backend_native
-            && let Some(backend @ (crate::compute::Backend::Simd | crate::compute::Backend::Gpu)) =
-                selected_backend
-        {
-            // Keep terminal projection in the lazy graph so the selected
-            // backend can fuse it with pending image work and report its real
-            // execution receipt. P and LAB stay on the exact host path below:
-            // P must expose raw indices, while LAB's a/b samples use Pillow's
-            // signed-byte offset rather than ExtractBand's raw channel value.
-            let extracted = Image::push_op(
-                self,
-                PipelineOp::ExtractBand {
-                    index: backend_band,
-                },
-            )
-            .use_backend(backend);
-            let image = extracted.materialized_shared()?;
-            let values = image.as_bytes();
-            if values.len() != output.len() {
-                return Err(PilError::InternalError(
-                    "getdata band backend output length mismatch".into(),
-                ));
-            }
-            output.copy_from_slice(values);
+        if self.try_getdata_band_backend(mode, backend_band, selected_backend, output)? {
             return Ok(());
         }
 
-        self.write_getdata_band_cpu(band_index, selected_backend, output)
+        let context_backend = if selected_backend == Some(crate::compute::Backend::Simd) {
+            crate::compute::Backend::Simd
+        } else {
+            crate::compute::Backend::Cpu
+        };
+        let context = crate::compute::ExecutionContext::for_routed_backend(context_backend);
+        let selection =
+            crate::compute::pool_cpu::ops::analysis::ops::select_get_data_band_into(mode, &context)?;
+        self.write_getdata_band_cpu(band_index, selected_backend, selection, output)
+    }
+
+    fn selected_getdata_backend(&self) -> Result<Option<crate::compute::Backend>, PilError> {
+        match self.backend() {
+            Some(backend) => Ok(Some(backend)),
+            None => Ok(crate::compute::preferred_active_backend()?.map(|(backend, _)| backend)),
+        }
+    }
+
+    fn try_getdata_band_simd_sink(
+        &self,
+        band: u8,
+        selected_backend: Option<crate::compute::Backend>,
+        output: &mut [u8],
+    ) -> Result<bool, PilError> {
+        if selected_backend != Some(crate::compute::Backend::Simd)
+            || !matches!(self, Image::Loaded(_))
+        {
+            return Ok(false);
+        }
+        let image = self.materialized_shared()?;
+        let operation = PipelineOp::ExtractBand { index: band };
+        let handled = crate::compute::execute_eager_cpu_arch_bytes(
+            "GetData",
+            image.as_ref(),
+            crate::compute::Backend::Simd,
+            output,
+            |context, output| {
+                let prepared = crate::compute::registry::prepare_cpu(
+                    &operation,
+                    crate::compute::registry::support::OperationInputs {
+                        image: image.as_ref(),
+                        palette: crate::compute::registry::support::PaletteInput::default(),
+                    },
+                    context,
+                )?;
+                let selection = *prepared.selection();
+                let Some(output_work) = prepared.execute_into(output)? else {
+                    return Ok(None);
+                };
+                Ok(Some((selection, output_work)))
+            },
+        )?;
+        Ok(handled.is_some())
+    }
+
+    fn try_getdata_band_backend(
+        &self,
+        mode: Mode,
+        band: u8,
+        selected_backend: Option<crate::compute::Backend>,
+        output: &mut [u8],
+    ) -> Result<bool, PilError> {
+        let Some(backend @ (crate::compute::Backend::Simd | crate::compute::Backend::Gpu)) =
+            selected_backend
+        else {
+            return Ok(false);
+        };
+        // TODO(pillow-rs#3ptb): move GPU terminal eligibility into the combined
+        // CPU/GPU GetDataBandInto support declaration.
+        if !crate::compute::pool_cpu::ops::analysis::ops::supports_get_data_band_terminal(
+            mode, backend,
+        ) {
+            return Ok(false);
+        }
+
+        // Keep terminal projection in the lazy graph so the selected backend
+        // can fuse it with pending image work and report its real receipt. P
+        // and LAB stay on the host path: P needs raw indices, while LAB's a/b
+        // samples need Pillow's signed-byte offset.
+        let extracted = Image::push_op(self, PipelineOp::ExtractBand { index: band })
+            .use_backend(backend);
+        let image = extracted.materialized_shared()?;
+        let values = image.as_bytes();
+        if values.len() != output.len() {
+            return Err(PilError::InternalError(
+                "getdata band backend output length mismatch".into(),
+            ));
+        }
+        output.copy_from_slice(values);
+        Ok(true)
     }
 
     fn write_getdata_band_cpu(
         &self,
         band: usize,
         selected_backend: Option<crate::compute::Backend>,
+        selection: crate::compute::registry::support::StrategySelection,
         output: &mut [u8],
     ) -> Result<(), PilError> {
         let telemetry =
@@ -636,7 +652,12 @@ impl Image {
             write_getdata_band_samples(img.as_ref(), img.mode(), band, output)
         })();
         if result.is_ok() {
-            crate::compute::finish_eager_cpu_operation_telemetry(telemetry, output.len());
+            crate::compute::finish_eager_cpu_operation_telemetry_with_selection(
+                telemetry,
+                output.len(),
+                "GetData",
+                selection,
+            );
         } else {
             crate::compute::cancel_eager_cpu_operation_telemetry(telemetry);
         }
@@ -676,7 +697,7 @@ impl Image {
             return Ok(FormattedImageData::Scalars(raw));
         }
 
-        let band_count = getdata_band_count(mode);
+        let band_count = crate::compute::pool_cpu::ops::analysis::ops::get_data_band_count(mode);
         if band_count == 1 {
             return Ok(FormattedImageData::Scalars(raw));
         }

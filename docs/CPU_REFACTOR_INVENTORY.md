@@ -1,16 +1,17 @@
 # CPU refactor source and evidence inventory
 
-Status: baseline inventory captured; the 98 CPU and 182 SIMD files are preserved below pool_cpu/legacy; maintained implementation and source review remain in progress. The separate SIMD executor and adapter registry were removed from the active module graph on 2026-10-31; `Backend::Simd` is now a CPU-plus-Architecture compatibility request. RGB8 Wasm SIMD Convert strategies are restored from archived portable-vector routes, Default RGB→LA/I;16 staging preserves the archived L scratch allocation, and reviewed Convert empty routes retain their archived receipts. The RGBA/RGBa-to-LA vector kernel now lives in a shared native four-byte helper used by both exact mode strategies. The RGBX-to-La/RGBa routes and their inventory were committed in `baf192167`; `0b34e9a9b` exposes same-mode Convert identity in all 25 source contracts, including palette-preserving P/PA and CoreOnly internal high-depth identities. `e75e87f43` routes named ImageOps/Paste color resolution through exact `Mode` and marks internal high-depth color results `NO_PILLOW_SUPPORT`. `7790ed967` classifies reviewed mode-preserving pipeline operations, records RemapPalette and Color3DLut output identities from typed operation contracts, and routes Tiny-RGB eager ExtractBand through prepared CPU architecture execution for CPU Default and compatibility SIMD. `054a98326` replaces clone-only same-carrier PutData prefix writes with the native writer in 16 mode owners, removes copy-only carrier conversion from four PutAlpha and 13 PutAlphaData Default paths, and makes callback-preserving PutData writes validate and mutate the exact materialized DynamicImage byte carrier. `aa6de79ae` carries exact `raster::Mode` through PutData value-kind selection, normalization, immediate-write width selection, and the deferred `PipelineOp::PutData` payload. `3f110aa47` adds callback-driven PutData's exact-mode support contract and cached CPU Default context; `65fb1c21c` adds mode-owned synchronous PutPixelValueAt for numeric I/F and I;16. `e060b60c1` adds the CPU Default strategy for Pillow's raw-byte I;16 PutData path. GPU consumers match exact modes and explicitly map supported payload identities to the existing shader layout codes; `PixelMode` remains on PutAlpha/PutAlphaData. Cross-mode lazy P/PA output still lacks terminal palette metadata. All current CPU source remains unverified.
+Status: baseline inventory captured; the 98 CPU and 182 SIMD files are preserved below pool_cpu/legacy; maintained implementation and source review remain in progress. The separate SIMD executor and adapter registry were removed from the active module graph on 2026-10-31; `Backend::Simd` is now a CPU-plus-Architecture compatibility request. RGB8 Wasm SIMD Convert strategies are restored from archived portable-vector routes, Default RGB→LA/I;16 staging preserves the archived L scratch allocation, and reviewed Convert empty routes retain their archived receipts. The RGBA/RGBa-to-LA vector kernel now lives in a shared native four-byte helper used by both exact mode strategies. The RGBX-to-La/RGBa routes and their inventory were committed in `baf192167`; `0b34e9a9b` exposes same-mode Convert identity in all 25 source contracts, including palette-preserving P/PA and CoreOnly internal high-depth identities. `e75e87f43` routes named ImageOps/Paste color resolution through exact `Mode` and marks internal high-depth color results `NO_PILLOW_SUPPORT`. `7790ed967` classifies reviewed mode-preserving pipeline operations, records RemapPalette and Color3DLut output identities from typed operation contracts, and routes Tiny-RGB eager ExtractBand through prepared CPU architecture execution for CPU Default and compatibility SIMD. `054a98326` replaces clone-only same-carrier PutData prefix writes with the native writer in 16 mode owners, removes copy-only carrier conversion from four PutAlpha and 13 PutAlphaData Default paths, and makes callback-preserving PutData writes validate and mutate the exact materialized DynamicImage byte carrier. `aa6de79ae` carries exact `raster::Mode` through PutData value-kind selection, normalization, immediate-write width selection, and the deferred `PipelineOp::PutData` payload. `3f110aa47` adds callback-driven PutData's exact-mode support contract and cached CPU Default context; `65fb1c21c` adds mode-owned synchronous PutPixelValueAt for numeric I/F and I;16. `e060b60c1` adds the CPU Default strategy for Pillow's raw-byte I;16 PutData path. `751fe8249` routes allocated GetData band reads through the caller-owned output path. GPU consumers match exact modes and explicitly map supported payload identities to the existing shader layout codes; `PixelMode` remains on PutAlpha/PutAlphaData. Cross-mode lazy P/PA output still lacks terminal palette metadata. All current CPU source remains unverified.
 Baseline commit: 3f9dfd4036caa061eabcf2255c9f34a745df9c7e
 Working checkout: `/Users/lazytrot/work/pillow-rs`, branch `develop` at
-`e060b60c1`. The commits include the exact-mode PutData callback writer and its
+`751fe8249`. The commits include the exact-mode PutData callback writer and its
 sequence-scoped CPU Default context, mode-owned numeric I/F and I;16
 PutPixelValueAt strategies, and four exact-mode Default owners for Pillow's
 row-shaped raw-byte I;16 PutData path. GPU maps exact payload modes to
 established shader byte-layout codes; alpha operations keep their separate
-`PixelMode` fields. The current uncommitted source routes allocated non-scalar
-GetData band reads through the caller-owned output path so they use the same
-backend/architecture selection. No build, format, lint, test, parity,
+`PixelMode` fields. The current uncommitted source declares typed support for
+full GetData, allocated band reads, and caller-owned band reads; routes exact
+mode and band-count selection through those contracts; and records the direct
+CPU band strategy in telemetry. No build, format, lint, test, parity,
 benchmark, or coverage validation has run.
 Convert's P/PA source matrix is being reconciled against Pillow's `frompalette`
 and `topalette` paths; this source remains unverified.
@@ -25,14 +26,21 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
 
 ## Current source-only continuation
 
-- Allocated `Image::getdata(Some(band))` now reuses `getdata_band_into` for
-  non-scalar modes after the same eager materialization and band validation.
-  This keeps its allocated return type while sharing caller-owned-buffer
-  backend/architecture selection and output handling. I;16, I, and F retain
-  their existing direct path because `getdata_band_into` intentionally rejects
-  explicit bands for those Pillow scalar modes. This source change is
-  uncompiled and unvalidated; the direct GetData support declaration and
-  GPU-terminal selection remain open.
+- Direct `GetData`, allocated `GetDataBand`, and caller-owned `GetDataBandInto`
+  now have independent exhaustive support descriptors under `analysis`; the
+  band-count facts and the existing scalar-mode caller-buffer rejection are
+  read from those declarations. Full-image reads, zero-copy byte views, and
+  allocated band reads consume their selected CPU Default strategy; the
+  caller-owned CPU fallback records its selected strategy and architecture.
+  Allocated non-scalar band reads continue
+  through `getdata_band_into` after preserving eager materialization and band
+  validation order. SIMD's direct sink path is the sole SIMD band path because
+  its prepared ExtractBand sink handles all nine eligible exact layouts before
+  returning. The GPU backend eligibility helper remains in `analysis/ops.rs`
+  pending a shared GPU support contract. Exact-mode full-buffer and band
+  byte/sample algorithms still live in `image/data_access/get.rs`; actionable
+  TODOs there track migration to `analysis/<mode>/default`. This source is
+  uncompiled and unvalidated.
 - Callback-preserving `Image::putdata_value_at_with_context` selects the declared `PutDataValueAt` support contract for the exact mode and writes through the native byte or I;16 carrier. The Pillow and JavaScript sequence adapters retain one CPU Default context for their callback-driven writes; the context caches the selected mode strategy and refreshes it if a re-entrant callback changes the image mode. The synchronous mutation remains visible before the next value is coerced, and telemetry records the selected Default implementation alongside any requested-backend handoff. The direct `Image::putdata_value_at` API creates the same context for one write, while callback-free I;16 value loops reuse one context. Source review against the prior implementation confirms typed normalization order, synchronous mutation, exact mode identity, `LoadedData` metadata retention, palette retention, and existing storage/offset errors on valid rasters. Cross-mode conversion and broader wrapper review remain open; source is unvalidated.
 - Numeric I/F `Image::putpixel_mode_scalar` now selects the distinct `PutPixelValueAt` contract from the exact raster mode instead of reporting itself as PutData. It retains the existing numeric-to-four-byte normalization and in-place write through the mode-owned I/F Default implementations, and records the selected CPU Default strategy.
 - Direct I;16 PutPixel now uses that same contract with four exact mode classifications and separate `i16`, `i16l`, `i16b`, and `i16n` Default owners. Each owner writes the typed u16 sample in place, preserving modulo-65536 normalization, byte-order identity, and the existing offset error. The broader wrapper/source review and all validation remain pending. These PutPixel updates are unverified.

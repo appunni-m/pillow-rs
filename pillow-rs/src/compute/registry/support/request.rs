@@ -140,6 +140,11 @@ pub enum InputContract {
     CallerValidatedPixelIndex,
     /// Caller checked length and dimensions for Pillow's row-shaped I;16 byte mapping.
     CallerValidatedRawI16ByteRows,
+    /// GetData's wrapper validates a logical band against this mode's band count.
+    CallerValidatedGetDataBandIndex {
+        /// Number of logical bands in this exact mode.
+        bands: u8,
+    },
     /// Internal batch execution retains ordered variant/bounds checks and last-write-wins.
     OrderedPixelWrites,
     /// Normalize a secondary mask with the existing typed-to-L conversion,

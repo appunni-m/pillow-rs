@@ -470,7 +470,7 @@ migrated into their corresponding owner.
 
 | Family | Operation ownership |
 | --- | --- |
-| `analysis` | Direct materialized analysis operations, including `GetProjection`; each operation retains its own `OperationId` and support descriptor. |
+| `analysis` | Direct materialized analysis and data-access operations, including `GetProjection`, `GetData`, `GetDataBand`, and `GetDataBandInto`; each operation retains its own `OperationId` and support descriptor. |
 | `resize` | `Resize`, `ResizeBoxed` |
 | `crop` | `Crop` |
 | `rotate` | `Rotate` |

@@ -1,9 +1,9 @@
-//! GetProjection support contract and prepared CPU strategy selection.
+//! Direct analysis and GetData support contracts with prepared CPU selection.
 
-use crate::compute::ExecutionContext;
+use crate::compute::{Backend, ExecutionContext};
 use crate::compute::registry::support::{
     InputContract, ModeSupport, OperationId, OperationSupport, OutputModeRule,
-    PaletteKnowledge, RequestFacts, StrategyInputs, StrategySelection,
+    PaletteKnowledge, RejectionKind, RequestFacts, StrategyInputs, StrategySelection,
 };
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
@@ -14,6 +14,281 @@ use super::helpers::projection::{
 
 const NO_INPUTS: &[InputContract] = &[];
 const NO_RASTER_OUTPUT: OutputModeRule = OutputModeRule::NoRasterResult;
+const GET_DATA_BAND_1_INPUTS: &[InputContract] =
+    &[InputContract::CallerValidatedGetDataBandIndex { bands: 1 }];
+const GET_DATA_BAND_2_INPUTS: &[InputContract] =
+    &[InputContract::CallerValidatedGetDataBandIndex { bands: 2 }];
+const GET_DATA_BAND_3_INPUTS: &[InputContract] =
+    &[InputContract::CallerValidatedGetDataBandIndex { bands: 3 }];
+const GET_DATA_BAND_4_INPUTS: &[InputContract] =
+    &[InputContract::CallerValidatedGetDataBandIndex { bands: 4 }];
+
+fn get_data_band_inputs(mode: Mode) -> &'static [InputContract] {
+    match get_data_band_count(mode) {
+        1 => GET_DATA_BAND_1_INPUTS,
+        2 => GET_DATA_BAND_2_INPUTS,
+        3 => GET_DATA_BAND_3_INPUTS,
+        4 => GET_DATA_BAND_4_INPUTS,
+        _ => NO_INPUTS,
+    }
+}
+
+/// Returns the number of logical bands declared for an exact raster identity.
+pub(crate) fn get_data_band_count(mode: Mode) -> usize {
+    match mode {
+        Mode::One
+        | Mode::ImageLuma8
+        | Mode::ImagePalette8
+        | Mode::ImageI32
+        | Mode::ImageF32
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N => 1,
+        Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8
+        | Mode::ImageLumaA16 => 2,
+        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8
+        | Mode::ImageRgb16 | Mode::ImageRgb32F => 3,
+        Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8 | Mode::ImageRgbx8
+        | Mode::ImageCmyk8 | Mode::ImageRgba16 | Mode::ImageRgba32F => 4,
+    }
+}
+
+fn classify_get_data_mode(mode: Mode) -> ModeSupport {
+    match mode {
+        Mode::One
+        | Mode::ImageLuma8
+        | Mode::ImageLumaA8
+        | Mode::ImageLaPremultiplied8
+        | Mode::ImagePalette8
+        | Mode::ImagePaletteAlpha8
+        | Mode::ImageRgb8
+        | Mode::ImageRgba8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8
+        | Mode::ImageYCbCr8
+        | Mode::ImageLab8
+        | Mode::ImageHsv8
+        | Mode::ImageI32
+        | Mode::ImageF32
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N => ModeSupport::cpu(
+            OperationId::GetData,
+            mode,
+            NO_RASTER_OUTPUT,
+            NO_INPUTS,
+            &[],
+        ),
+        // NO_PILLOW_SUPPORT: GetData narrows native samples at this byte-read boundary.
+        Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => ModeSupport::cpu_core_only(
+            OperationId::GetData,
+            mode,
+            NO_RASTER_OUTPUT,
+            NO_INPUTS,
+            &[],
+            "native high-depth GetData extends the Pillow mode contract",
+        ),
+    }
+}
+
+/// Exhaustive support declaration for the direct full-buffer GetData read.
+pub(crate) static GET_DATA_SUPPORT: OperationSupport =
+    OperationSupport::new(OperationId::GetData, NO_INPUTS, classify_get_data_mode);
+
+fn classify_get_data_band_mode(mode: Mode) -> ModeSupport {
+    let inputs = get_data_band_inputs(mode);
+    match mode {
+        // NO_PILLOW_SUPPORT: these internal identities expose native samples through GetData.
+        Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => ModeSupport::cpu_core_only(
+            OperationId::GetDataBand,
+            mode,
+            NO_RASTER_OUTPUT,
+            inputs,
+            &[],
+            "native high-depth GetDataBand extends the Pillow mode contract",
+        ),
+        Mode::One
+        | Mode::ImageLuma8
+        | Mode::ImageLumaA8
+        | Mode::ImageLaPremultiplied8
+        | Mode::ImagePalette8
+        | Mode::ImagePaletteAlpha8
+        | Mode::ImageRgb8
+        | Mode::ImageRgba8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8
+        | Mode::ImageYCbCr8
+        | Mode::ImageLab8
+        | Mode::ImageHsv8
+        | Mode::ImageI32
+        | Mode::ImageF32
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N => ModeSupport::cpu(
+            OperationId::GetDataBand,
+            mode,
+            NO_RASTER_OUTPUT,
+            inputs,
+            &[],
+        ),
+    }
+}
+
+/// Allocated band reads compose caller-buffer and ExtractBand strategies where eligible.
+pub(crate) static GET_DATA_BAND_SUPPORT: OperationSupport = OperationSupport::composed(
+    OperationId::GetDataBand,
+    NO_INPUTS,
+    classify_get_data_band_mode,
+    &[OperationId::GetDataBandInto, OperationId::ExtractBand],
+);
+
+fn classify_get_data_band_into_mode(mode: Mode) -> ModeSupport {
+    match mode {
+        Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N
+        | Mode::ImageI32
+        | Mode::ImageF32 => ModeSupport::Rejected {
+            mode,
+            reason: "image has wrong mode",
+            kind: RejectionKind::ValueError,
+        },
+        // NO_PILLOW_SUPPORT: internal high-depth bands are native Rust extensions.
+        Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => ModeSupport::cpu_core_only(
+            OperationId::GetDataBandInto,
+            mode,
+            NO_RASTER_OUTPUT,
+            get_data_band_inputs(mode),
+            &[],
+            "native high-depth GetDataBandInto extends the Pillow mode contract",
+        ),
+        Mode::One
+        | Mode::ImageLuma8
+        | Mode::ImageLumaA8
+        | Mode::ImageLaPremultiplied8
+        | Mode::ImagePalette8
+        | Mode::ImagePaletteAlpha8
+        | Mode::ImageRgb8
+        | Mode::ImageRgba8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8
+        | Mode::ImageYCbCr8
+        | Mode::ImageLab8
+        | Mode::ImageHsv8 => ModeSupport::cpu(
+            OperationId::GetDataBandInto,
+            mode,
+            NO_RASTER_OUTPUT,
+            get_data_band_inputs(mode),
+            &[],
+        ),
+    }
+}
+
+/// Caller-owned band reads declare the existing scalar-mode rejection contract.
+pub(crate) static GET_DATA_BAND_INTO_SUPPORT: OperationSupport =
+    OperationSupport::composed(
+        OperationId::GetDataBandInto,
+        NO_INPUTS,
+        classify_get_data_band_into_mode,
+        &[OperationId::ExtractBand],
+    );
+
+/// Returns the band count or the existing mode error for caller-owned reads.
+pub(crate) fn get_data_band_into_count(mode: Mode) -> Result<usize, PilError> {
+    match GET_DATA_BAND_INTO_SUPPORT.for_mode(mode) {
+        ModeSupport::Rejected { reason, kind, .. } => Err(kind.into_error(reason)),
+        ModeSupport::Supported { inputs, .. } => inputs
+            .iter()
+            .find_map(|input| match input {
+                InputContract::CallerValidatedGetDataBandIndex { bands } => {
+                    Some(usize::from(*bands))
+                }
+                _ => None,
+            })
+            .ok_or_else(|| PilError::InternalError("GetData band count was not declared".into())),
+    }
+}
+
+/// Returns whether caller-owned band reads have a declared mode strategy.
+pub(crate) fn supports_get_data_band_into(mode: Mode) -> bool {
+    matches!(
+        GET_DATA_BAND_INTO_SUPPORT.for_mode(mode),
+        ModeSupport::Supported { .. }
+    )
+}
+
+/// Returns whether the existing terminal band route can preserve this mode.
+///
+/// GPU eligibility remains here until its support descriptor can compose this
+/// CPU operation's terminal output contract.
+pub(crate) fn supports_get_data_band_terminal(mode: Mode, backend: Backend) -> bool {
+    match backend {
+        Backend::Simd => matches!(
+            mode,
+            Mode::ImageLumaA8
+                | Mode::ImagePaletteAlpha8
+                | Mode::ImageRgb8
+                | Mode::ImageRgba8
+                | Mode::ImageRgbPremultiplied8
+                | Mode::ImageRgbx8
+                | Mode::ImageCmyk8
+                | Mode::ImageHsv8
+                | Mode::ImageYCbCr8
+        ),
+        Backend::Gpu => !matches!(
+            mode,
+            Mode::ImagePalette8 | Mode::ImageLab8 | Mode::ImageI32 | Mode::ImageF32
+        ),
+        Backend::Cpu => false,
+    }
+}
+
+/// Selects the direct full-buffer read for the mode carried by the raster.
+pub(crate) fn select_get_data(
+    mode: Mode,
+    context: &ExecutionContext,
+) -> Result<StrategySelection, PilError> {
+    GET_DATA_SUPPORT.for_mode(mode).select_serial(context)
+}
+
+/// Selects the allocated band-read strategy for the exact raster mode.
+pub(crate) fn select_get_data_band(
+    mode: Mode,
+    context: &ExecutionContext,
+) -> Result<StrategySelection, PilError> {
+    GET_DATA_BAND_SUPPORT
+        .for_mode(mode)
+        .select_serial(context)
+}
+
+/// Selects the caller-owned band-read CPU strategy for the exact raster mode.
+pub(crate) fn select_get_data_band_into(
+    mode: Mode,
+    context: &ExecutionContext,
+) -> Result<StrategySelection, PilError> {
+    GET_DATA_BAND_INTO_SUPPORT
+        .for_mode(mode)
+        .select_serial(context)
+}
 
 /// Result and execution evidence produced by a prepared projection strategy.
 #[derive(Debug)]
