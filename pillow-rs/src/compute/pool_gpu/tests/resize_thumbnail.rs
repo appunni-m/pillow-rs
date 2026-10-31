@@ -59,7 +59,7 @@ fn assert_f_pad_f64_lowering_cases(
             &[
                 PipelineOp::PutData {
                     data: putdata.clone(),
-                    mode: PixelMode::F,
+                    payload_mode: Mode::ImageF32,
                 },
                 pad,
             ],

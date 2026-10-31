@@ -176,7 +176,7 @@ impl Image {
             // Pillow mutates palette indices directly for putdata, while
             // putalpha promotes each index to a PA (index, alpha) pair.
             | PipelineOp::PutData {
-                mode: crate::pipeline::PixelMode::P | crate::pipeline::PixelMode::PA,
+                payload_mode: Mode::ImagePalette8 | Mode::ImagePaletteAlpha8,
                 ..
             }
             | PipelineOp::PutAlpha {

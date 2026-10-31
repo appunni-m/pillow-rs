@@ -112,7 +112,7 @@ pub(in crate::compute::pool_gpu) fn gpu_f_resize_box_copy_is_exact(
         match op {
             PipelineOp::PutData {
                 data,
-                mode: PixelMode::F,
+                payload_mode: Mode::ImageF32,
             } => {
                 let expected = CheckedDims::new(dimensions.0, dimensions.1, 4)
                     .ok()
@@ -173,7 +173,7 @@ pub(in crate::compute::pool_gpu) fn gpu_f_resize_identity_is_exact(
         match op {
             PipelineOp::PutData {
                 data,
-                mode: PixelMode::F,
+                payload_mode: Mode::ImageF32,
             } => {
                 let expected = CheckedDims::new(dimensions.0, dimensions.1, 4)
                     .ok()
@@ -306,7 +306,7 @@ pub(in crate::compute::pool_gpu) fn gpu_f_resize_box_average_is_exact(
         match op {
             PipelineOp::PutData {
                 data,
-                mode: PixelMode::F,
+                payload_mode: Mode::ImageF32,
             } => {
                 let expected = CheckedDims::new(dimensions.0, dimensions.1, 4)
                     .ok()

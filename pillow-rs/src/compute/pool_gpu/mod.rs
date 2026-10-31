@@ -28,7 +28,7 @@ use crate::pipeline::{
 };
 #[cfg(target_endian = "little")]
 use crate::raster::RgbImage;
-use crate::raster::{DynamicImage, GenericImageView, ImageBuffer, Luma, RgbaImage};
+use crate::raster::{DynamicImage, GenericImageView, ImageBuffer, Luma, Mode, RgbaImage};
 use std::collections::HashMap;
 use std::num::NonZeroU64;
 use std::sync::Arc;

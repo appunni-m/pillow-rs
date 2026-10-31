@@ -1,8 +1,8 @@
 use super::{
     gpu_f_resize_dyadic_is_exact, gpu_f_resize_f64_is_exact, gpu_f_resize_integer_is_exact,
 };
-use crate::pipeline::{PipelineOp, PixelMode, ResampleFilter};
-use crate::raster::{DynamicImage, RgbaImage};
+use crate::pipeline::{PipelineOp, ResampleFilter};
+use crate::raster::{DynamicImage, Mode, RgbaImage};
 
 #[test]
 fn f_resize_dyadic_lowering_requires_proven_filter_and_source_domain() {
@@ -59,7 +59,7 @@ fn assert_f_resize_dyadic_basic_cases(image: &DynamicImage, bilinear: &PipelineO
         &[
             PipelineOp::PutData {
                 data: bytes::Bytes::copy_from_slice(image.as_bytes()),
-                mode: PixelMode::F,
+                payload_mode: Mode::ImageF32,
             },
             dyadic_box_resize(1, 2),
         ],
@@ -97,7 +97,7 @@ fn assert_f_resize_dyadic_box_chain_cases(image: &DynamicImage) {
                         .flat_map(f32::to_le_bytes)
                         .collect::<Vec<_>>(),
                 ),
-                mode: PixelMode::F,
+                payload_mode: Mode::ImageF32,
             },
             dyadic_box_resize(2, 1),
             dyadic_box_resize(1, 1),
@@ -379,7 +379,7 @@ fn assert_f_resize_f64_putdata_proofs(image: &DynamicImage) {
         &[
             PipelineOp::PutData {
                 data: putdata.clone(),
-                mode: PixelMode::F,
+                payload_mode: Mode::ImageF32,
             },
             PipelineOp::Resize {
                 w: 1,
@@ -394,7 +394,7 @@ fn assert_f_resize_f64_putdata_proofs(image: &DynamicImage) {
         &[
             PipelineOp::PutData {
                 data: bytes::Bytes::from(vec![0u8; 4]),
-                mode: PixelMode::F,
+                payload_mode: Mode::ImageF32,
             },
             PipelineOp::Resize {
                 w: 1,
@@ -409,7 +409,7 @@ fn assert_f_resize_f64_putdata_proofs(image: &DynamicImage) {
         &[
             PipelineOp::PutData {
                 data: putdata,
-                mode: PixelMode::I,
+                payload_mode: Mode::ImageI32,
             },
             PipelineOp::Resize {
                 w: 1,

@@ -1,6 +1,6 @@
 use super::{
     CheckedDims, DynamicImage, FilterCoeffs, FilterCoeffsF64, GPU_BUFFER_CAPACITY, PipelineOp,
-    PixelMode, ResampleFilter, gpu_f_resize_f64_is_exact, gpu_f_resize_f64_sample_bits,
+    Mode, ResampleFilter, gpu_f_resize_f64_is_exact, gpu_f_resize_f64_sample_bits,
     gpu_pad_geometry, transpose_forward, transpose_output_dimensions,
 };
 use crate::raster::GenericImageView;
@@ -351,7 +351,7 @@ pub(in crate::compute::pool_gpu) fn gpu_f_pad_f64_is_exact(
         !matches!(
             op,
             PipelineOp::PutData {
-                mode: PixelMode::F,
+                payload_mode: Mode::ImageF32,
                 ..
             }
         )

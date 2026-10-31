@@ -1,14 +1,10 @@
 use super::{
-    Arc, Bytes, CheckedDims, Image, PilError, PipelineOp, PixelMode, PutDataInput, PutDataValue,
+    Arc, Bytes, CheckedDims, Image, PilError, PipelineOp, PutDataInput, PutDataValue,
     PutDataValueKind, is_l16_identity, l16_identity_uses_big_endian,
-    materialization_cache, putdata_bytes,
+    materialization_cache, putdata_byte_width, putdata_bytes, unsupported_putdata_mode,
     putdata_clip_u8, putdata_l16_sample,
 };
 use crate::raster::Mode;
-
-fn mode_name(mode: Mode) -> &'static str {
-    mode.pillow_name().unwrap_or("unknown")
-}
 
 impl Image {
     /// Queues replacement pixel data from a flat byte sequence.
@@ -21,15 +17,13 @@ impl Image {
     /// Currently returns `Ok(())`; materialization reports invalid byte length
     /// or mode mismatches.
     pub fn putdata(&mut self, data: &[u8]) -> Result<(), PilError> {
-        let image_mode = self.mode_identity()?;
-        let mode = PixelMode::from_raster_mode(image_mode).ok_or_else(|| {
-            PilError::ValueError(format!("unsupported putdata mode: {}", mode_name(image_mode)))
-        })?;
+        let payload_mode = self.mode_identity()?;
+        putdata_byte_width(payload_mode).ok_or_else(|| unsupported_putdata_mode(payload_mode))?;
         let new_self = Image::push_op(
             self,
             PipelineOp::PutData {
                 data: Bytes::copy_from_slice(data),
-                mode,
+                payload_mode,
             },
         );
         *self = new_self;
@@ -55,15 +49,18 @@ impl Image {
         if scale != 1.0 || offset != 0.0 || data.len() != entry_count {
             return Ok(false);
         }
-        let image_mode = self.mode_identity()?;
-        if !matches!(image_mode, Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8) {
+        let payload_mode = self.mode_identity()?;
+        if !matches!(payload_mode, Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8) {
             return Ok(false);
         }
         self.validate_putdata_length(entry_count)?;
-        let mode = PixelMode::from_raster_mode(image_mode).ok_or_else(|| {
-            PilError::ValueError(format!("unsupported putdata mode: {}", mode_name(image_mode)))
-        })?;
-        let new_self = Image::push_op(self, PipelineOp::PutData { data, mode });
+        let new_self = Image::push_op(
+            self,
+            PipelineOp::PutData {
+                data,
+                payload_mode,
+            },
+        );
         *self = new_self;
         Ok(true)
     }
@@ -97,10 +94,7 @@ impl Image {
             }
             return Ok(());
         }
-        let mode = PixelMode::from_raster_mode(image_mode).ok_or_else(|| {
-            PilError::ValueError(format!("unsupported putdata mode: {}", mode_name(image_mode)))
-        })?;
-        let data = putdata_bytes(mode, values, scale, offset)?;
+        let data = putdata_bytes(image_mode, values, scale, offset)?;
         self.putdata(&data)
     }
 
@@ -125,12 +119,9 @@ impl Image {
         ) {
             return Ok(PutDataValueKind::Numeric);
         }
-        let mode = PixelMode::from_raster_mode(image_mode).ok_or_else(|| {
-            PilError::ValueError(format!("unsupported putdata mode: {}", mode_name(image_mode)))
-        })?;
-        Ok(PutDataValueKind::Components {
-            channels: mode.channels(),
-        })
+        let channels =
+            putdata_byte_width(image_mode).ok_or_else(|| unsupported_putdata_mode(image_mode))?;
+        Ok(PutDataValueKind::Components { channels })
     }
 
     /// Applies a callback-free bulk input through the canonical `putdata`
@@ -400,12 +391,11 @@ impl Image {
         if is_l16_identity(image_mode) {
             return self.putdata_l16_value_at(pixel_index, value, scale, offset, requested_backend);
         }
-        let mode = PixelMode::from_raster_mode(image_mode).ok_or_else(|| {
-            PilError::ValueError(format!("unsupported putdata mode: {}", mode_name(image_mode)))
-        })?;
-        let bytes = putdata_bytes(mode, std::slice::from_ref(value), scale, offset)?;
+        let bytes_per_pixel =
+            putdata_byte_width(image_mode).ok_or_else(|| unsupported_putdata_mode(image_mode))?;
+        let bytes = putdata_bytes(image_mode, std::slice::from_ref(value), scale, offset)?;
         let start = pixel_index
-            .checked_mul(mode.channels())
+            .checked_mul(bytes_per_pixel)
             .ok_or_else(|| PilError::DimensionError("putdata byte offset overflow".into()))?;
         let end = start
             .checked_add(bytes.len())

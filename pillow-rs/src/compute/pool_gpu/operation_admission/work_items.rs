@@ -51,7 +51,9 @@ pub(super) fn gpu_shader_inner_work_items(
             let block_h = u64::from((*y_factor).max(1).min(source_h.max(1)));
             block_w.saturating_mul(block_h)
         }
-        PipelineOp::PutData { mode, .. } => mode.channels() as u64,
+        PipelineOp::PutData { payload_mode, .. } => {
+            crate::compute::helpers::put_data::payload_bytes_per_pixel(*payload_mode)? as u64
+        }
         PipelineOp::Pad { .. } => 4,
         // Even a constant-work shader consumes one invocation per output
         // pixel. Count that work so a long point-operation chain is split

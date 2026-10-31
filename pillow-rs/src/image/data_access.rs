@@ -6,7 +6,7 @@ use bytes::Bytes;
 
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
-use crate::pipeline::{PipelineOp, PixelMode};
+use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
 
 use super::{
@@ -107,111 +107,137 @@ fn putdata_l16_sample(value: &PutDataValue, scale: f64, offset: f64) -> Result<u
     }
 }
 
+fn putdata_byte_width(mode: Mode) -> Option<usize> {
+    crate::compute::helpers::put_data::payload_bytes_per_pixel(mode)
+}
+
+fn unsupported_putdata_mode(mode: Mode) -> PilError {
+    PilError::ValueError(format!(
+        "unsupported putdata mode: {}",
+        mode.pillow_name().unwrap_or("unknown")
+    ))
+}
+
+fn append_numeric_value(
+    mode: Mode,
+    value: &PutDataValue,
+    scale: f64,
+    offset: f64,
+    data: &mut Vec<u8>,
+) -> Result<(), PilError> {
+    let PutDataValue::Number(number) = value else {
+        return Err(PilError::TypeError("sequence must be flattened".into()));
+    };
+    match mode {
+        Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => {
+            data.push(putdata_clip_u8(number * scale + offset));
+        }
+        Mode::ImageI32 => {
+            data.extend_from_slice(&((number * scale + offset) as i32).to_le_bytes());
+        }
+        Mode::ImageF32 => {
+            data.extend_from_slice(&((number * scale + offset) as f32).to_le_bytes());
+        }
+        _ => return Err(unsupported_putdata_mode(mode)),
+    }
+    Ok(())
+}
+
+fn append_two_channel_value(value: &PutDataValue, data: &mut Vec<u8>) -> Result<(), PilError> {
+    match value {
+        PutDataValue::Packed(packed) => {
+            let bytes = packed.to_le_bytes();
+            data.extend_from_slice(&[bytes[0], bytes[3]]);
+        }
+        PutDataValue::Components(components) if components.len() == 2 => {
+            data.extend(components.iter().copied().map(putdata_clip_component));
+        }
+        PutDataValue::Components(_) => {
+            return Err(PilError::TypeError(
+                "color must be int, or tuple of one or two elements".into(),
+            ));
+        }
+        _ => return Err(PilError::TypeError("color must be int or tuple".into())),
+    }
+    Ok(())
+}
+
+fn append_three_channel_value(value: &PutDataValue, data: &mut Vec<u8>) -> Result<(), PilError> {
+    match value {
+        PutDataValue::Packed(packed) => data.extend_from_slice(&packed.to_le_bytes()[..3]),
+        PutDataValue::Components(components) if matches!(components.len(), 3 | 4) => {
+            data.extend(components[..3].iter().copied().map(putdata_clip_component));
+        }
+        PutDataValue::Components(_) => {
+            return Err(PilError::TypeError(
+                "color must be int, or tuple of one, three or four elements".into(),
+            ));
+        }
+        _ => return Err(PilError::TypeError("color must be int or tuple".into())),
+    }
+    Ok(())
+}
+
+fn append_four_channel_value(value: &PutDataValue, data: &mut Vec<u8>) -> Result<(), PilError> {
+    match value {
+        PutDataValue::Packed(packed) => data.extend_from_slice(&packed.to_le_bytes()[..4]),
+        PutDataValue::Components(components) if matches!(components.len(), 3 | 4) => {
+            data.extend(components[..3].iter().copied().map(putdata_clip_component));
+            data.push(
+                components
+                    .get(3)
+                    .copied()
+                    .map_or(255, putdata_clip_component),
+            );
+        }
+        PutDataValue::Components(_) => {
+            return Err(PilError::TypeError(
+                "color must be int, or tuple of one, three or four elements".into(),
+            ));
+        }
+        _ => return Err(PilError::TypeError("color must be int or tuple".into())),
+    }
+    Ok(())
+}
+
+fn append_putdata_value(
+    mode: Mode,
+    value: &PutDataValue,
+    scale: f64,
+    offset: f64,
+    data: &mut Vec<u8>,
+) -> Result<(), PilError> {
+    match mode {
+        Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 | Mode::ImageI32 | Mode::ImageF32 => {
+            append_numeric_value(mode, value, scale, offset, data)
+        }
+        Mode::ImageLumaA8 | Mode::ImagePaletteAlpha8 => append_two_channel_value(value, data),
+        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageHsv8 => {
+            append_three_channel_value(value, data)
+        }
+        Mode::ImageRgba8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8 => append_four_channel_value(value, data),
+        _ => Err(unsupported_putdata_mode(mode)),
+    }
+}
+
 fn putdata_bytes(
-    mode: crate::pipeline::PixelMode,
+    mode: Mode,
     values: &[PutDataValue],
     scale: f64,
     offset: f64,
 ) -> Result<Vec<u8>, PilError> {
+    let bytes_per_pixel = putdata_byte_width(mode).ok_or_else(|| unsupported_putdata_mode(mode))?;
     let capacity = values
         .len()
-        .checked_mul(mode.channels())
+        .checked_mul(bytes_per_pixel)
         .ok_or_else(|| PilError::DimensionError("putdata byte count overflow".into()))?;
     let mut data = Vec::with_capacity(capacity);
-
     for value in values {
-        match (mode, value) {
-            (
-                crate::pipeline::PixelMode::Mode1
-                | crate::pipeline::PixelMode::L
-                | crate::pipeline::PixelMode::P,
-                PutDataValue::Number(number),
-            ) => data.push(putdata_clip_u8(number * scale + offset)),
-            (crate::pipeline::PixelMode::I, PutDataValue::Number(number)) => {
-                data.extend_from_slice(&((number * scale + offset) as i32).to_le_bytes());
-            }
-            (crate::pipeline::PixelMode::F, PutDataValue::Number(number)) => {
-                data.extend_from_slice(&((number * scale + offset) as f32).to_le_bytes());
-            }
-            (
-                crate::pipeline::PixelMode::LA | crate::pipeline::PixelMode::PA,
-                PutDataValue::Packed(packed),
-            ) => {
-                let bytes = packed.to_le_bytes();
-                data.extend_from_slice(&[bytes[0], bytes[3]]);
-            }
-            (
-                crate::pipeline::PixelMode::RGB
-                | crate::pipeline::PixelMode::YCbCr
-                | crate::pipeline::PixelMode::HSV,
-                PutDataValue::Packed(packed),
-            ) => data.extend_from_slice(&packed.to_le_bytes()[..3]),
-            (
-                crate::pipeline::PixelMode::RGBA | crate::pipeline::PixelMode::CMYK,
-                PutDataValue::Packed(packed),
-            ) => data.extend_from_slice(&packed.to_le_bytes()[..4]),
-            (
-                crate::pipeline::PixelMode::LA | crate::pipeline::PixelMode::PA,
-                PutDataValue::Components(components),
-            ) if components.len() == 2 => {
-                data.extend(components.iter().copied().map(putdata_clip_component));
-            }
-            (
-                crate::pipeline::PixelMode::RGB
-                | crate::pipeline::PixelMode::YCbCr
-                | crate::pipeline::PixelMode::HSV,
-                PutDataValue::Components(components),
-            ) if matches!(components.len(), 3 | 4) => {
-                data.extend(components[..3].iter().copied().map(putdata_clip_component));
-            }
-            (
-                crate::pipeline::PixelMode::RGBA | crate::pipeline::PixelMode::CMYK,
-                PutDataValue::Components(components),
-            ) if matches!(components.len(), 3 | 4) => {
-                data.extend(components[..3].iter().copied().map(putdata_clip_component));
-                data.push(
-                    components
-                        .get(3)
-                        .copied()
-                        .map_or(255, putdata_clip_component),
-                );
-            }
-            (
-                crate::pipeline::PixelMode::LA | crate::pipeline::PixelMode::PA,
-                PutDataValue::Components(_),
-            ) => {
-                return Err(PilError::TypeError(
-                    "color must be int, or tuple of one or two elements".into(),
-                ));
-            }
-            (
-                crate::pipeline::PixelMode::RGB
-                | crate::pipeline::PixelMode::RGBA
-                | crate::pipeline::PixelMode::CMYK
-                | crate::pipeline::PixelMode::YCbCr
-                | crate::pipeline::PixelMode::HSV,
-                PutDataValue::Components(_),
-            ) => {
-                return Err(PilError::TypeError(
-                    "color must be int, or tuple of one, three or four elements".into(),
-                ));
-            }
-            (
-                crate::pipeline::PixelMode::Mode1
-                | crate::pipeline::PixelMode::L
-                | crate::pipeline::PixelMode::P
-                | crate::pipeline::PixelMode::I
-                | crate::pipeline::PixelMode::F,
-                _,
-            ) => {
-                return Err(PilError::TypeError("sequence must be flattened".into()));
-            }
-            _ => {
-                return Err(PilError::TypeError("color must be int or tuple".into()));
-            }
-        }
+        append_putdata_value(mode, value, scale, offset, &mut data)?;
     }
-
     Ok(data)
 }
 

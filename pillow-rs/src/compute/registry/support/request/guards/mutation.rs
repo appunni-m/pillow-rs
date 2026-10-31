@@ -307,7 +307,7 @@ pub(super) fn put_data_native_guard(
     }
     match input.request {
         RequestFacts::Unspecified => GuardAssessment::Deferred,
-        RequestFacts::PutData { mode, .. } if payloads.contains(&mode) => layout,
+        RequestFacts::PutData { payload_mode, .. } if payloads.contains(&payload_mode) => layout,
         _ => GuardAssessment::Ineligible,
     }
 }

@@ -274,7 +274,7 @@ pub enum RequestFacts {
     /// Typed normalized byte-prefix parameters.
     PutData {
         /// Explicit payload identity, separate from the source image variant.
-        mode: Mode,
+        payload_mode: Mode,
         /// Available normalized bytes; excess bytes retain the existing prefix semantics.
         data_len: usize,
     },

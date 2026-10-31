@@ -572,8 +572,8 @@ pub enum PipelineOp {
     PutData {
         /// Immutable, reference-counted raw pixel data.
         data: Bytes,
-        /// Logical Pillow mode whose sample layout `data` follows.
-        mode: PixelMode,
+        /// Exact typed identity of the normalized byte payload layout.
+        payload_mode: Mode,
     },
     /// Replace or set alpha channel.
     PutAlpha {

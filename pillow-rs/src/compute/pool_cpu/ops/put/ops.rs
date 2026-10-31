@@ -418,9 +418,9 @@ pub(crate) fn prepare_pixel_pipeline<'a>(
 pub(crate) fn prepare_data_pipeline<'a>(
     input: OperationInputs<'a>, op: &'a PipelineOp, ctx: &ExecutionContext,
 ) -> Result<crate::compute::registry::PreparedOperation<'a>, PilError> {
-    let PipelineOp::PutData { data, mode } = op else {
+    let PipelineOp::PutData { data, payload_mode } = op else {
         return Err(PilError::ValueError("expected PutData op".into()));
     };
-    prepare_put_data(input.image, data, mode.raster_mode(), ctx)
+    prepare_put_data(input.image, data, *payload_mode, ctx)
         .map(crate::compute::registry::PreparedOperation::from_put_data)
 }

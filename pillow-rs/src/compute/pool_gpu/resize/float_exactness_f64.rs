@@ -2,7 +2,7 @@
 
 use super::super::{
     CheckedDims, DynamicImage, FilterCoeffsF64, GPU_BUFFER_CAPACITY, GenericImageView, PipelineOp,
-    PixelMode, ResampleFilter, filter_from_resample, gpu_f_resize_f64_coefficients_fit_binding,
+    Mode, ResampleFilter, filter_from_resample, gpu_f_resize_f64_coefficients_fit_binding,
     gpu_f_resize_f64_pass_bits, gpu_f_resize_nearest_pass_words, gpu_f_resize_relocate_words,
     gpu_f64_integer_parts, gpu_resize_coefficients, precompute_coeffs_f64,
 };
@@ -64,7 +64,7 @@ fn gpu_f_resize_f64_materialize_op(
 ) -> bool {
     if let PipelineOp::PutData {
         data,
-        mode: PixelMode::F,
+        payload_mode: Mode::ImageF32,
     } = op
     {
         // PutData(F) is a raw little-endian word replacement in the GPU

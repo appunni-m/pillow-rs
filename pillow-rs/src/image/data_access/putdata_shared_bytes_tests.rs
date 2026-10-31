@@ -1,6 +1,6 @@
 use super::{Image, PilError};
 use crate::compute::Backend;
-use crate::pipeline::{PipelineOp, PixelMode};
+use crate::pipeline::PipelineOp;
 use bytes::Bytes;
 
 #[test]
@@ -14,7 +14,7 @@ fn native_l_putdata_keeps_the_shared_allocation_and_materializes_exactly() -> Re
         Image::Pipeline { ops, .. } => match &ops.as_slice()[0] {
             PipelineOp::PutData {
                 data,
-                mode: PixelMode::L,
+                payload_mode: crate::raster::Mode::ImageLuma8,
             } => data.as_ptr(),
             other => panic!("unexpected queued operation: {other:?}"),
         },

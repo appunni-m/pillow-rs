@@ -6,6 +6,7 @@ use super::{
     gpu_color_saturation_factor_params, gpu_sharpness_factor_int,
 };
 use crate::pipeline::{ColorMode, PipelineOp, ResampleFilter, TransposeMethod};
+use crate::raster::Mode;
 
 #[cfg(feature = "gpu")]
 fn separable_box_blur_params(radius: u32) -> [u32; 3] {
@@ -459,7 +460,9 @@ fn transform_params(op: &PipelineOp) -> Option<Vec<u32>> {
 fn data_mutation_params(op: &PipelineOp) -> Option<Vec<u32>> {
     let params = match op {
         // ── PutData: data length ──
-        PipelineOp::PutData { data, mode } => vec![data.len() as u32, mode.code()],
+        PipelineOp::PutData { data, payload_mode } => {
+            vec![data.len() as u32, gpu_put_data_mode_code(*payload_mode)?]
+        }
 
         // ── CropBorder: border ──
         PipelineOp::CropBorder { border } => vec![*border],
@@ -483,6 +486,35 @@ fn data_mutation_params(op: &PipelineOp) -> Option<Vec<u32>> {
         _ => return None,
     };
     Some(params)
+}
+
+#[cfg(feature = "gpu")]
+fn gpu_put_data_mode_code(mode: Mode) -> Option<u32> {
+    Some(match mode {
+        Mode::ImageLuma8 => 0,
+        Mode::ImageLumaA8 => 1,
+        Mode::ImageRgb8 => 2,
+        Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8 | Mode::ImageRgbx8 => 3,
+        Mode::ImagePalette8 => 4,
+        Mode::ImagePaletteAlpha8 => 5,
+        Mode::ImageCmyk8 => 6,
+        Mode::One => 7,
+        Mode::ImageYCbCr8 => 8,
+        Mode::ImageHsv8 => 9,
+        Mode::ImageI32 => 10,
+        Mode::ImageF32 => 11,
+        Mode::ImageLaPremultiplied8
+        | Mode::ImageLab8
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N
+        | Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => return None,
+    })
 }
 
 #[cfg(feature = "gpu")]

@@ -12,8 +12,8 @@ use super::super::super::{
 use super::{BatchRouteStage, PreparedGpuBatchRoute};
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
-use crate::pipeline::{PipelineOp, PixelMode};
-use crate::raster::{DynamicImage, GenericImageView};
+use crate::pipeline::PipelineOp;
+use crate::raster::{DynamicImage, GenericImageView, Mode};
 
 mod standard;
 
@@ -43,7 +43,7 @@ impl PreparedGpuBatchRoute<'_> {
         };
         let image_pixels = CheckedDims::new(self.img.width(), self.img.height(), 1)?.total_pixels();
         let full_luma_putdata = packed_plan.packed_luma_putdata
-            && matches!(self.ops(), [PipelineOp::PutData { data, mode: PixelMode::L }]
+            && matches!(self.ops(), [PipelineOp::PutData { data, payload_mode: Mode::ImageLuma8 }]
                 if data.len() == image_pixels);
         GpuBatchExecutionRoute {
             prepared: self,

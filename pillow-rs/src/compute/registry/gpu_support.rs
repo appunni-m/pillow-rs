@@ -545,24 +545,25 @@ fn gpu_auxiliary_shader_contract(op: &PipelineOp) -> Option<bool> {
                 | PixelMode::PA
                 | PixelMode::CMYK
         ),
-        // PutData replaces raw logical bytes. The shader carries the logical
-        // channel count and only packs those bytes for transport, so every
-        // byte-backed Pillow mode is representable here; the pool separately
-        // proves that its concrete source layout matches the logical mode.
-        PipelineOp::PutData { mode, .. } => matches!(
-            mode,
-            PixelMode::L
-                | PixelMode::LA
-                | PixelMode::RGB
-                | PixelMode::RGBA
-                | PixelMode::P
-                | PixelMode::PA
-                | PixelMode::CMYK
-                | PixelMode::Mode1
-                | PixelMode::YCbCr
-                | PixelMode::HSV
-                | PixelMode::I
-                | PixelMode::F
+        // PutData keeps the exact payload identity through dispatch. The
+        // shader only needs its raw byte width, but admission must preserve
+        // the source storage contract before uploading those bytes.
+        PipelineOp::PutData { payload_mode, .. } => matches!(
+            payload_mode,
+            Mode::One
+                | Mode::ImageLuma8
+                | Mode::ImageLumaA8
+                | Mode::ImagePalette8
+                | Mode::ImagePaletteAlpha8
+                | Mode::ImageRgb8
+                | Mode::ImageRgba8
+                | Mode::ImageRgbPremultiplied8
+                | Mode::ImageRgbx8
+                | Mode::ImageCmyk8
+                | Mode::ImageYCbCr8
+                | Mode::ImageHsv8
+                | Mode::ImageI32
+                | Mode::ImageF32
         ),
         // P/PA pipelines pass raw indexed samples as Luma8/LumaA8 at the
         // executor boundary. The GPU pool performs the logical-mode check

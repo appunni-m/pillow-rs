@@ -28,7 +28,7 @@ pub(super) fn gpu_float_filter_is_supported(ops: &[PipelineOp], image: &DynamicI
             PipelineOp::Mirror => true,
             PipelineOp::PutData {
                 data,
-                mode: PixelMode::F,
+                payload_mode: Mode::ImageF32,
             } => finite_words(data),
             PipelineOp::MaxFilter { .. }
             | PipelineOp::MinFilter { .. }
@@ -102,7 +102,7 @@ pub(super) fn gpu_int_filter_is_supported(ops: &[PipelineOp], image: &DynamicIma
                 }
             }
             PipelineOp::PutData {
-                mode: PixelMode::I, ..
+                payload_mode: Mode::ImageI32, ..
             } => continue,
             _ => return false,
         }

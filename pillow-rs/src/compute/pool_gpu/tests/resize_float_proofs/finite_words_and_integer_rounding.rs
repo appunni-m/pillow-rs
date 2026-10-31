@@ -1,6 +1,6 @@
 use super::{gpu_f_resize_dyadic_is_exact, gpu_f64_integer_to_f32, gpu_float_filter_is_supported};
-use crate::pipeline::{PipelineOp, PixelMode, ResampleFilter};
-use crate::raster::{DynamicImage, RgbaImage};
+use crate::pipeline::{PipelineOp, ResampleFilter};
+use crate::raster::{DynamicImage, Mode, RgbaImage};
 
 fn f32_putdata_bytes(values: [f32; 4]) -> bytes::Bytes {
     bytes::Bytes::from(
@@ -29,7 +29,7 @@ fn f_order_filter_putdata_requires_finite_words() {
         &[
             PipelineOp::PutData {
                 data: f32_putdata_bytes([4.0, 3.0, 2.0, 1.0]),
-                mode: PixelMode::F,
+                payload_mode: Mode::ImageF32,
             },
             rank.clone(),
         ],
@@ -40,7 +40,7 @@ fn f_order_filter_putdata_requires_finite_words() {
             &[
                 PipelineOp::PutData {
                     data: f32_putdata_bytes([special, 3.0, 2.0, 1.0]),
-                    mode: PixelMode::F,
+                    payload_mode: Mode::ImageF32,
                 },
                 rank.clone(),
             ],
@@ -51,7 +51,7 @@ fn f_order_filter_putdata_requires_finite_words() {
         &[
             PipelineOp::PutData {
                 data: bytes::Bytes::from(vec![0u8; 4]),
-                mode: PixelMode::F,
+                payload_mode: Mode::ImageF32,
             },
             rank.clone(),
         ],
@@ -61,7 +61,7 @@ fn f_order_filter_putdata_requires_finite_words() {
         &[
             PipelineOp::PutData {
                 data: f32_putdata_bytes([4.0, 3.0, 2.0, 1.0]),
-                mode: PixelMode::I,
+                payload_mode: Mode::ImageI32,
             },
             rank,
         ],

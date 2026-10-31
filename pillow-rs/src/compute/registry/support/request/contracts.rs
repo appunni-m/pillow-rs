@@ -757,7 +757,7 @@ fn assess_byte_data_payload(
 ) -> Result<Option<UnresolvedGuard>, PilError> {
     match input.request {
         RequestFacts::Unspecified => unresolved_request(contract),
-        RequestFacts::PutData { mode, .. } if modes.contains(&mode) => Ok(None),
+        RequestFacts::PutData { payload_mode, .. } if modes.contains(&payload_mode) => Ok(None),
         _ => Err(PilError::ValueError(rejection_reason.into())),
     }
 }

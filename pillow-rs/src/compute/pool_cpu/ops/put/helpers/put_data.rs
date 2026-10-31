@@ -70,7 +70,7 @@ pub(crate) fn facts<P: Pixel>(
         width: image.width(), height: image.height(),
         byte_len: Some(core::mem::size_of_val(image.as_raw().as_slice())),
         palette: PaletteKnowledge::Unknown,
-        request: RequestFacts::PutData { mode: payload, data_len: data.len() },
+        request: RequestFacts::PutData { payload_mode: payload, data_len: data.len() },
     }
 }
 

@@ -132,7 +132,7 @@ fn assert_f_resize_identity_proofs(image: &DynamicImage, same_size: &PipelineOp)
         &[
             PipelineOp::PutData {
                 data: bytes::Bytes::from([0xde, 0xad, 0xbe, 0xef].repeat(16)),
-                mode: PixelMode::F,
+                payload_mode: Mode::ImageF32,
             },
             (*same_size).clone(),
         ],

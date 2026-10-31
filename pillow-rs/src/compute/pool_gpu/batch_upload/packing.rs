@@ -1,7 +1,8 @@
 use super::{
-    BufferRange, CheckedDims, DynamicImage, ImageBuffer, Luma, PilError, PixelMode, RgbaImage,
+    BufferRange, CheckedDims, DynamicImage, ImageBuffer, Luma, Mode, PilError, PixelMode, RgbaImage,
     align_up,
 };
+use crate::compute::helpers::put_data::payload_bytes_per_pixel;
 pub(in crate::compute::pool_gpu) fn expand_rgb_into_rgba(
     rgb: &[u8],
     rgba: &mut [u8],
@@ -169,10 +170,12 @@ pub(in crate::compute::pool_gpu) fn pack_luma16_numeric(
 /// original byte length to preserve every untouched or partial pixel.
 pub(in crate::compute::pool_gpu) fn pack_put_data(
     data: &[u8],
-    mode: PixelMode,
+    mode: Mode,
     capacity: u32,
 ) -> Result<Vec<u32>, PilError> {
-    let channels = mode.channels();
+    let channels = payload_bytes_per_pixel(mode).ok_or_else(|| {
+        PilError::ValueError("GPU PutData does not support this payload mode".into())
+    })?;
     let pixel_count = data.len().div_ceil(channels);
     if pixel_count > capacity as usize {
         return Err(PilError::ValueError(format!(
@@ -185,26 +188,46 @@ pub(in crate::compute::pool_gpu) fn pack_put_data(
         let start = pixel_index * channels;
         let samples = &data[start..data.len().min(start + channels)];
         let pixel = match mode {
-            PixelMode::L | PixelMode::P | PixelMode::Mode1 => {
+            Mode::ImageLuma8 | Mode::ImagePalette8 | Mode::One => {
                 samples.first().copied().unwrap_or(0) as u32
             }
-            PixelMode::LA | PixelMode::PA => {
+            Mode::ImageLumaA8 | Mode::ImagePaletteAlpha8 => {
                 let luma = samples.first().copied().unwrap_or(0) as u32;
                 let alpha = samples.get(1).copied().unwrap_or(0) as u32;
                 luma | (alpha << 24)
             }
-            PixelMode::RGB | PixelMode::YCbCr | PixelMode::HSV => {
+            Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageHsv8 => {
                 let r = samples.first().copied().unwrap_or(0) as u32;
                 let g = samples.get(1).copied().unwrap_or(0) as u32;
                 let b = samples.get(2).copied().unwrap_or(0) as u32;
                 r | (g << 8) | (b << 16)
             }
-            PixelMode::RGBA | PixelMode::CMYK | PixelMode::I | PixelMode::F => {
+            Mode::ImageRgba8
+            | Mode::ImageRgbPremultiplied8
+            | Mode::ImageRgbx8
+            | Mode::ImageCmyk8
+            | Mode::ImageI32
+            | Mode::ImageF32 => {
                 let first = samples.first().copied().unwrap_or(0) as u32;
                 let second = samples.get(1).copied().unwrap_or(0) as u32;
                 let third = samples.get(2).copied().unwrap_or(0) as u32;
                 let fourth = samples.get(3).copied().unwrap_or(0) as u32;
                 first | (second << 8) | (third << 16) | (fourth << 24)
+            }
+            Mode::ImageLaPremultiplied8
+            | Mode::ImageLab8
+            | Mode::ImageI16
+            | Mode::ImageI16L
+            | Mode::ImageI16B
+            | Mode::ImageI16N
+            | Mode::ImageLumaA16
+            | Mode::ImageRgb16
+            | Mode::ImageRgba16
+            | Mode::ImageRgb32F
+            | Mode::ImageRgba32F => {
+                return Err(PilError::ValueError(
+                    "GPU PutData does not support this payload mode".into(),
+                ));
             }
         };
         packed.push(pixel);

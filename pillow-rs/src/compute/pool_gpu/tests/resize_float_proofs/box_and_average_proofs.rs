@@ -2,8 +2,8 @@ use super::{
     gpu_f_resize_box_average_is_exact, gpu_f_resize_box_copy_is_exact, gpu_f_resize_constant_bits,
     gpu_resize_coefficients, gpu_resize_nearest_uses_coefficients,
 };
-use crate::pipeline::{PipelineOp, PixelMode, ResampleFilter};
-use crate::raster::{DynamicImage, RgbaImage};
+use crate::pipeline::{PipelineOp, ResampleFilter};
+use crate::raster::{DynamicImage, Mode, RgbaImage};
 
 #[test]
 fn f_resize_constant_lowering_requires_exact_finite_source() {
@@ -103,7 +103,7 @@ fn assert_f_resize_box_copy_positive_chains(image: &DynamicImage) {
         &[
             PipelineOp::PutData {
                 data: bytes::Bytes::from(vec![0u8; 24]),
-                mode: PixelMode::F,
+                payload_mode: Mode::ImageF32,
             },
             f_resize_box_operation(6, 4),
         ],
@@ -117,7 +117,7 @@ fn assert_f_resize_box_copy_rejected_chains(image: &DynamicImage) {
         &[
             PipelineOp::PutData {
                 data: bytes::Bytes::from(vec![0u8; 4]),
-                mode: PixelMode::F,
+                payload_mode: Mode::ImageF32,
             },
             f_resize_box_operation(6, 4),
         ],
