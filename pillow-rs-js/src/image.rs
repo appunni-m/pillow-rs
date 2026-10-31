@@ -71,9 +71,20 @@ pub fn resolve_array_layout(
     typestr: &str,
     mode: Option<String>,
 ) -> Result<ArrayDescriptorLayout, JsValue> {
-    let layout = pillow_rs::resolve_array_layout(&shape, typestr, mode.as_deref()).map_err(err)?;
+    let mode = mode
+        .map(|name| {
+            pillow_rs::Mode::from_pillow_name(&name)
+                .ok_or_else(|| err(pillow_rs::PilError::ValueError("unrecognized image mode".into())))
+        })
+        .transpose()?;
+    let layout = pillow_rs::resolve_array_layout(&shape, typestr, mode).map_err(err)?;
+    let mode = layout
+        .mode
+        .pillow_name()
+        .ok_or_else(|| err(pillow_rs::PilError::ValueError("unsupported array image mode".into())))?
+        .to_owned();
     Ok(ArrayDescriptorLayout {
-        mode: layout.mode,
+        mode,
         raw_mode: layout.raw_mode,
         width: layout.width,
         height: layout.height,
@@ -96,6 +107,8 @@ impl Image {
         // Users can change the level at runtime via setLogLevel().
         #[cfg(feature = "debug-hooks")]
         console_log::init_with_level(log::Level::Warn).ok();
+        let mode = pillow_rs::Mode::from_pillow_name(mode)
+            .ok_or_else(|| err(pillow_rs::PilError::ValueError("unrecognized image mode".into())))?;
         RsImage::new(w, h, mode, (r, g, b, a))
             .map(|i| Image { inner: i })
             .map_err(err)

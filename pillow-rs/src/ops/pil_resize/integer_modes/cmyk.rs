@@ -3,7 +3,7 @@ use super::{
     resize_coefficients_fit_source, resize_u8_coefficients_fit_i32,
 };
 /// Resize the four stored C/M/Y/K bytes with narrow, exact fixed-point sums.
-/// CMYK shares an `ImageRgba8` carrier, but none of its channels are alpha.
+/// CMYK's four-byte carrier stores C/M/Y/K samples, none of which is alpha.
 #[cfg(not(feature = "parallel"))]
 pub(in crate::ops::pil_resize) fn pil_resize_cmyk_i32(
     img: &DynamicImage,
@@ -12,7 +12,7 @@ pub(in crate::ops::pil_resize) fn pil_resize_cmyk_i32(
     horizontal: &FilterCoeffs,
     vertical: &FilterCoeffs,
 ) -> Option<DynamicImage> {
-    let DynamicImage::ImageRgba8(source) = img else {
+    let DynamicImage::ImageCmyk8(source) = img else {
         return None;
     };
     let source_width = usize::try_from(source.width()).ok()?;

@@ -5,7 +5,7 @@ use crate::error::PilError;
 fn cpu_known_zero_cmyk_projection_uses_sparse_writes() -> Result<(), PilError> {
     use crate::compute::Backend;
 
-    let mut image = Image::new(7, 3, "CMYK", (0, 0, 0, 0))?;
+    let mut image = Image::new(7, 3, crate::raster::Mode::ImageCmyk8, (0, 0, 0, 0))?;
     image.putpixel(1, 0, 1, 0, 0, 0)?;
     image.putpixel(4, 1, 0, 1, 0, 0)?;
     image.putpixel(6, 2, 0, 0, 0, 1)?;
@@ -27,7 +27,7 @@ fn cpu_known_zero_cmyk_projection_uses_sparse_writes() -> Result<(), PilError> {
 fn eager_pixel_data_mutation_invalidates_known_zero_source() -> Result<(), PilError> {
     use crate::compute::Backend;
 
-    let mut image = Image::new(4, 1, "CMYK", (0, 0, 0, 0))?;
+    let mut image = Image::new(4, 1, crate::raster::Mode::ImageCmyk8, (0, 0, 0, 0))?;
     assert!(matches!(
         &image,
         Image::Loaded(data) if data.known_zero_fill
@@ -46,7 +46,7 @@ fn eager_pixel_data_mutation_invalidates_known_zero_source() -> Result<(), PilEr
 
 #[test]
 fn packed_cmyk_projection_covers_grouped_pixels_and_row_tails() -> Result<(), PilError> {
-    let mut image = Image::new(7, 3, "CMYK", (0, 0, 0, 0))?;
+    let mut image = Image::new(7, 3, crate::raster::Mode::ImageCmyk8, (0, 0, 0, 0))?;
     image.putpixel(1, 0, 1, 0, 0, 0)?;
     image.putpixel(4, 1, 0, 1, 0, 0)?;
     image.putpixel(6, 2, 0, 0, 1, 0)?;
@@ -61,14 +61,14 @@ fn packed_cmyk_projection_covers_grouped_pixels_and_row_tails() -> Result<(), Pi
 
 #[test]
 fn packed_cmyk_projection_preserves_empty_width_rows() -> Result<(), PilError> {
-    let image = Image::new(0, 3, "CMYK", (0, 0, 0, 0))?;
+    let image = Image::new(0, 3, crate::raster::Mode::ImageCmyk8, (0, 0, 0, 0))?;
     assert_eq!(image.getprojection()?, (vec![], vec![0, 0, 0]));
     Ok(())
 }
 
 #[test]
 fn pending_cmyk_projection_applies_overwrites_without_changing_image() -> Result<(), PilError> {
-    let mut image = Image::new(7, 3, "CMYK", (1, 0, 0, 0))?;
+    let mut image = Image::new(7, 3, crate::raster::Mode::ImageCmyk8, (1, 0, 0, 0))?;
     for x in 0..7 {
         image.putpixel(x, 2, 0, 0, 0, 0)?;
     }
@@ -102,7 +102,7 @@ fn simd_pending_cmyk_projection_fuses_writes_and_reports_vector_execution() -> R
 {
     use crate::compute::Backend;
 
-    let mut image = Image::new(65, 3, "CMYK", (0, 0, 0, 0))?;
+    let mut image = Image::new(65, 3, crate::raster::Mode::ImageCmyk8, (0, 0, 0, 0))?;
     image.putpixel(1, 0, 1, 0, 0, 0)?;
     image.putpixel(1, 0, 0, 0, 0, 0)?;
     image.putpixel(64, 1, 0, 1, 0, 0)?;
@@ -133,7 +133,7 @@ fn simd_known_zero_cmyk_projection_vectorizes_positive_writes_and_axis_tails()
 -> Result<(), PilError> {
     use crate::compute::Backend;
 
-    let mut image = Image::new(65, 3, "CMYK", (0, 0, 0, 0))?;
+    let mut image = Image::new(65, 3, crate::raster::Mode::ImageCmyk8, (0, 0, 0, 0))?;
     image.putpixel(1, 0, 1, 0, 0, 0)?;
     image.putpixel(1, 0, 0, 1, 0, 0)?;
     image.putpixel(64, 2, 0, 0, 0, 1)?;
@@ -165,7 +165,7 @@ fn simd_known_zero_cmyk_projection_vectorizes_positive_writes_and_axis_tails()
 fn simd_known_zero_cmyk_projection_scans_when_write_limit_is_exceeded() -> Result<(), PilError> {
     use crate::compute::Backend;
 
-    let mut image = Image::new(9, 1, "CMYK", (0, 0, 0, 0))?;
+    let mut image = Image::new(9, 1, crate::raster::Mode::ImageCmyk8, (0, 0, 0, 0))?;
     for x in 0..9 {
         image.putpixel(x, 0, 0, 0, 1, 0)?;
     }
@@ -239,7 +239,7 @@ fn gpu_pending_cmyk_projection_applies_zero_overwrites_across_wide_row_boundarie
         return Ok(());
     }
 
-    let mut image = Image::new(515, 19, "CMYK", (0, 0, 0, 0))?;
+    let mut image = Image::new(515, 19, crate::raster::Mode::ImageCmyk8, (0, 0, 0, 0))?;
     image.putpixel(255, 16, 1, 0, 0, 0)?;
     image.putpixel(255, 16, 0, 0, 0, 0)?;
     image.putpixel(0, 0, 0, 0, 1, 0)?;
@@ -325,7 +325,7 @@ fn gpu_pending_cmyk_projection_applies_overwrites_to_nonzero_source() -> Result<
         return Ok(());
     }
 
-    let mut image = Image::frombytes("CMYK", (width, height), &bytes)?;
+    let mut image = Image::frombytes(crate::raster::Mode::ImageCmyk8, (width, height), &bytes)?;
     image.putpixel(100, 3, 0, 0, 0, 0)?;
     image.putpixel(257, 7, 0, 1, 0, 0)?;
     image.putpixel(514, 18, 0, 0, 0, 1)?;

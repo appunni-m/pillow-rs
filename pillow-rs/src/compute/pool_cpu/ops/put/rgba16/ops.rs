@@ -17,11 +17,11 @@ declare_data_strategies! {
 use super::super::helpers::put_alpha_strategy::declare_strategies as declare_alpha_strategies;
 
 declare_alpha_strategies! {
-    ImageRgba16, ImageRgba8, 0, 4;
+    ImageRgba16, ImageRgba16, 0, 4;
 }
 
 use super::super::helpers::put_alpha_data_strategy::declare_strategies as declare_alpha_data_strategies;
 
 declare_alpha_data_strategies! {
-    ImageRgba16, ImageRgba8, 0, 4;
+    ImageRgba16, ImageRgba16, 0, 4;
 }

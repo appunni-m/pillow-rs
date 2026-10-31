@@ -19,7 +19,7 @@ fn f_resize_dyadic_gpu_bytes_match_reference_and_publish_native_receipt() {
                 .map(|value| value.to_bits())
                 .collect::<Vec<_>>(),
         );
-        let source = Image::frombytes("F", source_size, &source_bytes).expect("F source");
+        let source = Image::frombytes(crate::raster::Mode::ImageF32, source_size, &source_bytes).expect("F source");
         let actual = match source
             .resize(
                 (i64::from(output_size.0), i64::from(output_size.1)),
@@ -63,7 +63,7 @@ fn assert_f_resize_box_chain(previous: bool) -> bool {
     // pass must still match Pillow's f64 accumulation and f32 store.
     let chain_values = [1.0f32, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0];
     let chain_source = Image::frombytes(
-        "F",
+        crate::raster::Mode::ImageF32,
         (4, 2),
         &f_resize_words_to_bytes(&chain_values.map(f32::to_bits)),
     )
@@ -273,7 +273,7 @@ fn f_resize_box_copy_native_preserves_special_words() {
         0x3fc0_0000, // finite control word
     ];
     let source_bytes: Vec<u8> = words.iter().flat_map(|word| word.to_le_bytes()).collect();
-    let source = Image::frombytes("F", (7, 1), &source_bytes).expect("F source");
+    let source = Image::frombytes(crate::raster::Mode::ImageF32, (7, 1), &source_bytes).expect("F source");
     let expected_words: Vec<u32> = words
         .iter()
         .flat_map(|word| {
@@ -334,7 +334,7 @@ fn f_resize_integer_emulation_matches_cpu_for_heterogeneous_significands() {
         .iter()
         .flat_map(|value| value.to_le_bytes())
         .collect();
-    let source = Image::frombytes("F", (2, 2), &source_bytes).expect("F source");
+    let source = Image::frombytes(crate::raster::Mode::ImageF32, (2, 2), &source_bytes).expect("F source");
     let filters = ["BILINEAR", "BICUBIC"];
     let sizes = [(1i64, 2i64), (2, 1)];
     let previous = Backend::set_pipeline_telemetry_enabled(true);
@@ -395,7 +395,7 @@ fn f_resize_signed_source() -> Image {
         .iter()
         .flat_map(|value| value.to_le_bytes())
         .collect();
-    Image::frombytes("F", (2, 2), &signed_bytes).expect("F source")
+    Image::frombytes(crate::raster::Mode::ImageF32, (2, 2), &signed_bytes).expect("F source")
 }
 
 fn assert_f_resize_signed_two_axis_case(source: &Image) -> bool {
@@ -441,7 +441,7 @@ fn f_resize_f64_two_axis_native_non_dyadic_matches_cpu() {
         .iter()
         .flat_map(|value| value.to_le_bytes())
         .collect();
-    let source = Image::frombytes("F", (2, 2), &source_bytes).expect("F source");
+    let source = Image::frombytes(crate::raster::Mode::ImageF32, (2, 2), &source_bytes).expect("F source");
     let expected = source
         .resize((1, 5), Some(ResampleInput::Name("BILINEAR".into())), None)
         .expect("CPU resize operation")
@@ -484,7 +484,7 @@ fn f_resize_f64_native_mixed_upscale_downscale_matches_cpu() {
         .iter()
         .flat_map(|value| value.to_le_bytes())
         .collect();
-    let source = Image::frombytes("F", (2, 2), &source_bytes).expect("F source");
+    let source = Image::frombytes(crate::raster::Mode::ImageF32, (2, 2), &source_bytes).expect("F source");
     let expected = source
         .resize((4, 1), Some(ResampleInput::Name("BILINEAR".into())), None)
         .expect("CPU mixed-geometry resize operation")
@@ -551,7 +551,7 @@ fn f_resize_f64_native_preserves_proven_overflow_outputs() {
     }
 
     let source_words = [0x7f7f_ffff, 0x7f7f_ffff, 0xff7f_ffff];
-    let source = Image::frombytes("F", (3, 1), &bytes(&source_words)).expect("F source");
+    let source = Image::frombytes(crate::raster::Mode::ImageF32, (3, 1), &bytes(&source_words)).expect("F source");
     let cases = [
         (
             ResampleInput::Name("BICUBIC".into()),

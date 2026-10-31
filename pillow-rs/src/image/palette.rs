@@ -6,7 +6,7 @@ use image_slash_star::{ImageFormat, ImageInfo};
 
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, Mode};
 
 use super::{Image, LoadedData, PalettedData, materialization_cache};
 
@@ -169,8 +169,7 @@ impl Image {
     /// pipeline's pending output.
     pub fn explicit_mode(&self) -> Option<&str> {
         match self {
-            Image::Loaded(data) => super::mode_boundary::pillow_mode_name_opt(data.explicit_mode)
-                .or_else(|| super::mode_boundary::pillow_mode_name(data.image.mode())),
+            Image::Loaded(data) => super::mode_boundary::pillow_mode_name(data.image.mode()),
             Image::Paletted(_) => Some("P"),
             Image::Pipeline {
                 explicit_mode: Some(m),
@@ -358,8 +357,14 @@ impl Image {
     /// Returns [`PilError::ValueError`] for an illegal image mode, unsupported
     /// raw palette mode, or an oversized palette.
     pub fn putpalette(&mut self, data: &[u8], rawmode: &str) -> Result<(), PilError> {
-        let mode = self.mode()?;
-        if !matches!(mode.as_str(), "L" | "LA" | "P" | "PA") {
+        let mode = self.mode_identity()?;
+        if !matches!(
+            mode,
+            Mode::ImageLuma8
+                | Mode::ImageLumaA8
+                | Mode::ImagePalette8
+                | Mode::ImagePaletteAlpha8
+        ) {
             return Err(PilError::ValueError("illegal image mode".to_owned()));
         }
         let (palette, palette_alpha) = split_palette_data(data, rawmode)?;
@@ -368,8 +373,8 @@ impl Image {
         let exif = self.exif_metadata();
         let materialized = self.materialize()?;
 
-        *self = match mode.as_str() {
-            "L" | "P" => Image::Paletted(PalettedData {
+        *self = match mode {
+            Mode::ImageLuma8 | Mode::ImagePalette8 => Image::Paletted(PalettedData {
                 indices: DynamicImage::ImagePalette8(materialized.to_luma8()),
                 palette,
                 palette_alpha,
@@ -378,14 +383,11 @@ impl Image {
                 exif,
                 materialized: materialization_cache(),
             }),
-            "LA" | "PA" => {
-                let image = DynamicImage::ImageLumaA8(materialized.to_luma_alpha8());
-                let decoded_mode = image.color().into();
+            Mode::ImageLumaA8 | Mode::ImagePaletteAlpha8 => {
+                let image = DynamicImage::ImagePaletteAlpha8(materialized.to_luma_alpha8());
                 Image::Loaded(LoadedData {
                     image: Arc::new(image),
                     known_zero_fill: false,
-                    explicit_mode: Some(crate::raster::Mode::ImagePaletteAlpha8),
-                    decoded_mode,
                     palette: Some(palette),
                     palette_alpha: Some(palette_alpha),
                     source_format,

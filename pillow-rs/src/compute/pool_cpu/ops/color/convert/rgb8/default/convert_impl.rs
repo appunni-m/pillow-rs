@@ -1,0 +1,101 @@
+//! Serial RGB8 source conversions over the native triplet samples.
+
+use crate::error::PilError;
+use crate::raster::{DynamicImage, GenericImageView, GrayAlphaImage, Mode, RgbImage, Rgba, RgbaImage};
+
+pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, PilError> {
+    match target {
+        Mode::ImageLuma8 => {
+            let kernel = crate::compute::pool_cpu::ops::grayscale::rgb8::default::grayscale_impl::prepare(source)?;
+            crate::compute::pool_cpu::ops::grayscale::rgb8::default::grayscale_impl::execute(kernel)
+                .map(DynamicImage::ImageLuma8)
+        }
+        Mode::ImageLumaA8 => convert_luma_alpha(source, Mode::ImageLumaA8),
+        // NO_PILLOW_SUPPORT: The archived Pillow Convert contract rejects RGB→La.
+        // The core extension writes native L with opaque alpha directly.
+        Mode::ImageLaPremultiplied8 => {
+            convert_luma_alpha(source, Mode::ImageLaPremultiplied8)
+        }
+        Mode::ImageRgb8 => Ok(DynamicImage::ImageRgb8(source.clone())),
+        Mode::ImageRgba8 => Ok(DynamicImage::ImageRgba8(RgbaImage::from_fn(
+            source.width(),
+            source.height(),
+            |x, y| {
+                let pixel = source.get_pixel(x, y);
+                Rgba([pixel[0], pixel[1], pixel[2], 255])
+            },
+        ))),
+        // NO_PILLOW_SUPPORT: The archived Pillow Convert contract rejects RGB→RGBa.
+        // Opaque alpha makes native RGB samples valid premultiplied samples.
+        Mode::ImageRgbPremultiplied8 => Ok(DynamicImage::ImageRgbPremultiplied8(
+            RgbaImage::from_fn(source.width(), source.height(), |x, y| {
+                let pixel = source.get_pixel(x, y);
+                Rgba([pixel[0], pixel[1], pixel[2], 255])
+            }),
+        )),
+        // NO_PILLOW_SUPPORT: The archived Pillow Convert contract rejects RGB→RGBX.
+        // The core extension supplies an opaque padding byte to native RGB samples.
+        Mode::ImageRgbx8 => Ok(DynamicImage::ImageRgbx8(RgbaImage::from_fn(
+            source.width(),
+            source.height(),
+            |x, y| {
+                let pixel = source.get_pixel(x, y);
+                Rgba([pixel[0], pixel[1], pixel[2], 255])
+            },
+        ))),
+        Mode::ImageCmyk8 => Ok(DynamicImage::ImageCmyk8(
+            crate::color::rgb_to_cmyk_inverse(source),
+        )),
+        Mode::ImageYCbCr8 => Ok(DynamicImage::ImageYCbCr8(
+            crate::color::rgb_buffer_to_ycbcr(source),
+        )),
+        Mode::ImageHsv8 => Ok(DynamicImage::ImageHsv8(
+            crate::color::rgb_buffer_to_hsv(source),
+        )),
+        Mode::ImageI32 => Ok(crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_i32_rgb8(source)),
+        Mode::ImageF32 => Ok(crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_f32_rgb8(source)),
+        _ => Err(PilError::ValueError("image has wrong mode".into())),
+    }
+}
+
+fn convert_luma_alpha(source: &RgbImage, target: Mode) -> Result<DynamicImage, PilError> {
+    let source_dims = crate::checked_dims::CheckedDims::new_allow_empty(
+        source.width(),
+        source.height(),
+        3,
+    )?;
+    let output_dims = crate::checked_dims::CheckedDims::new_allow_empty(
+        source.width(),
+        source.height(),
+        2,
+    )?;
+    if source.as_raw().len() != source_dims.total_bytes() {
+        return Err(PilError::InternalError(
+            "RGB Convert source storage did not match its dimensions".into(),
+        ));
+    }
+
+    let mut bytes = Vec::with_capacity(output_dims.total_bytes());
+    for pixel in source.as_raw().chunks_exact(3).take(source_dims.total_pixels()) {
+        bytes.extend_from_slice(&[
+            crate::color::rgb_to_luma_u8(pixel[0], pixel[1], pixel[2]),
+            u8::MAX,
+        ]);
+    }
+    if bytes.len() != output_dims.total_bytes() {
+        return Err(PilError::InternalError(
+            "RGB Convert luma-alpha output shape mismatch".into(),
+        ));
+    }
+    if bytes.capacity() != 0 {
+        crate::compute::record_pipeline_allocation(bytes.capacity());
+    }
+    let output = GrayAlphaImage::from_raw(source.width(), source.height(), bytes)
+        .ok_or_else(|| PilError::InternalError("RGB Convert luma-alpha output shape mismatch".into()))?;
+
+    match target {
+        Mode::ImageLumaA8 => Ok(DynamicImage::ImageLumaA8(output)),
+        Mode::ImageLaPremultiplied8 => Ok(DynamicImage::ImageLaPremultiplied8(output)),
+        _ => Err(PilError::InternalError("invalid RGB8 alpha target".into())),
+    }
+}

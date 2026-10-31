@@ -2,7 +2,7 @@ use super::merge;
 use crate::image::{FormattedImageData, FormattedPixelValue, Image};
 
 fn l_band(bytes: &[u8]) -> Image {
-    Image::frombytes("L", (2, 1), bytes).expect("valid L band")
+    Image::frombytes(crate::raster::Mode::ImageLuma8, (2, 1), bytes).expect("valid L band")
 }
 
 #[test]
@@ -78,7 +78,7 @@ fn assert_lab_merge_encoding(l0: Image, l1: Image, l2: Image) {
 
 #[test]
 fn merge_preserves_first_palette_band_and_rejects_later_palette() {
-    let palette = Image::frombytes("P", (2, 1), &[1, 2]).expect("valid P band");
+    let palette = Image::frombytes(crate::raster::Mode::ImagePalette8, (2, 1), &[1, 2]).expect("valid P band");
     let l0 = l_band(&[0x20, 0x21]);
     let l1 = l_band(&[0x30, 0x31]);
 
@@ -91,7 +91,7 @@ fn merge_preserves_first_palette_band_and_rejects_later_palette() {
 
     let later = merge(
         "RGB",
-        &[Image::frombytes("L", (2, 1), &[1, 2]).unwrap(), palette, l1],
+        &[Image::frombytes(crate::raster::Mode::ImageLuma8, (2, 1), &[1, 2]).unwrap(), palette, l1],
     );
     assert_eq!(
         later.expect_err("later P must fail").to_string(),
@@ -103,7 +103,7 @@ fn merge_preserves_first_palette_band_and_rejects_later_palette() {
 fn merge_keeps_typed_scalar_storage() {
     let mode1 = merge(
         "1",
-        &[Image::frombytes("1", (2, 1), &[0xa0]).expect("valid 1 band")],
+        &[Image::frombytes(crate::raster::Mode::One, (2, 1), &[0xa0]).expect("valid 1 band")],
     )
     .expect("1 merge");
     assert_eq!(mode1.tobytes().expect("1 bytes"), [0x80]);
@@ -111,7 +111,7 @@ fn merge_keeps_typed_scalar_storage() {
     let int = merge(
         "I",
         &[
-            Image::frombytes("I", (2, 1), &[1, 0, 0, 0, 0xff, 0xff, 0xff, 0xff])
+            Image::frombytes(crate::raster::Mode::ImageI32, (2, 1), &[1, 0, 0, 0, 0xff, 0xff, 0xff, 0xff])
                 .expect("valid I band"),
         ],
     )
@@ -124,7 +124,7 @@ fn merge_keeps_typed_scalar_storage() {
     let float = merge(
         "F",
         &[
-            Image::frombytes("F", (2, 1), &[0, 0, 0xc0, 0x3f, 0, 0, 0x10, 0xc0])
+            Image::frombytes(crate::raster::Mode::ImageF32, (2, 1), &[0, 0, 0xc0, 0x3f, 0, 0, 0x10, 0xc0])
                 .expect("valid F band"),
         ],
     )
@@ -150,7 +150,7 @@ fn merge_keeps_i16_byte_order_and_scalar_values() {
         ("I;16B", vec![0x01, 0x02, 0x03, 0x04]),
         ("I;16N", vec![0x01, 0x02, 0x03, 0x04]),
     ] {
-        let band = Image::frombytes(mode, (2, 1), &bytes).expect("valid I;16 band");
+        let band = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (2, 1), &bytes).expect("valid I;16 band");
         let merged = merge(mode, &[band]).expect("I;16 merge succeeds");
         assert_eq!(merged.mode().expect("mode"), mode);
         assert_eq!(merged.tobytes().expect("raw bytes"), bytes);
@@ -163,8 +163,8 @@ fn merge_keeps_i16_byte_order_and_scalar_values() {
 
 #[test]
 fn merge_rejects_i16_band_mode_and_arity_mismatches() {
-    let band = Image::frombytes("I;16", (1, 1), &[0x2a, 0x00]).expect("valid I;16 band");
-    let other = Image::frombytes("I;16L", (1, 1), &[0x2a, 0x00]).expect("valid I;16L band");
+    let band = Image::frombytes(crate::raster::Mode::ImageI16, (1, 1), &[0x2a, 0x00]).expect("valid I;16 band");
+    let other = Image::frombytes(crate::raster::Mode::ImageI16L, (1, 1), &[0x2a, 0x00]).expect("valid I;16L band");
     assert_eq!(
         merge("I;16", &[]).expect_err("missing band").to_string(),
         "wrong number of bands"

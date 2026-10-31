@@ -93,6 +93,48 @@ pub(crate) fn grouped<P: Pixel<Subpixel = u8>, const CHANNELS: usize>(
     Ok(DynamicImage::ImageLuma8(gray))
 }
 
+/// Writes an already validated byte-band request directly to its final slice.
+/// Missing source pixels retain the zero fill of the image-producing default.
+pub(crate) fn grouped_into<P: Pixel<Subpixel = u8>, const CHANNELS: usize>(
+    input: CheckedBand<'_, P>,
+    output: &mut [u8],
+) -> Result<(u64, u64, &'static str), PilError> {
+    let pixel_count = input.dimensions.total_pixels();
+    let Some(source_len) = pixel_count.checked_mul(CHANNELS) else {
+        return Err(PilError::InternalError(
+            "ExtractBand source length overflow".into(),
+        ));
+    };
+    if output.len() != pixel_count {
+        return Err(PilError::InternalError(
+            "SIMD ExtractBand output length mismatch".into(),
+        ));
+    }
+    let source = input.input.as_raw();
+    if source.len() < source_len {
+        output.fill(0);
+    }
+    let band = input.index.min(CHANNELS - 1);
+    let grouped_pixels = pixel_count / 4 * 4;
+    for (dst, pixels) in output[..grouped_pixels]
+        .chunks_exact_mut(4)
+        .zip(source.chunks_exact(CHANNELS * 4).take(grouped_pixels / 4))
+    {
+        dst[0] = pixels[band];
+        dst[1] = pixels[band + CHANNELS];
+        dst[2] = pixels[band + CHANNELS * 2];
+        dst[3] = pixels[band + CHANNELS * 3];
+    }
+    let source_tail = source.get(grouped_pixels * CHANNELS..).unwrap_or_default();
+    for (dst, pixel) in output[grouped_pixels..]
+        .iter_mut()
+        .zip(source_tail.chunks_exact(CHANNELS).take(pixel_count - grouped_pixels))
+    {
+        *dst = pixel[band];
+    }
+    Ok((0, 0, "cpu"))
+}
+
 /// Extracts one high-depth band directly from its native samples.
 ///
 /// None selects the opaque byte used by the existing RGBA conversion for

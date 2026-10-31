@@ -1,14 +1,16 @@
 //! Typed band extraction and native writes with exhaustive source-mode strategies.
 //!
 //! TODO(pillow-rs#3ptb): connect these prepared plans to the serial pool/batch
-//! executor and thumbnail fusion, migrate the remaining public metadata
-//! boundaries, and retire the separate SIMD eager route.
-//! TODO(pillow-rs#3ptb): review every cross-mode conversion in PutData,
+//! executor and thumbnail fusion, and migrate the remaining public metadata
+//! boundaries. GetData's direct output-buffer route now uses the prepared
+//! ExtractBand mode/architecture strategy.
+//! TODO(pillow-rs#3ptb): finish reviewing cross-mode conversions in PutData,
 //! PutAlpha, PutAlphaData, and ExtractBand against the archived contract. Keep
-//! conversions only when they are part of that operation's Pillow semantics;
-//! replace conversions used only for kernel reuse with native-mode code.
+//! conversions only when they are part of the operation's semantics; replace
+//! conversions used only for kernel reuse with native-mode code. PutAlpha and
+//! PutAlphaData now retain native high-depth samples, pending full source review.
 // NO_PILLOW_SUPPORT: Internal high-depth raster identities have declared
-// core-only band and mutation routes. The TODO below still audits their exact
+// core-only band and mutation routes. The TODO above still audits the remaining
 // sample semantics and removes conversions used only for implementation reuse.
 //!
 //! This internal operation retains its original defensive index behavior.
@@ -120,6 +122,26 @@ macro_rules! declare_modes {
                     $(Self::$mode(strategy) => super::$module::ops::execute(strategy),)+
                 }
             }
+
+            pub(crate) fn execute_into(
+                self,
+                output: &mut [u8],
+            ) -> Result<Option<(u64, u64, &'static str)>, PilError> {
+                match self {
+                    Self::ImageLumaA8(strategy) => super::luma_a8::ops::execute_into(strategy, output).map(Some),
+                    Self::ImagePaletteAlpha8(strategy) =>
+                        super::palette_alpha8::ops::execute_into(strategy, output).map(Some),
+                    Self::ImageRgb8(strategy) => super::rgb8::ops::execute_into(strategy, output).map(Some),
+                    Self::ImageRgba8(strategy) => super::rgba8::ops::execute_into(strategy, output).map(Some),
+                    Self::ImageRgbPremultiplied8(strategy) =>
+                        super::rgb_premultiplied8::ops::execute_into(strategy, output).map(Some),
+                    Self::ImageRgbx8(strategy) => super::rgbx8::ops::execute_into(strategy, output).map(Some),
+                    Self::ImageCmyk8(strategy) => super::cmyk8::ops::execute_into(strategy, output).map(Some),
+                    Self::ImageHsv8(strategy) => super::hsv8::ops::execute_into(strategy, output).map(Some),
+                    Self::ImageYCbCr8(strategy) => super::ycbcr8::ops::execute_into(strategy, output).map(Some),
+                    _ => Ok(None),
+                }
+            }
         }
 
         impl PreparedPutData<'_> {
@@ -185,6 +207,7 @@ declare_modes! {
 pub(crate) static EXTRACT_BAND_SUPPORT: OperationSupport = OperationSupport::new(
     OperationId::ExtractBand, &[], classify_mode,
 );
+
 pub(crate) static PUT_DATA_SUPPORT: OperationSupport = OperationSupport::new(
     OperationId::PutData, &[], classify_data_mode,
 );

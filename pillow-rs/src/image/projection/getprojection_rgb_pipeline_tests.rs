@@ -5,7 +5,7 @@ use crate::error::PilError;
 fn cpu_zero_rgb_source_preserves_sparse_overwrite_order() -> Result<(), PilError> {
     use crate::compute::Backend;
 
-    let mut image = Image::new(17, 4, "RGB", (0, 0, 0, 255))?;
+    let mut image = Image::new(17, 4, crate::raster::Mode::ImageRgb8, (0, 0, 0, 255))?;
     image.putpixel(0, 0, 1, 0, 0, 0)?;
     image.putpixel(16, 3, 0, 1, 0, 0)?;
     image.putpixel(0, 0, 0, 0, 0, 255)?;
@@ -38,7 +38,7 @@ fn cpu_zero_rgb_source_preserves_sparse_overwrite_order() -> Result<(), PilError
 fn cpu_pending_rgb_projection_applies_overwrites_and_ignores_alpha() -> Result<(), PilError> {
     use crate::compute::Backend;
 
-    let mut image = Image::new(7, 4, "RGB", (1, 0, 0, 255))?;
+    let mut image = Image::new(7, 4, crate::raster::Mode::ImageRgb8, (1, 0, 0, 255))?;
     for x in 0..7 {
         image.putpixel(x, 3, 0, 0, 0, 255)?;
     }
@@ -61,7 +61,7 @@ fn cpu_pending_rgb_projection_applies_overwrites_and_ignores_alpha() -> Result<(
 fn simd_pending_rgb_projection_executes_vector_blocks() -> Result<(), PilError> {
     use crate::compute::Backend;
 
-    let mut image = Image::new(17, 4, "RGB", (0, 0, 0, 255))?;
+    let mut image = Image::new(17, 4, crate::raster::Mode::ImageRgb8, (0, 0, 0, 255))?;
     image.putpixel(0, 0, 1, 0, 0, 0)?;
     image.putpixel(16, 3, 0, 1, 0, 0)?;
     image.putpixel(4, 2, 0, 0, 0, 255)?;
@@ -120,7 +120,7 @@ fn gpu_pending_rgb_projection_executes_terminal_and_ignores_alpha() -> Result<()
         return Ok(());
     }
 
-    let mut image = Image::new(17, 4, "RGB", (0, 0, 0, 255))?;
+    let mut image = Image::new(17, 4, crate::raster::Mode::ImageRgb8, (0, 0, 0, 255))?;
     image.putpixel(0, 0, 1, 0, 0, 0)?;
     image.putpixel(16, 3, 0, 1, 0, 0)?;
     image.putpixel(4, 2, 0, 0, 0, 255)?;

@@ -1,22 +1,10 @@
-//! Enhance operation registration.
-use super::prelude::{
-    DynamicImage, PilError, PipelineOp, Registry, op_enhance_brightness,
-    op_enhance_color_saturation, op_enhance_contrast, op_enhance_sharpness,
-};
+//! Enhancement operation registration.
+use super::prelude::Registry;
 fn register_brightness_contrast(m: &mut Registry) {
     m.insert(
         "Brightness",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::Brightness { factor } = op {
-                    op_enhance_brightness(img, *factor, mode)
-                } else {
-                    Err(PilError::ValueError("expected Brightness op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::enhance::ops::prepare_pipeline,
             "brightness.wgsl"
         ),
     );
@@ -24,16 +12,7 @@ fn register_brightness_contrast(m: &mut Registry) {
     m.insert(
         "Contrast",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::Contrast { factor } = op {
-                    op_enhance_contrast(img, *factor, mode)
-                } else {
-                    Err(PilError::ValueError("expected Contrast op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::enhance::ops::prepare_contrast_pipeline,
             "contrast.wgsl"
         ),
     );
@@ -43,16 +22,7 @@ fn register_color_sharpness(m: &mut Registry) {
     m.insert(
         "ColorSaturation",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::ColorSaturation { factor } = op {
-                    op_enhance_color_saturation(img, *factor, mode)
-                } else {
-                    Err(PilError::ValueError("expected ColorSaturation op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::enhance::ops::prepare_color_saturation_pipeline,
             "color_saturation.wgsl"
         ),
     );
@@ -60,16 +30,7 @@ fn register_color_sharpness(m: &mut Registry) {
     m.insert(
         "Sharpness",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::Sharpness { factor } = op {
-                    op_enhance_sharpness(img, *factor, mode)
-                } else {
-                    Err(PilError::ValueError("expected Sharpness op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::enhance::ops::prepare_sharpness_pipeline,
             "sharpness.wgsl"
         ),
     );

@@ -17,10 +17,10 @@ pillow-rs = "=12.2.3"
 ## First operation
 
 ```rust
-use pillow_rs::Image;
+use pillow_rs::{Image, Mode};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let image = Image::new(4, 4, "RGB", (0, 128, 255, 255))?;
+    let image = Image::new(4, 4, Mode::ImageRgb8, (0, 128, 255, 255))?;
     assert_eq!(image.size()?, (4, 4));
     let gray = image.convert("L", None, None, None, None)?;
     assert_eq!(gray.tobytes()?.len(), 16);
@@ -28,8 +28,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-The constructor takes width, height, mode, and an RGBA color tuple. The image
-retains its selected mode.
+The constructor takes width, height, a typed mode, and an RGBA color tuple.
+The image retains its selected mode.
 
 <!-- release:rust-api -->
 [Rust API reference](https://docs.rs/pillow-rs/12.2.3/pillow_rs/).

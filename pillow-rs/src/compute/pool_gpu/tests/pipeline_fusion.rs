@@ -169,7 +169,7 @@ fn assert_native_gpu_transpose_fusion_mode(
     let bytes: Vec<u8> = (0..5 * 3 * channels)
         .map(|index: usize| index.wrapping_mul(29).wrapping_add(index / 3) as u8)
         .collect();
-    let source = Image::frombytes(mode, (5, 3), &bytes)
+    let source = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (5, 3), &bytes)
         .expect("transpose source")
         .materialize()
         .expect("native transpose source");
@@ -250,7 +250,7 @@ fn gpu_transpose_public_pa_chain_preserves_materialization_boundary() {
     let bytes: Vec<u8> = (0usize..5 * 3 * 2)
         .map(|index| index.wrapping_mul(29).wrapping_add(index / 3) as u8)
         .collect();
-    let source = Image::frombytes("PA", (5, 3), &bytes).expect("PA transpose source");
+    let source = Image::frombytes(crate::raster::Mode::ImagePaletteAlpha8, (5, 3), &bytes).expect("PA transpose source");
     let first = Image::push_op(
         &source,
         PipelineOp::Transpose {
@@ -389,7 +389,7 @@ fn grayscale_f_prefix_keeps_gpu_suffix_receipt_terminal() {
     .into_iter()
     .flatten()
     .collect::<Vec<_>>();
-    let source = Image::frombytes("F", (2, 2), &source_bytes).expect("F source");
+    let source = Image::frombytes(crate::raster::Mode::ImageF32, (2, 2), &source_bytes).expect("F source");
     let pipeline = crate::ops::imageops::invert(
         &crate::ops::imageops::grayscale(&source).expect("grayscale pipeline"),
     )

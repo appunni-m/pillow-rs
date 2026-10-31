@@ -1,4 +1,4 @@
-use super::{Draw, Image, PilError, Rgba, blend_u8, pil_blend};
+use super::{Draw, Image, Mode, PilError, Rgba, blend_u8, pil_blend};
 impl Draw {
     pub(super) fn pack_text_ink(fill: (u8, u8, u8, u8)) -> i64 {
         i64::from(fill.0) | (i64::from(fill.1) << 8) | (i64::from(fill.2) << 16)
@@ -76,7 +76,7 @@ impl Draw {
                     blend_u8(source_rgb.2, raw[destination_offset + 2], coverage, inverse);
             }
         }
-        self.image = Image::from_dynamic(canvas, None);
+        self.image = Image::from_dynamic(canvas);
         Ok(true)
     }
 
@@ -141,7 +141,7 @@ impl Draw {
                 // destination; RGBA destinations blend it separately.
                 let channel_alpha = sa;
                 let inv = 255u16 - u16::from(channel_alpha);
-                let alpha = if mode == "RGBA" && !rgba_blend_rgb {
+                let alpha = if mode == Mode::ImageRgba8 && !rgba_blend_rgb {
                     blend_u8(fill.3, dp[3], sa, inv)
                 } else {
                     255
@@ -152,7 +152,11 @@ impl Draw {
                     (fill.0, fill.1, fill.2)
                 };
                 let (r, g, b) =
-                    if mode == "RGBA" && !rgba_blend_rgb && !color_mask && !blend_rgba_overlay {
+                    if mode == Mode::ImageRgba8
+                        && !rgba_blend_rgb
+                        && !color_mask
+                        && !blend_rgba_overlay
+                    {
                         // Pillow's RGBA text writes the fill RGB directly and
                         // blends only the alpha channel with glyph coverage.
                         (fill.0, fill.1, fill.2)
@@ -166,17 +170,19 @@ impl Draw {
                 canvas.put_pixel(dx, dy, Rgba([r, g, b, alpha]));
             }
         }
-        if matches!(mode.as_str(), "YCbCr" | "HSV") {
+        if matches!(mode, Mode::ImageYCbCr8 | Mode::ImageHsv8 | Mode::ImageLab8) {
             // Three-band canvases store no alpha; rebuild as RGB tagged with
             // the source mode so the result keeps Pillow's 3-byte layout.
-            self.image = Image::from_dynamic(
-                crate::raster::DynamicImage::ImageRgb8(
-                    crate::raster::DynamicImage::ImageRgba8(canvas).to_rgb8(),
-                ),
-                crate::image::mode_boundary::parse_pillow_mode(&mode),
-            );
+            let rgb = crate::raster::DynamicImage::ImageRgba8(canvas).to_rgb8();
+            let image = match mode {
+                Mode::ImageYCbCr8 => crate::raster::DynamicImage::ImageYCbCr8(rgb),
+                Mode::ImageLab8 => crate::raster::DynamicImage::ImageLab8(rgb),
+                Mode::ImageHsv8 => crate::raster::DynamicImage::ImageHsv8(rgb),
+                _ => unreachable!("three-band mode selected"),
+            };
+            self.image = Image::from_dynamic(image);
         } else {
-            self.set_image(canvas);
+            self.set_image(canvas)?;
         }
         Ok(())
     }
@@ -193,18 +199,22 @@ impl Draw {
         w: u32,
         h: u32,
         pixels: &[u8],
-        mode: &str,
+        mode: Mode,
         fill: (u8, u8, u8, u8),
         fill_is_integer: bool,
     ) -> Result<(), PilError> {
         let img = self.image.materialize()?;
         match mode {
-            "1" => self.text_compose_mode_1(img, x, y, w, h, pixels, fill),
-            "L" => self.text_compose_mode_l(img, x, y, w, h, pixels, fill),
-            "LA" => self.text_compose_mode_la(img, x, y, w, h, pixels, fill),
-            "CMYK" => self.text_compose_mode_cmyk(img, x, y, w, h, pixels, fill, fill_is_integer),
-            "P" => self.text_compose_mode_p(img, x, y, w, h, pixels, fill),
-            "I" | "F" => self.text_compose_mode_numeric(img, x, y, w, h, pixels, mode, fill),
+            Mode::One => self.text_compose_mode_1(img, x, y, w, h, pixels, fill),
+            Mode::ImageLuma8 => self.text_compose_mode_l(img, x, y, w, h, pixels, fill),
+            Mode::ImageLumaA8 => self.text_compose_mode_la(img, x, y, w, h, pixels, fill),
+            Mode::ImageCmyk8 => {
+                self.text_compose_mode_cmyk(img, x, y, w, h, pixels, fill, fill_is_integer)
+            }
+            Mode::ImagePalette8 => self.text_compose_mode_p(img, x, y, w, h, pixels, fill),
+            Mode::ImageI32 | Mode::ImageF32 => {
+                self.text_compose_mode_numeric(img, x, y, w, h, pixels, mode, fill)
+            }
             _ => self.text_compose_rgba(x, y, w, h, pixels, fill, false, false, false),
         }
     }
@@ -235,10 +245,7 @@ impl Draw {
                 }
             }
         }
-        self.image = Image::from_dynamic(
-            crate::raster::DynamicImage::ImageLuma8(luma),
-            Some(crate::raster::Mode::One),
-        );
+        self.image = Image::from_dynamic(crate::raster::DynamicImage::One(luma));
         Ok(())
     }
 
@@ -276,7 +283,7 @@ impl Draw {
                 );
             }
         }
-        self.image = Image::from_dynamic(crate::raster::DynamicImage::ImageLuma8(luma), None);
+        self.image = Image::from_dynamic(crate::raster::DynamicImage::ImageLuma8(luma));
         Ok(())
     }
 
@@ -312,10 +319,7 @@ impl Draw {
                 la.put_pixel(dx, dy, crate::raster::LumaA([new_luma, new_alpha]));
             }
         }
-        self.image = Image::from_dynamic(
-            crate::raster::DynamicImage::ImageLumaA8(la),
-            Some(crate::raster::Mode::ImageLumaA8),
-        );
+        self.image = Image::from_dynamic(crate::raster::DynamicImage::ImageLumaA8(la));
         Ok(())
     }
 
@@ -364,10 +368,7 @@ impl Draw {
                 rgba.put_pixel(dx, dy, pixel);
             }
         }
-        self.image = Image::from_dynamic(
-            crate::raster::DynamicImage::ImageRgba8(rgba),
-            Some(crate::raster::Mode::ImageCmyk8),
-        );
+        self.image = Image::from_dynamic(crate::raster::DynamicImage::ImageCmyk8(rgba));
         Ok(())
     }
 
@@ -460,10 +461,7 @@ impl Draw {
                 luma.put_pixel(dx as u32, dy as u32, crate::raster::Luma([ink]));
             }
         }
-        self.image = Image::from_dynamic(
-            crate::raster::DynamicImage::ImageLuma8(luma),
-            Some(crate::raster::Mode::ImagePalette8),
-        );
+        self.image = Image::from_dynamic(crate::raster::DynamicImage::ImagePalette8(luma));
         Ok(())
     }
 
@@ -475,7 +473,7 @@ impl Draw {
         w: u32,
         h: u32,
         pixels: &[u8],
-        mode: &str,
+        mode: Mode,
         fill: (u8, u8, u8, u8),
     ) -> Result<(), PilError> {
         let mut rgba = img.to_rgba8();
@@ -495,10 +493,12 @@ impl Draw {
                 rgba.put_pixel(dx as u32, dy as u32, Rgba(ink));
             }
         }
-        self.image = Image::from_dynamic(
-            crate::raster::DynamicImage::ImageRgba8(rgba),
-            crate::image::mode_boundary::parse_pillow_mode(&mode),
-        );
+        let image = match mode {
+            Mode::ImageI32 => crate::raster::DynamicImage::ImageI32(rgba),
+            Mode::ImageF32 => crate::raster::DynamicImage::ImageF32(rgba),
+            _ => unreachable!("numeric text strategy is selected for I and F modes"),
+        };
+        self.image = Image::from_dynamic(image);
         Ok(())
     }
 }

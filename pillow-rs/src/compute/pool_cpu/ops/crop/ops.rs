@@ -2,10 +2,11 @@
 //!
 //! TODO(pillow-rs#3ptb): retire the separately registered SIMD crop adapter
 //! after its caller compatibility route has an injected CPU destination. Its
-//! ordinary native-byte row copies remain Default behavior; the archived
-//! I;16 vector copy now has exact mode and architecture strategies. Its
-//! remaining eligibility/error compatibility needs reconciliation. `CropBorder`
-//! composes nonempty requests over this prepared crop family.
+//! ordinary native-byte path is the same row-span copy as each exact mode's
+//! Default `ByteCrop`; the archived I;16 vector copy now has exact mode and
+//! architecture strategies. Reconcile adapter eligibility and error behavior
+//! before removing that route. `CropBorder` composes nonempty requests over
+//! this prepared crop family.
 
 // NO_PILLOW_SUPPORT: The five internal high-depth raster identities below use
 // exact typed sample-copy strategies even though Pillow has no mode spellings

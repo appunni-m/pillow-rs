@@ -367,15 +367,6 @@ fn cached_filter_coeffs_f64(
     cache_filter_coeffs_f64(key, coeffs)
 }
 
-/// PIL's ROUND_UP: (int)((f) >= 0.0 ? (f) + 0.5 : (f) - 0.5)
-pub(crate) fn round_up(f: f64) -> f64 {
-    if f >= 0.0 {
-        (f + 0.5).trunc()
-    } else {
-        (f - 0.5).trunc()
-    }
-}
-
 /// Precompute f64 (double-precision) coefficients matching PIL's 32-bit image resample.
 fn _precompute_coeffs_f64_impl(
     out_size: u32,

@@ -2,7 +2,7 @@
 
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
-use crate::ops::pil_resize::round_up;
+use crate::compute::helpers::resampling::rounding::round_up;
 use crate::raster::RgbaImage;
 
 fn scalar_index(x: u32, y: u32, width: u32) -> usize {

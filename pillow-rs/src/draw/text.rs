@@ -1,4 +1,4 @@
-use super::{Draw, blend_u8, pil_blend};
+use super::{Draw, Mode, blend_u8, pil_blend};
 use crate::error::PilError;
 use crate::image::Image;
 use crate::raster::Rgba;
@@ -324,7 +324,10 @@ impl Draw {
     ) -> Result<(u32, u32), PilError> {
         let mode = self.effective_mode();
         self.validate_text_options(options)?;
-        let binary = matches!(mode.as_str(), "1" | "P" | "I" | "F");
+        let binary = matches!(
+            mode,
+            Mode::One | Mode::ImagePalette8 | Mode::ImageI32 | Mode::ImageF32
+        );
         let mut options = options.clone();
         if binary && options.mode.is_none() {
             options.mode = Some("1".to_string());
@@ -361,7 +364,8 @@ impl Draw {
         // expanding the full image and grayscale mask to RGBA only to narrow
         // them again adds work without changing those semantics.
         let rgba_blend_rgb = self.alpha_blend_rgb();
-        let rgb_target = (mode == "RGB" && !rgba_blend_rgb) || (mode == "RGBA" && rgba_blend_rgb);
+        let rgb_target = (mode == Mode::ImageRgb8 && !rgba_blend_rgb)
+            || (mode == Mode::ImageRgba8 && rgba_blend_rgb);
         if rgb_target
             && self.text_compose_rgb_native(draw_x, draw_y, w, h, &mask, fill, color_mask)?
         {
@@ -374,8 +378,8 @@ impl Draw {
             text_mask_to_rgba(mask, render_fill)
         };
 
-        match mode.as_str() {
-            "RGB" | "RGBA" => self.text_compose_rgba(
+        match mode {
+            Mode::ImageRgb8 | Mode::ImageRgba8 => self.text_compose_rgba(
                 draw_x,
                 draw_y,
                 w,

@@ -1,7 +1,7 @@
 //! Supporting enums and state for pipeline operation descriptors.
 
 /// Resampling filter used by resize-like operations.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResampleFilter {
     /// Nearest-neighbor sampling.
     Nearest,
@@ -102,47 +102,12 @@ pub enum TransformMethod {
     Mesh,
 }
 
-/// Pillow image mode used by pipeline operations.
+/// Compatibility name for the canonical Pillow-owned operation mode.
 ///
-/// This enum carries mode intent through the pipeline before conversion to a
-/// concrete image-buffer representation.
-///
-/// TODO(cpu-migration): use the canonical `raster::Mode` for operation mode
-/// inputs and retain narrower payload descriptors only where their distinct
-/// input semantics require them.
-#[derive(Debug, Clone)]
-pub enum ColorMode {
-    /// 8-bit luma.
-    L,
-    /// 8-bit luma plus alpha.
-    LA,
-    /// Premultiplied 8-bit luma plus alpha (`La`).
-    LaPremultiplied,
-    /// 8-bit red, green, and blue.
-    RGB,
-    /// 8-bit red, green, blue, and alpha.
-    RGBA,
-    /// Premultiplied 8-bit red, green, blue, and alpha (`RGBa`).
-    RgbPremultiplied,
-    /// RGB bytes with an opaque padding byte (`RGBX`).
-    Rgbx,
-    /// Cyan, magenta, yellow, and key/black.
-    CMYK,
-    /// Luma and chroma channels.
-    YCbCr,
-    /// Hue, saturation, and value.
-    HSV,
-    /// 32-bit signed integer pixels.
-    I,
-    /// 32-bit floating-point pixels.
-    F,
-    /// Unsigned 16-bit luma samples used by `I;16*` conversions.
-    I16,
-    /// Palette-indexed pixels.
-    P,
-    /// Pillow mode `"1"` binary pixels.
-    Mode1,
-}
+/// Pipeline targets now carry the same exact identity as materialized
+/// [`crate::raster::DynamicImage`] values. Historical associated names remain
+/// available on `raster::Mode` while callers migrate to its explicit variants.
+pub use crate::raster::Mode as ColorMode;
 
 /// Existing normalized-byte payload descriptor for mutating pipeline operations.
 ///
@@ -206,7 +171,7 @@ impl PixelMode {
 
     /// Parses a Pillow mode name used by the core image API.
     ///
-    /// TODO(cpu-migration): parse mode strings in host adapters and pass a
+    /// TODO(pillow-rs#3ptb): parse mode strings in host adapters and pass a
     /// typed mode into Rust operation APIs.
     pub(crate) fn from_name(mode: &str) -> Option<Self> {
         match mode {

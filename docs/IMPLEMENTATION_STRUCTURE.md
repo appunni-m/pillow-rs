@@ -384,6 +384,14 @@ The descriptor must also distinguish Pillow-defined support from intentional
 core-only extensions, including extensions unavailable through Pillow's
 string-mode API.
 
+For operations whose typed parameter selects an output mode, report scope for
+the exact source/target pair. `ModeSupport::scope()` describes a source-mode
+route; it must not label every target of that source the same way. Declare
+accepted core-only targets and their reason in the target input contract, and
+expose the pair classification through `OperationSupport::scope_for_target`.
+This keeps a Pillow-defined RGB source route from obscuring native-only target
+extensions while preserving one exhaustive target contract for admission.
+
 ## 4. Exact CPU placement
 
 The implementation path is:
@@ -454,13 +462,15 @@ pool_cpu/
 
 ## 5. Family ownership
 
-This table assigns the baseline's 84 `PipelineOp` variants to target owners.
-It is a migration map, not a replacement for the source enum or parity manifest.
+This table assigns the baseline's 84 `PipelineOp` variants to target owners
+and names the direct-operation owner established by this migration. It is a
+migration map, not a replacement for the source enum or parity manifest.
 Public CPU operations that bypass `PipelineOp` must also be inventoried and
 migrated into their corresponding owner.
 
-| Family | Pipeline operation ownership |
+| Family | Operation ownership |
 | --- | --- |
+| `analysis` | Direct materialized analysis operations, including `GetProjection`; each operation retains its own `OperationId` and support descriptor. |
 | `resize` | `Resize`, `ResizeBoxed` |
 | `crop` | `Crop` |
 | `rotate` | `Rotate` |

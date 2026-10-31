@@ -5,6 +5,11 @@ use pillow_rs::Image as RsImage;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::{JsValue, wasm_bindgen};
 
+fn parse_pillow_mode(mode: &str) -> Result<pillow_rs::Mode, JsValue> {
+    pillow_rs::Mode::from_pillow_name(mode)
+        .ok_or_else(|| err(pillow_rs::PilError::ValueError("unrecognized image mode".into())))
+}
+
 fn putdata_uint8_values(
     image: &mut RsImage,
     data: &JsValue,
@@ -382,7 +387,7 @@ impl Image {
     /// Creates an image from raw pixel bytes in the requested mode and dimensions.
     #[wasm_bindgen(js_name = "fromBytes")]
     pub fn frombytes(&self, m: &str, w: u32, h: u32, d: Vec<u8>) -> Result<Image, JsValue> {
-        RsImage::frombytes(m, (w, h), &d)
+        RsImage::frombytes(parse_pillow_mode(m)?, (w, h), &d)
             .map(|i| Image { inner: i })
             .map_err(err)
     }
@@ -395,7 +400,7 @@ impl Image {
         h: u32,
         d: Vec<u8>,
     ) -> Result<(), JsValue> {
-        self.inner = RsImage::frombytes(m, (w, h), &d).map_err(err)?;
+        self.inner = RsImage::frombytes(parse_pillow_mode(m)?, (w, h), &d).map_err(err)?;
         Ok(())
     }
     /// Pastes an image or color value into this image, with an optional box and mask.
@@ -721,7 +726,7 @@ pub fn image_open_path(_path: &str) -> Result<Image, JsValue> {
 #[wasm_bindgen(js_name = "imageNew")]
 /// Creates a new image filled with the supplied RGBA color.
 pub fn image_new(mode: &str, w: u32, h: u32, r: u8, g: u8, b: u8, a: u8) -> Result<Image, JsValue> {
-    RsImage::new(w, h, mode, (r, g, b, a))
+    RsImage::new(w, h, parse_pillow_mode(mode)?, (r, g, b, a))
         .map(|i| Image { inner: i })
         .map_err(err)
 }
@@ -729,6 +734,7 @@ pub fn image_new(mode: &str, w: u32, h: u32, r: u8, g: u8, b: u8, a: u8) -> Resu
 #[wasm_bindgen(js_name = "imageNewWithInput")]
 /// Creates an image from a mode-aware JavaScript color value.
 pub fn image_new_with_input(mode: &str, w: u32, h: u32, color: JsValue) -> Result<Image, JsValue> {
+    let mode = parse_pillow_mode(mode)?;
     let input = js_new_color_input(
         mode,
         (!color.is_null() && !color.is_undefined()).then_some(&color),
@@ -747,11 +753,17 @@ pub fn from_bytes_fn(
     data: Vec<u8>,
     decoder_name: Option<String>,
 ) -> Result<Image, JsValue> {
+    let decoder_name = decoder_name.unwrap_or_else(|| "raw".to_owned());
+    if decoder_name != "raw" {
+        return Err(err(pillow_rs::PilError::IOError(format!(
+            "decoder {decoder_name} not available"
+        ))));
+    }
     pillow_rs::image_frombytes(
-        mode,
+        parse_pillow_mode(mode)?,
         (w, h),
         &data,
-        decoder_name.as_deref().unwrap_or("raw"),
+        &decoder_name,
     )
     .map(|i| Image { inner: i })
     .map_err(err)
@@ -780,7 +792,10 @@ pub fn from_array_fn(
             })
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let layout = pillow_rs::resolve_array_layout(&shape, typestr, mode.as_deref()).map_err(err)?;
+    let mode = mode
+        .map(|name| parse_pillow_mode(&name))
+        .transpose()?;
+    let layout = pillow_rs::resolve_array_layout(&shape, typestr, mode).map_err(err)?;
     pillow_rs::from_resolved_array_interface(&layout, &data)
         .map(|i| Image { inner: i })
         .map_err(err)

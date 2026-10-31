@@ -1,3 +1,9 @@
+//! TODO(pillow-rs#3ptb): audit GPU input packing and admission for the exact
+//! 25-variant `DynamicImage` representation. In particular, palette and
+//! premultiplied two-channel images can no longer be identified by a shared
+//! `ImageLumaA8` carrier. Keep GPU routing on this backend and preserve each
+//! mode's raw samples while adapting the shared raster type.
+
 use super::*;
 
 mod channels;
@@ -328,7 +334,7 @@ pub(super) fn gpu_packed_native_byte_filter_input(
                         scale,
                         offset,
                     },
-                ] => crate::compute::pool_cpu::ops::filter::binomial3x3_parameters_match(
+                ] => crate::compute::helpers::filters::binomial3x3_parameters_match(
                     kernel, *scale, *offset,
                 ),
                 [

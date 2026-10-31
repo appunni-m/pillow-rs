@@ -132,7 +132,7 @@ impl Image {
             ));
         }
 
-        // TODO(cpu-migration): give quantize leaf selectors the typed mode
+        // TODO(pillow-rs#3ptb): give quantize leaf selectors the typed mode
         // identity instead of the compatibility string consumed below.
         let quantized = quantize_by_method(
             &image,
@@ -324,9 +324,7 @@ fn build_paletted_image(
     }
     Ok(Image::Pipeline {
         source: Arc::new(Image::from_dynamic(
-            DynamicImage::ImageLuma8(output),
-            Some(crate::raster::Mode::ImagePalette8),
-        )),
+            DynamicImage::ImagePalette8(output))),
         ops: PipelineOps::empty(),
         format: None,
         explicit_mode: Some(crate::raster::Mode::ImagePalette8),

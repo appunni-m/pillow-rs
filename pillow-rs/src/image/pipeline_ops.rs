@@ -309,9 +309,10 @@ pub(crate) fn known_pipeline_op_mode(op: &PipelineOp, current: Mode) -> Option<M
             Some(Mode::ImageRgb8)
         }
         PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. } => Some(current),
-        // The public wrapper records explicit target modes for conversions
-        // whose identity is not recoverable from a generic raster carrier.
-        PipelineOp::Convert { mode, .. } | PipelineOp::Merge { mode, .. } => match mode {
+        // Convert carries the exact typed output identity. Merge retains its
+        // legacy subset until its mode contract is migrated.
+        PipelineOp::Convert { mode, .. } => Some(*mode),
+        PipelineOp::Merge { mode, .. } => match mode {
             ColorMode::L => Some(Mode::ImageLuma8),
             ColorMode::LA => Some(Mode::ImageLumaA8),
             ColorMode::RGB => Some(Mode::ImageRgb8),

@@ -13,7 +13,7 @@ macro_rules! declare_strategies {
         use crate::compute::pool_cpu::helpers::execution::prepared::Prepared as PreparedMask;
         use super::default::put_alpha_data_impl as mask_scalar;
 
-        pub(crate) const PUT_ALPHA_DATA_SUPPORT: MaskSupport = MaskSupport::cpu(
+        pub(crate) const PUT_ALPHA_DATA_SUPPORT: MaskSupport = super::put_alpha_strategy::support(
             MaskOperation::PutAlphaData, crate::raster::Mode::$mode,
             MaskOutput::Fixed(crate::raster::Mode::$output),
             &[MaskContract::AlphaMaskLumaPrefix {

@@ -2,7 +2,6 @@
 
 use crate::error::PilError;
 use crate::raster::DynamicImage;
-use crate::raster::ConvertBuffer;
 use super::super::super::helpers::{
     alpha_mask::MaskStrategy, put_alpha_data::{self as helpers, AlphaDataInput},
 };
@@ -17,6 +16,9 @@ pub(crate) fn prepare<'a>(image: &'a Input, mask: MaskStrategy<'a>) -> Kernel<'a
 
 #[inline]
 pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
-    let rgba: crate::raster::RgbaImage = input.image.convert();
-    Ok(DynamicImage::ImageRgba8(helpers::rgba_mask(&rgba, input.mask)))
+    let mask = input.mask.to_luma8();
+    Ok(DynamicImage::ImageRgba32F(helpers::rgba32f_mask(
+        input.image,
+        &mask,
+    )))
 }

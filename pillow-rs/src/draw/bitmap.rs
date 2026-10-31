@@ -3,10 +3,10 @@ use crate::compute::Backend;
 use crate::error::PilError;
 use crate::image::Image;
 use crate::ops::paste::PasteSource;
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, Mode};
 
 struct BitmapMask<'a> {
-    mode: &'a str,
+    mode: Mode,
     width: u32,
     data: &'a [u8],
 }
@@ -16,10 +16,10 @@ impl BitmapMask<'_> {
     fn coverage(&self, x: u32, y: u32) -> u8 {
         let index = (y * self.width + x) as usize;
         match self.mode {
-            "1" => u8::from(self.data[index] > 0) * 255,
-            "L" => self.data[index],
-            "RGBA" => self.data[index * 4 + 3],
-            "RGBa" => 255,
+            Mode::One => u8::from(self.data[index] > 0) * 255,
+            Mode::ImageLuma8 => self.data[index],
+            Mode::ImageRgba8 => self.data[index * 4 + 3],
+            Mode::ImageRgbPremultiplied8 => 255,
             _ => unreachable!("bitmap mode was validated before mask iteration"),
         }
     }
@@ -43,8 +43,11 @@ impl Draw {
         fill: Option<(u8, u8, u8, u8)>,
     ) -> Result<(), PilError> {
         let color = fill.unwrap_or((255, 255, 255, 255));
-        let bmp_mode = bitmap.mode()?;
-        if !matches!(bmp_mode.as_str(), "1" | "L" | "RGBA" | "RGBa") {
+        let bmp_mode = bitmap.mode_identity()?;
+        if !matches!(
+            bmp_mode,
+            Mode::One | Mode::ImageLuma8 | Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8
+        ) {
             return Err(PilError::ValueError("bad transparency mask".to_string()));
         }
         let (bmp_w, bmp_h) = bitmap.size()?;
@@ -56,7 +59,7 @@ impl Draw {
         if bmp_w != 0
             && bmp_h != 0
             && requested_backend.is_some_and(|backend| backend != Backend::Cpu)
-            && Self::bitmap_masked_paste_matches(&mode, self.orig_mode.as_deref(), &bmp_mode)
+            && Self::bitmap_masked_paste_matches(mode, self.orig_mode, bmp_mode)
         {
             // A constant-color bitmap with a compatible mask has the same
             // byte operation contract as masked Paste for these native modes. Reuse the
@@ -66,9 +69,11 @@ impl Draw {
             // SIMD than CPU because fixed pipeline and terminal-observation
             // costs dominate such a small blend. Keep the requested backend
             // route instead of disguising that case as CPU execution.
-            let source = match mode.as_str() {
-                "1" | "L" | "P" => PasteSource::Scalar(color.0),
-                "LA" => PasteSource::LumaAlpha(color.0, color.3),
+            let source = match mode {
+                Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => {
+                    PasteSource::Scalar(color.0)
+                }
+                Mode::ImageLumaA8 => PasteSource::LumaAlpha(color.0, color.3),
                 _ => PasteSource::Rgba(color.0, color.1, color.2, color.3),
             };
             self.image
@@ -78,7 +83,7 @@ impl Draw {
 
         let telemetry =
             crate::compute::begin_eager_cpu_operation_telemetry("DrawBitmap", requested_backend);
-        let result = self.bitmap_cpu(x, y, bitmap, &bmp_mode, bmp_w, bmp_h, color, &mode);
+        let result = self.bitmap_cpu(x, y, bitmap, bmp_mode, bmp_w, bmp_h, color, mode);
         match result {
             Ok(()) => {
                 let output_bytes = self
@@ -96,30 +101,40 @@ impl Draw {
     }
 
     fn bitmap_masked_paste_matches(
-        mode: &str,
-        original_mode: Option<&str>,
-        mask_mode: &str,
+        mode: Mode,
+        original_mode: Option<Mode>,
+        mask_mode: Mode,
     ) -> bool {
         // A binary bitmap mask selects complete stored pixels, so it can use
         // a same-mode native Paste kernel for these byte layouts. Keep
         // fractional L masks on their draw-specific paths where indexed and
         // alpha-bearing modes have different blend rules.
-        if mask_mode == "1" {
+        if mask_mode == Mode::One {
             return match mode {
-                "1" | "P" | "L" | "LA" | "RGB" | "RGBA" | "CMYK" | "HSV" => {
-                    original_mode == Some(mode) || (mode == "RGBA" && original_mode == Some("RGB"))
+                Mode::One
+                | Mode::ImagePalette8
+                | Mode::ImageLuma8
+                | Mode::ImageLumaA8
+                | Mode::ImageRgb8
+                | Mode::ImageRgba8
+                | Mode::ImageCmyk8
+                | Mode::ImageHsv8 => {
+                    original_mode == Some(mode)
+                        || (mode == Mode::ImageRgba8 && original_mode == Some(Mode::ImageRgb8))
                 }
                 _ => false,
             };
         }
-        if mask_mode != "L" {
+        if mask_mode != Mode::ImageLuma8 {
             return false;
         }
         match mode {
-            "L" | "RGB" | "CMYK" | "HSV" => original_mode == Some(mode),
+            Mode::ImageLuma8 | Mode::ImageRgb8 | Mode::ImageCmyk8 | Mode::ImageHsv8 => {
+                original_mode == Some(mode)
+            }
             // Pillow's RGBA drawing context over an RGB destination ignores
             // the fill alpha and blends the three native RGB samples by mask.
-            "RGBA" => original_mode == Some("RGB"),
+            Mode::ImageRgba8 => original_mode == Some(Mode::ImageRgb8),
             _ => false,
         }
     }
@@ -129,11 +144,11 @@ impl Draw {
         x: i32,
         y: i32,
         bitmap: &Image,
-        bmp_mode: &str,
+        bmp_mode: Mode,
         bmp_w: u32,
         bmp_h: u32,
         color: (u8, u8, u8, u8),
-        mode: &str,
+        mode: Mode,
     ) -> Result<(), PilError> {
         if self.try_native_rgb_bitmap(x, y, bitmap, bmp_mode, bmp_w, bmp_h, color, mode)? {
             return Ok(());
@@ -149,13 +164,17 @@ impl Draw {
             data: &raw_data,
         };
         match mode {
-            "RGB" | "RGBA" => self.bitmap_mode_rgba(x, y, bmp_w, bmp_h, &mask, color),
-            "1" => self.bitmap_mode_1(x, y, bmp_w, bmp_h, &mask, color),
-            "L" => self.bitmap_mode_l(x, y, bmp_w, bmp_h, &mask, color),
-            "LA" => self.bitmap_mode_la(x, y, bmp_w, bmp_h, &mask, color),
-            "CMYK" => self.bitmap_mode_cmyk(x, y, bmp_w, bmp_h, &mask, color),
-            "P" => self.bitmap_mode_p(x, y, bmp_w, bmp_h, &mask, color),
-            "I" | "F" => self.bitmap_mode_numeric(x, y, bmp_w, bmp_h, &mask, mode, color),
+            Mode::ImageRgb8 | Mode::ImageRgba8 => {
+                self.bitmap_mode_rgba(x, y, bmp_w, bmp_h, &mask, color)
+            }
+            Mode::One => self.bitmap_mode_1(x, y, bmp_w, bmp_h, &mask, color),
+            Mode::ImageLuma8 => self.bitmap_mode_l(x, y, bmp_w, bmp_h, &mask, color),
+            Mode::ImageLumaA8 => self.bitmap_mode_la(x, y, bmp_w, bmp_h, &mask, color),
+            Mode::ImageCmyk8 => self.bitmap_mode_cmyk(x, y, bmp_w, bmp_h, &mask, color),
+            Mode::ImagePalette8 => self.bitmap_mode_p(x, y, bmp_w, bmp_h, &mask, color),
+            Mode::ImageI32 | Mode::ImageF32 => {
+                self.bitmap_mode_numeric(x, y, bmp_w, bmp_h, &mask, mode, color)
+            }
             _ => self.bitmap_mode_fallback(x, y, bmp_w, bmp_h, &mask, mode, color),
         }
     }
@@ -164,35 +183,38 @@ impl Draw {
         x: i32,
         y: i32,
         bitmap: &Image,
-        bmp_mode: &str,
+        bmp_mode: Mode,
         bmp_w: u32,
         bmp_h: u32,
         color: (u8, u8, u8, u8),
-        mode: &str,
+        mode: Mode,
     ) -> Result<bool, PilError> {
         // Both an ordinary RGB context and an explicit RGBA context on an RGB
         // image ultimately write a three-byte RGB destination. The shared
         // path below widens that canvas, computes alpha, then discards it when
         // restoring the original RGB image. With RGB input alpha fixed at 255,
         // its visible channels are exactly the native coverage blend below.
-        let rgb_target = (mode == "RGB" && self.orig_mode.as_deref() == Some("RGB"))
-            || (mode == "RGBA" && self.alpha_blend_rgb());
+        let rgb_target = (mode == Mode::ImageRgb8 && self.orig_mode == Some(Mode::ImageRgb8))
+            || (mode == Mode::ImageRgba8 && self.alpha_blend_rgb());
         if rgb_target {
             let img = self.image.materialized_shared()?;
             let mask = bitmap.materialized_shared()?;
             let mask_layout = match (bmp_mode, mask.as_ref()) {
-                ("1", DynamicImage::ImageLuma8(image)) => {
+                (Mode::One, DynamicImage::One(image)) => {
                     Some((image.as_raw().as_slice(), 1, 0, true, false))
                 }
-                ("L", DynamicImage::ImageLuma8(image)) => {
+                (Mode::ImageLuma8, DynamicImage::ImageLuma8(image)) => {
                     Some((image.as_raw().as_slice(), 1, 0, false, false))
                 }
-                ("RGBA", DynamicImage::ImageRgba8(image)) => {
+                (Mode::ImageRgba8, DynamicImage::ImageRgba8(image)) => {
                     Some((image.as_raw().as_slice(), 4, 3, false, false))
                 }
                 // Pillow passes RGBa as a fully opaque bitmap mask and ignores
                 // its stored alpha byte in ImagingDrawBitmap.
-                ("RGBa", DynamicImage::ImageRgba8(_)) => Some((&[][..], 0, 0, false, true)),
+                (
+                    Mode::ImageRgbPremultiplied8,
+                    DynamicImage::ImageRgbPremultiplied8(_),
+                ) => Some((&[][..], 0, 0, false, true)),
                 _ => None,
             };
             if let (
@@ -248,7 +270,7 @@ impl Draw {
                     }
                 }
 
-                self.image = Image::from_dynamic(DynamicImage::ImageRgb8(canvas), None);
+                self.image = Image::from_dynamic(DynamicImage::ImageRgb8(canvas));
                 return Ok(true);
             }
         }
@@ -260,21 +282,24 @@ impl Draw {
         x: i32,
         y: i32,
         bitmap: &Image,
-        bmp_mode: &str,
+        bmp_mode: Mode,
         bmp_w: u32,
         bmp_h: u32,
         color: (u8, u8, u8, u8),
-        mode: &str,
+        mode: Mode,
     ) -> Result<bool, PilError> {
         // CMYK pixels use the same four-byte carrier as RGBA in this image
         // model. Keep those bytes in place while drawing: materializing an
         // owned image and then calling `to_rgba8()` makes two full-frame
         // copies even though this path performs no color conversion.
-        if mode == "CMYK" && self.orig_mode.as_deref() == Some("CMYK") && bmp_mode == "L" {
+        if mode == Mode::ImageCmyk8
+            && self.orig_mode == Some(Mode::ImageCmyk8)
+            && bmp_mode == Mode::ImageLuma8
+        {
             let img = self.image.materialized_shared()?;
             let mask = bitmap.materialized_shared()?;
 
-            if let (DynamicImage::ImageRgba8(source), DynamicImage::ImageLuma8(mask)) =
+            if let (DynamicImage::ImageCmyk8(source), DynamicImage::ImageLuma8(mask)) =
                 (img.as_ref(), mask.as_ref())
             {
                 let (img_w, img_h) = source.dimensions();
@@ -320,8 +345,7 @@ impl Draw {
                     }
                 }
 
-                self.image =
-                    Image::from_dynamic(DynamicImage::ImageRgba8(canvas), Some(crate::raster::Mode::ImageCmyk8));
+                self.image = Image::from_dynamic(DynamicImage::ImageCmyk8(canvas));
                 return Ok(true);
             }
         }
@@ -374,8 +398,7 @@ impl Draw {
             }
         }
 
-        self.set_image(canvas);
-        Ok(())
+        self.set_image(canvas)
     }
 
     fn bitmap_mode_1(
@@ -409,10 +432,7 @@ impl Draw {
                 }
             }
         }
-        self.image = Image::from_dynamic(
-            crate::raster::DynamicImage::ImageLuma8(luma),
-            Some(crate::raster::Mode::One),
-        );
+        self.image = Image::from_dynamic(crate::raster::DynamicImage::One(luma));
         Ok(())
     }
 
@@ -447,7 +467,7 @@ impl Draw {
                 }
             }
         }
-        self.image = Image::from_dynamic(crate::raster::DynamicImage::ImageLuma8(luma), None);
+        self.image = Image::from_dynamic(crate::raster::DynamicImage::ImageLuma8(luma));
         Ok(())
     }
 
@@ -486,10 +506,7 @@ impl Draw {
                 }
             }
         }
-        self.image = Image::from_dynamic(
-            crate::raster::DynamicImage::ImageLumaA8(la),
-            Some(crate::raster::Mode::ImageLumaA8),
-        );
+        self.image = Image::from_dynamic(crate::raster::DynamicImage::ImageLumaA8(la));
         Ok(())
     }
 
@@ -544,10 +561,7 @@ impl Draw {
                 }
             }
         }
-        self.image = Image::from_dynamic(
-            crate::raster::DynamicImage::ImageRgba8(rgba),
-            Some(crate::raster::Mode::ImageCmyk8),
-        );
+        self.image = Image::from_dynamic(crate::raster::DynamicImage::ImageCmyk8(rgba));
         Ok(())
     }
 
@@ -628,10 +642,8 @@ impl Draw {
                     }
                 }
             }
-            self.image = Image::from_dynamic(
-                crate::raster::DynamicImage::ImageLuma8(luma),
-                Some(crate::raster::Mode::ImagePalette8),
-            );
+            self.image =
+                Image::from_dynamic(crate::raster::DynamicImage::ImagePalette8(luma));
         }
         Ok(())
     }
@@ -643,7 +655,7 @@ impl Draw {
         bmp_w: u32,
         bmp_h: u32,
         mask: &BitmapMask<'_>,
-        mode: &str,
+        mode: Mode,
         color: (u8, u8, u8, u8),
     ) -> Result<(), PilError> {
         let img = self.image.materialize()?;
@@ -686,10 +698,12 @@ impl Draw {
                 }
             }
         }
-        self.image = Image::from_dynamic(
-            crate::raster::DynamicImage::ImageRgba8(rgba),
-            crate::image::mode_boundary::parse_pillow_mode(mode),
-        );
+        let image = match mode {
+            Mode::ImageI32 => DynamicImage::ImageI32(rgba),
+            Mode::ImageF32 => DynamicImage::ImageF32(rgba),
+            _ => unreachable!("numeric bitmap strategy is selected for I and F modes"),
+        };
+        self.image = Image::from_dynamic(image);
         Ok(())
     }
 
@@ -700,7 +714,7 @@ impl Draw {
         bmp_w: u32,
         bmp_h: u32,
         mask: &BitmapMask<'_>,
-        mode: &str,
+        mode: Mode,
         color: (u8, u8, u8, u8),
     ) -> Result<(), PilError> {
         // Fallback: RGBA pipeline
@@ -744,12 +758,52 @@ impl Draw {
         // YCbCr/HSV and other 3-band fallback modes store no alpha;
         // rebuild the canvas as RGB tagged with the source mode so
         // the resulting image keeps Pillow's 3-byte pixel layout.
-        self.image = Image::from_dynamic(
-            crate::raster::DynamicImage::ImageRgb8(
-                crate::raster::DynamicImage::ImageRgba8(canvas).to_rgb8(),
-            ),
-            crate::image::mode_boundary::parse_pillow_mode(mode),
-        );
+        let image = match mode {
+            Mode::ImageYCbCr8 => {
+                DynamicImage::ImageYCbCr8(DynamicImage::ImageRgba8(canvas).to_rgb8())
+            }
+            Mode::ImageLab8 => {
+                DynamicImage::ImageLab8(DynamicImage::ImageRgba8(canvas).to_rgb8())
+            }
+            Mode::ImageHsv8 => {
+                DynamicImage::ImageHsv8(DynamicImage::ImageRgba8(canvas).to_rgb8())
+            }
+            Mode::ImageRgbPremultiplied8 => DynamicImage::ImageRgbPremultiplied8(canvas),
+            Mode::ImageRgbx8 => DynamicImage::ImageRgbx8(canvas),
+            Mode::ImageLaPremultiplied8 => {
+                DynamicImage::ImageLaPremultiplied8(
+                    DynamicImage::ImageRgba8(canvas).to_luma_alpha8(),
+                )
+            }
+            Mode::ImagePaletteAlpha8 => {
+                DynamicImage::ImagePaletteAlpha8(
+                    DynamicImage::ImageRgba8(canvas).to_luma_alpha8(),
+                )
+            }
+            Mode::ImageI16 => {
+                DynamicImage::ImageI16(DynamicImage::ImageRgba8(canvas).to_luma16())
+            }
+            Mode::ImageI16L => {
+                DynamicImage::ImageI16L(DynamicImage::ImageRgba8(canvas).to_luma16())
+            }
+            Mode::ImageI16B => {
+                DynamicImage::ImageI16B(DynamicImage::ImageRgba8(canvas).to_luma16())
+            }
+            Mode::ImageI16N => {
+                DynamicImage::ImageI16N(DynamicImage::ImageRgba8(canvas).to_luma16())
+            }
+            Mode::ImageLumaA16
+            | Mode::ImageRgb16
+            | Mode::ImageRgba16
+            | Mode::ImageRgb32F
+            | Mode::ImageRgba32F => {
+                // NO_PILLOW_SUPPORT: these internal high-depth modes have no
+                // Pillow ImageDraw contract and cannot use this byte canvas.
+                return Err(PilError::ValueError("unsupported image mode".into()));
+            }
+            _ => unreachable!("bitmap fallback is selected for other draw modes"),
+        };
+        self.image = Image::from_dynamic(image);
         Ok(())
     }
 }

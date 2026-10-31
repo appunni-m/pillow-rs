@@ -51,7 +51,7 @@ fn palette_partial_mesh_source(mode: &str, channels: usize, palette: &[u8]) -> I
         })
         .collect::<Vec<_>>();
     let storage_mode = if mode == "PA" { "LA" } else { mode };
-    let mut source = Image::frombytes(storage_mode, source_size, &bytes)
+    let mut source = Image::frombytes(crate::raster::Mode::from_pillow_name(storage_mode).expect("known test mode"), source_size, &bytes)
         .unwrap_or_else(|error| panic!("{mode} source: {error}"));
     source
         .putpalette(palette, "RGB")

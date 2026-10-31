@@ -6,12 +6,13 @@
 
 use crate::error::PilError;
 use crate::image::Image;
+use crate::raster::Mode;
 
 /// Resolved Pillow image and raw-decoder layout for an array descriptor.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ArrayLayout {
     /// Public Pillow image mode.
-    pub mode: String,
+    pub mode: Mode,
     /// Pillow raw decoder mode.
     pub raw_mode: String,
     /// Image width.
@@ -27,137 +28,141 @@ pub struct ArrayLayout {
 struct TypeMapEntry {
     shape_tail: &'static [usize],
     typestr: &'static str,
-    mode: &'static str,
+    mode: Mode,
     raw_mode: &'static str,
-    color_modes: &'static [&'static str],
+    color_modes: &'static [Mode],
 }
 
 const TYPE_MAP: &[TypeMapEntry] = &[
     TypeMapEntry {
         shape_tail: &[],
         typestr: "|b1",
-        mode: "1",
+        mode: Mode::One,
         raw_mode: "1;8",
         color_modes: &[],
     },
     TypeMapEntry {
         shape_tail: &[],
         typestr: "|u1",
-        mode: "L",
+        mode: Mode::ImageLuma8,
         raw_mode: "L",
-        color_modes: &["P"],
+        color_modes: &[Mode::ImagePalette8],
     },
     TypeMapEntry {
         shape_tail: &[],
         typestr: "|i1",
-        mode: "I",
+        mode: Mode::ImageI32,
         raw_mode: "I;8",
         color_modes: &[],
     },
     TypeMapEntry {
         shape_tail: &[],
         typestr: "<u2",
-        mode: "I",
+        mode: Mode::ImageI32,
         raw_mode: "I;16",
         color_modes: &[],
     },
     TypeMapEntry {
         shape_tail: &[],
         typestr: ">u2",
-        mode: "I",
+        mode: Mode::ImageI32,
         raw_mode: "I;16B",
         color_modes: &[],
     },
     TypeMapEntry {
         shape_tail: &[],
         typestr: "<i2",
-        mode: "I",
+        mode: Mode::ImageI32,
         raw_mode: "I;16S",
         color_modes: &[],
     },
     TypeMapEntry {
         shape_tail: &[],
         typestr: ">i2",
-        mode: "I",
+        mode: Mode::ImageI32,
         raw_mode: "I;16BS",
         color_modes: &[],
     },
     TypeMapEntry {
         shape_tail: &[],
         typestr: "<u4",
-        mode: "I",
+        mode: Mode::ImageI32,
         raw_mode: "I;32",
         color_modes: &[],
     },
     TypeMapEntry {
         shape_tail: &[],
         typestr: ">u4",
-        mode: "I",
+        mode: Mode::ImageI32,
         raw_mode: "I;32B",
         color_modes: &[],
     },
     TypeMapEntry {
         shape_tail: &[],
         typestr: "<i4",
-        mode: "I",
+        mode: Mode::ImageI32,
         raw_mode: "I",
         color_modes: &[],
     },
     TypeMapEntry {
         shape_tail: &[],
         typestr: ">i4",
-        mode: "I",
+        mode: Mode::ImageI32,
         raw_mode: "I;32BS",
         color_modes: &[],
     },
     TypeMapEntry {
         shape_tail: &[],
         typestr: "<f4",
-        mode: "F",
+        mode: Mode::ImageF32,
         raw_mode: "F",
         color_modes: &[],
     },
     TypeMapEntry {
         shape_tail: &[],
         typestr: ">f4",
-        mode: "F",
+        mode: Mode::ImageF32,
         raw_mode: "F;32BF",
         color_modes: &[],
     },
     TypeMapEntry {
         shape_tail: &[],
         typestr: "<f8",
-        mode: "F",
+        mode: Mode::ImageF32,
         raw_mode: "F;64F",
         color_modes: &[],
     },
     TypeMapEntry {
         shape_tail: &[],
         typestr: ">f8",
-        mode: "F",
+        mode: Mode::ImageF32,
         raw_mode: "F;64BF",
         color_modes: &[],
     },
     TypeMapEntry {
         shape_tail: &[2],
         typestr: "|u1",
-        mode: "LA",
+        mode: Mode::ImageLumaA8,
         raw_mode: "LA",
-        color_modes: &["La", "PA"],
+        color_modes: &[Mode::ImageLaPremultiplied8, Mode::ImagePaletteAlpha8],
     },
     TypeMapEntry {
         shape_tail: &[3],
         typestr: "|u1",
-        mode: "RGB",
+        mode: Mode::ImageRgb8,
         raw_mode: "RGB",
-        color_modes: &["YCbCr", "LAB", "HSV"],
+        color_modes: &[Mode::ImageYCbCr8, Mode::ImageLab8, Mode::ImageHsv8],
     },
     TypeMapEntry {
         shape_tail: &[4],
         typestr: "|u1",
-        mode: "RGBA",
+        mode: Mode::ImageRgba8,
         raw_mode: "RGBA",
-        color_modes: &["RGBa", "RGBX", "CMYK"],
+        color_modes: &[
+            Mode::ImageRgbPremultiplied8,
+            Mode::ImageRgbx8,
+            Mode::ImageCmyk8,
+        ],
     },
 ];
 
@@ -171,7 +176,7 @@ const TYPE_MAP: &[TypeMapEntry] = &[
 pub fn resolve_array_layout(
     shape: &[usize],
     typestr: &str,
-    explicit_mode: Option<&str>,
+    explicit_mode: Option<Mode>,
 ) -> Result<ArrayLayout, PilError> {
     let shape_tail = shape.get(2..).unwrap_or_default();
     let Some(entry) = TYPE_MAP
@@ -187,8 +192,12 @@ pub fn resolve_array_layout(
     let mode = explicit_mode.unwrap_or(entry.mode);
     let dimensions = shape.len();
     let maximum_dimensions = match mode {
-        "1" | "L" | "I" | "P" | "F" => 2,
-        "RGB" => 3,
+        Mode::One
+        | Mode::ImageLuma8
+        | Mode::ImageI32
+        | Mode::ImagePalette8
+        | Mode::ImageF32 => 2,
+        Mode::ImageRgb8 => 3,
         _ => 4,
     };
     if dimensions > maximum_dimensions {
@@ -214,9 +223,16 @@ pub fn resolve_array_layout(
     u32::try_from(height)
         .map_err(|_| PilError::OverflowError("signed integer is greater than maximum".into()))?;
     let mode_reinterprets_dtype = mode != entry.mode && !entry.color_modes.contains(&mode);
+    let raw_mode = if explicit_mode.is_some() {
+        mode.pillow_name().ok_or_else(|| {
+            PilError::ValueError("unsupported explicit image mode for array interface".into())
+        })?
+    } else {
+        entry.raw_mode
+    };
     Ok(ArrayLayout {
-        mode: mode.to_string(),
-        raw_mode: explicit_mode.unwrap_or(entry.raw_mode).to_string(),
+        mode,
+        raw_mode: raw_mode.to_owned(),
         width,
         height,
         dimensions,
@@ -237,7 +253,7 @@ pub fn from_resolved_array_interface(layout: &ArrayLayout, data: &[u8]) -> Resul
     let height = u32::try_from(layout.height)
         .map_err(|_| PilError::OverflowError("signed integer is greater than maximum".into()))?;
 
-    if layout.mode == "1" && layout.raw_mode == "1;8" {
+    if layout.mode == Mode::One && layout.raw_mode == "1;8" {
         // Pillow's ``|b1`` array typemap is a byte-per-pixel source decoder,
         // not the packed bitmap layout accepted by Image.frombytes("1").
         // Pack each nonzero source byte into the public mode-1 scanline before
@@ -261,7 +277,7 @@ pub fn from_resolved_array_interface(layout: &ArrayLayout, data: &[u8]) -> Resul
                 packed[row * row_bytes + column / 8] |= 0x80 >> (column % 8);
             }
         }
-        return Image::frombytes("1", (width, height), &packed);
+        return Image::frombytes(crate::raster::Mode::One, (width, height), &packed);
     }
 
     if let Some(normalized) = normalize_scalar_array(layout, data)? {
@@ -269,9 +285,11 @@ pub fn from_resolved_array_interface(layout: &ArrayLayout, data: &[u8]) -> Resul
         // the resulting public image remains mode I or F.  Normalize those
         // encodings to the native four-byte representation before entering
         // the ordinary Image::frombytes mode path.
-        return Image::frombytes(&layout.mode, (width, height), &normalized);
+        return Image::frombytes(layout.mode, (width, height), &normalized);
     }
-    Image::frombytes(&layout.raw_mode, (width, height), data)
+    let raw_mode = Mode::from_pillow_name(&layout.raw_mode)
+        .ok_or_else(|| PilError::ValueError("unsupported array raw mode".into()))?;
+    Image::frombytes(raw_mode, (width, height), data)
 }
 
 fn normalize_scalar_array(layout: &ArrayLayout, data: &[u8]) -> Result<Option<Vec<u8>>, PilError> {
@@ -301,7 +319,7 @@ fn normalize_scalar_array(layout: &ArrayLayout, data: &[u8]) -> Result<Option<Ve
         .ok_or_else(|| PilError::OverflowError("array buffer size overflow".into()))?;
     let mut output = Vec::with_capacity(output_capacity);
 
-    if layout.mode == "I" {
+    if layout.mode == Mode::ImageI32 {
         for sample in input.chunks_exact(bytes_per_sample) {
             let value = match layout.raw_mode.as_str() {
                 // Pillow's I;8 raw decoder widens the byte as unsigned even
@@ -316,7 +334,7 @@ fn normalize_scalar_array(layout: &ArrayLayout, data: &[u8]) -> Result<Option<Ve
             };
             output.extend_from_slice(&value.to_ne_bytes());
         }
-    } else if layout.mode == "F" {
+    } else if layout.mode == Mode::ImageF32 {
         for sample in input.chunks_exact(bytes_per_sample) {
             // Pillow stores F images as float32, so f64 array inputs must
             // intentionally narrow to the public image representation.

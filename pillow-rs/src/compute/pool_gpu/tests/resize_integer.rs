@@ -9,7 +9,7 @@ fn i_filtered_resize_native_gpu_preserves_int32_rounding() {
         .into_iter()
         .flat_map(i32::to_le_bytes)
         .collect::<Vec<_>>();
-    let source = Image::frombytes("I", (9, 8), &source_bytes).expect("I source");
+    let source = Image::frombytes(crate::raster::Mode::ImageI32, (9, 8), &source_bytes).expect("I source");
     let cases = [
         ((9, 3), ResampleInput::Name("BILINEAR".into())),
         ((9, 3), ResampleInput::Name("BICUBIC".into())),
@@ -77,7 +77,7 @@ fn i_filtered_box_resize_native_gpu_handles_extreme_words() {
         .into_iter()
         .flat_map(i32::to_le_bytes)
         .collect::<Vec<_>>();
-    let source = Image::frombytes("I", (4, 4), &source_bytes).expect("I source");
+    let source = Image::frombytes(crate::raster::Mode::ImageI32, (4, 4), &source_bytes).expect("I source");
     let resized = source
         .resize((2, 2), Some(ResampleInput::Name("BOX".into())), None)
         .expect("I Box resize");
@@ -127,7 +127,7 @@ fn i_resize_identity_native_gpu_preserves_signed_words() {
     let source_bytes = (0..72usize)
         .flat_map(|index| values[index % values.len()].to_le_bytes())
         .collect::<Vec<_>>();
-    let source = Image::frombytes("I", (9, 8), &source_bytes).expect("I source");
+    let source = Image::frombytes(crate::raster::Mode::ImageI32, (9, 8), &source_bytes).expect("I source");
     let resized = source
         .resize((9, 8), Some(ResampleInput::Code(3)), None)
         .expect("I identity resize");
@@ -306,7 +306,7 @@ fn indexed_nearest_rotate_native_gpu_preserves_raw_samples() {
     ];
     let previous = Backend::set_pipeline_telemetry_enabled(true);
     for (mode, size, raw, fill) in cases {
-        let source = Image::frombytes(mode, size, &raw)
+        let source = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), size, &raw)
             .unwrap_or_else(|error| panic!("{mode} source image: {error}"));
         let rotated = source
             .rotate(13.0, true, fill)
@@ -347,7 +347,7 @@ fn indexed_rotate_forces_nearest_and_reports_transposed_size() {
     ];
     let previous = Backend::set_pipeline_telemetry_enabled(true);
     for (mode, size, raw) in cases {
-        let source = Image::frombytes(mode, size, &raw)
+        let source = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), size, &raw)
             .unwrap_or_else(|error| panic!("{mode} source image: {error}"));
         let rotated = source
             .rotate_with_input(
@@ -401,7 +401,7 @@ fn typed_scalar_right_angle_rotate_uses_native_transpose() {
     let cases = typed_scalar_right_angle_rotate_cases();
     let previous = Backend::set_pipeline_telemetry_enabled(true);
     for (mode, size, raw) in cases {
-        let source = Image::frombytes(mode, size, &raw)
+        let source = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), size, &raw)
             .unwrap_or_else(|error| panic!("{mode} source image: {error}"));
         let rotated = source
             .rotate_with_input(
@@ -512,7 +512,7 @@ fn typed_scalar_u16_rotate_cases() -> [TypedScalarRotateCase; 2] {
 #[test]
 fn cmyk_nearest_rotate_native_gpu_preserves_raw_samples() {
     let source = Image::frombytes(
-        "CMYK",
+        crate::raster::Mode::ImageCmyk8,
         (3, 2),
         &[
             0, 17, 34, 51, 68, 85, 102, 119, 136, 153, 170, 187, 204, 221, 238, 255, 13, 47, 89,
@@ -602,7 +602,7 @@ fn assert_cmyk_rotate_native_gpu_case(rotated: Image, previous: bool) -> bool {
 #[test]
 fn cmyk_filtered_rotate_uses_native_gpu_with_exact_parity() {
     let source = Image::frombytes(
-        "CMYK",
+        crate::raster::Mode::ImageCmyk8,
         (3, 2),
         &[
             0, 17, 34, 51, 68, 85, 102, 119, 136, 153, 170, 187, 204, 221, 238, 255, 13, 47, 89,

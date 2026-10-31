@@ -242,36 +242,6 @@ fn pil_resize_luma_i32_into(
     Some(())
 }
 
-/// Resize native L bytes directly into a caller-owned full-width output
-/// window. ImageOps.pad uses this to avoid materializing the contained image
-/// before copying its rows into the final canvas.
-#[cfg(not(feature = "parallel"))]
-pub(crate) fn pil_resize_luma_i32_into_window(
-    img: &DynamicImage,
-    output_width: u32,
-    output_height: u32,
-    filter: ResampleFilter,
-    output: &mut [u8],
-) -> bool {
-    let DynamicImage::ImageLuma8(_) = img else {
-        return false;
-    };
-    if output_width == 0 || output_height == 0 || img.width() == 0 || img.height() == 0 {
-        return false;
-    }
-    let horizontal = precompute_coeffs(output_width, img.width(), filter);
-    let vertical = precompute_coeffs(output_height, img.height(), filter);
-    pil_resize_luma_i32_into(
-        img,
-        output_width as usize,
-        output_height as usize,
-        &horizontal,
-        &vertical,
-        output,
-    )
-    .is_some()
-}
-
 #[cfg(not(feature = "parallel"))]
 fn horizontal_pass_la_i32(source_row: &[u8], coeffs: &FilterCoeffs, output_row: &mut [u8]) {
     for (output_x, output_pixel) in output_row.chunks_exact_mut(2).enumerate() {

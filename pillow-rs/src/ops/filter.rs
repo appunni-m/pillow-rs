@@ -6,6 +6,7 @@
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
+use crate::raster::Mode;
 
 /// Normalizes the arguments accepted by `ImageFilter.Kernel`.
 ///
@@ -125,32 +126,40 @@ const SMOOTH: FilterKernel =
 impl Image {
     /// Validates whether a Python-facing filter may run for this image mode.
     pub fn validate_filter(&self, filter_name: &str) -> Result<(), PilError> {
-        // TODO(cpu-migration): classify filter support from exact `Mode` values
-        // rather than projecting the source identity into Pillow strings.
-        let mode = self.mode()?;
+        let mode = match self.known_mode_identity() {
+            Some(mode) => mode,
+            None => self.materialized_shared()?.mode(),
+        };
         // Pillow's ImagingUnsharpMask accepts only byte modes with native
         // band storage. Keep the native operation's wrong-mode error for
         // indexed, scalar, and color-space modes instead of expanding them
         // through a generic RGBA conversion.
         if filter_name == "UnsharpMask"
             && !matches!(
-                mode.as_str(),
-                "L" | "LA" | "La" | "RGB" | "RGBA" | "RGBX" | "RGBa" | "CMYK"
+                mode,
+                Mode::ImageLuma8
+                    | Mode::ImageLumaA8
+                    | Mode::ImageLaPremultiplied8
+                    | Mode::ImageRgb8
+                    | Mode::ImageRgba8
+                    | Mode::ImageRgbx8
+                    | Mode::ImageRgbPremultiplied8
+                    | Mode::ImageCmyk8
             )
         {
             return Err(PilError::ValueError("image has wrong mode".into()));
         }
-        if mode == "P" && filter_name != "Mode" {
+        if mode == Mode::ImagePalette8 && filter_name != "Mode" {
             return Err(PilError::ValueError("cannot filter palette images".into()));
         }
         // Pillow's ImagingGaussianBlur path rejects PA samples with the
         // generic wrong-mode error instead of expanding the palette. Keep the
         // validation at the core boundary so Python and other bindings do not
         // enter a non-Pillow RGBA fallback.
-        if mode == "PA" && filter_name == "GaussianBlur" {
+        if mode == Mode::ImagePaletteAlpha8 && filter_name == "GaussianBlur" {
             return Err(PilError::ValueError("image has wrong mode".into()));
         }
-        if mode == "F"
+        if mode == Mode::ImageF32
             && !matches!(
                 filter_name,
                 "MaxFilter" | "MinFilter" | "MedianFilter" | "RankFilter"
@@ -294,7 +303,7 @@ mod i32_uniform_filter_ownership_tests {
 
     #[test]
     fn identity_filter_result_remains_independent_when_mutated() {
-        let image = Image::new(32, 24, "I", (37, 0, 0, 0)).unwrap();
+        let image = Image::new(32, 24, crate::raster::Mode::ImageI32, (37, 0, 0, 0)).unwrap();
         let source = image.tobytes().unwrap();
         let mut filtered = image
             .kernel_filter(

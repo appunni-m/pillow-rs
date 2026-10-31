@@ -1,6 +1,6 @@
 //! Effects operation registration.
 use super::prelude::{
-    DynamicImage, PilError, PipelineOp, Registry, op_alpha_composite, op_paste,
+    PilError, PipelineOp, Registry, op_paste,
 };
 fn register_part_1(m: &mut Registry) {
     // Pillow 12.2.0 libImaging/Effects.c:117-159 consumes process-global
@@ -35,20 +35,6 @@ fn register_part_1(m: &mut Registry) {
                 }
             },
             "paste.wgsl"
-        ),
-    );
-
-    m.insert(
-        "AlphaComposite",
-        gpu_entry!(
-            |img, op, _mode| {
-                if let PipelineOp::AlphaComposite { source, .. } = op {
-                    op_alpha_composite(img, source)
-                } else {
-                    Err(PilError::ValueError("expected AlphaComposite op".into()))
-                }
-            },
-            "alpha_composite.wgsl"
         ),
     );
 }

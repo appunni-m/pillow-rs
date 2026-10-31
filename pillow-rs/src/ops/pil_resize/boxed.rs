@@ -1,16 +1,13 @@
 use super::alpha::premultiply_channel;
 use super::coefficients::BOXED_ZERO_FAST_PATH_MAX_PIXELS;
-use super::float::{
-    f_resize_boxed_horizontal_pass, f_resize_boxed_vertical_pass, typed_color_resize_bytes,
-};
+use super::float::{f_resize_boxed_horizontal_pass, f_resize_boxed_vertical_pass};
 use super::horizontal_passes::horizontal_pass_boxed_rows;
-use super::luma16::pil_resize_luma16;
 use super::vertical_passes::{
     vertical_pass_rows, vertical_pass_rows_alpha, vertical_pass_rows_sparse_rgb,
 };
 use super::*;
 use crate::pipeline::ResampleFilter;
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, Mode};
 
 fn f_boxed_nearest_axis_maps_identity(
     source_size: u32,
@@ -260,7 +257,6 @@ pub fn pil_resize_boxed(
     box_right: f64,
     box_bottom: f64,
     filter: ResampleFilter,
-    explicit_mode: Option<&str>,
 ) -> DynamicImage {
     pil_resize_boxed_with_parallel_pixel_threshold(
         img,
@@ -271,7 +267,6 @@ pub fn pil_resize_boxed(
         box_right,
         box_bottom,
         filter,
-        explicit_mode,
         0,
     )
 }
@@ -287,7 +282,6 @@ pub(crate) fn pil_resize_boxed_with_parallel_pixel_threshold(
     box_right: f64,
     box_bottom: f64,
     filter: ResampleFilter,
-    explicit_mode: Option<&str>,
     parallel_pixel_threshold: usize,
 ) -> DynamicImage {
     pil_resize_boxed_with_hints(
@@ -299,7 +293,6 @@ pub(crate) fn pil_resize_boxed_with_parallel_pixel_threshold(
         box_right,
         box_bottom,
         filter,
-        explicit_mode,
         parallel_pixel_threshold,
         None,
     )
@@ -317,7 +310,6 @@ pub(crate) fn pil_resize_boxed_with_sparse_rgb_rows(
     box_right: f64,
     box_bottom: f64,
     filter: ResampleFilter,
-    explicit_mode: Option<&str>,
     nonzero_source_rows: &[bool],
 ) -> DynamicImage {
     pil_resize_boxed_with_hints(
@@ -329,8 +321,10 @@ pub(crate) fn pil_resize_boxed_with_sparse_rgb_rows(
         box_right,
         box_bottom,
         filter,
-        explicit_mode,
-        0,
+        // This sparse-row helper serves the serial CPU Thumbnail strategy.
+        // A maximum threshold keeps the shared row scheduler out of Rayon
+        // even when the optional `parallel` feature is enabled.
+        usize::MAX,
         Some(nonzero_source_rows),
     )
 }
@@ -345,7 +339,6 @@ fn pil_resize_boxed_early_paths(
     box_right: f64,
     box_bottom: f64,
     filter: ResampleFilter,
-    explicit_mode: Option<&str>,
 ) -> (Option<DynamicImage>, bool) {
     // Pillow narrows the source box to float32 before `_resize` sees it. Keep
     // those values for the crop and pass-elision decisions below so integer
@@ -358,16 +351,9 @@ fn pil_resize_boxed_early_paths(
         && box_top_f32.is_finite()
         && box_right_f32.is_finite()
         && box_bottom_f32.is_finite();
-    let is_cmyk = explicit_mode == Some("CMYK");
-    let is_fi = explicit_mode == Some("F") || explicit_mode == Some("I");
+    let mode = img.mode();
     let needs_alpha = !matches!(filter, ResampleFilter::Nearest)
-        && !is_cmyk
-        && !is_fi
-        && !matches!(explicit_mode, Some("RGBa" | "RGBX" | "La" | "PA"))
-        && matches!(
-            img.color(),
-            crate::raster::ColorType::Rgba8 | crate::raster::ColorType::La8
-        );
+        && matches!(mode, Mode::ImageRgba8 | Mode::ImageLumaA8);
     if finite_box
         && dst_w == img.width()
         && dst_h == img.height()
@@ -396,34 +382,35 @@ fn pil_resize_boxed_early_paths(
         return (Some(img.crop_imm(left, top, dst_w, dst_h)), needs_alpha);
     }
 
-    if let DynamicImage::ImageI16(luma) = img {
+    if let Some(resized) = crate::compute::pool_cpu::ops::resize::ops::native_luma16_resize(
+        img,
+        dst_w,
+        dst_h,
+        filter,
+        Some((box_left, box_top, box_right, box_bottom)),
+    )
+    {
         // A two-byte typed sample cannot enter the generic four-byte pixel
-        // transport. Reuse the native u16 passes with boxed coefficients.
-        return (
-            Some(pil_resize_luma16(
-                luma,
-                dst_w,
-                dst_h,
-                filter,
-                explicit_mode,
-                Some((box_left, box_top, box_right, box_bottom)),
-            )),
-            needs_alpha,
-        );
+        // transport. Exact mode strategies use native u16 passes with boxed
+        // coefficients and construct their own output variant.
+        return (Some(resized), needs_alpha);
     }
 
-    if explicit_mode == Some("F") && matches!(img, DynamicImage::ImageRgba8(_)) {
+    if let Some(resized) = crate::compute::pool_cpu::ops::resize::ops::native_typed_resize(
+        img,
+        dst_w,
+        dst_h,
+        filter,
+        Some((box_left, box_top, box_right, box_bottom)),
+    )
+    {
+        return (Some(resized), needs_alpha);
+    }
+
+    if mode == Mode::ImageF32 && matches!(img, DynamicImage::ImageF32(_)) {
         return (
             Some(pil_resize_f_boxed(
                 img, dst_w, dst_h, box_left, box_top, box_right, box_bottom, filter,
-            )),
-            needs_alpha,
-        );
-    }
-    if let Some(byte_mode) = typed_color_resize_bytes(img) {
-        return (
-            Some(pil_resize_boxed(
-                &byte_mode, dst_w, dst_h, box_left, box_top, box_right, box_bottom, filter, None,
             )),
             needs_alpha,
         );
@@ -654,7 +641,6 @@ fn pil_resize_boxed_with_hints(
     box_right: f64,
     box_bottom: f64,
     filter: ResampleFilter,
-    explicit_mode: Option<&str>,
     parallel_pixel_threshold: usize,
     sparse_rgb_nonzero_rows: Option<&[bool]>,
 ) -> DynamicImage {
@@ -667,7 +653,6 @@ fn pil_resize_boxed_with_hints(
         box_right,
         box_bottom,
         filter,
-        explicit_mode,
     );
     if let Some(output) = early_output {
         return output;
@@ -683,7 +668,7 @@ fn pil_resize_boxed_with_hints(
     };
     let sparse_rgb_nonzero_rows = sparse_rgb_nonzero_rows.filter(|rows| {
         matches!(img, DynamicImage::ImageRgb8(_))
-            && matches!(explicit_mode, None | Some("RGB"))
+            && img.mode() == Mode::ImageRgb8
             && !needs_alpha
             && rows.len() == sh as usize
     });

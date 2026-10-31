@@ -4,9 +4,9 @@ use super::automatic_segments;
 use super::backend_state::{active_lock, pools};
 #[cfg(feature = "gpu")]
 use super::pool_gpu;
-// TODO(pillow-rs#3ptb): route remaining SIMD-only segments and their mode
-// transitions through the injected CPU architecture strategy before removing
-// the independent SIMD executor.
+// TODO(pillow-rs#3ptb): replace `execute_automatic_simd`, `simd_initial_mode`,
+// `simd_mode_after_op`, and `first_unsupported_simd_op` with prepared CPU
+// support/transition declarations before removing the independent executor.
 use super::pool_simd;
 use super::registry;
 use super::{
@@ -27,7 +27,9 @@ use std::time::Instant;
 use crate::compute::registry::support::PaletteInput;
 
 mod terminals;
-pub(crate) use terminals::{execute_prepared_cpu_terminal, execute_prepared_simd_terminal};
+pub(crate) use terminals::{
+    execute_prepared_cpu_arch_terminal, execute_prepared_cpu_terminal,
+};
 #[cfg(feature = "gpu")]
 pub(crate) use terminals::{
     execute_prepared_gpu_cmyk_projection_terminal, execute_prepared_gpu_rgb_projection_terminal,
@@ -395,7 +397,11 @@ fn execute_automatic_simd_segments_with_palette(
         let pool = if backend == Backend::Simd { simd } else { cpu };
         let segment_ops = &ops[index..end];
         let next = if backend == Backend::Cpu {
-            let context = ExecutionContext::for_routed_backend(Backend::Cpu);
+            // Automatic SIMD routing is a compatibility surface for CPU
+            // architectures. Keep CPU as the executor while carrying the
+            // already resolved host architecture into its prepared mode
+            // strategies for segments the legacy SIMD adapter cannot run.
+            let context = ExecutionContext::for_routed_backend(Backend::Simd);
             pool.execute_batch_with_context_and_palette(
                 segment_ops,
                 input,
@@ -494,32 +500,64 @@ fn empty_convert_result(ops: &[PipelineOp], img: &DynamicImage) -> Option<Dynami
     let width = img.width();
     let height = img.height();
     Some(match mode {
-        crate::pipeline::ColorMode::L => {
+        crate::raster::Mode::ImageLuma8 => {
             DynamicImage::ImageLuma8(crate::raster::GrayImage::new(width, height))
         }
-        crate::pipeline::ColorMode::LA => {
+        crate::raster::Mode::ImageLumaA8 => {
             DynamicImage::ImageLumaA8(crate::raster::GrayAlphaImage::new(width, height))
         }
-        crate::pipeline::ColorMode::LaPremultiplied => {
-            DynamicImage::ImageLumaA8(crate::raster::GrayAlphaImage::new(width, height))
+        crate::raster::Mode::ImageLaPremultiplied8 => {
+            DynamicImage::ImageLaPremultiplied8(crate::raster::GrayAlphaImage::new(width, height))
         }
-        crate::pipeline::ColorMode::RGB
-        | crate::pipeline::ColorMode::YCbCr
-        | crate::pipeline::ColorMode::HSV => {
+        crate::raster::Mode::ImageRgb8 => {
             DynamicImage::ImageRgb8(crate::raster::RgbImage::new(width, height))
         }
-        crate::pipeline::ColorMode::RGBA
-        | crate::pipeline::ColorMode::RgbPremultiplied
-        | crate::pipeline::ColorMode::Rgbx
-        | crate::pipeline::ColorMode::CMYK
-        | crate::pipeline::ColorMode::I
-        | crate::pipeline::ColorMode::F => {
+        crate::raster::Mode::ImageRgba8 => {
             DynamicImage::ImageRgba8(crate::raster::RgbaImage::new(width, height))
         }
-        crate::pipeline::ColorMode::I16 => {
+        crate::raster::Mode::ImageRgbPremultiplied8 => {
+            DynamicImage::ImageRgbPremultiplied8(crate::raster::RgbaImage::new(width, height))
+        }
+        crate::raster::Mode::ImageRgbx8 => {
+            DynamicImage::ImageRgbx8(crate::raster::RgbaImage::new(width, height))
+        }
+        crate::raster::Mode::ImageCmyk8 => {
+            DynamicImage::ImageCmyk8(crate::raster::RgbaImage::new(width, height))
+        }
+        crate::raster::Mode::ImageYCbCr8 => {
+            DynamicImage::ImageYCbCr8(crate::raster::RgbImage::new(width, height))
+        }
+        crate::raster::Mode::ImageLab8 => {
+            DynamicImage::ImageLab8(crate::raster::RgbImage::new(width, height))
+        }
+        crate::raster::Mode::ImageHsv8 => {
+            DynamicImage::ImageHsv8(crate::raster::RgbImage::new(width, height))
+        }
+        crate::raster::Mode::ImageI32 => {
+            DynamicImage::ImageI32(crate::raster::RgbaImage::new(width, height))
+        }
+        crate::raster::Mode::ImageF32 => {
+            DynamicImage::ImageF32(crate::raster::RgbaImage::new(width, height))
+        }
+        crate::raster::Mode::ImageI16 => {
             DynamicImage::ImageI16(crate::raster::ImageBuffer::new(width, height))
         }
-        crate::pipeline::ColorMode::P | crate::pipeline::ColorMode::Mode1 => return None,
+        crate::raster::Mode::ImageI16L => {
+            DynamicImage::ImageI16L(crate::raster::ImageBuffer::new(width, height))
+        }
+        crate::raster::Mode::ImageI16B => {
+            DynamicImage::ImageI16B(crate::raster::ImageBuffer::new(width, height))
+        }
+        crate::raster::Mode::ImageI16N => {
+            DynamicImage::ImageI16N(crate::raster::ImageBuffer::new(width, height))
+        }
+        crate::raster::Mode::One | crate::raster::Mode::ImagePalette8 => return None,
+        crate::raster::Mode::ImagePaletteAlpha8
+        | crate::raster::Mode::ImageLumaA16
+        | crate::raster::Mode::ImageRgb16
+        | crate::raster::Mode::ImageRgba16
+        | crate::raster::Mode::ImageRgb32F
+        | crate::raster::Mode::ImageRgba32F => return None,
     })
 }
 
@@ -797,40 +835,21 @@ pub(crate) fn execute_prepared_shared_with_palette(
     mode: Option<&str>,
     palette: PaletteInput<'_>,
 ) -> Result<Arc<DynamicImage>, PilError> {
-    if matches!(prepared.selected_backend, Backend::Cpu | Backend::Simd)
-        && mode == Some("I")
+    if prepared.context.backend() == Backend::Cpu
+        && img.mode() == crate::raster::Mode::ImageI32
         && ops.len() == 1
-        && let PipelineOp::Filter3x3 {
-            kernel,
-            scale,
-            offset,
-        } = &ops[0]
-        && matches!(img.as_ref(), DynamicImage::ImageRgba8(_))
+        && matches!(&ops[0], PipelineOp::Filter3x3 { .. })
+        && matches!(img.as_ref(), DynamicImage::ImageI32(_))
     {
-        let normalized_kernel = std::array::from_fn(|index| kernel[index] / scale);
+        let operation = registry::prepare_cpu(
+            &ops[0],
+            crate::compute::registry::support::OperationInputs { image: img.as_ref(), palette },
+            &prepared.context,
+        )?;
+        let selection = *operation.selection();
         let timed = pipeline_telemetry_enabled();
         let backend_start = timed.then(pipeline_timestamp).flatten();
-        let identity = match prepared.selected_backend {
-            Backend::Cpu => {
-                crate::compute::pool_cpu::ops::filter::uniform_i32_filter3x3_is_identity(
-                    img.as_bytes(),
-                    img.width() as usize,
-                    img.height() as usize,
-                    &normalized_kernel,
-                    offset + 0.5,
-                )
-            }
-            Backend::Simd => {
-                crate::compute::pool_simd::ops::adapters::uniform_i32_filter3x3_is_identity_simd(
-                    img.as_bytes(),
-                    img.width() as usize,
-                    img.height() as usize,
-                    &normalized_kernel,
-                    offset + 0.5,
-                )
-            }
-            Backend::Gpu => false,
-        };
+        let identity = operation.shared_identity_proof().unwrap_or(false);
         if identity {
             if timed {
                 reset_pipeline_allocation_telemetry();
@@ -840,12 +859,19 @@ pub(crate) fn execute_prepared_shared_with_palette(
                 let _ = take_pipeline_dispatch_count();
                 let _ = take_pipeline_resize_coeff_cache_stats();
                 begin_pipeline_operation_telemetry(registry::variant_key(&ops[0]));
-                record_pipeline_operation_path(if prepared.selected_backend == Backend::Cpu {
+                crate::compute::record_pipeline_operation_architecture(
+                    selection.implementation.architecture,
+                );
+                record_pipeline_operation_path(if selection.implementation.architecture
+                    == crate::compute::Architecture::Default
+                {
                     "cpu"
                 } else {
                     "scalar-control"
                 });
-                if prepared.selected_backend == Backend::Simd {
+                if selection.implementation.architecture
+                    != crate::compute::Architecture::Default
+                {
                     let bytes = img.as_bytes().len();
                     record_pipeline_operation_vector_blocks((bytes / 16) as u64);
                     record_pipeline_operation_scalar_tail((bytes % 16) as u64);
@@ -868,6 +894,18 @@ pub(crate) fn execute_prepared_shared_with_palette(
             }
             return Ok(Arc::clone(img));
         }
+
+        return super::eager::execute_cpu_arch_operation(
+            registry::variant_key(&ops[0]),
+            img.as_ref(),
+            prepared.context,
+            prepared.requested_backend,
+            prepared.route_ns,
+            prepared.validation_ns,
+            prepared.fallback_reason.clone(),
+            move |_context| operation.execute().map(|result| (result, selection)),
+        )
+        .map(Arc::new);
     }
 
     execute_prepared_with_palette(prepared, ops, img, mode, palette).map(Arc::new)

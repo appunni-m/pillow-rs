@@ -83,13 +83,17 @@ impl Image {
         let mut extrema = vec![(255u8, 0u8); bands];
         // Use the appropriate pixel reader based on color type
         match img.as_ref() {
-            crate::raster::DynamicImage::ImageLuma8(luma) => {
+            crate::raster::DynamicImage::One(luma)
+            | crate::raster::DynamicImage::ImageLuma8(luma)
+            | crate::raster::DynamicImage::ImagePalette8(luma) => {
                 for px in luma.pixels() {
                     extrema[0].0 = extrema[0].0.min(px[0]);
                     extrema[0].1 = extrema[0].1.max(px[0]);
                 }
             }
-            crate::raster::DynamicImage::ImageLumaA8(la) => {
+            crate::raster::DynamicImage::ImageLumaA8(la)
+            | crate::raster::DynamicImage::ImageLaPremultiplied8(la)
+            | crate::raster::DynamicImage::ImagePaletteAlpha8(la) => {
                 for px in la.pixels() {
                     extrema[0].0 = extrema[0].0.min(px[0]);
                     extrema[0].1 = extrema[0].1.max(px[0]);

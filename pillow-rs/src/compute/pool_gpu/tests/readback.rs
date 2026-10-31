@@ -330,7 +330,7 @@ fn execute_public_readback_worker(
     start.wait();
     let mut retained = Vec::new();
     for (iteration, (mode, width, height, source, expected)) in cases.into_iter().enumerate() {
-        let pipeline = Image::frombytes(mode, (width, height), &source)
+        let pipeline = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (width, height), &source)
             .expect("concurrent native source")
             .transpose("TRANSPOSE")
             .expect("concurrent transpose construction")
@@ -497,7 +497,7 @@ fn execute_native_rgb_readback_case(
     let bytes: Vec<u8> = (0usize..channels.saturating_mul(15))
         .map(|index| index.wrapping_mul(29).wrapping_add(index / 3) as u8)
         .collect();
-    let source = Image::frombytes(mode, (5, 3), &bytes)
+    let source = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (5, 3), &bytes)
         .expect("native readback source")
         .materialize()
         .expect("readback source materialization");

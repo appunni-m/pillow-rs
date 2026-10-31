@@ -43,7 +43,6 @@ fn putalpha_conversion_target(mode: &str) -> Option<&'static str> {
 #[inline(always)]
 fn eager_getchannel_tiny_rgb(
     image: &DynamicImage,
-    mode: &str,
     channel: u8,
     backend: crate::compute::Backend,
 ) -> Result<Option<DynamicImage>, PilError> {
@@ -66,31 +65,25 @@ fn eager_getchannel_tiny_rgb(
                 ),
             )?))
         }
-        crate::compute::Backend::Simd => {
-            crate::compute::execute_eager_simd_image_operation("ExtractBand", image, || {
-                let (width, height) = image.dimensions();
-                let mut output =
-                    crate::checked_dims::CheckedDims::new_allow_empty(width, height, 1)?
-                        .alloc_buffer();
-                let (vector_blocks, scalar_tail, path) = crate::compute::simd_extract_band_into(
-                    image,
-                    channel,
-                    Some(mode),
-                    &mut output,
-                )?;
-                let output =
-                    crate::raster::GrayImage::from_raw(width, height, output).ok_or_else(|| {
-                        PilError::InternalError("SIMD ExtractBand buffer shape mismatch".into())
-                    })?;
-                Ok((
-                    DynamicImage::ImageLuma8(output),
-                    vector_blocks,
-                    scalar_tail,
-                    path,
-                ))
-            })
-            .map(Some)
-        }
+        crate::compute::Backend::Simd =>
+            crate::compute::execute_eager_cpu_arch_image_operation(
+                "ExtractBand",
+                image,
+                backend,
+                |ctx| {
+                    let prepared = crate::compute::registry::prepare_cpu(
+                        &operation,
+                        crate::compute::registry::support::OperationInputs {
+                            image,
+                            palette: crate::compute::registry::support::PaletteInput::default(),
+                        },
+                        ctx,
+                    )?;
+                    let selection = *prepared.selection();
+                    prepared.execute().map(|result| (result, selection))
+                },
+            )
+            .map(Some),
         crate::compute::Backend::Gpu => Ok(None),
     }
 }
@@ -160,10 +153,9 @@ impl Image {
             && u64::from(img.width()) * u64::from(img.height()) <= 256
             && let Some((backend, _)) = crate::compute::preferred_active_backend()?
         {
-            let extracted =
-                eager_getchannel_tiny_rgb(img.as_ref(), &mode, backend_channel, backend)?;
+            let extracted = eager_getchannel_tiny_rgb(img.as_ref(), backend_channel, backend)?;
             if let Some(extracted) = extracted {
-                let mut result = Image::from_dynamic(extracted, None);
+                let mut result = Image::from_dynamic(extracted);
                 if let Image::Loaded(data) = &mut result {
                     data.info = self.image_info();
                     data.exif = self.exif_metadata();

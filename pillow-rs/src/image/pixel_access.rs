@@ -56,7 +56,7 @@ impl Image {
         let Image::Loaded(data) = self else {
             return Ok(None);
         };
-        if data.explicit_mode.unwrap_or(data.image.mode()) != crate::raster::Mode::ImageRgb8 {
+        if data.image.mode() != crate::raster::Mode::ImageRgb8 {
             return Ok(None);
         }
         if x >= data.image.width() || y >= data.image.height() {
@@ -71,7 +71,7 @@ impl Image {
     /// Returns one pixel with Pillow's mode-specific scalar or tuple shape.
     pub fn getpixel_formatted(&self, x: u32, y: u32) -> Result<FormattedPixelValue, PilError> {
         let img = self.materialized_shared()?;
-        let mode = self.mode_from_materialized(&img);
+        let mode = Self::mode_from_materialized(&img);
         let (width, height) = (img.width(), img.height());
         if is_l16_mode(&mode) {
             if x >= width || y >= height {
@@ -260,7 +260,7 @@ impl Image {
     ///
     /// Returns the same errors as [`Image::putpixel`].
     pub fn putpixel_mode(&mut self, x: u32, y: u32, v: u8, mode: &str) -> Result<(), PilError> {
-        // TODO(cpu-migration): take `Mode` directly from typed Rust callers.
+        // TODO(pillow-rs#3ptb): take `Mode` directly from typed Rust callers.
         if is_l16_mode(mode) {
             return self.putpixel_l16(x, y, i64::from(v));
         }
@@ -640,14 +640,14 @@ mod getpixel_rgb_fast_path_tests {
 
     #[test]
     fn fast_path_reads_only_loaded_native_rgb_pixels() -> Result<(), PilError> {
-        let rgb = Image::new(2, 1, "RGB", (17, 83, 211, 255))?;
+        let rgb = Image::new(2, 1, crate::raster::Mode::ImageRgb8, (17, 83, 211, 255))?;
         assert_eq!(rgb.getpixel_rgb_if_loaded(1, 0)?, Some([17, 83, 211]));
         assert!(matches!(
             rgb.getpixel_rgb_if_loaded(2, 0),
             Err(PilError::IndexError(_))
         ));
 
-        let gray = Image::new(1, 1, "L", (42, 0, 0, 255))?;
+        let gray = Image::new(1, 1, crate::raster::Mode::ImageLuma8, (42, 0, 0, 255))?;
         assert_eq!(gray.getpixel_rgb_if_loaded(0, 0)?, None);
 
         let deferred = crate::ops::imageops::invert(&rgb)?;

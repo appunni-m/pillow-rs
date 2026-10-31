@@ -485,7 +485,7 @@ pub enum PipelineOp {
         /// Original Pillow mode spelling. The raster core uses canonical
         /// storage variants for aliases such as `LAB` and `RGBa`, while this
         /// tag keeps target-specific encoding and backend admission exact.
-        /// TODO(cpu-migration): replace this compatibility string with the
+        /// TODO(pillow-rs#3ptb): replace this compatibility string with the
         /// target `raster::Mode` and keep codec spelling at the host boundary.
         logical_mode: String,
         /// Band images.
@@ -528,7 +528,7 @@ pub enum PipelineOp {
         /// Number of output channels.
         channels: u32,
         /// Exact source identity captured by the Pillow image wrapper.
-        /// TODO(cpu-migration): remove this snapshot after GPU parameter
+        /// TODO(pillow-rs#3ptb): remove this snapshot after GPU parameter
         /// encoding derives it from the prepared mode transition.
         source_mode: Mode,
         /// Exact output identity selected by the caller.

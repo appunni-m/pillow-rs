@@ -9,7 +9,7 @@ fn palette_alpha_projective_nearest_native_gpu_preserves_pairs() {
     let source_bytes = (0..7 * 5)
         .flat_map(|index| [(index * 17 + 3) as u8, (index * 29 + 11) as u8])
         .collect::<Vec<_>>();
-    let mut source = Image::frombytes("LA", (7, 5), &source_bytes).expect("LA source");
+    let mut source = Image::frombytes(crate::raster::Mode::ImageLumaA8, (7, 5), &source_bytes).expect("LA source");
     source
         .putpalette(&[10, 20, 30, 40, 50, 60], "RGB")
         .expect("PA palette");
@@ -221,7 +221,7 @@ fn palette_alpha_projective_filtered_relocations_native_gpu_preserve_pairs() {
         let source_bytes = (0..source_width * source_height)
             .flat_map(|index| [(index * 17 + 3) as u8, (index * 29 + 11) as u8])
             .collect::<Vec<_>>();
-        let mut source = Image::frombytes("LA", source_size, &source_bytes).expect("LA source");
+        let mut source = Image::frombytes(crate::raster::Mode::ImageLumaA8, source_size, &source_bytes).expect("LA source");
         source.putpalette(&palette, "RGB").expect("PA palette");
         assert_eq!(source.mode().expect("PA mode"), "PA");
         if !assert_palette_filtered_case(&source, source_size, output_size, matrix, fill, &palette)
@@ -350,7 +350,7 @@ fn fractional_projective_nearest_native_gpu_preserves_oracle() {
     let source_bytes: Vec<u8> = (0..height)
         .flat_map(|y| (0..width).map(move |x| (x * 37 + y * 11 + 3) as u8))
         .collect();
-    let source = Image::frombytes("L", (width, height), &source_bytes).expect("luma source");
+    let source = Image::frombytes(crate::raster::Mode::ImageLuma8, (width, height), &source_bytes).expect("luma source");
     let transformed = source
         .transform_public(
             (8, 7),
@@ -407,7 +407,7 @@ fn palette_alpha_nearest_affine_native_gpu_preserves_pairs() {
         1u8, 17, 2, 33, 3, 49, 4, 65, 5, 81, 6, 97, 7, 113, 8, 129, 9, 145, 10, 161, 11, 177, 12,
         193,
     ];
-    let mut source = Image::frombytes("LA", (4, 3), &source_bytes).expect("LA source");
+    let mut source = Image::frombytes(crate::raster::Mode::ImageLumaA8, (4, 3), &source_bytes).expect("LA source");
     source
         .putpalette(&[10, 20, 30, 40, 50, 60], "RGB")
         .expect("PA palette");
@@ -457,7 +457,7 @@ fn palette_alpha_nearest_rotate_native_gpu_preserves_pairs() {
         1u8, 17, 2, 33, 3, 49, 4, 65, 5, 81, 6, 97, 7, 113, 8, 129, 9, 145, 10, 161, 11, 177, 12,
         193,
     ];
-    let mut source = Image::frombytes("LA", (4, 3), &source_bytes).expect("LA source");
+    let mut source = Image::frombytes(crate::raster::Mode::ImageLumaA8, (4, 3), &source_bytes).expect("LA source");
     source
         .putpalette(&[10, 20, 30, 40, 50, 60], "RGB")
         .expect("PA palette");

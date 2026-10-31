@@ -9,7 +9,7 @@
 #![allow(unused_crate_dependencies)]
 
 use pillow_rs::{
-    Backend, Image, PilError, chops_multiply, chops_screen, image_eval_validated, imageops_invert,
+    Backend, Image, Mode, PilError, chops_multiply, chops_screen, image_eval_validated, imageops_invert,
     imageops_mirror,
 };
 use std::env;
@@ -85,28 +85,28 @@ struct GraphSample {
     signature: u64,
 }
 
-fn source(mode: &str, color: (u8, u8, u8, u8)) -> Result<Image, PilError> {
+fn source(mode: Mode, color: (u8, u8, u8, u8)) -> Result<Image, PilError> {
     Image::new(1024, 1024, mode, color)
 }
 
 fn build_workload(name: &str, backend: Backend) -> Result<Image, PilError> {
     let image = match name {
         "transpose-twice" => {
-            let first = source("RGB", (47, 131, 223, 255))?.transpose("ROTATE_90")?;
+            let first = source(Mode::ImageRgb8, (47, 131, 223, 255))?.transpose("ROTATE_90")?;
             first.transpose("ROTATE_90")?
         }
         "gaussianblur-invert" => {
-            let blurred = source("RGB", (23, 97, 181, 255))?.gaussian_blur(2.0)?;
+            let blurred = source(Mode::ImageRgb8, (23, 97, 181, 255))?.gaussian_blur(2.0)?;
             imageops_invert(&blurred)?
         }
         "multiply-screen" => {
-            let primary = source("RGB", (17, 83, 149, 255))?;
-            let secondary = source("RGB", (211, 127, 43, 255))?;
+            let primary = source(Mode::ImageRgb8, (17, 83, 149, 255))?;
+            let secondary = source(Mode::ImageRgb8, (211, 127, 43, 255))?;
             let multiplied = chops_multiply(&primary, &secondary)?;
             chops_screen(&multiplied, &secondary)?
         }
         "invert-mirror" => {
-            let inverted = imageops_invert(&source("RGB", (47, 131, 223, 255))?)?;
+            let inverted = imageops_invert(&source(Mode::ImageRgb8, (47, 131, 223, 255))?)?;
             imageops_mirror(&inverted)?
         }
         other => return Err(PilError::ValueError(format!("unknown workload: {other}"))),
@@ -115,7 +115,7 @@ fn build_workload(name: &str, backend: Backend) -> Result<Image, PilError> {
 }
 
 fn build_graph(length: usize) -> Result<Image, PilError> {
-    let mut image = source("L", (127, 127, 127, 255))?;
+    let mut image = source(Mode::ImageLuma8, (127, 127, 127, 255))?;
     for _ in 0..length {
         image = imageops_invert(&image)?;
     }
@@ -123,7 +123,7 @@ fn build_graph(length: usize) -> Result<Image, PilError> {
 }
 
 fn build_lut_graph(length: usize) -> Result<Image, PilError> {
-    let mut image = Image::new(1, 1, "L", (127, 127, 127, 255))?;
+    let mut image = Image::new(1, 1, Mode::ImageLuma8, (127, 127, 127, 255))?;
     let lut: Vec<u8> = (0..=u8::MAX).map(|value| u8::MAX - value).collect();
     for _ in 0..length {
         image = image_eval_validated(&image, &lut)?;
@@ -132,7 +132,7 @@ fn build_lut_graph(length: usize) -> Result<Image, PilError> {
 }
 
 fn build_branch_workload(backend: Backend) -> Result<(Image, Image), PilError> {
-    let prefix = source("RGB", (23, 97, 181, 255))?
+    let prefix = source(Mode::ImageRgb8, (23, 97, 181, 255))?
         .gaussian_blur(2.0)?
         .use_backend(backend);
     let invert_branch = imageops_invert(&prefix)?;

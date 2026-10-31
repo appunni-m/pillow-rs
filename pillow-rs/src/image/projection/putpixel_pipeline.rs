@@ -1,7 +1,17 @@
-use super::{Arc, DynamicImage, Image, PilError, PipelineOp, PipelineOps, ProjectionAxes};
+//! RGB/CMYK PutPixel projection terminals use their prepared CPU mode and
+//! architecture strategies. GPU terminal admission remains backend-specific.
+
+use super::{Arc, DynamicImage, Image, Mode, PilError, PipelineOp, PipelineOps, ProjectionAxes};
+
+type ProjectionResult = (Vec<u32>, Vec<u32>, u64, u64);
+
+// TODO(pillow-rs#3ptb): Route the GPU terminal through its operation-owned
+// support declaration and retain the prepared GPU context through execution.
+
 struct PreparedPutPixelProjection<'a> {
-    mode: &'static str,
+    mode: Mode,
     terminal_backend: crate::compute::Backend,
+    execution_context: crate::compute::ExecutionContext,
     prepared: crate::compute::PreparedExecution,
     ops: &'a [PipelineOp],
     input: Arc<DynamicImage>,
@@ -33,25 +43,31 @@ fn projection_terminal_backend(
 
 impl Image {
     fn cmyk_projection_with_putpixel_ops(
+        context: &crate::compute::ExecutionContext,
         image: &crate::raster::RgbaImage,
         ops: &[PipelineOp],
         source_is_known_zero: bool,
     ) -> Result<(Vec<u32>, Vec<u32>), PilError> {
-        Self::cmyk_projection_with_putpixel_ops_using(image, ops, source_is_known_zero, |image| {
-            let (horizontal, vertical) = Self::cmyk_projection(image);
-            (horizontal, vertical, 0, 0)
+        Self::cmyk_projection_with_putpixel_ops_using(image, ops, source_is_known_zero, || {
+            let output = crate::compute::cpu_cmyk_projection_in_context(context, image)?;
+            Ok((output.axes.0, output.axes.1, output.vector_blocks, output.scalar_tail))
         })
         .map(|(horizontal, vertical, _, _)| (horizontal, vertical))
     }
 
     fn rgb_projection_with_putpixel_ops(
+        context: &crate::compute::ExecutionContext,
         image: &crate::raster::RgbImage,
         ops: &[PipelineOp],
         source_is_known_zero: bool,
     ) -> Result<(Vec<u32>, Vec<u32>), PilError> {
-        Self::rgb_projection_with_putpixel_ops_using(image, ops, source_is_known_zero, |image| {
-            let (horizontal, vertical) = Self::rgb_projection(image);
-            (horizontal, vertical, 0, 0)
+        Self::rgb_projection_with_putpixel_ops_using(image, ops, source_is_known_zero, || {
+            let output = crate::compute::cpu_rgb_projection_in_context(
+                context,
+                image,
+                Mode::ImageRgb8,
+            )?;
+            Ok((output.axes.0, output.axes.1, output.vector_blocks, output.scalar_tail))
         })
         .map(|(horizontal, vertical, _, _)| (horizontal, vertical))
     }
@@ -60,17 +76,17 @@ impl Image {
         image: &crate::raster::RgbaImage,
         ops: &[PipelineOp],
         source_is_known_zero: bool,
-        project: impl FnOnce(&crate::raster::RgbaImage) -> (Vec<u32>, Vec<u32>, u64, u64),
+        project: impl FnOnce() -> Result<ProjectionResult, PilError>,
     ) -> Result<(Vec<u32>, Vec<u32>, u64, u64), PilError> {
         Self::projection_with_putpixel_ops_using(
             image.width(),
             image.height(),
             image.as_raw(),
             4,
-            "CMYK",
+            Mode::ImageCmyk8,
             ops,
             source_is_known_zero,
-            || project(image),
+            project,
         )
     }
 
@@ -78,17 +94,17 @@ impl Image {
         image: &crate::raster::RgbImage,
         ops: &[PipelineOp],
         source_is_known_zero: bool,
-        project: impl FnOnce(&crate::raster::RgbImage) -> (Vec<u32>, Vec<u32>, u64, u64),
+        project: impl FnOnce() -> Result<ProjectionResult, PilError>,
     ) -> Result<(Vec<u32>, Vec<u32>, u64, u64), PilError> {
         Self::projection_with_putpixel_ops_using(
             image.width(),
             image.height(),
             image.as_raw(),
             3,
-            "RGB",
+            Mode::ImageRgb8,
             ops,
             source_is_known_zero,
-            || project(image),
+            project,
         )
     }
 
@@ -97,17 +113,17 @@ impl Image {
         height: u32,
         bytes: &[u8],
         channels: usize,
-        mode: &str,
+        mode: Mode,
         ops: &[PipelineOp],
         source_is_known_zero: bool,
-        project: impl FnOnce() -> (Vec<u32>, Vec<u32>, u64, u64),
+        project: impl FnOnce() -> Result<ProjectionResult, PilError>,
     ) -> Result<(Vec<u32>, Vec<u32>, u64, u64), PilError> {
         let (w, h) = (width as usize, height as usize);
         let mut pending_writes = Vec::with_capacity(ops.len());
         for (order, op) in ops.iter().enumerate() {
             let PipelineOp::PutPixel { x, y, color, .. } = op else {
                 return Err(PilError::InternalError(format!(
-                    "{mode} projection fusion received a non-pixel operation"
+                    "{mode:?} projection fusion received a non-pixel operation"
                 )));
             };
             if *x >= width || *y >= height {
@@ -135,7 +151,7 @@ impl Image {
         let (mut h_proj, mut v_proj, vector_blocks, scalar_tail) = if source_is_known_zero {
             (vec![0; w], vec![0; h], 0, 0)
         } else {
-            project()
+            project()?
         };
         let mut cleared_columns = Vec::new();
         let mut cleared_rows = Vec::new();
@@ -187,7 +203,7 @@ impl Image {
     fn prepare_putpixel_projection<'a>(
         source: &Image,
         ops: &'a PipelineOps,
-        mode: &'static str,
+        mode: Mode,
         backend: Option<crate::compute::Backend>,
     ) -> Result<Option<PreparedPutPixelProjection<'a>>, PilError> {
         let Some(terminal_backend) = projection_terminal_backend(backend)? else {
@@ -214,14 +230,16 @@ impl Image {
             Image::Loaded(data) if data.known_zero_fill
         );
         let input = source.materialized_shared()?;
-        if source.mode_from_materialized(&input) != mode {
+        if input.mode() != mode {
             return Ok(None);
         }
         #[cfg(feature = "gpu")]
         if terminal_backend == crate::compute::Backend::Gpu {
             let supported = match mode {
-                "RGB" => crate::compute::gpu_rgb_projection_terminal_supported(input.as_ref(), ops),
-                "CMYK" => {
+                Mode::ImageRgb8 => {
+                    crate::compute::gpu_rgb_projection_terminal_supported(input.as_ref(), ops)
+                }
+                Mode::ImageCmyk8 => {
                     crate::compute::gpu_cmyk_projection_terminal_supported(input.as_ref(), ops)
                 }
                 _ => false,
@@ -238,6 +256,9 @@ impl Image {
         Ok(Some(PreparedPutPixelProjection {
             mode,
             terminal_backend,
+            execution_context: crate::compute::ExecutionContext::for_routed_backend(
+                terminal_backend,
+            ),
             prepared,
             ops,
             input,
@@ -250,7 +271,7 @@ impl Image {
     fn execute_cmyk_cpu_putpixel_projection(
         execution: &PreparedPutPixelProjection<'_>,
     ) -> Result<Option<ProjectionAxes>, PilError> {
-        let DynamicImage::ImageRgba8(image) = execution.input.as_ref() else {
+        let DynamicImage::ImageCmyk8(image) = execution.input.as_ref() else {
             return Ok(None);
         };
         crate::compute::execute_prepared_cpu_terminal(
@@ -260,6 +281,7 @@ impl Image {
             execution.output_sizes,
             || {
                 Self::cmyk_projection_with_putpixel_ops(
+                    &execution.execution_context,
                     image,
                     execution.ops,
                     execution.source_is_known_zero,
@@ -283,6 +305,7 @@ impl Image {
             execution.output_sizes,
             || {
                 Self::rgb_projection_with_putpixel_ops(
+                    &execution.execution_context,
                     image,
                     execution.ops,
                     execution.source_is_known_zero,
@@ -293,70 +316,69 @@ impl Image {
     }
 
     #[inline(always)]
-    fn execute_cmyk_simd_putpixel_projection(
+    fn execute_cmyk_arch_putpixel_projection(
         execution: &PreparedPutPixelProjection<'_>,
     ) -> Result<Option<ProjectionAxes>, PilError> {
-        let DynamicImage::ImageRgba8(image) = execution.input.as_ref() else {
+        let DynamicImage::ImageCmyk8(image) = execution.input.as_ref() else {
             return Ok(None);
         };
-        crate::compute::execute_prepared_simd_terminal(
+        crate::compute::execute_prepared_cpu_arch_terminal(
             &execution.prepared,
             execution.ops,
             execution.input.as_ref(),
             execution.output_sizes,
             || {
-                if let Some((horizontal, vertical, vector_blocks, scalar_tail)) = execution
-                    .source_is_known_zero
-                    .then(|| {
-                        crate::compute::simd_cmyk_projection_from_positive_writes(
-                            image.width(),
-                            image.height(),
-                            execution.ops,
-                        )
-                    })
-                    .flatten()
-                {
-                    Ok(((horizontal, vertical), vector_blocks, scalar_tail))
-                } else {
-                    Self::cmyk_projection_with_putpixel_ops_using(
-                        image,
+                if execution.source_is_known_zero
+                    && let Some(output) = crate::compute::pool_cpu::ops::analysis::cmyk8::ops::execute_positive_writes(
+                        &execution.execution_context,
+                        image.width(),
+                        image.height(),
                         execution.ops,
-                        false,
-                        crate::compute::simd_cmyk_projection,
-                    )
-                    .map(
-                        |(horizontal, vertical, vector_blocks, scalar_tail)| {
-                            ((horizontal, vertical), vector_blocks, scalar_tail)
-                        },
-                    )
+                    )?
+                {
+                    return Ok((output.axes, output.vector_blocks, output.scalar_tail));
                 }
+                let output = crate::compute::cpu_cmyk_projection_in_context(
+                    &execution.execution_context,
+                    image,
+                )?;
+                let (horizontal, vertical, _, _) = Self::cmyk_projection_with_putpixel_ops_using(
+                    image,
+                    execution.ops,
+                    false,
+                    || Ok((output.axes.0, output.axes.1, output.vector_blocks, output.scalar_tail)),
+                )?;
+                Ok(((horizontal, vertical), output.vector_blocks, output.scalar_tail))
             },
         )
         .map(Some)
     }
 
     #[inline(always)]
-    fn execute_rgb_simd_putpixel_projection(
+    fn execute_rgb_arch_putpixel_projection(
         execution: &PreparedPutPixelProjection<'_>,
     ) -> Result<Option<ProjectionAxes>, PilError> {
         let DynamicImage::ImageRgb8(image) = execution.input.as_ref() else {
             return Ok(None);
         };
-        crate::compute::execute_prepared_simd_terminal(
+        crate::compute::execute_prepared_cpu_arch_terminal(
             &execution.prepared,
             execution.ops,
             execution.input.as_ref(),
             execution.output_sizes,
             || {
-                Self::rgb_projection_with_putpixel_ops_using(
+                let output = crate::compute::cpu_rgb_projection_in_context(
+                    &execution.execution_context,
+                    image,
+                    Mode::ImageRgb8,
+                )?;
+                let (horizontal, vertical, _, _) = Self::rgb_projection_with_putpixel_ops_using(
                     image,
                     execution.ops,
                     false,
-                    crate::compute::simd_rgb_projection,
-                )
-                .map(|(horizontal, vertical, vector_blocks, scalar_tail)| {
-                    ((horizontal, vertical), vector_blocks, scalar_tail)
-                })
+                    || Ok((output.axes.0, output.axes.1, output.vector_blocks, output.scalar_tail)),
+                )?;
+                Ok(((horizontal, vertical), output.vector_blocks, output.scalar_tail))
             },
         )
         .map(Some)
@@ -366,20 +388,20 @@ impl Image {
         execution: PreparedPutPixelProjection<'_>,
     ) -> Result<Option<ProjectionAxes>, PilError> {
         match (execution.mode, execution.terminal_backend) {
-            ("CMYK", crate::compute::Backend::Cpu) => {
+            (Mode::ImageCmyk8, crate::compute::Backend::Cpu) => {
                 Self::execute_cmyk_cpu_putpixel_projection(&execution)
             }
-            ("RGB", crate::compute::Backend::Cpu) => {
+            (Mode::ImageRgb8, crate::compute::Backend::Cpu) => {
                 Self::execute_rgb_cpu_putpixel_projection(&execution)
             }
-            ("CMYK", crate::compute::Backend::Simd) => {
-                Self::execute_cmyk_simd_putpixel_projection(&execution)
+            (Mode::ImageCmyk8, crate::compute::Backend::Simd) => {
+                Self::execute_cmyk_arch_putpixel_projection(&execution)
             }
-            ("RGB", crate::compute::Backend::Simd) => {
-                Self::execute_rgb_simd_putpixel_projection(&execution)
+            (Mode::ImageRgb8, crate::compute::Backend::Simd) => {
+                Self::execute_rgb_arch_putpixel_projection(&execution)
             }
             #[cfg(feature = "gpu")]
-            ("CMYK", crate::compute::Backend::Gpu) => {
+            (Mode::ImageCmyk8, crate::compute::Backend::Gpu) => {
                 crate::compute::execute_prepared_gpu_cmyk_projection_terminal(
                     &execution.prepared,
                     execution.ops,
@@ -389,7 +411,7 @@ impl Image {
                 .map(Some)
             }
             #[cfg(feature = "gpu")]
-            ("RGB", crate::compute::Backend::Gpu) => {
+            (Mode::ImageRgb8, crate::compute::Backend::Gpu) => {
                 crate::compute::execute_prepared_gpu_rgb_projection_terminal(
                     &execution.prepared,
                     execution.ops,
@@ -414,7 +436,6 @@ impl Image {
         let Image::Pipeline {
             source,
             ops,
-            explicit_mode,
             backend,
             ..
         } = self
@@ -424,16 +445,16 @@ impl Image {
         if !matches!(source.as_ref(), Image::Loaded(_) | Image::Bytes { .. }) {
             return Ok(None);
         }
-        let mode = match super::super::mode_boundary::pillow_mode_name_opt(*explicit_mode) {
-            Some("RGB") => "RGB",
-            Some("CMYK") => "CMYK",
-            Some(_) => return Ok(None),
-            // RGB is represented by the native three-byte raster and usually
-            // has no explicit mode tag. Resolve that ordinary mode from the
-            // source before admitting the fused terminal path.
-            None if source.mode()? == "RGB" => "RGB",
-            None => return Ok(None),
+        let mode = match self
+            .known_mode_identity()
+            .or_else(|| source.known_mode_identity())
+        {
+            Some(mode) => mode,
+            None => source.materialized_shared()?.mode(),
         };
+        if !matches!(mode, Mode::ImageRgb8 | Mode::ImageCmyk8) {
+            return Ok(None);
+        }
         if ops.is_empty() {
             return Ok(None);
         }

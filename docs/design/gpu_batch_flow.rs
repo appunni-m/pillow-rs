@@ -2,11 +2,11 @@
 // pillow-rs/src/compute/pool_gpu/stream.rs; Python's bounded run/join driver
 // lives in pillow-rs-py/python/pillow_rs/gpu_batch.py. This example is outside
 // Cargo and does not define another PipelineOp or scheduler.
-use pillow_rs::{BatchOutput, GpuBatchConfig, GpuBatchExecutor, Image};
+use pillow_rs::{BatchOutput, GpuBatchConfig, GpuBatchExecutor, Image, Mode};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut executor = GpuBatchExecutor::new(GpuBatchConfig::default())?;
-    let source = Image::new(256, 256, "L", (42, 42, 42, 255))?;
+    let source = Image::new(256, 256, Mode::ImageLuma8, (42, 42, 42, 255))?;
     let lazy = pillow_rs::imageops_invert(&source)?; // canonical Image::Pipeline / PipelineOp::Invert
     let id = executor.submit(&lazy)?;
     while let Some(result) = executor.next_result()? {

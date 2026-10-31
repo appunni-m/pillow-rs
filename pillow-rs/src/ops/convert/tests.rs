@@ -34,13 +34,14 @@ fn integer_to_rgb_clamps_native_i_samples_and_broadcasts_them() {
         .iter()
         .flat_map(|value| value.to_le_bytes())
         .collect();
-    let source = Image::from_dynamic(
+    let source = Image::from_dynamic_with_mode(
         crate::raster::DynamicImage::ImageRgba8(
             crate::raster::RgbaImage::from_raw(samples.len() as u32, 1, source_bytes)
                 .expect("valid I-mode carrier"),
         ),
         Some(crate::raster::Mode::ImageI32),
-    );
+    )
+    .expect("tag valid I-mode carrier");
 
     let converted = source
         .convert("RGB", None, None, None, None)
@@ -63,13 +64,14 @@ fn float_to_rgb_clamps_and_truncates_native_f_samples() {
         .iter()
         .flat_map(|value| value.to_le_bytes())
         .collect();
-    let source = Image::from_dynamic(
+    let source = Image::from_dynamic_with_mode(
         crate::raster::DynamicImage::ImageRgba8(
             crate::raster::RgbaImage::from_raw(samples.len() as u32, 1, source_bytes)
                 .expect("valid F-mode carrier"),
         ),
         Some(crate::raster::Mode::ImageF32),
-    );
+    )
+    .expect("tag valid F-mode carrier");
 
     let converted = source
         .convert("RGB", None, None, None, None)
@@ -87,7 +89,7 @@ fn float_to_rgb_clamps_and_truncates_native_f_samples() {
 #[test]
 fn luma8_to_luma16_conversion_and_paste_preserve_numeric_sample() {
     for mode in ["I;16", "I;16L", "I;16B", "I;16N"] {
-        let source = Image::new(1, 1, "L", (17, 17, 17, 255)).expect("source image");
+        let source = Image::new(1, 1, crate::raster::Mode::ImageLuma8, (17, 17, 17, 255)).expect("source image");
         let converted = source
             .convert(mode, None, None, None, None)
             .expect("I;16 conversion");
@@ -100,7 +102,7 @@ fn luma8_to_luma16_conversion_and_paste_preserve_numeric_sample() {
             }
         );
 
-        let mut destination = Image::new(1, 1, mode, (0, 0, 0, 255)).expect("destination image");
+        let mut destination = Image::new(1, 1, crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (0, 0, 0, 255)).expect("destination image");
         destination
             .paste(
                 PasteSource::Image(Box::new(source)),

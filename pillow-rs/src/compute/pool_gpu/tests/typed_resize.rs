@@ -23,7 +23,7 @@ fn typed_luma16_nearest_affine_transform_uses_native_word_path() {
                 }
             })
             .collect::<Vec<_>>();
-        let source = Image::frombytes(mode, (4, 3), &bytes)
+        let source = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (4, 3), &bytes)
             .unwrap_or_else(|error| panic!("{mode} source: {error}"));
         let data = TransformData::Affine(vec![0.5, 0.0, 0.0, 0.0, 0.5, 0.0]);
         let transformed = source
@@ -182,7 +182,7 @@ fn luma16_filtered_resize_proof_covers_declared_byte_orders() {
                 }
             })
             .collect::<Vec<_>>();
-        let source = Image::frombytes(mode, (4, 3), &bytes).expect("I;16 source");
+        let source = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (4, 3), &bytes).expect("I;16 source");
         let image = source.materialize().expect("materialize I;16 source");
         assert!(
             gpu_luma16_resize_f64_is_exact(std::slice::from_ref(&op), &image, Some(mode)),
@@ -218,7 +218,7 @@ fn luma16_filtered_resize_native_gpu_matches_cpu() {
                 }
             })
             .collect::<Vec<_>>();
-        let source = Image::frombytes(mode, (4, 4), &bytes).expect("I;16 source");
+        let source = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (4, 4), &bytes).expect("I;16 source");
         assert_eq!(source.mode().expect("I;16 mode"), mode);
         assert_eq!(
             luma16_resample_big_endian(Some(mode)),
@@ -284,7 +284,7 @@ fn rgb_a_fit_uses_native_raw_channel_resize() {
     let previous = Backend::set_pipeline_telemetry_enabled(true);
     let mut source_bytes = vec![0u8; 9 * 8 * 4];
     source_bytes[(3 * 9 + 2) * 4..][..4].copy_from_slice(&[200, 100, 50, 128]);
-    let source = Image::frombytes("RGBa", (9, 8), &source_bytes).expect("RGBa source");
+    let source = Image::frombytes(crate::raster::Mode::ImageRgbPremultiplied8, (9, 8), &source_bytes).expect("RGBa source");
     let fitted = crate::ops::imageops::fit(&source, 4, 3, Some("BILINEAR"), 0.0, (0.5, 0.5))
         .expect("RGBa Fit operation");
     let actual = match fitted.use_backend(Backend::Gpu).tobytes() {

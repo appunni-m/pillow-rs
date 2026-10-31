@@ -2,7 +2,6 @@
 
 use crate::error::PilError;
 use crate::raster::DynamicImage;
-use crate::raster::ConvertBuffer;
 use super::super::super::helpers::put_alpha::{self as helpers, AlphaInput};
 
 pub(crate) type Input = crate::raster::ImageBuffer<crate::raster::Rgba<u16>, Vec<u16>>;
@@ -15,6 +14,9 @@ pub(crate) fn prepare(image: &Input, alpha: u8) -> Kernel<'_> {
 
 #[inline]
 pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
-    let rgba: crate::raster::RgbaImage = input.image.convert();
-    Ok(DynamicImage::ImageRgba8(helpers::replace_rgba_alpha(rgba, input.alpha)))
+    let alpha = helpers::alpha_u8_to_u16(input.alpha);
+    Ok(DynamicImage::ImageRgba16(helpers::rgba16_with_alpha(
+        input.image,
+        alpha,
+    )))
 }

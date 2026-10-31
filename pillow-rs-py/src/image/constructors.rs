@@ -50,6 +50,9 @@ fn image_alpha_composite(
 /// Generate a 256×256 linear gradient image from black to white.
 #[pyfunction]
 fn image_linear_gradient(mode: &str) -> PyResult<PyImage> {
+    let mode = pillow_rs::Mode::from_pillow_name(mode).ok_or_else(|| {
+        map_error(pillow_rs::PilError::ValueError("image has wrong mode".into()))
+    })?;
     let rs = pillow_rs::image_linear_gradient(mode).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
@@ -57,6 +60,9 @@ fn image_linear_gradient(mode: &str) -> PyResult<PyImage> {
 /// Generate a 256×256 radial gradient image from white (center) to black (edges).
 #[pyfunction]
 fn image_radial_gradient(mode: &str) -> PyResult<PyImage> {
+    let mode = pillow_rs::Mode::from_pillow_name(mode).ok_or_else(|| {
+        map_error(pillow_rs::PilError::ValueError("image has wrong mode".into()))
+    })?;
     let rs = pillow_rs::image_radial_gradient(mode).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }

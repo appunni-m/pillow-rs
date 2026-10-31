@@ -1,8 +1,18 @@
 //! Pillow point/eval operations and their host-neutral input contract.
 
 use crate::error::PilError;
+use crate::compute::pool_cpu::ops::eval::{helpers::mode::pillow_band_count, scalar};
+use crate::compute::{Architecture, Backend, ExecutionContext};
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
+use crate::raster::Mode;
+
+fn exact_mode(image: &Image) -> Result<Mode, PilError> {
+    match image.known_mode_identity() {
+        Some(mode) => Ok(mode),
+        None => Ok(image.materialized_shared()?.mode()),
+    }
+}
 
 /// Host-neutral input classification for the callable form of `Image.eval`.
 #[derive(Debug, Clone, Copy)]
@@ -84,7 +94,7 @@ pub fn eval_replicated(image: &Image, lut: &[u8], n_bands: usize) -> Result<Imag
 /// or [`PilError::ValueError`] when `lut` is not a valid single-band or
 /// already-expanded table.
 pub fn eval_replicated_for_image(image: &Image, lut: &[u8]) -> Result<Image, PilError> {
-    let n_bands = image.getbands()?.len();
+    let n_bands = pillow_band_count(exact_mode(image)?);
     eval_replicated(image, lut, n_bands)
 }
 
@@ -114,53 +124,9 @@ where
 /// and these native scalar buffers are not represented by the byte-oriented
 /// `Eval` pipeline operation.
 pub fn eval_point_transform(image: &Image, scale: f64, offset: f64) -> Result<Image, PilError> {
-    let mode = image.mode()?;
-    if !matches!(
-        mode.as_str(),
-        "I" | "I;16" | "I;16L" | "I;16B" | "I;16N" | "F"
-    ) {
-        return Err(PilError::ValueError(
-            "point operation not supported for this mode".to_owned(),
-        ));
-    }
-
-    let mut result = image.materialize()?;
-    match mode.as_str() {
-        "I" => {
-            let pixels = result.as_mut_rgba8().ok_or_else(|| {
-                PilError::InternalError("I image has no four-byte scalar storage".to_owned())
-            })?;
-            for pixel in pixels.pixels_mut() {
-                let value = i32::from_le_bytes(pixel.0);
-                let transformed = (f64::from(value) * scale + offset) as i32;
-                pixel.0 = transformed.to_le_bytes();
-            }
-        }
-        "F" => {
-            let pixels = result.as_mut_rgba8().ok_or_else(|| {
-                PilError::InternalError("F image has no four-byte scalar storage".to_owned())
-            })?;
-            for pixel in pixels.pixels_mut() {
-                let value = f32::from_le_bytes(pixel.0);
-                let transformed = (f64::from(value) * scale + offset) as f32;
-                pixel.0 = transformed.to_le_bytes();
-            }
-        }
-        "I;16" | "I;16L" | "I;16B" | "I;16N" => {
-            let pixels = result.as_mut_luma16().ok_or_else(|| {
-                PilError::InternalError("I;16 image has no 16-bit scalar storage".to_owned())
-            })?;
-            for pixel in pixels.pixels_mut() {
-                pixel.0[0] = (f64::from(pixel.0[0]) * scale + offset) as u16;
-            }
-        }
-        _ => unreachable!("scalar point transform mode was validated above"),
-    }
-
-    Ok(Image::from_dynamic(
-        result,
-        crate::image::mode_boundary::parse_pillow_mode(&mode),
-    ))
+    let context = ExecutionContext::new(Backend::Cpu, Architecture::Default);
+    let prepared = scalar::prepare(image, &context)?;
+    scalar::execute_affine(prepared, scale, offset)
 }
 
 /// Applies a host callback to each scalar sample in an integer or float image.
@@ -172,51 +138,9 @@ pub fn eval_point_callable<F>(image: &Image, mut callback: F) -> Result<Image, P
 where
     F: FnMut(f64) -> Result<f64, PilError>,
 {
-    let mode = image.mode()?;
-    if !matches!(
-        mode.as_str(),
-        "I" | "I;16" | "I;16L" | "I;16B" | "I;16N" | "F"
-    ) {
-        return Err(PilError::ValueError(
-            "point operation not supported for this mode".to_owned(),
-        ));
-    }
-
-    let mut result = image.materialize()?;
-    match mode.as_str() {
-        "I" => {
-            let pixels = result.as_mut_rgba8().ok_or_else(|| {
-                PilError::InternalError("I image has no four-byte scalar storage".to_owned())
-            })?;
-            for pixel in pixels.pixels_mut() {
-                let value = f64::from(i32::from_le_bytes(pixel.0));
-                pixel.0 = (callback(value)? as i32).to_le_bytes();
-            }
-        }
-        "F" => {
-            let pixels = result.as_mut_rgba8().ok_or_else(|| {
-                PilError::InternalError("F image has no four-byte scalar storage".to_owned())
-            })?;
-            for pixel in pixels.pixels_mut() {
-                let value = f64::from(f32::from_le_bytes(pixel.0));
-                pixel.0 = (callback(value)? as f32).to_le_bytes();
-            }
-        }
-        "I;16" | "I;16L" | "I;16B" | "I;16N" => {
-            let pixels = result.as_mut_luma16().ok_or_else(|| {
-                PilError::InternalError("I;16 image has no 16-bit scalar storage".to_owned())
-            })?;
-            for pixel in pixels.pixels_mut() {
-                pixel.0[0] = callback(f64::from(pixel.0[0]))? as u16;
-            }
-        }
-        _ => unreachable!("scalar point mode was validated above"),
-    }
-
-    Ok(Image::from_dynamic(
-        result,
-        crate::image::mode_boundary::parse_pillow_mode(&mode),
-    ))
+    let context = ExecutionContext::new(Backend::Cpu, Architecture::Default);
+    let prepared = scalar::prepare(image, &context)?;
+    scalar::execute_callable(prepared, callback)
 }
 
 /// Validates and applies a pre-expanded Pillow lookup table.
@@ -231,11 +155,8 @@ where
 /// or [`PilError::ValueError`] when the table length does not equal
 /// `256 * image_band_count`.
 pub fn eval_validated(image: &Image, lut: &[u8]) -> Result<Image, PilError> {
-    let mode = image.mode()?;
-    if matches!(
-        mode.as_str(),
-        "I" | "I;16" | "I;16L" | "I;16B" | "I;16N" | "F"
-    ) {
+    let mode = exact_mode(image)?;
+    if scalar::supports(mode) {
         // Pillow routes callable transforms for scalar images through the
         // affine path, but rejects a byte LUT before entering the Imaging
         // point kernel. Keep that public error boundary here so a scalar
@@ -244,10 +165,15 @@ pub fn eval_validated(image: &Image, lut: &[u8]) -> Result<Image, PilError> {
             "point operation not supported for this mode".to_owned(),
         ));
     }
-    let n_bands = image.getbands()?.len();
+    let n_bands = pillow_band_count(mode);
     let expected = 256 * n_bands;
     if lut.len() != expected {
         return Err(PilError::ValueError("wrong number of lut entries".into()));
+    }
+    if n_bands == 0 {
+        return Err(PilError::ValueError(
+            "point operation not supported for this mode".into(),
+        ));
     }
     eval(image, lut)
 }
@@ -265,24 +191,8 @@ pub fn eval_validated(image: &Image, lut: &[u8]) -> Result<Image, PilError> {
 /// Returns [`PilError::ValueError`] when the LUT length or source mode does
 /// not match Pillow's single-band floating-output path.
 pub fn eval_float(image: &Image, lut: &[f64]) -> Result<Image, PilError> {
-    let mode = image.mode()?;
-    let n_bands = image.getbands()?.len();
-    if lut.len() != 256 * n_bands {
-        return Err(PilError::ValueError("wrong number of lut entries".into()));
-    }
-    if !matches!(mode.as_str(), "1" | "L" | "P") {
-        return Err(PilError::ValueError(
-            "point operation not supported for this mode".to_owned(),
-        ));
-    }
-
-    let size = image.size()?;
-    let pixels = image.materialize()?.to_luma8().into_raw();
-    let mut raw = Vec::with_capacity(pixels.len() * std::mem::size_of::<f32>());
-    for sample in pixels {
-        raw.extend_from_slice(&(lut[usize::from(sample)] as f32).to_le_bytes());
-    }
-    Image::frombytes("F", size, &raw)
+    let context = ExecutionContext::new(Backend::Cpu, Architecture::Default);
+    crate::compute::pool_cpu::ops::eval::ops::execute_float(image, lut, &context)
 }
 
 /// Builds a floating-point point-operation LUT from a host callback.

@@ -1,7 +1,10 @@
 //! Direct eager operations that select CPU, SIMD, or GPU without a lazy pipeline.
 //!
-//! TODO(pillow-rs#3ptb): replace the remaining direct SIMD adapter calls with
-//! CPU-family strategies selected by the injected execution context.
+//! TODO(pillow-rs#3ptb): migrate eager RGB/CMYK projection and
+//! linear/radial/Mandelbrot generators from separate SIMD adapters into their
+//! CPU family/mode architecture strategies.
+//! TODO(pillow-rs#3ptb): pass the injected execution context through the
+//! remaining eager projection and generator entry points and receipts.
 
 use super::backend_state::active_lock;
 #[cfg(feature = "gpu")]
@@ -12,7 +15,8 @@ use super::{
     begin_pipeline_operation_telemetry, elapsed_ns, finish_pipeline_operation_telemetry,
     host_resource_telemetry, pipeline_telemetry_enabled, pipeline_timestamp,
     record_pipeline_allocation, record_pipeline_operation_handoff,
-    record_pipeline_operation_mode_conversion, record_pipeline_operation_path,
+    record_pipeline_operation_architecture, record_pipeline_operation_mode_conversion,
+    record_pipeline_operation_path,
     record_pipeline_operation_scalar_tail, record_pipeline_operation_vector_blocks,
     record_pipeline_resource_telemetry, record_pipeline_telemetry,
     reset_pipeline_allocation_telemetry, reset_pipeline_operation_telemetry,
@@ -20,6 +24,7 @@ use super::{
     take_pipeline_dispatch_count, take_pipeline_resize_coeff_cache_stats,
     take_pipeline_resource_telemetry, take_pipeline_telemetry,
 };
+use crate::raster::Mode;
 use std::time::Instant;
 
 fn reset_eager_image_operation_telemetry() {
@@ -87,46 +92,33 @@ fn record_eager_simd_generator_telemetry(
     });
 }
 
-/// Run the SIMD CMYK projection block scanner and return its vector/tail
-/// evidence together with the two Pillow-compatible result axes.
-pub(crate) fn simd_cmyk_projection(
-    image: &crate::raster::RgbaImage,
-) -> (Vec<u32>, Vec<u32>, u64, u64) {
-    pool_simd::ops::adapters::simd_cmyk_projection(image)
-}
-
-/// Derive CMYK projection axes from a proven zero source and positive writes.
-pub(crate) fn simd_cmyk_projection_from_positive_writes(
-    width: u32,
-    height: u32,
-    ops: &[PipelineOp],
-) -> Option<(Vec<u32>, Vec<u32>, u64, u64)> {
-    pool_simd::ops::adapters::simd_cmyk_projection_from_positive_writes(width, height, ops)
-}
-
-pub(crate) fn simd_rgb_projection(
-    image: &crate::raster::RgbImage,
-) -> (Vec<u32>, Vec<u32>, u64, u64) {
-    pool_simd::ops::adapters::simd_rgb_projection(image)
-}
-
 pub(crate) fn execute_eager_cpu_getprojection(
     input: &DynamicImage,
+    context: &ExecutionContext,
     requested_backend: Option<Backend>,
     fallback_reason: Option<String>,
-    execute: impl FnOnce() -> Result<(Vec<u32>, Vec<u32>), PilError>,
 ) -> Result<(Vec<u32>, Vec<u32>), PilError> {
+    let prepared = super::prepare_cpu_getprojection(input, context)?;
+    let selection = *prepared.selection();
     let timed = pipeline_telemetry_enabled();
     if timed {
         reset_eager_image_operation_telemetry();
     }
     let backend_start = timed.then(pipeline_timestamp).flatten();
-    let result = execute()?;
+    let output = prepared.execute()?;
     let backend_ns = elapsed_ns(backend_start);
+    let result = output.axes;
     if timed {
         begin_pipeline_operation_telemetry("GetProjection");
-        record_pipeline_operation_path("cpu");
+        record_pipeline_operation_architecture(selection.implementation.architecture);
+        record_pipeline_operation_vector_blocks(output.vector_blocks);
+        record_pipeline_operation_scalar_tail(output.scalar_tail);
+        record_pipeline_operation_path(if output.vector_blocks == 0 { "cpu" } else { "vector" });
         finish_pipeline_operation_telemetry();
+        let selected_fallback = selection
+            .fallback
+            .map(|reason| format!("GetProjection strategy fell back: {reason:?}"));
+        let fallback_reason = fallback_reason.or(selected_fallback);
         if fallback_reason.is_some() {
             record_pipeline_operation_handoff(1);
         }
@@ -159,59 +151,6 @@ pub(crate) fn execute_eager_cpu_getprojection(
             backend_ns,
             dispatch_count,
             fallback_reason,
-            resource,
-            resize_coeff_cache_hits: 0,
-            resize_coeff_cache_misses: 0,
-        });
-    }
-    Ok(result)
-}
-
-pub(crate) fn execute_eager_simd_getprojection(
-    input: &DynamicImage,
-    execute: impl FnOnce() -> Result<((Vec<u32>, Vec<u32>), u64, u64), PilError>,
-) -> Result<(Vec<u32>, Vec<u32>), PilError> {
-    let timed = pipeline_telemetry_enabled();
-    if timed {
-        reset_eager_image_operation_telemetry();
-    }
-    let backend_start = timed.then(pipeline_timestamp).flatten();
-    let (result, vector_blocks, scalar_tail) = execute()?;
-    let backend_ns = elapsed_ns(backend_start);
-    if timed {
-        begin_pipeline_operation_telemetry("GetProjection");
-        record_pipeline_operation_vector_blocks(vector_blocks);
-        record_pipeline_operation_scalar_tail(scalar_tail);
-        finish_pipeline_operation_telemetry();
-
-        let mut resource = host_resource_telemetry(input);
-        let output_bytes =
-            (result.0.len() + result.1.len()).saturating_mul(std::mem::size_of::<u32>()) as u64;
-        resource.host_buffer_count = resource.host_buffer_count.saturating_add(2);
-        resource.host_buffer_bytes = resource.host_buffer_bytes.saturating_add(output_bytes);
-        resource.peak_live_host_bytes = resource
-            .peak_live_host_bytes
-            .max((input.as_bytes().len() as u64).saturating_add(output_bytes));
-        resource.fused_operation_count = 0;
-        record_pipeline_allocation(result.0.len() * std::mem::size_of::<u32>());
-        record_pipeline_allocation(result.1.len() * std::mem::size_of::<u32>());
-        let allocation = take_pipeline_allocation_telemetry();
-        resource.host_allocation_count = allocation.allocation_count;
-        resource.host_allocated_bytes = allocation.allocated_bytes;
-        record_pipeline_resource_telemetry(resource);
-        let resource = take_pipeline_resource_telemetry();
-        let _ = take_pipeline_backend_override();
-        let dispatch_count = take_pipeline_dispatch_count();
-        let _ = take_pipeline_resize_coeff_cache_stats();
-        record_pipeline_telemetry(PipelineTelemetry {
-            requested_backend: Some(Backend::Simd),
-            actual_backend: Backend::Simd,
-            operation_count: 1,
-            route_ns: 0,
-            validation_ns: 0,
-            backend_ns,
-            dispatch_count,
-            fallback_reason: None,
             resource,
             resize_coeff_cache_hits: 0,
             resize_coeff_cache_misses: 0,
@@ -385,6 +324,109 @@ pub(crate) fn execute_eager_cpu_arch_image_operation(
     )
 }
 
+/// Executes a prepared CPU architecture strategy into a caller-owned byte slice.
+pub(crate) fn execute_eager_cpu_arch_bytes(
+    operation: &'static str,
+    input: &DynamicImage,
+    requested_backend: Backend,
+    output: &mut [u8],
+    execute: impl FnOnce(
+        &ExecutionContext,
+        &mut [u8],
+    ) -> Result<Option<(
+        crate::compute::registry::support::StrategySelection,
+        (u64, u64, &'static str),
+    )>, PilError>,
+) -> Result<Option<()>, PilError> {
+    let timed = pipeline_telemetry_enabled();
+    let route_start = timed.then(pipeline_timestamp).flatten();
+    let context = ExecutionContext::for_routed_backend(requested_backend);
+    let route_ns = elapsed_ns(route_start);
+    if timed {
+        reset_eager_image_operation_telemetry();
+    }
+    if context.backend() != Backend::Cpu {
+        if timed {
+            discard_eager_image_operation_telemetry();
+        }
+        return Err(PilError::InternalError(
+            "CPU architecture byte execution received a non-CPU context".into(),
+        ));
+    }
+    if timed {
+        begin_pipeline_operation_telemetry(operation);
+    }
+    let backend_start = timed.then(pipeline_timestamp).flatten();
+    let (selection, (vector_blocks, scalar_tail, path)) = match execute(&context, output) {
+        Ok(Some(result)) => result,
+        Ok(None) => {
+            if timed {
+                discard_eager_image_operation_telemetry();
+            }
+            return Ok(None);
+        }
+        Err(error) => {
+            if timed {
+                discard_eager_image_operation_telemetry();
+            }
+            return Err(error);
+        }
+    };
+    let backend_ns = elapsed_ns(backend_start);
+    if timed {
+        record_pipeline_operation_architecture(selection.implementation.architecture);
+        record_pipeline_operation_vector_blocks(vector_blocks);
+        record_pipeline_operation_scalar_tail(scalar_tail);
+        record_pipeline_operation_path(path);
+        record_pipeline_operation_mode_conversion(0);
+        finish_pipeline_operation_telemetry();
+
+        let mut resource = host_resource_telemetry(input);
+        let output_bytes = output.len() as u64;
+        resource.host_buffer_count = resource
+            .host_buffer_count
+            .saturating_add(u64::from(output_bytes != 0));
+        resource.host_buffer_bytes = resource.host_buffer_bytes.saturating_add(output_bytes);
+        resource.peak_live_host_bytes = resource
+            .peak_live_host_bytes
+            .max((input.as_bytes().len() as u64).saturating_add(output_bytes));
+        let allocation = take_pipeline_allocation_telemetry();
+        resource.host_allocation_count = allocation.allocation_count;
+        resource.host_allocated_bytes = allocation.allocated_bytes;
+        record_pipeline_resource_telemetry(resource);
+        let resource = take_pipeline_resource_telemetry();
+        let _ = take_pipeline_backend_override();
+        let dispatch_count = take_pipeline_dispatch_count();
+        let _ = take_pipeline_resize_coeff_cache_stats();
+        let fallback_reason = selection.fallback.map_or_else(
+            || {
+                (requested_backend == Backend::Simd
+                    && selection.requested_architecture == crate::compute::Architecture::Default)
+                    .then(|| format!("{operation} used CPU Default for a SIMD request"))
+            },
+            |reason| Some(format!(
+                "{operation} selected {:?} after {reason:?} for requested {:?}",
+                selection.implementation.architecture,
+                selection.requested_architecture,
+            )),
+        );
+        record_pipeline_telemetry(PipelineTelemetry {
+            requested_backend: Some(requested_backend),
+            actual_backend: Backend::Cpu,
+            operation_count: 1,
+            route_ns,
+            validation_ns: 0,
+            backend_ns,
+            dispatch_count,
+            fallback_reason,
+            resource,
+            resize_coeff_cache_hits: 0,
+            resize_coeff_cache_misses: 0,
+        });
+    }
+    Ok(Some(()))
+}
+
 /// Executes one CPU architecture strategy with caller-routed context and phase timings.
 pub(crate) fn execute_cpu_arch_operation(
     operation: &'static str,
@@ -454,6 +496,7 @@ fn record_cpu_arch_operation_telemetry(
     backend_ns: u64,
     routed_fallback_reason: Option<String>,
 ) {
+    record_pipeline_operation_architecture(selection.implementation.architecture);
     let mode_conversion = u64::from(input.mode() != result.mode());
     if selection.implementation.architecture == crate::compute::Architecture::Default {
         record_pipeline_operation_path("cpu");
@@ -496,8 +539,6 @@ fn record_cpu_arch_operation_telemetry(
             ))
         },
     );
-    // TODO(pillow-rs#3ptb): include the selected Architecture in the
-    // operation receipt; PipelineTelemetry currently records backend/path only.
     record_pipeline_telemetry(PipelineTelemetry {
         requested_backend,
         actual_backend: Backend::Cpu,
@@ -565,72 +606,6 @@ pub(crate) fn execute_eager_cpu_shared_result<T>(
     Ok(result)
 }
 
-/// Execute one SIMD image operation directly for a loaded source and publish
-/// the vector and buffer evidence for its native kernel. The closure accounts
-/// its checked image-buffer allocations through the normal allocation hooks.
-pub(crate) fn execute_eager_simd_image_operation(
-    operation: &'static str,
-    input: &DynamicImage,
-    execute: impl FnOnce() -> Result<(DynamicImage, u64, u64, &'static str), PilError>,
-) -> Result<DynamicImage, PilError> {
-    let timed = pipeline_telemetry_enabled();
-    if timed {
-        reset_eager_image_operation_telemetry();
-    }
-
-    let backend_start = timed.then(pipeline_timestamp).flatten();
-    let (result, vector_blocks, scalar_tail, path) = match execute() {
-        Ok(result) => result,
-        Err(error) => {
-            if timed {
-                discard_eager_image_operation_telemetry();
-            }
-            return Err(error);
-        }
-    };
-    let backend_ns = elapsed_ns(backend_start);
-    if timed {
-        begin_pipeline_operation_telemetry(operation);
-        record_pipeline_operation_vector_blocks(vector_blocks);
-        record_pipeline_operation_scalar_tail(scalar_tail);
-        record_pipeline_operation_path(path);
-        finish_pipeline_operation_telemetry();
-
-        let mut resource = host_resource_telemetry(input);
-        let output_bytes = result.as_bytes().len();
-        let output_bytes_u64 = output_bytes as u64;
-        resource.host_buffer_count = resource
-            .host_buffer_count
-            .saturating_add(u64::from(output_bytes != 0));
-        resource.host_buffer_bytes = resource.host_buffer_bytes.saturating_add(output_bytes_u64);
-        resource.peak_live_host_bytes = resource
-            .peak_live_host_bytes
-            .max((input.as_bytes().len() as u64).saturating_add(output_bytes_u64));
-        let allocation = take_pipeline_allocation_telemetry();
-        resource.host_allocation_count = allocation.allocation_count;
-        resource.host_allocated_bytes = allocation.allocated_bytes;
-        record_pipeline_resource_telemetry(resource);
-        let resource = take_pipeline_resource_telemetry();
-        let _ = take_pipeline_backend_override();
-        let dispatch_count = take_pipeline_dispatch_count();
-        let _ = take_pipeline_resize_coeff_cache_stats();
-        record_pipeline_telemetry(PipelineTelemetry {
-            requested_backend: Some(Backend::Simd),
-            actual_backend: Backend::Simd,
-            operation_count: 1,
-            route_ns: 0,
-            validation_ns: 0,
-            backend_ns,
-            dispatch_count,
-            fallback_reason: None,
-            resource,
-            resize_coeff_cache_hits: 0,
-            resize_coeff_cache_misses: 0,
-        });
-    }
-    Ok(result)
-}
-
 #[cfg(feature = "gpu")]
 pub(crate) fn gpu_cmyk_projection_terminal_supported(
     image: &DynamicImage,
@@ -652,18 +627,6 @@ pub(crate) fn gpu_rgb_projection_terminal_supported(
     pool_gpu::GpuPool::rgb_projection_terminal_supported(image, ops)
 }
 
-/// Apply the exact native RGB 150% UnsharpMask blend through the SIMD adapter.
-///
-/// The caller is responsible for selecting the SIMD route and validating the
-/// logical image mode before using this narrow byte kernel.
-pub(crate) fn simd_unsharp_blend_rgb_150(
-    original: &[u8],
-    blurred_output: &mut [u8],
-    threshold: i32,
-) -> bool {
-    pool_simd::ops::adapters::simd_unsharp_blend_rgb_150(original, blurred_output, threshold)
-}
-
 /// Try the eager `Image.linear_gradient` constructor on the active SIMD
 /// backend.
 ///
@@ -671,7 +634,7 @@ pub(crate) fn simd_unsharp_blend_rgb_150(
 /// a deferred pipeline.  Keep their backend boundary here so strict SIMD
 /// parity can observe the actual data-plane executor and so an unsupported
 /// SIMD contract returns an error instead of silently entering the CPU loop.
-pub(crate) fn try_simd_linear_gradient(mode: &str) -> Result<Option<DynamicImage>, PilError> {
+pub(crate) fn try_simd_linear_gradient(mode: Mode) -> Result<Option<DynamicImage>, PilError> {
     let timed = pipeline_telemetry_enabled();
     let route_start = timed.then(pipeline_timestamp).flatten();
     let active_set = active_lock()?.clone();
@@ -690,7 +653,10 @@ pub(crate) fn try_simd_linear_gradient(mode: &str) -> Result<Option<DynamicImage
         begin_pipeline_operation_telemetry("LinearGradient");
     }
     let backend_start = timed.then(pipeline_timestamp).flatten();
-    let result = pool_simd::ops::adapters::simd_linear_gradient_generate(mode);
+    let mode_name = mode
+        .pillow_name()
+        .ok_or_else(|| PilError::ValueError("image has wrong mode".into()))?;
+    let result = pool_simd::ops::adapters::simd_linear_gradient_generate(mode_name);
     let backend_ns = elapsed_ns(backend_start);
 
     if timed {
@@ -710,8 +676,8 @@ pub(crate) fn try_simd_linear_gradient(mode: &str) -> Result<Option<DynamicImage
 ///
 /// Other modes stay on their established constructors until they have their
 /// own format-specific vector kernels.
-pub(crate) fn try_simd_radial_gradient(mode: &str) -> Result<Option<DynamicImage>, PilError> {
-    if mode != "L" {
+pub(crate) fn try_simd_radial_gradient(mode: Mode) -> Result<Option<DynamicImage>, PilError> {
+    if mode != Mode::ImageLuma8 {
         return Ok(None);
     }
     let timed = pipeline_telemetry_enabled();

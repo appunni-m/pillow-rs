@@ -44,7 +44,7 @@ fn extract_band_native_gpu_preserves_raw_color_mode_channels() {
     let cases = native_extract_band_cases();
     let previous = Backend::set_pipeline_telemetry_enabled(true);
     for (mode, channel, source_bytes, expected_bytes) in cases {
-        let source = Image::frombytes(mode, (2, 1), &source_bytes).expect("source image");
+        let source = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (2, 1), &source_bytes).expect("source image");
         let expected = source
             .getchannel(channel)
             .expect("channel operation")

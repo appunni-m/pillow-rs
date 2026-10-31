@@ -1,4 +1,8 @@
 //! Admission checks for operations that may fuse across lazy image pipelines.
+//!
+//! TODO(pillow-rs#3ptb): replace SIMD-exclusive routing and the separate
+//! PutPixel/thumbnail fusion admission with the injected CPU architecture
+//! support contract; keep backend compatibility at this wrapper boundary.
 
 use super::Image;
 use crate::pipeline::{PipelineOp, ResampleFilter};
@@ -103,7 +107,10 @@ impl Image {
                     source.image.as_ref(),
                     ops.as_slice(),
                     &thumbnail,
-                    super::mode_boundary::pillow_mode_name_opt(*explicit_mode),
+                    *explicit_mode,
+                    &crate::compute::ExecutionContext::for_routed_backend(
+                        crate::compute::Backend::Cpu,
+                    ),
                 )
             }
             crate::compute::Backend::Simd => {

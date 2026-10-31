@@ -2,7 +2,6 @@
 
 use image_slash_star::{ImageFormat, ImageInfo, ImageMode};
 
-use crate::color::color_type_to_mode;
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, GenericImageView, Mode};
@@ -661,54 +660,103 @@ impl Image {
     /// Returns a known exact raster identity without materializing pixels.
     pub(crate) fn known_mode_identity(&self) -> Option<Mode> {
         match self {
-            Image::Loaded(data) => data.explicit_mode.or(Some(data.image.mode())),
-            Image::Paletted(_) => Some(Mode::ImagePalette8),
-            Image::Bytes { info: Some(info), .. } => {
-                super::mode_boundary::parse_pillow_mode(image_mode_name(info.mode))
-            }
-            Image::Pipeline {
-                explicit_mode: Some(mode),
-                ..
-            } => Some(*mode),
-            Image::Pipeline { mode, .. } => mode
+            Image::Loaded(data) => Some(data.image.mode()),
+            Image::Paletted(data) => Some(data.indices.mode()),
+            Image::Bytes {
+                info, materialized, ..
+            } => materialized
                 .get()
                 .and_then(|result| result.as_ref().ok())
-                .copied()
-                .flatten(),
-            Image::Bytes { info: None, .. } => None,
+                .map(|image| image.mode())
+                .or_else(|| {
+                    info.as_ref().and_then(|info| {
+                        super::mode_boundary::parse_pillow_mode(image_mode_name(info.mode))
+                    })
+                }),
+            Image::Pipeline {
+                explicit_mode,
+                materialized,
+                mode,
+                ..
+            } => materialized
+                .get()
+                .and_then(|result| result.as_ref().ok())
+                .map(|image| image.mode())
+                .or(*explicit_mode)
+                .or_else(|| {
+                    mode.get()
+                        .and_then(|result| result.as_ref().ok())
+                        .copied()
+                        .flatten()
+                }),
         }
     }
 
+    /// Returns this image's exact raster mode identity.
+    ///
+    /// Encoded inputs are decoded only when neither their header nor a planned
+    /// pipeline can provide the identity. Host-facing Pillow spellings remain
+    /// available through [`Image::mode`].
+    pub fn mode_identity(&self) -> Result<Mode, PilError> {
+        if let Some(mode) = self.known_mode_identity() {
+            return Ok(mode);
+        }
+        if let Image::Pipeline {
+            source,
+            ops,
+            mode,
+            ..
+        } = self
+        {
+            let planned = mode.get_or_init(|| {
+                let mut current = if let Some(mode) = source.known_mode_identity() {
+                    mode
+                } else {
+                    // TODO(pillow-rs#3ptb): derive encoded identities from the
+                    // codec adapter without passing through Pillow strings.
+                    let source_name = source.mode()?;
+                    let Some(mode) = super::mode_boundary::parse_pillow_mode(&source_name) else {
+                        return Ok(None);
+                    };
+                    mode
+                };
+                if ops.mode_preserving() {
+                    return Ok(Some(current));
+                }
+                for op in ops.iter() {
+                    let Some(next) = known_pipeline_op_mode(op, current) else {
+                        return Ok(None);
+                    };
+                    current = next;
+                }
+                Ok(Some(current))
+            });
+            if let Some(mode) = planned.as_ref().map_err(Clone::clone)? {
+                return Ok(*mode);
+            }
+        }
+        Ok(self.materialized_shared()?.mode())
+    }
+
     /// Returns the Pillow mode string for this image.
+    ///
+    /// Core-only mode identities without a Pillow spelling return `"unknown"`;
+    /// use [`Image::mode_identity`] to inspect the exact Rust mode.
     ///
     /// # Errors
     ///
     /// Returns [`PilError`] when lazy data must be materialized to determine
     /// the mode and that materialization fails.
     pub fn mode(&self) -> Result<String, PilError> {
+        if let Some(mode) = self.known_mode_identity() {
+            return Ok(super::mode_boundary::pillow_mode_name(mode)
+                .unwrap_or("unknown")
+                .to_owned());
+        }
         match self {
-            Image::Paletted(_) => return Ok("P".to_owned()),
-            Image::Loaded(data) => {
-                return Ok(super::mode_boundary::pillow_mode_name_opt(data.explicit_mode)
-                    .or_else(|| super::mode_boundary::pillow_mode_name(data.image.mode()))
-                    .map(str::to_owned)
-                    .unwrap_or_else(|| image_mode_name(data.decoded_mode).to_owned()));
-            }
-            Image::Bytes {
-                info: Some(info), ..
-            } => return Ok(image_mode_name(info.mode).to_owned()),
-            Image::Pipeline {
-                explicit_mode: Some(mode),
-                ..
-            } => {
-                if let Some(name) = super::mode_boundary::pillow_mode_name(*mode) {
-                    return Ok(name.to_owned());
-                }
-            }
             Image::Pipeline {
                 source,
                 ops,
-                explicit_mode: None,
                 mode,
                 ..
             } => {
@@ -716,7 +764,7 @@ impl Image {
                     let mut current = if let Some(mode) = source.known_mode_identity() {
                         mode
                     } else {
-                        // TODO(cpu-migration): derive a typed identity directly
+                        // TODO(pillow-rs#3ptb): derive a typed identity directly
                         // from every encoded header/decode state before using
                         // the compatibility string fallback below.
                         let source_name = source.mode()?;
@@ -738,16 +786,16 @@ impl Image {
                     }
                     Ok(Some(current))
                 });
-                if let Some(mode) = planned.as_ref().map_err(Clone::clone)? {
-                    if let Some(name) = super::mode_boundary::pillow_mode_name(*mode) {
-                        return Ok(name.to_owned());
-                    }
+                if let Some(mode) = planned.as_ref().map_err(Clone::clone)?.as_ref() {
+                    return Ok(super::mode_boundary::pillow_mode_name(*mode)
+                        .unwrap_or("unknown")
+                        .to_owned());
                 }
             }
             _ => {}
         }
         let img = self.materialized_shared()?;
-        Ok(self.mode_from_materialized(&img))
+        Ok(Self::mode_from_materialized(&img))
     }
 
     /// Returns the mode after the caller has already materialized this image.
@@ -755,25 +803,12 @@ impl Image {
     /// The fallible [`Image::mode`] method must decode lazy inputs when no
     /// header mode is available. Once a concrete buffer is in hand, that
     /// operation cannot fail; keeping this path infallible also makes it clear
-    /// that mode selection does not trigger a second decode.
-    pub(crate) fn mode_from_materialized(&self, image: &DynamicImage) -> String {
-        match self {
-            Image::Paletted(_) => "P".to_owned(),
-            Image::Loaded(data) => super::mode_boundary::pillow_mode_name_opt(data.explicit_mode)
-                .or_else(|| super::mode_boundary::pillow_mode_name(image.mode()))
-                .map(str::to_owned)
-                .unwrap_or_else(|| image_mode_name(data.decoded_mode).to_owned()),
-            Image::Bytes {
-                info: Some(info), ..
-            } => image_mode_name(info.mode).to_owned(),
-            Image::Pipeline {
-                explicit_mode: Some(mode),
-                ..
-            } => super::mode_boundary::pillow_mode_name(*mode)
-                .unwrap_or_else(|| image_mode_name(image.color().into()))
-                .to_owned(),
-            _ => color_type_to_mode(image.color()).to_owned(),
-        }
+    /// that mode selection does not trigger a second decode. The materialized
+    /// [`DynamicImage`] variant is the mode authority, including for pipelines.
+    pub(crate) fn mode_from_materialized(image: &DynamicImage) -> String {
+        super::mode_boundary::pillow_mode_name(image.mode())
+            .unwrap_or("unknown")
+            .to_owned()
     }
 }
 

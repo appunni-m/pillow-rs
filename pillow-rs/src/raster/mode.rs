@@ -61,6 +61,42 @@ pub enum Mode {
 }
 
 impl Mode {
+    /// Compatibility alias for Pillow's `L` mode.
+    pub const L: Self = Self::ImageLuma8;
+    /// Compatibility alias for Pillow's `LA` mode.
+    pub const LA: Self = Self::ImageLumaA8;
+    /// Compatibility alias for Pillow's premultiplied `La` mode.
+    #[allow(non_upper_case_globals)]
+    pub const LaPremultiplied: Self = Self::ImageLaPremultiplied8;
+    /// Compatibility alias for Pillow's `RGB` mode.
+    pub const RGB: Self = Self::ImageRgb8;
+    /// Compatibility alias for Pillow's `RGBA` mode.
+    pub const RGBA: Self = Self::ImageRgba8;
+    /// Compatibility alias for Pillow's premultiplied `RGBa` mode.
+    #[allow(non_upper_case_globals)]
+    pub const RgbPremultiplied: Self = Self::ImageRgbPremultiplied8;
+    /// Compatibility alias for Pillow's padded `RGBX` mode.
+    #[allow(non_upper_case_globals)]
+    pub const Rgbx: Self = Self::ImageRgbx8;
+    /// Compatibility alias for Pillow's `CMYK` mode.
+    pub const CMYK: Self = Self::ImageCmyk8;
+    /// Compatibility alias for Pillow's `YCbCr` mode.
+    pub const YCbCr: Self = Self::ImageYCbCr8;
+    /// Compatibility alias for Pillow's `HSV` mode.
+    pub const HSV: Self = Self::ImageHsv8;
+    /// Compatibility alias for Pillow's `I` mode.
+    pub const I: Self = Self::ImageI32;
+    /// Compatibility alias for Pillow's `F` mode.
+    pub const F: Self = Self::ImageF32;
+    /// Compatibility alias for Pillow's native-endian `I;16` mode.
+    #[allow(non_upper_case_globals)]
+    pub const I16: Self = Self::ImageI16;
+    /// Compatibility alias for Pillow's `P` mode.
+    pub const P: Self = Self::ImagePalette8;
+    /// Compatibility alias for Pillow's bilevel `1` mode.
+    #[allow(non_upper_case_globals)]
+    pub const Mode1: Self = Self::One;
+
     /// Every raster identity, including internal high-depth representations.
     pub const ALL: [Self; 25] = [
         Self::One,

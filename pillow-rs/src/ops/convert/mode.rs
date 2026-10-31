@@ -1,5 +1,5 @@
 use crate::error::PilError;
-use crate::pipeline::ColorMode;
+use crate::raster::Mode;
 
 /// Parses a Pillow mode string into a pipeline color mode.
 ///
@@ -7,19 +7,19 @@ use crate::pipeline::ColorMode;
 ///
 /// Returns [`PilError::ValueError`] when `s` is not one of the modes supported
 /// by core conversion.
-pub fn parse_mode(s: &str) -> Result<ColorMode, PilError> {
+pub fn parse_mode(s: &str) -> Result<Mode, PilError> {
     match s {
-        "L" => Ok(ColorMode::L),
-        "LA" => Ok(ColorMode::LA),
-        "RGB" => Ok(ColorMode::RGB),
-        "RGBA" => Ok(ColorMode::RGBA),
-        "CMYK" => Ok(ColorMode::CMYK),
-        "YCbCr" => Ok(ColorMode::YCbCr),
-        "HSV" => Ok(ColorMode::HSV),
-        "I" => Ok(ColorMode::I),
-        "F" => Ok(ColorMode::F),
-        "P" => Ok(ColorMode::P),
-        "1" => Ok(ColorMode::Mode1),
+        "L" => Ok(Mode::ImageLuma8),
+        "LA" => Ok(Mode::ImageLumaA8),
+        "RGB" => Ok(Mode::ImageRgb8),
+        "RGBA" => Ok(Mode::ImageRgba8),
+        "CMYK" => Ok(Mode::ImageCmyk8),
+        "YCbCr" => Ok(Mode::ImageYCbCr8),
+        "HSV" => Ok(Mode::ImageHsv8),
+        "I" => Ok(Mode::ImageI32),
+        "F" => Ok(Mode::ImageF32),
+        "P" => Ok(Mode::ImagePalette8),
+        "1" => Ok(Mode::One),
         _ => Err(PilError::ValueError(format!("Unknown mode: {}", s))),
     }
 }

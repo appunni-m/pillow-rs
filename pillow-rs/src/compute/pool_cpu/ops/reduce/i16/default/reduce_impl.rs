@@ -3,6 +3,7 @@
 use crate::error::PilError;
 use crate::raster::DynamicImage;
 
+// NO_PILLOW_SUPPORT: typed u16 reduction is an explicit native core extension.
 pub(crate) fn execute(
     input: &crate::raster::ImageBuffer<crate::raster::Luma<u16>, Vec<u16>>,
     x_factor: u32,

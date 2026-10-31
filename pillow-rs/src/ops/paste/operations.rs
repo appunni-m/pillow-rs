@@ -12,6 +12,7 @@ use crate::error::PilError;
 use crate::image::Image;
 use crate::ops::crop::check_crop_extent;
 use crate::pipeline::PipelineOp;
+use crate::raster::Mode;
 
 fn coordinate_overflow() -> PilError {
     PilError::OverflowError("signed integer is greater than maximum".into())
@@ -29,13 +30,13 @@ impl Image {
         box_input: PasteBoxInput,
         mask_input: PasteMaskInput,
     ) -> Result<(), PilError> {
-        let destination_mode = self.mode()?;
+        let destination_mode = self.mode_identity()?;
         let source = match source {
             PasteSourceInput::Image(image) => PasteSource::from_parts(Some(*image), 0, 0, 0, 255),
-            PasteSourceInput::Scalar(value) => paste_scalar_source(value, &destination_mode),
+            PasteSourceInput::Scalar(value) => paste_scalar_source(value, destination_mode),
             PasteSourceInput::Float(value) => PasteSource::RawFloat(value),
             PasteSourceInput::Components(values) => match values.as_slice() {
-                [value] => paste_scalar_source(*value, &destination_mode),
+                [value] => paste_scalar_source(*value, destination_mode),
                 [luma, alpha] => match (u8::try_from(*luma), u8::try_from(*alpha)) {
                     (Ok(luma), Ok(alpha)) => PasteSource::LumaAlpha(luma, alpha),
                     _ => PasteSource::RawLumaAlpha(*luma, *alpha),
@@ -53,13 +54,13 @@ impl Image {
                     (Ok(r), Ok(g), Ok(b), Ok(a)) => PasteSource::from_parts(None, r, g, b, a),
                     _ => PasteSource::RawRgba(*r, *g, *b, *a),
                 },
-                _ => return Err(invalid_component_error(&destination_mode)),
+                _ => return Err(invalid_component_error(destination_mode)),
             },
             PasteSourceInput::String(value) => {
-                paste_source_from_color_string(&value, &destination_mode)?
+                paste_source_from_color_string(&value, destination_mode)?
             }
             PasteSourceInput::Invalid => {
-                return Err(invalid_component_error(&destination_mode));
+                return Err(invalid_component_error(destination_mode));
             }
         };
 
@@ -314,7 +315,7 @@ impl Image {
         mask: Option<&Image>,
         compact_solid_source: bool,
     ) -> Result<(), PilError> {
-        let destination_mode = self.mode()?;
+        let destination_mode = self.mode_identity()?;
         let source_size = match &source {
             PasteSource::Image(image) => Some(image.size()?),
             _ => None,
@@ -340,7 +341,7 @@ impl Image {
         };
         let source_image = resolve_paste_source(
             source,
-            &destination_mode,
+            destination_mode,
             source_width,
             source_height,
             mask.is_some(),
@@ -384,11 +385,11 @@ impl Image {
         // Pillow 12.2.0 `libImaging/AlphaComposite.c::ImagingAlphaComposite`
         // validates the destination mode first, then requires the source mode
         // and dimensions to match exactly.
-        let dest_mode = self.mode()?;
-        if dest_mode != "RGBA" && dest_mode != "LA" {
+        let dest_mode = self.mode_identity()?;
+        if dest_mode != Mode::ImageRgba8 && dest_mode != Mode::ImageLumaA8 {
             return Err(PilError::ValueError("image has wrong mode".into()));
         }
-        let source_mode = source.mode()?;
+        let source_mode = source.mode_identity()?;
         if source_mode != dest_mode {
             return Err(PilError::ValueError("images do not match".into()));
         }
@@ -461,7 +462,7 @@ fn paste_mask_uses_alpha(mask: Option<&Image>) -> Result<bool, PilError> {
 
 fn resolve_paste_source(
     source: PasteSource,
-    destination_mode: &str,
+    destination_mode: Mode,
     width: u32,
     height: u32,
     has_mask: bool,
@@ -474,53 +475,65 @@ fn resolve_paste_source(
 
 fn resolve_image_source(
     image: Box<Image>,
-    destination_mode: &str,
+    destination_mode: Mode,
     has_mask: bool,
 ) -> Result<Image, PilError> {
-    let source_mode = image.mode()?;
+    let source_mode = image.mode_identity()?;
     if source_mode == destination_mode
-        || (destination_mode == "RGB" && matches!(source_mode.as_str(), "LA" | "RGBA" | "RGBa"))
+        || (destination_mode == Mode::ImageRgb8
+            && matches!(
+                source_mode,
+                Mode::ImageLumaA8 | Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8
+            ))
     {
         Ok(*image)
-    } else if destination_mode == "RGBA" && source_mode == "RGB" && !has_mask {
+    } else if destination_mode == Mode::ImageRgba8
+        && source_mode == Mode::ImageRgb8
+        && !has_mask
+    {
         // Keep RGB source bytes native; the destination writer supplies opaque alpha.
         Ok(*image)
-    } else if destination_mode == "PA" && source_mode == "P" {
+    } else if destination_mode == Mode::ImagePaletteAlpha8
+        && source_mode == Mode::ImagePalette8
+    {
         // Pillow promotes P sources to opaque PA samples and retains each index.
         let mut promoted = *image;
         promoted.putalpha(255)?;
         Ok(promoted)
     } else {
         // Convert before backend execution so every backend receives identical bytes.
-        image.convert(destination_mode, None, None, None, None)
+        let mode_name = destination_mode
+            .pillow_name()
+            .ok_or_else(|| PilError::ValueError("unsupported paste destination mode".into()))?;
+        image.convert(mode_name, None, None, None, None)
     }
 }
 
 fn resolve_solid_source(
     source: PasteSource,
-    destination_mode: &str,
+    destination_mode: Mode,
     width: u32,
     height: u32,
 ) -> Result<Image, PilError> {
     let color = source.solid_color(destination_mode)?;
     match color {
-        ResolvedPasteColor::Bytes(color) if destination_mode == "P" => {
+        ResolvedPasteColor::Bytes(color) if destination_mode == Mode::ImagePalette8 => {
             let dims = CheckedDims::new(width, height, 1)?;
             let mut indices = dims.alloc_buffer();
             indices.fill(color.0);
-            Image::frombytes("P", (width, height), &indices)
+            Image::frombytes(crate::raster::Mode::ImagePalette8, (width, height), &indices)
         }
-        ResolvedPasteColor::Bytes(color) if destination_mode == "PA" => {
+        ResolvedPasteColor::Bytes(color) if destination_mode == Mode::ImagePaletteAlpha8 => {
             // PA uses the LA physical layout while retaining its palette tag.
-            Image::new(width, height, "LA", color)
+            Image::new(width, height, Mode::ImagePaletteAlpha8, color)
         }
         ResolvedPasteColor::Integer(value) => {
             let bytes = value.to_le_bytes();
-            Image::new(width, height, "I", (bytes[0], bytes[1], bytes[2], bytes[3]))
+            Image::new(width, height, crate::raster::Mode::ImageI32, (bytes[0], bytes[1], bytes[2], bytes[3]))
         }
         ResolvedPasteColor::Float(value) => {
             let bytes = value.to_le_bytes();
-            Image::new(width, height, "F", (bytes[0], bytes[1], bytes[2], bytes[3]))
+            Image::new(width, height, crate::raster::Mode::ImageF32, (bytes[0], bytes[1], bytes[2], bytes[3]))
         }
         ResolvedPasteColor::Luma16(sample) => {
             let pixels = crate::raster::ImageBuffer::from_pixel(
@@ -528,10 +541,10 @@ fn resolve_solid_source(
                 height,
                 crate::raster::Luma([sample]),
             );
-            Ok(Image::from_dynamic(
+            Image::from_dynamic_with_mode(
                 crate::raster::DynamicImage::ImageI16(pixels),
-                crate::image::mode_boundary::parse_pillow_mode(&destination_mode),
-            ))
+                Some(destination_mode),
+            )
         }
         ResolvedPasteColor::Bytes(color) => Image::new(width, height, destination_mode, color),
     }

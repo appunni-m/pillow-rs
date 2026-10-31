@@ -1,5 +1,7 @@
 use super::*;
-use crate::raster::{DynamicImage, FromColor, Rgba};
+use crate::raster::DynamicImage;
+#[cfg(target_arch = "x86_64")]
+use crate::compute::{Architecture, Backend, ExecutionContext};
 
 const F_RESIZE_VECTOR_WIDTH: usize = 16;
 
@@ -76,12 +78,28 @@ impl X86FmaToken {
         std::is_x86_feature_detected!("fma").then_some(Self { _private: () })
     }
 
+    pub(crate) fn from_context(
+        context: &ExecutionContext,
+        implementation: Architecture,
+    ) -> Option<Self> {
+        if context.backend() == Backend::Cpu
+            && matches!(implementation, Architecture::AvxFma | Architecture::Avx2Fma)
+            && context.permits_architecture(implementation)
+            && context.supports_architecture(implementation)
+        {
+            Some(Self { _private: () })
+        } else {
+            None
+        }
+    }
+
     #[allow(unsafe_code)]
     #[inline(always)]
     fn mul_add_finite_operands(weight: f64, sample: f64, accumulator: f64) -> f64 {
         let mut result = accumulator;
-        // SAFETY: callers have an `X86FmaToken` created by runtime feature
-        // detection, so the current CPU supports the scalar FMA instruction.
+        // SAFETY: callers hold an `X86FmaToken` created from the captured
+        // execution context or explicit feature detection, both of which
+        // establish that this CPU supports the scalar FMA instruction.
         unsafe {
             std::arch::asm!(
                 "vfmadd231sd {result}, {weight}, {sample}",
@@ -297,35 +315,38 @@ pub(super) fn f_resize_boxed_vertical_pass<const FINITE_OPERANDS: bool, F: F64Mu
 
 // ── Pixel access helpers ──
 
-/// Get pixel as 4 f64 values (r, g, b, a). Grayscale replicates to RGB.
-#[inline]
-fn typed_pixel_as_rgba8<P>(pixel: &P) -> [f64; 4]
-where
-    Rgba<u8>: FromColor<P>,
-{
-    let mut converted = Rgba([0; 4]);
-    converted.copy_from_color(pixel);
-    converted.0.map(f64::from)
-}
-
 /// Convert one typed sample using the same channel conversion as `to_rgba8`,
 /// without materializing an RGBA copy of the complete image for each sample.
+// TODO(pillow-rs#3ptb): remove this compatibility pixel fallback with the
+// mode-owned Resize implementation.
 pub(super) fn pixel_at(img: &DynamicImage, x: u32, y: u32) -> [f64; 4] {
     match img {
-        DynamicImage::ImageLuma8(g) => {
+        DynamicImage::One(g)
+        | DynamicImage::ImageLuma8(g)
+        | DynamicImage::ImagePalette8(g) => {
             let v = g.get_pixel(x, y)[0] as f64;
             [v, v, v, 255.0]
         }
-        DynamicImage::ImageLumaA8(ga) => {
+        DynamicImage::ImageLumaA8(ga)
+        | DynamicImage::ImageLaPremultiplied8(ga)
+        | DynamicImage::ImagePaletteAlpha8(ga) => {
             let p = ga.get_pixel(x, y);
             let v = p[0] as f64;
             [v, v, v, p[1] as f64]
         }
-        DynamicImage::ImageRgb8(rgb) => {
+        DynamicImage::ImageRgb8(rgb)
+        | DynamicImage::ImageYCbCr8(rgb)
+        | DynamicImage::ImageLab8(rgb)
+        | DynamicImage::ImageHsv8(rgb) => {
             let p = rgb.get_pixel(x, y);
             [p[0] as f64, p[1] as f64, p[2] as f64, 255.0]
         }
-        DynamicImage::ImageRgba8(rgba) => {
+        DynamicImage::ImageRgba8(rgba)
+        | DynamicImage::ImageRgbPremultiplied8(rgba)
+        | DynamicImage::ImageRgbx8(rgba)
+        | DynamicImage::ImageCmyk8(rgba)
+        | DynamicImage::ImageI32(rgba)
+        | DynamicImage::ImageF32(rgba) => {
             let p = rgba.get_pixel(x, y);
             [p[0] as f64, p[1] as f64, p[2] as f64, p[3] as f64]
         }
@@ -335,30 +356,19 @@ pub(super) fn pixel_at(img: &DynamicImage, x: u32, y: u32) -> [f64; 4] {
             let value = image.get_pixel(x, y)[0].min(u16::from(u8::MAX)) as u8;
             [f64::from(value), f64::from(value), f64::from(value), 255.0]
         }
-        DynamicImage::ImageLumaA16(image) => typed_pixel_as_rgba8(image.get_pixel(x, y)),
-        DynamicImage::ImageRgb16(image) => typed_pixel_as_rgba8(image.get_pixel(x, y)),
-        DynamicImage::ImageRgba16(image) => typed_pixel_as_rgba8(image.get_pixel(x, y)),
-        DynamicImage::ImageRgb32F(image) => typed_pixel_as_rgba8(image.get_pixel(x, y)),
-        DynamicImage::ImageRgba32F(image) => typed_pixel_as_rgba8(image.get_pixel(x, y)),
+        DynamicImage::ImageI16L(image)
+        | DynamicImage::ImageI16B(image)
+        | DynamicImage::ImageI16N(image) => {
+            let value = image.get_pixel(x, y)[0].min(u16::from(u8::MAX)) as u8;
+            [f64::from(value), f64::from(value), f64::from(value), 255.0]
+        }
+        DynamicImage::ImageLumaA16(_)
+        | DynamicImage::ImageRgb16(_)
+        | DynamicImage::ImageRgba16(_)
+        | DynamicImage::ImageRgb32F(_)
+        | DynamicImage::ImageRgba32F(_) => {
+            unreachable!("native typed Resize strategies return before the byte fallback")
+        }
     }
 }
 
-/// Materialize typed multi-channel samples in Pillow's public 8-bit layout.
-///
-/// Pillow's RGB/LA/RGBA image core is byte-backed even when the source codec
-/// decodes 16-bit or float samples. Convert into the matching logical layout
-/// before byte resampling; treating the sample bytes as four unrelated
-/// channels misaligns RGB and filters numeric sample encodings for every mode.
-/// Keep RGB at three bytes and LA at two rather than widening both to RGBA.
-pub(super) fn typed_color_resize_bytes(img: &DynamicImage) -> Option<DynamicImage> {
-    match img {
-        DynamicImage::ImageLumaA16(_) => Some(DynamicImage::ImageLumaA8(img.to_luma_alpha8())),
-        DynamicImage::ImageRgb16(_) | DynamicImage::ImageRgb32F(_) => {
-            Some(DynamicImage::ImageRgb8(img.to_rgb8()))
-        }
-        DynamicImage::ImageRgba16(_) | DynamicImage::ImageRgba32F(_) => {
-            Some(DynamicImage::ImageRgba8(img.to_rgba8()))
-        }
-        _ => None,
-    }
-}

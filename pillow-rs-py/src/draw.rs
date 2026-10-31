@@ -126,6 +126,13 @@ impl PyDraw {
     #[new]
     #[pyo3(signature = (image, mode=None))]
     fn new(image: &Bound<'_, PyImage>, mode: Option<String>) -> PyResult<Self> {
+        let mode = mode
+            .map(|mode| {
+                pillow_rs::Mode::from_pillow_name(&mode).ok_or_else(|| {
+                    map_error(pillow_rs::PilError::ValueError("mode mismatch".to_owned()))
+                })
+            })
+            .transpose()?;
         let borrowed = image.borrow();
         let draw = pillow_rs::Draw::new(borrowed.inner.clone(), mode);
         draw.validate_mode().map_err(map_error)?;

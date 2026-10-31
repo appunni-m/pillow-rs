@@ -5,7 +5,7 @@ use super::coefficients::fixed_point_to_u8;
 use super::*;
 
 #[inline(always)]
-fn horizontal_pass_rgb_row(
+pub(crate) fn horizontal_pass_rgb_row(
     src_row: &[u8],
     coeffs: &FilterCoeffs,
     out_w: u32,

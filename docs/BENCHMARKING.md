@@ -84,14 +84,17 @@ hashes, runtime identity, requested/actual backend, and terminal receipts are
 compatible with the comparison.
 
 The untimed representative execution receipt also retains each operation's
-path, vector-block count, and originating timed `step_id`, plus the receipt's
-`selected_step_ids`. A positive count records vector blocks for that operation;
-a recorded zero keeps scalar-only paths explicit. The benchmark filters records
-to the workload's selected steps before collecting telemetry; report validation
-keeps those IDs within the workload's measurement policy. Consumers can verify
-each vector event belongs to that selection. Missing, empty, or unscoped
-operation telemetry does not establish vector-kernel execution. These receipts
-do not add latency samples.
+path, selected architecture when its prepared strategy exposes one, vector-block
+count, and originating timed `step_id`, plus the receipt's `selected_step_ids`.
+The architecture is `null` when it is not applicable, a compatibility route
+does not expose a concrete selection, or a composite operation has no single
+child architecture to report. A positive count records vector blocks for that
+operation; a recorded zero keeps scalar-only paths explicit. The
+benchmark filters records to the workload's selected steps before collecting
+telemetry; report validation keeps those IDs within the workload's measurement
+policy. Consumers can verify each vector event belongs to that selection.
+Missing, empty, or unscoped operation telemetry does not establish
+vector-kernel execution. These receipts do not add latency samples.
 
 `whole_workflow` timing includes the terminal result observation needed to
 realize the measured workflow. For a lazy final image result, the timing adapter

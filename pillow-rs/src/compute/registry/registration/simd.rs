@@ -44,8 +44,6 @@ fn register_section_b(m: &mut Registry) -> Result<(), PilError> {
 
     simd_set(m, "Equalize", adapters::simd_equalize)?;
 
-    simd_set(m, "RemapPalette", adapters::simd_remap_palette)?;
-
     simd_set(m, "Resize", adapters::simd_resize)?;
 
     simd_set(m, "Scale", adapters::simd_scale)?;
@@ -64,7 +62,6 @@ fn register_section_b(m: &mut Registry) -> Result<(), PilError> {
 
     simd_set(m, "Convert", adapters::simd_convert)?;
 
-    simd_set(m, "ConvertLab", adapters::simd_convert_lab)?;
 
     simd_set(m, "Reduce", adapters::simd_reduce)?;
 

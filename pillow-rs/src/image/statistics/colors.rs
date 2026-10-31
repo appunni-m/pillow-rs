@@ -78,7 +78,12 @@ impl Image {
         mut count_pixel: impl FnMut(u32) -> bool,
     ) -> bool {
         match (n_bands, img) {
-            (2, crate::raster::DynamicImage::ImageLumaA8(image)) => {
+            (
+                2,
+                crate::raster::DynamicImage::ImageLumaA8(image)
+                | crate::raster::DynamicImage::ImageLaPremultiplied8(image)
+                | crate::raster::DynamicImage::ImagePaletteAlpha8(image),
+            ) => {
                 for pixel in image.pixels() {
                     if !count_pixel(pillow_color_pixel(&pixel.0)) {
                         return false;

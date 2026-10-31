@@ -61,7 +61,7 @@ fn public_cpu_getchannel_ignores_overlong_loaded_rgb_storage() {
     // Counts above the eager threshold exercise the deferred CPU path.
     for width in [257, 258, 259, 260] {
         let source = rgb_with_trailing_storage(width, 1);
-        let mut image = Image::new(width, 1, "RGB", (0, 0, 0, 255)).expect("RGB image");
+        let mut image = Image::new(width, 1, crate::raster::Mode::ImageRgb8, (0, 0, 0, 255)).expect("RGB image");
         let Image::Loaded(data) = &mut image else {
             panic!("new RGB image must have loaded storage");
         };

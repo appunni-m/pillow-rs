@@ -11,9 +11,8 @@ use crate::pipeline::{PipelineOp, ResampleFilter, TransformMethod};
 use crate::raster::{DynamicImage, Mode};
 
 use super::{
-    Image, ImageMode, LoadedData, PalettedData, PipelinePrefixCache, expand_palette,
-    expand_palette_alpha, image_mode_name, materialization_cache, padded_palette,
-    take_cached_materialization, validate_scalar_storage,
+    Image, LoadedData, PalettedData, PipelinePrefixCache, expand_palette, expand_palette_alpha,
+    materialization_cache, padded_palette, take_cached_materialization, validate_scalar_storage,
 };
 
 fn image_from_materialized(
@@ -22,10 +21,7 @@ fn image_from_materialized(
     info: Option<ImageInfo>,
     exif: Option<Vec<u8>>,
 ) -> Result<Image, PilError> {
-    let decoded_mode = info
-        .as_ref()
-        .map_or_else(|| image.color().into(), |info| info.mode);
-    if image.mode() == Mode::ImagePalette8 || decoded_mode == ImageMode::P8 {
+    if image.mode() == Mode::ImagePalette8 {
         let palette = info
             .as_ref()
             .and_then(|info| info.palette.clone())
@@ -45,8 +41,6 @@ fn image_from_materialized(
     Ok(Image::Loaded(LoadedData {
         image,
         known_zero_fill: false,
-        explicit_mode: None,
-        decoded_mode,
         palette: None,
         palette_alpha: None,
         source_format,
@@ -335,7 +329,7 @@ impl Image {
     /// mode against their storage, without cloning the materialized buffer.
     pub(crate) fn materialized_shared_for_ops(&self) -> Result<Arc<DynamicImage>, PilError> {
         let image = self.materialized_shared()?;
-        let mode = self.mode_from_materialized(&image);
+        let mode = Self::mode_from_materialized(&image);
         validate_scalar_storage(&image, &mode)?;
         Ok(image)
     }
@@ -358,9 +352,7 @@ impl Image {
             Image::Pipeline { .. } => {
                 let image = self.materialized_shared()?;
                 Ok(Image::Loaded(LoadedData {
-                    decoded_mode: image.color().into(),
                     known_zero_fill: false,
-                    explicit_mode: None,
                     palette: self.palette(),
                     palette_alpha: self.palette_alpha(),
                     source_format: None,
@@ -718,7 +710,7 @@ impl Image {
         )? {
             return Ok(result);
         }
-        // TODO(cpu-migration): keep prepared execution typed through the pool;
+        // TODO(pillow-rs#3ptb): keep prepared execution typed through the pool;
         // this projection is needed only by the legacy string-mode executor.
         let explicit_mode_name = super::mode_boundary::pillow_mode_name_opt(*explicit_mode);
         if let Some(result) = Self::evaluate_palette_pipeline(

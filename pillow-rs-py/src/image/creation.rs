@@ -7,7 +7,13 @@ impl PyImage {
     #[new]
     fn py_new() -> PyResult<Self> {
         // Default 1x1 RGB image for compatibility
-        let img = RsImage::new(1, 1, "RGB", (0, 0, 0, 0)).map_err(map_error)?;
+        let img = RsImage::new(
+            1,
+            1,
+            pillow_rs::Mode::ImageRgb8,
+            (0, 0, 0, 0),
+        )
+        .map_err(map_error)?;
         Ok(PyImage { inner: img })
     }
 
@@ -37,6 +43,11 @@ impl PyImage {
             }
             _ => new_color_input_from_python(color),
         };
+        let mode = pillow_rs::Mode::from_pillow_name(mode).ok_or_else(|| {
+            map_error(pillow_rs::PilError::ValueError(
+                "unrecognized image mode".into(),
+            ))
+        })?;
         let img = RsImage::new_with_input(size.0, size.1, mode, input).map_err(map_error)?;
         Ok(PyImage { inner: img })
     }
@@ -210,14 +221,23 @@ impl PyImage {
         decoder_name: &str,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
-        let mode = mode.to_owned();
+        if decoder_name != "raw" {
+            return Err(map_error(pillow_rs::PilError::IOError(format!(
+                "decoder {decoder_name} not available"
+            ))));
+        }
+        let mode = pillow_rs::Mode::from_pillow_name(mode).ok_or_else(|| {
+            map_error(pillow_rs::PilError::ValueError(
+                "unrecognized image mode".into(),
+            ))
+        })?;
         let decoder_name = decoder_name.to_owned();
         // PyO3 borrows immutable bytes and extracts owned vectors for mutable
         // sequences. Preserve that ownership so raw raster modes can adopt an
         // extracted buffer instead of copying it a second time.
         py.detach(move || match data {
-            Cow::Borrowed(data) => pillow_rs::image_frombytes(&mode, size, data, &decoder_name),
-            Cow::Owned(data) => pillow_rs::image_frombytes_owned(&mode, size, data, &decoder_name),
+            Cow::Borrowed(data) => pillow_rs::image_frombytes(mode, size, data, &decoder_name),
+            Cow::Owned(data) => pillow_rs::image_frombytes_owned(mode, size, data, &decoder_name),
         })
         .map(|img| PyImage { inner: img })
         .map_err(map_error)

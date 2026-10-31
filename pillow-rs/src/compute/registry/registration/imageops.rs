@@ -1,13 +1,5 @@
 //! Imageops operation registration.
-// TODO(pillow-rs#3ptb): replace the remaining direct-result callbacks for
-// Contain, Cover, Fit, Pad, Scale, and Expand with operation-owned prepared
-// plans. For Expand, retain the exact mode/output identity and P/PA raw-sample
-// behavior when wiring its legacy native-byte paths. The two histogram
-// operations now enter through their CPU plans.
-use super::prelude::{
-    DynamicImage, PilError, PipelineOp, Registry, op_contain, op_cover,
-    op_fit, op_pad, op_scale,
-};
+use super::prelude::{PilError, Registry};
 fn register_autocontrast_equalize(m: &mut Registry) {
     m.insert(
         "Autocontrast",
@@ -92,16 +84,7 @@ fn register_part_3(m: &mut Registry) {
     m.insert(
         "Contain",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::Contain { w, h, filter } = op {
-                    op_contain(img, *w, *h, *filter, mode)
-                } else {
-                    Err(PilError::ValueError("expected Contain op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::geometry::ops::prepare_pipeline,
             "contain.wgsl"
         ),
     );
@@ -109,16 +92,7 @@ fn register_part_3(m: &mut Registry) {
     m.insert(
         "Cover",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::Cover { w, h, filter } = op {
-                    op_cover(img, *w, *h, *filter, mode)
-                } else {
-                    Err(PilError::ValueError("expected Cover op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::geometry::ops::prepare_pipeline,
             "cover.wgsl"
         ),
     );
@@ -128,23 +102,7 @@ fn register_fit_pad(m: &mut Registry) {
     m.insert(
         "Fit",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::Fit {
-                    w,
-                    h,
-                    filter,
-                    bleed,
-                    centering,
-                } = op
-                {
-                    op_fit(img, *w, *h, *filter, *bleed, *centering, mode)
-                } else {
-                    Err(PilError::ValueError("expected Fit op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::geometry::ops::prepare_pipeline,
             "fit.wgsl"
         ),
     );
@@ -152,23 +110,7 @@ fn register_fit_pad(m: &mut Registry) {
     m.insert(
         "Pad",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::Pad {
-                    w,
-                    h,
-                    filter,
-                    color,
-                    centering,
-                } = op
-                {
-                    op_pad(img, *w, *h, *filter, *color, *centering, mode)
-                } else {
-                    Err(PilError::ValueError("expected Pad op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::geometry::ops::prepare_pipeline,
             "pad.wgsl"
         ),
     );
@@ -178,16 +120,7 @@ fn register_scale_expand(m: &mut Registry) {
     m.insert(
         "Scale",
         gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::Scale { factor, filter } = op {
-                    op_scale(img, *factor, *filter, mode)
-                } else {
-                    Err(PilError::ValueError("expected Scale op".into()))
-                }
-            },
+            crate::compute::pool_cpu::ops::geometry::ops::prepare_pipeline,
             "scale.wgsl"
         ),
     );

@@ -7,7 +7,7 @@ fn f_pad_constant_source_preserves_scalar_fill_on_gpu() {
     // eligible for the exact scalar resize marker; the named fill is
     // resolved to Pillow's F luma value (76.0) before it reaches the
     // raw-word placement shader.
-    let source = Image::new(16, 16, "F", (0, 0, 0, 0)).expect("F source");
+    let source = Image::new(16, 16, crate::raster::Mode::ImageF32, (0, 0, 0, 0)).expect("F source");
     let expected = crate::ops::imageops::pad_with_input(
         &source,
         20,
@@ -208,7 +208,7 @@ fn gpu_pad_fill_keeps_rgbx_and_cmyk_fourth_byte_semantics() {
 #[test]
 fn alpha_composite_mirror_fuses_only_matching_full_frame_rgba() {
     let source = Arc::new(
-        crate::image::Image::new(2, 1, "RGBA", (0, 0, 0, 0)).expect("RGBA composite source"),
+        crate::image::Image::new(2, 1, crate::raster::Mode::ImageRgba8, (0, 0, 0, 0)).expect("RGBA composite source"),
     );
     let pair = [
         PipelineOp::AlphaComposite {
@@ -252,7 +252,7 @@ fn alpha_composite_mirror_fuses_only_matching_full_frame_rgba() {
     ));
 
     let wrong_size_source = Arc::new(
-        crate::image::Image::new(1, 1, "RGBA", (0, 0, 0, 0))
+        crate::image::Image::new(1, 1, crate::raster::Mode::ImageRgba8, (0, 0, 0, 0))
             .expect("mismatched RGBA composite source"),
     );
     let wrong_size_pair = [

@@ -18,7 +18,7 @@ fn extract_band_native_gpu_handles_4096_square_la_alpha() {
         source_bytes.push(sample.wrapping_mul(37).wrapping_add(53));
     }
     let source =
-        Image::frombytes("LA", (WIDTH, HEIGHT), &source_bytes).expect("4096-square LA source");
+        Image::frombytes(crate::raster::Mode::ImageLumaA8, (WIDTH, HEIGHT), &source_bytes).expect("4096-square LA source");
     let expected = source
         .getchannel(1)
         .expect("LA alpha channel")
@@ -94,7 +94,7 @@ fn effect_spread_native_gpu_preserves_raw_byte_modes() {
     ];
     let previous = Backend::set_pipeline_telemetry_enabled(true);
     for (mode, source_bytes) in cases {
-        let source = Image::frombytes(mode, (2, 1), &source_bytes).expect("source image");
+        let source = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (2, 1), &source_bytes).expect("source image");
         let expected = crate::image_effect_spread(&source, 0)
             .expect("effect_spread operation")
             .use_backend(Backend::Cpu)
@@ -145,7 +145,7 @@ fn contrast_after_putpixel_native_gpu_uses_current_image_midpoint() {
     ];
     let previous = Backend::set_pipeline_telemetry_enabled(true);
     for (mode, bytes) in cases {
-        let mut source = Image::frombytes(mode, (2, 2), &bytes)
+        let mut source = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (2, 2), &bytes)
             .unwrap_or_else(|error| panic!("{mode} source image: {error}"));
         source
             .putpixel(1, 0, 180, 90, 60, 220)
@@ -185,7 +185,7 @@ fn contrast_kernels_match_constructor_blend_for_varied_pixels() {
         let bytes: Vec<u8> = (0..17 * 11 * channels)
             .map(|i| ((i * 73 + (i / 17) * 11 + 29) & 255) as u8)
             .collect();
-        let source = Image::frombytes(mode, (17, 11), &bytes).expect("varied source");
+        let source = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (17, 11), &bytes).expect("varied source");
         let base = source.contrast_degenerate().expect("reference base");
         for factor in [0.1, 0.3, 0.7, 0.99999999, 1.00000001, 1.2, -1.0, 3.33333] {
             let expected = crate::ops::module_fns::blend(&base, &source, factor)
@@ -234,7 +234,7 @@ fn cmyk_putalpha_native_gpu_promotes_exactly() {
     ];
     let previous = Backend::set_pipeline_telemetry_enabled(true);
 
-    let mut scalar = Image::frombytes("CMYK", (2, 1), &source_bytes).expect("CMYK source");
+    let mut scalar = Image::frombytes(crate::raster::Mode::ImageCmyk8, (2, 1), &source_bytes).expect("CMYK source");
     scalar.putalpha(173).expect("CMYK scalar PutAlpha");
     let expected = scalar
         .clone()
@@ -256,8 +256,8 @@ fn cmyk_putalpha_native_gpu_promotes_exactly() {
     assert_eq!(telemetry.6, Some(1));
     assert_eq!(telemetry.7, None);
 
-    let mask = Image::frombytes("L", (2, 1), &[7, 231]).expect("L alpha mask");
-    let mut masked = Image::frombytes("CMYK", (2, 1), &source_bytes).expect("CMYK source");
+    let mask = Image::frombytes(crate::raster::Mode::ImageLuma8, (2, 1), &[7, 231]).expect("L alpha mask");
+    let mut masked = Image::frombytes(crate::raster::Mode::ImageCmyk8, (2, 1), &source_bytes).expect("CMYK source");
     masked.putalpha_data(&mask).expect("CMYK image PutAlpha");
     let expected = masked
         .clone()
@@ -287,12 +287,12 @@ fn draw_point_native_gpu_preserves_raw_byte_modes() {
     let previous = Backend::set_pipeline_telemetry_enabled(true);
     for (mode, source_bytes) in raw_byte_draw_point_cases() {
         let source = if mode == "PA" {
-            let mut indexed = Image::frombytes("P", (2, 1), &source_bytes)
+            let mut indexed = Image::frombytes(crate::raster::Mode::ImagePalette8, (2, 1), &source_bytes)
                 .unwrap_or_else(|error| panic!("{mode} source image: {error}"));
             indexed.putalpha(201).expect("PA source alpha");
             indexed
         } else {
-            Image::frombytes(mode, (2, 1), &source_bytes)
+            Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (2, 1), &source_bytes)
                 .unwrap_or_else(|error| panic!("{mode} source image: {error}"))
         };
         let op = PipelineOp::DrawPoint {

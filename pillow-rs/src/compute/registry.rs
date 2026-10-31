@@ -308,7 +308,10 @@ fn simd_native_operation(op: &PipelineOp) -> bool {
     )
 }
 
-/// Returns whether the SIMD backend has an implementation for `op`.
+/// Returns whether the compatibility SIMD backend has an implementation for `op`.
+///
+/// TODO(pillow-rs#3ptb): remove this pool-based query after operation support
+/// admission is derived from the prepared CPU mode/architecture declarations.
 pub fn simd_supports(op: &PipelineOp) -> Result<bool, PilError> {
     if !simd_native_operation(op) {
         return Ok(false);

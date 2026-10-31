@@ -15,12 +15,13 @@
 //!
 //! # Mode And Layout
 //!
-//! Mode strings follow Pillow names. Raw byte APIs use the current image mode:
+//! Rust construction APIs use [`Mode`] identities; host bindings translate
+//! Pillow strings at the boundary. Raw byte APIs use the current image mode:
 //! `L` is one byte per pixel, `RGB` and `LAB` are tightly packed triplets,
 //! `RGBA` is tightly packed quadruplets, and `P` returns palette indices.
 //! Non-standard modes such as `CMYK`, `HSV`, `YCbCr`, `I`, `F`, and the 16-bit
-//! luma raw modes may be carried through Pillow-owned raster buffers with an
-//! explicit mode tag.
+//! luma raw modes use their exact Pillow-owned `DynamicImage` variants even
+//! when those variants share a raw pixel carrier.
 //!
 //! # Lazy Execution
 //!
@@ -28,7 +29,7 @@
 //! may be deferred. Calling [`Image::materialize`], [`Image::encode`], or
 //! [`Image::tobytes`] forces decoding and pipeline execution.
 
-use image_slash_star::{EncodedImage, ImageFormat, ImageInfo, ImageMode};
+use image_slash_star::{EncodedImage, ImageFormat, ImageInfo};
 use std::sync::Arc;
 
 use crate::pipeline::PipelineOp;
@@ -143,13 +144,6 @@ pub struct LoadedData {
     /// True only while constructor-created RGB/CMYK samples are known zero.
     /// Direct in-place data mutators clear this provenance.
     pub(crate) known_zero_fill: bool,
-    /// Logical mode for storage whose backing raster carrier cannot express it.
-    ///
-    /// TODO(cpu-migration): remove this fallback once every construction and
-    /// decode adapter creates the matching `DynamicImage` variant directly.
-    pub explicit_mode: Option<Mode>,
-    /// Exact decoded sample mode before operation-buffer adaptation.
-    pub decoded_mode: ImageMode,
     /// Palette RGB entries attached to a `PA` image.
     pub palette: Option<Vec<u8>>,
     /// Optional per-entry alpha values for an attached `RGBA` palette.
@@ -329,7 +323,7 @@ pub enum Image {
         format: Option<ImageFormat>,
         /// Pillow mode identity retained for a pending pipeline output.
         ///
-        /// TODO(cpu-migration): consolidate this with `PipelineModeCache` once
+        /// TODO(pillow-rs#3ptb): consolidate this with `PipelineModeCache` once
         /// each mode-changing operation declares its output `Mode` when queued.
         explicit_mode: Option<Mode>,
         /// Locked backend for this pipeline. None = use global active set.

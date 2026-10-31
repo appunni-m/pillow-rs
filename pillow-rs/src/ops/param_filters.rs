@@ -3,11 +3,11 @@
 //! Most methods return lazy pipeline operations. Filters that need multiple
 //! passes or mode-specific CPU behavior may materialize immediately.
 
-use crate::checked_dims::CheckedDims;
+use crate::compute::{Backend, ExecutionContext};
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::{PipelineOp, PixelMode};
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, Mode};
 
 /// Find the mode (most common value) and its count from a histogram.
 /// Uses PIL's strict `>` tie-breaking (lower value wins on tie).
@@ -396,28 +396,6 @@ impl Image {
         ))
     }
 
-    /// PIL-compatible clip8: clamp to [0, 255].
-    /// Matches PIL's clip8(): `return ss <= 0.0 ? 0 : ss >= 255.0 ? 255 : (UINT8)ss`
-    fn pil_clip8(v: i32) -> u8 {
-        if v >= 255 {
-            255
-        } else if v <= 0 {
-            0
-        } else {
-            v as u8
-        }
-    }
-
-    /// Pillow's truncating `diff * 150 / 100` for byte samples.
-    ///
-    /// Here `diff` is bounded to [-255, 255]. Correct the arithmetic shift's
-    /// negative rounding so this remains signed division truncated toward zero.
-    #[inline(always)]
-    fn pil_unsharp_adjustment_150(diff: i32) -> i32 {
-        let tripled = diff * 3;
-        (tripled + i32::from(tripled < 0)) >> 1
-    }
-
     /// Applies Pillow-style unsharp masking.
     ///
     /// `radius` controls blur amount, `percent` controls strength (150 = 150%),
@@ -437,95 +415,45 @@ impl Image {
         threshold: i32,
     ) -> Result<Image, PilError> {
         self.validate_filter("UnsharpMask")?;
-        // TODO(cpu-migration): keep this filter on `known_mode_identity()`
-        // through mode selection and result construction instead of round-tripping
-        // through Pillow mode strings.
-        let mode = self.mode()?;
-        let simd_blend_selected = match self.backend() {
-            Some(backend) => backend == crate::compute::Backend::Simd,
-            None => {
-                crate::compute::active_backends()?.first().copied()
-                    == Some(crate::compute::Backend::Simd)
-            }
-        };
-        // The source remains shared; the blurred result is the output buffer,
-        // so reuse its uniquely owned allocation for the blend.
         let img = self.materialized_shared_for_ops()?;
-        let mut blurred =
-            Image::push_op(self, PipelineOp::GaussianBlur { sigma: radius }).materialize_owned()?;
-
-        let (w, h) = (img.width(), img.height());
-        let channels = img.color().channel_count() as usize;
-        let raw = img.as_bytes();
-        let blur_bytes = blurred.as_bytes();
-        let expected_bytes = CheckedDims::new(w, h, channels as u8)?.total_bytes();
-
-        // Keep the established typed-storage fallback for any representation
-        // whose byte count does not match its logical band count.
-        if raw.len() != expected_bytes || blur_bytes.len() != expected_bytes {
-            let mut out = CheckedDims::new(w, h, channels as u8)?.alloc_buffer();
-            for y in 0..h {
-                for x in 0..w {
-                    let base = (y * w + x) as usize * channels;
-                    for c in 0..channels {
-                        let p = i32::from(raw[base + c]);
-                        let diff = p - i32::from(blur_bytes[base + c]);
-                        out[base + c] = if diff.abs() > threshold {
-                            Self::pil_clip8(p + diff * percent / 100)
-                        } else {
-                            p as u8
-                        };
-                    }
-                }
-            }
-            let result = crate::image_utils::raw_bytes_to_image(w, h, out, channels)?;
-            return Ok(Image::from_dynamic(result, None));
-        }
-
-        let native_rgb = mode == "RGB"
-            && matches!(img.as_ref(), DynamicImage::ImageRgb8(_))
-            && matches!(&blurred, DynamicImage::ImageRgb8(_));
-        let Some(blur_bytes) = blurred.as_bytes_mut() else {
-            return Err(PilError::InternalError(
-                "byte-mode UnsharpMask blur has no mutable byte storage".into(),
-            ));
+        let mode = img.mode();
+        let routed_backend = match self.backend() {
+            Some(backend) => backend,
+            None => crate::compute::active_backends()?.first().copied().unwrap_or(Backend::Cpu),
         };
-        let simd_blended = simd_blend_selected
-            && native_rgb
-            && percent == 150
-            && crate::compute::simd_unsharp_blend_rgb_150(raw, blur_bytes, threshold);
-        if simd_blended {
-            // The SIMD kernel updated the blur allocation in place.
-        } else if percent == 150 {
-            // Every stored byte is an independent UnsharpMask sample in the
-            // existing byte path. Flattening the common 150% case removes
-            // nested pixel/channel indexing and replaces multiply/divide by
-            // 100 with Pillow-exact truncating half of `diff * 3`.
-            for (output, &p) in blur_bytes.iter_mut().zip(raw) {
-                let diff = i32::from(p) - i32::from(*output);
-                *output = if diff.abs() > threshold {
-                    Self::pil_clip8(i32::from(p) + Self::pil_unsharp_adjustment_150(diff))
-                } else {
-                    p
-                };
-            }
+        let routed_context = ExecutionContext::for_routed_backend(routed_backend);
+        let (context, fallback_reason) = if routed_context.backend() == Backend::Cpu {
+            (routed_context, None)
         } else {
-            for (output, &original) in blur_bytes.iter_mut().zip(raw) {
-                let original = i32::from(original);
-                let diff = original - i32::from(*output);
-                // PIL uses integer arithmetic: diff * percent / 100 (truncating).
-                *output = if diff.abs() > threshold {
-                    Self::pil_clip8(original + diff * percent / 100)
-                } else {
-                    original as u8
-                };
-            }
-        }
+            // UnsharpMask currently composes CPU-only blur and blend strategies.
+            (
+                ExecutionContext::for_routed_backend(Backend::Cpu),
+                Some("UnsharpMask has no GPU strategy".to_owned()),
+            )
+        };
+        let result = crate::compute::eager::execute_cpu_arch_operation(
+            "UnsharpMask",
+            img.as_ref(),
+            context,
+            Some(routed_backend),
+            0,
+            0,
+            fallback_reason,
+            |context| {
+                let prepared =
+                    crate::compute::pool_cpu::ops::filter::ops::prepare_unsharp_mask(
+                        img.as_ref(),
+                        radius,
+                        percent,
+                        threshold,
+                        context,
+                    )?;
+                let selection = *prepared.selection();
+                Ok((prepared.execute()?, selection))
+            },
+        )?;
 
-        Ok(Image::from_dynamic(
-            blurred,
-            crate::image::mode_boundary::parse_pillow_mode(&mode),
-        ))
+        Ok(Image::from_dynamic_with_mode(result, Some(mode))?)
     }
 
     /// Applies a maximum filter over an odd neighborhood.
@@ -653,9 +581,9 @@ impl Image {
         }
         // Preserve the exact raster identity while rebuilding filtered bytes.
         if explicit.is_some() {
-            return Ok(Image::from_dynamic(result, explicit));
+            return Ok(Image::from_dynamic_with_mode(result, explicit)?);
         }
-        Ok(Image::from_dynamic(result, None))
+        Ok(Image::from_dynamic(result))
     }
 
     /// Applies a rank filter over an odd neighborhood.

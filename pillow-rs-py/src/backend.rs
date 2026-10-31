@@ -106,6 +106,10 @@ fn pipeline_operation_telemetry_to_py(
         let value = PyDict::new(py);
         value.set_item("operation", sample.operation)?;
         value.set_item("path", sample.path)?;
+        value.set_item(
+            "selected_architecture",
+            sample.selected_architecture.map(|architecture| architecture.name()),
+        )?;
         value.set_item("vector_block_count", sample.vector_block_count)?;
         value.set_item("scalar_tail_count", sample.scalar_tail_count)?;
         value.set_item("mode_conversion_count", sample.mode_conversion_count)?;

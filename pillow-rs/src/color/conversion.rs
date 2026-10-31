@@ -35,13 +35,20 @@ pub fn muldiv255(a: u32, b: u32) -> u32 {
 #[inline]
 fn cmyk_to_rgb_row(source: &[u8], output: &mut [u8]) {
     for (rgb, cmyk) in output.chunks_exact_mut(3).zip(source.chunks_exact(4)) {
-        let ink = u8::MAX - cmyk[3];
-        // muldiv255(channel, ink) is in 0..=ink for byte channels, so the
-        // subtraction is already the exact clipped Pillow result.
-        rgb[0] = ink - cmyk_muldiv255_byte(cmyk[0], ink);
-        rgb[1] = ink - cmyk_muldiv255_byte(cmyk[1], ink);
-        rgb[2] = ink - cmyk_muldiv255_byte(cmyk[2], ink);
+        rgb.copy_from_slice(&cmyk_pixel_to_rgb([cmyk[0], cmyk[1], cmyk[2], cmyk[3]]));
     }
+}
+
+#[inline(always)]
+pub(crate) fn cmyk_pixel_to_rgb([cyan, magenta, yellow, black]: [u8; 4]) -> [u8; 3] {
+    let ink = u8::MAX - black;
+    // muldiv255(channel, ink) is in 0..=ink for byte channels, so the
+    // subtraction is already the exact clipped Pillow result.
+    [
+        ink - cmyk_muldiv255_byte(cyan, ink),
+        ink - cmyk_muldiv255_byte(magenta, ink),
+        ink - cmyk_muldiv255_byte(yellow, ink),
+    ]
 }
 
 fn cmyk_to_rgb_rows(source: &[u8], output: &mut RgbImage) {
@@ -123,17 +130,51 @@ pub fn hsv_to_rgb(img: &DynamicImage) -> DynamicImage {
 }
 
 pub(crate) fn hsv_buffer_to_rgb(input: &RgbImage) -> RgbImage {
+    hsv_pixels_to_rgb(
+        input.width(),
+        input.height(),
+        input
+            .as_raw()
+            .chunks_exact(3)
+            .map(|pixel| [pixel[0], pixel[1], pixel[2]]),
+    )
+}
+
+pub(crate) fn hsv_pixels_to_rgb(
+    width: u32,
+    height: u32,
+    pixels: impl Iterator<Item = [u8; 3]>,
+) -> RgbImage {
+    let mut output = Vec::with_capacity(pixels.size_hint().0.saturating_mul(3));
+    for [hue, saturation, value] in pixels {
+        output.extend_from_slice(&hsv_pixel_to_rgb(hue, saturation, value));
+    }
+    RgbImage::from_raw(width, height, output)
+        .expect("HSV-to-RGB output preserves the source dimensions")
+}
+
+pub(crate) fn hsv_pixel_to_rgb(hue: u8, saturation: u8, value: u8) -> [u8; 3] {
+    let factor = hsv_factors()[usize::from(hue) * 256 + usize::from(saturation)];
+    let value = f32::from(value);
+    [
+        (value * factor[0]).round().clamp(0.0, 255.0) as u8,
+        (value * factor[1]).round().clamp(0.0, 255.0) as u8,
+        (value * factor[2]).round().clamp(0.0, 255.0) as u8,
+    ]
+}
+
+fn hsv_factors() -> &'static [[f32; 3]] {
     use std::sync::OnceLock;
 
     static FACTORS: OnceLock<Vec<[f32; 3]>> = OnceLock::new();
-    let factors = FACTORS.get_or_init(|| {
+    FACTORS.get_or_init(|| {
         let mut table = Vec::with_capacity(256 * 256);
-        for h_in in 0..=255u8 {
-            let h = h_in as f32 * 6.0 / 255.0;
+        for hue in 0..=255u8 {
+            let h = hue as f32 * 6.0 / 255.0;
             let j = h.floor() as i32;
             let f = h - h.floor();
-            for s_in in 0..=255u8 {
-                let fs = s_in as f32 / 255.0;
+            for saturation in 0..=255u8 {
+                let fs = saturation as f32 / 255.0;
                 let p = 1.0 - fs;
                 let q = 1.0 - fs * f;
                 let t = 1.0 - fs * (1.0 - f);
@@ -148,19 +189,7 @@ pub(crate) fn hsv_buffer_to_rgb(input: &RgbImage) -> RgbImage {
             }
         }
         table
-    });
-
-    let mut out = Vec::with_capacity(input.as_raw().len());
-    for ip in input.as_raw().chunks_exact(3) {
-        let v = ip[2] as f32;
-        let factor = factors[ip[0] as usize * 256 + ip[1] as usize];
-        let r = (v * factor[0]).round().clamp(0.0, 255.0) as u8;
-        let g = (v * factor[1]).round().clamp(0.0, 255.0) as u8;
-        let b = (v * factor[2]).round().clamp(0.0, 255.0) as u8;
-        out.extend_from_slice(&[r, g, b]);
-    }
-    RgbImage::from_raw(input.width(), input.height(), out)
-        .expect("HSV-to-RGB output preserves the source's RGB dimensions")
+    })
 }
 
 /// Converts RGB to HSV using Pillow's `rgb2hsv` precision behavior.
@@ -174,58 +203,83 @@ pub(crate) fn hsv_buffer_to_rgb(input: &RgbImage) -> RgbImage {
 /// This function matches PIL pixel-for-pixel by mimicking the exact precision
 /// flow: f32 divisions → f64 promotions for constant arithmetic → f32 storage.
 pub fn rgb_to_hsv(img: &DynamicImage) -> DynamicImage {
-    let (w, h) = (img.width(), img.height());
     let rgb = match img {
-        // Native RGB bytes are already the converter's input layout. Borrow
-        // them instead of cloning the full image through `to_rgb8`.
-        DynamicImage::ImageRgb8(rgb) => Cow::Borrowed(rgb.as_raw().as_slice()),
-        _ => Cow::Owned(img.to_rgb8().into_raw()),
+        DynamicImage::ImageRgb8(rgb) => Cow::Borrowed(rgb),
+        _ => Cow::Owned(img.to_rgb8()),
     };
-    let mut out = crate::raster::RgbImage::new(w, h);
-    for (op, ip) in out.pixels_mut().zip(rgb.chunks_exact(3)) {
-        let r = ip[0];
-        let g = ip[1];
-        let b = ip[2];
-        let maxc = r.max(g.max(b));
-        let minc = r.min(g.min(b));
-        let v = maxc;
-        let (uh, us) = if minc == maxc {
-            (0u8, 0u8)
-        } else {
-            // All intermediate computations in f32, matching PIL's `float` type
-            let cr = (maxc - minc) as f32;
-            let rc = (maxc as f32 - r as f32) / cr;
-            let gc = (maxc as f32 - g as f32) / cr;
-            let bc = (maxc as f32 - b as f32) / cr;
+    DynamicImage::ImageHsv8(rgb_buffer_to_hsv(rgb.as_ref()))
+}
 
-            // Compute h_val in f64 (PIL promotes to double due to 2.0/4.0 literals),
-            // then immediately cast back to f32 for storage in `h`.
-            let h_float: f32 = if r == maxc {
-                (bc as f64 - gc as f64) as f32
-            } else if g == maxc {
-                (2.0_f64 + rc as f64 - bc as f64) as f32
-            } else {
-                (4.0_f64 + gc as f64 - rc as f64) as f32
-            };
+/// Applies Pillow's RGB-to-HSV arithmetic directly to a native RGB8 buffer.
+pub(crate) fn rgb_buffer_to_hsv(rgb: &RgbImage) -> crate::raster::RgbImage {
+    rgb_bytes_to_hsv::<3>(rgb.as_raw(), rgb.width(), rgb.height())
+}
 
-            // PIL: h = fmod((h / 6.0 + 1.0), 1.0)
-            // h is float (f32), 6.0/1.0 are double literals → promotion to double.
-            // The fmod result is stored back to float (f32).
-            let h_double = h_float as f64;
-            let h_fmod = ((h_double / 6.0) + 1.0) % 1.0;
-            let h_stored = h_fmod as f32; // PIL stores h back to float here
+/// Applies Pillow's RGB-to-HSV arithmetic to interleaved RGB(A) source bytes.
+pub(crate) fn rgb_bytes_to_hsv<const CHANNELS: usize>(
+    source: &[u8],
+    width: u32,
+    height: u32,
+) -> crate::raster::RgbImage {
+    rgb_pixels_to_hsv(
+        width,
+        height,
+        source
+            .chunks_exact(CHANNELS)
+            .map(|pixel| [pixel[0], pixel[1], pixel[2]]),
+    )
+}
 
-            // PIL: uh = (int)(h * 255.0) — float promoted to double for multiplication
-            // with 255.0 (double literal), then truncated
-            let s_float = cr / maxc as f32; // s = cr / maxc in f32
-            let us = ((s_float as f64) * 255.0) as u8;
-            let uh = ((h_stored as f64) * 255.0) as u8;
-
-            (uh, us)
-        };
-        *op = crate::raster::Rgb([uh, us, v]);
+/// Applies Pillow's RGB-to-HSV arithmetic directly to computed RGB samples.
+pub(crate) fn rgb_pixels_to_hsv(
+    width: u32,
+    height: u32,
+    pixels: impl Iterator<Item = [u8; 3]>,
+) -> crate::raster::RgbImage {
+    let mut output = Vec::with_capacity(pixels.size_hint().0.saturating_mul(3));
+    for [red, green, blue] in pixels {
+        output.extend_from_slice(&rgb_pixel_to_hsv(red, green, blue));
     }
-    DynamicImage::ImageRgb8(out)
+    crate::raster::RgbImage::from_raw(width, height, output)
+        .expect("RGB-to-HSV output preserves the source dimensions")
+}
+
+pub(crate) fn rgb_pixel_to_hsv(r: u8, g: u8, b: u8) -> [u8; 3] {
+    let maxc = r.max(g.max(b));
+    let minc = r.min(g.min(b));
+    let v = maxc;
+    let (uh, us) = if minc == maxc {
+        (0u8, 0u8)
+    } else {
+        // All intermediate computations in f32, matching PIL's `float` type.
+        let cr = (maxc - minc) as f32;
+        let rc = (maxc as f32 - r as f32) / cr;
+        let gc = (maxc as f32 - g as f32) / cr;
+        let bc = (maxc as f32 - b as f32) / cr;
+
+        // PIL promotes the hue arithmetic to double for the 2.0/4.0 literals,
+        // then stores the result back to f32.
+        let h_float: f32 = if r == maxc {
+            (bc as f64 - gc as f64) as f32
+        } else if g == maxc {
+            (2.0_f64 + rc as f64 - bc as f64) as f32
+        } else {
+            (4.0_f64 + gc as f64 - rc as f64) as f32
+        };
+
+        // PIL evaluates fmod((h / 6.0 + 1.0), 1.0) in double precision and
+        // stores the result back to f32 before generating the byte channels.
+        let h_double = h_float as f64;
+        let h_fmod = ((h_double / 6.0) + 1.0) % 1.0;
+        let h_stored = h_fmod as f32;
+
+        // The final multiplications use double literals and truncate to bytes.
+        let s_float = cr / maxc as f32;
+        let us = ((s_float as f64) * 255.0) as u8;
+        let uh = ((h_stored as f64) * 255.0) as u8;
+        (uh, us)
+    };
+    [uh, us, v]
 }
 
 /// Converts RGB to YCbCr using Pillow's lookup-table BT.601 conversion.
@@ -234,55 +288,91 @@ pub fn rgb_to_hsv(img: &DynamicImage) -> DynamicImage {
 /// Uses precomputed tables matching PIL's ConvertYCbCr.c with SCALE=6.
 /// Table formula: `table[i] = (int)(i * coeff * 64 + 0.5)`.
 pub fn rgb_to_ycbcr(img: &DynamicImage) -> DynamicImage {
+    let rgb = match img {
+        DynamicImage::ImageRgb8(rgb) => Cow::Borrowed(rgb),
+        _ => Cow::Owned(img.to_rgb8()),
+    };
+    DynamicImage::ImageYCbCr8(rgb_buffer_to_ycbcr(rgb.as_ref()))
+}
+
+/// Applies Pillow's fixed-point RGB-to-YCbCr conversion to native RGB8 bytes.
+pub(crate) fn rgb_buffer_to_ycbcr(rgb: &RgbImage) -> crate::raster::RgbImage {
+    rgb_bytes_to_ycbcr::<3>(rgb.as_raw(), rgb.width(), rgb.height())
+}
+
+/// Applies Pillow's RGB-to-YCbCr arithmetic to interleaved RGB(A) source bytes.
+pub(crate) fn rgb_bytes_to_ycbcr<const CHANNELS: usize>(
+    source: &[u8],
+    width: u32,
+    height: u32,
+) -> crate::raster::RgbImage {
+    rgb_pixels_to_ycbcr(
+        width,
+        height,
+        source
+            .chunks_exact(CHANNELS)
+            .map(|pixel| [pixel[0], pixel[1], pixel[2]]),
+    )
+}
+
+/// Applies Pillow's RGB-to-YCbCr arithmetic directly to computed RGB samples.
+pub(crate) fn rgb_pixels_to_ycbcr(
+    width: u32,
+    height: u32,
+    pixels: impl Iterator<Item = [u8; 3]>,
+) -> crate::raster::RgbImage {
+    let tables = ycbcr_tables();
+    let mut output = Vec::with_capacity(pixels.size_hint().0.saturating_mul(3));
+    for rgb in pixels {
+        output.extend_from_slice(&rgb_pixel_to_ycbcr_with_tables(rgb, tables));
+    }
+    crate::raster::RgbImage::from_raw(width, height, output)
+        .expect("RGB-to-YCbCr output preserves the source dimensions")
+}
+
+fn rgb_pixel_to_ycbcr_with_tables(
+    [red, green, blue]: [u8; 3],
+    tables: &[[i32; 256]; 8],
+) -> [u8; 3] {
+    let y_r = &tables[0];
+    let y_g = &tables[1];
+    let y_b = &tables[2];
+    let cb_r = &tables[3];
+    let cb_g = &tables[4];
+    let cb_b = &tables[5];
+    let cr_g = &tables[6];
+    let cr_b = &tables[7];
+    let r = usize::from(red);
+    let g = usize::from(green);
+    let b = usize::from(blue);
+    let y = ((y_r[r] + y_g[g] + y_b[b]) >> 6) as u8;
+    let cb = (((cb_r[r] + cb_g[g] + cb_b[b]) >> 6) + 128) as u8;
+    let cr = (((cb_b[r] + cr_g[g] + cr_b[b]) >> 6) + 128) as u8;
+    [y, cb, cr]
+}
+
+fn ycbcr_tables() -> &'static [[i32; 256]; 8] {
     use std::sync::OnceLock;
 
     fn make_table(coeff: f64) -> [i32; 256] {
-        let mut t = [0i32; 256];
-        for i in 0..256 {
-            t[i] = (i as f64 * coeff * 64.0 + 0.5) as i32;
+        let mut table = [0i32; 256];
+        for (index, value) in table.iter_mut().enumerate() {
+            *value = (index as f64 * coeff * 64.0 + 0.5) as i32;
         }
-        t
+        table
     }
 
-    static Y_R: OnceLock<[i32; 256]> = OnceLock::new();
-    static Y_G: OnceLock<[i32; 256]> = OnceLock::new();
-    static Y_B: OnceLock<[i32; 256]> = OnceLock::new();
-    static CB_R: OnceLock<[i32; 256]> = OnceLock::new();
-    static CB_G: OnceLock<[i32; 256]> = OnceLock::new();
-    static CB_B: OnceLock<[i32; 256]> = OnceLock::new();
-    static CR_G: OnceLock<[i32; 256]> = OnceLock::new();
-    static CR_B: OnceLock<[i32; 256]> = OnceLock::new();
-
-    let y_r = Y_R.get_or_init(|| make_table(0.299));
-    let y_g = Y_G.get_or_init(|| make_table(0.587));
-    let y_b = Y_B.get_or_init(|| make_table(0.114));
-    let cb_r = CB_R.get_or_init(|| make_table(-0.16874));
-    let cb_g = CB_G.get_or_init(|| make_table(-0.33126));
-    let cb_b = CB_B.get_or_init(|| make_table(0.5));
-    let cr_g = CR_G.get_or_init(|| make_table(-0.41869));
-    let cr_b = CR_B.get_or_init(|| make_table(-0.08131));
-
-    let rgb = match img {
-        DynamicImage::ImageRgb8(rgb) => Cow::Borrowed(rgb.as_raw().as_slice()),
-        _ => Cow::Owned(img.to_rgb8().into_raw()),
-    };
-    let (w, h) = (img.width(), img.height());
-    let mut out = Vec::with_capacity(rgb.len());
-    for ip in rgb.chunks_exact(3) {
-        let r = ip[0] as usize;
-        let g = ip[1] as usize;
-        let b = ip[2] as usize;
-
-        let y = ((y_r[r] + y_g[g] + y_b[b]) >> 6) as u8;
-        let cb = (((cb_r[r] + cb_g[g] + cb_b[b]) >> 6) + 128) as u8;
-        let cr = (((cb_b[r] + cr_g[g] + cr_b[b]) >> 6) + 128) as u8; // Cr_R = Cb_B
-
-        out.extend_from_slice(&[y, cb, cr]);
-    }
-    DynamicImage::ImageRgb8(
-        crate::raster::RgbImage::from_raw(w, h, out)
-            .expect("YCbCr output preserves the source's RGB dimensions"),
-    )
+    static TABLES: OnceLock<[[i32; 256]; 8]> = OnceLock::new();
+    TABLES.get_or_init(|| [
+        make_table(0.299),
+        make_table(0.587),
+        make_table(0.114),
+        make_table(-0.16874),
+        make_table(-0.33126),
+        make_table(0.5),
+        make_table(-0.41869),
+        make_table(-0.08131),
+    ])
 }
 
 const YCBCR_TO_RGB_R_CR: [i32; 256] = [
@@ -378,26 +468,53 @@ const YCBCR_TO_RGB_B_CB: [i32; 256] = [
 /// ```
 /// Tables extracted directly from PIL's _imaging C extension.
 pub fn ycbcr_to_rgb(img: &DynamicImage) -> DynamicImage {
-    let rgb = img.to_rgb8();
-    let (w, h) = rgb.dimensions();
-    let mut out = RgbImage::new(w, h);
-    for (op, ip) in out.pixels_mut().zip(rgb.pixels()) {
-        let y_ = ip[0] as i32;
-        let cb = ip[1] as i32;
-        let cr = ip[2] as i32;
+    let source = match img {
+        DynamicImage::ImageYCbCr8(source) | DynamicImage::ImageRgb8(source) => {
+            Cow::Borrowed(source)
+        }
+        _ => Cow::Owned(img.to_rgb8()),
+    };
+    DynamicImage::ImageRgb8(ycbcr_buffer_to_rgb(source.as_ref()))
+}
 
-        // PIL: right-shift is arithmetic (sign-extending) for negative values
-        let r = y_ + (YCBCR_TO_RGB_R_CR[cr as usize] >> 6);
-        let g = y_ + ((YCBCR_TO_RGB_G_CB[cb as usize] + YCBCR_TO_RGB_G_CR[cr as usize]) >> 6);
-        let b = y_ + (YCBCR_TO_RGB_B_CB[cb as usize] >> 6);
+pub(crate) fn ycbcr_buffer_to_rgb(source: &RgbImage) -> RgbImage {
+    ycbcr_pixels_to_rgb(
+        source.width(),
+        source.height(),
+        source
+            .as_raw()
+            .chunks_exact(3)
+            .map(|pixel| [pixel[0], pixel[1], pixel[2]]),
+    )
+}
 
-        *op = crate::raster::Rgb([
-            r.clamp(0, 255) as u8,
-            g.clamp(0, 255) as u8,
-            b.clamp(0, 255) as u8,
-        ]);
+pub(crate) fn ycbcr_pixels_to_rgb(
+    width: u32,
+    height: u32,
+    pixels: impl Iterator<Item = [u8; 3]>,
+) -> RgbImage {
+    let mut output = Vec::with_capacity(pixels.size_hint().0.saturating_mul(3));
+    for [luma, cb, cr] in pixels {
+        output.extend_from_slice(&ycbcr_pixel_to_rgb(luma, cb, cr));
     }
-    DynamicImage::ImageRgb8(out)
+    RgbImage::from_raw(width, height, output)
+        .expect("YCbCr-to-RGB output preserves the source dimensions")
+}
+
+pub(crate) fn ycbcr_pixel_to_rgb(luma: u8, cb: u8, cr: u8) -> [u8; 3] {
+    let y = i32::from(luma);
+    let cb = usize::from(cb);
+    let cr = usize::from(cr);
+
+    // PIL's arithmetic right shifts sign-extend the fixed-point table values.
+    let red = y + (YCBCR_TO_RGB_R_CR[cr] >> 6);
+    let green = y + ((YCBCR_TO_RGB_G_CB[cb] + YCBCR_TO_RGB_G_CR[cr]) >> 6);
+    let blue = y + (YCBCR_TO_RGB_B_CB[cb] >> 6);
+    [
+        red.clamp(0, 255) as u8,
+        green.clamp(0, 255) as u8,
+        blue.clamp(0, 255) as u8,
+    ]
 }
 
 /// Converts Pillow `"I"` storage to RGB.
@@ -516,7 +633,7 @@ pub fn luma_to_ycbcr(img: &DynamicImage) -> DynamicImage {
     for (op, ip) in out.pixels_mut().zip(luma.pixels()) {
         *op = crate::raster::Rgb([ip[0], 128, 128]);
     }
-    DynamicImage::ImageRgb8(out)
+    DynamicImage::ImageYCbCr8(out)
 }
 
 /// Converts `P` palette-index storage to RGB.

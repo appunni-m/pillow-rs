@@ -258,7 +258,7 @@ impl GpuPool {
             .iter()
             .any(|op| matches!(op, PipelineOp::Contrast { .. }))
         {
-            match gpu_contrast_mean_after_exact_prefix(image, ops, mode) {
+            match gpu_contrast_mean_after_exact_prefix(image, ops) {
                 Some(mean) => Some(mean),
                 None => {
                     let reason = if ops

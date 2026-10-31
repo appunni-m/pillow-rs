@@ -2,7 +2,7 @@ use crate::color;
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::{ColorMode, PipelineOp};
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, Mode};
 
 use super::mode::is_luma16_mode;
 
@@ -19,10 +19,10 @@ pub(super) fn try_convert_early_modes(
         // destinations. Reuse the native LA/RGBA converters and carry the
         // Pillow mode tag on the lazy result so SIMD and GPU can execute the
         // pixel work instead of materializing through the eager mode adapter.
-        let (pipeline_mode, explicit_mode) = match target_mode {
-            "La" => (ColorMode::LA, "La"),
-            "RGBX" => (ColorMode::RGBA, "RGBX"),
-            "RGBa" => (ColorMode::RGBA, "RGBa"),
+        let pipeline_mode = match target_mode {
+            "La" => Mode::ImageLaPremultiplied8,
+            "RGBX" => Mode::ImageRgbx8,
+            "RGBa" => Mode::ImageRgbPremultiplied8,
             _ => unreachable!(),
         };
         let mut result = Image::push_op(
@@ -33,12 +33,8 @@ pub(super) fn try_convert_early_modes(
                 dither: None,
             },
         );
-        if let Image::Pipeline {
-            explicit_mode: mode,
-            ..
-        } = &mut result
-        {
-            *mode = crate::image::mode_boundary::parse_pillow_mode(explicit_mode);
+        if let Image::Pipeline { explicit_mode, .. } = &mut result {
+            *explicit_mode = Some(pipeline_mode);
         }
         return Ok(Some(result));
     }
@@ -147,9 +143,9 @@ fn convert_from_premultiplied(
             let straight =
                 crate::ops::pil_resize::unpremultiply_alpha(image.materialized_shared()?.as_ref());
             if matches!((source_mode, target_mode), ("La", "LA") | ("RGBa", "RGBA")) {
-                return Ok(Some(Image::from_dynamic(straight, None)));
+                return Ok(Some(Image::from_dynamic(straight)));
             }
-            let rgb = Image::from_dynamic(DynamicImage::ImageRgb8(straight.to_rgb8()), None);
+            let rgb = Image::from_dynamic(DynamicImage::ImageRgb8(straight.to_rgb8()));
             Ok(Some(rgb.convert(
                 target_mode,
                 None,
@@ -186,10 +182,10 @@ fn convert_to_premultiplied(
                 let premultiplied = crate::ops::pil_resize::premultiply_alpha(
                     image.materialized_shared()?.as_ref(),
                 );
-                return Ok(Some(Image::from_dynamic(
+                return Ok(Some(Image::from_dynamic_with_mode(
                     premultiplied,
                     crate::image::mode_boundary::parse_pillow_mode(target_mode),
-                )));
+                )?));
             }
             if matches!(source_mode, "1" | "L" | "LA" | "I" | "F") || is_luma16_mode(source_mode) {
                 return Err(PilError::ValueError(format!(
@@ -204,10 +200,10 @@ fn convert_to_premultiplied(
             } else {
                 DynamicImage::ImageLumaA8(color::pil_grayscale_alpha(&rgb)?)
             };
-            Ok(Some(Image::from_dynamic(
+            Ok(Some(Image::from_dynamic_with_mode(
                 converted,
                 crate::image::mode_boundary::parse_pillow_mode(target_mode),
-            )))
+            )?))
         },
         |result| {
             result
@@ -243,10 +239,10 @@ fn convert_to_rgbx(
                     pixel[3] = alpha.get(usize::from(index)).copied().unwrap_or(255);
                 }
             }
-            Ok(Image::from_dynamic(
+            Image::from_dynamic_with_mode(
                 DynamicImage::ImageRgba8(rgba),
                 crate::image::mode_boundary::parse_pillow_mode(target_mode),
-            ))
+            )
         },
         super::nonstandard::eager_convert_image_bytes,
     )
@@ -255,12 +251,10 @@ fn convert_to_rgbx(
 fn convert_pa_to_p(image: &Image) -> Result<Image, PilError> {
     // Dropping PA alpha preserves indices and the existing palette.
     Ok(Image::Loaded(crate::image::LoadedData {
-        image: std::sync::Arc::new(DynamicImage::ImageLuma8(
+        image: std::sync::Arc::new(DynamicImage::ImagePalette8(
             image.materialized_shared()?.to_luma8(),
         )),
         known_zero_fill: false,
-        explicit_mode: Some(crate::raster::Mode::ImagePalette8),
-        decoded_mode: crate::raster::ColorType::L8.into(),
         palette: image.palette(),
         palette_alpha: image.palette_alpha(),
         source_format: image.source_format(),

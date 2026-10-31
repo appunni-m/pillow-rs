@@ -100,7 +100,7 @@ fn capture_telemetry<T>(
 #[test]
 fn cpu_getchannel_preserves_alpha_through_native_la_raw_prefix() -> Result<(), PilError> {
     let _backends = CpuOnlyBackendsGuard::new()?;
-    let root = Image::frombytes("LA", (3, 2), &LA_BYTES)?;
+    let root = Image::frombytes(crate::raster::Mode::ImageLumaA8, (3, 2), &LA_BYTES)?;
     let mut pipeline = root.clone();
 
     for _ in 0..2 {
@@ -133,7 +133,7 @@ fn cpu_getchannel_preserves_alpha_through_native_la_raw_prefix() -> Result<(), P
 fn pipeline_getchannel_preserves_explicit_backend_lock_after_materialized_branch()
 -> Result<(), PilError> {
     let _backends = CpuOnlyBackendsGuard::new()?;
-    let root = Image::frombytes("RGBA", (2, 1), &[11, 22, 33, 44, 55, 66, 77, 88])?;
+    let root = Image::frombytes(crate::raster::Mode::ImageRgba8, (2, 1), &[11, 22, 33, 44, 55, 66, 77, 88])?;
     let pipeline = Image::push_op(
         &root,
         PipelineOp::Convert {
@@ -153,7 +153,7 @@ fn pipeline_getchannel_preserves_explicit_backend_lock_after_materialized_branch
 #[test]
 fn loaded_tiny_rgb_cpu_getchannel_reports_one_output_buffer_allocation() -> Result<(), PilError> {
     let _backends = CpuOnlyBackendsGuard::new()?;
-    let image = Image::frombytes("RGB", (3, 2), &RGB_BYTES)?;
+    let image = Image::frombytes(crate::raster::Mode::ImageRgb8, (3, 2), &RGB_BYTES)?;
 
     let (result, receipt, operations) = capture_telemetry(|| image.getchannel(1));
     let output = result?;
@@ -182,7 +182,7 @@ fn loaded_tiny_rgb_cpu_getchannel_reports_one_output_buffer_allocation() -> Resu
 #[test]
 fn loaded_tiny_rgb_cpu_grayscale_reports_actual_mode_conversion() -> Result<(), PilError> {
     let _backends = CpuOnlyBackendsGuard::new()?;
-    let image = Image::frombytes("RGB", (2, 1), &[0, 0, 0, 255, 255, 255])?;
+    let image = Image::frombytes(crate::raster::Mode::ImageRgb8, (2, 1), &[0, 0, 0, 255, 255, 255])?;
 
     let (result, receipt, operations) =
         capture_telemetry(|| crate::ops::imageops::grayscale(&image));
@@ -212,7 +212,7 @@ fn loaded_tiny_rgb_cpu_grayscale_reports_actual_mode_conversion() -> Result<(), 
 
 #[test]
 fn direct_cpu_eager_same_mode_records_no_conversion() -> Result<(), PilError> {
-    let image = Image::frombytes("L", (2, 1), &[17, 231])?;
+    let image = Image::frombytes(crate::raster::Mode::ImageLuma8, (2, 1), &[17, 231])?;
     let input = image.materialize()?;
     let (result, receipt, operations) = capture_telemetry(|| {
         compute::execute_eager_cpu_image_operation("Grayscale", &input, false, |ctx| {
@@ -247,7 +247,7 @@ fn direct_cpu_eager_same_mode_records_no_conversion() -> Result<(), PilError> {
 
 #[test]
 fn failed_cpu_eager_operation_clears_mode_conversion_receipt() -> Result<(), PilError> {
-    let image = Image::frombytes("RGB", (2, 1), &[0, 0, 0, 255, 255, 255])?;
+    let image = Image::frombytes(crate::raster::Mode::ImageRgb8, (2, 1), &[0, 0, 0, 255, 255, 255])?;
     let input = image.materialize()?;
     let (result, receipt, operations) = capture_telemetry(|| {
         compute::execute_eager_cpu_image_operation("Grayscale", &input, false, |ctx| {

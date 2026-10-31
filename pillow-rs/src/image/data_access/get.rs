@@ -8,7 +8,7 @@ impl Image {
         // Pillow validates the requested logical band before extracting it.
         // Keep this check in the core so every binding observes the same
         // contract instead of silently clamping to RGBA channel 3.
-        let mode = self.mode_from_materialized(image);
+        let mode = Image::mode_from_materialized(image);
         let band = validated_band_index(band, pillow_band_count(&mode))?;
         if mode == "LAB" {
             if let DynamicImage::ImageRgb8(image) = image {
@@ -21,10 +21,18 @@ impl Image {
         // single channel, which made a read-only terminal operation pay
         // for an avoidable full-frame allocation and conversion.
         match image {
-            DynamicImage::ImageLuma8(image) if band == 0 => {
+            DynamicImage::One(image)
+            | DynamicImage::ImageLuma8(image)
+            | DynamicImage::ImagePalette8(image)
+                if band == 0 =>
+            {
                 return Ok(image.as_raw().clone());
             }
-            DynamicImage::ImageLumaA8(image) if band < 2 => {
+            DynamicImage::ImageLumaA8(image)
+            | DynamicImage::ImageLaPremultiplied8(image)
+            | DynamicImage::ImagePaletteAlpha8(image)
+                if band < 2 =>
+            {
                 return Ok(select_interleaved_band(image.as_raw(), 2, band));
             }
             DynamicImage::ImageRgb8(image) if band < 3 => {
@@ -53,7 +61,7 @@ impl Image {
         if let Some(band) = band {
             return self.getdata_band(&img, band);
         }
-        let mode = self.mode_from_materialized(&img);
+        let mode = Image::mode_from_materialized(&img);
         if mode == "LAB" {
             let mut data = img.to_rgb8().into_raw();
             for pixel in data.chunks_exact_mut(3) {
@@ -147,7 +155,7 @@ impl Image {
             // Preserve mode precedence without formatting a Pillow spelling.
             Image::Loaded(data)
                 if matches!(
-                    data.explicit_mode.unwrap_or(data.image.mode()),
+                    data.image.mode(),
                     crate::raster::Mode::One | crate::raster::Mode::ImageLuma8
                 ) =>
             {
@@ -197,6 +205,42 @@ impl Image {
             Some(backend) => Some(backend),
             None => crate::compute::preferred_active_backend()?.map(|(backend, _)| backend),
         };
+        if selected_backend == Some(crate::compute::Backend::Simd)
+            && matches!(self, Image::Loaded(_))
+        {
+            let image = self.materialized_shared()?;
+            let operation = PipelineOp::ExtractBand {
+                index: backend_band,
+            };
+            let handled = crate::compute::execute_eager_cpu_arch_bytes(
+                "GetData",
+                image.as_ref(),
+                crate::compute::Backend::Simd,
+                output,
+                |context, output| {
+                    let prepared = crate::compute::registry::prepare_cpu(
+                        &operation,
+                        crate::compute::registry::support::OperationInputs {
+                            image: image.as_ref(),
+                            palette: crate::compute::registry::support::PaletteInput::default(),
+                        },
+                        context,
+                    )?;
+                    let selection = *prepared.selection();
+                    let Some(output_work) = prepared.execute_into(output)? else {
+                        return Ok(None);
+                    };
+                    Ok(Some((selection, output_work)))
+                },
+            )?;
+            if handled.is_some() {
+                return Ok(());
+            }
+        }
+
+        // TODO(pillow-rs#3ptb): replace these compatibility string tables with
+        // the prepared operation support declarations once SIMD/GPU pipeline
+        // terminal selection has been migrated to exact raster::Mode.
         let backend_native = match selected_backend {
             Some(crate::compute::Backend::Simd) => matches!(
                 mode,
@@ -209,27 +253,6 @@ impl Image {
             && let Some(backend @ (crate::compute::Backend::Simd | crate::compute::Backend::Gpu)) =
                 selected_backend
         {
-            if backend == crate::compute::Backend::Simd && matches!(self, Image::Loaded(_)) {
-                // A materialized image needs no deferred pipeline boundary.
-                // Write SIMD channel extraction into Python's final bytes
-                // allocation instead of allocating an intermediate L image
-                // and copying that image back into the binding buffer.
-                let image = self.materialized_shared()?;
-                return crate::compute::execute_eager_simd_bytes(
-                    "GetData",
-                    image.as_ref(),
-                    output,
-                    |output| {
-                        crate::compute::simd_extract_band_into(
-                            image.as_ref(),
-                            backend_band,
-                            Some(mode),
-                            output,
-                        )
-                    },
-                );
-            }
-
             // Keep terminal projection in the lazy graph so the selected
             // backend can fuse it with pending image work and report its real
             // execution receipt. P and LAB stay on the exact host path below:
@@ -271,7 +294,7 @@ impl Image {
             }
 
             let img = self.materialized_shared()?;
-            let materialized_mode = self.mode_from_materialized(&img);
+            let materialized_mode = Image::mode_from_materialized(&img);
             if materialized_mode == "LAB" {
                 if let DynamicImage::ImageRgb8(image) = img.as_ref() {
                     select_lab_band_into(image.as_raw(), band, output);
@@ -282,11 +305,19 @@ impl Image {
             }
 
             match img.as_ref() {
-                DynamicImage::ImageLuma8(image) if band == 0 => {
+                DynamicImage::One(image)
+                | DynamicImage::ImageLuma8(image)
+                | DynamicImage::ImagePalette8(image)
+                    if band == 0 =>
+                {
                     output.copy_from_slice(image.as_raw());
                     return Ok(());
                 }
-                DynamicImage::ImageLumaA8(image) if band < 2 => {
+                DynamicImage::ImageLumaA8(image)
+                | DynamicImage::ImageLaPremultiplied8(image)
+                | DynamicImage::ImagePaletteAlpha8(image)
+                    if band < 2 =>
+                {
                     select_interleaved_band_into(image.as_raw(), 2, band, output);
                     return Ok(());
                 }

@@ -1,0 +1,100 @@
+//! Direct destination kernels from native H, S, V samples.
+
+use crate::error::PilError;
+use crate::raster::{
+    DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, Luma, LumaA, Mode, RgbImage,
+    Rgba, RgbaImage,
+};
+
+pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, PilError> {
+    match target {
+        Mode::ImageLuma8 => Ok(DynamicImage::ImageLuma8(luma(source))),
+        Mode::ImageLumaA8 => Ok(DynamicImage::ImageLumaA8(luma_alpha(source))),
+        Mode::ImageRgb8 => Ok(DynamicImage::ImageRgb8(rgb(source))),
+        Mode::ImageRgba8 => Ok(DynamicImage::ImageRgba8(rgba(source))),
+        Mode::ImageCmyk8 => Ok(DynamicImage::ImageCmyk8(cmyk(source))),
+        Mode::ImageYCbCr8 => Ok(DynamicImage::ImageYCbCr8(ycbcr(source))),
+        Mode::ImageHsv8 => Ok(DynamicImage::ImageHsv8(source.clone())),
+        Mode::ImageI32 => Ok(DynamicImage::ImageI32(to_i32(source))),
+        Mode::ImageF32 => Ok(DynamicImage::ImageF32(to_f32(source))),
+        _ => Err(PilError::ValueError("image has wrong mode".into())),
+    }
+}
+
+fn luma(source: &RgbImage) -> GrayImage {
+    let mut output = GrayImage::new(source.width(), source.height());
+    for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
+        let [red, green, blue] = crate::color::hsv_pixel_to_rgb(pixel[0], pixel[1], pixel[2]);
+        *destination = Luma([crate::color::rgb_to_luma_u8(red, green, blue)]);
+    }
+    output
+}
+
+fn luma_alpha(source: &RgbImage) -> GrayAlphaImage {
+    let mut output = GrayAlphaImage::new(source.width(), source.height());
+    for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
+        let [red, green, blue] = crate::color::hsv_pixel_to_rgb(pixel[0], pixel[1], pixel[2]);
+        let luma = crate::color::rgb_to_luma_u8(red, green, blue);
+        *destination = LumaA([luma, u8::MAX]);
+    }
+    output
+}
+
+fn rgb(source: &RgbImage) -> RgbImage {
+    crate::color::hsv_buffer_to_rgb(source)
+}
+
+fn rgba(source: &RgbImage) -> RgbaImage {
+    let mut output = RgbaImage::new(source.width(), source.height());
+    for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
+        let [red, green, blue] = crate::color::hsv_pixel_to_rgb(pixel[0], pixel[1], pixel[2]);
+        *destination = Rgba([red, green, blue, u8::MAX]);
+    }
+    output
+}
+
+fn cmyk(source: &RgbImage) -> RgbaImage {
+    let mut output = RgbaImage::new(source.width(), source.height());
+    for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
+        let [red, green, blue] = crate::color::hsv_pixel_to_rgb(pixel[0], pixel[1], pixel[2]);
+        *destination = Rgba([
+            u8::MAX - red,
+            u8::MAX - green,
+            u8::MAX - blue,
+            0,
+        ]);
+    }
+    output
+}
+
+fn ycbcr(source: &RgbImage) -> RgbImage {
+    crate::color::rgb_pixels_to_ycbcr(
+        source.width(),
+        source.height(),
+        source.pixels().map(|pixel| {
+            crate::color::hsv_pixel_to_rgb(pixel[0], pixel[1], pixel[2])
+        }),
+    )
+}
+
+fn to_i32(source: &RgbImage) -> RgbaImage {
+    let mut output = RgbaImage::new(source.width(), source.height());
+    for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
+        let [red, green, blue] = crate::color::hsv_pixel_to_rgb(pixel[0], pixel[1], pixel[2]);
+        *destination = Rgba(crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_i32_rgb(
+            red, green, blue,
+        ));
+    }
+    output
+}
+
+fn to_f32(source: &RgbImage) -> RgbaImage {
+    let mut output = RgbaImage::new(source.width(), source.height());
+    for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
+        let [red, green, blue] = crate::color::hsv_pixel_to_rgb(pixel[0], pixel[1], pixel[2]);
+        *destination = Rgba(crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_f32_rgb(
+            red, green, blue,
+        ));
+    }
+    output
+}

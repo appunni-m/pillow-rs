@@ -23,7 +23,7 @@ fn f_resize_ordered_f64_over_64_taps_native_matches_cpu() {
                 value.to_bits()
             })
             .collect();
-        let source = Image::frombytes("F", (width as u32, 1), &f32_words_to_bytes(&words))
+        let source = Image::frombytes(crate::raster::Mode::ImageF32, (width as u32, 1), &f32_words_to_bytes(&words))
             .expect("wide F source");
         let source_dynamic = source.materialize().expect("materialize wide F source");
         let op = PipelineOp::Resize { w: 1, h: 1, filter };
@@ -82,7 +82,7 @@ fn f_resize_ordered_f64_two_axes_over_64_taps_native_matches_cpu() {
         })
         .collect();
     let source = Image::frombytes(
-        "F",
+        crate::raster::Mode::ImageF32,
         (width as u32, height as u32),
         &f32_words_to_bytes(&words),
     )
@@ -209,7 +209,7 @@ fn f_resize_ordered_f64_through_8388607_taps_native_matches_cpu() {
                 value.to_bits()
             })
             .collect();
-        let source = Image::frombytes("F", (width as u32, 1), &f32_words_to_bytes(&words))
+        let source = Image::frombytes(crate::raster::Mode::ImageF32, (width as u32, 1), &f32_words_to_bytes(&words))
             .expect("wide ordered F source");
         let source_dynamic = source
             .materialize()
@@ -270,7 +270,7 @@ fn f_resize_ordered_f64_2097152_two_axis_native_matches_cpu() {
         })
         .collect();
     let source = Image::frombytes(
-        "F",
+        crate::raster::Mode::ImageF32,
         (width as u32, height as u32),
         &f32_words_to_bytes(&words),
     )
@@ -349,7 +349,7 @@ fn f_resize_ordered_f64_524289_taps_native_matches_cpu() {
     let words: Vec<u32> = (0..width)
         .map(|index| (0.5f32 + ((index * 13 % 90) as f32) * 0.01f32).to_bits())
         .collect();
-    let source = Image::frombytes("F", (width as u32, 1), &f32_words_to_bytes(&words))
+    let source = Image::frombytes(crate::raster::Mode::ImageF32, (width as u32, 1), &f32_words_to_bytes(&words))
         .expect("over-bound F source");
     let source_dynamic = source
         .materialize()
@@ -398,7 +398,7 @@ fn f_resize_ordered_f64_over_8388607_taps_streams_natively() {
     let words: Vec<u32> = (0..width)
         .map(|index| (0.5f32 + ((index * 13 % 90) as f32) * 0.01f32).to_bits())
         .collect();
-    let source = Image::frombytes("F", (width as u32, 1), &f32_words_to_bytes(&words))
+    let source = Image::frombytes(crate::raster::Mode::ImageF32, (width as u32, 1), &f32_words_to_bytes(&words))
         .expect("over-bound F source");
     let source_dynamic = source
         .materialize()

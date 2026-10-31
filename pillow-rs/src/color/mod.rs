@@ -50,3 +50,8 @@ pub use resolve::{ColorValue, getcolor, resolve_new_color};
 pub(crate) use grayscale::cmyk_muldiv255_byte as grayscale_cmyk_muldiv255_byte;
 pub(crate) use conversion::hsv_buffer_to_rgb;
 pub(crate) use conversion::cmyk_buffer_to_rgb;
+pub(crate) use conversion::{
+    cmyk_pixel_to_rgb, hsv_pixel_to_rgb, rgb_buffer_to_hsv, rgb_buffer_to_ycbcr,
+    rgb_bytes_to_hsv, rgb_bytes_to_ycbcr, rgb_pixels_to_hsv, rgb_pixels_to_ycbcr,
+    ycbcr_buffer_to_rgb, ycbcr_pixel_to_rgb,
+};

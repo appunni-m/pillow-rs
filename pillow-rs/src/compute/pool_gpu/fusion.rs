@@ -55,7 +55,10 @@ pub(super) fn fuse_gpu_transpose_ops(ops: &[PipelineOp]) -> Vec<PipelineOp> {
             };
             combined = match combined {
                 Some(first) => {
-                    crate::compute::pool_simd::compose_transpose_methods(&first, next, 2, 3)
+                    match crate::pipeline::TransposeTransform::Method(first).then(next) {
+                        crate::pipeline::TransposeTransform::Identity => None,
+                        crate::pipeline::TransposeTransform::Method(method) => Some(method),
+                    }
                 }
                 None => Some(next.clone()),
             };

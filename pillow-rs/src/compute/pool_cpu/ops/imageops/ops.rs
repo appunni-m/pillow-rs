@@ -10,6 +10,9 @@
 //! registered until eager, fusion, and compatibility routes use their prepared
 //! CPU strategies. Autocontrast and Equalize kernels are now declared under
 //! their exact mode and architecture owners.
+//! The archived Invert adapter preserved LA/PA/RGBA alpha unlike the serial
+//! ImageOps algorithm; maintained architecture kernels now match Default's
+//! all-byte semantics. Keep the adapter until its callers move.
 //! Posterize/Solarize vector kernels are now declared for native L/RGB modes;
 //! the independent adapter routes still need reconciliation and retirement.
 

@@ -16,8 +16,9 @@ pub(crate) fn prepare<'a>(image: &'a Input, mask: MaskStrategy<'a>) -> Kernel<'a
 
 #[inline]
 pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
-    let rgba: crate::raster::RgbaImage = super::super::super::helpers::put_data::clipped(input.image, |sample| {
-        crate::raster::Rgba([sample, sample, sample, u8::MAX])
-    });
-    Ok(DynamicImage::ImageRgba8(helpers::rgba_mask(&rgba, input.mask)))
+    let mask = input.mask.to_luma8();
+    Ok(DynamicImage::ImageLumaA16(helpers::luma16_mask(
+        input.image,
+        &mask,
+    )))
 }

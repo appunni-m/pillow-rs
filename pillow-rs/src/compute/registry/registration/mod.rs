@@ -1,10 +1,13 @@
 //! Operation registration, split into focused initializer modules.
 //!
 //! TODO(pillow-rs#3ptb): replace the old direct-result callbacks in the
-//! `chops`, `color`, `draw`, `effects`, `enhance`, `filter`, `geometry`,
+//! `chops`, `color`, `draw`, `effects`, `enhance`, `geometry`,
 //! `module_fns`, and `transform` registrations with family-owned prepared
 //! callbacks as those CPU owners are migrated. Keep each existing operation
 //! key and GPU shader paired with its replacement.
+//! TODO(pillow-rs#3ptb): remove `SimdOpFn` entries and independent SIMD
+//! registration after each operation's CPU architecture compatibility route
+//! uses its prepared owner.
 
 use super::{OpEntry, SimdOpFn};
 use crate::error::PilError;
@@ -50,6 +53,7 @@ fn simd_set(entries: &mut Registry, key: &'static str, f: SimdOpFn) -> Result<()
 
 mod chops;
 mod color;
+mod composite;
 mod draw;
 mod effects;
 mod enhance;
@@ -71,6 +75,7 @@ pub(super) fn register_all(entries: &mut Registry) -> Result<(), PilError> {
     chops::register(entries)?;
     enhance::register(entries)?;
     effects::register(entries)?;
+    composite::register(entries)?;
     module_fns::register(entries)?;
     transform::register(entries)?;
     mutating::register(entries)?;

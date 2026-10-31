@@ -6,7 +6,7 @@ fn f_resize_u32_words_to_bytes(words: &[u32]) -> Vec<u8> {
 
 #[test]
 fn f_resize_ordered_shader_admission_checks_geometry_and_coefficients() {
-    let source = Image::frombytes("F", (32, 24), &vec![0; 32 * 24 * 4]).expect("F source");
+    let source = Image::frombytes(crate::raster::Mode::ImageF32, (32, 24), &vec![0; 32 * 24 * 4]).expect("F source");
     let source_dynamic = source.materialize().expect("materialize F source");
     let op = PipelineOp::Resize {
         w: 16,
@@ -36,7 +36,7 @@ fn f_resize_ordered_shader_admission_checks_geometry_and_coefficients() {
     ));
 
     let wide_row_source =
-        Image::frombytes("F", (128, 8), &vec![0; 128 * 8 * 4]).expect("wide F source");
+        Image::frombytes(crate::raster::Mode::ImageF32, (128, 8), &vec![0; 128 * 8 * 4]).expect("wide F source");
     let wide_row_dynamic = wide_row_source
         .materialize()
         .expect("materialize wide F source");
@@ -64,7 +64,7 @@ fn f_resize_ordered_f64_two_tap_native_matches_cpu() {
         155, 14, 222, 56, // 1.0588505e-4
         62, 115, 42, 56, // 4.0638486e-5
     ];
-    let source = Image::frombytes("F", (3, 1), &source_bytes).expect("F source");
+    let source = Image::frombytes(crate::raster::Mode::ImageF32, (3, 1), &source_bytes).expect("F source");
     let source_dynamic = source.materialize().expect("materialize F source");
     let op = PipelineOp::Resize {
         w: 2,
@@ -128,7 +128,7 @@ fn f_resize_ordered_f64_wider_tap_native_matches_cpu() {
     // before the final f32 store; the bounded integer reducer now follows
     // that sequence for this finite heterogeneous row.
     let source = Image::frombytes(
-        "F",
+        crate::raster::Mode::ImageF32,
         (3, 1),
         &bytes(&[0x3fc3_2777, 0xbeb0_5e6a, 0x44db_fac1]),
     )
@@ -210,7 +210,7 @@ fn f_resize_arm64_wide_horizontal_vector_native_matches_pillow() {
             .collect();
         let source_bytes = bytes(&words);
         let source =
-            Image::frombytes("F", (width as u32, 1), &source_bytes).expect("wide F source");
+            Image::frombytes(crate::raster::Mode::ImageF32, (width as u32, 1), &source_bytes).expect("wide F source");
         let source_dynamic = source.materialize().expect("materialize wide F source");
         let op = PipelineOp::Resize {
             w: 1,
@@ -283,7 +283,7 @@ fn f_resize_wide_box_extreme_exponent_is_native() {
     // Its exact average is 0x7d7fffff; any proof that drops the high
     // exponent term can incorrectly produce the small-value average.
     let source = Image::frombytes(
-        "F",
+        crate::raster::Mode::ImageF32,
         (16, 1),
         &bytes(
             &[0x7f7f_ffff]
@@ -376,7 +376,7 @@ fn f_resize_f64_wide_lanczos_cancellation_native_matches_pillow() {
         .cycle()
         .take(48)
         .collect::<Vec<_>>();
-    let source = Image::frombytes("F", (48, 1), &bytes(&values)).expect("wide F source");
+    let source = Image::frombytes(crate::raster::Mode::ImageF32, (48, 1), &bytes(&values)).expect("wide F source");
     let source_dynamic = source.materialize().expect("materialize wide F source");
     let op = PipelineOp::Resize {
         w: 3,
@@ -454,7 +454,7 @@ fn f_resize_f64_native_preserves_proven_negative_zero_output() {
         0.0f32.to_bits(),
         0.0f32.to_bits(),
     ];
-    let source = Image::frombytes("F", (1, 3), &bytes(&source_words)).expect("F source");
+    let source = Image::frombytes(crate::raster::Mode::ImageF32, (1, 3), &bytes(&source_words)).expect("F source");
     let filter = ResampleInput::Name("BOX".into());
     let source_dynamic = source.materialize().expect("materialize F source");
     assert!(gpu_f_resize_f64_is_exact(
@@ -575,7 +575,7 @@ fn assert_native_gpu_special_value_f_resize_case(
     words: Vec<u32>,
     previous: bool,
 ) -> bool {
-    let source = Image::frombytes("F", source_dimensions, &f_resize_u32_words_to_bytes(&words))
+    let source = Image::frombytes(crate::raster::Mode::ImageF32, source_dimensions, &f_resize_u32_words_to_bytes(&words))
         .expect("F special-value source");
     let expected = source
         .resize(destination, Some(filter.clone()), None)
@@ -657,7 +657,7 @@ fn assert_f_resize_wide_special_case(
     let mut words = vec![0x3f80_0000; (source_w * source_h) as usize];
     words[special_index] = special;
     let source = Image::frombytes(
-        "F",
+        crate::raster::Mode::ImageF32,
         (source_w, source_h),
         &f_resize_u32_words_to_bytes(&words),
     )

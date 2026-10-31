@@ -13,6 +13,18 @@ use super::{Image, PipelineOps, image_mode_name, materialization_cache};
 #[cfg(feature = "gpu")]
 use super::{MaterializationCache, PipelineModeCache};
 
+#[cfg(feature = "gpu")]
+fn gpu_dynamic_mode_name(image: &DynamicImage) -> Result<String, PilError> {
+    super::mode_boundary::pillow_mode_name(image.mode())
+        .map(str::to_owned)
+        .ok_or_else(|| {
+            PilError::ValueError(format!(
+                "GPU graph does not support dynamic mode {:?}",
+                image.mode()
+            ))
+        })
+}
+
 impl Image {
     /// Locks this image pipeline to one compute backend.
     ///
@@ -116,7 +128,7 @@ impl Image {
         let Image::Loaded(data) = self else {
             return Ok(None);
         };
-        let logical_mode = data.explicit_mode.unwrap_or(data.image.mode());
+        let logical_mode = data.image.mode();
         if logical_mode != crate::raster::Mode::ImageRgb8 {
             return Ok(None);
         }
@@ -160,7 +172,7 @@ impl Image {
             crate::compute::Backend::Gpu => return Ok(None),
         };
 
-        let mut result = Image::from_dynamic(grayscale, None);
+        let mut result = Image::from_dynamic(grayscale);
         if let Image::Loaded(data) = &mut result {
             data.info = self.image_info();
             data.exif = self.exif_metadata();
@@ -180,17 +192,21 @@ pub(crate) struct GpuResultMetadata {
 
 #[cfg(feature = "gpu")]
 impl GpuResultMetadata {
-    pub(crate) fn materialize(&self, image: DynamicImage, mode: &str) -> Image {
-        let mut result = Image::from_dynamic(
+    pub(crate) fn materialize(
+        &self,
+        image: DynamicImage,
+        mode: &str,
+    ) -> Result<Image, PilError> {
+        let mut result = Image::from_dynamic_with_mode(
             image,
             super::mode_boundary::parse_pillow_mode(mode),
-        );
+        )?;
         if let Image::Loaded(data) = &mut result {
             data.info = self.info.clone();
             data.exif = self.exif.clone();
             data.source_format = self.format;
         }
-        result
+        Ok(result)
     }
 }
 
@@ -271,10 +287,7 @@ impl Image {
                 cached: Some(data.image.clone()),
                 width: data.image.width(),
                 height: data.image.height(),
-                mode: super::mode_boundary::pillow_mode_name_opt(data.explicit_mode)
-                    .or_else(|| super::mode_boundary::pillow_mode_name(data.image.mode()))
-                    .unwrap_or_else(|| image_mode_name(data.decoded_mode))
-                    .to_owned(),
+                mode: gpu_dynamic_mode_name(&data.image)?,
                 encoded_bytes: 0,
                 ops: Vec::new(),
             }),
@@ -322,7 +335,7 @@ impl Image {
         }
         if let Some(pixels) = materialized.get() {
             let pixels = pixels.clone()?;
-            let pixel_mode = explicit_mode
+            let cached_mode = explicit_mode
                 .map(str::to_owned)
                 .or_else(|| {
                     mode.get()
@@ -335,17 +348,21 @@ impl Image {
                                     .map(str::to_owned)
                             })
                         })
-                })
-                .unwrap_or_else(|| image_mode_name(pixels.color().into()).to_owned());
+                });
+            let pixel_mode = match cached_mode {
+                Some(mode) => mode,
+                None => gpu_dynamic_mode_name(&pixels)?,
+            };
             return Ok(self.gpu_cached_pending_graph(pixels, pixel_mode));
         }
         let (mut graph, skip) = if let Some(prefix) = ops.prefix_cache()
             && let Some(pixels) = prefix.materialized.get()
         {
             let pixels = pixels.clone()?;
-            let pixel_mode = explicit_mode
-                .map(str::to_owned)
-                .unwrap_or_else(|| image_mode_name(pixels.color().into()).to_owned());
+            let pixel_mode = match explicit_mode {
+                Some(mode) => mode.to_owned(),
+                None => gpu_dynamic_mode_name(&pixels)?,
+            };
             (
                 self.gpu_cached_pending_graph(pixels, pixel_mode),
                 prefix.ops_len,

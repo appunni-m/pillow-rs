@@ -58,9 +58,9 @@ fn assert_native_masked_rgba_paste_case(
 ) {
     use crate::ops::paste::PasteSource;
 
-    let source = Image::frombytes("RGBA", (5, 3), source_bytes).unwrap();
-    let mask = Image::frombytes("L", (5, 3), mask_bytes).unwrap();
-    let mut expected_image = Image::frombytes("RGBA", (7, 4), destination_bytes).unwrap();
+    let source = Image::frombytes(crate::raster::Mode::ImageRgba8, (5, 3), source_bytes).unwrap();
+    let mask = Image::frombytes(crate::raster::Mode::ImageLuma8, (5, 3), mask_bytes).unwrap();
+    let mut expected_image = Image::frombytes(crate::raster::Mode::ImageRgba8, (7, 4), destination_bytes).unwrap();
     expected_image
         .paste_at(
             PasteSource::Image(Box::new(source.clone())),
@@ -73,7 +73,7 @@ fn assert_native_masked_rgba_paste_case(
         .tobytes()
         .expect("CPU masked RGBA Paste reference");
 
-    let mut actual_image = Image::frombytes("RGBA", (7, 4), destination_bytes).unwrap();
+    let mut actual_image = Image::frombytes(crate::raster::Mode::ImageRgba8, (7, 4), destination_bytes).unwrap();
     actual_image
         .paste_at(
             PasteSource::Image(Box::new(source)),
@@ -229,16 +229,16 @@ fn native_masked_pa_paste_executes_the_pa_shader_without_color_conversion() {
     let mask_bytes = vec![
         0, 1, 127, 128, 254, 255, 127, 128, 1, 254, 0, 255, 128, 1, 254,
     ];
-    let mut source = Image::frombytes("PA", (5, 3), &source_bytes).expect("PA source");
+    let mut source = Image::frombytes(crate::raster::Mode::ImagePaletteAlpha8, (5, 3), &source_bytes).expect("PA source");
     source
         .putpalette(&palette, "RGB")
         .expect("PA source palette");
     let mut expected_image =
-        Image::frombytes("PA", (5, 3), &destination_bytes).expect("PA destination reference");
+        Image::frombytes(crate::raster::Mode::ImagePaletteAlpha8, (5, 3), &destination_bytes).expect("PA destination reference");
     expected_image
         .putpalette(&palette, "RGB")
         .expect("PA destination palette");
-    let mask = Image::frombytes("L", (5, 3), &mask_bytes).expect("L mask");
+    let mask = Image::frombytes(crate::raster::Mode::ImageLuma8, (5, 3), &mask_bytes).expect("L mask");
     let position = (-1, -1);
     expected_image
         .paste_at(
@@ -253,7 +253,7 @@ fn native_masked_pa_paste_executes_the_pa_shader_without_color_conversion() {
         .expect("CPU masked PA Paste");
 
     let mut actual_image =
-        Image::frombytes("PA", (5, 3), &destination_bytes).expect("PA GPU destination");
+        Image::frombytes(crate::raster::Mode::ImagePaletteAlpha8, (5, 3), &destination_bytes).expect("PA GPU destination");
     actual_image
         .putpalette(&palette, "RGB")
         .expect("PA GPU destination palette");
@@ -291,7 +291,7 @@ fn native_rgb_crop_uses_its_shader_and_preserves_odd_output_tail() {
     let source_bytes = (0..45)
         .map(|index| (index * 29 + 17) as u8)
         .collect::<Vec<_>>();
-    let source = Image::frombytes("RGB", (5, 3), &source_bytes).expect("RGB source");
+    let source = Image::frombytes(crate::raster::Mode::ImageRgb8, (5, 3), &source_bytes).expect("RGB source");
     let expected = source
         .crop(Some((1, 1, 4, 3)))
         .expect("RGB crop")

@@ -15,6 +15,21 @@ try:
 except ModuleNotFoundError:
     from scripts.migration_parity.fault_contracts import FAULT_CONTRACTS
 
+ARCHITECTURE_NAMES = frozenset(
+    {
+        "default",
+        "neon",
+        "sse2",
+        "sse3",
+        "ssse3",
+        "avx",
+        "avx2",
+        "avx_fma",
+        "avx2_fma",
+        "wasm_simd128",
+    }
+)
+
 
 def exact(value: Any, keys: set[str], label: str) -> None:
     if not isinstance(value, dict) or set(value) != keys:
@@ -276,18 +291,19 @@ def execution_receipt(
                 "handoff_count",
             }
             has_source = isinstance(item, dict) and "source" in item
+            has_architecture = (
+                isinstance(item, dict) and "selected_architecture" in item
+            )
+            optional_keys = (
+                ({"source"} if has_source else set())
+                | ({"selected_architecture"} if has_architecture else set())
+            )
             if selected_step_ids is None:
-                exact(
-                    item,
-                    telemetry_keys | ({"source"} if has_source else set()),
-                    telemetry_label,
-                )
+                exact(item, telemetry_keys | optional_keys, telemetry_label)
             else:
                 exact(
                     item,
-                    telemetry_keys
-                    | {"step_id"}
-                    | ({"source"} if has_source else set()),
+                    telemetry_keys | {"step_id"} | optional_keys,
                     telemetry_label,
                 )
                 string(item["step_id"], f"{telemetry_label}.step_id")
@@ -306,6 +322,15 @@ def execution_receipt(
                     string(item["source"][field], f"{source_label}.{field}")
             string(item["operation"], f"{telemetry_label}.operation")
             string(item["path"], f"{telemetry_label}.path")
+            if has_architecture:
+                architecture = item["selected_architecture"]
+                if architecture is not None:
+                    string(architecture, f"{telemetry_label}.selected_architecture")
+                    if architecture not in ARCHITECTURE_NAMES:
+                        raise ValueError(
+                            f"{telemetry_label}.selected_architecture: "
+                            "unknown architecture"
+                        )
             for field in (
                 "vector_block_count",
                 "scalar_tail_count",

@@ -146,7 +146,7 @@ pub(super) fn gpu_convert_target_mode_code(mode: &ColorMode) -> Option<u32> {
         ColorMode::RgbPremultiplied => Some(10),
         ColorMode::LaPremultiplied => Some(11),
         ColorMode::Rgbx => Some(12),
-        ColorMode::P | ColorMode::Mode1 => None,
+        _ => None,
     }
 }
 
@@ -198,8 +198,8 @@ pub(super) fn gpu_mode_after_ops(mut mode: u32, ops: &[PipelineOp]) -> u32 {
 /// byte layout is scanned once, then the complete per-pixel blend is executed
 /// by `contrast.wgsl`. CMYK keeps its C/M/Y/K interpretation instead of
 /// treating the fourth packed byte as alpha.
-pub(super) fn gpu_contrast_mean(img: &DynamicImage, logical_mode: Option<&str>) -> Option<u8> {
-    let base = crate::ops::enhance::contrast_base(img, logical_mode)?;
+pub(super) fn gpu_contrast_mean(img: &DynamicImage) -> Option<u8> {
+    let base = crate::compute::helpers::enhance::contrast_base(img)?;
     (!img.as_bytes().is_empty()).then_some(base.mean)
 }
 
@@ -216,7 +216,6 @@ pub(super) fn gpu_contrast_mean(img: &DynamicImage, logical_mode: Option<&str>) 
 pub(super) fn gpu_contrast_mean_after_exact_prefix(
     img: &DynamicImage,
     ops: &[PipelineOp],
-    logical_mode: Option<&str>,
 ) -> Option<u8> {
     let first_contrast = ops
         .iter()
@@ -230,7 +229,7 @@ pub(super) fn gpu_contrast_mean_after_exact_prefix(
     }
 
     if first_contrast == 0 {
-        return gpu_contrast_mean(img, logical_mode);
+        return gpu_contrast_mean(img);
     }
 
     // A single PutPixel is the only prefix whose exact result can be formed
@@ -251,7 +250,7 @@ pub(super) fn gpu_contrast_mean_after_exact_prefix(
     };
     let prefixed =
         crate::compute::pool_cpu::ops::effects::op_put_pixel(img, *x, *y, *color).ok()?;
-    gpu_contrast_mean(&prefixed, logical_mode)
+    gpu_contrast_mean(&prefixed)
 }
 
 /// Return the concrete byte-buffer color type produced by a supported GPU
@@ -377,23 +376,7 @@ pub(super) fn gpu_logical_mode_after_op(
             Some("L")
         }
         PipelineOp::Colorize { .. } => Some("RGB"),
-        PipelineOp::Convert { mode, .. } => match mode {
-            ColorMode::L => Some("L"),
-            ColorMode::LA => Some("LA"),
-            ColorMode::RGB => Some("RGB"),
-            ColorMode::RGBA => Some("RGBA"),
-            ColorMode::CMYK => Some("CMYK"),
-            ColorMode::YCbCr => Some("YCbCr"),
-            ColorMode::HSV => Some("HSV"),
-            ColorMode::I => Some("I"),
-            ColorMode::F => Some("F"),
-            ColorMode::I16 => Some("I;16"),
-            ColorMode::LaPremultiplied => Some("La"),
-            ColorMode::RgbPremultiplied => Some("RGBa"),
-            ColorMode::Rgbx => Some("RGBX"),
-            ColorMode::P => Some("P"),
-            ColorMode::Mode1 => Some("1"),
-        },
+        PipelineOp::Convert { mode, .. } => mode.pillow_name(),
         PipelineOp::ConvertLab { .. } => Some("LAB"),
         PipelineOp::PutAlpha { mode, .. } | PipelineOp::PutAlphaData { mode, .. } => match mode {
             PixelMode::L | PixelMode::LA => Some("LA"),

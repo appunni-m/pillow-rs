@@ -2,33 +2,27 @@ use super::boxed::raw_to_dynamic_owned;
 use super::coefficients::pil_round;
 #[cfg(not(feature = "parallel"))]
 use super::coefficients::resize_u8_coefficients_fit_i32;
-use super::float::{pixel_at, typed_color_resize_bytes};
+use super::float::pixel_at;
 use super::horizontal_passes::{horizontal_pass_rows, horizontal_pass_rows_alpha};
 #[cfg(not(feature = "parallel"))]
 use super::integer_modes::{
     pil_resize_cmyk_i32, pil_resize_hsv_i32, pil_resize_la_i32, pil_resize_luma_i32,
     pil_resize_rgba_i32,
 };
-use super::luma16::pil_resize_luma16;
 use super::vertical_passes::{vertical_pass_rows, vertical_pass_rows_alpha};
 use super::*;
 use crate::pipeline::ResampleFilter;
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, Mode};
 
-/// Preserve the original image's color mode.
+/// Preserve the original image's exact mode identity when its carrier matches.
 pub(crate) fn pil_preserve_mode(original: &DynamicImage, result: DynamicImage) -> DynamicImage {
-    let orig_color = original.color();
-    let res_color = result.color();
-    if orig_color == res_color {
+    let mode = original.mode();
+    if result.mode() == mode {
         return result;
     }
-    match orig_color {
-        crate::raster::ColorType::L8 => DynamicImage::ImageLuma8(result.to_luma8()),
-        crate::raster::ColorType::La8 => DynamicImage::ImageLumaA8(result.to_luma_alpha8()),
-        crate::raster::ColorType::Rgb8 => DynamicImage::ImageRgb8(result.to_rgb8()),
-        crate::raster::ColorType::Rgba8 => DynamicImage::ImageRgba8(result.to_rgba8()),
-        _ => result,
-    }
+    result
+        .with_mode(mode)
+        .unwrap_or_else(|unmodified| unmodified)
 }
 
 struct NearestResizeGeometry {
@@ -53,16 +47,13 @@ fn pil_resize_nearest_native_bytes(
     geometry: &NearestResizeGeometry,
     xintab: &[u32],
 ) -> Option<DynamicImage> {
-    if !matches!(
-        img,
-        DynamicImage::ImageLuma8(_)
-            | DynamicImage::ImageLumaA8(_)
-            | DynamicImage::ImageRgb8(_)
-            | DynamicImage::ImageRgba8(_)
-    ) {
+    let source = img.as_bytes();
+    let expected_source_len = (geometry.source_width as usize)
+        .checked_mul(geometry.channels)?
+        .checked_mul(geometry.source_height as usize)?;
+    if source.len() != expected_source_len {
         return None;
     }
-    let source = img.as_bytes();
     let mut out_bytes = vec![0u8; geometry.pixel_count * geometry.channels];
     let source_stride = geometry.source_width as usize * geometry.channels;
     let destination_stride = geometry.destination_width as usize * geometry.channels;
@@ -255,26 +246,27 @@ pub fn pil_resize(
     dst_w: u32,
     dst_h: u32,
     filter: ResampleFilter,
-    explicit_mode: Option<&str>,
 ) -> DynamicImage {
     // Handle identity
     if (dst_w, dst_h) == (img.width(), img.height()) {
         return img.clone();
+    }
+    if let Some(resized) = crate::compute::pool_cpu::ops::resize::ops::native_typed_resize(
+        img, dst_w, dst_h, filter, None,
+    )
+    {
+        return resized;
     }
     // Handle empty
     if dst_w == 0 || dst_h == 0 || img.width() == 0 || img.height() == 0 {
         return DynamicImage::new_rgba8(dst_w, dst_h);
     }
 
-    // Pillow keeps I;16* samples in the native 16-bit resize path.  The
-    // generic pixel accessor below is byte-oriented and would otherwise
-    // convert this mode to RGBA8 before preserving only its mode label.
-    if let DynamicImage::ImageI16(luma) = img {
-        return pil_resize_luma16(luma, dst_w, dst_h, filter, explicit_mode, None);
-    }
-
-    if let Some(byte_mode) = typed_color_resize_bytes(img) {
-        return pil_resize(&byte_mode, dst_w, dst_h, filter, None);
+    if let Some(resized) = crate::compute::pool_cpu::ops::resize::ops::native_luma16_resize(
+        img, dst_w, dst_h, filter, None,
+    )
+    {
+        return resized;
     }
 
     // Retain original image for final mode preservation
@@ -284,20 +276,14 @@ pub fn pil_resize(
     // RGBa is already premultiplied storage, so PIL resamples its channels
     // directly rather than premultiplying them a second time.
     // PIL does NOT premultiply alpha for these modes.
-    let is_cmyk = explicit_mode == Some("CMYK");
-    let is_fi = explicit_mode == Some("F") || explicit_mode == Some("I");
+    let mode = img.mode();
+    let is_cmyk = mode == Mode::ImageCmyk8;
     // Nearest-neighbour resizing copies one source sample directly.  Pillow's
     // ImagingScaleAffine path does not premultiply LA/RGBA for that filter;
     // doing so here would round a constant (173, 127) or (17, 83, 149, 127)
     // down by one during the unnecessary premultiply/unpremultiply cycle.
     let needs_alpha = !matches!(filter, ResampleFilter::Nearest)
-        && !is_cmyk
-        && !is_fi
-        && !matches!(explicit_mode, Some("RGBa" | "RGBX" | "La" | "PA"))
-        && matches!(
-            img.color(),
-            crate::raster::ColorType::Rgba8 | crate::raster::ColorType::La8
-        );
+        && matches!(mode, Mode::ImageRgba8 | Mode::ImageLumaA8);
     let (sw, sh) = (img.width(), img.height());
     let (dw, dh) = (dst_w, dst_h);
 
@@ -350,14 +336,14 @@ pub fn pil_resize(
     let v_coeffs = precompute_coeffs(dh, sh, filter);
 
     #[cfg(not(feature = "parallel"))]
-    if matches!(explicit_mode, None | Some("L")) && matches!(img, DynamicImage::ImageLuma8(_)) {
+    if mode == Mode::ImageLuma8 && matches!(img, DynamicImage::ImageLuma8(_)) {
         if let Some(output) = pil_resize_luma_i32(img, dw, dh, &h_coeffs, &v_coeffs) {
             return pil_preserve_mode(orig_img, raw_to_dynamic_owned(output, dw, dh, 1));
         }
     }
 
     #[cfg(not(feature = "parallel"))]
-    if matches!(explicit_mode, None | Some("LA")) && matches!(img, DynamicImage::ImageLumaA8(_)) {
+    if mode == Mode::ImageLumaA8 && matches!(img, DynamicImage::ImageLumaA8(_)) {
         if let Some(output) = pil_resize_la_i32(img, dw, dh, &h_coeffs, &v_coeffs) {
             return pil_preserve_mode(orig_img, raw_to_dynamic_owned(output, dw, dh, 2));
         }
@@ -371,8 +357,8 @@ pub fn pil_resize(
     }
 
     #[cfg(not(feature = "parallel"))]
-    if explicit_mode == Some("HSV")
-        && matches!(img, DynamicImage::ImageRgb8(_))
+    if mode == Mode::ImageHsv8
+        && matches!(img, DynamicImage::ImageHsv8(_))
         && matches!(filter, ResampleFilter::Bicubic)
         && resize_u8_coefficients_fit_i32(&h_coeffs)
         && resize_u8_coefficients_fit_i32(&v_coeffs)
@@ -383,7 +369,7 @@ pub fn pil_resize(
     }
 
     #[cfg(not(feature = "parallel"))]
-    if is_cmyk && matches!(img, DynamicImage::ImageRgba8(_)) {
+    if is_cmyk && matches!(img, DynamicImage::ImageCmyk8(_)) {
         if let Some(result) = pil_resize_cmyk_i32(img, dw, dh, &h_coeffs, &v_coeffs) {
             return pil_preserve_mode(orig_img, result);
         }
@@ -403,80 +389,6 @@ pub fn pil_resize(
     )
 }
 
-/// Resize RGBX bytes into an existing, full-width output window.
-///
-/// ImageOps.pad can use this when contain preserves the destination width and
-/// adds only top/bottom borders. The exact Pillow coefficient tables and
-/// horizontal/vertical kernels remain unchanged; only the temporary resized
-/// output allocation is removed. RGBX byte three is data, so this route must
-/// never enable alpha premultiplication.
-pub(crate) fn pil_resize_rgbx_into_window(
-    img: &DynamicImage,
-    dst_w: u32,
-    dst_h: u32,
-    filter: ResampleFilter,
-    output: &mut [u8],
-) -> bool {
-    let DynamicImage::ImageRgba8(_) = img else {
-        return false;
-    };
-    if matches!(filter, ResampleFilter::Nearest)
-        || dst_w == 0
-        || dst_h == 0
-        || img.width() == 0
-        || img.height() == 0
-    {
-        return false;
-    }
-    let Ok(source_dims) = crate::checked_dims::CheckedDims::new(img.width(), img.height(), 4)
-    else {
-        return false;
-    };
-    let Ok(output_dims) = crate::checked_dims::CheckedDims::new(dst_w, dst_h, 4) else {
-        return false;
-    };
-    if img.as_bytes().len() != source_dims.total_bytes()
-        || output.len() != output_dims.total_bytes()
-    {
-        return false;
-    }
-    let Ok(source_height) = usize::try_from(img.height()) else {
-        return false;
-    };
-    let Ok(output_width) = usize::try_from(dst_w) else {
-        return false;
-    };
-    let Some(intermediate_len) = source_height
-        .checked_mul(output_width)
-        .and_then(|pixels| pixels.checked_mul(4))
-    else {
-        return false;
-    };
-
-    let horizontal = precompute_coeffs(dst_w, img.width(), filter);
-    let vertical = precompute_coeffs(dst_h, img.height(), filter);
-    let mut intermediate = vec![0u8; intermediate_len];
-    horizontal_pass_rows(
-        img.as_bytes(),
-        img.width(),
-        img.height(),
-        4,
-        &horizontal,
-        dst_w,
-        &mut intermediate,
-    );
-    vertical_pass_rows(
-        &intermediate,
-        img.height(),
-        dst_w,
-        dst_h,
-        4,
-        &vertical,
-        output,
-        0,
-    );
-    true
-}
 #[cfg(test)]
 mod typed_nearest_tests {
     use super::{pil_resize, pixel_at};
@@ -490,11 +402,23 @@ mod typed_nearest_tests {
             .collect()
     }
 
-    fn typed_integer_images() -> [DynamicImage; 4] {
+    fn typed_integer_images() -> [DynamicImage; 7] {
         [
             DynamicImage::ImageI16(
                 ImageBuffer::from_raw(3, 2, vec![0, 1, 32_768, 65_535, 257, 65_407])
                     .expect("L16 samples"),
+            ),
+            DynamicImage::ImageI16L(
+                ImageBuffer::from_raw(3, 2, vec![0, 1, 32_768, 65_535, 257, 65_407])
+                    .expect("I;16L samples"),
+            ),
+            DynamicImage::ImageI16B(
+                ImageBuffer::from_raw(3, 2, vec![0, 1, 32_768, 65_535, 257, 65_407])
+                    .expect("I;16B samples"),
+            ),
+            DynamicImage::ImageI16N(
+                ImageBuffer::from_raw(3, 2, vec![0, 1, 32_768, 65_535, 257, 65_407])
+                    .expect("I;16N samples"),
             ),
             DynamicImage::ImageLumaA16(
                 ImageBuffer::from_raw(
@@ -601,148 +525,68 @@ mod typed_nearest_tests {
         )
     }
 
-    fn typed_public_byte_mode(image: &DynamicImage) -> DynamicImage {
+    fn typed_native_bytes_per_pixel(image: &DynamicImage) -> usize {
         match image {
-            DynamicImage::ImageLumaA16(_) => DynamicImage::ImageLumaA8(image.to_luma_alpha8()),
-            DynamicImage::ImageRgb16(_) | DynamicImage::ImageRgb32F(_) => {
-                DynamicImage::ImageRgb8(image.to_rgb8())
-            }
-            DynamicImage::ImageRgba16(_) | DynamicImage::ImageRgba32F(_) => {
-                DynamicImage::ImageRgba8(image.to_rgba8())
-            }
-            _ => unreachable!("only multi-channel typed inputs use this conversion"),
+            DynamicImage::ImageI16(_)
+            | DynamicImage::ImageI16L(_)
+            | DynamicImage::ImageI16B(_)
+            | DynamicImage::ImageI16N(_) => 2,
+            DynamicImage::ImageLumaA16(_) => 4,
+            DynamicImage::ImageRgb16(_) => 6,
+            DynamicImage::ImageRgba16(_) => 8,
+            DynamicImage::ImageRgb32F(_) => 12,
+            DynamicImage::ImageRgba32F(_) => 16,
+            _ => unreachable!("only typed high-depth inputs use this helper"),
         }
     }
 
     #[test]
-    fn typed_nearest_resize_keeps_the_logical_byte_mode_layout() {
+    fn typed_nearest_resize_preserves_exact_mode_and_native_sample_width() {
         let destination_width = 4;
         let destination_height = 3;
         for image in typed_images() {
-            let rgba = image.to_rgba8();
-            for y in 0..image.height() {
-                for x in 0..image.width() {
-                    let expected = rgba.get_pixel(x, y).0.map(f64::from);
-                    assert_eq!(pixel_at(&image, x, y), expected);
-                }
-            }
-
-            // L16 has its own native nearest path. The other typed layouts
-            // exercise pixel_at from the generic affine-nearest fallback.
-            if matches!(image, DynamicImage::ImageI16(_)) {
-                continue;
-            }
-            let byte_mode = typed_public_byte_mode(&image);
-            let expected = pil_resize(
-                &byte_mode,
-                destination_width,
-                destination_height,
-                ResampleFilter::Nearest,
-                None,
-            );
             let resized = pil_resize(
                 &image,
                 destination_width,
                 destination_height,
                 ResampleFilter::Nearest,
-                None,
             );
-            assert_eq!(resized.color(), expected.color());
-            assert_eq!(resized.as_bytes(), expected.as_bytes());
+            assert_eq!(resized.mode(), image.mode());
+            let expected_bytes = destination_width as usize
+                * destination_height as usize
+                * typed_native_bytes_per_pixel(&image);
+            assert_eq!(resized.as_bytes().len(), expected_bytes);
         }
     }
 
     #[test]
-    fn typed_filtered_resize_uses_the_logical_byte_mode_layout() {
+    fn typed_filtered_resize_preserves_exact_mode_and_native_sample_width() {
         let destination = (4, 3);
         let box_bounds = (0.25, 0.5, 2.75, 1.5);
-        for image in typed_images().into_iter().skip(1) {
-            assert_typed_filtered_resize_layout(&image, destination, box_bounds);
+        for image in typed_images() {
+            let standard = pil_resize(
+                &image,
+                destination.0,
+                destination.1,
+                ResampleFilter::Bicubic,
+            );
+            let boxed = super::pil_resize_boxed(
+                &image,
+                destination.0,
+                destination.1,
+                box_bounds.0,
+                box_bounds.1,
+                box_bounds.2,
+                box_bounds.3,
+                ResampleFilter::Bicubic,
+            );
+            let expected_bytes = destination.0 as usize
+                * destination.1 as usize
+                * typed_native_bytes_per_pixel(&image);
+            assert_eq!(standard.mode(), image.mode());
+            assert_eq!(standard.as_bytes().len(), expected_bytes);
+            assert_eq!(boxed.mode(), image.mode());
+            assert_eq!(boxed.as_bytes().len(), expected_bytes);
         }
-    }
-
-    fn assert_typed_filtered_resize_layout(
-        image: &DynamicImage,
-        destination: (u32, u32),
-        box_bounds: (f64, f64, f64, f64),
-    ) {
-        let byte_mode = typed_public_byte_mode(image);
-        assert_typed_standard_resize_layout(image, &byte_mode, destination);
-        assert_typed_boxed_resize_layout(image, &byte_mode, destination, box_bounds);
-    }
-
-    fn assert_typed_standard_resize_layout(
-        image: &DynamicImage,
-        byte_mode: &DynamicImage,
-        destination: (u32, u32),
-    ) {
-        let normal_expected = pil_resize(
-            byte_mode,
-            destination.0,
-            destination.1,
-            ResampleFilter::Bicubic,
-            None,
-        );
-        let normal_actual = pil_resize(
-            image,
-            destination.0,
-            destination.1,
-            ResampleFilter::Bicubic,
-            None,
-        );
-        assert_eq!(
-            normal_actual.color(),
-            normal_expected.color(),
-            "standard resize layout for {:?}",
-            image.color()
-        );
-        assert_eq!(
-            normal_actual.as_bytes(),
-            normal_expected.as_bytes(),
-            "standard resize samples for {:?}",
-            image.color()
-        );
-    }
-
-    fn assert_typed_boxed_resize_layout(
-        image: &DynamicImage,
-        byte_mode: &DynamicImage,
-        destination: (u32, u32),
-        box_bounds: (f64, f64, f64, f64),
-    ) {
-        let boxed_expected = super::pil_resize_boxed(
-            byte_mode,
-            destination.0,
-            destination.1,
-            box_bounds.0,
-            box_bounds.1,
-            box_bounds.2,
-            box_bounds.3,
-            ResampleFilter::Bicubic,
-            None,
-        );
-        let boxed_actual = super::pil_resize_boxed(
-            image,
-            destination.0,
-            destination.1,
-            box_bounds.0,
-            box_bounds.1,
-            box_bounds.2,
-            box_bounds.3,
-            ResampleFilter::Bicubic,
-            None,
-        );
-        assert_eq!(
-            boxed_actual.color(),
-            boxed_expected.color(),
-            "boxed resize layout for {:?}",
-            image.color()
-        );
-        assert_eq!(
-            boxed_actual.as_bytes(),
-            boxed_expected.as_bytes(),
-            "boxed resize samples for {:?}",
-            image.color()
-        );
     }
 }

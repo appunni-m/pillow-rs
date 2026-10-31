@@ -1,0 +1,12 @@
+//! AVX implementation for exact ImageF32 Reduce.
+
+use crate::error::PilError;
+use crate::raster::{DynamicImage, RgbaImage};
+
+pub(crate) fn execute(
+    input: &RgbaImage,
+    x_factor: u32,
+    y_factor: u32,
+) -> Result<DynamicImage, PilError> {
+    super::super::kernels::vector::execute(input, x_factor, y_factor)
+}

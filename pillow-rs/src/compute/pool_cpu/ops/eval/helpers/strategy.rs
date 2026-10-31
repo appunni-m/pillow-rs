@@ -2,12 +2,21 @@
 
 use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{
-    ImplementationSupport, ModeSupport, OperationId, PaletteKnowledge, RequestFacts,
+    ImplementationSupport, InputContract, ModeSupport, OperationId, PaletteKnowledge, RequestFacts,
     StrategyGuard, StrategyInputs, StrategySelection, SupportAssessment,
 };
 use crate::compute::Architecture;
 use crate::raster::Mode;
 use crate::error::PilError;
+
+pub(crate) const FLOAT_LUT_INPUTS: &[InputContract] = &[
+    InputContract::PointFloatLutEntries { channels: 1 },
+    InputContract::ExactNativeBytes {
+        channels: 1,
+        overflow_reason: "Eval native byte dimensions overflowed",
+        mismatch_reason: "Eval source byte length did not match its dimensions",
+    },
+];
 
 pub(crate) fn facts(
     width: u32,
@@ -23,6 +32,22 @@ pub(crate) fn facts(
         request: RequestFacts::Unspecified,
     }
     .with_eval_lut_entries(lut_entries)
+}
+
+pub(crate) fn point_float_facts(
+    width: u32,
+    height: u32,
+    byte_len: usize,
+    lut_entries: usize,
+) -> StrategyInputs {
+    StrategyInputs {
+        width,
+        height,
+        byte_len: Some(byte_len),
+        palette: PaletteKnowledge::Absent,
+        request: RequestFacts::Unspecified,
+    }
+    .with_point_float_lut_entries(lut_entries)
 }
 
 pub(crate) fn select(

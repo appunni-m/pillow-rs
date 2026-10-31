@@ -15,7 +15,7 @@ fn f_resize_f64_special_over_8388607_taps_streams_natively() {
     let width = 8_388_608usize;
     let mut words = vec![0x3f80_0000; width];
     words[width / 2] = 0x7fc1_2345;
-    let source = Image::frombytes("F", (width as u32, 1), &bytes(&words))
+    let source = Image::frombytes(crate::raster::Mode::ImageF32, (width as u32, 1), &bytes(&words))
         .expect("over-bound special F source");
     let source_dynamic = source
         .materialize()
@@ -68,7 +68,7 @@ fn f_resize_f64_coeff_table_over_binding_streams_natively() {
     let words: Vec<u32> = (0..width)
         .map(|index| (0.5f32 + ((index * 13 % 90) as f32) * 0.01f32).to_bits())
         .collect();
-    let source = Image::frombytes("F", (width as u32, 1), &bytes(&words))
+    let source = Image::frombytes(crate::raster::Mode::ImageF32, (width as u32, 1), &bytes(&words))
         .expect("multi-row coefficient F source");
     let source_dynamic = source
         .materialize()
@@ -130,7 +130,7 @@ fn f_resize_ordered_f64_subnormal_and_extreme_finite_native_matches_cpu() {
     ] {
         let width = 32768usize;
         let words = vec![value; width];
-        let source = Image::frombytes("F", (width as u32, 1), &bytes(&words))
+        let source = Image::frombytes(crate::raster::Mode::ImageF32, (width as u32, 1), &bytes(&words))
             .expect("subnormal/extreme F source");
         let source_dynamic = source
             .materialize()
@@ -210,7 +210,7 @@ fn f_resize_ordered_f64_subnormal_vertical_native_matches_cpu() {
     ] {
         let height = 32768usize;
         let words = vec![value; height];
-        let source = Image::frombytes("F", (1, height as u32), &bytes(&words))
+        let source = Image::frombytes(crate::raster::Mode::ImageF32, (1, height as u32), &bytes(&words))
             .expect("vertical subnormal/extreme F source");
         let source_dynamic = source
             .materialize()
@@ -292,7 +292,7 @@ fn f_resize_ordered_f64_wide_cancellation_native_matches_cpu() {
                 }
             })
             .collect();
-        let source = Image::frombytes("F", (width as u32, 1), &bytes(&words))
+        let source = Image::frombytes(crate::raster::Mode::ImageF32, (width as u32, 1), &bytes(&words))
             .expect("wide cancellation F source");
         let source_dynamic = source
             .materialize()

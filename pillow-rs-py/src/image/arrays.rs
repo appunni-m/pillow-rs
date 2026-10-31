@@ -56,7 +56,17 @@ fn fromarray(data: &Bound<'_, PyAny>, mode: Option<&str>) -> PyResult<PyImage> {
     // Resolve dimensions before touching the Python buffer. Pillow reports
     // malformed shape/mode combinations before it asks the object for a
     // byte buffer.
-    let layout = pillow_rs::resolve_array_layout(&shape, &typestr, mode).map_err(map_error)?;
+    let mode_identity = mode
+        .map(|name| {
+            pillow_rs::Mode::from_pillow_name(name).ok_or_else(|| {
+                map_error(pillow_rs::PilError::ValueError(
+                    "unrecognized image mode".into(),
+                ))
+            })
+        })
+        .transpose()?;
+    let layout =
+        pillow_rs::resolve_array_layout(&shape, &typestr, mode_identity).map_err(map_error)?;
     let bytes = array_interface_bytes(data, mode)?;
     pillow_rs::from_resolved_array_interface(&layout, &bytes)
         .map(|img| PyImage { inner: img })

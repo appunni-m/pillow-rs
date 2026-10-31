@@ -80,6 +80,13 @@ fn latin1_encode_error(text: &str, position: usize, character: char) -> PilError
 }
 
 impl PilFontMode {
+    const fn raster_mode(self) -> crate::raster::Mode {
+        match self {
+            Self::One => crate::raster::Mode::One,
+            Self::Luma => crate::raster::Mode::ImageLuma8,
+        }
+    }
+
     /// Returns Pillow's mode name.
     pub fn as_str(self) -> &'static str {
         match self {
@@ -155,11 +162,11 @@ impl PilFontMask {
     /// sequence.
     pub fn to_image(&self) -> Result<Image, PilError> {
         if self.width == 0 {
-            return Image::new(self.width, self.height, self.mode.as_str(), (0, 0, 0, 0));
+            return Image::new(self.width, self.height, self.mode.raster_mode(), (0, 0, 0, 0));
         }
 
         match self.mode {
-            PilFontMode::Luma => Image::frombytes("L", (self.width, self.height), &self.pixels),
+            PilFontMode::Luma => Image::frombytes(crate::raster::Mode::ImageLuma8, (self.width, self.height), &self.pixels),
             PilFontMode::One => {
                 let row_bytes = (self.width as usize).div_ceil(8);
                 let packed_len = row_bytes
@@ -173,7 +180,7 @@ impl PilFontMask {
                         }
                     }
                 }
-                Image::frombytes("1", (self.width, self.height), &packed)
+                Image::frombytes(crate::raster::Mode::One, (self.width, self.height), &packed)
             }
         }
     }
@@ -182,12 +189,12 @@ impl PilFontMask {
     /// mode-1 round trip or a copy of its expanded pixels.
     pub(crate) fn into_image(self) -> Result<Image, PilError> {
         if self.width == 0 || self.height == 0 {
-            return Image::new(self.width, self.height, self.mode.as_str(), (0, 0, 0, 0));
+            return Image::new(self.width, self.height, self.mode.raster_mode(), (0, 0, 0, 0));
         }
 
         match self.mode {
             PilFontMode::Luma => {
-                Image::frombytes_owned("L", (self.width, self.height), self.pixels)
+                Image::frombytes_owned(crate::raster::Mode::ImageLuma8, (self.width, self.height), self.pixels)
             }
             PilFontMode::One => {
                 // Mode-1 conversion maps every nonzero sample to 255. Keep
@@ -200,9 +207,7 @@ impl PilFontMask {
                 let image = crate::raster::GrayImage::from_raw(self.width, self.height, pixels)
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?;
                 Ok(Image::from_dynamic(
-                    crate::raster::DynamicImage::ImageLuma8(image),
-                    Some(crate::raster::Mode::One),
-                ))
+                    crate::raster::DynamicImage::One(image)))
             }
         }
     }
@@ -680,7 +685,7 @@ fn decode_pbm_for_pilfont(data: &[u8]) -> Result<PilFontGlyphImage, PilError> {
         }
         _ => return Err(PilError::ValueError("unsupported PBM format".into())),
     }
-    Image::frombytes("1", (width, height), &packed)
+    Image::frombytes(crate::raster::Mode::One, (width, height), &packed)
         .map(|image| PilFontGlyphImage::Image(Box::new(image)))
 }
 

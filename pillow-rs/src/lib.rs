@@ -49,9 +49,9 @@
 //! # Quick Start
 //!
 //! ```
-//! use pillow_rs::Image;
+//! use pillow_rs::{Image, Mode};
 //!
-//! let image = Image::new(4, 4, "RGB", (0, 128, 255, 255)).unwrap();
+//! let image = Image::new(4, 4, Mode::ImageRgb8, (0, 128, 255, 255)).unwrap();
 //! assert_eq!(image.size().unwrap(), (4, 4));
 //! assert_eq!(image.mode().unwrap(), "RGB");
 //! ```
@@ -59,9 +59,9 @@
 //! # Converting Modes
 //!
 //! ```
-//! use pillow_rs::Image;
+//! use pillow_rs::{Image, Mode};
 //!
-//! let rgb = Image::new(2, 2, "RGB", (255, 0, 0, 255)).unwrap();
+//! let rgb = Image::new(2, 2, Mode::ImageRgb8, (255, 0, 0, 255)).unwrap();
 //! let gray = rgb.convert("L", None, None, None, None).unwrap();
 //! assert_eq!(gray.mode().unwrap(), "L");
 //! assert_eq!(gray.tobytes().unwrap().len(), 4);

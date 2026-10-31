@@ -7,7 +7,7 @@
 //   factor<1000 (<1.0) → more blurring (anti-sharpen)
 //   factor>1000 (>1.0) → unsharp mask (increased sharpness)
 //
-// CPU reference: pool_cpu/ops/enhance.rs op_enhance_sharpness
+// CPU reference: pool_cpu/ops/enhance/ops.rs and helpers/sharpness.rs
 //   SMOOTH kernel: [1,1,1, 1,5,1, 1,1,1], scale=13, offset=0
 //   Blend: blurred * (1-factor) + original * factor
 //

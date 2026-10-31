@@ -31,7 +31,7 @@ pub(super) fn try_convert_scalar_source(
                 } else {
                     color::f_to_l(source.as_ref())
                 };
-                return Ok(Some(Image::from_dynamic(luma, None)));
+                return Ok(Some(Image::from_dynamic(luma)));
             }
             let source = image.materialize()?;
             let converted = match (source_mode, target_mode) {
@@ -45,7 +45,7 @@ pub(super) fn try_convert_scalar_source(
                     } else {
                         color::f_to_l(&source)
                     };
-                    return Ok(Some(Image::from_dynamic(luma, None).convert(
+                    return Ok(Some(Image::from_dynamic(luma).convert(
                         target_mode,
                         matrix,
                         dither,
@@ -54,10 +54,10 @@ pub(super) fn try_convert_scalar_source(
                     )?));
                 }
             };
-            Ok(Some(Image::from_dynamic(
+            Ok(Some(Image::from_dynamic_with_mode(
                 converted,
                 explicit_mode_for(target_mode),
-            )))
+            )?))
         },
         |result| result.as_ref().map_or(0, eager_convert_image_bytes),
     )
@@ -89,7 +89,7 @@ pub(super) fn try_convert_between_nonstandard_modes(
         color::convert_from_nonstandard(source_mode, &source, palette.as_deref())
             .unwrap_or_else(|| source.to_rgb8().into())
     };
-    let rgb_source = Image::from_dynamic(converted, None);
+    let rgb_source = Image::from_dynamic(converted);
     Ok(Some(rgb_source.convert(
         target_mode,
         matrix,
@@ -169,10 +169,10 @@ pub(super) fn try_convert_luma16_to_cmyk(
     for (output, input) in result.pixels_mut().zip(gray.pixels()) {
         *output = crate::raster::Rgba([0, 0, 0, 255u8.saturating_sub(input[0])]);
     }
-    Ok(Some(Image::from_dynamic(
+    Ok(Some(Image::from_dynamic_with_mode(
         DynamicImage::ImageRgba8(result),
         explicit_mode_for(target_mode),
-    )))
+    )?))
 }
 
 pub(super) fn try_convert_nonstandard_source(
@@ -194,10 +194,10 @@ pub(super) fn try_convert_nonstandard_source(
             indices_alpha,
             palette.as_deref().unwrap_or_default(),
         );
-        return Ok(Some(Image::from_dynamic(
+        return Ok(Some(Image::from_dynamic_with_mode(
             rgba,
             explicit_mode_for(target_mode),
-        )));
+        )?));
     }
     let converted = nonstandard_rgb_source(source, source_mode, palette.as_deref());
     let result = if matches!(target_mode, "L" | "LA") {
@@ -217,10 +217,10 @@ pub(super) fn try_convert_nonstandard_source(
         // Mode 1 re-derives truncated luma in the shared threshold/dither path.
         return Ok(None);
     }
-    Ok(Some(Image::from_dynamic(
+    Ok(Some(Image::from_dynamic_with_mode(
         result,
         explicit_mode_for(target_mode),
-    )))
+    )?))
 }
 
 fn needs_nonstandard_expansion(source_mode: &str, target_mode: &str) -> bool {
@@ -310,10 +310,10 @@ fn convert_nonstandard_rgba_palette_alpha(
     }
     let indices = source.to_luma8();
     let expanded = crate::image::expand_palette(&indices, palette, &alpha);
-    Ok(Some(Image::from_dynamic(
+    Ok(Some(Image::from_dynamic_with_mode(
         expanded,
         explicit_mode_for(target_mode),
-    )))
+    )?))
 }
 
 fn convert_nonstandard_color(target_mode: &str, converted: DynamicImage) -> DynamicImage {
@@ -353,8 +353,8 @@ pub(super) fn try_convert_cmyk_to_scalar(
             crate::raster::Rgba(value.to_le_bytes())
         };
     }
-    Ok(Some(Image::from_dynamic(
+    Ok(Some(Image::from_dynamic_with_mode(
         DynamicImage::ImageRgba8(output),
         explicit_mode_for(target_mode),
-    )))
+    )?))
 }

@@ -8,16 +8,27 @@ use std::sync::Arc;
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
+use crate::raster::Mode;
 
-fn binary_mode_class(mode: &str) -> Option<u8> {
+fn binary_mode_class(mode: Mode) -> Option<u8> {
     match mode {
-        "1" | "L" | "P" => Some(1),
+        Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => Some(1),
         // Chops operates on stored bytes, including premultiplied La samples.
-        "LA" | "La" | "PA" => Some(2),
-        "RGB" | "YCbCr" | "HSV" => Some(3),
-        "RGBA" | "CMYK" | "RGBa" | "RGBX" => Some(4),
+        Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => Some(2),
+        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageHsv8 => Some(3),
+        Mode::ImageRgba8
+        | Mode::ImageCmyk8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8 => Some(4),
         _ => None,
     }
+}
+
+fn mode_identity(image: &Image) -> Result<Mode, PilError> {
+    if let Some(mode) = image.known_mode_identity() {
+        return Ok(mode);
+    }
+    Ok(image.materialized_shared_for_ops()?.mode())
 }
 
 /// Validate the native byte-layout compatibility enforced by
@@ -26,12 +37,12 @@ fn binary_mode_class(mode: &str) -> Option<u8> {
 /// `YCbCr` with `RGB`); scalar `I`/`F` and 16-bit modes are rejected by the
 /// underlying byte-oriented Chops entry points.
 fn validate_binary_operands(image1: &Image, image2: &Image) -> Result<(), PilError> {
-    let mode1 = image1.mode()?;
-    let mode2 = image2.mode()?;
-    let Some(class1) = binary_mode_class(&mode1) else {
+    let mode1 = mode_identity(image1)?;
+    let mode2 = mode_identity(image2)?;
+    let Some(class1) = binary_mode_class(mode1) else {
         return Err(PilError::ValueError("image has wrong mode".into()));
     };
-    let Some(class2) = binary_mode_class(&mode2) else {
+    let Some(class2) = binary_mode_class(mode2) else {
         return Err(PilError::ValueError("images do not match".into()));
     };
     // Chops.c clips binary results to the smaller width and height; unequal
@@ -43,7 +54,7 @@ fn validate_binary_operands(image1: &Image, image2: &Image) -> Result<(), PilErr
 }
 
 fn validate_logical_operands(image1: &Image, image2: &Image) -> Result<(), PilError> {
-    if image1.mode()? != "1" || image2.mode()? != "1" {
+    if mode_identity(image1)? != Mode::One || mode_identity(image2)? != Mode::One {
         return Err(PilError::ValueError("image has wrong mode".into()));
     }
     // Pillow's mode-1 logical Chops clips each axis to the overlap, including
@@ -371,7 +382,7 @@ mod tests {
         ];
 
         for &(mode, bytes) in cases {
-            let source = Image::frombytes(mode, (1, 1), bytes).expect("source image");
+            let source = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (1, 1), bytes).expect("source image");
             let result = constant(&source, 127).expect("constant image");
             assert_eq!(
                 result.mode().expect("result mode"),

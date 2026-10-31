@@ -256,7 +256,7 @@ fn vertical_pass_col_transposed(
 /// for every x coordinate in an output row, so repeating this setup in
 /// `vertical_pass_col` needlessly multiplies it by the output width.
 #[inline]
-fn vertical_pass_rgb_row(
+pub(crate) fn vertical_pass_rgb_row(
     intermediate: &[u8],
     output_width: u32,
     coeffs: &FilterCoeffs,

@@ -133,7 +133,7 @@ pub(crate) fn reduce_sparse_2x2_if_applicable(
 }
 
 /// Keeps exact active-row facts for the thumbnail reducing-gap consumer.
-fn reduce_rgb_with_sparse_rows(
+pub(crate) fn reduce_rgb_with_sparse_rows(
     source: &[u8],
     width: u32,
     height: u32,

@@ -1,4 +1,7 @@
 //! Terminal operations that fold pending image pipelines into host results.
+//!
+//! Architecture-specialized CPU terminals retain the injected mode strategy
+//! and report CPU as the executor even for the compatibility SIMD request.
 
 #[cfg(feature = "gpu")]
 use super::pool_gpu;
@@ -40,6 +43,9 @@ pub(crate) fn execute_prepared_cpu_terminal<T>(
     if timed {
         for op in ops {
             begin_pipeline_operation_telemetry(registry::variant_key(op));
+            crate::compute::record_pipeline_operation_architecture(
+                prepared.context().architecture(),
+            );
             record_pipeline_operation_path("cpu");
             finish_pipeline_operation_telemetry();
         }
@@ -88,10 +94,9 @@ pub(crate) fn execute_prepared_cpu_terminal<T>(
     Ok(result)
 }
 
-/// Runs a SIMD terminal that folds a supported pending image pipeline into
-/// its result instead of materializing an intermediate image. The closure
-/// returns the measured SIMD block and scalar-tail counts with the result.
-pub(crate) fn execute_prepared_simd_terminal<T>(
+/// Runs an architecture-specialized CPU terminal and records its vector work.
+/// The closure returns vector-block and scalar-tail counts with the result.
+pub(crate) fn execute_prepared_cpu_arch_terminal<T>(
     prepared: &PreparedExecution,
     ops: &[PipelineOp],
     input: &DynamicImage,
@@ -111,7 +116,7 @@ pub(crate) fn execute_prepared_simd_terminal<T>(
     let (result, vector_blocks, scalar_tail) = execute()?;
     let backend_ns = elapsed_ns(backend_start);
     if timed {
-        record_simd_terminal_telemetry(
+        record_cpu_arch_terminal_telemetry(
             prepared,
             ops,
             input,
@@ -124,7 +129,7 @@ pub(crate) fn execute_prepared_simd_terminal<T>(
     Ok(result)
 }
 
-fn record_simd_terminal_telemetry(
+fn record_cpu_arch_terminal_telemetry(
     prepared: &PreparedExecution,
     ops: &[PipelineOp],
     input: &DynamicImage,
@@ -135,7 +140,11 @@ fn record_simd_terminal_telemetry(
 ) {
     for (index, op) in ops.iter().enumerate() {
         begin_pipeline_operation_telemetry(registry::variant_key(op));
+        crate::compute::record_pipeline_operation_architecture(
+            prepared.context().architecture(),
+        );
         if index == 0 {
+            record_pipeline_operation_path("cpu");
             record_pipeline_operation_vector_blocks(vector_blocks);
             record_pipeline_operation_scalar_tail(scalar_tail);
         } else {
@@ -173,7 +182,7 @@ fn record_simd_terminal_telemetry(
     let _ = take_pipeline_resize_coeff_cache_stats();
     record_pipeline_telemetry(PipelineTelemetry {
         requested_backend: prepared.requested_backend,
-        actual_backend: Backend::Simd,
+        actual_backend: Backend::Cpu,
         operation_count: ops.len(),
         route_ns: prepared.route_ns,
         validation_ns: prepared.validation_ns,

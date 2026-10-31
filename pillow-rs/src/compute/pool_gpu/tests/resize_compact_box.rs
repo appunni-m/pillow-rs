@@ -11,7 +11,7 @@ fn f_resize_compact_box_proof_covers_horizontal_over_binding_row() {
     let words: Vec<u32> = (0..height)
         .map(|index| pattern[index % pattern.len()].to_bits())
         .collect();
-    let source = Image::frombytes("F", (height as u32, 1), &f32_words_to_bytes(&words))
+    let source = Image::frombytes(crate::raster::Mode::ImageF32, (height as u32, 1), &f32_words_to_bytes(&words))
         .expect("horizontal compact Box source");
     let source_dynamic = source
         .materialize()
@@ -89,7 +89,7 @@ fn f_resize_compact_box_proof_covers_multiple_output_rows() {
     let words: Vec<u32> = (0..width)
         .map(|index| pattern[index % pattern.len()].to_bits())
         .collect();
-    let source = Image::frombytes("F", (width as u32, 1), &f32_words_to_bytes(&words))
+    let source = Image::frombytes(crate::raster::Mode::ImageF32, (width as u32, 1), &f32_words_to_bytes(&words))
         .expect("multi-output compact Box source");
     let source_dynamic = source
         .materialize()
@@ -167,7 +167,7 @@ fn f_resize_compact_box_proof_covers_vertical_over_binding_row() {
     let words: Vec<u32> = (0..height)
         .map(|index| pattern[index % pattern.len()].to_bits())
         .collect();
-    let source = Image::frombytes("F", (1, height as u32), &f32_words_to_bytes(&words))
+    let source = Image::frombytes(crate::raster::Mode::ImageF32, (1, height as u32), &f32_words_to_bytes(&words))
         .expect("vertical compact Box source");
     let source_dynamic = source
         .materialize()
@@ -213,7 +213,7 @@ fn f_resize_compact_box_proof_covers_changed_second_axis() {
     let words: Vec<u32> = (0..width * 2)
         .map(|index| pattern[index % pattern.len()].to_bits())
         .collect();
-    let source = Image::frombytes("F", (width as u32, 2), &f32_words_to_bytes(&words))
+    let source = Image::frombytes(crate::raster::Mode::ImageF32, (width as u32, 2), &f32_words_to_bytes(&words))
         .expect("compact chained Box source");
     let source_dynamic = source
         .materialize()
@@ -237,7 +237,7 @@ fn f_resize_compact_box_proof_covers_changed_second_axis() {
     let mut special_words = words.clone();
     special_words[width / 2] = 0x7fc1_2345;
     let special_source =
-        Image::frombytes("F", (width as u32, 2), &f32_words_to_bytes(&special_words))
+        Image::frombytes(crate::raster::Mode::ImageF32, (width as u32, 2), &f32_words_to_bytes(&special_words))
             .expect("compact chained special Box source")
             .materialize()
             .expect("materialize compact chained special Box source");
@@ -329,7 +329,7 @@ fn assert_f_resize_compact_box_special_case(
     for (index, value) in specials {
         words[index] = value;
     }
-    let source = Image::frombytes("F", (source_w, source_h), &f32_words_to_bytes(&words))
+    let source = Image::frombytes(crate::raster::Mode::ImageF32, (source_w, source_h), &f32_words_to_bytes(&words))
         .expect("compact special F source");
     let source_dynamic = source
         .materialize()

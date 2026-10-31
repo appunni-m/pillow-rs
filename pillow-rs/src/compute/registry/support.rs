@@ -82,6 +82,22 @@ pub enum OperationId {
     Mirror,
     /// Apply one Pillow transpose method while preserving its exact mode.
     Transpose,
+    /// Resize an image to an exact output size.
+    Resize,
+    /// Resize an image from a floating source region to an exact output size.
+    ResizeBoxed,
+    /// Resize an image to fit inside target bounds while preserving aspect ratio.
+    Contain,
+    /// Resize an image to cover target bounds while preserving aspect ratio.
+    Cover,
+    /// Resize and crop an image to target bounds with typed bleed and centering.
+    Fit,
+    /// Resize an image into a target canvas while preserving aspect ratio.
+    Pad,
+    /// Scale an image by a floating-point factor.
+    Scale,
+    /// Apply Pillow's reducing-gap thumbnail algorithm while preserving mode.
+    Thumbnail,
     /// Rotate by an arbitrary angle with a typed mode and interpolation strategy.
     Rotate,
     /// Reduce native sample blocks while preserving the declared output mode.
@@ -90,6 +106,10 @@ pub enum OperationId {
     Grayscale,
     /// Apply one byte lookup table per native byte band, preserving exact mode.
     Eval,
+    /// Apply a callable affine point transform to native I/F/I;16 samples.
+    PointScalar,
+    /// Apply a floating lookup table to a byte sample and produce native F samples.
+    PointFloat,
     /// Invert every byte of an image while preserving its exact mode.
     Invert,
     /// Reduce the stored high bits of native L or RGB samples.
@@ -100,6 +120,24 @@ pub enum OperationId {
     Colorize,
     /// Stretch L/RGB contrast from per-channel histogram percentiles.
     Autocontrast,
+    /// Apply a native 3x3 Pillow convolution kernel.
+    Filter3x3,
+    /// Apply a native 5x5 Pillow convolution kernel.
+    Filter5x5,
+    /// Apply Pillow's Gaussian blur.
+    GaussianBlur,
+    /// Apply Pillow's native-byte box blur.
+    BoxBlur,
+    /// Sharpen byte samples by blending the source with its Gaussian blur.
+    UnsharpMask,
+    /// Apply Pillow's median rank filter.
+    MedianFilter,
+    /// Apply Pillow's maximum rank filter.
+    MaxFilter,
+    /// Apply Pillow's minimum rank filter.
+    MinFilter,
+    /// Select one sample from each Pillow rank-filter neighborhood.
+    RankFilter,
     /// Equalize L/RGB samples directly and P samples after palette expansion.
     Equalize,
     /// Add a native-mode border while preserving the exact source identity.
@@ -108,10 +146,18 @@ pub enum OperationId {
     ExtractBand,
     /// Apply a 3D color lookup table with a typed target identity.
     Color3DLut,
+    /// Convert exact RGB8 samples to Pillow's packed LAB representation.
+    ConvertLab,
+    /// Convert one exact source mode to a typed target mode.
+    Convert,
+    /// Remap native L/P samples into a P index plane with reordered palette metadata.
+    RemapPalette,
     /// Relocate native pixels using Pillow's process-global random stream.
     EffectSpread,
     /// Generate Pillow's L-mode Gaussian noise using the process-global stream.
     EffectNoise,
+    /// Alpha-composite one same-sized LA or RGBA image over another.
+    AlphaComposite,
     /// One normalized native-byte pixel write with caller-validated coordinates.
     PutPixel,
     /// An ordered run of adjacent native-byte writes that clones its source once.
@@ -122,6 +168,54 @@ pub enum OperationId {
     PutAlpha,
     /// Replace per-pixel alpha from a mode-bearing secondary image.
     PutAlphaData,
+    /// Return horizontal and vertical non-zero sample projections.
+    GetProjection,
+    /// Blend native Pillow samples with the same-mode black brightness base.
+    Brightness,
+    /// Blend native samples with Pillow's contrast-degenerate base.
+    Contrast,
+    /// Blend native byte pixels with their exact-mode color saturation base.
+    ColorSaturation,
+    /// Blend native samples with the exact-mode 3x3 smoothing result.
+    Sharpness,
+    /// Add native bytes from a compatible secondary raster with scale and offset.
+    ChopsAdd,
+    /// Subtract native bytes from a compatible secondary raster with scale and offset.
+    ChopsSubtract,
+    /// Multiply compatible native-byte samples.
+    ChopsMultiply,
+    /// Apply the native-byte screen blend operation.
+    ChopsScreen,
+    /// Select the darker compatible native-byte sample.
+    ChopsDarker,
+    /// Select the lighter compatible native-byte sample.
+    ChopsLighter,
+    /// Compute absolute differences between compatible native-byte samples.
+    ChopsDifference,
+    /// Apply the native-byte overlay lookup table.
+    ChopsOverlay,
+    /// Apply the native-byte hard-light lookup table.
+    ChopsHardLight,
+    /// Apply the native-byte soft-light lookup table.
+    ChopsSoftLight,
+    /// Add compatible native-byte samples modulo 256.
+    ChopsAddModulo,
+    /// Subtract compatible native-byte samples modulo 256.
+    ChopsSubtractModulo,
+    /// Apply Pillow mode-1 logical AND.
+    ChopsLogicalAnd,
+    /// Apply Pillow mode-1 logical OR.
+    ChopsLogicalOr,
+    /// Apply Pillow mode-1 logical XOR.
+    ChopsLogicalXor,
+    /// Construct a single-band luma image filled with a constant byte.
+    ChopsConstant,
+    /// Offset native pixels with wraparound while preserving exact mode.
+    ChopsOffset,
+    /// Clone the source while preserving exact mode.
+    ChopsDuplicate,
+    /// Invert every stored byte while preserving exact mode.
+    ChopsInvert,
 }
 
 impl OperationId {
@@ -134,26 +228,87 @@ impl OperationId {
             Self::Flip => &crate::compute::pool_cpu::ops::transpose::ops::FLIP_SUPPORT,
             Self::Mirror => &crate::compute::pool_cpu::ops::transpose::ops::MIRROR_SUPPORT,
             Self::Transpose => &crate::compute::pool_cpu::ops::transpose::ops::TRANSPOSE_SUPPORT,
+            Self::Resize => &crate::compute::pool_cpu::ops::resize::ops::SUPPORT,
+            Self::ResizeBoxed => &crate::compute::pool_cpu::ops::resize::ops::BOXED_SUPPORT,
+            Self::Contain => &crate::compute::pool_cpu::ops::geometry::ops::CONTAIN_SUPPORT,
+            Self::Cover => &crate::compute::pool_cpu::ops::geometry::ops::COVER_SUPPORT,
+            Self::Fit => &crate::compute::pool_cpu::ops::geometry::ops::FIT_SUPPORT,
+            Self::Pad => &crate::compute::pool_cpu::ops::geometry::pad::ops::SUPPORT,
+            Self::Scale => &crate::compute::pool_cpu::ops::geometry::ops::SCALE_SUPPORT,
+            Self::Thumbnail => &crate::compute::pool_cpu::ops::thumbnail::ops::SUPPORT,
             Self::Rotate => &crate::compute::pool_cpu::ops::rotate::ops::SUPPORT,
             Self::Reduce => &crate::compute::pool_cpu::ops::reduce::ops::SUPPORT,
             Self::Grayscale => &crate::compute::pool_cpu::ops::grayscale::ops::SUPPORT,
             Self::Eval => &crate::compute::pool_cpu::ops::eval::ops::SUPPORT,
+            Self::PointScalar => {
+                &crate::compute::pool_cpu::ops::eval::ops::SCALAR_POINT_SUPPORT
+            }
+            Self::PointFloat => {
+                &crate::compute::pool_cpu::ops::eval::ops::POINT_FLOAT_SUPPORT
+            }
             Self::Invert => &crate::compute::pool_cpu::ops::imageops::ops::INVERT_SUPPORT,
             Self::Posterize => &crate::compute::pool_cpu::ops::imageops::ops::POSTERIZE_SUPPORT,
             Self::Solarize => &crate::compute::pool_cpu::ops::imageops::ops::SOLARIZE_SUPPORT,
             Self::Colorize => &crate::compute::pool_cpu::ops::imageops::ops::COLORIZE_SUPPORT,
             Self::Autocontrast => &crate::compute::pool_cpu::ops::imageops::autocontrast::SUPPORT,
+            Self::Filter3x3 => &crate::compute::pool_cpu::ops::filter::ops::FILTER3X3_SUPPORT,
+            Self::Filter5x5 => &crate::compute::pool_cpu::ops::filter::ops::FILTER5X5_SUPPORT,
+            Self::GaussianBlur => &crate::compute::pool_cpu::ops::filter::ops::GAUSSIAN_BLUR_SUPPORT,
+            Self::BoxBlur => &crate::compute::pool_cpu::ops::filter::ops::BOX_BLUR_SUPPORT,
+            Self::UnsharpMask => {
+                &crate::compute::pool_cpu::ops::filter::ops::UNSHARP_MASK_SUPPORT
+            }
+            Self::MedianFilter => &crate::compute::pool_cpu::ops::filter::ops::MEDIAN_FILTER_SUPPORT,
+            Self::MaxFilter => &crate::compute::pool_cpu::ops::filter::ops::MAX_FILTER_SUPPORT,
+            Self::MinFilter => &crate::compute::pool_cpu::ops::filter::ops::MIN_FILTER_SUPPORT,
+            Self::RankFilter => &crate::compute::pool_cpu::ops::filter::ops::RANK_FILTER_SUPPORT,
             Self::Equalize => &crate::compute::pool_cpu::ops::imageops::equalize::SUPPORT,
             Self::Expand => &crate::compute::pool_cpu::ops::imageops::ops::EXPAND_SUPPORT,
             Self::ExtractBand => &crate::compute::pool_cpu::ops::put::ops::EXTRACT_BAND_SUPPORT,
             Self::Color3DLut => &crate::compute::pool_cpu::ops::color3dlut::ops::SUPPORT,
+            Self::Convert => &crate::compute::pool_cpu::ops::color::convert::ops::SUPPORT,
+            Self::ConvertLab => &crate::compute::pool_cpu::ops::color::ops::SUPPORT,
+            Self::RemapPalette => &crate::compute::pool_cpu::ops::color::ops::REMAP_PALETTE_SUPPORT,
             Self::EffectSpread => &crate::compute::pool_cpu::ops::effects::ops::EFFECT_SPREAD_SUPPORT,
             Self::EffectNoise => &crate::compute::pool_cpu::ops::effects::ops::EFFECT_NOISE_SUPPORT,
+            Self::AlphaComposite => {
+                &crate::compute::pool_cpu::ops::composite::ops::ALPHA_COMPOSITE_SUPPORT
+            }
             Self::PutPixel => &crate::compute::pool_cpu::ops::put::ops::PUT_PIXEL_SUPPORT,
             Self::PutPixelBatch => &crate::compute::pool_cpu::ops::put::ops::PUT_PIXEL_BATCH_SUPPORT,
             Self::PutData => &crate::compute::pool_cpu::ops::put::ops::PUT_DATA_SUPPORT,
             Self::PutAlpha => &crate::compute::pool_cpu::ops::put::ops::PUT_ALPHA_SUPPORT,
             Self::PutAlphaData => &crate::compute::pool_cpu::ops::put::ops::PUT_ALPHA_DATA_SUPPORT,
+            Self::GetProjection => &crate::compute::pool_cpu::ops::analysis::ops::SUPPORT,
+            Self::Brightness => &crate::compute::pool_cpu::ops::enhance::ops::SUPPORT,
+            Self::Contrast => {
+                &crate::compute::pool_cpu::ops::enhance::ops::CONTRAST_SUPPORT
+            },
+            Self::ColorSaturation => {
+                &crate::compute::pool_cpu::ops::enhance::ops::COLOR_SATURATION_SUPPORT
+            }
+            Self::Sharpness => {
+                &crate::compute::pool_cpu::ops::enhance::ops::SHARPNESS_SUPPORT
+            }
+            Self::ChopsAdd => &crate::compute::pool_cpu::ops::chops::ops::ADD_SUPPORT,
+            Self::ChopsSubtract => &crate::compute::pool_cpu::ops::chops::ops::SUBTRACT_SUPPORT,
+            Self::ChopsMultiply => &crate::compute::pool_cpu::ops::chops::ops::MULTIPLY_SUPPORT,
+            Self::ChopsScreen => &crate::compute::pool_cpu::ops::chops::ops::SCREEN_SUPPORT,
+            Self::ChopsDarker => &crate::compute::pool_cpu::ops::chops::ops::DARKER_SUPPORT,
+            Self::ChopsLighter => &crate::compute::pool_cpu::ops::chops::ops::LIGHTER_SUPPORT,
+            Self::ChopsDifference => &crate::compute::pool_cpu::ops::chops::ops::DIFFERENCE_SUPPORT,
+            Self::ChopsOverlay => &crate::compute::pool_cpu::ops::chops::ops::OVERLAY_SUPPORT,
+            Self::ChopsHardLight => &crate::compute::pool_cpu::ops::chops::ops::HARD_LIGHT_SUPPORT,
+            Self::ChopsSoftLight => &crate::compute::pool_cpu::ops::chops::ops::SOFT_LIGHT_SUPPORT,
+            Self::ChopsAddModulo => &crate::compute::pool_cpu::ops::chops::ops::ADD_MODULO_SUPPORT,
+            Self::ChopsSubtractModulo => &crate::compute::pool_cpu::ops::chops::ops::SUBTRACT_MODULO_SUPPORT,
+            Self::ChopsLogicalAnd => &crate::compute::pool_cpu::ops::chops::ops::LOGICAL_AND_SUPPORT,
+            Self::ChopsLogicalOr => &crate::compute::pool_cpu::ops::chops::ops::LOGICAL_OR_SUPPORT,
+            Self::ChopsLogicalXor => &crate::compute::pool_cpu::ops::chops::ops::LOGICAL_XOR_SUPPORT,
+            Self::ChopsConstant => &crate::compute::pool_cpu::ops::chops::ops::CONSTANT_SUPPORT,
+            Self::ChopsOffset => &crate::compute::pool_cpu::ops::chops::ops::OFFSET_SUPPORT,
+            Self::ChopsDuplicate => &crate::compute::pool_cpu::ops::chops::ops::DUPLICATE_SUPPORT,
+            Self::ChopsInvert => &crate::compute::pool_cpu::ops::chops::ops::INVERT_SUPPORT,
         }
     }
 }
@@ -161,6 +316,8 @@ impl OperationId {
 /// Relationship between an operation's input and output identities.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputModeRule {
+    /// The operation returns a non-raster result.
+    NoRasterResult,
     /// Preserve the exact input identity, including palette and byte order.
     Preserve,
     /// Construct this exact output identity independently of the source mode.
@@ -346,6 +503,39 @@ impl ModeSupport {
             Self::Supported { scope, .. } => Some(scope),
             Self::Rejected { .. } => None,
         }
+    }
+
+    /// Returns the declared scope of an accepted conversion target pair.
+    #[must_use]
+    pub fn scope_for_target(self, target: Mode) -> Option<SupportScope> {
+        let Self::Supported { scope, inputs, .. } = self else {
+            return None;
+        };
+        for input in inputs {
+            if let InputContract::ConvertTarget {
+                targets,
+                core_only_targets,
+                core_only_reason,
+                ..
+            } = input
+            {
+                if !targets.contains(&target) {
+                    return None;
+                }
+                if let SupportScope::CoreOnly { .. } = scope {
+                    return Some(scope);
+                }
+                if core_only_targets.contains(&target) || target.pillow_name().is_none() {
+                    return Some(SupportScope::CoreOnly {
+                        reason: (*core_only_reason).unwrap_or(
+                            "this source/target pair is a native core extension",
+                        ),
+                    });
+                }
+                return Some(SupportScope::Pillow);
+            }
+        }
+        None
     }
 
     /// Declares a concrete serial strategy with no vector specialization.
@@ -538,6 +728,8 @@ pub struct OperationSupport {
     pub operation: OperationId,
     /// Requirements checked during assessment and preparation.
     pub inputs: &'static [InputContract],
+    /// Prepared child operations whose contracts participate in this operation.
+    composed_operations: &'static [OperationId],
     classify: fn(Mode) -> ModeSupport,
 }
 
@@ -548,13 +740,41 @@ impl OperationSupport {
         inputs: &'static [InputContract],
         classify: fn(Mode) -> ModeSupport,
     ) -> Self {
-        Self { operation, inputs, classify }
+        Self { operation, inputs, composed_operations: &[], classify }
+    }
+
+    /// Declares nested prepared operations that contribute concrete strategies.
+    pub const fn composed(
+        operation: OperationId,
+        inputs: &'static [InputContract],
+        classify: fn(Mode) -> ModeSupport,
+        composed_operations: &'static [OperationId],
+    ) -> Self {
+        Self { operation, inputs, composed_operations, classify }
+    }
+
+    /// Returns the child operation contracts used by this prepared strategy.
+    #[must_use]
+    pub const fn composed_operations(&self) -> &'static [OperationId] {
+        self.composed_operations
+    }
+
+    /// Returns the child operation contracts linked to this declaration.
+    #[must_use]
+    pub fn composed_supports(&self) -> impl Iterator<Item = &'static OperationSupport> + '_ {
+        self.composed_operations.iter().copied().map(OperationId::support)
     }
 
     /// Returns this operation's explicit contract for one mode.
     #[must_use]
     pub fn for_mode(&self, mode: Mode) -> ModeSupport {
         (self.classify)(mode)
+    }
+
+    /// Returns the contract scope for one exact source and target mode pair.
+    #[must_use]
+    pub fn scope_for_target(&self, source: Mode, target: Mode) -> Option<SupportScope> {
+        self.for_mode(source).scope_for_target(target)
     }
 
     /// Enumerates all identities, including rejected and internal modes.

@@ -58,7 +58,7 @@ fn gpu_native_luma_affine_nearest_transform_reads_and_writes_packed_bytes() {
     let source_bytes = (0..15)
         .map(|index| (index * 37 + 11) as u8)
         .collect::<Vec<_>>();
-    let source = Image::frombytes("L", (5, 3), &source_bytes).expect("odd L source");
+    let source = Image::frombytes(crate::raster::Mode::ImageLuma8, (5, 3), &source_bytes).expect("odd L source");
     let transformed = source
         .transform_public(
             (5, 3),
@@ -123,7 +123,7 @@ fn assert_aligned_native_luma_transform() {
     let aligned_bytes = (0..32)
         .map(|index| (index * 29 + 7) as u8)
         .collect::<Vec<_>>();
-    let aligned_source = Image::frombytes("L", (8, 4), &aligned_bytes).expect("aligned L source");
+    let aligned_source = Image::frombytes(crate::raster::Mode::ImageLuma8, (8, 4), &aligned_bytes).expect("aligned L source");
     let aligned_transform = aligned_source
         .transform_public(
             (8, 4),
@@ -183,7 +183,7 @@ fn assert_native_rgb_affine_case(width: u32, height: u32) {
         .map(|index| (index * 29 + 7) as u8)
         .collect::<Vec<_>>();
     let source =
-        Image::frombytes("RGB", (width, height), &source_bytes).expect("native RGB source");
+        Image::frombytes(crate::raster::Mode::ImageRgb8, (width, height), &source_bytes).expect("native RGB source");
     let transformed = source
         .transform_public(
             (width, height),
@@ -250,7 +250,7 @@ fn assert_native_la_affine_case(width: u32, height: u32) {
     let source_bytes = (0..(width * height * 2) as usize)
         .map(|index| (index * 29 + 7) as u8)
         .collect::<Vec<_>>();
-    let source = Image::frombytes("LA", (width, height), &source_bytes).expect("native LA source");
+    let source = Image::frombytes(crate::raster::Mode::ImageLumaA8, (width, height), &source_bytes).expect("native LA source");
     let transformed = source
         .transform_public(
             (width, height),

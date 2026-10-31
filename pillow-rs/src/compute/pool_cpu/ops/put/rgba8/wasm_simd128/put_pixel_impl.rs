@@ -23,5 +23,6 @@ pub(crate) fn prepare_batch(input: scalar::BatchKernel<'_>) -> BatchKernel<'_> {
 
 #[inline]
 pub(crate) fn execute_batch(input: BatchKernel<'_>) -> Result<DynamicImage, PilError> {
-    put_pixel_vector::batch(input).map(DynamicImage::ImageRgba8)
+    put_pixel_vector::batch(input, crate::compute::Architecture::WasmSimd128)
+        .map(DynamicImage::ImageRgba8)
 }

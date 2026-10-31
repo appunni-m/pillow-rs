@@ -1,19 +1,32 @@
 use super::input::clipped_byte;
 use super::types::{PasteSource, ResolvedPasteColor};
 use crate::error::PilError;
+use crate::raster::Mode;
 
 impl PasteSource {
-    pub(super) fn solid_color(&self, mode: &str) -> Result<ResolvedPasteColor, PilError> {
+    pub(super) fn solid_color(&self, mode: Mode) -> Result<ResolvedPasteColor, PilError> {
         match mode {
-            "1" | "L" | "P" => single_band_color(self),
-            "LA" | "PA" => luma_alpha_color(self),
-            "RGB" | "RGBA" | "RGBa" | "RGBX" | "CMYK" | "YCbCr" | "HSV" => {
+            Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => single_band_color(self),
+            Mode::ImageLumaA8
+            | Mode::ImageLaPremultiplied8
+            | Mode::ImagePaletteAlpha8 => luma_alpha_color(self),
+            Mode::ImageRgb8
+            | Mode::ImageRgba8
+            | Mode::ImageRgbPremultiplied8
+            | Mode::ImageRgbx8
+            | Mode::ImageCmyk8
+            | Mode::ImageYCbCr8
+            | Mode::ImageLab8
+            | Mode::ImageHsv8 => {
                 multi_band_color(mode, self)
             }
-            "I" | "F" => numeric_color(mode, self),
-            "I;16" | "I;16L" | "I;16B" | "I;16N" => luma16_color(self),
+            Mode::ImageI32 | Mode::ImageF32 => numeric_color(mode, self),
+            Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
+                luma16_color(self)
+            }
             _ => Err(PilError::ValueError(format!(
-                "unsupported paste destination mode {mode}"
+                "unsupported paste destination mode {}",
+                mode.pillow_name().unwrap_or("internal raster")
             ))),
         }
     }
@@ -52,8 +65,14 @@ fn luma_alpha_color(source: &PasteSource) -> Result<ResolvedPasteColor, PilError
     }
 }
 
-fn multi_band_color(mode: &str, source: &PasteSource) -> Result<ResolvedPasteColor, PilError> {
-    let preserves_alpha = matches!(mode, "RGBA" | "RGBa" | "RGBX" | "CMYK");
+fn multi_band_color(mode: Mode, source: &PasteSource) -> Result<ResolvedPasteColor, PilError> {
+    let preserves_alpha = matches!(
+        mode,
+        Mode::ImageRgba8
+            | Mode::ImageRgbPremultiplied8
+            | Mode::ImageRgbx8
+            | Mode::ImageCmyk8
+    );
     let alpha = |value| if preserves_alpha { value } else { 255 };
     let color = match source {
         PasteSource::Scalar(value) => (*value, 0, 0, 0),
@@ -75,19 +94,27 @@ fn multi_band_color(mode: &str, source: &PasteSource) -> Result<ResolvedPasteCol
     Ok(ResolvedPasteColor::Bytes(color))
 }
 
-fn numeric_color(mode: &str, source: &PasteSource) -> Result<ResolvedPasteColor, PilError> {
+fn numeric_color(mode: Mode, source: &PasteSource) -> Result<ResolvedPasteColor, PilError> {
     match (mode, source) {
-        ("I", PasteSource::Scalar(value)) => Ok(ResolvedPasteColor::Integer(i32::from(*value))),
-        ("I", PasteSource::RawScalar(value)) => Ok(ResolvedPasteColor::Integer(
+        (Mode::ImageI32, PasteSource::Scalar(value)) => {
+            Ok(ResolvedPasteColor::Integer(i32::from(*value)))
+        }
+        (Mode::ImageI32, PasteSource::RawScalar(value)) => Ok(ResolvedPasteColor::Integer(
             i32::try_from(*value)
                 .map_err(|_| PilError::TypeError("im must be Image or color".to_owned()))?,
         )),
-        ("F", PasteSource::Scalar(value)) => Ok(ResolvedPasteColor::Float(f32::from(*value))),
-        ("F", PasteSource::RawScalar(value)) => Ok(ResolvedPasteColor::Float(*value as f32)),
-        ("F", PasteSource::RawFloat(value)) => Ok(ResolvedPasteColor::Float(*value as f32)),
-        ("I", _) => Err(bad_single_color()),
+        (Mode::ImageF32, PasteSource::Scalar(value)) => {
+            Ok(ResolvedPasteColor::Float(f32::from(*value)))
+        }
+        (Mode::ImageF32, PasteSource::RawScalar(value)) => {
+            Ok(ResolvedPasteColor::Float(*value as f32))
+        }
+        (Mode::ImageF32, PasteSource::RawFloat(value)) => {
+            Ok(ResolvedPasteColor::Float(*value as f32))
+        }
+        (Mode::ImageI32, _) => Err(bad_single_color()),
         // Pillow rejects tuple colors for F with its native real-number diagnostic.
-        ("F", _) => Err(PilError::TypeError(
+        (Mode::ImageF32, _) => Err(PilError::TypeError(
             "must be real number, not tuple".to_owned(),
         )),
         _ => unreachable!("numeric modes are selected by solid_color"),

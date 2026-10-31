@@ -3,122 +3,37 @@
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, Mode};
+use crate::compute::helpers::enhance::contrast_base;
 
-// TODO(cpu-migration): replace Pillow-string mode projections and branches in
-// enhancer setup with typed `Mode` decisions and output identities.
-
-pub(crate) struct ContrastBase {
-    #[cfg(feature = "gpu")]
-    pub(crate) mean: u8,
-    pub(crate) channels: usize,
-    pub(crate) values: [u8; 4],
-    pub(crate) alpha: Option<usize>,
+fn exact_mode(image: &Image) -> Result<Mode, PilError> {
+    image.mode_identity()
 }
 
-/// Per-pixel L/LA round trip for canonical byte modes, before float blending.
-pub(crate) fn color_pixel_base(pixel: &[u8], mode: Option<&str>) -> [u8; 4] {
-    if pixel.len() <= 2 {
-        return [pixel[0], *pixel.get(1).unwrap_or(&0), 0, 0];
-    }
-    let cmyk = mode == Some("CMYK");
-    let gray = if cmyk {
-        let nk = 255 - u32::from(pixel[3]);
-        let rgb = |c: u8| (nk - crate::color::muldiv255(u32::from(c), nk)) as u8;
-        crate::color::rgb_to_luma_u8(rgb(pixel[0]), rgb(pixel[1]), rgb(pixel[2]))
-    } else {
-        crate::color::rgb_to_luma_u8(pixel[0], pixel[1], pixel[2])
-    };
-    if cmyk {
-        [0, 0, 0, 255 - gray]
-    } else {
-        [
-            gray,
-            gray,
-            gray,
-            if mode == Some("RGBX") {
-                255
-            } else {
-                *pixel.get(3).unwrap_or(&255)
-            },
-        ]
+fn uppercase_a_band(mode: Mode) -> Option<usize> {
+    match mode {
+        Mode::ImageLumaA8 | Mode::ImagePaletteAlpha8 | Mode::ImageLab8 => Some(1),
+        Mode::ImageRgba8 => Some(3),
+        // NO_PILLOW_SUPPORT: internal high-depth alpha rasters retain their
+        // declared alpha sample while constructing a native core base.
+        Mode::ImageLumaA16 => Some(1),
+        Mode::ImageRgba16 | Mode::ImageRgba32F => Some(3),
+        _ => None,
     }
 }
 
-/// Native-mode equivalent of convert-to-L, rounded mean, and L-to-source base.
-pub(crate) fn contrast_base(img: &DynamicImage, mode: Option<&str>) -> Option<ContrastBase> {
-    let (channels, alpha, cmyk) = match (img, mode) {
-        (DynamicImage::ImageLuma8(_), None | Some("L")) => (1, None, false),
-        (DynamicImage::ImageLumaA8(_), None | Some("LA")) => (2, Some(1), false),
-        (DynamicImage::ImageRgb8(_), None | Some("RGB")) => (3, None, false),
-        (DynamicImage::ImageRgba8(_), None | Some("RGBA")) => (4, Some(3), false),
-        (DynamicImage::ImageRgba8(_), Some("RGBX")) => (4, None, false),
-        (DynamicImage::ImageRgba8(_), Some("CMYK")) => (4, None, true),
-        _ => return None,
-    };
-    let source = img.as_bytes();
-    let count = source.len() / channels;
-    let sum: u64 = source
-        .chunks_exact(channels)
-        .map(|pixel| {
-            let value = if channels <= 2 {
-                pixel[0]
-            } else if cmyk {
-                let nk = 255 - u32::from(pixel[3]);
-                let rgb = |c: u8| (nk - crate::color::muldiv255(u32::from(c), nk)) as u8;
-                crate::color::rgb_to_luma_u8(rgb(pixel[0]), rgb(pixel[1]), rgb(pixel[2]))
-            } else {
-                crate::color::rgb_to_luma_u8(pixel[0], pixel[1], pixel[2])
-            };
-            u64::from(value)
-        })
-        .sum();
-    let mean = if count == 0 {
-        0
-    } else {
-        (sum as f64 / count as f64 + 0.5) as u8
-    };
-    Some(ContrastBase {
-        #[cfg(feature = "gpu")]
-        mean,
-        channels,
-        alpha,
-        values: if cmyk {
-            [0, 0, 0, 255 - mean]
-        } else {
-            [mean, mean, mean, 255]
-        },
-    })
-}
-
-pub(crate) fn contrast_lut(base: &ContrastBase, factor: f64) -> Vec<u8> {
-    (0..base.channels)
-        .flat_map(|band| {
-            (0..=255u8).map(move |value| {
-                if base.alpha == Some(band) {
-                    return value;
-                }
-                let midpoint = f32::from(base.values[band]);
-                (factor as f32)
-                    .mul_add(f32::from(value) - midpoint, midpoint)
-                    .clamp(0.0, 255.0) as u8
-            })
-        })
-        .collect()
-}
-
-fn validate_mode(image: &Image, palette_rejects: bool) -> Result<(), PilError> {
-    let mode = image.mode()?;
-    if mode == "1" {
+fn validate_mode(image: &Image, palette_rejects: bool) -> Result<Mode, PilError> {
+    let mode = exact_mode(image)?;
+    if mode == Mode::One {
         return Err(PilError::ValueError("image has wrong mode".into()));
     }
-    if palette_rejects && mode == "P" {
+    if palette_rejects && mode == Mode::ImagePalette8 {
         return Err(PilError::ValueError("cannot filter palette images".into()));
     }
-    if matches!(mode.as_str(), "P" | "PA") {
+    if matches!(mode, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8) {
         return Err(PilError::ValueError("image has wrong mode".into()));
     }
-    Ok(())
+    Ok(mode)
 }
 
 impl Image {
@@ -131,12 +46,12 @@ impl Image {
         &self,
         value: crate::image::PutPixelValue,
     ) -> Result<crate::image::ImageInfoValue, PilError> {
-        let mode = self.mode()?;
+        let mode_identity = exact_mode(self)?;
         // Pillow's RGB integer ink packs R/G/B into the low three bytes.
         // The general scalar pixel API accepts only a native byte, so retain
         // the full integer here before delegating to its component coercion.
         let value = match value {
-            crate::image::PutPixelValue::Integer(value) if mode == "RGB" => {
+            crate::image::PutPixelValue::Integer(value) if mode_identity == Mode::ImageRgb8 => {
                 crate::image::PutPixelValue::Components(vec![
                     value & 255,
                     (value >> 8) & 255,
@@ -145,8 +60,8 @@ impl Image {
             }
             value => value,
         };
-        let mut pixel = Image::new(1, 1, &mode, (0, 0, 0, 0))?;
-        if mode == "P"
+        let mut pixel = Image::new(1, 1, mode_identity, (0, 0, 0, 0))?;
+        if mode_identity == Mode::ImagePalette8
             && let Some(palette) = self.palette()
         {
             pixel.putpalette(&palette, "RGB")?;
@@ -154,7 +69,7 @@ impl Image {
         pixel.putpixel_value(0, 0, value)?;
         let gray = pixel.convert("L", None, None, None, None)?;
         let gray = gray.materialized_shared()?.as_bytes()[0];
-        Ok(if mode == "RGB" {
+        Ok(if mode_identity == Mode::ImageRgb8 {
             crate::image::ImageInfoValue::IntegerTuple(vec![i64::from(gray); 3])
         } else {
             crate::image::ImageInfoValue::Integer(i64::from(gray))
@@ -170,16 +85,13 @@ impl Image {
     ///
     /// Returns conversion or materialization failures during construction.
     pub fn color_degenerate(&self) -> Result<Image, PilError> {
-        let mode = self.mode()?;
-        let intermediate = if self.getbands()?.iter().any(|band| band == "A") {
-            "LA"
-        } else {
-            "L"
-        };
-        if mode == intermediate {
+        let mode = exact_mode(self)?;
+        let pillow_mode = self.mode()?;
+        let intermediate = if uppercase_a_band(mode).is_some() { "LA" } else { "L" };
+        if matches!(mode, Mode::ImageLuma8 | Mode::ImageLumaA8) {
             return Ok(self.clone());
         }
-        if mode == "RGBA" {
+        if mode == Mode::ImageRgba8 {
             // RGBA -> LA -> RGBA produces the same rounded BT.601 gray in
             // each color channel. The native
             // ColorSaturation(0) path writes that retained base in one pass
@@ -190,12 +102,12 @@ impl Image {
             return Ok(base);
         }
         let mut base = self.convert(intermediate, None, None, None, None)?;
-        if mode == "RGBa" {
+        if mode == Mode::ImageRgbPremultiplied8 {
             return Err(PilError::ValueError(
                 "conversion from L to RGBa not supported".into(),
             ));
         }
-        if mode == "RGBX" {
+        if mode == Mode::ImageRgbx8 {
             // RGBX's padding sample becomes 255 through L conversion and
             // participates in the later blend, unlike uppercase alpha.
             let gray = base.materialized_shared()?;
@@ -210,12 +122,9 @@ impl Image {
                 bytes,
                 4,
             )?;
-            return Ok(Image::from_dynamic(
-                image,
-                crate::image::mode_boundary::parse_pillow_mode(&mode),
-            ));
+            return Ok(Image::from_dynamic_with_mode(image, Some(mode))?);
         }
-        base = base.convert(&mode, None, None, None, None)?;
+        base = base.convert(&pillow_mode, None, None, None, None)?;
         base.load()?;
         Ok(base)
     }
@@ -246,37 +155,24 @@ impl Image {
     /// error. Modes rejected by blending can still construct a base image.
     pub fn contrast_degenerate(&self) -> Result<Image, PilError> {
         let mode = self.mode()?;
-        if matches!(mode.as_str(), "L" | "LA" | "RGB" | "RGBA" | "RGBX" | "CMYK") {
-            let source = self.materialized_shared()?;
-            if let Some(base) = contrast_base(&source, Some(&mode)) {
-                // Only the base is observable: avoid an intermediate grayscale
-                // frame and a second full-frame conversion of a constant image.
-                let mut bytes = vec![base.values[0]; source.as_bytes().len()];
+        let source = self.materialized_shared()?;
+        if let Some(base) = contrast_base(&source) {
+            // Only the base is observable: avoid an intermediate grayscale
+            // frame and a second full-frame conversion of a constant image.
+            let mut image = source.clone();
+            let output = image
+                .as_bytes_mut()
+                .ok_or_else(|| PilError::ValueError("image has wrong mode".into()))?;
+            for (pixel, original) in output
+                .chunks_exact_mut(base.channels)
+                .zip(source.as_bytes().chunks_exact(base.channels))
+            {
+                pixel.copy_from_slice(&base.values[..base.channels]);
                 if let Some(alpha) = base.alpha {
-                    for (pixel, original) in bytes
-                        .chunks_exact_mut(base.channels)
-                        .zip(source.as_bytes().chunks_exact(base.channels))
-                    {
-                        pixel[alpha] = original[alpha];
-                    }
-                } else if base.channels == 4 {
-                    for pixel in bytes.chunks_exact_mut(4) {
-                        pixel[3] = base.values[3];
-                    }
+                    pixel[alpha] = original[alpha];
                 }
-                let image = crate::image_utils::raw_bytes_to_image_allow_empty(
-                    source.width(),
-                    source.height(),
-                    bytes,
-                    base.channels,
-                )?;
-                return Ok(Image::from_dynamic(
-                    image,
-                    matches!(mode.as_str(), "RGBX" | "CMYK")
-                        .then(|| self.known_mode_identity())
-                        .flatten(),
-                ));
             }
+            return Ok(Image::from_dynamic_with_mode(image, Some(source.mode()))?);
         }
 
         let gray = self.convert("L", None, None, None, None)?;
@@ -288,18 +184,18 @@ impl Image {
             let sum: u64 = samples.iter().map(|&value| u64::from(value)).sum();
             (sum as f64 / samples.len() as f64 + 0.5) as u8
         };
-        let mut base = Image::new(gray.width(), gray.height(), "L", (mean, mean, mean, 255))?;
-        if mode == "RGBX" {
+        let mut base = Image::new(gray.width(), gray.height(), crate::raster::Mode::ImageLuma8, (mean, mean, mean, 255))?;
+        if source.mode() == Mode::ImageRgbx8 {
             // L -> RGBX fills X with 255; it is a blended sample, not alpha.
-            base = Image::new(gray.width(), gray.height(), "RGBX", (mean, mean, mean, 255))?;
-        } else if mode == "RGBa" {
+            base = Image::new(gray.width(), gray.height(), crate::raster::Mode::ImageRgbx8, (mean, mean, mean, 255))?;
+        } else if source.mode() == Mode::ImageRgbPremultiplied8 {
             return Err(PilError::ValueError(
                 "conversion from L to RGBa not supported".into(),
             ));
-        } else if mode != "L" {
+        } else if source.mode() != Mode::ImageLuma8 {
             base = base.convert(&mode, None, None, None, None)?;
         }
-        if let Some(alpha) = self.getbands()?.iter().position(|band| band == "A") {
+        if let Some(alpha) = uppercase_a_band(source.mode()) {
             base.putalpha_data(&self.getchannel(alpha as i32)?)?;
         }
         // Pillow creates this image during __init__, including conversion
@@ -318,8 +214,15 @@ impl Image {
     /// byte modes may defer base construction and execution until materialization.
     pub fn enhance_contrast(&self, factor: f64) -> Result<Image, PilError> {
         if matches!(
-            self.mode()?.as_str(),
-            "L" | "LA" | "RGB" | "RGBA" | "RGBX" | "CMYK" | "HSV" | "YCbCr"
+            exact_mode(self)?,
+            Mode::ImageLuma8
+                | Mode::ImageLumaA8
+                | Mode::ImageRgb8
+                | Mode::ImageRgba8
+                | Mode::ImageRgbx8
+                | Mode::ImageCmyk8
+                | Mode::ImageHsv8
+                | Mode::ImageYCbCr8
         ) {
             // The one-shot core API retains its lazy graph so a later backend
             // choice also governs any pending source operations. Stateful host
@@ -340,8 +243,13 @@ impl Image {
     /// report additional materialization failures.
     pub fn enhance_color(&self, factor: f64) -> Result<Image, PilError> {
         if matches!(
-            self.mode()?.as_str(),
-            "L" | "LA" | "RGB" | "RGBA" | "RGBX" | "CMYK"
+            exact_mode(self)?,
+            Mode::ImageLuma8
+                | Mode::ImageLumaA8
+                | Mode::ImageRgb8
+                | Mode::ImageRgba8
+                | Mode::ImageRgbx8
+                | Mode::ImageCmyk8
         ) {
             return Ok(Image::push_op(self, PipelineOp::ColorSaturation { factor }));
         }
@@ -380,7 +288,7 @@ mod tests {
                             .wrapping_add(29)) as u8
                     })
                     .collect();
-                let source = Image::frombytes(mode, (pixel_count as u32, 1), &bytes)
+                let source = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (pixel_count as u32, 1), &bytes)
                     .expect("varied native color source");
                 let mut expected = source
                     .convert(intermediate, None, None, None, None)

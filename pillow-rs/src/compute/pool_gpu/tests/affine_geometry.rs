@@ -172,7 +172,7 @@ fn float_nearest_affine_native_gpu_preserves_words() {
         .iter()
         .flat_map(|value| value.to_le_bytes())
         .collect::<Vec<_>>();
-    let source = Image::frombytes("F", (16, 16), &bytes).expect("F source");
+    let source = Image::frombytes(crate::raster::Mode::ImageF32, (16, 16), &bytes).expect("F source");
     let transformed = source
         .transform_public(
             (6, 6),
@@ -225,7 +225,7 @@ fn float_nearest_rotate_native_gpu_preserves_words() {
         .iter()
         .flat_map(|value| value.to_le_bytes())
         .collect::<Vec<_>>();
-    let source = Image::frombytes("F", (16, 16), &bytes).expect("F source");
+    let source = Image::frombytes(crate::raster::Mode::ImageF32, (16, 16), &bytes).expect("F source");
     let rotated = source
         .rotate_with_input(
             13.0,

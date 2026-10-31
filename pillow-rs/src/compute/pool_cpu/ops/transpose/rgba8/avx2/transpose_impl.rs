@@ -26,28 +26,54 @@ pub(crate) unsafe fn execute(
     image: &super::super::Input,
     method: &TransposeMethod,
 ) -> Result<DynamicImage, PilError> {
+    let _ = transpose_flags(method)?;
     let (width, height) = image.dimensions();
-    let (reverse_x, reverse_y) = match method {
-        TransposeMethod::Rotate90 => (true, false),
-        TransposeMethod::Rotate270 => (false, true),
-        TransposeMethod::Transpose => (false, false),
-        TransposeMethod::Transverse => (true, true),
-        _ => return Err(PilError::InternalError("AVX2 transpose selected for a non-axis method".into())),
-    };
     let output_dims = crate::checked_dims::CheckedDims::new(height, width, CHANNELS as u8)?;
     let mut output = output_dims.alloc_buffer();
+
+    // SAFETY: the public caller prepares this exact AVX2 strategy, and the
+    // output buffer was allocated from the checked transposed dimensions.
+    unsafe { execute_into(image, method, &mut output)? };
+    let output = RgbaImage::from_raw(height, width, output)
+        .ok_or_else(|| PilError::InternalError("transpose RGBA buffer shape mismatch".into()))?;
+    Ok(DynamicImage::ImageRgba8(output))
+}
+
+/// Executes an admitted RGBA AVX2 transpose into a caller-owned output buffer.
+///
+/// # Safety
+///
+/// The caller must have prepared this AVX2 strategy from an `ExecutionContext`
+/// whose captured host capabilities include AVX2 and whose request guard
+/// admits this image layout, size, and transpose method.
+/// The output slice must not overlap the image's source allocation.
+pub(crate) unsafe fn execute_into(
+    image: &super::super::Input,
+    method: &TransposeMethod,
+    output: &mut [u8],
+) -> Result<(), PilError> {
+    let (width, height) = image.dimensions();
+    let (reverse_x, reverse_y) = transpose_flags(method)?;
+    let input_dims = crate::checked_dims::CheckedDims::new(width, height, CHANNELS as u8)?;
+    let output_dims = crate::checked_dims::CheckedDims::new(height, width, CHANNELS as u8)?;
+    if image.as_raw().len() != input_dims.total_bytes()
+        || output.len() != output_dims.total_bytes()
+    {
+        return Err(PilError::InternalError(
+            "AVX2 transpose buffer shape mismatch".into(),
+        ));
+    }
     let width = width as usize;
     let height = height as usize;
     let full_rows = width / TILE * TILE;
     let full_columns = height / TILE * TILE;
 
-    // SAFETY: the prepared AVX2 strategy requires captured AVX2 capability,
-    // exact RGBA storage, axis-swap methods, and dimensions of at least one
-    // tile. The checked output and typed input bound every full-tile access.
+    // SAFETY: the prepared AVX2 strategy supplies host support; checked input
+    // and output shapes establish the exact ranges for full-tile accesses.
     unsafe {
         transpose_full_tiles(
             image.as_raw(),
-            &mut output,
+            output,
             width,
             height,
             full_rows,
@@ -58,7 +84,7 @@ pub(crate) unsafe fn execute(
     }
     copy_bottom_edge(
         image.as_raw(),
-        &mut output,
+        output,
         width,
         height,
         full_rows,
@@ -67,7 +93,7 @@ pub(crate) unsafe fn execute(
     );
     copy_right_edge(
         image.as_raw(),
-        &mut output,
+        output,
         width,
         height,
         full_rows,
@@ -81,9 +107,22 @@ pub(crate) unsafe fn execute(
     crate::compute::record_pipeline_operation_vector_blocks((tiles * TILE) as u64);
     crate::compute::record_pipeline_operation_scalar_tail((scalar_pixels * CHANNELS) as u64);
     crate::compute::record_pipeline_operation_path("native-copy");
-    let output = RgbaImage::from_raw(height as u32, width as u32, output)
-        .ok_or_else(|| PilError::InternalError("transpose RGBA buffer shape mismatch".into()))?;
-    Ok(DynamicImage::ImageRgba8(output))
+    Ok(())
+}
+
+fn transpose_flags(method: &TransposeMethod) -> Result<(bool, bool), PilError> {
+    let flags = match method {
+        TransposeMethod::Rotate90 => (true, false),
+        TransposeMethod::Rotate270 => (false, true),
+        TransposeMethod::Transpose => (false, false),
+        TransposeMethod::Transverse => (true, true),
+        _ => {
+            return Err(PilError::InternalError(
+                "AVX2 transpose selected for a non-axis method".into(),
+            ));
+        }
+    };
+    Ok(flags)
 }
 
 fn copy_bottom_edge(

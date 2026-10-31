@@ -10,8 +10,9 @@ use crate::error::PilError;
 use crate::image::Image;
 use crate::ops::convert::parse_mode;
 use crate::pipeline::PipelineOp;
+use crate::raster::Mode;
 
-// TODO(cpu-migration): accept `Mode` for merge and gradient inputs after host
+// TODO(pillow-rs#3ptb): accept `Mode` for merge and gradient inputs after host
 // bindings perform Pillow spelling conversion.
 
 mod point;
@@ -66,15 +67,12 @@ const fn build_radial_gradient_l_template() -> [u8; 256 * 256] {
 /// truncation of Pillow's `sqrt((dx*dx + dy*dy) * 2.0)` formula.
 pub(crate) static RADIAL_GRADIENT_L_TEMPLATE: [u8; 256 * 256] = build_radial_gradient_l_template();
 
-fn parse_gradient_mode(mode: &str) -> Result<GradientMode, PilError> {
-    if mode.len() != 1 {
-        return Err(PilError::ValueError("image has wrong mode".into()));
-    }
+fn parse_gradient_mode(mode: Mode) -> Result<GradientMode, PilError> {
     match mode {
-        "L" | "P" => Ok(GradientMode::Byte),
-        "1" => Ok(GradientMode::One),
-        "I" => Ok(GradientMode::Integer),
-        "F" => Ok(GradientMode::Float),
+        Mode::ImageLuma8 | Mode::ImagePalette8 => Ok(GradientMode::Byte),
+        Mode::One => Ok(GradientMode::One),
+        Mode::ImageI32 => Ok(GradientMode::Integer),
+        Mode::ImageF32 => Ok(GradientMode::Float),
         _ => Err(PilError::ValueError("image has wrong mode".into())),
     }
 }
@@ -115,7 +113,7 @@ fn execute_eager_cpu_gradient(
 /// Decoder selection is part of the public operation contract, not a binding
 /// concern. Host adapters pass the decoder name through after extracting it.
 pub fn frombytes(
-    mode: &str,
+    mode: Mode,
     size: (u32, u32),
     data: &[u8],
     decoder_name: &str,
@@ -131,7 +129,7 @@ pub fn frombytes(
 /// Creates an image from an owned raw byte buffer, avoiding a second copy for
 /// raw raster modes when the decoder can adopt the supplied allocation.
 pub fn frombytes_owned(
-    mode: &str,
+    mode: Mode,
     size: (u32, u32),
     data: Vec<u8>,
     decoder_name: &str,
@@ -440,7 +438,7 @@ pub fn effect_noise(image: &Image, sigma: f64) -> Result<Image, PilError> {
 
 /// Generates a Gaussian-noise `L` image for Pillow's module-level effect.
 pub fn effect_noise_from_size(size: (u32, u32), sigma: f64) -> Result<Image, PilError> {
-    let source = Image::new(size.0, size.1, "L", (0, 0, 0, 255))?;
+    let source = Image::new(size.0, size.1, Mode::ImageLuma8, (0, 0, 0, 255))?;
     effect_noise(&source, sigma)
 }
 
@@ -463,10 +461,10 @@ pub fn effect_spread(image: &Image, distance: u32) -> Result<Image, PilError> {
 ///
 /// Returns [`PilError::ValueError`] when `mode` is unsupported, or another
 /// [`PilError`] when raw image construction fails.
-pub fn linear_gradient(mode: &str) -> Result<Image, PilError> {
+pub fn linear_gradient(mode: Mode) -> Result<Image, PilError> {
     let gradient_mode = parse_gradient_mode(mode)?;
     if let Some(image) = crate::compute::try_simd_linear_gradient(mode)? {
-        return Ok(Image::from_generated_dynamic(image, mode));
+        return Image::from_generated_dynamic(image, mode);
     }
     let (bytes_per_pixel, row_bytes) = match gradient_mode {
         GradientMode::Byte => (1, 256),
@@ -475,14 +473,14 @@ pub fn linear_gradient(mode: &str) -> Result<Image, PilError> {
     };
     let size: usize = row_bytes * 256 * bytes_per_pixel;
     execute_eager_cpu_gradient("LinearGradient", size, || {
-        let mut data = if mode == "L" {
+        let mut data = if mode == Mode::ImageLuma8 {
             Vec::with_capacity(size)
         } else {
             vec![0u8; size]
         };
 
         for y in 0..256usize {
-            if mode == "L" {
+            if mode == Mode::ImageLuma8 {
                 // Each native-L row is one repeated sample; initialize every
                 // output byte once instead of zeroing the frame before filling it.
                 data.resize((y + 1) * 256, y as u8);
@@ -536,12 +534,12 @@ pub fn linear_gradient(mode: &str) -> Result<Image, PilError> {
 ///
 /// Returns [`PilError::ValueError`] when `mode` is unsupported, or another
 /// [`PilError`] when raw image construction fails.
-pub fn radial_gradient(mode: &str) -> Result<Image, PilError> {
+pub fn radial_gradient(mode: Mode) -> Result<Image, PilError> {
     let gradient_mode = parse_gradient_mode(mode)?;
     if let Some(image) = crate::compute::try_simd_radial_gradient(mode)? {
-        return Ok(Image::from_generated_dynamic(image, mode));
+        return Image::from_generated_dynamic(image, mode);
     }
-    if mode == "L" {
+    if mode == Mode::ImageLuma8 {
         // L is the fixed dense one-byte output, so reuse its exact constant
         // raster and allocate only the owned result buffer.
         return execute_eager_cpu_gradient(
@@ -616,7 +614,7 @@ pub fn effect_mandelbrot(
     let (w, h) = size;
     if w == 0 || h == 0 {
         // Pillow accepts a zero-size mandelbrot and returns an empty image.
-        return Image::new(w, h, "L", (0, 0, 0, 255));
+        return Image::new(w, h, Mode::ImageLuma8, (0, 0, 0, 255));
     }
 
     let (x0, y0, x1, y1) = extent;
@@ -628,7 +626,7 @@ pub fn effect_mandelbrot(
     }
 
     if let Some(image) = crate::compute::try_simd_mandelbrot(size, extent, quality)? {
-        return Ok(Image::from_generated_dynamic(image, "L"));
+        return Image::from_generated_dynamic(image, Mode::ImageLuma8);
     }
 
     // Pillow's C implementation divides by ``width - 1`` and ``height - 1``
@@ -668,7 +666,7 @@ pub fn effect_mandelbrot(
 
     // Transfer the completed L buffer into raster storage; borrowing here
     // would copy the entire generated frame before returning it.
-    let image = Image::frombytes_owned("L", (w, h), data)?;
+    let image = Image::frombytes_owned(crate::raster::Mode::ImageLuma8, (w, h), data)?;
     crate::compute::finish_eager_cpu_mandelbrot_telemetry(telemetry, size);
     Ok(image)
 }

@@ -258,6 +258,20 @@ impl TransposeStrategy<'_> {
         self.prepared.selection()
     }
 
+    pub(crate) fn execute_avx2_into(self, output: &mut [u8]) -> Result<(), PilError> {
+        match self.prepared.implementation {
+            #[cfg(target_arch = "x86_64")]
+            TransposeArchitecture::Avx2(image, method) => {
+                // SAFETY: preparation used this context's captured AVX2
+                // capability and the exact RGBA transpose request guard.
+                unsafe { super::avx2::transpose_impl::execute_into(image, &method, output) }
+            }
+            _ => Err(PilError::InternalError(
+                "RGBA transpose selected a non-AVX2 implementation for an AVX2 buffer".into(),
+            )),
+        }
+    }
+
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         match self.prepared.implementation {
             TransposeArchitecture::Default(image, method) => {

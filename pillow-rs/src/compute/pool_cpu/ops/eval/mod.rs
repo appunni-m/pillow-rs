@@ -2,7 +2,14 @@
 
 pub(crate) mod helpers;
 pub(crate) mod ops;
+pub(crate) mod scalar;
 mod one;
+mod f32;
+mod i16;
+mod i16b;
+mod i16l;
+mod i16n;
+mod i32;
 mod luma8;
 mod luma_a8;
 mod la_premultiplied8;

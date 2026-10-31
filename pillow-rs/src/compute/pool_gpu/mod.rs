@@ -12,13 +12,16 @@ macro_rules! gpu_log {
 
 use crate::checked_dims::CheckedDims;
 use crate::compute::registry;
+use crate::compute::helpers::resampling::{
+    luma16_samples::{read as luma16_resample_read, write as luma16_resample_write},
+    rounding::round_up,
+};
 use crate::compute::{Backend, BackendImpl, PipelineResourceTelemetry};
 use crate::error::PilError;
 use crate::ops::pil_resize::{
     FilterCoeffs, FilterCoeffsF64, compact_resize_coeffs_to_source_span, filter_from_resample,
-    i32_samples_from_le_bytes, luma16_resample_big_endian, luma16_resample_read,
-    luma16_resample_write, precompute_coeffs, precompute_coeffs_boxed_for_filter,
-    precompute_coeffs_f64, round_up,
+    i32_samples_from_le_bytes, luma16_resample_big_endian, precompute_coeffs,
+    precompute_coeffs_boxed_for_filter, precompute_coeffs_f64,
 };
 use crate::pipeline::{
     ColorMode, PipelineOp, PixelMode, ResampleFilter, TransformMethod, TransposeMethod,

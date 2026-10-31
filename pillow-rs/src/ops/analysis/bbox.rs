@@ -383,8 +383,12 @@ fn getbbox_native_bounds(
     alpha_only: bool,
 ) -> Option<(u32, u32, u32, u32)> {
     match image {
-        crate::raster::DynamicImage::ImageLuma8(image) => getbbox_luma8_bounds(image),
-        crate::raster::DynamicImage::ImageLumaA8(image) => {
+        crate::raster::DynamicImage::One(image)
+        | crate::raster::DynamicImage::ImageLuma8(image)
+        | crate::raster::DynamicImage::ImagePalette8(image) => getbbox_luma8_bounds(image),
+        crate::raster::DynamicImage::ImageLumaA8(image)
+        | crate::raster::DynamicImage::ImageLaPremultiplied8(image)
+        | crate::raster::DynamicImage::ImagePaletteAlpha8(image) => {
             getbbox_luma_alpha8_bounds(image, alpha_only)
         }
         crate::raster::DynamicImage::ImageRgb8(image) => getbbox_rgb_bounds(image),
@@ -478,7 +482,7 @@ impl Image {
             return Ok(None);
         }
 
-        let mode = self.mode_from_materialized(&image);
+        let mode = Image::mode_from_materialized(&image);
         let bounds = if mode == "I" {
             getbbox_i_bounds(&image)
         } else if mode == "F" {

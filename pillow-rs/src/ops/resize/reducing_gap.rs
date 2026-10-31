@@ -1,6 +1,7 @@
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::ResampleFilter;
+use crate::raster::Mode;
 
 type ResizeBounds = (f64, f64, f64, f64);
 type ReducingGapResult = Result<(Image, ResizeBounds), PilError>;
@@ -10,7 +11,7 @@ pub(super) fn apply_reducing_gap(
     mut bounds: ResizeBounds,
     gap: f64,
     filter: ResampleFilter,
-    mode: &str,
+    mode: Mode,
     output_size: (u32, u32),
     source_size: (u32, u32),
 ) -> ReducingGapResult {
@@ -35,7 +36,7 @@ pub(super) fn apply_reducing_gap(
     }
     // Pillow's integer reducer does not accept 16-bit modes, although its
     // ordinary filtered resampler does.
-    if mode.starts_with("I;16") {
+    if matches!(mode, Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N) {
         return Err(PilError::ValueError("image has wrong mode".into()));
     }
     super::validate_resize_box(bounds, source_size)?;

@@ -650,7 +650,7 @@ fn native_image(
     let channels = native_channels(mode)
         .ok_or_else(|| PilError::ValueError("unsupported native output mode".into()))?;
     let pixels = crate::image_utils::raw_bytes_to_image(width, height, bytes, channels as usize)?;
-    Ok(template.materialize(pixels, mode))
+    template.materialize(pixels, mode)
 }
 fn native_channels(mode: &str) -> Option<u8> {
     match mode {

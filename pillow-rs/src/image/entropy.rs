@@ -103,8 +103,11 @@ fn histogram_la8(
     mask_raw: Option<&[u8]>,
     hists: &mut [[u32; 256]],
 ) {
-    let crate::raster::DynamicImage::ImageLumaA8(la) = img else {
-        unreachable!("La8 color must use native LA storage");
+    let la = match img {
+        crate::raster::DynamicImage::ImageLumaA8(la)
+        | crate::raster::DynamicImage::ImageLaPremultiplied8(la)
+        | crate::raster::DynamicImage::ImagePaletteAlpha8(la) => la,
+        _ => unreachable!("La8 color must use native LA storage"),
     };
     let raw = la.as_raw();
     match mask_raw {

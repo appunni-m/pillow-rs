@@ -9,7 +9,7 @@ fn f_pad_f64_native_preserves_heterogeneous_words() {
         .into_iter()
         .flat_map(f32::to_le_bytes)
         .collect::<Vec<_>>();
-    let source = Image::new(4, 3, "F", (0, 0, 0, 0)).expect("initial F source");
+    let source = Image::new(4, 3, crate::raster::Mode::ImageF32, (0, 0, 0, 0)).expect("initial F source");
     let source_dynamic = source.materialize().expect("materialize initial F source");
     let putdata = bytes::Bytes::from(source_bytes.clone());
     let filters = [
@@ -122,7 +122,7 @@ fn assert_f_pad_f64_native_result(
 
 #[test]
 fn f_thumbnail_constant_source_uses_exact_gpu_resize() {
-    let source = Image::new(16, 16, "F", (0, 0, 0, 0)).expect("constant F thumbnail source");
+    let source = Image::new(16, 16, crate::raster::Mode::ImageF32, (0, 0, 0, 0)).expect("constant F thumbnail source");
     let mut expected_image = source.clone();
     expected_image
         .thumbnail((4, 4), None)
@@ -203,7 +203,7 @@ fn f_thumbnail_without_reducing_gap_uses_exact_f64_resize() {
         .take(8 * 4)
         .flat_map(|value| value.to_le_bytes())
         .collect::<Vec<_>>();
-    let source = Image::frombytes("F", (8, 4), &source_bytes).expect("F thumbnail source");
+    let source = Image::frombytes(crate::raster::Mode::ImageF32, (8, 4), &source_bytes).expect("F thumbnail source");
     let filters = ["BOX", "BILINEAR", "BICUBIC", "LANCZOS", "HAMMING"];
     let previous = Backend::set_pipeline_telemetry_enabled(true);
     for filter in filters {
@@ -251,7 +251,7 @@ fn f_resize_f64_filtered_chain_native_matches_cpu() {
         .iter()
         .flat_map(|value| value.to_le_bytes())
         .collect();
-    let source = Image::frombytes("F", (2, 2), &source_bytes).expect("F source");
+    let source = Image::frombytes(crate::raster::Mode::ImageF32, (2, 2), &source_bytes).expect("F source");
     let expected = source
         .resize((3, 3), Some(ResampleInput::Name("BICUBIC".into())), None)
         .expect("CPU first chain resize")
@@ -296,7 +296,7 @@ type FResizeRelocationCase = ((u32, u32), PipelineOp, (u32, u32), &'static str);
 
 fn f_resize_f64_relocation_chain_source() -> Image {
     Image::frombytes(
-        "F",
+        crate::raster::Mode::ImageF32,
         (2, 2),
         &[0.1f32, -0.3, 1.7, 2.9]
             .into_iter()
@@ -405,7 +405,7 @@ fn f_resize_f64_relocation_chain_native_matches_cpu() {
 fn f_resize_f64_nearest_relocation_chain_native_matches_cpu() {
     fn source() -> Image {
         Image::frombytes(
-            "F",
+            crate::raster::Mode::ImageF32,
             (2, 2),
             &[0.1f32, -0.3, 1.7, 2.9]
                 .into_iter()
@@ -468,7 +468,7 @@ fn f_resize_f64_putdata_prefix_native_matches_cpu() {
     // non-dyadic resize; the GPU must prove and consume that same update
     // instead of applying the coefficients to stale upload bytes.
     let initial =
-        Image::frombytes("F", (2, 2), &bytes(&[9.0, 8.0, 7.0, 6.0])).expect("initial F source");
+        Image::frombytes(crate::raster::Mode::ImageF32, (2, 2), &bytes(&[9.0, 8.0, 7.0, 6.0])).expect("initial F source");
     let replacement = bytes(&[0.1, -0.3, 1.7, 2.9]);
 
     let mut expected_image = initial.clone();
@@ -519,7 +519,7 @@ fn f_resize_mixed_upscale_downscale_native_matches_cpu() {
         .iter()
         .flat_map(|value| value.to_le_bytes())
         .collect();
-    let source = Image::frombytes("F", (1, 2), &source_bytes).expect("F source");
+    let source = Image::frombytes(crate::raster::Mode::ImageF32, (1, 2), &source_bytes).expect("F source");
     let expected = source
         .resize((2, 1), Some(ResampleInput::Name("BOX".into())), None)
         .expect("CPU mixed-geometry resize")
@@ -551,7 +551,7 @@ fn f_resize_f64_subnormal_native_matches_cpu() {
     }
 
     let source = Image::frombytes(
-        "F",
+        crate::raster::Mode::ImageF32,
         (2, 2),
         &bytes(&[0x0000_0001, 0x0000_0002, 0x0000_0003, 0x0000_0004]),
     )

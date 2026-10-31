@@ -14,14 +14,14 @@ pub struct PreparedOperation<'a> {
 }
 
 macro_rules! declare_prepared_operations {
-    ($($variant:ident, $family:ident, $plan:ident, $constructor:ident);+ $(;)?) => {
+    ($($variant:ident, $family:ident $(:: $subfamily:ident)?, $plan:ident, $constructor:ident);+ $(;)?) => {
         enum Implementation<'a> {
-            $($variant(crate::compute::pool_cpu::ops::$family::ops::$plan<'a>),)+
+            $($variant(crate::compute::pool_cpu::ops::$family $(::$subfamily)?::ops::$plan<'a>),)+
         }
 
         impl<'a> PreparedOperation<'a> {
             $(pub(crate) fn $constructor(
-                plan: crate::compute::pool_cpu::ops::$family::ops::$plan<'a>,
+                plan: crate::compute::pool_cpu::ops::$family $(::$subfamily)?::ops::$plan<'a>,
             ) -> Self {
                 Self { implementation: Implementation::$variant(plan) }
             })+
@@ -34,6 +34,19 @@ macro_rules! declare_prepared_operations {
                 }
             }
 
+            /// Returns selections for prepared child operations, if this plan composes any.
+            #[must_use]
+            pub fn composed_selections(&self) -> &[StrategySelection] {
+                match &self.implementation {
+                    Implementation::Contain(plan)
+                    | Implementation::Cover(plan)
+                    | Implementation::Fit(plan)
+                    | Implementation::Scale(plan) => plan.composed_selections(),
+                    Implementation::Pad(plan) => plan.composed_selections(),
+                    _ => &[],
+                }
+            }
+
             /// Executes the original typed algorithm selected during preparation.
             ///
             /// # Errors
@@ -41,8 +54,32 @@ macro_rules! declare_prepared_operations {
             /// Propagates the operation's existing error contract without retrying
             /// another mode, architecture, or backend.
             pub fn execute(self) -> Result<DynamicImage, PilError> {
+                crate::compute::record_pipeline_operation_architecture(
+                    self.selection().implementation.architecture,
+                );
                 match self.implementation {
                     $(Implementation::$variant(plan) => plan.execute(),)+
+                }
+            }
+
+            /// Executes the prepared ExtractBand plan into a caller-owned byte slice.
+            ///
+            /// This terminal form preserves the direct GetData allocation boundary.
+            ///
+            /// # Returns
+            ///
+            /// Returns `None` when this plan has no caller-owned output strategy.
+            ///
+            /// # Errors
+            ///
+            /// Propagates output-shape and kernel errors from a selected ExtractBand strategy.
+            pub(crate) fn execute_into(
+                self,
+                output: &mut [u8],
+            ) -> Result<Option<(u64, u64, &'static str)>, PilError> {
+                match self.implementation {
+                    Implementation::ExtractBand(plan) => plan.execute_into(output),
+                    _ => Ok(None),
                 }
             }
         }
@@ -52,6 +89,13 @@ macro_rules! declare_prepared_operations {
 declare_prepared_operations! {
     Crop, crop, PreparedCrop, from_crop;
     CropBorder, imageops, PreparedCropBorder, from_crop_border;
+    Resize, resize, PreparedResize, from_resize;
+    Contain, geometry, PreparedContain, from_contain;
+    Cover, geometry, PreparedCover, from_cover;
+    Fit, geometry, PreparedFit, from_fit;
+    Pad, geometry::pad, PreparedPad, from_pad;
+    Scale, geometry, PreparedScale, from_scale;
+    Thumbnail, thumbnail, PreparedThumbnail, from_thumbnail;
     Flip, transpose, PreparedFlip, from_flip;
     Mirror, transpose, PreparedMirror, from_mirror;
     Transpose, transpose, PreparedTranspose, from_transpose;
@@ -73,11 +117,29 @@ declare_prepared_operations! {
     PutAlpha, put, PreparedPutAlpha, from_put_alpha;
     PutAlphaData, put, PreparedPutAlphaData, from_put_alpha_data;
     Color3DLut, color3dlut, PreparedColor3DLut, from_color3dlut;
+    Convert, color, PreparedConvert, from_convert;
+    ConvertLab, color, PreparedConvertLab, from_convert_lab;
+    RemapPalette, color, PreparedRemapPalette, from_remap_palette;
     EffectSpread, effects, PreparedEffectSpread, from_effect_spread;
     EffectNoise, effects, PreparedEffectNoise, from_effect_noise;
+    Brightness, enhance, PreparedBrightness, from_brightness;
+    Contrast, enhance, PreparedContrast, from_contrast;
+    ColorSaturation, enhance, PreparedColorSaturation, from_color_saturation;
+    Sharpness, enhance, PreparedSharpness, from_sharpness;
+    Filter, filter, PreparedFilter, from_filter;
+    Chops, chops, PreparedChops, from_chops;
+    AlphaComposite, composite, PreparedAlphaComposite, from_alpha_composite;
 }
 
 impl PreparedOperation<'_> {
+    /// Returns the filter owner's prepared identity proof when it can share the input Arc.
+    pub(crate) fn shared_identity_proof(&self) -> Option<bool> {
+        match &self.implementation {
+            Implementation::Filter(plan) => plan.shared_identity_proof(),
+            _ => None,
+        }
+    }
+
     /// Returns the operation identity carried by the selected implementation.
     #[must_use]
     pub fn operation(&self) -> OperationId {

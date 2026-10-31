@@ -318,7 +318,7 @@ fn mode_specific_flags(
             scale,
             offset,
         } if mode == "LA"
-            && crate::compute::pool_cpu::ops::filter::binomial3x3_parameters_match(
+            && crate::compute::helpers::filters::binomial3x3_parameters_match(
                 kernel, *scale, *offset,
             ) =>
         {

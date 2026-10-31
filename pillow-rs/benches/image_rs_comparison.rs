@@ -6,7 +6,7 @@ use std::hint::black_box;
 use std::time::Instant;
 
 use image::{RgbImage, imageops};
-use pillow_rs::{Backend, DynamicImage, Image};
+use pillow_rs::{Backend, DynamicImage, Image, Mode};
 
 type BenchResult<T> = Result<T, Box<dyn Error>>;
 type PillowOperation = fn(&Image, Backend) -> BenchResult<DynamicImage>;
@@ -287,7 +287,7 @@ fn main() -> BenchResult<()> {
     let pixels = (0..(WIDTH as usize * HEIGHT as usize))
         .flat_map(|index| [index as u8, (index >> 8) as u8, (index >> 16) as u8]);
     let input: Vec<u8> = pixels.collect();
-    let pillow = Image::frombytes("RGB", (WIDTH, HEIGHT), &input)?;
+    let pillow = Image::frombytes(Mode::ImageRgb8, (WIDTH, HEIGHT), &input)?;
     let image = RgbImage::from_raw(WIDTH, HEIGHT, input).ok_or_else(|| {
         std::io::Error::other("deterministic RGB input did not match its declared dimensions")
     })?;

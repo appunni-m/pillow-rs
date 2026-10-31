@@ -32,7 +32,7 @@ fn filtered_relocation_source() -> (Image, Vec<u8>) {
             ]
         })
         .collect::<Vec<_>>();
-    let mut source = Image::frombytes("LA", source_size, &source_bytes).expect("LA source");
+    let mut source = Image::frombytes(crate::raster::Mode::ImageLumaA8, source_size, &source_bytes).expect("LA source");
     let palette = vec![10, 20, 30, 40, 50, 60];
     source.putpalette(&palette, "RGB").expect("PA palette");
     assert_eq!(source.mode().expect("PA mode"), "PA");
@@ -143,7 +143,7 @@ fn nearest_relocation_source() -> Image {
             ]
         })
         .collect::<Vec<_>>();
-    let mut source = Image::frombytes("LA", (8, 8), &source_bytes).expect("LA source");
+    let mut source = Image::frombytes(crate::raster::Mode::ImageLumaA8, (8, 8), &source_bytes).expect("LA source");
     source
         .putpalette(&[10, 20, 30, 40, 50, 60], "RGB")
         .expect("PA palette");

@@ -85,7 +85,7 @@ mod tests {
         ];
 
         for &(mode, bytes) in cases {
-            let image = Image::frombytes(mode, (2, 1), bytes).expect("source image");
+            let image = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (2, 1), bytes).expect("source image");
             let bands = image.split().expect("split scalar image");
 
             assert_eq!(bands.len(), 1, "mode {mode}");

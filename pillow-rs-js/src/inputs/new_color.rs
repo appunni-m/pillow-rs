@@ -1,7 +1,7 @@
 use super::JsValue;
 use crate::{err, js_float_array};
 pub(crate) fn js_new_color_input(
-    mode: &str,
+    mode: pillow_rs::Mode,
     value: Option<&JsValue>,
 ) -> Result<pillow_rs::NewColorInput, JsValue> {
     let Some(value) = value else {
@@ -32,9 +32,12 @@ pub(crate) fn js_new_color_input(
     )))
 }
 
-fn js_new_color_number(mode: &str, number: f64) -> Result<pillow_rs::NewColorInput, JsValue> {
+fn js_new_color_number(
+    mode: pillow_rs::Mode,
+    number: f64,
+) -> Result<pillow_rs::NewColorInput, JsValue> {
     if !number.is_finite() {
-        if mode == "F" {
+        if mode == pillow_rs::Mode::ImageF32 {
             return Ok(pillow_rs::NewColorInput::from_parts(
                 None,
                 None,

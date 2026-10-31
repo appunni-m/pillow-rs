@@ -14,7 +14,7 @@ fn byte_projective_filtered_relocations_native_gpu_preserve_pixels() {
         let bytes = (0..16 * 16 * channels)
             .map(|index| (index * 29 + 7) as u8)
             .collect::<Vec<_>>();
-        let source = Image::frombytes(mode, (16, 16), &bytes).expect("byte source");
+        let source = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (16, 16), &bytes).expect("byte source");
         let fill = match mode {
             "LA" => Some(TransformFill::Components(vec![199, 71])),
             "RGBA" => Some(TransformFill::Components(vec![199, 71, 17, 83])),
@@ -115,7 +115,7 @@ fn byte_quad_mesh_filtered_relocations_native_gpu_preserve_pixels() {
         let bytes = (0..source_size.0 as usize * source_size.1 as usize * channels)
             .map(|index| (index * 29 + 7) as u8)
             .collect::<Vec<_>>();
-        let source = Image::frombytes(mode, source_size, &bytes).expect("byte source");
+        let source = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), source_size, &bytes).expect("byte source");
         let fill = match mode {
             "LA" => Some(TransformFill::Components(vec![199, 71])),
             "RGBA" => Some(TransformFill::Components(vec![199, 71, 17, 83])),
@@ -263,7 +263,7 @@ fn assert_byte_partial_mesh_mode(
     let bytes = (0..source_size.0 as usize * source_size.1 as usize * channels)
         .map(|index| (index * 37 + channels * 11 + 5) as u8)
         .collect::<Vec<_>>();
-    let source = Image::frombytes(mode, source_size, &bytes).expect("byte source");
+    let source = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), source_size, &bytes).expect("byte source");
     let fill = match mode {
         "L" => Some(TransformFill::Scalar(199)),
         "LA" => Some(TransformFill::Components(vec![199, 71])),
@@ -664,7 +664,7 @@ fn integer_constant_projective_source_and_fill(
     let bytes = (0..channels.saturating_mul(256))
         .map(|index| index.wrapping_mul(53).wrapping_add(17) as u8)
         .collect::<Vec<_>>();
-    let mut source = Image::frombytes(if mode == "PA" { "LA" } else { mode }, source_size, &bytes)
+    let mut source = Image::frombytes(crate::raster::Mode::from_pillow_name(if mode == "PA" { "LA" } else { mode }).expect("known test mode"), source_size, &bytes)
         .expect("integer-constant projective source");
     if mode == "PA" {
         let palette = (0usize..768)

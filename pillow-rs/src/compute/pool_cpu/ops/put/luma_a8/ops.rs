@@ -1,7 +1,7 @@
 //! `ImageLumaA8` band semantics and context-selected architecture strategies.
 
 use crate::compute::registry::support::BandIndexRule;
-use super::super::helpers::extract_band_strategy::declare_strategies;
+use super::super::helpers::extract_band_strategy::{declare_into, declare_strategies};
 
 declare_strategies! {
     ImageLumaA8, BandIndexRule::ClampToNative { channels: 2 };
@@ -15,6 +15,8 @@ declare_strategies! {
         &[crate::compute::Architecture::Neon], 2, safe;
 
 }
+
+declare_into!(2);
 
 use super::super::helpers::put_pixel_strategy::declare_strategies as declare_pixel_strategies;
 

@@ -53,6 +53,68 @@ pub(crate) fn gather<const CHANNELS: usize, const CHANNEL: usize>(
     )
 }
 
+#[cfg(any(
+    all(target_arch = "x86", any(target_feature = "sse2", target_feature = "ssse3")),
+    all(target_arch = "wasm32", target_feature = "simd128"),
+))]
+pub(crate) fn gather_into<const CHANNELS: usize, const CHANNEL: usize>(
+    source: &[u8],
+    output: &mut [u8],
+) -> Result<(u64, u64), crate::error::PilError> {
+    const LANES: usize = 16;
+    if CHANNELS == 0 || CHANNEL >= CHANNELS || source.len() % CHANNELS != 0 {
+        return Err(crate::error::PilError::InternalError(
+            "ExtractBand source layout mismatch".into(),
+        ));
+    }
+    let pixel_count = source.len() / CHANNELS;
+    if output.len() != pixel_count {
+        return Err(crate::error::PilError::InternalError(
+            "SIMD ExtractBand output length mismatch".into(),
+        ));
+    }
+    let selectors: [u8x16; CHANNELS] = std::array::from_fn(|_block| {
+        u8x16::new(std::array::from_fn(|lane| {
+            ((lane * CHANNELS + CHANNEL) % LANES) as u8
+        }))
+    });
+    let masks: [u8x16; CHANNELS] = std::array::from_fn(|block| {
+        u8x16::new(std::array::from_fn(|lane| {
+            if (lane * CHANNELS + CHANNEL) / LANES == block {
+                u8::MAX
+            } else {
+                0
+            }
+        }))
+    });
+
+    let vector_pixels = pixel_count / LANES * LANES;
+    for (pixels, selected_output) in source[..vector_pixels * CHANNELS]
+        .chunks_exact(CHANNELS * LANES)
+        .zip(output[..vector_pixels].chunks_exact_mut(LANES))
+    {
+        let input_vectors: [u8x16; CHANNELS] = std::array::from_fn(|block| {
+            let mut lanes = [0u8; LANES];
+            let start = block * LANES;
+            lanes.copy_from_slice(&pixels[start..start + LANES]);
+            u8x16::new(lanes)
+        });
+        let mut selected = u8x16::splat(0);
+        for block in 0..CHANNELS {
+            selected |= input_vectors[block].swizzle_relaxed(selectors[block]) & masks[block];
+        }
+        selected_output.copy_from_slice(&selected.to_array());
+    }
+
+    for (pixel, output_sample) in source[vector_pixels * CHANNELS..]
+        .chunks_exact(CHANNELS)
+        .zip(&mut output[vector_pixels..])
+    {
+        *output_sample = pixel[CHANNEL];
+    }
+    Ok(((vector_pixels / LANES) as u64, (pixel_count - vector_pixels) as u64))
+}
+
 #[inline]
 pub(crate) fn simd_pack_u16x16(value: u16x16) -> u8x16 {
     let [low, high]: [u16x8; 2] = bytemuck::cast(value);
@@ -60,4 +122,5 @@ pub(crate) fn simd_pack_u16x16(value: u16x16) -> u8x16 {
     let high: i16x8 = bytemuck::cast(high);
     u8x16::narrow_i16x8(low, high)
 }
+
 

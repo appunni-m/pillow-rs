@@ -100,6 +100,10 @@ fn pipeline_operation_telemetry_to_js(
         let value = js_sys::Object::new();
         set_pipeline_telemetry_field(&value, "operation", &JsValue::from_str(sample.operation));
         set_pipeline_telemetry_field(&value, "path", &JsValue::from_str(sample.path));
+        let architecture = sample
+            .selected_architecture
+            .map_or(JsValue::NULL, |value| JsValue::from_str(value.name()));
+        set_pipeline_telemetry_field(&value, "selected_architecture", &architecture);
         set_pipeline_telemetry_field(
             &value,
             "vector_block_count",

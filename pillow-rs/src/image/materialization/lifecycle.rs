@@ -83,12 +83,9 @@ impl Image {
                     }
                 } else {
                     let image = self.materialized_shared()?;
-                    let decoded_mode = image.color().into();
                     Image::Loaded(LoadedData {
                         image,
                         known_zero_fill: false,
-                        explicit_mode: None,
-                        decoded_mode,
                         palette: palette.clone(),
                         palette_alpha: palette_alpha.clone(),
                         source_format: *format,

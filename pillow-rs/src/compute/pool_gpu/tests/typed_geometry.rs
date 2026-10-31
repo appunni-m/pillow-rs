@@ -6,12 +6,12 @@ fn fit_nearest_native_gpu_preserves_indexed_modes() {
     let previous = Backend::set_pipeline_telemetry_enabled(true);
     for (mode, source_bytes) in cases {
         let source = if mode == "PA" {
-            let mut indexed = Image::frombytes("P", (4, 3), &source_bytes)
+            let mut indexed = Image::frombytes(crate::raster::Mode::ImagePalette8, (4, 3), &source_bytes)
                 .unwrap_or_else(|error| panic!("{mode} source image: {error}"));
             indexed.putalpha(201).expect("PA source alpha");
             indexed
         } else {
-            Image::frombytes(mode, (4, 3), &source_bytes)
+            Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (4, 3), &source_bytes)
                 .unwrap_or_else(|error| panic!("{mode} source image: {error}"))
         };
         let fitted = crate::ops::imageops::fit(&source, 3, 2, Some("NEAREST"), 0.0, (0.5, 0.5))
@@ -55,7 +55,7 @@ fn f_fit_nearest_native_gpu_preserves_scalar_words() {
         .into_iter()
         .flat_map(f32::to_le_bytes)
         .collect::<Vec<_>>();
-    let source = Image::frombytes("F", (5, 4), &source_bytes).expect("F source");
+    let source = Image::frombytes(crate::raster::Mode::ImageF32, (5, 4), &source_bytes).expect("F source");
     let fitted = crate::ops::imageops::fit(&source, 3, 2, Some("NEAREST"), 0.0, (0.5, 0.5))
         .expect("F Fit operation");
     let expected = fitted
@@ -109,7 +109,7 @@ fn i_cover_pad_nearest_native_gpu_preserves_signed_words() {
         .into_iter()
         .flat_map(i32::to_le_bytes)
         .collect::<Vec<_>>();
-    let source = Image::frombytes("I", (12, 1), &source_bytes).expect("I source");
+    let source = Image::frombytes(crate::raster::Mode::ImageI32, (12, 1), &source_bytes).expect("I source");
     let covered =
         crate::ops::imageops::cover_with_input(&source, 8, 1, Some(ResampleInput::Code(0)))
             .expect("I Cover operation");
@@ -158,7 +158,7 @@ fn i_filter_nearest_resize_native_gpu_preserves_signed_words() {
         .map(|index| index.saturating_mul(257).saturating_sub(20_000))
         .flat_map(i32::to_le_bytes)
         .collect::<Vec<_>>();
-    let source = Image::frombytes("I", (11, 9), &source_bytes).expect("I source");
+    let source = Image::frombytes(crate::raster::Mode::ImageI32, (11, 9), &source_bytes).expect("I source");
     let filter = PipelineOp::Filter3x3 {
         kernel: [0.0, -1.0, 0.0, -1.0, 5.0, -1.0, 0.0, -1.0, 0.0],
         scale: 1.0,

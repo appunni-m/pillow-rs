@@ -3,11 +3,73 @@ use super::*;
 #[cfg(all(test, not(feature = "parallel")))]
 mod narrow_u8_resize_tests {
     use super::{
-        FilterCoeffs, pil_resize, pil_resize_la_i32, pil_resize_luma_i32, precompute_coeffs,
-        resize_u8_coefficients_fit_i32,
+        FilterCoeffs, horizontal_pass_rows, horizontal_pass_rows_alpha, pil_resize,
+        pil_resize_la_i32, pil_resize_luma_i32, precompute_coeffs,
+        resize_u8_coefficients_fit_i32, vertical_pass_rows, vertical_pass_rows_alpha,
     };
     use crate::pipeline::ResampleFilter;
     use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage};
+
+    fn wide_resize_reference(
+        image: &DynamicImage,
+        output_width: u32,
+        output_height: u32,
+        filter: ResampleFilter,
+        channels: usize,
+        needs_alpha: bool,
+    ) -> Vec<u8> {
+        let horizontal = precompute_coeffs(output_width, image.width(), filter);
+        let vertical = precompute_coeffs(output_height, image.height(), filter);
+        let intermediate_len = image.height() as usize * output_width as usize * channels;
+        let mut intermediate = vec![0; intermediate_len];
+        let source = image.as_bytes();
+        if needs_alpha {
+            horizontal_pass_rows_alpha(
+                source,
+                image.width(),
+                image.height(),
+                channels,
+                &horizontal,
+                output_width,
+                &mut intermediate,
+            );
+        } else {
+            horizontal_pass_rows(
+                source,
+                image.width(),
+                image.height(),
+                channels,
+                &horizontal,
+                output_width,
+                &mut intermediate,
+            );
+        }
+        let mut output = vec![0; output_width as usize * output_height as usize * channels];
+        if needs_alpha {
+            vertical_pass_rows_alpha(
+                &intermediate,
+                image.height(),
+                output_width,
+                output_height,
+                channels,
+                &vertical,
+                &mut output,
+                0,
+            );
+        } else {
+            vertical_pass_rows(
+                &intermediate,
+                image.height(),
+                output_width,
+                output_height,
+                channels,
+                &vertical,
+                &mut output,
+                0,
+            );
+        }
+        output
+    }
 
     #[test]
     fn hsv_narrow_cpu_resize_matches_wide_three_channel_resize() {
@@ -35,21 +97,23 @@ mod narrow_u8_resize_tests {
                 let image = DynamicImage::ImageRgb8(
                     RgbImage::from_raw(width, height, bytes).expect("HSV test image shape"),
                 );
+                let DynamicImage::ImageRgb8(rgb) = &image else {
+                    unreachable!();
+                };
+                let hsv_image = DynamicImage::ImageHsv8(rgb.clone());
                 let hsv = pil_resize(
-                    &image,
+                    &hsv_image,
                     output_width,
                     output_height,
                     ResampleFilter::Bicubic,
-                    Some("HSV"),
                 );
                 let wide = pil_resize(
                     &image,
                     output_width,
                     output_height,
                     ResampleFilter::Bicubic,
-                    Some("RGB"),
                 );
-                assert!(matches!(hsv, DynamicImage::ImageRgb8(_)));
+                assert!(matches!(hsv, DynamicImage::ImageHsv8(_)));
                 assert_eq!(
                     hsv.as_bytes(),
                     wide.as_bytes(),
@@ -129,13 +193,19 @@ mod narrow_u8_resize_tests {
                     )
                     .expect("safe L coefficients select the narrow path");
 
-                    // A different logical-mode hint leaves the L storage at
-                    // one byte per sample but bypasses the L-only candidate.
-                    let reference =
-                        pil_resize(&image, output_width, output_height, filter, Some("RGB"));
+                    // Exercise the generic wide kernel without selecting the
+                    // L-specific narrow candidate.
+                    let reference = wide_resize_reference(
+                        &image,
+                        output_width,
+                        output_height,
+                        filter,
+                        1,
+                        false,
+                    );
                     assert_eq!(
                         specialized,
-                        reference.as_bytes(),
+                        reference,
                         "{width}x{height}->{output_width}x{output_height} {filter:?} pattern {pattern}"
                     );
                 }
@@ -196,10 +266,17 @@ mod narrow_u8_resize_tests {
                         &vertical,
                     )
                     .expect("safe LA coefficients select the narrow path");
-                    let public = pil_resize(&image, output_width, output_height, filter, None);
-                    let wide = pil_resize(&image, output_width, output_height, filter, Some("RGB"));
-                    assert_eq!(specialized, wide.as_bytes());
-                    assert_eq!(public.as_bytes(), wide.as_bytes());
+                    let public = pil_resize(&image, output_width, output_height, filter);
+                    let wide = wide_resize_reference(
+                        &image,
+                        output_width,
+                        output_height,
+                        filter,
+                        2,
+                        true,
+                    );
+                    assert_eq!(specialized, wide);
+                    assert_eq!(public.as_bytes(), wide);
                     assert!(matches!(public, DynamicImage::ImageLumaA8(_)));
                 }
             }
@@ -225,8 +302,8 @@ mod narrow_u8_resize_tests {
         let specialized =
             pil_resize_la_i32(&image, output_width, output_height, &horizontal, &vertical)
                 .expect("safe LA coefficients select the narrow path");
-        let wide = pil_resize(&image, output_width, output_height, filter, Some("RGB"));
-        assert_eq!(specialized, wide.as_bytes());
+        let wide = wide_resize_reference(&image, output_width, output_height, filter, 2, true);
+        assert_eq!(specialized, wide);
     }
 }
 
@@ -330,7 +407,7 @@ mod rgba_i32_resize_tests {
                     );
                     assert_eq!(specialized, reference);
 
-                    let public = pil_resize(&image, output_width, output_height, filter, None);
+                    let public = pil_resize(&image, output_width, output_height, filter);
                     assert_eq!(public.as_bytes(), reference);
                     assert!(matches!(public, DynamicImage::ImageRgba8(_)));
                 }
@@ -415,7 +492,7 @@ mod cmyk_i32_resize_tests {
                             values.map(|value| value as u8)
                         })
                         .collect::<Vec<_>>();
-                    let image = DynamicImage::ImageRgba8(
+                    let image = DynamicImage::ImageCmyk8(
                         RgbaImage::from_raw(source_width, source_height, samples)
                             .expect("CMYK carrier dimensions are valid"),
                     );
@@ -429,11 +506,10 @@ mod cmyk_i32_resize_tests {
                     )
                     .expect("safe CMYK coefficients select the narrow path");
                     assert_eq!(narrow.as_bytes(), expected);
-                    let actual =
-                        pil_resize(&image, output_width, output_height, filter, Some("CMYK"));
+                    let actual = pil_resize(&image, output_width, output_height, filter);
                     assert_eq!(actual.as_bytes(), expected);
                     assert_eq!(actual.as_bytes(), narrow.as_bytes());
-                    assert!(matches!(actual, DynamicImage::ImageRgba8(_)));
+                    assert!(matches!(actual, DynamicImage::ImageCmyk8(_)));
                 }
             }
         }
@@ -453,7 +529,7 @@ mod cmyk_i32_resize_tests {
                 ]
             })
             .collect::<Vec<_>>();
-        let image = DynamicImage::ImageRgba8(
+        let image = DynamicImage::ImageCmyk8(
             RgbaImage::from_raw(source_width, source_height, samples)
                 .expect("CMYK carrier dimensions are valid"),
         );

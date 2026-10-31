@@ -70,3 +70,52 @@ pub(crate) const fn native_byte_architectures(
         ),
     ]
 }
+
+/// Declares F32 reducers for architectures with the eight-lane float kernel.
+pub(crate) const fn native_f32_architectures(
+    operation: OperationId,
+    mode: crate::raster::Mode,
+) -> [ImplementationSupport; 4] {
+    let guard = StrategyGuard::ReduceF32Vector;
+    [
+        ImplementationSupport::cpu(
+            operation,
+            mode,
+            Architecture::Avx,
+            cfg!(all(
+                any(target_arch = "x86", target_arch = "x86_64"),
+                target_feature = "avx"
+            )),
+            &[Architecture::Avx],
+            guard,
+        ),
+        ImplementationSupport::cpu(
+            operation,
+            mode,
+            Architecture::Sse2,
+            cfg!(all(
+                any(target_arch = "x86", target_arch = "x86_64"),
+                target_feature = "sse2",
+                not(target_feature = "avx")
+            )),
+            &[Architecture::Sse2],
+            guard,
+        ),
+        ImplementationSupport::cpu(
+            operation,
+            mode,
+            Architecture::Neon,
+            cfg!(all(target_arch = "aarch64", target_feature = "neon")),
+            &[Architecture::Neon],
+            guard,
+        ),
+        ImplementationSupport::cpu(
+            operation,
+            mode,
+            Architecture::WasmSimd128,
+            cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
+            &[Architecture::WasmSimd128],
+            guard,
+        ),
+    ]
+}

@@ -19,12 +19,12 @@ fn byte_point_fusion_requires_matching_native_mode() {
 
 #[test]
 fn palette_first_rgb_merge_admission_is_narrow() {
-    let mut palette = Image::frombytes("P", (2, 1), &[1, 2]).expect("P band");
+    let mut palette = Image::frombytes(crate::raster::Mode::ImagePalette8, (2, 1), &[1, 2]).expect("P band");
     palette
         .putpalette(&[10, 20, 30, 40, 50, 60], "RGB")
         .expect("palette");
-    let l0 = Image::frombytes("L", (2, 1), &[32, 33]).expect("G band");
-    let l1 = Image::frombytes("L", (2, 1), &[48, 49]).expect("B band");
+    let l0 = Image::frombytes(crate::raster::Mode::ImageLuma8, (2, 1), &[32, 33]).expect("G band");
+    let l1 = Image::frombytes(crate::raster::Mode::ImageLuma8, (2, 1), &[48, 49]).expect("B band");
     let rgb = PipelineOp::Merge {
         mode: ColorMode::RGB,
         logical_mode: "RGB".to_owned(),
@@ -77,9 +77,9 @@ fn native_rgb_luma_merge_planner_bounds_compact_transfers_and_grid() {
 #[test]
 #[cfg(target_endian = "little")]
 fn native_rgb_luma_merge_admission_requires_exact_l_planes() {
-    let first = Image::frombytes("L", (2, 1), &[1, 2]).expect("R band");
-    let green = Image::frombytes("L", (2, 1), &[3, 4]).expect("G band");
-    let blue = Image::frombytes("L", (2, 1), &[5, 6]).expect("B band");
+    let first = Image::frombytes(crate::raster::Mode::ImageLuma8, (2, 1), &[1, 2]).expect("R band");
+    let green = Image::frombytes(crate::raster::Mode::ImageLuma8, (2, 1), &[3, 4]).expect("G band");
+    let blue = Image::frombytes(crate::raster::Mode::ImageLuma8, (2, 1), &[5, 6]).expect("B band");
     let image =
         DynamicImage::ImageLuma8(GrayImage::from_raw(2, 1, vec![1, 2]).expect("native L source"));
     let supported = PipelineOp::Merge {
@@ -108,12 +108,12 @@ fn native_rgb_luma_merge_admission_requires_exact_l_planes() {
 
 #[test]
 fn palette_first_rgb_merge_native_gpu_preserves_index_bytes() {
-    let mut palette = Image::frombytes("P", (2, 1), &[1, 2]).expect("P band");
+    let mut palette = Image::frombytes(crate::raster::Mode::ImagePalette8, (2, 1), &[1, 2]).expect("P band");
     palette
         .putpalette(&[10, 20, 30, 40, 50, 60], "RGB")
         .expect("palette");
-    let green = Image::frombytes("L", (2, 1), &[32, 33]).expect("G band");
-    let blue = Image::frombytes("L", (2, 1), &[48, 49]).expect("B band");
+    let green = Image::frombytes(crate::raster::Mode::ImageLuma8, (2, 1), &[32, 33]).expect("G band");
+    let blue = Image::frombytes(crate::raster::Mode::ImageLuma8, (2, 1), &[48, 49]).expect("B band");
     let merged = crate::image_merge("RGB", &[palette, green, blue]).expect("RGB merge");
     let expected = merged
         .clone()
@@ -161,9 +161,9 @@ fn native_rgb_luma_merge_gpu_preserves_odd_tail_and_compact_transfer() {
         let blue = (0..pixels)
             .map(|index| (index * 59 + 21) as u8)
             .collect::<Vec<_>>();
-        let red_image = Image::frombytes("L", (width, height), &red).expect("R band");
-        let green_image = Image::frombytes("L", (width, height), &green).expect("G band");
-        let blue_image = Image::frombytes("L", (width, height), &blue).expect("B band");
+        let red_image = Image::frombytes(crate::raster::Mode::ImageLuma8, (width, height), &red).expect("R band");
+        let green_image = Image::frombytes(crate::raster::Mode::ImageLuma8, (width, height), &green).expect("G band");
+        let blue_image = Image::frombytes(crate::raster::Mode::ImageLuma8, (width, height), &blue).expect("B band");
         let merged =
             crate::image_merge("RGB", &[red_image, green_image, blue_image]).expect("RGB merge");
         let expected = merged
@@ -214,40 +214,35 @@ fn contrast_mean_after_exact_putpixel_prefix_matches_materialized_prefix() {
     let cases = [
         (
             DynamicImage::ImageLuma8(GrayImage::from_raw(2, 1, vec![10, 20]).unwrap()),
-            Some("L"),
             (1, 0, (80, 0, 0, 255)),
         ),
         (
             DynamicImage::ImageLumaA8(
                 GrayAlphaImage::from_raw(2, 1, vec![10, 200, 20, 100]).unwrap(),
             ),
-            Some("LA"),
             (1, 0, (80, 0, 0, 220)),
         ),
         (
             DynamicImage::ImageRgb8(
                 RgbImage::from_raw(2, 1, vec![10, 20, 30, 40, 50, 60]).unwrap(),
             ),
-            Some("RGB"),
             (1, 0, (80, 90, 100, 255)),
         ),
         (
             DynamicImage::ImageRgba8(
                 RgbaImage::from_raw(2, 1, vec![10, 20, 30, 40, 50, 60, 70, 80]).unwrap(),
             ),
-            Some("RGBA"),
             (1, 0, (80, 90, 100, 220)),
         ),
         (
-            DynamicImage::ImageRgba8(
+            DynamicImage::ImageCmyk8(
                 RgbaImage::from_raw(2, 1, vec![10, 20, 30, 40, 50, 60, 70, 80]).unwrap(),
             ),
-            Some("CMYK"),
             (1, 0, (80, 90, 100, 220)),
         ),
     ];
-    for (image, mode, (x, y, color)) in cases {
-        assert_contrast_mean_after_exact_putpixel_case(image, mode, x, y, color);
+    for (image, (x, y, color)) in cases {
+        assert_contrast_mean_after_exact_putpixel_case(image, x, y, color);
     }
 
     let indexed = [
@@ -259,20 +254,20 @@ fn contrast_mean_after_exact_putpixel_prefix_matches_materialized_prefix() {
         },
         PipelineOp::Contrast { factor: 0.5 },
     ];
-    let image = DynamicImage::ImageLuma8(GrayImage::from_raw(1, 1, vec![7]).unwrap());
+    let image = DynamicImage::ImagePalette8(GrayImage::from_raw(1, 1, vec![7]).unwrap());
     assert_eq!(
-        gpu_contrast_mean_after_exact_prefix(&image, &indexed, Some("P")),
+        gpu_contrast_mean_after_exact_prefix(&image, &indexed),
         None
     );
 }
 
 fn assert_contrast_mean_after_exact_putpixel_case(
     image: DynamicImage,
-    mode: Option<&str>,
     x: u32,
     y: u32,
     color: (u8, u8, u8, u8),
 ) {
+    let mode = image.mode();
     let ops = [
         PipelineOp::PutPixel {
             x,
@@ -285,8 +280,8 @@ fn assert_contrast_mean_after_exact_putpixel_case(
     let prefixed = crate::compute::pool_cpu::ops::effects::op_put_pixel(&image, x, y, color)
         .expect("exact PutPixel prefix");
     assert_eq!(
-        gpu_contrast_mean_after_exact_prefix(&image, &ops, mode),
-        gpu_contrast_mean(&prefixed, mode),
+        gpu_contrast_mean_after_exact_prefix(&image, &ops),
+        gpu_contrast_mean(&prefixed),
         "mode {mode:?}"
     );
 }

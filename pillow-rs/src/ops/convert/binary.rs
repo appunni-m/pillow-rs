@@ -13,10 +13,7 @@ pub(super) fn convert_to_binary(
     if source_mode == "CMYK" && matches!(dither, Some(DitherMethod::None)) {
         let source = image.materialized_shared()?;
         let output = crate::color::cmyk_to_binary_truncate(source.as_ref())?;
-        return Ok(Image::from_dynamic(
-            DynamicImage::ImageLuma8(output),
-            Some(crate::raster::Mode::One),
-        ));
+        return Ok(Image::from_dynamic(DynamicImage::One(output)));
     }
     let source = image.materialize()?;
     let gray = binary_luma(image, source_mode, &source)?;
@@ -27,10 +24,7 @@ pub(super) fn convert_to_binary(
     } else {
         diffuse_binary_error(&source, source_mode, &gray, &mut output);
     }
-    Ok(Image::from_dynamic(
-        DynamicImage::ImageLuma8(output),
-        Some(crate::raster::Mode::One),
-    ))
+    Ok(Image::from_dynamic(DynamicImage::One(output)))
 }
 
 fn binary_luma(

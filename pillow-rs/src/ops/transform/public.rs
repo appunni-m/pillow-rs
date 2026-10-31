@@ -289,7 +289,7 @@ fn transform_public_mesh(
         Some(TransformData::Mesh(items)) => flatten_mesh_data(&items)?,
         Some(TransformData::RawMesh(items)) => flatten_raw_mesh_data(&items)?,
         Some(TransformData::Affine(items)) if items.is_empty() => {
-            let mode = image.mode()?;
+            let mode = image.mode_identity()?;
             if let Some(index) = palette_fill {
                 return Ok(Image::new_palette_index(size.0, size.1, index));
             }
@@ -298,12 +298,15 @@ fn transform_public_mesh(
             // stores LA/PA alpha in the fourth slot. Preserve the
             // public two-component fill when an empty mesh uses
             // Image.new directly.
-            let image_fill = if matches!(mode.as_str(), "LA" | "PA") {
+            let image_fill = if matches!(
+                mode,
+                crate::raster::Mode::ImageLumaA8 | crate::raster::Mode::ImagePaletteAlpha8
+            ) {
                 (fill.0, 0, 0, fill.1)
             } else {
                 fill
             };
-            return Image::new(size.0, size.1, &mode, image_fill);
+            return Image::new(size.0, size.1, mode, image_fill);
         }
         Some(TransformData::Affine(_)) => {
             return Err(PilError::TypeError(

@@ -1,7 +1,7 @@
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::{PipelineOp, ResampleFilter};
-use crate::raster::GenericImageView;
+use crate::raster::{GenericImageView, Mode};
 
 mod reducing_gap;
 use reducing_gap::apply_reducing_gap;
@@ -159,19 +159,22 @@ impl Image {
         }
         let (w, h) = positive_dimensions(size, "height and width must be > 0")?;
         let (source_w, source_h) = self.size()?;
+        let mode = match self.known_mode_identity() {
+            Some(mode) => mode,
+            None => self.materialized_shared()?.mode(),
+        };
         let full_box = (0.0, 0.0, f64::from(source_w), f64::from(source_h));
         let mut bounds = box_coords.unwrap_or(full_box);
         if (w, h) == (source_w, source_h) && bounds == full_box {
             // The resize executors already copy identity geometry before
             // filtering. Retain their ordinary backend execution boundary.
-            return self.resize_with_filter((w, h), filter);
+            return self.resize_with_filter((w, h), filter, mode);
         }
-        let mode = self.mode()?;
-        if matches!(mode.as_str(), "1" | "P") {
+        if matches!(mode, Mode::One | Mode::ImagePalette8) {
             filter = ResampleFilter::Nearest;
         }
         if let Some(identity_resize) =
-            self.identity_boxed_nearest_resize(filter, (w, h), (source_w, source_h), &mode, bounds)?
+            self.identity_boxed_nearest_resize(filter, (w, h), (source_w, source_h), mode, bounds)?
         {
             return Ok(identity_resize);
         }
@@ -180,14 +183,14 @@ impl Image {
         // Applying reduction to ordinary RGBA/LA first changes its rounding.
         if let Some(gap) = reducing_gap
             && !matches!(filter, ResampleFilter::Nearest)
-            && !matches!(mode.as_str(), "LA" | "RGBA")
+            && !matches!(mode, Mode::ImageLumaA8 | Mode::ImageRgba8)
         {
             (source, bounds) = apply_reducing_gap(
                 source,
                 bounds,
                 gap,
                 filter,
-                &mode,
+                mode,
                 (w, h),
                 (source_w, source_h),
             )?;
@@ -199,7 +202,7 @@ impl Image {
             && h < source_size.1
             && w != source_size.0;
         if bounds == full_source && !vertical_first {
-            return source.resize_with_filter((w, h), filter);
+            return source.resize_with_filter((w, h), filter, mode);
         }
         Ok(Image::push_op(
             &source,
@@ -218,10 +221,13 @@ impl Image {
         filter: ResampleFilter,
         output_size: (u32, u32),
         source_size: (u32, u32),
-        mode: &str,
+        mode: Mode,
         bounds: (f64, f64, f64, f64),
     ) -> Result<Option<Image>, PilError> {
-        if mode == "F" && matches!(filter, ResampleFilter::Nearest) && output_size == source_size {
+        if mode == Mode::ImageF32
+            && matches!(filter, ResampleFilter::Nearest)
+            && output_size == source_size
+        {
             // Validate before the no-op check to keep Pillow's box errors.
             // A fractional box can still map every nearest coordinate to the
             // same sample; return a logically independent copy that shares
@@ -236,17 +242,15 @@ impl Image {
         Ok(None)
     }
 
-    // TODO(cpu-migration): pass the exact `Mode` to the legacy resampling
-    // helpers instead of projecting mode identity into string branches.
     fn resize_with_filter(
         &self,
         (w, h): (u32, u32),
         mut filter: ResampleFilter,
+        mode: Mode,
     ) -> Result<Image, PilError> {
         // Only single-band indexed samples force nearest. PA retains the
         // requested filter over its independent raw index and alpha bands.
-        if self.has_palette_mode()
-            || self.known_mode_identity() == Some(crate::raster::Mode::One) {
+        if matches!(mode, Mode::One | Mode::ImagePalette8) {
             filter = ResampleFilter::Nearest;
         }
         Ok(Image::push_op(self, PipelineOp::Resize { w, h, filter }))
@@ -329,20 +333,22 @@ impl Image {
         {
             self.materialized_shared()?;
         }
-        self.thumbnail_with_filter(dimensions, &mut filter)
+        let mode = match self.known_mode_identity() {
+            Some(mode) => mode,
+            None => self.materialized_shared()?.mode(),
+        };
+        self.thumbnail_with_filter(dimensions, &mut filter, mode)
     }
 
     fn thumbnail_with_filter(
         &mut self,
         (w, h): (u32, u32),
         filter: &mut ResampleFilter,
+        mode: Mode,
     ) -> Result<(), PilError> {
         // PIL forces NEAREST for indexed samples, including PA's raw
         // index/alpha pairs, to preserve the sample layout.
-        if self.has_palette_mode() || matches!(
-            self.known_mode_identity(),
-            Some(crate::raster::Mode::One | crate::raster::Mode::ImagePaletteAlpha8)
-        ) {
+        if matches!(mode, Mode::One | Mode::ImagePalette8 | Mode::ImagePaletteAlpha8) {
             *filter = ResampleFilter::Nearest;
         }
         let new_self = Image::push_op(
@@ -531,7 +537,7 @@ mod tests {
 
     #[test]
     fn cpu_rgb_thumbnail_keeps_valid_putpixel_prefix_in_the_same_batch() {
-        let mut image = CoreImage::new(1024, 768, "RGB", (0, 0, 0, 255)).unwrap();
+        let mut image = CoreImage::new(1024, 768, crate::raster::Mode::ImageRgb8, (0, 0, 0, 255)).unwrap();
         image.putpixel(2, 3, 180, 120, 60, 255).unwrap();
         let CoreImage::Pipeline {
             source,
@@ -574,10 +580,10 @@ mod tests {
         assert!(materialized.get().is_none());
 
         let actual = image.materialize().unwrap();
-        let mut reference = CoreImage::new(1024, 768, "RGB", (0, 0, 0, 255)).unwrap();
+        let mut reference = CoreImage::new(1024, 768, crate::raster::Mode::ImageRgb8, (0, 0, 0, 255)).unwrap();
         reference.putpixel(2, 3, 180, 120, 60, 255).unwrap();
         let materialized_reference = reference.materialize().unwrap();
-        let mut expected = CoreImage::from_dynamic(materialized_reference, Some(crate::raster::Mode::ImageRgb8));
+        let mut expected = CoreImage::from_dynamic(materialized_reference);
         expected
             .thumbnail((256, 256), Some(super::ResampleInput::Code(2)))
             .unwrap();
@@ -587,7 +593,7 @@ mod tests {
 
     #[test]
     fn simd_rgb_thumbnail_keeps_fusible_putpixel_prefix_until_materialization() {
-        let mut image = CoreImage::new(1024, 768, "RGB", (0, 0, 0, 255)).unwrap();
+        let mut image = CoreImage::new(1024, 768, crate::raster::Mode::ImageRgb8, (0, 0, 0, 255)).unwrap();
         image.putpixel(2, 3, 180, 120, 60, 255).unwrap();
         let image = image.use_backend(Backend::Simd);
         assert!(image.has_deferable_rgb_putpixel_prefix());
@@ -611,7 +617,7 @@ mod tests {
 
     #[test]
     fn cpu_rgb_thumbnail_noop_and_invalid_request_keep_eager_prefix_load() {
-        let mut noop = CoreImage::new(1024, 768, "RGB", (0, 0, 0, 255)).unwrap();
+        let mut noop = CoreImage::new(1024, 768, crate::raster::Mode::ImageRgb8, (0, 0, 0, 255)).unwrap();
         noop.putpixel(2, 3, 180, 120, 60, 255).unwrap();
         let mut noop = noop.use_backend(Backend::Cpu);
         noop.thumbnail((1024, 768), None).unwrap();
@@ -620,7 +626,7 @@ mod tests {
         };
         assert!(materialized.get().is_some());
 
-        let mut invalid = CoreImage::new(1024, 768, "RGB", (0, 0, 0, 255)).unwrap();
+        let mut invalid = CoreImage::new(1024, 768, crate::raster::Mode::ImageRgb8, (0, 0, 0, 255)).unwrap();
         invalid.putpixel(2, 3, 180, 120, 60, 255).unwrap();
         let mut invalid = invalid.use_backend(Backend::Cpu);
         let error = invalid.thumbnail((-1, 256), None).unwrap_err();
@@ -633,7 +639,7 @@ mod tests {
 
     #[test]
     fn thumbnail_empty_source_nonnegative_bounds_is_noop() {
-        let mut image = Image::new(0, 0, "RGB", (1, 2, 3, 255)).unwrap();
+        let mut image = Image::new(0, 0, crate::raster::Mode::ImageRgb8, (1, 2, 3, 255)).unwrap();
 
         image.thumbnail((0, 2), None).unwrap();
 
@@ -642,7 +648,7 @@ mod tests {
 
     #[test]
     fn thumbnail_zero_width_source_matches_resize_validation() {
-        let mut image = Image::new(0, 2, "RGB", (1, 2, 3, 255)).unwrap();
+        let mut image = Image::new(0, 2, crate::raster::Mode::ImageRgb8, (1, 2, 3, 255)).unwrap();
 
         let error = image.thumbnail((1, 1), None).unwrap_err();
 
@@ -655,7 +661,7 @@ mod tests {
 
     #[test]
     fn thumbnail_zero_width_source_preserves_aspect_division_order() {
-        let mut image = Image::new(0, 2, "RGB", (1, 2, 3, 255)).unwrap();
+        let mut image = Image::new(0, 2, crate::raster::Mode::ImageRgb8, (1, 2, 3, 255)).unwrap();
 
         let error = image.thumbnail((-1, 1), None).unwrap_err();
 
@@ -668,7 +674,7 @@ mod tests {
 
     #[test]
     fn thumbnail_zero_height_source_preserves_aspect_division_order() {
-        let mut image = Image::new(2, 0, "RGB", (1, 2, 3, 255)).unwrap();
+        let mut image = Image::new(2, 0, crate::raster::Mode::ImageRgb8, (1, 2, 3, 255)).unwrap();
 
         let error = image.thumbnail((1, 1), None).unwrap_err();
 

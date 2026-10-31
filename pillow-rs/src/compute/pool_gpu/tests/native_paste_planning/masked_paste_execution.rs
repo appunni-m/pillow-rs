@@ -10,8 +10,8 @@ use std::sync::Arc;
 
 #[test]
 fn compact_masked_la_paste_can_fit_when_generic_grids_and_buffers_do_not() {
-    let source = Arc::new(crate::image::Image::new(17, 1, "LA", (0, 0, 0, 255)).unwrap());
-    let mask = Arc::new(crate::image::Image::new(17, 1, "L", (127, 0, 0, 0)).unwrap());
+    let source = Arc::new(crate::image::Image::new(17, 1, crate::raster::Mode::ImageLumaA8, (0, 0, 0, 255)).unwrap());
+    let mask = Arc::new(crate::image::Image::new(17, 1, crate::raster::Mode::ImageLuma8, (127, 0, 0, 0)).unwrap());
     let operation = PipelineOp::Paste {
         source,
         x: 0,
@@ -74,8 +74,8 @@ fn native_masked_rgba_paste_selects_its_native_four_byte_shader() {
 #[test]
 fn native_masked_pa_layout_keeps_the_palette_alpha_mode_tag() {
     let bytes = [1, 2, 3, 4, 5, 6];
-    let source_image = Arc::new(Image::frombytes("PA", (3, 1), &bytes).unwrap());
-    let mask_image = Arc::new(Image::frombytes("L", (3, 1), &[0, 127, 255]).unwrap());
+    let source_image = Arc::new(Image::frombytes(crate::raster::Mode::ImagePaletteAlpha8, (3, 1), &bytes).unwrap());
+    let mask_image = Arc::new(Image::frombytes(crate::raster::Mode::ImageLuma8, (3, 1), &[0, 127, 255]).unwrap());
     let destination =
         DynamicImage::ImageLumaA8(GrayAlphaImage::from_raw(3, 1, bytes.to_vec()).unwrap());
     let source = DynamicImage::ImageLumaA8(GrayAlphaImage::from_raw(3, 1, bytes.to_vec()).unwrap());
@@ -101,8 +101,8 @@ fn native_masked_rgba_layout_keeps_four_stored_channels() {
     let source_bytes = [1u8; 5 * 3 * 4];
     let destination_bytes = [2u8; 7 * 4 * 4];
     let mask_bytes = [127u8; 5 * 3];
-    let source_image = Arc::new(Image::frombytes("RGBA", (5, 3), &source_bytes).unwrap());
-    let mask_image = Arc::new(Image::frombytes("L", (5, 3), &mask_bytes).unwrap());
+    let source_image = Arc::new(Image::frombytes(crate::raster::Mode::ImageRgba8, (5, 3), &source_bytes).unwrap());
+    let mask_image = Arc::new(Image::frombytes(crate::raster::Mode::ImageLuma8, (5, 3), &mask_bytes).unwrap());
     let destination =
         DynamicImage::ImageRgba8(RgbaImage::from_raw(7, 4, destination_bytes.to_vec()).unwrap());
     let source =
@@ -221,9 +221,9 @@ fn assert_native_masked_rgb_hsv_case(
 ) {
     use crate::ops::paste::PasteSource;
 
-    let source = Image::frombytes(mode, (5, 3), source_bytes).unwrap();
-    let mask = Image::frombytes("L", (5, 3), mask_bytes).unwrap();
-    let mut expected_image = Image::frombytes(mode, (5, 3), destination_bytes).unwrap();
+    let source = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (5, 3), source_bytes).unwrap();
+    let mask = Image::frombytes(crate::raster::Mode::ImageLuma8, (5, 3), mask_bytes).unwrap();
+    let mut expected_image = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (5, 3), destination_bytes).unwrap();
     expected_image
         .paste_at(
             PasteSource::Image(Box::new(source.clone())),
@@ -236,7 +236,7 @@ fn assert_native_masked_rgb_hsv_case(
         .tobytes()
         .expect("CPU masked Paste reference");
 
-    let mut actual_image = Image::frombytes(mode, (5, 3), destination_bytes).unwrap();
+    let mut actual_image = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (5, 3), destination_bytes).unwrap();
     actual_image
         .paste_at(
             PasteSource::Image(Box::new(source)),

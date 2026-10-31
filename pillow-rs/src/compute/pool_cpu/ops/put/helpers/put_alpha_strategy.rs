@@ -1,5 +1,42 @@
 //! One declaration binds scalar alpha semantics to concrete architecture owners.
 
+use crate::compute::registry::support::{
+    ImplementationSupport, InputContract, ModeSupport, OperationId, OutputModeRule, RejectionKind,
+};
+use crate::raster::Mode;
+
+pub(crate) const fn support(
+    operation: OperationId,
+    mode: Mode,
+    output: OutputModeRule,
+    inputs: &'static [InputContract],
+    architectures: &'static [ImplementationSupport],
+) -> ModeSupport {
+    match mode {
+        Mode::ImageI32 => ModeSupport::Rejected {
+            mode,
+            reason: "conversion from I to LA not supported",
+            kind: RejectionKind::ValueError,
+        },
+        Mode::ImageF32 => ModeSupport::Rejected {
+            mode,
+            reason: "conversion from F to LA not supported",
+            kind: RejectionKind::ValueError,
+        },
+        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
+            ModeSupport::cpu_core_only(
+                operation,
+                mode,
+                output,
+                inputs,
+                architectures,
+                "native unsigned 16-bit alpha output extends Pillow putalpha",
+            )
+        }
+        _ => ModeSupport::cpu(operation, mode, output, inputs, architectures),
+    }
+}
+
 macro_rules! declare_strategies {
     ($mode:ident, $output:ident, $channels:literal, $minimum:literal; $(
         $variant:ident, $module:ident, $cfg:meta, $requires:expr
@@ -13,7 +50,7 @@ macro_rules! declare_strategies {
         use crate::compute::pool_cpu::helpers::execution::prepared::Prepared as PreparedAlpha;
         use super::default::put_alpha_impl as alpha_scalar;
 
-        pub(crate) const PUT_ALPHA_SUPPORT: AlphaSupport = AlphaSupport::cpu(
+        pub(crate) const PUT_ALPHA_SUPPORT: AlphaSupport = super::support(
             AlphaOperation::PutAlpha, crate::raster::Mode::$mode,
             AlphaOutput::Fixed(crate::raster::Mode::$output), &[],
             &[$(crate::compute::registry::support::ImplementationSupport::cpu(

@@ -207,8 +207,8 @@ impl Image {
     }
 
     fn crop_canvas(&self, width: u32, height: u32) -> Result<Image, PilError> {
-        let mode = self.mode()?;
-        if mode == "P" {
+        let mode = self.mode_identity()?;
+        if mode == crate::raster::Mode::ImagePalette8 {
             return Ok(Image::Paletted(PalettedData {
                 indices: crate::raster::DynamicImage::ImagePalette8(
                     crate::raster::GrayImage::from_pixel(
@@ -225,7 +225,7 @@ impl Image {
                 materialized: crate::image::materialization_cache(),
             }));
         }
-        Image::new(width, height, &mode, (0, 0, 0, 0))
+        Image::new(width, height, mode, (0, 0, 0, 0))
     }
 }
 

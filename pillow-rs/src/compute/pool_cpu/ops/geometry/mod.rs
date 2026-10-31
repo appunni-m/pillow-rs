@@ -1,0 +1,4 @@
+//! Mode-preserving geometry operations composed from prepared CPU strategies.
+
+pub(crate) mod ops;
+pub(crate) mod pad;

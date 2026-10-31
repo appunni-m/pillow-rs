@@ -90,7 +90,9 @@ pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> 
             vector::execute_sse2(kernel).and_then(from_vector).map(DynamicImage::ImageRgb8)
         }
         ArchitectureStrategy::Neon(kernel) => {
-            vector::execute_neon(kernel).and_then(from_vector).map(DynamicImage::ImageRgb8)
+            super::neon::execute(kernel)
+                .and_then(from_vector)
+                .map(DynamicImage::ImageRgb8)
         }
         ArchitectureStrategy::WasmSimd128(kernel) => vector::execute_wasm_simd128(kernel)
             .and_then(from_vector)

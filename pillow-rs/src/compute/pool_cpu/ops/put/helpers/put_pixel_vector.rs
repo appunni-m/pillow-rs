@@ -64,6 +64,7 @@ fn apply_rgba_batch(output: &mut [u8], row_bytes: usize, ops: &[PipelineOp]) -> 
 
 pub(crate) fn batch(
     input: BatchInput<'_, crate::raster::Rgba<u8>>,
+    architecture: crate::compute::Architecture,
 ) -> Result<crate::raster::RgbaImage, PilError> {
     let row_bytes = (input.image.width() as usize).checked_mul(4)
         .ok_or_else(|| PilError::InternalError("SIMD PutPixel row stride overflow".into()))?;
@@ -74,6 +75,7 @@ pub(crate) fn batch(
     )?;
     for _ in input.ops {
         crate::compute::begin_pipeline_operation_telemetry("PutPixel");
+        crate::compute::record_pipeline_operation_architecture(architecture);
         crate::compute::record_pipeline_operation_path("vector");
         crate::compute::record_pipeline_operation_vector_blocks(1);
         crate::compute::finish_pipeline_operation_telemetry();

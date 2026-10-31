@@ -132,12 +132,11 @@ pub(super) fn convert_to_palette_alpha(
             // images with distinct transparent and visible colors.
             let (rgb, alpha) = split_rgba_for_palette(source.as_ref())?;
             let (width, height) = rgb.dimensions();
-            let quantized =
-                Image::from_dynamic(DynamicImage::ImageRgb8(rgb), Some(crate::raster::Mode::ImageRgb8))
-                    // Image.convert("PA") calls RGB.quantize() without a method;
-                    // RGB therefore uses MEDIANCUT (method 0), not RGBA's FASTOCTREE
-                    // default.  The palette-index order is observable in PA bytes.
-                    .quantize(256, 0, None, true, 0)?;
+            let quantized = Image::from_dynamic(DynamicImage::ImageRgb8(rgb))
+                // Image.convert("PA") calls RGB.quantize() without a method;
+                // RGB therefore uses MEDIANCUT (method 0), not RGBA's FASTOCTREE
+                // default. The palette-index order is observable in PA bytes.
+                .quantize(256, 0, None, true, 0)?;
             let index_bytes = quantized.materialize()?.to_luma8().into_raw();
             let palette = quantized.palette();
             let indices = crate::raster::GrayImage::from_raw(width, height, index_bytes)
@@ -189,10 +188,8 @@ pub(super) fn convert_to_palette_alpha(
     }
 
     Ok(Image::Loaded(crate::image::LoadedData {
-        image: std::sync::Arc::new(DynamicImage::ImageLumaA8(pa)),
+        image: std::sync::Arc::new(DynamicImage::ImagePaletteAlpha8(pa)),
         known_zero_fill: false,
-        explicit_mode: Some(crate::raster::Mode::ImagePaletteAlpha8),
-        decoded_mode: crate::raster::ColorType::La8.into(),
         palette,
         palette_alpha: None,
         // Pillow's mode conversion returns a detached image and does not
@@ -230,10 +227,8 @@ pub(super) fn convert_to_web_palette(
         pixel[0] = indices.get(index).copied().unwrap_or(0);
     }
     let source = crate::image::LoadedData {
-        image: Arc::new(DynamicImage::ImageLuma8(output)),
+        image: Arc::new(DynamicImage::ImagePalette8(output)),
         known_zero_fill: false,
-        explicit_mode: Some(crate::raster::Mode::ImagePalette8),
-        decoded_mode: crate::raster::ColorType::L8.into(),
         palette: None,
         palette_alpha: None,
         source_format: image.source_format(),

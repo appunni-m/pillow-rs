@@ -53,6 +53,23 @@ impl Architecture {
         }
     }
 
+    /// Returns a stable diagnostic name for the selected CPU architecture.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Default => "default",
+            Self::Neon => "neon",
+            Self::Sse2 => "sse2",
+            Self::Sse3 => "sse3",
+            Self::Ssse3 => "ssse3",
+            Self::Avx => "avx",
+            Self::Avx2 => "avx2",
+            Self::AvxFma => "avx_fma",
+            Self::Avx2Fma => "avx2_fma",
+            Self::WasmSimd128 => "wasm_simd128",
+        }
+    }
+
     /// Whether this selected architecture includes FMA3.
     #[must_use]
     pub const fn has_fma(self) -> bool {

@@ -5,7 +5,7 @@
 
 use crate::raster::Mode;
 
-/// TODO(cpu-migration): keep this parser only at host/API boundaries; remove
+/// TODO(pillow-rs#3ptb): keep this parser only at host/API boundaries; remove
 /// internal callers once those entry points accept `Mode` directly.
 pub(crate) fn parse_pillow_mode(name: &str) -> Option<Mode> {
     Mode::from_pillow_name(name)

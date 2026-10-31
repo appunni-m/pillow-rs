@@ -112,7 +112,7 @@ pub(crate) fn mirror_native_row(
     Some((vector_blocks, scalar_tail))
 }
 
-fn reverse_pixel_block(input: &[u8], channels: usize) -> Option<[u8; 16]> {
+pub(crate) fn reverse_pixel_block(input: &[u8], channels: usize) -> Option<[u8; 16]> {
     let indices = match channels {
         1 => [15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
         2 => [14, 15, 12, 13, 10, 11, 8, 9, 6, 7, 4, 5, 2, 3, 0, 1],

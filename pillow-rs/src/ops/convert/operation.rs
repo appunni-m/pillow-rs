@@ -36,7 +36,7 @@ impl Image {
         _palette: Option<&str>,
         _colors: Option<u32>,
     ) -> Result<Image, PilError> {
-        // TODO(cpu-migration): accept `Mode` in Rust and keep Pillow string
+        // TODO(pillow-rs#3ptb): accept `Mode` in Rust and keep Pillow string
         // parsing in the host bindings; this wrapper still routes by `&str`.
         let src_mode = self.mode()?;
         validate_convert_request(&src_mode, mode, matrix.is_some())?;
@@ -196,7 +196,7 @@ fn try_convert_prestandard(
             output[0] = if input[0] != 0 { 255 } else { 0 };
         }
         let expanded = crate::raster::DynamicImage::ImageLuma8(gray);
-        return Ok(Some(Image::from_dynamic(expanded, None).convert(
+        return Ok(Some(Image::from_dynamic(expanded).convert(
             target_mode,
             matrix.clone(),
             dither,
@@ -209,7 +209,7 @@ fn try_convert_prestandard(
     if let Some(matrix) = matrix {
         let materialized = image.materialize()?;
         return convert_with_matrix(&materialized, target_mode, matrix)
-            .map(|result| Image::from_dynamic(result, explicit_mode_for(target_mode)))
+            .and_then(|result| Image::from_dynamic_with_mode(result, explicit_mode_for(target_mode)))
             .map(Some);
     }
     if let Some(converted) = super::dispatch::try_convert_early_modes(

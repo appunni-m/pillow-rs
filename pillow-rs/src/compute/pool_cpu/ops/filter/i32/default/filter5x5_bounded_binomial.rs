@@ -1,0 +1,51 @@
+
+// A native I-mode convolution can amortize a uniformity proof over a larger
+// image than the byte filters: each interior output otherwise reads and
+// converts 25 four-byte samples. Keep the proof bounded so a nearly-uniform
+// large image cannot add an unbounded extra full-frame scan.
+pub(super) const I32_UNIFORM_FILTER5X5_MAX_PIXELS: usize = 1024 * 1024;
+pub(super) const I32_BINOMIAL_FILTER5X5_WEIGHTS: [i32; 5] = [1, 4, 6, 4, 1];
+pub(super) const I32_BINOMIAL_FILTER5X5_MAX_ABS_SAMPLE: u32 = 65_535;
+
+pub(super) fn i32_filter5x5_binomial_kernel_is_applicable(kernel: &[f32; 25]) -> bool {
+    for (y, vertical) in I32_BINOMIAL_FILTER5X5_WEIGHTS.iter().enumerate() {
+        for (x, horizontal) in I32_BINOMIAL_FILTER5X5_WEIGHTS.iter().enumerate() {
+            let expected = (*vertical * *horizontal) as f32 / 256.0;
+            if kernel[y * 5 + x] != expected {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+/// Whether an I-mode input can use the exact integer form of the normalized
+/// binomial 5x5 kernel. The 16-bit magnitude bound keeps every weighted
+/// partial sum below 2^24, so Pillow's f32 path is exact before its +0.5 cast.
+
+
+
+pub(super) fn i32_filter5x5_bounded_binomial_kernel_is_applicable(
+    sample_count: usize,
+    width: usize,
+    height: usize,
+    kernel: &[f32; 25],
+    offset: f32,
+) -> bool {
+    if width < 5 || height < 5 || offset != 0.0 {
+        return false;
+    }
+    let Some(pixel_count) = width.checked_mul(height) else {
+        return false;
+    };
+    if sample_count != pixel_count {
+        return false;
+    }
+    i32_filter5x5_binomial_kernel_is_applicable(kernel)
+}
+
+/// Evaluate the exact integer factorization of the binomial I-mode kernel.
+/// Five horizontal rows form a ring buffer; each source row is filtered once
+/// and reused by the five vertical contributions. The returned bytes preserve
+/// Pillow's copied two-pixel border and positive-only I-mode clipping.
+

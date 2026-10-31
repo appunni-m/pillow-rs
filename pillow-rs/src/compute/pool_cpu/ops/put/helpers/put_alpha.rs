@@ -1,6 +1,9 @@
 //! Typed dependencies and original scalar alpha-insertion loops.
 
-use crate::raster::{GrayAlphaImage, GrayImage, Pixel, RgbImage, RgbaImage};
+use crate::raster::{
+    GrayAlphaImage, GrayImage, ImageBuffer, Luma, LumaA, Pixel, Rgb, RgbImage, Rgba, RgbaImage,
+    Rgb32FImage, Rgba32FImage,
+};
 
 pub(crate) struct AlphaInput<'a, P: Pixel> {
     pub(crate) image: &'a crate::raster::ImageBuffer<P, Vec<P::Subpixel>>,
@@ -50,4 +53,74 @@ pub(crate) fn replace_rgba_alpha(mut rgba: RgbaImage, alpha: u8) -> RgbaImage {
         pixel[3] = alpha;
     }
     rgba
+}
+
+#[inline]
+pub(crate) fn alpha_u8_to_u16(alpha: u8) -> u16 {
+    u16::from(alpha) * 257
+}
+
+#[inline]
+pub(crate) fn alpha_u8_to_f32(alpha: u8) -> f32 {
+    f32::from(alpha) / 255.0
+}
+
+pub(crate) fn luma16_with_alpha(
+    image: &ImageBuffer<Luma<u16>, Vec<u16>>,
+    alpha: u16,
+) -> ImageBuffer<LumaA<u16>, Vec<u16>> {
+    let mut output = ImageBuffer::new(image.width(), image.height());
+    for (destination, source) in output.pixels_mut().zip(image.pixels()) {
+        *destination = LumaA([source[0], alpha]);
+    }
+    output
+}
+
+pub(crate) fn replace_luma_alpha16(
+    image: &ImageBuffer<LumaA<u16>, Vec<u16>>,
+    alpha: u16,
+) -> ImageBuffer<LumaA<u16>, Vec<u16>> {
+    let mut output = image.clone();
+    for pixel in output.pixels_mut() {
+        pixel[1] = alpha;
+    }
+    output
+}
+
+pub(crate) fn rgb16_with_alpha(
+    image: &ImageBuffer<Rgb<u16>, Vec<u16>>,
+    alpha: u16,
+) -> ImageBuffer<Rgba<u16>, Vec<u16>> {
+    let mut output = ImageBuffer::new(image.width(), image.height());
+    for (destination, source) in output.pixels_mut().zip(image.pixels()) {
+        *destination = Rgba([source[0], source[1], source[2], alpha]);
+    }
+    output
+}
+
+pub(crate) fn rgba16_with_alpha(
+    image: &ImageBuffer<Rgba<u16>, Vec<u16>>,
+    alpha: u16,
+) -> ImageBuffer<Rgba<u16>, Vec<u16>> {
+    let mut output = image.clone();
+    for pixel in output.pixels_mut() {
+        pixel[3] = alpha;
+    }
+    output
+}
+
+pub(crate) fn rgb32f_with_alpha(image: &Rgb32FImage, alpha: f32) -> Rgba32FImage {
+    let mut output = Rgba32FImage::new(image.width(), image.height());
+    for (destination, source) in output.pixels_mut().zip(image.pixels()) {
+        *destination = Rgba([source[0], source[1], source[2], alpha]);
+    }
+    output
+}
+
+pub(crate) fn rgba32f_with_alpha(image: &Rgba32FImage, alpha: f32) -> Rgba32FImage {
+    let mut output = image.clone();
+    for pixel in output.pixels_mut() {
+        pixel[3] = alpha;
+    }
+    output
 }

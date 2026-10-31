@@ -292,7 +292,7 @@ pub fn mask_image(
     options: &ImageFontTextOptions,
 ) -> Result<Image, PilError> {
     if options.uses_color_mask() {
-        Image::frombytes("RGBA", (width, height), &pixels)
+        Image::frombytes(crate::raster::Mode::ImageRgba8, (width, height), &pixels)
     } else {
         Image::from_luma_mask(width, height, pixels)
     }

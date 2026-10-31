@@ -33,6 +33,14 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     &ARCHITECTURES,
 );
 
+pub(crate) const FLOAT_LUT_SUPPORT: ModeSupport = ModeSupport::cpu(
+    OperationId::PointFloat,
+    Mode::One,
+    OutputModeRule::Fixed(Mode::ImageF32),
+    super::super::helpers::strategy::FLOAT_LUT_INPUTS,
+    &[],
+);
+
 pub(crate) enum ArchitectureStrategy<'a> {
     Default(default::Kernel<'a>),
     Sse2(vector::Kernel<'a, CHANNELS>),
@@ -54,7 +62,12 @@ pub(crate) fn prepare<'a>(
     lut: &'a [u8],
     ctx: &ExecutionContext,
 ) -> Result<Strategy<'a>, PilError> {
-    let facts = strategy::facts(input.width(), input.height(), input.as_raw().len(), lut.len());
+    let facts = strategy::point_float_facts(
+        input.width(),
+        input.height(),
+        input.as_raw().len(),
+        lut.len(),
+    );
     let selection = strategy::select(SUPPORT, facts, ctx)?;
     let implementation = match selection.implementation.architecture {
         Architecture::Default => ArchitectureStrategy::Default(default::prepare(input, lut)),
@@ -95,5 +108,21 @@ pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> 
         ArchitectureStrategy::WasmSimd128(kernel) => vector::execute_wasm_simd128(kernel)
             .and_then(from_vector)
             .map(DynamicImage::One),
+    }
+}
+
+pub(crate) fn execute_float_lut(
+    input: &GrayImage,
+    lut: &[f64],
+    ctx: &ExecutionContext,
+) -> Result<DynamicImage, PilError> {
+    let facts = strategy::facts(input.width(), input.height(), input.as_raw().len(), lut.len());
+    let selection = strategy::select(FLOAT_LUT_SUPPORT, facts, ctx)?;
+    match selection.implementation.architecture {
+        Architecture::Default => super::default::eval_float_impl::execute(input, lut)
+            .map(DynamicImage::ImageF32),
+        architecture => Err(PilError::InternalError(format!(
+            "unexpected {architecture:?} architecture selected for PointFloat mode One"
+        ))),
     }
 }

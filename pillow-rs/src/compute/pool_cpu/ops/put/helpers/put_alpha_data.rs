@@ -1,6 +1,9 @@
 //! Original typed alpha-mask loops and borrowed prepared dependencies.
 
-use crate::raster::{GrayAlphaImage, GrayImage, Pixel, RgbImage, RgbaImage};
+use crate::raster::{
+    GrayAlphaImage, GrayImage, ImageBuffer, Luma, LumaA, Pixel, RgbImage, Rgba, RgbaImage,
+    Rgb32FImage, Rgba32FImage,
+};
 use super::alpha_mask::MaskStrategy;
 
 pub(crate) struct AlphaDataInput<'a, P: Pixel> {
@@ -70,6 +73,88 @@ pub(crate) fn replace_rgba_mask(output: &mut RgbaImage, mask: &[u8]) {
     for (pixel, alpha) in output.as_mut().chunks_exact_mut(4).zip(mask) {
         pixel[3] = *alpha;
     }
+}
+
+pub(crate) fn luma16_mask(
+    image: &ImageBuffer<Luma<u16>, Vec<u16>>,
+    mask: &GrayImage,
+) -> ImageBuffer<LumaA<u16>, Vec<u16>> {
+    let mut output = ImageBuffer::new(image.width(), image.height());
+    for ((destination, source), alpha) in output
+        .pixels_mut()
+        .zip(image.pixels())
+        .zip(mask.pixels())
+    {
+        *destination = LumaA([source[0], super::put_alpha::alpha_u8_to_u16(alpha[0])]);
+    }
+    output
+}
+
+pub(crate) fn replace_luma_alpha16_mask(
+    image: &ImageBuffer<LumaA<u16>, Vec<u16>>,
+    mask: &GrayImage,
+) -> ImageBuffer<LumaA<u16>, Vec<u16>> {
+    let mut output = image.clone();
+    for (pixel, alpha) in output.pixels_mut().zip(mask.pixels()) {
+        pixel[1] = super::put_alpha::alpha_u8_to_u16(alpha[0]);
+    }
+    output
+}
+
+pub(crate) fn rgb16_mask(
+    image: &ImageBuffer<Rgb<u16>, Vec<u16>>,
+    mask: &GrayImage,
+) -> ImageBuffer<Rgba<u16>, Vec<u16>> {
+    let mut output = ImageBuffer::new(image.width(), image.height());
+    for ((destination, source), alpha) in output
+        .pixels_mut()
+        .zip(image.pixels())
+        .zip(mask.pixels())
+    {
+        *destination = Rgba([
+            source[0],
+            source[1],
+            source[2],
+            super::put_alpha::alpha_u8_to_u16(alpha[0]),
+        ]);
+    }
+    output
+}
+
+pub(crate) fn rgba16_mask(
+    image: &ImageBuffer<Rgba<u16>, Vec<u16>>,
+    mask: &GrayImage,
+) -> ImageBuffer<Rgba<u16>, Vec<u16>> {
+    let mut output = image.clone();
+    for (pixel, alpha) in output.pixels_mut().zip(mask.pixels()) {
+        pixel[3] = super::put_alpha::alpha_u8_to_u16(alpha[0]);
+    }
+    output
+}
+
+pub(crate) fn rgb32f_mask(image: &Rgb32FImage, mask: &GrayImage) -> Rgba32FImage {
+    let mut output = Rgba32FImage::new(image.width(), image.height());
+    for ((destination, source), alpha) in output
+        .pixels_mut()
+        .zip(image.pixels())
+        .zip(mask.pixels())
+    {
+        *destination = Rgba([
+            source[0],
+            source[1],
+            source[2],
+            super::put_alpha::alpha_u8_to_f32(alpha[0]),
+        ]);
+    }
+    output
+}
+
+pub(crate) fn rgba32f_mask(image: &Rgba32FImage, mask: &GrayImage) -> Rgba32FImage {
+    let mut output = image.clone();
+    for (pixel, alpha) in output.pixels_mut().zip(mask.pixels()) {
+        pixel[3] = super::put_alpha::alpha_u8_to_f32(alpha[0]);
+    }
+    output
 }
 
 pub(crate) fn native_rgb_mask(source: &RgbImage, mask: &GrayImage) -> RgbaImage {

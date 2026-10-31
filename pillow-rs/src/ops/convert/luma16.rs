@@ -1,6 +1,6 @@
 use crate::error::PilError;
 use crate::image::Image;
-use crate::raster::{DynamicImage, GenericImageView};
+use crate::raster::{DynamicImage, GenericImageView, Mode};
 
 use super::mode::is_luma16_mode;
 
@@ -79,10 +79,10 @@ pub(super) fn try_convert_from_luma16(
                         f32::from(sample[0]).to_le_bytes()
                     };
                 }
-                return Ok(Some(Image::from_dynamic(
+                return Ok(Some(Image::from_dynamic_with_mode(
                     DynamicImage::ImageRgba8(result),
                     crate::image::mode_boundary::parse_pillow_mode(target_mode),
-                )));
+                )?));
             }
             // Other destinations retry through clipped L; P uses identity gray indices.
             let luma = image.convert("L", None, None, None, None)?;
@@ -114,7 +114,9 @@ pub(super) fn try_convert_to_luma16(
         let mut result = Image::push_op(
             image,
             crate::pipeline::PipelineOp::Convert {
-                mode: crate::pipeline::ColorMode::I16,
+                mode: Mode::from_pillow_name(target_mode).ok_or_else(|| {
+                    PilError::ValueError(format!("Unknown mode: {}", target_mode))
+                })?,
                 matrix: None,
                 dither: None,
             },
@@ -134,10 +136,10 @@ pub(super) fn try_convert_to_luma16(
             } else {
                 convert_luma_to_luma16(image, source_mode)?
             };
-            Ok(Some(Image::from_dynamic(
+            Ok(Some(Image::from_dynamic_with_mode(
                 DynamicImage::ImageI16(samples),
                 crate::image::mode_boundary::parse_pillow_mode(target_mode),
-            )))
+            )?))
         },
         |result| {
             result

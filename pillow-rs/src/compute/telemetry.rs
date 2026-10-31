@@ -1,6 +1,6 @@
 //! Bounded execution telemetry and receipt collection for compute backends.
 
-use super::{Backend, PipelineTelemetrySample};
+use super::{Architecture, Backend, PipelineTelemetrySample};
 
 #[path = "telemetry/eager_cpu.rs"]
 mod eager_cpu;
@@ -11,7 +11,6 @@ pub(crate) use eager_cpu::{
     record_eager_cpu_operation_receipt_with_reason,
 };
 
-use crate::error::PilError;
 use crate::raster::DynamicImage;
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
@@ -110,6 +109,8 @@ pub struct PipelineOperationTelemetry {
     pub operation: &'static str,
     /// Controlled execution-path classification.
     pub path: &'static str,
+    /// CPU architecture selected by the prepared operation, when available.
+    pub selected_architecture: Option<Architecture>,
     /// Number of vector blocks processed by the operation.
     pub vector_block_count: u64,
     /// Number of scalar tail elements processed after vector blocks.
@@ -127,6 +128,7 @@ pub struct PipelineOperationTelemetry {
 struct PipelineOperationSample {
     operation: &'static str,
     path: &'static str,
+    selected_architecture: Option<Architecture>,
     vector_block_count: u64,
     scalar_tail_count: u64,
     mode_conversion_count: u64,
@@ -400,6 +402,7 @@ pub fn take_pipeline_operation_telemetry() -> Vec<PipelineOperationTelemetry> {
             .map(|sample| PipelineOperationTelemetry {
                 operation: sample.operation,
                 path: sample.path,
+                selected_architecture: sample.selected_architecture,
                 vector_block_count: sample.vector_block_count,
                 scalar_tail_count: sample.scalar_tail_count,
                 mode_conversion_count: sample.mode_conversion_count,
@@ -421,6 +424,7 @@ pub(crate) fn begin_pipeline_operation_telemetry(operation: &'static str) {
             // An adapter starts in scalar control until it proves that a
             // vector block or a native-copy path actually ran.
             path: "scalar-control",
+            selected_architecture: None,
             vector_block_count: 0,
             scalar_tail_count: 0,
             mode_conversion_count: 0,
@@ -548,6 +552,7 @@ pub(crate) fn record_pipeline_operation_unsupported(operation: &'static str) {
         last.borrow_mut().push(PipelineOperationSample {
             operation,
             path: "unsupported",
+            selected_architecture: None,
             vector_block_count: 0,
             scalar_tail_count: 0,
             mode_conversion_count: 0,
@@ -557,69 +562,33 @@ pub(crate) fn record_pipeline_operation_unsupported(operation: &'static str) {
     });
 }
 
-/// Records one checked host pixel-buffer allocation for the active managed
-/// benchmark sample.
-/// Execute a synchronous SIMD terminal read directly into its caller-owned
-/// result buffer and publish an honest receipt for the actual SIMD kernel.
-/// Internal kernel allocations are intentionally not inferred from the final
-/// host buffer accounting.
-pub(crate) fn execute_eager_simd_bytes(
-    operation: &'static str,
-    input: &DynamicImage,
-    output: &mut [u8],
-    execute: impl FnOnce(&mut [u8]) -> Result<(u64, u64, &'static str), PilError>,
-) -> Result<(), PilError> {
-    let timed = pipeline_telemetry_enabled();
-    if timed {
-        reset_pipeline_allocation_telemetry();
-        reset_pipeline_operation_telemetry();
-        let _ = take_pipeline_resource_telemetry();
-        let _ = take_pipeline_backend_override();
-        let _ = take_pipeline_dispatch_count();
-        let _ = take_pipeline_resize_coeff_cache_stats();
+/// Record the concrete CPU architecture selected for the active operation.
+pub(crate) fn record_pipeline_operation_architecture(architecture: Architecture) {
+    if !pipeline_telemetry_enabled() {
+        return;
     }
-
-    let backend_start = timed.then(pipeline_timestamp).flatten();
-    let (vector_blocks, scalar_tail, path) = execute(output)?;
-    let backend_ns = elapsed_ns(backend_start);
-    if timed {
-        begin_pipeline_operation_telemetry(operation);
-        record_pipeline_operation_vector_blocks(vector_blocks);
-        record_pipeline_operation_scalar_tail(scalar_tail);
-        record_pipeline_operation_path(path);
-        finish_pipeline_operation_telemetry();
-
-        let mut resource = host_resource_telemetry(input);
-        let output_bytes = output.len() as u64;
-        resource.host_buffer_count = resource
-            .host_buffer_count
-            .saturating_add(u64::from(output_bytes != 0));
-        resource.host_buffer_bytes = resource.host_buffer_bytes.saturating_add(output_bytes);
-        resource.peak_live_host_bytes = resource
-            .peak_live_host_bytes
-            .max((input.as_bytes().len() as u64).saturating_add(output_bytes));
-        record_pipeline_resource_telemetry(resource);
-        let resource = take_pipeline_resource_telemetry();
-        let _ = take_pipeline_backend_override();
-        let dispatch_count = take_pipeline_dispatch_count();
-        let _ = take_pipeline_resize_coeff_cache_stats();
-        record_pipeline_telemetry(PipelineTelemetry {
-            requested_backend: Some(Backend::Simd),
-            actual_backend: Backend::Simd,
-            operation_count: 1,
-            route_ns: 0,
-            validation_ns: 0,
-            backend_ns,
-            dispatch_count,
-            fallback_reason: None,
-            resource,
-            resize_coeff_cache_hits: 0,
-            resize_coeff_cache_misses: 0,
-        });
-    }
-    Ok(())
+    ACTIVE_PIPELINE_OPERATION_TELEMETRY.with(|active| {
+        if let Some(sample) = active.borrow_mut().last_mut() {
+            sample.selected_architecture = Some(architecture);
+        }
+    });
 }
 
+/// Clear architecture selection when a composite operation runs child plans
+/// whose architecture cannot yet be represented by one operation receipt.
+pub(crate) fn clear_pipeline_operation_architecture() {
+    if !pipeline_telemetry_enabled() {
+        return;
+    }
+    ACTIVE_PIPELINE_OPERATION_TELEMETRY.with(|active| {
+        if let Some(sample) = active.borrow_mut().last_mut() {
+            sample.selected_architecture = None;
+        }
+    });
+}
+
+/// Records one checked host pixel-buffer allocation for the active managed
+/// benchmark sample.
 pub(crate) fn record_pipeline_allocation(bytes: usize) {
     if !pipeline_telemetry_enabled() {
         return;

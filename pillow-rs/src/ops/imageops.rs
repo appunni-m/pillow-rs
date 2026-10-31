@@ -94,7 +94,7 @@ mod tests {
     use crate::raster::GenericImageView;
 
     fn empty_image(size: (u32, u32)) -> Image {
-        Image::new(size.0, size.1, "L", (0, 0, 0, 0)).expect("empty image dimensions are valid")
+        Image::new(size.0, size.1, crate::raster::Mode::ImageLuma8, (0, 0, 0, 0)).expect("empty image dimensions are valid")
     }
 
     #[test]
@@ -215,7 +215,7 @@ mod tests {
     fn expand_rgbx_and_cmyk_resolve_three_components_in_native_order() {
         let fill = [17, 83, 149, u8::MAX];
         for mode in ["CMYK", "RGBX"] {
-            let source = Image::new(1, 1, mode, (23, 47, 89, 131))
+            let source = Image::new(1, 1, crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (23, 47, 89, 131))
                 .expect("native four-byte source is valid");
             let expanded =
                 expand_with_input(&source, 1, ImageOpsColor::Components(vec![17, 83, 149]))
@@ -231,7 +231,7 @@ mod tests {
     #[test]
     fn expand_rejects_two_component_fill_for_cmyk_and_rgbx() {
         for mode in ["CMYK", "RGBX"] {
-            let source = Image::new(1, 1, mode, (23, 47, 89, 131))
+            let source = Image::new(1, 1, crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (23, 47, 89, 131))
                 .expect("native four-byte source is valid");
             let error = expand_with_input(&source, 1, ImageOpsColor::Components(vec![17, 83]))
                 .expect_err("CMYK and RGBX reject two-component colors");
@@ -496,7 +496,7 @@ mod tests {
         let mut bytes = Vec::new();
         bytes.extend_from_slice(&f32::INFINITY.to_le_bytes());
         bytes.extend_from_slice(&(-2.25f32).to_le_bytes());
-        let source = Image::frombytes("F", (1, 2), &bytes).expect("F source");
+        let source = Image::frombytes(crate::raster::Mode::ImageF32, (1, 2), &bytes).expect("F source");
         let fitted = fit(&source, 1, 1, Some("LANCZOS"), 0.0, (1.0, 1.0))
             .expect("Fit operation")
             .materialize()

@@ -86,3 +86,60 @@ macro_rules! declare_strategies {
     };
 }
 pub(crate) use declare_strategies;
+
+macro_rules! declare_into {
+    ($channels:literal) => {
+        #[allow(unsafe_code)]
+        pub(crate) fn execute_into(
+            strategy: Strategy<'_>,
+            output: &mut [u8],
+        ) -> Result<(u64, u64, &'static str), PilError> {
+            match strategy.implementation {
+                ArchitectureStrategy::Default(input) =>
+                    super::super::helpers::extract_band::grouped_into::<_, $channels>(input, output),
+                #[cfg(any(
+                    target_arch = "x86_64",
+                    all(target_arch = "x86", target_feature = "ssse3"),
+                ))]
+                ArchitectureStrategy::Ssse3(input) => {
+                    #[cfg(target_arch = "x86_64")]
+                    {
+                        // SAFETY: preparation selected this strategy only after
+                        // checking SSE2/SSSE3 and the exact source layout.
+                        unsafe {
+                            super::super::helpers::extract_band_vector::ssse3_into::<_, $channels>(
+                                input, output,
+                            )
+                        }
+                    }
+                    #[cfg(target_arch = "x86")]
+                    {
+                        super::super::helpers::extract_band_vector::portable_into::<_, $channels>(
+                            input, output,
+                        )
+                    }
+                }
+                #[cfg(all(
+                    target_arch = "x86",
+                    target_feature = "sse2",
+                    not(target_feature = "ssse3"),
+                ))]
+                ArchitectureStrategy::Sse2(input) =>
+                    super::super::helpers::extract_band_vector::portable_into::<_, $channels>(
+                        input, output,
+                    ),
+                #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+                ArchitectureStrategy::WasmSimd128(input) =>
+                    super::super::helpers::extract_band_vector::portable_into::<_, $channels>(
+                        input, output,
+                    ),
+                #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+                ArchitectureStrategy::Neon(input) =>
+                    super::super::helpers::extract_band_vector::neon_into::<_, $channels>(
+                        input, output,
+                    ),
+            }
+        }
+    };
+}
+pub(crate) use declare_into;

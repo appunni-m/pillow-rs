@@ -4,7 +4,7 @@ use crate::raster::Mode;
 fn mode_identity(image: &Image) -> Result<Mode, PilError> {
     match image.known_mode_identity() {
         Some(mode) => Ok(mode),
-        // TODO(cpu-migration): make every lazy pipeline expose its exact Mode
+        // TODO(pillow-rs#3ptb): make every lazy pipeline expose its exact Mode
         // before operation admission so validation never has to materialize.
         None => Ok(image.materialized_shared()?.mode()),
     }
@@ -277,9 +277,8 @@ pub fn solarize_with_input(image: &Image, input: SolarizeInput) -> Result<Image,
             })
             .collect(),
     };
-    // TODO(cpu-migration): preserve this high-threshold/custom-comparison
-    // Solarize route when Eval receives its prepared CPU owner; these requests
-    // deliberately become a LUT operation rather than PipelineOp::Solarize.
+    // High-threshold and custom-comparison cases deliberately become a
+    // mode-aware Eval LUT operation rather than PipelineOp::Solarize.
     crate::ops::module_fns::eval_replicated(
         image,
         &lut,

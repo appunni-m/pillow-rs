@@ -159,7 +159,9 @@ fn histogram_native_bytes(
     histogram: &mut [u32],
 ) -> bool {
     match image {
-        crate::raster::DynamicImage::ImageLumaA8(la) => {
+        crate::raster::DynamicImage::ImageLumaA8(la)
+        | crate::raster::DynamicImage::ImageLaPremultiplied8(la)
+        | crate::raster::DynamicImage::ImagePaletteAlpha8(la) => {
             for (y, row) in la.rows().enumerate() {
                 for (x, pixel) in row.enumerate() {
                     if !mask_includes_pixel(mask_raw, y * width + x) {
@@ -173,7 +175,9 @@ fn histogram_native_bytes(
                 }
             }
         }
-        crate::raster::DynamicImage::ImageLuma8(luma) => {
+        crate::raster::DynamicImage::One(luma)
+        | crate::raster::DynamicImage::ImageLuma8(luma)
+        | crate::raster::DynamicImage::ImagePalette8(luma) => {
             for (y, row) in luma.rows().enumerate() {
                 for (x, pixel) in row.enumerate() {
                     if mask_includes_pixel(mask_raw, y * width + x) {
@@ -305,7 +309,7 @@ impl Image {
     /// mask is non-zero, matching Pillow's masked-histogram semantics.
     pub fn histogram_with_mask(&self, mask: Option<&Image>) -> Result<Vec<u32>, PilError> {
         let image = self.materialized_shared()?;
-        let mode = self.mode_from_materialized(&image);
+        let mode = Image::mode_from_materialized(&image);
         let mask_image = if let Some(mask) = mask {
             let mask_image = mask.materialized_shared()?;
             if (mask_image.width(), mask_image.height()) != (image.width(), image.height()) {

@@ -101,6 +101,18 @@ macro_rules! declare_modes {
                 match self { $(Self::$mode(strategy) => strategy.selection(),)+ }
             }
 
+            pub(crate) fn execute_rgba_avx2_into(
+                self,
+                output: &mut [u8],
+            ) -> Result<(), PilError> {
+                match self {
+                    Self::ImageRgba8(strategy) => strategy.execute_avx2_into(output),
+                    _ => Err(PilError::InternalError(
+                        "AVX2 transpose buffer execution requires exact RGBA mode".into(),
+                    )),
+                }
+            }
+
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
                 match self { $(Self::$mode(strategy) => strategy.execute(),)+ }
             }

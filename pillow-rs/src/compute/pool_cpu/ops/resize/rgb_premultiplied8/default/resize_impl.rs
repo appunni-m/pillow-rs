@@ -1,0 +1,23 @@
+//! Resample premultiplied RGBA samples without another alpha transform.
+
+use crate::error::PilError;
+use crate::pipeline::ResampleFilter;
+use crate::raster::RgbaImage;
+
+pub(crate) fn execute(
+    input: &RgbaImage,
+    width: u32,
+    height: u32,
+    filter: ResampleFilter,
+    bounds: Option<(f64, f64, f64, f64)>,
+) -> Result<RgbaImage, PilError> {
+    let bytes = super::super::super::helpers::byte_samples::resize::<4>(
+        input.as_raw(),
+        input.dimensions(),
+        (width, height),
+        filter,
+        bounds,
+    )?;
+    RgbaImage::from_raw(width, height, bytes)
+        .ok_or_else(|| PilError::ValueError("resize_rgba_premultiplied: failed to create output buffer".into()))
+}

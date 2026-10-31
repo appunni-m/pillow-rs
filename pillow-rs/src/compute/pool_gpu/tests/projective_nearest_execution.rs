@@ -11,7 +11,7 @@ fn indexed_projective_nearest_native_gpu_preserves_index_bytes() {
     let previous = Backend::set_pipeline_telemetry_enabled(true);
     let mut bytes = vec![0u8; 16 * 16];
     bytes[3 * 16 + 2] = 23;
-    let source = Image::frombytes("P", (16, 16), &bytes).expect("indexed source");
+    let source = Image::frombytes(crate::raster::Mode::ImagePalette8, (16, 16), &bytes).expect("indexed source");
     let cases = [
         (
             2,
@@ -76,7 +76,7 @@ fn byte_projective_nearest_proven_native_gpu_preserves_pixels() {
         let bytes = (0..16 * 16 * channels)
             .map(|index| (index * 29 + 7) as u8)
             .collect::<Vec<_>>();
-        let source = Image::frombytes(mode, (16, 16), &bytes).expect("byte source");
+        let source = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (16, 16), &bytes).expect("byte source");
         let cases = byte_projective_nearest_proven_cases();
         for (method, data) in cases {
             let transformed = source
@@ -126,7 +126,7 @@ fn byte_projective_integer_affine_nearest_native_gpu_preserves_pixels() {
             let bytes = (0..source_size.0 as usize * source_size.1 as usize * channels)
                 .map(|index| (index * (29 + 2 * seed) + 7 * channels + seed) as u8)
                 .collect::<Vec<_>>();
-            let mut source = Image::frombytes(mode, *source_size, &bytes)
+            let mut source = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), *source_size, &bytes)
                 .unwrap_or_else(|error| panic!("{mode} source: {error}"));
             if mode == "P" {
                 let palette = (0..768)
@@ -189,7 +189,7 @@ fn byte_projective_fractional_nearest_native_gpu_preserves_pixels() {
             let source_bytes = (0..source_size.0 as usize * source_size.1 as usize * channels)
                 .map(|index| (index * (31 + case_index * 7) + 13 + channels) as u8)
                 .collect::<Vec<_>>();
-            let mut source = Image::frombytes(mode, *source_size, &source_bytes)
+            let mut source = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), *source_size, &source_bytes)
                 .unwrap_or_else(|error| panic!("{mode} source: {error}"));
             if mode == "P" {
                 let palette = (0..768)
@@ -347,7 +347,7 @@ fn assert_byte_projective_nonconstant_native_case(
     source_bytes: &[u8],
     case_index: usize,
 ) -> bool {
-    let source = Image::frombytes(mode, source_size, source_bytes)
+    let source = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), source_size, source_bytes)
         .unwrap_or_else(|error| panic!("{mode} source: {error}"));
     let fill = byte_projective_fill(mode, fill_value);
     let transformed = source
@@ -400,7 +400,7 @@ fn byte_projective_quad_mesh_nearest_proof_native_gpu_preserves_pixels() {
         let source_bytes = (0..source_size.0 as usize * source_size.1 as usize * channels)
             .map(|index| (index * 29 + 7 + channels) as u8)
             .collect::<Vec<_>>();
-        let source = Image::frombytes(mode, source_size, &source_bytes)
+        let source = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), source_size, &source_bytes)
             .unwrap_or_else(|error| panic!("{mode} source: {error}"));
         let fill = match mode {
             "LA" => Some(TransformFill::Components(vec![199, 71])),
@@ -508,7 +508,7 @@ fn run_byte_projective_fractional_constant_mode(
                 .wrapping_add(channels) as u8
         })
         .collect::<Vec<_>>();
-    let mut source = Image::frombytes(mode, source_size, &source_bytes)
+    let mut source = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), source_size, &source_bytes)
         .unwrap_or_else(|error| panic!("{mode} source: {error}"));
     if mode == "P" {
         let palette = (0usize..768)
@@ -584,7 +584,7 @@ fn indexed_projective_fractional_nonconstant_nearest_native_gpu_preserves_pixels
     let source_bytes = (0..source_size.0 as usize * source_size.1 as usize)
         .map(|index| (index * 73 + 19) as u8)
         .collect::<Vec<_>>();
-    let mut source = Image::frombytes("P", source_size, &source_bytes).expect("P source");
+    let mut source = Image::frombytes(crate::raster::Mode::ImagePalette8, source_size, &source_bytes).expect("P source");
     let palette = (0..768)
         .map(|index| (index * 23 + 11) as u8)
         .collect::<Vec<_>>();

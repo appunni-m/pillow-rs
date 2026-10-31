@@ -1,4 +1,8 @@
 //! Active backend policy and the compiled backend-pool registry.
+//!
+//! TODO(pillow-rs#3ptb): retire `SimdPool` registration and the independent
+//! SIMD activation/priority entries after compatibility requests resolve to
+//! CPU plus an injected Architecture.
 
 #[cfg(feature = "gpu")]
 use super::GpuPool;

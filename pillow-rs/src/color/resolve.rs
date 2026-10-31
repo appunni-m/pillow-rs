@@ -1,4 +1,5 @@
 use super::parse_color_str;
+use crate::raster::Mode;
 
 /// Resolves `Image.new` color input into core RGBA storage.
 ///
@@ -17,7 +18,7 @@ use super::parse_color_str;
 /// Returns [`crate::PilError::ValueError`] when `hex_str` is present but cannot
 /// be parsed as a color.
 pub fn resolve_new_color(
-    mode: &str,
+    mode: Mode,
     hex_str: Option<&str>,
     single_value: Option<u8>,
     rgb: Option<(u8, u8, u8)>,
@@ -30,21 +31,24 @@ pub fn resolve_new_color(
         return parse_color_str(s);
     }
     // For I mode with i32 value, pack as 4-byte LE
-    if mode == "I"
+    if mode == Mode::ImageI32
         && let Some(v) = int32_val
     {
         let bytes = v.to_le_bytes();
         return Ok((bytes[0], bytes[1], bytes[2], bytes[3]));
     }
     // For F mode with f64 value, pack as 4-byte LE f32
-    if mode == "F"
+    if mode == Mode::ImageF32
         && let Some(v) = float_val
     {
         let f = v as f32;
         let bytes = f.to_le_bytes();
         return Ok((bytes[0], bytes[1], bytes[2], bytes[3]));
     }
-    if matches!(mode, "I;16" | "I;16L" | "I;16B" | "I;16N")
+    if matches!(
+        mode,
+        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N
+    )
         && let Some(v) = int32_val
     {
         let bytes = (v as u16).to_le_bytes();
@@ -55,7 +59,7 @@ pub fn resolve_new_color(
         return Ok((v, 0, 0, 0));
     }
     if let Some((l, a)) = la {
-        if mode == "P" {
+        if mode == Mode::ImagePalette8 {
             // Pillow's single-band color validation rejects a two-component
             // tuple before palette allocation; it does not reinterpret LA as
             // an RGB palette entry.
@@ -69,18 +73,25 @@ pub fn resolve_new_color(
         // Pillow accepts only a scalar or one-element tuple for single-band
         // modes. The F path uses a distinct native conversion error, while
         // integer/luma modes share the standard color-type message.
-        if mode == "F" {
+        if mode == Mode::ImageF32 {
             return Err(crate::error::PilError::TypeError(
                 "must be real number, not tuple".to_owned(),
             ));
         }
-        if matches!(mode, "I" | "I;16" | "I;16L" | "I;16B" | "I;16N") {
+        if matches!(
+            mode,
+            Mode::ImageI32
+                | Mode::ImageI16
+                | Mode::ImageI16L
+                | Mode::ImageI16B
+                | Mode::ImageI16N
+        ) {
             return Err(crate::error::PilError::TypeError(
                 "color must be int or single-element tuple".to_owned(),
             ));
         }
-        if mode == "L" || mode == "1" || mode == "P" {
-            if mode != "P" {
+        if matches!(mode, Mode::ImageLuma8 | Mode::One | Mode::ImagePalette8) {
+            if mode != Mode::ImagePalette8 {
                 return Err(crate::error::PilError::TypeError(
                     "color must be int or single-element tuple".to_owned(),
                 ));

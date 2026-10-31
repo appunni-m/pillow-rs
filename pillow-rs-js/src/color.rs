@@ -10,6 +10,9 @@ pub fn resolve_new_color(
     rgba: Option<Vec<u8>>,
     la: Option<Vec<u8>>,
 ) -> Result<JsValue, JsValue> {
+    let mode = pillow_rs::Mode::from_pillow_name(mode).ok_or_else(|| {
+        JsValue::from_str("unrecognized image mode")
+    })?;
     let hex = hex.as_deref();
     let rgb = rgb.map(|v| {
         if v.len() == 3 {

@@ -5,7 +5,7 @@
 //! Coordinates are integer pixel coordinates. Colors are normalized RGBA byte
 //! tuples before mode-specific drawing rules are applied.
 
-use crate::raster::{DynamicImage, RgbaImage};
+use crate::raster::{DynamicImage, Mode, RgbaImage};
 
 use crate::error::PilError;
 use crate::image::Image;
@@ -22,10 +22,10 @@ type ShapeInks = (Option<DrawColor>, Option<DrawColor>);
 pub struct Draw {
     image: Image,
     /// Original image mode used to restore the public image on `image_clone()`.
-    orig_mode: Option<String>,
+    orig_mode: Option<Mode>,
     /// Requested drawing mode, which may differ from `orig_mode` for Pillow's
     /// RGBA-on-RGB alpha-compositing context.
-    draw_mode: Option<String>,
+    draw_mode: Option<Mode>,
 }
 
 /// Host-neutral coordinate input for ImageDraw point-based primitives.
@@ -271,14 +271,42 @@ fn draw_color_error() -> PilError {
     )
 }
 
-fn is_l16_mode(mode: &str) -> bool {
-    matches!(mode, "I;16" | "I;16L" | "I;16B" | "I;16N")
+fn is_l16_mode(mode: Mode) -> bool {
+    matches!(
+        mode,
+        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N
+    )
 }
 
-fn draw_float_color_error(mode: &str) -> PilError {
+fn is_single_band_draw_mode(mode: Mode) -> bool {
+    matches!(
+        mode,
+        Mode::One
+            | Mode::ImageLuma8
+            | Mode::ImagePalette8
+            | Mode::ImageI32
+            | Mode::ImageF32
+    )
+}
+
+fn is_double_band_draw_mode(mode: Mode) -> bool {
+    matches!(
+        mode,
+        Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8
+    )
+}
+
+fn draw_float_color_error(mode: Mode) -> PilError {
     if matches!(
         mode,
-        "1" | "L" | "P" | "I" | "I;16" | "I;16L" | "I;16B" | "I;16N"
+        Mode::One
+            | Mode::ImageLuma8
+            | Mode::ImagePalette8
+            | Mode::ImageI32
+            | Mode::ImageI16
+            | Mode::ImageI16L
+            | Mode::ImageI16B
+            | Mode::ImageI16N
     ) {
         PilError::TypeError("color must be int or single-element tuple".to_owned())
     } else {
@@ -292,12 +320,12 @@ fn draw_byte(value: i64) -> u8 {
     value.clamp(0, 255) as u8
 }
 
-fn resolve_integer_color(mode: &str, value: i64) -> Result<(u8, u8, u8, u8), PilError> {
-    if mode == "F" {
+fn resolve_integer_color(mode: Mode, value: i64) -> Result<(u8, u8, u8, u8), PilError> {
+    if mode == Mode::ImageF32 {
         let bytes = (value as f32).to_le_bytes();
         return Ok((bytes[0], bytes[1], bytes[2], bytes[3]));
     }
-    if mode == "I" {
+    if mode == Mode::ImageI32 {
         let value = i32::try_from(value).map_err(|_| draw_color_error())?;
         let bytes = value.to_le_bytes();
         return Ok((bytes[0], bytes[1], bytes[2], bytes[3]));
@@ -318,20 +346,22 @@ fn resolve_integer_color(mode: &str, value: i64) -> Result<(u8, u8, u8, u8), Pil
     Ok(match mode {
         // Multi-band integer inks are packed little-endian by Pillow's
         // ImagingDraw implementation, including values outside one byte.
-        "RGB" | "YCbCr" | "HSV" => (packed[0], packed[1], packed[2], 255),
-        "RGBA" => (packed[0], packed[1], packed[2], packed[3]),
-        "LA" => (
+        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageHsv8 => {
+            (packed[0], packed[1], packed[2], 255)
+        }
+        Mode::ImageRgba8 => (packed[0], packed[1], packed[2], packed[3]),
+        Mode::ImageLumaA8 => (
             packed[0],
             packed[0],
             packed[0],
             if signed_value < 0 { 255 } else { 0 },
         ),
-        "CMYK" => (packed[0], packed[1], packed[2], packed[3]),
+        Mode::ImageCmyk8 => (packed[0], packed[1], packed[2], packed[3]),
         _ => (value, value, value, 255),
     })
 }
 
-fn resolve_component_color(mode: &str, values: &[i64]) -> Result<(u8, u8, u8, u8), PilError> {
+fn resolve_component_color(mode: Mode, values: &[i64]) -> Result<(u8, u8, u8, u8), PilError> {
     if is_l16_mode(mode) {
         if values.len() != 1 {
             return Err(PilError::TypeError(
@@ -342,7 +372,7 @@ fn resolve_component_color(mode: &str, values: &[i64]) -> Result<(u8, u8, u8, u8
         return Ok((bytes[0], bytes[1], 0, 255));
     }
     let components = || values.iter().copied().map(draw_byte).collect::<Vec<_>>();
-    if mode == "PA" {
+    if mode == Mode::ImagePaletteAlpha8 {
         let components = components();
         return match components.as_slice() {
             [value] => Ok((*value, *value, *value, 0)),
@@ -352,7 +382,7 @@ fn resolve_component_color(mode: &str, values: &[i64]) -> Result<(u8, u8, u8, u8
             )),
         };
     }
-    if mode == "LA" {
+    if mode == Mode::ImageLumaA8 {
         let components = components();
         return match components.as_slice() {
             [value, alpha] => Ok((*value, *value, *value, *alpha)),
@@ -363,7 +393,11 @@ fn resolve_component_color(mode: &str, values: &[i64]) -> Result<(u8, u8, u8, u8
     }
     let components = components();
     match components.as_slice() {
-        [value] if matches!(mode, "L" | "1" | "P") => Ok((*value, *value, *value, 255)),
+        [value]
+            if matches!(mode, Mode::ImageLuma8 | Mode::One | Mode::ImagePalette8) =>
+        {
+            Ok((*value, *value, *value, 255))
+        }
         [r, g, b] => Ok((*r, *g, *b, 255)),
         [r, g, b, a] => Ok((*r, *g, *b, *a)),
         _ => Err(draw_color_error()),
@@ -373,14 +407,10 @@ fn resolve_component_color(mode: &str, values: &[i64]) -> Result<(u8, u8, u8, u8
 impl Draw {
     /// Creates a drawing context for `image`.
     ///
-    /// `explicit_mode` is an optional PIL mode override for cases where the
-    /// image's raw DynamicImage mode differs from the logical PIL mode
-    /// (e.g. "P" stored as Luma8, "CMYK" stored as Rgba8).
-    pub fn new(image: Image, explicit_mode: Option<String>) -> Self {
-        // TODO(cpu-migration): accept `Option<Mode>` and keep string parsing
-        // in the binding adapter.
-        let original_mode = image.mode().ok();
-        let draw_mode = explicit_mode.or_else(|| original_mode.clone());
+    /// `explicit_mode` may select Pillow's RGBA drawing context over an RGB image.
+    pub fn new(image: Image, explicit_mode: Option<Mode>) -> Self {
+        let original_mode = image.mode_identity().ok();
+        let draw_mode = explicit_mode.or(original_mode);
         Draw {
             image,
             orig_mode: original_mode,
@@ -393,11 +423,13 @@ impl Draw {
     /// RGB images may be drawn through an RGBA context for alpha blending. All
     /// other explicit modes must match the destination image mode exactly.
     pub fn validate_mode(&self) -> Result<(), PilError> {
-        let Some(requested) = self.draw_mode.as_deref() else {
+        let Some(requested) = self.draw_mode else {
             return Ok(());
         };
-        let actual = self.image.mode()?;
-        if requested != actual && !(requested == "RGBA" && actual == "RGB") {
+        let actual = self.image.mode_identity()?;
+        if requested != actual
+            && !(requested == Mode::ImageRgba8 && actual == Mode::ImageRgb8)
+        {
             return Err(PilError::ValueError("mode mismatch".to_owned()));
         }
         Ok(())
@@ -405,16 +437,16 @@ impl Draw {
 
     /// Return the effective PIL mode for drawing operations.
     /// Uses the explicit mode if set, otherwise falls back to the image's mode.
-    fn effective_mode(&self) -> String {
+    fn effective_mode(&self) -> Mode {
         self.draw_mode
-            .clone()
-            .or_else(|| self.image.mode().ok())
-            .unwrap_or_else(|| "RGBA".to_string())
+            .or_else(|| self.image.mode_identity().ok())
+            .unwrap_or(Mode::ImageRgba8)
     }
 
     /// Whether Pillow requested an RGBA drawing context over an RGB image.
     fn alpha_blend_rgb(&self) -> bool {
-        self.draw_mode.as_deref() == Some("RGBA") && self.orig_mode.as_deref() == Some("RGB")
+        self.draw_mode == Some(Mode::ImageRgba8)
+            && self.orig_mode == Some(Mode::ImageRgb8)
     }
 
     /// Validate text options against the destination's Pillow mode.
@@ -422,7 +454,9 @@ impl Draw {
         &self,
         options: &crate::font::ImageFontTextOptions,
     ) -> Result<(), PilError> {
-        if options.embedded_color && !matches!(self.effective_mode().as_str(), "RGB" | "RGBA") {
+        if options.embedded_color
+            && !matches!(self.effective_mode(), Mode::ImageRgb8 | Mode::ImageRgba8)
+        {
             return Err(PilError::ValueError(
                 "Embedded color supported only in RGB and RGBA modes".into(),
             ));
@@ -436,13 +470,13 @@ impl Draw {
         match input {
             DrawColorInput::None => Ok(self.default_shape_ink().unwrap_or((0, 0, 0, 255))),
             DrawColorInput::String(value) => crate::color::parse_color_str(&value),
-            DrawColorInput::Integer(value) => resolve_integer_color(&mode, value),
-            DrawColorInput::Float(value) if mode == "F" => {
+            DrawColorInput::Integer(value) => resolve_integer_color(mode, value),
+            DrawColorInput::Float(value) if mode == Mode::ImageF32 => {
                 let bytes = (value as f32).to_le_bytes();
                 Ok((bytes[0], bytes[1], bytes[2], bytes[3]))
             }
-            DrawColorInput::Float(_) => Err(draw_float_color_error(&mode)),
-            DrawColorInput::Components(values) => resolve_component_color(&mode, &values),
+            DrawColorInput::Float(_) => Err(draw_float_color_error(mode)),
+            DrawColorInput::Components(values) => resolve_component_color(mode, &values),
             DrawColorInput::Invalid => Err(draw_color_error()),
         }
     }
@@ -459,12 +493,19 @@ impl Draw {
             return self.color_with_input(input);
         }
 
-        match self.effective_mode().as_str() {
-            "RGB" | "RGBA" | "RGBa" | "LA" | "PA" | "CMYK" | "YCbCr" | "HSV" => {
+        match self.effective_mode() {
+            Mode::ImageRgb8
+            | Mode::ImageRgba8
+            | Mode::ImageRgbPremultiplied8
+            | Mode::ImageLumaA8
+            | Mode::ImagePaletteAlpha8
+            | Mode::ImageCmyk8
+            | Mode::ImageYCbCr8
+            | Mode::ImageHsv8 => {
                 Ok((255, 255, 255, 255))
             }
-            "I" => Ok((1, 0, 0, 0)),
-            "F" => Ok((0, 0, 128, 63)),
+            Mode::ImageI32 => Ok((1, 0, 0, 0)),
+            Mode::ImageF32 => Ok((0, 0, 128, 63)),
             _ => Ok((0, 0, 0, 255)),
         }
     }
@@ -481,7 +522,7 @@ impl Draw {
         if matches!(input, DrawColorInput::None) {
             return self.bitmap(x, y, bitmap, None);
         }
-        if mode == "P"
+        if mode == Mode::ImagePalette8
             && matches!(&input, DrawColorInput::Components(values) if values.len() > 1)
             && self
                 .image
@@ -495,8 +536,8 @@ impl Draw {
             return Ok(());
         }
         if let DrawColorInput::Components(values) = &input {
-            if mode.len() == 1 && mode != "P" && values.len() != 1 {
-                if mode == "F" {
+            if is_single_band_draw_mode(mode) && mode != Mode::ImagePalette8 && values.len() != 1 {
+                if mode == Mode::ImageF32 {
                     return Err(PilError::TypeError(
                         "must be real number, not tuple".to_owned(),
                     ));
@@ -505,7 +546,7 @@ impl Draw {
                     "color must be int or single-element tuple".to_owned(),
                 ));
             }
-            if mode.len() == 2 && !matches!(values.len(), 1 | 2) {
+            if is_double_band_draw_mode(mode) && !matches!(values.len(), 1 | 2) {
                 return Err(PilError::TypeError(
                     "color must be int, or tuple of one or two elements".to_owned(),
                 ));
@@ -516,8 +557,8 @@ impl Draw {
     }
 
     /// Returns the original Pillow mode of the drawing target.
-    pub fn mode(&self) -> Option<&str> {
-        self.orig_mode.as_deref()
+    pub fn mode(&self) -> Option<Mode> {
+        self.orig_mode
     }
 
     fn shape_inks(
@@ -526,7 +567,7 @@ impl Draw {
         outline: Option<(u8, u8, u8, u8)>,
     ) -> ShapeInks {
         if fill.is_none() && outline.is_none() {
-            if self.orig_mode.as_deref() == Some("PA") {
+            if self.orig_mode == Some(Mode::ImagePaletteAlpha8) {
                 return (None, Some((255, 255, 255, 255)));
             }
             // ImageDraw geometric primitives default to the context's outline
@@ -541,54 +582,105 @@ impl Draw {
     /// Return the ink Pillow's experimental `Outline` API uses when both
     /// `fill` and `outline` are omitted.
     fn default_shape_ink(&self) -> Option<(u8, u8, u8, u8)> {
-        match self.effective_mode().as_str() {
+        match self.effective_mode() {
             // ImageDraw._getink() starts an RGB-family outline with
             // draw_ink(-1), which resolves to an all-255 sample.
-            "RGB" | "RGBA" | "RGBX" | "LA" | "PA" | "CMYK" | "YCbCr" | "HSV" => {
+            Mode::ImageRgb8
+            | Mode::ImageRgba8
+            | Mode::ImageRgbx8
+            | Mode::ImageLumaA8
+            | Mode::ImagePaletteAlpha8
+            | Mode::ImageCmyk8
+            | Mode::ImageYCbCr8
+            | Mode::ImageHsv8 => {
                 Some((255, 255, 255, 255))
             }
             // I/F contexts initialize their ink with draw_ink(1). These
             // tuples are the native little-endian representations carried by
             // the explicit-mode RGBA canvas used by this crate.
-            "I" => Some((1, 0, 0, 0)),
+            Mode::ImageI32 => Some((1, 0, 0, 0)),
             // I;16* uses Pillow's draw_ink(-1) default. The native canvas
             // consumes the low two packed bytes as the full 65535 sample.
-            "I;16" | "I;16L" | "I;16B" | "I;16N" => Some((255, 255, 255, 255)),
-            "F" => Some((0, 0, 128, 63)),
+            Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
+                Some((255, 255, 255, 255))
+            }
+            Mode::ImageF32 => Some((0, 0, 128, 63)),
             // Pillow's draw_ink(-1) is not a valid ink for these single-byte
             // and palette-indexed modes, so shape() remains a no-op.
-            "1" | "L" | "P" => None,
+            Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => None,
             _ => None,
         }
     }
 
-    /// Set the output image from a drawn RGBA canvas.
-    /// image_clone() handles RGBA→native mode conversion for standard modes.
-    /// Only F/I/CMYK need explicit_mode tagging (their RGBA data IS the final format).
-    fn set_image(&mut self, canvas: RgbaImage) {
-        let explicit = match self.orig_mode.as_deref() {
-            Some("F") | Some("I") | Some("CMYK") => self.orig_mode.clone(),
-            _ => None,
+    /// Restore a drawn RGBA canvas to the exact selected raster mode.
+    fn set_image(&mut self, canvas: RgbaImage) -> Result<(), PilError> {
+        let mode = self.draw_mode.or(self.orig_mode).unwrap_or(Mode::ImageRgba8);
+        let canvas = DynamicImage::ImageRgba8(canvas);
+        let image = match mode {
+            Mode::One => DynamicImage::One(canvas.to_luma8()),
+            Mode::ImageLuma8 => DynamicImage::ImageLuma8(canvas.to_luma8()),
+            Mode::ImageLumaA8 => DynamicImage::ImageLumaA8(canvas.to_luma_alpha8()),
+            Mode::ImageLaPremultiplied8 => {
+                DynamicImage::ImageLaPremultiplied8(canvas.to_luma_alpha8())
+            }
+            Mode::ImagePalette8 => DynamicImage::ImagePalette8(canvas.to_luma8()),
+            Mode::ImagePaletteAlpha8 => {
+                DynamicImage::ImagePaletteAlpha8(canvas.to_luma_alpha8())
+            }
+            Mode::ImageRgb8 => DynamicImage::ImageRgb8(canvas.to_rgb8()),
+            Mode::ImageRgba8 => canvas,
+            Mode::ImageRgbPremultiplied8 => DynamicImage::ImageRgbPremultiplied8(
+                match canvas {
+                    DynamicImage::ImageRgba8(image) => image,
+                    _ => unreachable!("draw canvas is RGBA"),
+                },
+            ),
+            Mode::ImageRgbx8 => DynamicImage::ImageRgbx8(match canvas {
+                DynamicImage::ImageRgba8(image) => image,
+                _ => unreachable!("draw canvas is RGBA"),
+            }),
+            Mode::ImageCmyk8 => DynamicImage::ImageCmyk8(match canvas {
+                DynamicImage::ImageRgba8(image) => image,
+                _ => unreachable!("draw canvas is RGBA"),
+            }),
+            Mode::ImageYCbCr8 => DynamicImage::ImageYCbCr8(canvas.to_rgb8()),
+            Mode::ImageLab8 => DynamicImage::ImageLab8(canvas.to_rgb8()),
+            Mode::ImageHsv8 => DynamicImage::ImageHsv8(canvas.to_rgb8()),
+            Mode::ImageI32 => DynamicImage::ImageI32(match canvas {
+                DynamicImage::ImageRgba8(image) => image,
+                _ => unreachable!("draw canvas is RGBA"),
+            }),
+            Mode::ImageF32 => DynamicImage::ImageF32(match canvas {
+                DynamicImage::ImageRgba8(image) => image,
+                _ => unreachable!("draw canvas is RGBA"),
+            }),
+            Mode::ImageI16 => DynamicImage::ImageI16(canvas.to_luma16()),
+            Mode::ImageI16L => DynamicImage::ImageI16L(canvas.to_luma16()),
+            Mode::ImageI16B => DynamicImage::ImageI16B(canvas.to_luma16()),
+            Mode::ImageI16N => DynamicImage::ImageI16N(canvas.to_luma16()),
+            Mode::ImageLumaA16
+            | Mode::ImageRgb16
+            | Mode::ImageRgba16
+            | Mode::ImageRgb32F
+            | Mode::ImageRgba32F => {
+                // NO_PILLOW_SUPPORT: Draw's byte canvas has no contract for
+                // these internal high-depth modes.
+                return Err(PilError::ValueError("unsupported image mode".into()));
+            }
         };
-        self.image = Image::from_dynamic(
-            DynamicImage::ImageRgba8(canvas),
-            explicit.as_deref().and_then(crate::image::mode_boundary::parse_pillow_mode),
-        );
+        self.image = Image::from_dynamic(image);
+        Ok(())
     }
 
     /// Returns the current drawn image with original mode semantics restored.
     ///
-    /// Standard modes are converted from the internal RGBA drawing canvas back
-    /// to their original layout. All other public draw branches either write
-    /// the destination's native layout directly or retain the original mode
-    /// as an explicit tag on the RGBA backing buffer. The only public path
-    /// that leaves a logical mode mismatch is an explicit RGBA context over
-    /// an RGB image.
+    /// The only public path that changes the stored mode during drawing is an
+    /// explicit RGBA context over an RGB image; this method restores RGB.
     pub fn image_clone(&self) -> Result<Image, PilError> {
         let img = self.image.clone();
-        let orig = self.orig_mode.as_deref().unwrap_or_default();
-        let current = img.mode().unwrap_or_default();
-        if orig != "RGB" || current == orig {
+        let orig = self.orig_mode;
+        let current = img.mode_identity().ok();
+        if orig != Some(Mode::ImageRgb8) || current == orig {
             return Ok(img);
         }
 
@@ -596,9 +688,7 @@ impl Draw {
         // storage intentionally differs from the logical destination mode.
         let img_loaded = img.materialize()?;
         Ok(Image::from_dynamic(
-            DynamicImage::ImageRgb8(img_loaded.to_rgb8()),
-            None,
-        ))
+            DynamicImage::ImageRgb8(img_loaded.to_rgb8())))
     }
 
     /// Consume the drawing context and return the modified image.
@@ -626,7 +716,7 @@ mod tests {
 
     #[test]
     fn rounded_rectangle_rejects_reversed_axes_in_pillow_order() {
-        let image = Image::new(8, 8, "L", (0, 0, 0, 255)).expect("test image");
+        let image = Image::new(8, 8, crate::raster::Mode::ImageLuma8, (0, 0, 0, 255)).expect("test image");
         let mut draw = Draw::new(image, None);
 
         let error = draw
@@ -646,7 +736,13 @@ mod tests {
     #[test]
     fn i16_geometry_uses_native_samples_and_declared_byte_order() {
         for mode in ["I;16", "I;16L", "I;16B", "I;16N"] {
-            let image = Image::new(4, 4, mode, (0, 0, 0, 0)).expect("test image");
+            let image = Image::new(
+                4,
+                4,
+                crate::raster::Mode::from_pillow_name(mode).expect("known test mode"),
+                (0, 0, 0, 0),
+            )
+            .expect("test image");
             let mut draw = Draw::new(image, None);
             draw.shape(&[(0, 0), (2, 0), (0, 2)], None, None)
                 .expect("default shape ink");
@@ -657,7 +753,13 @@ mod tests {
                 FormattedPixelValue::Integer(65535)
             );
 
-            let image = Image::new(1, 1, mode, (0, 0, 0, 0)).expect("test image");
+            let image = Image::new(
+                1,
+                1,
+                crate::raster::Mode::from_pillow_name(mode).expect("known test mode"),
+                (0, 0, 0, 0),
+            )
+            .expect("test image");
             let mut draw = Draw::new(image, None);
             draw.point(&[(0, 0)], (1, 0, 0, 255))
                 .expect("packed point ink");

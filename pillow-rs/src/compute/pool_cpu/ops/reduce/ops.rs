@@ -1,11 +1,14 @@
 //! Reduce orchestration and exhaustive mode support.
 //!
-//! TODO(pillow-rs#3ptb): share I/F helpers and RGB sparse-row facts with
-//! Thumbnail when that family is migrated, and move archived Rayon scheduling
-//! into pool_parallel after CPU is complete. L, LA, RGB, RGBA, CMYK, YCbCr,
-//! and HSV declare AVX2 plus portable SSE2, NEON, and wasm SIMD strategies
-//! where those kernels are built for the target. Other modes retain their
-//! same-mode Default strategy.
+//! Non-fused Thumbnail reduction reuses this prepared Reduce owner, including
+//! the I/F helpers; RGB PutPixel/Thumbnail fusion consumes the shared sparse-
+//! row reducer. TODO(pillow-rs#3ptb): move archived Rayon scheduling into
+//! pool_parallel after CPU is complete. L, LA, RGB, RGBA, CMYK, YCbCr,
+//! and HSV declare native-byte AVX2 plus portable SSE2, NEON, and wasm SIMD
+//! strategies where those kernels are built for the target. F32 declares its
+//! portable eight-lane even 2x2 kernel as AVX or SSE2 when compiled for those
+//! features, with NEON and wasm SIMD128 choices where built. Other requests
+//! and modes retain their same-mode Default strategy.
 
 // NO_PILLOW_SUPPORT: typed I;16 reductions extend Pillow's current Reduce contract.
 // NO_PILLOW_SUPPORT: internal high-depth modes use native typed strategies.

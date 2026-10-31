@@ -63,10 +63,11 @@ pub(crate) use telemetry::{
     RestorePipelineOperationOrigins, account_host_buffer_boundary,
     begin_eager_cpu_operation_telemetry, begin_pipeline_operation_telemetry,
     cancel_eager_cpu_operation_telemetry, capture_active_origin, enter_operation_origins,
-    execute_eager_simd_bytes, finish_eager_cpu_operation_telemetry,
+    finish_eager_cpu_operation_telemetry,
     finish_pipeline_operation_telemetry, host_resource_telemetry,
     record_eager_cpu_operation_receipt, record_eager_cpu_operation_receipt_with_reason,
     record_pipeline_allocation, record_pipeline_backend_fallback,
+    clear_pipeline_operation_architecture, record_pipeline_operation_architecture,
     record_pipeline_operation_handoff, record_pipeline_operation_mode_conversion,
     record_pipeline_operation_path, record_pipeline_operation_scalar_tail,
     record_pipeline_operation_unsupported, record_pipeline_operation_vector_blocks,
@@ -88,11 +89,10 @@ pub(crate) use backend_state::{
 };
 pub(crate) use eager::{
     begin_eager_cpu_mandelbrot_telemetry, execute_eager_cpu_getprojection,
-    execute_eager_cpu_arch_image_operation, execute_eager_cpu_image_operation,
+    execute_eager_cpu_arch_bytes, execute_eager_cpu_arch_image_operation,
+    execute_eager_cpu_image_operation,
     execute_eager_cpu_shared_result,
-    execute_eager_simd_getprojection, execute_eager_simd_image_operation,
-    finish_eager_cpu_mandelbrot_telemetry, simd_cmyk_projection,
-    simd_cmyk_projection_from_positive_writes, simd_rgb_projection, simd_unsharp_blend_rgb_150,
+    finish_eager_cpu_mandelbrot_telemetry,
     try_simd_linear_gradient, try_simd_mandelbrot, try_simd_radial_gradient,
 };
 #[cfg(feature = "gpu")]
@@ -104,8 +104,8 @@ pub(crate) use eager::{
 use execution::execute_automatic_simd_segments;
 pub(crate) use execution::{
     PreparedExecution, execute_prepared, execute_prepared_cpu_arch_operation,
-    execute_prepared_cpu_terminal, execute_prepared_shared,
-    execute_prepared_shared_with_palette, execute_prepared_simd_terminal,
+    execute_prepared_cpu_arch_terminal, execute_prepared_cpu_terminal, execute_prepared_shared,
+    execute_prepared_shared_with_palette,
     execute_prepared_with_palette, prepare_execution,
 };
 #[cfg(feature = "gpu")]
@@ -363,15 +363,19 @@ pub use pool_gpu::stream::{
     BatchError, BatchErrorKind, BatchKey, BatchOutput, BatchResult, GpuBatchConfig,
     GpuBatchExecutor, GpuBatchStats, GpuImage,
 };
-// TODO(pillow-rs#3ptb): route SIMD architecture selection through CPU operation
-// strategies, then retire this separate pool and its adapter re-exports. Do
-// not restore the archived pool as an active module.
+// TODO(pillow-rs#3ptb): route pipeline, admission, terminal, fusion, registry,
+// and eager compatibility calls through CPU mode/architecture strategies,
+// then remove this independent pool. Do not restore the archived pool as active.
 mod pool_simd;
-pub(crate) use pool_simd::ops::adapters::simd_extract_band_into;
 
 pub(crate) mod registry;
 
 pub(crate) use pool_cpu::CpuPool;
+pub(crate) use pool_cpu::ops::analysis::ops::{
+    ProjectionOutput, execute_cmyk8_in_context as cpu_cmyk_projection_in_context,
+    execute_rgb8_in_context as cpu_rgb_projection_in_context,
+    prepare as prepare_cpu_getprojection,
+};
 #[cfg(feature = "gpu")]
 pub(crate) use pool_gpu::GpuPool;
 pub(crate) use pool_simd::SimdPool;
@@ -389,8 +393,8 @@ pub(crate) fn clear_gpu_batch_test_fault() {
 #[cfg(test)]
 mod tests {
     use super::{
-        Backend, PilError, execute_automatic_simd_segments, execute_eager_simd_image_operation,
-        simd_extract_band_into,
+        Architecture, Backend, execute_automatic_simd_segments,
+        execute_eager_cpu_arch_bytes,
     };
     use crate::pipeline::{PipelineOp, ResampleFilter, TransformMethod};
     use crate::raster::{DynamicImage, Rgb, RgbImage};
@@ -410,7 +414,7 @@ mod tests {
     }
 
     #[test]
-    fn eager_simd_image_operation_records_vector_and_allocation_evidence() {
+    fn eager_cpu_arch_bytes_records_strategy_and_output_buffer_receipt() {
         let raw: Vec<u8> = (0..37 * 3)
             .map(|index| u8::try_from((index * 73 + 19) % 256).expect("sample byte fits"))
             .collect();
@@ -418,27 +422,39 @@ mod tests {
             RgbImage::from_raw(37, 1, raw).expect("RGB source shape must be valid"),
         );
         let previous = Backend::set_pipeline_telemetry_enabled(true);
-        let result = execute_eager_simd_image_operation("ExtractBand", &image, || {
-            let mut output = crate::checked_dims::CheckedDims::new(37, 1, 1)?.alloc_buffer();
-            let (vector_blocks, scalar_tail, path) =
-                simd_extract_band_into(&image, 1, Some("RGB"), &mut output)?;
-            let output = crate::raster::GrayImage::from_raw(37, 1, output).ok_or_else(|| {
-                PilError::InternalError("SIMD ExtractBand buffer shape mismatch".into())
-            })?;
-            Ok((
-                DynamicImage::ImageLuma8(output),
-                vector_blocks,
-                scalar_tail,
-                path,
-            ))
-        });
-        let receipt = Backend::take_pipeline_telemetry().expect("SIMD execution receipt");
+        let mut output = vec![0; 37];
+        let operation = PipelineOp::ExtractBand { index: 1 };
+        let result = execute_eager_cpu_arch_bytes(
+            "GetData",
+            &image,
+            Backend::Simd,
+            &mut output,
+            |context, output| {
+                let prepared = crate::compute::registry::prepare_cpu(
+                    &operation,
+                    crate::compute::registry::support::OperationInputs {
+                        image: &image,
+                        palette: crate::compute::registry::support::PaletteInput::default(),
+                    },
+                    context,
+                )?;
+                let selection = *prepared.selection();
+                let output_work = prepared
+                    .execute_into(output)?
+                    .expect("RGB ExtractBand has a caller-owned output strategy");
+                Ok(Some((selection, output_work)))
+            },
+        );
+        let receipt = Backend::take_pipeline_telemetry()
+            .expect("CPU architecture execution receipt");
         let operations = Backend::take_pipeline_operation_telemetry();
         Backend::set_pipeline_telemetry_enabled(previous);
 
-        let result = result.expect("eager SIMD ExtractBand must succeed");
+        result
+            .expect("eager CPU architecture ExtractBand must succeed")
+            .expect("RGB ExtractBand has a caller-owned output strategy");
         assert_eq!(
-            result.as_bytes(),
+            output.as_slice(),
             image
                 .as_bytes()
                 .chunks_exact(3)
@@ -447,21 +463,26 @@ mod tests {
                 .as_slice()
         );
         assert_eq!(receipt.0, Some(Backend::Simd));
-        assert_eq!(receipt.1, Backend::Simd);
+        assert_eq!(receipt.1, Backend::Cpu);
         assert_eq!(receipt.2, 1);
-        assert_eq!(receipt.7, None);
-        let resource = receipt.8.expect("SIMD host-buffer receipt");
-        assert_eq!(resource.host_allocation_count, 1);
-        assert_eq!(resource.host_allocated_bytes, 37);
+        let resource = receipt.8.expect("CPU architecture host-buffer receipt");
+        assert_eq!(resource.host_allocation_count, 0);
+        assert_eq!(resource.host_allocated_bytes, 0);
         let operation = operations
             .first()
-            .expect("SIMD ExtractBand operation receipt");
-        assert!(operation.vector_block_count > 0);
-        assert_eq!(operation.scalar_tail_count, 5);
-        assert!(matches!(
-            operation.path,
-            "neon-deinterleave" | "ssse3-gather" | "vector-gather"
-        ));
+            .expect("CPU architecture ExtractBand operation receipt");
+        assert!(operation.selected_architecture.is_some());
+        if operation.selected_architecture == Some(Architecture::Default) {
+            assert_eq!(operation.path, "cpu");
+            assert_eq!(operation.vector_block_count, 0);
+        } else {
+            assert!(operation.vector_block_count > 0);
+            assert_eq!(operation.scalar_tail_count, 5);
+            assert!(matches!(
+                operation.path,
+                "neon-deinterleave" | "ssse3-gather" | "vector-gather"
+            ));
+        }
     }
 
     #[test]

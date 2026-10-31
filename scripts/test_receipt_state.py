@@ -1287,6 +1287,36 @@ class ReceiptStateTests(unittest.TestCase):
         ):
             execution_receipt(receipt, "benchmark.execution")
 
+    def test_operation_telemetry_accepts_selected_architecture_and_rejects_unknown(
+        self,
+    ) -> None:
+        receipt = execution_result(
+            "target_profile",
+            "python-cpu",
+            [benchmark_record(terminal_complete=True)],
+            aggregate_policy(),
+        )
+        receipt["operation_telemetry"] = [
+            {
+                "step_id": "operation",
+                "operation": "Resize",
+                "path": "vector",
+                "selected_architecture": "neon",
+                "vector_block_count": 1,
+                "scalar_tail_count": 0,
+                "mode_conversion_count": 0,
+                "handoff_count": 0,
+            }
+        ]
+        execution_receipt(receipt, "benchmark.execution")
+
+        receipt["operation_telemetry"][0]["selected_architecture"] = "avx512"
+        with self.assertRaisesRegex(
+            ValueError,
+            r"operation_telemetry\[0\]\.selected_architecture: unknown architecture",
+        ):
+            execution_receipt(receipt, "benchmark.execution")
+
     def test_representative_receipt_is_not_sliced_as_a_timing_warmup(self) -> None:
         record = benchmark_record(terminal_complete=True)
         record["actual_backend"] = "cpu"
