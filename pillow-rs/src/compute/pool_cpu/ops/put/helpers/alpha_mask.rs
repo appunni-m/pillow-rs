@@ -24,11 +24,35 @@ macro_rules! declare_masks {
                 match self { $(Self::$mode($image) => $normalize,)+ }
             }
 
+            /// Borrows exact one-channel modes whose luma normalization is a
+            /// byte-preserving clone; other modes keep their owned conversion.
+            pub(crate) fn luma_samples(self) -> LumaSamples<'a> {
+                match self {
+                    Self::One(image) | Self::ImageLuma8(image) | Self::ImagePalette8(image) =>
+                        LumaSamples::Borrowed(image.as_raw()),
+                    mask => LumaSamples::Owned(mask.to_luma8()),
+                }
+            }
+
             pub(crate) fn native_luma(self) -> Option<&'a GrayImage> {
                 match self { Self::ImageLuma8(image) => Some(image), _ => None }
             }
         }
     };
+}
+
+pub(crate) enum LumaSamples<'a> {
+    Borrowed(&'a [u8]),
+    Owned(GrayImage),
+}
+
+impl LumaSamples<'_> {
+    pub(crate) fn as_slice(&self) -> &[u8] {
+        match self {
+            Self::Borrowed(samples) => samples,
+            Self::Owned(image) => image.as_raw(),
+        }
+    }
 }
 
 declare_masks! {

@@ -35,30 +35,33 @@ pub(crate) fn native_mask<'a, P: Pixel<Subpixel = u8>>(
 
 pub(crate) fn luma_mask(luma: &GrayImage, mask: MaskStrategy<'_>) -> GrayAlphaImage {
     let mut output = GrayAlphaImage::new(luma.width(), luma.height());
+    let mask = mask.luma_samples();
     for ((destination, source), alpha) in output.pixels_mut().zip(luma.pixels())
-        .zip(mask.to_luma8().pixels()) {
+        .zip(mask.as_slice()) {
         destination[0] = source[0];
-        destination[1] = alpha[0];
+        destination[1] = *alpha;
     }
     output
 }
 
 pub(crate) fn luma_alpha_mask(luma: &GrayAlphaImage, mask: MaskStrategy<'_>) -> GrayAlphaImage {
     let mut output = GrayAlphaImage::new(luma.width(), luma.height());
+    let mask = mask.luma_samples();
     for ((destination, source), alpha) in output.pixels_mut().zip(luma.pixels())
-        .zip(mask.to_luma8().pixels()) {
+        .zip(mask.as_slice()) {
         destination[0] = source[0];
-        destination[1] = alpha[0];
+        destination[1] = *alpha;
     }
     output
 }
 
 pub(crate) fn rgba_mask(rgba: &RgbaImage, mask: MaskStrategy<'_>) -> RgbaImage {
     let mut output = RgbaImage::new(rgba.width(), rgba.height());
+    let mask = mask.luma_samples();
     for ((destination, source), alpha) in output.pixels_mut().zip(rgba.pixels())
-        .zip(mask.to_luma8().pixels()) {
+        .zip(mask.as_slice()) {
         *destination = *source;
-        destination[3] = alpha[0];
+        destination[3] = *alpha;
     }
     output
 }
@@ -77,45 +80,45 @@ pub(crate) fn replace_rgba_mask(output: &mut RgbaImage, mask: &[u8]) {
 
 pub(crate) fn luma16_mask(
     image: &ImageBuffer<Luma<u16>, Vec<u16>>,
-    mask: &GrayImage,
+    mask: &[u8],
 ) -> ImageBuffer<LumaA<u16>, Vec<u16>> {
     let mut output = ImageBuffer::new(image.width(), image.height());
     for ((destination, source), alpha) in output
         .pixels_mut()
         .zip(image.pixels())
-        .zip(mask.pixels())
+        .zip(mask)
     {
-        *destination = LumaA([source[0], super::put_alpha::alpha_u8_to_u16(alpha[0])]);
+        *destination = LumaA([source[0], super::put_alpha::alpha_u8_to_u16(*alpha)]);
     }
     output
 }
 
 pub(crate) fn replace_luma_alpha16_mask(
     image: &ImageBuffer<LumaA<u16>, Vec<u16>>,
-    mask: &GrayImage,
+    mask: &[u8],
 ) -> ImageBuffer<LumaA<u16>, Vec<u16>> {
     let mut output = image.clone();
-    for (pixel, alpha) in output.pixels_mut().zip(mask.pixels()) {
-        pixel[1] = super::put_alpha::alpha_u8_to_u16(alpha[0]);
+    for (pixel, alpha) in output.pixels_mut().zip(mask) {
+        pixel[1] = super::put_alpha::alpha_u8_to_u16(*alpha);
     }
     output
 }
 
 pub(crate) fn rgb16_mask(
     image: &ImageBuffer<Rgb<u16>, Vec<u16>>,
-    mask: &GrayImage,
+    mask: &[u8],
 ) -> ImageBuffer<Rgba<u16>, Vec<u16>> {
     let mut output = ImageBuffer::new(image.width(), image.height());
     for ((destination, source), alpha) in output
         .pixels_mut()
         .zip(image.pixels())
-        .zip(mask.pixels())
+        .zip(mask)
     {
         *destination = Rgba([
             source[0],
             source[1],
             source[2],
-            super::put_alpha::alpha_u8_to_u16(alpha[0]),
+            super::put_alpha::alpha_u8_to_u16(*alpha),
         ]);
     }
     output
@@ -123,44 +126,44 @@ pub(crate) fn rgb16_mask(
 
 pub(crate) fn rgba16_mask(
     image: &ImageBuffer<Rgba<u16>, Vec<u16>>,
-    mask: &GrayImage,
+    mask: &[u8],
 ) -> ImageBuffer<Rgba<u16>, Vec<u16>> {
     let mut output = image.clone();
-    for (pixel, alpha) in output.pixels_mut().zip(mask.pixels()) {
-        pixel[3] = super::put_alpha::alpha_u8_to_u16(alpha[0]);
+    for (pixel, alpha) in output.pixels_mut().zip(mask) {
+        pixel[3] = super::put_alpha::alpha_u8_to_u16(*alpha);
     }
     output
 }
 
-pub(crate) fn rgb32f_mask(image: &Rgb32FImage, mask: &GrayImage) -> Rgba32FImage {
+pub(crate) fn rgb32f_mask(image: &Rgb32FImage, mask: &[u8]) -> Rgba32FImage {
     let mut output = Rgba32FImage::new(image.width(), image.height());
     for ((destination, source), alpha) in output
         .pixels_mut()
         .zip(image.pixels())
-        .zip(mask.pixels())
+        .zip(mask)
     {
         *destination = Rgba([
             source[0],
             source[1],
             source[2],
-            super::put_alpha::alpha_u8_to_f32(alpha[0]),
+            super::put_alpha::alpha_u8_to_f32(*alpha),
         ]);
     }
     output
 }
 
-pub(crate) fn rgba32f_mask(image: &Rgba32FImage, mask: &GrayImage) -> Rgba32FImage {
+pub(crate) fn rgba32f_mask(image: &Rgba32FImage, mask: &[u8]) -> Rgba32FImage {
     let mut output = image.clone();
-    for (pixel, alpha) in output.pixels_mut().zip(mask.pixels()) {
-        pixel[3] = super::put_alpha::alpha_u8_to_f32(alpha[0]);
+    for (pixel, alpha) in output.pixels_mut().zip(mask) {
+        pixel[3] = super::put_alpha::alpha_u8_to_f32(*alpha);
     }
     output
 }
 
-pub(crate) fn native_rgb_mask(source: &RgbImage, mask: &GrayImage) -> RgbaImage {
+pub(crate) fn native_rgb_mask(source: &RgbImage, mask: &[u8]) -> RgbaImage {
     let mut output = RgbaImage::new(source.width(), source.height());
     for ((destination, color), alpha) in output.as_mut().chunks_exact_mut(4)
-        .zip(source.as_raw().chunks_exact(3)).zip(mask.as_raw()) {
+        .zip(source.as_raw().chunks_exact(3)).zip(mask) {
         destination[..3].copy_from_slice(color);
         destination[3] = *alpha;
     }

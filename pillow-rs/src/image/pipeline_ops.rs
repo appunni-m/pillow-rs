@@ -628,11 +628,11 @@ fn pipeline_output_mode(
         }
     };
 
-    // Keep putalpha's output-mode promotion here so P becomes PA without
-    // expanding its indices, while CMYK becomes ordinary RGBA without a tag.
+    // Use the same exact source-to-output mapping for the declared pipeline
+    // identity and the lazy metadata planner. In particular, L/LA/RGB/CMYK
+    // alpha updates must not leave the source mode cached on the new node.
     match putalpha_mode {
-        Some(Mode::ImagePalette8 | Mode::ImagePaletteAlpha8) => Some(Mode::ImagePaletteAlpha8),
-        Some(Mode::ImageCmyk8) => None,
+        Some(mode) => known_putalpha_mode(mode),
         _ => output_mode,
     }
 }

@@ -4,24 +4,22 @@
 //! registered and consumed by the serial CPU batch executor. Consecutive
 //! PutPixel runs also compose with the prepared RGB Thumbnail fusion.
 //! TODO(pillow-rs#3ptb): finish auditing wrapper metadata paths for
-//! Backend/Architecture context bypasses, and finish the mode-specific
-//! conversion review below. Immediate PutData callbacks use their own exact-mode
-//! support declaration and a sequence-scoped CPU Default execution context.
+//! Backend/Architecture context bypasses and reconcile mode-changing callers.
+//! Immediate PutData callbacks use their own exact-mode support declaration and
+//! a sequence-scoped CPU Default execution context.
 //! GetData's direct output-buffer route uses the prepared ExtractBand strategy.
 //! Source review confirmed PutData's cross-carrier ConvertBuffer routes are
 //! semantic: they construct the requested 1/2/3/4-channel payload carrier
 //! before applying the byte prefix, matching the archived operation. Same-
 //! carrier paths write the exact source carrier directly and preserve its mode.
-//! TODO(pillow-rs#3ptb): finish reviewing cross-mode conversions in PutAlpha,
-//! PutAlphaData, and ExtractBand against the archived contract. Keep
-//! conversions only when they are part of the operation's semantics; replace
-//! conversions used only for kernel reuse with native-mode code. One/P/PA/La
-//! PutAlpha paths avoid copy-only carrier conversion, and PutAlphaData uses
-//! native source-layout writers for same-carrier inputs. Both operations retain
-//! native high-depth samples, pending full source review.
+//! PutAlpha, PutAlphaData, and ExtractBand conversion routes were reviewed
+//! against the archived contracts. Mask-to-L normalization remains semantic;
+//! exact one-channel masks borrow their bytes in Default paths. Same-carrier
+//! alpha outputs keep their single required result copy, and ExtractBand reads
+//! native channels directly. This source review remains unvalidated.
 // NO_PILLOW_SUPPORT: Internal high-depth raster identities have declared
-// core-only band and mutation routes. The TODO above still audits the remaining
-// sample semantics and removes conversions used only for implementation reuse.
+// core-only band and mutation routes; their narrowing and output rules remain
+// explicit in each mode contract.
 //!
 //! This internal operation retains its original defensive index behavior.
 //! Image::getchannel validates public selectors, rejects I/F, and preserves
