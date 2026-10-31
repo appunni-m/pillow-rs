@@ -216,13 +216,12 @@ fn wrap_prepared_palette(
                 source: Arc::new(Image::Loaded(source)),
                 ops: PipelineOps::empty(),
                 format: None,
-                explicit_mode: Some(Mode::ImagePalette8),
                 backend: None,
                 palette: Some(palette),
                 palette_alpha,
                 materialized: crate::image::materialization_cache(),
                 shape: crate::image::pipeline_shape_cache(),
-                mode: crate::image::pipeline_mode_cache(),
+                mode: crate::image::pipeline_mode_cache_for(Some(Mode::ImagePalette8)),
             })
         }
         Mode::ImagePaletteAlpha8 => Ok(Image::Loaded(LoadedData {

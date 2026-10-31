@@ -18,7 +18,7 @@ impl Image {
             source,
             ops,
             backend,
-            explicit_mode,
+            mode,
             ..
         } = self
         else {
@@ -35,7 +35,10 @@ impl Image {
         if !backend_is_unambiguous {
             return false;
         }
-        if !matches!(*explicit_mode, None | Some(crate::raster::Mode::ImageRgb8))
+        if !matches!(
+            super::declared_pipeline_mode(mode),
+            None | Some(crate::raster::Mode::ImageRgb8)
+        )
             || ops.is_empty()
         {
             return false;
@@ -72,7 +75,7 @@ impl Image {
             source,
             ops,
             backend,
-            explicit_mode,
+            mode,
             ..
         } = self
         else {
@@ -107,7 +110,7 @@ impl Image {
                     source.image.as_ref(),
                     ops.as_slice(),
                     &thumbnail,
-                    *explicit_mode,
+                    super::declared_pipeline_mode(mode),
                     &crate::compute::ExecutionContext::for_routed_backend(
                         selected_backend,
                     ),

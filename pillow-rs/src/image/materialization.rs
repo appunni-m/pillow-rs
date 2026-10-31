@@ -11,8 +11,9 @@ use crate::pipeline::{PipelineOp, ResampleFilter, TransformMethod};
 use crate::raster::{DynamicImage, Mode};
 
 use super::{
-    Image, LoadedData, PalettedData, PipelinePrefixCache, expand_palette, expand_palette_alpha,
-    materialization_cache, padded_palette, take_cached_materialization, validate_scalar_storage,
+    Image, LoadedData, PalettedData, PipelinePrefixCache, declared_pipeline_mode, expand_palette,
+    expand_palette_alpha, materialization_cache, padded_palette, take_cached_materialization,
+    validate_scalar_storage,
 };
 
 fn image_from_materialized(
@@ -407,7 +408,7 @@ impl Image {
             Image::Pipeline {
                 source,
                 ops,
-                explicit_mode,
+                mode,
                 backend,
                 palette,
                 palette_alpha,
@@ -416,10 +417,11 @@ impl Image {
             } => materialized
                 .get_or_init(|| {
                     let _origin_scope = ops.telemetry_origin_scope();
+                    let output_mode = declared_pipeline_mode(mode);
                     Self::evaluate_pipeline(
                         source,
                         ops.as_slice(),
-                        explicit_mode,
+                        &output_mode,
                         *backend,
                         palette,
                         palette_alpha,
@@ -450,7 +452,7 @@ impl Image {
     fn evaluate_pipeline(
         source: &Image,
         ops: &[PipelineOp],
-        explicit_mode: &Option<Mode>,
+        output_mode: &Option<Mode>,
         backend: Option<crate::compute::Backend>,
         palette: &Option<Vec<u8>>,
         palette_alpha: &Option<Vec<u8>>,
@@ -470,7 +472,7 @@ impl Image {
                         source_image.as_ref(),
                         &source_image,
                         prefix_ops,
-                        explicit_mode,
+                        output_mode,
                         &prepared,
                         palette,
                         palette_alpha,
@@ -492,7 +494,7 @@ impl Image {
                 &prepared,
                 suffix_ops,
                 &prefix_image,
-                *explicit_mode,
+                *output_mode,
                 inputs,
             );
         }
@@ -503,7 +505,7 @@ impl Image {
             source_image.as_ref(),
             &source_image,
             ops,
-            explicit_mode,
+            output_mode,
             &prepared,
             palette,
             palette_alpha,
@@ -513,7 +515,7 @@ impl Image {
     pub(super) fn evaluate_pipeline_uncached(
         source: &Image,
         ops: &[PipelineOp],
-        explicit_mode: &Option<Mode>,
+        output_mode: &Option<Mode>,
         backend: Option<crate::compute::Backend>,
         palette: &Option<Vec<u8>>,
         palette_alpha: &Option<Vec<u8>>,
@@ -525,7 +527,7 @@ impl Image {
             source_image.as_ref(),
             &source_image,
             ops,
-            explicit_mode,
+            output_mode,
             &prepared,
             palette,
             palette_alpha,
@@ -572,7 +574,7 @@ impl Image {
         source: &Image,
         img: &DynamicImage,
         ops: &[PipelineOp],
-        explicit_mode: &Option<Mode>,
+        output_mode: &Option<Mode>,
         prepared: &crate::compute::PreparedExecution,
         palette: &Option<Vec<u8>>,
         palette_alpha: &Option<Vec<u8>>,
@@ -584,7 +586,7 @@ impl Image {
             .iter()
             .all(|op| Self::is_palette_safe_op_for_source(source, op));
         if all_safe {
-            let palette_mode = if *explicit_mode == Some(Mode::ImagePaletteAlpha8)
+            let palette_mode = if *output_mode == Some(Mode::ImagePaletteAlpha8)
                 || source.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
             {
                 Mode::ImagePaletteAlpha8
@@ -623,7 +625,7 @@ impl Image {
         // incorrectly expose the index as grayscale (for example, index
         // 7 would become RGB(7, 7, 7)).
         let palette = palette.clone().or_else(|| source.extract_palette());
-        let pillow_output_mode = explicit_mode
+        let pillow_output_mode = output_mode
             .as_ref()
             .copied()
             .filter(|mode| mode.pillow_name().is_some());
@@ -661,7 +663,7 @@ impl Image {
         source: &Image,
         img: &DynamicImage,
         ops: &[PipelineOp],
-        explicit_mode: &Option<Mode>,
+        output_mode: &Option<Mode>,
     ) -> Result<Option<Mode>, PilError> {
         // RemapPalette needs the source mode to distinguish L samples from P
         // indices; its pipeline result may stay P-tagged.
@@ -685,7 +687,7 @@ impl Image {
         // source identity in the lazy image header.
         let source_luma16_mode = if remap_source_mode.is_none()
             && convert_source_mode.is_none()
-            && explicit_mode.is_none()
+            && output_mode.is_none()
             && matches!(img, DynamicImage::ImageI16(_))
         {
             Some(source.mode_identity()?)
@@ -706,7 +708,7 @@ impl Image {
             .or(convert_source_mode)
             .or(source_luma16_mode)
             .or(initial_source_mode)
-            .or(*explicit_mode);
+            .or(*output_mode);
         Ok(logical_mode)
     }
 
@@ -715,7 +717,7 @@ impl Image {
         img: &DynamicImage,
         shared_img: &Arc<DynamicImage>,
         ops: &[PipelineOp],
-        explicit_mode: &Option<Mode>,
+        output_mode: &Option<Mode>,
         prepared: &crate::compute::PreparedExecution,
         palette: &Option<Vec<u8>>,
         palette_alpha: &Option<Vec<u8>>,
@@ -734,7 +736,7 @@ impl Image {
             source,
             img,
             ops,
-            explicit_mode,
+            output_mode,
             prepared,
             palette,
             palette_alpha,
@@ -747,7 +749,7 @@ impl Image {
             source,
             img,
             ops,
-            explicit_mode,
+            output_mode,
         )?;
         let resolved_palette = if palette.is_none() {
             source.extract_palette()
@@ -785,24 +787,25 @@ impl Image {
             Image::Pipeline {
                 source,
                 ops,
-                explicit_mode,
+                mode,
                 backend,
                 palette,
                 palette_alpha,
                 ..
             } => {
                 let _origin_scope = ops.telemetry_origin_scope();
+                let output_mode = declared_pipeline_mode(mode);
                 Self::evaluate_pipeline_uncached(
                     source,
                     ops,
-                    explicit_mode,
+                    &output_mode,
                     *backend,
                     palette,
                     palette_alpha,
                 )
                 .and_then(|image| {
                     let image = image.as_ref().clone();
-                    let Some(mode) = explicit_mode else {
+                    let Some(mode) = output_mode else {
                         return Ok(image);
                     };
                     let Some(name) = super::mode_boundary::pillow_mode_name(*mode) else {

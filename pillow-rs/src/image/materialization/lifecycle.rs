@@ -1,5 +1,6 @@
 use super::{
-    DynamicImage, Image, LoadedData, PalettedData, PilError, expand_palette,
+    DynamicImage, Image, LoadedData, PalettedData, PilError, declared_pipeline_mode,
+    expand_palette,
     image_from_materialized, map_codec_error, materialization_cache,
 };
 impl Image {
@@ -58,13 +59,13 @@ impl Image {
             )?,
             Image::Pipeline {
                 source,
-                explicit_mode,
+                mode,
                 format,
                 palette,
                 palette_alpha,
                 ..
             } => {
-                if *explicit_mode == Some(crate::raster::Mode::ImagePalette8) {
+                if declared_pipeline_mode(mode) == Some(crate::raster::Mode::ImagePalette8) {
                     if let Some(palette) = palette {
                         let indices = self.materialized_shared()?.as_ref().clone().to_luma8();
                         Image::Paletted(PalettedData {
@@ -122,7 +123,7 @@ impl Image {
             Image::Pipeline {
                 source,
                 ops,
-                explicit_mode,
+                mode,
                 backend,
                 palette,
                 palette_alpha,
@@ -132,7 +133,7 @@ impl Image {
                 Self::evaluate_pipeline_uncached(
                     source,
                     ops,
-                    explicit_mode,
+                    &declared_pipeline_mode(mode),
                     *backend,
                     palette,
                     palette_alpha,

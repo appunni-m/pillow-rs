@@ -183,15 +183,11 @@ pub fn merge(mode: Mode, bands: &[Image]) -> Result<Image, PilError> {
             bands: bands.to_vec().into(),
         },
     );
-    if let Image::Pipeline {
-        explicit_mode: tag, ..
-    } = &mut result
-        && !matches!(
-            mode,
-            Mode::ImageLuma8 | Mode::ImageLumaA8 | Mode::ImageRgb8 | Mode::ImageRgba8
-        )
-    {
-        *tag = Some(mode);
+    if !matches!(
+        mode,
+        Mode::ImageLuma8 | Mode::ImageLumaA8 | Mode::ImageRgb8 | Mode::ImageRgba8
+    ) {
+        result.set_pipeline_output_mode(Some(mode));
     }
     Ok(result)
 }
@@ -336,13 +332,11 @@ pub fn composite(image1: &Image, image2: &Image, mask: &Image) -> Result<Image, 
         },
     );
     if let Image::Pipeline {
-        ref mut explicit_mode,
         ref mut palette,
         ref mut palette_alpha,
         ..
     } = result
     {
-        *explicit_mode = image2.known_mode_identity();
         if output_mode == Mode::ImagePalette8 {
             // The output begins as image2.copy(), so palette ownership follows
             // image2 even when image1 was converted to P for the paste.
@@ -358,6 +352,7 @@ pub fn composite(image1: &Image, image2: &Image, mask: &Image) -> Result<Image, 
             *palette_alpha = None;
         }
     }
+    result.set_pipeline_output_mode(image2.known_mode_identity());
     Ok(result)
 }
 

@@ -388,11 +388,51 @@ pub struct PipelinePrefixCache {
 /// a failing source-header lookup.
 pub type PipelineShapeCache = Arc<OnceLock<Result<Option<(u32, u32)>, PilError>>>;
 
-/// Shared once-initialized Pillow-owned output identity for a lazy pipeline node.
+/// Single cached mode state for a lazy pipeline node.
 ///
-/// `None` means that the operation list contains a mode transition whose
-/// representation cannot be described without materializing pixels.
-pub type PipelineModeCache = Arc<OnceLock<Result<Option<Mode>, PilError>>>;
+/// A declared mode carries operation output metadata. A planned mode is
+/// computed from the graph on demand; `Planned(None)` keeps the existing
+/// materialization fallback for transitions that cannot be inferred.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum PipelineModeState {
+    /// The lazy graph carries its output identity from construction/update.
+    Declared(Mode),
+    /// Metadata planning inferred the output identity from the lazy graph.
+    Planned(Option<Mode>),
+}
+
+/// Opaque shared cache for a lazy pipeline's declared or planned output mode.
+#[derive(Debug, Clone)]
+pub struct PipelineModeCache {
+    state: Arc<OnceLock<Result<PipelineModeState, PilError>>>,
+}
+
+impl PipelineModeCache {
+    fn new() -> Self {
+        Self {
+            state: Arc::new(OnceLock::new()),
+        }
+    }
+
+    fn with_declared_mode(mode: Mode) -> Self {
+        let cache = Self::new();
+        let _ = cache
+            .state
+            .set(Ok(PipelineModeState::Declared(mode)));
+        cache
+    }
+
+    pub(crate) fn get(&self) -> Option<&Result<PipelineModeState, PilError>> {
+        self.state.get()
+    }
+
+    pub(crate) fn get_or_init<F>(&self, initialize: F) -> &Result<PipelineModeState, PilError>
+    where
+        F: FnOnce() -> Result<PipelineModeState, PilError>,
+    {
+        self.state.get_or_init(initialize)
+    }
+}
 
 pub(crate) fn materialization_cache() -> MaterializationCache {
     Arc::new(OnceLock::new())
@@ -402,15 +442,50 @@ pub(crate) fn pipeline_shape_cache() -> PipelineShapeCache {
     Arc::new(OnceLock::new())
 }
 
-pub(crate) fn pipeline_mode_cache() -> PipelineModeCache {
-    Arc::new(OnceLock::new())
+fn pipeline_mode_cache() -> PipelineModeCache {
+    PipelineModeCache::new()
+}
+
+/// Creates the single pipeline mode cache, optionally seeded with an output
+/// identity already known while constructing or updating the lazy graph.
+pub(crate) fn pipeline_mode_cache_for(output_mode: Option<Mode>) -> PipelineModeCache {
+    match output_mode {
+        Some(mode) => PipelineModeCache::with_declared_mode(mode),
+        None => pipeline_mode_cache(),
+    }
+}
+
+/// Returns a mode already carried by the graph or resolved by a prior metadata
+/// query, without triggering planning or materialization.
+pub(crate) fn cached_pipeline_mode(cache: &PipelineModeCache) -> Option<Mode> {
+    cache
+        .get()
+        .and_then(|result| result.as_ref().ok())
+        .and_then(|state| match state {
+            PipelineModeState::Declared(mode) | PipelineModeState::Planned(Some(mode)) => {
+                Some(*mode)
+            }
+            PipelineModeState::Planned(None) => None,
+        })
+}
+
+/// Returns only the output identity carried by the graph, not one inferred by
+/// a later metadata query.
+pub(crate) fn declared_pipeline_mode(cache: &PipelineModeCache) -> Option<Mode> {
+    cache
+        .get()
+        .and_then(|result| result.as_ref().ok())
+        .and_then(|state| match state {
+            PipelineModeState::Declared(mode) => Some(*mode),
+            PipelineModeState::Planned(_) => None,
+        })
 }
 
 struct PipelineOutputMetadata {
     source_is_paletted: bool,
     palette_safe: bool,
     promotes_p_to_pa: bool,
-    explicit_mode: Option<Mode>,
+    output_mode: Option<Mode>,
     palette: Option<Vec<u8>>,
     palette_alpha: Option<Vec<u8>>,
 }
@@ -435,7 +510,7 @@ fn pipeline_output_metadata(source: &Image, op: &PipelineOp) -> PipelineOutputMe
                 ..
             }
         );
-    let explicit_mode =
+    let output_mode =
         pipeline_output_mode(source, op, source_is_paletted, palette_safe, putalpha_mode);
     let (palette, palette_alpha) = pipeline_output_palette(
         source,
@@ -447,7 +522,7 @@ fn pipeline_output_metadata(source: &Image, op: &PipelineOp) -> PipelineOutputMe
         source_is_paletted,
         palette_safe,
         promotes_p_to_pa,
-        explicit_mode,
+        output_mode,
         palette,
         palette_alpha,
     }
@@ -457,7 +532,7 @@ fn new_pipeline_node(
     source: Arc<Image>,
     ops: PipelineOps,
     backend: Option<crate::compute::Backend>,
-    explicit_mode: Option<Mode>,
+    output_mode: Option<Mode>,
     palette: Option<Vec<u8>>,
     palette_alpha: Option<Vec<u8>>,
 ) -> Image {
@@ -465,13 +540,12 @@ fn new_pipeline_node(
         source,
         ops,
         format: None,
-        explicit_mode,
         backend,
         palette,
         palette_alpha,
         materialized: materialization_cache(),
         shape: pipeline_shape_cache(),
-        mode: pipeline_mode_cache(),
+        mode: pipeline_mode_cache_for(output_mode),
     }
 }
 
@@ -482,7 +556,7 @@ fn append_pipeline_op(
     materialized: &MaterializationCache,
     op: PipelineOp,
     source_is_paletted: bool,
-    explicit_mode: Option<Mode>,
+    output_mode: Option<Mode>,
     palette: Option<Vec<u8>>,
     palette_alpha: Option<Vec<u8>>,
 ) -> Image {
@@ -509,7 +583,7 @@ fn append_pipeline_op(
         Arc::clone(source),
         new_ops,
         backend,
-        explicit_mode,
+        output_mode,
         palette,
         palette_alpha,
     )
@@ -523,7 +597,7 @@ fn pipeline_output_mode(
     putalpha_mode: Option<Mode>,
 ) -> Option<Mode> {
     let source_mode = source.known_mode_identity();
-    let explicit_mode = if matches!(
+    let output_mode = if matches!(
         op,
         PipelineOp::ExtractBand { .. } | PipelineOp::Merge { .. }
     ) {
@@ -559,7 +633,7 @@ fn pipeline_output_mode(
     match putalpha_mode {
         Some(Mode::ImagePalette8 | Mode::ImagePaletteAlpha8) => Some(Mode::ImagePaletteAlpha8),
         Some(Mode::ImageCmyk8) => None,
-        _ => explicit_mode,
+        _ => output_mode,
     }
 }
 
@@ -604,20 +678,28 @@ fn pipeline_output_palette(
 }
 
 impl Image {
+    /// Replaces a pipeline's cached output identity after an operation adapter
+    /// supplies a more exact mode contract.
+    pub(crate) fn set_pipeline_output_mode(&mut self, output_mode: Option<Mode>) {
+        if let Image::Pipeline { mode, .. } = self {
+            *mode = pipeline_mode_cache_for(output_mode);
+        }
+    }
+
     // ── Pipeline ops ──
 
     /// Returns a lazy image with `op` appended to its pipeline.
     ///
     /// Existing pipelines are extended in order. Non-pipeline images become the
     /// source of a new pipeline. Mode metadata and palettes are carried forward
-    /// when the operation can preserve them; operations that fundamentally
-    /// change mode clear or replace the explicit mode tag.
+    /// when the operation can preserve them; mode-changing operations declare
+    /// a replacement output identity when the contract can resolve it.
     pub fn push_op(source: &Image, op: PipelineOp) -> Image {
         let PipelineOutputMetadata {
             source_is_paletted,
             palette_safe,
             promotes_p_to_pa,
-            explicit_mode,
+            output_mode,
             palette,
             palette_alpha,
         } = pipeline_output_metadata(source, &op);
@@ -636,7 +718,7 @@ impl Image {
                     Arc::new(source.clone()),
                     PipelineOps::one(op),
                     source.backend(),
-                    explicit_mode,
+                    output_mode,
                     palette,
                     palette_alpha,
                 )
@@ -654,7 +736,7 @@ impl Image {
                 pipeline_materialized,
                 op,
                 source_is_paletted,
-                explicit_mode,
+                output_mode,
                 palette,
                 palette_alpha,
             ),
@@ -662,7 +744,7 @@ impl Image {
                 Arc::new(other.clone()),
                 PipelineOps::one(op),
                 other.backend(),
-                explicit_mode,
+                output_mode,
                 palette,
                 palette_alpha,
             ),
@@ -677,19 +759,18 @@ impl Image {
     pub(crate) fn push_mode_changing_op(
         source: &Image,
         op: PipelineOp,
-        explicit_mode: Mode,
+        output_mode: Mode,
     ) -> Image {
         Image::Pipeline {
             source: Arc::new(source.clone()),
             ops: PipelineOps::one(op),
             format: None,
-            explicit_mode: Some(explicit_mode),
             backend: source.backend(),
             palette: None,
             palette_alpha: None,
             materialized: materialization_cache(),
             shape: pipeline_shape_cache(),
-            mode: pipeline_mode_cache(),
+            mode: pipeline_mode_cache_for(Some(output_mode)),
         }
     }
 }

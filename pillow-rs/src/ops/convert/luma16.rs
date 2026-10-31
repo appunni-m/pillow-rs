@@ -21,9 +21,7 @@ pub(super) fn try_convert_to_luma16(
                 dither: None,
             },
         );
-        if let Image::Pipeline { explicit_mode, .. } = &mut result {
-            *explicit_mode = Some(target_mode);
-        }
+        result.set_pipeline_output_mode(Some(target_mode));
         return Ok(Some(result));
     }
     if crate::compute::pool_cpu::ops::color::convert::ops::SUPPORT

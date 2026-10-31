@@ -70,11 +70,13 @@ use data_access::{
     is_l16_mode, l16_uses_big_endian, pillow_band_count, validate_scalar_storage,
 };
 pub use pipeline_ops::{
-    MaterializationCache, PipelineModeCache, PipelineOps, PipelinePrefixCache, PipelineShapeCache,
+    MaterializationCache, PipelineModeCache, PipelineOps, PipelinePrefixCache,
+    PipelineShapeCache,
 };
 use pipeline_ops::{known_pipeline_op_dimensions, take_cached_materialization};
 pub(crate) use pipeline_ops::{
-    known_pipeline_op_mode, materialization_cache, pipeline_mode_cache, pipeline_shape_cache,
+    cached_pipeline_mode, declared_pipeline_mode, known_pipeline_op_mode, materialization_cache,
+    pipeline_mode_cache_for, pipeline_shape_cache, PipelineModeState,
 };
 mod pixel_access;
 pub use pixel_access::PutPixelValue;
@@ -290,7 +292,7 @@ pub enum Image {
     /// Lazy pipeline — operations recorded, not executed.
     /// source: the input image (loaded or another pipeline).
     /// ops: the operations to apply, in order.
-    /// explicit_mode: logical output identity retained before materialization.
+    /// mode: cached or operation-declared output identity.
     Pipeline {
         /// Input image feeding the operation pipeline.
         source: Arc<Image>,
@@ -298,11 +300,6 @@ pub enum Image {
         ops: PipelineOps,
         /// Output format inherited from the source when known.
         format: Option<ImageFormat>,
-        /// Pillow mode identity retained for a pending pipeline output.
-        ///
-        /// TODO(pillow-rs#3ptb): consolidate this with `PipelineModeCache` once
-        /// each mode-changing operation declares its output `Mode` when queued.
-        explicit_mode: Option<Mode>,
         /// Locked backend for this pipeline. None = use global active set.
         backend: Option<crate::compute::Backend>,
         /// Quantize palette (RGB triples) — populated after Quantize op materializes.
@@ -313,7 +310,7 @@ pub enum Image {
         materialized: MaterializationCache,
         /// Shape metadata initialized by the first property query.
         shape: PipelineShapeCache,
-        /// Logical output mode initialized by the first mode query.
+        /// Operation-declared or lazily planned output identity.
         mode: PipelineModeCache,
     },
 }

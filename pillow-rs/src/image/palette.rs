@@ -8,7 +8,7 @@ use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
 
-use super::{Image, LoadedData, PalettedData, materialization_cache};
+use super::{Image, LoadedData, PalettedData, declared_pipeline_mode, materialization_cache};
 
 pub(super) fn padded_palette(rgb: &[u8]) -> Vec<u8> {
     let mut palette = rgb.to_vec();
@@ -171,10 +171,7 @@ impl Image {
         match self {
             Image::Loaded(data) => Some(data.image.mode()),
             Image::Paletted(_) => Some(crate::raster::Mode::ImagePalette8),
-            Image::Pipeline {
-                explicit_mode: Some(mode),
-                ..
-            } => Some(*mode),
+            Image::Pipeline { mode, .. } => declared_pipeline_mode(mode),
             _ => None,
         }
     }
@@ -539,16 +536,15 @@ impl Image {
             },
         );
         if let Image::Pipeline {
-            explicit_mode,
             palette,
             palette_alpha,
             ..
         } = &mut result
         {
-            *explicit_mode = Some(crate::raster::Mode::ImagePalette8);
             *palette = Some(remapped_palette);
             *palette_alpha = remapped_alpha;
         }
+        result.set_pipeline_output_mode(Some(crate::raster::Mode::ImagePalette8));
         Ok(result)
     }
 }

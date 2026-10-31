@@ -7,9 +7,12 @@ use image_slash_star::{ImageFormat, ImageInfo};
 
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, Mode};
 
-use super::{Image, PipelineOps, image_mode_name, materialization_cache};
+use super::{
+    Image, PipelineOps, cached_pipeline_mode, declared_pipeline_mode, image_mode_name,
+    materialization_cache,
+};
 #[cfg(feature = "gpu")]
 use super::{MaterializationCache, PipelineModeCache};
 
@@ -268,7 +271,6 @@ impl Image {
                 ops,
                 materialized,
                 backend,
-                explicit_mode,
                 palette,
                 mode,
                 ..
@@ -277,7 +279,6 @@ impl Image {
                 ops,
                 materialized,
                 *backend,
-                super::mode_boundary::pillow_mode_name_opt(*explicit_mode),
                 palette.is_some(),
                 mode,
                 depth,
@@ -318,7 +319,6 @@ impl Image {
         ops: &'a PipelineOps,
         materialized: &'a MaterializationCache,
         backend: Option<crate::Backend>,
-        explicit_mode: Option<&'a str>,
         has_palette: bool,
         mode: &'a PipelineModeCache,
         depth: usize,
@@ -328,27 +328,24 @@ impl Image {
                 "GPU batch graph is locked to another backend".into(),
             ));
         }
-        if has_palette || matches!(explicit_mode, Some("P" | "PA")) {
+        let output_mode = cached_pipeline_mode(mode);
+        let declared_mode = declared_pipeline_mode(mode);
+        if has_palette
+            || matches!(
+                declared_mode,
+                Some(Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
+            )
+        {
             return Err(PilError::ValueError(
                 "GPU graph palette boundary is not yet represented by a native plan".into(),
             ));
         }
         if let Some(pixels) = materialized.get() {
             let pixels = pixels.clone()?;
-            let cached_mode = explicit_mode
-                .map(str::to_owned)
-                .or_else(|| {
-                    mode.get()
-                        .and_then(|cached| {
-                            cached.as_ref().ok().and_then(|cached_mode| {
-                                cached_mode
-                                    .as_ref()
-                                    .copied()
-                                    .and_then(super::mode_boundary::pillow_mode_name)
-                                    .map(str::to_owned)
-                            })
-                        })
-                });
+            let cached_mode = declared_mode
+                .or(output_mode)
+                .and_then(super::mode_boundary::pillow_mode_name)
+                .map(str::to_owned);
             let pixel_mode = match cached_mode {
                 Some(mode) => mode,
                 None => gpu_dynamic_mode_name(&pixels)?,
@@ -359,7 +356,9 @@ impl Image {
             && let Some(pixels) = prefix.materialized.get()
         {
             let pixels = pixels.clone()?;
-            let pixel_mode = match explicit_mode {
+            let pixel_mode = match declared_mode
+                .and_then(super::mode_boundary::pillow_mode_name)
+            {
                 Some(mode) => mode.to_owned(),
                 None => gpu_dynamic_mode_name(&pixels)?,
             };

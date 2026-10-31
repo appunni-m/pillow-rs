@@ -86,9 +86,7 @@ pub(super) fn try_convert_early_modes(
                 dither: None,
             },
         );
-        if let Image::Pipeline { explicit_mode, .. } = &mut result {
-            *explicit_mode = Some(pipeline_mode);
-        }
+        result.set_pipeline_output_mode(Some(pipeline_mode));
         return Ok(Some(result));
     }
     if source_mode == Mode::ImageCmyk8 && target_mode == Mode::ImageRgb8 {
@@ -129,9 +127,7 @@ pub(super) fn try_convert_early_modes(
                 dither: None,
             },
         );
-        if let Image::Pipeline { explicit_mode, .. } = &mut result {
-            *explicit_mode = Some(target_mode);
-        }
+        result.set_pipeline_output_mode(Some(target_mode));
         return Ok(Some(result));
     }
     if target_mode == Mode::ImageLab8 {
@@ -177,9 +173,7 @@ fn convert_to_lab(image: &Image, source_mode: Mode) -> Result<Image, PilError> {
             icc_profile: crate::lab::pillow_lab_icc_profile().into(),
         },
     );
-    if let Image::Pipeline { explicit_mode, .. } = &mut result {
-        *explicit_mode = Some(crate::raster::Mode::ImageLab8);
-    }
+    result.set_pipeline_output_mode(Some(crate::raster::Mode::ImageLab8));
     Ok(result)
 }
 

@@ -540,7 +540,7 @@ mod tests {
             source,
             ops,
             backend,
-            explicit_mode,
+            mode,
             ..
         } = &image
         else {
@@ -548,7 +548,7 @@ mod tests {
         };
         assert_eq!(*backend, None);
         assert!(matches!(
-            explicit_mode,
+            crate::image::declared_pipeline_mode(mode),
             None | Some(crate::raster::Mode::ImageRgb8)
         ));
         assert!(matches!(source.as_ref(), CoreImage::Loaded(_)));

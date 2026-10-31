@@ -344,12 +344,11 @@ fn build_paletted_image(
             DynamicImage::ImagePalette8(output))),
         ops: PipelineOps::empty(),
         format: None,
-        explicit_mode: Some(crate::raster::Mode::ImagePalette8),
         backend: None,
         palette: Some(quantized.palette),
         palette_alpha: quantized.alpha,
         materialized: crate::image::materialization_cache(),
         shape: crate::image::pipeline_shape_cache(),
-        mode: crate::image::pipeline_mode_cache(),
+        mode: crate::image::pipeline_mode_cache_for(Some(crate::raster::Mode::ImagePalette8)),
     })
 }

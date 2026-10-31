@@ -161,6 +161,13 @@ The temporary migration may be uncompilable; no compiler or lint runs here.
 Deliverable: mode is determined once at admission or a mode-changing operation;
 maintained CPU code does not recover it from strings or storage layout.
 
+Source-only progress (2026-11-01): `Image::Pipeline` now has one
+`PipelineModeCache` instead of a separate `explicit_mode` field and lazy cache.
+The cache distinguishes a graph-declared output mode from a mode inferred
+by metadata planning, so materialization keeps consuming declared execution
+context while mode queries can use the planned result. This boundary has not
+been compiled or validated, and the remaining Stage 2 work is still open.
+
 ## Stage 3: inject Backend and Architecture
 
 1. Define immutable execution context and the centralized selection policy.

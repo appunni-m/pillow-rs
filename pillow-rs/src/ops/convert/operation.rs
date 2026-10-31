@@ -114,9 +114,7 @@ fn push_pipeline_convert(image: &Image, mode: Mode) -> Image {
             dither: None,
         },
     );
-    if let Image::Pipeline { explicit_mode, .. } = &mut result {
-        *explicit_mode = Some(mode);
-    }
+    result.set_pipeline_output_mode(Some(mode));
     result
 }
 

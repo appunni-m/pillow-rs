@@ -7,8 +7,9 @@ use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, GenericImageView, Mode};
 
 use super::{
-    Image, ImageInfoValue, PaletteTransparency, PalettedData, known_pipeline_op_dimensions,
-    known_pipeline_op_mode, materialization_cache,
+    Image, ImageInfoValue, PaletteTransparency, PalettedData, cached_pipeline_mode,
+    known_pipeline_op_dimensions, known_pipeline_op_mode, materialization_cache,
+    PipelineModeState,
 };
 
 /// Prepared fields for Pillow's lightweight public EXIF compatibility object.
@@ -688,7 +689,6 @@ impl Image {
                     })
                 }),
             Image::Pipeline {
-                explicit_mode,
                 materialized,
                 mode,
                 ..
@@ -696,13 +696,7 @@ impl Image {
                 .get()
                 .and_then(|result| result.as_ref().ok())
                 .map(|image| image.mode())
-                .or(*explicit_mode)
-                .or_else(|| {
-                    mode.get()
-                        .and_then(|result| result.as_ref().ok())
-                        .copied()
-                        .flatten()
-                }),
+                .or_else(|| cached_pipeline_mode(mode)),
         }
     }
 
@@ -729,18 +723,21 @@ impl Image {
                     source.mode_identity()?
                 };
                 if ops.mode_preserving() {
-                    return Ok(Some(current));
+                    return Ok(PipelineModeState::Planned(Some(current)));
                 }
                 for op in ops.iter() {
                     let Some(next) = known_pipeline_op_mode(op, current) else {
-                        return Ok(None);
+                        return Ok(PipelineModeState::Planned(None));
                     };
                     current = next;
                 }
-                Ok(Some(current))
+                Ok(PipelineModeState::Planned(Some(current)))
             });
-            if let Some(mode) = planned.as_ref().map_err(Clone::clone)? {
-                return Ok(*mode);
+            match planned.as_ref().map_err(Clone::clone)? {
+                PipelineModeState::Declared(mode) | PipelineModeState::Planned(Some(mode)) => {
+                    return Ok(*mode);
+                }
+                PipelineModeState::Planned(None) => {}
             }
         }
         Ok(self.materialized_shared()?.mode())
@@ -756,45 +753,8 @@ impl Image {
     /// Returns [`PilError`] when lazy data must be materialized to determine
     /// the mode and that materialization fails.
     pub fn mode(&self) -> Result<String, PilError> {
-        if let Some(mode) = self.known_mode_identity() {
-            return Ok(super::mode_boundary::pillow_mode_name(mode)
-                .unwrap_or("unknown")
-                .to_owned());
-        }
-        match self {
-            Image::Pipeline {
-                source,
-                ops,
-                mode,
-                ..
-            } => {
-                let planned = mode.get_or_init(|| {
-                    let mut current = if let Some(mode) = source.known_mode_identity() {
-                        mode
-                    } else {
-                        source.mode_identity()?
-                    };
-                    if ops.mode_preserving() {
-                        return Ok(Some(current));
-                    }
-                    for op in ops.iter() {
-                        let Some(next) = known_pipeline_op_mode(op, current) else {
-                            return Ok(None);
-                        };
-                        current = next;
-                    }
-                    Ok(Some(current))
-                });
-                if let Some(mode) = planned.as_ref().map_err(Clone::clone)?.as_ref() {
-                    return Ok(super::mode_boundary::pillow_mode_name(*mode)
-                        .unwrap_or("unknown")
-                        .to_owned());
-                }
-            }
-            _ => {}
-        }
-        let img = self.materialized_shared()?;
-        Ok(super::mode_boundary::pillow_mode_name(Self::mode_from_materialized(&img))
+        let mode = self.mode_identity()?;
+        Ok(super::mode_boundary::pillow_mode_name(mode)
             .unwrap_or("unknown")
             .to_owned())
     }
