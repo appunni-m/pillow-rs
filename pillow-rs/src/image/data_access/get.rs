@@ -374,14 +374,33 @@ fn getdata_unsigned_luma16_values(image: &DynamicImage, mode: Mode) -> Result<Ve
 
 impl Image {
     fn getdata_band(&self, image: &DynamicImage, band: i32) -> Result<Vec<u8>, PilError> {
-        // TODO(pillow-rs#3ptb): route this allocated API through the same
-        // backend/architecture selection as the caller-owned output path.
         // Pillow validates the requested logical band before extracting it.
         // Keep this check in the core so every binding observes the same
         // contract instead of silently clamping to RGBA channel 3.
         let mode = image.mode();
-        let band = validated_band_index(band, getdata_band_count(mode))?;
-        getdata_band_bytes(image, mode, band)
+        let band_index = validated_band_index(band, getdata_band_count(mode))?;
+        if matches!(
+            mode,
+            Mode::ImageI16
+                | Mode::ImageI16L
+                | Mode::ImageI16B
+                | Mode::ImageI16N
+                | Mode::ImageI32
+                | Mode::ImageF32
+        ) {
+            // These scalar modes intentionally have no caller-owned band
+            // buffer API. Keep their established direct byte conversion.
+            return getdata_band_bytes(image, mode, band_index);
+        }
+
+        let dimensions = crate::checked_dims::CheckedDims::new_allow_empty(
+            image.width(),
+            image.height(),
+            1,
+        )?;
+        let mut output = dimensions.alloc_buffer();
+        self.getdata_band_into(band, &mut output)?;
+        Ok(output)
     }
 
     /// Returns pixel data as a flat sequence of channel bytes.
