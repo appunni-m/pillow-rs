@@ -58,7 +58,7 @@ fn cpu_pending_rgb_projection_applies_overwrites_and_ignores_alpha() -> Result<(
 }
 
 #[test]
-fn simd_pending_rgb_projection_executes_vector_blocks() -> Result<(), PilError> {
+fn simd_alias_rgb_projection_executes_cpu_vector_blocks() -> Result<(), PilError> {
     use crate::compute::Backend;
 
     let mut image = Image::new(17, 4, crate::raster::Mode::ImageRgb8, (0, 0, 0, 255))?;
@@ -77,8 +77,9 @@ fn simd_pending_rgb_projection_executes_vector_blocks() -> Result<(), PilError> 
     expected_horizontal[0] = 1;
     expected_horizontal[16] = 1;
     assert_eq!(projection, (expected_horizontal, vec![1, 0, 0, 1]));
-    let receipt = receipt.expect("SIMD RGB projection terminal receipt");
-    assert_eq!(receipt.1, Backend::Simd);
+    let receipt = receipt.expect("CPU architecture RGB projection terminal receipt");
+    assert_eq!(receipt.0, Some(Backend::Simd));
+    assert_eq!(receipt.1, Backend::Cpu);
     assert_eq!(receipt.2, 3);
     assert_eq!(receipt.7, None);
     assert_eq!(operation_receipts.len(), 3);

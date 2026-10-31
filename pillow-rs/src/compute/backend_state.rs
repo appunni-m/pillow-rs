@@ -1,12 +1,8 @@
-//! Active backend policy and the compiled backend-pool registry.
+//! Active backend policy and the compiled executor-pool registry.
 //!
-//! TODO(pillow-rs#3ptb): retire `SimdPool` registration and the independent
-//! SIMD activation/priority entries after compatibility requests resolve to
-//! CPU plus an injected Architecture.
-
 #[cfg(feature = "gpu")]
 use super::GpuPool;
-use super::{Backend, BackendImpl, CpuPool, SimdPool};
+use super::{Backend, BackendImpl, CpuPool};
 use crate::error::PilError;
 use std::collections::HashSet;
 use std::sync::{Mutex, MutexGuard, OnceLock};
@@ -83,7 +79,6 @@ pub(super) fn pools() -> &'static [Box<dyn BackendImpl>] {
             Box::new(CpuPool),
             #[cfg(feature = "gpu")]
             Box::new(GpuPool),
-            Box::new(SimdPool),
         ];
         v.sort_by_key(|b| std::cmp::Reverse(b.priority()));
         v
@@ -91,6 +86,8 @@ pub(super) fn pools() -> &'static [Box<dyn BackendImpl>] {
 }
 
 /// Returns every backend compiled into this crate.
+/// Returns compiled executor backends. The legacy SIMD request alias is not
+/// listed because it selects a CPU architecture strategy rather than a pool.
 pub fn available_backends() -> Vec<Backend> {
     pools().iter().map(|p| p.name()).collect()
 }
@@ -103,8 +100,9 @@ pub(crate) fn cpu_is_only_active_backend() -> bool {
     matches!(active_backends(), Ok(active) if active.as_slice() == [Backend::Cpu])
 }
 
-/// Whether an unlocked pipeline is exclusively routed through SIMD.
-pub(crate) fn simd_is_only_active_backend() -> bool {
+/// Whether an unlocked pipeline is exclusively routed through the legacy SIMD
+/// request alias, which selects CPU with the detected host architecture.
+pub(crate) fn cpu_architecture_alias_is_only_active_backend() -> bool {
     matches!(active_backends(), Ok(active) if active.as_slice() == [Backend::Simd])
 }
 

@@ -8,16 +8,16 @@
 //! ImageI16B, ImageI16N, ImageLumaA16, ImageRgb16, ImageRgba16, ImageRgb32F,
 //! and ImageRgba32F. Route their eager `Image::enhance_contrast` conversion
 //! paths through those strategies while preserving conversion and rejection
-//! behavior. Sharpness's native-byte vector kernel now belongs to its exact
-//! mode and architecture owners; reconcile the compatibility SIMD caller
-//! before retiring its registration. Fold the Contrast SIMD LUT and retire
-//! both separate registrations after all callers use this injected context.
+//! behavior. Sharpness's native-byte vector kernel belongs to its exact mode
+//! and architecture owners. TODO: route any remaining direct enhancement
+//! callers through their prepared CPU strategies and compare those owners with
+//! the archived vector/admission paths. There is no active separate SIMD
+//! registration; compatibility requests enter through CPU context selection.
 //! ImageI32 and ImageF32 Sharpness read and write their exact little-endian
 //! scalar samples in the existing four-byte carrier; these native routes are
 //! core extensions and are not reported as Pillow parity.
-//! TODO(pillow-rs#3ptb): route automatic and explicit architecture requests
-//! through the declared Brightness and ColorSaturation mode strategies, then
-//! remove their separate SIMD adapter registrations after caller reconciliation.
+//! TODO(pillow-rs#3ptb): confirm every Brightness and ColorSaturation eager
+//! caller passes the routed CPU architecture context into these mode strategies.
 
 use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{

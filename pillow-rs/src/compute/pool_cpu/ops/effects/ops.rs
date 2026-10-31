@@ -1,9 +1,8 @@
 //! Effect operation contracts and exact-mode strategy composition.
 //!
-//! TODO(pillow-rs#3ptb): retire the remaining compatibility SIMD registrations
-//! after every pipeline and compatibility caller uses the prepared CPU
-//! strategies with its injected context. Rayon scheduling remains owned by
-//! pool_parallel.
+//! TODO(pillow-rs#3ptb): finish comparing every effect mode/architecture
+//! contract against the archived SIMD source and add any missing strategy or
+//! fallback. Rayon scheduling remains owned by `pool_parallel`.
 
 use crate::compute::registry::support::{
     InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport,

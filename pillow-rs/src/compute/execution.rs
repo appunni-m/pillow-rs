@@ -1,20 +1,14 @@
 //! Routing, validating, and executing materialized pipeline batches.
 
-use super::automatic_segments;
 use super::backend_state::{active_lock, pools};
 #[cfg(feature = "gpu")]
 use super::pool_gpu;
-// TODO(pillow-rs#3ptb): replace `execute_automatic_simd`, `simd_initial_mode`,
-// `simd_mode_after_op`, and `first_unsupported_simd_op` with prepared CPU
-// support/transition declarations before removing the independent executor.
-use super::pool_simd;
 use super::registry;
 use super::{
-    Backend, BackendImpl, DynamicImage, ExecutionContext, PilError, PipelineOp, PipelineResourceTelemetry,
+    Backend, DynamicImage, ExecutionContext, PilError, PipelineOp, PipelineResourceTelemetry,
     PipelineTelemetry, begin_pipeline_operation_telemetry, elapsed_ns,
     finish_pipeline_operation_telemetry, host_resource_telemetry, pipeline_telemetry_enabled,
-    pipeline_timestamp, record_pipeline_allocation, record_pipeline_backend_fallback,
-    record_pipeline_operation_handoff, record_pipeline_operation_path,
+    pipeline_timestamp, record_pipeline_allocation, record_pipeline_operation_path,
     record_pipeline_operation_scalar_tail, record_pipeline_operation_unsupported,
     record_pipeline_operation_vector_blocks, record_pipeline_resource_telemetry,
     record_pipeline_telemetry, reset_pipeline_allocation_telemetry,
@@ -51,15 +45,13 @@ fn route_decision(
     // table expands; holding the global policy mutex across that scan would
     // serialize unrelated pipeline construction and backend toggles.
     let active_set = active_lock()?.clone();
+    let simd_alias_active = active_set.contains(&Backend::Simd);
     let mut fallback_reason = None;
     for pool in pools() {
         if active_set.contains(&pool.name()) {
             let mut supports_all = true;
-            let mut supports_any = false;
             for op in ops {
-                if pool.supports(op)? {
-                    supports_any = true;
-                } else {
+                if !pool.supports(op)? {
                     supports_all = false;
                     if pool.name() != Backend::Cpu && fallback_reason.is_none() {
                         fallback_reason = Some(format!(
@@ -68,18 +60,11 @@ fn route_decision(
                             registry::variant_key(op)
                         ));
                     }
-                    // SIMD can execute a mixed host-resident pipeline. Keep
-                    // scanning its descriptors so an operation after a
-                    // CPU-only boundary can still select the SIMD planner.
-                    // GPU remains an all-operations route and stops at the
-                    // first unsupported descriptor.
-                    if pool.name() != Backend::Simd {
-                        break;
-                    }
+                    break;
                 }
             }
-            if pool.name() == Backend::Simd && supports_any {
-                return Ok((pool.name(), fallback_reason, true));
+            if pool.name() == Backend::Cpu && simd_alias_active && supports_all {
+                return Ok((Backend::Simd, fallback_reason, true));
             }
             if supports_all {
                 // The support scan above is the validation pass for automatic
@@ -88,6 +73,18 @@ fn route_decision(
                 // backend executor runs.
                 return Ok((pool.name(), fallback_reason, true));
             }
+        }
+    }
+    if simd_alias_active {
+        let mut supports_all = true;
+        for op in ops {
+            if !registry::cpu_supports(op)? {
+                supports_all = false;
+                break;
+            }
+        }
+        if supports_all {
+            return Ok((Backend::Simd, fallback_reason, true));
         }
     }
     Ok((
@@ -106,25 +103,8 @@ fn backend_label(backend: Backend) -> &'static str {
     match backend {
         Backend::Cpu => "CPU",
         Backend::Gpu => "GPU",
-        Backend::Simd => "SIMD",
+        Backend::Simd => "CPU architecture",
     }
-}
-
-/// Describe an automatic SIMD-to-CPU handoff without misclassifying a valid
-/// public operation as an unsupported outcome.  Contextual SIMD capability is
-/// checked only after the image layout and logical mode are known; when that
-/// check rejects a step, CPU remains the exact semantic executor and the
-/// receipt should expose that fact while retaining the operation key for
-/// diagnosis.
-fn simd_host_control_reason(op: &PipelineOp) -> String {
-    format!(
-        "exact host semantic control: SIMD image-layout guard for {}",
-        registry::variant_key(op)
-    )
-}
-
-fn is_simd_capability_error(error: &PilError) -> bool {
-    matches!(error, PilError::NotImplementedError(message) if message.starts_with("SIMD "))
 }
 
 #[derive(Debug, Clone)]
@@ -146,7 +126,7 @@ impl PreparedExecution {
         self.selected_backend == Backend::Cpu && self.fallback_reason.is_none()
     }
 
-    pub(crate) fn is_simd_without_fallback(&self) -> bool {
+    pub(crate) fn is_cpu_architecture_alias_without_fallback(&self) -> bool {
         self.selected_backend == Backend::Simd && self.fallback_reason.is_none()
     }
 
@@ -218,9 +198,14 @@ pub(crate) fn prepare_execution(
 /// Returns [`PilError::ValueError`] for an unavailable backend or the first
 /// operation without a native implementation on the selected backend.
 pub fn validate_backend_support(backend: Backend, ops: &[PipelineOp]) -> Result<(), PilError> {
+    let executor_backend = if backend == Backend::Simd {
+        Backend::Cpu
+    } else {
+        backend
+    };
     let pool = pools()
         .iter()
-        .find(|pool| pool.name() == backend)
+        .find(|pool| pool.name() == executor_backend)
         .ok_or_else(|| PilError::ValueError(format!("Backend {:?} not available", backend)))?;
     for op in ops {
         if pool.supports(op)? {
@@ -259,11 +244,7 @@ pub fn validate_backend_support(backend: Backend, ops: &[PipelineOp]) -> Result<
                 backend_label(backend)
             )));
         }
-        let name = match backend {
-            Backend::Cpu => "CPU",
-            Backend::Gpu => "GPU",
-            Backend::Simd => "SIMD",
-        };
+        let name = backend_label(backend);
         return Err(PilError::ValueError(format!(
             "{name}: no native impl for {}",
             registry::variant_key(op)
@@ -309,134 +290,6 @@ pub(crate) fn merge_pipeline_resource_telemetry(
         .saturating_add(next.host_allocated_bytes);
 }
 
-// TODO(pillow-rs#3ptb): fold these segments into CPU execution-context
-// selection after CPU family strategies own the archived SIMD contracts.
-// Preserve or deliberately retire the current routing/receipt semantics
-// during that move; this path still depends on the separate SIMD pool.
-///
-/// Execute an automatic CPU/SIMD pipeline as contiguous host-resident
-/// segments.
-///
-/// This planner is intentionally conservative about segment extension. A
-/// segment may include operations that preserve the current concrete layout,
-/// plus a consecutive transpose run that the SIMD executor composes against
-/// the original input. Other shape/mode-changing operations end the segment.
-/// The next operation is then checked against the actual owned output, so no
-/// backend is entered with stale capability information and no Python-level
-/// materialization is needed at a CPU↔SIMD boundary.
-pub(super) fn execute_automatic_simd_segments(
-    ops: &[PipelineOp],
-    img: &DynamicImage,
-    mode: Option<&str>,
-) -> Result<
-    (
-        DynamicImage,
-        Backend,
-        Option<String>,
-        Option<PipelineResourceTelemetry>,
-    ),
-    PilError,
-> {
-    execute_automatic_simd_segments_with_palette(ops, img, mode, PaletteInput::default())
-}
-
-fn execute_automatic_simd_segments_with_palette(
-    ops: &[PipelineOp],
-    img: &DynamicImage,
-    mode: Option<&str>,
-    palette: PaletteInput<'_>,
-) -> Result<
-    (
-        DynamicImage,
-        Backend,
-        Option<String>,
-        Option<PipelineResourceTelemetry>,
-    ),
-    PilError,
-> {
-    let simd = pools()
-        .iter()
-        .find(|pool| pool.name() == Backend::Simd)
-        .ok_or_else(|| PilError::ValueError("SIMD backend not available".into()))?;
-    let cpu = pools()
-        .iter()
-        .find(|pool| pool.name() == Backend::Cpu)
-        .ok_or_else(|| PilError::ValueError("CPU backend not available".into()))?;
-
-    let mut current: Option<DynamicImage> = None;
-    let mut previous_backend = None;
-    let mut last_backend = None;
-    let mut fallback_reason = None;
-    let mut resources = None;
-    let mut index = 0usize;
-    let mut current_mode = pool_simd::ops::adapters::simd_initial_mode(img, ops, mode);
-
-    while index < ops.len() {
-        let input = current.as_ref().unwrap_or(img);
-        let op_mode = current_mode.as_deref();
-        let backend = if simd.supports_for_image(&ops[index], input, op_mode)? {
-            Backend::Simd
-        } else {
-            fallback_reason.get_or_insert_with(|| simd_host_control_reason(&ops[index]));
-            Backend::Cpu
-        };
-
-        let end = automatic_segments::segment_end(
-            ops,
-            index,
-            backend,
-            input,
-            op_mode,
-            simd.as_ref(),
-            cpu.as_ref(),
-        )?;
-
-        if previous_backend.is_some_and(|previous| previous != backend) {
-            record_pipeline_operation_handoff(1);
-        }
-        let pool = if backend == Backend::Simd { simd } else { cpu };
-        let segment_ops = &ops[index..end];
-        let next = if backend == Backend::Cpu {
-            // Automatic SIMD routing is a compatibility surface for CPU
-            // architectures. Keep CPU as the executor while carrying the
-            // already resolved host architecture into its prepared mode
-            // strategies for segments the legacy SIMD adapter cannot run.
-            let context = ExecutionContext::for_routed_backend(Backend::Simd);
-            pool.execute_batch_with_context_and_palette(
-                segment_ops,
-                input,
-                op_mode,
-                &context,
-                palette,
-            )?
-        } else {
-            pool.execute_batch(segment_ops, input, op_mode)?
-        };
-        merge_pipeline_resource_telemetry(&mut resources, take_pipeline_resource_telemetry());
-        current = Some(next);
-        previous_backend = Some(backend);
-        // Automatic routing can mix host-resident SIMD and CPU segments. The
-        // receipt must identify the executor that produced the returned
-        // pixels, while operation telemetry preserves every segment and
-        // handoff. Pillow's sequential operation semantics expose no composite
-        // backend identity, so reporting any SIMD use would mislabel a final
-        // CPU segment as SIMD.
-        last_backend = Some(backend);
-        for op in segment_ops {
-            current_mode =
-                pool_simd::ops::adapters::simd_mode_after_op(op, current_mode.as_deref());
-        }
-        index = end;
-    }
-
-    let result = current.unwrap_or_else(|| img.clone());
-    if let Some(resource) = resources {
-        record_pipeline_resource_telemetry(resource);
-    }
-    let actual_backend = last_backend.unwrap_or(Backend::Cpu);
-    Ok((result, actual_backend, fallback_reason, resources))
-}
-
 /// Executes a previously routed and validated pipeline, recording the bounded
 /// backend phase when telemetry is enabled.
 pub(crate) fn execute_prepared(
@@ -476,10 +329,6 @@ pub(crate) fn execute_prepared_with_palette(
         reset_execution_telemetry();
     }
     let backend_start = timed.then(pipeline_timestamp).flatten();
-    if prepared.requested_backend.is_none() && prepared.selected_backend == Backend::Simd {
-        return execute_automatic_simd(prepared, ops, img, mode, palette, timed, backend_start);
-    }
-    validate_explicit_simd_support(prepared, ops, img, mode)?;
     execute_prepared_on_backend(prepared, ops, img, mode, palette, timed, backend_start)
 }
 
@@ -570,68 +419,6 @@ fn reset_execution_telemetry() {
     let _ = take_pipeline_resize_coeff_cache_stats();
 }
 
-fn execute_automatic_simd(
-    prepared: &PreparedExecution,
-    ops: &[PipelineOp],
-    img: &DynamicImage,
-    mode: Option<&str>,
-    palette: PaletteInput<'_>,
-    timed: bool,
-    backend_start: Option<Instant>,
-) -> Result<DynamicImage, PilError> {
-    let (result, actual_backend, mixed_reason, mut resource) =
-        execute_automatic_simd_segments_with_palette(ops, img, mode, palette)?;
-    if timed {
-        let allocation = take_pipeline_allocation_telemetry();
-        if let Some(resource) = resource.as_mut() {
-            resource.host_allocation_count = allocation.allocation_count;
-            resource.host_allocated_bytes = allocation.allocated_bytes;
-        }
-        // The segment executor publishes the aggregate so the ordinary
-        // receipt boundary remains compatible with single-backend runs.
-        let _ = take_pipeline_resource_telemetry();
-        let _ = take_pipeline_backend_override();
-        let _ = take_pipeline_dispatch_count();
-        let (resize_coeff_cache_hits, resize_coeff_cache_misses) =
-            take_pipeline_resize_coeff_cache_stats();
-        record_pipeline_telemetry(PipelineTelemetry {
-            requested_backend: prepared.requested_backend,
-            actual_backend,
-            operation_count: ops.len(),
-            route_ns: prepared.route_ns,
-            validation_ns: prepared.validation_ns,
-            backend_ns: elapsed_ns(backend_start),
-            dispatch_count: None,
-            fallback_reason: mixed_reason.or_else(|| prepared.fallback_reason.clone()),
-            resource,
-            resize_coeff_cache_hits,
-            resize_coeff_cache_misses,
-        });
-    }
-    Ok(result)
-}
-
-fn validate_explicit_simd_support(
-    prepared: &PreparedExecution,
-    ops: &[PipelineOp],
-    img: &DynamicImage,
-    mode: Option<&str>,
-) -> Result<(), PilError> {
-    if prepared.selected_backend != Backend::Simd
-        || prepared.requested_backend != Some(Backend::Simd)
-    {
-        return Ok(());
-    }
-    if let Some(op) = pool_simd::ops::adapters::first_unsupported_simd_op(img, ops, mode) {
-        let key = registry::variant_key(op);
-        record_pipeline_operation_unsupported(key);
-        return Err(PilError::NotImplementedError(format!(
-            "SIMD does not support {key} for the current image layout/mode"
-        )));
-    }
-    Ok(())
-}
-
 fn execute_prepared_on_backend(
     prepared: &PreparedExecution,
     ops: &[PipelineOp],
@@ -641,7 +428,11 @@ fn execute_prepared_on_backend(
     timed: bool,
     backend_start: Option<Instant>,
 ) -> Result<DynamicImage, PilError> {
-    let effective_backend = prepared.selected_backend;
+    let effective_backend = if prepared.selected_backend == Backend::Simd {
+        Backend::Cpu
+    } else {
+        prepared.selected_backend
+    };
     let pool = pools()
         .iter()
         .find(|pool| pool.name() == effective_backend)
@@ -652,53 +443,6 @@ fn execute_prepared_on_backend(
             ))
         })?;
     let estimated_dispatch_count = timed.then(|| pool.dispatch_count(ops)).flatten();
-    let mut execution_backend = effective_backend;
-    let mut fallback_reason = prepared.fallback_reason.clone();
-    let execution = execute_pool_with_simd_recovery(
-        prepared,
-        pool.as_ref(),
-        ops,
-        img,
-        mode,
-        palette,
-        timed,
-        &mut execution_backend,
-        &mut fallback_reason,
-    );
-    match execution {
-        Ok(result) => {
-            if timed {
-                record_prepared_backend_telemetry(
-                    prepared,
-                    ops,
-                    backend_start,
-                    execution_backend,
-                    fallback_reason,
-                    estimated_dispatch_count,
-                );
-            }
-            Ok(result)
-        }
-        Err(error) => {
-            if timed {
-                clear_failed_execution_telemetry();
-            }
-            Err(error)
-        }
-    }
-}
-
-fn execute_pool_with_simd_recovery(
-    prepared: &PreparedExecution,
-    pool: &dyn BackendImpl,
-    ops: &[PipelineOp],
-    img: &DynamicImage,
-    mode: Option<&str>,
-    palette: PaletteInput<'_>,
-    timed: bool,
-    effective_backend: &mut Backend,
-    fallback_reason: &mut Option<String>,
-) -> Result<DynamicImage, PilError> {
     let execution = if prepared.requested_backend == Some(Backend::Gpu) {
         pool.execute_batch_strict(ops, img, mode)
     } else {
@@ -711,53 +455,26 @@ fn execute_pool_with_simd_recovery(
         )
     };
     match execution {
-        Err(error)
-            if *effective_backend == Backend::Simd
-                && prepared.requested_backend != Some(Backend::Simd)
-                && is_simd_capability_error(&error) =>
-        {
-            retry_simd_capability_failure(
-                ops,
-                img,
-                mode,
-                palette,
-                timed,
-                effective_backend,
-                fallback_reason,
-            )
+        Ok(result) => {
+            if timed {
+                record_prepared_backend_telemetry(
+                    prepared,
+                    ops,
+                    backend_start,
+                    effective_backend,
+                    prepared.fallback_reason.clone(),
+                    estimated_dispatch_count,
+                );
+            }
+            Ok(result)
         }
-        result => result,
+        Err(error) => {
+            if timed {
+                clear_failed_execution_telemetry();
+            }
+            Err(error)
+        }
     }
-}
-
-fn retry_simd_capability_failure(
-    ops: &[PipelineOp],
-    img: &DynamicImage,
-    mode: Option<&str>,
-    palette: PaletteInput<'_>,
-    timed: bool,
-    effective_backend: &mut Backend,
-    fallback_reason: &mut Option<String>,
-) -> Result<DynamicImage, PilError> {
-    // SIMD never calls CPU from inside an adapter. If a later operation
-    // changes layout, retry the original host image through the CPU pool.
-    *effective_backend = Backend::Cpu;
-    let host_control_reason = pool_simd::ops::adapters::first_unsupported_simd_op(img, ops, mode)
-        .map(simd_host_control_reason)
-        .unwrap_or_else(|| {
-            "exact host semantic control: SIMD runtime capability boundary".to_owned()
-        });
-    fallback_reason.get_or_insert_with(|| host_control_reason.clone());
-    if timed {
-        reset_execution_telemetry();
-    }
-    record_pipeline_backend_fallback(host_control_reason);
-    let cpu = pools()
-        .iter()
-        .find(|candidate| candidate.name() == Backend::Cpu)
-        .ok_or_else(|| PilError::ValueError("CPU backend not available".into()))?;
-    let context = ExecutionContext::for_routed_backend(Backend::Cpu);
-    cpu.execute_batch_with_context_and_palette(ops, img, mode, &context, palette)
 }
 
 fn record_prepared_backend_telemetry(
@@ -880,7 +597,7 @@ pub(crate) fn execute_prepared_shared_with_palette(
                 let _ = take_pipeline_allocation_telemetry();
                 record_pipeline_telemetry(PipelineTelemetry {
                     requested_backend: prepared.requested_backend,
-                    actual_backend: prepared.selected_backend,
+                    actual_backend: Backend::Cpu,
                     operation_count: ops.len(),
                     route_ns: prepared.route_ns,
                     validation_ns: prepared.validation_ns,

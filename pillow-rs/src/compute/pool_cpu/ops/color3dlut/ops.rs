@@ -1,9 +1,9 @@
 //! Color3DLut support declaration and prepared mode-strategy composition.
 //!
-//! TODO(pillow-rs#3ptb): retire the separate SIMD Color3DLut adapter after the
-//! remaining SIMD operation families have moved to CPU architecture owners.
-//! The public Image method enters this prepared plan through the registry; keep
-//! that route as the only CPU execution entry point.
+//! TODO(pillow-rs#3ptb): compare every archived Color3DLut architecture,
+//! eligibility, and output-mode case against these prepared CPU strategies;
+//! add any missing strategy here. The public Image method enters this plan
+//! through the registry as its CPU execution entry point.
 
 use crate::compute::{ExecutionContext, registry::support::{
     InputContract, ModeChannelCapacity, ModeSupport, OperationId, OperationInputs,

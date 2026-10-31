@@ -1,15 +1,15 @@
 //! Admission checks for operations that may fuse across lazy image pipelines.
 //!
-//! TODO(pillow-rs#3ptb): replace SIMD-exclusive routing and the separate
-//! PutPixel/thumbnail fusion admission with the injected CPU architecture
-//! support contract; keep backend compatibility at this wrapper boundary.
+//! CPU mode/architecture contracts own PutPixel/thumbnail fusion admission.
+//! The wrapper resolves its backend compatibility request and injects that
+//! context before asking the operation family whether it can fuse.
 
 use super::Image;
 use crate::pipeline::{PipelineOp, ResampleFilter};
 use crate::raster::DynamicImage;
 
 impl Image {
-    /// Whether this CPU- or SIMD-locked RGB pipeline contains only public,
+    /// Whether this CPU or compatibility-SIMD RGB pipeline contains only public,
     /// already validated pixel writes over an in-memory source. `thumbnail()`
     /// can keep those writes in the same backend batch when that backend has a
     /// matching fusion.
@@ -28,7 +28,7 @@ impl Image {
             Some(crate::compute::Backend::Cpu | crate::compute::Backend::Simd) => true,
             None => {
                 crate::compute::cpu_is_only_active_backend()
-                    || crate::compute::simd_is_only_active_backend()
+                    || crate::compute::cpu_architecture_alias_is_only_active_backend()
             }
             Some(crate::compute::Backend::Gpu) => false,
         };
@@ -57,8 +57,8 @@ impl Image {
         })
     }
 
-    /// Check the concrete CPU or SIMD fusion admission for this lazy write
-    /// prefix and requested thumbnail.
+    /// Check the CPU architecture strategy's fusion admission for this lazy
+    /// write prefix and requested thumbnail.
     pub(crate) fn can_defer_rgb_putpixel_thumbnail(
         &self,
         width: u32,
@@ -85,7 +85,7 @@ impl Image {
             None if crate::compute::cpu_is_only_active_backend() => {
                 Some(crate::compute::Backend::Cpu)
             }
-            None if crate::compute::simd_is_only_active_backend() => {
+            None if crate::compute::cpu_architecture_alias_is_only_active_backend() => {
                 Some(crate::compute::Backend::Simd)
             }
             None => None,
@@ -102,23 +102,15 @@ impl Image {
             filter,
         };
         match selected_backend {
-            crate::compute::Backend::Cpu => {
+            crate::compute::Backend::Cpu | crate::compute::Backend::Simd => {
                 crate::compute::cpu_rgb_putpixel_thumbnail_fusion_supported(
                     source.image.as_ref(),
                     ops.as_slice(),
                     &thumbnail,
                     *explicit_mode,
                     &crate::compute::ExecutionContext::for_routed_backend(
-                        crate::compute::Backend::Cpu,
+                        selected_backend,
                     ),
-                )
-            }
-            crate::compute::Backend::Simd => {
-                crate::compute::simd_rgb_putpixel_thumbnail_fusion_supported(
-                    source.image.as_ref(),
-                    ops.as_slice(),
-                    &thumbnail,
-                    super::mode_boundary::pillow_mode_name_opt(*explicit_mode),
                 )
             }
             crate::compute::Backend::Gpu => false,

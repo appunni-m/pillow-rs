@@ -179,6 +179,11 @@ maintained CPU code does not recover it from strings or storage layout.
    selection. Adapt legacy public SIMD requests at admission if compatibility
    requires it. Keep actual backend, requested architecture, selected
    implementation, and fallback reason observable.
+   Source-only status (2026-10-31): the active SIMD pool, adapter registry,
+   segment planner, and pool-based admission were removed. Legacy `Backend::Simd`
+   requests now select the CPU pool with the detected host architecture, and
+   telemetry reports CPU as the executor. This routing change remains
+   unverified until the complete CPU source review and validation stages.
 6. Remove feature-dependent Rayon execution from maintained CPU paths. Enabling
    the parallel feature must not change CPU into a parallel executor.
 7. Add the shared operation-support contract and registry delegation described

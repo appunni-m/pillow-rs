@@ -1,20 +1,12 @@
 //! ImageOps support contracts and prepared mode/architecture dispatch.
 //!
-//! TODO(pillow-rs#3ptb): retire Expand's separate SIMD adapter after eager,
-//! fusion, and compatibility routes use its prepared CPU architecture plan.
-//! Registry CPU execution now uses the exhaustive prepared native-mode plan.
-//! TODO(pillow-rs#3ptb): route remaining Colorize eager, fusion, and
-//! compatibility callers through its prepared CPU strategy, then remove the
-//! independent `simd_colorize` registration. Separate SIMD adapters for
-//! Autocontrast, Equalize, CropBorder, Invert, Posterize, and Solarize remain
-//! registered until eager, fusion, and compatibility routes use their prepared
-//! CPU strategies. Autocontrast and Equalize kernels are now declared under
-//! their exact mode and architecture owners.
-//! The archived Invert adapter preserved LA/PA/RGBA alpha unlike the serial
-//! ImageOps algorithm; maintained architecture kernels now match Default's
-//! all-byte semantics. Keep the adapter until its callers move.
-//! Posterize/Solarize vector kernels are now declared for native L/RGB modes;
-//! the independent adapter routes still need reconciliation and retirement.
+//! TODO(pillow-rs#3ptb): audit direct eager and fusion callers for Colorize,
+//! Autocontrast, Equalize, CropBorder, Invert, Posterize, Solarize, and Expand.
+//! Route any caller that bypasses the prepared CPU mode/architecture plans
+//! through its owner, and migrate any missing archived behavior. No separate
+//! SIMD pool or registration is active. Autocontrast/Equalize and
+//! Posterize/Solarize kernels are declared under their exact mode owners; the
+//! maintained Invert strategies match Default's all-byte semantics.
 
 use crate::compute::{
     Architecture,

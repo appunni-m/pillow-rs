@@ -1,11 +1,10 @@
 //! Chops contracts, preparation, and exact-mode strategy orchestration.
 //!
-//! TODO(pillow-rs#3ptb): route explicit SIMD requests in `compute/execution.rs`
-//! through this CPU architecture owner, then remove the Chops entries from
-//! `compute/registry/registration/simd.rs` after reviewing palette transitions.
-//! Invert now has exact-mode SSE2, NEON, and Wasm SIMD128 strategies for the
-//! archived `1/L/P`, `LA/PA`, `RGB`, and `RGBA/CMYK` layouts; its shared byte
-//! kernel lives in `pool_cpu/helpers/bytes` and preserves every stored byte.
+//! Legacy `Backend::Simd` requests now reach this owner through the CPU pool
+//! with the detected architecture in their context. Invert has exact-mode
+//! SSE2, NEON, and Wasm SIMD128 strategies for the archived `1/L/P`, `LA/PA`,
+//! `RGB`, and `RGBA/CMYK` layouts; its shared byte kernel lives in
+//! `pool_cpu/helpers/bytes` and preserves every stored byte.
 
 use std::sync::Arc;
 

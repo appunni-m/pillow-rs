@@ -23,15 +23,16 @@
 //!
 //! Public image APIs use Pillow mode strings such as `"L"`, `"RGB"`, `"RGBA"`,
 //! `"CMYK"`, `"P"`, and `"1"`. Core operations normalize those modes into Rust
-//! image buffers before dispatching to CPU, SIMD, or GPU backends. Raw byte APIs
-//! return tightly packed pixels in the image's current mode unless a method says
-//! otherwise.
+//! image buffers before dispatching to CPU architecture strategies or the GPU
+//! backend. Raw byte APIs return tightly packed pixels in the image's current
+//! mode unless a method says otherwise.
 //!
 //! # Feature Flags
 //!
 //! - `gpu` enables the wgpu/WebGPU backend where an operation has a shader.
 //! - `parallel` opt-in enables Rayon-backed Parallel CPU row and pixel paths;
-//!   SIMD adapters and GPU execution stay thread-scheduler independent.
+//!   CPU architecture strategies and GPU execution stay thread-scheduler
+//!   independent.
 //! - `image-codecs-all` enables all codec features exposed through
 //!   `image-slash-star`; individual codec features can be selected instead.
 //!
@@ -602,14 +603,12 @@ pub use crate::font::public_api::imagefont_get_transposed_mask_input;
 #[cfg(feature = "test-api")]
 pub use crate::font::public_api::imagefont_render_text_binary;
 
-/// Public backend capability summary for one registered operation.
+/// Public executor capability summary for one registered operation.
 #[cfg(feature = "test-api")]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BackendSupportEntry {
-    /// CPU implementation marker.
+    /// CPU mode/architecture strategy entry marker.
     pub cpu_fn: Option<()>,
-    /// SIMD-pool implementation marker.
-    pub simd_fn: Option<()>,
     /// GPU shader name when the operation has a shader.
     pub gpu_shader: Option<&'static str>,
     /// GPU shader source marker.
@@ -626,7 +625,6 @@ pub fn backend_support_registry() -> Result<BTreeMap<&'static str, BackendSuppor
                 *name,
                 BackendSupportEntry {
                     cpu_fn: entry.cpu_fn.map(|_| ()),
-                    simd_fn: entry.simd_fn.map(|_| ()),
                     gpu_shader: {
                         #[cfg(feature = "gpu")]
                         {
@@ -659,10 +657,10 @@ pub fn backend_cpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
     crate::compute::registry::cpu_supports(op)
 }
 
-/// Returns whether SIMD declares support for a pipeline operation.
+/// Returns whether the legacy SIMD request alias has a CPU operation entry.
 #[cfg(feature = "test-api")]
 pub fn backend_simd_supports(op: &PipelineOp) -> Result<bool, PilError> {
-    crate::compute::registry::simd_supports(op)
+    crate::compute::registry::cpu_supports(op)
 }
 
 /// Returns whether GPU declares support for a pipeline operation.
@@ -687,21 +685,14 @@ pub fn backend_support_matrix_json() -> Result<String, PilError> {
         .iter()
         .map(|(name, entry)| {
             format!(
-                "{{\"operation\":\"{name}\",\"cpu\":{},\"simd_pool\":{},\"gpu_shader\":{}}}",
+                "{{\"operation\":\"{name}\",\"cpu\":{},\"gpu_shader\":{}}}",
                 entry.cpu_fn.is_some(),
-                entry.simd_fn.is_some(),
                 entry.gpu_shader.is_some()
             )
         })
         .collect::<Vec<_>>();
     let counts = backend_support_matrix_counts(&registry);
 
-    let cpu_without_simd_json = counts
-        .cpu_without_simd
-        .iter()
-        .map(|name| format!("\"{name}\""))
-        .collect::<Vec<_>>()
-        .join(", ");
     let operations_json = operations
         .iter()
         .map(|entry| entry.to_string())
@@ -714,11 +705,8 @@ pub fn backend_support_matrix_json() -> Result<String, PilError> {
             "  \"totals\": {{\n",
             "    \"operations\": {operations},\n",
             "    \"cpu\": {cpu},\n",
-            "    \"simd_pool\": {simd_pool},\n",
-            "    \"gpu_shader\": {gpu_shader},\n",
-            "    \"cpu_without_simd\": {cpu_without_simd_len}\n",
+            "    \"gpu_shader\": {gpu_shader}\n",
             "  }},\n",
-            "  \"cpu_without_simd\": [{cpu_without_simd_json}],\n",
             "  \"operations\": [\n",
             "    {operations_json}\n",
             "  ]\n",
@@ -726,10 +714,7 @@ pub fn backend_support_matrix_json() -> Result<String, PilError> {
         ),
         operations = registry.len(),
         cpu = counts.cpu,
-        simd_pool = counts.simd_pool,
         gpu_shader = counts.gpu_shader,
-        cpu_without_simd_len = counts.cpu_without_simd.len(),
-        cpu_without_simd_json = cpu_without_simd_json,
         operations_json = operations_json
     ))
 }
@@ -737,9 +722,7 @@ pub fn backend_support_matrix_json() -> Result<String, PilError> {
 #[cfg(feature = "test-api")]
 struct BackendSupportMatrixCounts {
     cpu: usize,
-    simd_pool: usize,
     gpu_shader: usize,
-    cpu_without_simd: Vec<&'static str>,
 }
 
 #[cfg(feature = "test-api")]
@@ -750,25 +733,13 @@ fn backend_support_matrix_counts(
         .values()
         .filter(|entry| entry.cpu_fn.is_some())
         .count();
-    let simd_pool = registry
-        .values()
-        .filter(|entry| entry.simd_fn.is_some())
-        .count();
     let gpu_shader = registry
         .values()
         .filter(|entry| entry.gpu_shader.is_some())
         .count();
-    let cpu_without_simd = registry
-        .iter()
-        .filter_map(|(name, entry)| {
-            (entry.cpu_fn.is_some() && entry.simd_fn.is_none()).then_some(*name)
-        })
-        .collect();
 
     BackendSupportMatrixCounts {
         cpu,
-        simd_pool,
         gpu_shader,
-        cpu_without_simd,
     }
 }

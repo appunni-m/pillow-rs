@@ -1,9 +1,7 @@
 //! Shared imports for registry initialization modules.
 //!
 //! TODO(pillow-rs#3ptb): retire this direct CPU facade import map as the
-//! remaining registrations move to operation-owned prepared callbacks. Remove
-//! the `pool_simd` adapter import when its registrations and compatibility
-//! callers have moved to those prepared CPU owners.
+//! remaining registrations move to operation-owned prepared callbacks.
 //! Convert, ConvertLab, and RemapPalette use prepared typed color owners.
 
 pub(super) use super::Registry;
@@ -14,7 +12,6 @@ pub(super) use crate::compute::pool_cpu::ops::draw::{
 pub(super) use crate::compute::pool_cpu::ops::effects::{
     op_blend_module, op_composite_module, op_merge, op_paste, op_transform,
 };
-pub(super) use crate::compute::pool_simd::ops::adapters;
 pub(super) use crate::error::PilError;
 pub(super) use crate::pipeline::PipelineOp;
 pub(super) use crate::raster::DynamicImage;

@@ -7,28 +7,24 @@
 //!
 //! # Routing Contract
 //!
-//! Automatic materialization may execute contiguous operation segments on the
-//! best available backend. CPU is always present and acts as the universal
-//! fallback. GPU and SIMD are selected only when they are active and every
-//! operation in the segment reports contextual support. CPU and SIMD both
-//! operate on host-resident image buffers, so a CPU↔SIMD handoff is a planner
-//! event, not a device copy or a Python-level materialization. A GPU segment
-//! performs its device transfer once, records the eligible dispatches, and
-//! reads the final result back once; GPU/host segmentation must account for
-//! those boundaries separately.
+//! Automatic materialization selects GPU when its operation contracts allow
+//! it, otherwise CPU. CPU receives the host architecture in its execution
+//! context and each operation selects a matching specialization or its
+//! same-mode Default implementation. `Backend::Simd` remains a compatibility
+//! request that selects CPU with the detected host architecture; it is not a
+//! separate executor. GPU remains an independent device path.
 //!
 //! # Adding Operations
 //!
-//! New operations must define the pipeline variant, CPU implementation, registry
-//! key, and optional GPU/SIMD support together. The registry module is the
-//! source of truth used by the routing and execution phases.
+//! New operations must define the pipeline variant, CPU mode/architecture
+//! strategies, registry key, and optional GPU shader together. The operation's
+//! support declaration is shared by support reporting, admission, and
+//! prepared execution.
 
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::DynamicImage;
 
-#[path = "automatic_segments.rs"]
-mod automatic_segments;
 pub(crate) mod helpers;
 #[path = "backend_state.rs"]
 mod backend_state;
@@ -85,7 +81,8 @@ pub use backend_state::{
     active_backends, available_backends, backend_enabled, disable_backend, enable_backend,
 };
 pub(crate) use backend_state::{
-    cpu_is_only_active_backend, preferred_active_backend, simd_is_only_active_backend,
+    cpu_architecture_alias_is_only_active_backend, cpu_is_only_active_backend,
+    preferred_active_backend,
 };
 pub(crate) use eager::{
     execute_eager_cpu_getprojection, execute_eager_cpu_linear_gradient,
@@ -99,8 +96,6 @@ pub(crate) use eager::{
     execute_eager_gpu_rgb_getprojection, gpu_cmyk_projection_terminal_supported,
     gpu_rgb_projection_supported, gpu_rgb_projection_terminal_supported,
 };
-#[cfg(test)]
-use execution::execute_automatic_simd_segments;
 pub(crate) use execution::{
     PreparedExecution, execute_prepared, execute_prepared_cpu_arch_operation,
     execute_prepared_cpu_arch_terminal, execute_prepared_cpu_terminal, execute_prepared_shared,
@@ -118,7 +113,7 @@ pub(crate) use phase_telemetry::{
     pipeline_phase_timestamp, record_transpose_output_allocation_timing,
 };
 pub(crate) use thumbnail_fusion::{
-    cpu_rgb_putpixel_thumbnail_fusion_supported, simd_rgb_putpixel_thumbnail_fusion_supported,
+    cpu_rgb_putpixel_thumbnail_fusion_supported,
 };
 
 /// Return `(multiplier, offset)` when a 256-entry byte LUT is exactly the
@@ -146,16 +141,16 @@ pub(crate) fn byte_lut_affine_coefficients(lut: &[u8]) -> Option<(u8, u8)> {
 
 /// Compute backend used to execute a materialized image pipeline.
 ///
-/// Backends are ordered by preference, with CPU as the universal fallback.
-/// Callers can enable or disable backends globally, or request one explicitly
-/// when routing a batch.
+/// GPU is a separate executor; CPU selects architecture-specific strategies
+/// from the injected context. `Simd` is retained as a compatibility request
+/// that routes through CPU with the detected host architecture.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Backend {
     /// Scalar CPU implementation. This backend is always available.
     Cpu = 0,
     /// WebGPU/wgpu implementation when the `gpu` feature is enabled.
     Gpu = 1,
-    /// SIMD implementation for operations with vectorized adapters.
+    /// Compatibility alias for CPU execution with the detected architecture.
     Simd = 2,
 }
 
@@ -179,7 +174,8 @@ pub type PipelineTelemetrySample = (
 impl Backend {
     /// Parses a backend name used by CLI, environment, or binding-layer options.
     ///
-    /// Accepted values are `"cpu"`, `"gpu"`, and `"simd"`, case-insensitive.
+    /// Accepted values are `"cpu"`, `"gpu"`, and the legacy `"simd"` alias,
+    /// case-insensitive.
     pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "cpu" => Some(Self::Cpu),
@@ -281,20 +277,6 @@ pub(crate) trait BackendImpl: Send + Sync {
     fn priority(&self) -> u8; // higher = preferred
     /// Returns whether this backend can execute one pipeline operation.
     fn supports(&self, op: &PipelineOp) -> Result<bool, PilError>;
-    /// Returns whether this backend can execute `op` for this concrete image
-    /// and logical mode.  Operation-only registry support is deliberately not
-    /// enough for backends whose implementation depends on layout, mode, or
-    /// parameters.  Backends that do not have contextual restrictions inherit
-    /// the operation-only answer.
-    fn supports_for_image(
-        &self,
-        op: &PipelineOp,
-        img: &DynamicImage,
-        mode: Option<&str>,
-    ) -> Result<bool, PilError> {
-        let _ = (img, mode);
-        self.supports(op)
-    }
     /// Executes a sequence of operations against one image buffer.
     fn execute_batch(
         &self,
@@ -362,11 +344,6 @@ pub use pool_gpu::stream::{
     BatchError, BatchErrorKind, BatchKey, BatchOutput, BatchResult, GpuBatchConfig,
     GpuBatchExecutor, GpuBatchStats, GpuImage,
 };
-// TODO(pillow-rs#3ptb): route pipeline, admission, terminal, fusion, registry,
-// and eager compatibility calls through CPU mode/architecture strategies,
-// then remove this independent pool. Do not restore the archived pool as active.
-mod pool_simd;
-
 pub(crate) mod registry;
 
 pub(crate) use pool_cpu::CpuPool;
@@ -377,8 +354,6 @@ pub(crate) use pool_cpu::ops::analysis::ops::{
 };
 #[cfg(feature = "gpu")]
 pub(crate) use pool_gpu::GpuPool;
-pub(crate) use pool_simd::SimdPool;
-
 #[cfg(all(feature = "gpu", feature = "test-api"))]
 pub(crate) fn arm_gpu_batch_admission_failure() {
     pool_gpu::stream::arm_test_admission_failure();
@@ -392,8 +367,8 @@ pub(crate) fn clear_gpu_batch_test_fault() {
 #[cfg(test)]
 mod tests {
     use super::{
-        Architecture, Backend, execute_automatic_simd_segments,
-        execute_eager_cpu_arch_bytes,
+        Architecture, Backend, execute_eager_cpu_arch_bytes, execute_prepared,
+        prepare_execution,
     };
     use crate::pipeline::{PipelineOp, ResampleFilter, TransformMethod};
     use crate::raster::{DynamicImage, Rgb, RgbImage};
@@ -485,7 +460,7 @@ mod tests {
     }
 
     #[test]
-    fn automatic_simd_receipt_uses_final_cpu_segment() {
+    fn simd_compatibility_request_uses_cpu_architecture_context() {
         let source = DynamicImage::ImageRgb8(RgbImage::from_pixel(2, 2, Rgb([11, 22, 33])));
         let ops = [
             PipelineOp::PutPixel {
@@ -506,14 +481,18 @@ mod tests {
             },
         ];
 
-        let (_result, actual_backend, fallback_reason, _resource) =
-            execute_automatic_simd_segments(&ops, &source, Some("RGB"))
-                .expect("mixed SIMD/CPU pipeline should execute");
+        let prepared = prepare_execution(&ops, Some(Backend::Simd))
+            .expect("SIMD compatibility request should prepare as CPU architecture routing");
+        let previous = Backend::set_pipeline_telemetry_enabled(true);
+        let result = execute_prepared(&prepared, &ops, &source, Some("RGB"))
+            .expect("CPU architecture strategies should execute the pipeline");
+        let receipt = Backend::take_pipeline_telemetry()
+            .expect("CPU architecture pipeline receipt");
+        Backend::set_pipeline_telemetry_enabled(previous);
 
-        assert_eq!(actual_backend, Backend::Cpu);
-        assert_eq!(
-            fallback_reason.as_deref(),
-            Some("exact host semantic control: SIMD image-layout guard for Transform")
-        );
+        assert_eq!(result.dimensions(), source.dimensions());
+        assert_eq!(receipt.0, Some(Backend::Simd));
+        assert_eq!(receipt.1, Backend::Cpu);
+        assert_eq!(receipt.2, 2);
     }
 }

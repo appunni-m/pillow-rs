@@ -238,9 +238,9 @@ impl Image {
             }
         }
 
-        // TODO(pillow-rs#3ptb): replace these compatibility string tables with
-        // the prepared operation support declarations once SIMD/GPU pipeline
-        // terminal selection has been migrated to exact raster::Mode.
+        // TODO(pillow-rs#3ptb): replace this compatibility string table with
+        // the prepared CPU mode/architecture and GPU terminal support
+        // declarations, keeping the exact `raster::Mode` at this boundary.
         let backend_native = match selected_backend {
             Some(crate::compute::Backend::Simd) => matches!(
                 mode,

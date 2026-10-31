@@ -1,7 +1,7 @@
 //! Eval operation contract and exact-mode prepared strategy composition.
 //!
-//! TODO(pillow-rs#3ptb): retire the separate SIMD Eval registration after all
-//! eager, fusion, and compatibility callers use these prepared CPU strategies.
+//! TODO(pillow-rs#3ptb): compare the archived Eval vector/admission paths with
+//! these prepared mode/architecture strategies and migrate any missing case.
 //! TODO(pillow-rs#3ptb): move the archived Rayon row path to the later
 //! `pool_parallel` owner; do not move its scheduling into this CPU family.
 use crate::compute::registry::support::{

@@ -2,8 +2,8 @@
 //!
 //! This module maps each [`crate::pipeline::PipelineOp`] variant to
 //! the backend implementations that can execute it. CPU operations are normal
-//! Rust functions, GPU operations point at embedded WGSL shader sources, and
-//! SIMD operations use vectorized adapters where present.
+//! Rust functions that prepare mode/architecture strategies, while GPU
+//! operations point at embedded WGSL shader sources.
 //!
 //! Performance: `variant_key()` returns a `&'static str` for O(1) HashMap lookup.
 //! No allocations on the hot path.
@@ -26,7 +26,6 @@
 
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
-use crate::raster::DynamicImage;
 use super::{Backend, ExecutionContext};
 use self::support::OperationInputs;
 use std::collections::HashMap;
@@ -65,10 +64,6 @@ pub type CpuOpFn = for<'a> fn(
     ctx: &ExecutionContext,
 ) -> Result<PreparedOperation<'a>, PilError>;
 
-/// Existing vector callback, pending retirement of the separate SIMD registry.
-pub type SimdOpFn =
-    fn(img: &DynamicImage, op: &PipelineOp, mode: Option<&str>) -> Result<DynamicImage, PilError>;
-
 // ── OpEntry — one entry per operation, all backends ──────────────────────────────
 
 /// Backend implementations registered for one pipeline operation.
@@ -81,8 +76,6 @@ pub struct OpEntry {
     /// Embedded WGSL shader source for GPU execution.
     #[cfg(feature = "gpu")]
     pub gpu_source: Option<&'static str>,
-    /// SIMD implementation, present when a vectorized adapter exists.
-    pub simd_fn: Option<SimdOpFn>,
 }
 
 impl OpEntry {
@@ -91,7 +84,6 @@ impl OpEntry {
     pub const fn cpu_only(f: CpuOpFn) -> Self {
         OpEntry {
             cpu_fn: Some(f),
-            simd_fn: None,
             #[cfg(feature = "gpu")]
             gpu_shader: None,
             #[cfg(feature = "gpu")]
@@ -211,114 +203,6 @@ pub fn cpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
     Ok(registry()?
         .get(variant_key(op))
         .is_some_and(|e| e.cpu_fn.is_some()))
-}
-
-fn simd_native_operation(op: &PipelineOp) -> bool {
-    // Keep this operation-level answer deliberately narrow.  A registered
-    // adapter may still exist as a workbench for a future kernel, but it is
-    // not a SIMD capability until its data plane is vectorized.  Contextual
-    // support below then applies the image layout, logical mode, dimensions,
-    // and secondary-operand checks.
-    matches!(
-        op,
-        PipelineOp::Invert
-            | PipelineOp::InvertChops
-            | PipelineOp::Resize { .. }
-            | PipelineOp::ResizeBoxed { .. }
-            | PipelineOp::Scale { .. }
-            | PipelineOp::Thumbnail { .. }
-            | PipelineOp::Contain { .. }
-            | PipelineOp::Cover { .. }
-            | PipelineOp::Fit { .. }
-            | PipelineOp::Transform { .. }
-            | PipelineOp::Pad { .. }
-            | PipelineOp::Convert { .. }
-            | PipelineOp::ConvertLab { .. }
-            | PipelineOp::Reduce { .. }
-            | PipelineOp::Solarize { .. }
-            | PipelineOp::Posterize { .. }
-            | PipelineOp::Grayscale
-            | PipelineOp::Colorize { .. }
-            | PipelineOp::Brightness { .. }
-            | PipelineOp::Contrast { .. }
-            | PipelineOp::ColorSaturation { .. }
-            | PipelineOp::Sharpness { .. }
-            | PipelineOp::Autocontrast { .. }
-            | PipelineOp::Equalize
-            | PipelineOp::EqualizeMasked { .. }
-            | PipelineOp::Eval { .. }
-            | PipelineOp::RemapPalette { .. }
-            | PipelineOp::PutData { .. }
-            | PipelineOp::ExtractBand { .. }
-            | PipelineOp::Offset { .. }
-            | PipelineOp::Flip
-            | PipelineOp::Mirror
-            | PipelineOp::Transpose { .. }
-            | PipelineOp::Crop { .. }
-            | PipelineOp::CropBorder { .. }
-            | PipelineOp::Expand { .. }
-            | PipelineOp::Constant { .. }
-            | PipelineOp::Duplicate
-            | PipelineOp::Filter3x3 { .. }
-            | PipelineOp::Filter5x5 { .. }
-            | PipelineOp::BoxBlur { .. }
-            | PipelineOp::BoxBlurXY { .. }
-            | PipelineOp::GaussianBlur { .. }
-            | PipelineOp::MaxFilter { .. }
-            | PipelineOp::MinFilter { .. }
-            | PipelineOp::MedianFilter { .. }
-            | PipelineOp::RankFilter { .. }
-            | PipelineOp::EffectNoise { .. }
-            | PipelineOp::EffectSpread { .. }
-            | PipelineOp::Color3DLut { .. }
-            | PipelineOp::Rotate { .. }
-            | PipelineOp::PutAlpha { .. }
-            | PipelineOp::PutAlphaData { .. }
-            | PipelineOp::PutPixel { .. }
-            | PipelineOp::DrawLine { .. }
-            | PipelineOp::DrawPoint { .. }
-            | PipelineOp::DrawRectangle { .. }
-            | PipelineOp::DrawRoundedRect { .. }
-            | PipelineOp::DrawPolygon { .. }
-            | PipelineOp::DrawEllipse { .. }
-            | PipelineOp::DrawCircle { .. }
-            | PipelineOp::DrawArc { .. }
-            | PipelineOp::DrawChord { .. }
-            | PipelineOp::DrawPieslice { .. }
-            | PipelineOp::AlphaComposite { .. }
-            | PipelineOp::Paste { .. }
-            | PipelineOp::Merge { .. }
-            | PipelineOp::BlendModule { .. }
-            | PipelineOp::CompositeModule { .. }
-            | PipelineOp::Multiply { .. }
-            | PipelineOp::Screen { .. }
-            | PipelineOp::Darker { .. }
-            | PipelineOp::Lighter { .. }
-            | PipelineOp::Difference { .. }
-            | PipelineOp::Overlay { .. }
-            | PipelineOp::HardLight { .. }
-            | PipelineOp::SoftLight { .. }
-            | PipelineOp::AddModulo { .. }
-            | PipelineOp::SubtractModulo { .. }
-            | PipelineOp::LogicalAnd { .. }
-            | PipelineOp::LogicalOr { .. }
-            | PipelineOp::LogicalXor { .. }
-            | PipelineOp::Add { .. }
-            | PipelineOp::Subtract { .. }
-    )
-}
-
-/// Returns whether the compatibility SIMD backend has an implementation for `op`.
-///
-/// TODO(pillow-rs#3ptb): remove this pool-based query after operation support
-/// admission is derived from the prepared CPU mode/architecture declarations.
-pub fn simd_supports(op: &PipelineOp) -> Result<bool, PilError> {
-    if !simd_native_operation(op) {
-        return Ok(false);
-    }
-    Ok(registry()?
-        .get(variant_key(op))
-        .is_some_and(|entry| entry.simd_fn.is_some()))
 }
 
 /// Prepares one operation using its exact mode and the injected CPU context.

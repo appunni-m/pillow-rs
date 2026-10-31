@@ -98,7 +98,7 @@ fn pending_cmyk_projection_applies_overwrites_without_changing_image() -> Result
 }
 
 #[test]
-fn simd_pending_cmyk_projection_fuses_writes_and_reports_vector_execution() -> Result<(), PilError>
+fn simd_alias_cmyk_projection_fuses_writes_and_reports_cpu_vector_execution() -> Result<(), PilError>
 {
     use crate::compute::Backend;
 
@@ -119,8 +119,9 @@ fn simd_pending_cmyk_projection_fuses_writes_and_reports_vector_execution() -> R
     expected_horizontal[3] = 1;
     expected_horizontal[64] = 1;
     assert_eq!(projection, (expected_horizontal, vec![0, 1, 1]));
-    let receipt = receipt.expect("SIMD terminal receipt");
-    assert_eq!(receipt.1, Backend::Simd);
+    let receipt = receipt.expect("CPU architecture terminal receipt");
+    assert_eq!(receipt.0, Some(Backend::Simd));
+    assert_eq!(receipt.1, Backend::Cpu);
     assert_eq!(receipt.2, 4);
     assert_eq!(receipt.7, None);
     assert_eq!(operation_receipts.len(), 4);
@@ -129,7 +130,7 @@ fn simd_pending_cmyk_projection_fuses_writes_and_reports_vector_execution() -> R
 }
 
 #[test]
-fn simd_known_zero_cmyk_projection_vectorizes_positive_writes_and_axis_tails()
+fn simd_alias_cmyk_projection_vectorizes_positive_writes_and_axis_tails()
 -> Result<(), PilError> {
     use crate::compute::Backend;
 
@@ -152,8 +153,9 @@ fn simd_known_zero_cmyk_projection_vectorizes_positive_writes_and_axis_tails()
     expected_vertical[0] = 1;
     expected_vertical[2] = 1;
     assert_eq!(projection, (expected_horizontal, expected_vertical));
-    let receipt = receipt.expect("SIMD terminal receipt");
-    assert_eq!(receipt.1, Backend::Simd);
+    let receipt = receipt.expect("CPU architecture terminal receipt");
+    assert_eq!(receipt.0, Some(Backend::Simd));
+    assert_eq!(receipt.1, Backend::Cpu);
     assert_eq!(receipt.2, 3);
     assert_eq!(receipt.7, None);
     assert_eq!(operation_receipts.len(), 3);
@@ -162,7 +164,7 @@ fn simd_known_zero_cmyk_projection_vectorizes_positive_writes_and_axis_tails()
 }
 
 #[test]
-fn simd_known_zero_cmyk_projection_scans_when_write_limit_is_exceeded() -> Result<(), PilError> {
+fn simd_alias_cmyk_projection_scans_when_write_limit_is_exceeded() -> Result<(), PilError> {
     use crate::compute::Backend;
 
     let mut image = Image::new(9, 1, crate::raster::Mode::ImageCmyk8, (0, 0, 0, 0))?;
@@ -178,8 +180,9 @@ fn simd_known_zero_cmyk_projection_scans_when_write_limit_is_exceeded() -> Resul
     Backend::set_pipeline_telemetry_enabled(previous);
 
     assert_eq!(projection, (vec![1; 9], vec![1]));
-    let receipt = receipt.expect("SIMD terminal receipt");
-    assert_eq!(receipt.1, Backend::Simd);
+    let receipt = receipt.expect("CPU architecture terminal receipt");
+    assert_eq!(receipt.0, Some(Backend::Simd));
+    assert_eq!(receipt.1, Backend::Cpu);
     assert_eq!(receipt.2, 9);
     assert_eq!(receipt.7, None);
     assert_eq!(operation_receipts[0].vector_block_count, 2);

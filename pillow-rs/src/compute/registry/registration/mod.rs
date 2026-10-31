@@ -5,11 +5,7 @@
 //! `module_fns`, and `transform` registrations with family-owned prepared
 //! callbacks as those CPU owners are migrated. Keep each existing operation
 //! key and GPU shader paired with its replacement.
-//! TODO(pillow-rs#3ptb): remove `SimdOpFn` entries and independent SIMD
-//! registration after each operation's CPU architecture compatibility route
-//! uses its prepared owner.
-
-use super::{OpEntry, SimdOpFn};
+use super::OpEntry;
 use crate::error::PilError;
 use std::collections::HashMap;
 
@@ -26,7 +22,6 @@ macro_rules! gpu_entry {
                 "/src/compute/pool_gpu/shaders/",
                 $shader
             ))),
-            simd_fn: None,
         }
     };
 }
@@ -43,14 +38,6 @@ macro_rules! draw_entry {
     };
 }
 
-fn simd_set(entries: &mut Registry, key: &'static str, f: SimdOpFn) -> Result<(), PilError> {
-    let entry = entries
-        .get_mut(key)
-        .ok_or_else(|| PilError::InternalError(format!("SIMD key not registered: {key}")))?;
-    entry.simd_fn = Some(f);
-    Ok(())
-}
-
 mod chops;
 mod color;
 mod composite;
@@ -64,7 +51,6 @@ mod imageops;
 mod module_fns;
 mod mutating;
 mod prelude;
-mod simd;
 mod transform;
 
 pub(super) fn register_all(entries: &mut Registry) -> Result<(), PilError> {
@@ -81,6 +67,5 @@ pub(super) fn register_all(entries: &mut Registry) -> Result<(), PilError> {
     mutating::register(entries)?;
     extract_band::register(entries)?;
     draw::register(entries)?;
-    simd::register(entries)?;
     Ok(())
 }

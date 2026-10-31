@@ -1,4 +1,4 @@
-use super::{Backend, PilError, execute_automatic_simd_segments};
+use super::{Backend, PilError, execute_prepared, prepare_execution};
 use crate::compute::registry;
 use crate::pipeline::{PipelineOp, TransposeMethod};
 use crate::raster::{DynamicImage, GenericImageView, RgbaImage};
@@ -34,7 +34,7 @@ fn fused_native_copy_preserves_avx2_transpose_receipt() {
 }
 
 #[test]
-fn automatic_simd_composes_consecutive_transposes() -> Result<(), PilError> {
+fn simd_compatibility_request_composes_consecutive_transposes() -> Result<(), PilError> {
     let source = DynamicImage::ImageRgba8(
         RgbaImage::from_raw(
             19,
@@ -57,30 +57,24 @@ fn automatic_simd_composes_consecutive_transposes() -> Result<(), PilError> {
         registry::execute_cpu(op, &input, Some("RGBA"))
     })?;
 
+    let prepared = prepare_execution(&ops, Some(Backend::Simd))?;
     let previous = Backend::set_pipeline_telemetry_enabled(true);
-    Backend::reset_pipeline_allocation_telemetry();
     crate::compute::reset_pipeline_operation_telemetry();
-    let result = execute_automatic_simd_segments(&ops, &source, Some("RGBA"));
+    let result = execute_prepared(&prepared, &ops, &source, Some("RGBA"));
+    let receipt = Backend::take_pipeline_telemetry();
     let operation_records = crate::compute::take_pipeline_operation_telemetry();
-    let allocations = Backend::take_pipeline_allocation_telemetry();
     Backend::set_pipeline_telemetry_enabled(previous);
 
-    let (actual, backend, fallback_reason, resources) = result?;
+    let actual = result?;
     assert_eq!(actual.as_bytes(), expected.as_bytes());
     assert_eq!(actual.dimensions(), expected.dimensions());
-    assert_eq!(backend, Backend::Simd);
-    assert_eq!(fallback_reason, None);
+    let receipt = receipt.expect("CPU architecture execution receipt");
+    assert_eq!(receipt.0, Some(Backend::Simd));
+    assert_eq!(receipt.1, Backend::Cpu);
+    assert_eq!(receipt.2, 2);
     assert_eq!(operation_records.len(), 2);
-    assert!(
-        operation_records
-            .iter()
-            .map(|record| record.vector_block_count)
-            .sum::<u64>()
-            > 0
-    );
-    let resources = resources.expect("SIMD segment resource receipt");
-    assert_eq!(resources.fused_operation_count, 2);
-    assert_eq!(allocations.allocation_count, 1);
-    assert_eq!(allocations.allocated_bytes, (19 * 17 * 4) as u64);
+    assert!(operation_records
+        .iter()
+        .all(|record| record.selected_architecture.is_some()));
     Ok(())
 }

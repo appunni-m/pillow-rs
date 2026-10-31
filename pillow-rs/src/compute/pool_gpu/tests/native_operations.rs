@@ -215,7 +215,16 @@ fn contrast_kernels_match_constructor_blend_for_varied_pixels() {
                 };
                 assert_eq!(actual, expected, "{mode} factor={factor} {backend:?}");
                 let receipt = Backend::take_pipeline_telemetry().expect("native receipt");
-                assert_eq!(receipt.1, backend, "{mode} factor={factor}");
+                assert_eq!(receipt.0, Some(backend), "{mode} factor={factor} requested");
+                assert_eq!(
+                    receipt.1,
+                    if backend == Backend::Simd {
+                        Backend::Cpu
+                    } else {
+                        backend
+                    },
+                    "{mode} factor={factor} executor"
+                );
                 assert_eq!(receipt.7, None, "{mode} factor={factor}");
                 if backend == Backend::Gpu {
                     assert_eq!(receipt.6, Some(1));

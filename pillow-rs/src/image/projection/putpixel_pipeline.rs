@@ -220,7 +220,9 @@ impl Image {
         let execution_context = *prepared.context();
         let backend_matches = match terminal_backend {
             crate::compute::Backend::Cpu => prepared.is_serial_cpu_without_fallback(),
-            crate::compute::Backend::Simd => prepared.is_simd_without_fallback(),
+            crate::compute::Backend::Simd => {
+                prepared.is_cpu_architecture_alias_without_fallback()
+            }
             crate::compute::Backend::Gpu => prepared.is_gpu_without_fallback(),
         };
         if !backend_matches {
