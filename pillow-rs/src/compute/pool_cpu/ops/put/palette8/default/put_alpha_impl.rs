@@ -14,6 +14,5 @@ pub(crate) fn prepare(image: &Input, alpha: u8) -> Kernel<'_> {
 
 #[inline]
 pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
-    let luma = input.image.clone();
-    Ok(DynamicImage::ImagePaletteAlpha8(helpers::luma_constant(&luma, input.alpha)))
+    Ok(DynamicImage::ImagePaletteAlpha8(helpers::luma_constant(input.image, input.alpha)))
 }

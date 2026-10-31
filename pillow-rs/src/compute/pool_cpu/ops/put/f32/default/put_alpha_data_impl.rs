@@ -16,6 +16,5 @@ pub(crate) fn prepare<'a>(image: &'a Input, mask: MaskStrategy<'a>) -> Kernel<'a
 
 #[inline]
 pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
-    let rgba: crate::raster::RgbaImage = input.image.clone();
-    Ok(DynamicImage::ImageRgba8(helpers::rgba_mask(&rgba, input.mask)))
+    Ok(DynamicImage::ImageRgba8(helpers::rgba_mask(input.image, input.mask)))
 }

@@ -421,39 +421,30 @@ impl Image {
             }
             Image::Loaded(data) => {
                 let image = Arc::make_mut(&mut data.image);
-                let samples: &mut [u8] = match mode {
-                    crate::pipeline::PixelMode::Mode1
-                    | crate::pipeline::PixelMode::L
-                    | crate::pipeline::PixelMode::P => image
-                        .as_mut_luma8()
-                        .ok_or_else(|| {
-                            PilError::InternalError("putdata L storage mismatch".into())
-                        })?
-                        .as_mut(),
-                    crate::pipeline::PixelMode::LA | crate::pipeline::PixelMode::PA => image
-                        .as_mut_luma_alpha8()
-                        .ok_or_else(|| {
-                            PilError::InternalError("putdata LA storage mismatch".into())
-                        })?
-                        .as_mut(),
-                    crate::pipeline::PixelMode::RGB
-                    | crate::pipeline::PixelMode::YCbCr
-                    | crate::pipeline::PixelMode::HSV => image
-                        .as_mut_rgb8()
-                        .ok_or_else(|| {
-                            PilError::InternalError("putdata RGB storage mismatch".into())
-                        })?
-                        .as_mut(),
-                    crate::pipeline::PixelMode::RGBA
-                    | crate::pipeline::PixelMode::CMYK
-                    | crate::pipeline::PixelMode::I
-                    | crate::pipeline::PixelMode::F => image
-                        .as_mut_rgba8()
-                        .ok_or_else(|| {
-                            PilError::InternalError("putdata RGBA storage mismatch".into())
-                        })?
-                        .as_mut(),
+                let mismatch = match image_mode {
+                    Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => {
+                        "putdata L storage mismatch"
+                    }
+                    Mode::ImageLumaA8 | Mode::ImagePaletteAlpha8 => {
+                        "putdata LA storage mismatch"
+                    }
+                    Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageHsv8 => {
+                        "putdata RGB storage mismatch"
+                    }
+                    Mode::ImageRgba8
+                    | Mode::ImageRgbPremultiplied8
+                    | Mode::ImageRgbx8
+                    | Mode::ImageCmyk8
+                    | Mode::ImageI32
+                    | Mode::ImageF32 => "putdata RGBA storage mismatch",
+                    _ => "putdata byte-addressable storage mismatch",
                 };
+                if image.mode() != image_mode {
+                    return Err(PilError::InternalError(mismatch.into()));
+                }
+                let samples = image
+                    .as_bytes_mut()
+                    .ok_or_else(|| PilError::InternalError(mismatch.into()))?;
                 let destination = samples.get_mut(start..end).ok_or_else(|| {
                     PilError::InternalError("putdata storage offset out of bounds".into())
                 })?;

@@ -19,6 +19,5 @@ pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
     if let Some(mask) = helpers::native_mask(&input) {
         return Ok(DynamicImage::ImageRgba8(helpers::native_rgba_mask(input.image, mask)));
     }
-    let rgba: crate::raster::RgbaImage = input.image.clone();
-    Ok(DynamicImage::ImageRgba8(helpers::rgba_mask(&rgba, input.mask)))
+    Ok(DynamicImage::ImageRgba8(helpers::rgba_mask(input.image, input.mask)))
 }

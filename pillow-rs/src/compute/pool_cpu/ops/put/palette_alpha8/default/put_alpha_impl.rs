@@ -2,7 +2,6 @@
 
 use crate::error::PilError;
 use crate::raster::DynamicImage;
-use crate::raster::ConvertBuffer;
 use super::super::super::helpers::put_alpha::{self as helpers, AlphaInput};
 
 pub(crate) type Input = crate::raster::GrayAlphaImage;
@@ -16,6 +15,5 @@ pub(crate) fn prepare(image: &Input, alpha: u8) -> Kernel<'_> {
 #[inline]
 pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
     // Preserve indices independently of the wrapper's retained palette.
-    let luma: crate::raster::GrayImage = input.image.convert();
-    Ok(DynamicImage::ImagePaletteAlpha8(helpers::luma_constant(&luma, input.alpha)))
+    Ok(DynamicImage::ImagePaletteAlpha8(helpers::replace_luma_alpha(input.image, input.alpha)))
 }

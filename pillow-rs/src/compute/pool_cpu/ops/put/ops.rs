@@ -3,15 +3,20 @@
 //! Pipeline callbacks for PutPixel, PutData, PutAlpha, and PutAlphaData are
 //! registered and consumed by the serial CPU batch executor. Consecutive
 //! PutPixel runs also compose with the prepared RGB Thumbnail fusion.
-//! TODO(pillow-rs#3ptb): audit direct value-at mutation and wrapper metadata
-//! paths for context bypasses, and finish the mode-specific conversion review
-//! below. GetData's direct output-buffer route now uses the prepared
-//! ExtractBand mode/architecture strategy.
+//! TODO(pillow-rs#3ptb): finish auditing direct value-at mutation and wrapper
+//! metadata paths for Backend/Architecture context bypasses, and finish the
+//! mode-specific conversion review below. The immediate PutData callback path
+//! now writes exact DynamicImage byte storage after checking planned identity.
+//! GetData's direct output-buffer route uses the prepared ExtractBand strategy.
 //! TODO(pillow-rs#3ptb): finish reviewing cross-mode conversions in PutData,
 //! PutAlpha, PutAlphaData, and ExtractBand against the archived contract. Keep
 //! conversions only when they are part of the operation's semantics; replace
-//! conversions used only for kernel reuse with native-mode code. PutAlpha and
-//! PutAlphaData now retain native high-depth samples, pending full source review.
+//! conversions used only for kernel reuse with native-mode code. PutData's
+//! clone-only same-carrier prefix routes now use the native writer; true
+//! ConvertBuffer branches still need the full cross-mode audit. One/P/PA/La
+//! PutAlpha paths avoid copy-only carrier conversion, and PutAlphaData uses
+//! native source-layout writers for same-carrier inputs. Both operations retain
+//! native high-depth samples, pending full source review.
 // NO_PILLOW_SUPPORT: Internal high-depth raster identities have declared
 // core-only band and mutation routes. The TODO above still audits the remaining
 // sample semantics and removes conversions used only for implementation reuse.

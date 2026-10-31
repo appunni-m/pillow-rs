@@ -27,7 +27,7 @@ pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
             .map(DynamicImage::ImageRgb8),
         PayloadLayout::Rgba => helpers::native(image, data)
             .map(DynamicImage::ImageF32),
-        PayloadLayout::Raw4 => helpers::converted(width, height, data, || image.clone())
+        PayloadLayout::Raw4 => helpers::native(image, data)
             .map(DynamicImage::ImageF32),
     }
 }

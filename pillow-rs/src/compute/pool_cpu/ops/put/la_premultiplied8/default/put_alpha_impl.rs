@@ -2,7 +2,6 @@
 
 use crate::error::PilError;
 use crate::raster::DynamicImage;
-use crate::raster::ConvertBuffer;
 use super::super::super::helpers::put_alpha::{self as helpers, AlphaInput};
 
 pub(crate) type Input = crate::raster::GrayAlphaImage;
@@ -15,11 +14,7 @@ pub(crate) fn prepare(image: &Input, alpha: u8) -> Kernel<'_> {
 
 #[inline]
 pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
-    let rgba: crate::raster::RgbaImage = input.image.convert();
-    let mut output = crate::raster::GrayAlphaImage::new(rgba.width(), rgba.height());
-    for (destination, source) in output.pixels_mut().zip(rgba.pixels()) {
-        destination[0] = source[0];
-        destination[1] = input.alpha;
-    }
-    Ok(DynamicImage::ImageLumaA8(output))
+    // The old L→RGBA→LA route copied L unchanged and then replaced alpha.
+    // Write that exact result in its native two-byte carrier.
+    Ok(DynamicImage::ImageLumaA8(helpers::replace_luma_alpha(input.image, input.alpha)))
 }

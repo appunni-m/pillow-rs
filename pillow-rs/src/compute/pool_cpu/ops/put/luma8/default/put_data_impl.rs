@@ -21,7 +21,7 @@ pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
     match input.payload {
         PayloadLayout::Luma => helpers::native(image, data)
             .map(DynamicImage::ImageLuma8),
-        PayloadLayout::Index => helpers::converted(width, height, data, || image.clone())
+        PayloadLayout::Index => helpers::native(image, data)
             .map(DynamicImage::ImageLuma8),
         PayloadLayout::LumaAlpha | PayloadLayout::IndexAlpha => helpers::converted(width, height, data, || image.convert())
             .map(DynamicImage::ImageLumaA8),

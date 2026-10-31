@@ -16,6 +16,5 @@ pub(crate) fn prepare<'a>(image: &'a Input, mask: MaskStrategy<'a>) -> Kernel<'a
 
 #[inline]
 pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
-    let luma = input.image.clone();
-    Ok(DynamicImage::ImagePaletteAlpha8(helpers::luma_mask(&luma, input.mask)))
+    Ok(DynamicImage::ImagePaletteAlpha8(helpers::luma_mask(input.image, input.mask)))
 }
