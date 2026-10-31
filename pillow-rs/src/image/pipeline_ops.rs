@@ -338,6 +338,28 @@ pub(crate) fn known_pipeline_op_mode(op: &PipelineOp, current: Mode) -> Option<M
     }
 }
 
+/// Plans an operation's mode while accounting for an indexed source.
+///
+/// A mode-preserving operation may still expand palette indices when its
+/// source-specific route is not palette-safe. In that case, defer to the
+/// materialized result instead of reporting the input identity.
+/// TODO(pillow-rs#3ptb): replace those indexed materialization fallbacks with
+/// exact transitions or existing rejections from each operation contract.
+pub(crate) fn known_pipeline_op_mode_for_source(
+    source: &Image,
+    op: &PipelineOp,
+    current: Mode,
+) -> Option<Mode> {
+    if matches!(current, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
+        && source.has_palette_samples()
+        && op_preserves_mode(op)
+        && !Image::is_palette_safe_op_for_source(source, op)
+    {
+        return None;
+    }
+    known_pipeline_op_mode(op, current)
+}
+
 /// Rounds a non-negative dimension using Python's ties-to-even rule.
 ///
 /// Metadata propagation must never manufacture a dimension for an invalid or
@@ -495,10 +517,6 @@ fn pipeline_output_metadata(source: &Image, op: &PipelineOp) -> PipelineOutputMe
     let palette_safe = source_is_paletted && Image::is_palette_safe_op_for_source(source, op);
     let indexed_chops_result_without_palette =
         source_is_paletted && Image::indexed_chops_result_without_palette(op);
-    let putalpha_mode = match op {
-        PipelineOp::PutAlpha { mode, .. } | PipelineOp::PutAlphaData { mode, .. } => Some(*mode),
-        _ => None,
-    };
     let promotes_p_to_pa = source.has_palette_mode()
         && matches!(
             op,
@@ -510,8 +528,7 @@ fn pipeline_output_metadata(source: &Image, op: &PipelineOp) -> PipelineOutputMe
                 ..
             }
         );
-    let output_mode =
-        pipeline_output_mode(source, op, source_is_paletted, palette_safe, putalpha_mode);
+    let output_mode = pipeline_output_mode(source, op, source_is_paletted, palette_safe);
     let (palette, palette_alpha) = pipeline_output_palette(
         source,
         op,
@@ -594,14 +611,10 @@ fn pipeline_output_mode(
     op: &PipelineOp,
     source_is_paletted: bool,
     palette_safe: bool,
-    putalpha_mode: Option<Mode>,
 ) -> Option<Mode> {
     let source_mode = source.known_mode_identity();
-    let output_mode = if matches!(
-        op,
-        PipelineOp::ExtractBand { .. } | PipelineOp::Merge { .. }
-    ) {
-        None
+    let output_mode = if matches!(op, PipelineOp::ExtractBand { .. } | PipelineOp::Merge { .. }) {
+        source_mode.and_then(|mode| known_pipeline_op_mode_for_source(source, op, mode))
     } else if source_is_paletted {
         if source_mode == Some(Mode::ImagePaletteAlpha8)
             && matches!(op, PipelineOp::PutPixel { .. })
@@ -610,29 +623,28 @@ fn pipeline_output_mode(
             // RGB palette is attached, so later conversion still sees PA.
             Some(Mode::ImagePaletteAlpha8)
         } else {
-            palette_safe.then(|| match source_mode {
-                Some(Mode::ImagePaletteAlpha8) => Mode::ImagePaletteAlpha8,
-                _ => Mode::ImagePalette8,
-            })
+            palette_safe
+                .then(|| match source_mode {
+                    Some(Mode::ImagePaletteAlpha8) => Mode::ImagePaletteAlpha8,
+                    _ => Mode::ImagePalette8,
+                })
+                .or_else(|| {
+                    source_mode.and_then(|mode| {
+                        known_pipeline_op_mode_for_source(source, op, mode)
+                    })
+                })
         }
     } else {
-        match op {
-            // Pillow's constant constructor always allocates L, even when the
-            // source has an explicit CMYK, YCbCr, HSV, I, F, or 1 mode tag.
-            PipelineOp::Grayscale
-            | PipelineOp::Constant { .. }
-            | PipelineOp::Convert { .. }
-            | PipelineOp::ConvertLab { .. }
-            | PipelineOp::ExtractBand { .. } => None,
-            _ => source_mode,
-        }
+        source_mode.and_then(|mode| known_pipeline_op_mode(op, mode))
     };
 
-    // Use the same exact source-to-output mapping for the declared pipeline
-    // identity and the lazy metadata planner. In particular, L/LA/RGB/CMYK
-    // alpha updates must not leave the source mode cached on the new node.
-    match putalpha_mode {
-        Some(mode) => known_putalpha_mode(mode),
+    // The lazy planner owns mode transitions for both metadata queries and
+    // declared outputs. Keep the palette-aware exception above because some
+    // P/PA operations expand indices to colors based on attached metadata.
+    match op {
+        PipelineOp::PutAlpha { mode, .. } | PipelineOp::PutAlphaData { mode, .. } => {
+            known_putalpha_mode(*mode)
+        }
         _ => output_mode,
     }
 }

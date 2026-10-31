@@ -176,20 +176,13 @@ pub fn merge(mode: Mode, bands: &[Image]) -> Result<Image, PilError> {
     validate_merge_band_modes(mode, bands)?;
     validate_merge_band_sizes(bands)?;
 
-    let mut result = Image::push_op(
+    Ok(Image::push_op(
         &bands[0],
         PipelineOp::Merge {
             mode,
             bands: bands.to_vec().into(),
         },
-    );
-    if !matches!(
-        mode,
-        Mode::ImageLuma8 | Mode::ImageLumaA8 | Mode::ImageRgb8 | Mode::ImageRgba8
-    ) {
-        result.set_pipeline_output_mode(Some(mode));
-    }
-    Ok(result)
+    ))
 }
 
 /// Merges host-extracted band inputs while keeping invalid-item handling in

@@ -2,9 +2,11 @@
 
 Status: baseline inventory captured; the 98 CPU and 182 SIMD files are preserved below pool_cpu/legacy; maintained implementation and source review remain in progress. The separate SIMD executor and adapter registry were removed from the active module graph on 2026-10-31; `Backend::Simd` is now a CPU-plus-Architecture compatibility request. RGB8 Wasm SIMD Convert strategies are restored from archived portable-vector routes, Default RGB→LA/I;16 staging preserves the archived L scratch allocation, and reviewed Convert empty routes retain their archived receipts. The RGBA/RGBa-to-LA vector kernel now lives in a shared native four-byte helper used by both exact mode strategies. The RGBX-to-La/RGBa routes and their inventory were committed in `baf192167`; `0b34e9a9b` exposes same-mode Convert identity in all 25 source contracts, including palette-preserving P/PA and CoreOnly internal high-depth identities. `e75e87f43` routes named ImageOps/Paste color resolution through exact `Mode` and marks internal high-depth color results `NO_PILLOW_SUPPORT`. `7790ed967` classifies reviewed mode-preserving pipeline operations, records RemapPalette and Color3DLut output identities from typed operation contracts, and routes Tiny-RGB eager ExtractBand through prepared CPU architecture execution for CPU Default and compatibility SIMD. `054a98326` replaces clone-only same-carrier PutData prefix writes with the native writer in 16 mode owners, removes copy-only carrier conversion from four PutAlpha and 13 PutAlphaData Default paths, and makes callback-preserving PutData writes validate and mutate the exact materialized DynamicImage byte carrier. `aa6de79ae` carries exact `raster::Mode` through PutData value-kind selection, normalization, immediate-write width selection, and the deferred `PipelineOp::PutData` payload. `3f110aa47` adds callback-driven PutData's exact-mode support contract and cached CPU Default context; `65fb1c21c` adds mode-owned synchronous PutPixelValueAt for numeric I/F and I;16. `e060b60c1` adds the CPU Default strategy for Pillow's raw-byte I;16 PutData path. `751fe8249` routes allocated GetData band reads through the caller-owned output path. Commit `3254bd6ad` moves GetData byte, band, I;16 scalar, and I/F scalar algorithms into exact-mode Default owners for all 25 identities. Commit `572b7fd6c` carries exact `raster::Mode` through PutAlpha and PutAlphaData descriptors, while GPU packing preserves the existing shader layout codes. Commit 11665ed82 passes typed Mode through prepared execution and array import. The lazy-mode-cache consolidation is source-only and unverified; cross-mode P/PA terminal palette metadata remains incomplete. All current CPU source remains unverified.
 Baseline commit: 3f9dfd4036caa061eabcf2255c9f34a745df9c7e
-Working checkout: `/Users/lazytrot/work/pillow-rs`, branch `develop` at
-`5e93cd6cb`, with an uncommitted, unvalidated PutAlpha mode-cache correction
-and alpha-mask copy-elimination slice. The commits
+Working checkout: `/Users/lazytrot/work/pillow-rs`, branch `develop`. The
+pipeline output-mode correction is source-reviewed and remains runtime-
+unvalidated.
+Commit `de3f7c903` corrects PutAlpha's declared mode and removes redundant
+alpha-mask copies for exact One/L/P carriers. The commits
 include the exact-mode PutData callback writer and its
 sequence-scoped CPU Default context, mode-owned numeric I/F and I;16
 PutPixelValueAt strategies, four exact-mode Default owners for Pillow's
@@ -50,6 +52,19 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   admission, output handling, native routes, and shader packing use exact
   identities while retaining existing numeric layout codes. This source-only
   change remains uncompiled and unvalidated.
+- Pipeline output metadata uses the typed mode planner instead of retaining a
+  non-paletted source identity by default. Source tracing found Colorize nodes
+  cached L despite returning RGB, and EffectNoise nodes could retain an
+  arbitrary input mode despite returning L; either stale declaration could
+  force materialization to retag the result incorrectly. For indexed inputs,
+  palette-safe P/PA handling remains explicit. Known mode-changing routes use
+  their declared transition; mode-preserving routes that are not palette-safe
+  defer identity to materialization rather than claiming the source mode. A
+  source TODO tracks replacing those indexed fallbacks with exact transitions
+  or existing rejections. Merge and ExtractBand now seed the output cache from
+  their typed operation contracts, and Image::merge no longer reapplies a
+  partial target-mode list after queuing. This source-only correction is
+  unvalidated.
 - Prepared execution, its shared-result variants, and `BackendImpl` now carry
   `Option<Mode>` instead of a Pillow spelling. Materialization resolves the
   logical source identity with `Image::mode_identity()` and keeps palette mode
@@ -2010,7 +2025,7 @@ The structure guide remains the authority for exact maintained paths. This ledge
 | Archived `simd_rgba_putpixel_batch` and `kernels/rgba_batch.rs::apply_rgba_batch` | Typed RGBA architecture owners compose `put/helpers/put_pixel_vector.rs::{batch,apply_rgba_batch}`; immutable admitted writes retain order, one frame clone, and vector-store telemetry. |
 | Archived PutPixel inline vector tests | Two source regressions relocated to `put/tests/put_pixel.rs`; pool-level telemetry/resource behavior still needs review against the maintained executor. |
 
-Remaining put-family work includes typed wrapper boundaries and complete caller reconciliation. PutData and both alpha operations have source owners, but remain unvalidated and are not end-to-end complete. The structure guide remains the placement authority. No build, formatter, checkstyle, lint, test, parity, benchmark, or coverage has run. The latest commit is `5e93cd6cb` on `develop`; the current alpha-mask copy-elimination slice is uncommitted and unverified. The active CPU refactor remains incomplete.
+Remaining put-family work includes typed wrapper boundaries and complete caller reconciliation. PutData and both alpha operations have source owners, but remain unvalidated and are not end-to-end complete. The structure guide remains the placement authority. No build, formatter, checkstyle, lint, test, parity, benchmark, or coverage has run. The pipeline output-mode correction remains runtime-unverified. The active CPU refactor remains incomplete.
 
 ### PutData source progress: incomplete and unvalidated
 

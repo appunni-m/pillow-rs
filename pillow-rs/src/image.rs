@@ -75,8 +75,9 @@ pub use pipeline_ops::{
 };
 use pipeline_ops::{known_pipeline_op_dimensions, take_cached_materialization};
 pub(crate) use pipeline_ops::{
-    cached_pipeline_mode, declared_pipeline_mode, known_pipeline_op_mode, materialization_cache,
-    pipeline_mode_cache_for, pipeline_shape_cache, PipelineModeState,
+    cached_pipeline_mode, declared_pipeline_mode, known_pipeline_op_mode,
+    known_pipeline_op_mode_for_source, materialization_cache, pipeline_mode_cache_for,
+    pipeline_shape_cache, PipelineModeState,
 };
 mod pixel_access;
 pub use pixel_access::PutPixelValue;

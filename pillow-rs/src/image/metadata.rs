@@ -8,7 +8,7 @@ use crate::raster::{DynamicImage, GenericImageView, Mode};
 
 use super::{
     Image, ImageInfoValue, PaletteTransparency, PalettedData, cached_pipeline_mode,
-    known_pipeline_op_dimensions, known_pipeline_op_mode, materialization_cache,
+    known_pipeline_op_dimensions, known_pipeline_op_mode_for_source, materialization_cache,
     PipelineModeState,
 };
 
@@ -722,11 +722,11 @@ impl Image {
                 } else {
                     source.mode_identity()?
                 };
-                if ops.mode_preserving() {
+                if ops.mode_preserving() && !source.has_palette_samples() {
                     return Ok(PipelineModeState::Planned(Some(current)));
                 }
                 for op in ops.iter() {
-                    let Some(next) = known_pipeline_op_mode(op, current) else {
+                    let Some(next) = known_pipeline_op_mode_for_source(source, op, current) else {
                         return Ok(PipelineModeState::Planned(None));
                     };
                     current = next;
