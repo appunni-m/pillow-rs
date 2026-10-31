@@ -163,6 +163,11 @@ fn validate_convert_request(
     target_mode: Mode,
     has_matrix: bool,
 ) -> Result<(), PilError> {
+    // Internal high-depth rasters have no Pillow conversion target spelling,
+    // but exact same-mode Rust conversion is a typed identity copy.
+    if !has_matrix && source_mode == target_mode {
+        return Ok(());
+    }
     if source_mode == Mode::ImageLaPremultiplied8
         && !matches!(target_mode, Mode::ImageLaPremultiplied8 | Mode::ImageLumaA8)
         && !has_matrix

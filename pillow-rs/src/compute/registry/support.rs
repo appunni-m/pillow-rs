@@ -671,7 +671,19 @@ impl ModeSupport {
             return Err(PilError::InternalError("CPU strategy received a context for another backend".into()));
         }
         let mut unresolved = None;
+        let palette_identity_copy = default.id.operation == OperationId::Convert
+            && matches!(
+                input.request,
+                RequestFacts::ConvertTarget { target_mode }
+                    if target_mode == default.id.mode
+            );
         for contract in inputs {
+            // A same-mode P/PA Convert copies its indexed raster and carries
+            // wrapper metadata unchanged; it does not need resolved palette
+            // colors to choose or execute the identity strategy.
+            if palette_identity_copy && matches!(contract, InputContract::PaletteMetadata) {
+                continue;
+            }
             if let Some(guard) = contract.assess(input)? {
                 if unresolved.is_none() {
                     unresolved = Some(guard);

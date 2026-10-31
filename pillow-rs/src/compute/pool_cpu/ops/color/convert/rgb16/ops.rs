@@ -14,6 +14,7 @@ use crate::raster::{DynamicImage, ImageBuffer, Mode, Rgb};
 type Source = ImageBuffer<Rgb<u16>, Vec<u16>>;
 
 const TARGETS: &[Mode] = &[
+    Mode::ImageRgb16,
     Mode::One,
     Mode::ImageLuma8, Mode::ImageLumaA8, Mode::ImageRgb8, Mode::ImageRgba8,
     Mode::ImagePalette8, Mode::ImagePaletteAlpha8,
@@ -29,7 +30,7 @@ const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     rejection_reason: "image has wrong mode",
 }];
 
-// NO_PILLOW_SUPPORT: RGB16 has no Pillow identity; its LAB route is core-only.
+// NO_PILLOW_SUPPORT: RGB16's native conversions and identity route are core-only.
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
     OperationId::Convert,
     Mode::ImageRgb16,

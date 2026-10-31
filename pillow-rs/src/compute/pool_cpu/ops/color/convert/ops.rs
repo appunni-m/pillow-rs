@@ -82,6 +82,7 @@ const RGB_PREMULTIPLIED_TARGETS: &[Mode] = &[
     Mode::ImageI16N,
     Mode::ImageLaPremultiplied8,
     Mode::ImageRgb8,
+    Mode::ImageRgbPremultiplied8,
     Mode::ImageRgba8,
     Mode::ImageLab8,
     Mode::ImageRgbx8,
@@ -126,6 +127,7 @@ pub(crate) const RGBX_TARGETS: &[Mode] = &[
     Mode::ImageI16N,
     Mode::ImageRgb8,
     Mode::ImageRgba8,
+    Mode::ImageRgbx8,
     Mode::ImageLaPremultiplied8,
     Mode::ImageRgbPremultiplied8,
     Mode::ImageCmyk8,
@@ -266,10 +268,10 @@ fn classify_mode(mode: Mode) -> ModeSupport {
 // source-target-architecture comparison. Generic empty-native receipts for
 // RGB8, L, LA, RGBA, RGBX, RGBa, and I;16 are reconciled; audit alpha-only
 // mode outputs, same-mode guards, build availability, and uncovered routes.
-// The public Image::convert same-mode copy currently returns before this
-// prepared contract; some exact-mode target lists also omit that identity.
-// Expose that lazy, palette-preserving identity route here without forcing
-// materialization or dropping wrapper metadata.
+// All 25 same-mode identities are now listed at this operation boundary;
+// palette identity retains its wrapper dependency, and internal high-depth
+// identity is CoreOnly. The public Image::convert fast path remains a wrapper
+// copy; the prepared route is available to typed admission and direct callers.
 const CONVERT_CHILDREN: &[OperationId] = &[OperationId::ConvertLab];
 
 pub(crate) static SUPPORT: OperationSupport = OperationSupport::composed(
@@ -371,10 +373,12 @@ impl Prepared<'_> {
     }
 
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
+        let identity = self.matrix.is_none() && self.input.mode() == self.target;
         let output = self.execute_with_output()?;
-        if output.palette.is_some()
-            || output.palette_alpha.is_some()
-            || output.wrapper_metadata.is_some()
+        if !identity
+            && (output.palette.is_some()
+                || output.palette_alpha.is_some()
+                || output.wrapper_metadata.is_some())
         {
             return Err(PilError::InternalError(
                 "palette-target Convert requires the Image wrapper output boundary".into(),
@@ -384,6 +388,9 @@ impl Prepared<'_> {
     }
 
     pub(crate) fn execute_with_output(self) -> Result<PreparedConvertOutput, PilError> {
+        if self.matrix.is_none() && self.input.mode() == self.target {
+            return Ok(self.identity_output());
+        }
         if let Some(matrix) = self.matrix {
             return super::helpers::matrix::convert_with_matrix(
                 self.input.image,
@@ -403,6 +410,29 @@ impl Prepared<'_> {
         }
         Self::execute_mode(self.input, self.target, self.selection)
             .map(PreparedConvertOutput::raster)
+    }
+
+    fn identity_output(self) -> PreparedConvertOutput {
+        let input = self.input;
+        let image = input.image.clone();
+        // NO_PILLOW_SUPPORT: this same-mode identity also admits the five
+        // internal high-depth raster identities as a native core extension.
+        match self.target {
+            Mode::ImagePalette8 => PreparedConvertOutput {
+                image,
+                palette: None,
+                palette_alpha: None,
+                wrapper_metadata: Some(ConvertWrapperMetadata::PreserveSourceLoaded),
+            },
+            Mode::ImagePaletteAlpha8 => PreparedConvertOutput {
+                image,
+                palette: input.palette.rgb.map(|entries| entries.to_vec()),
+                palette_alpha: (!input.palette.alpha.is_empty())
+                    .then(|| input.palette.alpha.to_vec()),
+                wrapper_metadata: Some(ConvertWrapperMetadata::PreserveSource),
+            },
+            _ => PreparedConvertOutput::raster(image),
+        }
     }
 
     fn execute_lab(self) -> Result<DynamicImage, PilError> {
@@ -887,9 +917,12 @@ pub(crate) fn prepare_pipeline<'a>(
     let PipelineOp::Convert { mode, matrix, dither } = op else {
         return Err(PilError::ValueError("expected Convert op".into()));
     };
-    // TODO(pillow-rs#3ptb): carry prepared palette metadata through the lazy
-    // pipeline terminal before admitting palette-target Convert descriptors.
-    if matches!(mode, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8) {
+    // TODO(pillow-rs#3ptb): carry generated cross-mode palette and alpha
+    // metadata through the lazy pipeline terminal before admitting P/PA targets.
+    // Same-mode identity is a metadata-preserving raster copy.
+    if matches!(mode, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
+        && *mode != input.mode()
+    {
         return Err(PilError::NotImplementedError(
             "palette-target Convert requires the Image wrapper output boundary".into(),
         ));

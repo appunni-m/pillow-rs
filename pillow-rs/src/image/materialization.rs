@@ -238,6 +238,17 @@ impl Image {
     /// accepted.
     pub(super) fn is_palette_safe_op_for_source(source: &Image, op: &PipelineOp) -> bool {
         Self::is_palette_safe_op(op)
+            // Same-mode P/PA conversion is a wrapper copy; retain indexed
+            // samples and their attached palette through internal pipelines.
+            || (source.has_palette_samples()
+                && matches!(
+                    op,
+                    PipelineOp::Convert {
+                        mode,
+                        matrix: None,
+                        ..
+                    } if source.known_mode_identity() == Some(*mode)
+                ))
             // Core-only P Posterize/Solarize strategies transform their
             // native index bytes and retain the source palette.
             || (source.known_mode_identity() == Some(Mode::ImagePalette8)

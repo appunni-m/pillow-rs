@@ -11,6 +11,7 @@ use crate::error::PilError;
 use crate::raster::{DynamicImage, GrayAlphaImage, Mode};
 
 const TARGETS: &[Mode] = &[
+    Mode::ImagePaletteAlpha8,
     Mode::One,
     Mode::ImageLuma8,
     Mode::ImageLumaA8,
