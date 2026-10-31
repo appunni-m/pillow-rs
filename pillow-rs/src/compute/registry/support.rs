@@ -15,6 +15,9 @@ pub use request::{
     RequestFacts, SecondaryInputFacts, StrategyGuard, StrategyInputs, UnresolvedGuard,
 };
 
+/// Exact mask identities accepted by image-backed alpha replacement.
+pub(crate) const PUT_ALPHA_DATA_MASK_MODES: &[Mode] = &[Mode::One, Mode::ImageLuma8];
+
 /// Palette dependencies resolved by the Pillow image wrapper before execution.
 ///
 /// `None` means resolution completed and no palette is attached. Lazy support

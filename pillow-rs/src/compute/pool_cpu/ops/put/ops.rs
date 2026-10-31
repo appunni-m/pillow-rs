@@ -113,7 +113,7 @@ macro_rules! declare_modes {
         pub(crate) fn prepare_put_alpha_data<'a>(
             image: &'a DynamicImage, mask: &DynamicImage, ctx: &ExecutionContext,
         ) -> Result<PreparedPutAlphaData<'a>, PilError> {
-            let mask = super::helpers::alpha_mask::MaskStrategy::new(mask);
+            let mask = super::helpers::alpha_mask::MaskStrategy::new(mask)?;
             match image {
                 $(DynamicImage::$mode(input) => super::$module::ops::prepare_alpha_data(input, mask, ctx)
                     .map(PreparedPutAlphaData::$mode),)+

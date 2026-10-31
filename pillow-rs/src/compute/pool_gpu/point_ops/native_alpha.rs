@@ -1,6 +1,14 @@
 use super::*;
 
 #[cfg(target_endian = "little")]
+fn native_put_alpha_mask(mask: &DynamicImage) -> Option<&crate::raster::GrayImage> {
+    match mask {
+        DynamicImage::One(image) | DynamicImage::ImageLuma8(image) => Some(image),
+        _ => None,
+    }
+}
+
+#[cfg(target_endian = "little")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::compute::pool_gpu) struct NativeRgbPutAlphaDispatch {
     pub(in crate::compute::pool_gpu) input_bytes: usize,
@@ -69,7 +77,7 @@ pub(in crate::compute::pool_gpu) struct NativeRgbPutAlphaDataDispatch {
     pub(in crate::compute::pool_gpu) groups_y: u32,
 }
 
-/// Plan native RGB and L-mask uploads for the required RGBA PutAlphaData
+/// Plan native RGB and 1/L-mask uploads for the required RGBA PutAlphaData
 /// result. The shader gathers three packed source bytes per pixel and uses a
 /// separately packed one-byte mask, so each binding has its own checked span.
 #[cfg(target_endian = "little")]
@@ -133,7 +141,7 @@ pub(in crate::compute::pool_gpu) struct NativeRgbaPutAlphaDataDispatch {
     pub(in crate::compute::pool_gpu) groups_y: u32,
 }
 
-/// Plan native four-byte RGBA and one-byte L-mask uploads for PutAlphaData.
+/// Plan native four-byte RGBA and one-byte 1/L-mask uploads for PutAlphaData.
 /// Pixel and mask indexing use u32 in WGSL, and each binding must fit the
 /// active adapter's storage-buffer and allocation limits.
 #[cfg(target_endian = "little")]
@@ -531,9 +539,14 @@ impl GpuInner {
         dispatch: NativeRgbPutAlphaDataDispatch,
         buffers: &mut BufferPool,
     ) -> Result<DynamicImage, PilError> {
-        let (DynamicImage::ImageRgb8(rgb), DynamicImage::ImageLuma8(alpha)) = (image, mask) else {
+        let DynamicImage::ImageRgb8(rgb) = image else {
             return Err(PilError::InternalError(
-                "GPU native RGB PutAlphaData requires RGB and L storage".into(),
+                "GPU native RGB PutAlphaData requires RGB storage".into(),
+            ));
+        };
+        let Some(alpha) = native_put_alpha_mask(mask) else {
+            return Err(PilError::InternalError(
+                "GPU native RGB PutAlphaData requires a one-byte mask".into(),
             ));
         };
         let (width, height) = rgb.dimensions();
@@ -631,7 +644,7 @@ impl GpuInner {
         )
     }
 
-    /// Replace the alpha byte in native RGBA pixels from a packed L mask.
+    /// Replace the alpha byte in native RGBA pixels from a packed 1/L mask.
     /// Both inputs stay in their original host layout; the shader writes the
     /// required RGBA output without constructing a widened mask image.
     #[cfg(target_endian = "little")]
@@ -642,10 +655,14 @@ impl GpuInner {
         dispatch: NativeRgbaPutAlphaDataDispatch,
         buffers: &mut BufferPool,
     ) -> Result<DynamicImage, PilError> {
-        let (DynamicImage::ImageRgba8(rgba), DynamicImage::ImageLuma8(alpha)) = (image, mask)
-        else {
+        let DynamicImage::ImageRgba8(rgba) = image else {
             return Err(PilError::InternalError(
-                "GPU native RGBA PutAlphaData requires RGBA and L storage".into(),
+                "GPU native RGBA PutAlphaData requires RGBA storage".into(),
+            ));
+        };
+        let Some(alpha) = native_put_alpha_mask(mask) else {
+            return Err(PilError::InternalError(
+                "GPU native RGBA PutAlphaData requires a one-byte mask".into(),
             ));
         };
         let (width, height) = rgba.dimensions();

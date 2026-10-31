@@ -217,7 +217,7 @@ pub(super) fn extract_third_image(op: &PipelineOp) -> Result<Option<Arc<DynamicI
             .as_ref()
             .map(|image| image.materialized_shared())
             .transpose(),
-        // PutAlphaData owns an operation-ready L mask already. Reuse its Arc
+        // PutAlphaData owns an operation-ready 1/L mask already. Reuse its Arc
         // directly so adding the GPU mask binding does not create a second
         // host image or trigger another materialization.
         PipelineOp::PutAlphaData { mask, .. } => Ok(Some(Arc::clone(mask))),

@@ -19,9 +19,7 @@ pub(crate) struct NativeInput<'a, P: Pixel<Subpixel = u8>> {
 
 impl<'a, P: Pixel<Subpixel = u8>> NativeInput<'a, P> {
     pub(crate) fn new(input: AlphaDataInput<'a, P>) -> Result<Self, PilError> {
-        let Some(mask) = input.mask.native_luma() else {
-            return Err(unsupported());
-        };
+        let mask = input.mask.image();
         let dimensions = CheckedDims::new(
             input.image.width(), input.image.height(), P::CHANNEL_COUNT,
         ).map_err(|_| unsupported())?;

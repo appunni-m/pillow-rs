@@ -329,6 +329,14 @@ pub(super) fn gpu_auxiliary_layout_is_supported_for_op(
     is_second: bool,
     image: &DynamicImage,
 ) -> bool {
+    if !is_second
+        && matches!(op, PipelineOp::PutAlphaData { .. })
+        && crate::compute::registry::support::PUT_ALPHA_DATA_MASK_MODES.contains(&image.mode())
+    {
+        // PutAlphaData's declared mask modes share one-byte luma storage.
+        // Keep their exact identities admissible only in this mask slot.
+        return true;
+    }
     // A typed I;16 Paste is the one multi-input GPU contract whose source is
     // intentionally not representable by the ordinary RGBA uploader. Keep
     // this exception attached to the exact operation and slot; masks still

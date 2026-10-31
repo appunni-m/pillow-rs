@@ -265,24 +265,23 @@ impl Image {
         }
     }
 
-    /// Replaces the alpha channel from an `L` mask image, matching Pillow's
+    /// Replaces the alpha channel from a `1` or `L` mask image, matching Pillow's
     /// image-backed ``Image.putalpha``.
     pub fn putalpha_data(&mut self, mask: &Image) -> Result<(), PilError> {
         let mask_img = mask.materialize()?;
         let mask_mode = mask_img.mode();
-        if !matches!(mask_mode, Mode::One | Mode::ImageLuma8) {
+        if !crate::compute::registry::support::PUT_ALPHA_DATA_MASK_MODES.contains(&mask_mode) {
             return Err(PilError::ValueError("illegal image mode".into()));
         }
         if (mask_img.width(), mask_img.height()) != (self.size()?.0, self.size()?.1) {
             return Err(PilError::ValueError("images do not match".into()));
         }
-        let mask_luma = mask_img.to_luma8();
         let image_mode = self.mode_identity()?;
         validate_putalpha_mode(image_mode)?;
         let new_self = Image::push_op(
             self,
             PipelineOp::PutAlphaData {
-                mask: Arc::new(crate::raster::DynamicImage::ImageLuma8(mask_luma)),
+                mask: Arc::new(mask_img),
                 mode: image_mode,
             },
         );

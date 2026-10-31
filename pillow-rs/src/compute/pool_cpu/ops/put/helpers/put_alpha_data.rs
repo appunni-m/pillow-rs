@@ -26,18 +26,18 @@ pub(crate) fn facts<P: Pixel>(input: &AlphaDataInput<'_, P>)
 pub(crate) fn native_mask<'a, P: Pixel<Subpixel = u8>>(
     input: &AlphaDataInput<'a, P>,
 ) -> Option<&'a GrayImage> {
-    input.mask.native_luma().filter(|mask| {
-        input.image.dimensions() == mask.dimensions()
-            && input.image.as_raw().len() == mask.as_raw().len()
-                .saturating_mul(usize::from(P::CHANNEL_COUNT))
-    })
+    let mask = input.mask.image();
+    (input.image.dimensions() == mask.dimensions()
+        && input.image.as_raw().len()
+            == mask.as_raw().len().saturating_mul(usize::from(P::CHANNEL_COUNT)))
+    .then_some(mask)
 }
 
 pub(crate) fn luma_mask(luma: &GrayImage, mask: MaskStrategy<'_>) -> GrayAlphaImage {
     let mut output = GrayAlphaImage::new(luma.width(), luma.height());
-    let mask = mask.luma_samples();
+    let mask = mask.samples();
     for ((destination, source), alpha) in output.pixels_mut().zip(luma.pixels())
-        .zip(mask.as_slice()) {
+        .zip(mask) {
         destination[0] = source[0];
         destination[1] = *alpha;
     }
@@ -46,9 +46,9 @@ pub(crate) fn luma_mask(luma: &GrayImage, mask: MaskStrategy<'_>) -> GrayAlphaIm
 
 pub(crate) fn luma_alpha_mask(luma: &GrayAlphaImage, mask: MaskStrategy<'_>) -> GrayAlphaImage {
     let mut output = GrayAlphaImage::new(luma.width(), luma.height());
-    let mask = mask.luma_samples();
+    let mask = mask.samples();
     for ((destination, source), alpha) in output.pixels_mut().zip(luma.pixels())
-        .zip(mask.as_slice()) {
+        .zip(mask) {
         destination[0] = source[0];
         destination[1] = *alpha;
     }
@@ -57,9 +57,9 @@ pub(crate) fn luma_alpha_mask(luma: &GrayAlphaImage, mask: MaskStrategy<'_>) -> 
 
 pub(crate) fn rgba_mask(rgba: &RgbaImage, mask: MaskStrategy<'_>) -> RgbaImage {
     let mut output = RgbaImage::new(rgba.width(), rgba.height());
-    let mask = mask.luma_samples();
+    let mask = mask.samples();
     for ((destination, source), alpha) in output.pixels_mut().zip(rgba.pixels())
-        .zip(mask.as_slice()) {
+        .zip(mask) {
         *destination = *source;
         destination[3] = *alpha;
     }

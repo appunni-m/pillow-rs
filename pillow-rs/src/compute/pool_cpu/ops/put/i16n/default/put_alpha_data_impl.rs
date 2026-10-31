@@ -16,9 +16,9 @@ pub(crate) fn prepare<'a>(image: &'a Input, mask: MaskStrategy<'a>) -> Kernel<'a
 
 #[inline]
 pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
-    let mask = input.mask.luma_samples();
+    let mask = input.mask.samples();
     Ok(DynamicImage::ImageLumaA16(helpers::luma16_mask(
         input.image,
-        mask.as_slice(),
+        mask,
     )))
 }

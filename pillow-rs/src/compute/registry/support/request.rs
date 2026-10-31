@@ -147,13 +147,13 @@ pub enum InputContract {
     },
     /// Internal batch execution retains ordered variant/bounds checks and last-write-wins.
     OrderedPixelWrites,
-    /// Normalize a secondary mask with the existing typed-to-L conversion,
-    /// then consume its pixel prefix through the original zip traversal.
-    /// Public Image.putalpha separately requires a same-size 1/L mask.
+    /// Consume a secondary mask's luma samples through the original zip traversal.
+    /// The normalized identity describes sample semantics; the source raster
+    /// keeps its exact mode. Public Image.putalpha requires a same-size 1/L mask.
     AlphaMaskLumaPrefix {
         /// Exact mask identities whose original conversion is retained.
         modes: &'static [Mode],
-        /// Identity of the normalized mask consumed by the alpha loop.
+        /// Luma sample interpretation used by the alpha loop.
         normalized: Mode,
     },
     /// Accepted normalized byte payload identities, independently of the source mode.

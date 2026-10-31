@@ -19,10 +19,10 @@ pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
     // Preserve the original CMYK-to-RGB arithmetic without copying the
     // converted RGB frame before packing its output alpha samples.
     let rgb = crate::color::cmyk_buffer_to_rgb(input.image);
-    let mask = input.mask.luma_samples();
+    let mask = input.mask.samples();
     let mut output = crate::raster::RgbaImage::new(rgb.width(), rgb.height());
     for ((destination, source), alpha) in output.pixels_mut().zip(rgb.pixels())
-        .zip(mask.as_slice()) {
+        .zip(mask) {
         *destination = Rgba([source[0], source[1], source[2], *alpha]);
     }
     Ok(DynamicImage::ImageRgba8(output))

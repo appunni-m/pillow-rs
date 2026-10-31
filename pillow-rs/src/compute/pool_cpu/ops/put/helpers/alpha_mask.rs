@@ -1,84 +1,47 @@
-//! Exact secondary-mask strategies selected once before alpha execution.
+//! Exact secondary-mask strategies for image-backed alpha replacement.
 
-use crate::raster::{ConvertBuffer, DynamicImage, GrayImage, Mode};
 use crate::compute::registry::support::SecondaryInputFacts;
+use crate::error::PilError;
+use crate::raster::{DynamicImage, GrayImage, Mode};
 
-macro_rules! declare_masks {
-    ($($mode:ident($input:ty) => |$image:ident| $normalize:expr;)+) => {
-        #[derive(Clone, Copy)]
-        pub(crate) enum MaskStrategy<'a> { $($mode(&'a $input),)+ }
+#[derive(Clone, Copy)]
+pub(crate) enum MaskStrategy<'a> {
+    One(&'a GrayImage),
+    ImageLuma8(&'a GrayImage),
+}
 
-        impl<'a> MaskStrategy<'a> {
-            pub(crate) fn new(image: &'a DynamicImage) -> Self {
-                match image { $(DynamicImage::$mode(image) => Self::$mode(image),)+ }
-            }
-
-            pub(crate) fn facts(&self) -> SecondaryInputFacts {
-                match self { $(Self::$mode(image) => SecondaryInputFacts {
-                    mode: Mode::$mode, width: image.width(), height: image.height(),
-                    byte_len: Some(std::mem::size_of_val(image.as_raw().as_slice())),
-                },)+ }
-            }
-
-            pub(crate) fn to_luma8(self) -> GrayImage {
-                match self { $(Self::$mode($image) => $normalize,)+ }
-            }
-
-            /// Borrows exact one-channel modes whose luma normalization is a
-            /// byte-preserving clone; other modes keep their owned conversion.
-            pub(crate) fn luma_samples(self) -> LumaSamples<'a> {
-                match self {
-                    Self::One(image) | Self::ImageLuma8(image) | Self::ImagePalette8(image) =>
-                        LumaSamples::Borrowed(image.as_raw()),
-                    mask => LumaSamples::Owned(mask.to_luma8()),
-                }
-            }
-
-            pub(crate) fn native_luma(self) -> Option<&'a GrayImage> {
-                match self { Self::ImageLuma8(image) => Some(image), _ => None }
-            }
+impl<'a> MaskStrategy<'a> {
+    pub(crate) fn new(image: &'a DynamicImage) -> Result<Self, PilError> {
+        match image {
+            DynamicImage::One(image) => Ok(Self::One(image)),
+            DynamicImage::ImageLuma8(image) => Ok(Self::ImageLuma8(image)),
+            _ => Err(PilError::ValueError("illegal image mode".into())),
         }
-    };
-}
+    }
 
-pub(crate) enum LumaSamples<'a> {
-    Borrowed(&'a [u8]),
-    Owned(GrayImage),
-}
-
-impl LumaSamples<'_> {
-    pub(crate) fn as_slice(&self) -> &[u8] {
+    pub(crate) fn facts(&self) -> SecondaryInputFacts {
         match self {
-            Self::Borrowed(samples) => samples,
-            Self::Owned(image) => image.as_raw(),
+            Self::One(image) => mask_facts(Mode::One, image),
+            Self::ImageLuma8(image) => mask_facts(Mode::ImageLuma8, image),
+        }
+    }
+
+    pub(crate) fn samples(self) -> &'a [u8] {
+        self.image().as_raw()
+    }
+
+    pub(crate) fn image(self) -> &'a GrayImage {
+        match self {
+            Self::One(image) | Self::ImageLuma8(image) => image,
         }
     }
 }
 
-declare_masks! {
-    One(crate::raster::GrayImage) => |image| image.clone();
-    ImageLuma8(crate::raster::GrayImage) => |image| image.clone();
-    ImageLumaA8(crate::raster::GrayAlphaImage) => |image| image.convert();
-    ImageLaPremultiplied8(crate::raster::GrayAlphaImage) => |image| image.convert();
-    ImagePalette8(crate::raster::GrayImage) => |image| image.clone();
-    ImagePaletteAlpha8(crate::raster::GrayAlphaImage) => |image| image.convert();
-    ImageRgb8(crate::raster::RgbImage) => |image| image.convert();
-    ImageRgba8(crate::raster::RgbaImage) => |image| image.convert();
-    ImageRgbPremultiplied8(crate::raster::RgbaImage) => |image| image.convert();
-    ImageRgbx8(crate::raster::RgbaImage) => |image| image.convert();
-    ImageCmyk8(crate::raster::RgbaImage) => |image| image.convert();
-    ImageYCbCr8(crate::raster::RgbImage) => |image| image.convert();
-    ImageLab8(crate::raster::RgbImage) => |image| image.convert();
-    ImageHsv8(crate::raster::RgbImage) => |image| image.convert();
-    ImageI32(crate::raster::RgbaImage) => |image| image.convert();
-    ImageF32(crate::raster::RgbaImage) => |image| image.convert();
-    ImageI16(crate::raster::ImageBuffer<crate::raster::Luma<u16>, Vec<u16>>) => |image| super::put_data::clipped(image, |sample| crate::raster::Luma([sample]));
-    ImageI16L(crate::raster::ImageBuffer<crate::raster::Luma<u16>, Vec<u16>>) => |image| super::put_data::clipped(image, |sample| crate::raster::Luma([sample]));
-    ImageI16B(crate::raster::ImageBuffer<crate::raster::Luma<u16>, Vec<u16>>) => |image| super::put_data::clipped(image, |sample| crate::raster::Luma([sample]));
-    ImageI16N(crate::raster::ImageBuffer<crate::raster::Luma<u16>, Vec<u16>>) => |image| super::put_data::clipped(image, |sample| crate::raster::Luma([sample]));
-    ImageLumaA16(crate::raster::ImageBuffer<crate::raster::LumaA<u16>, Vec<u16>>) => |image| image.convert();
-    ImageRgb16(crate::raster::ImageBuffer<crate::raster::Rgb<u16>, Vec<u16>>) => |image| image.convert();
-    ImageRgba16(crate::raster::ImageBuffer<crate::raster::Rgba<u16>, Vec<u16>>) => |image| image.convert();
-    ImageRgb32F(crate::raster::Rgb32FImage) => |image| image.convert();
-    ImageRgba32F(crate::raster::Rgba32FImage) => |image| image.convert();
+fn mask_facts(mode: Mode, image: &GrayImage) -> SecondaryInputFacts {
+    SecondaryInputFacts {
+        mode,
+        width: image.width(),
+        height: image.height(),
+        byte_len: Some(std::mem::size_of_val(image.as_raw().as_slice())),
+    }
 }

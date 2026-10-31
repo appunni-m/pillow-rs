@@ -1,5 +1,6 @@
 use super::super::{GuardAssessment, PixelWriteRunFacts, RequestFacts, StrategyGuard, StrategyInputs};
 use super::{checked_native_bytes_guard, native_bytes_guard};
+use crate::compute::registry::support::PUT_ALPHA_DATA_MASK_MODES;
 use crate::pipeline::TransposeMethod;
 use crate::raster::Mode;
 
@@ -390,7 +391,10 @@ pub(super) fn alpha_mask_guard(input: StrategyInputs, channels: u8, minimum_pixe
         RequestFacts::PutAlphaData { mask } => mask,
         _ => return GuardAssessment::Ineligible,
     };
-    if mask.mode != Mode::ImageLuma8 || mask.width != input.width || mask.height != input.height {
+    if !PUT_ALPHA_DATA_MASK_MODES.contains(&mask.mode)
+        || mask.width != input.width
+        || mask.height != input.height
+    {
         return GuardAssessment::Ineligible;
     }
     let pixels = (input.width as usize).checked_mul(input.height as usize);

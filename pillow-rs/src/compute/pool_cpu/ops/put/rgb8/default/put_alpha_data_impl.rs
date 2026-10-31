@@ -22,6 +22,6 @@ pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
             mask.as_raw(),
         )));
     }
-    let mask = input.mask.luma_samples();
-    Ok(DynamicImage::ImageRgba8(helpers::native_rgb_mask(input.image, mask.as_slice())))
+    let mask = input.mask.samples();
+    Ok(DynamicImage::ImageRgba8(helpers::native_rgb_mask(input.image, mask)))
 }

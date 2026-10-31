@@ -582,9 +582,9 @@ pub enum PipelineOp {
         /// Exact Pillow-owned source mode before alpha promotion.
         mode: Mode,
     },
-    /// Replaces the alpha channel from an L-mask image.
+    /// Replaces alpha from a typed `1` or `L` mask while preserving its mode.
     PutAlphaData {
-        /// L-mask pixel data.
+        /// The original one-byte mask image, retaining its exact mode identity.
         mask: Arc<crate::raster::DynamicImage>,
         /// Exact Pillow-owned source mode before alpha promotion.
         mode: Mode,

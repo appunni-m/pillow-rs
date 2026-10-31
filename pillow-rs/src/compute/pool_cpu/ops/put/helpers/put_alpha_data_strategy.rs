@@ -17,7 +17,8 @@ macro_rules! declare_strategies {
             MaskOperation::PutAlphaData, crate::raster::Mode::$mode,
             MaskOutput::Fixed(crate::raster::Mode::$output),
             &[MaskContract::AlphaMaskLumaPrefix {
-                modes: &crate::raster::Mode::ALL, normalized: crate::raster::Mode::ImageLuma8,
+                modes: crate::compute::registry::support::PUT_ALPHA_DATA_MASK_MODES,
+                normalized: crate::raster::Mode::ImageLuma8,
             }],
             &[$(crate::compute::registry::support::ImplementationSupport::cpu(
                 MaskOperation::PutAlphaData, crate::raster::Mode::$mode,
