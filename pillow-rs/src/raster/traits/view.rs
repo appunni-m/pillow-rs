@@ -125,7 +125,7 @@ pub trait GenericImage: GenericImageView {
         other: &O,
         x: u32,
         y: u32,
-    ) -> Result<(), crate::raster::error::ImageError>
+    ) -> Result<(), crate::raster::RasterError>
     where
         O: GenericImageView<Pixel = Self::Pixel>,
     {
@@ -137,13 +137,9 @@ pub trait GenericImage: GenericImageView {
             || y.checked_add(height)
                 .is_none_or(|bottom| bottom > self.height())
         {
-            return Err(crate::raster::error::ImageError::Dimensions {
-                format: None,
-                message: "image copy exceeds destination bounds".to_owned(),
-                stage: None,
-                offset: None,
-                identity: None,
-            });
+            return Err(crate::raster::RasterError::Dimensions(
+                "image copy exceeds destination bounds".to_owned(),
+            ));
         }
 
         for k in 0..height {

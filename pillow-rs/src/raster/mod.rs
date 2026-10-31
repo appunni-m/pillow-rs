@@ -20,7 +20,7 @@ pub use self::color::{
     ColorType, ExtendedColorType, FromColor, FromPrimitive, Luma, LumaA, Rgb, Rgba,
 };
 pub use self::dynamic::DynamicImage;
-pub use self::error::Rect;
+pub use self::error::{RasterError, Rect};
 pub use self::mode::Mode;
 pub use self::traits::{
     EncodableLayout, Enlargeable, GenericImage, GenericImageView, Pixel, Primitive,

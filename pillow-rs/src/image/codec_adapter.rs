@@ -1,11 +1,36 @@
 //! Pillow-owned translation between codec images and exact raster identities.
 
-use image_slash_star::{Decoded, DecodedImage, ImageMode};
+use image_slash_star::{ColorType as CodecColorType, Decoded, DecodedImage, ImageMode};
 
 use crate::error::PilError;
 use crate::raster::{
-    ColorType, DynamicImage, GrayAlphaImage, GrayImage, ImageBuffer, RgbImage, RgbaImage,
+    ColorType, DynamicImage, GrayAlphaImage, GrayImage, ImageBuffer, Mode, RgbImage, RgbaImage,
 };
+
+/// Projects codec transfer metadata onto the exact Pillow-owned raster carrier.
+///
+/// The 16-bit and float RGB/alpha layouts are internal raster identities; they
+/// must not be collapsed to their byte-mode counterparts before materializing.
+pub(super) const fn raster_mode_from_image_mode(mode: ImageMode) -> Option<Mode> {
+    match mode {
+        ImageMode::L1 => Some(Mode::One),
+        ImageMode::P8 => Some(Mode::ImagePalette8),
+        ImageMode::L8 => Some(Mode::ImageLuma8),
+        ImageMode::La8 => Some(Mode::ImageLumaA8),
+        ImageMode::La16 => Some(Mode::ImageLumaA16),
+        ImageMode::Rgb8 => Some(Mode::ImageRgb8),
+        ImageMode::Rgba8 => Some(Mode::ImageRgba8),
+        ImageMode::Cmyk8 => Some(Mode::ImageCmyk8),
+        ImageMode::L16 => Some(Mode::ImageI16),
+        ImageMode::Rgb16 => Some(Mode::ImageRgb16),
+        ImageMode::Rgba16 => Some(Mode::ImageRgba16),
+        ImageMode::Rgb32F => Some(Mode::ImageRgb32F),
+        ImageMode::Rgba32F => Some(Mode::ImageRgba32F),
+        ImageMode::F32 => Some(Mode::ImageF32),
+        ImageMode::I32 => Some(Mode::ImageI32),
+        _ => None,
+    }
+}
 
 fn native_u16_samples(bytes: &[u8]) -> Vec<u16> {
     bytes.chunks_exact(2).map(|c| u16::from_ne_bytes([c[0], c[1]])).collect()
@@ -20,8 +45,26 @@ pub(crate) fn raster_to_decoded(image: DynamicImage) -> DecodedImage {
         image.width(),
         image.height(),
         image.as_bytes().to_vec(),
-        image.color(),
+        codec_color_type(image.color()),
     )
+}
+
+fn codec_color_type(color: ColorType) -> CodecColorType {
+    match color {
+        ColorType::L8 => CodecColorType::L8,
+        ColorType::La8 => CodecColorType::La8,
+        ColorType::Rgb8 => CodecColorType::Rgb8,
+        ColorType::Rgba8 => CodecColorType::Rgba8,
+        ColorType::Cmyk8 => CodecColorType::Cmyk8,
+        ColorType::L16 => CodecColorType::L16,
+        ColorType::La16 => CodecColorType::La16,
+        ColorType::Rgb16 => CodecColorType::Rgb16,
+        ColorType::Rgba16 => CodecColorType::Rgba16,
+        ColorType::Rgb32F => CodecColorType::Rgb32F,
+        ColorType::Rgba32F => CodecColorType::Rgba32F,
+        ColorType::L32F => CodecColorType::L32F,
+        ColorType::L32I => CodecColorType::L32I,
+    }
 }
 
 pub(crate) fn decoded_pixels_to_raster(d: &DecodedImage) -> Option<DynamicImage> {
@@ -29,55 +72,55 @@ pub(crate) fn decoded_pixels_to_raster(d: &DecodedImage) -> Option<DynamicImage>
         return None;
     }
     let img = match d.color {
-        ColorType::L8 => {
+        CodecColorType::L8 => {
             DynamicImage::ImageLuma8(GrayImage::from_raw(d.width, d.height, d.pixels.clone())?)
         }
-        ColorType::La8 => DynamicImage::ImageLumaA8(GrayAlphaImage::from_raw(
+        CodecColorType::La8 => DynamicImage::ImageLumaA8(GrayAlphaImage::from_raw(
             d.width,
             d.height,
             d.pixels.clone(),
         )?),
-        ColorType::Rgb8 => {
+        CodecColorType::Rgb8 => {
             DynamicImage::ImageRgb8(RgbImage::from_raw(d.width, d.height, d.pixels.clone())?)
         }
-        ColorType::Rgba8 => {
+        CodecColorType::Rgba8 => {
             DynamicImage::ImageRgba8(RgbaImage::from_raw(d.width, d.height, d.pixels.clone())?)
         }
-        ColorType::Cmyk8 => DynamicImage::ImageCmyk8(RgbaImage::from_raw(
+        CodecColorType::Cmyk8 => DynamicImage::ImageCmyk8(RgbaImage::from_raw(
             d.width,
             d.height,
             d.pixels.clone(),
         )?),
-        ColorType::L16 => {
+        CodecColorType::L16 => {
             let u16_data = native_u16_samples(&d.pixels);
             DynamicImage::ImageI16(ImageBuffer::from_raw(d.width, d.height, u16_data)?)
         }
-        ColorType::La16 => {
+        CodecColorType::La16 => {
             let u16_data = native_u16_samples(&d.pixels);
             DynamicImage::ImageLumaA16(ImageBuffer::from_raw(d.width, d.height, u16_data)?)
         }
-        ColorType::Rgb16 => {
+        CodecColorType::Rgb16 => {
             let u16_data = native_u16_samples(&d.pixels);
             DynamicImage::ImageRgb16(ImageBuffer::from_raw(d.width, d.height, u16_data)?)
         }
-        ColorType::Rgba16 => {
+        CodecColorType::Rgba16 => {
             let u16_data = native_u16_samples(&d.pixels);
             DynamicImage::ImageRgba16(ImageBuffer::from_raw(d.width, d.height, u16_data)?)
         }
-        ColorType::Rgb32F => {
+        CodecColorType::Rgb32F => {
             let f32_data = native_f32_samples(&d.pixels);
             DynamicImage::ImageRgb32F(ImageBuffer::from_raw(d.width, d.height, f32_data)?)
         }
-        ColorType::Rgba32F => {
+        CodecColorType::Rgba32F => {
             let f32_data = native_f32_samples(&d.pixels);
             DynamicImage::ImageRgba32F(ImageBuffer::from_raw(d.width, d.height, f32_data)?)
         }
-        ColorType::L32F => DynamicImage::ImageF32(RgbaImage::from_raw(
+        CodecColorType::L32F => DynamicImage::ImageF32(RgbaImage::from_raw(
             d.width,
             d.height,
             d.pixels.clone(),
         )?),
-        ColorType::L32I => DynamicImage::ImageI32(RgbaImage::from_raw(
+        CodecColorType::L32I => DynamicImage::ImageI32(RgbaImage::from_raw(
             d.width,
             d.height,
             d.pixels.clone(),

@@ -23,7 +23,6 @@
 
 mod conversion;
 mod grayscale;
-mod mode;
 mod palette;
 mod parse;
 mod resolve;
@@ -39,7 +38,6 @@ pub(crate) use grayscale::{
     cmyk_to_binary_truncate, cmyk_to_grayscale, cmyk_to_grayscale_truncate, pil_grayscale,
     pil_grayscale_alpha, pil_grayscale_truncate, rgb_to_luma_u8, grayscale_rgb_bytes,
 };
-pub(crate) use mode::color_type_to_mode;
 pub use palette::{
     PaletteColorInput, palette_getcolor, palette_getcolor_append, palette_getcolor_validate,
     palette_getcolor_validate_input, palette_to_text,

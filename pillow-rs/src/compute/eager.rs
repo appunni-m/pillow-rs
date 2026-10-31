@@ -198,9 +198,9 @@ pub(crate) fn execute_eager_cpu_image_operation(
     };
     let backend_ns = elapsed_ns(backend_start);
     if timed {
-        // Match pipeline boundary accounting for the actual physical color
+        // Match pipeline boundary accounting for the exact raster mode
         // change without adding work to telemetry-disabled eager calls.
-        let mode_conversion_count = u64::from(input.color() != result.color());
+        let mode_conversion_count = u64::from(input.mode() != result.mode());
         begin_pipeline_operation_telemetry(operation);
         record_pipeline_operation_path("cpu");
         record_pipeline_operation_mode_conversion(mode_conversion_count);

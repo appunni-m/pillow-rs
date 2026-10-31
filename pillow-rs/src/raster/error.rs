@@ -1,8 +1,24 @@
 //! Errors and geometry used by Pillow's in-memory raster operations.
 
-// TODO(pillow-rs#3ptb): keep codec errors behind the image I/O adapter and
-// expose only pillow-rs-owned errors from raster APIs.
-pub use image_slash_star::ImageError;
+use std::fmt;
+
+/// Failure produced by an in-memory raster operation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum RasterError {
+    /// Image dimensions or placement are incompatible with the operation.
+    Dimensions(String),
+}
+
+impl fmt::Display for RasterError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Dimensions(message) => write!(formatter, "invalid image dimensions: {message}"),
+        }
+    }
+}
+
+impl std::error::Error for RasterError {}
 
 /// A rectangular region within an in-memory raster.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

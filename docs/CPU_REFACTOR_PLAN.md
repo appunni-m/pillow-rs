@@ -131,7 +131,9 @@ The temporary migration may be uncompilable; no compiler or lint runs here.
    payload-free `raster::Mode` selector the same variant identities, and read
    the materialized mode directly from the `DynamicImage` variant tag.
    Both types belong to pillow-rs. Keep image-slash-star codec types and mode
-   descriptors independent, following the guide's ownership boundary.
+   descriptors independent, following the guide's ownership boundary. Raster
+   `ColorType` may describe a storage layout but must never determine `Mode`;
+   translate codec color/layout metadata only inside Pillow-owned I/O adapters.
    All backends consume this same Mode type; do not create backend-local enums.
    Representability in Mode does not imply support by any particular operation.
 2. Give construction, decoding, raw-byte import, and conversion explicit output

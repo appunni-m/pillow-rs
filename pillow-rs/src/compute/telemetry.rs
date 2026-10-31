@@ -178,8 +178,8 @@ pub(crate) fn account_host_buffer_boundary(
     telemetry.peak_live_host_bytes = telemetry
         .peak_live_host_bytes
         .max(before_bytes.saturating_add(after_bytes));
-    record_pipeline_operation_mode_conversion(u64::from(before.color() != after.color()));
-    if before.color() != after.color() {
+    record_pipeline_operation_mode_conversion(u64::from(before.mode() != after.mode()));
+    if before.mode() != after.mode() {
         telemetry.mode_conversion_count = telemetry.mode_conversion_count.saturating_add(1);
     }
 }

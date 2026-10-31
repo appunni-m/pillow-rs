@@ -78,23 +78,6 @@ pub(super) const fn image_mode_name(mode: ImageMode) -> &'static str {
     }
 }
 
-/// Translates codec mode metadata into Pillow-owned raster identity.
-pub(super) const fn raster_mode_from_image_mode(mode: ImageMode) -> Option<Mode> {
-    match mode {
-        ImageMode::L1 => Some(Mode::One),
-        ImageMode::P8 => Some(Mode::ImagePalette8),
-        ImageMode::L8 => Some(Mode::ImageLuma8),
-        ImageMode::La8 | ImageMode::La16 => Some(Mode::ImageLumaA8),
-        ImageMode::Rgb8 | ImageMode::Rgb16 | ImageMode::Rgb32F => Some(Mode::ImageRgb8),
-        ImageMode::Rgba8 | ImageMode::Rgba16 | ImageMode::Rgba32F => Some(Mode::ImageRgba8),
-        ImageMode::Cmyk8 => Some(Mode::ImageCmyk8),
-        ImageMode::L16 => Some(Mode::ImageI16),
-        ImageMode::F32 => Some(Mode::ImageF32),
-        ImageMode::I32 => Some(Mode::ImageI32),
-        _ => None,
-    }
-}
-
 impl Image {
     /// Returns pending Pillow `info["transparency"]` metadata for a P image.
     ///
@@ -685,7 +668,7 @@ impl Image {
                 .map(|image| image.mode())
                 .or_else(|| {
                     info.as_ref().and_then(|info| {
-                        raster_mode_from_image_mode(info.mode)
+                        super::codec_adapter::raster_mode_from_image_mode(info.mode)
                     })
                 }),
             Image::Pipeline {
