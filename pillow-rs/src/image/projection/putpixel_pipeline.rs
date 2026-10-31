@@ -144,10 +144,10 @@ impl Image {
             }
         }
 
-        // The constructor's immutable fill invariant lets the serial CPU
-        // terminal path derive the result from deferred writes without
-        // rereading the full backing frame. SIMD callers deliberately leave
-        // this false so their receipt still proves vector execution.
+        // The constructor's immutable fill invariant lets CPU Default derive
+        // the result from deferred writes without rereading the backing frame.
+        // Architecture-selected callers leave this false so the selected
+        // vector scanner still performs the measured projection work.
         let (mut h_proj, mut v_proj, vector_blocks, scalar_tail) = if source_is_known_zero {
             (vec![0; w], vec![0; h], 0, 0)
         } else {
@@ -217,6 +217,7 @@ impl Image {
             return Ok(None);
         }
         let prepared = crate::compute::prepare_execution(ops, Some(terminal_backend))?;
+        let execution_context = *prepared.context();
         let backend_matches = match terminal_backend {
             crate::compute::Backend::Cpu => prepared.is_serial_cpu_without_fallback(),
             crate::compute::Backend::Simd => prepared.is_simd_without_fallback(),
@@ -256,9 +257,7 @@ impl Image {
         Ok(Some(PreparedPutPixelProjection {
             mode,
             terminal_backend,
-            execution_context: crate::compute::ExecutionContext::for_routed_backend(
-                terminal_backend,
-            ),
+            execution_context,
             prepared,
             ops,
             input,

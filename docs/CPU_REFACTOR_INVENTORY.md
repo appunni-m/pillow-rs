@@ -3,11 +3,12 @@
 Status: baseline inventory captured; the 98 CPU and 182 SIMD files are preserved below pool_cpu/legacy; maintained implementation is in progress.
 Baseline commit: 3f9dfd4036caa061eabcf2255c9f34a745df9c7e
 Working checkout: `/Users/lazytrot/work/pillow-rs`, branch
-`codex/cpu-mode-aware-refactor-backup-20261029` at `204221686`, tracking the
-same upstream commit. The CPU migration remains uncommitted in this worktree;
-its in-progress source is preserved. Eval, ImageOps Expand, Geometry, Crop, and
-Effects source work is recorded below. No build, formatter, checkstyle, lint, test,
-parity, benchmark, or coverage command has run.
+`codex/cpu-mode-aware-refactor-backup-20261029` at `2ea7cd97c`, one local WIP
+checkpoint above `origin/codex/cpu-mode-aware-refactor-backup-20261029` at
+`204221686`. The checkpoint is explicitly unverified. The current source-only
+continuation is not yet committed. Eval, ImageOps Expand, Geometry, Crop,
+Effects, and projection source work is recorded below. No build, formatter,
+checkstyle, lint, test, parity, benchmark, or coverage command has run.
 Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related parity/performance findings; remains open).
 
 ## Current source-only continuation
@@ -64,6 +65,14 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   fused AlphaComposite+Mirror route remains pending. The archived serial path
   ignores nonzero `dest`/`src`, so preserve that behavior until the frozen CPU
   cases establish the offset contract. Source-only; unverified.
+- GetProjection's direct eager route and RGB/CMYK PutPixel terminal now use the
+  maintained operation-owned projection strategies. The terminal retains its
+  exact `Mode`, uses CPU architecture implementations for compatibility SIMD
+  requests, preserves the CMYK positive-write fast path, and takes its
+  `ExecutionContext` from the prepared backend plan instead of creating a
+  second context. Searches of maintained source find no calls to the archived
+  SIMD RGB/CMYK projection adapters or old SIMD terminal executor. GPU terminal
+  support and admission still have an explicit TODO. Source-only; unverified.
 
 This inventory records the source and evidence denominator before rebuilding pool_cpu. It is a migration ledger, not a claim that the listed mode literals prove support. Each function's exact mode support, output identity, rejection behavior, shared helpers, and architecture fallback must be confirmed from its implementation before it is copied into the maintained tree. The source path lists are taken from the baseline Git tree, so every archived file can be checked against 3f9dfd403.
 
@@ -1037,11 +1046,10 @@ none of the listed edges is completion evidence.
 | --- | --- |
 | `compute/mod.rs`, `compute/backend_state.rs` | Remove the independent `pool_simd` module, `SimdPool`, activation/priority wiring, and compatibility exports after all callers use CPU plus Architecture. |
 | `compute/automatic_segments.rs`, `compute/execution.rs` | Replace pool capability checks, segment splitting, `simd_initial_mode`, `simd_mode_after_op`, and unsupported-op scans with prepared CPU support and exact mode transitions. |
-| `compute/execution/terminals.rs` | Move the SIMD terminal executor and receipt onto the selected CPU architecture strategy. |
+| `compute/execution/terminals.rs`, `image/projection/putpixel_pipeline.rs` | The fused RGB/CMYK projection terminal now executes the CPU mode/architecture strategies and reuses its prepared context. Remaining work is to replace legacy SIMD backend admission with the injected CPU architecture route and keep GPU terminal support separate. |
 | `compute/registry/registration/prelude.rs`, `compute/registry/registration/simd.rs` | Remove the adapter import and independent operation registrations as each operation owner supplies its prepared CPU strategy and compatibility route. |
-| `compute/eager.rs`, `image/projection.rs` | Migrate RGB/CMYK eager projections and LinearGradient, RadialGradient, and Mandelbrot generation to exact-mode CPU architecture strategies with injected context. |
+| `compute/eager.rs`, `image/projection.rs` | Eager RGB/CMYK GetProjection now uses the operation-owned CPU strategy. Migrate LinearGradient, RadialGradient, and Mandelbrot generation to exact-mode CPU architecture strategies with injected context. |
 | `compute/thumbnail_fusion.rs`, `image/pipeline_admission.rs` | Replace separate SIMD RGB PutPixel/Thumbnail admission with the CPU thumbnail family's prepared fusion contract. |
-| `image/projection/putpixel_pipeline.rs` | Migrate RGB/CMYK PutPixel projection terminal kernels and admission to exact-mode CPU architecture strategies. |
 | `compute/pool_gpu/fusion.rs` | Resolved: adjacent transpose composition now uses the shared `pipeline::TransposeTransform` algebra rather than the separate pool helper. |
 | `image/channel_access.rs`, `image/data_access/get.rs` | Resolved for eager ExtractBand: both compatibility SIMD requests use prepared CPU mode/architecture strategies; GetData retains its direct caller-owned output slice. |
 

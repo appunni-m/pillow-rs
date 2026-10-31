@@ -1,10 +1,10 @@
 //! Direct eager operations that select CPU, SIMD, or GPU without a lazy pipeline.
 //!
-//! TODO(pillow-rs#3ptb): migrate eager RGB/CMYK projection and
-//! linear/radial/Mandelbrot generators from separate SIMD adapters into their
-//! CPU family/mode architecture strategies.
+//! TODO(pillow-rs#3ptb): migrate eager linear/radial/Mandelbrot generators
+//! from separate SIMD adapters into their CPU family/mode architecture
+//! strategies.
 //! TODO(pillow-rs#3ptb): pass the injected execution context through the
-//! remaining eager projection and generator entry points and receipts.
+//! remaining generator entry points and receipts.
 
 use super::backend_state::active_lock;
 #[cfg(feature = "gpu")]
