@@ -87,7 +87,7 @@ impl Image {
 
         let image_mode = self.mode_identity()?;
         if is_l16_identity(image_mode) {
-            // Keep I;16 out of PixelMode's byte-oriented deferred path. Its
+            // Keep I;16 out of the byte-oriented deferred path. Its
             // generic fallback widens to RGBA8 and loses the 16-bit sample.
             let mut context = self.putdata_execution_context();
             for (pixel_index, value) in values.iter().enumerate() {

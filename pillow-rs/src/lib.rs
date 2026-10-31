@@ -432,7 +432,6 @@ pub use crate::ops::utils::align_row_to_32;
 pub use crate::pipeline::ColorMode;
 pub use crate::pipeline::DitherMethod;
 pub use crate::pipeline::PipelineOp;
-pub use crate::pipeline::PixelMode;
 pub use crate::pipeline::ResampleFilter;
 pub use crate::pipeline::TransformMethod;
 pub use crate::pipeline::TransposeMethod;

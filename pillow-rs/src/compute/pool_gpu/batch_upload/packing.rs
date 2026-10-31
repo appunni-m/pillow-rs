@@ -1,5 +1,5 @@
 use super::{
-    BufferRange, CheckedDims, DynamicImage, ImageBuffer, Luma, Mode, PilError, PixelMode, RgbaImage,
+    BufferRange, CheckedDims, DynamicImage, ImageBuffer, Luma, Mode, PilError, RgbaImage,
     align_up,
 };
 use crate::compute::helpers::put_data::payload_bytes_per_pixel;

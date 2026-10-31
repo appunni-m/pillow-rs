@@ -6,7 +6,7 @@
 use crate::compute::{Backend, ExecutionContext};
 use crate::error::PilError;
 use crate::image::Image;
-use crate::pipeline::{PipelineOp, PixelMode};
+use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
 
 /// Find the mode (most common value) and its count from a histogram.

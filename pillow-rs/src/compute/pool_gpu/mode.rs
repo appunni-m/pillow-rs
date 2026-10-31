@@ -379,11 +379,29 @@ pub(super) fn gpu_logical_mode_after_op(
         PipelineOp::Convert { mode, .. } => mode.pillow_name(),
         PipelineOp::ConvertLab { .. } => Some("LAB"),
         PipelineOp::PutAlpha { mode, .. } | PipelineOp::PutAlphaData { mode, .. } => match mode {
-            PixelMode::L | PixelMode::LA => Some("LA"),
-            PixelMode::RGB | PixelMode::RGBA | PixelMode::YCbCr | PixelMode::HSV => Some("RGBA"),
-            PixelMode::P | PixelMode::PA => Some("PA"),
-            PixelMode::CMYK => Some("CMYK"),
-            PixelMode::Mode1 | PixelMode::I | PixelMode::F => None,
+            Mode::ImageLuma8 | Mode::ImageLumaA8 => Some("LA"),
+            Mode::ImageRgb8
+            | Mode::ImageRgba8
+            | Mode::ImageRgbPremultiplied8
+            | Mode::ImageRgbx8
+            | Mode::ImageYCbCr8
+            | Mode::ImageHsv8 => Some("RGBA"),
+            Mode::ImagePalette8 | Mode::ImagePaletteAlpha8 => Some("PA"),
+            Mode::ImageCmyk8 => Some("CMYK"),
+            Mode::One
+            | Mode::ImageLaPremultiplied8
+            | Mode::ImageLab8
+            | Mode::ImageI32
+            | Mode::ImageF32
+            | Mode::ImageI16
+            | Mode::ImageI16L
+            | Mode::ImageI16B
+            | Mode::ImageI16N
+            | Mode::ImageLumaA16
+            | Mode::ImageRgb16
+            | Mode::ImageRgba16
+            | Mode::ImageRgb32F
+            | Mode::ImageRgba32F => None,
         },
         _ => None,
     };

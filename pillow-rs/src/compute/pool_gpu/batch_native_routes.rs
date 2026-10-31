@@ -192,7 +192,7 @@ impl GpuInner {
         if let (
             [
                 PipelineOp::PutAlphaData {
-                    mode: PixelMode::RGB,
+                    mode: Mode::ImageRgb8,
                     ..
                 },
             ],
@@ -236,7 +236,7 @@ impl GpuInner {
         if let (
             [
                 PipelineOp::PutAlphaData {
-                    mode: PixelMode::RGBA,
+                    mode: Mode::ImageRgba8,
                     ..
                 },
             ],
@@ -279,7 +279,7 @@ impl GpuInner {
         if let [
             PipelineOp::PutAlpha {
                 alpha,
-                mode: PixelMode::RGB,
+                mode: Mode::ImageRgb8,
             },
         ] = ops
             && matches!(image, DynamicImage::ImageRgb8(_))

@@ -3,7 +3,7 @@
 // The auxiliary buffer contains one packed logical pixel per u32. Short data
 // never zero-fills the destination: untouched samples come from input.
 //
-// PixelMode codes:
+// PutData payload layout codes:
 //   0=L, 1=LA, 2=RGB, 3=RGBA, 4=P, 5=PA, 6=CMYK, 7=1,
 //   8=YCbCr, 9=HSV, 10=I, 11=F.
 

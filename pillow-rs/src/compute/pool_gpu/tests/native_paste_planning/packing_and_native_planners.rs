@@ -2,8 +2,7 @@ use super::{
     GPU_BUFFER_CAPACITY, plan_gpu_native_byte_paste, plan_gpu_native_rgb_crop,
     plan_gpu_native_rgb_to_rgba_paste,
 };
-use crate::pipeline::PixelMode;
-use crate::raster::{DynamicImage, GrayAlphaImage, RgbImage, RgbaImage};
+use crate::raster::{DynamicImage, GrayAlphaImage, Mode, RgbImage, RgbaImage};
 
 #[test]
 fn pack_dynamic_rgba_uses_existing_rgba_storage_and_preserves_other_modes() {
@@ -33,7 +32,7 @@ fn pack_dynamic_rgba_uses_existing_rgba_storage_and_preserves_other_modes() {
 #[test]
 fn put_alpha_output_keeps_native_results_and_consumes_rgba_fallback() {
     let bytes = vec![17, 201, 83, 149];
-    for mode in [PixelMode::LA, PixelMode::PA] {
+    for mode in [Mode::ImageLumaA8, Mode::ImagePaletteAlpha8] {
         let image =
             DynamicImage::ImageLumaA8(GrayAlphaImage::from_raw(2, 1, bytes.clone()).unwrap());
         let result = super::put_alpha_output(image, mode).unwrap();
@@ -44,7 +43,7 @@ fn put_alpha_output_keeps_native_results_and_consumes_rgba_fallback() {
     let rgba = DynamicImage::ImageRgba8(
         RgbaImage::from_raw(2, 1, vec![17, 22, 33, 201, 83, 91, 102, 149]).unwrap(),
     );
-    let output = super::put_alpha_output(rgba, PixelMode::L).unwrap();
+    let output = super::put_alpha_output(rgba, Mode::ImageLuma8).unwrap();
     assert!(matches!(&output, DynamicImage::ImageLumaA8(_)));
     assert_eq!(output.as_bytes(), [17, 201, 83, 149]);
 }

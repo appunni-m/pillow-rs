@@ -368,10 +368,10 @@ impl LogicalModeAdmission<'_> {
             && matches!(
                 self.ops[0],
                 PipelineOp::PutAlpha {
-                    mode: PixelMode::CMYK,
+                    mode: Mode::ImageCmyk8,
                     ..
                 } | PipelineOp::PutAlphaData {
-                    mode: PixelMode::CMYK,
+                    mode: Mode::ImageCmyk8,
                     ..
                 }
             )

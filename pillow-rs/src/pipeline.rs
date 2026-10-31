@@ -42,7 +42,7 @@ use std::sync::Arc;
 mod support;
 pub(crate) use support::TransposeTransform;
 pub use support::{
-    ColorMode, DitherMethod, PixelMode, ResampleFilter, TransformMethod, TransposeMethod,
+    ColorMode, DitherMethod, ResampleFilter, TransformMethod, TransposeMethod,
 };
 
 /// Every image-producing operation maps to one variant.
@@ -579,15 +579,15 @@ pub enum PipelineOp {
     PutAlpha {
         /// Constant alpha value.
         alpha: u8,
-        /// Logical Pillow mode of the image before alpha promotion.
-        mode: PixelMode,
+        /// Exact Pillow-owned source mode before alpha promotion.
+        mode: Mode,
     },
     /// Replaces the alpha channel from an L-mask image.
     PutAlphaData {
         /// L-mask pixel data.
         mask: Arc<crate::raster::DynamicImage>,
-        /// Logical Pillow mode of the image before alpha promotion.
-        mode: PixelMode,
+        /// Exact Pillow-owned source mode before alpha promotion.
+        mode: Mode,
     },
 
     // ── Channel extraction ──

@@ -180,11 +180,11 @@ impl Image {
                 ..
             }
             | PipelineOp::PutAlpha {
-                mode: crate::pipeline::PixelMode::P | crate::pipeline::PixelMode::PA,
+                mode: Mode::ImagePalette8 | Mode::ImagePaletteAlpha8,
                 ..
             }
             | PipelineOp::PutAlphaData {
-                mode: crate::pipeline::PixelMode::P | crate::pipeline::PixelMode::PA,
+                mode: Mode::ImagePalette8 | Mode::ImagePaletteAlpha8,
                 ..
             }
             // Pillow keeps P/PA images indexed through ImageOps.pad. The

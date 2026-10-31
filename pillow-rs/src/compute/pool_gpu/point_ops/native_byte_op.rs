@@ -52,7 +52,7 @@ fn plan_native_byte_op_layout(
                     | PipelineOp::Posterize { .. }
                     | PipelineOp::Brightness { .. }
                     | PipelineOp::PutAlpha {
-                        mode: PixelMode::LA | PixelMode::PA,
+                        mode: Mode::ImageLumaA8 | Mode::ImagePaletteAlpha8,
                         ..
                     }
             )
@@ -213,7 +213,7 @@ fn native_byte_op_shader(
             include_str!("../shaders/brightness_native.wgsl"),
         ),
         PipelineOp::PutAlpha {
-            mode: PixelMode::LA,
+            mode: Mode::ImageLumaA8,
             ..
         } => (
             "PutAlphaNativeLA",
@@ -221,7 +221,7 @@ fn native_byte_op_shader(
             include_str!("../shaders/put_alpha_native_la.wgsl"),
         ),
         PipelineOp::PutAlpha {
-            mode: PixelMode::PA,
+            mode: Mode::ImagePaletteAlpha8,
             ..
         } => (
             "PutAlphaNativePA",
@@ -282,7 +282,7 @@ fn prepare_native_byte_op_parameters(
             })?,
         PipelineOp::PutAlpha {
             alpha,
-            mode: PixelMode::LA | PixelMode::PA,
+            mode: Mode::ImageLumaA8 | Mode::ImagePaletteAlpha8,
         } => u32::from(*alpha),
         PipelineOp::Solarize { threshold } => u32::from(*threshold),
         PipelineOp::Posterize { bits } => u32::from(*bits),

@@ -1,6 +1,6 @@
 // Image.putalpha(mask): replace the destination alpha with an L/1 mask.
 //
-// PixelMode codes:
+// PutAlpha layout codes selected from the exact raster Mode:
 //   0=L, 1=LA, 2=RGB, 3=RGBA, 4=P, 5=PA, 6=CMYK.
 // Packed GPU transport is u32 RGBA: byte0=R/index/C, byte1=G/M,
 // byte2=B/Y, byte3=A/K. The mask is packed through the ordinary L path, so

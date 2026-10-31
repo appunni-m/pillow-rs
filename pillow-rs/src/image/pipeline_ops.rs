@@ -3,7 +3,7 @@
 use std::sync::{Arc, OnceLock};
 
 use crate::error::PilError;
-use crate::pipeline::{ColorMode, PipelineOp, PixelMode};
+use crate::pipeline::{ColorMode, PipelineOp};
 use crate::raster::{DynamicImage, Mode};
 
 use super::Image;
@@ -284,13 +284,17 @@ fn op_preserves_mode(op: &PipelineOp) -> bool {
     )
 }
 
-fn known_putalpha_mode(mode: PixelMode) -> Option<Mode> {
+fn known_putalpha_mode(mode: Mode) -> Option<Mode> {
     match mode {
-        PixelMode::YCbCr | PixelMode::HSV | PixelMode::RGB => Some(Mode::ImageRgba8),
-        PixelMode::L | PixelMode::LA => Some(Mode::ImageLumaA8),
-        PixelMode::RGBA => Some(Mode::ImageRgba8),
-        PixelMode::P | PixelMode::PA => Some(Mode::ImagePaletteAlpha8),
-        PixelMode::CMYK => Some(Mode::ImageRgba8),
+        Mode::ImageYCbCr8
+        | Mode::ImageHsv8
+        | Mode::ImageRgb8
+        | Mode::ImageRgba8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8 => Some(Mode::ImageRgba8),
+        Mode::ImageLuma8 | Mode::ImageLumaA8 => Some(Mode::ImageLumaA8),
+        Mode::ImagePalette8 | Mode::ImagePaletteAlpha8 => Some(Mode::ImagePaletteAlpha8),
         // Palette putalpha is tagged as PA in push_op before this planner is
         // reached. Public putalpha also rejects 1/I/F, YCbCr, and HSV before
         // queueing; keep this fallback for malformed/internal descriptors.
@@ -424,10 +428,10 @@ fn pipeline_output_metadata(source: &Image, op: &PipelineOp) -> PipelineOutputMe
         && matches!(
             op,
             PipelineOp::PutAlpha {
-                mode: PixelMode::P,
+                mode: Mode::ImagePalette8,
                 ..
             } | PipelineOp::PutAlphaData {
-                mode: PixelMode::P,
+                mode: Mode::ImagePalette8,
                 ..
             }
         );
@@ -516,7 +520,7 @@ fn pipeline_output_mode(
     op: &PipelineOp,
     source_is_paletted: bool,
     palette_safe: bool,
-    putalpha_mode: Option<PixelMode>,
+    putalpha_mode: Option<Mode>,
 ) -> Option<Mode> {
     let source_mode = source.known_mode_identity();
     let explicit_mode = if matches!(
@@ -553,8 +557,8 @@ fn pipeline_output_mode(
     // Keep putalpha's output-mode promotion here so P becomes PA without
     // expanding its indices, while CMYK becomes ordinary RGBA without a tag.
     match putalpha_mode {
-        Some(PixelMode::P | PixelMode::PA) => Some(Mode::ImagePaletteAlpha8),
-        Some(PixelMode::CMYK) => None,
+        Some(Mode::ImagePalette8 | Mode::ImagePaletteAlpha8) => Some(Mode::ImagePaletteAlpha8),
+        Some(Mode::ImageCmyk8) => None,
         _ => explicit_mode,
     }
 }

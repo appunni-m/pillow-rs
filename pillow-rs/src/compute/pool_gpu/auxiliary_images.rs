@@ -2,11 +2,14 @@ use super::*;
 
 pub(super) fn put_alpha_output(
     result: DynamicImage,
-    mode: PixelMode,
+    mode: Mode,
 ) -> Result<DynamicImage, PilError> {
     if matches!(
         mode,
-        PixelMode::L | PixelMode::LA | PixelMode::P | PixelMode::PA
+        Mode::ImageLuma8
+            | Mode::ImageLumaA8
+            | Mode::ImagePalette8
+            | Mode::ImagePaletteAlpha8
     ) {
         let rgba = match result {
             // Native LA/PA byte dispatch already returned the public

@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use crate::error::PilError;
-use crate::pipeline::{PipelineOp, PixelMode};
+use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, GenericImageView, Mode};
 
 use super::Image;
@@ -44,6 +44,35 @@ fn putalpha_conversion_target(mode: Mode) -> Option<&'static str> {
         Mode::ImageYCbCr8 | Mode::ImageHsv8 => Some("RGBA"),
         _ => None,
     }
+}
+
+fn validate_putalpha_mode(mode: Mode) -> Result<(), PilError> {
+    let image_mode_name = mode_name(mode);
+    if let Some(target) = putalpha_conversion_target(mode) {
+        // Pillow Image.py derives the alpha mode from getmodebase(), then
+        // surfaces the exact failed core conversion when neither in-place
+        // setmode nor ImagingConvert supports this source/target pair.
+        return Err(PilError::ValueError(format!(
+            "conversion from {image_mode_name} to {target} not supported"
+        )));
+    }
+    if !matches!(
+        mode,
+        Mode::ImageLuma8
+            | Mode::ImageLumaA8
+            | Mode::ImagePalette8
+            | Mode::ImagePaletteAlpha8
+            | Mode::ImageRgb8
+            | Mode::ImageRgba8
+            | Mode::ImageRgbPremultiplied8
+            | Mode::ImageRgbx8
+            | Mode::ImageCmyk8
+    ) {
+        return Err(PilError::ValueError(format!(
+            "unsupported putalpha mode: {image_mode_name}"
+        )));
+    }
+    Ok(())
 }
 
 fn mode_name(mode: Mode) -> &'static str {
@@ -213,19 +242,14 @@ impl Image {
     /// failures.
     pub fn putalpha(&mut self, alpha: u8) -> Result<(), PilError> {
         let image_mode = self.mode_identity()?;
-        let image_mode_name = mode_name(image_mode);
-        if let Some(target) = putalpha_conversion_target(image_mode) {
-            // Pillow Image.py derives the alpha mode from getmodebase(), then
-            // surfaces the exact failed core conversion when neither in-place
-            // setmode nor ImagingConvert supports this source/target pair.
-            return Err(PilError::ValueError(format!(
-                "conversion from {image_mode_name} to {target} not supported"
-            )));
-        }
-        let mode = PixelMode::from_raster_mode(image_mode).ok_or_else(|| {
-            PilError::ValueError(format!("unsupported putalpha mode: {image_mode_name}"))
-        })?;
-        let new_self = Image::push_op(self, PipelineOp::PutAlpha { alpha, mode });
+        validate_putalpha_mode(image_mode)?;
+        let new_self = Image::push_op(
+            self,
+            PipelineOp::PutAlpha {
+                alpha,
+                mode: image_mode,
+            },
+        );
         *self = new_self;
         Ok(())
     }
@@ -254,23 +278,12 @@ impl Image {
         }
         let mask_luma = mask_img.to_luma8();
         let image_mode = self.mode_identity()?;
-        let image_mode_name = mode_name(image_mode);
-        if let Some(target) = putalpha_conversion_target(image_mode) {
-            // Keep image-backed alpha on the same failed conversion path as
-            // scalar alpha. Pillow rejects these source/target pairs before
-            // queuing the alpha-data operation.
-            return Err(PilError::ValueError(format!(
-                "conversion from {image_mode_name} to {target} not supported"
-            )));
-        }
-        let mode = PixelMode::from_raster_mode(image_mode).ok_or_else(|| {
-            PilError::ValueError(format!("unsupported putalpha mode: {image_mode_name}"))
-        })?;
+        validate_putalpha_mode(image_mode)?;
         let new_self = Image::push_op(
             self,
             PipelineOp::PutAlphaData {
                 mask: Arc::new(crate::raster::DynamicImage::ImageLuma8(mask_luma)),
-                mode,
+                mode: image_mode,
             },
         );
         *self = new_self;

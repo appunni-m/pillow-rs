@@ -1,7 +1,7 @@
 use super::*;
 
 pub(super) struct GpuBatchOutputLayout {
-    pub(super) put_alpha_mode: Option<PixelMode>,
+    pub(super) put_alpha_mode: Option<Mode>,
     pub(super) output_color_type: Option<crate::raster::ColorType>,
     pub(super) native_rgb: bool,
     pub(super) native_luma8_extract: bool,

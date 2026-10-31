@@ -145,8 +145,9 @@ The temporary migration may be uncompilable; no compiler or lint runs here.
    strings before calling typed Rust operation APIs; bindings and explicit
    I/O adapters own string parsing/formatting. Keep core mode parameters and
    strategy declarations typed, including internal high-depth identities.
-5. Reconcile `ColorMode`, `PixelMode`, decoded metadata, `explicit_mode`, and
-   pipeline caches. Retain genuinely distinct parameter roles, but remove
+5. Reconcile the `ColorMode` compatibility alias, decoded metadata,
+   `explicit_mode`, and pipeline caches. Retain genuinely distinct parameter
+   roles, but remove
    duplicated image identity and channel-based inference from active execution.
 6. Update binary inputs, masks, merge bands, pasted images, and fused outputs so
    their own exact modes travel with them. Preserve palette and source metadata

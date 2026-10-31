@@ -177,7 +177,7 @@ pub(super) fn gpu_native_byte_op_channels(
         PipelineOp::Duplicate => gpu_native_duplicate_channels(image, mode),
         PipelineOp::Brightness { factor } => gpu_native_brightness_channels(*factor, image, mode),
         PipelineOp::PutAlpha {
-            mode: PixelMode::LA,
+            mode: Mode::ImageLumaA8,
             ..
         } => match image {
             DynamicImage::ImageLumaA8(_)
@@ -188,7 +188,7 @@ pub(super) fn gpu_native_byte_op_channels(
             _ => None,
         },
         PipelineOp::PutAlpha {
-            mode: PixelMode::PA,
+            mode: Mode::ImagePaletteAlpha8,
             ..
         } => match image {
             DynamicImage::ImageLumaA8(_)

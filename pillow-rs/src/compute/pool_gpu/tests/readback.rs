@@ -481,7 +481,7 @@ fn native_rgb_readback_cases() -> Vec<(&'static str, usize, PipelineOp)> {
             3,
             PipelineOp::PutAlpha {
                 alpha: 37,
-                mode: PixelMode::RGB,
+                mode: Mode::ImageRgb8,
             },
         ),
     ]
@@ -543,7 +543,7 @@ fn assert_native_rgb_readback_resources(mode: &str, op: &PipelineOp, actual: &Dy
             && matches!(
                 op,
                 PipelineOp::PutAlpha {
-                    mode: PixelMode::RGB,
+                    mode: Mode::ImageRgb8,
                     ..
                 }
             ))

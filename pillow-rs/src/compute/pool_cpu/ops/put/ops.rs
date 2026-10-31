@@ -508,9 +508,14 @@ pub(crate) static PUT_ALPHA_DATA_SUPPORT: OperationSupport = OperationSupport::n
 pub(crate) fn prepare_alpha_pipeline<'a>(
     input: OperationInputs<'a>, op: &'a PipelineOp, ctx: &ExecutionContext,
 ) -> Result<crate::compute::registry::PreparedOperation<'a>, PilError> {
-    let PipelineOp::PutAlpha { alpha, .. } = op else {
+    let PipelineOp::PutAlpha { alpha, mode } = op else {
         return Err(PilError::ValueError("expected PutAlpha op".into()));
     };
+    if input.image.mode() != *mode {
+        return Err(PilError::InternalError(
+            "PutAlpha source mode does not match its DynamicImage".into(),
+        ));
+    }
     prepare_put_alpha(input.image, *alpha, ctx)
         .map(crate::compute::registry::PreparedOperation::from_put_alpha)
 }
@@ -531,9 +536,14 @@ pub(crate) fn assess_alpha_data(
 pub(crate) fn prepare_alpha_data_pipeline<'a>(
     input: OperationInputs<'a>, op: &'a PipelineOp, ctx: &ExecutionContext,
 ) -> Result<crate::compute::registry::PreparedOperation<'a>, PilError> {
-    let PipelineOp::PutAlphaData { mask, .. } = op else {
+    let PipelineOp::PutAlphaData { mask, mode } = op else {
         return Err(PilError::ValueError("expected PutAlphaData op".into()));
     };
+    if input.image.mode() != *mode {
+        return Err(PilError::InternalError(
+            "PutAlphaData source mode does not match its DynamicImage".into(),
+        ));
+    }
     prepare_put_alpha_data(input.image, mask.as_ref(), ctx)
         .map(crate::compute::registry::PreparedOperation::from_put_alpha_data)
 }

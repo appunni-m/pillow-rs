@@ -224,6 +224,13 @@ fn gpu_resize_dimensions_require_cpu(
 /// particular native mode. Keep this check beside the dimension preflight so
 /// those cases fall back before any device or upload work begins.
 pub(super) fn gpu_operation_mode_requires_cpu(op: &PipelineOp, image: &DynamicImage) -> bool {
+    if matches!(
+        op,
+        PipelineOp::PutAlpha { mode, .. } | PipelineOp::PutAlphaData { mode, .. }
+            if *mode != image.mode()
+    ) {
+        return true;
+    }
     let other_is_lab = matches!(op, PipelineOp::BlendModule { other, .. }
         if other.mode().ok().as_deref() == Some("LAB"));
     gpu_operation_color_requires_cpu(op, image.color(), other_is_lab)
@@ -263,7 +270,7 @@ pub(super) fn gpu_operation_color_requires_cpu(
             !mode_matches_color(*payload_mode, color)
         }
         PipelineOp::PutAlpha { mode, .. }
-        | PipelineOp::PutAlphaData { mode, .. } => !pixel_mode_matches_color(*mode, color),
+        | PipelineOp::PutAlphaData { mode, .. } => !mode_matches_color(*mode, color),
         // The CPU ImageOps implementation runs Posterize/Solarize through
         // an RGB temporary and preserve_mode, which makes alpha opaque for
         // LA/RGBA. The packed shaders currently retain alpha, so keep those
@@ -293,30 +300,6 @@ pub(super) fn gpu_operation_color_requires_cpu(
         }
         _ => false,
     }
-}
-
-pub(super) fn pixel_mode_matches_color(mode: PixelMode, color: crate::raster::ColorType) -> bool {
-    matches!(
-        (mode, color),
-        (PixelMode::L, crate::raster::ColorType::L8)
-            | (PixelMode::LA, crate::raster::ColorType::La8)
-            | (PixelMode::RGB, crate::raster::ColorType::Rgb8)
-            | (PixelMode::RGBA, crate::raster::ColorType::Rgba8)
-            // P/PA retain raw index samples in the same one-/two-byte
-            // buffers as L/LA until the binding restores palette metadata.
-            | (PixelMode::P, crate::raster::ColorType::L8)
-            | (PixelMode::PA, crate::raster::ColorType::La8)
-            | (PixelMode::Mode1, crate::raster::ColorType::L8)
-            | (PixelMode::YCbCr, crate::raster::ColorType::Rgb8)
-            | (PixelMode::HSV, crate::raster::ColorType::Rgb8)
-            // CMYK is represented as C/M/Y/K in the four bytes of Rgba8.
-            | (PixelMode::CMYK, crate::raster::ColorType::Rgba8)
-            // I/F are four-byte logical planes stored without conversion in
-            // the RGBA transport; putdata replaces their raw little-endian
-            // samples rather than interpreting them as color channels.
-            | (PixelMode::I, crate::raster::ColorType::Rgba8)
-            | (PixelMode::F, crate::raster::ColorType::Rgba8)
-    )
 }
 
 fn mode_matches_color(mode: Mode, color: crate::raster::ColorType) -> bool {

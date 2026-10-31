@@ -24,7 +24,7 @@ use crate::ops::pil_resize::{
     precompute_coeffs_boxed_for_filter, precompute_coeffs_f64,
 };
 use crate::pipeline::{
-    ColorMode, PipelineOp, PixelMode, ResampleFilter, TransformMethod, TransposeMethod,
+    ColorMode, PipelineOp, ResampleFilter, TransformMethod, TransposeMethod,
 };
 #[cfg(target_endian = "little")]
 use crate::raster::RgbImage;

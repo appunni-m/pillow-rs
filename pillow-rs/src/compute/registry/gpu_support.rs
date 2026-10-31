@@ -2,7 +2,7 @@
 
 use super::{registry, variant_key};
 use crate::error::PilError;
-use crate::pipeline::{ColorMode, PipelineOp, PixelMode};
+use crate::pipeline::{ColorMode, PipelineOp};
 use crate::raster::Mode;
 
 /// Returns whether the GPU backend has an implementation for `op`.
@@ -537,13 +537,15 @@ fn gpu_auxiliary_shader_contract(op: &PipelineOp) -> Option<bool> {
         // with K in byte three; put_alpha.wgsl handles both reinterpretations.
         PipelineOp::PutAlpha { mode, .. } | PipelineOp::PutAlphaData { mode, .. } => matches!(
             mode,
-            PixelMode::L
-                | PixelMode::LA
-                | PixelMode::RGB
-                | PixelMode::RGBA
-                | PixelMode::P
-                | PixelMode::PA
-                | PixelMode::CMYK
+            Mode::ImageLuma8
+                | Mode::ImageLumaA8
+                | Mode::ImageRgb8
+                | Mode::ImageRgba8
+                | Mode::ImageRgbPremultiplied8
+                | Mode::ImageRgbx8
+                | Mode::ImagePalette8
+                | Mode::ImagePaletteAlpha8
+                | Mode::ImageCmyk8
         ),
         // PutData keeps the exact payload identity through dispatch. The
         // shader only needs its raw byte width, but admission must preserve

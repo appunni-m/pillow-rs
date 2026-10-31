@@ -2,7 +2,7 @@ use super::*;
 use crate::ops::imageops::ImageOpsColor;
 use crate::ops::rotate::{RotateExpandInput, RotatePointInput, RotateResampleInput};
 use crate::ops::transform::{TransformData, TransformFill};
-use crate::pipeline::{ColorMode, PipelineOp, PixelMode, ResampleFilter, TransformMethod};
+use crate::pipeline::{ColorMode, PipelineOp, ResampleFilter, TransformMethod};
 use crate::raster::{
     DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, ImageBuffer, Luma, RgbImage,
     RgbaImage,

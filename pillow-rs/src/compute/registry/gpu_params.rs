@@ -346,8 +346,10 @@ fn format_geometry_params(op: &PipelineOp) -> Option<Vec<u32>> {
 fn channel_mutation_params(op: &PipelineOp) -> Option<Vec<u32>> {
     let params = match op {
         // ── PutAlpha: alpha as u32 ──
-        PipelineOp::PutAlpha { alpha, mode } => vec![*alpha as u32, mode.code()],
-        PipelineOp::PutAlphaData { mode, .. } => vec![0, mode.code()],
+        PipelineOp::PutAlpha { alpha, mode } => {
+            vec![*alpha as u32, put_alpha_layout_code(*mode)?]
+        }
+        PipelineOp::PutAlphaData { mode, .. } => vec![0, put_alpha_layout_code(*mode)?],
 
         // ── PutPixel: x, y, color packed as RGBA u32 ──
         PipelineOp::PutPixel { x, y, color, .. } => {
@@ -359,6 +361,38 @@ fn channel_mutation_params(op: &PipelineOp) -> Option<Vec<u32>> {
         _ => return None,
     };
     Some(params)
+}
+
+#[cfg(feature = "gpu")]
+fn put_alpha_layout_code(mode: Mode) -> Option<u32> {
+    // These values are the existing shader layout ABI. Keep the mapping local
+    // to GPU parameter packing while the operation descriptor carries exact
+    // Pillow mode identity.
+    Some(match mode {
+        Mode::ImageLuma8 => 0,
+        Mode::ImageLumaA8 => 1,
+        Mode::ImageRgb8 => 2,
+        Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8 | Mode::ImageRgbx8 => 3,
+        Mode::ImagePalette8 => 4,
+        Mode::ImagePaletteAlpha8 => 5,
+        Mode::ImageCmyk8 => 6,
+        Mode::One => 7,
+        Mode::ImageYCbCr8 => 8,
+        Mode::ImageHsv8 => 9,
+        Mode::ImageI32 => 10,
+        Mode::ImageF32 => 11,
+        Mode::ImageLaPremultiplied8
+        | Mode::ImageLab8
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N
+        | Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => return None,
+    })
 }
 
 #[cfg(feature = "gpu")]
