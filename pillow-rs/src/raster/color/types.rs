@@ -2,6 +2,8 @@
 
 use std::ops::{Index, IndexMut};
 
+// TODO(pillow-rs#3ptb): keep this codec-owned storage descriptor behind the
+// image I/O adapter so raster APIs do not leak image-slash-star types.
 pub use image_slash_star::ColorType;
 
 /// A Pillow processing color layout, including packed and sub-byte variants.

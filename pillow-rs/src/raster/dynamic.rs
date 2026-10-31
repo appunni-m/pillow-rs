@@ -608,19 +608,6 @@ impl DynamicImage {
             }
         }
     }
-
-    /// Converts pixels to a codec image through the Pillow-owned I/O adapter.
-    #[must_use]
-    pub fn into_decoded(self) -> image_slash_star::DecodedImage {
-        crate::image::codec_adapter::raster_to_decoded(self)
-    }
-
-    /// Adapts an unpacked codec image without changing its sample representation.
-    #[must_use]
-    pub fn from_decoded(d: &image_slash_star::DecodedImage) -> Option<DynamicImage> {
-        crate::image::codec_adapter::decoded_pixels_to_raster(d)
-    }
-
 }
 
 // -----------------------------------------------------------------------

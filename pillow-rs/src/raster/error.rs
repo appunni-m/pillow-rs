@@ -1,5 +1,7 @@
 //! Errors and geometry used by Pillow's in-memory raster operations.
 
+// TODO(pillow-rs#3ptb): keep codec errors behind the image I/O adapter and
+// expose only pillow-rs-owned errors from raster APIs.
 pub use image_slash_star::ImageError;
 
 /// A rectangular region within an in-memory raster.

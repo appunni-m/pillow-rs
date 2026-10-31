@@ -124,6 +124,6 @@ impl Image {
             )
             .with_palette(ImagePalette::new(palette, alpha)?));
         }
-        Ok(self.materialize()?.into_decoded())
+        Ok(super::codec_adapter::raster_to_decoded(self.materialize()?))
     }
 }

@@ -2,16 +2,32 @@
 
 use crate::error::PilError;
 use crate::compute::pool_cpu::ops::eval::{helpers::mode::pillow_band_count, scalar};
-use crate::compute::{Architecture, Backend, ExecutionContext};
+use crate::compute::{Backend, ExecutionContext};
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
 use crate::raster::Mode;
 
 fn exact_mode(image: &Image) -> Result<Mode, PilError> {
-    match image.known_mode_identity() {
-        Some(mode) => Ok(mode),
-        None => Ok(image.materialized_shared()?.mode()),
-    }
+    image.mode_identity()
+}
+
+fn cpu_point_context(image: &Image) -> Result<ExecutionContext, PilError> {
+    let requested_backend = match image.backend() {
+        Some(backend) => backend,
+        None => crate::compute::preferred_active_backend()?
+            .map(|(backend, _)| backend)
+            .unwrap_or(Backend::Cpu),
+    };
+    // PointScalar and PointFloat are CPU-owned. A SIMD request is resolved by
+    // the context to CPU plus the detected architecture; GPU requests use the
+    // CPU fallback until GPU point strategies are declared.
+    // TODO(pillow-rs#3ptb): report this eager GPU-to-CPU fallback through the
+    // prepared operation receipt once direct point operations use that route.
+    let execution_backend = match requested_backend {
+        Backend::Gpu => Backend::Cpu,
+        backend => backend,
+    };
+    Ok(ExecutionContext::for_routed_backend(execution_backend))
 }
 
 /// Host-neutral input classification for the callable form of `Image.eval`.
@@ -124,7 +140,7 @@ where
 /// and these native scalar buffers are not represented by the byte-oriented
 /// `Eval` pipeline operation.
 pub fn eval_point_transform(image: &Image, scale: f64, offset: f64) -> Result<Image, PilError> {
-    let context = ExecutionContext::new(Backend::Cpu, Architecture::Default);
+    let context = cpu_point_context(image)?;
     let prepared = scalar::prepare(image, &context)?;
     scalar::execute_affine(prepared, scale, offset)
 }
@@ -138,7 +154,7 @@ pub fn eval_point_callable<F>(image: &Image, mut callback: F) -> Result<Image, P
 where
     F: FnMut(f64) -> Result<f64, PilError>,
 {
-    let context = ExecutionContext::new(Backend::Cpu, Architecture::Default);
+    let context = cpu_point_context(image)?;
     let prepared = scalar::prepare(image, &context)?;
     scalar::execute_callable(prepared, callback)
 }
@@ -191,7 +207,7 @@ pub fn eval_validated(image: &Image, lut: &[u8]) -> Result<Image, PilError> {
 /// Returns [`PilError::ValueError`] when the LUT length or source mode does
 /// not match Pillow's single-band floating-output path.
 pub fn eval_float(image: &Image, lut: &[f64]) -> Result<Image, PilError> {
-    let context = ExecutionContext::new(Backend::Cpu, Architecture::Default);
+    let context = cpu_point_context(image)?;
     crate::compute::pool_cpu::ops::eval::ops::execute_float(image, lut, &context)
 }
 

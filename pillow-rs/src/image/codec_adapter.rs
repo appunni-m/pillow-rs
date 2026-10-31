@@ -131,7 +131,7 @@ pub(super) fn decoded_to_dynamic(decoded: &Decoded<DecodedImage>) -> Result<Dyna
         )
         .map(DynamicImage::ImageI32)
         .ok_or_else(|| PilError::DimensionError("invalid four-byte buffer".to_owned())),
-        mode => DynamicImage::from_decoded(content)
+        mode => decoded_pixels_to_raster(content)
             .ok_or_else(|| PilError::ValueError(format!("unsupported decoded mode {mode:?}"))),
     }
 }

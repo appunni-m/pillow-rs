@@ -2,12 +2,7 @@ use super::*;
 use crate::raster::Mode;
 
 fn mode_identity(image: &Image) -> Result<Mode, PilError> {
-    match image.known_mode_identity() {
-        Some(mode) => Ok(mode),
-        // TODO(pillow-rs#3ptb): make every lazy pipeline expose its exact Mode
-        // before operation admission so validation never has to materialize.
-        None => Ok(image.materialized_shared()?.mode()),
-    }
+    image.mode_identity()
 }
 
 fn mode_label(mode: Mode) -> &'static str {
