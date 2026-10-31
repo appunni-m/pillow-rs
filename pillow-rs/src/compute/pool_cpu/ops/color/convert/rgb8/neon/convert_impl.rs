@@ -20,6 +20,8 @@ pub(crate) unsafe fn execute(
         }
         Mode::ImageRgb8 => super::super::helpers::vector::identity(source),
         Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8 | Mode::ImageRgbx8 => {
+            // NO_PILLOW_SUPPORT: RGBa and RGBX are core-only targets; this
+            // native expansion supplies opaque alpha or padding as required.
             // SAFETY: the strategy is selected only by the NEON support entry.
             let output = unsafe { super::rgba_impl::execute(source)? };
             super::super::helpers::vector::rgba_for_target(output, target)
