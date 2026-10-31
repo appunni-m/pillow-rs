@@ -1,7 +1,7 @@
 //! Original constant alpha semantics for `ImageCmyk8`.
 
 use crate::error::PilError;
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, Rgba};
 use super::super::super::helpers::put_alpha::{self as helpers, AlphaInput};
 
 pub(crate) type Input = crate::raster::RgbaImage;
@@ -14,13 +14,12 @@ pub(crate) fn prepare(image: &Input, alpha: u8) -> Kernel<'_> {
 
 #[inline]
 pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
-    // Retain the original conversion result and RGB-copy allocation boundary.
-    // The typed serial conversion never enters the optional Rayon adapter.
-    let converted = DynamicImage::ImageRgb8(crate::color::cmyk_buffer_to_rgb(input.image));
-    let rgb = converted.to_rgb8();
+    // Preserve the original CMYK-to-RGB arithmetic, then write the required
+    // RGBA result directly without cloning the converted RGB frame.
+    let rgb = crate::color::cmyk_buffer_to_rgb(input.image);
     let mut output = crate::raster::RgbaImage::new(rgb.width(), rgb.height());
     for (destination, source) in output.pixels_mut().zip(rgb.pixels()) {
-        *destination = crate::raster::Rgba([source[0], source[1], source[2], input.alpha]);
+        *destination = Rgba([source[0], source[1], source[2], input.alpha]);
     }
     Ok(DynamicImage::ImageRgba8(output))
 }
