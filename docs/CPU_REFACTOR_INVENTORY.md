@@ -3,9 +3,10 @@
 Status: baseline inventory captured; the 98 CPU and 182 SIMD files are preserved below pool_cpu/legacy; maintained implementation and source review remain in progress. The separate SIMD executor and adapter registry were removed from the active module graph on 2026-10-31; `Backend::Simd` is now a CPU-plus-Architecture compatibility request. The source change is unverified.
 Baseline commit: 3f9dfd4036caa061eabcf2255c9f34a745df9c7e
 Working checkout: `/Users/lazytrot/work/pillow-rs`, branch
-`codex/cpu-mode-aware-refactor-backup-20261029` at `c841d3d0d`, six local
+`codex/cpu-mode-aware-refactor-backup-20261029` at `eb22f478b`, seven local
 commits above `origin/codex/cpu-mode-aware-refactor-backup-20261029`. GetData's
-typed mode migration is committed but unverified. Earlier
+typed mode migration and Paste's initial strategy migration are committed but
+unverified. Earlier
 Eval, ImageOps Expand, Geometry, Crop, Effects, projection, and direct gradient
 work is recorded below. No build, formatter, checkstyle, lint, test, parity,
 benchmark, or coverage command has run for the current migration state.
@@ -103,7 +104,7 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   caller-owned path still needs a direct support declaration that derives its
   CPU/GPU selection. Source-only; unverified.
 
-### Paste source audit (maintained strategy not yet written)
+### Paste source audit (maintained strategies written; source review continues)
 
 - Public admission lives in `pillow-rs/src/ops/paste/operations.rs`. It reads
   the destination's typed `Mode`, validates placement and source/mask region
@@ -196,8 +197,11 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   routes; archived explicit NEON blends and RGB/RGBA shuffle kernels remain a
   tracked optimization TODO beside `helpers/vector.rs`. Five internal
   high-depth identities have typed core-only implementations marked
-  `NO_PILLOW_SUPPORT`. No build, formatter, checkstyle, lint, test, parity,
-  benchmark, or coverage command has run for Paste.
+  `NO_PILLOW_SUPPORT`. Archived SIMD test source relocation and the remaining
+  explicit NEON/cross-layout kernels are still tracked TODOs; the mode/input
+  and caller review is not a full family verification. No build, formatter,
+  checkstyle, lint, test, parity, benchmark, or coverage command has run for
+  Paste.
 
 This inventory records the source and evidence denominator before rebuilding pool_cpu. It is a migration ledger, not a claim that the listed mode literals prove support. Each function's exact mode support, output identity, rejection behavior, shared helpers, and architecture fallback must be confirmed from its implementation before it is copied into the maintained tree. The source path lists are taken from the baseline Git tree, so every archived file can be checked against 3f9dfd403.
 
@@ -1842,7 +1846,7 @@ an implementation.
 | Maintained TODO location | Pending route |
 | --- | --- |
 | `compute/pool_cpu/ops/color/convert/ops.rs` | Complete the source-mode strategy folders and their Default implementations; declare and compose each real folded CPU architecture kernel with same-mode Default fallback; preserve each legacy target/error/allocation contract; finish prepared registry and public caller routing. |
-| `compute/pool_cpu/ops/mod.rs` | Rewire remaining direct callers for `chops`; create active owners and rewire callers for `paste`, `composite`, `transform`, and `draw`. The Geometry owner prepares Contain, Cover, Fit, Scale, and Pad through typed support contracts; Pad's Luma8 filtered SSE2/NEON/Wasm SIMD128 and serial L/RGBX direct-to-canvas paths use prepared Resize children, with remaining SIMD full-width convolution and compatibility routing still pending at its source TODO. The Filter owner exists and its caller/source review remains open in its family entry. |
+| `compute/pool_cpu/ops/mod.rs` | Rewire remaining direct callers for `chops`; complete Composite, Transform, and Draw owners and their callers. Paste now has an active prepared owner; migrate the archived explicit NEON blends and RGB/RGBA shuffles from its source TODO and relocate its retained SIMD test cases. The Geometry owner prepares Contain, Cover, Fit, Scale, and Pad through typed support contracts; Pad's Luma8 filtered SSE2/NEON/Wasm SIMD128 and serial L/RGBX direct-to-canvas paths use prepared Resize children, with remaining SIMD full-width convolution and compatibility routing still pending at its source TODO. The Filter owner exists and its caller/source review remains open in its family entry. |
 | `compute/pool_cpu/ops/geometry/pad/ops.rs` | Move any remaining archived full-width convolution modes into exact mode/architecture Resize owners, and finish checking every padded mode against its same-mode Default fallback and prepared context. |
 | `compute/pool_cpu/ops/enhance/ops.rs` | Add exact-mode Contrast strategies for the 17 eager conversion identities and route `Image::enhance_contrast` through them; review Sharpness native-mode contracts and route remaining direct callers through their exact mode/architecture owners. Compare the archived Contrast LUT path against the retained strategies. |
 | `compute/pool_cpu/ops/filter/ops.rs` | Compare the migrated Gaussian/box blur vector kernels and RGBA uniform proof against every archived mode route; review every Filter5x5 Default path and direct/eager Filter caller. Native-byte extrema/rank strategies and L/F32 rank vector strategies are represented in their exact mode owners. |
