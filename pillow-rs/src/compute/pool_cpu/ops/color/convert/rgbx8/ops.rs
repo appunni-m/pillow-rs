@@ -33,7 +33,7 @@ macro_rules! architecture_targets {
     };
 }
 
-static ARCHITECTURES: [ImplementationSupport; 30] = [
+static ARCHITECTURES: [ImplementationSupport; 36] = [
     ImplementationSupport::cpu(
         OperationId::Convert,
         Mode::ImageRgbx8,
@@ -124,6 +124,8 @@ static ARCHITECTURES: [ImplementationSupport; 30] = [
         &[Architecture::Sse2];
         ImageLumaA8,
         ImageRgba8,
+        ImageLaPremultiplied8,
+        ImageRgbPremultiplied8,
         ImageCmyk8,
         ImageYCbCr8,
         ImageHsv8,
@@ -136,6 +138,8 @@ static ARCHITECTURES: [ImplementationSupport; 30] = [
         &[Architecture::Neon];
         ImageLumaA8,
         ImageRgba8,
+        ImageLaPremultiplied8,
+        ImageRgbPremultiplied8,
         ImageCmyk8,
         ImageYCbCr8,
         ImageHsv8,
@@ -149,6 +153,8 @@ static ARCHITECTURES: [ImplementationSupport; 30] = [
         ImageRgb8,
         ImageLumaA8,
         ImageRgba8,
+        ImageLaPremultiplied8,
+        ImageRgbPremultiplied8,
         ImageCmyk8,
         ImageYCbCr8,
         ImageHsv8,

@@ -7,9 +7,12 @@ use crate::raster::{DynamicImage, Mode, RgbImage, RgbaImage};
 pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, PilError> {
     match target {
         Mode::ImageRgb8 => convert_rgb(source),
-        Mode::ImageLumaA8 => convert_luma_alpha(source),
-        Mode::ImageRgba8 => crate::compute::pool_cpu::ops::color::convert::rgba8::helpers::opaque_padding::execute(source)
-            .map(DynamicImage::ImageRgba8),
+        Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 => {
+            convert_luma_alpha(source, target)
+        }
+        Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8 => {
+            convert_rgba(source, target)
+        }
         Mode::ImageCmyk8 => convert_cmyk(source),
         Mode::ImageYCbCr8 => convert_ycbcr(source),
         Mode::ImageHsv8 => convert_hsv(source),
@@ -30,7 +33,7 @@ fn convert_rgb(source: &RgbaImage) -> Result<DynamicImage, PilError> {
     Ok(DynamicImage::ImageRgb8(output))
 }
 
-fn convert_luma_alpha(source: &RgbaImage) -> Result<DynamicImage, PilError> {
+fn convert_luma_alpha(source: &RgbaImage, target: Mode) -> Result<DynamicImage, PilError> {
     let (bytes, blocks) = native_rgb::to_luma_alpha_opaque::<4>(
         source.as_raw(),
         source.width(),
@@ -40,7 +43,26 @@ fn convert_luma_alpha(source: &RgbaImage) -> Result<DynamicImage, PilError> {
     record_vector_output(blocks, bytes.capacity());
     let output = crate::raster::GrayAlphaImage::from_raw(source.width(), source.height(), bytes)
         .ok_or_else(|| PilError::InternalError("RGBX Convert LA output shape mismatch".into()))?;
-    Ok(DynamicImage::ImageLumaA8(output))
+    match target {
+        Mode::ImageLumaA8 => Ok(DynamicImage::ImageLumaA8(output)),
+        // NO_PILLOW_SUPPORT: the archived Pillow Convert table rejects RGBX to La.
+        Mode::ImageLaPremultiplied8 => Ok(DynamicImage::ImageLaPremultiplied8(output)),
+        _ => Err(PilError::InternalError(
+            "Convert selected an undeclared RGBX luma-alpha target".into(),
+        )),
+    }
+}
+
+fn convert_rgba(source: &RgbaImage, target: Mode) -> Result<DynamicImage, PilError> {
+    let output = crate::compute::pool_cpu::ops::color::convert::rgba8::helpers::opaque_padding::execute(source)?;
+    match target {
+        Mode::ImageRgba8 => Ok(DynamicImage::ImageRgba8(output)),
+        // NO_PILLOW_SUPPORT: the archived Pillow Convert table rejects RGBX to RGBa.
+        Mode::ImageRgbPremultiplied8 => Ok(DynamicImage::ImageRgbPremultiplied8(output)),
+        _ => Err(PilError::InternalError(
+            "Convert selected an undeclared RGBX four-byte target".into(),
+        )),
+    }
 }
 
 fn convert_cmyk(source: &RgbaImage) -> Result<DynamicImage, PilError> {

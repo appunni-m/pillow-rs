@@ -126,6 +126,8 @@ pub(crate) const RGBX_TARGETS: &[Mode] = &[
     Mode::ImageI16N,
     Mode::ImageRgb8,
     Mode::ImageRgba8,
+    Mode::ImageLaPremultiplied8,
+    Mode::ImageRgbPremultiplied8,
     Mode::ImageCmyk8,
     Mode::ImageYCbCr8,
     Mode::ImageHsv8,
@@ -133,10 +135,14 @@ pub(crate) const RGBX_TARGETS: &[Mode] = &[
     Mode::ImageI32,
     Mode::ImageF32,
 ];
+const RGBX_CORE_ONLY_TARGETS: &[Mode] = &[
+    Mode::ImageLaPremultiplied8,
+    Mode::ImageRgbPremultiplied8,
+];
 pub(crate) const RGBX_INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: RGBX_TARGETS,
-    core_only_targets: &[],
-    core_only_reason: None,
+    core_only_targets: RGBX_CORE_ONLY_TARGETS,
+    core_only_reason: Some("RGBX to La and RGBa extend the Pillow Convert contract"),
     rejection_reason: "image has wrong mode",
 }];
 const SCALAR_TARGETS: &[Mode] = &[

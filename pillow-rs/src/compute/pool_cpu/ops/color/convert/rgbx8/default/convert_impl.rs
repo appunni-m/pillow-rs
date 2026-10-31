@@ -26,12 +26,11 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
             )
         }
         Mode::ImageLumaA8 => {
-            let mut output = GrayAlphaImage::new(width, height);
-            for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
-                let luma = crate::color::rgb_to_luma_u8(pixel[0], pixel[1], pixel[2]);
-                *destination = LumaA([luma, u8::MAX]);
-            }
-            Ok(DynamicImage::ImageLumaA8(output))
+            Ok(DynamicImage::ImageLumaA8(opaque_luma_alpha(source)))
+        }
+        // NO_PILLOW_SUPPORT: Pillow's Convert table rejects RGBX to La.
+        Mode::ImageLaPremultiplied8 => {
+            Ok(DynamicImage::ImageLaPremultiplied8(opaque_luma_alpha(source)))
         }
         Mode::ImageRgb8 => {
             let mut output = RgbImage::new(width, height);
@@ -41,11 +40,11 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
             Ok(DynamicImage::ImageRgb8(output))
         }
         Mode::ImageRgba8 => {
-            let mut output = RgbaImage::new(width, height);
-            for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
-                *destination = Rgba([pixel[0], pixel[1], pixel[2], u8::MAX]);
-            }
-            Ok(DynamicImage::ImageRgba8(output))
+            Ok(DynamicImage::ImageRgba8(opaque_rgba(source)))
+        }
+        // NO_PILLOW_SUPPORT: Pillow's Convert table rejects RGBX to RGBa.
+        Mode::ImageRgbPremultiplied8 => {
+            Ok(DynamicImage::ImageRgbPremultiplied8(opaque_rgba(source)))
         }
         Mode::ImageCmyk8 => {
             let mut output = RgbaImage::new(width, height);
@@ -69,6 +68,25 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
         Mode::ImageF32 => Ok(DynamicImage::ImageF32(scalar_f32(source))),
         _ => Err(PilError::ValueError("image has wrong mode".into())),
     }
+}
+
+fn opaque_luma_alpha(source: &RgbaImage) -> GrayAlphaImage {
+    let (width, height) = source.dimensions();
+    let mut output = GrayAlphaImage::new(width, height);
+    for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
+        let luma = crate::color::rgb_to_luma_u8(pixel[0], pixel[1], pixel[2]);
+        *destination = LumaA([luma, u8::MAX]);
+    }
+    output
+}
+
+fn opaque_rgba(source: &RgbaImage) -> RgbaImage {
+    let (width, height) = source.dimensions();
+    let mut output = RgbaImage::new(width, height);
+    for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
+        *destination = Rgba([pixel[0], pixel[1], pixel[2], u8::MAX]);
+    }
+    output
 }
 
 pub(crate) fn execute_palette_target(
