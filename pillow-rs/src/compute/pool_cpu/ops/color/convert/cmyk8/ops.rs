@@ -42,8 +42,9 @@ const SSE2_AVAILABLE: bool = cfg!(any(
     target_arch = "x86_64",
     all(target_arch = "x86", target_feature = "sse2")
 ));
+const WASM_SIMD128_AVAILABLE: bool = cfg!(all(target_arch = "wasm32", target_feature = "simd128"));
 
-static ARCHITECTURES: [ImplementationSupport; 3] = [
+static ARCHITECTURES: [ImplementationSupport; 4] = [
     ImplementationSupport::cpu(
         OperationId::Convert,
         Mode::ImageCmyk8,
@@ -66,6 +67,14 @@ static ARCHITECTURES: [ImplementationSupport; 3] = [
         Architecture::Neon,
         cfg!(all(target_arch = "aarch64", target_feature = "neon")),
         &[Architecture::Neon],
+        StrategyGuard::ConvertTargetMode(Mode::ImageRgb8),
+    ),
+    ImplementationSupport::cpu(
+        OperationId::Convert,
+        Mode::ImageCmyk8,
+        Architecture::WasmSimd128,
+        WASM_SIMD128_AVAILABLE,
+        &[Architecture::WasmSimd128],
         StrategyGuard::ConvertTargetMode(Mode::ImageRgb8),
     ),
 ];
@@ -97,6 +106,10 @@ pub(crate) unsafe fn execute(
         (Architecture::Sse2, Mode::ImageRgb8) => super::sse2::convert_impl::execute(source),
         #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
         (Architecture::Neon, Mode::ImageRgb8) => super::neon::convert_impl::execute(source),
+        #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+        (Architecture::WasmSimd128, Mode::ImageRgb8) => {
+            super::wasm_simd128::convert_impl::execute(source)
+        }
         _ => Err(PilError::InternalError(
             "Convert selected an undeclared CMYK8 architecture".into(),
         )),

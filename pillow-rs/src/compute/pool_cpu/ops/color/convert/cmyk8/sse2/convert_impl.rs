@@ -4,5 +4,5 @@ use crate::error::PilError;
 use crate::raster::{DynamicImage, RgbaImage};
 
 pub(crate) fn execute(source: &RgbaImage) -> Result<DynamicImage, PilError> {
-    super::super::helpers::to_rgb::execute_sse2(source).map(DynamicImage::ImageRgb8)
+    super::super::helpers::to_rgb::execute_wide(source).map(DynamicImage::ImageRgb8)
 }

@@ -6,7 +6,7 @@ use crate::raster::{RgbImage, RgbaImage};
 use crate::compute::pool_cpu::helpers::channel::{gather::gather_interleaved_channel, wide::simd_pack_u16x16};
 use wide::{u8x16, u16x16};
 
-pub(crate) fn execute_sse2(source: &RgbaImage) -> Result<RgbImage, PilError> {
+pub(crate) fn execute_wide(source: &RgbaImage) -> Result<RgbImage, PilError> {
     let mut output = prepare_output(source)?;
     let mut vector_blocks = 0u64;
     for block in source.as_raw().chunks(64) {
