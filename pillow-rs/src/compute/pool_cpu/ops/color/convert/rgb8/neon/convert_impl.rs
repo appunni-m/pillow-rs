@@ -15,7 +15,9 @@ pub(crate) unsafe fn execute(
 ) -> Result<DynamicImage, PilError> {
     match target {
         Mode::ImageLuma8 => luma8(source),
-        Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 => {
+        Mode::ImageLumaA8 => super::super::helpers::vector::luma_alpha(source, target),
+        // NO_PILLOW_SUPPORT: RGB to La is an explicitly core-only target.
+        Mode::ImageLaPremultiplied8 => {
             super::super::helpers::vector::luma_alpha(source, target)
         }
         Mode::ImageRgb8 => super::super::helpers::vector::identity(source),

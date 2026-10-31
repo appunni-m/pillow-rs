@@ -248,8 +248,8 @@ fn classify_mode(mode: Mode) -> ModeSupport {
 /// declared RGB normalization route, then the RGB8 ConvertLab operation runs.
 // TODO(pillow-rs#3ptb): finish the archived SIMD Convert source/target and
 // edge-guard comparison against the inventory. Alpha, CMYK→RGB, I;16,
-// RGB→RGB/RGBA, and RGB8→LAB arithmetic are reviewed; reconcile empty-image
-// receipts and RGB→RGBA allocation failure, then review uncovered routes.
+// RGB→RGB/RGBA, and RGB8→LAB arithmetic and RGB→RGBA allocation errors are
+// reviewed; reconcile empty-image receipts and review uncovered routes.
 const CONVERT_CHILDREN: &[OperationId] = &[OperationId::ConvertLab];
 
 pub(crate) static SUPPORT: OperationSupport = OperationSupport::composed(

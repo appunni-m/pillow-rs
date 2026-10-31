@@ -16,6 +16,7 @@ const SSE2_AVAILABLE: bool = cfg!(any(
     target_arch = "x86_64",
     all(target_arch = "x86", target_feature = "sse2")
 ));
+const WASM_SIMD128_AVAILABLE: bool = cfg!(all(target_arch = "wasm32", target_feature = "simd128"));
 
 const TARGETS: &[Mode] = &[
     Mode::One,
@@ -50,7 +51,7 @@ const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     rejection_reason: "image has wrong mode",
 }];
 
-static ARCHITECTURES: [ImplementationSupport; 27] = [
+static ARCHITECTURES: [ImplementationSupport; 38] = [
     ImplementationSupport::cpu(
         OperationId::Convert,
         Mode::ImageRgb8,
@@ -92,7 +93,7 @@ static ARCHITECTURES: [ImplementationSupport; 27] = [
         OperationId::Convert,
         Mode::ImageRgb8,
         Architecture::WasmSimd128,
-        cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
+        WASM_SIMD128_AVAILABLE,
         &[Architecture::WasmSimd128],
         StrategyGuard::ConvertTargetMode(Mode::ImageLuma8),
     ),
@@ -123,6 +124,14 @@ static ARCHITECTURES: [ImplementationSupport; 27] = [
     ImplementationSupport::cpu(
         OperationId::Convert,
         Mode::ImageRgb8,
+        Architecture::WasmSimd128,
+        WASM_SIMD128_AVAILABLE,
+        &[Architecture::WasmSimd128],
+        StrategyGuard::ConvertTargetMode(Mode::ImageLumaA8),
+    ),
+    ImplementationSupport::cpu(
+        OperationId::Convert,
+        Mode::ImageRgb8,
         Architecture::Sse2,
         SSE2_AVAILABLE,
         &[Architecture::Sse2],
@@ -134,6 +143,14 @@ static ARCHITECTURES: [ImplementationSupport; 27] = [
         Architecture::Neon,
         cfg!(target_arch = "aarch64"),
         &[Architecture::Neon],
+        StrategyGuard::ConvertTargetMode(Mode::ImageLaPremultiplied8),
+    ),
+    ImplementationSupport::cpu(
+        OperationId::Convert,
+        Mode::ImageRgb8,
+        Architecture::WasmSimd128,
+        WASM_SIMD128_AVAILABLE,
+        &[Architecture::WasmSimd128],
         StrategyGuard::ConvertTargetMode(Mode::ImageLaPremultiplied8),
     ),
     ImplementationSupport::cpu(
@@ -150,6 +167,14 @@ static ARCHITECTURES: [ImplementationSupport; 27] = [
         Architecture::Neon,
         cfg!(target_arch = "aarch64"),
         &[Architecture::Neon],
+        StrategyGuard::ConvertTargetMode(Mode::ImageCmyk8),
+    ),
+    ImplementationSupport::cpu(
+        OperationId::Convert,
+        Mode::ImageRgb8,
+        Architecture::WasmSimd128,
+        WASM_SIMD128_AVAILABLE,
+        &[Architecture::WasmSimd128],
         StrategyGuard::ConvertTargetMode(Mode::ImageCmyk8),
     ),
     ImplementationSupport::cpu(
@@ -166,6 +191,14 @@ static ARCHITECTURES: [ImplementationSupport; 27] = [
         Architecture::Neon,
         cfg!(target_arch = "aarch64"),
         &[Architecture::Neon],
+        StrategyGuard::ConvertTargetMode(Mode::ImageYCbCr8),
+    ),
+    ImplementationSupport::cpu(
+        OperationId::Convert,
+        Mode::ImageRgb8,
+        Architecture::WasmSimd128,
+        WASM_SIMD128_AVAILABLE,
+        &[Architecture::WasmSimd128],
         StrategyGuard::ConvertTargetMode(Mode::ImageYCbCr8),
     ),
     ImplementationSupport::cpu(
@@ -182,6 +215,14 @@ static ARCHITECTURES: [ImplementationSupport; 27] = [
         Architecture::Neon,
         cfg!(target_arch = "aarch64"),
         &[Architecture::Neon],
+        StrategyGuard::ConvertTargetMode(Mode::ImageHsv8),
+    ),
+    ImplementationSupport::cpu(
+        OperationId::Convert,
+        Mode::ImageRgb8,
+        Architecture::WasmSimd128,
+        WASM_SIMD128_AVAILABLE,
+        &[Architecture::WasmSimd128],
         StrategyGuard::ConvertTargetMode(Mode::ImageHsv8),
     ),
     ImplementationSupport::cpu(
@@ -198,6 +239,14 @@ static ARCHITECTURES: [ImplementationSupport; 27] = [
         Architecture::Neon,
         cfg!(target_arch = "aarch64"),
         &[Architecture::Neon],
+        StrategyGuard::ConvertTargetMode(Mode::ImageI32),
+    ),
+    ImplementationSupport::cpu(
+        OperationId::Convert,
+        Mode::ImageRgb8,
+        Architecture::WasmSimd128,
+        WASM_SIMD128_AVAILABLE,
+        &[Architecture::WasmSimd128],
         StrategyGuard::ConvertTargetMode(Mode::ImageI32),
     ),
     ImplementationSupport::cpu(
@@ -214,6 +263,14 @@ static ARCHITECTURES: [ImplementationSupport; 27] = [
         Architecture::Neon,
         cfg!(target_arch = "aarch64"),
         &[Architecture::Neon],
+        StrategyGuard::ConvertTargetMode(Mode::ImageF32),
+    ),
+    ImplementationSupport::cpu(
+        OperationId::Convert,
+        Mode::ImageRgb8,
+        Architecture::WasmSimd128,
+        WASM_SIMD128_AVAILABLE,
+        &[Architecture::WasmSimd128],
         StrategyGuard::ConvertTargetMode(Mode::ImageF32),
     ),
     ImplementationSupport::cpu(
@@ -230,6 +287,14 @@ static ARCHITECTURES: [ImplementationSupport; 27] = [
         Architecture::Neon,
         cfg!(target_arch = "aarch64"),
         &[Architecture::Neon],
+        StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageRgb8),
+    ),
+    ImplementationSupport::cpu(
+        OperationId::Convert,
+        Mode::ImageRgb8,
+        Architecture::WasmSimd128,
+        WASM_SIMD128_AVAILABLE,
+        &[Architecture::WasmSimd128],
         StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageRgb8),
     ),
     ImplementationSupport::cpu(
@@ -246,6 +311,14 @@ static ARCHITECTURES: [ImplementationSupport; 27] = [
         Architecture::Neon,
         cfg!(target_arch = "aarch64"),
         &[Architecture::Neon],
+        StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageRgba8),
+    ),
+    ImplementationSupport::cpu(
+        OperationId::Convert,
+        Mode::ImageRgb8,
+        Architecture::WasmSimd128,
+        WASM_SIMD128_AVAILABLE,
+        &[Architecture::WasmSimd128],
         StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageRgba8),
     ),
     ImplementationSupport::cpu(
@@ -262,6 +335,14 @@ static ARCHITECTURES: [ImplementationSupport; 27] = [
         Architecture::Neon,
         cfg!(target_arch = "aarch64"),
         &[Architecture::Neon],
+        StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageRgbPremultiplied8),
+    ),
+    ImplementationSupport::cpu(
+        OperationId::Convert,
+        Mode::ImageRgb8,
+        Architecture::WasmSimd128,
+        WASM_SIMD128_AVAILABLE,
+        &[Architecture::WasmSimd128],
         StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageRgbPremultiplied8),
     ),
     ImplementationSupport::cpu(
@@ -278,6 +359,14 @@ static ARCHITECTURES: [ImplementationSupport; 27] = [
         Architecture::Neon,
         cfg!(target_arch = "aarch64"),
         &[Architecture::Neon],
+        StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageRgbx8),
+    ),
+    ImplementationSupport::cpu(
+        OperationId::Convert,
+        Mode::ImageRgb8,
+        Architecture::WasmSimd128,
+        WASM_SIMD128_AVAILABLE,
+        &[Architecture::WasmSimd128],
         StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageRgbx8),
     ),
 ];
@@ -351,8 +440,8 @@ pub(crate) unsafe fn execute(
             unsafe { super::avx2::convert_impl::execute(source) }
         }
         #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
-        Architecture::WasmSimd128 if target == Mode::ImageLuma8 => {
-            super::wasm_simd128::convert_impl::execute(source)
+        Architecture::WasmSimd128 => {
+            super::wasm_simd128::convert_impl::execute(source, target)
         }
         #[cfg(target_arch = "aarch64")]
         Architecture::Neon => {

@@ -11,25 +11,23 @@ use crate::raster::{RgbImage, RgbaImage};
 pub(crate) unsafe fn execute(source: &RgbImage) -> Result<RgbaImage, PilError> {
     let pixels = (source.width() as usize)
         .checked_mul(source.height() as usize)
-        .ok_or_else(|| PilError::DimensionError("RGB Convert dimensions overflowed".into()))?;
+        .ok_or_else(super::super::helpers::rgba::unsupported)?;
     let source_bytes = pixels
         .checked_mul(3)
-        .ok_or_else(|| PilError::DimensionError("RGB Convert source size overflowed".into()))?;
+        .ok_or_else(super::super::helpers::rgba::unsupported)?;
     let output_bytes = pixels
         .checked_mul(4)
         .filter(|&bytes| bytes <= isize::MAX as usize)
-        .ok_or_else(|| PilError::DimensionError("RGBA Convert output size overflowed".into()))?;
+        .ok_or_else(super::super::helpers::rgba::unsupported)?;
     if source.as_raw().len() != source_bytes {
-        return Err(PilError::InternalError(
-            "RGB Convert source storage did not match its dimensions".into(),
-        ));
+        return Err(super::super::helpers::rgba::unsupported());
     }
 
     let vector_pixels = pixels / 16 * 16;
     let mut output = Vec::new();
     output
         .try_reserve_exact(output_bytes)
-        .map_err(|error| PilError::MemoryError(error.to_string()))?;
+        .map_err(|_| super::super::helpers::rgba::unsupported())?;
     // SAFETY: prepared selection establishes NEON; source length and output
     // capacity are checked, and the leaf handles complete sixteen-pixel blocks.
     unsafe { rgb_to_rgba_neon(source.as_raw(), vector_pixels, &mut output) };

@@ -1,11 +1,10 @@
 # CPU refactor source and evidence inventory
 
-Status: baseline inventory captured; the 98 CPU and 182 SIMD files are preserved below pool_cpu/legacy; maintained implementation and source review remain in progress. The separate SIMD executor and adapter registry were removed from the active module graph on 2026-10-31; `Backend::Simd` is now a CPU-plus-Architecture compatibility request. The source change is unverified.
+Status: baseline inventory captured; the 98 CPU and 182 SIMD files are preserved below pool_cpu/legacy; maintained implementation and source review remain in progress. The separate SIMD executor and adapter registry were removed from the active module graph on 2026-10-31; `Backend::Simd` is now a CPU-plus-Architecture compatibility request. RGB8 Wasm SIMD Convert strategies are being restored from archived portable-vector routes, and Default RGB→LA/I;16 staging now preserves the archived L scratch allocation; current source changes are unverified.
 Baseline commit: 3f9dfd4036caa061eabcf2255c9f34a745df9c7e
 Working checkout: `/Users/lazytrot/work/pillow-rs`, branch `develop` at
-`f32735a49`; the previous native-I;16 source fix is committed, and the current
-source-review notes and core-only strategy annotations are uncommitted. The
-Typed-mode backup is a separate worktree and remains untouched. The baseline archive was rechecked on
+`dcdf63209`; the prior inventory checkpoint is committed and the RGB8 Wasm
+strategy restoration is currently uncommitted. The baseline archive was rechecked on
 2026-10-31: all 98 CPU files and 182 SIMD files from
 `3f9dfd4036caa061eabcf2255c9f34a745df9c7e` match their preserved contents under
 `pool_cpu/legacy/` and `pool_cpu/legacy/pool_simd/`; maintained Rust source has
@@ -76,25 +75,23 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   are entirely scalar tails. Empty images were intercepted by the archived
   scalar-control route; the maintained `ConvertTargetModeNonEmpty` declaration
   falls back to Default, producing the same empty output with a different
-  execution receipt. Allocation failure is not reconciled: the archive used a
-  fallible reservation that surfaced as SIMD `NotImplementedError`, while the
-  maintained SSE2 owner uses `Vec::with_capacity` and NEON maps reservation
-  failure to `MemoryError`. The archived batch executor propagated adapter
-  errors and did not retry on CPU; the prepared architecture owner likewise
-  returns its leaf error directly. This observable error difference remains a
-  source-review TODO. No validation has run.
+  execution receipt. The shared portable helper and NEON route now use a
+  fallible exact reservation and map invalid extents, storage shape, or reserve
+  failure to the archived `SIMD Convert is unsupported for the validated
+  image layout/parameters` `NotImplementedError`. The archived batch executor
+  propagated adapter errors and did not retry on CPU; the prepared architecture
+  owner likewise returns its leaf error directly. No validation has run.
 - RGB→I;16/I;16L/I;16B/I;16N is Pillow-supported, not a core-only extension.
   The baseline `try_convert_to_luma16` accepts all four target spellings and
   routes RGB through the `L` conversion before widening each byte to native
-  `u16`. The maintained RGB8 Default owner applies the same rounded BT.601
-  fixed-point projection (`19595/38470/7471`, bias `32768`) with
-  `rgb_to_luma_u8`, widens each resulting sample to `u16`, and constructs the
-  exact requested I;16 `DynamicImage` variant. No RGB8 architecture strategy
-  is declared for these targets, so they remain Default-only. The direct owner
-  removes the archived intermediate L conversion/materialization step; verify
-  that this execution and allocation-boundary change is permitted by the
-  preserved Convert contract before closing source review. No validation has
-  run.
+  `u16`. The maintained RGB8 Default owner computes the same rounded BT.601
+  fixed-point projection (`19595/38470/7471`, bias `32768`) into a temporary L
+  byte buffer, then widens those samples into the exact requested I;16
+  `DynamicImage` variant. This preserves the archived two-buffer allocation
+  boundary without constructing or retagging a `DynamicImage` intermediate.
+  No RGB8 architecture strategy is declared for these targets, so they remain
+  Default-only. The typed L scratch route and output are source-reviewed; no
+  validation has run.
 - RGB→I/F is source-reviewed against both archived executors. The archived CPU
   and maintained Default owners use the same fixed-point rounded luma formula
   for I, then write the signed value as little-endian i32 into the four-byte
@@ -113,18 +110,17 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   maintained mode owners. The archived CPU path used Pillow's rounded L
   grayscale conversion and filled the LA alpha byte with 255. Its SIMD path
   used eight-pixel fixed-point luma blocks, zero-filled inactive lanes, and
-  interleaved opaque alpha. The maintained Default owner applies the same
-  rounded `rgb_to_luma_u8` equation while emitting `[L, 255]`; the selected
+  interleaved opaque alpha. The maintained Default owner computes the same
+  rounded luma into an L byte scratch buffer and then emits `[L, 255]`,
+  preserving the archived L-buffer allocation followed by the LA output
+  allocation without constructing a `DynamicImage` intermediate. The selected
   architecture owner calls the eight-lane `native_rgb::to_luma_alpha_opaque`
   kernel with the same active-lane output. Both return exact `ImageLumaA8`.
   Empty images remain accepted: the archived path records scalar-control and
   the maintained zero-block vector helper records scalar-control, although the
-  new support guard can retain the requested architecture selection. The
-  Default route no longer materializes the intermediate L raster, so its
-  allocation boundary differs from the archived CPU path; resolve this against
-  the preservation contract before source review is closed. RGB→La shares the
-  byte arithmetic but remains an explicitly core-only target with its own
-  exact output identity. No validation has run.
+  new support guard can retain the requested architecture selection. RGB→La
+  shares the byte arithmetic but remains an explicitly core-only target with
+  its own exact output identity. No validation has run.
 - RGB→L is source-reviewed against the actual archived Convert route. Its
   `try_layout_special_conversion` delegated exact RGB8 input to the archived
   Grayscale kernel selector, so the generic eight-lane Convert luma helper was
@@ -149,9 +145,16 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   conversions; SSE2/NEON owners call the corresponding native vector helpers.
   All preserve padded inactive lanes, active-only stores, scalar-control for
   empty input, and exact `ImageCmyk8`, `ImageYCbCr8`, or `ImageHsv8` identity.
-  No source arithmetic or tail difference was found; the broader audit still
-  needs to reconcile archived executor build availability with every declared
-  Architecture row. Parity and performance validation remain pending.
+  No source arithmetic or tail difference was found. The archived portable
+  SIMD executor dispatched these `wide` kernels without target-architecture
+  gates; `wide` 1.6.1 maps the required `u8x16`, `i32x8`, `f32x8`, and `f64x8`
+  operations onto Wasm SIMD128 when `simd128` is enabled. The maintained RGB8
+  owner had omitted those Wasm strategies. It now declares and routes them for
+  these targets, along with LA, core-only La, I/F, RGB identity, and the
+  four-byte expansion targets. The shared portable RGB→RGBA kernel now lives
+  under the RGB8 mode helpers and is used by SSE2 and Wasm; NEON retains its
+  sixteen-pixel structure kernel. Other family/architecture rows still need
+  the same build-availability audit. No build or validation has run.
 - RGB→RGB identity is source-reviewed. The archived generic layout route and
   maintained SSE2/NEON mode owners both copy native triplets through five-pixel
   `u8x16` blocks, including a padded final block, and preserve the exact

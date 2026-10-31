@@ -1,4 +1,4 @@
-//! Native RGB-to-RGBA vector conversion for the exact RGB8 source mode.
+//! Portable wide RGB-to-RGBA expansion shared by SSE2 and Wasm SIMD128.
 
 use crate::error::PilError;
 use crate::raster::{RgbImage, RgbaImage};
@@ -10,24 +10,23 @@ const RGB_TO_RGBA_BYTES: u8x16 =
 pub(crate) fn execute(source: &RgbImage) -> Result<RgbaImage, PilError> {
     let pixels = (source.width() as usize)
         .checked_mul(source.height() as usize)
-        .ok_or_else(|| PilError::DimensionError("RGB Convert dimensions overflowed".into()))?;
+        .ok_or_else(unsupported)?;
     let source_bytes = pixels
         .checked_mul(3)
-        .ok_or_else(|| PilError::DimensionError("RGB Convert source size overflowed".into()))?;
+        .ok_or_else(unsupported)?;
     let output_bytes = pixels
         .checked_mul(4)
         .filter(|&bytes| bytes <= isize::MAX as usize)
-        .ok_or_else(|| PilError::DimensionError("RGBA Convert output size overflowed".into()))?;
+        .ok_or_else(unsupported)?;
     if source.as_raw().len() != source_bytes {
-        return Err(PilError::InternalError(
-            "RGB Convert source storage did not match its dimensions".into(),
-        ));
+        return Err(unsupported());
     }
 
     let vector_pixels = pixels / 4 * 4;
-    let mut output = Vec::with_capacity(output_bytes);
+    let mut output = Vec::new();
+    output.try_reserve_exact(output_bytes).map_err(|_| unsupported())?;
     for pixel in (0..vector_pixels).step_by(4) {
-        output.extend_from_slice(&rgb_to_rgba_block(source.as_raw(), pixel, 4));
+        output.extend_from_slice(&rgb_to_rgba_block(source.as_raw(), pixel));
     }
     for pixel in vector_pixels..pixels {
         let offset = pixel * 3;
@@ -46,13 +45,17 @@ pub(crate) fn execute(source: &RgbImage) -> Result<RgbaImage, PilError> {
         .ok_or_else(|| PilError::InternalError("RGBA Convert output shape mismatch".into()))
 }
 
+pub(crate) fn unsupported() -> PilError {
+    PilError::NotImplementedError(
+        "SIMD Convert is unsupported for the validated image layout/parameters".into(),
+    )
+}
+
 #[inline]
-fn rgb_to_rgba_block(source: &[u8], start_pixel: usize, active_pixels: usize) -> [u8; 16] {
-    debug_assert!((1..=4).contains(&active_pixels));
+fn rgb_to_rgba_block(source: &[u8], start_pixel: usize) -> [u8; 16] {
     let source_start = start_pixel * 3;
-    let active_bytes = active_pixels * 3;
     let mut input = [0u8; 16];
-    input[..active_bytes].copy_from_slice(&source[source_start..source_start + active_bytes]);
+    input[..12].copy_from_slice(&source[source_start..source_start + 12]);
     input[15] = u8::MAX;
     u8x16::new(input)
         .swizzle_relaxed(RGB_TO_RGBA_BYTES)
