@@ -2,6 +2,17 @@
 
 use crate::raster::Mode;
 
+/// Applies Pillow's byte-oriented PutData clipping to one numeric value.
+pub(crate) fn clip_u8(value: f64) -> u8 {
+    if value.is_nan() || value >= 255.0 {
+        255
+    } else if value <= 0.0 {
+        0
+    } else {
+        value as u8
+    }
+}
+
 /// Raw bytes per normalized PutData payload pixel for supported byte carriers.
 ///
 /// The `Mode` is the exact payload identity, not an inferred source image mode.

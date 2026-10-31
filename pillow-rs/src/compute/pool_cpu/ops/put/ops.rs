@@ -220,6 +220,103 @@ pub(crate) static PUT_DATA_SUPPORT: OperationSupport = OperationSupport::new(
     OperationId::PutData, &[], classify_data_mode,
 );
 
+const PUT_DATA_L16_BYTES_INPUTS: &[crate::compute::registry::support::InputContract] =
+    &[crate::compute::registry::support::InputContract::CallerValidatedRawI16ByteRows];
+
+fn classify_put_data_l16_bytes_mode(mode: Mode) -> ModeSupport {
+    match mode {
+        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
+            ModeSupport::serial(OperationId::PutDataL16Bytes, mode, PUT_DATA_L16_BYTES_INPUTS)
+        }
+        Mode::One
+        | Mode::ImageLuma8
+        | Mode::ImageLumaA8
+        | Mode::ImageLaPremultiplied8
+        | Mode::ImagePalette8
+        | Mode::ImagePaletteAlpha8
+        | Mode::ImageRgb8
+        | Mode::ImageRgba8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8
+        | Mode::ImageYCbCr8
+        | Mode::ImageLab8
+        | Mode::ImageHsv8
+        | Mode::ImageI32
+        | Mode::ImageF32
+        | Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => ModeSupport::Rejected {
+            mode,
+            reason: "putdata I;16 storage mismatch",
+            kind: crate::compute::registry::support::RejectionKind::InternalError,
+        },
+    }
+}
+
+pub(crate) static PUT_DATA_L16_BYTES_SUPPORT: OperationSupport = OperationSupport::new(
+    OperationId::PutDataL16Bytes,
+    &[],
+    classify_put_data_l16_bytes_mode,
+);
+
+pub(crate) fn select_put_data_l16_bytes(
+    mode: Mode,
+    context: &ExecutionContext,
+) -> Result<StrategySelection, PilError> {
+    PUT_DATA_L16_BYTES_SUPPORT
+        .for_mode(mode)
+        .select_serial(context)
+}
+
+pub(crate) fn prepare_put_data_l16_bytes(
+    data: &[u8],
+    dimensions: crate::checked_dims::CheckedDims,
+    scale: f64,
+    offset: f64,
+) -> Result<Vec<u8>, PilError> {
+    super::helpers::put_data_l16_bytes::prepare_raw_bytes(data, dimensions, scale, offset)
+}
+
+pub(crate) fn execute_put_data_l16_bytes(
+    image: &mut DynamicImage,
+    raw: &[u8],
+    selection: StrategySelection,
+) -> Result<(), PilError> {
+    let mode = image.mode();
+    if selection.implementation.operation != OperationId::PutDataL16Bytes
+        || selection.implementation.mode != mode
+    {
+        return Err(PilError::InternalError(
+            "putdata I;16 storage mismatch".into(),
+        ));
+    }
+    if selection.implementation.architecture != crate::compute::Architecture::Default {
+        return Err(PilError::InternalError(
+            "unbound putdata I;16 bytes architecture".into(),
+        ));
+    }
+    match image {
+        DynamicImage::ImageI16(image) => {
+            super::i16::default::put_data_impl::execute_l16_bytes(image, raw)
+        }
+        DynamicImage::ImageI16L(image) => {
+            super::i16l::default::put_data_impl::execute_l16_bytes(image, raw)
+        }
+        DynamicImage::ImageI16B(image) => {
+            super::i16b::default::put_data_impl::execute_l16_bytes(image, raw)
+        }
+        DynamicImage::ImageI16N(image) => {
+            super::i16n::default::put_data_impl::execute_l16_bytes(image, raw)
+        }
+        _ => Err(PilError::InternalError(
+            "putdata I;16 storage mismatch".into(),
+        )),
+    }
+}
+
 const PUT_DATA_VALUE_AT_INPUTS: &[crate::compute::registry::support::InputContract] =
     &[crate::compute::registry::support::InputContract::CallerValidatedPixelIndex];
 

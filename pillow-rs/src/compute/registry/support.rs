@@ -187,6 +187,8 @@ pub enum OperationId {
     PutPixelValueAt,
     /// Replace a normalized byte prefix, retaining the direct payload-layout contract.
     PutData,
+    /// Replace I;16 samples from the Pillow byte-row fast path.
+    PutDataL16Bytes,
     /// Write one normalized putdata value synchronously before the next value is coerced.
     PutDataValueAt,
     /// Insert or replace a constant alpha sample using the exact source identity.
@@ -323,6 +325,9 @@ impl OperationId {
                 &crate::compute::pool_cpu::ops::put::ops::PUT_PIXEL_VALUE_AT_SUPPORT
             }
             Self::PutData => &crate::compute::pool_cpu::ops::put::ops::PUT_DATA_SUPPORT,
+            Self::PutDataL16Bytes => {
+                &crate::compute::pool_cpu::ops::put::ops::PUT_DATA_L16_BYTES_SUPPORT
+            }
             Self::PutDataValueAt => {
                 &crate::compute::pool_cpu::ops::put::ops::PUT_DATA_VALUE_AT_SUPPORT
             }

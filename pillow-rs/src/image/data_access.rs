@@ -54,16 +54,6 @@ pub(super) fn validate_scalar_storage(image: &DynamicImage, mode: Mode) -> Resul
     Ok(())
 }
 
-pub(super) fn putdata_clip_u8(value: f64) -> u8 {
-    if value.is_nan() || value >= 255.0 {
-        255
-    } else if value <= 0.0 {
-        0
-    } else {
-        value as u8
-    }
-}
-
 fn putdata_clip_component(value: i128) -> u8 {
     value.clamp(0, 255) as u8
 }
@@ -130,7 +120,9 @@ fn append_numeric_value(
     };
     match mode {
         Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => {
-            data.push(putdata_clip_u8(number * scale + offset));
+            data.push(crate::compute::helpers::put_data::clip_u8(
+                number * scale + offset,
+            ));
         }
         Mode::ImageI32 => {
             data.extend_from_slice(&((number * scale + offset) as i32).to_le_bytes());

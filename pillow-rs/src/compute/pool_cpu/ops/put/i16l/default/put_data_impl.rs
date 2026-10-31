@@ -28,3 +28,8 @@ pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
             .map(DynamicImage::ImageRgba8),
     }
 }
+
+pub(crate) fn execute_l16_bytes(input: &mut Input, raw: &[u8]) -> Result<(), PilError> {
+    super::super::super::helpers::put_data_l16_bytes::write_little_endian(input.as_mut(), raw);
+    Ok(())
+}

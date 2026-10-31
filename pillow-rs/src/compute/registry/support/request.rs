@@ -138,6 +138,8 @@ pub enum InputContract {
     CallerValidatedPixelCoordinates,
     /// Image.putdata validates the flattened pixel index before the direct write.
     CallerValidatedPixelIndex,
+    /// Caller checked length and dimensions for Pillow's row-shaped I;16 byte mapping.
+    CallerValidatedRawI16ByteRows,
     /// Internal batch execution retains ordered variant/bounds checks and last-write-wins.
     OrderedPixelWrites,
     /// Normalize a secondary mask with the existing typed-to-L conversion,

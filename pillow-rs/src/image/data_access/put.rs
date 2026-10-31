@@ -1,8 +1,8 @@
 use super::{
     Arc, Bytes, CheckedDims, Image, PilError, PipelineOp, PutDataInput, PutDataValue,
-    PutDataExecutionContext, PutDataValueKind, is_l16_identity, l16_identity_uses_big_endian,
+    PutDataExecutionContext, PutDataValueKind, is_l16_identity,
     materialization_cache, putdata_byte_width, putdata_bytes, unsupported_putdata_mode,
-    putdata_clip_u8, putdata_l16_sample,
+    putdata_l16_sample,
 };
 use crate::raster::Mode;
 
@@ -266,9 +266,6 @@ impl Image {
     /// worth of input bytes at a time, leaving the remaining byte half of each
     /// 16-bit row zero-filled. With a scale or offset it applies the same
     /// clipping to each input byte before placing it in that row layout.
-    ///
-    /// TODO(pillow-rs#3ptb): route the raw-byte row mapping through exact-mode
-    /// PutData strategies while preserving its byte-order and zero-fill rules.
     pub fn putdata_l16_bytes(
         &mut self,
         data: &[u8],
@@ -279,34 +276,32 @@ impl Image {
         let (width, height) = self.size()?;
         let dimensions = CheckedDims::new(width, height, 2)?;
         let mode = self.mode_identity()?;
-        let mut raw = dimensions.alloc_buffer();
-        let width = width as usize;
-        let row_stride = width
-            .checked_mul(2)
-            .ok_or_else(|| PilError::DimensionError("putdata row stride overflow".into()))?;
-        for (index, byte) in data.iter().copied().enumerate() {
-            let row = index / width;
-            let column = index % width;
-            raw[row * row_stride + column] = if scale == 1.0 && offset == 0.0 {
-                byte
-            } else {
-                putdata_clip_u8(f64::from(byte) * scale + offset)
-            };
-        }
+        let raw = crate::compute::pool_cpu::ops::put::ops::prepare_put_data_l16_bytes(
+            data, dimensions, scale, offset,
+        )?;
+        let context = crate::compute::ExecutionContext::for_routed_backend(
+            crate::compute::Backend::Cpu,
+        );
+        let requested_backend = self.requested_backend_for_eager_cpu_mutation();
         self.load()?;
         if let Image::Loaded(image_data) = self {
-            let image = Arc::make_mut(&mut image_data.image);
-            let destination = image
-                .as_mut_luma16()
-                .ok_or_else(|| PilError::InternalError("putdata I;16 storage mismatch".into()))?;
-            for (pixel, sample) in destination.as_mut().iter_mut().zip(raw.chunks_exact(2)) {
-                *pixel = if l16_identity_uses_big_endian(mode) {
-                    u16::from_be_bytes([sample[0], sample[1]])
-                } else {
-                    u16::from_le_bytes([sample[0], sample[1]])
-                };
-            }
+            let selection = crate::compute::pool_cpu::ops::put::ops::select_put_data_l16_bytes(
+                mode,
+                &context,
+            )?;
+            crate::compute::pool_cpu::ops::put::ops::execute_put_data_l16_bytes(
+                Arc::make_mut(&mut image_data.image),
+                &raw,
+                selection,
+            )?;
             image_data.known_zero_fill = false;
+            crate::compute::record_eager_cpu_operation_receipt_with_selection(
+                "PutData",
+                requested_backend,
+                0,
+                "I;16 byte writes update host storage synchronously",
+                selection,
+            );
             return Ok(());
         }
         Err(PilError::InternalError(
