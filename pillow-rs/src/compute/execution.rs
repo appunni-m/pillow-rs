@@ -6,7 +6,7 @@ use super::pool_gpu;
 use super::registry;
 use super::{
     Backend, DynamicImage, ExecutionContext, PilError, PipelineOp, PipelineResourceTelemetry,
-    PipelineTelemetry, begin_pipeline_operation_telemetry, elapsed_ns,
+    Mode, PipelineTelemetry, begin_pipeline_operation_telemetry, elapsed_ns,
     finish_pipeline_operation_telemetry, host_resource_telemetry, pipeline_telemetry_enabled,
     pipeline_timestamp, record_pipeline_allocation, record_pipeline_operation_path,
     record_pipeline_operation_scalar_tail, record_pipeline_operation_unsupported,
@@ -291,14 +291,16 @@ pub(crate) fn merge_pipeline_resource_telemetry(
 }
 
 /// Executes a previously routed and validated pipeline, recording the bounded
-/// backend phase when telemetry is enabled.
+/// backend phase when telemetry is enabled. The logical source identity is a
+/// typed `Mode`; CPU strategy selection always reads the exact mode from the
+/// supplied `DynamicImage`.
 pub(crate) fn execute_prepared(
     prepared: &PreparedExecution,
     ops: &[PipelineOp],
     img: &DynamicImage,
-    mode: Option<&str>,
+    logical_mode: Option<Mode>,
 ) -> Result<DynamicImage, PilError> {
-    execute_prepared_with_palette(prepared, ops, img, mode, PaletteInput::default())
+    execute_prepared_with_palette(prepared, ops, img, logical_mode, PaletteInput::default())
 }
 
 /// Executes a prepared pipeline with palette metadata resolved by its image
@@ -307,7 +309,7 @@ pub(crate) fn execute_prepared_with_palette(
     prepared: &PreparedExecution,
     ops: &[PipelineOp],
     img: &DynamicImage,
-    mode: Option<&str>,
+    logical_mode: Option<Mode>,
     palette: PaletteInput<'_>,
 ) -> Result<DynamicImage, PilError> {
     // A pure conversion of an empty image has no samples to transform. Return
@@ -329,7 +331,7 @@ pub(crate) fn execute_prepared_with_palette(
         reset_execution_telemetry();
     }
     let backend_start = timed.then(pipeline_timestamp).flatten();
-    execute_prepared_on_backend(prepared, ops, img, mode, palette, timed, backend_start)
+    execute_prepared_on_backend(prepared, ops, img, logical_mode, palette, timed, backend_start)
 }
 
 fn empty_convert_result(ops: &[PipelineOp], img: &DynamicImage) -> Option<DynamicImage> {
@@ -423,7 +425,7 @@ fn execute_prepared_on_backend(
     prepared: &PreparedExecution,
     ops: &[PipelineOp],
     img: &DynamicImage,
-    mode: Option<&str>,
+    logical_mode: Option<Mode>,
     palette: PaletteInput<'_>,
     timed: bool,
     backend_start: Option<Instant>,
@@ -444,12 +446,12 @@ fn execute_prepared_on_backend(
         })?;
     let estimated_dispatch_count = timed.then(|| pool.dispatch_count(ops)).flatten();
     let execution = if prepared.requested_backend == Some(Backend::Gpu) {
-        pool.execute_batch_strict(ops, img, mode)
+        pool.execute_batch_strict(ops, img, logical_mode)
     } else {
         pool.execute_batch_with_context_and_palette(
             ops,
             img,
-            mode,
+            logical_mode,
             prepared.context(),
             palette,
         )
@@ -539,9 +541,9 @@ pub(crate) fn execute_prepared_shared(
     prepared: &PreparedExecution,
     ops: &[PipelineOp],
     img: &Arc<DynamicImage>,
-    mode: Option<&str>,
+    logical_mode: Option<Mode>,
 ) -> Result<Arc<DynamicImage>, PilError> {
-    execute_prepared_shared_with_palette(prepared, ops, img, mode, PaletteInput::default())
+    execute_prepared_shared_with_palette(prepared, ops, img, logical_mode, PaletteInput::default())
 }
 
 /// Shared-result counterpart to [`execute_prepared_with_palette`].
@@ -549,7 +551,7 @@ pub(crate) fn execute_prepared_shared_with_palette(
     prepared: &PreparedExecution,
     ops: &[PipelineOp],
     img: &Arc<DynamicImage>,
-    mode: Option<&str>,
+    logical_mode: Option<Mode>,
     palette: PaletteInput<'_>,
 ) -> Result<Arc<DynamicImage>, PilError> {
     if prepared.context.backend() == Backend::Cpu
@@ -625,5 +627,5 @@ pub(crate) fn execute_prepared_shared_with_palette(
         .map(Arc::new);
     }
 
-    execute_prepared_with_palette(prepared, ops, img, mode, palette).map(Arc::new)
+    execute_prepared_with_palette(prepared, ops, img, logical_mode, palette).map(Arc::new)
 }

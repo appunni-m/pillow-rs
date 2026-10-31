@@ -218,18 +218,23 @@ impl BackendImpl for GpuPool {
         &self,
         ops: &[PipelineOp],
         img: &DynamicImage,
-        mode: Option<&str>,
+        logical_mode: Option<Mode>,
     ) -> Result<DynamicImage, PilError> {
-        self.execute_batch_with_policy(ops, img, mode, true)
+        // TODO(pillow-rs#3ptb): replace the `Option<&str>` logical-mode inputs
+        // in GPU admission, planning, and upload with `Mode` matches, then
+        // remove this compatibility spelling adapter.
+        let logical_mode_name = logical_mode.map(|mode| mode.pillow_name().unwrap_or("unknown"));
+        self.execute_batch_with_policy(ops, img, logical_mode_name, true)
     }
 
     fn execute_batch_strict(
         &self,
         ops: &[PipelineOp],
         img: &DynamicImage,
-        mode: Option<&str>,
+        logical_mode: Option<Mode>,
     ) -> Result<DynamicImage, PilError> {
-        self.execute_batch_with_policy(ops, img, mode, false)
+        let logical_mode_name = logical_mode.map(|mode| mode.pillow_name().unwrap_or("unknown"));
+        self.execute_batch_with_policy(ops, img, logical_mode_name, false)
     }
 }
 

@@ -287,9 +287,10 @@ pub fn from_resolved_array_interface(layout: &ArrayLayout, data: &[u8]) -> Resul
         // the ordinary Image::frombytes mode path.
         return Image::frombytes(layout.mode, (width, height), &normalized);
     }
-    let raw_mode = Mode::from_pillow_name(&layout.raw_mode)
-        .ok_or_else(|| PilError::ValueError("unsupported array raw mode".into()))?;
-    Image::frombytes(raw_mode, (width, height), data)
+    // `raw_mode` describes the input byte layout. `resolve_array_layout` has
+    // already resolved the exact output identity; do not parse the external
+    // Pillow spelling back into Mode here.
+    Image::frombytes(layout.mode, (width, height), data)
 }
 
 fn normalize_scalar_array(layout: &ArrayLayout, data: &[u8]) -> Result<Option<Vec<u8>>, PilError> {

@@ -60,7 +60,12 @@ fn simd_compatibility_request_composes_consecutive_transposes() -> Result<(), Pi
     let prepared = prepare_execution(&ops, Some(Backend::Simd))?;
     let previous = Backend::set_pipeline_telemetry_enabled(true);
     crate::compute::reset_pipeline_operation_telemetry();
-    let result = execute_prepared(&prepared, &ops, &source, Some("RGBA"));
+    let result = execute_prepared(
+        &prepared,
+        &ops,
+        &source,
+        Some(crate::raster::Mode::ImageRgba8),
+    );
     let receipt = Backend::take_pipeline_telemetry();
     let operation_records = crate::compute::take_pipeline_operation_telemetry();
     Backend::set_pipeline_telemetry_enabled(previous);

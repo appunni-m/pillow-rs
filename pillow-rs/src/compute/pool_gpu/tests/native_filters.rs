@@ -46,7 +46,7 @@ fn gpu_luma_box_blur_radius_one_matches_cpu_at_edges_and_fuses_axes() {
                 &prepared,
                 std::slice::from_ref(&operation),
                 &source,
-                Some("L"),
+                Some(crate::raster::Mode::ImageLuma8),
             ),
             "native GPU L BoxBlur failed",
         ) else {
@@ -98,7 +98,7 @@ fn gpu_rgb_box_blur_radius_one_matches_cpu_at_edges_and_fuses_axes() {
                 &prepared,
                 std::slice::from_ref(&operation),
                 &source,
-                Some("RGB"),
+                Some(crate::raster::Mode::ImageRgb8),
             ),
             "native GPU RGB BoxBlur failed",
         ) else {
@@ -193,7 +193,7 @@ fn gpu_packed_la_filter_5x5_preserves_channels_and_compact_transfers() {
         let prepared =
             prepare_execution(&op, Some(Backend::Gpu)).expect("GPU LA Filter5x5 routing");
         let Some(actual) = native_gpu_result_or_skip(
-            execute_prepared(&prepared, &op, &source, Some("LA")),
+            execute_prepared(&prepared, &op, &source, Some(crate::raster::Mode::ImageLumaA8)),
             "native GPU LA Filter5x5 failed",
         ) else {
             return;
@@ -239,7 +239,7 @@ fn gpu_packed_la_binomial_filter_3x3_preserves_channels_and_compact_transfers() 
         let prepared =
             prepare_execution(&op, Some(Backend::Gpu)).expect("GPU LA Filter3x3 routing");
         let Some(actual) = native_gpu_result_or_skip(
-            execute_prepared(&prepared, &op, &source, Some("LA")),
+            execute_prepared(&prepared, &op, &source, Some(crate::raster::Mode::ImageLumaA8)),
             "native GPU LA Filter3x3 failed",
         ) else {
             return;
@@ -277,7 +277,7 @@ fn gpu_packed_la_median_filter_preserves_odd_width_rows_and_alpha() {
     let prepared = prepare_execution(&op, Some(Backend::Gpu)).expect("GPU LA MedianFilter routing");
     let previous = Backend::set_pipeline_telemetry_enabled(true);
     let Some(actual) = native_gpu_result_or_skip(
-        execute_prepared(&prepared, &op, &source, Some("LA")),
+        execute_prepared(&prepared, &op, &source, Some(crate::raster::Mode::ImageLumaA8)),
         "native GPU LA MedianFilter failed",
     ) else {
         Backend::set_pipeline_telemetry_enabled(previous);
@@ -316,7 +316,7 @@ fn gpu_packed_la_rank_filter_preserves_rank_edges_and_compact_transfers() {
         let prepared =
             prepare_execution(&op, Some(Backend::Gpu)).expect("GPU LA RankFilter routing");
         let Some(actual) = native_gpu_result_or_skip(
-            execute_prepared(&prepared, &op, &source, Some("LA")),
+            execute_prepared(&prepared, &op, &source, Some(crate::raster::Mode::ImageLumaA8)),
             format_args!("native GPU LA RankFilter(rank={rank}) failed"),
         ) else {
             return;
@@ -357,7 +357,7 @@ fn gpu_packed_la_max_filter_preserves_edges_alpha_and_compact_transfers() {
         let prepared =
             prepare_execution(&op, Some(Backend::Gpu)).expect("GPU LA MaxFilter routing");
         let Some(actual) = native_gpu_result_or_skip(
-            execute_prepared(&prepared, &op, &source, Some("LA")),
+            execute_prepared(&prepared, &op, &source, Some(crate::raster::Mode::ImageLumaA8)),
             "native GPU LA MaxFilter failed",
         ) else {
             return;
@@ -395,7 +395,7 @@ fn gpu_packed_la_min_filter_preserves_edges_alpha_and_compact_transfers() {
         let prepared =
             prepare_execution(&op, Some(Backend::Gpu)).expect("GPU LA MinFilter routing");
         let Some(actual) = native_gpu_result_or_skip(
-            execute_prepared(&prepared, &op, &source, Some("LA")),
+            execute_prepared(&prepared, &op, &source, Some(crate::raster::Mode::ImageLumaA8)),
             "native GPU LA MinFilter failed",
         ) else {
             return;
@@ -432,7 +432,7 @@ fn gpu_packed_rgb_median_filter_preserves_edges_and_compact_transfers() {
         let prepared =
             prepare_execution(&op, Some(Backend::Gpu)).expect("GPU RGB MedianFilter routing");
         let Some(actual) = native_gpu_result_or_skip(
-            execute_prepared(&prepared, &op, &source, Some("RGB")),
+            execute_prepared(&prepared, &op, &source, Some(crate::raster::Mode::ImageRgb8)),
             "native GPU RGB MedianFilter failed",
         ) else {
             return;
@@ -473,7 +473,7 @@ fn gpu_packed_luma_rank_one_preserves_edges_and_compact_transfers() {
         let prepared =
             prepare_execution(&op, Some(Backend::Gpu)).expect("GPU L RankFilter routing");
         let Some(actual) = native_gpu_result_or_skip(
-            execute_prepared(&prepared, &op, &source, Some("L")),
+            execute_prepared(&prepared, &op, &source, Some(crate::raster::Mode::ImageLuma8)),
             "native GPU L RankFilter failed",
         ) else {
             return;
@@ -510,7 +510,7 @@ fn gpu_packed_luma_max_filter_preserves_edges_and_compact_transfers() {
             .expect("CPU L MaxFilter reference");
         let prepared = prepare_execution(&op, Some(Backend::Gpu)).expect("GPU L MaxFilter routing");
         let Some(actual) = native_gpu_result_or_skip(
-            execute_prepared(&prepared, &op, &source, Some("L")),
+            execute_prepared(&prepared, &op, &source, Some(crate::raster::Mode::ImageLuma8)),
             "native GPU L MaxFilter failed",
         ) else {
             return;
@@ -547,7 +547,7 @@ fn gpu_packed_luma_min_filter_preserves_edges_and_compact_transfers() {
             .expect("CPU L MinFilter reference");
         let prepared = prepare_execution(&op, Some(Backend::Gpu)).expect("GPU L MinFilter routing");
         let Some(actual) = native_gpu_result_or_skip(
-            execute_prepared(&prepared, &op, &source, Some("L")),
+            execute_prepared(&prepared, &op, &source, Some(crate::raster::Mode::ImageLuma8)),
             "native GPU L MinFilter failed",
         ) else {
             return;
@@ -584,7 +584,7 @@ fn gpu_packed_rgb_max_filter_preserves_edges_and_compact_transfers() {
         let prepared =
             prepare_execution(&op, Some(Backend::Gpu)).expect("GPU RGB MaxFilter routing");
         let Some(actual) = native_gpu_result_or_skip(
-            execute_prepared(&prepared, &op, &source, Some("RGB")),
+            execute_prepared(&prepared, &op, &source, Some(crate::raster::Mode::ImageRgb8)),
             "native GPU RGB MaxFilter failed",
         ) else {
             return;
@@ -621,7 +621,7 @@ fn gpu_packed_rgb_min_filter_preserves_edges_and_compact_transfers() {
         let prepared =
             prepare_execution(&op, Some(Backend::Gpu)).expect("GPU RGB MinFilter routing");
         let Some(actual) = native_gpu_result_or_skip(
-            execute_prepared(&prepared, &op, &source, Some("RGB")),
+            execute_prepared(&prepared, &op, &source, Some(crate::raster::Mode::ImageRgb8)),
             "native GPU RGB MinFilter failed",
         ) else {
             return;
@@ -656,7 +656,7 @@ fn gpu_packed_la_gaussian_blur_preserves_odd_width_rows_and_alpha() {
     let prepared = prepare_execution(&op, Some(Backend::Gpu)).expect("GPU LA GaussianBlur routing");
     let previous = Backend::set_pipeline_telemetry_enabled(true);
     let Some(actual) = native_gpu_result_or_skip(
-        execute_prepared(&prepared, &op, &source, Some("LA")),
+        execute_prepared(&prepared, &op, &source, Some(crate::raster::Mode::ImageLumaA8)),
         "native GPU LA GaussianBlur failed",
     ) else {
         Backend::set_pipeline_telemetry_enabled(previous);

@@ -116,7 +116,13 @@ fn assert_packed_rgb_transpose_fusion(source: &DynamicImage) {
             registry::execute_cpu(op, &image, mode).unwrap()
         });
         let prepared = prepare_execution(&ops, Some(Backend::Gpu)).unwrap();
-        let actual = execute_prepared(&prepared, &ops, source, mode).unwrap();
+        let actual = execute_prepared(
+            &prepared,
+            &ops,
+            source,
+            optional_pillow_mode(mode),
+        )
+        .unwrap();
         assert_eq!(actual.dimensions(), expected.dimensions());
         assert_eq!(actual.color(), expected.color());
         assert_eq!(actual.as_bytes(), expected.as_bytes());
@@ -143,7 +149,13 @@ fn assert_packed_rgb_flip_backend(source: &DynamicImage) {
     for mode in [None, Some("RGB")] {
         let expected = registry::execute_cpu(&PipelineOp::Flip, source, mode).unwrap();
         let prepared = prepare_execution(&flip_ops, Some(Backend::Gpu)).unwrap();
-        let actual = execute_prepared(&prepared, &flip_ops, source, mode).unwrap();
+        let actual = execute_prepared(
+            &prepared,
+            &flip_ops,
+            source,
+            optional_pillow_mode(mode),
+        )
+        .unwrap();
         assert_eq!(actual.dimensions(), expected.dimensions());
         assert_eq!(actual.color(), expected.color());
         assert_eq!(actual.as_bytes(), expected.as_bytes());

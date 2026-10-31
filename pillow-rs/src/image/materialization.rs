@@ -492,7 +492,7 @@ impl Image {
                 &prepared,
                 suffix_ops,
                 &prefix_image,
-                super::mode_boundary::pillow_mode_name_opt(*explicit_mode),
+                *explicit_mode,
                 inputs,
             );
         }
@@ -576,7 +576,6 @@ impl Image {
         prepared: &crate::compute::PreparedExecution,
         palette: &Option<Vec<u8>>,
         palette_alpha: &Option<Vec<u8>>,
-        explicit_mode_name: Option<&str>,
     ) -> Result<Option<Arc<DynamicImage>>, PilError> {
         if !source.has_palette_samples() {
             return Ok(None);
@@ -588,9 +587,9 @@ impl Image {
             let palette_mode = if *explicit_mode == Some(Mode::ImagePaletteAlpha8)
                 || source.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
             {
-                "PA"
+                Mode::ImagePaletteAlpha8
             } else {
-                "P"
+                Mode::ImagePalette8
             };
             let resolved_palette = palette.clone().or_else(|| source.extract_palette());
             let resolved_alpha = palette_alpha
@@ -612,9 +611,9 @@ impl Image {
         }
 
         let palette_mode = if source.known_mode_identity() == Some(Mode::ImagePaletteAlpha8) {
-            "PA"
+            Mode::ImagePaletteAlpha8
         } else {
-            "P"
+            Mode::ImagePalette8
         };
 
         // PA always expands through a palette before color-dependent
@@ -624,7 +623,11 @@ impl Image {
         // incorrectly expose the index as grayscale (for example, index
         // 7 would become RGB(7, 7, 7)).
         let palette = palette.clone().or_else(|| source.extract_palette());
-        if palette_mode == "PA" {
+        let pillow_output_mode = explicit_mode
+            .as_ref()
+            .copied()
+            .filter(|mode| mode.pillow_name().is_some());
+        if palette_mode == Mode::ImagePaletteAlpha8 {
             let expanded = expand_palette_alpha(
                 &img.to_luma_alpha8(),
                 palette.as_deref().unwrap_or_default(),
@@ -633,7 +636,7 @@ impl Image {
                 prepared,
                 ops,
                 &expanded,
-                explicit_mode_name,
+                pillow_output_mode,
             )?;
             return Ok(Some(Arc::new(result)));
         }
@@ -647,7 +650,7 @@ impl Image {
                 prepared,
                 ops,
                 &expanded,
-                explicit_mode_name,
+                pillow_output_mode,
             )?;
             return Ok(Some(Arc::new(result)));
         }
@@ -659,14 +662,13 @@ impl Image {
         img: &DynamicImage,
         ops: &[PipelineOp],
         explicit_mode: &Option<Mode>,
-        explicit_mode_name: Option<&str>,
-    ) -> Result<Option<String>, PilError> {
+    ) -> Result<Option<Mode>, PilError> {
         // RemapPalette needs the source mode to distinguish L samples from P
         // indices; its pipeline result may stay P-tagged.
         let remap_source_mode = if ops.len() == 1
             && matches!(ops.first(), Some(PipelineOp::RemapPalette { .. }))
         {
-            Some(source.mode()?)
+            Some(source.mode_identity()?)
         } else {
             None
         };
@@ -675,7 +677,7 @@ impl Image {
         let convert_source_mode = if ops.len() == 1
             && matches!(ops.first(), Some(PipelineOp::Convert { .. }))
         {
-            Some(source.mode()?)
+            Some(source.mode_identity()?)
         } else {
             None
         };
@@ -686,7 +688,7 @@ impl Image {
             && explicit_mode.is_none()
             && matches!(img, DynamicImage::ImageI16(_))
         {
-            Some(source.mode()?)
+            Some(source.mode_identity()?)
         } else {
             None
         };
@@ -696,16 +698,16 @@ impl Image {
             && convert_source_mode.is_none()
             && source_luma16_mode.is_none()
         {
-            Some(source.mode()?)
+            Some(source.mode_identity()?)
         } else {
             None
         };
-        let mode = remap_source_mode
+        let logical_mode = remap_source_mode
             .or(convert_source_mode)
             .or(source_luma16_mode)
             .or(initial_source_mode)
-            .or_else(|| explicit_mode_name.map(str::to_owned));
-        Ok(mode)
+            .or(*explicit_mode);
+        Ok(logical_mode)
     }
 
     fn evaluate_pipeline_with_image(
@@ -728,9 +730,6 @@ impl Image {
         )? {
             return Ok(result);
         }
-        // TODO(pillow-rs#3ptb): keep prepared execution typed through the pool;
-        // this projection is needed only by the legacy string-mode executor.
-        let explicit_mode_name = super::mode_boundary::pillow_mode_name_opt(*explicit_mode);
         if let Some(result) = Self::evaluate_palette_pipeline(
             source,
             img,
@@ -739,18 +738,16 @@ impl Image {
             prepared,
             palette,
             palette_alpha,
-            explicit_mode_name,
         )? {
             return Ok(result);
         }
-        // RGBX carries padding rather than alpha; keep its source spelling at
-        // the compatibility executor boundary instead of normalizing pixels.
+        // RGBX carries padding rather than alpha; preserve its exact source
+        // identity instead of normalizing pixels to RGBA.
         let execution_mode = Self::compatibility_execution_mode(
             source,
             img,
             ops,
             explicit_mode,
-            explicit_mode_name,
         )?;
         let resolved_palette = if palette.is_none() {
             source.extract_palette()
@@ -773,7 +770,7 @@ impl Image {
             prepared,
             ops,
             shared_img,
-            execution_mode.as_deref(),
+            execution_mode,
             inputs,
         )
     }

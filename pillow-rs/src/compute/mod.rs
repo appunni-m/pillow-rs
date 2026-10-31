@@ -23,7 +23,7 @@
 
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, Mode};
 
 pub(crate) mod helpers;
 #[path = "backend_state.rs"]
@@ -277,11 +277,13 @@ pub(crate) trait BackendImpl: Send + Sync {
     /// Returns whether this backend can execute one pipeline operation.
     fn supports(&self, op: &PipelineOp) -> Result<bool, PilError>;
     /// Executes a sequence of operations against one image buffer.
+    /// `logical_mode` retains typed wrapper context for operations that need
+    /// the source interpretation; CPU strategy selection reads `img.mode()`.
     fn execute_batch(
         &self,
         ops: &[PipelineOp],
         img: &DynamicImage,
-        mode: Option<&str>,
+        logical_mode: Option<Mode>,
     ) -> Result<DynamicImage, PilError>;
     /// Executes a batch with the context selected at the routing boundary.
     ///
@@ -292,10 +294,10 @@ pub(crate) trait BackendImpl: Send + Sync {
         &self,
         ops: &[PipelineOp],
         img: &DynamicImage,
-        mode: Option<&str>,
+        logical_mode: Option<Mode>,
         _context: &ExecutionContext,
     ) -> Result<DynamicImage, PilError> {
-        self.execute_batch(ops, img, mode)
+        self.execute_batch(ops, img, logical_mode)
     }
     /// Executes a context-routed batch with wrapper-owned palette inputs.
     ///
@@ -306,12 +308,12 @@ pub(crate) trait BackendImpl: Send + Sync {
         &self,
         ops: &[PipelineOp],
         img: &DynamicImage,
-        mode: Option<&str>,
+        logical_mode: Option<Mode>,
         context: &ExecutionContext,
         palette: registry::support::PaletteInput<'_>,
     ) -> Result<DynamicImage, PilError> {
         let _ = palette;
-        self.execute_batch_with_context(ops, img, mode, context)
+        self.execute_batch_with_context(ops, img, logical_mode, context)
     }
     /// Executes a sequence without allowing the backend to recover through a
     /// different implementation.  Explicit backend locks use this boundary
@@ -321,9 +323,9 @@ pub(crate) trait BackendImpl: Send + Sync {
         &self,
         ops: &[PipelineOp],
         img: &DynamicImage,
-        mode: Option<&str>,
+        logical_mode: Option<Mode>,
     ) -> Result<DynamicImage, PilError> {
-        self.execute_batch(ops, img, mode)
+        self.execute_batch(ops, img, logical_mode)
     }
     /// Returns a backend-native dispatch count when it can be reported without
     /// estimating or instrumenting the backend. Most backends currently do not
@@ -483,7 +485,12 @@ mod tests {
         let prepared = prepare_execution(&ops, Some(Backend::Simd))
             .expect("SIMD compatibility request should prepare as CPU architecture routing");
         let previous = Backend::set_pipeline_telemetry_enabled(true);
-        let result = execute_prepared(&prepared, &ops, &source, Some("RGB"))
+        let result = execute_prepared(
+            &prepared,
+            &ops,
+            &source,
+            Some(crate::raster::Mode::ImageRgb8),
+        )
             .expect("CPU architecture strategies should execute the pipeline");
         let receipt = Backend::take_pipeline_telemetry()
             .expect("CPU architecture pipeline receipt");

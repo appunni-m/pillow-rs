@@ -505,7 +505,7 @@ fn execute_native_rgb_readback_case(
         registry::execute_cpu(op, &source, Some(mode)).expect("CPU native readback reference");
     let ops = std::slice::from_ref(op);
     let prepared = prepare_execution(ops, Some(Backend::Gpu)).expect("GPU routing");
-    match execute_prepared(&prepared, ops, &source, Some(mode)) {
+    match execute_prepared(&prepared, ops, &source, Some(pillow_mode(mode))) {
         Ok(actual) => Some((actual, expected)),
         Err(error)
             if error.to_string().contains("GPU adapter not available")

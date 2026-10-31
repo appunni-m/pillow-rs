@@ -168,10 +168,10 @@ maintained CPU code does not recover it from strings or storage layout.
 2. Respect existing explicit/backend-auto-routing scenarios. Resolve architecture
    from guaranteed compilation features or the one-time portable capability
    policy described in the guide. Do not repeatedly detect it in operations.
-3. Thread the context through the backend interface, registry function types,
-   eager execution, lazy materialization, pipeline batches, admission, fusion,
-   nested operations, and fallback calls. Audit every call edge, not just the
-   top-level pool method.
+3. Thread the context and exact `Mode` through the backend interface, registry
+   function types, eager execution, lazy materialization, pipeline batches,
+   admission, fusion, nested operations, and fallback calls. Audit every call
+   edge, not just the top-level pool method.
 4. Eliminate fresh default contexts inside helpers and context-free escape
    routes. Geometry helpers calling resize, thumbnail calling reduce/resize,
    filters calling shared kernels, and multi-image operations keep the supplied

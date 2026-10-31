@@ -241,7 +241,13 @@ fn gpu_rgba_transpose_public_fusion_and_inferred_mode() {
     ];
     for mode in [None, Some("RGBA")] {
         let prepared = prepare_execution(&ops, Some(Backend::Gpu)).unwrap();
-        let actual = execute_prepared(&prepared, &ops, &source, mode).unwrap();
+        let actual = execute_prepared(
+            &prepared,
+            &ops,
+            &source,
+            optional_pillow_mode(mode),
+        )
+        .unwrap();
         assert_eq!(actual.dimensions(), expected.dimensions());
         assert_eq!(actual.as_bytes(), expected.as_raw());
         let receipt = Backend::take_pipeline_telemetry().unwrap();
@@ -422,7 +428,13 @@ fn gpu_packed_rgb_hsv_transpose_tiled_public_pixels_and_receipts() {
             let ops = [PipelineOp::Transpose { method }];
             for mode in [None, Some("RGB"), Some("HSV")] {
                 let prepared = prepare_execution(&ops, Some(Backend::Gpu)).unwrap();
-                let actual = execute_prepared(&prepared, &ops, &source, mode).unwrap();
+                let actual = execute_prepared(
+                    &prepared,
+                    &ops,
+                    &source,
+                    optional_pillow_mode(mode),
+                )
+                .unwrap();
                 assert_eq!(actual.dimensions(), (height, width));
                 assert_eq!(actual.color(), crate::raster::ColorType::Rgb8);
                 assert_eq!(actual.as_bytes(), expected);

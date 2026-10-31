@@ -280,7 +280,12 @@ fn gpu_native_hsv_pad_preserves_triplets_and_uses_compact_transfers() {
         .expect("CPU HSV Pad reference");
     let prepared = prepare_execution(&op, Some(Backend::Gpu)).expect("GPU HSV Pad routing");
     let previous = Backend::set_pipeline_telemetry_enabled(true);
-    let actual = match execute_prepared(&prepared, &op, &source, Some("HSV")) {
+    let actual = match execute_prepared(
+        &prepared,
+        &op,
+        &source,
+        Some(crate::raster::Mode::ImageHsv8),
+    ) {
         Ok(actual) => actual,
         Err(error)
             if error.to_string().contains("GPU adapter not available")
@@ -331,7 +336,12 @@ fn gpu_packed_la_pad_preserves_odd_rows_fill_and_alpha() {
         .expect("CPU LA Pad reference");
     let prepared = prepare_execution(&op, Some(Backend::Gpu)).expect("GPU LA Pad routing");
     let previous = Backend::set_pipeline_telemetry_enabled(true);
-    let actual = match execute_prepared(&prepared, &op, &source, Some("LA")) {
+    let actual = match execute_prepared(
+        &prepared,
+        &op,
+        &source,
+        Some(crate::raster::Mode::ImageLumaA8),
+    ) {
         Ok(actual) => actual,
         Err(error)
             if error.to_string().contains("GPU adapter not available")

@@ -310,7 +310,13 @@ fn assert_native_flip_cases(cases: Vec<NativeFlipCase>) {
     let prepared = prepare_execution(&ops, Some(Backend::Gpu)).unwrap();
     for (mode, source, expected_transfer_bytes) in cases {
         let expected = registry::execute_cpu(&op, &source, Some(mode)).unwrap();
-        let actual = execute_prepared(&prepared, &ops, &source, Some(mode)).unwrap();
+        let actual = execute_prepared(
+            &prepared,
+            &ops,
+            &source,
+            Some(pillow_mode(mode)),
+        )
+        .unwrap();
         assert_eq!(actual.dimensions(), expected.dimensions(), "mode {mode}");
         assert_eq!(actual.color(), expected.color(), "mode {mode}");
         assert_eq!(actual.as_bytes(), expected.as_bytes(), "mode {mode}");

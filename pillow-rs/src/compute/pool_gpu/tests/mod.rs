@@ -11,6 +11,14 @@ use crate::{Backend, Image, ResampleInput};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+fn pillow_mode(name: &str) -> crate::raster::Mode {
+    crate::raster::Mode::from_pillow_name(name).expect("known test mode")
+}
+
+fn optional_pillow_mode(name: Option<&str>) -> Option<crate::raster::Mode> {
+    name.map(pillow_mode)
+}
+
 fn native_gpu_result_or_skip<T>(
     result: Result<T, impl std::fmt::Display>,
     context: impl std::fmt::Display,

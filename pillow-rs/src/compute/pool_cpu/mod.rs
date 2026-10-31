@@ -7,7 +7,7 @@
 use crate::compute::{Backend, BackendImpl, ExecutionContext, registry};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, Mode};
 
 mod batch_execution;
 pub(crate) mod helpers;
@@ -33,7 +33,7 @@ impl BackendImpl for CpuPool {
         &self,
         ops: &[PipelineOp],
         image: &DynamicImage,
-        _mode: Option<&str>,
+        _logical_mode: Option<Mode>,
     ) -> Result<DynamicImage, PilError> {
         let context = ExecutionContext::for_routed_backend(Backend::Cpu);
         batch_execution::execute_batch(ops, image, &context, Default::default())
@@ -43,7 +43,7 @@ impl BackendImpl for CpuPool {
         &self,
         ops: &[PipelineOp],
         image: &DynamicImage,
-        _mode: Option<&str>,
+        _logical_mode: Option<Mode>,
         context: &ExecutionContext,
     ) -> Result<DynamicImage, PilError> {
         batch_execution::execute_batch(ops, image, context, Default::default())
@@ -53,7 +53,7 @@ impl BackendImpl for CpuPool {
         &self,
         ops: &[PipelineOp],
         image: &DynamicImage,
-        _mode: Option<&str>,
+        _logical_mode: Option<Mode>,
         context: &ExecutionContext,
         palette: registry::support::PaletteInput<'_>,
     ) -> Result<DynamicImage, PilError> {
