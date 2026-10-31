@@ -26,7 +26,7 @@ static ARCHITECTURES: [ImplementationSupport; 24] = [
         Architecture::Sse2,
         SSE2_AVAILABLE,
         &[Architecture::Sse2],
-        StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageRgb8),
+        StrategyGuard::ConvertTargetMode(Mode::ImageRgb8),
     ),
     ImplementationSupport::cpu(
         OperationId::Convert,
@@ -34,7 +34,7 @@ static ARCHITECTURES: [ImplementationSupport; 24] = [
         Architecture::Neon,
         cfg!(target_arch = "aarch64"),
         &[Architecture::Neon],
-        StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageRgb8),
+        StrategyGuard::ConvertTargetMode(Mode::ImageRgb8),
     ),
     ImplementationSupport::cpu(
         OperationId::Convert,
@@ -42,7 +42,7 @@ static ARCHITECTURES: [ImplementationSupport; 24] = [
         Architecture::Sse2,
         SSE2_AVAILABLE,
         &[Architecture::Sse2],
-        StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageRgba8),
+        StrategyGuard::ConvertTargetMode(Mode::ImageRgba8),
     ),
     ImplementationSupport::cpu(
         OperationId::Convert,
@@ -50,7 +50,7 @@ static ARCHITECTURES: [ImplementationSupport; 24] = [
         Architecture::Neon,
         cfg!(target_arch = "aarch64"),
         &[Architecture::Neon],
-        StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageRgba8),
+        StrategyGuard::ConvertTargetMode(Mode::ImageRgba8),
     ),
     ImplementationSupport::cpu(
         OperationId::Convert,
@@ -58,7 +58,7 @@ static ARCHITECTURES: [ImplementationSupport; 24] = [
         Architecture::Sse2,
         SSE2_AVAILABLE,
         &[Architecture::Sse2],
-        StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageCmyk8),
+        StrategyGuard::ConvertTargetMode(Mode::ImageCmyk8),
     ),
     ImplementationSupport::cpu(
         OperationId::Convert,
@@ -66,7 +66,7 @@ static ARCHITECTURES: [ImplementationSupport; 24] = [
         Architecture::Neon,
         cfg!(target_arch = "aarch64"),
         &[Architecture::Neon],
-        StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageCmyk8),
+        StrategyGuard::ConvertTargetMode(Mode::ImageCmyk8),
     ),
     ImplementationSupport::cpu(
         OperationId::Convert,
@@ -74,7 +74,7 @@ static ARCHITECTURES: [ImplementationSupport; 24] = [
         Architecture::Sse2,
         SSE2_AVAILABLE,
         &[Architecture::Sse2],
-        StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageYCbCr8),
+        StrategyGuard::ConvertTargetMode(Mode::ImageYCbCr8),
     ),
     ImplementationSupport::cpu(
         OperationId::Convert,
@@ -82,7 +82,7 @@ static ARCHITECTURES: [ImplementationSupport; 24] = [
         Architecture::Neon,
         cfg!(target_arch = "aarch64"),
         &[Architecture::Neon],
-        StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageYCbCr8),
+        StrategyGuard::ConvertTargetMode(Mode::ImageYCbCr8),
     ),
     ImplementationSupport::cpu(
         OperationId::Convert,
@@ -90,7 +90,7 @@ static ARCHITECTURES: [ImplementationSupport; 24] = [
         Architecture::Sse2,
         SSE2_AVAILABLE,
         &[Architecture::Sse2],
-        StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageHsv8),
+        StrategyGuard::ConvertTargetMode(Mode::ImageHsv8),
     ),
     ImplementationSupport::cpu(
         OperationId::Convert,
@@ -98,7 +98,7 @@ static ARCHITECTURES: [ImplementationSupport; 24] = [
         Architecture::Neon,
         cfg!(target_arch = "aarch64"),
         &[Architecture::Neon],
-        StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageHsv8),
+        StrategyGuard::ConvertTargetMode(Mode::ImageHsv8),
     ),
     ImplementationSupport::cpu(
         OperationId::Convert,
@@ -106,7 +106,7 @@ static ARCHITECTURES: [ImplementationSupport; 24] = [
         Architecture::Sse2,
         SSE2_AVAILABLE,
         &[Architecture::Sse2],
-        StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageI32),
+        StrategyGuard::ConvertTargetMode(Mode::ImageI32),
     ),
     ImplementationSupport::cpu(
         OperationId::Convert,
@@ -114,7 +114,7 @@ static ARCHITECTURES: [ImplementationSupport; 24] = [
         Architecture::Neon,
         cfg!(target_arch = "aarch64"),
         &[Architecture::Neon],
-        StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageI32),
+        StrategyGuard::ConvertTargetMode(Mode::ImageI32),
     ),
     ImplementationSupport::cpu(
         OperationId::Convert,
@@ -122,7 +122,7 @@ static ARCHITECTURES: [ImplementationSupport; 24] = [
         Architecture::Sse2,
         SSE2_AVAILABLE,
         &[Architecture::Sse2],
-        StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageF32),
+        StrategyGuard::ConvertTargetMode(Mode::ImageF32),
     ),
     ImplementationSupport::cpu(
         OperationId::Convert,
@@ -130,7 +130,7 @@ static ARCHITECTURES: [ImplementationSupport; 24] = [
         Architecture::Neon,
         cfg!(target_arch = "aarch64"),
         &[Architecture::Neon],
-        StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageF32),
+        StrategyGuard::ConvertTargetMode(Mode::ImageF32),
     ),
     ImplementationSupport::cpu(
         OperationId::Convert,
@@ -138,7 +138,7 @@ static ARCHITECTURES: [ImplementationSupport; 24] = [
         Architecture::Sse2,
         SSE2_AVAILABLE,
         &[Architecture::Sse2],
-        StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageLumaA8),
+        StrategyGuard::ConvertTargetMode(Mode::ImageLumaA8),
     ),
     ImplementationSupport::cpu(
         OperationId::Convert,
@@ -146,7 +146,7 @@ static ARCHITECTURES: [ImplementationSupport; 24] = [
         Architecture::Neon,
         cfg!(target_arch = "aarch64"),
         &[Architecture::Neon],
-        StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageLumaA8),
+        StrategyGuard::ConvertTargetMode(Mode::ImageLumaA8),
     ),
     ImplementationSupport::cpu(
         OperationId::Convert,

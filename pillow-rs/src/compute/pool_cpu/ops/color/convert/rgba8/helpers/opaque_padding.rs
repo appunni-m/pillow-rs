@@ -48,9 +48,13 @@ pub(crate) fn execute(source: &RgbaImage) -> Result<RgbaImage, PilError> {
         vector_blocks = vector_blocks.saturating_add(1);
     }
 
-    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-    crate::compute::record_pipeline_operation_scalar_tail(0);
-    crate::compute::record_pipeline_operation_path("vector");
+    if pixels == 0 {
+        crate::compute::record_pipeline_operation_path("scalar-control");
+    } else {
+        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+        crate::compute::record_pipeline_operation_scalar_tail(0);
+        crate::compute::record_pipeline_operation_path("vector");
+    }
     RgbaImage::from_raw(source.width(), source.height(), output)
         .ok_or_else(|| PilError::InternalError("RGBX Convert output shape mismatch".into()))
 }

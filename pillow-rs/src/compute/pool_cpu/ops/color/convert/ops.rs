@@ -246,10 +246,10 @@ fn classify_mode(mode: Mode) -> ModeSupport {
 ///
 /// Convert-to-LAB is a wrapper composition: each source mode selects its
 /// declared RGB normalization route, then the RGB8 ConvertLab operation runs.
-// TODO(pillow-rs#3ptb): finish the archived SIMD Convert source/target and
-// edge-guard comparison against the inventory. Alpha, CMYK→RGB, I;16,
-// RGB→RGB/RGBA, and RGB8→LAB arithmetic and RGB→RGBA allocation errors are
-// reviewed; reconcile empty-image receipts and review uncovered routes.
+// TODO(pillow-rs#3ptb): complete the one-to-one archived/maintained Convert
+// source-target-architecture comparison. Generic empty-native receipts for
+// RGB8, L, LA, RGBA, RGBX, RGBa, and I;16 are reconciled; audit alpha-only
+// mode outputs, same-mode guards, build availability, and uncovered routes.
 const CONVERT_CHILDREN: &[OperationId] = &[OperationId::ConvertLab];
 
 pub(crate) static SUPPORT: OperationSupport = OperationSupport::composed(

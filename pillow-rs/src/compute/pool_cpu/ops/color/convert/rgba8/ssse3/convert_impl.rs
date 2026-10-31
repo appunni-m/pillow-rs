@@ -40,9 +40,13 @@ pub(crate) unsafe fn execute(source: &RgbaImage) -> Result<RgbImage, PilError> {
         output.extend_from_slice(&source.as_raw()[offset..offset + 3]);
     }
 
-    crate::compute::record_pipeline_operation_vector_blocks((vector_pixels / 16) as u64);
-    crate::compute::record_pipeline_operation_scalar_tail((pixels - vector_pixels) as u64);
-    crate::compute::record_pipeline_operation_path("ssse3-rgba-to-rgb");
+    if pixels == 0 {
+        crate::compute::record_pipeline_operation_path("scalar-control");
+    } else {
+        crate::compute::record_pipeline_operation_vector_blocks((vector_pixels / 16) as u64);
+        crate::compute::record_pipeline_operation_scalar_tail((pixels - vector_pixels) as u64);
+        crate::compute::record_pipeline_operation_path("ssse3-rgba-to-rgb");
+    }
     RgbImage::from_raw(source.width(), source.height(), output)
         .ok_or_else(|| PilError::InternalError("RGB Convert output shape mismatch".into()))
 }

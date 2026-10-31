@@ -20,14 +20,14 @@ const SSE2_AVAILABLE: bool = cfg!(any(
 ));
 
 macro_rules! architecture_targets {
-    ($architecture:ident, $available:expr, $requirements:expr; $($target:ident),+ $(,)?) => {
+    ($guard:ident, $architecture:ident, $available:expr, $requirements:expr; $($target:ident),+ $(,)?) => {
         $(ImplementationSupport::cpu(
             OperationId::Convert,
             Mode::ImageRgbPremultiplied8,
             Architecture::$architecture,
             $available,
             $requirements,
-            StrategyGuard::ConvertTargetModeNonEmpty(Mode::$target),
+            StrategyGuard::$guard(Mode::$target),
         ),)+
     };
 }
@@ -90,14 +90,11 @@ static ARCHITECTURES: [ImplementationSupport; 25] = [
         StrategyGuard::ConvertTargetMode(Mode::ImageLuma8),
     ),
     architecture_targets!(
+        ConvertTargetMode,
         Sse2,
         SSE2_AVAILABLE,
         &[Architecture::Sse2];
         ImageLumaA8,
-        ImageLaPremultiplied8,
-        ImageRgb8,
-        ImageRgba8,
-        ImageRgbx8,
         ImageCmyk8,
         ImageYCbCr8,
         ImageHsv8,
@@ -105,19 +102,36 @@ static ARCHITECTURES: [ImplementationSupport; 25] = [
         ImageF32,
     ),
     architecture_targets!(
+        ConvertTargetMode,
         Neon,
         cfg!(all(target_arch = "aarch64", target_feature = "neon")),
         &[Architecture::Neon];
         ImageLumaA8,
-        ImageLaPremultiplied8,
-        ImageRgb8,
-        ImageRgba8,
-        ImageRgbx8,
         ImageCmyk8,
         ImageYCbCr8,
         ImageHsv8,
         ImageI32,
         ImageF32,
+    ),
+    architecture_targets!(
+        ConvertTargetModeNonEmpty,
+        Sse2,
+        SSE2_AVAILABLE,
+        &[Architecture::Sse2];
+        ImageLaPremultiplied8,
+        ImageRgb8,
+        ImageRgba8,
+        ImageRgbx8,
+    ),
+    architecture_targets!(
+        ConvertTargetModeNonEmpty,
+        Neon,
+        cfg!(all(target_arch = "aarch64", target_feature = "neon")),
+        &[Architecture::Neon];
+        ImageLaPremultiplied8,
+        ImageRgb8,
+        ImageRgba8,
+        ImageRgbx8,
     ),
 ];
 

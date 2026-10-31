@@ -47,9 +47,7 @@ pub(crate) fn to_rgb(source: &GrayImage) -> Result<RgbImage, PilError> {
     }
     let mut output = blocks.into_flattened().into_flattened();
     output.truncate(output_bytes);
-    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-    crate::compute::record_pipeline_operation_scalar_tail(0);
-    crate::compute::record_pipeline_operation_path("vector");
+    record_expansion_path(vector_blocks);
     RgbImage::from_raw(source.width(), source.height(), output)
         .ok_or_else(|| PilError::InternalError("RGB Convert output shape mismatch".into()))
 }
@@ -79,9 +77,7 @@ pub(crate) fn to_rgba(source: &GrayImage) -> Result<RgbaImage, PilError> {
     }
     let mut output = blocks.into_flattened().into_flattened();
     output.truncate(output_bytes);
-    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-    crate::compute::record_pipeline_operation_scalar_tail(0);
-    crate::compute::record_pipeline_operation_path("vector");
+    record_expansion_path(vector_blocks);
     RgbaImage::from_raw(source.width(), source.height(), output)
         .ok_or_else(|| PilError::InternalError("RGBA Convert output shape mismatch".into()))
 }
@@ -96,4 +92,14 @@ fn checked_pixels(source: &GrayImage) -> Result<usize, PilError> {
         ));
     }
     Ok(pixels)
+}
+
+fn record_expansion_path(vector_blocks: u64) {
+    if vector_blocks == 0 {
+        crate::compute::record_pipeline_operation_path("scalar-control");
+    } else {
+        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+        crate::compute::record_pipeline_operation_scalar_tail(0);
+        crate::compute::record_pipeline_operation_path("vector");
+    }
 }

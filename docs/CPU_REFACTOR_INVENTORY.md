@@ -1,10 +1,11 @@
 # CPU refactor source and evidence inventory
 
-Status: baseline inventory captured; the 98 CPU and 182 SIMD files are preserved below pool_cpu/legacy; maintained implementation and source review remain in progress. The separate SIMD executor and adapter registry were removed from the active module graph on 2026-10-31; `Backend::Simd` is now a CPU-plus-Architecture compatibility request. RGB8 Wasm SIMD Convert strategies are being restored from archived portable-vector routes, and Default RGB→LA/I;16 staging now preserves the archived L scratch allocation; current source changes are unverified.
+Status: baseline inventory captured; the 98 CPU and 182 SIMD files are preserved below pool_cpu/legacy; maintained implementation and source review remain in progress. The separate SIMD executor and adapter registry were removed from the active module graph on 2026-10-31; `Backend::Simd` is now a CPU-plus-Architecture compatibility request. RGB8 Wasm SIMD Convert strategies are restored from archived portable-vector routes, Default RGB→LA/I;16 staging now preserves the archived L scratch allocation, and reviewed RGB8/L/LA/RGBA/RGBX/RGBa generic empty native routes now retain their archived scalar-control receipts; current source changes are unverified.
 Baseline commit: 3f9dfd4036caa061eabcf2255c9f34a745df9c7e
 Working checkout: `/Users/lazytrot/work/pillow-rs`, branch `develop` at
-`dcdf63209`; the prior inventory checkpoint is committed and the RGB8 Wasm
-strategy restoration is currently uncommitted. The baseline archive was rechecked on
+`eac7c1ec3`; the prior inventory checkpoint and RGB8 Wasm strategy restoration
+are committed; additional empty-route reconciliation is currently uncommitted.
+The baseline archive was rechecked on
 2026-10-31: all 98 CPU files and 182 SIMD files from
 `3f9dfd4036caa061eabcf2255c9f34a745df9c7e` match their preserved contents under
 `pool_cpu/legacy/` and `pool_cpu/legacy/pool_simd/`; maintained Rust source has
@@ -25,9 +26,8 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   though both archived CPU and SIMD paths preserved the full sample. The
   redundant clip strategy is removed and the `I;16N` architecture wrappers now
   use the same native vector helper. Empty One/L→I;16 remains a zero-block
-  vector result; empty I;16→byte/scalar targets uses Default after the
-  nonempty architecture guard, versus the archived scalar-control route. This
-  selection difference still needs review. No validation has run.
+  vector result; empty I;16→byte/scalar targets now select their native route
+  and record the archived scalar-control receipt. No validation has run.
 - The archived SIMD Convert alpha slice has now been compared against mode
   contracts, architecture guards, dispatch, and kernel bodies. `LA→La` and
   `LA→RGBX` map to `luma_a8`; `La→LA` maps to `la_premultiplied8`; `RGBA→RGBa`
@@ -36,13 +36,15 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   rounding; unpremultiply retains the same exact reciprocal correction, clamps,
   zero-alpha behavior, and alpha bytes. `RGBa→La` still emits opaque alpha, and
   `LA→RGBX` preserves the source alpha in its fourth byte. Output variants are
-  exact. One empty-input selection discrepancy remains under source review:
-  the archived explicit SIMD route errors when these alpha transforms execute
-  zero vector blocks (except `LA→RGBX`, which returns an empty output), while
-  the new CPU architecture contract routes most empty transforms to Default;
-  `LA→La` still declares its architecture route for empty input. Do not treat
-  this selection/error distinction as resolved by matching nonempty kernels.
-  This source-only comparison has not been validated.
+  exact. The archived alpha adapter errors when an alpha-transform route emits
+  zero vector blocks, except `LA→RGBX`, which returns an empty output. The
+  folded CPU contract uses each mode's Default strategy for zero-work alpha
+  transforms through nonempty guards; `LA→La` now follows that same fallback.
+  `LA→RGBX` keeps its explicit empty result because the archived path supports
+  it. This maps adapter-level SIMD unsupported errors to the required same-mode
+  CPU fallback for zero-work alpha transforms; output and error parity still
+  need the planned CPU parity run. This source-only comparison has not been
+  validated.
 - Source-only review of archived CMYK→RGB is complete. The former tagged
   `ImageRgba8` plus `CMYK` string guard is now the exact `ImageCmyk8` source and
   `ImageRgb8` target contract; matrix requests remain on the separate
@@ -58,24 +60,34 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   16-pixel shuffle tables, partial-block padding, three-byte RGB packing, and
   RGBA alpha fill of 255 are retained in the `luma8` helper reached through the
   SSE2 and NEON mode owners. The old SIMD adapter returned a scalar-control
-  empty image before invoking these kernels; the new nonempty guards select the
-  Luma8 Default strategy for empty inputs. Output shape and bytes remain the
-  same; that selection change is recorded for the broader guard review. This
-  route has not been validated.
+  empty image before invoking these kernels; the exact-target guards now select
+  the architecture owner, and its zero-block path records scalar-control.
+  Output shape and bytes remain the same. This route has not been validated.
 - The L→LA layout route is also reconciled: both the archived generic block
   helper and maintained `luma8` kernel process eight L samples per output
   vector and emit `[L, 255]` per pixel using the opaque sentinel lane. Empty
-  input uses the archived scalar-control output versus the maintained Default
-  fallback, with the same exact LA result. This route has not been validated.
+  input uses the archived scalar-control output and the maintained zero-block
+  helper now records scalar-control under the exact-target guard, with the same
+  exact LA result. This route has not been validated.
+- The generic zero-pixel Convert interception is reconciled for the reviewed
+  RGB8, L, LA, RGBA, RGBX, RGBa generic color/typed targets, and native I;16
+  source routes. The archived adapter
+  ran alpha-specific conversions first, then recorded scalar-control for an
+  accepted empty native-layout conversion. Exact-target guards now admit the
+  reviewed architecture owners; their zero-pixel helpers record scalar-control
+  without vector-block or scalar-tail counts. RGBA→RGBa/RGBX and other
+  alpha transforms that require vector groups retain nonempty guards and
+  select Default for zero-work input; `LA→RGBX` keeps its explicit empty route
+  because the archived alpha adapter returns that output. Source is unvalidated.
 - RGB→RGBA sample conversion is source-reviewed. The archived layout kernel
   and maintained `rgb8` architecture owners both emit each native RGB triplet
   followed by opaque alpha and return exact `ImageRgba8` output. The portable
   four-pixel shuffle and NEON sixteen-pixel structure load/store retain their
   vector widths and scalar tails; nonempty images smaller than a full block
   are entirely scalar tails. Empty images were intercepted by the archived
-  scalar-control route; the maintained `ConvertTargetModeNonEmpty` declaration
-  falls back to Default, producing the same empty output with a different
-  execution receipt. The shared portable helper and NEON route now use a
+  scalar-control route; the maintained exact-target guard now selects the
+  architecture owner, whose zero-pixel branch records the same scalar-control
+  receipt. The shared portable helper and NEON route now use a
   fallible exact reservation and map invalid extents, storage shape, or reserve
   failure to the archived `SIMD Convert is unsupported for the validated
   image layout/parameters` `NotImplementedError`. The archived batch executor
@@ -103,7 +115,7 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   accepted exact native RGB bytes and handled empty images as `scalar-control`;
   the maintained support declaration admits the exact I/F targets for the
   RGB8 owner, and its zero-block path records the same empty control receipt.
-  SSE2/NEON selections use these eight-lane kernels, with the Default strategy
+  SSE2/NEON/Wasm selections use these eight-lane kernels, with the Default strategy
   retained for fallback. No arithmetic or tail difference was found in this
   slice; parity and benchmark validation remain pending.
 - RGB→LA is source-reviewed across the archived CPU, archived SIMD, and
@@ -156,13 +168,13 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   sixteen-pixel structure kernel. Other family/architecture rows still need
   the same build-availability audit. No build or validation has run.
 - RGB→RGB identity is source-reviewed. The archived generic layout route and
-  maintained SSE2/NEON mode owners both copy native triplets through five-pixel
+  maintained SSE2/NEON/Wasm mode owners both copy native triplets through five-pixel
   `u8x16` blocks, including a padded final block, and preserve the exact
   `ImageRgb8` identity. The archive returned an empty image through its
-  scalar-control path; the maintained nonempty architecture guard selects the
-  Default identity clone for empty input. Nonempty output and vector-block
-  accounting agree. The empty execution receipt remains part of the broader
-  fallback reconciliation; no validation has run.
+  scalar-control path; the maintained exact-target architecture guard now
+  selects the identity kernel, whose zero-block receipt is also scalar-control.
+  Nonempty output and vector-block accounting agree. Other empty-route receipts
+  remain part of the broader fallback reconciliation; no validation has run.
 - RGB→RGBa and RGB→RGBX are explicit core-only target pairs in the RGB8
   contract, each with the reason at the operation entry point. Default, SSE2,
   and NEON produce the exact requested `DynamicImage` variant from native RGB
@@ -2172,7 +2184,7 @@ Remaining put-family work includes typed wrapper boundaries and complete test/ca
 - Prepared conversion distinguishes the grayscale contract for target `L` from target `LA`: `L` composes the exact source mode's Default grayscale strategy, while `LA` uses Convert's generic grayscale semantics before its alpha-preservation path. This preserves the archived difference for an `RGBa` source, where target `L` unpremultiplies but target `LA` uses the stored premultiplied color samples.
 - CMYK8, YCbCr8, and HSV8 have independent support declarations and direct Default source strategies. CMYK derives RGB samples in each final-destination loop and retains the existing scalar arithmetic for L, LA, RGB, RGBA, YCbCr, HSV, I, and F. YCbCr uses its native Y channel for L/LA and directly applies the archived fixed-point RGB transform for color/scalar destinations. HSV uses the archived integer-domain lookup for RGB-derived destinations. Neither strategy materializes an intermediate RGB image.
 - P and PA now have independent target contracts and direct Default strategies that receive resolved `PaletteInput`. P preserves palette-provided alpha for LA/RGBA and uses opaque defaults when absent; PA preserves its per-pixel alpha only on alpha-bearing output paths and ignores it for RGB/scalar conversions. Both map palette indices directly into final destination loops without first expanding a whole RGB raster.
-- Registry type plumbing exposes the prepared Convert plan through the color-family facade. All 25 source identities now have separate Default strategy owners and support declarations, including LAB's existing identity route and the five internal high-depth storage identities. Luma8 uses the archived L→LA and L→RGB/RGBA layout kernels, the CMYK/YCbCr/HSV/typed kernels, and all four I;16 widening routes under SSE2 and NEON selections; its I;16 routes retain the archived empty-image control boundary, while the other vector targets use nonempty guards. LumaA8 now declares all 11 archived LA target routes under exact SSE2/NEON target guards: native layout for L/LA/RGB, premultiplication for La, direct RGBA/RGBX expansion, direct CMYK/YCbCr/HSV, and typed I/F output. It retains native interleaved LA samples and exact result variants; empty generic targets fall back to Default; the reviewed alpha route zero-block behavior is detailed above. RGB8→RGB retains the archived five-pixel layout-copy route under SSE2 and NEON; the source and architecture owner review, including its empty guard, is detailed above. RGB8→Luma8 reuses the exact RGB8 Grayscale AVX2, SSSE3, SSE2, NEON, and Wasm SIMD128 kernels under Convert's typed target strategy; its target guard retains the archived empty-image scalar-control path. RGB8→LumaA8 uses a direct eight-pixel RGB/luma/opaque-alpha kernel under SSE2 and NEON, and its Default route now writes LA directly without an intermediate L image. RGB8→CMYK uses the archived four-pixel inverse-channel kernel under SSE2 and NEON, writing K=0 into the native CMYK carrier. RGB8→YCbCr uses the archived eight-pixel fixed-point table kernel under SSE2 and NEON and writes directly to the YCbCr carrier. RGB8→HSV uses the archived eight-pixel float-lane conversion, preserving its tie order and f32 hue narrowing, under SSE2 and NEON. RGB8→I/F use the archived eight-pixel typed-lane conversions and write little-endian scalar bytes directly into their native four-byte carriers. RGB8→RGBA8 declares SSE2's archived four-pixel vector path and NEON's archived sixteen-pixel structure-load path; its empty-image receipt and allocation-failure differences remain listed in the source-only continuation above. RGBA8 declares SSSE3 and NEON for RGBA8→RGB8, reuses the exact RGBA8 Grayscale AVX2/SSSE3/SSE2/NEON/Wasm SIMD128 kernels for RGBA8→L, and routes RGBA8→LA/RGBa/CMYK/YCbCr/HSV/I/F through native four-byte vector strategies under SSE2 and NEON; RGBX8 retains the archived opaque-padding helper under SSE2 and NEON, while RGBA identity stays on Default. Each path consumes its prepared selection and preserves the exact output Mode. RGBa now also declares the archived AVX2/SSSE3/SSE2/NEON/Wasm SIMD128 target-L grayscale routes and SSE2/NEON native vector routes for LA, La, RGB, RGBA, RGBX, CMYK, YCbCr, HSV, I, and F; its alpha kernels preserve archived zero-alpha behavior and emitted alpha/padding while unpremultiplying only targets that require straight color. CMYK8→RGB now declares the archived SSSE3/SSE2/NEON routes over native CMYK samples. The four I;16 source modes now process native u16 values directly under SSE2/NEON/Wasm SIMD128 and retain full native u16 values for I/F; One→I;16 declares the archived 16-sample vector expansion. Archived SIMD Convert source files and their exact vector cases still need a one-to-one review against the maintained source/target declarations, excluding the alpha and RGB identity/layout routes reconciled above; remaining routes include other layout/color-space kernels, same-mode and empty-image guards, architecture build availability, and complete output identity; place retained cases beside their maintained owners and migrate any uncovered path. Do not treat the current dispatcher as a finished support/selection/implementation composition.
+- Registry type plumbing exposes the prepared Convert plan through the color-family facade. All 25 source identities now have separate Default strategy owners and support declarations, including LAB's existing identity route and the five internal high-depth storage identities. Luma8 uses the archived L→LA and L→RGB/RGBA layout kernels, the CMYK/YCbCr/HSV/typed kernels, and all four I;16 widening routes under SSE2 and NEON selections; its I;16 routes retain the archived zero-block vector receipt; reviewed generic targets now admit exact architecture routes and record scalar-control for empty images. LumaA8 now declares all 11 archived LA target routes under exact SSE2/NEON target guards: native layout for L/LA/RGB, premultiplication for La, direct RGBA/RGBX expansion, direct CMYK/YCbCr/HSV, and typed I/F output. It retains native interleaved LA samples and exact result variants; generic empty targets retain the archived scalar-control receipt; the reviewed alpha route zero-block behavior is detailed above. RGB8→RGB retains the archived five-pixel layout-copy route under SSE2, NEON, and Wasm; the source and architecture owner review, including its empty guard, is detailed above. RGB8→Luma8 reuses the exact RGB8 Grayscale AVX2, SSSE3, SSE2, NEON, and Wasm SIMD128 kernels under Convert's typed target strategy; its target guard retains the archived empty-image scalar-control path. RGB8→LumaA8 uses a direct eight-pixel RGB/luma/opaque-alpha kernel under SSE2, NEON, and Wasm, and its Default route materializes the archived rounded L scratch before LA output. RGB8→CMYK uses the archived four-pixel inverse-channel kernel under SSE2, NEON, and Wasm, writing K=0 into the native CMYK carrier. RGB8→YCbCr uses the archived eight-pixel fixed-point table kernel under SSE2, NEON, and Wasm and writes directly to the YCbCr carrier. RGB8→HSV uses the archived eight-pixel float-lane conversion, preserving its tie order and f32 hue narrowing, under SSE2, NEON, and Wasm. RGB8→I/F use the archived eight-pixel typed-lane conversions under SSE2, NEON, and Wasm and write little-endian scalar bytes directly into their native four-byte carriers. RGB8→RGBA8 declares SSE2's archived four-pixel vector path, NEON's archived sixteen-pixel structure-load path, and the portable Wasm path; the empty-image receipt and allocation-failure handling are source-reconciled above. RGBA8 declares SSSE3 and NEON for RGBA8→RGB8, reuses the exact RGBA8 Grayscale AVX2/SSSE3/SSE2/NEON/Wasm SIMD128 kernels for RGBA8→L, and routes RGBA8→LA/RGBa/CMYK/YCbCr/HSV/I/F through native four-byte vector strategies under SSE2 and NEON; RGBX8 retains the archived opaque-padding helper under SSE2 and NEON, while RGBA identity stays on Default. Each path consumes its prepared selection and preserves the exact output Mode. RGBa now also declares the archived AVX2/SSSE3/SSE2/NEON/Wasm SIMD128 target-L grayscale routes and SSE2/NEON native vector routes for LA, La, RGB, RGBA, RGBX, CMYK, YCbCr, HSV, I, and F; its alpha kernels preserve archived zero-alpha behavior and emitted alpha/padding while unpremultiplying only targets that require straight color. CMYK8→RGB now declares the archived SSSE3/SSE2/NEON routes over native CMYK samples. The four I;16 source modes now process native u16 values directly under SSE2/NEON/Wasm SIMD128 and retain full native u16 values for I/F; One→I;16 declares the archived 16-sample vector expansion. Archived SIMD Convert source files and their exact vector cases still need a one-to-one review against the maintained source/target declarations, excluding the alpha and RGB identity/layout routes reconciled above; remaining routes include other layout/color-space kernels, same-mode and empty-image guards, architecture build availability, and complete output identity; place retained cases beside their maintained owners and migrate any uncovered path. Do not treat the current dispatcher as a finished support/selection/implementation composition.
 - Archived SIMD Convert admission was narrower than the 25-mode typed contract: generic byte-layout conversion recognizes L/LA/RGB/RGBA carriers with either no mode tag or the matching identity, plus RGBA storage explicitly tagged RGBa or RGBX. Special routes add the documented alpha pairs, CMYK→RGB, One/L→I;16, I;16→L/LA/RGB/RGBA/CMYK/I/F, and RGB8→LAB scalar control. Its ordinary vector destinations are L/LA/RGB/RGBA/CMYK/YCbCr/HSV/I/F. Other pairs were not admitted to this vector adapter and used the CPU route. The per-file owner map below records candidate destinations; the same-mode guards, zero-size behavior, build availability, and every source/target/architecture tuple still require one-to-one review.
 - Archived SIMD Convert file map (candidate destinations; guard review pending):
 

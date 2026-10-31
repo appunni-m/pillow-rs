@@ -24,7 +24,7 @@ macro_rules! architecture_strategies {
             Architecture::Sse2,
             SSE2_AVAILABLE,
             &[Architecture::Sse2],
-            StrategyGuard::ConvertTargetModeNonEmpty(Mode::$target),
+            StrategyGuard::ConvertTargetMode(Mode::$target),
         ),
         ImplementationSupport::cpu(
             OperationId::Convert,
@@ -32,7 +32,7 @@ macro_rules! architecture_strategies {
             Architecture::Neon,
             cfg!(all(target_arch = "aarch64", target_feature = "neon")),
             &[Architecture::Neon],
-            StrategyGuard::ConvertTargetModeNonEmpty(Mode::$target),
+            StrategyGuard::ConvertTargetMode(Mode::$target),
         ),
         ImplementationSupport::cpu(
             OperationId::Convert,
@@ -40,7 +40,7 @@ macro_rules! architecture_strategies {
             Architecture::WasmSimd128,
             cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
             &[Architecture::WasmSimd128],
-            StrategyGuard::ConvertTargetModeNonEmpty(Mode::$target),
+            StrategyGuard::ConvertTargetMode(Mode::$target),
         ),
     };
 }
@@ -279,7 +279,9 @@ fn finish_vector(
     if output.len() != expected_bytes {
         return Err(PilError::InternalError("I;16 Convert output shape mismatch".into()));
     }
-    if vector_blocks != 0 {
+    if vector_blocks == 0 {
+        crate::compute::record_pipeline_operation_path("scalar-control");
+    } else {
         crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
         crate::compute::record_pipeline_operation_scalar_tail(0);
         crate::compute::record_pipeline_operation_path("vector");

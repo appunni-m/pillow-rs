@@ -27,7 +27,7 @@ macro_rules! architecture_targets {
             Architecture::$architecture,
             $available,
             $requirements,
-            StrategyGuard::ConvertTargetModeNonEmpty(Mode::$target),
+            StrategyGuard::ConvertTargetMode(Mode::$target),
         ),)+
     };
 }
@@ -99,7 +99,7 @@ static ARCHITECTURES: [ImplementationSupport; 21] = [
             not(target_feature = "avx2")
         )),
         &[Architecture::Sse2, Architecture::Ssse3],
-        StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageRgb8),
+        StrategyGuard::ConvertTargetMode(Mode::ImageRgb8),
     ),
     ImplementationSupport::cpu(
         OperationId::Convert,
@@ -107,7 +107,7 @@ static ARCHITECTURES: [ImplementationSupport; 21] = [
         Architecture::Neon,
         cfg!(all(target_arch = "aarch64", target_feature = "neon")),
         &[Architecture::Neon],
-        StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageRgb8),
+        StrategyGuard::ConvertTargetMode(Mode::ImageRgb8),
     ),
     architecture_targets!(
         Sse2,

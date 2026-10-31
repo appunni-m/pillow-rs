@@ -27,7 +27,7 @@ macro_rules! architecture_targets {
             Architecture::$architecture,
             $available,
             $requirements,
-            StrategyGuard::ConvertTargetModeNonEmpty(Mode::$target),
+            StrategyGuard::ConvertTargetMode(Mode::$target),
         ),)+
     };
 }
@@ -39,7 +39,7 @@ static ARCHITECTURES: [ImplementationSupport; 23] = [
         Architecture::Ssse3,
         cfg!(target_arch = "x86_64"),
         &[Architecture::Ssse3],
-        StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageRgb8),
+        StrategyGuard::ConvertTargetMode(Mode::ImageRgb8),
     ),
     ImplementationSupport::cpu(
         OperationId::Convert,
@@ -47,7 +47,7 @@ static ARCHITECTURES: [ImplementationSupport; 23] = [
         Architecture::Neon,
         cfg!(all(target_arch = "aarch64", target_feature = "neon")),
         &[Architecture::Neon],
-        StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageRgb8),
+        StrategyGuard::ConvertTargetMode(Mode::ImageRgb8),
     ),
     ImplementationSupport::cpu(
         OperationId::Convert,
@@ -64,6 +64,22 @@ static ARCHITECTURES: [ImplementationSupport; 23] = [
         cfg!(all(target_arch = "aarch64", target_feature = "neon")),
         &[Architecture::Neon],
         StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageRgbx8),
+    ),
+    ImplementationSupport::cpu(
+        OperationId::Convert,
+        Mode::ImageRgba8,
+        Architecture::Sse2,
+        SSE2_AVAILABLE,
+        &[Architecture::Sse2],
+        StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageRgbPremultiplied8),
+    ),
+    ImplementationSupport::cpu(
+        OperationId::Convert,
+        Mode::ImageRgba8,
+        Architecture::Neon,
+        cfg!(all(target_arch = "aarch64", target_feature = "neon")),
+        &[Architecture::Neon],
+        StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageRgbPremultiplied8),
     ),
     ImplementationSupport::cpu(
         OperationId::Convert,
@@ -126,7 +142,6 @@ static ARCHITECTURES: [ImplementationSupport; 23] = [
         SSE2_AVAILABLE,
         &[Architecture::Sse2];
         ImageLumaA8,
-        ImageRgbPremultiplied8,
         ImageCmyk8,
         ImageYCbCr8,
         ImageHsv8,
@@ -138,7 +153,6 @@ static ARCHITECTURES: [ImplementationSupport; 23] = [
         cfg!(all(target_arch = "aarch64", target_feature = "neon")),
         &[Architecture::Neon];
         ImageLumaA8,
-        ImageRgbPremultiplied8,
         ImageCmyk8,
         ImageYCbCr8,
         ImageHsv8,
