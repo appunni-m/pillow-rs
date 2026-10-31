@@ -3,12 +3,14 @@
 //! Exact mode support and prepared strategy composition for enhancement ops.
 //!
 //! TODO(pillow-rs#3ptb): add Contrast strategies for One,
-//! ImageLaPremultiplied8, ImagePalette8, ImagePaletteAlpha8,
-//! ImageRgbPremultiplied8, ImageLab8, ImageI32, ImageF32, ImageI16, ImageI16L,
-//! ImageI16B, ImageI16N, ImageLumaA16, ImageRgb16, ImageRgba16, ImageRgb32F,
-//! and ImageRgba32F. Route their eager `Image::enhance_contrast` conversion
-//! paths through those strategies while preserving conversion and rejection
-//! behavior. The archived Contrast LUT path now has mode/architecture owners
+//! ImageLaPremultiplied8, ImagePalette8, ImagePaletteAlpha8, ImageLab8,
+//! ImageI32, ImageF32, ImageI16, ImageI16L, ImageI16B, ImageI16N,
+//! ImageLumaA16, ImageRgb16, ImageRgba16, ImageRgb32F, and ImageRgba32F.
+//! Route modes accepted by `contrast_degenerate` and Blend through those
+//! strategies while preserving their conversion and output behavior.
+//! ImageRgbPremultiplied8 remains rejected by the public L-to-RGBa base
+//! conversion; its exact error is exposed by this contract. The archived
+//! Contrast LUT path now has mode/architecture owners
 //! for L, LA, RGB, RGBA, RGBX, and CMYK. `Image::enhance_color` also retains
 //! conversion/blend routes for modes outside its six native strategies; add
 //! exact-mode strategies only after preserving their conversion, error, and
@@ -142,7 +144,6 @@ macro_rules! declare_contrast_modes {
                 | Mode::ImageLaPremultiplied8
                 | Mode::ImagePalette8
                 | Mode::ImagePaletteAlpha8
-                | Mode::ImageRgbPremultiplied8
                 | Mode::ImageLab8
                 | Mode::ImageI32
                 | Mode::ImageF32
@@ -157,6 +158,11 @@ macro_rules! declare_contrast_modes {
                 | Mode::ImageRgba32F => ModeSupport::Rejected {
                     mode,
                     reason: "image has wrong mode",
+                    kind: RejectionKind::ValueError,
+                },
+                Mode::ImageRgbPremultiplied8 => ModeSupport::Rejected {
+                    mode,
+                    reason: "conversion from L to RGBa not supported",
                     kind: RejectionKind::ValueError,
                 },
             }

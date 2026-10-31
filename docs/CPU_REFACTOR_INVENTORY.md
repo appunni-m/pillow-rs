@@ -1465,9 +1465,14 @@ Before any validation command, update this ledger with exact baseline-source to 
 ### Remaining enhancement source review: in progress and unvalidated
 
 - `Image::enhance_contrast` creates a lazy operation for L, LA, RGB, RGBA,
-  RGBX, CMYK, HSV, and YCbCr; other source modes first construct
-  `contrast_degenerate()` and then blend. The archived CPU leaf uses a native
-  contrast base/LUT for finite f32 factors in L, LA, RGB, RGBA, RGBX, and CMYK,
+  RGBX, CMYK, HSV, and YCbCr; other source modes enter the
+  `contrast_degenerate()`/Blend composition, which can preserve mode-specific
+  conversion errors. `RGBa` returns
+  `ValueError("conversion from L to RGBa not supported")` during base
+  construction. The prepared operation contract now
+  reports that exact rejection instead of the generic wrong-mode error. The
+  archived CPU leaf uses a native contrast base/LUT for finite f32 factors in
+  L, LA, RGB, RGBA, RGBX, and CMYK,
   while non-finite factors and other layouts use that wrapper conversion path.
   The shared typed `contrast_base` helper now computes native base values for
   all eight queued byte identities from the exact `DynamicImage` variant.
@@ -1483,9 +1488,10 @@ Before any validation command, update this ledger with exact baseline-source to 
   per-channel 256-entry LUT; non-finite factors apply the same f32 blend to the
   typed native base, preserving the conversion path's alpha behavior. The
   prepared operation contract now explicitly classifies all 25 identities:
-  the eight queued byte modes have native Default strategies, while the other
-  17 retain their existing prepared-route rejection and continue through the
-  eager conversion/blend path. L, LA, RGB, RGBA, and CMYK now compose their
+  the eight queued byte modes have native Default strategies, RGBa reports its
+  exact base-conversion rejection, and the remaining 16 still have no prepared
+  route while public calls use their existing conversion/Blend composition.
+  L, LA, RGB, RGBA, and CMYK now compose their
   Default route with the archived native-byte LUT kernel under SSE2, NEON, or
   Wasm SIMD128. RGBX now uses the same four-byte LUT kernel through its exact
   SSE2, NEON, and Wasm SIMD128 strategy owners; its fourth-channel LUT uses
@@ -1498,7 +1504,8 @@ Before any validation command, update this ledger with exact baseline-source to 
   HSV remain Default-only, matching archived SIMD admission. Add prepared
   strategies for the remaining exact modes and route
   `Image::enhance_contrast` through them only after preserving current
-  conversions, errors, and output identity. The archived SIMD adapter is
+  conversions, errors, and output identity. Source mode classification and
+  conversion/Blend paths still need full review. The archived SIMD adapter is
   inactive; its eligible LUT kernel now lives under exact mode/architecture
   owners. The
   public wrapper now asks the same `OperationId::Contrast` declaration as
