@@ -183,6 +183,8 @@ pub enum OperationId {
     PutPixel,
     /// An ordered run of adjacent native-byte writes that clones its source once.
     PutPixelBatch,
+    /// Write one normalized numeric I/F/I;16 pixel synchronously into its native carrier.
+    PutPixelValueAt,
     /// Replace a normalized byte prefix, retaining the direct payload-layout contract.
     PutData,
     /// Write one normalized putdata value synchronously before the next value is coerced.
@@ -317,6 +319,9 @@ impl OperationId {
             Self::Paste => &crate::compute::pool_cpu::ops::paste::ops::SUPPORT,
             Self::PutPixel => &crate::compute::pool_cpu::ops::put::ops::PUT_PIXEL_SUPPORT,
             Self::PutPixelBatch => &crate::compute::pool_cpu::ops::put::ops::PUT_PIXEL_BATCH_SUPPORT,
+            Self::PutPixelValueAt => {
+                &crate::compute::pool_cpu::ops::put::ops::PUT_PIXEL_VALUE_AT_SUPPORT
+            }
             Self::PutData => &crate::compute::pool_cpu::ops::put::ops::PUT_DATA_SUPPORT,
             Self::PutDataValueAt => {
                 &crate::compute::pool_cpu::ops::put::ops::PUT_DATA_VALUE_AT_SUPPORT

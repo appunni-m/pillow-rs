@@ -25,6 +25,36 @@ pub(crate) struct BatchInput<'a, P: Pixel<Subpixel = u8>> {
     pub(crate) ops: &'a [PipelineOp],
 }
 
+pub(crate) fn write_native_bytes(
+    samples: &mut [u8],
+    pixel_index: usize,
+    bytes: &[u8],
+) -> Result<(), PilError> {
+    let start = pixel_index
+        .checked_mul(bytes.len())
+        .ok_or_else(|| PilError::DimensionError("putdata byte offset overflow".into()))?;
+    let end = start
+        .checked_add(bytes.len())
+        .ok_or_else(|| PilError::DimensionError("putdata byte offset overflow".into()))?;
+    let destination = samples
+        .get_mut(start..end)
+        .ok_or_else(|| PilError::InternalError("putdata storage offset out of bounds".into()))?;
+    destination.copy_from_slice(bytes);
+    Ok(())
+}
+
+pub(crate) fn write_native_luma16(
+    samples: &mut [u16],
+    pixel_index: usize,
+    sample: u16,
+) -> Result<(), PilError> {
+    let pixel = samples
+        .get_mut(pixel_index)
+        .ok_or_else(|| PilError::InternalError("putpixel I;16 offset out of bounds".into()))?;
+    *pixel = sample;
+    Ok(())
+}
+
 pub(crate) fn facts<P: Pixel<Subpixel = u8>>(
     image: &ImageBuffer<P, Vec<u8>>, write: PixelWrite,
 ) -> StrategyInputs {

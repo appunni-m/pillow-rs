@@ -25,6 +25,18 @@ pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
     Ok(DynamicImage::ImageF32(helpers::write(input, Rgba([color.0, color.1, color.2, color.3]))))
 }
 
+pub(crate) fn execute_value_at(
+    input: &mut Input,
+    pixel_index: usize,
+    bytes: [u8; 4],
+) -> Result<(), PilError> {
+    super::super::super::helpers::put_pixel::write_native_bytes(
+        input.as_mut(),
+        pixel_index,
+        &bytes,
+    )
+}
+
 #[inline]
 pub(crate) fn execute_batch(input: BatchKernel<'_>) -> Result<DynamicImage, PilError> {
     helpers::write_batch(input, |color| Rgba([color.0, color.1, color.2, color.3]))

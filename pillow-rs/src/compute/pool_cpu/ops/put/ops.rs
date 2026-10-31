@@ -277,6 +277,101 @@ pub(crate) static PUT_DATA_VALUE_AT_SUPPORT: OperationSupport = OperationSupport
     classify_data_value_at_mode,
 );
 
+const PUT_PIXEL_VALUE_AT_INPUTS: &[crate::compute::registry::support::InputContract] =
+    &[crate::compute::registry::support::InputContract::CallerValidatedPixelIndex];
+
+fn classify_pixel_value_at_mode(mode: Mode) -> ModeSupport {
+    match mode {
+        Mode::ImageI32
+        | Mode::ImageF32
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N => ModeSupport::serial(
+            OperationId::PutPixelValueAt,
+            mode,
+            PUT_PIXEL_VALUE_AT_INPUTS,
+        ),
+        _ => ModeSupport::Rejected {
+            mode,
+            reason: "scalar putpixel value-at requires I, F, or I;16 mode",
+            kind: crate::compute::registry::support::RejectionKind::NotImplementedError,
+        },
+    }
+}
+
+pub(crate) static PUT_PIXEL_VALUE_AT_SUPPORT: OperationSupport = OperationSupport::new(
+    OperationId::PutPixelValueAt,
+    &[],
+    classify_pixel_value_at_mode,
+);
+
+pub(crate) fn select_put_pixel_value_at(
+    mode: Mode,
+    context: &ExecutionContext,
+) -> Result<StrategySelection, PilError> {
+    PUT_PIXEL_VALUE_AT_SUPPORT.for_mode(mode).select_serial(context)
+}
+
+pub(crate) fn execute_put_pixel_value_at(
+    image: &mut DynamicImage,
+    pixel_index: usize,
+    input: PutPixelValueAtInput,
+    selection: StrategySelection,
+) -> Result<(), PilError> {
+    if selection.implementation.operation != OperationId::PutPixelValueAt {
+        return Err(PilError::InternalError(
+            "putpixel value-at strategy does not match its raster mode".into(),
+        ));
+    }
+    let mode = selection.implementation.mode;
+    if image.mode() != mode {
+        let is_l16 = matches!(
+            mode,
+            Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N
+        );
+        let error = if is_l16 {
+            "putpixel I;16 storage mismatch"
+        } else {
+            "putdata RGBA storage mismatch"
+        };
+        return Err(PilError::InternalError(error.into()));
+    }
+    if selection.implementation.architecture != crate::compute::Architecture::Default {
+        return Err(PilError::InternalError(
+            "unbound putpixel value-at architecture".into(),
+        ));
+    }
+    match (image, input) {
+        (DynamicImage::ImageI32(image), PutPixelValueAtInput::NumericBytes(bytes)) => {
+            super::i32::default::put_pixel_impl::execute_value_at(image, pixel_index, bytes)
+        }
+        (DynamicImage::ImageF32(image), PutPixelValueAtInput::NumericBytes(bytes)) => {
+            super::f32::default::put_pixel_impl::execute_value_at(image, pixel_index, bytes)
+        }
+        (DynamicImage::ImageI16(image), PutPixelValueAtInput::Luma16(sample)) => {
+            super::i16::default::put_pixel_impl::execute_value_at(image, pixel_index, sample)
+        }
+        (DynamicImage::ImageI16L(image), PutPixelValueAtInput::Luma16(sample)) => {
+            super::i16l::default::put_pixel_impl::execute_value_at(image, pixel_index, sample)
+        }
+        (DynamicImage::ImageI16B(image), PutPixelValueAtInput::Luma16(sample)) => {
+            super::i16b::default::put_pixel_impl::execute_value_at(image, pixel_index, sample)
+        }
+        (DynamicImage::ImageI16N(image), PutPixelValueAtInput::Luma16(sample)) => {
+            super::i16n::default::put_pixel_impl::execute_value_at(image, pixel_index, sample)
+        }
+        _ => Err(PilError::InternalError(
+            "putpixel value-at input does not match its raster mode".into(),
+        )),
+    }
+}
+
+pub(crate) enum PutPixelValueAtInput {
+    NumericBytes([u8; 4]),
+    Luma16(u16),
+}
+
 pub(crate) fn select_put_data_value_at(
     mode: Mode,
     context: &ExecutionContext,

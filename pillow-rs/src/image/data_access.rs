@@ -241,6 +241,17 @@ fn putdata_bytes(
     Ok(data)
 }
 
+pub(super) fn putpixel_numeric_bytes(mode: Mode, value: f64) -> Result<[u8; 4], PilError> {
+    let value = value * 1.0 + 0.0;
+    match mode {
+        Mode::ImageI32 => Ok((value as i32).to_le_bytes()),
+        Mode::ImageF32 => Ok((value as f32).to_le_bytes()),
+        _ => Err(PilError::InternalError(
+            "numeric putpixel bytes require I or F mode".into(),
+        )),
+    }
+}
+
 pub(super) const fn pillow_band_count(mode: Mode) -> usize {
     match mode {
         Mode::One

@@ -50,17 +50,7 @@ fn write_bytes(
     let samples = image
         .as_bytes_mut()
         .ok_or_else(|| PilError::InternalError(mismatch.into()))?;
-    let start = pixel_index
-        .checked_mul(bytes.len())
-        .ok_or_else(|| PilError::DimensionError("putdata byte offset overflow".into()))?;
-    let end = start
-        .checked_add(bytes.len())
-        .ok_or_else(|| PilError::DimensionError("putdata byte offset overflow".into()))?;
-    let destination = samples
-        .get_mut(start..end)
-        .ok_or_else(|| PilError::InternalError("putdata storage offset out of bounds".into()))?;
-    destination.copy_from_slice(bytes);
-    Ok(())
+    super::put_pixel::write_native_bytes(samples, pixel_index, bytes)
 }
 
 fn write_luma16(

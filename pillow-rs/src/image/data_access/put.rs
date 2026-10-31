@@ -266,6 +266,9 @@ impl Image {
     /// worth of input bytes at a time, leaving the remaining byte half of each
     /// 16-bit row zero-filled. With a scale or offset it applies the same
     /// clipping to each input byte before placing it in that row layout.
+    ///
+    /// TODO(pillow-rs#3ptb): route the raw-byte row mapping through exact-mode
+    /// PutData strategies while preserving its byte-order and zero-fill rules.
     pub fn putdata_l16_bytes(
         &mut self,
         data: &[u8],
@@ -311,7 +314,9 @@ impl Image {
         ))
     }
 
-    fn putdata_requested_backend(&self) -> Option<crate::compute::Backend> {
+    pub(crate) fn requested_backend_for_eager_cpu_mutation(
+        &self,
+    ) -> Option<crate::compute::Backend> {
         if !crate::compute::Backend::pipeline_telemetry_enabled() {
             return None;
         }
@@ -402,7 +407,7 @@ impl Image {
         // directly on host storage even when SIMD/GPU is requested. Capture
         // the request before `load()` consumes a locked pipeline so telemetry
         // can report the actual CPU route as a backend gap.
-        let requested_backend = self.putdata_requested_backend();
+        let requested_backend = self.requested_backend_for_eager_cpu_mutation();
 
         let (width, height) = self.size()?;
         let pixel_count = (width as usize)

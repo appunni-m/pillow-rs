@@ -4,7 +4,7 @@ use crate::error::PilError;
 use crate::raster::{GenericImageView, Mode};
 
 use super::{
-    Arc, DynamicImage, FormattedPixelValue, Image, PipelineOp, PutDataValue,
+    Arc, DynamicImage, FormattedPixelValue, Image, PipelineOp,
     is_l16_identity, pillow_band_count,
 };
 
@@ -318,48 +318,96 @@ impl Image {
             .checked_mul(width as usize)
             .and_then(|row| row.checked_add(x as usize))
             .ok_or_else(|| PilError::DimensionError("pixel index overflow".into()))?;
-        self.load()?;
-        if let Image::Loaded(data) = self {
-            let image = Arc::make_mut(&mut data.image);
-            let destination = image
-                .as_mut_luma16()
-                .ok_or_else(|| PilError::InternalError("putpixel I;16 storage mismatch".into()))?;
-            let pixel = destination.as_mut().get_mut(pixel_index).ok_or_else(|| {
-                PilError::InternalError("putpixel I;16 offset out of bounds".into())
-            })?;
-            *pixel = value as u16;
-            data.known_zero_fill = false;
-            return Ok(());
+        let mode = self.mode_identity()?;
+        if !is_l16_identity(mode) {
+            return Err(PilError::InternalError(
+                "putpixel I;16 storage mismatch".into(),
+            ));
         }
-        Err(PilError::InternalError(
-            "putpixel I;16 did not materialize writable storage".into(),
-        ))
+        self.putpixel_sample_at(
+            mode,
+            pixel_index,
+            crate::compute::pool_cpu::ops::put::ops::PutPixelValueAtInput::Luma16(value as u16),
+        )
+    }
+
+    fn putpixel_sample_at(
+        &mut self,
+        mode: Mode,
+        pixel_index: usize,
+        input: crate::compute::pool_cpu::ops::put::ops::PutPixelValueAtInput,
+    ) -> Result<(), PilError> {
+        let context = crate::compute::ExecutionContext::for_routed_backend(
+            crate::compute::Backend::Cpu,
+        );
+        let selection = crate::compute::pool_cpu::ops::put::ops::select_put_pixel_value_at(
+            mode,
+            &context,
+        )?;
+        let requested_backend = self.requested_backend_for_eager_cpu_mutation();
+
+        self.load()?;
+        let Image::Loaded(data) = self else {
+            let reason = if is_l16_identity(mode) {
+                "putpixel I;16 did not materialize writable storage"
+            } else {
+                "putdata did not materialize writable storage"
+            };
+            return Err(PilError::InternalError(reason.into()));
+        };
+        crate::compute::pool_cpu::ops::put::ops::execute_put_pixel_value_at(
+            Arc::make_mut(&mut data.image),
+            pixel_index,
+            input,
+            selection,
+        )?;
+        data.known_zero_fill = false;
+        let fallback_detail = if is_l16_identity(mode) {
+            "I;16 pixel writes update host storage synchronously"
+        } else {
+            "numeric I/F pixel writes update host storage synchronously"
+        };
+        crate::compute::record_eager_cpu_operation_receipt_with_selection(
+            "PutPixel",
+            requested_backend,
+            0,
+            fallback_detail,
+            selection,
+        );
+        Ok(())
     }
 
     /// Writes a scalar pixel for Pillow's numeric `I` and `F` modes.
     ///
     /// Those modes preserve the host numeric value as a four-byte signed or
     /// floating-point sample. The ordinary byte-oriented mode helper remains
-    /// intentionally narrow for `L`, `1`, and `P` inputs.
+    /// intentionally narrow for `L`, `1`, and `P` inputs. The compatibility
+    /// mode argument is not an identity source; selection uses the raster mode.
     pub fn putpixel_mode_scalar(
         &mut self,
         x: u32,
         y: u32,
         value: f64,
-        mode: Mode,
+        _mode: Mode,
     ) -> Result<(), PilError> {
-        if !matches!(mode, Mode::ImageI32 | Mode::ImageF32) {
-            return self.putpixel_mode(x, y, value as u8, mode);
-        }
         let (width, height) = self.size()?;
         if x >= width || y >= height {
             return Err(PilError::IndexError("image index out of range".into()));
+        }
+        let image_mode = self.mode_identity()?;
+        if !matches!(image_mode, Mode::ImageI32 | Mode::ImageF32) {
+            return self.putpixel_mode(x, y, value as u8, image_mode);
         }
         let pixel_index = (y as usize)
             .checked_mul(width as usize)
             .and_then(|row| row.checked_add(x as usize))
             .ok_or_else(|| PilError::DimensionError("pixel index overflow".into()))?;
-        self.putdata_value_at(pixel_index, &PutDataValue::Number(value), 1.0, 0.0)
+        let bytes = super::data_access::putpixel_numeric_bytes(image_mode, value)?;
+        self.putpixel_sample_at(
+            image_mode,
+            pixel_index,
+            crate::compute::pool_cpu::ops::put::ops::PutPixelValueAtInput::NumericBytes(bytes),
+        )
     }
 
     /// Resolves an RGB(A) palette color before coordinate validation.
