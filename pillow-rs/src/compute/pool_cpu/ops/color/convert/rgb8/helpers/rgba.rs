@@ -23,8 +23,7 @@ pub(crate) fn execute(source: &RgbImage) -> Result<RgbaImage, PilError> {
     }
 
     let vector_pixels = pixels / 4 * 4;
-    let mut output = Vec::new();
-    output.try_reserve_exact(output_bytes).map_err(|_| unsupported())?;
+    let mut output = Vec::with_capacity(output_bytes);
     for pixel in (0..vector_pixels).step_by(4) {
         output.extend_from_slice(&rgb_to_rgba_block(source.as_raw(), pixel));
     }

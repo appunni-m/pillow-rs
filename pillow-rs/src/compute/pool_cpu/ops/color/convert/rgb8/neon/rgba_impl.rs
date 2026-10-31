@@ -25,9 +25,11 @@ pub(crate) unsafe fn execute(source: &RgbImage) -> Result<RgbaImage, PilError> {
 
     let vector_pixels = pixels / 16 * 16;
     let mut output = Vec::new();
-    output
-        .try_reserve_exact(output_bytes)
-        .map_err(|_| super::super::helpers::rgba::unsupported())?;
+    if output.try_reserve_exact(output_bytes).is_err() {
+        // The archived adapter falls through to the portable four-pixel
+        // layout kernel when the NEON-specific reservation fails.
+        return super::super::helpers::rgba::execute(source);
+    }
     // SAFETY: prepared selection establishes NEON; source length and output
     // capacity are checked, and the leaf handles complete sixteen-pixel blocks.
     unsafe { rgb_to_rgba_neon(source.as_raw(), vector_pixels, &mut output) };
@@ -41,9 +43,13 @@ pub(crate) unsafe fn execute(source: &RgbImage) -> Result<RgbaImage, PilError> {
         ]);
     }
 
-    crate::compute::record_pipeline_operation_vector_blocks((vector_pixels / 16) as u64);
-    crate::compute::record_pipeline_operation_scalar_tail((pixels - vector_pixels) as u64);
-    crate::compute::record_pipeline_operation_path("vector");
+    if pixels == 0 {
+        crate::compute::record_pipeline_operation_path("scalar-control");
+    } else {
+        crate::compute::record_pipeline_operation_vector_blocks((vector_pixels / 16) as u64);
+        crate::compute::record_pipeline_operation_scalar_tail((pixels - vector_pixels) as u64);
+        crate::compute::record_pipeline_operation_path("vector");
+    }
     RgbaImage::from_raw(source.width(), source.height(), output)
         .ok_or_else(|| PilError::InternalError("RGBA Convert output shape mismatch".into()))
 }
