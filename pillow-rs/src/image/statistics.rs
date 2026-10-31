@@ -8,7 +8,7 @@ pub use result::{StatResult, StatValue, stat_from_histogram, stat_from_list};
 
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, Mode};
 
 use super::{
     FormattedExtrema, FormattedPixelValue, Image, ScalarImageSamples, decode_float_samples,
@@ -534,27 +534,41 @@ impl Image {
     }
 
     /// Reads the retained four-byte scalar storage for `I` and `F` modes.
-    pub(crate) fn scalar_samples(&self, mode: &str) -> Result<ScalarImageSamples, PilError> {
-        if mode == "I" {
-            return self
+    pub(crate) fn scalar_samples(&self, mode: Mode) -> Result<ScalarImageSamples, PilError> {
+        match mode {
+            Mode::ImageI32 => self
                 .read_scalar_storage(mode, decode_integer_samples)
-                .map(ScalarImageSamples::Integer);
+                .map(ScalarImageSamples::Integer),
+            Mode::ImageF32 => self
+                .read_scalar_storage(mode, decode_float_samples)
+                .map(ScalarImageSamples::Float),
+            _ => Err(PilError::ValueError("image has wrong mode".into())),
         }
-        self.read_scalar_storage(mode, decode_float_samples)
-            .map(ScalarImageSamples::Float)
     }
 
     fn read_scalar_storage<T>(
         &self,
-        mode: &str,
+        mode: Mode,
         decode: impl FnOnce(&[u8]) -> T,
     ) -> Result<T, PilError> {
         let img = self.materialized_shared()?;
+        let (mode_name, storage_matches) = match (mode, img.as_ref()) {
+            (Mode::ImageI32, DynamicImage::ImageI32(_)) => ("I", true),
+            (Mode::ImageF32, DynamicImage::ImageF32(_)) => ("F", true),
+            (Mode::ImageI32, _) => ("I", false),
+            (Mode::ImageF32, _) => ("F", false),
+            _ => ("scalar", false),
+        };
+        if !storage_matches {
+            return Err(PilError::InternalError(format!(
+                "{mode_name} image has invalid scalar storage"
+            )));
+        }
         let expected = CheckedDims::new(img.width(), img.height(), 4)?.total_bytes();
         let raw = img.as_bytes();
         if raw.len() != expected {
             return Err(PilError::InternalError(format!(
-                "{mode} image has invalid scalar storage"
+                "{mode_name} image has invalid scalar storage"
             )));
         }
         Ok(decode(raw))

@@ -1,50 +1,387 @@
 use super::{
     DynamicImage, FormattedImageData, Image, PilError, PipelineOp, ScalarImageSamples,
-    is_l16_mode, pillow_band_count, select_interleaved_band,
-    select_interleaved_band_into, select_lab_band, select_lab_band_into, validated_band_index,
+    select_interleaved_band_into, select_lab_band_into, validated_band_index,
 };
+use crate::raster::{FromPrimitive, Mode};
+
+fn native_sample_count(width: u32, height: u32, channels: u8) -> Result<usize, PilError> {
+    Ok(crate::checked_dims::CheckedDims::new_allow_empty(width, height, channels)?.total_bytes())
+}
+
+fn mode_carrier_mismatch(mode: Mode) -> PilError {
+    PilError::InternalError(format!(
+        "GetData mode {mode:?} does not match its native raster carrier"
+    ))
+}
+
+fn narrow_native_samples<T: Copy>(
+    samples: &[T],
+    width: u32,
+    height: u32,
+    channels: u8,
+    mode: Mode,
+    convert: impl Fn(T) -> u8,
+) -> Result<Vec<u8>, PilError> {
+    let sample_count = native_sample_count(width, height, channels)?;
+    let samples = samples
+        .get(..sample_count)
+        .ok_or_else(|| mode_carrier_mismatch(mode))?;
+    Ok(samples.iter().copied().map(convert).collect())
+}
+
+fn getdata_byte_modes(image: &DynamicImage, mode: Mode) -> Result<Vec<u8>, PilError> {
+    let output = match (mode, image) {
+        (Mode::One, DynamicImage::One(image))
+        | (Mode::ImageLuma8, DynamicImage::ImageLuma8(image))
+        | (Mode::ImagePalette8, DynamicImage::ImagePalette8(image)) => {
+            image.as_raw().clone()
+        }
+        (Mode::ImageLumaA8, DynamicImage::ImageLumaA8(image))
+        | (Mode::ImageLaPremultiplied8, DynamicImage::ImageLaPremultiplied8(image))
+        | (Mode::ImagePaletteAlpha8, DynamicImage::ImagePaletteAlpha8(image)) => {
+            image.as_raw().clone()
+        }
+        (Mode::ImageRgb8, DynamicImage::ImageRgb8(image))
+        | (Mode::ImageYCbCr8, DynamicImage::ImageYCbCr8(image))
+        | (Mode::ImageHsv8, DynamicImage::ImageHsv8(image)) => image.as_raw().clone(),
+        (Mode::ImageLab8, DynamicImage::ImageLab8(image)) => {
+            let mut output = image.as_raw().clone();
+            for pixel in output.chunks_exact_mut(3) {
+                pixel[1] = pixel[1].wrapping_sub(128);
+                pixel[2] = pixel[2].wrapping_sub(128);
+            }
+            output
+        }
+        (Mode::ImageRgba8, DynamicImage::ImageRgba8(image))
+        | (Mode::ImageRgbPremultiplied8, DynamicImage::ImageRgbPremultiplied8(image))
+        | (Mode::ImageRgbx8, DynamicImage::ImageRgbx8(image))
+        | (Mode::ImageCmyk8, DynamicImage::ImageCmyk8(image))
+        | (Mode::ImageI32, DynamicImage::ImageI32(image))
+        | (Mode::ImageF32, DynamicImage::ImageF32(image)) => image.as_raw().clone(),
+        _ => return Err(mode_carrier_mismatch(mode)),
+    };
+    Ok(output)
+}
+
+fn getdata_unsigned_luma16(image: &DynamicImage, mode: Mode) -> Result<Vec<u8>, PilError> {
+    let image = match (mode, image) {
+        (Mode::ImageI16, DynamicImage::ImageI16(image))
+        | (Mode::ImageI16L, DynamicImage::ImageI16L(image))
+        | (Mode::ImageI16B, DynamicImage::ImageI16B(image))
+        | (Mode::ImageI16N, DynamicImage::ImageI16N(image)) => image,
+        _ => return Err(mode_carrier_mismatch(mode)),
+    };
+    let count = native_sample_count(image.width(), image.height(), 1)?;
+    let samples = image
+        .as_raw()
+        .get(..count)
+        .ok_or_else(|| mode_carrier_mismatch(mode))?;
+    Ok(samples
+        .iter()
+        .map(|sample| (*sample).min(u16::from(u8::MAX)) as u8)
+        .collect())
+}
+
+fn getdata_internal_high_depth(image: &DynamicImage, mode: Mode) -> Result<Vec<u8>, PilError> {
+    let output = match (mode, image) {
+        // NO_PILLOW_SUPPORT: internal high-depth identities are Rust-only;
+        // GetData narrows their native samples at this byte-return boundary.
+        (Mode::ImageLumaA16, DynamicImage::ImageLumaA16(image)) => narrow_native_samples(
+            image.as_raw(),
+            image.width(),
+            image.height(),
+            2,
+            mode,
+            u8::from_primitive,
+        )?,
+        (Mode::ImageRgb16, DynamicImage::ImageRgb16(image)) => narrow_native_samples(
+            image.as_raw(),
+            image.width(),
+            image.height(),
+            3,
+            mode,
+            u8::from_primitive,
+        )?,
+        (Mode::ImageRgba16, DynamicImage::ImageRgba16(image)) => narrow_native_samples(
+            image.as_raw(),
+            image.width(),
+            image.height(),
+            4,
+            mode,
+            u8::from_primitive,
+        )?,
+        (Mode::ImageRgb32F, DynamicImage::ImageRgb32F(image)) => narrow_native_samples(
+            image.as_raw(),
+            image.width(),
+            image.height(),
+            3,
+            mode,
+            u8::from_primitive,
+        )?,
+        (Mode::ImageRgba32F, DynamicImage::ImageRgba32F(image)) => narrow_native_samples(
+            image.as_raw(),
+            image.width(),
+            image.height(),
+            4,
+            mode,
+            u8::from_primitive,
+        )?,
+        _ => return Err(mode_carrier_mismatch(mode)),
+    };
+    Ok(output)
+}
+
+fn getdata_mode_bytes(image: &DynamicImage, mode: Mode) -> Result<Vec<u8>, PilError> {
+    match mode {
+        Mode::One
+        | Mode::ImageLuma8
+        | Mode::ImageLumaA8
+        | Mode::ImageLaPremultiplied8
+        | Mode::ImagePalette8
+        | Mode::ImagePaletteAlpha8
+        | Mode::ImageRgb8
+        | Mode::ImageRgba8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8
+        | Mode::ImageYCbCr8
+        | Mode::ImageLab8
+        | Mode::ImageHsv8
+        | Mode::ImageI32
+        | Mode::ImageF32 => getdata_byte_modes(image, mode),
+        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
+            getdata_unsigned_luma16(image, mode)
+        }
+        Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => getdata_internal_high_depth(image, mode),
+    }
+}
+
+fn getdata_band_count(mode: Mode) -> usize {
+    match mode {
+        Mode::One
+        | Mode::ImageLuma8
+        | Mode::ImagePalette8
+        | Mode::ImageI32
+        | Mode::ImageF32
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N => 1,
+        Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8
+        | Mode::ImageLumaA16 => 2,
+        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8
+        | Mode::ImageRgb16 | Mode::ImageRgb32F => 3,
+        Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8 | Mode::ImageRgbx8
+        | Mode::ImageCmyk8 | Mode::ImageRgba16 | Mode::ImageRgba32F => 4,
+    }
+}
+
+fn validate_getdata_band_output(image: &DynamicImage, output: &[u8]) -> Result<(), PilError> {
+    let expected = crate::checked_dims::CheckedDims::new_allow_empty(
+        image.width(),
+        image.height(),
+        1,
+    )?
+    .total_pixels();
+    if output.len() != expected {
+        return Err(PilError::InternalError(
+            "getdata band output length mismatch".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn write_getdata_byte_band(
+    image: &DynamicImage,
+    mode: Mode,
+    band: usize,
+    output: &mut [u8],
+) -> Result<(), PilError> {
+    match (mode, image) {
+        (Mode::One, DynamicImage::One(image))
+        | (Mode::ImageLuma8, DynamicImage::ImageLuma8(image))
+        | (Mode::ImagePalette8, DynamicImage::ImagePalette8(image)) if band == 0 => {
+            output.copy_from_slice(image.as_raw());
+        }
+        (Mode::ImageLumaA8, DynamicImage::ImageLumaA8(image))
+        | (Mode::ImageLaPremultiplied8, DynamicImage::ImageLaPremultiplied8(image))
+        | (Mode::ImagePaletteAlpha8, DynamicImage::ImagePaletteAlpha8(image)) => {
+            select_interleaved_band_into(image.as_raw(), 2, band, output);
+        }
+        (Mode::ImageRgb8, DynamicImage::ImageRgb8(image))
+        | (Mode::ImageYCbCr8, DynamicImage::ImageYCbCr8(image))
+        | (Mode::ImageHsv8, DynamicImage::ImageHsv8(image)) => {
+            select_interleaved_band_into(image.as_raw(), 3, band, output);
+        }
+        (Mode::ImageLab8, DynamicImage::ImageLab8(image)) => {
+            select_lab_band_into(image.as_raw(), band, output);
+        }
+        (Mode::ImageRgba8, DynamicImage::ImageRgba8(image))
+        | (Mode::ImageRgbPremultiplied8, DynamicImage::ImageRgbPremultiplied8(image))
+        | (Mode::ImageRgbx8, DynamicImage::ImageRgbx8(image))
+        | (Mode::ImageCmyk8, DynamicImage::ImageCmyk8(image)) => {
+            select_interleaved_band_into(image.as_raw(), 4, band, output);
+        }
+        (Mode::ImageI32, DynamicImage::ImageI32(image))
+        | (Mode::ImageF32, DynamicImage::ImageF32(image)) => {
+            select_interleaved_band_into(image.as_raw(), 4, 0, output);
+        }
+        _ => return Err(mode_carrier_mismatch(mode)),
+    }
+    Ok(())
+}
+
+fn write_getdata_unsigned_luma16_band(
+    image: &DynamicImage,
+    mode: Mode,
+    band: usize,
+    output: &mut [u8],
+) -> Result<(), PilError> {
+    let image = match (mode, image) {
+        (Mode::ImageI16, DynamicImage::ImageI16(image))
+        | (Mode::ImageI16L, DynamicImage::ImageI16L(image))
+        | (Mode::ImageI16B, DynamicImage::ImageI16B(image))
+        | (Mode::ImageI16N, DynamicImage::ImageI16N(image)) => image,
+        _ => return Err(mode_carrier_mismatch(mode)),
+    };
+    write_native_sample_band(
+        image.as_raw(),
+        image.width(),
+        image.height(),
+        1,
+        band,
+        mode,
+        output,
+        |sample| sample.min(u16::from(u8::MAX)) as u8,
+    )
+}
+
+fn write_native_sample_band<T: Copy>(
+    samples: &[T],
+    width: u32,
+    height: u32,
+    channels: u8,
+    band: usize,
+    mode: Mode,
+    output: &mut [u8],
+    convert: impl Fn(T) -> u8,
+) -> Result<(), PilError> {
+    let count = native_sample_count(width, height, channels)?;
+    let samples = samples
+        .get(..count)
+        .ok_or_else(|| mode_carrier_mismatch(mode))?;
+    for (destination, sample) in output
+        .iter_mut()
+        .zip(samples.iter().skip(band).step_by(usize::from(channels)))
+    {
+        *destination = convert(*sample);
+    }
+    Ok(())
+}
+
+fn write_getdata_internal_band(
+    image: &DynamicImage,
+    mode: Mode,
+    band: usize,
+    output: &mut [u8],
+) -> Result<(), PilError> {
+    // NO_PILLOW_SUPPORT: these internal high-depth modes expose native bands
+    // through this byte API without changing or retagging their raster.
+    match (mode, image) {
+        (Mode::ImageLumaA16, DynamicImage::ImageLumaA16(image)) => write_native_sample_band(
+            image.as_raw(), image.width(), image.height(), 2, band, mode, output, u8::from_primitive,
+        ),
+        (Mode::ImageRgb16, DynamicImage::ImageRgb16(image)) => write_native_sample_band(
+            image.as_raw(), image.width(), image.height(), 3, band, mode, output, u8::from_primitive,
+        ),
+        (Mode::ImageRgba16, DynamicImage::ImageRgba16(image)) => write_native_sample_band(
+            image.as_raw(), image.width(), image.height(), 4, band, mode, output, u8::from_primitive,
+        ),
+        (Mode::ImageRgb32F, DynamicImage::ImageRgb32F(image)) => write_native_sample_band(
+            image.as_raw(), image.width(), image.height(), 3, band, mode, output, u8::from_primitive,
+        ),
+        (Mode::ImageRgba32F, DynamicImage::ImageRgba32F(image)) => write_native_sample_band(
+            image.as_raw(), image.width(), image.height(), 4, band, mode, output, u8::from_primitive,
+        ),
+        _ => Err(mode_carrier_mismatch(mode)),
+    }
+}
+
+fn write_getdata_band_samples(
+    image: &DynamicImage,
+    mode: Mode,
+    band: usize,
+    output: &mut [u8],
+) -> Result<(), PilError> {
+    validate_getdata_band_output(image, output)?;
+    match mode {
+        Mode::One
+        | Mode::ImageLuma8
+        | Mode::ImageLumaA8
+        | Mode::ImageLaPremultiplied8
+        | Mode::ImagePalette8
+        | Mode::ImagePaletteAlpha8
+        | Mode::ImageRgb8
+        | Mode::ImageRgba8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8
+        | Mode::ImageYCbCr8
+        | Mode::ImageLab8
+        | Mode::ImageHsv8
+        | Mode::ImageI32
+        | Mode::ImageF32 => write_getdata_byte_band(image, mode, band, output),
+        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
+            write_getdata_unsigned_luma16_band(image, mode, band, output)
+        }
+        Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => write_getdata_internal_band(image, mode, band, output),
+    }
+}
+
+fn getdata_band_bytes(
+    image: &DynamicImage,
+    mode: Mode,
+    band: usize,
+) -> Result<Vec<u8>, PilError> {
+    let dimensions = crate::checked_dims::CheckedDims::new_allow_empty(
+        image.width(),
+        image.height(),
+        1,
+    )?;
+    let mut output = dimensions.alloc_buffer();
+    write_getdata_band_samples(image, mode, band, &mut output)?;
+    Ok(output)
+}
+
+fn getdata_unsigned_luma16_values(image: &DynamicImage, mode: Mode) -> Result<Vec<i32>, PilError> {
+    let samples = match (mode, image) {
+        (Mode::ImageI16, DynamicImage::ImageI16(image))
+        | (Mode::ImageI16L, DynamicImage::ImageI16L(image))
+        | (Mode::ImageI16B, DynamicImage::ImageI16B(image))
+        | (Mode::ImageI16N, DynamicImage::ImageI16N(image)) => image.as_raw(),
+        _ => return Err(mode_carrier_mismatch(mode)),
+    };
+    Ok(samples.iter().copied().map(i32::from).collect())
+}
+
 impl Image {
     fn getdata_band(&self, image: &DynamicImage, band: i32) -> Result<Vec<u8>, PilError> {
+        // TODO(pillow-rs#3ptb): route this allocated API through the same
+        // backend/architecture selection as the caller-owned output path.
         // Pillow validates the requested logical band before extracting it.
         // Keep this check in the core so every binding observes the same
         // contract instead of silently clamping to RGBA channel 3.
-        let mode = Image::mode_from_materialized(image);
-        let band = validated_band_index(band, pillow_band_count(&mode))?;
-        if mode == "LAB" {
-            if let DynamicImage::ImageRgb8(image) = image {
-                return Ok(select_lab_band(image.as_raw(), band));
-            }
-            return Ok(select_lab_band(image.to_rgb8().as_raw(), band));
-        }
-        // Keep ordinary byte layouts narrow for banded reads. The old
-        // fallback widened the complete frame to RGBA before selecting a
-        // single channel, which made a read-only terminal operation pay
-        // for an avoidable full-frame allocation and conversion.
-        match image {
-            DynamicImage::One(image)
-            | DynamicImage::ImageLuma8(image)
-            | DynamicImage::ImagePalette8(image)
-                if band == 0 =>
-            {
-                return Ok(image.as_raw().clone());
-            }
-            DynamicImage::ImageLumaA8(image)
-            | DynamicImage::ImageLaPremultiplied8(image)
-            | DynamicImage::ImagePaletteAlpha8(image)
-                if band < 2 =>
-            {
-                return Ok(select_interleaved_band(image.as_raw(), 2, band));
-            }
-            DynamicImage::ImageRgb8(image) if band < 3 => {
-                return Ok(select_interleaved_band(image.as_raw(), 3, band));
-            }
-            DynamicImage::ImageRgba8(image) if band < 4 => {
-                return Ok(select_interleaved_band(image.as_raw(), 4, band));
-            }
-            _ => {}
-        }
-        let rgba = image.to_rgba8();
-        Ok(rgba.pixels().map(|pixel| pixel[band]).collect())
+        let mode = image.mode();
+        let band = validated_band_index(band, getdata_band_count(mode))?;
+        getdata_band_bytes(image, mode, band)
     }
 
     /// Returns pixel data as a flat sequence of channel bytes.
@@ -61,40 +398,7 @@ impl Image {
         if let Some(band) = band {
             return self.getdata_band(&img, band);
         }
-        let mode = Image::mode_from_materialized(&img);
-        if mode == "LAB" {
-            let mut data = img.to_rgb8().into_raw();
-            for pixel in data.chunks_exact_mut(3) {
-                pixel[1] = pixel[1].wrapping_sub(128);
-                pixel[2] = pixel[2].wrapping_sub(128);
-            }
-            return Ok(data);
-        }
-        match img.color() {
-            crate::raster::ColorType::L8 | crate::raster::ColorType::L16 => {
-                let gray = img.to_luma8();
-                Ok(gray.into_raw())
-            }
-            crate::raster::ColorType::La8 | crate::raster::ColorType::La16 => {
-                let ga = img.to_luma_alpha8();
-                let mut out = Vec::with_capacity((ga.width() * ga.height() * 2) as usize);
-                for p in ga.pixels() {
-                    out.push(p[0]);
-                    out.push(p[1]);
-                }
-                Ok(out)
-            }
-            crate::raster::ColorType::Rgb8
-            | crate::raster::ColorType::Rgb16
-            | crate::raster::ColorType::Rgb32F => {
-                let rgb = img.to_rgb8();
-                Ok(rgb.into_raw())
-            }
-            _ => {
-                let rgba = img.to_rgba8();
-                Ok(rgba.into_raw())
-            }
-        }
+        getdata_mode_bytes(img.as_ref(), img.mode())
     }
 
     /// Return the number of samples produced by Pillow's formatted band read.
@@ -111,15 +415,22 @@ impl Image {
     /// the mode or the requested band is out of range. Other errors can occur
     /// while loading or materializing the image.
     pub fn getdata_band_len(&self, band: i32) -> Result<usize, PilError> {
-        let mode = self.mode()?;
-        self.getdata_band_len_for_mode(&mode, band)
+        self.getdata_band_len_for_mode(self.mode_selector()?, band)
     }
 
-    fn getdata_band_len_for_mode(&self, mode: &str, band: i32) -> Result<usize, PilError> {
-        if is_l16_mode(mode) || mode == "I" || mode == "F" {
+    fn getdata_band_len_for_mode(&self, mode: Mode, band: i32) -> Result<usize, PilError> {
+        if matches!(
+            mode,
+            Mode::ImageI16
+                | Mode::ImageI16L
+                | Mode::ImageI16B
+                | Mode::ImageI16N
+                | Mode::ImageI32
+                | Mode::ImageF32
+        ) {
             return Err(PilError::ValueError("image has wrong mode".into()));
         }
-        let band_count = pillow_band_count(mode);
+        let band_count = getdata_band_count(mode);
         validated_band_index(band, band_count)?;
         let (width, height) = self.size()?;
         Ok(crate::checked_dims::CheckedDims::new_allow_empty(width, height, 1)?.total_pixels())
@@ -191,8 +502,7 @@ impl Image {
     /// [`PilError::InternalError`] when the output length is incorrect. Other
     /// errors can occur while loading or materializing the image.
     pub fn getdata_band_into(&self, band: i32, output: &mut [u8]) -> Result<(), PilError> {
-        let mode_name = self.mode()?;
-        let mode = mode_name.as_str();
+        let mode = self.mode_selector()?;
         let expected = self.getdata_band_len_for_mode(mode, band)?;
         let band_index = usize::try_from(band).expect("getdata band was validated as nonnegative");
         let backend_band = u8::try_from(band_index).expect("Pillow band indices fit in u8");
@@ -238,15 +548,25 @@ impl Image {
             }
         }
 
-        // TODO(pillow-rs#3ptb): replace this compatibility string table with
-        // the prepared CPU mode/architecture and GPU terminal support
-        // declarations, keeping the exact `raster::Mode` at this boundary.
+        // TODO(pillow-rs#3ptb): expose GetData's direct support contract and
+        // derive CPU architecture/GPU terminal selection from that declaration.
         let backend_native = match selected_backend {
             Some(crate::compute::Backend::Simd) => matches!(
                 mode,
-                "LA" | "PA" | "RGB" | "RGBA" | "RGBa" | "RGBX" | "CMYK" | "HSV" | "YCbCr"
+                Mode::ImageLumaA8
+                    | Mode::ImagePaletteAlpha8
+                    | Mode::ImageRgb8
+                    | Mode::ImageRgba8
+                    | Mode::ImageRgbPremultiplied8
+                    | Mode::ImageRgbx8
+                    | Mode::ImageCmyk8
+                    | Mode::ImageHsv8
+                    | Mode::ImageYCbCr8
             ),
-            Some(crate::compute::Backend::Gpu) => !matches!(mode, "P" | "LAB" | "I" | "F"),
+            Some(crate::compute::Backend::Gpu) => !matches!(
+                mode,
+                Mode::ImagePalette8 | Mode::ImageLab8 | Mode::ImageI32 | Mode::ImageF32
+            ),
             Some(crate::compute::Backend::Cpu) | None => false,
         };
         if backend_native
@@ -294,49 +614,7 @@ impl Image {
             }
 
             let img = self.materialized_shared()?;
-            let materialized_mode = Image::mode_from_materialized(&img);
-            if materialized_mode == "LAB" {
-                if let DynamicImage::ImageRgb8(image) = img.as_ref() {
-                    select_lab_band_into(image.as_raw(), band, output);
-                } else {
-                    select_lab_band_into(img.to_rgb8().as_raw(), band, output);
-                }
-                return Ok(());
-            }
-
-            match img.as_ref() {
-                DynamicImage::One(image)
-                | DynamicImage::ImageLuma8(image)
-                | DynamicImage::ImagePalette8(image)
-                    if band == 0 =>
-                {
-                    output.copy_from_slice(image.as_raw());
-                    return Ok(());
-                }
-                DynamicImage::ImageLumaA8(image)
-                | DynamicImage::ImageLaPremultiplied8(image)
-                | DynamicImage::ImagePaletteAlpha8(image)
-                    if band < 2 =>
-                {
-                    select_interleaved_band_into(image.as_raw(), 2, band, output);
-                    return Ok(());
-                }
-                DynamicImage::ImageRgb8(image) if band < 3 => {
-                    select_interleaved_band_into(image.as_raw(), 3, band, output);
-                    return Ok(());
-                }
-                DynamicImage::ImageRgba8(image) if band < 4 => {
-                    select_interleaved_band_into(image.as_raw(), 4, band, output);
-                    return Ok(());
-                }
-                _ => {}
-            }
-
-            let rgba = img.to_rgba8();
-            for (destination, pixel) in output.iter_mut().zip(rgba.pixels()) {
-                *destination = pixel[band];
-            }
-            Ok(())
+            write_getdata_band_samples(img.as_ref(), img.mode(), band, output)
         })();
         if result.is_ok() {
             crate::compute::finish_eager_cpu_operation_telemetry(telemetry, output.len());
@@ -352,29 +630,24 @@ impl Image {
     /// bindings should only convert [`FormattedImageData`] into their native
     /// list/tuple representation.
     pub fn getdata_formatted(&self, band: Option<i32>) -> Result<FormattedImageData, PilError> {
-        let mode = self.mode()?;
-        if is_l16_mode(&mode) {
+        let mode = self.mode_selector()?;
+        if matches!(mode, Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N) {
             if band.is_some() {
                 // Pillow's ImagingCore.getdata rejects every explicit band
                 // selection for I;16 modes with the mode error, rather than
                 // the generic index error used by ordinary multi-band images.
                 return Err(PilError::ValueError("image has wrong mode".into()));
             }
+            let image = self.materialized_shared()?;
             return Ok(FormattedImageData::IntegerScalars(
-                self.materialized_shared()?
-                    .to_luma16()
-                    .as_raw()
-                    .iter()
-                    .copied()
-                    .map(i32::from)
-                    .collect(),
+                getdata_unsigned_luma16_values(image.as_ref(), mode)?,
             ));
         }
-        if mode == "I" || mode == "F" {
+        if matches!(mode, Mode::ImageI32 | Mode::ImageF32) {
             if band.is_some() {
                 return Err(PilError::ValueError("image has wrong mode".into()));
             }
-            return Ok(match self.scalar_samples(&mode)? {
+            return Ok(match self.scalar_samples(mode)? {
                 ScalarImageSamples::Integer(values) => FormattedImageData::IntegerScalars(values),
                 ScalarImageSamples::Float(values) => FormattedImageData::FloatScalars(values),
             });
@@ -384,7 +657,7 @@ impl Image {
             return Ok(FormattedImageData::Scalars(raw));
         }
 
-        let band_count = pillow_band_count(&mode);
+        let band_count = getdata_band_count(mode);
         if band_count == 1 {
             return Ok(FormattedImageData::Scalars(raw));
         }

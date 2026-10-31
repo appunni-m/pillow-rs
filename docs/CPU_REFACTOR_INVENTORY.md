@@ -3,13 +3,12 @@
 Status: baseline inventory captured; the 98 CPU and 182 SIMD files are preserved below pool_cpu/legacy; maintained implementation and source review remain in progress. The separate SIMD executor and adapter registry were removed from the active module graph on 2026-10-31; `Backend::Simd` is now a CPU-plus-Architecture compatibility request. The source change is unverified.
 Baseline commit: 3f9dfd4036caa061eabcf2255c9f34a745df9c7e
 Working checkout: `/Users/lazytrot/work/pillow-rs`, branch
-`codex/cpu-mode-aware-refactor-backup-20261029` at `866843c0d`, two local WIP
-checkpoints above `origin/codex/cpu-mode-aware-refactor-backup-20261029` at
-`204221686`. Both checkpoints are explicitly unverified. The current
-LinearGradient continuation is source-only and uncommitted. Eval, ImageOps
-Expand, Geometry, Crop, Effects, projection, and direct LinearGradient source
+`codex/cpu-mode-aware-refactor-backup-20261029` at `954e1b5a8`, five local
+commits above `origin/codex/cpu-mode-aware-refactor-backup-20261029`. The
+current GetData source continuation is uncommitted and unverified. Earlier
+Eval, ImageOps Expand, Geometry, Crop, Effects, projection, and direct gradient
 work is recorded below. No build, formatter, checkstyle, lint, test, parity,
-benchmark, or coverage command has run.
+benchmark, or coverage command has run for the current migration state.
 Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related parity/performance findings; remains open).
 
 ## Current source-only continuation
@@ -92,6 +91,17 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   recurrence order and reports vector work through the prepared receipt. The
   zero-size shortcut and argument error order remain at the public entry.
   Source-only; unverified.
+- Full GetData byte export now matches the exact `Mode` with the same
+  `DynamicImage` variant for all 25 identities instead of selecting a conversion
+  from `ColorType`. LAB's signed-byte offset, raw I/F carrier bytes, and I;16
+  clipping are explicit; internal high-depth samples narrow only at this byte
+  return boundary. The allocated band path now validates against exact mode
+  arity and selects native carriers, including LAB, I/F, I;16, and internal
+  high-depth samples, without widening the whole raster to RGBA. Typed band
+  formatted output and scalar extraction now use `Mode` as well. The allocated
+  band API still needs the prepared backend/architecture route, and the
+  caller-owned path still needs a direct support declaration that derives its
+  CPU/GPU selection. Source-only; unverified.
 
 This inventory records the source and evidence denominator before rebuilding pool_cpu. It is a migration ledger, not a claim that the listed mode literals prove support. Each function's exact mode support, output identity, rejection behavior, shared helpers, and architecture fallback must be confirmed from its implementation before it is copied into the maintained tree. The source path lists are taken from the baseline Git tree, so every archived file can be checked against 3f9dfd403.
 
