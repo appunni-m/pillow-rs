@@ -15,4 +15,8 @@ impl<S> Prepared<S> {
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
     }
+
+    pub(crate) fn composed_selections(&self) -> &[StrategySelection] {
+        &[]
+    }
 }

@@ -3,11 +3,13 @@
 //! Exact mode support and prepared strategy composition for enhancement ops.
 //!
 //! TODO(pillow-rs#3ptb): add Contrast strategies for One,
-//! ImageLaPremultiplied8, ImagePalette8, ImagePaletteAlpha8, ImageLab8,
+//! ImagePalette8, ImagePaletteAlpha8,
 //! ImageI32, ImageF32, ImageI16, ImageI16L, ImageI16B, ImageI16N,
 //! ImageLumaA16, ImageRgb16, ImageRgba16, ImageRgb32F, and ImageRgba32F.
-//! Route modes accepted by `contrast_degenerate` and Blend through those
-//! strategies while preserving their conversion and output behavior.
+//! Audit each mode's `contrast_degenerate` and Blend route; add strategies only
+//! for accepted compositions, preserving conversion and output behavior.
+//! ImageLaPremultiplied8 remains rejected by the public L-base conversion with
+//! its exact error exposed by this contract.
 //! ImageRgbPremultiplied8 remains rejected by the public L-to-RGBa base
 //! conversion; its exact error is exposed by this contract. The archived
 //! Contrast LUT path now has mode/architecture owners
@@ -140,11 +142,14 @@ macro_rules! declare_contrast_modes {
         fn classify_contrast_mode(mode: Mode) -> ModeSupport {
             match mode {
                 $(Mode::$mode => super::$module::ops::CONTRAST_SUPPORT,)+
+                Mode::ImageLaPremultiplied8 => ModeSupport::Rejected {
+                    mode,
+                    reason: "conversion from La to L not supported",
+                    kind: RejectionKind::ValueError,
+                },
                 Mode::One
-                | Mode::ImageLaPremultiplied8
                 | Mode::ImagePalette8
                 | Mode::ImagePaletteAlpha8
-                | Mode::ImageLab8
                 | Mode::ImageI32
                 | Mode::ImageF32
                 | Mode::ImageI16
@@ -183,7 +188,6 @@ macro_rules! declare_contrast_modes {
                 | DynamicImage::ImagePalette8(_)
                 | DynamicImage::ImagePaletteAlpha8(_)
                 | DynamicImage::ImageRgbPremultiplied8(_)
-                | DynamicImage::ImageLab8(_)
                 | DynamicImage::ImageI32(_)
                 | DynamicImage::ImageF32(_)
                 | DynamicImage::ImageI16(_)
@@ -207,6 +211,12 @@ macro_rules! declare_contrast_modes {
                 }
             }
 
+            pub(crate) fn composed_selections(&self) -> &[StrategySelection] {
+                match self {
+                    $(Self::$mode(strategy) => strategy.composed_selections(),)+
+                }
+            }
+
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
                 match self {
                     $(Self::$mode(strategy) => super::$module::ops::execute_contrast(strategy),)+
@@ -225,6 +235,7 @@ declare_contrast_modes! {
     ImageCmyk8 => cmyk8,
     ImageYCbCr8 => ycbcr8,
     ImageHsv8 => hsv8,
+    ImageLab8 => lab8,
 }
 
 macro_rules! declare_brightness_modes {
@@ -497,12 +508,19 @@ ExecutionContext,
 
 const INPUTS: &[InputContract] = &[];
 
-/// Native prepared-path support for Contrast's currently queued byte modes.
-///
-/// The public eager conversion modes remain on their existing wrapper routes
-/// until their exact mode strategies are migrated.
-pub(crate) static CONTRAST_SUPPORT: OperationSupport =
-    OperationSupport::new(OperationId::Contrast, INPUTS, classify_contrast_mode);
+/// Prepared support for Contrast's exact-mode strategies and child operations.
+const CONTRAST_CHILDREN: &[OperationId] = &[
+    OperationId::Convert,
+    OperationId::ConvertLab,
+    OperationId::BlendModule,
+];
+
+pub(crate) static CONTRAST_SUPPORT: OperationSupport = OperationSupport::composed(
+    OperationId::Contrast,
+    INPUTS,
+    classify_contrast_mode,
+    CONTRAST_CHILDREN,
+);
 
 /// Exhaustive source-mode support for native Brightness.
 pub(crate) static SUPPORT: OperationSupport =

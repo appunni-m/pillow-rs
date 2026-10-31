@@ -4,7 +4,7 @@ use crate::checked_dims::CheckedDims;
 use crate::compute::Architecture;
 use crate::compute::registry::support::{OperationId, StrategySelection};
 use crate::error::PilError;
-use crate::raster::{DynamicImage, Mode};
+use crate::raster::{DynamicImage, Mode, RgbImage};
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 pub(crate) mod avx_fma;
@@ -28,8 +28,62 @@ pub(crate) fn execute(
     {
         return Err(PilError::ValueError("images do not match".into()));
     }
-    let first_lab = mode == Mode::ImageLab8;
-    let second_lab = other.mode() == Mode::ImageLab8;
+    blend_bytes(
+        width,
+        height,
+        mode,
+        alpha,
+        source_bytes,
+        other_bytes,
+        mode == Mode::ImageLab8,
+        other.mode() == Mode::ImageLab8,
+    )
+}
+
+/// Blend the base and input LAB rasters through the portable byte strategy.
+pub(crate) fn execute_lab_samples(
+    base: &RgbImage,
+    source: &RgbImage,
+    alpha: f64,
+    selection: &StrategySelection,
+) -> Result<DynamicImage, PilError> {
+    super::strategy::require_operation_mode(selection, OperationId::BlendModule, Mode::ImageLab8)?;
+    if selection.implementation.architecture != Architecture::Default {
+        return Err(PilError::InternalError(
+            "LAB Blend selected an undeclared architecture".into(),
+        ));
+    }
+    if source.dimensions() != base.dimensions() {
+        return Err(PilError::ValueError("images do not match".into()));
+    }
+    let dimensions = CheckedDims::new_allow_empty(base.width(), base.height(), 3)?;
+    if source.as_raw().len() != dimensions.total_bytes()
+        || base.as_raw().len() != dimensions.total_bytes()
+    {
+        return Err(PilError::ValueError("images do not match".into()));
+    }
+    blend_bytes(
+        base.width(),
+        base.height(),
+        Mode::ImageLab8,
+        alpha,
+        base.as_raw(),
+        source.as_raw(),
+        true,
+        true,
+    )
+}
+
+fn blend_bytes(
+    width: u32,
+    height: u32,
+    mode: Mode,
+    alpha: f64,
+    source_bytes: &[u8],
+    other_bytes: &[u8],
+    first_lab: bool,
+    second_lab: bool,
+) -> Result<DynamicImage, PilError> {
     let alpha = alpha as f32;
     let output = source_bytes
         .iter()
