@@ -1,15 +1,15 @@
 //! SSSE3 RGBA-to-RGB conversion for the exact RGBA8 source mode.
 
 use crate::error::PilError;
-use crate::raster::{DynamicImage, RgbImage, RgbaImage};
+use crate::raster::{DynamicImage, Mode, RgbImage, RgbaImage};
 
-/// Executes the SSSE3 RGBA-to-RGB kernel for an already selected strategy.
+/// Executes the SSSE3 RGBA-to-RGB kernel, with the archived wide-layout fallback.
 ///
 /// # Safety
 ///
 /// The caller must ensure that the host supports SSSE3.
 #[cfg(target_arch = "x86_64")]
-pub(crate) unsafe fn execute(source: &RgbaImage) -> Result<RgbImage, PilError> {
+pub(crate) unsafe fn execute(source: &RgbaImage) -> Result<DynamicImage, PilError> {
     let pixels = (source.width() as usize)
         .checked_mul(source.height() as usize)
         .ok_or_else(|| PilError::DimensionError("RGBA Convert dimensions overflowed".into()))?;
@@ -28,9 +28,11 @@ pub(crate) unsafe fn execute(source: &RgbaImage) -> Result<RgbImage, PilError> {
 
     let vector_pixels = pixels / 16 * 16;
     let mut output = Vec::new();
-    output
-        .try_reserve_exact(output_bytes)
-        .map_err(|error| PilError::MemoryError(error.to_string()))?;
+    if output.try_reserve_exact(output_bytes).is_err() {
+        // The archived adapter falls through to its portable layout kernel
+        // when this specialization cannot reserve its output buffer.
+        return super::super::helpers::vector::execute(source, Mode::ImageRgb8);
+    }
     // SAFETY: the mode strategy selected SSSE3 only after the execution
     // context confirmed the host feature. Exact source length and output
     // capacity are checked above; the kernel writes complete 16-pixel blocks.
@@ -48,6 +50,7 @@ pub(crate) unsafe fn execute(source: &RgbaImage) -> Result<RgbImage, PilError> {
         crate::compute::record_pipeline_operation_path("ssse3-rgba-to-rgb");
     }
     RgbImage::from_raw(source.width(), source.height(), output)
+        .map(DynamicImage::ImageRgb8)
         .ok_or_else(|| PilError::InternalError("RGB Convert output shape mismatch".into()))
 }
 

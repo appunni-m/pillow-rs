@@ -255,7 +255,6 @@ pub(crate) unsafe fn execute(
         Architecture::Ssse3 if target == Mode::ImageRgb8 => {
             // SAFETY: SUPPORT binds this route to the SSSE3 RGBA kernel.
             unsafe { super::ssse3::convert_impl::execute(source) }
-                .map(DynamicImage::ImageRgb8)
         }
         #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
         Architecture::Neon => super::neon::convert_impl::execute(source, target),

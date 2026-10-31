@@ -8,7 +8,15 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
         Mode::ImageLuma8 => luma8(source),
         Mode::ImageRgb8 => {
             // SAFETY: this wrapper is called only for the selected NEON strategy.
-            unsafe { execute_rgb(source) }.map(DynamicImage::ImageRgb8)
+            match unsafe { execute_rgb(source) } {
+                Ok(output) => Ok(DynamicImage::ImageRgb8(output)),
+                Err(PilError::MemoryError(_)) => {
+                    // The archived adapter falls through to its portable
+                    // layout kernel when NEON output reservation fails.
+                    super::super::helpers::vector::execute(source, target)
+                }
+                Err(error) => Err(error),
+            }
         }
         Mode::ImageRgbx8 => super::super::helpers::opaque_padding::execute(source)
             .map(DynamicImage::ImageRgbx8),
