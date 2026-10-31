@@ -305,11 +305,6 @@ fn assess_convert_target(
                 rejection_reason,
             },
         ))),
-        RequestFacts::ConvertTarget {
-            target_mode: Mode::One | Mode::ImagePalette8,
-        } => Err(PilError::ValueError(
-            "deferred conversion mode must be materialized first".into(),
-        )),
         RequestFacts::ConvertTarget { target_mode } if targets.contains(&target_mode) => Ok(None),
         RequestFacts::ConvertTarget { .. } => {
             Err(PilError::ValueError(rejection_reason.into()))

@@ -250,6 +250,10 @@ fn classify_mode(mode: Mode) -> ModeSupport {
 // source-target-architecture comparison. Generic empty-native receipts for
 // RGB8, L, LA, RGBA, RGBX, RGBa, and I;16 are reconciled; audit alpha-only
 // mode outputs, same-mode guards, build availability, and uncovered routes.
+// The public Image::convert same-mode copy currently returns before this
+// prepared contract; some exact-mode target lists also omit that identity.
+// Expose that lazy, palette-preserving identity route here without forcing
+// materialization or dropping wrapper metadata.
 const CONVERT_CHILDREN: &[OperationId] = &[OperationId::ConvertLab];
 
 pub(crate) static SUPPORT: OperationSupport = OperationSupport::composed(
