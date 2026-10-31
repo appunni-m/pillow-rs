@@ -1,11 +1,12 @@
 # CPU refactor source and evidence inventory
 
-Status: baseline inventory captured; the 98 CPU and 182 SIMD files are preserved below pool_cpu/legacy; maintained implementation and source review remain in progress. The separate SIMD executor and adapter registry were removed from the active module graph on 2026-10-31; `Backend::Simd` is now a CPU-plus-Architecture compatibility request. RGB8 Wasm SIMD Convert strategies are restored from archived portable-vector routes, Default RGB→LA/I;16 staging preserves the archived L scratch allocation, and reviewed Convert empty routes retain their archived receipts. The RGBA/RGBa-to-LA vector kernel now lives in a shared native four-byte helper used by both exact mode strategies; current source changes remain unverified.
+Status: baseline inventory captured; the 98 CPU and 182 SIMD files are preserved below pool_cpu/legacy; maintained implementation and source review remain in progress. The separate SIMD executor and adapter registry were removed from the active module graph on 2026-10-31; `Backend::Simd` is now a CPU-plus-Architecture compatibility request. RGB8 Wasm SIMD Convert strategies are restored from archived portable-vector routes, Default RGB→LA/I;16 staging preserves the archived L scratch allocation, and reviewed Convert empty routes retain their archived receipts. The RGBA/RGBa-to-LA vector kernel now lives in a shared native four-byte helper used by both exact mode strategies. The RGBX-to-La/RGBa routes and their inventory were committed in `baf192167`; all current CPU source remains unverified.
 Baseline commit: 3f9dfd4036caa061eabcf2255c9f34a745df9c7e
 Working checkout: `/Users/lazytrot/work/pillow-rs`, branch `develop` at
-`7de5881fb`; the shared RGBA/RGBa-to-LA kernel and Convert empty-target and
-target-assessment corrections are committed. RGBX-to-La/RGBa strategy routes
-and their inventory update are in progress and remain unverified.
+`baf192167`; the shared RGBA/RGBa-to-LA kernel, Convert empty-target and
+target-assessment corrections, and RGBX-to-La/RGBa strategy routes are
+committed. Convert's P/PA source matrix is being reconciled against Pillow's
+`frompalette` and `topalette` paths; this source remains unverified.
 The baseline archive was rechecked on
 2026-10-31: all 98 CPU files and 182 SIMD files from
 `3f9dfd4036caa061eabcf2255c9f34a745df9c7e` match their preserved contents under
@@ -139,9 +140,11 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   kernel with the same active-lane output. Both return exact `ImageLumaA8`.
   Empty images remain accepted: the archived path records scalar-control and
   the maintained zero-block vector helper records scalar-control, although the
-  new support guard can retain the requested architecture selection. RGB→La
-  shares the byte arithmetic but remains an explicitly core-only target with
-  its own exact output identity. No validation has run.
+  new support guard can retain the requested architecture selection.
+  Pillow's Convert table also explicitly provides RGB→La; the maintained route
+  uses the same rounded luma and opaque alpha with the exact
+  `ImageLaPremultiplied8` identity. Both alpha targets are Pillow routes, not
+  core-only extensions. No validation has run.
 - RGB→L is source-reviewed against the actual archived Convert route. Its
   `try_layout_special_conversion` delegated exact RGB8 input to the archived
   Grayscale kernel selector, so the generic eight-lane Convert luma helper was
@@ -171,7 +174,7 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   gates; `wide` 1.6.1 maps the required `u8x16`, `i32x8`, `f32x8`, and `f64x8`
   operations onto Wasm SIMD128 when `simd128` is enabled. The maintained RGB8
   owner had omitted those Wasm strategies. It now declares and routes them for
-  these targets, along with LA, core-only La, I/F, RGB identity, and the
+  these targets, along with LA, Pillow-defined La, I/F, RGB identity, and the
   four-byte expansion targets. The shared portable RGB→RGBA kernel now lives
   under the RGB8 mode helpers and is used by SSE2 and Wasm; NEON retains its
   sixteen-pixel structure kernel. Other family/architecture rows still need
@@ -184,14 +187,15 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   selects the identity kernel, whose zero-block receipt is also scalar-control.
   Nonempty output and vector-block accounting agree. Other empty-route receipts
   remain part of the broader fallback reconciliation; no validation has run.
-- RGB→RGBa and RGB→RGBX are explicit core-only target pairs in the RGB8
-  contract, each with the reason at the operation entry point. Default, SSE2,
-  and NEON produce the exact requested `DynamicImage` variant from native RGB
-  samples and insert an opaque fourth byte, which is valid alpha for RGBa and
-  padding for RGBX. The architecture owners reuse the reviewed RGBA expansion
-  kernel; each path now marks these targets `NO_PILLOW_SUPPORT`. The archived
-  Pillow contract has no corresponding target pair, and these targets stay
-  outside Pillow parity.
+- RGB→La, RGBa, and RGBX are Pillow-supported pairs in Pillow's
+  [Convert table](https://github.com/python-pillow/Pillow/blob/main/src/libImaging/Convert.c#L1412-L1428).
+  Default, SSE2, NEON, and Wasm produce the exact requested `DynamicImage`
+  variant from native RGB samples and insert an opaque fourth byte; that byte
+  is alpha for RGBa and padding for RGBX. The architecture owners reuse the
+  reviewed RGBA expansion kernel. Pillow's `topalette` route accepts RGB for
+  either P or PA and supplies opaque alpha for PA. Its maintained Default
+  owner uses native RGB samples for those palette outputs; parity remains
+  pending.
 
 - RGB8→LAB leaf execution is source-reviewed as a scalar-control migration.
   The archived SIMD adapter accepted only exact RGB8 input and Pillow's RGB
@@ -204,15 +208,18 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   selects and executes source normalization, then selects this exact RGB8
   child route. Empty RGB8 images remain accepted with an empty LAB result.
   This source comparison has not been validated.
-- RGB8→P/PA remains a Default-only palette route. The archived SIMD Convert
+- RGB8→P/PA remains a Default-only Pillow palette route. The archived SIMD Convert
   target descriptor has no palette or palette-alpha target, and the maintained
   RGB8 architecture declarations likewise contain no P/PA specialization.
   The mode owner invokes the existing web-palette quantizer for P and the
   palette-alpha helper for PA with opaque source alpha, preserving exact
   `ImagePalette8`/`ImagePaletteAlpha8` output. P installs the WEB palette and
   keeps `PreserveSource` wrapper metadata; PA uses the alpha-capable palette
-  helper with `ExifOnly` metadata. This is an explicit Default destination,
-  not a missing architecture kernel; parity validation remains pending.
+  helper with `ExifOnly` metadata. Pillow's native `topalette` converter
+  accepts RGB sources for both P and PA; its Python RGBA→PA special case only
+  changes how source alpha is preserved. Both RGB8 palette targets remain
+  Pillow-scoped. This is an explicit Default destination, not a missing
+  architecture kernel; parity validation remains pending.
 
 - Convert-to-LAB is now declared as a composed Convert source/target route at
   the operation boundary. Pillow identities report Pillow scope; internal
@@ -2181,8 +2188,9 @@ Remaining put-family work includes typed wrapper boundaries and complete test/ca
 - RGBX8→P/PA now has a prepared Default strategy in `convert/rgbx8/default/convert_impl.rs`. It quantizes RGB samples directly from native RGBX storage, retaining source metadata for P and EXIF only for PA; the unused fourth byte is not interpreted as alpha.
 - RGBa→P/PA now has a prepared Default strategy in `convert/rgb_premultiplied8/default/convert_impl.rs`. It preserves the archived raw RGB sample quantization after dropping the fourth byte, retains source metadata for P, and uses opaque PA alpha with the `ExifOnly` policy.
 - LAB Default execution now also provides routes to L, LA, RGB, RGBA, CMYK, YCbCr, HSV, I, and F in `convert/lab8/default/convert_impl.rs`; its existing identity, I;16, and P/PA routes remain. L/LA use the native LAB grayscale kernel; RGB preserves the raw three-byte carrier; RGBA adds opaque alpha; numeric and color-space outputs use their existing native helpers. P/PA quantize the three-byte LAB carrier directly; P preserves source metadata, while PA uses opaque per-pixel alpha and the `ExifOnly` policy. The new target routes are source-only and unverified; the preexisting I;16 pairs also need exact archived-contract review before closing Convert.
-- RGB8→La, RGB8→RGBa, and RGB8→RGBX are core-only extensions beyond the archived Pillow source/target contract. Their `NO_PILLOW_SUPPORT` comments sit beside the Default and architecture implementations, and the Convert target contract lists the three identities separately so `OperationSupport::scope_for_target` can report the pair scope without marking all RGB8 conversions core-only. SSE2 build availability includes x86_64 and 32-bit x86 compiled with `target_feature="sse2"`; portable x86 builds retain Default fallback.
-- RGB8's architecture support also declares direct opaque-alpha routes for La and opaque four-channel targets RGBa/RGBX, reusing the LA and RGBA kernels while restoring the exact destination `Mode` variant. This is valid because the appended alpha/padding sample is 255, so premultiplied and ordinary color samples are identical for these conversions. The RGBa/RGBX architecture routes retain the nonempty guard used by RGBA expansion. The target guards expose the reconciled archived source/target matrix plus the explicitly core-only routes; same-mode RGB uses the archived five-pixel layout-copy path.
+- RGB8→La, RGB8→RGBa, RGB8→RGBX, and RGB8→P/PA are Pillow-supported conversions. The Convert table supplies the first three directly; Pillow's `topalette` route supports RGB input for both P and PA. Their Default and architecture implementations consume native RGB triplets and emit the exact destination variant. SSE2 build availability includes x86_64 and 32-bit x86 compiled with `target_feature="sse2"`; portable x86 builds retain Default fallback.
+- RGB8's architecture support declares direct opaque-alpha routes for La and opaque four-channel targets RGBa/RGBX, reusing the LA and RGBA kernels while restoring the exact destination `Mode` variant. This is valid because the appended alpha/padding sample is 255, so premultiplied and ordinary color samples are identical for these conversions. The RGBa/RGBX architecture routes retain the nonempty guard used by RGBA expansion. The target guards expose the reconciled Pillow source/target matrix; same-mode RGB uses the archived five-pixel layout-copy path.
+- The Pillow palette support matrix comes from its special [`frompalette`](https://github.com/python-pillow/Pillow/blob/main/src/libImaging/Convert.c#L1021-L1060) and [`topalette`](https://github.com/python-pillow/Pillow/blob/main/src/libImaging/Convert.c#L1086-L1105) paths: P/PA sources use `frompalette`; `topalette` accepts L, RGB, RGBX, RGBA, and RGBa for P and PA. One, LA, CMYK, YCbCr, HSV, LAB, I, F, and the four I;16 sources remain accepted native core extensions where implemented; their P/PA targets are marked CoreOnly in the corresponding support declarations and `NO_PILLOW_SUPPORT` beside their Default palette implementations. The internal five high-depth sources are CoreOnly by their mode scope. This classification is source-only; parity must cover the newly separated Pillow/core-only pairs.
 - RGB8 execution is now split into `sse2/convert_impl.rs`, `neon/convert_impl.rs`, and exact Luma8-only AVX2, SSSE3, and Wasm SIMD128 implementations. `rgb8/ops.rs` owns only support declarations, preparation, and architecture orchestration; shared typed output construction and telemetry live in `rgb8/helpers/vector.rs`. No algorithms or output contracts changed in this placement pass.
 - RGBA8, RGBa, and RGBX Luma8 architecture routes now invoke their concrete grayscale kernels from their own SSE2, NEON, AVX2, SSSE3, or Wasm SIMD128 strategy files. The former per-mode grayscale helpers that accepted an `Architecture` and matched again have been removed. Source review of the full Convert matrix remains open.
 - RGBX-to-RGB keeps its SSSE3 and NEON four-channel-to-three-channel kernels in concrete architecture owners; the RGBX strategy composes those raw-byte kernels while preserving the RGBX input identity until the explicit RGB output is constructed.

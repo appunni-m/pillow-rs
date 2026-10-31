@@ -33,6 +33,7 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
     }
 }
 
+// NO_PILLOW_SUPPORT: Pillow's palette converter rejects native `CMYK` input.
 pub(crate) fn execute_palette_target(
     source: &RgbaImage,
     target: Mode,

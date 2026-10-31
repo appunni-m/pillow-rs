@@ -60,6 +60,7 @@ fn luma_alpha(source: &RgbImage) -> Result<GrayAlphaImage, PilError> {
     Ok(output)
 }
 
+// NO_PILLOW_SUPPORT: Pillow's palette converter rejects native `LAB` input.
 pub(crate) fn execute_palette_target(
     source: &RgbImage,
     target: Mode,

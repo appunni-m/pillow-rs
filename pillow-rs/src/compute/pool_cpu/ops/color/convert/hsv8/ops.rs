@@ -32,8 +32,8 @@ const TARGETS: &[Mode] = &[
 ];
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: TARGETS,
-    core_only_targets: &[],
-    core_only_reason: None,
+    core_only_targets: super::super::ops::PALETTE_CORE_ONLY_TARGETS,
+    core_only_reason: Some(super::super::ops::PALETTE_CORE_ONLY_REASON),
     rejection_reason: "image has wrong mode",
 }];
 

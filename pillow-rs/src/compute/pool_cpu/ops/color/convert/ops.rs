@@ -179,10 +179,20 @@ pub(crate) const LUMA_INPUTS: &[InputContract] = &[InputContract::ConvertTarget 
     core_only_reason: None,
     rejection_reason: "image has wrong mode",
 }];
+pub(crate) const PALETTE_CORE_ONLY_TARGETS: &[Mode] =
+    &[Mode::ImagePalette8, Mode::ImagePaletteAlpha8];
+pub(crate) const PALETTE_CORE_ONLY_REASON: &str =
+    "Pillow's native palette conversion rejects this source mode";
+pub(crate) const ONE_INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
+    targets: LUMA_TARGETS,
+    core_only_targets: PALETTE_CORE_ONLY_TARGETS,
+    core_only_reason: Some(PALETTE_CORE_ONLY_REASON),
+    rejection_reason: "image has wrong mode",
+}];
 pub(crate) const LA_INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: LA_TARGETS,
-    core_only_targets: &[],
-    core_only_reason: None,
+    core_only_targets: PALETTE_CORE_ONLY_TARGETS,
+    core_only_reason: Some(PALETTE_CORE_ONLY_REASON),
     rejection_reason: "image has wrong mode",
 }];
 pub(crate) const RGBA_INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
@@ -207,14 +217,14 @@ pub(crate) const LA_PREMULTIPLIED_INPUTS: &[InputContract] =
     }];
 pub(crate) const I16_INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: I16_TARGETS,
-    core_only_targets: &[],
-    core_only_reason: None,
+    core_only_targets: PALETTE_CORE_ONLY_TARGETS,
+    core_only_reason: Some(PALETTE_CORE_ONLY_REASON),
     rejection_reason: "image has wrong mode",
 }];
 pub(crate) const SCALAR_INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: SCALAR_TARGETS,
-    core_only_targets: &[],
-    core_only_reason: None,
+    core_only_targets: PALETTE_CORE_ONLY_TARGETS,
+    core_only_reason: Some(PALETTE_CORE_ONLY_REASON),
     rejection_reason: "image has wrong mode",
 }];
 

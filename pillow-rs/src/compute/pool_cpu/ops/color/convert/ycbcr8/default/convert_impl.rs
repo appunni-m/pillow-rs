@@ -34,6 +34,7 @@ pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, P
     }
 }
 
+// NO_PILLOW_SUPPORT: Pillow's palette converter rejects native `YCbCr` input.
 pub(crate) fn execute_palette_target(
     source: &RgbImage,
     target: Mode,

@@ -106,6 +106,7 @@ fn to_f32(source: &RgbaImage) -> RgbaImage {
     output
 }
 
+// NO_PILLOW_SUPPORT: Pillow's palette converter rejects scalar `I` input.
 pub(crate) fn execute_palette_target(
     source: &RgbaImage,
     target: Mode,

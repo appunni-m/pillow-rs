@@ -66,7 +66,7 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::Convert,
     Mode::One,
     OutputModeRule::ByTargetModeWithPalette,
-    &super::super::ops::LUMA_INPUTS,
+    &super::super::ops::ONE_INPUTS,
     &ARCHITECTURES,
 );
 

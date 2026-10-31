@@ -15,6 +15,7 @@ pub(crate) fn execute(source: &GrayImage, target: Mode) -> Result<DynamicImage, 
     )
 }
 
+// NO_PILLOW_SUPPORT: Pillow's palette converter rejects bilevel `1` input.
 pub(crate) fn execute_palette_target(
     source: &GrayImage,
     target: Mode,

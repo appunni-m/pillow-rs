@@ -98,6 +98,7 @@ pub(crate) fn execute(
     }
 }
 
+// NO_PILLOW_SUPPORT: Pillow's palette converter rejects native `LA` input.
 pub(crate) fn execute_palette_target(
     source: &GrayAlphaImage,
     target: Mode,

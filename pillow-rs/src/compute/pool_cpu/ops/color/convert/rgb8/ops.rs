@@ -42,12 +42,8 @@ const TARGETS: &[Mode] = &[
 ];
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: TARGETS,
-    core_only_targets: &[
-        Mode::ImageLaPremultiplied8,
-        Mode::ImageRgbPremultiplied8,
-        Mode::ImageRgbx8,
-    ],
-    core_only_reason: Some("RGB to La, RGBa, and RGBX extend the archived Pillow Convert contract"),
+    core_only_targets: &[],
+    core_only_reason: None,
     rejection_reason: "image has wrong mode",
 }];
 

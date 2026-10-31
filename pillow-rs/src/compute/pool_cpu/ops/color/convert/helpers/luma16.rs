@@ -104,6 +104,7 @@ where
     }
 }
 
+// NO_PILLOW_SUPPORT: Pillow's palette converter rejects all four I;16 sources.
 pub(crate) fn execute_palette_target(
     source: &Samples,
     target: Mode,

@@ -15,8 +15,6 @@ pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, P
         }
         // Preserve the archived RGB→L scratch before constructing LA.
         Mode::ImageLumaA8 => convert_luma_alpha_from_rgb(source),
-        // NO_PILLOW_SUPPORT: The archived Pillow Convert contract rejects RGB→La.
-        // The core extension writes native L with opaque alpha directly.
         Mode::ImageLaPremultiplied8 => convert_luma_alpha_direct_to_la(source),
         Mode::ImageRgb8 => Ok(DynamicImage::ImageRgb8(source.clone())),
         // I;16 conversion materializes rounded L bytes before widening them.
@@ -49,7 +47,6 @@ pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, P
                 Rgba([pixel[0], pixel[1], pixel[2], 255])
             },
         ))),
-        // NO_PILLOW_SUPPORT: The archived Pillow Convert contract rejects RGB→RGBa.
         // Opaque alpha makes native RGB samples valid premultiplied samples.
         Mode::ImageRgbPremultiplied8 => Ok(DynamicImage::ImageRgbPremultiplied8(
             RgbaImage::from_fn(source.width(), source.height(), |x, y| {
@@ -57,8 +54,7 @@ pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, P
                 Rgba([pixel[0], pixel[1], pixel[2], 255])
             }),
         )),
-        // NO_PILLOW_SUPPORT: The archived Pillow Convert contract rejects RGB→RGBX.
-        // The core extension supplies an opaque padding byte to native RGB samples.
+        // RGBX is Pillow-defined; append its required opaque padding byte.
         Mode::ImageRgbx8 => Ok(DynamicImage::ImageRgbx8(RgbaImage::from_fn(
             source.width(),
             source.height(),
@@ -91,6 +87,7 @@ pub(crate) fn execute_palette_target(
         return Err(PilError::ValueError("image has wrong mode".into()));
     }
     let dither = !matches!(dither, Some(DitherMethod::None));
+    // Pillow's topalette path accepts RGB for both P and PA; RGB supplies opaque PA alpha.
     if target == Mode::ImagePaletteAlpha8 {
         return crate::compute::pool_cpu::ops::color::convert::helpers::palette::web_alpha_from_rgb_samples(
             source.width(),
