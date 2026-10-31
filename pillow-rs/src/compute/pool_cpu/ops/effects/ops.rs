@@ -7,7 +7,7 @@
 
 use crate::compute::registry::support::{
     InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport,
-    RejectionKind, StrategySelection,
+    PaletteKnowledge, RejectionKind, RequestFacts, StrategyInputs, StrategySelection,
 };
 use crate::compute::ExecutionContext;
 use crate::error::PilError;
@@ -17,6 +17,8 @@ use crate::compute::pool_cpu::ops::effects::helpers::generator::GeneratedImage;
 
 pub(crate) const SPREAD_INPUTS: &[InputContract] = &[InputContract::EffectSpreadDistance];
 pub(crate) const NOISE_INPUTS: &[InputContract] = &[InputContract::EffectNoiseSigma];
+pub(crate) const MANDELBROT_INPUTS: &[InputContract] =
+    &[InputContract::EffectMandelbrotParameters];
 const NO_INPUTS: &[InputContract] = &[];
 
 pub(crate) enum PreparedLinearGradient {
@@ -33,6 +35,13 @@ pub(crate) enum PreparedRadialGradient {
     ImagePalette8(super::palette8::ops::RadialGradientStrategy),
     ImageI32(super::i32::ops::RadialGradientStrategy),
     ImageF32(super::f32::ops::RadialGradientStrategy),
+}
+
+pub(crate) struct PreparedMandelbrot {
+    strategy: super::luma8::ops::MandelbrotStrategy,
+    size: (u32, u32),
+    extent: (f64, f64, f64, f64),
+    quality: i32,
 }
 
 fn rejected_gradient_mode(mode: Mode) -> ModeSupport {
@@ -103,6 +112,40 @@ fn classify_radial_gradient(mode: Mode) -> ModeSupport {
     }
 }
 
+fn classify_mandelbrot(mode: Mode) -> ModeSupport {
+    match mode {
+        Mode::ImageLuma8 => super::luma8::ops::MANDELBROT_SUPPORT,
+        Mode::One
+        | Mode::ImageLumaA8
+        | Mode::ImageLaPremultiplied8
+        | Mode::ImagePalette8
+        | Mode::ImagePaletteAlpha8
+        | Mode::ImageRgb8
+        | Mode::ImageRgba8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8
+        | Mode::ImageYCbCr8
+        | Mode::ImageLab8
+        | Mode::ImageHsv8
+        | Mode::ImageI32
+        | Mode::ImageF32
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N
+        | Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => ModeSupport::Rejected {
+            mode,
+            reason: "Mandelbrot output mode is fixed to L",
+            kind: RejectionKind::ValueError,
+        },
+    }
+}
+
 /// Exhaustive support contract for direct eager LinearGradient construction.
 pub(crate) static LINEAR_GRADIENT_SUPPORT: OperationSupport = OperationSupport::new(
     OperationId::LinearGradient,
@@ -116,6 +159,28 @@ pub(crate) static RADIAL_GRADIENT_SUPPORT: OperationSupport = OperationSupport::
     NO_INPUTS,
     classify_radial_gradient,
 );
+
+/// Mandelbrot is a fixed-L constructor; mode classification describes output identity.
+pub(crate) static MANDELBROT_SUPPORT: OperationSupport = OperationSupport::new(
+    OperationId::EffectMandelbrot,
+    MANDELBROT_INPUTS,
+    classify_mandelbrot,
+);
+
+impl PreparedMandelbrot {
+    pub(crate) fn selection(&self) -> &StrategySelection {
+        self.strategy.selection()
+    }
+
+    pub(crate) fn execute(self) -> Result<GeneratedImage, PilError> {
+        super::luma8::ops::execute_mandelbrot(
+            self.strategy,
+            self.size,
+            self.extent,
+            self.quality,
+        )
+    }
+}
 
 impl PreparedLinearGradient {
     pub(crate) fn selection(&self) -> &StrategySelection {
@@ -245,6 +310,35 @@ pub(crate) fn prepare_radial_gradient(
             "rejected RadialGradient mode produced a strategy selection".into(),
         )),
     }
+}
+
+pub(crate) fn prepare_mandelbrot(
+    size: (u32, u32),
+    extent: (f64, f64, f64, f64),
+    quality: i32,
+    ctx: &ExecutionContext,
+) -> Result<PreparedMandelbrot, PilError> {
+    let (x0, y0, x1, y1) = extent;
+    let facts = StrategyInputs {
+        width: size.0,
+        height: size.1,
+        byte_len: None,
+        palette: PaletteKnowledge::Absent,
+        request: RequestFacts::EffectMandelbrot {
+            extent_bits: (x0.to_bits(), y0.to_bits(), x1.to_bits(), y1.to_bits()),
+            quality,
+        },
+    };
+    let selection = MANDELBROT_SUPPORT
+        .for_mode(Mode::ImageLuma8)
+        .select(ctx, facts)?;
+    let strategy = super::luma8::ops::prepare_mandelbrot(selection)?;
+    Ok(PreparedMandelbrot {
+        strategy,
+        size,
+        extent,
+        quality,
+    })
 }
 
 macro_rules! declare_effect_modes {

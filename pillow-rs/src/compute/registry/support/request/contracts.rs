@@ -19,6 +19,7 @@ pub(super) fn assess(
         | InputContract::SharpnessFactor
         | InputContract::EffectSpreadDistance
         | InputContract::EffectNoiseSigma
+        | InputContract::EffectMandelbrotParameters
         | InputContract::Rotate
         | InputContract::PosterizeBits
         | InputContract::ByteLutEntries { .. }
@@ -162,6 +163,7 @@ fn assess_request(
         | (InputContract::SharpnessFactor, RequestFacts::Unspecified)
         | (InputContract::EffectSpreadDistance, RequestFacts::Unspecified)
         | (InputContract::EffectNoiseSigma, RequestFacts::Unspecified)
+        | (InputContract::EffectMandelbrotParameters, RequestFacts::Unspecified)
         | (InputContract::Rotate, RequestFacts::Unspecified)
         | (InputContract::PosterizeBits, RequestFacts::Unspecified)
         | (InputContract::ByteLutEntries { .. }, RequestFacts::Unspecified)
@@ -177,8 +179,24 @@ fn assess_request(
             unresolved_request(contract)
         }
         (InputContract::EffectSpreadDistance, RequestFacts::EffectSpread { .. })
-        | (InputContract::EffectNoiseSigma, RequestFacts::EffectNoise { .. })
-        | (InputContract::Rotate, RequestFacts::Rotate { .. }) => Ok(None),
+        | (InputContract::EffectNoiseSigma, RequestFacts::EffectNoise { .. }) => Ok(None),
+        (
+            InputContract::EffectMandelbrotParameters,
+            RequestFacts::EffectMandelbrot { extent_bits, quality },
+        ) => {
+            if input.width == 0 || input.height == 0 {
+                return Ok(None);
+            }
+            let (x0, y0, x1, y1) = extent_bits;
+            let extent_width = f64::from_bits(x1) - f64::from_bits(x0);
+            let extent_height = f64::from_bits(y1) - f64::from_bits(y0);
+            if extent_width < 0.0 || extent_height < 0.0 || quality < 2 {
+                Err(PilError::ValueError("unrecognized argument value".into()))
+            } else {
+                Ok(None)
+            }
+        }
+        (InputContract::Rotate, RequestFacts::Rotate { .. }) => Ok(None),
         (InputContract::Filter3x3Parameters, RequestFacts::Filter3x3 { .. })
         | (InputContract::Filter5x5Parameters, RequestFacts::Filter5x5 { .. })
         | (InputContract::GaussianBlurSigma, RequestFacts::GaussianBlur { .. })
@@ -245,6 +263,9 @@ fn assess_request(
             Ok(None)
         }
         (InputContract::EffectSpreadDistance, _) => Err(wrong_request("EffectSpread")),
+        (InputContract::EffectMandelbrotParameters, _) => {
+            Err(wrong_request("EffectMandelbrot"))
+        }
         (InputContract::Filter3x3Parameters, _) => Err(wrong_request("Filter3x3")),
         (InputContract::Filter5x5Parameters, _) => Err(wrong_request("Filter5x5")),
         (InputContract::GaussianBlurSigma, _) => Err(wrong_request("GaussianBlur")),

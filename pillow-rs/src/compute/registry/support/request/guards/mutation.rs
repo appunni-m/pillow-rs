@@ -90,6 +90,19 @@ pub(super) fn effect_noise_vector_guard(input: StrategyInputs) -> GuardAssessmen
     }
 }
 
+pub(super) fn effect_mandelbrot_vector_guard(input: StrategyInputs) -> GuardAssessment {
+    match input.request {
+        RequestFacts::EffectMandelbrot { .. } => (),
+        RequestFacts::Unspecified => return GuardAssessment::Deferred,
+        _ => return GuardAssessment::Ineligible,
+    }
+    if input.width < 8 || input.height == 0 {
+        GuardAssessment::Ineligible
+    } else {
+        GuardAssessment::Satisfied
+    }
+}
+
 pub(super) fn expand_vector_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     if !(1..=4).contains(&channels) {
         return GuardAssessment::Ineligible;
@@ -376,6 +389,7 @@ pub(super) fn pixel_span_guard(input: StrategyInputs, channels: u8) -> GuardAsse
         | RequestFacts::Posterize { .. }
         | RequestFacts::EffectSpread { .. }
         | RequestFacts::EffectNoise { .. }
+        | RequestFacts::EffectMandelbrot { .. }
         | RequestFacts::EvalLut { .. }
         | RequestFacts::PointFloatLut { .. }
         | RequestFacts::FilterWindow { .. }
@@ -433,6 +447,7 @@ pub(super) fn pixel_write_run_guard(input: StrategyInputs) -> GuardAssessment {
         | RequestFacts::Posterize { .. }
         | RequestFacts::EffectSpread { .. }
         | RequestFacts::EffectNoise { .. }
+        | RequestFacts::EffectMandelbrot { .. }
         | RequestFacts::EvalLut { .. }
         | RequestFacts::PointFloatLut { .. }
         | RequestFacts::FilterWindow { .. }

@@ -233,3 +233,105 @@ pub(crate) fn execute_radial_gradient(
         }
     }
 }
+
+static MANDELBROT_ARCHITECTURES: [ImplementationSupport; 4] = [
+    ImplementationSupport::cpu(
+        OperationId::EffectMandelbrot,
+        Mode::ImageLuma8,
+        Architecture::Avx,
+        cfg!(all(
+            any(target_arch = "x86", target_arch = "x86_64"),
+            target_feature = "avx",
+            not(target_feature = "avx512f")
+        )),
+        &[Architecture::Avx],
+        StrategyGuard::EffectMandelbrotVector,
+    ),
+    ImplementationSupport::cpu(
+        OperationId::EffectMandelbrot,
+        Mode::ImageLuma8,
+        Architecture::Sse2,
+        cfg!(all(
+            any(target_arch = "x86", target_arch = "x86_64"),
+            target_feature = "sse2",
+            not(target_feature = "avx"),
+            not(target_feature = "avx512f")
+        )),
+        &[Architecture::Sse2],
+        StrategyGuard::EffectMandelbrotVector,
+    ),
+    ImplementationSupport::cpu(
+        OperationId::EffectMandelbrot,
+        Mode::ImageLuma8,
+        Architecture::Neon,
+        cfg!(all(target_arch = "aarch64", target_feature = "neon")),
+        &[Architecture::Neon],
+        StrategyGuard::EffectMandelbrotVector,
+    ),
+    ImplementationSupport::cpu(
+        OperationId::EffectMandelbrot,
+        Mode::ImageLuma8,
+        Architecture::WasmSimd128,
+        cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
+        &[Architecture::WasmSimd128],
+        StrategyGuard::EffectMandelbrotVector,
+    ),
+];
+
+pub(crate) const MANDELBROT_SUPPORT: ModeSupport = ModeSupport::cpu(
+    OperationId::EffectMandelbrot,
+    Mode::ImageLuma8,
+    OutputModeRule::Fixed(Mode::ImageLuma8),
+    super::super::ops::MANDELBROT_INPUTS,
+    &MANDELBROT_ARCHITECTURES,
+);
+
+pub(crate) enum MandelbrotImplementation {
+    Default,
+    Avx,
+    Sse2,
+    Neon,
+    WasmSimd128,
+}
+pub(crate) type MandelbrotStrategy = Prepared<MandelbrotImplementation>;
+
+pub(crate) fn prepare_mandelbrot(
+    selection: crate::compute::registry::support::StrategySelection,
+) -> Result<MandelbrotStrategy, PilError> {
+    let implementation = match selection.implementation.architecture {
+        Architecture::Default => MandelbrotImplementation::Default,
+        Architecture::Avx => MandelbrotImplementation::Avx,
+        Architecture::Sse2 => MandelbrotImplementation::Sse2,
+        Architecture::Neon => MandelbrotImplementation::Neon,
+        Architecture::WasmSimd128 => MandelbrotImplementation::WasmSimd128,
+        architecture => return Err(PilError::InternalError(format!(
+            "unexpected {architecture:?} architecture selected for EffectMandelbrot mode ImageLuma8"
+        ))),
+    };
+    Ok(Prepared::new(implementation, selection))
+}
+
+pub(crate) fn execute_mandelbrot(
+    plan: MandelbrotStrategy,
+    size: (u32, u32),
+    extent: (f64, f64, f64, f64),
+    quality: i32,
+) -> Result<crate::compute::pool_cpu::ops::effects::helpers::generator::GeneratedImage, PilError> {
+    match plan.implementation {
+        MandelbrotImplementation::Default => {
+            super::default::mandelbrot_impl::execute(size, extent, quality)
+        }
+        MandelbrotImplementation::Avx => {
+            super::avx::mandelbrot_impl::execute(size, extent, quality)
+        }
+        MandelbrotImplementation::Sse2 => {
+            super::sse2::mandelbrot_impl::execute(size, extent, quality)
+        }
+        MandelbrotImplementation::Neon => {
+            super::neon::mandelbrot_impl::execute(size, extent, quality)
+        }
+        MandelbrotImplementation::WasmSimd128 => {
+            super::wasm_simd128::mandelbrot_impl::execute(size, extent, quality)
+        }
+    }
+}

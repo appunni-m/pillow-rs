@@ -39,6 +39,8 @@ pub enum InputContract {
     EffectSpreadDistance,
     /// EffectNoise consumes typed f64 sigma and rounds at Pillow's f32 boundary.
     EffectNoiseSigma,
+    /// EffectMandelbrot consumes output dimensions, extent, and quality.
+    EffectMandelbrotParameters,
     /// Rotate receives normalized angle, filter, fill, center, and translation facts.
     Rotate,
     /// Eval receives exactly 256 byte-LUT entries for each native band.
@@ -361,6 +363,8 @@ pub enum StrategyGuard {
     },
     /// Nonempty image dimensions and finite sigma for EffectNoise's vector data plane.
     EffectNoiseVector,
+    /// Eight-lane Mandelbrot generation with at least one complete vector per row.
+    EffectMandelbrotVector,
     /// Equal primary and secondary dimensions required by native-byte Chops vectors.
     ChopsEqualDimensions,
     /// Chops Add/Sub request admitted by the native byte-vector kernel.
@@ -533,6 +537,7 @@ impl StrategyGuard {
             Self::EffectSpreadBytes { channels } =>
                 guards::effect_spread_bytes_guard(input, channels),
             Self::EffectNoiseVector => guards::effect_noise_vector_guard(input),
+            Self::EffectMandelbrotVector => guards::effect_mandelbrot_vector_guard(input),
             Self::NativeBytes { channels } => guards::native_bytes_guard(input, channels),
             Self::AlphaCompositeVector { channels } => {
                 guards::alpha_composite_vector_guard(input, channels)

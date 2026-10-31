@@ -25,6 +25,13 @@ pub enum RequestFacts {
         /// Original input value retained without NaN normalization.
         sigma_bits: u64,
     },
+    /// Mandelbrot's extent and quality, with output dimensions in `StrategyInputs`.
+    EffectMandelbrot {
+        /// Exact f64 bit patterns for `(x0, y0, x1, y1)`.
+        extent_bits: (u64, u64, u64, u64),
+        /// Escape iteration quality.
+        quality: i32,
+    },
     /// Expanded byte lookup table supplied to the exact-mode Eval operation.
     EvalLut {
         /// Number of table entries across all native bands.

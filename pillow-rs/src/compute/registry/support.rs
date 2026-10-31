@@ -160,6 +160,8 @@ pub enum OperationId {
     LinearGradient,
     /// Construct a fixed 256 by 256 typed radial-gradient raster.
     RadialGradient,
+    /// Construct a typed native-L Mandelbrot raster.
+    EffectMandelbrot,
     /// Alpha-composite one same-sized LA or RGBA image over another.
     AlphaComposite,
     /// One normalized native-byte pixel write with caller-validated coordinates.
@@ -277,6 +279,7 @@ impl OperationId {
             Self::EffectNoise => &crate::compute::pool_cpu::ops::effects::ops::EFFECT_NOISE_SUPPORT,
             Self::LinearGradient => &crate::compute::pool_cpu::ops::effects::ops::LINEAR_GRADIENT_SUPPORT,
             Self::RadialGradient => &crate::compute::pool_cpu::ops::effects::ops::RADIAL_GRADIENT_SUPPORT,
+            Self::EffectMandelbrot => &crate::compute::pool_cpu::ops::effects::ops::MANDELBROT_SUPPORT,
             Self::AlphaComposite => {
                 &crate::compute::pool_cpu::ops::composite::ops::ALPHA_COMPOSITE_SUPPORT
             }

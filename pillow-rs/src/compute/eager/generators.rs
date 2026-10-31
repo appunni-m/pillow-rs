@@ -206,3 +206,38 @@ pub(crate) fn execute_eager_cpu_radial_gradient(mode: Mode) -> Result<DynamicIma
     );
     Ok(generated.image)
 }
+
+pub(crate) fn execute_eager_cpu_mandelbrot(
+    size: (u32, u32),
+    extent: (f64, f64, f64, f64),
+    quality: i32,
+) -> Result<DynamicImage, PilError> {
+    let route = route_generator()?;
+    let validation_start = route.timed.then(pipeline_timestamp).flatten();
+    let prepared = crate::compute::pool_cpu::ops::effects::ops::prepare_mandelbrot(
+        size,
+        extent,
+        quality,
+        &route.context,
+    )?;
+    let validation_ns = elapsed_ns(validation_start);
+    let selection = *prepared.selection();
+    begin_generator_receipt("EffectMandelbrot", &route);
+    let backend_start = route.timed.then(pipeline_timestamp).flatten();
+    let generated = match prepared.execute() {
+        Ok(generated) => generated,
+        Err(error) => {
+            discard_generator_receipt(&route);
+            return Err(error);
+        }
+    };
+    record_generator_receipt(
+        "EffectMandelbrot",
+        &route,
+        validation_ns,
+        elapsed_ns(backend_start),
+        selection,
+        &generated,
+    );
+    Ok(generated.image)
+}
