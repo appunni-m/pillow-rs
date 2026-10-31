@@ -266,6 +266,36 @@ pub(super) fn filter5x5_native_bytes_vectorizable_guard(
     }
 }
 
+pub(super) fn filter5x5_i32_binomial_fma_guard(input: StrategyInputs) -> GuardAssessment {
+    let (kernel_bits, scale_bits, offset_bits) = match input.request {
+        RequestFacts::Filter5x5 { kernel_bits, scale_bits, offset_bits } => {
+            (kernel_bits, scale_bits, offset_bits)
+        }
+        RequestFacts::Unspecified => return GuardAssessment::Deferred,
+        _ => return GuardAssessment::Ineligible,
+    };
+    let scale = f32::from_bits(scale_bits);
+    if !scale.is_finite() || scale == 0.0 || f32::from_bits(offset_bits) != 0.0 {
+        return GuardAssessment::Ineligible;
+    }
+
+    let factors = [1.0f32, 4.0, 6.0, 4.0, 1.0];
+    let exact_binomial = kernel_bits.iter().enumerate().all(|(index, bits)| {
+        let coefficient = f32::from_bits(*bits);
+        if !coefficient.is_finite() {
+            return false;
+        }
+        let normalized = coefficient / scale;
+        let expected = factors[index % 5] * factors[index / 5] / 256.0;
+        normalized.to_bits() == expected.to_bits()
+    });
+    if exact_binomial {
+        GuardAssessment::Satisfied
+    } else {
+        GuardAssessment::Ineligible
+    }
+}
+
 pub(super) fn filter_native_byte_blur_guard(
     input: StrategyInputs,
     channels: u8,

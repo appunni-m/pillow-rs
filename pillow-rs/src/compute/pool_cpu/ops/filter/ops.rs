@@ -1,9 +1,10 @@
 //! Filter support contracts and prepared CPU dispatch.
 //!
 //! TODO(pillow-rs#3ptb): compare the migrated general blur and RGBA uniform
-//! strategies against every archived mode route; review Filter5x5 Default paths
-//! and reconcile every public Filter caller before closing this family. Keep
-//! Rayon out of this serial owner.
+//! strategies against every archived mode route; cover the exact-binomial I32
+//! AVX/FMA route and ineligible-request Default fallback in CPU parity; review
+//! Filter5x5 Default paths and reconcile every public Filter caller before
+//! closing this family. Keep Rayon out of this serial owner.
 
 use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{

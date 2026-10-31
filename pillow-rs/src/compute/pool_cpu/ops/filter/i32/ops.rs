@@ -53,18 +53,28 @@ const AVX2_FMA_FILTER3X3: &[ImplementationSupport] = &[ImplementationSupport::cp
     StrategyGuard::Filter3x3I32Vectorizable { channels: 4 },
 )];
 
-const AVX2_FMA_FILTER5X5: &[ImplementationSupport] = &[ImplementationSupport::cpu(
-    OperationId::Filter5x5,
-    MODE,
-    Architecture::Avx2Fma,
-    cfg!(all(
-        any(target_arch = "x86", target_arch = "x86_64"),
-        target_feature = "avx2",
-        target_feature = "fma"
-    )),
-    &[Architecture::Avx2Fma],
-    StrategyGuard::Always,
-)];
+const FILTER5X5_ARCHITECTURES: &[ImplementationSupport] = &[
+    ImplementationSupport::cpu(
+        OperationId::Filter5x5,
+        MODE,
+        Architecture::Avx2Fma,
+        cfg!(all(
+            any(target_arch = "x86", target_arch = "x86_64"),
+            target_feature = "avx2",
+            target_feature = "fma"
+        )),
+        &[Architecture::Avx2Fma],
+        StrategyGuard::Always,
+    ),
+    ImplementationSupport::cpu(
+        OperationId::Filter5x5,
+        MODE,
+        Architecture::AvxFma,
+        cfg!(any(target_arch = "x86", target_arch = "x86_64")),
+        &[Architecture::AvxFma],
+        StrategyGuard::Filter5x5I32BinomialFma,
+    ),
+];
 
 fn rejected() -> ModeSupport {
     ModeSupport::Rejected {
@@ -82,7 +92,9 @@ pub(super) fn support(operation: OperationId) -> ModeSupport {
         OperationId::Filter3x3 => core_only(OperationId::Filter3x3, MODE, AVX2_FMA_FILTER3X3),
         // NO_PILLOW_SUPPORT: Pillow 12.2 Kernel is documented for L and RGB only;
         // this native mode strategy extends that contract.
-        OperationId::Filter5x5 => core_only(OperationId::Filter5x5, MODE, AVX2_FMA_FILTER5X5),
+        OperationId::Filter5x5 => {
+            core_only(OperationId::Filter5x5, MODE, FILTER5X5_ARCHITECTURES)
+        }
         OperationId::GaussianBlur | OperationId::BoxBlur => rejected(),
         OperationId::MedianFilter => ModeSupport::serial(
             OperationId::MedianFilter, Mode::ImageI32, inputs_for(OperationId::MedianFilter),
@@ -120,6 +132,15 @@ pub(super) fn execute(
             }
             _ => Err(PilError::InternalError(
                 "AVX2/FMA filter selection received an unsupported convolution request".into(),
+            )),
+        },
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        Architecture::AvxFma => match request {
+            super::super::ops::FilterRequest::Filter5x5 { kernel, scale, offset } => {
+                avx::execute(image, &kernel, scale, offset)
+            }
+            _ => Err(PilError::InternalError(
+                "AVX/FMA filter selection received an unsupported convolution request".into(),
             )),
         },
         _ => Err(PilError::InternalError("filter selected an unowned architecture".into())),

@@ -7,7 +7,7 @@ use crate::ops::pil_resize::i32_samples_from_le_bytes;
 use crate::raster::DynamicImage;
 
 
-trait F32MulAdd {
+pub(super) trait F32MulAdd {
     fn mul_add(&self, sample: f32, weight: f32, accumulator: f32) -> f32;
 }
 
@@ -112,20 +112,6 @@ fn read_i32_pixel_le(raw: &[u8], pixel_index: usize) -> i32 {
     let byte = pixel_index * 4;
     i32::from_le_bytes([raw[byte], raw[byte + 1], raw[byte + 2], raw[byte + 3]])
 }
-
-/// Convert each I-mode sample to f32 once, then reuse five source rows while
-/// evaluating the scalar convolution in Pillow's original FMA order.
-
-fn filter_5x5_i32_f32_ring(
-    raw: &[u8],
-    width: usize,
-    height: usize,
-    kernel: &[f32; 25],
-    offset: f32,
-) -> Option<Vec<u8>> {
-    filter_5x5_i32_f32_ring_with_fma(raw, width, height, kernel, offset, &PortableF32Fma)
-}
-
 
 fn filter_5x5_i32_output_with_copied_border(
     raw: &[u8],
@@ -507,6 +493,17 @@ fn filter_5x5_i32_f32_ring_with_fma<F: F32MulAdd>(
     Some(output)
 }
 
+#[cfg(test)]
+fn filter_5x5_i32_f32_ring(
+    raw: &[u8],
+    width: usize,
+    height: usize,
+    kernel: &[f32; 25],
+    offset: f32,
+) -> Option<Vec<u8>> {
+    filter_5x5_i32_f32_ring_with_fma(raw, width, height, kernel, offset, &PortableF32Fma)
+}
+
 /// Prove that a uniform I image is unchanged by this exact normalized 5x5
 /// convolution. The sample and the five row sums use the same f32 conversion,
 /// FMA order, vertical accumulation, bias, and truncation as
@@ -565,6 +562,7 @@ fn filter_5x5_i32_fast_path(
     height: usize,
     kernel: &[f32; 25],
     offset: f32,
+    fma: &impl F32MulAdd,
 ) -> Option<Vec<u8>> {
     if uniform_i32_filter5x5_is_identity(raw, width, height, kernel, offset + 0.5) {
         return Some(raw.to_vec());
@@ -589,7 +587,7 @@ fn filter_5x5_i32_fast_path(
         }
     }
 
-    filter_5x5_i32_f32_ring(raw, width, height, kernel, offset)
+    filter_5x5_i32_f32_ring_with_fma(raw, width, height, kernel, offset, fma)
 }
 
 fn filter_5x5_i32_image(width: u32, height: u32, raw: Vec<u8>) -> Result<DynamicImage, PilError> {
@@ -604,9 +602,17 @@ pub(super) fn execute(
     scale: f32,
     offset: f32,
 ) -> Result<DynamicImage, PilError> {
-    // I-mode stores one little-endian i32 word per four-byte pixel. Borrow a
-    // matching carrier directly, keeping the existing accessor fallback for
-    // mismatched internal variants.
+    execute_with_fma(img, kernel, scale, offset, &PortableF32Fma)
+}
+
+pub(super) fn execute_with_fma(
+    img: &DynamicImage,
+    kernel: &[f32; 25],
+    scale: f32,
+    offset: f32,
+    fma: &impl F32MulAdd,
+) -> Result<DynamicImage, PilError> {
+    // Exact ImageI32 variants store one little-endian i32 word per four-byte pixel.
     let (w_u32, h_u32) = (img.width(), img.height());
     let DynamicImage::ImageI32(image) = img else {
         return Err(PilError::InternalError(
@@ -627,8 +633,14 @@ pub(super) fn execute(
     
 
     
-    if let Some(output) = filter_5x5_i32_fast_path(raw, w_u32 as usize, h_u32 as usize, &kd, offset)
-    {
+    if let Some(output) = filter_5x5_i32_fast_path(
+        raw,
+        w_u32 as usize,
+        h_u32 as usize,
+        &kd,
+        offset,
+        fma,
+    ) {
         return filter_5x5_i32_image(w_u32, h_u32, output);
     }
 

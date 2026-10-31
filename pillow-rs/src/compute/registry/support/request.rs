@@ -379,6 +379,8 @@ pub enum StrategyGuard {
         /// Physical byte channels in this exact mode's storage.
         channels: u8,
     },
+    /// I32 Filter5x5's exact normalized binomial kernel, safe for scalar AVX/FMA.
+    Filter5x5I32BinomialFma,
     /// Native-byte BoxBlur or GaussianBlur with an exact mode layout.
     FilterNativeByteBlur {
         /// Physical byte channels in this exact mode's storage.
@@ -655,6 +657,9 @@ impl StrategyGuard {
             }
             Self::Filter5x5NativeBytesVectorizable { channels } => {
                 guards::filter5x5_native_bytes_vectorizable_guard(input, channels)
+            }
+            Self::Filter5x5I32BinomialFma => {
+                guards::filter5x5_i32_binomial_fma_guard(input)
             }
             Self::FilterNativeByteBlur { channels } => {
                 guards::filter_native_byte_blur_guard(input, channels)

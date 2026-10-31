@@ -15,6 +15,7 @@ pub(super) use core::{
     filter3x3_i32_vectorizable_guard,
     filter3x3_native_bytes_vectorizable_guard,
     filter5x5_native_bytes_vectorizable_guard,
+    filter5x5_i32_binomial_fma_guard,
     filter_native_byte_blur_guard,
     filter_luma_rank_window_guard,
     filter_native_byte_extrema_guard,
