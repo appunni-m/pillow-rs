@@ -135,6 +135,12 @@ pub(super) fn try_convert_early_modes(
         return Ok(Some(result));
     }
     if target_mode == Mode::ImageLab8 {
+        if crate::compute::pool_cpu::ops::color::convert::ops::SUPPORT
+            .scope_for_target(source_mode, target_mode)
+            .is_none()
+        {
+            return Ok(None);
+        }
         return Ok(Some(convert_to_lab(image, source_mode)?));
     }
     if let Some(converted) =

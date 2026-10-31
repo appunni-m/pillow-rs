@@ -111,8 +111,20 @@ impl PreparedConvertLab<'_> {
     }
 
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
-        super::rgb8::default::convert_lab_impl::execute(self.source)
+        execute_selected_rgb_to_lab(self.source, self.selection)
     }
+}
+
+pub(crate) fn execute_selected_rgb_to_lab(
+    source: &RgbImage,
+    selection: StrategySelection,
+) -> Result<DynamicImage, PilError> {
+    if selection.implementation.architecture != crate::compute::Architecture::Default {
+        return Err(PilError::InternalError(
+            "ConvertLab selected an undeclared RGB architecture".into(),
+        ));
+    }
+    super::rgb8::default::convert_lab_impl::execute(source)
 }
 
 /// Prepares the selected source-mode strategy using the image's variant tag.

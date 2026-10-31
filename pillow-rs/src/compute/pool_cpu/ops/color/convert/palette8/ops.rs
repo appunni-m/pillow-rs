@@ -16,6 +16,7 @@ const TARGETS: &[Mode] = &[
     Mode::ImageLumaA8,
     Mode::ImagePaletteAlpha8,
     Mode::ImageRgb8,
+    Mode::ImageLab8,
     Mode::ImageRgba8,
     Mode::ImageCmyk8,
     Mode::ImageYCbCr8,

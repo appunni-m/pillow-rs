@@ -7,8 +7,13 @@ pub(crate) fn execute(
     source: &GrayAlphaImage,
     target: Mode,
 ) -> Result<DynamicImage, PilError> {
+    if target == Mode::ImageLaPremultiplied8 {
+        return Ok(DynamicImage::ImageLaPremultiplied8(source.clone()));
+    }
     if target != Mode::ImageLumaA8 {
-        return Err(PilError::ValueError("image has wrong mode".into()));
+        return Err(PilError::ValueError(
+            "conversion from La to L not supported".into(),
+        ));
     }
     let mut output = GrayAlphaImage::new(source.width(), source.height());
     for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {

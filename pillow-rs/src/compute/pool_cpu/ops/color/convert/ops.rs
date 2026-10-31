@@ -2,8 +2,9 @@
 
 use crate::compute::{ExecutionContext, registry::support::{
     InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport,
-    StrategySelection, SupportAssessment,
+    PaletteKnowledge, RequestFacts, StrategySelection, SupportAssessment, StrategyInputs,
 }};
+use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::pipeline::{DitherMethod, PipelineOp};
 use crate::raster::{DynamicImage, Mode};
@@ -16,6 +17,7 @@ const LUMA_TARGETS: &[Mode] = &[
     Mode::ImagePaletteAlpha8,
     Mode::ImageRgb8,
     Mode::ImageRgba8,
+    Mode::ImageLab8,
     Mode::ImageI16,
     Mode::ImageI16L,
     Mode::ImageI16B,
@@ -39,6 +41,7 @@ const LA_TARGETS: &[Mode] = &[
     Mode::ImageLaPremultiplied8,
     Mode::ImageRgb8,
     Mode::ImageRgba8,
+    Mode::ImageLab8,
     Mode::ImageRgbx8,
     Mode::ImageCmyk8,
     Mode::ImageYCbCr8,
@@ -58,6 +61,7 @@ const RGBA_TARGETS: &[Mode] = &[
     Mode::ImageI16N,
     Mode::ImageRgb8,
     Mode::ImageRgba8,
+    Mode::ImageLab8,
     Mode::ImageRgbPremultiplied8,
     Mode::ImageRgbx8,
     Mode::ImageCmyk8,
@@ -79,6 +83,7 @@ const RGB_PREMULTIPLIED_TARGETS: &[Mode] = &[
     Mode::ImageLaPremultiplied8,
     Mode::ImageRgb8,
     Mode::ImageRgba8,
+    Mode::ImageLab8,
     Mode::ImageRgbx8,
     Mode::ImageCmyk8,
     Mode::ImageYCbCr8,
@@ -86,7 +91,10 @@ const RGB_PREMULTIPLIED_TARGETS: &[Mode] = &[
     Mode::ImageI32,
     Mode::ImageF32,
 ];
-const LA_PREMULTIPLIED_TARGETS: &[Mode] = &[Mode::ImageLumaA8];
+const LA_PREMULTIPLIED_TARGETS: &[Mode] = &[
+    Mode::ImageLaPremultiplied8,
+    Mode::ImageLumaA8,
+];
 const I16_TARGETS: &[Mode] = &[
     Mode::One,
     Mode::ImageLuma8,
@@ -97,6 +105,7 @@ const I16_TARGETS: &[Mode] = &[
     Mode::ImageI16L,
     Mode::ImageI16B,
     Mode::ImageI16N,
+    Mode::ImageLab8,
     Mode::ImageRgb8,
     Mode::ImageRgba8,
     Mode::ImageCmyk8,
@@ -120,6 +129,7 @@ pub(crate) const RGBX_TARGETS: &[Mode] = &[
     Mode::ImageCmyk8,
     Mode::ImageYCbCr8,
     Mode::ImageHsv8,
+    Mode::ImageLab8,
     Mode::ImageI32,
     Mode::ImageF32,
 ];
@@ -143,6 +153,7 @@ const SCALAR_TARGETS: &[Mode] = &[
     Mode::ImageCmyk8,
     Mode::ImageYCbCr8,
     Mode::ImageHsv8,
+    Mode::ImageLab8,
     Mode::ImageI32,
     Mode::ImageF32,
     Mode::ImagePalette8,
@@ -186,7 +197,7 @@ pub(crate) const LA_PREMULTIPLIED_INPUTS: &[InputContract] =
         targets: LA_PREMULTIPLIED_TARGETS,
         core_only_targets: &[],
         core_only_reason: None,
-        rejection_reason: "image has wrong mode",
+        rejection_reason: "conversion from La to L not supported",
     }];
 pub(crate) const I16_INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: I16_TARGETS,
@@ -232,11 +243,20 @@ fn classify_mode(mode: Mode) -> ModeSupport {
 }
 
 /// Complete source-mode and typed-target contract for Convert.
+///
+/// Convert-to-LAB is a wrapper composition: each source mode selects its
+/// declared RGB normalization route, then the RGB8 ConvertLab operation runs.
 // TODO(pillow-rs#3ptb): compare each archived SIMD Convert source/target path
 // and edge guard with these mode/Architecture declarations; migrate any gaps
 // and relocate the archived SIMD cases beside their maintained strategies.
-pub(crate) static SUPPORT: OperationSupport =
-    OperationSupport::new(OperationId::Convert, &[], classify_mode);
+const CONVERT_CHILDREN: &[OperationId] = &[OperationId::ConvertLab];
+
+pub(crate) static SUPPORT: OperationSupport = OperationSupport::composed(
+    OperationId::Convert,
+    &[],
+    classify_mode,
+    CONVERT_CHILDREN,
+);
 
 fn classify_matrix_mode(mode: Mode) -> ModeSupport {
     if mode == Mode::ImageRgb8 {
@@ -304,11 +324,29 @@ pub(crate) struct Prepared<'a> {
     matrix: Option<&'a [f64]>,
     dither: Option<DitherMethod>,
     selection: StrategySelection,
+    lab: Option<LabConvertSelections>,
+}
+
+struct LabConvertSelections {
+    entries: Vec<StrategySelection>,
+    source_via_luma16: bool,
+}
+
+impl LabConvertSelections {
+    fn as_slice(&self) -> &[StrategySelection] {
+        &self.entries
+    }
 }
 
 impl Prepared<'_> {
     pub(crate) fn selection(&self) -> &StrategySelection {
         &self.selection
+    }
+
+    pub(crate) fn composed_selections(&self) -> &[StrategySelection] {
+        self.lab
+            .as_ref()
+            .map_or(&[], LabConvertSelections::as_slice)
     }
 
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
@@ -339,7 +377,61 @@ impl Prepared<'_> {
         if matches!(self.target, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8) {
             return self.execute_palette_target();
         }
-        self.execute_mode().map(PreparedConvertOutput::raster)
+        if self.target == Mode::ImageLab8 {
+            return self.execute_lab().map(PreparedConvertOutput::raster);
+        }
+        Self::execute_mode(self.input, self.target, self.selection)
+            .map(PreparedConvertOutput::raster)
+    }
+
+    fn execute_lab(self) -> Result<DynamicImage, PilError> {
+        if self.input.mode() == Mode::ImageLab8 {
+            return Ok(self.input.image.clone());
+        }
+        let route = self.lab.ok_or_else(|| {
+            PilError::InternalError("Convert-to-LAB preparation omitted its child strategies".into())
+        })?;
+        let rgb = if route.source_via_luma16 {
+            let luma = Self::execute_mode(
+                self.input,
+                Mode::ImageLuma8,
+                route.entries[0],
+            )?;
+            let DynamicImage::ImageLuma8(luma) = luma else {
+                return Err(PilError::InternalError(
+                    "I;16 Convert-to-LAB normalization returned another mode".into(),
+                ));
+            };
+            let luma_image = DynamicImage::ImageLuma8(luma);
+            let inputs = OperationInputs {
+                image: &luma_image,
+                palette: crate::compute::registry::support::PaletteInput::default(),
+            };
+            crate::compute::record_pipeline_operation_architecture(
+                route.entries[1].implementation.architecture,
+            );
+            Self::execute_mode(inputs, Mode::ImageRgb8, route.entries[1])?
+        } else {
+            crate::compute::record_pipeline_operation_architecture(
+                route.entries[0].implementation.architecture,
+            );
+            Self::execute_mode(self.input, Mode::ImageRgb8, route.entries[0])?
+        };
+        let DynamicImage::ImageRgb8(rgb) = rgb else {
+            return Err(PilError::InternalError(
+                "Convert-to-LAB normalization returned another mode".into(),
+            ));
+        };
+        let convert_lab = *route.entries.last().ok_or_else(|| {
+            PilError::InternalError("Convert-to-LAB route omitted its LAB strategy".into())
+        })?;
+        crate::compute::record_pipeline_operation_architecture(
+            convert_lab.implementation.architecture,
+        );
+        crate::compute::pool_cpu::ops::color::ops::execute_selected_rgb_to_lab(
+            &rgb,
+            convert_lab,
+        )
     }
 
     fn execute_palette_target(self) -> Result<PreparedConvertOutput, PilError> {
@@ -440,116 +532,112 @@ impl Prepared<'_> {
         }
     }
 
-    fn execute_mode(self) -> Result<DynamicImage, PilError> {
-        match self.input.image {
+    fn execute_mode(
+        input: OperationInputs<'_>,
+        target: Mode,
+        selection: StrategySelection,
+    ) -> Result<DynamicImage, PilError> {
+        match input.image {
             DynamicImage::One(source) => {
-                return super::one::ops::execute(source, self.target, self.selection);
+                return super::one::ops::execute(source, target, selection);
             }
             DynamicImage::ImageLuma8(source) => {
-                return super::luma8::ops::execute(source, self.target, self.selection);
+                return super::luma8::ops::execute(source, target, selection);
             }
             DynamicImage::ImageLumaA8(source) => {
-                return super::luma_a8::ops::execute(source, self.target, self.selection);
+                return super::luma_a8::ops::execute(source, target, selection);
             }
             DynamicImage::ImageRgb8(source) => {
                 // SAFETY: prepare retained the exact source, target, and
                 // context used to select this declared mode strategy.
-                return unsafe {
-                    super::rgb8::ops::execute(source, self.target, self.selection)
-                };
+                return unsafe { super::rgb8::ops::execute(source, target, selection) };
             }
             DynamicImage::ImageRgba8(source) => {
                 // SAFETY: `prepare` computed this selection from the same
                 // source mode, target, and injected context retained here.
-                return unsafe {
-                    super::rgba8::ops::execute(source, self.target, self.selection)
-                };
+                return unsafe { super::rgba8::ops::execute(source, target, selection) };
             }
             DynamicImage::ImageRgbPremultiplied8(source) => {
                 return super::rgb_premultiplied8::ops::execute(
                     source,
-                    self.target,
-                    self.selection,
+                    target,
+                    selection,
                 );
             }
             DynamicImage::ImageRgbx8(source) => {
                 // SAFETY: prepare selected this strategy from the RGBX
                 // contract using the same source, target, and context retained here.
-                return unsafe {
-                    super::rgbx8::ops::execute(source, self.target, self.selection)
-                };
+                return unsafe { super::rgbx8::ops::execute(source, target, selection) };
             }
             DynamicImage::ImageI32(source) => {
-                return super::i32::ops::execute(source, self.target, self.selection);
+                return super::i32::ops::execute(source, target, selection);
             }
             DynamicImage::ImageF32(source) => {
-                return super::f32::ops::execute(source, self.target, self.selection);
+                return super::f32::ops::execute(source, target, selection);
             }
             DynamicImage::ImageI16(source) => {
-                return super::i16::ops::execute(source, self.target, self.selection);
+                return super::i16::ops::execute(source, target, selection);
             }
             DynamicImage::ImageI16L(source) => {
-                return super::i16l::ops::execute(source, self.target, self.selection);
+                return super::i16l::ops::execute(source, target, selection);
             }
             DynamicImage::ImageI16B(source) => {
-                return super::i16b::ops::execute(source, self.target, self.selection);
+                return super::i16b::ops::execute(source, target, selection);
             }
             DynamicImage::ImageI16N(source) => {
-                return super::i16n::ops::execute(source, self.target, self.selection);
+                return super::i16n::ops::execute(source, target, selection);
             }
             DynamicImage::ImageLaPremultiplied8(source) => {
                 return super::la_premultiplied8::ops::execute(
                     source,
-                    self.target,
-                    self.selection,
+                    target,
+                    selection,
                 );
             }
             DynamicImage::ImageCmyk8(source) => {
                 // SAFETY: prepare selected this strategy from the CMYK
                 // contract using the same source, target, and context retained here.
-                return unsafe {
-                    super::cmyk8::ops::execute(source, self.target, self.selection)
-                };
+                return unsafe { super::cmyk8::ops::execute(source, target, selection) };
             }
             DynamicImage::ImageYCbCr8(source) => {
-                return super::ycbcr8::ops::execute(source, self.target, self.selection);
+                return super::ycbcr8::ops::execute(source, target, selection);
             }
             DynamicImage::ImageHsv8(source) => {
-                return super::hsv8::ops::execute(source, self.target, self.selection);
+                return super::hsv8::ops::execute(source, target, selection);
             }
             DynamicImage::ImagePalette8(source) => {
                 return super::palette8::ops::execute(
                     source,
-                    self.input.palette,
-                    self.target,
-                    self.selection,
+                    input.palette,
+                    target,
+                    selection,
                 );
             }
             DynamicImage::ImagePaletteAlpha8(source) => {
                 return super::palette_alpha8::ops::execute(
                     source,
-                    self.input.palette,
-                    self.target,
-                    self.selection,
+                    input.palette,
+                    target,
+                    selection,
                 );
             }
             DynamicImage::ImageLab8(source) => {
-                return super::lab8::ops::execute(source, self.target, self.selection);
+                return super::lab8::ops::execute(source, target, selection);
             }
             DynamicImage::ImageLumaA16(source) => {
-                return super::luma_a16::ops::execute(source, self.target, self.selection);
+                return super::luma_a16::ops::execute(source, target, selection);
             }
             DynamicImage::ImageRgb16(source) => {
-                return super::rgb16::ops::execute(source, self.target, self.selection);
+                return super::rgb16::ops::execute(source, target, selection);
             }
             DynamicImage::ImageRgba16(source) => {
-                return super::rgba16::ops::execute(source, self.target, self.selection);
+                return super::rgba16::ops::execute(source, target, selection);
             }
             DynamicImage::ImageRgb32F(source) => {
-                return super::rgb32f::ops::execute(source, self.target, self.selection);
+                return super::rgb32f::ops::execute(source, target, selection);
             }
             DynamicImage::ImageRgba32F(source) => {
-                return super::rgba32f::ops::execute(source, self.target, self.selection);
+                return super::rgba32f::ops::execute(source, target, selection);
             }
         }
     }
@@ -659,7 +747,8 @@ pub(crate) fn prepare<'a>(
             ));
         }
     };
-    Ok(Prepared { input, target, matrix: None, dither, selection })
+    let lab = prepare_lab_route(input, target, ctx)?;
+    Ok(Prepared { input, target, matrix: None, dither, selection, lab })
 }
 
 pub(crate) fn prepare_matrix<'a>(
@@ -679,7 +768,94 @@ pub(crate) fn prepare_matrix<'a>(
             ));
         }
     };
-    Ok(Prepared { input, target, matrix: Some(matrix), dither: None, selection })
+    Ok(Prepared { input, target, matrix: Some(matrix), dither: None, selection, lab: None })
+}
+
+fn prepare_lab_route(
+    input: OperationInputs<'_>,
+    target: Mode,
+    ctx: &ExecutionContext,
+) -> Result<Option<LabConvertSelections>, PilError> {
+    if target != Mode::ImageLab8 || input.mode() == Mode::ImageLab8 {
+        return Ok(None);
+    }
+
+    let mut entries = Vec::with_capacity(3);
+    let source_via_luma16 = matches!(
+        input.mode(),
+        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N
+    );
+    if source_via_luma16 {
+        entries.push(select_convert_target(
+            input.mode(),
+            input.facts(),
+            Mode::ImageLuma8,
+            ctx,
+        )?);
+        let luma_facts = facts_for_mode(input.image.width(), input.image.height(), 1)?;
+        entries.push(select_convert_target(
+            Mode::ImageLuma8,
+            luma_facts,
+            Mode::ImageRgb8,
+            ctx,
+        )?);
+    } else {
+        entries.push(select_convert_target(
+            input.mode(),
+            input.facts(),
+            Mode::ImageRgb8,
+            ctx,
+        )?);
+    }
+
+    let rgb_facts = facts_for_mode(input.image.width(), input.image.height(), 3)?;
+    entries.push(select_strategy(
+        crate::compute::pool_cpu::ops::color::ops::SUPPORT.for_mode(Mode::ImageRgb8),
+        rgb_facts,
+        ctx,
+        "ConvertLab support remained unresolved after RGB normalization",
+    )?);
+    Ok(Some(LabConvertSelections { entries, source_via_luma16 }))
+}
+
+fn select_convert_target(
+    source: Mode,
+    facts: StrategyInputs,
+    target: Mode,
+    ctx: &ExecutionContext,
+) -> Result<StrategySelection, PilError> {
+    select_strategy(
+        SUPPORT.for_mode(source),
+        facts.with_convert_target(target),
+        ctx,
+        "Convert child support remained unresolved after source materialization",
+    )
+}
+
+fn select_strategy(
+    support: ModeSupport,
+    facts: StrategyInputs,
+    ctx: &ExecutionContext,
+    unresolved_message: &'static str,
+) -> Result<StrategySelection, PilError> {
+    match support.assess(ctx, facts)? {
+        SupportAssessment::Ready(selection) => Ok(selection),
+        SupportAssessment::Rejected { reason, kind, .. } => Err(kind.into_error(reason)),
+        SupportAssessment::Deferred { .. } => {
+            Err(PilError::InternalError(unresolved_message.into()))
+        }
+    }
+}
+
+fn facts_for_mode(width: u32, height: u32, channels: u8) -> Result<StrategyInputs, PilError> {
+    let dimensions = CheckedDims::new_allow_empty(width, height, channels)?;
+    Ok(StrategyInputs {
+        width,
+        height,
+        byte_len: Some(dimensions.total_bytes()),
+        palette: PaletteKnowledge::Absent,
+        request: RequestFacts::Unspecified,
+    })
 }
 
 pub(crate) fn prepare_pipeline<'a>(

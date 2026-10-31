@@ -18,6 +18,7 @@ const TARGETS: &[Mode] = &[
     Mode::ImageLuma8, Mode::ImageLumaA8, Mode::ImageRgb8, Mode::ImageRgba8,
     Mode::ImagePalette8, Mode::ImagePaletteAlpha8,
     Mode::ImageI16, Mode::ImageI16L, Mode::ImageI16B, Mode::ImageI16N,
+    Mode::ImageLab8,
     Mode::ImageCmyk8, Mode::ImageYCbCr8, Mode::ImageHsv8, Mode::ImageI32,
     Mode::ImageF32,
 ];
@@ -28,7 +29,7 @@ const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     rejection_reason: "image has wrong mode",
 }];
 
-// NO_PILLOW_SUPPORT: RGBA32F and its native P/PA conversion targets are core-only.
+// NO_PILLOW_SUPPORT: RGBA32F has no Pillow identity; its LAB route is core-only.
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
     OperationId::Convert,
     Mode::ImageRgba32F,

@@ -45,6 +45,7 @@ macro_rules! declare_prepared_operations {
                     Implementation::Pad(plan) => plan.composed_selections(),
                     Implementation::Thumbnail(plan) => plan.composed_selections(),
                     Implementation::Contrast(plan) => plan.composed_selections(),
+                    Implementation::Convert(plan) => plan.composed_selections(),
                     _ => &[],
                 }
             }
