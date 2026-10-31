@@ -1,10 +1,10 @@
 //! Filter support contracts and prepared CPU dispatch.
 //!
-//! TODO(pillow-rs#3ptb): compare the general blur and BoxBlur mode routes against
-//! the archive; include the RGBA radius-seven small-shape architecture fallback
-//! in CPU parity; cover the exact-binomial I32 AVX/FMA route and ineligible-
-//! request Default fallback; reconcile every public Filter caller before closing
-//! this family. Keep Rayon out of this serial owner.
+//! TODO(pillow-rs#3ptb): compare general blur and BoxBlur mode routes against
+//! the archive; add ModeFilter mode, palette, and backend-fallback parity cases;
+//! include the RGBA radius-seven small-shape architecture fallback; cover the
+//! exact-binomial I32 AVX/FMA route and ineligible-request Default fallback;
+//! finish the public Filter caller audit. Keep Rayon out of this serial owner.
 
 use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{
@@ -31,6 +31,7 @@ const RANK_WINDOW: &[InputContract] = &[InputContract::OddRankWindow {
 const RANK_WINDOW_VALUE: &[InputContract] = &[InputContract::OddRankWindow {
     rank_required: true,
 }];
+const MODE_FILTER_INPUTS: &[InputContract] = &[InputContract::ModeFilterWindow];
 
 pub(super) const fn inputs_for(operation: OperationId) -> &'static [InputContract] {
     match operation {
@@ -41,6 +42,7 @@ pub(super) const fn inputs_for(operation: OperationId) -> &'static [InputContrac
         OperationId::UnsharpMask => UNSHARP_INPUTS,
         OperationId::MedianFilter | OperationId::MaxFilter | OperationId::MinFilter => RANK_WINDOW,
         OperationId::RankFilter => RANK_WINDOW_VALUE,
+        OperationId::ModeFilter => MODE_FILTER_INPUTS,
         _ => NO_INPUTS,
     }
 }
@@ -91,6 +93,9 @@ fn rejected(mode: Mode, reason: &'static str) -> ModeSupport {
 }
 
 fn support_for_mode(operation: OperationId, mode: Mode) -> ModeSupport {
+    if operation == OperationId::ModeFilter {
+        return mode_filter_support_for_mode(mode);
+    }
     match mode {
         Mode::One => super::one::ops::support(operation),
         Mode::ImageLuma8 => super::luma8::ops::support(operation),
@@ -117,6 +122,38 @@ fn support_for_mode(operation: OperationId, mode: Mode) -> ModeSupport {
         | Mode::ImageRgba16
         | Mode::ImageRgb32F
         | Mode::ImageRgba32F => rejected(mode, INTERNAL_MODE),
+    }
+}
+
+fn mode_filter_support_for_mode(mode: Mode) -> ModeSupport {
+    match mode {
+        Mode::One
+        | Mode::ImageLuma8
+        | Mode::ImageLumaA8
+        | Mode::ImageLaPremultiplied8
+        | Mode::ImagePalette8
+        | Mode::ImagePaletteAlpha8
+        | Mode::ImageRgb8
+        | Mode::ImageRgba8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8
+        | Mode::ImageYCbCr8
+        | Mode::ImageLab8
+        | Mode::ImageHsv8 => {
+            ModeSupport::serial(OperationId::ModeFilter, mode, MODE_FILTER_INPUTS)
+        }
+        Mode::ImageI32
+        | Mode::ImageF32
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N
+        | Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => rejected(mode, WRONG_UNSHARP_MODE),
     }
 }
 
@@ -179,6 +216,11 @@ pub(crate) static RANK_FILTER_SUPPORT: OperationSupport = OperationSupport::new(
     OperationId::RankFilter,
     RANK_WINDOW_VALUE,
     |mode| support_for_mode(OperationId::RankFilter, mode),
+);
+pub(crate) static MODE_FILTER_SUPPORT: OperationSupport = OperationSupport::new(
+    OperationId::ModeFilter,
+    MODE_FILTER_INPUTS,
+    mode_filter_support_for_mode,
 );
 
 /// Prepared mode and architecture selection for the direct UnsharpMask blend.
@@ -248,6 +290,45 @@ impl PreparedUnsharpMask<'_> {
         blend.execute(original.as_bytes(), blurred_bytes)?;
         Ok(blurred)
     }
+}
+
+/// Prepared direct ModeFilter with its exact mode contract and serial selection.
+pub(crate) struct PreparedModeFilter<'a> {
+    image: &'a DynamicImage,
+    mode: Mode,
+    size: u32,
+    selection: StrategySelection,
+}
+
+impl PreparedModeFilter<'_> {
+    pub(crate) fn selection(&self) -> &StrategySelection {
+        &self.selection
+    }
+
+    pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
+        super::helpers::execute_mode_filter(self.image, self.mode, self.size)
+    }
+}
+
+/// Selects the direct ModeFilter mode strategy before applying its native-byte helper.
+pub(crate) fn prepare_mode_filter<'a>(
+    image: &'a DynamicImage,
+    size: u32,
+    context: &ExecutionContext,
+) -> Result<PreparedModeFilter<'a>, PilError> {
+    let inputs = OperationInputs { image, palette: PaletteInput::default() };
+    let mode = inputs.mode();
+    let facts = inputs.facts().with_filter_window(size, None);
+    let selection = match MODE_FILTER_SUPPORT.for_mode(mode).assess(context, facts)? {
+        SupportAssessment::Ready(selection) => selection,
+        SupportAssessment::Rejected { reason, kind, .. } => return Err(kind.into_error(reason)),
+        SupportAssessment::Deferred { .. } => {
+            return Err(PilError::InternalError(
+                "materialized ModeFilter has unresolved strategy facts".into(),
+            ));
+        }
+    };
+    Ok(PreparedModeFilter { image, mode, size, selection })
 }
 
 /// Select the direct UnsharpMask blend from its declared exact-mode strategy.

@@ -7,22 +7,7 @@ use crate::compute::{Backend, ExecutionContext};
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
-use crate::raster::{DynamicImage, Mode};
-
-/// Find the mode (most common value) and its count from a histogram.
-/// Uses PIL's strict `>` tie-breaking (lower value wins on tie).
-/// Starts with pixel 0 as initial mode, scans 1..255.
-fn find_mode_with_count(hist: &[u32; 256]) -> (u8, u32) {
-    let mut mode = 0u8;
-    let mut max_count = hist[0];
-    for (v, &count) in hist.iter().enumerate().skip(1) {
-        if count > max_count {
-            max_count = count;
-            mode = v as u8;
-        }
-    }
-    (mode, max_count)
-}
+use crate::raster::DynamicImage;
 
 /// Formats the Pillow-compatible representation of a Color3DLUT filter.
 pub fn color3dlut_repr(
@@ -517,58 +502,49 @@ impl Image {
         // Keep zero distinct from the normalized rank-family filters.
         let size = if size <= 1 { size } else { size | 1 };
 
-        // For palette images: extract palette before materialize
         let palette = self.palette();
         let palette_alpha = self.palette_alpha();
-        let explicit = self.known_mode_identity();
+        let image = self.materialized_shared_for_ops()?;
+        let routed_backend = match self.backend() {
+            Some(backend) => backend,
+            None => crate::compute::active_backends()?.first().copied().unwrap_or(Backend::Cpu),
+        };
+        let routed_context = ExecutionContext::for_routed_backend(routed_backend);
+        let (context, fallback_reason) = if routed_context.backend() == Backend::Cpu {
+            (routed_context, None)
+        } else {
+            (
+                ExecutionContext::for_routed_backend(Backend::Cpu),
+                Some("ModeFilter has no GPU strategy".to_owned()),
+            )
+        };
+        let result = crate::compute::eager::execute_cpu_arch_operation(
+            "ModeFilter",
+            image.as_ref(),
+            context,
+            Some(routed_backend),
+            0,
+            0,
+            fallback_reason,
+            |context| {
+                let prepared = crate::compute::pool_cpu::ops::filter::ops::prepare_mode_filter(
+                    image.as_ref(),
+                    size,
+                    context,
+                )?;
+                let selection = *prepared.selection();
+                Ok((prepared.execute()?, selection))
+            },
+        )?;
 
-        let img = self.materialize()?;
-        let half = (size / 2) as i32;
-
-        let (w_u32, h_u32) = (img.width(), img.height());
-        let w = w_u32 as i32;
-        let h = h_u32 as i32;
-        let channels = img.color().channel_count() as usize;
-        let raw = img.as_bytes();
-
-        let mut out = vec![0u8; (w_u32 * h_u32) as usize * channels];
-
-        for y in 0..h {
-            for x in 0..w {
-                // Per-channel histograms
-                let mut hists: Vec<[u32; 256]> = vec![[0u32; 256]; channels];
-                for dy in -half..=half {
-                    let sy = y + dy;
-                    if sy < 0 || sy >= h {
-                        continue; // PIL skips out-of-bounds rows
-                    }
-                    for dx in -half..=half {
-                        let sx = x + dx;
-                        if sx < 0 || sx >= w {
-                            continue; // PIL skips out-of-bounds columns
-                        }
-                        let base = ((sy * w + sx) as usize) * channels;
-                        for c in 0..channels {
-                            hists[c][raw[base + c] as usize] += 1;
-                        }
-                    }
-                }
-                let out_base = ((y * w + x) as usize) * channels;
-                for c in 0..channels {
-                    let orig_val = raw[((y * w + x) as usize) * channels + c];
-                    let (mode, max_count) = find_mode_with_count(&hists[c]);
-                    out[out_base + c] = if max_count > 2 { mode } else { orig_val };
-                }
-            }
-        }
-        let result = crate::image_utils::raw_bytes_to_image(w_u32, h_u32, out, channels)?;
-        // Preserve palette for P-mode images
         if let Some(pal) = palette {
+            let DynamicImage::ImagePalette8(indices) = result else {
+                return Err(PilError::InternalError(
+                    "ModeFilter changed palette index mode".into(),
+                ));
+            };
             // A palette image materializes as one-band indices, so the raw
-            // reconstruction above is necessarily Luma8 here. Keeping the
-            // invariant typed avoids an unreachable error path while
-            // preserving the palette and index buffer exactly.
-            let indices = result.into_luma8();
+            // output remains an exact P raster rather than a tagged L carrier.
             return Ok(Image::Paletted(crate::image::PalettedData {
                 indices: DynamicImage::ImagePalette8(indices),
                 palette: pal,
@@ -578,10 +554,6 @@ impl Image {
                 exif: None,
                 materialized: crate::image::materialization_cache(),
             }));
-        }
-        // Preserve the exact raster identity while rebuilding filtered bytes.
-        if explicit.is_some() {
-            return Ok(Image::from_dynamic_with_mode(result, explicit)?);
         }
         Ok(Image::from_dynamic(result))
     }

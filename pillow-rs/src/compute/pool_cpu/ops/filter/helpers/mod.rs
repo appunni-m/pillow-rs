@@ -24,6 +24,7 @@ mod rank_vector_kernel;
 #[path = "filter5x5.rs"]
 mod filter5x5;
 mod mode_leaf;
+mod mode_filter;
 #[path = "rank.rs"]
 mod rank;
 #[path = "rank_vector.rs"]
@@ -77,3 +78,4 @@ pub(crate) use mode_leaf::{
     native_filter5x5_architectures, native_filter5x5_mode_fast_path,
     native_filter_mode_leaf,
 };
+pub(crate) use mode_filter::execute_mode_filter;

@@ -127,6 +127,17 @@ impl Image {
     /// Validates whether a Python-facing filter may run for this image mode.
     pub fn validate_filter(&self, filter_name: &str) -> Result<(), PilError> {
         let mode = self.mode_identity()?;
+        if filter_name == "Mode" {
+            return match crate::compute::registry::support::OperationId::ModeFilter
+                .support()
+                .for_mode(mode)
+            {
+                crate::compute::registry::support::ModeSupport::Supported { .. } => Ok(()),
+                crate::compute::registry::support::ModeSupport::Rejected { reason, kind, .. } => {
+                    Err(kind.into_error(reason))
+                }
+            };
+        }
         // Pillow's ImagingUnsharpMask accepts only byte modes with native
         // band storage. Keep the native operation's wrong-mode error for
         // indexed, scalar, and color-space modes instead of expanding them

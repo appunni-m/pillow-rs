@@ -33,7 +33,8 @@ pub(super) fn assess(
         | InputContract::FitParameters
         | InputContract::PadParameters
         | InputContract::ScaleParameters
-        | InputContract::OddRankWindow { .. } => assess_request(contract, input),
+        | InputContract::OddRankWindow { .. }
+        | InputContract::ModeFilterWindow => assess_request(contract, input),
         InputContract::MergeBandLayout { .. } => assess_merge_band_layout(contract, input),
         InputContract::BlendInputs { .. } => assess_blend_inputs(contract, input),
         InputContract::CompositeInputs { .. } => assess_composite_inputs(contract, input),
@@ -534,7 +535,8 @@ fn assess_request(
         | (InputContract::FitParameters, RequestFacts::Unspecified)
         | (InputContract::PadParameters, RequestFacts::Unspecified)
         | (InputContract::ScaleParameters, RequestFacts::Unspecified)
-        | (InputContract::OddRankWindow { .. }, RequestFacts::Unspecified) => {
+        | (InputContract::OddRankWindow { .. }, RequestFacts::Unspecified)
+        | (InputContract::ModeFilterWindow, RequestFacts::Unspecified) => {
             unresolved_request(contract)
         }
         (InputContract::EffectSpreadDistance, RequestFacts::EffectSpread { .. })
@@ -630,6 +632,17 @@ fn assess_request(
             }
             Ok(None)
         }
+        (InputContract::ModeFilterWindow, RequestFacts::FilterWindow { size, rank }) => {
+            if rank.is_some() {
+                return Err(PilError::InternalError(
+                    "ModeFilter contract received rank-filter facts".into(),
+                ));
+            }
+            size.checked_mul(size)
+                .filter(|_| size == 0 || !size.is_multiple_of(2))
+                .ok_or_else(|| PilError::ValueError("bad filter size".into()))?;
+            Ok(None)
+        }
         (InputContract::EffectSpreadDistance, _) => Err(wrong_request("EffectSpread")),
         (InputContract::EffectMandelbrotParameters, _) => {
             Err(wrong_request("EffectMandelbrot"))
@@ -653,6 +666,7 @@ fn assess_request(
         (InputContract::PadParameters, _) => Err(wrong_request("Pad")),
         (InputContract::ScaleParameters, _) => Err(wrong_request("Scale")),
         (InputContract::OddRankWindow { .. }, _) => Err(wrong_request("RankFilter")),
+        (InputContract::ModeFilterWindow, _) => Err(wrong_request("ModeFilter")),
         _ => Err(PilError::InternalError(
             "request validation received a non-request input contract".into(),
         )),

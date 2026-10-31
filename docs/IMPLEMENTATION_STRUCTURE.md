@@ -479,7 +479,7 @@ migrated into their corresponding owner.
 | `reduce` | `Reduce` |
 | `color` | `Convert`, `ConvertLab`, `RemapPalette` |
 | `color3dlut` | `Color3DLut` |
-| `filter` | `Filter3x3`, `Filter5x5`, `GaussianBlur`, `BoxBlur`, `BoxBlurXY`, `MedianFilter`, `MaxFilter`, `MinFilter`, `RankFilter` |
+| `filter` | `Filter3x3`, `Filter5x5`, `GaussianBlur`, `BoxBlur`, `BoxBlurXY`, `MedianFilter`, `MaxFilter`, `MinFilter`, `RankFilter`, and direct `ModeFilter` |
 | `imageops` | `Autocontrast`, `Equalize`, `EqualizeMasked`, `Invert`, `Posterize`, `Solarize`, `Colorize`, `Expand`, `CropBorder` |
 | `geometry` | `Contain`, `Cover`, `Fit`, `Pad`, `Scale` |
 | `grayscale` | `Grayscale` |

@@ -231,6 +231,8 @@ pub enum InputContract {
         /// Whether this operation requires a caller-selected rank inside the window.
         rank_required: bool,
     },
+    /// Odd, positive square neighborhood after direct ModeFilter normalization.
+    ModeFilterWindow,
     /// Merge's exact band count, accepted source identities, and size contract.
     MergeBandLayout {
         /// Required number of input bands.

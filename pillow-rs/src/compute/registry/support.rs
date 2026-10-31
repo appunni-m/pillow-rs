@@ -146,6 +146,8 @@ pub enum OperationId {
     MinFilter,
     /// Select one sample from each Pillow rank-filter neighborhood.
     RankFilter,
+    /// Replace each native byte channel with its local most-frequent sample.
+    ModeFilter,
     /// Equalize L/RGB samples directly and P samples after palette expansion.
     Equalize,
     /// Add a native-mode border while preserving the exact source identity.
@@ -300,6 +302,7 @@ impl OperationId {
             Self::MaxFilter => &crate::compute::pool_cpu::ops::filter::ops::MAX_FILTER_SUPPORT,
             Self::MinFilter => &crate::compute::pool_cpu::ops::filter::ops::MIN_FILTER_SUPPORT,
             Self::RankFilter => &crate::compute::pool_cpu::ops::filter::ops::RANK_FILTER_SUPPORT,
+            Self::ModeFilter => &crate::compute::pool_cpu::ops::filter::ops::MODE_FILTER_SUPPORT,
             Self::Equalize => &crate::compute::pool_cpu::ops::imageops::equalize::SUPPORT,
             Self::Expand => &crate::compute::pool_cpu::ops::imageops::ops::EXPAND_SUPPORT,
             Self::ExtractBand => &crate::compute::pool_cpu::ops::put::ops::EXTRACT_BAND_SUPPORT,
