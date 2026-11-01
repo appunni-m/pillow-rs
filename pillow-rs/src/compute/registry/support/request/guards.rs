@@ -58,6 +58,7 @@ pub(super) use mutation::{
     native_crop_bytes_guard,
     native_mirror_rows_guard,
     native_pointwise_bytes_guard,
+    native_pointwise_bytes_including_empty_guard,
     native_transpose_bytes_guard,
     pixel_span_guard,
     pixel_write_run_guard,

@@ -550,6 +550,24 @@ pub(super) fn native_pointwise_bytes_guard(input: StrategyInputs, channels: u8) 
     exact_native_rows_guard(input, channels)
 }
 
+pub(super) fn native_pointwise_bytes_including_empty_guard(
+    input: StrategyInputs,
+    channels: u8,
+) -> GuardAssessment {
+    if !(1..=4).contains(&channels) {
+        return GuardAssessment::Ineligible;
+    }
+    let expected = (input.width as usize)
+        .checked_mul(input.height as usize)
+        .and_then(|pixels| pixels.checked_mul(usize::from(channels)));
+    match (expected, input.byte_len) {
+        (None, _) => GuardAssessment::Ineligible,
+        (Some(_), None) => GuardAssessment::Deferred,
+        (Some(expected), Some(actual)) if actual == expected => GuardAssessment::Satisfied,
+        (Some(_), Some(_)) => GuardAssessment::Ineligible,
+    }
+}
+
 pub(super) fn exact_native_rows_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     if input.width == 0 || input.height == 0 || !(1..=4).contains(&channels) {
         return GuardAssessment::Ineligible;

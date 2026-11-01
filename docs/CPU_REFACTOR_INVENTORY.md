@@ -55,6 +55,17 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   operation-specific output contracts. GPU pending/result metadata also
   retains a string route for the later backend stage. These boundaries remain
   source-only and unvalidated.
+- Empty-image source review found the archived SIMD Chops Invert and
+  RemapPalette routes accept zero-byte rasters and retain their native-copy or
+  scalar-control receipts. Their maintained kernels also handle exact empty
+  storage, but the shared `NativePointwiseBytes` guard rejected every zero
+  dimension before those strategies could run. Added the distinct
+  `NativePointwiseBytesIncludingEmpty` guard for ChopsInvert and RemapPalette;
+  the original nonempty guard remains in use for Eval and the shared ImageOps
+  point-strategy callers; their empty-image routes were not changed in this
+  source review. ChopsInvert remains an exact-mode architecture route with
+  same-mode Default fallback. This source correction is uncompiled and
+  unvalidated.
 - Direct `GetData`, allocated `GetDataBand`, and caller-owned `GetDataBandInto`
   have independent exhaustive support descriptors under `analysis`; band-count
   facts and the existing scalar-mode caller-buffer rejection come from those
@@ -1960,21 +1971,39 @@ Before any validation command, update this ledger with exact baseline-source to 
   adjacent operations sharing the same secondary `Image`, matching mode and
   dimensions, and matching Multiply/Screen architecture selections. It keeps
   the intermediate multiply truncation and performs one output traversal.
-  Source integration is unverified; explicit SIMD-request routing, SIMD
-  compatibility retirement, source review, compilation, parity, and benchmark
-  evidence remain pending under `pillow-rs#3ptb`.
+  Prepared execution now dispatches through the exact mode's Default or named
+  architecture entry point; the shared arithmetic remains in
+  `chops/helpers/fusion.rs` without an Architecture match. Explicit
+  SIMD-request routing, compatibility retirement, remaining source review,
+  compilation, parity, and benchmark evidence remain pending under
+  `pillow-rs#3ptb`.
 - The public Rust Chops adapter checks `raster::Mode` from known wrapper
   identity, materializing the source only when that typed identity is unknown;
   this removes its last Pillow-string mode comparison. Internal high-depth
   unary support is classified as CoreOnly at the operation descriptor.
+- The archived SIMD Chops Invert source accepts empty native layouts and
+  returns the input with a `native-copy` receipt. Its maintained shared kernel
+  has the same empty path, but the initial nonempty-only strategy guard made
+  that branch unreachable. A separate exact-byte guard now permits zero
+  dimensions for ChopsInvert while still rejecting non-exact storage; Eval
+  retains the nonempty guard because both identity and mapped vector kernels
+  reject a zero row stride. SSE2, NEON, and Wasm SIMD128 compile-time feature
+  declarations and the same-mode Default fallback are unchanged. Each
+  byte-vector mode now exposes its declared architecture folders; mode `ops.rs`
+  selects the named entry point, while the identical portable vector algorithm
+  remains shared in `chops/helpers/vector.rs`. That helper no longer receives
+  or checks Architecture. This is source-only evidence; parity and telemetry
+  receipts remain pending.
 
 | Preserved source/function | Maintained destination and disposition |
 | --- | --- |
 | `pool_cpu/legacy/ops/chops.rs::op_chops_add` through `op_chops_subtract_modulo` | `chops/helpers/binary.rs` preserves native-byte formulas and row clipping; exact mode support and secondary mode compatibility live in `chops/ops.rs` and each mode's `ops.rs`. |
 | `pool_cpu/legacy/ops/chops.rs::op_chops_logical_and` through `op_chops_logical_xor` | `chops/helpers/binary.rs` uses truth semantics on raw mode-1 bytes and emits canonical 0/255 bytes. |
-| `pool_cpu/legacy/mod.rs::fused_multiply_screen` and `pool_cpu/legacy/pool_simd/ops/adapters/chops/kernels/fused_multiply_screen.rs` | `chops/helpers/fusion.rs` preserves serial and vector arithmetic for exact L/LA/RGB/RGBA. `chops/ops.rs` prepares both mode/architecture declarations; `batch_execution.rs` routes adjacent operations with the same operand through the prepared fusion. Explicit SIMD-request routing and verification remain pending. |
+| `pool_cpu/legacy/mod.rs::fused_multiply_screen` and `pool_cpu/legacy/pool_simd/ops/adapters/chops/kernels/fused_multiply_screen.rs` | `chops/helpers/fusion.rs` preserves serial and vector arithmetic for exact L/LA/RGB/RGBA. `chops/ops.rs` prepares both mode/architecture declarations and dispatches the selected fusion through each mode's Default or named architecture entry point; `batch_execution.rs` admits adjacent operations with the same operand. Explicit SIMD-request routing and verification remain pending. |
 | `pool_cpu/legacy/ops/chops.rs::op_chops_constant`, `op_chops_offset`, `op_chops_duplicate` | `chops/helpers/unary.rs` keeps L output for Constant and same-mode native behavior for Offset and Duplicate. |
 | `pool_cpu/legacy/ops/chops.rs::op_chops_invert` | `chops/helpers/unary.rs` inverts stored bytes and `chops/helpers/output.rs` reconstructs the exact requested raster identity; high-depth extensions are separately declared CoreOnly. The archived byte-vector kernel is now shared from `pool_cpu/helpers/bytes/native_invert.rs` by the exact-mode Chops and ImageOps architecture strategies. |
+| `pool_cpu/legacy/pool_simd/ops/adapters/chops/kernels.rs` | The exact `1/L/P`, `LA/La/PA`, `RGB/YCbCr/HSV`, and `RGBA/CMYK/RGBa/RGBX` mode owners expose SSE2, NEON, and Wasm SIMD128 entry points under `<mode>/<arch>/mod.rs`; those paths route into the shared portable formulas in `chops/helpers/vector.rs`. Operation support supplies the exact pair, dimension, and parameter guards, with same-mode Default fallback. |
+| `pool_cpu/legacy/pool_simd/ops/adapters/effects.rs::{native_invert,simd_invert_chops}` | `chops/<mode>/{sse2,neon,wasm_simd128}/mod.rs` exposes the exact-mode architecture entry point for archived `1/L/P`, `LA/PA`, `RGB`, and `RGBA/CMYK` layouts. Each entry point reuses `chops/helpers/vector.rs`; mode `ops.rs` selects it from the injected Architecture. Channels including alpha are inverted. Empty exact layouts return the source with `native-copy`; the maintained exact-byte guard now admits them, with the same-mode serial Default as fallback. |
 
 ### Grayscale source progress: incomplete and unvalidated
 

@@ -29,12 +29,15 @@ pub(crate) fn execute(
     architecture: Architecture,
 ) -> Result<DynamicImage, PilError> {
     match image {
-        DynamicImage::ImagePalette8(_) if architecture == Architecture::Default => {
-            default::ops::execute(image, request, other)
-        }
-        DynamicImage::ImagePalette8(_) => {
-            super::super::helpers::vector::execute(image, request, other, MODE, architecture)
-        }
+        DynamicImage::ImagePalette8(_) => match architecture {
+            Architecture::Default => default::ops::execute(image, request, other),
+            Architecture::Sse2 => super::sse2::execute(image, request, other, MODE),
+            Architecture::Neon => super::neon::execute(image, request, other, MODE),
+            Architecture::WasmSimd128 => super::wasm_simd128::execute(image, request, other, MODE),
+            _ => Err(PilError::InternalError(
+                "Chops vector strategy received an unsupported architecture".into(),
+            )),
+        },
         _ => Err(PilError::InternalError("Chops mode strategy received a different raster variant".into())),
     }
 }

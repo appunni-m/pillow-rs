@@ -1,30 +1,11 @@
-//! Native Multiply-to-Screen fusion shared by prepared CPU Chops plans.
+//! Shared arithmetic for native Multiply-to-Screen fusion.
 
 use crate::checked_dims::CheckedDims;
-use crate::compute::Architecture;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, GenericImageView, Mode};
 use wide::{u8x16, u16x16};
 
-/// Runs the archived serial fused formula on the selected mode's native bytes.
-pub(crate) fn execute(
-    image: &DynamicImage,
-    other: &DynamicImage,
-    mode: Mode,
-    architecture: Architecture,
-) -> Result<DynamicImage, PilError> {
-    match architecture {
-        Architecture::Default => execute_default(image, other, mode),
-        Architecture::Sse2 | Architecture::Neon | Architecture::WasmSimd128 => {
-            execute_vector(image, other, mode)
-        }
-        _ => Err(PilError::InternalError(
-            "Chops fusion received an unsupported architecture".into(),
-        )),
-    }
-}
-
-fn execute_default(
+pub(crate) fn execute_default(
     image: &DynamicImage,
     other: &DynamicImage,
     mode: Mode,
@@ -41,7 +22,7 @@ fn execute_default(
         .ok_or_else(|| PilError::ValueError("channel_op_binary buffer error".into()))
 }
 
-fn execute_vector(
+pub(crate) fn execute_vector(
     image: &DynamicImage,
     other: &DynamicImage,
     mode: Mode,

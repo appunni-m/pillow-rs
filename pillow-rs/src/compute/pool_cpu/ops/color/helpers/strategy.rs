@@ -12,7 +12,7 @@ pub(crate) const fn palette_remap_architectures(
     mode: Mode,
 ) -> [ImplementationSupport; 3] {
     let operation = OperationId::RemapPalette;
-    let guard = StrategyGuard::NativePointwiseBytes { channels: 1 };
+    let guard = StrategyGuard::NativePointwiseBytesIncludingEmpty { channels: 1 };
     [
         ImplementationSupport::cpu(
             operation,

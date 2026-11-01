@@ -522,6 +522,11 @@ pub enum StrategyGuard {
         /// Physical number of byte channels in this particular implementation.
         channels: u8,
     },
+    /// Exact native pointwise bytes, including empty images.
+    NativePointwiseBytesIncludingEmpty {
+        /// Physical number of byte channels in this particular implementation.
+        channels: u8,
+    },
     /// Nonempty, exact native byte rows for opaque sample-preserving movement.
     ExactNativeRows {
         /// Physical number of bytes in each sample pixel.
@@ -731,6 +736,9 @@ impl StrategyGuard {
                 guards::native_mirror_rows_guard(input, channels),
             Self::NativePointwiseBytes { channels } =>
                 guards::native_pointwise_bytes_guard(input, channels),
+            Self::NativePointwiseBytesIncludingEmpty { channels } => {
+                guards::native_pointwise_bytes_including_empty_guard(input, channels)
+            }
             Self::NativeCropBytes { channels } =>
                 guards::native_crop_bytes_guard(input, channels),
             Self::NativeCropBorderBytes { channels } =>

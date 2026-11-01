@@ -5,13 +5,14 @@
 //! SSE2, NEON, and Wasm SIMD128 strategies for the archived `1/L/P`, `LA/PA`,
 //! `RGB`, and `RGBA/CMYK` layouts; its shared byte kernel lives in
 //! `pool_cpu/helpers/bytes` and preserves every stored byte.
-// TODO(pillow-rs#3ptb): complete the archived-source comparison for all Chops
-// mode owners' Default and architecture strategies; record each kernel's exact
-// feature guard, fallback, and direct/fused caller in the inventory.
+// TODO(pillow-rs#3ptb): continue the archived-source comparison for every Chops
+// operation's mode owners; record each remaining kernel's exact feature guard,
+// fallback, and direct/fused caller in the inventory. ChopsInvert's empty-image
+// architecture path has been reconciled separately.
 
 use std::sync::Arc;
 
-use crate::compute::ExecutionContext;
+use crate::compute::{Architecture, ExecutionContext};
 use crate::compute::registry::support::{
     InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport, OutputModeRule,
     PaletteInput, RejectionKind, SecondaryInputFacts, StrategySelection, SupportAssessment,
@@ -348,12 +349,29 @@ impl PreparedChopsFusion<'_> {
     }
 
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
-        super::helpers::fusion::execute(
+        execute_fused_multiply_screen(
             self.image,
             &self.other,
             self.mode,
             self.selection.implementation.architecture,
         )
+    }
+}
+
+fn execute_fused_multiply_screen(
+    image: &DynamicImage,
+    other: &DynamicImage,
+    mode: Mode,
+    architecture: Architecture,
+) -> Result<DynamicImage, PilError> {
+    match mode {
+        Mode::ImageLuma8 => super::luma8::ops::execute_fused(image, other, architecture),
+        Mode::ImageLumaA8 => super::luma_a8::ops::execute_fused(image, other, architecture),
+        Mode::ImageRgb8 => super::rgb8::ops::execute_fused(image, other, architecture),
+        Mode::ImageRgba8 => super::rgba8::ops::execute_fused(image, other, architecture),
+        _ => Err(PilError::InternalError(
+            "Chops fusion received a mode without a fused strategy".into(),
+        )),
     }
 }
 

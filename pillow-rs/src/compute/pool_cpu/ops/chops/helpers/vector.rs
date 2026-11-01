@@ -1,7 +1,6 @@
 //! Portable native-byte vectors for the exact-mode Chops CPU strategies.
 
 use crate::checked_dims::CheckedDims;
-use crate::compute::Architecture;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, GenericImageView, Mode};
 use wide::{f32x8, u8x16, u16x16};
@@ -14,16 +13,7 @@ pub(crate) fn execute(
     request: super::super::ops::ChopsRequest,
     other: Option<&DynamicImage>,
     mode: Mode,
-    architecture: Architecture,
 ) -> Result<DynamicImage, PilError> {
-    match architecture {
-        Architecture::Sse2 | Architecture::Neon | Architecture::WasmSimd128 => (),
-        _ => {
-            return Err(PilError::InternalError(
-                "Chops vector strategy received an unsupported architecture".into(),
-            ));
-        }
-    }
     let operation = match request {
         super::super::ops::ChopsRequest::Invert => return execute_invert(image, mode),
         super::super::ops::ChopsRequest::Binary(operation) => operation,

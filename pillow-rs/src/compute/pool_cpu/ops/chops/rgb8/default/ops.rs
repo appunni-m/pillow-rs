@@ -12,3 +12,14 @@ pub(crate) fn execute(
 ) -> Result<DynamicImage, PilError> {
     super::super::super::ops::execute_mode(image, super::super::ops::MODE, request, other)
 }
+
+pub(crate) fn execute_fused(
+    image: &DynamicImage,
+    other: &DynamicImage,
+) -> Result<DynamicImage, PilError> {
+    super::super::super::helpers::fusion::execute_default(
+        image,
+        other,
+        super::super::ops::MODE,
+    )
+}
