@@ -19,13 +19,14 @@ const COMPOSITE_ALPHA_MASKS: &[Mode] = &[
     Mode::ImageRgba8,
     Mode::ImageRgbPremultiplied8,
 ];
-const COMPOSITE_INPUTS: &[InputContract] = &[InputContract::CompositeInputs {
+const COMPOSITE_INPUT: InputContract = InputContract::CompositeInputs {
     luma_masks: COMPOSITE_LUMA_MASKS,
     alpha_masks: COMPOSITE_ALPHA_MASKS,
     mode_rejection: "images do not match",
     mask_rejection: "bad transparency mask",
     size_rejection: "images do not match",
-}];
+};
+const COMPOSITE_INPUTS: &[InputContract] = &[COMPOSITE_INPUT];
 
 const COMPOSITE_SSE2: &[Architecture] = &[Architecture::Sse2];
 const COMPOSITE_NEON: &[Architecture] = &[Architecture::Neon];
@@ -135,7 +136,42 @@ fn composite_support(mode: Mode) -> ModeSupport {
 
 /// Complete exact-mode support contract for Image.composite.
 pub(crate) static COMPOSITE_MODULE_SUPPORT: OperationSupport =
-    OperationSupport::new(OperationId::CompositeModule, &[], composite_support);
+    OperationSupport::new(OperationId::CompositeModule, COMPOSITE_INPUTS, composite_support);
+
+/// Validates the eager wrapper's size check from the same contract used by
+/// prepared Composite admission.
+pub(crate) fn validate_composite_wrapper_dimensions(
+    source_size: (u32, u32),
+    mask_size: (u32, u32),
+) -> Result<(), PilError> {
+    let InputContract::CompositeInputs { size_rejection, .. } = COMPOSITE_INPUT else {
+        return Err(PilError::InternalError(
+            "Composite support omitted its input contract".into(),
+        ));
+    };
+    if source_size != mask_size {
+        return Err(PilError::ValueError(size_rejection.into()));
+    }
+    Ok(())
+}
+
+/// Selects luma or alpha mask samples from Composite's declared mode sets.
+pub(crate) fn composite_wrapper_mask_alpha(mask_mode: Mode) -> Result<bool, PilError> {
+    let InputContract::CompositeInputs { luma_masks, alpha_masks, mask_rejection, .. } =
+        COMPOSITE_INPUT
+    else {
+        return Err(PilError::InternalError(
+            "Composite support omitted its mask contract".into(),
+        ));
+    };
+    if luma_masks.contains(&mask_mode) {
+        return Ok(false);
+    }
+    if alpha_masks.contains(&mask_mode) {
+        return Ok(true);
+    }
+    Err(PilError::ValueError(mask_rejection.into()))
+}
 
 pub(crate) struct PreparedCompositeModule<'a> {
     source: &'a DynamicImage,

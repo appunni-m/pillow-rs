@@ -257,14 +257,13 @@ pub fn composite(image1: &Image, image2: &Image, mask: &Image) -> Result<Image, 
     // image2 can be a different size (it's the background canvas).
     let (w1, h1) = image1.size()?;
     let (wm, hm) = mask.size()?;
-    if (w1, h1) != (wm, hm) {
-        return Err(PilError::ValueError("images do not match".into()));
-    }
-    let mask_alpha = match mask.mode_identity()? {
-        Mode::One | Mode::ImageLuma8 => false,
-        Mode::ImageLumaA8 | Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8 => true,
-        _ => return Err(PilError::ValueError("bad transparency mask".into())),
-    };
+    crate::compute::pool_cpu::ops::composite::ops::validate_composite_wrapper_dimensions(
+        (w1, h1),
+        (wm, hm),
+    )?;
+    let mask_alpha = crate::compute::pool_cpu::ops::composite::ops::composite_wrapper_mask_alpha(
+        mask.mode_identity()?,
+    )?;
     let output_mode = image2.mode_identity()?;
     let source = if image1.mode_identity()? == output_mode {
         image1.clone()

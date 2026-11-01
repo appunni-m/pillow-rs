@@ -5,24 +5,11 @@
 
 use std::sync::Arc;
 
+use crate::compute::registry::support::OperationId;
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
 use crate::raster::Mode;
-
-fn binary_mode_class(mode: Mode) -> Option<u8> {
-    match mode {
-        Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => Some(1),
-        // Chops operates on stored bytes, including premultiplied La samples.
-        Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => Some(2),
-        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageHsv8 => Some(3),
-        Mode::ImageRgba8
-        | Mode::ImageCmyk8
-        | Mode::ImageRgbPremultiplied8
-        | Mode::ImageRgbx8 => Some(4),
-        _ => None,
-    }
-}
 
 fn mode_identity(image: &Image) -> Result<Mode, PilError> {
     if let Some(mode) = image.known_mode_identity() {
@@ -35,28 +22,35 @@ fn mode_identity(image: &Image) -> Result<Mode, PilError> {
 /// `ImagingChops` before it allocates a result image. Modes in the same byte
 /// width family are intentionally compatible (for example `P` with `L` and
 /// `YCbCr` with `RGB`); scalar `I`/`F` and 16-bit modes are rejected by the
-/// underlying byte-oriented Chops entry points.
-fn validate_binary_operands(image1: &Image, image2: &Image) -> Result<(), PilError> {
+/// operation's declared support contract.
+fn validate_binary_operands(
+    operation: OperationId,
+    image1: &Image,
+    image2: &Image,
+) -> Result<(), PilError> {
     let mode1 = mode_identity(image1)?;
     let mode2 = mode_identity(image2)?;
-    let Some(class1) = binary_mode_class(mode1) else {
-        return Err(PilError::ValueError("image has wrong mode".into()));
-    };
-    let Some(class2) = binary_mode_class(mode2) else {
-        return Err(PilError::ValueError("images do not match".into()));
-    };
     // Chops.c clips binary results to the smaller width and height; unequal
     // dimensions are valid. Backend admission still checks its own layout needs.
-    if class1 != class2 {
-        return Err(PilError::ValueError("images do not match".into()));
-    }
-    Ok(())
+    validate_binary_mode_pair(operation, mode1, mode2)
 }
 
-fn validate_logical_operands(image1: &Image, image2: &Image) -> Result<(), PilError> {
-    if mode_identity(image1)? != Mode::One || mode_identity(image2)? != Mode::One {
-        return Err(PilError::ValueError("image has wrong mode".into()));
-    }
+fn validate_binary_mode_pair(
+    operation: OperationId,
+    mode1: Mode,
+    mode2: Mode,
+) -> Result<(), PilError> {
+    let mode_support = operation.support().for_mode(mode1);
+    mode_support.validate_chops_secondary_mode(|| Ok(mode2))
+}
+
+fn validate_logical_operands(
+    operation: OperationId,
+    image1: &Image,
+    image2: &Image,
+) -> Result<(), PilError> {
+    let mode_support = operation.support().for_mode(mode_identity(image1)?);
+    mode_support.validate_chops_secondary_mode(|| mode_identity(image2))?;
     // Pillow's mode-1 logical Chops clips each axis to the overlap, including
     // an empty overlap. Mode compatibility does not require equal dimensions.
     Ok(())
@@ -69,7 +63,7 @@ fn validate_logical_operands(image1: &Image, image2: &Image) -> Result<(), PilEr
 /// Returns an error for unsupported or incompatible byte-mode layouts. The
 /// result clips to the smaller width and height; execution errors are deferred.
 pub fn add(image1: &Image, image2: &Image, scale: f64, offset: f64) -> Result<Image, PilError> {
-    validate_binary_operands(image1, image2)?;
+    validate_binary_operands(OperationId::ChopsAdd, image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::Add {
@@ -92,7 +86,7 @@ pub fn subtract(
     scale: f64,
     offset: f64,
 ) -> Result<Image, PilError> {
-    validate_binary_operands(image1, image2)?;
+    validate_binary_operands(OperationId::ChopsSubtract, image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::Subtract {
@@ -110,7 +104,7 @@ pub fn subtract(
 /// Returns an error for unsupported or incompatible byte-mode layouts. The
 /// result clips to the smaller width and height; execution errors are deferred.
 pub fn multiply(image1: &Image, image2: &Image) -> Result<Image, PilError> {
-    validate_binary_operands(image1, image2)?;
+    validate_binary_operands(OperationId::ChopsMultiply, image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::Multiply {
@@ -126,7 +120,7 @@ pub fn multiply(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Returns an error for unsupported or incompatible byte-mode layouts. The
 /// result clips to the smaller width and height; execution errors are deferred.
 pub fn screen(image1: &Image, image2: &Image) -> Result<Image, PilError> {
-    validate_binary_operands(image1, image2)?;
+    validate_binary_operands(OperationId::ChopsScreen, image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::Screen {
@@ -142,7 +136,7 @@ pub fn screen(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Returns an error for unsupported or incompatible byte-mode layouts. The
 /// result clips to the smaller width and height; execution errors are deferred.
 pub fn darker(image1: &Image, image2: &Image) -> Result<Image, PilError> {
-    validate_binary_operands(image1, image2)?;
+    validate_binary_operands(OperationId::ChopsDarker, image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::Darker {
@@ -158,7 +152,7 @@ pub fn darker(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Returns an error for unsupported or incompatible byte-mode layouts. The
 /// result clips to the smaller width and height; execution errors are deferred.
 pub fn lighter(image1: &Image, image2: &Image) -> Result<Image, PilError> {
-    validate_binary_operands(image1, image2)?;
+    validate_binary_operands(OperationId::ChopsLighter, image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::Lighter {
@@ -174,7 +168,7 @@ pub fn lighter(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Returns an error for unsupported or incompatible byte-mode layouts. The
 /// result clips to the smaller width and height; execution errors are deferred.
 pub fn difference(image1: &Image, image2: &Image) -> Result<Image, PilError> {
-    validate_binary_operands(image1, image2)?;
+    validate_binary_operands(OperationId::ChopsDifference, image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::Difference {
@@ -190,7 +184,7 @@ pub fn difference(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Returns an error for unsupported or incompatible byte-mode layouts. The
 /// result clips to the smaller width and height; execution errors are deferred.
 pub fn overlay(image1: &Image, image2: &Image) -> Result<Image, PilError> {
-    validate_binary_operands(image1, image2)?;
+    validate_binary_operands(OperationId::ChopsOverlay, image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::Overlay {
@@ -206,7 +200,7 @@ pub fn overlay(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Returns an error for unsupported or incompatible byte-mode layouts. The
 /// result clips to the smaller width and height; execution errors are deferred.
 pub fn soft_light(image1: &Image, image2: &Image) -> Result<Image, PilError> {
-    validate_binary_operands(image1, image2)?;
+    validate_binary_operands(OperationId::ChopsSoftLight, image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::SoftLight {
@@ -222,7 +216,7 @@ pub fn soft_light(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Returns an error for unsupported or incompatible byte-mode layouts. The
 /// result clips to the smaller width and height; execution errors are deferred.
 pub fn hard_light(image1: &Image, image2: &Image) -> Result<Image, PilError> {
-    validate_binary_operands(image1, image2)?;
+    validate_binary_operands(OperationId::ChopsHardLight, image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::HardLight {
@@ -238,7 +232,7 @@ pub fn hard_light(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Returns an error if either input is not mode `1` or its mode cannot be read.
 /// Unequal dimensions clip to the overlap; execution errors are deferred.
 pub fn logical_and(image1: &Image, image2: &Image) -> Result<Image, PilError> {
-    validate_logical_operands(image1, image2)?;
+    validate_logical_operands(OperationId::ChopsLogicalAnd, image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::LogicalAnd {
@@ -254,7 +248,7 @@ pub fn logical_and(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Returns an error if either input is not mode `1` or its mode cannot be read.
 /// Unequal dimensions clip to the overlap; execution errors are deferred.
 pub fn logical_or(image1: &Image, image2: &Image) -> Result<Image, PilError> {
-    validate_logical_operands(image1, image2)?;
+    validate_logical_operands(OperationId::ChopsLogicalOr, image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::LogicalOr {
@@ -270,7 +264,7 @@ pub fn logical_or(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Returns an error if either input is not mode `1` or its mode cannot be read.
 /// Unequal dimensions clip to the overlap; execution errors are deferred.
 pub fn logical_xor(image1: &Image, image2: &Image) -> Result<Image, PilError> {
-    validate_logical_operands(image1, image2)?;
+    validate_logical_operands(OperationId::ChopsLogicalXor, image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::LogicalXor {
@@ -330,7 +324,7 @@ pub fn offset_with_default(
 /// Returns an error for unsupported or incompatible byte-mode layouts. The
 /// result clips to the smaller width and height; execution errors are deferred.
 pub fn add_modulo(image1: &Image, image2: &Image) -> Result<Image, PilError> {
-    validate_binary_operands(image1, image2)?;
+    validate_binary_operands(OperationId::ChopsAddModulo, image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::AddModulo {
@@ -346,7 +340,7 @@ pub fn add_modulo(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Returns an error for unsupported or incompatible byte-mode layouts. The
 /// result clips to the smaller width and height; execution errors are deferred.
 pub fn subtract_modulo(image1: &Image, image2: &Image) -> Result<Image, PilError> {
-    validate_binary_operands(image1, image2)?;
+    validate_binary_operands(OperationId::ChopsSubtractModulo, image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::SubtractModulo {

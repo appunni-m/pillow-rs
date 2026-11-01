@@ -5,6 +5,9 @@
 //! SSE2, NEON, and Wasm SIMD128 strategies for the archived `1/L/P`, `LA/PA`,
 //! `RGB`, and `RGBA/CMYK` layouts; its shared byte kernel lives in
 //! `pool_cpu/helpers/bytes` and preserves every stored byte.
+// TODO(pillow-rs#3ptb): complete the archived-source comparison for all Chops
+// mode owners' Default and architecture strategies; record each kernel's exact
+// feature guard, fallback, and direct/fused caller in the inventory.
 
 use std::sync::Arc;
 

@@ -213,6 +213,31 @@ JavaScript continue converting mode strings to `Mode` before calling core.
 This change is uncompiled and unvalidated; composite-family caller review
 remains open.
 
+Source-only CPU Composite admission progress (`2026-11-02`): the direct typed
+Rust `composite` wrapper now reads mask identities, luma-versus-alpha selection,
+and dimension rejection from the `CompositeModule` input declaration used by
+prepared admission. It retains the prior size-before-mask validation order,
+source conversion, and destination palette handling. The change is uncompiled
+and unvalidated; composite-family caller review remains open.
+
+Source-only CPU Chops admission progress (`2026-11-02`): each direct byte-binary
+and mode-1 logical wrapper now validates its mode pair through that operation's
+`OperationId` support declaration. The duplicate byte-width mode classifier is
+removed. Binary wrappers still resolve both identities before rejecting;
+logical wrappers still reject an unsupported first mode before reading the
+second. Overlap clipping and deferred execution are unchanged. This change is
+uncompiled and unvalidated; the remaining Chops caller and source review stays
+open.
+
+Source-only Chops unary caller review (`2026-11-02`): Constant, Offset,
+Duplicate, and Invert wrappers intentionally keep queuing their typed
+`PipelineOp`s without eager mode reads. `Image::push_op` preserves their exact
+mode transitions, and the shared registered prepare route maps each variant to
+its own operation contract and prepared strategy. Python and JavaScript
+delegate to these typed Rust functions. This preserves their lazy error
+boundary; Chops mode-owner and architecture-kernel comparison remains open and
+is tracked at the family owner.
+
 ## Stage 3: inject Backend and Architecture
 
 1. Define immutable execution context and the centralized selection policy.

@@ -1687,9 +1687,13 @@ Before any validation command, update this ledger with exact baseline-source to 
   RGBA, CMYK, and RGBX declare SSE2, NEON, and Wasm SIMD128 masked-byte paths
   over the existing wide kernel with same-mode Default fallback. Their guard
   requires exact source/destination mode, valid native lengths, and a matching
-  mask shape and selector. Mask samples are borrowed from native storage; mode
-  `1` is treated as a binary mask. Parity must cover every exact mode, mask
-  selector, architecture, block/tail boundary, and fallback.
+  mask shape and selector. The operation-level support view exposes this
+  input declaration, and the direct typed Rust wrapper reads the same declared
+  mask sets, luma-versus-alpha selector, and size error while preserving its
+  size-before-mask rejection order. Mask samples are borrowed from native
+  storage; mode `1` is treated as a binary mask. Source-only and unvalidated.
+  Parity must cover every exact mode, mask selector, architecture, block/tail
+  boundary, and fallback.
 - `AlphaComposite` remains restricted to exact LA and RGBA inputs, preserves
   Pillow's fixed-point pixel arithmetic and existing ignored-offset behavior,
   and has maintained SSE2/NEON/Wasm SIMD128 routes under exact LA/RGBA
@@ -1731,9 +1735,22 @@ Before any validation command, update this ledger with exact baseline-source to 
   and `RGBA/CMYK` layouts. Those strategies and ImageOps Invert share the
   native-byte kernel in `pool_cpu/helpers/bytes/native_invert.rs`; Chops
   reconstructs the exact input mode and inverts alpha as required by its
-  bytewise operation. Direct/eager caller rewiring, compatibility registration
-  retirement, source review, and all verification remain pending under the
-  TODO in `chops/ops.rs`. These additions are source-only and unvalidated.
+  bytewise operation. The 12 direct byte-binary wrappers and three logical
+  wrappers now pass their exact `OperationId` to the support declaration for
+  source and secondary-mode admission; the duplicate channel-width class map
+  is removed. Binary wrappers still resolve both input identities before
+  rejection, logical wrappers still reject the first mode before reading the
+  second, and overlap clipping is unchanged. Unary Constant, Offset, Duplicate,
+  and Invert remain lazy: their Rust wrappers queue the matching `PipelineOp`,
+  `Image::push_op` keeps the declared L transition or exact-mode preservation,
+  and the shared registered `prepare_pipeline` route selects the corresponding
+  `OperationId` support contract at materialization. Python and JavaScript
+  wrappers delegate these operations to the typed Rust API. This retains the
+  existing deferred execution/error boundary without duplicating mode checks.
+  Their caller and registry trace is source-reviewed; full Chops leaf-kernel
+  comparison and the remaining family review are pending under the TODO in
+  `pillow-rs/src/compute/pool_cpu/ops/chops/ops.rs`. This source remains
+  unvalidated.
 - Reduce output contract decision (2026-10-29): implement typed `u16`
   averaging for `ImageI16`, `ImageI16L`, `ImageI16B`, and `ImageI16N`,
   preserving the exact source variant in the reduced `DynamicImage`. The

@@ -615,6 +615,34 @@ impl ModeSupport {
         ))
     }
 
+    /// Validates an ImageChops secondary identity from this mode's declaration.
+    ///
+    /// The secondary identity is supplied lazily so source rejection can
+    /// precede materializing or inspecting the secondary image when required.
+    pub(crate) fn validate_chops_secondary_mode(
+        self,
+        other_mode: impl FnOnce() -> Result<Mode, PilError>,
+    ) -> Result<(), PilError> {
+        self.validate_mode()?;
+        let other_mode = other_mode()?;
+        let Self::Supported { inputs, .. } = self else {
+            unreachable!("validated Chops source mode was rejected")
+        };
+        for contract in inputs {
+            let InputContract::ChopsBinaryModes { modes, rejection_reason } = *contract else {
+                continue;
+            };
+            return if modes.contains(&other_mode) {
+                Ok(())
+            } else {
+                Err(PilError::ValueError(rejection_reason.into()))
+            };
+        }
+        Err(PilError::InternalError(
+            "Chops support omitted its secondary-mode contract".into(),
+        ))
+    }
+
     /// Checks declared input contracts without selecting an architecture.
     ///
     /// A returned guard means the caller does not yet have enough facts to

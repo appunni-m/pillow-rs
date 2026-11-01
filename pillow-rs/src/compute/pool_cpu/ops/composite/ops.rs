@@ -7,6 +7,7 @@ mod merge;
 pub(crate) use blend::{BLEND_MODULE_SUPPORT, PreparedBlendModule, prepare_blend_pipeline};
 pub(crate) use composite_module::{
     COMPOSITE_MODULE_SUPPORT, PreparedCompositeModule, prepare_composite_pipeline,
+    composite_wrapper_mask_alpha, validate_composite_wrapper_dimensions,
 };
 pub(crate) use merge::{MERGE_SUPPORT, PreparedMerge, prepare_merge_pipeline};
 
