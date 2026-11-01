@@ -194,8 +194,8 @@ pub(super) fn chops_add_subtract_guard(
     if input.width != other.width || input.height != other.height {
         return GuardAssessment::Ineligible;
     }
-    let scale = f32::from_bits(scale_bits);
-    let offset = f32::from_bits(offset_bits);
+    let scale = f64::from_bits(scale_bits);
+    let offset = f64::from_bits(offset_bits);
     let row_bytes = input.width.checked_mul(u32::from(channels));
     if !scale.is_finite() || !offset.is_finite() {
         GuardAssessment::Ineligible

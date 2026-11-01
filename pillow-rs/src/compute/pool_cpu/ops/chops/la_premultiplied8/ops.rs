@@ -35,3 +35,26 @@ pub(crate) fn execute(
         _ => Err(PilError::InternalError("Chops mode strategy received a different raster variant".into())),
     }
 }
+
+pub(crate) fn execute_in_place(
+    image: &mut DynamicImage,
+    request: super::super::ops::ChopsRequest,
+    other: &DynamicImage,
+    architecture: Architecture,
+) -> Result<(), PilError> {
+    match image {
+        DynamicImage::ImageLaPremultiplied8(_) => match architecture {
+            Architecture::Sse2 => super::sse2::execute_in_place(image, request, other, MODE),
+            Architecture::Neon => super::neon::execute_in_place(image, request, other, MODE),
+            Architecture::WasmSimd128 => {
+                super::wasm_simd128::execute_in_place(image, request, other, MODE)
+            }
+            _ => Err(PilError::InternalError(
+                "Chops in-place strategy received an unsupported architecture".into(),
+            )),
+        },
+        _ => Err(PilError::InternalError(
+            "Chops in-place mode strategy received a different raster variant".into(),
+        )),
+    }
+}

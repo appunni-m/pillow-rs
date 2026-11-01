@@ -64,6 +64,15 @@ pub(super) fn execute_batch(
             result = Some(owned);
         }
 
+        if matches!(op, PipelineOp::Add { .. } | PipelineOp::Subtract { .. })
+            && let Some(mut owned) = result.take()
+        {
+            execute_owned_chops_affine(&mut owned, op, context, &mut resources)?;
+            result = Some(owned);
+            index += 1;
+            continue;
+        }
+
         let input = result.as_ref().unwrap_or(image);
         begin_pipeline_operation_telemetry(crate::compute::registry::variant_key(op));
         let operation_palette = match input.mode() {
@@ -124,6 +133,52 @@ struct OwnedInvertPlan {
     mode: crate::raster::Mode,
     architecture: Architecture,
     channels: usize,
+}
+
+fn execute_owned_chops_affine(
+    image: &mut DynamicImage,
+    op: &PipelineOp,
+    context: &ExecutionContext,
+    resources: &mut crate::compute::PipelineResourceTelemetry,
+) -> Result<(), PilError> {
+    begin_pipeline_operation_telemetry(crate::compute::registry::variant_key(op));
+    let plan = match super::ops::chops::ops::prepare_plan(
+        OperationInputs {
+            image: &*image,
+            palette: PaletteInput::default(),
+        },
+        op,
+        context,
+    ) {
+        Ok(plan) => plan,
+        Err(error) => {
+            record_pipeline_operation_path("cpu");
+            finish_pipeline_operation_telemetry();
+            return Err(error);
+        }
+    };
+    let architecture = plan.selection().implementation.architecture;
+    let uses_default = architecture == Architecture::Default;
+    let can_execute_in_place = plan.can_execute_in_place(image);
+    crate::compute::record_pipeline_operation_architecture(architecture);
+    if uses_default || !can_execute_in_place {
+        let output = match plan.execute(image) {
+            Ok(output) => output,
+            Err(error) => {
+                record_pipeline_operation_path("cpu");
+                finish_pipeline_operation_telemetry();
+                return Err(error);
+            }
+        };
+        record_pipeline_operation_path("cpu");
+        account_host_buffer_boundary(resources, image, &output);
+        *image = output;
+    } else if let Err(error) = plan.execute_in_place(image) {
+        finish_pipeline_operation_telemetry();
+        return Err(error);
+    }
+    finish_pipeline_operation_telemetry();
+    Ok(())
 }
 
 fn prepare_owned_invert(

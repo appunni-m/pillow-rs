@@ -1966,6 +1966,22 @@ Before any validation command, update this ledger with exact baseline-source to 
   migration only: explicit SIMD-request routing, compatibility SIMD
   registration retirement, source review, compilation, parity, and benchmark
   evidence remain pending under `pillow-rs#3ptb`.
+- The archived SIMD batch admitted in-place Chops only for Add/Sub, and its
+  affine path required empty storage or at least eight bytes per row. The CPU
+  batch now prepares one `ChopsExecutionPlan` from the mode support declaration
+  and reuses an owned prior result only when that selected architecture plan
+  meets the archived threshold. Unit Add/Sub uses the 16-byte saturating
+  in-place kernel only with a complete vector per row; 8–15-byte rows retain
+  the archived eight-lane affine path, narrow rows use the allocating selected
+  strategy, and empty images are a no-op. The route records the selected
+  architecture without selecting again. This is source-only and uncompiled;
+  caller and telemetry reconciliation remain pending.
+- Chops Add/Sub support facts retain the original `f64` scale and offset bits
+  for the archived finite-value and exact `(1, 0)` architecture guard. The
+  executable request still narrows to `f32` for Pillow's arithmetic. Thus a
+  finite `f64` that overflows when narrowed remains eligible for the archived
+  affine vector path, while non-finite original parameters select Default.
+  This guard and narrowing boundary are source-reviewed only.
 - The archived Multiply→Screen scalar and vector formulas now have a prepared
   native-mode fusion for L/LA/RGB/RGBA. CPU batch execution admits it only for
   adjacent operations sharing the same secondary `Image`, matching mode and
@@ -1997,10 +2013,12 @@ Before any validation command, update this ledger with exact baseline-source to 
 
 | Preserved source/function | Maintained destination and disposition |
 | --- | --- |
-| `pool_cpu/legacy/ops/chops.rs::op_chops_add` through `op_chops_subtract_modulo` | `chops/helpers/binary.rs` preserves native-byte formulas and row clipping; exact mode support and secondary mode compatibility live in `chops/ops.rs` and each mode's `ops.rs`. |
+| `pool_cpu/legacy/ops/chops.rs::op_chops_add` through `op_chops_subtract_modulo` | `chops/helpers/binary.rs` preserves native-byte formulas and row clipping; exact mode support and secondary mode compatibility live in `chops/ops.rs` and each mode's `ops.rs`. Add/Sub architecture guards retain the original `f64` parameters before the `f32` arithmetic narrowing, matching archived finite checks and the exact `(1, 0)` fast-path test. |
 | `pool_cpu/legacy/ops/chops.rs::op_chops_logical_and` through `op_chops_logical_xor` | `chops/helpers/binary.rs` uses truth semantics on raw mode-1 bytes and emits canonical 0/255 bytes. |
 | `pool_cpu/legacy/mod.rs::fused_multiply_screen` and `pool_cpu/legacy/pool_simd/ops/adapters/chops/kernels/fused_multiply_screen.rs` | `chops/helpers/fusion.rs` preserves serial and vector arithmetic for exact L/LA/RGB/RGBA. `chops/ops.rs` prepares both mode/architecture declarations and dispatches the selected fusion through each mode's Default or named architecture entry point; `batch_execution.rs` admits adjacent operations with the same operand. Explicit SIMD-request routing and verification remain pending. |
 | `pool_cpu/legacy/ops/chops.rs::op_chops_constant`, `op_chops_offset`, `op_chops_duplicate` | `chops/helpers/unary.rs` keeps L output for Constant and same-mode native behavior for Offset and Duplicate. |
+| `pool_cpu/legacy/pool_simd/ops/adapters/chops.rs::{supports_constant_for_image,supports_constant_for_shape,simd_constant}` | Intentionally retired as an architecture strategy: the SIMD adapter only allocated the final repeated-byte L buffer and reported synthetic vector counters; it executed no vector kernel. `chops/helpers/unary.rs::constant` retains the same output and fill behavior for every source mode, including empty images. All exact-mode ChopsConstant declarations route to Default; no architecture folder is added for this non-kernel path. |
+| `pool_cpu/legacy/pool_simd/ops/adapters/chops.rs::{supports_in_place,execute_in_place}` and `kernels.rs::native_chops_affine_in_place` | The archive's batch calls the in-place adapter only after `supports_in_place`, which admits Add/Sub and requires empty native bytes or rows at least eight bytes wide. `chops/helpers/vector.rs::execute_in_place` preserves the affine eight-lane row traversal and the 16-byte saturating path for unit parameters when each row contains a full vector. `ChopsExecutionPlan` carries the already selected architecture into the owned-intermediate path in `pool_cpu/batch_execution.rs`; narrow unit rows keep the allocating vector route. The old bytewise in-place arms were not admitted by `supports_in_place` and are retired as unreachable from archived batch execution. Source review and parity remain pending. |
 | `pool_cpu/legacy/ops/chops.rs::op_chops_invert` | `chops/helpers/unary.rs` inverts stored bytes and `chops/helpers/output.rs` reconstructs the exact requested raster identity; high-depth extensions are separately declared CoreOnly. The archived byte-vector kernel is now shared from `pool_cpu/helpers/bytes/native_invert.rs` by the exact-mode Chops and ImageOps architecture strategies. |
 | `pool_cpu/legacy/pool_simd/ops/adapters/chops/kernels.rs` | The exact `1/L/P`, `LA/La/PA`, `RGB/YCbCr/HSV`, and `RGBA/CMYK/RGBa/RGBX` mode owners expose SSE2, NEON, and Wasm SIMD128 entry points under `<mode>/<arch>/mod.rs`; those paths route into the shared portable formulas in `chops/helpers/vector.rs`. Operation support supplies the exact pair, dimension, and parameter guards, with same-mode Default fallback. |
 | `pool_cpu/legacy/pool_simd/ops/adapters/effects.rs::{native_invert,simd_invert_chops}` | `chops/<mode>/{sse2,neon,wasm_simd128}/mod.rs` exposes the exact-mode architecture entry point for archived `1/L/P`, `LA/PA`, `RGB`, and `RGBA/CMYK` layouts. Each entry point reuses `chops/helpers/vector.rs`; mode `ops.rs` selects it from the injected Architecture. Channels including alpha are inverted. Empty exact layouts return the source with `native-copy`; the maintained exact-byte guard now admits them, with the same-mode serial Default as fallback. |

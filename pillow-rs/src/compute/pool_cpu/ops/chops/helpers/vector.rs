@@ -182,17 +182,12 @@ fn execute_native(
         ));
     }
     let (scale, offset, subtract) = affine_parameters(operation)?;
-    if !scale.is_finite() || !offset.is_finite() {
-        return Err(PilError::InternalError(
-            "Chops vector parameters bypassed architecture admission".into(),
-        ));
-    }
     if left.is_empty() {
         crate::compute::record_pipeline_operation_path("native-copy");
         return Ok(image.clone());
     }
     let mut output = dimensions.alloc_buffer();
-    if scale == 1.0 && offset == 0.0 {
+    if exact_default_parameters(operation) {
         apply_saturating(left, right, &mut output, subtract);
         crate::compute::record_pipeline_operation_vector_blocks(
             u64::try_from(left.len().div_ceil(16)).unwrap_or(u64::MAX),
@@ -221,13 +216,94 @@ fn execute_native(
         .ok_or_else(|| PilError::ValueError("channel_op_binary buffer error".into()))
 }
 
+/// Applies an admitted Add/Sub vector strategy to an owned batch intermediate.
+pub(crate) fn execute_in_place(
+    image: &mut DynamicImage,
+    request: super::super::ops::ChopsRequest,
+    other: &DynamicImage,
+    mode: Mode,
+) -> Result<(), PilError> {
+    let super::super::ops::ChopsRequest::Binary(operation) = request else {
+        return Err(PilError::InternalError(
+            "Chops in-place vector strategy received a non-binary request".into(),
+        ));
+    };
+    let (scale, offset, subtract) = affine_parameters(operation)?;
+    let channels = super::binary::byte_channels(mode).ok_or_else(|| {
+        PilError::InternalError("Chops in-place strategy received a non-byte mode".into())
+    })?;
+    if image.mode() != mode
+        || super::binary::byte_channels(other.mode()) != Some(channels)
+        || image.dimensions() != other.dimensions()
+    {
+        return Err(PilError::InternalError(
+            "Chops vector operands did not match their admitted native layout".into(),
+        ));
+    }
+    let dimensions = CheckedDims::new_allow_empty(image.width(), image.height(), channels)?;
+    let height = image.height() as usize;
+    let right = other.as_bytes();
+    let left = image.as_bytes_mut().ok_or_else(|| {
+        PilError::InternalError("Chops in-place strategy has no mutable native bytes".into())
+    })?;
+    if left.len() != dimensions.total_bytes() || right.len() != dimensions.total_bytes() {
+        return Err(PilError::InternalError(
+            "Chops vector operands did not match their image dimensions".into(),
+        ));
+    }
+    if left.is_empty() {
+        crate::compute::record_pipeline_operation_path("native-copy");
+        return Ok(());
+    }
+    let row_stride = dimensions.row_stride();
+    if exact_default_parameters(operation) && row_stride >= 16 {
+        apply_saturating_in_place(left, right, subtract);
+        crate::compute::record_pipeline_operation_vector_blocks(
+            u64::try_from(left.len().div_ceil(16)).unwrap_or(u64::MAX),
+        );
+        crate::compute::record_pipeline_operation_scalar_tail(0);
+    } else {
+        let (blocks, scalar_tail) = apply_affine_in_place(
+            left,
+            right,
+            row_stride,
+            height,
+            scale,
+            offset,
+            subtract,
+        );
+        crate::compute::record_pipeline_operation_vector_blocks(
+            u64::try_from(blocks).unwrap_or(u64::MAX),
+        );
+        crate::compute::record_pipeline_operation_scalar_tail(
+            u64::try_from(scalar_tail).unwrap_or(u64::MAX),
+        );
+    }
+    crate::compute::record_pipeline_operation_path("vector");
+    Ok(())
+}
+
 fn affine_parameters(operation: BinaryOperation) -> Result<(f32, f32, bool), PilError> {
     match operation {
-        BinaryOperation::Add { scale, offset } => Ok((scale, offset, false)),
-        BinaryOperation::Subtract { scale, offset } => Ok((scale, offset, true)),
+        BinaryOperation::Add { scale, offset, .. } => Ok((scale, offset, false)),
+        BinaryOperation::Subtract { scale, offset, .. } => Ok((scale, offset, true)),
         _ => Err(PilError::InternalError(
             "Chops vector strategy received a non-Add/Sub operation".into(),
         )),
+    }
+}
+
+fn exact_default_parameters(operation: BinaryOperation) -> bool {
+    match operation {
+        BinaryOperation::Add {
+            exact_default_parameters,
+            ..
+        }
+        | BinaryOperation::Subtract {
+            exact_default_parameters,
+            ..
+        } => exact_default_parameters,
+        _ => false,
     }
 }
 
@@ -259,6 +335,70 @@ fn apply_saturating(left: &[u8], right: &[u8], output: &mut [u8], subtract: bool
         };
         output_tail.copy_from_slice(&values.to_array()[..active]);
     }
+}
+
+fn apply_saturating_in_place(left: &mut [u8], right: &[u8], subtract: bool) {
+    let (left_blocks, left_tail) = left.as_chunks_mut::<16>();
+    let (right_blocks, right_tail) = right.as_chunks::<16>();
+    for (left_block, right_block) in left_blocks.iter_mut().zip(right_blocks) {
+        let left_value = u8x16::new(*left_block);
+        let right_value = u8x16::new(*right_block);
+        *left_block = if subtract {
+            left_value.saturating_sub(right_value).to_array()
+        } else {
+            left_value.saturating_add(right_value).to_array()
+        };
+    }
+    if !left_tail.is_empty() {
+        let active = left_tail.len();
+        let mut left_padded = [0; 16];
+        let mut right_padded = [0; 16];
+        left_padded[..active].copy_from_slice(left_tail);
+        right_padded[..active].copy_from_slice(right_tail);
+        let left = u8x16::new(left_padded);
+        let right = u8x16::new(right_padded);
+        let output = if subtract {
+            left.saturating_sub(right)
+        } else {
+            left.saturating_add(right)
+        };
+        left_tail.copy_from_slice(&output.to_array()[..active]);
+    }
+}
+
+fn apply_affine_in_place(
+    left: &mut [u8],
+    right: &[u8],
+    row_stride: usize,
+    height: usize,
+    scale: f32,
+    offset: f32,
+    subtract: bool,
+) -> (usize, usize) {
+    let vector_bytes = row_stride / 8 * 8;
+    for row in 0..height {
+        let start = row * row_stride;
+        let left_row = &mut left[start..start + row_stride];
+        let right_row = &right[start..start + row_stride];
+        for start in (0..vector_bytes).step_by(8) {
+            let left_block = <[u8; 8]>::try_from(&left_row[start..start + 8])
+                .expect("complete affine vector block");
+            let right_block = <[u8; 8]>::try_from(&right_row[start..start + 8])
+                .expect("complete affine vector block");
+            left_row[start..start + 8]
+                .copy_from_slice(&affine_block(left_block, right_block, scale, offset, subtract));
+        }
+        for index in vector_bytes..row_stride {
+            left_row[index] = affine_sample(
+                left_row[index],
+                right_row[index],
+                scale,
+                offset,
+                subtract,
+            );
+        }
+    }
+    (vector_bytes / 8 * height, (row_stride - vector_bytes) * height)
 }
 
 fn apply_affine(

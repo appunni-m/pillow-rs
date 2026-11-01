@@ -12,9 +12,23 @@ static SOFT_LIGHT_LUT: &[u8; 65_536] = include_bytes!("../../../../../ops/lut_so
 #[derive(Clone, Copy)]
 pub(crate) enum BinaryOperation {
     /// Pillow-scaled addition.
-    Add { scale: f32, offset: f32 },
+    Add {
+        /// Scale narrowed to the original float32 arithmetic type.
+        scale: f32,
+        /// Offset narrowed to the original float32 arithmetic type.
+        offset: f32,
+        /// Whether the original float64 request was exactly `(1, 0)`.
+        exact_default_parameters: bool,
+    },
     /// Pillow-scaled subtraction.
-    Subtract { scale: f32, offset: f32 },
+    Subtract {
+        /// Scale narrowed to the original float32 arithmetic type.
+        scale: f32,
+        /// Offset narrowed to the original float32 arithmetic type.
+        offset: f32,
+        /// Whether the original float64 request was exactly `(1, 0)`.
+        exact_default_parameters: bool,
+    },
     /// Multiply with Pillow's 8-bit normalization.
     Multiply,
     /// Screen blend.
@@ -88,17 +102,17 @@ fn apply(
     operation: BinaryOperation,
 ) {
     match operation {
-        BinaryOperation::Add { scale, offset } if scale == 1.0 && offset == 0.0 => {
+        BinaryOperation::Add { scale, offset, .. } if scale == 1.0 && offset == 0.0 => {
             apply_rows(left, right, output, width, height, channels, left_stride, right_stride, u8::saturating_add)
         }
-        BinaryOperation::Add { scale, offset } => apply_rows(
+        BinaryOperation::Add { scale, offset, .. } => apply_rows(
             left, right, output, width, height, channels, left_stride, right_stride,
             |a, b| ((f32::from(a) + f32::from(b)) / scale + offset).clamp(0.0, 255.0) as u8,
         ),
-        BinaryOperation::Subtract { scale, offset } if scale == 1.0 && offset == 0.0 => {
+        BinaryOperation::Subtract { scale, offset, .. } if scale == 1.0 && offset == 0.0 => {
             apply_rows(left, right, output, width, height, channels, left_stride, right_stride, u8::saturating_sub)
         }
-        BinaryOperation::Subtract { scale, offset } => apply_rows(
+        BinaryOperation::Subtract { scale, offset, .. } => apply_rows(
             left, right, output, width, height, channels, left_stride, right_stride,
             |a, b| ((f32::from(a) - f32::from(b)) / scale + offset).clamp(0.0, 255.0) as u8,
         ),
@@ -145,7 +159,7 @@ fn apply_rows<F: Fn(u8, u8) -> u8>(
     }
 }
 
-pub(super) const fn byte_channels(mode: Mode) -> Option<u8> {
+pub(crate) const fn byte_channels(mode: Mode) -> Option<u8> {
     match mode {
         Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => Some(1),
         Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => Some(2),

@@ -341,10 +341,10 @@ pub enum RequestFacts {
     ChopsBinary {
         /// Materialized secondary raster facts.
         other: SecondaryInputFacts,
-        /// Float32 scale supplied to Add/Sub, retained as bits for exact facts.
-        affine_scale_bits: Option<u32>,
-        /// Float32 offset supplied to Add/Sub, retained as bits for exact facts.
-        affine_offset_bits: Option<u32>,
+        /// Original float64 scale supplied to Add/Sub, retained as exact bits.
+        affine_scale_bits: Option<u64>,
+        /// Original float64 offset supplied to Add/Sub, retained as exact bits.
+        affine_offset_bits: Option<u64>,
     },
     /// Materialized secondary raster for an exact same-mode, same-size operation.
     SameModeSecondaryImage {
@@ -894,13 +894,13 @@ impl StrategyInputs {
         self
     }
 
-    /// Supplies Add/Sub's narrowed float parameters and the materialized operand.
+    /// Supplies Add/Sub's original float parameters and materialized operand.
     #[must_use]
     pub fn with_chops_affine_secondary(
         mut self,
         other: SecondaryInputFacts,
-        scale: f32,
-        offset: f32,
+        scale: f64,
+        offset: f64,
     ) -> Self {
         self.request = RequestFacts::ChopsBinary {
             other,
