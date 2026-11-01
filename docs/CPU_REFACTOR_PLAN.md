@@ -170,6 +170,24 @@ by metadata planning, so materialization keeps consuming declared execution
 context while mode queries can use the planned result. This boundary has not
 been compiled or validated, and the remaining Stage 2 work is still open.
 
+Committed source-only progress (`40ef86a05`, 2026-11-01): CPU P and PA
+ImageOps Invert now retain their indexed samples and attached palette metadata
+through lazy materialization. Their support declarations mark these Rust-only
+routes CoreOnly because the Python Pillow adapter rejects them. The change has
+not been compiled or parity-validated.
+
+Source-only CPU support progress (`2026-11-01`): every `PipelineOp` now maps
+exhaustively to an `OperationId` and exposes the same `OperationSupport`
+descriptor used by preparation; matrix conversions select the matrix contract.
+The support and strategy types plus `ExecutionContext` and `Architecture` are
+re-exported from the crate root for typed Rust inspection. CPU indexed
+materialization checks the first operation's declared P/PA mode before generic
+palette expansion, covering direct `Image::push_op` calls. A source-only
+crosswalk matched all 84 `PipelineOp` variants with no unmapped variants or
+unknown `OperationId`s. These changes remain uncompiled and unvalidated; full
+support-contract review, caller reconciliation, CPU source review, and all
+planned validation stages remain open.
+
 ## Stage 3: inject Backend and Architecture
 
 1. Define immutable execution context and the centralized selection policy.

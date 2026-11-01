@@ -179,6 +179,15 @@ pub use crate::color::parse_color_str;
 pub use crate::color::parse_color_str_unclamped;
 pub use crate::color::resolve_new_color;
 pub use crate::compute::Backend;
+pub use crate::compute::{
+    Architecture, BandIndexRule, DrawRequestKind, DrawTextMaskKind, ExecutionContext,
+    F32RankCompatibility, FallbackReason, ImplementationId, ImplementationSupport,
+    InputContract, MergeBandModeRule, ModeChannelCapacity, ModeSupport, OperationId,
+    OperationSupport, OutputModeRule, PaletteKnowledge, PasteInputRules, PasteMaskRule,
+    PayloadOutput, PixelWriteRunFacts, RejectionKind, RequestFacts, SecondaryInputFacts,
+    StrategyGuard, StrategyInputs, StrategySelection, SupportAssessment, SupportScope,
+    UnresolvedGuard,
+};
 #[cfg(feature = "gpu")]
 pub use crate::compute::BatchError;
 #[cfg(feature = "gpu")]

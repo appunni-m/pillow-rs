@@ -1,5 +1,8 @@
 //! Supporting enums and state for pipeline operation descriptors.
 
+use crate::compute::registry::support::{OperationId, OperationSupport};
+use crate::pipeline::PipelineOp;
+
 /// Resampling filter used by resize-like operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResampleFilter {
@@ -116,4 +119,109 @@ pub enum DitherMethod {
     None,
     /// Floyd-Steinberg error diffusion.
     FloydSteinberg,
+}
+
+impl PipelineOp {
+    /// Returns the typed operation contract for this pipeline descriptor.
+    ///
+    /// Parameterized forms that own different support contracts resolve to
+    /// their exact operation identity before callers inspect mode support.
+    #[must_use]
+    pub fn operation_id(&self) -> OperationId {
+        use OperationId as Id;
+
+        match self {
+            Self::Resize { .. } => Id::Resize,
+            Self::ResizeBoxed { .. } => Id::ResizeBoxed,
+            Self::Crop { .. } => Id::Crop,
+            Self::Rotate { .. } => Id::Rotate,
+            Self::Transpose { .. } => Id::Transpose,
+            Self::Thumbnail { .. } => Id::Thumbnail,
+            Self::Reduce { .. } => Id::Reduce,
+            Self::Convert {
+                matrix: Some(_), ..
+            } => Id::ConvertMatrix,
+            Self::Convert { matrix: None, .. } => Id::Convert,
+            Self::ConvertLab { .. } => Id::ConvertLab,
+            Self::RemapPalette { .. } => Id::RemapPalette,
+            Self::Filter3x3 { .. } => Id::Filter3x3,
+            Self::Filter5x5 { .. } => Id::Filter5x5,
+            Self::GaussianBlur { .. } => Id::GaussianBlur,
+            Self::BoxBlur { .. } | Self::BoxBlurXY { .. } => Id::BoxBlur,
+            Self::MedianFilter { .. } => Id::MedianFilter,
+            Self::MaxFilter { .. } => Id::MaxFilter,
+            Self::MinFilter { .. } => Id::MinFilter,
+            Self::RankFilter { .. } => Id::RankFilter,
+            Self::Autocontrast { .. } => Id::Autocontrast,
+            Self::Equalize | Self::EqualizeMasked { .. } => Id::Equalize,
+            Self::Invert => Id::Invert,
+            Self::Flip => Id::Flip,
+            Self::Mirror => Id::Mirror,
+            Self::Posterize { .. } => Id::Posterize,
+            Self::Solarize { .. } => Id::Solarize,
+            Self::Grayscale => Id::Grayscale,
+            Self::Colorize { .. } => Id::Colorize,
+            Self::Contain { .. } => Id::Contain,
+            Self::Cover { .. } => Id::Cover,
+            Self::Fit { .. } => Id::Fit,
+            Self::Pad { .. } => Id::Pad,
+            Self::Scale { .. } => Id::Scale,
+            Self::Expand { .. } => Id::Expand,
+            Self::CropBorder { .. } => Id::CropBorder,
+            Self::Add { .. } => Id::ChopsAdd,
+            Self::Subtract { .. } => Id::ChopsSubtract,
+            Self::Multiply { .. } => Id::ChopsMultiply,
+            Self::Screen { .. } => Id::ChopsScreen,
+            Self::Darker { .. } => Id::ChopsDarker,
+            Self::Lighter { .. } => Id::ChopsLighter,
+            Self::Difference { .. } => Id::ChopsDifference,
+            Self::Overlay { .. } => Id::ChopsOverlay,
+            Self::HardLight { .. } => Id::ChopsHardLight,
+            Self::SoftLight { .. } => Id::ChopsSoftLight,
+            Self::AddModulo { .. } => Id::ChopsAddModulo,
+            Self::SubtractModulo { .. } => Id::ChopsSubtractModulo,
+            Self::LogicalAnd { .. } => Id::ChopsLogicalAnd,
+            Self::LogicalOr { .. } => Id::ChopsLogicalOr,
+            Self::LogicalXor { .. } => Id::ChopsLogicalXor,
+            Self::Constant { .. } => Id::ChopsConstant,
+            Self::Offset { .. } => Id::ChopsOffset,
+            Self::Duplicate => Id::ChopsDuplicate,
+            Self::InvertChops => Id::ChopsInvert,
+            Self::Brightness { .. } => Id::Brightness,
+            Self::Contrast { .. } => Id::Contrast,
+            Self::ColorSaturation { .. } => Id::ColorSaturation,
+            Self::Sharpness { .. } => Id::Sharpness,
+            Self::EffectSpread { .. } => Id::EffectSpread,
+            Self::Paste { .. } => Id::Paste,
+            Self::AlphaComposite { .. } => Id::AlphaComposite,
+            Self::Merge { .. } => Id::Merge,
+            Self::BlendModule { .. } => Id::BlendModule,
+            Self::CompositeModule { .. } => Id::CompositeModule,
+            Self::Eval { .. } => Id::Eval,
+            Self::EffectNoise { .. } => Id::EffectNoise,
+            Self::Transform { .. } => Id::Transform,
+            Self::Color3DLut { .. } => Id::Color3DLut,
+            Self::PutPixel { .. } => Id::PutPixel,
+            Self::PutData { .. } => Id::PutData,
+            Self::PutAlpha { .. } => Id::PutAlpha,
+            Self::PutAlphaData { .. } => Id::PutAlphaData,
+            Self::ExtractBand { .. } => Id::ExtractBand,
+            Self::DrawLine { .. }
+            | Self::DrawRectangle { .. }
+            | Self::DrawRoundedRect { .. }
+            | Self::DrawEllipse { .. }
+            | Self::DrawCircle { .. }
+            | Self::DrawPolygon { .. }
+            | Self::DrawArc { .. }
+            | Self::DrawChord { .. }
+            | Self::DrawPieslice { .. }
+            | Self::DrawPoint { .. } => Id::Draw,
+        }
+    }
+
+    /// Returns the exhaustive support descriptor used by preparation.
+    #[must_use]
+    pub fn support(&self) -> &'static OperationSupport {
+        self.operation_id().support()
+    }
 }

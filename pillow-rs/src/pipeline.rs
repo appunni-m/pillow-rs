@@ -20,6 +20,7 @@
 //! Every new operation must keep these tables aligned:
 //!
 //! - [`crate::pipeline::PipelineOp`] variant.
+//! - `PipelineOp::operation_id` and `PipelineOp::support`.
 //! - `compute::registry::variant_key`.
 //! - CPU implementation registration.
 //! - optional GPU/SIMD registration and shader parameter extraction.

@@ -617,6 +617,19 @@ impl Image {
         if !source.has_palette_samples() {
             return Ok(None);
         }
+        let source_mode = img.mode();
+        if prepared.context().backend() == crate::compute::Backend::Cpu
+            && matches!(source_mode, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
+        {
+            // Public Image::push_op can bypass the Pillow wrapper's mode
+            // admission. Check the exact indexed source declaration before
+            // this adapter expands its samples and could dispatch as RGB(A).
+            // Unsafe indexed operations are isolated at a pipeline boundary,
+            // so later operations are prepared against their actual result.
+            if let Some(op) = ops.first() {
+                op.support().for_mode(source_mode).validate_mode()?;
+            }
+        }
         let all_safe = ops
             .iter()
             .all(|op| Self::is_palette_safe_op_for_source(source, op));

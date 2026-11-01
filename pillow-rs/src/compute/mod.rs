@@ -346,6 +346,14 @@ pub use pool_gpu::stream::{
     GpuBatchExecutor, GpuBatchStats, GpuImage,
 };
 pub(crate) mod registry;
+pub use registry::support::{
+    BandIndexRule, DrawRequestKind, DrawTextMaskKind, F32RankCompatibility, FallbackReason,
+    ImplementationId, ImplementationSupport, InputContract, MergeBandModeRule,
+    ModeChannelCapacity, ModeSupport, OperationId, OperationSupport, OutputModeRule,
+    PaletteKnowledge, PasteInputRules, PasteMaskRule, PayloadOutput, PixelWriteRunFacts,
+    RejectionKind, RequestFacts, SecondaryInputFacts, StrategyGuard, StrategyInputs,
+    StrategySelection, SupportAssessment, SupportScope, UnresolvedGuard,
+};
 
 pub(crate) use pool_cpu::CpuPool;
 pub(crate) use pool_cpu::ops::analysis::ops::{

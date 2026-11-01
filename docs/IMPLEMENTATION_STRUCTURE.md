@@ -259,8 +259,8 @@ guards. Keep declared support, eligibility for a particular request, actual
 selection, and verification evidence distinct; a single supported boolean
 cannot express this contract.
 
-The following illustrates the planned interface; these APIs are not yet
-implemented or validated:
+The following illustrates the target interface; operation coverage remains
+incomplete and current support data has not been validated:
 
 ```rust
 let support = OperationId::Resize.support(); // Full operation contract.
@@ -270,6 +270,12 @@ let prepared = op.prepare(&inputs, &ctx)?;
 let selection = prepared.selection();       // Actual route and fallback reason.
 let output = prepared.execute()?;
 ```
+
+`pillow-rs` re-exports `OperationId` and the support descriptor types from its
+crate root so Rust callers can name and match the complete contract. Every
+`PipelineOp` exposes `operation_id()` and `support()` and resolves parameterized
+forms such as matrix conversion to their exact operation identity. Direct
+operations outside `PipelineOp` expose the same contract through `OperationId`.
 
 `support()` describes declared strategies and availability in the current
 build without executing the operation. `assess()` applies the same eligibility

@@ -367,9 +367,10 @@ pub(crate) fn known_pipeline_op_mode(op: &PipelineOp, current: Mode) -> Option<M
 /// TODO(pillow-rs#3ptb): finish caller reconciliation for Autocontrast(P/PA),
 /// Filter(P), GaussianBlur(PA), Posterize/Solarize(PA),
 /// Brightness/Contrast/ColorSaturation/Sharpness(P/PA), and BlendModule(P/PA).
-/// Their public wrappers currently reject these combinations before queueing;
-/// trace nested and direct PipelineOp callers, then record the exact rejection
-/// and error timing before removing this fallback.
+/// CPU indexed materialization now checks `PipelineOp::support` against the
+/// exact source mode before palette expansion, including direct `push_op` use.
+/// Trace remaining wrapper/nested parameter and output transitions, then record
+/// their exact error timing before removing this fallback.
 pub(crate) fn known_pipeline_op_mode_for_source(
     source: &Image,
     op: &PipelineOp,
