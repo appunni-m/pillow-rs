@@ -1,7 +1,7 @@
 //! Pad support declarations and prepared exact-mode Resize composition.
-// TODO(pillow-rs#3ptb): let full-width Pad windows compose the newly migrated
-// byte-mode vector Resize strategies, then reconcile and retire the old SIMD
-// Pad route after its callers use this prepared CPU context.
+// TODO(pillow-rs#3ptb): audit archived full-width SIMD Pad behavior and its
+// compatibility callers against the exact L/RGBX mode/architecture Resize
+// composition, then retire the old route after caller/error-order review.
 
 use crate::compute::{Architecture, ExecutionContext, registry::support::{
     InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport,
@@ -120,19 +120,19 @@ fn try_direct_resize_into_canvas(
     resize: Option<&crate::compute::pool_cpu::ops::resize::ops::PreparedResize<'_>>,
     architecture: Architecture,
 ) -> Result<Option<DynamicImage>, PilError> {
-    if architecture != Architecture::Default {
-        return Ok(None);
-    }
     let Some(resize) = resize else {
         return Ok(None);
     };
+    if resize.selection().implementation.architecture != architecture {
+        return Ok(None);
+    }
     match image {
         DynamicImage::ImageLuma8(image) => {
-            super::luma8::default::pad_impl::resize_into_canvas(image, frame, resize)
+            super::luma8::helpers::resize_window::resize_into_canvas(image, frame, resize)
                 .map(|padded| padded.map(DynamicImage::ImageLuma8))
         }
         DynamicImage::ImageRgbx8(image) => {
-            super::rgbx8::default::pad_impl::resize_into_canvas(image, frame, resize)
+            super::rgbx8::helpers::resize_window::resize_into_canvas(image, frame, resize)
                 .map(|padded| padded.map(DynamicImage::ImageRgbx8))
         }
         _ => Ok(None),

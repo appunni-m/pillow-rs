@@ -12,3 +12,4 @@ pub(crate) mod byte_samples;
 pub(crate) mod native_nearest;
 pub(crate) mod native_byte_vector;
 pub(crate) mod alpha_samples;
+pub(crate) mod pad_window;

@@ -94,6 +94,65 @@ fn execute_with_row_facts<
     filter: ResampleFilter,
     sparse_source_rows: Option<&[bool]>,
 ) -> Result<Vec<u8>, PilError> {
+    let output_dims = CheckedDims::new(destination_size.0, destination_size.1, CHANNELS as u8)?;
+    let mut output = output_dims.alloc_buffer();
+    execute_into_with_row_facts::<CHANNELS, PREMULTIPLIED_ALPHA, USE_BOUNDED_I32>(
+        source,
+        source_size,
+        destination_size,
+        filter,
+        sparse_source_rows,
+        output_dims,
+        &mut output,
+    )?;
+    Ok(output)
+}
+
+pub(crate) fn execute_into<
+    const CHANNELS: usize,
+    const PREMULTIPLIED_ALPHA: bool,
+    const USE_BOUNDED_I32: bool,
+>(
+    source: &[u8],
+    source_size: (u32, u32),
+    destination_size: (u32, u32),
+    filter: ResampleFilter,
+    output: &mut [u8],
+) -> Result<bool, PilError> {
+    if matches!(filter, ResampleFilter::Nearest)
+        || source_size.0 == 0
+        || source_size.1 == 0
+        || destination_size.0 == 0
+        || destination_size.1 == 0
+    {
+        return Ok(false);
+    }
+    let output_dims = CheckedDims::new(destination_size.0, destination_size.1, CHANNELS as u8)?;
+    execute_into_with_row_facts::<CHANNELS, PREMULTIPLIED_ALPHA, USE_BOUNDED_I32>(
+        source,
+        source_size,
+        destination_size,
+        filter,
+        None,
+        output_dims,
+        output,
+    )?;
+    Ok(true)
+}
+
+fn execute_into_with_row_facts<
+    const CHANNELS: usize,
+    const PREMULTIPLIED_ALPHA: bool,
+    const USE_BOUNDED_I32: bool,
+>(
+    source: &[u8],
+    source_size: (u32, u32),
+    destination_size: (u32, u32),
+    filter: ResampleFilter,
+    sparse_source_rows: Option<&[bool]>,
+    output_dims: CheckedDims,
+    output: &mut [u8],
+) -> Result<(), PilError> {
     validate_channels::<CHANNELS, PREMULTIPLIED_ALPHA, USE_BOUNDED_I32>()?;
     if matches!(filter, ResampleFilter::Nearest) {
         return Err(PilError::InternalError(
@@ -103,10 +162,14 @@ fn execute_with_row_facts<
     let source_dims = CheckedDims::new(source_size.0, source_size.1, CHANNELS as u8)?;
     let intermediate_dims =
         CheckedDims::new(destination_size.0, source_size.1, CHANNELS as u8)?;
-    let output_dims = CheckedDims::new(destination_size.0, destination_size.1, CHANNELS as u8)?;
     if source.len() != source_dims.total_bytes() {
         return Err(PilError::InternalError(
             "filtered native-byte Resize received an invalid source buffer".into(),
+        ));
+    }
+    if output.len() != output_dims.total_bytes() {
+        return Err(PilError::InternalError(
+            "filtered native-byte Resize received an invalid output buffer".into(),
         ));
     }
 
@@ -135,7 +198,6 @@ fn execute_with_row_facts<
         .checked_mul(CHANNELS)
         .ok_or_else(invalid_kernel_plan)?;
     let mut intermediate = intermediate_dims.alloc_buffer();
-    let mut output = output_dims.alloc_buffer();
     let mut premultiplied_row = if PREMULTIPLIED_ALPHA {
         vec![0; source_stride]
     } else {
@@ -169,7 +231,7 @@ fn execute_with_row_facts<
         source_height,
         output_height,
         &vertical,
-        &mut output,
+        output,
         sparse_source_rows,
     )
     .ok_or_else(invalid_kernel_plan)?;
@@ -179,7 +241,7 @@ fn execute_with_row_facts<
         horizontal_tail,
         vertical_tail,
     );
-    Ok(output)
+    Ok(())
 }
 
 fn validate_channels<

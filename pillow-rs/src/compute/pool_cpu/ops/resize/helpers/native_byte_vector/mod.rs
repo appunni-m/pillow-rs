@@ -10,5 +10,6 @@ mod plan;
 mod telemetry;
 
 pub(crate) use execute::{
-    execute, execute_boxed, execute_boxed_with_sparse_rows, execute_with_sparse_rows,
+    execute, execute_boxed, execute_boxed_with_sparse_rows, execute_into,
+    execute_with_sparse_rows,
 };

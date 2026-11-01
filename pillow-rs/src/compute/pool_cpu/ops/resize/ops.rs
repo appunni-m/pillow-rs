@@ -463,17 +463,11 @@ impl PreparedResize<'_> {
             self.request,
             ResizeRequest::Standard { filter } if !matches!(filter, ResampleFilter::Nearest)
         );
-        filtered
-            && match self.selection.implementation.architecture {
-                Architecture::Default => matches!(
-                    self.image,
-                    DynamicImage::ImageLuma8(_) | DynamicImage::ImageRgbx8(_)
-                ),
-                Architecture::Sse2 | Architecture::Neon | Architecture::WasmSimd128 => {
-                    matches!(self.image, DynamicImage::ImageLuma8(_))
-                }
-                _ => false,
-            }
+        super::helpers::pad_window::supports(
+            self.image,
+            self.selection.implementation.architecture,
+            filtered,
+        )
     }
 
     /// Executes the retained mode and architecture strategy into a Pad window.
@@ -484,38 +478,14 @@ impl PreparedResize<'_> {
         let ResizeRequest::Standard { filter } = self.request else {
             return Ok(false);
         };
-        match (self.selection.implementation.architecture, self.image) {
-            (Architecture::Default, DynamicImage::ImageLuma8(image)) => Ok(
-                super::luma8::default::resize_impl::execute_into_window(
-                    image, self.width, self.height, filter, output,
-                ),
-            ),
-            (Architecture::Sse2, DynamicImage::ImageLuma8(image)) => Ok(
-                super::luma8::sse2::resize_impl::execute_into_window(
-                    image, self.width, self.height, filter, output,
-                ),
-            ),
-            (Architecture::Neon, DynamicImage::ImageLuma8(image)) => Ok(
-                super::luma8::neon::resize_impl::execute_into_window(
-                    image, self.width, self.height, filter, output,
-                ),
-            ),
-            (Architecture::WasmSimd128, DynamicImage::ImageLuma8(image)) => Ok(
-                super::luma8::wasm_simd128::resize_impl::execute_into_window(
-                    image, self.width, self.height, filter, output,
-                ),
-            ),
-            (Architecture::Default, DynamicImage::ImageRgbx8(image)) => {
-                super::rgbx8::default::resize_impl::execute_into_window(
-                    image,
-                    self.width,
-                    self.height,
-                    filter,
-                    output,
-                )
-            }
-            _ => Ok(false),
-        }
+        super::helpers::pad_window::execute(
+            self.image,
+            self.width,
+            self.height,
+            filter,
+            self.selection.implementation.architecture,
+            output,
+        )
     }
 
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
