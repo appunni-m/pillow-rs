@@ -188,6 +188,31 @@ unknown `OperationId`s. These changes remain uncompiled and unvalidated; full
 support-contract review, caller reconciliation, CPU source review, and all
 planned validation stages remain open.
 
+Source-only CPU Blend admission progress (`2026-11-01`): the Rust module-level
+`blend` wrapper now validates its source/secondary mode pair and dimensions
+through the same `BlendModule` support declaration used by prepared execution.
+It checks the mode pair before querying dimensions, preserving the prior
+rejection order, and the indexed materializer rejects direct P/PA requests from
+that same declaration before palette expansion. The duplicated mode-pair
+matrix was removed. This source change has not been compiled or validated.
+
+Source-only CPU ImageOps admission progress (`2026-11-01`): the Autocontrast,
+Equalize, Posterize, and Solarize wrappers now use their operation contracts
+for exact-mode admission. Posterize/Solarize internal high-depth rejection
+messages now match the existing public `LA`/`RGB`/`RGBA` aliases. Source review
+confirmed the wrappers retain their prior mask-before-mode order for masked
+Autocontrast/Equalize and keep P Posterize/Solarize as CoreOnly native-index
+routes. Direct/fusion caller review and all validation remain open.
+
+Source-only CPU Merge admission progress (`2026-11-01`): the direct typed Rust
+`merge` wrapper now derives supported target identities, band counts, allowed
+band identities, and error messages from `OperationId::Merge.support()`. It
+still validates target mode and arity before reading bands, each band mode
+before checking sizes, and rejects the same first failing input. Python and
+JavaScript continue converting mode strings to `Mode` before calling core.
+This change is uncompiled and unvalidated; composite-family caller review
+remains open.
+
 ## Stage 3: inject Backend and Architecture
 
 1. Define immutable execution context and the centralized selection policy.

@@ -580,6 +580,41 @@ impl ModeSupport {
         }
     }
 
+    /// Validates a Blend secondary identity from this mode's declaration.
+    ///
+    /// The public wrapper calls this before querying dimensions so unsupported
+    /// modes keep their historical error ordering without maintaining a
+    /// second mode-pair matrix beside `BlendInputs`.
+    pub(crate) fn validate_blend_input_mode(self, other_mode: Mode) -> Result<(), PilError> {
+        self.validate_mode()?;
+        let Self::Supported { inputs, .. } = self else {
+            unreachable!("validated mode support was rejected")
+        };
+        for contract in inputs {
+            let InputContract::BlendInputs {
+                compatible_modes,
+                wrong_mode_modes,
+                wrong_mode_rejection,
+                mismatch_rejection,
+            } = *contract
+            else {
+                continue;
+            };
+            if compatible_modes.contains(&other_mode) {
+                return Ok(());
+            }
+            let reason = if wrong_mode_modes.contains(&other_mode) {
+                wrong_mode_rejection
+            } else {
+                mismatch_rejection
+            };
+            return Err(PilError::ValueError(reason.into()));
+        }
+        Err(PilError::InternalError(
+            "Blend support omitted its secondary-mode contract".into(),
+        ))
+    }
+
     /// Checks declared input contracts without selecting an architecture.
     ///
     /// A returned guard means the caller does not yet have enough facts to

@@ -5,6 +5,10 @@
 
 use std::sync::Arc;
 
+use crate::compute::registry::support::{
+    InputContract, MergeBandModeRule, ModeSupport, OperationId, PaletteKnowledge, RequestFacts,
+    SecondaryInputFacts, StrategyInputs,
+};
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
@@ -58,93 +62,78 @@ pub fn alpha_composite(im1: &Image, im2: &Image) -> Result<Image, PilError> {
     Ok(result)
 }
 
-fn validate_merge_shape(mode: Mode, band_count: usize) -> Result<(), PilError> {
-    let n_expected = match mode {
-        Mode::One
-        | Mode::ImageLuma8
-        | Mode::ImagePalette8
-        | Mode::ImageI32
-        | Mode::ImageF32
-        | Mode::ImageI16
-        | Mode::ImageI16L
-        | Mode::ImageI16B
-        | Mode::ImageI16N => 1,
-        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => 3,
-        Mode::ImageRgba8
-        | Mode::ImageRgbPremultiplied8
-        | Mode::ImageRgbx8
-        | Mode::ImageCmyk8 => 4,
-        Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => 2,
-        Mode::ImageLumaA16
-        | Mode::ImageRgb16
-        | Mode::ImageRgba16
-        | Mode::ImageRgb32F
-        | Mode::ImageRgba32F => {
-            return Err(PilError::ValueError("image has wrong mode".to_owned()));
-        }
-    };
+type MergeLayoutContract = (
+    usize,
+    MergeBandModeRule,
+    &'static str,
+    &'static str,
+    &'static str,
+);
 
-    if band_count != n_expected {
-        return Err(PilError::ValueError("wrong number of bands".into()));
+fn merge_layout_contract(mode: Mode) -> Result<MergeLayoutContract, PilError> {
+    let mode_support = OperationId::Merge.support().for_mode(mode);
+    mode_support.validate_mode()?;
+    let ModeSupport::Supported { inputs, .. } = mode_support else {
+        unreachable!("validated Merge mode support was rejected")
+    };
+    for contract in inputs {
+        if let InputContract::MergeBandLayout {
+            band_count,
+            mode_rule,
+            count_rejection,
+            mode_rejection,
+            size_rejection,
+        } = *contract
+        {
+            return Ok((
+                band_count,
+                mode_rule,
+                count_rejection,
+                mode_rejection,
+                size_rejection,
+            ));
+        }
+    }
+    Err(PilError::InternalError(
+        "Merge support omitted its band layout contract".into(),
+    ))
+}
+
+fn validate_merge_shape(mode: Mode, band_count: usize) -> Result<(), PilError> {
+    let (expected, _, count_rejection, _, _) = merge_layout_contract(mode)?;
+    if band_count != expected {
+        return Err(PilError::ValueError(count_rejection.into()));
     }
     Ok(())
 }
 
 fn validate_merge_band_modes(mode: Mode, bands: &[Image]) -> Result<(), PilError> {
-    // Pillow's ``Image.merge`` accepts an L image for every band.  For
-    // multi-band outputs it also accepts a P image only in the first
-    // position, where the indexed core is treated as a single-byte band;
-    // later P bands fail in ``ImagingMerge`` with ``mode mismatch``.  The
-    // single-band L path has its own ``images do not match`` error.
+    let (_, mode_rule, _, mode_rejection, _) = merge_layout_contract(mode)?;
     for (index, band) in bands.iter().enumerate() {
         let band_mode = band.mode_identity()?;
-        let valid = match mode {
-            // ImagingMerge requires a source core with the exact scalar mode
-            // for these destinations; an L/P band is not coerced to 1/I/F.
-            Mode::One
-            | Mode::ImageI32
-            | Mode::ImageF32
-            | Mode::ImagePalette8
-            | Mode::ImageI16
-            | Mode::ImageI16L
-            | Mode::ImageI16B
-            | Mode::ImageI16N => band_mode == mode,
-            Mode::ImageLuma8 => band_mode == Mode::ImageLuma8,
-            _ => band_mode == Mode::ImageLuma8
-                || (index == 0 && band_mode == Mode::ImagePalette8),
+        let valid = match mode_rule {
+            MergeBandModeRule::ExactTarget => band_mode == mode,
+            MergeBandModeRule::LumaOrFirstPalette => {
+                band_mode == Mode::ImageLuma8
+                    || (index == 0 && band_mode == Mode::ImagePalette8)
+            }
         };
         if !valid {
-            return Err(
-                if matches!(
-                    mode,
-                    Mode::ImageLuma8
-                        | Mode::One
-                        | Mode::ImageI32
-                        | Mode::ImageF32
-                        | Mode::ImagePalette8
-                        | Mode::ImageI16
-                        | Mode::ImageI16L
-                        | Mode::ImageI16B
-                        | Mode::ImageI16N
-                ) {
-                    PilError::ValueError("images do not match".into())
-                } else {
-                    PilError::ValueError("mode mismatch".into())
-                },
-            );
+            return Err(PilError::ValueError(mode_rejection.into()));
         }
     }
     Ok(())
 }
 
-fn validate_merge_band_sizes(bands: &[Image]) -> Result<(), PilError> {
+fn validate_merge_band_sizes(mode: Mode, bands: &[Image]) -> Result<(), PilError> {
+    let (_, _, _, _, size_rejection) = merge_layout_contract(mode)?;
     let expected = bands[0].size()?;
     for band in bands.iter().skip(1) {
         // Pillow's ImagingMerge rejects mismatched dimensions at the public
         // call boundary. Keep this validation eager so a lazy pipeline cannot
         // defer the ValueError into result serialization.
         if band.size()? != expected {
-            return Err(PilError::ValueError("size mismatch".into()));
+            return Err(PilError::ValueError(size_rejection.into()));
         }
     }
     Ok(())
@@ -174,7 +163,7 @@ pub enum MergeInput {
 pub fn merge(mode: Mode, bands: &[Image]) -> Result<Image, PilError> {
     validate_merge_shape(mode, bands.len())?;
     validate_merge_band_modes(mode, bands)?;
-    validate_merge_band_sizes(bands)?;
+    validate_merge_band_sizes(mode, bands)?;
 
     Ok(Image::push_op(
         &bands[0],
@@ -220,63 +209,31 @@ pub fn merge_inputs(mode: Mode, bands: &[MergeInput]) -> Result<Image, PilError>
 pub fn blend(image1: &Image, image2: &Image, alpha: f64) -> Result<Image, PilError> {
     let mode1 = image1.mode_identity()?;
     let mode2 = image2.mode_identity()?;
-    let compatible = match mode1 {
-        Mode::ImageLuma8 => mode2 == Mode::ImageLuma8,
-        Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 => {
-            matches!(mode2, Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8)
-        }
-        Mode::ImageRgb8 | Mode::ImageLab8 | Mode::ImageHsv8 | Mode::ImageYCbCr8 => {
-            matches!(
-                mode2,
-                Mode::ImageRgb8 | Mode::ImageLab8 | Mode::ImageHsv8 | Mode::ImageYCbCr8
-            )
-        }
-        Mode::ImageRgba8
-        | Mode::ImageCmyk8
-        | Mode::ImageRgbPremultiplied8
-        | Mode::ImageRgbx8 => matches!(
-            mode2,
-            Mode::ImageRgba8
-                | Mode::ImageCmyk8
-                | Mode::ImageRgbPremultiplied8
-                | Mode::ImageRgbx8
-        ),
-        _ => false,
-    };
-    if !compatible {
-        // Pillow reports unsupported first-image modes (and indexed/1-bit
-        // second images) as ``image has wrong mode``. Other type-family
-        // mismatches are reported as ``images do not match``.
-        let wrong_mode = !matches!(
-            mode1,
-            Mode::ImageLuma8
-                | Mode::ImageLumaA8
-                | Mode::ImageLaPremultiplied8
-                | Mode::ImageRgb8
-                | Mode::ImageLab8
-                | Mode::ImageHsv8
-                | Mode::ImageYCbCr8
-                | Mode::ImageRgba8
-                | Mode::ImageCmyk8
-                | Mode::ImageRgbPremultiplied8
-                | Mode::ImageRgbx8
-        ) || matches!(
-            mode2,
-            Mode::One | Mode::ImagePalette8 | Mode::ImagePaletteAlpha8
-        );
-        return Err(PilError::ValueError(
-            if wrong_mode {
-                "image has wrong mode"
-            } else {
-                "images do not match"
-            }
-            .into(),
-        ));
-    }
+    let support = OperationId::BlendModule.support();
+    let mode_support = support.for_mode(mode1);
+    mode_support.validate_blend_input_mode(mode2)?;
     let (w1, h1) = image1.size()?;
     let (w2, h2) = image2.size()?;
-    if (w1, h1) != (w2, h2) {
-        return Err(PilError::ValueError("images do not match".into()));
+    let facts = StrategyInputs {
+        width: w1,
+        height: h1,
+        byte_len: None,
+        palette: PaletteKnowledge::Unknown,
+        request: RequestFacts::Unspecified,
+    }
+    .with_blend_inputs(
+        SecondaryInputFacts {
+            mode: mode2,
+            width: w2,
+            height: h2,
+            byte_len: None,
+        },
+        alpha,
+    );
+    if mode_support.assess_inputs(facts)?.is_some() {
+        return Err(PilError::InternalError(
+            "Blend wrapper did not resolve all declared input facts".into(),
+        ));
     }
     Ok(Image::push_op(
         image1,

@@ -1,4 +1,5 @@
 use super::*;
+use crate::compute::registry::support::OperationId;
 use crate::raster::Mode;
 
 fn mode_identity(image: &Image) -> Result<Mode, PilError> {
@@ -16,20 +17,10 @@ fn mode_label(mode: Mode) -> &'static str {
 
 fn validate_autocontrast_mode(image: &Image) -> Result<(), PilError> {
     let mode = mode_identity(image)?;
-    // Pillow 12.2.0 `ImageOps._lut` accepts only "L" and "RGB"; "P" raises
-    // NotImplementedError and every other mode raises the OSError below.
-    if mode == Mode::ImagePalette8 {
-        return Err(PilError::NotImplementedError(
-            "mode P support coming soon".into(),
-        ));
-    }
-    if !matches!(mode, Mode::ImageLuma8 | Mode::ImageRgb8) {
-        return Err(PilError::OsError(format!(
-            "not supported for mode {}",
-            mode_label(mode)
-        )));
-    }
-    Ok(())
+    OperationId::Autocontrast
+        .support()
+        .for_mode(mode)
+        .validate_mode()
 }
 
 /// Normalizes image contrast by clipping darkest and lightest values.
@@ -80,14 +71,7 @@ pub fn autocontrast_with_mask(
 /// or another [`PilError`] when mode detection fails.
 pub fn equalize(image: &Image) -> Result<Image, PilError> {
     let mode = mode_identity(image)?;
-    // Pillow 12.2.0 converts "P" to "RGB" before building the LUT and then
-    // `_lut` accepts only "L" and "RGB"; all other modes raise the OSError.
-    if !matches!(mode, Mode::ImageLuma8 | Mode::ImageRgb8 | Mode::ImagePalette8) {
-        return Err(PilError::OsError(format!(
-            "not supported for mode {}",
-            mode_label(mode)
-        )));
-    }
+    OperationId::Equalize.support().for_mode(mode).validate_mode()?;
     Ok(Image::push_op(image, PipelineOp::Equalize))
 }
 
@@ -103,12 +87,7 @@ pub fn equalize_with_mask(image: &Image, mask: ImageOpsMask) -> Result<Image, Pi
             // Retain equalize's mode validation after mask validation, matching
             // Pillow's histogram-before-LUT error order.
             let mode = mode_identity(image)?;
-            if !matches!(mode, Mode::ImageLuma8 | Mode::ImageRgb8 | Mode::ImagePalette8) {
-                return Err(PilError::OsError(format!(
-                    "not supported for mode {}",
-                    mode_label(mode)
-                )));
-            }
+            OperationId::Equalize.support().for_mode(mode).validate_mode()?;
             Ok(Image::push_op(
                 image,
                 PipelineOp::EqualizeMasked {
@@ -193,12 +172,7 @@ pub fn mirror(image: &Image) -> Result<Image, PilError> {
 /// [`PilError`] when mode detection fails. P is a core-only native-index path.
 pub fn posterize(image: &Image, bits: u8) -> Result<Image, PilError> {
     let mode = mode_identity(image)?;
-    if !matches!(mode, Mode::ImageLuma8 | Mode::ImageRgb8 | Mode::ImagePalette8) {
-        return Err(PilError::OsError(format!(
-            "not supported for mode {}",
-            mode_label(mode)
-        )));
-    }
+    OperationId::Posterize.support().for_mode(mode).validate_mode()?;
     Ok(Image::push_op(
         image,
         PipelineOp::Posterize {
@@ -231,12 +205,7 @@ pub fn solarize(image: &Image, threshold: u8) -> Result<Image, PilError> {
 /// exceptions and mutations precede image validation, as they do in Pillow.
 pub fn solarize_with_input(image: &Image, input: SolarizeInput) -> Result<Image, PilError> {
     let mode = mode_identity(image)?;
-    if !matches!(mode, Mode::ImageLuma8 | Mode::ImageRgb8 | Mode::ImagePalette8) {
-        return Err(PilError::OsError(format!(
-            "not supported for mode {}",
-            mode_label(mode)
-        )));
-    }
+    OperationId::Solarize.support().for_mode(mode).validate_mode()?;
     let lut = match input {
         SolarizeInput::Threshold(threshold) if threshold <= 255.0 || threshold.is_nan() => {
             return Ok(Image::push_op(

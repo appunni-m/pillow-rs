@@ -399,8 +399,11 @@ fn rejected_native_byte_point_mode(mode: Mode) -> ModeSupport {
         Mode::ImageI16L => "not supported for mode I;16L",
         Mode::ImageI16B => "not supported for mode I;16B",
         Mode::ImageI16N => "not supported for mode I;16N",
-        Mode::ImageLumaA16 | Mode::ImageRgb16 | Mode::ImageRgba16
-        | Mode::ImageRgb32F | Mode::ImageRgba32F => "not supported for internal mode",
+        Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => super::helpers::strategy::unsupported_mode_reason(mode),
     };
     ModeSupport::Rejected { mode, reason, kind: RejectionKind::OsError }
 }

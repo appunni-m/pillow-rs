@@ -364,11 +364,15 @@ pub(crate) fn known_pipeline_op_mode(op: &PipelineOp, current: Mode) -> Option<M
 /// A mode-preserving operation may still expand palette indices when its
 /// source-specific route is not palette-safe. In that case, defer to the
 /// materialized result instead of reporting the input identity.
-/// TODO(pillow-rs#3ptb): finish caller reconciliation for Autocontrast(P/PA),
-/// Filter(P), GaussianBlur(PA), Posterize/Solarize(PA),
-/// Brightness/Contrast/ColorSaturation/Sharpness(P/PA), and BlendModule(P/PA).
+/// TODO(pillow-rs#3ptb): finish caller reconciliation for
+/// Brightness/Contrast/ColorSaturation/Sharpness(P/PA), especially the eager
+/// contrast and color-saturation base-construction fallbacks.
 /// CPU indexed materialization now checks `PipelineOp::support` against the
 /// exact source mode before palette expansion, including direct `push_op` use.
+/// Autocontrast, Filter, GaussianBlur, Equalize, Posterize, and Solarize
+/// wrappers use their operation declarations for mode admission. BlendModule's
+/// wrapper and prepared path share its declared mode-pair contract, including
+/// direct P/PA rejection before palette expansion.
 /// Trace remaining wrapper/nested parameter and output transitions, then record
 /// their exact error timing before removing this fallback.
 pub(crate) fn known_pipeline_op_mode_for_source(
