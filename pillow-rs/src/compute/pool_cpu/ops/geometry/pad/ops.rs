@@ -1,7 +1,6 @@
 //! Pad support declarations and prepared exact-mode Resize composition.
-// TODO(pillow-rs#3ptb): finish comparing archived SIMD Pad admission,
-// fill/copy, and fallback behavior against these exact-mode strategies. The
-// archived adapter has no active caller; keep it inert.
+// TODO(pillow-rs#3ptb): verify all 25 exact Pad mode strategies, architecture
+// availability/fallback receipts, and composed Resize outputs in CPU parity.
 
 use crate::compute::{Architecture, ExecutionContext, registry::support::{
     InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport,
