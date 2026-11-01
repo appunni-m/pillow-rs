@@ -1,19 +1,5 @@
 pub(crate) use crate::compute::helpers::filters::binomial5x5_parameters_match;
 
-/// Apply the exact L-mode 5x5 binomial kernel in parallel row bands.
-///
-/// Each band owns its horizontal-sum ring and recomputes the four input rows
-/// shared with neighboring bands. The indexed block collector preserves row
-/// order; the copied source rows retain Pillow's unchanged two-pixel border.
-
-
-/// Apply the exact LA-mode 5x5 binomial kernel in parallel row bands.
-///
-/// Each band owns a five-row horizontal-sum ring for both interleaved bands.
-/// The block collector preserves row order, while copying source rows before
-/// updating interior pixels retains Pillow's unchanged two-pixel border.
-
-
 /// Apply Pillow's 5x5 binomial blur to native L bytes using exact integer
 /// arithmetic and five reusable horizontal rows. For this kernel, every
 /// normalized coefficient is an exact multiple of 1/256 and the largest

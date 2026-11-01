@@ -16,6 +16,7 @@ use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
 
 const SOURCE_MODE_ERROR: &str = "image has wrong mode";
+const PALETTE_MODE_ERROR: &str = "cannot filter palette images";
 pub(super) const TARGET_MODES: &[ModeChannelCapacity] = &[
     ModeChannelCapacity { mode: Mode::ImageRgb8, channels: 3 },
     ModeChannelCapacity { mode: Mode::ImageRgba8, channels: 4 },
@@ -35,11 +36,15 @@ fn classify_mode(mode: Mode) -> ModeSupport {
         Mode::ImageYCbCr8 => super::ycbcr8::ops::SUPPORT,
         Mode::ImageLab8 => super::lab8::ops::SUPPORT,
         Mode::ImageHsv8 => super::hsv8::ops::SUPPORT,
+        Mode::ImagePalette8 => ModeSupport::Rejected {
+            mode,
+            reason: PALETTE_MODE_ERROR,
+            kind: RejectionKind::ValueError,
+        },
         Mode::One
         | Mode::ImageLuma8
         | Mode::ImageLumaA8
         | Mode::ImageLaPremultiplied8
-        | Mode::ImagePalette8
         | Mode::ImagePaletteAlpha8
         | Mode::ImageRgbPremultiplied8
         | Mode::ImageRgbx8
@@ -63,7 +68,7 @@ fn classify_mode(mode: Mode) -> ModeSupport {
 
 pub(crate) static SUPPORT: OperationSupport = OperationSupport::new(
     OperationId::Color3DLut,
-    &[],
+    &TARGET_INPUTS,
     classify_mode,
 );
 

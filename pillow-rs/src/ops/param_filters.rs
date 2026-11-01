@@ -594,31 +594,28 @@ impl Image {
         input: PreparedColor3DLut,
         target_mode: Option<crate::raster::Mode>,
     ) -> Result<Image, PilError> {
-        self.validate_filter("Color3DLUT")?;
+        let source_mode = self.mode_identity()?;
+        let source_support = crate::compute::registry::support::OperationId::Color3DLut
+            .support()
+            .for_mode(source_mode);
         let PreparedColor3DLut {
             size,
             table,
             channels,
         } = input;
-        let source_mode = match self.known_mode_identity() {
-            Some(mode @ (crate::raster::Mode::ImageRgb8
-            | crate::raster::Mode::ImageRgba8
-            | crate::raster::Mode::ImageCmyk8)) => mode,
-            // NO_PILLOW_SUPPORT: Core callers may apply Color3DLut directly
-            // to native YCbCr, LAB, and HSV samples without converting modes.
-            Some(mode @ (crate::raster::Mode::ImageYCbCr8
-            | crate::raster::Mode::ImageLab8
-            | crate::raster::Mode::ImageHsv8)) => mode,
-            _ => return Err(PilError::ValueError("image has wrong mode".into())),
-        };
         let target_mode = target_mode.unwrap_or(source_mode);
-        let target_channels = match target_mode {
-            crate::raster::Mode::ImageRgb8 => 3,
-            crate::raster::Mode::ImageRgba8 | crate::raster::Mode::ImageCmyk8 => 4,
-            _ => return Err(PilError::ValueError("unrecognized image mode".into())),
-        };
-        if target_channels < channels as usize {
-            return Err(PilError::ValueError("image has wrong mode".into()));
+        let facts = crate::compute::registry::support::StrategyInputs {
+            width: 0,
+            height: 0,
+            byte_len: None,
+            palette: crate::compute::registry::support::PaletteKnowledge::Absent,
+            request: crate::compute::registry::support::RequestFacts::Unspecified,
+        }
+        .with_color3dlut(target_mode, channels, size, table.len());
+        if source_support.assess_inputs(facts)?.is_some() {
+            return Err(PilError::InternalError(
+                "Color3DLut input contract remained unresolved before queuing".into(),
+            ));
         }
 
         // Color3DLUT records the exact output identity before lazy execution.

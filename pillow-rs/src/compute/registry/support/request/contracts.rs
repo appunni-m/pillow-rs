@@ -740,11 +740,16 @@ fn assess_color3dlut_target(
         RequestFacts::Unspecified => Ok(Some(UnresolvedGuard::InputContract(
             InputContract::Color3DLutTarget { targets },
         ))),
-        RequestFacts::Color3DLut { target_mode, channels, .. }
-            if targets.iter().any(|target| {
-                target.mode == target_mode && channels <= u32::from(target.channels)
-            }) => Ok(None),
-        _ => Err(PilError::ValueError("image has wrong mode".into())),
+        RequestFacts::Color3DLut { target_mode, channels, .. } => {
+            let Some(target) = targets.iter().find(|target| target.mode == target_mode) else {
+                return Err(PilError::ValueError("unrecognized image mode".into()));
+            };
+            if channels > u32::from(target.channels) {
+                return Err(PilError::ValueError("image has wrong mode".into()));
+            }
+            Ok(None)
+        }
+        _ => Err(wrong_request("Color3DLut")),
     }
 }
 

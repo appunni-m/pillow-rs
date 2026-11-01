@@ -31,13 +31,9 @@ impl<'a> Strategy<'a> {
             height: image.height(),
             byte_len: Some(image.as_bytes().len()),
             palette: crate::compute::registry::support::PaletteKnowledge::Absent,
-            request: RequestFacts::Color3DLut {
-                target_mode,
-                channels,
-                size,
-                table_len: table.len(),
-            },
-        };
+            request: RequestFacts::Unspecified,
+        }
+        .with_color3dlut(target_mode, channels, size, table.len());
         let selection = match support.assess(ctx, facts)? {
             SupportAssessment::Ready(selection) => selection,
             SupportAssessment::Rejected { reason, kind, .. } => return Err(kind.into_error(reason)),

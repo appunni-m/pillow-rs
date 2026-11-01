@@ -856,6 +856,24 @@ impl StrategyInputs {
         self
     }
 
+    /// Supplies the Color3DLut target, source channel count, and table shape.
+    #[must_use]
+    pub const fn with_color3dlut(
+        mut self,
+        target_mode: Mode,
+        channels: u32,
+        size: (u32, u32, u32),
+        table_len: usize,
+    ) -> Self {
+        self.request = RequestFacts::Color3DLut {
+            target_mode,
+            channels,
+            size,
+            table_len,
+        };
+        self
+    }
+
     /// Supplies the exact source and optional mask metadata for Paste.
     #[must_use]
     pub const fn with_paste(

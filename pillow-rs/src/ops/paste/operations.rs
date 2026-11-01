@@ -389,17 +389,48 @@ impl Image {
         // validates the destination mode first, then requires the source mode
         // and dimensions to match exactly.
         let dest_mode = self.mode_identity()?;
-        if dest_mode != Mode::ImageRgba8 && dest_mode != Mode::ImageLumaA8 {
-            return Err(PilError::ValueError("image has wrong mode".into()));
-        }
+        let mode_support = crate::compute::registry::support::OperationId::AlphaComposite
+            .support()
+            .for_mode(dest_mode);
+        mode_support.validate_mode()?;
         let source_mode = source.mode_identity()?;
-        if source_mode != dest_mode {
-            return Err(PilError::ValueError("images do not match".into()));
+        let mode_facts = crate::compute::registry::support::StrategyInputs {
+            width: 0,
+            height: 0,
+            byte_len: None,
+            palette: crate::compute::registry::support::PaletteKnowledge::Unknown,
+            request: crate::compute::registry::support::RequestFacts::Unspecified,
         }
+        .with_same_mode_secondary_image(
+            crate::compute::registry::support::SecondaryInputFacts {
+                mode: source_mode,
+                width: 0,
+                height: 0,
+                byte_len: None,
+            },
+        );
+        mode_support.assess_inputs(mode_facts)?;
         let (w1, h1) = self.size()?;
         let (w2, h2) = source.size()?;
-        if (w1, h1) != (w2, h2) {
-            return Err(PilError::ValueError("images do not match".into()));
+        let facts = crate::compute::registry::support::StrategyInputs {
+            width: w1,
+            height: h1,
+            byte_len: None,
+            palette: crate::compute::registry::support::PaletteKnowledge::Unknown,
+            request: crate::compute::registry::support::RequestFacts::Unspecified,
+        }
+        .with_same_mode_secondary_image(
+            crate::compute::registry::support::SecondaryInputFacts {
+                mode: source_mode,
+                width: w2,
+                height: h2,
+                byte_len: None,
+            },
+        );
+        if mode_support.assess_inputs(facts)?.is_some() {
+            return Err(PilError::InternalError(
+                "AlphaComposite input contract remained unresolved before queuing".into(),
+            ));
         }
         let new_self = Image::push_op(
             self,

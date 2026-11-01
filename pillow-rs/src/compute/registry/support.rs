@@ -572,6 +572,49 @@ pub enum ModeSupport {
 }
 
 impl ModeSupport {
+    /// Rejects unsupported source modes through this operation's declaration.
+    pub(crate) fn validate_mode(self) -> Result<(), PilError> {
+        match self {
+            Self::Supported { .. } => Ok(()),
+            Self::Rejected { reason, kind, .. } => Err(kind.into_error(reason)),
+        }
+    }
+
+    /// Checks declared input contracts without selecting an architecture.
+    ///
+    /// A returned guard means the caller does not yet have enough facts to
+    /// complete admission; materialized preparation resolves it later.
+    pub(crate) fn assess_inputs(
+        self,
+        input: StrategyInputs,
+    ) -> Result<Option<UnresolvedGuard>, PilError> {
+        self.validate_mode()?;
+        let Self::Supported { default, inputs, .. } = self else {
+            unreachable!("validated mode support was rejected")
+        };
+        let palette_identity_copy = default.id.operation == OperationId::Convert
+            && matches!(
+                input.request,
+                RequestFacts::ConvertTarget { target_mode }
+                    if target_mode == default.id.mode
+            );
+        let mut unresolved = None;
+        for contract in inputs {
+            // A same-mode P/PA Convert copies its indexed raster and carries
+            // wrapper metadata unchanged; it does not need resolved palette
+            // colors to choose or execute the identity strategy.
+            if palette_identity_copy && matches!(contract, InputContract::PaletteMetadata) {
+                continue;
+            }
+            if let Some(guard) = contract.assess(input)? {
+                if unresolved.is_none() {
+                    unresolved = Some(guard);
+                }
+            }
+        }
+        Ok(unresolved)
+    }
+
     /// Returns whether this mode route is Pillow-defined or a core extension.
     #[must_use]
     pub const fn scope(self) -> Option<SupportScope> {
@@ -697,35 +740,15 @@ impl ModeSupport {
         ctx: &ExecutionContext,
         input: StrategyInputs,
     ) -> Result<SupportAssessment, PilError> {
-        let (default, architectures, inputs) = match self {
+        let (default, architectures) = match self {
             Self::Rejected { mode, reason, kind } =>
                 return Ok(SupportAssessment::Rejected { mode, reason, kind }),
-            Self::Supported { default, architectures, inputs, .. } => (default, architectures, inputs),
+            Self::Supported { default, architectures, .. } => (default, architectures),
         };
         if ctx.backend() != Backend::Cpu {
             return Err(PilError::InternalError("CPU strategy received a context for another backend".into()));
         }
-        let mut unresolved = None;
-        let palette_identity_copy = default.id.operation == OperationId::Convert
-            && matches!(
-                input.request,
-                RequestFacts::ConvertTarget { target_mode }
-                    if target_mode == default.id.mode
-            );
-        for contract in inputs {
-            // A same-mode P/PA Convert copies its indexed raster and carries
-            // wrapper metadata unchanged; it does not need resolved palette
-            // colors to choose or execute the identity strategy.
-            if palette_identity_copy && matches!(contract, InputContract::PaletteMetadata) {
-                continue;
-            }
-            if let Some(guard) = contract.assess(input)? {
-                if unresolved.is_none() {
-                    unresolved = Some(guard);
-                }
-            }
-        }
-        if let Some(guard) = unresolved {
+        if let Some(guard) = self.assess_inputs(input)? {
             return Ok(SupportAssessment::Deferred { implementation: default.id, guard });
         }
         if ctx.supports_architecture(ctx.architecture()) {

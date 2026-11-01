@@ -6,9 +6,8 @@ use crate::compute::helpers::filters::binomial3x3_parameters_match;
 
 // ── 3x3 filter (I-mode) ──
 
-/// Apply one row of the byte 3x3 convolution. The source is immutable and the
-/// destination row is exclusive, so complete rows can be evaluated in
-/// parallel without changing Pillow's per-pixel contraction order.
+/// Apply one row of the byte 3x3 convolution while preserving Pillow's
+/// per-pixel contraction order.
 #[inline]
 fn filter_3x3_byte_row(
     raw: &[u8],

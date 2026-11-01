@@ -84,9 +84,8 @@ fn rank_filter_bytes_extreme_line(
 }
 
 /// Evaluate one output row of the vertical extrema pass. Rebuilding a
-/// monotonic queue for the bounded vertical window keeps this pass parallel
-/// over disjoint destination rows while reducing the square scan to one
-/// horizontal and one vertical window traversal per pixel.
+/// monotonic queue for each bounded vertical window reduces the square scan
+/// to one horizontal and one vertical window traversal per pixel.
 fn rank_filter_bytes_extreme_vertical_row(
     input: &[u8],
     output: &mut [u8],

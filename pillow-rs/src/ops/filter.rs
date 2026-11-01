@@ -3,7 +3,7 @@
 //! Built-in filter names use Pillow `ImageFilter` kernel definitions. The
 //! public methods return lazy pipeline images where possible.
 
-use crate::compute::registry::support::{ModeSupport, OperationId};
+use crate::compute::registry::support::OperationId;
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
@@ -78,10 +78,7 @@ fn operation_for_filter_name(filter_name: &str) -> Option<OperationId> {
 }
 
 fn validate_filter_mode_contract(operation: OperationId, mode: Mode) -> Result<(), PilError> {
-    match operation.support().for_mode(mode) {
-        ModeSupport::Supported { .. } => Ok(()),
-        ModeSupport::Rejected { reason, kind, .. } => Err(kind.into_error(reason)),
-    }
+    operation.support().for_mode(mode).validate_mode()
 }
 
 impl FilterKernel {

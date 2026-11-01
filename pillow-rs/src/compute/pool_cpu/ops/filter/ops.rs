@@ -3,9 +3,10 @@
 //! TODO(pillow-rs#3ptb): add ModeFilter mode, palette, and backend-fallback
 //! parity cases; include the RGBA radius-seven small-shape architecture
 //! fallback; cover the exact-binomial I32 AVX/FMA route and ineligible-request
-//! Default fallback; source-review the `Image::validate_filter` name mapping
-//! and preserve Python's validate-before-`_apply` error order. Keep Rayon out
-//! of this serial owner.
+//! Default fallback; add parity cases for ModeFilter(P), UnsharpMask(P),
+//! GaussianBlur(PA), non-rank F32 rejection, Kernel mode-before-parameter
+//! errors, and Python mode validation before `_apply`. Keep Rayon out of this
+//! serial owner.
 
 use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{
