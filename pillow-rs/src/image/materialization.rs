@@ -273,6 +273,21 @@ impl Image {
                     op,
                     PipelineOp::Filter3x3 { .. } | PipelineOp::Filter5x5 { .. }
                 ))
+            // The PA CPU Filter strategy declares native two-channel
+            // implementations for box and rank filters. Keep their index / per-pixel
+            // alpha samples in PA so prepared execution reaches those exact-mode
+            // strategies instead of expanding the palette to RGBA. GaussianBlur
+            // remains excluded because the PA strategy explicitly rejects it.
+            || (source.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
+                && matches!(
+                    op,
+                    PipelineOp::BoxBlur { .. }
+                        | PipelineOp::BoxBlurXY { .. }
+                        | PipelineOp::MedianFilter { .. }
+                        | PipelineOp::MaxFilter { .. }
+                        | PipelineOp::MinFilter { .. }
+                        | PipelineOp::RankFilter { .. }
+                ))
             // Pillow keeps PA rotation in its native index/alpha sample
             // layout, including bilinear/bicubic resampling and a two-element
             // fillcolor. The generic palette-safe rule only accepts a
@@ -534,7 +549,7 @@ impl Image {
         )
     }
 
-    fn evaluate_palette_grayscale(
+    fn evaluate_palette_cpu_operation(
         source: &Image,
         img: &DynamicImage,
         ops: &[PipelineOp],
@@ -544,9 +559,21 @@ impl Image {
     ) -> Result<Option<Arc<DynamicImage>>, PilError> {
         if !source.has_palette_samples()
             || ops.len() != 1
-            || !matches!(ops.first(), Some(PipelineOp::Grayscale))
             || prepared.context().backend() != crate::compute::Backend::Cpu
         {
+            return Ok(None);
+        }
+        // TODO(pillow-rs#3ptb): move indexed Equalize expansion into the GPU
+        // mode strategy when GPU execution adopts the typed palette contract.
+        let palette_strategy = match (source.known_mode_identity(), ops.first()) {
+            (_, Some(PipelineOp::Grayscale)) => true,
+            (
+                Some(Mode::ImagePalette8 | Mode::ImagePaletteAlpha8),
+                Some(PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. }),
+            ) => true,
+            _ => false,
+        };
+        if !palette_strategy {
             return Ok(None);
         }
 
@@ -722,7 +749,7 @@ impl Image {
         palette: &Option<Vec<u8>>,
         palette_alpha: &Option<Vec<u8>>,
     ) -> Result<Arc<DynamicImage>, PilError> {
-        if let Some(result) = Self::evaluate_palette_grayscale(
+        if let Some(result) = Self::evaluate_palette_cpu_operation(
             source,
             img,
             ops,

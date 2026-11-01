@@ -302,6 +302,27 @@ fn known_putalpha_mode(mode: Mode) -> Option<Mode> {
     }
 }
 
+/// Reads simple output transitions from the operation-owned support contract.
+/// Request-dependent output rules remain in their existing typed planners.
+fn declared_preserve_or_fixed_output(
+    operation: crate::compute::registry::support::OperationId,
+    source: Mode,
+) -> Option<Mode> {
+    use crate::compute::registry::support::{ModeSupport, OutputModeRule};
+
+    match operation.support().for_mode(source) {
+        ModeSupport::Supported {
+            output: OutputModeRule::Preserve,
+            ..
+        } => Some(source),
+        ModeSupport::Supported {
+            output: OutputModeRule::Fixed(output),
+            ..
+        } => Some(output),
+        ModeSupport::Supported { .. } | ModeSupport::Rejected { .. } => None,
+    }
+}
+
 /// Computes a statically known logical mode for one pipeline operation.
 ///
 /// This is intentionally conservative: `None` retains the existing
@@ -313,12 +334,12 @@ pub(crate) fn known_pipeline_op_mode(op: &PipelineOp, current: Mode) -> Option<M
         return Some(current);
     }
     match op {
-        PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. }
-            if matches!(current, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8) =>
-        {
-            Some(Mode::ImageRgb8)
+        PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. } => {
+            declared_preserve_or_fixed_output(
+                crate::compute::registry::support::OperationId::Equalize,
+                current,
+            )
         }
-        PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. } => Some(current),
         // Convert and Merge both carry their exact typed output identity.
         PipelineOp::Convert { mode, .. } => Some(*mode),
         PipelineOp::Merge { mode, .. } => Some(*mode),
@@ -343,8 +364,9 @@ pub(crate) fn known_pipeline_op_mode(op: &PipelineOp, current: Mode) -> Option<M
 /// A mode-preserving operation may still expand palette indices when its
 /// source-specific route is not palette-safe. In that case, defer to the
 /// materialized result instead of reporting the input identity.
-/// TODO(pillow-rs#3ptb): replace those indexed materialization fallbacks with
-/// exact transitions or existing rejections from each operation contract.
+/// TODO(pillow-rs#3ptb): classify each remaining unsafe P/PA request from its
+/// operation contract, recording the exact expansion mode or preserving its
+/// current rejection and error timing before removing this fallback.
 pub(crate) fn known_pipeline_op_mode_for_source(
     source: &Image,
     op: &PipelineOp,
