@@ -16,6 +16,40 @@ pub(crate) struct PadFrame {
     pub(crate) color: Option<(u8, u8, u8, u8)>,
 }
 
+/// Row counts for a full-width Pad whose content is already in final shape.
+#[derive(Clone, Copy)]
+pub(crate) struct FullWidthVerticalRows {
+    pub(crate) top: usize,
+    pub(crate) bottom: usize,
+}
+
+/// Returns the append-only path bounds when the content occupies the full
+/// canvas width and has vertical borders only.
+pub(crate) fn full_width_vertical_rows(
+    source: (u32, u32),
+    frame: PadFrame,
+) -> Option<FullWidthVerticalRows> {
+    if frame.width == 0
+        || frame.height == 0
+        || source.0 == 0
+        || source.1 == 0
+        || frame.offset_x != 0
+        || frame.content_width != frame.width
+        || source != (frame.content_width, frame.content_height)
+    {
+        return None;
+    }
+    let top = usize::try_from(frame.offset_y).ok()?;
+    let source_height = usize::try_from(source.1).ok()?;
+    let height = usize::try_from(frame.height).ok()?;
+    let content_end = top.checked_add(source_height)?;
+    if content_end > height {
+        return None;
+    }
+    let bottom = height - content_end;
+    (top != 0 || bottom != 0).then_some(FullWidthVerticalRows { top, bottom })
+}
+
 /// Reproduces the archived CPU contain sizing and its validation order.
 pub(crate) fn build(
     source: (u32, u32),

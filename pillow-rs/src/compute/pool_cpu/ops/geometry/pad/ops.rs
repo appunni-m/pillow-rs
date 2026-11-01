@@ -1,7 +1,7 @@
 //! Pad support declarations and prepared exact-mode Resize composition.
-// TODO(pillow-rs#3ptb): audit archived full-width SIMD Pad behavior and its
-// compatibility callers against the exact L/RGBX mode/architecture Resize
-// composition, then retire the old route after caller/error-order review.
+// TODO(pillow-rs#3ptb): finish comparing archived SIMD Pad admission,
+// fill/copy, and fallback behavior against these exact-mode strategies. The
+// archived adapter has no active caller; keep it inert.
 
 use crate::compute::{Architecture, ExecutionContext, registry::support::{
     InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport,
@@ -12,6 +12,12 @@ use crate::pipeline::{PipelineOp, ResampleFilter};
 use crate::raster::{DynamicImage, Mode};
 
 use super::helpers::dimensions::{self, PadFrame};
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PadContentSource {
+    Input,
+    Resized,
+}
 
 pub(super) const INPUTS: &[InputContract] = &[InputContract::PadParameters];
 const RESIZE_CHILD: &[OperationId] = &[OperationId::Resize];
@@ -97,7 +103,21 @@ impl PreparedPad<'_> {
             }
             None => None,
         };
+        let content_source = if resized.is_some() {
+            PadContentSource::Resized
+        } else {
+            PadContentSource::Input
+        };
         let image = resized.as_ref().unwrap_or(self.inputs.image);
+        if let Some((image, vector_blocks, scalar_tail)) = try_vertical_append(
+            image,
+            self.frame,
+            architecture,
+            content_source,
+        )? {
+            record_vector_work(vector_blocks, scalar_tail);
+            return Ok(image);
+        }
         if architecture == Architecture::Default
             && self.frame.content_width == self.frame.width
             && self.frame.content_height == self.frame.height
@@ -105,12 +125,146 @@ impl PreparedPad<'_> {
             return Ok(image.clone());
         }
         let (image, vector_blocks, scalar_tail) = pad_mode(image, self.frame, architecture)?;
-        if vector_blocks != 0 || scalar_tail != 0 {
-            crate::compute::record_pipeline_operation_path("vector");
-            crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-            crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-        }
+        record_vector_work(vector_blocks, scalar_tail);
         Ok(image)
+    }
+}
+
+fn record_vector_work(vector_blocks: u64, scalar_tail: u64) {
+    if vector_blocks != 0 || scalar_tail != 0 {
+        crate::compute::record_pipeline_operation_path("vector");
+        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+    }
+}
+
+fn try_vertical_append(
+    image: &DynamicImage,
+    frame: PadFrame,
+    architecture: Architecture,
+    content_source: PadContentSource,
+) -> Result<Option<(DynamicImage, u64, u64)>, PilError> {
+    if architecture == Architecture::Default {
+        return try_default_vertical_append(image, frame, content_source);
+    }
+    try_vector_vertical_append(image, frame, architecture, content_source)
+}
+
+fn try_default_vertical_append(
+    image: &DynamicImage,
+    frame: PadFrame,
+    content_source: PadContentSource,
+) -> Result<Option<(DynamicImage, u64, u64)>, PilError> {
+    use PadContentSource::{Input, Resized};
+    match (content_source, image) {
+        (Input | Resized, DynamicImage::ImageLuma8(image)) => {
+            super::helpers::samples::pad_vertical_append(
+                image,
+                frame,
+                super::luma8::default::pad_impl::fill(frame.color),
+            )
+            .map(|output| output.map(|output| (DynamicImage::ImageLuma8(output), 0, 0)))
+        }
+        (Input, DynamicImage::ImageRgb8(image)) => {
+            super::helpers::samples::pad_vertical_append(
+                image,
+                frame,
+                super::rgb8::default::pad_impl::fill(frame.color),
+            )
+            .map(|output| output.map(|output| (DynamicImage::ImageRgb8(output), 0, 0)))
+        }
+        (Input, DynamicImage::ImageHsv8(image)) => {
+            super::helpers::samples::pad_vertical_append(
+                image,
+                frame,
+                super::hsv8::default::pad_impl::fill(frame.color),
+            )
+            .map(|output| output.map(|output| (DynamicImage::ImageHsv8(output), 0, 0)))
+        }
+        (Input, DynamicImage::ImageRgba8(image)) => {
+            super::helpers::samples::pad_vertical_append(
+                image,
+                frame,
+                super::rgba8::default::pad_impl::fill(frame.color),
+            )
+            .map(|output| output.map(|output| (DynamicImage::ImageRgba8(output), 0, 0)))
+        }
+        (Resized, DynamicImage::ImageCmyk8(image)) => {
+            super::helpers::samples::pad_vertical_append(
+                image,
+                frame,
+                super::cmyk8::default::pad_impl::fill(frame.color),
+            )
+            .map(|output| output.map(|output| (DynamicImage::ImageCmyk8(output), 0, 0)))
+        }
+        (Resized, DynamicImage::ImageRgbx8(image)) => {
+            super::helpers::samples::pad_vertical_append(
+                image,
+                frame,
+                super::rgbx8::default::pad_impl::fill(frame.color),
+            )
+            .map(|output| output.map(|output| (DynamicImage::ImageRgbx8(output), 0, 0)))
+        }
+        _ => Ok(None),
+    }
+}
+
+fn try_vector_vertical_append(
+    image: &DynamicImage,
+    frame: PadFrame,
+    architecture: Architecture,
+    content_source: PadContentSource,
+) -> Result<Option<(DynamicImage, u64, u64)>, PilError> {
+    if content_source != PadContentSource::Input
+        || !matches!(
+            architecture,
+            Architecture::Sse2 | Architecture::Neon | Architecture::WasmSimd128
+        )
+    {
+        return Ok(None);
+    }
+    match image {
+        DynamicImage::ImageLuma8(image) => {
+            super::helpers::native_vector::pad_vertical_append::<_, false>(
+                image,
+                frame,
+                super::luma8::default::pad_impl::fill(frame.color),
+            )
+            .map(|output| output.map(|(output, blocks, tail)| (DynamicImage::ImageLuma8(output), blocks, tail)))
+        }
+        DynamicImage::ImageRgb8(image) => {
+            super::helpers::native_vector::pad_vertical_append::<_, false>(
+                image,
+                frame,
+                super::rgb8::default::pad_impl::fill(frame.color),
+            )
+            .map(|output| output.map(|(output, blocks, tail)| (DynamicImage::ImageRgb8(output), blocks, tail)))
+        }
+        DynamicImage::ImageRgba8(image) => {
+            super::helpers::native_vector::pad_vertical_append::<_, true>(
+                image,
+                frame,
+                super::rgba8::default::pad_impl::fill(frame.color),
+            )
+            .map(|output| output.map(|(output, blocks, tail)| (DynamicImage::ImageRgba8(output), blocks, tail)))
+        }
+        DynamicImage::ImageCmyk8(image) => {
+            super::helpers::native_vector::pad_vertical_append::<_, false>(
+                image,
+                frame,
+                super::cmyk8::default::pad_impl::fill(frame.color),
+            )
+            .map(|output| output.map(|(output, blocks, tail)| (DynamicImage::ImageCmyk8(output), blocks, tail)))
+        }
+        DynamicImage::ImageRgbx8(image) => {
+            super::helpers::native_vector::pad_vertical_append::<_, false>(
+                image,
+                frame,
+                super::rgbx8::default::pad_impl::fill(frame.color),
+            )
+            .map(|output| output.map(|(output, blocks, tail)| (DynamicImage::ImageRgbx8(output), blocks, tail)))
+        }
+        _ => Ok(None),
     }
 }
 

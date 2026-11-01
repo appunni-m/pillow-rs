@@ -71,6 +71,78 @@ where
         .map(|image| (image, counts.blocks, counts.tail))
 }
 
+/// Appends full-width native-byte content with the archived fill-row strategy.
+pub(crate) fn pad_vertical_append<P, const VECTOR_FILL_ROW: bool>(
+    source: &ImageBuffer<P, Vec<u8>>,
+    frame: super::dimensions::PadFrame,
+    fill: [u8; 4],
+) -> Result<Option<(ImageBuffer<P, Vec<u8>>, u64, u64)>, PilError>
+where
+    P: Pixel<Subpixel = u8>,
+{
+    let Some(rows) = super::dimensions::full_width_vertical_rows(source.dimensions(), frame) else {
+        return Ok(None);
+    };
+    let channels = usize::from(P::CHANNEL_COUNT);
+    if !(1..=4).contains(&channels) {
+        return Err(PilError::InternalError("Pad vector mode has invalid channels".into()));
+    }
+    let output_dims = CheckedDims::new_allow_empty(frame.width, frame.height, channels as u8)?;
+    let output_len = output_dims.total_bytes();
+    let target_stride = checked_product(
+        usize::try_from(frame.width)
+            .map_err(|_| PilError::DimensionError("Pad output width overflow".into()))?,
+        channels,
+        "Pad output row overflow",
+    )?;
+    let source_stride = checked_product(
+        usize::try_from(source.width())
+            .map_err(|_| PilError::DimensionError("Pad source width overflow".into()))?,
+        channels,
+        "Pad source row overflow",
+    )?;
+    let source_len = checked_product(
+        source_stride,
+        usize::try_from(source.height())
+            .map_err(|_| PilError::DimensionError("Pad source height overflow".into()))?,
+        "Pad source size overflow",
+    )?;
+    if source_len != source.as_raw().len() {
+        return Err(PilError::InternalError("Pad source buffer shape mismatch".into()));
+    }
+
+    let fill = &fill[..channels];
+    let (fill_row, vector_blocks, scalar_tail) = if VECTOR_FILL_ROW {
+        let mut row = Vec::new();
+        row.try_reserve_exact(target_stride)
+            .map_err(|error| PilError::MemoryError(error.to_string()))?;
+        row.resize(target_stride, 0);
+        let counts = fill_row(&mut row, fill);
+        (row, counts.0, counts.1)
+    } else {
+        (fill.repeat(target_stride / channels), 0, 0)
+    };
+    if fill_row.len() != target_stride {
+        return Err(PilError::InternalError("Pad fill row shape mismatch".into()));
+    }
+    let mut output = Vec::new();
+    output
+        .try_reserve_exact(output_len)
+        .map_err(|error| PilError::MemoryError(error.to_string()))?;
+    for _ in 0..rows.top {
+        output.extend_from_slice(&fill_row);
+    }
+    output.extend_from_slice(source.as_raw());
+    for _ in 0..rows.bottom {
+        output.extend_from_slice(&fill_row);
+    }
+    if output.len() != output_len {
+        return Err(PilError::InternalError("Pad output buffer shape mismatch".into()));
+    }
+    image_from_raw(frame.width, frame.height, output)
+        .map(|image| Some((image, vector_blocks, scalar_tail)))
+}
+
 #[derive(Clone, Copy)]
 struct ContentWindow {
     source_stride: usize,
