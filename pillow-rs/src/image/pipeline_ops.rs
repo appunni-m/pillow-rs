@@ -364,9 +364,12 @@ pub(crate) fn known_pipeline_op_mode(op: &PipelineOp, current: Mode) -> Option<M
 /// A mode-preserving operation may still expand palette indices when its
 /// source-specific route is not palette-safe. In that case, defer to the
 /// materialized result instead of reporting the input identity.
-/// TODO(pillow-rs#3ptb): classify each remaining unsafe P/PA request from its
-/// operation contract, recording the exact expansion mode or preserving its
-/// current rejection and error timing before removing this fallback.
+/// TODO(pillow-rs#3ptb): finish caller reconciliation for Autocontrast(P/PA),
+/// Filter(P), GaussianBlur(PA), Posterize/Solarize(PA),
+/// Brightness/Contrast/ColorSaturation/Sharpness(P/PA), and BlendModule(P/PA).
+/// Their public wrappers currently reject these combinations before queueing;
+/// trace nested and direct PipelineOp callers, then record the exact rejection
+/// and error timing before removing this fallback.
 pub(crate) fn known_pipeline_op_mode_for_source(
     source: &Image,
     op: &PipelineOp,

@@ -5,7 +5,15 @@ use crate::compute::registry::support::{
 };
 use crate::raster::Mode;
 
-declare_invert_native_mode!(ImagePalette8, super::Input, 1, 1);
+// NO_PILLOW_SUPPORT: Pillow's ImageOps.invert rejects P. This Rust strategy
+// inverts the native palette indices and preserves the attached palette.
+declare_invert_native_mode!(
+    ImagePalette8,
+    super::Input,
+    1,
+    1,
+    Some("ImageOps.invert extends Pillow with native P index inversion"),
+);
 
 const POSTERIZE_INPUTS: &[InputContract] = &[
     InputContract::PosterizeBits,

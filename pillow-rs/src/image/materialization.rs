@@ -254,6 +254,14 @@ impl Image {
             // native index bytes and retain the source palette.
             || (source.known_mode_identity() == Some(Mode::ImagePalette8)
                 && matches!(op, PipelineOp::Posterize { .. } | PipelineOp::Solarize { .. }))
+            // The Rust ImageOps Invert strategies operate on native P/PA
+            // samples and preserve their palette metadata. Python's Pillow
+            // compatibility wrappers reject these modes before queuing Invert.
+            || (matches!(
+                source.known_mode_identity(),
+                Some(Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
+            )
+                && matches!(op, PipelineOp::Invert))
             // A single-band Eval LUT over P maps indices, not palette colors.
             || (source.known_mode_identity() == Some(Mode::ImagePalette8)
                 && matches!(op, PipelineOp::Eval { lut } if lut.len() == 256))
