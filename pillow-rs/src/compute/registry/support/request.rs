@@ -551,8 +551,11 @@ pub enum StrategyGuard {
     EffectNoiseVector,
     /// Eight-lane Mandelbrot generation with at least one complete vector per row.
     EffectMandelbrotVector,
-    /// Equal primary and secondary dimensions required by native-byte Chops vectors.
-    ChopsEqualDimensions,
+    /// Equal primary and secondary dimensions plus exact primary bytes for native Chops vectors.
+    ChopsEqualDimensions {
+        /// Native bytes consumed per pixel by the exact mode strategy.
+        channels: u8,
+    },
     /// Chops Add/Sub request admitted by the native byte-vector kernel.
     ChopsAddSubtractVector {
         /// Native bytes consumed per pixel by the exact mode strategy.
@@ -658,7 +661,9 @@ impl StrategyGuard {
             Self::ColorSaturationVector { channels } => {
                 guards::color_saturation_vector_guard(input, channels)
             }
-            Self::ChopsEqualDimensions => guards::chops_equal_dimensions_guard(input),
+            Self::ChopsEqualDimensions { channels } => {
+                guards::chops_equal_dimensions_guard(input, channels)
+            }
             Self::ChopsAddSubtractVector { channels } => {
                 guards::chops_add_subtract_guard(input, channels)
             }

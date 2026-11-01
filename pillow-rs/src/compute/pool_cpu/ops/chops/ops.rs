@@ -5,12 +5,10 @@
 //! SSE2, NEON, and Wasm SIMD128 strategies for the archived `1/L/P`, `LA/PA`,
 //! `RGB`, and `RGBA/CMYK` layouts; its shared byte kernel lives in
 //! `pool_cpu/helpers/bytes` and preserves every stored byte.
-// TODO(pillow-rs#3ptb): finish comparing archived `supports_for_image` and
-// `supports_for_shape` with Add/Sub, Multiply/Screen, bytewise, LUT, logical,
-// and Invert declarations. Verify Add/Sub's original-f64 guard, owned
-// in-place threshold, and telemetry against the archive; then complete fused
-// Multiply→Screen admission and direct caller review in `batch_execution.rs`.
-// Record remaining exact modes, architecture guards, fallbacks, and callers.
+// TODO(pillow-rs#3ptb): finish comparing the archived formula and mode matrix
+// with Add/Sub, Multiply/Screen, bytewise, LUT, logical, and Invert declarations.
+// Then complete direct caller review in `batch_execution.rs`, SIMD-request
+// routing, and the remaining architecture guards and fallback paths.
 
 use std::sync::Arc;
 
@@ -32,7 +30,12 @@ const BINARY_MODES_2: &[Mode] = &[
     Mode::ImageLaPremultiplied8,
     Mode::ImagePaletteAlpha8,
 ];
-const BINARY_MODES_3: &[Mode] = &[Mode::ImageRgb8, Mode::ImageYCbCr8, Mode::ImageHsv8];
+const BINARY_MODES_3: &[Mode] = &[
+    Mode::ImageRgb8,
+    Mode::ImageYCbCr8,
+    Mode::ImageLab8,
+    Mode::ImageHsv8,
+];
 const BINARY_MODES_4: &[Mode] = &[
     Mode::ImageRgba8,
     Mode::ImageCmyk8,
@@ -69,6 +72,7 @@ const BINARY_INPUTS: &[InputContract] = &[InputContract::ChopsBinaryModes {
         Mode::ImagePaletteAlpha8,
         Mode::ImageRgb8,
         Mode::ImageYCbCr8,
+        Mode::ImageLab8,
         Mode::ImageHsv8,
         Mode::ImageRgba8,
         Mode::ImageCmyk8,
@@ -242,7 +246,9 @@ fn binary_inputs_for(operation: OperationId, mode: Mode) -> Option<&'static [Inp
         Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => {
             Some(BINARY_INPUTS_2)
         }
-        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageHsv8 => Some(BINARY_INPUTS_3),
+        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => {
+            Some(BINARY_INPUTS_3)
+        }
         Mode::ImageRgba8
         | Mode::ImageCmyk8
         | Mode::ImageRgbPremultiplied8
@@ -411,7 +417,9 @@ impl ChopsExecutionPlan {
             Mode::One => super::one::ops::execute(image, self.request, self.other.as_deref(), architecture),
             Mode::ImageLuma8 => super::luma8::ops::execute(image, self.request, self.other.as_deref(), architecture),
             Mode::ImageLumaA8 => super::luma_a8::ops::execute(image, self.request, self.other.as_deref(), architecture),
-            Mode::ImageLaPremultiplied8 => super::la_premultiplied8::ops::execute(image, self.request, self.other.as_deref(), architecture),
+            Mode::ImageLaPremultiplied8 => {
+                super::la_premultiplied8::ops::execute(image, self.request, self.other.as_deref())
+            }
             Mode::ImagePalette8 => super::palette8::ops::execute(image, self.request, self.other.as_deref(), architecture),
             Mode::ImagePaletteAlpha8 => super::palette_alpha8::ops::execute(image, self.request, self.other.as_deref(), architecture),
             Mode::ImageRgb8 => super::rgb8::ops::execute(image, self.request, self.other.as_deref(), architecture),
@@ -450,7 +458,6 @@ impl ChopsExecutionPlan {
             Mode::One => super::one::ops::execute_in_place(image, self.request, other, architecture),
             Mode::ImageLuma8 => super::luma8::ops::execute_in_place(image, self.request, other, architecture),
             Mode::ImageLumaA8 => super::luma_a8::ops::execute_in_place(image, self.request, other, architecture),
-            Mode::ImageLaPremultiplied8 => super::la_premultiplied8::ops::execute_in_place(image, self.request, other, architecture),
             Mode::ImagePalette8 => super::palette8::ops::execute_in_place(image, self.request, other, architecture),
             Mode::ImagePaletteAlpha8 => super::palette_alpha8::ops::execute_in_place(image, self.request, other, architecture),
             Mode::ImageRgb8 => super::rgb8::ops::execute_in_place(image, self.request, other, architecture),
@@ -555,12 +562,21 @@ pub(crate) fn prepare_fused_multiply_screen<'a>(
     }
 
     let mode = image.mode();
-    if !matches!(
-        mode,
-        Mode::ImageLuma8 | Mode::ImageLumaA8 | Mode::ImageRgb8 | Mode::ImageRgba8
-    ) || image.width() == 0
-        || image.height() == 0
-    {
+    let channels = match mode {
+        Mode::ImageLuma8 => 1,
+        Mode::ImageLumaA8 => 2,
+        Mode::ImageRgb8 => 3,
+        Mode::ImageRgba8 => 4,
+        _ => return Ok(None),
+    };
+    let Ok(dimensions) = crate::checked_dims::CheckedDims::new_allow_empty(
+        image.width(),
+        image.height(),
+        channels,
+    ) else {
+        return Ok(None);
+    };
+    if dimensions.row_stride() == 0 || image.as_bytes().len() != dimensions.total_bytes() {
         return Ok(None);
     }
 
@@ -570,6 +586,8 @@ pub(crate) fn prepare_fused_multiply_screen<'a>(
         || screen_other.mode() != mode
         || other.dimensions() != image.dimensions()
         || screen_other.dimensions() != image.dimensions()
+        || other.as_bytes().len() != dimensions.total_bytes()
+        || screen_other.as_bytes().len() != dimensions.total_bytes()
     {
         return Ok(None);
     }

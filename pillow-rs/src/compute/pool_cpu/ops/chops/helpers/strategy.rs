@@ -16,7 +16,7 @@ pub(crate) const fn byte_architectures(
             StrategyGuard::ChopsAddSubtractVector { channels }
         }
         OperationId::ChopsInvert => StrategyGuard::NativePointwiseBytesIncludingEmpty { channels },
-        _ => StrategyGuard::ChopsEqualDimensions,
+        _ => StrategyGuard::ChopsEqualDimensions { channels },
     };
     [
         ImplementationSupport::cpu(

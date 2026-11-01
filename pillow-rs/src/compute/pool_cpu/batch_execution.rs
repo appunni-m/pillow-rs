@@ -165,12 +165,16 @@ fn execute_owned_chops_affine(
         let output = match plan.execute(image) {
             Ok(output) => output,
             Err(error) => {
-                record_pipeline_operation_path("cpu");
+                if uses_default {
+                    record_pipeline_operation_path("cpu");
+                }
                 finish_pipeline_operation_telemetry();
                 return Err(error);
             }
         };
-        record_pipeline_operation_path("cpu");
+        if uses_default {
+            record_pipeline_operation_path("cpu");
+        }
         account_host_buffer_boundary(resources, image, &output);
         *image = output;
     } else if let Err(error) = plan.execute_in_place(image) {

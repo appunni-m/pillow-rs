@@ -1,60 +1,26 @@
 //! Exact la_premultiplied8 Chops support and mode strategy.
+//!
+//! This mode has no archived architecture-specific Chops strategy.
 
-use crate::compute::registry::support::{ImplementationSupport, ModeSupport, OperationId};
-use crate::compute::Architecture;
+use crate::compute::registry::support::{ModeSupport, OperationId};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
-use super::super::helpers::strategy::declare_byte_binary_architectures;
 
 pub(crate) const MODE: Mode = Mode::ImageLaPremultiplied8;
-const CHANNELS: u8 = 2;
-
-declare_byte_binary_architectures!(MODE, CHANNELS);
 
 pub(crate) fn support(operation: OperationId) -> ModeSupport {
-    let architectures = binary_architectures_for(operation);
-    super::super::ops::mode_support_with_architectures(MODE, operation, architectures)
+    super::super::ops::mode_support(MODE, operation)
 }
 
 pub(crate) fn execute(
     image: &DynamicImage,
     request: super::super::ops::ChopsRequest,
     other: Option<&DynamicImage>,
-    architecture: Architecture,
 ) -> Result<DynamicImage, PilError> {
     match image {
-        DynamicImage::ImageLaPremultiplied8(_) => match architecture {
-            Architecture::Default => default::ops::execute(image, request, other),
-            Architecture::Sse2 => super::sse2::execute(image, request, other, MODE),
-            Architecture::Neon => super::neon::execute(image, request, other, MODE),
-            Architecture::WasmSimd128 => super::wasm_simd128::execute(image, request, other, MODE),
-            _ => Err(PilError::InternalError(
-                "Chops vector strategy received an unsupported architecture".into(),
-            )),
-        },
-        _ => Err(PilError::InternalError("Chops mode strategy received a different raster variant".into())),
-    }
-}
-
-pub(crate) fn execute_in_place(
-    image: &mut DynamicImage,
-    request: super::super::ops::ChopsRequest,
-    other: &DynamicImage,
-    architecture: Architecture,
-) -> Result<(), PilError> {
-    match image {
-        DynamicImage::ImageLaPremultiplied8(_) => match architecture {
-            Architecture::Sse2 => super::sse2::execute_in_place(image, request, other, MODE),
-            Architecture::Neon => super::neon::execute_in_place(image, request, other, MODE),
-            Architecture::WasmSimd128 => {
-                super::wasm_simd128::execute_in_place(image, request, other, MODE)
-            }
-            _ => Err(PilError::InternalError(
-                "Chops in-place strategy received an unsupported architecture".into(),
-            )),
-        },
+        DynamicImage::ImageLaPremultiplied8(_) => default::ops::execute(image, request, other),
         _ => Err(PilError::InternalError(
-            "Chops in-place mode strategy received a different raster variant".into(),
+            "Chops mode strategy received a different raster variant".into(),
         )),
     }
 }

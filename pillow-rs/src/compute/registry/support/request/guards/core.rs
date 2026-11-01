@@ -1,6 +1,8 @@
 //! Materialized input guards for declared implementation strategies.
 
-use super::super::{GuardAssessment, RequestFacts, StrategyGuard, StrategyInputs};
+use super::super::{
+    GuardAssessment, RequestFacts, SecondaryInputFacts, StrategyGuard, StrategyInputs,
+};
 use crate::raster::Mode;
 
 pub(super) fn thumbnail_i32_stream_guard(input: StrategyInputs) -> GuardAssessment {
@@ -166,12 +168,15 @@ pub(super) fn color_saturation_vector_guard(
     }
 }
 
-pub(super) fn chops_equal_dimensions_guard(input: StrategyInputs) -> GuardAssessment {
+pub(super) fn chops_equal_dimensions_guard(
+    input: StrategyInputs,
+    channels: u8,
+) -> GuardAssessment {
     match input.request {
         RequestFacts::ChopsBinary { other, .. }
             if input.width == other.width && input.height == other.height =>
         {
-            GuardAssessment::Satisfied
+            chops_native_bytes_guard(input, other, channels)
         }
         RequestFacts::Unspecified => GuardAssessment::Deferred,
         _ => GuardAssessment::Ineligible,
@@ -198,13 +203,37 @@ pub(super) fn chops_add_subtract_guard(
     let offset = f64::from_bits(offset_bits);
     let row_bytes = input.width.checked_mul(u32::from(channels));
     if !scale.is_finite() || !offset.is_finite() {
-        GuardAssessment::Ineligible
-    } else if input.width == 0 || input.height == 0 {
-        GuardAssessment::Satisfied
-    } else if (scale == 1.0 && offset == 0.0) || row_bytes.is_some_and(|bytes| bytes >= 8) {
-        GuardAssessment::Satisfied
-    } else {
-        GuardAssessment::Ineligible
+        return GuardAssessment::Ineligible;
+    }
+    if scale == 1.0 && offset == 0.0 {
+        return chops_native_bytes_guard(input, other, channels);
+    }
+    if input.width == 0 || input.height == 0 {
+        return chops_native_bytes_guard(input, other, channels);
+    }
+    if !row_bytes.is_some_and(|bytes| bytes >= 8) {
+        return GuardAssessment::Ineligible;
+    }
+    chops_native_bytes_guard(input, other, channels)
+}
+
+fn chops_native_bytes_guard(
+    input: StrategyInputs,
+    other: SecondaryInputFacts,
+    channels: u8,
+) -> GuardAssessment {
+    let primary = native_bytes_guard(input, channels);
+    if !matches!(primary, GuardAssessment::Satisfied) {
+        return primary;
+    }
+    let expected = (other.width as usize)
+        .checked_mul(other.height as usize)
+        .and_then(|pixels| pixels.checked_mul(usize::from(channels)));
+    match (expected, other.byte_len) {
+        (None, _) => GuardAssessment::Ineligible,
+        (Some(_), None) => GuardAssessment::Deferred,
+        (Some(expected), Some(actual)) if actual == expected => GuardAssessment::Satisfied,
+        (Some(_), Some(_)) => GuardAssessment::Ineligible,
     }
 }
 

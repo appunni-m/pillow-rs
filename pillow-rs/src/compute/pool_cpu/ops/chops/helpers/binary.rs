@@ -163,7 +163,7 @@ pub(crate) const fn byte_channels(mode: Mode) -> Option<u8> {
     match mode {
         Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => Some(1),
         Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => Some(2),
-        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageHsv8 => Some(3),
+        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => Some(3),
         Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8 | Mode::ImageRgbx8 | Mode::ImageCmyk8 => Some(4),
         _ => None,
     }
