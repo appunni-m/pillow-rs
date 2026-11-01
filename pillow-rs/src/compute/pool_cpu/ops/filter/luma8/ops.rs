@@ -96,7 +96,7 @@ macro_rules! rank_median_architectures {
 rank_median_architectures!(MEDIAN_FILTER_ARCHITECTURES, OperationId::MedianFilter);
 rank_median_architectures!(RANK_FILTER_ARCHITECTURES, OperationId::RankFilter);
 
-pub(super) fn support(operation: OperationId) -> ModeSupport {
+pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId) -> ModeSupport {
     match operation {
         OperationId::Filter3x3 => ModeSupport::cpu(
             OperationId::Filter3x3,
@@ -196,7 +196,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute_architecture_blur(
     }
 }
 
-pub(super) fn execute(
+pub(in crate::compute::pool_cpu::ops::filter) fn execute(
     image: &DynamicImage,
     request: super::super::ops::FilterRequest,
     selection: &StrategySelection,

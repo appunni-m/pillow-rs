@@ -10,9 +10,10 @@ use crate::raster::{DynamicImage, Mode};
 mod request;
 use request::GuardAssessment;
 pub use request::{
-    BandIndexRule, DrawRequestKind, DrawTextMaskKind, InputContract, MergeBandModeRule,
-    ModeChannelCapacity, PaletteKnowledge, PasteInputRules, PasteMaskRule, PixelWriteRunFacts,
-    RequestFacts, SecondaryInputFacts, StrategyGuard, StrategyInputs, UnresolvedGuard,
+    BandIndexRule, DrawRequestKind, DrawTextMaskKind, F32RankCompatibility, InputContract,
+    MergeBandModeRule, ModeChannelCapacity, PaletteKnowledge, PasteInputRules, PasteMaskRule,
+    PixelWriteRunFacts, RequestFacts, SecondaryInputFacts, StrategyGuard, StrategyInputs,
+    UnresolvedGuard,
 };
 
 /// Exact mask identities accepted by image-backed alpha replacement.

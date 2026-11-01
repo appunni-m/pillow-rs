@@ -3,14 +3,15 @@
 //! TODO(pillow-rs#3ptb): add ModeFilter mode, palette, and backend-fallback
 //! parity cases; include the RGBA radius-seven small-shape architecture
 //! fallback; cover the exact-binomial I32 AVX/FMA route and ineligible-request
-//! Default fallback; finish the public Filter caller audit. Keep Rayon out of
-//! this serial owner.
+//! Default fallback; source-review the `Image::validate_filter` name mapping
+//! and preserve Python's validate-before-`_apply` error order. Keep Rayon out
+//! of this serial owner.
 
 use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{
     ImplementationSupport, InputContract, ModeSupport, OperationId, OperationInputs,
-    OperationSupport, OutputModeRule, PaletteInput, RejectionKind, StrategySelection,
-    SupportAssessment,
+    OperationSupport, OutputModeRule, PaletteInput, RejectionKind, StrategyInputs,
+    StrategySelection, SupportAssessment,
 };
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
@@ -561,9 +562,9 @@ pub(crate) fn prepare_pipeline<'a>(
         }
         FilterRequest::MedianFilter { size }
         | FilterRequest::MaxFilter { size }
-        | FilterRequest::MinFilter { size } => inputs.facts().with_filter_window(size, None),
+        | FilterRequest::MinFilter { size } => rank_window_facts(inputs, size, None, ctx),
         FilterRequest::RankFilter { size, rank } => {
-            inputs.facts().with_filter_window(size, Some(rank))
+            rank_window_facts(inputs, size, Some(rank), ctx)
         }
         _ => inputs.facts(),
     };
@@ -584,4 +585,31 @@ pub(crate) fn prepare_pipeline<'a>(
         context: *ctx,
     };
     Ok(crate::compute::registry::PreparedOperation::from_filter(plan))
+}
+
+fn rank_window_facts(
+    inputs: OperationInputs<'_>,
+    size: u32,
+    rank: Option<u32>,
+    context: &ExecutionContext,
+) -> StrategyInputs {
+    let facts = inputs.facts();
+    if context.architecture() == crate::compute::Architecture::Default {
+        return facts.with_filter_window(size, rank);
+    }
+    let area = u64::from(size) * u64::from(size);
+    let vector_window = size > 0
+        && size <= super::f32::ops::MAX_RANK_WINDOW
+        && size % 2 == 1
+        && inputs.image.width() > 0
+        && inputs.image.height() > 0
+        && rank.map_or(true, |rank| u64::from(rank) < area);
+    match inputs.image {
+        DynamicImage::ImageF32(image) if vector_window => facts.with_f32_rank_window(
+            size,
+            rank,
+            super::f32::ops::rank_compatibility(image.as_raw()),
+        ),
+        _ => facts.with_filter_window(size, rank),
+    }
 }

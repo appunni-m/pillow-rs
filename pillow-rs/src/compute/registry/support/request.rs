@@ -8,8 +8,8 @@ mod facts;
 mod guards;
 
 pub use facts::{
-    DrawRequestKind, DrawTextMaskKind, PixelWriteRunFacts, RequestFacts, SecondaryInputFacts,
-    StrategyInputs,
+    DrawRequestKind, DrawTextMaskKind, F32RankCompatibility, PixelWriteRunFacts, RequestFacts,
+    SecondaryInputFacts, StrategyInputs,
 };
 
 /// One mask mode accepted by the native Paste input contract.
@@ -402,8 +402,11 @@ pub enum StrategyGuard {
         /// Number of interleaved native bytes in the exact mode's pixel.
         channels: u8,
     },
-    /// F-mode vector rank window with exact native four-byte samples.
-    FilterF32RankWindow,
+    /// F-mode vector rank window with exact samples and order-compatible contents.
+    FilterF32RankWindow {
+        /// Largest window implemented by this operation's vector sorter.
+        max_size: u32,
+    },
     /// Native RGB 150% UnsharpMask blend with one complete vector block.
     FilterUnsharpRgb150,
     /// I32 AVX2/FMA Filter3x3's finite kernel and complete vector block.
@@ -676,7 +679,9 @@ impl StrategyGuard {
             Self::FilterNativeByteRankWindow { channels } => {
                 guards::filter_native_byte_rank_window_guard(input, channels)
             }
-            Self::FilterF32RankWindow => guards::filter_f32_rank_window_guard(input),
+            Self::FilterF32RankWindow { max_size } => {
+                guards::filter_f32_rank_window_guard(input, max_size)
+            }
             Self::FilterUnsharpRgb150 => guards::filter_unsharp_rgb150_guard(input),
             Self::Filter3x3I32Vectorizable { channels } => {
                 guards::filter3x3_i32_vectorizable_guard(input, channels)

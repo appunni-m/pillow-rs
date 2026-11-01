@@ -376,7 +376,7 @@ pub(super) fn filter_rgba_gaussian_blur_radius_seven_guard(
 
 pub(super) fn filter_luma_rank_window_guard(input: StrategyInputs) -> GuardAssessment {
     let (size, rank) = match input.request {
-        RequestFacts::FilterWindow { size, rank } => (size, rank),
+        RequestFacts::FilterWindow { size, rank, .. } => (size, rank),
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
         _ => return GuardAssessment::Ineligible,
     };
@@ -419,7 +419,7 @@ pub(super) fn filter_native_byte_rank_window_guard(
         return GuardAssessment::Ineligible;
     }
     let (size, rank) = match input.request {
-        RequestFacts::FilterWindow { size, rank } => (size, rank),
+        RequestFacts::FilterWindow { size, rank, .. } => (size, rank),
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
         _ => return GuardAssessment::Ineligible,
     };
@@ -436,22 +436,38 @@ pub(super) fn filter_native_byte_rank_window_guard(
     checked_native_bytes_guard(input, channels)
 }
 
-pub(super) fn filter_f32_rank_window_guard(input: StrategyInputs) -> GuardAssessment {
-    let (size, rank) = match input.request {
-        RequestFacts::FilterWindow { size, rank } => (size, rank),
+pub(super) fn filter_f32_rank_window_guard(
+    input: StrategyInputs,
+    max_size: u32,
+) -> GuardAssessment {
+    let (size, rank, compatibility) = match input.request {
+        RequestFacts::FilterWindow { size, rank, f32_rank_compatibility } => {
+            (size, rank, f32_rank_compatibility)
+        }
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
         _ => return GuardAssessment::Ineligible,
     };
     if size == 0
         || size % 2 == 0
-        || size > 9
+        || size > max_size
         || input.width == 0
         || input.height == 0
         || rank.is_some_and(|rank| u64::from(rank) >= u64::from(size) * u64::from(size))
     {
         return GuardAssessment::Ineligible;
     }
-    checked_native_bytes_guard(input, 4)
+    match checked_native_bytes_guard(input, 4) {
+        GuardAssessment::Satisfied => match compatibility {
+            Some(super::super::F32RankCompatibility::VectorOrdering) => {
+                GuardAssessment::Satisfied
+            }
+            Some(super::super::F32RankCompatibility::DefaultComparator) => {
+                GuardAssessment::Ineligible
+            }
+            None => GuardAssessment::Deferred,
+        },
+        other => other,
+    }
 }
 
 pub(super) fn filter_unsharp_rgb150_guard(input: StrategyInputs) -> GuardAssessment {

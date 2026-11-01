@@ -1,17 +1,28 @@
 use super::super::ops::inputs_for;
 use crate::compute::Architecture;
 use crate::compute::registry::support::{
-    ImplementationSupport, ModeSupport, OperationId, OutputModeRule, RejectionKind,
-    StrategyGuard, StrategySelection,
+    F32RankCompatibility, ImplementationSupport, ModeSupport, OperationId, OutputModeRule,
+    RejectionKind, StrategyGuard, StrategySelection,
 };
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 
-// TODO(pillow-rs#3ptb): Reconcile the F32 architecture sorter with Default's
-// comparator-sensitive handling of NaNs and mixed signed zero samples before
-// declaring its strategy parity-complete. The archived vector route has no
-// equivalent content guard.
-pub(super) const MODE: Mode = Mode::ImageF32;
+// TODO(pillow-rs#brg0): Add exact F32 NaN and mixed signed-zero parity cases
+// for each rank operation and architecture. The content guard routes these
+// inputs through Default; architecture parity remains unverified.
+const MODE: Mode = Mode::ImageF32;
+pub(in crate::compute::pool_cpu::ops::filter) const MAX_RANK_WINDOW: u32 =
+    super::helpers::MAX_RANK_WINDOW;
+
+pub(in crate::compute::pool_cpu::ops::filter) fn rank_compatibility(
+    raw: &[u8],
+) -> F32RankCompatibility {
+    if super::helpers::requires_default_comparator_sort(raw) {
+        F32RankCompatibility::DefaultComparator
+    } else {
+        F32RankCompatibility::VectorOrdering
+    }
+}
 
 macro_rules! rank_vector_architectures {
     ($name:ident, $operation:expr) => {
@@ -25,7 +36,7 @@ macro_rules! rank_vector_architectures {
                     target_feature = "avx2"
                 )),
                 &[Architecture::Avx2],
-                StrategyGuard::FilterF32RankWindow,
+                StrategyGuard::FilterF32RankWindow { max_size: MAX_RANK_WINDOW },
             ),
             ImplementationSupport::cpu(
                 $operation,
@@ -37,7 +48,7 @@ macro_rules! rank_vector_architectures {
                     not(target_feature = "avx2")
                 )),
                 &[Architecture::Avx],
-                StrategyGuard::FilterF32RankWindow,
+                StrategyGuard::FilterF32RankWindow { max_size: MAX_RANK_WINDOW },
             ),
             ImplementationSupport::cpu(
                 $operation,
@@ -49,7 +60,7 @@ macro_rules! rank_vector_architectures {
                     not(target_feature = "avx")
                 )),
                 &[Architecture::Sse2],
-                StrategyGuard::FilterF32RankWindow,
+                StrategyGuard::FilterF32RankWindow { max_size: MAX_RANK_WINDOW },
             ),
             ImplementationSupport::cpu(
                 $operation,
@@ -57,7 +68,7 @@ macro_rules! rank_vector_architectures {
                 Architecture::Neon,
                 cfg!(all(target_arch = "aarch64", target_feature = "neon")),
                 &[Architecture::Neon],
-                StrategyGuard::FilterF32RankWindow,
+                StrategyGuard::FilterF32RankWindow { max_size: MAX_RANK_WINDOW },
             ),
             ImplementationSupport::cpu(
                 $operation,
@@ -65,7 +76,7 @@ macro_rules! rank_vector_architectures {
                 Architecture::WasmSimd128,
                 cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
                 &[Architecture::WasmSimd128],
-                StrategyGuard::FilterF32RankWindow,
+                StrategyGuard::FilterF32RankWindow { max_size: MAX_RANK_WINDOW },
             ),
         ];
     };
@@ -80,7 +91,7 @@ fn rejected(mode: Mode) -> ModeSupport {
     ModeSupport::Rejected { mode, reason: "image has wrong mode", kind: RejectionKind::ValueError }
 }
 
-pub(super) fn support(operation: OperationId) -> ModeSupport {
+pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId) -> ModeSupport {
     match operation {
         OperationId::Filter3x3 => rejected(Mode::ImageF32),
         OperationId::Filter5x5 => rejected(Mode::ImageF32),
@@ -122,7 +133,7 @@ pub(super) fn support(operation: OperationId) -> ModeSupport {
     }
 }
 
-pub(super) fn execute(
+pub(in crate::compute::pool_cpu::ops::filter) fn execute(
     image: &DynamicImage,
     request: super::super::ops::FilterRequest,
     selection: &StrategySelection,

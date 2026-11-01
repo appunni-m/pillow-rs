@@ -3,6 +3,7 @@
 //! Built-in filter names use Pillow `ImageFilter` kernel definitions. The
 //! public methods return lazy pipeline images where possible.
 
+use crate::compute::registry::support::{ModeSupport, OperationId};
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
@@ -56,6 +57,31 @@ struct FilterKernel {
     kernel: [f32; 9],
     scale: f32,
     offset: f32,
+}
+
+fn operation_for_filter_name(filter_name: &str) -> Option<OperationId> {
+    match filter_name {
+        "Mode" => Some(OperationId::ModeFilter),
+        "UnsharpMask" => Some(OperationId::UnsharpMask),
+        "GaussianBlur" => Some(OperationId::GaussianBlur),
+        "BoxBlur" => Some(OperationId::BoxBlur),
+        "MaxFilter" => Some(OperationId::MaxFilter),
+        "MinFilter" => Some(OperationId::MinFilter),
+        "MedianFilter" => Some(OperationId::MedianFilter),
+        "RankFilter" => Some(OperationId::RankFilter),
+        "Kernel" => Some(OperationId::Filter3x3),
+        "BLUR" | "SMOOTH_MORE" => Some(OperationId::Filter5x5),
+        "CONTOUR" | "DETAIL" | "EDGE_ENHANCE" | "EDGE_ENHANCE_MORE" | "EMBOSS"
+        | "FIND_EDGES" | "SHARPEN" | "SMOOTH" => Some(OperationId::Filter3x3),
+        _ => None,
+    }
+}
+
+fn validate_filter_mode_contract(operation: OperationId, mode: Mode) -> Result<(), PilError> {
+    match operation.support().for_mode(mode) {
+        ModeSupport::Supported { .. } => Ok(()),
+        ModeSupport::Rejected { reason, kind, .. } => Err(kind.into_error(reason)),
+    }
 }
 
 impl FilterKernel {
@@ -127,52 +153,22 @@ impl Image {
     /// Validates whether a Python-facing filter may run for this image mode.
     pub fn validate_filter(&self, filter_name: &str) -> Result<(), PilError> {
         let mode = self.mode_identity()?;
-        if filter_name == "Mode" {
-            return match crate::compute::registry::support::OperationId::ModeFilter
-                .support()
-                .for_mode(mode)
-            {
-                crate::compute::registry::support::ModeSupport::Supported { .. } => Ok(()),
-                crate::compute::registry::support::ModeSupport::Rejected { reason, kind, .. } => {
-                    Err(kind.into_error(reason))
-                }
-            };
+        // Keep early rejection on the existing palette, F32, and eager filter
+        // routes. Other mode errors remain deferred to prepared execution.
+        let mode_preflight = matches!(filter_name, "Mode" | "UnsharpMask")
+            || mode == Mode::ImagePalette8
+            || (mode == Mode::ImagePaletteAlpha8 && filter_name == "GaussianBlur")
+            || mode == Mode::ImageF32;
+        if !mode_preflight {
+            return Ok(());
         }
-        // Pillow's ImagingUnsharpMask accepts only byte modes with native
-        // band storage. Keep the native operation's wrong-mode error for
-        // indexed, scalar, and color-space modes instead of expanding them
-        // through a generic RGBA conversion.
-        if filter_name == "UnsharpMask"
-            && !matches!(
-                mode,
-                Mode::ImageLuma8
-                    | Mode::ImageLumaA8
-                    | Mode::ImageLaPremultiplied8
-                    | Mode::ImageRgb8
-                    | Mode::ImageRgba8
-                    | Mode::ImageRgbx8
-                    | Mode::ImageRgbPremultiplied8
-                    | Mode::ImageCmyk8
-            )
-        {
-            return Err(PilError::ValueError("image has wrong mode".into()));
+        if let Some(operation) = operation_for_filter_name(filter_name) {
+            return validate_filter_mode_contract(operation, mode);
         }
-        if mode == Mode::ImagePalette8 && filter_name != "Mode" {
+        if mode == Mode::ImagePalette8 {
             return Err(PilError::ValueError("cannot filter palette images".into()));
         }
-        // Pillow's ImagingGaussianBlur path rejects PA samples with the
-        // generic wrong-mode error instead of expanding the palette. Keep the
-        // validation at the core boundary so Python and other bindings do not
-        // enter a non-Pillow RGBA fallback.
-        if mode == Mode::ImagePaletteAlpha8 && filter_name == "GaussianBlur" {
-            return Err(PilError::ValueError("image has wrong mode".into()));
-        }
-        if mode == Mode::ImageF32
-            && !matches!(
-                filter_name,
-                "MaxFilter" | "MinFilter" | "MedianFilter" | "RankFilter"
-            )
-        {
+        if mode == Mode::ImageF32 {
             return Err(PilError::ValueError("image has wrong mode".into()));
         }
         Ok(())

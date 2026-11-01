@@ -5,7 +5,7 @@ use wide::f32x8;
 
 const LANES: usize = 8;
 const MAX_AREA: usize = 81;
-const MAX_SIZE: u32 = 9;
+pub(super) const MAX_SIZE: u32 = 9;
 
 #[inline]
 fn sort_vectors(values: &mut [f32x8]) {

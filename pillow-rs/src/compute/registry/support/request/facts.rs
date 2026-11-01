@@ -188,6 +188,8 @@ pub enum RequestFacts {
         size: u32,
         /// Rank within `size * size`; absent for Median/Min/Max.
         rank: Option<u32>,
+        /// Materialized F sample facts needed before selecting its vector sorter.
+        f32_rank_compatibility: Option<F32RankCompatibility>,
     },
     /// Exact native Filter3x3 coefficients and scalar parameters.
     Filter3x3 {
@@ -435,6 +437,15 @@ pub enum PixelWriteRunFacts {
     Ineligible,
 }
 
+/// F32 rank sample properties used to preserve the serial comparator's result.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum F32RankCompatibility {
+    /// No NaNs or mixed signs of zero are present.
+    VectorOrdering,
+    /// The Default comparator sort must preserve output sample selection.
+    DefaultComparator,
+}
+
 /// Known source facts used by the same guard during assessment and preparation.
 #[derive(Debug, Clone, Copy)]
 pub struct StrategyInputs {
@@ -657,7 +668,27 @@ impl StrategyInputs {
     /// Supplies a rank-family filter window to its declared input contract.
     #[must_use]
     pub const fn with_filter_window(mut self, size: u32, rank: Option<u32>) -> Self {
-        self.request = RequestFacts::FilterWindow { size, rank };
+        self.request = RequestFacts::FilterWindow {
+            size,
+            rank,
+            f32_rank_compatibility: None,
+        };
+        self
+    }
+
+    /// Supplies the F32 rank compatibility fact captured during preparation.
+    #[must_use]
+    pub const fn with_f32_rank_window(
+        mut self,
+        size: u32,
+        rank: Option<u32>,
+        compatibility: F32RankCompatibility,
+    ) -> Self {
+        self.request = RequestFacts::FilterWindow {
+            size,
+            rank,
+            f32_rank_compatibility: Some(compatibility),
+        };
         self
     }
 

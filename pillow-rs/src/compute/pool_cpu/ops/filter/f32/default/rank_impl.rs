@@ -2,30 +2,9 @@ use crate::checked_dims::CheckedDims;
 use crate::compute::pool_cpu::ops::filter::helpers::SMALL_RANK_AREA;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, RgbaImage};
-use super::super::helpers::native_uniform_f_mode_image;
-
-pub(super) fn rank_filter_f_requires_legacy_sort(raw: &[u8]) -> bool {
-    let mut saw_negative_zero = false;
-    let mut saw_positive_zero = false;
-    for bytes in raw.chunks_exact(4) {
-        let value = f32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
-        if value.is_nan() {
-            // The existing partial_cmp fallback treats every NaN as equal to
-            // every value. Keep its exact sort behavior for these inputs.
-            return true;
-        }
-        if value == 0.0 {
-            saw_negative_zero |= value.is_sign_negative();
-            saw_positive_zero |= !value.is_sign_negative();
-            if saw_negative_zero && saw_positive_zero {
-                // partial_cmp considers the two zero signs equal, though
-                // their output bytes differ.
-                return true;
-            }
-        }
-    }
-    false
-}
+use super::super::helpers::{native_uniform_f_mode_image, requires_default_comparator_sort};
+pub(super) use super::super::helpers::requires_default_comparator_sort as
+    rank_filter_f_requires_legacy_sort;
 
 #[inline]
 pub(super) fn select_rank_filter_f_value(
@@ -158,7 +137,7 @@ fn rank_filter_f_impl(
     if area <= SMALL_RANK_AREA {
         rank_filter_f_small(raw, &mut out, w, h, half, area, rank);
     } else {
-        let legacy_sort = rank_filter_f_requires_legacy_sort(raw);
+        let legacy_sort = requires_default_comparator_sort(raw);
         
         
         rank_filter_f_large_serial(raw, &mut out, w, h, half, area, rank, legacy_sort);

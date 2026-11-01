@@ -70,7 +70,7 @@ const UNSHARP_ARCHITECTURES: &[ImplementationSupport] = &[
     ),
 ];
 
-pub(super) const fn unsharp_mask_support() -> ModeSupport {
+pub(in crate::compute::pool_cpu::ops::filter) const fn unsharp_mask_support() -> ModeSupport {
     ModeSupport::cpu(
         OperationId::UnsharpMask,
         MODE,
@@ -80,7 +80,7 @@ pub(super) const fn unsharp_mask_support() -> ModeSupport {
     )
 }
 
-pub(super) fn execute_unsharp_blend(
+pub(in crate::compute::pool_cpu::ops::filter) fn execute_unsharp_blend(
     selection: &StrategySelection,
     original: &[u8],
     blurred_output: &mut [u8],
@@ -96,7 +96,7 @@ pub(super) fn execute_unsharp_blend(
 }
 
 
-pub(super) fn support(operation: OperationId) -> ModeSupport {
+pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId) -> ModeSupport {
     match operation {
         OperationId::Filter3x3 => ModeSupport::cpu(
             OperationId::Filter3x3,
@@ -184,7 +184,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute_architecture_blur(
     }
 }
 
-pub(super) fn execute(
+pub(in crate::compute::pool_cpu::ops::filter) fn execute(
     image: &DynamicImage,
     request: super::super::ops::FilterRequest,
     selection: &StrategySelection,

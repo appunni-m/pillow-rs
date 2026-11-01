@@ -44,7 +44,7 @@ crate::compute::pool_cpu::ops::filter::helpers::native_filter5x5_architectures!(
 crate::compute::pool_cpu::ops::filter::helpers::native_filter5x5_arch_leaf!(ImageRgbx8, RgbaImage, 4);
 
 
-pub(super) fn support(operation: OperationId) -> ModeSupport {
+pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId) -> ModeSupport {
     match operation {
         // NO_PILLOW_SUPPORT: Pillow 12.2 Kernel is documented for L and RGB only;
         // this native mode strategy extends that contract.
@@ -105,7 +105,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute_architecture_blur(
     )
 }
 
-pub(super) fn execute(
+pub(in crate::compute::pool_cpu::ops::filter) fn execute(
     image: &DynamicImage,
     request: super::super::ops::FilterRequest,
     selection: &StrategySelection,

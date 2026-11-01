@@ -616,7 +616,7 @@ fn assess_request(
         | (InputContract::ScaleParameters, RequestFacts::Scale { .. }) => Ok(None),
         (
             InputContract::OddRankWindow { rank_required },
-            RequestFacts::FilterWindow { size, rank },
+            RequestFacts::FilterWindow { size, rank, .. },
         ) => {
             let area = size
                 .checked_mul(size)
@@ -632,7 +632,7 @@ fn assess_request(
             }
             Ok(None)
         }
-        (InputContract::ModeFilterWindow, RequestFacts::FilterWindow { size, rank }) => {
+        (InputContract::ModeFilterWindow, RequestFacts::FilterWindow { size, rank, .. }) => {
             if rank.is_some() {
                 return Err(PilError::InternalError(
                     "ModeFilter contract received rank-filter facts".into(),
