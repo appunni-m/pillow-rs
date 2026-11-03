@@ -69,15 +69,15 @@ the baseline. Keep `pillow-rs-bad` as reference.
 
 ## Current pending matrix
 
-Snapshot based on `develop` commit `e51eecac5` and the current source-only
-working tree. The tree is incomplete and unverified. During the preceding WIP
-push checkpoint, `make docs-lint` passed;
-`make fmt clippy docs-lint` stopped at the public-API boundary check, direct
-`cargo fmt -- --check` found broad workspace formatting drift, and direct core
-Clippy could not compile the unfinished source tree. These results do not pass
-the source-completion or verification gates. No unit or parity tests or
-benchmarks ran. This matrix tracks pending work; it is not support or
-verification evidence.
+Snapshot at `develop` commit `4e9531042` and the current documentation-only
+working tree. The source tree remains incomplete and unverified. `make
+docs-lint` passed; `make fmt clippy docs-lint` stopped at the public-API
+boundary check; direct `cargo fmt --check` found broad workspace formatting
+drift; and direct Clippy could not compile the unfinished CPU tree (7,929
+library and 8,037 library-test compiler errors). These results do not pass the
+source-completion or verification gates. No unit or parity tests or benchmarks
+ran. This matrix tracks pending work; it is not support or verification
+evidence.
 Detailed mappings and source TODOs remain in [CPU refactor
 inventory](CPU_REFACTOR_INVENTORY.md). Refresh this matrix at each completed
 checkpoint.
@@ -218,8 +218,9 @@ palette-bearing output. Moved the raster-only rejection into
 `execute_convert_output` and retain palette/alpha sidecars; direct raster-only
 execution still returns the existing `NotImplementedError`. This fixes the
 source-level route mismatch only. Palette output, metadata, and exact-mode
-parity remain pending; no build, formatter, lint, test, parity, or benchmark
-ran.
+parity remain pending. Push-time `docs-lint` passed; `cargo fmt --check` reports
+workspace-wide formatting drift and Clippy cannot compile the unfinished CPU
+tree. No behavior tests, parity, or benchmark ran.
 
 Histogram source review (2026-11-03): Pillow 12.2's masked multiband `Histo.c` reads physical lane 1 into the second result bank, while the unmasked two-band branch reads lane 3. LA, La, and PA raw inputs use `unpackLA`, which initializes omitted lanes by repeating the first sample; ordinary two-component inks do the same. The maintained typed Histogram owner reads retained lane 1 when available and falls back to the canonical repeated first sample when no independent-lane provenance exists. Source review confirms retained lanes are attached by new/frombytes/decode construction, packed PutData, and same-pixel-size mode-mismatched Paste. This repository has no Arrow image-import API, so `ImagingNewArrow` is not a reachable producer here. The remaining cross-operation risk is any producer that loses sidecar provenance before Histogram; track that with the hidden-lane producer audit and parity. Histogram parity remains pending. Sources: [Histo.c](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Histo.c#L721-L830), [Unpack.c mode dispatch](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Unpack.c#L1493-L1511), [`unpackLA`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Unpack.c#L2924-L2957), [`_imaging.c::getink`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/_imaging.c#L534-L645), [Paste.c raw pixelsize path](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Paste.c#L1982-L2017).
 
