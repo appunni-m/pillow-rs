@@ -124,7 +124,7 @@ pub(crate) fn execute(
     target: Mode,
     selection: StrategySelection,
 ) -> Result<DynamicImage, PilError> {
-    match selection.implementation.architecture {
+    let mut output = match selection.implementation.architecture {
         Architecture::Default => super::default::convert_impl::execute(source, target),
         Architecture::Sse2 => super::sse2::convert_impl::execute(source, target),
         Architecture::Neon => super::neon::convert_impl::execute(source, target),
@@ -133,7 +133,9 @@ pub(crate) fn execute(
         _ => Err(PilError::InternalError(
             "Convert selected an undeclared LA architecture".into(),
         )),
-    }
+    }?;
+    super::super::helpers::physical_lanes::preserve_alpha_lane(source, target, &mut output)?;
+    Ok(output)
 }
 
 pub(crate) fn execute_palette_target(

@@ -69,7 +69,7 @@ the baseline. Keep `pillow-rs-bad` as reference.
 
 ## Current pending matrix
 
-Snapshot base: `develop` commit `43374bee7` (local WIP, unpushed). The CPU
+Snapshot base: `develop` commit `5f928a33b` (local WIP, unpushed). The CPU
 source migration remains in review and is not ready for validation gates.
 Recent source-only checkpoints thread `StrategySelection` through Rotate and
 Transform hidden-lane helpers; native-byte Filter extrema, rank, and blur
@@ -88,8 +88,12 @@ raw parameters are the const Merge support declaration builder and Analysis's
 internal missing-strategy error formatter. Convert's physical-lane review
 identified missing fourth-byte propagation for RGB-family-to-YCbCr/HSV routes.
 Exact RGB, RGBA, RGBa, RGBX, and YCbCr owners now attach those lanes after
-their selected kernels; the remaining source-mode matrix is a blocking TODO
-in the inventory. This source change is uncompiled.
+their selected kernels. The next source pass added YCbCr/HSV-to-RGB lane
+transfer and LA alpha transfer into RGB-family results. This preserves
+observable follow-on pixel behavior without coupling the logical pixel kernels
+to Pillow's storage representation. The complete source/target matrix, including
+La/PA and two-lane compact outputs, remains a blocking TODO in the inventory.
+These source changes are uncompiled.
 Chops, Pad, Draw, Thumbnail, Quantize, Resize, geometry sidecars, Filter, and
 Composite context propagation remain uncompiled and runtime-unverified. The
 audit is not a completion proof: operation support declarations, ownership,
