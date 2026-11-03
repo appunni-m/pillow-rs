@@ -503,7 +503,7 @@ fn execute_thumbnail(plan: PreparedThumbnail<'_>) -> Result<DynamicImage, PilErr
             (output_width, output_height),
             filter,
             &plan.context,
-            plan.selection.implementation.architecture,
+            &plan.selection,
         );
     }
 

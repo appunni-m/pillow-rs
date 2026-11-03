@@ -3,6 +3,7 @@
 use crate::compute::{Architecture, ExecutionContext};
 use crate::compute::registry::support::{
     ImplementationSupport, ModeSupport, OperationId, OutputModeRule, StrategyGuard,
+    StrategySelection,
 };
 use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
@@ -39,25 +40,26 @@ pub(crate) fn execute(
     image: &DynamicImage,
     output: (u32, u32),
     filter: ResampleFilter,
-    _context: &ExecutionContext,
-    architecture: Architecture,
+    context: &ExecutionContext,
+    selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
     let DynamicImage::ImageI32(input) = image else {
         return Err(PilError::InternalError(
             "ImageI32 Thumbnail strategy received another raster mode".into(),
         ));
     };
+    let architecture = super::helpers::strategy::selected_architecture(selection)?;
     let output_image = match architecture {
         Architecture::Default => {
             super::default::thumbnail_impl::execute(input, output, filter)
         }
         #[cfg(target_arch = "x86_64")]
         Architecture::AvxFma => super::avx::thumbnail_impl::execute(
-            _context,
+            context,
             input,
             output,
             filter,
-            Architecture::AvxFma,
+            selection,
         ),
         _ => Err(PilError::InternalError(format!(
             "ImageI32 Thumbnail received non-I32 implementation selection {architecture:?}"
