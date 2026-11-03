@@ -167,9 +167,9 @@ pub(crate) fn imageops_color_from_python(
         if let Ok(values) = tuple.extract::<Vec<f64>>() {
             return pillow_rs::ImageOpsColor::FloatingComponents(values);
         }
-        // TODO(pillow-rs#3ptb): retain tuple values for 1/2-component host
-        // coercion and custom numeric types; P/PA 3/4 arity faults are handled
-        // at the Expand operation bridge.
+        // TODO(pillow-rs#3ptb): retain tuple values for Rotate's 1/2-component
+        // coercion and custom numeric types; Expand and Pad use the typed fill
+        // adapter after capturing the destination mode.
         return pillow_rs::ImageOpsColor::Invalid;
     }
     if let Ok(list) = value.cast::<PyList>() {
@@ -177,40 +177,19 @@ pub(crate) fn imageops_color_from_python(
             return pillow_rs::ImageOpsColor::ListComponents(values);
         }
         // TODO(pillow-rs#3ptb): preserve oversized integer-list components for
-        // the remaining ImageOps paths; Expand handles them separately below.
+        // Rotate's remaining ImageOps fill path; Expand and Pad use the typed
+        // fill adapter after capturing the destination mode.
         return pillow_rs::ImageOpsColor::InvalidList;
     }
     pillow_rs::ImageOpsColor::Invalid
 }
 
-/// Retains built-in mixed and arbitrary-width tuple numbers for P fills.
-///
-/// Pillow's palette lookup compares the tuple before converting it to bytes,
-/// so widening mixed numeric values through `f64` changes both lookup and
-/// error ordering.
-pub(crate) fn imageops_expand_color_from_python(
-    value: Option<&Bound<'_, PyAny>>,
-) -> pillow_rs::ImageOpsColor {
-    if let Some(value) = value {
-        if let Some(components) = imageops_expand_tuple_numeric_components(value) {
-            return pillow_rs::ImageOpsColor::TupleComponentsWithFallback {
-                components,
-                fallback: Box::new(imageops_color_from_python(Some(value))),
-            };
-        }
-        if let Some(components) = imageops_expand_list_wide_integer_components(value) {
-            return pillow_rs::ImageOpsColor::ListNumericComponents(components);
-        }
-    }
-    imageops_color_from_python(value)
-}
-
-/// Adapts an ImageOps.pad fill using its exact destination Mode.
+/// Adapts an Image.new fill using its exact destination Mode.
 ///
 /// P-mode strings pass through ImageColor, then RGB(A) integer lists and tuples
 /// use the temporary palette callback path. Other values retain the
 /// destination-specific typed conversion.
-pub(crate) fn imageops_pad_color_from_python(
+pub(crate) fn imageops_fill_from_python(
     py: Python<'_>,
     value: Option<&Bound<'_, PyAny>>,
     mode: pillow_rs::Mode,
@@ -218,24 +197,27 @@ pub(crate) fn imageops_pad_color_from_python(
     let Some(value) = value else {
         return Ok(pillow_rs::ImageOpsColor::None);
     };
+    if value.is_none() {
+        return Ok(pillow_rs::ImageOpsColor::None);
+    }
     if mode == pillow_rs::Mode::ImagePalette8 && value.cast::<PyString>().is_ok() {
         let color = py
             .import("pillow_rs.imagecolor")?
             .getattr("getcolor")?
             .call1((value, "P"))?;
-        return imageops_pad_palette_color_from_python(py, &color);
+        return imageops_palette_fill_from_python(py, &color);
     }
     if let Ok(name) = value.extract::<String>() {
         return Ok(pillow_rs::ImageOpsColor::Name(name));
     }
     if mode == pillow_rs::Mode::ImageF32 {
-        return imageops_pad_float_color_from_python(value);
+        return imageops_float_fill_from_python(value);
     }
     if matches!(mode, pillow_rs::Mode::ImageRgb32F | pillow_rs::Mode::ImageRgba32F) {
         return Ok(imageops_color_from_python(Some(value)));
     }
     if mode == pillow_rs::Mode::ImagePalette8 {
-        return imageops_pad_palette_color_from_python(py, value);
+        return imageops_palette_fill_from_python(py, value);
     }
 
     if value.is_instance_of::<PyInt>() {
@@ -259,7 +241,7 @@ pub(crate) fn imageops_pad_color_from_python(
         }));
     };
 
-    if !pad_integer_tuple_arity_is_valid(tuple.len(), mode) {
+    if !imageops_tuple_arity_is_valid(tuple.len(), mode) {
         return Ok(pillow_rs::ImageOpsColor::TupleComponents(Vec::new()));
     }
     if tuple.len() == 1 && mode.band_count() == 2 {
@@ -295,11 +277,11 @@ pub(crate) fn imageops_pad_color_from_python(
     Ok(pillow_rs::ImageOpsColor::TupleComponents(components))
 }
 
-fn imageops_pad_palette_color_from_python(
+fn imageops_palette_fill_from_python(
     py: Python<'_>,
     value: &Bound<'_, PyAny>,
 ) -> PyResult<pillow_rs::ImageOpsColor> {
-    if let Some(fill) = imageops_pad_palette_fill_from_python(py, value)? {
+    if let Some(fill) = imageops_temporary_palette_fill_from_python(py, value)? {
         return Ok(fill);
     }
     if value.is_instance_of::<PyInt>() {
@@ -324,7 +306,7 @@ fn imageops_pad_palette_color_from_python(
     ))
 }
 
-fn imageops_pad_palette_fill_from_python(
+fn imageops_temporary_palette_fill_from_python(
     py: Python<'_>,
     value: &Bound<'_, PyAny>,
 ) -> PyResult<Option<pillow_rs::ImageOpsColor>> {
@@ -352,7 +334,7 @@ fn imageops_pad_palette_fill_from_python(
     }))
 }
 
-fn pad_integer_tuple_arity_is_valid(len: usize, mode: pillow_rs::Mode) -> bool {
+fn imageops_tuple_arity_is_valid(len: usize, mode: pillow_rs::Mode) -> bool {
     match mode.band_count() {
         1 => len == 1,
         2 => matches!(len, 1 | 2),
@@ -360,7 +342,7 @@ fn pad_integer_tuple_arity_is_valid(len: usize, mode: pillow_rs::Mode) -> bool {
     }
 }
 
-fn imageops_pad_float_color_from_python(
+fn imageops_float_fill_from_python(
     value: &Bound<'_, PyAny>,
 ) -> PyResult<pillow_rs::ImageOpsColor> {
     let scalar = if let Ok(tuple) = value.cast::<PyTuple>() {
@@ -383,55 +365,6 @@ fn imageops_pad_float_color_from_python(
             .extract::<f64>()
             .map(pillow_rs::ImageOpsColor::FloatingScalar)
     }
-}
-
-fn imageops_expand_tuple_numeric_components(
-    value: &Bound<'_, PyAny>,
-) -> Option<Vec<pillow_rs::PaletteColorComponent>> {
-    let tuple = value.cast::<PyTuple>().ok()?;
-    let mut components = Vec::with_capacity(tuple.len());
-    let mut contains_integer = false;
-    let mut contains_float = false;
-    let mut contains_wide_integer = false;
-    for component in tuple.iter() {
-        if component.is_instance_of::<PyInt>() {
-            contains_integer = true;
-            let parsed = palette_integer_component_from_python(&component)?;
-            contains_wide_integer |= matches!(
-                &parsed,
-                pillow_rs::PaletteColorComponent::WideInteger { .. }
-            );
-            components.push(parsed);
-        } else if component.is_instance_of::<PyFloat>() {
-            contains_float = true;
-            components.push(pillow_rs::PaletteColorComponent::Float(
-                component.extract::<f64>().ok()?,
-            ));
-        } else {
-            return None;
-        }
-    }
-    (contains_wide_integer || (contains_integer && contains_float)).then_some(components)
-}
-
-fn imageops_expand_list_wide_integer_components(
-    value: &Bound<'_, PyAny>,
-) -> Option<Vec<pillow_rs::PaletteColorComponent>> {
-    let list = value.cast::<PyList>().ok()?;
-    let mut components = Vec::with_capacity(list.len());
-    let mut contains_wide_integer = false;
-    for component in list.iter() {
-        if !component.is_instance_of::<PyInt>() {
-            return None;
-        }
-        let parsed = palette_integer_component_from_python(&component)?;
-        contains_wide_integer |= matches!(
-            &parsed,
-            pillow_rs::PaletteColorComponent::WideInteger { .. }
-        );
-        components.push(parsed);
-    }
-    contains_wide_integer.then_some(components)
 }
 
 /// Converts a Python integer without narrowing values outside `i64`.

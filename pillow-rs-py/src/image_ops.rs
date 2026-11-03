@@ -243,7 +243,7 @@ fn ops_pad(
     let inner = image.borrow().inner.clone();
     let (fill, centering) = if preflight.needs_padding() {
         let mode = inner.mode_identity().map_err(map_error)?;
-        let color = imageops_pad_color_from_python(image.py(), color, mode)?;
+        let color = imageops_fill_from_python(image.py(), color, mode)?;
         // TODO(pillow-rs#3ptb): Pillow allocates Image.new's canvas before
         // core fill validation and before centering access. This deferred Pad
         // plan currently resolves fill and centering before canvas allocation.
@@ -358,25 +358,7 @@ fn ops_expand_prepare_fill(
     fill: &Bound<'_, PyAny>,
 ) -> PyResult<PyExpandFill> {
     let mode = target.borrow().mode;
-    if let Ok(tuple) = fill.cast::<PyTuple>() {
-        if matches!(tuple.len(), 3 | 4) {
-            if mode == pillow_rs::Mode::ImagePaletteAlpha8 {
-                return Err(PyTypeError::new_err(
-                    "color must be int, or tuple of one or two elements",
-                ));
-            }
-            if mode == pillow_rs::Mode::ImagePalette8
-                && !tuple
-                    .iter()
-                    .all(|component| component.is_instance_of::<PyInt>())
-            {
-                return Err(PyTypeError::new_err(
-                    "color must be int or single-element tuple",
-                ));
-            }
-        }
-    }
-    let input = imageops_expand_color_from_python(Some(fill));
+    let input = imageops_fill_from_python(py, Some(fill), mode)?;
     let prepared = py
         .detach(|| pillow_rs::imageops_prepare_expand_fill_for_mode(mode, input))
         .map_err(map_error)?;

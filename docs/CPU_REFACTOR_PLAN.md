@@ -118,8 +118,13 @@ source image, and attaches its final data for both P and PA modes. It captures
 a target image after palette callbacks, validates size before non-string fill
 conversion, and pastes the current source wrapper into the captured-mode
 canvas. The exact-mode Rust Expand strategies still perform canvas filling.
-Dirty/raw palette faults, metadata, allocation order, and CoreOnly fill cases
-remain under source review and parity.
+Expand and Pad now share the exact-mode host fill adapter. For P-mode RGB(A)
+integer lists and tuples it invokes the package's `ImagePalette.getcolor` and
+passes the chosen index and temporary palette to Rust; Expand retains that
+palette on its materialized canvas. Non-palette tuple arity and component
+conversion now use the captured mode's band count and native integer widths.
+Dirty/raw palette faults, metadata, allocation order, CoreOnly fill cases, and
+runtime parity remain under source review.
 For P-mode Pad, the host bridge now routes three/four-component all-integer
 lists and tuples through the package's `ImagePalette.getcolor`, carrying the
 selected index and temporary palette bytes into the native canvas strategy.

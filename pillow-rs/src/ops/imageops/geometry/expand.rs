@@ -80,12 +80,16 @@ pub fn resolve_expand_fill_palette(
     }
     let source_palette = matches!(mode, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
         .then(|| (image.palette(), image.palette_alpha()));
-    if let Some((index, palette, palette_alpha)) =
+    if let ImageOpsColor::PaletteFill { index, palette } = &prepared.input {
+        let (palette, palette_alpha) = match image.palette() {
+            Some(palette) => (palette, image.palette_alpha()),
+            None => (palette.clone(), None),
+        };
+        apply_expand_palette_fill(&mut prepared, *index, palette, palette_alpha);
+    } else if let Some((index, palette, palette_alpha)) =
         resolve_expand_palette_fill(image, &prepared.input, prepared.fill_rule)?
     {
-        prepared.fill = (index, index, index, u8::MAX);
-        prepared.native_fill = None;
-        prepared.output_palette = Some((Some(palette), palette_alpha));
+        apply_expand_palette_fill(&mut prepared, index, palette, palette_alpha);
     } else if let Some(palette) = source_palette {
         prepared.output_palette = Some(palette);
     }
@@ -105,6 +109,11 @@ pub fn finish_expand_fill_palette_from_host(
         ));
     }
     if prepared.fill_rule == ExpandFillRule::PaletteIndexOrColor {
+        if let ImageOpsColor::PaletteFill { index, palette } = &prepared.input
+            && mode == Mode::ImagePalette8
+        {
+            apply_expand_palette_fill(&mut prepared, *index, palette.clone(), None);
+        }
         if let Some(components) = super::color::palette_fill_components(&prepared.input)? {
             match mode {
                 Mode::ImagePalette8 if uses_new_palette_color(&prepared.input, &components) => {
@@ -112,9 +121,12 @@ pub fn finish_expand_fill_palette_from_host(
                     // RGB palette when ImageOps did not resolve the fill
                     // through an existing palette callback.
                     let palette = super::color::resolve_palette_tuple_bytes(&components)?;
-                    prepared.fill = (0, 0, 0, u8::MAX);
-                    prepared.native_fill = None;
-                    prepared.output_palette = Some((Some(palette.to_vec()), None));
+                    apply_expand_palette_fill(
+                        &mut prepared,
+                        0,
+                        palette.to_vec(),
+                        None,
+                    );
                 }
                 Mode::ImagePalette8 => {
                     return Err(PilError::TypeError(
@@ -134,6 +146,17 @@ pub fn finish_expand_fill_palette_from_host(
     }
     prepared.palette_resolved = true;
     Ok(prepared)
+}
+
+fn apply_expand_palette_fill(
+    prepared: &mut PreparedExpandFill,
+    index: u8,
+    palette: Vec<u8>,
+    palette_alpha: Option<Vec<u8>>,
+) {
+    prepared.fill = (index, index, index, u8::MAX);
+    prepared.native_fill = None;
+    prepared.output_palette = Some((Some(palette), palette_alpha));
 }
 
 fn uses_new_palette_color(
