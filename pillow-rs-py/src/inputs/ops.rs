@@ -167,8 +167,9 @@ pub(crate) fn imageops_color_from_python(
         if let Ok(values) = tuple.extract::<Vec<f64>>() {
             return pillow_rs::ImageOpsColor::FloatingComponents(values);
         }
-        // TODO(pillow-rs#3ptb): retain nonnumeric tuple arity and host
-        // coercion for ImageOps.fill, especially P/PA arity-first faults.
+        // TODO(pillow-rs#3ptb): retain tuple values for 1/2-component host
+        // coercion and custom numeric types; P/PA 3/4 arity faults are handled
+        // at the Expand operation bridge.
         return pillow_rs::ImageOpsColor::Invalid;
     }
     if let Ok(list) = value.cast::<PyList>() {

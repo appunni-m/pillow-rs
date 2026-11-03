@@ -1573,7 +1573,8 @@ callback resolves a P fill, the Rust strategy now reproduces `Image.new("P")`
 for integer RGB(A) tuples and lists by creating the temporary RGB palette and
 filling index zero. PA three- and four-component tuple/list fills now return
 the matching mode-specific Pillow type errors. Other P component tuples keep
-the single-band fill error. Nonnumeric tuple arity/coercion, custom palette
-callback outcomes, dirty/raw palette faults, palette metadata variants,
+the single-band fill error, including invalid three/four-component tuple kinds
+before component coercion. One/two-component custom tuple coercion, custom
+palette callback outcomes, dirty/raw palette faults, palette metadata variants,
 CoreOnly fill extensions, and pixel/fault parity remain pending. Source-only;
 no build, formatter, checkstyle, lint, tests, parity, benchmark, or coverage ran.
