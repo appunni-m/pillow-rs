@@ -25,15 +25,14 @@ const TARGETS: &[Mode] = &[
     Mode::ImageI32,
     Mode::ImageF32,
 ];
-// TODO(pillow-rs#3ptb): Pillow routes palette-to-LAB through RGBA and ImageCms.
-// Keep this CoreOnly until the Rust composition matches that public contract.
-const CORE_ONLY_TARGETS: &[Mode] = &[Mode::ImageLab8];
+// Palette-to-LAB uses the palette-aware P -> RGBA -> ImageCms route.
+const CORE_ONLY_TARGETS: &[Mode] = &[];
 const INPUTS: &[InputContract] = &[
     InputContract::PaletteMetadata,
     InputContract::ConvertTarget {
         targets: TARGETS,
         core_only_targets: CORE_ONLY_TARGETS,
-        core_only_reason: Some("Rust P-to-LAB has not completed ImageCms parity review"),
+        core_only_reason: None,
         rejection_reason: "image has wrong mode",
     },
 ];

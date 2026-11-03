@@ -10,6 +10,7 @@ use crate::pipeline::{DitherMethod, PipelineOp};
 use crate::raster::{DynamicImage, Mode};
 
 use super::super::ops::{MATRIX_SUPPORT, SUPPORT};
+use super::target_compositions::{self, LabNormalization};
 
 /// Raster output plus wrapper-owned palette data for eager palette conversion.
 pub(crate) struct PreparedConvertOutput {
@@ -49,7 +50,7 @@ pub(crate) struct Prepared<'a> {
 
 struct LabConvertSelections {
     entries: Vec<StrategySelection>,
-    source_via_luma16: bool,
+    normalization: LabNormalization,
 }
 
 impl LabConvertSelections {
@@ -148,42 +149,53 @@ impl Prepared<'_> {
         let route = self.lab.ok_or_else(|| {
             PilError::InternalError("Convert-to-LAB preparation omitted its child strategies".into())
         })?;
-        let rgb = if route.source_via_luma16 {
-            crate::compute::record_pipeline_operation_selection(&route.entries[0]);
-            let luma = Self::execute_mode(
-                self.input,
-                Mode::ImageLuma8,
-                route.entries[0],
-            )?;
-            let DynamicImage::ImageLuma8(luma) = luma else {
-                return Err(PilError::InternalError(
-                    "I;16 Convert-to-LAB normalization returned another mode".into(),
-                ));
-            };
-            let luma_image = DynamicImage::ImageLuma8(luma);
-            let inputs = OperationInputs {
-                image: &luma_image,
-                palette: crate::compute::registry::support::PaletteInput::default(),
-            };
-            crate::compute::record_pipeline_operation_selection(&route.entries[1]);
-            Self::execute_mode(inputs, Mode::ImageRgb8, route.entries[1])?
-        } else {
-            crate::compute::record_pipeline_operation_selection(&route.entries[0]);
-            Self::execute_mode(self.input, Mode::ImageRgb8, route.entries[0])?
-        };
-        let DynamicImage::ImageRgb8(rgb) = rgb else {
-            return Err(PilError::InternalError(
-                "Convert-to-LAB normalization returned another mode".into(),
-            ));
-        };
-        let convert_lab = *route.entries.last().ok_or_else(|| {
-            PilError::InternalError("Convert-to-LAB route omitted its LAB strategy".into())
-        })?;
-        crate::compute::record_pipeline_operation_selection(&convert_lab);
-        crate::compute::pool_cpu::ops::color::ops::execute_selected_rgb_to_lab(
-            &rgb,
-            convert_lab,
-        )
+        match route.normalization {
+            LabNormalization::Direct => {
+                let convert_lab = route.strategy(0)?;
+                execute_lab_strategy(self.input.image, convert_lab)
+            }
+            LabNormalization::ToRgba => {
+                let rgba = execute_lab_convert_step(
+                    self.input,
+                    Mode::ImageRgba8,
+                    route.strategy(0)?,
+                )?;
+                require_lab_mode(rgba, Mode::ImageRgba8)?;
+                execute_lab_strategy(&rgba, route.strategy(1)?)
+            }
+            LabNormalization::ViaLuma => {
+                let luma = execute_lab_convert_step(
+                    self.input,
+                    Mode::ImageLuma8,
+                    route.strategy(0)?,
+                )?;
+                require_lab_mode(luma, Mode::ImageLuma8)?;
+                let luma_input = lab_child_input(&luma);
+                let rgba = execute_lab_convert_step(
+                    luma_input,
+                    Mode::ImageRgba8,
+                    route.strategy(1)?,
+                )?;
+                require_lab_mode(rgba, Mode::ImageRgba8)?;
+                execute_lab_strategy(&rgba, route.strategy(2)?)
+            }
+            LabNormalization::ViaRgb => {
+                let rgb = execute_lab_convert_step(
+                    self.input,
+                    Mode::ImageRgb8,
+                    route.strategy(0)?,
+                )?;
+                require_lab_mode(rgb, Mode::ImageRgb8)?;
+                let rgb_input = lab_child_input(&rgb);
+                let rgba = execute_lab_convert_step(
+                    rgb_input,
+                    Mode::ImageRgba8,
+                    route.strategy(1)?,
+                )?;
+                require_lab_mode(rgba, Mode::ImageRgba8)?;
+                execute_lab_strategy(&rgba, route.strategy(2)?)
+            }
+        }
     }
 
     fn execute_palette_target(self) -> Result<PreparedConvertOutput, PilError> {
@@ -537,42 +549,113 @@ fn prepare_lab_route(
         return Ok(None);
     }
 
+    let normalization = target_compositions::lab_normalization(input.mode());
+    let width = input.image.width();
+    let height = input.image.height();
     let mut entries = Vec::with_capacity(3);
-    let source_via_luma16 = matches!(
-        input.mode(),
-        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N
-    );
-    if source_via_luma16 {
-        entries.push(select_convert_target(
-            input.mode(),
-            input.facts(),
-            Mode::ImageLuma8,
+    match normalization {
+        LabNormalization::Direct => {
+            entries.push(select_strategy(
+                crate::compute::pool_cpu::ops::color::ops::SUPPORT.for_mode(input.mode()),
+                input.facts(),
+                ctx,
+                "ConvertLab support remained unresolved for its native source mode",
+            )?);
+        }
+        LabNormalization::ToRgba => {
+            entries.push(select_convert_target(
+                input.mode(),
+                input.facts(),
+                Mode::ImageRgba8,
+                ctx,
+            )?);
+        }
+        LabNormalization::ViaLuma => {
+            entries.push(select_convert_target(
+                input.mode(),
+                input.facts(),
+                Mode::ImageLuma8,
+                ctx,
+            )?);
+            let luma_facts = facts_for_mode(width, height, 1)?;
+            entries.push(select_convert_target(
+                Mode::ImageLuma8,
+                luma_facts,
+                Mode::ImageRgba8,
+                ctx,
+            )?);
+        }
+        LabNormalization::ViaRgb => {
+            entries.push(select_convert_target(
+                input.mode(),
+                input.facts(),
+                Mode::ImageRgb8,
+                ctx,
+            )?);
+            let rgb_facts = facts_for_mode(width, height, 3)?;
+            entries.push(select_convert_target(
+                Mode::ImageRgb8,
+                rgb_facts,
+                Mode::ImageRgba8,
+                ctx,
+            )?);
+        }
+    }
+    if normalization != LabNormalization::Direct {
+        let rgba_facts = facts_for_mode(width, height, 4)?;
+        entries.push(select_strategy(
+            crate::compute::pool_cpu::ops::color::ops::SUPPORT.for_mode(Mode::ImageRgba8),
+            rgba_facts,
             ctx,
-        )?);
-        let luma_facts = facts_for_mode(input.image.width(), input.image.height(), 1)?;
-        entries.push(select_convert_target(
-            Mode::ImageLuma8,
-            luma_facts,
-            Mode::ImageRgb8,
-            ctx,
-        )?);
-    } else {
-        entries.push(select_convert_target(
-            input.mode(),
-            input.facts(),
-            Mode::ImageRgb8,
-            ctx,
+            "ConvertLab support remained unresolved after RGBA normalization",
         )?);
     }
+    Ok(Some(LabConvertSelections {
+        entries,
+        normalization,
+    }))
+}
 
-    let rgb_facts = facts_for_mode(input.image.width(), input.image.height(), 3)?;
-    entries.push(select_strategy(
-        crate::compute::pool_cpu::ops::color::ops::SUPPORT.for_mode(Mode::ImageRgb8),
-        rgb_facts,
-        ctx,
-        "ConvertLab support remained unresolved after RGB normalization",
-    )?);
-    Ok(Some(LabConvertSelections { entries, source_via_luma16 }))
+impl LabConvertSelections {
+    fn strategy(&self, index: usize) -> Result<StrategySelection, PilError> {
+        self.entries.get(index).copied().ok_or_else(|| {
+            PilError::InternalError("Convert-to-LAB route omitted a child strategy".into())
+        })
+    }
+}
+
+fn execute_lab_convert_step(
+    input: OperationInputs<'_>,
+    target: Mode,
+    selection: StrategySelection,
+) -> Result<DynamicImage, PilError> {
+    crate::compute::record_pipeline_operation_selection(&selection);
+    Prepared::execute_mode(input, target, selection)
+}
+
+fn lab_child_input(image: &DynamicImage) -> OperationInputs<'_> {
+    OperationInputs {
+        image,
+        palette: crate::compute::registry::support::PaletteInput::default(),
+    }
+}
+
+fn require_lab_mode(image: DynamicImage, expected: Mode) -> Result<DynamicImage, PilError> {
+    if image.mode() == expected {
+        Ok(image)
+    } else {
+        Err(PilError::InternalError(
+            "Convert-to-LAB normalization returned another mode".into(),
+        ))
+    }
+}
+
+fn execute_lab_strategy(
+    image: &DynamicImage,
+    selection: StrategySelection,
+) -> Result<DynamicImage, PilError> {
+    crate::compute::record_pipeline_operation_selection(&selection);
+    crate::compute::pool_cpu::ops::color::ops::execute_selected_convert_lab(image, selection)
 }
 
 fn select_convert_target(

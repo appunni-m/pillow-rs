@@ -43,14 +43,16 @@ const TO_PA: &[OperationModeTransition] = &[OperationModeTransition {
     source: OperationTransitionSource::Input,
     target: Mode::ImagePaletteAlpha8,
 }];
-// TODO(pillow-rs#3ptb): Pillow's public LAB conversion uses ImageCms. This
-// current route normalizes every source through RGB and cannot preserve the
-// alpha/auxiliary channel behavior of direct RGBA or RGBX profile transforms.
+const DIRECT_TO_LAB: &[OperationModeTransition] = &[OperationModeTransition {
+    operation: OperationId::ConvertLab,
+    source: OperationTransitionSource::Input,
+    target: Mode::ImageLab8,
+}];
 const TO_LAB: &[OperationModeTransition] = &[
     OperationModeTransition {
         operation: OperationId::Convert,
         source: OperationTransitionSource::Input,
-        target: Mode::ImageRgb8,
+        target: Mode::ImageRgba8,
     },
     OperationModeTransition {
         operation: OperationId::ConvertLab,
@@ -58,7 +60,7 @@ const TO_LAB: &[OperationModeTransition] = &[
         target: Mode::ImageLab8,
     },
 ];
-const L16_TO_LAB: &[OperationModeTransition] = &[
+const LUMA_TO_LAB: &[OperationModeTransition] = &[
     OperationModeTransition {
         operation: OperationId::Convert,
         source: OperationTransitionSource::Input,
@@ -67,7 +69,7 @@ const L16_TO_LAB: &[OperationModeTransition] = &[
     OperationModeTransition {
         operation: OperationId::Convert,
         source: OperationTransitionSource::Previous,
-        target: Mode::ImageRgb8,
+        target: Mode::ImageRgba8,
     },
     OperationModeTransition {
         operation: OperationId::ConvertLab,
@@ -75,6 +77,42 @@ const L16_TO_LAB: &[OperationModeTransition] = &[
         target: Mode::ImageLab8,
     },
 ];
+const RGB_TO_LAB: &[OperationModeTransition] = &[
+    OperationModeTransition {
+        operation: OperationId::Convert,
+        source: OperationTransitionSource::Input,
+        target: Mode::ImageRgb8,
+    },
+    OperationModeTransition {
+        operation: OperationId::Convert,
+        source: OperationTransitionSource::Previous,
+        target: Mode::ImageRgba8,
+    },
+    OperationModeTransition {
+        operation: OperationId::ConvertLab,
+        source: OperationTransitionSource::Previous,
+        target: Mode::ImageLab8,
+    },
+];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum LabNormalization {
+    Direct,
+    ToRgba,
+    ViaLuma,
+    ViaRgb,
+}
+
+pub(super) const fn lab_normalization(source: Mode) -> LabNormalization {
+    match source {
+        Mode::ImageRgb8 | Mode::ImageRgba8 | Mode::ImageRgbx8 => LabNormalization::Direct,
+        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N | Mode::ImageF32 => {
+            LabNormalization::ViaLuma
+        }
+        Mode::ImageYCbCr8 | Mode::ImageHsv8 => LabNormalization::ViaRgb,
+        _ => LabNormalization::ToRgba,
+    }
+}
 
 pub(crate) fn classify_target_composition(
     source: Mode,
@@ -145,7 +183,12 @@ fn classify_lab_composition(
     prepared_support: ModeSupport,
 ) -> Option<OperationTargetComposition> {
     let scope = prepared_support.scope_for_target(target)?;
-    let transitions = if is_luma16_source(source) { L16_TO_LAB } else { TO_LAB };
+    let transitions = match lab_normalization(source) {
+        LabNormalization::Direct => DIRECT_TO_LAB,
+        LabNormalization::ToRgba => TO_LAB,
+        LabNormalization::ViaLuma => LUMA_TO_LAB,
+        LabNormalization::ViaRgb => RGB_TO_LAB,
+    };
     Some(OperationTargetComposition {
         source_mode: source,
         target_mode: target,
@@ -299,10 +342,6 @@ fn target_rejection(support: ModeSupport, target: Mode) -> Option<(&'static str,
             _ => None,
         }),
     }
-}
-
-const fn is_luma16_source(mode: Mode) -> bool {
-    matches!(mode, Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N)
 }
 
 const fn is_premultiplied_target(mode: Mode) -> bool {

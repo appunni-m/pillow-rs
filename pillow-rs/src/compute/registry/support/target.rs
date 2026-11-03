@@ -9,7 +9,7 @@ use super::{ModeSupport, OperationId, OperationRouteOutcome, OutputModeRule, Sup
 pub enum OperationTargetCompositionKind {
     /// Reject during Convert's source/target validation before any child runs.
     ConvertGuard,
-    /// Normalize the source to RGB, then execute the ConvertLab child.
+    /// Apply the source-mode LAB route, including its declared normalization.
     ConvertLab,
     /// Select a mode-specific premultiplied target strategy or rejection.
     ConvertPremultiplied,

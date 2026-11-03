@@ -202,15 +202,13 @@ static ARCHITECTURES: [ImplementationSupport; 36] = architecture_catalog!(
     ]
 );
 
-// TODO(pillow-rs#3ptb): Pillow routes RGBA-to-LAB directly through ImageCms;
-// keep LAB CoreOnly until the Rust path preserves its color and auxiliary lanes.
+// RGBA-to-LAB uses the direct ImageCms route and retains its auxiliary lane.
 const CORE_ONLY_TARGETS: &[Mode] = &[
     Mode::ImageLaPremultiplied8,
     Mode::ImageI16,
     Mode::ImageI16L,
     Mode::ImageI16B,
     Mode::ImageI16N,
-    Mode::ImageLab8,
 ];
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: super::super::ops::RGBA_TARGETS,

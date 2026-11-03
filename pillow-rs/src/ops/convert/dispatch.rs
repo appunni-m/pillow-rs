@@ -205,11 +205,9 @@ fn convert_to_lab(
         };
         converted = Some(source.convert(transition.target, None, None, None, None)?);
     }
-    let rgb = converted.ok_or_else(|| {
-        PilError::InternalError("ConvertLab composition omitted RGB normalization".into())
-    })?;
+    let lab_input = converted.as_ref().unwrap_or(image);
     Ok(Image::push_op(
-        &rgb,
+        lab_input,
         PipelineOp::ConvertLab {
             icc_profile: crate::lab::pillow_lab_icc_profile().into(),
         },

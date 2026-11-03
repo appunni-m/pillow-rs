@@ -70,7 +70,6 @@ const CORE_ONLY_TARGETS: &[Mode] = &[
     Mode::ImageI16L,
     Mode::ImageI16B,
     Mode::ImageI16N,
-    Mode::ImageLab8,
 ];
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: super::super::ops::LUMA_TARGETS,

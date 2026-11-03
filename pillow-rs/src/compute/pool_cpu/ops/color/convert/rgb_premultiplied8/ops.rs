@@ -158,8 +158,7 @@ static ARCHITECTURES: [ImplementationSupport; 35] = architecture_targets!(
     ]
 );
 
-// TODO(pillow-rs#3ptb): Pillow can route RGBa-to-LAB through RGBA and ImageCms;
-// keep LAB CoreOnly until the Rust path matches that public conversion.
+// RGBa-to-LAB uses the RGBa -> RGBA -> ImageCms route.
 const CORE_ONLY_TARGETS: &[Mode] = &[
     Mode::One,
     Mode::ImageLuma8,
@@ -169,7 +168,6 @@ const CORE_ONLY_TARGETS: &[Mode] = &[
     Mode::ImageI16B,
     Mode::ImageI16N,
     Mode::ImageLaPremultiplied8,
-    Mode::ImageLab8,
     Mode::ImageRgbx8,
     Mode::ImageCmyk8,
     Mode::ImageYCbCr8,

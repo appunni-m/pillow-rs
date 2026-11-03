@@ -100,7 +100,6 @@ const CORE_ONLY_TARGETS: &[Mode] = &[
     Mode::ImageI16L,
     Mode::ImageI16B,
     Mode::ImageI16N,
-    Mode::ImageLab8,
     Mode::ImageI32,
     Mode::ImageF32,
 ];

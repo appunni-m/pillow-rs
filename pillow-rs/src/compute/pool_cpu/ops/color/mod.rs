@@ -6,3 +6,5 @@ pub(crate) mod luma8;
 pub(crate) mod ops;
 pub(crate) mod palette8;
 pub(crate) mod rgb8;
+pub(crate) mod rgba8;
+pub(crate) mod rgbx8;

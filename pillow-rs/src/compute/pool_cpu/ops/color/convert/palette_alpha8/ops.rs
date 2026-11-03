@@ -31,8 +31,7 @@ const TARGETS: &[Mode] = &[
     Mode::ImageI32,
     Mode::ImageF32,
 ];
-// TODO(pillow-rs#3ptb): Pillow routes PA-to-LAB through RGBA and ImageCms when
-// palette metadata permits it. The remaining listed targets stay CoreOnly.
+// PA-to-LAB uses the palette-aware PA -> RGBA -> ImageCms route.
 const CORE_ONLY_TARGETS: &[Mode] = &[
     Mode::ImageLaPremultiplied8,
     Mode::ImageRgbPremultiplied8,
@@ -40,7 +39,6 @@ const CORE_ONLY_TARGETS: &[Mode] = &[
     Mode::ImageI16L,
     Mode::ImageI16B,
     Mode::ImageI16N,
-    Mode::ImageLab8,
 ];
 const INPUTS: &[InputContract] = &[
     InputContract::PaletteMetadata,

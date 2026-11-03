@@ -335,13 +335,12 @@ static ARCHITECTURES: [ImplementationSupport; 39] = [
     ),
 ];
 
-// TODO(pillow-rs#3ptb): Pillow converts L through RGBA and ImageCms for LAB.
-// Keep this CoreOnly until the composed Rust route matches that public contract.
-const CORE_ONLY_TARGETS: &[Mode] = &[Mode::ImageLab8];
+// LAB uses the explicit L -> RGBA -> ImageCms route in the Convert wrapper.
+const CORE_ONLY_TARGETS: &[Mode] = &[];
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: super::super::ops::LUMA_TARGETS,
     core_only_targets: CORE_ONLY_TARGETS,
-    core_only_reason: Some("Rust L-to-LAB has not completed ImageCms parity review"),
+    core_only_reason: None,
     rejection_reason: "image has wrong mode",
 }];
 

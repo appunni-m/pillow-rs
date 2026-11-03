@@ -6,7 +6,7 @@ use crate::compute::{ExecutionContext, registry::support::{
 }};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
-use crate::raster::{DynamicImage, Mode, RgbImage};
+use crate::raster::{DynamicImage, Mode};
 
 pub(super) const RGB_INPUTS: &[InputContract] = &[InputContract::ExactNativeBytes {
     channels: 3,
@@ -14,18 +14,30 @@ pub(super) const RGB_INPUTS: &[InputContract] = &[InputContract::ExactNativeByte
     mismatch_reason: "LAB conversion requires tightly packed RGB8 input",
 }];
 
+pub(super) const RGBA_INPUTS: &[InputContract] = &[InputContract::ExactNativeBytes {
+    channels: 4,
+    overflow_reason: "LAB image size overflow",
+    mismatch_reason: "LAB conversion requires tightly packed RGBA8 input",
+}];
+
+pub(super) const RGBX_INPUTS: &[InputContract] = &[InputContract::ExactNativeBytes {
+    channels: 4,
+    overflow_reason: "LAB image size overflow",
+    mismatch_reason: "LAB conversion requires tightly packed RGBX8 input",
+}];
+
 fn classify_convert_lab(mode: Mode) -> ModeSupport {
     match mode {
         Mode::ImageRgb8 => super::rgb8::ops::SUPPORT,
+        Mode::ImageRgba8 => super::rgba8::ops::SUPPORT,
+        Mode::ImageRgbx8 => super::rgbx8::ops::SUPPORT,
         Mode::One
         | Mode::ImageLuma8
         | Mode::ImageLumaA8
         | Mode::ImageLaPremultiplied8
         | Mode::ImagePalette8
         | Mode::ImagePaletteAlpha8
-        | Mode::ImageRgba8
         | Mode::ImageRgbPremultiplied8
-        | Mode::ImageRgbx8
         | Mode::ImageCmyk8
         | Mode::ImageYCbCr8
         | Mode::ImageLab8
@@ -48,7 +60,7 @@ fn classify_convert_lab(mode: Mode) -> ModeSupport {
     }
 }
 
-/// Complete source-mode contract for the normalized RGB-to-LAB pipeline op.
+/// Source-mode contract for typed RGB-family-to-LAB pipeline strategies.
 pub(crate) static SUPPORT: OperationSupport = OperationSupport::new(
     OperationId::ConvertLab,
     &[],
@@ -101,9 +113,9 @@ pub(crate) static REMAP_PALETTE_SUPPORT: OperationSupport = OperationSupport::ne
 )
 .with_rejected_output(OutputModeRule::Fixed(Mode::ImagePalette8));
 
-/// Prepared RGB-to-LAB execution with the exact mode and backend selection.
+/// Prepared RGB-family-to-LAB execution with exact mode and backend selection.
 pub(crate) struct PreparedConvertLab<'a> {
-    source: &'a RgbImage,
+    source: &'a DynamicImage,
     selection: StrategySelection,
 }
 
@@ -113,20 +125,22 @@ impl PreparedConvertLab<'_> {
     }
 
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
-        execute_selected_rgb_to_lab(self.source, self.selection)
+        execute_selected_convert_lab(self.source, self.selection)
     }
 }
 
-pub(crate) fn execute_selected_rgb_to_lab(
-    source: &RgbImage,
+pub(crate) fn execute_selected_convert_lab(
+    source: &DynamicImage,
     selection: StrategySelection,
 ) -> Result<DynamicImage, PilError> {
-    if selection.implementation.architecture != crate::compute::Architecture::Default {
-        return Err(PilError::InternalError(
-            "ConvertLab selected an undeclared RGB architecture".into(),
-        ));
+    match source {
+        DynamicImage::ImageRgb8(source) => super::rgb8::ops::execute(source, selection),
+        DynamicImage::ImageRgba8(source) => super::rgba8::ops::execute(source, selection),
+        DynamicImage::ImageRgbx8(source) => super::rgbx8::ops::execute(source, selection),
+        _ => Err(PilError::InternalError(
+            "ConvertLab selection did not match its prepared source mode".into(),
+        )),
     }
-    super::rgb8::default::convert_lab_impl::execute(source)
 }
 
 /// Prepares the selected source-mode strategy using the image's variant tag.
@@ -141,16 +155,11 @@ pub(crate) fn prepare<'a>(
         SupportAssessment::Rejected { reason, kind, .. } => return Err(kind.into_error(reason)),
         SupportAssessment::Deferred { .. } => {
             return Err(PilError::InternalError(
-                "ConvertLab support remained unresolved after RGB materialization".into(),
+                "ConvertLab support remained unresolved after source-mode preparation".into(),
             ));
         }
     };
-    let DynamicImage::ImageRgb8(source) = input.image else {
-        return Err(PilError::InternalError(
-            "ConvertLab support accepted a non-RGB8 image".into(),
-        ));
-    };
-    Ok(PreparedConvertLab { source, selection })
+    Ok(PreparedConvertLab { source: input.image, selection })
 }
 
 /// Registry entry for ConvertLab; it preserves typed source and output modes.

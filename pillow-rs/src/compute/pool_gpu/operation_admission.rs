@@ -242,6 +242,10 @@ pub(super) fn gpu_operation_color_requires_cpu(
     other_is_lab: bool,
 ) -> bool {
     match op {
+        // The current LAB shader writes a three-byte result and cannot retain
+        // RGBA's auxiliary lane. Direct four-byte LAB conversion is handled
+        // by the CPU mode strategy until the GPU path carries that lane.
+        PipelineOp::ConvertLab { .. } => color != crate::raster::ColorType::Rgb8,
         // AlphaComposite's public implementation is defined for LA/RGBA
         // canvases. On L/RGB, the CPU operation promotes to RGBA while the
         // packed GPU result would otherwise be fed through preserve_mode.

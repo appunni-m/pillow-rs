@@ -97,17 +97,16 @@ and RGBX/RGBa conversions to RGB, were source-reviewed and use the canonical
 opaque byte. Newly produced LA/La/PA conversions use canonical duplicated
 sample/index lanes, while same-mode identity retains existing sidecars. The
 compact-lane source review confirms CMYK-to-RGB, YCbCr, and HSV synthesize the
-canonical opaque X value; no CMYK source lane is copied. A broader wrapper
-review found that Pillow's Python `Image.convert()` handles LAB through
-ImageCms: RGB/RGBA/RGBX sources can transform directly, other source modes are
-normalized through RGBA, and LAB sources transform to RGB-family targets. The
-current Rust support declarations still mark many of these paths CoreOnly;
-Convert-to-LAB currently normalizes through RGB, and LAB-to-RGB currently
-reuses LAB samples. The exact wrapper route, both transform directions,
-auxiliary-lane outcomes, and fault ordering are now explicit source TODOs.
-Official source references and the remaining Convert mode/target matrix are in
-the [CPU refactor inventory](CPU_REFACTOR_INVENTORY.md). These source changes
-are uncompiled.
+canonical opaque X value; no CMYK source lane is copied. Pillow's LAB wrapper
+route is now represented for conversion into LAB: RGB/RGBA/RGBX use direct
+mode-owned Default strategies, while other Pillow modes use explicit
+RGBA normalization and the base-mode routes required for I;16, F, YCbCr, and
+HSV. The direct wrapper composition now remains lazy, and GPU admission keeps
+four-byte LAB inputs on CPU until its shader can preserve their auxiliary
+lane. LAB-to-RGB-family conversion remains pending, along with exact transform
+parity and fault-order verification. Official source references and the
+remaining Convert mode/target matrix are in the [CPU refactor
+inventory](CPU_REFACTOR_INVENTORY.md). These source changes are uncompiled.
 Chops, Pad, Draw, Thumbnail, Quantize, Resize, geometry sidecars, Filter, and
 Composite context propagation remain uncompiled and runtime-unverified. The
 audit is not a completion proof: operation support declarations, ownership,

@@ -36,7 +36,7 @@ pub(crate) fn preserve_luma_alpha_lane(
     Ok(())
 }
 
-/// Carries the input X/A byte through Pillow's YCbCr and HSV conversions.
+/// Carries the input X/A byte through Pillow's LAB, YCbCr, and HSV conversions.
 pub(crate) fn preserve_fourth_byte(
     source: &[u8],
     width: u32,
@@ -127,11 +127,14 @@ fn replace_target_lane_values(
 }
 
 fn uses_rgb_family_storage(target: Mode) -> bool {
-    matches!(target, Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageHsv8)
+    matches!(
+        target,
+        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8
+    )
 }
 
 fn carries_fourth_byte_to_color_space_target(target: Mode) -> bool {
-    matches!(target, Mode::ImageYCbCr8 | Mode::ImageHsv8)
+    matches!(target, Mode::ImageLab8 | Mode::ImageYCbCr8 | Mode::ImageHsv8)
 }
 
 fn carries_luma_alpha_lane(target: Mode) -> bool {
@@ -147,6 +150,7 @@ fn replace_target_lanes(
         (target, output),
         (Mode::ImageRgb8, DynamicImage::ImageRgb8(_))
             | (Mode::ImageYCbCr8, DynamicImage::ImageYCbCr8(_))
+            | (Mode::ImageLab8, DynamicImage::ImageLab8(_))
             | (Mode::ImageHsv8, DynamicImage::ImageHsv8(_))
     );
     if !has_expected_mode {
