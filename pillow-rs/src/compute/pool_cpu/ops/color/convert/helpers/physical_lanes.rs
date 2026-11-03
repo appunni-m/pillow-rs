@@ -17,15 +17,15 @@ pub(crate) fn preserve_compact_rgb_lane(
     replace_target_lanes(target, output, source.hidden_pixel_lanes().cloned())
 }
 
-pub(crate) fn preserve_alpha_lane(
+pub(crate) fn preserve_luma_alpha_lane(
     source: &GrayAlphaImage,
     target: Mode,
     output: &mut DynamicImage,
 ) -> Result<(), PilError> {
-    if !uses_rgb_family_storage(target) {
+    if !carries_luma_alpha_lane(target) {
         return Ok(());
     }
-    // LA-to-RGB-family conversions expose alpha as the compact output's fourth byte.
+    // LA-to-RGB and LA-to-HSV expose alpha as the compact output's fourth byte.
     replace_target_lane_values(
         target,
         source.width(),
@@ -132,6 +132,10 @@ fn uses_rgb_family_storage(target: Mode) -> bool {
 
 fn carries_fourth_byte_to_color_space_target(target: Mode) -> bool {
     matches!(target, Mode::ImageYCbCr8 | Mode::ImageHsv8)
+}
+
+fn carries_luma_alpha_lane(target: Mode) -> bool {
+    matches!(target, Mode::ImageRgb8 | Mode::ImageHsv8)
 }
 
 fn replace_target_lanes(

@@ -58,6 +58,7 @@ pub(crate) fn execute(
             }
             Ok(DynamicImage::ImageCmyk8(output))
         }
+        // Pillow's LA-to-YCbCr conversion emits opaque padding, not source alpha.
         Mode::ImageYCbCr8 => {
             let mut output = RgbImage::new(width, height);
             for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
