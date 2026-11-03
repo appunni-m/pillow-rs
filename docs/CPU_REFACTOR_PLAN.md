@@ -1665,3 +1665,19 @@ still record one synchronous write at a time. Define and preserve how source
 graph and earlier write receipts aggregate across a sequence while retaining
 per-item callback visibility and fault order. Source-only; no build, formatting,
 checkstyle, lint, tests, parity, benchmark, or coverage ran.
+
+Draw dispatch source review (2026-11-04): the operation entry declares support
+per exact raster mode and binds the injected CPU/Architecture context once.
+Geometry batches admit a vector span strategy only when every operation passes
+the mode-specific eligibility guard; direct Bitmap and Text requests select
+their exact-mode Default owner, and their executors validate the prepared mode,
+backend, and declared implementation before applying pixels. The eager Bitmap
+path keeps the compatible Paste route separate, then runs its native fast
+routes before materializing the mask and destination for the typed owner. The
+Text path obtains the font mask before strategy selection, returns early for an
+empty mask, and materializes the destination only after selecting the typed
+owner. This review confirms context and strategy propagation only. TODO:
+finish semantic and callback/fault-order review for direct Text and Bitmap,
+including palette mutation, unsupported CoreOnly modes, and eager native fast
+routes; frozen CPU parity remains pending. No build, formatting, checkstyle,
+lint, tests, parity, benchmark, or coverage ran.
