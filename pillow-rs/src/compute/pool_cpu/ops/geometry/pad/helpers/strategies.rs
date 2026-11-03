@@ -1,10 +1,39 @@
 //! Architecture declarations shared by native-byte Pad modes.
 
-use crate::compute::Architecture;
+use crate::compute::{Architecture, Backend};
 use crate::compute::registry::support::{
-    ImplementationSupport, OperationId, StrategyGuard,
+    ImplementationSupport, OperationId, StrategyGuard, StrategySelection,
 };
+use crate::error::PilError;
 use crate::raster::Mode;
+
+pub(crate) fn selected_architecture(
+    selection: &StrategySelection,
+    mode: Mode,
+) -> Result<Architecture, PilError> {
+    let implementation = selection.implementation;
+    if implementation.operation == OperationId::Pad
+        && implementation.mode == mode
+        && implementation.backend == Backend::Cpu
+    {
+        return Ok(implementation.architecture);
+    }
+    Err(PilError::InternalError(
+        "Pad mode received a mismatched CPU strategy selection".into(),
+    ))
+}
+
+pub(crate) fn require_default_selection(
+    selection: &StrategySelection,
+    mode: Mode,
+) -> Result<(), PilError> {
+    if selected_architecture(selection, mode)? == Architecture::Default {
+        return Ok(());
+    }
+    Err(PilError::InternalError(
+        "Pad Default mode received a non-Default strategy selection".into(),
+    ))
+}
 
 pub(crate) const fn byte_vector_architectures(
     mode: Mode,

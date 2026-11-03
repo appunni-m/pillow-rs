@@ -69,7 +69,7 @@ the baseline. Keep `pillow-rs-bad` as reference.
 
 ## Current pending matrix
 
-Snapshot refreshed on `develop` commit `2f12b643c` (local WIP, unpushed). The
+Snapshot base: `develop` commit `320b33637` (local WIP, unpushed). The
 CPU source tree remains incomplete. Recent work removes uncalled Put,
 family-level and per-mode assessment/execution forwarding wrappers while
 keeping operation support declarations and prepared execution paths. The
@@ -82,14 +82,23 @@ they were not deleted based only on an aarch64 host check. Composite SSE2, NEON,
 and Wasm modules now use the same target conditions as their operation
 dispatch.
 
+The committed Chops source checkpoint passes the prepared `StrategySelection`
+through all 25 exact-mode entry points, fusion, and the 12 eligible in-place
+routes. The Pad source checkpoint passes its retained selection through all 25
+exact-mode strategies and the Resize composition helpers; a static source
+audit found 25/25 mode entries and no bare `Architecture` parameter in Pad
+mode `ops.rs` files. Chops and Pad context propagation remain source-only and
+have not been compiled or runtime-verified.
+
 The latest focused library compilation passed for the committed Resize
 selection-context refactor with
 `RUSTFLAGS='--cap-lints allow' cargo check -p pillow-rs --lib
 --no-default-features --features image-codecs-all`. This confirms compilation
 only; lint caps suppressed the current denied-diagnostic backlog. It predates
-the current Chops source changes. No formatter, checkstyle, lint, tests, parity,
-benchmark, or coverage has run for this WIP sequence. This matrix tracks
-pending work; it is not support or runtime verification evidence.
+Chops commit `320b33637` and the current Pad source changes. No formatter,
+checkstyle, lint, tests, parity, benchmark, or coverage has run for this WIP
+sequence. This matrix tracks pending work; it is not support or runtime
+verification evidence.
 Detailed mappings and source TODOs remain in [CPU refactor
 inventory](CPU_REFACTOR_INVENTORY.md). Refresh this matrix at each completed
 checkpoint.

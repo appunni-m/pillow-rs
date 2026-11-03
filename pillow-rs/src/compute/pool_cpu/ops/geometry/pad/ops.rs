@@ -98,12 +98,13 @@ impl PreparedPad<'_> {
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let source = self.inputs.image;
         let frame = self.frame;
-        let architecture = self.selection.implementation.architecture;
+        let selection = &self.selection;
+        let architecture = selection.implementation.architecture;
         if let Some(padded) = try_direct_resize_into_canvas(
             source,
             frame,
             self.resize.as_ref(),
-            architecture,
+            selection,
         )? {
             if let Some(resize) = self.resize.as_ref() {
                 crate::compute::record_pipeline_operation_selection(resize.selection());
@@ -126,7 +127,7 @@ impl PreparedPad<'_> {
         if let Some((image, vector_blocks, scalar_tail)) = try_vertical_append(
             content,
             frame,
-            architecture,
+            selection,
             content_source,
         )? {
             record_vector_work(vector_blocks, scalar_tail);
@@ -140,7 +141,7 @@ impl PreparedPad<'_> {
         {
             return finish_pad(content, content.clone(), frame);
         }
-        let (image, vector_blocks, scalar_tail) = pad_mode(content, frame, architecture)?;
+        let (image, vector_blocks, scalar_tail) = pad_mode(content, frame, selection)?;
         record_vector_work(vector_blocks, scalar_tail);
         finish_pad(content, image, frame)
     }
@@ -166,20 +167,23 @@ fn record_vector_work(vector_blocks: u64, scalar_tail: u64) {
 fn try_vertical_append(
     image: &DynamicImage,
     frame: PadFrame,
-    architecture: Architecture,
+    selection: &StrategySelection,
     content_source: PadContentSource,
 ) -> Result<Option<(DynamicImage, u64, u64)>, PilError> {
+    let architecture = super::helpers::strategies::selected_architecture(selection, image.mode())?;
     if architecture == Architecture::Default {
-        return try_default_vertical_append(image, frame, content_source);
+        return try_default_vertical_append(image, frame, selection, content_source);
     }
-    try_vector_vertical_append(image, frame, architecture, content_source)
+    try_vector_vertical_append(image, frame, selection, content_source)
 }
 
 fn try_default_vertical_append(
     image: &DynamicImage,
     frame: PadFrame,
+    selection: &StrategySelection,
     content_source: PadContentSource,
 ) -> Result<Option<(DynamicImage, u64, u64)>, PilError> {
+    super::helpers::strategies::require_default_selection(selection, image.mode())?;
     use PadContentSource::{Input, Resized};
     match (content_source, image) {
         (Input | Resized, DynamicImage::ImageLuma8(image)) => {
@@ -237,9 +241,10 @@ fn try_default_vertical_append(
 fn try_vector_vertical_append(
     image: &DynamicImage,
     frame: PadFrame,
-    architecture: Architecture,
+    selection: &StrategySelection,
     content_source: PadContentSource,
 ) -> Result<Option<(DynamicImage, u64, u64)>, PilError> {
+    let architecture = selection.implementation.architecture;
     if content_source != PadContentSource::Input
         || !matches!(
             architecture,
@@ -297,11 +302,13 @@ fn try_direct_resize_into_canvas(
     image: &DynamicImage,
     frame: PadFrame,
     resize: Option<&crate::compute::pool_cpu::ops::resize::ops::PreparedResize<'_>>,
-    architecture: Architecture,
+    selection: &StrategySelection,
 ) -> Result<Option<DynamicImage>, PilError> {
     let Some(resize) = resize else {
         return Ok(None);
     };
+    let architecture =
+        super::helpers::strategies::selected_architecture(selection, image.mode())?;
     if resize.selection().implementation.architecture != architecture {
         return Ok(None);
     }
@@ -335,36 +342,36 @@ fn select(
 fn pad_mode(
     image: &DynamicImage,
     frame: PadFrame,
-    architecture: Architecture,
+    selection: &StrategySelection,
 ) -> Result<(DynamicImage, u64, u64), PilError> {
     match image.mode() {
-        Mode::One => super::one::ops::pad(image, frame, architecture),
-        Mode::ImageLuma8 => super::luma8::ops::pad(image, frame, architecture),
-        Mode::ImageLumaA8 => super::luma_a8::ops::pad(image, frame, architecture),
-        Mode::ImageLaPremultiplied8 => super::la_premultiplied8::ops::pad(image, frame)
+        Mode::One => super::one::ops::pad(image, frame, selection),
+        Mode::ImageLuma8 => super::luma8::ops::pad(image, frame, selection),
+        Mode::ImageLumaA8 => super::luma_a8::ops::pad(image, frame, selection),
+        Mode::ImageLaPremultiplied8 => super::la_premultiplied8::ops::pad(image, frame, selection)
             .map(|image| (image, 0, 0)),
-        Mode::ImagePalette8 => super::palette8::ops::pad(image, frame, architecture),
-        Mode::ImagePaletteAlpha8 => super::palette_alpha8::ops::pad(image, frame, architecture),
-        Mode::ImageRgb8 => super::rgb8::ops::pad(image, frame, architecture),
-        Mode::ImageRgba8 => super::rgba8::ops::pad(image, frame, architecture),
-        Mode::ImageRgbPremultiplied8 => super::rgb_premultiplied8::ops::pad(image, frame)
+        Mode::ImagePalette8 => super::palette8::ops::pad(image, frame, selection),
+        Mode::ImagePaletteAlpha8 => super::palette_alpha8::ops::pad(image, frame, selection),
+        Mode::ImageRgb8 => super::rgb8::ops::pad(image, frame, selection),
+        Mode::ImageRgba8 => super::rgba8::ops::pad(image, frame, selection),
+        Mode::ImageRgbPremultiplied8 => super::rgb_premultiplied8::ops::pad(image, frame, selection)
             .map(|image| (image, 0, 0)),
-        Mode::ImageRgbx8 => super::rgbx8::ops::pad(image, frame, architecture),
-        Mode::ImageCmyk8 => super::cmyk8::ops::pad(image, frame, architecture),
-        Mode::ImageYCbCr8 => super::ycbcr8::ops::pad(image, frame, architecture),
-        Mode::ImageLab8 => super::lab8::ops::pad(image, frame).map(|image| (image, 0, 0)),
-        Mode::ImageHsv8 => super::hsv8::ops::pad(image, frame, architecture),
-        Mode::ImageI32 => super::i32::ops::pad(image, frame, architecture),
-        Mode::ImageF32 => super::f32::ops::pad(image, frame, architecture),
-        Mode::ImageI16 => super::i16::ops::pad(image, frame).map(|image| (image, 0, 0)),
-        Mode::ImageI16L => super::i16l::ops::pad(image, frame).map(|image| (image, 0, 0)),
-        Mode::ImageI16B => super::i16b::ops::pad(image, frame).map(|image| (image, 0, 0)),
-        Mode::ImageI16N => super::i16n::ops::pad(image, frame).map(|image| (image, 0, 0)),
-        Mode::ImageLumaA16 => super::luma_a16::ops::pad(image, frame).map(|image| (image, 0, 0)),
-        Mode::ImageRgb16 => super::rgb16::ops::pad(image, frame).map(|image| (image, 0, 0)),
-        Mode::ImageRgba16 => super::rgba16::ops::pad(image, frame).map(|image| (image, 0, 0)),
-        Mode::ImageRgb32F => super::rgb32f::ops::pad(image, frame).map(|image| (image, 0, 0)),
-        Mode::ImageRgba32F => super::rgba32f::ops::pad(image, frame).map(|image| (image, 0, 0)),
+        Mode::ImageRgbx8 => super::rgbx8::ops::pad(image, frame, selection),
+        Mode::ImageCmyk8 => super::cmyk8::ops::pad(image, frame, selection),
+        Mode::ImageYCbCr8 => super::ycbcr8::ops::pad(image, frame, selection),
+        Mode::ImageLab8 => super::lab8::ops::pad(image, frame, selection).map(|image| (image, 0, 0)),
+        Mode::ImageHsv8 => super::hsv8::ops::pad(image, frame, selection),
+        Mode::ImageI32 => super::i32::ops::pad(image, frame, selection),
+        Mode::ImageF32 => super::f32::ops::pad(image, frame, selection),
+        Mode::ImageI16 => super::i16::ops::pad(image, frame, selection).map(|image| (image, 0, 0)),
+        Mode::ImageI16L => super::i16l::ops::pad(image, frame, selection).map(|image| (image, 0, 0)),
+        Mode::ImageI16B => super::i16b::ops::pad(image, frame, selection).map(|image| (image, 0, 0)),
+        Mode::ImageI16N => super::i16n::ops::pad(image, frame, selection).map(|image| (image, 0, 0)),
+        Mode::ImageLumaA16 => super::luma_a16::ops::pad(image, frame, selection).map(|image| (image, 0, 0)),
+        Mode::ImageRgb16 => super::rgb16::ops::pad(image, frame, selection).map(|image| (image, 0, 0)),
+        Mode::ImageRgba16 => super::rgba16::ops::pad(image, frame, selection).map(|image| (image, 0, 0)),
+        Mode::ImageRgb32F => super::rgb32f::ops::pad(image, frame, selection).map(|image| (image, 0, 0)),
+        Mode::ImageRgba32F => super::rgba32f::ops::pad(image, frame, selection).map(|image| (image, 0, 0)),
     }
 }
 

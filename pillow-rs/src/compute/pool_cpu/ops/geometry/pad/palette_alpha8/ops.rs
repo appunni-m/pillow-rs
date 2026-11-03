@@ -2,6 +2,7 @@
 
 use crate::compute::{Architecture, registry::support::{
     ImplementationSupport, ModeSupport, OperationId, OutputModeRule,
+    StrategySelection,
 }};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
@@ -23,11 +24,15 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
 pub(crate) fn pad(
     image: &DynamicImage,
     frame: PadFrame,
-    architecture: Architecture,
+    selection: &StrategySelection,
 ) -> Result<(DynamicImage, u64, u64), PilError> {
     let DynamicImage::ImagePaletteAlpha8(image) = image else {
         return Err(PilError::InternalError("Pad mode dispatch received a different raster".into()));
     };
+    let architecture = super::super::helpers::strategies::selected_architecture(
+        selection,
+        Mode::ImagePaletteAlpha8,
+    )?;
     match architecture {
         Architecture::Default => super::default::pad_impl::pad(image, frame)
             .map(|output| (DynamicImage::ImagePaletteAlpha8(output), 0, 0)),

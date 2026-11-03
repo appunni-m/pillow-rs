@@ -4,7 +4,7 @@
 // target-specific reachability is verified.
 // TODO(pillow-rs#3ptb): finish the family-by-family audit that every execution
 // boundary consumes the prepared selection derived from ExecutionContext.
-// Resize and Chops are the only families covered by this continuation so far.
+// Resize, Chops, and Pad are covered by the current source continuation so far.
 
 pub(crate) mod analysis;
 pub(crate) mod chops;
