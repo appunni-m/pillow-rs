@@ -32,6 +32,7 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
         Mode::ImageLaPremultiplied8 => {
             Ok(DynamicImage::ImageLaPremultiplied8(opaque_luma_alpha(source)))
         }
+        // Pillow discards RGBX's X byte and emits opaque RGB padding.
         Mode::ImageRgb8 => {
             let mut output = RgbImage::new(width, height);
             for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {

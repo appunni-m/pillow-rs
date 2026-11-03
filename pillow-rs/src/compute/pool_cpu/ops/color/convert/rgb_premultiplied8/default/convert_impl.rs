@@ -55,6 +55,7 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
             }
             Ok(DynamicImage::ImageLaPremultiplied8(output))
         }
+        // Pillow unpremultiplies color and emits opaque RGB padding when alpha is dropped.
         Mode::ImageRgb8 => {
             let mut output = RgbImage::new(width, height);
             for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
