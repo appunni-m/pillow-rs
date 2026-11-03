@@ -13,8 +13,8 @@ fn with_getdata_receipt<T>(
     output_bytes: impl FnOnce(&T) -> usize,
     execute: impl FnOnce() -> Result<T, PilError>,
 ) -> Result<T, PilError> {
-    // TODO(pillow-rs#3ptb): aggregate source graph timing/resources; this
-    // receipt currently measures only the terminal host read.
+    // This timing/resource sample covers the terminal host read; ordered
+    // source graph operation receipts are restored separately.
     let telemetry =
         crate::compute::begin_eager_cpu_operation_telemetry("GetData", requested_backend);
     operation_receipts.restore();

@@ -646,8 +646,8 @@ fn execute_eager_native_result<T>(
     execute: impl FnOnce() -> Result<T, PilError>,
 ) -> Result<T, PilError> {
     let timed = pipeline_telemetry_enabled();
-    // TODO(pillow-rs#3ptb): aggregate source graph timing and resources when
-    // the caller supplies prior operation receipts.
+    // The timing/resource sample covers this eager result operation; ordered
+    // source graph operation receipts are restored separately.
     if timed {
         reset_eager_image_operation_telemetry();
     }

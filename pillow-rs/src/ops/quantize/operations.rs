@@ -141,8 +141,8 @@ fn with_quantize_receipt(
     if !crate::compute::Backend::pipeline_telemetry_enabled() {
         return execute().map(|(image, _)| image);
     }
-    // TODO(pillow-rs#3ptb): define aggregate timing/resource semantics for
-    // lazy source graphs; this summary measures only the terminal Quantize.
+    // This timing/resource sample covers terminal Quantize; ordered source
+    // graph operation receipts are restored separately.
     let telemetry = crate::compute::begin_eager_cpu_operation_telemetry(
         "Quantize",
         requested_backend,

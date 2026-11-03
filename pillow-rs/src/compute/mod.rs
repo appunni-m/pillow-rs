@@ -236,7 +236,11 @@ impl Backend {
     /// automatic routing), actual selected backend, operation count, route
     /// nanoseconds, validation nanoseconds, backend nanoseconds, optional
     /// dispatch count, fallback reason, optional resource counters, and
-    /// resize-coefficient cache counters.
+    /// resize-coefficient cache counters. For eager terminal operations over
+    /// lazy images or masks, the sample measures the terminal operation only;
+    /// source graph operation paths and selections are retained separately by
+    /// [`Backend::take_pipeline_operation_telemetry`]. It does not aggregate
+    /// source or mask graph timing and resource counters.
     pub fn take_pipeline_telemetry() -> Option<PipelineTelemetrySample> {
         take_pipeline_telemetry()
     }

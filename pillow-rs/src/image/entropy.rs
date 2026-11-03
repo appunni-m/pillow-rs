@@ -70,8 +70,8 @@ impl Image {
             }
         };
         let telemetry = if Backend::pipeline_telemetry_enabled() {
-            // TODO(pillow-rs#3ptb): define aggregate timing/resource semantics
-            // for source and mask graphs; this summary covers the terminal scan.
+            // This timing/resource sample covers the terminal scan; ordered
+            // source and mask graph operation receipts are restored separately.
             let telemetry = crate::compute::begin_eager_cpu_operation_telemetry(
                 "Entropy",
                 requested_backend,

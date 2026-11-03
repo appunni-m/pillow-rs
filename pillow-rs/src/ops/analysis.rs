@@ -119,8 +119,8 @@ impl Image {
         let image = self.materialized_shared()?;
         operation_receipts.capture();
         let telemetry = if crate::compute::Backend::pipeline_telemetry_enabled() {
-            // TODO(pillow-rs#3ptb): define aggregate timing/resource semantics
-            // for lazy source graphs; this summary covers the terminal scan.
+            // This timing/resource sample covers the terminal scan; ordered
+            // source graph operation receipts are restored separately.
             let telemetry = crate::compute::begin_eager_cpu_operation_telemetry(
                 "GetExtremaBytes",
                 requested_backend,
