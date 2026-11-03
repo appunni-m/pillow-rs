@@ -74,6 +74,13 @@ impl Prepared<'_> {
 
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let identity = self.matrix.is_none() && self.input.mode() == self.target;
+        if matches!(self.target, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
+            && self.target != self.input.mode()
+        {
+            return Err(PilError::NotImplementedError(
+                "palette-target Convert requires the Image wrapper output boundary".into(),
+            ));
+        }
         let output = self.execute_with_output()?;
         if !identity
             && (output.palette.is_some()
@@ -617,18 +624,10 @@ pub(crate) fn prepare_pipeline<'a>(
     let PipelineOp::Convert { mode, matrix, dither } = op else {
         return Err(PilError::ValueError("expected Convert op".into()));
     };
-    // TODO(pillow-rs#3ptb): include generated palette/alpha metadata in the
-    // generic prepared-operation result. Image's dedicated lazy P/PA boundary
-    // already invokes the exact prepared strategy and publishes those sidecars
-    // after materialization; this raster-only entry intentionally rejects that
-    // cross-mode result. Same-mode identity remains a metadata-preserving copy.
-    if matches!(mode, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
-        && *mode != input.mode()
-    {
-        return Err(PilError::NotImplementedError(
-            "palette-target Convert requires the Image wrapper output boundary".into(),
-        ));
-    }
+    // Cross-mode P/PA preparation is required by Image's wrapper output route,
+    // which consumes the exact selected plan through `execute_convert_output`.
+    // The generic raster-only `execute` path rejects it before running pixels;
+    // carrying wrapper metadata through generic prepared results remains a TODO.
     if let Some(matrix) = matrix {
         return prepare_matrix(input, *mode, matrix, ctx)
             .map(crate::compute::registry::PreparedOperation::from_convert);

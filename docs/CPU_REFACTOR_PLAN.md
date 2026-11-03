@@ -69,8 +69,9 @@ the baseline. Keep `pillow-rs-bad` as reference.
 
 ## Current pending matrix
 
-Snapshot at `develop` commit `e16897d2e`. The working tree is incomplete and
-unverified. During the authorized WIP push checkpoint, `make docs-lint` passed;
+Snapshot based on `develop` commit `e51eecac5` and the current source-only
+working tree. The tree is incomplete and unverified. During the preceding WIP
+push checkpoint, `make docs-lint` passed;
 `make fmt clippy docs-lint` stopped at the public-API boundary check, direct
 `cargo fmt -- --check` found broad workspace formatting drift, and direct core
 Clippy could not compile the unfinished source tree. These results do not pass
@@ -208,6 +209,17 @@ RGBA16 compute luma from u16 channels; RGB32F and RGBA32F compute normalized
 float luma and map it directly to u16. These routes do not create an 8-bit
 intermediate. Each is marked `NO_PILLOW_SUPPORT`; focused extension parity
 remains a source-owner TODO.
+
+Palette-target Convert preparation correction (2026-11-03): the generic
+Convert registry entry rejected cross-mode P/PA targets during preparation,
+before Image's lazy and eager wrapper routes could consume the prepared plan's
+palette-bearing output. Moved the raster-only rejection into
+`PreparedConvert::execute`, before pixel work. Image wrapper paths use
+`execute_convert_output` and retain palette/alpha sidecars; direct raster-only
+execution still returns the existing `NotImplementedError`. This fixes the
+source-level route mismatch only. Palette output, metadata, and exact-mode
+parity remain pending; no build, formatter, lint, test, parity, or benchmark
+ran.
 
 Histogram source review (2026-11-03): Pillow 12.2's masked multiband `Histo.c` reads physical lane 1 into the second result bank, while the unmasked two-band branch reads lane 3. LA, La, and PA raw inputs use `unpackLA`, which initializes omitted lanes by repeating the first sample; ordinary two-component inks do the same. The maintained typed Histogram owner reads retained lane 1 when available and falls back to the canonical repeated first sample when no independent-lane provenance exists. Source review confirms retained lanes are attached by new/frombytes/decode construction, packed PutData, and same-pixel-size mode-mismatched Paste. This repository has no Arrow image-import API, so `ImagingNewArrow` is not a reachable producer here. The remaining cross-operation risk is any producer that loses sidecar provenance before Histogram; track that with the hidden-lane producer audit and parity. Histogram parity remains pending. Sources: [Histo.c](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Histo.c#L721-L830), [Unpack.c mode dispatch](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Unpack.c#L1493-L1511), [`unpackLA`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Unpack.c#L2924-L2957), [`_imaging.c::getink`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/_imaging.c#L534-L645), [Paste.c raw pixelsize path](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Paste.c#L1982-L2017).
 
