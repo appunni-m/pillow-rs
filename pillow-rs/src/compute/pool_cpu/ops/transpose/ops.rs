@@ -18,8 +18,13 @@
 // sample types and mode tags through these native transpose strategies.
 
 use crate::compute::{ExecutionContext, registry::support::{
-    ModeSupport, OperationId, OperationInputs, OperationSupport, RequestFacts, StrategyInputs,
-    StrategySelection, SupportAssessment,
+    ModeSupport,
+    OperationId,
+    OperationInputs,
+    OperationSupport,
+    RequestFacts,
+    StrategyInputs,
+    StrategySelection,
 }};
 use crate::error::PilError;
 use crate::pipeline::{PipelineOp, TransposeMethod};
@@ -200,19 +205,7 @@ pub(crate) fn prepare_mirror<'a>(
     prepare_mirror_mode(image, ctx)
 }
 
-pub(crate) fn execute_flip(
-    image: &DynamicImage,
-    ctx: &ExecutionContext,
-) -> Result<DynamicImage, PilError> {
-    prepare_flip(image, ctx)?.execute()
-}
 
-pub(crate) fn execute_mirror(
-    image: &DynamicImage,
-    ctx: &ExecutionContext,
-) -> Result<DynamicImage, PilError> {
-    prepare_mirror(image, ctx)?.execute()
-}
 
 pub(crate) fn prepare_transpose<'a>(
     image: &'a DynamicImage,
@@ -224,23 +217,7 @@ pub(crate) fn prepare_transpose<'a>(
     prepare_transpose_mode(image, method, facts, ctx)
 }
 
-pub(crate) fn assess_transpose(
-    image: &DynamicImage,
-    method: &TransposeMethod,
-    ctx: &ExecutionContext,
-) -> Result<SupportAssessment, PilError> {
-    let mut facts = OperationInputs { image, palette: Default::default() }.facts();
-    facts.request = RequestFacts::Transpose { method: *method };
-    TRANSPOSE_SUPPORT.for_mode(image.mode()).assess(ctx, facts)
-}
 
-pub(crate) fn execute_transpose(
-    image: &DynamicImage,
-    method: &TransposeMethod,
-    ctx: &ExecutionContext,
-) -> Result<DynamicImage, PilError> {
-    prepare_transpose(image, method, ctx)?.execute()
-}
 
 pub(crate) fn prepare_flip_pipeline<'a>(
     input: OperationInputs<'a>,

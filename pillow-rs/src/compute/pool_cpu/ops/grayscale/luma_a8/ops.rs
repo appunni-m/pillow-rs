@@ -2,7 +2,7 @@
 
 use crate::compute::{Architecture, ExecutionContext, registry::support::{
     ImplementationSupport, InputContract, ModeSupport, OperationId, OutputModeRule, StrategyGuard,
-    StrategyInputs, PaletteKnowledge, SupportAssessment,
+    StrategyInputs, PaletteKnowledge,
 }};
 use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
 use crate::error::PilError;
@@ -27,10 +27,6 @@ macro_rules! declare_architectures {
         }
         pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
 
-        pub(crate) fn assess(input: StrategyInputs, ctx: &ExecutionContext)
-            -> Result<SupportAssessment, PilError> {
-            SUPPORT.assess(ctx, input)
-        }
 
         pub(crate) fn prepare<'a>(input: &'a grayscale_impl::Input, ctx: &ExecutionContext)
             -> Result<Strategy<'a>, PilError> {

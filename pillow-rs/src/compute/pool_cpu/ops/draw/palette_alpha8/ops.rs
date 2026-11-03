@@ -38,12 +38,6 @@ pub(crate) fn support() -> ModeSupport {
     super::super::ops::mode_support(MODE)
 }
 
-pub(crate) fn execute(
-    image: &DynamicImage,
-    ops: &[PipelineOp],
-) -> Result<DynamicImage, PilError> {
-    execute_with_architecture(image, ops, Architecture::Default)
-}
 
 pub(crate) fn execute_with_architecture(
     image: &DynamicImage,

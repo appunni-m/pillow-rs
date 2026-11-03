@@ -1,8 +1,14 @@
 //! Exact i16n crop semantics and its declared architecture strategy.
 
 use crate::compute::{Architecture, ExecutionContext, registry::support::{
-    ImplementationSupport, ModeSupport, OperationId, PaletteKnowledge, RequestFacts,
-    StrategyInputs, StrategyGuard, SupportAssessment, OutputModeRule,
+    ImplementationSupport,
+    ModeSupport,
+    OperationId,
+    PaletteKnowledge,
+    RequestFacts,
+    StrategyInputs,
+    StrategyGuard,
+    OutputModeRule,
 }};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, GenericImageView, Mode};
@@ -35,23 +41,6 @@ pub(crate) enum ArchitectureStrategy<'a> {
 
 pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
 
-pub(crate) fn assess(region: CropRegion, ctx: &ExecutionContext) -> Result<SupportAssessment, PilError> {
-    SUPPORT.assess(ctx, StrategyInputs {
-        width: region.source_width,
-        height: region.source_height,
-        byte_len: None,
-        palette: PaletteKnowledge::Unknown,
-        request: RequestFacts::Unspecified,
-    }
-    .with_crop_region(
-        region.left,
-        region.top,
-        region.width,
-        region.height,
-        region.source_width,
-        region.source_height,
-    ))
-}
 
 pub(crate) fn prepare<'a>(
     image: &'a super::default::crop_impl::Input,

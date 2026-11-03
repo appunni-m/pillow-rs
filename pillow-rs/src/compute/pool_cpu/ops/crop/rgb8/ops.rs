@@ -1,6 +1,10 @@
 //! Exact rgb8 crop semantics and its declared architecture strategy.
 
-use crate::compute::{ExecutionContext, registry::support::{ModeSupport, OperationId, StrategyInputs, PaletteKnowledge, SupportAssessment}};
+use crate::compute::{ExecutionContext, registry::support::{
+    ModeSupport,
+    OperationId,
+    PaletteKnowledge,
+}};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 
@@ -17,9 +21,6 @@ pub(crate) enum ArchitectureStrategy<'a> {
 
 pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
 
-pub(crate) fn assess(region: CropRegion, ctx: &ExecutionContext) -> Result<SupportAssessment, PilError> {
-    SUPPORT.assess(ctx, StrategyInputs { width: region.width, height: region.height, byte_len: None, palette: PaletteKnowledge::Unknown, request: Default::default() })
-}
 
 pub(crate) fn prepare<'a>(
     image: &'a super::default::crop_impl::Input,

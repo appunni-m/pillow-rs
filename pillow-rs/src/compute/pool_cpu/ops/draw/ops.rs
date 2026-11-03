@@ -705,14 +705,6 @@ fn execute_mode(
     }
 }
 
-pub(crate) fn execute_draw_batch(
-    image: &DynamicImage,
-    ops: &[PipelineOp],
-    context: &ExecutionContext,
-) -> Result<DynamicImage, PilError> {
-    let selection = prepare_mode(image, ops, context)?;
-    execute_batch(image, ops, image.mode(), selection)
-}
 
 pub(crate) fn is_draw_op(op: &PipelineOp) -> bool {
     super::helpers::is_draw_op(op)

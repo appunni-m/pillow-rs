@@ -6,8 +6,12 @@
 // typed-input grayscale strategies; Pillow defines no corresponding strings.
 
 use crate::compute::{ExecutionContext, registry::support::{
-    ModeSupport, OperationId, OperationSupport, OutputModeRule, RejectionKind, StrategyInputs,
-    StrategySelection, SupportAssessment,
+    ModeSupport,
+    OperationId,
+    OperationSupport,
+    OutputModeRule,
+    RejectionKind,
+    StrategySelection,
 }};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
@@ -38,16 +42,6 @@ macro_rules! declare_grayscale_modes {
             }
         }
 
-        pub(crate) fn assess(mode: Mode, input: StrategyInputs, ctx: &ExecutionContext)
-            -> Result<SupportAssessment, PilError> {
-            match mode {
-                $(Mode::$mode => super::$module::ops::assess(input, ctx),)+
-                Mode::ImageLaPremultiplied8 => Ok(SupportAssessment::Rejected {
-                    mode: Mode::ImageLaPremultiplied8, reason: LA_REJECTION,
-                    kind: RejectionKind::ValueError,
-                }),
-            }
-        }
 
         pub(crate) fn prepare<'a>(input: GrayscaleInputs<'a>, ctx: &ExecutionContext)
             -> Result<PreparedGrayscale<'a>, PilError> {

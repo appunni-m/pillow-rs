@@ -23,8 +23,14 @@
 //! implementation.
 
 use crate::compute::registry::support::{
-    InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport, PaletteKnowledge,
-    RequestFacts, StrategyInputs, StrategySelection, SupportAssessment,
+    InputContract,
+    ModeSupport,
+    OperationId,
+    OperationInputs,
+    OperationSupport,
+    PaletteKnowledge,
+    RequestFacts,
+    StrategySelection,
 };
 use crate::compute::ExecutionContext;
 use crate::error::PilError;
@@ -158,21 +164,6 @@ declare_rotate_modes! {
 pub(crate) static SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::Rotate, ROTATE_INPUTS, classify_mode);
 
-pub(crate) fn assess(
-    mode: Mode,
-    size: (u32, u32),
-    request: RotateRequest,
-    context: &ExecutionContext,
-) -> Result<SupportAssessment, PilError> {
-    let input = StrategyInputs {
-        width: size.0,
-        height: size.1,
-        byte_len: None,
-        palette: PaletteKnowledge::Absent,
-        request: request.facts(),
-    };
-    SUPPORT.for_mode(mode).assess(context, input)
-}
 
 pub(crate) fn prepare<'a>(
     image: &'a DynamicImage,
@@ -185,14 +176,6 @@ pub(crate) fn prepare<'a>(
         request,
         strategy,
     })
-}
-
-pub(crate) fn execute(
-    image: &DynamicImage,
-    request: RotateRequest,
-    context: &ExecutionContext,
-) -> Result<DynamicImage, PilError> {
-    prepare(image, request, context)?.execute()
 }
 
 pub(crate) fn prepare_pipeline<'a>(

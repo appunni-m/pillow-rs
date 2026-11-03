@@ -3,8 +3,12 @@
 use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
 use crate::compute::pool_cpu::ops::eval::helpers::{strategy, vector};
 use crate::compute::registry::support::{
-    ImplementationSupport, InputContract, ModeSupport, OperationId, OutputModeRule,
-    StrategyInputs, StrategySelection, SupportAssessment,
+    ImplementationSupport,
+    InputContract,
+    ModeSupport,
+    OperationId,
+    OutputModeRule,
+    StrategySelection,
 };
 use crate::compute::{Architecture, ExecutionContext};
 use crate::error::PilError;
@@ -42,12 +46,6 @@ pub(crate) enum ArchitectureStrategy<'a> {
 
 pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
 
-pub(crate) fn assess(
-    input: StrategyInputs,
-    ctx: &ExecutionContext,
-) -> Result<SupportAssessment, PilError> {
-    SUPPORT.assess(ctx, input)
-}
 
 pub(crate) fn prepare<'a>(
     input: &'a GrayAlphaImage,

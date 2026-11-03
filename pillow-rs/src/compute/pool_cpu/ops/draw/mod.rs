@@ -39,4 +39,4 @@ pub(crate) mod rgba16;
 pub(crate) mod rgb32f;
 pub(crate) mod rgba32f;
 
-pub(crate) use ops::{execute_draw_batch, is_draw_op};
+pub(crate) use ops::is_draw_op;

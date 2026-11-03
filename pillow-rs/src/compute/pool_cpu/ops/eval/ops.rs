@@ -7,8 +7,13 @@
 //! TODO(pillow-rs#3ptb): move the archived Rayon row path to the later
 //! `pool_parallel` owner; do not move its scheduling into this CPU family.
 use crate::compute::registry::support::{
-    InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport,
-    RejectionKind, StrategyInputs, SupportAssessment, StrategySelection,
+    InputContract,
+    ModeSupport,
+    OperationId,
+    OperationInputs,
+    OperationSupport,
+    RejectionKind,
+    StrategySelection,
 };
 use crate::compute::ExecutionContext;
 use crate::error::PilError;
@@ -76,16 +81,6 @@ macro_rules! declare_eval_modes {
             }
         }
 
-        pub(crate) fn assess(
-            mode: Mode,
-            input: StrategyInputs,
-            ctx: &ExecutionContext,
-        ) -> Result<SupportAssessment, PilError> {
-            match mode {
-                $(Mode::$mode => super::$module::ops::assess(input, ctx),)+
-                _ => classify_mode(mode).assess(ctx, input),
-            }
-        }
 
         fn prepare_image<'a>(
             image: &'a DynamicImage,

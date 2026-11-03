@@ -6,8 +6,11 @@
 
 use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{
-    ExpandFillRule, InputContract, ModeSupport, OperationId, StrategyInputs, StrategySelection,
-    SupportAssessment,
+    ExpandFillRule,
+    InputContract,
+    ModeSupport,
+    OperationId,
+    StrategySelection,
 };
 use crate::error::PilError;
 use crate::pipeline::NativeColorInput;
@@ -82,13 +85,6 @@ declare_expand_modes! {
     ImageRgba32F => rgba32f,
 }
 
-pub(crate) fn assess(
-    mode: Mode,
-    input: StrategyInputs,
-    ctx: &ExecutionContext,
-) -> Result<SupportAssessment, PilError> {
-    classify_mode(mode).assess(ctx, input)
-}
 
 pub(crate) fn prepare<'a>(
     image: &'a DynamicImage,

@@ -19,8 +19,12 @@
 // for those carriers.
 
 use crate::compute::{ExecutionContext, registry::support::{
-    InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport,
-    StrategySelection, SupportAssessment,
+    InputContract,
+    ModeSupport,
+    OperationId,
+    OperationInputs,
+    OperationSupport,
+    StrategySelection,
 }};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
@@ -55,15 +59,6 @@ macro_rules! declare_crop_modes {
             }
         }
 
-        fn assess_mode(
-            mode: Mode,
-            region: CropRegion,
-            ctx: &ExecutionContext,
-        ) -> Result<SupportAssessment, PilError> {
-            match mode {
-                $(Mode::$mode => super::$module::ops::assess(region, ctx),)+
-            }
-        }
 
         fn prepare_mode<'a>(
             image: &'a DynamicImage,
@@ -127,14 +122,6 @@ pub(crate) static SUPPORT: OperationSupport = OperationSupport::new(
     classify_mode,
 );
 
-pub(crate) fn assess(
-    mode: Mode,
-    size: (u32, u32),
-    request: CropRequest,
-    ctx: &ExecutionContext,
-) -> Result<SupportAssessment, PilError> {
-    assess_mode(mode, request.region(size)?, ctx)
-}
 
 pub(crate) fn prepare<'a>(
     image: &'a DynamicImage,

@@ -1,6 +1,6 @@
 //! ImagePalette8 semantics composed with its serial architecture strategy.
 
-use crate::compute::{ExecutionContext, registry::support::{ModeSupport, OperationId, OutputModeRule, StrategyInputs, PaletteInput, SupportAssessment, InputContract}};
+use crate::compute::{ExecutionContext, registry::support::{ModeSupport, OperationId, OutputModeRule, StrategyInputs, PaletteInput, InputContract}};
 use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
@@ -14,9 +14,6 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
 pub(crate) enum ArchitectureStrategy<'a> { Default(grayscale_impl::Kernel<'a>) }
 pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
 
-pub(crate) fn assess(input: StrategyInputs, ctx: &ExecutionContext) -> Result<SupportAssessment, PilError> {
-    SUPPORT.assess(ctx, input)
-}
 
 pub(crate) fn prepare<'a>(input: &'a grayscale_impl::Input, palette: PaletteInput<'_>, ctx: &ExecutionContext) -> Result<Strategy<'a>, PilError> {
     let implementation = grayscale_impl::prepare(input, palette)?;

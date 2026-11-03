@@ -20,9 +20,10 @@
 use crate::compute::{
     ExecutionContext,
     registry::support::{
-        OperationId, OperationInputs, OperationSupport, PaletteKnowledge, RequestFacts,
-        StrategyInputs, SupportAssessment,
-    },
+    OperationId,
+    OperationInputs,
+    OperationSupport,
+},
 };
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
@@ -95,24 +96,6 @@ fn classify_mode(mode: Mode) -> crate::compute::registry::support::ModeSupport {
 pub(crate) static SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::Reduce, &[], classify_mode);
 
-pub(crate) fn assess(
-    mode: Mode,
-    size: (u32, u32),
-    factors: (u32, u32),
-    ctx: &ExecutionContext,
-) -> Result<SupportAssessment, PilError> {
-    let input = StrategyInputs {
-        width: size.0,
-        height: size.1,
-        byte_len: None,
-        palette: PaletteKnowledge::Unknown,
-        request: RequestFacts::Reduce {
-            x_factor: factors.0,
-            y_factor: factors.1,
-        },
-    };
-    SUPPORT.for_mode(mode).assess(ctx, input)
-}
 
 pub(crate) fn prepare<'a>(
     input: OperationInputs<'a>,
