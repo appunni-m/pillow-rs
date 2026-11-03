@@ -419,29 +419,30 @@ impl Image {
         self.validate_filter("UnsharpMask")?;
         let (routed_backend, context, fallback_reason) =
             cpu_only_filter_route(self, "UnsharpMask")?;
-        let img = self.materialized_shared_for_ops()?;
+        let (img, mut operation_receipts) =
+            self.materialized_shared_for_ops_with_receipts()?;
         let mode = img.mode();
-        let result = crate::compute::eager::execute_cpu_arch_operation(
-            "UnsharpMask",
-            img.as_ref(),
-            context,
-            Some(routed_backend),
-            0,
-            0,
-            fallback_reason,
-            |context| {
-                let prepared =
-                    crate::compute::pool_cpu::ops::filter::ops::prepare_unsharp_mask(
-                        img.as_ref(),
-                        radius,
-                        percent,
-                        threshold,
-                        context,
-                    )?;
-                let selection = *prepared.selection();
-                Ok((prepared.execute()?, selection))
-            },
-        )?;
+        let result =
+            crate::compute::execute_eager_cpu_arch_image_operation_with_context_and_receipts(
+                "UnsharpMask",
+                img.as_ref(),
+                context,
+                Some(routed_backend),
+                fallback_reason,
+                &mut operation_receipts,
+                |context| {
+                    let prepared =
+                        crate::compute::pool_cpu::ops::filter::ops::prepare_unsharp_mask(
+                            img.as_ref(),
+                            radius,
+                            percent,
+                            threshold,
+                            context,
+                        )?;
+                    let selection = *prepared.selection();
+                    Ok((prepared.execute()?, selection))
+                },
+            )?;
 
         Ok(Image::from_dynamic_with_mode(result, Some(mode))?)
     }
@@ -512,27 +513,28 @@ impl Image {
 
         let palette = self.palette();
         let palette_alpha = self.palette_alpha();
-        let image = self.materialized_shared_for_ops()?;
+        let (image, mut operation_receipts) =
+            self.materialized_shared_for_ops_with_receipts()?;
         let (routed_backend, context, fallback_reason) =
             cpu_only_filter_route(self, "ModeFilter")?;
-        let result = crate::compute::eager::execute_cpu_arch_operation(
-            "ModeFilter",
-            image.as_ref(),
-            context,
-            Some(routed_backend),
-            0,
-            0,
-            fallback_reason,
-            |context| {
-                let prepared = crate::compute::pool_cpu::ops::filter::ops::prepare_mode_filter(
-                    image.as_ref(),
-                    size,
-                    context,
-                )?;
-                let selection = *prepared.selection();
-                Ok((prepared.execute()?, selection))
-            },
-        )?;
+        let result =
+            crate::compute::execute_eager_cpu_arch_image_operation_with_context_and_receipts(
+                "ModeFilter",
+                image.as_ref(),
+                context,
+                Some(routed_backend),
+                fallback_reason,
+                &mut operation_receipts,
+                |context| {
+                    let prepared = crate::compute::pool_cpu::ops::filter::ops::prepare_mode_filter(
+                        image.as_ref(),
+                        size,
+                        context,
+                    )?;
+                    let selection = *prepared.selection();
+                    Ok((prepared.execute()?, selection))
+                },
+            )?;
 
         if let Some(pal) = palette {
             let DynamicImage::ImagePalette8(indices) = result else {

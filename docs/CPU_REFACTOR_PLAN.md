@@ -1622,3 +1622,13 @@ Architecture into the matrix child instead of rerouting through a temporary
 Image wrapper. Other eager architecture callers still need source-receipt and
 context propagation review. Source-only; no build, formatting, checkstyle,
 lint, tests, parity, benchmark, or coverage ran.
+
+Parameterized Filter eager receipts (2026-11-04): UnsharpMask and ModeFilter
+now capture the source graph during operation-ready materialization and restore
+its operation receipts before their prepared CPU strategy records selection.
+UnsharpMask still resolves its CPU route before materializing; ModeFilter keeps
+its palette snapshot and materializes before resolving the route, preserving
+their prior ordering. The selected Backend/Architecture context reaches the
+same specialized Filter owner and no pixel algorithm changed. Other eager
+architecture callers remain under source review. No build, formatting,
+checkstyle, lint, tests, parity, benchmark, or coverage ran.
