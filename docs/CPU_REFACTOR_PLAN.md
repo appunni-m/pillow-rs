@@ -1693,3 +1693,15 @@ PutAlphaData operation, including when validation fails and Pillow's visible
 opaque-alpha promotion is applied. Validation and mutation order are unchanged.
 This is source-only; wrapper callback and receipt parity remain pending. No
 build, formatting, checkstyle, lint, tests, parity, benchmark, or coverage ran.
+
+Crop and Transpose dispatch source review (2026-11-04): Crop's entry classifies
+all 25 modes; 21 select Default and the four I;16 identities compose Default
+with guarded SSE2, NEON, or wasm SIMD128 copy strategies. Transpose's entry
+classifies all 25 modes across Flip, Mirror, and Transpose; exact mode owners
+compose their declarations with prepared Default and available vector
+strategies, and the registry records the same prepared selections on execution.
+The active `pool_cpu` tree has no Rayon or `parallel` feature dispatch; archived
+parallel collection work remains reserved for the later `pool_parallel`
+stage. This closes source dispatch review for these families only. Architecture
+reachability and mode/architecture parity remain pending. No build, formatting,
+checkstyle, lint, tests, parity, benchmark, or coverage ran.

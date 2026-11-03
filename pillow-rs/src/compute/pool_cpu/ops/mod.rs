@@ -4,10 +4,10 @@
 // target-specific reachability is verified.
 // TODO(pillow-rs#3ptb): finish the family-by-family audit that every execution
 // boundary consumes the prepared selection derived from ExecutionContext.
-// Resize, Chops, and Pad are covered; all supported Draw routes now consume
-// their prepared selection. Thumbnail's I32 stream now consumes its selection;
-// ImageOps Quantize now threads selection through all 25 modes. Continue the
-// family audit and finish Draw's source/fault-contract review.
+// Resize, Chops, Pad, Crop, Transpose, and supported Draw routes are
+// source-reviewed for prepared-selection flow. Thumbnail's I32 stream
+// consumes its selection; ImageOps Quantize threads selection through all 25
+// modes. Continue the family audit and finish Draw's semantic/fault review.
 
 pub(crate) mod analysis;
 pub(crate) mod chops;

@@ -5,10 +5,11 @@
 //! strategy ahead of the native-byte route, and packed-word Rotate270 lives in
 //! its Default mode owner.
 //!
-//! TODO(pillow-rs#3ptb): move parallel transpose collection kernels to the later
-//! `pool_parallel` stage. The archived byte Flip adapter had no separate vector
-//! kernel; its prepared Default owner keeps the native row-copy behavior. Keep
-//! the I;16 vector Flip in its exact mode/architecture strategies.
+//! TODO(pillow-rs#3ptb): port archived parallel collection strategies only in
+//! the later `pool_parallel` stage. The active `pool_cpu` transpose family has
+//! no Rayon or `parallel` feature path. The archived byte Flip adapter had no
+//! separate vector kernel; its prepared Default owner keeps the native row-copy
+//! behavior. Keep the I;16 vector Flip in its exact mode/architecture strategies.
 //! TODO(pillow-rs#3ptb): include byte-mode exact-empty and trailing-storage
 //! cases, I;16 trailing-storage cases, and architecture/fallback receipts in parity.
 //! TODO(pillow-rs#3ptb): verify cancelled transpose sequences report
