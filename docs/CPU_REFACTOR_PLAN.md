@@ -69,7 +69,7 @@ the baseline. Keep `pillow-rs-bad` as reference.
 
 ## Current pending matrix
 
-Snapshot refreshed on `develop` commit `9af54f318` (local WIP, unpushed). The
+Snapshot refreshed on `develop` commit `970bd036d` (local WIP, unpushed). The
 CPU source tree remains incomplete. Recent work removes uncalled Put,
 family-level and per-mode assessment/execution forwarding wrappers while
 keeping the operation support declarations and prepared execution paths. The
@@ -79,13 +79,16 @@ the unused Merge Identity layout, CropRegion's unread `source_height`, an
 unused architecture-name adapter, and unused Convert helpers. Architecture
 folder implementations remain pending reachability review across target
 architectures; they were not deleted based only on an aarch64 host check.
+Commit `970bd036d` gates the Composite SSE2, NEON, and Wasm modules with the
+same conditions used by their operation dispatch. The remaining architecture
+module declarations need family-by-family review.
 Recent CPU-only `cargo check -p pillow-rs --lib --no-default-features --features
 image-codecs-all` reached lint evaluation with no E-coded type or name
 resolution errors, then failed on denied diagnostics: 120 `dead_code`, 335
 `unused_imports`, 75 `deprecated`, 18 `unsafe_code`, 3 `unused_macro_rules`, 2
 `unused_variables`, and 1 `unreachable_patterns`; it also reported 40 warnings.
-That check predates commit `9af54f318`, so the latest cleanup remains
-uncompiled. No formatter, separate lint target, tests, parity, benchmark, or
+That check predates commits `9af54f318` and `970bd036d`, so the latest source
+cleanup remains uncompiled. No formatter, separate lint target, tests, parity, benchmark, or
 coverage ran for these WIP commits. The earlier check does not establish a
 successful build or runtime correctness. This matrix tracks pending work; it is
 not support or verification evidence.

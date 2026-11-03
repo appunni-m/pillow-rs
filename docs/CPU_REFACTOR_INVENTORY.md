@@ -15,8 +15,12 @@ evaluation, but this is not a successful build. No formatter, separate lint
 target, tests, parity, benchmark, or coverage ran for these commits.
 Commit `9af54f318` subsequently removed the audited orphaned helpers and
 per-mode wrappers listed in the plan; that source-only cleanup has not been
-compiled. Host diagnostics did not justify deleting architecture folders, so
-their x86 and Wasm reachability still needs target-specific review.
+compiled. Commit `970bd036d` gates Composite architecture modules with the
+same target conditions as strategy dispatch. A static source scan found other
+architecture module declarations that still need family-by-family target
+reachability review; preserve them until their support declarations and
+dispatch conditions are checked. The cross-family review remains TODO in
+`pool_cpu/ops/mod.rs`.
 Commit `8bad284fe` retains the exact `One` or `ImageLuma8` identity of a
 PutAlphaData mask through CPU preparation and updates the corresponding GPU
 auxiliary admission and native byte-mask routes. It is source-reviewed but

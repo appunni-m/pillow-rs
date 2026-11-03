@@ -1,4 +1,7 @@
 //! Exact-mode operation families for serial CPU execution.
+// TODO(pillow-rs#3ptb): audit every architecture module declaration against
+// its mode support and dispatch cfg. Keep architecture implementations until
+// target-specific reachability is verified.
 
 pub(crate) mod analysis;
 pub(crate) mod chops;
