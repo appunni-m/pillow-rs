@@ -1,13 +1,14 @@
 use crate::error::PilError;
-use crate::raster::{DynamicImage, RgbaImage};
-use crate::FormattedPixelValue;
+use crate::image::FormattedPixelValue;
+use crate::raster::{DynamicImage, GenericImageView, RgbaImage};
 
 /// Reads one pixel from its exact stored variant without an intermediate mode.
-pub(super) fn formatted_pixel(
+pub(crate) fn formatted_pixel(
     image: &DynamicImage,
     x: u32,
     y: u32,
 ) -> Result<FormattedPixelValue, PilError> {
+    // TODO(pillow-rs#3ptb): move this variant dispatch into exact-mode Default strategies.
     match image {
         DynamicImage::One(image)
         | DynamicImage::ImageLuma8(image)
@@ -58,7 +59,6 @@ pub(super) fn formatted_pixel(
             Ok(FormattedPixelValue::Integer(i32::from(sample)))
         }
         // NO_PILLOW_SUPPORT: internal high-depth modes expose native samples.
-        // TODO(pillow-rs#3ptb): cover typed CoreOnly GetPixel values in parity.
         DynamicImage::ImageLumaA16(image) => {
             Ok(FormattedPixelValue::U16Components(image.get_pixel(x, y).0.to_vec()))
         }
@@ -74,6 +74,37 @@ pub(super) fn formatted_pixel(
         DynamicImage::ImageRgba32F(image) => {
             Ok(FormattedPixelValue::FloatComponents(image.get_pixel(x, y).0.to_vec()))
         }
+    }
+}
+
+/// Reads one pixel using the Rust/JavaScript accessor's fixed RGBA8 shape.
+// NO_PILLOW_SUPPORT: Pillow's `getpixel` preserves each mode's scalar/tuple shape.
+pub(crate) fn rgba_pixel(image: &DynamicImage, x: u32, y: u32) -> [u8; 4] {
+    image.get_pixel(x, y).0
+}
+
+/// Reads a direct RGB tuple without allocating the formatted component vector.
+pub(crate) fn rgb_pixel(image: &DynamicImage, x: u32, y: u32) -> Option<[u8; 3]> {
+    let DynamicImage::ImageRgb8(rgb) = image else {
+        return None;
+    };
+    Some(rgb.get_pixel(x, y).0)
+}
+
+/// Returns the number of host value bytes produced by one formatted pixel.
+pub(crate) fn formatted_pixel_bytes(value: &FormattedPixelValue) -> usize {
+    match value {
+        FormattedPixelValue::Scalar(_) => 1,
+        FormattedPixelValue::Integer(_) => std::mem::size_of::<i32>(),
+        FormattedPixelValue::Float(_) => std::mem::size_of::<f64>(),
+        FormattedPixelValue::Components(values) => values.len(),
+        FormattedPixelValue::U16Components(values) => {
+            values.len().saturating_mul(std::mem::size_of::<u16>())
+        }
+        FormattedPixelValue::FloatComponents(values) => {
+            values.len().saturating_mul(std::mem::size_of::<f32>())
+        }
+        FormattedPixelValue::InlineComponents { bands, .. } => usize::from(*bands),
     }
 }
 
@@ -96,4 +127,3 @@ fn scalar_bytes(image: &RgbaImage, x: u32, y: u32) -> Result<[u8; 4], PilError> 
     })?;
     Ok([sample[0], sample[1], sample[2], sample[3]])
 }
-

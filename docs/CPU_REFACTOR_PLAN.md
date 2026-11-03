@@ -69,13 +69,14 @@ the baseline. Keep `pillow-rs-bad` as reference.
 
 ## Current pending matrix
 
-Snapshot at `develop` commit `9b96b2f32`. The working tree is incomplete and
+Snapshot at `develop` commit `7bae04020`. The working tree is incomplete and
 unverified. An early `cargo check` ran before source closure and failed; that
 output is diagnostic only and does not pass Gate 4. No formatter, lint, test,
-parity, or benchmark gate has run. This matrix tracks pending work; it is not
-support or verification evidence. Detailed mappings and source TODOs remain in
-[CPU refactor inventory](CPU_REFACTOR_INVENTORY.md). Refresh this matrix at
-each completed checkpoint.
+parity, or benchmark gate has run for the current source-only continuation.
+This matrix tracks pending work; it is not support or verification evidence.
+Detailed mappings and source TODOs remain in [CPU refactor
+inventory](CPU_REFACTOR_INVENTORY.md). Refresh this matrix at each completed
+checkpoint.
 
 Header-mode source update (2026-11-02): image-slash-star PR
 [#157](https://github.com/appunni-m/image-slash-star/pull/157), commit
@@ -117,6 +118,36 @@ P/PA special route sends PA indices as P8 and drops its per-pixel alpha; define
 a format-specific PA encoding or rejection instead of assuming every encoder
 should convert it to RGBA. Keep codec transfer layouts distinct from Pillow's
 mode identity.
+
+Mode-tag source audit (2026-11-03): the maintained Rust source has four direct
+`DynamicImage::with_mode` call sites: compatible-carrier assignment in
+`Image::from_dynamic_with_mode`, generated-image identity assignment,
+`frombytes` boundary tagging, and Resize's exact-source-mode restoration. Each
+call uses the requested or source `Mode` explicitly; `with_mode` checks carrier
+compatibility and does not infer identity from buffer type. No active caller
+uses `with_mode` to substitute a different algorithm or convert samples. The
+operation constructors found by the caller scan pass their declared target
+mode into `from_dynamic_with_mode`. Source review only; output and rejection
+parity remain in the frozen CPU gate.
+
+PutPixel mode-source update (2026-11-03): the public scalar `Image::putpixel_mode`
+and numeric `Image::putpixel_mode_scalar` methods no longer accept a redundant
+`Mode` argument. They resolve identity from the Pillow-owned `Image` and keep
+the resolved value in private helpers for exact-mode input expansion and CPU
+strategy selection; the Python binding remains a separate host adapter and
+continues to obtain mode from the image wrapper. Source-only; scalar and mode
+error-order parity remains pending.
+
+Direct GetPixel source continuation (2026-11-03): `getpixel_formatted`, the
+fixed RGBA8 Rust/JavaScript convenience accessor, and the loaded RGB binding
+fast path now have declared `OperationId`s and per-mode result shapes under
+the CPU `analysis` support contract. Pixel readers moved from the image
+wrapper's local helper into `analysis/helpers/pixel_access.rs`; the public
+wrappers still own coordinate checks and the loaded RGB shortcut returns
+`None` for non-RGB or deferred images. These readers currently dispatch on the
+stored raster variant inside a Default CPU helper. Splitting and selecting
+per-mode/per-architecture implementations, and confirming outputs, receipts,
+and fallback behavior remain part of the source and parity gates.
 
 Convert source audit update (2026-11-02): I;16-to-I;16 alias targets preserve
 the native u16 samples when selecting among `I;16`, `I;16L`, `I;16B`, and

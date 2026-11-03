@@ -5,11 +5,11 @@
 use crate::compute::{Backend, ExecutionContext};
 use crate::compute::registry::support::{
     InputContract, ModeSupport, OperationId, OperationModeRoute, OperationRouteGuard,
-    OperationRoutePath, OperationSupport, OperationValueResult, OutputModeRule,
+    OperationRoutePath, OperationSupport, OperationValueResult, OutputModeRule, PixelValueShape,
     RejectionKind, StrategySelection,
 };
 use crate::error::PilError;
-use crate::raster::Mode;
+use crate::raster::{DynamicImage, Mode};
 
 pub(crate) use super::helpers::histogram_execution::{
     prepare_entropy_histogram, prepare_histogram,
@@ -50,6 +50,84 @@ pub(super) const HISTOGRAM_INPUTS: &[InputContract] = &[
         modes: HISTOGRAM_EXTREMA_MODES,
     },
 ];
+
+fn pixel_value_shape(mode: Mode) -> PixelValueShape {
+    match mode {
+        Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => PixelValueShape::U8Scalar,
+        Mode::ImageI32 | Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
+            PixelValueShape::I32Scalar
+        }
+        Mode::ImageF32 => PixelValueShape::F64Scalar,
+        Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => {
+            PixelValueShape::U8Components { bands: 2 }
+        }
+        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => {
+            PixelValueShape::U8Components { bands: 3 }
+        }
+        Mode::ImageRgba8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8 => PixelValueShape::U8Components { bands: 4 },
+        Mode::ImageLumaA16 => PixelValueShape::U16Components { bands: 2 },
+        Mode::ImageRgb16 => PixelValueShape::U16Components { bands: 3 },
+        Mode::ImageRgba16 => PixelValueShape::U16Components { bands: 4 },
+        Mode::ImageRgb32F => PixelValueShape::F32Components { bands: 3 },
+        Mode::ImageRgba32F => PixelValueShape::F32Components { bands: 4 },
+    }
+}
+
+fn classify_get_pixel_mode(mode: Mode) -> ModeSupport {
+    let support = match mode {
+        // NO_PILLOW_SUPPORT: internal high-depth identities expose native samples.
+        Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => ModeSupport::cpu_core_only(
+            OperationId::GetPixel,
+            mode,
+            NO_RASTER_OUTPUT,
+            NO_INPUTS,
+            &[],
+            "native high-depth GetPixel values extend Pillow's mode contract",
+        ),
+        _ => ModeSupport::cpu(
+            OperationId::GetPixel,
+            mode,
+            NO_RASTER_OUTPUT,
+            NO_INPUTS,
+            &[],
+        ),
+    };
+    support.with_value_result(OperationValueResult::Pixel(pixel_value_shape(mode)))
+}
+
+/// Exact-mode result shapes and Default-only strategies for Pillow-shaped GetPixel.
+pub(crate) static GET_PIXEL_SUPPORT: OperationSupport = OperationSupport::new(
+    OperationId::GetPixel,
+    NO_INPUTS,
+    classify_get_pixel_mode,
+);
+
+fn classify_get_pixel_rgba_mode(mode: Mode) -> ModeSupport {
+    // NO_PILLOW_SUPPORT: this Rust/JavaScript convenience route projects every mode to RGBA8.
+    ModeSupport::cpu_core_only(
+        OperationId::GetPixelRgba,
+        mode,
+        NO_RASTER_OUTPUT,
+        NO_INPUTS,
+        &[],
+        "the Rust/JavaScript accessor returns a fixed RGBA8 value",
+    )
+    .with_value_result(OperationValueResult::Pixel(PixelValueShape::Rgba8))
+}
+
+/// Exact-mode Default strategies for the Rust/JavaScript RGBA8 accessor.
+pub(crate) static GET_PIXEL_RGBA_SUPPORT: OperationSupport = OperationSupport::new(
+    OperationId::GetPixelRgba,
+    NO_INPUTS,
+    classify_get_pixel_rgba_mode,
+);
 
 fn classify_get_extrema_bytes_mode(mode: Mode) -> ModeSupport {
     match mode {
@@ -750,6 +828,72 @@ pub(crate) static GET_DATA_BAND_INTO_SUPPORT: OperationSupport =
         classify_get_data_band_into_mode,
         &[OperationId::ExtractBand],
     );
+
+/// Selects the exact-mode, serial formatted pixel reader.
+pub(crate) fn select_get_pixel(
+    mode: Mode,
+    context: &ExecutionContext,
+) -> Result<StrategySelection, PilError> {
+    GET_PIXEL_SUPPORT.for_mode(mode).select_serial(context)
+}
+
+/// Selects the exact-mode, serial RGBA8 convenience reader.
+pub(crate) fn select_get_pixel_rgba(
+    mode: Mode,
+    context: &ExecutionContext,
+) -> Result<StrategySelection, PilError> {
+    GET_PIXEL_RGBA_SUPPORT.for_mode(mode).select_serial(context)
+}
+
+fn validate_pixel_selection(
+    selection: StrategySelection,
+    operation: OperationId,
+    mode: Mode,
+) -> Result<(), PilError> {
+    if selection.implementation.operation != operation
+        || selection.implementation.mode != mode
+        || selection.implementation.backend != Backend::Cpu
+        || selection.implementation.architecture != crate::compute::Architecture::Default
+    {
+        return Err(PilError::InternalError(
+            "GetPixel selection did not match its exact mode and Default implementation".into(),
+        ));
+    }
+    Ok(())
+}
+
+/// Executes Pillow-shaped GetPixel after its declared exact-mode selection.
+pub(crate) fn execute_get_pixel(
+    image: &DynamicImage,
+    x: u32,
+    y: u32,
+    selection: StrategySelection,
+) -> Result<crate::image::FormattedPixelValue, PilError> {
+    validate_pixel_selection(selection, OperationId::GetPixel, image.mode())?;
+    super::helpers::pixel_access::formatted_pixel(image, x, y)
+}
+
+/// Executes the allocation-free RGB binding path under the GetPixel declaration.
+pub(crate) fn execute_get_pixel_rgb(
+    image: &DynamicImage,
+    x: u32,
+    y: u32,
+    selection: StrategySelection,
+) -> Result<Option<[u8; 3]>, PilError> {
+    validate_pixel_selection(selection, OperationId::GetPixel, image.mode())?;
+    Ok(super::helpers::pixel_access::rgb_pixel(image, x, y))
+}
+
+/// Executes the Rust/JavaScript fixed-RGBA8 pixel accessor.
+pub(crate) fn execute_get_pixel_rgba(
+    image: &DynamicImage,
+    x: u32,
+    y: u32,
+    selection: StrategySelection,
+) -> Result<[u8; 4], PilError> {
+    validate_pixel_selection(selection, OperationId::GetPixelRgba, image.mode())?;
+    Ok(super::helpers::pixel_access::rgba_pixel(image, x, y))
+}
 
 /// Selects the direct full-buffer read for the mode carried by the raster.
 pub(crate) fn select_get_data(

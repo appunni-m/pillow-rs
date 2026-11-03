@@ -158,6 +158,10 @@ pub enum OperationId {
     GetDataBand,
     /// Fill a caller-owned byte buffer with one logical band.
     GetDataBandInto,
+    /// Return one pixel with Pillow's exact-mode scalar or component shape.
+    GetPixel,
+    /// Return one pixel projected to the Rust/JavaScript RGBA8 convenience shape.
+    GetPixelRgba,
     /// Extract one logical channel through the image wrapper's typed route.
     GetChannel,
     /// Blend native Pillow samples with the same-mode black brightness base.
@@ -269,6 +273,8 @@ impl OperationId {
             Self::Histogram => &cpu_ops::analysis::ops::HISTOGRAM_SUPPORT,
             Self::Entropy => &cpu_ops::analysis::ops::ENTROPY_SUPPORT,
             Self::GetColors => &cpu_ops::analysis::ops::GET_COLORS_SUPPORT,
+            Self::GetPixel => &cpu_ops::analysis::ops::GET_PIXEL_SUPPORT,
+            Self::GetPixelRgba => &cpu_ops::analysis::ops::GET_PIXEL_RGBA_SUPPORT,
             Self::Stat => &cpu_ops::analysis::ops::STAT_SUPPORT,
             Self::Split => &cpu_ops::analysis::ops::SPLIT_SUPPORT,
             Self::Paste

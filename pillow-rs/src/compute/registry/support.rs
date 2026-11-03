@@ -107,6 +107,8 @@ pub enum OutputModeRule {
 /// Shape of a non-raster value returned by an operation for one exact mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OperationValueResult {
+    /// Result shape of one exact-mode pixel read.
+    Pixel(PixelValueShape),
     /// Histogram output concatenates fixed-size bins in band order.
     Histogram {
         /// Number of output bands, which may preserve a compatibility band
@@ -115,6 +117,25 @@ pub enum OperationValueResult {
         /// Number of bins in each output band.
         bins_per_band: usize,
     },
+}
+
+/// Native value shape returned by a direct pixel-read operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PixelValueShape {
+    /// One unsigned 8-bit sample.
+    U8Scalar,
+    /// One signed 32-bit sample.
+    I32Scalar,
+    /// One f64 API value sourced from an F32 sample.
+    F64Scalar,
+    /// A tuple of byte samples in Pillow band order.
+    U8Components { bands: u8 },
+    /// A tuple of native unsigned 16-bit samples.
+    U16Components { bands: u8 },
+    /// A tuple of native 32-bit floating-point samples.
+    F32Components { bands: u8 },
+    /// The Rust/JavaScript convenience API's fixed four-byte RGBA result.
+    Rgba8,
 }
 
 /// An operation-owned relation between a typed payload and its output identity.

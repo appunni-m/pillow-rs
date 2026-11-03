@@ -358,7 +358,7 @@ pub use registry::support::{
     ModeChannelCapacity, ModeSupport, OperationId, OperationModeRoute, OperationModeTransition,
     OperationRouteGuard, OperationRouteOutcome, OperationRoutePath, OperationRouteStage,
     OperationSupport, OperationTargetComposition, OperationTargetCompositionKind, PadFillRule,
-    OperationValueResult,
+    OperationValueResult, PixelValueShape,
     OperationTransitionSource, OutputModeRule, PaletteKnowledge, PasteInputRules, PasteMaskRule, PayloadOutput,
     PixelWriteRunFacts, RejectionKind, RequestFacts, SecondaryInputFacts, StrategyGuard,
     StrategyInputs, StrategySelection, SupportAssessment, SupportScope, UnresolvedGuard,

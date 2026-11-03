@@ -1,14 +1,12 @@
 //! Pixel access and mutation methods for [`Image`].
 
 use crate::error::PilError;
-use crate::raster::{GenericImageView, Mode};
+use crate::raster::Mode;
 
 use super::{
-    Arc, DynamicImage, FormattedPixelValue, Image, PipelineOp,
+    Arc, FormattedPixelValue, Image, PipelineOp,
     is_l16_identity,
 };
-
-mod native_pixel;
 
 /// Host-neutral value extracted for a public `Image.putpixel` call.
 #[derive(Debug, Clone, PartialEq)]
@@ -45,13 +43,25 @@ impl Image {
         if x >= w || y >= h {
             return Err(PilError::IndexError("image index out of range".into()));
         }
-        let rgba = img.get_pixel(x, y).0;
-        Ok((
-            rgba[0],
-            rgba.get(1).copied().unwrap_or(0),
-            rgba.get(2).copied().unwrap_or(0),
-            rgba.get(3).copied().unwrap_or(255),
-        ))
+        let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
+        let selection = crate::compute::pool_cpu::ops::analysis::ops::select_get_pixel_rgba(
+            img.mode(),
+            &context,
+        )?;
+        let rgba = crate::compute::pool_cpu::ops::analysis::ops::execute_get_pixel_rgba(
+            img.as_ref(),
+            x,
+            y,
+            selection,
+        )?;
+        crate::compute::record_eager_cpu_operation_receipt_with_selection(
+            "GetPixelRgba",
+            requested_backend,
+            rgba.len(),
+            "RGBA8 pixel access uses the declared exact-mode Default strategy",
+            selection,
+        );
+        Ok((rgba[0], rgba[1], rgba[2], rgba[3]))
     }
 
     /// Returns an already-loaded native RGB pixel without converting it to RGBA.
@@ -72,10 +82,31 @@ impl Image {
         if x >= data.image.width() || y >= data.image.height() {
             return Err(PilError::IndexError("image index out of range".into()));
         }
-        let DynamicImage::ImageRgb8(rgb) = data.image.as_ref() else {
+        if data.image.mode() != Mode::ImageRgb8 {
+            return Ok(None);
+        }
+        let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
+        let selection = crate::compute::pool_cpu::ops::analysis::ops::select_get_pixel(
+            Mode::ImageRgb8,
+            &context,
+        )?;
+        let Some(rgb) = crate::compute::pool_cpu::ops::analysis::ops::execute_get_pixel_rgb(
+            data.image.as_ref(),
+            x,
+            y,
+            selection,
+        )?
+        else {
             return Ok(None);
         };
-        Ok(Some(rgb.get_pixel(x, y).0))
+        crate::compute::record_eager_cpu_operation_receipt_with_selection(
+            "GetPixel",
+            requested_backend,
+            rgb.len(),
+            "RGB formatted pixel access reads the native three-byte carrier",
+            selection,
+        );
+        Ok(Some(rgb))
     }
 
     /// Returns one pixel with Pillow's mode-specific scalar or tuple shape.
@@ -85,7 +116,27 @@ impl Image {
         if x >= width || y >= height {
             return Err(PilError::IndexError("image index out of range".into()));
         }
-        native_pixel::formatted_pixel(&img, x, y)
+        let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
+        let selection = crate::compute::pool_cpu::ops::analysis::ops::select_get_pixel(
+            img.mode(),
+            &context,
+        )?;
+        let value = crate::compute::pool_cpu::ops::analysis::ops::execute_get_pixel(
+            img.as_ref(),
+            x,
+            y,
+            selection,
+        )?;
+        let output_bytes = crate::compute::pool_cpu::ops::analysis::helpers::pixel_access::
+            formatted_pixel_bytes(&value);
+        crate::compute::record_eager_cpu_operation_receipt_with_selection(
+            "GetPixel",
+            requested_backend,
+            output_bytes,
+            "formatted pixel access reads the exact native mode strategy",
+            selection,
+        );
+        Ok(value)
     }
 
     /// Queues an in-place single-pixel write.
@@ -249,14 +300,28 @@ impl Image {
 
     /// Queues a Pillow-style single-integer pixel write.
     ///
-    /// Typed Rust callers use this path when they have already selected the
-    /// exact mode strategy for a scalar input. `mode` decides how the scalar
-    /// expands before the same [`Image::putpixel`] pipeline path is used.
+    /// The mode-specific scalar expansion comes from this image's own raster
+    /// identity before the same [`Image::putpixel`] pipeline path is used.
     ///
     /// # Errors
     ///
     /// Returns the same errors as [`Image::putpixel`].
-    pub fn putpixel_mode(&mut self, x: u32, y: u32, v: u8, mode: Mode) -> Result<(), PilError> {
+    pub fn putpixel_mode(&mut self, x: u32, y: u32, v: u8) -> Result<(), PilError> {
+        let (width, height) = self.size()?;
+        if x >= width || y >= height {
+            return Err(PilError::IndexError("image index out of range".into()));
+        }
+        let mode = self.mode_identity()?;
+        self.putpixel_mode_for_mode(x, y, v, mode)
+    }
+
+    fn putpixel_mode_for_mode(
+        &mut self,
+        x: u32,
+        y: u32,
+        v: u8,
+        mode: Mode,
+    ) -> Result<(), PilError> {
         if is_l16_identity(mode) {
             return self.putpixel_l16(x, y, i64::from(v));
         }
@@ -368,22 +433,30 @@ impl Image {
     ///
     /// Those modes preserve the host numeric value as a four-byte signed or
     /// floating-point sample. The ordinary byte-oriented mode helper remains
-    /// intentionally narrow for `L`, `1`, and `P` inputs. The compatibility
-    /// mode argument is not an identity source; selection uses the raster mode.
-    pub fn putpixel_mode_scalar(
-        &mut self,
-        x: u32,
-        y: u32,
-        value: f64,
-        _mode: Mode,
-    ) -> Result<(), PilError> {
+    /// intentionally narrow for `L`, `1`, and `P` inputs. The source raster's
+    /// exact identity determines whether the value is stored as I32 or F32.
+    pub fn putpixel_mode_scalar(&mut self, x: u32, y: u32, value: f64) -> Result<(), PilError> {
         let (width, height) = self.size()?;
         if x >= width || y >= height {
             return Err(PilError::IndexError("image index out of range".into()));
         }
         let image_mode = self.mode_identity()?;
+        self.putpixel_mode_scalar_for_mode(x, y, value, image_mode)
+    }
+
+    fn putpixel_mode_scalar_for_mode(
+        &mut self,
+        x: u32,
+        y: u32,
+        value: f64,
+        image_mode: Mode,
+    ) -> Result<(), PilError> {
+        let (width, height) = self.size()?;
+        if x >= width || y >= height {
+            return Err(PilError::IndexError("image index out of range".into()));
+        }
         if !matches!(image_mode, Mode::ImageI32 | Mode::ImageF32) {
-            return self.putpixel_mode(x, y, value as u8, image_mode);
+            return self.putpixel_mode_for_mode(x, y, value as u8, image_mode);
         }
         let pixel_index = (y as usize)
             .checked_mul(width as usize)
@@ -800,13 +873,13 @@ impl Image {
                 if mode == Mode::ImageI32 {
                     // getink narrows the signed integer before storage. Going
                     // through f64 first loses low bits and saturates on cast.
-                    return self.putpixel_mode_scalar(x, y, f64::from(value as i32), mode);
+                    return self.putpixel_mode_scalar_for_mode(x, y, f64::from(value as i32), mode);
                 }
                 if mode == Mode::ImageF32 {
-                    return self.putpixel_mode_scalar(x, y, value as f64, mode);
+                    return self.putpixel_mode_scalar_for_mode(x, y, value as f64, mode);
                 }
                 if matches!(mode, Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8) {
-                    return self.putpixel_mode(x, y, value.clamp(0, 255) as u8, mode);
+                    return self.putpixel_mode_for_mode(x, y, value.clamp(0, 255) as u8, mode);
                 }
                 // Multiband integer ink is ABGR, including alpha in bits
                 // 24..31 for two-band images. A singleton tuple takes this
@@ -816,7 +889,7 @@ impl Image {
             }
             PutPixelValue::Float(value) => {
                 if mode == Mode::ImageF32 {
-                    self.putpixel_mode_scalar(x, y, value, mode)
+                    self.putpixel_mode_scalar_for_mode(x, y, value, mode)
                 } else {
                     Err(if mode.pillow_name().is_some_and(|name| name.len() == 1) {
                         PilError::TypeError("color must be int or single-element tuple".into())
@@ -870,7 +943,7 @@ impl Image {
             }
             PutPixelValue::FloatComponents(values) => match values.as_slice() {
                 [value] if mode == Mode::ImageF32 => {
-                    self.putpixel_mode_scalar(x, y, *value, mode)
+                    self.putpixel_mode_scalar_for_mode(x, y, *value, mode)
                 }
                 _ => Err(if mode.pillow_name().is_some_and(|name| name.len() == 1) {
                     PilError::TypeError("color must be int or single-element tuple".into())

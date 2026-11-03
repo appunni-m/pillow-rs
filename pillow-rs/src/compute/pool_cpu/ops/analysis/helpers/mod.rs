@@ -11,6 +11,7 @@ pub(crate) mod getcolors;
 pub(crate) mod getcolors_execution;
 pub(crate) mod histogram_execution;
 pub(crate) mod histogram_samples;
+pub(crate) mod pixel_access;
 pub(crate) mod projection;
 pub(crate) mod projection_vector;
 pub(crate) mod stat;

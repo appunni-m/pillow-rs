@@ -310,7 +310,7 @@ mod i32_uniform_filter_ownership_tests {
 
         assert_eq!(filtered.tobytes().unwrap(), source);
         filtered
-            .putpixel_mode_scalar(0, 0, 99.0, crate::raster::Mode::ImageI32)
+            .putpixel_mode_scalar(0, 0, 99.0)
             .unwrap();
 
         let mut expected = source.clone();
