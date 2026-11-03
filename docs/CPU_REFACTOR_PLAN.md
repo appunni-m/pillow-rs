@@ -113,6 +113,13 @@ Exact outputs, Pillow wrapper-fallback parity, and fault-order verification
 remain pending. Official source references and the remaining Convert
 mode/target matrix are in the [CPU refactor inventory](CPU_REFACTOR_INVENTORY.md).
 
+Reduce's top-level dispatch has now been source-reviewed across all 25 modes.
+Seven byte modes and Pillow `F` declare vector routes; the remaining modes use
+their typed Default owners. Prepared execution retains the selected mode and
+applies mode-specific physical-lane behavior after reduction. Arithmetic,
+fault ordering, palette metadata, architecture reachability, and parity remain
+open; see the Reduce checkpoint below.
+
 The Expand Python boundary now resolves named fills against the initial mode,
 snapshots an existing palette's mode before `getpalette` loads the source,
 allocates 3/4-component colors through a fresh palette without passing the
