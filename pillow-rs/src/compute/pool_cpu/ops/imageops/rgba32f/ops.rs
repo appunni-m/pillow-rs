@@ -1,3 +1,3 @@
 use crate::compute::pool_cpu::ops::imageops::helpers::strategy::declare_quantize_native_mode;
 
-declare_quantize_native_mode!(f32, "ImageRgba32F");
+declare_quantize_native_mode!(f32, "ImageRgba32F", ImageRgba32F);

@@ -6,7 +6,8 @@
 // boundary consumes the prepared selection derived from ExecutionContext.
 // Resize, Chops, and Pad are covered; all supported Draw routes now consume
 // their prepared selection. Thumbnail's I32 stream now consumes its selection;
-// continue family review and finish Draw's source/fault-contract review.
+// ImageOps Quantize now threads selection through all 25 modes. Continue the
+// family audit and finish Draw's source/fault-contract review.
 
 pub(crate) mod analysis;
 pub(crate) mod chops;

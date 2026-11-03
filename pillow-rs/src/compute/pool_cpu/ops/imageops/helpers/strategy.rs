@@ -1,7 +1,6 @@
 //! Composition helpers for exact-mode imageops strategies.
 
-use crate::compute::ExecutionContext;
-use crate::compute::Architecture;
+use crate::compute::{Architecture, Backend, ExecutionContext};
 use crate::compute::registry::support::{
     ImplementationSupport, ModeSupport, OperationId, PaletteKnowledge,
     RequestFacts, SecondaryInputFacts, StrategyGuard, StrategyInputs, StrategySelection,
@@ -12,8 +11,24 @@ use crate::image::Image;
 use crate::raster::{DynamicImage, Mode};
 use std::sync::Arc;
 
+pub(crate) fn selected_quantize_architecture(
+    selection: &StrategySelection,
+    mode: Mode,
+) -> Result<Architecture, PilError> {
+    let implementation = selection.implementation;
+    if implementation.operation == OperationId::Quantize
+        && implementation.mode == mode
+        && implementation.backend == Backend::Cpu
+    {
+        return Ok(implementation.architecture);
+    }
+    Err(PilError::InternalError(
+        "Quantize mode received a mismatched CPU strategy selection".into(),
+    ))
+}
+
 macro_rules! declare_quantize_native_mode {
-    ($component:ty, $mode_name:literal) => {
+    ($component:ty, $mode_name:literal, $mode:ident) => {
         pub(crate) fn execute_quantize(
             samples: &[$component],
             width: u32,
@@ -21,8 +36,12 @@ macro_rules! declare_quantize_native_mode {
             colors: usize,
             kmeans: u32,
             method: u32,
-            architecture: $crate::compute::Architecture,
+            selection: &$crate::compute::registry::support::StrategySelection,
         ) -> Result<(Vec<u8>, Vec<u8>, Option<Vec<u8>>), $crate::error::PilError> {
+            let architecture = super::super::helpers::strategy::selected_quantize_architecture(
+                selection,
+                $crate::raster::Mode::$mode,
+            )?;
             match architecture {
                 $crate::compute::Architecture::Default => {
                     super::default::quantize_impl::execute(

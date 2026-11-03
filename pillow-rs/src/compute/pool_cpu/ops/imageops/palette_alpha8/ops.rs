@@ -18,8 +18,13 @@ pub(crate) fn execute_quantize_with_palette(
     width: u32,
     height: u32,
     colors: usize,
-    architecture: crate::compute::Architecture,
+    selection: &crate::compute::registry::support::StrategySelection,
 ) -> Result<(Vec<u8>, Vec<u8>, Option<Vec<u8>>), crate::error::PilError> {
+    let architecture =
+        crate::compute::pool_cpu::ops::imageops::helpers::strategy::selected_quantize_architecture(
+            selection,
+            crate::raster::Mode::ImagePaletteAlpha8,
+        )?;
     match architecture {
         crate::compute::Architecture::Default => {
             super::default::quantize_impl::execute(samples, palette, width, height, colors)

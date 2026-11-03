@@ -291,8 +291,12 @@ pub(crate) fn execute_quantize(
     colors: usize,
     kmeans: u32,
     method: u32,
-    architecture: Architecture,
+    selection: &StrategySelection,
 ) -> Result<(Vec<u8>, Vec<u8>, Option<Vec<u8>>), PilError> {
+    let architecture = super::super::helpers::strategy::selected_quantize_architecture(
+        selection,
+        Mode::ImageLuma8,
+    )?;
     match architecture {
         Architecture::Default => super::default::quantize_impl::execute(
             image, width, height, colors, kmeans, method,
@@ -307,8 +311,12 @@ pub(crate) fn execute_quantize_with_palette(
     image: &GrayImage,
     palette: &[[u8; 3]],
     dither: bool,
-    architecture: Architecture,
+    selection: &StrategySelection,
 ) -> Result<Vec<u8>, PilError> {
+    let architecture = super::super::helpers::strategy::selected_quantize_architecture(
+        selection,
+        Mode::ImageLuma8,
+    )?;
     match architecture {
         Architecture::Default => {
             super::default::quantize_impl::execute_with_palette(image, palette, dither)

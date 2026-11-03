@@ -92,8 +92,10 @@ direct Text/Bitmap, and both eager native Bitmap fast routes. All 20 supported
 mode owners receive and validate the exact CPU selection; the five rejected
 internal high-depth modes remain rejected. The I32 Thumbnail streaming path
 now retains its selection through the mode owner and AVX FMA kernel adapter.
-Chops, Pad, Draw, and Thumbnail context propagation remain source-only and
-have not been compiled or runtime-verified.
+ImageOps Quantize now passes its retained selection through all 25 exact-mode
+strategies, including macro-generated CoreOnly owners. Chops, Pad, Draw,
+Thumbnail, and Quantize context propagation remain source-only and have not
+been compiled or runtime-verified.
 
 The latest focused library compilation passed for the committed Resize
 selection-context refactor with
@@ -101,8 +103,9 @@ selection-context refactor with
 --no-default-features --features image-codecs-all`. This confirms compilation
 only; lint caps suppressed the current denied-diagnostic backlog. It predates
 Chops commit `320b33637`, Pad commit `dc568ad28`, Draw commits `db55c50cf` and
-`0653e62b3`, and the current Thumbnail source changes. No formatter,
-checkstyle, lint, tests, parity, benchmark, or coverage has run for this WIP
+`0653e62b3`, Thumbnail commit `061325538`, and the current ImageOps Quantize
+source changes. No formatter, checkstyle, lint, tests, parity, benchmark, or
+coverage has run for this WIP
 sequence. This matrix tracks pending work; it is not support or runtime
 verification evidence.
 Detailed mappings and source TODOs remain in [CPU refactor

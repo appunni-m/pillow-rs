@@ -330,13 +330,13 @@ pub(crate) fn execute_with_palette(
             luma,
             &palette,
             dither,
-            selection.implementation.architecture,
+            &selection,
         )?,
         DynamicImage::ImageRgb8(rgb) => super::rgb8::ops::execute_quantize_with_palette(
             rgb,
             &palette,
             dither,
-            selection.implementation.architecture,
+            &selection,
         )?,
         _ => {
             return Err(PilError::InternalError(
@@ -421,7 +421,7 @@ fn quantize_by_method(
                 n_colors,
                 kmeans,
                 method,
-                selection.implementation.architecture,
+                selection,
             )?;
             return Ok(QuantizedColors { indices, palette, alpha });
         }
@@ -437,7 +437,7 @@ fn quantize_by_method(
                 n_colors,
                 kmeans,
                 method,
-                selection.implementation.architecture,
+                selection,
             )?;
             return Ok(QuantizedColors { indices, palette, alpha });
         }
@@ -452,14 +452,14 @@ fn quantize_by_method(
                 width,
                 height,
                 n_colors,
-                selection.implementation.architecture,
+                selection,
             )?;
             return Ok(QuantizedColors { indices, palette, alpha });
         }
         QuantizeSource::RgbPremultiplied => {
             return quantize_rgb_premultiplied_source(
                 image,
-                selection.implementation.architecture,
+                selection,
                 width,
                 height,
                 n_colors,
@@ -468,7 +468,7 @@ fn quantize_by_method(
         QuantizeSource::Rgbx => {
             return quantize_rgbx_source(
                 image,
-                selection.implementation.architecture,
+                selection,
                 width,
                 height,
                 n_colors,
@@ -487,7 +487,7 @@ fn quantize_by_method(
                 n_colors,
                 kmeans,
                 method,
-                selection.implementation.architecture,
+                selection,
             )?;
             return Ok(QuantizedColors { indices, palette, alpha });
         }
@@ -495,7 +495,7 @@ fn quantize_by_method(
             return quantize_native_source(
                 image,
                 palette,
-                selection.implementation.architecture,
+                selection,
                 width,
                 height,
                 n_colors,
@@ -509,7 +509,7 @@ fn quantize_by_method(
 /// Quantizes RGBX without interpreting its padding byte as alpha.
 fn quantize_rgbx_source(
     image: &DynamicImage,
-    architecture: crate::compute::Architecture,
+    selection: &StrategySelection,
     width: u32,
     height: u32,
     colors: usize,
@@ -520,7 +520,7 @@ fn quantize_rgbx_source(
         return Err(PilError::InternalError("Quantize RGBX mode tag mismatch".into()));
     };
     let (indices, palette, alpha) = super::rgbx8::ops::execute_quantize(
-        rgbx.as_raw(), width, height, colors, kmeans, method, architecture,
+        rgbx.as_raw(), width, height, colors, kmeans, method, selection,
     )?;
     Ok(QuantizedColors { indices, palette, alpha })
 }
@@ -529,7 +529,7 @@ fn quantize_rgbx_source(
 fn quantize_native_source(
     image: &DynamicImage,
     palette: PaletteInput<'_>,
-    architecture: crate::compute::Architecture,
+    selection: &StrategySelection,
     width: u32,
     height: u32,
     colors: usize,
@@ -543,64 +543,64 @@ fn quantize_native_source(
         // NO_PILLOW_SUPPORT: CoreOnly strategies preserve each exact mode and
         // read its native buffer through that mode's Default implementation.
         DynamicImage::One(samples) => super::one::ops::execute_quantize(
-            samples.as_raw(), width, height, colors, kmeans, method, architecture,
+            samples.as_raw(), width, height, colors, kmeans, method, selection,
         )?,
         DynamicImage::ImageLumaA8(samples) => super::luma_a8::ops::execute_quantize(
-            samples.as_raw(), width, height, colors, kmeans, method, architecture,
+            samples.as_raw(), width, height, colors, kmeans, method, selection,
         )?,
         DynamicImage::ImageLaPremultiplied8(samples) => {
             super::la_premultiplied8::ops::execute_quantize(
-                samples.as_raw(), width, height, colors, kmeans, method, architecture,
+                samples.as_raw(), width, height, colors, kmeans, method, selection,
             )?
         }
         DynamicImage::ImagePaletteAlpha8(samples) =>
             super::palette_alpha8::ops::execute_quantize_with_palette(
-                samples.as_raw(), palette, width, height, colors, architecture,
+                samples.as_raw(), palette, width, height, colors, selection,
             )?,
         DynamicImage::ImageCmyk8(samples) => super::cmyk8::ops::execute_quantize(
-            samples.as_raw(), width, height, colors, kmeans, method, architecture,
+            samples.as_raw(), width, height, colors, kmeans, method, selection,
         )?,
         DynamicImage::ImageI32(samples) => super::i32::ops::execute_quantize(
-            samples.as_raw(), width, height, colors, kmeans, method, architecture,
+            samples.as_raw(), width, height, colors, kmeans, method, selection,
         )?,
         DynamicImage::ImageF32(samples) => super::f32::ops::execute_quantize(
-            samples.as_raw(), width, height, colors, kmeans, method, architecture,
+            samples.as_raw(), width, height, colors, kmeans, method, selection,
         )?,
         DynamicImage::ImageYCbCr8(samples) => super::ycbcr8::ops::execute_quantize(
-            samples.as_raw(), width, height, colors, kmeans, method, architecture,
+            samples.as_raw(), width, height, colors, kmeans, method, selection,
         )?,
         DynamicImage::ImageLab8(samples) => super::lab8::ops::execute_quantize(
-            samples.as_raw(), width, height, colors, kmeans, method, architecture,
+            samples.as_raw(), width, height, colors, kmeans, method, selection,
         )?,
         DynamicImage::ImageHsv8(samples) => super::hsv8::ops::execute_quantize(
-            samples.as_raw(), width, height, colors, kmeans, method, architecture,
+            samples.as_raw(), width, height, colors, kmeans, method, selection,
         )?,
         DynamicImage::ImageI16(samples) => super::i16::ops::execute_quantize(
-            samples.as_raw(), width, height, colors, kmeans, method, architecture,
+            samples.as_raw(), width, height, colors, kmeans, method, selection,
         )?,
         DynamicImage::ImageI16L(samples) => super::i16l::ops::execute_quantize(
-            samples.as_raw(), width, height, colors, kmeans, method, architecture,
+            samples.as_raw(), width, height, colors, kmeans, method, selection,
         )?,
         DynamicImage::ImageI16B(samples) => super::i16b::ops::execute_quantize(
-            samples.as_raw(), width, height, colors, kmeans, method, architecture,
+            samples.as_raw(), width, height, colors, kmeans, method, selection,
         )?,
         DynamicImage::ImageI16N(samples) => super::i16n::ops::execute_quantize(
-            samples.as_raw(), width, height, colors, kmeans, method, architecture,
+            samples.as_raw(), width, height, colors, kmeans, method, selection,
         )?,
         DynamicImage::ImageLumaA16(samples) => super::luma_a16::ops::execute_quantize(
-            samples.as_raw(), width, height, colors, kmeans, method, architecture,
+            samples.as_raw(), width, height, colors, kmeans, method, selection,
         )?,
         DynamicImage::ImageRgb16(samples) => super::rgb16::ops::execute_quantize(
-            samples.as_raw(), width, height, colors, kmeans, method, architecture,
+            samples.as_raw(), width, height, colors, kmeans, method, selection,
         )?,
         DynamicImage::ImageRgba16(samples) => super::rgba16::ops::execute_quantize(
-            samples.as_raw(), width, height, colors, kmeans, method, architecture,
+            samples.as_raw(), width, height, colors, kmeans, method, selection,
         )?,
         DynamicImage::ImageRgb32F(samples) => super::rgb32f::ops::execute_quantize(
-            samples.as_raw(), width, height, colors, kmeans, method, architecture,
+            samples.as_raw(), width, height, colors, kmeans, method, selection,
         )?,
         DynamicImage::ImageRgba32F(samples) => super::rgba32f::ops::execute_quantize(
-            samples.as_raw(), width, height, colors, kmeans, method, architecture,
+            samples.as_raw(), width, height, colors, kmeans, method, selection,
         )?,
         _ => {
             return Err(PilError::InternalError(
@@ -614,7 +614,7 @@ fn quantize_native_source(
 /// Quantizes Rust-only four-byte modes with the established alpha-aware octree.
 fn quantize_rgb_premultiplied_source(
     image: &DynamicImage,
-    architecture: crate::compute::Architecture,
+    selection: &StrategySelection,
     width: u32,
     height: u32,
     colors: usize,
@@ -622,7 +622,7 @@ fn quantize_rgb_premultiplied_source(
     let (indices, palette, alpha) = match image {
         DynamicImage::ImageRgbPremultiplied8(samples) => {
             super::rgb_premultiplied8::ops::execute_quantize(
-                samples.as_raw(), width, height, colors, 0, 2, architecture,
+                samples.as_raw(), width, height, colors, 0, 2, selection,
             )?
         }
         _ => {

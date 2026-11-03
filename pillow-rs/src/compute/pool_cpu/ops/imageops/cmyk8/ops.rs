@@ -12,4 +12,4 @@ declare_invert_native_mode!(
 );
 
 use crate::compute::pool_cpu::ops::imageops::helpers::strategy::declare_quantize_native_mode;
-declare_quantize_native_mode!(u8, "ImageCmyk8");
+declare_quantize_native_mode!(u8, "ImageCmyk8", ImageCmyk8);

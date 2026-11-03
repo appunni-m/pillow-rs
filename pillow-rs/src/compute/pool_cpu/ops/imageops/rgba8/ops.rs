@@ -1,6 +1,7 @@
 pub(crate) type Input = crate::raster::RgbaImage;
 use crate::compute::pool_cpu::ops::imageops::helpers::strategy::declare_invert_native_mode;
 use crate::compute::Architecture;
+use crate::compute::registry::support::StrategySelection;
 use crate::error::PilError;
 use crate::raster::RgbaImage;
 
@@ -19,8 +20,12 @@ pub(crate) fn execute_quantize(
     width: u32,
     height: u32,
     colors: usize,
-    architecture: Architecture,
+    selection: &StrategySelection,
 ) -> Result<(Vec<u8>, Vec<u8>, Option<Vec<u8>>), PilError> {
+    let architecture = super::super::helpers::strategy::selected_quantize_architecture(
+        selection,
+        crate::raster::Mode::ImageRgba8,
+    )?;
     match architecture {
         Architecture::Default => super::default::quantize_impl::execute(image, width, height, colors),
         _ => Err(PilError::InternalError(
