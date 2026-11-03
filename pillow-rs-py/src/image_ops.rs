@@ -243,7 +243,7 @@ fn ops_pad(
     let inner = image.borrow().inner.clone();
     let (fill, centering) = if preflight.needs_padding() {
         let mode = inner.mode_identity().map_err(map_error)?;
-        let color = imageops_pad_color_from_python(color, mode)?;
+        let color = imageops_pad_color_from_python(image.py(), color, mode)?;
         let fill = pillow_rs::imageops_pad_fill_preflight(&inner, preflight, color)
             .map_err(map_error)?;
         let centering = pad_centering_from_python(

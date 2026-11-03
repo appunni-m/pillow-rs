@@ -104,6 +104,11 @@ pub enum ImageOpsColor {
     /// Integer components from a Python list containing an arbitrary-width
     /// value. Pillow normalizes valid P-mode lists to tuples before lookup.
     ListNumericComponents(Vec<crate::image::PaletteColorComponent>),
+    /// A P-mode RGB(A) fill resolved by the host ImagePalette callback path.
+    /// Carries the resulting palette index and temporary palette bytes into
+    /// the native canvas strategy without losing host conversion behavior.
+    #[doc(hidden)]
+    PaletteFill { index: u8, palette: Vec<u8> },
     /// A scalar floating-point fill, accepted by Pillow's `F` mode.
     FloatingScalar(f64),
     /// A floating-point tuple retained for the destination mode to validate.

@@ -120,7 +120,13 @@ conversion, and pastes the current source wrapper into the captured-mode
 canvas. The exact-mode Rust Expand strategies still perform canvas filling.
 Dirty/raw palette faults, metadata, allocation order, and CoreOnly fill cases
 remain under source review and parity.
-These source changes are uncompiled.
+For P-mode Pad, the host bridge now routes three/four-component all-integer
+lists and tuples through the package's `ImagePalette.getcolor`, carrying the
+selected index and temporary palette bytes into the native canvas strategy.
+This preserves iterable and integer-subclass callbacks before centering
+conversion. Other P fills still use a typed fallback that does not preserve all
+custom sequence/subscript callbacks and fault order. These source changes are
+uncompiled.
 Chops, Pad, Draw, Thumbnail, Quantize, Resize, geometry sidecars, Filter, and
 Composite context propagation remain uncompiled and runtime-unverified. The
 audit is not a completion proof: operation support declarations, ownership,

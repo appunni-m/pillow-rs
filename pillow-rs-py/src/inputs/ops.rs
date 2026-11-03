@@ -205,12 +205,12 @@ pub(crate) fn imageops_expand_color_from_python(
     imageops_color_from_python(value)
 }
 
-/// Preserves wide integer tuples accepted by Pillow's P-mode `Image.new` path.
+/// Adapts an ImageOps.pad fill using its exact destination Mode.
 ///
-/// Pillow 12.2 only routes all-integer tuples of length three or four through
-/// its temporary RGB palette. Mixed numeric tuples continue to the ordinary
-/// per-mode conversion, where P rejects them as a single-band fill.
+/// P-mode RGB(A) integer lists and tuples use the temporary palette callback
+/// path. Other values retain the destination-specific typed conversion.
 pub(crate) fn imageops_pad_color_from_python(
+    py: Python<'_>,
     value: Option<&Bound<'_, PyAny>>,
     mode: pillow_rs::Mode,
 ) -> PyResult<pillow_rs::ImageOpsColor> {
@@ -227,7 +227,7 @@ pub(crate) fn imageops_pad_color_from_python(
         return Ok(imageops_color_from_python(Some(value)));
     }
     if mode == pillow_rs::Mode::ImagePalette8 {
-        return imageops_pad_palette_color_from_python(value);
+        return imageops_pad_palette_color_from_python(py, value);
     }
 
     if value.is_instance_of::<PyInt>() {
@@ -288,13 +288,16 @@ pub(crate) fn imageops_pad_color_from_python(
 }
 
 fn imageops_pad_palette_color_from_python(
+    py: Python<'_>,
     value: &Bound<'_, PyAny>,
 ) -> PyResult<pillow_rs::ImageOpsColor> {
-    // TODO(pillow-rs#3ptb): Pillow's Image.new routes three/four-component
-    // integer lists and tuples through a temporary RGB ImagePalette. It calls
-    // tuple(value) and ImagePalette.getcolor before core fill validation; this
-    // bridge currently preserves numeric results but bypasses those host
-    // iteration, hash, comparison, and byte-conversion callbacks.
+    if let Some(fill) = imageops_pad_palette_fill_from_python(py, value)? {
+        return Ok(fill);
+    }
+    // TODO(pillow-rs#3ptb): for P fills outside the all-integer RGB(A) palette
+    // case, Pillow passes the original object to core fill parsing. This typed
+    // fallback still lowers recognized values and does not preserve every
+    // custom sequence/subscript callback or its fault order.
     if value.is_instance_of::<PyInt>() {
         return value
             .extract::<i64>()
@@ -346,6 +349,34 @@ fn imageops_pad_palette_color_from_python(
     Err(PyTypeError::new_err(
         "color must be int or single-element tuple",
     ))
+}
+
+fn imageops_pad_palette_fill_from_python(
+    py: Python<'_>,
+    value: &Bound<'_, PyAny>,
+) -> PyResult<Option<pillow_rs::ImageOpsColor>> {
+    if value.cast::<PyList>().is_err() && value.cast::<PyTuple>().is_err() {
+        return Ok(None);
+    }
+    for component in value.try_iter()? {
+        if !component?.is_instance_of::<PyInt>() {
+            return Ok(None);
+        }
+    }
+    let tuple = py.import("builtins")?.getattr("tuple")?.call1((value,))?;
+    if !matches!(tuple.len()?, 3 | 4) {
+        return Ok(None);
+    }
+    let palette_module = py.import("pillow_rs.imagepalette")?;
+    let palette = palette_module.getattr("ImagePalette")?.call0()?;
+    let index = palette
+        .call_method1("getcolor", (&tuple,))?
+        .extract::<u8>()?;
+    let palette = palette.getattr("palette")?.extract::<Vec<u8>>()?;
+    Ok(Some(pillow_rs::ImageOpsColor::PaletteFill {
+        index,
+        palette,
+    }))
 }
 
 fn pad_integer_tuple_arity_is_valid(len: usize, mode: pillow_rs::Mode) -> bool {

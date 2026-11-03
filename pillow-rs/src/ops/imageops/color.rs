@@ -43,6 +43,16 @@ impl PartialEq for ImageOpsColor {
                 palette_components_equal(left, right)
             }
             (Self::ListComponents(left), Self::ListComponents(right)) => left == right,
+            (
+                Self::PaletteFill {
+                    index: left_index,
+                    palette: left_palette,
+                },
+                Self::PaletteFill {
+                    index: right_index,
+                    palette: right_palette,
+                },
+            ) => left_index == right_index && left_palette == right_palette,
             (Self::FloatingScalar(left), Self::FloatingScalar(right)) => {
                 left.to_bits() == right.to_bits()
             }
@@ -130,6 +140,12 @@ pub(crate) fn resolve_imageops_color(
             resolve_palette_tuple_fill(&components).map(Some)
         }
         ImageOpsColor::ListNumericComponents(_) => Err(python_list_color_error(mode)),
+        ImageOpsColor::PaletteFill { index, .. } if mode == Mode::ImagePalette8 => {
+            Ok(Some((*index, *index, *index, u8::MAX)))
+        }
+        ImageOpsColor::PaletteFill { .. } => {
+            Err(PilError::TypeError("color must be int or tuple".into()))
+        }
         ImageOpsColor::ListComponents(values) => {
             resolve_python_integer_list(&values, mode).map(Some)
         }
@@ -197,11 +213,19 @@ pub(crate) fn resolve_pad_palette_fill(
     if fill_rule != PadFillRule::PaletteIndexOrColor {
         return Ok(None);
     }
+    if let ImageOpsColor::PaletteFill { index, palette } = fill {
+        let (output_palette, alpha) = match image.palette() {
+            Some(palette) => (palette, image.palette_alpha()),
+            None => (palette.clone(), None),
+        };
+        return Ok(Some((*index, output_palette, alpha)));
+    }
     let Some(components) = palette_fill_components(fill)? else {
         return Ok(None);
     };
-    // Pad writes border pixels as palette index zero. Preserve an attached
-    // source palette; an unpaletted output gets an RGB palette for the fill.
+    // Native Rust fills use index zero and derive their temporary RGB palette
+    // from components. A Python-prepared PaletteFill above retains its exact
+    // host-selected index and palette bytes.
     let color = resolve_palette_tuple_bytes(&components)?;
     let (palette, alpha) = match image.palette() {
         Some(palette) => (palette, image.palette_alpha()),
