@@ -53,15 +53,36 @@ const POSTERIZE_INPUTS: &[InputContract] = &[
         allow_empty: true,
     },
 ];
+const AUTOCONTRAST_INPUTS: &[InputContract] = &[
+    InputContract::AutocontrastParameters,
+    InputContract::CheckedByteDimensions {
+        bytes_per_pixel: 1,
+        allow_empty: true,
+    },
+    InputContract::ImageOpsLumaMask,
+];
 const SOLARIZE_INPUTS: &[InputContract] = &[InputContract::CheckedByteDimensions {
     bytes_per_pixel: 1,
     allow_empty: true,
 }];
 
+static AUTOCONTRAST_ARCHITECTURES: [ImplementationSupport; 3] =
+    strategy::native_byte_point_architectures(OperationId::Autocontrast, Mode::ImagePalette8, 1);
 static POSTERIZE_ARCHITECTURES: [ImplementationSupport; 3] =
     strategy::native_byte_point_architectures(OperationId::Posterize, Mode::ImagePalette8, 1);
 static SOLARIZE_ARCHITECTURES: [ImplementationSupport; 3] =
     strategy::native_byte_point_architectures(OperationId::Solarize, Mode::ImagePalette8, 1);
+
+// NO_PILLOW_SUPPORT: Pillow's ImageOps._lut rejects P. This Rust-only
+// strategy stretches native palette indices and preserves the attached palette.
+pub(crate) const AUTOCONTRAST_SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
+    OperationId::Autocontrast,
+    Mode::ImagePalette8,
+    OutputModeRule::Preserve,
+    AUTOCONTRAST_INPUTS,
+    &AUTOCONTRAST_ARCHITECTURES,
+    "Autocontrast applies its byte lookup table directly to native palette indices",
+);
 
 // NO_PILLOW_SUPPORT: Pillow's ImageOps._lut rejects P. These native strategies
 // transform palette indices and preserve the Rust image's attached palette.
@@ -102,6 +123,39 @@ pub(crate) const EQUALIZE_SUPPORT: ModeSupport = ModeSupport::cpu(
     EQUALIZE_INPUTS,
     &EQUALIZE_ARCHITECTURES,
 );
+
+/// Prepared P-mode Autocontrast strategy over native palette indices.
+pub(crate) struct PreparedAutocontrast<'a> {
+    input: &'a GrayImage,
+    lut: Vec<u8>,
+    selection: StrategySelection,
+}
+
+impl<'a> PreparedAutocontrast<'a> {
+    pub(crate) fn new(input: &'a GrayImage, lut: Vec<u8>, selection: StrategySelection) -> Self {
+        Self { input, lut, selection }
+    }
+
+    pub(crate) fn selection(&self) -> &StrategySelection {
+        &self.selection
+    }
+
+    pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
+        match self.selection.implementation.architecture {
+            Architecture::Default => {
+                super::default::autocontrast_impl::execute(self.input, &self.lut)
+            }
+            Architecture::Sse2 => super::sse2::autocontrast_impl::execute(self.input, &self.lut),
+            Architecture::Neon => super::neon::autocontrast_impl::execute(self.input, &self.lut),
+            Architecture::WasmSimd128 => {
+                super::wasm_simd128::autocontrast_impl::execute(self.input, &self.lut)
+            }
+            _ => Err(PilError::InternalError(
+                "native-byte point selection has no matching CPU kernel".into(),
+            )),
+        }
+    }
+}
 
 /// Prepared P-mode Equalize strategy over its palette-expanded RGB samples.
 pub(crate) struct PreparedEqualize {

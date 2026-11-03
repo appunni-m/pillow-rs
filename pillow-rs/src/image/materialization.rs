@@ -257,6 +257,10 @@ impl Image {
             // native index bytes and retain the source palette.
             || (source.known_mode_identity() == Some(Mode::ImagePalette8)
                 && matches!(op, PipelineOp::Posterize { .. } | PipelineOp::Solarize { .. }))
+            // Rust-only ImageOps Autocontrast transforms P index bytes and
+            // keeps the source palette attached to the indexed output.
+            || (source.known_mode_identity() == Some(Mode::ImagePalette8)
+                && matches!(op, PipelineOp::Autocontrast { .. }))
             // The Rust ImageOps Invert strategies operate on native P/PA
             // samples and preserve their palette metadata. Python's Pillow
             // compatibility wrappers reject these modes before queuing Invert.

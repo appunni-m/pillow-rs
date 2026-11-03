@@ -16,12 +16,8 @@ pub(super) const INPUTS: &[InputContract] = &[
 pub(super) fn classify_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::ImageLuma8 => super::luma8::ops::AUTOCONTRAST_SUPPORT,
+        Mode::ImagePalette8 => super::palette8::ops::AUTOCONTRAST_SUPPORT,
         Mode::ImageRgb8 => super::rgb8::ops::AUTOCONTRAST_SUPPORT,
-        Mode::ImagePalette8 => ModeSupport::Rejected {
-            mode,
-            reason: "mode P support coming soon",
-            kind: RejectionKind::NotImplementedError,
-        },
         _ => ModeSupport::Rejected {
             mode,
             reason: super::helpers::strategy::unsupported_mode_reason(mode),
@@ -33,6 +29,7 @@ pub(super) fn classify_mode(mode: Mode) -> ModeSupport {
 /// Prepared Autocontrast strategy routed to its exact source-mode owner.
 pub(crate) enum PreparedAutocontrast<'a> {
     Luma(super::luma8::ops::PreparedAutocontrast<'a>),
+    Palette(super::palette8::ops::PreparedAutocontrast<'a>),
     Rgb(super::rgb8::ops::PreparedAutocontrast<'a>),
 }
 
@@ -40,6 +37,7 @@ impl PreparedAutocontrast<'_> {
     pub(crate) fn selection(&self) -> &StrategySelection {
         match self {
             Self::Luma(prepared) => prepared.selection(),
+            Self::Palette(prepared) => prepared.selection(),
             Self::Rgb(prepared) => prepared.selection(),
         }
     }
@@ -47,6 +45,7 @@ impl PreparedAutocontrast<'_> {
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let mut output = match self {
             Self::Luma(prepared) => prepared.execute()?,
+            Self::Palette(prepared) => prepared.execute()?,
             Self::Rgb(prepared) => prepared.execute()?,
         };
         super::helpers::hidden_lanes::initialize_point_output_lanes(&mut output)?;
@@ -72,6 +71,9 @@ pub(crate) fn prepare<'a>(
     let source = match image {
         DynamicImage::ImageLuma8(input) => PreparedAutocontrast::Luma(
             super::luma8::ops::PreparedAutocontrast::new(input, lut, selection),
+        ),
+        DynamicImage::ImagePalette8(input) => PreparedAutocontrast::Palette(
+            super::palette8::ops::PreparedAutocontrast::new(input, lut, selection),
         ),
         DynamicImage::ImageRgb8(input) => PreparedAutocontrast::Rgb(
             super::rgb8::ops::PreparedAutocontrast::new(input, lut, selection),

@@ -263,7 +263,9 @@ fn fill_native_autocontrast_histogram(
     }
     let native_layout = matches!(
         (img, channels),
-        (DynamicImage::ImageLuma8(_), 1) | (DynamicImage::ImageRgb8(_), 3)
+        (DynamicImage::ImageLuma8(_), 1)
+            | (DynamicImage::ImagePalette8(_), 1)
+            | (DynamicImage::ImageRgb8(_), 3)
     );
     if !unmasked || expected_len != Some(raw.len()) || !native_layout {
         return false;
@@ -783,6 +785,40 @@ pub(crate) fn apply_rgb_architecture(
     crate::compute::record_pipeline_operation_scalar_tail(tail);
     crate::compute::record_pipeline_operation_path("vector");
     crate::image_utils::raw_bytes_to_image(width, height, output, 3)
+}
+
+/// Applies a one-channel LUT to P-mode indices with the selected vector path.
+///
+/// The palette is wrapper metadata; this kernel deliberately transforms the
+/// stored index bytes and keeps the output's exact P identity.
+pub(crate) fn apply_palette_architecture(
+    input: &GrayImage,
+    lut: &[u8],
+) -> Result<DynamicImage, PilError> {
+    let (width, height) = input.dimensions();
+    if lut.len() != 256 {
+        return Err(PilError::InternalError(
+            "P Autocontrast lookup table must contain 256 entries".into(),
+        ));
+    }
+    if width == 0 || height == 0 || lut_is_identity(lut, 1) {
+        crate::compute::record_pipeline_operation_path("native-copy");
+        return Ok(DynamicImage::ImagePalette8(input.clone()));
+    }
+    let (output, blocks, tail) = apply_native_lut(
+        input.as_raw(),
+        width as usize,
+        height as usize,
+        1,
+        lut,
+    )
+    .ok_or_else(|| PilError::InternalError("P Autocontrast buffer shape mismatch".into()))?;
+    crate::compute::record_pipeline_operation_vector_blocks(blocks);
+    crate::compute::record_pipeline_operation_scalar_tail(tail);
+    crate::compute::record_pipeline_operation_path("vector");
+    let output = GrayImage::from_raw(width, height, output)
+        .ok_or_else(|| PilError::InternalError("P Autocontrast buffer mismatch".into()))?;
+    Ok(DynamicImage::ImagePalette8(output))
 }
 
 #[cfg(test)]
