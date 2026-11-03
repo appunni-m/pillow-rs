@@ -491,12 +491,14 @@ where
         &mut self.data[..len]
     }
 
-    // TODO(pillow-rs#3ptb): keep invalidating generic mutable escapes (DerefMut,
-    // pixel and row accessors, and mutable slices) until every mode-owned
-    // writer restores Pillow physical lanes. PutPixel, bulk and synchronous
-    // PutData, and LA-family PutAlpha / PutAlphaData preserve their lanes.
-    // Audit remaining producers before claiming downstream Paste/Histogram
-    // parity; this buffer cannot infer a Pillow mode's lane contract.
+    // Generic mutable escapes invalidate retained physical lanes: this helper
+    // backs pixels_mut and its enumerator; rows_mut, get_pixel_mut and its
+    // checked variant invalidate directly; DerefMut covers raw slices and
+    // IndexMut. GenericImage::put_pixel reaches get_pixel_mut. The private
+    // logical pixel writer in buffer/mutable.rs is the only writer that
+    // bypasses invalidation; DynamicImage::put_pixel updates its lane sidecar.
+    // TODO(pillow-rs#3ptb): keep downstream Paste/Histogram outcomes in CPU
+    // parity; this mode-free buffer cannot infer Pillow's physical lanes.
     fn invalidate_hidden_pixel_lanes(&mut self) {
         self.hidden_pixel_lanes = None;
     }
