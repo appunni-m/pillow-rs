@@ -24,9 +24,10 @@ pub use geometry::{
     fit_geometry_preflight, pad_fill_preflight, pad_filter_preflight,
     pad_geometry_preflight, pad_preflight_with_input, pad_with_input,
     pad_with_input_and_containment, pad_with_preflight, pad_with_preflight_and_fill,
-    parse_imageops_filter_input, prepare_expand_fill,
-    resolve_expand_fill_palette, scale_with_input, validate_deform_resample,
-    validate_expand_output_size, validate_prepared_expand_output_size, PadFillPreflight,
+    parse_imageops_filter_input, prepare_expand_fill, prepare_expand_fill_for_mode,
+    finish_expand_fill_palette_from_host, resolve_expand_fill_palette, scale_with_input,
+    validate_deform_resample, validate_expand_output_size_for_mode,
+    validate_prepared_expand_output_size, PadFillPreflight,
     PadGeometryPreflight, PadPreflight, PreparedExpandFill,
 };
 pub use point::*;

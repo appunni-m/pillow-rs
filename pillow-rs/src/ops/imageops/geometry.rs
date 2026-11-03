@@ -4,8 +4,10 @@ mod expand;
 mod pad;
 pub use expand::{
     expand, expand_canvas_with_prepared_fill, expand_with_input, expand_with_margins,
-    expand_with_margins_and_input, prepare_expand_fill, resolve_expand_fill_palette,
-    validate_expand_output_size, validate_prepared_expand_output_size, PreparedExpandFill,
+    expand_with_margins_and_input, prepare_expand_fill, prepare_expand_fill_for_mode,
+    finish_expand_fill_palette_from_host, resolve_expand_fill_palette,
+    validate_expand_output_size_for_mode, validate_prepared_expand_output_size,
+    PreparedExpandFill,
 };
 pub use pad::{
     pad, pad_fill_preflight, pad_filter_preflight, pad_geometry_preflight,

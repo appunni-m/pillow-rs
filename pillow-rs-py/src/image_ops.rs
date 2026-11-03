@@ -9,7 +9,7 @@ struct PyExpandFill {
 
 #[pyclass(name = "_ExpandTarget", frozen)]
 struct PyExpandTarget {
-    inner: pillow_rs::Image,
+    mode: pillow_rs::Mode,
 }
 
 #[pyfunction]
@@ -321,46 +321,11 @@ fn ops_scale(
 }
 
 #[pyfunction]
-fn ops_expand_capture_target(image: &Bound<'_, PyImage>) -> PyResult<PyExpandTarget> {
-    let inner = image.borrow().inner.clone();
-    inner.mode_identity().map_err(map_error)?;
-    Ok(PyExpandTarget { inner })
-}
-
-#[pyfunction]
-fn ops_expand_prepare_fill(
-    py: Python<'_>,
-    target: &Bound<'_, PyExpandTarget>,
-    fill: &Bound<'_, PyAny>,
-) -> PyResult<PyExpandFill> {
-    let inner = target.borrow().inner.clone();
-    let input = imageops_expand_color_from_python(Some(fill));
-    let prepared = py
-        .detach(|| pillow_rs::imageops_prepare_expand_fill(&inner, input))
-        .map_err(map_error)?;
-    Ok(PyExpandFill { prepared })
-}
-
-#[pyfunction]
-fn ops_expand_resolve_palette_fill(
-    py: Python<'_>,
-    target: &Bound<'_, PyExpandTarget>,
-    fill: PyRef<'_, PyExpandFill>,
-) -> PyResult<PyExpandFill> {
-    let inner = target.borrow().inner.clone();
-    let prepared = fill.prepared.clone();
-    let prepared = py
-        .detach(|| pillow_rs::imageops_resolve_expand_fill_palette(&inner, prepared))
-        .map_err(map_error)?;
-    Ok(PyExpandFill { prepared })
-}
-
-#[pyfunction]
-fn ops_expand_validate_size(
+fn ops_expand_capture_target(
     py: Python<'_>,
     size: &Bound<'_, PyAny>,
-    target: &Bound<'_, PyExpandTarget>,
-) -> PyResult<(u32, u32)> {
+    mode_name: &Bound<'_, PyAny>,
+) -> PyResult<(PyExpandTarget, (u32, u32))> {
     let size = size.cast::<PyTuple>()?;
     if size.len() != 2 {
         return Err(PyValueError::new_err(
@@ -372,13 +337,43 @@ fn ops_expand_validate_size(
     if width < 0 || height < 0 {
         return Err(PyValueError::new_err("Width and height must be >= 0"));
     }
+    // TODO(pillow-rs#3ptb): freeze valid mode overrides and invalid-mode
+    // output/error ordering against the Python property value.
+    let mode_name = mode_name.extract::<&str>()?;
+    let mode = pillow_rs::Mode::from_pillow_name(mode_name)
+        .ok_or_else(|| PyValueError::new_err("unrecognized image mode"))?;
     let size = (width as u32, height as u32);
-    let inner = target.borrow().inner.clone();
-    py.detach(move || {
-        pillow_rs::imageops_validate_expand_output_size(&inner, size)
-    })
-    .map_err(map_error)?;
-    Ok(size)
+    py.detach(move || pillow_rs::imageops_validate_expand_output_size_for_mode(mode, size))
+        .map_err(map_error)?;
+    Ok((PyExpandTarget { mode }, size))
+}
+
+#[pyfunction]
+fn ops_expand_prepare_fill(
+    py: Python<'_>,
+    target: &Bound<'_, PyExpandTarget>,
+    fill: &Bound<'_, PyAny>,
+) -> PyResult<PyExpandFill> {
+    let mode = target.borrow().mode;
+    let input = imageops_expand_color_from_python(Some(fill));
+    let prepared = py
+        .detach(|| pillow_rs::imageops_prepare_expand_fill_for_mode(mode, input))
+        .map_err(map_error)?;
+    Ok(PyExpandFill { prepared })
+}
+
+#[pyfunction]
+fn ops_expand_resolve_palette_fill(
+    py: Python<'_>,
+    target: &Bound<'_, PyExpandTarget>,
+    fill: PyRef<'_, PyExpandFill>,
+) -> PyResult<PyExpandFill> {
+    let mode = target.borrow().mode;
+    let prepared = fill.prepared.clone();
+    let prepared = py
+        .detach(|| pillow_rs::imageops_finish_expand_fill_palette_from_host(mode, prepared))
+        .map_err(map_error)?;
+    Ok(PyExpandFill { prepared })
 }
 
 #[pyfunction]
@@ -443,7 +438,6 @@ pub(super) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(ops_expand_capture_target, m)?)?;
     m.add_function(wrap_pyfunction!(ops_expand_prepare_fill, m)?)?;
     m.add_function(wrap_pyfunction!(ops_expand_resolve_palette_fill, m)?)?;
-    m.add_function(wrap_pyfunction!(ops_expand_validate_size, m)?)?;
     m.add_function(wrap_pyfunction!(ops_expand_canvas, m)?)?;
     m.add_function(wrap_pyfunction!(ops_crop_border, m)?)?;
     m.add_function(wrap_pyfunction!(ops_exif_transpose, m)?)?;

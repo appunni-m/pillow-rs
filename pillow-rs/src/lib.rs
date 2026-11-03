@@ -410,12 +410,14 @@ pub use crate::ops::imageops::expand_with_margins_and_input as imageops_expand_w
 pub use crate::ops::imageops::expand_canvas_with_prepared_fill as
     imageops_expand_canvas_with_prepared_fill;
 #[doc(hidden)]
-pub use crate::ops::imageops::prepare_expand_fill as imageops_prepare_expand_fill;
+pub use crate::ops::imageops::prepare_expand_fill_for_mode as
+    imageops_prepare_expand_fill_for_mode;
 #[doc(hidden)]
-pub use crate::ops::imageops::resolve_expand_fill_palette as imageops_resolve_expand_fill_palette;
+pub use crate::ops::imageops::finish_expand_fill_palette_from_host as
+    imageops_finish_expand_fill_palette_from_host;
 #[doc(hidden)]
-pub use crate::ops::imageops::validate_expand_output_size
-    as imageops_validate_expand_output_size;
+pub use crate::ops::imageops::validate_expand_output_size_for_mode as
+    imageops_validate_expand_output_size_for_mode;
 #[doc(hidden)]
 pub use crate::ops::imageops::validate_prepared_expand_output_size as
     imageops_validate_prepared_expand_output_size;

@@ -103,18 +103,14 @@ def expand(image: Image, border=0, fill=0) -> Image:
         if isinstance(fill, tuple) and len(fill) in (3, 4):
             fill = palette.getcolor(fill)
 
-    # Pillow evaluates image.mode before size validation. Keep that property
-    # access in sequence; the captured Rust raster currently supplies the
-    # prepared target mode for ordinary Image wrappers.
-    # TODO(pillow-rs#3ptb): translate this captured spelling to Mode and carry
-    # it into the prepared target. A subclass mode override that returns a
-    # different valid mode currently affects access order but not output mode.
+    # Image.new evaluates image.mode before size validation. Capture the
+    # returned Pillow mode before effectful size comparisons; the binding
+    # converts it to the flat Rust Mode enum at the typed operation boundary.
     target_mode = image.mode
-    target = _core.ops_expand_capture_target(image._rust_image)
     size = (width, height)
     if size[0] < 0 or size[1] < 0:
         raise ValueError("Width and height must be >= 0")
-    size = _core.ops_expand_validate_size(size, target)
+    target, size = _core.ops_expand_capture_target(size, target_mode)
     prepared_fill = _core.ops_expand_prepare_fill(target, fill)
     prepared_fill = _core.ops_expand_resolve_palette_fill(target, prepared_fill)
 

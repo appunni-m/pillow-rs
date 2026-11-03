@@ -10,7 +10,7 @@ use crate::raster::{DynamicImage, Mode};
 /// A fill resolved for the exact mode of a captured `Image.new` target.
 ///
 /// The Python wrapper resolves names and palette callbacks first, captures
-/// the target image, validates the size, then prepares this mode strategy.
+/// the target mode, validates the size, then prepares this mode strategy.
 #[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct PreparedExpandFill {
@@ -29,7 +29,15 @@ pub fn prepare_expand_fill(
     image: &Image,
     input: ImageOpsColor,
 ) -> Result<PreparedExpandFill, PilError> {
-    let mode = image.mode_identity()?;
+    prepare_expand_fill_for_mode(image.mode_identity()?, input)
+}
+
+/// Converts and validates an Expand fill against an explicit target mode.
+#[doc(hidden)]
+pub fn prepare_expand_fill_for_mode(
+    mode: Mode,
+    input: ImageOpsColor,
+) -> Result<PreparedExpandFill, PilError> {
     let fill_rule = expand_fill_rule(mode)?;
     let palette_components = if fill_rule == ExpandFillRule::PaletteIndexOrColor {
         super::color::palette_fill_components(&input)?
@@ -85,6 +93,28 @@ pub fn resolve_expand_fill_palette(
     Ok(prepared)
 }
 
+/// Completes the host palette stage for an already captured target mode.
+#[doc(hidden)]
+pub fn finish_expand_fill_palette_from_host(
+    mode: Mode,
+    prepared: PreparedExpandFill,
+) -> Result<PreparedExpandFill, PilError> {
+    if mode != prepared.mode {
+        return Err(PilError::InternalError(
+            "Expand fill was prepared for a different image mode".into(),
+        ));
+    }
+    if prepared.fill_rule == ExpandFillRule::PaletteIndexOrColor
+        && super::color::palette_fill_components(&prepared.input)?.is_some()
+    {
+        // TODO(pillow-rs#3ptb): freeze P/PA fills when a subclass suppresses
+        // `image.palette`; match Pillow's exact Image.new tuple-fill fault.
+        return Err(PilError::ValueError("unknown color specifier".into()));
+    }
+    prepared.palette_resolved = true;
+    Ok(prepared)
+}
+
 /// Checks the allocation dimensions against the mode captured for `Image.new`.
 #[doc(hidden)]
 pub fn validate_prepared_expand_output_size(
@@ -94,18 +124,13 @@ pub fn validate_prepared_expand_output_size(
     validate_expand_output_size_for_mode(prepared.mode, size)
 }
 
-fn validate_expand_output_size_for_mode(mode: Mode, size: (u32, u32)) -> Result<(), PilError> {
+#[doc(hidden)]
+pub fn validate_expand_output_size_for_mode(
+    mode: Mode,
+    size: (u32, u32),
+) -> Result<(), PilError> {
     CheckedDims::new_allow_empty(size.0, size.1, expand_bytes_per_pixel(mode)?)?;
     Ok(())
-}
-
-/// Validates the allocation size against an already captured Image.new source.
-///
-/// The host wrapper snapshots this image before effectful Python size
-/// comparisons, matching the mode value evaluated for `Image.new`.
-#[doc(hidden)]
-pub fn validate_expand_output_size(image: &Image, size: (u32, u32)) -> Result<(), PilError> {
-    validate_expand_output_size_for_mode(image.mode_identity()?, size)
 }
 
 /// Creates and materializes the filled canvas before the source is loaded.
