@@ -123,10 +123,13 @@ remain under source review and parity.
 For P-mode Pad, the host bridge now routes three/four-component all-integer
 lists and tuples through the package's `ImagePalette.getcolor`, carrying the
 selected index and temporary palette bytes into the native canvas strategy.
-This preserves iterable and integer-subclass callbacks before centering
-conversion. Other P fills still use a typed fallback that does not preserve all
-custom sequence/subscript callbacks and fault order. These source changes are
-uncompiled.
+P-mode strings first call the package's `ImageColor.getcolor`, and its result
+then follows that same palette route. This preserves iterable and
+integer-subclass callbacks before centering conversion. Remaining P values
+follow the one-band native fill contract: only an integer or one-element
+integer tuple is accepted after the palette route. The eager `Image.new`
+allocation/fill-fault/centering order remains TODO, as does runtime parity.
+These source changes are uncompiled.
 Chops, Pad, Draw, Thumbnail, Quantize, Resize, geometry sidecars, Filter, and
 Composite context propagation remain uncompiled and runtime-unverified. The
 audit is not a completion proof: operation support declarations, ownership,
@@ -1335,14 +1338,19 @@ the current-mode Resize. It validates fill first and indexes only the
 coordinate for the padded axis. Exact built-in values use equivalent native
 clamp/multiply/round arithmetic; custom numeric values invoke Python's
 `min`/`max`, multiplication, and `round` protocols in order. In-range offsets
-pass through normalized centering. P tuple and name fills validate into
-`Image.new`'s temporary RGB palette and write index zero; if the source has a
-palette, Pad restores that palette on the result without looking up or
-appending the fill color. Integer-list P fills are a documented
-`NO_PILLOW_SUPPORT` extension. TODO: preserve signed out-of-gap custom
-`round` results and match Pillow's paste-coordinate C-int overflow behavior;
-verify callback-driven mode/storage mutation and `getdata` identity, malformed
-or custom color coercion, and dirty/raw palette failure ordering. Keep these
+pass through normalized centering. For mode P, `Image.new` first converts
+strings with `ImageColor.getcolor`; it then routes three/four-component
+all-integer lists and tuples through a temporary RGB `ImagePalette.getcolor`
+call. Pad writes that returned palette index. If the resized source has a
+palette, Pad replaces the temporary palette on the result after the lookup; it
+does not skip the lookup. The host bridge now calls the package's ImageColor
+and ImagePalette adapters in that order and carries the index and temporary
+bytes into the native canvas strategy. Integer RGB(A) lists are Pillow-defined
+input here. TODO: preserve the eager `Image.new` canvas-allocation precedence
+over native fill validation and centering access; preserve signed out-of-gap
+custom `round` results and match Pillow's paste-coordinate C-int overflow
+behavior; verify callback-driven mode/storage mutation and `getdata` identity,
+non-P custom color coercion, and dirty/raw palette failure ordering. Keep these
 cases in the frozen CPU parity matrix; no runtime evidence is claimed yet.
 
 ### PutData I;16 bytes-subclass boundary

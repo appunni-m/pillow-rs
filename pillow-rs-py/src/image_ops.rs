@@ -244,6 +244,9 @@ fn ops_pad(
     let (fill, centering) = if preflight.needs_padding() {
         let mode = inner.mode_identity().map_err(map_error)?;
         let color = imageops_pad_color_from_python(image.py(), color, mode)?;
+        // TODO(pillow-rs#3ptb): Pillow allocates Image.new's canvas before
+        // core fill validation and before centering access. This deferred Pad
+        // plan currently resolves fill and centering before canvas allocation.
         let fill = pillow_rs::imageops_pad_fill_preflight(&inner, preflight, color)
             .map_err(map_error)?;
         let centering = pad_centering_from_python(

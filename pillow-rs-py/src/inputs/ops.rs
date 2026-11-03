@@ -1,6 +1,6 @@
 use super::{
-    Bound, PyAny, PyDict, PyErr, PyInt, PyList, PyOverflowError, PyResult, PyTuple, PyTypeError,
-    PyValueError, Python,
+    Bound, PyAny, PyDict, PyErr, PyInt, PyList, PyOverflowError, PyResult, PyString, PyTuple,
+    PyTypeError, PyValueError, Python,
 };
 use pyo3::types::{PyAnyMethods, PyBool, PyFloat, PyListMethods, PyTupleMethods, PyTypeMethods};
 
@@ -207,8 +207,9 @@ pub(crate) fn imageops_expand_color_from_python(
 
 /// Adapts an ImageOps.pad fill using its exact destination Mode.
 ///
-/// P-mode RGB(A) integer lists and tuples use the temporary palette callback
-/// path. Other values retain the destination-specific typed conversion.
+/// P-mode strings pass through ImageColor, then RGB(A) integer lists and tuples
+/// use the temporary palette callback path. Other values retain the
+/// destination-specific typed conversion.
 pub(crate) fn imageops_pad_color_from_python(
     py: Python<'_>,
     value: Option<&Bound<'_, PyAny>>,
@@ -217,6 +218,13 @@ pub(crate) fn imageops_pad_color_from_python(
     let Some(value) = value else {
         return Ok(pillow_rs::ImageOpsColor::None);
     };
+    if mode == pillow_rs::Mode::ImagePalette8 && value.cast::<PyString>().is_ok() {
+        let color = py
+            .import("pillow_rs.imagecolor")?
+            .getattr("getcolor")?
+            .call1((value, "P"))?;
+        return imageops_pad_palette_color_from_python(py, &color);
+    }
     if let Ok(name) = value.extract::<String>() {
         return Ok(pillow_rs::ImageOpsColor::Name(name));
     }
@@ -294,26 +302,12 @@ fn imageops_pad_palette_color_from_python(
     if let Some(fill) = imageops_pad_palette_fill_from_python(py, value)? {
         return Ok(fill);
     }
-    // TODO(pillow-rs#3ptb): for P fills outside the all-integer RGB(A) palette
-    // case, Pillow passes the original object to core fill parsing. This typed
-    // fallback still lowers recognized values and does not preserve every
-    // custom sequence/subscript callback or its fault order.
     if value.is_instance_of::<PyInt>() {
         return value
             .extract::<i64>()
             .map(pillow_rs::ImageOpsColor::Scalar);
     }
-    if value.is_instance_of::<PyFloat>() {
-        return value
-            .extract::<f64>()
-            .map(pillow_rs::ImageOpsColor::FloatingScalar);
-    }
     if let Ok(tuple) = value.cast::<PyTuple>() {
-        if !matches!(tuple.len(), 1 | 3 | 4) {
-            // P has one logical band. Reject invalid tuple shapes before
-            // examining components, preserving Pillow's arity-first fault.
-            return Ok(pillow_rs::ImageOpsColor::FloatingComponents(Vec::new()));
-        }
         if tuple.len() == 1 {
             let component = tuple.get_item(0)?;
             if component.is_instance_of::<PyInt>() {
@@ -322,30 +316,9 @@ fn imageops_pad_palette_color_from_python(
                     .map(pillow_rs::ImageOpsColor::Scalar);
             }
         }
-        if let Some(components) = imageops_pad_wide_integer_tuple_components(value) {
-            return Ok(pillow_rs::ImageOpsColor::WideTupleComponents {
-                components,
-                fallback: Box::new(imageops_color_from_python(Some(value))),
-            });
-        }
-        if tuple.iter().all(|component| {
-            component.is_instance_of::<PyInt>() || component.is_instance_of::<PyFloat>()
-        }) {
-            return Ok(imageops_color_from_python(Some(value)));
-        }
-        return Err(PyTypeError::new_err(
-            "color must be int or single-element tuple",
-        ));
     }
-    if let Ok(list) = value.cast::<PyList>() {
-        if let Some(components) = imageops_expand_list_wide_integer_components(value) {
-            return Ok(pillow_rs::ImageOpsColor::ListNumericComponents(components));
-        }
-        if list.iter().all(|component| component.is_instance_of::<PyInt>()) {
-            return Ok(imageops_color_from_python(Some(value)));
-        }
-        return Ok(pillow_rs::ImageOpsColor::InvalidList);
-    }
+    // Pillow's one-band P fill parser accepts only a PyLong or a one-element
+    // tuple containing a PyLong once Image.new's temporary RGB route is over.
     Err(PyTypeError::new_err(
         "color must be int or single-element tuple",
     ))
@@ -410,23 +383,6 @@ fn imageops_pad_float_color_from_python(
             .extract::<f64>()
             .map(pillow_rs::ImageOpsColor::FloatingScalar)
     }
-}
-
-fn imageops_pad_wide_integer_tuple_components(
-    value: &Bound<'_, PyAny>,
-) -> Option<Vec<pillow_rs::PaletteColorComponent>> {
-    let components = imageops_expand_tuple_numeric_components(value)?;
-    let has_wide_integer = components.iter().any(|component| {
-        matches!(
-            component,
-            pillow_rs::PaletteColorComponent::WideInteger { .. }
-        )
-    });
-    let contains_float = components
-        .iter()
-        .any(|component| matches!(component, pillow_rs::PaletteColorComponent::Float(_)));
-    (matches!(components.len(), 3 | 4) && has_wide_integer && !contains_float)
-        .then_some(components)
 }
 
 fn imageops_expand_tuple_numeric_components(
