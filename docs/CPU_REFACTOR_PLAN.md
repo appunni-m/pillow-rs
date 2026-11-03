@@ -69,13 +69,14 @@ the baseline. Keep `pillow-rs-bad` as reference.
 
 ## Current pending matrix
 
-Snapshot base: `develop` commit `f9b685741` (local WIP, unpushed). The CPU
+Snapshot base: `develop` commit `535813b58` (local WIP, unpushed). The CPU
 source migration remains in source review and is not ready for validation
 gates. Recent source-only checkpoints thread `StrategySelection` through
 Rotate and Transform hidden-lane helpers; native-byte Filter extrema, rank,
 and blur helpers; LA/RGBA AlphaComposite architecture binding; and the
-UnsharpMask mutable-byte handoff now preserves GaussianBlur's hidden lanes. A
-static scan now finds no runtime helper parameters carrying a bare `Architecture`;
+UnsharpMask mutable-byte handoff now preserves GaussianBlur's hidden lanes.
+The mutable-byte accessor now documents its sidecar invalidation contract. A
+static scan finds no runtime helper parameters carrying a bare `Architecture`;
 remaining raw parameters are the const Merge support-declaration builder and
 Analysis's internal missing-strategy error formatter. Chops, Pad, Draw,
 Thumbnail, Quantize, Resize, geometry sidecars, Filter, and Composite context
