@@ -7,6 +7,11 @@ struct PyExpandFill {
     prepared: pillow_rs::PreparedExpandFill,
 }
 
+#[pyclass(name = "_ExpandTarget", frozen)]
+struct PyExpandTarget {
+    inner: pillow_rs::Image,
+}
+
 #[pyfunction]
 fn ops_validate_deform_resample(value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
     let value = resample_input_from_python(value)?;
@@ -316,13 +321,19 @@ fn ops_scale(
 }
 
 #[pyfunction]
+fn ops_expand_capture_target(image: &Bound<'_, PyImage>) -> PyResult<PyExpandTarget> {
+    let inner = image.borrow().inner.clone();
+    inner.mode_identity().map_err(map_error)?;
+    Ok(PyExpandTarget { inner })
+}
+
+#[pyfunction]
 fn ops_expand_prepare_fill(
     py: Python<'_>,
-    image: &Bound<'_, PyImage>,
+    target: &Bound<'_, PyExpandTarget>,
     fill: &Bound<'_, PyAny>,
 ) -> PyResult<PyExpandFill> {
-    // ImageOps.expand evaluates image.mode before converting the fill.
-    let inner = image.borrow().inner.clone();
+    let inner = target.borrow().inner.clone();
     let input = imageops_expand_color_from_python(Some(fill));
     let prepared = py
         .detach(|| pillow_rs::imageops_prepare_expand_fill(&inner, input))
@@ -333,10 +344,10 @@ fn ops_expand_prepare_fill(
 #[pyfunction]
 fn ops_expand_resolve_palette_fill(
     py: Python<'_>,
-    image: &Bound<'_, PyImage>,
+    target: &Bound<'_, PyExpandTarget>,
     fill: PyRef<'_, PyExpandFill>,
 ) -> PyResult<PyExpandFill> {
-    let inner = image.borrow().inner.clone();
+    let inner = target.borrow().inner.clone();
     let prepared = fill.prepared.clone();
     let prepared = py
         .detach(|| pillow_rs::imageops_resolve_expand_fill_palette(&inner, prepared))
@@ -348,7 +359,7 @@ fn ops_expand_resolve_palette_fill(
 fn ops_expand_validate_size(
     py: Python<'_>,
     size: &Bound<'_, PyAny>,
-    fill: PyRef<'_, PyExpandFill>,
+    target: &Bound<'_, PyExpandTarget>,
 ) -> PyResult<(u32, u32)> {
     let size = size.cast::<PyTuple>()?;
     if size.len() != 2 {
@@ -362,9 +373,9 @@ fn ops_expand_validate_size(
         return Err(PyValueError::new_err("Width and height must be >= 0"));
     }
     let size = (width as u32, height as u32);
-    let prepared = fill.prepared.clone();
+    let inner = target.borrow().inner.clone();
     py.detach(move || {
-        pillow_rs::imageops_validate_prepared_expand_output_size(&prepared, size)
+        pillow_rs::imageops_validate_expand_output_size(&inner, size)
     })
     .map_err(map_error)?;
     Ok(size)
@@ -427,7 +438,9 @@ pub(super) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(ops_pad_preflight, m)?)?;
     m.add_function(wrap_pyfunction!(ops_pad, m)?)?;
     m.add_function(wrap_pyfunction!(ops_scale, m)?)?;
+    m.add_class::<PyExpandTarget>()?;
     m.add_class::<PyExpandFill>()?;
+    m.add_function(wrap_pyfunction!(ops_expand_capture_target, m)?)?;
     m.add_function(wrap_pyfunction!(ops_expand_prepare_fill, m)?)?;
     m.add_function(wrap_pyfunction!(ops_expand_resolve_palette_fill, m)?)?;
     m.add_function(wrap_pyfunction!(ops_expand_validate_size, m)?)?;

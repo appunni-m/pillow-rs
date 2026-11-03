@@ -26,8 +26,8 @@ pub use geometry::{
     pad_with_input_and_containment, pad_with_preflight, pad_with_preflight_and_fill,
     parse_imageops_filter_input, prepare_expand_fill,
     resolve_expand_fill_palette, scale_with_input, validate_deform_resample,
-    validate_prepared_expand_output_size, PadFillPreflight, PadGeometryPreflight, PadPreflight,
-    PreparedExpandFill,
+    validate_expand_output_size, validate_prepared_expand_output_size, PadFillPreflight,
+    PadGeometryPreflight, PadPreflight, PreparedExpandFill,
 };
 pub use point::*;
 

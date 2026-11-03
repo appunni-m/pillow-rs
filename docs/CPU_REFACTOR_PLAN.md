@@ -110,6 +110,14 @@ directly from generated samples without materializing an intermediate image.
 Exact outputs, Pillow wrapper-fallback parity, and fault-order verification
 remain pending. Official source references and the remaining Convert
 mode/target matrix are in the [CPU refactor inventory](CPU_REFACTOR_INVENTORY.md).
+
+The Expand Python boundary now resolves named fills against the initial mode,
+executes copied P-palette callbacks in Python, captures a target image after
+those callbacks, validates size before non-string fill conversion, and pastes
+the current source wrapper into the captured-mode canvas. The exact-mode Rust
+Expand strategies still perform canvas filling. Dirty/raw palette faults,
+metadata, allocation order, and CoreOnly fill cases remain under source review
+and parity.
 These source changes are uncompiled.
 Chops, Pad, Draw, Thumbnail, Quantize, Resize, geometry sidecars, Filter, and
 Composite context propagation remain uncompiled and runtime-unverified. The
@@ -1349,19 +1357,25 @@ complete byte inputs in Pillow CPU parity. Source: [Pillow 12.2.0
 
 The Python facade copies Pillow's two- and four-value border unpacking and
 reads `image.size` while computing `left + width + right` /
-`top + height + bottom`, before core fill conversion. The typed
-`PreparedExpandFill` captures the source mode before fill coercion and carries
-mode-resolved fill through palette handling. Accessing `image.palette`
-intentionally preserves the wrapper's palette-load and dirty-palette
-realization boundary for indexed modes. Core then resolves P palette
-components against the committed palette before size validation. The facade
-captures the Image.new source before Python size comparisons, checks negative
-dimensions before C-int extraction, forms Paste's four-coordinate box after
-size validation, and loads the current source before the binding applies
-ordered C-int checks. This preserves Pillow's Paste source-load error order
-while keeping the expanded result as a lazy pipeline. Core derives effective
-trailing margins from that explicit size and queues the existing exact-mode
-Expand strategy without allocating an intermediate image-sized raster.
+`top + height + bottom`. It captures the initial `image.mode` for
+`ImageColor.getcolor`, accesses and realizes the palette, then calls the copied
+P palette's `getcolor` in Python so overrides and callback mutations remain at
+the host boundary. After palette callbacks it captures the exact Rust image
+that supplies `Image.new`'s target mode. Python negative-size comparisons run
+before ordered C-int extraction and exact-mode `ExpandedDimensions`
+validation; non-string fill validation follows those size checks. The Rust
+`PreparedExpandFill` is built against the captured target, while Paste uses
+the current source wrapper after size comparisons, preserving Pillow's
+Image.new-then-paste composition when callbacks replace or change the source.
+The canvas uses existing exact-mode Expand strategies. A copied P palette is
+attached through the wrapper's `putpalette` path before the current source is
+pasted, and the final result is materialized at Pillow's eager boundary.
+
+Core derives effective trailing margins from the explicit size and queues the
+existing exact-mode Expand strategy without allocating an intermediate
+image-sized raster. Remaining source review covers dirty/raw and malformed
+palette faults, output metadata, eager `Image.new` allocation timing, and
+CoreOnly typed fill behavior. Runtime mode/output/fault parity remains pending.
 
 Both the wrapper preflight and CPU Expand allocation use the declared exact-mode
 `ExpandedDimensions` byte count and allow valid zero-sized results. Source
@@ -1372,17 +1386,11 @@ compare eager `Image.new` allocation failure timing; and verify
 dirty/malformed palette behavior in the frozen CPU parity set. No runtime
 validation has run for this boundary.
 
-Expand callback source audit (2026-11-04): Pillow resolves a string fill with
-the initial `image.mode`, accesses and copies the palette, then evaluates
-`image.mode` again as the target passed to `Image.new`. The Python wrapper can
-therefore change mode between fill parsing and canvas creation. The maintained
-`PreparedExpandFill` currently stores one mode, resolves non-string fill
-validation too early, and resolves palette entries from the Rust image rather
-than the returned Python palette object. This remains an implementation gap:
-separate the two mode captures, preserve Python palette callbacks, and defer
-raw fill validation to the Image.new boundary. Keep parity and allocation
-fault checks pending until that source path is complete. The actionable TODO
-is also recorded at the Expand Python and Rust owners and in the CPU inventory.
+Expand callback source audit (2026-11-04): the initial fill mode, Python P
+palette callback, later target snapshot, size checks, prepared Rust fill, and
+current-source Paste are now separate ordered stages. The remaining source
+TODO covers palette faults/metadata and CoreOnly fill contracts; parity and
+allocation-fault checks remain pending.
 
 ### Filter blur source review update
 

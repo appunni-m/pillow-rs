@@ -414,6 +414,9 @@ pub use crate::ops::imageops::prepare_expand_fill as imageops_prepare_expand_fil
 #[doc(hidden)]
 pub use crate::ops::imageops::resolve_expand_fill_palette as imageops_resolve_expand_fill_palette;
 #[doc(hidden)]
+pub use crate::ops::imageops::validate_expand_output_size
+    as imageops_validate_expand_output_size;
+#[doc(hidden)]
 pub use crate::ops::imageops::validate_prepared_expand_output_size as
     imageops_validate_prepared_expand_output_size;
 #[doc(hidden)]

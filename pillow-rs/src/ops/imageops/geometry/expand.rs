@@ -7,10 +7,10 @@ use crate::ops::imageops::{ImageOpsColor, resolve_imageops_color};
 use crate::pipeline::{ExpandMargins, NativeColorInput, PipelineOp};
 use crate::raster::{DynamicImage, Mode};
 
-/// A fill converted against the source mode before Expand geometry is checked.
+/// A fill resolved for the exact mode of a captured `Image.new` target.
 ///
-/// The Python binding carries this through Pillow's fill, palette, and
-/// `Image.new` size stages.
+/// The Python wrapper resolves names and P-palette callbacks first, captures
+/// the target image, validates the size, then prepares this mode strategy.
 #[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct PreparedExpandFill {
@@ -23,7 +23,7 @@ pub struct PreparedExpandFill {
     palette_resolved: bool,
 }
 
-/// Converts and validates an Expand fill against the source's exact mode.
+/// Converts and validates an Expand fill against the captured image's mode.
 #[doc(hidden)]
 pub fn prepare_expand_fill(
     image: &Image,
@@ -97,6 +97,15 @@ pub fn validate_prepared_expand_output_size(
 fn validate_expand_output_size_for_mode(mode: Mode, size: (u32, u32)) -> Result<(), PilError> {
     CheckedDims::new_allow_empty(size.0, size.1, expand_bytes_per_pixel(mode)?)?;
     Ok(())
+}
+
+/// Validates the allocation size against an already captured Image.new source.
+///
+/// The host wrapper snapshots this image before effectful Python size
+/// comparisons, matching the mode value evaluated for `Image.new`.
+#[doc(hidden)]
+pub fn validate_expand_output_size(image: &Image, size: (u32, u32)) -> Result<(), PilError> {
+    validate_expand_output_size_for_mode(image.mode_identity()?, size)
 }
 
 /// Creates and materializes the filled canvas before the source is loaded.
@@ -267,13 +276,11 @@ fn resolve_expand_palette_fill(
     fill: &ImageOpsColor,
     fill_rule: ExpandFillRule,
 ) -> Result<Option<(u8, Vec<u8>, Option<Vec<u8>>)>, PilError> {
-    // The Python adapter converts the fill before committing a dirty palette,
-    // then this stage looks up or appends the color in that committed snapshot.
-    // TODO(pillow-rs#3ptb): keep the mode used to parse a string fill separate
-    // from the later Image.new target mode; palette callbacks may change the
-    // wrapper between them. Preserve the original color value type until
-    // Image.new validation, and let Python palette overrides own getcolor.
-    // Verify dirty/raw palette faults, malformed buffers, and output metadata.
+    // The Python adapter resolves P colors against its copied palette before
+    // preparing this Rust mode strategy. This retains source palette metadata
+    // for P/PA routes that do not perform the host tuple allocation.
+    // TODO(pillow-rs#3ptb): verify dirty/raw palette faults, malformed buffers,
+    // palette output metadata, and the documented CoreOnly fill extensions.
     if fill_rule != ExpandFillRule::PaletteIndexOrColor {
         return Ok(None);
     }

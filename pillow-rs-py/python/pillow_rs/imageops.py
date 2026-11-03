@@ -84,33 +84,52 @@ def expand(image: Image, border=0, fill=0) -> Image:
     # conversion. Retaining these values also preserves custom __add__ results.
     width = left + image.size[0] + right
     height = top + image.size[1] + bottom
-    prepared_fill = _core.ops_expand_prepare_fill(image._rust_image, fill)
+    fill_mode = image.mode
+    if isinstance(fill, str):
+        from .imagecolor import getcolor
+
+        fill = getcolor(fill, fill_mode)
 
     # Pillow reads image.palette after _color. For indexed modes this property
     # can load the source and realize dirty palette state before Image.new.
     palette = image.palette
     if palette and palette.dirty:
         image._realize_dirty_palette()
+    if image.mode == "P":
+        if palette:
+            palette = palette.copy()
+            if isinstance(fill, (str, tuple)):
+                fill = palette.getcolor(fill, image)
+            else:
+                palette = None
+    else:
+        palette = None
 
-    prepared_fill = _core.ops_expand_resolve_palette_fill(
-        image._rust_image, prepared_fill
-    )
+    # Image.new evaluates image.mode before its size comparisons. Retain that
+    # exact raster snapshot even if the comparisons mutate the source wrapper.
+    target_mode = image.mode
+    target = _core.ops_expand_capture_target(image._rust_image)
     size = (width, height)
-    # Image.new evaluates image.mode before its Python size comparisons.
     if size[0] < 0 or size[1] < 0:
         raise ValueError("Width and height must be >= 0")
-    size = _core.ops_expand_validate_size(size, prepared_fill)
+    size = _core.ops_expand_validate_size(size, target)
+    prepared_fill = _core.ops_expand_prepare_fill(target, fill)
+    prepared_fill = _core.ops_expand_resolve_palette_fill(target, prepared_fill)
 
     # Pillow allocates the target-mode Image.new canvas before Image.paste
     # loads or converts the current source wrapper.
     output = Image(_core.ops_expand_canvas(size, prepared_fill))
+    if target_mode == "P":
+        if palette:
+            palette_mode, palette_data = palette.getdata()
+            output.putpalette(palette_data, palette_mode)
+        elif not isinstance(fill, (tuple, list)):
+            # Image.new("P", ..., scalar) keeps an empty palette even when the
+            # source image carried one. Tuple/list extension routes resolve
+            # their own palette through the prepared Rust fill strategy.
+            output.putpalette([], "RGB")
     output.paste(image, (left, top))
     output.load()
-    # TODO(pillow-rs#3ptb): preserve the mode used by _color separately from
-    # the later Image.new mode; run copied-palette getcolor overrides in
-    # Python, and defer non-string fill validation until after size checks.
-    # Verify malformed palette faults, metadata changes, and changed-mode
-    # source behavior in the frozen CPU parity matrix.
     return output
 
 
