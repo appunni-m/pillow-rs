@@ -1,5 +1,7 @@
 //! Sparse RGB PutPixel overrides applied during Thumbnail's 2x2 reduction.
 
+use crate::raster::GenericImageView;
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::error::PilError;

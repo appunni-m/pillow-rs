@@ -16,19 +16,15 @@ fn ops_validate_deform_resample(value: Option<&Bound<'_, PyAny>>) -> PyResult<()
 // --- ImageOps module-level functions ---
 
 #[pyfunction]
-fn ops_autocontrast(
-    image: &Bound<'_, PyImage>,
-    cutoff: Option<f64>,
-    mask: Option<&Bound<'_, PyAny>>,
-) -> PyResult<PyImage> {
-    let inner = image.borrow().inner.clone();
-    let c = cutoff.unwrap_or(0.0);
-    let mask = imageops_mask_from_python(mask)?;
-    let rs = Python::attach(|py| {
-        py.detach(|| pillow_rs::imageops_autocontrast_with_mask(&inner, c, mask))
-    })
-    .map_err(map_error)?;
-    Ok(PyImage { inner: rs })
+fn ops_autocontrast_lut(
+    py: Python<'_>,
+    histogram: &Bound<'_, PyAny>,
+    cutoff: Option<&Bound<'_, PyAny>>,
+) -> PyResult<Vec<u8>> {
+    let histogram = histogram.extract::<Vec<u32>>()?;
+    let cutoff_counts = autocontrast_cutoff_counts_from_python(py, &histogram, cutoff)?;
+    pillow_rs::imageops_autocontrast_lut_from_histogram_and_counts(&histogram, cutoff_counts)
+        .map_err(map_error)
 }
 
 #[pyfunction]
@@ -320,49 +316,6 @@ fn ops_scale(
 }
 
 #[pyfunction]
-fn ops_expand(
-    py: Python<'_>,
-    image: &Bound<'_, PyImage>,
-    size: (u32, u32),
-    position: &Bound<'_, PyAny>,
-    fill: PyRef<'_, PyExpandFill>,
-) -> PyResult<PyImage> {
-    let inner = image.borrow().inner.clone();
-
-    // ImageOps.expand delegates to Image.paste with a two-coordinate box.
-    // The facade adds the source extent after size validation; parse its final
-    // four C-int coordinates in Pillow's order here.
-    let position = position.cast::<PyTuple>()?;
-    if position.len() != 4 {
-        return Err(PyTypeError::new_err(format!(
-            "argument 2 must be sequence of length 4, not {}",
-            position.len()
-        )));
-    }
-    let left = position.get_item(0)?;
-    let top = position.get_item(1)?;
-    let right = position.get_item(2)?;
-    let bottom = position.get_item(3)?;
-    let left = paste_box_coordinate_from_python(&left)?;
-    let top = paste_box_coordinate_from_python(&top)?;
-    let _right = paste_box_coordinate_from_python(&right)?;
-    let _bottom = paste_box_coordinate_from_python(&bottom)?;
-
-    let prepared = fill.prepared.clone();
-    let rs = py
-        .detach(move || {
-            pillow_rs::imageops_expand_with_output_size_and_position(
-                &inner,
-                size,
-                (left, top),
-                &prepared,
-            )
-        })
-        .map_err(map_error)?;
-    Ok(PyImage { inner: rs })
-}
-
-#[pyfunction]
 fn ops_expand_prepare_fill(
     py: Python<'_>,
     image: &Bound<'_, PyImage>,
@@ -394,10 +347,9 @@ fn ops_expand_resolve_palette_fill(
 #[pyfunction]
 fn ops_expand_validate_size(
     py: Python<'_>,
-    image: &Bound<'_, PyImage>,
     size: &Bound<'_, PyAny>,
+    fill: PyRef<'_, PyExpandFill>,
 ) -> PyResult<(u32, u32)> {
-    let inner = image.borrow().inner.clone();
     let size = size.cast::<PyTuple>()?;
     if size.len() != 2 {
         return Err(PyValueError::new_err(
@@ -410,9 +362,25 @@ fn ops_expand_validate_size(
         return Err(PyValueError::new_err("Width and height must be >= 0"));
     }
     let size = (width as u32, height as u32);
-    py.detach(|| pillow_rs::imageops_validate_expand_output_size(&inner, size))
-        .map_err(map_error)?;
+    let prepared = fill.prepared.clone();
+    py.detach(move || {
+        pillow_rs::imageops_validate_prepared_expand_output_size(&prepared, size)
+    })
+    .map_err(map_error)?;
     Ok(size)
+}
+
+#[pyfunction]
+fn ops_expand_canvas(
+    py: Python<'_>,
+    size: (u32, u32),
+    fill: PyRef<'_, PyExpandFill>,
+) -> PyResult<PyImage> {
+    let prepared = fill.prepared.clone();
+    let rs = py
+        .detach(move || pillow_rs::imageops_expand_canvas_with_prepared_fill(size, &prepared))
+        .map_err(map_error)?;
+    Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
@@ -442,7 +410,7 @@ fn ops_exif_transpose(image: &Bound<'_, PyImage>, in_place: bool) -> PyResult<Op
 }
 
 pub(super) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(ops_autocontrast, m)?)?;
+    m.add_function(wrap_pyfunction!(ops_autocontrast_lut, m)?)?;
     m.add_function(wrap_pyfunction!(ops_equalize, m)?)?;
     m.add_function(wrap_pyfunction!(ops_validate_deform_resample, m)?)?;
     m.add_function(wrap_pyfunction!(ops_invert, m)?)?;
@@ -463,7 +431,7 @@ pub(super) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(ops_expand_prepare_fill, m)?)?;
     m.add_function(wrap_pyfunction!(ops_expand_resolve_palette_fill, m)?)?;
     m.add_function(wrap_pyfunction!(ops_expand_validate_size, m)?)?;
-    m.add_function(wrap_pyfunction!(ops_expand, m)?)?;
+    m.add_function(wrap_pyfunction!(ops_expand_canvas, m)?)?;
     m.add_function(wrap_pyfunction!(ops_crop_border, m)?)?;
     m.add_function(wrap_pyfunction!(ops_exif_transpose, m)?)?;
     Ok(())

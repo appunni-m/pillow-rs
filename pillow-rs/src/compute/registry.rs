@@ -38,7 +38,7 @@ mod gpu_support;
 mod registration;
 mod prepared;
 pub use prepared::PreparedOperation;
-pub mod support;
+pub(crate) mod support;
 #[cfg(feature = "gpu")]
 pub use gpu_params::extract_params;
 #[cfg(feature = "gpu")]

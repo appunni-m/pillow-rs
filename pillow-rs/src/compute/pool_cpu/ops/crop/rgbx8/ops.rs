@@ -9,10 +9,10 @@ use super::super::helpers::crop::CropRegion;
 use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
 
 pub(crate) const SUPPORT: ModeSupport =
-    ModeSupport::serial(OperationId::Crop, Mode::ImageRgbx8, default::crop_impl::INPUTS);
+    ModeSupport::serial(OperationId::Crop, Mode::ImageRgbx8, super::default::crop_impl::INPUTS);
 
 pub(crate) enum ArchitectureStrategy<'a> {
-    Default(default::crop_impl::Crop<'a>),
+    Default(super::default::crop_impl::Crop<'a>),
 }
 
 pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
@@ -22,17 +22,17 @@ pub(crate) fn assess(region: CropRegion, ctx: &ExecutionContext) -> Result<Suppo
 }
 
 pub(crate) fn prepare<'a>(
-    image: &'a default::crop_impl::Input,
+    image: &'a super::default::crop_impl::Input,
     region: CropRegion,
     ctx: &ExecutionContext,
 ) -> Result<Strategy<'a>, PilError> {
-    let implementation = default::crop_impl::prepare(image, region)?;
+    let implementation = super::default::crop_impl::prepare(image, region)?;
     let selection = SUPPORT.select_serial(ctx)?;
     Ok(Prepared::new(ArchitectureStrategy::Default(implementation), selection))
 }
 
 pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
     match strategy.implementation {
-            ArchitectureStrategy::Default(implementation) => default::crop_impl::execute(implementation),
+            ArchitectureStrategy::Default(implementation) => super::default::crop_impl::execute(implementation),
     }
 }

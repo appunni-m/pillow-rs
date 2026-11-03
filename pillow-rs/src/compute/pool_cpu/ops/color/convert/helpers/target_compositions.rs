@@ -73,7 +73,7 @@ const L16_TO_LAB: &[OperationModeTransition] = &[
     },
 ];
 
-pub(super) fn classify_target_composition(
+pub(crate) fn classify_target_composition(
     source: Mode,
     target: Mode,
 ) -> Option<OperationTargetComposition> {
@@ -240,6 +240,7 @@ fn classify_rgbx_composition(
         if PILLOW_RGBX_SOURCES.contains(&source) {
             base_scope
         } else {
+            // NO_PILLOW_SUPPORT: Pillow has no direct conversion from this source to RGBX.
             SupportScope::CoreOnly {
                 reason: "Pillow has no direct conversion from this source to RGBX",
             }

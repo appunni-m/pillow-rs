@@ -16,7 +16,7 @@ pub(crate) fn execute(
     other: Option<&DynamicImage>,
 ) -> Result<DynamicImage, PilError> {
     match image {
-        DynamicImage::ImageLumaA16(_) => default::ops::execute(image, request, other),
+        DynamicImage::ImageLumaA16(_) => super::default::ops::execute(image, request, other),
         _ => Err(PilError::InternalError("Chops mode strategy received a different raster variant".into())),
     }
 }

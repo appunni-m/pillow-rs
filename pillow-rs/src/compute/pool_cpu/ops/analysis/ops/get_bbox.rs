@@ -23,6 +23,7 @@ const GET_BBOX_INPUTS: &[InputContract] = &[InputContract::GetBBoxAlphaOnly {
 
 fn classify_get_bbox_mode(mode: Mode) -> ModeSupport {
     match mode {
+        // NO_PILLOW_SUPPORT: these native high-depth carriers extend GetBBox's Pillow modes.
         Mode::ImageLumaA16
         | Mode::ImageRgb16
         | Mode::ImageRgba16

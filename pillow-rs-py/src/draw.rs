@@ -353,6 +353,27 @@ impl PyDraw {
             .map_err(map_error)
     }
 
+    fn text_ink(&mut self, fill: Option<&Bound<'_, PyAny>>) -> PyResult<i64> {
+        self.draw
+            .text_ink_with_input(draw_color_input_from_python(fill)?)
+            .map_err(map_error)
+    }
+
+    fn text_color_mask(
+        &mut self,
+        xy: (i32, i32),
+        color: &Bound<'_, PyImage>,
+        coverage: &Bound<'_, PyImage>,
+    ) -> PyResult<()> {
+        color.call_method0("load")?;
+        coverage.call_method0("load")?;
+        let color = color.borrow();
+        let coverage = coverage.borrow();
+        self.draw
+            .paste_text_color_mask(xy, &color.inner, &coverage.inner)
+            .map_err(map_error)
+    }
+
     fn regular_polygon(
         &mut self,
         bounding_circle: &Bound<'_, PyAny>,

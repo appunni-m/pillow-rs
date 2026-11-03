@@ -249,13 +249,13 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
             selection.implementation.architecture,
             image,
             request,
-            default::execute,
+            super::default::execute,
             execute_filter5x5_vectorized
         );
     }
     if matches!(request, super::super::ops::FilterRequest::Filter3x3 { .. }) {
         return match selection.implementation.architecture {
-            Architecture::Default => default::execute(image, request),
+            Architecture::Default => super::default::execute(image, request),
             Architecture::Sse2
             | Architecture::Avx
             | Architecture::AvxFma
@@ -271,7 +271,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
     if selection.implementation.architecture != Architecture::Default {
         return Err(PilError::InternalError("filter selected an unowned architecture".into()));
     }
-    default::execute(image, request)
+    super::default::execute(image, request)
 }
 
 fn execute_gaussian_blur(
@@ -281,7 +281,7 @@ fn execute_gaussian_blur(
     context: &crate::compute::ExecutionContext,
 ) -> Result<DynamicImage, PilError> {
     match selection.implementation.architecture {
-        Architecture::Default => default::execute(
+        Architecture::Default => super::default::execute(
             image,
             super::super::ops::FilterRequest::GaussianBlur { sigma },
         ),
@@ -313,4 +313,15 @@ fn execute_gaussian_blur(
             "RGBA GaussianBlur selected an unowned architecture".into(),
         )),
     }
+}
+
+pub(in crate::compute::pool_cpu::ops::filter) fn mode_filter_support() -> crate::compute::registry::support::ModeSupport {
+    super::super::ops::core_only_serial(crate::compute::registry::support::OperationId::ModeFilter, MODE)
+}
+
+pub(in crate::compute::pool_cpu::ops::filter) fn execute_mode_filter(
+    image: &crate::raster::DynamicImage,
+    size: u32,
+) -> Result<crate::raster::DynamicImage, crate::error::PilError> {
+    super::default::execute_mode_filter(image, size)
 }

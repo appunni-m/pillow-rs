@@ -1,6 +1,6 @@
 //! Mode-specific CPU drawing strategies.
 
-mod helpers;
+pub(crate) mod helpers;
 pub(crate) use helpers::bitmap_mask::BitmapMask;
 pub(crate) use helpers::bitmap_region::BitmapRegion;
 pub(crate) use helpers::gray_alpha_bitmap;

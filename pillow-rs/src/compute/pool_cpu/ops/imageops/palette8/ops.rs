@@ -2,11 +2,13 @@ pub(crate) type Input = crate::raster::GrayImage;
 use crate::compute::pool_cpu::ops::imageops::helpers::strategy::declare_invert_native_mode;
 use crate::compute::Architecture;
 use crate::compute::registry::support::PaletteInput;
+use crate::compute::registry::support::StrategySelection;
 use crate::error::PilError;
-use crate::raster::GrayImage;
+use crate::raster::{DynamicImage, GrayImage, RgbImage};
 use crate::compute::pool_cpu::ops::imageops::helpers::strategy;
 use crate::compute::registry::support::{
     ImplementationSupport, InputContract, ModeSupport, OperationId, OutputModeRule,
+    StrategyGuard,
 };
 use crate::raster::Mode;
 
@@ -78,3 +80,118 @@ pub(crate) const SOLARIZE_SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
     &SOLARIZE_ARCHITECTURES,
     "Solarize applies its byte lookup table directly to native palette indices",
 );
+
+const EQUALIZE_INPUTS: &[InputContract] = &[
+    InputContract::PaletteMetadata,
+    InputContract::CheckedByteDimensions { bytes_per_pixel: 1, allow_empty: true },
+    InputContract::ImageOpsLumaMask,
+];
+static EQUALIZE_ARCHITECTURES: [ImplementationSupport; 3] = strategy::cpu_architectures_for(
+    OperationId::Equalize,
+    Mode::ImagePalette8,
+    StrategyGuard::Always,
+);
+pub(crate) const EQUALIZE_SUPPORT: ModeSupport = ModeSupport::cpu(
+    OperationId::Equalize,
+    Mode::ImagePalette8,
+    OutputModeRule::Fixed(Mode::ImageRgb8),
+    EQUALIZE_INPUTS,
+    &EQUALIZE_ARCHITECTURES,
+);
+
+/// Prepared P-mode Equalize strategy over its palette-expanded RGB samples.
+pub(crate) struct PreparedEqualize {
+    input: RgbImage,
+    lut: Vec<u8>,
+    selection: StrategySelection,
+}
+
+impl PreparedEqualize {
+    pub(crate) fn new(input: RgbImage, lut: Vec<u8>, selection: StrategySelection) -> Self {
+        Self { input, lut, selection }
+    }
+
+    pub(crate) fn selection(&self) -> &StrategySelection {
+        &self.selection
+    }
+
+    pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
+        match self.selection.implementation.architecture {
+            Architecture::Default => {
+                super::default::equalize_impl::execute_rgb(self.input, &self.lut)
+            }
+            Architecture::Sse2 => super::sse2::equalize_impl::execute(self.input, &self.lut),
+            Architecture::Neon => super::neon::equalize_impl::execute(self.input, &self.lut),
+            Architecture::WasmSimd128 => {
+                super::wasm_simd128::equalize_impl::execute(self.input, &self.lut)
+            }
+            _ => Err(PilError::InternalError(
+                "native-byte point selection has no matching CPU kernel".into(),
+            )),
+        }
+    }
+}
+
+/// Prepared P-mode Posterize strategy with its selected architecture.
+pub(crate) struct PreparedPosterize<'a> {
+    input: &'a GrayImage,
+    bits: u8,
+    selection: StrategySelection,
+}
+
+impl<'a> PreparedPosterize<'a> {
+    pub(crate) fn new(input: &'a GrayImage, bits: u8, selection: StrategySelection) -> Self {
+        Self { input, bits, selection }
+    }
+
+    pub(crate) fn selection(&self) -> &StrategySelection {
+        &self.selection
+    }
+
+    pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
+        match self.selection.implementation.architecture {
+            Architecture::Default => super::default::posterize_impl::execute(self.input, self.bits),
+            Architecture::Sse2 => super::sse2::posterize_impl::execute(self.input, self.bits),
+            Architecture::Neon => super::neon::posterize_impl::execute(self.input, self.bits),
+            Architecture::WasmSimd128 => {
+                super::wasm_simd128::posterize_impl::execute(self.input, self.bits)
+            }
+            _ => Err(PilError::InternalError(
+                "native-byte point selection has no matching CPU kernel".into(),
+            )),
+        }
+    }
+}
+
+/// Prepared P-mode Solarize strategy with its selected architecture.
+pub(crate) struct PreparedSolarize<'a> {
+    input: &'a GrayImage,
+    threshold: u8,
+    selection: StrategySelection,
+}
+
+impl<'a> PreparedSolarize<'a> {
+    pub(crate) fn new(input: &'a GrayImage, threshold: u8, selection: StrategySelection) -> Self {
+        Self { input, threshold, selection }
+    }
+
+    pub(crate) fn selection(&self) -> &StrategySelection {
+        &self.selection
+    }
+
+    pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
+        match self.selection.implementation.architecture {
+            Architecture::Default => {
+                super::default::solarize_impl::execute(self.input, self.threshold)
+            }
+            Architecture::Sse2 => super::sse2::solarize_impl::execute(self.input, self.threshold),
+            Architecture::Neon => super::neon::solarize_impl::execute(self.input, self.threshold),
+            Architecture::WasmSimd128 => {
+                super::wasm_simd128::solarize_impl::execute(self.input, self.threshold)
+            }
+            _ => Err(PilError::InternalError(
+                "native-byte point selection has no matching CPU kernel".into(),
+            )),
+        }
+    }
+}

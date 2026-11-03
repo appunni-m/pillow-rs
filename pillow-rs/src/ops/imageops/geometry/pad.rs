@@ -1,5 +1,5 @@
 use super::{native_geometry_color_input, pad_containment_dimensions, parse_imageops_filter};
-use crate::compute::registry::support::{InputContract, OperationId, PadFillRule};
+use crate::compute::registry::support::{InputContract, ModeSupport, OperationId, PadFillRule};
 use crate::error::PilError;
 use crate::image::Image;
 use crate::ops::imageops::{
@@ -440,10 +440,11 @@ fn validate_pad_paste_position(
 }
 
 fn pad_fill_rule(mode: crate::raster::Mode) -> Result<PadFillRule, PilError> {
-    OperationId::Pad
-        .support()
-        .for_mode(mode)
-        .inputs
+    let inputs = match OperationId::Pad.support().for_mode(mode) {
+        ModeSupport::Supported { inputs, .. } => inputs,
+        ModeSupport::Rejected { reason, kind, .. } => return Err(kind.into_error(reason)),
+    };
+    inputs
         .iter()
         .find_map(|input| match input {
             InputContract::PadFill(rule) => Some(*rule),

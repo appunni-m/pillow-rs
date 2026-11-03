@@ -28,7 +28,7 @@ use crate::compute::registry::support::{
 };
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
-use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, Mode, RgbImage, RgbaImage};
+use crate::raster::{DynamicImage, Mode};
 
 const NO_INPUTS: &[crate::compute::registry::support::InputContract] = &[];
 const FILTER3X3_INPUTS: &[InputContract] = &[InputContract::Filter3x3Parameters];
@@ -79,6 +79,8 @@ fn core_only_reason(operation: OperationId) -> &'static str {
     }
 }
 
+// NO_PILLOW_SUPPORT: callers use this helper only for native mode extensions
+// whose Pillow mode contract is narrower; `core_only_reason` records the case.
 pub(super) fn core_only(
     operation: OperationId,
     mode: Mode,
@@ -154,30 +156,108 @@ fn support_for_mode(operation: OperationId, mode: Mode) -> ModeSupport {
     }
 }
 
-fn mode_filter_support_for_mode(mode: Mode) -> ModeSupport {
-    match mode {
-        Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => {
-            ModeSupport::serial(OperationId::ModeFilter, mode, MODE_FILTER_INPUTS)
+#[derive(Clone, Copy)]
+enum ModeFilterStrategy {
+    One,
+    Luma8,
+    LumaA8,
+    LaPremultiplied8,
+    Palette8,
+    PaletteAlpha8,
+    Rgb8,
+    Rgba8,
+    RgbPremultiplied8,
+    Rgbx8,
+    Cmyk8,
+    Ycbcr8,
+    Lab8,
+    Hsv8,
+}
+
+impl ModeFilterStrategy {
+    fn execute(self, image: &DynamicImage, size: u32) -> Result<DynamicImage, PilError> {
+        match self {
+            Self::One => super::one::ops::execute_mode_filter(image, size),
+            Self::Luma8 => super::luma8::ops::execute_mode_filter(image, size),
+            Self::LumaA8 => super::luma_a8::ops::execute_mode_filter(image, size),
+            Self::LaPremultiplied8 => {
+                super::la_premultiplied8::ops::execute_mode_filter(image, size)
+            }
+            Self::Palette8 => super::palette8::ops::execute_mode_filter(image, size),
+            Self::PaletteAlpha8 => {
+                super::palette_alpha8::ops::execute_mode_filter(image, size)
+            }
+            Self::Rgb8 => super::rgb8::ops::execute_mode_filter(image, size),
+            Self::Rgba8 => super::rgba8::ops::execute_mode_filter(image, size),
+            Self::RgbPremultiplied8 => {
+                super::rgb_premultiplied8::ops::execute_mode_filter(image, size)
+            }
+            Self::Rgbx8 => super::rgbx8::ops::execute_mode_filter(image, size),
+            Self::Cmyk8 => super::cmyk8::ops::execute_mode_filter(image, size),
+            Self::Ycbcr8 => super::ycbcr8::ops::execute_mode_filter(image, size),
+            Self::Lab8 => super::lab8::ops::execute_mode_filter(image, size),
+            Self::Hsv8 => super::hsv8::ops::execute_mode_filter(image, size),
         }
-        // NO_PILLOW_SUPPORT: Pillow C ModeFilter only accepts one-band uint8;
-        // the core extension applies its established algorithm per native band.
-        Mode::ImageLumaA8
-        | Mode::ImageLaPremultiplied8
-        | Mode::ImagePaletteAlpha8
-        | Mode::ImageRgb8
-        | Mode::ImageRgba8
-        | Mode::ImageRgbPremultiplied8
-        | Mode::ImageRgbx8
-        | Mode::ImageCmyk8
-        | Mode::ImageYCbCr8
-        | Mode::ImageLab8
-        | Mode::ImageHsv8 => ModeSupport::cpu_core_only(
-            OperationId::ModeFilter,
-            mode,
-            OutputModeRule::Preserve,
-            MODE_FILTER_INPUTS,
-            &[],
-            "native per-channel byte filtering extends Pillow's single-band ModeFilter contract",
+    }
+}
+
+fn mode_filter_route(mode: Mode) -> (ModeSupport, Option<ModeFilterStrategy>) {
+    match mode {
+        Mode::One => (
+            super::one::ops::mode_filter_support(),
+            Some(ModeFilterStrategy::One),
+        ),
+        Mode::ImageLuma8 => (
+            super::luma8::ops::mode_filter_support(),
+            Some(ModeFilterStrategy::Luma8),
+        ),
+        Mode::ImageLumaA8 => (
+            super::luma_a8::ops::mode_filter_support(),
+            Some(ModeFilterStrategy::LumaA8),
+        ),
+        Mode::ImageLaPremultiplied8 => (
+            super::la_premultiplied8::ops::mode_filter_support(),
+            Some(ModeFilterStrategy::LaPremultiplied8),
+        ),
+        Mode::ImagePalette8 => (
+            super::palette8::ops::mode_filter_support(),
+            Some(ModeFilterStrategy::Palette8),
+        ),
+        Mode::ImagePaletteAlpha8 => (
+            super::palette_alpha8::ops::mode_filter_support(),
+            Some(ModeFilterStrategy::PaletteAlpha8),
+        ),
+        Mode::ImageRgb8 => (
+            super::rgb8::ops::mode_filter_support(),
+            Some(ModeFilterStrategy::Rgb8),
+        ),
+        Mode::ImageRgba8 => (
+            super::rgba8::ops::mode_filter_support(),
+            Some(ModeFilterStrategy::Rgba8),
+        ),
+        Mode::ImageRgbPremultiplied8 => (
+            super::rgb_premultiplied8::ops::mode_filter_support(),
+            Some(ModeFilterStrategy::RgbPremultiplied8),
+        ),
+        Mode::ImageRgbx8 => (
+            super::rgbx8::ops::mode_filter_support(),
+            Some(ModeFilterStrategy::Rgbx8),
+        ),
+        Mode::ImageCmyk8 => (
+            super::cmyk8::ops::mode_filter_support(),
+            Some(ModeFilterStrategy::Cmyk8),
+        ),
+        Mode::ImageYCbCr8 => (
+            super::ycbcr8::ops::mode_filter_support(),
+            Some(ModeFilterStrategy::Ycbcr8),
+        ),
+        Mode::ImageLab8 => (
+            super::lab8::ops::mode_filter_support(),
+            Some(ModeFilterStrategy::Lab8),
+        ),
+        Mode::ImageHsv8 => (
+            super::hsv8::ops::mode_filter_support(),
+            Some(ModeFilterStrategy::Hsv8),
         ),
         Mode::ImageI32
         | Mode::ImageF32
@@ -189,8 +269,12 @@ fn mode_filter_support_for_mode(mode: Mode) -> ModeSupport {
         | Mode::ImageRgb16
         | Mode::ImageRgba16
         | Mode::ImageRgb32F
-        | Mode::ImageRgba32F => rejected(mode, WRONG_UNSHARP_MODE),
+        | Mode::ImageRgba32F => (rejected(mode, WRONG_UNSHARP_MODE), None),
     }
+}
+
+fn mode_filter_support_for_mode(mode: Mode) -> ModeSupport {
+    mode_filter_route(mode).0
 }
 
 fn unsharp_support_for_mode(mode: Mode) -> ModeSupport {
@@ -341,141 +425,9 @@ impl PreparedUnsharpMask<'_> {
 /// Prepared direct ModeFilter with its exact mode contract and serial selection.
 pub(crate) struct PreparedModeFilter<'a> {
     image: &'a DynamicImage,
-    strategy: ModeFilterStrategy<'a>,
+    strategy: ModeFilterStrategy,
     size: u32,
     selection: StrategySelection,
-}
-
-enum ModeFilterStrategy<'a> {
-    One(&'a GrayImage),
-    Luma8(&'a GrayImage),
-    // NO_PILLOW_SUPPORT: Pillow C ModeFilter rejects two-band rasters.
-    LumaA8(&'a GrayAlphaImage),
-    // NO_PILLOW_SUPPORT: Pillow C ModeFilter rejects two-band rasters.
-    LaPremultiplied8(&'a GrayAlphaImage),
-    Palette8(&'a GrayImage),
-    // NO_PILLOW_SUPPORT: Pillow C ModeFilter rejects two-band rasters.
-    PaletteAlpha8(&'a GrayAlphaImage),
-    // NO_PILLOW_SUPPORT: Pillow C ModeFilter rejects three-band rasters.
-    Rgb8(&'a RgbImage),
-    // NO_PILLOW_SUPPORT: Pillow C ModeFilter rejects four-band rasters.
-    Rgba8(&'a RgbaImage),
-    // NO_PILLOW_SUPPORT: Pillow C ModeFilter rejects four-band rasters.
-    RgbPremultiplied8(&'a RgbaImage),
-    // NO_PILLOW_SUPPORT: Pillow C ModeFilter rejects four-band rasters.
-    Rgbx8(&'a RgbaImage),
-    // NO_PILLOW_SUPPORT: Pillow C ModeFilter rejects four-band rasters.
-    Cmyk8(&'a RgbaImage),
-    // NO_PILLOW_SUPPORT: Pillow C ModeFilter rejects three-band rasters.
-    Ycbcr8(&'a RgbImage),
-    // NO_PILLOW_SUPPORT: Pillow C ModeFilter rejects three-band rasters.
-    Lab8(&'a RgbImage),
-    // NO_PILLOW_SUPPORT: Pillow C ModeFilter rejects three-band rasters.
-    Hsv8(&'a RgbImage),
-}
-
-impl<'a> ModeFilterStrategy<'a> {
-    fn for_image(image: &'a DynamicImage) -> (Mode, Option<Self>) {
-        match image {
-            DynamicImage::One(image) => (Mode::One, Some(ModeFilterStrategy::One(image))),
-            DynamicImage::ImageLuma8(image) => {
-                (Mode::ImageLuma8, Some(ModeFilterStrategy::Luma8(image)))
-            }
-            DynamicImage::ImageLumaA8(image) => {
-                (Mode::ImageLumaA8, Some(ModeFilterStrategy::LumaA8(image)))
-            }
-            DynamicImage::ImageLaPremultiplied8(image) => (
-                Mode::ImageLaPremultiplied8,
-                Some(ModeFilterStrategy::LaPremultiplied8(image)),
-            ),
-            DynamicImage::ImagePalette8(image) => {
-                (Mode::ImagePalette8, Some(ModeFilterStrategy::Palette8(image)))
-            }
-            DynamicImage::ImagePaletteAlpha8(image) => (
-                Mode::ImagePaletteAlpha8,
-                Some(ModeFilterStrategy::PaletteAlpha8(image)),
-            ),
-            DynamicImage::ImageRgb8(image) => {
-                (Mode::ImageRgb8, Some(ModeFilterStrategy::Rgb8(image)))
-            }
-            DynamicImage::ImageRgba8(image) => {
-                (Mode::ImageRgba8, Some(ModeFilterStrategy::Rgba8(image)))
-            }
-            DynamicImage::ImageRgbPremultiplied8(image) => (
-                Mode::ImageRgbPremultiplied8,
-                Some(ModeFilterStrategy::RgbPremultiplied8(image)),
-            ),
-            DynamicImage::ImageRgbx8(image) => {
-                (Mode::ImageRgbx8, Some(ModeFilterStrategy::Rgbx8(image)))
-            }
-            DynamicImage::ImageCmyk8(image) => {
-                (Mode::ImageCmyk8, Some(ModeFilterStrategy::Cmyk8(image)))
-            }
-            DynamicImage::ImageYCbCr8(image) => {
-                (Mode::ImageYCbCr8, Some(ModeFilterStrategy::Ycbcr8(image)))
-            }
-            DynamicImage::ImageLab8(image) => {
-                (Mode::ImageLab8, Some(ModeFilterStrategy::Lab8(image)))
-            }
-            DynamicImage::ImageHsv8(image) => {
-                (Mode::ImageHsv8, Some(ModeFilterStrategy::Hsv8(image)))
-            }
-            DynamicImage::ImageI32(_) => (Mode::ImageI32, None),
-            DynamicImage::ImageF32(_) => (Mode::ImageF32, None),
-            DynamicImage::ImageI16(_) => (Mode::ImageI16, None),
-            DynamicImage::ImageI16L(_) => (Mode::ImageI16L, None),
-            DynamicImage::ImageI16B(_) => (Mode::ImageI16B, None),
-            DynamicImage::ImageI16N(_) => (Mode::ImageI16N, None),
-            DynamicImage::ImageLumaA16(_) => (Mode::ImageLumaA16, None),
-            DynamicImage::ImageRgb16(_) => (Mode::ImageRgb16, None),
-            DynamicImage::ImageRgba16(_) => (Mode::ImageRgba16, None),
-            DynamicImage::ImageRgb32F(_) => (Mode::ImageRgb32F, None),
-            DynamicImage::ImageRgba32F(_) => (Mode::ImageRgba32F, None),
-        }
-    }
-
-    fn execute(self, size: u32) -> Result<DynamicImage, PilError> {
-        use super::helpers::mode_filter;
-        match self {
-            Self::One(image) => mode_filter::execute::<_, 1>(image, size).map(DynamicImage::One),
-            Self::Luma8(image) => {
-                mode_filter::execute::<_, 1>(image, size).map(DynamicImage::ImageLuma8)
-            }
-            Self::LumaA8(image) => {
-                mode_filter::execute::<_, 2>(image, size).map(DynamicImage::ImageLumaA8)
-            }
-            Self::LaPremultiplied8(image) => mode_filter::execute::<_, 2>(image, size)
-                .map(DynamicImage::ImageLaPremultiplied8),
-            Self::Palette8(image) => {
-                mode_filter::execute::<_, 1>(image, size).map(DynamicImage::ImagePalette8)
-            }
-            Self::PaletteAlpha8(image) => mode_filter::execute::<_, 2>(image, size)
-                .map(DynamicImage::ImagePaletteAlpha8),
-            Self::Rgb8(image) => {
-                mode_filter::execute::<_, 3>(image, size).map(DynamicImage::ImageRgb8)
-            }
-            Self::Rgba8(image) => {
-                mode_filter::execute::<_, 4>(image, size).map(DynamicImage::ImageRgba8)
-            }
-            Self::RgbPremultiplied8(image) => mode_filter::execute::<_, 4>(image, size)
-                .map(DynamicImage::ImageRgbPremultiplied8),
-            Self::Rgbx8(image) => {
-                mode_filter::execute::<_, 4>(image, size).map(DynamicImage::ImageRgbx8)
-            }
-            Self::Cmyk8(image) => {
-                mode_filter::execute::<_, 4>(image, size).map(DynamicImage::ImageCmyk8)
-            }
-            Self::Ycbcr8(image) => {
-                mode_filter::execute::<_, 3>(image, size).map(DynamicImage::ImageYCbCr8)
-            }
-            Self::Lab8(image) => {
-                mode_filter::execute::<_, 3>(image, size).map(DynamicImage::ImageLab8)
-            }
-            Self::Hsv8(image) => {
-                mode_filter::execute::<_, 3>(image, size).map(DynamicImage::ImageHsv8)
-            }
-        }
-    }
 }
 
 impl PreparedModeFilter<'_> {
@@ -484,7 +436,7 @@ impl PreparedModeFilter<'_> {
     }
 
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
-        let mut output = self.strategy.execute(self.size)?;
+        let mut output = self.strategy.execute(self.image, self.size)?;
         super::helpers::hidden_lanes::finish_mode_filter(self.image, &mut output, self.size)?;
         Ok(output)
     }
@@ -496,10 +448,10 @@ pub(crate) fn prepare_mode_filter<'a>(
     size: u32,
     context: &ExecutionContext,
 ) -> Result<PreparedModeFilter<'a>, PilError> {
-    let (mode, strategy) = ModeFilterStrategy::for_image(image);
     let inputs = OperationInputs { image, palette: PaletteInput::default() };
+    let (support, strategy) = mode_filter_route(inputs.mode());
     let facts = inputs.facts().with_filter_window(size, None);
-    let selection = match MODE_FILTER_SUPPORT.for_mode(mode).assess(context, facts)? {
+    let selection = match support.assess(context, facts)? {
         SupportAssessment::Ready(selection) => selection,
         SupportAssessment::Rejected { reason, kind, .. } => return Err(kind.into_error(reason)),
         SupportAssessment::Deferred { .. } => {

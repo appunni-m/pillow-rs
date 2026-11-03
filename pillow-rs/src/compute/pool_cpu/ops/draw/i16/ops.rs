@@ -12,13 +12,13 @@ pub(crate) fn apply_bitmap(
     mask: &super::super::BitmapMask<'_>,
     color: (u8, u8, u8, u8),
 ) -> Result<DynamicImage, PilError> {
-    default::bitmap_impl::apply(image, x, y, mask_width, mask_height, mask, color)
+    super::default::bitmap_impl::apply(image, x, y, mask_width, mask_height, mask, color)
 }
 
 pub(crate) fn apply_text<const RGBA_MASK: bool>(
     input: super::super::TextComposeInput<'_>,
 ) -> Result<super::super::TextComposeResult, PilError> {
-    default::text_impl::apply::<RGBA_MASK>(
+    super::default::text_impl::apply::<RGBA_MASK>(
         input.image,
         input.x,
         input.y,
@@ -42,6 +42,6 @@ pub(crate) fn execute(
     let DynamicImage::ImageI16(pixels) = image else {
         return Err(PilError::InternalError("Draw strategy received a different raster variant".into()));
     };
-    let output = default::draw_impl::execute(pixels, ops)?;
+    let output = super::default::draw_impl::execute(pixels, ops)?;
     Ok(DynamicImage::ImageI16(output))
 }

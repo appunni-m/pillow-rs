@@ -1,6 +1,8 @@
 use crate::raster::Mode;
 
 /// Byte coverage view shared by Draw Bitmap's exact-mode writers.
+/// TODO(pillow-rs#3ptb): verify PA's alpha-aware L coverage and RGBa-mask
+/// PREBLEND across every supported destination mode in CPU parity.
 pub(crate) struct BitmapMask<'a> {
     mode: Mode,
     width: u32,

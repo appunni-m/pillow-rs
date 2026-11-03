@@ -34,7 +34,7 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
 );
 
 pub(crate) enum ArchitectureStrategy<'a> {
-    Default(default::Kernel<'a>),
+    Default(super::default::Kernel<'a>),
     Sse2(vector::Kernel<'a, CHANNELS>),
     Neon(vector::Kernel<'a, CHANNELS>),
     WasmSimd128(vector::Kernel<'a, CHANNELS>),
@@ -57,7 +57,7 @@ pub(crate) fn prepare<'a>(
     let facts = strategy::facts(input.width(), input.height(), input.as_raw().len(), lut.len());
     let selection = strategy::select(SUPPORT, facts, ctx)?;
     let implementation = match selection.implementation.architecture {
-        Architecture::Default => ArchitectureStrategy::Default(default::prepare(input, lut)),
+        Architecture::Default => ArchitectureStrategy::Default(super::default::prepare(input, lut)),
         Architecture::Sse2 => ArchitectureStrategy::Sse2(vector::prepare::<CHANNELS>(
             input.as_raw(), input.width(), input.height(), lut,
         )?),
@@ -76,15 +76,15 @@ pub(crate) fn prepare<'a>(
     Ok(Prepared::new(implementation, selection))
 }
 
-fn from_vector(output: vector::Output) -> Result<default::Input, PilError> {
-    default::Input::from_raw(output.width, output.height, output.bytes)
+fn from_vector(output: vector::Output) -> Result<super::default::Input, PilError> {
+    super::default::Input::from_raw(output.width, output.height, output.bytes)
         .ok_or_else(|| PilError::InternalError("Eval LUT output dimensions were invalid".into()))
 }
 
 pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
     match strategy.implementation {
         ArchitectureStrategy::Default(kernel) => {
-            default::execute(kernel).map(DynamicImage::ImageHsv8)
+            super::default::execute(kernel).map(DynamicImage::ImageHsv8)
         }
         ArchitectureStrategy::Sse2(kernel) => {
             vector::execute_sse2(kernel).and_then(from_vector).map(DynamicImage::ImageHsv8)

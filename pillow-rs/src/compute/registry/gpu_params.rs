@@ -609,7 +609,9 @@ fn effects_params(op: &PipelineOp) -> Option<Vec<u32>> {
         }
 
         // ── Autocontrast: cutoff ──
-        PipelineOp::Autocontrast { cutoff, .. } => vec![(*cutoff as f32).to_bits()],
+        PipelineOp::Autocontrast { options, .. } => {
+            vec![(options.cutoff.0 as f32).to_bits()]
+        }
 
         // ── Equalize: no params ──
         PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. } => vec![],

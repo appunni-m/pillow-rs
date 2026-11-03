@@ -29,7 +29,7 @@ pub(crate) fn prepare<'a>(
 
 pub(crate) fn execute(plan: Strategy<'_>) -> Result<DynamicImage, PilError> {
     match plan.selection().implementation.architecture {
-        Architecture::Default => default::transform_impl::execute(
+        Architecture::Default => super::default::transform_impl::execute(
             plan.implementation.image,
             plan.implementation.request,
         ),

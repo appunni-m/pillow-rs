@@ -1,5 +1,7 @@
 //! Shared arithmetic for native-byte Blend mode strategies.
 
+use crate::raster::GenericImageView;
+
 use crate::checked_dims::CheckedDims;
 use crate::compute::Architecture;
 use crate::compute::pool_cpu::helpers::bytes::hidden_lanes::default_hidden_lanes_for_bytes;

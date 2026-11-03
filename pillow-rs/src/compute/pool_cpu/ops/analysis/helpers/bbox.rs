@@ -374,7 +374,7 @@ macro_rules! declare_getbbox_owner {
             image: &$image_ty,
             alpha_only: bool,
             selection: crate::compute::registry::support::StrategySelection,
-        ) -> Result<BBox, crate::error::PilError> {
+        ) -> Result<crate::compute::pool_cpu::ops::analysis::helpers::bbox::BBox, crate::error::PilError> {
             let implementation = selection.implementation;
             if implementation.mode != crate::raster::Mode::$mode
                 || implementation.operation

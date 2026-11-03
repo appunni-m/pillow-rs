@@ -2,7 +2,7 @@
 
 use super::super::{DrawRequestKind, GuardAssessment, RequestFacts, StrategyInputs};
 
-pub(super) fn draw_native_spans_guard(input: StrategyInputs) -> GuardAssessment {
+pub(crate) fn draw_native_spans_guard(input: StrategyInputs) -> GuardAssessment {
     match input.request {
         RequestFacts::Draw {
             kind: DrawRequestKind::GeometryBatch,

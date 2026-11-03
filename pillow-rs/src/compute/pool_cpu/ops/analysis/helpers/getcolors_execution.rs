@@ -85,51 +85,51 @@ fn execute_getcolors_mode(
     maxcolors: u32,
 ) -> Result<GetColorsOutput, PilError> {
     match image {
-        DynamicImage::One(image) => super::one::ops::execute_getcolors(image, selection, maxcolors),
+        DynamicImage::One(image) => super::super::one::ops::execute_getcolors(image, selection, maxcolors),
         DynamicImage::ImageLuma8(image) => {
-            super::luma8::ops::execute_getcolors(image, selection, maxcolors)
+            super::super::luma8::ops::execute_getcolors(image, selection, maxcolors)
         }
         DynamicImage::ImageLumaA8(image) => {
-            super::luma_a8::ops::execute_getcolors(image, selection, maxcolors)
+            super::super::luma_a8::ops::execute_getcolors(image, selection, maxcolors)
         }
         DynamicImage::ImageLaPremultiplied8(image) => {
-            super::la_premultiplied8::ops::execute_getcolors(image, selection, maxcolors)
+            super::super::la_premultiplied8::ops::execute_getcolors(image, selection, maxcolors)
         }
         DynamicImage::ImagePalette8(image) => {
-            super::palette8::ops::execute_getcolors(image, selection, maxcolors)
+            super::super::palette8::ops::execute_getcolors(image, selection, maxcolors)
         }
         DynamicImage::ImagePaletteAlpha8(image) => {
-            super::palette_alpha8::ops::execute_getcolors(image, selection, maxcolors)
+            super::super::palette_alpha8::ops::execute_getcolors(image, selection, maxcolors)
         }
         DynamicImage::ImageRgb8(image) => {
-            super::rgb8::ops::execute_getcolors(image, selection, maxcolors)
+            super::super::rgb8::ops::execute_getcolors(image, selection, maxcolors)
         }
         DynamicImage::ImageRgba8(image) => {
-            super::rgba8::ops::execute_getcolors(image, selection, maxcolors)
+            super::super::rgba8::ops::execute_getcolors(image, selection, maxcolors)
         }
         DynamicImage::ImageRgbPremultiplied8(image) => {
-            super::rgb_premultiplied8::ops::execute_getcolors(image, selection, maxcolors)
+            super::super::rgb_premultiplied8::ops::execute_getcolors(image, selection, maxcolors)
         }
         DynamicImage::ImageRgbx8(image) => {
-            super::rgbx8::ops::execute_getcolors(image, selection, maxcolors)
+            super::super::rgbx8::ops::execute_getcolors(image, selection, maxcolors)
         }
         DynamicImage::ImageCmyk8(image) => {
-            super::cmyk8::ops::execute_getcolors(image, selection, maxcolors)
+            super::super::cmyk8::ops::execute_getcolors(image, selection, maxcolors)
         }
         DynamicImage::ImageYCbCr8(image) => {
-            super::ycbcr8::ops::execute_getcolors(image, selection, maxcolors)
+            super::super::ycbcr8::ops::execute_getcolors(image, selection, maxcolors)
         }
         DynamicImage::ImageLab8(image) => {
-            super::lab8::ops::execute_getcolors(image, selection, maxcolors)
+            super::super::lab8::ops::execute_getcolors(image, selection, maxcolors)
         }
         DynamicImage::ImageHsv8(image) => {
-            super::hsv8::ops::execute_getcolors(image, selection, maxcolors)
+            super::super::hsv8::ops::execute_getcolors(image, selection, maxcolors)
         }
         DynamicImage::ImageI32(image) => {
-            super::i32::ops::execute_getcolors(image, selection, maxcolors)
+            super::super::i32::ops::execute_getcolors(image, selection, maxcolors)
         }
         DynamicImage::ImageF32(image) => {
-            super::f32::ops::execute_getcolors(image, selection, maxcolors)
+            super::super::f32::ops::execute_getcolors(image, selection, maxcolors)
         }
         DynamicImage::ImageI16(_)
         | DynamicImage::ImageI16L(_)
@@ -138,19 +138,19 @@ fn execute_getcolors_mode(
             Err(PilError::ValueError("image has wrong mode".into()))
         }
         DynamicImage::ImageLumaA16(image) => {
-            super::luma_a16::ops::execute_getcolors(image, selection, maxcolors)
+            super::super::luma_a16::ops::execute_getcolors(image, selection, maxcolors)
         }
         DynamicImage::ImageRgb16(image) => {
-            super::rgb16::ops::execute_getcolors(image, selection, maxcolors)
+            super::super::rgb16::ops::execute_getcolors(image, selection, maxcolors)
         }
         DynamicImage::ImageRgba16(image) => {
-            super::rgba16::ops::execute_getcolors(image, selection, maxcolors)
+            super::super::rgba16::ops::execute_getcolors(image, selection, maxcolors)
         }
         DynamicImage::ImageRgb32F(image) => {
-            super::rgb32f::ops::execute_getcolors(image, selection, maxcolors)
+            super::super::rgb32f::ops::execute_getcolors(image, selection, maxcolors)
         }
         DynamicImage::ImageRgba32F(image) => {
-            super::rgba32f::ops::execute_getcolors(image, selection, maxcolors)
+            super::super::rgba32f::ops::execute_getcolors(image, selection, maxcolors)
         }
     }
 }

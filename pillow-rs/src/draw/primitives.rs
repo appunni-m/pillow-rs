@@ -212,7 +212,7 @@ impl Draw {
                 "y1 must be greater than or equal to y0".into(),
             ));
         }
-        let (fill, outline) = self.shape_inks(fill, outline);
+        let (fill, outline) = self.shape_inks(fill, outline)?;
         self.image = Image::push_op(
             &self.image,
             PipelineOp::DrawRectangle {
@@ -261,7 +261,7 @@ impl Draw {
                 "y1 must be greater than or equal to y0".into(),
             ));
         }
-        let (fill, outline) = self.shape_inks(fill, outline);
+        let (fill, outline) = self.shape_inks(fill, outline)?;
         self.image = Image::push_op(
             &self.image,
             PipelineOp::DrawEllipse {
@@ -294,7 +294,7 @@ impl Draw {
         outline: Option<(u8, u8, u8, u8)>,
         _width: u32,
     ) -> Result<(), PilError> {
-        let (fill, outline) = self.shape_inks(fill, outline);
+        let (fill, outline) = self.shape_inks(fill, outline)?;
         if points.len() < 2 {
             return Ok(());
         }
@@ -397,7 +397,13 @@ impl Draw {
         // when both arguments are omitted. This is deliberately shape-only:
         // the experimental API calls draw_outline directly, and its default
         // differs from the wrapper's ordinary color parser.
-        let Some(ink) = outline.or(fill).or_else(|| self.default_shape_ink()) else {
+        let provided_ink = outline.or(fill);
+        let default_ink = if provided_ink.is_none() {
+            self.default_shape_ink()?
+        } else {
+            None
+        };
+        let Some(ink) = provided_ink.or(default_ink) else {
             return Ok(());
         };
         self.polygon(points, Some(ink), None, 1)

@@ -1,6 +1,6 @@
 //! Mode-aware CPU Transform strategies.
 
-mod helpers;
+pub(crate) mod helpers;
 pub(crate) mod ops;
 pub(crate) mod one;
 pub(crate) mod luma8;

@@ -1,6 +1,6 @@
 use crate::compute::pool_cpu::ops::draw::BitmapRegion;
 use crate::raster::{ImageBuffer, Luma};
-use image::GenericImageView;
+use crate::raster::GenericImageView;
 
 type Luma16Image = ImageBuffer<Luma<u16>, Vec<u16>>;
 

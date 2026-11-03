@@ -1,3 +1,5 @@
+
+use crate::raster::GenericImageView;
 use std::borrow::Cow;
 use std::ops::Deref;
 use std::sync::Arc;

@@ -1,11 +1,11 @@
 use crate::checked_dims::CheckedDims;
 use super::native_geometry_color_input;
-use crate::compute::registry::support::{ExpandFillRule, InputContract, OperationId};
+use crate::compute::registry::support::{ExpandFillRule, InputContract, ModeSupport, OperationId};
 use crate::error::PilError;
 use crate::image::Image;
 use crate::ops::imageops::{ImageOpsColor, resolve_imageops_color};
 use crate::pipeline::{ExpandMargins, NativeColorInput, PipelineOp};
-use crate::raster::Mode;
+use crate::raster::{DynamicImage, Mode};
 
 /// A fill converted against the source mode before Expand geometry is checked.
 ///
@@ -66,58 +66,92 @@ pub fn resolve_expand_fill_palette(
             "Expand fill was prepared for a different image mode".into(),
         ));
     }
+    let source_palette = matches!(mode, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
+        .then(|| (image.palette(), image.palette_alpha()));
     if let Some((index, palette, palette_alpha)) =
         resolve_expand_palette_fill(image, &prepared.input, prepared.fill_rule)?
     {
         prepared.fill = (index, index, index, u8::MAX);
         prepared.native_fill = None;
         prepared.output_palette = Some((Some(palette), palette_alpha));
+    } else if let Some(palette) = source_palette {
+        prepared.output_palette = Some(palette);
     }
     prepared.palette_resolved = true;
     Ok(prepared)
 }
 
-/// Checks the allocation dimensions that Pillow validates in `Image.new`.
+/// Checks the allocation dimensions against the mode captured for `Image.new`.
 #[doc(hidden)]
-pub fn validate_expand_output_size(image: &Image, size: (u32, u32)) -> Result<(), PilError> {
-    let mode = image.mode_identity()?;
+pub fn validate_prepared_expand_output_size(
+    prepared: &PreparedExpandFill,
+    size: (u32, u32),
+) -> Result<(), PilError> {
+    validate_expand_output_size_for_mode(prepared.mode, size)
+}
+
+fn validate_expand_output_size_for_mode(mode: Mode, size: (u32, u32)) -> Result<(), PilError> {
     CheckedDims::new_allow_empty(size.0, size.1, expand_bytes_per_pixel(mode)?)?;
     Ok(())
 }
 
-/// Queues Expand with dimensions and placement already resolved by the host.
+/// Creates and materializes the filled canvas before the source is loaded.
 ///
-/// The explicit output size preserves Python's arithmetic result, including
-/// custom numeric border objects. The source still runs through its exact-mode
-/// CPU Expand strategy when the lazy pipeline is materialized.
+/// ImageOps.expand follows Pillow's Image.new-then-paste order. The host
+/// wrapper uses this entry point to preserve allocation faults before source
+/// decoding while it delegates the source conversion and copy to Image.paste.
 #[doc(hidden)]
-pub fn expand_with_output_size_and_position(
-    image: &Image,
+pub fn expand_canvas_with_prepared_fill(
     size: (u32, u32),
-    position: (i64, i64),
     prepared: &PreparedExpandFill,
 ) -> Result<Image, PilError> {
-    validate_expand_output_size(image, size)?;
-    let mode = image.mode_identity()?;
-    if mode != prepared.mode {
-        return Err(PilError::InternalError(
-            "Expand fill was prepared for a different image mode".into(),
-        ));
-    }
+    validate_prepared_expand_output_size(prepared, size)?;
     if !prepared.palette_resolved {
         return Err(PilError::InternalError(
-            "Expand palette fill was not resolved before geometry".into(),
+            "Expand palette fill was not resolved before canvas allocation".into(),
         ));
     }
-    let right = expand_trailing_margin(size.0, image.width(), position.0, "width")?;
-    let bottom = expand_trailing_margin(size.1, image.height(), position.1, "height")?;
-    let border = ExpandMargins {
-        left: position.0,
-        top: position.1,
-        right,
-        bottom,
+    let canvas = empty_expand_canvas(prepared.mode, prepared.fill)?;
+    let filled = expand_with_prepared_fill(
+        &canvas,
+        ExpandMargins {
+            left: 0,
+            top: 0,
+            right: i64::from(size.0),
+            bottom: i64::from(size.1),
+        },
+        prepared,
+    )?;
+    filled.materialized_branch()
+}
+
+fn empty_expand_canvas(mode: Mode, fill: (u8, u8, u8, u8)) -> Result<Image, PilError> {
+    if mode == Mode::ImagePalette8 {
+        return Ok(Image::new_palette_index(0, 0, fill.0));
+    }
+    let image = match mode {
+        Mode::ImageLumaA16 => DynamicImage::ImageLumaA16(
+            crate::raster::ImageBuffer::from_pixel(0, 0, crate::raster::LumaA([0, 0])),
+        ),
+        Mode::ImageRgb16 => DynamicImage::ImageRgb16(
+            crate::raster::ImageBuffer::from_pixel(0, 0, crate::raster::Rgb([0, 0, 0])),
+        ),
+        Mode::ImageRgba16 => DynamicImage::ImageRgba16(
+            crate::raster::ImageBuffer::from_pixel(0, 0, crate::raster::Rgba([0, 0, 0, 0])),
+        ),
+        Mode::ImageRgb32F => DynamicImage::ImageRgb32F(
+            crate::raster::Rgb32FImage::from_pixel(0, 0, crate::raster::Rgb([0.0, 0.0, 0.0])),
+        ),
+        Mode::ImageRgba32F => DynamicImage::ImageRgba32F(
+            crate::raster::Rgba32FImage::from_pixel(
+                0,
+                0,
+                crate::raster::Rgba([0.0, 0.0, 0.0, 0.0]),
+            ),
+        ),
+        _ => return Image::new(0, 0, mode, fill),
     };
-    expand_with_prepared_fill(image, border, prepared)
+    Ok(Image::from_dynamic(image))
 }
 
 /// Adds a border around an image.
@@ -197,10 +231,11 @@ fn expand_with_prepared_fill(
 }
 
 fn expand_bytes_per_pixel(mode: Mode) -> Result<u8, PilError> {
-    OperationId::Expand
-        .support()
-        .for_mode(mode)
-        .inputs
+    let inputs = match OperationId::Expand.support().for_mode(mode) {
+        ModeSupport::Supported { inputs, .. } => inputs,
+        ModeSupport::Rejected { reason, kind, .. } => return Err(kind.into_error(reason)),
+    };
+    inputs
         .iter()
         .find_map(|input| match input {
             InputContract::ExpandedDimensions { bytes_per_pixel } => Some(*bytes_per_pixel),
@@ -230,8 +265,9 @@ fn resolve_expand_palette_fill(
 ) -> Result<Option<(u8, Vec<u8>, Option<Vec<u8>>)>, PilError> {
     // The Python adapter converts the fill before committing a dirty palette,
     // then this stage looks up or appends the color in that committed snapshot.
-    // TODO(pillow-rs#3ptb): verify dirty/raw palette error ordering, malformed
-    // palette buffers, allocation order, and output metadata in CPU parity.
+    // TODO(pillow-rs#3ptb): handle source mode changes during palette access;
+    // verify dirty/raw palette error order, malformed buffers, and output
+    // metadata. Keep canvas-before-source-load ordering in frozen parity cases.
     if fill_rule != ExpandFillRule::PaletteIndexOrColor {
         return Ok(None);
     }
@@ -243,10 +279,11 @@ fn resolve_expand_palette_fill(
 }
 
 fn expand_fill_rule(mode: crate::raster::Mode) -> Result<ExpandFillRule, PilError> {
-    OperationId::Expand
-        .support()
-        .for_mode(mode)
-        .inputs
+    let inputs = match OperationId::Expand.support().for_mode(mode) {
+        ModeSupport::Supported { inputs, .. } => inputs,
+        ModeSupport::Rejected { reason, kind, .. } => return Err(kind.into_error(reason)),
+    };
+    inputs
         .iter()
         .find_map(|input| match input {
             InputContract::ExpandFill(rule) => Some(*rule),

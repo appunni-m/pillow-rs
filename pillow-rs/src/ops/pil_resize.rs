@@ -13,6 +13,7 @@ mod coefficients;
 mod filters;
 mod float;
 mod horizontal_passes;
+#[cfg(test)]
 mod integer_modes;
 mod luma16;
 #[cfg(test)]
@@ -26,7 +27,7 @@ pub(crate) use boxed::pil_resize_boxed;
 pub(crate) use coefficients::{
     FilterCoeffs, FilterCoeffsF64, compact_resize_coeffs_to_source_span, precompute_coeffs,
     precompute_coeffs_boxed, precompute_coeffs_boxed_for_filter, precompute_coeffs_f64,
-    precompute_coeffs_f64_boxed,
+    precompute_coeffs_f64_boxed, fixed_point_to_u8,
 };
 pub(crate) use filters::{filter_from_resample, pillow_sin_f64};
 pub(crate) use horizontal_passes::horizontal_pass_rgb_row;

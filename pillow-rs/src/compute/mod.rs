@@ -343,7 +343,7 @@ pub(crate) trait BackendImpl: Send + Sync {
 
 // ── Modules ────────────────────────────────────────────────────────────────
 
-mod pool_cpu;
+pub(crate) mod pool_cpu;
 #[cfg(feature = "gpu")]
 mod pool_gpu;
 #[cfg(feature = "gpu")]

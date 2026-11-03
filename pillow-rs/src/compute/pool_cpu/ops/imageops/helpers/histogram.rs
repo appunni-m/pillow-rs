@@ -5,18 +5,6 @@ use crate::raster::{DynamicImage, GrayImage, RgbImage};
 use std::sync::Arc;
 use wide::u8x16;
 
-#[inline]
-fn histogram_value_at(histogram: &[usize; 256], index: usize, fallback: u8) -> u8 {
-    let mut remaining = index;
-    for (value, count) in histogram.iter().enumerate() {
-        if remaining < *count {
-            return value as u8;
-        }
-        remaining -= *count;
-    }
-    fallback
-}
-
 /// Reduce a native L byte slice to its extrema using portable vector lanes.
 /// AutoContrast at cutoff zero needs only these two bins, not a full histogram.
 fn native_luma_minmax(raw: &[u8]) -> Option<(u8, u8)> {
@@ -94,29 +82,103 @@ pub(crate) fn apply_native_luma_lut_row(
 /// from drifting on cutoff rounding, masked selection, or identity channels.
 pub(crate) fn autocontrast_lut(
     img: &DynamicImage,
-    cutoff: f64,
+    options: &crate::pipeline::AutocontrastOptions,
     mask: Option<&std::sync::Arc<crate::image::Image>>,
 ) -> Result<Vec<u8>, PilError> {
-    let histogram = collect_autocontrast_histogram(img, cutoff, mask)?;
-    if histogram.selected_pixels == 0 {
-        return Ok(identity_lut(histogram.channels));
+    let no_ignored_bins = options.ignore.as_ref().map_or(true, Vec::is_empty);
+    let zero_cutoff_luma = options.cutoff == (0.0, 0.0)
+        && no_ignored_bins
+        && !options.preserve_tone;
+    let histogram = collect_autocontrast_histogram(
+        img,
+        mask,
+        options.preserve_tone,
+        zero_cutoff_luma,
+    )?;
+    let ignored = normalize_ignored_bins(&options.ignore)?;
+    let lut = build_autocontrast_lut(&histogram, options.cutoff, &ignored)?;
+    if options.preserve_tone && matches!(img, DynamicImage::ImageRgb8(_)) {
+        // Pillow gathers statistics from `image.convert("L")`, then expands
+        // the one-channel LUT for `_lut(image, lut)` without changing RGB mode.
+        let mut rgb_lut = Vec::with_capacity(768);
+        rgb_lut.extend_from_slice(&lut);
+        rgb_lut.extend_from_slice(&lut);
+        rgb_lut.extend_from_slice(&lut);
+        return Ok(rgb_lut);
     }
-    Ok(build_autocontrast_lut(&histogram, cutoff))
+    Ok(lut)
+}
+
+/// Build an autocontrast LUT from bins already collected by the binding.
+///
+/// The Python ImageOps facade computes the histogram before coercing
+/// `ignore` and `cutoff`, matching Pillow's observable fault order. This
+/// entrypoint keeps the bin arithmetic and LUT construction in Rust.
+pub(crate) fn autocontrast_lut_from_histogram(
+    histogram: &[u32],
+    options: &crate::pipeline::AutocontrastOptions,
+) -> Result<Vec<u8>, PilError> {
+    if histogram.is_empty() || histogram.len() % 256 != 0 || histogram.len() > 4 * 256 {
+        return Err(PilError::ValueError(
+            "histogram must contain one to four complete 256-bin channels".into(),
+        ));
+    }
+    let channels = histogram.len() / 256;
+    let mut values = [[0usize; 256]; 4];
+    for (channel, bins) in histogram.chunks_exact(256).enumerate() {
+        for (value, &count) in values[channel].iter_mut().zip(bins) {
+            *value = count as usize;
+        }
+    }
+    let histogram = AutocontrastHistogram {
+        channels,
+        values,
+        zero_cutoff_luma_bounds: None,
+    };
+    let ignored = normalize_ignored_bins(&options.ignore)?;
+    build_autocontrast_lut(&histogram, options.cutoff, &ignored)
+}
+
+/// Build one channel's LUT from Pillow-computed integer cutoff counts.
+pub(crate) fn autocontrast_lut_from_cutoff_counts(
+    histogram: &[u32],
+    cutoff_counts: (i128, i128),
+) -> Result<Vec<u8>, PilError> {
+    if histogram.len() != 256 {
+        return Err(PilError::ValueError(
+            "histogram must contain one complete 256-bin channel".into(),
+        ));
+    }
+    let mut bins = [0usize; 256];
+    for (count, &value) in bins.iter_mut().zip(histogram) {
+        *count = value as usize;
+    }
+    let mut lut = vec![0u8; 256];
+    build_lut_channel(
+        &mut lut,
+        bins,
+        normalize_cutoff_count(cutoff_counts.0),
+        normalize_cutoff_count(cutoff_counts.1),
+        None,
+    );
+    Ok(lut)
 }
 
 struct AutocontrastHistogram {
     channels: usize,
-    selected_pixels: usize,
     values: [[usize; 256]; 4],
     zero_cutoff_luma_bounds: Option<(u8, u8)>,
 }
 
 fn collect_autocontrast_histogram(
     img: &DynamicImage,
-    cutoff: f64,
     mask: Option<&std::sync::Arc<crate::image::Image>>,
+    preserve_tone: bool,
+    zero_cutoff_luma: bool,
 ) -> Result<AutocontrastHistogram, PilError> {
-    let channels = img.mode().band_count();
+    let source_channels = img.mode().band_count();
+    let tone_luma = preserve_tone && matches!(img, DynamicImage::ImageRgb8(_));
+    let channels = if tone_luma { 1 } else { source_channels };
     let (width, height) = (img.width(), img.height());
     let image_pixels = CheckedDims::new(width, height, 1)?.total_pixels();
     let mask = mask
@@ -131,11 +193,10 @@ fn collect_autocontrast_histogram(
         Some(_) => unreachable!("ImageOps contract admits only 1 or L masks"),
         None => None,
     };
-    let mut selected_pixels = if mask.is_none() { image_pixels } else { 0 };
     let raw = img.as_bytes();
-    let stride = width as usize * channels;
-    let expected_len = image_pixels.checked_mul(channels);
-    let zero_cutoff_luma_bounds = if cutoff == 0.0
+    let stride = width as usize * source_channels;
+    let expected_len = image_pixels.checked_mul(source_channels);
+    let zero_cutoff_luma_bounds = if zero_cutoff_luma
         && mask.is_none()
         && matches!((img, channels), (DynamicImage::ImageLuma8(_), 1))
         && expected_len == Some(raw.len())
@@ -163,18 +224,25 @@ fn collect_autocontrast_histogram(
                     if mask[mask_index] == 0 {
                         continue;
                     }
-                    selected_pixels += 1;
                 }
-                let index = y * stride + x * channels;
-                for channel in 0..channels {
-                    values[channel][raw[index + channel] as usize] += 1;
+                let index = y * stride + x * source_channels;
+                if tone_luma {
+                    let luma = crate::color::rgb_to_luma_u8(
+                        raw[index],
+                        raw[index + 1],
+                        raw[index + 2],
+                    );
+                    values[0][usize::from(luma)] += 1;
+                } else {
+                    for channel in 0..channels {
+                        values[channel][raw[index + channel] as usize] += 1;
+                    }
                 }
             }
         }
     }
     Ok(AutocontrastHistogram {
         channels,
-        selected_pixels,
         values,
         zero_cutoff_luma_bounds,
     })
@@ -215,47 +283,135 @@ fn fill_native_autocontrast_histogram(
     true
 }
 
-fn identity_lut(channels: usize) -> Vec<u8> {
-    let mut lut = vec![0u8; channels * 256];
-    for channel in 0..channels {
-        for value in 0..=u8::MAX {
-            lut[channel * 256 + usize::from(value)] = value;
-        }
-    }
-    lut
+fn normalize_ignored_bins(ignore: &Option<Vec<i64>>) -> Result<Vec<usize>, PilError> {
+    let Some(ignore) = ignore else {
+        return Ok(Vec::new());
+    };
+    ignore
+        .iter()
+        .map(|&index| {
+            let normalized = if index < 0 { index + 256 } else { index };
+            usize::try_from(normalized)
+                .ok()
+                .filter(|&index| index < 256)
+                .ok_or_else(|| PilError::IndexError("list assignment index out of range".into()))
+        })
+        .collect()
 }
 
-fn build_autocontrast_lut(histogram: &AutocontrastHistogram, cutoff: f64) -> Vec<u8> {
-    let mut lut = vec![0u8; histogram.channels * 256];
-    let total = histogram.selected_pixels as f64;
-    for channel in 0..histogram.channels {
-        let low_threshold = (total * cutoff / 100.0) as usize;
-        let high_threshold = (total * (100.0 - cutoff) / 100.0) as usize;
-        let (low, high) = channel_bounds(histogram, channel, low_threshold, high_threshold);
-        let start = channel * 256;
-        if high <= low {
-            fill_identity_channel(&mut lut[start..start + 256]);
-        } else {
-            fill_contrast_channel(&mut lut[start..start + 256], low, high);
-        }
+fn validate_cutoff(total: usize, cutoff: f64) -> Result<(), PilError> {
+    let count = total as f64 * cutoff / 100.0;
+    if count.is_nan() {
+        return Err(PilError::ValueError("cannot convert float NaN to integer".into()));
     }
-    lut
+    if count.is_infinite() {
+        return Err(PilError::OverflowError("cannot convert float infinity to integer".into()));
+    }
+    Ok(())
 }
 
-fn channel_bounds(
+fn cutoff_count(total: usize, cutoff: f64) -> Result<(bool, usize), PilError> {
+    validate_cutoff(total, cutoff)?;
+    let count = (total as f64 * cutoff / 100.0).floor();
+    let negative = count < 0.0;
+    let magnitude = count.abs();
+    let magnitude = if magnitude >= usize::MAX as f64 {
+        usize::MAX
+    } else {
+        magnitude as usize
+    };
+    Ok((negative, magnitude))
+}
+
+fn normalize_cutoff_count(count: i128) -> (bool, usize) {
+    let negative = count < 0;
+    let magnitude = count.saturating_abs().min(usize::MAX as i128) as usize;
+    (negative, magnitude)
+}
+
+fn trim_histogram_edge(histogram: &mut [usize; 256], cutoff: (bool, usize), high: bool) {
+    if cutoff.0 {
+        let edge = if high { &mut histogram[255] } else { &mut histogram[0] };
+        *edge = edge.saturating_add(cutoff.1);
+        return;
+    }
+    let mut remaining = cutoff.1;
+    if high {
+        for bin in histogram.iter_mut().rev() {
+            let removed = (*bin).min(remaining);
+            *bin -= removed;
+            remaining -= removed;
+            if remaining == 0 {
+                break;
+            }
+        }
+    } else {
+        for bin in histogram.iter_mut() {
+            let removed = (*bin).min(remaining);
+            *bin -= removed;
+            remaining -= removed;
+            if remaining == 0 {
+                break;
+            }
+        }
+    }
+}
+
+fn build_autocontrast_lut(
     histogram: &AutocontrastHistogram,
-    channel: usize,
-    low_threshold: usize,
-    high_threshold: usize,
-) -> (f64, f64) {
-    if let Some((low, high)) = histogram.zero_cutoff_luma_bounds {
-        return (f64::from(low), f64::from(high));
+    cutoff: (f64, f64),
+    ignored: &[usize],
+) -> Result<Vec<u8>, PilError> {
+    let mut lut = vec![0u8; histogram.channels * 256];
+    for channel in 0..histogram.channels {
+        let mut bins = histogram.values[channel];
+        for &index in ignored {
+            bins[index] = 0;
+        }
+        let total = bins.iter().copied().sum();
+        let low_cutoff = cutoff_count(total, cutoff.0)?;
+        let high_cutoff = cutoff_count(total, cutoff.1)?;
+        let start = channel * 256;
+        build_lut_channel(
+            &mut lut[start..start + 256],
+            bins,
+            low_cutoff,
+            high_cutoff,
+            histogram.zero_cutoff_luma_bounds,
+        );
     }
-    let high_index = high_threshold.min(histogram.selected_pixels - 1);
-    (
-        histogram_value_at(&histogram.values[channel], low_threshold, 0) as f64,
-        histogram_value_at(&histogram.values[channel], high_index, 255) as f64,
-    )
+    Ok(lut)
+}
+
+fn build_lut_channel(
+    lut: &mut [u8],
+    mut bins: [usize; 256],
+    low_cutoff: (bool, usize),
+    high_cutoff: (bool, usize),
+    zero_cutoff_luma_bounds: Option<(u8, u8)>,
+) {
+    if let Some((low, high)) = zero_cutoff_luma_bounds {
+        fill_channel_from_bounds(lut, low, high);
+        return;
+    }
+    trim_histogram_edge(&mut bins, low_cutoff, false);
+    trim_histogram_edge(&mut bins, high_cutoff, true);
+    let low = bins.iter().position(|&count| count != 0);
+    let high = bins.iter().rposition(|&count| count != 0);
+    match (low, high) {
+        (Some(low), Some(high)) if high > low => {
+            fill_contrast_channel(lut, low as f64, high as f64)
+        }
+        _ => fill_identity_channel(lut),
+    }
+}
+
+fn fill_channel_from_bounds(channel: &mut [u8], low: u8, high: u8) {
+    if high <= low {
+        fill_identity_channel(channel);
+    } else {
+        fill_contrast_channel(channel, f64::from(low), f64::from(high));
+    }
 }
 
 fn fill_identity_channel(channel: &mut [u8]) {
@@ -311,7 +467,12 @@ mod autocontrast_luma_tests {
         let image = DynamicImage::ImageLuma8(
             GrayImage::from_raw(pixels.len() as u32, 1, pixels.to_vec()).expect("valid L image"),
         );
-        let lut = autocontrast_lut(&image, 0.0, None).expect("cutoff-zero LUT");
+        let lut = autocontrast_lut(
+            &image,
+            &crate::pipeline::AutocontrastOptions::symmetric(0.0),
+            None,
+        )
+        .expect("cutoff-zero LUT");
         assert_eq!(lut[22], 0);
         assert_eq!(lut[23], 0);
         assert_eq!(lut[50], 39);
@@ -322,7 +483,12 @@ mod autocontrast_luma_tests {
         let constant = DynamicImage::ImageLuma8(
             GrayImage::from_raw(19, 1, vec![77; 19]).expect("valid constant L image"),
         );
-        let constant_lut = autocontrast_lut(&constant, 0.0, None).expect("constant LUT");
+        let constant_lut = autocontrast_lut(
+            &constant,
+            &crate::pipeline::AutocontrastOptions::symmetric(0.0),
+            None,
+        )
+        .expect("constant LUT");
         assert!(constant_lut.iter().copied().eq(0..=u8::MAX));
     }
 }

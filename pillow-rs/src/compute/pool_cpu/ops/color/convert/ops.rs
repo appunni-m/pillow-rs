@@ -234,7 +234,7 @@ pub(crate) static SUPPORT: OperationSupport = OperationSupport::composed(
     CONVERT_CHILDREN,
 )
 .with_rejected_output(OutputModeRule::ByTargetMode)
-.with_target_compositions(helpers::target_compositions::classify_target_composition);
+.with_target_compositions(super::helpers::target_compositions::classify_target_composition);
 
 fn classify_matrix_mode(mode: Mode) -> ModeSupport {
     if mode == Mode::ImageRgb8 {

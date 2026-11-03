@@ -103,7 +103,7 @@ impl Strategy<'_> {
         };
         let output = match self.architecture {
             ArchitectureStrategy::Default => {
-                default::alpha_composite_impl::execute(source, self.destination)?
+                super::default::alpha_composite_impl::execute(source, self.destination)?
             }
             #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
             ArchitectureStrategy::Sse2 => super::sse2::alpha_composite_impl::execute(source, self.destination)?,
@@ -214,7 +214,7 @@ impl MirrorFusionStrategy<'_> {
         let (output, composite_vector_blocks, composite_scalar_tail,
             mirror_vector_blocks, mirror_scalar_tail) = match self.architecture {
             ArchitectureStrategy::Default => (
-                default::alpha_composite_mirror_impl::execute(
+                super::default::alpha_composite_mirror_impl::execute(
                     source.as_raw(), self.destination.as_raw(), width, height,
                 )?,
                 0, 0, 0, 0,
@@ -244,7 +244,7 @@ fn fused_vector_output(
     destination: &RgbaImage,
 ) -> Result<(Vec<u8>, u64, u64, u64, u64), PilError> {
     let (width, height) = destination.dimensions();
-    super::helpers::alpha_composite_mirror::execute(
+    super::super::helpers::alpha_composite_mirror::execute(
         source.as_raw(),
         destination.as_raw(),
         width,

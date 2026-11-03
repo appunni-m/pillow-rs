@@ -24,7 +24,7 @@ pub(crate) const SUPPORT: ModeSupport =
     ModeSupport::serial(OperationId::Eval, Mode::ImageRgbPremultiplied8, INPUTS);
 
 pub(crate) enum ArchitectureStrategy<'a> {
-    Default(default::Kernel<'a>),
+    Default(super::default::Kernel<'a>),
 }
 
 pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
@@ -48,14 +48,14 @@ pub(crate) fn prepare<'a>(
         lut.len(),
     );
     let selection = super::super::helpers::strategy::select(SUPPORT, facts, ctx)?;
-    let kernel = default::prepare(input, lut);
+    let kernel = super::default::prepare(input, lut);
     Ok(Prepared::new(ArchitectureStrategy::Default(kernel), selection))
 }
 
 pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
     match strategy.implementation {
         ArchitectureStrategy::Default(kernel) => {
-            default::execute(kernel).map(DynamicImage::ImageRgbPremultiplied8)
+            super::default::execute(kernel).map(DynamicImage::ImageRgbPremultiplied8)
         }
     }
 }

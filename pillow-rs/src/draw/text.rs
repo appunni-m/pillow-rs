@@ -1,9 +1,51 @@
-use super::{Draw, Mode};
+use super::{Draw, DrawColorInput, Mode};
 use crate::compute::ExecutionContext;
 use crate::compute::registry::support::StrategySelection;
 use crate::error::PilError;
 
 mod composition;
+
+impl Draw {
+    /// Resolve an ImageDraw text color to the native ink passed to font masks.
+    ///
+    /// Single-band and I;16 modes retain their scalar ink values. Multiband
+    /// byte modes use the same little-endian channel order as RGBA font masks.
+    pub fn text_ink_with_input(&mut self, input: DrawColorInput) -> Result<i64, PilError> {
+        let fill = self.resolve_text_color_with_input(input)?;
+        Ok(match self.effective_mode()? {
+            Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => i64::from(fill.0),
+            Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
+                i64::from(u16::from_le_bytes([fill.0, fill.1]))
+            }
+            _ => Self::pack_text_ink(fill),
+        })
+    }
+
+    /// Paste a custom font's RGBA glyph colors through the existing Paste
+    /// mode strategy, using the mask alpha as coverage.
+    pub fn paste_text_color_mask(
+        &mut self,
+        position: (i32, i32),
+        color: &crate::image::Image,
+        coverage: &crate::image::Image,
+    ) -> Result<(), PilError> {
+        if color.mode_identity()? != Mode::ImageRgba8 {
+            return Err(PilError::ValueError("bad transparency mask".into()));
+        }
+        if !matches!(coverage.mode_identity()?, Mode::One | Mode::ImageLuma8) {
+            return Err(PilError::ValueError("bad transparency mask".into()));
+        }
+        self.image.paste_at(
+            crate::ops::paste::PasteSource::Image(Box::new(color.clone())),
+            Some(position),
+            Some(coverage),
+        )
+    }
+
+    fn pack_text_ink(fill: (u8, u8, u8, u8)) -> i64 {
+        i64::from(i32::from_le_bytes([fill.0, fill.1, fill.2, fill.3]))
+    }
+}
 
 struct PositionedTextLine<'a> {
     x: f64,
@@ -139,7 +181,7 @@ impl Draw {
             font,
             spacing,
             options,
-            self.effective_mode(),
+            self.effective_mode()?,
         )?;
         for line in positioned {
             let mut line_options = options.clone();
@@ -309,7 +351,7 @@ impl Draw {
         options: &crate::font::ImageFontTextOptions,
         context: &ExecutionContext,
     ) -> Result<(u32, u32, Option<StrategySelection>), PilError> {
-        let mode = self.effective_mode();
+        let mode = self.effective_mode()?;
         // Read the current typed raster identity, including pending outputs.
         let raster_mode = self.image.mode_identity()?;
         self.validate_text_options(options)?;

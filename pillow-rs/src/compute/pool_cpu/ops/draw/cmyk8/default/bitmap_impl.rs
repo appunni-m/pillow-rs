@@ -1,7 +1,7 @@
 use crate::compute::pool_cpu::ops::draw::{BitmapMask, BitmapRegion};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Rgba};
-use image::{GenericImage, GenericImageView};
+use crate::raster::{GenericImage, GenericImageView};
 
 pub(crate) fn apply(
     image: DynamicImage,
@@ -76,7 +76,7 @@ pub(crate) fn apply_luma_mask(
 }
 
 fn blend_luma_rows(
-    canvas: &mut image::RgbaImage,
+    canvas: &mut crate::raster::RgbaImage,
     mask: &[u8],
     mask_width: u32,
     region: BitmapRegion,

@@ -46,7 +46,9 @@ pub(super) fn assess(
         InputContract::ExpandedDimensions { bytes_per_pixel } => {
             assess_expanded_dimensions(contract, input, bytes_per_pixel)
         }
-        InputContract::ExpandFill(_) | InputContract::PadFill(_) => Ok(None),
+        InputContract::ExpandFill(_)
+        | InputContract::PadFill(_)
+        | InputContract::AutocontrastParameters => Ok(None),
         InputContract::PaletteMetadata if input.palette == PaletteKnowledge::Unknown => {
             Ok(Some(UnresolvedGuard::PaletteMetadata))
         }
@@ -86,11 +88,6 @@ pub(super) fn assess(
         }
         // These variants duplicate architecture guards and must not be
         // declared as public input validation contracts.
-        InputContract::BlendNativeVector { .. }
-        | InputContract::CompositeNativeByteVector { .. }
-        | InputContract::CompositeLMaskNeon { .. } => Err(PilError::InternalError(
-            "vector eligibility must be declared with StrategyGuard".into(),
-        )),
         InputContract::PaletteMetadata
         | InputContract::NormalizedCrop
         | InputContract::ExtractBandIndex(_)

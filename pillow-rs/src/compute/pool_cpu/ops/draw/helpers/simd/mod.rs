@@ -11,4 +11,4 @@ use admission::{
     has_visible_draw_point, has_visible_draw_rectangle, valid_draw_rectangle,
 };
 use layout::DrawLayout;
-pub(crate) use strategy::{execute, is_eligible};
+pub(crate) use strategy::{execute as vector_execute, is_eligible};

@@ -6,7 +6,7 @@ use crate::pipeline::PipelineOp;
 use wide::u32x4;
 
 use super::super::super::helpers::projection_vector::VectorProjection;
-use super::super::ops::ProjectionOutput;
+use crate::compute::pool_cpu::ops::analysis::helpers::projection::ProjectionOutput;
 
 const MAX_WRITES: usize = 8;
 

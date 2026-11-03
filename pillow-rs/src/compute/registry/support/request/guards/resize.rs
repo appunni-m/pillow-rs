@@ -8,7 +8,7 @@ use crate::compute::pool_cpu::ops::resize::helpers::coefficients::{
 };
 use crate::ops::pil_resize::{precompute_coeffs, precompute_coeffs_boxed_for_filter};
 
-pub(super) fn resize_filtered_fma_guard(input: StrategyInputs) -> GuardAssessment {
+pub(crate) fn resize_filtered_fma_guard(input: StrategyInputs) -> GuardAssessment {
     match input.request {
         RequestFacts::Resize {
             width,
@@ -51,7 +51,7 @@ pub(super) fn resize_filtered_fma_guard(input: StrategyInputs) -> GuardAssessmen
 }
 
 
-pub(super) fn resize_luma16_vector_guard(input: StrategyInputs) -> GuardAssessment {
+pub(crate) fn resize_luma16_vector_guard(input: StrategyInputs) -> GuardAssessment {
     let (width, height) = match input.request {
         RequestFacts::Resize { width, height, boxed: false, .. } => (width, height),
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
@@ -85,7 +85,7 @@ pub(super) fn resize_luma16_vector_guard(input: StrategyInputs) -> GuardAssessme
     }
 }
 
-pub(super) fn resize_i32_neon_guard(input: StrategyInputs) -> GuardAssessment {
+pub(crate) fn resize_i32_neon_guard(input: StrategyInputs) -> GuardAssessment {
     let (width, height) = match input.request {
         RequestFacts::Resize {
             width,
@@ -120,7 +120,7 @@ pub(super) fn resize_i32_neon_guard(input: StrategyInputs) -> GuardAssessment {
     }
 }
 
-pub(super) fn resize_byte_nearest_vector_guard(
+pub(crate) fn resize_byte_nearest_vector_guard(
     input: StrategyInputs,
     channels: u8,
 ) -> GuardAssessment {
@@ -157,7 +157,7 @@ pub(super) fn resize_byte_nearest_vector_guard(
     }
 }
 
-pub(super) fn resize_byte_filtered_vector_guard(
+pub(crate) fn resize_byte_filtered_vector_guard(
     input: StrategyInputs,
     channels: u8,
 ) -> GuardAssessment {
@@ -214,7 +214,7 @@ pub(super) fn resize_byte_filtered_vector_guard(
     }
 }
 
-pub(super) fn resize_byte_native_vector_guard(
+pub(crate) fn resize_byte_native_vector_guard(
     input: StrategyInputs,
     channels: u8,
 ) -> GuardAssessment {
@@ -229,7 +229,7 @@ pub(super) fn resize_byte_native_vector_guard(
     }
 }
 
-pub(super) fn resize_byte_boxed_nearest_vector_guard(
+pub(crate) fn resize_byte_boxed_nearest_vector_guard(
     input: StrategyInputs,
     channels: u8,
 ) -> GuardAssessment {
@@ -244,7 +244,7 @@ pub(super) fn resize_byte_boxed_nearest_vector_guard(
     }
 }
 
-pub(super) fn resize_byte_boxed_vector_guard(
+pub(crate) fn resize_byte_boxed_vector_guard(
     input: StrategyInputs,
     channels: u8,
     straight_alpha: bool,

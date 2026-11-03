@@ -10,7 +10,9 @@ use super::types::{
     PasteSourceInput, ResolvedPasteColor,
 };
 use crate::checked_dims::CheckedDims;
-use crate::compute::registry::support::OperationId;
+use crate::compute::registry::support::{
+    OperationId, PaletteKnowledge, RequestFacts, SecondaryInputFacts, StrategyInputs,
+};
 use crate::error::PilError;
 use crate::image::Image;
 use crate::ops::crop::check_crop_extent;
@@ -29,7 +31,8 @@ pub struct PasteBoxPlan {
     abbreviated_mask: Option<Box<Image>>,
 }
 
-/// Mode-resolved source held until destination and mask preparation complete.
+/// Source captured before destination and mask preparation complete.
+/// Python conversion overrides may intentionally supply a different mode.
 #[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct PasteSourcePlan {
@@ -56,10 +59,7 @@ impl Image {
             || matches!(&mask_input, PasteMaskInput::Image(_))
             || matches!(&box_input, PasteBoxInput::Image(_));
         let box_plan = Self::prepare_paste_box(box_input, has_mask, position_size_available)?;
-        let source_plan = self.prepare_paste_source(
-            source,
-            has_mask || box_plan.abbreviated_mask.is_some(),
-        )?;
+        let source_plan = self.prepare_paste_source(source)?;
         self.paste_prepared(box_plan, source_plan, mask_input)
     }
 
@@ -115,12 +115,11 @@ impl Image {
         })
     }
 
-    /// Resolves an image or color source in the destination's exact mode.
+    /// Applies base-image Paste conversion rules and resolves solid inputs.
     #[doc(hidden)]
     pub fn prepare_paste_source(
         &self,
         source_input: PasteSourceInput,
-        has_mask: bool,
     ) -> Result<PasteSourcePlan, PilError> {
         let destination_mode = self.mode_identity()?;
         let source = match source_input {
@@ -176,7 +175,6 @@ impl Image {
                 PasteSource::Image(Box::new(resolve_image_source(
                     image,
                     destination_mode,
-                    has_mask,
                 )?)),
                 None,
             ),
@@ -333,6 +331,17 @@ impl Image {
                 height,
             )?,
         };
+        // TODO(pillow-rs#3ptb): freeze mismatch ordering against invalid-mask
+        // and callback failures for subclass conversion results; also cover
+        // source/destination aliasing and reentrant palette/image mutation.
+        validate_paste_source_contract(
+            destination_mode,
+            &source_image,
+            mask,
+            (x, y),
+            (width, height),
+            mask_alpha,
+        )?;
         let w = i32::try_from(width)
             .map_err(|_| PilError::ValueError("images do not match".to_owned()))?;
         let h = i32::try_from(height)
@@ -568,7 +577,6 @@ impl Image {
             destination_mode,
             source_width,
             source_height,
-            mask.is_some(),
         )?;
 
         let w = i32::try_from(width)
@@ -714,15 +722,60 @@ fn paste_mask_uses_alpha(destination_mode: Mode, mask: Option<&Image>) -> Result
         .paste_mask_uses_alpha(mask_image.mode_identity()?)
 }
 
+/// Validate resolved Python sources before lazy pipeline queuing.
+/// Prepared execution applies this same mode declaration after materialization.
+fn validate_paste_source_contract(
+    destination_mode: Mode,
+    source: &Image,
+    mask: Option<&Image>,
+    position: (i64, i64),
+    region: (u32, u32),
+    mask_alpha: bool,
+) -> Result<(), PilError> {
+    let source_size = source.size()?;
+    let source = SecondaryInputFacts {
+        mode: source.mode_identity()?,
+        width: source_size.0,
+        height: source_size.1,
+        byte_len: None,
+    };
+    let mask = match mask {
+        Some(image) => {
+            let size = image.size()?;
+            Some(SecondaryInputFacts {
+                mode: image.mode_identity()?,
+                width: size.0,
+                height: size.1,
+                byte_len: None,
+            })
+        }
+        None => None,
+    };
+    let facts = StrategyInputs {
+        width: 0,
+        height: 0,
+        byte_len: None,
+        palette: PaletteKnowledge::Unknown,
+        request: RequestFacts::Unspecified,
+    }
+    .with_paste(source, mask, position, region, mask_alpha);
+    let support = OperationId::Paste.support().for_mode(destination_mode);
+    if support.assess_inputs(facts)?.is_some() {
+        return Err(PilError::InternalError(
+            "Paste wrapper left a declared input guard unresolved".into(),
+        ));
+    }
+    Ok(())
+}
+
 fn resolve_paste_source(
     source: PasteSource,
     destination_mode: Mode,
     width: u32,
     height: u32,
-    has_mask: bool,
 ) -> Result<Image, PilError> {
     match source {
-        PasteSource::Image(image) => resolve_image_source(image, destination_mode, has_mask),
+        PasteSource::Image(image) => resolve_image_source(image, destination_mode),
         solid => {
             let color = solid.solid_color(destination_mode)?;
             resolve_solid_source(color, destination_mode, width, height)
@@ -733,7 +786,6 @@ fn resolve_paste_source(
 fn resolve_image_source(
     image: Box<Image>,
     destination_mode: Mode,
-    has_mask: bool,
 ) -> Result<Image, PilError> {
     let source_mode = image.mode_identity()?;
     // Pillow skips conversion for LA, RGBA, and RGBa pasted into RGB because
@@ -747,12 +799,6 @@ fn resolve_image_source(
             ))
     {
         Ok(*image)
-    } else if destination_mode == Mode::ImageRgba8
-        && source_mode == Mode::ImageRgb8
-        && !has_mask
-    {
-        // Keep RGB source bytes native; the destination writer supplies opaque alpha.
-        Ok(*image)
     } else if destination_mode == Mode::ImagePaletteAlpha8
         && source_mode == Mode::ImagePalette8
     {
@@ -761,7 +807,8 @@ fn resolve_image_source(
         promoted.putalpha(255)?;
         Ok(promoted)
     } else {
-        // Convert before backend execution so every backend receives identical bytes.
+        // Pillow converts every other mismatched base-image source here,
+        // including RGB to RGBA regardless of whether a mask is present.
         image.convert(destination_mode, None, None, None, None)
     }
 }

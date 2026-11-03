@@ -13,7 +13,7 @@ pub(crate) fn apply_bitmap(
     mask: &super::super::BitmapMask<'_>,
     color: (u8, u8, u8, u8),
 ) -> Result<DynamicImage, PilError> {
-    default::bitmap_impl::apply(image, x, y, mask_width, mask_height, mask, color)
+    super::default::bitmap_impl::apply(image, x, y, mask_width, mask_height, mask, color)
 }
 
 pub(crate) const MODE: Mode = Mode::ImageYCbCr8;
@@ -23,7 +23,7 @@ pub(crate) const FLOAT_MODE: bool = false;
 pub(crate) fn apply_text<const RGBA_MASK: bool>(
     input: super::super::TextComposeInput<'_>,
 ) -> Result<super::super::TextComposeResult, PilError> {
-    default::text_impl::apply::<RGBA_MASK>(
+    super::default::text_impl::apply::<RGBA_MASK>(
         input.image,
         input.x,
         input.y,
@@ -58,12 +58,12 @@ pub(crate) fn execute_with_architecture(
     };
     match architecture {
         Architecture::Default => {
-            let output = default::draw_impl::execute(pixels, ops)?;
+            let output = super::default::draw_impl::execute(pixels, ops)?;
             Ok(DynamicImage::ImageYCbCr8(output))
         }
-        Architecture::Sse2 => sse2::draw_impl::execute(image, ops),
-        Architecture::Neon => neon::draw_impl::execute(image, ops),
-        Architecture::WasmSimd128 => wasm_simd128::draw_impl::execute(image, ops),
+        Architecture::Sse2 => super::sse2::draw_impl::execute(image, ops),
+        Architecture::Neon => super::neon::draw_impl::execute(image, ops),
+        Architecture::WasmSimd128 => super::wasm_simd128::draw_impl::execute(image, ops),
         unexpected => Err(PilError::InternalError(format!(
             "unexpected {unexpected:?} architecture selected for Draw mode {MODE:?}"
         ))),

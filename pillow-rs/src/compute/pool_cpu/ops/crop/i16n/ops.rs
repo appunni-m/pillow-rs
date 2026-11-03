@@ -22,15 +22,15 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::Crop,
     Mode::ImageI16N,
     OutputModeRule::Preserve,
-    default::crop_impl::INPUTS,
+    super::default::crop_impl::INPUTS,
     &ARCHITECTURES,
 );
 
 pub(crate) enum ArchitectureStrategy<'a> {
-    Default(default::crop_impl::Crop<'a>),
-    Sse2 { image: &'a default::crop_impl::Input, region: CropRegion },
-    Neon { image: &'a default::crop_impl::Input, region: CropRegion },
-    WasmSimd128 { image: &'a default::crop_impl::Input, region: CropRegion },
+    Default(super::default::crop_impl::Crop<'a>),
+    Sse2 { image: &'a super::default::crop_impl::Input, region: CropRegion },
+    Neon { image: &'a super::default::crop_impl::Input, region: CropRegion },
+    WasmSimd128 { image: &'a super::default::crop_impl::Input, region: CropRegion },
 }
 
 pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
@@ -54,7 +54,7 @@ pub(crate) fn assess(region: CropRegion, ctx: &ExecutionContext) -> Result<Suppo
 }
 
 pub(crate) fn prepare<'a>(
-    image: &'a default::crop_impl::Input,
+    image: &'a super::default::crop_impl::Input,
     region: CropRegion,
     ctx: &ExecutionContext,
 ) -> Result<Strategy<'a>, PilError> {
@@ -76,7 +76,7 @@ pub(crate) fn prepare<'a>(
     let selection = SUPPORT.select(ctx, inputs)?;
     let implementation = match selection.implementation.architecture {
         Architecture::Default => ArchitectureStrategy::Default(
-            default::crop_impl::prepare(image, region),
+            super::default::crop_impl::prepare(image, region),
         ),
         Architecture::Sse2 => ArchitectureStrategy::Sse2 { image, region },
         Architecture::Neon => ArchitectureStrategy::Neon { image, region },
@@ -91,7 +91,7 @@ pub(crate) fn prepare<'a>(
 pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
     match strategy.implementation {
         ArchitectureStrategy::Default(implementation) => {
-            Ok(default::crop_impl::execute(implementation))
+            Ok(super::default::crop_impl::execute(implementation))
         }
         ArchitectureStrategy::Sse2 { image, region } => {
             sse2::crop_impl::execute(image, region).map(DynamicImage::ImageI16N)

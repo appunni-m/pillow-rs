@@ -87,11 +87,11 @@ impl<'a, P: Pixel<Subpixel = u8>> ByteCrop<'a, P> {
         let left = self.region.left as usize;
         let top = self.region.top as usize;
         let output_width = self.region.width as usize;
-        if !output.remap_hidden_pixel_lanes_from(self.image, |destination_index| {
+        if output.remap_hidden_pixel_lanes_from(self.image, |destination_index| {
             let x = destination_index % output_width;
             let y = destination_index / output_width;
             (top + y) * source_width + left + x
-        }) {
+        }).is_none() {
             return Err(PilError::InternalError(
                 "crop hidden pixel lanes did not match the output extent".into(),
             ));

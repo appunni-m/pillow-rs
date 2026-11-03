@@ -572,6 +572,7 @@ macro_rules! declare_invert_native_mode {
             ),
         ];
 
+        // NO_PILLOW_SUPPORT: `Some(reason)` declares the exact mode's native Invert extension.
         pub(crate) const SUPPORT: crate::compute::registry::support::ModeSupport = match $core_only_reason {
             Some(reason) => crate::compute::registry::support::ModeSupport::cpu_core_only(
                 crate::compute::registry::support::OperationId::Invert,

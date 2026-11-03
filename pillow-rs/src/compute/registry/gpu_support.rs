@@ -8,6 +8,17 @@ use crate::raster::Mode;
 /// Returns whether the GPU backend has an implementation for `op`.
 #[cfg(feature = "gpu")]
 pub fn gpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
+    if let PipelineOp::Autocontrast { options, mask } = op
+        && mask.is_some()
+        && (options.ignore.as_ref().is_some_and(|values| !values.is_empty())
+            || options.preserve_tone
+            || options.cutoff.0 != options.cutoff.1
+            || options.cutoff != (0.0, 0.0))
+    {
+        // TODO(pillow-rs#3ptb): implement masked cutoff trimming, ignored
+        // bins, and preserve-tone in the GPU histogram strategy.
+        return Ok(false);
+    }
     if matches!(
         op,
         PipelineOp::PadTyped { .. }

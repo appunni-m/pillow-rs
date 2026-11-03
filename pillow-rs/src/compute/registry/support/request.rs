@@ -197,6 +197,8 @@ pub enum InputContract {
     PaletteMetadata,
     /// ImageOps autocontrast/equalize masks are validated as same-size L/1 images.
     ImageOpsLumaMask,
+    /// Autocontrast cutoff pair, ignored bins, and tone-preservation request.
+    AutocontrastParameters,
     /// Existing defensive index handling for direct internal band requests.
     ExtractBandIndex(BandIndexRule),
     /// Image.putpixel validates coordinates before constructing the internal write.
@@ -338,29 +340,6 @@ pub enum InputContract {
         mode_rejection: &'static str,
         /// Existing error when band dimensions differ.
         size_rejection: &'static str,
-    },
-    /// Native-byte Blend pairs admitted by the fused architecture kernel.
-    BlendNativeVector {
-        /// Number of bytes stored per source pixel.
-        channels: u8,
-        /// Exact secondary identities with byte arithmetic matching this kernel.
-        compatible_modes: &'static [Mode],
-    },
-    /// Native-byte Composite layout and mask contract for the portable vector kernel.
-    CompositeNativeByteVector {
-        /// Exact destination/source mode owned by this strategy.
-        mode: Mode,
-        /// Number of bytes stored per image pixel.
-        channels: u8,
-    },
-    /// Composite's exact-mode NEON row kernel reused from the Paste strategy.
-    CompositeLMaskNeon {
-        /// Exact destination/source mode owned by this strategy.
-        mode: Mode,
-        /// Number of bytes stored per image pixel.
-        channels: u8,
-        /// Minimum clipped row width required by the specialized kernel.
-        minimum_clipped_width: u32,
     },
     /// Blend's allowed secondary modes and the existing mode/size errors.
     BlendInputs {
@@ -554,6 +533,29 @@ pub enum StrategyGuard {
     AlphaCompositeVector {
         /// Physical number of byte channels in the exact mode's stored pixel.
         channels: u8,
+    },
+    /// Native-byte Blend pairs admitted by the fused architecture kernel.
+    BlendNativeVector {
+        /// Number of bytes stored per source pixel.
+        channels: u8,
+        /// Exact secondary identities with byte arithmetic matching this kernel.
+        compatible_modes: &'static [Mode],
+    },
+    /// Native-byte Composite layout and mask contract for the portable vector kernel.
+    CompositeNativeByteVector {
+        /// Exact destination/source mode owned by this strategy.
+        mode: Mode,
+        /// Number of bytes stored per image pixel.
+        channels: u8,
+    },
+    /// Composite's exact-mode NEON row kernel reused from the Paste strategy.
+    CompositeLMaskNeon {
+        /// Exact destination/source mode owned by this strategy.
+        mode: Mode,
+        /// Number of bytes stored per image pixel.
+        channels: u8,
+        /// Minimum clipped row width required by the specialized kernel.
+        minimum_clipped_width: u32,
     },
     /// RGB Merge's sixteen-pixel native L/P plane interleaver.
     MergeRgbInterleave,

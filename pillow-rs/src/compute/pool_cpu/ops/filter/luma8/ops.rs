@@ -238,7 +238,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
     if selection.implementation.architecture != Architecture::Default {
         return Err(PilError::InternalError("filter selected an unowned architecture".into()));
     }
-    default::execute(image, request)
+    super::default::execute(image, request)
 }
 
 fn execute_rank(
@@ -251,10 +251,10 @@ fn execute_rank(
             (size, size.saturating_mul(size) / 2)
         }
         super::super::ops::FilterRequest::RankFilter { size, rank } => (size, rank),
-        _ => return default::execute(image, request),
+        _ => return super::default::execute(image, request),
     };
     match selection.implementation.architecture {
-        Architecture::Default => default::execute(image, request),
+        Architecture::Default => super::default::execute(image, request),
         Architecture::Avx2
         | Architecture::Avx
         | Architecture::Sse2
@@ -284,7 +284,7 @@ fn execute_box_blur(
     selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
     match selection.implementation.architecture {
-        Architecture::Default => default::execute(image, request),
+        Architecture::Default => super::default::execute(image, request),
         Architecture::Avx2
         | Architecture::Avx
         | Architecture::Sse2
@@ -302,10 +302,10 @@ fn execute_gaussian_blur(
     selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
     let super::super::ops::FilterRequest::GaussianBlur { sigma } = request else {
-        return default::execute(image, request);
+        return super::default::execute(image, request);
     };
     match selection.implementation.architecture {
-        Architecture::Default => default::execute(image, request),
+        Architecture::Default => super::default::execute(image, request),
         Architecture::Avx2
         | Architecture::Avx
         | Architecture::Sse2
@@ -330,7 +330,7 @@ fn execute_filter5x5(
         }
     }
     match selection.implementation.architecture {
-        Architecture::Default => default::execute(image, request),
+        Architecture::Default => super::default::execute(image, request),
         Architecture::Sse2
         | Architecture::Avx
         | Architecture::AvxFma
@@ -350,7 +350,7 @@ fn execute_filter3x3(
     selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
     match selection.implementation.architecture {
-        Architecture::Default => default::execute(image, request),
+        Architecture::Default => super::default::execute(image, request),
         Architecture::Sse2
         | Architecture::Avx
         | Architecture::AvxFma
@@ -362,4 +362,21 @@ fn execute_filter3x3(
             "filter selected an unowned Filter3x3 architecture".into(),
         )),
     }
+}
+
+pub(in crate::compute::pool_cpu::ops::filter) fn mode_filter_support() -> crate::compute::registry::support::ModeSupport {
+    crate::compute::registry::support::ModeSupport::serial(
+        crate::compute::registry::support::OperationId::ModeFilter,
+        MODE,
+        super::super::ops::inputs_for(
+            crate::compute::registry::support::OperationId::ModeFilter,
+        ),
+    )
+}
+
+pub(in crate::compute::pool_cpu::ops::filter) fn execute_mode_filter(
+    image: &crate::raster::DynamicImage,
+    size: u32,
+) -> Result<crate::raster::DynamicImage, crate::error::PilError> {
+    super::default::execute_mode_filter(image, size)
 }

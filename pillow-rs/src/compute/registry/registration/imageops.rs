@@ -4,7 +4,7 @@ fn register_autocontrast_equalize(m: &mut Registry) {
     m.insert(
         "Autocontrast",
         gpu_entry!(
-            crate::compute::pool_cpu::ops::imageops::autocontrast::prepare_pipeline,
+            crate::compute::pool_cpu::ops::imageops::ops::prepare_autocontrast_pipeline,
             "autocontrast.wgsl"
         ),
     );
@@ -12,7 +12,7 @@ fn register_autocontrast_equalize(m: &mut Registry) {
     m.insert(
         "Equalize",
         gpu_entry!(
-            crate::compute::pool_cpu::ops::imageops::equalize::prepare_pipeline,
+            crate::compute::pool_cpu::ops::imageops::ops::prepare_equalize_pipeline,
             "equalize.wgsl"
         ),
     );

@@ -1,5 +1,7 @@
 //! Native-byte Contrast blending shared by exact mode strategies.
 
+use crate::raster::GenericImageView;
+
 use crate::compute::helpers::enhance::ContrastBase;
 use crate::error::PilError;
 use crate::raster::buffer::HiddenPixelLanes;

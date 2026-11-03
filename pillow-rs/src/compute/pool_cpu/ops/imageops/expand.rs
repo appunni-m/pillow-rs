@@ -6,11 +6,11 @@
 
 use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{
-    ExpandFillRule, InputContract, ModeSupport, OperationId, OperationInputs,
-    OperationSupport, StrategyInputs, StrategySelection, SupportAssessment,
+    ExpandFillRule, InputContract, ModeSupport, OperationId, StrategyInputs, StrategySelection,
+    SupportAssessment,
 };
 use crate::error::PilError;
-use crate::pipeline::{NativeColorInput, PipelineOp};
+use crate::pipeline::NativeColorInput;
 use crate::raster::{DynamicImage, Mode};
 
 macro_rules! declare_expand_modes {
@@ -19,7 +19,7 @@ macro_rules! declare_expand_modes {
             $($mode(super::$module::expand::Strategy<'a>),)+
         }
 
-        fn classify_mode(mode: Mode) -> ModeSupport {
+        pub(super) fn classify_mode(mode: Mode) -> ModeSupport {
             match mode {
                 $(Mode::$mode => super::$module::expand::SUPPORT,)+
             }
@@ -82,10 +82,6 @@ declare_expand_modes! {
     ImageRgba32F => rgba32f,
 }
 
-/// Complete exact-mode support for native ImageOps.expand.
-pub(crate) static SUPPORT: OperationSupport =
-    OperationSupport::new(OperationId::Expand, &[], classify_mode);
-
 pub(crate) fn assess(
     mode: Mode,
     input: StrategyInputs,
@@ -112,8 +108,12 @@ pub(crate) fn prepare_with_native_fill(
     native_fill: NativeColorInput,
     ctx: &ExecutionContext,
 ) -> Result<PreparedExpand<'_>, PilError> {
-    let support = SUPPORT.for_mode(image.mode());
-    let declares_native_fill = support.inputs.iter().any(|contract| {
+    let support = super::ops::EXPAND_SUPPORT.for_mode(image.mode());
+    let inputs = match support {
+        ModeSupport::Supported { inputs, .. } => inputs,
+        ModeSupport::Rejected { reason, kind, .. } => return Err(kind.into_error(reason)),
+    };
+    let declares_native_fill = inputs.iter().any(|contract| {
         matches!(
             contract,
             InputContract::ExpandFill(
@@ -167,23 +167,4 @@ pub(crate) fn prepare_with_native_fill(
             "typed Expand fill reached a non-native-width mode".into(),
         )),
     }
-}
-
-pub(crate) fn prepare_pipeline<'a>(
-    input: OperationInputs<'a>,
-    op: &'a PipelineOp,
-    ctx: &ExecutionContext,
-) -> Result<crate::compute::registry::PreparedOperation<'a>, PilError> {
-    match op {
-        PipelineOp::Expand { border, fill } => prepare(input.image, *border, *fill, ctx),
-        PipelineOp::ExpandTyped { border, fill, input: native_fill } => prepare_with_native_fill(
-            input.image,
-            *border,
-            *fill,
-            *native_fill,
-            ctx,
-        ),
-        _ => return Err(PilError::ValueError("expected Expand op".into())),
-    }
-    .map(crate::compute::registry::PreparedOperation::from_expand)
 }

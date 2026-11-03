@@ -256,6 +256,7 @@ fn color_saturation_composed_route(mode: Mode) -> OperationModeRoute {
             OperationRouteStage::WrapperGuard,
             "conversion from L to RGBa not supported",
         ),
+        // NO_PILLOW_SUPPORT: internal high-depth modes have no ColorSaturation route.
         Mode::ImageLumaA16
         | Mode::ImageRgb16
         | Mode::ImageRgba16
@@ -817,6 +818,7 @@ fn classify_contrast_route(mode: Mode) -> OperationModeRoute {
             OperationRouteStage::ChildAdmission,
             "image has wrong mode",
         ),
+        // NO_PILLOW_SUPPORT: this native high-depth conversion-first contract is Rust-only.
         Mode::ImageLumaA16
         | Mode::ImageRgb16
         | Mode::ImageRgba16

@@ -84,7 +84,7 @@ impl Strategy<'_> {
         };
         let output = match self.architecture {
             ArchitectureStrategy::Default => {
-                default::alpha_composite_impl::execute(source, self.destination)?
+                super::default::alpha_composite_impl::execute(source, self.destination)?
             }
             #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
             ArchitectureStrategy::Sse2 => super::sse2::alpha_composite_impl::execute(source, self.destination)?,

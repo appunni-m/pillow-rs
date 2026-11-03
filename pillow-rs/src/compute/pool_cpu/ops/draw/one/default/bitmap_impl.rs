@@ -1,7 +1,7 @@
 use crate::compute::pool_cpu::ops::draw::BitmapMask;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Luma};
-use image::{GenericImage, GenericImageView};
+use crate::raster::{GenericImage, GenericImageView};
 
 pub(crate) fn apply(
     image: DynamicImage,

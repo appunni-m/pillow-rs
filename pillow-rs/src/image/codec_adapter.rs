@@ -111,12 +111,14 @@ pub(crate) fn raster_to_decoded(image: DynamicImage) -> Result<DecodedImage, Pil
             CodecColorType::Rgba16,
         )),
         image => {
-            // TODO(image-slash-star#nype): add exact codec transfer mappings
-            // for premultiplied alpha, RGBX, and three-byte color spaces,
-            // including format-specific support and rejection behavior.
-            // Append newly found mode/format cases to that task. Keep pixel
-            // translation in the codec boundary, not as a Pillow-side
-            // conversion.
+            // TODO(image-slash-star#9h5w): add exact codec transfer mappings
+            // for PA (palette indices, per-pixel alpha, and palette alpha),
+            // premultiplied alpha, RGBX, and three-byte color spaces. Start
+            // with PA × TIFF and PA × PNG, defining each format's output,
+            // metadata, and fault contract in the codec. The generic LA
+            // mapping cannot preserve PA identity. Append newly found
+            // mode/format cases to the shared list. image-slash-star owns all
+            // encoding; do not add a Pillow-side pixel conversion here.
             // TODO(pillow-rs#3ptb): update this adapter when those codec
             // contracts land and verify Pillow-visible output and errors.
             Ok(DecodedImage::new(

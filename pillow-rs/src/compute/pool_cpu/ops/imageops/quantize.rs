@@ -6,8 +6,8 @@ use std::sync::Arc;
 
 use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{
-    ModeSupport, OperationId, OperationSupport, OutputModeRule, PaletteKnowledge, RequestFacts,
-    StrategyInputs, StrategySelection, SupportAssessment,
+    ModeSupport, OperationId, OutputModeRule, PaletteKnowledge, RequestFacts, StrategyInputs,
+    StrategySelection, SupportAssessment,
 };
 use crate::error::PilError;
 use crate::image::{Image, PalettedData, PipelineOps};
@@ -49,7 +49,7 @@ const QUANTIZE_INPUT: crate::compute::registry::support::InputContract =
             "dependency required by this method was not enabled at compile time",
         kmeans_rejection: "kmeans must not be negative",
     };
-const INPUTS: &[crate::compute::registry::support::InputContract] = &[
+pub(super) const INPUTS: &[crate::compute::registry::support::InputContract] = &[
     crate::compute::registry::support::InputContract::PaletteMetadata,
     QUANTIZE_INPUT,
 ];
@@ -139,7 +139,7 @@ fn quantize_mode_strategy(mode: Mode) -> QuantizeModeStrategy {
     }
 }
 
-fn classify_mode(mode: Mode) -> ModeSupport {
+pub(super) fn classify_mode(mode: Mode) -> ModeSupport {
     quantize_mode_strategy(mode).support
 }
 
@@ -147,10 +147,6 @@ fn classify_mode(mode: Mode) -> ModeSupport {
 pub(crate) fn default_method(mode: Mode) -> u32 {
     quantize_mode_strategy(mode).default_method
 }
-
-/// Exhaustive source-mode contract; every route produces a P-mode image.
-pub(crate) static SUPPORT: OperationSupport =
-    OperationSupport::new(OperationId::Quantize, INPUTS, classify_mode);
 
 /// Validates the public color count using the operation's declared bounds.
 pub(crate) fn validate_color_count(colors: i64) -> Result<(), PilError> {
@@ -387,7 +383,7 @@ fn select_quantize_request(
             palette_mode,
         },
     };
-    match SUPPORT.for_mode(mode).assess(context, input)? {
+    match super::ops::QUANTIZE_SUPPORT.for_mode(mode).assess(context, input)? {
         SupportAssessment::Ready(selection) => Ok(selection),
         SupportAssessment::Rejected { reason, kind, .. } => Err(kind.into_error(reason)),
         SupportAssessment::Deferred { guard, .. } => Err(PilError::InternalError(format!(

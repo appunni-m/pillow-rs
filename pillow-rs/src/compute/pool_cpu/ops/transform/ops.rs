@@ -11,7 +11,7 @@
 //! TODO(pillow-rs#3ptb): verify every mode/method/filter and architecture,
 //! including unavailable-architecture and Default fallback receipts, plus
 //! empty-mesh P palette retention with a non-default source palette.
-//! `helpers::hidden_lanes` composes omitted physical bytes after the selected
+//! `super::helpers::hidden_lanes` composes omitted physical bytes after the selected
 //! mode/architecture kernel. Nearest sampling follows that architecture's
 //! sampler; filtered LA/La/PA repeats the resulting first band into physical
 //! lanes 1 and 2, while filtered three-band modes retain the output fill byte.

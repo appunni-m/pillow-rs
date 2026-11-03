@@ -1,17 +1,37 @@
 use super::*;
-use crate::compute::registry::support::OperationId;
+use crate::compute::registry::support::{ModeSupport, OperationId};
+use crate::pipeline::AutocontrastOptions;
 use crate::raster::Mode;
 
 fn mode_identity(image: &Image) -> Result<Mode, PilError> {
     image.mode_identity()
 }
 
-fn validate_autocontrast_mode(image: &Image) -> Result<(), PilError> {
+fn validate_autocontrast_mode_after_histogram(
+    image: &Image,
+    options: &AutocontrastOptions,
+    mask: Option<&Image>,
+) -> Result<(), PilError> {
     let mode = mode_identity(image)?;
-    OperationId::Autocontrast
-        .support()
-        .for_mode(mode)
-        .validate_mode()
+    let support = OperationId::Autocontrast.support().for_mode(mode);
+    if matches!(support, ModeSupport::Rejected { .. }) {
+        // Pillow computes the source histogram and LUT parameters before `_lut`
+        // rejects an unsupported output mode. Keep accepted operations lazy;
+        // only their rejection path needs this eager work to preserve fault order.
+        let histogram = if options.preserve_tone {
+            image
+                .convert(Mode::ImageLuma8, None, None, None, None)?
+                .histogram_with_mask(mask)?
+        } else {
+            image.histogram_with_mask(mask)?
+        };
+        autocontrast_lut_from_histogram(
+            &histogram,
+            options.cutoff,
+            options.ignore.clone(),
+        )?;
+    }
+    support.validate_mode()
 }
 
 /// Normalizes image contrast by clipping darkest and lightest values.
@@ -21,11 +41,16 @@ fn validate_autocontrast_mode(image: &Image) -> Result<(), PilError> {
 /// Returns [`PilError::OsError`] for alpha modes that Pillow does not support,
 /// or another [`PilError`] when mode detection fails.
 pub fn autocontrast(image: &Image, cutoff: f64) -> Result<Image, PilError> {
-    validate_autocontrast_mode(image)?;
-    Ok(Image::push_op(
-        image,
-        PipelineOp::Autocontrast { cutoff, mask: None },
-    ))
+    autocontrast_with_options(image, AutocontrastOptions::symmetric(cutoff))
+}
+
+/// Normalizes image contrast using independent cutoffs, ignored bins, and tone-preserving luma statistics.
+pub fn autocontrast_with_options(
+    image: &Image,
+    options: AutocontrastOptions,
+) -> Result<Image, PilError> {
+    validate_autocontrast_mode_after_histogram(image, &options, None)?;
+    Ok(Image::push_op(image, PipelineOp::Autocontrast { options, mask: None }))
 }
 
 /// Normalizes contrast after validating an optional Pillow mask.
@@ -34,24 +59,67 @@ pub fn autocontrast_with_mask(
     cutoff: f64,
     mask: ImageOpsMask,
 ) -> Result<Image, PilError> {
+    autocontrast_with_options_and_mask(
+        image,
+        AutocontrastOptions::symmetric(cutoff),
+        mask,
+    )
+}
+
+/// Normalizes image contrast using typed options after validating an optional Pillow mask.
+pub fn autocontrast_with_options_and_mask(
+    image: &Image,
+    options: AutocontrastOptions,
+    mask: ImageOpsMask,
+) -> Result<Image, PilError> {
     match mask {
-        ImageOpsMask::None => autocontrast(image, cutoff),
+        ImageOpsMask::None => autocontrast_with_options(image, options),
         ImageOpsMask::Invalid(type_name) => {
             validate_imageops_mask(image, ImageOpsMask::Invalid(type_name))
-                .and_then(|_| autocontrast(image, cutoff))
+                .and_then(|_| autocontrast_with_options(image, options))
         }
         ImageOpsMask::Image(mask) => {
             validate_imageops_mask(image, ImageOpsMask::Image(mask.clone()))?;
-            validate_autocontrast_mode(image)?;
+            validate_autocontrast_mode_after_histogram(image, &options, Some(mask.as_ref()))?;
             Ok(Image::push_op(
                 image,
                 PipelineOp::Autocontrast {
-                    cutoff,
+                    options,
                     mask: Some(Arc::new(*mask)),
                 },
             ))
         }
     }
+}
+
+/// Builds the Rust autocontrast LUT from a histogram computed by a host
+/// wrapper before it coerces the operation's cutoff and ignored bins.
+#[doc(hidden)]
+pub fn autocontrast_lut_from_histogram(
+    histogram: &[u32],
+    cutoff: (f64, f64),
+    ignore: Option<Vec<i64>>,
+) -> Result<Vec<u8>, PilError> {
+    crate::compute::pool_cpu::ops::imageops::helpers::histogram::autocontrast_lut_from_histogram(
+        histogram,
+        &AutocontrastOptions {
+            cutoff,
+            ignore,
+            preserve_tone: false,
+        },
+    )
+}
+
+/// Builds one channel's LUT from cutoff counts evaluated with host arithmetic.
+#[doc(hidden)]
+pub fn autocontrast_lut_from_histogram_and_counts(
+    histogram: &[u32],
+    cutoff_counts: (i128, i128),
+) -> Result<Vec<u8>, PilError> {
+    crate::compute::pool_cpu::ops::imageops::helpers::histogram::autocontrast_lut_from_cutoff_counts(
+        histogram,
+        cutoff_counts,
+    )
 }
 
 /// Equalizes the image histogram.

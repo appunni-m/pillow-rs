@@ -5,7 +5,7 @@ use crate::error::PilError;
 use crate::raster::DynamicImage;
 
 impl Draw {
-    /// Replaces the wrapper raster while retaining indexed-image metadata.
+    /// Replaces the wrapper raster while retaining source Image metadata.
     pub(super) fn apply_text_output(
         &mut self,
         mode: Mode,
@@ -27,7 +27,7 @@ impl Draw {
                 self.replace_palette_alpha_output(image)
             }
             TextComposeResult::Updated(image) => {
-                self.image = Image::from_dynamic(image);
+                self.replace_draw_output(image);
                 Ok(())
             }
         }

@@ -7,7 +7,7 @@ pub(crate) fn execute(
     image: &DynamicImage,
     ops: &[PipelineOp],
 ) -> Result<DynamicImage, PilError> {
-    simd::execute::<super::super::ops::CHANNELS, super::super::ops::FLOAT_MODE>(
+    simd::vector_execute::<{ super::super::ops::CHANNELS }, { super::super::ops::FLOAT_MODE }>(
         image,
         ops,
         super::super::ops::MODE,

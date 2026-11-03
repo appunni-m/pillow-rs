@@ -77,6 +77,8 @@ impl Prepared<'_> {
         if matches!(self.target, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
             && self.target != self.input.mode()
         {
+            // The raster-only registry result cannot carry wrapper palette
+            // state. Image-facing P/PA conversion uses execute_with_output.
             return Err(PilError::NotImplementedError(
                 "palette-target Convert requires the Image wrapper output boundary".into(),
             ));
@@ -624,10 +626,9 @@ pub(crate) fn prepare_pipeline<'a>(
     let PipelineOp::Convert { mode, matrix, dither } = op else {
         return Err(PilError::ValueError("expected Convert op".into()));
     };
-    // Cross-mode P/PA preparation is required by Image's wrapper output route,
-    // which consumes the exact selected plan through `execute_convert_output`.
-    // The generic raster-only `execute` path rejects it before running pixels;
-    // carrying wrapper metadata through generic prepared results remains a TODO.
+    // Image-facing cross-mode P/PA conversion consumes this selected plan via
+    // `execute_convert_output`, which carries the wrapper palette sidecar.
+    // Generic raster-only execution rejects this output before running pixels.
     if let Some(matrix) = matrix {
         return prepare_matrix(input, *mode, matrix, ctx)
             .map(crate::compute::registry::PreparedOperation::from_convert);

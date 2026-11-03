@@ -1,8 +1,68 @@
 use super::{
     Bound, PyAny, PyDict, PyErr, PyInt, PyList, PyOverflowError, PyResult, PyTuple, PyTypeError,
-    PyValueError,
+    PyValueError, Python,
 };
 use pyo3::types::{PyAnyMethods, PyBool, PyFloat, PyListMethods, PyTupleMethods, PyTypeMethods};
+
+pub(crate) fn autocontrast_cutoff_counts_from_python(
+    py: Python<'_>,
+    histogram: &[u32],
+    value: Option<&Bound<'_, PyAny>>,
+) -> PyResult<(i128, i128)> {
+    let Some(value) = value.filter(|value| !value.is_none()) else {
+        return Ok((0, 0));
+    };
+    let total = histogram
+        .iter()
+        .map(|&count| u64::from(count))
+        .sum::<u64>();
+    let total = i64::try_from(total)
+        .map_err(|_| PyOverflowError::new_err("histogram count exceeds Python integer range"))?;
+    if value.cast::<PyTuple>().is_ok() {
+        let operator = py.import("operator")?;
+        let low = operator.getattr("getitem")?.call1((value, 0))?;
+        let low = autocontrast_cutoff_count_from_python(py, total, &low)?;
+        let high = operator.getattr("getitem")?.call1((value, 1))?;
+        let high = autocontrast_cutoff_count_from_python(py, total, &high)?;
+        return Ok((low, high));
+    }
+
+    let cutoff = autocontrast_cutoff_count_from_python(py, total, value)?;
+    Ok((cutoff, cutoff))
+}
+
+fn autocontrast_cutoff_count_from_python(
+    py: Python<'_>,
+    total: i64,
+    cutoff: &Bound<'_, PyAny>,
+) -> PyResult<i128> {
+    let operator = py.import("operator")?;
+    let product = operator.getattr("mul")?.call1((total, cutoff))?;
+    let percentage = operator
+        .getattr("floordiv")?
+        .call1((product, 100))?;
+    let count = py.import("builtins")?.getattr("int")?.call1((percentage,))?;
+    if operator
+        .getattr("lt")?
+        .call1((count.clone(), 0))?
+        .extract::<bool>()?
+    {
+        // Only the sign of a negative trim can affect the final LUT: it makes
+        // the corresponding edge bin nonempty; its magnitude cannot move the
+        // output bounds beyond that edge.
+        return Ok(-1);
+    }
+    if operator
+        .getattr("gt")?
+        .call1((count.clone(), total))?
+        .extract::<bool>()?
+    {
+        // A trim beyond the whole channel removes every existing bin. One past
+        // the total is sufficient even if Python produced a larger int.
+        return Ok(i128::from(total) + 1);
+    }
+    count.extract::<i64>().map(i128::from)
+}
 
 pub(crate) fn resample_input_from_python(
     value: Option<&Bound<'_, PyAny>>,

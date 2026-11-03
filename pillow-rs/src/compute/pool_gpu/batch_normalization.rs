@@ -231,7 +231,7 @@ fn host_autocontrast_dispatch_op(
     image: &DynamicImage,
     mode: Option<&str>,
 ) -> Result<Option<PipelineOp>, PilError> {
-    let [PipelineOp::Autocontrast { cutoff, mask }] = ops else {
+    let [PipelineOp::Autocontrast { options, mask }] = ops else {
         return Ok(None);
     };
     let native_layout = matches!(
@@ -240,16 +240,16 @@ fn host_autocontrast_dispatch_op(
     ) && (mode.is_none()
         || (matches!(image, DynamicImage::ImageLuma8(_)) && mode == Some("L"))
         || (matches!(image, DynamicImage::ImageRgb8(_)) && mode == Some("RGB")));
-    if mask.is_none()
-        && cutoff.is_finite()
-        && native_layout
-        && image.width() != 0
-        && image.height() != 0
-    {
-        Ok(Some(PipelineOp::Eval {
-            lut: crate::compute::pool_cpu::ops::imageops::autocontrast_lut(image, *cutoff, None)?
-                .into(),
-        }))
+    if mask.is_none() && native_layout {
+        let lut = crate::compute::pool_cpu::ops::imageops::autocontrast_lut(image, options, None)?;
+        if image.width() == 0 || image.height() == 0 {
+            // Validate parameters through the exact native histogram path,
+            // then retain the operation identity for the empty no-dispatch
+            // route below.
+            Ok(Some(ops[0].clone()))
+        } else {
+            Ok(Some(PipelineOp::Eval { lut: lut.into() }))
+        }
     } else {
         Ok(None)
     }

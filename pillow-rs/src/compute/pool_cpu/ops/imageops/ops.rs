@@ -1,13 +1,12 @@
-//! ImageOps support contracts and prepared mode/architecture dispatch.
+//! ImageOps support contracts and family-level prepared operation routing.
 //!
-//! Public ImageOps wrappers route through prepared exact-mode CPU plans.
-//! Batch-fused point operations use prepared Eval, and owned-intermediate
-//! Invert uses the exact mode and architecture selected by its support plan.
-//! Point operations and Expand compose omitted physical lanes after their exact-mode kernels.
+//! Wrappers compose exact-mode plans; batch-fused Point uses Eval.
+//! Point operations and Expand compose omitted physical lanes.
 //! TODO(pillow-rs#3ptb): freeze raw-byte follow-on Paste parity for point and Expand outputs.
 
+use crate::raster::GenericImageView;
+
 use crate::compute::{
-    Architecture,
     ExecutionContext,
     registry::support::{
         ImplementationSupport, InputContract, ModeSupport, OperationId, OperationInputs,
@@ -22,11 +21,73 @@ use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
 
+use super::expand::{prepare as prepare_expand, prepare_with_native_fill};
 pub(crate) use super::autocontrast::PreparedAutocontrast;
 pub(crate) use super::equalize::PreparedEqualize;
-pub(crate) use super::expand::{
-    PreparedExpand, SUPPORT as EXPAND_SUPPORT, prepare_pipeline as prepare_expand_pipeline,
-};
+pub(crate) use super::expand::PreparedExpand;
+pub(crate) use super::luma8::ops::PreparedColorize;
+
+macro_rules! declare_mode_support {
+    ($name:ident, $operation:ident, $module:ident) => {
+        pub(crate) static $name: OperationSupport = OperationSupport::new(
+            OperationId::$operation,
+            super::$module::INPUTS,
+            super::$module::classify_mode,
+        );
+    };
+}
+
+// Family-level support declarations are owned by the ImageOps entrypoint.
+declare_mode_support!(AUTOCONTRAST_SUPPORT, Autocontrast, autocontrast);
+declare_mode_support!(EQUALIZE_SUPPORT, Equalize, equalize);
+
+/// Complete exact-mode support for native ImageOps.expand.
+pub(crate) static EXPAND_SUPPORT: OperationSupport =
+    OperationSupport::new(OperationId::Expand, &[], super::expand::classify_mode);
+
+declare_mode_support!(QUANTIZE_SUPPORT, Quantize, quantize);
+
+pub(crate) fn prepare_autocontrast_pipeline<'a>(
+    input: OperationInputs<'a>,
+    op: &'a PipelineOp,
+    ctx: &ExecutionContext,
+) -> Result<crate::compute::registry::PreparedOperation<'a>, PilError> {
+    let PipelineOp::Autocontrast { options, mask } = op else {
+        return Err(PilError::ValueError("expected Autocontrast op".into()));
+    };
+    super::autocontrast::prepare(input.image, options, mask.as_ref(), ctx)
+        .map(crate::compute::registry::PreparedOperation::from_autocontrast)
+}
+
+pub(crate) fn prepare_equalize_pipeline<'a>(
+    input: OperationInputs<'a>,
+    op: &'a PipelineOp,
+    ctx: &ExecutionContext,
+) -> Result<crate::compute::registry::PreparedOperation<'a>, PilError> {
+    let mask = match op {
+        PipelineOp::Equalize => None,
+        PipelineOp::EqualizeMasked { mask } => Some(mask),
+        _ => return Err(PilError::ValueError("expected Equalize op".into())),
+    };
+    super::equalize::prepare(input, mask, ctx)
+        .map(crate::compute::registry::PreparedOperation::from_equalize)
+}
+
+pub(crate) fn prepare_expand_pipeline<'a>(
+    input: OperationInputs<'a>,
+    op: &'a PipelineOp,
+    ctx: &ExecutionContext,
+) -> Result<crate::compute::registry::PreparedOperation<'a>, PilError> {
+    let image = input.image;
+    let prepared = match op {
+        PipelineOp::Expand { border, fill } => prepare_expand(image, *border, *fill, ctx),
+        PipelineOp::ExpandTyped { border, fill, input: native_fill } => {
+            prepare_with_native_fill(image, *border, *fill, *native_fill, ctx)
+        }
+        _ => return Err(PilError::ValueError("expected Expand op".into())),
+    }?;
+    Ok(crate::compute::registry::PreparedOperation::from_expand(prepared))
+}
 
 const CROP_BORDER_INPUTS: &[InputContract] = &[InputContract::CropBorder];
 
@@ -302,6 +363,7 @@ fn classify_imageops_invert_route(mode: Mode) -> OperationModeRoute {
     let scope = if mode.pillow_name().is_some() {
         SupportScope::Pillow
     } else {
+        // NO_PILLOW_SUPPORT: internal raster identities have no Pillow ImageOps mode route.
         SupportScope::CoreOnly {
             reason: "this internal raster identity has no Pillow ImageOps route",
         }
@@ -370,47 +432,15 @@ pub(crate) fn validate_imageops_invert_mode(mode: Mode) -> Result<(), PilError> 
     }
 }
 
-const POSTERIZE_INPUTS: &[InputContract] = &[InputContract::PosterizeBits];
-const POSTERIZE_LUMA_INPUTS: &[InputContract] = &[
-    InputContract::PosterizeBits,
-    InputContract::CheckedByteDimensions { bytes_per_pixel: 1, allow_empty: true },
-];
-const POSTERIZE_RGB_INPUTS: &[InputContract] = &[
-    InputContract::PosterizeBits,
-    InputContract::CheckedByteDimensions { bytes_per_pixel: 3, allow_empty: true },
-];
-const SOLARIZE_INPUTS: &[InputContract] = &[];
-const SOLARIZE_LUMA_INPUTS: &[InputContract] = &[
-    InputContract::CheckedByteDimensions { bytes_per_pixel: 1, allow_empty: true },
-];
-const SOLARIZE_RGB_INPUTS: &[InputContract] = &[
-    InputContract::CheckedByteDimensions { bytes_per_pixel: 3, allow_empty: true },
-];
-
 fn classify_native_byte_point_mode(
-    operation: OperationId,
     mode: Mode,
+    luma_support: ModeSupport,
     palette_support: ModeSupport,
-    luma_inputs: &'static [InputContract],
-    rgb_inputs: &'static [InputContract],
-    luma_architectures: &'static [ImplementationSupport],
-    rgb_architectures: &'static [ImplementationSupport],
+    rgb_support: ModeSupport,
 ) -> ModeSupport {
     match mode {
-        Mode::ImageLuma8 => ModeSupport::cpu(
-            operation,
-            mode,
-            OutputModeRule::Preserve,
-            luma_inputs,
-            luma_architectures,
-        ),
-        Mode::ImageRgb8 => ModeSupport::cpu(
-            operation,
-            mode,
-            OutputModeRule::Preserve,
-            rgb_inputs,
-            rgb_architectures,
-        ),
+        Mode::ImageLuma8 => luma_support,
+        Mode::ImageRgb8 => rgb_support,
         Mode::ImagePalette8 => palette_support,
         Mode::One
         | Mode::ImageLumaA8
@@ -436,37 +466,6 @@ fn classify_native_byte_point_mode(
         | Mode::ImageRgba32F => rejected_native_byte_point_mode(mode),
     }
 }
-
-const POSTERIZE_LUMA_ARCHITECTURES: [ImplementationSupport; 3] =
-    super::helpers::strategy::native_byte_point_architectures(
-        OperationId::Posterize,
-        Mode::ImageLuma8,
-        1,
-    );
-const POSTERIZE_RGB_ARCHITECTURES: [ImplementationSupport; 3] =
-    super::helpers::strategy::native_byte_point_architectures(
-        OperationId::Posterize,
-        Mode::ImageRgb8,
-        3,
-    );
-const SOLARIZE_LUMA_ARCHITECTURES: [ImplementationSupport; 3] =
-    super::helpers::strategy::native_byte_point_architectures(
-        OperationId::Solarize,
-        Mode::ImageLuma8,
-        1,
-    );
-const SOLARIZE_RGB_ARCHITECTURES: [ImplementationSupport; 3] =
-    super::helpers::strategy::native_byte_point_architectures(
-        OperationId::Solarize,
-        Mode::ImageRgb8,
-        3,
-    );
-const COLORIZE_LUMA_ARCHITECTURES: [ImplementationSupport; 3] =
-    super::helpers::strategy::native_byte_point_architectures(
-        OperationId::Colorize,
-        Mode::ImageLuma8,
-        1,
-    );
 
 fn rejected_native_byte_point_mode(mode: Mode) -> ModeSupport {
     let reason = match mode {
@@ -500,47 +499,41 @@ fn rejected_native_byte_point_mode(mode: Mode) -> ModeSupport {
 
 fn classify_posterize_mode(mode: Mode) -> ModeSupport {
     classify_native_byte_point_mode(
-        OperationId::Posterize,
         mode,
+        super::luma8::ops::POSTERIZE_SUPPORT,
         super::palette8::ops::POSTERIZE_SUPPORT,
-        POSTERIZE_LUMA_INPUTS,
-        POSTERIZE_RGB_INPUTS,
-        &POSTERIZE_LUMA_ARCHITECTURES,
-        &POSTERIZE_RGB_ARCHITECTURES,
+        super::rgb8::ops::POSTERIZE_SUPPORT,
     )
 }
 
+const POSTERIZE_INPUTS: &[InputContract] = &[InputContract::PosterizeBits];
+
 /// Exhaustive Posterize contract, including the core-only P index strategy.
 pub(crate) static POSTERIZE_SUPPORT: OperationSupport =
-    OperationSupport::new(OperationId::Posterize, POSTERIZE_INPUTS, classify_posterize_mode);
+    OperationSupport::new(
+        OperationId::Posterize,
+        POSTERIZE_INPUTS,
+        classify_posterize_mode,
+    );
 
 fn classify_solarize_mode(mode: Mode) -> ModeSupport {
     classify_native_byte_point_mode(
-        OperationId::Solarize,
         mode,
+        super::luma8::ops::SOLARIZE_SUPPORT,
         super::palette8::ops::SOLARIZE_SUPPORT,
-        SOLARIZE_LUMA_INPUTS,
-        SOLARIZE_RGB_INPUTS,
-        &SOLARIZE_LUMA_ARCHITECTURES,
-        &SOLARIZE_RGB_ARCHITECTURES,
+        super::rgb8::ops::SOLARIZE_SUPPORT,
     )
 }
 
 /// Exhaustive Solarize contract, including the core-only P index strategy.
 pub(crate) static SOLARIZE_SUPPORT: OperationSupport =
-    OperationSupport::new(OperationId::Solarize, SOLARIZE_INPUTS, classify_solarize_mode);
+    OperationSupport::new(OperationId::Solarize, &[], classify_solarize_mode);
 
 macro_rules! declare_colorize_modes {
     ($($mode:ident),+ $(,)?) => {
         fn classify_colorize_mode(mode: Mode) -> ModeSupport {
             match mode {
-                Mode::ImageLuma8 => ModeSupport::cpu(
-                    OperationId::Colorize,
-                    Mode::ImageLuma8,
-                    OutputModeRule::Fixed(Mode::ImageRgb8),
-                    &[],
-                    &COLORIZE_LUMA_ARCHITECTURES,
-                ),
+                Mode::ImageLuma8 => super::luma8::ops::COLORIZE_SUPPORT,
                 $(Mode::$mode => rejected_colorize_mode(mode),)+
             }
         }
@@ -587,49 +580,6 @@ pub(crate) static COLORIZE_SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::Colorize, &[], classify_colorize_mode)
         .with_rejected_output(OutputModeRule::Fixed(Mode::ImageRgb8));
 
-/// Prepared Colorize input, LUT, and exact source-mode selection.
-pub(crate) struct PreparedColorize<'a> {
-    source: &'a [u8],
-    width: u32,
-    height: u32,
-    lut: [[u8; 256]; 3],
-    selection: StrategySelection,
-}
-
-impl PreparedColorize<'_> {
-    pub(crate) fn selection(&self) -> &StrategySelection {
-        &self.selection
-    }
-
-    pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
-        let mode = self.selection.implementation.mode;
-        let architecture = self.selection.implementation.architecture;
-        let mut output = match (mode, architecture) {
-            (Mode::ImageLuma8, Architecture::Default) => {
-                super::luma8::default::colorize_impl::execute(
-                    self.source, self.width, self.height, &self.lut,
-                )
-            }
-            (Mode::ImageLuma8, Architecture::Sse2) => super::luma8::sse2::colorize_impl::execute(
-                self.source, self.width, self.height, &self.lut,
-            ),
-            (Mode::ImageLuma8, Architecture::Neon) => super::luma8::neon::colorize_impl::execute(
-                self.source, self.width, self.height, &self.lut,
-            ),
-            (Mode::ImageLuma8, Architecture::WasmSimd128) => {
-                super::luma8::wasm_simd128::colorize_impl::execute(
-                    self.source, self.width, self.height, &self.lut,
-                )
-            }
-            _ => Err(PilError::InternalError(
-                "colorize selection has no matching CPU kernel".into(),
-            )),
-        }?;
-        super::helpers::hidden_lanes::initialize_point_output_lanes(&mut output)?;
-        Ok(output)
-    }
-}
-
 fn prepare_colorize<'a>(
     image: &'a DynamicImage,
     black: &(u8, u8, u8),
@@ -641,14 +591,6 @@ fn prepare_colorize<'a>(
     ctx: &ExecutionContext,
 ) -> Result<PreparedColorize<'a>, PilError> {
     let selection = mode_selection(&COLORIZE_SUPPORT, image, RequestFacts::Unspecified, ctx)?;
-    let source = match image {
-        DynamicImage::ImageLuma8(gray) => gray.as_raw(),
-        _ => {
-            return Err(PilError::InternalError(
-                "Colorize support and mode dispatch disagree".into(),
-            ));
-        }
-    };
     let lut = super::helpers::colorize::lookup_tables(
         black,
         white,
@@ -657,13 +599,12 @@ fn prepare_colorize<'a>(
         midpoint,
         whitepoint,
     );
-    Ok(PreparedColorize {
-        source,
-        width: image.width(),
-        height: image.height(),
-        lut,
-        selection,
-    })
+    match image {
+        DynamicImage::ImageLuma8(gray) => Ok(PreparedColorize::new(gray, lut, selection)),
+        _ => Err(PilError::InternalError(
+            "Colorize support and mode dispatch disagree".into(),
+        )),
+    }
 }
 
 pub(crate) fn prepare_colorize_pipeline<'a>(
@@ -695,141 +636,55 @@ pub(crate) fn prepare_colorize_pipeline<'a>(
     .map(crate::compute::registry::PreparedOperation::from_colorize)
 }
 
-enum NativeBytePointSource<'a> {
-    Luma(&'a crate::raster::GrayImage),
-    Palette(&'a crate::raster::GrayImage),
-    Rgb(&'a crate::raster::RgbImage),
-}
-
-#[derive(Clone, Copy)]
-enum PointArchitecture {
-    Default,
-    Sse2,
-    Neon,
-    WasmSimd128,
-}
-
-fn point_architecture(selection: &StrategySelection) -> Result<PointArchitecture, PilError> {
-    match selection.implementation.architecture {
-        Architecture::Default => Ok(PointArchitecture::Default),
-        Architecture::Sse2 => Ok(PointArchitecture::Sse2),
-        Architecture::Neon => Ok(PointArchitecture::Neon),
-        Architecture::WasmSimd128 => Ok(PointArchitecture::WasmSimd128),
-        _ => Err(PilError::InternalError(
-            "native-byte point selection has no matching CPU kernel".into(),
-        )),
-    }
-}
-
-/// A validated Posterize mode strategy and its selected CPU architecture.
-pub(crate) struct PreparedPosterize<'a> {
-    source: NativeBytePointSource<'a>,
-    bits: u8,
-    architecture: PointArchitecture,
-    selection: StrategySelection,
+/// Prepared Posterize strategy routed to one exact mode owner.
+pub(crate) enum PreparedPosterize<'a> {
+    Luma(super::luma8::ops::PreparedPosterize<'a>),
+    Palette(super::palette8::ops::PreparedPosterize<'a>),
+    Rgb(super::rgb8::ops::PreparedPosterize<'a>),
 }
 
 impl PreparedPosterize<'_> {
     pub(crate) fn selection(&self) -> &StrategySelection {
-        &self.selection
+        match self {
+            Self::Luma(prepared) => prepared.selection(),
+            Self::Palette(prepared) => prepared.selection(),
+            Self::Rgb(prepared) => prepared.selection(),
+        }
     }
 
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
-        let mut output = match (self.source, self.architecture) {
-            (NativeBytePointSource::Luma(input), PointArchitecture::Default) => {
-                super::luma8::default::posterize_impl::execute(input, self.bits)
-            }
-            (NativeBytePointSource::Luma(input), PointArchitecture::Sse2) => {
-                super::luma8::sse2::posterize_impl::execute(input, self.bits)
-            }
-            (NativeBytePointSource::Luma(input), PointArchitecture::Neon) => {
-                super::luma8::neon::posterize_impl::execute(input, self.bits)
-            }
-            (NativeBytePointSource::Luma(input), PointArchitecture::WasmSimd128) => {
-                super::luma8::wasm_simd128::posterize_impl::execute(input, self.bits)
-            }
-            (NativeBytePointSource::Palette(input), PointArchitecture::Default) => {
-                super::palette8::default::posterize_impl::execute(input, self.bits)
-            }
-            (NativeBytePointSource::Palette(input), PointArchitecture::Sse2) => {
-                super::palette8::sse2::posterize_impl::execute(input, self.bits)
-            }
-            (NativeBytePointSource::Palette(input), PointArchitecture::Neon) => {
-                super::palette8::neon::posterize_impl::execute(input, self.bits)
-            }
-            (NativeBytePointSource::Palette(input), PointArchitecture::WasmSimd128) => {
-                super::palette8::wasm_simd128::posterize_impl::execute(input, self.bits)
-            }
-            (NativeBytePointSource::Rgb(input), PointArchitecture::Default) => {
-                super::rgb8::default::posterize_impl::execute(input, self.bits)
-            }
-            (NativeBytePointSource::Rgb(input), PointArchitecture::Sse2) => {
-                super::rgb8::sse2::posterize_impl::execute(input, self.bits)
-            }
-            (NativeBytePointSource::Rgb(input), PointArchitecture::Neon) => {
-                super::rgb8::neon::posterize_impl::execute(input, self.bits)
-            }
-            (NativeBytePointSource::Rgb(input), PointArchitecture::WasmSimd128) => {
-                super::rgb8::wasm_simd128::posterize_impl::execute(input, self.bits)
-            }
-        }?;
+        let mut output = match self {
+            Self::Luma(prepared) => prepared.execute()?,
+            Self::Palette(prepared) => prepared.execute()?,
+            Self::Rgb(prepared) => prepared.execute()?,
+        };
         super::helpers::hidden_lanes::initialize_point_output_lanes(&mut output)?;
         Ok(output)
     }
 }
 
-/// A validated Solarize mode strategy and its selected CPU architecture.
-pub(crate) struct PreparedSolarize<'a> {
-    source: NativeBytePointSource<'a>,
-    threshold: u8,
-    architecture: PointArchitecture,
-    selection: StrategySelection,
+/// Prepared Solarize strategy routed to one exact mode owner.
+pub(crate) enum PreparedSolarize<'a> {
+    Luma(super::luma8::ops::PreparedSolarize<'a>),
+    Palette(super::palette8::ops::PreparedSolarize<'a>),
+    Rgb(super::rgb8::ops::PreparedSolarize<'a>),
 }
 
 impl PreparedSolarize<'_> {
     pub(crate) fn selection(&self) -> &StrategySelection {
-        &self.selection
+        match self {
+            Self::Luma(prepared) => prepared.selection(),
+            Self::Palette(prepared) => prepared.selection(),
+            Self::Rgb(prepared) => prepared.selection(),
+        }
     }
 
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
-        let mut output = match (self.source, self.architecture) {
-            (NativeBytePointSource::Luma(input), PointArchitecture::Default) => {
-                super::luma8::default::solarize_impl::execute(input, self.threshold)
-            }
-            (NativeBytePointSource::Luma(input), PointArchitecture::Sse2) => {
-                super::luma8::sse2::solarize_impl::execute(input, self.threshold)
-            }
-            (NativeBytePointSource::Luma(input), PointArchitecture::Neon) => {
-                super::luma8::neon::solarize_impl::execute(input, self.threshold)
-            }
-            (NativeBytePointSource::Luma(input), PointArchitecture::WasmSimd128) => {
-                super::luma8::wasm_simd128::solarize_impl::execute(input, self.threshold)
-            }
-            (NativeBytePointSource::Palette(input), PointArchitecture::Default) => {
-                super::palette8::default::solarize_impl::execute(input, self.threshold)
-            }
-            (NativeBytePointSource::Palette(input), PointArchitecture::Sse2) => {
-                super::palette8::sse2::solarize_impl::execute(input, self.threshold)
-            }
-            (NativeBytePointSource::Palette(input), PointArchitecture::Neon) => {
-                super::palette8::neon::solarize_impl::execute(input, self.threshold)
-            }
-            (NativeBytePointSource::Palette(input), PointArchitecture::WasmSimd128) => {
-                super::palette8::wasm_simd128::solarize_impl::execute(input, self.threshold)
-            }
-            (NativeBytePointSource::Rgb(input), PointArchitecture::Default) => {
-                super::rgb8::default::solarize_impl::execute(input, self.threshold)
-            }
-            (NativeBytePointSource::Rgb(input), PointArchitecture::Sse2) => {
-                super::rgb8::sse2::solarize_impl::execute(input, self.threshold)
-            }
-            (NativeBytePointSource::Rgb(input), PointArchitecture::Neon) => {
-                super::rgb8::neon::solarize_impl::execute(input, self.threshold)
-            }
-            (NativeBytePointSource::Rgb(input), PointArchitecture::WasmSimd128) => {
-                super::rgb8::wasm_simd128::solarize_impl::execute(input, self.threshold)
-            }
-        }?;
+        let mut output = match self {
+            Self::Luma(prepared) => prepared.execute()?,
+            Self::Palette(prepared) => prepared.execute()?,
+            Self::Rgb(prepared) => prepared.execute()?,
+        };
         super::helpers::hidden_lanes::initialize_point_output_lanes(&mut output)?;
         Ok(output)
     }
@@ -850,17 +705,6 @@ fn mode_selection(
     )
 }
 
-fn native_byte_point_source(image: &DynamicImage) -> Result<NativeBytePointSource<'_>, PilError> {
-    match image {
-        DynamicImage::ImageLuma8(input) => Ok(NativeBytePointSource::Luma(input)),
-        DynamicImage::ImagePalette8(input) => Ok(NativeBytePointSource::Palette(input)),
-        DynamicImage::ImageRgb8(input) => Ok(NativeBytePointSource::Rgb(input)),
-        _ => Err(PilError::InternalError(
-            "native-byte point support and mode dispatch disagree".into(),
-        )),
-    }
-}
-
 fn prepare_posterize(
     image: &DynamicImage,
     bits: u8,
@@ -872,13 +716,20 @@ fn prepare_posterize(
         RequestFacts::Posterize { bits },
         ctx,
     )?;
-    let architecture = point_architecture(&selection)?;
-    Ok(PreparedPosterize {
-        source: native_byte_point_source(image)?,
-        bits,
-        architecture,
-        selection,
-    })
+    match image {
+        DynamicImage::ImageLuma8(input) => Ok(PreparedPosterize::Luma(
+            super::luma8::ops::PreparedPosterize::new(input, bits, selection),
+        )),
+        DynamicImage::ImagePalette8(input) => Ok(PreparedPosterize::Palette(
+            super::palette8::ops::PreparedPosterize::new(input, bits, selection),
+        )),
+        DynamicImage::ImageRgb8(input) => Ok(PreparedPosterize::Rgb(
+            super::rgb8::ops::PreparedPosterize::new(input, bits, selection),
+        )),
+        _ => Err(PilError::InternalError(
+            "native-byte point support and mode dispatch disagree".into(),
+        )),
+    }
 }
 
 fn prepare_solarize(
@@ -887,13 +738,20 @@ fn prepare_solarize(
     ctx: &ExecutionContext,
 ) -> Result<PreparedSolarize<'_>, PilError> {
     let selection = mode_selection(&SOLARIZE_SUPPORT, image, RequestFacts::Unspecified, ctx)?;
-    let architecture = point_architecture(&selection)?;
-    Ok(PreparedSolarize {
-        source: native_byte_point_source(image)?,
-        threshold,
-        architecture,
-        selection,
-    })
+    match image {
+        DynamicImage::ImageLuma8(input) => Ok(PreparedSolarize::Luma(
+            super::luma8::ops::PreparedSolarize::new(input, threshold, selection),
+        )),
+        DynamicImage::ImagePalette8(input) => Ok(PreparedSolarize::Palette(
+            super::palette8::ops::PreparedSolarize::new(input, threshold, selection),
+        )),
+        DynamicImage::ImageRgb8(input) => Ok(PreparedSolarize::Rgb(
+            super::rgb8::ops::PreparedSolarize::new(input, threshold, selection),
+        )),
+        _ => Err(PilError::InternalError(
+            "native-byte point support and mode dispatch disagree".into(),
+        )),
+    }
 }
 
 pub(crate) fn prepare_posterize_pipeline<'a>(

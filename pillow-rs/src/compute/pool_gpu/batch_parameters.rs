@@ -328,8 +328,8 @@ fn append_operation_params(
         PipelineOp::EqualizeMasked { .. } => {
             params[3] = u32::from(context.auxiliary.third.is_some());
         }
-        PipelineOp::Autocontrast { cutoff, .. } => {
-            append_autocontrast_params(context, *cutoff, params)?
+        PipelineOp::Autocontrast { options, .. } => {
+            append_autocontrast_params(context, options.cutoff.0, params)?
         }
         PipelineOp::Transform { .. } => append_transform_params(context, params)?,
         PipelineOp::Color3DLut {

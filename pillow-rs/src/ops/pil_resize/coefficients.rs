@@ -25,7 +25,7 @@ pub(super) fn pil_round(v: f64) -> u8 {
 
 /// Convert a fixed-point sum to u8, matching PIL's:
 ///   `(UINT8)((sum + (1 << (PRECISION_BITS - 1))) >> PRECISION_BITS)`
-pub(super) fn fixed_point_to_u8(sum: i64) -> u8 {
+pub(crate) fn fixed_point_to_u8(sum: i64) -> u8 {
     let v = (sum + HALF_PRECISION) >> PRECISION_BITS;
     if v <= 0 {
         0

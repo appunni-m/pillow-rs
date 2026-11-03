@@ -68,6 +68,7 @@ const ARCHITECTURES: &[ImplementationSupport] = &[WASM_SIMD128_SUPPORT];
 )))]
 const ARCHITECTURES: &[ImplementationSupport] = &[];
 
+// NO_PILLOW_SUPPORT: Color3DLut applies its table directly to native HSV samples.
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
     OperationId::Color3DLut,
     SOURCE_MODE,

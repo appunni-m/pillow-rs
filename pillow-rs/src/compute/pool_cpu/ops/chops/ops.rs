@@ -10,6 +10,8 @@
 //! state starts from the same canonical per-mode fallback as Paste; Invert
 //! retains a changed fallback byte. Offset remaps lanes and Invert transforms
 //! every retained byte.
+
+use crate::raster::GenericImageView;
 use std::sync::Arc;
 
 use crate::compute::{Architecture, ExecutionContext};

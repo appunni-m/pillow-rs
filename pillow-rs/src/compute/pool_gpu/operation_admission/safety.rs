@@ -147,7 +147,9 @@ fn gpu_geometry_operation_is_safe(op: &PipelineOp) -> bool {
             ..
         } => gpu_transform_op_is_safe(op, w, h, method, data, filter),
         PipelineOp::AlphaComposite { dest, src, .. } => *dest == (0, 0) && *src == (0, 0),
-        PipelineOp::Autocontrast { cutoff, .. } => finite_f32(*cutoff),
+        PipelineOp::Autocontrast { options, .. } => {
+            finite_f32(options.cutoff.0) && finite_f32(options.cutoff.1)
+        }
         _ => true,
     }
 }

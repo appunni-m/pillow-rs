@@ -1,11 +1,39 @@
 """ImageOps — high-level image operations. Pillow-compatible module."""
+from typing import Tuple, Union
+
 from .image import Image
 from . import _core
 
 
-def autocontrast(image: Image, cutoff: float = 0, ignore=None, mask=None,
+def autocontrast(image: Image, cutoff: Union[float, Tuple[float, float]] = 0, ignore=None, mask=None,
                  preserve_tone: bool = False) -> Image:
-    return image._new(_core.ops_autocontrast(image._rust_image, cutoff, mask))
+    if preserve_tone:
+        histogram = image.convert("L").histogram(mask)
+    else:
+        histogram = image.histogram(mask)
+    lut = []
+    for layer in range(0, len(histogram), 256):
+        channel = histogram[layer : layer + 256]
+        if ignore is not None:
+            if isinstance(ignore, int):
+                channel[ignore] = 0
+            else:
+                for index in ignore:
+                    channel[index] = 0
+        if cutoff:
+            if not isinstance(cutoff, tuple):
+                cutoff = (cutoff, cutoff)
+            channel_cutoff = cutoff
+        else:
+            channel_cutoff = None
+        lut.extend(_core.ops_autocontrast_lut(channel, channel_cutoff))
+    if image.mode == "P":
+        raise NotImplementedError("mode P support coming soon")
+    if image.mode not in ("L", "RGB"):
+        raise OSError(f"not supported for mode {image.mode}")
+    if image.mode == "RGB" and len(lut) == 256:
+        lut = lut * 3
+    return image.point(lut)
 
 
 def equalize(image: Image, mask=None) -> Image:
@@ -42,6 +70,8 @@ def _expand_border(border):
             left, top = right, bottom = border
         elif len(border) == 4:
             left, top, right, bottom = border
+        else:
+            left = top = right = bottom = border
     else:
         left = top = right = bottom = border
     return left, top, right, bottom
@@ -67,32 +97,19 @@ def expand(image: Image, border=0, fill=0) -> Image:
     )
     size = (width, height)
     # Image.new evaluates image.mode before its Python size comparisons.
-    size_image = image._rust_image
     if size[0] < 0 or size[1] < 0:
         raise ValueError("Width and height must be >= 0")
-    size = _core.ops_expand_validate_size(size_image, size)
+    size = _core.ops_expand_validate_size(size, prepared_fill)
 
-    # Image.paste forms the full box from the source size after Image.new has
-    # accepted its dimensions.
-    source_size = image.size
-    paste_box = (
-        left,
-        top,
-        left + source_size[0],
-        top + source_size[1],
-    )
-
-    # TODO(pillow-rs#3ptb): preserve mode/source mutations caused by effectful
-    # size comparisons, then audit eager allocation failure timing and Paste's
-    # source-load-before-coordinate-parser order while retaining lazy Expand.
-    return Image(
-        _core.ops_expand(
-            image._rust_image,
-            size,
-            paste_box,
-            prepared_fill,
-        )
-    )
+    # Pillow allocates the target-mode Image.new canvas before Image.paste
+    # loads or converts the current source wrapper.
+    output = Image(_core.ops_expand_canvas(size, prepared_fill))
+    output.paste(image, (left, top))
+    output.load()
+    # TODO(pillow-rs#3ptb): account for mode changes during palette access;
+    # verify malformed palette errors, metadata mutation, and changed-mode
+    # source behavior in the frozen CPU parity matrix.
+    return output
 
 
 def crop(image: Image, border: int = 0) -> Image:

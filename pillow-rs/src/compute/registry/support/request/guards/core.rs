@@ -6,7 +6,7 @@ use super::super::{
 use crate::pipeline::ResampleFilter;
 use crate::raster::Mode;
 
-pub(super) fn thumbnail_i32_stream_guard(input: StrategyInputs) -> GuardAssessment {
+pub(crate) fn thumbnail_i32_stream_guard(input: StrategyInputs) -> GuardAssessment {
     let (width, height, filter, reducing_gap_bits) = match input.request {
         RequestFacts::Thumbnail {
             width,
@@ -46,7 +46,7 @@ pub(super) fn thumbnail_i32_stream_guard(input: StrategyInputs) -> GuardAssessme
     }
 }
 
-pub(super) fn reduce_f32_vector_guard(input: StrategyInputs) -> GuardAssessment {
+pub(crate) fn reduce_f32_vector_guard(input: StrategyInputs) -> GuardAssessment {
     let (x_factor, y_factor) = match input.request {
         RequestFacts::Reduce { x_factor, y_factor } => (x_factor, y_factor),
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
@@ -72,7 +72,7 @@ pub(super) fn reduce_f32_vector_guard(input: StrategyInputs) -> GuardAssessment 
     }
 }
 
-pub(super) fn brightness_vector_guard(
+pub(crate) fn brightness_vector_guard(
     input: StrategyInputs,
     channels: u8,
 ) -> GuardAssessment {
@@ -98,7 +98,7 @@ pub(super) fn brightness_vector_guard(
     }
 }
 
-pub(super) fn contrast_vector_guard(
+pub(crate) fn contrast_vector_guard(
     input: StrategyInputs,
     channels: u8,
 ) -> GuardAssessment {
@@ -125,7 +125,7 @@ pub(super) fn contrast_vector_guard(
     }
 }
 
-pub(super) fn sharpness_vector_guard(
+pub(crate) fn sharpness_vector_guard(
     input: StrategyInputs,
     channels: u8,
 ) -> GuardAssessment {
@@ -151,7 +151,7 @@ pub(super) fn sharpness_vector_guard(
     }
 }
 
-pub(super) fn color_saturation_vector_guard(
+pub(crate) fn color_saturation_vector_guard(
     input: StrategyInputs,
     channels: u8,
 ) -> GuardAssessment {
@@ -178,7 +178,7 @@ pub(super) fn color_saturation_vector_guard(
     }
 }
 
-pub(super) fn chops_equal_dimensions_guard(
+pub(crate) fn chops_equal_dimensions_guard(
     input: StrategyInputs,
     channels: u8,
 ) -> GuardAssessment {
@@ -193,7 +193,7 @@ pub(super) fn chops_equal_dimensions_guard(
     }
 }
 
-pub(super) fn chops_add_subtract_guard(
+pub(crate) fn chops_add_subtract_guard(
     input: StrategyInputs,
     channels: u8,
 ) -> GuardAssessment {
@@ -227,7 +227,7 @@ pub(super) fn chops_add_subtract_guard(
     chops_native_bytes_guard(input, other, channels)
 }
 
-pub(super) fn chops_offset_native_bytes_guard(
+pub(crate) fn chops_offset_native_bytes_guard(
     input: StrategyInputs,
     channels: u8,
 ) -> GuardAssessment {
@@ -253,7 +253,7 @@ pub(super) fn chops_offset_native_bytes_guard(
     }
 }
 
-pub(super) fn chops_offset_native_i16_guard(input: StrategyInputs) -> GuardAssessment {
+pub(crate) fn chops_offset_native_i16_guard(input: StrategyInputs) -> GuardAssessment {
     // Match the archived I;16 capability predicate's checked-u32 byte count.
     // The typed SIMD kernel needs one complete 16-byte block, except that an
     // empty image is a valid no-op. Smaller non-empty inputs use the exact
@@ -300,7 +300,7 @@ fn chops_native_bytes_guard(
     }
 }
 
-pub(super) fn filter3x3_native_bytes_vectorizable_guard(
+pub(crate) fn filter3x3_native_bytes_vectorizable_guard(
     input: StrategyInputs,
     channels: u8,
 ) -> GuardAssessment {
@@ -329,7 +329,7 @@ pub(super) fn filter3x3_native_bytes_vectorizable_guard(
     }
 }
 
-pub(super) fn filter5x5_native_bytes_vectorizable_guard(
+pub(crate) fn filter5x5_native_bytes_vectorizable_guard(
     input: StrategyInputs,
     channels: u8,
 ) -> GuardAssessment {
@@ -358,7 +358,7 @@ pub(super) fn filter5x5_native_bytes_vectorizable_guard(
     }
 }
 
-pub(super) fn filter5x5_i32_binomial_fma_guard(input: StrategyInputs) -> GuardAssessment {
+pub(crate) fn filter5x5_i32_binomial_fma_guard(input: StrategyInputs) -> GuardAssessment {
     let (kernel_bits, scale_bits, offset_bits) = match input.request {
         RequestFacts::Filter5x5 { kernel_bits, scale_bits, offset_bits } => {
             (kernel_bits, scale_bits, offset_bits)
@@ -395,7 +395,7 @@ pub(super) fn filter5x5_i32_binomial_fma_guard(input: StrategyInputs) -> GuardAs
     }
 }
 
-pub(super) fn filter5x5_i32_vectorizable_guard(input: StrategyInputs) -> GuardAssessment {
+pub(crate) fn filter5x5_i32_vectorizable_guard(input: StrategyInputs) -> GuardAssessment {
     let (kernel_bits, scale_bits) = match input.request {
         RequestFacts::Filter5x5 { kernel_bits, scale_bits, .. } => (kernel_bits, scale_bits),
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
@@ -416,7 +416,7 @@ pub(super) fn filter5x5_i32_vectorizable_guard(input: StrategyInputs) -> GuardAs
     }
 }
 
-pub(super) fn filter_native_byte_blur_guard(
+pub(crate) fn filter_native_byte_blur_guard(
     input: StrategyInputs,
     channels: u8,
 ) -> GuardAssessment {
@@ -468,7 +468,7 @@ pub(super) fn filter_native_byte_blur_guard(
     checked_native_bytes_guard(input, channels)
 }
 
-pub(super) fn filter_rgba_gaussian_blur_radius_seven_guard(
+pub(crate) fn filter_rgba_gaussian_blur_radius_seven_guard(
     input: StrategyInputs,
 ) -> GuardAssessment {
     let sigma = match input.request {
@@ -494,7 +494,7 @@ pub(super) fn filter_rgba_gaussian_blur_radius_seven_guard(
     checked_native_bytes_guard(input, 4)
 }
 
-pub(super) fn filter_luma_rank_window_guard(input: StrategyInputs) -> GuardAssessment {
+pub(crate) fn filter_luma_rank_window_guard(input: StrategyInputs) -> GuardAssessment {
     let (size, rank) = match input.request {
         RequestFacts::FilterWindow { size, rank, .. } => (size, rank),
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
@@ -513,7 +513,7 @@ pub(super) fn filter_luma_rank_window_guard(input: StrategyInputs) -> GuardAsses
     checked_native_bytes_guard(input, 1)
 }
 
-pub(super) fn filter_native_byte_extrema_guard(
+pub(crate) fn filter_native_byte_extrema_guard(
     input: StrategyInputs,
     channels: u8,
 ) -> GuardAssessment {
@@ -531,7 +531,7 @@ pub(super) fn filter_native_byte_extrema_guard(
     checked_native_bytes_guard(input, channels)
 }
 
-pub(super) fn filter_native_byte_rank_window_guard(
+pub(crate) fn filter_native_byte_rank_window_guard(
     input: StrategyInputs,
     channels: u8,
 ) -> GuardAssessment {
@@ -556,7 +556,7 @@ pub(super) fn filter_native_byte_rank_window_guard(
     checked_native_bytes_guard(input, channels)
 }
 
-pub(super) fn filter_f32_rank_window_guard(
+pub(crate) fn filter_f32_rank_window_guard(
     input: StrategyInputs,
     max_size: u32,
 ) -> GuardAssessment {
@@ -590,7 +590,7 @@ pub(super) fn filter_f32_rank_window_guard(
     }
 }
 
-pub(super) fn filter_unsharp_rgb150_guard(input: StrategyInputs) -> GuardAssessment {
+pub(crate) fn filter_unsharp_rgb150_guard(input: StrategyInputs) -> GuardAssessment {
     match input.request {
         RequestFacts::UnsharpMask { percent: 150, .. } => (),
         RequestFacts::UnsharpMask { .. } => return GuardAssessment::Ineligible,
@@ -609,7 +609,7 @@ pub(super) fn filter_unsharp_rgb150_guard(input: StrategyInputs) -> GuardAssessm
     }
 }
 
-pub(super) fn filter3x3_i32_vectorizable_guard(
+pub(crate) fn filter3x3_i32_vectorizable_guard(
     input: StrategyInputs,
     channels: u8,
 ) -> GuardAssessment {
@@ -633,7 +633,7 @@ pub(super) fn filter3x3_i32_vectorizable_guard(
     }
 }
 
-pub(super) fn convert_target_guard(
+pub(crate) fn convert_target_guard(
     input: StrategyInputs,
     target: Mode,
     nonempty: bool,
@@ -655,7 +655,7 @@ pub(super) fn convert_target_guard(
     }
 }
 
-pub(super) fn rotate_vector_bytes_guard(
+pub(crate) fn rotate_vector_bytes_guard(
     input: StrategyInputs,
     channels: u8,
     force_nearest: bool,
@@ -729,7 +729,7 @@ pub(super) fn rotate_vector_bytes_guard(
     layout
 }
 
-pub(super) fn transform_byte_kernels_guard(
+pub(crate) fn transform_byte_kernels_guard(
     input: StrategyInputs,
     channels: u8,
     affine_nearest: bool,
@@ -776,7 +776,7 @@ pub(super) fn transform_byte_kernels_guard(
     checked_native_bytes_guard(input, channels)
 }
 
-pub(super) fn transform_i16_affine_guard(
+pub(crate) fn transform_i16_affine_guard(
     input: StrategyInputs,
     nearest: bool,
     bilinear: bool,
@@ -895,7 +895,7 @@ fn rotate_destination_dimensions(
     Some((output_width as u32, output_height as u32))
 }
 
-pub(super) fn native_bytes_guard(
+pub(crate) fn native_bytes_guard(
     input: StrategyInputs,
     channels: u8,
 ) -> GuardAssessment {
@@ -905,7 +905,7 @@ pub(super) fn native_bytes_guard(
     exact_byte_layout(input.byte_len, expected)
 }
 
-pub(super) fn checked_native_bytes_guard(
+pub(crate) fn checked_native_bytes_guard(
     input: StrategyInputs,
     channels: u8,
 ) -> GuardAssessment {

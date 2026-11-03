@@ -31,7 +31,7 @@ pub(crate) fn execute(
     if let super::super::ops::ChopsRequest::Offset { x, y } = request {
         return match image {
             DynamicImage::ImageRgb8(buffer) => match architecture {
-                Architecture::Default => default::ops::execute(image, request, other),
+                Architecture::Default => super::default::ops::execute(image, request, other),
                 Architecture::Sse2 => super::sse2::execute_offset(buffer, x, y)
                     .map(DynamicImage::ImageRgb8),
                 Architecture::Neon => super::neon::execute_offset(buffer, x, y)
@@ -53,7 +53,7 @@ pub(crate) fn execute(
     match image {
         DynamicImage::ImageRgb8(buffer) => {
             if architecture == Architecture::Default {
-                return default::ops::execute(image, request, other);
+                return super::default::ops::execute(image, request, other);
             }
             let other = match other {
                 Some(
@@ -101,7 +101,7 @@ pub(crate) fn execute_fused(
         }
     };
     match architecture {
-        Architecture::Default => default::ops::execute_fused(image, other),
+        Architecture::Default => super::default::ops::execute_fused(image, other),
         Architecture::Sse2 => super::sse2::execute_fused(image, other)
             .map(|output| output.map_image(DynamicImage::ImageRgb8)),
         Architecture::Neon => super::neon::execute_fused(image, other)

@@ -14,13 +14,13 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
     OperationId::Crop,
     Mode::ImageRgb16,
     crate::compute::registry::support::OutputModeRule::Preserve,
-    default::crop_impl::INPUTS,
+    super::default::crop_impl::INPUTS,
     &[],
     "typed native sample crop extends Pillow for this internal raster identity",
 );
 
 pub(crate) enum ArchitectureStrategy<'a> {
-    Default(default::crop_impl::Crop<'a>),
+    Default(super::default::crop_impl::Crop<'a>),
 }
 
 pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
@@ -30,17 +30,17 @@ pub(crate) fn assess(region: CropRegion, ctx: &ExecutionContext) -> Result<Suppo
 }
 
 pub(crate) fn prepare<'a>(
-    image: &'a default::crop_impl::Input,
+    image: &'a super::default::crop_impl::Input,
     region: CropRegion,
     ctx: &ExecutionContext,
 ) -> Result<Strategy<'a>, PilError> {
-    let implementation = default::crop_impl::prepare(image, region);
+    let implementation = super::default::crop_impl::prepare(image, region);
     let selection = SUPPORT.select_serial(ctx)?;
     Ok(Prepared::new(ArchitectureStrategy::Default(implementation), selection))
 }
 
 pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
     match strategy.implementation {
-            ArchitectureStrategy::Default(implementation) => Ok(default::crop_impl::execute(implementation)),
+            ArchitectureStrategy::Default(implementation) => Ok(super::default::crop_impl::execute(implementation)),
     }
 }

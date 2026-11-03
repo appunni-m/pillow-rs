@@ -201,7 +201,7 @@ pub(crate) fn execute_filter5x5_rgb_vector_fast_path(
         }
     }
     if pixel_count <= VECTOR_SMALL_UNIFORM_FILTER5X5_MAX_PIXELS
-        || !super::rgb_blur_ring::parameters_match(kernel, scale, offset)
+        || !rgb_blur_ring::parameters_match(kernel, scale, offset)
     {
         return None;
     }

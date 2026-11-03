@@ -72,8 +72,16 @@ def line_number(text: str, offset: int) -> int:
 
 def collect_rust_files() -> list[Path]:
     files: list[Path] = []
+    inert_archives = (
+        ROOT / "pillow-rs" / "src" / "compute" / "pool_cpu" / "legacy",
+        ROOT / "pillow-rs" / "src" / "compute" / "pool_cpu" / "legacy_2",
+    )
     for pattern in RUST_GLOBS:
-        files.extend(ROOT.glob(pattern))
+        files.extend(
+            path
+            for path in ROOT.glob(pattern)
+            if not any(archive in path.parents for archive in inert_archives)
+        )
     return sorted(set(files))
 
 

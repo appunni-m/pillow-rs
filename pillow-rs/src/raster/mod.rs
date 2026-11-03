@@ -8,7 +8,7 @@ pub(crate) mod buffer;
 pub(crate) mod color;
 pub(crate) mod dynamic;
 pub(crate) mod error;
-pub mod mode;
+pub(crate) mod mode;
 pub(crate) mod traits;
 
 pub use self::buffer::{

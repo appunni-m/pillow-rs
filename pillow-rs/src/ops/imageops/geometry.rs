@@ -3,9 +3,9 @@ use super::*;
 mod expand;
 mod pad;
 pub use expand::{
-    expand, expand_with_input, expand_with_margins, expand_with_margins_and_input,
-    expand_with_output_size_and_position, prepare_expand_fill, resolve_expand_fill_palette,
-    validate_expand_output_size, PreparedExpandFill,
+    expand, expand_canvas_with_prepared_fill, expand_with_input, expand_with_margins,
+    expand_with_margins_and_input, prepare_expand_fill, resolve_expand_fill_palette,
+    validate_prepared_expand_output_size, PreparedExpandFill,
 };
 pub use pad::{
     pad, pad_fill_preflight, pad_filter_preflight, pad_geometry_preflight,

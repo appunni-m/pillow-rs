@@ -29,7 +29,7 @@ pub(crate) fn pad(
         return Err(PilError::InternalError("Pad mode dispatch received a different raster".into()));
     };
     match architecture {
-        Architecture::Default => default::pad_impl::pad(image, frame)
+        Architecture::Default => super::default::pad_impl::pad(image, frame)
             .map(|output| (DynamicImage::ImagePaletteAlpha8(output), 0, 0)),
         Architecture::Sse2 => sse2::pad_impl::pad(image, frame)
             .map(|(output, blocks, tail)| (DynamicImage::ImagePaletteAlpha8(output), blocks, tail)),

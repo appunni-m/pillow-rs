@@ -26,6 +26,7 @@ pub(crate) const fn pillow_get_pixel_support(
 }
 
 /// Declares a native high-depth GetPixel extension for one exact mode.
+// NO_PILLOW_SUPPORT: GetPixel returns the native sample shape of internal high-depth modes.
 pub(crate) const fn core_get_pixel_support(
     mode: crate::raster::Mode,
     shape: PixelValueShape,
@@ -42,6 +43,7 @@ pub(crate) const fn core_get_pixel_support(
 }
 
 /// Declares the Rust/JavaScript fixed-RGBA8 access as a core extension.
+// NO_PILLOW_SUPPORT: this Rust/JavaScript accessor has no matching Pillow GetPixel result.
 pub(crate) const fn rgba_get_pixel_support(mode: crate::raster::Mode) -> ModeSupport {
     ModeSupport::cpu_core_only(
         OperationId::GetPixelRgba,

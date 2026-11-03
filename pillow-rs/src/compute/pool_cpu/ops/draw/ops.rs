@@ -14,8 +14,8 @@
 //! embedded-color facts, then executes the selected raster owner.
 //! Mode-owned Bitmap/Text and Default/SIMD geometry writers preserve omitted
 //! physical lanes using the same mode-specific sidecar. TODO(pillow-rs#3ptb):
-//! verify every declared I;16 identity in parity and finish direct Text ink,
-//! palette/error ordering, and public Bitmap fast-route review.
+//! verify I;16, PA L-mask, RGBa PREBLEND, and public Bitmap fast-route outputs
+//! in parity; finish direct Text ink and palette/error-order review.
 //! Pillow 12.2's `ImagingFill2` confirms I;16 L masks blend both sample bytes,
 //! while 1/RGBA/RGBa masks step through the raw row byte prefix; RGBa reads
 //! alpha and applies PREBLEND. Draw support declares the compatible
@@ -27,10 +27,11 @@
 
 use crate::compute::{Architecture, Backend, ExecutionContext};
 use crate::compute::registry::support::{
-    DrawRequestKind, DrawTextMaskKind, ImplementationSupport, ModeSupport, OperationId,
-    OperationInputs, OperationModeRoute, OperationRouteGuard, OperationRouteInputs,
-    OperationRoutePath, OperationSupport, OutputModeRule, PaletteKnowledge, RequestFacts,
-    StrategyGuard, StrategyInputs, StrategySelection, SupportAssessment,
+    DrawRequestKind, DrawTextMaskKind, ImplementationSupport, InputContract, ModeSupport,
+    OperationId, OperationInputs, OperationModeRoute, OperationRouteGuard,
+    OperationRouteInputs, OperationRoutePath, OperationSupport, OutputModeRule,
+    PaletteKnowledge, RequestFacts, StrategyGuard, StrategyInputs, StrategySelection,
+    SupportAssessment,
 };
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
@@ -185,6 +186,31 @@ pub(crate) static SUPPORT: OperationSupport = OperationSupport::routed(
     classify_route,
     DRAW_COMPOSED_OPERATIONS,
 );
+
+/// Validates the bitmap mode using the mask identities declared by Draw support.
+pub(crate) fn validate_bitmap_mask_mode(mode: Mode) -> Result<(), PilError> {
+    let contract = SUPPORT.inputs.iter().find_map(|contract| {
+        let InputContract::DrawInputs {
+            bitmap_masks,
+            mask_rejection,
+            ..
+        } = contract
+        else {
+            return None;
+        };
+        Some((*bitmap_masks, *mask_rejection))
+    });
+    let Some((bitmap_masks, mask_rejection)) = contract else {
+        return Err(PilError::InternalError(
+            "Draw support omitted its bitmap mask contract".into(),
+        ));
+    };
+    if bitmap_masks.contains(&mode) {
+        Ok(())
+    } else {
+        Err(PilError::ValueError(mask_rejection.to_owned()))
+    }
+}
 
 pub(crate) struct PreparedDraw<'a> {
     image: &'a DynamicImage,

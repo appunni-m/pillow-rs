@@ -1,5 +1,7 @@
 //! Native arithmetic and physical-lane preservation shared by Enhance modes.
 
+use crate::raster::GenericImageView;
+
 use crate::error::PilError;
 use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::DynamicImage;

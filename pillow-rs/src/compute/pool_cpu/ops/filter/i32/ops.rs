@@ -22,7 +22,7 @@ pub(crate) fn prepared_uniform_filter3x3_identity(
     }
     let normalized = std::array::from_fn(|index| kernel[index] / scale);
     match selection.implementation.architecture {
-        Architecture::Default => default::uniform_i32_filter3x3_is_identity(
+        Architecture::Default => super::default::uniform_i32_filter3x3_is_identity(
             image.as_bytes(),
             image.width() as usize,
             image.height() as usize,
@@ -143,7 +143,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
         return Ok(DynamicImage::ImageI32(output));
     }
     match selection.implementation.architecture {
-        Architecture::Default => default::execute(image, request),
+        Architecture::Default => super::default::execute(image, request),
         Architecture::Avx2Fma => match request {
             request @ super::super::ops::FilterRequest::Filter3x3 { .. } => {
                 avx2::execute_filter3x3(image, request)

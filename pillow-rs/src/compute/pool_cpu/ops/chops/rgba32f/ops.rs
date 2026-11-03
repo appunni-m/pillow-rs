@@ -16,7 +16,7 @@ pub(crate) fn execute(
     other: Option<&DynamicImage>,
 ) -> Result<DynamicImage, PilError> {
     match image {
-        DynamicImage::ImageRgba32F(_) => default::ops::execute(image, request, other),
+        DynamicImage::ImageRgba32F(_) => super::default::ops::execute(image, request, other),
         _ => Err(PilError::InternalError("Chops mode strategy received a different raster variant".into())),
     }
 }

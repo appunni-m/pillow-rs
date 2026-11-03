@@ -419,7 +419,7 @@ fn assert_rgb_autocontrast_packed_case(width: u32, height: u32) {
         .expect("RGB AutoContrast source"),
     );
     let op = PipelineOp::Autocontrast {
-        cutoff: 0.0,
+        options: crate::pipeline::AutocontrastOptions::symmetric(0.0),
         mask: None,
     };
     let expected = crate::compute::registry::execute_cpu(&op, &source, Some("RGB"))

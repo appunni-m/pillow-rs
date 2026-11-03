@@ -551,6 +551,7 @@ fn classify_get_channel_mode(mode: Mode) -> ModeSupport {
             &[],
             "native u16 GetChannel extends Pillow while preserving sample width",
         ),
+        // NO_PILLOW_SUPPORT: native f32 GetChannel preserves sample width.
         Mode::ImageRgb32F | Mode::ImageRgba32F => ModeSupport::cpu_core_only(
             OperationId::GetChannel,
             mode,

@@ -1,3 +1,5 @@
+
+use crate::raster::GenericImageView;
 use super::super::DrawLayout;
 use crate::error::PilError;
 use crate::raster::buffer::HiddenPixelLanes;

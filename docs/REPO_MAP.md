@@ -515,6 +515,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extrema_bytes_impl.rs
 |   |   |   |       |   |   |   |-- get_data_impl.rs
+|   |   |   |       |   |   |   |-- get_pixel_impl.rs
 |   |   |   |       |   |   |   |-- getbbox_impl.rs
 |   |   |   |       |   |   |   |-- getcolors_impl.rs
 |   |   |   |       |   |   |   |-- histogram_impl.rs
@@ -539,6 +540,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extrema_bytes_impl.rs
 |   |   |   |       |   |   |   |-- get_data_impl.rs
+|   |   |   |       |   |   |   |-- get_pixel_impl.rs
 |   |   |   |       |   |   |   |-- getbbox_impl.rs
 |   |   |   |       |   |   |   |-- getcolors_impl.rs
 |   |   |   |       |   |   |   |-- histogram_impl.rs
@@ -560,6 +562,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- histogram_execution.rs
 |   |   |   |       |   |   |-- histogram_samples.rs
 |   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   |-- pixel_access.rs
 |   |   |   |       |   |   |-- projection.rs
 |   |   |   |       |   |   |-- projection_vector.rs
 |   |   |   |       |   |   |-- stat.rs
@@ -568,6 +571,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extrema_bytes_impl.rs
 |   |   |   |       |   |   |   |-- get_data_impl.rs
+|   |   |   |       |   |   |   |-- get_pixel_impl.rs
 |   |   |   |       |   |   |   |-- getbbox_impl.rs
 |   |   |   |       |   |   |   |-- getcolors_impl.rs
 |   |   |   |       |   |   |   |-- histogram_impl.rs
@@ -579,6 +583,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extrema_bytes_impl.rs
 |   |   |   |       |   |   |   |-- get_data_impl.rs
+|   |   |   |       |   |   |   |-- get_pixel_impl.rs
 |   |   |   |       |   |   |   |-- getbbox_impl.rs
 |   |   |   |       |   |   |   |-- histogram_impl.rs
 |   |   |   |       |   |   |   |-- mod.rs
@@ -589,6 +594,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extrema_bytes_impl.rs
 |   |   |   |       |   |   |   |-- get_data_impl.rs
+|   |   |   |       |   |   |   |-- get_pixel_impl.rs
 |   |   |   |       |   |   |   |-- getbbox_impl.rs
 |   |   |   |       |   |   |   |-- histogram_impl.rs
 |   |   |   |       |   |   |   |-- mod.rs
@@ -599,6 +605,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extrema_bytes_impl.rs
 |   |   |   |       |   |   |   |-- get_data_impl.rs
+|   |   |   |       |   |   |   |-- get_pixel_impl.rs
 |   |   |   |       |   |   |   |-- getbbox_impl.rs
 |   |   |   |       |   |   |   |-- histogram_impl.rs
 |   |   |   |       |   |   |   |-- mod.rs
@@ -609,6 +616,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extrema_bytes_impl.rs
 |   |   |   |       |   |   |   |-- get_data_impl.rs
+|   |   |   |       |   |   |   |-- get_pixel_impl.rs
 |   |   |   |       |   |   |   |-- getbbox_impl.rs
 |   |   |   |       |   |   |   |-- histogram_impl.rs
 |   |   |   |       |   |   |   |-- mod.rs
@@ -619,6 +627,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extrema_bytes_impl.rs
 |   |   |   |       |   |   |   |-- get_data_impl.rs
+|   |   |   |       |   |   |   |-- get_pixel_impl.rs
 |   |   |   |       |   |   |   |-- getbbox_impl.rs
 |   |   |   |       |   |   |   |-- getcolors_impl.rs
 |   |   |   |       |   |   |   |-- histogram_impl.rs
@@ -630,6 +639,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extrema_bytes_impl.rs
 |   |   |   |       |   |   |   |-- get_data_impl.rs
+|   |   |   |       |   |   |   |-- get_pixel_impl.rs
 |   |   |   |       |   |   |   |-- getbbox_impl.rs
 |   |   |   |       |   |   |   |-- getcolors_impl.rs
 |   |   |   |       |   |   |   |-- histogram_impl.rs
@@ -641,6 +651,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extrema_bytes_impl.rs
 |   |   |   |       |   |   |   |-- get_data_impl.rs
+|   |   |   |       |   |   |   |-- get_pixel_impl.rs
 |   |   |   |       |   |   |   |-- getbbox_impl.rs
 |   |   |   |       |   |   |   |-- getcolors_impl.rs
 |   |   |   |       |   |   |   |-- histogram_impl.rs
@@ -652,6 +663,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extrema_bytes_impl.rs
 |   |   |   |       |   |   |   |-- get_data_impl.rs
+|   |   |   |       |   |   |   |-- get_pixel_impl.rs
 |   |   |   |       |   |   |   |-- getbbox_impl.rs
 |   |   |   |       |   |   |   |-- getcolors_impl.rs
 |   |   |   |       |   |   |   |-- histogram_impl.rs
@@ -663,6 +675,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extrema_bytes_impl.rs
 |   |   |   |       |   |   |   |-- get_data_impl.rs
+|   |   |   |       |   |   |   |-- get_pixel_impl.rs
 |   |   |   |       |   |   |   |-- getbbox_impl.rs
 |   |   |   |       |   |   |   |-- getcolors_impl.rs
 |   |   |   |       |   |   |   |-- histogram_impl.rs
@@ -674,6 +687,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extrema_bytes_impl.rs
 |   |   |   |       |   |   |   |-- get_data_impl.rs
+|   |   |   |       |   |   |   |-- get_pixel_impl.rs
 |   |   |   |       |   |   |   |-- getbbox_impl.rs
 |   |   |   |       |   |   |   |-- getcolors_impl.rs
 |   |   |   |       |   |   |   |-- histogram_impl.rs
@@ -686,6 +700,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extrema_bytes_impl.rs
 |   |   |   |       |   |   |   |-- get_data_impl.rs
+|   |   |   |       |   |   |   |-- get_pixel_impl.rs
 |   |   |   |       |   |   |   |-- getbbox_impl.rs
 |   |   |   |       |   |   |   |-- getcolors_impl.rs
 |   |   |   |       |   |   |   |-- histogram_impl.rs
@@ -701,6 +716,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extrema_bytes_impl.rs
 |   |   |   |       |   |   |   |-- get_data_impl.rs
+|   |   |   |       |   |   |   |-- get_pixel_impl.rs
 |   |   |   |       |   |   |   |-- getbbox_impl.rs
 |   |   |   |       |   |   |   |-- getcolors_impl.rs
 |   |   |   |       |   |   |   |-- histogram_impl.rs
@@ -712,6 +728,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extrema_bytes_impl.rs
 |   |   |   |       |   |   |   |-- get_data_impl.rs
+|   |   |   |       |   |   |   |-- get_pixel_impl.rs
 |   |   |   |       |   |   |   |-- getbbox_impl.rs
 |   |   |   |       |   |   |   |-- getcolors_impl.rs
 |   |   |   |       |   |   |   |-- histogram_impl.rs
@@ -723,6 +740,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extrema_bytes_impl.rs
 |   |   |   |       |   |   |   |-- get_data_impl.rs
+|   |   |   |       |   |   |   |-- get_pixel_impl.rs
 |   |   |   |       |   |   |   |-- getbbox_impl.rs
 |   |   |   |       |   |   |   |-- getcolors_impl.rs
 |   |   |   |       |   |   |   |-- histogram_impl.rs
@@ -734,6 +752,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extrema_bytes_impl.rs
 |   |   |   |       |   |   |   |-- get_data_impl.rs
+|   |   |   |       |   |   |   |-- get_pixel_impl.rs
 |   |   |   |       |   |   |   |-- getbbox_impl.rs
 |   |   |   |       |   |   |   |-- getcolors_impl.rs
 |   |   |   |       |   |   |   |-- histogram_impl.rs
@@ -745,6 +764,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extrema_bytes_impl.rs
 |   |   |   |       |   |   |   |-- get_data_impl.rs
+|   |   |   |       |   |   |   |-- get_pixel_impl.rs
 |   |   |   |       |   |   |   |-- getbbox_impl.rs
 |   |   |   |       |   |   |   |-- getcolors_impl.rs
 |   |   |   |       |   |   |   |-- histogram_impl.rs
@@ -766,6 +786,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extrema_bytes_impl.rs
 |   |   |   |       |   |   |   |-- get_data_impl.rs
+|   |   |   |       |   |   |   |-- get_pixel_impl.rs
 |   |   |   |       |   |   |   |-- getbbox_impl.rs
 |   |   |   |       |   |   |   |-- getcolors_impl.rs
 |   |   |   |       |   |   |   |-- histogram_impl.rs
@@ -777,6 +798,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extrema_bytes_impl.rs
 |   |   |   |       |   |   |   |-- get_data_impl.rs
+|   |   |   |       |   |   |   |-- get_pixel_impl.rs
 |   |   |   |       |   |   |   |-- getbbox_impl.rs
 |   |   |   |       |   |   |   |-- getcolors_impl.rs
 |   |   |   |       |   |   |   |-- histogram_impl.rs
@@ -788,6 +810,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extrema_bytes_impl.rs
 |   |   |   |       |   |   |   |-- get_data_impl.rs
+|   |   |   |       |   |   |   |-- get_pixel_impl.rs
 |   |   |   |       |   |   |   |-- getbbox_impl.rs
 |   |   |   |       |   |   |   |-- getcolors_impl.rs
 |   |   |   |       |   |   |   |-- histogram_impl.rs
@@ -799,6 +822,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extrema_bytes_impl.rs
 |   |   |   |       |   |   |   |-- get_data_impl.rs
+|   |   |   |       |   |   |   |-- get_pixel_impl.rs
 |   |   |   |       |   |   |   |-- getbbox_impl.rs
 |   |   |   |       |   |   |   |-- getcolors_impl.rs
 |   |   |   |       |   |   |   |-- histogram_impl.rs
@@ -810,6 +834,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extrema_bytes_impl.rs
 |   |   |   |       |   |   |   |-- get_data_impl.rs
+|   |   |   |       |   |   |   |-- get_pixel_impl.rs
 |   |   |   |       |   |   |   |-- getbbox_impl.rs
 |   |   |   |       |   |   |   |-- getcolors_impl.rs
 |   |   |   |       |   |   |   |-- histogram_impl.rs
@@ -821,6 +846,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |       |-- default/
 |   |   |   |       |       |   |-- extrema_bytes_impl.rs
 |   |   |   |       |       |   |-- get_data_impl.rs
+|   |   |   |       |       |   |-- get_pixel_impl.rs
 |   |   |   |       |       |   |-- getbbox_impl.rs
 |   |   |   |       |       |   |-- getcolors_impl.rs
 |   |   |   |       |       |   |-- histogram_impl.rs
@@ -7599,7 +7625,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   `-- dimensions.rs
 |   |   |   |-- pipeline_ops.rs
 |   |   |   |-- pixel_access/
-|   |   |   |   |-- native_pixel.rs
 |   |   |   |   `-- palette_components.rs
 |   |   |   |-- pixel_access.rs
 |   |   |   |-- projection/

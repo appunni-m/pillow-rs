@@ -48,6 +48,7 @@ pub(crate) const fn support(
             reason: "conversion from F to LA not supported",
             kind: RejectionKind::ValueError,
         },
+        // NO_PILLOW_SUPPORT: native unsigned 16-bit alpha output extends PutAlpha.
         Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
             ModeSupport::cpu_core_only(
                 operation,
@@ -58,6 +59,7 @@ pub(crate) const fn support(
                 "native unsigned 16-bit alpha output extends Pillow putalpha",
             )
         }
+        // NO_PILLOW_SUPPORT: native high-depth alpha output extends PutAlpha.
         Mode::ImageLumaA16
         | Mode::ImageRgb16
         | Mode::ImageRgba16

@@ -143,7 +143,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
             }
         }
         return match selection.implementation.architecture {
-            Architecture::Default => default::execute(image, request),
+            Architecture::Default => super::default::execute(image, request),
             #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
             Architecture::Neon => super::neon::execute(image, request),
             Architecture::Sse2
@@ -159,7 +159,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
     }
     if matches!(request, super::super::ops::FilterRequest::Filter3x3 { .. }) {
         return match selection.implementation.architecture {
-            Architecture::Default => default::execute(image, request),
+            Architecture::Default => super::default::execute(image, request),
             #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
             Architecture::Neon => super::neon::execute_filter3x3(image, request),
             Architecture::Sse2
@@ -174,7 +174,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
         };
     }
     match selection.implementation.architecture {
-        Architecture::Default => default::execute(image, request),
+        Architecture::Default => super::default::execute(image, request),
         #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
         Architecture::Neon => match request {
             request @ super::super::ops::FilterRequest::Filter3x3 { .. } => {
@@ -197,10 +197,10 @@ fn execute_gaussian_blur(
     selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
     let super::super::ops::FilterRequest::GaussianBlur { sigma } = request else {
-        return default::execute(image, request);
+        return super::default::execute(image, request);
     };
     match selection.implementation.architecture {
-        Architecture::Default => default::execute(image, request),
+        Architecture::Default => super::default::execute(image, request),
         Architecture::Avx2
         | Architecture::Avx
         | Architecture::Sse2
@@ -212,4 +212,15 @@ fn execute_gaussian_blur(
             "filter selected an unowned LA GaussianBlur architecture".into(),
         )),
     }
+}
+
+pub(in crate::compute::pool_cpu::ops::filter) fn mode_filter_support() -> crate::compute::registry::support::ModeSupport {
+    super::super::ops::core_only_serial(crate::compute::registry::support::OperationId::ModeFilter, MODE)
+}
+
+pub(in crate::compute::pool_cpu::ops::filter) fn execute_mode_filter(
+    image: &crate::raster::DynamicImage,
+    size: u32,
+) -> Result<crate::raster::DynamicImage, crate::error::PilError> {
+    super::default::execute_mode_filter(image, size)
 }

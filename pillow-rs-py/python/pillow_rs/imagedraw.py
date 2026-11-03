@@ -16,6 +16,7 @@ class Draw:
         # loads the image before validating the optional draw mode.
         image.load()
         self._orig_mode = image.mode
+        self._draw_mode = mode or image.mode
         self._draw = RustDraw(image._rust_image, mode)
         self._image = image
         self._font = None  # current font for text
@@ -85,6 +86,153 @@ class Draw:
             self._draw._validate_embedded_color()
         return font, embedded_color
 
+    def _font_mask_image(self, mask, mode):
+        image = getattr(mask, "_image", None)
+        if image is not None:
+            return image
+        if isinstance(mask, Image):
+            return mask
+        size = getattr(mask, "size", None)
+        if size is None:
+            raise TypeError("font mask has no image size")
+        mask_mode = getattr(mask, "mode", mode)
+        return Image.frombytes(mask_mode, size, mask.tobytes())
+
+    def _draw_custom_font_mask(
+        self, xy, text, font, fill, mode, direction, features, language,
+        stroke_width, anchor, ink, **kwargs
+    ):
+        x, y = float(xy[0]), float(xy[1])
+        x_int, y_int = int(x), int(y)
+        start = (x - x_int, y - y_int)
+        getmask2 = getattr(font, "getmask2", None)
+        if getmask2 is not None:
+            mask, offset = getmask2(
+                text,
+                mode,
+                direction=direction,
+                features=features,
+                language=language,
+                stroke_width=stroke_width,
+                stroke_filled=True,
+                anchor=anchor,
+                ink=ink,
+                start=start,
+                **kwargs,
+            )
+            x_int += offset[0]
+            y_int += offset[1]
+        else:
+            try:
+                mask = font.getmask(
+                    text,
+                    mode,
+                    direction,
+                    features,
+                    language,
+                    stroke_width,
+                    anchor,
+                    ink,
+                    start=start,
+                    **kwargs,
+                )
+            except TypeError:
+                mask = font.getmask(text)
+
+        mask_size = getattr(mask, "size", None)
+        if mask_size is not None and (mask_size[0] == 0 or mask_size[1] == 0):
+            return
+        mask_image = self._font_mask_image(mask, mode)
+        if mode == "RGBA":
+            coverage = mask_image.getchannel("A")
+            mask_image.putalpha((ink >> 24) & 0xFF)
+            self._draw.text_color_mask(
+                (x_int, y_int), mask_image._rust_image, coverage._rust_image
+            )
+        else:
+            self.bitmap((x_int, y_int), mask_image, fill=fill)
+
+    def _custom_font_text_lines(
+        self, xy, text, font, anchor, align, spacing, direction, features,
+        language, stroke_width, embedded_color
+    ):
+        if anchor is None:
+            anchor = "lt" if direction == "ttb" else "la"
+        elif len(anchor) != 2:
+            raise ValueError("anchor must be a 2 character string")
+        newline = b"\n" if isinstance(text, bytes) else "\n"
+        lines = text.split(newline)
+        if len(lines) == 1:
+            return [(float(xy[0]), float(xy[1]), anchor, lines[0])]
+        if anchor[1] in "tb" and direction != "ttb":
+            raise ValueError("anchor not supported for multiline text")
+
+        font_mode = (
+            "1" if self._draw_mode in ("1", "P", "I", "F")
+            else "RGBA" if embedded_color else "L"
+        )
+        line_spacing = (
+            font.getbbox("A", font_mode, None, features, language, stroke_width)[3]
+            + stroke_width
+            + spacing
+        )
+        x, y = float(xy[0]), float(xy[1])
+        if direction == "ttb":
+            result = []
+            for line in lines:
+                result.append((x, y, anchor, line))
+                x += line_spacing
+            return result
+
+        widths = [
+            font.getlength(line, font_mode, direction, features, language)
+            for line in lines
+        ]
+        max_width = max(widths, default=0)
+        if anchor[1] == "m":
+            y -= (len(lines) - 1) * line_spacing / 2.0
+        elif anchor[1] == "d":
+            y -= (len(lines) - 1) * line_spacing
+
+        result = []
+        for line_index, (line, width) in enumerate(zip(lines, widths)):
+            left = x
+            width_difference = max_width - width
+            if align == "center":
+                left += width_difference / 2.0
+            elif align == "right":
+                left += width_difference
+            elif align not in ("left", "justify"):
+                raise ValueError('align must be "left", "center", "right" or "justify"')
+
+            if align == "justify" and width_difference != 0 and line_index != len(lines) - 1:
+                separator = b" " if isinstance(line, bytes) else " "
+                words = line.split(separator)
+                if len(words) > 1:
+                    if anchor[0] == "m":
+                        left -= max_width / 2.0
+                    elif anchor[0] == "r":
+                        left -= max_width
+                    word_widths = [
+                        font.getlength(word, font_mode, direction, features, language)
+                        for word in words
+                    ]
+                    extra = max_width - sum(word_widths)
+                    word_x = left
+                    for word_index, word in enumerate(words):
+                        result.append((word_x, y, "l" + anchor[1], word))
+                        word_x += word_widths[word_index] + extra / (len(words) - 1)
+                    y += line_spacing
+                    continue
+
+            if anchor[0] == "m":
+                left -= width_difference / 2.0
+            elif anchor[0] == "r":
+                left -= width_difference
+            result.append((left, y, anchor, line))
+            y += line_spacing
+        return result
+
     def line(self, xy, fill=None, width: int = 0, joint: str | None = None):
         fill = self._palette_ink(fill)
         self._mutate(self._draw.line, xy, fill, width, joint)
@@ -148,7 +296,9 @@ class Draw:
                     features, language, float(stroke_width), anchor, embedded_color,
                     None, align, stroke_fill,
                 )
-            elif hasattr(font, "getmask"):
+            elif hasattr(font, "getmask") or hasattr(font, "getmask2"):
+                # TODO(pillow-rs#3ptb): preserve ImageText.Text state and its
+                # precomputed line positions for custom fonts.
                 return self.text(
                     xy, text, fill=fill, font=font, anchor=anchor, spacing=spacing,
                     align=align, direction=direction, features=features,
@@ -165,6 +315,8 @@ class Draw:
             self._sync()
 
     def textbbox(self, xy, text, font=None, **kwargs):
+        # TODO(pillow-rs#3ptb): route custom Python font metrics through their
+        # getbbox/getmask contracts instead of the native FreeType binding.
         return self._draw.textbbox(
             xy,
             text,
@@ -179,6 +331,7 @@ class Draw:
         )
 
     def textlength(self, text, font=None, **kwargs):
+        # TODO(pillow-rs#3ptb): preserve custom Python font getlength options.
         return self._draw.textlength(
             text,
             font._rust_font if hasattr(font, "_rust_font") else font,
@@ -201,6 +354,8 @@ class Draw:
                            direction=None, features=None, language=None, stroke_width=0,
                            embedded_color=False, *, font_size=None):
         """Get the bounding box of multiline text."""
+        # TODO(pillow-rs#3ptb): derive multiline metrics from custom fonts and
+        # their per-line ImageText.Text layout.
         return self._draw.multiline_textbbox(
             xy,
             text,
@@ -239,7 +394,8 @@ class Draw:
              stroke_width=0, stroke_fill=None, embedded_color=False, *,
              font_size=None):
         # TODO(pillow-rs#3ptb): preserve ImageText.Text state and arbitrary
-        # custom-font getmask2 arguments through the Rust text boundary.
+        # getmask2 args for custom fonts. Plain string line layout and returned
+        # offsets use the custom font's mode-aware metric/mask methods below.
         font, embedded_color = self._prepare_text_font(font, font_size, embedded_color)
         fill = self._palette_ink(fill)
         if stroke_width:
@@ -261,9 +417,32 @@ class Draw:
                     stroke_fill,
                     None,
                 )
-            elif hasattr(font, 'getmask'):
-                mask = font.getmask(text, mode="1" if self._orig_mode == "1" else "L")
-                self.bitmap(xy, mask, fill=fill)
+            elif hasattr(font, 'getmask') or hasattr(font, 'getmask2'):
+                stroke_color = stroke_fill if stroke_fill is not None else fill
+                stroke_ink = self._draw.text_ink(stroke_color) if stroke_width else None
+                fill_ink = self._draw.text_ink(fill)
+                lines = self._custom_font_text_lines(
+                    xy, text, font, anchor, align, spacing, direction,
+                    features, language, stroke_width, embedded_color,
+                )
+                for line_x, line_y, line_anchor, line_text in lines:
+                    if stroke_ink is not None:
+                        stroke_mode = "1" if self._draw_mode in ("1", "P", "I", "F") else "L"
+                        self._draw_custom_font_mask(
+                            (line_x, line_y), line_text, font, stroke_color,
+                            stroke_mode, direction, features, language,
+                            stroke_width, line_anchor, stroke_ink,
+                        )
+                        if stroke_ink == fill_ink:
+                            continue
+                    fill_mode = (
+                        "RGBA" if embedded_color
+                        else "1" if self._draw_mode in ("1", "P", "I", "F") else "L"
+                    )
+                    self._draw_custom_font_mask(
+                        (line_x, line_y), line_text, font, fill, fill_mode,
+                        direction, features, language, 0, line_anchor, fill_ink,
+                    )
             else:
                 self._draw.text(
                     (float(xy[0]), float(xy[1])), text, fill, font,

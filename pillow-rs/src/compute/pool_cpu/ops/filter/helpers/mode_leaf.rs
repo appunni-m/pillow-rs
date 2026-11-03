@@ -28,7 +28,7 @@ macro_rules! native_filter_mode_leaf {
         $la_special:expr,
         $filter5x5_impl:path
     ) => {
-        pub(super) fn execute(
+        pub(crate) fn execute(
             image: &crate::raster::DynamicImage,
             request: $crate::compute::pool_cpu::ops::filter::ops::FilterRequest,
         ) -> Result<crate::raster::DynamicImage, crate::error::PilError> {

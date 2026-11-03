@@ -531,7 +531,7 @@ class Image:
             )
         else:
             source_plan = self._rust_image._paste_prepare_source(
-                im, effective_mask is not None, is_image_source
+                im, is_image_source
             )
         self.load()
         self._native_info_known_empty = False

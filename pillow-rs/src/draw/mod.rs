@@ -5,8 +5,6 @@
 //! Coordinates are integer pixel coordinates. Colors are normalized RGBA byte
 //! tuples before mode-specific drawing rules are applied.
 
-use std::sync::Arc;
-
 use crate::compute::{Backend, ExecutionContext};
 use crate::error::PilError;
 use crate::image::{Image, ImageInfoValue, PaletteColorComponent, PutPixelValue};
@@ -33,6 +31,18 @@ pub struct Draw {
     /// ImagePalette-style tuple keys retained after palette lookup, including
     /// keys whose byte conversion returned an error.
     palette_color_cache: Vec<(Vec<PaletteColorComponent>, u8)>,
+}
+
+fn image_with_draw_output(source: &Image, output: DynamicImage) -> Image {
+    let mut image = Image::from_dynamic(output);
+    if let Image::Loaded(data) = &mut image {
+        data.palette = source.palette();
+        data.palette_alpha = source.palette_alpha();
+        data.source_format = source.source_format();
+        data.info = source.image_info();
+        data.exif = source.exif_metadata();
+    }
+    image
 }
 
 /// Host-neutral coordinate input for ImageDraw point-based primitives.
@@ -449,6 +459,9 @@ impl Draw {
     ///
     /// `explicit_mode` may select Pillow's RGBA drawing context over an RGB image.
     pub fn new(image: Image, explicit_mode: Option<Mode>) -> Self {
+        // Keep Draw construction lazy and infallible. If the source mode is
+        // unresolved, operations retry through effective_mode() and propagate
+        // the error instead of selecting an invented default.
         let original_mode = image.mode_identity().ok();
         let draw_mode = explicit_mode.or(original_mode);
         let palette_reserved_indices =
@@ -516,23 +529,13 @@ impl Draw {
                 "Draw PA strategy returned another raster mode".into(),
             ));
         }
-        let metadata = (
-            self.image.palette(),
-            self.image.palette_alpha(),
-            self.image.source_format(),
-            self.image.image_info(),
-            self.image.exif_metadata(),
-        );
-        self.image = Image::Loaded(crate::image::LoadedData {
-            image: Arc::new(image),
-            known_zero_fill: false,
-            palette: metadata.0,
-            palette_alpha: metadata.1,
-            source_format: metadata.2,
-            info: metadata.3,
-            exif: metadata.4,
-        });
+        self.replace_draw_output(image);
         Ok(())
+    }
+
+    /// Replaces eagerly drawn pixels while retaining their Image metadata.
+    pub(super) fn replace_draw_output(&mut self, image: DynamicImage) {
+        self.image = image_with_draw_output(&self.image, image);
     }
 
     /// Validate Pillow's optional draw-mode override against the destination.
@@ -552,12 +555,12 @@ impl Draw {
         Ok(())
     }
 
-    /// Return the effective PIL mode for drawing operations.
-    /// Uses the explicit mode if set, otherwise falls back to the image's mode.
-    fn effective_mode(&self) -> Mode {
-        self.draw_mode
-            .or_else(|| self.image.mode_identity().ok())
-            .unwrap_or(Mode::ImageRgba8)
+    /// Return the effective PIL mode without inventing a fallback identity.
+    fn effective_mode(&self) -> Result<Mode, PilError> {
+        match self.draw_mode.or(self.orig_mode) {
+            Some(mode) => Ok(mode),
+            None => self.image.mode_identity(),
+        }
     }
 
     /// Whether Pillow requested an RGBA drawing context over an RGB image.
@@ -572,7 +575,10 @@ impl Draw {
         options: &crate::font::ImageFontTextOptions,
     ) -> Result<(), PilError> {
         if options.embedded_color
-            && !matches!(self.effective_mode(), Mode::ImageRgb8 | Mode::ImageRgba8)
+            && !matches!(
+                self.effective_mode()?,
+                Mode::ImageRgb8 | Mode::ImageRgba8
+            )
         {
             return Err(PilError::ValueError(
                 "Embedded color supported only in RGB and RGBA modes".into(),
@@ -583,9 +589,11 @@ impl Draw {
 
     /// Resolves a host-neutral color according to Pillow's drawing-mode rules.
     pub fn color_with_input(&self, input: DrawColorInput) -> Result<(u8, u8, u8, u8), PilError> {
-        let mode = self.effective_mode();
+        let mode = self.effective_mode()?;
         match input {
-            DrawColorInput::None => Ok(self.default_shape_ink().unwrap_or((0, 0, 0, 255))),
+            DrawColorInput::None => {
+                Ok(self.default_shape_ink()?.unwrap_or((0, 0, 0, 255)))
+            }
             DrawColorInput::String(value) => crate::color::parse_color_str(&value),
             DrawColorInput::Integer(value) => resolve_integer_color(mode, value),
             DrawColorInput::Float(value) if mode == Mode::ImageF32 => {
@@ -640,7 +648,7 @@ impl Draw {
         &mut self,
         input: DrawColorInput,
     ) -> Result<(u8, u8, u8, u8), PilError> {
-        if self.effective_mode() == Mode::ImagePalette8
+        if self.effective_mode()? == Mode::ImagePalette8
             && self.image.palette_input().rgb.is_some()
         {
             let components = match &input {
@@ -702,7 +710,7 @@ impl Draw {
             return self.color_with_input(input);
         }
 
-        match self.effective_mode() {
+        match self.effective_mode()? {
             Mode::ImageRgb8
             | Mode::ImageRgba8
             | Mode::ImageRgbPremultiplied8
@@ -742,7 +750,7 @@ impl Draw {
         bitmap: &Image,
         input: DrawColorInput,
     ) -> Result<(), PilError> {
-        let mode = self.effective_mode();
+        let mode = self.effective_mode()?;
         if matches!(input, DrawColorInput::None) {
             return self.bitmap(x, y, bitmap, None);
         }
@@ -803,24 +811,24 @@ impl Draw {
         &self,
         fill: Option<(u8, u8, u8, u8)>,
         outline: Option<(u8, u8, u8, u8)>,
-    ) -> ShapeInks {
+    ) -> Result<ShapeInks, PilError> {
         if fill.is_none() && outline.is_none() {
-            if self.orig_mode == Some(Mode::ImagePaletteAlpha8) {
-                return (None, Some((255, 255, 255, 255)));
+            if self.effective_mode()? == Mode::ImagePaletteAlpha8 {
+                return Ok((None, Some((255, 255, 255, 255))));
             }
             // ImageDraw geometric primitives default to the context's outline
             // ink, not a filled interior.  Rectangle/ellipse/polygon and
             // their relatives therefore retain a one-pixel white outline on
             // RGB-family images when both color arguments are omitted.
-            return (None, self.default_shape_ink());
+            return Ok((None, self.default_shape_ink()?));
         }
-        (fill, outline)
+        Ok((fill, outline))
     }
 
     /// Return the ink Pillow's experimental `Outline` API uses when both
     /// `fill` and `outline` are omitted.
-    fn default_shape_ink(&self) -> Option<(u8, u8, u8, u8)> {
-        match self.effective_mode() {
+    fn default_shape_ink(&self) -> Result<Option<(u8, u8, u8, u8)>, PilError> {
+        let ink = match self.effective_mode()? {
             // ImageDraw._getink() starts an RGB-family outline with
             // draw_ink(-1), which resolves to an all-255 sample.
             Mode::ImageRgb8
@@ -850,7 +858,8 @@ impl Draw {
             // and palette-indexed modes, so shape() remains a no-op.
             Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => None,
             _ => None,
-        }
+        };
+        Ok(ink)
     }
 
     /// Returns the current drawn image with original mode semantics restored.
@@ -859,17 +868,19 @@ impl Draw {
     /// explicit RGBA context over an RGB image; this method restores RGB.
     pub fn image_clone(&self) -> Result<Image, PilError> {
         let img = self.image.clone();
-        let orig = self.orig_mode;
-        let current = img.mode_identity().ok();
-        if orig != Some(Mode::ImageRgb8) || current == orig {
+        if self.orig_mode != Some(Mode::ImageRgb8)
+            || img.mode_identity()? == Mode::ImageRgb8
+        {
             return Ok(img);
         }
 
         // The RGBA draw context over RGB is the one public path whose backing
         // storage intentionally differs from the logical destination mode.
         let img_loaded = img.materialize()?;
-        Ok(Image::from_dynamic(
-            DynamicImage::ImageRgb8(img_loaded.to_rgb8())))
+        Ok(image_with_draw_output(
+            &img,
+            DynamicImage::ImageRgb8(img_loaded.to_rgb8()),
+        ))
     }
 
     /// Consume the drawing context and return the modified image.

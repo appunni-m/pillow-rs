@@ -1,7 +1,7 @@
 use crate::compute::pool_cpu::ops::draw::BitmapMask;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Rgba};
-use image::{GenericImage, GenericImageView};
+use crate::raster::{GenericImage, GenericImageView};
 
 pub(crate) fn apply(
     image: DynamicImage,
@@ -38,7 +38,7 @@ pub(crate) fn apply(
 }
 
 fn blend_pixel(
-    canvas: &mut image::RgbaImage,
+    canvas: &mut crate::raster::RgbaImage,
     x: u32,
     y: u32,
     coverage: u8,

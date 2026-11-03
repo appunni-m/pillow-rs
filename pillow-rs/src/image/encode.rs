@@ -108,13 +108,9 @@ impl Image {
             .with_palette(palette));
         }
         if self.has_palette_mode() {
-            // TODO(image-slash-star#nype): add a PA codec transfer that
-            // preserves per-pixel alpha and palette metadata. Keep the
-            // format-specific encoding contract in image-slash-star rather
-            // than adding a Pillow-side RGBA conversion. Append newly found
-            // mode/format cases to that task.
-            // TODO(pillow-rs#3ptb): update this adapter after the codec
-            // contract lands and verify Pillow-visible output and errors.
+            // This is the single-band P pipeline path. PA has a distinct
+            // two-sample identity and must use its own codec transfer rather
+            // than being routed through P8.
             let indices = self.materialize_indices()?.to_luma8();
             let mut palette = self.extract_palette().ok_or_else(|| {
                 PilError::PaletteError("P-mode pipeline has no retained palette".to_owned())

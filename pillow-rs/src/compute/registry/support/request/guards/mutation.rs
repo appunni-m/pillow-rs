@@ -4,7 +4,7 @@ use crate::compute::registry::support::PUT_ALPHA_DATA_MASK_MODES;
 use crate::pipeline::TransposeMethod;
 use crate::raster::Mode;
 
-pub(super) fn alpha_composite_vector_guard(
+pub(crate) fn alpha_composite_vector_guard(
     input: StrategyInputs,
     channels: u8,
 ) -> GuardAssessment {
@@ -33,7 +33,7 @@ pub(super) fn alpha_composite_vector_guard(
     checked_native_bytes_guard(input, channels)
 }
 
-pub(super) fn paste_l_mask_neon_guard(
+pub(crate) fn paste_l_mask_neon_guard(
     input: StrategyInputs,
     mode: Mode,
     channels: u8,
@@ -108,7 +108,7 @@ fn clipped_paste_size(
     )
 }
 
-pub(super) fn merge_rgb_interleave_guard(input: StrategyInputs) -> GuardAssessment {
+pub(crate) fn merge_rgb_interleave_guard(input: StrategyInputs) -> GuardAssessment {
     let RequestFacts::MergeBands {
         target_mode: Mode::ImageRgb8,
         band_count: 3,
@@ -139,7 +139,7 @@ pub(super) fn merge_rgb_interleave_guard(input: StrategyInputs) -> GuardAssessme
     }
 }
 
-pub(super) fn merge_native_interleave_guard(
+pub(crate) fn merge_native_interleave_guard(
     input: StrategyInputs,
     target_mode: Mode,
     channels: u8,
@@ -179,7 +179,7 @@ pub(super) fn merge_native_interleave_guard(
     }
 }
 
-pub(super) fn blend_native_vector_guard(
+pub(crate) fn blend_native_vector_guard(
     input: StrategyInputs,
     channels: u8,
     compatible_modes: &'static [Mode],
@@ -221,7 +221,7 @@ pub(super) fn blend_native_vector_guard(
     }
 }
 
-pub(super) fn composite_native_byte_vector_guard(
+pub(crate) fn composite_native_byte_vector_guard(
     input: StrategyInputs,
     mode: Mode,
     channels: u8,
@@ -278,7 +278,7 @@ pub(super) fn composite_native_byte_vector_guard(
     }
 }
 
-pub(super) fn composite_l_mask_neon_guard(
+pub(crate) fn composite_l_mask_neon_guard(
     input: StrategyInputs,
     mode: Mode,
     channels: u8,
@@ -349,7 +349,7 @@ pub(super) fn composite_l_mask_neon_guard(
     }
 }
 
-pub(super) fn put_alpha_bytes_guard(
+pub(crate) fn put_alpha_bytes_guard(
     input: StrategyInputs,
     channels: u8,
     minimum_pixels: usize,
@@ -361,7 +361,7 @@ pub(super) fn put_alpha_bytes_guard(
     checked_native_bytes_guard(input, channels)
 }
 
-pub(super) fn extract_band_bytes_guard(
+pub(crate) fn extract_band_bytes_guard(
     input: StrategyInputs,
     channels: u8,
 ) -> GuardAssessment {
@@ -376,7 +376,7 @@ pub(super) fn extract_band_bytes_guard(
     }
 }
 
-pub(super) fn put_data_native_guard(
+pub(crate) fn put_data_native_guard(
     input: StrategyInputs,
     channels: u8,
     payloads: &'static [Mode],
@@ -392,7 +392,7 @@ pub(super) fn put_data_native_guard(
     }
 }
 
-pub(super) fn effect_spread_bytes_guard(
+pub(crate) fn effect_spread_bytes_guard(
     input: StrategyInputs,
     channels: u8,
 ) -> GuardAssessment {
@@ -407,7 +407,7 @@ pub(super) fn effect_spread_bytes_guard(
     native_bytes_guard(input, channels)
 }
 
-pub(super) fn effect_noise_vector_guard(input: StrategyInputs) -> GuardAssessment {
+pub(crate) fn effect_noise_vector_guard(input: StrategyInputs) -> GuardAssessment {
     let sigma = match input.request {
         RequestFacts::EffectNoise { sigma_bits } => f64::from_bits(sigma_bits),
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
@@ -423,7 +423,7 @@ pub(super) fn effect_noise_vector_guard(input: StrategyInputs) -> GuardAssessmen
     }
 }
 
-pub(super) fn effect_mandelbrot_vector_guard(input: StrategyInputs) -> GuardAssessment {
+pub(crate) fn effect_mandelbrot_vector_guard(input: StrategyInputs) -> GuardAssessment {
     match input.request {
         RequestFacts::EffectMandelbrot { .. } => (),
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
@@ -436,7 +436,7 @@ pub(super) fn effect_mandelbrot_vector_guard(input: StrategyInputs) -> GuardAsse
     }
 }
 
-pub(super) fn expand_vector_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
+pub(crate) fn expand_vector_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     if !(1..=4).contains(&channels) {
         return GuardAssessment::Ineligible;
     }
@@ -466,7 +466,7 @@ pub(super) fn expand_vector_guard(input: StrategyInputs, channels: u8) -> GuardA
     }
 }
 
-pub(super) fn alpha_mask_guard(input: StrategyInputs, channels: u8, minimum_pixels: usize) -> GuardAssessment {
+pub(crate) fn alpha_mask_guard(input: StrategyInputs, channels: u8, minimum_pixels: usize) -> GuardAssessment {
     let source = StrategyGuard::PutAlphaBytes { channels, minimum_pixels }.assess(input);
     if matches!(source, GuardAssessment::Ineligible) {
         return source;
@@ -491,7 +491,7 @@ pub(super) fn alpha_mask_guard(input: StrategyInputs, channels: u8, minimum_pixe
     }
 }
 
-pub(super) fn rgba_transpose_avx2_guard(input: StrategyInputs) -> GuardAssessment {
+pub(crate) fn rgba_transpose_avx2_guard(input: StrategyInputs) -> GuardAssessment {
     let layout = native_transpose_storage_guard(input, 4, true);
     if !matches!(layout, GuardAssessment::Satisfied) {
         return layout;
@@ -511,7 +511,7 @@ pub(super) fn rgba_transpose_avx2_guard(input: StrategyInputs) -> GuardAssessmen
     }
 }
 
-pub(super) fn native_transpose_bytes_guard(
+pub(crate) fn native_transpose_bytes_guard(
     input: StrategyInputs,
     channels: u8,
     allow_empty: bool,
@@ -554,7 +554,7 @@ fn native_transpose_storage_guard(
     }
 }
 
-pub(super) fn color3dlut_guard(input: StrategyInputs, source_channels: u8) -> GuardAssessment {
+pub(crate) fn color3dlut_guard(input: StrategyInputs, source_channels: u8) -> GuardAssessment {
     let (target_mode, channels, size, table_len) = match input.request {
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
         RequestFacts::Color3DLut { target_mode, channels, size, table_len } => {
@@ -593,7 +593,7 @@ pub(super) fn color3dlut_guard(input: StrategyInputs, source_channels: u8) -> Gu
     }
 }
 
-pub(super) fn reduce_native_byte_vector_guard(
+pub(crate) fn reduce_native_byte_vector_guard(
     input: StrategyInputs,
     channels: u8,
 ) -> GuardAssessment {
@@ -635,7 +635,7 @@ pub(super) fn reduce_native_byte_vector_guard(
     }
 }
 
-pub(super) fn native_byte_prefix_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
+pub(crate) fn native_byte_prefix_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     let expected = (input.width as usize)
         .checked_mul(input.height as usize)
         .and_then(|pixels| pixels.checked_mul(usize::from(channels)));
@@ -647,7 +647,7 @@ pub(super) fn native_byte_prefix_guard(input: StrategyInputs, channels: u8) -> G
     }
 }
 
-pub(super) fn native_mirror_rows_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
+pub(crate) fn native_mirror_rows_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     if input.width == 0 || input.height == 0 || !(1..=4).contains(&channels) {
         return GuardAssessment::Ineligible;
     }
@@ -662,11 +662,11 @@ pub(super) fn native_mirror_rows_guard(input: StrategyInputs, channels: u8) -> G
     }
 }
 
-pub(super) fn native_pointwise_bytes_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
+pub(crate) fn native_pointwise_bytes_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     exact_native_rows_guard(input, channels)
 }
 
-pub(super) fn native_pointwise_bytes_including_empty_guard(
+pub(crate) fn native_pointwise_bytes_including_empty_guard(
     input: StrategyInputs,
     channels: u8,
 ) -> GuardAssessment {
@@ -684,7 +684,7 @@ pub(super) fn native_pointwise_bytes_including_empty_guard(
     }
 }
 
-pub(super) fn exact_native_rows_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
+pub(crate) fn exact_native_rows_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     if input.width == 0 || input.height == 0 || !(1..=4).contains(&channels) {
         return GuardAssessment::Ineligible;
     }
@@ -699,7 +699,7 @@ pub(super) fn exact_native_rows_guard(input: StrategyInputs, channels: u8) -> Gu
     }
 }
 
-pub(super) fn native_crop_bytes_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
+pub(crate) fn native_crop_bytes_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     if channels == 0 || input.width == 0 || input.height == 0 {
         return GuardAssessment::Ineligible;
     }
@@ -741,7 +741,7 @@ pub(super) fn native_crop_bytes_guard(input: StrategyInputs, channels: u8) -> Gu
     }
 }
 
-pub(super) fn native_crop_border_bytes_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
+pub(crate) fn native_crop_border_bytes_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     if channels == 0 {
         return GuardAssessment::Ineligible;
     }
@@ -762,7 +762,7 @@ pub(super) fn native_crop_border_bytes_guard(input: StrategyInputs, channels: u8
     exact_native_rows_guard(input, channels)
 }
 
-pub(super) fn pixel_span_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
+pub(crate) fn pixel_span_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     let (x, y) = match input.request {
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
         RequestFacts::PutPixel { x, y } => (x, y),
@@ -828,7 +828,7 @@ pub(super) fn pixel_span_guard(input: StrategyInputs, channels: u8) -> GuardAsse
     }
 }
 
-pub(super) fn pixel_write_run_guard(input: StrategyInputs) -> GuardAssessment {
+pub(crate) fn pixel_write_run_guard(input: StrategyInputs) -> GuardAssessment {
     let writes = match input.request {
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
         RequestFacts::PutPixelBatch { count, writes } => {

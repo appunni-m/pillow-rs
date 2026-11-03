@@ -209,35 +209,33 @@ The exact `DynamicImage` variant remains the sole mode identity. `Mode` owns the
 static Pillow pixel size, byte-carrier width, and byte offsets for each physical
 layout. Its Pillow-owned raster payload may also retain physical per-pixel byte
 values that are not exposed as logical mode channels. These values are payload
-state, not a second mode tag or a `PixelStorage` selector. Keep existing typed
-samples and logical `as_bytes()` behavior intact; expose the physical bytes only
-to operations whose Pillow contract consumes them.
+state, not a second mode tag or a `PixelStorage` selector. Preserve every
+physical byte that can affect a public output, including serialization and
+operation results; it may be stored, derived, or computed by a mode-specific
+strategy. Keep existing typed samples and logical `as_bytes()` behavior intact.
 
-This is required for four-byte Pillow modes whose Rust carriers expose two or
-three logical channels. Pillow's unmasked Paste copies the full internal pixel
-size, and some readers inspect physical lanes directly. The raw lanes cannot
-always be synthesized from Mode: decoders, explicit fills, packed integer
-fills, and raw same-pixel-size Paste can produce different values for the
-same identity. The producer must attach the actual physical bytes when they
-are known; do not infer their values from the variant tag or visible channel
-count.
+This matters for Pillow modes whose public operations or serializers expose
+bytes beyond the logical Rust samples. The result cannot always be inferred
+from Mode: decoded data, explicit fills, packed integer fills, and operations
+can produce different public bytes for the same identity. Preserve or compute
+the actual observable values; do not infer them only from the variant tag or
+visible channel count.
 
-Keep equal-pixel-size Paste behavior mode-owned. The selected destination
-strategy prepares a physical-byte source view before its kernel, then copies
-or blends the bytes Pillow consumes. The compact LA/La/PA and RGB/YCbCr/LAB/HSV
-carriers retain their omitted bytes as payload; do not convert the source mode
-or put per-pixel mode checks into kernels. Same-width 1-byte aliases use their
-native byte samples. I;16 aliases use a typed raw two-byte path that translates
-the stored source byte order into the destination order. Keep parity coverage
-for every alias and mask path explicit before considering that route complete.
+Keep Paste behavior mode-owned and match its public output and fault contracts.
+Pillow's pixel-size check and raw copy/blend paths are diagnostic implementation
+details; Rust does not need to reproduce them. Use a direct typed loop, retained
+payload values, or another mode-specific method when it yields the same
+observable result. Do not convert the source mode or put per-pixel mode checks
+into kernels. Keep parity coverage for every supported alias and mask path
+explicit.
 
-Mode-preserving copies and transforms carry those bytes with their pixels.
-Mode-specific writes and algorithms update them according to the same
-operation semantics as the logical samples. Prepare a typed physical-layout
-view before entering a raw kernel; do not add mode checks or dynamic dispatch
-inside pixel loops. Paste and Histogram use physical lanes only where the
-Pillow reference does. Keep codec transfer buffers independent and translate
-their layout at the Pillow-owned adapter boundary.
+Mode-preserving copies and transforms retain the same public bytes. Mode-
+specific writes and algorithms produce the public result required for that
+operation. Select the mode strategy before entering pixel loops; do not add
+dynamic mode dispatch inside hot loops. Paste and Histogram consume physical
+lanes only when their public contracts require them. Keep codec transfer
+buffers independent and translate their layout at the Pillow-owned adapter
+boundary.
 
 ## 3. Injected execution context
 

@@ -1,5 +1,7 @@
 //! Pillow physical-byte behavior for compact mode filter outputs.
 
+use crate::raster::GenericImageView;
+
 use crate::error::PilError;
 use crate::compute::pool_cpu::helpers::bytes::hidden_lanes::default_hidden_lanes_for_bytes;
 use crate::raster::buffer::HiddenPixelLanes;

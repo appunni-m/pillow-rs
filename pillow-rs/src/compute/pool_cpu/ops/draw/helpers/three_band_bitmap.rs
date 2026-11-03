@@ -5,7 +5,7 @@ use crate::compute::pool_cpu::helpers::bytes::hidden_lanes::{
 use crate::error::PilError;
 use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{Rgb, RgbImage};
-use image::{GenericImage, GenericImageView};
+use crate::raster::{GenericImage, GenericImageView};
 
 /// Blend a three-byte raster without adding an intermediate alpha channel.
 pub(crate) fn apply(

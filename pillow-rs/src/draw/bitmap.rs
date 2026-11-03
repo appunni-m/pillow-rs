@@ -8,6 +8,15 @@ use crate::error::PilError;
 use crate::image::Image;
 use crate::ops::paste::PasteSource;
 use crate::raster::{DynamicImage, Mode};
+use image_slash_star::{ImageFormat, ImageInfo};
+
+type PalettedBitmapMetadata = (
+    Vec<u8>,
+    Vec<u8>,
+    Option<ImageFormat>,
+    Option<ImageInfo>,
+    Option<Vec<u8>>,
+);
 
 impl Draw {
     /// Draws a bitmap mask at `(x, y)` using `fill`.
@@ -28,14 +37,9 @@ impl Draw {
     ) -> Result<(), PilError> {
         let color = fill.unwrap_or((255, 255, 255, 255));
         let bmp_mode = bitmap.mode_identity()?;
-        if !matches!(
-            bmp_mode,
-            Mode::One | Mode::ImageLuma8 | Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8
-        ) {
-            return Err(PilError::ValueError("bad transparency mask".to_string()));
-        }
+        crate::compute::pool_cpu::ops::draw::ops::validate_bitmap_mask_mode(bmp_mode)?;
         let (bmp_w, bmp_h) = bitmap.size()?;
-        let mode = self.effective_mode();
+        let mode = self.effective_mode()?;
         // Pending Image pipelines keep their exact output mode on the wrapper.
         let raster_mode = self.image.mode_identity()?;
         let (requested_backend, context) = self.cpu_execution_context()?;
@@ -179,7 +183,6 @@ impl Draw {
                 )
             });
         }
-
         let mask_image = bitmap.materialized_shared()?;
         let mask = BitmapMask::new(bmp_mode, bmp_w, mask_image.as_bytes());
         if selection.is_none() {
@@ -197,7 +200,24 @@ impl Draw {
         let prepared = selection.ok_or_else(|| {
             PilError::InternalError("Draw Bitmap mode did not prepare a strategy".into())
         })?;
-        crate::compute::pool_cpu::ops::draw::ops::validate_direct_selection(prepared, raster_mode)?;
+        crate::compute::pool_cpu::ops::draw::ops::validate_direct_selection(
+            prepared,
+            raster_mode,
+        )?;
+        self.apply_prepared_bitmap(prepared, x, y, bmp_w, bmp_h, &mask, color)?;
+        Ok(prepared)
+    }
+
+    fn apply_prepared_bitmap(
+        &mut self,
+        prepared: StrategySelection,
+        x: i32,
+        y: i32,
+        bmp_w: u32,
+        bmp_h: u32,
+        mask: &BitmapMask<'_>,
+        color: (u8, u8, u8, u8),
+    ) -> Result<(), PilError> {
         let selected_mode = prepared.implementation.mode;
         let paletted = if selected_mode == Mode::ImagePalette8 {
             self.image
@@ -223,9 +243,19 @@ impl Draw {
             y,
             bmp_w,
             bmp_h,
-            &mask,
+            mask,
             color,
         )?;
+        self.install_bitmap_output(selected_mode, output, paletted)?;
+        Ok(())
+    }
+
+    fn install_bitmap_output(
+        &mut self,
+        selected_mode: Mode,
+        output: DynamicImage,
+        paletted: Option<PalettedBitmapMetadata>,
+    ) -> Result<(), PilError> {
         if selected_mode == Mode::ImagePaletteAlpha8 {
             self.replace_palette_alpha_output(output)?;
         } else if let Some((palette, palette_alpha, source_format, info, exif)) = paletted {
@@ -244,9 +274,9 @@ impl Draw {
                 materialized: crate::image::materialization_cache(),
             });
         } else {
-            self.image = Image::from_dynamic(output);
+            self.replace_draw_output(output);
         }
-        Ok(prepared)
+        Ok(())
     }
     fn try_native_rgb_bitmap(
         &mut self,
@@ -282,7 +312,7 @@ impl Draw {
         )? else {
             return Ok(false);
         };
-        self.image = Image::from_dynamic(output);
+        self.replace_draw_output(output);
         Ok(true)
     }
 
@@ -315,7 +345,7 @@ impl Draw {
                 bmp_h,
                 color,
             ) {
-                self.image = Image::from_dynamic(output);
+                self.replace_draw_output(output);
                 return Ok(true);
             }
         }

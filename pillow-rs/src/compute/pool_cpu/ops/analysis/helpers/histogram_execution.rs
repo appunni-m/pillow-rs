@@ -250,64 +250,64 @@ fn execute_pillow_histogram(
     mask_raw: Option<&[u8]>,
 ) -> Result<Vec<u32>, PilError> {
     match image {
-        DynamicImage::One(image) => super::one::ops::execute_histogram(
+        DynamicImage::One(image) => super::super::one::ops::execute_histogram(
             image, selection, mask_raw,
         ),
-        DynamicImage::ImageLuma8(image) => super::luma8::ops::execute_histogram(
+        DynamicImage::ImageLuma8(image) => super::super::luma8::ops::execute_histogram(
             image, selection, mask_raw,
         ),
-        DynamicImage::ImageLumaA8(image) => super::luma_a8::ops::execute_histogram(
+        DynamicImage::ImageLumaA8(image) => super::super::luma_a8::ops::execute_histogram(
             image, selection, mask_raw,
         ),
         DynamicImage::ImageLaPremultiplied8(image) => {
-            super::la_premultiplied8::ops::execute_histogram(image, selection, mask_raw)
+            super::super::la_premultiplied8::ops::execute_histogram(image, selection, mask_raw)
         }
-        DynamicImage::ImagePalette8(image) => super::palette8::ops::execute_histogram(
+        DynamicImage::ImagePalette8(image) => super::super::palette8::ops::execute_histogram(
             image, selection, mask_raw,
         ),
         DynamicImage::ImagePaletteAlpha8(image) => {
-            super::palette_alpha8::ops::execute_histogram(image, selection, mask_raw)
+            super::super::palette_alpha8::ops::execute_histogram(image, selection, mask_raw)
         }
-        DynamicImage::ImageRgb8(image) => super::rgb8::ops::execute_histogram(
+        DynamicImage::ImageRgb8(image) => super::super::rgb8::ops::execute_histogram(
             image, selection, mask_raw,
         ),
-        DynamicImage::ImageRgba8(image) => super::rgba8::ops::execute_histogram(
+        DynamicImage::ImageRgba8(image) => super::super::rgba8::ops::execute_histogram(
             image, selection, mask_raw,
         ),
         DynamicImage::ImageRgbPremultiplied8(image) => {
-            super::rgb_premultiplied8::ops::execute_histogram(image, selection, mask_raw)
+            super::super::rgb_premultiplied8::ops::execute_histogram(image, selection, mask_raw)
         }
-        DynamicImage::ImageRgbx8(image) => super::rgbx8::ops::execute_histogram(
+        DynamicImage::ImageRgbx8(image) => super::super::rgbx8::ops::execute_histogram(
             image, selection, mask_raw,
         ),
-        DynamicImage::ImageCmyk8(image) => super::cmyk8::ops::execute_histogram(
+        DynamicImage::ImageCmyk8(image) => super::super::cmyk8::ops::execute_histogram(
             image, selection, mask_raw,
         ),
-        DynamicImage::ImageYCbCr8(image) => super::ycbcr8::ops::execute_histogram(
+        DynamicImage::ImageYCbCr8(image) => super::super::ycbcr8::ops::execute_histogram(
             image, selection, mask_raw,
         ),
-        DynamicImage::ImageLab8(image) => super::lab8::ops::execute_histogram(
+        DynamicImage::ImageLab8(image) => super::super::lab8::ops::execute_histogram(
             image, selection, mask_raw,
         ),
-        DynamicImage::ImageHsv8(image) => super::hsv8::ops::execute_histogram(
+        DynamicImage::ImageHsv8(image) => super::super::hsv8::ops::execute_histogram(
             image, selection, mask_raw,
         ),
-        DynamicImage::ImageI32(image) => super::i32::ops::execute_histogram(
+        DynamicImage::ImageI32(image) => super::super::i32::ops::execute_histogram(
             image, selection, mask_raw,
         ),
-        DynamicImage::ImageF32(image) => super::f32::ops::execute_histogram(
+        DynamicImage::ImageF32(image) => super::super::f32::ops::execute_histogram(
             image, selection, mask_raw,
         ),
-        DynamicImage::ImageI16(image) => super::i16::ops::execute_histogram(
+        DynamicImage::ImageI16(image) => super::super::i16::ops::execute_histogram(
             image, selection, mask_raw,
         ),
-        DynamicImage::ImageI16L(image) => super::i16l::ops::execute_histogram(
+        DynamicImage::ImageI16L(image) => super::super::i16l::ops::execute_histogram(
             image, selection, mask_raw,
         ),
-        DynamicImage::ImageI16B(image) => super::i16b::ops::execute_histogram(
+        DynamicImage::ImageI16B(image) => super::super::i16b::ops::execute_histogram(
             image, selection, mask_raw,
         ),
-        DynamicImage::ImageI16N(image) => super::i16n::ops::execute_histogram(
+        DynamicImage::ImageI16N(image) => super::super::i16n::ops::execute_histogram(
             image, selection, mask_raw,
         ),
         _ => Err(PilError::InternalError(
@@ -322,19 +322,19 @@ fn execute_coreonly_histogram(
     mask_raw: Option<&[u8]>,
 ) -> Result<Vec<u32>, PilError> {
     match image {
-        DynamicImage::ImageLumaA16(image) => super::luma_a16::ops::execute_histogram(
+        DynamicImage::ImageLumaA16(image) => super::super::luma_a16::ops::execute_histogram(
             image, selection, mask_raw,
         ),
-        DynamicImage::ImageRgb16(image) => super::rgb16::ops::execute_histogram(
+        DynamicImage::ImageRgb16(image) => super::super::rgb16::ops::execute_histogram(
             image, selection, mask_raw,
         ),
-        DynamicImage::ImageRgba16(image) => super::rgba16::ops::execute_histogram(
+        DynamicImage::ImageRgba16(image) => super::super::rgba16::ops::execute_histogram(
             image, selection, mask_raw,
         ),
-        DynamicImage::ImageRgb32F(image) => super::rgb32f::ops::execute_histogram(
+        DynamicImage::ImageRgb32F(image) => super::super::rgb32f::ops::execute_histogram(
             image, selection, mask_raw,
         ),
-        DynamicImage::ImageRgba32F(image) => super::rgba32f::ops::execute_histogram(
+        DynamicImage::ImageRgba32F(image) => super::super::rgba32f::ops::execute_histogram(
             image, selection, mask_raw,
         ),
         _ => Err(PilError::InternalError(

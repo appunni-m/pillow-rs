@@ -18,7 +18,7 @@ pub(crate) fn execute(
     other: Option<&DynamicImage>,
 ) -> Result<DynamicImage, PilError> {
     match image {
-        DynamicImage::ImageLaPremultiplied8(_) => default::ops::execute(image, request, other),
+        DynamicImage::ImageLaPremultiplied8(_) => super::default::ops::execute(image, request, other),
         _ => Err(PilError::InternalError(
             "Chops mode strategy received a different raster variant".into(),
         )),

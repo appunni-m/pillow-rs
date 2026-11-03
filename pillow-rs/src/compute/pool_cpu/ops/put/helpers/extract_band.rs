@@ -69,6 +69,7 @@ pub(crate) const fn support(
 ) -> ModeSupport {
     let output = OutputModeRule::Fixed(output_mode(mode));
     match mode {
+        // NO_PILLOW_SUPPORT: preserve native high-depth samples in band extraction.
         Mode::ImageLumaA16
         | Mode::ImageRgb16
         | Mode::ImageRgba16

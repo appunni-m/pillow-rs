@@ -147,10 +147,10 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
         }
         super::super::ops::FilterRequest::MinFilter { size } => (size, 0),
         super::super::ops::FilterRequest::RankFilter { size, rank } => (size, rank),
-        _ => return default::execute(image, request),
+        _ => return super::default::execute(image, request),
     };
     match selection.implementation.architecture {
-        Architecture::Default => default::execute(image, request),
+        Architecture::Default => super::default::execute(image, request),
         Architecture::Avx2
         | Architecture::Avx
         | Architecture::Sse2

@@ -11,7 +11,7 @@ use crate::raster::{DynamicImage, Mode};
 use super::super::helpers::projection::{
     native_pixel_bytes, project_lab, project_native_bytes, project_stored_words, storage_error,
 };
-use super::super::helpers::projection::ProjectionOutput;
+pub(crate) use super::super::helpers::projection::ProjectionOutput;
 use super::{NO_INPUTS, NO_RASTER_OUTPUT};
 
 fn classify_mode(mode: Mode) -> ModeSupport {

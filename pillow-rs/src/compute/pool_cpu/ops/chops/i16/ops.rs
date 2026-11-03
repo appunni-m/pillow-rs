@@ -32,7 +32,7 @@ pub(crate) fn execute(
     };
     match request {
         super::super::ops::ChopsRequest::Offset { x, y } => match architecture {
-            Architecture::Default => default::ops::execute(image, request, other),
+            Architecture::Default => super::default::ops::execute(image, request, other),
             Architecture::Sse2 => super::sse2::execute_offset(buffer, x, y, false)
                 .map(DynamicImage::ImageI16),
             Architecture::Neon => super::neon::execute_offset(buffer, x, y, false)
@@ -45,7 +45,7 @@ pub(crate) fn execute(
                 "Chops Offset selected an unsupported architecture".into(),
             )),
         },
-        _ if architecture == Architecture::Default => default::ops::execute(image, request, other),
+        _ if architecture == Architecture::Default => super::default::ops::execute(image, request, other),
         _ => Err(PilError::InternalError(
             "Chops mode strategy selected an architecture without an implementation".into(),
         )),

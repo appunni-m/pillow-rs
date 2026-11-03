@@ -58,7 +58,7 @@ impl Draw {
         outline: Option<(u8, u8, u8, u8)>,
         _width: u32,
     ) -> Result<(), PilError> {
-        let (fill, outline) = self.shape_inks(fill, outline);
+        let (fill, outline) = self.shape_inks(fill, outline)?;
         self.image = Image::push_op(
             &self.image,
             PipelineOp::DrawChord {
@@ -95,7 +95,7 @@ impl Draw {
         outline: Option<(u8, u8, u8, u8)>,
         _width: u32,
     ) -> Result<(), PilError> {
-        let (fill, outline) = self.shape_inks(fill, outline);
+        let (fill, outline) = self.shape_inks(fill, outline)?;
         self.image = Image::push_op(
             &self.image,
             PipelineOp::DrawPieslice {
@@ -131,7 +131,7 @@ impl Draw {
         outline: Option<(u8, u8, u8, u8)>,
         _width: u32,
     ) -> Result<(), PilError> {
-        let (fill, outline) = self.shape_inks(fill, outline);
+        let (fill, outline) = self.shape_inks(fill, outline)?;
         self.image = Image::push_op(
             &self.image,
             PipelineOp::DrawCircle {
@@ -195,7 +195,7 @@ impl Draw {
                 "y1 must be greater than or equal to y0".into(),
             ));
         }
-        let (fill, outline) = self.shape_inks(fill, outline);
+        let (fill, outline) = self.shape_inks(fill, outline)?;
         let r = radius.round() as i32;
         let mut d = r * 2;
         // ImagingDrawRoundedRectangle joins the corners before deciding

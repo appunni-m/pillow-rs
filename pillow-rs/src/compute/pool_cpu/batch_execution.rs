@@ -1,5 +1,7 @@
 //! Serial composition of prepared CPU operation strategies.
 
+use crate::raster::GenericImageView;
+
 use crate::compute::pool_cpu::ops::imageops::helpers::hidden_lanes as imageops_hidden_lanes;
 use crate::compute::registry::support::{OperationInputs, PaletteInput, StrategySelection};
 use crate::compute::{
@@ -667,7 +669,7 @@ fn execute_transpose_run(
         }));
     };
 
-    let strategy = match super::ops::transpose::prepare_transpose(image, &method, context) {
+    let strategy = match super::ops::transpose::ops::prepare_transpose(image, &method, context) {
         Ok(strategy) => strategy,
         Err(error) => {
             finish_failed_unprepared_run(&ops[start..end]);

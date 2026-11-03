@@ -1,5 +1,7 @@
 //! Serial native-sample Sharpness kernels shared by exact-mode strategies.
 
+use crate::raster::GenericImageView;
+
 use crate::error::PilError;
 use crate::compute::pool_cpu::helpers::bytes::hidden_lanes::default_hidden_pixel_lanes;
 use crate::raster::buffer::HiddenPixelLanes;

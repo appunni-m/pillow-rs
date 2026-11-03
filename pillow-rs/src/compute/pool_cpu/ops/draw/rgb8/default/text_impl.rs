@@ -4,7 +4,7 @@ use crate::compute::pool_cpu::helpers::bytes::hidden_lanes::{
 use crate::compute::pool_cpu::ops::draw::{TextComposeResult, text_coords};
 use crate::draw::blend_u8;
 use crate::raster::DynamicImage;
-use image::GenericImageView;
+use crate::raster::GenericImageView;
 
 pub(crate) fn apply<const RGBA_MASK: bool>(
     image: DynamicImage,

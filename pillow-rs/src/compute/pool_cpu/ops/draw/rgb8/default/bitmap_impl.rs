@@ -6,7 +6,7 @@ use crate::compute::pool_cpu::helpers::bytes::preblend;
 use crate::compute::pool_cpu::ops::draw::{BitmapMask, BitmapRegion};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode, RgbImage};
-use image::GenericImageView;
+use crate::raster::GenericImageView;
 
 enum NativeMask<'a> {
     One(&'a [u8]),

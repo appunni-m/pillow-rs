@@ -5,7 +5,7 @@ use crate::compute::pool_cpu::helpers::bytes::hidden_lanes::{
 use crate::error::PilError;
 use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{GrayAlphaImage, Pixel, Rgb};
-use image::{GenericImage, GenericImageView};
+use crate::raster::{GenericImage, GenericImageView};
 
 /// Write a gray-alpha carrier without changing its exact mode identity.
 pub(crate) fn apply(

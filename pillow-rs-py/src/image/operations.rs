@@ -22,7 +22,6 @@ pub(super) struct PyPasteBoxPlan {
 pub(super) struct PyPasteSourcePlan {
     prepared: Option<pillow_rs::PasteSourcePlan>,
     deferred_source: Option<pyo3::Py<PyAny>>,
-    has_mask: bool,
 }
 
 #[pyclass(name = "_ThumbnailPlan", frozen)]
@@ -251,7 +250,6 @@ impl PyImage {
     fn _paste_prepare_source(
         &self,
         source: &Bound<'_, PyAny>,
-        has_mask: bool,
         is_image_source: bool,
     ) -> PyResult<PyPasteSourcePlan> {
         let mode = self.inner.mode_identity().map_err(map_error)?;
@@ -263,17 +261,15 @@ impl PyImage {
             return Ok(PyPasteSourcePlan {
                 prepared: None,
                 deferred_source: Some(source.clone().unbind()),
-                has_mask,
             });
         };
         let prepared = self
             .inner
-            .prepare_paste_source(source_input, has_mask)
+            .prepare_paste_source(source_input)
             .map_err(map_error)?;
         Ok(PyPasteSourcePlan {
             prepared: Some(prepared),
             deferred_source: None,
-            has_mask,
         })
     }
 
@@ -289,7 +285,6 @@ impl PyImage {
         Ok(PyPasteSourcePlan {
             prepared: Some(prepared),
             deferred_source: None,
-            has_mask: false,
         })
     }
 
@@ -323,7 +318,7 @@ impl PyImage {
                 let mode = self.inner.mode_identity().map_err(map_error)?;
                 let input = paste_source_from_python(&source, mode)?;
                 self.inner
-                    .prepare_paste_source(input, source_plan.has_mask)
+                    .prepare_paste_source(input)
                     .map_err(map_error)?
             }
         };
