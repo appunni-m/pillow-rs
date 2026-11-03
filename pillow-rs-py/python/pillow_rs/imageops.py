@@ -106,8 +106,10 @@ def expand(image: Image, border=0, fill=0) -> Image:
     output = Image(_core.ops_expand_canvas(size, prepared_fill))
     output.paste(image, (left, top))
     output.load()
-    # TODO(pillow-rs#3ptb): account for mode changes during palette access;
-    # verify malformed palette errors, metadata mutation, and changed-mode
+    # TODO(pillow-rs#3ptb): preserve the mode used by _color separately from
+    # the later Image.new mode; run copied-palette getcolor overrides in
+    # Python, and defer non-string fill validation until after size checks.
+    # Verify malformed palette faults, metadata changes, and changed-mode
     # source behavior in the frozen CPU parity matrix.
     return output
 

@@ -269,9 +269,11 @@ fn resolve_expand_palette_fill(
 ) -> Result<Option<(u8, Vec<u8>, Option<Vec<u8>>)>, PilError> {
     // The Python adapter converts the fill before committing a dirty palette,
     // then this stage looks up or appends the color in that committed snapshot.
-    // TODO(pillow-rs#3ptb): handle source mode changes during palette access;
-    // verify dirty/raw palette error order, malformed buffers, and output
-    // metadata. Keep canvas-before-source-load ordering in frozen parity cases.
+    // TODO(pillow-rs#3ptb): keep the mode used to parse a string fill separate
+    // from the later Image.new target mode; palette callbacks may change the
+    // wrapper between them. Preserve the original color value type until
+    // Image.new validation, and let Python palette overrides own getcolor.
+    // Verify dirty/raw palette faults, malformed buffers, and output metadata.
     if fill_rule != ExpandFillRule::PaletteIndexOrColor {
         return Ok(None);
     }
