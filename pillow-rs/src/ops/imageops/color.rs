@@ -388,7 +388,10 @@ fn resolve_color_components(values: &[i64], mode: Mode) -> Result<(u8, u8, u8, u
             if !is_luma_mode(mode)
                 && !matches!(
                     mode,
-                    Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImageLumaA16
+                    Mode::ImageLumaA8
+                        | Mode::ImageLaPremultiplied8
+                        | Mode::ImagePaletteAlpha8
+                        | Mode::ImageLumaA16
                 ) =>
         {
             let alpha = if matches!(
@@ -418,7 +421,7 @@ fn resolve_palette_tuple_fill(
     Ok((0, 0, 0, u8::MAX))
 }
 
-fn resolve_palette_tuple_bytes(
+pub(crate) fn resolve_palette_tuple_bytes(
     values: &[crate::image::PaletteColorComponent],
 ) -> Result<[u8; 3], PilError> {
     let rgb = match values {
@@ -557,11 +560,14 @@ fn is_luma_mode(mode: Mode) -> bool {
 fn invalid_color(mode: Mode) -> PilError {
     if mode == Mode::ImageF32 {
         PilError::TypeError("must be real number, not tuple".into())
-    } else if is_luma_mode(mode) {
+    } else if is_luma_mode(mode) || mode == Mode::ImagePalette8 {
         PilError::TypeError("color must be int or single-element tuple".into())
     } else if matches!(
         mode,
-        Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImageLumaA16
+        Mode::ImageLumaA8
+            | Mode::ImageLaPremultiplied8
+            | Mode::ImagePaletteAlpha8
+            | Mode::ImageLumaA16
     ) {
         PilError::TypeError("color must be int, or tuple of one or two elements".into())
     } else {

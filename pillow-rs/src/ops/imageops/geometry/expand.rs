@@ -97,22 +97,81 @@ pub fn resolve_expand_fill_palette(
 #[doc(hidden)]
 pub fn finish_expand_fill_palette_from_host(
     mode: Mode,
-    prepared: PreparedExpandFill,
+    mut prepared: PreparedExpandFill,
 ) -> Result<PreparedExpandFill, PilError> {
     if mode != prepared.mode {
         return Err(PilError::InternalError(
             "Expand fill was prepared for a different image mode".into(),
         ));
     }
-    if prepared.fill_rule == ExpandFillRule::PaletteIndexOrColor
-        && super::color::palette_fill_components(&prepared.input)?.is_some()
-    {
-        // TODO(pillow-rs#3ptb): freeze P/PA fills when a subclass suppresses
-        // `image.palette`; match Pillow's exact Image.new tuple-fill fault.
-        return Err(PilError::ValueError("unknown color specifier".into()));
+    if prepared.fill_rule == ExpandFillRule::PaletteIndexOrColor {
+        if let Some(components) = super::color::palette_fill_components(&prepared.input)? {
+            match mode {
+                Mode::ImagePalette8 if uses_new_palette_color(&prepared.input, &components) => {
+                    // Image.new("P", ..., tuple_or_list) creates a temporary
+                    // RGB palette when ImageOps did not resolve the fill
+                    // through an existing palette callback.
+                    let palette = super::color::resolve_palette_tuple_bytes(&components)?;
+                    prepared.fill = (0, 0, 0, u8::MAX);
+                    prepared.native_fill = None;
+                    prepared.output_palette = Some((Some(palette.to_vec()), None));
+                }
+                Mode::ImagePalette8 => {
+                    return Err(PilError::TypeError(
+                        "color must be int or single-element tuple".into(),
+                    ));
+                }
+                Mode::ImagePaletteAlpha8 => {
+                    return Err(palette_alpha_fill_error(&prepared.input));
+                }
+                _ => {
+                    return Err(PilError::InternalError(
+                        "Expand palette fill rule was assigned to a non-palette mode".into(),
+                    ));
+                }
+            }
+        }
     }
     prepared.palette_resolved = true;
     Ok(prepared)
+}
+
+fn uses_new_palette_color(
+    input: &ImageOpsColor,
+    components: &[crate::image::PaletteColorComponent],
+) -> bool {
+    if !matches!(components.len(), 3 | 4) {
+        return false;
+    }
+    let integer_components = components.iter().all(|component| {
+        matches!(
+            component,
+            crate::image::PaletteColorComponent::Integer(_)
+                | crate::image::PaletteColorComponent::WideInteger { .. }
+        )
+    });
+    match input {
+        ImageOpsColor::Name(_)
+        | ImageOpsColor::Components(_)
+        | ImageOpsColor::TupleComponents(_)
+        | ImageOpsColor::ListComponents(_) => true,
+        ImageOpsColor::TupleNumericComponents(_)
+        | ImageOpsColor::TupleComponentsWithFallback { .. }
+        | ImageOpsColor::WideTupleComponents { .. }
+        | ImageOpsColor::ListNumericComponents(_) => integer_components,
+        _ => false,
+    }
+}
+
+fn palette_alpha_fill_error(input: &ImageOpsColor) -> PilError {
+    if matches!(
+        input,
+        ImageOpsColor::ListComponents(_) | ImageOpsColor::ListNumericComponents(_)
+    ) {
+        PilError::TypeError("color must be int or tuple".into())
+    } else {
+        PilError::TypeError("color must be int, or tuple of one or two elements".into())
+    }
 }
 
 /// Checks the allocation dimensions against the mode captured for `Image.new`.
