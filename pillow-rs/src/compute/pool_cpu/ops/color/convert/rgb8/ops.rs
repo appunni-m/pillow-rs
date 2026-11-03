@@ -422,7 +422,7 @@ pub(crate) unsafe fn execute(
     target: Mode,
     selection: StrategySelection,
 ) -> Result<DynamicImage, PilError> {
-    match selection.implementation.architecture {
+    let mut output = match selection.implementation.architecture {
         Architecture::Default => super::default::convert_impl::execute(source, target),
         #[cfg(any(target_arch = "x86_64", all(target_arch = "x86", target_feature = "sse2")))]
         Architecture::Sse2 => super::sse2::convert_impl::execute(source, target),
@@ -451,7 +451,9 @@ pub(crate) unsafe fn execute(
         _ => Err(PilError::InternalError(
             "Convert selected an undeclared RGB8 architecture".into(),
         )),
-    }
+    }?;
+    super::super::helpers::physical_lanes::preserve_compact_rgb_lane(source, target, &mut output)?;
+    Ok(output)
 }
 
 pub(crate) fn execute_palette_target(

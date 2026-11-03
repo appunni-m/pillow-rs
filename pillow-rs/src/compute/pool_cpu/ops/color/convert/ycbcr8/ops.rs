@@ -70,12 +70,14 @@ pub(crate) fn execute(
     target: Mode,
     selection: StrategySelection,
 ) -> Result<DynamicImage, PilError> {
-    match selection.implementation.architecture {
+    let mut output = match selection.implementation.architecture {
         Architecture::Default => super::default::convert_impl::execute(source, target),
         _ => Err(PilError::InternalError(
             "Convert selected an undeclared YCbCr8 architecture".into(),
         )),
-    }
+    }?;
+    super::super::helpers::physical_lanes::preserve_compact_rgb_lane(source, target, &mut output)?;
+    Ok(output)
 }
 
 pub(crate) fn execute_palette_target(

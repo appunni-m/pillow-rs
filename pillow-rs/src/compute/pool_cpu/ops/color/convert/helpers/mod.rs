@@ -10,6 +10,7 @@ pub(crate) mod luma16;
 pub(crate) mod matrix;
 pub(crate) mod native_rgb;
 pub(crate) mod palette;
+pub(crate) mod physical_lanes;
 pub(crate) mod pixel;
 pub(crate) mod prepared;
 pub(crate) mod premultiplied;

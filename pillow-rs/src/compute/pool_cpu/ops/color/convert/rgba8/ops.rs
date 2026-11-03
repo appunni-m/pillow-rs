@@ -252,7 +252,7 @@ pub(crate) unsafe fn execute(
     target: Mode,
     selection: StrategySelection,
 ) -> Result<DynamicImage, PilError> {
-    match selection.implementation.architecture {
+    let mut output = match selection.implementation.architecture {
         Architecture::Default => super::default::convert_impl::execute(source, target),
         #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "avx2"))]
         Architecture::Avx2 if target == Mode::ImageLuma8 => {
@@ -282,5 +282,13 @@ pub(crate) unsafe fn execute(
         _ => Err(PilError::InternalError(
             "Convert selected an undeclared RGBA architecture".into(),
         )),
-    }
+    }?;
+    super::super::helpers::physical_lanes::preserve_fourth_byte(
+        source.as_raw(),
+        source.width(),
+        source.height(),
+        target,
+        &mut output,
+    )?;
+    Ok(output)
 }
