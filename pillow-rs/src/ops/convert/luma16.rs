@@ -38,7 +38,7 @@ pub(super) fn try_convert_to_luma16(
 }
 
 fn execute_declared_source_strategy(image: &Image, target_mode: Mode) -> Result<Image, PilError> {
-    let source = image.materialized_shared_for_ops()?;
+    let (source, mut operation_receipts) = image.materialized_shared_for_ops_with_receipts()?;
     let operation = crate::pipeline::PipelineOp::Convert {
         mode: target_mode,
         matrix: None,
@@ -60,12 +60,13 @@ fn execute_declared_source_strategy(image: &Image, target_mode: Mode) -> Result<
             context.architecture()
         )
     });
-    let output = crate::compute::execute_eager_cpu_arch_image_operation_with_context(
+    let output = crate::compute::execute_eager_cpu_arch_image_operation_with_context_and_receipts(
         "Convert",
         source.as_ref(),
         context,
         requested_backend,
         fallback_reason,
+        &mut operation_receipts,
         |context| {
             let prepared = crate::compute::registry::prepare_cpu(&operation, input, context)?;
             let selection = *prepared.selection();

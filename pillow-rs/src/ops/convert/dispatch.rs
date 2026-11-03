@@ -29,7 +29,7 @@ pub(super) fn try_convert_scalar_to_rgbx(
         return Ok(None);
     }
 
-    let source = image.materialized_shared_for_ops()?;
+    let (source, mut operation_receipts) = image.materialized_shared_for_ops_with_receipts()?;
     let operation = PipelineOp::Convert {
         mode: Mode::ImageRgbx8,
         matrix: None,
@@ -42,12 +42,13 @@ pub(super) fn try_convert_scalar_to_rgbx(
             alpha: &[],
         },
     };
-    let raster = crate::compute::execute_eager_cpu_arch_image_operation_with_context(
+    let raster = crate::compute::execute_eager_cpu_arch_image_operation_with_context_and_receipts(
         "Convert",
         source.as_ref(),
         context,
         requested_backend,
         None,
+        &mut operation_receipts,
         |context| {
             let prepared = crate::compute::registry::prepare_cpu(&operation, input, context)?;
             let selection = *prepared.selection();

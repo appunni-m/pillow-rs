@@ -1611,3 +1611,14 @@ Source-only; no compilation, formatting, lint, test, parity, benchmark, or
 coverage ran.
 
 - Raster mutable escape audit (2026-11-04): `pixels_mut`, pixel/row enumerators, `rows_mut`, `get_pixel_mut`, its checked form, `put_pixel`, `IndexMut`, and `DerefMut` all invalidate retained hidden lanes before exposing mutable samples. `Clone`/`clone_from` preserve data and lanes together; `from_raw` begins without lane provenance; consuming `into_raw` drops the sidecar with the buffer. The only non-invalidating pixel writer is crate-private and called by `DynamicImage::put_pixel`, which updates the lane sidecar from its exact Mode. Source audit complete; downstream Paste/Histogram output parity remains pending. No runtime checks ran.
+
+Eager Convert receipt continuation (2026-11-04): operation-ready materialization
+now has a receipt-capturing form, and the direct CPU strategy routes for One,
+I;16 targets, palette targets, nonstandard compositions, scalar-to-RGBX, and
+matrix conversion restore source graph receipts before recording the selected
+Convert strategy. The bilevel matrix route keeps its existing native One-to-L
+normalization and now carries the original image's injected Backend and
+Architecture into the matrix child instead of rerouting through a temporary
+Image wrapper. Other eager architecture callers still need source-receipt and
+context propagation review. Source-only; no build, formatting, checkstyle,
+lint, tests, parity, benchmark, or coverage ran.

@@ -89,7 +89,7 @@ pub(super) fn convert_prepared_palette(
     } else {
         None
     };
-    let source = image.materialized_shared_for_ops()?;
+    let (source, mut operation_receipts) = image.materialized_shared_for_ops_with_receipts()?;
     if should_parse_dither && !parse_before_materialize {
         // Scalar I/F and nonstandard-to-P conversions normalized their source
         // before parsing dither; retain that validation order in the prepared route.
@@ -125,12 +125,13 @@ pub(super) fn convert_prepared_palette(
         )
     });
     let mut palette_output = None;
-    let raster = crate::compute::execute_eager_cpu_arch_image_operation_with_context(
+    let raster = crate::compute::execute_eager_cpu_arch_image_operation_with_context_and_receipts(
         "Convert",
         source.as_ref(),
         context,
         selected_backend,
         fallback_reason,
+        &mut operation_receipts,
         |context| {
             let prepared = crate::compute::registry::prepare_cpu(&operation, input, context)?;
             let selection = *prepared.selection();

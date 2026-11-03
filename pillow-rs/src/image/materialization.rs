@@ -12,6 +12,7 @@ use crate::pipeline::{PipelineOp, ResampleFilter, TransformMethod};
 use crate::raster::{DynamicImage, Mode};
 
 mod palette_output;
+mod receipts;
 use palette_output::{evaluate_palette_target_convert, retain_preserved_palette_metadata};
 
 use super::{

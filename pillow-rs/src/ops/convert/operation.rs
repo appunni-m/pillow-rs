@@ -1,7 +1,7 @@
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
-use crate::raster::Mode;
+use crate::raster::{DynamicImage, Mode};
 
 use super::input::parse_dither;
 use super::mode::{is_convert_target_mode, is_luma16_mode, is_nonstandard_mode};
@@ -166,22 +166,24 @@ fn try_convert_prestandard(
     // Preserve the archived matrix path's L normalization for bilevel data.
     // Ordinary conversions use the native One strategy, which expands each
     // stored nonzero sample directly into the destination's native layout.
-    if source_mode == Mode::One && matrix.is_some() {
+    if source_mode == Mode::One && let Some(matrix) = matrix {
         // Preserve Pillow's archived bilevel normalization before selecting
         // the prepared matrix strategy for its resulting L source.
-        let materialized = image.materialize()?;
+        let (materialized, mut operation_receipts) =
+            image.materialized_shared_for_ops_with_receipts()?;
         let mut gray = crate::raster::GrayImage::new(materialized.width(), materialized.height());
         for (output, input) in gray.pixels_mut().zip(materialized.to_luma8().pixels()) {
             output[0] = if input[0] != 0 { 255 } else { 0 };
         }
         let expanded = crate::raster::DynamicImage::ImageLuma8(gray);
-        return Ok(Some(Image::from_dynamic(expanded).convert(
+        return execute_matrix_conversion_from_source(
+            image,
+            &expanded,
             target_mode,
-            matrix.clone(),
-            dither,
-            None,
-            None,
-        )?));
+            matrix,
+            &mut operation_receipts,
+        )
+        .map(Some);
     }
 
     // Pillow applies the matrix before its same-mode fast path.
@@ -203,7 +205,24 @@ fn execute_matrix_conversion(
     target_mode: Mode,
     matrix: &[f64],
 ) -> Result<Image, PilError> {
-    let materialized = image.materialize()?;
+    let (materialized, mut operation_receipts) =
+        image.materialized_shared_for_ops_with_receipts()?;
+    execute_matrix_conversion_from_source(
+        image,
+        materialized.as_ref(),
+        target_mode,
+        matrix,
+        &mut operation_receipts,
+    )
+}
+
+fn execute_matrix_conversion_from_source(
+    image: &Image,
+    materialized: &DynamicImage,
+    target_mode: Mode,
+    matrix: &[f64],
+    operation_receipts: &mut crate::compute::PipelineOperationTelemetryCapture,
+) -> Result<Image, PilError> {
     if !matches!(target_mode, Mode::ImageLuma8 | Mode::ImageRgb8) {
         return Err(PilError::ValueError(format!(
             "Matrix must be 4 or 12 elements, got {}",
@@ -212,11 +231,11 @@ fn execute_matrix_conversion(
     }
     let operation = PipelineOp::Convert {
         mode: target_mode,
-                matrix: Some(matrix.to_vec().into()),
+        matrix: Some(matrix.to_vec().into()),
         dither: None,
     };
     let inputs = crate::compute::registry::support::OperationInputs {
-        image: &materialized,
+        image: materialized,
         palette: crate::compute::registry::support::PaletteInput::default(),
     };
     // Matrix conversion is currently CPU-owned. Preserve an explicit SIMD
@@ -231,12 +250,13 @@ fn execute_matrix_conversion(
             context.architecture()
         )
     });
-    let result = crate::compute::execute_eager_cpu_arch_image_operation_with_context(
+    let result = crate::compute::execute_eager_cpu_arch_image_operation_with_context_and_receipts(
         "Convert",
-        &materialized,
+        materialized,
         context,
         requested_backend,
         fallback_reason,
+        operation_receipts,
         |context| {
             let prepared = crate::compute::registry::prepare_cpu(&operation, inputs, context)?;
             let selection = *prepared.selection();

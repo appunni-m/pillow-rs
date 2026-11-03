@@ -13,7 +13,8 @@ use crate::raster::{DynamicImage, Mode};
 /// A lazy source is a separate image graph: `materialized_shared_for_ops`
 /// evaluates it through that graph's stored Backend request, and
 /// `prepare_execution` resolves the routed Backend/Architecture context before
-/// this composition executes its child with the context captured here.
+/// this composition executes its child with the context captured here. Source
+/// operation receipts are restored before the child strategy receipt.
 pub(super) fn execute_eager_convert_composition(
     image: &Image,
     source_mode: Mode,
@@ -28,7 +29,7 @@ pub(super) fn execute_eager_convert_composition(
         None
     };
     let (requested_backend, context) = image.cpu_arch_execution_route_advisory();
-    let source = image.materialized_shared_for_ops()?;
+    let (source, mut operation_receipts) = image.materialized_shared_for_ops_with_receipts()?;
     let palette = if matches!(source_mode, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8) {
         image.palette()
     } else {
@@ -60,12 +61,13 @@ pub(super) fn execute_eager_convert_composition(
             context.architecture()
         )
     });
-    let output = crate::compute::execute_eager_cpu_arch_image_operation_with_context(
+    let output = crate::compute::execute_eager_cpu_arch_image_operation_with_context_and_receipts(
         "Convert",
         source.as_ref(),
         context,
         requested_backend,
         fallback_reason,
+        &mut operation_receipts,
         |context| {
             let prepared = crate::compute::registry::prepare_cpu(&operation, inputs, context)?;
             let selection = *prepared.selection();
