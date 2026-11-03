@@ -256,14 +256,21 @@ impl Draw {
         let (requested_backend, context) = self.cpu_execution_context()?;
         let telemetry =
             crate::compute::begin_eager_cpu_operation_telemetry("DrawText", requested_backend);
+        let mut operation_receipts =
+            crate::compute::PipelineOperationTelemetryCapture::begin_preserving_current();
         let result =
             self.text_with_options_inner_selected(x, y, text, font, fill, options, &context);
+        let output_bytes = if result.is_ok() {
+            self.image
+                .materialized_shared()
+                .map_or(0, |image| image.as_bytes().len())
+        } else {
+            0
+        };
+        operation_receipts.capture();
+        operation_receipts.restore();
         match result {
             Ok((dimensions, selection)) => {
-                let output_bytes = self
-                    .image
-                    .materialized_shared()
-                    .map_or(0, |image| image.as_bytes().len());
                 if let Some(selection) = selection {
                     crate::compute::finish_eager_cpu_operation_telemetry_with_selection(
                         telemetry,

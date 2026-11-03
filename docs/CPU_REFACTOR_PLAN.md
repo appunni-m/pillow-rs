@@ -1647,8 +1647,13 @@ Terminal pixel read and projection receipts (2026-11-04): `getpixel`,
 `getpixel_formatted`, numeric `putpixel`, and the lazy `getprojection` route
 now retain completed source-pipeline operation receipts when starting their
 terminal CPU receipt. Loaded-only fast paths keep their existing behavior.
-TODO(pillow-rs#3ptb): finish receipt review for callback-driven PutData and
-Draw operations that synchronously load or materialize an existing lazy image;
-preserve per-item callback visibility and current fault ordering. Source-only;
-no build, formatting, checkstyle, lint, tests, parity, benchmark, or coverage
-ran.
+
+Draw nested receipts (2026-11-04): direct DrawBitmap and DrawText execution
+now suspends its active terminal receipt while destination, mask, and output
+images materialize, then restores the nested graph receipts in order before
+finishing the Draw receipt. The compatible Bitmap-to-Paste route continues to
+use Paste's own operation receipts. No drawing algorithm or public fault order
+changed. TODO(pillow-rs#3ptb): finish receipt review for callback-driven PutData
+paths that synchronously load an existing lazy image while preserving per-item
+callback visibility and current fault ordering. Source-only; no build,
+formatting, checkstyle, lint, tests, parity, benchmark, or coverage ran.

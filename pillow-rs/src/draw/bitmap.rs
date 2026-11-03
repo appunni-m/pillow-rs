@@ -77,6 +77,8 @@ impl Draw {
 
         let telemetry =
             crate::compute::begin_eager_cpu_operation_telemetry("DrawBitmap", requested_backend);
+        let mut operation_receipts =
+            crate::compute::PipelineOperationTelemetryCapture::begin_preserving_current();
         let result = self.bitmap_cpu(
             x,
             y,
@@ -89,12 +91,17 @@ impl Draw {
             raster_mode,
             &context,
         );
+        let output_bytes = if result.is_ok() {
+            self.image
+                .materialized_shared()
+                .map_or(0, |image| image.as_bytes().len())
+        } else {
+            0
+        };
+        operation_receipts.capture();
+        operation_receipts.restore();
         match result {
             Ok(selection) => {
-                let output_bytes = self
-                    .image
-                    .materialized_shared()
-                    .map_or(0, |image| image.as_bytes().len());
                 crate::compute::finish_eager_cpu_operation_telemetry_with_selection(
                     telemetry,
                     output_bytes,
