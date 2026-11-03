@@ -1655,7 +1655,13 @@ now suspends its active terminal receipt while destination, mask, and output
 images materialize, then restores the nested graph receipts in order before
 finishing the Draw receipt. The compatible Bitmap-to-Paste route continues to
 use Paste's own operation receipts. No drawing algorithm or public fault order
-changed. TODO(pillow-rs#3ptb): finish receipt review for callback-driven PutData
-paths that synchronously load an existing lazy image while preserving per-item
-callback visibility and current fault ordering. Source-only; no build,
-formatting, checkstyle, lint, tests, parity, benchmark, or coverage ran.
+changed.
+
+One-shot PutData receipt (2026-11-04): the I;16 raw-byte fast path captures
+source graph receipts across its synchronous load and restores them before
+recording its selected PutData strategy. Validation and load-before-selection
+ordering remain unchanged. TODO(pillow-rs#3ptb): callback-driven PutData writes
+still record one synchronous write at a time. Define and preserve how source
+graph and earlier write receipts aggregate across a sequence while retaining
+per-item callback visibility and fault order. Source-only; no build, formatting,
+checkstyle, lint, tests, parity, benchmark, or coverage ran.

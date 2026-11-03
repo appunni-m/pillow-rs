@@ -4,8 +4,9 @@ use super::{
     putdata_byte_width, putdata_bytes, putdata_hidden_lane_bytes, putdata_hidden_lanes,
     unsupported_putdata_mode,
 };
-use crate::raster::Mode;
+use crate::compute::PipelineOperationTelemetryCapture;
 use crate::image::PutDataExecutionContext;
+use crate::raster::Mode;
 
 impl Image {
     /// Queues replacement pixel data from a flat byte sequence.
@@ -298,7 +299,9 @@ impl Image {
         self.validate_putdata_length(entry_count)?;
         let mode = self.mode_identity()?;
         let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
+        let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
         self.load()?;
+        operation_receipts.capture();
         if let Image::Loaded(image_data) = self {
             let selection = crate::compute::pool_cpu::ops::put::ops::select_put_data_l16_bytes(
                 mode,
@@ -313,12 +316,13 @@ impl Image {
                 selection,
             )?;
             image_data.known_zero_fill = false;
-            crate::compute::record_eager_cpu_operation_receipt_with_selection(
+            crate::compute::record_eager_cpu_operation_receipt_with_selection_and_receipts(
                 "PutData",
                 requested_backend,
                 0,
                 "I;16 byte writes update host storage synchronously",
                 selection,
+                operation_receipts,
             );
             return Ok(());
         }
