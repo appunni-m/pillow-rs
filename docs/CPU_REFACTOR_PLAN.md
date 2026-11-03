@@ -1452,3 +1452,12 @@ path are unchanged. This source-only move is not compiled or parity-validated.
 Resize legacy-wrapper source cleanup (2026-11-03): `ops::pil_resize::resize` and the boxed wrapper were already gated to tests; source tracing found the old `integer_modes` reducers had no production consumers once the prepared CPU mode strategies were active. Gated that module to tests as well, retaining the shared low-level helpers used by the maintained CPU owners. Source-only; the full CPU source review and verification gates remain open.
 
 Resize strategy-selection continuation (2026-11-03): Resize architecture guards now consume the retained `StrategySelection`, verify CPU/Resize/requested-architecture identity against `ExecutionContext`, and return the selected implementation architecture for local dispatch. The ImageI32 AVX/FMA and NEON kernels and ImageF32 AVX/FMA kernel now receive the selection instead of a bare `Architecture`; their arithmetic paths are unchanged. A static scan of 242 active Resize source files found no raw `Architecture` function parameters or old context-plus-architecture guard calls. Source-only; no build, formatter, checkstyle, lint, tests, parity, benchmark, or coverage ran.
+
+Rotate/Transform sidecar selection-context follow-up (2026-11-03): prepared
+Rotate and Transform now pass their retained `StrategySelection` into the
+hidden physical-lane composition helpers. Those helpers validate operation,
+exact mode, and CPU backend before selecting the architecture-specific nearest
+lane sampler. Filtering and pixel kernels are unchanged. Static source review
+found no bare `Architecture` parameters in the helpers or prepared call sites;
+`git diff --check` passed. Source-only; no build, formatter, checkstyle, lint,
+tests, parity, benchmark, or coverage ran.

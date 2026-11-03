@@ -1,7 +1,8 @@
 //! Pillow physical-byte behavior for compact-carrier Transform modes.
 
 use super::{affine, projective, vector_affine_nearest, vector_projective_nearest};
-use crate::compute::Architecture;
+use crate::compute::{Architecture, Backend};
+use crate::compute::registry::support::{OperationId, StrategySelection};
 use crate::compute::pool_cpu::ops::transform::ops::TransformRequest;
 use crate::error::PilError;
 use crate::pipeline::{ResampleFilter, TransformMethod};
@@ -19,9 +20,10 @@ pub(crate) fn finish(
     source: &DynamicImage,
     output: &mut DynamicImage,
     request: TransformRequest<'_>,
-    architecture: Architecture,
+    selection: &StrategySelection,
 ) -> Result<(), PilError> {
     let mode = source.mode();
+    validate_selection(selection, mode)?;
     if output.mode() != mode {
         return Err(PilError::InternalError(
             "Transform output changed its source mode".into(),
@@ -35,11 +37,11 @@ pub(crate) fn finish(
         Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => {
             if matches!(request.filter, ResampleFilter::Nearest) {
                 match source.hidden_pixel_lanes() {
-                    Some(_) => sample_source_lanes::<2>(source, mode, request, architecture)?,
+                    Some(_) => sample_source_lanes::<2>(source, mode, request, selection)?,
                     None if two_band_fill_matches_luma(mode, request) => {
                         repeat_first_sample(output, pixel_count, lane_count)?
                     }
-                    None => sample_source_lanes::<2>(source, mode, request, architecture)?,
+                    None => sample_source_lanes::<2>(source, mode, request, selection)?,
                 }
             } else {
                 repeat_first_sample(output, pixel_count, lane_count)?
@@ -47,7 +49,7 @@ pub(crate) fn finish(
         }
         Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => {
             if matches!(request.filter, ResampleFilter::Nearest) {
-                sample_source_lanes::<1>(source, mode, request, architecture)?
+                sample_source_lanes::<1>(source, mode, request, selection)?
             } else {
                 let fill = hidden_fill(mode, request)[0];
                 HiddenPixelLanes::constant(lane_count, pixel_count, [fill, 0])
@@ -73,8 +75,9 @@ fn sample_source_lanes<const CHANNELS: usize>(
     source: &DynamicImage,
     mode: Mode,
     request: TransformRequest<'_>,
-    architecture: Architecture,
+    selection: &StrategySelection,
 ) -> Result<HiddenPixelLanes, PilError> {
+    let architecture = selection.implementation.architecture;
     let raw = source_lane_plane(source, mode, CHANNELS)?;
     let fill = hidden_fill(mode, request);
     let fill = [fill[0], fill[1], 0, 0];
@@ -87,6 +90,23 @@ fn sample_source_lanes<const CHANNELS: usize>(
     };
     HiddenPixelLanes::per_pixel(CHANNELS, pixel_count_from_request(request)?, bytes)
         .ok_or_else(invalid_lanes)
+}
+
+fn validate_selection(
+    selection: &StrategySelection,
+    mode: Mode,
+) -> Result<(), PilError> {
+    let implementation = selection.implementation;
+    if implementation.operation != OperationId::Transform
+        || implementation.mode != mode
+        || implementation.backend != Backend::Cpu
+        || selection.requested_backend != Backend::Cpu
+    {
+        return Err(PilError::InternalError(
+            "Transform hidden-lane helper received a mismatched strategy selection".into(),
+        ));
+    }
+    Ok(())
 }
 
 fn source_lane_plane(

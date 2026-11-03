@@ -144,7 +144,7 @@ impl PreparedTransform<'_> {
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let source = self.strategy.implementation.image;
         let request = self.strategy.implementation.request;
-        let architecture = self.strategy.selection().implementation.architecture;
+        let selection = *self.strategy.selection();
         let mut output = match self.mode {
             Mode::One => super::one::ops::execute(self.strategy),
             Mode::ImageLuma8 => super::luma8::ops::execute(self.strategy),
@@ -170,7 +170,7 @@ impl PreparedTransform<'_> {
                 "rejected Transform mode {mode:?} reached execution"
             ))),
         }?;
-        super::helpers::hidden_lanes::finish(source, &mut output, request, architecture)?;
+        super::helpers::hidden_lanes::finish(source, &mut output, request, &selection)?;
         Ok(output)
     }
 }

@@ -1,8 +1,9 @@
 //! Pillow physical-byte behavior for compact-carrier Rotate modes.
 
-use crate::compute::Architecture;
+use crate::compute::{Architecture, Backend};
 use crate::compute::pool_cpu::helpers::bytes::hidden_lanes::default_hidden_lanes_for_bytes;
 use crate::compute::pool_cpu::ops::rotate::ops::RotateRequest;
+use crate::compute::registry::support::{OperationId, StrategySelection};
 use crate::error::PilError;
 use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{DynamicImage, GenericImageView, Mode};
@@ -19,9 +20,10 @@ pub(crate) fn finish(
     source: &DynamicImage,
     output: &mut DynamicImage,
     request: RotateRequest,
-    architecture: Architecture,
+    selection: &StrategySelection,
 ) -> Result<(), PilError> {
     let mode = source.mode();
+    validate_selection(selection, mode)?;
     if output.mode() != mode {
         return Err(PilError::InternalError(
             "Rotate output changed its source mode".into(),
@@ -40,7 +42,7 @@ pub(crate) fn finish(
     }
     let output_pixels = pixel_count(output)?;
     if request.nearest {
-        finish_nearest(source, output, request, architecture, lane_count, source_pixels, output_pixels)
+        finish_nearest(source, output, request, selection, lane_count, source_pixels, output_pixels)
     } else {
         finish_filtered(mode, output, request, lane_count, output_pixels)
     }
@@ -85,7 +87,7 @@ fn finish_nearest(
     source: &DynamicImage,
     output: &mut DynamicImage,
     request: RotateRequest,
-    architecture: Architecture,
+    selection: &StrategySelection,
     lane_count: usize,
     source_pixels: usize,
     output_pixels: usize,
@@ -95,7 +97,7 @@ fn finish_nearest(
             source,
             output,
             request,
-            architecture,
+            selection,
             lane_count,
             source_pixels,
             output_pixels,
@@ -118,7 +120,7 @@ fn finish_nearest(
             source_lanes,
             output,
             request,
-            architecture,
+            selection,
             source_pixels,
             output_pixels,
         )?,
@@ -127,7 +129,7 @@ fn finish_nearest(
             source_lanes,
             output,
             request,
-            architecture,
+            selection,
             source_pixels,
             output_pixels,
         )?,
@@ -140,7 +142,7 @@ fn finish_nearest_without_source_lanes(
     source: &DynamicImage,
     output: &mut DynamicImage,
     request: RotateRequest,
-    architecture: Architecture,
+    selection: &StrategySelection,
     lane_count: usize,
     source_pixels: usize,
     output_pixels: usize,
@@ -172,7 +174,7 @@ fn finish_nearest_without_source_lanes(
         &source_lanes,
         output,
         request,
-        architecture,
+        selection,
         source_pixels,
         output_pixels,
     )?;
@@ -184,7 +186,7 @@ fn nearest_lanes<const CHANNELS: usize>(
     source_lanes: &HiddenPixelLanes,
     output: &DynamicImage,
     request: RotateRequest,
-    architecture: Architecture,
+    selection: &StrategySelection,
     source_pixels: usize,
     output_pixels: usize,
 ) -> Result<HiddenPixelLanes, PilError> {
@@ -206,7 +208,7 @@ fn nearest_lanes<const CHANNELS: usize>(
             .ok_or_else(invalid_lanes);
     }
     let fill = hidden_fill(source.mode(), request);
-    if architecture == Architecture::Default {
+    if selection.implementation.architecture == Architecture::Default {
         super::byte::affine_nearest::<CHANNELS>(
             &source_bytes,
             source.dimensions(),
@@ -224,6 +226,23 @@ fn nearest_lanes<const CHANNELS: usize>(
         );
     }
     HiddenPixelLanes::per_pixel(CHANNELS, output_pixels, output_bytes).ok_or_else(invalid_lanes)
+}
+
+fn validate_selection(
+    selection: &StrategySelection,
+    mode: Mode,
+) -> Result<(), PilError> {
+    let implementation = selection.implementation;
+    if implementation.operation != OperationId::Rotate
+        || implementation.mode != mode
+        || implementation.backend != Backend::Cpu
+        || selection.requested_backend != Backend::Cpu
+    {
+        return Err(PilError::InternalError(
+            "Rotate hidden-lane helper received a mismatched strategy selection".into(),
+        ));
+    }
+    Ok(())
 }
 
 fn finish_filtered(

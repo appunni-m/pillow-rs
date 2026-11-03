@@ -121,12 +121,12 @@ macro_rules! declare_rotate_modes {
             }
 
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
-                let architecture = self.selection().implementation.architecture;
+                let selection = *self.selection();
                 let Self { image, request, strategy } = self;
                 let mut output = match strategy {
                     $(RotateStrategy::$mode(plan) => super::$module::ops::execute(plan),)+
                 }?;
-                super::helpers::hidden_lanes::finish(image, &mut output, request, architecture)?;
+                super::helpers::hidden_lanes::finish(image, &mut output, request, &selection)?;
                 Ok(output)
             }
         }
