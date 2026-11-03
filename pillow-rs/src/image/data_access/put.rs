@@ -346,6 +346,7 @@ impl Image {
             context,
             requested_backend,
             selection: None,
+            operation_receipts: PipelineOperationTelemetryCapture::begin_preserving_current(),
         }
     }
 
@@ -408,6 +409,11 @@ impl Image {
         offset: f64,
         context: &mut PutDataExecutionContext,
     ) -> Result<(), PilError> {
+        // Keep receipts from earlier writes and callback-driven operations
+        // outside the per-write telemetry reset below. The context restores
+        // them together when the whole synchronous sequence ends.
+        context.operation_receipts.capture();
+
         // This public helper is the callback-preserving path: writes are
         // visible before the binding coerces the next value, so they execute
         // directly on host storage even when SIMD/GPU is requested. Retain the
@@ -441,6 +447,7 @@ impl Image {
         let selection = self.putdata_value_at_selection(image_mode, context)?;
 
         self.load()?;
+        context.operation_receipts.capture();
         match self {
             Image::Paletted(data) if image_mode == Mode::ImagePalette8 => {
                 crate::compute::pool_cpu::ops::put::ops::execute_put_data_value_at(
@@ -474,6 +481,7 @@ impl Image {
             "per-item writes must be visible before the next sequence value is coerced",
             selection,
         );
+        context.operation_receipts.capture();
         Ok(())
     }
 }

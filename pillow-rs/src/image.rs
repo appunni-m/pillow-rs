@@ -194,13 +194,14 @@ pub enum PutDataValueKind {
 /// Bindings retain this token while coercing sequence items without holding
 /// the mutable image borrow, then pass it into each completed pixel write.
 /// The selected route remains fixed for the sequence, even if callbacks
-/// change global backend preferences between values.
+/// change global backend preferences between values. Its drop restores source,
+/// callback, and per-item operation receipts in their execution order.
 #[doc(hidden)]
-#[derive(Clone, Copy)]
 pub struct PutDataExecutionContext {
     pub(crate) context: crate::compute::ExecutionContext,
     pub(crate) requested_backend: Option<crate::compute::Backend>,
     pub(crate) selection: Option<crate::compute::registry::support::StrategySelection>,
+    pub(crate) operation_receipts: crate::compute::PipelineOperationTelemetryCapture,
 }
 
 /// Callback-free bulk values extracted by a host-language binding.

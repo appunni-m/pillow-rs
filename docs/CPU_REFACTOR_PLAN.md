@@ -1660,11 +1660,15 @@ changed.
 One-shot PutData receipt (2026-11-04): the I;16 raw-byte fast path captures
 source graph receipts across its synchronous load and restores them before
 recording its selected PutData strategy. Validation and load-before-selection
-ordering remain unchanged. TODO(pillow-rs#3ptb): callback-driven PutData writes
-still record one synchronous write at a time. Define and preserve how source
-graph and earlier write receipts aggregate across a sequence while retaining
-per-item callback visibility and fault order. Source-only; no build, formatting,
-checkstyle, lint, tests, parity, benchmark, or coverage ran.
+ordering remain unchanged. Callback-driven PutData now keeps one ordered
+receipt capture in its sequence context, collecting source materialization,
+per-item PutData, and callback-generated operation receipts before each
+per-write telemetry reset. Dropping the context restores the aggregate in
+order, including earlier completed writes if a later coercion fails. Pixel
+writes remain synchronous before the next item is coerced. This source change
+is uncompiled and unverified; TODO: review nested callback telemetry and
+failure paths, then cover them in the frozen CPU parity matrix. No build,
+formatting, checkstyle, lint, tests, parity, benchmark, or coverage ran.
 
 Draw dispatch source review (2026-11-04): the operation entry declares support
 per exact raster mode and binds the injected CPU/Architecture context once.
