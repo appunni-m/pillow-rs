@@ -7,6 +7,7 @@ use crate::raster::{GenericImageView, ImageBuffer, Pixel};
 /// state was retained for its compact carrier.
 pub(crate) fn default_hidden_pixel_lanes(mode: Mode, first_sample: u8) -> Option<[u8; 2]> {
     match mode {
+        // LA/La repeat luma; PA repeats its palette index in the omitted slots.
         Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => {
             Some([first_sample, first_sample])
         }

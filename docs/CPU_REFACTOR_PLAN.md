@@ -69,7 +69,7 @@ the baseline. Keep `pillow-rs-bad` as reference.
 
 ## Current pending matrix
 
-Snapshot base: `develop` commit `eb9aeb3e2` (local WIP, unpushed). The CPU
+Snapshot base: `develop` commit `9e1c17fcc` (local WIP, unpushed). The CPU
 source migration remains in review and is not ready for validation gates.
 Recent source-only checkpoints thread `StrategySelection` through Rotate and
 Transform hidden-lane helpers; native-byte Filter extrema, rank, and blur
@@ -94,8 +94,9 @@ opaque synthesized lane. This preserves
 observable follow-on pixel behavior without coupling the logical pixel kernels
 to Pillow's storage representation. P/PA conversions to RGB, YCbCr, and HSV,
 and RGBX/RGBa conversions to RGB, were source-reviewed and use the canonical
-opaque byte. The complete
-source/target matrix, including La/PA and two-lane compact outputs, remains a
+opaque byte. Newly produced LA/La/PA conversions use canonical duplicated
+sample/index lanes, while same-mode identity retains existing sidecars. The
+complete source/target matrix, including LAB and CoreOnly routes, remains a
 blocking TODO in the inventory.
 These source changes are uncompiled.
 Chops, Pad, Draw, Thumbnail, Quantize, Resize, geometry sidecars, Filter, and
