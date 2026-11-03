@@ -7,6 +7,7 @@ use super::{
     reset_pipeline_operation_telemetry, take_pipeline_backend_override,
     take_pipeline_dispatch_count, take_pipeline_resize_coeff_cache_stats,
     take_pipeline_resource_telemetry, take_pipeline_telemetry,
+    PipelineOperationTelemetryCapture,
 };
 pub(crate) struct EagerCpuOperationTelemetry {
     timed: bool,
@@ -104,6 +105,29 @@ pub(crate) fn record_eager_cpu_operation_receipt_with_selection(
         requested_backend,
         Some(fallback_detail),
     );
+    finish_eager_cpu_operation_telemetry_with_selection(
+        telemetry,
+        output_bytes,
+        operation,
+        selection,
+    );
+}
+
+/// Record a host-owned operation after preserving receipts from its source graph.
+pub(crate) fn record_eager_cpu_operation_receipt_with_selection_and_receipts(
+    operation: &'static str,
+    requested_backend: Option<Backend>,
+    output_bytes: usize,
+    fallback_detail: &'static str,
+    selection: crate::compute::registry::support::StrategySelection,
+    mut operation_receipts: PipelineOperationTelemetryCapture,
+) {
+    let telemetry = begin_eager_cpu_operation_telemetry_with_reason(
+        operation,
+        requested_backend,
+        Some(fallback_detail),
+    );
+    operation_receipts.restore();
     finish_eager_cpu_operation_telemetry_with_selection(
         telemetry,
         output_bytes,

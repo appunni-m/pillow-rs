@@ -1642,3 +1642,13 @@ earlier graph's receipt list. Pixel algorithms and operation error order are
 unchanged. Other multi-image CPU preparation paths remain under source review.
 Source-only; no build, formatting, checkstyle, lint, tests, parity, benchmark,
 or coverage ran.
+
+Terminal pixel read and projection receipts (2026-11-04): `getpixel`,
+`getpixel_formatted`, numeric `putpixel`, and the lazy `getprojection` route
+now retain completed source-pipeline operation receipts when starting their
+terminal CPU receipt. Loaded-only fast paths keep their existing behavior.
+TODO(pillow-rs#3ptb): finish receipt review for callback-driven PutData and
+Draw operations that synchronously load or materialize an existing lazy image;
+preserve per-item callback visibility and current fault ordering. Source-only;
+no build, formatting, checkstyle, lint, tests, parity, benchmark, or coverage
+ran.

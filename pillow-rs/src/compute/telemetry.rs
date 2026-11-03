@@ -12,6 +12,7 @@ pub(crate) use eager_cpu::{
     finish_eager_cpu_operation_telemetry_with_selection,
     record_eager_cpu_operation_receipt, record_eager_cpu_operation_receipt_with_reason,
     record_eager_cpu_operation_receipt_with_selection,
+    record_eager_cpu_operation_receipt_with_selection_and_receipts,
 };
 
 use crate::raster::DynamicImage;

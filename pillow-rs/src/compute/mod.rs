@@ -62,6 +62,7 @@ pub(crate) use telemetry::{
     finish_pipeline_operation_telemetry, host_resource_telemetry,
     record_eager_cpu_operation_receipt, record_eager_cpu_operation_receipt_with_reason,
     record_eager_cpu_operation_receipt_with_selection,
+    record_eager_cpu_operation_receipt_with_selection_and_receipts,
     record_pipeline_allocation, record_pipeline_backend_fallback,
     clear_pipeline_operation_architecture, record_pipeline_operation_architecture,
     record_pipeline_operation_selection,
@@ -87,7 +88,8 @@ pub(crate) use backend_state::{
     preferred_active_backend,
 };
 pub(crate) use eager::{
-    execute_eager_cpu_getprojection, execute_eager_cpu_linear_gradient,
+    execute_eager_cpu_getprojection, execute_eager_cpu_getprojection_with_receipts,
+    execute_eager_cpu_linear_gradient,
     execute_eager_cpu_mandelbrot, execute_eager_cpu_radial_gradient,
     execute_eager_cpu_arch_bytes_with_context,
     execute_eager_cpu_arch_image_operation_with_context,

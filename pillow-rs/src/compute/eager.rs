@@ -49,11 +49,40 @@ pub(crate) fn execute_eager_cpu_getprojection(
     requested_backend: Option<Backend>,
     fallback_reason: Option<String>,
 ) -> Result<(Vec<u32>, Vec<u32>), PilError> {
+    execute_eager_cpu_getprojection_inner(input, context, requested_backend, fallback_reason, None)
+}
+
+pub(crate) fn execute_eager_cpu_getprojection_with_receipts(
+    input: &DynamicImage,
+    context: &ExecutionContext,
+    requested_backend: Option<Backend>,
+    fallback_reason: Option<String>,
+    mut operation_receipts: PipelineOperationTelemetryCapture,
+) -> Result<(Vec<u32>, Vec<u32>), PilError> {
+    execute_eager_cpu_getprojection_inner(
+        input,
+        context,
+        requested_backend,
+        fallback_reason,
+        Some(&mut operation_receipts),
+    )
+}
+
+fn execute_eager_cpu_getprojection_inner(
+    input: &DynamicImage,
+    context: &ExecutionContext,
+    requested_backend: Option<Backend>,
+    fallback_reason: Option<String>,
+    mut operation_receipts: Option<&mut PipelineOperationTelemetryCapture>,
+) -> Result<(Vec<u32>, Vec<u32>), PilError> {
     let prepared = super::prepare_cpu_getprojection(input, context)?;
     let selection = *prepared.selection();
     let timed = pipeline_telemetry_enabled();
     if timed {
         reset_eager_image_operation_telemetry();
+        if let Some(operation_receipts) = operation_receipts.as_mut() {
+            operation_receipts.restore();
+        }
     }
     let backend_start = timed.then(pipeline_timestamp).flatten();
     let output = prepared.execute()?;

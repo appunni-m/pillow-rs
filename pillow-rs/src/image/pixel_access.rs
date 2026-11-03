@@ -1,12 +1,11 @@
 //! Pixel access and mutation methods for [`Image`].
 
+use crate::compute::PipelineOperationTelemetryCapture;
 use crate::error::PilError;
 use crate::raster::Mode;
 
-use super::{
-    Arc, FormattedPixelValue, Image, PipelineOp,
-};
 use super::data_access::is_l16_identity;
+use super::{Arc, FormattedPixelValue, Image, PipelineOp};
 
 /// Host-neutral value extracted for a public `Image.putpixel` call.
 #[derive(Debug, Clone, PartialEq)]
@@ -38,7 +37,9 @@ impl Image {
     ///
     /// Returns [`PilError::IndexError`] when coordinates are outside the image.
     pub fn getpixel(&self, x: u32, y: u32) -> Result<(u8, u8, u8, u8), PilError> {
+        let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
         let img = self.materialized_shared()?;
+        operation_receipts.capture();
         let (w, h) = (img.width(), img.height());
         if x >= w || y >= h {
             return Err(PilError::IndexError("image index out of range".into()));
@@ -54,12 +55,13 @@ impl Image {
             y,
             selection,
         )?;
-        crate::compute::record_eager_cpu_operation_receipt_with_selection(
+        crate::compute::record_eager_cpu_operation_receipt_with_selection_and_receipts(
             "GetPixelRgba",
             requested_backend,
             rgba.len(),
             "RGBA8 pixel access uses the declared exact-mode Default strategy",
             selection,
+            operation_receipts,
         );
         Ok((rgba[0], rgba[1], rgba[2], rgba[3]))
     }
@@ -105,7 +107,9 @@ impl Image {
 
     /// Returns one pixel with Pillow's mode-specific scalar or tuple shape.
     pub fn getpixel_formatted(&self, x: u32, y: u32) -> Result<FormattedPixelValue, PilError> {
+        let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
         let img = self.materialized_shared()?;
+        operation_receipts.capture();
         let (width, height) = (img.width(), img.height());
         if x >= width || y >= height {
             return Err(PilError::IndexError("image index out of range".into()));
@@ -123,12 +127,13 @@ impl Image {
         )?;
         let output_bytes = crate::compute::pool_cpu::ops::analysis::helpers::pixel_access::
             formatted_pixel_bytes(&value);
-        crate::compute::record_eager_cpu_operation_receipt_with_selection(
+        crate::compute::record_eager_cpu_operation_receipt_with_selection_and_receipts(
             "GetPixel",
             requested_backend,
             output_bytes,
             "formatted pixel access reads the exact native mode strategy",
             selection,
+            operation_receipts,
         );
         Ok(value)
     }
@@ -392,7 +397,9 @@ impl Image {
             &context,
         )?;
 
+        let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
         self.load()?;
+        operation_receipts.capture();
         let Image::Loaded(data) = self else {
             let reason = if is_l16_identity(mode) {
                 "putpixel I;16 did not materialize writable storage"
@@ -413,12 +420,13 @@ impl Image {
         } else {
             "numeric I/F pixel writes update host storage synchronously"
         };
-        crate::compute::record_eager_cpu_operation_receipt_with_selection(
+        crate::compute::record_eager_cpu_operation_receipt_with_selection_and_receipts(
             "PutPixel",
             requested_backend,
             0,
             fallback_detail,
             selection,
+            operation_receipts,
         );
         Ok(())
     }

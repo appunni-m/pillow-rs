@@ -1,6 +1,6 @@
 //! Pillow-compatible horizontal and vertical image projections.
 
-use crate::compute::Backend;
+use crate::compute::{Backend, PipelineOperationTelemetryCapture};
 use crate::error::PilError;
 use crate::image::PipelineOps;
 use crate::pipeline::PipelineOp;
@@ -28,7 +28,9 @@ impl Image {
         if let Some(projection) = self.try_getprojection_putpixel_pipeline()? {
             return Ok(projection);
         }
+        let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
         let image = self.materialized_shared()?;
+        operation_receipts.capture();
         if matches!(self, Image::Loaded(_) | Image::Paletted(_))
             && let Some(projection) = self.try_getprojection_eager_backend(image.as_ref())?
         {
@@ -45,11 +47,12 @@ impl Image {
                     context.architecture()
                 )
             });
-        crate::compute::execute_eager_cpu_getprojection(
+        crate::compute::execute_eager_cpu_getprojection_with_receipts(
             image.as_ref(),
             &context,
             requested_backend,
             fallback_reason,
+            operation_receipts,
         )
     }
 
