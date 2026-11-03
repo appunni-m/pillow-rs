@@ -76,18 +76,20 @@ Transform hidden-lane helpers; native-byte Filter extrema, rank, and blur
 helpers; LA/RGBA AlphaComposite architecture binding; the UnsharpMask
 mutable-byte handoff; and mode-aware `DynamicImage::put_pixel` writes. This
 source update also remaps retained physical lanes through
-`DynamicImage::copy_within`; `GenericImage::copy_from` remains an explicit
-raster API review TODO because its source trait carries no physical-lane
-provenance. The mutable-byte accessor documents its sidecar invalidation
-contract. A static scan finds no runtime helper parameters carrying a bare
-`Architecture`; remaining raw parameters are the const Merge support
+`DynamicImage::copy_within`. `GenericImage::copy_from` is explicitly a logical
+pixel copy: its source trait exposes no mode or physical-lane provenance, and
+destination-only state follows `put_pixel`; mode-aware raw-lane transfer stays
+with operation strategies such as Paste. The mutable-byte accessor documents
+its sidecar invalidation contract. A static scan finds no runtime helper
+parameters carrying a bare `Architecture`; remaining raw parameters are the
+const Merge support
 declaration builder and Analysis's internal missing-strategy error formatter.
 Chops, Pad, Draw, Thumbnail, Quantize, Resize, geometry sidecars, Filter, and
 Composite context propagation remain uncompiled and runtime-unverified. The
 audit is not a completion proof: operation support declarations, ownership,
 source behavior, algorithm coverage, inert-archive review, and function-size
 limits remain open. Current touched-file counts are `buffer.rs` 996 lines,
-`dynamic.rs` 953 lines, `traits/view.rs` 237 lines, and `buffer/mutable.rs` 21
+`dynamic.rs` 961 lines, `traits/view.rs` 241 lines, and `buffer/mutable.rs` 21
 lines; all are below 1,000. Refresh the full source inventory and Clippy-counted
 function inventory only after source closure.
 

@@ -119,7 +119,11 @@ pub trait GenericImage: GenericImageView {
     /// Panics if `(x, y)` is out of bounds.
     fn put_pixel(&mut self, x: u32, y: u32, pixel: Self::Pixel);
 
-    /// Copies all of the pixels from another image into this image.
+    /// Copies the logical pixels exposed by another image into this image.
+    ///
+    /// The source view exposes only [`Pixel`] values, so storage outside that
+    /// logical value is not copied. Any such destination state follows
+    /// [`GenericImage::put_pixel`].
     fn copy_from<O>(
         &mut self,
         other: &O,
