@@ -6,13 +6,17 @@ Working checkout: `/Users/lazytrot/work/pillow-rs`, branch `develop`. Static
 lazy output modes now come from operation support contracts without
 wrapper cache overrides; mode metadata remains source-reviewed and
 runtime-unvalidated.
-Latest CPU-only compiler check (2026-11-03, commits `a1ed8e869` and
+Latest CPU-only compiler check (2026-11-03, source at commits `a1ed8e869` and
 `b536c0e8a`): no E-coded type/name errors were emitted, but `cargo check`
 failed on denied lints (120 `dead_code`, 335 `unused_imports`, 75 `deprecated`,
 18 `unsafe_code`, 3 `unused_macro_rules`, 2 `unused_variables`, and 1
 `unreachable_patterns`; 40 additional warnings). The compiler reached lint
 evaluation, but this is not a successful build. No formatter, separate lint
 target, tests, parity, benchmark, or coverage ran for these commits.
+Commit `9af54f318` subsequently removed the audited orphaned helpers and
+per-mode wrappers listed in the plan; that source-only cleanup has not been
+compiled. Host diagnostics did not justify deleting architecture folders, so
+their x86 and Wasm reachability still needs target-specific review.
 Commit `8bad284fe` retains the exact `One` or `ImageLuma8` identity of a
 PutAlphaData mask through CPU preparation and updates the corresponding GPU
 auxiliary admission and native byte-mask routes. It is source-reviewed but
