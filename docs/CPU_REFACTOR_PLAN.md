@@ -69,23 +69,27 @@ the baseline. Keep `pillow-rs-bad` as reference.
 
 ## Current pending matrix
 
-Snapshot base: `develop` commit `535813b58` (local WIP, unpushed). The CPU
-source migration remains in source review and is not ready for validation
-gates. Recent source-only checkpoints thread `StrategySelection` through
-Rotate and Transform hidden-lane helpers; native-byte Filter extrema, rank,
-and blur helpers; LA/RGBA AlphaComposite architecture binding; and the
-UnsharpMask mutable-byte handoff now preserves GaussianBlur's hidden lanes.
-The mutable-byte accessor now documents its sidecar invalidation contract. A
-static scan finds no runtime helper parameters carrying a bare `Architecture`;
-remaining raw parameters are the const Merge support-declaration builder and
-Analysis's internal missing-strategy error formatter. Chops, Pad, Draw,
-Thumbnail, Quantize, Resize, geometry sidecars, Filter, and Composite context
-propagation are still uncompiled and runtime-unverified. The audit is not a
-completion proof: operation support declarations, ownership, source behavior,
-algorithm coverage, inert-archive review, and line limits remain open.
-The source-size scan covers 5,517 first-party Rust files and finds 26 at or
-above 800 lines, none above 1,000; `pool_cpu/ops/analysis/ops.rs` is largest at
-994 lines. Function-size review remains gated because it requires Clippy.
+Snapshot base: `develop` commit `8f88a4408` (local WIP, unpushed). The CPU
+source migration remains in review and is not ready for validation gates.
+Recent source-only checkpoints thread `StrategySelection` through Rotate and
+Transform hidden-lane helpers; native-byte Filter extrema, rank, and blur
+helpers; LA/RGBA AlphaComposite architecture binding; the UnsharpMask
+mutable-byte handoff; and mode-aware `DynamicImage::put_pixel` writes. This
+source update also remaps retained physical lanes through
+`DynamicImage::copy_within`; `GenericImage::copy_from` remains an explicit
+raster API review TODO because its source trait carries no physical-lane
+provenance. The mutable-byte accessor documents its sidecar invalidation
+contract. A static scan finds no runtime helper parameters carrying a bare
+`Architecture`; remaining raw parameters are the const Merge support
+declaration builder and Analysis's internal missing-strategy error formatter.
+Chops, Pad, Draw, Thumbnail, Quantize, Resize, geometry sidecars, Filter, and
+Composite context propagation remain uncompiled and runtime-unverified. The
+audit is not a completion proof: operation support declarations, ownership,
+source behavior, algorithm coverage, inert-archive review, and function-size
+limits remain open. Current touched-file counts are `buffer.rs` 996 lines,
+`dynamic.rs` 953 lines, `traits/view.rs` 237 lines, and `buffer/mutable.rs` 21
+lines; all are below 1,000. Refresh the full source inventory and Clippy-counted
+function inventory only after source closure.
 
 The last focused library compilation passed for the earlier Resize
 selection-context refactor with
@@ -93,10 +97,10 @@ selection-context refactor with
 --no-default-features --features image-codecs-all`. It confirms compilation
 only; lint caps suppressed the denied-diagnostic backlog. It predates the
 Chops, Pad, Draw, Thumbnail, Quantize, Rotate/Transform, Filter, and Composite
-selection-context checkpoints. Since those checkpoints, only static source
-inspection and `git diff --check` have run. No formatter, checkstyle, lint,
-tests, parity, benchmark, or coverage has run for the current WIP. This matrix
-tracks pending work; it is not support or runtime verification evidence.
+selection-context checkpoints. Current lane-preservation edits have only
+received static source review. No formatter, checkstyle, lint, tests, parity,
+benchmark, or coverage has run for this source update. This matrix tracks
+pending work; it is not support or runtime verification evidence.
 Detailed mappings and source TODOs remain in [CPU refactor
 inventory](CPU_REFACTOR_INVENTORY.md). Refresh this matrix at each completed
 checkpoint.
@@ -364,7 +368,12 @@ Mode-aware generic pixel write correction (2026-11-03):
 and RGB/YCbCr/LAB/HSV carriers without invalidating their retained physical
 lane payload. The lower-level mode-blind `ImageBuffer` mutators still
 invalidate sidecars; downstream raw-byte outcomes after those escapes remain
-pending source review and CPU parity.
+pending source review and CPU parity. `DynamicImage::copy_within` now remaps
+retained lanes from the original source coordinates alongside the logical
+overlap-safe copy. TODO(pillow-rs#3ptb): review `GenericImage::copy_from`, whose
+source trait exposes logical pixels without mode or physical-lane provenance,
+and define its mode-aware lane contract before claiming full raster API
+coverage. No validation has run.
 
 EffectSpread physical-lane follow-up (2026-11-03): the Default strategy remaps hidden lanes through its existing Pillow relocation map. Selected SSE2, NEON, and Wasm SIMD128 strategies preserve per-pixel hidden lanes using a cloned starting RNG state and the same destination decisions as the active-byte kernel; the process RNG still advances only once. Constant sidecars remain compact, and absent producer state stays absent. No build, formatter, checkstyle, lint, test, parity, or benchmark ran.
 

@@ -175,7 +175,7 @@ pub trait GenericImage: GenericImageView {
 }
 
 #[inline(always)]
-fn copy_within_pixels<I: GenericImage + ?Sized>(
+pub(crate) fn copy_within_pixels<I: GenericImage + ?Sized>(
     image: &mut I,
     sx: u32,
     sy: u32,

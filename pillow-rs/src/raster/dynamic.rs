@@ -873,4 +873,89 @@ impl GenericImageTrait for DynamicImage {
             }
         }
     }
+
+    fn copy_within(&mut self, source: super::error::Rect, x: u32, y: u32) -> bool {
+        let (sx, sy, width, height) = (source.x, source.y, source.width, source.height);
+        let (image_width, image_height) = self.dimensions();
+        if sx >= image_width || x >= image_width || sy >= image_height || y >= image_height {
+            return false;
+        }
+        if image_width.saturating_sub(x.max(sx)) < width
+            || image_height.saturating_sub(y.max(sy)) < height
+        {
+            return false;
+        }
+
+        let Some(width_usize) = usize::try_from(image_width).ok() else {
+            return false;
+        };
+        let Some(height_usize) = usize::try_from(image_height).ok() else {
+            return false;
+        };
+        let Some(pixel_count) = width_usize.checked_mul(height_usize) else {
+            return false;
+        };
+        let Some(expected_lane_count) = self.mode().hidden_pixel_lane_count() else {
+            super::traits::view::copy_within_pixels(self, sx, sy, x, y, width, height);
+            return true;
+        };
+
+        // Without a payload, omitted bytes use fallbacks derived from the
+        // logical samples, so the pixel copy keeps those defaults in sync.
+        // Retained payload must follow the original coordinate map because
+        // the logical copy below may overlap its source region.
+        let hidden_lanes = match self.hidden_pixel_lanes() {
+            Some(lanes) => {
+                if lanes.lane_count() != expected_lane_count
+                    || lanes.pixel_count() != pixel_count
+                {
+                    return false;
+                }
+                let Some(destination_right) = usize::try_from(x)
+                    .ok()
+                    .and_then(|left| left.checked_add(usize::try_from(width).ok()?))
+                else {
+                    return false;
+                };
+                let Some(destination_bottom) = usize::try_from(y)
+                    .ok()
+                    .and_then(|top| top.checked_add(usize::try_from(height).ok()?))
+                else {
+                    return false;
+                };
+                let source_x = usize::try_from(sx).expect("source x is within image bounds");
+                let source_y = usize::try_from(sy).expect("source y is within image bounds");
+                let destination_x =
+                    usize::try_from(x).expect("destination x is within image bounds");
+                let destination_y =
+                    usize::try_from(y).expect("destination y is within image bounds");
+                let Some(lanes) = lanes.remap(pixel_count, |index| {
+                    let output_x = index % width_usize;
+                    let output_y = index / width_usize;
+                    if output_x >= destination_x
+                        && output_x < destination_right
+                        && output_y >= destination_y
+                        && output_y < destination_bottom
+                    {
+                        (source_y + output_y - destination_y) * width_usize
+                            + source_x
+                            + output_x
+                            - destination_x
+                    } else {
+                        index
+                    }
+                }) else {
+                    return false;
+                };
+                Some(lanes)
+            }
+            None => None,
+        };
+
+        if !self.replace_hidden_pixel_lanes(hidden_lanes) {
+            return false;
+        }
+        super::traits::view::copy_within_pixels(self, sx, sy, x, y, width, height);
+        true
+    }
 }
