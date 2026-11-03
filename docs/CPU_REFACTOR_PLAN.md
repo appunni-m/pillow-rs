@@ -69,7 +69,7 @@ the baseline. Keep `pillow-rs-bad` as reference.
 
 ## Current pending matrix
 
-Snapshot at `develop` commit `7612b3295`. The working tree is incomplete and
+Snapshot at `develop` commit `8e3731b73`. The working tree is incomplete and
 unverified. An early `cargo check` ran before source closure and failed; that
 output is diagnostic only and does not pass Gate 4. No formatter, lint, test,
 parity, or benchmark gate has run for the current source-only continuation.
@@ -152,6 +152,16 @@ per-pixel projection without an intermediate image. Public coordinate checks
 and the loaded RGB `None` fast-path behavior remain at the Image wrapper.
 Output shape, error order, selected/fallback receipts, and CPU parity remain
 pending; this source change is unvalidated.
+
+GetPixel source follow-up (2026-11-03): rechecked the `Mode::ALL` list against
+both family classifiers, all per-mode support declarations, every Default
+owner, and the exhaustive `DynamicImage` execution match; the source mapping
+covers 25/25 identities. The loaded RGB binding shortcut checks its exact
+mode before coordinates and then uses the same RGB mode declaration and
+Default owner. Removed a redundant second mode check from that shortcut.
+This closes only the GetPixel source-placement review; values, coordinate and
+error ordering, fallback receipts, and mode-by-architecture parity remain
+pending.
 
 Convert source audit update (2026-11-02): I;16-to-I;16 alias targets preserve
 the native u16 samples when selecting among `I;16`, `I;16L`, `I;16B`, and

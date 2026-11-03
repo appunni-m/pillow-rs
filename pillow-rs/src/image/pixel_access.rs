@@ -82,9 +82,6 @@ impl Image {
         if x >= data.image.width() || y >= data.image.height() {
             return Err(PilError::IndexError("image index out of range".into()));
         }
-        if data.image.mode() != Mode::ImageRgb8 {
-            return Ok(None);
-        }
         let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
         let selection = crate::compute::pool_cpu::ops::analysis::ops::select_get_pixel(
             Mode::ImageRgb8,
