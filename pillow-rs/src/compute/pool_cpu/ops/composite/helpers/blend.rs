@@ -2,6 +2,7 @@
 
 use crate::checked_dims::CheckedDims;
 use crate::compute::Architecture;
+use crate::compute::pool_cpu::helpers::bytes::hidden_lanes::default_hidden_lanes_for_bytes;
 use crate::compute::registry::support::{OperationId, StrategySelection};
 use crate::error::PilError;
 use crate::raster::buffer::HiddenPixelLanes;
@@ -80,6 +81,8 @@ pub(crate) fn execute_lab_samples(
         Mode::ImageLab8,
         base.hidden_pixel_lanes(),
         source.hidden_pixel_lanes(),
+        base.as_raw(),
+        source.as_raw(),
         dimensions,
         alpha as f32,
     )?;
@@ -103,6 +106,8 @@ fn attach_hidden_lanes(
         mode,
         source.hidden_pixel_lanes(),
         other.hidden_pixel_lanes(),
+        source.as_bytes(),
+        other.as_bytes(),
         dimensions,
         alpha,
     )?;
@@ -114,12 +119,13 @@ fn attach_hidden_lanes(
     Ok(())
 }
 
-/// Mirrors Pillow's physical-row blend for bytes omitted from a compact mode
-/// carrier. Missing lane state remains unknown instead of being synthesized.
+/// Mirrors the physical-row blend for bytes omitted from a compact carrier.
 fn blend_hidden_lanes(
     mode: Mode,
     left: Option<&HiddenPixelLanes>,
     right: Option<&HiddenPixelLanes>,
+    left_bytes: &[u8],
+    right_bytes: &[u8],
     dimensions: (usize, usize),
     alpha: f32,
 ) -> Result<Option<HiddenPixelLanes>, PilError> {
@@ -154,9 +160,25 @@ fn blend_hidden_lanes(
     if alpha == 1.0 {
         return Ok(right.cloned());
     }
-    let (Some(left), Some(right)) = (left, right) else {
+    if pixel_count == 0 || (left.is_none() && right.is_none()) {
         return Ok(None);
+    }
+    let left_fallback = if left.is_none() {
+        default_hidden_lanes_for_bytes(mode, left_bytes, pixel_count)?
+    } else {
+        None
     };
+    let right_fallback = if right.is_none() {
+        default_hidden_lanes_for_bytes(mode, right_bytes, pixel_count)?
+    } else {
+        None
+    };
+    let left = left.or(left_fallback.as_ref()).ok_or_else(|| {
+        PilError::InternalError("Blend omitted left physical-lane state".into())
+    })?;
+    let right = right.or(right_fallback.as_ref()).ok_or_else(|| {
+        PilError::InternalError("Blend omitted right physical-lane state".into())
+    })?;
     left.zip_map_clipped(
         right,
         dimensions,

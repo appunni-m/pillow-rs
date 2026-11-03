@@ -292,17 +292,12 @@ where
 }
 
 fn default_hidden_lane(mode: Mode, lane: usize, logical_first: u8) -> u8 {
-    match mode {
-        Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => {
-            debug_assert!(lane < 2);
-            logical_first
-        }
-        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => {
-            debug_assert_eq!(lane, 0);
-            u8::MAX
-        }
-        _ => 0,
-    }
+    crate::compute::pool_cpu::helpers::bytes::hidden_lanes::default_hidden_pixel_lanes(
+        mode,
+        logical_first,
+    )
+    .and_then(|values| values.get(lane).copied())
+    .unwrap_or(0)
 }
 
 fn checked_extent(size: (u32, u32), part: &str) -> Result<usize, PilError> {

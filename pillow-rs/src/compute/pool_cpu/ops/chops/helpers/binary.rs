@@ -1,6 +1,9 @@
 //! Serial native-byte ImageChops kernels.
 
 use crate::checked_dims::CheckedDims;
+use crate::compute::pool_cpu::helpers::bytes::hidden_lanes::{
+    default_hidden_pixel_lanes, hidden_lanes_for_pixel_ref,
+};
 use crate::error::PilError;
 use crate::raster::buffer::{HiddenPixelLanes, ImageBuffer};
 use crate::raster::traits::Pixel;
@@ -97,8 +100,8 @@ impl BinaryOperation {
     }
 }
 
-/// Produces Chops results for retained physical lanes when both inputs carry
-/// their omitted bytes. A missing sidecar remains unknown and is not guessed.
+/// Produces Chops results for retained physical lanes, resolving missing
+/// producer state with the same canonical mode fallback used by Paste.
 pub(crate) fn output_hidden_lanes(
     image: &DynamicImage,
     other: &DynamicImage,
@@ -126,27 +129,155 @@ where
             "Chops operands did not have matching physical pixel layouts".into(),
         ));
     }
-    let (Some(left), Some(right)) = (image.hidden_pixel_lanes(), other.hidden_pixel_lanes()) else {
-        return Ok(None);
-    };
-    if left.lane_count() != lane_count || right.lane_count() != lane_count {
-        return Err(PilError::InternalError(
-            "Chops physical lane payload did not match its mode".into(),
-        ));
-    }
+    let left_lanes = image.hidden_pixel_lanes();
+    let right_lanes = other.hidden_pixel_lanes();
+    validate_hidden_lane_source(image, left_lanes, lane_count)?;
+    validate_hidden_lane_source(other, right_lanes, lane_count)?;
     let output_dimensions = (
         image.width().min(other.width()) as usize,
         image.height().min(other.height()) as usize,
     );
-    left.zip_map_clipped(
-        right,
-        (image.width() as usize, image.height() as usize),
-        (other.width() as usize, other.height() as usize),
+    let output_pixel_count = output_dimensions
+        .0
+        .checked_mul(output_dimensions.1)
+        .ok_or_else(|| PilError::InternalError("Chops output lane extent overflow".into()))?;
+    if output_pixel_count == 0 {
+        return Ok(None);
+    }
+    if let (Some(left), Some(right)) = (left_lanes, right_lanes) {
+        return left
+            .zip_map_clipped(
+                right,
+                (image.width() as usize, image.height() as usize),
+                (other.width() as usize, other.height() as usize),
+                output_dimensions,
+                &mut map,
+            )
+            .map(Some)
+            .ok_or_else(|| {
+                PilError::InternalError("Chops physical lane extents did not match".into())
+            });
+    }
+    if left_lanes.is_none() && right_lanes.is_none() {
+        // The two-lane fallback duplicates logical band zero; the same byte
+        // operation therefore remains implicit in the output carrier.
+        if lane_count == 2 {
+            return Ok(None);
+        }
+        let left_default = default_hidden_pixel_lanes(image.mode(), 0).ok_or_else(|| {
+            PilError::InternalError("Chops left mode omitted its physical-lane fallback".into())
+        })?;
+        let right_default = default_hidden_pixel_lanes(other.mode(), 0).ok_or_else(|| {
+            PilError::InternalError("Chops right mode omitted its physical-lane fallback".into())
+        })?;
+        let output_lane = map(left_default[0], right_default[0]);
+        // Three-band fallbacks use 255 for the omitted fourth byte. Preserve
+        // that canonical value without allocating a sidecar.
+        if output_lane == u8::MAX {
+            return Ok(None);
+        }
+        return HiddenPixelLanes::constant(
+            lane_count,
+            output_pixel_count,
+            [output_lane, 0],
+        )
+        .map(Some)
+        .ok_or_else(|| {
+            PilError::InternalError("Chops physical lane result was invalid".into())
+        });
+    }
+    output_hidden_lanes_with_fallbacks(
+        image,
+        other,
+        left_lanes,
+        right_lanes,
+        lane_count,
         output_dimensions,
+        output_pixel_count,
         &mut map,
     )
-    .map(Some)
-    .ok_or_else(|| PilError::InternalError("Chops physical lane extents did not match".into()))
+}
+
+fn validate_hidden_lane_source(
+    image: &DynamicImage,
+    lanes: Option<&HiddenPixelLanes>,
+    lane_count: usize,
+) -> Result<(), PilError> {
+    let expected_pixels = (image.width() as usize)
+        .checked_mul(image.height() as usize)
+        .ok_or_else(|| PilError::InternalError("Chops input lane extent overflow".into()))?;
+    if lanes.is_some_and(|lanes| {
+        lanes.lane_count() != lane_count || lanes.pixel_count() != expected_pixels
+    }) {
+        return Err(PilError::InternalError(
+            "Chops physical lane payload did not match its mode".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn output_hidden_lanes_with_fallbacks<F>(
+    image: &DynamicImage,
+    other: &DynamicImage,
+    left_lanes: Option<&HiddenPixelLanes>,
+    right_lanes: Option<&HiddenPixelLanes>,
+    lane_count: usize,
+    output_dimensions: (usize, usize),
+    output_pixel_count: usize,
+    map: &mut F,
+) -> Result<Option<HiddenPixelLanes>, PilError>
+where
+    F: FnMut(u8, u8) -> u8,
+{
+    let mut values = Vec::with_capacity(
+        output_pixel_count
+            .checked_mul(lane_count)
+            .ok_or_else(|| PilError::InternalError("Chops output lane size overflow".into()))?,
+    );
+    let left_width = image.width() as usize;
+    let right_width = other.width() as usize;
+    for y in 0..output_dimensions.1 {
+        let left_row = y * left_width;
+        let right_row = y * right_width;
+        for x in 0..output_dimensions.0 {
+            let left_index = left_row + x;
+            let right_index = right_row + x;
+            let left = input_hidden_lanes(image, left_lanes, left_index, lane_count)?;
+            let right = input_hidden_lanes(other, right_lanes, right_index, lane_count)?;
+            for lane in 0..lane_count {
+                values.push(map(left[lane], right[lane]));
+            }
+        }
+    }
+    HiddenPixelLanes::per_pixel(lane_count, output_pixel_count, values)
+        .map(Some)
+        .ok_or_else(|| PilError::InternalError("Chops physical lane result was invalid".into()))
+}
+
+fn input_hidden_lanes(
+    image: &DynamicImage,
+    lanes: Option<&HiddenPixelLanes>,
+    pixel_index: usize,
+    lane_count: usize,
+) -> Result<[u8; 2], PilError> {
+    if lanes.is_some() {
+        return hidden_lanes_for_pixel_ref(lanes, pixel_index, lane_count, [0, 0]);
+    }
+    let mode = image.mode();
+    let carrier_width = mode.byte_carrier_pixel_width().ok_or_else(|| {
+        PilError::InternalError("Chops mode omitted its byte-carrier width".into())
+    })?;
+    let first_byte = pixel_index
+        .checked_mul(carrier_width)
+        .and_then(|start| image.as_bytes().get(start))
+        .copied()
+        .ok_or_else(|| {
+            PilError::InternalError("Chops pixel lane fallback was unavailable".into())
+        })?;
+    let fallback = default_hidden_pixel_lanes(mode, first_byte).ok_or_else(|| {
+        PilError::InternalError("Chops mode omitted its physical-lane fallback".into())
+    })?;
+    hidden_lanes_for_pixel_ref(None, pixel_index, lane_count, fallback)
 }
 
 /// Attaches Chops arithmetic for omitted bytes to an already computed image.

@@ -1,5 +1,8 @@
 //! Omitted physical-lane composition for Pad borders.
 
+use crate::compute::pool_cpu::helpers::bytes::hidden_lanes::{
+    default_hidden_lanes_for_bytes, default_hidden_pixel_lanes,
+};
 use crate::compute::pool_cpu::ops::geometry::pad::helpers::dimensions::PadFrame;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode, buffer::HiddenPixelLanes};
@@ -23,9 +26,6 @@ pub(crate) fn preserve_same_size_content(
     let Some(lane_count) = mode.hidden_pixel_lane_count() else {
         return Ok(());
     };
-    let Some(source_lanes) = source.hidden_pixel_lanes() else {
-        return Ok(());
-    };
     let source_width = usize::try_from(source.width())
         .map_err(|_| PilError::DimensionError("Pad lane source width overflow".into()))?;
     let source_height = usize::try_from(source.height())
@@ -33,7 +33,9 @@ pub(crate) fn preserve_same_size_content(
     let source_pixels = source_width
         .checked_mul(source_height)
         .ok_or_else(|| PilError::DimensionError("Pad lane source extent overflow".into()))?;
-    if source_lanes.lane_count() != lane_count || source_lanes.pixel_count() != source_pixels {
+    if source.hidden_pixel_lanes().is_some_and(|source_lanes| {
+        source_lanes.lane_count() != lane_count || source_lanes.pixel_count() != source_pixels
+    }) {
         return Err(PilError::InternalError(
             "Pad source physical lanes did not match the source image".into(),
         ));
@@ -47,13 +49,42 @@ pub(crate) fn preserve_same_size_content(
         .checked_mul(output_height)
         .ok_or_else(|| PilError::DimensionError("Pad lane output extent overflow".into()))?;
     let fill = fill_lanes(mode, frame.color);
-    let lanes = if output_pixels == 0 {
-        source_lanes.remap(0, |_| usize::MAX).ok_or_else(invalid_lane_output)?
-    } else if is_borderless(frame) {
-        source_lanes.clone()
-    } else if source_pixels == 0
-        || (source_lanes.is_constant()
-            && source_lanes.for_pixel(0) == Some(&fill[..lane_count]))
+    if output_pixels == 0 {
+        return match source.hidden_pixel_lanes() {
+            Some(source_lanes) => {
+                let lanes = source_lanes
+                    .remap(0, |_| usize::MAX)
+                    .ok_or_else(invalid_lane_output)?;
+                replace_lanes(output, Some(lanes))
+            }
+            None => replace_lanes(output, None),
+        };
+    }
+    if is_borderless(frame) {
+        return replace_lanes(output, source.hidden_pixel_lanes().cloned());
+    }
+    if source.hidden_pixel_lanes().is_none()
+        && default_hidden_pixel_lanes(mode, frame.color.map_or(0, |color| color.0))
+            .is_some_and(|default| default[..lane_count] == fill[..lane_count])
+    {
+        return replace_lanes(output, None);
+    }
+    if source_pixels == 0 {
+        let lanes = HiddenPixelLanes::constant(lane_count, output_pixels, fill)
+            .ok_or_else(invalid_lane_output)?;
+        return replace_lanes(output, Some(lanes));
+    }
+    let fallback_lanes = if source.hidden_pixel_lanes().is_none() {
+        default_hidden_lanes_for_bytes(mode, source.as_bytes(), source_pixels)?
+    } else {
+        None
+    };
+    let source_lanes = source
+        .hidden_pixel_lanes()
+        .or(fallback_lanes.as_ref())
+        .ok_or_else(invalid_lane_output)?;
+    let lanes = if source_lanes.is_constant()
+        && source_lanes.for_pixel(0) == Some(&fill[..lane_count])
     {
         HiddenPixelLanes::constant(lane_count, output_pixels, fill)
             .ok_or_else(invalid_lane_output)?

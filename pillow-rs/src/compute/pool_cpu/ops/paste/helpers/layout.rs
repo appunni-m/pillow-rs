@@ -1,3 +1,4 @@
+use crate::compute::pool_cpu::helpers::bytes::hidden_lanes::default_hidden_pixel_lanes;
 use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{DynamicImage, Mode};
 
@@ -58,11 +59,7 @@ pub(crate) fn physical_four_byte_source(image: &DynamicImage) -> Option<Vec<u8>>
     let mut physical = Vec::with_capacity(output_size);
     let lane_count = mode.hidden_pixel_lane_count()?;
     for (index, pixel) in logical.chunks_exact(channels).enumerate() {
-        let fallback = match channels {
-            2 => [pixel[0], pixel[0]],
-            3 => [u8::MAX, 0],
-            _ => return None,
-        };
+        let fallback = default_hidden_pixel_lanes(mode, pixel[0])?;
         let mut physical_pixel = [0; 4];
         for (byte, &sample) in pixel.iter().enumerate() {
             physical_pixel[mode.byte_carrier_physical_offset(byte)?] = sample;

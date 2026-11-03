@@ -38,13 +38,31 @@ pub(crate) fn carry_brightness_hidden_lanes(
             ));
         }
         Some(lanes) if alpha == 1.0 => Some(lanes.clone()),
-        Some(_) | None if alpha == 0.0 => {
+        Some(_) if alpha == 0.0 => {
             let lanes = HiddenPixelLanes::constant(lane_count, pixel_count, [0; 2])
                 .ok_or_else(|| PilError::InternalError("invalid Brightness lane layout".into()))?;
             (pixel_count > 0).then_some(lanes)
         }
         Some(lanes) => Some(lanes.map_values(|sample| blend_u8(0, sample, alpha))),
-        None => None,
+        None if lane_count == 2 => None,
+        None => {
+            let fallback = crate::compute::pool_cpu::helpers::bytes::hidden_lanes::
+                default_hidden_pixel_lanes(source.mode(), 0)
+                .ok_or_else(|| {
+                    PilError::InternalError(
+                        "Brightness mode omitted its physical-lane fallback".into(),
+                    )
+                })?;
+            let value = blend_u8(0, fallback[0], alpha);
+            if pixel_count == 0 || value == u8::MAX {
+                None
+            } else {
+                HiddenPixelLanes::constant(lane_count, pixel_count, [value, 0]).map(Some)
+                    .ok_or_else(|| {
+                        PilError::InternalError("invalid Brightness lane layout".into())
+                    })?
+            }
+        }
     };
     if output.replace_hidden_pixel_lanes(lanes) {
         Ok(())

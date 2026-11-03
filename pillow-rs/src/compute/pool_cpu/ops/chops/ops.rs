@@ -7,8 +7,9 @@
 //! `pool_cpu/helpers/bytes` and preserves every stored byte.
 //! Binary and fused Chops paths now apply their native byte arithmetic to
 //! retained omitted lanes, including owned in-place batch execution. Missing
-//! producer lane state remains a source-owner TODO; Offset remaps lanes and
-//! Invert transforms every retained byte.
+//! state starts from the same canonical per-mode fallback as Paste; Invert
+//! retains a changed fallback byte. Offset remaps lanes and Invert transforms
+//! every retained byte.
 use std::sync::Arc;
 
 use crate::compute::{Architecture, ExecutionContext};
@@ -500,6 +501,8 @@ impl ChopsExecutionPlan {
                 PilError::InternalError("Chops binary plan lost its secondary image".into())
             })?;
             super::helpers::binary::carry_hidden_lanes(image, other, &mut output, operation)?;
+        } else if matches!(self.request, ChopsRequest::Invert) {
+            super::helpers::unary::carry_inverted_lane_fallback(image, &mut output)?;
         }
         Ok(output)
     }

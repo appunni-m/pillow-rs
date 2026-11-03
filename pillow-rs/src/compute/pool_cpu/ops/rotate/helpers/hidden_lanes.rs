@@ -1,6 +1,7 @@
 //! Pillow physical-byte behavior for compact-carrier Rotate modes.
 
 use crate::compute::Architecture;
+use crate::compute::pool_cpu::helpers::bytes::hidden_lanes::default_hidden_lanes_for_bytes;
 use crate::compute::pool_cpu::ops::rotate::ops::RotateRequest;
 use crate::error::PilError;
 use crate::raster::buffer::HiddenPixelLanes;
@@ -90,7 +91,15 @@ fn finish_nearest(
     output_pixels: usize,
 ) -> Result<(), PilError> {
     let Some(source_lanes) = source.hidden_pixel_lanes() else {
-        return replace_lanes(output, None);
+        return finish_nearest_without_source_lanes(
+            source,
+            output,
+            request,
+            architecture,
+            lane_count,
+            source_pixels,
+            output_pixels,
+        );
     };
     let fill = hidden_fill(source.mode(), request);
     let fill_values = [fill.0, fill.3];
@@ -124,6 +133,49 @@ fn finish_nearest(
         )?,
         _ => return Err(invalid_lanes()),
     };
+    replace_lanes(output, Some(lanes))
+}
+
+fn finish_nearest_without_source_lanes(
+    source: &DynamicImage,
+    output: &mut DynamicImage,
+    request: RotateRequest,
+    architecture: Architecture,
+    lane_count: usize,
+    source_pixels: usize,
+    output_pixels: usize,
+) -> Result<(), PilError> {
+    if output_pixels == 0 || lane_count == 2 {
+        return replace_lanes(output, None);
+    }
+    let fill = hidden_fill(source.mode(), request);
+    let fill_values = [fill.0, fill.3];
+    if lane_count != 1 {
+        return Err(invalid_lanes());
+    }
+    if fill_values[0] == u8::MAX {
+        return replace_lanes(output, None);
+    }
+    if source_pixels == 0 {
+        let lanes = HiddenPixelLanes::constant(lane_count, output_pixels, fill_values)
+            .ok_or_else(invalid_lanes)?;
+        return replace_lanes(output, Some(lanes));
+    }
+    let source_lanes = default_hidden_lanes_for_bytes(
+        source.mode(),
+        source.as_bytes(),
+        source_pixels,
+    )?
+    .ok_or_else(invalid_lanes)?;
+    let lanes = nearest_lanes::<1>(
+        source,
+        &source_lanes,
+        output,
+        request,
+        architecture,
+        source_pixels,
+        output_pixels,
+    )?;
     replace_lanes(output, Some(lanes))
 }
 

@@ -1,6 +1,7 @@
 //! Serial native-sample Sharpness kernels shared by exact-mode strategies.
 
 use crate::error::PilError;
+use crate::compute::pool_cpu::helpers::bytes::hidden_lanes::default_hidden_pixel_lanes;
 use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{DynamicImage, ImageBuffer, Mode, Pixel, RgbaImage};
 
@@ -50,17 +51,27 @@ where
     let pixel_count = (source.width() as usize)
         .checked_mul(source.height() as usize)
         .ok_or_else(|| PilError::DimensionError("Sharpness lane extent overflow".into()))?;
+    let alpha = factor as f32;
+    let width = source.width() as usize;
+    let height = source.height() as usize;
     let Some(source_lanes) = source.hidden_pixel_lanes() else {
-        return replace_sharpness_lanes(output, None);
+        let lanes = default_sharpness_lanes(
+            mode,
+            lane_count,
+            pixel_count,
+            width,
+            height,
+            source.as_raw(),
+            output.as_bytes(),
+            alpha,
+        )?;
+        return replace_sharpness_lanes(output, lanes);
     };
     if source_lanes.lane_count() != lane_count || source_lanes.pixel_count() != pixel_count {
         return Err(PilError::InternalError(
             "Sharpness source lane payload did not match its mode".into(),
         ));
     }
-    let alpha = factor as f32;
-    let width = source.width() as usize;
-    let height = source.height() as usize;
     let lanes = if alpha == 1.0 || width < 3 || height < 3 {
         source_lanes.clone()
     } else {
@@ -88,6 +99,64 @@ where
             .ok_or_else(|| PilError::InternalError("invalid Sharpness lane layout".into()))?
     };
     replace_sharpness_lanes(output, Some(lanes))
+}
+
+fn default_sharpness_lanes(
+    mode: Mode,
+    lane_count: usize,
+    pixel_count: usize,
+    width: usize,
+    height: usize,
+    source_bytes: &[u8],
+    output_bytes: &[u8],
+    factor: f32,
+) -> Result<Option<HiddenPixelLanes>, PilError> {
+    if pixel_count == 0 || factor == 1.0 || width < 3 || height < 3 {
+        return Ok(None);
+    }
+    let carrier_width = mode.byte_carrier_pixel_width().ok_or_else(|| {
+        PilError::InternalError("Sharpness mode omitted its byte-carrier width".into())
+    })?;
+    let byte_size = pixel_count
+        .checked_mul(carrier_width)
+        .ok_or_else(|| PilError::DimensionError("Sharpness byte extent overflow".into()))?;
+    let source_bytes = source_bytes.get(..byte_size).ok_or_else(|| {
+        PilError::InternalError("Sharpness source bytes did not match its mode extent".into())
+    })?;
+    let output_bytes = output_bytes.get(..byte_size).ok_or_else(|| {
+        PilError::InternalError("Sharpness output bytes did not match its mode extent".into())
+    })?;
+    let lane_size = pixel_count
+        .checked_mul(lane_count)
+        .ok_or_else(|| PilError::DimensionError("Sharpness lane extent overflow".into()))?;
+    let mut values = Vec::with_capacity(lane_size);
+    let mut differs_from_fallback = false;
+    for index in 0..pixel_count {
+        let x = index % width;
+        let y = index / width;
+        let interior = x > 0 && x + 1 < width && y > 0 && y + 1 < height;
+        let byte_offset = index * carrier_width;
+        let source_lanes = default_hidden_pixel_lanes(mode, source_bytes[byte_offset])
+            .ok_or_else(|| {
+                PilError::InternalError("Sharpness mode omitted its physical-lane fallback".into())
+            })?;
+        let output_fallback = default_hidden_pixel_lanes(mode, output_bytes[byte_offset])
+            .ok_or_else(|| {
+                PilError::InternalError("Sharpness mode omitted its physical-lane fallback".into())
+            })?;
+        for lane in 0..lane_count {
+            let filtered = if interior { 0 } else { source_lanes[lane] };
+            let value = super::native::blend_u8(filtered, source_lanes[lane], factor);
+            differs_from_fallback |= value != output_fallback[lane];
+            values.push(value);
+        }
+    }
+    if !differs_from_fallback {
+        return Ok(None);
+    }
+    HiddenPixelLanes::per_pixel(lane_count, pixel_count, values)
+        .map(Some)
+        .ok_or_else(|| PilError::InternalError("invalid Sharpness lane layout".into()))
 }
 
 fn replace_sharpness_lanes(

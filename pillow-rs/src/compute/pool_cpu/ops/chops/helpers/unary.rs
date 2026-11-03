@@ -1,7 +1,7 @@
 //! Serial native-mode ImageChops unary strategies.
 
 use crate::error::PilError;
-use crate::raster::buffer::ImageBuffer;
+use crate::raster::buffer::{HiddenPixelLanes, ImageBuffer};
 use crate::raster::traits::Pixel;
 use crate::raster::{DynamicImage, GrayImage, Luma};
 
@@ -55,6 +55,37 @@ where
             "invert Chops hidden lane shape mismatch".into(),
         ))
     }
+}
+
+/// Preserves an inverted three-band fallback byte when no producer sidecar
+/// was present on the source carrier.
+pub(crate) fn carry_inverted_lane_fallback(
+    source: &DynamicImage,
+    output: &mut DynamicImage,
+) -> Result<(), PilError> {
+    let mode = source.mode();
+    if mode.hidden_pixel_lane_count() != Some(1) || source.hidden_pixel_lanes().is_some() {
+        return Ok(());
+    }
+    let pixel_count = (source.width() as usize)
+        .checked_mul(source.height() as usize)
+        .ok_or_else(|| PilError::InternalError("Chops hidden lane extent overflow".into()))?;
+    if pixel_count == 0 {
+        return Ok(());
+    }
+    let fallback = crate::compute::pool_cpu::helpers::bytes::hidden_lanes::
+        default_hidden_pixel_lanes(mode, 0)
+        .ok_or_else(|| {
+            PilError::InternalError("Chops mode omitted its physical-lane fallback".into())
+        })?;
+    let lanes = HiddenPixelLanes::constant(1, pixel_count, [!fallback[0], 0])
+        .ok_or_else(|| PilError::InternalError("Chops inverted lane result was invalid".into()))?;
+    if output.mode() != mode || !output.replace_hidden_pixel_lanes(Some(lanes)) {
+        return Err(PilError::InternalError(
+            "Chops inverted lane output did not match its mode".into(),
+        ));
+    }
+    Ok(())
 }
 
 pub(crate) trait InvertSample: Copy {

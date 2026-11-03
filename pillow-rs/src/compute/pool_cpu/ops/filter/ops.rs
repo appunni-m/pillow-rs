@@ -10,9 +10,10 @@
 //! around `_apply`. Freeze size-3-or-larger rank-filter empty-image behavior
 //! as a safe empty result; Pillow 12.2 reaches an edge read in `ImagingExpand`.
 //! Compact mode lanes follow Pillow's physical-byte rules: Filter.c copies the
-//! border and zeros omitted lanes in its interior, BoxBlur filters all four
-//! bytes, and UnsharpMask applies the same blend to the filtered lanes. Native
-//! rank and ModeFilter extensions process omitted bytes independently.
+//! border and zeros omitted lanes in its interior, deriving canonical input
+//! lanes when no sidecar exists; BoxBlur filters all four bytes, and
+//! UnsharpMask applies the same blend to the filtered lanes. Native rank and
+//! ModeFilter extensions process omitted bytes independently.
 //! TODO(pillow-rs#3ptb): freeze these physical-lane cases in CPU parity.
 //! Keep Rayon out of this serial owner.
 //!

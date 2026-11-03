@@ -36,7 +36,10 @@ pub(crate) fn finish(
             if matches!(request.filter, ResampleFilter::Nearest) {
                 match source.hidden_pixel_lanes() {
                     Some(_) => sample_source_lanes::<2>(source, mode, request, architecture)?,
-                    None => repeat_first_sample(output, pixel_count, lane_count)?,
+                    None if two_band_fill_matches_luma(mode, request) => {
+                        repeat_first_sample(output, pixel_count, lane_count)?
+                    }
+                    None => sample_source_lanes::<2>(source, mode, request, architecture)?,
                 }
             } else {
                 repeat_first_sample(output, pixel_count, lane_count)?
@@ -57,6 +60,13 @@ pub(crate) fn finish(
         return Err(invalid_lanes());
     }
     Ok(())
+}
+
+// A missing source sidecar is recoverable from luma except when a nearest
+// transform's explicit packed fill carries different physical bytes.
+fn two_band_fill_matches_luma(mode: Mode, request: TransformRequest<'_>) -> bool {
+    let luma = request.fill.map_or(0, |fill| fill.0);
+    hidden_fill(mode, request) == [luma, luma]
 }
 
 fn sample_source_lanes<const CHANNELS: usize>(
@@ -243,6 +253,8 @@ fn hidden_fill(mode: Mode, request: TransformRequest<'_>) -> [u8; 2] {
     if request.fill_is_none {
         return [0, 0];
     }
+    // public_transform_fill stores LA-family components as (L, A, lane1,
+    // lane2); RGB-family component four is the omitted physical padding byte.
     request.fill.map_or([0, 0], |fill| {
         if mode.hidden_pixel_lane_count() == Some(1) {
             [fill.3, 0]

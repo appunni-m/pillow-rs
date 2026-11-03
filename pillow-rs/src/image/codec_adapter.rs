@@ -111,9 +111,14 @@ pub(crate) fn raster_to_decoded(image: DynamicImage) -> Result<DecodedImage, Pil
             CodecColorType::Rgba16,
         )),
         image => {
-            // TODO(pillow-rs#3ptb): finish exact-mode encoder mappings for
-            // premultiplied alpha, RGBX, and three-byte color spaces, with
-            // format-specific pixel translation or an explicit rejection.
+            // TODO(image-slash-star#nype): add exact codec transfer mappings
+            // for premultiplied alpha, RGBX, and three-byte color spaces,
+            // including format-specific support and rejection behavior.
+            // Append newly found mode/format cases to that task. Keep pixel
+            // translation in the codec boundary, not as a Pillow-side
+            // conversion.
+            // TODO(pillow-rs#3ptb): update this adapter when those codec
+            // contracts land and verify Pillow-visible output and errors.
             Ok(DecodedImage::new(
                 width,
                 height,

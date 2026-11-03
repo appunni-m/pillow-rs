@@ -1,6 +1,7 @@
 //! Pillow physical-byte behavior for compact mode filter outputs.
 
 use crate::error::PilError;
+use crate::compute::pool_cpu::helpers::bytes::hidden_lanes::default_hidden_lanes_for_bytes;
 use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::DynamicImage;
 
@@ -18,7 +19,7 @@ pub(crate) fn finish(
         return Ok(());
     };
     let Some(source_lanes) = source.hidden_pixel_lanes() else {
-        return replace_lanes(output, None);
+        return finish_missing_source_lanes(source, output, request, lane_count);
     };
     validate_source_lanes(source_lanes, lane_count, source)?;
 
@@ -27,6 +28,34 @@ pub(crate) fn finish(
         FilterRequest::Filter5x5 { .. } => filter_border_lanes(source_lanes, source, 2)?,
         _ => execute_independent_lanes(source_lanes, source, request)?,
     };
+    replace_lanes(output, Some(lanes))
+}
+
+fn finish_missing_source_lanes(
+    source: &DynamicImage,
+    output: &mut DynamicImage,
+    request: FilterRequest,
+    lane_count: usize,
+) -> Result<(), PilError> {
+    let radius = match request {
+        FilterRequest::Filter3x3 { .. } => 1,
+        FilterRequest::Filter5x5 { .. } => 2,
+        _ => return replace_lanes(output, None),
+    };
+    let width = source.width() as usize;
+    let height = source.height() as usize;
+    if width < radius * 2 + 1 || height < radius * 2 + 1 {
+        return replace_lanes(output, None);
+    }
+    let pixel_count = checked_pixel_count(source)?;
+    let source_lanes = default_hidden_lanes_for_bytes(
+        source.mode(),
+        source.as_bytes(),
+        pixel_count,
+    )?
+    .ok_or_else(invalid_lanes)?;
+    validate_source_lanes(&source_lanes, lane_count, source)?;
+    let lanes = filter_border_lanes(&source_lanes, source, radius)?;
     replace_lanes(output, Some(lanes))
 }
 
