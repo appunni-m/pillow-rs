@@ -34,8 +34,8 @@ const TARGETS: &[Mode] = &[
     Mode::ImageI32,
     Mode::ImageF32,
 ];
-// NO_PILLOW_SUPPORT: CMYK targets other than identity, RGB, RGBA, RGBX, and
-// HSV extend Pillow's native conversion set.
+// TODO(pillow-rs#3ptb): Pillow's wrapper also converts CMYK to LAB through
+// RGBA and ImageCms; reconcile all CoreOnly targets with wrapper fallbacks.
 const CORE_ONLY_TARGETS: &[Mode] = &[
     Mode::One,
     Mode::ImageLuma8,
@@ -56,7 +56,7 @@ const CORE_ONLY_TARGETS: &[Mode] = &[
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: TARGETS,
     core_only_targets: CORE_ONLY_TARGETS,
-    core_only_reason: Some("Pillow has no matching CMYK source-target conversion"),
+    core_only_reason: Some("listed CMYK target routes need Pillow-wrapper parity review"),
     rejection_reason: "image has wrong mode",
 }];
 

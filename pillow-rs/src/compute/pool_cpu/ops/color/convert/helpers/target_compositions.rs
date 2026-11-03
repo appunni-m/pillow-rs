@@ -43,6 +43,9 @@ const TO_PA: &[OperationModeTransition] = &[OperationModeTransition {
     source: OperationTransitionSource::Input,
     target: Mode::ImagePaletteAlpha8,
 }];
+// TODO(pillow-rs#3ptb): Pillow's public LAB conversion uses ImageCms. This
+// current route normalizes every source through RGB and cannot preserve the
+// alpha/auxiliary channel behavior of direct RGBA or RGBX profile transforms.
 const TO_LAB: &[OperationModeTransition] = &[
     OperationModeTransition {
         operation: OperationId::Convert,

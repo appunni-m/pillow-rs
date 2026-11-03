@@ -202,7 +202,8 @@ static ARCHITECTURES: [ImplementationSupport; 36] = architecture_catalog!(
     ]
 );
 
-// NO_PILLOW_SUPPORT: Pillow has no RGBA converters to La, I;16 identities, or LAB.
+// TODO(pillow-rs#3ptb): Pillow routes RGBA-to-LAB directly through ImageCms;
+// keep LAB CoreOnly until the Rust path preserves its color and auxiliary lanes.
 const CORE_ONLY_TARGETS: &[Mode] = &[
     Mode::ImageLaPremultiplied8,
     Mode::ImageI16,
@@ -214,7 +215,7 @@ const CORE_ONLY_TARGETS: &[Mode] = &[
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: super::super::ops::RGBA_TARGETS,
     core_only_targets: CORE_ONLY_TARGETS,
-    core_only_reason: Some("Pillow has no matching RGBA source-target conversion"),
+    core_only_reason: Some("listed RGBA target routes still need Pillow-wrapper parity review"),
     rejection_reason: "image has wrong mode",
 }];
 

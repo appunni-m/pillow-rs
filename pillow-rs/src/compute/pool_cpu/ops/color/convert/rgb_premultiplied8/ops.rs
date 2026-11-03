@@ -158,7 +158,8 @@ static ARCHITECTURES: [ImplementationSupport; 35] = architecture_targets!(
     ]
 );
 
-// NO_PILLOW_SUPPORT: RGBa has only identity, RGB, RGBA, and palette targets.
+// TODO(pillow-rs#3ptb): Pillow can route RGBa-to-LAB through RGBA and ImageCms;
+// keep LAB CoreOnly until the Rust path matches that public conversion.
 const CORE_ONLY_TARGETS: &[Mode] = &[
     Mode::One,
     Mode::ImageLuma8,
@@ -179,7 +180,7 @@ const CORE_ONLY_TARGETS: &[Mode] = &[
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: super::super::ops::RGB_PREMULTIPLIED_TARGETS,
     core_only_targets: CORE_ONLY_TARGETS,
-    core_only_reason: Some("Pillow has no matching RGBa source-target conversion"),
+    core_only_reason: Some("listed RGBa target routes need Pillow-wrapper parity review"),
     rejection_reason: "image has wrong mode",
 }];
 

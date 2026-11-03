@@ -7,6 +7,8 @@ use crate::raster::{
 };
 
 pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, PilError> {
+    // TODO(pillow-rs#3ptb): Apply the Rust inverse LAB profile before treating
+    // LAB samples as RGB for color-space, luma, or CMYK target strategies.
     match target {
         Mode::ImageLuma8 => luma(source).map(DynamicImage::ImageLuma8),
         Mode::ImageLumaA8 => luma_alpha(source).map(DynamicImage::ImageLumaA8),

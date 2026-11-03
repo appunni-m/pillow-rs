@@ -31,7 +31,8 @@ const TARGETS: &[Mode] = &[
     Mode::ImageI32,
     Mode::ImageF32,
 ];
-// NO_PILLOW_SUPPORT: PA-to-I;16, LAB, and premultiplied targets are Rust extensions.
+// TODO(pillow-rs#3ptb): Pillow routes PA-to-LAB through RGBA and ImageCms when
+// palette metadata permits it. The remaining listed targets stay CoreOnly.
 const CORE_ONLY_TARGETS: &[Mode] = &[
     Mode::ImageLaPremultiplied8,
     Mode::ImageRgbPremultiplied8,
@@ -46,7 +47,7 @@ const INPUTS: &[InputContract] = &[
     InputContract::ConvertTarget {
         targets: TARGETS,
         core_only_targets: CORE_ONLY_TARGETS,
-        core_only_reason: Some("Pillow has no matching PA source-target conversion"),
+        core_only_reason: Some("listed PA target routes still need Pillow-wrapper parity review"),
         rejection_reason: "image has wrong mode",
     },
 ];

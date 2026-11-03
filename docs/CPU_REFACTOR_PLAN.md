@@ -69,7 +69,7 @@ the baseline. Keep `pillow-rs-bad` as reference.
 
 ## Current pending matrix
 
-Snapshot base: `develop` commit `9e1c17fcc` (local WIP, unpushed). The CPU
+Snapshot base: `develop` commit `a06a7f2b5` (local WIP, unpushed). The CPU
 source migration remains in review and is not ready for validation gates.
 Recent source-only checkpoints thread `StrategySelection` through Rotate and
 Transform hidden-lane helpers; native-byte Filter extrema, rank, and blur
@@ -96,9 +96,18 @@ to Pillow's storage representation. P/PA conversions to RGB, YCbCr, and HSV,
 and RGBX/RGBa conversions to RGB, were source-reviewed and use the canonical
 opaque byte. Newly produced LA/La/PA conversions use canonical duplicated
 sample/index lanes, while same-mode identity retains existing sidecars. The
-complete source/target matrix, including LAB and CoreOnly routes, remains a
-blocking TODO in the inventory.
-These source changes are uncompiled.
+compact-lane source review confirms CMYK-to-RGB, YCbCr, and HSV synthesize the
+canonical opaque X value; no CMYK source lane is copied. A broader wrapper
+review found that Pillow's Python `Image.convert()` handles LAB through
+ImageCms: RGB/RGBA/RGBX sources can transform directly, other source modes are
+normalized through RGBA, and LAB sources transform to RGB-family targets. The
+current Rust support declarations still mark many of these paths CoreOnly;
+Convert-to-LAB currently normalizes through RGB, and LAB-to-RGB currently
+reuses LAB samples. The exact wrapper route, both transform directions,
+auxiliary-lane outcomes, and fault ordering are now explicit source TODOs.
+Official source references and the remaining Convert mode/target matrix are in
+the [CPU refactor inventory](CPU_REFACTOR_INVENTORY.md). These source changes
+are uncompiled.
 Chops, Pad, Draw, Thumbnail, Quantize, Resize, geometry sidecars, Filter, and
 Composite context propagation remain uncompiled and runtime-unverified. The
 audit is not a completion proof: operation support declarations, ownership,

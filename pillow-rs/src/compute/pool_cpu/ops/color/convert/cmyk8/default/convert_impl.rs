@@ -8,6 +8,7 @@ use crate::raster::{
 };
 
 pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, PilError> {
+    // CMYK stores C/M/Y/K, not alpha; color-space outputs synthesize opaque X.
     match target {
         Mode::ImageLuma8 => Ok(DynamicImage::ImageLuma8(grayscale(source))),
         Mode::ImageLaPremultiplied8 | Mode::ImageRgbPremultiplied8 => {

@@ -201,8 +201,10 @@ pub(super) fn classify_mode(mode: Mode) -> ModeSupport {
 
 /// Complete source-mode and typed-target contract for Convert.
 ///
-/// Convert-to-LAB is a wrapper composition: each source mode selects its
-/// declared RGB normalization route, then the RGB8 ConvertLab operation runs.
+/// Convert-to-LAB currently composes source normalization with the RGB8
+/// ConvertLab operation. TODO(pillow-rs#3ptb): Pillow's Python wrapper handles
+/// LAB through ImageCms, including direct RGBA/RGBX and inverse LAB routes;
+/// replace this normalization contract with the matching Rust strategies.
 // Archive source review: SIMD's generic byte-layout preflight admits L, LA,
 // RGB, and RGBA carriers with their explicit Pillow aliases; RGBa alpha
 // transforms, CMYK→RGB, I;16 conversions, and One/L→I;16 use separate paths.

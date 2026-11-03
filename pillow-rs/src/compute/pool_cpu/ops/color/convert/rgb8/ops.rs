@@ -43,11 +43,12 @@ const TARGETS: &[Mode] = &[
 const CORE_ONLY_TARGETS: &[Mode] = &[
     Mode::ImageLab8,
 ];
-// NO_PILLOW_SUPPORT: RGB-to-LAB is provided by the Rust ConvertLab composition.
+// TODO(pillow-rs#3ptb): Pillow routes RGB-to-LAB through ImageCms. Keep this
+// CoreOnly until the Rust composition matches that public conversion contract.
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: TARGETS,
     core_only_targets: CORE_ONLY_TARGETS,
-    core_only_reason: Some("Pillow has no standard RGB-to-LAB conversion"),
+    core_only_reason: Some("Rust RGB-to-LAB has not completed ImageCms parity review"),
     rejection_reason: "image has wrong mode",
 }];
 

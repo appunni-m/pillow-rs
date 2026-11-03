@@ -32,7 +32,8 @@ const TARGETS: &[Mode] = &[
     Mode::ImageI32,
     Mode::ImageF32,
 ];
-// NO_PILLOW_SUPPORT: Pillow defines identity copies but no LAB conversions.
+// TODO(pillow-rs#3ptb): Pillow uses ImageCms for LAB-to-RGB/RGBA/RGBX. The
+// current Rust source-mode routes do not implement those profile transforms.
 const CORE_ONLY_TARGETS: &[Mode] = &[
     Mode::One,
     Mode::ImageLuma8,
@@ -56,7 +57,7 @@ const CORE_ONLY_TARGETS: &[Mode] = &[
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: TARGETS,
     core_only_targets: CORE_ONLY_TARGETS,
-    core_only_reason: Some("Pillow has no matching LAB source-target conversion"),
+    core_only_reason: Some("listed LAB source routes need Pillow-wrapper parity review"),
     rejection_reason: "image has wrong mode",
 }];
 
