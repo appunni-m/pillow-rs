@@ -1,10 +1,8 @@
 //! Serial native-sample implementations for ImageLuma8.
 
 use crate::error::PilError;
-use crate::raster::{DynamicImage, Mode};
+use crate::raster::DynamicImage;
 use std::sync::Arc;
-
-const MODE: Mode = Mode::ImageLuma8;
 
 pub(crate) fn merge(
     source: &DynamicImage,
@@ -14,14 +12,4 @@ pub(crate) fn merge(
         return Err(PilError::InternalError("identity Merge received extra bands".into()));
     }
     Ok(source.clone())
-}
-
-pub(crate) fn blend(
-    source: &DynamicImage,
-    other: &DynamicImage,
-    alpha: f64,
-) -> Result<DynamicImage, PilError> {
-    crate::compute::pool_cpu::ops::composite::helpers::blend::execute(
-        source, other, MODE, alpha, 1,
-    )
 }

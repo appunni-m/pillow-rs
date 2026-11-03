@@ -19,16 +19,6 @@ pub(crate) fn merge(
     )
 }
 
-pub(crate) fn blend(
-    source: &DynamicImage,
-    other: &DynamicImage,
-    alpha: f64,
-) -> Result<DynamicImage, PilError> {
-    crate::compute::pool_cpu::ops::composite::helpers::blend::execute(
-        source, other, MODE, alpha, 3,
-    )
-}
-
 pub(crate) fn composite(
     source: &DynamicImage,
     destination: &DynamicImage,

@@ -17,13 +17,3 @@ pub(crate) fn merge(
         crate::compute::pool_cpu::ops::composite::ops::MergeLayout::Three { lab_encoding: false },
     )
 }
-
-pub(crate) fn blend(
-    source: &DynamicImage,
-    other: &DynamicImage,
-    alpha: f64,
-) -> Result<DynamicImage, PilError> {
-    crate::compute::pool_cpu::ops::composite::helpers::blend::execute(
-        source, other, MODE, alpha, 3,
-    )
-}

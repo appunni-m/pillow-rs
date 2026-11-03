@@ -24,11 +24,6 @@ pub(crate) fn interleave(
             interleave_three(&bands, &mut output, lab_encoding)
         }
         MergeLayout::Four => interleave_four(&bands, &mut output),
-        MergeLayout::Identity => {
-            return Err(PilError::InternalError(
-                "identity Merge reached the interleave kernel".into(),
-            ));
-        }
     }
 
     crate::compute::pool_cpu::ops::composite::helpers::native_bytes::construct(

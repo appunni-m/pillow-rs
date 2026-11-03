@@ -24,22 +24,6 @@ pub(crate) fn alpha(index: u8, palette: PaletteInput<'_>) -> u8 {
     palette.alpha.get(usize::from(index)).copied().unwrap_or(u8::MAX)
 }
 
-pub(crate) fn web_alpha_from_pixels(
-    width: u32,
-    height: u32,
-    pixels: impl Iterator<Item = [u8; 3]>,
-    dither: bool,
-) -> Result<PreparedConvertOutput, PilError> {
-    web_palette_from_pixels(
-        width,
-        height,
-        pixels,
-        dither,
-        Mode::ImagePaletteAlpha8,
-        ConvertWrapperMetadata::ExifOnly,
-    )
-}
-
 pub(crate) fn web_alpha_from_rgb_samples(
     width: u32,
     height: u32,

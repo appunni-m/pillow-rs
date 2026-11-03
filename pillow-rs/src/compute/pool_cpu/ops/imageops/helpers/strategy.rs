@@ -370,28 +370,6 @@ macro_rules! declare_expand_byte_mode {
 
 pub(crate) use declare_expand_byte_mode;
 
-#[derive(Clone, Copy)]
-pub(crate) enum NativeByteArchitecture {
-    Default,
-    Sse2,
-    Neon,
-    WasmSimd128,
-}
-
-pub(crate) fn native_byte_architecture(
-    selection: &StrategySelection,
-) -> Result<NativeByteArchitecture, PilError> {
-    match selection.implementation.architecture {
-        Architecture::Default => Ok(NativeByteArchitecture::Default),
-        Architecture::Sse2 => Ok(NativeByteArchitecture::Sse2),
-        Architecture::Neon => Ok(NativeByteArchitecture::Neon),
-        Architecture::WasmSimd128 => Ok(NativeByteArchitecture::WasmSimd128),
-        _ => Err(PilError::InternalError(
-            "native-byte selection has no matching CPU kernel".into(),
-        )),
-    }
-}
-
 pub(crate) const fn unsupported_mode_reason(mode: Mode) -> &'static str {
     match mode {
         Mode::One => "not supported for mode 1",

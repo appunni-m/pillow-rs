@@ -94,13 +94,3 @@ fn interleave_rgb_luma_bands(
     }
     Ok(output)
 }
-
-pub(crate) fn blend(
-    source: &DynamicImage,
-    other: &DynamicImage,
-    alpha: f64,
-) -> Result<DynamicImage, PilError> {
-    crate::compute::pool_cpu::ops::composite::helpers::blend::execute(
-        source, other, MODE, alpha, 3,
-    )
-}

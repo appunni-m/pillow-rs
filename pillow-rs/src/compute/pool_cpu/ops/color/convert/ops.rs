@@ -268,6 +268,5 @@ pub(crate) static MATRIX_SUPPORT: OperationSupport = OperationSupport::new(
 .with_rejected_output(OutputModeRule::ByTargetMode);
 
 pub(crate) use super::helpers::prepared::{
-    prepare, prepare_matrix, prepare_pipeline, ConvertWrapperMetadata, Prepared,
-    PreparedConvert, PreparedConvertOutput,
+    prepare_pipeline, ConvertWrapperMetadata, Prepared, PreparedConvertOutput,
 };

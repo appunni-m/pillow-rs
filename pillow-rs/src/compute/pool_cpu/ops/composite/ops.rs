@@ -202,7 +202,6 @@ pub(crate) fn prepare_mirror_fusion<'a>(
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum MergeLayout {
-    Identity,
     Two,
     Three { lab_encoding: bool },
     Four,
@@ -211,7 +210,6 @@ pub(crate) enum MergeLayout {
 impl MergeLayout {
     pub(crate) const fn channels(self) -> u8 {
         match self {
-            Self::Identity => 1,
             Self::Two => 2,
             Self::Three { .. } => 3,
             Self::Four => 4,

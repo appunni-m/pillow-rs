@@ -11,9 +11,6 @@ use crate::raster::{DynamicImage, Mode};
 
 use super::super::ops::{MATRIX_SUPPORT, SUPPORT};
 
-/// Compatibility name consumed by the prepared-operation registry.
-pub(crate) type PreparedConvert<'a> = Prepared<'a>;
-
 /// Raster output plus wrapper-owned palette data for eager palette conversion.
 pub(crate) struct PreparedConvertOutput {
     pub(crate) image: DynamicImage,

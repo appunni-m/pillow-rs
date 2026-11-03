@@ -10,7 +10,6 @@ use crate::raster::{ImageBuffer, Pixel};
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct CropRegion {
     pub(crate) source_width: u32,
-    pub(crate) source_height: u32,
     pub(crate) left: u32,
     pub(crate) top: u32,
     pub(crate) width: u32,
@@ -39,7 +38,6 @@ impl CropRegion {
         })?;
         Ok(Self {
             source_width: image_width,
-            source_height: image_height,
             left,
             top,
             width,
