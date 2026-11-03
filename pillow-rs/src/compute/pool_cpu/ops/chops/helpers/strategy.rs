@@ -3,8 +3,26 @@
 use crate::compute::registry::support::{
     ImplementationSupport, OperationId, StrategyGuard,
 };
-use crate::compute::Architecture;
+use crate::compute::{Architecture, Backend};
+use crate::compute::registry::support::StrategySelection;
+use crate::error::PilError;
 use crate::raster::Mode;
+
+pub(crate) fn require_default_selection(
+    selection: &StrategySelection,
+    mode: Mode,
+) -> Result<(), PilError> {
+    let implementation = selection.implementation;
+    if implementation.backend == Backend::Cpu
+        && implementation.mode == mode
+        && implementation.architecture == Architecture::Default
+    {
+        return Ok(());
+    }
+    Err(PilError::InternalError(
+        "Chops Default mode received a mismatched strategy selection".into(),
+    ))
+}
 
 pub(crate) const fn byte_architectures(
     operation: OperationId,

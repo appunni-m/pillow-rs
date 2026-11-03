@@ -1,6 +1,8 @@
 //! Exact luma8 Chops support and mode strategy.
 
-use crate::compute::registry::support::{ImplementationSupport, ModeSupport, OperationId};
+use crate::compute::registry::support::{
+    ImplementationSupport, ModeSupport, OperationId, StrategySelection,
+};
 use crate::compute::Architecture;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
@@ -26,8 +28,9 @@ pub(crate) fn execute(
     image: &DynamicImage,
     request: super::super::ops::ChopsRequest,
     other: Option<&DynamicImage>,
-    architecture: Architecture,
+    selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
+    let architecture = selection.implementation.architecture;
     if let super::super::ops::ChopsRequest::Offset { x, y } = request {
         return match image {
             DynamicImage::ImageLuma8(buffer) => match architecture {
@@ -89,8 +92,9 @@ pub(crate) fn execute(
 pub(crate) fn execute_fused(
     image: &DynamicImage,
     other: &DynamicImage,
-    architecture: Architecture,
+    selection: &StrategySelection,
 ) -> Result<super::super::helpers::fusion::FusedChopsOutput, PilError> {
+    let architecture = selection.implementation.architecture;
     let (image, other) = match (image, other) {
         (DynamicImage::ImageLuma8(image), DynamicImage::ImageLuma8(other)) => (image, other),
         _ => {
@@ -117,8 +121,9 @@ pub(crate) fn execute_in_place(
     image: &mut DynamicImage,
     request: super::super::ops::ChopsRequest,
     other: &DynamicImage,
-    architecture: Architecture,
+    selection: &StrategySelection,
 ) -> Result<(), PilError> {
+    let architecture = selection.implementation.architecture;
     match image {
         DynamicImage::ImageLuma8(buffer) => {
             let other = match other {

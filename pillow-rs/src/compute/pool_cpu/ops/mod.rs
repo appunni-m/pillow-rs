@@ -2,6 +2,9 @@
 // TODO(pillow-rs#3ptb): audit every architecture module declaration against
 // its mode support and dispatch cfg. Keep architecture implementations until
 // target-specific reachability is verified.
+// TODO(pillow-rs#3ptb): finish the family-by-family audit that every execution
+// boundary consumes the prepared selection derived from ExecutionContext.
+// Resize and Chops are the only families covered by this continuation so far.
 
 pub(crate) mod analysis;
 pub(crate) mod chops;

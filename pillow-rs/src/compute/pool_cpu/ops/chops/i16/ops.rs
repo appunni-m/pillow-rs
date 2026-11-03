@@ -1,6 +1,8 @@
 //! Exact i16 Chops support and mode strategy.
 
-use crate::compute::registry::support::{ImplementationSupport, ModeSupport, OperationId};
+use crate::compute::registry::support::{
+    ImplementationSupport, ModeSupport, OperationId, StrategySelection,
+};
 use crate::compute::Architecture;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
@@ -23,8 +25,9 @@ pub(crate) fn execute(
     image: &DynamicImage,
     request: super::super::ops::ChopsRequest,
     other: Option<&DynamicImage>,
-    architecture: Architecture,
+    selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
+    let architecture = selection.implementation.architecture;
     let DynamicImage::ImageI16(buffer) = image else {
         return Err(PilError::InternalError(
             "Chops mode strategy received a different raster variant".into(),

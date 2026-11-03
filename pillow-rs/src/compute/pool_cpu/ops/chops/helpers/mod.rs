@@ -1,6 +1,7 @@
 //! Native-byte kernels shared by exact-mode ImageChops strategies.
 
 pub(crate) mod binary;
+pub(crate) mod dispatch;
 pub(crate) mod fusion;
 pub(crate) mod offset;
 pub(crate) mod strategy;

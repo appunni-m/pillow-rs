@@ -407,7 +407,7 @@ impl PreparedChopsFusion<'_> {
             self.image,
             &self.other,
             self.mode,
-            self.selection.implementation.architecture,
+            &self.selection,
         )?;
         let lanes = super::helpers::binary::output_hidden_lanes_with(
             self.image,
@@ -430,13 +430,13 @@ fn execute_fused_multiply_screen(
     image: &DynamicImage,
     other: &DynamicImage,
     mode: Mode,
-    architecture: Architecture,
+    selection: &StrategySelection,
 ) -> Result<super::helpers::fusion::FusedChopsOutput, PilError> {
     match mode {
-        Mode::ImageLuma8 => super::luma8::ops::execute_fused(image, other, architecture),
-        Mode::ImageLumaA8 => super::luma_a8::ops::execute_fused(image, other, architecture),
-        Mode::ImageRgb8 => super::rgb8::ops::execute_fused(image, other, architecture),
-        Mode::ImageRgba8 => super::rgba8::ops::execute_fused(image, other, architecture),
+        Mode::ImageLuma8 => super::luma8::ops::execute_fused(image, other, selection),
+        Mode::ImageLumaA8 => super::luma_a8::ops::execute_fused(image, other, selection),
+        Mode::ImageRgb8 => super::rgb8::ops::execute_fused(image, other, selection),
+        Mode::ImageRgba8 => super::rgba8::ops::execute_fused(image, other, selection),
         _ => Err(PilError::InternalError(
             "Chops fusion received a mode without a fused strategy".into(),
         )),
@@ -467,37 +467,11 @@ impl ChopsExecutionPlan {
     }
 
     pub(crate) fn execute(self, image: &DynamicImage) -> Result<DynamicImage, PilError> {
-        let architecture = self.selection.implementation.architecture;
+        let selection = &self.selection;
         let other = self.other.as_deref();
-        let mut output = match self.mode {
-            Mode::One => super::one::ops::execute(image, self.request, self.other.as_deref(), architecture),
-            Mode::ImageLuma8 => super::luma8::ops::execute(image, self.request, self.other.as_deref(), architecture),
-            Mode::ImageLumaA8 => super::luma_a8::ops::execute(image, self.request, self.other.as_deref(), architecture),
-            Mode::ImageLaPremultiplied8 => {
-                super::la_premultiplied8::ops::execute(image, self.request, self.other.as_deref())
-            }
-            Mode::ImagePalette8 => super::palette8::ops::execute(image, self.request, self.other.as_deref(), architecture),
-            Mode::ImagePaletteAlpha8 => super::palette_alpha8::ops::execute(image, self.request, self.other.as_deref(), architecture),
-            Mode::ImageRgb8 => super::rgb8::ops::execute(image, self.request, self.other.as_deref(), architecture),
-            Mode::ImageRgba8 => super::rgba8::ops::execute(image, self.request, self.other.as_deref(), architecture),
-            Mode::ImageRgbPremultiplied8 => super::rgb_premultiplied8::ops::execute(image, self.request, self.other.as_deref(), architecture),
-            Mode::ImageRgbx8 => super::rgbx8::ops::execute(image, self.request, self.other.as_deref(), architecture),
-            Mode::ImageCmyk8 => super::cmyk8::ops::execute(image, self.request, self.other.as_deref(), architecture),
-            Mode::ImageYCbCr8 => super::ycbcr8::ops::execute(image, self.request, self.other.as_deref(), architecture),
-            Mode::ImageLab8 => super::lab8::ops::execute(image, self.request, self.other.as_deref()),
-            Mode::ImageHsv8 => super::hsv8::ops::execute(image, self.request, self.other.as_deref(), architecture),
-            Mode::ImageI32 => super::i32::ops::execute(image, self.request, self.other.as_deref(), architecture),
-            Mode::ImageF32 => super::f32::ops::execute(image, self.request, self.other.as_deref(), architecture),
-            Mode::ImageI16 => super::i16::ops::execute(image, self.request, self.other.as_deref(), architecture),
-            Mode::ImageI16L => super::i16l::ops::execute(image, self.request, self.other.as_deref(), architecture),
-            Mode::ImageI16B => super::i16b::ops::execute(image, self.request, self.other.as_deref(), architecture),
-            Mode::ImageI16N => super::i16n::ops::execute(image, self.request, self.other.as_deref(), architecture),
-            Mode::ImageLumaA16 => super::luma_a16::ops::execute(image, self.request, self.other.as_deref()),
-            Mode::ImageRgb16 => super::rgb16::ops::execute(image, self.request, self.other.as_deref()),
-            Mode::ImageRgba16 => super::rgba16::ops::execute(image, self.request, self.other.as_deref()),
-            Mode::ImageRgb32F => super::rgb32f::ops::execute(image, self.request, self.other.as_deref()),
-            Mode::ImageRgba32F => super::rgba32f::ops::execute(image, self.request, other),
-        }?;
+        let mut output = super::helpers::dispatch::execute(
+            self.mode, image, self.request, other, selection,
+        )?;
         if let ChopsRequest::Binary(operation) = self.request {
             let other = other.ok_or_else(|| {
                 PilError::InternalError("Chops binary plan lost its secondary image".into())
@@ -510,12 +484,12 @@ impl ChopsExecutionPlan {
     }
 
     pub(crate) fn execute_in_place(self, image: &mut DynamicImage) -> Result<(), PilError> {
+        let selection = &self.selection;
         if !self.can_execute_in_place(image) {
             return Err(PilError::InternalError(
                 "Chops plan is not eligible for owned vector execution".into(),
             ));
         }
-        let architecture = self.selection.implementation.architecture;
         let other = self.other.as_deref().ok_or_else(|| {
             PilError::InternalError("Chops in-place plan lost its secondary image".into())
         })?;
@@ -525,23 +499,9 @@ impl ChopsExecutionPlan {
             ),
             _ => None,
         };
-        match self.mode {
-            Mode::One => super::one::ops::execute_in_place(image, self.request, other, architecture),
-            Mode::ImageLuma8 => super::luma8::ops::execute_in_place(image, self.request, other, architecture),
-            Mode::ImageLumaA8 => super::luma_a8::ops::execute_in_place(image, self.request, other, architecture),
-            Mode::ImagePalette8 => super::palette8::ops::execute_in_place(image, self.request, other, architecture),
-            Mode::ImagePaletteAlpha8 => super::palette_alpha8::ops::execute_in_place(image, self.request, other, architecture),
-            Mode::ImageRgb8 => super::rgb8::ops::execute_in_place(image, self.request, other, architecture),
-            Mode::ImageRgba8 => super::rgba8::ops::execute_in_place(image, self.request, other, architecture),
-            Mode::ImageRgbPremultiplied8 => super::rgb_premultiplied8::ops::execute_in_place(image, self.request, other, architecture),
-            Mode::ImageRgbx8 => super::rgbx8::ops::execute_in_place(image, self.request, other, architecture),
-            Mode::ImageCmyk8 => super::cmyk8::ops::execute_in_place(image, self.request, other, architecture),
-            Mode::ImageYCbCr8 => super::ycbcr8::ops::execute_in_place(image, self.request, other, architecture),
-            Mode::ImageHsv8 => super::hsv8::ops::execute_in_place(image, self.request, other, architecture),
-            _ => Err(PilError::InternalError(
-                "Chops Add/Sub plan selected an unsupported native mode".into(),
-            )),
-        }?;
+        super::helpers::dispatch::execute_in_place(
+            self.mode, image, self.request, other, selection,
+        )?;
         if let Some(hidden_lanes) = hidden_lanes {
             if !image.replace_hidden_pixel_lanes(hidden_lanes) {
                 return Err(PilError::InternalError(
