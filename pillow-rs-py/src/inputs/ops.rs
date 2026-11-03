@@ -303,6 +303,10 @@ fn imageops_pad_palette_color_from_python(
             .map(pillow_rs::ImageOpsColor::FloatingScalar);
     }
     if let Ok(tuple) = value.cast::<PyTuple>() {
+        // TODO(pillow-rs#3ptb): preserve ImagePalette.getcolor's callback and
+        // fault order for tuple/int subclasses and nonnumeric tuple elements.
+        // This bridge currently lowers built-in numeric values before the
+        // temporary P palette runs its key lookup and byte conversion.
         if !matches!(tuple.len(), 1 | 3 | 4) {
             // P has one logical band. Reject invalid tuple shapes before
             // examining components, preserving Pillow's arity-first fault.
@@ -451,14 +455,23 @@ pub(crate) fn palette_integer_component_from_python(
     if let Ok(value) = component.extract::<i64>() {
         return Some(pillow_rs::PaletteColorComponent::Integer(value));
     }
-    let negative = component
-        .call_method1("__lt__", (0,))
+    let int_type = component.py().get_type::<PyInt>();
+    let negative = int_type
+        .getattr("__lt__")
+        .ok()?
+        .call1((component, 0))
         .ok()?
         .extract::<bool>()
         .ok()?;
-    let magnitude = component.call_method0("__abs__").ok()?;
-    let bits = magnitude
-        .call_method0("bit_length")
+    let magnitude = int_type
+        .getattr("__abs__")
+        .ok()?
+        .call1((component,))
+        .ok()?;
+    let bits = int_type
+        .getattr("bit_length")
+        .ok()?
+        .call1((&magnitude,))
         .ok()?
         .extract::<usize>()
         .ok()?;
@@ -466,8 +479,10 @@ pub(crate) fn palette_integer_component_from_python(
     let bytes = if length == 0 {
         Vec::new()
     } else {
-        magnitude
-            .call_method1("to_bytes", (length, "big"))
+        int_type
+            .getattr("to_bytes")
+            .ok()?
+            .call1((&magnitude, length, "big"))
             .ok()?
             .extract::<Vec<u8>>()
             .ok()?
