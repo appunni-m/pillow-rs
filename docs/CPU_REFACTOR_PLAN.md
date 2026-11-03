@@ -69,26 +69,23 @@ the baseline. Keep `pillow-rs-bad` as reference.
 
 ## Current pending matrix
 
-Snapshot based on `develop` commit `9bda4c934` and the current uncommitted CPU
-source/documentation changes. The source tree remains incomplete and
-unverified. Current WIP source changes resolve absent physical-lane state from
-canonical mode fallbacks in Chops, Blend, Brightness, Sharpness,
-Filter3x3/Filter5x5, nearest Rotate, and same-size Pad. Transform fill-lane
+Snapshot based on `develop` commit `0508e1ef4` (pushed). The CPU source tree
+remains incomplete and unverified. Current WIP changes resolve absent
+physical-lane state from canonical mode fallbacks in Chops, Blend, Brightness,
+Sharpness, Filter3x3/Filter5x5, nearest Rotate, and same-size Pad. Transform fill-lane
 normalization has also been traced to its public fill adapter; nearest
 two-band Transform now reconstructs explicit packed fill lanes when a source
 has no sidecar and those lanes differ from its output luma. The prior WIP
 checkpoint also committed source corrections from the previous Clippy
-diagnostics and recorded them in the inventory. Before those corrections,
-`make docs-lint` passed;
-`make fmt clippy docs-lint` stopped at the public-API boundary check; direct
-`cargo fmt --check` found broad
-workspace formatting drift; and direct Clippy could not compile the unfinished
-tree (7,929 library and 8,037 library-test compiler errors). These earlier
-results do not verify `9bda4c934` or pass the source-completion and verification
-gates. The commit hook's large-file check and `git diff --check` passed for the
-checkpoint. No formatter, lint, build, tests, parity, benchmark, or coverage
-ran for that checkpoint. This matrix tracks pending work; it is not support or
-verification evidence.
+diagnostics and recorded them in the inventory. On `0508e1ef4`, `make
+docs-lint` passed. `make fmt` and `make clippy` stopped at the public-API
+boundary gate before running Cargo formatting or Clippy; reported violations
+are in public export/module visibility declarations and wildcard imports in
+the preserved legacy archive. The commit hook's large-file check passed. No
+build, tests, parity, benchmark, or coverage ran for this checkpoint. Earlier
+direct formatting/compiler failures are historical and do not verify this
+commit. This matrix tracks pending work; it is not support or verification
+evidence.
 Detailed mappings and source TODOs remain in [CPU refactor
 inventory](CPU_REFACTOR_INVENTORY.md). Refresh this matrix at each completed
 checkpoint.
