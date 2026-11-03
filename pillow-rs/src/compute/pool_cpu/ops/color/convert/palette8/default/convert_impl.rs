@@ -12,6 +12,7 @@ pub(crate) fn execute(
     palette: PaletteInput<'_>,
     target: Mode,
 ) -> Result<DynamicImage, PilError> {
+    // Pillow emits opaque X for palette-to-RGB, YCbCr, and HSV conversions.
     match target {
         Mode::ImageLuma8 => Ok(DynamicImage::ImageLuma8(luma(source, palette))),
         Mode::ImageLumaA8 => Ok(DynamicImage::ImageLumaA8(luma_alpha(source, palette))),

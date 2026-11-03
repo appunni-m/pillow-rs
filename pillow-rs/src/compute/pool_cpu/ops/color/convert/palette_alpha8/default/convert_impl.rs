@@ -12,6 +12,7 @@ pub(crate) fn execute(
     palette: PaletteInput<'_>,
     target: Mode,
 ) -> Result<DynamicImage, PilError> {
+    // Pillow discards PA alpha for RGB, YCbCr, and HSV targets, emitting opaque X.
     match target {
         Mode::ImageLaPremultiplied8 => Ok(DynamicImage::ImageLaPremultiplied8(
             premultiplied_luma_alpha(source, palette),
