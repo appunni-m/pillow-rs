@@ -69,7 +69,7 @@ the baseline. Keep `pillow-rs-bad` as reference.
 
 ## Current pending matrix
 
-Snapshot base: `develop` commit `8f88a4408` (local WIP, unpushed). The CPU
+Snapshot base: `develop` commit `a052cad41` (local WIP, unpushed). The CPU
 source migration remains in review and is not ready for validation gates.
 Recent source-only checkpoints thread `StrategySelection` through Rotate and
 Transform hidden-lane helpers; native-byte Filter extrema, rank, and blur
@@ -80,8 +80,11 @@ source update also remaps retained physical lanes through
 pixel copy: its source trait exposes no mode or physical-lane provenance, and
 destination-only state follows `put_pixel`; mode-aware raw-lane transfer stays
 with operation strategies such as Paste. The mutable-byte accessor documents
-its sidecar invalidation contract. A static scan finds no runtime helper
-parameters carrying a bare `Architecture`; remaining raw parameters are the
+its sidecar invalidation contract. A static source scan finds no maintained
+Rust imports, module declarations, or `include!` paths reaching
+`pool_cpu/legacy`; the archive remains reference-only. A separate static scan
+finds no runtime helper parameters carrying a bare `Architecture`; remaining
+raw parameters are the
 const Merge support
 declaration builder and Analysis's internal missing-strategy error formatter.
 Chops, Pad, Draw, Thumbnail, Quantize, Resize, geometry sidecars, Filter, and
