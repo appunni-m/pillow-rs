@@ -1,6 +1,6 @@
 //! Pillow `ImageEnhance`-style adjustment methods.
 
-use crate::compute::helpers::enhance::contrast_base;
+use crate::compute::helpers::enhance::{contrast_base, contrast_base_hidden_lanes};
 use crate::compute::registry::support::{ModeSupport, OperationId};
 use crate::error::PilError;
 use crate::image::Image;
@@ -161,8 +161,9 @@ impl Image {
         let mode = exact_mode(self)?;
         let source = self.materialized_shared()?;
         if let Some(base) = contrast_base(&source) {
-            // Only the base is observable: avoid an intermediate grayscale
-            // frame and a second full-frame conversion of a constant image.
+            let source_mode = source.mode();
+            // Only the degenerate base image is needed: avoid an intermediate
+            // grayscale frame and a second full-frame conversion of a constant image.
             let mut image = source.clone();
             let output = image
                 .as_bytes_mut()
@@ -176,7 +177,29 @@ impl Image {
                     pixel[alpha] = original[alpha];
                 }
             }
-            return Ok(Image::from_dynamic_with_mode(image, Some(source.mode()))?);
+            if source_mode.hidden_pixel_lane_count().is_some() {
+                let pixel_count = (image.width() as usize)
+                    .checked_mul(image.height() as usize)
+                    .ok_or_else(|| {
+                        PilError::DimensionError("Contrast base lane extent overflow".into())
+                    })?;
+                let lanes =
+                    contrast_base_hidden_lanes(source_mode, &base, pixel_count).ok_or_else(
+                        || {
+                            PilError::InternalError(
+                                "Contrast base hidden-lane layout was invalid".into(),
+                            )
+                        },
+                    )?;
+                if !image.replace_hidden_pixel_lanes(Some(lanes)) {
+                    return Err(PilError::InternalError(
+                        "Contrast base lanes did not match its mode".into(),
+                    ));
+                }
+            }
+            // TODO(pillow-rs#3ptb): verify the resulting compact-mode bytes
+            // through same-pixel-size Paste in the frozen CPU parity matrix.
+            return Ok(Image::from_dynamic_with_mode(image, Some(source_mode))?);
         }
 
         let gray = self.convert(Mode::ImageLuma8, None, None, None, None)?;

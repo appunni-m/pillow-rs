@@ -1,5 +1,6 @@
 //! Native image facts shared by backend enhancement implementations.
 
+use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{DynamicImage, Mode};
 
 #[derive(Clone, Copy)]
@@ -41,6 +42,20 @@ fn contrast_luma(pixel: &[u8], color_space: ContrastColorSpace) -> u8 {
 /// Native-mode equivalent of convert-to-L, rounded mean, and L-to-source base.
 pub(crate) fn contrast_base(img: &DynamicImage) -> Option<ContrastBase> {
     contrast_base_for_mode(img.mode(), img.as_bytes())
+}
+
+/// Projects a converted Contrast base's physical lanes omitted by its carrier.
+pub(crate) fn contrast_base_hidden_lanes(
+    mode: Mode,
+    base: &ContrastBase,
+    pixel_count: usize,
+) -> Option<HiddenPixelLanes> {
+    let lane_count = mode.hidden_pixel_lane_count()?;
+    let mut values = [0; 2];
+    for (lane, value) in values.iter_mut().take(lane_count).enumerate() {
+        *value = base.values[mode.hidden_pixel_lane_offset(lane)?];
+    }
+    HiddenPixelLanes::constant(lane_count, pixel_count, values)
 }
 
 /// Computes a Contrast base from one exact mode and its native byte samples.
