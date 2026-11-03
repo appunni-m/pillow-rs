@@ -340,6 +340,13 @@ Pillow cross-version Paste source review (2026-11-03): source review found the P
 
 Contrast hidden-lane follow-up (2026-11-03): each direct exact-mode Contrast strategy now retains its already-computed `ContrastBase` and factor through prepared execution, avoiding a second source scan. The Contrast helper applies the same float32 `mul_add` byte formula to omitted lanes after Default or selected SIMD execution. LA maps its two hidden luma copies to the measured mean; RGB, YCbCr, and HSV map their padding lane to the mode-specific base value of 255. Factor zero yields known base lanes and factor one preserves the source. With absent sidecars, each supported mode's canonical lane is a fixed point of its mapping: LA lanes follow output luma, while RGB, YCbCr, and HSV padding stays 255. LAB continues through its composed Blend child, which already carries sidecars. Sharpness mode owners now preserve compact sidecars using Pillow's copied filter borders, zeroed interiors, and final Blend. Source-only; no build, formatter, checkstyle, lint, test, parity, or benchmark ran. Source: [ImageEnhance.py](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageEnhance.py).
 
+UnsharpMask lane handoff correction (2026-11-03): the logical-byte blend uses
+`DynamicImage::as_bytes_mut`, whose mode-blind mutable escape intentionally
+invalidates omitted physical lanes. The prepared UnsharpMask owner now saves
+the already-filtered GaussianBlur lane payload, restores it after blending the
+logical carrier, then applies the same UnsharpMask formula to those lanes.
+Source review only; runtime mode/architecture parity remains pending.
+
 EffectSpread physical-lane follow-up (2026-11-03): the Default strategy remaps hidden lanes through its existing Pillow relocation map. Selected SSE2, NEON, and Wasm SIMD128 strategies preserve per-pixel hidden lanes using a cloned starting RNG state and the same destination decisions as the active-byte kernel; the process RNG still advances only once. Constant sidecars remain compact, and absent producer state stays absent. No build, formatter, checkstyle, lint, test, parity, or benchmark ran.
 
 Paste wrapper validation follow-up (2026-11-03): the final staged call now

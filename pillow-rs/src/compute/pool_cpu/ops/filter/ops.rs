@@ -406,6 +406,10 @@ impl PreparedUnsharpMask<'_> {
         let percent = blend.percent;
         let threshold = blend.threshold;
         let mut blurred = blur.execute()?;
+        // Mutable byte access invalidates mode-blind hidden lanes. GaussianBlur
+        // already produced the Pillow padding lanes, so restore them after
+        // blending the compact logical carrier and before blending those lanes.
+        let blurred_lanes = blurred.take_hidden_pixel_lanes();
         {
             let Some(blurred_bytes) = blurred.as_bytes_mut() else {
                 return Err(PilError::InternalError(
@@ -413,6 +417,11 @@ impl PreparedUnsharpMask<'_> {
                 ));
             };
             blend.execute(original.as_bytes(), blurred_bytes)?;
+        }
+        if !blurred.replace_hidden_pixel_lanes(blurred_lanes) {
+            return Err(PilError::InternalError(
+                "UnsharpMask Gaussian blur could not restore its Pillow physical lanes".into(),
+            ));
         }
         super::helpers::hidden_lanes::finish_unsharp(
             original,
