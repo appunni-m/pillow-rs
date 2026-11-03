@@ -1,80 +1,181 @@
+use crate::compute::{Architecture, Backend};
+use crate::compute::registry::support::{
+    ModeSupport, OperationId, OperationValueResult, OutputModeRule, PixelValueShape,
+    StrategySelection,
+};
 use crate::error::PilError;
 use crate::image::FormattedPixelValue;
-use crate::raster::{DynamicImage, GenericImageView, RgbaImage};
+use crate::raster::{
+    DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, ImageBuffer, Luma, LumaA, Rgb,
+    Rgb32FImage, RgbImage, Rgba, Rgba32FImage, RgbaImage,
+};
 
-/// Reads one pixel from its exact stored variant without an intermediate mode.
-pub(crate) fn formatted_pixel(
-    image: &DynamicImage,
+/// Declares a Pillow-defined Default strategy for one exact GetPixel mode.
+pub(crate) const fn pillow_get_pixel_support(
+    mode: crate::raster::Mode,
+    shape: PixelValueShape,
+) -> ModeSupport {
+    ModeSupport::cpu(
+        OperationId::GetPixel,
+        mode,
+        OutputModeRule::NoRasterResult,
+        &[],
+        &[],
+    )
+    .with_value_result(OperationValueResult::Pixel(shape))
+}
+
+/// Declares a native high-depth GetPixel extension for one exact mode.
+pub(crate) const fn core_get_pixel_support(
+    mode: crate::raster::Mode,
+    shape: PixelValueShape,
+) -> ModeSupport {
+    ModeSupport::cpu_core_only(
+        OperationId::GetPixel,
+        mode,
+        OutputModeRule::NoRasterResult,
+        &[],
+        &[],
+        "native high-depth GetPixel values extend Pillow's mode contract",
+    )
+    .with_value_result(OperationValueResult::Pixel(shape))
+}
+
+/// Declares the Rust/JavaScript fixed-RGBA8 access as a core extension.
+pub(crate) const fn rgba_get_pixel_support(mode: crate::raster::Mode) -> ModeSupport {
+    ModeSupport::cpu_core_only(
+        OperationId::GetPixelRgba,
+        mode,
+        OutputModeRule::NoRasterResult,
+        &[],
+        &[],
+        "the Rust/JavaScript accessor returns a fixed RGBA8 value",
+    )
+    .with_value_result(OperationValueResult::Pixel(PixelValueShape::Rgba8))
+}
+
+/// Checks that a mode owner received its declared Default pixel-read strategy.
+pub(crate) fn validate_default_selection(
+    selection: StrategySelection,
+    operation: OperationId,
+    mode: crate::raster::Mode,
+) -> Result<(), PilError> {
+    if selection.implementation.operation != operation
+        || selection.implementation.mode != mode
+        || selection.implementation.backend != Backend::Cpu
+        || selection.implementation.architecture != Architecture::Default
+    {
+        return Err(PilError::InternalError(
+            "pixel read selection did not match its exact mode and Default implementation".into(),
+        ));
+    }
+    Ok(())
+}
+
+/// Reads the sample used by Pillow's scalar byte modes.
+pub(crate) fn scalar_u8(image: &GrayImage, x: u32, y: u32) -> FormattedPixelValue {
+    FormattedPixelValue::Scalar(image.get_pixel(x, y).0[0])
+}
+
+/// Reads the two byte components used by LA, La, and PA.
+pub(crate) fn components_u8_2(image: &GrayAlphaImage, x: u32, y: u32) -> FormattedPixelValue {
+    FormattedPixelValue::Components(image.get_pixel(x, y).0.to_vec())
+}
+
+/// Reads a native three-byte pixel.
+pub(crate) fn components_u8_3(image: &RgbImage, x: u32, y: u32) -> FormattedPixelValue {
+    FormattedPixelValue::Components(image.get_pixel(x, y).0.to_vec())
+}
+
+/// Reads LAB samples in Pillow's signed-offset component representation.
+pub(crate) fn components_lab8(image: &RgbImage, x: u32, y: u32) -> FormattedPixelValue {
+    let [luma, a, b] = image.get_pixel(x, y).0;
+    FormattedPixelValue::Components(vec![luma, a.wrapping_sub(128), b.wrapping_sub(128)])
+}
+
+/// Reads four native byte components, including physical RGBX and CMYK lanes.
+pub(crate) fn components_u8_4(image: &RgbaImage, x: u32, y: u32) -> FormattedPixelValue {
+    FormattedPixelValue::Components(image.get_pixel(x, y).0.to_vec())
+}
+
+/// Reads the raw I sample from Pillow's four-byte scalar carrier.
+pub(crate) fn scalar_i32(
+    image: &RgbaImage,
     x: u32,
     y: u32,
 ) -> Result<FormattedPixelValue, PilError> {
-    // TODO(pillow-rs#3ptb): move this variant dispatch into exact-mode Default strategies.
-    match image {
-        DynamicImage::One(image)
-        | DynamicImage::ImageLuma8(image)
-        | DynamicImage::ImagePalette8(image) => {
-            Ok(FormattedPixelValue::Scalar(image.get_pixel(x, y).0[0]))
-        }
-        DynamicImage::ImageLumaA8(image)
-        | DynamicImage::ImageLaPremultiplied8(image)
-        | DynamicImage::ImagePaletteAlpha8(image) => {
-            let [luma, alpha] = image.get_pixel(x, y).0;
-            Ok(FormattedPixelValue::Components(vec![luma, alpha]))
-        }
-        DynamicImage::ImageRgb8(image)
-        | DynamicImage::ImageYCbCr8(image)
-        | DynamicImage::ImageHsv8(image) => {
-            Ok(FormattedPixelValue::Components(image.get_pixel(x, y).0.to_vec()))
-        }
-        DynamicImage::ImageLab8(image) => {
-            let [luma, a, b] = image.get_pixel(x, y).0;
-            Ok(FormattedPixelValue::Components(vec![
-                luma,
-                a.wrapping_sub(128),
-                b.wrapping_sub(128),
-            ]))
-        }
-        DynamicImage::ImageRgba8(image)
-        | DynamicImage::ImageRgbPremultiplied8(image)
-        | DynamicImage::ImageRgbx8(image)
-        | DynamicImage::ImageCmyk8(image) => {
-            Ok(FormattedPixelValue::Components(image.get_pixel(x, y).0.to_vec()))
-        }
-        DynamicImage::ImageI32(image) => {
-            let sample = scalar_bytes(image, x, y)?;
-            Ok(FormattedPixelValue::Integer(i32::from_le_bytes(sample)))
-        }
-        DynamicImage::ImageF32(image) => {
-            let sample = scalar_bytes(image, x, y)?;
-            Ok(FormattedPixelValue::Float(f64::from(f32::from_le_bytes(sample))))
-        }
-        DynamicImage::ImageI16(image)
-        | DynamicImage::ImageI16L(image)
-        | DynamicImage::ImageI16B(image)
-        | DynamicImage::ImageI16N(image) => {
-            let index = pixel_index(image.width(), x, y)?;
-            let sample = image.as_raw().get(index).copied().ok_or_else(|| {
-                PilError::InternalError("I;16 pixel index out of bounds".into())
-            })?;
-            Ok(FormattedPixelValue::Integer(i32::from(sample)))
-        }
-        // NO_PILLOW_SUPPORT: internal high-depth modes expose native samples.
-        DynamicImage::ImageLumaA16(image) => {
-            Ok(FormattedPixelValue::U16Components(image.get_pixel(x, y).0.to_vec()))
-        }
-        DynamicImage::ImageRgb16(image) => {
-            Ok(FormattedPixelValue::U16Components(image.get_pixel(x, y).0.to_vec()))
-        }
-        DynamicImage::ImageRgba16(image) => {
-            Ok(FormattedPixelValue::U16Components(image.get_pixel(x, y).0.to_vec()))
-        }
-        DynamicImage::ImageRgb32F(image) => {
-            Ok(FormattedPixelValue::FloatComponents(image.get_pixel(x, y).0.to_vec()))
-        }
-        DynamicImage::ImageRgba32F(image) => {
-            Ok(FormattedPixelValue::FloatComponents(image.get_pixel(x, y).0.to_vec()))
-        }
-    }
+    let sample = scalar_bytes(image, x, y)?;
+    Ok(FormattedPixelValue::Integer(i32::from_le_bytes(sample)))
+}
+
+/// Reads the raw F sample from Pillow's four-byte scalar carrier.
+pub(crate) fn scalar_f32(
+    image: &RgbaImage,
+    x: u32,
+    y: u32,
+) -> Result<FormattedPixelValue, PilError> {
+    let sample = scalar_bytes(image, x, y)?;
+    Ok(FormattedPixelValue::Float(f64::from(f32::from_le_bytes(sample))))
+}
+
+/// Reads one native unsigned 16-bit luma sample.
+pub(crate) fn scalar_u16(
+    image: &ImageBuffer<Luma<u16>, Vec<u16>>,
+    x: u32,
+    y: u32,
+) -> Result<FormattedPixelValue, PilError> {
+    let index = pixel_index(image.width(), x, y)?;
+    let sample = image
+        .as_raw()
+        .get(index)
+        .copied()
+        .ok_or_else(|| PilError::InternalError("I;16 pixel index out of bounds".into()))?;
+    Ok(FormattedPixelValue::Integer(i32::from(sample)))
+}
+
+/// Reads native unsigned 16-bit LA samples.
+pub(crate) fn components_u16_2(
+    image: &ImageBuffer<LumaA<u16>, Vec<u16>>,
+    x: u32,
+    y: u32,
+) -> FormattedPixelValue {
+    FormattedPixelValue::U16Components(image.get_pixel(x, y).0.to_vec())
+}
+
+/// Reads native unsigned 16-bit RGB samples.
+pub(crate) fn components_u16_3(
+    image: &ImageBuffer<Rgb<u16>, Vec<u16>>,
+    x: u32,
+    y: u32,
+) -> FormattedPixelValue {
+    FormattedPixelValue::U16Components(image.get_pixel(x, y).0.to_vec())
+}
+
+/// Reads native unsigned 16-bit RGBA samples.
+pub(crate) fn components_u16_4(
+    image: &ImageBuffer<Rgba<u16>, Vec<u16>>,
+    x: u32,
+    y: u32,
+) -> FormattedPixelValue {
+    FormattedPixelValue::U16Components(image.get_pixel(x, y).0.to_vec())
+}
+
+/// Reads native 32-bit float RGB samples.
+pub(crate) fn components_f32_3(
+    image: &Rgb32FImage,
+    x: u32,
+    y: u32,
+) -> FormattedPixelValue {
+    FormattedPixelValue::FloatComponents(image.get_pixel(x, y).0.to_vec())
+}
+
+/// Reads native 32-bit float RGBA samples.
+pub(crate) fn components_f32_4(
+    image: &Rgba32FImage,
+    x: u32,
+    y: u32,
+) -> FormattedPixelValue {
+    FormattedPixelValue::FloatComponents(image.get_pixel(x, y).0.to_vec())
 }
 
 /// Reads one pixel using the Rust/JavaScript accessor's fixed RGBA8 shape.
@@ -84,11 +185,8 @@ pub(crate) fn rgba_pixel(image: &DynamicImage, x: u32, y: u32) -> [u8; 4] {
 }
 
 /// Reads a direct RGB tuple without allocating the formatted component vector.
-pub(crate) fn rgb_pixel(image: &DynamicImage, x: u32, y: u32) -> Option<[u8; 3]> {
-    let DynamicImage::ImageRgb8(rgb) = image else {
-        return None;
-    };
-    Some(rgb.get_pixel(x, y).0)
+pub(crate) fn rgb_pixel(image: &RgbImage, x: u32, y: u32) -> [u8; 3] {
+    image.get_pixel(x, y).0
 }
 
 /// Returns the number of host value bytes produced by one formatted pixel.

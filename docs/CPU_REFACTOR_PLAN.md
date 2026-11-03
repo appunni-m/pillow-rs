@@ -69,7 +69,7 @@ the baseline. Keep `pillow-rs-bad` as reference.
 
 ## Current pending matrix
 
-Snapshot at `develop` commit `7bae04020`. The working tree is incomplete and
+Snapshot at `develop` commit `7612b3295`. The working tree is incomplete and
 unverified. An early `cargo check` ran before source closure and failed; that
 output is diagnostic only and does not pass Gate 4. No formatter, lint, test,
 parity, or benchmark gate has run for the current source-only continuation.
@@ -138,16 +138,20 @@ strategy selection; the Python binding remains a separate host adapter and
 continues to obtain mode from the image wrapper. Source-only; scalar and mode
 error-order parity remains pending.
 
-Direct GetPixel source continuation (2026-11-03): `getpixel_formatted`, the
-fixed RGBA8 Rust/JavaScript convenience accessor, and the loaded RGB binding
-fast path now have declared `OperationId`s and per-mode result shapes under
-the CPU `analysis` support contract. Pixel readers moved from the image
-wrapper's local helper into `analysis/helpers/pixel_access.rs`; the public
-wrappers still own coordinate checks and the loaded RGB shortcut returns
-`None` for non-RGB or deferred images. These readers currently dispatch on the
-stored raster variant inside a Default CPU helper. Splitting and selecting
-per-mode/per-architecture implementations, and confirming outputs, receipts,
-and fallback behavior remain part of the source and parity gates.
+Direct GetPixel source continuation (2026-11-03): the family support
+classifier now links to exact-mode `GET_PIXEL_SUPPORT` declarations in all 25
+analysis mode `ops.rs` files. Each mode owner validates its selected Default
+strategy and calls its native-carrier implementation in
+`<mode>/default/get_pixel_impl.rs`; family orchestration dispatches from the
+authoritative `DynamicImage` variant. Shared helpers read matching carrier
+types directly, with LAB and scalar I/F behavior remaining distinct. No vector
+strategy is declared for a one-pixel read; all architecture requests resolve
+through the declared Default implementation. The fixed-RGBA8 Rust/JavaScript
+accessor has per-mode CoreOnly result declarations and uses the shared
+per-pixel projection without an intermediate image. Public coordinate checks
+and the loaded RGB `None` fast-path behavior remain at the Image wrapper.
+Output shape, error order, selected/fallback receipts, and CPU parity remain
+pending; this source change is unvalidated.
 
 Convert source audit update (2026-11-02): I;16-to-I;16 alias targets preserve
 the native u16 samples when selecting among `I;16`, `I;16L`, `I;16B`, and

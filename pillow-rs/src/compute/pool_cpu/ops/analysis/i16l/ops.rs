@@ -61,3 +61,30 @@ crate::compute::pool_cpu::ops::analysis::helpers::extrema_bytes_execution::
     crate::compute::pool_cpu::ops::analysis::helpers::get_data::Luma16Image,
     crate::compute::pool_cpu::ops::analysis::i16l::default::extrema_bytes_impl::execute,
 );
+
+pub(crate) const GET_PIXEL_SUPPORT:
+    crate::compute::registry::support::ModeSupport =
+    crate::compute::pool_cpu::ops::analysis::helpers::pixel_access::pillow_get_pixel_support(
+        crate::raster::Mode::ImageI16L,
+        crate::compute::registry::support::PixelValueShape::I32Scalar,
+    );
+
+pub(crate) const GET_PIXEL_RGBA_SUPPORT:
+    crate::compute::registry::support::ModeSupport =
+    crate::compute::pool_cpu::ops::analysis::helpers::pixel_access::rgba_get_pixel_support(
+        crate::raster::Mode::ImageI16L,
+    );
+
+pub(crate) fn execute_get_pixel(
+    image: &crate::raster::ImageBuffer<crate::raster::Luma<u16>, Vec<u16>>,
+    x: u32,
+    y: u32,
+    selection: crate::compute::registry::support::StrategySelection,
+) -> Result<crate::image::FormattedPixelValue, crate::error::PilError> {
+    super::super::helpers::pixel_access::validate_default_selection(
+        selection,
+        crate::compute::registry::support::OperationId::GetPixel,
+        crate::raster::Mode::ImageI16L,
+    )?;
+    super::default::get_pixel_impl::execute(image, x, y)
+}

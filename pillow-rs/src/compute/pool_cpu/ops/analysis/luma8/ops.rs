@@ -70,3 +70,30 @@ crate::compute::pool_cpu::ops::analysis::helpers::extrema_bytes_execution::
     crate::raster::GrayImage,
     crate::compute::pool_cpu::ops::analysis::luma8::default::extrema_bytes_impl::execute,
 );
+
+pub(crate) const GET_PIXEL_SUPPORT:
+    crate::compute::registry::support::ModeSupport =
+    crate::compute::pool_cpu::ops::analysis::helpers::pixel_access::pillow_get_pixel_support(
+        crate::raster::Mode::ImageLuma8,
+        crate::compute::registry::support::PixelValueShape::U8Scalar,
+    );
+
+pub(crate) const GET_PIXEL_RGBA_SUPPORT:
+    crate::compute::registry::support::ModeSupport =
+    crate::compute::pool_cpu::ops::analysis::helpers::pixel_access::rgba_get_pixel_support(
+        crate::raster::Mode::ImageLuma8,
+    );
+
+pub(crate) fn execute_get_pixel(
+    image: &crate::raster::GrayImage,
+    x: u32,
+    y: u32,
+    selection: crate::compute::registry::support::StrategySelection,
+) -> Result<crate::image::FormattedPixelValue, crate::error::PilError> {
+    super::super::helpers::pixel_access::validate_default_selection(
+        selection,
+        crate::compute::registry::support::OperationId::GetPixel,
+        crate::raster::Mode::ImageLuma8,
+    )?;
+    super::default::get_pixel_impl::execute(image, x, y)
+}

@@ -5,8 +5,8 @@
 use crate::compute::{Backend, ExecutionContext};
 use crate::compute::registry::support::{
     InputContract, ModeSupport, OperationId, OperationModeRoute, OperationRouteGuard,
-    OperationRoutePath, OperationSupport, OperationValueResult, OutputModeRule, PixelValueShape,
-    RejectionKind, StrategySelection,
+    OperationRoutePath, OperationSupport, OperationValueResult, OutputModeRule, RejectionKind,
+    StrategySelection,
 };
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
@@ -51,58 +51,37 @@ pub(super) const HISTOGRAM_INPUTS: &[InputContract] = &[
     },
 ];
 
-fn pixel_value_shape(mode: Mode) -> PixelValueShape {
+fn classify_get_pixel_mode(mode: Mode) -> ModeSupport {
     match mode {
-        Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => PixelValueShape::U8Scalar,
-        Mode::ImageI32 | Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
-            PixelValueShape::I32Scalar
-        }
-        Mode::ImageF32 => PixelValueShape::F64Scalar,
-        Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => {
-            PixelValueShape::U8Components { bands: 2 }
-        }
-        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => {
-            PixelValueShape::U8Components { bands: 3 }
-        }
-        Mode::ImageRgba8
-        | Mode::ImageRgbPremultiplied8
-        | Mode::ImageRgbx8
-        | Mode::ImageCmyk8 => PixelValueShape::U8Components { bands: 4 },
-        Mode::ImageLumaA16 => PixelValueShape::U16Components { bands: 2 },
-        Mode::ImageRgb16 => PixelValueShape::U16Components { bands: 3 },
-        Mode::ImageRgba16 => PixelValueShape::U16Components { bands: 4 },
-        Mode::ImageRgb32F => PixelValueShape::F32Components { bands: 3 },
-        Mode::ImageRgba32F => PixelValueShape::F32Components { bands: 4 },
+        Mode::One => super::one::ops::GET_PIXEL_SUPPORT,
+        Mode::ImageLuma8 => super::luma8::ops::GET_PIXEL_SUPPORT,
+        Mode::ImageLumaA8 => super::luma_a8::ops::GET_PIXEL_SUPPORT,
+        Mode::ImageLaPremultiplied8 => super::la_premultiplied8::ops::GET_PIXEL_SUPPORT,
+        Mode::ImagePalette8 => super::palette8::ops::GET_PIXEL_SUPPORT,
+        Mode::ImagePaletteAlpha8 => super::palette_alpha8::ops::GET_PIXEL_SUPPORT,
+        Mode::ImageRgb8 => super::rgb8::ops::GET_PIXEL_SUPPORT,
+        Mode::ImageRgba8 => super::rgba8::ops::GET_PIXEL_SUPPORT,
+        Mode::ImageRgbPremultiplied8 => super::rgb_premultiplied8::ops::GET_PIXEL_SUPPORT,
+        Mode::ImageRgbx8 => super::rgbx8::ops::GET_PIXEL_SUPPORT,
+        Mode::ImageCmyk8 => super::cmyk8::ops::GET_PIXEL_SUPPORT,
+        Mode::ImageYCbCr8 => super::ycbcr8::ops::GET_PIXEL_SUPPORT,
+        Mode::ImageLab8 => super::lab8::ops::GET_PIXEL_SUPPORT,
+        Mode::ImageHsv8 => super::hsv8::ops::GET_PIXEL_SUPPORT,
+        Mode::ImageI32 => super::i32::ops::GET_PIXEL_SUPPORT,
+        Mode::ImageF32 => super::f32::ops::GET_PIXEL_SUPPORT,
+        Mode::ImageI16 => super::i16::ops::GET_PIXEL_SUPPORT,
+        Mode::ImageI16L => super::i16l::ops::GET_PIXEL_SUPPORT,
+        Mode::ImageI16B => super::i16b::ops::GET_PIXEL_SUPPORT,
+        Mode::ImageI16N => super::i16n::ops::GET_PIXEL_SUPPORT,
+        Mode::ImageLumaA16 => super::luma_a16::ops::GET_PIXEL_SUPPORT,
+        Mode::ImageRgb16 => super::rgb16::ops::GET_PIXEL_SUPPORT,
+        Mode::ImageRgba16 => super::rgba16::ops::GET_PIXEL_SUPPORT,
+        Mode::ImageRgb32F => super::rgb32f::ops::GET_PIXEL_SUPPORT,
+        Mode::ImageRgba32F => super::rgba32f::ops::GET_PIXEL_SUPPORT,
     }
 }
 
-fn classify_get_pixel_mode(mode: Mode) -> ModeSupport {
-    let support = match mode {
-        // NO_PILLOW_SUPPORT: internal high-depth identities expose native samples.
-        Mode::ImageLumaA16
-        | Mode::ImageRgb16
-        | Mode::ImageRgba16
-        | Mode::ImageRgb32F
-        | Mode::ImageRgba32F => ModeSupport::cpu_core_only(
-            OperationId::GetPixel,
-            mode,
-            NO_RASTER_OUTPUT,
-            NO_INPUTS,
-            &[],
-            "native high-depth GetPixel values extend Pillow's mode contract",
-        ),
-        _ => ModeSupport::cpu(
-            OperationId::GetPixel,
-            mode,
-            NO_RASTER_OUTPUT,
-            NO_INPUTS,
-            &[],
-        ),
-    };
-    support.with_value_result(OperationValueResult::Pixel(pixel_value_shape(mode)))
-}
-
-/// Exact-mode result shapes and Default-only strategies for Pillow-shaped GetPixel.
+/// TODO(pillow-rs#3ptb): verify all 25 typed result shapes and Default receipts in CPU parity.
 pub(crate) static GET_PIXEL_SUPPORT: OperationSupport = OperationSupport::new(
     OperationId::GetPixel,
     NO_INPUTS,
@@ -110,19 +89,36 @@ pub(crate) static GET_PIXEL_SUPPORT: OperationSupport = OperationSupport::new(
 );
 
 fn classify_get_pixel_rgba_mode(mode: Mode) -> ModeSupport {
-    // NO_PILLOW_SUPPORT: this Rust/JavaScript convenience route projects every mode to RGBA8.
-    ModeSupport::cpu_core_only(
-        OperationId::GetPixelRgba,
-        mode,
-        NO_RASTER_OUTPUT,
-        NO_INPUTS,
-        &[],
-        "the Rust/JavaScript accessor returns a fixed RGBA8 value",
-    )
-    .with_value_result(OperationValueResult::Pixel(PixelValueShape::Rgba8))
+    match mode {
+        Mode::One => super::one::ops::GET_PIXEL_RGBA_SUPPORT,
+        Mode::ImageLuma8 => super::luma8::ops::GET_PIXEL_RGBA_SUPPORT,
+        Mode::ImageLumaA8 => super::luma_a8::ops::GET_PIXEL_RGBA_SUPPORT,
+        Mode::ImageLaPremultiplied8 => super::la_premultiplied8::ops::GET_PIXEL_RGBA_SUPPORT,
+        Mode::ImagePalette8 => super::palette8::ops::GET_PIXEL_RGBA_SUPPORT,
+        Mode::ImagePaletteAlpha8 => super::palette_alpha8::ops::GET_PIXEL_RGBA_SUPPORT,
+        Mode::ImageRgb8 => super::rgb8::ops::GET_PIXEL_RGBA_SUPPORT,
+        Mode::ImageRgba8 => super::rgba8::ops::GET_PIXEL_RGBA_SUPPORT,
+        Mode::ImageRgbPremultiplied8 => super::rgb_premultiplied8::ops::GET_PIXEL_RGBA_SUPPORT,
+        Mode::ImageRgbx8 => super::rgbx8::ops::GET_PIXEL_RGBA_SUPPORT,
+        Mode::ImageCmyk8 => super::cmyk8::ops::GET_PIXEL_RGBA_SUPPORT,
+        Mode::ImageYCbCr8 => super::ycbcr8::ops::GET_PIXEL_RGBA_SUPPORT,
+        Mode::ImageLab8 => super::lab8::ops::GET_PIXEL_RGBA_SUPPORT,
+        Mode::ImageHsv8 => super::hsv8::ops::GET_PIXEL_RGBA_SUPPORT,
+        Mode::ImageI32 => super::i32::ops::GET_PIXEL_RGBA_SUPPORT,
+        Mode::ImageF32 => super::f32::ops::GET_PIXEL_RGBA_SUPPORT,
+        Mode::ImageI16 => super::i16::ops::GET_PIXEL_RGBA_SUPPORT,
+        Mode::ImageI16L => super::i16l::ops::GET_PIXEL_RGBA_SUPPORT,
+        Mode::ImageI16B => super::i16b::ops::GET_PIXEL_RGBA_SUPPORT,
+        Mode::ImageI16N => super::i16n::ops::GET_PIXEL_RGBA_SUPPORT,
+        Mode::ImageLumaA16 => super::luma_a16::ops::GET_PIXEL_RGBA_SUPPORT,
+        Mode::ImageRgb16 => super::rgb16::ops::GET_PIXEL_RGBA_SUPPORT,
+        Mode::ImageRgba16 => super::rgba16::ops::GET_PIXEL_RGBA_SUPPORT,
+        Mode::ImageRgb32F => super::rgb32f::ops::GET_PIXEL_RGBA_SUPPORT,
+        Mode::ImageRgba32F => super::rgba32f::ops::GET_PIXEL_RGBA_SUPPORT,
+    }
 }
 
-/// Exact-mode Default strategies for the Rust/JavaScript RGBA8 accessor.
+/// TODO(pillow-rs#3ptb): verify fixed-RGBA8 extension output across all exact modes.
 pub(crate) static GET_PIXEL_RGBA_SUPPORT: OperationSupport = OperationSupport::new(
     OperationId::GetPixelRgba,
     NO_INPUTS,
@@ -845,23 +841,6 @@ pub(crate) fn select_get_pixel_rgba(
     GET_PIXEL_RGBA_SUPPORT.for_mode(mode).select_serial(context)
 }
 
-fn validate_pixel_selection(
-    selection: StrategySelection,
-    operation: OperationId,
-    mode: Mode,
-) -> Result<(), PilError> {
-    if selection.implementation.operation != operation
-        || selection.implementation.mode != mode
-        || selection.implementation.backend != Backend::Cpu
-        || selection.implementation.architecture != crate::compute::Architecture::Default
-    {
-        return Err(PilError::InternalError(
-            "GetPixel selection did not match its exact mode and Default implementation".into(),
-        ));
-    }
-    Ok(())
-}
-
 /// Executes Pillow-shaped GetPixel after its declared exact-mode selection.
 pub(crate) fn execute_get_pixel(
     image: &DynamicImage,
@@ -869,8 +848,81 @@ pub(crate) fn execute_get_pixel(
     y: u32,
     selection: StrategySelection,
 ) -> Result<crate::image::FormattedPixelValue, PilError> {
-    validate_pixel_selection(selection, OperationId::GetPixel, image.mode())?;
-    super::helpers::pixel_access::formatted_pixel(image, x, y)
+    match image {
+        DynamicImage::One(image) => super::one::ops::execute_get_pixel(image, x, y, selection),
+        DynamicImage::ImageLuma8(image) => {
+            super::luma8::ops::execute_get_pixel(image, x, y, selection)
+        }
+        DynamicImage::ImageLumaA8(image) => {
+            super::luma_a8::ops::execute_get_pixel(image, x, y, selection)
+        }
+        DynamicImage::ImageLaPremultiplied8(image) => {
+            super::la_premultiplied8::ops::execute_get_pixel(image, x, y, selection)
+        }
+        DynamicImage::ImagePalette8(image) => {
+            super::palette8::ops::execute_get_pixel(image, x, y, selection)
+        }
+        DynamicImage::ImagePaletteAlpha8(image) => {
+            super::palette_alpha8::ops::execute_get_pixel(image, x, y, selection)
+        }
+        DynamicImage::ImageRgb8(image) => {
+            super::rgb8::ops::execute_get_pixel(image, x, y, selection)
+        }
+        DynamicImage::ImageRgba8(image) => {
+            super::rgba8::ops::execute_get_pixel(image, x, y, selection)
+        }
+        DynamicImage::ImageRgbPremultiplied8(image) => {
+            super::rgb_premultiplied8::ops::execute_get_pixel(image, x, y, selection)
+        }
+        DynamicImage::ImageRgbx8(image) => {
+            super::rgbx8::ops::execute_get_pixel(image, x, y, selection)
+        }
+        DynamicImage::ImageCmyk8(image) => {
+            super::cmyk8::ops::execute_get_pixel(image, x, y, selection)
+        }
+        DynamicImage::ImageYCbCr8(image) => {
+            super::ycbcr8::ops::execute_get_pixel(image, x, y, selection)
+        }
+        DynamicImage::ImageLab8(image) => {
+            super::lab8::ops::execute_get_pixel(image, x, y, selection)
+        }
+        DynamicImage::ImageHsv8(image) => {
+            super::hsv8::ops::execute_get_pixel(image, x, y, selection)
+        }
+        DynamicImage::ImageI32(image) => {
+            super::i32::ops::execute_get_pixel(image, x, y, selection)
+        }
+        DynamicImage::ImageF32(image) => {
+            super::f32::ops::execute_get_pixel(image, x, y, selection)
+        }
+        DynamicImage::ImageI16(image) => {
+            super::i16::ops::execute_get_pixel(image, x, y, selection)
+        }
+        DynamicImage::ImageI16L(image) => {
+            super::i16l::ops::execute_get_pixel(image, x, y, selection)
+        }
+        DynamicImage::ImageI16B(image) => {
+            super::i16b::ops::execute_get_pixel(image, x, y, selection)
+        }
+        DynamicImage::ImageI16N(image) => {
+            super::i16n::ops::execute_get_pixel(image, x, y, selection)
+        }
+        DynamicImage::ImageLumaA16(image) => {
+            super::luma_a16::ops::execute_get_pixel(image, x, y, selection)
+        }
+        DynamicImage::ImageRgb16(image) => {
+            super::rgb16::ops::execute_get_pixel(image, x, y, selection)
+        }
+        DynamicImage::ImageRgba16(image) => {
+            super::rgba16::ops::execute_get_pixel(image, x, y, selection)
+        }
+        DynamicImage::ImageRgb32F(image) => {
+            super::rgb32f::ops::execute_get_pixel(image, x, y, selection)
+        }
+        DynamicImage::ImageRgba32F(image) => {
+            super::rgba32f::ops::execute_get_pixel(image, x, y, selection)
+        }
+    }
 }
 
 /// Executes the allocation-free RGB binding path under the GetPixel declaration.
@@ -879,9 +931,13 @@ pub(crate) fn execute_get_pixel_rgb(
     x: u32,
     y: u32,
     selection: StrategySelection,
-) -> Result<Option<[u8; 3]>, PilError> {
-    validate_pixel_selection(selection, OperationId::GetPixel, image.mode())?;
-    Ok(super::helpers::pixel_access::rgb_pixel(image, x, y))
+) -> Result<[u8; 3], PilError> {
+    let DynamicImage::ImageRgb8(image) = image else {
+        return Err(PilError::InternalError(
+            "RGB GetPixel selection carried a non-RGB raster".into(),
+        ));
+    };
+    super::rgb8::ops::execute_get_pixel_rgb(image, x, y, selection)
 }
 
 /// Executes the Rust/JavaScript fixed-RGBA8 pixel accessor.
@@ -891,7 +947,11 @@ pub(crate) fn execute_get_pixel_rgba(
     y: u32,
     selection: StrategySelection,
 ) -> Result<[u8; 4], PilError> {
-    validate_pixel_selection(selection, OperationId::GetPixelRgba, image.mode())?;
+    super::helpers::pixel_access::validate_default_selection(
+        selection,
+        OperationId::GetPixelRgba,
+        image.mode(),
+    )?;
     Ok(super::helpers::pixel_access::rgba_pixel(image, x, y))
 }
 

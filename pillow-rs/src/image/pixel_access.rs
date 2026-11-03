@@ -90,15 +90,12 @@ impl Image {
             Mode::ImageRgb8,
             &context,
         )?;
-        let Some(rgb) = crate::compute::pool_cpu::ops::analysis::ops::execute_get_pixel_rgb(
+        let rgb = crate::compute::pool_cpu::ops::analysis::ops::execute_get_pixel_rgb(
             data.image.as_ref(),
             x,
             y,
             selection,
-        )?
-        else {
-            return Ok(None);
-        };
+        )?;
         crate::compute::record_eager_cpu_operation_receipt_with_selection(
             "GetPixel",
             requested_backend,
