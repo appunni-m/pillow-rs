@@ -399,10 +399,13 @@ lane payload. The lower-level mode-blind `ImageBuffer` mutators still
 invalidate sidecars; downstream raw-byte outcomes after those escapes remain
 pending source review and CPU parity. `DynamicImage::copy_within` now remaps
 retained lanes from the original source coordinates alongside the logical
-overlap-safe copy. TODO(pillow-rs#3ptb): review `GenericImage::copy_from`, whose
-source trait exposes logical pixels without mode or physical-lane provenance,
-and define its mode-aware lane contract before claiming full raster API
-coverage. No validation has run.
+overlap-safe copy. `GenericImage::copy_from` is a logical-pixel operation:
+its source trait exposes no mode or physical-lane provenance, so omitted
+destination lanes follow `put_pixel` and are not copied from the source.
+Mode-aware physical-lane transfer remains owned by operations such as Paste.
+This resolves the earlier `copy_from` contract TODO; raw-byte outcomes after
+lower-level mode-blind `ImageBuffer` mutations remain open for source review
+and CPU parity. No validation has run.
 
 EffectSpread physical-lane follow-up (2026-11-03): the Default strategy remaps hidden lanes through its existing Pillow relocation map. Selected SSE2, NEON, and Wasm SIMD128 strategies preserve per-pixel hidden lanes using a cloned starting RNG state and the same destination decisions as the active-byte kernel; the process RNG still advances only once. Constant sidecars remain compact, and absent producer state stays absent. No build, formatter, checkstyle, lint, test, parity, or benchmark ran.
 
