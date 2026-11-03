@@ -106,16 +106,18 @@ fn eager_getchannel_tiny_rgb(
     channel: u8,
     backend: crate::compute::Backend,
     context: crate::compute::ExecutionContext,
+    operation_receipts: &mut crate::compute::PipelineOperationTelemetryCapture,
 ) -> Result<Option<DynamicImage>, PilError> {
     let operation = PipelineOp::ExtractBand { index: channel };
     match backend {
         crate::compute::Backend::Cpu | crate::compute::Backend::Simd => {
-            crate::compute::execute_eager_cpu_arch_image_operation_with_context(
+            crate::compute::execute_eager_cpu_arch_image_operation_with_context_and_receipts(
                 "ExtractBand",
                 image,
                 context,
                 Some(backend),
                 None,
+                operation_receipts,
                 |ctx| {
                     let prepared = crate::compute::registry::prepare_cpu(
                         &operation,
@@ -209,6 +211,7 @@ fn eager_getchannel_tiny_rgb_child(
     route: OperationModeRoute,
     pixels: &DynamicImage,
     channel: u8,
+    operation_receipts: &mut crate::compute::PipelineOperationTelemetryCapture,
 ) -> Result<Option<Image>, PilError> {
     let Some(guards) = route.eager_child_guards(OperationId::ExtractBand) else {
         return Ok(None);
@@ -237,7 +240,13 @@ fn eager_getchannel_tiny_rgb_child(
         return Ok(None);
     }
     let backend = requested_backend.expect("satisfied backend guard must be present");
-    let extracted = eager_getchannel_tiny_rgb(pixels, channel, backend, context)?;
+    let extracted = eager_getchannel_tiny_rgb(
+        pixels,
+        channel,
+        backend,
+        context,
+        operation_receipts,
+    )?;
     let Some(extracted) = extracted else {
         return Ok(None);
     };
@@ -377,6 +386,7 @@ impl Image {
             route,
             img.as_ref(),
             backend_channel,
+            &mut operation_receipts,
         )? {
             return Ok(result);
         }

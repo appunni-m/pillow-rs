@@ -1601,4 +1601,13 @@ no build, formatter, checkstyle, lint, tests, parity, benchmark, or coverage ran
 
 Autocontrast native P strategy (2026-11-04): the Rust CPU operation now declares a CoreOnly P route that builds its histogram from native palette indices, applies the resulting byte LUT through Default or the selected vector architecture, returns exact P identity, and retains the attached palette. The Python facade keeps Pillow's existing P rejection. The new strategy and its palette propagation are source-only and remain uncompiled and unverified; no build, formatter, checkstyle, lint, tests, parity, benchmark, or coverage ran.
 
+Eager GetChannel receipt continuation (2026-11-04): the tiny RGB direct child
+route now restores the source graph's captured operation receipts after
+clearing terminal telemetry and before recording its selected ExtractBand
+strategy. The source graph and eager child therefore remain ordered and retain
+their independently selected strategies. Other eager architecture routes that
+can follow lazy materialization still need caller-by-caller receipt review.
+Source-only; no compilation, formatting, lint, test, parity, benchmark, or
+coverage ran.
+
 - Raster mutable escape audit (2026-11-04): `pixels_mut`, pixel/row enumerators, `rows_mut`, `get_pixel_mut`, its checked form, `put_pixel`, `IndexMut`, and `DerefMut` all invalidate retained hidden lanes before exposing mutable samples. `Clone`/`clone_from` preserve data and lanes together; `from_raw` begins without lane provenance; consuming `into_raw` drops the sidecar with the buffer. The only non-invalidating pixel writer is crate-private and called by `DynamicImage::put_pixel`, which updates the lane sidecar from its exact Mode. Source audit complete; downstream Paste/Histogram output parity remains pending. No runtime checks ran.

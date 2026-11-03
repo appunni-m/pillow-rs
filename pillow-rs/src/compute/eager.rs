@@ -272,6 +272,32 @@ pub(crate) fn execute_eager_cpu_arch_image_operation_with_context(
     )
 }
 
+/// Executes a prepared CPU architecture child after restoring receipts from
+/// the lazy source graph that was materialized for this eager route.
+pub(crate) fn execute_eager_cpu_arch_image_operation_with_context_and_receipts(
+    operation: &'static str,
+    input: &DynamicImage,
+    context: ExecutionContext,
+    requested_backend: Option<Backend>,
+    fallback_reason: Option<String>,
+    operation_receipts: &mut PipelineOperationTelemetryCapture,
+    execute: impl FnOnce(
+        &ExecutionContext,
+    ) -> Result<(DynamicImage, crate::compute::registry::support::StrategySelection), PilError>,
+) -> Result<DynamicImage, PilError> {
+    execute_cpu_arch_operation_with_receipts(
+        operation,
+        input,
+        context,
+        requested_backend,
+        0,
+        0,
+        fallback_reason,
+        Some(operation_receipts),
+        execute,
+    )
+}
+
 /// Executes a prepared CPU architecture strategy into a caller-owned byte slice.
 #[cfg(test)]
 pub(crate) fn execute_eager_cpu_arch_bytes(
@@ -442,12 +468,38 @@ pub(crate) fn execute_cpu_arch_operation(
         &ExecutionContext,
     ) -> Result<(DynamicImage, crate::compute::registry::support::StrategySelection), PilError>,
 ) -> Result<DynamicImage, PilError> {
+    execute_cpu_arch_operation_with_receipts(
+        operation,
+        input,
+        context,
+        requested_backend,
+        route_ns,
+        validation_ns,
+        routed_fallback_reason,
+        None,
+        execute,
+    )
+}
+
+fn execute_cpu_arch_operation_with_receipts(
+    operation: &'static str,
+    input: &DynamicImage,
+    context: ExecutionContext,
+    requested_backend: Option<Backend>,
+    route_ns: u64,
+    validation_ns: u64,
+    routed_fallback_reason: Option<String>,
+    mut operation_receipts: Option<&mut PipelineOperationTelemetryCapture>,
+    execute: impl FnOnce(
+        &ExecutionContext,
+    ) -> Result<(DynamicImage, crate::compute::registry::support::StrategySelection), PilError>,
+) -> Result<DynamicImage, PilError> {
     let timed = pipeline_telemetry_enabled();
     if timed {
-        // TODO(pillow-rs#3ptb): when this eager child follows lazy source
-        // materialization, compose the source graph receipt instead of
-        // resetting it. Keep source and child contexts independently routed.
         reset_eager_image_operation_telemetry();
+        if let Some(operation_receipts) = operation_receipts.as_mut() {
+            operation_receipts.restore();
+        }
     }
 
     if context.backend() != Backend::Cpu {

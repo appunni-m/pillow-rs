@@ -91,6 +91,7 @@ pub(crate) use eager::{
     execute_eager_cpu_mandelbrot, execute_eager_cpu_radial_gradient,
     execute_eager_cpu_arch_bytes_with_context,
     execute_eager_cpu_arch_image_operation_with_context,
+    execute_eager_cpu_arch_image_operation_with_context_and_receipts,
     execute_eager_native_copy_result, execute_eager_native_copy_result_with_receipts,
     execute_eager_native_identity_result, execute_eager_native_identity_result_with_receipts,
 };
