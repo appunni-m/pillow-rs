@@ -216,6 +216,7 @@ fn affine_nearest_generic_row<const CHANNELS: usize>(
         origin_x + i64::from(y) * step_y_x,
         origin_y + i64::from(y) * step_y_y,
     );
+    let pixel_count = row.len() / CHANNELS;
     for (x, pixel) in row.chunks_exact_mut(CHANNELS).enumerate() {
         let (source_x, source_y) = (sx >> 16, sy >> 16);
         if source_x >= 0
@@ -230,7 +231,7 @@ fn affine_nearest_generic_row<const CHANNELS: usize>(
                 *sample = fill_sample::<CHANNELS>(fill, channel);
             }
         }
-        if x + 1 < row.len() / CHANNELS {
+        if x + 1 < pixel_count {
             sx += step_x_x;
             sy += step_x_y;
         }

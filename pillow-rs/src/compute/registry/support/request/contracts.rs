@@ -84,6 +84,13 @@ pub(super) fn assess(
         InputContract::ExactNativeBytes { channels, overflow_reason, mismatch_reason } => {
             assess_exact_native_bytes(contract, input, channels, overflow_reason, mismatch_reason)
         }
+        // These variants duplicate architecture guards and must not be
+        // declared as public input validation contracts.
+        InputContract::BlendNativeVector { .. }
+        | InputContract::CompositeNativeByteVector { .. }
+        | InputContract::CompositeLMaskNeon { .. } => Err(PilError::InternalError(
+            "vector eligibility must be declared with StrategyGuard".into(),
+        )),
         InputContract::PaletteMetadata
         | InputContract::NormalizedCrop
         | InputContract::ExtractBandIndex(_)

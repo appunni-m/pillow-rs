@@ -5,7 +5,7 @@ use super::{
     simd_write_clipped_ellipse_spans, simd_write_rect_spans,
 };
 use super::super::super::DrawLayout;
-use crate::compute::pool_cpu::ops::draw::{arc_clip_state, pie_clip_state};
+use super::super::super::super::clipping::{arc_clip_state, pie_clip_state};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, GenericImageView};
 
@@ -206,7 +206,7 @@ fn draw_rounded_rect_spans(
     writer.into_image().map(Some)
 }
 
-pub(super) fn simd_draw_rounded_rect_native(
+pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_rounded_rect_native(
     img: &DynamicImage,
     x0: i32,
     y0: i32,

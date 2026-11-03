@@ -253,7 +253,7 @@ fn push_simd_draw_point(
 /// on one row are coalesced so a point cloud that forms a span still gets wide
 /// vector stores; isolated points use a masked vector block and never call the
 /// scalar CPU drawing adapter.
-pub(super) fn simd_draw_points_native(
+pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_points_native(
     img: &DynamicImage,
     points: &[(i32, i32)],
     fill: (u8, u8, u8, u8),
@@ -371,7 +371,7 @@ fn draw_rectangle_outline_spans(
     Ok(())
 }
 
-pub(super) fn simd_draw_rectangle_native(
+pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_rectangle_native(
     img: &DynamicImage,
     x0: i32,
     y0: i32,

@@ -39,7 +39,7 @@ pub(crate) fn execute(
     image: &DynamicImage,
     output: (u32, u32),
     filter: ResampleFilter,
-    context: &ExecutionContext,
+    _context: &ExecutionContext,
     architecture: Architecture,
 ) -> Result<DynamicImage, PilError> {
     let DynamicImage::ImageI32(input) = image else {
@@ -53,7 +53,7 @@ pub(crate) fn execute(
         }
         #[cfg(target_arch = "x86_64")]
         Architecture::AvxFma => super::avx::thumbnail_impl::execute(
-            context,
+            _context,
             input,
             output,
             filter,

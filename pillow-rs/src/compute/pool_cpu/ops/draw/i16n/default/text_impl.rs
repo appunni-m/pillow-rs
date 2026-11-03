@@ -1,4 +1,5 @@
-use crate::compute::pool_cpu::ops::draw::{TextComposeResult, i16_text};
+use crate::compute::pool_cpu::ops::draw::helpers::i16_text;
+use crate::compute::pool_cpu::ops::draw::TextComposeResult;
 use crate::error::PilError;
 use crate::raster::DynamicImage;
 

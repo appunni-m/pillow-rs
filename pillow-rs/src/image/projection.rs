@@ -39,7 +39,7 @@ impl Image {
         let requested_backend = only_active_backend.then_some(selected_backend).flatten();
         let fallback_reason = selected_backend
             .filter(|backend| *backend == Backend::Gpu)
-            .map(|backend| {
+            .map(|_| {
                 format!(
                     "GetProjection has no GPU strategy for this materialized route; used CPU {:?}",
                     context.architecture()

@@ -9,7 +9,7 @@ use crate::ops::analysis::HistogramExtrema;
 use crate::raster::{DynamicImage, Mode};
 use std::sync::Arc;
 
-use super::ops::{ENTROPY_SUPPORT, HISTOGRAM_INPUTS, HISTOGRAM_SUPPORT};
+use super::super::ops::{ENTROPY_SUPPORT, HISTOGRAM_INPUTS, HISTOGRAM_SUPPORT};
 
 pub(crate) fn selected_histogram_architecture(
     selection: StrategySelection,

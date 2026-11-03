@@ -158,7 +158,6 @@ pub(super) fn palette_components_equal(
                 let (integer_negative, integer_magnitude) = integer_magnitude(*integer);
                 wide_integer_equals(*negative, magnitude, integer_negative, &integer_magnitude)
             }
-            _ => false,
         })
 }
 

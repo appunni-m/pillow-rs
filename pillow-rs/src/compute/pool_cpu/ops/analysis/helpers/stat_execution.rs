@@ -10,7 +10,7 @@ use crate::compute::registry::support::{
 };
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
-use super::ops::STAT_SUPPORT;
+use super::super::ops::STAT_SUPPORT;
 
 macro_rules! declare_stat_owner {
     ($mode:ident, $image_ty:ty, $implementation:path $(,)?) => {

@@ -69,11 +69,14 @@ the baseline. Keep `pillow-rs-bad` as reference.
 
 ## Current pending matrix
 
-Snapshot at `develop` commit `8e3731b73`. The working tree is incomplete and
-unverified. An early `cargo check` ran before source closure and failed; that
-output is diagnostic only and does not pass Gate 4. No formatter, lint, test,
-parity, or benchmark gate has run for the current source-only continuation.
-This matrix tracks pending work; it is not support or verification evidence.
+Snapshot at `develop` commit `e16897d2e`. The working tree is incomplete and
+unverified. During the authorized WIP push checkpoint, `make docs-lint` passed;
+`make fmt clippy docs-lint` stopped at the public-API boundary check, direct
+`cargo fmt -- --check` found broad workspace formatting drift, and direct core
+Clippy could not compile the unfinished source tree. These results do not pass
+the source-completion or verification gates. No unit or parity tests or
+benchmarks ran. This matrix tracks pending work; it is not support or
+verification evidence.
 Detailed mappings and source TODOs remain in [CPU refactor
 inventory](CPU_REFACTOR_INVENTORY.md). Refresh this matrix at each completed
 checkpoint.
@@ -162,6 +165,34 @@ Default owner. Removed a redundant second mode check from that shortcut.
 This closes only the GetPixel source-placement review; values, coordinate and
 error ordering, fallback receipts, and mode-by-architecture parity remain
 pending.
+
+Analysis helper module-path correction (2026-11-03): the WIP Clippy compile
+output exposed four prepared Analysis helpers resolving support constants via
+`analysis::helpers::ops`, a nonexistent sibling. Corrected those imports to the
+parent `analysis::ops` module. This is source-only and has not been compiled;
+the overall CPU source review and validation gates remain open.
+
+Draw SIMD module-boundary correction (2026-11-03): the same WIP compiler output
+showed Draw's SIMD kernel re-exports widening `pub(super)` items across
+multiple parents, plus shape kernels importing clipping helpers from the Draw
+family root where they are not exported. Kept admission and layout imports
+local to the SIMD subtree, kept the span writer private to its kernel parent,
+restricted re-exported kernels to the SIMD subtree, and resolved clipping and
+I;16 text helpers through their owning helper modules. Algorithms are
+unchanged; this source correction is uncompiled, and Draw source review remains
+open.
+
+Support and compile-diagnostic source corrections (2026-11-03): kept the
+Blend/Composite vector contracts in the architecture-selection layer and made
+their unused `InputContract` forms fail if misdeclared as public input
+validation; updated
+the exhaustive native pixel-write request guards for the new typed request
+facts; and made ChannelAccess reject Draw-only wrapper guards it cannot
+resolve. Also removed a Rotate row aliasing conflict by caching its pixel
+count before mutable iteration, and corrected target-specific unused bindings
+and an unreachable palette comparison arm exposed by the failed WIP Clippy
+attempt. No algorithm changes were intended. These edits are uncompiled; the
+cross-cutting source audit and CPU gates remain open.
 
 Convert source audit update (2026-11-02): I;16-to-I;16 alias targets preserve
 the native u16 samples when selecting among `I;16`, `I;16L`, `I;16B`, and

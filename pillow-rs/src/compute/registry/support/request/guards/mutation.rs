@@ -766,10 +766,18 @@ pub(super) fn pixel_span_guard(input: StrategyInputs, channels: u8) -> GuardAsse
     let (x, y) = match input.request {
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
         RequestFacts::PutPixel { x, y } => (x, y),
-        RequestFacts::ExtractBand { .. } | RequestFacts::PutPixelBatch { .. }
-        | RequestFacts::PutData { .. } | RequestFacts::PutAlphaData { .. }
+        RequestFacts::Draw { .. }
+        | RequestFacts::Quantize { .. }
+        | RequestFacts::Transform { .. }
+        | RequestFacts::SameModeSecondaryImage { .. }
+        | RequestFacts::AlphaComposite { .. }
+        | RequestFacts::ExtractBand { .. }
+        | RequestFacts::PutPixelBatch { .. }
+        | RequestFacts::PutData { .. }
+        | RequestFacts::PutAlphaData { .. }
         | RequestFacts::ImageOpsMask { .. }
-        | RequestFacts::Color3DLut { .. } | RequestFacts::Transpose { .. }
+        | RequestFacts::Color3DLut { .. }
+        | RequestFacts::Transpose { .. }
         | RequestFacts::Brightness { .. }
         | RequestFacts::Contrast { .. }
         | RequestFacts::Sharpness { .. }
@@ -828,10 +836,18 @@ pub(super) fn pixel_write_run_guard(input: StrategyInputs) -> GuardAssessment {
             }
             writes
         },
-        RequestFacts::ExtractBand { .. } | RequestFacts::PutPixel { .. }
-        | RequestFacts::PutData { .. } | RequestFacts::PutAlphaData { .. }
+        RequestFacts::Draw { .. }
+        | RequestFacts::Quantize { .. }
+        | RequestFacts::Transform { .. }
+        | RequestFacts::SameModeSecondaryImage { .. }
+        | RequestFacts::AlphaComposite { .. }
+        | RequestFacts::ExtractBand { .. }
+        | RequestFacts::PutPixel { .. }
+        | RequestFacts::PutData { .. }
+        | RequestFacts::PutAlphaData { .. }
         | RequestFacts::ImageOpsMask { .. }
-        | RequestFacts::Color3DLut { .. } | RequestFacts::Transpose { .. }
+        | RequestFacts::Color3DLut { .. }
+        | RequestFacts::Transpose { .. }
         | RequestFacts::Brightness { .. }
         | RequestFacts::Contrast { .. }
         | RequestFacts::Sharpness { .. }

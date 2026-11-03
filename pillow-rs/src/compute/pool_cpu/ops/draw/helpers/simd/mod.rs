@@ -7,8 +7,8 @@ mod kernels;
 mod layout;
 mod strategy;
 
-pub(super) use admission::{
+use admission::{
     has_visible_draw_point, has_visible_draw_rectangle, valid_draw_rectangle,
 };
-pub(super) use layout::DrawLayout;
+use layout::DrawLayout;
 pub(crate) use strategy::{execute, is_eligible};

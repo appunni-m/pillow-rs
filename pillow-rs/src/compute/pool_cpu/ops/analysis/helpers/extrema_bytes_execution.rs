@@ -4,7 +4,7 @@ use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{OperationId, StrategySelection};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
-use super::ops::GET_EXTREMA_BYTES_SUPPORT;
+use super::super::ops::GET_EXTREMA_BYTES_SUPPORT;
 
 pub(crate) struct PreparedGetExtremaBytes<'a> {
     image: &'a DynamicImage,

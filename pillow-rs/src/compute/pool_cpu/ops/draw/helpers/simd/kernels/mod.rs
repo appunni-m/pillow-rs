@@ -9,4 +9,4 @@ pub(super) use self::shapes::{
 pub(super) use self::spans::{
     simd_draw_line_native, simd_draw_points_native, simd_draw_rectangle_native,
 };
-pub(super) use self::span_writer::SimdDrawSpanWriter;
+use self::span_writer::SimdDrawSpanWriter;

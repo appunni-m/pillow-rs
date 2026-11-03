@@ -7,7 +7,7 @@ use crate::compute::registry::support::{
 };
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
-use super::ops::GET_COLORS_SUPPORT;
+use super::super::ops::GET_COLORS_SUPPORT;
 
 /// Generates the exact-mode Default owner for one GetColors implementation.
 macro_rules! declare_getcolors_owner {

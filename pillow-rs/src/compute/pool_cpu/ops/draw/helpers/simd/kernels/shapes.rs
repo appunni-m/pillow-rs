@@ -1,9 +1,10 @@
 use super::super::DrawLayout;
 use super::SimdDrawSpanWriter;
 use super::spans::simd_draw_rectangle_native;
-use crate::compute::pool_cpu::ops::draw::{
+use super::super::super::clipping::{
     arc_clip_state, chord_clip_state, chord_line_clip_state, for_each_clipped_ellipse_span,
     for_each_ellipse_span, normalize_angles, pie_clip_state, pie_side_clip_state,
+    ClipEllipseState,
 };
 use crate::draw::{for_each_bresenham_point, for_each_polygon_fill_span, wide_line_polygon_points};
 use crate::error::PilError;
@@ -45,7 +46,7 @@ fn simd_write_clipped_ellipse_spans(
     y0: i32,
     a: i32,
     b: i32,
-    state: crate::compute::pool_cpu::ops::draw::ClipEllipseState,
+    state: ClipEllipseState,
     color: (u8, u8, u8, u8),
 ) -> Result<(), PilError> {
     let mut first_error = None;
@@ -63,7 +64,7 @@ fn simd_write_clipped_ellipse_spans(
 /// byte SIMD span writes.  The geometry helper emits the same ordered spans
 /// as the CPU canvas; this adapter owns the destination buffer and therefore
 /// preserves repeated-span blending without entering a CPU pixel loop.
-pub(super) fn simd_draw_ellipse_native(
+pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_ellipse_native(
     img: &DynamicImage,
     x0: i32,
     y0: i32,
@@ -119,7 +120,7 @@ pub(super) fn simd_draw_ellipse_native(
     writer.into_image().map(Some)
 }
 
-pub(super) fn simd_draw_arc_native(
+pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_arc_native(
     img: &DynamicImage,
     x0: i32,
     y0: i32,
@@ -177,7 +178,7 @@ pub(super) fn simd_draw_arc_native(
     writer.into_image().map(Some)
 }
 
-pub(super) fn simd_draw_chord_native(
+pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_chord_native(
     img: &DynamicImage,
     x0: i32,
     y0: i32,
@@ -252,7 +253,7 @@ pub(super) fn simd_draw_chord_native(
     writer.into_image().map(Some)
 }
 
-pub(super) fn simd_draw_pieslice_native(
+pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_pieslice_native(
     img: &DynamicImage,
     x0: i32,
     y0: i32,
@@ -386,7 +387,7 @@ fn polygon_fill_intervals(
     rows
 }
 
-pub(super) fn simd_draw_polygon_native(
+pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_polygon_native(
     img: &DynamicImage,
     points: &[(i32, i32)],
     fill: Option<(u8, u8, u8, u8)>,

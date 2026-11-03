@@ -8,7 +8,7 @@ use crate::draw::{for_each_polygon_fill_span, wide_line_polygon_points};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, GenericImageView};
 
-pub(super) fn simd_draw_line_native(
+pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_line_native(
     img: &DynamicImage,
     x0: i32,
     y0: i32,

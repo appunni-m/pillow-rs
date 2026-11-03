@@ -25,7 +25,7 @@ pub(crate) fn remap_hidden_lanes(
     method: TransposeMethod,
 ) -> Result<(), PilError> {
     let (source_width, source_height) = source.dimensions();
-    let (output_width, output_height) = output.dimensions();
+    let output_width = output.width();
     let swaps_axes = matches!(
         method,
         TransposeMethod::Rotate90

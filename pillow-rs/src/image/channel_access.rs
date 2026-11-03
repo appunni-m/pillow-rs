@@ -279,6 +279,10 @@ fn eager_route_guards_pass(
             !backend_resolved
                 || requested_backend.is_some_and(|backend| backends.contains(&backend))
         }
+        OperationRouteGuard::NonEmptyInput => pixel_count != 0,
+        // Channel extraction never has Draw context/mask facts, so it cannot
+        // take a Draw-only wrapper route.
+        OperationRouteGuard::DrawBitmapRouteIn(_) => false,
         OperationRouteGuard::PixelCountAtMost(limit) => pixel_count <= *limit,
         OperationRouteGuard::ByteStorageLengthMatchesPixelCount => {
             usize::try_from(pixel_count).ok() == Some(byte_length)
