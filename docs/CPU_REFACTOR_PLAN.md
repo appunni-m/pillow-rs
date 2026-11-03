@@ -69,7 +69,7 @@ the baseline. Keep `pillow-rs-bad` as reference.
 
 ## Current pending matrix
 
-Snapshot base: `develop` commit `a052cad41` (local WIP, unpushed). The CPU
+Snapshot base: `develop` commit `9319f259b` (local WIP, unpushed). The CPU
 source migration remains in review and is not ready for validation gates.
 Recent source-only checkpoints thread `StrategySelection` through Rotate and
 Transform hidden-lane helpers; native-byte Filter extrema, rank, and blur
@@ -84,9 +84,10 @@ its sidecar invalidation contract. A static source scan finds no maintained
 Rust imports, module declarations, or `include!` paths reaching
 `pool_cpu/legacy`; the archive remains reference-only. A separate static scan
 finds no runtime helper parameters carrying a bare `Architecture`; remaining
-raw parameters are the
-const Merge support
-declaration builder and Analysis's internal missing-strategy error formatter.
+raw parameters are the const Merge support declaration builder and Analysis's
+internal missing-strategy error formatter. Convert's physical-lane review
+also identified missing fourth-byte propagation for RGB-family-to-YCbCr/HSV
+routes; the exact-mode source matrix is now a blocking TODO in the inventory.
 Chops, Pad, Draw, Thumbnail, Quantize, Resize, geometry sidecars, Filter, and
 Composite context propagation remain uncompiled and runtime-unverified. The
 audit is not a completion proof: operation support declarations, ownership,
