@@ -3,7 +3,7 @@
 use wide::{u8x16, u16x16};
 
 /// Apply the exact signed-truncating 150% blend to interleaved RGB bytes.
-pub(super) fn execute_unsharp_rgb150(
+pub(in crate::compute::pool_cpu::ops::filter::rgb8) fn execute_unsharp_rgb150(
     original: &[u8],
     blurred_output: &mut [u8],
     threshold: i32,

@@ -7,7 +7,7 @@ use crate::raster::{DynamicImage, RgbaImage};
 
 use super::gaussian_blur_radius_seven::Avx2Kernel;
 
-pub(super) fn execute_gaussian_blur_radius_seven(
+pub(in crate::compute::pool_cpu::ops::filter::rgba8) fn execute_gaussian_blur_radius_seven(
     image: &DynamicImage,
     sigma: f32,
     context: &ExecutionContext,

@@ -11,7 +11,8 @@ use crate::error::PilError;
 use crate::raster::{DynamicImage, GenericImageView};
 
 mod rounded_rect;
-pub(super) use rounded_rect::simd_draw_rounded_rect_native;
+pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) use
+    rounded_rect::simd_draw_rounded_rect_native;
 
 fn simd_write_ellipse_spans(
     writer: &mut SimdDrawSpanWriter,

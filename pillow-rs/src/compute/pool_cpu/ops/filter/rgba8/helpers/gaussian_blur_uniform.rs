@@ -17,7 +17,7 @@ pub(in crate::compute::pool_cpu::ops::filter::rgba8) struct ScanEvidence {
 
 /// Prove that a large RGBA image is uniform and both fixed-point Gaussian
 /// passes preserve every source channel byte.
-pub(super) fn prove_identity(
+pub(in crate::compute::pool_cpu::ops::filter::rgba8) fn prove_identity(
     raw: &[u8],
     width: usize,
     height: usize,

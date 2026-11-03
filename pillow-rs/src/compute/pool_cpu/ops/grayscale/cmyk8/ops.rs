@@ -60,10 +60,12 @@ macro_rules! declare_architectures {
 }
 
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[allow(unsafe_code)]
 fn prepare_neon(input: grayscale_impl::Kernel<'_>) -> super::neon::grayscale_impl::Kernel<'_> {
     // The target statically guarantees NEON; the context-selected declaration
     // constructs the token once, before the original pixel loops run.
-    let neon = fearless_simd::Neon::assume_supported();
+    // SAFETY: this function is compiled only when the target enables NEON.
+    let neon = unsafe { fearless_simd::Neon::assume_supported() };
     super::neon::grayscale_impl::prepare(input, neon)
 }
 

@@ -3,7 +3,7 @@
 use crate::compute::registry::support::{PaletteKnowledge, PayloadOutput, RequestFacts, StrategyInputs};
 use crate::error::PilError;
 use crate::raster::buffer::HiddenPixelLanes;
-use crate::raster::{DynamicImage, GenericImageView, ImageBuffer, Mode, Pixel};
+use crate::raster::{DynamicImage, ImageBuffer, Mode, Pixel};
 
 pub(crate) const UNSUPPORTED_PAYLOAD: &str = "putdata payload mode is not supported";
 

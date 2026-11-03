@@ -1,6 +1,10 @@
 //! Exact bit-pattern uniformity shared by F-mode rank strategies.
 
-pub(super) fn native_uniform_f_mode_image(raw: &[u8], width: usize, height: usize) -> bool {
+pub(in crate::compute::pool_cpu::ops::filter::f32) fn native_uniform_f_mode_image(
+    raw: &[u8],
+    width: usize,
+    height: usize,
+) -> bool {
     let Some(pixel_count) = width.checked_mul(height) else {
         return false;
     };

@@ -106,10 +106,11 @@ fn filter_3x3_i32_row(
 // The 3x3 I-mode filter can cheaply skip its per-pixel convolution when a
 // bounded native image is uniform and the exact Pillow f32 result equals its
 // source sample. Keep this limit aligned with the 5x5 proof below.
-pub(super) const I32_UNIFORM_FILTER3X3_MAX_PIXELS: usize = 1024 * 1024;
+pub(in crate::compute::pool_cpu::ops::filter::i32) const I32_UNIFORM_FILTER3X3_MAX_PIXELS: usize =
+    1024 * 1024;
 
 /// Compare one uniform sample's exact normalized 3x3 result with its source.
-pub(super) fn uniform_i32_filter3x3_sample_is_identity(
+pub(in crate::compute::pool_cpu::ops::filter::i32) fn uniform_i32_filter3x3_sample_is_identity(
     sample_i32: i32,
     kernel: &[f32; 9],
     rounding_bias: f32,
@@ -129,7 +130,7 @@ pub(super) fn uniform_i32_filter3x3_sample_is_identity(
 /// Prove a uniform I image is unchanged by this normalized 3x3 convolution.
 /// Use the same fused row expressions, vertical accumulation order, rounding
 /// bias, and truncation as [`filter_3x3_i32_row`].
-pub(super) fn uniform_i32_filter3x3_is_identity(
+pub(in crate::compute::pool_cpu::ops::filter::i32) fn uniform_i32_filter3x3_is_identity(
     raw: &[u8],
     width: usize,
     height: usize,

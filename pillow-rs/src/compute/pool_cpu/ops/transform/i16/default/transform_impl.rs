@@ -3,7 +3,7 @@
 use crate::compute::pool_cpu::ops::transform::helpers::luma16::{self, ByteOrder};
 use crate::compute::pool_cpu::ops::transform::ops::TransformRequest;
 use crate::error::PilError;
-use crate::raster::{DynamicImage, GenericImageView, ImageBuffer};
+use crate::raster::{DynamicImage, ImageBuffer};
 
 pub(crate) fn execute(
     input: &DynamicImage,

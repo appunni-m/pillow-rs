@@ -5,7 +5,7 @@ use wide::f32x8;
 
 const LANES: usize = 8;
 const MAX_AREA: usize = 81;
-pub(super) const MAX_SIZE: u32 = 9;
+pub(in crate::compute::pool_cpu::ops::filter::f32) const MAX_SIZE: u32 = 9;
 
 #[inline]
 fn sort_vectors(values: &mut [f32x8]) {
@@ -106,7 +106,7 @@ fn filter_row(
     }
 }
 
-pub(super) fn execute(
+pub(in crate::compute::pool_cpu::ops::filter::f32) fn execute(
     raw: &[u8],
     width: u32,
     height: u32,

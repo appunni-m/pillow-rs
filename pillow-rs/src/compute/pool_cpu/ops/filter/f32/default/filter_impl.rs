@@ -3,7 +3,7 @@ use crate::raster::DynamicImage;
 use super::rank_impl;
 use crate::compute::pool_cpu::ops::filter::ops::FilterRequest;
 
-pub(super) fn execute(
+pub(in crate::compute::pool_cpu::ops::filter::f32) fn execute(
     image: &DynamicImage,
     request: FilterRequest,
 ) -> Result<DynamicImage, PilError> {

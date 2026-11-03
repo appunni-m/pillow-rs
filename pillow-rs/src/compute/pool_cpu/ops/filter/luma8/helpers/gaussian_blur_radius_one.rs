@@ -172,7 +172,7 @@ fn gaussian_radius_one(raw: &[u8], width: usize, height: usize, radius: f32) -> 
     work
 }
 
-pub(super) fn execute_radius_one(
+pub(in crate::compute::pool_cpu::ops::filter::luma8) fn execute_radius_one(
     image: &DynamicImage,
     sigma: f32,
 ) -> Result<DynamicImage, PilError> {

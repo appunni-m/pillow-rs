@@ -9,7 +9,7 @@ use crate::raster::{DynamicImage, ImageBuffer, Luma};
 
 type I16Image = ImageBuffer<Luma<u16>, Vec<u16>>;
 
-pub(super) fn execute(
+pub(in crate::compute::pool_cpu::ops::filter::i16) fn execute(
     image: &DynamicImage,
     request: FilterRequest,
 ) -> Result<DynamicImage, PilError> {

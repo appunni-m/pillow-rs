@@ -114,7 +114,7 @@ fn filter_row(
     }
 }
 
-pub(super) fn execute(
+pub(in crate::compute::pool_cpu::ops::filter::luma8) fn execute(
     input: &GrayImage,
     size: u32,
     rank: u32,

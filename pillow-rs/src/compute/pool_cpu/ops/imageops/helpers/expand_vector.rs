@@ -2,7 +2,7 @@
 
 use crate::error::PilError;
 use crate::pipeline::ExpandMargins;
-use crate::raster::{GenericImageView, ImageBuffer, Pixel};
+use crate::raster::{ImageBuffer, Pixel};
 use wide::u8x16;
 
 pub(crate) fn expand_buffer<P>(

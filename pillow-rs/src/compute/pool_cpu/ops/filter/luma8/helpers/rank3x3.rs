@@ -111,7 +111,10 @@ fn filter_luma_row(
     }
 }
 
-pub(super) fn execute(input: &GrayImage, rank: u32) -> Result<GrayImage, PilError> {
+pub(in crate::compute::pool_cpu::ops::filter::luma8) fn execute(
+    input: &GrayImage,
+    rank: u32,
+) -> Result<GrayImage, PilError> {
     if !matches!(rank, 1 | 4) {
         return Err(PilError::InternalError(
             "L 3x3 rank strategy received an unsupported rank".into(),

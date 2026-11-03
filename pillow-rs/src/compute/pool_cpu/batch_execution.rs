@@ -567,7 +567,6 @@ fn execute_chops_multiply_screen_run(
 
     let fused_ops = &ops[start..start + 2];
     let selection = *prepared.selection();
-    let architecture = selection.implementation.architecture;
     let output = match prepared.execute() {
         Ok(output) => output,
         Err(error) => {
@@ -616,7 +615,6 @@ fn execute_rgb_putpixel_thumbnail_run(
     let end = putpixel_end + 1;
     let fused_ops = &ops[start..end];
     let selection = *plan.selection();
-    let architecture = selection.implementation.architecture;
     for op in fused_ops {
         begin_pipeline_operation_telemetry(crate::compute::registry::variant_key(op));
     }

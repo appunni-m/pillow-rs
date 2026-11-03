@@ -12,7 +12,7 @@ const RADIUS: usize = 7;
 const BOX_BLUR_BIAS: u32 = crate::compute::pool_cpu::ops::filter::helpers::BOX_BLUR_BIAS;
 
 /// Architecture-specific middle-block hook, monomorphized at the mode leaf.
-pub(super) trait RadiusSevenHorizontalKernel {
+pub(in crate::compute::pool_cpu::ops::filter::rgba8) trait RadiusSevenHorizontalKernel {
     const HAS_OPTIMIZED_MIDDLE_BLOCK: bool;
 
     fn blur_middle_block(
@@ -26,7 +26,7 @@ pub(super) trait RadiusSevenHorizontalKernel {
 }
 
 /// Transpose RGBA storage through the architecture strategy selected by context.
-pub(super) fn transpose_rgba_in_place(
+pub(in crate::compute::pool_cpu::ops::filter::rgba8) fn transpose_rgba_in_place(
     work: &mut Vec<u8>,
     scratch: &mut Vec<u8>,
     width: u32,
@@ -78,7 +78,9 @@ struct HorizontalBlurContext {
 }
 
 /// Blur RGBA rows with the archived eight-pixel fixed-point vector loop.
-pub(super) fn blur_horizontal_rows<K: RadiusSevenHorizontalKernel>(
+pub(in crate::compute::pool_cpu::ops::filter::rgba8) fn blur_horizontal_rows<
+    K: RadiusSevenHorizontalKernel,
+>(
     source: &[u8],
     destination: &mut [u8],
     width: usize,

@@ -145,10 +145,13 @@ pub(crate) struct NeonBand<'a, P: Pixel> {
 }
 
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[allow(unsafe_code)]
 pub(crate) fn prepare_neon<P: Pixel>(input: CheckedBand<'_, P>) -> NeonBand<'_, P> {
     // This module requires a statically guaranteed NEON target; the operation
     // also selected NEON through the injected context. No leaf probe is needed.
-    NeonBand { input, neon: fearless_simd::Neon::assume_supported() }
+    // SAFETY: this function is compiled only when the target enables NEON.
+    let neon = unsafe { fearless_simd::Neon::assume_supported() };
+    NeonBand { input, neon }
 }
 
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]

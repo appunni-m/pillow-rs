@@ -69,7 +69,7 @@ fn sample_fixed<const CHANNELS: usize>(
     fill: [u8; 4],
     output_len: usize,
 ) -> Vec<u8> {
-    let (output_width, output_height) = output_dimensions;
+    let (output_width, _) = output_dimensions;
     let [step_x, step_y, origin_x, step_x_y, step_y_y, origin_y] = steps;
     let offsets_x = i64x8::new(std::array::from_fn(|lane| lane as i64 * step_x));
     let offsets_y = i64x8::new(std::array::from_fn(|lane| lane as i64 * step_x_y));

@@ -219,7 +219,7 @@ fn vertical_radius_one_pass(
     }
 }
 
-pub(super) fn execute_radius_one(
+pub(in crate::compute::pool_cpu::ops::filter::rgb8) fn execute_radius_one(
     image: &DynamicImage,
     sigma: f32,
 ) -> Result<DynamicImage, PilError> {
@@ -399,7 +399,7 @@ fn box_blur_radius_one_rows(
     Ok(())
 }
 
-pub(super) fn execute_box_blur_radius_one(
+pub(in crate::compute::pool_cpu::ops::filter::rgb8) fn execute_box_blur_radius_one(
     image: &DynamicImage,
     request: FilterRequest,
 ) -> Result<DynamicImage, PilError> {

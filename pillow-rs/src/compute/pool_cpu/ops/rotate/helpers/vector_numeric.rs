@@ -2,7 +2,7 @@
 
 use crate::compute::pool_cpu::ops::rotate::ops::RotateRequest;
 use crate::error::PilError;
-use crate::raster::{GenericImageView, RgbaImage};
+use crate::raster::RgbaImage;
 
 pub(crate) fn execute<const FLOAT: bool>(
     image: &RgbaImage,

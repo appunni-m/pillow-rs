@@ -7,7 +7,7 @@ use crate::ops::pil_resize::i32_samples_from_le_bytes;
 use crate::raster::DynamicImage;
 
 
-pub(super) trait F32MulAdd {
+pub(in crate::compute::pool_cpu::ops::filter::i32) trait F32MulAdd {
     fn mul_add(&self, sample: f32, weight: f32, accumulator: f32) -> f32;
 }
 
@@ -596,7 +596,7 @@ fn filter_5x5_i32_image(width: u32, height: u32, raw: Vec<u8>) -> Result<Dynamic
         .ok_or_else(|| PilError::ValueError("filter_5x5_i32: buffer error".into()))
 }
 
-pub(super) fn execute(
+pub(in crate::compute::pool_cpu::ops::filter::i32) fn execute(
     img: &DynamicImage,
     kernel: &[f32; 25],
     scale: f32,
@@ -605,7 +605,7 @@ pub(super) fn execute(
     execute_with_fma(img, kernel, scale, offset, &PortableF32Fma).map(|(image, _)| image)
 }
 
-pub(super) fn execute_with_fma(
+pub(in crate::compute::pool_cpu::ops::filter::i32) fn execute_with_fma(
     img: &DynamicImage,
     kernel: &[f32; 25],
     scale: f32,

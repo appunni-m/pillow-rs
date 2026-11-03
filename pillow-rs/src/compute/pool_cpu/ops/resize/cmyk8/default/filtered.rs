@@ -52,7 +52,6 @@ pub(crate) fn execute(
     vertical_rows(
         &intermediate,
         intermediate_stride,
-        output_width,
         output_height,
         vertical,
         &mut output,
@@ -121,7 +120,6 @@ fn horizontal_row(
 fn vertical_rows(
     intermediate: &[u8],
     row_stride: usize,
-    output_width: usize,
     output_height: usize,
     coefficients: &FilterCoeffs,
     output: &mut [u8],

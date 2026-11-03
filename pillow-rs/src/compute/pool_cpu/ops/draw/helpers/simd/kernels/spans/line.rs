@@ -292,7 +292,7 @@ fn simd_draw_bresenham_native(
     alpha_blend_rgb: bool,
     layout: DrawLayout,
 ) -> Result<Option<DynamicImage>, PilError> {
-    let (image_width, image_height) = img.dimensions();
+    let image_width = img.width();
     let row_bytes = (image_width as usize)
         .checked_mul(layout.channels)
         .ok_or_else(|| PilError::InternalError("SIMD draw row stride overflow".into()))?;

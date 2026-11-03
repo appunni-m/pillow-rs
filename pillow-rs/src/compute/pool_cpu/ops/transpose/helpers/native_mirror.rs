@@ -1,7 +1,7 @@
 //! Portable wide-lane horizontal reversal for native byte rows.
 
 use wide::u8x16;
-use crate::raster::{GenericImageView, ImageBuffer, Pixel};
+use crate::raster::{ImageBuffer, Pixel};
 
 /// Mirrors a typed byte image and preserves its pixel-buffer type.
 pub(crate) fn mirror_image<P>(

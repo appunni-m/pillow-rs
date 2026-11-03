@@ -177,7 +177,7 @@ fn vertical_radius_one_pass(
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
 }
 
-pub(super) fn execute_radius_one(
+pub(in crate::compute::pool_cpu::ops::filter::luma_a8) fn execute_radius_one(
     image: &DynamicImage,
     sigma: f32,
 ) -> Result<DynamicImage, PilError> {

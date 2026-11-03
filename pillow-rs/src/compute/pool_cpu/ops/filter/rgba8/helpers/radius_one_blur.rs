@@ -243,7 +243,7 @@ fn vertical_radius_one_rows(
     Ok(())
 }
 
-pub(super) fn try_execute(
+pub(in crate::compute::pool_cpu::ops::filter::rgba8) fn try_execute(
     image: &DynamicImage,
     request: FilterRequest,
 ) -> Result<Option<DynamicImage>, PilError> {

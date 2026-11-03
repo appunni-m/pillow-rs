@@ -9,7 +9,9 @@ use crate::compute::pool_cpu::ops::eval::helpers::vector::{
 use crate::error::PilError;
 
 /// Execute the RGB NEON path selected by the exact mode strategy.
-pub(super) fn execute(kernel: Kernel<'_, 3>) -> Result<Output, PilError> {
+pub(in crate::compute::pool_cpu::ops::eval::rgb8) fn execute(
+    kernel: Kernel<'_, 3>,
+) -> Result<Output, PilError> {
     if kernel.is_identity() {
         return vector::execute_neon(kernel);
     }

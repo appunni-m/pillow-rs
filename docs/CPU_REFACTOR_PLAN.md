@@ -69,15 +69,16 @@ the baseline. Keep `pillow-rs-bad` as reference.
 
 ## Current pending matrix
 
-Snapshot at `develop` commit `4e9531042` and the current documentation-only
-working tree. The source tree remains incomplete and unverified. `make
-docs-lint` passed; `make fmt clippy docs-lint` stopped at the public-API
-boundary check; direct `cargo fmt --check` found broad workspace formatting
-drift; and direct Clippy could not compile the unfinished CPU tree (7,929
-library and 8,037 library-test compiler errors). These results do not pass the
-source-completion or verification gates. No unit or parity tests or benchmarks
-ran. This matrix tracks pending work; it is not support or verification
-evidence.
+Snapshot based on `develop` commit `0509b5daa` and the current source-only
+working tree. The source tree remains incomplete and unverified. The previous
+push-time check on the pre-correction tree passed `make docs-lint`; `make fmt
+clippy docs-lint` stopped at the public-API boundary check; direct `cargo fmt
+--check` found broad workspace formatting drift; and direct Clippy could not
+compile that unfinished tree (7,929 library and 8,037 library-test compiler
+errors). The source-only corrections below have not been checked, so these
+results do not pass the source-completion or verification gates. No unit or
+parity tests or benchmarks ran. This matrix tracks pending work; it is not
+support or verification evidence.
 Detailed mappings and source TODOs remain in [CPU refactor
 inventory](CPU_REFACTOR_INVENTORY.md). Refresh this matrix at each completed
 checkpoint.
@@ -221,6 +222,16 @@ source-level route mismatch only. Palette output, metadata, and exact-mode
 parity remain pending. Push-time `docs-lint` passed; `cargo fmt --check` reports
 workspace-wide formatting drift and Clippy cannot compile the unfinished CPU
 tree. No behavior tests, parity, or benchmark ran.
+
+Compiler-diagnostic source corrections (2026-11-03): widened implementation
+visibility to the owning family/mode boundary for Geometry, Draw, Eval, and
+Filter re-exports;
+classified Paste as ineligible for unrelated pixel-span guards; aligned the
+PutAlphaData image/mask borrow lifetime; documented and locally permitted the
+NEON token construction under statically NEON-enabled targets; and removed
+unused imports and locals identified in the prior Clippy output. This is
+source-only cleanup from the previous failed compile; no follow-up build or
+quality check has run, and CPU source closure remains open.
 
 Histogram source review (2026-11-03): Pillow 12.2's masked multiband `Histo.c` reads physical lane 1 into the second result bank, while the unmasked two-band branch reads lane 3. LA, La, and PA raw inputs use `unpackLA`, which initializes omitted lanes by repeating the first sample; ordinary two-component inks do the same. The maintained typed Histogram owner reads retained lane 1 when available and falls back to the canonical repeated first sample when no independent-lane provenance exists. Source review confirms retained lanes are attached by new/frombytes/decode construction, packed PutData, and same-pixel-size mode-mismatched Paste. This repository has no Arrow image-import API, so `ImagingNewArrow` is not a reachable producer here. The remaining cross-operation risk is any producer that loses sidecar provenance before Histogram; track that with the hidden-lane producer audit and parity. Histogram parity remains pending. Sources: [Histo.c](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Histo.c#L721-L830), [Unpack.c mode dispatch](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Unpack.c#L1493-L1511), [`unpackLA`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Unpack.c#L2924-L2957), [`_imaging.c::getink`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/_imaging.c#L534-L645), [Paste.c raw pixelsize path](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Paste.c#L1982-L2017).
 
@@ -552,7 +563,7 @@ above, so source ownership alone does not close rows.
 | Mode ownership and boundaries | CPU source review complete; parity pending | `DynamicImage` and `Mode` declare the same 25 exact identities; CPU construction and operation APIs use typed `Mode`, while materialized execution reads the `DynamicImage` variant. Decode/encode translation stays in Pillow-owned codec adapters, lazy output transitions use operation support declarations, and indexed palette state retains the exact P/PA raster identity. Python and JavaScript parse public raster-mode strings at binding boundaries. `ImageColor.getcolor` uses a distinct typed `ColorOutputMode` for Pillow `ImageMode` descriptors such as `I;32` and `I;16S`; these values are not coerced to raster `Mode`. The later GPU compatibility path still carries Pillow spellings in its pending execution metadata and remains a separate backend-stage TODO. CPU source review is complete; frozen CPU parity and receipt verification remain pending. |
 | Backend and Architecture context | Incomplete | The shared selector checks the requested Architecture before permitted lower-architecture declarations, preserves `MissingSpecialization` for lower implementations, and carries the selected guard in `StrategySelection` for execution. CPU-only direct Analysis, Quantize, point/eval, eager Filter, Draw, GetData, GetProjection, callback PutData/PutPixel, and the CPU-owned binary/matrix/I;16/palette Convert routes now use the shared image-pinned/active Backend plus CPU Architecture resolver (advisory where the old wrapper swallowed backend-state errors); GPU preference can therefore retain an active SIMD architecture for CPU fallback, while an explicit GPU pin stays CPU Default. Eager receipts treat SIMD as an architecture request: a selected SIMD strategy clears the provisional host-fallback note, while Default/lower-architecture selection records the strategy fallback; GPU-to-CPU stays a backend fallback. Per-operation telemetry now exposes optional typed strategy fallback reasons separately from pipeline-level backend fallback (`None` means selection is unavailable; an empty list means a recorded selection had no fallback), and prepared CPU batch, direct eager, composed, fused, and vector PutPixel batch selection paths record the actual `StrategySelection`. The owned batch Invert path keeps its exact byte-mode eligibility and derives its kernel band count from `Mode::band_count()`. Fused RGB/CMYK GetProjection terminal execution and receipts now consume the prepared selection directly; RGB PutPixel→Thumbnail fusion admission also passes the single Image-resolved Backend/Architecture snapshot into its support guard. Other host terminal paths retain source TODOs for selection and receipt plumbing. Continue tracing injected context through registries, pipeline, eager/direct, fusion, nested, fallback, and terminal edges; audit owner declarations and verify exact, lower-architecture, build/hardware-unavailable, and guard-fallback receipts in parity. |
 | Operation support declarations | Incomplete | For every operation, expose all 25 exact modes, inputs/outputs, multi-input constraints, build/architecture requirements, deferred guards, and rejection/fallback reasons at its top-level contract. Use the same declarations for reporting, admission, and prepared selection. |
-| Archive, dead code, and source size | Pending | Account for all 98 archived CPU files, 182 archived SIMD files, 84 `PipelineOp` variants, 313 CPU and 569 SIMD baseline declarations, callers, modes, kernels, and fallbacks. Review active/archive correspondence, remove dead maintained code, and meet the 100-line function / 1,000-line file limits before validation. Keep CPU serial; do not add Rayon. Source-only audit (2026-11-03): active `pool_cpu` has no references to `legacy` or `pool_simd`; its largest files are `enhance/ops.rs` at 979 and `resize/ops.rs` at 951. A wider maintained-Rust scan, excluding inert archives and build outputs, found no file above 1,000 lines (largest: `image/materialization.rs` at 989). Function-size audit and full active/archive correspondence remain pending. |
+| Archive, dead code, and source size | Pending | Account for all 98 archived CPU files, 182 archived SIMD files, 84 `PipelineOp` variants, 313 CPU and 569 SIMD baseline declarations, callers, modes, kernels, and fallbacks. Review active/archive correspondence, remove dead maintained code, and meet the 100-line function / 1,000-line file limits before validation. Keep CPU serial; do not add Rayon. Source-only audit (2026-11-03): active `pool_cpu` has no references to `legacy` or `pool_simd`; `pool_cpu/ops` contains 4,764 Rust files and 163,429 lines, with `analysis/ops.rs` at 993, `enhance/ops.rs` at 979, and `imageops/ops.rs` at 940 as the largest files. The earlier wider maintained-Rust scan found no file above 1,000 lines, but its reported maximum predates the current 993-line Analysis file. A fresh full-tree file and function-size review plus active/archive correspondence remain pending. |
 | Static quality and compilation | Not started; gated on source review | After Stage 5 is complete, run source-map and implementation-structure audits, `make quality`, affected structure/crosswalk checks, `make build-parity`, and available target/feature builds. No unit-test suites for this migration. |
 | Full CPU parity | Not started; gated on static quality | Preserve all 17,407 existing CPU-applicable cases (current case-set SHA-256 `8da7b964ad255904d23d15df85f29135f2bf1f9647038330429a9972acde721b`), then expand the parity matrix to operation × exact Mode × each declared CPU Architecture before freezing the final case IDs/hash. Include mode-specific behavior such as I/F and I;16 Brightness, selection/fallback/rejection receipts, output identity, tails, empty inputs, and secondary inputs; do not modify or weaken existing cases. Run the entire expanded CPU-only set after source review and static gates pass. |
 | CPU performance | Not started; gated on parity | Compare the frozen 1,032 CPU workloads (ID SHA-256 `639e358082276c924343618d5a3b09c6945de012c91c1a80ac5a8ee2121ccb84`) against compatible pre-refactor evidence. Preserve each workload contract and report each operation/mode/architecture separately; at most one confirmation repeat for questionable pairs. |

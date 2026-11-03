@@ -102,7 +102,9 @@ fn filter_radius_one(raw: &[u8], output: &mut [u8], width: usize, height: usize)
     }
 }
 
-pub(super) fn execute_radius_one(image: &DynamicImage) -> Result<DynamicImage, PilError> {
+pub(in crate::compute::pool_cpu::ops::filter::luma8) fn execute_radius_one(
+    image: &DynamicImage,
+) -> Result<DynamicImage, PilError> {
     let DynamicImage::ImageLuma8(input) = image else {
         return Err(PilError::InternalError(
             "L BoxBlur strategy received a mismatched raster variant".into(),

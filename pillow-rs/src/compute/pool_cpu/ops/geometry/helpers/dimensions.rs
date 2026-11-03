@@ -3,7 +3,7 @@ use crate::error::PilError;
 // TODO(pillow-rs#3ptb): verify tie rounding, zero-sized inputs, and error
 // ordering for Contain/Cover/Fit/Scale in the frozen CPU parity matrix.
 
-pub(super) fn bankers_round(value: f64) -> f64 {
+pub(in crate::compute::pool_cpu::ops::geometry) fn bankers_round(value: f64) -> f64 {
     let floor = value.floor();
     let fraction = value - floor;
     if fraction == 0.5 {
@@ -13,7 +13,7 @@ pub(super) fn bankers_round(value: f64) -> f64 {
     }
 }
 
-pub(super) fn contain_dimensions(
+pub(in crate::compute::pool_cpu::ops::geometry) fn contain_dimensions(
     source: (u32, u32),
     target: (u32, u32),
 ) -> Result<(u32, u32), PilError> {
@@ -43,7 +43,7 @@ pub(super) fn contain_dimensions(
     Ok(size)
 }
 
-pub(super) fn cover_dimensions(
+pub(in crate::compute::pool_cpu::ops::geometry) fn cover_dimensions(
     source: (u32, u32),
     target: (u32, u32),
 ) -> Result<(u32, u32), PilError> {
@@ -87,7 +87,7 @@ fn validate_contain_cover_size(
     Ok(())
 }
 
-pub(super) fn fit_box(
+pub(in crate::compute::pool_cpu::ops::geometry) fn fit_box(
     source: (u32, u32),
     target: (u32, u32),
     bleed: f64,

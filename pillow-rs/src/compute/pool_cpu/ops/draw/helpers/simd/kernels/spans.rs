@@ -7,7 +7,7 @@ use crate::raster::{DynamicImage, GenericImageView};
 use wide::{u8x16, u16x16};
 
 mod line;
-pub(super) use line::simd_draw_line_native;
+pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) use line::simd_draw_line_native;
 
 /// Return the inclusive pixel span of a horizontal line after clipping it to
 /// the destination.  Geometry is deliberately kept scalar: the SIMD kernel

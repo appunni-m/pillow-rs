@@ -4,7 +4,7 @@ use crate::compute::pool_cpu::ops::transform::helpers::{byte, scalar};
 use crate::compute::pool_cpu::ops::transform::ops::TransformRequest;
 use crate::error::PilError;
 use crate::pipeline::{ResampleFilter, TransformMethod};
-use crate::raster::{DynamicImage, GenericImageView, RgbaImage};
+use crate::raster::{DynamicImage, RgbaImage};
 
 pub(crate) fn execute(
     input: &DynamicImage,

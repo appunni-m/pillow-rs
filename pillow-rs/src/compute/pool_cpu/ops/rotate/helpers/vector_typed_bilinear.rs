@@ -7,7 +7,7 @@ use crate::compute::pool_cpu::ops::rotate::helpers::vector_interpolation::{
 };
 use crate::compute::pool_cpu::ops::rotate::ops::RotateRequest;
 use crate::error::PilError;
-use crate::raster::{GenericImageView, Rgba, RgbaImage};
+use crate::raster::{Rgba, RgbaImage};
 use wide::{f32x8, f64x8, i32x8};
 
 pub(crate) fn execute<const FLOAT: bool>(

@@ -30,7 +30,7 @@ impl F32MulAdd for X86FmaToken {
     }
 }
 
-pub(super) fn execute(
+pub(in crate::compute::pool_cpu::ops::filter::i32) fn execute(
     image: &DynamicImage,
     kernel: &[f32; 25],
     scale: f32,

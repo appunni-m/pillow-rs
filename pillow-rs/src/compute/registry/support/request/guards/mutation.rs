@@ -770,6 +770,7 @@ pub(super) fn pixel_span_guard(input: StrategyInputs, channels: u8) -> GuardAsse
         | RequestFacts::Quantize { .. }
         | RequestFacts::Transform { .. }
         | RequestFacts::SameModeSecondaryImage { .. }
+        | RequestFacts::Paste { .. }
         | RequestFacts::AlphaComposite { .. }
         | RequestFacts::ExtractBand { .. }
         | RequestFacts::PutPixelBatch { .. }
@@ -840,6 +841,7 @@ pub(super) fn pixel_write_run_guard(input: StrategyInputs) -> GuardAssessment {
         | RequestFacts::Quantize { .. }
         | RequestFacts::Transform { .. }
         | RequestFacts::SameModeSecondaryImage { .. }
+        | RequestFacts::Paste { .. }
         | RequestFacts::AlphaComposite { .. }
         | RequestFacts::ExtractBand { .. }
         | RequestFacts::PutPixel { .. }
