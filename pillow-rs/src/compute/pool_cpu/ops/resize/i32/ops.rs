@@ -37,11 +37,11 @@ pub(crate) fn resize(
         }
         #[cfg(target_arch = "x86_64")]
         Architecture::AvxFma => super::avx::resize_impl::execute(
-            context, input, width, height, filter, bounds, Architecture::AvxFma,
+            context, input, width, height, filter, bounds, selection,
         )?,
         #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
         Architecture::Neon => super::neon::resize_impl::execute(
-            context, input, width, height, filter, bounds, Architecture::Neon,
+            context, input, width, height, filter, bounds, selection,
         )?,
         _ => {
             return Err(PilError::InternalError(format!(

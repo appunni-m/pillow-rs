@@ -1,10 +1,12 @@
 //! Scalar FMA implementation for ImageF32 Resize on x86 AVX/FMA targets.
 
-use crate::compute::{Architecture, ExecutionContext};
+use crate::compute::ExecutionContext;
+use crate::compute::registry::support::StrategySelection;
 use crate::error::PilError;
 use crate::ops::pil_resize::X86FmaToken;
 use crate::pipeline::ResampleFilter;
 use crate::raster::RgbaImage;
+use super::super::super::helpers::strategy::require_architecture;
 
 pub(crate) fn execute(
     context: &ExecutionContext,
@@ -13,8 +15,9 @@ pub(crate) fn execute(
     height: u32,
     filter: ResampleFilter,
     bounds: super::super::super::helpers::typed_nearest::BoxBounds,
-    architecture: Architecture,
+    selection: &StrategySelection,
 ) -> Result<RgbaImage, PilError> {
+    let architecture = require_architecture(context, selection)?;
     let fma = X86FmaToken::from_context(context, architecture).ok_or_else(|| {
         PilError::InternalError(
             "ImageF32 AVX FMA strategy received an ineligible execution context".into(),

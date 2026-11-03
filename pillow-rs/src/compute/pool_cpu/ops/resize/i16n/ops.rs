@@ -35,7 +35,8 @@ pub(crate) fn resize_selected(
                 "ImageI16N vector Resize does not accept boxed bounds".into(),
             ));
         }
-        super::super::helpers::strategy::require_architecture(context, architecture)?;
+        let architecture =
+            super::super::helpers::strategy::require_architecture(context, selection)?;
         match architecture {
             #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
             crate::compute::Architecture::Sse2 => {

@@ -4,6 +4,7 @@ use crate::checked_dims::CheckedDims;
 use crate::compute::{Architecture, ExecutionContext};
 use crate::error::PilError;
 use crate::compute::helpers::resampling::rounding::round_up;
+use crate::compute::registry::support::StrategySelection;
 use crate::ops::pil_resize::{FilterCoeffsF64, i32_samples_from_le_bytes};
 use crate::pipeline::ResampleFilter;
 use crate::raster::RgbaImage;
@@ -22,9 +23,9 @@ pub(crate) fn execute(
     height: u32,
     filter: ResampleFilter,
     bounds: BoxBounds,
-    architecture: Architecture,
+    selection: &StrategySelection,
 ) -> Result<RgbaImage, PilError> {
-    require_architecture(context, architecture)?;
+    let architecture = require_architecture(context, selection)?;
     if architecture != Architecture::Neon || bounds.is_some() {
         return Err(PilError::InternalError(
             "ImageI32 NEON Resize received an unsupported request".into(),

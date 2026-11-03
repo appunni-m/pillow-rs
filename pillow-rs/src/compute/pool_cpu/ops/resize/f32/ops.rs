@@ -19,7 +19,6 @@ pub(crate) fn resize(
     bounds: super::super::helpers::typed_nearest::BoxBounds,
     selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
-    let architecture = selection.implementation.architecture;
     let DynamicImage::ImageF32(input) = image else {
         return Err(PilError::InternalError(
             "ImageF32 Resize strategy received another raster mode".into(),
@@ -56,7 +55,7 @@ pub(crate) fn resize(
 }
 
 fn resize_selected(
-    _context: &ExecutionContext,
+    context: &ExecutionContext,
     selection: &StrategySelection,
     input: &RgbaImage,
     width: u32,
@@ -71,7 +70,7 @@ fn resize_selected(
         }
         #[cfg(target_arch = "x86_64")]
         Architecture::AvxFma => super::avx::resize_impl::execute(
-            _context, input, width, height, filter, bounds, Architecture::AvxFma,
+            context, input, width, height, filter, bounds, selection,
         ),
         _ => Err(PilError::InternalError(format!(
             "ImageF32 Resize received non-F32 implementation selection {architecture:?}"

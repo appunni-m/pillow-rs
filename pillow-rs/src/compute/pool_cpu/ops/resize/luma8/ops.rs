@@ -19,7 +19,8 @@ pub(crate) fn resize(
     if !matches!(filter, ResampleFilter::Nearest) {
         match architecture {
             Architecture::Sse2 | Architecture::Neon | Architecture::WasmSimd128 => {
-                super::super::helpers::strategy::require_architecture(context, architecture)?;
+                let architecture =
+                    super::super::helpers::strategy::require_architecture(context, selection)?;
                 return match architecture {
                     Architecture::Sse2 => match bounds {
                         Some(bounds) => GrayImage::from_raw(

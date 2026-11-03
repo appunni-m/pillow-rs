@@ -1,7 +1,7 @@
 //! Selected implementation checks for native Resize mode owners.
 
 use crate::compute::{Architecture, Backend, ExecutionContext};
-use crate::compute::registry::support::StrategySelection;
+use crate::compute::registry::support::{OperationId, StrategySelection};
 use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
 
@@ -9,13 +9,20 @@ pub(crate) fn require_default_architecture(
     context: &ExecutionContext,
     selection: &StrategySelection,
 ) -> Result<(), PilError> {
-    let architecture = selection.implementation.architecture;
-    if context.backend() != Backend::Cpu {
+    let implementation = selection.implementation;
+    if context.backend() != Backend::Cpu || implementation.backend != Backend::Cpu {
         return Err(PilError::InternalError(
             "CPU Resize mode received a non-CPU execution context".into(),
         ));
     }
-    if architecture != Architecture::Default {
+    if implementation.operation != OperationId::Resize
+        || selection.requested_architecture != context.architecture()
+    {
+        return Err(PilError::InternalError(
+            "Resize mode received a mismatched strategy selection".into(),
+        ));
+    }
+    if implementation.architecture != Architecture::Default {
         return Err(PilError::InternalError(
             "Resize mode selected an architecture without a declared strategy".into(),
         ));
@@ -25,11 +32,20 @@ pub(crate) fn require_default_architecture(
 
 pub(crate) fn require_architecture(
     context: &ExecutionContext,
-    architecture: Architecture,
-) -> Result<(), PilError> {
-    if context.backend() != Backend::Cpu {
+    selection: &StrategySelection,
+) -> Result<Architecture, PilError> {
+    let implementation = selection.implementation;
+    let architecture = implementation.architecture;
+    if context.backend() != Backend::Cpu || implementation.backend != Backend::Cpu {
         return Err(PilError::InternalError(
             "CPU Resize mode received a non-CPU execution context".into(),
+        ));
+    }
+    if implementation.operation != OperationId::Resize
+        || selection.requested_architecture != context.architecture()
+    {
+        return Err(PilError::InternalError(
+            "Resize mode received a mismatched strategy selection".into(),
         ));
     }
     if architecture == Architecture::Default
@@ -40,7 +56,7 @@ pub(crate) fn require_architecture(
             "Resize mode received an unavailable architecture strategy".into(),
         ));
     }
-    Ok(())
+    Ok(architecture)
 }
 
 /// Selects a declared native-byte nearest kernel or the mode's Default route.
@@ -66,7 +82,7 @@ pub(crate) fn resize_byte_nearest<T, const CHANNELS: usize>(
             "native-byte nearest Resize received an unsupported request".into(),
         ));
     }
-    require_architecture(context, architecture)?;
+    let architecture = require_architecture(context, selection)?;
     match architecture {
         #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
         Architecture::Sse2 => (),
@@ -111,7 +127,7 @@ pub(crate) fn resize_byte_native<T, const CHANNELS: usize>(
         require_default_architecture(context, selection)?;
         return default();
     }
-    require_architecture(context, architecture)?;
+    let architecture = require_architecture(context, selection)?;
     let output = match (filter, bounds) {
         (ResampleFilter::Nearest, Some(bounds)) => super::native_nearest::execute_boxed::<CHANNELS>(
             source,
