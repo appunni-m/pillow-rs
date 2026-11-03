@@ -1705,3 +1705,16 @@ parallel collection work remains reserved for the later `pool_parallel`
 stage. This closes source dispatch review for these families only. Architecture
 reachability and mode/architecture parity remain pending. No build, formatting,
 checkstyle, lint, tests, parity, benchmark, or coverage ran.
+
+Reduce dispatch source review (2026-11-04): the operation entry classifies all
+25 exact modes and prepares the matching mode-owned strategy with the injected
+execution context. Seven byte modes declare AVX2, SSE2, NEON, and wasm SIMD128
+strategies; Pillow `F` declares AVX, SSE2, NEON, and wasm SIMD128; remaining
+modes declare their Default owner. Prepared execution invokes the stored
+selection, preserves the exact mode, and composes Pillow's physical-lane copy
+or zeroing behavior after reduction. Core-only u16 and internal float modes
+stay on native typed sample paths. The active CPU tree still has no Rayon or
+`parallel` feature dispatch. This source pass does not establish arithmetic,
+fault, palette-metadata, architecture-reachability, or mode/architecture
+parity. Those checks remain pending; no build, formatting, checkstyle, lint,
+tests, parity, benchmark, or coverage ran.
