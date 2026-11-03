@@ -1685,3 +1685,11 @@ finish semantic and callback/fault-order review for direct Text and Bitmap,
 including palette mutation, unsupported CoreOnly modes, and eager native fast
 routes; frozen CPU parity remains pending. No build, formatting, checkstyle,
 lint, tests, parity, benchmark, or coverage ran.
+
+PutAlphaData mask receipt continuation (2026-11-04): eager mask materialization
+for exact mode and dimension validation now uses a nested receipt capture. The
+mask graph's receipts are restored around the still-lazy destination
+PutAlphaData operation, including when validation fails and Pillow's visible
+opaque-alpha promotion is applied. Validation and mutation order are unchanged.
+This is source-only; wrapper callback and receipt parity remain pending. No
+build, formatting, checkstyle, lint, tests, parity, benchmark, or coverage ran.

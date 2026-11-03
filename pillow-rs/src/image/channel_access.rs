@@ -17,12 +17,16 @@
 // `native-identity`; Paletted copies report `native-copy`. None selects an
 // architecture. Lazy identity routes preserve source graph receipts before
 // the terminal identity receipt. Multiband ExtractBand selection remains
-// deferred until child use.
+// deferred until child use. PutAlphaData preserves the eagerly materialized
+// mask graph receipts while it validates the mask and queues the destination
+// operation lazily.
 // The operation route declares copy, shared-buffer, eager, and ExtractBand
 // child paths per mode. PutAlpha's Rust/Python ordering and metadata paths have
 // been source-reviewed; value and receipt parity remains open.
 
 use std::sync::Arc;
+
+use crate::compute::PipelineOperationTelemetryCapture;
 
 use crate::compute::registry::support::{
     InputContract, ModeSupport, OperationId, OperationModeRoute, OperationRouteGuard,
@@ -500,6 +504,7 @@ impl Image {
         // Pillow promotes before mask validation. Because this wrapper holds
         // exclusive access, apply the same visible mutation only on failure;
         // valid calls stay on the direct native PutAlphaData route.
+        let mut operation_receipts = PipelineOperationTelemetryCapture::begin_preserving_current();
         let mask_img = match validated_putalpha_mask(self, mask) {
             Ok(mask) => mask,
             Err(error) => {
@@ -507,6 +512,7 @@ impl Image {
                 return Err(error);
             }
         };
+        operation_receipts.restore();
         let operation = PipelineOp::PutAlphaData {
             mask: Arc::new(mask_img),
             mode: image_mode,
