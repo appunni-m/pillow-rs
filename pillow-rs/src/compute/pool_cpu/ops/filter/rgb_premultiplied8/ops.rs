@@ -88,14 +88,14 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute_architecture_blur(
     context: &crate::compute::ExecutionContext,
 ) -> Result<DynamicImage, PilError> {
     crate::compute::pool_cpu::ops::filter::helpers::validate_native_byte_blur_selection(
-        selection, context,
+        selection, MODE, request, context,
     )?;
     crate::compute::pool_cpu::ops::filter::helpers::execute_native_byte_blur(
         image,
         MODE,
         4,
         request,
-        selection.implementation.architecture,
+        selection,
         context,
     )
 }
@@ -113,7 +113,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
         )
     {
         return crate::compute::pool_cpu::ops::filter::helpers::execute_native_byte_extrema(
-            image, request, MODE, 4, selection.implementation.architecture,
+            image, request, MODE, 4, selection,
         );
     }
 
@@ -125,7 +125,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
         )
     {
         return crate::compute::pool_cpu::ops::filter::helpers::execute_native_byte_rank(
-            image, request, MODE, 4, selection.implementation.architecture,
+            image, request, MODE, 4, selection,
         );
     }
 

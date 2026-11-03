@@ -1,7 +1,8 @@
 //! Prepared exact-mode adapter for native-byte order-statistic kernels.
 
 use crate::checked_dims::CheckedDims;
-use crate::compute::Architecture;
+use crate::compute::{Architecture, Backend};
+use crate::compute::registry::support::{OperationId, StrategySelection};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 
@@ -18,20 +19,32 @@ pub(crate) fn execute_native_byte_rank(
     request: super::super::ops::FilterRequest,
     mode: Mode,
     channels: u8,
-    architecture: Architecture,
+    selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
-    let (size, rank) = match request {
+    let (size, rank, operation) = match request {
         super::super::ops::FilterRequest::MedianFilter { size } => {
-            (size, size.saturating_mul(size) / 2)
+            (size, size.saturating_mul(size) / 2, OperationId::MedianFilter)
         }
-        super::super::ops::FilterRequest::RankFilter { size, rank } => (size, rank),
+        super::super::ops::FilterRequest::RankFilter { size, rank } => {
+            (size, rank, OperationId::RankFilter)
+        }
         _ => {
             return Err(PilError::InternalError(
                 "byte rank strategy received a different filter request".into(),
             ));
         }
     };
-    match architecture {
+    let implementation = selection.implementation;
+    if implementation.operation != operation
+        || implementation.mode != mode
+        || implementation.backend != Backend::Cpu
+        || selection.requested_backend != Backend::Cpu
+    {
+        return Err(PilError::InternalError(
+            "byte rank strategy received a mismatched CPU selection".into(),
+        ));
+    }
+    match implementation.architecture {
         Architecture::Avx2
         | Architecture::Avx
         | Architecture::Sse2

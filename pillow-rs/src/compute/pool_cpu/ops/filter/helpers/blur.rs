@@ -569,18 +569,35 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute_native_byte_blur(
     mode: crate::raster::Mode,
     channels: usize,
     request: super::super::ops::FilterRequest,
-    architecture: crate::compute::Architecture,
+    selection: &crate::compute::registry::support::StrategySelection,
     context: &crate::compute::ExecutionContext,
 ) -> Result<crate::raster::DynamicImage, PilError> {
-    vector::execute(image, mode, channels, request, architecture, context)
+    vector::execute(image, mode, channels, request, selection, context)
 }
 
 pub(in crate::compute::pool_cpu::ops::filter) fn validate_native_byte_blur_selection(
     selection: &crate::compute::registry::support::StrategySelection,
+    mode: crate::raster::Mode,
+    request: super::super::ops::FilterRequest,
     context: &crate::compute::ExecutionContext,
 ) -> Result<(), PilError> {
-    let architecture = selection.implementation.architecture;
-    if selection.requested_backend != context.backend()
+    use crate::compute::registry::support::OperationId;
+    let implementation = selection.implementation;
+    let operation = match request {
+        super::super::ops::FilterRequest::GaussianBlur { .. } => OperationId::GaussianBlur,
+        super::super::ops::FilterRequest::BoxBlur { .. }
+        | super::super::ops::FilterRequest::BoxBlurXY { .. } => OperationId::BoxBlur,
+        _ => {
+            return Err(PilError::InternalError(
+                "native-byte blur received a non-blur request".into(),
+            ));
+        }
+    };
+    let architecture = implementation.architecture;
+    if implementation.operation != operation
+        || implementation.mode != mode
+        || implementation.backend != crate::compute::Backend::Cpu
+        || selection.requested_backend != context.backend()
         || selection.requested_architecture != context.architecture()
         || context.backend() != crate::compute::Backend::Cpu
         || !context.permits_architecture(architecture)

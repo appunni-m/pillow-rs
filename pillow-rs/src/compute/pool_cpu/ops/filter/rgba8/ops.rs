@@ -154,7 +154,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute_architecture_blur(
     context: &crate::compute::ExecutionContext,
 ) -> Result<DynamicImage, PilError> {
     super::super::helpers::validate_native_byte_blur_selection(
-        selection, context,
+        selection, MODE, request, context,
     )?;
     if !matches!(image, DynamicImage::ImageRgba8(_)) {
         return Err(PilError::InternalError(
@@ -201,7 +201,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute_architecture_blur(
         MODE,
         4,
         request,
-        selection.implementation.architecture,
+        selection,
         context,
     )
 }
@@ -223,7 +223,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
         )
     {
         return super::super::helpers::execute_native_byte_extrema(
-            image, request, MODE, 4, selection.implementation.architecture,
+            image, request, MODE, 4, selection,
         );
     }
 
@@ -235,7 +235,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
         )
     {
         return super::super::helpers::execute_native_byte_rank(
-            image, request, MODE, 4, selection.implementation.architecture,
+            image, request, MODE, 4, selection,
         );
     }
 

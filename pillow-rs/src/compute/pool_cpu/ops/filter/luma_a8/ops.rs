@@ -88,7 +88,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute_architecture_blur(
     context: &crate::compute::ExecutionContext,
 ) -> Result<DynamicImage, PilError> {
     super::super::helpers::validate_native_byte_blur_selection(
-        selection, context,
+        selection, MODE, request, context,
     )?;
     if let super::super::ops::FilterRequest::GaussianBlur { sigma } = request {
         if super::super::helpers::gaussian_blur_box_parameters(sigma).0 == 1 {
@@ -100,7 +100,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute_architecture_blur(
         MODE,
         2,
         request,
-        selection.implementation.architecture,
+        selection,
         context,
     )
 }
@@ -121,7 +121,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
         )
     {
         return super::super::helpers::execute_native_byte_extrema(
-            image, request, MODE, 2, selection.implementation.architecture,
+            image, request, MODE, 2, selection,
         );
     }
 
@@ -133,7 +133,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
         )
     {
         return super::super::helpers::execute_native_byte_rank(
-            image, request, MODE, 2, selection.implementation.architecture,
+            image, request, MODE, 2, selection,
         );
     }
 

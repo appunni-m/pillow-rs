@@ -1,8 +1,10 @@
 //! Native-byte architecture declarations and MaxFilter/MinFilter kernels.
 
 use crate::checked_dims::CheckedDims;
-use crate::compute::Architecture;
-use crate::compute::registry::support::{ImplementationSupport, OperationId, StrategyGuard};
+use crate::compute::{Architecture, Backend};
+use crate::compute::registry::support::{
+    ImplementationSupport, OperationId, StrategyGuard, StrategySelection,
+};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 use wide::u8x16;
@@ -90,18 +92,32 @@ pub(crate) fn execute_native_byte_extrema(
     request: super::super::ops::FilterRequest,
     mode: Mode,
     channels: u8,
-    architecture: Architecture,
+    selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
-    let (size, select_max) = match request {
-        super::super::ops::FilterRequest::MaxFilter { size } => (size, true),
-        super::super::ops::FilterRequest::MinFilter { size } => (size, false),
+    let (size, select_max, operation) = match request {
+        super::super::ops::FilterRequest::MaxFilter { size } => {
+            (size, true, OperationId::MaxFilter)
+        }
+        super::super::ops::FilterRequest::MinFilter { size } => {
+            (size, false, OperationId::MinFilter)
+        }
         _ => {
             return Err(PilError::InternalError(
                 "byte extrema strategy received a different filter request".into(),
             ));
         }
     };
-    match architecture {
+    let implementation = selection.implementation;
+    if implementation.operation != operation
+        || implementation.mode != mode
+        || implementation.backend != Backend::Cpu
+        || selection.requested_backend != Backend::Cpu
+    {
+        return Err(PilError::InternalError(
+            "byte extrema strategy received a mismatched CPU selection".into(),
+        ));
+    }
+    match implementation.architecture {
         Architecture::Avx2
         | Architecture::Avx
         | Architecture::Sse2

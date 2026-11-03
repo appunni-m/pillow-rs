@@ -1,7 +1,8 @@
 //! Portable-wide BoxBlur recurrence used by exact native-byte strategies.
 
 use crate::checked_dims::CheckedDims;
-use crate::compute::{Architecture, Backend, ExecutionContext};
+use crate::compute::ExecutionContext;
+use crate::compute::registry::support::StrategySelection;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 use wide::u32x8;
@@ -36,10 +37,11 @@ pub(super) fn execute(
     mode: Mode,
     channels: usize,
     request: crate::compute::pool_cpu::ops::filter::ops::FilterRequest,
-    architecture: Architecture,
+    selection: &StrategySelection,
     context: &ExecutionContext,
 ) -> Result<DynamicImage, PilError> {
-    validate_strategy(image, mode, channels, architecture, context)?;
+    super::validate_native_byte_blur_selection(selection, mode, request, context)?;
+    validate_strategy(image, mode, channels)?;
     let dimensions = CheckedDims::new(image.width(), image.height(), channels as u8)?;
     if image.as_bytes().len() != dimensions.total_bytes() {
         return Err(PilError::InternalError(
@@ -104,36 +106,15 @@ fn validate_strategy(
     image: &DynamicImage,
     mode: Mode,
     channels: usize,
-    architecture: Architecture,
-    context: &ExecutionContext,
 ) -> Result<(), PilError> {
-    if context.backend() != Backend::Cpu {
-        return Err(PilError::InternalError(
-            "native-byte blur strategy received a non-CPU execution context".into(),
-        ));
-    }
     if image.mode() != mode {
         return Err(PilError::InternalError(
             "native-byte blur strategy received a different raster mode".into(),
         ));
     }
-    if !(1..=4).contains(&channels)
-        || !matches!(
-            architecture,
-            Architecture::Avx2
-                | Architecture::Avx
-                | Architecture::Sse2
-                | Architecture::Neon
-                | Architecture::WasmSimd128
-        )
-    {
+    if !(1..=4).contains(&channels) {
         return Err(PilError::InternalError(
-            "native-byte blur strategy received an unsupported architecture or layout".into(),
-        ));
-    }
-    if !context.permits_architecture(architecture) {
-        return Err(PilError::InternalError(
-            "native-byte blur architecture is outside the injected context".into(),
+            "native-byte blur strategy received an unsupported layout".into(),
         ));
     }
     Ok(())

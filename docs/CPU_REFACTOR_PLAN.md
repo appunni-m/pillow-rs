@@ -1461,3 +1461,13 @@ lane sampler. Filtering and pixel kernels are unchanged. Static source review
 found no bare `Architecture` parameters in the helpers or prepared call sites;
 `git diff --check` passed. Source-only; no build, formatter, checkstyle, lint,
 tests, parity, benchmark, or coverage ran.
+
+Filter kernel selection-context follow-up (2026-11-03): native-byte extrema,
+rank, and blur helpers now receive `StrategySelection` instead of a bare
+architecture. Extrema and rank validate operation, exact mode, and CPU
+backend; blur also validates the retained selection against the injected
+`ExecutionContext` before its specialized or portable-wide path. All native-byte
+mode owners pass the prepared selection. Algorithms are unchanged. Static
+source scan found no `Architecture` parameters in active Filter helpers and
+`git diff --check` passed. Source-only; no build, formatter, checkstyle, lint,
+tests, parity, benchmark, or coverage ran.

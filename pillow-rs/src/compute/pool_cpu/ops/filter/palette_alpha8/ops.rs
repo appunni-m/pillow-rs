@@ -75,7 +75,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
         )
     {
         return crate::compute::pool_cpu::ops::filter::helpers::execute_native_byte_extrema(
-            image, request, MODE, 2, selection.implementation.architecture,
+            image, request, MODE, 2, selection,
         );
     }
 
@@ -87,7 +87,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
         )
     {
         return crate::compute::pool_cpu::ops::filter::helpers::execute_native_byte_rank(
-            image, request, MODE, 2, selection.implementation.architecture,
+            image, request, MODE, 2, selection,
         );
     }
 
