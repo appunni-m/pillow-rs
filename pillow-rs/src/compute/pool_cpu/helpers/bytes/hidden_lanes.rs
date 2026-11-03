@@ -10,6 +10,7 @@ pub(crate) fn default_hidden_pixel_lanes(mode: Mode, first_sample: u8) -> Option
         Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => {
             Some([first_sample, first_sample])
         }
+        // Canonical X value; Convert strategies retain source-specific values separately.
         Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => {
             Some([u8::MAX, 0])
         }
