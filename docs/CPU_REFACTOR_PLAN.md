@@ -103,10 +103,12 @@ mode-owned Default strategies, while other Pillow modes use explicit
 RGBA normalization and the base-mode routes required for I;16, F, YCbCr, and
 HSV. The direct wrapper composition now remains lazy, and GPU admission keeps
 four-byte LAB inputs on CPU until its shader can preserve their auxiliary
-lane. LAB-to-RGB-family conversion remains pending, along with exact transform
-parity and fault-order verification. Official source references and the
-remaining Convert mode/target matrix are in the [CPU refactor
-inventory](CPU_REFACTOR_INVENTORY.md). These source changes are uncompiled.
+lane. LAB-to-RGB/RGBA/RGBX now has a native serial transform and preserves the
+auxiliary lane; exact transform parity and fault-order verification remain
+pending. Native algorithms for Rust-only LAB targets are still TODO. Official
+source references and the remaining Convert mode/target matrix are in the [CPU
+refactor inventory](CPU_REFACTOR_INVENTORY.md). These source changes are
+uncompiled.
 Chops, Pad, Draw, Thumbnail, Quantize, Resize, geometry sidecars, Filter, and
 Composite context propagation remain uncompiled and runtime-unverified. The
 audit is not a completion proof: operation support declarations, ownership,

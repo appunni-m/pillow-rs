@@ -18,6 +18,7 @@ const TARGETS: &[Mode] = &[
     Mode::ImagePalette8,
     Mode::ImagePaletteAlpha8,
     Mode::ImageRgb8,
+    Mode::ImageRgbx8,
     Mode::ImageLaPremultiplied8,
     Mode::ImageRgbPremultiplied8,
     Mode::ImageRgba8,
@@ -32,18 +33,16 @@ const TARGETS: &[Mode] = &[
     Mode::ImageI32,
     Mode::ImageF32,
 ];
-// TODO(pillow-rs#3ptb): Pillow uses ImageCms for LAB-to-RGB/RGBA/RGBX. The
-// current Rust source-mode routes do not implement those profile transforms.
+// NO_PILLOW_SUPPORT: these extra LAB targets are Rust extensions; Pillow only
+// defines LAB identity and ImageCms conversion to RGB, RGBA, and RGBX.
 const CORE_ONLY_TARGETS: &[Mode] = &[
     Mode::One,
     Mode::ImageLuma8,
     Mode::ImageLumaA8,
     Mode::ImagePalette8,
     Mode::ImagePaletteAlpha8,
-    Mode::ImageRgb8,
     Mode::ImageLaPremultiplied8,
     Mode::ImageRgbPremultiplied8,
-    Mode::ImageRgba8,
     Mode::ImageI16,
     Mode::ImageI16L,
     Mode::ImageI16B,
@@ -57,7 +56,7 @@ const CORE_ONLY_TARGETS: &[Mode] = &[
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: TARGETS,
     core_only_targets: CORE_ONLY_TARGETS,
-    core_only_reason: Some("listed LAB source routes need Pillow-wrapper parity review"),
+    core_only_reason: Some("Pillow does not define these LAB source targets"),
     rejection_reason: "image has wrong mode",
 }];
 
@@ -90,10 +89,16 @@ pub(crate) fn execute(
     target: Mode,
     selection: StrategySelection,
 ) -> Result<DynamicImage, PilError> {
-    match selection.implementation.architecture {
+    let mut output = match selection.implementation.architecture {
         Architecture::Default => super::default::convert_impl::execute(source, target),
         _ => Err(PilError::InternalError(
             "Convert selected an undeclared LAB8 architecture".into(),
         )),
-    }
+    }?;
+    super::super::helpers::physical_lanes::preserve_compact_rgb_lane(
+        source,
+        target,
+        &mut output,
+    )?;
+    Ok(output)
 }

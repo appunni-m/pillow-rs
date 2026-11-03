@@ -9,7 +9,7 @@ use crate::raster::Mode;
 
 use super::super::ops::classify_mode;
 
-// NO_PILLOW_SUPPORT: sources outside Pillow's direct RGBX map use Rust composition.
+// Pillow's wrapper admits these source modes for direct RGBX conversion.
 const PILLOW_RGBX_SOURCES: &[Mode] = &[
     Mode::One,
     Mode::ImageLuma8,
@@ -19,6 +19,7 @@ const PILLOW_RGBX_SOURCES: &[Mode] = &[
     Mode::ImageRgb8,
     Mode::ImageRgba8,
     Mode::ImageRgbx8,
+    Mode::ImageLab8,
     Mode::ImageCmyk8,
     Mode::ImageI32,
 ];
@@ -371,6 +372,7 @@ const fn uses_prepared_rgbx_route(mode: Mode) -> bool {
             | Mode::ImageRgba8
             | Mode::ImageRgbPremultiplied8
             | Mode::ImageRgbx8
+            | Mode::ImageLab8
             | Mode::ImageI32
             | Mode::ImageF32
     )

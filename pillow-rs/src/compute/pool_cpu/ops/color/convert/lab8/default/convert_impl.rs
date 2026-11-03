@@ -3,12 +3,12 @@
 use crate::error::PilError;
 use crate::pipeline::DitherMethod;
 use crate::raster::{
-    DynamicImage, GenericImageView, GrayAlphaImage, LumaA, Mode, RgbImage, Rgba, RgbaImage,
+    DynamicImage, GenericImageView, GrayAlphaImage, LumaA, Mode, RgbImage,
 };
 
 pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, PilError> {
-    // TODO(pillow-rs#3ptb): Apply the Rust inverse LAB profile before treating
-    // LAB samples as RGB for color-space, luma, or CMYK target strategies.
+    // TODO(pillow-rs#3ptb): Add native LAB-domain algorithms for the Rust-only
+    // luma, color-space, and CMYK targets below; Pillow rejects those targets.
     match target {
         Mode::ImageLuma8 => luma(source).map(DynamicImage::ImageLuma8),
         Mode::ImageLumaA8 => luma_alpha(source).map(DynamicImage::ImageLumaA8),
@@ -20,15 +20,12 @@ pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, P
                 target,
             )
         }
-        Mode::ImageRgb8 => Ok(DynamicImage::ImageRgb8(source.clone())),
-        Mode::ImageRgba8 => Ok(DynamicImage::ImageRgba8(RgbaImage::from_fn(
-            source.width(),
-            source.height(),
-            |x, y| {
-                let pixel = source.get_pixel(x, y);
-                Rgba([pixel[0], pixel[1], pixel[2], u8::MAX])
-            },
-        ))),
+        Mode::ImageRgb8 => super::super::helpers::to_srgb::convert_to_rgb(source)
+            .map(DynamicImage::ImageRgb8),
+        Mode::ImageRgba8 => super::super::helpers::to_srgb::convert_to_four_byte(source)
+            .map(DynamicImage::ImageRgba8),
+        Mode::ImageRgbx8 => super::super::helpers::to_srgb::convert_to_four_byte(source)
+            .map(DynamicImage::ImageRgbx8),
         Mode::ImageLab8 => Ok(DynamicImage::ImageLab8(source.clone())),
         Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
             super::super::super::helpers::luma16::from_luma8_samples(
