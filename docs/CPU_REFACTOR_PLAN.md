@@ -69,45 +69,29 @@ the baseline. Keep `pillow-rs-bad` as reference.
 
 ## Current pending matrix
 
-Snapshot base: `develop` commit `dc568ad28` (local WIP, unpushed). The
-CPU source tree remains incomplete. Recent work removes uncalled Put,
-family-level and per-mode assessment/execution forwarding wrappers while
-keeping operation support declarations and prepared execution paths. The
-active Draw module no longer exports its unreferenced batch wrapper. Other
-source-only cleanup removes redundant per-mode default Blend wrappers, the
-unused Merge Identity layout, CropRegion's unread `source_height`, an unused
-architecture-name adapter, and unused Convert helpers. Architecture folder
-implementations remain pending reachability review across target architectures;
-they were not deleted based only on an aarch64 host check. Composite SSE2, NEON,
-and Wasm modules now use the same target conditions as their operation
-dispatch.
+Snapshot base: `develop` commit `db8fb9780` (local WIP, unpushed). The CPU
+source migration remains in source review and is not ready for validation
+gates. Recent source-only checkpoints thread `StrategySelection` through
+Rotate and Transform hidden-lane helpers; native-byte Filter extrema, rank,
+and blur helpers; and LA/RGBA AlphaComposite architecture binding. A static
+scan now finds no runtime helper parameters carrying a bare `Architecture`;
+remaining raw parameters are the const Merge support-declaration builder and
+Analysis's internal missing-strategy error formatter. Chops, Pad, Draw,
+Thumbnail, Quantize, Resize, geometry sidecars, Filter, and Composite context
+propagation are still uncompiled and runtime-unverified. The audit is not a
+completion proof: operation support declarations, ownership, source behavior,
+algorithm coverage, inert-archive review, and line limits remain open.
 
-The committed Chops source checkpoint passes the prepared `StrategySelection`
-through all 25 exact-mode entry points, fusion, and the 12 eligible in-place
-routes. The Pad source checkpoint passes its retained selection through all 25
-exact-mode strategies and the Resize composition helpers; a static source
-audit found 25/25 mode entries and no bare `Architecture` parameter in Pad
-mode `ops.rs` files. Draw now passes its retained selection through geometry,
-direct Text/Bitmap, and both eager native Bitmap fast routes. All 20 supported
-mode owners receive and validate the exact CPU selection; the five rejected
-internal high-depth modes remain rejected. The I32 Thumbnail streaming path
-now retains its selection through the mode owner and AVX FMA kernel adapter.
-ImageOps Quantize now passes its retained selection through all 25 exact-mode
-strategies, including macro-generated CoreOnly owners. Chops, Pad, Draw,
-Thumbnail, and Quantize context propagation remain source-only and have not
-been compiled or runtime-verified.
-
-The latest focused library compilation passed for the committed Resize
+The last focused library compilation passed for the earlier Resize
 selection-context refactor with
 `RUSTFLAGS='--cap-lints allow' cargo check -p pillow-rs --lib
---no-default-features --features image-codecs-all`. This confirms compilation
-only; lint caps suppressed the current denied-diagnostic backlog. It predates
-Chops commit `320b33637`, Pad commit `dc568ad28`, Draw commits `db55c50cf` and
-`0653e62b3`, Thumbnail commit `061325538`, and the current ImageOps Quantize
-source changes. No formatter, checkstyle, lint, tests, parity, benchmark, or
-coverage has run for this WIP
-sequence. This matrix tracks pending work; it is not support or runtime
-verification evidence.
+--no-default-features --features image-codecs-all`. It confirms compilation
+only; lint caps suppressed the denied-diagnostic backlog. It predates the
+Chops, Pad, Draw, Thumbnail, Quantize, Rotate/Transform, Filter, and Composite
+selection-context checkpoints. Since those checkpoints, only static source
+inspection and `git diff --check` have run. No formatter, checkstyle, lint,
+tests, parity, benchmark, or coverage has run for the current WIP. This matrix
+tracks pending work; it is not support or runtime verification evidence.
 Detailed mappings and source TODOs remain in [CPU refactor
 inventory](CPU_REFACTOR_INVENTORY.md). Refresh this matrix at each completed
 checkpoint.
