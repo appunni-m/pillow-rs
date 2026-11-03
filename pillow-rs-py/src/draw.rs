@@ -224,6 +224,10 @@ impl PyDraw {
     #[new]
     #[pyo3(signature = (image, mode=None))]
     fn new(image: &Bound<'_, PyImage>, mode: Option<String>) -> PyResult<Self> {
+        // Pillow's ImageDraw constructor loads the target before validating an
+        // explicit drawing mode. Keep direct calls to this binding ordered the
+        // same way as the Python facade.
+        image.call_method0("load")?;
         let mode = mode
             .map(|mode| {
                 pillow_rs::Mode::from_pillow_name(&mode).ok_or_else(|| {
