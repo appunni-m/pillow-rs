@@ -1372,6 +1372,18 @@ compare eager `Image.new` allocation failure timing; and verify
 dirty/malformed palette behavior in the frozen CPU parity set. No runtime
 validation has run for this boundary.
 
+Expand callback source audit (2026-11-04): Pillow resolves a string fill with
+the initial `image.mode`, accesses and copies the palette, then evaluates
+`image.mode` again as the target passed to `Image.new`. The Python wrapper can
+therefore change mode between fill parsing and canvas creation. The maintained
+`PreparedExpandFill` currently stores one mode, resolves non-string fill
+validation too early, and resolves palette entries from the Rust image rather
+than the returned Python palette object. This remains an implementation gap:
+separate the two mode captures, preserve Python palette callbacks, and defer
+raw fill validation to the Image.new boundary. Keep parity and allocation
+fault checks pending until that source path is complete. The actionable TODO
+is also recorded at the Expand Python and Rust owners and in the CPU inventory.
+
 ### Filter blur source review update
 
 BoxBlur, BoxBlurXY, and GaussianBlur source comparison against the archived
