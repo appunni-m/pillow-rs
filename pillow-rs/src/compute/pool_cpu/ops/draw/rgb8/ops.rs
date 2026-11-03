@@ -7,8 +7,10 @@ use crate::raster::{DynamicImage, Mode};
 use crate::compute::pool_cpu::ops::draw::TextComposeResult;
 
 pub(crate) fn apply_text<const RGBA_MASK: bool>(
+    selection: &StrategySelection,
     input: super::super::TextComposeInput<'_>,
 ) -> Result<TextComposeResult, PilError> {
+    super::super::helpers::strategy::require_default_selection(selection, MODE)?;
     super::default::text_impl::apply::<RGBA_MASK>(
         input.image,
         input.x,
@@ -21,6 +23,7 @@ pub(crate) fn apply_text<const RGBA_MASK: bool>(
 }
 
 pub(crate) fn try_native_bitmap(
+    selection: &StrategySelection,
     image: &DynamicImage,
     mask: &DynamicImage,
     mask_mode: Mode,
@@ -30,6 +33,7 @@ pub(crate) fn try_native_bitmap(
     y: i32,
     color: (u8, u8, u8, u8),
 ) -> Result<Option<DynamicImage>, PilError> {
+    super::super::helpers::strategy::require_default_selection(selection, MODE)?;
     super::default::bitmap_impl::apply(
         image,
         mask,
@@ -43,6 +47,7 @@ pub(crate) fn try_native_bitmap(
 }
 
 pub(crate) fn apply_bitmap(
+    selection: &StrategySelection,
     image: DynamicImage,
     x: i32,
     y: i32,
@@ -51,6 +56,7 @@ pub(crate) fn apply_bitmap(
     mask: &BitmapMask<'_>,
     color: (u8, u8, u8, u8),
 ) -> Result<DynamicImage, PilError> {
+    super::super::helpers::strategy::require_default_selection(selection, MODE)?;
     super::default::bitmap_impl::apply_raw(image, x, y, mask_width, mask_height, mask, color)
 }
 

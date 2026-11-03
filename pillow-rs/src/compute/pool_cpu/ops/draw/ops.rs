@@ -23,9 +23,8 @@
 //! backend, and nonempty guards; the wrapper evaluates that declaration. The
 //! Source tracing confirms the queued child receipt is Paste; route parity
 //! remains TODO. Text masks are dispatched without an expanded intermediate
-//! buffer; parity remains pending. TODO(pillow-rs#3ptb): continue passing
-//! `StrategySelection` into direct Text/Bitmap mode owners and audit the eager
-//! native Bitmap fast route.
+//! buffer; parity remains pending. TODO(pillow-rs#3ptb): finish source and
+//! fault-contract review for direct Text/Bitmap and eager native Bitmap paths.
 
 use crate::compute::{Architecture, Backend, ExecutionContext};
 use crate::compute::registry::support::{
@@ -342,40 +341,41 @@ pub(crate) fn apply_text(
     let mode = selection.implementation.mode;
     validate_direct_selection(selection, mode)?;
     match input.mask_kind {
-        DrawTextMaskKind::Coverage => apply_text_for_mode::<false>(mode, input),
-        DrawTextMaskKind::Rgba => apply_text_for_mode::<true>(mode, input),
+        DrawTextMaskKind::Coverage => apply_text_for_mode::<false>(mode, input, &selection),
+        DrawTextMaskKind::Rgba => apply_text_for_mode::<true>(mode, input, &selection),
     }
 }
 
 fn apply_text_for_mode<const RGBA_MASK: bool>(
     mode: Mode,
     input: TextComposeInput<'_>,
+    selection: &StrategySelection,
 ) -> Result<TextComposeResult, PilError> {
     match mode {
-        Mode::One => super::one::ops::apply_text::<RGBA_MASK>(input),
-        Mode::ImageLuma8 => super::luma8::ops::apply_text::<RGBA_MASK>(input),
-        Mode::ImageLumaA8 => super::luma_a8::ops::apply_text::<RGBA_MASK>(input),
+        Mode::One => super::one::ops::apply_text::<RGBA_MASK>(selection, input),
+        Mode::ImageLuma8 => super::luma8::ops::apply_text::<RGBA_MASK>(selection, input),
+        Mode::ImageLumaA8 => super::luma_a8::ops::apply_text::<RGBA_MASK>(selection, input),
         Mode::ImageLaPremultiplied8 => {
-            super::la_premultiplied8::ops::apply_text::<RGBA_MASK>(input)
+            super::la_premultiplied8::ops::apply_text::<RGBA_MASK>(selection, input)
         }
-        Mode::ImagePalette8 => super::palette8::ops::apply_text::<RGBA_MASK>(input),
-        Mode::ImagePaletteAlpha8 => super::palette_alpha8::ops::apply_text::<RGBA_MASK>(input),
-        Mode::ImageRgb8 => super::rgb8::ops::apply_text::<RGBA_MASK>(input),
-        Mode::ImageRgba8 => super::rgba8::ops::apply_text::<RGBA_MASK>(input),
+        Mode::ImagePalette8 => super::palette8::ops::apply_text::<RGBA_MASK>(selection, input),
+        Mode::ImagePaletteAlpha8 => super::palette_alpha8::ops::apply_text::<RGBA_MASK>(selection, input),
+        Mode::ImageRgb8 => super::rgb8::ops::apply_text::<RGBA_MASK>(selection, input),
+        Mode::ImageRgba8 => super::rgba8::ops::apply_text::<RGBA_MASK>(selection, input),
         Mode::ImageRgbPremultiplied8 => {
-            super::rgb_premultiplied8::ops::apply_text::<RGBA_MASK>(input)
+            super::rgb_premultiplied8::ops::apply_text::<RGBA_MASK>(selection, input)
         }
-        Mode::ImageRgbx8 => super::rgbx8::ops::apply_text::<RGBA_MASK>(input),
-        Mode::ImageCmyk8 => super::cmyk8::ops::apply_text::<RGBA_MASK>(input),
-        Mode::ImageYCbCr8 => super::ycbcr8::ops::apply_text::<RGBA_MASK>(input),
-        Mode::ImageLab8 => super::lab8::ops::apply_text::<RGBA_MASK>(input),
-        Mode::ImageHsv8 => super::hsv8::ops::apply_text::<RGBA_MASK>(input),
-        Mode::ImageI32 => super::i32::ops::apply_text::<RGBA_MASK>(input),
-        Mode::ImageF32 => super::f32::ops::apply_text::<RGBA_MASK>(input),
-        Mode::ImageI16 => super::i16::ops::apply_text::<RGBA_MASK>(input),
-        Mode::ImageI16L => super::i16l::ops::apply_text::<RGBA_MASK>(input),
-        Mode::ImageI16B => super::i16b::ops::apply_text::<RGBA_MASK>(input),
-        Mode::ImageI16N => super::i16n::ops::apply_text::<RGBA_MASK>(input),
+        Mode::ImageRgbx8 => super::rgbx8::ops::apply_text::<RGBA_MASK>(selection, input),
+        Mode::ImageCmyk8 => super::cmyk8::ops::apply_text::<RGBA_MASK>(selection, input),
+        Mode::ImageYCbCr8 => super::ycbcr8::ops::apply_text::<RGBA_MASK>(selection, input),
+        Mode::ImageLab8 => super::lab8::ops::apply_text::<RGBA_MASK>(selection, input),
+        Mode::ImageHsv8 => super::hsv8::ops::apply_text::<RGBA_MASK>(selection, input),
+        Mode::ImageI32 => super::i32::ops::apply_text::<RGBA_MASK>(selection, input),
+        Mode::ImageF32 => super::f32::ops::apply_text::<RGBA_MASK>(selection, input),
+        Mode::ImageI16 => super::i16::ops::apply_text::<RGBA_MASK>(selection, input),
+        Mode::ImageI16L => super::i16l::ops::apply_text::<RGBA_MASK>(selection, input),
+        Mode::ImageI16B => super::i16b::ops::apply_text::<RGBA_MASK>(selection, input),
+        Mode::ImageI16N => super::i16n::ops::apply_text::<RGBA_MASK>(selection, input),
         Mode::ImageLumaA16
         | Mode::ImageRgb16
         | Mode::ImageRgba16
@@ -399,63 +399,83 @@ pub(crate) fn apply_bitmap(
     validate_direct_selection(selection, mode)?;
     match mode {
         Mode::One => super::one::ops::apply_bitmap(
+            &selection,
             image, x, y, mask_width, mask_height, mask, color,
         ),
         Mode::ImageLuma8 => super::luma8::ops::apply_bitmap(
+            &selection,
             image, x, y, mask_width, mask_height, mask, color,
         ),
         Mode::ImageLumaA8 => super::luma_a8::ops::apply_bitmap(
+            &selection,
             image, x, y, mask_width, mask_height, mask, color,
         ),
         Mode::ImageLaPremultiplied8 => super::la_premultiplied8::ops::apply_bitmap(
+            &selection,
             image, x, y, mask_width, mask_height, mask, color,
         ),
         Mode::ImagePalette8 => super::palette8::ops::apply_bitmap(
+            &selection,
             image, x, y, mask_width, mask_height, mask, color,
         ),
         Mode::ImagePaletteAlpha8 => super::palette_alpha8::ops::apply_bitmap(
+            &selection,
             image, x, y, mask_width, mask_height, mask, color,
         ),
         Mode::ImageRgb8 => super::rgb8::ops::apply_bitmap(
+            &selection,
             image, x, y, mask_width, mask_height, mask, color,
         ),
         Mode::ImageRgba8 => super::rgba8::ops::apply_bitmap(
+            &selection,
             image, x, y, mask_width, mask_height, mask, color,
         ),
         Mode::ImageRgbPremultiplied8 => super::rgb_premultiplied8::ops::apply_bitmap(
+            &selection,
             image, x, y, mask_width, mask_height, mask, color,
         ),
         Mode::ImageRgbx8 => super::rgbx8::ops::apply_bitmap(
+            &selection,
             image, x, y, mask_width, mask_height, mask, color,
         ),
         Mode::ImageCmyk8 => super::cmyk8::ops::apply_bitmap(
+            &selection,
             image, x, y, mask_width, mask_height, mask, color,
         ),
         Mode::ImageYCbCr8 => super::ycbcr8::ops::apply_bitmap(
+            &selection,
             image, x, y, mask_width, mask_height, mask, color,
         ),
         Mode::ImageLab8 => super::lab8::ops::apply_bitmap(
+            &selection,
             image, x, y, mask_width, mask_height, mask, color,
         ),
         Mode::ImageHsv8 => super::hsv8::ops::apply_bitmap(
+            &selection,
             image, x, y, mask_width, mask_height, mask, color,
         ),
         Mode::ImageI32 => super::i32::ops::apply_bitmap(
+            &selection,
             image, x, y, mask_width, mask_height, mask, color,
         ),
         Mode::ImageF32 => super::f32::ops::apply_bitmap(
+            &selection,
             image, x, y, mask_width, mask_height, mask, color,
         ),
         Mode::ImageI16 => super::i16::ops::apply_bitmap(
+            &selection,
             image, x, y, mask_width, mask_height, mask, color,
         ),
         Mode::ImageI16L => super::i16l::ops::apply_bitmap(
+            &selection,
             image, x, y, mask_width, mask_height, mask, color,
         ),
         Mode::ImageI16B => super::i16b::ops::apply_bitmap(
+            &selection,
             image, x, y, mask_width, mask_height, mask, color,
         ),
         Mode::ImageI16N => super::i16n::ops::apply_bitmap(
+            &selection,
             image, x, y, mask_width, mask_height, mask, color,
         ),
         Mode::ImageLumaA16

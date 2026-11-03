@@ -151,6 +151,7 @@ impl Draw {
             )?;
         }
         if self.try_native_rgb_bitmap(
+            selection.as_ref(),
             x,
             y,
             bitmap,
@@ -168,6 +169,7 @@ impl Draw {
             });
         }
         if self.try_native_cmyk_l_bitmap(
+            selection.as_ref(),
             x,
             y,
             bitmap,
@@ -280,6 +282,7 @@ impl Draw {
     }
     fn try_native_rgb_bitmap(
         &mut self,
+        selection: Option<&StrategySelection>,
         x: i32,
         y: i32,
         bitmap: &Image,
@@ -298,9 +301,13 @@ impl Draw {
         if !rgb_target {
             return Ok(false);
         }
+        let selection = selection.ok_or_else(|| {
+            PilError::InternalError("Draw RGB Bitmap fast path has no prepared selection".into())
+        })?;
         let image = self.image.materialized_shared()?;
         let mask = bitmap.materialized_shared()?;
         let Some(output) = crate::compute::pool_cpu::ops::draw::rgb8::ops::try_native_bitmap(
+            selection,
             image.as_ref(),
             mask.as_ref(),
             bmp_mode,
@@ -318,6 +325,7 @@ impl Draw {
 
     fn try_native_cmyk_l_bitmap(
         &mut self,
+        selection: Option<&StrategySelection>,
         x: i32,
         y: i32,
         bitmap: &Image,
@@ -334,9 +342,15 @@ impl Draw {
         if raster_mode == Mode::ImageCmyk8
             && bmp_mode == Mode::ImageLuma8
         {
+            let selection = selection.ok_or_else(|| {
+                PilError::InternalError(
+                    "Draw CMYK Bitmap fast path has no prepared selection".into(),
+                )
+            })?;
             let img = self.image.materialized_shared()?;
             let mask = bitmap.materialized_shared()?;
             if let Some(output) = crate::compute::pool_cpu::ops::draw::cmyk8::ops::apply_luma_mask(
+                selection,
                 img.as_ref(),
                 mask.as_ref(),
                 x,
@@ -344,7 +358,7 @@ impl Draw {
                 bmp_w,
                 bmp_h,
                 color,
-            ) {
+            )? {
                 self.replace_draw_output(output);
                 return Ok(true);
             }

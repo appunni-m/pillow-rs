@@ -4,8 +4,8 @@
 // target-specific reachability is verified.
 // TODO(pillow-rs#3ptb): finish the family-by-family audit that every execution
 // boundary consumes the prepared selection derived from ExecutionContext.
-// Resize, Chops, and Pad are covered; Draw's prepared geometry batch now
-// consumes the selection, while its direct Text/Bitmap routes remain pending.
+// Resize, Chops, and Pad are covered; all supported Draw routes now consume
+// their prepared selection. Finish Draw source and fault-contract review.
 
 pub(crate) mod analysis;
 pub(crate) mod chops;

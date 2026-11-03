@@ -5,6 +5,7 @@ use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
 
 pub(crate) fn apply_bitmap(
+    selection: &StrategySelection,
     image: DynamicImage,
     x: i32,
     y: i32,
@@ -13,6 +14,7 @@ pub(crate) fn apply_bitmap(
     mask: &super::super::BitmapMask<'_>,
     color: (u8, u8, u8, u8),
 ) -> Result<DynamicImage, PilError> {
+    super::super::helpers::strategy::require_default_selection(selection, MODE)?;
     super::default::bitmap_impl::apply(image, x, y, mask_width, mask_height, mask, color)
 }
 
@@ -21,8 +23,10 @@ pub(crate) const CHANNELS: usize = 3;
 pub(crate) const FLOAT_MODE: bool = false;
 
 pub(crate) fn apply_text<const RGBA_MASK: bool>(
+    selection: &StrategySelection,
     input: super::super::TextComposeInput<'_>,
 ) -> Result<super::super::TextComposeResult, PilError> {
+    super::super::helpers::strategy::require_default_selection(selection, MODE)?;
     super::default::text_impl::apply::<RGBA_MASK>(
         input.image,
         input.x,

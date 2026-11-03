@@ -87,11 +87,11 @@ through all 25 exact-mode entry points, fusion, and the 12 eligible in-place
 routes. The Pad source checkpoint passes its retained selection through all 25
 exact-mode strategies and the Resize composition helpers; a static source
 audit found 25/25 mode entries and no bare `Architecture` parameter in Pad
-mode `ops.rs` files. Draw's prepared geometry batch now passes its retained
-selection through all 20 supported mode owners (16 architecture-capable, four
-Default-only); direct Text/Bitmap mode owners and the eager Bitmap route remain
-pending. Chops, Pad, and Draw context propagation remain source-only and have
-not been compiled or runtime-verified.
+mode `ops.rs` files. Draw now passes its retained selection through geometry,
+direct Text/Bitmap, and both eager native Bitmap fast routes. All 20 supported
+mode owners receive and validate the exact CPU selection; the five rejected
+internal high-depth modes remain rejected. Chops, Pad, and Draw context
+propagation remain source-only and have not been compiled or runtime-verified.
 
 The latest focused library compilation passed for the committed Resize
 selection-context refactor with
