@@ -69,8 +69,10 @@ the baseline. Keep `pillow-rs-bad` as reference.
 
 ## Current pending matrix
 
-Snapshot base: `develop` commit `a06a7f2b5` (local WIP, unpushed). The CPU
-source migration remains in review and is not ready for validation gates.
+Baseline: `3f9dfd4036caa061eabcf2255c9f34a745df9c7e`; continue from the current
+`develop` HEAD and preserve all later WIP commits. The CPU source migration
+remains in review and is not ready for validation gates. See the append-only
+checkpoint notes below for recent source changes and explicit remaining TODOs.
 Recent source-only checkpoints thread `StrategySelection` through Rotate and
 Transform hidden-lane helpers; native-byte Filter extrema, rank, and blur
 helpers; LA/RGBA AlphaComposite architecture binding; the UnsharpMask
