@@ -151,11 +151,15 @@ pub(crate) fn prepare_pipeline<'a>(
     };
     let width = u32::try_from(*w).map_err(|_| PilError::ValueError("images do not match".into()))?;
     let height = u32::try_from(*h).map_err(|_| PilError::ValueError("images do not match".into()))?;
+    let mut operand_receipts = crate::compute::PipelineOperationTelemetryCapture::begin_preserving_current();
     let source = source.materialized_shared_for_ops()?;
+    operand_receipts.capture();
     let mask = mask
         .as_deref()
         .map(crate::image::Image::materialized_shared_for_ops)
         .transpose()?;
+    operand_receipts.capture();
+    operand_receipts.restore();
     let source_facts = secondary_facts(source.as_ref());
     let mask_facts = mask.as_deref().map(secondary_facts);
     let facts = input
