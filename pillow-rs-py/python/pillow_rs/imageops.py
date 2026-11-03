@@ -90,20 +90,18 @@ def expand(image: Image, border=0, fill=0) -> Image:
 
         fill = getcolor(fill, fill_mode)
 
-    # Pillow reads image.palette after _color. For indexed modes this property
-    # can load the source and realize dirty palette state before Image.new.
-    palette = image.palette
-    if palette and palette.dirty:
-        image._realize_dirty_palette()
-    if image.mode == "P":
-        if palette:
-            palette = palette.copy()
-            if isinstance(fill, (str, tuple)):
-                fill = palette.getcolor(fill, image)
-            else:
-                palette = None
-    else:
-        palette = None
+    # Pillow snapshots an existing palette only after parsing the fill. Read
+    # its mode before getpalette loads the source and realizes dirty state.
+    source_palette = image.palette
+    palette = None
+    palette_mode = None
+    if source_palette:
+        palette_mode = source_palette.mode
+        from .imagepalette import ImagePalette
+
+        palette = ImagePalette(palette_mode, image.getpalette(palette_mode))
+        if isinstance(fill, tuple) and len(fill) in (3, 4):
+            fill = palette.getcolor(fill)
 
     # Image.new evaluates image.mode before its size comparisons. Retain that
     # exact raster snapshot even if the comparisons mutate the source wrapper.
@@ -119,15 +117,8 @@ def expand(image: Image, border=0, fill=0) -> Image:
     # Pillow allocates the target-mode Image.new canvas before Image.paste
     # loads or converts the current source wrapper.
     output = Image(_core.ops_expand_canvas(size, prepared_fill))
-    if target_mode == "P":
-        if palette:
-            palette_mode, palette_data = palette.getdata()
-            output.putpalette(palette_data, palette_mode)
-        elif not isinstance(fill, (tuple, list)):
-            # Image.new("P", ..., scalar) keeps an empty palette even when the
-            # source image carried one. Tuple/list extension routes resolve
-            # their own palette through the prepared Rust fill strategy.
-            output.putpalette([], "RGB")
+    if palette:
+        output.putpalette(palette.palette, palette_mode)
     output.paste(image, (left, top))
     output.load()
     return output

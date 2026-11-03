@@ -9,7 +9,7 @@ use crate::raster::{DynamicImage, Mode};
 
 /// A fill resolved for the exact mode of a captured `Image.new` target.
 ///
-/// The Python wrapper resolves names and P-palette callbacks first, captures
+/// The Python wrapper resolves names and palette callbacks first, captures
 /// the target image, validates the size, then prepares this mode strategy.
 #[doc(hidden)]
 #[derive(Debug, Clone)]
@@ -276,9 +276,9 @@ fn resolve_expand_palette_fill(
     fill: &ImageOpsColor,
     fill_rule: ExpandFillRule,
 ) -> Result<Option<(u8, Vec<u8>, Option<Vec<u8>>)>, PilError> {
-    // The Python adapter resolves P colors against its copied palette before
-    // preparing this Rust mode strategy. This retains source palette metadata
-    // for P/PA routes that do not perform the host tuple allocation.
+    // The Python adapter resolves P/PA colors against a fresh palette snapshot
+    // before preparing this Rust mode strategy. This retains source palette
+    // metadata for routes that do not perform the host tuple allocation.
     // TODO(pillow-rs#3ptb): verify dirty/raw palette faults, malformed buffers,
     // palette output metadata, and the documented CoreOnly fill extensions.
     if fill_rule != ExpandFillRule::PaletteIndexOrColor {

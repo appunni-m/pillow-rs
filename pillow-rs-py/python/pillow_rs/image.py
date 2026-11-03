@@ -1180,7 +1180,9 @@ class Image:
         from .imagepalette import ImagePalette
         mode = self._rust_image.palette_mode() or "RGB"
         palette = ImagePalette(mode)
-        palette.palette = self.getpalette(mode) or []
+        # Pillow keeps palette metadata available without loading pixel data.
+        # Image.getpalette() is the eager, source-loading accessor.
+        palette.palette = self._rust_image.getpalette_with_input(mode) or []
         self._palette_object = palette
         return palette
 
