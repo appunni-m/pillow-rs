@@ -2,8 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::compute::Architecture;
-use crate::compute::ExecutionContext;
+use crate::compute::{Architecture, Backend, ExecutionContext};
 use crate::compute::registry::support::{
     ImplementationSupport, InputContract, ModeSupport, OperationId, OutputModeRule,
     PaletteKnowledge, StrategyGuard, StrategyInputs, StrategySelection,
@@ -121,12 +120,23 @@ pub(crate) fn prepare<'a>(
     source: Arc<DynamicImage>,
     selection: StrategySelection,
 ) -> Result<Strategy<'a>, PilError> {
-    let architecture = bind_architecture(selection.implementation.architecture)?;
+    let architecture = bind_architecture(&selection)?;
     Ok(Strategy { destination, source, architecture, selection })
 }
 
-fn bind_architecture(architecture: Architecture) -> Result<ArchitectureStrategy, PilError> {
-    let strategy = match architecture {
+fn bind_architecture(selection: &StrategySelection) -> Result<ArchitectureStrategy, PilError> {
+    super::super::helpers::strategy::require_operation_mode(
+        selection,
+        OperationId::AlphaComposite,
+        MODE,
+    )?;
+    let implementation = selection.implementation;
+    if implementation.backend != Backend::Cpu || selection.requested_backend != Backend::Cpu {
+        return Err(PilError::InternalError(
+            "RGBA AlphaComposite received a non-CPU strategy selection".into(),
+        ));
+    }
+    let strategy = match implementation.architecture {
         Architecture::Default => ArchitectureStrategy::Default,
         #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
         Architecture::Sse2 => ArchitectureStrategy::Sse2,
@@ -168,7 +178,7 @@ pub(crate) fn prepare_mirror_fusion<'a>(
     {
         return Ok(None);
     }
-    let architecture = bind_architecture(architecture)?;
+    let architecture = bind_architecture(&alpha_selection)?;
     Ok(Some(MirrorFusionStrategy {
         destination,
         source,

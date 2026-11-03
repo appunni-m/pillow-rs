@@ -1471,3 +1471,13 @@ mode owners pass the prepared selection. Algorithms are unchanged. Static
 source scan found no `Architecture` parameters in active Filter helpers and
 `git diff --check` passed. Source-only; no build, formatter, checkstyle, lint,
 tests, parity, benchmark, or coverage ran.
+
+Composite AlphaComposite selection binding (2026-11-03): RGBA architecture
+binding now receives the retained `StrategySelection` and validates
+AlphaComposite/RGBA/CPU identity before producing its local architecture
+strategy; mirror fusion binds from that selection. LA preparation validates
+the same operation/mode/backend identity before matching its selected
+architecture. Static review of remaining raw `Architecture` parameters found
+only the const Merge support-declaration builder and Analysis's internal error
+formatter. Source-only; no build, formatter, checkstyle, lint, tests, parity,
+benchmark, or coverage ran.

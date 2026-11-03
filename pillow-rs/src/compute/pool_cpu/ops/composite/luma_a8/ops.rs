@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::compute::Architecture;
+use crate::compute::{Architecture, Backend};
 use crate::compute::registry::support::{
     ImplementationSupport, InputContract, ModeSupport, OperationId, OutputModeRule,
     StrategyGuard, StrategySelection,
@@ -102,6 +102,18 @@ pub(crate) fn prepare<'a>(
     source: Arc<DynamicImage>,
     selection: StrategySelection,
 ) -> Result<Strategy<'a>, PilError> {
+    super::super::helpers::strategy::require_operation_mode(
+        &selection,
+        OperationId::AlphaComposite,
+        MODE,
+    )?;
+    if selection.implementation.backend != Backend::Cpu
+        || selection.requested_backend != Backend::Cpu
+    {
+        return Err(PilError::InternalError(
+            "LA AlphaComposite received a non-CPU strategy selection".into(),
+        ));
+    }
     let architecture = match selection.implementation.architecture {
         Architecture::Default => ArchitectureStrategy::Default,
         #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
