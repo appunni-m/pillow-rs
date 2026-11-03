@@ -329,7 +329,7 @@ fn rgba_component_fill(mode: Mode, values: &[i64]) -> Result<(u8, u8, u8, u8), P
     }
 }
 
-pub(super) fn public_transform_fill(
+pub(crate) fn public_transform_fill(
     fillcolor: Option<TransformFill>,
     mode: Mode,
 ) -> Result<TransformFillResult, PilError> {

@@ -22,7 +22,8 @@ pub(crate) fn resize<const BIG_ENDIAN: bool>(
         filter,
         bounds,
     );
-    let mut intermediate = ImageBuffer::<Luma<u16>, Vec<u16>>::new(input.height(), destination_width);
+    let mut intermediate =
+        ImageBuffer::<Luma<u16>, Vec<u16>>::new(destination_width, input.height());
     for source_y in 0..input.height() {
         let source_start = source_y as usize * input.width() as usize;
         let intermediate_start = source_y as usize * destination_width as usize;
@@ -30,7 +31,8 @@ pub(crate) fn resize<const BIG_ENDIAN: bool>(
             &input.as_raw()[source_start..source_start + input.width() as usize],
             &horizontal,
             destination_width,
-            &mut intermediate[intermediate_start..intermediate_start + destination_width as usize],
+            &mut intermediate.as_mut()
+                [intermediate_start..intermediate_start + destination_width as usize],
         );
     }
 

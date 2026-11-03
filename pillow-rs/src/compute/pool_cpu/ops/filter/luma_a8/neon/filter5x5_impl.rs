@@ -24,7 +24,7 @@ pub(crate) fn execute(
     if source.width() < 5 || source.height() < 5 {
         return super::super::ops::execute_filter5x5_vectorized(
             image,
-            super::super::ops::FilterRequest::Filter5x5 {
+            super::super::super::ops::FilterRequest::Filter5x5 {
                 kernel,
                 scale,
                 offset,
@@ -50,7 +50,7 @@ pub(crate) fn execute(
     } else {
         return super::super::ops::execute_filter5x5_vectorized(
             image,
-            super::super::ops::FilterRequest::Filter5x5 {
+            super::super::super::ops::FilterRequest::Filter5x5 {
                 kernel,
                 scale,
                 offset,
@@ -60,7 +60,7 @@ pub(crate) fn execute(
     let Some((vector_blocks, scalar_tail)) = result else {
         return super::super::ops::execute_filter5x5_vectorized(
             image,
-            super::super::ops::FilterRequest::Filter5x5 {
+            super::super::super::ops::FilterRequest::Filter5x5 {
                 kernel,
                 scale,
                 offset,

@@ -287,7 +287,7 @@ pub(crate) fn execute_sharpness(
             crate::raster::Mode::ImageRgb8.pillow_name().unwrap_or("internal"),
         ))),
     }?;
-    super::helpers::sharpness::carry_hidden_lanes(
+    crate::compute::pool_cpu::ops::enhance::helpers::sharpness::carry_hidden_lanes(
         source,
         &mut output,
         crate::raster::Mode::ImageRgb8,

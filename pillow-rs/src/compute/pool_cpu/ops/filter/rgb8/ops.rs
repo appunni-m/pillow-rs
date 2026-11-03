@@ -9,39 +9,39 @@ use crate::raster::{DynamicImage, Mode};
 
 pub(super) const MODE: Mode = Mode::ImageRgb8;
 
-static MAX_FILTER_ARCHITECTURES:  [crate::compute::registry::support::ImplementationSupport; 5] = crate::compute::pool_cpu::ops::filter::helpers::native_byte_filter_architectures(
+static MAX_FILTER_ARCHITECTURES:  [crate::compute::registry::support::ImplementationSupport; 5] = super::super::helpers::native_byte_filter_architectures(
     OperationId::MaxFilter, MODE,
     crate::compute::registry::support::StrategyGuard::FilterNativeByteExtrema { channels: 3 },
 );
-static MIN_FILTER_ARCHITECTURES:  [crate::compute::registry::support::ImplementationSupport; 5] = crate::compute::pool_cpu::ops::filter::helpers::native_byte_filter_architectures(
+static MIN_FILTER_ARCHITECTURES:  [crate::compute::registry::support::ImplementationSupport; 5] = super::super::helpers::native_byte_filter_architectures(
     OperationId::MinFilter, MODE,
     crate::compute::registry::support::StrategyGuard::FilterNativeByteExtrema { channels: 3 },
 );
 static GAUSSIAN_BLUR_ARCHITECTURES: [ImplementationSupport; 5] =
-    crate::compute::pool_cpu::ops::filter::helpers::native_byte_blur_architectures(
+    super::super::helpers::native_byte_blur_architectures(
         OperationId::GaussianBlur,
         MODE,
         3,
     );
 static BOX_BLUR_ARCHITECTURES: [ImplementationSupport; 5] =
-    crate::compute::pool_cpu::ops::filter::helpers::native_byte_blur_architectures(
+    super::super::helpers::native_byte_blur_architectures(
         OperationId::BoxBlur,
         MODE,
         3,
     );
-static MEDIAN_FILTER_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] = crate::compute::pool_cpu::ops::filter::helpers::native_byte_filter_architectures(
+static MEDIAN_FILTER_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] = super::super::helpers::native_byte_filter_architectures(
     OperationId::MedianFilter, MODE,
     crate::compute::registry::support::StrategyGuard::FilterNativeByteRankWindow { channels: 3 },
 );
-static RANK_FILTER_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] = crate::compute::pool_cpu::ops::filter::helpers::native_byte_filter_architectures(
+static RANK_FILTER_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] = super::super::helpers::native_byte_filter_architectures(
     OperationId::RankFilter, MODE,
     crate::compute::registry::support::StrategyGuard::FilterNativeByteRankWindow { channels: 3 },
 );
 
-crate::compute::pool_cpu::ops::filter::helpers::native_filter3x3_architectures!(MODE, 3);
-crate::compute::pool_cpu::ops::filter::helpers::native_filter3x3_arch_leaf!(ImageRgb8, RgbImage, 3);
-crate::compute::pool_cpu::ops::filter::helpers::native_filter5x5_architectures!(MODE, 3);
-crate::compute::pool_cpu::ops::filter::helpers::native_filter5x5_arch_leaf!(ImageRgb8, RgbImage, 3, rgb);
+super::super::helpers::native_filter3x3_architectures!(MODE, 3);
+super::super::helpers::native_filter3x3_arch_leaf!(ImageRgb8, RgbImage, 3);
+super::super::helpers::native_filter5x5_architectures!(MODE, 3);
+super::super::helpers::native_filter5x5_arch_leaf!(ImageRgb8, RgbImage, 3, rgb);
 
 const UNSHARP_ARCHITECTURES: &[ImplementationSupport] = &[
     ImplementationSupport::cpu(
@@ -152,7 +152,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute_architecture_blur(
     selection: &StrategySelection,
     context: &crate::compute::ExecutionContext,
 ) -> Result<DynamicImage, PilError> {
-    crate::compute::pool_cpu::ops::filter::helpers::validate_native_byte_blur_selection(
+    super::super::helpers::validate_native_byte_blur_selection(
         selection, context,
     )?;
     match request {
@@ -171,9 +171,9 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute_architecture_blur(
                 ),
             ) =>
         {
-            super::helpers::execute_gaussian_blur_radius_one(image, request)
+            super::helpers::execute_gaussian_blur_radius_one(image, sigma)
         }
-        _ => super::helpers::execute_native_byte_blur(
+        _ => super::super::helpers::execute_native_byte_blur(
             image,
             MODE,
             3,
@@ -206,7 +206,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
                 | super::super::ops::FilterRequest::MinFilter { .. }
         )
     {
-        return crate::compute::pool_cpu::ops::filter::helpers::execute_native_byte_extrema(
+        return super::super::helpers::execute_native_byte_extrema(
             image, request, MODE, 3, selection.implementation.architecture,
         );
     }
@@ -218,7 +218,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
                 | super::super::ops::FilterRequest::RankFilter { .. }
         )
     {
-        return crate::compute::pool_cpu::ops::filter::helpers::execute_native_byte_rank(
+        return super::super::helpers::execute_native_byte_rank(
             image, request, MODE, 3, selection.implementation.architecture,
         );
     }
@@ -229,7 +229,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
                 return Ok(output);
             }
         }
-        return crate::compute::pool_cpu::ops::filter::helpers::native_filter5x5_arch_dispatch!(
+        return super::super::helpers::native_filter5x5_arch_dispatch!(
             selection.implementation.architecture,
             image,
             request,

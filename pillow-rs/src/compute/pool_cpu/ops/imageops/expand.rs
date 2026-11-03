@@ -90,24 +90,24 @@ pub(crate) fn assess(
     classify_mode(mode).assess(ctx, input)
 }
 
-pub(crate) fn prepare(
-    image: &DynamicImage,
+pub(crate) fn prepare<'a>(
+    image: &'a DynamicImage,
     border: crate::pipeline::ExpandMargins,
     fill: (u8, u8, u8, u8),
     ctx: &ExecutionContext,
-) -> Result<PreparedExpand<'_>, PilError> {
+) -> Result<PreparedExpand<'a>, PilError> {
     prepare_image(image, border, fill, ctx)
 }
 
 // TODO(pillow-rs#3ptb): Freeze I;16 low-16-bit fill wrap, CoreOnly typed
 // component fills, and Default/lower-architecture fallback receipts in CPU parity.
-pub(crate) fn prepare_with_native_fill(
-    image: &DynamicImage,
+pub(crate) fn prepare_with_native_fill<'a>(
+    image: &'a DynamicImage,
     border: crate::pipeline::ExpandMargins,
     fill: (u8, u8, u8, u8),
     native_fill: NativeColorInput,
     ctx: &ExecutionContext,
-) -> Result<PreparedExpand<'_>, PilError> {
+) -> Result<PreparedExpand<'a>, PilError> {
     let support = super::ops::EXPAND_SUPPORT.for_mode(image.mode());
     let inputs = match support {
         ModeSupport::Supported { inputs, .. } => inputs,

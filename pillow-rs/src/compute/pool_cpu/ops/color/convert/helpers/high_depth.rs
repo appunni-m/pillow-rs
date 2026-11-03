@@ -7,11 +7,7 @@ use crate::raster::{
     LumaA, Mode, Pixel, Primitive, Rgb, RgbImage, Rgba, RgbaImage,
 };
 
-pub(crate) trait HighDepthPixel: Pixel
-where
-    Self::Subpixel: Primitive,
-    Luma<u16>: FromColor<Self>,
-{
+pub(crate) trait HighDepthPixel: Pixel {
     fn luma16(&self) -> Luma<u16>;
     fn luma8(&self) -> Luma<u8>;
     fn luma_alpha8(&self) -> LumaA<u8>;

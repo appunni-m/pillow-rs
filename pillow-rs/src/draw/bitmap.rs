@@ -265,7 +265,7 @@ impl Draw {
                 ));
             };
             self.image = Image::Paletted(crate::image::PalettedData {
-                indices,
+                indices: DynamicImage::ImagePalette8(indices),
                 palette,
                 palette_alpha,
                 source_format,

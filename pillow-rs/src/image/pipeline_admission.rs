@@ -109,11 +109,10 @@ impl Image {
         };
         match selected_backend {
             crate::compute::Backend::Cpu | crate::compute::Backend::Simd => {
-                crate::compute::cpu_rgb_putpixel_thumbnail_fusion_supported(
+                crate::compute::pool_cpu::ops::thumbnail::ops::rgb_putpixel_fusion_supported(
                     source.image.as_ref(),
                     ops.as_slice(),
                     &thumbnail,
-                    super::declared_pipeline_mode(mode),
                     &context,
                 )
             }

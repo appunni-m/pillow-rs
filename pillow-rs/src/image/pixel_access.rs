@@ -5,8 +5,8 @@ use crate::raster::Mode;
 
 use super::{
     Arc, FormattedPixelValue, Image, PipelineOp,
-    is_l16_identity,
 };
+use super::data_access::is_l16_identity;
 
 /// Host-neutral value extracted for a public `Image.putpixel` call.
 #[derive(Debug, Clone, PartialEq)]

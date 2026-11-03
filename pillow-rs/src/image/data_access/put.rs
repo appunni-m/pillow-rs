@@ -1,10 +1,11 @@
 use super::{
     Arc, Bytes, Image, PilError, PipelineOp, PutDataInput, PutDataValue,
-    PutDataExecutionContext, PutDataValueKind, is_l16_identity, materialization_cache,
+    PutDataValueKind, is_l16_identity, materialization_cache,
     putdata_byte_width, putdata_bytes, putdata_hidden_lane_bytes, putdata_hidden_lanes,
     unsupported_putdata_mode,
 };
 use crate::raster::Mode;
+use crate::image::PutDataExecutionContext;
 
 impl Image {
     /// Queues replacement pixel data from a flat byte sequence.

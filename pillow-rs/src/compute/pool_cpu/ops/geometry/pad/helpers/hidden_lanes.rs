@@ -118,6 +118,17 @@ fn fill_lanes(mode: Mode, color: Option<(u8, u8, u8, u8)>) -> [u8; 2] {
     }
 }
 
+fn replace_lanes(
+    output: &mut DynamicImage,
+    lanes: Option<HiddenPixelLanes>,
+) -> Result<(), PilError> {
+    if output.replace_hidden_pixel_lanes(lanes) {
+        Ok(())
+    } else {
+        Err(invalid_lane_output())
+    }
+}
+
 fn is_borderless(frame: PadFrame) -> bool {
     frame.offset_x == 0
         && frame.offset_y == 0

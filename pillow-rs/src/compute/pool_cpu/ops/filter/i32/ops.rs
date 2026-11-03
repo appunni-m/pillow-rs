@@ -29,7 +29,7 @@ pub(crate) fn prepared_uniform_filter3x3_identity(
             &normalized,
             offset + 0.5,
         ),
-        Architecture::Avx2Fma => avx2::uniform_i32_filter3x3_is_identity(
+        Architecture::Avx2Fma => super::avx2::uniform_i32_filter3x3_is_identity(
             image.as_bytes(),
             image.width() as usize,
             image.height() as usize,
@@ -146,10 +146,10 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
         Architecture::Default => super::default::execute(image, request),
         Architecture::Avx2Fma => match request {
             request @ super::super::ops::FilterRequest::Filter3x3 { .. } => {
-                avx2::execute_filter3x3(image, request)
+                super::avx2::execute_filter3x3(image, request)
             }
             super::super::ops::FilterRequest::Filter5x5 { kernel, scale, offset } => {
-                avx2::execute(image, &kernel, scale, offset)
+                super::avx2::execute(image, &kernel, scale, offset)
             }
             _ => Err(PilError::InternalError(
                 "AVX2/FMA filter selection received an unsupported convolution request".into(),

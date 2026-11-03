@@ -36,7 +36,7 @@ pub(crate) fn execute_with_fma<F: F64MulAdd>(
     let source_dims = CheckedDims::new_allow_empty(source_width, source_height, 4)?;
     let source = i32_samples_from_le_bytes(input.as_raw(), source_dims.total_pixels());
     if matches!(filter, ResampleFilter::Nearest) {
-        return nearest::execute(
+        return super::nearest::execute(
             &source,
             (source_width, source_height),
             (width, height),

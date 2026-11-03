@@ -59,7 +59,7 @@ pub(crate) fn formatted_histogram(histogram: &[u32]) -> StatOutput {
             let stddev = variance.sqrt();
             let half = (count / 2.0).floor();
             let (mut cumulative, mut median) = (0.0, 255.0);
-            let (mut minimum, mut maximum) = (255.0, 0.0);
+            let (mut minimum, mut maximum) = (255.0_f64, 0.0_f64);
             for (value, &frequency) in band.iter().enumerate() {
                 let frequency = f64::from(frequency);
                 cumulative += frequency;
@@ -227,7 +227,7 @@ fn stat_from_byte_histogram(histogram: &[u32]) -> StatOutput {
         let stddev = variance.sqrt();
         let half = count_u64 / 2;
         let (mut cumulative, mut median) = (0u64, None);
-        let (mut minimum, mut maximum) = (255.0, 0.0);
+        let (mut minimum, mut maximum) = (255.0_f64, 0.0_f64);
         for (value, &frequency) in band.iter().enumerate() {
             if frequency > 0 {
                 minimum = minimum.min(value as f64);

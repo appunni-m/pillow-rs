@@ -1,7 +1,7 @@
 //! Original typed alpha-mask loops and borrowed prepared dependencies.
 
 use crate::raster::{
-    GrayAlphaImage, GrayImage, ImageBuffer, Luma, LumaA, Pixel, RgbImage, Rgba, RgbaImage,
+    GrayAlphaImage, GrayImage, ImageBuffer, Luma, LumaA, Pixel, Rgb, RgbImage, Rgba, RgbaImage,
     Rgb32FImage, Rgba32FImage,
 };
 use super::alpha_mask::MaskStrategy;

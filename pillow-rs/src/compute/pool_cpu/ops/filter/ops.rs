@@ -403,6 +403,8 @@ impl PreparedUnsharpMask<'_> {
 
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let Self { original, blur, blend } = self;
+        let percent = blend.percent;
+        let threshold = blend.threshold;
         let mut blurred = blur.execute()?;
         {
             let Some(blurred_bytes) = blurred.as_bytes_mut() else {
@@ -415,8 +417,8 @@ impl PreparedUnsharpMask<'_> {
         super::helpers::hidden_lanes::finish_unsharp(
             original,
             &mut blurred,
-            blend.percent,
-            blend.threshold,
+            percent,
+            threshold,
         )?;
         Ok(blurred)
     }
@@ -512,7 +514,7 @@ pub(crate) fn prepare_unsharp_mask<'a>(
 }
 
 #[derive(Clone, Copy)]
-pub(super) enum FilterRequest {
+pub(in crate::compute::pool_cpu::ops::filter) enum FilterRequest {
     Filter3x3 { kernel: [f32; 9], scale: f32, offset: f32 },
     Filter5x5 { kernel: [f32; 25], scale: f32, offset: f32 },
     GaussianBlur { sigma: f32 },

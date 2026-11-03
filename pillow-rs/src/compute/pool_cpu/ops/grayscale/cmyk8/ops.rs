@@ -9,6 +9,12 @@ use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 use super::default::grayscale_impl;
 
+const AVX2_REQUIREMENTS: &[Architecture] = if cfg!(target_feature = "ssse3") {
+    &[Architecture::Sse2, Architecture::Ssse3, Architecture::Avx2]
+} else {
+    &[Architecture::Sse2, Architecture::Avx2]
+};
+
 macro_rules! declare_architectures {
     ($($variant:ident, $module:ident, $cfg:meta, $requirements:expr, $prepare:path);+ $(;)?) => {
         pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
@@ -71,7 +77,7 @@ fn prepare_neon(input: grayscale_impl::Kernel<'_>) -> super::neon::grayscale_imp
 
 declare_architectures! {
     Avx2, avx2, all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "avx2"),
-        if cfg!(target_feature = "ssse3") { &[Architecture::Sse2, Architecture::Ssse3, Architecture::Avx2] } else { &[Architecture::Sse2, Architecture::Avx2] }, super::avx2::grayscale_impl::prepare;
+        AVX2_REQUIREMENTS, super::avx2::grayscale_impl::prepare;
     Ssse3, ssse3, all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "ssse3", not(target_feature = "avx2")),
         &[Architecture::Sse2, Architecture::Ssse3], super::ssse3::grayscale_impl::prepare;
     Sse2, sse2, all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2", not(target_feature = "ssse3"), not(target_feature = "avx2")),

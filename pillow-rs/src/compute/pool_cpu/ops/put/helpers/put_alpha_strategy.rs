@@ -83,13 +83,13 @@ macro_rules! declare_strategies {
         use crate::compute::{Architecture as AlphaArch, ExecutionContext as AlphaContext};
         use crate::compute::registry::support::{
             ModeSupport as AlphaSupport, OperationId as AlphaOperation,
-            OutputModeRule as AlphaOutput, StrategyInputs as AlphaFacts,
-            SupportAssessment as AlphaAssessment,
+            OutputModeRule as AlphaOutput,
         };
         use crate::compute::pool_cpu::helpers::execution::prepared::Prepared as PreparedAlpha;
         use super::default::put_alpha_impl as alpha_scalar;
 
-        pub(crate) const PUT_ALPHA_SUPPORT: AlphaSupport = super::support(
+        pub(crate) const PUT_ALPHA_SUPPORT: AlphaSupport =
+            $crate::compute::pool_cpu::ops::put::helpers::put_alpha_strategy::support(
             AlphaOperation::PutAlpha, crate::raster::Mode::$mode,
             AlphaOutput::Fixed(crate::raster::Mode::$output), &[],
             &[$(crate::compute::registry::support::ImplementationSupport::cpu(
@@ -107,10 +107,6 @@ macro_rules! declare_strategies {
         }
         pub(crate) type AlphaStrategy<'a> = PreparedAlpha<AlphaArchitectureStrategy<'a>>;
 
-        pub(crate) fn assess_alpha(input: AlphaFacts, ctx: &AlphaContext)
-            -> Result<AlphaAssessment, crate::error::PilError> {
-            PUT_ALPHA_SUPPORT.assess(ctx, input)
-        }
 
         #[inline]
         pub(crate) fn prepare_alpha<'a>(
@@ -118,7 +114,8 @@ macro_rules! declare_strategies {
         ) -> Result<AlphaStrategy<'a>, crate::error::PilError> {
             let input = alpha_scalar::prepare(image, alpha);
             let selection = PUT_ALPHA_SUPPORT.select(
-                ctx, super::super::helpers::put_alpha::facts(&input),
+                ctx,
+                $crate::compute::pool_cpu::ops::put::helpers::put_alpha::facts(&input),
             )?;
             let implementation = match selection.implementation.architecture {
                 AlphaArch::Default => AlphaArchitectureStrategy::Default(input),

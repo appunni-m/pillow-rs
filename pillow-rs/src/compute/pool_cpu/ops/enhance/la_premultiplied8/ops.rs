@@ -7,7 +7,7 @@ use crate::compute::registry::support::{
 };
 use crate::compute::{Architecture, registry::support::StrategySelection};
 use crate::error::PilError;
-use crate::raster::{DynamicImage, GrayAlphaImage};
+use crate::raster::{DynamicImage, GrayAlphaImage, Mode};
 
 const INPUTS: &[InputContract] = &[InputContract::ExactNativeBytes {
     channels: 2,
@@ -102,7 +102,7 @@ pub(crate) fn execute_sharpness(
             crate::raster::Mode::ImageLaPremultiplied8.pillow_name().unwrap_or("internal"),
         ))),
     }?;
-    super::helpers::sharpness::carry_hidden_lanes(
+    crate::compute::pool_cpu::ops::enhance::helpers::sharpness::carry_hidden_lanes(
         source,
         &mut output,
         crate::raster::Mode::ImageLaPremultiplied8,

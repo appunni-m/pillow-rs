@@ -299,7 +299,7 @@ impl Draw {
         {
             let mut stroke_options = options.clone();
             stroke_options.ink = Some(Self::pack_text_ink(stroke_fill));
-            let (_, stroke_selection) = self.text_render_and_compose(
+            let (_, _, stroke_selection) = self.text_render_and_compose(
                 x,
                 y,
                 text,

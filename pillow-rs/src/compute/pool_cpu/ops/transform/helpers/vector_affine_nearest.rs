@@ -17,7 +17,7 @@ pub(crate) fn execute<const CHANNELS: usize>(
     fill: [u8; 4],
 ) -> Result<Vec<u8>, PilError> {
     let (source_width, source_height) = source_dimensions;
-    let (output_width, _) = output_dimensions;
+    let (output_width, output_height) = output_dimensions;
     if !(1..=4).contains(&CHANNELS) {
         return Err(PilError::InternalError(
             "Transform vector kernel has an invalid native channel count".into(),

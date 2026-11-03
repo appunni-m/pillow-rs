@@ -8,7 +8,6 @@ macro_rules! declare_strategies {
         use crate::compute::registry::support::{
             InputContract as MaskContract, ModeSupport as MaskSupport,
             OperationId as MaskOperation, OutputModeRule as MaskOutput,
-            StrategyInputs as MaskFacts, SupportAssessment as MaskAssessment,
         };
         use crate::compute::pool_cpu::helpers::execution::prepared::Prepared as PreparedMask;
         use super::default::put_alpha_data_impl as mask_scalar;
@@ -35,10 +34,6 @@ macro_rules! declare_strategies {
         }
         pub(crate) type AlphaDataStrategy<'a> = PreparedMask<AlphaDataArchitectureStrategy<'a>>;
 
-        pub(crate) fn assess_alpha_data(input: MaskFacts, ctx: &MaskContext)
-            -> Result<MaskAssessment, crate::error::PilError> {
-            PUT_ALPHA_DATA_SUPPORT.assess(ctx, input)
-        }
 
         #[inline]
         pub(crate) fn prepare_alpha_data<'a>(

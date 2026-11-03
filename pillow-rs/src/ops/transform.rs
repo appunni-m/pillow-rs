@@ -6,6 +6,7 @@ use crate::pipeline::{PipelineOp, ResampleFilter, TransformMethod};
 
 mod fill;
 mod public;
+pub(crate) use fill::public_transform_fill;
 
 /// Host-neutral transform data after the binding has performed only Python
 /// sequence extraction.

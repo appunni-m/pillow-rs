@@ -338,7 +338,7 @@ impl Image {
             destination_mode,
             &source_image,
             mask,
-            (x, y),
+            (i64::from(x), i64::from(y)),
             (width, height),
             mask_alpha,
         )?;

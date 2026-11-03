@@ -31,7 +31,11 @@ pub fn prepare_expand_fill(
 ) -> Result<PreparedExpandFill, PilError> {
     let mode = image.mode_identity()?;
     let fill_rule = expand_fill_rule(mode)?;
-    let palette_components = expand_palette_components(&input, fill_rule)?;
+    let palette_components = if fill_rule == ExpandFillRule::PaletteIndexOrColor {
+        super::color::palette_fill_components(&input)?
+    } else {
+        None
+    };
     let fill = if palette_components.is_some() {
         (0, 0, 0, u8::MAX)
     } else {

@@ -1,4 +1,4 @@
-use super::{Draw, Image, Mode};
+use super::super::{Draw, Image, Mode};
 use crate::compute::pool_cpu::ops::draw::TextComposeResult;
 use crate::compute::registry::support::PaletteKnowledge;
 use crate::error::PilError;
@@ -49,7 +49,7 @@ impl Draw {
         let info = self.image.image_info();
         let exif = self.image.exif_metadata();
         self.image = Image::Paletted(crate::image::PalettedData {
-            indices,
+            indices: DynamicImage::ImagePalette8(indices),
             palette,
             palette_alpha,
             source_format,

@@ -37,8 +37,7 @@
 //! at its operation-level support entry.
 
 use crate::compute::{ExecutionContext, registry::support::{
-    ModeSupport, OperationId, OperationInputs, OperationSupport, StrategyInputs,
-    StrategySelection, SupportAssessment,
+    ModeSupport, OperationId, OperationInputs, OperationSupport, StrategySelection,
 }};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
@@ -77,10 +76,6 @@ macro_rules! declare_modes {
             match mode { $(Mode::$mode => super::$module::ops::PUT_ALPHA_DATA_SUPPORT,)+ }
         }
 
-        pub(crate) fn assess(mode: Mode, input: StrategyInputs, ctx: &ExecutionContext)
-            -> Result<SupportAssessment, PilError> {
-            match mode { $(Mode::$mode => super::$module::ops::assess(input, ctx),)+ }
-        }
 
         pub(crate) fn prepare<'a>(image: &'a DynamicImage, index: u8, ctx: &ExecutionContext)
             -> Result<PreparedExtractBand<'a>, PilError> {
@@ -90,10 +85,6 @@ macro_rules! declare_modes {
             }
         }
 
-        pub(crate) fn assess_put_data(mode: Mode, input: StrategyInputs, ctx: &ExecutionContext)
-            -> Result<SupportAssessment, PilError> {
-            match mode { $(Mode::$mode => super::$module::ops::assess_data(input, ctx),)+ }
-        }
 
         pub(crate) fn prepare_put_data<'a>(
             image: &'a DynamicImage,
@@ -115,10 +106,6 @@ macro_rules! declare_modes {
             }
         }
 
-        pub(crate) fn assess_put_alpha(mode: Mode, input: StrategyInputs, ctx: &ExecutionContext)
-            -> Result<SupportAssessment, PilError> {
-            match mode { $(Mode::$mode => super::$module::ops::assess_alpha(input, ctx),)+ }
-        }
 
         pub(crate) fn prepare_put_alpha<'a>(
             image: &'a DynamicImage, alpha: u8, ctx: &ExecutionContext,
@@ -129,10 +116,6 @@ macro_rules! declare_modes {
             }
         }
 
-        pub(crate) fn assess_put_alpha_data(mode: Mode, input: StrategyInputs, ctx: &ExecutionContext)
-            -> Result<SupportAssessment, PilError> {
-            match mode { $(Mode::$mode => super::$module::ops::assess_alpha_data(input, ctx),)+ }
-        }
 
         pub(crate) fn prepare_put_alpha_data<'a>(
             image: &'a DynamicImage, mask: &'a DynamicImage, ctx: &ExecutionContext,
@@ -150,7 +133,7 @@ macro_rules! declare_modes {
             }
 
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
-                match self { $(Self::$mode(strategy) => strategy.execute(),)+ }
+                match self { $(Self::$mode(strategy) => super::$module::ops::execute(strategy),)+ }
             }
 
             pub(crate) fn execute_into(
@@ -542,18 +525,6 @@ pub(crate) fn prepare_alpha_pipeline<'a>(
         .map(crate::compute::registry::PreparedOperation::from_put_alpha)
 }
 
-pub(crate) fn assess_alpha_data(
-    image: &DynamicImage, mask: &DynamicImage, ctx: &ExecutionContext,
-) -> Result<SupportAssessment, PilError> {
-    let mut facts = OperationInputs { image, palette: Default::default() }.facts();
-    facts.request = crate::compute::registry::support::RequestFacts::PutAlphaData {
-        mask: crate::compute::registry::support::SecondaryInputFacts {
-            mode: mask.mode(), width: mask.width(), height: mask.height(),
-            byte_len: Some(mask.as_bytes().len()),
-        },
-    };
-    assess_put_alpha_data(image.mode(), facts, ctx)
-}
 
 pub(crate) fn prepare_alpha_data_pipeline<'a>(
     input: OperationInputs<'a>, op: &'a PipelineOp, ctx: &ExecutionContext,
@@ -570,10 +541,6 @@ pub(crate) fn prepare_alpha_data_pipeline<'a>(
         .map(crate::compute::registry::PreparedOperation::from_put_alpha_data)
 }
 
-pub(crate) fn execute_extract_band(image: &DynamicImage, index: u8, ctx: &ExecutionContext)
-    -> Result<DynamicImage, PilError> {
-    prepare(image, index, ctx)?.execute()
-}
 
 pub(crate) fn prepare_pipeline<'a>(
     input: OperationInputs<'a>, op: &'a PipelineOp, ctx: &ExecutionContext,
@@ -622,21 +589,7 @@ macro_rules! declare_write_modes {
             }
         }
 
-        pub(crate) fn assess_put_pixel(mode: Mode, input: StrategyInputs, ctx: &ExecutionContext)
-            -> Result<SupportAssessment, PilError> {
-            match mode {
-                $(Mode::$mode => super::$module::ops::assess_pixel(input, ctx),)+
-                $(Mode::$rejected => rejected_write(mode).assess(ctx, input),)+
-            }
-        }
 
-        pub(crate) fn assess_put_pixel_batch(mode: Mode, input: StrategyInputs, ctx: &ExecutionContext)
-            -> Result<SupportAssessment, PilError> {
-            match mode {
-                $(Mode::$mode => super::$module::ops::assess_pixel_batch(input, ctx),)+
-                $(Mode::$rejected => rejected_write(mode).assess(ctx, input),)+
-            }
-        }
 
         pub(crate) fn prepare_put_pixel<'a>(
             image: &'a DynamicImage, write: PixelWrite, ctx: &ExecutionContext,

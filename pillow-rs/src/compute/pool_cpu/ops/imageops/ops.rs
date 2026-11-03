@@ -206,7 +206,7 @@ impl PreparedCropBorder<'_> {
 
 pub(crate) fn prepare_crop_border<'a>(
     image: &'a DynamicImage,
-    border: crate::pipeline::ExpandMargins,
+    border: u32,
     ctx: &ExecutionContext,
 ) -> Result<PreparedCropBorder<'a>, PilError> {
     let (width, height) = image.dimensions();
@@ -705,11 +705,11 @@ fn mode_selection(
     )
 }
 
-fn prepare_posterize(
-    image: &DynamicImage,
+fn prepare_posterize<'a>(
+    image: &'a DynamicImage,
     bits: u8,
     ctx: &ExecutionContext,
-) -> Result<PreparedPosterize<'_>, PilError> {
+) -> Result<PreparedPosterize<'a>, PilError> {
     let selection = mode_selection(
         &POSTERIZE_SUPPORT,
         image,
@@ -732,11 +732,11 @@ fn prepare_posterize(
     }
 }
 
-fn prepare_solarize(
-    image: &DynamicImage,
+fn prepare_solarize<'a>(
+    image: &'a DynamicImage,
     threshold: u8,
     ctx: &ExecutionContext,
-) -> Result<PreparedSolarize<'_>, PilError> {
+) -> Result<PreparedSolarize<'a>, PilError> {
     let selection = mode_selection(&SOLARIZE_SUPPORT, image, RequestFacts::Unspecified, ctx)?;
     match image {
         DynamicImage::ImageLuma8(input) => Ok(PreparedSolarize::Luma(

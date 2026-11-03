@@ -17,7 +17,7 @@ const INPUTS: &[InputContract] = &[
 // sample storage and writes scalar/component fills as native f32 values.
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
     OperationId::Expand,
-    Mode::Rgb32FImage,
+    Mode::ImageRgb32F,
     OutputModeRule::Preserve,
     INPUTS,
     &[],

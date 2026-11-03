@@ -38,6 +38,7 @@ pub(crate) use conversion::{
 pub(crate) use grayscale::{
     cmyk_to_binary_truncate, cmyk_to_grayscale, cmyk_to_grayscale_truncate, pil_grayscale,
     pil_grayscale_alpha, pil_grayscale_truncate, rgb_to_luma_u8, grayscale_rgb_bytes,
+    grayscale_rgb_pixel,
 };
 pub use palette::{
     PaletteColorInput, palette_getcolor, palette_getcolor_append, palette_getcolor_validate,

@@ -196,8 +196,8 @@ where
 {
     let (width, height) = image.dimensions();
     let channels = usize::from(P::CHANNEL_COUNT);
-    let dimensions =
-        CheckedDims::new_allow_empty(width, height, channels).map_err(|_| offset_layout_error())?;
+    let dimensions = CheckedDims::new_allow_empty(width, height, P::CHANNEL_COUNT)
+        .map_err(|_| offset_layout_error())?;
     if image.as_raw().len() != dimensions.total_bytes() {
         return Err(offset_layout_error());
     }

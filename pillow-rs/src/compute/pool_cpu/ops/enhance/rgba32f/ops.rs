@@ -7,7 +7,7 @@ use crate::compute::registry::support::{
 };
 use crate::compute::{Architecture, registry::support::StrategySelection};
 use crate::error::PilError;
-use crate::raster::{DynamicImage, Rgba32FImage};
+use crate::raster::{DynamicImage, Mode, Rgba32FImage};
 
 const INPUTS: &[InputContract] = &[InputContract::ExactNativeBytes {
     channels: 16,

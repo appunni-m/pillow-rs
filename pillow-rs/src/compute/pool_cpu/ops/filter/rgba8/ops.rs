@@ -9,11 +9,11 @@ use crate::raster::{DynamicImage, Mode};
 
 pub(super) const MODE: Mode = Mode::ImageRgba8;
 
-static MAX_FILTER_ARCHITECTURES:  [crate::compute::registry::support::ImplementationSupport; 5] = crate::compute::pool_cpu::ops::filter::helpers::native_byte_filter_architectures(
+static MAX_FILTER_ARCHITECTURES:  [crate::compute::registry::support::ImplementationSupport; 5] = super::super::helpers::native_byte_filter_architectures(
     OperationId::MaxFilter, MODE,
     crate::compute::registry::support::StrategyGuard::FilterNativeByteExtrema { channels: 4 },
 );
-static MIN_FILTER_ARCHITECTURES:  [crate::compute::registry::support::ImplementationSupport; 5] = crate::compute::pool_cpu::ops::filter::helpers::native_byte_filter_architectures(
+static MIN_FILTER_ARCHITECTURES:  [crate::compute::registry::support::ImplementationSupport; 5] = super::super::helpers::native_byte_filter_architectures(
     OperationId::MinFilter, MODE,
     crate::compute::registry::support::StrategyGuard::FilterNativeByteExtrema { channels: 4 },
 );
@@ -89,24 +89,24 @@ static GAUSSIAN_BLUR_ARCHITECTURES: [ImplementationSupport; 7] = [
     ),
 ];
 static BOX_BLUR_ARCHITECTURES: [ImplementationSupport; 5] =
-    crate::compute::pool_cpu::ops::filter::helpers::native_byte_blur_architectures(
+    super::super::helpers::native_byte_blur_architectures(
         OperationId::BoxBlur,
         MODE,
         4,
     );
-static MEDIAN_FILTER_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] = crate::compute::pool_cpu::ops::filter::helpers::native_byte_filter_architectures(
+static MEDIAN_FILTER_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] = super::super::helpers::native_byte_filter_architectures(
     OperationId::MedianFilter, MODE,
     crate::compute::registry::support::StrategyGuard::FilterNativeByteRankWindow { channels: 4 },
 );
-static RANK_FILTER_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] = crate::compute::pool_cpu::ops::filter::helpers::native_byte_filter_architectures(
+static RANK_FILTER_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] = super::super::helpers::native_byte_filter_architectures(
     OperationId::RankFilter, MODE,
     crate::compute::registry::support::StrategyGuard::FilterNativeByteRankWindow { channels: 4 },
 );
 
-crate::compute::pool_cpu::ops::filter::helpers::native_filter3x3_architectures!(MODE, 4);
-crate::compute::pool_cpu::ops::filter::helpers::native_filter3x3_arch_leaf!(ImageRgba8, RgbaImage, 4);
-crate::compute::pool_cpu::ops::filter::helpers::native_filter5x5_architectures!(MODE, 4);
-crate::compute::pool_cpu::ops::filter::helpers::native_filter5x5_arch_leaf!(ImageRgba8, RgbaImage, 4);
+super::super::helpers::native_filter3x3_architectures!(MODE, 4);
+super::super::helpers::native_filter3x3_arch_leaf!(ImageRgba8, RgbaImage, 4);
+super::super::helpers::native_filter5x5_architectures!(MODE, 4);
+super::super::helpers::native_filter5x5_arch_leaf!(ImageRgba8, RgbaImage, 4);
 
 
 pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId) -> ModeSupport {
@@ -153,7 +153,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute_architecture_blur(
     selection: &StrategySelection,
     context: &crate::compute::ExecutionContext,
 ) -> Result<DynamicImage, PilError> {
-    crate::compute::pool_cpu::ops::filter::helpers::validate_native_byte_blur_selection(
+    super::super::helpers::validate_native_byte_blur_selection(
         selection, context,
     )?;
     if !matches!(image, DynamicImage::ImageRgba8(_)) {
@@ -163,7 +163,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute_architecture_blur(
     }
     if let super::super::ops::FilterRequest::GaussianBlur { sigma } = request {
         let parameters @ (radius, _, fractional_weight) =
-            crate::compute::pool_cpu::ops::filter::helpers::gaussian_blur_box_parameters(sigma);
+            super::super::helpers::gaussian_blur_box_parameters(sigma);
         if radius == 7 && fractional_weight != 0 {
             let evidence = super::helpers::prove_gaussian_blur_uniform_identity(
                 image.as_bytes(),
@@ -182,7 +182,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute_architecture_blur(
                 }
             }
             if evidence.identity {
-                return crate::compute::pool_cpu::ops::filter::helpers::
+                return super::super::helpers::
                     copy_native_byte_blur_input(image, MODE, 4);
             }
         }
@@ -196,7 +196,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute_architecture_blur(
     if let Some(output) = super::helpers::try_execute_radius_one_blur(image, request)? {
         return Ok(output);
     }
-    super::helpers::execute_native_byte_blur(
+    super::super::helpers::execute_native_byte_blur(
         image,
         MODE,
         4,
@@ -222,7 +222,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
                 | super::super::ops::FilterRequest::MinFilter { .. }
         )
     {
-        return crate::compute::pool_cpu::ops::filter::helpers::execute_native_byte_extrema(
+        return super::super::helpers::execute_native_byte_extrema(
             image, request, MODE, 4, selection.implementation.architecture,
         );
     }
@@ -234,7 +234,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
                 | super::super::ops::FilterRequest::RankFilter { .. }
         )
     {
-        return crate::compute::pool_cpu::ops::filter::helpers::execute_native_byte_rank(
+        return super::super::helpers::execute_native_byte_rank(
             image, request, MODE, 4, selection.implementation.architecture,
         );
     }
@@ -245,7 +245,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
                 return Ok(output);
             }
         }
-        return crate::compute::pool_cpu::ops::filter::helpers::native_filter5x5_arch_dispatch!(
+        return super::super::helpers::native_filter5x5_arch_dispatch!(
             selection.implementation.architecture,
             image,
             request,

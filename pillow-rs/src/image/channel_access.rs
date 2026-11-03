@@ -172,12 +172,13 @@ fn eager_getchannel_shared_buffer_identity(
     let Some(guards) = route.shared_buffer_identity_guards() else {
         return Ok(None);
     };
-    let pixel_count = crate::checked_dims::CheckedDims::new_allow_empty(
+    let dimensions = crate::checked_dims::CheckedDims::new_allow_empty(
         pixels.width(),
         pixels.height(),
         1,
-    )?
-    .total_pixels();
+    )?;
+    let pixel_count = u64::try_from(dimensions.total_pixels())
+        .map_err(|_| PilError::DimensionError("GetChannel pixel count overflow".into()))?;
     let byte_length = pixels.as_bytes().len();
     let loaded_image = matches!(image, Image::Loaded(_));
     if !eager_route_guards_pass(guards, loaded_image, None, pixel_count, byte_length, false) {

@@ -108,7 +108,7 @@ fn horizontal_radius_one_rows(
     height: usize,
     whole_weight: u32,
     fractional_weight: u32,
-) {
+) -> Result<(), PilError> {
     let row_stride = width.checked_mul(4).ok_or_else(|| {
         PilError::InternalError("RGBA blur row stride overflows native dimensions".into())
     })?;

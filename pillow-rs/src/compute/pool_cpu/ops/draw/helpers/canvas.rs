@@ -122,7 +122,7 @@ impl<P: Pixel<Subpixel = u8>, const CHANNELS: usize> DrawCanvas
 pub(crate) struct Luma16Canvas<'a, const DECLARED_BIG_ENDIAN: bool> {
     width: u32,
     height: u32,
-    pixels: &'a mut [Luma<u16>],
+    pixels: &'a mut [u16],
     big_endian_ink: bool,
 }
 
@@ -158,7 +158,7 @@ impl<const DECLARED_BIG_ENDIAN: bool> DrawCanvas for Luma16Canvas<'_, DECLARED_B
         } else {
             raw
         };
-        self.pixels[y as usize * self.width as usize + x as usize] = Luma([sample]);
+        self.pixels[y as usize * self.width as usize + x as usize] = sample;
     }
 }
 

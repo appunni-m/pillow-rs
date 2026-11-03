@@ -44,7 +44,7 @@ pub(crate) fn apply(
             let pixel = if full_coverage {
                 Rgb([color.0, color.1, color.2])
             } else {
-                blend_pixel(background, color, coverage, mask)
+                blend_pixel(*background, color, coverage, mask)
             };
             canvas.put_pixel(x, y, pixel);
             update_hidden_lanes(

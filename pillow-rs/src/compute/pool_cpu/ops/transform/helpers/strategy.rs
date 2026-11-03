@@ -45,6 +45,6 @@ fn facts(image: &DynamicImage, request: TransformRequest<'_>) -> StrategyInputs 
     }
 }
 
-pub(crate) fn selection(plan: &Strategy<'_>) -> &StrategySelection {
+pub(crate) fn selection<'a>(plan: &'a Strategy<'_>) -> &'a StrategySelection {
     plan.selection()
 }

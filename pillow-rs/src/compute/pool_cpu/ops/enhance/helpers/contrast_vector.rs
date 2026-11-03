@@ -31,7 +31,7 @@ where
     }
     let tables = native_lut_tables::<CHANNELS>(lut)?;
     let mut output = source_bytes.to_vec();
-    let (vector_blocks, scalar_tail) = apply_native_lut(
+    let (vector_blocks, scalar_tail) = apply_native_lut::<CHANNELS>(
         &mut output,
         source.width() as usize,
         source.height() as usize,

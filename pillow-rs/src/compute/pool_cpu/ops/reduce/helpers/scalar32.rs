@@ -18,7 +18,7 @@ fn read_f32(source: &[u8], index: usize) -> f32 {
 }
 
 fn output_bytes(width: u32, height: u32) -> Result<Vec<u8>, PilError> {
-    CheckedDims::new(width, height, 4).map(CheckedDims::alloc_buffer)
+    CheckedDims::new(width, height, 4).map(|dimensions| dimensions.alloc_buffer())
 }
 
 fn reduce_i32_2x2(

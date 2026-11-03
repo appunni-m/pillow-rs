@@ -80,13 +80,17 @@ pub(crate) fn physical_four_byte_source(image: &DynamicImage) -> Option<Vec<u8>>
 
 pub(crate) fn hidden_lanes(image: &DynamicImage, mode: Mode) -> Option<&HiddenPixelLanes> {
     match (mode, image) {
-        (Mode::ImageLumaA8, DynamicImage::ImageLumaA8(image))
-        | (Mode::ImageLaPremultiplied8, DynamicImage::ImageLaPremultiplied8(image))
-        | (Mode::ImagePaletteAlpha8, DynamicImage::ImagePaletteAlpha8(image))
-        | (Mode::ImageRgb8, DynamicImage::ImageRgb8(image))
-        | (Mode::ImageYCbCr8, DynamicImage::ImageYCbCr8(image))
-        | (Mode::ImageLab8, DynamicImage::ImageLab8(image))
-        | (Mode::ImageHsv8, DynamicImage::ImageHsv8(image)) => image.hidden_pixel_lanes(),
+        (Mode::ImageLumaA8, DynamicImage::ImageLumaA8(image)) => image.hidden_pixel_lanes(),
+        (Mode::ImageLaPremultiplied8, DynamicImage::ImageLaPremultiplied8(image)) => {
+            image.hidden_pixel_lanes()
+        }
+        (Mode::ImagePaletteAlpha8, DynamicImage::ImagePaletteAlpha8(image)) => {
+            image.hidden_pixel_lanes()
+        }
+        (Mode::ImageRgb8, DynamicImage::ImageRgb8(image)) => image.hidden_pixel_lanes(),
+        (Mode::ImageYCbCr8, DynamicImage::ImageYCbCr8(image)) => image.hidden_pixel_lanes(),
+        (Mode::ImageLab8, DynamicImage::ImageLab8(image)) => image.hidden_pixel_lanes(),
+        (Mode::ImageHsv8, DynamicImage::ImageHsv8(image)) => image.hidden_pixel_lanes(),
         _ => None,
     }
 }

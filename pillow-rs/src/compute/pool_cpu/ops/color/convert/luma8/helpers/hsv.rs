@@ -9,7 +9,7 @@ pub(crate) fn execute(source: &GrayImage) -> Result<(Vec<u8>, u64), PilError> {
     let mut vector_blocks = 0u64;
     for start in (0..pixels).step_by(8) {
         let active = (pixels - start).min(8);
-        let luma = std::array::from_fn(|lane| {
+        let luma: [u8; 8] = std::array::from_fn(|lane| {
             if lane < active {
                 source.as_raw()[start + lane]
             } else {

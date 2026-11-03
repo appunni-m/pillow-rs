@@ -138,7 +138,7 @@ fn luma16_color(source: &PasteSource) -> Result<ResolvedPasteColor, PilError> {
     }
 }
 
-fn bad_single_color() -> PilError {
+pub(super) fn bad_single_color() -> PilError {
     PilError::TypeError("color must be int or single-element tuple".to_owned())
 }
 

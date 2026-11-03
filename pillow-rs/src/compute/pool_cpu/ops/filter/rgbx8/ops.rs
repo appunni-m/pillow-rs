@@ -90,7 +90,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute_architecture_blur(
     crate::compute::pool_cpu::ops::filter::helpers::validate_native_byte_blur_selection(
         selection, context,
     )?;
-    super::helpers::execute_native_byte_blur(
+    crate::compute::pool_cpu::ops::filter::helpers::execute_native_byte_blur(
         image,
         MODE,
         4,

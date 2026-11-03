@@ -175,7 +175,7 @@ fn draw_primitive_operation<C: DrawCanvas, const FLOAT_MODE: bool>(
         ),
         PipelineOp::DrawPoint { points, fill, .. } => {
             let (img_w, img_h) = (canvas.width(), canvas.height());
-            for &(x, y) in points {
+            for &(x, y) in points.iter() {
                 plot(canvas, x, y, *fill, img_w, img_h, false);
             }
         }

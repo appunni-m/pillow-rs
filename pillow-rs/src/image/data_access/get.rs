@@ -54,7 +54,7 @@ impl Image {
                 1,
             )?;
             let mut output = dimensions.alloc_buffer();
-            let terminal_mode = self.mode_selector()?;
+            let terminal_mode = self.mode_identity()?;
             let expected = self.getdata_band_len_for_mode(terminal_mode, band)?;
             if output.len() != expected {
                 return Err(PilError::InternalError(
@@ -148,7 +148,7 @@ impl Image {
     /// the mode or the requested band is out of range. Other errors can occur
     /// while loading or materializing the image.
     pub fn getdata_band_len(&self, band: i32) -> Result<usize, PilError> {
-        self.getdata_band_len_for_mode(self.mode_selector()?, band)
+        self.getdata_band_len_for_mode(self.mode_identity()?, band)
     }
 
     fn getdata_band_len_for_mode(&self, mode: Mode, band: i32) -> Result<usize, PilError> {
@@ -225,7 +225,7 @@ impl Image {
     /// [`PilError::InternalError`] when the output length is incorrect. Other
     /// errors can occur while loading or materializing the image.
     pub fn getdata_band_into(&self, band: i32, output: &mut [u8]) -> Result<(), PilError> {
-        let mode = self.mode_selector()?;
+        let mode = self.mode_identity()?;
         let expected = self.getdata_band_len_for_mode(mode, band)?;
         let band_index = usize::try_from(band).expect("getdata band was validated as nonnegative");
         let backend_band = u8::try_from(band_index).expect("Pillow band indices fit in u8");
@@ -429,7 +429,7 @@ impl Image {
     /// bindings should only convert [`FormattedImageData`] into their native
     /// list/tuple representation.
     pub fn getdata_formatted(&self, band: Option<i32>) -> Result<FormattedImageData, PilError> {
-        let mode = self.mode_selector()?;
+        let mode = self.mode_identity()?;
         if matches!(mode, Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N) {
             if band.is_some() {
                 // Pillow's ImagingCore.getdata rejects every explicit band

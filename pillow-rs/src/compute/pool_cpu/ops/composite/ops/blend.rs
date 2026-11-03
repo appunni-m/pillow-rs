@@ -11,6 +11,8 @@ use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
 
+use super::{secondary_facts, select_support};
+
 const BLEND_LUMA: &[Mode] = &[Mode::ImageLuma8];
 const BLEND_LUMA_ALPHA: &[Mode] = &[Mode::ImageLumaA8, Mode::ImageLaPremultiplied8];
 const BLEND_RGB: &[Mode] = &[
@@ -112,7 +114,7 @@ fn blend_support(mode: Mode) -> ModeSupport {
             &BLEND_LA_PREMULTIPLIED_ARCHITECTURES[..],
         ),
         Mode::ImageRgb8 => (BLEND_RGB_INPUT, &BLEND_RGB_ARCHITECTURES[..]),
-        Mode::ImageLab8 => (BLEND_RGB_INPUT, &[]),
+        Mode::ImageLab8 => (BLEND_RGB_INPUT, &[] as &[ImplementationSupport]),
         Mode::ImageHsv8 => (BLEND_RGB_INPUT, &BLEND_HSV_ARCHITECTURES[..]),
         Mode::ImageYCbCr8 => (BLEND_RGB_INPUT, &BLEND_YCBCR_ARCHITECTURES[..]),
         Mode::ImageRgba8 => (BLEND_RGBA_INPUT, &BLEND_RGBA_ARCHITECTURES[..]),

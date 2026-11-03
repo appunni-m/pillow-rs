@@ -26,6 +26,7 @@
 
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
+use crate::raster::DynamicImage;
 use super::{Backend, ExecutionContext};
 use self::support::OperationInputs;
 use std::collections::HashMap;

@@ -9,7 +9,7 @@ pub(crate) fn execute(
     x: u32,
     y: u32,
 ) -> Result<FormattedPixelValue, PilError> {
-    pixel_access::components_u8_3(image, x, y)
+    Ok(pixel_access::components_u8_3(image, x, y))
 }
 
 /// Reads RGB directly into the binding's fixed-size tuple without allocating.

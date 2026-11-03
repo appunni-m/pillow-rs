@@ -232,8 +232,10 @@ fn convert_to_premultiplied(
         dither,
         |converted, _source| match converted {
             DynamicImage::ImageRgb8(rgb) => {
-                crate::compute::pool_cpu::ops::color::convert::helpers::premultiplied::from_rgb(
-                    &rgb,
+                crate::compute::pool_cpu::ops::color::convert::helpers::premultiplied::from_rgb_samples(
+                    rgb.width(),
+                    rgb.height(),
+                    rgb.pixels().map(|pixel| [pixel[0], pixel[1], pixel[2]]),
                     target_mode,
                 )
             }
@@ -268,7 +270,7 @@ fn convert_to_rgbx(
                         "Convert RGBX palette child did not retain P indices".into(),
                     ));
                 };
-                for (pixel, &index) in rgba.pixels_mut().zip(indices.as_bytes()) {
+                for (pixel, &index) in rgba.pixels_mut().zip(indices.as_raw()) {
                     pixel[3] = alpha.get(usize::from(index)).copied().unwrap_or(255);
                 }
             }

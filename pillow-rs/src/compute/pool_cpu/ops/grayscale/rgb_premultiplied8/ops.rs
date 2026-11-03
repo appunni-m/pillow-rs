@@ -9,6 +9,12 @@ use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 use super::default::grayscale_impl;
 
+const AVX2_REQUIREMENTS: &[Architecture] = if cfg!(target_feature = "ssse3") {
+    &[Architecture::Sse2, Architecture::Ssse3, Architecture::Avx2]
+} else {
+    &[Architecture::Sse2, Architecture::Avx2]
+};
+
 macro_rules! declare_architectures {
     ($($variant:ident, $cfg:meta, $requirements:expr, $guard:expr, $run:expr, $path:literal);+ $(;)?) => {
         pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
@@ -62,7 +68,7 @@ macro_rules! declare_architectures {
 
 declare_architectures! {
     Avx2, all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "avx2"),
-        if cfg!(target_feature = "ssse3") { &[Architecture::Sse2, Architecture::Ssse3, Architecture::Avx2] } else { &[Architecture::Sse2, Architecture::Avx2] }, StrategyGuard::NativeBytes { channels: 4 },
+        AVX2_REQUIREMENTS, StrategyGuard::NativeBytes { channels: 4 },
         super::avx2::grayscale_impl::execute, "vector";
     Ssse3, all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "ssse3", not(target_feature = "avx2")),
         &[Architecture::Sse2, Architecture::Ssse3], StrategyGuard::NativeBytes { channels: 4 },

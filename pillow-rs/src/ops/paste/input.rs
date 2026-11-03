@@ -1,4 +1,5 @@
 use super::types::{PasteColorComponent, PasteSource};
+use super::color::bad_single_color;
 use crate::error::PilError;
 use crate::raster::Mode;
 

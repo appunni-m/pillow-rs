@@ -332,12 +332,12 @@ fn sample_transform_i32(
     let value = if matches!(filter, ResampleFilter::Bicubic) {
         let rows = std::array::from_fn(|row| {
             let yy = y + row as i64 - 1;
-            crate::compute::pool_cpu::ops::geometry::rotate_cubic_horizontal_i32(
+            crate::compute::pool_cpu::ops::rotate::helpers::cubic::horizontal_i32(
                 [at(x - 1, yy), at(x, yy), at(x + 1, yy), at(x + 2, yy)],
                 dx,
             )
         });
-        crate::compute::pool_cpu::ops::geometry::rotate_cubic_vertical_f64(rows, dy)
+        crate::compute::pool_cpu::ops::rotate::helpers::cubic::vertical_f64(rows, dy)
     } else {
         let p00 = at(x, y);
         let p10 = at(x + 1, y);

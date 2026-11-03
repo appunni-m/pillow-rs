@@ -1,5 +1,6 @@
 //! Enhancement operation registration.
 use super::prelude::Registry;
+use crate::error::PilError;
 fn register_brightness_contrast(m: &mut Registry) {
     m.insert(
         "Brightness",

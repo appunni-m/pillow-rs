@@ -2,6 +2,7 @@
 
 pub(crate) mod noise;
 pub(crate) mod noise_vector;
+pub(crate) mod pixel_buffer;
 pub(crate) mod generator;
 pub(crate) mod linear_gradient_vector;
 pub(crate) mod radial_gradient;

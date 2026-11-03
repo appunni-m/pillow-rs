@@ -34,23 +34,23 @@ pub(crate) fn execute(plan: Strategy<'_>) -> Result<DynamicImage, PilError> {
             plan.implementation.image,
             plan.implementation.request,
         ),
-        Architecture::Avx2 => avx2::transform_impl::execute(
+        Architecture::Avx2 => super::avx2::transform_impl::execute(
             plan.implementation.image,
             plan.implementation.request,
         ),
-        Architecture::Avx => avx::transform_impl::execute(
+        Architecture::Avx => super::avx::transform_impl::execute(
             plan.implementation.image,
             plan.implementation.request,
         ),
-        Architecture::Sse2 => sse2::transform_impl::execute(
+        Architecture::Sse2 => super::sse2::transform_impl::execute(
             plan.implementation.image,
             plan.implementation.request,
         ),
-        Architecture::Neon => neon::transform_impl::execute(
+        Architecture::Neon => super::neon::transform_impl::execute(
             plan.implementation.image,
             plan.implementation.request,
         ),
-        Architecture::WasmSimd128 => wasm_simd128::transform_impl::execute(
+        Architecture::WasmSimd128 => super::wasm_simd128::transform_impl::execute(
             plan.implementation.image,
             plan.implementation.request,
         ),

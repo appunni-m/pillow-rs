@@ -10,7 +10,7 @@ macro_rules! declare_strategies {
             InputContract as WriteContract,
             ModeSupport as WriteSupport, OperationId as WriteOperation,
             OutputModeRule as WriteOutput,
-            StrategyInputs as WriteFacts, SupportAssessment as WriteAssessment,
+            StrategyInputs as WriteFacts,
         };
         use crate::compute::pool_cpu::helpers::execution::prepared::Prepared as PreparedWrite;
         use super::default::put_pixel_impl as pixel_scalar;
@@ -48,15 +48,7 @@ macro_rules! declare_strategies {
         pub(crate) type PixelStrategy<'a> = PreparedWrite<PixelArchitectureStrategy<'a>>;
         pub(crate) type BatchStrategy<'a> = PreparedWrite<BatchArchitectureStrategy<'a>>;
 
-        pub(crate) fn assess_pixel(input: WriteFacts, ctx: &WriteContext)
-            -> Result<WriteAssessment, crate::error::PilError> {
-            PUT_PIXEL_SUPPORT.assess(ctx, input)
-        }
 
-        pub(crate) fn assess_pixel_batch(input: WriteFacts, ctx: &WriteContext)
-            -> Result<WriteAssessment, crate::error::PilError> {
-            PUT_PIXEL_BATCH_SUPPORT.assess(ctx, input)
-        }
 
         #[inline]
         pub(crate) fn prepare_pixel<'a>(

@@ -28,7 +28,7 @@ macro_rules! declare_strategies {
         $variant:ident, $module:ident, $cfg:meta, $requires:expr, $channels:literal, $safety:ident
     );* $(;)?) => {
         use crate::compute::{Architecture, ExecutionContext, registry::support::{
-            InputContract, ModeSupport, OperationId, StrategyInputs, SupportAssessment,
+            InputContract, ModeSupport, OperationId,
         }};
         use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
         use crate::error::PilError;
@@ -59,10 +59,6 @@ macro_rules! declare_strategies {
         }
         pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
 
-        pub(crate) fn assess(input: StrategyInputs, ctx: &ExecutionContext)
-            -> Result<SupportAssessment, PilError> {
-            SUPPORT.assess(ctx, input)
-        }
 
         #[inline]
         pub(crate) fn prepare<'a>(input: &'a scalar::Input, index: u8, ctx: &ExecutionContext)

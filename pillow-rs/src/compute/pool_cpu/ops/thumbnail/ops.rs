@@ -556,7 +556,7 @@ fn resize_thumbnail_work_image(
         bounds,
         context,
         selection,
-    )
+    )?
     .execute()
 }
 

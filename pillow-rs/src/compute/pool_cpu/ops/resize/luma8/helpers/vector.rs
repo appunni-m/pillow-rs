@@ -97,7 +97,7 @@ fn execute_into(
         .map_err(|_| PilError::DimensionError("ImageLuma8 source height is too large".into()))?;
     let output_height = usize::try_from(height)
         .map_err(|_| PilError::DimensionError("ImageLuma8 Resize height is too large".into()))?;
-    let plan = build_horizontal_plan(&horizontal, output_width)?;
+    let plan = build_horizontal_plan(&horizontal, output_width).ok_or_else(invalid_kernel_plan)?;
     let mut intermediate = vec![0; intermediate_dims.total_bytes()];
     let (horizontal_blocks, horizontal_tail) = horizontal_pass(
         input.as_raw(),

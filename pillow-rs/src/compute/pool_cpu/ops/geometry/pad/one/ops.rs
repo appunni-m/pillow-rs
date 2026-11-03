@@ -31,11 +31,11 @@ pub(crate) fn pad(
     match architecture {
         Architecture::Default => super::default::pad_impl::pad(image, frame)
             .map(|output| (DynamicImage::One(output), 0, 0)),
-        Architecture::Sse2 => sse2::pad_impl::pad(image, frame)
+        Architecture::Sse2 => super::sse2::pad_impl::pad(image, frame)
             .map(|(output, blocks, tail)| (DynamicImage::One(output), blocks, tail)),
-        Architecture::Neon => neon::pad_impl::pad(image, frame)
+        Architecture::Neon => super::neon::pad_impl::pad(image, frame)
             .map(|(output, blocks, tail)| (DynamicImage::One(output), blocks, tail)),
-        Architecture::WasmSimd128 => wasm_simd128::pad_impl::pad(image, frame)
+        Architecture::WasmSimd128 => super::wasm_simd128::pad_impl::pad(image, frame)
             .map(|(output, blocks, tail)| (DynamicImage::One(output), blocks, tail)),
         architecture => Err(PilError::InternalError(format!(
             "unexpected {architecture:?} architecture selected for One Pad"

@@ -28,7 +28,7 @@ use crate::raster::{DynamicImage, Mode};
 pub(crate) mod helpers;
 #[path = "backend_state.rs"]
 mod backend_state;
-mod eager;
+pub(crate) mod eager;
 mod execution;
 mod execution_context;
 pub use execution_context::{Architecture, ExecutionContext};

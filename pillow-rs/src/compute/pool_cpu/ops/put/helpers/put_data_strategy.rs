@@ -8,7 +8,6 @@ macro_rules! declare_strategies {
         use crate::compute::registry::support::{
             InputContract as DataContract, ModeSupport as DataSupport,
             OperationId as DataOperation, OutputModeRule as DataOutput,
-            StrategyInputs as DataFacts, SupportAssessment as DataAssessment,
         };
         use crate::compute::pool_cpu::helpers::execution::prepared::Prepared as PreparedData;
         use super::default::put_data_impl as data_scalar;
@@ -37,10 +36,6 @@ macro_rules! declare_strategies {
         }
         pub(crate) type DataStrategy<'a> = PreparedData<DataArchitectureStrategy<'a>>;
 
-        pub(crate) fn assess_data(input: DataFacts, ctx: &DataContext)
-            -> Result<DataAssessment, crate::error::PilError> {
-            PUT_DATA_SUPPORT.assess(ctx, input)
-        }
 
         #[inline]
         pub(crate) fn prepare_data<'a>(

@@ -43,18 +43,18 @@ pub(crate) fn resize<P: Pixel<Subpixel = f32>>(
                 &horizontal,
                 destination_width,
                 channel_count,
-                &mut intermediate[intermediate_start..intermediate_end],
+                &mut intermediate.as_mut()[intermediate_start..intermediate_end],
             );
         }
     } else {
-        intermediate.copy_from_slice(input.as_raw());
+        intermediate.as_mut().copy_from_slice(input.as_raw());
     }
 
     if !need_vertical {
         return intermediate;
     }
 
-    let mut output = ImageBuffer::new(destination_width, destination_height);
+    let mut output = ImageBuffer::<P, Vec<f32>>::new(destination_width, destination_height);
     for destination_y in 0..destination_height {
         let output_start = destination_y as usize * destination_width as usize * channel_count;
         let output_end = output_start + destination_width as usize * channel_count;
@@ -65,7 +65,7 @@ pub(crate) fn resize<P: Pixel<Subpixel = f32>>(
             destination_width,
             source_height,
             channel_count,
-            &mut output[output_start..output_end],
+            &mut output.as_mut()[output_start..output_end],
         );
     }
     output

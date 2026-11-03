@@ -212,7 +212,7 @@ fn execute_matrix_conversion(
     }
     let operation = PipelineOp::Convert {
         mode: target_mode,
-        matrix: Some(matrix.to_vec()),
+                matrix: Some(matrix.to_vec().into()),
         dither: None,
     };
     let inputs = crate::compute::registry::support::OperationInputs {

@@ -72,7 +72,7 @@ pub(crate) fn prepare_histogram_mask(
     source: &DynamicImage,
     mask: Option<Arc<DynamicImage>>,
 ) -> Result<PreparedAnalysisMask, PilError> {
-    prepare_materialized_analysis_mask(source, mask, HISTOGRAM_SUPPORT)
+    prepare_materialized_analysis_mask(source, mask, &HISTOGRAM_SUPPORT)
 }
 
 /// Validates a materialized Entropy mask with its declared input contract.
@@ -80,7 +80,7 @@ pub(crate) fn prepare_entropy_mask(
     source: &DynamicImage,
     mask: Option<Arc<DynamicImage>>,
 ) -> Result<PreparedAnalysisMask, PilError> {
-    prepare_materialized_analysis_mask(source, mask, ENTROPY_SUPPORT)
+    prepare_materialized_analysis_mask(source, mask, &ENTROPY_SUPPORT)
 }
 
 fn prepare_materialized_analysis_mask(

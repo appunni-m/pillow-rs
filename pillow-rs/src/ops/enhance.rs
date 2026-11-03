@@ -164,7 +164,7 @@ impl Image {
             let source_mode = source.mode();
             // Only the degenerate base image is needed: avoid an intermediate
             // grayscale frame and a second full-frame conversion of a constant image.
-            let mut image = source.clone();
+            let mut image = source.as_ref().clone();
             let output = image
                 .as_bytes_mut()
                 .ok_or_else(|| PilError::ValueError("image has wrong mode".into()))?;

@@ -244,7 +244,7 @@ fn fused_vector_output(
     destination: &RgbaImage,
 ) -> Result<(Vec<u8>, u64, u64, u64, u64), PilError> {
     let (width, height) = destination.dimensions();
-    super::super::helpers::alpha_composite_mirror::execute(
+    super::helpers::alpha_composite_mirror::execute(
         source.as_raw(),
         destination.as_raw(),
         width,

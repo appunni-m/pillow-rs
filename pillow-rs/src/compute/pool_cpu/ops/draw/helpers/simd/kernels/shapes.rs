@@ -3,9 +3,9 @@ use super::SimdDrawSpanWriter;
 use super::spans::simd_draw_rectangle_native;
 use super::super::super::clipping::{
     arc_clip_state, chord_clip_state, chord_line_clip_state, for_each_clipped_ellipse_span,
-    for_each_ellipse_span, normalize_angles, pie_clip_state, pie_side_clip_state,
-    ClipEllipseState,
+    normalize_angles, pie_clip_state, pie_side_clip_state, ClipEllipseState,
 };
+use super::super::super::ellipse::for_each_ellipse_span;
 use crate::draw::{for_each_bresenham_point, for_each_polygon_fill_span, wide_line_polygon_points};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, GenericImageView};

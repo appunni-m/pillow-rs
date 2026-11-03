@@ -150,6 +150,8 @@ pub struct PayloadOutput {
 /// Existing error class for a mode rejected by an operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RejectionKind {
+    /// Pillow rejects the operation through an assertion contract.
+    AssertionError,
     /// Pillow's invalid-value or unsupported conversion error.
     ValueError,
     /// Pillow rejects this mode with an operating-system error.
@@ -163,6 +165,7 @@ pub enum RejectionKind {
 impl RejectionKind {
     pub(crate) fn into_error(self, reason: &'static str) -> PilError {
         match self {
+            Self::AssertionError => PilError::AssertionError(reason.into()),
             Self::ValueError => PilError::ValueError(reason.into()),
             Self::OsError => PilError::OsError(reason.into()),
             Self::NotImplementedError => PilError::NotImplementedError(reason.into()),

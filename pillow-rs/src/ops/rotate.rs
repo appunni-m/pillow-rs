@@ -359,7 +359,7 @@ fn resolve_rotate_fill(
                 ImageOpsColor::Invalid => TransformFill::Invalid,
                 ImageOpsColor::None => unreachable!(),
             };
-            let (fill, _) = image.public_transform_fill(Some(fill))?;
+            let (fill, _) = crate::ops::transform::public_transform_fill(Some(fill), source_mode)?;
             // Two-sample luma-alpha carriers read their alpha fill from byte 3.
             Ok(Some(if matches!(
                 source_mode,

@@ -16,7 +16,7 @@ pub(crate) fn resize<P: Pixel<Subpixel = u16>>(
         return super::typed_nearest::resize(input, destination_width, destination_height, bounds);
     }
     let (source_width, source_height) = input.dimensions();
-    let mut output = ImageBuffer::new(destination_width, destination_height);
+    let mut output = ImageBuffer::<P, Vec<u16>>::new(destination_width, destination_height);
     if source_width == 0 || source_height == 0 || destination_width == 0 || destination_height == 0 {
         return output;
     }
@@ -39,7 +39,7 @@ pub(crate) fn resize<P: Pixel<Subpixel = u16>>(
             &horizontal,
             destination_width,
             channel_count,
-            &mut intermediate[intermediate_start..intermediate_end],
+            &mut intermediate.as_mut()[intermediate_start..intermediate_end],
         );
     }
 
@@ -53,7 +53,7 @@ pub(crate) fn resize<P: Pixel<Subpixel = u16>>(
             destination_width,
             source_height,
             channel_count,
-            &mut output[output_start..output_end],
+            &mut output.as_mut()[output_start..output_end],
         );
     }
     output

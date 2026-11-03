@@ -588,6 +588,7 @@ fn filter_5x5_i32_fast_path(
     }
 
     filter_5x5_i32_f32_ring_with_fma(raw, width, height, kernel, offset, fma)
+        .map(|output| (output, false))
 }
 
 fn filter_5x5_i32_image(width: u32, height: u32, raw: Vec<u8>) -> Result<DynamicImage, PilError> {

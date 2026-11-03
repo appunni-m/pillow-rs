@@ -26,7 +26,7 @@ pub(crate) fn merge(
         #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
         Architecture::Sse2 => super::sse2::merge_impl::merge(source, remaining),
         #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-        Architecture::Neon => super::neon::merge_impl::merge(source, remaining, selection),
+        Architecture::Neon => super::neon::merge(source, remaining, selection),
         #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
         Architecture::WasmSimd128 => super::wasm_simd128::merge_impl::merge(source, remaining),
         _ => Err(PilError::InternalError(

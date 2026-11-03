@@ -118,12 +118,12 @@ impl PreparedEqualize {
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         match self.selection.implementation.architecture {
             Architecture::Default => {
-                super::default::equalize_impl::execute_rgb(self.input, &self.lut)
+                super::default::equalize_impl::execute_rgb(&self.input, &self.lut)
             }
-            Architecture::Sse2 => super::sse2::equalize_impl::execute(self.input, &self.lut),
-            Architecture::Neon => super::neon::equalize_impl::execute(self.input, &self.lut),
+            Architecture::Sse2 => super::sse2::equalize_impl::execute(&self.input, &self.lut),
+            Architecture::Neon => super::neon::equalize_impl::execute(&self.input, &self.lut),
             Architecture::WasmSimd128 => {
-                super::wasm_simd128::equalize_impl::execute(self.input, &self.lut)
+                super::wasm_simd128::equalize_impl::execute(&self.input, &self.lut)
             }
             _ => Err(PilError::InternalError(
                 "native-byte point selection has no matching CPU kernel".into(),

@@ -205,9 +205,9 @@ pub(crate) fn transpose_bytes<const CHANNELS: usize>(
             TRANSPOSE_TILE_SIZE
         };
         if should_tile_transpose(width, height) {
-            transpose_bytes_tiled(source, &mut output, width, height, method, tile_size);
+            transpose_bytes_tiled::<CHANNELS>(source, &mut output, width, height, method, tile_size);
         } else {
-            transpose_bytes_serial(source, &mut output, width, height, method);
+            transpose_bytes_serial::<CHANNELS>(source, &mut output, width, height, method);
         }
     } else {
         let (reverse_x, reverse_y) = match method {

@@ -161,7 +161,7 @@ pub(in crate::compute::pool_cpu::ops::filter::i32) fn uniform_i32_filter3x3_is_i
     uniform_i32_filter3x3_sample_is_identity(sample_i32, kernel, rounding_bias)
 }
 
-fn execute(
+pub(super) fn execute(
     img: &DynamicImage,
     kernel: &[f32; 9],
     scale: f32,

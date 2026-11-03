@@ -659,20 +659,20 @@ impl PreparedSharpness<'_> {
     }
 }
 
-fn prepare_sharpness(
-    input: OperationInputs<'_>,
+fn prepare_sharpness<'a>(
+    input: OperationInputs<'a>,
     factor: f64,
     context: &ExecutionContext,
-) -> Result<PreparedSharpness<'_>, PilError> {
+) -> Result<PreparedSharpness<'a>, PilError> {
     prepare_sharpness_mode(input.image, input.facts(), factor, context)
 }
 
-fn prepare_sharpness_mode(
-    image: &DynamicImage,
+fn prepare_sharpness_mode<'a>(
+    image: &'a DynamicImage,
     facts: crate::compute::registry::support::StrategyInputs,
     factor: f64,
     context: &ExecutionContext,
-) -> Result<PreparedSharpness<'_>, PilError> {
+) -> Result<PreparedSharpness<'a>, PilError> {
     match image {
         DynamicImage::ImageLuma8(source) => super::luma8::ops::prepare_sharpness(source, facts, factor, context).map(PreparedSharpness::ImageLuma8),
         DynamicImage::ImageLumaA8(source) => super::luma_a8::ops::prepare_sharpness(source, facts, factor, context).map(PreparedSharpness::ImageLumaA8),
