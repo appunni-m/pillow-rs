@@ -8,8 +8,8 @@ use crate::raster::{GenericImageView, Mode, RgbImage, RgbaImage};
 pub(crate) fn convert_to_rgb(source: &RgbImage) -> Result<RgbImage, PilError> {
     let dimensions = CheckedDims::new_allow_empty(source.width(), source.height(), 3)?;
     let mut output = Vec::with_capacity(dimensions.total_bytes());
-    for pixel in source.pixels() {
-        output.extend_from_slice(&lab_to_srgb(pixel.0));
+    for pixel in srgb_pixels(source) {
+        output.extend_from_slice(&pixel);
     }
     if output.len() != dimensions.total_bytes() {
         return Err(PilError::InternalError(
@@ -36,7 +36,7 @@ pub(crate) fn convert_to_four_byte(source: &RgbImage) -> Result<RgbaImage, PilEr
 
     let mut output = Vec::with_capacity(dimensions.total_bytes());
     for (index, pixel) in source.pixels().enumerate() {
-        output.extend_from_slice(&lab_to_srgb(pixel.0));
+        output.extend_from_slice(&lab_to_srgb_pixel(pixel.0));
         output.push(auxiliary_byte(hidden_lanes, index));
     }
     if output.len() != dimensions.total_bytes() {
@@ -49,6 +49,10 @@ pub(crate) fn convert_to_four_byte(source: &RgbImage) -> Result<RgbaImage, PilEr
     }
     RgbaImage::from_raw(source.width(), source.height(), output)
         .ok_or_else(|| PilError::InternalError("LAB to four-byte RGB output shape mismatch".into()))
+}
+
+pub(crate) fn srgb_pixels(source: &RgbImage) -> impl Iterator<Item = [u8; 3]> + '_ {
+    source.pixels().map(|pixel| lab_to_srgb_pixel(pixel.0))
 }
 
 fn auxiliary_byte(
@@ -64,7 +68,7 @@ fn auxiliary_byte(
 }
 
 #[inline]
-fn lab_to_srgb(lab: [u8; 3]) -> [u8; 3] {
+pub(crate) fn lab_to_srgb_pixel(lab: [u8; 3]) -> [u8; 3] {
     // LAB's logical A/B bytes store signed values; the hidden fourth byte is
     // carried separately because Pillow's CMS bridge treats it as auxiliary.
     let lightness = f64::from(lab[0]) * (100.0 / 255.0);

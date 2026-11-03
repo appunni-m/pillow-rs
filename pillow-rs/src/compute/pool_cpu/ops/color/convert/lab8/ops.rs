@@ -1,11 +1,8 @@
 //! LAB8 source-mode support and architecture selection for Convert.
 
-crate::compute::pool_cpu::ops::color::convert::helpers::binary::declare_mode_strategy!(
-    crate::raster::Mode::ImageLab8
-);
-
 use crate::compute::{Architecture, registry::support::{
-    InputContract, ModeSupport, OperationId, OutputModeRule, StrategySelection,
+    InputContract, ModeSupport, OperationId, OperationInputs, OutputModeRule,
+    StrategySelection,
 }};
 use crate::error::PilError;
 use crate::pipeline::DitherMethod;
@@ -56,7 +53,9 @@ const CORE_ONLY_TARGETS: &[Mode] = &[
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: TARGETS,
     core_only_targets: CORE_ONLY_TARGETS,
-    core_only_reason: Some("Pillow does not define these LAB source targets"),
+    core_only_reason: Some(
+        "these LAB target routes are Rust extensions; Pillow wrapper fallback parity is unverified",
+    ),
     rejection_reason: "image has wrong mode",
 }];
 
@@ -67,6 +66,29 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     INPUTS,
     &[],
 );
+
+pub(crate) fn execute_binary(
+    inputs: OperationInputs<'_>,
+    dither: Option<&DitherMethod>,
+    selection: StrategySelection,
+) -> Result<DynamicImage, PilError> {
+    if selection.implementation.architecture != Architecture::Default {
+        return Err(PilError::InternalError(
+            "Convert selected an undeclared LAB binary architecture".into(),
+        ));
+    }
+    if inputs.mode() != Mode::ImageLab8 {
+        return Err(PilError::InternalError(
+            "Convert LAB binary strategy received a different source mode".into(),
+        ));
+    }
+    let DynamicImage::ImageLab8(source) = inputs.image else {
+        return Err(PilError::InternalError(
+            "Convert LAB binary strategy received a different image carrier".into(),
+        ));
+    };
+    super::default::convert_impl::execute_binary(source, dither)
+}
 
 pub(crate) fn execute_palette_target(
     source: &RgbImage,

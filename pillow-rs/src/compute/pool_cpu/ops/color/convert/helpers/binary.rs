@@ -1,5 +1,6 @@
 //! CPU conversion to Pillow's expanded-byte bilevel representation.
 
+use crate::checked_dims::CheckedDims;
 use crate::compute::{Architecture, registry::support::StrategySelection};
 use crate::compute::registry::support::OperationInputs;
 use crate::error::PilError;
@@ -60,17 +61,16 @@ pub(crate) fn convert_for_mode(
             threshold_binary(&gray, &mut output);
             Ok(DynamicImage::One(output))
         }
-        (Mode::ImageRgb8 | Mode::ImageLab8, false) => {
-            // The archived path uses RGB error diffusion for LAB's three-byte
-            // carrier too; its nonstandard-mode predicate intentionally
-            // excludes LAB.
+        (Mode::ImageRgb8, false) => {
+            // RGB already contains the device-space samples expected by the
+            // generic color error-diffusion kernel.
             let (width, height) = (source.width(), source.height());
             let mut output = GrayImage::new(width, height);
             let rgb_samples = match source {
-                DynamicImage::ImageRgb8(image) | DynamicImage::ImageLab8(image) => image.as_raw(),
-                _ => unreachable!("RGB binary strategy must retain its native triplet carrier"),
+                DynamicImage::ImageRgb8(image) => image.as_raw(),
+                _ => unreachable!("RGB binary strategy must retain its native RGB carrier"),
             };
-            diffuse_rgb_rows(rgb_samples, &mut output);
+            diffuse_rgb_rows(rgb_samples, &mut output)?;
             Ok(DynamicImage::One(output))
         }
         (_, false) => {
@@ -114,19 +114,43 @@ fn threshold_binary(gray: &GrayImage, output: &mut GrayImage) {
     }
 }
 
-fn diffuse_rgb_rows(rgb: &[u8], output: &mut GrayImage) {
+pub(crate) fn diffuse_rgb_rows(rgb: &[u8], output: &mut GrayImage) -> Result<(), PilError> {
+    if rgb.len() % 3 != 0 {
+        return Err(PilError::InternalError(
+            "binary RGB source did not contain complete pixels".into(),
+        ));
+    }
+    diffuse_rgb_samples(
+        rgb.chunks_exact(3).map(|pixel| [pixel[0], pixel[1], pixel[2]]),
+        output,
+    )
+}
+
+pub(crate) fn diffuse_rgb_samples(
+    samples: impl ExactSizeIterator<Item = [u8; 3]>,
+    output: &mut GrayImage,
+) -> Result<(), PilError> {
     let (width, height) = output.dimensions();
     let width_usize = width as usize;
+    let pixel_count = CheckedDims::new_allow_empty(width, height, 1)?.total_pixels();
+    if samples.len() != pixel_count {
+        return Err(PilError::InternalError(
+            "binary RGB source did not match its output extent".into(),
+        ));
+    }
+    let mut samples = samples;
     let mut errors = vec![0i32; (width + 1) as usize];
     for y in 0..height as usize {
         let mut carry = 0i32;
         let mut delayed_five = 0i32;
         let mut delayed_one = 0i32;
-        let row_base = y * width_usize * 3;
         for x in 0..width_usize {
-            let r = i32::from(rgb[row_base + x * 3]);
-            let g = i32::from(rgb[row_base + x * 3 + 1]);
-            let b = i32::from(rgb[row_base + x * 3 + 2]);
+            let [red, green, blue] = samples.next().ok_or_else(|| {
+                PilError::InternalError("binary RGB source ended before its output".into())
+            })?;
+            let r = i32::from(red);
+            let g = i32::from(green);
+            let b = i32::from(blue);
             let luminance = (299 * r + 587 * g + 114 * b) / 1000;
             let value = (luminance + (carry + errors[x + 1]) / 16).clamp(0, 255);
             let quantized = if value > 128 { 255 } else { 0 };
@@ -143,6 +167,12 @@ fn diffuse_rgb_rows(rgb: &[u8], output: &mut GrayImage) {
         }
         errors[width_usize] = delayed_five;
     }
+    if samples.next().is_some() {
+        return Err(PilError::InternalError(
+            "binary RGB source exceeded its output extent".into(),
+        ));
+    }
+    Ok(())
 }
 
 fn diffuse_gray_rows(gray: &GrayImage, output: &mut GrayImage) {

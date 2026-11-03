@@ -1,22 +1,21 @@
 //! Serial Convert paths for native three-byte LAB source samples.
 
+use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::pipeline::DitherMethod;
-use crate::raster::{
-    DynamicImage, GenericImageView, GrayAlphaImage, LumaA, Mode, RgbImage,
-};
+use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, Mode, RgbImage, RgbaImage};
 
 pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, PilError> {
-    // TODO(pillow-rs#3ptb): Add native LAB-domain algorithms for the Rust-only
-    // luma, color-space, and CMYK targets below; Pillow rejects those targets.
+    // NO_PILLOW_SUPPORT: non-identity targets outside the RGB family are Rust
+    // extensions. Each path converts LAB samples directly into its target.
     match target {
-        Mode::ImageLuma8 => luma(source).map(DynamicImage::ImageLuma8),
-        Mode::ImageLumaA8 => luma_alpha(source).map(DynamicImage::ImageLumaA8),
+        Mode::ImageLuma8 => gray_output(source).map(DynamicImage::ImageLuma8),
+        Mode::ImageLumaA8 => luma_alpha_output(source).map(DynamicImage::ImageLumaA8),
         Mode::ImageLaPremultiplied8 | Mode::ImageRgbPremultiplied8 => {
             super::super::super::helpers::premultiplied::from_rgb_samples(
                 source.width(),
                 source.height(),
-                source.pixels().map(|pixel| pixel.0),
+                super::super::helpers::to_srgb::srgb_pixels(source),
                 target,
             )
         }
@@ -32,42 +31,50 @@ pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, P
                 source.width(),
                 source.height(),
                 target,
-                luma(source)?.pixels().map(|pixel| pixel[0]),
+                luma_samples(source),
             )
         }
-        Mode::ImageCmyk8 => Ok(DynamicImage::ImageCmyk8(
-            crate::color::rgb_to_cmyk_inverse(source),
-        )),
+        Mode::ImageCmyk8 => cmyk_output(source).map(DynamicImage::ImageCmyk8),
         Mode::ImageYCbCr8 => Ok(DynamicImage::ImageYCbCr8(
-            crate::color::rgb_buffer_to_ycbcr(source),
+            crate::color::rgb_pixels_to_ycbcr(
+                source.width(),
+                source.height(),
+                super::super::helpers::to_srgb::srgb_pixels(source),
+            ),
         )),
-        Mode::ImageHsv8 => Ok(DynamicImage::ImageHsv8(
-            crate::color::rgb_buffer_to_hsv(source),
-        )),
-        Mode::ImageI32 => Ok(crate::compute::pool_cpu::ops::color::convert::helpers::pixel::
-            scalar_i32_rgb8(source)),
-        Mode::ImageF32 => Ok(crate::compute::pool_cpu::ops::color::convert::helpers::pixel::
-            scalar_f32_rgb8(source)),
+        Mode::ImageHsv8 => Ok(DynamicImage::ImageHsv8(crate::color::rgb_pixels_to_hsv(
+            source.width(),
+            source.height(),
+            super::super::helpers::to_srgb::srgb_pixels(source),
+        ))),
+        Mode::ImageI32 => scalar_output(source, true).map(DynamicImage::ImageI32),
+        Mode::ImageF32 => scalar_output(source, false).map(DynamicImage::ImageF32),
         _ => Err(PilError::ValueError("image has wrong mode".into())),
     }
 }
 
-fn luma(source: &RgbImage) -> Result<crate::raster::GrayImage, PilError> {
-    let kernel =
-        crate::compute::pool_cpu::ops::grayscale::lab8::default::grayscale_impl::prepare(source)?;
-    crate::compute::pool_cpu::ops::grayscale::lab8::default::grayscale_impl::execute(kernel)
-}
-
-fn luma_alpha(source: &RgbImage) -> Result<GrayAlphaImage, PilError> {
-    let luma = luma(source)?;
-    let mut output = GrayAlphaImage::new(source.width(), source.height());
-    for (target, pixel) in output.pixels_mut().zip(luma.pixels()) {
-        *target = LumaA([pixel[0], u8::MAX]);
+pub(crate) fn execute_binary(
+    source: &RgbImage,
+    dither: Option<&DitherMethod>,
+) -> Result<DynamicImage, PilError> {
+    let mut output = GrayImage::new(source.width(), source.height());
+    if matches!(dither, Some(DitherMethod::None)) {
+        for (destination, [red, green, blue]) in output
+            .pixels_mut()
+            .zip(super::super::helpers::to_srgb::srgb_pixels(source))
+        {
+            let gray = crate::color::grayscale_rgb_pixel(&[red, green, blue], 0);
+            destination[0] = if gray >= 128 { u8::MAX } else { 0 };
+        }
+    } else {
+        crate::compute::pool_cpu::ops::color::convert::helpers::binary::diffuse_rgb_samples(
+            super::super::helpers::to_srgb::srgb_pixels(source),
+            &mut output,
+        )?;
     }
-    Ok(output)
+    Ok(DynamicImage::One(output))
 }
 
-// NO_PILLOW_SUPPORT: Pillow's palette converter rejects native `LAB` input.
 pub(crate) fn execute_palette_target(
     source: &RgbImage,
     target: Mode,
@@ -84,9 +91,76 @@ pub(crate) fn execute_palette_target(
     crate::compute::pool_cpu::ops::color::convert::helpers::palette::web_palette_from_pixels(
         source.width(),
         source.height(),
-        source.pixels().map(|pixel| pixel.0),
+        super::super::helpers::to_srgb::srgb_pixels(source),
         !matches!(dither, Some(DitherMethod::None)),
         target,
         metadata,
     )
+}
+
+fn gray_output(source: &RgbImage) -> Result<GrayImage, PilError> {
+    let bytes = encode_samples::<1>(source, |[red, green, blue]| {
+        [crate::color::rgb_to_luma_u8(red, green, blue)]
+    })?;
+    GrayImage::from_raw(source.width(), source.height(), bytes)
+        .ok_or_else(|| PilError::InternalError("LAB to L output shape mismatch".into()))
+}
+
+fn luma_alpha_output(source: &RgbImage) -> Result<GrayAlphaImage, PilError> {
+    let bytes = encode_samples::<2>(source, |[red, green, blue]| {
+        [crate::color::rgb_to_luma_u8(red, green, blue), u8::MAX]
+    })?;
+    GrayAlphaImage::from_raw(source.width(), source.height(), bytes)
+        .ok_or_else(|| PilError::InternalError("LAB to LA output shape mismatch".into()))
+}
+
+fn cmyk_output(source: &RgbImage) -> Result<RgbaImage, PilError> {
+    let bytes = encode_samples::<4>(source, |[red, green, blue]| {
+        [u8::MAX - red, u8::MAX - green, u8::MAX - blue, 0]
+    })?;
+    RgbaImage::from_raw(source.width(), source.height(), bytes)
+        .ok_or_else(|| PilError::InternalError("LAB to CMYK output shape mismatch".into()))
+}
+
+fn scalar_output(source: &RgbImage, integer: bool) -> Result<RgbaImage, PilError> {
+    let bytes = if integer {
+        encode_samples::<4>(source, |[red, green, blue]| {
+            crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_i32_rgb(
+                red, green, blue,
+            )
+        })?
+    } else {
+        encode_samples::<4>(source, |[red, green, blue]| {
+            crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_f32_rgb(
+                red, green, blue,
+            )
+        })?
+    };
+    RgbaImage::from_raw(source.width(), source.height(), bytes)
+        .ok_or_else(|| PilError::InternalError("LAB scalar output shape mismatch".into()))
+}
+
+fn luma_samples(source: &RgbImage) -> impl Iterator<Item = u8> + '_ {
+    super::super::helpers::to_srgb::srgb_pixels(source)
+        .map(|[red, green, blue]| crate::color::rgb_to_luma_u8(red, green, blue))
+}
+
+fn encode_samples<const CHANNELS: usize>(
+    source: &RgbImage,
+    mut encode: impl FnMut([u8; 3]) -> [u8; CHANNELS],
+) -> Result<Vec<u8>, PilError> {
+    let dimensions = CheckedDims::new_allow_empty(source.width(), source.height(), CHANNELS)?;
+    let mut output = Vec::with_capacity(dimensions.total_bytes());
+    for sample in super::super::helpers::to_srgb::srgb_pixels(source) {
+        output.extend_from_slice(&encode(sample));
+    }
+    if output.len() != dimensions.total_bytes() {
+        return Err(PilError::InternalError(
+            "LAB Convert output shape mismatch".into(),
+        ));
+    }
+    if output.capacity() != 0 {
+        crate::compute::record_pipeline_allocation(output.capacity());
+    }
+    Ok(output)
 }
