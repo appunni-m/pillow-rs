@@ -287,11 +287,14 @@ pub(crate) fn imageops_pad_color_from_python(
     Ok(pillow_rs::ImageOpsColor::TupleComponents(components))
 }
 
-// NO_PILLOW_SUPPORT: Rust also accepts integer lists as P-mode RGB(A) Pad
-// fills. Pillow's Image.new temporary-palette path accepts tuples, not lists.
 fn imageops_pad_palette_color_from_python(
     value: &Bound<'_, PyAny>,
 ) -> PyResult<pillow_rs::ImageOpsColor> {
+    // TODO(pillow-rs#3ptb): Pillow's Image.new routes three/four-component
+    // integer lists and tuples through a temporary RGB ImagePalette. It calls
+    // tuple(value) and ImagePalette.getcolor before core fill validation; this
+    // bridge currently preserves numeric results but bypasses those host
+    // iteration, hash, comparison, and byte-conversion callbacks.
     if value.is_instance_of::<PyInt>() {
         return value
             .extract::<i64>()
@@ -303,10 +306,6 @@ fn imageops_pad_palette_color_from_python(
             .map(pillow_rs::ImageOpsColor::FloatingScalar);
     }
     if let Ok(tuple) = value.cast::<PyTuple>() {
-        // TODO(pillow-rs#3ptb): preserve ImagePalette.getcolor's callback and
-        // fault order for tuple/int subclasses and nonnumeric tuple elements.
-        // This bridge currently lowers built-in numeric values before the
-        // temporary P palette runs its key lookup and byte conversion.
         if !matches!(tuple.len(), 1 | 3 | 4) {
             // P has one logical band. Reject invalid tuple shapes before
             // examining components, preserving Pillow's arity-first fault.
