@@ -59,6 +59,7 @@ fn assert_f_pad_f64_lowering_cases(
             &[
                 PipelineOp::PutData {
                     data: putdata.clone(),
+                    hidden_lanes: None,
                     payload_mode: Mode::ImageF32,
                 },
                 pad,
@@ -180,6 +181,7 @@ fn f_thumbnail_constant_admission_rejects_reducing_overflow() {
         w: 10,
         h: 7,
         filter: ResampleFilter::Bilinear,
+        reducing_gap: Some(2.0),
     };
     assert!(!gpu_f_thumbnail_constant_is_exact(
         &thumbnail,

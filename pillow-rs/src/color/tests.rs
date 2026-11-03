@@ -3,8 +3,8 @@ use super::grayscale::{
     grayscale_rgb_pixel_lookup,
 };
 use super::{
-    ColorValue, cmyk_to_grayscale, f_to_i, f_to_l, getcolor, i_to_f, i_to_l, muldiv255, rgb_to_hsv,
-    rgb_to_luma_u8,
+    ColorOutputMode, ColorValue, cmyk_to_grayscale, f_to_i, f_to_l, getcolor, i_to_f, i_to_l,
+    muldiv255, rgb_to_hsv, rgb_to_luma_u8,
 };
 use crate::checked_dims::CheckedDims;
 use crate::compute::Backend;
@@ -15,19 +15,19 @@ use crate::raster::{DynamicImage, RgbaImage};
 #[test]
 fn getcolor_accepts_pillow_mapping_and_lowercase_alpha_modes() {
     assert_eq!(
-        getcolor(255, 0, 0, 255, "La").unwrap(),
-        ColorValue::Gray(76)
+        getcolor(255, 0, 0, 255, ColorOutputMode::LumaAlphaPremultiplied),
+        ColorValue::GrayAlpha(76, 255)
     );
     assert_eq!(
-        getcolor(255, 0, 0, 255, "I;32BS").unwrap(),
+        getcolor(255, 0, 0, 255, ColorOutputMode::Integer32BigEndianSigned),
         ColorValue::Gray(76)
     );
 }
 
 #[test]
-fn getcolor_rejects_unknown_modes_with_key_error() {
+fn color_output_mode_parser_rejects_unknown_modes_with_key_error() {
     assert!(matches!(
-        getcolor(255, 0, 0, 255, "XYZ"),
+        ColorOutputMode::parse_pillow_name("XYZ"),
         Err(PilError::KeyError(mode)) if mode == "XYZ"
     ));
 }

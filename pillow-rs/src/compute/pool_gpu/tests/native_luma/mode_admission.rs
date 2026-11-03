@@ -6,7 +6,7 @@ use std::sync::Arc;
 #[cfg(target_endian = "little")]
 fn gpu_native_expand_requires_matching_singleton_layout() {
     let expand = PipelineOp::Expand {
-        border: 1,
+        border: crate::pipeline::ExpandMargins::uniform(1),
         fill: (7, 11, 13, 17),
     };
     assert_gpu_native_expand_matching_layouts(&expand);

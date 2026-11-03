@@ -148,10 +148,11 @@ pub(super) fn op_output_dims(op: &PipelineOp, cur_w: u32, cur_h: u32) -> Option<
             right,
             bottom,
         } => Some((right.checked_sub(*left)?, bottom.checked_sub(*top)?)),
-        PipelineOp::Expand { border, .. } => {
-            let border = border.checked_mul(2)?;
-            let new_w = cur_w.checked_add(border)?;
-            let new_h = cur_h.checked_add(border)?;
+        PipelineOp::Expand { border, .. } | PipelineOp::ExpandTyped { border, .. } => {
+            let new_w = i128::from(cur_w) + i128::from(border.left) + i128::from(border.right);
+            let new_h = i128::from(cur_h) + i128::from(border.top) + i128::from(border.bottom);
+            let new_w = u32::try_from(new_w).ok()?;
+            let new_h = u32::try_from(new_h).ok()?;
             Some((new_w, new_h))
         }
         PipelineOp::CropBorder { border } => {
@@ -399,6 +400,7 @@ pub(super) fn op_has_explicit_output_dimensions(op: &PipelineOp) -> bool {
             | PipelineOp::Pad { .. }
             | PipelineOp::Crop { .. }
             | PipelineOp::Expand { .. }
+            | PipelineOp::ExpandTyped { .. }
             | PipelineOp::CropBorder { .. }
             | PipelineOp::Rotate { .. }
             | PipelineOp::Transpose { .. }

@@ -27,6 +27,16 @@ pub(crate) fn apply<const CHANNELS: usize>(
 
     let mut output = destination.to_vec();
     alpha_composite_chunk::<CHANNELS>(source, &mut output);
+    let pixels = dimensions.total_bytes() / CHANNELS;
+    let vector_blocks = pixels / 8;
+    let scalar_tail = pixels % 8;
+    crate::compute::record_pipeline_operation_path(if vector_blocks == 0 {
+        "scalar-control"
+    } else {
+        "vector"
+    });
+    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks as u64);
+    crate::compute::record_pipeline_operation_scalar_tail(scalar_tail as u64);
     Ok(output)
 }
 

@@ -2,6 +2,7 @@
 
 use crate::raster::{DynamicImage, Mode};
 
+#[derive(Clone, Copy)]
 pub(crate) struct ContrastBase {
     #[cfg(feature = "gpu")]
     pub(crate) mean: u8,

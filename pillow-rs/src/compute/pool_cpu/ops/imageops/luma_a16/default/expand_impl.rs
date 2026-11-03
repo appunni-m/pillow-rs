@@ -2,22 +2,31 @@
 use crate::raster::{ImageBuffer, LumaA};
 
 use crate::error::PilError;
+use crate::pipeline::NativeColorInput;
 
 pub(super) type Input = ImageBuffer<LumaA<u16>, Vec<u16>>;
 
 
 pub(super) struct Kernel<'a> {
     input: &'a Input,
-    border: u32,
+    border: crate::pipeline::ExpandMargins,
     fill: [u16; 2],
 }
 
 pub(super) fn prepare(
     input: &Input,
-    border: u32,
+    border: crate::pipeline::ExpandMargins,
     fill: (u8, u8, u8, u8),
+    native_fill: Option<NativeColorInput>,
 ) -> Kernel<'_> {
-    Kernel { input, border, fill: [u16::from(fill.0), u16::from(fill.3)] }
+    let fill = match native_fill {
+        Some(input) => [
+            input.component(0, i64::from(fill.0)) as u16,
+            input.component(1, i64::from(fill.3)) as u16,
+        ],
+        None => [u16::from(fill.0), u16::from(fill.3)],
+    };
+    Kernel { input, border, fill }
 }
 
 pub(super) fn execute(kernel: Kernel<'_>) -> Result<Input, PilError> {

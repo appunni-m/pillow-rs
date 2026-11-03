@@ -9,6 +9,10 @@ mod nonstandard;
 mod operation;
 mod palette;
 
+pub(crate) fn palette_alpha_for_lazy_convert(image: &crate::image::Image) -> Option<Vec<u8>> {
+    palette::palette_alpha_for_convert(image)
+}
+
 #[cfg(test)]
 mod tests;
 

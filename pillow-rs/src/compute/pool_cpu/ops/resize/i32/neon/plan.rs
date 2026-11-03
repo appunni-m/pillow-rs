@@ -1,9 +1,9 @@
 //! Checked tap and source-address plans for the I32 NEON Resize strategy.
 
+pub(in crate::compute::pool_cpu::ops::resize::i32) const LANES: usize = 8;
+
 use crate::ops::pil_resize::FilterCoeffsF64;
 use wide::f64x8;
-
-use super::LANES;
 
 #[derive(Clone, Copy)]
 pub(super) struct HorizontalTap {

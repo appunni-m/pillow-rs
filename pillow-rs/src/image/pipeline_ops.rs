@@ -2,6 +2,7 @@
 
 use std::sync::{Arc, OnceLock};
 
+use crate::compute::registry::support::{ModeSupport, OutputModeRule};
 use crate::error::PilError;
 use crate::pipeline::{ColorMode, PipelineOp};
 use crate::raster::{DynamicImage, Mode};
@@ -23,6 +24,23 @@ pub(super) use dimensions::known_pipeline_op_dimensions;
 pub struct PipelineOps {
     chain: Arc<PipelineOpChain>,
     prefix_cache: Option<PipelinePrefixCache>,
+    palette_output: Arc<OnceLock<PipelinePaletteOutput>>,
+    source_format_suppressed: bool,
+    preserves_palette: bool,
+}
+
+/// Palette data and wrapper policy produced by a materialized P/PA Convert.
+///
+/// Palette conversion is data-dependent, so its generated palette cannot be
+/// attached when the lazy operation is queued. Keep it beside the operation
+/// graph and publish it only after the matching raster has materialized.
+#[derive(Debug, Clone)]
+pub(crate) struct PipelinePaletteOutput {
+    pub(crate) mode: Mode,
+    pub(crate) palette: Option<Vec<u8>>,
+    pub(crate) palette_alpha: Option<Vec<u8>>,
+    pub(crate) wrapper_metadata:
+        crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata,
 }
 
 #[derive(Debug)]
@@ -49,6 +67,9 @@ impl PipelineOps {
                 flattened_origins: OnceLock::new(),
             }),
             prefix_cache: None,
+            palette_output: Arc::new(OnceLock::new()),
+            source_format_suppressed: false,
+            preserves_palette: false,
         }
     }
 
@@ -70,6 +91,9 @@ impl PipelineOps {
                 flattened_origins: OnceLock::new(),
             }),
             prefix_cache: None,
+            palette_output: Arc::new(OnceLock::new()),
+            source_format_suppressed: false,
+            preserves_palette: false,
         }
     }
 
@@ -94,6 +118,9 @@ impl PipelineOps {
                 flattened_origins: OnceLock::new(),
             }),
             prefix_cache: self.prefix_cache.clone(),
+            palette_output: Arc::new(OnceLock::new()),
+            source_format_suppressed: false,
+            preserves_palette: false,
         }
     }
 
@@ -195,6 +222,42 @@ impl PipelineOps {
         self.prefix_cache = prefix_cache;
         self
     }
+
+    /// Returns palette and wrapper data after this node has materialized.
+    pub(crate) fn palette_output(&self) -> Option<&PipelinePaletteOutput> {
+        self.palette_output.get()
+    }
+
+    /// Publishes generated palette metadata after output validation succeeds.
+    pub(crate) fn cache_palette_output(
+        &self,
+        output: PipelinePaletteOutput,
+    ) -> Result<(), PilError> {
+        self.palette_output.set(output).map_err(|_| {
+            PilError::InternalError("pipeline palette output was initialized twice".to_owned())
+        })
+    }
+
+    /// Marks a copied node whose public `format` value was cleared.
+    pub(crate) fn suppress_source_format(&mut self) {
+        self.source_format_suppressed = true;
+    }
+
+    /// Returns whether copy semantics suppress a preserved source format.
+    pub(crate) fn source_format_suppressed(&self) -> bool {
+        self.source_format_suppressed
+    }
+
+    /// Records whether the output contract inherits its source palette.
+    pub(crate) fn with_palette_preservation(mut self, preserves_palette: bool) -> Self {
+        self.preserves_palette = preserves_palette;
+        self
+    }
+
+    /// Returns whether a materialized result should publish inherited palette data.
+    pub(crate) fn preserves_palette(&self) -> bool {
+        self.preserves_palette
+    }
 }
 
 /// Whether an operation leaves the logical Pillow mode unchanged.
@@ -235,8 +298,11 @@ fn op_preserves_mode(op: &PipelineOp) -> bool {
             | PipelineOp::Cover { .. }
             | PipelineOp::Fit { .. }
             | PipelineOp::Pad { .. }
+            | PipelineOp::PadTyped { .. }
+            | PipelineOp::PadPositioned { .. }
             | PipelineOp::Scale { .. }
             | PipelineOp::Expand { .. }
+            | PipelineOp::ExpandTyped { .. }
             | PipelineOp::Transform { .. }
             | PipelineOp::CropBorder { .. }
             | PipelineOp::Add { .. }
@@ -277,52 +343,67 @@ fn op_preserves_mode(op: &PipelineOp) -> bool {
             | PipelineOp::DrawPieslice { .. }
             | PipelineOp::DrawPoint { .. }
             | PipelineOp::PutPixel { .. }
-            // PutData records the image's current mode when it is queued, so
-            // the generic mode-preserving planner path is authoritative.
+            // Public putdata records the current mode when queued. The
+            // metadata planner checks that invariant before taking its
+            // preservation fast path and resolves other payloads by contract.
             | PipelineOp::PutData { .. }
             | PipelineOp::Eval { .. }
     )
 }
 
-fn known_putalpha_mode(mode: Mode) -> Option<Mode> {
-    match mode {
-        Mode::ImageYCbCr8
-        | Mode::ImageHsv8
-        | Mode::ImageRgb8
-        | Mode::ImageRgba8
-        | Mode::ImageRgbPremultiplied8
-        | Mode::ImageRgbx8
-        | Mode::ImageCmyk8 => Some(Mode::ImageRgba8),
-        Mode::ImageLuma8 | Mode::ImageLumaA8 => Some(Mode::ImageLumaA8),
-        Mode::ImagePalette8 | Mode::ImagePaletteAlpha8 => Some(Mode::ImagePaletteAlpha8),
-        // Palette putalpha is tagged as PA in push_op before this planner is
-        // reached. Public putalpha also rejects 1/I/F, YCbCr, and HSV before
-        // queueing; keep this fallback for malformed/internal descriptors.
+fn target_mode_for_pipeline_op(op: &PipelineOp) -> Option<Mode> {
+    match op {
+        PipelineOp::Convert { mode, .. } | PipelineOp::Merge { mode, .. } => Some(*mode),
+        PipelineOp::Color3DLut { target_mode, .. } => Some(*target_mode),
         _ => None,
     }
 }
 
-/// Reads simple output transitions from the operation-owned support contract.
-/// Request-dependent output rules remain in their existing typed planners.
-fn declared_preserve_or_fixed_output(
-    operation: crate::compute::registry::support::OperationId,
-    source: Mode,
-) -> Option<Mode> {
-    use crate::compute::registry::support::{ModeSupport, OutputModeRule};
-
-    match operation.support().for_mode(source) {
-        ModeSupport::Supported {
-            output: OutputModeRule::Preserve,
-            ..
-        } => Some(source),
-        ModeSupport::Supported {
-            output: OutputModeRule::Fixed(output),
-            ..
-        } => Some(output),
-        ModeSupport::Supported { .. } | ModeSupport::Rejected { .. } => None,
+/// Resolves a declared output rule against this operation's typed parameters.
+fn output_mode_from_rule(op: &PipelineOp, source: Mode, output: OutputModeRule) -> Option<Mode> {
+    match output {
+        OutputModeRule::NoRasterResult => None,
+        OutputModeRule::Preserve => Some(source),
+        OutputModeRule::Fixed(mode) => Some(mode),
+        OutputModeRule::ByTargetMode | OutputModeRule::ByTargetModeWithPalette => {
+            target_mode_for_pipeline_op(op)
+        }
+        OutputModeRule::ByPayload(outputs) => {
+            let PipelineOp::PutData { payload_mode, .. } = op else {
+                return None;
+            };
+            outputs
+                .iter()
+                .find(|output| output.payload == *payload_mode)
+                .map(|output| output.output)
+        }
     }
 }
 
+/// Resolves the success output or the operation-declared lazy output retained
+/// when a rejected source mode reaches its existing wrapper error.
+// Source audit (2026-11-01): every pipeline operation with a rejected source
+// mode and a statically exposed changed output declares it here: Convert,
+// ConvertMatrix, ConvertLab, RemapPalette, Grayscale, Colorize, Color3DLut,
+// Merge, and EffectNoise. Other rejected routes either preserve source mode,
+// produce no raster result (such as rejected Equalize), or are rejected by the
+// public PutAlpha wrappers before queueing. A raw invalid `push_op` therefore
+// keeps its materialization-time operation error instead of claiming a result
+// mode. TODO(pillow-rs#3ptb): verify these metadata/error outcomes in frozen
+// CPU parity; no runtime validation has run for this audit.
+fn output_mode_from_operation_contract(op: &PipelineOp, source: Mode) -> Option<Mode> {
+    let support = op.support();
+    let rule = match support.for_mode(source) {
+        ModeSupport::Supported { output, .. } => output,
+        ModeSupport::Rejected { .. } => support.rejected_output()?,
+    };
+    output_mode_from_rule(op, source, rule)
+}
+
+// Declared modes are checked against the producer's exact DynamicImage variant
+// by both materialization paths; never use a same-carrier retag to satisfy a
+// planner declaration. Routes without a static output contract keep the
+// materialization fallback, preserving metadata error timing.
 /// Computes a statically known logical mode for one pipeline operation.
 ///
 /// This is intentionally conservative: `None` retains the existing
@@ -330,32 +411,10 @@ fn declared_preserve_or_fixed_output(
 /// mode cache is separate from the pixel cache because metadata reads must not
 /// publish or expose a partially executed image.
 pub(crate) fn known_pipeline_op_mode(op: &PipelineOp, current: Mode) -> Option<Mode> {
-    if op_preserves_mode(op) {
-        return Some(current);
-    }
-    match op {
-        PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. } => {
-            declared_preserve_or_fixed_output(
-                crate::compute::registry::support::OperationId::Equalize,
-                current,
-            )
-        }
-        // Convert and Merge both carry their exact typed output identity.
-        PipelineOp::Convert { mode, .. } => Some(*mode),
-        PipelineOp::Merge { mode, .. } => Some(*mode),
-        PipelineOp::RemapPalette { .. } => Some(Mode::ImagePalette8),
-        PipelineOp::Color3DLut { target_mode, .. } => Some(*target_mode),
-        PipelineOp::ConvertLab { .. } => Some(Mode::ImageLab8),
-        PipelineOp::Grayscale => Some(Mode::ImageLuma8),
-        PipelineOp::Colorize { .. } => Some(Mode::ImageRgb8),
-        PipelineOp::Constant { .. } => Some(Mode::ImageLuma8),
-        PipelineOp::PutAlpha { mode, .. } | PipelineOp::PutAlphaData { mode, .. } => {
-            known_putalpha_mode(*mode)
-        }
-        PipelineOp::ExtractBand { .. } | PipelineOp::EffectNoise { .. } => {
-            Some(Mode::ImageLuma8)
-        }
-        _ => None,
+    match output_mode_from_operation_contract(op, current) {
+        Some(mode) => Some(mode),
+        None if op_preserves_mode(op) => Some(current),
+        None => None,
     }
 }
 
@@ -364,17 +423,19 @@ pub(crate) fn known_pipeline_op_mode(op: &PipelineOp, current: Mode) -> Option<M
 /// A mode-preserving operation may still expand palette indices when its
 /// source-specific route is not palette-safe. In that case, defer to the
 /// materialized result instead of reporting the input identity.
-/// TODO(pillow-rs#3ptb): finish caller reconciliation for
-/// Brightness/Contrast/ColorSaturation/Sharpness(P/PA), especially the eager
-/// contrast and color-saturation base-construction fallbacks.
+/// Brightness and Sharpness reject P/PA through their typed wrappers;
+/// Contrast and ColorSaturation retain their eager conversion/blend fallback
+/// when no prepared strategy exists. Direct indexed pipeline admission checks
+/// the exact source mode before palette expansion.
 /// CPU indexed materialization now checks `PipelineOp::support` against the
 /// exact source mode before palette expansion, including direct `push_op` use.
 /// Autocontrast, Filter, GaussianBlur, Equalize, Posterize, and Solarize
 /// wrappers use their operation declarations for mode admission. BlendModule's
 /// wrapper and prepared path share its declared mode-pair contract, including
 /// direct P/PA rejection before palette expansion.
-/// Trace remaining wrapper/nested parameter and output transitions, then record
-/// their exact error timing before removing this fallback.
+/// TODO(pillow-rs#3ptb): verify indexed source metadata, wrapper error order,
+/// and eager Contrast/ColorSaturation base results in the frozen CPU parity
+/// cases before changing this source-specific fallback.
 pub(crate) fn known_pipeline_op_mode_for_source(
     source: &Image,
     op: &PipelineOp,
@@ -540,13 +601,12 @@ struct PipelineOutputMetadata {
     output_mode: Option<Mode>,
     palette: Option<Vec<u8>>,
     palette_alpha: Option<Vec<u8>>,
+    preserves_palette: bool,
 }
 
 fn pipeline_output_metadata(source: &Image, op: &PipelineOp) -> PipelineOutputMetadata {
     let source_is_paletted = source.has_palette_samples();
     let palette_safe = source_is_paletted && Image::is_palette_safe_op_for_source(source, op);
-    let indexed_chops_result_without_palette =
-        source_is_paletted && Image::indexed_chops_result_without_palette(op);
     let promotes_p_to_pa = source.has_palette_mode()
         && matches!(
             op,
@@ -559,12 +619,8 @@ fn pipeline_output_metadata(source: &Image, op: &PipelineOp) -> PipelineOutputMe
             }
         );
     let output_mode = pipeline_output_mode(source, op, source_is_paletted, palette_safe);
-    let (palette, palette_alpha) = pipeline_output_palette(
-        source,
-        op,
-        palette_safe,
-        indexed_chops_result_without_palette,
-    );
+    let (palette, palette_alpha, preserves_palette) =
+        pipeline_output_palette(source, op, palette_safe);
     PipelineOutputMetadata {
         source_is_paletted,
         palette_safe,
@@ -572,6 +628,7 @@ fn pipeline_output_metadata(source: &Image, op: &PipelineOp) -> PipelineOutputMe
         output_mode,
         palette,
         palette_alpha,
+        preserves_palette,
     }
 }
 
@@ -582,10 +639,11 @@ fn new_pipeline_node(
     output_mode: Option<Mode>,
     palette: Option<Vec<u8>>,
     palette_alpha: Option<Vec<u8>>,
+    preserves_palette: bool,
 ) -> Image {
     Image::Pipeline {
         source,
-        ops,
+        ops: ops.with_palette_preservation(preserves_palette),
         format: None,
         backend,
         palette,
@@ -606,9 +664,17 @@ fn append_pipeline_op(
     output_mode: Option<Mode>,
     palette: Option<Vec<u8>>,
     palette_alpha: Option<Vec<u8>>,
+    preserves_palette: bool,
 ) -> Image {
-    let can_reuse_prefix =
-        !source_is_paletted && !ops.is_empty() && ops.mode_preserving() && op_preserves_mode(&op);
+    let output_matches_source_mode = match (source.known_mode_identity(), output_mode) {
+        (Some(source_mode), Some(output_mode)) => source_mode == output_mode,
+        _ => false,
+    };
+    let can_reuse_prefix = !source_is_paletted
+        && !ops.is_empty()
+        && ops.mode_preserving()
+        && op_preserves_mode(&op)
+        && output_matches_source_mode;
     let ancestor_cache = if can_reuse_prefix {
         if materialized.get().is_some() {
             Some(PipelinePrefixCache {
@@ -625,7 +691,10 @@ fn append_pipeline_op(
     } else {
         None
     };
-    let new_ops = ops.append(op).with_prefix_cache(ancestor_cache);
+    let new_ops = ops
+        .append(op)
+        .with_prefix_cache(ancestor_cache)
+        .with_palette_preservation(preserves_palette);
     new_pipeline_node(
         Arc::clone(source),
         new_ops,
@@ -633,6 +702,7 @@ fn append_pipeline_op(
         output_mode,
         palette,
         palette_alpha,
+        preserves_palette,
     )
 }
 
@@ -643,7 +713,13 @@ fn pipeline_output_mode(
     palette_safe: bool,
 ) -> Option<Mode> {
     let source_mode = source.known_mode_identity();
-    let output_mode = if matches!(op, PipelineOp::ExtractBand { .. } | PipelineOp::Merge { .. }) {
+    let output_mode = if matches!(
+        op,
+        PipelineOp::ExtractBand { .. }
+            | PipelineOp::Merge { .. }
+            | PipelineOp::PutAlpha { .. }
+            | PipelineOp::PutAlphaData { .. }
+    ) {
         source_mode.and_then(|mode| known_pipeline_op_mode_for_source(source, op, mode))
     } else if source_is_paletted {
         if source_mode == Some(Mode::ImagePaletteAlpha8)
@@ -668,23 +744,16 @@ fn pipeline_output_mode(
         source_mode.and_then(|mode| known_pipeline_op_mode(op, mode))
     };
 
-    // The lazy planner owns mode transitions for both metadata queries and
-    // declared outputs. Keep the palette-aware exception above because some
-    // P/PA operations expand indices to colors based on attached metadata.
-    match op {
-        PipelineOp::PutAlpha { mode, .. } | PipelineOp::PutAlphaData { mode, .. } => {
-            known_putalpha_mode(*mode)
-        }
-        _ => output_mode,
-    }
+    // The lazy planner owns palette-dependent transitions; operation support
+    // declares every static source/output identity.
+    output_mode
 }
 
 fn pipeline_output_palette(
     source: &Image,
     op: &PipelineOp,
     palette_safe: bool,
-    indexed_chops_result_without_palette: bool,
-) -> (Option<Vec<u8>>, Option<Vec<u8>>) {
+) -> (Option<Vec<u8>>, Option<Vec<u8>>, bool) {
     let palette_dropped_by_pa_operation =
         source.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
         && match op {
@@ -702,29 +771,34 @@ fn pipeline_output_palette(
     let preserve_palette = palette_safe
         && !matches!(op, PipelineOp::ExtractBand { .. })
         && !palette_dropped_by_pa_operation;
-    let palette = if indexed_chops_result_without_palette {
-        Some(Vec::new())
-    } else if preserve_palette {
+    let palette = if preserve_palette {
         source.extract_palette()
     } else {
         None
     };
-    let palette_alpha = if indexed_chops_result_without_palette {
-        None
-    } else if preserve_palette {
+    let palette_alpha = if preserve_palette {
         source.palette_alpha()
     } else {
         None
     };
-    (palette, palette_alpha)
+    (palette, palette_alpha, preserve_palette)
 }
 
 impl Image {
-    /// Replaces a pipeline's cached output identity after an operation adapter
-    /// supplies a more exact mode contract.
-    pub(crate) fn set_pipeline_output_mode(&mut self, output_mode: Option<Mode>) {
-        if let Image::Pipeline { mode, .. } = self {
-            *mode = pipeline_mode_cache_for(output_mode);
+    /// Replaces palette metadata on an already queued pipeline operation.
+    pub(crate) fn set_pipeline_output_palette(
+        &mut self,
+        output_palette: Option<Vec<u8>>,
+        output_palette_alpha: Option<Vec<u8>>,
+    ) {
+        if let Image::Pipeline {
+            palette,
+            palette_alpha,
+            ..
+        } = self
+        {
+            *palette = output_palette;
+            *palette_alpha = output_palette_alpha;
         }
     }
 
@@ -744,17 +818,41 @@ impl Image {
             output_mode,
             palette,
             palette_alpha,
+            preserves_palette,
         } = pipeline_output_metadata(source, &op);
+        let palette_conversion = matches!(
+            &op,
+            PipelineOp::Convert {
+                mode: Mode::ImagePalette8 | Mode::ImagePaletteAlpha8,
+                matrix: None,
+                ..
+            }
+        );
+        let deferred_palette_conversion = matches!(
+            source,
+            Image::Pipeline { ops, .. }
+                if ops.len() == 1
+                    && matches!(
+                        ops.as_slice().first(),
+                        Some(PipelineOp::Convert {
+                            mode: Mode::ImagePalette8 | Mode::ImagePaletteAlpha8,
+                            matrix: None,
+                            ..
+                        })
+                    )
+        );
         match source {
             // Keep a concrete sample-layout boundary around palette expansion
             // and P↔PA transitions. A flattened batch has only one external
             // mode tag, so it cannot correctly run P operations before
             // putalpha or PA operations after it (especially on the GPU).
             Image::Pipeline { .. }
-                if source_is_paletted
-                    && (!palette_safe
+                if palette_conversion
+                    || (source_is_paletted
+                        && (!palette_safe
                         || promotes_p_to_pa
-                        || source.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)) =>
+                        || source.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
+                        || deferred_palette_conversion)) =>
             {
                 new_pipeline_node(
                     Arc::new(source.clone()),
@@ -763,6 +861,7 @@ impl Image {
                     output_mode,
                     palette,
                     palette_alpha,
+                    preserves_palette,
                 )
             }
             Image::Pipeline {
@@ -781,6 +880,7 @@ impl Image {
                 output_mode,
                 palette,
                 palette_alpha,
+                preserves_palette,
             ),
             other => new_pipeline_node(
                 Arc::new(other.clone()),
@@ -789,6 +889,7 @@ impl Image {
                 output_mode,
                 palette,
                 palette_alpha,
+                preserves_palette,
             ),
         }
     }

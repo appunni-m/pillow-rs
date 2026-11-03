@@ -67,6 +67,7 @@ impl Image {
         width: u32,
         height: u32,
         filter: ResampleFilter,
+        reducing_gap: Option<f64>,
     ) -> bool {
         if !self.has_deferable_rgb_putpixel_prefix() {
             return false;
@@ -74,28 +75,29 @@ impl Image {
         let Image::Pipeline {
             source,
             ops,
-            backend,
             mode,
             ..
         } = self
         else {
             return false;
         };
-        let selected_backend = match backend {
-            Some(crate::compute::Backend::Cpu) => Some(crate::compute::Backend::Cpu),
-            Some(crate::compute::Backend::Simd) => Some(crate::compute::Backend::Simd),
-            Some(crate::compute::Backend::Gpu) => None,
-            None if crate::compute::cpu_is_only_active_backend() => {
-                Some(crate::compute::Backend::Cpu)
-            }
-            None if crate::compute::cpu_architecture_alias_is_only_active_backend() => {
-                Some(crate::compute::Backend::Simd)
-            }
-            None => None,
-        };
-        let Some(selected_backend) = selected_backend else {
+        let (requested_backend, strict_request, context) =
+            match self.cpu_arch_execution_route_with_policy() {
+                Ok(route) => route,
+                Err(_) => return false,
+            };
+        if !strict_request {
+            return false;
+        }
+        let Some(selected_backend) = requested_backend else {
             return false;
         };
+        if !matches!(
+            selected_backend,
+            crate::compute::Backend::Cpu | crate::compute::Backend::Simd
+        ) {
+            return false;
+        }
         let Image::Loaded(source) = source.as_ref() else {
             return false;
         };
@@ -103,6 +105,7 @@ impl Image {
             w: width,
             h: height,
             filter,
+            reducing_gap,
         };
         match selected_backend {
             crate::compute::Backend::Cpu | crate::compute::Backend::Simd => {
@@ -111,9 +114,7 @@ impl Image {
                     ops.as_slice(),
                     &thumbnail,
                     super::declared_pipeline_mode(mode),
-                    &crate::compute::ExecutionContext::for_routed_backend(
-                        selected_backend,
-                    ),
+                    &context,
                 )
             }
             crate::compute::Backend::Gpu => false,

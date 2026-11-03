@@ -116,7 +116,8 @@ impl ImagePalette {
 /// Parses a color string and converts it to the requested image mode.
 pub fn getcolor(color: &str, mode: &str) -> Result<JsValue, JsValue> {
     let (r, g, b, a) = pillow_rs::parse_color_str_unclamped(color).map_err(err)?;
-    let value = pillow_rs::getcolor(r, g, b, a, mode).map_err(err)?;
+    let mode = pillow_rs::ColorOutputMode::parse_pillow_name(mode).map_err(err)?;
+    let value = pillow_rs::getcolor(r, g, b, a, mode);
     match value {
         pillow_rs::ColorValue::Gray(value) => Ok(JsValue::from(value)),
         pillow_rs::ColorValue::GrayAlpha(gray, alpha) => {

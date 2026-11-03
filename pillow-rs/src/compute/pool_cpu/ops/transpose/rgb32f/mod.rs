@@ -1,5 +1,5 @@
-use crate::raster::{Rgb32FImage};
 
-pub(crate) type Input = Rgb32FImage;
 pub(crate) mod default;
 pub(crate) mod ops;
+
+pub(crate) use ops::Input;

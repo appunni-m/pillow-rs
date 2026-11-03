@@ -10,6 +10,14 @@ pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, P
     match target {
         Mode::ImageLuma8 => luma(source).map(DynamicImage::ImageLuma8),
         Mode::ImageLumaA8 => luma_alpha(source).map(DynamicImage::ImageLumaA8),
+        Mode::ImageLaPremultiplied8 | Mode::ImageRgbPremultiplied8 => {
+            super::super::super::helpers::premultiplied::from_rgb_samples(
+                source.width(),
+                source.height(),
+                source.pixels().map(|pixel| pixel.0),
+                target,
+            )
+        }
         Mode::ImageRgb8 => Ok(DynamicImage::ImageRgb8(source.clone())),
         Mode::ImageRgba8 => Ok(DynamicImage::ImageRgba8(RgbaImage::from_fn(
             source.width(),

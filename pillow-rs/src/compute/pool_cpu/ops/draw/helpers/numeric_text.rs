@@ -2,7 +2,7 @@ use crate::raster::RgbaImage;
 use image::{GenericImage, GenericImageView};
 
 /// Write the fill's raw four-byte sample when a numeric text pixel is covered.
-pub(crate) fn apply(
+pub(crate) fn apply<const RGBA_MASK: bool>(
     canvas: &mut RgbaImage,
     x: i32,
     y: i32,
@@ -15,8 +15,8 @@ pub(crate) fn apply(
     let ink = [fill.0, fill.1, fill.2, fill.3];
     for text_y in 0..height {
         for text_x in 0..width {
-            let offset = ((text_y * width + text_x) * 4) as usize;
-            if pixels[offset + 3] == 0 {
+            let pixel_index = (text_y * width + text_x) as usize;
+            if super::text_mask::coverage::<RGBA_MASK>(pixels, pixel_index) == 0 {
                 continue;
             }
             let image_x = i64::from(x) + i64::from(text_x);

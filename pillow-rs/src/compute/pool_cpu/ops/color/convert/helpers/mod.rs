@@ -1,4 +1,4 @@
-//! Small sample helpers shared by typed Convert target strategies.
+//! Prepared planning and sample helpers shared by typed Convert strategies.
 
 pub(crate) mod alpha;
 pub(crate) mod binary;
@@ -11,4 +11,7 @@ pub(crate) mod matrix;
 pub(crate) mod native_rgb;
 pub(crate) mod palette;
 pub(crate) mod pixel;
+pub(crate) mod prepared;
+pub(crate) mod premultiplied;
+pub(super) mod target_compositions;
 pub(crate) mod wide;

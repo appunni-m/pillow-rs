@@ -7,8 +7,8 @@ crate::compute::pool_cpu::ops::color::convert::helpers::binary::declare_mode_str
 use crate::compute::{
     Architecture,
     registry::support::{
-        ImplementationSupport, ModeSupport, OperationId, OutputModeRule, StrategyGuard,
-        StrategySelection,
+        ImplementationSupport, InputContract, ModeSupport, OperationId, OutputModeRule,
+        StrategyGuard, StrategySelection,
     },
 };
 use crate::error::PilError;
@@ -19,54 +19,71 @@ const SSE2_AVAILABLE: bool = cfg!(any(
     all(target_arch = "x86", target_feature = "sse2")
 ));
 
-macro_rules! architecture_targets {
-    ($architecture:ident, $available:expr, $requirements:expr; $($target:ident),+ $(,)?) => {
-        $(ImplementationSupport::cpu(
-            OperationId::Convert,
-            Mode::One,
-            Architecture::$architecture,
-            $available,
-            $requirements,
-            StrategyGuard::ConvertTargetMode(Mode::$target),
-        ),)+
+macro_rules! architecture_catalog {
+    (
+        $mode:ident,
+        singles [$($single:expr),* $(,)?],
+        groups [
+            $(
+                $guard:ident, $architecture:ident, $available:expr, $requirements:expr;
+                [$($target:ident),+ $(,)?]
+            ),+ $(,)?
+        ]
+    ) => {
+        [
+            $($single,)*
+            $(
+                $(
+                    ImplementationSupport::cpu(
+                        OperationId::Convert,
+                        Mode::$mode,
+                        Architecture::$architecture,
+                        $available,
+                        $requirements,
+                        StrategyGuard::$guard(Mode::$target),
+                    ),
+                )+
+            )+
+        ]
     };
 }
 
-static ARCHITECTURES: [ImplementationSupport; 12] = [
-    architecture_targets!(
-        Sse2,
-        SSE2_AVAILABLE,
-        &[Architecture::Sse2];
-        ImageI16,
-        ImageI16L,
-        ImageI16B,
-        ImageI16N,
-    ),
-    architecture_targets!(
-        Neon,
-        cfg!(all(target_arch = "aarch64", target_feature = "neon")),
-        &[Architecture::Neon];
-        ImageI16,
-        ImageI16L,
-        ImageI16B,
-        ImageI16N,
-    ),
-    architecture_targets!(
-        WasmSimd128,
-        cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
-        &[Architecture::WasmSimd128];
-        ImageI16,
-        ImageI16L,
-        ImageI16B,
-        ImageI16N,
-    ),
+static ARCHITECTURES: [ImplementationSupport; 12] = architecture_catalog!(
+    One,
+    singles [],
+    groups [
+        ConvertTargetMode, Sse2, SSE2_AVAILABLE, &[Architecture::Sse2];
+        [ImageI16, ImageI16L, ImageI16B, ImageI16N],
+        ConvertTargetMode, Neon, cfg!(all(target_arch = "aarch64", target_feature = "neon")),
+        &[Architecture::Neon]; [ImageI16, ImageI16L, ImageI16B, ImageI16N],
+        ConvertTargetMode, WasmSimd128, cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
+        &[Architecture::WasmSimd128]; [ImageI16, ImageI16L, ImageI16B, ImageI16N],
+    ]
+);
+
+// NO_PILLOW_SUPPORT: these 1-to-target pairs are Rust extensions.
+const CORE_ONLY_TARGETS: &[Mode] = &[
+    Mode::ImageLumaA8,
+    Mode::ImagePalette8,
+    Mode::ImagePaletteAlpha8,
+    Mode::ImageI16,
+    Mode::ImageI16L,
+    Mode::ImageI16B,
+    Mode::ImageI16N,
+    Mode::ImageLab8,
 ];
+const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
+    targets: super::super::ops::LUMA_TARGETS,
+    core_only_targets: CORE_ONLY_TARGETS,
+    core_only_reason: Some("Pillow has no matching bilevel source-target conversion"),
+    rejection_reason: "image has wrong mode",
+}];
 
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::Convert,
     Mode::One,
     OutputModeRule::ByTargetModeWithPalette,
-    &super::super::ops::ONE_INPUTS,
+    INPUTS,
     &ARCHITECTURES,
 );
 

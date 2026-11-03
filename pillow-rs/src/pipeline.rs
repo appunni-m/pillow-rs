@@ -7,7 +7,9 @@
 //! materialized, saved, or serialized.
 //!
 //! Coordinates are integer pixel coordinates unless a field explicitly says it
-//! is a normalized factor. Colors are normalized RGBA tuples in byte order.
+//! is a normalized factor. Direct color fields are RGBA tuples in byte order;
+//! `PadTyped` and `ExpandTyped` retain validated scalar/component inputs for
+//! native-width CPU mode strategies.
 //!
 //! # Descriptor Contract
 //!
@@ -45,6 +47,134 @@ pub(crate) use support::TransposeTransform;
 pub use support::{
     ColorMode, DitherMethod, ResampleFilter, TransformMethod, TransposeMethod,
 };
+
+/// Independent margins used by the Pillow `ImageOps.expand` operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ExpandMargins {
+    /// Pixels added on the left, or removed when negative.
+    pub left: i64,
+    /// Pixels added on the top, or removed when negative.
+    pub top: i64,
+    /// Pixels added on the right, or removed when negative.
+    pub right: i64,
+    /// Pixels added on the bottom, or removed when negative.
+    pub bottom: i64,
+}
+
+impl ExpandMargins {
+    /// Creates equal margins on every edge.
+    pub const fn uniform(border: u32) -> Self {
+        let border = border as i64;
+        Self { left: border, top: border, right: border, bottom: border }
+    }
+
+    /// Returns the nonnegative symmetric margin when all edges match.
+    pub const fn uniform_nonnegative(self) -> Option<u32> {
+        if self.left == self.top
+            && self.left == self.right
+            && self.left == self.bottom
+            && self.left >= 0
+            && self.left <= u32::MAX as i64
+        {
+            Some(self.left as u32)
+        } else {
+            None
+        }
+    }
+}
+
+/// Unnarrowed scalar or component input for a native-sample geometry fill.
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy)]
+pub struct NativeColorInput(NativeColorInputValue);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NativeColorInputValue {
+    IntegerScalar(i64),
+    IntegerComponents { values: [i64; 4], len: u8 },
+    FloatScalar(u64),
+    FloatComponents { values: [u64; 4], len: u8 },
+}
+
+impl NativeColorInput {
+    pub(crate) const fn scalar(value: i64) -> Self {
+        Self(NativeColorInputValue::IntegerScalar(value))
+    }
+
+    pub(crate) fn components(values: &[i64]) -> Option<Self> {
+        if values.len() > 4 {
+            return None;
+        }
+        let mut components = [0; 4];
+        components[..values.len()].copy_from_slice(values);
+        Some(Self(NativeColorInputValue::IntegerComponents {
+            values: components,
+            len: values.len() as u8,
+        }))
+    }
+
+    pub(crate) fn floating_scalar(value: f64) -> Self {
+        Self(NativeColorInputValue::FloatScalar(value.to_bits()))
+    }
+
+    pub(crate) fn floating_components(values: &[f64]) -> Option<Self> {
+        if values.len() > 4 {
+            return None;
+        }
+        let mut components = [0; 4];
+        for (destination, value) in components.iter_mut().zip(values) {
+            *destination = value.to_bits();
+        }
+        Some(Self(NativeColorInputValue::FloatComponents {
+            values: components,
+            len: values.len() as u8,
+        }))
+    }
+
+    /// Returns one input band or the exact-mode default for a missing band.
+    pub(crate) const fn component(self, band: usize, default: i64) -> i64 {
+        match self.0 {
+            NativeColorInputValue::IntegerScalar(value) if band == 0 => value,
+            NativeColorInputValue::IntegerScalar(_) => default,
+            NativeColorInputValue::IntegerComponents { values, len } if band < len as usize => {
+                values[band]
+            }
+            NativeColorInputValue::IntegerComponents { .. }
+            | NativeColorInputValue::FloatScalar(_)
+            | NativeColorInputValue::FloatComponents { .. } => default,
+        }
+    }
+
+    /// Returns one native float sample, preserving floating-point input values.
+    pub(crate) fn float_component(self, band: usize, default: f64) -> f64 {
+        match self.0 {
+            NativeColorInputValue::IntegerScalar(value) if band == 0 => value as f64,
+            NativeColorInputValue::IntegerScalar(_) => default,
+            NativeColorInputValue::IntegerComponents { values, len } if band < len as usize => {
+                values[band] as f64
+            }
+            NativeColorInputValue::IntegerComponents { .. } => default,
+            NativeColorInputValue::FloatScalar(value) if band == 0 => f64::from_bits(value),
+            NativeColorInputValue::FloatScalar(_) => default,
+            NativeColorInputValue::FloatComponents { values, len } if band < len as usize => {
+                f64::from_bits(values[band])
+            }
+            NativeColorInputValue::FloatComponents { .. } => default,
+        }
+    }
+}
+
+impl PartialEq for NativeColorInput {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl Eq for NativeColorInput {}
+
+/// Compatibility name for callers that used the original Pad fill payload.
+#[doc(hidden)]
+pub type PadColorInput = NativeColorInput;
 
 /// Every image-producing operation maps to one variant.
 /// Input image is the source; output image is the result of applying this op.
@@ -112,6 +242,8 @@ pub enum PipelineOp {
         h: u32,
         /// Filter used when sampling source pixels.
         filter: ResampleFilter,
+        /// Optional Pillow integer-reduction gap; `None` disables reduction.
+        reducing_gap: Option<f64>,
     },
     /// Reduce image dimensions by an integer factor.
     Reduce {
@@ -297,10 +429,50 @@ pub enum PipelineOp {
         h: u32,
         /// Filter used when sampling source pixels.
         filter: ResampleFilter,
-        /// Optional pad fill color.
+        /// Optional byte-normalized pad fill color for direct pipeline callers.
         color: Option<(u8, u8, u8, u8)>,
         /// Normalized horizontal and vertical centering.
         centering: (f64, f64),
+    },
+    /// Resize and pad while retaining native-width scalar/component input.
+    ///
+    /// `color` remains the normalized compatibility view; `input` reaches the
+    /// exact-mode CPU fill strategy without sample-width narrowing.
+    #[doc(hidden)]
+    PadTyped {
+        /// Target width of the produced image, in pixels.
+        w: u32,
+        /// Target height of the produced image, in pixels.
+        h: u32,
+        /// Filter used when sampling source pixels.
+        filter: ResampleFilter,
+        /// Byte-normalized view used by generic request facts and fallback.
+        color: Option<(u8, u8, u8, u8)>,
+        /// Original scalar/component color passed to the exact-mode owner.
+        input: PadColorInput,
+        /// Normalized horizontal and vertical centering.
+        centering: (f64, f64),
+    },
+    /// Resize and paste into a canvas at Pillow's resolved integer position.
+    ///
+    /// ImageOps.pad computes the position in Python, where custom centering
+    /// values can affect `min`, `max`, multiplication, `round`, and paste-box
+    /// conversion. Carry the final C-int position without normalizing it back
+    /// into a centering ratio.
+    #[doc(hidden)]
+    PadPositioned {
+        /// Target width of the produced image, in pixels.
+        w: u32,
+        /// Target height of the produced image, in pixels.
+        h: u32,
+        /// Filter used when sampling source pixels.
+        filter: ResampleFilter,
+        /// Byte-normalized view used by generic request facts and fallback.
+        color: Option<(u8, u8, u8, u8)>,
+        /// Original native-width fill input, when applicable.
+        native_color: Option<PadColorInput>,
+        /// Signed C-int destination coordinate passed to Pillow's Paste.
+        position: (i32, i32),
     },
     /// Scale dimensions by a factor.
     Scale {
@@ -311,10 +483,20 @@ pub enum PipelineOp {
     },
     /// Add a border around the image.
     Expand {
-        /// Border width in pixels.
-        border: u32,
+        /// Independent left, top, right, and bottom margins.
+        border: ExpandMargins,
         /// Border fill color.
         fill: (u8, u8, u8, u8),
+    },
+    /// Add a border while retaining a native-width scalar/component fill.
+    #[doc(hidden)]
+    ExpandTyped {
+        /// Independent left, top, right, and bottom margins.
+        border: ExpandMargins,
+        /// Byte-normalized compatibility view of the fill.
+        fill: (u8, u8, u8, u8),
+        /// Original scalar/component value consumed by the exact-mode CPU owner.
+        input: NativeColorInput,
     },
     /// Crop an equal border from every side.
     CropBorder {
@@ -573,6 +755,9 @@ pub enum PipelineOp {
     PutData {
         /// Immutable, reference-counted raw pixel data.
         data: Bytes,
+        /// Physical pixel lanes omitted by the compact logical carrier when
+        /// normalized values specify them.
+        hidden_lanes: Option<Bytes>,
         /// Exact typed identity of the normalized byte payload layout.
         payload_mode: Mode,
     },

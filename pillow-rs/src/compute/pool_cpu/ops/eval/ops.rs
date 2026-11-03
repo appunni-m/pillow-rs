@@ -2,6 +2,8 @@
 //!
 //! TODO(pillow-rs#3ptb): expand parity across each exact byte mode, supported
 //! architecture, LUT shape, and native-row tail after the CPU source review.
+//! Pillow's Point loops write only declared bands into clean output storage;
+//! PreparedEval restores the resulting zero values for omitted physical lanes.
 //! TODO(pillow-rs#3ptb): move the archived Rayon row path to the later
 //! `pool_parallel` owner; do not move its scheduling into this CPU family.
 use crate::compute::registry::support::{
@@ -10,7 +12,6 @@ use crate::compute::registry::support::{
 };
 use crate::compute::ExecutionContext;
 use crate::error::PilError;
-use crate::image::Image;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
 
@@ -111,9 +112,11 @@ macro_rules! declare_eval_modes {
             }
 
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
-                match self {
-                    $(Self::$mode(strategy) => super::$module::ops::execute(strategy),)+
-                }
+                let mut output = match self {
+                    $(Self::$mode(strategy) => super::$module::ops::execute(strategy)?,)+
+                };
+                super::helpers::lut::initialize_point_hidden_lanes(&mut output)?;
+                Ok(output)
             }
         }
     };
@@ -175,35 +178,35 @@ pub(crate) fn prepare_pipeline<'a>(
 }
 
 /// Applies the declared source-mode float-LUT strategy and retains F output mode.
-pub(crate) fn execute_float(
-    image: &Image,
-    lut: &[f64],
-    ctx: &ExecutionContext,
-) -> Result<Image, PilError> {
-    let mode = match image.known_mode_identity() {
-        Some(mode) => mode,
-        None => image.materialized_shared()?.mode(),
-    };
-    let expected = 256 * super::helpers::mode::pillow_band_count(mode);
+pub(crate) fn validate_float_lut_length(mode: Mode, lut: &[f64]) -> Result<(), PilError> {
+    let expected = 256 * mode.pillow_band_count();
     if lut.len() != expected {
         return Err(PilError::ValueError("wrong number of lut entries".into()));
     }
+    Ok(())
+}
 
-    let input = image.materialize()?;
-    if input.mode() != mode {
+pub(crate) fn execute_float(
+    image: &DynamicImage,
+    mode: Mode,
+    lut: &[f64],
+    ctx: &ExecutionContext,
+) -> Result<(DynamicImage, StrategySelection), PilError> {
+    validate_float_lut_length(mode, lut)?;
+    if image.mode() != mode {
         return Err(PilError::InternalError(
             "point float source mode did not match its DynamicImage variant".into(),
         ));
     }
-    let result = match (input, mode) {
+    let (result, selection) = match (image, mode) {
         (DynamicImage::One(input), Mode::One) => {
-            super::one::ops::execute_float_lut(&input, lut, ctx)?
+            super::one::ops::execute_float_lut(input, lut, ctx)?
         }
         (DynamicImage::ImageLuma8(input), Mode::ImageLuma8) => {
-            super::luma8::ops::execute_float_lut(&input, lut, ctx)?
+            super::luma8::ops::execute_float_lut(input, lut, ctx)?
         }
         (DynamicImage::ImagePalette8(input), Mode::ImagePalette8) => {
-            super::palette8::ops::execute_float_lut(&input, lut, ctx)?
+            super::palette8::ops::execute_float_lut(input, lut, ctx)?
         }
         (_, _) => return Err(RejectionKind::ValueError.into_error(POINT_FLOAT_ERROR)),
     };
@@ -212,5 +215,5 @@ pub(crate) fn execute_float(
             "point float strategy did not produce ImageF32".into(),
         ));
     }
-    Image::from_dynamic_with_mode(result, Some(Mode::ImageF32))
+    Ok((result, selection))
 }

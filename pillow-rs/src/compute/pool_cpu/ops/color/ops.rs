@@ -53,7 +53,8 @@ pub(crate) static SUPPORT: OperationSupport = OperationSupport::new(
     OperationId::ConvertLab,
     &[],
     classify_convert_lab,
-);
+)
+.with_rejected_output(OutputModeRule::Fixed(Mode::ImageLab8));
 
 /// Prepared Convert plan exported through the color-family registry facade.
 pub(crate) type PreparedConvert<'a> = super::convert::ops::Prepared<'a>;
@@ -97,7 +98,8 @@ pub(crate) static REMAP_PALETTE_SUPPORT: OperationSupport = OperationSupport::ne
     OperationId::RemapPalette,
     &[],
     classify_remap_palette,
-);
+)
+.with_rejected_output(OutputModeRule::Fixed(Mode::ImagePalette8));
 
 /// Prepared RGB-to-LAB execution with the exact mode and backend selection.
 pub(crate) struct PreparedConvertLab<'a> {

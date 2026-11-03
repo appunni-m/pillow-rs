@@ -22,6 +22,8 @@ const TARGETS: &[Mode] = &[
     Mode::ImageI16B,
     Mode::ImageI16N,
     Mode::ImageRgb8,
+    Mode::ImageLaPremultiplied8,
+    Mode::ImageRgbPremultiplied8,
     Mode::ImageLab8,
     Mode::ImageRgba8,
     Mode::ImageCmyk8,
@@ -30,10 +32,30 @@ const TARGETS: &[Mode] = &[
     Mode::ImageI32,
     Mode::ImageF32,
 ];
+// NO_PILLOW_SUPPORT: Pillow's HSV converter defines only the RGB target.
+const CORE_ONLY_TARGETS: &[Mode] = &[
+    Mode::One,
+    Mode::ImageLuma8,
+    Mode::ImageLumaA8,
+    Mode::ImagePalette8,
+    Mode::ImagePaletteAlpha8,
+    Mode::ImageI16,
+    Mode::ImageI16L,
+    Mode::ImageI16B,
+    Mode::ImageI16N,
+    Mode::ImageLab8,
+    Mode::ImageLaPremultiplied8,
+    Mode::ImageRgbPremultiplied8,
+    Mode::ImageRgba8,
+    Mode::ImageCmyk8,
+    Mode::ImageYCbCr8,
+    Mode::ImageI32,
+    Mode::ImageF32,
+];
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: TARGETS,
-    core_only_targets: super::super::ops::PALETTE_CORE_ONLY_TARGETS,
-    core_only_reason: Some(super::super::ops::PALETTE_CORE_ONLY_REASON),
+    core_only_targets: CORE_ONLY_TARGETS,
+    core_only_reason: Some("Pillow has no matching HSV source-target conversion"),
     rejection_reason: "image has wrong mode",
 }];
 

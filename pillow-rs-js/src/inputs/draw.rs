@@ -13,8 +13,47 @@ pub(crate) fn js_draw_color_input(value: &JsValue) -> pillow_rs::DrawColorInput 
     if let Some(value) = value.as_f64() {
         return pillow_rs::DrawColorInput::Float(value);
     }
-    if let Some(values) = js_integer_array(value) {
-        return pillow_rs::DrawColorInput::Components(values);
+    if let Some(values) = js_float_array(value) {
+        // NO_PILLOW_SUPPORT: JavaScript has no tuple type; numeric arrays are
+        // tuple-like P Draw colors so they can allocate indexed palette entries.
+        let components = values
+            .iter()
+            .map(|&number| {
+                if number.is_finite() && number.fract() == 0.0 {
+                    pillow_rs::PaletteColorComponent::from_integral_f64(number)
+                        .expect("finite integral component")
+                } else {
+                    pillow_rs::PaletteColorComponent::Float(number)
+                }
+            })
+            .collect::<Vec<_>>();
+        if components
+            .iter()
+            .all(|component| !matches!(component, pillow_rs::PaletteColorComponent::Float(_)))
+        {
+            let wide = components
+                .iter()
+                .any(|component| matches!(component, pillow_rs::PaletteColorComponent::WideInteger { .. }));
+            return if wide {
+                pillow_rs::DrawColorInput::TupleComponentsWithWideInteger(components)
+            } else {
+                let values = components
+                    .into_iter()
+                    .map(|component| match component {
+                        pillow_rs::PaletteColorComponent::Integer(value) => value,
+                        _ => unreachable!("integral components fit the i64 variant"),
+                    })
+                    .collect();
+                pillow_rs::DrawColorInput::TupleComponents(values)
+            };
+        }
+        if components
+            .iter()
+            .all(|component| matches!(component, pillow_rs::PaletteColorComponent::Float(_)))
+        {
+            return pillow_rs::DrawColorInput::TupleFloatComponents(values);
+        }
+        return pillow_rs::DrawColorInput::TupleMixedComponents(components);
     }
     pillow_rs::DrawColorInput::Invalid
 }
@@ -95,13 +134,13 @@ pub(crate) fn js_draw_circle_center_input(value: &JsValue) -> pillow_rs::DrawCir
 }
 
 pub(crate) fn js_draw_optional_color(
-    draw: &pillow_rs::Draw,
+    draw: &mut pillow_rs::Draw,
     value: &JsValue,
 ) -> Result<Option<(u8, u8, u8, u8)>, JsValue> {
     if value.is_null() || value.is_undefined() {
         return Ok(None);
     }
-    draw.color_with_input(js_draw_color_input(value))
+    draw.resolve_draw_color_with_input(js_draw_color_input(value))
         .map(Some)
         .map_err(err)
 }

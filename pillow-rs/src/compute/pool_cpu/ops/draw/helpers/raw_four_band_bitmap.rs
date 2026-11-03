@@ -3,7 +3,7 @@ use crate::raster::RgbaImage;
 use image::{GenericImage, GenericImageView};
 
 /// Blend four stored bytes while leaving the owning mode strategy in control.
-pub(crate) fn apply(
+pub(crate) fn apply<const ALPHA_CHANNEL: bool>(
     canvas: &mut RgbaImage,
     x: i32,
     y: i32,
@@ -16,7 +16,7 @@ pub(crate) fn apply(
     for mask_y in 0..mask_height {
         for mask_x in 0..mask_width {
             let coverage = mask.coverage(mask_x, mask_y);
-            if coverage == 0 {
+            if mask.should_skip(coverage) {
                 continue;
             }
             let image_x = x + mask_x as i32;
@@ -29,25 +29,21 @@ pub(crate) fn apply(
                 continue;
             }
             let background = canvas.get_pixel(image_x as u32, image_y as u32);
+            let color_coverage = if ALPHA_CHANNEL {
+                mask.luma_coverage_for_alpha(coverage, background[3])
+            } else {
+                coverage
+            };
             canvas.put_pixel(
                 image_x as u32,
                 image_y as u32,
                 crate::raster::Rgba([
-                    blend(color.0, background[0], coverage),
-                    blend(color.1, background[1], coverage),
-                    blend(color.2, background[2], coverage),
-                    blend(color.3, background[3], coverage),
+                    mask.blend_byte(color.0, background[0], color_coverage),
+                    mask.blend_byte(color.1, background[1], color_coverage),
+                    mask.blend_byte(color.2, background[2], color_coverage),
+                    mask.blend_byte(color.3, background[3], coverage),
                 ]),
             );
         }
-    }
-}
-
-#[inline]
-fn blend(ink: u8, background: u8, coverage: u8) -> u8 {
-    if coverage == 255 {
-        ink
-    } else {
-        crate::draw::pil_blend(ink, background, coverage)
     }
 }

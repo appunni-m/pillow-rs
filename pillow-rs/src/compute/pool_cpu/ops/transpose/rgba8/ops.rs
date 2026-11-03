@@ -1,5 +1,6 @@
 //! RGBA mode strategies, including the guarded AVX2 transpose kernel.
 
+pub(crate) type Input = crate::raster::RgbaImage;
 use crate::compute::{Architecture, ExecutionContext, registry::support::{
     ImplementationSupport, InputContract, ModeSupport, OperationId, OutputModeRule,
     StrategyGuard, StrategyInputs, StrategySelection,
@@ -58,7 +59,7 @@ const TRANSPOSE_ARCHITECTURES: &[ImplementationSupport] = &[
         Architecture::Sse2,
         cfg!(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2")),
         &[Architecture::Sse2],
-        StrategyGuard::TransposeNativeBytes { channels: 4 },
+        StrategyGuard::TransposeNativeBytes { channels: 4, allow_empty: true },
     ),
     ImplementationSupport::cpu(
         OperationId::Transpose,
@@ -66,7 +67,7 @@ const TRANSPOSE_ARCHITECTURES: &[ImplementationSupport] = &[
         Architecture::Neon,
         cfg!(all(target_arch = "aarch64", target_feature = "neon")),
         &[Architecture::Neon],
-        StrategyGuard::TransposeNativeBytes { channels: 4 },
+        StrategyGuard::TransposeNativeBytes { channels: 4, allow_empty: true },
     ),
     ImplementationSupport::cpu(
         OperationId::Transpose,
@@ -74,7 +75,7 @@ const TRANSPOSE_ARCHITECTURES: &[ImplementationSupport] = &[
         Architecture::WasmSimd128,
         cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
         &[Architecture::WasmSimd128],
-        StrategyGuard::TransposeNativeBytes { channels: 4 },
+        StrategyGuard::TransposeNativeBytes { channels: 4, allow_empty: true },
     ),
 ];
 
@@ -96,27 +97,27 @@ pub(crate) const TRANSPOSE_SUPPORT: ModeSupport = ModeSupport::cpu(
 );
 
 enum FlipArchitecture<'a> {
-    Default(&'a super::Input),
+    Default(&'a Input),
 }
 enum MirrorArchitecture<'a> {
-    Default(&'a super::Input),
+    Default(&'a Input),
     #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
-    Sse2(&'a super::Input),
+    Sse2(&'a Input),
     #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-    Neon(&'a super::Input),
+    Neon(&'a Input),
     #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
-    WasmSimd128(&'a super::Input),
+    WasmSimd128(&'a Input),
 }
 enum TransposeArchitecture<'a> {
-    Default(&'a super::Input, TransposeMethod),
+    Default(&'a Input, TransposeMethod),
     #[cfg(target_arch = "x86_64")]
-    Avx2(&'a super::Input, TransposeMethod),
+    Avx2(&'a Input, TransposeMethod),
     #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
-    Sse2(&'a super::Input, TransposeMethod),
+    Sse2(&'a Input, TransposeMethod),
     #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-    Neon(&'a super::Input, TransposeMethod),
+    Neon(&'a Input, TransposeMethod),
     #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
-    WasmSimd128(&'a super::Input, TransposeMethod),
+    WasmSimd128(&'a Input, TransposeMethod),
 }
 
 pub(crate) struct FlipStrategy<'a> {
@@ -130,7 +131,7 @@ pub(crate) struct TransposeStrategy<'a> {
 }
 
 pub(crate) fn prepare_flip<'a>(
-    image: &'a super::Input,
+    image: &'a Input,
     ctx: &ExecutionContext,
 ) -> Result<FlipStrategy<'a>, PilError> {
     let selection = FLIP_SUPPORT.select_serial(ctx)?;
@@ -140,7 +141,7 @@ pub(crate) fn prepare_flip<'a>(
 }
 
 pub(crate) fn prepare_mirror<'a>(
-    image: &'a super::Input,
+    image: &'a Input,
     ctx: &ExecutionContext,
 ) -> Result<MirrorStrategy<'a>, PilError> {
     let facts = StrategyInputs {
@@ -171,7 +172,7 @@ pub(crate) fn prepare_mirror<'a>(
 }
 
 pub(crate) fn prepare_transpose<'a>(
-    image: &'a super::Input,
+    image: &'a Input,
     method: &TransposeMethod,
     mut facts: StrategyInputs,
     ctx: &ExecutionContext,
@@ -237,7 +238,7 @@ impl MirrorStrategy<'_> {
     }
 }
 
-fn execute_native_mirror(image: &super::Input) -> DynamicImage {
+fn execute_native_mirror(image: &Input) -> DynamicImage {
     let Some((output, vector_blocks, scalar_tail)) =
         crate::compute::pool_cpu::ops::transpose::helpers::native_mirror::mirror_image(image, 4)
     else {
@@ -263,7 +264,7 @@ impl TransposeStrategy<'_> {
             #[cfg(target_arch = "x86_64")]
             TransposeArchitecture::Avx2(image, method) => {
                 // SAFETY: preparation used this context's captured AVX2
-                // capability and the exact RGBA transpose request guard.
+                // capability and the exact RGBA mode/request guard.
                 unsafe { super::avx2::transpose_impl::execute_into(image, &method, output) }
             }
             _ => Err(PilError::InternalError(

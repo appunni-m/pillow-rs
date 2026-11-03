@@ -1,5 +1,7 @@
-use super::super::{Image, PutDataValue, is_l16_mode, l16_uses_big_endian};
+use super::super::{Image, PutDataValue};
+use super::{is_l16_identity, l16_identity_uses_big_endian};
 use crate::error::PilError;
+use crate::raster::Mode;
 
 const MODES: &[(&str, usize)] = &[
     ("1", 1),
@@ -26,8 +28,10 @@ const MODES: &[(&str, usize)] = &[
 #[test]
 fn native_default_exports_share_storage() -> Result<(), PilError> {
     for &(mode, channels) in MODES {
-        if matches!(mode, "1" | "P")
-            || (is_l16_mode(mode) && cfg!(target_endian = "big") != l16_uses_big_endian(mode))
+        let mode_identity = Mode::from_pillow_name(mode).expect("known test mode");
+        if matches!(mode_identity, Mode::One | Mode::ImagePalette8)
+            || (is_l16_identity(mode_identity)
+                && cfg!(target_endian = "big") != l16_identity_uses_big_endian(mode_identity))
         {
             continue;
         }
@@ -35,9 +39,9 @@ fn native_default_exports_share_storage() -> Result<(), PilError> {
             let bytes: Vec<u8> = (0..channels * width as usize * height as usize)
                 .map(|index| index.wrapping_mul(37).wrapping_add(11).to_le_bytes()[0])
                 .collect();
-            let image = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (width, height), &bytes)?;
+            let image = Image::frombytes(mode_identity, (width, height), &bytes)?;
             let storage = image.materialized_shared()?;
-            let exported = image.tobytes_encoded_shared(mode, "raw", &[])?;
+            let exported = image.tobytes_encoded_shared(mode_identity, "raw", &[])?;
             assert_eq!(exported.as_ref(), bytes, "{mode} {width}x{height}");
             assert_eq!(
                 exported.as_ref().as_ptr(),
@@ -67,11 +71,21 @@ fn shared_exports_preserve_encoder_layouts_and_errors() -> Result<(), PilError> 
         let bytes: Vec<u8> = (0..9 * 2 * channels)
             .map(|index| index.wrapping_mul(43).wrapping_add(17).to_le_bytes()[0])
             .collect();
-        let image = Image::frombytes(crate::raster::Mode::from_pillow_name(source_mode).expect("known test mode"), (9, 2), &bytes)?;
-        for mode in [source_mode, "1", "RGB", "BGRA", "I;16L", "I;16B"] {
+        let image_mode = Mode::from_pillow_name(source_mode).expect("known test mode");
+        let image = Image::frombytes(image_mode, (9, 2), &bytes)?;
+        let modes = [
+            image_mode,
+            Mode::One,
+            Mode::ImageRgb8,
+            Mode::ImageRgba8,
+            Mode::ImageI16L,
+            Mode::ImageI16B,
+        ];
+        for mode in modes {
+            let mode_name = mode.pillow_name().expect("public mode");
             for raw_mode in [
                 None,
-                Some(mode),
+                Some(mode_name),
                 Some("BGR"),
                 Some("BGRA"),
                 Some("RGBA"),
@@ -86,7 +100,11 @@ fn shared_exports_preserve_encoder_layouts_and_errors() -> Result<(), PilError> 
                         .tobytes_encoded_shared(mode, encoder, &args)
                         .map(|bytes| bytes.as_ref().to_vec())
                         .map_err(|error| format!("{error:?}"));
-                    assert_eq!(shared, existing, "{source_mode}: {mode}/{encoder}/{args:?}");
+                    assert_eq!(
+                        shared,
+                        existing,
+                        "{source_mode}: {mode_name}/{encoder}/{args:?}"
+                    );
                 }
             }
         }
@@ -105,35 +123,35 @@ fn shared_scalar_exports_preserve_all_sample_bits() -> Result<(), PilError> {
         0xffff_ffff,
     ];
     let bytes: Vec<u8> = words.into_iter().flat_map(u32::to_le_bytes).collect();
-    for mode in ["I", "F"] {
-        let image = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (3, 2), &bytes)?;
+    for mode in [Mode::ImageI32, Mode::ImageF32] {
+        let image = Image::frombytes(mode, (3, 2), &bytes)?;
         let exported = image.tobytes_encoded_shared(mode, "raw", &[])?;
-        assert_eq!(exported.as_ref(), bytes, "{mode}");
+        assert_eq!(exported.as_ref(), bytes, "{mode:?}");
     }
     Ok(())
 }
 
 #[test]
 fn exported_bytes_survive_image_mutation_and_drop() -> Result<(), PilError> {
-    for mode in ["L", "P", "I;16N"] {
-        let bytes = if mode == "I;16N" {
+    for mode in [Mode::ImageLuma8, Mode::ImagePalette8, Mode::ImageI16N] {
+        let bytes = if mode == Mode::ImageI16N {
             vec![1, 2, 3, 4]
         } else {
             vec![1, 2]
         };
-        let mut image = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (2, 1), &bytes)?;
+        let mut image = Image::frombytes(mode, (2, 1), &bytes)?;
         let exported = image.tobytes_encoded_shared(mode, "raw", &[])?;
         image.putdata_value_at(0, &PutDataValue::Number(77.0), 1.0, 0.0)?;
         assert_ne!(
             image.tobytes()?,
             bytes,
-            "{mode} mutation must be observable"
+            "{mode:?} mutation must be observable"
         );
         drop(image);
         assert_eq!(
             exported.as_ref(),
             bytes,
-            "{mode} export must stay immutable"
+            "{mode:?} export must stay immutable"
         );
     }
     Ok(())

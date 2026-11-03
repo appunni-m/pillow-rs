@@ -4,7 +4,7 @@ use super::super::backend_state::active_lock;
 use super::super::{
     Backend, ExecutionContext, PipelineResourceTelemetry, PipelineTelemetry, elapsed_ns,
     begin_pipeline_operation_telemetry, finish_pipeline_operation_telemetry,
-    pipeline_telemetry_enabled, pipeline_timestamp, record_pipeline_operation_architecture,
+    pipeline_telemetry_enabled, pipeline_timestamp, record_pipeline_operation_selection,
     record_pipeline_operation_mode_conversion, record_pipeline_operation_path,
     record_pipeline_operation_scalar_tail, record_pipeline_operation_vector_blocks,
     record_pipeline_resource_telemetry, record_pipeline_telemetry,
@@ -81,7 +81,7 @@ fn record_generator_receipt(
     if !route.timed {
         return;
     }
-    record_pipeline_operation_architecture(selection.implementation.architecture);
+    record_pipeline_operation_selection(&selection);
     record_pipeline_operation_vector_blocks(generated.vector_blocks);
     record_pipeline_operation_scalar_tail(generated.scalar_tail);
     record_pipeline_operation_path(if selection.implementation.architecture

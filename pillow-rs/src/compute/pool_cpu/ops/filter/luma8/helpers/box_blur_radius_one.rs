@@ -118,6 +118,19 @@ pub(super) fn execute_radius_one(image: &DynamicImage) -> Result<DynamicImage, P
             "L BoxBlur strategy received invalid native dimensions".into(),
         ));
     }
+    if super::super::super::helpers::native_small_uniform_bytes(
+        input.as_raw(),
+        input.width(),
+        input.height(),
+        1,
+        super::super::super::helpers::SMALL_UNIFORM_BYTE_MAX_PIXELS,
+    ) {
+        return super::super::super::helpers::copy_native_byte_blur_input(
+            image,
+            crate::raster::Mode::ImageLuma8,
+            1,
+        );
+    }
 
     let mut output = vec![0u8; expected];
     filter_radius_one(input.as_raw(), &mut output, width, height);

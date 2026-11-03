@@ -68,6 +68,22 @@ fn transform_float_scalar_error(mode: Mode) -> PilError {
     PilError::TypeError(message.into())
 }
 
+fn transform_list_error(mode: Mode) -> PilError {
+    let message = match mode {
+        Mode::ImageF32 => "must be real number, not list",
+        Mode::One
+        | Mode::ImageLuma8
+        | Mode::ImagePalette8
+        | Mode::ImageI32
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N => "color must be int or single-element tuple",
+        _ => "color must be int or tuple",
+    };
+    PilError::TypeError(message.into())
+}
+
 fn transform_color_value_fill(
     mode: Mode,
     color: crate::color::ColorValue,
@@ -81,14 +97,37 @@ fn transform_color_value_fill(
                 let bytes = (value as u16).to_le_bytes();
                 Ok((bytes[0], bytes[1], 0, 0))
             }
+            Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => {
+                let value = clamp(value);
+                Ok((value, u8::MAX, value, value))
+            }
             _ => Ok((clamp(value), 0, 0, 0)),
         },
-        crate::color::ColorValue::GrayAlpha(gray, alpha) => Ok((clamp(gray), clamp(alpha), 0, 0)),
+        crate::color::ColorValue::GrayAlpha(gray, alpha) => {
+            let gray = clamp(gray);
+            if matches!(
+                mode,
+                Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8
+            ) {
+                Ok((gray, clamp(alpha), gray, gray))
+            } else {
+                Ok((gray, clamp(alpha), 0, 0))
+            }
+        }
         crate::color::ColorValue::Rgb(red, green, blue) => Ok((
             clamp(red),
             clamp(green),
             clamp(blue),
-            if matches!(mode, Mode::ImageRgba8 | Mode::ImageCmyk8) {
+            if matches!(
+                mode,
+                Mode::ImageRgba8
+                    | Mode::ImageRgbx8
+                    | Mode::ImageCmyk8
+                    | Mode::ImageRgb8
+                    | Mode::ImageYCbCr8
+                    | Mode::ImageLab8
+                    | Mode::ImageHsv8
+            ) {
                 255
             } else {
                 0
@@ -102,9 +141,12 @@ fn transform_color_value_fill(
             // the alpha component is part of the destination representation.
             clamp(alpha),
         )),
-        crate::color::ColorValue::Hsv(hue, saturation, value) => {
-            Ok((clamp(hue), clamp(saturation), clamp(value), 0))
-        }
+        crate::color::ColorValue::Hsv(hue, saturation, value) => Ok((
+            clamp(hue),
+            clamp(saturation),
+            clamp(value),
+            if mode == Mode::ImageHsv8 { u8::MAX } else { 0 },
+        )),
     }
 }
 
@@ -114,103 +156,177 @@ fn transform_components_fill(
     default_palette_fill: Option<u8>,
 ) -> Result<TransformFillResult, PilError> {
     let fill = match mode {
-        Mode::ImagePalette8 => match values {
-            [value] => {
-                let index = (*value).clamp(0, i64::from(u8::MAX)) as u8;
-                return Ok(((index, 0, 0, 255), Some(index)));
-            }
-            [red, green, blue] => {
-                let r = transform_component(*red)?;
-                let g = transform_component(*green)?;
-                let b = transform_component(*blue)?;
-                let _ = (r, g, b);
-                return Ok(((0, 0, 0, 255), default_palette_fill));
-            }
-            [red, green, blue, alpha] => {
-                let r = transform_component(*red)?;
-                let g = transform_component(*green)?;
-                let b = transform_component(*blue)?;
-                let a = transform_component(*alpha)?;
-                let _ = (r, g, b);
-                if a != 255 {
-                    return Err(PilError::ValueError(
-                        "cannot add non-opaque RGBA color to RGB palette".into(),
-                    ));
-                }
-                return Ok(((0, 0, 0, 255), default_palette_fill));
-            }
-            _ => return Err(transform_fill_arity_error(mode)),
-        },
-        Mode::One | Mode::ImageLuma8 => match values {
-            [value] => (clamp_transform_component(*value), 0, 0, 0),
-            _ => return Err(transform_fill_arity_error(mode)),
-        },
-        Mode::ImageI32 => match values {
-            [value] => packed_transform_scalar(*value),
-            _ => return Err(transform_fill_arity_error(mode)),
-        },
-        Mode::ImageF32 => match values {
-            [value] => packed_transform_float(*value),
-            _ => return Err(transform_fill_arity_error(mode)),
-        },
-        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => match values {
-            [value] => {
-                let bytes = (*value as u16).to_le_bytes();
-                (bytes[0], bytes[1], 0, 0)
-            }
-            _ => return Err(transform_fill_arity_error(mode)),
-        },
-        Mode::ImageLumaA8
-        | Mode::ImageLaPremultiplied8
-        | Mode::ImagePaletteAlpha8
-        | Mode::ImageLumaA16 => match values {
-            [value] => (clamp_transform_component(*value), 0, 0, 0),
-            [gray, alpha] => (
-                clamp_transform_component(*gray),
-                clamp_transform_component(*alpha),
-                0,
-                0,
-            ),
-            _ => return Err(transform_fill_arity_error(mode)),
-        },
-        Mode::ImageRgb8
-        | Mode::ImageYCbCr8
-        | Mode::ImageLab8
-        | Mode::ImageHsv8
-        | Mode::ImageRgb16
-        | Mode::ImageRgb32F => match values {
-            [value] => packed_transform_scalar(*value),
-            [red, green, blue] | [red, green, blue, _] => (
-                clamp_transform_component(*red),
-                clamp_transform_component(*green),
-                clamp_transform_component(*blue),
-                0,
-            ),
-            _ => return Err(transform_fill_arity_error(mode)),
-        },
+        Mode::ImagePalette8 => {
+            return transform_palette_components(values, default_palette_fill);
+        }
+        Mode::One | Mode::ImageLuma8 => single_byte_component_fill(mode, values)?,
+        Mode::ImageI32 => single_value_fill(mode, values, packed_transform_scalar)?,
+        Mode::ImageF32 => single_value_fill(mode, values, packed_transform_float)?,
+        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
+            single_i16_component_fill(mode, values)?
+        }
+        Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => {
+            luma_alpha_component_fill(mode, values)?
+        }
+        Mode::ImageLumaA16 => luma_alpha16_component_fill(mode, values)?,
+        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => {
+            rgb_component_fill(mode, values)?
+        }
+        Mode::ImageRgb16 | Mode::ImageRgb32F => rgb16_component_fill(mode, values)?,
         Mode::ImageRgba8
         | Mode::ImageRgbPremultiplied8
         | Mode::ImageRgbx8
         | Mode::ImageCmyk8
         | Mode::ImageRgba16
-        | Mode::ImageRgba32F => match values {
-            [value] => packed_transform_scalar(*value),
-            [red, green, blue] => (
-                clamp_transform_component(*red),
-                clamp_transform_component(*green),
-                clamp_transform_component(*blue),
-                255,
-            ),
-            [red, green, blue, alpha] => (
-                clamp_transform_component(*red),
-                clamp_transform_component(*green),
-                clamp_transform_component(*blue),
-                clamp_transform_component(*alpha),
-            ),
-            _ => return Err(transform_fill_arity_error(mode)),
-        },
+        | Mode::ImageRgba32F => rgba_component_fill(mode, values)?,
     };
     Ok((fill, default_palette_fill))
+}
+
+fn transform_palette_components(
+    values: &[i64],
+    default_palette_fill: Option<u8>,
+) -> Result<TransformFillResult, PilError> {
+    match values {
+        [value] => {
+            let index = (*value).clamp(0, i64::from(u8::MAX)) as u8;
+            Ok(((index, 0, 0, 255), Some(index)))
+        }
+        [red, green, blue] => {
+            let _ = (
+                transform_component(*red)?,
+                transform_component(*green)?,
+                transform_component(*blue)?,
+            );
+            Ok(((0, 0, 0, 255), default_palette_fill))
+        }
+        [red, green, blue, alpha] => {
+            let _ = (
+                transform_component(*red)?,
+                transform_component(*green)?,
+                transform_component(*blue)?,
+            );
+            if transform_component(*alpha)? != 255 {
+                return Err(PilError::ValueError(
+                    "cannot add non-opaque RGBA color to RGB palette".into(),
+                ));
+            }
+            Ok(((0, 0, 0, 255), default_palette_fill))
+        }
+        _ => Err(transform_fill_arity_error(Mode::ImagePalette8)),
+    }
+}
+
+fn single_byte_component_fill(mode: Mode, values: &[i64]) -> Result<(u8, u8, u8, u8), PilError> {
+    match values {
+        [value] => Ok((clamp_transform_component(*value), 0, 0, 0)),
+        _ => Err(transform_fill_arity_error(mode)),
+    }
+}
+
+fn single_value_fill(
+    mode: Mode,
+    values: &[i64],
+    pack: fn(i64) -> (u8, u8, u8, u8),
+) -> Result<(u8, u8, u8, u8), PilError> {
+    match values {
+        [value] => Ok(pack(*value)),
+        _ => Err(transform_fill_arity_error(mode)),
+    }
+}
+
+fn single_i16_component_fill(mode: Mode, values: &[i64]) -> Result<(u8, u8, u8, u8), PilError> {
+    match values {
+        [value] => {
+            let bytes = (*value as u16).to_le_bytes();
+            Ok((bytes[0], bytes[1], 0, 0))
+        }
+        _ => Err(transform_fill_arity_error(mode)),
+    }
+}
+
+fn luma_alpha_component_fill(
+    mode: Mode,
+    values: &[i64],
+) -> Result<(u8, u8, u8, u8), PilError> {
+    match values {
+        [value] => {
+            let gray = clamp_transform_component(*value);
+            Ok((gray, u8::MAX, gray, gray))
+        }
+        [gray, alpha] => {
+            let gray = clamp_transform_component(*gray);
+            Ok((gray, clamp_transform_component(*alpha), gray, gray))
+        }
+        _ => Err(transform_fill_arity_error(mode)),
+    }
+}
+
+fn luma_alpha16_component_fill(
+    mode: Mode,
+    values: &[i64],
+) -> Result<(u8, u8, u8, u8), PilError> {
+    match values {
+        [value] => Ok((clamp_transform_component(*value), 0, 0, 0)),
+        [gray, alpha] => Ok((
+            clamp_transform_component(*gray),
+            clamp_transform_component(*alpha),
+            0,
+            0,
+        )),
+        _ => Err(transform_fill_arity_error(mode)),
+    }
+}
+
+fn rgb_component_fill(mode: Mode, values: &[i64]) -> Result<(u8, u8, u8, u8), PilError> {
+    match values {
+        [value] => Ok(packed_transform_scalar(*value)),
+        [red, green, blue] => Ok((
+            clamp_transform_component(*red),
+            clamp_transform_component(*green),
+            clamp_transform_component(*blue),
+            u8::MAX,
+        )),
+        [red, green, blue, alpha] => Ok((
+            clamp_transform_component(*red),
+            clamp_transform_component(*green),
+            clamp_transform_component(*blue),
+            clamp_transform_component(*alpha),
+        )),
+        _ => Err(transform_fill_arity_error(mode)),
+    }
+}
+
+fn rgb16_component_fill(mode: Mode, values: &[i64]) -> Result<(u8, u8, u8, u8), PilError> {
+    match values {
+        [value] => Ok(packed_transform_scalar(*value)),
+        [red, green, blue] | [red, green, blue, _] => Ok((
+            clamp_transform_component(*red),
+            clamp_transform_component(*green),
+            clamp_transform_component(*blue),
+            0,
+        )),
+        _ => Err(transform_fill_arity_error(mode)),
+    }
+}
+
+fn rgba_component_fill(mode: Mode, values: &[i64]) -> Result<(u8, u8, u8, u8), PilError> {
+    match values {
+        [value] => Ok(packed_transform_scalar(*value)),
+        [red, green, blue] => Ok((
+            clamp_transform_component(*red),
+            clamp_transform_component(*green),
+            clamp_transform_component(*blue),
+            u8::MAX,
+        )),
+        [red, green, blue, alpha] => Ok((
+            clamp_transform_component(*red),
+            clamp_transform_component(*green),
+            clamp_transform_component(*blue),
+            clamp_transform_component(*alpha),
+        )),
+        _ => Err(transform_fill_arity_error(mode)),
+    }
 }
 
 pub(super) fn public_transform_fill(
@@ -227,6 +343,15 @@ pub(super) fn public_transform_fill(
         Some(TransformFill::Scalar(value)) if palette_mode => {
             let index = value.clamp(0, i64::from(u8::MAX)) as u8;
             Ok(((index, 0, 0, 255), Some(index)))
+        }
+        Some(TransformFill::Scalar(value))
+            if matches!(
+                mode,
+                Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8
+            ) =>
+        {
+            let (luma, lane_one, lane_two, alpha) = packed_transform_scalar(value);
+            Ok(((luma, alpha, lane_one, lane_two), None))
         }
         Some(TransformFill::Scalar(value)) => {
             let fill = match mode {
@@ -273,6 +398,7 @@ pub(super) fn public_transform_fill(
         Some(TransformFill::Invalid) => {
             Err(PilError::TypeError("color must be int or tuple".into()))
         }
+        Some(TransformFill::InvalidList) => Err(transform_list_error(mode)),
     }
 }
 

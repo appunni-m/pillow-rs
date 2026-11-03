@@ -2,10 +2,104 @@ use super::RsImage;
 use super::arrays::image_info_value_to_python;
 use super::point::point_transform_from_python;
 use crate::*;
-use pyo3::pymethods;
+use pyo3::types::PyModuleMethods;
+use pyo3::{pyclass, pyfunction, pymethods};
+
+#[pyclass(name = "_RotatePlan", frozen)]
+pub(super) struct PyRotatePlan {
+    prepared: pillow_rs::PreparedRotate,
+}
+
+#[pyclass(name = "_PasteBoxPlan", frozen)]
+pub(super) struct PyPasteBoxPlan {
+    prepared: pillow_rs::PasteBoxPlan,
+    pending_coordinates: Option<DeferredPasteBoxCoordinates>,
+    has_mask: bool,
+    position_size_available: bool,
+}
+
+#[pyclass(name = "_PasteSourcePlan", frozen)]
+pub(super) struct PyPasteSourcePlan {
+    prepared: Option<pillow_rs::PasteSourcePlan>,
+    deferred_source: Option<pyo3::Py<PyAny>>,
+    has_mask: bool,
+}
+
+#[pyclass(name = "_ThumbnailPlan", frozen)]
+pub(super) struct PyThumbnailPlan {
+    prepared: pillow_rs::ThumbnailPlan,
+    #[pyo3(get)]
+    output_size: (u32, u32),
+}
+
+#[pyfunction(name = "_thumbnail_filter_code")]
+pub(super) fn thumbnail_filter_code(
+    resample: Option<&Bound<'_, PyAny>>,
+) -> PyResult<i32> {
+    let input = resample_input_from_python(resample)?;
+    let filter = pillow_rs::parse_resample_input(input).map_err(map_error)?;
+    Ok(resample_filter_code(filter))
+}
+
+#[pyfunction(name = "_thumbnail_reducing_gap")]
+pub(super) fn thumbnail_reducing_gap(
+    value: Option<&Bound<'_, PyAny>>,
+) -> PyResult<Option<f64>> {
+    value.map(|value| value.extract::<f64>()).transpose()
+}
+
+pub(super) fn register_adapter_functions(m: &Bound<'_, pyo3::types::PyModule>) -> PyResult<()> {
+    m.add_function(pyo3::wrap_pyfunction!(thumbnail_filter_code, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(thumbnail_reducing_gap, m)?)?;
+    Ok(())
+}
+
+fn rotate_input_from_python(
+    resample: Option<&Bound<'_, PyAny>>,
+    expand: Option<&Bound<'_, PyAny>>,
+    center: Option<&Bound<'_, PyAny>>,
+    translate: Option<&Bound<'_, PyAny>>,
+    fillcolor: Option<&Bound<'_, PyAny>>,
+) -> PyResult<(
+    pillow_rs::RotatePointInput,
+    pillow_rs::RotatePointInput,
+    pillow_rs::RotateExpandInput,
+    pillow_rs::RotateResampleInput,
+    pillow_rs::ImageOpsColor,
+)> {
+    let center = rotate_point_input_from_python(center)?;
+    let translate = rotate_point_input_from_python(translate)?;
+    let expand = rotate_expand_input_from_python(expand)?;
+    let resample = rotate_resample_input_from_python(resample)?;
+    let fillcolor = imageops_color_from_python(fillcolor);
+    Ok((center, translate, expand, resample, fillcolor))
+}
+
+fn prepare_rotate_input(
+    image: &PyImage,
+    angle: f64,
+    resample: Option<&Bound<'_, PyAny>>,
+    expand: Option<&Bound<'_, PyAny>>,
+    center: Option<&Bound<'_, PyAny>>,
+    translate: Option<&Bound<'_, PyAny>>,
+    fillcolor: Option<&Bound<'_, PyAny>>,
+) -> PyResult<pillow_rs::PreparedRotate> {
+    let (center, translate, expand, resample, fillcolor) =
+        rotate_input_from_python(resample, expand, center, translate, fillcolor)?;
+    image
+        .inner
+        .prepare_rotate_with_input(angle, resample, expand, center, translate, fillcolor)
+        .map_err(map_error)
+}
 
 #[pymethods]
 impl PyImage {
+    fn _resize_filter_code(&self, resample: Option<&Bound<'_, PyAny>>) -> PyResult<i32> {
+        let input = resample_input_from_python(resample)?;
+        let filter = pillow_rs::parse_resample_input(input).map_err(map_error)?;
+        Ok(resample_filter_code(filter))
+    }
+
     #[pyo3(signature = (size, resample=None, box_coords=None, reducing_gap=None))]
     fn resize(
         &self,
@@ -44,11 +138,8 @@ impl PyImage {
         fillcolor: Option<&Bound<'_, PyAny>>,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
-        let center = rotate_point_input_from_python(center)?;
-        let translate = rotate_point_input_from_python(translate)?;
-        let expand = rotate_expand_input_from_python(expand)?;
-        let resample = rotate_resample_input_from_python(resample)?;
-        let fillcolor = imageops_color_from_python(fillcolor);
+        let (center, translate, expand, resample, fillcolor) =
+            rotate_input_from_python(resample, expand, center, translate, fillcolor)?;
         let rs = py
             .detach(|| {
                 self.inner
@@ -56,6 +147,35 @@ impl PyImage {
             })
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
+    }
+
+    #[pyo3(signature = (angle, resample=None, expand=None, center=None, translate=None, fillcolor=None))]
+    #[allow(clippy::too_many_arguments)] // Mirrors the public Pillow Image.rotate API.
+    fn _prepare_rotate(
+        &self,
+        angle: f64,
+        resample: Option<&Bound<'_, PyAny>>,
+        expand: Option<&Bound<'_, PyAny>>,
+        center: Option<&Bound<'_, PyAny>>,
+        translate: Option<&Bound<'_, PyAny>>,
+        fillcolor: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<PyRotatePlan> {
+        let prepared = prepare_rotate_input(
+            self, angle, resample, expand, center, translate, fillcolor,
+        )?;
+        Ok(PyRotatePlan { prepared })
+    }
+
+    fn _rotate_prepared(
+        &self,
+        plan: pyo3::PyRef<'_, PyRotatePlan>,
+        py: Python<'_>,
+    ) -> PyResult<PyImage> {
+        let prepared = plan.prepared;
+        let inner = py
+            .detach(|| self.inner.rotate_prepared(prepared))
+            .map_err(map_error)?;
+        Ok(PyImage { inner })
     }
 
     fn transpose(&self, method: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<PyImage> {
@@ -104,18 +224,111 @@ impl PyImage {
         Ok(PyImage { inner: rs })
     }
 
-    #[pyo3(signature = (im, box_coords=None, mask=None))]
-    fn paste(
-        &mut self,
-        im: &Bound<'_, PyAny>,
+    #[pyo3(signature = (box_coords, has_mask, position_size_available, known_length=None))]
+    fn _paste_prepare_box(
+        &self,
         box_coords: Option<&Bound<'_, PyAny>>,
+        has_mask: bool,
+        position_size_available: bool,
+        known_length: Option<usize>,
+    ) -> PyResult<PyPasteBoxPlan> {
+        let (box_input, pending_coordinates) =
+            paste_box_for_staged_plan(box_coords, known_length)?;
+        let prepared = pillow_rs::Image::prepare_paste_box(
+            box_input,
+            has_mask,
+            position_size_available,
+        )
+        .map_err(map_error)?;
+        Ok(PyPasteBoxPlan {
+            prepared,
+            pending_coordinates,
+            has_mask,
+            position_size_available,
+        })
+    }
+
+    fn _paste_prepare_source(
+        &self,
+        source: &Bound<'_, PyAny>,
+        has_mask: bool,
+        is_image_source: bool,
+    ) -> PyResult<PyPasteSourcePlan> {
+        let mode = self.inner.mode_identity().map_err(map_error)?;
+        let source_input = if is_image_source {
+            paste_source_from_python(source, mode)?
+        } else if source.cast::<PyString>().is_ok() {
+            pillow_rs::PasteSourceInput::String(source.extract::<String>()?)
+        } else {
+            return Ok(PyPasteSourcePlan {
+                prepared: None,
+                deferred_source: Some(source.clone().unbind()),
+                has_mask,
+            });
+        };
+        let prepared = self
+            .inner
+            .prepare_paste_source(source_input, has_mask)
+            .map_err(map_error)?;
+        Ok(PyPasteSourcePlan {
+            prepared: Some(prepared),
+            deferred_source: None,
+            has_mask,
+        })
+    }
+
+    fn _paste_prepare_resolved_image_source(
+        &self,
+        source: &Bound<'_, PyImage>,
+    ) -> PyResult<PyPasteSourcePlan> {
+        let source = source.borrow();
+        let prepared = self
+            .inner
+            .prepare_resolved_paste_image_source(source.inner.clone())
+            .map_err(map_error)?;
+        Ok(PyPasteSourcePlan {
+            prepared: Some(prepared),
+            deferred_source: None,
+            has_mask: false,
+        })
+    }
+
+    #[pyo3(signature = (box_plan, source_plan, mask=None))]
+    fn _paste_apply_prepared(
+        &mut self,
+        box_plan: pyo3::PyRef<'_, PyPasteBoxPlan>,
+        source_plan: pyo3::PyRef<'_, PyPasteSourcePlan>,
         mask: Option<&Bound<'_, PyAny>>,
         py: Python<'_>,
     ) -> PyResult<()> {
-        let source = paste_source_from_python(im);
-        let box_coords = paste_box_from_python(box_coords)?;
+        let box_plan = match &box_plan.pending_coordinates {
+            Some(coordinates) => {
+                let coordinates = resolve_deferred_paste_box_coordinates(coordinates, py)?;
+                pillow_rs::Image::prepare_paste_box(
+                    pillow_rs::PasteBoxInput::Values(coordinates),
+                    box_plan.has_mask,
+                    box_plan.position_size_available,
+                )
+                .map_err(map_error)?
+            }
+            None => box_plan.prepared.clone(),
+        };
+        let source_plan = match &source_plan.prepared {
+            Some(prepared) => prepared.clone(),
+            None => {
+                let source = source_plan.deferred_source.as_ref().ok_or_else(|| {
+                    PyTypeError::new_err("prepared Paste source was missing")
+                })?;
+                let source = source.bind(py);
+                let mode = self.inner.mode_identity().map_err(map_error)?;
+                let input = paste_source_from_python(&source, mode)?;
+                self.inner
+                    .prepare_paste_source(input, source_plan.has_mask)
+                    .map_err(map_error)?
+            }
+        };
         let mask = paste_mask_from_python(mask)?;
-        py.detach(|| self.inner.paste_with_input(source, box_coords, mask))
+        py.detach(|| self.inner.paste_prepared(box_plan, source_plan, mask))
             .map_err(map_error)
     }
 
@@ -133,6 +346,11 @@ impl PyImage {
         } else {
             filter_type.clone()
         };
+        if !filter.hasattr("_apply")? {
+            return Err(PyTypeError::new_err(
+                "filter argument should be ImageFilter.Filter instance or class",
+            ));
+        }
         let type_name = filter.get_type().name()?.to_string();
         let validation_name = filter
             .getattr("name")
@@ -142,11 +360,6 @@ impl PyImage {
         self.inner
             .validate_filter(&validation_name)
             .map_err(map_error)?;
-        if !filter.hasattr("_apply")? {
-            return Err(PyTypeError::new_err(
-                "filter argument should be ImageFilter.Filter instance or class",
-            ));
-        }
         let image = Py::new(
             py,
             PyImage {
@@ -197,16 +410,33 @@ impl PyImage {
         }
     }
 
-    #[pyo3(signature = (size, resample=None))]
-    fn thumbnail(
-        &mut self,
+    fn _thumbnail_preflight(
+        &self,
         size: (i64, i64),
-        resample: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<Option<PyThumbnailPlan>> {
+        let prepared = self.inner.prepare_thumbnail(size).map_err(map_error)?;
+        Ok(prepared.map(|prepared| PyThumbnailPlan {
+            output_size: prepared.output_size(),
+            prepared,
+        }))
+    }
+
+    fn _thumbnail_apply_prepared(
+        &mut self,
+        plan: pyo3::PyRef<'_, PyThumbnailPlan>,
+        filter_code: i32,
+        reducing_gap: Option<f64>,
         py: Python<'_>,
     ) -> PyResult<()> {
-        let resample = resample_input_from_python(resample)?;
-        py.detach(|| self.inner.thumbnail(size, resample))
-            .map_err(map_error)
+        let prepared = plan.prepared;
+        py.detach(|| {
+            self.inner.thumbnail_with_plan(
+                prepared,
+                Some(pillow_rs::ResampleInput::Code(i64::from(filter_code))),
+                reducing_gap,
+            )
+        })
+        .map_err(map_error)
     }
 
     #[pyo3(signature = (colors=None, method=None, kmeans=None, dither=None, palette=None))]
@@ -271,24 +501,27 @@ impl PyImage {
         Ok(PyImage { inner: rs })
     }
 
-    fn max_filter(&self, size: Option<i64>, py: Python<'_>) -> PyResult<PyImage> {
-        let size = filter_size_from_python(size.unwrap_or(3), false)?;
+    #[pyo3(signature = (size=3))]
+    fn max_filter(&self, size: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<PyImage> {
+        let size = filter_size_from_python(size, false)?;
         let rs = py
             .detach(|| self.inner.max_filter(size))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
-    fn min_filter(&self, size: Option<i64>, py: Python<'_>) -> PyResult<PyImage> {
-        let size = filter_size_from_python(size.unwrap_or(3), false)?;
+    #[pyo3(signature = (size=3))]
+    fn min_filter(&self, size: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<PyImage> {
+        let size = filter_size_from_python(size, false)?;
         let rs = py
             .detach(|| self.inner.min_filter(size))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
-    fn median_filter(&self, size: Option<i64>, py: Python<'_>) -> PyResult<PyImage> {
-        let size = filter_size_from_python(size.unwrap_or(3), false)?;
+    #[pyo3(signature = (size=3))]
+    fn median_filter(&self, size: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<PyImage> {
+        let size = filter_size_from_python(size, false)?;
         let rs = py
             .detach(|| self.inner.median_filter(size))
             .map_err(map_error)?;
@@ -304,22 +537,24 @@ impl PyImage {
         Ok(PyImage { inner: rs })
     }
 
-    fn mode_filter(&self, size: Option<i64>, py: Python<'_>) -> PyResult<PyImage> {
-        let size = filter_size_from_python(size.unwrap_or(3), true)?;
+    #[pyo3(signature = (size=3))]
+    fn mode_filter(&self, size: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<PyImage> {
+        let size = filter_size_from_python(size, true)?;
         let rs = py
             .detach(|| self.inner.mode_filter(size))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
+    #[pyo3(signature = (size=3, rank=0))]
     fn rank_filter(
         &self,
-        size: Option<i64>,
-        rank: Option<i64>,
+        size: &Bound<'_, PyAny>,
+        rank: &Bound<'_, PyAny>,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
-        let size = filter_size_from_python(size.unwrap_or(3), false)?;
-        let rank = filter_rank_from_python(rank.unwrap_or(0))?;
+        let size = filter_size_from_python(size, false)?;
+        let rank = filter_rank_from_python(rank)?;
         let rs = py
             .detach(|| self.inner.rank_filter(size, rank))
             .map_err(map_error)?;
@@ -369,6 +604,11 @@ impl PyImage {
         let input = if let Some(mask) = image_from_python(alpha) {
             pillow_rs::PutAlphaInput::Image(Box::new(mask))
         } else if let Ok(value) = alpha.extract::<i64>() {
+            pillow_rs::PutAlphaInput::Integer(value)
+        } else if alpha.is_instance_of::<PyInt>() {
+            // Clamp arbitrary-size Python integers in the core's byte domain
+            // without narrowing or converting through floating point.
+            let value = if alpha.lt(0)? { i64::MIN } else { i64::MAX };
             pillow_rs::PutAlphaInput::Integer(value)
         } else {
             pillow_rs::PutAlphaInput::Invalid(alpha.get_type().name()?.to_string())
@@ -439,9 +679,15 @@ impl PyImage {
             pillow_rs::EvalInputKind::Other
         };
         pillow_rs::validate_eval_input(input_kind).map_err(map_error)?;
-        if mode == Some("F") {
-            let source_mode = self.inner.mode().map_err(map_error)?;
-            if matches!(source_mode.as_str(), "1" | "L" | "P") {
+        let target_mode = mode.and_then(pillow_rs::Mode::from_pillow_name);
+        if target_mode == Some(pillow_rs::Mode::ImageF32) {
+            let source_mode = self.inner.mode_identity().map_err(map_error)?;
+            if matches!(
+                source_mode,
+                pillow_rs::Mode::One
+                    | pillow_rs::Mode::ImageLuma8
+                    | pillow_rs::Mode::ImagePalette8
+            ) {
                 let lut = if input.is_callable() {
                     pillow_rs::image_eval_float_lut(|sample| {
                         input.call1((sample,))?.extract::<f64>()
@@ -456,10 +702,15 @@ impl PyImage {
             }
         }
         if input.is_callable() {
-            let mode = self.inner.mode().map_err(map_error)?;
+            let source_mode = self.inner.mode_identity().map_err(map_error)?;
             if matches!(
-                mode.as_str(),
-                "I" | "I;16" | "I;16L" | "I;16B" | "I;16N" | "F"
+                source_mode,
+                pillow_rs::Mode::ImageI32
+                    | pillow_rs::Mode::ImageI16
+                    | pillow_rs::Mode::ImageI16L
+                    | pillow_rs::Mode::ImageI16B
+                    | pillow_rs::Mode::ImageI16N
+                    | pillow_rs::Mode::ImageF32
             ) {
                 let (scale, offset) = point_transform_from_python(input, py)?;
                 return py

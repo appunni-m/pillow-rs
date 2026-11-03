@@ -37,3 +37,36 @@ pub(crate) fn get_data_view(
         architecture => Err(helpers::missing_architecture(Mode::ImageLuma8, architecture)),
     }
 }
+crate::compute::pool_cpu::ops::analysis::helpers::bbox::declare_getbbox_owner!(
+    luma8,
+    ImageLuma8,
+    crate::raster::GrayImage,
+);
+
+crate::compute::pool_cpu::ops::analysis::helpers::extrema::declare_getextrema_owner!(
+    ImageLuma8,
+    crate::raster::GrayImage,
+    crate::compute::pool_cpu::ops::analysis::helpers::extrema::bytes,
+);
+
+crate::compute::pool_cpu::ops::analysis::helpers::histogram_execution::declare_histogram_owner!(
+    ImageLuma8,
+    crate::raster::GrayImage,
+    crate::compute::pool_cpu::ops::analysis::luma8::default::histogram_impl::execute,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::getcolors_execution::declare_getcolors_owner!(
+    ImageLuma8,
+    crate::raster::GrayImage,
+    crate::compute::pool_cpu::ops::analysis::luma8::default::getcolors_impl::execute,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::stat_execution::declare_stat_owner!(
+    ImageLuma8,
+    crate::raster::GrayImage,
+    crate::compute::pool_cpu::ops::analysis::luma8::default::stat_impl::execute,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::extrema_bytes_execution::
+    declare_getextrema_bytes_owner!(
+    ImageLuma8,
+    crate::raster::GrayImage,
+    crate::compute::pool_cpu::ops::analysis::luma8::default::extrema_bytes_impl::execute,
+);

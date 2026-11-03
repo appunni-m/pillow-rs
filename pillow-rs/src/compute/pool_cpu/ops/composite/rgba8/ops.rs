@@ -152,6 +152,12 @@ pub(crate) fn prepare_mirror_fusion<'a>(
     ctx: &ExecutionContext,
 ) -> Result<Option<MirrorFusionStrategy<'a>>, PilError> {
     let (width, height) = destination.dimensions();
+    let DynamicImage::ImageRgba8(source_image) = source.as_ref() else {
+        return Ok(None);
+    };
+    if source_image.dimensions() != destination.dimensions() {
+        return Ok(None);
+    }
     if width == 0 || height == 0 {
         return Ok(None);
     }
@@ -288,16 +294,15 @@ pub(crate) fn composite(
     mask_alpha: bool,
     selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
-    super::super::helpers::composite::execute_selected(
+    super::super::helpers::composite::execute_byte_selected(
         source,
         destination,
         mask,
         mask_alpha,
         MODE,
-        crate::compute::pool_cpu::ops::composite::ops::CompositeLayout::Byte {
-            channels: 4,
-        },
+        4,
         selection,
+        |plan| crate::compute::pool_cpu::ops::paste::rgba8::ops::execute(plan),
     )
 }
 

@@ -4,6 +4,7 @@
 //! aliases like `RgbImage`, `GrayImage`, etc., matching the `image` crate.
 
 use std::marker::PhantomData;
+use std::hash::{Hash, Hasher};
 use std::ops::{Deref, DerefMut, Index, IndexMut, Range};
 
 use super::color::{FromColor, Luma, LumaA, Rgb, Rgba};
@@ -21,12 +22,252 @@ pub use self::iterators::{
 // ---------------------------------------------------------------------------
 
 /// Generic image buffer parameterised by its Pixel type and Container.
-#[derive(Debug, Hash, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct ImageBuffer<P: Pixel, Container> {
     width: u32,
     height: u32,
     _phantom: PhantomData<P>,
     data: Container,
+    hidden_pixel_lanes: Option<HiddenPixelLanes>,
+}
+
+// Hidden physical lanes affect Pillow-compatible byte operations, but they
+// are not part of the typed buffer's logical-pixel equality or hash contract.
+impl<P: Pixel, Container: PartialEq> PartialEq for ImageBuffer<P, Container> {
+    fn eq(&self, other: &Self) -> bool {
+        self.width == other.width
+            && self.height == other.height
+            && self.data == other.data
+    }
+}
+
+impl<P: Pixel, Container: Eq> Eq for ImageBuffer<P, Container> {}
+
+impl<P: Pixel, Container: Hash> Hash for ImageBuffer<P, Container> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.width.hash(state);
+        self.height.hash(state);
+        self.data.hash(state);
+    }
+}
+
+/// Physical bytes omitted by a mode's logical typed carrier.
+///
+/// Mode-specific raster code supplies the lane count and physical interpretation.
+/// This value stores pixels only; it does not identify an image mode.
+#[derive(Debug, Hash, PartialEq, Eq, Clone)]
+pub(crate) struct HiddenPixelLanes {
+    lane_count: usize,
+    pixel_count: usize,
+    values: HiddenLaneValues,
+}
+
+#[derive(Debug, Hash, PartialEq, Eq, Clone)]
+enum HiddenLaneValues {
+    Constant([u8; 2]),
+    PerPixel(Vec<u8>),
+}
+
+impl HiddenPixelLanes {
+    pub(crate) fn constant(
+        lane_count: usize,
+        pixel_count: usize,
+        values: [u8; 2],
+    ) -> Option<Self> {
+        (1..=2).contains(&lane_count).then_some(Self {
+            lane_count,
+            pixel_count,
+            values: HiddenLaneValues::Constant(values),
+        })
+    }
+
+    pub(crate) fn per_pixel(
+        lane_count: usize,
+        pixel_count: usize,
+        values: Vec<u8>,
+    ) -> Option<Self> {
+        if !(1..=2).contains(&lane_count)
+            || pixel_count.checked_mul(lane_count) != Some(values.len())
+        {
+            return None;
+        }
+        Some(Self {
+            lane_count,
+            pixel_count,
+            values: HiddenLaneValues::PerPixel(values),
+        })
+    }
+
+    pub(crate) const fn lane_count(&self) -> usize {
+        self.lane_count
+    }
+
+    pub(crate) const fn pixel_count(&self) -> usize {
+        self.pixel_count
+    }
+
+    pub(crate) fn is_constant(&self) -> bool {
+        matches!(&self.values, HiddenLaneValues::Constant(_))
+    }
+
+    pub(crate) fn for_pixel(&self, index: usize) -> Option<&[u8]> {
+        if index >= self.pixel_count {
+            return None;
+        }
+        match &self.values {
+            HiddenLaneValues::Constant(values) => Some(&values[..self.lane_count]),
+            HiddenLaneValues::PerPixel(values) => {
+                let start = index.checked_mul(self.lane_count)?;
+                values.get(start..start.checked_add(self.lane_count)?)
+            }
+        }
+    }
+
+    pub(crate) fn set_pixel(&mut self, index: usize, values: [u8; 2]) -> Option<()> {
+        if index >= self.pixel_count {
+            return None;
+        }
+        let lane_count = self.lane_count;
+        let pixel_count = self.pixel_count;
+        let start = index.checked_mul(lane_count)?;
+        let end = start.checked_add(lane_count)?;
+        let replacement = match &mut self.values {
+            HiddenLaneValues::Constant(current) => {
+                if current[..lane_count] == values[..lane_count] {
+                    return Some(());
+                }
+                let size = pixel_count.checked_mul(lane_count)?;
+                let mut per_pixel = Vec::with_capacity(size);
+                for _ in 0..pixel_count {
+                    per_pixel.extend_from_slice(&current[..lane_count]);
+                }
+                per_pixel
+                    .get_mut(start..end)?
+                    .copy_from_slice(&values[..lane_count]);
+                Some(HiddenLaneValues::PerPixel(per_pixel))
+            }
+            HiddenLaneValues::PerPixel(per_pixel) => {
+                per_pixel
+                    .get_mut(start..end)?
+                    .copy_from_slice(&values[..lane_count]);
+                None
+            }
+        };
+        if let Some(replacement) = replacement {
+            self.values = replacement;
+        }
+        Some(())
+    }
+
+    pub(crate) fn map_values<F>(&self, mut map: F) -> Self
+    where
+        F: FnMut(u8) -> u8,
+    {
+        let values = match &self.values {
+            HiddenLaneValues::Constant(current) => {
+                let mut mapped = *current;
+                for value in mapped.iter_mut().take(self.lane_count) {
+                    *value = map(*value);
+                }
+                HiddenLaneValues::Constant(mapped)
+            }
+            HiddenLaneValues::PerPixel(current) => {
+                HiddenLaneValues::PerPixel(current.iter().copied().map(map).collect())
+            }
+        };
+        Self {
+            lane_count: self.lane_count,
+            pixel_count: self.pixel_count,
+            values,
+        }
+    }
+
+    pub(crate) fn map_values_in_place<F>(&mut self, mut map: F)
+    where
+        F: FnMut(u8) -> u8,
+    {
+        match &mut self.values {
+            HiddenLaneValues::Constant(values) => {
+                for value in values.iter_mut().take(self.lane_count) {
+                    *value = map(*value);
+                }
+            }
+            HiddenLaneValues::PerPixel(values) => {
+                for value in values {
+                    *value = map(*value);
+                }
+            }
+        }
+    }
+
+    /// Applies a byte operation to matching physical lanes while clipping to
+    /// the output extent used by Pillow's two-image Chops operations.
+    pub(crate) fn zip_map_clipped<F>(
+        &self,
+        other: &Self,
+        left_dimensions: (usize, usize),
+        right_dimensions: (usize, usize),
+        output_dimensions: (usize, usize),
+        mut map: F,
+    ) -> Option<Self>
+    where
+        F: FnMut(u8, u8) -> u8,
+    {
+        if self.lane_count != other.lane_count
+            || self.pixel_count != left_dimensions.0.checked_mul(left_dimensions.1)?
+            || other.pixel_count != right_dimensions.0.checked_mul(right_dimensions.1)?
+            || output_dimensions.0 > left_dimensions.0
+            || output_dimensions.0 > right_dimensions.0
+            || output_dimensions.1 > left_dimensions.1
+            || output_dimensions.1 > right_dimensions.1
+        {
+            return None;
+        }
+        let pixel_count = output_dimensions.0.checked_mul(output_dimensions.1)?;
+        if let (HiddenLaneValues::Constant(left), HiddenLaneValues::Constant(right)) =
+            (&self.values, &other.values)
+        {
+            let mut values = [0; 2];
+            for lane in 0..self.lane_count {
+                values[lane] = map(left[lane], right[lane]);
+            }
+            return Self::constant(self.lane_count, pixel_count, values);
+        }
+
+        let value_count = pixel_count.checked_mul(self.lane_count)?;
+        let mut values = Vec::with_capacity(value_count);
+        for y in 0..output_dimensions.1 {
+            let left_row = y.checked_mul(left_dimensions.0)?;
+            let right_row = y.checked_mul(right_dimensions.0)?;
+            for x in 0..output_dimensions.0 {
+                let left = self.for_pixel(left_row.checked_add(x)?)?;
+                let right = other.for_pixel(right_row.checked_add(x)?)?;
+                for lane in 0..self.lane_count {
+                    values.push(map(left[lane], right[lane]));
+                }
+            }
+        }
+        Self::per_pixel(self.lane_count, pixel_count, values)
+    }
+
+    pub(crate) fn remap<F>(&self, pixel_count: usize, mut source_index: F) -> Option<Self>
+    where
+        F: FnMut(usize) -> usize,
+    {
+        match &self.values {
+            HiddenLaneValues::Constant(values) => {
+                Self::constant(self.lane_count, pixel_count, *values)
+            }
+            HiddenLaneValues::PerPixel(_) => {
+                let size = pixel_count.checked_mul(self.lane_count)?;
+                let mut values = Vec::with_capacity(size);
+                for index in 0..pixel_count {
+                    values.extend_from_slice(self.for_pixel(source_index(index))?);
+                }
+                Self::per_pixel(self.lane_count, pixel_count, values)
+            }
+        }
+    }
 }
 
 // Generic implementation, shared along all image buffers
@@ -45,6 +286,7 @@ where
                 width,
                 height,
                 _phantom: PhantomData,
+                hidden_pixel_lanes: None,
             })
         } else {
             None
@@ -59,6 +301,55 @@ where
     /// Returns the underlying raw buffer
     pub fn as_raw(&self) -> &Container {
         &self.data
+    }
+
+    /// Returns physical lanes omitted by this buffer's logical pixel carrier.
+    pub(crate) fn hidden_pixel_lanes(&self) -> Option<&HiddenPixelLanes> {
+        self.hidden_pixel_lanes.as_ref()
+    }
+
+    pub(crate) fn take_hidden_pixel_lanes(&mut self) -> Option<HiddenPixelLanes> {
+        self.hidden_pixel_lanes.take()
+    }
+
+    /// Replaces hidden physical lanes after validating the image extent.
+    pub(crate) fn replace_hidden_pixel_lanes(
+        &mut self,
+        lanes: Option<HiddenPixelLanes>,
+    ) -> bool {
+        let Some(pixel_count) = (self.width as usize).checked_mul(self.height as usize) else {
+            return false;
+        };
+        if pixel_count == 0 {
+            self.hidden_pixel_lanes = None;
+            return lanes.map_or(true, |value| value.pixel_count() == 0);
+        }
+        if lanes
+            .as_ref()
+            .is_some_and(|value| value.pixel_count() != pixel_count)
+        {
+            return false;
+        }
+        self.hidden_pixel_lanes = lanes;
+        true
+    }
+
+    /// Carries physical lanes from a source buffer through a pixel-index map.
+    pub(crate) fn remap_hidden_pixel_lanes_from<F>(&mut self, source: &Self, source_index: F) -> Option<()>
+    where
+        F: FnMut(usize) -> usize,
+    {
+        let Some(lanes) = source.hidden_pixel_lanes() else {
+            self.hidden_pixel_lanes = None;
+            return Some(());
+        };
+        let pixel_count = (self.width as usize).checked_mul(self.height as usize)?;
+        if pixel_count == 0 {
+            self.hidden_pixel_lanes = None;
+            return Some(());
+        }
+        self.hidden_pixel_lanes = Some(lanes.remap(pixel_count, source_index)?);
+        Some(())
     }
 
     /// The width and height of this image.
@@ -192,8 +483,19 @@ where
     Container: Deref<Target = [P::Subpixel]> + DerefMut,
 {
     fn inner_pixels_mut(&mut self) -> &mut [P::Subpixel] {
+        self.invalidate_hidden_pixel_lanes();
         let len = Self::image_buffer_len(self.width, self.height).unwrap_or(0);
         &mut self.data[..len]
+    }
+
+    // TODO(pillow-rs#3ptb): keep invalidating generic mutable escapes (DerefMut,
+    // pixel and row accessors, and mutable slices) until every mode-owned
+    // writer restores Pillow physical lanes. PutPixel, bulk and synchronous
+    // PutData, and LA-family PutAlpha / PutAlphaData preserve their lanes.
+    // Audit remaining producers before claiming downstream Paste/Histogram
+    // parity; this buffer cannot infer a Pillow mode's lane contract.
+    fn invalidate_hidden_pixel_lanes(&mut self) {
+        self.hidden_pixel_lanes = None;
     }
 
     /// Returns an iterator over the mutable pixels of this image.
@@ -207,6 +509,7 @@ where
 
     /// Returns an iterator over the mutable rows of this image.
     pub fn rows_mut(&mut self) -> RowsMut<'_, P> {
+        self.invalidate_hidden_pixel_lanes();
         RowsMut::with_image(&mut self.data, self.width, self.height)
     }
 
@@ -235,7 +538,7 @@ where
     #[inline]
     #[track_caller]
     pub fn get_pixel_mut(&mut self, x: u32, y: u32) -> &mut P {
-        match self.pixel_indices(x, y) {
+        let pixel_indices = match self.pixel_indices(x, y) {
             None => {
                 panic!(
                     "Image index {:?} out of bounds {:?}",
@@ -243,8 +546,10 @@ where
                     (self.width, self.height)
                 )
             }
-            Some(pixel_indices) => <P as Pixel>::from_slice_mut(&mut self.data[pixel_indices]),
-        }
+            Some(pixel_indices) => pixel_indices,
+        };
+        self.invalidate_hidden_pixel_lanes();
+        <P as Pixel>::from_slice_mut(&mut self.data[pixel_indices])
     }
 
     /// Gets a reference to the mutable pixel at location `(x, y)` or returns
@@ -259,8 +564,11 @@ where
             .saturating_add(x as usize)
             .saturating_mul(num_channels);
 
+        let range = i..i.checked_add(num_channels)?;
+        self.data.get(range.clone())?;
+        self.invalidate_hidden_pixel_lanes();
         self.data
-            .get_mut(i..i.checked_add(num_channels)?)
+            .get_mut(range)
             .map(|pixel_indices| <P as Pixel>::from_slice_mut(pixel_indices))
     }
 
@@ -278,6 +586,22 @@ where
 
 // Vec-backed buffer implementation
 impl<P: Pixel> ImageBuffer<P, Vec<P::Subpixel>> {
+    fn zero_hidden_pixel_lanes(width: u32, height: u32) -> Option<HiddenPixelLanes> {
+        if std::mem::size_of::<P::Subpixel>() != std::mem::size_of::<u8>() {
+            return None;
+        }
+        let lane_count = match P::CHANNEL_COUNT {
+            2 => 2,
+            3 => 1,
+            _ => return None,
+        };
+        let pixel_count = (width as usize).checked_mul(height as usize)?;
+        if pixel_count == 0 {
+            return None;
+        }
+        HiddenPixelLanes::constant(lane_count, pixel_count, [0; 2])
+    }
+
     /// Creates a new image buffer based on a `Vec<P::Subpixel>`.
     ///
     /// All pixels have a value of zero.
@@ -295,6 +619,7 @@ impl<P: Pixel> ImageBuffer<P, Vec<P::Subpixel>> {
             width,
             height,
             _phantom: PhantomData,
+            hidden_pixel_lanes: Self::zero_hidden_pixel_lanes(width, height),
         }
     }
 
@@ -329,6 +654,7 @@ impl<P: Pixel> ImageBuffer<P, Vec<P::Subpixel>> {
             width,
             height,
             _phantom: PhantomData,
+            hidden_pixel_lanes: None,
         }
     }
 
@@ -378,6 +704,7 @@ where
             height: 0,
             _phantom: PhantomData,
             data: Default::default(),
+            hidden_pixel_lanes: None,
         }
     }
 }
@@ -401,6 +728,7 @@ where
     Container: Deref<Target = [P::Subpixel]> + DerefMut,
 {
     fn deref_mut(&mut self) -> &mut <Self as Deref>::Target {
+        self.invalidate_hidden_pixel_lanes();
         &mut self.data
     }
 }
@@ -440,6 +768,7 @@ where
             width: self.width,
             height: self.height,
             _phantom: PhantomData,
+            hidden_pixel_lanes: self.hidden_pixel_lanes.clone(),
         }
     }
 
@@ -447,6 +776,8 @@ where
         self.data.clone_from(&source.data);
         self.width = source.width;
         self.height = source.height;
+        self.hidden_pixel_lanes
+            .clone_from(&source.hidden_pixel_lanes);
     }
 }
 

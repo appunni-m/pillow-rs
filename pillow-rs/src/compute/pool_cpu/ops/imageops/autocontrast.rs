@@ -86,7 +86,7 @@ impl PreparedAutocontrast<'_> {
 
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         use super::helpers::strategy::NativeByteArchitecture as Architecture;
-        match (self.source, self.architecture) {
+        let mut output = match (self.source, self.architecture) {
             (Source::Luma(input), Architecture::Default) => {
                 super::luma8::default::autocontrast_impl::execute(input, &self.lut)
             }
@@ -111,7 +111,9 @@ impl PreparedAutocontrast<'_> {
             (Source::Rgb(input), Architecture::WasmSimd128) => {
                 super::rgb8::wasm_simd128::histogram_impl::autocontrast(input, &self.lut)
             }
-        }
+        }?;
+        super::helpers::hidden_lanes::initialize_point_output_lanes(&mut output)?;
+        Ok(output)
     }
 }
 

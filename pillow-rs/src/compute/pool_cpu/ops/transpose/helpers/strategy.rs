@@ -250,7 +250,10 @@ macro_rules! declare_transpose_mode {
 
         #[cfg(any($($mcfg),*))]
         fn execute_native_mirror(image: &$input) -> crate::raster::DynamicImage {
-            let channels = image.color().channel_count() as usize;
+            let channels = match crate::raster::Mode::$mode {
+                crate::raster::Mode::ImageI32 | crate::raster::Mode::ImageF32 => 4,
+                mode => mode.band_count(),
+            };
             let Some((output, vector_blocks, scalar_tail)) =
                 $crate::compute::pool_cpu::ops::transpose::helpers::native_mirror::mirror_image(
                     image, channels,
@@ -309,6 +312,7 @@ macro_rules! declare_native_byte_transpose_mode {
                 &[$crate::compute::Architecture::Sse2],
                 $crate::compute::registry::support::StrategyGuard::TransposeNativeBytes {
                     channels: $channels,
+                    allow_empty: true,
                 },
                 super::sse2::execute;
                 Neon,
@@ -316,6 +320,7 @@ macro_rules! declare_native_byte_transpose_mode {
                 &[$crate::compute::Architecture::Neon],
                 $crate::compute::registry::support::StrategyGuard::TransposeNativeBytes {
                     channels: $channels,
+                    allow_empty: true,
                 },
                 super::neon::execute;
                 WasmSimd128,
@@ -323,6 +328,7 @@ macro_rules! declare_native_byte_transpose_mode {
                 &[$crate::compute::Architecture::WasmSimd128],
                 $crate::compute::registry::support::StrategyGuard::TransposeNativeBytes {
                     channels: $channels,
+                    allow_empty: true,
                 },
                 super::wasm_simd128::execute
             }
@@ -415,6 +421,7 @@ macro_rules! declare_native_luma16_transpose_mode {
                 &[crate::compute::Architecture::Sse2],
                 crate::compute::registry::support::StrategyGuard::TransposeNativeBytes {
                     channels: 2,
+                    allow_empty: false,
                 },
             ),
             $crate::compute::registry::support::ImplementationSupport::cpu(
@@ -425,6 +432,7 @@ macro_rules! declare_native_luma16_transpose_mode {
                 &[crate::compute::Architecture::Neon],
                 crate::compute::registry::support::StrategyGuard::TransposeNativeBytes {
                     channels: 2,
+                    allow_empty: false,
                 },
             ),
             $crate::compute::registry::support::ImplementationSupport::cpu(
@@ -435,6 +443,7 @@ macro_rules! declare_native_luma16_transpose_mode {
                 &[crate::compute::Architecture::WasmSimd128],
                 crate::compute::registry::support::StrategyGuard::TransposeNativeBytes {
                     channels: 2,
+                    allow_empty: false,
                 },
             ),
         ];

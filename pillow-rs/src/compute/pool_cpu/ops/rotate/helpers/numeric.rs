@@ -44,7 +44,11 @@ where
     if let Some(degree) = discrete_angle(request) {
         let (width, height) = image.dimensions();
         if degree == 180 || request.expand || width == height {
-            return rotate_discrete::<P, S, CHANNELS>(image, degree);
+            return rotate_discrete::<P, S, CHANNELS>(
+                image,
+                degree,
+                degree == 180 || request.expand,
+            );
         }
         return rotate_90_non_expand::<P, S, CHANNELS>(image, degree, request.fill);
     }
@@ -85,6 +89,7 @@ where
 fn rotate_discrete<P, S, const CHANNELS: usize>(
     image: &ImageBuffer<P, Vec<S>>,
     degree: u32,
+    allow_empty_output: bool,
 ) -> Result<ImageBuffer<P, Vec<S>>, PilError>
 where
     P: Pixel<Subpixel = S>,
@@ -92,7 +97,11 @@ where
 {
     let (width, height) = image.dimensions();
     let (out_width, out_height) = if degree == 180 { (width, height) } else { (height, width) };
-    let dimensions = CheckedDims::new(out_width, out_height, CHANNELS as u8)?;
+    let dimensions = if allow_empty_output && (out_width == 0 || out_height == 0) {
+        CheckedDims::new_allow_empty(out_width, out_height, CHANNELS as u8)?
+    } else {
+        CheckedDims::new(out_width, out_height, CHANNELS as u8)?
+    };
     let mut output = vec![S::default(); dimensions.total_pixels() * CHANNELS];
     for y in 0..out_height {
         for x in 0..out_width {

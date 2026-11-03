@@ -1,8 +1,8 @@
 use super::{
-    Arc, Bytes, CheckedDims, Image, PilError, PipelineOp, PutDataInput, PutDataValue,
-    PutDataExecutionContext, PutDataValueKind, is_l16_identity,
-    materialization_cache, putdata_byte_width, putdata_bytes, unsupported_putdata_mode,
-    putdata_l16_sample,
+    Arc, Bytes, Image, PilError, PipelineOp, PutDataInput, PutDataValue,
+    PutDataExecutionContext, PutDataValueKind, is_l16_identity, materialization_cache,
+    putdata_byte_width, putdata_bytes, putdata_hidden_lane_bytes, putdata_hidden_lanes,
+    unsupported_putdata_mode,
 };
 use crate::raster::Mode;
 
@@ -23,6 +23,7 @@ impl Image {
             self,
             PipelineOp::PutData {
                 data: Bytes::copy_from_slice(data),
+                hidden_lanes: None,
                 payload_mode,
             },
         );
@@ -58,6 +59,7 @@ impl Image {
             self,
             PipelineOp::PutData {
                 data,
+                hidden_lanes: None,
                 payload_mode,
             },
         );
@@ -70,8 +72,8 @@ impl Image {
     /// Pillow 12.2's `_imaging.c:_putdata` applies `scale` and `offset` only to
     /// single-band, signed-integer, and float images. Its multiband `getink`
     /// path instead treats integers as little-endian packed pixels and ignores
-    /// scaling. Keeping that distinction here gives CPU, SIMD, and GPU the
-    /// same canonical byte payload.
+    /// scaling. Keeping that distinction here gives each backend the same
+    /// normalized logical bytes and physical-lane payload when supported.
     ///
     /// # Errors
     ///
@@ -102,7 +104,17 @@ impl Image {
             return Ok(());
         }
         let data = putdata_bytes(image_mode, values, scale, offset)?;
-        self.putdata(&data)
+        let hidden_lanes = putdata_hidden_lane_bytes(image_mode, values)?;
+        let new_self = Image::push_op(
+            self,
+            PipelineOp::PutData {
+                data: Bytes::from(data),
+                hidden_lanes,
+                payload_mode: image_mode,
+            },
+        );
+        *self = new_self;
+        Ok(())
     }
 
     /// Returns the host-language value shape required by the current mode.
@@ -230,7 +242,7 @@ impl Image {
     ) -> Result<bool, PilError> {
         let image_mode = self.mode_identity()?;
         if is_l16_identity(image_mode) {
-            self.putdata_l16_bytes(data, scale, offset)?;
+            self.putdata_l16_bytes_with_count(data, entry_count, scale, offset)?;
             return Ok(true);
         }
         if matches!(image_mode, Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8) {
@@ -263,26 +275,28 @@ impl Image {
     /// Pillow treats a `bytes` argument to `putdata` as byte-oriented storage
     /// for I;16 modes, rather than as one numeric sample per byte. Its
     /// `_imaging.c:_putdata` image8 fast path copies at most one logical row's
-    /// worth of input bytes at a time, leaving the remaining byte half of each
-    /// 16-bit row zero-filled. With a scale or offset it applies the same
-    /// clipping to each input byte before placing it in that row layout.
+    /// worth of input bytes at a time. It updates only those raw bytes and
+    /// preserves all other existing sample bytes. With a scale or offset it
+    /// clips each input byte before placing it in that row layout.
     pub fn putdata_l16_bytes(
         &mut self,
         data: &[u8],
         scale: f64,
         offset: f64,
     ) -> Result<(), PilError> {
-        self.validate_putdata_length(data.len())?;
-        let (width, height) = self.size()?;
-        let dimensions = CheckedDims::new(width, height, 2)?;
+        self.putdata_l16_bytes_with_count(data, data.len(), scale, offset)
+    }
+
+    fn putdata_l16_bytes_with_count(
+        &mut self,
+        data: &[u8],
+        entry_count: usize,
+        scale: f64,
+        offset: f64,
+    ) -> Result<(), PilError> {
+        self.validate_putdata_length(entry_count)?;
         let mode = self.mode_identity()?;
-        let raw = crate::compute::pool_cpu::ops::put::ops::prepare_put_data_l16_bytes(
-            data, dimensions, scale, offset,
-        )?;
-        let context = crate::compute::ExecutionContext::for_routed_backend(
-            crate::compute::Backend::Cpu,
-        );
-        let requested_backend = self.requested_backend_for_eager_cpu_mutation();
+        let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
         self.load()?;
         if let Image::Loaded(image_data) = self {
             let selection = crate::compute::pool_cpu::ops::put::ops::select_put_data_l16_bytes(
@@ -291,7 +305,10 @@ impl Image {
             )?;
             crate::compute::pool_cpu::ops::put::ops::execute_put_data_l16_bytes(
                 Arc::make_mut(&mut image_data.image),
-                &raw,
+                data,
+                entry_count,
+                scale,
+                offset,
                 selection,
             )?;
             image_data.known_zero_fill = false;
@@ -309,31 +326,20 @@ impl Image {
         ))
     }
 
-    pub(crate) fn requested_backend_for_eager_cpu_mutation(
-        &self,
-    ) -> Option<crate::compute::Backend> {
-        if !crate::compute::Backend::pipeline_telemetry_enabled() {
-            return None;
-        }
-        self.backend().or_else(|| {
-            crate::compute::preferred_active_backend()
-                .ok()
-                .flatten()
-                .and_then(|(backend, only_active)| only_active.then_some(backend))
-        })
-    }
-
-
-    /// Creates the CPU Default execution context for synchronous value writes.
+    /// Creates the routed CPU context for synchronous value writes.
     ///
     /// Bindings retain this value across callback-driven sequence processing
-    /// and pass it to [`Image::putdata_value_at_with_context`].
+    /// and pass it to [`Image::putdata_value_at_with_context`]. SIMD requests
+    /// retain their detected architecture so exact-mode selection can use a
+    /// matching strategy or report the Default fallback. A pinned GPU request
+    /// uses CPU Default; an unpinned GPU preference can use an active SIMD
+    /// architecture for this synchronous host-write path.
     #[doc(hidden)]
     pub fn putdata_execution_context(&self) -> PutDataExecutionContext {
+        let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
         PutDataExecutionContext {
-            context: crate::compute::ExecutionContext::for_routed_backend(
-                crate::compute::Backend::Cpu,
-            ),
+            context,
+            requested_backend,
             selection: None,
         }
     }
@@ -399,10 +405,10 @@ impl Image {
     ) -> Result<(), PilError> {
         // This public helper is the callback-preserving path: writes are
         // visible before the binding coerces the next value, so they execute
-        // directly on host storage even when SIMD/GPU is requested. Capture
-        // the request before `load()` consumes a locked pipeline so telemetry
-        // can report the actual CPU route as a backend gap.
-        let requested_backend = self.requested_backend_for_eager_cpu_mutation();
+        // directly on host storage even when SIMD/GPU is requested. Retain the
+        // request captured by the route context before `load()` consumes a
+        // locked pipeline so telemetry reports the actual CPU fallback.
+        let requested_backend = context.requested_backend;
 
         let (width, height) = self.size()?;
         let pixel_count = (width as usize)
@@ -415,13 +421,16 @@ impl Image {
         let image_mode = self.mode_identity()?;
         let input = if is_l16_identity(image_mode) {
             crate::compute::pool_cpu::ops::put::helpers::put_data_value_at::ValueAtInput::Luma16(
-                putdata_l16_sample(value, scale, offset)?,
+                crate::compute::pool_cpu::ops::put::helpers::put_data_value_at::luma16_sample(
+                    value, scale, offset,
+                )?,
             )
         } else {
             putdata_byte_width(image_mode).ok_or_else(|| unsupported_putdata_mode(image_mode))?;
             let bytes = putdata_bytes(image_mode, std::slice::from_ref(value), scale, offset)?;
             crate::compute::pool_cpu::ops::put::helpers::put_data_value_at::ValueAtInput::Bytes(
                 bytes,
+                putdata_hidden_lanes(image_mode, value)?,
             )
         };
         let selection = self.putdata_value_at_selection(image_mode, context)?;

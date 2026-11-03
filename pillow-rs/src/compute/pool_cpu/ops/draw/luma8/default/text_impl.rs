@@ -2,7 +2,7 @@ use crate::error::PilError;
 use crate::raster::{DynamicImage, Luma};
 use image::{GenericImage, GenericImageView};
 
-pub(crate) fn apply(
+pub(crate) fn apply<const RGBA_MASK: bool>(
     mut image: DynamicImage,
     x: i32,
     y: i32,
@@ -17,8 +17,8 @@ pub(crate) fn apply(
     let (image_width, image_height) = canvas.dimensions();
     for text_y in 0..height {
         for text_x in 0..width {
-            let offset = ((text_y * width + text_x) * 4) as usize;
-            let coverage = pixels[offset + 3];
+            let pixel_index = (text_y * width + text_x) as usize;
+            let coverage = crate::compute::pool_cpu::ops::draw::helpers::text_mask::coverage::<RGBA_MASK>(pixels, pixel_index);
             if coverage == 0 {
                 continue;
             }

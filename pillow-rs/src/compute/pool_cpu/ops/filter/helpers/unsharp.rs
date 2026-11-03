@@ -22,6 +22,21 @@ pub(crate) fn blend_native_bytes(
     Ok(())
 }
 
+/// Applies the same thresholded byte arithmetic to a retained physical lane.
+pub(super) fn blend_sample(source: u8, blurred: u8, percent: i32, threshold: i32) -> u8 {
+    let source_i32 = i32::from(source);
+    let difference = source_i32 - i32::from(blurred);
+    if difference.abs() <= threshold {
+        return source;
+    }
+    let adjustment = if percent == 150 {
+        adjustment_150(difference)
+    } else {
+        difference * percent / 100
+    };
+    clip_byte(source_i32 + adjustment)
+}
+
 #[inline(always)]
 fn blend_150(original: &[u8], blurred_output: &mut [u8], threshold: i32) {
     for (output, &source) in blurred_output.iter_mut().zip(original) {

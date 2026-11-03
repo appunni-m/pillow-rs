@@ -15,5 +15,5 @@ pub(crate) fn prepare(input: &Input, index: u8) -> Result<Kernel<'_>, PilError> 
 #[inline]
 pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
     let channel = Some(input.index.min(3));
-    helpers::native(input, channel)
+    helpers::native_f32(input, channel)
 }

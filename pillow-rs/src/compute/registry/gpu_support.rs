@@ -8,6 +8,19 @@ use crate::raster::Mode;
 /// Returns whether the GPU backend has an implementation for `op`.
 #[cfg(feature = "gpu")]
 pub fn gpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
+    if matches!(
+        op,
+        PipelineOp::PadTyped { .. }
+            | PipelineOp::PadPositioned { .. }
+            | PipelineOp::ExpandTyped { .. }
+    ) {
+        return Ok(false);
+    }
+    if let PipelineOp::Expand { border, .. } = op
+        && border.uniform_nonnegative().is_none()
+    {
+        return Ok(false);
+    }
     // Merge aliases share a raster storage type with canonical modes, but
     // their target-specific tags are not all representable by the shader
     // output contract. LAB additionally needs an A/B +128 byte encoding, and
@@ -550,23 +563,23 @@ fn gpu_auxiliary_shader_contract(op: &PipelineOp) -> Option<bool> {
         // PutData keeps the exact payload identity through dispatch. The
         // shader only needs its raw byte width, but admission must preserve
         // the source storage contract before uploading those bytes.
-        PipelineOp::PutData { payload_mode, .. } => matches!(
-            payload_mode,
-            Mode::One
-                | Mode::ImageLuma8
-                | Mode::ImageLumaA8
-                | Mode::ImagePalette8
-                | Mode::ImagePaletteAlpha8
-                | Mode::ImageRgb8
-                | Mode::ImageRgba8
-                | Mode::ImageRgbPremultiplied8
-                | Mode::ImageRgbx8
-                | Mode::ImageCmyk8
-                | Mode::ImageYCbCr8
-                | Mode::ImageHsv8
-                | Mode::ImageI32
-                | Mode::ImageF32
-        ),
+        // TODO(pillow-rs#3ptb): add a GPU PutData result strategy that retains
+        // compact-carrier lanes before admitting these payload modes.
+        PipelineOp::PutData { payload_mode, hidden_lanes, .. } => {
+            hidden_lanes.is_none()
+                && matches!(
+                    payload_mode,
+                    Mode::One
+                        | Mode::ImageLuma8
+                        | Mode::ImagePalette8
+                        | Mode::ImageRgba8
+                        | Mode::ImageRgbPremultiplied8
+                        | Mode::ImageRgbx8
+                        | Mode::ImageCmyk8
+                        | Mode::ImageI32
+                        | Mode::ImageF32
+                )
+        }
         // P/PA pipelines pass raw indexed samples as Luma8/LumaA8 at the
         // executor boundary. The GPU pool performs the logical-mode check
         // before dispatch, so both ordinary and palette-index writes use the

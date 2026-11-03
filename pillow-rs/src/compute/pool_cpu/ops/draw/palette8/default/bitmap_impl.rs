@@ -20,7 +20,7 @@ pub(crate) fn apply(
     for mask_y in 0..mask_height {
         for mask_x in 0..mask_width {
             let coverage = mask.coverage(mask_x, mask_y);
-            if coverage == 0 {
+            if mask.should_skip(coverage) {
                 continue;
             }
             let image_x = x + mask_x as i32;
@@ -36,7 +36,7 @@ pub(crate) fn apply(
             let output = if coverage == 255 {
                 ink
             } else {
-                crate::draw::pil_blend(ink, index, coverage)
+                mask.blend_byte(ink, index, coverage)
             };
             indices.put_pixel(image_x as u32, image_y as u32, Luma([output]));
         }

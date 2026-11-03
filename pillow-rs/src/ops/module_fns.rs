@@ -209,6 +209,7 @@ pub fn merge_inputs(mode: Mode, bands: &[MergeInput]) -> Result<Image, PilError>
 pub fn blend(image1: &Image, image2: &Image, alpha: f64) -> Result<Image, PilError> {
     let mode1 = image1.mode_identity()?;
     let mode2 = image2.mode_identity()?;
+    let backend = image1.backend().or(image2.backend());
     let support = OperationId::BlendModule.support();
     let mode_support = support.for_mode(mode1);
     mode_support.validate_blend_input_mode(mode2)?;
@@ -235,13 +236,20 @@ pub fn blend(image1: &Image, image2: &Image, alpha: f64) -> Result<Image, PilErr
             "Blend wrapper did not resolve all declared input facts".into(),
         ));
     }
-    Ok(Image::push_op(
+    let output = Image::push_op(
         image1,
         PipelineOp::BlendModule {
             other: Arc::new(image2.clone()),
             alpha,
         },
-    ))
+    );
+    // Stateful enhancers can materialize their base before blending. In that
+    // case the original source is the only operand that still carries the
+    // caller's explicit backend selection.
+    Ok(match backend {
+        Some(backend) => output.use_backend(backend),
+        None => output,
+    })
 }
 
 /// Composites `image1` over `image2` using `mask`.
@@ -301,7 +309,6 @@ pub fn composite(image1: &Image, image2: &Image, mask: &Image) -> Result<Image, 
             *palette_alpha = None;
         }
     }
-    result.set_pipeline_output_mode(image2.known_mode_identity());
     Ok(result)
 }
 

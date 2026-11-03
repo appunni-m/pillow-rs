@@ -11,7 +11,12 @@ fn expand(
     architecture: Architecture,
 ) -> DynamicImage {
     let context = ExecutionContext::new(Backend::Cpu, architecture);
-    super::super::expand::prepare(image, border, FILL, &context)
+    super::super::expand::prepare(
+        image,
+        crate::pipeline::ExpandMargins::uniform(border),
+        FILL,
+        &context,
+    )
         .expect("native Expand preparation must succeed")
         .execute()
         .expect("native Expand execution must succeed")

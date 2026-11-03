@@ -69,6 +69,22 @@ fn finish<P: Pixel<Subpixel = u8>>(
     crate::image_utils::typed_bytes_to_buffer(dimensions, bytes)
 }
 
+fn preserve_unchanged_lanes<P: Pixel<Subpixel = u8>, O: Pixel<Subpixel = u8>>(
+    source: &ImageBuffer<P, Vec<u8>>,
+    output: &mut ImageBuffer<O, Vec<u8>>,
+) -> Result<(), PilError> {
+    if P::CHANNEL_COUNT != O::CHANNEL_COUNT {
+        return Ok(());
+    }
+    let Some(lanes) = source.hidden_pixel_lanes().cloned() else {
+        return Ok(());
+    };
+    if !output.replace_hidden_pixel_lanes(Some(lanes)) {
+        return Err(unsupported());
+    }
+    Ok(())
+}
+
 pub(crate) fn rgb_mask(input: NativeInput<'_, Rgb<u8>>) -> Result<RgbaImage, PilError> {
     native_mask::<3, 4, false, _, _>(input)
 }
@@ -105,14 +121,18 @@ pub(crate) fn native_mask<
         }
         crate::compute::record_pipeline_operation_vector_blocks((width / 4 * height) as u64);
         crate::compute::record_pipeline_operation_scalar_tail((width % 4 * height) as u64);
-        return finish(source.width(), source.height(), output);
+        let mut output = finish(source.width(), source.height(), output)?;
+        preserve_unchanged_lanes(source, &mut output)?;
+        return Ok(output);
     }
     let (output, vectors, tail) = interleave::<SOURCE, OUTPUT, CMYK>(
         source.as_raw(), mask.as_raw(), pixels,
     ).ok_or_else(unsupported)?;
     if vectors != 0 { crate::compute::record_pipeline_operation_vector_blocks(vectors); }
     if tail != 0 { crate::compute::record_pipeline_operation_scalar_tail(tail); }
-    finish(source.width(), source.height(), output)
+    let mut output = finish(source.width(), source.height(), output)?;
+    preserve_unchanged_lanes(source, &mut output)?;
+    Ok(output)
 }
 
 fn interleave<const SOURCE: usize, const OUTPUT: usize, const CMYK: bool>(

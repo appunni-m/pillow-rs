@@ -221,7 +221,8 @@ fn merge_support(mode: Mode) -> ModeSupport {
 
 /// Complete exact-mode support contract for Image.merge.
 pub(crate) static MERGE_SUPPORT: OperationSupport =
-    OperationSupport::new(OperationId::Merge, &[], merge_support);
+    OperationSupport::new(OperationId::Merge, &[], merge_support)
+        .with_rejected_output(OutputModeRule::ByTargetMode);
 
 fn merge_facts(
     input: OperationInputs<'_>,

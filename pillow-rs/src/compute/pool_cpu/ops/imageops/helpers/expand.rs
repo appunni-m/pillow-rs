@@ -1,24 +1,22 @@
 //! Native sample copying for exact-mode ImageOps.expand implementations.
 
 use crate::error::PilError;
+use crate::pipeline::ExpandMargins;
 use crate::raster::{GenericImageView, ImageBuffer, Pixel, Primitive};
 
 pub(crate) fn expanded_dimensions(
     width: u32,
     height: u32,
-    border: u32,
+    border: ExpandMargins,
     bytes_per_pixel: u8,
 ) -> Result<(u32, u32), PilError> {
-    let border_twice = border
-        .checked_mul(2)
-        .ok_or_else(|| PilError::DimensionError("expand border overflows dimensions".into()))?;
-    let width = width
-        .checked_add(border_twice)
-        .ok_or_else(|| PilError::DimensionError("expanded image width overflows".into()))?;
-    let height = height
-        .checked_add(border_twice)
-        .ok_or_else(|| PilError::DimensionError("expanded image height overflows".into()))?;
-    crate::checked_dims::CheckedDims::new(width, height, bytes_per_pixel)?;
+    let width = i128::from(width) + i128::from(border.left) + i128::from(border.right);
+    let height = i128::from(height) + i128::from(border.top) + i128::from(border.bottom);
+    let width = u32::try_from(width)
+        .map_err(|_| PilError::DimensionError("expanded image width is invalid".into()))?;
+    let height = u32::try_from(height)
+        .map_err(|_| PilError::DimensionError("expanded image height is invalid".into()))?;
+    crate::checked_dims::CheckedDims::new_allow_empty(width, height, bytes_per_pixel)?;
     Ok((width, height))
 }
 
@@ -28,7 +26,7 @@ pub(crate) fn expand_samples<T: Copy>(
     source_height: u32,
     output_width: u32,
     output_height: u32,
-    border: u32,
+    border: ExpandMargins,
     channels: usize,
     fill: &[T],
 ) -> Result<Vec<T>, PilError> {
@@ -49,10 +47,48 @@ pub(crate) fn expand_samples<T: Copy>(
     let output_len = output_stride
         .checked_mul(output_height as usize)
         .ok_or_else(|| PilError::DimensionError("expanded image size overflows".into()))?;
-    if border == 0 {
+    if border.uniform_nonnegative() == Some(0) {
         return Ok(source.to_vec());
     }
 
+    if let Some(border) = border.uniform_nonnegative() {
+        return expand_uniform_samples(
+            source,
+            source_height,
+            output_width,
+            output_height,
+            border,
+            source_stride,
+            output_len,
+            fill,
+        );
+    }
+
+    expand_margin_samples(
+        source,
+        source_width,
+        source_height,
+        output_width,
+        output_height,
+        border,
+        channels,
+        fill,
+        source_stride,
+        output_stride,
+        output_len,
+    )
+}
+
+fn expand_uniform_samples<T: Copy>(
+    source: &[T],
+    source_height: u32,
+    output_width: u32,
+    output_height: u32,
+    border: u32,
+    source_stride: usize,
+    output_len: usize,
+    fill: &[T],
+) -> Result<Vec<T>, PilError> {
     let border = border as usize;
     let source_end_y = border + source_height as usize;
     let fill_row = fill.repeat(output_width as usize);
@@ -77,9 +113,52 @@ pub(crate) fn expand_samples<T: Copy>(
     Ok(output)
 }
 
+fn expand_margin_samples<T: Copy>(
+    source: &[T],
+    source_width: u32,
+    source_height: u32,
+    output_width: u32,
+    output_height: u32,
+    border: ExpandMargins,
+    channels: usize,
+    fill: &[T],
+    source_stride: usize,
+    output_stride: usize,
+    output_len: usize,
+) -> Result<Vec<T>, PilError> {
+    let mut output = fill.repeat(output_len / channels);
+    for output_y in 0..output_height {
+        let source_y = i128::from(output_y) - i128::from(border.top);
+        if !(0..i128::from(source_height)).contains(&source_y) {
+            continue;
+        }
+
+        let destination_start = i128::from(border.left).max(0).min(i128::from(output_width));
+        let destination_end = (i128::from(border.left) + i128::from(source_width))
+            .max(0)
+            .min(i128::from(output_width));
+        if destination_end <= destination_start {
+            continue;
+        }
+
+        let source_start = source_y as usize * source_stride
+            + (destination_start - i128::from(border.left)) as usize * channels;
+        let copy_len = (destination_end - destination_start) as usize * channels;
+        let output_start = output_y as usize * output_stride + destination_start as usize * channels;
+        output[output_start..output_start + copy_len]
+            .copy_from_slice(&source[source_start..source_start + copy_len]);
+    }
+    if output.len() != output_len {
+        return Err(PilError::InternalError(
+            "Expand output did not match its declared dimensions".into(),
+        ));
+    }
+    Ok(output)
+}
+
 pub(crate) fn expand_buffer<P, T>(
     input: &ImageBuffer<P, Vec<T>>,
-    border: u32,
+    border: ExpandMargins,
     bytes_per_pixel: u8,
     channels: usize,
     fill: &[T],

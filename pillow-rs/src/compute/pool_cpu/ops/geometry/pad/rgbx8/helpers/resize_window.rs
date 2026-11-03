@@ -12,15 +12,20 @@ pub(crate) fn resize_into_canvas(
     resize: &PreparedResize<'_>,
 ) -> Result<Option<RgbaImage>, PilError> {
     if !resize.supports_pad_window()
+        || frame.offset_x != 0
+        || frame.offset_y < 0
         || frame.content_width != frame.width
         || frame.content_height >= frame.height
+        || frame.offset_y > i64::from(frame.height - frame.content_height)
         || image.dimensions() == (frame.content_width, frame.content_height)
     {
         return Ok(None);
     }
     let canvas = CheckedDims::new(frame.width, frame.height, 4)?;
     let content = CheckedDims::new(frame.content_width, frame.content_height, 4)?;
-    let window = dimensions::resize_window(canvas, content, frame.offset_y, Mode::ImageRgbx8)?;
+    let offset_y = u32::try_from(frame.offset_y)
+        .map_err(|_| PilError::DimensionError("Pad vertical offset overflow".into()))?;
+    let window = dimensions::resize_window(canvas, content, offset_y, Mode::ImageRgbx8)?;
     let fill = super::super::default::pad_impl::fill(frame.color);
     let mut output = fill.repeat(canvas.width as usize);
     output = output.repeat(canvas.height as usize);

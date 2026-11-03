@@ -2,7 +2,7 @@ use crate::compute::pool_cpu::ops::draw::three_band_text;
 use crate::error::PilError;
 use crate::raster::DynamicImage;
 
-pub(crate) fn apply(
+pub(crate) fn apply<const RGBA_MASK: bool>(
     mut image: DynamicImage,
     x: i32,
     y: i32,
@@ -14,6 +14,17 @@ pub(crate) fn apply(
     let DynamicImage::ImageLab8(canvas) = &mut image else {
         return Err(PilError::ValueError("mode mismatch".into()));
     };
-    three_band_text::apply(canvas, x, y, width, height, pixels, fill);
+    let mut hidden_lanes = canvas.take_hidden_pixel_lanes();
+    three_band_text::apply::<RGBA_MASK>(
+        canvas,
+        x,
+        y,
+        width,
+        height,
+        pixels,
+        fill,
+        &mut hidden_lanes,
+    )?;
+    super::super::super::helpers::hidden_lanes::restore(canvas, hidden_lanes)?;
     Ok(image)
 }

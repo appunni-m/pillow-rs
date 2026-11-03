@@ -28,24 +28,30 @@ macro_rules! declare_strategies {
         $variant:ident, $module:ident, $cfg:meta, $requires:expr, $channels:literal, $safety:ident
     );* $(;)?) => {
         use crate::compute::{Architecture, ExecutionContext, registry::support::{
-            InputContract, ModeSupport, OperationId, OutputModeRule, StrategyInputs, SupportAssessment,
+            InputContract, ModeSupport, OperationId, StrategyInputs, SupportAssessment,
         }};
         use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
         use crate::error::PilError;
         use crate::raster::{DynamicImage, Mode};
         use super::default::extract_band_impl as scalar;
 
-        pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
-            OperationId::ExtractBand, Mode::$mode, OutputModeRule::Fixed(Mode::ImageLuma8),
-            &[
-                InputContract::CheckedByteDimensions { bytes_per_pixel: 1, allow_empty: true },
+        pub(crate) const SUPPORT: ModeSupport =
+            super::super::helpers::extract_band::support(
+                Mode::$mode,
+                &[
+                InputContract::CheckedByteDimensions {
+                    bytes_per_pixel: super::super::helpers::extract_band::output_bytes_per_pixel(
+                        Mode::$mode,
+                    ),
+                    allow_empty: true,
+                },
                 InputContract::ExtractBandIndex($rule),
-            ],
-            &[$(crate::compute::registry::support::ImplementationSupport::cpu(
+                ],
+                &[$(crate::compute::registry::support::ImplementationSupport::cpu(
                 OperationId::ExtractBand, Mode::$mode, Architecture::$variant, cfg!($cfg),
                 $requires, crate::compute::registry::support::StrategyGuard::ExtractBandBytes { channels: $channels },
-            ),)*],
-        );
+                ),)*],
+            );
 
         pub(crate) enum ArchitectureStrategy<'a> {
             Default(scalar::Kernel<'a>),

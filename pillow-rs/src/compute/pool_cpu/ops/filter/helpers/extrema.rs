@@ -82,6 +82,9 @@ pub(crate) const fn native_byte_blur_architectures(
 }
 
 /// Dispatches one admitted byte extrema request to its selected architecture.
+// TODO(pillow-rs#3ptb): freeze native-byte MaxFilter/MinFilter output and
+// architecture/fallback receipts across exact byte modes; source review is
+// complete, but CPU parity remains pending.
 pub(crate) fn execute_native_byte_extrema(
     image: &DynamicImage,
     request: super::super::ops::FilterRequest,

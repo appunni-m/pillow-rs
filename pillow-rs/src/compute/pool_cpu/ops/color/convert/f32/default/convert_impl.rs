@@ -12,11 +12,15 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
             crate::compute::pool_cpu::ops::grayscale::f32::default::grayscale_impl::execute(source),
         )),
         Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
-            super::super::super::helpers::luma16::from_luma8_samples(
+            // NO_PILLOW_SUPPORT: scalar F samples map directly to unsigned
+            // 16-bit range by clamping and truncating, like the native F→I cast.
+            // TODO(pillow-rs#3ptb): cover negative, fractional, >255 and
+            // out-of-u16-range inputs for all I;16 byte-order identities.
+            super::super::super::helpers::luma16::from_u16_samples(
                 source.width(),
                 source.height(),
                 target,
-                source.pixels().map(|pixel| sample(pixel.0)),
+                source.pixels().map(|pixel| sample_i16(pixel.0)),
             )
         }
         Mode::ImageLumaA8 => Ok(DynamicImage::ImageLumaA8(luma_alpha(source))),
@@ -86,6 +90,9 @@ fn hsv(source: &RgbaImage) -> RgbImage {
 fn to_i32(source: &RgbaImage) -> RgbaImage {
     let mut output = RgbaImage::new(source.width(), source.height());
     for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
+        // TODO(pillow-rs#3ptb): compare NaN and out-of-i32-range values with
+        // Pillow 12.2 on supported hosts; its C float-to-int cast has no
+        // portable result when the value cannot be represented as i32.
         let value = f32::from_le_bytes(pixel.0) as i32;
         *destination = Rgba(value.to_le_bytes());
     }
@@ -106,7 +113,7 @@ pub(crate) fn execute_palette_target(
             }
             return Ok(super::super::super::ops::PreparedConvertOutput {
                 image: DynamicImage::ImagePaletteAlpha8(output),
-                palette: Some(crate::ops::quantize::identity_grayscale_palette()),
+                palette: Some(crate::compute::pool_cpu::helpers::quantization::identity_grayscale_palette()),
                 palette_alpha: None,
                 wrapper_metadata: Some(super::super::super::ops::ConvertWrapperMetadata::ExifOnly),
             });
@@ -115,7 +122,7 @@ pub(crate) fn execute_palette_target(
     };
     Ok(super::super::super::ops::PreparedConvertOutput {
         image: DynamicImage::ImagePalette8(indices),
-        palette: Some(crate::ops::quantize::identity_grayscale_palette()),
+        palette: Some(crate::compute::pool_cpu::helpers::quantization::identity_grayscale_palette()),
         palette_alpha: None,
         wrapper_metadata: Some(super::super::super::ops::ConvertWrapperMetadata::Drop),
     })
@@ -124,4 +131,9 @@ pub(crate) fn execute_palette_target(
 #[inline]
 fn sample(bytes: [u8; 4]) -> u8 {
     f32::from_le_bytes(bytes).clamp(0.0, 255.0) as u8
+}
+
+#[inline]
+fn sample_i16(bytes: [u8; 4]) -> u16 {
+    f32::from_le_bytes(bytes).clamp(0.0, f32::from(u16::MAX)) as u16
 }

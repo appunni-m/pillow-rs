@@ -1,4 +1,8 @@
+use std::ops::Deref;
+
 use crate::error::PilError;
+use crate::compute::pool_cpu::helpers::bytes::preblend;
+use crate::raster::DynamicImage;
 
 use super::layout::{MaskLayout, SourceLayout};
 use super::plan::BytePlan;
@@ -9,9 +13,9 @@ pub(crate) trait SourceMap<const SOURCE: usize, const DESTINATION: usize> {
 }
 
 pub(crate) struct Native;
-pub(crate) struct LumaAlphaToRgb;
-pub(crate) struct FourBytesToRgb;
-pub(crate) struct RgbToRgba;
+pub(crate) struct PhysicalFourBytesToLumaAlpha;
+pub(crate) struct PhysicalFourBytesToRgb;
+pub(crate) struct PhysicalFourBytesToFour;
 
 impl<const CHANNELS: usize> SourceMap<CHANNELS, CHANNELS> for Native {
     #[inline(always)]
@@ -20,49 +24,61 @@ impl<const CHANNELS: usize> SourceMap<CHANNELS, CHANNELS> for Native {
     }
 }
 
-impl SourceMap<2, 3> for LumaAlphaToRgb {
+impl SourceMap<4, 2> for PhysicalFourBytesToLumaAlpha {
     #[inline(always)]
-    fn sample(source: &[u8], _band: usize) -> u8 {
-        source[0]
+    fn sample(source: &[u8], band: usize) -> u8 {
+        source[if band == 0 { 0 } else { 3 }]
     }
 }
 
-impl SourceMap<4, 3> for FourBytesToRgb {
+impl SourceMap<4, 3> for PhysicalFourBytesToRgb {
     #[inline(always)]
     fn sample(source: &[u8], band: usize) -> u8 {
         source[band]
     }
 }
 
-impl SourceMap<3, 4> for RgbToRgba {
+impl SourceMap<4, 4> for PhysicalFourBytesToFour {
     #[inline(always)]
     fn sample(source: &[u8], band: usize) -> u8 {
-        if band == 3 { 255 } else { source[band] }
+        source[band]
     }
 }
 
 /// Executes the prepared, exact-mode byte strategy without mode conversion.
-pub(crate) fn execute<const CHANNELS: usize>(plan: BytePlan<'_>) -> Result<Vec<u8>, PilError> {
+pub(crate) fn execute<const CHANNELS: usize, I>(
+    plan: BytePlan<'_, I>,
+) -> Result<Vec<u8>, PilError>
+where
+    I: Deref<Target = DynamicImage>,
+{
     match plan.source_layout {
-        SourceLayout::Native => execute_mapped::<CHANNELS, CHANNELS, Native>(plan),
-        SourceLayout::LumaAlphaToRgb => execute_mapped::<2, 3, LumaAlphaToRgb>(plan),
-        SourceLayout::FourBytesToRgb => execute_mapped::<4, 3, FourBytesToRgb>(plan),
-        SourceLayout::RgbToRgba => execute_mapped::<3, 4, RgbToRgba>(plan),
+        SourceLayout::Native => execute_mapped::<CHANNELS, CHANNELS, Native, I>(plan),
+        SourceLayout::PhysicalFourBytesToLumaAlpha => {
+            execute_mapped::<4, 2, PhysicalFourBytesToLumaAlpha, I>(plan)
+        }
+        SourceLayout::PhysicalFourBytesToRgb => {
+            execute_mapped::<4, 3, PhysicalFourBytesToRgb, I>(plan)
+        }
+        SourceLayout::PhysicalFourBytesToFour => {
+            execute_mapped::<4, 4, PhysicalFourBytesToFour, I>(plan)
+        }
     }
 }
 
-fn execute_mapped<const SOURCE: usize, const DESTINATION: usize, M>(
-    plan: BytePlan<'_>,
+fn execute_mapped<const SOURCE: usize, const DESTINATION: usize, M, I>(
+    plan: BytePlan<'_, I>,
 ) -> Result<Vec<u8>, PilError>
 where
     M: SourceMap<SOURCE, DESTINATION>,
+    I: Deref<Target = DynamicImage>,
 {
-    let mut output = plan.destination.to_vec();
+    let mut output = plan.initialize_destination()?;
     if plan.region.is_empty() {
         return Ok(output);
     }
     if plan.mask.is_none() {
-        copy_unmasked::<SOURCE, DESTINATION>(&plan, &mut output)?;
+        copy_unmasked::<SOURCE, DESTINATION, I>(&plan, &mut output)?;
         return Ok(output);
     }
     let (source_width, _) = plan.source_size;
@@ -98,12 +114,12 @@ where
             .checked_add(row)
             .ok_or_else(|| overflow("destination row"))?;
         let source_row = if plan.broadcast_source {
-            &plan.source.as_bytes()[..SOURCE]
+            &plan.source_bytes()[..SOURCE]
         } else {
             let start = source_y
                 .checked_mul(source_stride)
                 .ok_or_else(|| overflow("source row offset"))?;
-            &plan.source.as_bytes()[start..start + source_stride]
+            &plan.source_bytes()[start..start + source_stride]
         };
         let destination_start = destination_y
             .checked_mul(destination_stride)
@@ -135,22 +151,34 @@ where
     Ok(output)
 }
 
-fn copy_unmasked<const SOURCE: usize, const DESTINATION: usize>(
-    plan: &BytePlan<'_>,
+fn copy_unmasked<const SOURCE: usize, const DESTINATION: usize, I>(
+    plan: &BytePlan<'_, I>,
     output: &mut [u8],
-) -> Result<(), PilError> {
+) -> Result<(), PilError>
+where
+    I: Deref<Target = DynamicImage>,
+{
     match plan.source_layout {
-        SourceLayout::Native => copy_native_rows::<SOURCE, DESTINATION>(plan, output),
-        SourceLayout::LumaAlphaToRgb => copy_luma_alpha_to_rgb(plan, output),
-        SourceLayout::FourBytesToRgb => copy_four_bytes_to_rgb(plan, output),
-        SourceLayout::RgbToRgba => copy_rgb_to_rgba(plan, output),
+        SourceLayout::Native => copy_native_rows::<SOURCE, DESTINATION, I>(plan, output),
+        SourceLayout::PhysicalFourBytesToLumaAlpha => {
+            copy_physical_four_bytes::<4, 2, PhysicalFourBytesToLumaAlpha, I>(plan, output)
+        }
+        SourceLayout::PhysicalFourBytesToRgb => {
+            copy_physical_four_bytes::<4, 3, PhysicalFourBytesToRgb, I>(plan, output)
+        }
+        SourceLayout::PhysicalFourBytesToFour => {
+            copy_physical_four_bytes::<4, 4, PhysicalFourBytesToFour, I>(plan, output)
+        }
     }
 }
 
-fn copy_native_rows<const SOURCE: usize, const DESTINATION: usize>(
-    plan: &BytePlan<'_>,
+fn copy_native_rows<const SOURCE: usize, const DESTINATION: usize, I>(
+    plan: &BytePlan<'_, I>,
     output: &mut [u8],
-) -> Result<(), PilError> {
+) -> Result<(), PilError>
+where
+    I: Deref<Target = DynamicImage>,
+{
     let source_stride = checked_stride(plan.source_size.0, SOURCE)?;
     let destination_stride = checked_stride(plan.destination_size.0, DESTINATION)?;
     let source_left = usize::try_from(plan.region.source_left)
@@ -189,41 +217,39 @@ fn copy_native_rows<const SOURCE: usize, const DESTINATION: usize>(
             .and_then(|start| start.checked_add(destination_start_x))
             .ok_or_else(|| overflow("destination row offset"))?;
         output[destination_start..destination_start + copy_bytes]
-            .copy_from_slice(&plan.source.as_bytes()[source_start..source_start + copy_bytes]);
+            .copy_from_slice(&plan.source_bytes()[source_start..source_start + copy_bytes]);
     }
     Ok(())
 }
 
-fn copy_luma_alpha_to_rgb(plan: &BytePlan<'_>, output: &mut [u8]) -> Result<(), PilError> {
-    copy_mapped_rows::<2, 3>(plan, output, |source, destination| {
-        for (source, destination) in source.chunks_exact(2).zip(destination.chunks_exact_mut(3)) {
-            destination.fill(source[0]);
+fn copy_physical_four_bytes<const SOURCE: usize, const DESTINATION: usize, M, I>(
+    plan: &BytePlan<'_, I>,
+    output: &mut [u8],
+) -> Result<(), PilError>
+where
+    M: SourceMap<SOURCE, DESTINATION>,
+    I: Deref<Target = DynamicImage>,
+{
+    copy_mapped_rows::<SOURCE, DESTINATION, I>(plan, output, |source, destination| {
+        for (source, destination) in source
+            .chunks_exact(SOURCE)
+            .zip(destination.chunks_exact_mut(DESTINATION))
+        {
+            for (band, output) in destination.iter_mut().enumerate() {
+                *output = M::sample(source, band);
+            }
         }
     })
 }
 
-fn copy_four_bytes_to_rgb(plan: &BytePlan<'_>, output: &mut [u8]) -> Result<(), PilError> {
-    copy_mapped_rows::<4, 3>(plan, output, |source, destination| {
-        for (source, destination) in source.chunks_exact(4).zip(destination.chunks_exact_mut(3)) {
-            destination.copy_from_slice(&source[..3]);
-        }
-    })
-}
-
-fn copy_rgb_to_rgba(plan: &BytePlan<'_>, output: &mut [u8]) -> Result<(), PilError> {
-    copy_mapped_rows::<3, 4>(plan, output, |source, destination| {
-        for (source, destination) in source.chunks_exact(3).zip(destination.chunks_exact_mut(4)) {
-            destination[..3].copy_from_slice(source);
-            destination[3] = u8::MAX;
-        }
-    })
-}
-
-fn copy_mapped_rows<const SOURCE: usize, const DESTINATION: usize>(
-    plan: &BytePlan<'_>,
+fn copy_mapped_rows<const SOURCE: usize, const DESTINATION: usize, I>(
+    plan: &BytePlan<'_, I>,
     output: &mut [u8],
     mut copy: impl FnMut(&[u8], &mut [u8]),
-) -> Result<(), PilError> {
+) -> Result<(), PilError>
+where
+    I: Deref<Target = DynamicImage>,
+{
     let source_stride = checked_stride(plan.source_size.0, SOURCE)?;
     let destination_stride = checked_stride(plan.destination_size.0, DESTINATION)?;
     let source_start_x = usize::try_from(plan.region.source_left)
@@ -263,7 +289,7 @@ fn copy_mapped_rows<const SOURCE: usize, const DESTINATION: usize>(
             .checked_mul(SOURCE)
             .ok_or_else(|| overflow("source row bytes"))?;
         copy(
-            &plan.source.as_bytes()[source_start..source_start + source_width],
+            &plan.source_bytes()[source_start..source_start + source_width],
             &mut output[destination_start..destination_start + copy_bytes],
         );
     }
@@ -343,8 +369,7 @@ fn blend_pixel<const SOURCE: usize, const DESTINATION: usize, M>(
     for (band, output) in destination.iter_mut().enumerate() {
         let source = M::sample(source, band);
         *output = if layout.premultiplied {
-            let scaled = u32::from(*output) * u32::from(inverse) + 128;
-            ((((scaled >> 8) + scaled) >> 8) + u32::from(source)) as u8
+            preblend::apply(source, *output, mask)
         } else {
             ((u16::from(source) * weight + u16::from(*output) * inverse + 127) / 255) as u8
         };

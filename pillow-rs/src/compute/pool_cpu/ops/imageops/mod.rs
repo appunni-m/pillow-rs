@@ -5,6 +5,7 @@ pub(crate) mod ops;
 pub(crate) mod expand;
 pub(crate) mod autocontrast;
 pub(crate) mod equalize;
+pub(crate) mod quantize;
 pub(crate) mod one;
 pub(crate) mod luma8;
 pub(crate) mod luma_a8;

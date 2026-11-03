@@ -29,7 +29,7 @@ enum RoundedRectGeometry {
 }
 
 fn write_rounded_rect_fill(
-    writer: &mut SimdDrawSpanWriter<'_>,
+    writer: &mut SimdDrawSpanWriter,
     geometry: &RoundedRectSpanGeometry,
     fill: (u8, u8, u8, u8),
 ) -> Result<(), PilError> {
@@ -80,7 +80,7 @@ fn write_rounded_rect_fill(
 }
 
 fn write_rounded_rect_outline(
-    writer: &mut SimdDrawSpanWriter<'_>,
+    writer: &mut SimdDrawSpanWriter,
     geometry: &RoundedRectSpanGeometry,
     width: i32,
     outline: (u8, u8, u8, u8),
@@ -182,51 +182,28 @@ fn rounded_rect_geometry(x0: i32, y0: i32, x1: i32, y1: i32, radius: f64) -> Rou
 fn draw_rounded_rect_spans(
     img: &DynamicImage,
     layout: DrawLayout,
-    channels: usize,
     geometry: &RoundedRectSpanGeometry,
     fill: Option<(u8, u8, u8, u8)>,
     outline: Option<(u8, u8, u8, u8)>,
     width: u32,
     alpha_blend_rgb: bool,
 ) -> Result<Option<DynamicImage>, PilError> {
-    let (image_width, image_height) = img.dimensions();
-    let mut output = img.as_bytes().to_vec();
-    let (vector_blocks, scalar_tail) = {
-        let mut writer = SimdDrawSpanWriter {
-            output: &mut output,
-            image_width,
-            image_height,
-            channels,
-            alpha_blend_rgb,
-            vector_blocks: 0,
-            scalar_tail: 0,
-        };
-
-        if let Some(fill) = fill {
-            write_rounded_rect_fill(&mut writer, geometry, fill)?;
-        }
-        if let Some(outline) = outline.filter(|color| Some(*color) != fill && width != 0) {
-            let width = i32::try_from(width).unwrap_or(i32::MAX);
-            write_rounded_rect_outline(&mut writer, geometry, width, outline)?;
-        }
-
-        (writer.vector_blocks, writer.scalar_tail)
-    };
-    if vector_blocks == 0 {
+    let mut writer = SimdDrawSpanWriter::new(img, layout, alpha_blend_rgb);
+    if let Some(fill) = fill {
+        write_rounded_rect_fill(&mut writer, geometry, fill)?;
+    }
+    if let Some(outline) = outline.filter(|color| Some(*color) != fill && width != 0) {
+        let width = i32::try_from(width).unwrap_or(i32::MAX);
+        write_rounded_rect_outline(&mut writer, geometry, width, outline)?;
+    }
+    if writer.vector_blocks == 0 {
         crate::compute::record_pipeline_operation_path("scalar-control");
         return Ok(Some(img.clone()));
     }
     crate::compute::record_pipeline_operation_path("vector");
-    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-    crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    crate::compute::pool_cpu::helpers::dynamic_image::from_raw_bytes(
-        layout.mode,
-        image_width,
-        image_height,
-        output,
-    )
-    .map(Some)
-    .ok_or_else(|| PilError::InternalError("SIMD Draw output dimensions were invalid".into()))
+    crate::compute::record_pipeline_operation_vector_blocks(writer.vector_blocks);
+    crate::compute::record_pipeline_operation_scalar_tail(writer.scalar_tail);
+    writer.into_image().map(Some)
 }
 
 pub(super) fn simd_draw_rounded_rect_native(
@@ -281,7 +258,6 @@ pub(super) fn simd_draw_rounded_rect_native(
         RoundedRectGeometry::Spans(geometry) => draw_rounded_rect_spans(
             img,
             layout,
-            channels,
             &geometry,
             fill,
             outline,

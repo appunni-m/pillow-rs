@@ -22,11 +22,11 @@ pub(crate) fn merge(
     match implementation.architecture {
         Architecture::Default => super::default::operations::merge(source, remaining),
         #[cfg(target_arch = "x86_64")]
-        Architecture::Ssse3 => super::ssse3::merge(source, remaining),
+        Architecture::Ssse3 => super::ssse3::merge(source, remaining, selection),
         #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
         Architecture::Sse2 => super::sse2::merge_impl::merge(source, remaining),
         #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-        Architecture::Neon => super::neon::merge_impl::merge(source, remaining),
+        Architecture::Neon => super::neon::merge_impl::merge(source, remaining, selection),
         #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
         Architecture::WasmSimd128 => super::wasm_simd128::merge_impl::merge(source, remaining),
         _ => Err(PilError::InternalError(
@@ -53,15 +53,14 @@ pub(crate) fn composite(
     mask_alpha: bool,
     selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
-    super::super::helpers::composite::execute_selected(
+    super::super::helpers::composite::execute_byte_selected(
         source,
         destination,
         mask,
         mask_alpha,
         MODE,
-        crate::compute::pool_cpu::ops::composite::ops::CompositeLayout::Byte {
-            channels: 3,
-        },
+        3,
         selection,
+        |plan| crate::compute::pool_cpu::ops::paste::rgb8::ops::execute(plan),
     )
 }

@@ -1,7 +1,7 @@
 //! Default luma_a8 ImageChops strategy.
 
 use crate::error::PilError;
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, GrayAlphaImage};
 
 use super::super::super::ops::ChopsRequest;
 
@@ -10,16 +10,68 @@ pub(crate) fn execute(
     request: ChopsRequest,
     other: Option<&DynamicImage>,
 ) -> Result<DynamicImage, PilError> {
-    super::super::super::ops::execute_mode(image, super::super::ops::MODE, request, other)
+    match request {
+        ChopsRequest::Offset { x, y } => execute_offset(image, x, y),
+        ChopsRequest::Binary(operation) => execute_binary(image, other, operation),
+        ChopsRequest::Invert => execute_invert(image),
+        _ => super::super::super::ops::execute_shared(image, request),
+    }
 }
 
-pub(crate) fn execute_fused(
+fn execute_binary(
     image: &DynamicImage,
-    other: &DynamicImage,
+    other: Option<&DynamicImage>,
+    operation: super::super::super::helpers::binary::BinaryOperation,
 ) -> Result<DynamicImage, PilError> {
-    super::super::super::helpers::fusion::execute_default(
-        image,
-        other,
-        super::super::ops::MODE,
-    )
+    let DynamicImage::ImageLumaA8(buffer) = image else {
+        return Err(PilError::InternalError(
+            "Chops mode strategy received a different raster variant".into(),
+        ));
+    };
+    let other = match other {
+        Some(DynamicImage::ImageLumaA8(other) |
+        DynamicImage::ImageLaPremultiplied8(other) |
+        DynamicImage::ImagePaletteAlpha8(other)) => other,
+        Some(_) => {
+            return Err(PilError::InternalError(
+                "Chops binary strategy received a different secondary raster variant".into(),
+            ));
+        }
+        None => {
+            return Err(PilError::InternalError(
+                "Chops binary plan lost its secondary image".into(),
+            ));
+        }
+    };
+    let output = super::super::super::helpers::binary::execute(buffer, other, operation)?;
+    Ok(DynamicImage::ImageLumaA8(output))
+}
+
+fn execute_offset(image: &DynamicImage, x: i32, y: i32) -> Result<DynamicImage, PilError> {
+    let DynamicImage::ImageLumaA8(buffer) = image else {
+        return Err(PilError::InternalError(
+            "Chops mode strategy received a different raster variant".into(),
+        ));
+    };
+    let output = super::super::super::helpers::offset::offset_pixels(buffer, x, y);
+    Ok(DynamicImage::ImageLumaA8(output))
+}
+
+
+pub(crate) fn execute_fused(
+    image: &GrayAlphaImage,
+    other: &GrayAlphaImage,
+) -> Result<super::super::super::helpers::fusion::FusedChopsOutput, PilError> {
+    super::super::super::helpers::fusion::execute_default(image, other)
+        .map(|output| output.map_image(DynamicImage::ImageLumaA8))
+}
+
+fn execute_invert(image: &DynamicImage) -> Result<DynamicImage, PilError> {
+    let DynamicImage::ImageLumaA8(buffer) = image else {
+        return Err(PilError::InternalError(
+            "Chops mode strategy received a different raster variant".into(),
+        ));
+    };
+    super::super::super::helpers::unary::invert(buffer)
+        .map(DynamicImage::ImageLumaA8)
 }

@@ -2,7 +2,9 @@
 
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
-use crate::raster::{DynamicImage, Mode};
+use crate::raster::buffer::{HiddenPixelLanes, ImageBuffer};
+use crate::raster::traits::Pixel;
+use crate::raster::DynamicImage;
 
 static OVERLAY_LUT: &[u8; 65_536] = include_bytes!("../../../../../ops/lut_overlay.bin");
 static HARD_LIGHT_LUT: &[u8; 65_536] = include_bytes!("../../../../../ops/lut_hardlight.bin");
@@ -57,16 +59,123 @@ pub(crate) enum BinaryOperation {
     LogicalXor,
 }
 
-/// Clips the inputs to their overlap and applies one native-byte operation.
-pub(crate) fn execute(
+impl BinaryOperation {
+    /// Applies the same byte arithmetic as the native Chops strategy to an
+    /// omitted physical pixel lane.
+    pub(crate) fn apply_to_byte(self, left: u8, right: u8) -> u8 {
+        match self {
+            Self::Add { scale, offset, .. } if scale == 1.0 && offset == 0.0 => {
+                left.saturating_add(right)
+            }
+            Self::Add { scale, offset, .. } => {
+                ((f32::from(left) + f32::from(right)) / scale + offset).clamp(0.0, 255.0)
+                    as u8
+            }
+            Self::Subtract { scale, offset, .. } if scale == 1.0 && offset == 0.0 => {
+                left.saturating_sub(right)
+            }
+            Self::Subtract { scale, offset, .. } => {
+                ((f32::from(left) - f32::from(right)) / scale + offset).clamp(0.0, 255.0)
+                    as u8
+            }
+            Self::Multiply => ((u32::from(left) * u32::from(right)) / 255) as u8,
+            Self::Screen => {
+                (255 - ((255 - u32::from(left)) * (255 - u32::from(right)) / 255)) as u8
+            }
+            Self::Darker => left.min(right),
+            Self::Lighter => left.max(right),
+            Self::Difference => left.abs_diff(right),
+            Self::Overlay => OVERLAY_LUT[usize::from(left) * 256 + usize::from(right)],
+            Self::HardLight => HARD_LIGHT_LUT[usize::from(left) * 256 + usize::from(right)],
+            Self::SoftLight => SOFT_LIGHT_LUT[usize::from(left) * 256 + usize::from(right)],
+            Self::AddModulo => left.wrapping_add(right),
+            Self::SubtractModulo => left.wrapping_sub(right),
+            Self::LogicalAnd => u8::from(left != 0 && right != 0) * 255,
+            Self::LogicalOr => u8::from((left | right) != 0) * 255,
+            Self::LogicalXor => u8::from((left != 0) ^ (right != 0)) * 255,
+        }
+    }
+}
+
+/// Produces Chops results for retained physical lanes when both inputs carry
+/// their omitted bytes. A missing sidecar remains unknown and is not guessed.
+pub(crate) fn output_hidden_lanes(
     image: &DynamicImage,
     other: &DynamicImage,
-    mode: Mode,
     operation: BinaryOperation,
-) -> Result<DynamicImage, PilError> {
-    let channels = byte_channels(mode).ok_or_else(|| {
-        PilError::InternalError("Chops binary strategy received a non-byte mode".into())
-    })?;
+) -> Result<Option<HiddenPixelLanes>, PilError> {
+    output_hidden_lanes_with(image, other, |left, right| {
+        operation.apply_to_byte(left, right)
+    })
+}
+
+/// Produces retained physical lanes using an operation-specific byte mapping.
+pub(crate) fn output_hidden_lanes_with<F>(
+    image: &DynamicImage,
+    other: &DynamicImage,
+    mut map: F,
+) -> Result<Option<HiddenPixelLanes>, PilError>
+where
+    F: FnMut(u8, u8) -> u8,
+{
+    let Some(lane_count) = image.mode().hidden_pixel_lane_count() else {
+        return Ok(None);
+    };
+    if other.mode().hidden_pixel_lane_count() != Some(lane_count) {
+        return Err(PilError::InternalError(
+            "Chops operands did not have matching physical pixel layouts".into(),
+        ));
+    }
+    let (Some(left), Some(right)) = (image.hidden_pixel_lanes(), other.hidden_pixel_lanes()) else {
+        return Ok(None);
+    };
+    if left.lane_count() != lane_count || right.lane_count() != lane_count {
+        return Err(PilError::InternalError(
+            "Chops physical lane payload did not match its mode".into(),
+        ));
+    }
+    let output_dimensions = (
+        image.width().min(other.width()) as usize,
+        image.height().min(other.height()) as usize,
+    );
+    left.zip_map_clipped(
+        right,
+        (image.width() as usize, image.height() as usize),
+        (other.width() as usize, other.height() as usize),
+        output_dimensions,
+        &mut map,
+    )
+    .map(Some)
+    .ok_or_else(|| PilError::InternalError("Chops physical lane extents did not match".into()))
+}
+
+/// Attaches Chops arithmetic for omitted bytes to an already computed image.
+pub(crate) fn carry_hidden_lanes(
+    image: &DynamicImage,
+    other: &DynamicImage,
+    output: &mut DynamicImage,
+    operation: BinaryOperation,
+) -> Result<(), PilError> {
+    if !output.replace_hidden_pixel_lanes(output_hidden_lanes(image, other, operation)?) {
+        return Err(PilError::InternalError(
+            "Chops output physical lanes did not match its mode".into(),
+        ));
+    }
+    Ok(())
+}
+
+/// Clips two admitted native-byte inputs and applies the operation to the
+/// primary mode's typed buffer. The mode owner wraps the result in its exact
+/// `DynamicImage` variant.
+pub(crate) fn execute<P>(
+    image: &ImageBuffer<P, Vec<u8>>,
+    other: &ImageBuffer<P, Vec<u8>>,
+    operation: BinaryOperation,
+) -> Result<ImageBuffer<P, Vec<u8>>, PilError>
+where
+    P: Pixel<Subpixel = u8>,
+{
+    let channels = P::CHANNEL_COUNT;
     let width = image.width().min(other.width());
     let height = image.height().min(other.height());
     let dimensions = if width == 0 || height == 0 {
@@ -76,8 +185,8 @@ pub(crate) fn execute(
     };
     let mut output = dimensions.alloc_buffer();
     apply(
-        image.as_bytes(),
-        other.as_bytes(),
+        image.as_raw().as_slice(),
+        other.as_raw().as_slice(),
         &mut output,
         width as usize,
         height as usize,
@@ -86,7 +195,7 @@ pub(crate) fn execute(
         other.width() as usize * usize::from(channels),
         operation,
     );
-    output::from_raw_bytes(mode, width, height, output)
+    ImageBuffer::<P, Vec<u8>>::from_raw(width, height, output)
         .ok_or_else(|| PilError::ValueError("channel_op_binary buffer error".into()))
 }
 
@@ -156,15 +265,5 @@ fn apply_rows<F: Fn(u8, u8) -> u8>(
         for ((destination, &a), &b) in row.iter_mut().zip(left_row).zip(right_row) {
             *destination = operation(a, b);
         }
-    }
-}
-
-pub(crate) const fn byte_channels(mode: Mode) -> Option<u8> {
-    match mode {
-        Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => Some(1),
-        Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => Some(2),
-        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => Some(3),
-        Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8 | Mode::ImageRgbx8 | Mode::ImageCmyk8 => Some(4),
-        _ => None,
     }
 }

@@ -15,10 +15,10 @@ pub(crate) fn apply_bitmap(
     default::bitmap_impl::apply(image, x, y, mask_width, mask_height, mask, color)
 }
 
-pub(crate) fn apply_text(
+pub(crate) fn apply_text<const RGBA_MASK: bool>(
     input: super::super::TextComposeInput<'_>,
 ) -> Result<super::super::TextComposeResult, PilError> {
-    default::text_impl::apply(
+    default::text_impl::apply::<RGBA_MASK>(
         input.image,
         input.x,
         input.y,

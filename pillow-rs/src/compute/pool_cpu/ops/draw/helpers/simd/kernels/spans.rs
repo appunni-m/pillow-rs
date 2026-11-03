@@ -213,46 +213,21 @@ pub(super) fn simd_draw_span(
 
 fn flush_simd_draw_span(
     span: &mut Option<(i64, i64, i64, i64)>,
-    output: &mut [u8],
-    image_width: u32,
-    image_height: u32,
-    channels: usize,
+    writer: &mut SimdDrawSpanWriter,
     fill: (u8, u8, u8, u8),
-    alpha_blend_rgb: bool,
-    vector_blocks: &mut u64,
-    scalar_tail: &mut u64,
 ) -> Result<(), PilError> {
     let Some((x0, x1, _last_x, y)) = span.take() else {
         return Ok(());
     };
-    let (vectors, tail) = simd_draw_span(
-        output,
-        image_width,
-        image_height,
-        x0,
-        x1,
-        y,
-        channels,
-        fill,
-        alpha_blend_rgb,
-    )?;
-    *vector_blocks = vector_blocks.saturating_add(vectors);
-    *scalar_tail = scalar_tail.saturating_add(tail);
-    Ok(())
+    writer.write_span(x0, x1, y, fill)
 }
 
 fn push_simd_draw_point(
     span: &mut Option<(i64, i64, i64, i64)>,
     x: i64,
     y: i64,
-    output: &mut [u8],
-    image_width: u32,
-    image_height: u32,
-    channels: usize,
+    writer: &mut SimdDrawSpanWriter,
     fill: (u8, u8, u8, u8),
-    alpha_blend_rgb: bool,
-    vector_blocks: &mut u64,
-    scalar_tail: &mut u64,
 ) -> Result<(), PilError> {
     let extends_run = span
         .as_ref()
@@ -267,14 +242,8 @@ fn push_simd_draw_point(
     }
     flush_simd_draw_span(
         span,
-        output,
-        image_width,
-        image_height,
-        channels,
+        writer,
         fill,
-        alpha_blend_rgb,
-        vector_blocks,
-        scalar_tail,
     )?;
     *span = Some((x, x, x, y));
     Ok(())
@@ -299,200 +268,107 @@ pub(super) fn simd_draw_points_native(
     if has_visible_draw_point(image_width, image_height, points) && row_bytes < 16 {
         return Ok(None);
     }
-    let mut output = img.as_bytes().to_vec();
+    let mut writer = SimdDrawSpanWriter::new(img, layout, alpha_blend_rgb);
     let mut span = None;
-    let mut vector_blocks = 0u64;
-    let mut scalar_tail = 0u64;
     for &(x, y) in points {
         push_simd_draw_point(
             &mut span,
             i64::from(x),
             i64::from(y),
-            &mut output,
-            image_width,
-            image_height,
-            channels,
+            &mut writer,
             fill,
-            alpha_blend_rgb,
-            &mut vector_blocks,
-            &mut scalar_tail,
         )?;
     }
     flush_simd_draw_span(
         &mut span,
-        &mut output,
-        image_width,
-        image_height,
-        channels,
+        &mut writer,
         fill,
-        alpha_blend_rgb,
-        &mut vector_blocks,
-        &mut scalar_tail,
     )?;
 
-    if vector_blocks == 0 {
+    if writer.vector_blocks == 0 {
         crate::compute::record_pipeline_operation_path("scalar-control");
         return Ok(Some(img.clone()));
     }
     crate::compute::record_pipeline_operation_path("vector");
-    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-    crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    crate::compute::pool_cpu::helpers::dynamic_image::from_raw_bytes(
-        layout.mode,
-        image_width,
-        image_height,
-        output,
-    )
-    .map(Some)
-    .ok_or_else(|| PilError::InternalError("SIMD Draw output dimensions were invalid".into()))
+    crate::compute::record_pipeline_operation_vector_blocks(writer.vector_blocks);
+    crate::compute::record_pipeline_operation_scalar_tail(writer.scalar_tail);
+    writer.into_image().map(Some)
 }
 
 fn simd_draw_vertical_segment(
-    output: &mut [u8],
-    image_width: u32,
-    image_height: u32,
+    writer: &mut SimdDrawSpanWriter,
     x: i64,
     y0: i64,
     y1: i64,
-    channels: usize,
     fill: (u8, u8, u8, u8),
-    alpha_blend_rgb: bool,
-) -> Result<(u64, u64), PilError> {
-    if x < 0 || x >= i64::from(image_width) || image_height == 0 {
-        return Ok((0, 0));
+) -> Result<(), PilError> {
+    if x < 0 || x >= i64::from(writer.image_width) || writer.image_height == 0 {
+        return Ok(());
     }
-    let mut vector_blocks = 0u64;
-    let mut scalar_tail = 0u64;
     if y0 < y1 {
         let start = y0.max(0);
-        let end = y1.min(i64::from(image_height));
+        let end = y1.min(i64::from(writer.image_height));
         for y in start..end {
-            let (vectors, tail) = simd_draw_span(
-                output,
-                image_width,
-                image_height,
-                x,
-                x,
-                y,
-                channels,
-                fill,
-                alpha_blend_rgb,
-            )?;
-            vector_blocks = vector_blocks.saturating_add(vectors);
-            scalar_tail = scalar_tail.saturating_add(tail);
+            writer.write_span(x, x, y, fill)?;
         }
     } else if y0 > y1 {
-        let mut y = y0.min(i64::from(image_height) - 1);
+        let mut y = y0.min(i64::from(writer.image_height) - 1);
         let stop = y1.max(-1);
         while y > stop {
-            let (vectors, tail) = simd_draw_span(
-                output,
-                image_width,
-                image_height,
-                x,
-                x,
-                y,
-                channels,
-                fill,
-                alpha_blend_rgb,
-            )?;
-            vector_blocks = vector_blocks.saturating_add(vectors);
-            scalar_tail = scalar_tail.saturating_add(tail);
+            writer.write_span(x, x, y, fill)?;
             y -= 1;
         }
     }
-    Ok((vector_blocks, scalar_tail))
+    Ok(())
 }
 
 fn draw_rectangle_fill_spans(
-    output: &mut [u8],
-    image_width: u32,
-    image_height: u32,
+    writer: &mut SimdDrawSpanWriter,
     x0: i32,
     y0: i32,
     x1: i32,
     y1: i32,
-    channels: usize,
     fill: (u8, u8, u8, u8),
-    alpha_blend_rgb: bool,
-) -> Result<(u64, u64), PilError> {
-    let mut vector_blocks = 0u64;
-    let mut scalar_tail = 0u64;
+) -> Result<(), PilError> {
     let start = i64::from(y0).max(0);
-    let end = i64::from(y1).min(i64::from(image_height) - 1);
+    let end = i64::from(y1).min(i64::from(writer.image_height) - 1);
     for y in start..=end {
-        let (vectors, tail) = simd_draw_span(
-            output,
-            image_width,
-            image_height,
-            i64::from(x0),
-            i64::from(x1),
-            y,
-            channels,
-            fill,
-            alpha_blend_rgb,
-        )?;
-        vector_blocks = vector_blocks.saturating_add(vectors);
-        scalar_tail = scalar_tail.saturating_add(tail);
+        writer.write_span(i64::from(x0), i64::from(x1), y, fill)?;
     }
-    Ok((vector_blocks, scalar_tail))
+    Ok(())
 }
 
 fn draw_rectangle_outline_spans(
-    output: &mut [u8],
-    image_width: u32,
-    image_height: u32,
+    writer: &mut SimdDrawSpanWriter,
     x0: i32,
     y0: i32,
     x1: i32,
     y1: i32,
-    channels: usize,
     outline: (u8, u8, u8, u8),
     width: u32,
-    alpha_blend_rgb: bool,
-) -> Result<(u64, u64), PilError> {
-    let mut vector_blocks = 0u64;
-    let mut scalar_tail = 0u64;
+) -> Result<(), PilError> {
     let width = i64::from(width);
     for i in 0..width {
         for y in [
             i64::from(y0).saturating_add(i),
             i64::from(y1).saturating_sub(i),
         ] {
-            let (vectors, tail) = simd_draw_span(
-                output,
-                image_width,
-                image_height,
-                i64::from(x0),
-                i64::from(x1),
-                y,
-                channels,
-                outline,
-                alpha_blend_rgb,
-            )?;
-            vector_blocks = vector_blocks.saturating_add(vectors);
-            scalar_tail = scalar_tail.saturating_add(tail);
+            writer.write_span(i64::from(x0), i64::from(x1), y, outline)?;
         }
         for x in [
             i64::from(x1).saturating_sub(i),
             i64::from(x0).saturating_add(i),
         ] {
-            let (vectors, tail) = simd_draw_vertical_segment(
-                output,
-                image_width,
-                image_height,
+            simd_draw_vertical_segment(
+                writer,
                 x,
                 i64::from(y0).saturating_add(width),
                 i64::from(y1).saturating_sub(width).saturating_add(1),
-                channels,
                 outline,
-                alpha_blend_rgb,
             )?;
-            vector_blocks = vector_blocks.saturating_add(vectors);
-            scalar_tail = scalar_tail.saturating_add(tail);
         }
     }
-    Ok((vector_blocks, scalar_tail))
+    Ok(())
 }
 
 pub(super) fn simd_draw_rectangle_native(
@@ -533,56 +409,35 @@ pub(super) fn simd_draw_rectangle_native(
     if row_bytes < 16 {
         return Ok(None);
     }
-    let mut output = img.as_bytes().to_vec();
-    let mut vector_blocks = 0u64;
-    let mut scalar_tail = 0u64;
+    let mut writer = SimdDrawSpanWriter::new(img, layout, alpha_blend_rgb);
 
     if let Some(fill) = fill {
-        let (vectors, tail) = draw_rectangle_fill_spans(
-            &mut output,
-            image_width,
-            image_height,
+        draw_rectangle_fill_spans(
+            &mut writer,
             x0,
             y0,
             x1,
             y1,
-            channels,
             fill,
-            alpha_blend_rgb,
         )?;
-        vector_blocks = vector_blocks.saturating_add(vectors);
-        scalar_tail = scalar_tail.saturating_add(tail);
     }
 
     if let Some(outline) = outline.filter(|_| width != 0) {
-        let (vectors, tail) = draw_rectangle_outline_spans(
-            &mut output,
-            image_width,
-            image_height,
+        draw_rectangle_outline_spans(
+            &mut writer,
             x0,
             y0,
             x1,
             y1,
-            channels,
             outline,
             width,
-            alpha_blend_rgb,
         )?;
-        vector_blocks = vector_blocks.saturating_add(vectors);
-        scalar_tail = scalar_tail.saturating_add(tail);
     }
 
-    if vector_blocks == 0 {
+    if writer.vector_blocks == 0 {
         return Ok(None);
     }
-    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-    crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    crate::compute::pool_cpu::helpers::dynamic_image::from_raw_bytes(
-        layout.mode,
-        image_width,
-        image_height,
-        output,
-    )
-    .map(Some)
-    .ok_or_else(|| PilError::InternalError("SIMD Draw output dimensions were invalid".into()))
+    crate::compute::record_pipeline_operation_vector_blocks(writer.vector_blocks);
+    crate::compute::record_pipeline_operation_scalar_tail(writer.scalar_tail);
+    writer.into_image().map(Some)
 }

@@ -206,6 +206,7 @@ fn batch_input_layout_candidates(
             [PipelineOp::PutData {
                 data,
                 payload_mode: Mode::ImageLuma8,
+                ..
             }] if matches!(image, DynamicImage::ImageLuma8(source)
                 if data.len() <= source.as_raw().len())
         );

@@ -1,6 +1,5 @@
 //! Serial native-sample implementations for ImageHsv8.
 
-use crate::compute::pool_cpu::ops::composite::ops::CompositeLayout;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 use std::sync::Arc;
@@ -26,21 +25,5 @@ pub(crate) fn blend(
 ) -> Result<DynamicImage, PilError> {
     crate::compute::pool_cpu::ops::composite::helpers::blend::execute(
         source, other, MODE, alpha, 3,
-    )
-}
-
-pub(crate) fn composite(
-    source: &DynamicImage,
-    destination: &DynamicImage,
-    mask: &DynamicImage,
-    mask_alpha: bool,
-) -> Result<DynamicImage, PilError> {
-    crate::compute::pool_cpu::ops::composite::helpers::composite::execute(
-        source,
-        destination,
-        mask,
-        mask_alpha,
-        MODE,
-        CompositeLayout::Byte { channels: 3 },
     )
 }

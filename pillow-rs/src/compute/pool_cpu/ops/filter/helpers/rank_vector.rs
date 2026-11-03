@@ -10,6 +10,9 @@ const MAX_SIZE: u32 = 15;
 const MAX_AREA: usize = 225;
 
 /// Executes a declared byte rank strategy for one exact mode and architecture.
+// TODO(pillow-rs#3ptb): freeze non-L native-byte MedianFilter/RankFilter
+// output and architecture/fallback receipts. L uses its exact-mode owner;
+// this shared kernel includes LA and RGB specializations plus native channels.
 pub(crate) fn execute_native_byte_rank(
     image: &DynamicImage,
     request: super::super::ops::FilterRequest,

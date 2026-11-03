@@ -22,7 +22,10 @@ pub(crate) type BatchKernel<'a> = scalar::BatchKernel<'a>;
 pub(crate) fn prepare_batch(input: scalar::BatchKernel<'_>) -> BatchKernel<'_> { input }
 
 #[inline]
-pub(crate) fn execute_batch(input: BatchKernel<'_>) -> Result<DynamicImage, PilError> {
-    put_pixel_vector::batch(input, crate::compute::Architecture::WasmSimd128)
+pub(crate) fn execute_batch(
+    input: BatchKernel<'_>,
+    selection: crate::compute::registry::support::StrategySelection,
+) -> Result<DynamicImage, PilError> {
+    put_pixel_vector::batch(input, selection)
         .map(DynamicImage::ImageRgba8)
 }

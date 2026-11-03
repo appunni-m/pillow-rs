@@ -15,12 +15,15 @@ const INPUTS: &[InputContract] = &[InputContract::ExactNativeBytes {
     mismatch_reason: "Brightness source bytes did not match its dimensions",
 }];
 
-pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
+// NO_PILLOW_SUPPORT: Pillow's Brightness path reaches Image.blend, which rejects
+// non-u8 storage; this is a native u16-sample Rust extension.
+pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
     OperationId::Brightness,
     Mode::ImageI16L,
     OutputModeRule::Preserve,
     INPUTS,
     &[],
+    "native u16 Brightness extends Pillow's byte-only Image.blend contract",
 );
 
 pub(crate) type Strategy<'a> = Prepared<(&'a ImageBuffer<crate::raster::Luma<u16>, Vec<u16>>, f64)>;

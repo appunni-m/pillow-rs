@@ -2,7 +2,9 @@ use crate::error::PilError;
 use crate::raster::{DynamicImage, Rgba};
 use image::{GenericImage, GenericImageView};
 
-pub(crate) fn apply(
+/// TODO(pillow-rs#3ptb): verify integer-packed CMYK Text inks in CPU parity.
+/// TODO(pillow-rs#brg0): verify the historical default-fill CMYK Text bytes.
+pub(crate) fn apply<const RGBA_MASK: bool>(
     mut image: DynamicImage,
     x: i32,
     y: i32,
@@ -10,21 +12,18 @@ pub(crate) fn apply(
     height: u32,
     pixels: &[u8],
     fill: (u8, u8, u8, u8),
-    fill_is_integer: bool,
 ) -> Result<DynamicImage, PilError> {
     let DynamicImage::ImageCmyk8(canvas) = &mut image else {
         return Err(PilError::ValueError("mode mismatch".into()));
     };
-    let ink = if fill_is_integer {
-        [fill.0, 0, 0, 0]
-    } else {
-        [fill.0, fill.1, fill.2, fill.3]
-    };
+    // Draw resolves integer multi-band inks into their packed channel bytes
+    // before this mode-owned raster strategy runs.
+    let ink = [fill.0, fill.1, fill.2, fill.3];
     let (image_width, image_height) = canvas.dimensions();
     for text_y in 0..height {
         for text_x in 0..width {
-            let offset = ((text_y * width + text_x) * 4) as usize;
-            let coverage = pixels[offset + 3];
+            let pixel_index = (text_y * width + text_x) as usize;
+            let coverage = crate::compute::pool_cpu::ops::draw::helpers::text_mask::coverage::<RGBA_MASK>(pixels, pixel_index);
             if coverage == 0 {
                 continue;
             }

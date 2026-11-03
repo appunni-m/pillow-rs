@@ -51,17 +51,24 @@ impl ThumbnailModeStrategy {
         match self {
             Self::One => super::one::ops::effective_filter(requested),
             Self::Palette8 => super::palette8::ops::effective_filter(requested),
+            Self::PaletteAlpha8 => super::palette_alpha8::ops::effective_filter(requested),
             Self::Standard
             | Self::LumaA8
             | Self::LaPremultiplied8
-            | Self::PaletteAlpha8
             | Self::Rgba8
             | Self::I32
             | Self::F32 => requested,
         }
     }
 
-    pub(super) fn should_reduce(self, filter: ResampleFilter) -> bool {
+    pub(super) fn should_reduce(
+        self,
+        filter: ResampleFilter,
+        reducing_gap: Option<f64>,
+    ) -> bool {
+        if reducing_gap.is_none() {
+            return false;
+        }
         match self {
             Self::LumaA8 => super::luma_a8::ops::should_reduce(filter),
             Self::LaPremultiplied8 => super::la_premultiplied8::ops::should_reduce(filter),
@@ -97,11 +104,12 @@ impl ThumbnailModeStrategy {
         source: (u32, u32),
         output: (u32, u32),
         filter: ResampleFilter,
-        reduce: bool,
+        factors: (u32, u32),
     ) -> bool {
         match self {
             Self::I32 => {
-                reduce && super::i32::ops::streams_two_by_two(source, output, filter)
+                factors == (2, 2)
+                    && super::i32::ops::streams_two_by_two(source, output, filter)
             }
             Self::Standard
             | Self::One

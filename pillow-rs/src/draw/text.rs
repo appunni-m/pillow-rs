@@ -5,15 +5,27 @@ use crate::error::PilError;
 
 mod composition;
 
+struct PositionedTextLine<'a> {
+    x: f64,
+    y: f64,
+    text: &'a str,
+    anchor: String,
+}
+
+struct MultilineAnchor {
+    value: String,
+    horizontal: char,
+    vertical: char,
+    vertical_direction: bool,
+}
+
 impl Draw {
     /// Draws text at `(x, y)` using a loaded font.
     ///
-    /// For RGB and RGBA modes, uses the standard RGBA compositing pipeline.
-    /// For other modes (1, L, LA, CMYK, P, I, F), renders directly in the
-    /// mode's native pixel format, matching PIL's `draw_bitmap` behavior:
-    /// - Integer fill values go to the first channel only; other channels get 0.
-    /// - Binary modes (1, P, I, F) use PIL's fontmode="1": binary glyphs (coverage >= 128 → 255).
-    /// - Anti-aliased modes (L, LA, CMYK) use PIL's BLEND (truncation) per channel.
+    /// Dispatches the native glyph mask and resolved ink to the exact-mode
+    /// Draw strategy. Binary and indexed modes request Pillow's binary font
+    /// mask; other supported modes use coverage masks, with alpha-bearing and
+    /// packed sample behavior handled by their mode owners.
     ///
     /// # Errors
     ///
@@ -120,87 +132,19 @@ impl Draw {
         options: &crate::font::ImageFontTextOptions,
     ) -> Result<(), PilError> {
         let lines = text.split('\n').collect::<Vec<_>>();
-        let anchor = options.anchor.as_deref().unwrap_or("la");
-        if anchor.chars().count() != 2 {
-            return Err(PilError::ValueError(
-                if options.anchor_invalid_length_error {
-                    "anchor must be a 2 character string".into()
-                } else {
-                    format!("bad anchor specified: {anchor}")
-                },
-            ));
-        }
-        if matches!(anchor.as_bytes()[1], b't' | b'b')
-            && options.direction.as_deref() != Some("ttb")
-        {
-            return Err(PilError::ValueError(
-                "anchor not supported for multiline text".into(),
-            ));
-        }
-
-        let mut line_bbox_options = options.clone();
-        line_bbox_options.anchor = Some("la".into());
-        let line_spacing = f64::from(font.getbbox_with_options("A", &line_bbox_options)?.3)
-            + f64::from(options.stroke_width)
-            + spacing;
-        let mut line_y = match anchor.as_bytes()[1] {
-            b'm' => y - (lines.len().saturating_sub(1) as f64 * line_spacing / 2.0),
-            b'd' => y - (lines.len().saturating_sub(1) as f64 * line_spacing),
-            _ => y,
-        };
-        let widths = lines
-            .iter()
-            .map(|line| font.getlength_with_options(line, options))
-            .collect::<Result<Vec<_>, _>>()?;
-        let max_width = widths.iter().copied().fold(0.0_f32, f32::max) as f64;
-        // Pillow applies special positioning only to its known alignment names;
-        // an unknown name follows the ordinary left-aligned path.
-        let align = options.align.as_deref().unwrap_or("left");
-
-        for (index, line) in lines.iter().enumerate() {
-            let width_difference = max_width - f64::from(widths[index]);
-            let mut line_x = match align {
-                "center" => x + width_difference / 2.0,
-                "right" => x + width_difference,
-                _ => x,
-            };
-            if align == "justify" && width_difference != 0.0 && index + 1 != lines.len() {
-                let words = line.split(' ').collect::<Vec<_>>();
-                if words.len() > 1 {
-                    if anchor.as_bytes()[0] == b'm' {
-                        line_x -= max_width / 2.0;
-                    } else if anchor.as_bytes()[0] == b'r' {
-                        line_x -= max_width;
-                    }
-                    let word_widths = words
-                        .iter()
-                        .map(|word| font.getlength_with_options(word, options))
-                        .collect::<Result<Vec<_>, _>>()?;
-                    let extra = (max_width
-                        - word_widths
-                            .iter()
-                            .map(|width| f64::from(*width))
-                            .sum::<f64>())
-                        / (words.len() - 1) as f64;
-                    let mut word_options = options.clone();
-                    word_options.anchor = Some(format!("l{}", anchor.as_bytes()[1] as char));
-                    for (word, width) in words.iter().zip(word_widths) {
-                        self.draw_text_at(line_x, line_y, word, font, fill, &word_options)?;
-                        line_x += f64::from(width) + extra;
-                    }
-                    line_y += line_spacing;
-                    continue;
-                }
-            }
-            if anchor.as_bytes()[0] == b'm' {
-                line_x -= width_difference / 2.0;
-            } else if anchor.as_bytes()[0] == b'r' {
-                line_x -= width_difference;
-            }
+        let positioned = multiline_text_positions(
+            x,
+            y,
+            &lines,
+            font,
+            spacing,
+            options,
+            self.effective_mode(),
+        )?;
+        for line in positioned {
             let mut line_options = options.clone();
-            line_options.anchor = Some(anchor.to_owned());
-            self.draw_text_at(line_x, line_y, line, font, fill, &line_options)?;
-            line_y += line_spacing;
+            line_options.anchor = Some(line.anchor);
+            self.draw_text_at(line.x, line.y, line.text, font, fill, &line_options)?;
         }
         Ok(())
     }
@@ -321,7 +265,6 @@ impl Draw {
                 stroke_fill,
                 options.stroke_fill_is_integer,
                 &stroke_options,
-                false,
                 context,
             )?;
 
@@ -338,7 +281,6 @@ impl Draw {
                 fill,
                 options.text_fill_is_integer,
                 &fill_options,
-                true,
                 context,
             )?;
             return Ok(((width, height), fill_selection.or(stroke_selection)));
@@ -351,7 +293,6 @@ impl Draw {
             fill,
             options.text_fill_is_integer,
             options,
-            false,
             context,
         )?;
         Ok(((width, height), selection))
@@ -366,7 +307,6 @@ impl Draw {
         fill: (u8, u8, u8, u8),
         fill_is_integer: bool,
         options: &crate::font::ImageFontTextOptions,
-        blend_rgba_overlay: bool,
         context: &ExecutionContext,
     ) -> Result<(u32, u32, Option<StrategySelection>), PilError> {
         let mode = self.effective_mode();
@@ -396,13 +336,16 @@ impl Draw {
             options.ink = Some(Self::pack_text_ink(fill));
         }
 
-        // ImageFont rendering always uses alpha=255 so glyph coverage is preserved.
+        // The mask alpha carries glyph coverage; RGB carries the foreground or
+        // embedded glyph color for the RGBA-mask strategy.
         let (w, h, mask, offset) = font.getmask2_with_options(text, &options)?;
         if w == 0 || h == 0 {
             return Ok((w, h, None));
         }
         let support = crate::compute::pool_cpu::ops::draw::ops::SUPPORT.for_mode(raster_mode);
-        let palette = if raster_mode == Mode::ImagePalette8 && self.image.has_nonempty_palette() {
+        let palette = if matches!(raster_mode, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
+            && self.image.has_nonempty_palette()
+        {
             crate::compute::registry::support::PaletteKnowledge::Present
         } else {
             crate::compute::registry::support::PaletteKnowledge::Absent
@@ -438,15 +381,199 @@ impl Draw {
                 y: draw_y,
                 width: w,
                 height: h,
-                pixels: std::borrow::Cow::Borrowed(&mask),
+                pixels: &mask,
                 mask_kind,
                 fill,
-                fill_is_integer,
-                blend_rgba_overlay,
                 palette,
             },
         )?;
         self.apply_text_output(execution_mode, palette, output)?;
         Ok((w, h, Some(selection)))
     }
+}
+
+// TODO(pillow-rs#brg0): verify anchored, font-size, and spacing Text outputs in CPU parity.
+fn multiline_text_positions<'a>(
+    x: f64,
+    y: f64,
+    lines: &[&'a str],
+    font: &crate::font::FreeTypeFont,
+    spacing: f64,
+    options: &crate::font::ImageFontTextOptions,
+    mode: Mode,
+) -> Result<Vec<PositionedTextLine<'a>>, PilError> {
+    let anchor = resolve_multiline_anchor(lines.len(), options)?;
+    if lines.len() == 1 {
+        return Ok(vec![PositionedTextLine {
+            x,
+            y,
+            text: lines[0],
+            anchor: anchor.value,
+        }]);
+    }
+    let font_mode = text_layout_font_mode(mode, options.embedded_color);
+    let line_spacing = multiline_line_spacing(font, options, font_mode, spacing)?;
+    if anchor.vertical_direction {
+        return Ok(vertical_text_positions(x, y, lines, line_spacing, &anchor));
+    }
+    horizontal_text_positions(x, y, lines, font, options, font_mode, line_spacing, &anchor)
+}
+
+fn resolve_multiline_anchor(
+    line_count: usize,
+    options: &crate::font::ImageFontTextOptions,
+) -> Result<MultilineAnchor, PilError> {
+    let vertical_direction = options.direction.as_deref() == Some("ttb");
+    let default_anchor = if vertical_direction { "lt" } else { "la" };
+    let value = options.anchor.as_deref().unwrap_or(default_anchor);
+    let chars = value.chars().collect::<Vec<_>>();
+    if chars.len() != 2 {
+        return Err(PilError::ValueError(
+            if options.anchor_invalid_length_error {
+                "anchor must be a 2 character string".into()
+            } else {
+                format!("bad anchor specified: {value}")
+            },
+        ));
+    }
+    if line_count > 1 && matches!(chars[1], 't' | 'b') && !vertical_direction {
+        return Err(PilError::ValueError(
+            "anchor not supported for multiline text".into(),
+        ));
+    }
+    Ok(MultilineAnchor {
+        value: value.to_owned(),
+        horizontal: chars[0],
+        vertical: chars[1],
+        vertical_direction,
+    })
+}
+
+fn text_layout_font_mode(mode: Mode, embedded_color: bool) -> &'static str {
+    if embedded_color {
+        "RGBA"
+    } else if matches!(mode, Mode::One | Mode::ImagePalette8 | Mode::ImageI32 | Mode::ImageF32) {
+        "1"
+    } else {
+        "L"
+    }
+}
+
+fn multiline_line_spacing(
+    font: &crate::font::FreeTypeFont,
+    options: &crate::font::ImageFontTextOptions,
+    font_mode: &str,
+    spacing: f64,
+) -> Result<f64, PilError> {
+    let mut bbox_options = options.clone();
+    bbox_options.mode = Some(font_mode.to_owned());
+    bbox_options.direction = None;
+    bbox_options.anchor = None;
+    Ok(f64::from(font.getbbox_with_options("A", &bbox_options)?.3)
+        + f64::from(options.stroke_width)
+        + spacing)
+}
+
+fn vertical_text_positions<'a>(
+    x: f64,
+    y: f64,
+    lines: &[&'a str],
+    line_spacing: f64,
+    anchor: &MultilineAnchor,
+) -> Vec<PositionedTextLine<'a>> {
+    lines
+        .iter()
+        .enumerate()
+        .map(|(index, &text)| PositionedTextLine {
+            x: x + index as f64 * line_spacing,
+            y,
+            text,
+            anchor: anchor.value.clone(),
+        })
+        .collect()
+}
+
+fn horizontal_text_positions<'a>(
+    x: f64,
+    y: f64,
+    lines: &[&'a str],
+    font: &crate::font::FreeTypeFont,
+    options: &crate::font::ImageFontTextOptions,
+    font_mode: &str,
+    line_spacing: f64,
+    anchor: &MultilineAnchor,
+) -> Result<Vec<PositionedTextLine<'a>>, PilError> {
+    let mut width_options = options.clone();
+    width_options.mode = Some(font_mode.to_owned());
+    width_options.stroke_width = 0.0;
+    width_options.anchor = None;
+    let widths = lines
+        .iter()
+        .map(|line| font.getlength_with_options(line, &width_options))
+        .collect::<Result<Vec<_>, _>>()?;
+    let max_width = widths.iter().copied().fold(0.0_f32, f32::max) as f64;
+    let align = options.align.as_deref().unwrap_or("left");
+    if !matches!(align, "left" | "center" | "right" | "justify") {
+        return Err(PilError::ValueError(
+            "align must be \"left\", \"center\", \"right\" or \"justify\"".into(),
+        ));
+    }
+
+    let mut top = y;
+    if anchor.vertical == 'm' {
+        top -= (lines.len() - 1) as f64 * line_spacing / 2.0;
+    } else if anchor.vertical == 'd' {
+        top -= (lines.len() - 1) as f64 * line_spacing;
+    }
+    let mut positioned = Vec::new();
+    for (index, &line) in lines.iter().enumerate() {
+        let width_difference = max_width - f64::from(widths[index]);
+        let mut left = match align {
+            "center" => x + width_difference / 2.0,
+            "right" => x + width_difference,
+            _ => x,
+        };
+        if align == "justify" && width_difference != 0.0 && index + 1 != lines.len() {
+            let words = line.split(' ').collect::<Vec<_>>();
+            if words.len() > 1 {
+                if anchor.horizontal == 'm' {
+                    left -= max_width / 2.0;
+                } else if anchor.horizontal == 'r' {
+                    left -= max_width;
+                }
+                let word_widths = words
+                    .iter()
+                    .map(|word| font.getlength_with_options(word, &width_options))
+                    .collect::<Result<Vec<_>, _>>()?;
+                let extra = (max_width
+                    - word_widths.iter().map(|width| f64::from(*width)).sum::<f64>())
+                    / (words.len() - 1) as f64;
+                let word_anchor = format!("l{}", anchor.vertical);
+                for (word, width) in words.into_iter().zip(word_widths) {
+                    positioned.push(PositionedTextLine {
+                        x: left,
+                        y: top,
+                        text: word,
+                        anchor: word_anchor.clone(),
+                    });
+                    left += f64::from(width) + extra;
+                }
+                top += line_spacing;
+                continue;
+            }
+        }
+        if anchor.horizontal == 'm' {
+            left -= width_difference / 2.0;
+        } else if anchor.horizontal == 'r' {
+            left -= width_difference;
+        }
+        positioned.push(PositionedTextLine {
+            x: left,
+            y: top,
+            text: line,
+            anchor: anchor.value.clone(),
+        });
+        top += line_spacing;
+    }
+    Ok(positioned)
 }

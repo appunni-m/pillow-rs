@@ -6,5 +6,5 @@ pub(crate) fn execute(
     image: &ImageBuffer<LumaA<u8>, Vec<u8>>,
     ops: &[PipelineOp],
     ) -> Result<ImageBuffer<LumaA<u8>, Vec<u8>>, PilError> {
-    super::super::super::helpers::execute_byte_buffer::<LumaA<u8>, 2>(image, ops)
+    super::super::super::helpers::execute_byte_buffer::<LumaA<u8>, 2, 2>(image, ops)
 }

@@ -1,6 +1,26 @@
 use super::RsImage;
 use crate::*;
+use pyo3::buffer::PyUntypedBuffer;
+use pyo3::exceptions::PyBufferError;
 use pyo3::pymethods;
+
+fn palette_alpha_bytes(value: &Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
+    let buffer = PyUntypedBuffer::get(value)?;
+    if !buffer.is_c_contiguous() {
+        return Err(PyBufferError::new_err(
+            "underlying buffer is not C-contiguous",
+        ));
+    }
+    let length = buffer.len_bytes();
+    if length == 0 {
+        return Ok(Vec::new());
+    }
+    // SAFETY: PyUntypedBuffer holds a live reference to the exporting object;
+    // C-contiguity guarantees `length` adjacent bytes, and the GIL stays held
+    // while this slice is copied into Rust-owned storage.
+    let bytes = unsafe { std::slice::from_raw_parts(buffer.buf_ptr().cast::<u8>(), length) };
+    Ok(bytes.to_vec())
+}
 
 fn prepare_palette_putpixel<'py>(
     image: &mut pillow_rs::Image,
@@ -67,11 +87,14 @@ fn prepare_palette_putpixel<'py>(
     Ok((prepared, deferred_alpha))
 }
 
-fn putpixel_coordinates_in_bounds(
+// TODO(pillow-rs#3ptb): parity-check negative pixel indices, C-int boundaries,
+// and invalid coordinate error order after the CPU source gate.
+// Pillow ImagingCore adds each negative coordinate to its matching dimension
+// before applying the common bounds check for getpixel and putpixel.
+fn image_coordinates_in_bounds(
     image: &pillow_rs::Image,
-    xy: &Bound<'_, PyAny>,
+    (x, y): (i32, i32),
 ) -> PyResult<(u32, u32)> {
-    let (x, y) = putpixel_coordinates_from_python(xy)?;
     let (width, height) = image.size().map_err(map_error)?;
     let x = if x < 0 {
         i64::from(width) + i64::from(x)
@@ -89,6 +112,13 @@ fn putpixel_coordinates_in_bounds(
         ));
     }
     Ok((x as u32, y as u32))
+}
+
+fn putpixel_coordinates_in_bounds(
+    image: &pillow_rs::Image,
+    xy: &Bound<'_, PyAny>,
+) -> PyResult<(u32, u32)> {
+    image_coordinates_in_bounds(image, putpixel_coordinates_from_python(xy)?)
 }
 
 #[pymethods]
@@ -109,12 +139,16 @@ impl PyImage {
         }
     }
 
-    fn indexed_color_table(&self, mode: &str) -> PyResult<Vec<(u8, u8, u8)>> {
-        self.inner.indexed_color_table(mode).map_err(map_error)
+    fn indexed_color_table(&self) -> PyResult<Vec<(u8, u8, u8)>> {
+        self.inner.indexed_color_table().map_err(map_error)
     }
 
     fn palette_mode(&self) -> Option<String> {
         self.inner.palette_mode().map(str::to_owned)
+    }
+
+    fn has_attached_palette(&self) -> bool {
+        self.inner.has_attached_palette()
     }
 
     fn has_transparency_data(&self) -> bool {
@@ -130,6 +164,26 @@ impl PyImage {
     fn putpalette(&mut self, data: Vec<u8>, rawmode: &str, py: Python<'_>) -> PyResult<()> {
         let rawmode = rawmode.to_owned();
         py.detach(|| self.inner.putpalette(&data, &rawmode))
+            .map_err(map_error)
+    }
+
+    fn putpalettealpha(&mut self, index: i32, alpha: i32, py: Python<'_>) -> PyResult<()> {
+        py.detach(|| self.inner.putpalettealpha(index, alpha))
+            .map_err(map_error)
+    }
+
+    fn putpalettealphas(
+        &mut self,
+        values: &Bound<'_, PyAny>,
+        py: Python<'_>,
+    ) -> PyResult<()> {
+        let values = palette_alpha_bytes(values)?;
+        py.detach(|| self.inner.putpalettealphas(&values))
+            .map_err(map_error)
+    }
+
+    fn commit_palette_alpha(&mut self, py: Python<'_>) -> PyResult<()> {
+        py.detach(|| self.inner.commit_palette_alpha())
             .map_err(map_error)
     }
 
@@ -230,7 +284,8 @@ impl PyImage {
         })
     }
 
-    fn getpixel_formatted(&self, xy: (u32, u32), py: Python<'_>) -> PyResult<Py<PyAny>> {
+    fn getpixel_formatted(&self, xy: (i32, i32), py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let xy = image_coordinates_in_bounds(&self.inner, xy)?;
         if let Some(rgb) = self
             .inner
             .getpixel_rgb_if_loaded(xy.0, xy.1)
@@ -247,6 +302,12 @@ impl PyImage {
             pillow_rs::FormattedPixelValue::Float(value) => Ok(value.into_py_any(py)?),
             pillow_rs::FormattedPixelValue::Components(values) => {
                 Ok(PyTuple::new(py, values)?.into_py_any(py)?)
+            }
+            pillow_rs::FormattedPixelValue::U16Components(values) => {
+                Ok(PyTuple::new(py, values)?.into_py_any(py)?)
+            }
+            pillow_rs::FormattedPixelValue::FloatComponents(values) => {
+                Ok(PyTuple::new(py, values.into_iter().map(f64::from))?.into_py_any(py)?)
             }
             pillow_rs::FormattedPixelValue::InlineComponents { bytes, bands } => Ok(PyTuple::new(
                 py,

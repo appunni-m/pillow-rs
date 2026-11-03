@@ -43,7 +43,7 @@ mod byte_export;
 pub use byte_export::{ImagingCoreBytesInput, imaging_core_to_bytes};
 mod channel_access;
 pub use channel_access::{ChannelSelector, PutAlphaInput};
-mod color_count;
+pub(crate) mod color_count;
 pub(crate) mod codec_adapter;
 mod construction;
 pub use construction::{
@@ -60,15 +60,13 @@ mod metadata;
 pub(crate) mod mode_boundary;
 use metadata::image_mode_name;
 pub use metadata::{ExifCompatFields, prepare_exif_compat};
+use data_access::validate_scalar_storage;
 mod palette;
 pub(crate) use palette::{expand_palette, expand_palette_alpha};
 use palette::{operational_palette, padded_palette};
 #[path = "image/pipeline_admission.rs"]
 mod pipeline_admission;
 mod pipeline_ops;
-use data_access::{
-    is_l16_mode, l16_uses_big_endian, pillow_band_count, validate_scalar_storage,
-};
 pub use pipeline_ops::{
     MaterializationCache, PipelineModeCache, PipelineOps, PipelinePrefixCache,
     PipelineShapeCache,
@@ -77,10 +75,10 @@ use pipeline_ops::{known_pipeline_op_dimensions, take_cached_materialization};
 pub(crate) use pipeline_ops::{
     cached_pipeline_mode, declared_pipeline_mode, known_pipeline_op_mode,
     known_pipeline_op_mode_for_source, materialization_cache, pipeline_mode_cache_for,
-    pipeline_shape_cache, PipelineModeState,
+    pipeline_shape_cache, PipelineModeState, PipelinePaletteOutput,
 };
 mod pixel_access;
-pub use pixel_access::PutPixelValue;
+pub use pixel_access::{PaletteColorComponent, PutPixelValue};
 mod projection;
 mod statistics;
 pub use statistics::{StatResult, StatValue, stat_from_histogram, stat_from_list};
@@ -195,10 +193,13 @@ pub enum PutDataValueKind {
 ///
 /// Bindings retain this token while coercing sequence items without holding
 /// the mutable image borrow, then pass it into each completed pixel write.
+/// The selected route remains fixed for the sequence, even if callbacks
+/// change global backend preferences between values.
 #[doc(hidden)]
 #[derive(Clone, Copy)]
 pub struct PutDataExecutionContext {
     pub(crate) context: crate::compute::ExecutionContext,
+    pub(crate) requested_backend: Option<crate::compute::Backend>,
     pub(crate) selection: Option<crate::compute::registry::support::StrategySelection>,
 }
 
@@ -228,6 +229,10 @@ pub enum FormattedPixelValue {
     Float(f64),
     /// A multiband pixel value in Pillow band order.
     Components(Vec<u8>),
+    /// A CoreOnly multiband pixel containing native unsigned 16-bit samples.
+    U16Components(Vec<u16>),
+    /// A CoreOnly multiband pixel containing native 32-bit float samples.
+    FloatComponents(Vec<f32>),
     /// A small multiband pixel value stored inline to avoid a per-pixel heap allocation.
     InlineComponents {
         /// Pixel bytes in Pillow band order; unused trailing bytes are zero.
@@ -262,6 +267,10 @@ pub enum FormattedExtrema {
     Single((u8, u8)),
     /// One `(minimum, maximum)` pair per band.
     Multiple(Vec<(u8, u8)>),
+    /// Native unsigned 16-bit extrema for each CoreOnly band.
+    MultipleInteger(Vec<(i32, i32)>),
+    /// Native 32-bit float extrema for each CoreOnly band, widened for bindings.
+    MultipleFloat(Vec<(f64, f64)>),
     /// An integer scalar image's `(minimum, maximum)` pair, including `I;16*`.
     Integer((i32, i32)),
     /// A 32-bit floating-point scalar image's `(minimum, maximum)` pair.
@@ -283,6 +292,8 @@ pub enum Image {
     Bytes {
         /// Canonical backend source sharing inspection and lazy decode state.
         source: EncodedImage,
+        /// Pillow-owned raster identity translated from the codec's inspected header.
+        header_mode: Mode,
         /// Optional detected image format.
         format: Option<ImageFormat>,
         /// Cached header metadata.

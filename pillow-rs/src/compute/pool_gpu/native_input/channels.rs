@@ -147,9 +147,10 @@ pub(in crate::compute::pool_gpu) fn gpu_native_expand_channels(
     image: &DynamicImage,
     logical_mode: Option<&str>,
 ) -> Option<u8> {
-    let [PipelineOp::Expand { .. }] = ops else {
+    let [PipelineOp::Expand { border, .. }] = ops else {
         return None;
     };
+    border.uniform_nonnegative()?;
     let channels = match (logical_mode, image) {
         (None | Some("L"), DynamicImage::ImageLuma8(_)) => 1u8,
         (None | Some("LA"), DynamicImage::ImageLumaA8(_)) => 2,

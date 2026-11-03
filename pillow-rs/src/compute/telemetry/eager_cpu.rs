@@ -1,8 +1,8 @@
 use super::{
-    Backend, Instant, PipelineResourceTelemetry, PipelineTelemetry,
+    Architecture, Backend, Instant, PipelineResourceTelemetry, PipelineTelemetry,
     begin_pipeline_operation_telemetry, elapsed_ns, finish_pipeline_operation_telemetry,
     pipeline_telemetry_enabled, record_pipeline_operation_path, record_pipeline_resource_telemetry,
-    record_pipeline_operation_architecture, record_pipeline_telemetry,
+    record_pipeline_operation_selection, record_pipeline_telemetry,
     reset_pipeline_allocation_telemetry,
     reset_pipeline_operation_telemetry, take_pipeline_backend_override,
     take_pipeline_dispatch_count, take_pipeline_resize_coeff_cache_stats,
@@ -16,9 +16,9 @@ pub(crate) struct EagerCpuOperationTelemetry {
 }
 
 /// Begin an execution receipt for an eager operation whose data path is
-/// implemented on the host. The caller supplies the backend requested by the
-/// active image or process so a host path selected under SIMD/GPU is recorded
-/// as a fallback instead of being credited as accelerated execution.
+/// implemented on the host. GPU and SIMD requests begin with a provisional
+/// fallback receipt; a prepared strategy refines SIMD into its actual selected
+/// architecture, while GPU-to-CPU routing remains a backend fallback.
 pub(crate) fn begin_eager_cpu_operation_telemetry(
     operation: &'static str,
     requested_backend: Option<Backend>,
@@ -159,12 +159,28 @@ pub(crate) fn finish_eager_cpu_operation_telemetry_with_selection(
         return;
     }
 
-    record_pipeline_operation_architecture(selection.implementation.architecture);
-    if let Some(reason) = selection.fallback {
-        let selected_fallback = format!(
-            "{operation} selected {:?} after strategy fallback: {reason:?}",
-            selection.implementation.architecture,
-        );
+    record_pipeline_operation_selection(&selection);
+    let selected_fallback = selection
+        .fallback
+        .map(|reason| {
+            format!(
+                "{operation} selected {:?} after strategy fallback: {reason:?}",
+                selection.implementation.architecture,
+            )
+        })
+        .or_else(|| {
+            (telemetry.requested_backend == Some(Backend::Simd)
+                && selection.implementation.architecture == Architecture::Default)
+            .then(|| {
+                format!(
+                    "{operation} selected CPU Default while SIMD architecture was requested"
+                )
+            })
+        });
+    if telemetry.requested_backend == Some(Backend::Simd) {
+        telemetry.fallback_reason = None;
+    }
+    if let Some(selected_fallback) = selected_fallback {
         telemetry.fallback_reason = Some(match telemetry.fallback_reason.take() {
             Some(existing) => format!("{existing}; {selected_fallback}"),
             None => selected_fallback,

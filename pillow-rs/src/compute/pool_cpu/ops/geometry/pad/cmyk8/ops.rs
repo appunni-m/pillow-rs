@@ -16,7 +16,7 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::Pad,
     Mode::ImageCmyk8,
     OutputModeRule::Preserve,
-    super::super::ops::INPUTS,
+    super::super::ops::MODE_ENCODED_FILL_INPUTS,
     &ARCHITECTURES,
 );
 

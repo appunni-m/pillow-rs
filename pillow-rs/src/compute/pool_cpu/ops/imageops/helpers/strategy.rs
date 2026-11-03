@@ -12,6 +12,165 @@ use crate::image::Image;
 use crate::raster::{DynamicImage, Mode};
 use std::sync::Arc;
 
+macro_rules! declare_quantize_native_mode {
+    ($component:ty, $mode_name:literal) => {
+        pub(crate) fn execute_quantize(
+            samples: &[$component],
+            width: u32,
+            height: u32,
+            colors: usize,
+            kmeans: u32,
+            method: u32,
+            architecture: $crate::compute::Architecture,
+        ) -> Result<(Vec<u8>, Vec<u8>, Option<Vec<u8>>), $crate::error::PilError> {
+            match architecture {
+                $crate::compute::Architecture::Default => {
+                    super::default::quantize_impl::execute(
+                        samples, width, height, colors, kmeans, method,
+                    )
+                }
+                _ => Err($crate::error::PilError::InternalError(
+                    concat!($mode_name, " Quantize selected an unimplemented architecture")
+                        .into(),
+                )),
+            }
+        }
+    };
+}
+
+macro_rules! declare_quantize_native_default {
+    ($component:ty, $channels:literal) => {
+        pub(crate) fn execute(
+            samples: &[$component],
+            width: u32,
+            height: u32,
+            colors: usize,
+            kmeans: u32,
+            method: u32,
+        ) -> Result<(Vec<u8>, Vec<u8>, Option<Vec<u8>>), $crate::error::PilError> {
+            $crate::compute::pool_cpu::ops::imageops::helpers::quantize_rgb_source::execute_interleaved::<
+                $component,
+                $channels,
+            >(samples, width, height, colors, kmeans, method)
+        }
+    };
+    (rgba_interleaved, $component:ty, $channels:literal) => {
+        pub(crate) fn execute(
+            samples: &[$component],
+            width: u32,
+            height: u32,
+            colors: usize,
+            _kmeans: u32,
+            _method: u32,
+        ) -> Result<(Vec<u8>, Vec<u8>, Option<Vec<u8>>), $crate::error::PilError> {
+            $crate::compute::pool_cpu::ops::imageops::helpers::quantize_rgb_source::execute_rgba_interleaved::<
+                $component,
+                $channels,
+            >(samples, width, height, colors)
+        }
+    };
+    (premultiplied_luma_alpha) => {
+        pub(crate) fn execute(
+            samples: &[u8],
+            width: u32,
+            height: u32,
+            colors: usize,
+            _kmeans: u32,
+            _method: u32,
+        ) -> Result<(Vec<u8>, Vec<u8>, Option<Vec<u8>>), $crate::error::PilError> {
+            $crate::compute::pool_cpu::ops::imageops::helpers::quantize_rgb_source::execute_premultiplied_luma_alpha(
+                samples, width, height, colors,
+            )
+        }
+    };
+    (premultiplied_rgba) => {
+        pub(crate) fn execute(
+            samples: &[u8],
+            width: u32,
+            height: u32,
+            colors: usize,
+            _kmeans: u32,
+            _method: u32,
+        ) -> Result<(Vec<u8>, Vec<u8>, Option<Vec<u8>>), $crate::error::PilError> {
+            $crate::compute::pool_cpu::ops::imageops::helpers::quantize_rgb_source::execute_premultiplied_rgba(
+                samples, width, height, colors,
+            )
+        }
+    };
+    (palette_alpha) => {
+        pub(crate) fn execute(
+            samples: &[u8],
+            palette: $crate::compute::registry::support::PaletteInput<'_>,
+            width: u32,
+            height: u32,
+            colors: usize,
+        ) -> Result<(Vec<u8>, Vec<u8>, Option<Vec<u8>>), $crate::error::PilError> {
+            $crate::compute::pool_cpu::ops::imageops::helpers::quantize_rgb_source::execute_palette_alpha(
+                samples, palette, width, height, colors,
+            )
+        }
+    };
+    (clipped_luma16) => {
+        pub(crate) fn execute(
+            samples: &[u16],
+            width: u32,
+            height: u32,
+            colors: usize,
+            kmeans: u32,
+            method: u32,
+        ) -> Result<(Vec<u8>, Vec<u8>, Option<Vec<u8>>), $crate::error::PilError> {
+            $crate::compute::pool_cpu::ops::imageops::helpers::quantize_rgb_source::execute_clipped_luma16(
+                samples, width, height, colors, kmeans, method,
+            )
+        }
+    };
+    (i32_scalar) => {
+        pub(crate) fn execute(
+            samples: &[u8],
+            width: u32,
+            height: u32,
+            colors: usize,
+            kmeans: u32,
+            method: u32,
+        ) -> Result<(Vec<u8>, Vec<u8>, Option<Vec<u8>>), $crate::error::PilError> {
+            $crate::compute::pool_cpu::ops::imageops::helpers::quantize_rgb_source::execute_i32_scalar(
+                samples, width, height, colors, kmeans, method,
+            )
+        }
+    };
+    (f32_scalar) => {
+        pub(crate) fn execute(
+            samples: &[u8],
+            width: u32,
+            height: u32,
+            colors: usize,
+            kmeans: u32,
+            method: u32,
+        ) -> Result<(Vec<u8>, Vec<u8>, Option<Vec<u8>>), $crate::error::PilError> {
+            $crate::compute::pool_cpu::ops::imageops::helpers::quantize_rgb_source::execute_f32_scalar(
+                samples, width, height, colors, kmeans, method,
+            )
+        }
+    };
+    (rgba) => {
+        pub(crate) fn execute(
+            samples: &[u8],
+            width: u32,
+            height: u32,
+            colors: usize,
+            _kmeans: u32,
+            _method: u32,
+        ) -> Result<(Vec<u8>, Vec<u8>, Option<Vec<u8>>), $crate::error::PilError> {
+            $crate::compute::pool_cpu::ops::imageops::helpers::quantize_rgb_source::execute_rgba_samples(
+                samples, width, height, colors,
+            )
+        }
+    };
+}
+
+pub(crate) use declare_quantize_native_default;
+pub(crate) use declare_quantize_native_mode;
+
 pub(crate) fn imageops_mask_facts(
     mask: Option<&Arc<Image>>,
 ) -> Result<Option<SecondaryInputFacts>, PilError> {
@@ -77,6 +236,17 @@ pub(crate) const fn cpu_architectures_for(
 
 macro_rules! declare_expand_byte_mode {
     ($mode:ident, $channels:literal) => {
+        declare_expand_byte_mode!(
+            @impl
+            $mode,
+            $channels,
+            crate::compute::registry::support::ExpandFillRule::ModeEncodedBytes
+        );
+    };
+    ($mode:ident, $channels:literal, $fill_rule:expr $(,)?) => {
+        declare_expand_byte_mode!(@impl $mode, $channels, $fill_rule);
+    };
+    (@impl $mode:ident, $channels:literal, $fill_rule:expr) => {
         use crate::compute::{
             Architecture, ExecutionContext,
             pool_cpu::helpers::execution::prepared::Prepared,
@@ -88,9 +258,12 @@ macro_rules! declare_expand_byte_mode {
         use crate::error::PilError;
         use crate::raster::{DynamicImage, Mode};
 
-        const INPUTS: &[InputContract] = &[InputContract::ExpandedDimensions {
-            bytes_per_pixel: $channels,
-        }];
+        const INPUTS: &[InputContract] = &[
+            InputContract::ExpandedDimensions {
+                bytes_per_pixel: $channels,
+            },
+            InputContract::ExpandFill($fill_rule),
+        ];
         static ARCHITECTURES: [ImplementationSupport; 3] =
             super::super::helpers::strategy::cpu_architectures_for(
                 OperationId::Expand,
@@ -109,16 +282,21 @@ macro_rules! declare_expand_byte_mode {
             Default(default::Kernel<'a>),
             Vector {
                 input: &'a super::Input,
-                border: u32,
+                border: crate::pipeline::ExpandMargins,
                 fill: (u8, u8, u8, u8),
             },
         }
 
-        pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
+        pub(crate) struct Strategy<'a> {
+            prepared: Prepared<ArchitectureStrategy<'a>>,
+            input: &'a super::Input,
+            border: crate::pipeline::ExpandMargins,
+            fill: (u8, u8, u8, u8),
+        }
 
         pub(crate) fn prepare<'a>(
             input: &'a super::Input,
-            border: u32,
+            border: crate::pipeline::ExpandMargins,
             fill: (u8, u8, u8, u8),
             ctx: &ExecutionContext,
         ) -> Result<Strategy<'a>, PilError> {
@@ -144,13 +322,27 @@ macro_rules! declare_expand_byte_mode {
                     ));
                 }
             };
-            Ok(Prepared::new(implementation, selection))
+            Ok(Strategy {
+                prepared: Prepared::new(implementation, selection),
+                input,
+                border,
+                fill,
+            })
+        }
+
+        impl Strategy<'_> {
+            pub(crate) fn selection(
+                &self,
+            ) -> &crate::compute::registry::support::StrategySelection {
+                self.prepared.selection()
+            }
         }
 
         pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
-            match strategy.implementation {
+            let Strategy { prepared, input, border, fill } = strategy;
+            let output = match prepared.implementation {
                 ArchitectureStrategy::Default(kernel) => {
-                    default::execute(kernel).map(DynamicImage::$mode)
+                    default::execute(kernel)?
                 }
                 ArchitectureStrategy::Vector { input, border, fill } => {
                     let (output, vector_blocks, scalar_tail) =
@@ -160,9 +352,18 @@ macro_rules! declare_expand_byte_mode {
                     crate::compute::record_pipeline_operation_path("native-copy");
                     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
                     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-                    Ok(DynamicImage::$mode(output))
+                    output
                 }
-            }
+            };
+            let mut image = DynamicImage::$mode(output);
+            super::super::helpers::hidden_lanes::compose_expand_lanes(
+                Mode::$mode,
+                input,
+                &mut image,
+                border,
+                fill,
+            )?;
+            Ok(image)
         }
     };
 }
@@ -328,7 +529,7 @@ macro_rules! declare_invert_mode {
 }
 
 macro_rules! declare_invert_native_mode {
-    ($mode:ident, $input:ty, $channels:expr, $bytes_per_pixel:expr) => {
+    ($mode:ident, $input:ty, $channels:expr, $bytes_per_pixel:expr $(,)?) => {
         declare_invert_native_mode!(
             $mode,
             $input,
@@ -337,7 +538,7 @@ macro_rules! declare_invert_native_mode {
             None
         );
     };
-    ($mode:ident, $input:ty, $channels:expr, $bytes_per_pixel:expr, $core_only_reason:expr) => {
+    ($mode:ident, $input:ty, $channels:expr, $bytes_per_pixel:expr, $core_only_reason:expr $(,)?) => {
         const ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 3] = [
             crate::compute::registry::support::ImplementationSupport::cpu(
                 crate::compute::registry::support::OperationId::Invert,

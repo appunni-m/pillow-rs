@@ -3,6 +3,17 @@
 use crate::compute::pool_cpu::ops::color::convert::helpers::wide::pack_u16x16;
 use wide::{u8x16, u16x16, u32x16};
 
+/// Matches Pillow's RGBa-to-RGB conversion, including its zero-alpha rule.
+#[inline(always)]
+pub(crate) fn unpremultiply_sample(sample: u8, alpha: u8) -> u8 {
+    if alpha == 0 || alpha == u8::MAX {
+        sample
+    } else {
+        let expanded = u32::from(sample) * u32::from(u8::MAX) / u32::from(alpha);
+        expanded.min(u32::from(u8::MAX)) as u8
+    }
+}
+
 pub(crate) fn unpremultiply_block<const CHANNELS: usize>(input: u8x16) -> u8x16 {
     debug_assert!(CHANNELS == 2 || CHANNELS == 4);
     let alpha = input.swizzle_relaxed(u8x16::new(alpha_indices::<CHANNELS>()));

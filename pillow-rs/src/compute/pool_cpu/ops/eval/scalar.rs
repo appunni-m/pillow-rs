@@ -55,6 +55,12 @@ pub(crate) fn prepare(
     Ok(PreparedScalarPoint { image, selection })
 }
 
+impl PreparedScalarPoint {
+    pub(crate) fn selection(&self) -> StrategySelection {
+        self.selection
+    }
+}
+
 pub(crate) fn execute_affine(
     prepared: PreparedScalarPoint,
     scale: f64,

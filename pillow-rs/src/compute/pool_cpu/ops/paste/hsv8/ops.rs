@@ -12,7 +12,7 @@ use crate::raster::{DynamicImage, Mode, RgbImage};
 pub(crate) type Strategy<'a> = BytePlan<'a>;
 
 const RULES: PasteInputRules = PasteInputRules {
-    source_modes: &[Mode::ImageHsv8],
+    source_modes: super::super::helpers::contracts::physical_byte_sources(Mode::ImageHsv8),
     unmasked_only_sources: &[],
     compact_sources: super::super::helpers::contracts::compact_sources(Mode::ImageHsv8),
     compact_masks: super::super::helpers::contracts::compact_masks(Mode::ImageHsv8),
@@ -22,8 +22,12 @@ const RULES: PasteInputRules = PasteInputRules {
 };
 const INPUTS: &[InputContract] = &[InputContract::PasteInputs { rules: &RULES }];
 
-static ARCHITECTURES: [ImplementationSupport; 3] =
-    super::super::helpers::strategy::cpu_architectures_for(Mode::ImageHsv8, 3);
+static ARCHITECTURES: [ImplementationSupport; 4] =
+    super::super::helpers::strategy::cpu_architectures_for_l_mask_neon(
+        Mode::ImageHsv8,
+        3,
+        16,
+    );
 
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::Paste,
@@ -43,7 +47,7 @@ pub(crate) fn prepare<'a>(
     selection: StrategySelection,
 ) -> Result<Strategy<'a>, PilError> {
     super::super::helpers::plan::byte_plan(
-        destination.as_raw(),
+        destination,
         destination.dimensions(),
         Mode::ImageHsv8,
         source,
@@ -55,8 +59,13 @@ pub(crate) fn prepare<'a>(
     )
 }
 
-pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
-    match strategy.selection.implementation.architecture {
+pub(crate) fn execute<I>(strategy: BytePlan<'_, I>) -> Result<DynamicImage, PilError>
+where
+    I: std::ops::Deref<Target = DynamicImage>,
+{
+    let architecture = strategy.selection.implementation.architecture;
+    super::super::helpers::plan::execute_with_hidden_lanes(strategy, |strategy| {
+        match architecture {
         Architecture::Default => super::default::paste_impl::execute(strategy),
         Architecture::Sse2 => super::sse2::paste_impl::execute(strategy),
         Architecture::Neon => super::neon::paste_impl::execute(strategy),
@@ -65,5 +74,6 @@ pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> 
             "unbound {architecture:?} Paste strategy for mode {:?}",
             Mode::ImageHsv8
         ))),
-    }
+        }
+    })
 }

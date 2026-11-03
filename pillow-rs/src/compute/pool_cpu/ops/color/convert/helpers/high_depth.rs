@@ -6,27 +6,39 @@ use crate::raster::{
     DynamicImage, FromColor, GenericImageView, GrayAlphaImage, GrayImage, ImageBuffer, Luma,
     LumaA, Mode, Pixel, Primitive, Rgb, RgbImage, Rgba, RgbaImage,
 };
-use crate::compute::pool_cpu::ops::grayscale::helpers::luma::ToGrayByte;
 
 pub(crate) trait HighDepthPixel: Pixel
 where
     Self::Subpixel: Primitive,
+    Luma<u16>: FromColor<Self>,
 {
+    fn luma16(&self) -> Luma<u16>;
     fn luma8(&self) -> Luma<u8>;
     fn luma_alpha8(&self) -> LumaA<u8>;
     fn rgb8(&self) -> Rgb<u8>;
     fn rgba8(&self) -> Rgba<u8>;
 }
 
+// TODO(pillow-rs#3ptb): freeze CPU parity for all five CoreOnly high-depth
+// source modes across declared targets, including float limits and alpha edges.
+
 impl<P> HighDepthPixel for P
 where
     P: Pixel,
     P::Subpixel: Primitive,
+    Luma<u16>: FromColor<P>,
     Luma<u8>: FromColor<P>,
     LumaA<u8>: FromColor<P>,
     Rgb<u8>: FromColor<P>,
     Rgba<u8>: FromColor<P>,
 {
+    #[inline(always)]
+    fn luma16(&self) -> Luma<u16> {
+        let mut output = Luma([0]);
+        output.copy_from_color(self);
+        output
+    }
+
     #[inline(always)]
     fn luma8(&self) -> Luma<u8> {
         let mut output = Luma([0]);
@@ -69,6 +81,12 @@ where
         Mode::ImageLumaA8 => Ok(DynamicImage::ImageLumaA8(luma_alpha(source))),
         Mode::ImageRgb8 => Ok(DynamicImage::ImageRgb8(rgb(source))),
         Mode::ImageRgba8 => Ok(DynamicImage::ImageRgba8(rgba(source))),
+        Mode::ImageLaPremultiplied8 => Ok(DynamicImage::ImageLaPremultiplied8(
+            premultiplied_luma_alpha(source),
+        )),
+        Mode::ImageRgbPremultiplied8 => Ok(DynamicImage::ImageRgbPremultiplied8(
+            premultiplied_rgba(source),
+        )),
         Mode::ImageCmyk8 => Ok(DynamicImage::ImageCmyk8(cmyk(source))),
         Mode::ImageYCbCr8 => Ok(DynamicImage::ImageYCbCr8(ycbcr(source))),
         Mode::ImageHsv8 => Ok(DynamicImage::ImageHsv8(hsv(source))),
@@ -78,49 +96,64 @@ where
     }
 }
 
-// NO_PILLOW_SUPPORT: typed I;16 targets from internal high-depth modes are
-// core extensions; convert native samples to the same luma bytes directly.
-pub(crate) fn execute_i16_from_gray<P>(
+fn premultiplied_luma_alpha<P: HighDepthPixel>(
     source: &ImageBuffer<P, Vec<P::Subpixel>>,
-    target: Mode,
-) -> Result<DynamicImage, PilError>
+) -> GrayAlphaImage
 where
-    P: Pixel,
-    P::Subpixel: ToGrayByte,
+    P::Subpixel: Primitive,
 {
-    super::luma16::from_luma8_samples(
-        source.width(),
-        source.height(),
-        target,
-        source
-            .pixels()
-            .map(|pixel| pixel.channels()[0].to_gray_byte()),
-    )
+    let mut output = GrayAlphaImage::new(source.width(), source.height());
+    for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
+        let LumaA([luma, alpha]) = pixel.luma_alpha8();
+        let luma = crate::compute::pool_cpu::ops::color::convert::helpers::pixel::premultiply_byte(
+            luma, alpha,
+        );
+        *destination = LumaA([luma, alpha]);
+    }
+    output
 }
 
-// NO_PILLOW_SUPPORT: typed I;16 targets from internal high-depth modes are
-// core extensions; match the native RGB grayscale loop without an L raster.
-pub(crate) fn execute_i16_from_rgb<P>(
+fn premultiplied_rgba<P: HighDepthPixel>(source: &ImageBuffer<P, Vec<P::Subpixel>>) -> RgbaImage
+where
+    P::Subpixel: Primitive,
+{
+    let mut output = RgbaImage::new(source.width(), source.height());
+    for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
+        let Rgba([red, green, blue, alpha]) = pixel.rgba8();
+        *destination = Rgba([
+            crate::compute::pool_cpu::ops::color::convert::helpers::pixel::premultiply_byte(
+                red, alpha,
+            ),
+            crate::compute::pool_cpu::ops::color::convert::helpers::pixel::premultiply_byte(
+                green, alpha,
+            ),
+            crate::compute::pool_cpu::ops::color::convert::helpers::pixel::premultiply_byte(
+                blue, alpha,
+            ),
+            alpha,
+        ]);
+    }
+    output
+}
+
+// NO_PILLOW_SUPPORT: Pillow has no I;16 target for these internal high-depth
+// sources. Convert each native pixel directly to its u16 luma sample; this
+// keeps LA16 values intact and computes RGB luma before any byte projection.
+// TODO(pillow-rs#3ptb): add focused CoreOnly parity for LA16/RGB16/RGBA16 and
+// RGB32F/RGBA32F I;16 targets, including all four byte-order identities.
+pub(crate) fn execute_i16<P>(
     source: &ImageBuffer<P, Vec<P::Subpixel>>,
     target: Mode,
 ) -> Result<DynamicImage, PilError>
 where
-    P: Pixel,
-    P::Subpixel: ToGrayByte,
+    P: HighDepthPixel,
+    P::Subpixel: Primitive,
 {
-    super::luma16::from_luma8_samples(
+    super::luma16::from_u16_samples(
         source.width(),
         source.height(),
         target,
-        source.pixels().map(|pixel| {
-            let channels = pixel.channels();
-            let rgb = [
-                channels[0].to_gray_byte(),
-                channels[1].to_gray_byte(),
-                channels[2].to_gray_byte(),
-            ];
-            crate::color::grayscale_rgb_pixel(&rgb, 32768)
-        }),
+        source.pixels().map(|pixel| pixel.luma16().0[0]),
     )
 }
 

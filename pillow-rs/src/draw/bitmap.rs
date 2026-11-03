@@ -1,7 +1,9 @@
 use super::Draw;
-use crate::compute::{Backend, ExecutionContext};
+use crate::compute::ExecutionContext;
 use crate::compute::pool_cpu::ops::draw::BitmapMask;
-use crate::compute::registry::support::{ModeSupport, StrategySelection};
+use crate::compute::registry::support::{
+    ModeSupport, OperationId, OperationRouteInputs, StrategySelection,
+};
 use crate::error::PilError;
 use crate::image::Image;
 use crate::ops::paste::PasteSource;
@@ -37,11 +39,18 @@ impl Draw {
         // Pending Image pipelines keep their exact output mode on the wrapper.
         let raster_mode = self.image.mode_identity()?;
         let (requested_backend, context) = self.cpu_execution_context()?;
-        if bmp_w != 0
-            && bmp_h != 0
-            && requested_backend.is_some_and(|backend| backend != Backend::Cpu)
-            && Self::bitmap_masked_paste_matches(mode, raster_mode, bmp_mode)
-        {
+        let route_inputs = OperationRouteInputs {
+            requested_backend,
+            width: bmp_w,
+            height: bmp_h,
+            loaded_image: None,
+            byte_storage_length_matches_pixel_count: None,
+            draw_context_mode: Some(mode),
+            bitmap_mask_mode: Some(bmp_mode),
+        };
+        let paste_route = crate::compute::pool_cpu::ops::draw::ops::SUPPORT
+            .conditional_pipeline_child(raster_mode, route_inputs);
+        if paste_route == Some(OperationId::Paste) {
             // A constant-color bitmap with a compatible mask has the same
             // byte operation contract as masked Paste for these native modes. Reuse the
             // existing selected-backend kernels instead of running this
@@ -97,45 +106,6 @@ impl Draw {
         }
     }
 
-    fn bitmap_masked_paste_matches(
-        mode: Mode,
-        raster_mode: Mode,
-        mask_mode: Mode,
-    ) -> bool {
-        // A binary bitmap mask selects complete stored pixels, so it can use
-        // a same-mode native Paste kernel for these byte layouts. Keep
-        // fractional L masks on their draw-specific paths where indexed and
-        // alpha-bearing modes have different blend rules.
-        if mask_mode == Mode::One {
-            return match mode {
-                Mode::One
-                | Mode::ImagePalette8
-                | Mode::ImageLuma8
-                | Mode::ImageLumaA8
-                | Mode::ImageRgb8
-                | Mode::ImageRgba8
-                | Mode::ImageCmyk8
-                | Mode::ImageHsv8 => {
-                    raster_mode == mode
-                        || (mode == Mode::ImageRgba8 && raster_mode == Mode::ImageRgb8)
-                }
-                _ => false,
-            };
-        }
-        if mask_mode != Mode::ImageLuma8 {
-            return false;
-        }
-        match mode {
-            Mode::ImageLuma8 | Mode::ImageRgb8 | Mode::ImageCmyk8 | Mode::ImageHsv8 => {
-                raster_mode == mode
-            }
-            // Pillow's RGBA drawing context over an RGB destination ignores
-            // the fill alpha and blends the three native RGB samples by mask.
-            Mode::ImageRgba8 => raster_mode == Mode::ImageRgb8,
-            _ => false,
-        }
-    }
-
     fn bitmap_cpu(
         &mut self,
         x: i32,
@@ -149,7 +119,9 @@ impl Draw {
         raster_mode: Mode,
         context: &ExecutionContext,
     ) -> Result<StrategySelection, PilError> {
-        let palette = if raster_mode == Mode::ImagePalette8 && self.image.has_nonempty_palette() {
+        let palette = if matches!(raster_mode, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
+            && self.image.has_nonempty_palette()
+        {
             crate::compute::registry::support::PaletteKnowledge::Present
         } else {
             crate::compute::registry::support::PaletteKnowledge::Absent
@@ -208,8 +180,8 @@ impl Draw {
             });
         }
 
-        let raw_data = bitmap.getdata(None)?;
-        let mask = BitmapMask::new(bmp_mode, bmp_w, &raw_data);
+        let mask_image = bitmap.materialized_shared()?;
+        let mask = BitmapMask::new(bmp_mode, bmp_w, mask_image.as_bytes());
         if selection.is_none() {
             selection = Some(
                 crate::compute::pool_cpu::ops::draw::ops::select_bitmap_strategy(
@@ -254,7 +226,9 @@ impl Draw {
             &mask,
             color,
         )?;
-        if let Some((palette, palette_alpha, source_format, info, exif)) = paletted {
+        if selected_mode == Mode::ImagePaletteAlpha8 {
+            self.replace_palette_alpha_output(output)?;
+        } else if let Some((palette, palette_alpha, source_format, info, exif)) = paletted {
             let DynamicImage::ImagePalette8(indices) = output else {
                 return Err(PilError::InternalError(
                     "Draw Bitmap P strategy returned another raster mode".into(),
@@ -305,7 +279,7 @@ impl Draw {
             x,
             y,
             color,
-        ) else {
+        )? else {
             return Ok(false);
         };
         self.image = Image::from_dynamic(output);

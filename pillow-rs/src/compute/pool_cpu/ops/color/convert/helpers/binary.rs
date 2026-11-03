@@ -66,7 +66,11 @@ pub(crate) fn convert_for_mode(
             // excludes LAB.
             let (width, height) = (source.width(), source.height());
             let mut output = GrayImage::new(width, height);
-            diffuse_rgb_rows(&source.to_rgb8().into_raw(), &mut output);
+            let rgb_samples = match source {
+                DynamicImage::ImageRgb8(image) | DynamicImage::ImageLab8(image) => image.as_raw(),
+                _ => unreachable!("RGB binary strategy must retain its native triplet carrier"),
+            };
+            diffuse_rgb_rows(rgb_samples, &mut output);
             Ok(DynamicImage::One(output))
         }
         (_, false) => {
@@ -93,7 +97,11 @@ fn binary_luma(
         | Mode::ImagePalette8
         | Mode::ImagePaletteAlpha8 => {
             let rgb = crate::color::convert_from_nonstandard(source_mode, source, palette)
-                .unwrap_or_else(|| source.to_rgb8().into());
+                .ok_or_else(|| {
+                    PilError::InternalError(
+                        "Convert binary source mode omitted its RGB conversion strategy".into(),
+                    )
+                })?;
             crate::color::pil_grayscale_truncate(&rgb)
         }
         _ => crate::color::pil_grayscale_truncate(source),

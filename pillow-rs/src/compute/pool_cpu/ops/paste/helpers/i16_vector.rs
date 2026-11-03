@@ -4,7 +4,7 @@ use crate::compute::pool_cpu::ops::paste::helpers::plan::Luma16Plan;
 use crate::error::PilError;
 use wide::u16x8;
 
-/// Executes an exact-mode vectorized I;16 Paste plan.
+/// Executes a destination-mode vectorized I;16 Paste plan.
 #[expect(
     clippy::arithmetic_side_effects,
     reason = "prepared extents validate every sample and mask access"
@@ -25,14 +25,22 @@ pub(crate) fn execute(
         return Err(PilError::InternalError("I;16 Paste storage did not match dimensions".into()));
     }
     let mut output = plan.destination.to_vec();
-    if plan.region.is_empty() {
-        return Ok(output);
-    }
-    let vectorized = plan.mask_layout.is_some_and(|layout| !layout.binary);
+    let mut copy_vector_blocks = 0_u64;
     match (plan.mask.as_deref(), plan.mask_layout) {
-        (None, None) => copy_region(&plan, source, &mut output, source_width, destination_width),
+        (None, None) => {
+            copy_vector_blocks =
+                copy_region(&plan, source, &mut output, source_width, destination_width);
+        }
         (Some(mask), Some(layout)) if layout.binary => {
-            copy_binary_region(&plan, source, mask.as_bytes(), &mut output, source_width, destination_width, layout);
+            copy_binary_region(
+                &plan,
+                source,
+                mask.as_bytes(),
+                &mut output,
+                source_width,
+                destination_width,
+                layout,
+            );
         }
         (Some(mask), Some(layout)) => blend_fractional_region(
             &plan,
@@ -43,16 +51,23 @@ pub(crate) fn execute(
             destination_width,
             layout,
         )?,
-        _ => return Err(PilError::InternalError("I;16 Paste mask strategy was incomplete".into())),
+        _ => {
+            return Err(PilError::InternalError(
+                "I;16 Paste mask strategy was incomplete".into(),
+            ));
+        }
     }
-    if vectorized {
-        let blocks = (plan.region.width as usize)
-            .div_ceil(8)
-            .saturating_mul(plan.region.height as usize);
-        crate::compute::record_pipeline_operation_vector_blocks(
-            u64::try_from(blocks).unwrap_or(u64::MAX),
-        );
+    if plan.mask.is_some() {
+        if plan.mask_layout.is_some_and(|layout| !layout.binary) {
+            let blocks = (plan.region.width as usize)
+                .div_ceil(8)
+                .saturating_mul(plan.region.height as usize);
+            record_vector_blocks(u64::try_from(blocks).unwrap_or(u64::MAX));
+        }
         crate::compute::record_pipeline_operation_path("vector");
+    } else {
+        record_vector_blocks(copy_vector_blocks);
+        crate::compute::record_pipeline_operation_path("native-copy");
     }
     Ok(output)
 }
@@ -63,15 +78,45 @@ fn copy_region(
     output: &mut [u16],
     source_width: usize,
     destination_width: usize,
-) {
+) -> u64 {
+    let source_high_byte_first = super::i16::high_byte_first(plan.source_mode);
+    let destination_high_byte_first = super::i16::high_byte_first(plan.mode);
+    let mut vector_blocks = 0u64;
     for row in 0..plan.region.height as usize {
         let source_start = (plan.region.source_top as usize + row) * source_width
             + plan.region.source_left as usize;
         let destination_start = (plan.region.destination_top as usize + row) * destination_width
             + plan.region.destination_left as usize;
         let width = plan.region.width as usize;
-        output[destination_start..destination_start + width]
-            .copy_from_slice(&source[source_start..source_start + width]);
+        let source_row = &source[source_start..source_start + width];
+        let destination_row = &mut output[destination_start..destination_start + width];
+        if source_high_byte_first != destination_high_byte_first {
+            for start in (0..width).step_by(8) {
+                let active = (width - start).min(8);
+                let mut block = [0_u16; 8];
+                block[..active].copy_from_slice(&source_row[start..start + active]);
+                let values = u16x8::new(block);
+                let swapped = ((values << 8u32) | (values >> 8u32)).to_array();
+                destination_row[start..start + active].copy_from_slice(&swapped[..active]);
+                vector_blocks = vector_blocks.saturating_add(1);
+            }
+            continue;
+        }
+        for start in (0..width).step_by(8) {
+            let active = (width - start).min(8);
+            let mut block = [0u16; 8];
+            block[..active].copy_from_slice(&source_row[start..start + active]);
+            let copied = u16x8::new(block).to_array();
+            destination_row[start..start + active].copy_from_slice(&copied[..active]);
+            vector_blocks = vector_blocks.saturating_add(1);
+        }
+    }
+    vector_blocks
+}
+
+fn record_vector_blocks(blocks: u64) {
+    if blocks != 0 {
+        crate::compute::record_pipeline_operation_vector_blocks(blocks);
     }
 }
 
@@ -85,18 +130,25 @@ fn copy_binary_region(
     layout: super::layout::MaskLayout,
 ) {
     let mask_width = plan.source_size.0 as usize;
+    let source_high_byte_first = super::i16::high_byte_first(plan.source_mode);
+    let destination_high_byte_first = super::i16::high_byte_first(plan.mode);
     for row in 0..plan.region.height as usize {
         let source_y = plan.region.source_top as usize + row;
         let destination_y = plan.region.destination_top as usize + row;
         for column in 0..plan.region.width as usize {
             let source_x = plan.region.source_left as usize + column;
-            let mask_index = (source_y * mask_width + source_x) * layout.channels + layout.value_index;
+            let mask_index =
+                (source_y * mask_width + source_x) * layout.channels + layout.value_index;
             if mask[mask_index] != 0 {
                 let source_index = source_y * source_width + source_x;
                 let destination_index = destination_y * destination_width
                     + plan.region.destination_left as usize
                     + column;
-                output[destination_index] = source[source_index];
+                output[destination_index] = super::i16::sample_in_destination_order(
+                    source[source_index],
+                    source_high_byte_first,
+                    destination_high_byte_first,
+                );
             }
         }
     }
@@ -118,7 +170,8 @@ fn blend_fractional_region(
     let mask_width = source_width;
     let source_left = plan.region.source_left as usize;
     let destination_left = plan.region.destination_left as usize;
-    let high_byte_first = high_byte_first(plan.mode);
+    let source_high_byte_first = super::i16::high_byte_first(plan.source_mode);
+    let destination_high_byte_first = super::i16::high_byte_first(plan.mode);
     for row in 0..plan.region.height as usize {
         let source_y = plan.region.source_top as usize + row;
         let destination_y = plan.region.destination_top as usize + row;
@@ -134,17 +187,19 @@ fn blend_fractional_region(
                 let destination_byte_x = destination_left + start + lane;
                 let source_index = source_y * source_width + source_byte_x / 2;
                 let destination_index = destination_y * destination_width + destination_byte_x / 2;
-                let source_shift = byte_shift(high_byte_first, source_byte_x);
-                let destination_shift = byte_shift(high_byte_first, destination_byte_x);
+                let source_shift = byte_shift(source_high_byte_first, source_byte_x);
+                let destination_shift = byte_shift(destination_high_byte_first, destination_byte_x);
                 source_bytes[lane] = ((source[source_index] >> source_shift) & 0xff) as u8;
-                destination_bytes[lane] = ((output[destination_index] >> destination_shift) & 0xff) as u8;
+                destination_bytes[lane] =
+                    ((output[destination_index] >> destination_shift) & 0xff) as u8;
                 let mask_index = (source_y * mask_width + source_byte_x) * layout.channels
                     + layout.value_index;
                 masks[lane] = mask[mask_index];
                 destination_samples[lane] = destination_index;
                 destination_shifts[lane] = destination_shift;
             }
-            let blended = blend_group(source_bytes, destination_bytes, masks, layout.premultiplied);
+            let blended =
+                blend_group(source_bytes, destination_bytes, masks, layout.premultiplied);
             write_byte_lanes(output, blended, destination_samples, destination_shifts, active);
         }
     }
@@ -188,15 +243,6 @@ fn write_byte_lanes(
 fn div255(value: u16x8) -> u16x8 {
     let incremented = value + u16x8::splat(1);
     (incremented + (incremented >> 8u32)) >> 8u32
-}
-
-fn high_byte_first(mode: crate::raster::Mode) -> bool {
-    match mode {
-        crate::raster::Mode::ImageI16B => true,
-        crate::raster::Mode::ImageI16 | crate::raster::Mode::ImageI16L
-        | crate::raster::Mode::ImageI16N => cfg!(target_endian = "big"),
-        _ => false,
-    }
 }
 
 fn byte_shift(high_byte_first: bool, byte_offset: usize) -> u32 {

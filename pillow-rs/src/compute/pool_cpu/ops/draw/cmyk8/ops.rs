@@ -40,10 +40,10 @@ pub(crate) const MODE: Mode = Mode::ImageCmyk8;
 pub(crate) const CHANNELS: usize = 4;
 pub(crate) const FLOAT_MODE: bool = false;
 
-pub(crate) fn apply_text(
+pub(crate) fn apply_text<const RGBA_MASK: bool>(
     input: super::super::TextComposeInput<'_>,
 ) -> Result<super::super::TextComposeResult, PilError> {
-    default::text_impl::apply(
+    default::text_impl::apply::<RGBA_MASK>(
         input.image,
         input.x,
         input.y,
@@ -51,7 +51,6 @@ pub(crate) fn apply_text(
         input.height,
         input.pixels.as_ref(),
         input.fill,
-        input.fill_is_integer,
     )
     .map(super::super::TextComposeResult::Updated)
 }

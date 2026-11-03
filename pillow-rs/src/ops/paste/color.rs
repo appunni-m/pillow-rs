@@ -99,10 +99,14 @@ fn numeric_color(mode: Mode, source: &PasteSource) -> Result<ResolvedPasteColor,
         (Mode::ImageI32, PasteSource::Scalar(value)) => {
             Ok(ResolvedPasteColor::Integer(i32::from(*value)))
         }
-        (Mode::ImageI32, PasteSource::RawScalar(value)) => Ok(ResolvedPasteColor::Integer(
-            i32::try_from(*value)
-                .map_err(|_| PilError::TypeError("im must be Image or color".to_owned()))?,
-        )),
+        (Mode::ImageI32, PasteSource::RawScalar(value)) => {
+            // Pillow's INT32 ink stores the low four bytes after parsing a
+            // signed long long, matching native two's-complement narrowing.
+            let bytes = value.to_le_bytes();
+            Ok(ResolvedPasteColor::Integer(i32::from_le_bytes([
+                bytes[0], bytes[1], bytes[2], bytes[3],
+            ])))
+        }
         (Mode::ImageF32, PasteSource::Scalar(value)) => {
             Ok(ResolvedPasteColor::Float(f32::from(*value)))
         }
@@ -123,7 +127,13 @@ fn numeric_color(mode: Mode, source: &PasteSource) -> Result<ResolvedPasteColor,
 
 fn luma16_color(source: &PasteSource) -> Result<ResolvedPasteColor, PilError> {
     match source {
-        PasteSource::Scalar(value) => Ok(ResolvedPasteColor::Luma16(u16::from(*value) * 0x0101)),
+        PasteSource::Scalar(value) => Ok(ResolvedPasteColor::Luma16(u16::from(*value))),
+        PasteSource::RawScalar(value) => {
+            let bytes = value.to_le_bytes();
+            Ok(ResolvedPasteColor::Luma16(u16::from_le_bytes([
+                bytes[0], bytes[1],
+            ])))
+        }
         _ => Err(bad_single_color()),
     }
 }

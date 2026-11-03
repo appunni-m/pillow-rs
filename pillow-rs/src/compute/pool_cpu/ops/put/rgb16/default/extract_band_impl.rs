@@ -16,5 +16,5 @@ pub(crate) fn prepare(input: &Input, index: u8) -> Result<Kernel<'_>, PilError> 
 pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
     // RGB-to-RGBA compatibility supplies an opaque fourth band.
     let channel = (input.index < 3).then_some(input.index);
-    helpers::native(input, channel)
+    helpers::native_u16(input, channel)
 }

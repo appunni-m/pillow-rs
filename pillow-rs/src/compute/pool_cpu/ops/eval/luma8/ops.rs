@@ -115,7 +115,7 @@ pub(crate) fn execute_float_lut(
     input: &GrayImage,
     lut: &[f64],
     ctx: &ExecutionContext,
-) -> Result<DynamicImage, PilError> {
+) -> Result<(DynamicImage, StrategySelection), PilError> {
     let facts = strategy::point_float_facts(
         input.width(),
         input.height(),
@@ -123,11 +123,12 @@ pub(crate) fn execute_float_lut(
         lut.len(),
     );
     let selection = strategy::select(FLOAT_LUT_SUPPORT, facts, ctx)?;
-    match selection.implementation.architecture {
+    let output = match selection.implementation.architecture {
         Architecture::Default => super::default::eval_float_impl::execute(input, lut)
-            .map(DynamicImage::ImageF32),
-        architecture => Err(PilError::InternalError(format!(
+            .map(DynamicImage::ImageF32)?,
+        architecture => return Err(PilError::InternalError(format!(
             "unexpected {architecture:?} architecture selected for PointFloat mode L"
         ))),
-    }
+    };
+    Ok((output, selection))
 }

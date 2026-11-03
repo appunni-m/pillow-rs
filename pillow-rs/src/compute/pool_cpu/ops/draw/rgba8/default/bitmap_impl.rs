@@ -19,7 +19,7 @@ pub(crate) fn apply(
     for mask_y in 0..mask_height {
         for mask_x in 0..mask_width {
             let coverage = mask.coverage(mask_x, mask_y);
-            if coverage == 0 {
+            if mask.should_skip(coverage) {
                 continue;
             }
             let image_x = x + mask_x as i32;
@@ -31,7 +31,7 @@ pub(crate) fn apply(
             {
                 continue;
             }
-            blend_pixel(&mut canvas, image_x as u32, image_y as u32, coverage, color);
+            blend_pixel(&mut canvas, image_x as u32, image_y as u32, coverage, mask, color);
         }
     }
     Ok(DynamicImage::ImageRgba8(canvas))
@@ -42,26 +42,19 @@ fn blend_pixel(
     x: u32,
     y: u32,
     coverage: u8,
+    mask: &BitmapMask<'_>,
     color: (u8, u8, u8, u8),
 ) {
     let existing = canvas.get_pixel(x, y);
-    // Pillow replaces RGB ink on fully transparent destinations; partially
-    // opaque RGB uses mask blending while alpha always blends by coverage.
-    let blend_rgb = |background: u8, foreground: u8| {
-        if existing[3] == 0 {
-            foreground
-        } else {
-            crate::draw::pil_blend(foreground, background, coverage)
-        }
-    };
+    let color_coverage = mask.luma_coverage_for_alpha(coverage, existing[3]);
     canvas.put_pixel(
         x,
         y,
         Rgba([
-            blend_rgb(existing[0], color.0),
-            blend_rgb(existing[1], color.1),
-            blend_rgb(existing[2], color.2),
-            crate::draw::pil_blend(color.3, existing[3], coverage),
+            mask.blend_byte(color.0, existing[0], color_coverage),
+            mask.blend_byte(color.1, existing[1], color_coverage),
+            mask.blend_byte(color.2, existing[2], color_coverage),
+            mask.blend_byte(color.3, existing[3], coverage),
         ]),
     );
 }

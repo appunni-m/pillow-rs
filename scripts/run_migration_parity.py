@@ -765,6 +765,21 @@ def decode_literal(
             if bindings is None:
                 raise ValueError("putdata image pixel coercion requires workflow bindings")
             return PutDataImagePixelCoercion(value, bindings)
+        if protocol == "paste-convert-override":
+            if bindings is None:
+                raise ValueError("paste convert override requires workflow bindings")
+            try:
+                image = bindings[value["image_step_id"]]
+            except KeyError as exc:
+                raise ValueError("paste convert override references an unknown image") from exc
+
+            def return_same_image(_mode: Any) -> Any:
+                return image
+
+            # This is a deliberate instance-level override, matching the
+            # subclass behavior observed in Pillow's Image.paste wrapper.
+            image.convert = return_same_image
+            return image
         if protocol in {"putdata-read-pixel", "putdata-raise"}:
             # The sequence adapter evaluates these protocol records when the
             # source's __getitem__ is called, preserving materialization order.
@@ -1886,6 +1901,9 @@ def _descriptor_binding_steps(value: Any) -> set[str]:
     """Collect workflow step references from an input descriptor tree."""
 
     if isinstance(value, dict):
+        if value.get("protocol") == "paste-convert-override":
+            step_id = value.get("image_step_id")
+            return {step_id} if isinstance(step_id, str) else set()
         if value.get("protocol") in DISPLAY_PROTOCOLS:
             image_step_id = value.get("image_step_id")
             return {image_step_id} if isinstance(image_step_id, str) else set()

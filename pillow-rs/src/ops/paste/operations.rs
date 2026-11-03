@@ -1,13 +1,16 @@
 use std::sync::Arc;
 
 use super::input::{
-    coordinate, invalid_component_error, paste_scalar_source, paste_source_from_color_string,
+    coordinate, invalid_component_error, paste_float_source_error, paste_invalid_type_error,
+    paste_list_source_error, paste_scalar_source, paste_source_from_color_string,
+    paste_tuple_source, wide_integer_scalar_source,
 };
 use super::types::{
     AlphaCompositeBox, PasteBoxInput, PasteMaskInput, PastePlacement, PasteSource,
     PasteSourceInput, ResolvedPasteColor,
 };
 use crate::checked_dims::CheckedDims;
+use crate::compute::registry::support::OperationId;
 use crate::error::PilError;
 use crate::image::Image;
 use crate::ops::crop::check_crop_extent;
@@ -18,23 +21,128 @@ fn coordinate_overflow() -> PilError {
     PilError::OverflowError("signed integer is greater than maximum".into())
 }
 
+/// Normalized box syntax held between Pillow's staged Paste preparation steps.
+#[doc(hidden)]
+#[derive(Debug, Clone)]
+pub struct PasteBoxPlan {
+    input: PasteBoxInput,
+    abbreviated_mask: Option<Box<Image>>,
+}
+
+/// Mode-resolved source held until destination and mask preparation complete.
+#[doc(hidden)]
+#[derive(Debug, Clone)]
+pub struct PasteSourcePlan {
+    destination_mode: Mode,
+    source: PasteSource,
+    resolved_color: Option<ResolvedPasteColor>,
+}
+
 impl Image {
     /// Applies the Python `Image.paste` input contract before queuing paste.
     ///
-    /// Python and PyO3 bindings only classify host values into these neutral
-    /// records. Coordinate arity, abbreviated-box semantics, color arity,
-    /// mask errors, and the actual paste path all remain shared Rust logic.
+    /// The box is validated before source resolution. Image-source conversion
+    /// and solid-color resolution are prepared before the caller realizes the
+    /// destination and mask; the final method then validates dimensions and
+    /// queues the mode-preserving Paste operation.
     pub fn paste_with_input(
         &mut self,
         source: PasteSourceInput,
         box_input: PasteBoxInput,
         mask_input: PasteMaskInput,
     ) -> Result<(), PilError> {
+        let has_mask = !matches!(&mask_input, PasteMaskInput::None);
+        let position_size_available = matches!(&source, PasteSourceInput::Image(_))
+            || matches!(&mask_input, PasteMaskInput::Image(_))
+            || matches!(&box_input, PasteBoxInput::Image(_));
+        let box_plan = Self::prepare_paste_box(box_input, has_mask, position_size_available)?;
+        let source_plan = self.prepare_paste_source(
+            source,
+            has_mask || box_plan.abbreviated_mask.is_some(),
+        )?;
+        self.paste_prepared(box_plan, source_plan, mask_input)
+    }
+
+    /// Validates Paste box syntax before source loading or conversion.
+    #[doc(hidden)]
+    pub fn prepare_paste_box(
+        box_input: PasteBoxInput,
+        has_mask: bool,
+        position_size_available: bool,
+    ) -> Result<PasteBoxPlan, PilError> {
+        let (input, abbreviated_mask) = match box_input {
+            PasteBoxInput::Image(mask) => {
+                if has_mask {
+                    return Err(PilError::ValueError(
+                        "If using second argument as mask, third argument must be None".to_owned(),
+                    ));
+                }
+                (PasteBoxInput::None, Some(mask))
+            }
+            input => (input, None),
+        };
+        match &input {
+            PasteBoxInput::Values(values) if matches!(values.len(), 2 | 4) => {}
+            PasteBoxInput::Values(values) => {
+                return Err(PilError::TypeError(format!(
+                    "argument 2 must be sequence of length 4, not {}",
+                    values.len()
+                )));
+            }
+            PasteBoxInput::Invalid { length, type_name } => {
+                return Err(match length {
+                    Some(length) => PilError::TypeError(format!(
+                        "argument 2 must be sequence of length 4, not {length}"
+                    )),
+                    None => PilError::TypeError(format!(
+                        "object of type '{type_name}' has no len()"
+                    )),
+                });
+            }
+            PasteBoxInput::None | PasteBoxInput::Image(_) => {}
+        }
+        if !position_size_available
+            && (matches!(&input, PasteBoxInput::None)
+                || matches!(&input, PasteBoxInput::Values(values) if values.len() == 2))
+        {
+            return Err(PilError::ValueError(
+                "cannot determine region size; use 4-item box".to_owned(),
+            ));
+        }
+        Ok(PasteBoxPlan {
+            input,
+            abbreviated_mask,
+        })
+    }
+
+    /// Resolves an image or color source in the destination's exact mode.
+    #[doc(hidden)]
+    pub fn prepare_paste_source(
+        &self,
+        source_input: PasteSourceInput,
+        has_mask: bool,
+    ) -> Result<PasteSourcePlan, PilError> {
         let destination_mode = self.mode_identity()?;
-        let source = match source {
+        let source = match source_input {
             PasteSourceInput::Image(image) => PasteSource::from_parts(Some(*image), 0, 0, 0, 255),
             PasteSourceInput::Scalar(value) => paste_scalar_source(value, destination_mode),
-            PasteSourceInput::Float(value) => PasteSource::RawFloat(value),
+            PasteSourceInput::WideInteger { float_value, .. } => {
+                wide_integer_scalar_source(destination_mode, float_value)?
+            }
+            PasteSourceInput::Float(value) => {
+                if destination_mode == Mode::ImageF32 {
+                    PasteSource::RawFloat(value)
+                } else {
+                    return Err(paste_float_source_error(destination_mode));
+                }
+            }
+            PasteSourceInput::TupleComponents(values) => {
+                paste_tuple_source(&values, destination_mode)?
+            }
+            PasteSourceInput::List => return Err(paste_list_source_error(destination_mode)),
+            PasteSourceInput::InvalidType(type_name) => {
+                return Err(paste_invalid_type_error(destination_mode, &type_name));
+            }
             PasteSourceInput::Components(values) => match values.as_slice() {
                 [value] => paste_scalar_source(*value, destination_mode),
                 [luma, alpha] => match (u8::try_from(*luma), u8::try_from(*alpha)) {
@@ -63,73 +171,186 @@ impl Image {
                 return Err(invalid_component_error(destination_mode));
             }
         };
+        let (source, resolved_color) = match source {
+            PasteSource::Image(image) => (
+                PasteSource::Image(Box::new(resolve_image_source(
+                    image,
+                    destination_mode,
+                    has_mask,
+                )?)),
+                None,
+            ),
+            solid => {
+                let color = solid.solid_color(destination_mode)?;
+                (solid, Some(color))
+            }
+        };
+        Ok(PasteSourcePlan {
+            destination_mode,
+            source,
+            resolved_color,
+        })
+    }
 
-        let abbreviated_mask = match &box_input {
-            PasteBoxInput::Image(mask) => Some((**mask).clone()),
+    /// Captures an image source whose Pillow mode conversion has already run.
+    ///
+    /// The Python adapter uses this after Pillow's virtual `Image.convert`
+    /// call, or when Pillow keeps the original source core by reference. This
+    /// captures the Python-selected raster before destination/mask callbacks.
+    /// The returned source mode is retained as-is, including a mode-changing
+    /// override result. This reproduces Pillow 12.3.0's observed, undocumented
+    /// compatibility behavior: Paste admits matching physical pixel sizes;
+    /// unmasked paths copy raw bytes and masked paths blend physical lanes.
+    /// The parity input builder models an instance override that returns this
+    /// same image and emits the RGBA→CMYK, RGB→RGBA, L→P, RGBA→L, and masked
+    /// LA→RGBA cases. The active shared oracle is Pillow 12.2.0; the user has
+    /// independently reproduced the same behavior on Pillow 12.3.0. Runtime
+    /// parity remains gated on CPU source completion.
+    #[doc(hidden)]
+    pub fn prepare_resolved_paste_image_source(
+        &self,
+        image: Image,
+    ) -> Result<PasteSourcePlan, PilError> {
+        Ok(PasteSourcePlan {
+            destination_mode: self.mode_identity()?,
+            source: PasteSource::Image(Box::new(image)),
+            resolved_color: None,
+        })
+    }
+
+    /// Executes a Paste after box/source preparation and destination/mask loads.
+    #[doc(hidden)]
+    pub fn paste_prepared(
+        &mut self,
+        box_plan: PasteBoxPlan,
+        source_plan: PasteSourcePlan,
+        mask_input: PasteMaskInput,
+    ) -> Result<(), PilError> {
+        self.paste_prepared_with_box_mask(box_plan, source_plan, mask_input, None, true)
+    }
+
+    /// Applies a staged Paste with the already-loaded abbreviated box mask.
+    #[doc(hidden)]
+    pub fn paste_prepared_with_box_mask(
+        &mut self,
+        box_plan: PasteBoxPlan,
+        source_plan: PasteSourcePlan,
+        mask_input: PasteMaskInput,
+        loaded_box_mask: Option<Box<Image>>,
+        use_planned_box_mask: bool,
+    ) -> Result<(), PilError> {
+        let abbreviated_mask = match (
+            box_plan.abbreviated_mask,
+            loaded_box_mask,
+            use_planned_box_mask,
+        ) {
+            (Some(mask), None, true) => Some(*mask),
+            (Some(_), loaded, false) => loaded.map(|mask| *mask),
+            (None, None, _) => None,
+            (Some(_), Some(_), true) => {
+                return Err(PilError::InternalError(
+                    "planned Paste mask cannot be replaced and reused".into(),
+                ));
+            }
+            (None, Some(_), _) => {
+                return Err(PilError::InternalError(
+                    "loaded abbreviated Paste mask has no box plan".into(),
+                ));
+            }
+        };
+        let mask = match (abbreviated_mask, mask_input) {
+            (Some(mask), PasteMaskInput::None) => Some(mask),
+            (Some(_), _) => {
+                return Err(PilError::ValueError(
+                    "If using second argument as mask, third argument must be None".to_owned(),
+                ));
+            }
+            (None, PasteMaskInput::None) => None,
+            (None, PasteMaskInput::Image(mask)) => Some(*mask),
+            (None, PasteMaskInput::Invalid(type_name)) => {
+                return Err(PilError::AttributeError(format!(
+                    "'{type_name}' object has no attribute 'load'"
+                )));
+            }
+        };
+        let placement = match box_plan.input {
+            PasteBoxInput::None | PasteBoxInput::Image(_) => PastePlacement::Position(0, 0),
+            PasteBoxInput::Values(values) => match values.as_slice() {
+                [x, y] => PastePlacement::Position(coordinate(*x)?, coordinate(*y)?),
+                [left, top, right, bottom] => PastePlacement::Region(
+                    coordinate(*left)?,
+                    coordinate(*top)?,
+                    coordinate(*right)?,
+                    coordinate(*bottom)?,
+                ),
+                _ => {
+                    return Err(PilError::InternalError(
+                        "prepared Paste box changed after validation".into(),
+                    ));
+                }
+            },
+            PasteBoxInput::Invalid { .. } => {
+                return Err(PilError::InternalError(
+                    "prepared Paste box changed after validation".into(),
+                ));
+            }
+        };
+        self.paste_prepared_source(source_plan, placement, mask.as_ref())
+    }
+
+    fn paste_prepared_source(
+        &mut self,
+        plan: PasteSourcePlan,
+        placement: PastePlacement,
+        mask: Option<&Image>,
+    ) -> Result<(), PilError> {
+        let destination_mode = self.mode_identity()?;
+        let source_size = match &plan.source {
+            PasteSource::Image(image) => Some(image.size()?),
             _ => None,
         };
-        if abbreviated_mask.is_some() && !matches!(&mask_input, PasteMaskInput::None) {
-            return Err(PilError::ValueError(
-                "If using second argument as mask, third argument must be None".to_owned(),
-            ));
-        }
-        let mask = if let Some(image) = abbreviated_mask {
-            Some(image)
-        } else {
-            match mask_input {
-                PasteMaskInput::None => None,
-                PasteMaskInput::Image(image) => Some(*image),
-                PasteMaskInput::Invalid(type_name) => {
-                    return Err(PilError::AttributeError(format!(
-                        "'{type_name}' object has no attribute 'load'"
-                    )));
-                }
-            }
+        let mask_size = mask.map(Image::size).transpose()?;
+        let is_image = matches!(&plan.source, PasteSource::Image(_));
+        let Some((x, y, width, height)) =
+            resolve_paste_placement(placement, source_size, mask_size, is_image)?
+        else {
+            return Ok(());
         };
-
-        match box_input {
-            PasteBoxInput::None | PasteBoxInput::Image(_) => {
-                self.paste_at(source, None, mask.as_ref())
-            }
-            PasteBoxInput::Values(values) => match values.as_slice() {
-                [x, y] => {
-                    // Pillow rejects a two-coordinate solid-color paste for
-                    // lack of a region size before it validates the unused
-                    // coordinates. Keep that error ordering in core so a
-                    // huge coordinate does not change the public error.
-                    if !matches!(&source, PasteSource::Image(_)) && mask.is_none() {
-                        return self.paste_at(source, None, None);
-                    }
-                    self.paste_at(
-                        source,
-                        Some((coordinate(*x)?, coordinate(*y)?)),
-                        mask.as_ref(),
-                    )
-                }
-                [left, top, right, bottom] => self.paste(
-                    source,
-                    Some((
-                        coordinate(*left)?,
-                        coordinate(*top)?,
-                        coordinate(*right)?,
-                        coordinate(*bottom)?,
-                    )),
-                    mask.as_ref(),
-                ),
-                _ => Err(PilError::TypeError(format!(
-                    "argument 2 must be sequence of length 4, not {}",
-                    values.len()
-                ))),
-            },
-            PasteBoxInput::Invalid { length, type_name } => match length {
-                Some(length) => Err(PilError::TypeError(format!(
-                    "argument 2 must be sequence of length 4, not {length}"
-                ))),
-                None => Err(PilError::TypeError(format!(
-                    "object of type '{type_name}' has no len()"
-                ))),
-            },
+        if source_size.is_some_and(|size| size != (width, height))
+            || mask_size.is_some_and(|size| size != (width, height))
+        {
+            return Err(PilError::ValueError("images do not match".to_owned()));
         }
+        let mask_alpha = paste_mask_uses_alpha(destination_mode, mask)?;
+        let source_image = match plan.source {
+            PasteSource::Image(image) => *image,
+            _ => resolve_solid_source(
+                plan.resolved_color.ok_or_else(|| {
+                    PilError::InternalError("prepared solid Paste lost its color".into())
+                })?,
+                plan.destination_mode,
+                width,
+                height,
+            )?,
+        };
+        let w = i32::try_from(width)
+            .map_err(|_| PilError::ValueError("images do not match".to_owned()))?;
+        let h = i32::try_from(height)
+            .map_err(|_| PilError::ValueError("images do not match".to_owned()))?;
+        let new_self = Image::push_op(
+            self,
+            PipelineOp::Paste {
+                source: Arc::new(source_image),
+                x,
+                y,
+                w,
+                h,
+                mask: mask.map(|image| Arc::new(image.clone())),
+                mask_alpha,
+            },
+        );
+        *self = new_self;
+        Ok(())
     }
 
     /// Performs Pillow's high-level in-place alpha composite workflow.
@@ -336,7 +557,7 @@ impl Image {
         {
             return Err(PilError::ValueError("images do not match".to_owned()));
         }
-        let mask_alpha = paste_mask_uses_alpha(mask)?;
+        let mask_alpha = paste_mask_uses_alpha(destination_mode, mask)?;
         let (source_width, source_height) = if compact_solid_source {
             (1, 1)
         } else {
@@ -483,15 +704,14 @@ fn resolve_paste_placement(
     }
 }
 
-fn paste_mask_uses_alpha(mask: Option<&Image>) -> Result<bool, PilError> {
+fn paste_mask_uses_alpha(destination_mode: Mode, mask: Option<&Image>) -> Result<bool, PilError> {
     let Some(mask_image) = mask else {
         return Ok(false);
     };
-    match mask_image.mode_identity()? {
-        Mode::One | Mode::ImageLuma8 => Ok(false),
-        Mode::ImageLumaA8 | Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8 => Ok(true),
-        _ => Err(PilError::ValueError("bad transparency mask".to_owned())),
-    }
+    OperationId::Paste
+        .support()
+        .for_mode(destination_mode)
+        .paste_mask_uses_alpha(mask_image.mode_identity()?)
 }
 
 fn resolve_paste_source(
@@ -503,7 +723,10 @@ fn resolve_paste_source(
 ) -> Result<Image, PilError> {
     match source {
         PasteSource::Image(image) => resolve_image_source(image, destination_mode, has_mask),
-        solid => resolve_solid_source(solid, destination_mode, width, height),
+        solid => {
+            let color = solid.solid_color(destination_mode)?;
+            resolve_solid_source(color, destination_mode, width, height)
+        }
     }
 }
 
@@ -513,6 +736,9 @@ fn resolve_image_source(
     has_mask: bool,
 ) -> Result<Image, PilError> {
     let source_mode = image.mode_identity()?;
+    // Pillow skips conversion for LA, RGBA, and RGBa pasted into RGB because
+    // those modes already use the destination's four-byte physical pixel. Its
+    // low-level Paste copies or blends these lanes and leaves RGBa premultiplied.
     if source_mode == destination_mode
         || (destination_mode == Mode::ImageRgb8
             && matches!(
@@ -541,12 +767,11 @@ fn resolve_image_source(
 }
 
 fn resolve_solid_source(
-    source: PasteSource,
+    color: ResolvedPasteColor,
     destination_mode: Mode,
     width: u32,
     height: u32,
 ) -> Result<Image, PilError> {
-    let color = source.solid_color(destination_mode)?;
     match color {
         ResolvedPasteColor::Bytes(color) if destination_mode == Mode::ImagePalette8 => {
             let dims = CheckedDims::new(width, height, 1)?;

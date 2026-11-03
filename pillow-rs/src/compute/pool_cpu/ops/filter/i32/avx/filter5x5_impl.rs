@@ -36,5 +36,9 @@ pub(super) fn execute(
     scale: f32,
     offset: f32,
 ) -> Result<DynamicImage, PilError> {
-    execute_with_fma(image, kernel, scale, offset, &X86FmaToken)
+    let (image, identity) = execute_with_fma(image, kernel, scale, offset, &X86FmaToken)?;
+    if identity {
+        crate::compute::record_pipeline_operation_path("scalar-control");
+    }
+    Ok(image)
 }

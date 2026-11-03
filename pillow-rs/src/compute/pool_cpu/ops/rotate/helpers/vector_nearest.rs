@@ -20,6 +20,9 @@ where
         ));
     }
     let geometry = rotate_geometry(image.width(), image.height(), request);
+    if image.width() == 0 || image.height() == 0 {
+        return execute_empty::<P, CHANNELS>(geometry, request);
+    }
     let dimensions = CheckedDims::new(geometry.width, geometry.height, CHANNELS as u8)?;
     let mut output = dimensions.alloc_buffer();
     let counts = copy_nearest_rows::<CHANNELS>(
@@ -35,7 +38,37 @@ where
     crate::image_utils::typed_bytes_to_buffer::<P>(dimensions, output)
 }
 
-fn copy_nearest_rows<const CHANNELS: usize>(
+fn execute_empty<P, const CHANNELS: usize>(
+    geometry: Geometry,
+    request: RotateRequest,
+) -> Result<ImageBuffer<P, Vec<u8>>, PilError>
+where
+    P: Pixel<Subpixel = u8>,
+{
+    let dimensions = CheckedDims::new_allow_empty(geometry.width, geometry.height, CHANNELS as u8)?;
+    let mut output = dimensions.alloc_buffer();
+    let fill = request.fill.unwrap_or((0, 0, 0, 0));
+    let fill_block = std::array::from_fn(|index| {
+        super::byte::fill_sample::<CHANNELS>(fill, index % CHANNELS)
+    });
+    let fill_bytes = u8x16::new(fill_block).to_array();
+    let mut vector_blocks = 0_u64;
+    for chunk in output.chunks_mut(16) {
+        let active = chunk.len();
+        chunk.copy_from_slice(&fill_bytes[..active]);
+        vector_blocks = vector_blocks.saturating_add(1);
+    }
+    crate::compute::record_pipeline_operation_path(if vector_blocks == 0 {
+        "scalar-control"
+    } else {
+        "vector"
+    });
+    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+    crate::compute::record_pipeline_operation_scalar_tail(0);
+    crate::image_utils::typed_bytes_to_buffer::<P>(dimensions, output)
+}
+
+pub(super) fn copy_nearest_rows<const CHANNELS: usize>(
     source: &[u8],
     source_size: (u32, u32),
     geometry: Geometry,

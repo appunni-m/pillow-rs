@@ -1,4 +1,3 @@
-#[cfg(any(not(feature = "parallel"), test))]
 use super::alpha::premultiply_alpha_row;
 use super::alpha::premultiply_channel;
 use super::coefficients::fixed_point_to_u8;
@@ -214,26 +213,6 @@ pub(super) fn horizontal_pass_rows(
         return;
     }
 
-    #[cfg(feature = "parallel")]
-    crate::par_rows_mut!(
-        intermediate,
-        output_stride,
-        source_height as usize,
-        |row_start, _row_end, y, row| {
-            let source_start = y as usize * source_stride;
-            horizontal_pass_row(
-                &work_bytes[source_start..source_start + source_stride],
-                source_width,
-                channels,
-                coeffs,
-                output_width,
-                &mut row[..output_stride],
-            );
-            debug_assert_eq!(row_start, y as usize * output_stride);
-        }
-    );
-
-    #[cfg(not(feature = "parallel"))]
     for y in 0..source_height as usize {
         let source_start = y * source_stride;
         let output_start = y * output_stride;
@@ -263,27 +242,8 @@ pub(super) fn horizontal_pass_rows_alpha(
         return;
     }
 
-    #[cfg(feature = "parallel")]
-    crate::par_rows_mut!(
-        intermediate,
-        output_stride,
-        source_height as usize,
-        |_row_start, _row_end, y, row| {
-            let source_start = y as usize * source_stride;
-            horizontal_pass_row_alpha(
-                &source[source_start..source_start + source_stride],
-                channels,
-                coeffs,
-                output_width,
-                &mut row[..output_stride],
-            );
-        }
-    );
-
-    #[cfg(not(feature = "parallel"))]
     let mut premultiplied_row = vec![0u8; source_stride];
 
-    #[cfg(not(feature = "parallel"))]
     for y in 0..source_height as usize {
         let source_start = y * source_stride;
         let output_start = y * output_stride;
@@ -315,7 +275,6 @@ pub(super) fn horizontal_pass_boxed_rows(
     output_width: u32,
     intermediate: &mut [u8],
     premultiplied_alpha: bool,
-    parallel_pixel_threshold: usize,
 ) {
     let source_stride = source_width as usize * channels;
     let output_stride = output_width as usize * channels;
@@ -323,96 +282,6 @@ pub(super) fn horizontal_pass_boxed_rows(
         return;
     }
 
-    horizontal_pass_boxed_dense_rows(
-        work_bytes,
-        source_width,
-        first_source_row,
-        source_row_count,
-        channels,
-        coeffs,
-        output_width,
-        intermediate,
-        premultiplied_alpha,
-        parallel_pixel_threshold,
-        source_stride,
-        output_stride,
-    );
-}
-
-#[inline(always)]
-fn horizontal_pass_boxed_dense_rows(
-    work_bytes: &[u8],
-    source_width: u32,
-    first_source_row: u32,
-    source_row_count: u32,
-    channels: usize,
-    coeffs: &FilterCoeffs,
-    output_width: u32,
-    intermediate: &mut [u8],
-    premultiplied_alpha: bool,
-    parallel_pixel_threshold: usize,
-    source_stride: usize,
-    output_stride: usize,
-) {
-    #[cfg(not(feature = "parallel"))]
-    let _ = parallel_pixel_threshold;
-
-    #[cfg(feature = "parallel")]
-    if (source_row_count as usize).saturating_mul(output_width as usize) < parallel_pixel_threshold
-    {
-        for row_index in 0..source_row_count as usize {
-            let source_y = first_source_row as usize + row_index;
-            let source_start = source_y * source_stride;
-            let output_start = row_index * output_stride;
-            let source_row = &work_bytes[source_start..source_start + source_stride];
-            let output_row = &mut intermediate[output_start..output_start + output_stride];
-            if premultiplied_alpha {
-                horizontal_pass_row_alpha(source_row, channels, coeffs, output_width, output_row);
-            } else {
-                horizontal_pass_row(
-                    source_row,
-                    source_width,
-                    channels,
-                    coeffs,
-                    output_width,
-                    output_row,
-                );
-            }
-        }
-        return;
-    }
-
-    #[cfg(feature = "parallel")]
-    crate::par_rows_mut!(
-        intermediate,
-        output_stride,
-        source_row_count as usize,
-        |_row_start, _row_end, row_index, row| {
-            let source_y = first_source_row as usize + row_index as usize;
-            let source_start = source_y * source_stride;
-            let source_row = &work_bytes[source_start..source_start + source_stride];
-            if premultiplied_alpha {
-                horizontal_pass_row_alpha(
-                    source_row,
-                    channels,
-                    coeffs,
-                    output_width,
-                    &mut row[..output_stride],
-                );
-            } else {
-                horizontal_pass_row(
-                    source_row,
-                    source_width,
-                    channels,
-                    coeffs,
-                    output_width,
-                    &mut row[..output_stride],
-                );
-            }
-        }
-    );
-
-    #[cfg(not(feature = "parallel"))]
     for row_index in 0..source_row_count as usize {
         let source_y = first_source_row as usize + row_index;
         let source_start = source_y * source_stride;

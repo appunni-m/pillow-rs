@@ -16,14 +16,16 @@ pub(crate) fn prepare<'a>(image: &'a Input, mask: MaskStrategy<'a>) -> Kernel<'a
 
 #[inline]
 pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
-    // Preserve the original CMYK-to-RGB arithmetic without copying the
-    // converted RGB frame before packing its output alpha samples.
-    let rgb = crate::color::cmyk_buffer_to_rgb(input.image);
     let mask = input.mask.samples();
-    let mut output = crate::raster::RgbaImage::new(rgb.width(), rgb.height());
-    for ((destination, source), alpha) in output.pixels_mut().zip(rgb.pixels())
-        .zip(mask) {
-        *destination = Rgba([source[0], source[1], source[2], *alpha]);
+    // Apply the shared CMYK pixel arithmetic directly into the required RGBA
+    // result so the scalar path does not allocate an intermediate RGB frame.
+    let mut output = crate::raster::RgbaImage::new(input.image.width(), input.image.height());
+    for ((destination, source), alpha) in output.pixels_mut()
+        .zip(input.image.pixels())
+        .zip(mask)
+    {
+        let [red, green, blue] = crate::color::cmyk_pixel_to_rgb(source.0);
+        *destination = Rgba([red, green, blue, *alpha]);
     }
     Ok(DynamicImage::ImageRgba8(output))
 }

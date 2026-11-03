@@ -8,7 +8,7 @@ use std::sync::Arc;
 use crate::raster::{DynamicImage, Mode};
 
 use super::data_access::{is_l16_identity, l16_identity_uses_big_endian};
-use super::{Image, is_l16_mode, l16_uses_big_endian};
+use super::Image;
 
 /// Host-neutral input for converting Pillow's scalar `ImagingCore` view to bytes.
 #[derive(Debug, Clone)]
@@ -182,27 +182,22 @@ impl Image {
         self.tobytes()
     }
 
-    /// Returns raw image bytes using an explicit Pillow mode override.
+    /// Returns raw image bytes using an explicit mode override.
     ///
-    /// This is the binding-facing form of [`Image::tobytes`]. Modes `"F"` and
-    /// `"I"` return the internal little-endian 4-byte scalar representation.
-    /// Mode `"1"` packs pixels eight per byte, most-significant bit first.
+    /// This is the typed form of [`Image::tobytes`]. `ImageF32` and `ImageI32`
+    /// return the internal little-endian 4-byte scalar representation. `One`
+    /// packs pixels eight per byte, most-significant bit first.
     ///
     /// # Errors
     ///
     /// Returns [`PilError`] when materialization or mode-specific byte packing
     /// fails.
-    pub fn tobytes_formatted(&self, mode: &str) -> Result<Vec<u8>, PilError> {
-        // Fast path for Paletted: return raw index bytes
+    pub fn tobytes_formatted(&self, mode: Mode) -> Result<Vec<u8>, PilError> {
+        // Fast path for Paletted: return raw index bytes.
         if let Image::Paletted(data) = self {
             return Ok(data.indices.as_bytes().to_vec());
         }
-        let img = self.materialized_shared()?;
-
-        if let Some(mode) = Mode::from_pillow_name(mode) {
-            return self.tobytes_mode(mode);
-        }
-        Ok(img.as_bytes().to_vec())
+        self.tobytes_mode(mode)
     }
 
     /// Returns public image bytes using Pillow's raw encoder arguments.
@@ -217,7 +212,7 @@ impl Image {
     /// fails.
     pub fn tobytes_encoded(
         &self,
-        mode: &str,
+        mode: Mode,
         encoder_name: &str,
         args: &[String],
     ) -> Result<Vec<u8>, PilError> {
@@ -226,23 +221,24 @@ impl Image {
                 "encoder {encoder_name} not available"
             )));
         }
-        let raw_mode = args.first().map(String::as_str).unwrap_or(mode);
-        let mode_supports_raw = raw_mode == mode
-            || (mode == "RGB" && matches!(raw_mode, "BGR" | "RGBA"))
-            || (mode == "RGBA" && raw_mode == "BGRA");
+        let pillow_mode = mode.pillow_name().unwrap_or("unknown");
+        let raw_mode = args.first().map(String::as_str).unwrap_or(pillow_mode);
+        let mode_supports_raw = raw_mode == pillow_mode
+            || (mode == Mode::ImageRgb8 && matches!(raw_mode, "BGR" | "RGBA"))
+            || (mode == Mode::ImageRgba8 && raw_mode == "BGRA");
         if !mode_supports_raw {
             return Err(PilError::ValueError(format!(
-                "No packer found from {mode} to {raw_mode}"
+                "No packer found from {pillow_mode} to {raw_mode}"
             )));
         }
         // Pillow's default Image.tobytes() path uses the image's current mode
         // without a raw-mode override. Keep that public route on the canonical
         // core entry point; explicit raw modes still use the packer below.
-        if args.is_empty() && self.mode_identity()?.pillow_name() == Some(mode) {
+        if args.is_empty() && self.mode_identity()? == mode {
             return self.tobytes();
         }
         let mut data = self.tobytes_formatted(mode)?;
-        if mode == "RGB" && raw_mode == "RGBA" {
+        if mode == Mode::ImageRgb8 && raw_mode == "RGBA" {
             let mut expanded = Vec::with_capacity(data.len() / 3 * 4);
             for pixel in data.chunks_exact(3) {
                 expanded.extend_from_slice(pixel);
@@ -281,15 +277,16 @@ impl Image {
     /// [`Image::tobytes_encoded`].
     pub fn tobytes_encoded_shared(
         &self,
-        mode: &str,
+        mode: Mode,
         encoder_name: &str,
         args: &[String],
     ) -> Result<impl AsRef<[u8]> + Send + Sync + 'static + use<>, PilError> {
         if encoder_name != "raw"
             || !args.is_empty()
             || matches!(self, Image::Paletted(_))
-            || mode == "1"
-            || (is_l16_mode(mode) && cfg!(target_endian = "big") != l16_uses_big_endian(mode))
+            || mode == Mode::One
+            || (is_l16_identity(mode)
+                && cfg!(target_endian = "big") != l16_identity_uses_big_endian(mode))
         {
             return self
                 .tobytes_encoded(mode, encoder_name, args)

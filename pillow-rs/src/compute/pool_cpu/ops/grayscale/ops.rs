@@ -6,7 +6,8 @@
 // typed-input grayscale strategies; Pillow defines no corresponding strings.
 
 use crate::compute::{ExecutionContext, registry::support::{
-    ModeSupport, OperationId, OperationSupport, RejectionKind, StrategyInputs, StrategySelection, SupportAssessment,
+    ModeSupport, OperationId, OperationSupport, OutputModeRule, RejectionKind, StrategyInputs,
+    StrategySelection, SupportAssessment,
 }};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
@@ -101,69 +102,8 @@ declare_grayscale_modes! {
 
 pub(crate) static SUPPORT: OperationSupport = OperationSupport::new(
     OperationId::Grayscale, &[], classify_mode,
-);
-
-/// Executes the exact mode's Default grayscale kernel when composed by Convert.
-///
-/// Convert has no vector implementation for its other targets. Its luma
-/// conversion therefore composes the same serial Default kernel without
-/// manufacturing a second context or making an unreported architecture choice.
-pub(crate) fn execute_default(input: GrayscaleInputs<'_>) -> Result<DynamicImage, PilError> {
-    macro_rules! fallible {
-        ($module:ident, $image:expr) => {{
-            let kernel = super::$module::default::grayscale_impl::prepare($image)?;
-            super::$module::default::grayscale_impl::execute(kernel)
-                .map(DynamicImage::ImageLuma8)
-        }};
-    }
-    macro_rules! infallible {
-        ($module:ident, $image:expr) => {{
-            let kernel = super::$module::default::grayscale_impl::prepare($image);
-            Ok(DynamicImage::ImageLuma8(
-                super::$module::default::grayscale_impl::execute(kernel),
-            ))
-        }};
-    }
-
-    match input.image {
-        DynamicImage::One(image) => infallible!(one, image),
-        DynamicImage::ImageLuma8(image) => fallible!(luma8, image),
-        DynamicImage::ImageLumaA8(image) => fallible!(luma_a8, image),
-        DynamicImage::ImageLaPremultiplied8(_) => Err(PilError::ValueError(LA_REJECTION.into())),
-        DynamicImage::ImagePalette8(image) => {
-            let kernel = super::palette8::default::grayscale_impl::prepare(image, input.palette)?;
-            super::palette8::default::grayscale_impl::execute(kernel)
-                .map(DynamicImage::ImageLuma8)
-        }
-        DynamicImage::ImagePaletteAlpha8(image) => {
-            let kernel = super::palette_alpha8::default::grayscale_impl::prepare(
-                image,
-                input.palette,
-            )?;
-            super::palette_alpha8::default::grayscale_impl::execute(kernel)
-                .map(DynamicImage::ImageLuma8)
-        }
-        DynamicImage::ImageRgb8(image) => fallible!(rgb8, image),
-        DynamicImage::ImageRgba8(image) => fallible!(rgba8, image),
-        DynamicImage::ImageRgbPremultiplied8(image) => fallible!(rgb_premultiplied8, image),
-        DynamicImage::ImageRgbx8(image) => fallible!(rgbx8, image),
-        DynamicImage::ImageCmyk8(image) => fallible!(cmyk8, image),
-        DynamicImage::ImageYCbCr8(image) => infallible!(ycbcr8, image),
-        DynamicImage::ImageLab8(image) => fallible!(lab8, image),
-        DynamicImage::ImageHsv8(image) => fallible!(hsv8, image),
-        DynamicImage::ImageI32(image) => infallible!(i32, image),
-        DynamicImage::ImageF32(image) => infallible!(f32, image),
-        DynamicImage::ImageI16(image) => fallible!(i16, image),
-        DynamicImage::ImageI16L(image) => fallible!(i16l, image),
-        DynamicImage::ImageI16B(image) => fallible!(i16b, image),
-        DynamicImage::ImageI16N(image) => fallible!(i16n, image),
-        DynamicImage::ImageLumaA16(image) => fallible!(luma_a16, image),
-        DynamicImage::ImageRgb16(image) => fallible!(rgb16, image),
-        DynamicImage::ImageRgba16(image) => fallible!(rgba16, image),
-        DynamicImage::ImageRgb32F(image) => fallible!(rgb32f, image),
-        DynamicImage::ImageRgba32F(image) => fallible!(rgba32f, image),
-    }
-}
+)
+.with_rejected_output(OutputModeRule::Fixed(Mode::ImageLuma8));
 
 pub(crate) fn prepare_pipeline<'a>(
     input: GrayscaleInputs<'a>,

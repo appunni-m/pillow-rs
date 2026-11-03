@@ -16,55 +16,52 @@ const SSE2_AVAILABLE: bool = cfg!(any(
     all(target_arch = "x86", target_feature = "sse2")
 ));
 
-macro_rules! architecture_strategies {
-    ($mode:expr, $target:ident) => {
+macro_rules! architecture_strategy {
+    ($mode:expr, $target:ident, $architecture:ident, $available:expr, $requirements:expr) => {
         ImplementationSupport::cpu(
             OperationId::Convert,
             $mode,
-            Architecture::Sse2,
-            SSE2_AVAILABLE,
-            &[Architecture::Sse2],
+            Architecture::$architecture,
+            $available,
+            $requirements,
             StrategyGuard::ConvertTargetMode(Mode::$target),
-        ),
-        ImplementationSupport::cpu(
-            OperationId::Convert,
-            $mode,
-            Architecture::Neon,
-            cfg!(all(target_arch = "aarch64", target_feature = "neon")),
-            &[Architecture::Neon],
-            StrategyGuard::ConvertTargetMode(Mode::$target),
-        ),
-        ImplementationSupport::cpu(
-            OperationId::Convert,
-            $mode,
-            Architecture::WasmSimd128,
-            cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
-            &[Architecture::WasmSimd128],
-            StrategyGuard::ConvertTargetMode(Mode::$target),
-        ),
+        )
     };
 }
 
 pub(crate) const fn architecture_support(mode: Mode) -> [ImplementationSupport; 21] {
     [
-        architecture_strategies!(mode, ImageLuma8),
-        architecture_strategies!(mode, ImageLumaA8),
-        architecture_strategies!(mode, ImageRgb8),
-        architecture_strategies!(mode, ImageRgba8),
-        architecture_strategies!(mode, ImageCmyk8),
-        architecture_strategies!(mode, ImageI32),
-        architecture_strategies!(mode, ImageF32),
+        architecture_strategy!(mode, ImageLuma8, Sse2, SSE2_AVAILABLE, &[Architecture::Sse2]),
+        architecture_strategy!(mode, ImageLuma8, Neon, cfg!(all(target_arch = "aarch64", target_feature = "neon")), &[Architecture::Neon]),
+        architecture_strategy!(mode, ImageLuma8, WasmSimd128, cfg!(all(target_arch = "wasm32", target_feature = "simd128")), &[Architecture::WasmSimd128]),
+        architecture_strategy!(mode, ImageLumaA8, Sse2, SSE2_AVAILABLE, &[Architecture::Sse2]),
+        architecture_strategy!(mode, ImageLumaA8, Neon, cfg!(all(target_arch = "aarch64", target_feature = "neon")), &[Architecture::Neon]),
+        architecture_strategy!(mode, ImageLumaA8, WasmSimd128, cfg!(all(target_arch = "wasm32", target_feature = "simd128")), &[Architecture::WasmSimd128]),
+        architecture_strategy!(mode, ImageRgb8, Sse2, SSE2_AVAILABLE, &[Architecture::Sse2]),
+        architecture_strategy!(mode, ImageRgb8, Neon, cfg!(all(target_arch = "aarch64", target_feature = "neon")), &[Architecture::Neon]),
+        architecture_strategy!(mode, ImageRgb8, WasmSimd128, cfg!(all(target_arch = "wasm32", target_feature = "simd128")), &[Architecture::WasmSimd128]),
+        architecture_strategy!(mode, ImageRgba8, Sse2, SSE2_AVAILABLE, &[Architecture::Sse2]),
+        architecture_strategy!(mode, ImageRgba8, Neon, cfg!(all(target_arch = "aarch64", target_feature = "neon")), &[Architecture::Neon]),
+        architecture_strategy!(mode, ImageRgba8, WasmSimd128, cfg!(all(target_arch = "wasm32", target_feature = "simd128")), &[Architecture::WasmSimd128]),
+        architecture_strategy!(mode, ImageCmyk8, Sse2, SSE2_AVAILABLE, &[Architecture::Sse2]),
+        architecture_strategy!(mode, ImageCmyk8, Neon, cfg!(all(target_arch = "aarch64", target_feature = "neon")), &[Architecture::Neon]),
+        architecture_strategy!(mode, ImageCmyk8, WasmSimd128, cfg!(all(target_arch = "wasm32", target_feature = "simd128")), &[Architecture::WasmSimd128]),
+        architecture_strategy!(mode, ImageI32, Sse2, SSE2_AVAILABLE, &[Architecture::Sse2]),
+        architecture_strategy!(mode, ImageI32, Neon, cfg!(all(target_arch = "aarch64", target_feature = "neon")), &[Architecture::Neon]),
+        architecture_strategy!(mode, ImageI32, WasmSimd128, cfg!(all(target_arch = "wasm32", target_feature = "simd128")), &[Architecture::WasmSimd128]),
+        architecture_strategy!(mode, ImageF32, Sse2, SSE2_AVAILABLE, &[Architecture::Sse2]),
+        architecture_strategy!(mode, ImageF32, Neon, cfg!(all(target_arch = "aarch64", target_feature = "neon")), &[Architecture::Neon]),
+        architecture_strategy!(mode, ImageF32, WasmSimd128, cfg!(all(target_arch = "wasm32", target_feature = "simd128")), &[Architecture::WasmSimd128]),
     ]
 }
 
 /// Converts a native u16 raster; I;16N changes decode byte order, not sample range.
 pub(crate) fn execute_mode(
     source: &Samples,
-    source_mode: Mode,
     target: Mode,
 ) -> Result<DynamicImage, PilError> {
     if is_luma16_target(target) {
-        return execute_i16_target(source, source_mode, target);
+        return execute_i16_target(source, target);
     }
     execute(source, target)
 }
@@ -147,31 +144,23 @@ fn execute(source: &Samples, target: Mode) -> Result<DynamicImage, PilError> {
 
 fn execute_i16_target(
     source: &Samples,
-    source_mode: Mode,
     target: Mode,
 ) -> Result<DynamicImage, PilError> {
-    if source_mode == target {
-        return Ok(match target {
-            Mode::ImageI16 => DynamicImage::ImageI16(source.clone()),
-            Mode::ImageI16L => DynamicImage::ImageI16L(source.clone()),
-            Mode::ImageI16B => DynamicImage::ImageI16B(source.clone()),
-            Mode::ImageI16N => DynamicImage::ImageI16N(source.clone()),
-            _ => {
-                return Err(PilError::InternalError(
-                    "I;16 Convert selected an undeclared target mode".into(),
-                ));
-            }
-        });
+    // TODO(pillow-rs#3ptb): verify CoreOnly source/target alias pairs with
+    // samples above 255 and mode-specific byte export in the CPU parity lane.
+    // I;16 variants share native u16 storage; only their external byte-order
+    // contract differs. Preserve every sample when selecting another I;16
+    // identity so reads and writes apply endianness at the image boundary.
+    let samples = source.clone();
+    match target {
+        Mode::ImageI16 => Ok(DynamicImage::ImageI16(samples)),
+        Mode::ImageI16L => Ok(DynamicImage::ImageI16L(samples)),
+        Mode::ImageI16B => Ok(DynamicImage::ImageI16B(samples)),
+        Mode::ImageI16N => Ok(DynamicImage::ImageI16N(samples)),
+        _ => Err(PilError::InternalError(
+            "I;16 Convert selected an undeclared target mode".into(),
+        )),
     }
-    from_luma8_samples(
-        source.width(),
-        source.height(),
-        target,
-        source
-            .as_raw()
-            .iter()
-            .map(|sample| sample.min(u16::from(u8::MAX)) as u8),
-    )
 }
 
 pub(crate) const fn is_luma16_target(target: Mode) -> bool {

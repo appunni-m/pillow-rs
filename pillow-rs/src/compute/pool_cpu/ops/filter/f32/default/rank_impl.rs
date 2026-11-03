@@ -2,10 +2,49 @@ use crate::checked_dims::CheckedDims;
 use crate::compute::pool_cpu::ops::filter::helpers::SMALL_RANK_AREA;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, RgbaImage};
-use super::super::helpers::{native_uniform_f_mode_image, requires_default_comparator_sort};
+use super::super::helpers::native_uniform_f_mode_image;
+#[cfg(test)]
 pub(super) use super::super::helpers::requires_default_comparator_sort as
     rank_filter_f_requires_legacy_sort;
 
+/// Selects the same F32 rank sample as Pillow's in-place partition algorithm.
+#[inline]
+fn select_rank_filter_f_pillow(values: &mut [f32], rank: usize) -> f32 {
+    let target = rank as isize;
+    let mut left = 0_isize;
+    let mut right = values.len() as isize - 1;
+    while left < right {
+        let pivot = values[target as usize];
+        let mut i = left;
+        let mut j = right;
+        loop {
+            while i <= right && values[i as usize] < pivot {
+                i += 1;
+            }
+            while j >= left && pivot < values[j as usize] {
+                j -= 1;
+            }
+            if i <= j {
+                values.swap(i as usize, j as usize);
+                i += 1;
+                j -= 1;
+            }
+            if i > j {
+                break;
+            }
+        }
+        if j < target {
+            left = i;
+        }
+        if target < i {
+            right = j;
+        }
+    }
+    values[target as usize]
+}
+
+/// Kept only for the existing migration-only unit-test module.
+#[cfg(test)]
 #[inline]
 pub(super) fn select_rank_filter_f_value(
     values: &mut [f32],
@@ -30,7 +69,6 @@ fn rank_filter_f_large_serial(
     half: i32,
     area: usize,
     rank: usize,
-    legacy_sort: bool,
 ) {
     let mut values = Vec::with_capacity(area);
     for y in 0..h {
@@ -49,7 +87,7 @@ fn rank_filter_f_large_serial(
                     ]));
                 }
             }
-            let selected = select_rank_filter_f_value(&mut values, rank, legacy_sort);
+            let selected = select_rank_filter_f_pillow(&mut values, rank);
             let out_base = (y * w + x) as usize * 4;
             out[out_base..out_base + 4].copy_from_slice(&selected.to_le_bytes());
         }
@@ -59,6 +97,7 @@ fn rank_filter_f_large_serial(
 
 
 /// Precomputed dimensions and neighborhood bounds for one rank-filter operation.
+/// The sampling helpers clamp edges to fuse Pillow's expansion and output crop.
 #[derive(Clone, Copy)]
 pub(super) struct RankFilterWindow {
     pub(super) width: u32,
@@ -98,10 +137,9 @@ fn rank_filter_f_small(
                     value_index += 1;
                 }
             }
-            values[..area]
-                .sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            let selected = select_rank_filter_f_pillow(&mut values[..area], rank);
             let out_base = (y * width + x) as usize * 4;
-            output[out_base..out_base + 4].copy_from_slice(&values[rank].to_le_bytes());
+            output[out_base..out_base + 4].copy_from_slice(&selected.to_le_bytes());
         }
     }
 }
@@ -137,10 +175,7 @@ fn rank_filter_f_impl(
     if area <= SMALL_RANK_AREA {
         rank_filter_f_small(raw, &mut out, w, h, half, area, rank);
     } else {
-        let legacy_sort = requires_default_comparator_sort(raw);
-        
-        
-        rank_filter_f_large_serial(raw, &mut out, w, h, half, area, rank, legacy_sort);
+        rank_filter_f_large_serial(raw, &mut out, w, h, half, area, rank);
     }
     let result = DynamicImage::ImageF32(
         RgbaImage::from_raw(w_u32, h_u32, out)

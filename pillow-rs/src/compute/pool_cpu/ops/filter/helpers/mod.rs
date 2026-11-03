@@ -1,16 +1,16 @@
 //! Native-sample algorithms shared by the filter mode strategies.
 
-use crate::checked_dims::CheckedDims;
-use crate::error::PilError;
-
-pub(crate) const BOX_BLUR_BIAS: u32 = 1 << 23;
-
 #[path = "blur.rs"]
 mod blur;
+pub(crate) use blur::BOX_BLUR_BIAS;
 #[path = "byte_filter.rs"]
 mod byte_filter;
+#[path = "hidden_lanes.rs"]
+pub(super) mod hidden_lanes;
 #[path = "convolution.rs"]
 mod convolution;
+#[path = "i16_kernel.rs"]
+mod i16_kernel;
 #[path = "filter3x3.rs"]
 mod filter3x3;
 #[path = "kernels/filter3x3_vector.rs"]
@@ -24,7 +24,7 @@ mod rank_vector_kernel;
 #[path = "filter5x5.rs"]
 mod filter5x5;
 mod mode_leaf;
-mod mode_filter;
+pub(crate) mod mode_filter;
 #[path = "rank.rs"]
 mod rank;
 #[path = "rank_vector.rs"]
@@ -35,6 +35,9 @@ mod unsharp;
 mod uniform_image;
 
 pub(crate) use convolution::{pillow_kernel_row_3, pillow_kernel_row_5};
+pub(in crate::compute::pool_cpu::ops::filter) use i16_kernel::{
+    execute_u16_filter3x3, execute_u16_filter5x5,
+};
 pub(crate) use blur::gaussian_blur_box_parameters;
 pub(crate) use crate::compute::helpers::filters::binomial3x3_parameters_match;
 pub(crate) use filter3x3::{
@@ -64,7 +67,8 @@ pub(in crate::compute::pool_cpu::ops::filter) use extrema::{
     native_byte_filter_architectures,
 };
 pub(in crate::compute::pool_cpu::ops::filter) use blur::{
-    execute_native_byte_blur, validate_native_byte_blur_selection,
+    copy_native_byte_blur_input, execute_native_byte_blur,
+    validate_native_byte_blur_selection,
 };
 pub(crate) use rank_vector::execute_native_byte_rank;
 pub(in crate::compute::pool_cpu::ops::filter) use uniform_image::{
@@ -73,9 +77,9 @@ pub(in crate::compute::pool_cpu::ops::filter) use uniform_image::{
 pub(crate) use unsharp::blend_native_bytes as blend_unsharp_native_bytes;
 pub(in crate::compute::pool_cpu::ops::filter) use byte_filter::execute as execute_native_bytes_filter;
 pub(crate) use mode_leaf::{
-    native_filter3x3_arch_leaf, native_filter3x3_architectures,
+    execute_native_filter_identity_copy, native_filter3x3_arch_leaf,
+    native_filter3x3_architectures,
     native_filter5x5_arch_dispatch, native_filter5x5_arch_leaf,
     native_filter5x5_architectures, native_filter5x5_mode_fast_path,
     native_filter_mode_leaf,
 };
-pub(crate) use mode_filter::execute_mode_filter;

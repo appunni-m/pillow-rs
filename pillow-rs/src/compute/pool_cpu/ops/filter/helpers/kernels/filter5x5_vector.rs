@@ -1,5 +1,8 @@
 //! Shared vector kernels for native-byte 5x5 filtering.
 
+// TODO(pillow-rs#3ptb): freeze byte Filter5x5 output and architecture/fallback
+// receipts across exact modes, including the L, LA, and RGB specialized routes.
+
 use wide::f32x8;
 
 /// Apply the archived interleaved-byte 5x5 convolution without changing mode.

@@ -1,23 +1,26 @@
-use super::{Bound, PyAny, PyOverflowError, PyResult, PyTypeError, PyValueError};
+use super::{Bound, PyAny, PyOverflowError, PyResult, PyTypeError, PyValueError, c_int_from_python};
 use pyo3::types::PyAnyMethods;
 
-pub(crate) fn filter_size_from_python(size: i64, negative_is_identity: bool) -> PyResult<u32> {
+pub(crate) fn filter_size_from_python(
+    size: &Bound<'_, PyAny>,
+    negative_is_identity: bool,
+) -> PyResult<u32> {
+    let size = c_int_from_python(size)?;
     if size < 0 {
         if negative_is_identity {
             return Ok(0);
         }
         return Err(PyValueError::new_err("bad kernel size"));
     }
-    u32::try_from(size)
-        .map_err(|_| PyOverflowError::new_err("Python int too large to convert to C ssize_t"))
+    Ok(size as u32)
 }
 
-pub(crate) fn filter_rank_from_python(rank: i64) -> PyResult<u32> {
+pub(crate) fn filter_rank_from_python(rank: &Bound<'_, PyAny>) -> PyResult<u32> {
+    let rank = c_int_from_python(rank)?;
     if rank < 0 {
         return Err(PyValueError::new_err("bad rank value"));
     }
-    u32::try_from(rank)
-        .map_err(|_| PyOverflowError::new_err("Python int too large to convert to C ssize_t"))
+    Ok(rank as u32)
 }
 
 #[cfg(feature = "test-api")]

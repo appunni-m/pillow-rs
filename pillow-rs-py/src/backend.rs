@@ -110,6 +110,15 @@ fn pipeline_operation_telemetry_to_py(
             "selected_architecture",
             sample.selected_architecture.map(|architecture| architecture.name()),
         )?;
+        if let Some(reasons) = sample.strategy_fallbacks {
+            let strategy_fallbacks = PyList::empty(py);
+            for reason in reasons {
+                strategy_fallbacks.append(reason.name())?;
+            }
+            value.set_item("strategy_fallbacks", strategy_fallbacks)?;
+        } else {
+            value.set_item("strategy_fallbacks", py.None())?;
+        }
         value.set_item("vector_block_count", sample.vector_block_count)?;
         value.set_item("scalar_tail_count", sample.scalar_tail_count)?;
         value.set_item("mode_conversion_count", sample.mode_conversion_count)?;

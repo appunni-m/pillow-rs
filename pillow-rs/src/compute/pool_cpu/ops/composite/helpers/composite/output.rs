@@ -46,20 +46,6 @@ pub(super) fn u16_image(
     }
 }
 
-pub(super) fn i32_image(
-    width: u32,
-    height: u32,
-    bytes: Vec<u8>,
-) -> Result<DynamicImage, PilError> {
-    let dimensions = CheckedDims::new_allow_empty(width, height, 4)?;
-    if bytes.len() != dimensions.total_bytes() {
-        return Err(invalid_shape("I"));
-    }
-    crate::raster::RgbaImage::from_raw(width, height, bytes)
-        .map(DynamicImage::ImageI32)
-        .ok_or_else(|| invalid_shape("I"))
-}
-
 pub(super) fn f32_image(
     width: u32,
     height: u32,
@@ -70,11 +56,6 @@ pub(super) fn f32_image(
     let dimensions = CheckedDims::new_allow_empty(width, height, channels * 4)?;
     if bytes.len() != dimensions.total_bytes() || bytes.len() % 4 != 0 {
         return Err(invalid_shape("f32"));
-    }
-    if mode == Mode::ImageF32 {
-        return crate::raster::RgbaImage::from_raw(width, height, bytes)
-            .map(DynamicImage::ImageF32)
-            .ok_or_else(|| invalid_shape("F"));
     }
     let samples = bytes
         .chunks_exact(4)

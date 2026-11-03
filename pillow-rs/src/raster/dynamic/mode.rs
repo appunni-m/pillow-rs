@@ -3,8 +3,10 @@
 use super::{DynamicImage, Mode};
 
 impl DynamicImage {
-    /// Assigns a Pillow mode to an image at an adapter boundary while
-    /// preserving its existing sample buffer.
+    /// Assigns a Pillow mode identity to a same-layout buffer at an explicit
+    /// boundary where the caller certifies the samples already have that
+    /// meaning. This does not convert pixel values and must not share an
+    /// algorithm across modes.
     ///
     /// The returned error contains the original image when its storage cannot
     /// represent the requested mode. Internal high-depth buffers are never

@@ -13,7 +13,7 @@ mod rounded_rect;
 pub(super) use rounded_rect::simd_draw_rounded_rect_native;
 
 fn simd_write_ellipse_spans(
-    writer: &mut SimdDrawSpanWriter<'_>,
+    writer: &mut SimdDrawSpanWriter,
     x0: i32,
     y0: i32,
     x1: i32,
@@ -40,7 +40,7 @@ fn simd_write_ellipse_spans(
 }
 
 fn simd_write_clipped_ellipse_spans(
-    writer: &mut SimdDrawSpanWriter<'_>,
+    writer: &mut SimdDrawSpanWriter,
     x0: i32,
     y0: i32,
     a: i32,
@@ -76,7 +76,7 @@ pub(super) fn simd_draw_ellipse_native(
     layout: DrawLayout,
 ) -> Result<Option<DynamicImage>, PilError> {
     let channels = layout.channels;
-    let (image_width, image_height) = img.dimensions();
+    let image_width = img.width();
     let row_bytes = (image_width as usize)
         .checked_mul(channels)
         .ok_or_else(|| PilError::InternalError("SIMD ellipse row stride overflow".into()))?;
@@ -84,16 +84,7 @@ pub(super) fn simd_draw_ellipse_native(
         return Ok(None);
     }
 
-    let mut output = img.as_bytes().to_vec();
-    let mut writer = SimdDrawSpanWriter {
-        output: &mut output,
-        image_width,
-        image_height,
-        channels,
-        alpha_blend_rgb,
-        vector_blocks: 0,
-        scalar_tail: 0,
-    };
+    let mut writer = SimdDrawSpanWriter::new(img, layout, alpha_blend_rgb);
 
     if let Some(fill) = fill {
         let geometry_width = x1
@@ -125,14 +116,7 @@ pub(super) fn simd_draw_ellipse_native(
     crate::compute::record_pipeline_operation_path("vector");
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    crate::compute::pool_cpu::helpers::dynamic_image::from_raw_bytes(
-        layout.mode,
-        image_width,
-        image_height,
-        output,
-    )
-    .map(Some)
-    .ok_or_else(|| PilError::InternalError("SIMD Draw output dimensions were invalid".into()))
+    writer.into_image().map(Some)
 }
 
 pub(super) fn simd_draw_arc_native(
@@ -149,23 +133,14 @@ pub(super) fn simd_draw_arc_native(
     layout: DrawLayout,
 ) -> Result<Option<DynamicImage>, PilError> {
     let channels = layout.channels;
-    let (image_width, image_height) = img.dimensions();
+    let image_width = img.width();
     let row_bytes = (image_width as usize)
         .checked_mul(channels)
         .ok_or_else(|| PilError::InternalError("SIMD arc row stride overflow".into()))?;
     if row_bytes < 16 {
         return Ok(None);
     }
-    let mut output = img.as_bytes().to_vec();
-    let mut writer = SimdDrawSpanWriter {
-        output: &mut output,
-        image_width,
-        image_height,
-        channels,
-        alpha_blend_rgb,
-        vector_blocks: 0,
-        scalar_tail: 0,
-    };
+    let mut writer = SimdDrawSpanWriter::new(img, layout, alpha_blend_rgb);
     let (start, end) = normalize_angles(start as f32, end as f32);
     if start + 360.0 == end {
         if let Some(fill) = fill {
@@ -199,14 +174,7 @@ pub(super) fn simd_draw_arc_native(
     crate::compute::record_pipeline_operation_path("vector");
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    crate::compute::pool_cpu::helpers::dynamic_image::from_raw_bytes(
-        layout.mode,
-        image_width,
-        image_height,
-        output,
-    )
-    .map(Some)
-    .ok_or_else(|| PilError::InternalError("SIMD Draw output dimensions were invalid".into()))
+    writer.into_image().map(Some)
 }
 
 pub(super) fn simd_draw_chord_native(
@@ -224,23 +192,14 @@ pub(super) fn simd_draw_chord_native(
     layout: DrawLayout,
 ) -> Result<Option<DynamicImage>, PilError> {
     let channels = layout.channels;
-    let (image_width, image_height) = img.dimensions();
+    let image_width = img.width();
     let row_bytes = (image_width as usize)
         .checked_mul(channels)
         .ok_or_else(|| PilError::InternalError("SIMD chord row stride overflow".into()))?;
     if row_bytes < 16 {
         return Ok(None);
     }
-    let mut output = img.as_bytes().to_vec();
-    let mut writer = SimdDrawSpanWriter {
-        output: &mut output,
-        image_width,
-        image_height,
-        channels,
-        alpha_blend_rgb,
-        vector_blocks: 0,
-        scalar_tail: 0,
-    };
+    let mut writer = SimdDrawSpanWriter::new(img, layout, alpha_blend_rgb);
     let (start, end) = normalize_angles(start as f32, end as f32);
     let dimensions = x1
         .checked_sub(x0)
@@ -290,14 +249,7 @@ pub(super) fn simd_draw_chord_native(
     crate::compute::record_pipeline_operation_path("vector");
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    crate::compute::pool_cpu::helpers::dynamic_image::from_raw_bytes(
-        layout.mode,
-        image_width,
-        image_height,
-        output,
-    )
-    .map(Some)
-    .ok_or_else(|| PilError::InternalError("SIMD Draw output dimensions were invalid".into()))
+    writer.into_image().map(Some)
 }
 
 pub(super) fn simd_draw_pieslice_native(
@@ -315,23 +267,14 @@ pub(super) fn simd_draw_pieslice_native(
     layout: DrawLayout,
 ) -> Result<Option<DynamicImage>, PilError> {
     let channels = layout.channels;
-    let (image_width, image_height) = img.dimensions();
+    let image_width = img.width();
     let row_bytes = (image_width as usize)
         .checked_mul(channels)
         .ok_or_else(|| PilError::InternalError("SIMD pieslice row stride overflow".into()))?;
     if row_bytes < 16 {
         return Ok(None);
     }
-    let mut output = img.as_bytes().to_vec();
-    let mut writer = SimdDrawSpanWriter {
-        output: &mut output,
-        image_width,
-        image_height,
-        channels,
-        alpha_blend_rgb,
-        vector_blocks: 0,
-        scalar_tail: 0,
-    };
+    let mut writer = SimdDrawSpanWriter::new(img, layout, alpha_blend_rgb);
     let (start, end) = normalize_angles(start as f32, end as f32);
     let dimensions = x1
         .checked_sub(x0)
@@ -396,18 +339,11 @@ pub(super) fn simd_draw_pieslice_native(
     crate::compute::record_pipeline_operation_path("vector");
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    crate::compute::pool_cpu::helpers::dynamic_image::from_raw_bytes(
-        layout.mode,
-        image_width,
-        image_height,
-        output,
-    )
-    .map(Some)
-    .ok_or_else(|| PilError::InternalError("SIMD Draw output dimensions were invalid".into()))
+    writer.into_image().map(Some)
 }
 
 fn simd_write_rect_spans(
-    writer: &mut SimdDrawSpanWriter<'_>,
+    writer: &mut SimdDrawSpanWriter,
     x0: i32,
     y0: i32,
     x1: i32,
@@ -468,16 +404,7 @@ pub(super) fn simd_draw_polygon_native(
         return Ok(None);
     }
 
-    let mut output = img.as_bytes().to_vec();
-    let mut writer = SimdDrawSpanWriter {
-        output: &mut output,
-        image_width,
-        image_height,
-        channels,
-        alpha_blend_rgb,
-        vector_blocks: 0,
-        scalar_tail: 0,
-    };
+    let mut writer = SimdDrawSpanWriter::new(img, layout, alpha_blend_rgb);
     let mut first_error = None;
     if let Some(fill) = fill {
         for_each_polygon_fill_span(points, image_width, image_height, |x0, x1, y| {
@@ -557,12 +484,5 @@ pub(super) fn simd_draw_polygon_native(
     crate::compute::record_pipeline_operation_path("vector");
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    crate::compute::pool_cpu::helpers::dynamic_image::from_raw_bytes(
-        layout.mode,
-        image_width,
-        image_height,
-        output,
-    )
-    .map(Some)
-    .ok_or_else(|| PilError::InternalError("SIMD Draw output dimensions were invalid".into()))
+    writer.into_image().map(Some)
 }

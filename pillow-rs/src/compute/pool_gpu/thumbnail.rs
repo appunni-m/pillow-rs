@@ -25,9 +25,17 @@ pub(super) fn gpu_thumbnail_requires_exact_host_control(
     image: &DynamicImage,
     mode: Option<&str>,
 ) -> bool {
-    let PipelineOp::Thumbnail { w, h, filter } = op else {
+    let PipelineOp::Thumbnail {
+        w,
+        h,
+        filter,
+        reducing_gap,
+    } = op else {
         return false;
     };
+    if reducing_gap.is_some_and(|gap| gap < 1.0) {
+        return true;
+    }
     let Some((output_width, output_height)) =
         gpu_thumbnail_output_dims(source_dimensions.0, source_dimensions.1, *w, *h)
     else {
@@ -46,10 +54,17 @@ pub(super) fn gpu_thumbnail_requires_exact_host_control(
     // ordinary byte images the pool expands the divisible integer-reduce
     // case into native Reduce + Resize below; only partial edge blocks still
     // require the host's fractional resize box.
-    let has_alpha = matches!(
-        image,
-        DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_)
-    ) && !matches!(mode, Some("F" | "I" | "CMYK" | "RGBa" | "RGBX"));
+    let has_alpha = match mode {
+        Some("LA") => matches!(image, DynamicImage::ImageLumaA8(_)),
+        Some("RGBA") => matches!(image, DynamicImage::ImageRgba8(_)),
+        _ => false,
+    };
+    if has_alpha || reducing_gap.is_none() {
+        return false;
+    }
+    if *reducing_gap != Some(2.0) {
+        return true;
+    }
     let factor_x = ((f64::from(source_dimensions.0) / f64::from(output_width) / 2.0) as u32).max(1);
     let factor_y =
         ((f64::from(source_dimensions.1) / f64::from(output_height) / 2.0) as u32).max(1);
@@ -70,9 +85,6 @@ pub(super) fn gpu_thumbnail_requires_exact_host_control(
     }
     if matches!(mode, Some("F" | "I")) {
         return true;
-    }
-    if has_alpha {
-        return false;
     }
     (factor_x > 1 || factor_y > 1)
         && (!source_dimensions.0.is_multiple_of(factor_x)

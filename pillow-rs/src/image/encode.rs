@@ -108,6 +108,10 @@ impl Image {
             .with_palette(palette));
         }
         if self.has_palette_mode() {
+            // TODO(pillow-rs#3ptb): choose a format-specific PA route or
+            // rejection. Sending only P8 indices cannot represent PA's
+            // per-pixel alpha, but converting every format to RGBA may also
+            // differ from Pillow's encoder mode contract.
             let indices = self.materialize_indices()?.to_luma8();
             let mut palette = self.extract_palette().ok_or_else(|| {
                 PilError::PaletteError("P-mode pipeline has no retained palette".to_owned())
@@ -124,6 +128,6 @@ impl Image {
             )
             .with_palette(ImagePalette::new(palette, alpha)?));
         }
-        Ok(super::codec_adapter::raster_to_decoded(self.materialize()?))
+        super::codec_adapter::raster_to_decoded(self.materialize()?)
     }
 }

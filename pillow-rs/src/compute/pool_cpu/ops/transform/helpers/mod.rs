@@ -9,6 +9,7 @@ mod byte_mode;
 pub(crate) mod projective;
 pub(crate) mod scalar;
 pub(crate) mod luma16;
+pub(super) mod hidden_lanes;
 pub(crate) mod vector_affine_nearest;
 pub(crate) mod vector_affine_bilinear;
 pub(crate) mod vector_projective_nearest;

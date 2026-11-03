@@ -29,8 +29,7 @@ pub(in crate::ops::pil_resize) fn transpose_resize_intermediate(
     // touch one source cache line per row and channel. Tile both dimensions so
     // each source tile is read in row-major order while the corresponding
     // transposed destination rows stay resident during their short write span.
-    // Parallel CPU keeps its disjoint-column scheduling below.
-    #[cfg(not(feature = "parallel"))]
+    // Keep RGB transpose reads contiguous by tiling both dimensions.
     if channels == 3 {
         const TILE_WIDTH: usize = 32;
         const TILE_HEIGHT: usize = 32;
@@ -54,23 +53,6 @@ pub(in crate::ops::pil_resize) fn transpose_resize_intermediate(
         return destination;
     }
 
-    #[cfg(feature = "parallel")]
-    crate::par_rows_mut!(
-        &mut destination,
-        destination_row_stride,
-        output_width as usize,
-        |_row_start, _row_end, x, row| {
-            let x = x as usize;
-            for y in 0..source_rows as usize {
-                let source_start = y * source_row_stride + x * channels;
-                let destination_start = y * channels;
-                row[destination_start..destination_start + channels]
-                    .copy_from_slice(&source[source_start..source_start + channels]);
-            }
-        }
-    );
-
-    #[cfg(not(feature = "parallel"))]
     for x in 0..output_width as usize {
         let row_start = x * destination_row_stride;
         let row = &mut destination[row_start..row_start + destination_row_stride];

@@ -16,5 +16,5 @@ pub(crate) fn prepare(input: &Input, index: u8) -> Result<Kernel<'_>, PilError> 
 pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
     // This core-only LA16 strategy maps its two logical bands directly.
     let channel = input.index.min(1);
-    helpers::native(input, Some(channel))
+    helpers::native_u16(input, Some(channel))
 }

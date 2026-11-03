@@ -166,7 +166,7 @@ pub mod test_api {
     }
 }
 
-pub use crate::color::ColorValue;
+pub use crate::color::{ColorOutputMode, ColorValue};
 pub use crate::color::PaletteColorInput;
 pub use crate::color::color_has_explicit_alpha;
 pub use crate::color::getcolor;
@@ -181,12 +181,15 @@ pub use crate::color::resolve_new_color;
 pub use crate::compute::Backend;
 pub use crate::compute::{
     Architecture, BandIndexRule, DrawRequestKind, DrawTextMaskKind, ExecutionContext,
-    F32RankCompatibility, FallbackReason, ImplementationId, ImplementationSupport,
-    InputContract, MergeBandModeRule, ModeChannelCapacity, ModeSupport, OperationId,
-    OperationSupport, OutputModeRule, PaletteKnowledge, PasteInputRules, PasteMaskRule,
-    PayloadOutput, PixelWriteRunFacts, RejectionKind, RequestFacts, SecondaryInputFacts,
-    StrategyGuard, StrategyInputs, StrategySelection, SupportAssessment, SupportScope,
-    UnresolvedGuard,
+    ExpandFillRule, F32RankCompatibility, FallbackReason, ImplementationId, ImplementationSupport,
+    InputContract, MergeBandModeRule, ModeChannelCapacity, ModeSupport, OperationId, PadFillRule,
+    OperationModeRoute, OperationModeTransition, OperationRouteGuard, OperationRouteOutcome,
+    OperationRoutePath, OperationRouteStage, OperationSupport, OperationTargetComposition,
+    OperationTargetCompositionKind, OperationTransitionSource, OutputModeRule, PaletteKnowledge,
+    OperationValueResult, PasteInputRules, PasteMaskRule, PayloadOutput, PixelWriteRunFacts,
+    RejectionKind,
+    RequestFacts, SecondaryInputFacts, StrategyGuard, StrategyInputs, StrategySelection,
+    SupportAssessment, SupportScope, UnresolvedGuard,
 };
 #[cfg(feature = "gpu")]
 pub use crate::compute::BatchError;
@@ -267,6 +270,7 @@ pub use crate::image::NewColorInput;
 pub use crate::image::OpenFormatsInput;
 pub use crate::image::OpenModeInput;
 pub use crate::image::PaletteTransparency;
+pub use crate::image::PaletteColorComponent;
 pub use crate::image::PutAlphaInput;
 pub use crate::image::PutDataInput;
 pub use crate::image::PutDataExecutionContext;
@@ -294,7 +298,7 @@ pub use crate::image::validate_open_source_bytes;
 #[doc(hidden)]
 pub use crate::image::validate_open_source_bytes as validate_python_open_source_bytes;
 pub use crate::image_sequence::ImageSequenceIterator;
-pub use crate::ops::analysis::ImageAnalysisMask;
+pub use crate::ops::analysis::{HistogramExtrema, ImageAnalysisMask};
 pub use crate::ops::analysis::validate_transparency_mask;
 pub use crate::ops::array::ArrayLayout;
 pub use crate::ops::array::from_resolved_array_interface;
@@ -345,8 +349,12 @@ pub use crate::ops::imageops::autocontrast_with_mask as imageops_autocontrast_wi
 pub use crate::ops::imageops::colorize as imageops_colorize;
 pub use crate::ops::imageops::contain as imageops_contain;
 pub use crate::ops::imageops::contain_with_input as imageops_contain_with_input;
+#[doc(hidden)]
+pub use crate::ops::imageops::contain_geometry_preflight as imageops_contain_geometry_preflight;
 pub use crate::ops::imageops::cover as imageops_cover;
 pub use crate::ops::imageops::cover_with_input as imageops_cover_with_input;
+#[doc(hidden)]
+pub use crate::ops::imageops::cover_geometry_preflight as imageops_cover_geometry_preflight;
 pub use crate::ops::imageops::crop as imageops_crop;
 pub use crate::ops::imageops::equalize as imageops_equalize;
 pub use crate::ops::imageops::equalize_with_mask as imageops_equalize_with_mask;
@@ -355,16 +363,50 @@ pub use crate::ops::imageops::exif_remove_orientation;
 pub use crate::ops::imageops::exif_transpose as imageops_exif_transpose;
 pub use crate::ops::imageops::expand as imageops_expand;
 pub use crate::ops::imageops::expand_with_input as imageops_expand_with_input;
+pub use crate::ops::imageops::expand_with_margins as imageops_expand_with_margins;
+pub use crate::ops::imageops::expand_with_margins_and_input as imageops_expand_with_margins_and_input;
+#[doc(hidden)]
+pub use crate::ops::imageops::expand_with_output_size_and_position as imageops_expand_with_output_size_and_position;
+#[doc(hidden)]
+pub use crate::ops::imageops::prepare_expand_fill as imageops_prepare_expand_fill;
+#[doc(hidden)]
+pub use crate::ops::imageops::resolve_expand_fill_palette as imageops_resolve_expand_fill_palette;
+#[doc(hidden)]
+pub use crate::ops::imageops::validate_expand_output_size as imageops_validate_expand_output_size;
+#[doc(hidden)]
+pub use crate::ops::imageops::PreparedExpandFill;
 pub use crate::ops::imageops::fit as imageops_fit;
 pub use crate::ops::imageops::fit_with_input as imageops_fit_with_input;
+#[doc(hidden)]
+pub use crate::ops::imageops::fit_geometry_preflight as imageops_fit_geometry_preflight;
+#[doc(hidden)]
+pub use crate::ops::imageops::parse_imageops_filter_input;
 pub use crate::ops::imageops::flip as imageops_flip;
 pub use crate::ops::imageops::grayscale as imageops_grayscale;
 pub use crate::ops::imageops::invert_ops as imageops_invert;
 pub use crate::ops::imageops::mirror as imageops_mirror;
 pub use crate::ops::imageops::pad as imageops_pad;
+#[doc(hidden)]
+pub use crate::ops::imageops::pad_fill_preflight as imageops_pad_fill_preflight;
+#[doc(hidden)]
+pub use crate::ops::imageops::pad_filter_preflight as imageops_pad_filter_preflight;
+#[doc(hidden)]
+pub use crate::ops::imageops::pad_geometry_preflight as imageops_pad_geometry_preflight;
+#[doc(hidden)]
+pub use crate::ops::imageops::pad_preflight_with_input as imageops_pad_preflight_with_input;
 pub use crate::ops::imageops::pad_with_input as imageops_pad_with_input;
 #[doc(hidden)]
 pub use crate::ops::imageops::pad_with_input_and_containment as imageops_pad_with_input_and_containment;
+#[doc(hidden)]
+pub use crate::ops::imageops::pad_with_preflight as imageops_pad_with_preflight;
+#[doc(hidden)]
+pub use crate::ops::imageops::pad_with_preflight_and_fill as imageops_pad_with_preflight_and_fill;
+#[doc(hidden)]
+pub use crate::ops::imageops::PadFillPreflight;
+#[doc(hidden)]
+pub use crate::ops::imageops::PadPreflight;
+#[doc(hidden)]
+pub use crate::ops::imageops::PadGeometryPreflight;
 pub use crate::ops::imageops::posterize as imageops_posterize;
 pub use crate::ops::imageops::scale_with_input as imageops_scale_with_input;
 pub use crate::ops::imageops::solarize as imageops_solarize;
@@ -411,22 +453,30 @@ pub use crate::ops::param_filters::prepare_color3dlut;
 pub use crate::ops::paste::AlphaCompositeBox;
 pub use crate::ops::paste::PasteBoxInput;
 #[doc(hidden)]
+pub use crate::ops::paste::PasteBoxPlan;
+#[doc(hidden)]
 pub use crate::ops::paste::PasteBoxInput as PythonPasteBox;
 pub use crate::ops::paste::PasteMaskInput;
 #[doc(hidden)]
 pub use crate::ops::paste::PasteMaskInput as PythonPasteMask;
 pub use crate::ops::paste::PasteSource;
-pub use crate::ops::paste::PasteSourceInput;
+pub use crate::ops::paste::{PasteColorComponent, PasteSourceInput};
+#[doc(hidden)]
+pub use crate::ops::paste::PasteSourcePlan;
 #[doc(hidden)]
 pub use crate::ops::paste::PasteSourceInput as PythonPasteSource;
 pub use crate::ops::quantize::QuantizePalette;
 pub use crate::ops::resize::ResampleInput;
+#[doc(hidden)]
+pub use crate::ops::resize::ThumbnailPlan;
 pub use crate::ops::resize::parse_resample;
 pub use crate::ops::resize::parse_resample_input;
 pub use crate::ops::rotate::RotateExpandInput;
 pub use crate::ops::rotate::RotatePointInput;
 pub use crate::ops::rotate::RotateResampleInput;
 pub use crate::ops::rotate::normalize_rotate;
+#[doc(hidden)]
+pub use crate::ops::rotate::PreparedRotate;
 #[doc(hidden)]
 pub use crate::ops::rotate::normalize_rotate as normalize_python_rotate;
 pub use crate::ops::transform::ReduceBox;
@@ -440,7 +490,7 @@ pub use crate::ops::transpose::transpose_name_from_int;
 pub use crate::ops::utils::align_row_to_32;
 pub use crate::pipeline::ColorMode;
 pub use crate::pipeline::DitherMethod;
-pub use crate::pipeline::PipelineOp;
+pub use crate::pipeline::{ExpandMargins, PipelineOp};
 pub use crate::pipeline::ResampleFilter;
 pub use crate::pipeline::TransformMethod;
 pub use crate::pipeline::TransposeMethod;

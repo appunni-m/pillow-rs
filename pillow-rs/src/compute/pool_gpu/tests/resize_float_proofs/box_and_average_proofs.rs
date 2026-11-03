@@ -103,6 +103,7 @@ fn assert_f_resize_box_copy_positive_chains(image: &DynamicImage) {
         &[
             PipelineOp::PutData {
                 data: bytes::Bytes::from(vec![0u8; 24]),
+                hidden_lanes: None,
                 payload_mode: Mode::ImageF32,
             },
             f_resize_box_operation(6, 4),
@@ -117,6 +118,7 @@ fn assert_f_resize_box_copy_rejected_chains(image: &DynamicImage) {
         &[
             PipelineOp::PutData {
                 data: bytes::Bytes::from(vec![0u8; 4]),
+                hidden_lanes: None,
                 payload_mode: Mode::ImageF32,
             },
             f_resize_box_operation(6, 4),

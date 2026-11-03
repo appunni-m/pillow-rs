@@ -116,13 +116,21 @@ fn collect_autocontrast_histogram(
     cutoff: f64,
     mask: Option<&std::sync::Arc<crate::image::Image>>,
 ) -> Result<AutocontrastHistogram, PilError> {
-    let channels = img.color().channel_count() as usize;
+    let channels = img.mode().band_count();
     let (width, height) = (img.width(), img.height());
     let image_pixels = CheckedDims::new(width, height, 1)?.total_pixels();
     let mask = mask
         .map(|mask| mask.materialize_for_ops())
-        .transpose()?
-        .map(|mask| mask.to_luma8());
+        .transpose()?;
+    // The ImageOps contract admits `1` and `L` masks. Both already use the
+    // exact byte plane consumed by Pillow's nonzero mask predicate.
+    let mask_raw = match mask.as_ref() {
+        Some(DynamicImage::One(mask) | DynamicImage::ImageLuma8(mask)) => {
+            Some(mask.as_raw().as_slice())
+        }
+        Some(_) => unreachable!("ImageOps contract admits only 1 or L masks"),
+        None => None,
+    };
     let mut selected_pixels = if mask.is_none() { image_pixels } else { 0 };
     let raw = img.as_bytes();
     let stride = width as usize * channels;
@@ -150,8 +158,9 @@ fn collect_autocontrast_histogram(
     if !native_histogram {
         for y in 0..height as usize {
             for x in 0..width as usize {
-                if let Some(mask) = mask.as_ref() {
-                    if mask.get_pixel(x as u32, y as u32)[0] == 0 {
+                if let Some(mask) = mask_raw {
+                    let mask_index = y * width as usize + x;
+                    if mask[mask_index] == 0 {
                         continue;
                     }
                     selected_pixels += 1;

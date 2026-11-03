@@ -135,6 +135,8 @@ pub fn known_pipeline_op_dimensions(
         | PipelineOp::ResizeBoxed { w, h, .. }
         | PipelineOp::Thumbnail { w, h, .. }
         | PipelineOp::Pad { w, h, .. }
+        | PipelineOp::PadTyped { w, h, .. }
+        | PipelineOp::PadPositioned { w, h, .. }
         | PipelineOp::Transform { w, h, .. } => Some((*w, *h)),
         PipelineOp::Crop {
             left,
@@ -142,9 +144,10 @@ pub fn known_pipeline_op_dimensions(
             right,
             bottom,
         } => Some((right.checked_sub(*left)?, bottom.checked_sub(*top)?)),
-        PipelineOp::Expand { border, .. } => {
-            let border = border.checked_mul(2)?;
-            Some((width.checked_add(border)?, height.checked_add(border)?))
+        PipelineOp::Expand { border, .. } | PipelineOp::ExpandTyped { border, .. } => {
+            let output_width = i128::from(width) + i128::from(border.left) + i128::from(border.right);
+            let output_height = i128::from(height) + i128::from(border.top) + i128::from(border.bottom);
+            Some((u32::try_from(output_width).ok()?, u32::try_from(output_height).ok()?))
         }
         PipelineOp::CropBorder { border } => {
             let border = border.checked_mul(2)?;

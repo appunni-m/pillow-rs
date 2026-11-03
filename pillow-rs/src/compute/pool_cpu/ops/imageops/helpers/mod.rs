@@ -8,3 +8,5 @@ pub(crate) mod histogram;
 pub(crate) mod strategy;
 pub(crate) mod expand;
 pub(crate) mod expand_vector;
+pub(crate) mod hidden_lanes;
+pub(crate) mod quantize_rgb_source;

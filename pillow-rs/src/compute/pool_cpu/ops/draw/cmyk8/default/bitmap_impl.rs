@@ -20,7 +20,7 @@ pub(crate) fn apply(
     for mask_y in 0..mask_height {
         for mask_x in 0..mask_width {
             let coverage = mask.coverage(mask_x, mask_y);
-            if coverage == 0 {
+            if mask.should_skip(coverage) {
                 continue;
             }
             let image_x = x + mask_x as i32;
@@ -37,10 +37,10 @@ pub(crate) fn apply(
                 image_x as u32,
                 image_y as u32,
                 Rgba([
-                    blend(ink[0], existing[0], coverage),
-                    blend(ink[1], existing[1], coverage),
-                    blend(ink[2], existing[2], coverage),
-                    blend(ink[3], existing[3], coverage),
+                    mask.blend_byte(ink[0], existing[0], coverage),
+                    mask.blend_byte(ink[1], existing[1], coverage),
+                    mask.blend_byte(ink[2], existing[2], coverage),
+                    mask.blend_byte(ink[3], existing[3], coverage),
                 ]),
             );
         }

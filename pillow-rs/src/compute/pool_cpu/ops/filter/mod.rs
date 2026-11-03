@@ -16,5 +16,9 @@ pub(crate) mod ycbcr8;
 pub(crate) mod lab8;
 pub(crate) mod hsv8;
 pub(crate) mod i32;
+pub(crate) mod i16;
+pub(crate) mod i16l;
+pub(crate) mod i16b;
+pub(crate) mod i16n;
 pub(crate) mod f32;
 

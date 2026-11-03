@@ -253,6 +253,8 @@ pub(crate) fn apply(
     crate::compute::record_pipeline_operation_path("vector");
     crate::compute::record_pipeline_operation_vector_blocks((vector_end / 8) as u64);
     crate::compute::record_pipeline_operation_scalar_tail((pixels - vector_end) as u64);
-    super::lut::image_from_native_bytes(width, height, output, target_mode)
+    let mut output = super::lut::image_from_native_bytes(width, height, output, target_mode)?;
+    super::lut::preserve_target_padding(image, &mut output, channels as u32)?;
+    Ok(output)
 }
 

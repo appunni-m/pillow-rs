@@ -15,12 +15,15 @@ const INPUTS: &[InputContract] = &[InputContract::ExactNativeBytes {
     mismatch_reason: "Brightness source bytes did not match its dimensions",
 }];
 
-pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
+// NO_PILLOW_SUPPORT: Pillow's Brightness path reaches Image.blend, which rejects
+// non-u8 storage; this is a native signed-sample Rust extension.
+pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
     OperationId::Brightness,
     Mode::ImageI32,
     OutputModeRule::Preserve,
     INPUTS,
     &[],
+    "native signed I samples extend Pillow's byte-only Image.blend contract",
 );
 
 pub(crate) type Strategy<'a> = Prepared<(&'a RgbaImage, f64)>;

@@ -2,6 +2,9 @@
 
 use wide::{f32x8, i32x8, u8x16, u16x8, u16x16};
 
+// TODO(pillow-rs#3ptb): freeze byte Filter3x3 output and architecture-fallback
+// receipts across all exact modes using this shared native-byte kernel.
+
 /// Apply the archived native-byte vector convolution without changing mode.
 pub(crate) fn apply(
     raw: &[u8],

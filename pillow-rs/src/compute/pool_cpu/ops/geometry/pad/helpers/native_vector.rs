@@ -148,7 +148,9 @@ struct ContentWindow {
     source_stride: usize,
     copy_height: usize,
     copy_bytes: usize,
-    offset_y: usize,
+    source_y_start: usize,
+    destination_y_start: usize,
+    source_x_start_bytes: usize,
     content_start: usize,
     content_end: usize,
 }
@@ -161,7 +163,9 @@ impl ContentWindow {
         frame: super::dimensions::PadFrame,
         target_stride: usize,
     ) -> bool {
-        self.offset_y == 0
+        self.source_y_start == 0
+            && self.destination_y_start == 0
+            && self.source_x_start_bytes == 0
             && self.content_start == 0
             && self.content_end == target_stride
             && source_width == frame.width as usize
@@ -192,35 +196,65 @@ fn content_window(
     source_width: usize,
     source_height: usize,
 ) -> Result<ContentWindow, PilError> {
-    let copy_width = usize::try_from(frame.content_width.min(frame.width))
-        .map_err(|_| PilError::DimensionError("Pad content width overflow".into()))?;
-    let copy_height = usize::try_from(frame.content_height.min(frame.height))
-        .map_err(|_| PilError::DimensionError("Pad content height overflow".into()))?;
-    let offset_x = usize::try_from(frame.offset_x)
-        .map_err(|_| PilError::DimensionError("Pad horizontal offset overflow".into()))?;
-    let offset_y = usize::try_from(frame.offset_y)
-        .map_err(|_| PilError::DimensionError("Pad vertical offset overflow".into()))?;
-    let copy_bytes = checked_product(copy_width, channels, "Pad content row overflow")?;
-    let content_start = checked_product(offset_x, channels, "Pad content offset overflow")?;
+    let x_window = super::dimensions::clipped_axis(
+        frame.offset_x,
+        source_width,
+        frame.width as usize,
+    );
+    let y_window = super::dimensions::clipped_axis(
+        frame.offset_y,
+        source_height,
+        frame.height as usize,
+    );
+    let copy_bytes = checked_product(x_window.length, channels, "Pad content row overflow")?;
+    let source_x_start_bytes = checked_product(
+        x_window.source_start,
+        channels,
+        "Pad source offset overflow",
+    )?;
+    let content_start = checked_product(
+        x_window.destination_start,
+        channels,
+        "Pad content offset overflow",
+    )?;
     let content_end = content_start
         .checked_add(copy_bytes)
         .ok_or_else(|| PilError::DimensionError("Pad content end overflow".into()))?;
-    let offset_x_end = offset_x
-        .checked_add(copy_width)
+    let source_x_end = x_window
+        .source_start
+        .checked_add(x_window.length)
         .ok_or_else(|| PilError::DimensionError("Pad horizontal extent overflow".into()))?;
-    let offset_y_end = offset_y
-        .checked_add(copy_height)
+    let destination_x_end = x_window
+        .destination_start
+        .checked_add(x_window.length)
+        .ok_or_else(|| PilError::DimensionError("Pad horizontal extent overflow".into()))?;
+    let source_y_end = y_window
+        .source_start
+        .checked_add(y_window.length)
         .ok_or_else(|| PilError::DimensionError("Pad vertical extent overflow".into()))?;
-    if offset_x_end > frame.width as usize
-        || offset_y_end > frame.height as usize
-        || copy_width > source_width
-        || copy_height > source_height
+    let destination_y_end = y_window
+        .destination_start
+        .checked_add(y_window.length)
+        .ok_or_else(|| PilError::DimensionError("Pad vertical extent overflow".into()))?;
+    if destination_x_end > frame.width as usize
+        || destination_y_end > frame.height as usize
+        || source_x_end > source_width
+        || source_y_end > source_height
         || content_end > target_stride
         || copy_bytes > source_stride
     {
         return Err(PilError::InternalError("Pad content window exceeds its image".into()));
     }
-    Ok(ContentWindow { source_stride, copy_height, copy_bytes, offset_y, content_start, content_end })
+    Ok(ContentWindow {
+        source_stride,
+        copy_height: if x_window.length == 0 { 0 } else { y_window.length },
+        copy_bytes,
+        source_y_start: y_window.source_start,
+        destination_y_start: y_window.destination_start,
+        source_x_start_bytes,
+        content_start,
+        content_end,
+    })
 }
 
 fn compose_row(
@@ -232,7 +266,9 @@ fn compose_row(
     fill_is_zero: bool,
     counts: &mut VectorCounts,
 ) -> Result<(), PilError> {
-    if output_y < window.offset_y || output_y - window.offset_y >= window.copy_height {
+    if output_y < window.destination_y_start
+        || output_y - window.destination_y_start >= window.copy_height
+    {
         if !fill_is_zero {
             counts.add(fill_row(row, fill));
         }
@@ -241,8 +277,9 @@ fn compose_row(
     if !fill_is_zero {
         counts.add(fill_row(&mut row[..window.content_start], fill));
     }
-    let source_start = (output_y - window.offset_y)
+    let source_start = (window.source_y_start + output_y - window.destination_y_start)
         .checked_mul(window.source_stride)
+        .and_then(|row| row.checked_add(window.source_x_start_bytes))
         .ok_or_else(|| PilError::DimensionError("Pad source row offset overflow".into()))?;
     let source_end = source_start
         .checked_add(window.copy_bytes)

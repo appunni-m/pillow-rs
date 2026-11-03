@@ -86,6 +86,10 @@ impl Image {
     /// Methods `0` through `4` cover affine, extent, perspective, quad, and
     /// mesh transforms. Resampling is parsed and retained in the core pipeline
     /// so the selected backend observes the public Pillow filter.
+    ///
+    /// Pillow's `fill` argument is unused for these built-in transform methods;
+    /// `fillcolor` controls pixels outside the transformed area. Keep `_fill`
+    /// at this boundary because the host binding forwards Pillow's signature.
     pub fn transform_public(
         &self,
         size: (u32, u32),
@@ -292,7 +296,11 @@ fn transform_public_mesh(
         Some(TransformData::Affine(items)) if items.is_empty() => {
             let mode = image.mode_identity()?;
             if let Some(index) = palette_fill {
-                return Ok(Image::new_palette_index(size.0, size.1, index));
+                // Pillow copies the source palette even when an empty mesh
+                // returns the newly filled P image without running a kernel.
+                return Ok(Image::new_palette_index_from_source(
+                    image, size.0, size.1, index,
+                ));
             }
             // The transform fill tuple is normalized for raster
             // kernels as `(luma, alpha, 0, 0)`, while Image.new

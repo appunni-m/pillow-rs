@@ -274,8 +274,10 @@ impl Image {
 
     /// Returns conversion-time transparency metadata in Pillow's public
     /// scalar, byte-string, or tuple representation.
-    pub fn converted_transparency_info(&self, target_mode: &str) -> Option<ImageInfoValue> {
-        if matches!(target_mode, "LA" | "RGBA") && self.known_mode_identity() == Some(Mode::ImagePaletteAlpha8) {
+    pub fn converted_transparency_info(&self, target_mode: Mode) -> Option<ImageInfoValue> {
+        if matches!(target_mode, Mode::ImageLumaA8 | Mode::ImageRgba8)
+            && self.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
+        {
             return self.pending_transparency_info();
         }
         let transparency = self.converted_palette_transparency(target_mode)?;
@@ -289,7 +291,10 @@ impl Image {
 
     /// Returns conversion-time fields that should be merged into the target
     /// image's Pillow compatibility metadata.
-    pub fn converted_compatibility_info(&self, target_mode: &str) -> Vec<(String, ImageInfoValue)> {
+    pub fn converted_compatibility_info(
+        &self,
+        target_mode: Mode,
+    ) -> Vec<(String, ImageInfoValue)> {
         self.converted_transparency_info(target_mode)
             .map(|value| vec![("transparency".to_owned(), value)])
             .unwrap_or_default()
@@ -302,8 +307,8 @@ impl Image {
     /// the target has no alpha band (RGB keeps the palette color, L its BT.601
     /// gray level) and drops transparency entirely for alpha targets (RGBA,
     /// LA, PA) and for byte-table transparency.
-    pub fn converted_palette_transparency(&self, target_mode: &str) -> Option<Vec<u8>> {
-        if !matches!(target_mode, "L" | "RGB") {
+    pub fn converted_palette_transparency(&self, target_mode: Mode) -> Option<Vec<u8>> {
+        if !matches!(target_mode, Mode::ImageLuma8 | Mode::ImageRgb8) {
             return None;
         }
         let index = match self.pending_palette_transparency()? {
@@ -315,7 +320,7 @@ impl Image {
         let r = *palette.get(base)?;
         let g = *palette.get(base + 1)?;
         let b = *palette.get(base + 2)?;
-        if target_mode == "RGB" {
+        if target_mode == Mode::ImageRgb8 {
             Some(vec![r, g, b])
         } else {
             // BT.601 fixed-point with the same rounding bias as pil_grayscale.
@@ -457,7 +462,17 @@ impl Image {
         match self {
             Image::Loaded(data) => data.exif.clone().unwrap_or_default(),
             Image::Paletted(data) => data.exif.clone().unwrap_or_default(),
-            Image::Pipeline { source, .. } => source.getexif(),
+            Image::Pipeline { source, ops, .. } => match ops.palette_output() {
+                Some(output)
+                    if matches!(
+                        output.wrapper_metadata,
+                        crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata::Drop
+                    ) =>
+                {
+                    Vec::new()
+                }
+                Some(_) | None => source.getexif(),
+            },
             Image::Bytes { source, .. } => match source.info().format {
                 ImageFormat::Jpeg => Self::extract_jpeg_exif(source.bytes()).unwrap_or_default(),
                 ImageFormat::Tiff => {
@@ -554,13 +569,8 @@ impl Image {
 
     /// Returns the known image format name, if the image came from encoded input.
     pub fn format_name(&self) -> Option<String> {
-        match self {
-            Image::Loaded(data) => data.source_format.map(|format| format.as_str().to_owned()),
-            Image::Paletted(data) => data.source_format.map(|format| format.as_str().to_owned()),
-            Image::Bytes { format, .. } | Image::Pipeline { format, .. } => {
-                format.map(|format| format.as_str().to_owned())
-            }
-        }
+        self.source_format()
+            .map(|format| format.as_str().to_owned())
     }
 
     /// Replaces retained EXIF bytes after a metadata-only image operation.
@@ -661,16 +671,16 @@ impl Image {
             Image::Loaded(data) => Some(data.image.mode()),
             Image::Paletted(data) => Some(data.indices.mode()),
             Image::Bytes {
-                info, materialized, ..
-            } => materialized
-                .get()
-                .and_then(|result| result.as_ref().ok())
-                .map(|image| image.mode())
-                .or_else(|| {
-                    info.as_ref().and_then(|info| {
-                        super::codec_adapter::raster_mode_from_image_mode(info.mode)
-                    })
-                }),
+                header_mode,
+                materialized,
+                ..
+            } => Some(
+                materialized
+                    .get()
+                    .and_then(|result| result.as_ref().ok())
+                    .map(|image| image.mode())
+                    .unwrap_or(*header_mode),
+            ),
             Image::Pipeline {
                 materialized,
                 mode,
@@ -705,7 +715,16 @@ impl Image {
                 } else {
                     source.mode_identity()?
                 };
-                if ops.mode_preserving() && !source.has_palette_samples() {
+                let has_payload_mode_change = ops.iter().any(|op| {
+                    matches!(
+                        op,
+                        PipelineOp::PutData { payload_mode, .. } if *payload_mode != current
+                    )
+                });
+                if ops.mode_preserving()
+                    && !source.has_palette_samples()
+                    && !has_payload_mode_change
+                {
                     return Ok(PipelineModeState::Planned(Some(current)));
                 }
                 for op in ops.iter() {

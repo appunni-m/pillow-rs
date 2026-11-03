@@ -256,7 +256,7 @@ pub fn pil_resize_boxed(
     box_bottom: f64,
     filter: ResampleFilter,
 ) -> DynamicImage {
-    pil_resize_boxed_with_parallel_pixel_threshold(
+    pil_resize_boxed_impl(
         img,
         dst_w,
         dst_h,
@@ -265,33 +265,6 @@ pub fn pil_resize_boxed(
         box_right,
         box_bottom,
         filter,
-        0,
-    )
-}
-
-/// Box-based resize with an operation-specific cutoff for Rayon row dispatch.
-/// A zero threshold preserves the general resize scheduler behavior.
-pub(crate) fn pil_resize_boxed_with_parallel_pixel_threshold(
-    img: &DynamicImage,
-    dst_w: u32,
-    dst_h: u32,
-    box_left: f64,
-    box_top: f64,
-    box_right: f64,
-    box_bottom: f64,
-    filter: ResampleFilter,
-    parallel_pixel_threshold: usize,
-) -> DynamicImage {
-    pil_resize_boxed_with_hints(
-        img,
-        dst_w,
-        dst_h,
-        box_left,
-        box_top,
-        box_right,
-        box_bottom,
-        filter,
-        parallel_pixel_threshold,
     )
 }
 
@@ -485,7 +458,6 @@ fn pil_resize_boxed_horizontal_pass(
     dst_w: u32,
     intermediate: &mut [u8],
     needs_alpha: bool,
-    parallel_pixel_threshold: usize,
     need_horizontal: bool,
 ) {
     if !need_horizontal {
@@ -521,7 +493,6 @@ fn pil_resize_boxed_horizontal_pass(
             dst_w,
             intermediate,
             needs_alpha,
-            parallel_pixel_threshold,
         );
     }
 }
@@ -535,7 +506,6 @@ fn pil_resize_boxed_vertical_pass(
     channels: usize,
     v_coeffs: &FilterCoeffs,
     needs_alpha: bool,
-    parallel_pixel_threshold: usize,
     need_vertical: bool,
     out_bytes: &mut [u8],
 ) {
@@ -567,7 +537,6 @@ fn pil_resize_boxed_vertical_pass(
             channels,
             v_coeffs,
             out_bytes,
-            parallel_pixel_threshold,
         );
     } else {
         vertical_pass_rows(
@@ -578,12 +547,11 @@ fn pil_resize_boxed_vertical_pass(
             channels,
             v_coeffs,
             out_bytes,
-            parallel_pixel_threshold,
         );
     }
 }
 
-fn pil_resize_boxed_with_hints(
+fn pil_resize_boxed_impl(
     img: &DynamicImage,
     dst_w: u32,
     dst_h: u32,
@@ -592,7 +560,6 @@ fn pil_resize_boxed_with_hints(
     box_right: f64,
     box_bottom: f64,
     filter: ResampleFilter,
-    parallel_pixel_threshold: usize,
 ) -> DynamicImage {
     let (early_output, needs_alpha) = pil_resize_boxed_early_paths(
         img,
@@ -665,7 +632,6 @@ fn pil_resize_boxed_with_hints(
         dst_w,
         &mut intermediate,
         needs_alpha,
-        parallel_pixel_threshold,
         need_horizontal,
     );
 
@@ -679,7 +645,6 @@ fn pil_resize_boxed_with_hints(
         channels,
         &v_coeffs,
         needs_alpha,
-        parallel_pixel_threshold,
         need_vertical,
         &mut out_bytes,
     );

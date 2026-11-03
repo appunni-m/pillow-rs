@@ -49,6 +49,17 @@ class Resampling(IntEnum):
     BILINEAR_INT = BILINEAR
     BICUBIC_INT = BICUBIC
 
+
+class Transform(IntEnum):
+    """Pillow-compatible geometric transform method codes."""
+
+    AFFINE = 0
+    EXTENT = 1
+    PERSPECTIVE = 2
+    QUAD = 3
+    MESH = 4
+
+
 class Transpose:
     FLIP_LEFT_RIGHT = "FLIP_LEFT_RIGHT"
     FLIP_TOP_BOTTOM = "FLIP_TOP_BOTTOM"

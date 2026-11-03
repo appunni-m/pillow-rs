@@ -57,9 +57,7 @@ macro_rules! declare_prepared_operations {
             /// Propagates the operation's existing error contract without retrying
             /// another mode, architecture, or backend.
             pub fn execute(self) -> Result<DynamicImage, PilError> {
-                crate::compute::record_pipeline_operation_architecture(
-                    self.selection().implementation.architecture,
-                );
+                crate::compute::record_pipeline_operation_selection(self.selection());
                 match self.implementation {
                     $(Implementation::$variant(plan) => plan.execute(),)+
                 }

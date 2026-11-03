@@ -3,12 +3,16 @@
 use crate::compute::{ExecutionContext, pool_cpu::helpers::execution::prepared::Prepared};
 use crate::compute::registry::support::{InputContract, ModeSupport, OperationId, OutputModeRule, PaletteKnowledge, StrategyInputs};
 use crate::error::PilError;
+use crate::pipeline::NativeColorInput;
 use crate::raster::{DynamicImage, Mode};
 
 #[path = "default/expand_impl.rs"]
 mod default;
 
-const INPUTS: &[InputContract] = &[InputContract::ExpandedDimensions { bytes_per_pixel: 2 }];
+const INPUTS: &[InputContract] = &[
+    InputContract::ExpandedDimensions { bytes_per_pixel: 2 },
+    InputContract::ExpandFill(crate::compute::registry::support::ExpandFillRule::NativeU16),
+];
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::Expand,
     Mode::ImageI16N,
@@ -25,8 +29,18 @@ pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
 
 pub(crate) fn prepare<'a>(
     input: &'a default::Input,
-    border: u32,
+    border: crate::pipeline::ExpandMargins,
     fill: (u8, u8, u8, u8),
+    ctx: &ExecutionContext,
+) -> Result<Strategy<'a>, PilError> {
+    prepare_with_native_fill(input, border, fill, None, ctx)
+}
+
+pub(crate) fn prepare_with_native_fill<'a>(
+    input: &'a default::Input,
+    border: crate::pipeline::ExpandMargins,
+    fill: (u8, u8, u8, u8),
+    native_fill: Option<NativeColorInput>,
     ctx: &ExecutionContext,
 ) -> Result<Strategy<'a>, PilError> {
     let facts = StrategyInputs {
@@ -38,7 +52,7 @@ pub(crate) fn prepare<'a>(
     }
     .with_expand_border(border);
     let selection = super::super::helpers::strategy::select_expand(SUPPORT, facts, ctx)?;
-    let kernel = default::prepare(input, border, fill);
+    let kernel = default::prepare(input, border, fill, native_fill);
     Ok(Prepared::new(ArchitectureStrategy::Default(kernel), selection))
 }
 

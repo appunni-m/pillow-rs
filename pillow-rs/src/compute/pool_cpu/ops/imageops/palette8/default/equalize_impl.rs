@@ -1,4 +1,8 @@
 //! Palette-index conversion used by Pillow's Equalize RGB path.
+//!
+//! Pillow explicitly converts P images to RGB before histogramming and
+//! returns that RGB result. Keep this mode transition because it is part of
+//! the operation contract, not to share an unrelated mode implementation.
 
 use crate::compute::registry::support::PaletteInput;
 use crate::error::PilError;

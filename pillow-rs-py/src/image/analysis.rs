@@ -36,6 +36,20 @@ impl PyImage {
                     .collect::<PyResult<_>>()?;
                 Ok(PyTuple::new(py, tuples)?.into_py_any(py)?)
             }
+            pillow_rs::FormattedExtrema::MultipleInteger(values) => {
+                let tuples: Vec<Py<PyAny>> = values
+                    .into_iter()
+                    .map(|(minimum, maximum)| (minimum, maximum).into_py_any(py))
+                    .collect::<PyResult<_>>()?;
+                Ok(PyTuple::new(py, tuples)?.into_py_any(py)?)
+            }
+            pillow_rs::FormattedExtrema::MultipleFloat(values) => {
+                let tuples: Vec<Py<PyAny>> = values
+                    .into_iter()
+                    .map(|(minimum, maximum)| (minimum, maximum).into_py_any(py))
+                    .collect::<PyResult<_>>()?;
+                Ok(PyTuple::new(py, tuples)?.into_py_any(py)?)
+            }
             pillow_rs::FormattedExtrema::Integer((minimum, maximum)) => {
                 Ok((minimum, maximum).into_py_any(py)?)
             }
@@ -69,14 +83,23 @@ impl PyImage {
         stat_result_to_python(&result)
     }
 
-    #[pyo3(signature = (mask=None))]
+    #[pyo3(signature = (mask=None, extrema=None))]
     fn histogram_with_input(
         &self,
         mask: Option<&Bound<'_, PyAny>>,
+        extrema: Option<&Bound<'_, PyAny>>,
         py: Python<'_>,
     ) -> PyResult<Vec<u32>> {
         let mask = image_analysis_mask_from_python(mask)?;
-        py.detach(|| self.inner.histogram_with_input(mask))
+        if matches!(&mask, pillow_rs::ImageAnalysisMask::Invalid(_)) {
+            return py
+                .detach(|| self.inner.histogram_with_input(mask))
+                .map_err(map_error);
+        }
+        let masked = matches!(&mask, pillow_rs::ImageAnalysisMask::Image(_));
+        let mode = self.inner.mode_identity().map_err(map_error)?;
+        let extrema = histogram_extrema_from_python(extrema, mode, masked)?;
+        py.detach(|| self.inner.histogram_with_input_and_extrema(mask, extrema))
             .map_err(map_error)
     }
 
@@ -108,14 +131,23 @@ impl PyImage {
         py.detach(|| self.inner.getprojection()).map_err(map_error)
     }
 
-    #[pyo3(signature = (mask=None))]
+    #[pyo3(signature = (mask=None, extrema=None))]
     fn entropy_with_input(
         &mut self,
         mask: Option<&Bound<'_, PyAny>>,
+        extrema: Option<&Bound<'_, PyAny>>,
         py: Python<'_>,
     ) -> PyResult<f64> {
         let mask = image_analysis_mask_from_python(mask)?;
-        py.detach(|| self.inner.entropy_with_input(mask))
+        if matches!(&mask, pillow_rs::ImageAnalysisMask::Invalid(_)) {
+            return py
+                .detach(|| self.inner.entropy_with_input(mask))
+                .map_err(map_error);
+        }
+        let masked = matches!(&mask, pillow_rs::ImageAnalysisMask::Image(_));
+        let mode = self.inner.mode_identity().map_err(map_error)?;
+        let extrema = histogram_extrema_from_python(extrema, mode, masked)?;
+        py.detach(|| self.inner.entropy_with_input_and_extrema(mask, extrema))
             .map_err(map_error)
     }
 
@@ -128,7 +160,10 @@ impl PyImage {
         py: Python<'_>,
         target_mode: &str,
     ) -> PyResult<Py<PyAny>> {
-        image_info_to_python(py, self.inner.converted_compatibility_info(target_mode))
+        let info = pillow_rs::Mode::from_pillow_name(target_mode)
+            .map(|mode| self.inner.converted_compatibility_info(mode))
+            .unwrap_or_default();
+        image_info_to_python(py, info)
     }
 }
 

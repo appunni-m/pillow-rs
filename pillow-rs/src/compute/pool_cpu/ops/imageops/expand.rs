@@ -6,11 +6,11 @@
 
 use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{
-    ModeSupport, OperationId, OperationInputs, OperationSupport, StrategyInputs,
-    StrategySelection, SupportAssessment,
+    ExpandFillRule, InputContract, ModeSupport, OperationId, OperationInputs,
+    OperationSupport, StrategyInputs, StrategySelection, SupportAssessment,
 };
 use crate::error::PilError;
-use crate::pipeline::PipelineOp;
+use crate::pipeline::{NativeColorInput, PipelineOp};
 use crate::raster::{DynamicImage, Mode};
 
 macro_rules! declare_expand_modes {
@@ -27,7 +27,7 @@ macro_rules! declare_expand_modes {
 
         fn prepare_image<'a>(
             image: &'a DynamicImage,
-            border: u32,
+            border: crate::pipeline::ExpandMargins,
             fill: (u8, u8, u8, u8),
             ctx: &ExecutionContext,
         ) -> Result<PreparedExpand<'a>, PilError> {
@@ -96,11 +96,77 @@ pub(crate) fn assess(
 
 pub(crate) fn prepare(
     image: &DynamicImage,
-    border: u32,
+    border: crate::pipeline::ExpandMargins,
     fill: (u8, u8, u8, u8),
     ctx: &ExecutionContext,
 ) -> Result<PreparedExpand<'_>, PilError> {
     prepare_image(image, border, fill, ctx)
+}
+
+// TODO(pillow-rs#3ptb): Freeze I;16 low-16-bit fill wrap, CoreOnly typed
+// component fills, and Default/lower-architecture fallback receipts in CPU parity.
+pub(crate) fn prepare_with_native_fill(
+    image: &DynamicImage,
+    border: crate::pipeline::ExpandMargins,
+    fill: (u8, u8, u8, u8),
+    native_fill: NativeColorInput,
+    ctx: &ExecutionContext,
+) -> Result<PreparedExpand<'_>, PilError> {
+    let support = SUPPORT.for_mode(image.mode());
+    let declares_native_fill = support.inputs.iter().any(|contract| {
+        matches!(
+            contract,
+            InputContract::ExpandFill(
+                ExpandFillRule::NativeU16 | ExpandFillRule::NativeF32
+            )
+        )
+    });
+    if !declares_native_fill {
+        return Err(PilError::InternalError(
+            "typed Expand fill reached a mode without a native fill contract".into(),
+        ));
+    }
+    match image {
+        DynamicImage::ImageI16(input) => super::i16::expand::prepare_with_native_fill(
+            input, border, fill, Some(native_fill), ctx,
+        )
+        .map(PreparedExpand::ImageI16),
+        DynamicImage::ImageI16L(input) => super::i16l::expand::prepare_with_native_fill(
+            input, border, fill, Some(native_fill), ctx,
+        )
+        .map(PreparedExpand::ImageI16L),
+        DynamicImage::ImageI16B(input) => super::i16b::expand::prepare_with_native_fill(
+            input, border, fill, Some(native_fill), ctx,
+        )
+        .map(PreparedExpand::ImageI16B),
+        DynamicImage::ImageI16N(input) => super::i16n::expand::prepare_with_native_fill(
+            input, border, fill, Some(native_fill), ctx,
+        )
+        .map(PreparedExpand::ImageI16N),
+        DynamicImage::ImageLumaA16(input) => super::luma_a16::expand::prepare_with_native_fill(
+            input, border, fill, Some(native_fill), ctx,
+        )
+        .map(PreparedExpand::ImageLumaA16),
+        DynamicImage::ImageRgb16(input) => super::rgb16::expand::prepare_with_native_fill(
+            input, border, fill, Some(native_fill), ctx,
+        )
+        .map(PreparedExpand::ImageRgb16),
+        DynamicImage::ImageRgba16(input) => super::rgba16::expand::prepare_with_native_fill(
+            input, border, fill, Some(native_fill), ctx,
+        )
+        .map(PreparedExpand::ImageRgba16),
+        DynamicImage::ImageRgb32F(input) => super::rgb32f::expand::prepare_with_native_fill(
+            input, border, fill, Some(native_fill), ctx,
+        )
+        .map(PreparedExpand::ImageRgb32F),
+        DynamicImage::ImageRgba32F(input) => super::rgba32f::expand::prepare_with_native_fill(
+            input, border, fill, Some(native_fill), ctx,
+        )
+        .map(PreparedExpand::ImageRgba32F),
+        _ => Err(PilError::InternalError(
+            "typed Expand fill reached a non-native-width mode".into(),
+        )),
+    }
 }
 
 pub(crate) fn prepare_pipeline<'a>(
@@ -108,9 +174,16 @@ pub(crate) fn prepare_pipeline<'a>(
     op: &'a PipelineOp,
     ctx: &ExecutionContext,
 ) -> Result<crate::compute::registry::PreparedOperation<'a>, PilError> {
-    let PipelineOp::Expand { border, fill } = op else {
-        return Err(PilError::ValueError("expected Expand op".into()));
-    };
-    prepare(input.image, *border, *fill, ctx)
-        .map(crate::compute::registry::PreparedOperation::from_expand)
+    match op {
+        PipelineOp::Expand { border, fill } => prepare(input.image, *border, *fill, ctx),
+        PipelineOp::ExpandTyped { border, fill, input: native_fill } => prepare_with_native_fill(
+            input.image,
+            *border,
+            *fill,
+            *native_fill,
+            ctx,
+        ),
+        _ => return Err(PilError::ValueError("expected Expand op".into())),
+    }
+    .map(crate::compute::registry::PreparedOperation::from_expand)
 }

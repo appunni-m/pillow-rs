@@ -10,8 +10,14 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::serial(
     super::super::ops::INPUTS,
 );
 
+pub(in crate::compute::pool_cpu::ops::thumbnail) const fn effective_filter(
+    _requested: ResampleFilter,
+) -> ResampleFilter {
+    ResampleFilter::Nearest
+}
+
 pub(in crate::compute::pool_cpu::ops::thumbnail) const fn should_reduce(
-    _filter: ResampleFilter,
+    filter: ResampleFilter,
 ) -> bool {
-    false
+    !matches!(filter, ResampleFilter::Nearest)
 }

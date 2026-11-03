@@ -12,7 +12,7 @@ use crate::raster::{DynamicImage, Mode, RgbaImage};
 pub(crate) type Strategy<'a> = BytePlan<'a>;
 
 const RULES: PasteInputRules = PasteInputRules {
-    source_modes: &[Mode::ImageRgbx8],
+    source_modes: super::super::helpers::contracts::physical_byte_sources(Mode::ImageRgbx8),
     unmasked_only_sources: &[],
     compact_sources: super::super::helpers::contracts::compact_sources(Mode::ImageRgbx8),
     compact_masks: super::super::helpers::contracts::compact_masks(Mode::ImageRgbx8),
@@ -43,7 +43,7 @@ pub(crate) fn prepare<'a>(
     selection: StrategySelection,
 ) -> Result<Strategy<'a>, PilError> {
     super::super::helpers::plan::byte_plan(
-        destination.as_raw(),
+        destination,
         destination.dimensions(),
         Mode::ImageRgbx8,
         source,
@@ -55,7 +55,10 @@ pub(crate) fn prepare<'a>(
     )
 }
 
-pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
+pub(crate) fn execute<I>(strategy: BytePlan<'_, I>) -> Result<DynamicImage, PilError>
+where
+    I: std::ops::Deref<Target = DynamicImage>,
+{
     match strategy.selection.implementation.architecture {
         Architecture::Default => super::default::paste_impl::execute(strategy),
         Architecture::Sse2 => super::sse2::paste_impl::execute(strategy),

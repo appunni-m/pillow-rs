@@ -32,9 +32,14 @@ pub(crate) fn luma_constant(luma: &GrayImage, alpha: u8) -> GrayAlphaImage {
 
 pub(crate) fn replace_luma_alpha(source: &GrayAlphaImage, alpha: u8) -> GrayAlphaImage {
     let mut output = source.clone();
+    let hidden_lanes = output.take_hidden_pixel_lanes();
     for pixel in output.as_mut().chunks_exact_mut(2) {
         pixel[1] = alpha;
     }
+    // Pillow updates only the alpha band in its four-byte LA-family storage.
+    // The compact Rust carrier omits the two intervening physical lanes.
+    let lanes_restored = output.replace_hidden_pixel_lanes(hidden_lanes);
+    debug_assert!(lanes_restored);
     output
 }
 

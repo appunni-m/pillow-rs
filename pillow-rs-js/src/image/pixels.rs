@@ -234,8 +234,18 @@ impl Image {
         callback: Function,
         mode: Option<String>,
     ) -> Result<Image, JsValue> {
-        let source_mode = self.inner.mode().map_err(err)?;
-        if mode.as_deref() == Some("F") && matches!(source_mode.as_str(), "1" | "L" | "P") {
+        let source_mode = self.inner.mode_identity().map_err(err)?;
+        let target_mode = mode
+            .as_deref()
+            .and_then(pillow_rs::Mode::from_pillow_name);
+        if target_mode == Some(pillow_rs::Mode::ImageF32)
+            && matches!(
+                source_mode,
+                pillow_rs::Mode::One
+                    | pillow_rs::Mode::ImageLuma8
+                    | pillow_rs::Mode::ImagePalette8
+            )
+        {
             let lut = pillow_rs::image_eval_float_lut(|sample| {
                 let value = callback.call1(&JsValue::NULL, &JsValue::from(sample))?;
                 value.as_f64().ok_or_else(|| {
@@ -250,8 +260,13 @@ impl Image {
         }
 
         if matches!(
-            source_mode.as_str(),
-            "I" | "I;16" | "I;16L" | "I;16B" | "I;16N" | "F"
+            source_mode,
+            pillow_rs::Mode::ImageI32
+                | pillow_rs::Mode::ImageI16
+                | pillow_rs::Mode::ImageI16L
+                | pillow_rs::Mode::ImageI16B
+                | pillow_rs::Mode::ImageI16N
+                | pillow_rs::Mode::ImageF32
         ) {
             return pillow_rs::image_eval_point_callable(&self.inner, |sample| {
                 point_callback_number(&callback, sample)
@@ -273,7 +288,7 @@ impl Image {
     /// to preserve fractional LUT values across the WASM boundary.
     #[wasm_bindgen(js_name = "pointWithMode")]
     pub fn point_with_mode(&self, lut: Vec<f64>, mode: &str) -> Result<Image, JsValue> {
-        if mode != "F" {
+        if pillow_rs::Mode::from_pillow_name(mode) != Some(pillow_rs::Mode::ImageF32) {
             return Err(JsValue::from_str(
                 "only Image.point output mode 'F' is supported by this export",
             ));
@@ -463,6 +478,20 @@ impl Image {
                             let color_arr = js_sys::Array::new();
                             for value in values {
                                 color_arr.push(&JsValue::from(*value));
+                            }
+                            entry.push(&color_arr);
+                        }
+                        pillow_rs::FormattedPixelValue::U16Components(values) => {
+                            let color_arr = js_sys::Array::new();
+                            for value in values {
+                                color_arr.push(&JsValue::from(*value));
+                            }
+                            entry.push(&color_arr);
+                        }
+                        pillow_rs::FormattedPixelValue::FloatComponents(values) => {
+                            let color_arr = js_sys::Array::new();
+                            for value in values {
+                                color_arr.push(&JsValue::from_f64(f64::from(*value)));
                             }
                             entry.push(&color_arr);
                         }

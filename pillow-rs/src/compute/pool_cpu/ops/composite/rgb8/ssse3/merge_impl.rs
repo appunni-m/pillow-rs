@@ -2,6 +2,7 @@
 
 use crate::checked_dims::CheckedDims;
 use crate::compute::pool_cpu::ops::composite::helpers::{merge, native_bytes};
+use crate::compute::registry::support::{StrategyGuard, StrategySelection};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 use std::sync::Arc;
@@ -28,11 +29,12 @@ const RGB_SSSE3_MASKS: [[[u8; 16]; 3]; 3] = [
 pub(crate) fn merge(
     source: &DynamicImage,
     remaining: &[Arc<DynamicImage>],
+    selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
     let (width, height) = (source.width(), source.height());
     let dimensions = CheckedDims::new_allow_empty(width, height, 3)?;
     let pixels = dimensions.total_bytes() / 3;
-    if pixels < 16 {
+    if selection.guard != StrategyGuard::MergeRgbInterleave {
         return merge::interleave_wide(
             source,
             remaining,

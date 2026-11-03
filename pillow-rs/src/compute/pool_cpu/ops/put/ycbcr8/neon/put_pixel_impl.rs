@@ -12,6 +12,13 @@ pub(crate) fn prepare(input: scalar::Kernel<'_>) -> Kernel<'_> { input }
 
 #[inline]
 pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
-    put_pixel_vector::single::<crate::raster::Rgb<u8>, 3>(input)
-        .map(DynamicImage::ImageYCbCr8)
+    let color = input.write.color;
+    put_pixel_vector::single_with_hidden_lanes::<crate::raster::Rgb<u8>, 3>(
+        input,
+        1,
+        [color.3, 0],
+        [u8::MAX, 0],
+        |_| [u8::MAX, 0],
+    )
+    .map(DynamicImage::ImageYCbCr8)
 }

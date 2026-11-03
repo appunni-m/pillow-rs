@@ -15,6 +15,8 @@
 //   These helpers are opt-in with the `parallel` Cargo feature. Keep policy
 //   checks aligned with the scripts and CI jobs that actually exist.
 // ============================================================================
+// TODO(pillow-rs#3ptb): keep these scheduling helpers owned by the later
+// `pool_parallel` backend and pass its selected context to their callers.
 
 /// Parallelize pixel iteration over image rows.
 ///

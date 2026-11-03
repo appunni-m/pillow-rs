@@ -500,7 +500,7 @@ pub(super) fn gpu_batch_capacity(
             // endpoint; account for the intermediate before allocating.
             high_water = high_water.max(pixels((out_w, cur_h))?);
         }
-        if let PipelineOp::PutData { data, payload_mode } = op {
+        if let PipelineOp::PutData { data, payload_mode, .. } = op {
             let Some(bytes_per_pixel) =
                 crate::compute::helpers::put_data::payload_bytes_per_pixel(*payload_mode)
             else {

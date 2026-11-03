@@ -298,7 +298,13 @@ pub(super) fn resize_byte_boxed_vector_guard(
         return GuardAssessment::Ineligible;
     }
 
-    if u64::from(input.height) > u64::from(input.width) * 100 && height < input.height {
+    let horizontal_work = width != input.width
+        || bounds.0 != 0.0
+        || bounds.2 != f64::from(input.width as f32);
+    if horizontal_work
+        && u64::from(input.height) > u64::from(input.width) * 100
+        && height < input.height
+    {
         return GuardAssessment::Ineligible;
     }
     if matches!(filter, crate::pipeline::ResampleFilter::Nearest) {

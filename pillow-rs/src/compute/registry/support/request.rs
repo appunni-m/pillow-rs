@@ -58,6 +58,33 @@ pub enum MergeBandModeRule {
     LumaOrFirstPalette,
 }
 
+/// How `ImageOps.expand` interprets numeric fill values for one exact mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExpandFillRule {
+    /// The wrapper encodes scalar/components into the exact mode's byte carrier.
+    ModeEncodedBytes,
+    /// P scalars are indices; tuple/name colors resolve against its attached
+    /// palette, or an empty RGB palette, and update the result palette.
+    PaletteIndexOrColor,
+    /// Numeric scalar/components are written as native unsigned 16-bit samples.
+    NativeU16,
+    /// Numeric scalar/components are written as native 32-bit float samples.
+    NativeF32,
+}
+
+/// How `ImageOps.pad` interprets numeric and color fills for one exact mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PadFillRule {
+    /// The wrapper encodes values into this mode's existing byte carrier.
+    ModeEncodedBytes,
+    /// Scalar values are palette indices; tuple/name values use P color semantics.
+    PaletteIndexOrColor,
+    /// Numeric scalar/components are written as native unsigned 16-bit samples.
+    NativeU16,
+    /// Numeric scalar/components are written as native 32-bit float samples.
+    NativeF32,
+}
+
 /// Input requirements exposed by an operation's support contract.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputContract {
@@ -81,6 +108,39 @@ pub enum InputContract {
     EffectNoiseSigma,
     /// EffectMandelbrot consumes output dimensions, extent, and quality.
     EffectMandelbrotParameters,
+    /// Quantize consumes palette size, method, optional palette mode, and k-means count.
+    QuantizeParameters {
+        /// Inclusive minimum palette size.
+        min_colors: u32,
+        /// Inclusive maximum palette size.
+        max_colors: u32,
+        /// Exact modes whose quantization contract restricts the method set.
+        method_restricted_modes: &'static [Mode],
+        /// Methods accepted by those mode strategies.
+        allowed_methods: &'static [u32],
+        /// Exact identity required for a caller-supplied palette image.
+        palette_mode: Mode,
+        /// Source modes accepted with a caller-supplied palette.
+        palette_sources: &'static [Mode],
+        /// Methods unavailable when their optional external dependency is disabled.
+        unavailable_methods: &'static [u32],
+        /// Whether k-means iteration counts must be nonnegative.
+        kmeans_nonnegative: bool,
+        /// Existing invalid palette-size error.
+        colors_rejection: &'static str,
+        /// Pillow's existing RGBA method error.
+        pillow_rgba_method_rejection: &'static str,
+        /// Extension error for other method-restricted alpha modes.
+        alpha_method_rejection: &'static str,
+        /// Existing invalid palette-image-mode error.
+        palette_mode_rejection: &'static str,
+        /// Existing invalid source-mode error for a supplied palette.
+        palette_source_rejection: &'static str,
+        /// Existing error for a disabled external quantization dependency.
+        unavailable_method_rejection: &'static str,
+        /// Existing invalid k-means count error.
+        kmeans_rejection: &'static str,
+    },
     /// Rotate receives normalized angle, filter, fill, center, and translation facts.
     Rotate,
     /// Transform receives a method, coefficient shape, filter, and finite-input fact.
@@ -110,6 +170,8 @@ pub enum InputContract {
     FitParameters,
     /// Pad target dimensions, filter, fill color, and centering.
     PadParameters,
+    /// Fill representation used by this exact mode's Pad strategy.
+    PadFill(PadFillRule),
     /// Scale factor and resampling filter.
     ScaleParameters,
     /// Source bounds and coordinate subtraction preconditions of a normalized crop.
@@ -123,11 +185,14 @@ pub enum InputContract {
         /// Whether this algorithm's existing checked-dimension policy admits empty output.
         allow_empty: bool,
     },
-    /// Native source shape and border-expanded allocation for ImageOps.expand.
+    /// Native source shape and border-expanded allocation for ImageOps.expand,
+    /// including the operation's valid empty-output cases.
     ExpandedDimensions {
         /// Number of stored bytes per pixel in this exact mode.
         bytes_per_pixel: u8,
     },
+    /// Fill representation used by this exact mode's Expand strategy.
+    ExpandFill(ExpandFillRule),
     /// The wrapper supplies palette colors and optional palette alpha separately.
     PaletteMetadata,
     /// ImageOps autocontrast/equalize masks are validated as same-size L/1 images.
@@ -144,6 +209,30 @@ pub enum InputContract {
     CallerValidatedGetDataBandIndex {
         /// Number of logical bands in this exact mode.
         bands: u8,
+    },
+    /// Image.getchannel validates its selector against this exact source-mode count.
+    CallerValidatedGetChannelIndex {
+        /// Number of logical bands in this exact mode.
+        bands: u8,
+    },
+    /// GetBBox inspects alpha alone only for these exact alpha-bearing modes.
+    GetBBoxAlphaOnly {
+        /// Exact source identities with a logical alpha band.
+        alpha_modes: &'static [Mode],
+    },
+    /// Histogram accepts these exact optional mask modes after size validation.
+    HistogramMask {
+        /// Exact mask identities accepted by the public Histogram wrapper.
+        modes: &'static [Mode],
+        /// Existing rejection for an unsupported mask identity.
+        mode_rejection: &'static str,
+        /// Existing rejection for a source/mask size mismatch.
+        size_rejection: &'static str,
+    },
+    /// Histogram or its Entropy composition accepts this range only for exact native I/F modes.
+    HistogramExtrema {
+        /// Exact source identities whose native histogram uses the supplied range.
+        modes: &'static [Mode],
     },
     /// Internal batch execution retains ordered variant/bounds checks and last-write-wins.
     OrderedPixelWrites,
@@ -183,6 +272,10 @@ pub enum InputContract {
     ChopsBinaryModes {
         /// Secondary identities whose native byte layout is compatible.
         modes: &'static [Mode],
+        /// Accepted secondary identities whose operation/mode pair is Rust-only.
+        core_only_modes: &'static [Mode],
+        /// Why the listed secondary identities do not have Pillow parity.
+        core_only_reason: Option<&'static str>,
         /// Existing rejection when the secondary identity is incompatible.
         rejection_reason: &'static str,
     },
@@ -259,6 +352,15 @@ pub enum InputContract {
         mode: Mode,
         /// Number of bytes stored per image pixel.
         channels: u8,
+    },
+    /// Composite's exact-mode NEON row kernel reused from the Paste strategy.
+    CompositeLMaskNeon {
+        /// Exact destination/source mode owned by this strategy.
+        mode: Mode,
+        /// Number of bytes stored per image pixel.
+        channels: u8,
+        /// Minimum clipped row width required by the specialized kernel.
+        minimum_clipped_width: u32,
     },
     /// Blend's allowed secondary modes and the existing mode/size errors.
     BlendInputs {
@@ -383,6 +485,8 @@ pub enum StrategyGuard {
     },
     /// I32 Filter5x5's exact normalized binomial kernel, safe for scalar AVX/FMA.
     Filter5x5I32BinomialFma,
+    /// I32 Filter5x5 has exact storage and an interior accepted by the AVX2 kernel.
+    Filter5x5I32Vectorizable,
     /// Native-byte BoxBlur or GaussianBlur with an exact mode layout.
     FilterNativeByteBlur {
         /// Physical byte channels in this exact mode's storage.
@@ -414,9 +518,9 @@ pub enum StrategyGuard {
         /// Native byte channels in this exact mode's storage.
         channels: u8,
     },
-    /// One exact typed target mode selects this implementation.
+    /// One exact target identity different from the source selects this implementation.
     ConvertTargetMode(Mode),
-    /// One exact typed target selects a vector route only for nonempty images.
+    /// One exact non-identity target selects a vector route only for nonempty images.
     ConvertTargetModeNonEmpty(Mode),
     /// Exact native byte storage with at least one original alpha vector group.
     PutAlphaBytes {
@@ -453,14 +557,15 @@ pub enum StrategyGuard {
     },
     /// RGB Merge's sixteen-pixel native L/P plane interleaver.
     MergeRgbInterleave,
-    /// Portable native L/P plane interleave with at least one complete block.
+    /// Portable native L/P plane interleave, including scalar-tail-only inputs.
     MergeNativeInterleave {
         /// Exact output mode owned by this strategy.
         target_mode: Mode,
         /// Native output channels and number of input bands.
         channels: u8,
     },
-    /// Finite, non-discrete nearest or bilinear Rotate over native byte rows.
+    /// Native-byte Rotate strategy for eligible identity, right-angle, nearest,
+    /// or bilinear requests over an exact byte layout.
     RotateVectorBytes {
         /// Physical number of bytes in this exact mode's stored pixel.
         channels: u8,
@@ -561,6 +666,13 @@ pub enum StrategyGuard {
         /// Native bytes consumed per pixel by the exact mode strategy.
         channels: u8,
     },
+    /// Archived Chops Offset over a byte-addressed native mode.
+    ChopsOffsetNativeBytes {
+        /// Native bytes consumed per pixel by the exact mode strategy.
+        channels: u8,
+    },
+    /// Archived byte-oriented Chops Offset over an exact I;16 identity.
+    ChopsOffsetNativeI16,
     /// One in-bounds byte write over the mode's native raster, allowing trailing storage.
     PutPixelSpan {
         /// Native byte stride fixed by this mode implementation.
@@ -568,12 +680,14 @@ pub enum StrategyGuard {
     },
     /// At least two admitted writes over an exact RGBA raster with one complete vector.
     RgbaPixelWriteRun,
-    /// RGBA axis-swap method with exact bytes and dimensions large enough for AVX2 tiles.
+    /// RGBA axis-swap method with a complete logical byte prefix and dimensions for AVX2 tiles.
     TransposeRgbaAvx2,
-    /// Native byte transpose method over an exact source layout.
+    /// Native byte transpose over the logical source prefix.
     TransposeNativeBytes {
         /// Physical bytes moved together for one source pixel.
         channels: u8,
+        /// Whether this mode's archived architecture route admits an exact empty raster.
+        allow_empty: bool,
     },
     /// Eight-lane Color3DLut interpolation over an exact native byte source.
     Color3DLutVector {
@@ -667,6 +781,10 @@ impl StrategyGuard {
             Self::ChopsAddSubtractVector { channels } => {
                 guards::chops_add_subtract_guard(input, channels)
             }
+            Self::ChopsOffsetNativeBytes { channels } => {
+                guards::chops_offset_native_bytes_guard(input, channels)
+            }
+            Self::ChopsOffsetNativeI16 => guards::chops_offset_native_i16_guard(input),
             Self::Filter3x3NativeBytesVectorizable { channels } => {
                 guards::filter3x3_native_bytes_vectorizable_guard(input, channels)
             }
@@ -675,6 +793,9 @@ impl StrategyGuard {
             }
             Self::Filter5x5I32BinomialFma => {
                 guards::filter5x5_i32_binomial_fma_guard(input)
+            }
+            Self::Filter5x5I32Vectorizable => {
+                guards::filter5x5_i32_vectorizable_guard(input)
             }
             Self::FilterNativeByteBlur { channels } => {
                 guards::filter_native_byte_blur_guard(input, channels)
@@ -728,8 +849,8 @@ impl StrategyGuard {
             Self::PutPixelSpan { channels } => guards::pixel_span_guard(input, channels),
             Self::RgbaPixelWriteRun => guards::pixel_write_run_guard(input),
             Self::TransposeRgbaAvx2 => guards::rgba_transpose_avx2_guard(input),
-            Self::TransposeNativeBytes { channels } =>
-                guards::native_transpose_bytes_guard(input, channels),
+            Self::TransposeNativeBytes { channels, allow_empty } =>
+                guards::native_transpose_bytes_guard(input, channels, allow_empty),
             Self::Color3DLutVector { source_channels } =>
                 guards::color3dlut_guard(input, source_channels),
             Self::ReduceNativeByteVector { channels } =>
@@ -772,9 +893,29 @@ impl StrategyGuard {
             Self::CompositeNativeByteVector { mode, channels } => {
                 guards::composite_native_byte_vector_guard(input, mode, channels)
             }
+            Self::CompositeLMaskNeon { mode, channels, minimum_clipped_width } => {
+                guards::composite_l_mask_neon_guard(input, mode, channels, minimum_clipped_width)
+            }
             Self::ExpandVector { channels } => guards::expand_vector_guard(input, channels),
             Self::CheckedNativeBytes { channels } =>
                 guards::checked_native_bytes_guard(input, channels),
         }
+    }
+
+    pub(super) fn assess_for_mode(
+        self,
+        input: StrategyInputs,
+        source_mode: Mode,
+    ) -> GuardAssessment {
+        // Prepared Convert returns the source identity before reaching a
+        // target kernel, so same-mode requests must select the Default path.
+        if matches!(
+            self,
+            Self::ConvertTargetMode(target) | Self::ConvertTargetModeNonEmpty(target)
+                if target == source_mode
+        ) {
+            return GuardAssessment::Ineligible;
+        }
+        self.assess(input)
     }
 }

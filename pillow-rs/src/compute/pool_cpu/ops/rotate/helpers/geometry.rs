@@ -75,3 +75,19 @@ pub(crate) fn discrete_angle(request: RotateRequest) -> Option<u32> {
         .find(|angle| request.angle.rem_euclid(360.0) == *angle)
         .map(|angle| angle as u32)
 }
+
+pub(crate) fn identity_contract(request: RotateRequest) -> bool {
+    request.angle.is_finite()
+        && request.center.is_none()
+        && request.translate.is_none()
+        && request.angle.rem_euclid(360.0).abs() <= f64::EPSILON
+}
+
+pub(crate) fn discrete_fast_angle(
+    request: RotateRequest,
+    width: u32,
+    height: u32,
+) -> Option<u32> {
+    let angle = discrete_angle(request)?;
+    (angle == 180 || request.expand || width == height).then_some(angle)
+}

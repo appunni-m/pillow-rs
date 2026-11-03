@@ -14,12 +14,20 @@ mod exif;
 mod geometry;
 mod point;
 
-pub(crate) use color::resolve_imageops_color;
+pub(crate) use color::{resolve_imageops_color, resolve_pad_palette_fill};
+pub(crate) use geometry::fit_box_coordinates;
 pub use exif::{exif_get_orientation, exif_remove_orientation, exif_transpose};
 pub use geometry::{
-    contain, contain_with_input, cover, cover_with_input, crop, expand, expand_with_input, fit,
-    fit_with_input, pad, pad_with_input, pad_with_input_and_containment, scale_with_input,
-    validate_deform_resample,
+    contain, contain_geometry_preflight, contain_with_input, cover, cover_geometry_preflight,
+    cover_with_input, crop, expand, expand_with_input, expand_with_output_size_and_position,
+    expand_with_margins, expand_with_margins_and_input, fit, fit_with_input, pad,
+    fit_geometry_preflight, pad_fill_preflight, pad_filter_preflight,
+    pad_geometry_preflight, pad_preflight_with_input, pad_with_input,
+    pad_with_input_and_containment, pad_with_preflight, pad_with_preflight_and_fill,
+    parse_imageops_filter_input, prepare_expand_fill,
+    resolve_expand_fill_palette, scale_with_input, validate_deform_resample,
+    validate_expand_output_size, PadFillPreflight, PadGeometryPreflight, PadPreflight,
+    PreparedExpandFill,
 };
 pub use point::*;
 
@@ -32,6 +40,13 @@ pub enum CenteringInput {
     Scalar(f64),
     /// A sequence supplied by the caller.
     Values(Vec<f64>),
+    /// Integer coordinates resolved by the Python ImageOps.pad wrapper.
+    ///
+    /// Pillow passes these values through its native Paste coordinate parser,
+    /// including signed clipping when custom numeric protocols return an
+    /// out-of-range rounded value.
+    #[doc(hidden)]
+    PadPosition(i32, i32),
     /// A value that could not be represented as a numeric sequence.
     Invalid,
 }
@@ -48,8 +63,8 @@ pub enum ImageOpsMask {
     Invalid(String),
 }
 
-/// Host-neutral color input for `ImageOps.pad` and `ImageOps.expand`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Host-neutral fill input for ImageOps geometry and Image.rotate.
+#[derive(Debug, Clone)]
 pub enum ImageOpsColor {
     /// No explicit color was supplied; use the operation default.
     None,
@@ -59,6 +74,41 @@ pub enum ImageOpsColor {
     Scalar(i64),
     /// A color component sequence extracted from the host object.
     Components(Vec<i64>),
+    /// Integer components from a Python tuple, whose identity affects Pillow
+    /// color coercion for single-band and palette images.
+    TupleComponents(Vec<i64>),
+    /// Mixed or arbitrary-width numeric components from a Python tuple.
+    ///
+    /// ImageOps.expand retains these kinds for P palette lookup and ordered
+    /// `bytes(color)` validation instead of narrowing them through f64.
+    TupleNumericComponents(Vec<crate::image::PaletteColorComponent>),
+    /// Numeric tuple components retained for operation-specific palette paths.
+    TupleComponentsWithFallback {
+        /// Original numeric kinds needed by the palette path.
+        components: Vec<crate::image::PaletteColorComponent>,
+        /// Existing conversion behavior for fallback operation/mode paths.
+        fallback: Box<Self>,
+    },
+    /// A Python pad tuple containing an arbitrary-width integer, with the
+    /// ordinary host conversion retained for non-P mode behavior.
+    WideTupleComponents {
+        /// Original numeric kinds needed by Image.new's P palette path.
+        components: Vec<crate::image::PaletteColorComponent>,
+        /// Existing per-mode conversion for all non-P pad modes.
+        fallback: Box<Self>,
+    },
+    /// Integer components from a Python list. Pillow accepts RGB(A) lists for
+    /// mode P through `Image.new`, while other raster modes reject them.
+    ListComponents(Vec<i64>),
+    /// Integer components from a Python list containing an arbitrary-width
+    /// value. Pillow normalizes valid P-mode lists to tuples before lookup.
+    ListNumericComponents(Vec<crate::image::PaletteColorComponent>),
+    /// A scalar floating-point fill, accepted by Pillow's `F` mode.
+    FloatingScalar(f64),
+    /// A floating-point tuple retained for the destination mode to validate.
+    FloatingComponents(Vec<f64>),
+    /// A Python list whose values are not an accepted integer-list form.
+    InvalidList,
     /// A value that was not a supported color representation.
     Invalid,
 }

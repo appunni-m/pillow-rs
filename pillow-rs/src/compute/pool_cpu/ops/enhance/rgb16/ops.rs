@@ -15,6 +15,8 @@ const INPUTS: &[InputContract] = &[InputContract::ExactNativeBytes {
     mismatch_reason: "Brightness source bytes did not match its dimensions",
 }];
 
+// NO_PILLOW_SUPPORT: internal high-depth RGB Brightness is a native Rust
+// extension with no Pillow mode identity.
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
     OperationId::Brightness,
     Mode::ImageRgb16,

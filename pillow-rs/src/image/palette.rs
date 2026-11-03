@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use image_slash_star::{ImageFormat, ImageInfo};
 
+use crate::compute::registry::support::PaletteInput;
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
@@ -55,8 +56,20 @@ fn split_palette_data(data: &[u8], rawmode: &str) -> Result<(Vec<u8>, Vec<u8>), 
             }
             Ok((rgb, alpha))
         }
+        "PA" => {
+            // Pillow normalizes alpha-bearing palette identities to RGBA,
+            // but has no PA-to-RGBA raw unpacker; preserve that rejection.
+            Err(PilError::ValueError("unrecognized raw mode".to_owned()))
+        }
         _ => Err(PilError::ValueError("unrecognized raw mode".to_owned())),
     }
+}
+
+fn clear_pending_palette_alpha(info: &mut Option<ImageInfo>) {
+    let Some(palette) = info.as_mut().and_then(|info| info.palette.as_mut()) else {
+        return;
+    };
+    palette.alpha.clear();
 }
 
 pub(crate) fn expand_palette(
@@ -192,11 +205,70 @@ impl Image {
         match self {
             Image::Paletted(data) => Some(data.palette.clone()),
             Image::Loaded(data) => data.palette.clone(),
-            Image::Pipeline { palette, .. } => palette.clone(),
+            Image::Pipeline { palette, ops, .. } => palette
+                .clone()
+                .or_else(|| ops.palette_output()?.palette.clone()),
             Image::Bytes { info, .. } => info
                 .as_ref()
                 .and_then(|info| info.palette.as_ref())
                 .map(|palette| palette.rgb.clone()),
+        }
+    }
+
+    /// Returns whether palette metadata is attached, including an empty table.
+    #[doc(hidden)]
+    pub fn has_attached_palette(&self) -> bool {
+        match self {
+            Image::Paletted(_) => true,
+            Image::Loaded(data) => data.palette.is_some(),
+            Image::Bytes { info, .. } => info
+                .as_ref()
+                .is_some_and(|info| info.palette.is_some()),
+            Image::Pipeline { palette, ops, .. } => {
+                palette.is_some()
+                    || ops
+                        .palette_output()
+                        .is_some_and(|output| output.palette.is_some())
+            }
+        }
+    }
+
+    /// Borrows the resolved palette dependency for mode-specific operations.
+    pub(crate) fn palette_input(&self) -> PaletteInput<'_> {
+        match self {
+            Image::Paletted(data) => PaletteInput {
+                rgb: Some(&data.palette),
+                alpha: &data.palette_alpha,
+            },
+            Image::Loaded(data) => PaletteInput {
+                rgb: data.palette.as_deref(),
+                alpha: data.palette_alpha.as_deref().unwrap_or_default(),
+            },
+            Image::Bytes { info, .. } => info
+                .as_ref()
+                .and_then(|info| info.palette.as_ref())
+                .map(|palette| PaletteInput {
+                    rgb: Some(&palette.rgb),
+                    alpha: &palette.alpha,
+                })
+                .unwrap_or_default(),
+            Image::Pipeline {
+                palette,
+                palette_alpha,
+                ops,
+                ..
+            } => {
+                let output = ops.palette_output();
+                PaletteInput {
+                    rgb: palette
+                        .as_deref()
+                        .or_else(|| output.and_then(|output| output.palette.as_deref())),
+                    alpha: palette_alpha
+                        .as_deref()
+                        .or_else(|| output.and_then(|output| output.palette_alpha.as_deref()))
+                        .unwrap_or_default(),
+                }
+            }
         }
     }
 
@@ -208,8 +280,9 @@ impl Image {
                 .palette
                 .as_ref()
                 .is_some_and(|palette| !palette.is_empty()),
-            Image::Pipeline { palette, .. } => palette
+            Image::Pipeline { palette, ops, .. } => palette
                 .as_ref()
+                .or_else(|| ops.palette_output().and_then(|output| output.palette.as_ref()))
                 .is_some_and(|palette| !palette.is_empty()),
             Image::Bytes { info, .. } => info
                 .as_ref()
@@ -223,7 +296,12 @@ impl Image {
         match self {
             Image::Paletted(data) => Some(data.palette_alpha.clone()),
             Image::Loaded(data) => data.palette_alpha.clone(),
-            Image::Pipeline { palette_alpha, .. } => palette_alpha.clone(),
+            Image::Pipeline {
+                palette_alpha, ops, ..
+            } => palette_alpha.clone().or_else(|| {
+                ops.palette_output()
+                    .and_then(|output| output.palette_alpha.clone())
+            }),
             Image::Bytes { info, .. } => info
                 .as_ref()
                 .and_then(|info| info.palette.as_ref())
@@ -240,7 +318,15 @@ impl Image {
             Image::Loaded(data) => data.info.clone(),
             Image::Paletted(data) => data.info.clone(),
             Image::Bytes { info, .. } => info.clone(),
-            Image::Pipeline { source, .. } => source.image_info(),
+            Image::Pipeline { source, ops, .. } => match ops.palette_output() {
+                Some(output) => match output.wrapper_metadata {
+                    crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata::PreserveSource
+                    | crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata::PreserveSourceLoaded => source.image_info(),
+                    crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata::ExifOnly
+                    | crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata::Drop => None,
+                },
+                None => source.image_info(),
+            },
         }
     }
 
@@ -248,7 +334,24 @@ impl Image {
         match self {
             Image::Loaded(data) => data.source_format,
             Image::Paletted(data) => data.source_format,
-            Image::Bytes { format, .. } | Image::Pipeline { format, .. } => *format,
+            Image::Bytes { format, .. } => *format,
+            Image::Pipeline {
+                source,
+                ops,
+                format,
+                ..
+            } => match ops.palette_output() {
+                Some(output) => match output.wrapper_metadata {
+                    crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata::PreserveSource
+                    | crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata::PreserveSourceLoaded
+                        if !ops.source_format_suppressed() =>
+                    {
+                        source.source_format()
+                    }
+                    _ => None,
+                },
+                None => *format,
+            },
         }
     }
 
@@ -357,10 +460,10 @@ impl Image {
     /// Qt owns the final `qRgb` packing and `QImage` object construction; the
     /// Rust core owns the mode-aware table values so palette traversal is
     /// shared with every binding.
-    pub fn indexed_color_table(&self, mode: &str) -> Result<Vec<(u8, u8, u8)>, PilError> {
-        match mode {
-            "L" => Ok((0..=u8::MAX).map(|value| (value, value, value)).collect()),
-            "P" => Ok(self
+    pub fn indexed_color_table(&self) -> Result<Vec<(u8, u8, u8)>, PilError> {
+        match self.mode_identity()? {
+            Mode::ImageLuma8 => Ok((0..=u8::MAX).map(|value| (value, value, value)).collect()),
+            Mode::ImagePalette8 => Ok(self
                 .getpalette_with_input(Some("RGB"))?
                 .unwrap_or_default()
                 .chunks_exact(3)
@@ -426,6 +529,151 @@ impl Image {
         };
         Ok(())
     }
+
+    /// Applies Python ImagePalette transparency to an attached palette.
+    ///
+    /// This mirrors Pillow's `_putpalettealpha`: alpha storage has 256 slots,
+    /// defaults to opaque, and an index may be set beyond the currently
+    /// retained color entries. The Python wrapper keeps its public
+    /// `info["transparency"]` value; this method clears only the codec-side
+    /// pending marker after committing the alpha table.
+    pub fn putpalettealpha(&mut self, index: i32, alpha: i32) -> Result<(), PilError> {
+        if !self.has_attached_palette() {
+            return Err(PilError::ValueError("image has no palette".to_owned()));
+        }
+        if !(0..256).contains(&index) {
+            return Err(PilError::ValueError(
+                "palette index out of range".to_owned(),
+            ));
+        }
+
+        self.load()?;
+        let mut palette_alpha = self.palette_alpha().unwrap_or_default();
+        palette_alpha.resize(256, 255);
+        palette_alpha[index as usize] = alpha as u8;
+        self.store_committed_palette_alpha(palette_alpha)
+    }
+
+    /// Applies a prefix of Python ImagePalette transparency bytes.
+    ///
+    /// Existing raw LA palette alpha is preserved after the supplied prefix;
+    /// missing entries remain opaque. The Python wrapper keeps its public
+    /// `info["transparency"]` value and clears the codec-side pending marker.
+    pub fn putpalettealphas(&mut self, values: &[u8]) -> Result<(), PilError> {
+        if !self.has_attached_palette() {
+            return Err(PilError::ValueError("image has no palette".to_owned()));
+        }
+        if values.len() > 256 {
+            return Err(PilError::ValueError(
+                "palette index out of range".to_owned(),
+            ));
+        }
+
+        self.load()?;
+        let mut palette_alpha = self.palette_alpha().unwrap_or_default();
+        palette_alpha.resize(256, 255);
+        palette_alpha[..values.len()].copy_from_slice(values);
+        self.store_committed_palette_alpha(palette_alpha)
+    }
+
+    /// Commits alpha already supplied by an LA raw palette.
+    pub fn commit_palette_alpha(&mut self) -> Result<(), PilError> {
+        if !self.has_attached_palette() {
+            return Err(PilError::ValueError("image has no palette".to_owned()));
+        }
+        self.load()?;
+        let mut palette_alpha = self.palette_alpha().unwrap_or_default();
+        palette_alpha.resize(256, 255);
+        self.store_committed_palette_alpha(palette_alpha)
+    }
+
+    fn store_committed_palette_alpha(&mut self, palette_alpha: Vec<u8>) -> Result<(), PilError> {
+        match self {
+            Image::Paletted(data) => {
+                data.palette_alpha = palette_alpha;
+                clear_pending_palette_alpha(&mut data.info);
+            }
+            Image::Loaded(data) if data.palette.is_some() => {
+                data.palette_alpha = Some(palette_alpha);
+                clear_pending_palette_alpha(&mut data.info);
+            }
+            _ => return Err(PilError::ValueError("image has no palette".to_owned())),
+        }
+        Ok(())
+    }
+
+    /// Replaces palette metadata on an indexed image without decoding or
+    /// materializing its pixel pipeline.
+    pub(crate) fn replace_indexed_palette(
+        &mut self,
+        data: &[u8],
+        rawmode: &str,
+    ) -> Result<(), PilError> {
+        let mode = self.mode_identity()?;
+        if !matches!(mode, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8) {
+            return Err(PilError::ValueError("illegal image mode".to_owned()));
+        }
+        let (palette, palette_alpha) = split_palette_data(data, rawmode)?;
+
+        match self {
+            Image::Paletted(image) => {
+                image.palette = palette;
+                image.palette_alpha = palette_alpha;
+            }
+            Image::Loaded(image) => {
+                image.palette = Some(palette);
+                image.palette_alpha = Some(palette_alpha);
+            }
+            Image::Pipeline {
+                ops,
+                palette: current_palette,
+                palette_alpha: current_alpha,
+                ..
+            } if ops.is_empty() => {
+                *current_palette = Some(palette);
+                *current_alpha = Some(palette_alpha);
+            }
+            _ => {
+                // Keep earlier operations attached to their original palette;
+                // this empty metadata layer applies the updated palette only
+                // to operations queued after the color was resolved.
+                let source = Arc::new(self.clone());
+                *self = Image::Pipeline {
+                    format: self.source_format(),
+                    backend: self.backend(),
+                    source,
+                    ops: super::PipelineOps::empty(),
+                    palette: Some(palette),
+                    palette_alpha: Some(palette_alpha),
+                    materialized: materialization_cache(),
+                    shape: super::pipeline_shape_cache(),
+                    mode: super::pipeline_mode_cache_for(Some(mode)),
+                };
+            }
+        }
+        Ok(())
+    }
+
+    /// Installs the representable portion of a Python-owned Draw palette.
+    ///
+    /// `ImagePalette.getcolor` retains arbitrary byte lengths until
+    /// `Image.load`; drawing only needs the first 256 complete entries to
+    /// resolve indexed pixels. The wrapper keeps the original bytes and
+    /// performs strict realization at load time.
+    pub(crate) fn replace_indexed_palette_from_draw(
+        &mut self,
+        data: &[u8],
+        rawmode: &str,
+    ) -> Result<(), PilError> {
+        let entry_size = match rawmode {
+            "RGB" => 3,
+            "RGBA" => 4,
+            "LA" => 2,
+            _ => return Err(PilError::ValueError("unrecognized raw mode".to_owned())),
+        };
+        let complete_size = (data.len() / entry_size).min(256) * entry_size;
+        self.replace_indexed_palette(&data[..complete_size], rawmode)
+    }
 }
 
 impl Image {
@@ -434,7 +682,9 @@ impl Image {
         match self {
             Image::Paletted(data) => Some(operational_palette(data)),
             Image::Loaded(data) => data.palette.clone(),
-            Image::Pipeline { palette, .. } => palette.clone(),
+            Image::Pipeline { palette, ops, .. } => palette
+                .clone()
+                .or_else(|| ops.palette_output()?.palette.clone()),
             Image::Bytes { info, .. } => info
                 .as_ref()
                 .and_then(|info| info.palette.as_ref())
@@ -450,8 +700,9 @@ impl Image {
     ///
     /// # Errors
     ///
-    /// Currently returns `Ok(Image)`; invalid map behavior is handled during
-    /// pipeline execution.
+    /// Returns [`PilError::ValueError`] when the source is not `L` or `P`, or
+    /// when `dest_map` contains more than 256 entries. Errors resolving the
+    /// source mode are propagated.
     pub fn remap_palette(&self, dest_map: &[u8]) -> Result<Image, PilError> {
         self.remap_palette_with_source(dest_map, None)
     }
@@ -544,7 +795,6 @@ impl Image {
             *palette = Some(remapped_palette);
             *palette_alpha = remapped_alpha;
         }
-        result.set_pipeline_output_mode(Some(crate::raster::Mode::ImagePalette8));
         Ok(result)
     }
 }

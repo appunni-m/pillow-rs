@@ -59,6 +59,7 @@ fn assert_f_resize_dyadic_basic_cases(image: &DynamicImage, bilinear: &PipelineO
         &[
             PipelineOp::PutData {
                 data: bytes::Bytes::copy_from_slice(image.as_bytes()),
+                hidden_lanes: None,
                 payload_mode: Mode::ImageF32,
             },
             dyadic_box_resize(1, 2),
@@ -97,6 +98,7 @@ fn assert_f_resize_dyadic_box_chain_cases(image: &DynamicImage) {
                         .flat_map(f32::to_le_bytes)
                         .collect::<Vec<_>>(),
                 ),
+                hidden_lanes: None,
                 payload_mode: Mode::ImageF32,
             },
             dyadic_box_resize(2, 1),
@@ -379,6 +381,7 @@ fn assert_f_resize_f64_putdata_proofs(image: &DynamicImage) {
         &[
             PipelineOp::PutData {
                 data: putdata.clone(),
+                hidden_lanes: None,
                 payload_mode: Mode::ImageF32,
             },
             PipelineOp::Resize {
@@ -394,6 +397,7 @@ fn assert_f_resize_f64_putdata_proofs(image: &DynamicImage) {
         &[
             PipelineOp::PutData {
                 data: bytes::Bytes::from(vec![0u8; 4]),
+                hidden_lanes: None,
                 payload_mode: Mode::ImageF32,
             },
             PipelineOp::Resize {
@@ -409,6 +413,7 @@ fn assert_f_resize_f64_putdata_proofs(image: &DynamicImage) {
         &[
             PipelineOp::PutData {
                 data: putdata,
+                hidden_lanes: None,
                 payload_mode: Mode::ImageI32,
             },
             PipelineOp::Resize {

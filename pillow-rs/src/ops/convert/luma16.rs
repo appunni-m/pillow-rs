@@ -13,7 +13,7 @@ pub(super) fn try_convert_to_luma16(
         return Ok(None);
     }
     if matches!(source_mode, Mode::One | Mode::ImageLuma8) {
-        let mut result = Image::push_op(
+        let result = Image::push_op(
             image,
             crate::pipeline::PipelineOp::Convert {
                 mode: target_mode,
@@ -21,12 +21,10 @@ pub(super) fn try_convert_to_luma16(
                 dither: None,
             },
         );
-        result.set_pipeline_output_mode(Some(target_mode));
         return Ok(Some(result));
     }
     if crate::compute::pool_cpu::ops::color::convert::ops::SUPPORT
-        .for_mode(source_mode)
-        .scope_for_target(target_mode)
+        .scope_for_target(source_mode, target_mode)
         .is_some()
     {
         return execute_declared_source_strategy(image, target_mode).map(Some);
@@ -55,23 +53,18 @@ fn execute_declared_source_strategy(image: &Image, target_mode: Mode) -> Result<
             alpha: &palette_alpha,
         },
     };
-    let requested_backend = crate::compute::preferred_active_backend()?
-        .map(|(backend, _)| backend)
-        .unwrap_or(crate::compute::Backend::Cpu);
-    let (execution_backend, fallback_reason) =
-        if requested_backend == crate::compute::Backend::Gpu {
-            (
-                crate::compute::Backend::Cpu,
-                Some("GPU Convert has no declared I;16 target strategy".to_owned()),
-            )
-        } else {
-            (requested_backend, None)
-        };
-    let output = crate::compute::execute_eager_cpu_arch_image_operation_with_route(
+    let (requested_backend, context) = image.cpu_arch_execution_route()?;
+    let fallback_reason = (requested_backend == Some(crate::compute::Backend::Gpu)).then(|| {
+        format!(
+            "GPU Convert has no declared I;16 target strategy; used CPU {:?}",
+            context.architecture()
+        )
+    });
+    let output = crate::compute::execute_eager_cpu_arch_image_operation_with_context(
         "Convert",
         source.as_ref(),
+        context,
         requested_backend,
-        execution_backend,
         fallback_reason,
         |context| {
             let prepared = crate::compute::registry::prepare_cpu(&operation, input, context)?;

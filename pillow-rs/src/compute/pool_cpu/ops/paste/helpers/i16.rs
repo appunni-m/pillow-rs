@@ -1,6 +1,38 @@
+use crate::compute::pool_cpu::helpers::bytes::preblend;
 use crate::error::PilError;
+use crate::raster::{DynamicImage, Mode};
 
 use super::plan::Luma16Plan;
+
+pub(crate) fn source_samples(image: &DynamicImage) -> Option<&[u16]> {
+    match image {
+        DynamicImage::ImageI16(image)
+        | DynamicImage::ImageI16L(image)
+        | DynamicImage::ImageI16B(image)
+        | DynamicImage::ImageI16N(image) => Some(image.as_raw()),
+        _ => None,
+    }
+}
+
+pub(crate) const fn high_byte_first(mode: Mode) -> bool {
+    match mode {
+        Mode::ImageI16B => true,
+        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16N => cfg!(target_endian = "big"),
+        _ => false,
+    }
+}
+
+pub(crate) const fn sample_in_destination_order(
+    sample: u16,
+    source_high_byte_first: bool,
+    destination_high_byte_first: bool,
+) -> u16 {
+    if source_high_byte_first == destination_high_byte_first {
+        sample
+    } else {
+        sample.swap_bytes()
+    }
+}
 
 /// Executes Pillow's typed I;16 Paste behavior without changing mode identity.
 #[expect(
@@ -21,9 +53,8 @@ pub(crate) fn execute(plan: Luma16Plan<'_>, source: &[u16]) -> Result<Vec<u16>, 
     }
     let mask_bytes = plan.mask.as_deref().map(|mask| mask.as_bytes());
     let mask_layout = plan.mask_layout;
-    let high_byte_first = high_byte_first(plan.mode);
-    let region_width = usize::try_from(plan.region.width)
-        .map_err(|_| overflow("region width"))?;
+    let source_high_byte_first = high_byte_first(plan.source_mode);
+    let destination_high_byte_first = high_byte_first(plan.mode);
     let source_left = usize::try_from(plan.region.source_left)
         .map_err(|_| overflow("source x"))?;
     let destination_left = usize::try_from(plan.region.destination_left)
@@ -49,7 +80,11 @@ pub(crate) fn execute(plan: Luma16Plan<'_>, source: &[u16]) -> Result<Vec<u16>, 
             let destination_x = destination_left + column;
             let Some((bytes, layout)) = mask_bytes.zip(mask_layout) else {
                 output[destination_y * destination_width + destination_x] =
-                    source[source_y * source_width + source_x];
+                    sample_in_destination_order(
+                        source[source_y * source_width + source_x],
+                        source_high_byte_first,
+                        destination_high_byte_first,
+                    );
                 continue;
             };
             let mask_index =
@@ -58,7 +93,11 @@ pub(crate) fn execute(plan: Luma16Plan<'_>, source: &[u16]) -> Result<Vec<u16>, 
             if layout.binary {
                 if value != 0 {
                     output[destination_y * destination_width + destination_x] =
-                        source[source_y * source_width + source_x];
+                        sample_in_destination_order(
+                            source[source_y * source_width + source_x],
+                            source_high_byte_first,
+                            destination_high_byte_first,
+                        );
                 }
                 continue;
             }
@@ -74,8 +113,8 @@ pub(crate) fn execute(plan: Luma16Plan<'_>, source: &[u16]) -> Result<Vec<u16>, 
             let source_sample = source[source_y * source_width + source_byte_x];
             let destination_index = destination_y * destination_width + destination_byte_x;
             let destination_sample = output[destination_index];
-            let source_shift = byte_shift(high_byte_first, source_x);
-            let destination_shift = byte_shift(high_byte_first, destination_x);
+            let source_shift = byte_shift(source_high_byte_first, source_x);
+            let destination_shift = byte_shift(destination_high_byte_first, destination_x);
             let source_byte = ((source_sample >> source_shift) & 0xff) as u8;
             let destination_byte = ((destination_sample >> destination_shift) & 0xff) as u8;
             let blended = blend_byte(source_byte, destination_byte, value, layout.premultiplied);
@@ -96,26 +135,14 @@ pub(crate) fn execute(plan: Luma16Plan<'_>, source: &[u16]) -> Result<Vec<u16>, 
     reason = "Pillow stores the blended byte and selected byte lane only"
 )]
 fn blend_byte(source: u8, destination: u8, mask: u8, premultiplied: bool) -> u8 {
-    let inverse = 255 - u32::from(mask);
     if premultiplied {
-        let scaled = u32::from(destination) * inverse + 128;
-        ((((scaled >> 8) + scaled) >> 8) + u32::from(source)) as u8
+        preblend::apply(source, destination, mask)
     } else {
+        let inverse = 255 - u32::from(mask);
         ((u32::from(source) * u32::from(mask)
             + u32::from(destination) * inverse
             + 127)
             / 255) as u8
-    }
-}
-
-fn high_byte_first(mode: crate::raster::Mode) -> bool {
-    match mode {
-        crate::raster::Mode::ImageI16B => true,
-        crate::raster::Mode::ImageI16L => false,
-        crate::raster::Mode::ImageI16 | crate::raster::Mode::ImageI16N => {
-            cfg!(target_endian = "big")
-        }
-        _ => false,
     }
 }
 

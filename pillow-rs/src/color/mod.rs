@@ -6,8 +6,9 @@
 //!
 //! # Input Conventions
 //!
-//! - Mode values are Pillow mode strings such as `"L"`, `"RGB"`, `"RGBA"`,
-//!   `"CMYK"`, `"HSV"`, `"YCbCr"`, `"I"`, and `"F"`.
+//! - Raster operations use the Pillow-owned [`crate::raster::Mode`] enum.
+//!   `ImageColor.getcolor` uses [`ColorOutputMode`] because Pillow also accepts
+//!   non-raster descriptors such as `I;32` and `I;16S`.
 //! - Multi-byte scalar modes are represented in little-endian byte order inside
 //!   RGBA-like storage when this crate needs to carry them through
 //!   Pillow raster buffers.
@@ -43,7 +44,7 @@ pub use palette::{
     palette_getcolor_validate_input, palette_to_text,
 };
 pub use parse::{color_has_explicit_alpha, parse_color_str, parse_color_str_unclamped};
-pub use resolve::{ColorValue, getcolor, resolve_new_color};
+pub use resolve::{ColorOutputMode, ColorValue, getcolor, resolve_new_color};
 pub(crate) use resolve::getcolor_for_mode;
 
 pub(crate) use grayscale::cmyk_muldiv255_byte as grayscale_cmyk_muldiv255_byte;

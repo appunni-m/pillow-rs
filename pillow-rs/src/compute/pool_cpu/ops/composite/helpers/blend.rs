@@ -4,6 +4,7 @@ use crate::checked_dims::CheckedDims;
 use crate::compute::Architecture;
 use crate::compute::registry::support::{OperationId, StrategySelection};
 use crate::error::PilError;
+use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{DynamicImage, Mode, RgbImage};
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
@@ -23,6 +24,8 @@ pub(crate) fn execute(
     let source_bytes = source.as_bytes();
     let other_bytes = other.as_bytes();
     if source.mode() != mode
+        || other.mode() != mode
+        || source.dimensions() != other.dimensions()
         || source_bytes.len() != dimensions.total_bytes()
         || other_bytes.len() != dimensions.total_bytes()
     {
@@ -62,7 +65,7 @@ pub(crate) fn execute_lab_samples(
     {
         return Err(PilError::ValueError("images do not match".into()));
     }
-    blend_bytes(
+    let mut output = blend_bytes(
         base.width(),
         base.height(),
         Mode::ImageLab8,
@@ -71,7 +74,98 @@ pub(crate) fn execute_lab_samples(
         source.as_raw(),
         true,
         true,
+    )?;
+    let dimensions = (base.width() as usize, base.height() as usize);
+    let lanes = blend_hidden_lanes(
+        Mode::ImageLab8,
+        base.hidden_pixel_lanes(),
+        source.hidden_pixel_lanes(),
+        dimensions,
+        alpha as f32,
+    )?;
+    if !output.replace_hidden_pixel_lanes(lanes) {
+        return Err(PilError::InternalError(
+            "LAB Blend output physical lanes did not match its mode".into(),
+        ));
+    }
+    Ok(output)
+}
+
+fn attach_hidden_lanes(
+    source: &DynamicImage,
+    other: &DynamicImage,
+    mode: Mode,
+    alpha: f32,
+    output: &mut DynamicImage,
+) -> Result<(), PilError> {
+    let dimensions = (source.width() as usize, source.height() as usize);
+    let lanes = blend_hidden_lanes(
+        mode,
+        source.hidden_pixel_lanes(),
+        other.hidden_pixel_lanes(),
+        dimensions,
+        alpha,
+    )?;
+    if !output.replace_hidden_pixel_lanes(lanes) {
+        return Err(PilError::InternalError(
+            "Blend output physical lanes did not match its mode".into(),
+        ));
+    }
+    Ok(())
+}
+
+/// Mirrors Pillow's physical-row blend for bytes omitted from a compact mode
+/// carrier. Missing lane state remains unknown instead of being synthesized.
+fn blend_hidden_lanes(
+    mode: Mode,
+    left: Option<&HiddenPixelLanes>,
+    right: Option<&HiddenPixelLanes>,
+    dimensions: (usize, usize),
+    alpha: f32,
+) -> Result<Option<HiddenPixelLanes>, PilError> {
+    let Some(lane_count) = mode.hidden_pixel_lane_count() else {
+        return Ok(None);
+    };
+    let pixel_count = dimensions
+        .0
+        .checked_mul(dimensions.1)
+        .ok_or_else(|| PilError::DimensionError("Blend lane extent overflow".into()))?;
+    if let Some(lanes) = left.filter(|lanes| {
+        lanes.lane_count() != lane_count || lanes.pixel_count() != pixel_count
+    }) {
+        return Err(PilError::InternalError(format!(
+            "Blend source hidden lane shape is {} lanes across {} pixels, expected {lane_count} lanes across {pixel_count} pixels",
+            lanes.lane_count(),
+            lanes.pixel_count(),
+        )));
+    }
+    if let Some(lanes) = right.filter(|lanes| {
+        lanes.lane_count() != lane_count || lanes.pixel_count() != pixel_count
+    }) {
+        return Err(PilError::InternalError(format!(
+            "Blend input hidden lane shape is {} lanes across {} pixels, expected {lane_count} lanes across {pixel_count} pixels",
+            lanes.lane_count(),
+            lanes.pixel_count(),
+        )));
+    }
+    if alpha == 0.0 {
+        return Ok(left.cloned());
+    }
+    if alpha == 1.0 {
+        return Ok(right.cloned());
+    }
+    let (Some(left), Some(right)) = (left, right) else {
+        return Ok(None);
+    };
+    left.zip_map_clipped(
+        right,
+        dimensions,
+        dimensions,
+        dimensions,
+        |left, right| blend_raw_sample(left, right, alpha),
     )
+    .map(Some)
+    .ok_or_else(|| PilError::InternalError("Blend physical lane extents did not match".into()))
 }
 
 fn blend_bytes(
@@ -204,7 +298,13 @@ pub(crate) fn execute_selected(
     selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
     super::strategy::require_operation_mode(selection, OperationId::BlendModule, mode)?;
-    match selection.implementation.architecture {
+    if source.mode() != mode
+        || other.mode() != mode
+        || source.dimensions() != other.dimensions()
+    {
+        return Err(PilError::ValueError("images do not match".into()));
+    }
+    let mut output = match selection.implementation.architecture {
         Architecture::Default => execute(source, other, mode, alpha, channels),
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         Architecture::AvxFma if vector_mode(mode) => {
@@ -217,7 +317,9 @@ pub(crate) fn execute_selected(
         architecture => Err(PilError::InternalError(format!(
             "unbound {architecture:?} Blend strategy for mode {mode:?}"
         ))),
-    }
+    }?;
+    attach_hidden_lanes(source, other, mode, alpha as f32, &mut output)?;
+    Ok(output)
 }
 
 fn vector_mode(mode: Mode) -> bool {

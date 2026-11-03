@@ -25,12 +25,14 @@ const TARGETS: &[Mode] = &[
     Mode::ImageI32,
     Mode::ImageF32,
 ];
+// NO_PILLOW_SUPPORT: Pillow has no P-to-LAB converter.
+const CORE_ONLY_TARGETS: &[Mode] = &[Mode::ImageLab8];
 const INPUTS: &[InputContract] = &[
     InputContract::PaletteMetadata,
     InputContract::ConvertTarget {
         targets: TARGETS,
-        core_only_targets: &[],
-        core_only_reason: None,
+        core_only_targets: CORE_ONLY_TARGETS,
+        core_only_reason: Some("Pillow has no matching P source-target conversion"),
         rejection_reason: "image has wrong mode",
     },
 ];

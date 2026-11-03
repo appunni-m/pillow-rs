@@ -8,7 +8,18 @@ use crate::compute::pool_cpu::ops::paste::helpers::{
 use crate::error::PilError;
 use crate::raster::Mode;
 
-pub(super) fn try_execute(plan: &BytePlan<'_>) -> Result<Option<Vec<u8>>, PilError> {
+pub(super) fn try_execute<I>(plan: &BytePlan<'_, I>) -> Result<Option<Vec<u8>>, PilError>
+where
+    I: std::ops::Deref<Target = crate::raster::DynamicImage>,
+{
+    if !crate::compute::pool_cpu::ops::paste::helpers::strategy::l_mask_neon_selected(
+        &plan.selection,
+        Mode::ImageLuma8,
+        1,
+        16,
+    ) {
+        return Ok(None);
+    }
     let Some(mask_image) = plan.mask.as_deref() else {
         return Ok(None);
     };
@@ -41,7 +52,7 @@ pub(super) fn try_execute(plan: &BytePlan<'_>) -> Result<Option<Vec<u8>>, PilErr
     let destination_left = plan.region.destination_left;
     let source_top = plan.region.source_top;
     let destination_top = plan.region.destination_top;
-    let mut output = plan.destination.to_vec();
+    let mut output = plan.initialize_destination()?;
 
     for row in 0..plan.region.height {
         let source_y = source_top
@@ -144,7 +155,8 @@ fn blend_row(source: &[u8], destination: &mut [u8], mask: &[u8]) {
             clippy::cast_possible_truncation,
             reason = "DIV255 yields an 8-bit convex blend of byte channels"
         )]
-        destination[index] = (weighted / 255) as u8;
+        let blended = (weighted / 255) as u8;
+        destination[index] = blended;
     }
 }
 

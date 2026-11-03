@@ -1,13 +1,12 @@
 //! Line geometry with native-byte SIMD span writes.
 
 use super::{
-    SimdDrawSpanWriter, clipped_horizontal_span, draw_line_vector_block, flush_simd_draw_span,
-    push_simd_draw_point,
+    SimdDrawSpanWriter, clipped_horizontal_span, flush_simd_draw_span, push_simd_draw_point,
 };
 use super::super::super::DrawLayout;
 use crate::draw::{for_each_polygon_fill_span, wide_line_polygon_points};
 use crate::error::PilError;
-use crate::raster::{DynamicImage, GenericImageView, Mode};
+use crate::raster::{DynamicImage, GenericImageView};
 
 pub(super) fn simd_draw_line_native(
     img: &DynamicImage,
@@ -36,11 +35,10 @@ pub(super) fn simd_draw_line_native(
             y0,
             x1,
             y1,
-            channels,
             fill,
             width,
             alpha_blend_rgb,
-            layout.mode,
+            layout,
         );
     }
     if y0 != y1 {
@@ -50,10 +48,9 @@ pub(super) fn simd_draw_line_native(
             y0,
             x1,
             y1,
-            channels,
             fill,
             alpha_blend_rgb,
-            layout.mode,
+            layout,
         );
     }
     draw_horizontal_line(
@@ -62,11 +59,9 @@ pub(super) fn simd_draw_line_native(
         y0,
         x1,
         y1,
-        channels,
-        row_bytes,
+        layout,
         fill,
         alpha_blend_rgb,
-        layout.mode,
     )
 }
 
@@ -76,23 +71,13 @@ fn draw_wide_line(
     y0: i32,
     x1: i32,
     y1: i32,
-    channels: usize,
     fill: (u8, u8, u8, u8),
     width: u32,
     alpha_blend_rgb: bool,
-    mode: Mode,
+    layout: DrawLayout,
 ) -> Result<Option<DynamicImage>, PilError> {
     let (image_width, image_height) = img.dimensions();
-    let mut output = img.as_bytes().to_vec();
-    let mut writer = SimdDrawSpanWriter {
-        output: &mut output,
-        image_width,
-        image_height,
-        channels,
-        alpha_blend_rgb,
-        vector_blocks: 0,
-        scalar_tail: 0,
-    };
+    let mut writer = SimdDrawSpanWriter::new(img, layout, alpha_blend_rgb);
     if let Some(points) = wide_line_polygon_points(x0, y0, x1, y1, width) {
         let mut first_error = None;
         for_each_polygon_fill_span(&points, image_width, image_height, |span_x0, span_x1, y| {
@@ -108,23 +93,14 @@ fn draw_wide_line(
     } else {
         writer.write(x0, y0, x0, fill)?;
     }
-    let vector_blocks = writer.vector_blocks;
-    let scalar_tail = writer.scalar_tail;
-    if vector_blocks == 0 {
+    if writer.vector_blocks == 0 {
         crate::compute::record_pipeline_operation_path("scalar-control");
         return Ok(Some(img.clone()));
     }
     crate::compute::record_pipeline_operation_path("vector");
-    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-    crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    crate::compute::pool_cpu::helpers::dynamic_image::from_raw_bytes(
-        mode,
-        image_width,
-        image_height,
-        output,
-    )
-    .map(Some)
-    .ok_or_else(|| PilError::InternalError("SIMD Draw output dimensions were invalid".into()))
+    crate::compute::record_pipeline_operation_vector_blocks(writer.vector_blocks);
+    crate::compute::record_pipeline_operation_scalar_tail(writer.scalar_tail);
+    writer.into_image().map(Some)
 }
 
 fn draw_horizontal_line(
@@ -133,112 +109,33 @@ fn draw_horizontal_line(
     y0: i32,
     x1: i32,
     y1: i32,
-    channels: usize,
-    row_bytes: usize,
+    layout: DrawLayout,
     fill: (u8, u8, u8, u8),
     alpha_blend_rgb: bool,
-    mode: Mode,
 ) -> Result<Option<DynamicImage>, PilError> {
-    let Some((start_pixel, end_pixel, row_index)) =
-        clipped_horizontal_span(img.width(), img.height(), x0, y0, x1, y1)
-    else {
+    if clipped_horizontal_span(img.width(), img.height(), x0, y0, x1, y1).is_none() {
         return Ok(None);
-    };
-    let Some(target_start) = start_pixel.checked_mul(channels) else {
-        return Ok(None);
-    };
-    let Some(target_end) = end_pixel
-        .checked_add(1)
-        .and_then(|pixel| pixel.checked_mul(channels))
-    else {
-        return Ok(None);
-    };
-    let Some(row_start) = row_index.checked_mul(row_bytes) else {
-        return Ok(None);
-    };
-    let Some(row_end) = row_start.checked_add(row_bytes) else {
-        return Ok(None);
-    };
-    let mut output = img.as_bytes().to_vec();
-    let Some(row) = output.get_mut(row_start..row_end) else {
-        return Ok(None);
-    };
-
-    let mut next = target_start;
-    let mut vector_blocks = 0u64;
-    while next.checked_add(16).is_some_and(|end| end <= target_end) {
-        draw_line_vector_block(
-            row,
-            next,
-            target_start,
-            target_end,
-            channels,
-            fill,
-            alpha_blend_rgb,
-        );
-        vector_blocks = vector_blocks.saturating_add(1);
-        next += 16;
     }
-
-    let mut scalar_tail = 0u64;
-    if next < target_end {
-        if vector_blocks == 0 {
-            // A short span uses a masked vector block wholly inside the row,
-            // including when the span touches its right edge.
-            let block_start = if target_start
-                .checked_add(16)
-                .is_some_and(|end| end <= row.len())
-            {
-                target_start
-            } else {
-                row.len() - 16
-            };
-            draw_line_vector_block(
-                row,
-                block_start,
-                target_start,
-                target_end,
-                channels,
-                fill,
-                alpha_blend_rgb,
-            );
-            vector_blocks = 1;
-        } else {
-            for byte in next..target_end {
-                let source = super::draw_line_source_byte(fill, channels, byte);
-                row[byte] = if channels == 3 && alpha_blend_rgb {
-                    super::draw_line_blend_byte(source, row[byte], fill.3)
-                } else {
-                    source
-                };
-                scalar_tail = scalar_tail.saturating_add(1);
-            }
-        }
+    let mut writer = SimdDrawSpanWriter::new(img, layout, alpha_blend_rgb);
+    writer.write_span(
+        i64::from(x0.min(x1)),
+        i64::from(x0.max(x1)),
+        i64::from(y0),
+        fill,
+    )?;
+    if writer.vector_blocks == 0 {
+        return Ok(None);
     }
     crate::compute::record_pipeline_operation_path("vector");
-    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-    crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    crate::compute::pool_cpu::helpers::dynamic_image::from_raw_bytes(
-        mode,
-        img.width(),
-        img.height(),
-        output,
-    )
-    .map(Some)
-    .ok_or_else(|| PilError::InternalError("SIMD Draw output dimensions were invalid".into()))
+    crate::compute::record_pipeline_operation_vector_blocks(writer.vector_blocks);
+    crate::compute::record_pipeline_operation_scalar_tail(writer.scalar_tail);
+    writer.into_image().map(Some)
 }
 
 struct BresenhamSpans {
-    output: Vec<u8>,
+    writer: SimdDrawSpanWriter,
     span: Option<(i64, i64, i64, i64)>,
-    image_width: u32,
-    image_height: u32,
-    channels: usize,
-    mode: Mode,
     fill: (u8, u8, u8, u8),
-    alpha_blend_rgb: bool,
-    vector_blocks: u64,
-    scalar_tail: u64,
 }
 
 impl BresenhamSpans {
@@ -248,14 +145,8 @@ impl BresenhamSpans {
             &mut self.span,
             x,
             y,
-            &mut self.output,
-            self.image_width,
-            self.image_height,
-            self.channels,
+            &mut self.writer,
             self.fill,
-            self.alpha_blend_rgb,
-            &mut self.vector_blocks,
-            &mut self.scalar_tail,
         )
     }
 
@@ -266,32 +157,15 @@ impl BresenhamSpans {
         target_y: i64,
     ) -> Result<Option<DynamicImage>, PilError> {
         self.push(target_x, target_y)?;
-        flush_simd_draw_span(
-            &mut self.span,
-            &mut self.output,
-            self.image_width,
-            self.image_height,
-            self.channels,
-            self.fill,
-            self.alpha_blend_rgb,
-            &mut self.vector_blocks,
-            &mut self.scalar_tail,
-        )?;
-        if self.vector_blocks == 0 {
+        flush_simd_draw_span(&mut self.span, &mut self.writer, self.fill)?;
+        if self.writer.vector_blocks == 0 {
             crate::compute::record_pipeline_operation_path("scalar-control");
             return Ok(Some(img.clone()));
         }
         crate::compute::record_pipeline_operation_path("vector");
-        crate::compute::record_pipeline_operation_vector_blocks(self.vector_blocks);
-        crate::compute::record_pipeline_operation_scalar_tail(self.scalar_tail);
-        crate::compute::pool_cpu::helpers::dynamic_image::from_raw_bytes(
-            self.mode,
-            self.image_width,
-            self.image_height,
-            self.output,
-        )
-        .map(Some)
-        .ok_or_else(|| PilError::InternalError("SIMD Draw output dimensions were invalid".into()))
+        crate::compute::record_pipeline_operation_vector_blocks(self.writer.vector_blocks);
+        crate::compute::record_pipeline_operation_scalar_tail(self.writer.scalar_tail);
+        self.writer.into_image().map(Some)
     }
 }
 
@@ -414,30 +288,22 @@ fn simd_draw_bresenham_native(
     y0: i32,
     x1: i32,
     y1: i32,
-    channels: usize,
     fill: (u8, u8, u8, u8),
     alpha_blend_rgb: bool,
-    mode: Mode,
+    layout: DrawLayout,
 ) -> Result<Option<DynamicImage>, PilError> {
     let (image_width, image_height) = img.dimensions();
     let row_bytes = (image_width as usize)
-        .checked_mul(channels)
+        .checked_mul(layout.channels)
         .ok_or_else(|| PilError::InternalError("SIMD draw row stride overflow".into()))?;
     if row_bytes < 16 {
         return Ok(None);
     }
     let geometry = BresenhamGeometry::new(x0, y0, x1, y1);
     let mut spans = BresenhamSpans {
-        output: img.as_bytes().to_vec(),
+        writer: SimdDrawSpanWriter::new(img, layout, alpha_blend_rgb),
         span: None,
-        image_width,
-        image_height,
-        channels,
-        mode,
         fill,
-        alpha_blend_rgb,
-        vector_blocks: 0,
-        scalar_tail: 0,
     };
     geometry.walk(&mut spans)?;
     spans.finish(img, geometry.target_x, geometry.target_y)

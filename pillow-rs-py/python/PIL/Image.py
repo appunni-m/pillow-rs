@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from pillow_rs import Dither, ImageFormat, ImageMode, Palette, Resampling, Transpose
+from pillow_rs import Dither, ImageFormat, ImageMode, Palette, Resampling, Transform, Transpose
 from pillow_rs import __version__
 from pillow_rs import operations as _operations
 from pillow_rs.image import (
     Image as Image,
+    ImageTransformHandler,
     ImagingCore,
     PixelAccess,
+    SupportsGetData,
     UnidentifiedImageError,
 )
 
@@ -21,6 +23,11 @@ NEAREST = Resampling.NEAREST
 BILINEAR = Resampling.BILINEAR
 BICUBIC = Resampling.BICUBIC
 LANCZOS = Resampling.LANCZOS
+AFFINE = Transform.AFFINE
+EXTENT = Transform.EXTENT
+PERSPECTIVE = Transform.PERSPECTIVE
+QUAD = Transform.QUAD
+MESH = Transform.MESH
 
 open = _operations.open
 new = _operations.new
@@ -51,13 +58,21 @@ __all__ = [
     "ImageMode",
     "ImageFormat",
     "Resampling",
+    "Transform",
     "Transpose",
+    "ImageTransformHandler",
+    "SupportsGetData",
     "Dither",
     "Palette",
     "NEAREST",
     "BILINEAR",
     "BICUBIC",
     "LANCZOS",
+    "AFFINE",
+    "EXTENT",
+    "PERSPECTIVE",
+    "QUAD",
+    "MESH",
     "open",
     "new",
     "save",

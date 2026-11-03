@@ -66,6 +66,19 @@ pub(crate) fn construct(
                 _ => Err(invalid_target("four-channel")),
             }
         }
+        // Pillow's I and F Composite paths operate on their four raw carrier
+        // bytes. Preserve that arithmetic while retaining their exact modes.
+        Mode::ImageI32 | Mode::ImageF32 => {
+            let buffer = crate::image_utils::typed_bytes_to_buffer::<Rgba<u8>>(
+                CheckedDims::new_allow_empty(width, height, 4)?,
+                bytes,
+            )?;
+            match mode {
+                Mode::ImageI32 => Ok(DynamicImage::ImageI32(buffer)),
+                Mode::ImageF32 => Ok(DynamicImage::ImageF32(buffer)),
+                _ => Err(invalid_target("four-byte scalar carrier")),
+            }
+        }
         _ => Err(PilError::InternalError(
             "non-byte mode reached native byte construction".into(),
         )),

@@ -45,19 +45,6 @@ fn putdata_clip_component(value: i128) -> u8 {
     value.clamp(0, 255) as u8
 }
 
-pub(super) fn is_l16_mode(mode: &str) -> bool {
-    matches!(mode, "I;16" | "I;16L" | "I;16B" | "I;16N")
-}
-
-pub(super) fn l16_uses_big_endian(mode: &str) -> bool {
-    match mode {
-        "I;16B" => true,
-        "I;16L" => false,
-        "I;16" | "I;16N" => cfg!(target_endian = "big"),
-        _ => false,
-    }
-}
-
 pub(super) const fn is_l16_identity(mode: Mode) -> bool {
     matches!(mode, Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N)
 }
@@ -68,19 +55,6 @@ pub(super) const fn l16_identity_uses_big_endian(mode: Mode) -> bool {
         Mode::ImageI16L => false,
         Mode::ImageI16 | Mode::ImageI16N => cfg!(target_endian = "big"),
         _ => false,
-    }
-}
-
-fn putdata_l16_sample(value: &PutDataValue, scale: f64, offset: f64) -> Result<u16, PilError> {
-    match value {
-        // _imaging.c:_putdata treats I;16 as an unsigned 16-bit sample
-        // destination. Rust's float-to-integer cast provides the same
-        // bounded conversion for the public numeric path.
-        PutDataValue::Number(number) => Ok((number * scale + offset) as u16),
-        // Pillow's I;16 decoder reaches the flattened-sequence guard before
-        // numeric coercion for nested/non-numeric values. Keep that public
-        // error text exact instead of exposing the generic scalar path.
-        _ => Err(PilError::TypeError("sequence must be flattened".to_owned())),
     }
 }
 
@@ -190,8 +164,10 @@ fn append_putdata_value(
         Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 | Mode::ImageI32 | Mode::ImageF32 => {
             append_numeric_value(mode, value, scale, offset, data)
         }
-        Mode::ImageLumaA8 | Mode::ImagePaletteAlpha8 => append_two_channel_value(value, data),
-        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageHsv8 => {
+        Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => {
+            append_two_channel_value(value, data)
+        }
+        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => {
             append_three_channel_value(value, data)
         }
         Mode::ImageRgba8
@@ -220,6 +196,81 @@ fn putdata_bytes(
     Ok(data)
 }
 
+/// Retains `_imaging.c::getink` bytes omitted from compact LA/La/PA and
+/// RGB/YCbCr/LAB/HSV carriers.
+/// `_putdata` stores all four bytes of that ink, even though public pixels
+/// expose only lanes 0 and 3 for two-band modes or lanes 0 through 2 for
+/// three-band modes. Pillow's `getink` selects those layouts by band count.
+fn putdata_hidden_lanes(mode: Mode, value: &PutDataValue) -> Result<Option<[u8; 2]>, PilError> {
+    match (mode, value) {
+        (
+            Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8,
+            PutDataValue::Packed(packed),
+        ) => {
+            let bytes = packed.to_le_bytes();
+            Ok(Some([bytes[1], bytes[2]]))
+        }
+        (
+            Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8,
+            PutDataValue::Components(components),
+        ) if components.len() == 2 => {
+            let luma = putdata_clip_component(components[0]);
+            Ok(Some([luma, luma]))
+        }
+        (
+            Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8,
+            PutDataValue::Packed(packed),
+        ) => {
+            Ok(Some([packed.to_le_bytes()[3], 0]))
+        }
+        (
+            Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8,
+            PutDataValue::Components(components),
+        ) if matches!(components.len(), 3 | 4) => Ok(Some([
+            components
+                .get(3)
+                .copied()
+                .map_or(u8::MAX, putdata_clip_component),
+            0,
+        ])),
+        (
+            Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8,
+            _,
+        ) => Err(PilError::InternalError(
+            "putdata LA hidden lanes did not match normalized value".into(),
+        )),
+        (Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8, _) => {
+            Err(PilError::InternalError(
+                "putdata RGB hidden lane did not match normalized value".into(),
+            ))
+        }
+        _ => Ok(None),
+    }
+}
+
+fn putdata_hidden_lane_bytes(
+    mode: Mode,
+    values: &[PutDataValue],
+) -> Result<Option<bytes::Bytes>, PilError> {
+    let lane_count = match mode {
+        Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => 2,
+        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => 1,
+        _ => return Ok(None),
+    };
+    let capacity = values
+        .len()
+        .checked_mul(lane_count)
+        .ok_or_else(|| PilError::DimensionError("putdata hidden lane size overflow".into()))?;
+    let mut lanes = Vec::with_capacity(capacity);
+    for value in values {
+        let value = putdata_hidden_lanes(mode, value)?.ok_or_else(|| {
+            PilError::InternalError("putdata hidden lane normalization was missing".into())
+        })?;
+        lanes.extend_from_slice(&value[..lane_count]);
+    }
+    Ok(Some(bytes::Bytes::from(lanes)))
+}
+
 pub(super) fn putpixel_numeric_bytes(mode: Mode, value: f64) -> Result<[u8; 4], PilError> {
     let value = value * 1.0 + 0.0;
     match mode {
@@ -228,23 +279,6 @@ pub(super) fn putpixel_numeric_bytes(mode: Mode, value: f64) -> Result<[u8; 4], 
         _ => Err(PilError::InternalError(
             "numeric putpixel bytes require I or F mode".into(),
         )),
-    }
-}
-
-pub(super) const fn pillow_band_count(mode: Mode) -> usize {
-    match mode {
-        Mode::One
-        | Mode::ImageLuma8
-        | Mode::ImagePalette8
-        | Mode::ImageI32
-        | Mode::ImageF32
-        | Mode::ImageI16
-        | Mode::ImageI16L
-        | Mode::ImageI16B
-        | Mode::ImageI16N => 1,
-        Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => 2,
-        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageHsv8 | Mode::ImageLab8 => 3,
-        _ => 4,
     }
 }
 

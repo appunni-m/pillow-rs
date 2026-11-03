@@ -1,5 +1,8 @@
 //! Typed reducers that preserve each source sample and image identity.
 
+// Widen coordinates before flattening: a valid image can contain more than
+// `u32::MAX` pixels on 64-bit targets even though each axis is a `u32`.
+
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::raster::{ImageBuffer, Pixel};
@@ -48,8 +51,10 @@ where
             let block_width = x_factor.min(width - source_x);
             let mut sums = [0u128; 4];
             for dy in 0..block_height {
+                let source_row = (source_y as usize + dy as usize) * width as usize;
+                let first_pixel = source_row + source_x as usize;
                 for dx in 0..block_width {
-                    let index = (((source_y + dy) * width + source_x + dx) as usize) * channels;
+                    let index = (first_pixel + dx as usize) * channels;
                     for channel in 0..channels {
                         sums[channel] += u128::from(source[index + channel]);
                     }
@@ -94,8 +99,10 @@ where
             let block_width = x_factor.min(width - source_x);
             let mut sums = [0.0f64; 4];
             for dy in 0..block_height {
+                let source_row = (source_y as usize + dy as usize) * width as usize;
+                let first_pixel = source_row + source_x as usize;
                 for dx in 0..block_width {
-                    let index = (((source_y + dy) * width + source_x + dx) as usize) * channels;
+                    let index = (first_pixel + dx as usize) * channels;
                     for channel in 0..channels {
                         sums[channel] += f64::from(source[index + channel]);
                     }

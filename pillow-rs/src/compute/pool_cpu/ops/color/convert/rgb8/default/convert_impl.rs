@@ -15,6 +15,7 @@ pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, P
         }
         // Preserve the archived RGB→L scratch before constructing LA.
         Mode::ImageLumaA8 => convert_luma_alpha_from_rgb(source),
+        // Pillow's RGB-to-La route emits opaque premultiplied luma-alpha.
         Mode::ImageLaPremultiplied8 => convert_luma_alpha_direct_to_la(source),
         Mode::ImageRgb8 => Ok(DynamicImage::ImageRgb8(source.clone())),
         // I;16 conversion materializes rounded L bytes before widening them.
@@ -47,7 +48,7 @@ pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, P
                 Rgba([pixel[0], pixel[1], pixel[2], 255])
             },
         ))),
-        // Opaque alpha makes native RGB samples valid premultiplied samples.
+        // Pillow's RGB-to-RGBa route adds opaque alpha to the RGB samples.
         Mode::ImageRgbPremultiplied8 => Ok(DynamicImage::ImageRgbPremultiplied8(
             RgbaImage::from_fn(source.width(), source.height(), |x, y| {
                 let pixel = source.get_pixel(x, y);
@@ -97,7 +98,7 @@ pub(crate) fn execute_palette_target(
             |_| u8::MAX,
         );
     }
-    let (indices, palette) = crate::ops::quantize::web_palette_quantize(
+    let (indices, palette) = crate::compute::pool_cpu::helpers::quantization::web_palette_quantize(
         source.as_raw(),
         source.width(),
         source.height(),

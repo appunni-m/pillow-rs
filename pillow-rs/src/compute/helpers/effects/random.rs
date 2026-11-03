@@ -6,6 +6,7 @@ use std::sync::{Mutex, OnceLock};
 // Pillow delegates these effects to process-global libc rand(). The pinned
 // macOS/Darwin Pillow 12.2.0 oracle uses the Park-Miller sequence with the
 // process-default state equivalent to srand(1). Keep its stream portable.
+#[derive(Clone)]
 pub(crate) struct DarwinRand {
     state: u32,
 }

@@ -1,6 +1,6 @@
 //! Pillow-compatible horizontal and vertical image projections.
 
-use crate::compute::{Backend, ExecutionContext};
+use crate::compute::Backend;
 use crate::error::PilError;
 use crate::image::PipelineOps;
 use crate::pipeline::PipelineOp;
@@ -34,18 +34,17 @@ impl Image {
         {
             return Ok(projection);
         }
-        let selected = crate::compute::preferred_active_backend().ok().flatten();
-        let requested_backend = selected
-            .filter(|(_, only_active_backend)| *only_active_backend)
-            .map(|(backend, _)| backend);
-        let fallback_reason = requested_backend
-            .filter(|backend| *backend != Backend::Cpu)
+        let (selected_backend, only_active_backend, context) =
+            self.cpu_arch_execution_route_advisory_with_policy();
+        let requested_backend = only_active_backend.then_some(selected_backend).flatten();
+        let fallback_reason = selected_backend
+            .filter(|backend| *backend == Backend::Gpu)
             .map(|backend| {
                 format!(
-                    "GetProjection materialized pipeline used CPU Default while {backend:?} was requested"
+                    "GetProjection has no GPU strategy for this materialized route; used CPU {:?}",
+                    context.architecture()
                 )
             });
-        let context = ExecutionContext::for_routed_backend(Backend::Cpu);
         crate::compute::execute_eager_cpu_getprojection(
             image.as_ref(),
             &context,
@@ -58,17 +57,17 @@ impl Image {
         &self,
         image: &DynamicImage,
     ) -> Result<Option<ProjectionAxes>, PilError> {
-        let Some((backend, only_active_backend)) = crate::compute::preferred_active_backend()?
-        else {
+        let (selected_backend, only_active_backend, cpu_context) =
+            self.cpu_arch_execution_route_with_policy()?;
+        let Some(backend) = selected_backend else {
             return Ok(None);
         };
         let requested = only_active_backend.then_some(backend);
         match backend {
             Backend::Cpu | Backend::Simd => {
-                let context = ExecutionContext::for_routed_backend(backend);
                 crate::compute::execute_eager_cpu_getprojection(
                     image,
-                    &context,
+                    &cpu_context,
                     requested,
                     None,
                 )
@@ -79,25 +78,27 @@ impl Image {
                 if crate::compute::gpu_rgb_projection_supported(image) {
                     crate::compute::execute_eager_gpu_rgb_getprojection(image).map(Some)
                 } else {
-                    let context = ExecutionContext::for_routed_backend(Backend::Cpu);
                     crate::compute::execute_eager_cpu_getprojection(
                         image,
-                        &context,
+                        &cpu_context,
                         requested,
-                        Some("GPU GetProjection is unsupported for this RGB image".into()),
+                        Some(format!(
+                            "GPU GetProjection is unsupported for this RGB image; used CPU {:?}",
+                            cpu_context.architecture()
+                        )),
                     )
                     .map(Some)
                 }
             }
             Backend::Gpu => {
-                let context = ExecutionContext::for_routed_backend(Backend::Cpu);
                 crate::compute::execute_eager_cpu_getprojection(
                     image,
-                    &context,
+                    &cpu_context,
                     requested,
                     Some(format!(
-                        "GPU GetProjection is unsupported for mode {:?}",
-                        image.mode()
+                        "GPU GetProjection is unsupported for mode {:?}; used CPU {:?}",
+                        image.mode(),
+                        cpu_context.architecture()
                     )),
                 )
                 .map(Some)

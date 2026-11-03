@@ -2,7 +2,7 @@ use crate::compute::pool_cpu::ops::draw::{TextComposeResult, i16_text};
 use crate::error::PilError;
 use crate::raster::DynamicImage;
 
-pub(crate) fn apply(
+pub(crate) fn apply<const RGBA_MASK: bool>(
     image: DynamicImage,
     x: i32,
     y: i32,
@@ -14,7 +14,7 @@ pub(crate) fn apply(
     let DynamicImage::ImageI16(mut canvas) = image else {
         return Ok(TextComposeResult::NotApplicable);
     };
-    if !i16_text::apply(&mut canvas, x, y, width, height, pixels, fill) {
+    if !i16_text::apply::<RGBA_MASK>(&mut canvas, x, y, width, height, pixels, fill) {
         return Ok(TextComposeResult::Unchanged);
     }
     Ok(TextComposeResult::Updated(DynamicImage::ImageI16(canvas)))

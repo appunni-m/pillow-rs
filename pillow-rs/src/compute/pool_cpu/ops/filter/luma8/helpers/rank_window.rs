@@ -8,6 +8,10 @@ const LANES: usize = 16;
 const MAX_AREA: usize = 225;
 const MAX_SIZE: u32 = 15;
 
+// TODO(pillow-rs#3ptb): freeze L rank output, edge, and fallback receipts. The
+// preserved Apple ARM64 9x9 rank-40 path measured slower than serial CPU;
+// revisit with an algorithm-focused benchmark after parity, keeping semantics.
+
 #[inline]
 fn sort_vectors(values: &mut [u8x16]) {
     for pass in 0..values.len() {

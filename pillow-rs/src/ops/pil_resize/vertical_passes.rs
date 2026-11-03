@@ -322,37 +322,9 @@ pub(super) fn vertical_pass_rows(
     channels: usize,
     coeffs: &FilterCoeffs,
     output: &mut [u8],
-    parallel_pixel_threshold: usize,
 ) {
-    let _ = parallel_pixel_threshold;
     let output_stride = output_width as usize * channels;
     if output_height == 0 || output_stride == 0 {
-        return;
-    }
-
-    #[cfg(feature = "parallel")]
-    if (output_width as usize).saturating_mul(output_height as usize) < parallel_pixel_threshold {
-        for y in 0..output_height as usize {
-            let output_start = y * output_stride;
-            let row = &mut output[output_start..output_start + output_stride];
-            if channels == 3 {
-                vertical_pass_rgb_row(intermediate, output_width, coeffs, y, row);
-                continue;
-            }
-            for dx in 0..output_width {
-                let value = vertical_pass_col(
-                    intermediate,
-                    source_rows,
-                    dx,
-                    output_width,
-                    channels,
-                    coeffs,
-                    y,
-                );
-                let start = dx as usize * channels;
-                row[start..start + channels].copy_from_slice(&value[..channels]);
-            }
-        }
         return;
     }
 
@@ -371,39 +343,6 @@ pub(super) fn vertical_pass_rows(
         return;
     }
 
-    #[cfg(feature = "parallel")]
-    crate::par_rows_mut!(
-        output,
-        output_stride,
-        output_height as usize,
-        |_row_start, _row_end, y, row| {
-            if channels == 3 {
-                vertical_pass_rgb_row(
-                    intermediate,
-                    output_width,
-                    coeffs,
-                    y as usize,
-                    &mut row[..output_stride],
-                );
-            } else {
-                for dx in 0..output_width {
-                    let value = vertical_pass_col(
-                        intermediate,
-                        source_rows,
-                        dx,
-                        output_width,
-                        channels,
-                        coeffs,
-                        y as usize,
-                    );
-                    let start = dx as usize * channels;
-                    row[start..start + channels].copy_from_slice(&value[..channels]);
-                }
-            }
-        }
-    );
-
-    #[cfg(not(feature = "parallel"))]
     for y in 0..output_height as usize {
         let output_start = y * output_stride;
         let row = &mut output[output_start..output_start + output_stride];
@@ -438,28 +377,6 @@ fn vertical_pass_rows_transposed(
 ) {
     let output_stride = output_width as usize * channels;
 
-    #[cfg(feature = "parallel")]
-    crate::par_rows_mut!(
-        output,
-        output_stride,
-        output_height as usize,
-        |_row_start, _row_end, y, row| {
-            for dx in 0..output_width {
-                let value = vertical_pass_col_transposed(
-                    intermediate,
-                    source_rows,
-                    dx,
-                    channels,
-                    coeffs,
-                    y as usize,
-                );
-                let start = dx as usize * channels;
-                row[start..start + channels].copy_from_slice(&value[..channels]);
-            }
-        }
-    );
-
-    #[cfg(not(feature = "parallel"))]
     for y in 0..output_height as usize {
         let output_start = y * output_stride;
         let row = &mut output[output_start..output_start + output_stride];
@@ -502,35 +419,11 @@ pub(super) fn vertical_pass_rows_alpha(
     channels: usize,
     coeffs: &FilterCoeffs,
     output: &mut [u8],
-    parallel_pixel_threshold: usize,
 ) {
-    let _ = parallel_pixel_threshold;
     debug_assert!(matches!(channels, 2 | 4));
     let output_stride = output_width as usize * channels;
     let alpha_channel = channels - 1;
     if output_height == 0 || output_stride == 0 {
-        return;
-    }
-
-    #[cfg(feature = "parallel")]
-    if (output_width as usize).saturating_mul(output_height as usize) < parallel_pixel_threshold {
-        for y in 0..output_height as usize {
-            let output_start = y * output_stride;
-            let row = &mut output[output_start..output_start + output_stride];
-            for dx in 0..output_width {
-                let value = vertical_pass_col(
-                    intermediate,
-                    source_rows,
-                    dx,
-                    output_width,
-                    channels,
-                    coeffs,
-                    y,
-                );
-                let start = dx as usize * channels;
-                write_vertical_pass_alpha_pixel(row, start, channels, alpha_channel, value);
-            }
-        }
         return;
     }
 
@@ -549,30 +442,6 @@ pub(super) fn vertical_pass_rows_alpha(
         return;
     }
 
-    #[cfg(feature = "parallel")]
-    crate::par_rows_mut!(
-        output,
-        output_stride,
-        output_height as usize,
-        |_row_start, _row_end, y, row| {
-            let y = y as usize;
-            for dx in 0..output_width {
-                let value = vertical_pass_col(
-                    intermediate,
-                    source_rows,
-                    dx,
-                    output_width,
-                    channels,
-                    coeffs,
-                    y,
-                );
-                let start = dx as usize * channels;
-                write_vertical_pass_alpha_pixel(row, start, channels, alpha_channel, value);
-            }
-        }
-    );
-
-    #[cfg(not(feature = "parallel"))]
     for y in 0..output_height as usize {
         let output_start = y * output_stride;
         let row = &mut output[output_start..output_start + output_stride];
@@ -605,36 +474,6 @@ fn vertical_pass_rows_alpha_transposed(
     let output_stride = output_width as usize * channels;
     let alpha_channel = channels - 1;
 
-    #[cfg(feature = "parallel")]
-    crate::par_rows_mut!(
-        output,
-        output_stride,
-        output_height as usize,
-        |_row_start, _row_end, y, row| {
-            let y = y as usize;
-            for dx in 0..output_width {
-                let value = vertical_pass_col_transposed(
-                    intermediate,
-                    source_rows,
-                    dx,
-                    channels,
-                    coeffs,
-                    y,
-                );
-                let start = dx as usize * channels;
-                let alpha = value[alpha_channel];
-                for c in 0..channels {
-                    row[start + c] = if c == alpha_channel {
-                        alpha
-                    } else {
-                        unpremultiply_channel(value[c], alpha)
-                    };
-                }
-            }
-        }
-    );
-
-    #[cfg(not(feature = "parallel"))]
     for y in 0..output_height as usize {
         let output_start = y * output_stride;
         let row = &mut output[output_start..output_start + output_stride];

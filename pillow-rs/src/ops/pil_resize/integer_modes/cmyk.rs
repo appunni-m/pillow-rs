@@ -4,7 +4,6 @@ use super::{
 };
 /// Resize the four stored C/M/Y/K bytes with narrow, exact fixed-point sums.
 /// CMYK's four-byte carrier stores C/M/Y/K samples, none of which is alpha.
-#[cfg(not(feature = "parallel"))]
 pub(in crate::ops::pil_resize) fn pil_resize_cmyk_i32(
     img: &DynamicImage,
     output_width: u32,
@@ -124,7 +123,6 @@ pub(in crate::ops::pil_resize) fn pil_resize_cmyk_i32(
     ))
 }
 
-#[cfg(not(feature = "parallel"))]
 fn horizontal_pass_row_cmyk_i32(
     source_row: &[u8],
     coeffs: &FilterCoeffs,
@@ -187,7 +185,6 @@ fn horizontal_pass_row_cmyk_i32(
     }
 }
 
-#[cfg(not(feature = "parallel"))]
 fn vertical_pass_col_cmyk_i32(
     intermediate: &[u8],
     source_stride: usize,

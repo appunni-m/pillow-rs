@@ -37,3 +37,36 @@ pub(crate) fn get_data_view(
         architecture => Err(helpers::missing_architecture(Mode::One, architecture)),
     }
 }
+crate::compute::pool_cpu::ops::analysis::helpers::bbox::declare_getbbox_owner!(
+    one,
+    One,
+    crate::raster::GrayImage,
+);
+
+crate::compute::pool_cpu::ops::analysis::helpers::extrema::declare_getextrema_owner!(
+    One,
+    crate::raster::GrayImage,
+    crate::compute::pool_cpu::ops::analysis::helpers::extrema::bytes,
+);
+
+crate::compute::pool_cpu::ops::analysis::helpers::histogram_execution::declare_histogram_owner!(
+    One,
+    crate::raster::GrayImage,
+    crate::compute::pool_cpu::ops::analysis::one::default::histogram_impl::execute,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::getcolors_execution::declare_getcolors_owner!(
+    One,
+    crate::raster::GrayImage,
+    crate::compute::pool_cpu::ops::analysis::one::default::getcolors_impl::execute,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::stat_execution::declare_stat_owner!(
+    One,
+    crate::raster::GrayImage,
+    crate::compute::pool_cpu::ops::analysis::one::default::stat_impl::execute,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::extrema_bytes_execution::
+    declare_getextrema_bytes_owner!(
+    One,
+    crate::raster::GrayImage,
+    crate::compute::pool_cpu::ops::analysis::one::default::extrema_bytes_impl::execute,
+);

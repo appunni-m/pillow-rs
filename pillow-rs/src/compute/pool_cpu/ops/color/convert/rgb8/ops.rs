@@ -40,10 +40,14 @@ const TARGETS: &[Mode] = &[
     Mode::ImageI32,
     Mode::ImageF32,
 ];
+const CORE_ONLY_TARGETS: &[Mode] = &[
+    Mode::ImageLab8,
+];
+// NO_PILLOW_SUPPORT: RGB-to-LAB is provided by the Rust ConvertLab composition.
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: TARGETS,
-    core_only_targets: &[],
-    core_only_reason: None,
+    core_only_targets: CORE_ONLY_TARGETS,
+    core_only_reason: Some("Pillow has no standard RGB-to-LAB conversion"),
     rejection_reason: "image has wrong mode",
 }];
 

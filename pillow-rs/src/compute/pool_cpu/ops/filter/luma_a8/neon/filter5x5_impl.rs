@@ -21,6 +21,16 @@ pub(crate) fn execute(
             "NEON Filter5x5 strategy received a non-5x5 request".into(),
         ));
     };
+    if source.width() < 5 || source.height() < 5 {
+        return super::super::ops::execute_filter5x5_vectorized(
+            image,
+            super::super::ops::FilterRequest::Filter5x5 {
+                kernel,
+                scale,
+                offset,
+            },
+        );
+    }
     let mut output = source.as_raw().to_vec();
     let dimensions = (source.width() as usize, source.height() as usize);
     let result = if la_single_outlier5x5_parameters_match(&kernel, scale, offset) {

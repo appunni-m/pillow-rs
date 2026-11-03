@@ -9,7 +9,18 @@ use crate::compute::pool_cpu::ops::paste::helpers::{
 use crate::error::PilError;
 use crate::raster::Mode;
 
-pub(super) fn try_execute(plan: &BytePlan<'_>) -> Result<Option<Vec<u8>>, PilError> {
+pub(super) fn try_execute<I>(plan: &BytePlan<'_, I>) -> Result<Option<Vec<u8>>, PilError>
+where
+    I: std::ops::Deref<Target = crate::raster::DynamicImage>,
+{
+    if !crate::compute::pool_cpu::ops::paste::helpers::strategy::l_mask_neon_selected(
+        &plan.selection,
+        Mode::ImageCmyk8,
+        4,
+        16,
+    ) {
+        return Ok(None);
+    }
     let Some(mask_image) = plan.mask.as_deref() else {
         return Ok(None);
     };
@@ -42,7 +53,7 @@ pub(super) fn try_execute(plan: &BytePlan<'_>) -> Result<Option<Vec<u8>>, PilErr
     let mask_stride = usize::try_from(plan.region_size.0).map_err(|_| overflow("mask stride"))?;
     let source = plan.source.as_bytes();
     let mask = mask_image.as_bytes();
-    let mut output = plan.destination.to_vec();
+    let mut output = plan.initialize_destination()?;
 
     for row in 0..plan.region.height {
         let source_y = plan

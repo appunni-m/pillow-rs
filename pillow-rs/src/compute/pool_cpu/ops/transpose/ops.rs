@@ -6,8 +6,13 @@
 //! its Default mode owner.
 //!
 //! TODO(pillow-rs#3ptb): move parallel transpose collection kernels to the later
-//! `pool_parallel` stage. Retire the duplicate SIMD byte Flip route only after
-//! all CPU callers use these prepared strategies.
+//! `pool_parallel` stage. The archived byte Flip adapter had no separate vector
+//! kernel; its prepared Default owner keeps the native row-copy behavior. Keep
+//! the I;16 vector Flip in its exact mode/architecture strategies.
+//! TODO(pillow-rs#3ptb): include byte-mode exact-empty and trailing-storage
+//! cases, I;16 trailing-storage cases, and architecture/fallback receipts in parity.
+//! TODO(pillow-rs#3ptb): verify cancelled transpose sequences report
+//! `native-identity` with no selected architecture in the frozen parity receipts.
 
 // NO_PILLOW_SUPPORT: Internal high-depth raster identities retain their exact
 // sample types and mode tags through these native transpose strategies.
@@ -23,13 +28,13 @@ use crate::raster::{DynamicImage, Mode};
 macro_rules! declare_modes {
     ($($mode:ident => $module:ident),+ $(,)?) => {
         pub(crate) enum PreparedFlip<'a> {
-            $($mode(super::$module::ops::FlipStrategy<'a>),)+
+            $($mode(&'a DynamicImage, super::$module::ops::FlipStrategy<'a>),)+
         }
         pub(crate) enum PreparedMirror<'a> {
-            $($mode(super::$module::ops::MirrorStrategy<'a>),)+
+            $($mode(&'a DynamicImage, super::$module::ops::MirrorStrategy<'a>),)+
         }
         pub(crate) enum PreparedTranspose<'a> {
-            $($mode(super::$module::ops::TransposeStrategy<'a>),)+
+            $($mode(&'a DynamicImage, TransposeMethod, super::$module::ops::TransposeStrategy<'a>),)+
         }
 
         fn classify_flip(mode: Mode) -> ModeSupport {
@@ -43,62 +48,76 @@ macro_rules! declare_modes {
         }
 
         fn prepare_flip_mode<'a>(
-            image: &'a DynamicImage,
+            source: &'a DynamicImage,
             ctx: &ExecutionContext,
         ) -> Result<PreparedFlip<'a>, PilError> {
-            match image {
+            match source {
                 $(DynamicImage::$mode(image) => super::$module::ops::prepare_flip(image, ctx)
-                    .map(PreparedFlip::$mode),)+
+                    .map(|strategy| PreparedFlip::$mode(source, strategy)),)+
             }
         }
 
         fn prepare_mirror_mode<'a>(
-            image: &'a DynamicImage,
+            source: &'a DynamicImage,
             ctx: &ExecutionContext,
         ) -> Result<PreparedMirror<'a>, PilError> {
-            match image {
+            match source {
                 $(DynamicImage::$mode(image) => super::$module::ops::prepare_mirror(image, ctx)
-                    .map(PreparedMirror::$mode),)+
+                    .map(|strategy| PreparedMirror::$mode(source, strategy)),)+
             }
         }
 
         fn prepare_transpose_mode<'a>(
-            image: &'a DynamicImage,
+            source: &'a DynamicImage,
             method: &TransposeMethod,
             facts: StrategyInputs,
             ctx: &ExecutionContext,
         ) -> Result<PreparedTranspose<'a>, PilError> {
-            match image {
+            match source {
                 $(DynamicImage::$mode(image) => super::$module::ops::prepare_transpose(image, method, facts, ctx)
-                    .map(PreparedTranspose::$mode),)+
+                    .map(|strategy| PreparedTranspose::$mode(source, *method, strategy)),)+
             }
         }
 
         impl PreparedFlip<'_> {
             pub(crate) fn selection(&self) -> &StrategySelection {
-                match self { $(Self::$mode(strategy) => strategy.selection(),)+ }
+                match self { $(Self::$mode(_, strategy) => strategy.selection(),)+ }
             }
 
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
-                let image = match self { $(Self::$mode(strategy) => strategy.execute(),)+ };
+                let (source, mut image) = match self {
+                    $(Self::$mode(source, strategy) => (source, strategy.execute()),)+
+                };
+                super::helpers::pixel::remap_hidden_lanes(
+                    source,
+                    &mut image,
+                    TransposeMethod::FlipTopBottom,
+                )?;
                 Ok(image)
             }
         }
 
         impl PreparedMirror<'_> {
             pub(crate) fn selection(&self) -> &StrategySelection {
-                match self { $(Self::$mode(strategy) => strategy.selection(),)+ }
+                match self { $(Self::$mode(_, strategy) => strategy.selection(),)+ }
             }
 
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
-                let image = match self { $(Self::$mode(strategy) => strategy.execute(),)+ };
+                let (source, mut image) = match self {
+                    $(Self::$mode(source, strategy) => (source, strategy.execute()),)+
+                };
+                super::helpers::pixel::remap_hidden_lanes(
+                    source,
+                    &mut image,
+                    TransposeMethod::FlipLeftRight,
+                )?;
                 Ok(image)
             }
         }
 
         impl PreparedTranspose<'_> {
             pub(crate) fn selection(&self) -> &StrategySelection {
-                match self { $(Self::$mode(strategy) => strategy.selection(),)+ }
+                match self { $(Self::$mode(_, _, strategy) => strategy.selection(),)+ }
             }
 
             pub(crate) fn execute_rgba_avx2_into(
@@ -106,15 +125,22 @@ macro_rules! declare_modes {
                 output: &mut [u8],
             ) -> Result<(), PilError> {
                 match self {
-                    Self::ImageRgba8(strategy) => strategy.execute_avx2_into(output),
+                    Self::ImageRgba8(_, _, strategy) => strategy.execute_avx2_into(output),
                     _ => Err(PilError::InternalError(
-                        "AVX2 transpose buffer execution requires exact RGBA mode".into(),
+                        "AVX2 transpose buffer execution requires RGBA mode".into(),
                     )),
                 }
             }
 
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
-                match self { $(Self::$mode(strategy) => strategy.execute(),)+ }
+                let (source, method, output) = match self {
+                    $(Self::$mode(source, method, strategy) => {
+                        (source, method, strategy.execute())
+                    }),+
+                };
+                let mut output = output?;
+                super::helpers::pixel::remap_hidden_lanes(source, &mut output, method)?;
+                Ok(output)
             }
         }
     };

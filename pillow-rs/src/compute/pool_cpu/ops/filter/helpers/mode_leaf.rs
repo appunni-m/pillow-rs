@@ -1,5 +1,24 @@
 //! Exact-mode native-byte filter leaves.
 
+/// Copy a native filter identity through the shared vector-copy path and
+/// publish the same operation receipt as the archived architecture adapter.
+pub(crate) fn execute_native_filter_identity_copy(
+    raw: &[u8],
+) -> Result<Vec<u8>, crate::error::PilError> {
+    let mut output = vec![0; raw.len()];
+    let (vector_blocks, scalar_tail) =
+        crate::compute::pool_cpu::helpers::bytes::vector_copy::copy_native_bytes(raw, &mut output)
+            .ok_or_else(|| {
+                crate::error::PilError::InternalError(
+                    "native filter identity copy buffer mismatch".into(),
+                )
+            })?;
+    crate::compute::record_pipeline_operation_path("native-copy");
+    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+    crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+    Ok(output)
+}
+
 macro_rules! native_filter_mode_leaf {
     (
         $variant:ident,
@@ -381,6 +400,18 @@ macro_rules! native_filter5x5_arch_leaf {
                     "vector Filter5x5 strategy received a mismatched raster variant".into(),
                 ));
             };
+            if input.width() < 5 || input.height() < 5 {
+                let output = $crate::compute::pool_cpu::ops::filter::helpers::execute_native_filter_identity_copy(
+                    input.as_raw(),
+                )?;
+                return $crate::raster::$carrier::from_raw(input.width(), input.height(), output)
+                    .map($crate::raster::DynamicImage::$variant)
+                    .ok_or_else(|| {
+                        $crate::error::PilError::InternalError(
+                            "native Filter5x5 identity output does not match its mode".into(),
+                        )
+                    });
+            }
             let output = if let Some(output) =
                 $crate::compute::pool_cpu::ops::filter::helpers::native_filter5x5_mode_fast_path!(
                     $special,
@@ -484,6 +515,18 @@ macro_rules! native_filter3x3_arch_leaf {
                     "vector Filter3x3 strategy received a mismatched raster variant".into(),
                 ));
             };
+            if input.width() < 3 || input.height() < 3 {
+                let output = $crate::compute::pool_cpu::ops::filter::helpers::execute_native_filter_identity_copy(
+                    input.as_raw(),
+                )?;
+                return $crate::raster::$carrier::from_raw(input.width(), input.height(), output)
+                    .map($crate::raster::DynamicImage::$variant)
+                    .ok_or_else(|| {
+                        $crate::error::PilError::InternalError(
+                            "native Filter3x3 identity output does not match its mode".into(),
+                        )
+                    });
+            }
             let la_binomial = if $la_binomial {
                 $crate::compute::pool_cpu::ops::filter::helpers::execute_filter3x3_la_binomial_vector_bytes(
                     input.as_raw(),
@@ -518,17 +561,13 @@ macro_rules! native_filter3x3_arch_leaf {
             {
                 let input_bytes = input.as_raw();
                 if input_bytes[..$channels] == output[..$channels] {
-                    $crate::compute::record_pipeline_operation_path("native-copy");
-                    $crate::compute::record_pipeline_operation_vector_blocks(
-                        (input_bytes.len() / 16) as u64,
-                    );
-                    $crate::compute::record_pipeline_operation_scalar_tail(
-                        (input_bytes.len() % 16) as u64,
-                    );
+                    $crate::compute::pool_cpu::ops::filter::helpers::execute_native_filter_identity_copy(
+                        input_bytes,
+                    )?
                 } else {
                     $crate::compute::record_pipeline_operation_path("scalar-control");
+                    output
                 }
-                output
             } else {
                 let normalized = std::array::from_fn(|index| kernel[index] / scale);
                 let mut output = input.as_raw().clone();

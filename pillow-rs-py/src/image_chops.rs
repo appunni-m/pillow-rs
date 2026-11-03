@@ -4,22 +4,7 @@ use pyo3::{pyfunction, wrap_pyfunction};
 // --- ImageChops module-level functions ---
 
 pub(crate) fn chops_offset_from_python(offset: &Bound<'_, PyAny>) -> PyResult<f64> {
-    // PyArg_ParseTuple's "i" accepts __index__, checks C long first, then int.
-    // Extract inside the binding to retain Pillow's unprefixed error messages.
-    let value = offset.extract::<std::os::raw::c_long>().map_err(|error| {
-        if error.is_instance_of::<PyOverflowError>(offset.py()) {
-            PyOverflowError::new_err("Python int too large to convert to C long")
-        } else {
-            error
-        }
-    })?;
-    let value = i32::try_from(value).map_err(|_| {
-        PyOverflowError::new_err(if value < 0 {
-            "signed integer is less than minimum"
-        } else {
-            "signed integer is greater than maximum"
-        })
-    })?;
+    let value = crate::inputs::c_int_from_python(offset)?;
     Ok(f64::from(value))
 }
 

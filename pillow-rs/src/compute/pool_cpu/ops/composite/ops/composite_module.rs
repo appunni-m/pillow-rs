@@ -74,17 +74,75 @@ macro_rules! composite_architectures {
     };
 }
 
+macro_rules! composite_l_mask_architectures {
+    ($name:ident, $mode:ident, $channels:literal, $minimum_width:literal) => {
+        static $name: [ImplementationSupport; 4] = [
+            ImplementationSupport::cpu(
+                OperationId::CompositeModule,
+                Mode::$mode,
+                Architecture::Sse2,
+                cfg!(all(
+                    any(target_arch = "x86", target_arch = "x86_64"),
+                    target_feature = "sse2"
+                )),
+                COMPOSITE_SSE2,
+                StrategyGuard::CompositeNativeByteVector {
+                    mode: Mode::$mode,
+                    channels: $channels,
+                },
+            ),
+            ImplementationSupport::cpu(
+                OperationId::CompositeModule,
+                Mode::$mode,
+                Architecture::Neon,
+                cfg!(all(target_arch = "aarch64", target_feature = "neon")),
+                COMPOSITE_NEON,
+                StrategyGuard::CompositeLMaskNeon {
+                    mode: Mode::$mode,
+                    channels: $channels,
+                    minimum_clipped_width: $minimum_width,
+                },
+            ),
+            ImplementationSupport::cpu(
+                OperationId::CompositeModule,
+                Mode::$mode,
+                Architecture::Neon,
+                cfg!(all(target_arch = "aarch64", target_feature = "neon")),
+                COMPOSITE_NEON,
+                StrategyGuard::CompositeNativeByteVector {
+                    mode: Mode::$mode,
+                    channels: $channels,
+                },
+            ),
+            ImplementationSupport::cpu(
+                OperationId::CompositeModule,
+                Mode::$mode,
+                Architecture::WasmSimd128,
+                cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
+                COMPOSITE_WASM_SIMD128,
+                StrategyGuard::CompositeNativeByteVector {
+                    mode: Mode::$mode,
+                    channels: $channels,
+                },
+            ),
+        ];
+    };
+}
+
 composite_architectures!(COMPOSITE_ONE_ARCHITECTURES, One, 1);
-composite_architectures!(COMPOSITE_LUMA_ARCHITECTURES, ImageLuma8, 1);
+composite_l_mask_architectures!(COMPOSITE_LUMA_ARCHITECTURES, ImageLuma8, 1, 16);
 composite_architectures!(COMPOSITE_PALETTE_ARCHITECTURES, ImagePalette8, 1);
-composite_architectures!(COMPOSITE_LUMA_ALPHA_ARCHITECTURES, ImageLumaA8, 2);
-composite_architectures!(COMPOSITE_PALETTE_ALPHA_ARCHITECTURES, ImagePaletteAlpha8, 2);
-composite_architectures!(COMPOSITE_RGB_ARCHITECTURES, ImageRgb8, 3);
-composite_architectures!(COMPOSITE_HSV_ARCHITECTURES, ImageHsv8, 3);
+composite_l_mask_architectures!(COMPOSITE_LUMA_ALPHA_ARCHITECTURES, ImageLumaA8, 2, 8);
+composite_l_mask_architectures!(COMPOSITE_PALETTE_ALPHA_ARCHITECTURES, ImagePaletteAlpha8, 2, 1);
+composite_l_mask_architectures!(COMPOSITE_RGB_ARCHITECTURES, ImageRgb8, 3, 16);
+composite_l_mask_architectures!(COMPOSITE_HSV_ARCHITECTURES, ImageHsv8, 3, 16);
 composite_architectures!(COMPOSITE_YCBCR_ARCHITECTURES, ImageYCbCr8, 3);
-composite_architectures!(COMPOSITE_RGBA_ARCHITECTURES, ImageRgba8, 4);
-composite_architectures!(COMPOSITE_CMYK_ARCHITECTURES, ImageCmyk8, 4);
+composite_l_mask_architectures!(COMPOSITE_RGBA_ARCHITECTURES, ImageRgba8, 4, 4);
+composite_l_mask_architectures!(COMPOSITE_CMYK_ARCHITECTURES, ImageCmyk8, 4, 16);
 composite_architectures!(COMPOSITE_RGBX_ARCHITECTURES, ImageRgbx8, 4);
+composite_architectures!(COMPOSITE_RGB_PREMULTIPLIED_ARCHITECTURES, ImageRgbPremultiplied8, 4);
+composite_architectures!(COMPOSITE_I32_ARCHITECTURES, ImageI32, 4);
+composite_architectures!(COMPOSITE_F32_ARCHITECTURES, ImageF32, 4);
 
 fn composite_support(mode: Mode) -> ModeSupport {
     let architectures = match mode {
@@ -99,11 +157,11 @@ fn composite_support(mode: Mode) -> ModeSupport {
         Mode::ImageRgba8 => &COMPOSITE_RGBA_ARCHITECTURES[..],
         Mode::ImageCmyk8 => &COMPOSITE_CMYK_ARCHITECTURES[..],
         Mode::ImageRgbx8 => &COMPOSITE_RGBX_ARCHITECTURES[..],
+        Mode::ImageRgbPremultiplied8 => &COMPOSITE_RGB_PREMULTIPLIED_ARCHITECTURES[..],
+        Mode::ImageI32 => &COMPOSITE_I32_ARCHITECTURES[..],
+        Mode::ImageF32 => &COMPOSITE_F32_ARCHITECTURES[..],
         Mode::ImageLaPremultiplied8
-        | Mode::ImageRgbPremultiplied8
         | Mode::ImageLab8
-        | Mode::ImageI32
-        | Mode::ImageF32
         | Mode::ImageI16
         | Mode::ImageI16L
         | Mode::ImageI16B
@@ -231,10 +289,14 @@ pub(crate) fn prepare_composite_pipeline<'a>(
     let PipelineOp::CompositeModule { other, mask, mask_alpha } = op else {
         return Err(PilError::ValueError("expected CompositeModule op".into()));
     };
+    // The archived executor resolves the mask before the destination image;
+    // keep that ordering when either lazy input fails to materialize.
+    let mask = mask.materialized_shared()?;
+    let destination = other.materialized_shared()?;
     prepare_composite_module(
         input,
-        other.materialized_shared()?,
-        mask.materialized_shared()?,
+        destination,
+        mask,
         *mask_alpha,
         ctx,
     )

@@ -1,6 +1,5 @@
 //! Unmasked native RGB to RGBA region copy.
 
-use crate::compute::pool_cpu::helpers::channel::rgba::rgb_to_rgba_block;
 use crate::compute::pool_cpu::ops::paste::helpers::{
     layout::SourceLayout,
     plan::BytePlan,
@@ -9,22 +8,28 @@ use crate::compute::pool_cpu::ops::paste::helpers::{
 use crate::error::PilError;
 use crate::raster::Mode;
 
-pub(crate) fn supports(plan: &BytePlan<'_>) -> bool {
+pub(crate) fn supports<I>(plan: &BytePlan<'_, I>) -> bool
+where
+    I: std::ops::Deref<Target = crate::raster::DynamicImage>,
+{
     plan.source.mode() == Mode::ImageRgb8
-        && plan.source_layout == SourceLayout::RgbToRgba
+        && plan.source_layout == SourceLayout::PhysicalFourBytesToFour
         && !plan.broadcast_source
         && plan.mask.is_none()
 }
 
-pub(crate) fn execute(plan: &BytePlan<'_>) -> Result<Vec<u8>, PilError> {
-    let mut output = plan.destination.to_vec();
+pub(crate) fn execute<I>(plan: &BytePlan<'_, I>) -> Result<Vec<u8>, PilError>
+where
+    I: std::ops::Deref<Target = crate::raster::DynamicImage>,
+{
+    let mut output = plan.initialize_destination()?;
     if plan.region.is_empty() {
         crate::compute::record_pipeline_operation_path("vector-rgb-to-rgba-copy");
         return Ok(output);
     }
-    let source_stride = checked_stride(plan.source_size.0, 3)?;
+    let source_stride = checked_stride(plan.source_size.0, 4)?;
     let destination_stride = checked_stride(plan.destination_size.0, 4)?;
-    let source = plan.source.as_bytes();
+    let source = plan.source_bytes();
 
     for row in 0..plan.region.height {
         let source_y = plan
@@ -41,7 +46,7 @@ pub(crate) fn execute(plan: &BytePlan<'_>) -> Result<Vec<u8>, PilError> {
             source_y,
             plan.region.source_left,
             plan.region.width,
-            3,
+            4,
             source_stride,
         )
         .ok_or_else(|| overflow("source row range"))?;
@@ -77,26 +82,8 @@ pub(crate) fn execute(plan: &BytePlan<'_>) -> Result<Vec<u8>, PilError> {
 }
 
 fn copy_row(source: &[u8], destination: &mut [u8]) {
-    debug_assert_eq!(source.len() % 3, 0);
-    debug_assert_eq!(destination.len(), source.len() / 3 * 4);
-    let mut source_blocks = source.chunks_exact(12);
-    let mut destination_blocks = destination.chunks_exact_mut(16);
-    for (source_block, destination_block) in source_blocks
-        .by_ref()
-        .zip(destination_blocks.by_ref())
-    {
-        destination_block.copy_from_slice(&rgb_to_rgba_block(source_block, 255));
-    }
-
-    let source_tail = source_blocks.remainder();
-    let destination_tail = destination_blocks.into_remainder();
-    for (rgb, rgba) in source_tail
-        .chunks_exact(3)
-        .zip(destination_tail.chunks_exact_mut(4))
-    {
-        rgba[..3].copy_from_slice(rgb);
-        rgba[3] = 255;
-    }
+    debug_assert_eq!(source.len(), destination.len());
+    destination.copy_from_slice(source);
 }
 
 fn checked_stride(width: u32, channels: usize) -> Result<usize, PilError> {

@@ -5,7 +5,7 @@ use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{ImageBuffer, Pixel};
 use super::masked_store::store;
-use super::put_pixel::{BatchInput, PixelInput};
+use super::put_pixel::{self, BatchInput, PixelInput, PixelWrite};
 
 fn finish<P: Pixel<Subpixel = u8>, const CHANNELS: usize>(
     width: u32, height: u32, output: Vec<u8>,
@@ -43,6 +43,30 @@ pub(crate) fn single<P: Pixel<Subpixel = u8>, const CHANNELS: usize>(
     finish::<P, CHANNELS>(input.image.width(), input.image.height(), output)
 }
 
+pub(crate) fn single_with_hidden_lanes<P, const CHANNELS: usize>(
+    input: PixelInput<'_, P>,
+    lane_count: usize,
+    lane_values: [u8; 2],
+    default: [u8; 2],
+    fallback: impl Fn(&P) -> [u8; 2],
+) -> Result<ImageBuffer<P, Vec<u8>>, PilError>
+where
+    P: Pixel<Subpixel = u8>,
+{
+    let source = input.image;
+    let write: PixelWrite = input.write;
+    let output = single::<P, CHANNELS>(input)?;
+    put_pixel::preserve_hidden_lanes_after_write(
+        source,
+        output,
+        write,
+        lane_count,
+        lane_values,
+        default,
+        fallback,
+    )
+}
+
 fn apply_rgba_batch(output: &mut [u8], row_bytes: usize, ops: &[PipelineOp]) -> Result<(), PilError> {
     for op in ops {
         let PipelineOp::PutPixel { x, y, color, .. } = op else {
@@ -64,7 +88,7 @@ fn apply_rgba_batch(output: &mut [u8], row_bytes: usize, ops: &[PipelineOp]) -> 
 
 pub(crate) fn batch(
     input: BatchInput<'_, crate::raster::Rgba<u8>>,
-    architecture: crate::compute::Architecture,
+    selection: crate::compute::registry::support::StrategySelection,
 ) -> Result<crate::raster::RgbaImage, PilError> {
     let row_bytes = (input.image.width() as usize).checked_mul(4)
         .ok_or_else(|| PilError::InternalError("SIMD PutPixel row stride overflow".into()))?;
@@ -75,7 +99,7 @@ pub(crate) fn batch(
     )?;
     for _ in input.ops {
         crate::compute::begin_pipeline_operation_telemetry("PutPixel");
-        crate::compute::record_pipeline_operation_architecture(architecture);
+        crate::compute::record_pipeline_operation_selection(&selection);
         crate::compute::record_pipeline_operation_path("vector");
         crate::compute::record_pipeline_operation_vector_blocks(1);
         crate::compute::finish_pipeline_operation_telemetry();

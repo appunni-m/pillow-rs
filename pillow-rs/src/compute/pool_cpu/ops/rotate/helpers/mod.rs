@@ -3,6 +3,7 @@
 pub(crate) mod byte;
 pub(crate) mod cubic;
 pub(crate) mod geometry;
+pub(super) mod hidden_lanes;
 pub(crate) mod i16;
 pub(crate) mod nearest;
 pub(crate) mod numeric;

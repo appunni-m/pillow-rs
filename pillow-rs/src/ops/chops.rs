@@ -11,13 +11,6 @@ use crate::image::Image;
 use crate::pipeline::PipelineOp;
 use crate::raster::Mode;
 
-fn mode_identity(image: &Image) -> Result<Mode, PilError> {
-    if let Some(mode) = image.known_mode_identity() {
-        return Ok(mode);
-    }
-    Ok(image.materialized_shared_for_ops()?.mode())
-}
-
 /// Validate the native byte-layout compatibility enforced by
 /// `ImagingChops` before it allocates a result image. Modes in the same byte
 /// width family are intentionally compatible (for example `P` with `L` and
@@ -28,8 +21,8 @@ fn validate_binary_operands(
     image1: &Image,
     image2: &Image,
 ) -> Result<(), PilError> {
-    let mode1 = mode_identity(image1)?;
-    let mode2 = mode_identity(image2)?;
+    let mode1 = image1.mode_identity()?;
+    let mode2 = image2.mode_identity()?;
     // Chops.c clips binary results to the smaller width and height; unequal
     // dimensions are valid. Backend admission still checks its own layout needs.
     validate_binary_mode_pair(operation, mode1, mode2)
@@ -49,8 +42,8 @@ fn validate_logical_operands(
     image1: &Image,
     image2: &Image,
 ) -> Result<(), PilError> {
-    let mode_support = operation.support().for_mode(mode_identity(image1)?);
-    mode_support.validate_chops_secondary_mode(|| mode_identity(image2))?;
+    let mode_support = operation.support().for_mode(image1.mode_identity()?);
+    mode_support.validate_chops_secondary_mode(|| image2.mode_identity())?;
     // Pillow's mode-1 logical Chops clips each axis to the overlap, including
     // an empty overlap. Mode compatibility does not require equal dimensions.
     Ok(())

@@ -99,7 +99,7 @@ pub(crate) fn web_palette_from_rgb_samples(
     alpha: impl FnMut(usize) -> u8,
     metadata: ConvertWrapperMetadata,
 ) -> Result<PreparedConvertOutput, PilError> {
-    let (indices, palette) = crate::ops::quantize::web_palette_quantize(
+    let (indices, palette) = crate::compute::pool_cpu::helpers::quantization::web_palette_quantize(
         rgb_samples,
         width,
         height,

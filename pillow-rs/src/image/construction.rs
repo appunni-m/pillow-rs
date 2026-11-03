@@ -8,6 +8,7 @@ use image_slash_star::EncodedImage;
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::format::parse_format_str;
+use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{DynamicImage, Mode};
 
 use super::{Image, LoadedData, PalettedData, materialization_cache};
@@ -25,6 +26,48 @@ const MODE1_BYTE_PIXELS: [[u8; 8]; 256] = {
     }
     table
 };
+
+fn initialize_new_hidden_lanes(
+    image: &mut DynamicImage,
+    mode: Mode,
+    color: (u8, u8, u8, u8),
+    color_provided: bool,
+) -> Result<(), PilError> {
+    let (lane_count, values) = match mode {
+        Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => {
+            (2, if color_provided { [color.1, color.2] } else { [0, 0] })
+        }
+        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => {
+            (1, if color_provided { [color.3, 0] } else { [0, 0] })
+        }
+        _ => return Ok(()),
+    };
+    let pixel_count = (image.width() as usize)
+        .checked_mul(image.height() as usize)
+        .ok_or_else(|| PilError::DimensionError("physical pixel lane count overflows".into()))?;
+    let lanes = HiddenPixelLanes::constant(lane_count, pixel_count, values)
+        .ok_or_else(|| PilError::InternalError("invalid Pillow physical lane layout".into()))?;
+    let attached = match (mode, image) {
+        (Mode::ImageLumaA8, DynamicImage::ImageLumaA8(buffer))
+        | (Mode::ImageLaPremultiplied8, DynamicImage::ImageLaPremultiplied8(buffer))
+        | (Mode::ImagePaletteAlpha8, DynamicImage::ImagePaletteAlpha8(buffer)) => {
+            buffer.replace_hidden_pixel_lanes(Some(lanes))
+        }
+        (Mode::ImageRgb8, DynamicImage::ImageRgb8(buffer))
+        | (Mode::ImageYCbCr8, DynamicImage::ImageYCbCr8(buffer))
+        | (Mode::ImageLab8, DynamicImage::ImageLab8(buffer))
+        | (Mode::ImageHsv8, DynamicImage::ImageHsv8(buffer)) => {
+            buffer.replace_hidden_pixel_lanes(Some(lanes))
+        }
+        _ => false,
+    };
+    if !attached {
+        return Err(PilError::InternalError(
+            "new image mode did not match its physical pixel layout".into(),
+        ));
+    }
+    Ok(())
+}
 
 /// Expand complete, validated mode-1 rows; input padding never becomes pixels.
 pub(crate) fn unpack_mode1_rows(packed: &[u8], width: usize, pixels: &mut [u8]) {
@@ -61,7 +104,10 @@ impl Image {
             Image::Loaded(data) => data.source_format = None,
             Image::Paletted(data) => data.source_format = None,
             Image::Bytes { format, .. } => *format = None,
-            Image::Pipeline { format, .. } => *format = None,
+            Image::Pipeline { format, ops, .. } => {
+                *format = None;
+                ops.suppress_source_format();
+            }
         }
         copy
     }
@@ -345,6 +391,16 @@ impl Image {
         mode: Mode,
         color: (u8, u8, u8, u8),
     ) -> Result<Self, PilError> {
+        Self::new_with_color_presence(width, height, mode, color, true)
+    }
+
+    fn new_with_color_presence(
+        width: u32,
+        height: u32,
+        mode: Mode,
+        color: (u8, u8, u8, u8),
+        color_provided: bool,
+    ) -> Result<Self, PilError> {
         if mode == Mode::ImagePalette8 {
             // A tuple color allocates palette entry zero. Scalar P fills use
             // `new_palette_index` because this resolved tuple no longer carries
@@ -367,7 +423,7 @@ impl Image {
             }));
         }
 
-        let img = Self::new_dynamic_image(width, height, mode, color)?;
+        let img = Self::new_dynamic_image(width, height, mode, color, color_provided)?;
         crate::compute::record_pipeline_allocation(img.as_bytes().len());
         let known_zero_fill = match mode {
             Mode::ImageRgb8 => color.0 == 0 && color.1 == 0 && color.2 == 0,
@@ -389,8 +445,9 @@ impl Image {
         height: u32,
         mode: Mode,
         color: (u8, u8, u8, u8),
+        color_provided: bool,
     ) -> Result<DynamicImage, PilError> {
-        let image = match mode {
+        let mut image = match mode {
             Mode::ImageRgb8 => DynamicImage::ImageRgb8(crate::raster::RgbImage::from_pixel(
                 width,
                 height,
@@ -507,6 +564,7 @@ impl Image {
                 return Err(PilError::ValueError("unsupported image mode for Image.new".into()));
             }
         };
+        initialize_new_hidden_lanes(&mut image, mode, color, color_provided)?;
         Ok(image)
     }
 
@@ -552,7 +610,7 @@ impl Image {
             };
             return Self::new(width, height, mode, tuple_color);
         }
-        Self::new(width, height, mode, color)
+        Self::new_with_color_presence(width, height, mode, color, input.provided)
     }
 
     /// Creates a `P` image filled with one raw palette index and no palette.
@@ -561,17 +619,56 @@ impl Image {
     /// from a tuple color: the scalar is stored directly in every pixel while
     /// the image retains an empty palette.
     pub fn new_palette_index(width: u32, height: u32, index: u8) -> Self {
+        Self::new_palette_index_with_metadata(
+            width,
+            height,
+            index,
+            Vec::new(),
+            Vec::new(),
+            None,
+            None,
+        )
+    }
+
+    /// Creates an indexed image from a no-op transform while retaining the
+    /// source image's palette and public image metadata.
+    pub(crate) fn new_palette_index_from_source(
+        source: &Image,
+        width: u32,
+        height: u32,
+        index: u8,
+    ) -> Self {
+        Self::new_palette_index_with_metadata(
+            width,
+            height,
+            index,
+            source.palette().unwrap_or_default(),
+            source.palette_alpha().unwrap_or_default(),
+            source.image_info(),
+            source.exif_metadata(),
+        )
+    }
+
+    fn new_palette_index_with_metadata(
+        width: u32,
+        height: u32,
+        index: u8,
+        palette: Vec<u8>,
+        palette_alpha: Vec<u8>,
+        info: Option<image_slash_star::ImageInfo>,
+        exif: Option<Vec<u8>>,
+    ) -> Self {
         Image::Paletted(PalettedData {
             indices: DynamicImage::ImagePalette8(crate::raster::GrayImage::from_pixel(
                 width,
                 height,
                 crate::raster::Luma([index]),
             )),
-            palette: Vec::new(),
-            palette_alpha: Vec::new(),
+            palette,
+            palette_alpha,
             source_format: None,
-            info: None,
-            exif: None,
+            info,
+            exif,
             materialized: materialization_cache(),
         })
     }
@@ -766,7 +863,14 @@ impl Image {
                 )
             }
         };
-        Image::from_dynamic_with_mode(img, Some(mode))
+        let mut image = img.with_mode(mode).map_err(|image| {
+            PilError::InternalError(format!(
+                "frombytes {:?} samples cannot represent requested mode {mode:?}",
+                image.mode()
+            ))
+        })?;
+        super::codec_adapter::attach_decoded_hidden_lanes(&mut image, mode)?;
+        Ok(Self::from_dynamic(image))
     }
 
     /// Creates a lazy image from encoded image bytes with an optional format hint.
@@ -810,6 +914,10 @@ impl Image {
         let source = EncodedImage::new(Arc::clone(&data))
             .map_err(|_| PilError::UnidentifiedImageError("memory".to_owned()))?;
         let info = source.info().clone();
+        // EncodedImage::raster_mode reads the inspected header cache. Translate
+        // it once to Pillow's operation mode while keeping pixels lazy.
+        let header_mode =
+            super::codec_adapter::raster_mode_from_codec_mode(source.raster_mode());
         if requested
             .as_ref()
             .is_some_and(|requested| !requested.contains(&info.format))
@@ -818,6 +926,7 @@ impl Image {
         }
         Ok(Image::Bytes {
             source,
+            header_mode,
             format: Some(info.format),
             info: Some(info),
             materialized: materialization_cache(),

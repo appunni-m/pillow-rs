@@ -13,7 +13,9 @@ use crate::raster::Mode;
 pub struct ArrayLayout {
     /// Public Pillow image mode.
     pub mode: Mode,
-    /// Pillow raw decoder mode.
+    /// Raw byte-layout descriptor used by Pillow-compatible array decoding.
+    /// This is not the image's mode identity; `mode` remains the typed raster
+    /// identity selected at the API boundary.
     pub raw_mode: String,
     /// Image width.
     pub width: usize,

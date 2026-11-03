@@ -15,6 +15,7 @@ fn native_l_putdata_keeps_the_shared_allocation_and_materializes_exactly() -> Re
             PipelineOp::PutData {
                 data,
                 payload_mode: crate::raster::Mode::ImageLuma8,
+                ..
             } => data.as_ptr(),
             other => panic!("unexpected queued operation: {other:?}"),
         },

@@ -6,15 +6,6 @@ fn mode_identity(image: &Image) -> Result<Mode, PilError> {
     image.mode_identity()
 }
 
-fn mode_label(mode: Mode) -> &'static str {
-    match mode {
-        Mode::ImageLumaA16 => "LA",
-        Mode::ImageRgb16 | Mode::ImageRgb32F => "RGB",
-        Mode::ImageRgba16 | Mode::ImageRgba32F => "RGBA",
-        _ => mode.pillow_name().unwrap_or("unknown"),
-    }
-}
-
 fn validate_autocontrast_mode(image: &Image) -> Result<(), PilError> {
     let mode = mode_identity(image)?;
     OperationId::Autocontrast
@@ -99,18 +90,9 @@ pub fn equalize_with_mask(image: &Image, mask: ImageOpsMask) -> Result<Image, Pi
 }
 
 fn invert_for_mode(image: &Image, mode: Mode) -> Result<Image, PilError> {
-    // Pillow's ImageOps._lut path rejects CMYK before creating the result.
-    // Keep this separate from ImageChops.invert, which has a different mode
-    // contract and is implemented by the chops module.
-    if mode == Mode::ImageCmyk8 {
-        return Err(PilError::OsError("not supported for mode CMYK".into()));
-    }
-    if matches!(mode, Mode::ImageLumaA8 | Mode::ImagePaletteAlpha8 | Mode::ImageRgba8) {
-        return Err(PilError::OsError(format!(
-            "not supported for mode {}",
-            mode_label(mode)
-        )));
-    }
+    // The public ImageOps guard differs from the exact-mode prepared Invert
+    // child. Keep both contracts visible while preserving lazy child errors.
+    crate::compute::pool_cpu::ops::imageops::ops::validate_imageops_invert_mode(mode)?;
     Ok(Image::push_op(image, PipelineOp::Invert))
 }
 
@@ -281,11 +263,7 @@ pub fn grayscale(image: &Image) -> Result<Image, PilError> {
 /// another [`PilError`] when mode detection fails.
 pub fn validate_colorize_mode(image: &Image) -> Result<(), PilError> {
     let mode = mode_identity(image)?;
-    if mode != Mode::ImageLuma8 {
-        // PIL raises AssertionError for non-L modes before resolving colors.
-        return Err(PilError::AssertionError(String::new()));
-    }
-    Ok(())
+    OperationId::Colorize.support().for_mode(mode).validate_mode()
 }
 
 /// Colorizes an `L` image by mapping black and white endpoints.

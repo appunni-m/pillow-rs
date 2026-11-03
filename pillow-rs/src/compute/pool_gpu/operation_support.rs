@@ -29,6 +29,7 @@ pub(super) fn gpu_float_filter_is_supported(ops: &[PipelineOp], image: &DynamicI
             PipelineOp::PutData {
                 data,
                 payload_mode: Mode::ImageF32,
+                ..
             } => finite_words(data),
             PipelineOp::MaxFilter { .. }
             | PipelineOp::MinFilter { .. }
@@ -451,18 +452,26 @@ fn expand_thumbnail_integer_reduction(
     image: &DynamicImage,
     logical_mode: Option<&str>,
 ) -> Option<(Vec<PipelineOp>, (u32, u32))> {
-    let PipelineOp::Thumbnail { filter, .. } = op else {
+    let PipelineOp::Thumbnail {
+        filter,
+        reducing_gap,
+        ..
+    } = op else {
         return None;
     };
+    if *reducing_gap != Some(2.0) {
+        return None;
+    }
     let effective_filter = if matches!(logical_mode, Some("1" | "P")) {
         ResampleFilter::Nearest
     } else {
         *filter
     };
-    let has_alpha = matches!(
-        image,
-        DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_)
-    ) && !matches!(logical_mode, Some("F" | "I" | "CMYK" | "RGBa" | "RGBX"));
+    let has_alpha = match logical_mode {
+        Some("LA") => matches!(image, DynamicImage::ImageLumaA8(_)),
+        Some("RGBA") => matches!(image, DynamicImage::ImageRgba8(_)),
+        _ => false,
+    };
     if gpu_thumbnail_requires_exact_host_control(op, dimensions, image, logical_mode)
         || matches!(effective_filter, ResampleFilter::Nearest)
         || has_alpha

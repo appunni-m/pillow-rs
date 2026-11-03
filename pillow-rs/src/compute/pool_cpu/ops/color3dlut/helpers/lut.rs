@@ -1,6 +1,7 @@
 //! Scalar Color3DLut implementation shared by its supported source modes.
 
 use crate::error::PilError;
+use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{DynamicImage, GenericImageView, Mode, RgbImage, RgbaImage};
 
 const PRECISION_BITS: i32 = 6;
@@ -180,7 +181,15 @@ pub(crate) fn apply_native_rgb_samples(
             output_pixel,
         );
     }
-    image_from_native_bytes(width, height, output, target_mode)
+    let mut output = image_from_native_bytes(width, height, output, target_mode)?;
+    if target_mode == Mode::ImageRgb8 && channels == 3
+        && !output.replace_hidden_pixel_lanes(image.hidden_pixel_lanes().cloned())
+    {
+        return Err(PilError::InternalError(
+            "Color3DLut RGB output padding did not match its source extent".into(),
+        ));
+    }
+    Ok(output)
 }
 
 /// Applies the scalar LUT directly to a native four-byte source carrier.
@@ -244,7 +253,86 @@ pub(crate) fn apply_native_rgba_samples(
             output_pixel,
         );
     }
-    image_from_native_bytes(width, height, output, target_mode)
+    let mut output = image_from_native_bytes(width, height, output, target_mode)?;
+    if target_mode == Mode::ImageRgb8 && channels == 3 {
+        let pixel_count = source.len() / 4;
+        let padding = source.chunks_exact(4).map(|pixel| pixel[3]).collect();
+        let lanes = HiddenPixelLanes::per_pixel(1, pixel_count, padding).ok_or_else(|| {
+            PilError::InternalError("Color3DLut RGB output padding shape mismatch".into())
+        })?;
+        if !output.replace_hidden_pixel_lanes(Some(lanes)) {
+            return Err(PilError::InternalError(
+                "Color3DLut RGB output padding did not match its source extent".into(),
+            ));
+        }
+    }
+    Ok(output)
+}
+
+/// Retain the fourth physical byte copied by Pillow's three-channel LUT path
+/// when the destination is the compact RGB carrier.
+pub(crate) fn preserve_target_padding(
+    source: &DynamicImage,
+    output: &mut DynamicImage,
+    table_channels: u32,
+) -> Result<(), PilError> {
+    if output.mode() != Mode::ImageRgb8 || table_channels != 3 {
+        return Ok(());
+    }
+    let pixel_count = usize::try_from(source.width())
+        .ok()
+        .and_then(|width| {
+            usize::try_from(source.height())
+                .ok()
+                .and_then(|height| width.checked_mul(height))
+        })
+        .ok_or_else(|| PilError::DimensionError("Color3DLut padding extent overflows".into()))?;
+    let lanes = match source {
+        DynamicImage::ImageRgb8(_)
+        | DynamicImage::ImageYCbCr8(_)
+        | DynamicImage::ImageLab8(_)
+        | DynamicImage::ImageHsv8(_) => match source.hidden_pixel_lanes() {
+            Some(lanes) if lanes.lane_count() == 1 && lanes.pixel_count() == pixel_count => {
+                Some(lanes.clone())
+            }
+            Some(_) => {
+                return Err(PilError::InternalError(
+                    "Color3DLut source padding did not match its image".into(),
+                ));
+            }
+            None => None,
+        },
+        DynamicImage::ImageRgba8(_) | DynamicImage::ImageCmyk8(_) => {
+            let source_bytes = source.as_bytes();
+            let expected = pixel_count.checked_mul(4).ok_or_else(|| {
+                PilError::DimensionError("Color3DLut source padding size overflows".into())
+            })?;
+            if source_bytes.len() != expected {
+                return Err(PilError::InternalError(
+                    "Color3DLut four-band source shape mismatch".into(),
+                ));
+            }
+            let padding = source_bytes
+                .chunks_exact(4)
+                .map(|pixel| pixel[3])
+                .collect();
+            Some(HiddenPixelLanes::per_pixel(1, pixel_count, padding).ok_or_else(|| {
+                PilError::InternalError("Color3DLut RGB output padding shape mismatch".into())
+            })?)
+        }
+        _ => {
+            return Err(PilError::InternalError(
+                "Color3DLut RGB output received an unsupported source mode".into(),
+            ));
+        }
+    };
+    if output.replace_hidden_pixel_lanes(lanes) {
+        Ok(())
+    } else {
+        Err(PilError::InternalError(
+            "Color3DLut RGB output padding did not match its image".into(),
+        ))
+    }
 }
 
 pub(super) fn image_from_native_bytes(

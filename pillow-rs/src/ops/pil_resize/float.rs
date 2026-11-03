@@ -1,4 +1,5 @@
 use super::*;
+#[cfg(test)]
 use crate::raster::DynamicImage;
 #[cfg(target_arch = "x86_64")]
 use crate::compute::{Architecture, Backend, ExecutionContext};
@@ -74,6 +75,7 @@ pub(crate) struct X86FmaToken {
 
 #[cfg(target_arch = "x86_64")]
 impl X86FmaToken {
+    #[cfg(test)]
     pub(crate) fn detect() -> Option<Self> {
         std::is_x86_feature_detected!("fma").then_some(Self { _private: () })
     }
@@ -317,8 +319,9 @@ pub(super) fn f_resize_boxed_vertical_pass<const FINITE_OPERANDS: bool, F: F64Mu
 
 /// Convert one typed sample using the same channel conversion as `to_rgba8`,
 /// without materializing an RGBA copy of the complete image for each sample.
-// TODO(pillow-rs#3ptb): remove this compatibility pixel fallback with the
-// mode-owned Resize implementation.
+// The generic compatibility wrapper is compiled only for its existing tests;
+// production Resize dispatches through mode-owned implementations.
+#[cfg(test)]
 pub(super) fn pixel_at(img: &DynamicImage, x: u32, y: u32) -> [f64; 4] {
     match img {
         DynamicImage::One(g)

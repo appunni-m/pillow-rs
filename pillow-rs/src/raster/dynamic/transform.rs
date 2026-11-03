@@ -1,19 +1,37 @@
-//! Native-format flip, rotation, transpose, and offset operations.
+//! Native-format flip, rotation, and transpose operations.
 
-use crate::raster::buffer::{GrayAlphaImage, GrayImage, ImageBuffer, RgbImage, RgbaImage};
-use crate::raster::color::Luma;
+use crate::raster::buffer::ImageBuffer;
 use crate::raster::traits::Pixel;
 
 use super::DynamicImage;
+
+fn carry_hidden_lanes<P>(
+    source: &ImageBuffer<P, Vec<P::Subpixel>>,
+    output: &mut ImageBuffer<P, Vec<P::Subpixel>>,
+    source_index: impl FnMut(usize) -> usize,
+) where
+    P: Pixel,
+{
+    output
+        .remap_hidden_pixel_lanes_from(source, source_index)
+        .expect("pixel-preserving transform maps valid source pixels");
+}
 
 fn flip_horizontal<P>(image: &ImageBuffer<P, Vec<P::Subpixel>>) -> ImageBuffer<P, Vec<P::Subpixel>>
 where
     P: Pixel,
 {
     let (width, height) = image.dimensions();
-    ImageBuffer::from_fn(width, height, |x, y| {
+    let mut output = ImageBuffer::from_fn(width, height, |x, y| {
         *image.get_pixel(width.saturating_sub(1).saturating_sub(x), y)
-    })
+    });
+    let width = width as usize;
+    carry_hidden_lanes(image, &mut output, |index| {
+        let x = index % width;
+        let y = index / width;
+        y * width + width.saturating_sub(1).saturating_sub(x)
+    });
+    output
 }
 
 fn flip_vertical<P>(image: &ImageBuffer<P, Vec<P::Subpixel>>) -> ImageBuffer<P, Vec<P::Subpixel>>
@@ -38,8 +56,16 @@ where
     for row in source.chunks_exact(row_len).rev() {
         output.extend_from_slice(row);
     }
-    ImageBuffer::from_raw(width, height, output)
-        .expect("vertical flip preserves the source sample count")
+    let mut output = ImageBuffer::from_raw(width, height, output)
+        .expect("vertical flip preserves the source sample count");
+    let width = width as usize;
+    let height = height as usize;
+    carry_hidden_lanes(image, &mut output, |index| {
+        let x = index % width;
+        let y = index / width;
+        height.saturating_sub(1).saturating_sub(y) * width + x
+    });
+    output
 }
 
 fn rotate_clockwise<P>(image: &ImageBuffer<P, Vec<P::Subpixel>>) -> ImageBuffer<P, Vec<P::Subpixel>>
@@ -47,9 +73,17 @@ where
     P: Pixel,
 {
     let (width, height) = image.dimensions();
-    ImageBuffer::from_fn(height, width, |x, y| {
+    let mut output = ImageBuffer::from_fn(height, width, |x, y| {
         *image.get_pixel(y, height.saturating_sub(1).saturating_sub(x))
-    })
+    });
+    let input_width = width as usize;
+    let input_height = height as usize;
+    carry_hidden_lanes(image, &mut output, |index| {
+        let x = index % input_height;
+        let y = index / input_height;
+        input_height.saturating_sub(1).saturating_sub(x) * input_width + y
+    });
+    output
 }
 
 fn rotate_half_turn<P>(image: &ImageBuffer<P, Vec<P::Subpixel>>) -> ImageBuffer<P, Vec<P::Subpixel>>
@@ -57,12 +91,17 @@ where
     P: Pixel,
 {
     let (width, height) = image.dimensions();
-    ImageBuffer::from_fn(width, height, |x, y| {
+    let mut output = ImageBuffer::from_fn(width, height, |x, y| {
         *image.get_pixel(
             width.saturating_sub(1).saturating_sub(x),
             height.saturating_sub(1).saturating_sub(y),
         )
-    })
+    });
+    let pixel_count = (width as usize) * (height as usize);
+    carry_hidden_lanes(image, &mut output, |index| {
+        pixel_count.saturating_sub(1).saturating_sub(index)
+    });
+    output
 }
 
 fn rotate_counter_clockwise<P>(
@@ -72,9 +111,17 @@ where
     P: Pixel,
 {
     let (width, height) = image.dimensions();
-    ImageBuffer::from_fn(height, width, |x, y| {
+    let mut output = ImageBuffer::from_fn(height, width, |x, y| {
         *image.get_pixel(width.saturating_sub(1).saturating_sub(y), x)
-    })
+    });
+    let input_width = width as usize;
+    let input_height = height as usize;
+    carry_hidden_lanes(image, &mut output, |index| {
+        let x = index % input_height;
+        let y = index / input_height;
+        x * input_width + input_width.saturating_sub(1).saturating_sub(y)
+    });
+    output
 }
 
 fn transpose_diagonal<P>(
@@ -85,7 +132,7 @@ where
     P: Pixel,
 {
     let (width, height) = image.dimensions();
-    ImageBuffer::from_fn(height, width, |x, y| {
+    let mut output = ImageBuffer::from_fn(height, width, |x, y| {
         let (source_x, source_y) = if transverse {
             (
                 width.saturating_sub(1).saturating_sub(y),
@@ -95,76 +142,23 @@ where
             (y, x)
         };
         *image.get_pixel(source_x, source_y)
-    })
-}
-
-fn offset_image<P>(
-    image: &ImageBuffer<P, Vec<P::Subpixel>>,
-    xoffset: i32,
-    yoffset: i32,
-) -> ImageBuffer<P, Vec<P::Subpixel>>
-where
-    P: Pixel,
-{
-    let (width, height) = image.dimensions();
-    if width == 0 || height == 0 {
-        return ImageBuffer::new(width, height);
-    }
-
-    let source_x = (-(i64::from(xoffset))).rem_euclid(i64::from(width)) as u32;
-    let source_y = (-(i64::from(yoffset))).rem_euclid(i64::from(height)) as u32;
-    ImageBuffer::from_fn(width, height, |x, y| {
-        *image.get_pixel((x + source_x) % width, (y + source_y) % height)
-    })
-}
-
-fn offset_luma16(
-    image: &ImageBuffer<Luma<u16>, Vec<u16>>,
-    xoffset: i32,
-    yoffset: i32,
-    big_endian: bool,
-) -> ImageBuffer<Luma<u16>, Vec<u16>> {
-    let (width, height) = image.dimensions();
-    if width == 0 || height == 0 {
-        return ImageBuffer::new(width, height);
-    }
-
-    let mut source = Vec::with_capacity(image.as_raw().len() * 2);
-    for &sample in image.as_raw() {
-        let bytes = if big_endian {
-            sample.to_be_bytes()
+    });
+    let input_width = width as usize;
+    let input_height = height as usize;
+    carry_hidden_lanes(image, &mut output, |index| {
+        let x = index % input_height;
+        let y = index / input_height;
+        let (source_x, source_y) = if transverse {
+            (
+                input_width.saturating_sub(1).saturating_sub(y),
+                input_height.saturating_sub(1).saturating_sub(x),
+            )
         } else {
-            sample.to_ne_bytes()
+            (y, x)
         };
-        source.extend_from_slice(&bytes);
-    }
-
-    let row_bytes = width as usize * 2;
-    let xshift = (-(i64::from(xoffset))).rem_euclid(i64::from(width)) as usize;
-    let yshift = (-(i64::from(yoffset))).rem_euclid(i64::from(height)) as usize;
-    let mut destination = vec![0_u8; source.len()];
-    for y in 0..height as usize {
-        let source_y = (y + yshift) % height as usize;
-        let source_row = source_y * row_bytes;
-        let destination_row = y * row_bytes;
-        for x in 0..width as usize {
-            let source_x = (x + xshift) % width as usize;
-            destination[destination_row + x] = source[source_row + source_x];
-        }
-    }
-
-    let pixels: Vec<u16> = destination
-        .chunks_exact(2)
-        .map(|bytes| {
-            let bytes = [bytes[0], bytes[1]];
-            if big_endian {
-                u16::from_be_bytes(bytes)
-            } else {
-                u16::from_ne_bytes(bytes)
-            }
-        })
-        .collect();
-    ImageBuffer::from_vec(width, height, pixels).expect("offset preserves the source dimensions")
+        source_y * input_width + source_x
+    });
+    output
 }
 
 macro_rules! map_mode_preserving {
@@ -200,34 +194,6 @@ macro_rules! map_mode_preserving {
 }
 
 impl DynamicImage {
-    /// Matches Pillow's `libImaging/Offset.c` dispatch for 16-bit luma.
-    ///
-    /// Pillow exposes I;16 images through the byte-oriented `image8` storage
-    /// branch of this operation, so each coordinate indexes one byte and the
-    /// unwritten half of every output pixel remains zero. Other formats use
-    /// normal pixel-coordinate wrapping.
-    pub(crate) fn offset_with_mode(
-        &self,
-        xoffset: i32,
-        yoffset: i32,
-    ) -> DynamicImage {
-        match self {
-            DynamicImage::ImageI16(image) => DynamicImage::ImageI16(offset_luma16(
-                image, xoffset, yoffset, false,
-            )),
-            DynamicImage::ImageI16L(image) => DynamicImage::ImageI16L(offset_luma16(
-                image, xoffset, yoffset, false,
-            )),
-            DynamicImage::ImageI16B(image) => DynamicImage::ImageI16B(offset_luma16(
-                image, xoffset, yoffset, true,
-            )),
-            DynamicImage::ImageI16N(image) => DynamicImage::ImageI16N(offset_luma16(
-                image, xoffset, yoffset, false,
-            )),
-            image => map_mode_preserving!(image, offset_image, xoffset, yoffset),
-        }
-    }
-
     /// Flip the image horizontally (mirror).
     #[must_use]
     pub fn fliph(&self) -> DynamicImage {

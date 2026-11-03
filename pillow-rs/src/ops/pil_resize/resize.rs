@@ -1,10 +1,8 @@
 use super::boxed::raw_to_dynamic_owned;
 use super::coefficients::pil_round;
-#[cfg(not(feature = "parallel"))]
 use super::coefficients::resize_u8_coefficients_fit_i32;
 use super::float::pixel_at;
 use super::horizontal_passes::{horizontal_pass_rows, horizontal_pass_rows_alpha};
-#[cfg(not(feature = "parallel"))]
 use super::integer_modes::{
     pil_resize_cmyk_i32, pil_resize_hsv_i32, pil_resize_la_i32, pil_resize_luma_i32,
     pil_resize_rgba_i32,
@@ -22,7 +20,13 @@ pub(crate) fn pil_preserve_mode(original: &DynamicImage, result: DynamicImage) -
     }
     result
         .with_mode(mode)
-        .unwrap_or_else(|unmodified| unmodified)
+        .unwrap_or_else(|unmodified| {
+            panic!(
+                "resize output mode {:?} cannot preserve source mode {:?}",
+                unmodified.mode(),
+                mode
+            )
+        })
 }
 
 struct NearestResizeGeometry {
@@ -209,7 +213,6 @@ fn pil_resize_convolution(
             channels,
             v_coeffs,
             &mut out_bytes,
-            0,
         );
     } else {
         vertical_pass_rows(
@@ -220,7 +223,6 @@ fn pil_resize_convolution(
             channels,
             v_coeffs,
             &mut out_bytes,
-            0,
         );
     }
 
@@ -335,28 +337,24 @@ pub fn pil_resize(
     let h_coeffs = precompute_coeffs(dw, sw, filter);
     let v_coeffs = precompute_coeffs(dh, sh, filter);
 
-    #[cfg(not(feature = "parallel"))]
     if mode == Mode::ImageLuma8 && matches!(img, DynamicImage::ImageLuma8(_)) {
         if let Some(output) = pil_resize_luma_i32(img, dw, dh, &h_coeffs, &v_coeffs) {
             return pil_preserve_mode(orig_img, raw_to_dynamic_owned(output, dw, dh, 1));
         }
     }
 
-    #[cfg(not(feature = "parallel"))]
     if mode == Mode::ImageLumaA8 && matches!(img, DynamicImage::ImageLumaA8(_)) {
         if let Some(output) = pil_resize_la_i32(img, dw, dh, &h_coeffs, &v_coeffs) {
             return pil_preserve_mode(orig_img, raw_to_dynamic_owned(output, dw, dh, 2));
         }
     }
 
-    #[cfg(not(feature = "parallel"))]
     if needs_alpha && matches!(img, DynamicImage::ImageRgba8(_)) {
         if let Some(output) = pil_resize_rgba_i32(img, dw, dh, &h_coeffs, &v_coeffs) {
             return pil_preserve_mode(orig_img, raw_to_dynamic_owned(output, dw, dh, 4));
         }
     }
 
-    #[cfg(not(feature = "parallel"))]
     if mode == Mode::ImageHsv8
         && matches!(img, DynamicImage::ImageHsv8(_))
         && matches!(filter, ResampleFilter::Bicubic)
@@ -368,7 +366,6 @@ pub fn pil_resize(
         }
     }
 
-    #[cfg(not(feature = "parallel"))]
     if is_cmyk && matches!(img, DynamicImage::ImageCmyk8(_)) {
         if let Some(result) = pil_resize_cmyk_i32(img, dw, dh, &h_coeffs, &v_coeffs) {
             return pil_preserve_mode(orig_img, result);

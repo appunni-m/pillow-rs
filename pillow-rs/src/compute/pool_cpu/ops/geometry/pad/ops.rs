@@ -1,9 +1,10 @@
 //! Pad support declarations and prepared exact-mode Resize composition.
-// TODO(pillow-rs#3ptb): verify all 25 exact Pad mode strategies, architecture
-// availability/fallback receipts, and composed Resize outputs in CPU parity.
+// TODO(pillow-rs#3ptb): verify public Pad results and errors for custom,
+// nonnumeric, and wide tuple values; verify P palette output, native fills,
+// and composed Resize in CPU parity.
 
 use crate::compute::{Architecture, ExecutionContext, registry::support::{
-    InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport,
+    InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport, PadFillRule,
     OutputModeRule, StrategyInputs, StrategySelection, SupportAssessment,
 }};
 use crate::error::PilError;
@@ -18,7 +19,23 @@ enum PadContentSource {
     Resized,
 }
 
-pub(super) const INPUTS: &[InputContract] = &[InputContract::PadParameters];
+const PAD_PARAMETERS_INPUTS: &[InputContract] = &[InputContract::PadParameters];
+pub(super) const MODE_ENCODED_FILL_INPUTS: &[InputContract] = &[
+    InputContract::PadParameters,
+    InputContract::PadFill(PadFillRule::ModeEncodedBytes),
+];
+pub(super) const PALETTE_FILL_INPUTS: &[InputContract] = &[
+    InputContract::PadParameters,
+    InputContract::PadFill(PadFillRule::PaletteIndexOrColor),
+];
+pub(super) const NATIVE_U16_FILL_INPUTS: &[InputContract] = &[
+    InputContract::PadParameters,
+    InputContract::PadFill(PadFillRule::NativeU16),
+];
+pub(super) const NATIVE_F32_FILL_INPUTS: &[InputContract] = &[
+    InputContract::PadParameters,
+    InputContract::PadFill(PadFillRule::NativeF32),
+];
 const RESIZE_CHILD: &[OperationId] = &[OperationId::Resize];
 
 fn classify_mode(mode: Mode) -> ModeSupport {
@@ -54,7 +71,7 @@ fn classify_mode(mode: Mode) -> ModeSupport {
 /// Exhaustive Pad support for all exact raster identities.
 pub(crate) static SUPPORT: OperationSupport = OperationSupport::composed(
     OperationId::Pad,
-    INPUTS,
+    PAD_PARAMETERS_INPUTS,
     classify_mode,
     RESIZE_CHILD,
 );
@@ -79,25 +96,23 @@ impl PreparedPad<'_> {
     }
 
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
+        let source = self.inputs.image;
+        let frame = self.frame;
         let architecture = self.selection.implementation.architecture;
         if let Some(padded) = try_direct_resize_into_canvas(
-            self.inputs.image,
-            self.frame,
+            source,
+            frame,
             self.resize.as_ref(),
             architecture,
         )? {
             if let Some(resize) = self.resize.as_ref() {
-                crate::compute::record_pipeline_operation_architecture(
-                    resize.selection().implementation.architecture,
-                );
+                crate::compute::record_pipeline_operation_selection(resize.selection());
             }
-            return Ok(padded);
+            return finish_pad(source, padded, frame);
         }
         let resized = match self.resize {
             Some(resize) => {
-                crate::compute::record_pipeline_operation_architecture(
-                    resize.selection().implementation.architecture,
-                );
+                crate::compute::record_pipeline_operation_selection(resize.selection());
                 Some(resize.execute()?)
             }
             None => None,
@@ -107,26 +122,37 @@ impl PreparedPad<'_> {
         } else {
             PadContentSource::Input
         };
-        let image = resized.as_ref().unwrap_or(self.inputs.image);
+        let content = resized.as_ref().unwrap_or(source);
         if let Some((image, vector_blocks, scalar_tail)) = try_vertical_append(
-            image,
-            self.frame,
+            content,
+            frame,
             architecture,
             content_source,
         )? {
             record_vector_work(vector_blocks, scalar_tail);
-            return Ok(image);
+            return finish_pad(content, image, frame);
         }
         if architecture == Architecture::Default
-            && self.frame.content_width == self.frame.width
-            && self.frame.content_height == self.frame.height
+            && frame.content_width == frame.width
+            && frame.content_height == frame.height
+            && frame.offset_x == 0
+            && frame.offset_y == 0
         {
-            return Ok(image.clone());
+            return finish_pad(content, content.clone(), frame);
         }
-        let (image, vector_blocks, scalar_tail) = pad_mode(image, self.frame, architecture)?;
+        let (image, vector_blocks, scalar_tail) = pad_mode(content, frame, architecture)?;
         record_vector_work(vector_blocks, scalar_tail);
-        Ok(image)
+        finish_pad(content, image, frame)
     }
+}
+
+fn finish_pad(
+    source: &DynamicImage,
+    mut output: DynamicImage,
+    frame: PadFrame,
+) -> Result<DynamicImage, PilError> {
+    super::helpers::hidden_lanes::preserve_same_size_content(source, &mut output, frame)?;
+    Ok(output)
 }
 
 fn record_vector_work(vector_blocks: u64, scalar_tail: u64) {
@@ -315,28 +341,30 @@ fn pad_mode(
         Mode::One => super::one::ops::pad(image, frame, architecture),
         Mode::ImageLuma8 => super::luma8::ops::pad(image, frame, architecture),
         Mode::ImageLumaA8 => super::luma_a8::ops::pad(image, frame, architecture),
-        Mode::ImageLaPremultiplied8 => super::la_premultiplied8::ops::pad(image, frame, architecture),
+        Mode::ImageLaPremultiplied8 => super::la_premultiplied8::ops::pad(image, frame)
+            .map(|image| (image, 0, 0)),
         Mode::ImagePalette8 => super::palette8::ops::pad(image, frame, architecture),
         Mode::ImagePaletteAlpha8 => super::palette_alpha8::ops::pad(image, frame, architecture),
         Mode::ImageRgb8 => super::rgb8::ops::pad(image, frame, architecture),
         Mode::ImageRgba8 => super::rgba8::ops::pad(image, frame, architecture),
-        Mode::ImageRgbPremultiplied8 => super::rgb_premultiplied8::ops::pad(image, frame, architecture),
+        Mode::ImageRgbPremultiplied8 => super::rgb_premultiplied8::ops::pad(image, frame)
+            .map(|image| (image, 0, 0)),
         Mode::ImageRgbx8 => super::rgbx8::ops::pad(image, frame, architecture),
         Mode::ImageCmyk8 => super::cmyk8::ops::pad(image, frame, architecture),
         Mode::ImageYCbCr8 => super::ycbcr8::ops::pad(image, frame, architecture),
-        Mode::ImageLab8 => super::lab8::ops::pad(image, frame, architecture),
+        Mode::ImageLab8 => super::lab8::ops::pad(image, frame).map(|image| (image, 0, 0)),
         Mode::ImageHsv8 => super::hsv8::ops::pad(image, frame, architecture),
         Mode::ImageI32 => super::i32::ops::pad(image, frame, architecture),
         Mode::ImageF32 => super::f32::ops::pad(image, frame, architecture),
-        Mode::ImageI16 => super::i16::ops::pad(image, frame, architecture),
-        Mode::ImageI16L => super::i16l::ops::pad(image, frame, architecture),
-        Mode::ImageI16B => super::i16b::ops::pad(image, frame, architecture),
-        Mode::ImageI16N => super::i16n::ops::pad(image, frame, architecture),
-        Mode::ImageLumaA16 => super::luma_a16::ops::pad(image, frame, architecture),
-        Mode::ImageRgb16 => super::rgb16::ops::pad(image, frame, architecture),
-        Mode::ImageRgba16 => super::rgba16::ops::pad(image, frame, architecture),
-        Mode::ImageRgb32F => super::rgb32f::ops::pad(image, frame, architecture),
-        Mode::ImageRgba32F => super::rgba32f::ops::pad(image, frame, architecture),
+        Mode::ImageI16 => super::i16::ops::pad(image, frame).map(|image| (image, 0, 0)),
+        Mode::ImageI16L => super::i16l::ops::pad(image, frame).map(|image| (image, 0, 0)),
+        Mode::ImageI16B => super::i16b::ops::pad(image, frame).map(|image| (image, 0, 0)),
+        Mode::ImageI16N => super::i16n::ops::pad(image, frame).map(|image| (image, 0, 0)),
+        Mode::ImageLumaA16 => super::luma_a16::ops::pad(image, frame).map(|image| (image, 0, 0)),
+        Mode::ImageRgb16 => super::rgb16::ops::pad(image, frame).map(|image| (image, 0, 0)),
+        Mode::ImageRgba16 => super::rgba16::ops::pad(image, frame).map(|image| (image, 0, 0)),
+        Mode::ImageRgb32F => super::rgb32f::ops::pad(image, frame).map(|image| (image, 0, 0)),
+        Mode::ImageRgba32F => super::rgba32f::ops::pad(image, frame).map(|image| (image, 0, 0)),
     }
 }
 
@@ -345,23 +373,60 @@ pub(crate) fn prepare_pipeline<'a>(
     op: &'a PipelineOp,
     context: &ExecutionContext,
 ) -> Result<crate::compute::registry::PreparedOperation<'a>, PilError> {
-    let PipelineOp::Pad { w, h, filter, color, centering } = op else {
-        return Err(PilError::ValueError("expected Pad op".into()));
+    let (w, h, filter, color, native_color, centering, position) = match op {
+        PipelineOp::Pad {
+            w,
+            h,
+            filter,
+            color,
+            centering,
+        } => {
+            (w, h, filter, color, None, *centering, None)
+        }
+        PipelineOp::PadTyped {
+            w,
+            h,
+            filter,
+            color,
+            input,
+            centering,
+        } => {
+            (w, h, filter, color, Some(*input), *centering, None)
+        }
+        PipelineOp::PadPositioned {
+            w,
+            h,
+            filter,
+            color,
+            native_color,
+            position,
+        } => {
+            (
+                w,
+                h,
+                filter,
+                color,
+                *native_color,
+                (0.5, 0.5),
+                Some(*position),
+            )
+        }
+        _ => return Err(PilError::ValueError("expected Pad op".into())),
     };
     let mode = inputs.mode();
-    let facts = inputs.facts().with_pad(*w, *h, *filter, *color, *centering);
+    let facts = inputs.facts().with_pad(*w, *h, *filter, *color, centering);
     let selection = select(mode, facts, context)?;
-    let frame = dimensions::build(
+    let mut frame = dimensions::build(
         (inputs.image.width(), inputs.image.height()),
         (*w, *h),
-        *centering,
+        centering,
         *color,
     )?;
-    let filter = if mode == Mode::ImagePalette8 {
-        ResampleFilter::Nearest
-    } else {
-        *filter
-    };
+    if let Some((x, y)) = position {
+        frame.offset_x = i64::from(x);
+        frame.offset_y = i64::from(y);
+    }
+    frame.native_color = native_color;
     let native_identity = matches!(
         mode,
         Mode::ImageLuma8
@@ -380,7 +445,7 @@ pub(crate) fn prepare_pipeline<'a>(
             inputs,
             frame.content_width,
             frame.content_height,
-            filter,
+            *filter,
             None,
             context,
         )?)

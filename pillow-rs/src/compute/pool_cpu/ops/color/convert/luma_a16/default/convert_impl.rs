@@ -8,7 +8,7 @@ type Source = ImageBuffer<LumaA<u16>, Vec<u16>>;
 
 pub(crate) fn execute(source: &Source, target: Mode) -> Result<DynamicImage, PilError> {
     if super::super::super::helpers::luma16::is_luma16_target(target) {
-        return super::super::super::helpers::high_depth::execute_i16_from_gray(source, target);
+        return super::super::super::helpers::high_depth::execute_i16(source, target);
     }
     if target == Mode::ImageLuma8 {
         let kernel = crate::compute::pool_cpu::ops::grayscale::luma_a16::default::grayscale_impl::prepare(source)?;

@@ -14,7 +14,7 @@ impl<'a> BitmapMask<'a> {
 
     #[inline]
     pub(crate) fn coverage(&self, x: u32, y: u32) -> u8 {
-        self.coverage_at((y * self.width + x) as usize)
+        self.coverage_at(y as usize * self.width as usize + x as usize)
     }
 
     pub(crate) fn coverage_at(&self, pixel_index: usize) -> u8 {
@@ -23,10 +23,53 @@ impl<'a> BitmapMask<'a> {
             Mode::One => u8::from(self.data[pixel_index] > 0) * 255,
             Mode::ImageLuma8 => self.data[pixel_index],
             Mode::ImageRgba8 => self.data[pixel_index * 4 + 3],
-            // ImagingDrawBitmap ignores RGBa's stored alpha and treats each
-            // source pixel as fully opaque coverage.
-            Mode::ImageRgbPremultiplied8 => 255,
+            Mode::ImageRgbPremultiplied8 => self.data[pixel_index * 4 + 3],
             _ => unreachable!("bitmap mode was validated before mask iteration"),
+        }
+    }
+
+    #[inline]
+    pub(crate) const fn mode(&self) -> Mode {
+        self.mode
+    }
+
+    #[inline]
+    pub(crate) const fn data(&self) -> &[u8] {
+        self.data
+    }
+
+    #[inline]
+    pub(crate) fn is_premultiplied(&self) -> bool {
+        self.mode == Mode::ImageRgbPremultiplied8
+    }
+
+    #[inline]
+    pub(crate) fn should_skip(&self, coverage: u8) -> bool {
+        coverage == 0 && !self.is_premultiplied()
+    }
+
+    /// Pillow's Paste.c `fill_mask_L` route promotes non-alpha coverage only
+    /// when destination alpha is zero. Binary and RGBA masks keep their own
+    /// coverage rules, and RGBa masks use PREBLEND instead.
+    #[inline]
+    pub(crate) fn luma_coverage_for_alpha(&self, coverage: u8, alpha: u8) -> u8 {
+        if self.mode == Mode::ImageLuma8 && coverage != 0 && alpha == 0 {
+            u8::MAX
+        } else {
+            coverage
+        }
+    }
+
+    #[inline]
+    pub(crate) fn blend_byte(&self, ink: u8, background: u8, coverage: u8) -> u8 {
+        if self.is_premultiplied() {
+            crate::compute::pool_cpu::helpers::bytes::preblend::apply(
+                ink,
+                background,
+                coverage,
+            )
+        } else {
+            crate::draw::pil_blend(ink, background, coverage)
         }
     }
 }

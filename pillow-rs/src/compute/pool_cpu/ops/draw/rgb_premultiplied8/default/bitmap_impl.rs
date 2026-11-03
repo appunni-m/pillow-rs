@@ -14,6 +14,6 @@ pub(crate) fn apply(
     let DynamicImage::ImageRgbPremultiplied8(mut canvas) = image else {
         return Err(PilError::ValueError("mode mismatch".into()));
     };
-    raw_four_band_bitmap::apply(&mut canvas, x, y, mask_width, mask_height, mask, color);
+    raw_four_band_bitmap::apply::<true>(&mut canvas, x, y, mask_width, mask_height, mask, color);
     Ok(DynamicImage::ImageRgbPremultiplied8(canvas))
 }

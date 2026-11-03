@@ -104,6 +104,17 @@ fn pipeline_operation_telemetry_to_js(
             .selected_architecture
             .map_or(JsValue::NULL, |value| JsValue::from_str(value.name()));
         set_pipeline_telemetry_field(&value, "selected_architecture", &architecture);
+        let fallback_value = sample.strategy_fallbacks.map_or_else(
+            || JsValue::NULL,
+            |reasons| {
+                let fallbacks = js_sys::Array::new();
+                for reason in reasons {
+                    fallbacks.push(&JsValue::from_str(reason.name()));
+                }
+                fallbacks.into()
+            },
+        );
+        set_pipeline_telemetry_field(&value, "strategy_fallbacks", &fallback_value);
         set_pipeline_telemetry_field(
             &value,
             "vector_block_count",

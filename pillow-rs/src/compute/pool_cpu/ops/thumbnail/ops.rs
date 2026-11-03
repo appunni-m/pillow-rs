@@ -7,9 +7,11 @@
 //! Mode-specific filter, reducing-gap, and I32/F32 resize decisions are
 //! selected through `mode_strategy` before execution.
 //! The archived mode branches are source-reviewed against these owners: `1`
-//! and `P` force nearest; `LA`, `La`, `PA`, and `RGBA` skip reducing-gap; F32
-//! and I32 use exact typed owners; all other modes compose native Reduce and
-//! Resize. No active caller uses the archived adapter.
+//! `1`, `P`, and `PA` force nearest; straight-alpha `LA` and `RGBA` skip
+//! reducing-gap; premultiplied `La` reduces its stored samples like the
+//! archived implementation. F32 and I32 use exact typed owners; all other
+//! modes compose native Reduce and Resize. No active caller uses the archived
+//! adapter.
 //! TODO(pillow-rs#3ptb): complete Thumbnail parity for every declared exact
 //! mode and architecture in the operation × mode × architecture matrix.
 //! F32's even 2x2 vector reduction runs through its nested exact-mode Reduce
@@ -103,9 +105,17 @@ pub(crate) fn rgb_putpixel_fusion_supported(
     {
         return false;
     }
-    let PipelineOp::Thumbnail { w, h, filter } = thumbnail else {
+    let PipelineOp::Thumbnail {
+        w,
+        h,
+        filter,
+        reducing_gap,
+    } = thumbnail else {
         return false;
     };
+    if *reducing_gap != Some(2.0) {
+        return false;
+    }
     let (source_width, source_height) = (image.width(), image.height());
     if source_width < 2
         || source_height < 2
@@ -133,8 +143,8 @@ pub(crate) struct PreparedRgbPutPixelThumbnail<'a> {
 }
 
 impl PreparedRgbPutPixelThumbnail<'_> {
-    pub(crate) fn architecture(&self) -> Architecture {
-        self.resize_selection.implementation.architecture
+    pub(crate) fn selection(&self) -> &StrategySelection {
+        &self.resize_selection
     }
 
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
@@ -176,11 +186,21 @@ pub(crate) fn prepare_rgb_putpixel_thumbnail<'a>(
                 "RGB Thumbnail fusion has no prepared boxed Resize strategy".into(),
             )
         })?;
-    let PipelineOp::Thumbnail { w, h, filter } = thumbnail else {
+    let PipelineOp::Thumbnail {
+        w,
+        h,
+        filter,
+        reducing_gap,
+    } = thumbnail else {
         return Err(PilError::InternalError(
             "prepared RGB Thumbnail changed after admission".into(),
         ));
     };
+    if *reducing_gap != Some(2.0) {
+        return Err(PilError::InternalError(
+            "prepared RGB Thumbnail changed after admission".into(),
+        ));
+    }
     let reduced_facts = reduced_resize_facts(inputs, (2, 2))?.with_resize(
         (*w).max(1).min(inputs.image.width()),
         (*h).max(1).min(inputs.image.height()),
@@ -266,11 +286,17 @@ fn select_mode(
     width: u32,
     height: u32,
     filter: ResampleFilter,
+    reducing_gap: Option<f64>,
     context: &ExecutionContext,
 ) -> Result<StrategySelection, PilError> {
     match SUPPORT
         .for_mode(mode)
-        .assess(context, inputs.facts().with_thumbnail(width, height, filter))?
+        .assess(
+            context,
+            inputs
+                .facts()
+                .with_thumbnail(width, height, filter, reducing_gap),
+        )?
     {
         SupportAssessment::Ready(selection) => Ok(selection),
         SupportAssessment::Rejected { reason, kind, .. } => Err(kind.into_error(reason)),
@@ -286,23 +312,29 @@ pub(crate) fn prepare_pipeline<'a>(
     op: &'a PipelineOp,
     context: &ExecutionContext,
 ) -> Result<crate::compute::registry::PreparedOperation<'a>, PilError> {
-    let PipelineOp::Thumbnail { w, h, filter } = op else {
+    let PipelineOp::Thumbnail {
+        w,
+        h,
+        filter,
+        reducing_gap,
+    } = op else {
         return Err(PilError::ValueError("expected Thumbnail op".into()));
     };
     let mode = inputs.mode();
     let mode_strategy = ThumbnailModeStrategy::for_mode(mode);
     let effective_filter = mode_strategy.effective_filter(*filter);
-    let reduce = mode_strategy.should_reduce(effective_filter);
+    let selection = select_mode(inputs, mode, *w, *h, *filter, *reducing_gap, context)?;
+    let reduce = mode_strategy.should_reduce(effective_filter, *reducing_gap);
     let source = (inputs.image.width(), inputs.image.height());
     let output = ((*w).max(1).min(source.0), (*h).max(1).min(source.1));
-    let factors = crate::compute::helpers::resampling::thumbnail::reduce_factors(
+    let factors = crate::compute::helpers::resampling::thumbnail::reduce_factors_with_gap(
         source,
         output,
-        reduce,
-    );
+        if reduce { *reducing_gap } else { None },
+    )?;
     let stream_i32 = *w > 0
         && *h > 0
-        && mode_strategy.streams_i32_thumbnail(source, output, effective_filter, reduce);
+        && mode_strategy.streams_i32_thumbnail(source, output, effective_filter, factors);
     let use_unboxed_resize = factors == (1, 1)
         || mode_strategy.uses_unboxed_resize(source, output, factors);
     let resize_request = ThumbnailResizeRequest {
@@ -312,7 +344,6 @@ pub(crate) fn prepare_pipeline<'a>(
         filter: effective_filter,
         use_unboxed_resize,
     };
-    let selection = select_mode(inputs, mode, *w, *h, *filter, context)?;
     let children = prepare_composed_strategies(
         inputs,
         mode,

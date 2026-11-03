@@ -1,6 +1,4 @@
-use crate::raster::{GrayAlphaImage};
 
-pub(crate) type Input = GrayAlphaImage;
 pub(crate) mod default;
 pub(crate) mod ops;
 
@@ -15,3 +13,5 @@ pub(crate) mod neon;
 #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
 #[path = "wasm_simd128/transpose_impl.rs"]
 pub(crate) mod wasm_simd128;
+
+pub(crate) use ops::Input;

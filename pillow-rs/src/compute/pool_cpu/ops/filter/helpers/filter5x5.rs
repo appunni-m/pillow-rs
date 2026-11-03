@@ -157,10 +157,10 @@ pub(crate) fn execute_filter5x5_small_uniform_bytes(
             return None;
         }
     }
-    crate::compute::record_pipeline_operation_path("native-copy");
-    crate::compute::record_pipeline_operation_vector_blocks((raw.len() / 16) as u64);
-    crate::compute::record_pipeline_operation_scalar_tail((raw.len() % 16) as u64);
-    Some(raw.to_vec())
+    Some(
+        crate::compute::pool_cpu::ops::filter::helpers::execute_native_filter_identity_copy(raw)
+            .ok()?,
+    )
 }
 
 /// Apply the retained large-uniform or vector RGB BLUR-ring fast path.

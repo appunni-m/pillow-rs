@@ -54,7 +54,6 @@ mod narrow_u8_resize_tests {
                 channels,
                 &vertical,
                 &mut output,
-                0,
             );
         } else {
             vertical_pass_rows(
@@ -65,7 +64,6 @@ mod narrow_u8_resize_tests {
                 channels,
                 &vertical,
                 &mut output,
-                0,
             );
         }
         output
@@ -344,7 +342,6 @@ mod rgba_i32_resize_tests {
             4,
             vertical,
             &mut output,
-            0,
         );
         output
     }
@@ -453,7 +450,6 @@ mod cmyk_i32_resize_tests {
             4,
             &vertical,
             &mut output,
-            0,
         );
         output
     }

@@ -34,15 +34,14 @@ pub(crate) fn composite(
     mask_alpha: bool,
     selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
-    super::super::helpers::composite::execute_selected(
+    super::super::helpers::composite::execute_byte_selected(
         source,
         destination,
         mask,
         mask_alpha,
         MODE,
-        crate::compute::pool_cpu::ops::composite::ops::CompositeLayout::Byte {
-            channels: 1,
-        },
+        1,
         selection,
+        |plan| crate::compute::pool_cpu::ops::paste::luma8::ops::execute(plan),
     )
 }

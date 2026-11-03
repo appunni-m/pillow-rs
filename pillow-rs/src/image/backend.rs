@@ -60,7 +60,15 @@ impl Image {
         for op in &mut flattened_ops {
             Self::lock_op_backend_recursive(op, b);
         }
-        *ops = PipelineOps::from_vec_with_origins(flattened_ops, operation_origins);
+        let preserves_palette = ops.preserves_palette();
+        let source_format_suppressed = ops.source_format_suppressed();
+        let mut rebuilt_ops =
+            PipelineOps::from_vec_with_origins(flattened_ops, operation_origins)
+                .with_palette_preservation(preserves_palette);
+        if source_format_suppressed {
+            rebuilt_ops.suppress_source_format();
+        }
+        *ops = rebuilt_ops;
         *backend = Some(b);
         // A previously inspected/materialized pipeline must execute again
         // under the newly forced backend, including nested pipeline nodes.
@@ -122,6 +130,132 @@ impl Image {
             _ => None,
         }
     }
+
+    /// Resolves one CPU-owned operation's requested backend and CPU architecture.
+    ///
+    /// An image-pinned GPU request falls back to CPU Default. For an unpinned
+    /// operation, an active SIMD compatibility request supplies the CPU
+    /// architecture when GPU is preferred but has no operation strategy.
+    pub(crate) fn cpu_arch_execution_route(
+        &self,
+    ) -> Result<
+        (
+            Option<crate::compute::Backend>,
+            crate::compute::ExecutionContext,
+        ),
+        PilError,
+    > {
+        let (requested_backend, _, context) = self.cpu_arch_execution_route_with_policy()?;
+        Ok((requested_backend, context))
+    }
+
+    /// Resolves one CPU-owned operation's route and whether its backend is an
+    /// explicit request rather than an automatic preference.
+    pub(crate) fn cpu_arch_execution_route_with_policy(
+        &self,
+    ) -> Result<
+        (
+            Option<crate::compute::Backend>,
+            bool,
+            crate::compute::ExecutionContext,
+        ),
+        PilError,
+    > {
+        use crate::compute::Backend;
+
+        let (requested_backend, strict_request, active_backends) = self.backend_request_policy()?;
+        let context_backend = match (self.backend(), requested_backend) {
+            (None, Some(Backend::Gpu)) => {
+                if active_backends
+                    .as_ref()
+                    .is_some_and(|backends| backends.contains(&Backend::Simd))
+                {
+                    Backend::Simd
+                } else {
+                    Backend::Cpu
+                }
+            }
+            (_, Some(Backend::Simd)) => Backend::Simd,
+            _ => Backend::Cpu,
+        };
+        Ok((
+            requested_backend,
+            strict_request,
+            crate::compute::ExecutionContext::for_routed_backend(context_backend),
+        ))
+    }
+
+    /// Resolves the requested backend without choosing a CPU architecture.
+    pub(crate) fn requested_backend_route(
+        &self,
+    ) -> Result<Option<crate::compute::Backend>, PilError> {
+        self.backend_request_policy()
+            .map(|(requested_backend, _, _)| requested_backend)
+    }
+
+    fn backend_request_policy(
+        &self,
+    ) -> Result<
+        (
+            Option<crate::compute::Backend>,
+            bool,
+            Option<Vec<crate::compute::Backend>>,
+        ),
+        PilError,
+    > {
+        let pinned_backend = self.backend();
+        let active_backends = if pinned_backend.is_none() {
+            Some(crate::compute::active_backends()?)
+        } else {
+            None
+        };
+        let requested_backend = pinned_backend.or_else(|| {
+            active_backends
+                .as_ref()
+                .and_then(|backends| backends.first().copied())
+        });
+        let strict_request = pinned_backend.is_some()
+            || active_backends
+                .as_ref()
+                .is_some_and(|backends| backends.len() == 1);
+        Ok((requested_backend, strict_request, active_backends))
+    }
+
+    /// Resolves a CPU operation route without changing its error boundary.
+    ///
+    /// Direct host operations that historically ignored backend-state errors
+    /// retain CPU Default when routing policy cannot be inspected.
+    pub(crate) fn cpu_arch_execution_route_advisory(
+        &self,
+    ) -> (
+        Option<crate::compute::Backend>,
+        crate::compute::ExecutionContext,
+    ) {
+        let (requested_backend, _, context) =
+            self.cpu_arch_execution_route_advisory_with_policy();
+        (requested_backend, context)
+    }
+
+    /// Advisory CPU route that also retains whether the route is explicitly
+    /// pinned or is the only active backend.
+    pub(crate) fn cpu_arch_execution_route_advisory_with_policy(
+        &self,
+    ) -> (
+        Option<crate::compute::Backend>,
+        bool,
+        crate::compute::ExecutionContext,
+    ) {
+        self.cpu_arch_execution_route_with_policy()
+            .unwrap_or_else(|_| {
+                (
+                    None,
+                    false,
+                    crate::compute::ExecutionContext::for_routed_backend(
+                        crate::compute::Backend::Cpu,
+                    ),
+                )
+            })
+    }
 }
 
 impl Image {
@@ -147,7 +281,8 @@ impl Image {
             return Ok(None);
         }
 
-        let Some((backend, _)) = crate::compute::preferred_active_backend()? else {
+        let (requested_backend, context) = self.cpu_arch_execution_route()?;
+        let Some(backend) = requested_backend else {
             return Ok(None);
         };
         let operation = PipelineOp::Grayscale;
@@ -160,10 +295,12 @@ impl Image {
         };
         let grayscale = match backend {
             crate::compute::Backend::Cpu | crate::compute::Backend::Simd => {
-                crate::compute::execute_eager_cpu_arch_image_operation(
+                crate::compute::execute_eager_cpu_arch_image_operation_with_context(
                     "Grayscale",
                     image.as_ref(),
-                    backend,
+                    context,
+                    requested_backend,
+                    None,
                     |ctx| {
                         let prepared =
                             crate::compute::registry::prepare_cpu(&operation, inputs, ctx)?;
@@ -295,6 +432,7 @@ impl Image {
             Self::Bytes {
                 source,
                 info: Some(info),
+                header_mode,
                 materialized,
                 ..
             } => Ok(GpuPendingGraph {
@@ -302,7 +440,10 @@ impl Image {
                 cached: materialized.get().cloned().transpose()?,
                 width: info.width,
                 height: info.height,
-                mode: image_mode_name(info.mode).to_owned(),
+                mode: (*header_mode)
+                    .pillow_name()
+                    .unwrap_or_else(|| image_mode_name(info.mode))
+                    .to_owned(),
                 encoded_bytes: source.bytes().len() as u64,
                 ops: Vec::new(),
             }),

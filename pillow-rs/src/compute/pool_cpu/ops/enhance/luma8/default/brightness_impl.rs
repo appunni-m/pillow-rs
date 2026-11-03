@@ -3,10 +3,27 @@ use crate::error::PilError;
 use crate::raster::GrayImage;
 
 pub(crate) fn execute(source: &GrayImage, factor: f64) -> Result<GrayImage, PilError> {
-    if factor == 1.0 {
+    let alpha = factor as f32;
+    if alpha == 1.0 {
         return Ok(source.clone());
     }
-    let bytes = native::scale_u8(source.as_raw(), 1, 1, factor);
-    GrayImage::from_raw(source.width(), source.height(), bytes)
-        .ok_or_else(|| PilError::InternalError("Brightness output dimensions were invalid".into()))
+
+    let mut output = source.clone();
+    let shift = match alpha {
+        0.5 => Some(1),
+        0.25 => Some(2),
+        0.125 => Some(3),
+        _ => None,
+    };
+    if let Some(shift) = shift {
+        // These float32 factors produce the same truncating result as Pillow.
+        for sample in output.as_mut() {
+            *sample >>= shift;
+        }
+    } else {
+        for sample in output.as_mut() {
+            *sample = native::blend_u8(0, *sample, alpha);
+        }
+    }
+    Ok(output)
 }

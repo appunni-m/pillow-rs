@@ -1,7 +1,8 @@
 //! Serial native-sample Sharpness kernels shared by exact-mode strategies.
 
 use crate::error::PilError;
-use crate::raster::{ImageBuffer, Pixel, RgbaImage};
+use crate::raster::buffer::HiddenPixelLanes;
+use crate::raster::{DynamicImage, ImageBuffer, Mode, Pixel, RgbaImage};
 
 const BUFFER_ERROR: &str = "enhance_sharpness: buffer error";
 
@@ -24,6 +25,82 @@ fn check_channels<const CHANNELS: usize, const ACTIVE: usize>() -> Result<(), Pi
         ));
     }
     Ok(())
+}
+
+/// Applies Pillow Filter's zeroed omitted lanes, then its Sharpness Blend.
+pub(crate) fn carry_hidden_lanes<P>(
+    source: &ImageBuffer<P, Vec<u8>>,
+    output: &mut DynamicImage,
+    mode: Mode,
+    factor: f64,
+) -> Result<(), PilError>
+where
+    P: Pixel<Subpixel = u8>,
+{
+    if output.mode() != mode
+        || output.dimensions() != (source.width(), source.height())
+    {
+        return Err(PilError::InternalError(
+            "Sharpness output did not preserve its source layout".into(),
+        ));
+    }
+    let Some(lane_count) = mode.hidden_pixel_lane_count() else {
+        return Ok(());
+    };
+    let pixel_count = (source.width() as usize)
+        .checked_mul(source.height() as usize)
+        .ok_or_else(|| PilError::DimensionError("Sharpness lane extent overflow".into()))?;
+    let Some(source_lanes) = source.hidden_pixel_lanes() else {
+        return replace_sharpness_lanes(output, None);
+    };
+    if source_lanes.lane_count() != lane_count || source_lanes.pixel_count() != pixel_count {
+        return Err(PilError::InternalError(
+            "Sharpness source lane payload did not match its mode".into(),
+        ));
+    }
+    let alpha = factor as f32;
+    let width = source.width() as usize;
+    let height = source.height() as usize;
+    let lanes = if alpha == 1.0 || width < 3 || height < 3 {
+        source_lanes.clone()
+    } else {
+        let lane_values = pixel_count
+            .checked_mul(lane_count)
+            .ok_or_else(|| PilError::DimensionError("Sharpness lane extent overflow".into()))?;
+        let mut values = Vec::with_capacity(lane_values);
+        for index in 0..pixel_count {
+            let x = index % width;
+            let y = index / width;
+            let interior = width >= 3
+                && height >= 3
+                && x > 0
+                && x + 1 < width
+                && y > 0
+                && y + 1 < height;
+            for &sample in source_lanes.for_pixel(index).ok_or_else(|| {
+                PilError::InternalError("Sharpness source lane pixel was unavailable".into())
+            })? {
+                let base = if interior { 0 } else { sample };
+                values.push(super::native::blend_u8(base, sample, alpha));
+            }
+        }
+        HiddenPixelLanes::per_pixel(lane_count, pixel_count, values)
+            .ok_or_else(|| PilError::InternalError("invalid Sharpness lane layout".into()))?
+    };
+    replace_sharpness_lanes(output, Some(lanes))
+}
+
+fn replace_sharpness_lanes(
+    output: &mut DynamicImage,
+    lanes: Option<HiddenPixelLanes>,
+) -> Result<(), PilError> {
+    if output.replace_hidden_pixel_lanes(lanes) {
+        Ok(())
+    } else {
+        Err(PilError::InternalError(
+            "Sharpness output physical lanes did not match its mode".into(),
+        ))
+    }
 }
 
 /// Apply the archived byte filter and blend without converting the raster mode.

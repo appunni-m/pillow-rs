@@ -1,7 +1,8 @@
 //! Terminal operations that fold pending image pipelines into host results.
 //!
-//! Architecture-specialized CPU terminals retain the injected mode strategy
-//! and report CPU as the executor even for the compatibility SIMD request.
+//! CPU terminals retain the concrete mode/architecture strategy selected from
+//! the injected context and report CPU as executor for the SIMD compatibility
+//! request.
 
 #[cfg(feature = "gpu")]
 use super::pool_gpu;
@@ -17,6 +18,7 @@ use super::{
     take_pipeline_dispatch_count, take_pipeline_resize_coeff_cache_stats,
     take_pipeline_resource_telemetry,
 };
+use crate::compute::registry::support::StrategySelection;
 
 /// Runs a serial CPU terminal that folds a pending image pipeline into its
 /// result instead of materializing an intermediate image. The closure must
@@ -26,6 +28,7 @@ pub(crate) fn execute_prepared_cpu_terminal<T>(
     ops: &[PipelineOp],
     input: &DynamicImage,
     output_buffer_sizes: [usize; 2],
+    selection: &StrategySelection,
     execute: impl FnOnce() -> Result<T, PilError>,
 ) -> Result<T, PilError> {
     let timed = pipeline_telemetry_enabled();
@@ -43,9 +46,7 @@ pub(crate) fn execute_prepared_cpu_terminal<T>(
     if timed {
         for op in ops {
             begin_pipeline_operation_telemetry(registry::variant_key(op));
-            crate::compute::record_pipeline_operation_architecture(
-                prepared.context().architecture(),
-            );
+            crate::compute::record_pipeline_operation_selection(selection);
             record_pipeline_operation_path("cpu");
             finish_pipeline_operation_telemetry();
         }
@@ -101,6 +102,7 @@ pub(crate) fn execute_prepared_cpu_arch_terminal<T>(
     ops: &[PipelineOp],
     input: &DynamicImage,
     output_buffer_sizes: [usize; 2],
+    selection: &StrategySelection,
     execute: impl FnOnce() -> Result<(T, u64, u64), PilError>,
 ) -> Result<T, PilError> {
     let timed = pipeline_telemetry_enabled();
@@ -121,6 +123,7 @@ pub(crate) fn execute_prepared_cpu_arch_terminal<T>(
             ops,
             input,
             output_buffer_sizes,
+            selection,
             vector_blocks,
             scalar_tail,
             backend_ns,
@@ -134,15 +137,14 @@ fn record_cpu_arch_terminal_telemetry(
     ops: &[PipelineOp],
     input: &DynamicImage,
     output_buffer_sizes: [usize; 2],
+    selection: &StrategySelection,
     vector_blocks: u64,
     scalar_tail: u64,
     backend_ns: u64,
 ) {
     for (index, op) in ops.iter().enumerate() {
         begin_pipeline_operation_telemetry(registry::variant_key(op));
-        crate::compute::record_pipeline_operation_architecture(
-            prepared.context().architecture(),
-        );
+        crate::compute::record_pipeline_operation_selection(selection);
         if index == 0 {
             record_pipeline_operation_path("cpu");
             record_pipeline_operation_vector_blocks(vector_blocks);

@@ -5,8 +5,8 @@ use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::raster::DynamicImage;
 
-#[cfg(feature = "parallel")]
-const CMYK_TO_BINARY_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
+// TODO(pillow-rs#3ptb): if parallel scheduling is retained, move it into the
+// separate `pool_parallel` backend after CPU source closure.
 
 #[inline]
 /// Converts one RGB pixel to a Pillow-compatible `L` value.
@@ -276,20 +276,6 @@ pub fn cmyk_to_binary_truncate(img: &DynamicImage) -> Result<crate::raster::Gray
     let mut output = dims.alloc_buffer();
     let source_stride = (w as usize) * 4;
     let output_stride = w as usize;
-    #[cfg(feature = "parallel")]
-    if dims.total_pixels() >= CMYK_TO_BINARY_PARALLEL_PIXEL_THRESHOLD {
-        crate::par_rows_mut!(
-            &mut output,
-            output_stride,
-            h as usize,
-            |_row_start, _row_end, y, row| {
-                let source_start = y as usize * source_stride;
-                cmyk_to_binary_row(&cmyk[source_start..source_start + source_stride], row);
-            }
-        );
-        return crate::raster::GrayImage::from_raw(w, h, output)
-            .ok_or_else(|| PilError::InternalError("cmyk binary buffer mismatch".to_string()));
-    }
     for (source, output) in cmyk
         .chunks_exact(source_stride)
         .zip(output.chunks_exact_mut(output_stride))

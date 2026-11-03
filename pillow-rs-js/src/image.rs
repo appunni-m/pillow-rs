@@ -152,7 +152,10 @@ impl Image {
     /// Returns compatibility metadata after interpreting the image in `target_mode`.
     #[wasm_bindgen(js_name = "convertedCompatibilityInfo")]
     pub fn converted_compatibility_info(&self, target_mode: &str) -> JsValue {
-        image_info_to_js(self.inner.converted_compatibility_info(target_mode))
+        let info = pillow_rs::Mode::from_pillow_name(target_mode)
+            .map(|mode| self.inner.converted_compatibility_info(mode))
+            .unwrap_or_default();
+        image_info_to_js(info)
     }
     /// Replaces this image's contents with a clone of `other`.
     #[wasm_bindgen(js_name = "replaceFrom")]

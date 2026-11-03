@@ -10,15 +10,26 @@
 //! and drawing-context relations are validated by the same support declaration
 //! used for CPU selection, and its selected raster mode drives the Bitmap
 //! executor. Direct Text resolves the same declaration with its raster/context
-//! modes, P palette presence, mask representation, ink provenance/value, and
+//! modes, indexed palette presence, mask representation, ink provenance/value, and
 //! embedded-color facts, then executes the selected raster owner.
-//! TODO(pillow-rs#3ptb): review all Draw contracts against preserved sources
-//! before completion.
+//! Mode-owned Bitmap/Text and Default/SIMD geometry writers preserve omitted
+//! physical lanes using the same mode-specific sidecar. TODO(pillow-rs#3ptb):
+//! verify every declared I;16 identity in parity and finish direct Text ink,
+//! palette/error ordering, and public Bitmap fast-route review.
+//! Pillow 12.2's `ImagingFill2` confirms I;16 L masks blend both sample bytes,
+//! while 1/RGBA/RGBa masks step through the raw row byte prefix; RGBa reads
+//! alpha and applies PREBLEND. Draw support declares the compatible
+//! accelerated Bitmap route's Paste child and exact raster/context/mask,
+//! backend, and nonempty guards; the wrapper evaluates that declaration. The
+//! Source tracing confirms the queued child receipt is Paste; route parity
+//! remains TODO. Text masks are dispatched without an expanded intermediate
+//! buffer; parity remains pending.
 
 use crate::compute::{Architecture, Backend, ExecutionContext};
 use crate::compute::registry::support::{
     DrawRequestKind, DrawTextMaskKind, ImplementationSupport, ModeSupport, OperationId,
-    OperationInputs, OperationSupport, OutputModeRule, PaletteKnowledge, RequestFacts,
+    OperationInputs, OperationModeRoute, OperationRouteGuard, OperationRouteInputs,
+    OperationRoutePath, OperationSupport, OutputModeRule, PaletteKnowledge, RequestFacts,
     StrategyGuard, StrategyInputs, StrategySelection, SupportAssessment,
 };
 use crate::error::PilError;
@@ -36,7 +47,7 @@ const TEXT_MASK_KINDS: &[DrawTextMaskKind] = &[
     DrawTextMaskKind::Coverage,
     DrawTextMaskKind::Rgba,
 ];
-const PALETTE_MODES: &[Mode] = &[Mode::ImagePalette8];
+const PALETTE_MODES: &[Mode] = &[Mode::ImagePalette8, Mode::ImagePaletteAlpha8];
 const TEXT_EMBEDDED_COLOR_MODES: &[Mode] = &[Mode::ImageRgb8, Mode::ImageRgba8];
 const DRAW_INPUTS: &[crate::compute::registry::support::InputContract] = &[
     crate::compute::registry::support::InputContract::DrawInputs {
@@ -117,8 +128,63 @@ static I32_ARCHITECTURES: [ImplementationSupport; 3] =
 static F32_ARCHITECTURES: [ImplementationSupport; 3] =
     draw_vector_architectures(Mode::ImageF32);
 
-pub(crate) static SUPPORT: OperationSupport =
-    OperationSupport::new(OperationId::Draw, DRAW_INPUTS, classify_mode);
+const DRAW_COMPOSED_OPERATIONS: &[OperationId] = &[OperationId::Paste];
+const DRAW_ACCELERATED_BACKENDS: &[Backend] = &[Backend::Gpu, Backend::Simd];
+const DRAW_BITMAP_MASKED_PASTE_ROUTES: &[(Mode, Mode, Mode)] = &[
+    (Mode::One, Mode::One, Mode::One),
+    (Mode::ImageLuma8, Mode::ImageLuma8, Mode::One),
+    (Mode::ImageLuma8, Mode::ImageLuma8, Mode::ImageLuma8),
+    (Mode::ImageLumaA8, Mode::ImageLumaA8, Mode::One),
+    (Mode::ImagePalette8, Mode::ImagePalette8, Mode::One),
+    (Mode::ImageRgb8, Mode::ImageRgb8, Mode::One),
+    (Mode::ImageRgb8, Mode::ImageRgb8, Mode::ImageLuma8),
+    (Mode::ImageRgb8, Mode::ImageRgba8, Mode::One),
+    (Mode::ImageRgb8, Mode::ImageRgba8, Mode::ImageLuma8),
+    (Mode::ImageRgba8, Mode::ImageRgba8, Mode::One),
+    (Mode::ImageCmyk8, Mode::ImageCmyk8, Mode::One),
+    (Mode::ImageCmyk8, Mode::ImageCmyk8, Mode::ImageLuma8),
+    (Mode::ImageHsv8, Mode::ImageHsv8, Mode::One),
+    (Mode::ImageHsv8, Mode::ImageHsv8, Mode::ImageLuma8),
+];
+const DRAW_BITMAP_MASKED_PASTE_GUARDS: &[OperationRouteGuard] = &[
+    OperationRouteGuard::RequestedBackendIn(DRAW_ACCELERATED_BACKENDS),
+    OperationRouteGuard::NonEmptyInput,
+    OperationRouteGuard::DrawBitmapRouteIn(DRAW_BITMAP_MASKED_PASTE_ROUTES),
+];
+const DRAW_BITMAP_MASKED_PASTE_PATHS: &[OperationRoutePath] =
+    &[OperationRoutePath::ConditionalPipelineChild {
+        operation: OperationId::Paste,
+        guards: DRAW_BITMAP_MASKED_PASTE_GUARDS,
+    }];
+
+fn classify_route_paths(mode: Mode) -> &'static [OperationRoutePath] {
+    match mode {
+        Mode::One
+        | Mode::ImageLuma8
+        | Mode::ImageLumaA8
+        | Mode::ImagePalette8
+        | Mode::ImageRgb8
+        | Mode::ImageRgba8
+        | Mode::ImageCmyk8
+        | Mode::ImageHsv8 => DRAW_BITMAP_MASKED_PASTE_PATHS,
+        _ => &[],
+    }
+}
+
+fn classify_route(mode: Mode) -> OperationModeRoute {
+    OperationModeRoute::Prepared {
+        support: classify_mode(mode),
+        intermediate_mode: None,
+        paths: classify_route_paths(mode),
+    }
+}
+
+pub(crate) static SUPPORT: OperationSupport = OperationSupport::routed(
+    OperationId::Draw,
+    DRAW_INPUTS,
+    classify_route,
+    DRAW_COMPOSED_OPERATIONS,
+);
 
 pub(crate) struct PreparedDraw<'a> {
     image: &'a DynamicImage,
@@ -243,42 +309,45 @@ pub(crate) fn select_text_strategy(
 /// Executes Text through the exact mode selected by the shared Draw contract.
 pub(crate) fn apply_text(
     selection: StrategySelection,
-    mut input: TextComposeInput<'_>,
+    input: TextComposeInput<'_>,
 ) -> Result<TextComposeResult, PilError> {
     let mode = selection.implementation.mode;
     validate_direct_selection(selection, mode)?;
-    if input.mask_kind == DrawTextMaskKind::Coverage && mode != Mode::ImageRgb8 {
-        let expanded = super::helpers::text_mask::expand_coverage_to_rgba(
-            input.pixels.as_ref(),
-            (input.fill.0, input.fill.1, input.fill.2),
-        );
-        input.pixels = std::borrow::Cow::Owned(expanded);
+    match input.mask_kind {
+        DrawTextMaskKind::Coverage => apply_text_for_mode::<false>(mode, input),
+        DrawTextMaskKind::Rgba => apply_text_for_mode::<true>(mode, input),
     }
+}
+
+fn apply_text_for_mode<const RGBA_MASK: bool>(
+    mode: Mode,
+    input: TextComposeInput<'_>,
+) -> Result<TextComposeResult, PilError> {
     match mode {
-        Mode::One => super::one::ops::apply_text(input),
-        Mode::ImageLuma8 => super::luma8::ops::apply_text(input),
-        Mode::ImageLumaA8 => super::luma_a8::ops::apply_text(input),
+        Mode::One => super::one::ops::apply_text::<RGBA_MASK>(input),
+        Mode::ImageLuma8 => super::luma8::ops::apply_text::<RGBA_MASK>(input),
+        Mode::ImageLumaA8 => super::luma_a8::ops::apply_text::<RGBA_MASK>(input),
         Mode::ImageLaPremultiplied8 => {
-            super::la_premultiplied8::ops::apply_text(input)
+            super::la_premultiplied8::ops::apply_text::<RGBA_MASK>(input)
         }
-        Mode::ImagePalette8 => super::palette8::ops::apply_text(input),
-        Mode::ImagePaletteAlpha8 => super::palette_alpha8::ops::apply_text(input),
-        Mode::ImageRgb8 => super::rgb8::ops::apply_text(input),
-        Mode::ImageRgba8 => super::rgba8::ops::apply_text(input),
+        Mode::ImagePalette8 => super::palette8::ops::apply_text::<RGBA_MASK>(input),
+        Mode::ImagePaletteAlpha8 => super::palette_alpha8::ops::apply_text::<RGBA_MASK>(input),
+        Mode::ImageRgb8 => super::rgb8::ops::apply_text::<RGBA_MASK>(input),
+        Mode::ImageRgba8 => super::rgba8::ops::apply_text::<RGBA_MASK>(input),
         Mode::ImageRgbPremultiplied8 => {
-            super::rgb_premultiplied8::ops::apply_text(input)
+            super::rgb_premultiplied8::ops::apply_text::<RGBA_MASK>(input)
         }
-        Mode::ImageRgbx8 => super::rgbx8::ops::apply_text(input),
-        Mode::ImageCmyk8 => super::cmyk8::ops::apply_text(input),
-        Mode::ImageYCbCr8 => super::ycbcr8::ops::apply_text(input),
-        Mode::ImageLab8 => super::lab8::ops::apply_text(input),
-        Mode::ImageHsv8 => super::hsv8::ops::apply_text(input),
-        Mode::ImageI32 => super::i32::ops::apply_text(input),
-        Mode::ImageF32 => super::f32::ops::apply_text(input),
-        Mode::ImageI16 => super::i16::ops::apply_text(input),
-        Mode::ImageI16L => super::i16l::ops::apply_text(input),
-        Mode::ImageI16B => super::i16b::ops::apply_text(input),
-        Mode::ImageI16N => super::i16n::ops::apply_text(input),
+        Mode::ImageRgbx8 => super::rgbx8::ops::apply_text::<RGBA_MASK>(input),
+        Mode::ImageCmyk8 => super::cmyk8::ops::apply_text::<RGBA_MASK>(input),
+        Mode::ImageYCbCr8 => super::ycbcr8::ops::apply_text::<RGBA_MASK>(input),
+        Mode::ImageLab8 => super::lab8::ops::apply_text::<RGBA_MASK>(input),
+        Mode::ImageHsv8 => super::hsv8::ops::apply_text::<RGBA_MASK>(input),
+        Mode::ImageI32 => super::i32::ops::apply_text::<RGBA_MASK>(input),
+        Mode::ImageF32 => super::f32::ops::apply_text::<RGBA_MASK>(input),
+        Mode::ImageI16 => super::i16::ops::apply_text::<RGBA_MASK>(input),
+        Mode::ImageI16L => super::i16l::ops::apply_text::<RGBA_MASK>(input),
+        Mode::ImageI16B => super::i16b::ops::apply_text::<RGBA_MASK>(input),
+        Mode::ImageI16N => super::i16n::ops::apply_text::<RGBA_MASK>(input),
         Mode::ImageLumaA16
         | Mode::ImageRgb16
         | Mode::ImageRgba16

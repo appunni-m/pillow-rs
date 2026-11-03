@@ -2,6 +2,7 @@
 
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
+use crate::pipeline::PadColorInput;
 use crate::raster::Mode;
 
 /// Canvas facts shared by each exact-mode Pad strategy.
@@ -11,9 +12,12 @@ pub(crate) struct PadFrame {
     pub(crate) height: u32,
     pub(crate) content_width: u32,
     pub(crate) content_height: u32,
-    pub(crate) offset_x: u32,
-    pub(crate) offset_y: u32,
+    pub(crate) offset_x: i64,
+    pub(crate) offset_y: i64,
+    /// Byte-normalized fill used by the existing direct Pad route.
     pub(crate) color: Option<(u8, u8, u8, u8)>,
+    /// Original typed input for native-width mode owners.
+    pub(crate) native_color: Option<PadColorInput>,
 }
 
 /// Row counts for a full-width Pad whose content is already in final shape.
@@ -21,6 +25,44 @@ pub(crate) struct PadFrame {
 pub(crate) struct FullWidthVerticalRows {
     pub(crate) top: usize,
     pub(crate) bottom: usize,
+}
+
+/// A clipped source/destination interval for Pillow Paste's signed placement.
+#[derive(Clone, Copy)]
+pub(crate) struct ClippedAxis {
+    pub(crate) source_start: usize,
+    pub(crate) destination_start: usize,
+    pub(crate) length: usize,
+}
+
+pub(crate) fn clipped_axis(
+    offset: i64,
+    source_extent: usize,
+    destination_extent: usize,
+) -> ClippedAxis {
+    let (source_start, destination_start) = if offset < 0 {
+        (
+            usize::try_from(offset.unsigned_abs())
+                .unwrap_or(usize::MAX)
+                .min(source_extent),
+            0,
+        )
+    } else {
+        (
+            0,
+            usize::try_from(offset)
+                .unwrap_or(usize::MAX)
+                .min(destination_extent),
+        )
+    };
+    let length = source_extent
+        .saturating_sub(source_start)
+        .min(destination_extent.saturating_sub(destination_start));
+    ClippedAxis {
+        source_start,
+        destination_start,
+        length,
+    }
 }
 
 /// Returns the append-only path bounds when the content occupies the full
@@ -99,9 +141,10 @@ pub(crate) fn build(
         height,
         content_width,
         content_height,
-        offset_x,
-        offset_y,
+        offset_x: i64::from(offset_x),
+        offset_y: i64::from(offset_y),
         color,
+        native_color: None,
     })
 }
 
@@ -121,10 +164,12 @@ fn validate_contained_size(
 fn bankers_round(value: f64) -> f64 {
     let floor = value.floor();
     let fraction = value - floor;
-    if fraction == 0.5 {
-        if floor % 2.0 == 0.0 { floor } else { floor + 1.0 }
+    if fraction < 0.5 {
+        floor
+    } else if fraction > 0.5 || floor % 2.0 != 0.0 {
+        floor + 1.0
     } else {
-        (value + 0.5).floor()
+        floor
     }
 }
 

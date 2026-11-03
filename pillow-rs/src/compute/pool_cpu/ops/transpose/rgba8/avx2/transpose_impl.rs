@@ -56,13 +56,14 @@ pub(crate) unsafe fn execute_into(
     let (reverse_x, reverse_y) = transpose_flags(method)?;
     let input_dims = crate::checked_dims::CheckedDims::new(width, height, CHANNELS as u8)?;
     let output_dims = crate::checked_dims::CheckedDims::new(height, width, CHANNELS as u8)?;
-    if image.as_raw().len() != input_dims.total_bytes()
+    if image.as_raw().len() < input_dims.total_bytes()
         || output.len() != output_dims.total_bytes()
     {
         return Err(PilError::InternalError(
             "AVX2 transpose buffer shape mismatch".into(),
         ));
     }
+    let source = &image.as_raw()[..input_dims.total_bytes()];
     let width = width as usize;
     let height = height as usize;
     let full_rows = width / TILE * TILE;
@@ -72,7 +73,7 @@ pub(crate) unsafe fn execute_into(
     // and output shapes establish the exact ranges for full-tile accesses.
     unsafe {
         transpose_full_tiles(
-            image.as_raw(),
+            source,
             output,
             width,
             height,
@@ -83,7 +84,7 @@ pub(crate) unsafe fn execute_into(
         );
     }
     copy_bottom_edge(
-        image.as_raw(),
+        source,
         output,
         width,
         height,
@@ -92,7 +93,7 @@ pub(crate) unsafe fn execute_into(
         reverse_y,
     );
     copy_right_edge(
-        image.as_raw(),
+        source,
         output,
         width,
         height,

@@ -150,6 +150,7 @@ impl LogicalModeAdmission<'_> {
                         | PipelineOp::Crop { .. }
                         | PipelineOp::CropBorder { .. }
                         | PipelineOp::Expand { .. }
+                        | PipelineOp::ExpandTyped { .. }
                         | PipelineOp::Duplicate
                         | PipelineOp::Flip
                         | PipelineOp::Reduce { .. }
@@ -532,6 +533,7 @@ impl LogicalModeAdmission<'_> {
                         | PipelineOp::Crop { .. }
                         | PipelineOp::CropBorder { .. }
                         | PipelineOp::Expand { .. }
+                        | PipelineOp::ExpandTyped { .. }
                         | PipelineOp::Duplicate
                         | PipelineOp::Flip
                         | PipelineOp::Reduce { .. }

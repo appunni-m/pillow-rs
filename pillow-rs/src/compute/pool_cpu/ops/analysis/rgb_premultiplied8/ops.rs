@@ -25,3 +25,36 @@ pub(crate) fn execute_get_data(
         architecture => Err(helpers::missing_architecture(Mode::ImageRgbPremultiplied8, architecture)),
     }
 }
+crate::compute::pool_cpu::ops::analysis::helpers::bbox::declare_getbbox_owner!(
+    rgb_premultiplied8,
+    ImageRgbPremultiplied8,
+    crate::raster::RgbaImage,
+);
+
+crate::compute::pool_cpu::ops::analysis::helpers::extrema::declare_getextrema_owner!(
+    ImageRgbPremultiplied8,
+    crate::raster::RgbaImage,
+    crate::compute::pool_cpu::ops::analysis::helpers::extrema::bytes,
+);
+
+crate::compute::pool_cpu::ops::analysis::helpers::histogram_execution::declare_histogram_owner!(
+    ImageRgbPremultiplied8,
+    crate::raster::RgbaImage,
+    crate::compute::pool_cpu::ops::analysis::rgb_premultiplied8::default::histogram_impl::execute,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::getcolors_execution::declare_getcolors_owner!(
+    ImageRgbPremultiplied8,
+    crate::raster::RgbaImage,
+    crate::compute::pool_cpu::ops::analysis::rgb_premultiplied8::default::getcolors_impl::execute,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::stat_execution::declare_stat_owner!(
+    ImageRgbPremultiplied8,
+    crate::raster::RgbaImage,
+    crate::compute::pool_cpu::ops::analysis::rgb_premultiplied8::default::stat_impl::execute,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::extrema_bytes_execution::
+    declare_getextrema_bytes_owner!(
+    ImageRgbPremultiplied8,
+    crate::raster::RgbaImage,
+    crate::compute::pool_cpu::ops::analysis::rgb_premultiplied8::default::extrema_bytes_impl::execute,
+);

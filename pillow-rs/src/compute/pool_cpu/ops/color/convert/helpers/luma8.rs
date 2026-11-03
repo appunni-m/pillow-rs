@@ -40,7 +40,7 @@ pub(crate) fn execute_palette_target<I>(
 where
     I: Iterator<Item = u8>,
 {
-    let identity_palette = crate::ops::quantize::identity_grayscale_palette();
+    let identity_palette = crate::compute::pool_cpu::helpers::quantization::identity_grayscale_palette();
     match target {
         Mode::ImagePalette8 => {
             let indices = to_luma8(width, height, samples);

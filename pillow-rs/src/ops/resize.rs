@@ -15,6 +15,23 @@ pub enum ResampleInput {
     Name(String),
 }
 
+/// Geometry selected by Pillow's thumbnail size preflight.
+///
+/// Keep this plan across host-side input coercion. Python callbacks can mutate
+/// the wrapped image between preflight and execution, but Pillow has already
+/// selected the output dimensions by then.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ThumbnailPlan {
+    dimensions: (u32, u32),
+}
+
+impl ThumbnailPlan {
+    /// Returns the target size selected by preflight.
+    pub const fn output_size(self) -> (u32, u32) {
+        self.dimensions
+    }
+}
+
 const RESAMPLE_GUIDANCE: &str = concat!(
     "Use Image.Resampling.NEAREST (0), Image.Resampling.LANCZOS (1), ",
     "Image.Resampling.BILINEAR (2), Image.Resampling.BICUBIC (3), ",
@@ -242,15 +259,49 @@ impl Image {
     fn resize_with_filter(
         &self,
         (w, h): (u32, u32),
-        mut filter: ResampleFilter,
+        filter: ResampleFilter,
         mode: Mode,
     ) -> Result<Image, PilError> {
-        // Only single-band indexed samples force nearest. PA retains the
-        // requested filter over its independent raw index and alpha bands.
-        if matches!(mode, Mode::One | Mode::ImagePalette8) {
-            filter = ResampleFilter::Nearest;
-        }
+        let filter = crate::compute::pool_cpu::ops::resize::ops::effective_filter(mode, filter);
         Ok(Image::push_op(self, PipelineOp::Resize { w, h, filter }))
+    }
+
+    /// Prepares a Pillow-style thumbnail from the image's current dimensions.
+    ///
+    /// This preflight reads the source dimensions, validates output geometry
+    /// before resampling input, and returns `None` for Pillow's early no-op
+    /// and for requests whose computed output equals the source. Known-size
+    /// lazy sources stay unmaterialized. Bindings retain the plan while
+    /// coercing host values, then pass it to [`Self::thumbnail_with_plan`].
+    ///
+    /// # Errors
+    ///
+    /// Returns the same size and geometry errors as the initial phase of
+    /// [`Self::thumbnail`].
+    pub fn prepare_thumbnail(
+        &self,
+        size: (i64, i64),
+    ) -> Result<Option<ThumbnailPlan>, PilError> {
+        let source_size = self.size()?;
+        if size.0 >= i64::from(source_size.0)
+            && size.1 >= i64::from(source_size.1)
+            && size.0 >= 0
+            && size.1 >= 0
+        {
+            return Ok(None);
+        }
+        let dimensions = Self::thumbnail_dimensions(size, source_size)?;
+        if dimensions == (0, 0) || dimensions == source_size {
+            return Ok(None);
+        }
+        Ok(Some(ThumbnailPlan { dimensions }))
+    }
+
+    /// Reports whether a Pillow-style thumbnail request reaches its resize path.
+    ///
+    /// Known-size lazy sources stay unmaterialized during this geometry check.
+    pub fn thumbnail_needs_resize(&self, size: (i64, i64)) -> Result<bool, PilError> {
+        Ok(self.prepare_thumbnail(size)?.is_some())
     }
 
     /// Queues an in-place Pillow-style thumbnail resize from public input.
@@ -260,81 +311,89 @@ impl Image {
     ///
     /// # Errors
     ///
-    /// Returns [`PilError::ValueError`] for negative dimensions or
-    /// [`PilError::ZeroDivisionError`] for a single zero dimension. An
-    /// all-zero request is a Pillow no-op.
+    /// Returns [`PilError::ValueError`] for invalid computed dimensions or
+    /// [`PilError::ZeroDivisionError`] when aspect-ratio calculation divides by
+    /// zero. Requests that already contain the source return without resizing.
     pub fn thumbnail(
         &mut self,
         size: (i64, i64),
         filter: Option<ResampleInput>,
     ) -> Result<(), PilError> {
-        // Pillow's in-place thumbnail loads the source before returning from
-        // the public call. Keep that boundary for decode-backed images and
-        // every operation prefix except RGB PutPixel cases whose selected
-        // backend can fold the writes exactly into its reducing-gap pass.
+        self.thumbnail_with_options(size, filter, Some(2.0))
+    }
+
+    /// Queues a Pillow-style thumbnail with an optional reduction gap.
+    ///
+    /// `None` disables Pillow's reducing-gap pass. The default `thumbnail`
+    /// method supplies Pillow's default gap of `2.0`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] for invalid geometry, filters, or reduction gaps.
+    pub fn thumbnail_with_options(
+        &mut self,
+        size: (i64, i64),
+        filter: Option<ResampleInput>,
+        reducing_gap: Option<f64>,
+    ) -> Result<(), PilError> {
+        let Some(plan) = self.prepare_thumbnail(size)? else {
+            return Ok(());
+        };
+        self.thumbnail_with_plan(plan, filter, reducing_gap)
+    }
+
+    /// Queues a thumbnail using dimensions selected by [`Self::prepare_thumbnail`].
+    ///
+    /// Host bindings use this after converting Python values, which may run
+    /// callbacks that mutate the image. Applying the saved plan preserves the
+    /// dimensions Pillow selected before those callbacks.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] for an invalid filter, reduction gap, or source
+    /// image that cannot be resized.
+    pub fn thumbnail_with_plan(
+        &mut self,
+        plan: ThumbnailPlan,
+        filter: Option<ResampleInput>,
+        reducing_gap: Option<f64>,
+    ) -> Result<(), PilError> {
         let deferable_putpixel_prefix = self.has_deferable_rgb_putpixel_prefix();
-        let source_size = if deferable_putpixel_prefix {
-            self.size()?
-        } else {
-            self.materialized_shared()?.dimensions()
-        };
-        // Pillow returns before evaluating the aspect-ratio division when
-        // both requested bounds already contain the source. This also covers
-        // empty images: every non-negative bound contains a (0, 0) source,
-        // so thumbnail((0, 2)) is a no-op rather than division by zero.
-        if size.0 >= i64::from(source_size.0)
-            && size.1 >= i64::from(source_size.1)
-            && size.0 >= 0
-            && size.1 >= 0
-        {
-            if deferable_putpixel_prefix {
-                self.materialized_shared()?;
-            }
+        let source_size = self.size()?;
+        let dimensions = plan.dimensions;
+        let mut filter = parse_resample_input(filter)?;
+        if reducing_gap.is_some_and(|gap| gap < 1.0) {
+            return Err(PilError::ValueError(
+                "reducing_gap must be 1.0 or greater".into(),
+            ));
+        }
+        // Pillow's resize call can become an identity after an effectful host
+        // conversion changes the image to the already selected target size.
+        if source_size == dimensions {
             return Ok(());
         }
-        let dimensions = match Self::thumbnail_dimensions(size, source_size) {
-            Ok(dimensions) => dimensions,
-            Err(error) => {
-                if deferable_putpixel_prefix {
-                    self.materialized_shared()?;
-                }
-                return Err(error);
-            }
-        };
-        if dimensions == (0, 0) {
-            if deferable_putpixel_prefix {
-                self.materialized_shared()?;
-            }
-            return Ok(());
-        }
-        let mut filter = match parse_resample_input(filter) {
-            Ok(filter) => filter,
-            Err(error) => {
-                if deferable_putpixel_prefix {
-                    self.materialized_shared()?;
-                }
-                return Err(error);
-            }
-        };
         if source_size.0 == 0 || source_size.1 == 0 {
             // Pillow's aspect-preserving size can be positive even when the
             // source has a zero dimension. Its subsequent Image.resize call
             // then rejects the zero-sized source before any pixels are produced.
-            if deferable_putpixel_prefix {
-                self.materialized_shared()?;
-            }
+            self.materialized_shared()?;
             return Err(PilError::ValueError("height and width must be > 0".into()));
         }
-        if deferable_putpixel_prefix
-            && !self.can_defer_rgb_putpixel_thumbnail(dimensions.0, dimensions.1, filter)
-        {
+        let can_defer = deferable_putpixel_prefix
+            && self.can_defer_rgb_putpixel_thumbnail(
+                dimensions.0,
+                dimensions.1,
+                filter,
+                reducing_gap,
+            );
+        if !can_defer {
             self.materialized_shared()?;
         }
         let mode = match self.known_mode_identity() {
             Some(mode) => mode,
             None => self.materialized_shared()?.mode(),
         };
-        self.thumbnail_with_filter(dimensions, &mut filter, mode)
+        self.thumbnail_with_filter(dimensions, &mut filter, mode, reducing_gap)
     }
 
     fn thumbnail_with_filter(
@@ -342,6 +401,7 @@ impl Image {
         (w, h): (u32, u32),
         filter: &mut ResampleFilter,
         mode: Mode,
+        reducing_gap: Option<f64>,
     ) -> Result<(), PilError> {
         // PIL forces NEAREST for indexed samples, including PA's raw
         // index/alpha pairs, to preserve the sample layout.
@@ -354,6 +414,7 @@ impl Image {
                 w,
                 h,
                 filter: *filter,
+                reducing_gap,
             },
         );
         *self = new_self;
@@ -481,26 +542,7 @@ fn validate_resize_box(
     bounds: (f64, f64, f64, f64),
     size: (u32, u32),
 ) -> Result<(f64, f64, f64, f64), PilError> {
-    // _imaging.c reads a float32 box before checking its bounds. A double
-    // just outside an edge may round back to that edge and remain valid.
-    let bounds = (
-        f64::from(bounds.0 as f32),
-        f64::from(bounds.1 as f32),
-        f64::from(bounds.2 as f32),
-        f64::from(bounds.3 as f32),
-    );
-    if bounds.0 < 0.0 || bounds.1 < 0.0 {
-        return Err(PilError::ValueError("box offset can't be negative".into()));
-    }
-    if bounds.2 > f64::from(size.0 as f32) || bounds.3 > f64::from(size.1 as f32) {
-        return Err(PilError::ValueError(
-            "box can't exceed original image size".into(),
-        ));
-    }
-    if bounds.2 < bounds.0 || bounds.3 < bounds.1 {
-        return Err(PilError::ValueError("box can't be empty".into()));
-    }
-    Ok(bounds)
+    crate::compute::pool_cpu::ops::resize::helpers::boxed_crop::validate_bounds(bounds, size)
 }
 
 fn positive_dimensions(size: (i64, i64), message: &str) -> Result<(u32, u32), PilError> {
@@ -594,7 +636,12 @@ mod tests {
         image.putpixel(2, 3, 180, 120, 60, 255).unwrap();
         let image = image.use_backend(Backend::Simd);
         assert!(image.has_deferable_rgb_putpixel_prefix());
-        assert!(image.can_defer_rgb_putpixel_thumbnail(256, 192, ResampleFilter::Bicubic));
+        assert!(image.can_defer_rgb_putpixel_thumbnail(
+            256,
+            192,
+            ResampleFilter::Bicubic,
+            Some(2.0),
+        ));
 
         let mut image = image;
         image

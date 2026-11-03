@@ -5,11 +5,10 @@
 //! SSE2, NEON, and Wasm SIMD128 strategies for the archived `1/L/P`, `LA/PA`,
 //! `RGB`, and `RGBA/CMYK` layouts; its shared byte kernel lives in
 //! `pool_cpu/helpers/bytes` and preserves every stored byte.
-// TODO(pillow-rs#3ptb): finish comparing the archived formula and mode matrix
-// with Add/Sub, Multiply/Screen, bytewise, LUT, logical, and Invert declarations.
-// Then complete direct caller review in `batch_execution.rs`, SIMD-request
-// routing, and the remaining architecture guards and fallback paths.
-
+//! Binary and fused Chops paths now apply their native byte arithmetic to
+//! retained omitted lanes, including owned in-place batch execution. Missing
+//! producer lane state remains a source-owner TODO; Offset remaps lanes and
+//! Invert transforms every retained byte.
 use std::sync::Arc;
 
 use crate::compute::{Architecture, ExecutionContext};
@@ -36,6 +35,9 @@ const BINARY_MODES_3: &[Mode] = &[
     Mode::ImageLab8,
     Mode::ImageHsv8,
 ];
+const LAB_CORE_ONLY_MODES: &[Mode] = &[Mode::ImageLab8];
+const LAB_CORE_ONLY_REASON: &str =
+    "native three-byte LAB Chops extends Pillow's binary mode contract";
 const BINARY_MODES_4: &[Mode] = &[
     Mode::ImageRgba8,
     Mode::ImageCmyk8,
@@ -44,22 +46,33 @@ const BINARY_MODES_4: &[Mode] = &[
 ];
 const BINARY_INPUTS_1: &[InputContract] = &[InputContract::ChopsBinaryModes {
     modes: BINARY_MODES_1,
+    core_only_modes: &[],
+    core_only_reason: None,
     rejection_reason: "images do not match",
 }];
 const BINARY_INPUTS_2: &[InputContract] = &[InputContract::ChopsBinaryModes {
     modes: BINARY_MODES_2,
+    core_only_modes: &[],
+    core_only_reason: None,
     rejection_reason: "images do not match",
 }];
 const BINARY_INPUTS_3: &[InputContract] = &[InputContract::ChopsBinaryModes {
     modes: BINARY_MODES_3,
+    // NO_PILLOW_SUPPORT: LAB uses the native three-byte Chops strategy in Rust.
+    core_only_modes: LAB_CORE_ONLY_MODES,
+    core_only_reason: Some(LAB_CORE_ONLY_REASON),
     rejection_reason: "images do not match",
 }];
 const BINARY_INPUTS_4: &[InputContract] = &[InputContract::ChopsBinaryModes {
     modes: BINARY_MODES_4,
+    core_only_modes: &[],
+    core_only_reason: None,
     rejection_reason: "images do not match",
 }];
 const LOGICAL_INPUTS: &[InputContract] = &[InputContract::ChopsBinaryModes {
     modes: &[Mode::One],
+    core_only_modes: &[],
+    core_only_reason: None,
     rejection_reason: "image has wrong mode",
 }];
 const BINARY_INPUTS: &[InputContract] = &[InputContract::ChopsBinaryModes {
@@ -79,6 +92,9 @@ const BINARY_INPUTS: &[InputContract] = &[InputContract::ChopsBinaryModes {
         Mode::ImageRgbPremultiplied8,
         Mode::ImageRgbx8,
     ],
+    // NO_PILLOW_SUPPORT: LAB participates in native three-byte Chops pairs only in Rust.
+    core_only_modes: LAB_CORE_ONLY_MODES,
+    core_only_reason: Some(LAB_CORE_ONLY_REASON),
     rejection_reason: "images do not match",
 }];
 const NO_INPUTS: &[InputContract] = &[];
@@ -153,6 +169,17 @@ pub(super) fn mode_support_with_architectures(
     architectures: &'static [crate::compute::registry::support::ImplementationSupport],
 ) -> ModeSupport {
     if let Some(inputs) = binary_inputs_for(operation, mode) {
+        if mode == Mode::ImageLab8 {
+            // NO_PILLOW_SUPPORT: LAB binary Chops is a Rust-only native-byte extension.
+            return ModeSupport::cpu_core_only(
+                operation,
+                mode,
+                OutputModeRule::Preserve,
+                inputs,
+                architectures,
+                LAB_CORE_ONLY_REASON,
+            );
+        }
         return ModeSupport::cpu(
             operation,
             mode,
@@ -175,6 +202,8 @@ pub(super) fn mode_support_with_architectures(
                 rejected(mode, "image has wrong mode")
             }
         }
+        // NO_PILLOW_SUPPORT: native high-depth identities extend Constant
+        // beyond Pillow's ImageChops mode contract.
         OperationId::ChopsConstant if internal_mode(mode) => ModeSupport::cpu_core_only(
             operation,
             mode,
@@ -190,6 +219,8 @@ pub(super) fn mode_support_with_architectures(
             NO_INPUTS,
             &[],
         ),
+        // NO_PILLOW_SUPPORT: internal high-depth identities extend Offset and
+        // Duplicate beyond Pillow's ImageChops mode contract.
         OperationId::ChopsOffset | OperationId::ChopsDuplicate if internal_mode(mode) => {
             ModeSupport::cpu_core_only(
                 operation,
@@ -200,7 +231,14 @@ pub(super) fn mode_support_with_architectures(
                 "operation accepts an internal high-depth source mode",
             )
         }
-        OperationId::ChopsOffset | OperationId::ChopsDuplicate => {
+        OperationId::ChopsOffset => ModeSupport::cpu(
+            operation,
+            mode,
+            OutputModeRule::Preserve,
+            NO_INPUTS,
+            architectures,
+        ),
+        OperationId::ChopsDuplicate => {
             ModeSupport::cpu(operation, mode, OutputModeRule::Preserve, NO_INPUTS, &[])
         }
         OperationId::ChopsInvert
@@ -361,13 +399,27 @@ impl PreparedChopsFusion<'_> {
         &self.selection
     }
 
-    pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
-        execute_fused_multiply_screen(
+    pub(crate) fn execute(self) -> Result<super::helpers::fusion::FusedChopsOutput, PilError> {
+        let mut output = execute_fused_multiply_screen(
             self.image,
             &self.other,
             self.mode,
             self.selection.implementation.architecture,
-        )
+        )?;
+        let lanes = super::helpers::binary::output_hidden_lanes_with(
+            self.image,
+            &self.other,
+            |left, right| {
+                let multiplied = BinaryOperation::Multiply.apply_to_byte(left, right);
+                BinaryOperation::Screen.apply_to_byte(multiplied, right)
+            },
+        )?;
+        if !output.image.replace_hidden_pixel_lanes(lanes) {
+            return Err(PilError::InternalError(
+                "Chops fusion output physical lanes did not match its mode".into(),
+            ));
+        }
+        Ok(output)
     }
 }
 
@@ -376,7 +428,7 @@ fn execute_fused_multiply_screen(
     other: &DynamicImage,
     mode: Mode,
     architecture: Architecture,
-) -> Result<DynamicImage, PilError> {
+) -> Result<super::helpers::fusion::FusedChopsOutput, PilError> {
     match mode {
         Mode::ImageLuma8 => super::luma8::ops::execute_fused(image, other, architecture),
         Mode::ImageLumaA8 => super::luma_a8::ops::execute_fused(image, other, architecture),
@@ -406,14 +458,15 @@ impl ChopsExecutionPlan {
         if image.width() == 0 || image.height() == 0 {
             return image.as_bytes().is_empty();
         }
-        super::helpers::binary::byte_channels(self.mode)
-            .and_then(|channels| image.width().checked_mul(u32::from(channels)))
-            .is_some_and(|row_bytes| row_bytes >= 8)
+        let height = image.height() as usize;
+        let bytes = image.as_bytes();
+        bytes.len() % height == 0 && bytes.len() / height >= 8
     }
 
     pub(crate) fn execute(self, image: &DynamicImage) -> Result<DynamicImage, PilError> {
         let architecture = self.selection.implementation.architecture;
-        match self.mode {
+        let other = self.other.as_deref();
+        let mut output = match self.mode {
             Mode::One => super::one::ops::execute(image, self.request, self.other.as_deref(), architecture),
             Mode::ImageLuma8 => super::luma8::ops::execute(image, self.request, self.other.as_deref(), architecture),
             Mode::ImageLumaA8 => super::luma_a8::ops::execute(image, self.request, self.other.as_deref(), architecture),
@@ -430,18 +483,25 @@ impl ChopsExecutionPlan {
             Mode::ImageYCbCr8 => super::ycbcr8::ops::execute(image, self.request, self.other.as_deref(), architecture),
             Mode::ImageLab8 => super::lab8::ops::execute(image, self.request, self.other.as_deref()),
             Mode::ImageHsv8 => super::hsv8::ops::execute(image, self.request, self.other.as_deref(), architecture),
-            Mode::ImageI32 => super::i32::ops::execute(image, self.request, self.other.as_deref()),
-            Mode::ImageF32 => super::f32::ops::execute(image, self.request, self.other.as_deref()),
-            Mode::ImageI16 => super::i16::ops::execute(image, self.request, self.other.as_deref()),
-            Mode::ImageI16L => super::i16l::ops::execute(image, self.request, self.other.as_deref()),
-            Mode::ImageI16B => super::i16b::ops::execute(image, self.request, self.other.as_deref()),
-            Mode::ImageI16N => super::i16n::ops::execute(image, self.request, self.other.as_deref()),
+            Mode::ImageI32 => super::i32::ops::execute(image, self.request, self.other.as_deref(), architecture),
+            Mode::ImageF32 => super::f32::ops::execute(image, self.request, self.other.as_deref(), architecture),
+            Mode::ImageI16 => super::i16::ops::execute(image, self.request, self.other.as_deref(), architecture),
+            Mode::ImageI16L => super::i16l::ops::execute(image, self.request, self.other.as_deref(), architecture),
+            Mode::ImageI16B => super::i16b::ops::execute(image, self.request, self.other.as_deref(), architecture),
+            Mode::ImageI16N => super::i16n::ops::execute(image, self.request, self.other.as_deref(), architecture),
             Mode::ImageLumaA16 => super::luma_a16::ops::execute(image, self.request, self.other.as_deref()),
             Mode::ImageRgb16 => super::rgb16::ops::execute(image, self.request, self.other.as_deref()),
             Mode::ImageRgba16 => super::rgba16::ops::execute(image, self.request, self.other.as_deref()),
             Mode::ImageRgb32F => super::rgb32f::ops::execute(image, self.request, self.other.as_deref()),
-            Mode::ImageRgba32F => super::rgba32f::ops::execute(image, self.request, self.other.as_deref()),
+            Mode::ImageRgba32F => super::rgba32f::ops::execute(image, self.request, other),
+        }?;
+        if let ChopsRequest::Binary(operation) = self.request {
+            let other = other.ok_or_else(|| {
+                PilError::InternalError("Chops binary plan lost its secondary image".into())
+            })?;
+            super::helpers::binary::carry_hidden_lanes(image, other, &mut output, operation)?;
         }
+        Ok(output)
     }
 
     pub(crate) fn execute_in_place(self, image: &mut DynamicImage) -> Result<(), PilError> {
@@ -454,6 +514,12 @@ impl ChopsExecutionPlan {
         let other = self.other.as_deref().ok_or_else(|| {
             PilError::InternalError("Chops in-place plan lost its secondary image".into())
         })?;
+        let hidden_lanes = match self.request {
+            ChopsRequest::Binary(operation) => Some(
+                super::helpers::binary::output_hidden_lanes(image, other, operation)?,
+            ),
+            _ => None,
+        };
         match self.mode {
             Mode::One => super::one::ops::execute_in_place(image, self.request, other, architecture),
             Mode::ImageLuma8 => super::luma8::ops::execute_in_place(image, self.request, other, architecture),
@@ -470,7 +536,15 @@ impl ChopsExecutionPlan {
             _ => Err(PilError::InternalError(
                 "Chops Add/Sub plan selected an unsupported native mode".into(),
             )),
+        }?;
+        if let Some(hidden_lanes) = hidden_lanes {
+            if !image.replace_hidden_pixel_lanes(hidden_lanes) {
+                return Err(PilError::InternalError(
+                    "Chops in-place output physical lanes did not match its mode".into(),
+                ));
+            }
         }
+        Ok(())
     }
 }
 
@@ -686,22 +760,25 @@ fn request(op: &PipelineOp) -> Result<ChopsRequest, PilError> {
     Ok(request)
 }
 
-pub(super) fn execute_mode(
+pub(super) fn execute_shared(
     image: &DynamicImage,
-    mode: Mode,
     request: ChopsRequest,
-    other: Option<&DynamicImage>,
 ) -> Result<DynamicImage, PilError> {
     match request {
-        ChopsRequest::Binary(operation) => {
-            let other = other.ok_or_else(|| {
-                PilError::InternalError("Chops binary plan lost its secondary image".into())
-            })?;
-            super::helpers::binary::execute(image, other, mode, operation)
-        }
-        ChopsRequest::Constant(value) => Ok(super::helpers::unary::constant(image, value)),
-        ChopsRequest::Offset { x, y } => Ok(super::helpers::unary::offset(image, x, y)),
+        ChopsRequest::Binary(_) => Err(PilError::InternalError(
+            "Chops binary request bypassed its exact-mode strategy".into(),
+        )),
+        ChopsRequest::Constant(value) => Ok(super::helpers::unary::constant(
+            image.width(),
+            image.height(),
+            value,
+        )),
+        ChopsRequest::Offset { .. } => Err(PilError::InternalError(
+            "Chops Offset bypassed its exact-mode Default strategy".into(),
+        )),
         ChopsRequest::Duplicate => Ok(super::helpers::unary::duplicate(image)),
-        ChopsRequest::Invert => super::helpers::unary::invert(image, mode),
+        ChopsRequest::Invert => Err(PilError::InternalError(
+            "Chops Invert bypassed its exact-mode Default strategy".into(),
+        )),
     }
 }

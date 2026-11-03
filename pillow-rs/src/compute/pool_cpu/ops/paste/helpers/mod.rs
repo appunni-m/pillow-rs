@@ -8,3 +8,5 @@ pub(crate) mod region;
 pub(crate) mod strategy;
 pub(crate) mod typed;
 pub(crate) mod vector;
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+pub(crate) mod kernels;

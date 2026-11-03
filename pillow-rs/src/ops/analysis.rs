@@ -2,7 +2,8 @@
 //!
 //! These methods materialize lazy pipelines before scanning pixels. Results are
 //! returned as Rust primitives instead of Python tuples or lists.
-
+use crate::compute::registry::support::OperationId;
+use crate::compute::PipelineOperationTelemetryCapture;
 use crate::error::PilError;
 use crate::image::Image;
 use crate::raster::Mode;
@@ -18,6 +19,15 @@ pub enum ImageAnalysisMask {
     /// bindings can expose Pillow's attribute error without inspecting host
     /// objects in the core.
     Invalid(String),
+}
+
+/// Native I/F sample range for Histogram and its Entropy composition.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum HistogramExtrema {
+    /// Signed 32-bit lower and upper sample values for `I` mode.
+    ImageI32 { minimum: i32, maximum: i32 },
+    /// Float32 lower and upper sample values for `F` mode.
+    ImageF32 { minimum: f32, maximum: f32 },
 }
 
 mod bbox;
@@ -42,9 +52,22 @@ pub fn validate_transparency_mask(image: &Image, mask: &Image) -> Result<(), Pil
 impl Image {
     /// Computes a histogram after validating a host-neutral optional mask.
     pub fn histogram_with_input(&self, mask: ImageAnalysisMask) -> Result<Vec<u32>, PilError> {
+        self.histogram_with_input_and_extrema(mask, None)
+    }
+
+    /// Computes a histogram with Pillow's optional native `I`/`F` range.
+    pub fn histogram_with_input_and_extrema(
+        &self,
+        mask: ImageAnalysisMask,
+        extrema: Option<HistogramExtrema>,
+    ) -> Result<Vec<u32>, PilError> {
         match mask {
-            ImageAnalysisMask::None => self.histogram(),
-            ImageAnalysisMask::Image(mask) => self.histogram_with_mask(Some(&mask)),
+            ImageAnalysisMask::None => self.histogram_with_extrema(extrema),
+            // Pillow supplies a fixed (0, 0) range to the masked ImagingCore
+            // route; the mask itself is unsupported for I/F modes.
+            ImageAnalysisMask::Image(mask) => {
+                self.histogram_with_mask_and_extrema(Some(&mask), None)
+            }
             ImageAnalysisMask::Invalid(type_name) => Err(PilError::AttributeError(format!(
                 "'{type_name}' object has no attribute 'load'"
             ))),
@@ -53,9 +76,21 @@ impl Image {
 
     /// Computes entropy after validating a host-neutral optional mask.
     pub fn entropy_with_input(&self, mask: ImageAnalysisMask) -> Result<f64, PilError> {
+        self.entropy_with_input_and_extrema(mask, None)
+    }
+
+    /// Computes entropy using an optional native `I`/`F` histogram range.
+    // NO_PILLOW_SUPPORT: Pillow's public `Image.entropy` accepts a mask only.
+    pub fn entropy_with_input_and_extrema(
+        &self,
+        mask: ImageAnalysisMask,
+        extrema: Option<HistogramExtrema>,
+    ) -> Result<f64, PilError> {
         match mask {
-            ImageAnalysisMask::None => self.entropy(),
-            ImageAnalysisMask::Image(mask) => self.entropy_with_mask(Some(&mask)),
+            ImageAnalysisMask::None => self.entropy_with_extrema(extrema),
+            ImageAnalysisMask::Image(mask) => {
+                self.entropy_with_mask_and_extrema(Some(&mask), None)
+            }
             ImageAnalysisMask::Invalid(type_name) => Err(PilError::AttributeError(format!(
                 "'{type_name}' object has no attribute 'load'"
             ))),
@@ -64,70 +99,72 @@ impl Image {
 }
 
 impl Image {
-    /// Returns minimum and maximum byte values per band.
+    /// Returns minimum and maximum byte values per result lane.
     ///
-    /// Bands are returned in decoded image order. Each pair is `(min, max)`.
+    /// Lanes follow the existing Rust/JS result contract. Wide modes project
+    /// native samples to bytes; Python's Pillow-facing method uses typed
+    /// results from `getextrema_formatted` instead.
     ///
     /// # Errors
     ///
     /// Returns [`PilError`] when materialization fails.
     pub fn getextrema(&self) -> Result<Vec<(u8, u8)>, PilError> {
-        let img = self.materialized_shared()?;
-
-        let bands = match img.color() {
-            crate::raster::ColorType::L8 | crate::raster::ColorType::L16 => 1,
-            crate::raster::ColorType::La8 | crate::raster::ColorType::La16 => 2,
-            crate::raster::ColorType::Rgb8 | crate::raster::ColorType::Rgb16 => 3,
-            _ => 4,
+        let mode = self.mode_identity()?;
+        OperationId::GetExtremaBytes
+            .support()
+            .for_mode(mode)
+            .validate_mode()?;
+        let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
+        let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
+        let image = self.materialized_shared()?;
+        operation_receipts.capture();
+        let telemetry = if crate::compute::Backend::pipeline_telemetry_enabled() {
+            // TODO(pillow-rs#3ptb): define aggregate timing/resource semantics
+            // for lazy source graphs; this summary covers the terminal scan.
+            let telemetry = crate::compute::begin_eager_cpu_operation_telemetry(
+                "GetExtremaBytes",
+                requested_backend,
+            );
+            operation_receipts.restore();
+            Some(telemetry)
+        } else {
+            None
         };
-
-        let mut extrema = vec![(255u8, 0u8); bands];
-        // Use the appropriate pixel reader based on color type
-        match img.as_ref() {
-            crate::raster::DynamicImage::One(luma)
-            | crate::raster::DynamicImage::ImageLuma8(luma)
-            | crate::raster::DynamicImage::ImagePalette8(luma) => {
-                for px in luma.pixels() {
-                    extrema[0].0 = extrema[0].0.min(px[0]);
-                    extrema[0].1 = extrema[0].1.max(px[0]);
+        let result: Result<
+            (
+                Vec<(u8, u8)>,
+                crate::compute::registry::support::StrategySelection,
+            ),
+            PilError,
+        > = (|| {
+            let prepared = crate::compute::pool_cpu::ops::analysis::ops::prepare_get_extrema_bytes(
+                image.as_ref(),
+                &context,
+            )?;
+            let selection = *prepared.selection();
+            Ok((prepared.execute()?, selection))
+        })();
+        if let Some(telemetry) = telemetry {
+            match result {
+                Ok((extrema, selection)) => {
+                    crate::compute::finish_eager_cpu_operation_telemetry_with_selection(
+                        telemetry,
+                        extrema
+                            .len()
+                            .saturating_mul(std::mem::size_of::<(u8, u8)>()),
+                        "GetExtremaBytes",
+                        selection,
+                    );
+                    Ok(extrema)
+                }
+                Err(error) => {
+                    crate::compute::cancel_eager_cpu_operation_telemetry(telemetry);
+                    Err(error)
                 }
             }
-            crate::raster::DynamicImage::ImageLumaA8(la)
-            | crate::raster::DynamicImage::ImageLaPremultiplied8(la)
-            | crate::raster::DynamicImage::ImagePaletteAlpha8(la) => {
-                for px in la.pixels() {
-                    extrema[0].0 = extrema[0].0.min(px[0]);
-                    extrema[0].1 = extrema[0].1.max(px[0]);
-                    extrema[1].0 = extrema[1].0.min(px[1]);
-                    extrema[1].1 = extrema[1].1.max(px[1]);
-                }
-            }
-            crate::raster::DynamicImage::ImageRgb8(rgb) => {
-                for px in rgb.pixels() {
-                    for b in 0..3 {
-                        extrema[b].0 = extrema[b].0.min(px[b]);
-                        extrema[b].1 = extrema[b].1.max(px[b]);
-                    }
-                }
-            }
-            crate::raster::DynamicImage::ImageRgba8(rgba) => {
-                for px in rgba.pixels() {
-                    for b in 0..4 {
-                        extrema[b].0 = extrema[b].0.min(px[b]);
-                        extrema[b].1 = extrema[b].1.max(px[b]);
-                    }
-                }
-            }
-            _ => {
-                let rgba = img.to_rgba8();
-                for px in rgba.pixels() {
-                    for b in 0..bands.min(4) {
-                        extrema[b].0 = extrema[b].0.min(px[b]);
-                        extrema[b].1 = extrema[b].1.max(px[b]);
-                    }
-                }
-            }
+        } else {
+            result.map(|(extrema, _)| extrema)
         }
-        Ok(extrema)
     }
+
 }

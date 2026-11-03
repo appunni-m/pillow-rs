@@ -38,7 +38,8 @@ fn palette_to_text(palette: Vec<u8>, mode: &str) -> String {
 #[pyfunction]
 fn getcolor(color: &str, mode: &str) -> PyResult<Py<PyAny>> {
     let (r, g, b, a) = pillow_rs::parse_color_str_unclamped(color).map_err(map_error)?;
-    let result = pillow_rs::getcolor(r, g, b, a, mode).map_err(map_error)?;
+    let mode = pillow_rs::ColorOutputMode::parse_pillow_name(mode).map_err(map_error)?;
+    let result = pillow_rs::getcolor(r, g, b, a, mode);
     Python::attach(|py| match result {
         pillow_rs::ColorValue::Gray(value) => Ok(value.into_py_any(py)?),
         pillow_rs::ColorValue::GrayAlpha(gray, alpha) => Ok((gray, alpha).into_py_any(py)?),

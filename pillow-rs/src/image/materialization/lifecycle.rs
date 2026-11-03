@@ -43,6 +43,94 @@ impl Image {
         }
     }
 
+    fn pipeline_to_loaded(
+        image_handle: &Image,
+        source: &Image,
+        ops: &super::super::PipelineOps,
+        mode: &super::super::PipelineModeCache,
+        format: Option<image_slash_star::ImageFormat>,
+        palette: &Option<Vec<u8>>,
+        palette_alpha: &Option<Vec<u8>>,
+    ) -> Result<Image, PilError> {
+        let image = image_handle.materialized_shared()?;
+        if let Some(output) = ops.palette_output() {
+            let source_format = image_handle.source_format();
+            let info = image_handle.image_info();
+            let exif = image_handle.exif_metadata();
+            return match output.mode {
+                crate::raster::Mode::ImagePalette8
+                    if matches!(
+                        output.wrapper_metadata,
+                        crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata::PreserveSourceLoaded
+                    ) =>
+                {
+                    Ok(Image::Loaded(LoadedData {
+                        image,
+                        known_zero_fill: false,
+                        palette: output.palette.clone(),
+                        palette_alpha: output.palette_alpha.clone(),
+                        source_format,
+                        info,
+                        exif,
+                    }))
+                }
+                crate::raster::Mode::ImagePalette8 => {
+                    let retained_palette = output.palette.clone().ok_or_else(|| {
+                        PilError::InternalError("prepared P conversion omitted RGB entries".into())
+                    })?;
+                    Ok(Image::Paletted(PalettedData {
+                        indices: DynamicImage::ImagePalette8(image.to_luma8()),
+                        palette: retained_palette,
+                        palette_alpha: output.palette_alpha.clone().unwrap_or_default(),
+                        source_format,
+                        info,
+                        exif,
+                        materialized: materialization_cache(),
+                    }))
+                }
+                crate::raster::Mode::ImagePaletteAlpha8 => Ok(Image::Loaded(LoadedData {
+                    image,
+                    known_zero_fill: false,
+                    palette: output.palette.clone(),
+                    palette_alpha: output.palette_alpha.clone(),
+                    source_format,
+                    info,
+                    exif,
+                })),
+                _ => Err(PilError::InternalError(
+                    "cached palette conversion has a non-palette output mode".into(),
+                )),
+            };
+        }
+
+        if declared_pipeline_mode(mode) == Some(crate::raster::Mode::ImagePalette8) {
+            let Some(palette) = palette else {
+                return Err(PilError::PaletteError(
+                    "P-mode pipeline has no retained palette".to_owned(),
+                ));
+            };
+            return Ok(Image::Paletted(PalettedData {
+                indices: DynamicImage::ImagePalette8(image.to_luma8()),
+                palette: palette.clone(),
+                palette_alpha: palette_alpha.clone().unwrap_or_default(),
+                source_format: format,
+                info: source.image_info(),
+                exif: source.exif_metadata(),
+                materialized: materialization_cache(),
+            }));
+        }
+
+        Ok(Image::Loaded(LoadedData {
+            image,
+            known_zero_fill: false,
+            palette: palette.clone(),
+            palette_alpha: palette_alpha.clone(),
+            source_format: format,
+            info: source.image_info(),
+            exif: source.exif_metadata(),
+        }))
+    }
+
     /// Forces lazy decoding and pipeline execution.
     ///
     /// # Errors
@@ -59,42 +147,13 @@ impl Image {
             )?,
             Image::Pipeline {
                 source,
+                ops,
                 mode,
                 format,
                 palette,
                 palette_alpha,
                 ..
-            } => {
-                if declared_pipeline_mode(mode) == Some(crate::raster::Mode::ImagePalette8) {
-                    if let Some(palette) = palette {
-                        let indices = self.materialized_shared()?.as_ref().clone().to_luma8();
-                        Image::Paletted(PalettedData {
-                            indices: DynamicImage::ImagePalette8(indices),
-                            palette: palette.clone(),
-                            palette_alpha: palette_alpha.clone().unwrap_or_default(),
-                            source_format: *format,
-                            info: source.image_info(),
-                            exif: source.exif_metadata(),
-                            materialized: materialization_cache(),
-                        })
-                    } else {
-                        return Err(PilError::PaletteError(
-                            "P-mode pipeline has no retained palette".to_owned(),
-                        ));
-                    }
-                } else {
-                    let image = self.materialized_shared()?;
-                    Image::Loaded(LoadedData {
-                        image,
-                        known_zero_fill: false,
-                        palette: palette.clone(),
-                        palette_alpha: palette_alpha.clone(),
-                        source_format: *format,
-                        info: source.image_info(),
-                        exif: source.exif_metadata(),
-                    })
-                }
-            }
+            } => Self::pipeline_to_loaded(self, source, ops, mode, *format, palette, palette_alpha)?,
         };
         *self = loaded;
         Ok(())
@@ -137,6 +196,7 @@ impl Image {
                     *backend,
                     palette,
                     palette_alpha,
+                    ops.preserves_palette(),
                 )?;
             }
             Image::Loaded(_) | Image::Paletted(_) => {}

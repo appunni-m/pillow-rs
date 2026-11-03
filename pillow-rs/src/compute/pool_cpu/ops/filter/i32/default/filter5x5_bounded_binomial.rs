@@ -44,8 +44,3 @@ pub(super) fn i32_filter5x5_bounded_binomial_kernel_is_applicable(
     i32_filter5x5_binomial_kernel_is_applicable(kernel)
 }
 
-/// Evaluate the exact integer factorization of the binomial I-mode kernel.
-/// Five horizontal rows form a ring buffer; each source row is filtered once
-/// and reused by the five vertical contributions. The returned bytes preserve
-/// Pillow's copied two-pixel border and positive-only I-mode clipping.
-

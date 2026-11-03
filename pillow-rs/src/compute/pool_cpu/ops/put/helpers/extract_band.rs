@@ -1,10 +1,13 @@
 //! Original serial band algorithms, shared only by modes with the same contract.
 
 use crate::checked_dims::CheckedDims;
-use crate::compute::registry::support::{PaletteKnowledge, RequestFacts, StrategyInputs};
+use crate::compute::registry::support::{
+    InputContract, ImplementationSupport, ModeSupport, OperationId, OutputModeRule,
+    PaletteKnowledge, RequestFacts, StrategyInputs,
+};
 use crate::error::PilError;
 use crate::raster::{
-    DynamicImage, FromPrimitive, GrayImage, ImageBuffer, Luma, Pixel, Rgb,
+    DynamicImage, GrayImage, ImageBuffer, Luma, Mode, Pixel, Rgb, RgbaImage,
 };
 
 pub(crate) struct CheckedBand<'a, P: Pixel> {
@@ -16,7 +19,19 @@ pub(crate) struct CheckedBand<'a, P: Pixel> {
 impl<'a, P: Pixel> CheckedBand<'a, P> {
     pub(crate) fn new(input: &'a ImageBuffer<P, Vec<P::Subpixel>>, index: u8)
         -> Result<Self, PilError> {
-        let dimensions = CheckedDims::new_allow_empty(input.width(), input.height(), 1)?;
+        let source_bytes_per_pixel = usize::from(P::CHANNEL_COUNT)
+            .checked_mul(core::mem::size_of::<P::Subpixel>())
+            .and_then(|bytes| u8::try_from(bytes).ok())
+            .ok_or_else(|| {
+                PilError::InternalError(
+                    "ExtractBand source pixel width does not fit its dimension contract".into(),
+                )
+            })?;
+        let dimensions = CheckedDims::new_allow_empty(
+            input.width(),
+            input.height(),
+            source_bytes_per_pixel,
+        )?;
         Ok(Self { input, dimensions, index: usize::from(index) })
     }
 }
@@ -28,6 +43,45 @@ pub(crate) fn facts<P: Pixel>(input: &ImageBuffer<P, Vec<P::Subpixel>>, index: u
         byte_len: Some(core::mem::size_of_val(input.as_raw().as_slice())),
         palette: PaletteKnowledge::Unknown,
         request: RequestFacts::ExtractBand { index },
+    }
+}
+
+pub(crate) const fn output_mode(mode: Mode) -> Mode {
+    match mode {
+        Mode::ImageLumaA16 | Mode::ImageRgb16 | Mode::ImageRgba16 => Mode::ImageI16,
+        Mode::ImageRgb32F | Mode::ImageRgba32F => Mode::ImageF32,
+        _ => Mode::ImageLuma8,
+    }
+}
+
+pub(crate) const fn output_bytes_per_pixel(mode: Mode) -> u8 {
+    match output_mode(mode) {
+        Mode::ImageI16 => 2,
+        Mode::ImageF32 => 4,
+        _ => 1,
+    }
+}
+
+pub(crate) const fn support(
+    mode: Mode,
+    inputs: &'static [InputContract],
+    architectures: &'static [ImplementationSupport],
+) -> ModeSupport {
+    let output = OutputModeRule::Fixed(output_mode(mode));
+    match mode {
+        Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => ModeSupport::cpu_core_only(
+            OperationId::ExtractBand,
+            mode,
+            output,
+            inputs,
+            architectures,
+            "native high-depth ExtractBand extends the Pillow mode contract",
+        ),
+        _ => ModeSupport::cpu(OperationId::ExtractBand, mode, output, inputs, architectures),
     }
 }
 
@@ -135,26 +189,73 @@ pub(crate) fn grouped_into<P: Pixel<Subpixel = u8>, const CHANNELS: usize>(
     Ok((0, 0, "cpu"))
 }
 
-/// Extracts one high-depth band directly from its native samples.
-///
-/// None selects the opaque byte used by the existing RGBA conversion for
-/// defensive out-of-range RGB band requests.
-pub(crate) fn native<P: Pixel>(
+/// Extracts one CoreOnly high-depth band as a native unsigned 16-bit image.
+/// None supplies the mode's opaque maximum for defensive RGB band requests.
+pub(crate) fn native_u16<P: Pixel<Subpixel = u16>>(
     input: CheckedBand<'_, P>,
     selected: Option<usize>,
-) -> Result<DynamicImage, PilError>
-where
-    u8: FromPrimitive<P::Subpixel>,
-{
+) -> Result<DynamicImage, PilError> {
+    let dimensions = CheckedDims::new_allow_empty(input.input.width(), input.input.height(), 2)?;
+    let channels = usize::from(P::CHANNEL_COUNT);
+    let pixel_count = dimensions.total_pixels();
+    let required_samples = pixel_count.checked_mul(channels).ok_or_else(|| {
+        PilError::InternalError("ExtractBand source length overflow".into())
+    })?;
+    let source = input.input.as_raw();
+    if source.len() < required_samples {
+        return Err(PilError::InternalError(
+            "ExtractBand source buffer shape mismatch".into(),
+        ));
+    }
     let channel = selected.filter(|&index| index < usize::from(P::CHANNEL_COUNT));
-    let samples = input
-        .input
-        .as_raw()
-        .chunks_exact(usize::from(P::CHANNEL_COUNT))
-        .take(input.dimensions.total_pixels())
-        .map(|pixel| channel.map_or(u8::MAX, |index| u8::from_primitive(pixel[index])))
-        .collect();
-    finish_bytes(input.input.width(), input.input.height(), samples)
+    let mut samples = Vec::with_capacity(pixel_count);
+    for pixel in source.chunks_exact(channels).take(pixel_count) {
+        samples.push(channel.map_or(u16::MAX, |index| pixel[index]));
+    }
+    if samples.capacity() != 0 {
+        crate::compute::record_pipeline_allocation(samples.capacity() * core::mem::size_of::<u16>());
+    }
+    let image = ImageBuffer::<Luma<u16>, Vec<u16>>::from_raw(
+        input.input.width(),
+        input.input.height(),
+        samples,
+    )
+    .ok_or_else(|| PilError::InternalError("ExtractBand u16 buffer shape mismatch".into()))?;
+    Ok(DynamicImage::ImageI16(image))
+}
+
+/// Extracts one CoreOnly high-depth band as the native F32 scalar carrier.
+/// None supplies 1.0 for defensive RGB band requests.
+pub(crate) fn native_f32<P: Pixel<Subpixel = f32>>(
+    input: CheckedBand<'_, P>,
+    selected: Option<usize>,
+) -> Result<DynamicImage, PilError> {
+    let channels = usize::from(P::CHANNEL_COUNT);
+    let pixel_count = input.dimensions.total_pixels();
+    let required_samples = pixel_count.checked_mul(channels).ok_or_else(|| {
+        PilError::InternalError("ExtractBand source length overflow".into())
+    })?;
+    let source = input.input.as_raw();
+    if source.len() < required_samples {
+        return Err(PilError::InternalError(
+            "ExtractBand source buffer shape mismatch".into(),
+        ));
+    }
+    let dimensions = CheckedDims::new_allow_empty(input.input.width(), input.input.height(), 4)?;
+    let mut bytes = dimensions.alloc_buffer();
+    let channel = selected.filter(|&index| index < channels);
+    for (destination, pixel) in bytes
+        .chunks_exact_mut(4)
+        .zip(source.chunks_exact(channels).take(pixel_count))
+    {
+        destination.copy_from_slice(&channel.map_or(1.0f32, |index| pixel[index]).to_le_bytes());
+    }
+    if bytes.capacity() != 0 {
+        crate::compute::record_pipeline_allocation(bytes.capacity());
+    }
+    let image = RgbaImage::from_raw(input.input.width(), input.input.height(), bytes)
+        .ok_or_else(|| PilError::InternalError("ExtractBand f32 buffer shape mismatch".into()))?;
+    Ok(DynamicImage::ImageF32(image))
 }
 
 pub(crate) fn clipped_luma16(

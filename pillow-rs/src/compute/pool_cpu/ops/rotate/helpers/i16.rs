@@ -17,7 +17,7 @@ pub(crate) fn execute<const BIG_ENDIAN: bool>(
     if let Some(degree) = discrete_angle(request) {
         let (width, height) = image.dimensions();
         if degree == 180 || request.expand || width == height {
-            return rotate_discrete(image, degree);
+            return rotate_discrete(image, degree, degree == 180 || request.expand);
         }
     }
     if request.nearest {
@@ -35,10 +35,16 @@ fn is_identity(request: RotateRequest) -> bool {
 fn rotate_discrete(
     image: &ImageBuffer<Luma<u16>, Vec<u16>>,
     degree: u32,
+    allow_empty_output: bool,
 ) -> Result<ImageBuffer<Luma<u16>, Vec<u16>>, PilError> {
     let (width, height) = image.dimensions();
     let (out_width, out_height) = if degree == 180 { (width, height) } else { (height, width) };
-    let dimensions = CheckedDims::new(out_width, out_height, 1)?;
+    // Archived image-crate fast paths preserve empty 180° and expanded turns.
+    let dimensions = if allow_empty_output && (out_width == 0 || out_height == 0) {
+        CheckedDims::new_allow_empty(out_width, out_height, 1)?
+    } else {
+        CheckedDims::new(out_width, out_height, 1)?
+    };
     let mut output = vec![0; dimensions.total_pixels()];
     for y in 0..out_height {
         for x in 0..out_width {

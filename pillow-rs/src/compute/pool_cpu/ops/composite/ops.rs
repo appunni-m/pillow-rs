@@ -22,8 +22,9 @@ use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
 
-// TODO(pillow-rs#3ptb): finish source review and expand parity across every
-// operation, exact mode, and architecture route, including fallback reasons.
+// TODO(pillow-rs#3ptb): include CompositeModule, Merge, and BlendModule in CPU
+// parity for every supported mode/architecture pair, including exact output
+// identity, selected/fallback receipts, tails, and empty inputs.
 
 pub(crate) enum PreparedAlphaComposite<'a> {
     ImageLumaA8(super::luma_a8::ops::Strategy<'a>),
@@ -87,15 +88,21 @@ impl PreparedAlphaComposite<'_> {
 pub(crate) fn assess(
     inputs: OperationInputs<'_>,
     source: crate::compute::registry::support::SecondaryInputFacts,
+    destination_offset: (i32, i32),
+    source_offset: (i32, i32),
     ctx: &ExecutionContext,
 ) -> Result<SupportAssessment, PilError> {
-    let facts = inputs.facts().with_same_mode_secondary_image(source);
+    let facts = inputs
+        .facts()
+        .with_alpha_composite(source, destination_offset, source_offset);
     classify_mode(inputs.mode()).assess(ctx, facts)
 }
 
 pub(crate) fn prepare<'a>(
     input: OperationInputs<'a>,
     source: Arc<DynamicImage>,
+    destination_offset: (i32, i32),
+    source_offset: (i32, i32),
     ctx: &ExecutionContext,
 ) -> Result<PreparedAlphaComposite<'a>, PilError> {
     let secondary = crate::compute::registry::support::SecondaryInputFacts {
@@ -104,7 +111,7 @@ pub(crate) fn prepare<'a>(
         height: source.height(),
         byte_len: Some(source.as_bytes().len()),
     };
-    let selection = match assess(input, secondary, ctx)? {
+    let selection = match assess(input, secondary, destination_offset, source_offset, ctx)? {
         SupportAssessment::Ready(selection) => selection,
         SupportAssessment::Rejected { reason, kind, .. } => return Err(kind.into_error(reason)),
         SupportAssessment::Deferred { .. } => {
@@ -140,13 +147,13 @@ pub(crate) fn prepare_pipeline<'a>(
     op: &'a PipelineOp,
     ctx: &ExecutionContext,
 ) -> Result<crate::compute::registry::PreparedOperation<'a>, PilError> {
-    let PipelineOp::AlphaComposite { source, .. } = op else {
+    let PipelineOp::AlphaComposite { source, dest, src } = op else {
         return Err(PilError::ValueError("expected AlphaComposite op".into()));
     };
     if let ModeSupport::Rejected { reason, kind, .. } = classify_mode(input.mode()) {
         return Err(kind.into_error(reason));
     }
-    prepare(input, source.materialized_shared()?, ctx)
+    prepare(input, source.materialized_shared()?, *dest, *src, ctx)
         .map(crate::compute::registry::PreparedOperation::from_alpha_composite)
 }
 
@@ -182,6 +189,8 @@ pub(crate) fn prepare_mirror_fusion<'a>(
             palette: crate::compute::registry::support::PaletteInput::default(),
         },
         Arc::clone(&source),
+        (0, 0),
+        (0, 0),
         ctx,
     )?;
     let PreparedAlphaComposite::ImageRgba8(prepared) = prepared else {
@@ -214,7 +223,6 @@ impl MergeLayout {
 pub(crate) enum CompositeLayout {
     Byte { channels: u8 },
     U16 { channels: u8 },
-    I32,
     F32 { channels: u8 },
 }
 

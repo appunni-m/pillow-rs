@@ -22,6 +22,16 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
             }
             Ok(DynamicImage::ImageLumaA8(output))
         }
+        Mode::ImageLaPremultiplied8 => {
+            let mut output = GrayAlphaImage::new(width, height);
+            for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
+                let luma = crate::color::rgb_to_luma_u8(pixel[0], pixel[1], pixel[2]);
+                let luma = crate::compute::pool_cpu::ops::color::convert::helpers::pixel::
+                    premultiply_byte(luma, pixel[3]);
+                *destination = LumaA([luma, pixel[3]]);
+            }
+            Ok(DynamicImage::ImageLaPremultiplied8(output))
+        }
         Mode::ImageRgb8 => {
             let mut output = RgbImage::new(width, height);
             for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
@@ -100,7 +110,9 @@ pub(crate) fn execute_palette_target(
     let height = source.height();
     if target == Mode::ImagePalette8 {
         let (indices, palette, palette_alpha) =
-            crate::ops::quantize::quantize_rgba_samples(source.as_raw(), width, height, 256)?;
+            crate::compute::pool_cpu::helpers::quantization::quantize_rgba_samples(
+                source.as_raw(), width, height, 256,
+            )?;
         return crate::compute::pool_cpu::ops::color::convert::helpers::palette::palette_index_output(
             width,
             height,
@@ -129,7 +141,11 @@ pub(crate) fn execute_palette_target(
     for pixel in input.chunks_exact(4) {
         rgb_samples.extend_from_slice(&pixel[..3]);
     }
-    let (indices, palette) = crate::ops::quantize::median_cut_quantize_rgb(&rgb_samples, 256);
+    let (indices, palette) =
+        crate::compute::pool_cpu::helpers::quantization::median_cut_quantize_rgb(
+            &rgb_samples,
+            256,
+        );
     let palette: Vec<u8> = palette
         .into_iter()
         .flat_map(|color| color.into_iter())

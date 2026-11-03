@@ -8,7 +8,10 @@ use crate::raster::{DynamicImage, Mode};
 #[path = "default/expand_impl.rs"]
 mod default;
 
-const INPUTS: &[InputContract] = &[InputContract::ExpandedDimensions { bytes_per_pixel: 4 }];
+const INPUTS: &[InputContract] = &[
+    InputContract::ExpandedDimensions { bytes_per_pixel: 4 },
+    InputContract::ExpandFill(crate::compute::registry::support::ExpandFillRule::ModeEncodedBytes),
+];
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::Expand,
     Mode::ImageI32,
@@ -25,7 +28,7 @@ pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
 
 pub(crate) fn prepare<'a>(
     input: &'a default::Input,
-    border: u32,
+    border: crate::pipeline::ExpandMargins,
     fill: (u8, u8, u8, u8),
     ctx: &ExecutionContext,
 ) -> Result<Strategy<'a>, PilError> {

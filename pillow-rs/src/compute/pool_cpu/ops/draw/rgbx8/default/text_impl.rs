@@ -4,7 +4,8 @@ use crate::error::PilError;
 use crate::raster::{DynamicImage, Rgba};
 use image::{GenericImage, GenericImageView};
 
-pub(crate) fn apply(
+// TODO(pillow-rs#brg0): verify RGBX's fourth-byte text blending in CPU parity.
+pub(crate) fn apply<const RGBA_MASK: bool>(
     image: DynamicImage,
     x: i32,
     y: i32,
@@ -12,7 +13,6 @@ pub(crate) fn apply(
     height: u32,
     pixels: &[u8],
     fill: (u8, u8, u8, u8),
-    color_mask: bool,
 ) -> Result<TextComposeResult, PilError> {
     let DynamicImage::ImageRgbx8(mut canvas) = image else {
         return Ok(TextComposeResult::NotApplicable);
@@ -24,8 +24,8 @@ pub(crate) fn apply(
 
     for text_y in 0..height {
         for text_x in 0..width {
-            let offset = ((text_y * width + text_x) * 4) as usize;
-            let coverage = pixels[offset + 3];
+            let pixel_index = (text_y * width + text_x) as usize;
+            let coverage = crate::compute::pool_cpu::ops::draw::helpers::text_mask::coverage::<RGBA_MASK>(pixels, pixel_index);
             if coverage == 0 {
                 continue;
             }
@@ -41,11 +41,11 @@ pub(crate) fn apply(
             };
             let destination = canvas.get_pixel(image_x, image_y);
             let inverse = 255u16 - u16::from(coverage);
-            let source = if color_mask {
-                (pixels[offset], pixels[offset + 1], pixels[offset + 2])
-            } else {
-                (fill.0, fill.1, fill.2)
-            };
+            let source = crate::compute::pool_cpu::ops::draw::helpers::text_mask::color::<RGBA_MASK>(
+                pixels,
+                pixel_index,
+                (fill.0, fill.1, fill.2),
+            );
             canvas.put_pixel(
                 image_x,
                 image_y,
@@ -53,7 +53,7 @@ pub(crate) fn apply(
                     blend_u8(source.0, destination[0], coverage, inverse),
                     blend_u8(source.1, destination[1], coverage, inverse),
                     blend_u8(source.2, destination[2], coverage, inverse),
-                    u8::MAX,
+                    blend_u8(fill.3, destination[3], coverage, inverse),
                 ]),
             );
         }

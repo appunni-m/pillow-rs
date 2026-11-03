@@ -545,8 +545,8 @@ impl Image {
                 ))
             })?,
         );
-        let mode = self.inner.mode().map_err(err)?;
-        let fillcolor = js_transform_fill(&fillcolor, &mode)?;
+        let mode = self.inner.mode_identity().map_err(err)?;
+        let fillcolor = js_transform_fill(&fillcolor, mode)?;
         self.inner
             .transform_public(
                 size,
@@ -571,9 +571,9 @@ impl Image {
         encoder_name: &str,
         args: Vec<String>,
     ) -> Result<Vec<u8>, JsValue> {
-        let mode = self.inner.mode().map_err(err)?;
+        let mode = self.inner.mode_identity().map_err(err)?;
         self.inner
-            .tobytes_encoded(&mode, encoder_name, &args)
+            .tobytes_encoded(mode, encoder_name, &args)
             .map_err(err)
     }
     /// Returns a copy of this image.

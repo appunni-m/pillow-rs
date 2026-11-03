@@ -49,10 +49,10 @@ impl ImageDraw {
             anchor_invalid_length_error: true,
             ..JsFontOptionsInput::default()
         });
-        let (color, text_fill_is_integer) = js_text_color_and_kind(&self.draw, &fill)?;
+        let (color, text_fill_is_integer) = js_text_color_and_kind(&mut self.draw, &fill)?;
         options.text_fill_is_integer = text_fill_is_integer;
         if !stroke_fill.is_null() && !stroke_fill.is_undefined() {
-            let (color, is_integer) = js_text_color_and_kind(&self.draw, &stroke_fill)?;
+            let (color, is_integer) = js_text_color_and_kind(&mut self.draw, &stroke_fill)?;
             options.stroke_fill = Some(color);
             options.stroke_fill_is_integer = is_integer;
         }
@@ -98,10 +98,10 @@ impl ImageDraw {
             anchor_invalid_length_error: true,
             ..JsFontOptionsInput::default()
         });
-        let (color, text_fill_is_integer) = js_text_color_and_kind(&self.draw, &fill)?;
+        let (color, text_fill_is_integer) = js_text_color_and_kind(&mut self.draw, &fill)?;
         options.text_fill_is_integer = text_fill_is_integer;
         if !stroke_fill.is_null() && !stroke_fill.is_undefined() {
-            let (color, is_integer) = js_text_color_and_kind(&self.draw, &stroke_fill)?;
+            let (color, is_integer) = js_text_color_and_kind(&mut self.draw, &stroke_fill)?;
             options.stroke_fill = Some(color);
             options.stroke_fill_is_integer = is_integer;
         }

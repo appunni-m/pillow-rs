@@ -14,6 +14,17 @@ pub(crate) fn apply(
     let DynamicImage::ImageLaPremultiplied8(mut canvas) = image else {
         return Err(PilError::ValueError("mode mismatch".into()));
     };
-    gray_alpha_bitmap::apply(&mut canvas, x, y, mask_width, mask_height, mask, color);
+    let mut hidden_lanes = canvas.take_hidden_pixel_lanes();
+    gray_alpha_bitmap::apply(
+        &mut canvas,
+        x,
+        y,
+        mask_width,
+        mask_height,
+        mask,
+        color,
+        &mut hidden_lanes,
+    )?;
+    super::super::super::helpers::hidden_lanes::restore(&mut canvas, hidden_lanes)?;
     Ok(DynamicImage::ImageLaPremultiplied8(canvas))
 }

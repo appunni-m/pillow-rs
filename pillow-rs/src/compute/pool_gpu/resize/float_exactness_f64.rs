@@ -65,6 +65,7 @@ fn gpu_f_resize_f64_materialize_op(
     if let PipelineOp::PutData {
         data,
         payload_mode: Mode::ImageF32,
+        ..
     } = op
     {
         // PutData(F) is a raw little-endian word replacement in the GPU

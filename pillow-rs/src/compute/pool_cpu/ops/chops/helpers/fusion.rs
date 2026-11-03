@@ -2,34 +2,74 @@
 
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
-use crate::raster::{DynamicImage, GenericImageView, Mode};
+use crate::raster::buffer::ImageBuffer;
+use crate::raster::traits::Pixel;
+use crate::raster::DynamicImage;
 use wide::{u8x16, u16x16};
 
-pub(crate) fn execute_default(
-    image: &DynamicImage,
-    other: &DynamicImage,
-    mode: Mode,
-) -> Result<DynamicImage, PilError> {
-    let (dimensions, left, right) = native_operands(image, other, mode)?;
+pub(crate) struct FusedChopsOutput<I = DynamicImage> {
+    pub(crate) image: I,
+    pub(crate) vector_blocks: u64,
+    pub(crate) scalar_tail: u64,
+    pub(crate) path: &'static str,
+}
+
+impl<I> FusedChopsOutput<I> {
+    pub(crate) fn map_image<T>(self, map: impl FnOnce(I) -> T) -> FusedChopsOutput<T> {
+        FusedChopsOutput {
+            image: map(self.image),
+            vector_blocks: self.vector_blocks,
+            scalar_tail: self.scalar_tail,
+            path: self.path,
+        }
+    }
+}
+
+pub(crate) fn execute_default<P>(
+    image: &ImageBuffer<P, Vec<u8>>,
+    other: &ImageBuffer<P, Vec<u8>>,
+) -> Result<FusedChopsOutput<ImageBuffer<P, Vec<u8>>>, PilError>
+where
+    P: Pixel<Subpixel = u8>,
+{
+    let (dimensions, left, right) = native_operands(image, other)?;
     if left.is_empty() {
-        return Ok(image.clone());
+        return Ok(FusedChopsOutput {
+            image: image.clone(),
+            vector_blocks: 0,
+            scalar_tail: 0,
+            path: "cpu",
+        });
     }
     let mut output = dimensions.alloc_buffer();
     for ((destination, &left), &right) in output.iter_mut().zip(left).zip(right) {
         *destination = multiply_then_screen(left, right);
     }
-    super::output::from_raw_bytes(mode, image.width(), image.height(), output)
-        .ok_or_else(|| PilError::ValueError("channel_op_binary buffer error".into()))
+    let image = ImageBuffer::<P, Vec<u8>>::from_raw(image.width(), image.height(), output)
+        .ok_or_else(|| PilError::ValueError("channel_op_binary buffer error".into()))?;
+    Ok(FusedChopsOutput {
+        image,
+        vector_blocks: 0,
+        scalar_tail: 0,
+        path: "cpu",
+    })
 }
 
-pub(crate) fn execute_vector(
-    image: &DynamicImage,
-    other: &DynamicImage,
-    mode: Mode,
-) -> Result<DynamicImage, PilError> {
-    let (dimensions, left, right) = native_operands(image, other, mode)?;
+pub(crate) fn execute_vector<P>(
+    image: &ImageBuffer<P, Vec<u8>>,
+    other: &ImageBuffer<P, Vec<u8>>,
+) -> Result<FusedChopsOutput<ImageBuffer<P, Vec<u8>>>, PilError>
+where
+    P: Pixel<Subpixel = u8>,
+{
+    let (dimensions, left, right) = native_operands(image, other)?;
     if left.is_empty() {
-        return Ok(image.clone());
+        return Ok(FusedChopsOutput {
+            image: image.clone(),
+            vector_blocks: 0,
+            scalar_tail: 0,
+            path: "native-copy",
+        });
     }
     let mut output = dimensions.alloc_buffer();
     let (left_blocks, left_tail) = left.as_chunks::<16>();
@@ -45,40 +85,31 @@ pub(crate) fn execute_vector(
     {
         *output = multiply_then_screen(left, right);
     }
-    crate::compute::record_pipeline_operation_vector_blocks(
-        u64::try_from(left_blocks.len()).unwrap_or(u64::MAX),
-    );
-    crate::compute::record_pipeline_operation_scalar_tail(
-        u64::try_from(left_tail.len()).unwrap_or(u64::MAX),
-    );
-    super::output::from_raw_bytes(mode, image.width(), image.height(), output)
-        .ok_or_else(|| PilError::ValueError("channel_op_binary buffer error".into()))
+    let image = ImageBuffer::<P, Vec<u8>>::from_raw(image.width(), image.height(), output)
+        .ok_or_else(|| PilError::ValueError("channel_op_binary buffer error".into()))?;
+    Ok(FusedChopsOutput {
+        image,
+        vector_blocks: u64::try_from(left_blocks.len()).unwrap_or(u64::MAX),
+        scalar_tail: u64::try_from(left_tail.len()).unwrap_or(u64::MAX),
+        path: "vector",
+    })
 }
 
-fn native_operands<'a>(
-    image: &'a DynamicImage,
-    other: &'a DynamicImage,
-    mode: Mode,
-) -> Result<(CheckedDims, &'a [u8], &'a [u8]), PilError> {
-    let channels = match mode {
-        Mode::ImageLuma8 => 1,
-        Mode::ImageLumaA8 => 2,
-        Mode::ImageRgb8 => 3,
-        Mode::ImageRgba8 => 4,
-        _ => {
-            return Err(PilError::InternalError(
-                "Chops fusion received a mode without a fused strategy".into(),
-            ));
-        }
-    };
-    if image.mode() != mode || other.mode() != mode || image.dimensions() != other.dimensions() {
+fn native_operands<'a, P>(
+    image: &'a ImageBuffer<P, Vec<u8>>,
+    other: &'a ImageBuffer<P, Vec<u8>>,
+) -> Result<(CheckedDims, &'a [u8], &'a [u8]), PilError>
+where
+    P: Pixel<Subpixel = u8>,
+{
+    if image.dimensions() != other.dimensions() {
         return Err(PilError::InternalError(
             "Chops fusion operands did not match their admitted native layout".into(),
         ));
     }
-    let dimensions = CheckedDims::new_allow_empty(image.width(), image.height(), channels)?;
-    let left = image.as_bytes();
-    let right = other.as_bytes();
+    let dimensions = CheckedDims::new_allow_empty(image.width(), image.height(), P::CHANNEL_COUNT)?;
+    let left = image.as_raw().as_slice();
+    let right = other.as_raw().as_slice();
     if left.len() != dimensions.total_bytes() || right.len() != dimensions.total_bytes() {
         return Err(PilError::InternalError(
             "Chops fusion operands did not match their image dimensions".into(),

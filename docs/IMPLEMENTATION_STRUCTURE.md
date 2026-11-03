@@ -110,9 +110,11 @@ selector before calling core operation APIs. Other host bindings or explicit
 I/O adapters own their corresponding parsing and formatting boundaries. Core
 operation parameters, support declarations, and CPU strategies use enums;
 they must not accept string-based modes. Preserve existing invalid-string
-errors at the public boundary. Adapt decoded image-slash-star metadata once
-at the decode boundary. Keep codec objects and Pillow raster objects separate;
-do not add Pillow execution metadata to image-slash-star types.
+errors at the public boundary. Translate the cached header raster identity
+once at the lazy wrapper boundary. At decode, adapt the transfer layout and
+apply the already stored identity to the pixel buffer. Keep codec objects and
+Pillow raster objects separate; do not add Pillow execution metadata to
+image-slash-star types.
 
 ### 2.1. Mode ownership and codec boundaries
 
@@ -133,17 +135,22 @@ copies of Mode. The enum names every representable identity, not the modes
 supported by every operation. Each operation declares that narrower contract.
 
 image-slash-star owns its codecs, encoded/decoded image types, buffers, and
-format metadata. Its own mode or pixel-format descriptors retain their codec
-role; do not alias or re-export one as the Pillow-owned `raster::Mode`, add
-Pillow strategy metadata to its types, or require that repository to implement
-this refactor's mode model.
+format metadata. Its `ImageInfo.raster_mode` is the codec-owned exact raster
+identity selected during header inspection, available without materializing
+pixels. `ImageInfo.mode` continues to describe the codec transfer-buffer
+layout. The Pillow wrapper translates `raster_mode` once into its own
+operation-facing `raster::Mode` and carries it while pixels remain lazy. At
+materialization, the decode adapter preserves that identity on the resulting
+`DynamicImage` variant. This keeps the codec and Pillow mode types separate,
+avoids decoding to select an operation strategy, and keeps Pillow strategy
+metadata out of the codec types.
 
 The ownership boundary is explicit:
 
 | Concern | Owner | Required boundary |
 | --- | --- | --- |
 | Pillow mode identity and transitions | `pillow-rs` raster and operation contracts | Flat `DynamicImage` variants and the matching typed `Mode` selector |
-| Pixel buffers, codecs, and format metadata | image-slash-star | Keep its types independent; translate through Pillow-owned adapters |
+| Pixel buffers, codecs, transfer layouts, and header raster identity | image-slash-star | Keep its types independent; translate header `raster_mode` through the Pillow-owned adapter |
 | Pillow string spellings | Python binding and explicit I/O boundaries | Parse once before typed Rust operation calls; format only for external output |
 | Backend and architecture selection | `pillow-rs` compute context | Inject the resolved policy into operation preparation and execution |
 | Supported mode/architecture combinations | Each operation | Declare them at the operation entry point and bind them to executable strategies |
@@ -153,17 +160,21 @@ Reusing a buffer does not transfer ownership of Pillow semantics to the codec
 repository. A matching physical layout is insufficient to select or change a
 Pillow mode; the adapter or explicit conversion must establish that identity.
 
-The Pillow-owned decode adapter performs this translation once:
+The Pillow wrapper translates the cached header identity once. Materializing
+pixels later only applies that stored mode to the decoded buffer:
 
 ```text
-image-slash-star decoded image and format metadata
-    -> Pillow decode adapter
-        -> pillow-rs raster::DynamicImage with exact mode identity
-            -> operation mode strategy
+image-slash-star header inspection
+    -> ImageInfo.raster_mode
+        -> pillow-rs Image::Bytes stores raster::Mode while remaining lazy
+            -> load decodes pixels and applies the stored mode
+                -> raster::DynamicImage with exact mode identity
+                    -> operation mode strategy
 ```
 
-Use decoded metadata and the existing explicit construction/decode policy to
-choose the variant, preserving samples, palettes, alpha, and byte order.
+Use the codec's decoded buffer layout and the stored header identity together
+to choose the `DynamicImage` variant, preserving samples, palettes, alpha, and
+byte order without decoding to select an operation strategy.
 Preserve the existing rejection contract when the input cannot be represented;
 do not defer ambiguous mode recovery to CPU implementations. Encoding performs
 the corresponding translation at the codec boundary, preserving existing
@@ -179,11 +190,54 @@ string spelling is a boundary representation of that identity, not another
 mode model. The operation reads the materialized image's variant; it does not
 reconstruct a mode from the upstream buffer type, channel count, or spelling.
 
+`ImageColor.getcolor` accepts Pillow `ImageMode` descriptors as its output
+shape selector. Some accepted descriptors, including `I;32` and `I;16S`, are
+not raster identities and must not be converted to `raster::Mode`. The color
+module uses its own typed `ColorOutputMode` for this API; host bindings parse
+the external string before calling the typed core function. This descriptor
+does not tag, construct, or change a `DynamicImage`.
+
 Use this same enum type in Rust operation arguments, operation support
 descriptors, and prepared mode strategies. A support query must classify the
 identity that execution will consume, without translating through a string or
 an image-slash-star descriptor. Review these API signatures together with the
 Python parsing and codec adapters to verify the ownership boundary.
+
+### 2.2. Physical pixel lanes
+
+The exact `DynamicImage` variant remains the sole mode identity. `Mode` owns the
+static Pillow pixel size, byte-carrier width, and byte offsets for each physical
+layout. Its Pillow-owned raster payload may also retain physical per-pixel byte
+values that are not exposed as logical mode channels. These values are payload
+state, not a second mode tag or a `PixelStorage` selector. Keep existing typed
+samples and logical `as_bytes()` behavior intact; expose the physical bytes only
+to operations whose Pillow contract consumes them.
+
+This is required for four-byte Pillow modes whose Rust carriers expose two or
+three logical channels. Pillow's unmasked Paste copies the full internal pixel
+size, and some readers inspect physical lanes directly. The raw lanes cannot
+always be synthesized from Mode: decoders, explicit fills, packed integer
+fills, and raw same-pixel-size Paste can produce different values for the
+same identity. The producer must attach the actual physical bytes when they
+are known; do not infer their values from the variant tag or visible channel
+count.
+
+Keep equal-pixel-size Paste behavior mode-owned. The selected destination
+strategy prepares a physical-byte source view before its kernel, then copies
+or blends the bytes Pillow consumes. The compact LA/La/PA and RGB/YCbCr/LAB/HSV
+carriers retain their omitted bytes as payload; do not convert the source mode
+or put per-pixel mode checks into kernels. Same-width 1-byte aliases use their
+native byte samples. I;16 aliases use a typed raw two-byte path that translates
+the stored source byte order into the destination order. Keep parity coverage
+for every alias and mask path explicit before considering that route complete.
+
+Mode-preserving copies and transforms carry those bytes with their pixels.
+Mode-specific writes and algorithms update them according to the same
+operation semantics as the logical samples. Prepare a typed physical-layout
+view before entering a raw kernel; do not add mode checks or dynamic dispatch
+inside pixel loops. Paste and Histogram use physical lanes only where the
+Pillow reference does. Keep codec transfer buffers independent and translate
+their layout at the Pillow-owned adapter boundary.
 
 ## 3. Injected execution context
 
@@ -239,7 +293,7 @@ The descriptor at the operation's entry point must make these facts visible:
 | Operation | Typed identity, including variants whose parameter contracts differ |
 | Modes | Exhaustive classification of all 25 source identities, with rejection reasons |
 | Other inputs | Destination, secondary-image, mask, band, palette, and alpha constraints where relevant |
-| Result | Preserved or explicitly derived output mode and metadata requirements |
+| Result | Preserved or explicitly derived output mode and metadata requirements, including any lazy target identity visible before a rejected route reports its error; typed shape for non-raster results such as per-mode band/bin layout |
 | Backend and architecture | Registered strategies, exact instruction requirements, and build availability |
 | Request guards | Existing shape, alignment, filter, parameter, or content conditions on a strategy |
 | Fallback | Explicit same-mode Default strategy and the conditions selecting it |
@@ -253,7 +307,9 @@ use exhaustive, explicitly named supported and rejected arms. Do not infer
 support from storage layout.
 
 The top-level view must include rejected identities even when they have no
-implementation folder. For each accepted identity, show the output contract,
+implementation folder. Declare any wrapper-visible output identity that lazy
+metadata retains for a rejected source route in the same `OperationSupport`
+contract. For each accepted identity, show the output contract,
 Default implementation, declared specializations, and their availability or
 guards. Keep declared support, eligibility for a particular request, actual
 selection, and verification evidence distinct; a single supported boolean
@@ -367,9 +423,23 @@ do not keep an independent hand-maintained support boolean/table alongside
 different dispatch logic. Keep registration and introspection outside pixel
 loops and preserve direct calls, inlining, and allocation boundaries.
 
+For an operation whose public wrapper already composes conversions or child
+operations before preparing its primary pipeline, expose that route from the
+same operation descriptor with `route_for_mode` / `routes`. Include its ordered
+child operations, exact intermediate mode identities, output identity, and
+success or rejection stage. Distinguish an operation-level wrapper guard from
+a child conversion failure. Keep `for_mode` as the prepared-strategy admission
+contract. The public wrapper chooses between the declared prepared strategy
+and the declared composed route; prepared admission consumes the same
+declaration. This records existing wrapper behavior and must not introduce a
+new mode conversion or backend retry.
+
 The compute registry aggregates operation contracts and delegates admission
 and preparation to their owners. Shared support types belong to
 `compute/registry/support.rs`, exported deliberately from the registry facade.
+Keep that file as the namespace facade; split types into focused
+`compute/registry/support/` modules when needed to stay within the source-size
+limit, and re-export them from `support.rs`.
 The registry must not reimplement per-mode eligibility or architecture policy.
 Keep `mod.rs` files limited to declarations and exports.
 
@@ -397,6 +467,15 @@ accepted core-only targets and their reason in the target input contract, and
 expose the pair classification through `OperationSupport::scope_for_target`.
 This keeps a Pillow-defined RGB source route from obscuring native-only target
 extensions while preserving one exhaustive target contract for admission.
+
+When the public wrapper composes multiple typed operations for a specific
+source/target pair, expose that exact composition through
+`OperationSupport::target_composition_for` and
+`OperationSupport::target_compositions_for`. Each declaration records ordered
+child operation/source/target transitions, output identity, Pillow/CoreOnly
+scope, and any existing rejection stage. The wrapper dispatcher consumes this
+same declaration. Direct one-step target strategies remain in the source
+`ModeSupport`; do not duplicate them as wrapper compositions.
 
 ## 4. Exact CPU placement
 
@@ -476,7 +555,7 @@ migrated into their corresponding owner.
 
 | Family | Operation ownership |
 | --- | --- |
-| `analysis` | Direct materialized analysis and data-access operations, including `GetProjection`, `GetData`, `GetDataBand`, and `GetDataBandInto`; each operation retains its own `OperationId` and support descriptor. |
+| `analysis` | Direct materialized analysis and data-access operations, including `GetBBox`, `GetExtrema`, `Histogram`, `Entropy`, `GetColors`, `Stat`, `Split`, `GetProjection`, `GetData`, `GetDataBand`, and `GetDataBandInto`; each operation has its own `OperationId` and support descriptor, including separate identities when request contracts differ. |
 | `resize` | `Resize`, `ResizeBoxed` |
 | `crop` | `Crop` |
 | `rotate` | `Rotate` |
@@ -486,7 +565,7 @@ migrated into their corresponding owner.
 | `color` | `Convert`, `ConvertLab`, `RemapPalette` |
 | `color3dlut` | `Color3DLut` |
 | `filter` | `Filter3x3`, `Filter5x5`, `GaussianBlur`, `BoxBlur`, `BoxBlurXY`, `MedianFilter`, `MaxFilter`, `MinFilter`, `RankFilter`, and direct `ModeFilter` |
-| `imageops` | `Autocontrast`, `Equalize`, `EqualizeMasked`, `Invert`, `Posterize`, `Solarize`, `Colorize`, `Expand`, `CropBorder` |
+| `imageops` | `Autocontrast`, `Equalize`, `EqualizeMasked`, `Invert`, `Posterize`, `Solarize`, `Colorize`, `Quantize`, `Expand`, `CropBorder` |
 | `geometry` | `Contain`, `Cover`, `Fit`, `Pad`, `Scale` |
 | `grayscale` | `Grayscale` |
 | `chops` | `Add`, `Subtract`, `Multiply`, `Screen`, `Darker`, `Lighter`, `Difference`, `Overlay`, `HardLight`, `SoftLight`, `AddModulo`, `SubtractModulo`, `LogicalAnd`, `LogicalOr`, `LogicalXor`, `Constant`, `Offset`, `Duplicate`, `InvertChops` |

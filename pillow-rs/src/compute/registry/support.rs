@@ -7,13 +7,26 @@ use crate::compute::{Architecture, Backend, ExecutionContext};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 
+mod operation;
 mod request;
+mod route;
+mod target;
+
+pub use operation::OperationId;
+pub use route::{
+    OperationModeRoute, OperationRouteGuard, OperationRouteInputs, OperationRouteOutcome,
+    OperationRoutePath, OperationRouteStage,
+};
+pub use target::{
+    OperationModeTransition, OperationTargetComposition, OperationTargetCompositionKind,
+    OperationTransitionSource,
+};
 use request::GuardAssessment;
 pub use request::{
-    BandIndexRule, DrawRequestKind, DrawTextMaskKind, F32RankCompatibility, InputContract,
-    MergeBandModeRule, ModeChannelCapacity, PaletteKnowledge, PasteInputRules, PasteMaskRule,
-    PixelWriteRunFacts, RequestFacts, SecondaryInputFacts, StrategyGuard, StrategyInputs,
-    UnresolvedGuard,
+    BandIndexRule, DrawRequestKind, DrawTextMaskKind, ExpandFillRule, F32RankCompatibility,
+    InputContract, MergeBandModeRule, ModeChannelCapacity, PadFillRule, PaletteKnowledge,
+    PasteInputRules, PasteMaskRule, PixelWriteRunFacts, RequestFacts, SecondaryInputFacts,
+    StrategyGuard, StrategyInputs, UnresolvedGuard,
 };
 
 /// Exact mask identities accepted by image-backed alpha replacement.
@@ -74,319 +87,6 @@ impl OperationInputs<'_> {
     }
 }
 
-/// Identity of an operation with its own strategy and parameter contract.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum OperationId {
-    /// Draw one Pillow primitive directly into the mode-bearing raster.
-    Draw,
-    /// A crop with coordinates normalized by the image API.
-    Crop,
-    /// Remove an equal border from all edges, allowing valid empty output.
-    CropBorder,
-    /// Flip image top-to-bottom while preserving its exact mode.
-    Flip,
-    /// Mirror image left-to-right while preserving its exact mode.
-    Mirror,
-    /// Apply one Pillow transpose method while preserving its exact mode.
-    Transpose,
-    /// Resize an image to an exact output size.
-    Resize,
-    /// Resize an image from a floating source region to an exact output size.
-    ResizeBoxed,
-    /// Resize an image to fit inside target bounds while preserving aspect ratio.
-    Contain,
-    /// Resize an image to cover target bounds while preserving aspect ratio.
-    Cover,
-    /// Resize and crop an image to target bounds with typed bleed and centering.
-    Fit,
-    /// Resize an image into a target canvas while preserving aspect ratio.
-    Pad,
-    /// Scale an image by a floating-point factor.
-    Scale,
-    /// Apply Pillow's reducing-gap thumbnail algorithm while preserving mode.
-    Thumbnail,
-    /// Rotate by an arbitrary angle with a typed mode and interpolation strategy.
-    Rotate,
-    /// Apply an affine, perspective, quadrilateral, or mesh transform.
-    Transform,
-    /// Reduce native sample blocks while preserving the declared output mode.
-    Reduce,
-    /// Pillow's source-mode conversion to an eight-bit luma image.
-    Grayscale,
-    /// Apply one byte lookup table per native byte band, preserving exact mode.
-    Eval,
-    /// Apply a callable affine point transform to native I/F/I;16 samples.
-    PointScalar,
-    /// Apply a floating lookup table to a byte sample and produce native F samples.
-    PointFloat,
-    /// Invert every byte of an image while preserving its exact mode.
-    Invert,
-    /// Reduce the stored high bits of native L or RGB samples.
-    Posterize,
-    /// Invert native L or RGB samples at or above a threshold.
-    Solarize,
-    /// Map grayscale samples through three color lookup tables.
-    Colorize,
-    /// Stretch L/RGB contrast from per-channel histogram percentiles.
-    Autocontrast,
-    /// Apply a native 3x3 Pillow convolution kernel.
-    Filter3x3,
-    /// Apply a native 5x5 Pillow convolution kernel.
-    Filter5x5,
-    /// Apply Pillow's Gaussian blur.
-    GaussianBlur,
-    /// Apply Pillow's native-byte box blur.
-    BoxBlur,
-    /// Sharpen byte samples by blending the source with its Gaussian blur.
-    UnsharpMask,
-    /// Apply Pillow's median rank filter.
-    MedianFilter,
-    /// Apply Pillow's maximum rank filter.
-    MaxFilter,
-    /// Apply Pillow's minimum rank filter.
-    MinFilter,
-    /// Select one sample from each Pillow rank-filter neighborhood.
-    RankFilter,
-    /// Replace each native byte channel with its local most-frequent sample.
-    ModeFilter,
-    /// Equalize L/RGB samples directly and P samples after palette expansion.
-    Equalize,
-    /// Add a native-mode border while preserving the exact source identity.
-    Expand,
-    /// Internal band extraction; the public wrapper validates its band selector first.
-    ExtractBand,
-    /// Apply a 3D color lookup table with a typed target identity.
-    Color3DLut,
-    /// Convert exact RGB8 samples to Pillow's packed LAB representation.
-    ConvertLab,
-    /// Convert one exact source mode to a typed target mode.
-    Convert,
-    /// Apply Pillow's RGB conversion matrix to one exact source mode.
-    ConvertMatrix,
-    /// Remap native L/P samples into a P index plane with reordered palette metadata.
-    RemapPalette,
-    /// Relocate native pixels using Pillow's process-global random stream.
-    EffectSpread,
-    /// Generate Pillow's L-mode Gaussian noise using the process-global stream.
-    EffectNoise,
-    /// Construct a fixed 256 by 256 typed linear-gradient raster.
-    LinearGradient,
-    /// Construct a fixed 256 by 256 typed radial-gradient raster.
-    RadialGradient,
-    /// Construct a typed native-L Mandelbrot raster.
-    EffectMandelbrot,
-    /// Alpha-composite one same-sized LA or RGBA image over another.
-    AlphaComposite,
-    /// Merge native single-band images into one exact target mode.
-    Merge,
-    /// Blend two compatible Pillow byte-mode images.
-    BlendModule,
-    /// Composite a source image over a destination canvas through a mask.
-    CompositeModule,
-    /// Paste a normalized source into a native destination mode.
-    Paste,
-    /// One normalized native-byte pixel write with caller-validated coordinates.
-    PutPixel,
-    /// An ordered run of adjacent native-byte writes that clones its source once.
-    PutPixelBatch,
-    /// Write one normalized numeric I/F/I;16 pixel synchronously into its native carrier.
-    PutPixelValueAt,
-    /// Replace a normalized byte prefix, retaining the direct payload-layout contract.
-    PutData,
-    /// Replace I;16 samples from the Pillow byte-row fast path.
-    PutDataL16Bytes,
-    /// Write one normalized putdata value synchronously before the next value is coerced.
-    PutDataValueAt,
-    /// Insert or replace a constant alpha sample using the exact source identity.
-    PutAlpha,
-    /// Replace per-pixel alpha from a mode-bearing secondary image.
-    PutAlphaData,
-    /// Return horizontal and vertical non-zero sample projections.
-    GetProjection,
-    /// Read the complete stored image into a host-owned byte sequence.
-    GetData,
-    /// Read one logical band into an allocated host-owned byte sequence.
-    GetDataBand,
-    /// Fill a caller-owned byte buffer with one logical band.
-    GetDataBandInto,
-    /// Blend native Pillow samples with the same-mode black brightness base.
-    Brightness,
-    /// Blend native samples with Pillow's contrast-degenerate base.
-    Contrast,
-    /// Blend native byte pixels with their exact-mode color saturation base.
-    ColorSaturation,
-    /// Blend native samples with the exact-mode 3x3 smoothing result.
-    Sharpness,
-    /// Add native bytes from a compatible secondary raster with scale and offset.
-    ChopsAdd,
-    /// Subtract native bytes from a compatible secondary raster with scale and offset.
-    ChopsSubtract,
-    /// Multiply compatible native-byte samples.
-    ChopsMultiply,
-    /// Apply the native-byte screen blend operation.
-    ChopsScreen,
-    /// Select the darker compatible native-byte sample.
-    ChopsDarker,
-    /// Select the lighter compatible native-byte sample.
-    ChopsLighter,
-    /// Compute absolute differences between compatible native-byte samples.
-    ChopsDifference,
-    /// Apply the native-byte overlay lookup table.
-    ChopsOverlay,
-    /// Apply the native-byte hard-light lookup table.
-    ChopsHardLight,
-    /// Apply the native-byte soft-light lookup table.
-    ChopsSoftLight,
-    /// Add compatible native-byte samples modulo 256.
-    ChopsAddModulo,
-    /// Subtract compatible native-byte samples modulo 256.
-    ChopsSubtractModulo,
-    /// Apply Pillow mode-1 logical AND.
-    ChopsLogicalAnd,
-    /// Apply Pillow mode-1 logical OR.
-    ChopsLogicalOr,
-    /// Apply Pillow mode-1 logical XOR.
-    ChopsLogicalXor,
-    /// Construct a single-band luma image filled with a constant byte.
-    ChopsConstant,
-    /// Offset native pixels with wraparound while preserving exact mode.
-    ChopsOffset,
-    /// Clone the source while preserving exact mode.
-    ChopsDuplicate,
-    /// Invert every stored byte while preserving exact mode.
-    ChopsInvert,
-}
-
-impl OperationId {
-    /// Returns the contract owned by this operation's execution entry point.
-    #[must_use]
-    pub fn support(self) -> &'static OperationSupport {
-        match self {
-            Self::Draw => &crate::compute::pool_cpu::ops::draw::ops::SUPPORT,
-            Self::Crop => &crate::compute::pool_cpu::ops::crop::ops::SUPPORT,
-            Self::CropBorder => &crate::compute::pool_cpu::ops::imageops::ops::CROP_BORDER_SUPPORT,
-            Self::Flip => &crate::compute::pool_cpu::ops::transpose::ops::FLIP_SUPPORT,
-            Self::Mirror => &crate::compute::pool_cpu::ops::transpose::ops::MIRROR_SUPPORT,
-            Self::Transpose => &crate::compute::pool_cpu::ops::transpose::ops::TRANSPOSE_SUPPORT,
-            Self::Resize => &crate::compute::pool_cpu::ops::resize::ops::SUPPORT,
-            Self::ResizeBoxed => &crate::compute::pool_cpu::ops::resize::ops::BOXED_SUPPORT,
-            Self::Contain => &crate::compute::pool_cpu::ops::geometry::ops::CONTAIN_SUPPORT,
-            Self::Cover => &crate::compute::pool_cpu::ops::geometry::ops::COVER_SUPPORT,
-            Self::Fit => &crate::compute::pool_cpu::ops::geometry::ops::FIT_SUPPORT,
-            Self::Pad => &crate::compute::pool_cpu::ops::geometry::pad::ops::SUPPORT,
-            Self::Scale => &crate::compute::pool_cpu::ops::geometry::ops::SCALE_SUPPORT,
-            Self::Thumbnail => &crate::compute::pool_cpu::ops::thumbnail::ops::SUPPORT,
-            Self::Rotate => &crate::compute::pool_cpu::ops::rotate::ops::SUPPORT,
-            Self::Transform => &crate::compute::pool_cpu::ops::transform::ops::SUPPORT,
-            Self::Reduce => &crate::compute::pool_cpu::ops::reduce::ops::SUPPORT,
-            Self::Grayscale => &crate::compute::pool_cpu::ops::grayscale::ops::SUPPORT,
-            Self::Eval => &crate::compute::pool_cpu::ops::eval::ops::SUPPORT,
-            Self::PointScalar => {
-                &crate::compute::pool_cpu::ops::eval::ops::SCALAR_POINT_SUPPORT
-            }
-            Self::PointFloat => {
-                &crate::compute::pool_cpu::ops::eval::ops::POINT_FLOAT_SUPPORT
-            }
-            Self::Invert => &crate::compute::pool_cpu::ops::imageops::ops::INVERT_SUPPORT,
-            Self::Posterize => &crate::compute::pool_cpu::ops::imageops::ops::POSTERIZE_SUPPORT,
-            Self::Solarize => &crate::compute::pool_cpu::ops::imageops::ops::SOLARIZE_SUPPORT,
-            Self::Colorize => &crate::compute::pool_cpu::ops::imageops::ops::COLORIZE_SUPPORT,
-            Self::Autocontrast => &crate::compute::pool_cpu::ops::imageops::autocontrast::SUPPORT,
-            Self::Filter3x3 => &crate::compute::pool_cpu::ops::filter::ops::FILTER3X3_SUPPORT,
-            Self::Filter5x5 => &crate::compute::pool_cpu::ops::filter::ops::FILTER5X5_SUPPORT,
-            Self::GaussianBlur => &crate::compute::pool_cpu::ops::filter::ops::GAUSSIAN_BLUR_SUPPORT,
-            Self::BoxBlur => &crate::compute::pool_cpu::ops::filter::ops::BOX_BLUR_SUPPORT,
-            Self::UnsharpMask => {
-                &crate::compute::pool_cpu::ops::filter::ops::UNSHARP_MASK_SUPPORT
-            }
-            Self::MedianFilter => &crate::compute::pool_cpu::ops::filter::ops::MEDIAN_FILTER_SUPPORT,
-            Self::MaxFilter => &crate::compute::pool_cpu::ops::filter::ops::MAX_FILTER_SUPPORT,
-            Self::MinFilter => &crate::compute::pool_cpu::ops::filter::ops::MIN_FILTER_SUPPORT,
-            Self::RankFilter => &crate::compute::pool_cpu::ops::filter::ops::RANK_FILTER_SUPPORT,
-            Self::ModeFilter => &crate::compute::pool_cpu::ops::filter::ops::MODE_FILTER_SUPPORT,
-            Self::Equalize => &crate::compute::pool_cpu::ops::imageops::equalize::SUPPORT,
-            Self::Expand => &crate::compute::pool_cpu::ops::imageops::ops::EXPAND_SUPPORT,
-            Self::ExtractBand => &crate::compute::pool_cpu::ops::put::ops::EXTRACT_BAND_SUPPORT,
-            Self::Color3DLut => &crate::compute::pool_cpu::ops::color3dlut::ops::SUPPORT,
-            Self::Convert => &crate::compute::pool_cpu::ops::color::convert::ops::SUPPORT,
-            Self::ConvertMatrix => {
-                &crate::compute::pool_cpu::ops::color::convert::ops::MATRIX_SUPPORT
-            }
-            Self::ConvertLab => &crate::compute::pool_cpu::ops::color::ops::SUPPORT,
-            Self::RemapPalette => &crate::compute::pool_cpu::ops::color::ops::REMAP_PALETTE_SUPPORT,
-            Self::EffectSpread => &crate::compute::pool_cpu::ops::effects::ops::EFFECT_SPREAD_SUPPORT,
-            Self::EffectNoise => &crate::compute::pool_cpu::ops::effects::ops::EFFECT_NOISE_SUPPORT,
-            Self::LinearGradient => &crate::compute::pool_cpu::ops::effects::ops::LINEAR_GRADIENT_SUPPORT,
-            Self::RadialGradient => &crate::compute::pool_cpu::ops::effects::ops::RADIAL_GRADIENT_SUPPORT,
-            Self::EffectMandelbrot => &crate::compute::pool_cpu::ops::effects::ops::MANDELBROT_SUPPORT,
-            Self::AlphaComposite => {
-                &crate::compute::pool_cpu::ops::composite::ops::ALPHA_COMPOSITE_SUPPORT
-            }
-            Self::Merge => {
-                &crate::compute::pool_cpu::ops::composite::ops::MERGE_SUPPORT
-            }
-            Self::BlendModule => {
-                &crate::compute::pool_cpu::ops::composite::ops::BLEND_MODULE_SUPPORT
-            }
-            Self::CompositeModule => {
-                &crate::compute::pool_cpu::ops::composite::ops::COMPOSITE_MODULE_SUPPORT
-            }
-            Self::Paste => &crate::compute::pool_cpu::ops::paste::ops::SUPPORT,
-            Self::PutPixel => &crate::compute::pool_cpu::ops::put::ops::PUT_PIXEL_SUPPORT,
-            Self::PutPixelBatch => &crate::compute::pool_cpu::ops::put::ops::PUT_PIXEL_BATCH_SUPPORT,
-            Self::PutPixelValueAt => {
-                &crate::compute::pool_cpu::ops::put::ops::PUT_PIXEL_VALUE_AT_SUPPORT
-            }
-            Self::PutData => &crate::compute::pool_cpu::ops::put::ops::PUT_DATA_SUPPORT,
-            Self::PutDataL16Bytes => {
-                &crate::compute::pool_cpu::ops::put::ops::PUT_DATA_L16_BYTES_SUPPORT
-            }
-            Self::PutDataValueAt => {
-                &crate::compute::pool_cpu::ops::put::ops::PUT_DATA_VALUE_AT_SUPPORT
-            }
-            Self::PutAlpha => &crate::compute::pool_cpu::ops::put::ops::PUT_ALPHA_SUPPORT,
-            Self::PutAlphaData => &crate::compute::pool_cpu::ops::put::ops::PUT_ALPHA_DATA_SUPPORT,
-            Self::GetProjection => &crate::compute::pool_cpu::ops::analysis::ops::SUPPORT,
-            Self::GetData => &crate::compute::pool_cpu::ops::analysis::ops::GET_DATA_SUPPORT,
-            Self::GetDataBand => {
-                &crate::compute::pool_cpu::ops::analysis::ops::GET_DATA_BAND_SUPPORT
-            }
-            Self::GetDataBandInto => {
-                &crate::compute::pool_cpu::ops::analysis::ops::GET_DATA_BAND_INTO_SUPPORT
-            }
-            Self::Brightness => &crate::compute::pool_cpu::ops::enhance::ops::SUPPORT,
-            Self::Contrast => {
-                &crate::compute::pool_cpu::ops::enhance::ops::CONTRAST_SUPPORT
-            },
-            Self::ColorSaturation => {
-                &crate::compute::pool_cpu::ops::enhance::ops::COLOR_SATURATION_SUPPORT
-            }
-            Self::Sharpness => {
-                &crate::compute::pool_cpu::ops::enhance::ops::SHARPNESS_SUPPORT
-            }
-            Self::ChopsAdd => &crate::compute::pool_cpu::ops::chops::ops::ADD_SUPPORT,
-            Self::ChopsSubtract => &crate::compute::pool_cpu::ops::chops::ops::SUBTRACT_SUPPORT,
-            Self::ChopsMultiply => &crate::compute::pool_cpu::ops::chops::ops::MULTIPLY_SUPPORT,
-            Self::ChopsScreen => &crate::compute::pool_cpu::ops::chops::ops::SCREEN_SUPPORT,
-            Self::ChopsDarker => &crate::compute::pool_cpu::ops::chops::ops::DARKER_SUPPORT,
-            Self::ChopsLighter => &crate::compute::pool_cpu::ops::chops::ops::LIGHTER_SUPPORT,
-            Self::ChopsDifference => &crate::compute::pool_cpu::ops::chops::ops::DIFFERENCE_SUPPORT,
-            Self::ChopsOverlay => &crate::compute::pool_cpu::ops::chops::ops::OVERLAY_SUPPORT,
-            Self::ChopsHardLight => &crate::compute::pool_cpu::ops::chops::ops::HARD_LIGHT_SUPPORT,
-            Self::ChopsSoftLight => &crate::compute::pool_cpu::ops::chops::ops::SOFT_LIGHT_SUPPORT,
-            Self::ChopsAddModulo => &crate::compute::pool_cpu::ops::chops::ops::ADD_MODULO_SUPPORT,
-            Self::ChopsSubtractModulo => &crate::compute::pool_cpu::ops::chops::ops::SUBTRACT_MODULO_SUPPORT,
-            Self::ChopsLogicalAnd => &crate::compute::pool_cpu::ops::chops::ops::LOGICAL_AND_SUPPORT,
-            Self::ChopsLogicalOr => &crate::compute::pool_cpu::ops::chops::ops::LOGICAL_OR_SUPPORT,
-            Self::ChopsLogicalXor => &crate::compute::pool_cpu::ops::chops::ops::LOGICAL_XOR_SUPPORT,
-            Self::ChopsConstant => &crate::compute::pool_cpu::ops::chops::ops::CONSTANT_SUPPORT,
-            Self::ChopsOffset => &crate::compute::pool_cpu::ops::chops::ops::OFFSET_SUPPORT,
-            Self::ChopsDuplicate => &crate::compute::pool_cpu::ops::chops::ops::DUPLICATE_SUPPORT,
-            Self::ChopsInvert => &crate::compute::pool_cpu::ops::chops::ops::INVERT_SUPPORT,
-        }
-    }
-}
-
 /// Relationship between an operation's input and output identities.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputModeRule {
@@ -402,6 +102,19 @@ pub enum OutputModeRule {
     ByTargetMode,
     /// Target-mode output whose palette bytes are returned alongside the raster.
     ByTargetModeWithPalette,
+}
+
+/// Shape of a non-raster value returned by an operation for one exact mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OperationValueResult {
+    /// Histogram output concatenates fixed-size bins in band order.
+    Histogram {
+        /// Number of output bands, which may preserve a compatibility band
+        /// synthesized by an earlier projection.
+        result_bands: usize,
+        /// Number of bins in each output band.
+        bins_per_band: usize,
+    },
 }
 
 /// An operation-owned relation between a typed payload and its output identity.
@@ -482,6 +195,24 @@ impl ImplementationSupport {
     }
 }
 
+/// Prefer the context's exact architecture, then retain declaration order for
+/// specialized siblings and permitted lower-architecture fallbacks.
+// TODO(pillow-rs#3ptb): verify exact/lower architecture selection and fallback
+// reasons across each operation's declared strategy set in the frozen parity.
+fn prioritized_implementations<'a>(
+    architectures: &'a [ImplementationSupport],
+    requested: Architecture,
+) -> impl Iterator<Item = &'a ImplementationSupport> {
+    architectures
+        .iter()
+        .filter(move |implementation| implementation.id.architecture == requested)
+        .chain(
+            architectures
+                .iter()
+                .filter(move |implementation| implementation.id.architecture != requested),
+        )
+}
+
 /// Whether a supported mode follows Pillow's operation contract or extends it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SupportScope {
@@ -507,6 +238,19 @@ pub enum FallbackReason {
     IneligibleRequest,
 }
 
+impl FallbackReason {
+    /// Returns a stable diagnostic name for this strategy fallback.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::MissingSpecialization => "missing_specialization",
+            Self::UnavailableBuild => "unavailable_build",
+            Self::UnavailableHardware => "unavailable_hardware",
+            Self::IneligibleRequest => "ineligible_request",
+        }
+    }
+}
+
 /// The actual choice retained by a prepared operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StrategySelection {
@@ -516,6 +260,9 @@ pub struct StrategySelection {
     pub requested_architecture: Architecture,
     /// The concrete implementation that will execute.
     pub implementation: ImplementationId,
+    /// The exact request guard selected for this implementation, including a
+    /// mode-local specialization when multiple strategies share one architecture.
+    pub guard: StrategyGuard,
     /// Why a preferred declaration could not execute, including a narrower
     /// specialization or Default selected after that failure.
     pub fallback: Option<FallbackReason>,
@@ -559,6 +306,8 @@ pub enum ModeSupport {
         output: OutputModeRule,
         /// Additional requirements imposed by this mode's implementation.
         inputs: &'static [InputContract],
+        /// Shape of the non-raster value returned for this exact mode, if any.
+        value_result: Option<OperationValueResult>,
     },
     /// An existing semantic rejection rather than an implementation fallback.
     Rejected {
@@ -572,6 +321,33 @@ pub enum ModeSupport {
 }
 
 impl ModeSupport {
+    /// Adds the value-result shape declared by this mode strategy.
+    #[must_use]
+    pub const fn with_value_result(self, value_result: OperationValueResult) -> Self {
+        match self {
+            Self::Supported { scope, default, architectures, output, inputs, .. } => {
+                Self::Supported {
+                    scope,
+                    default,
+                    architectures,
+                    output,
+                    inputs,
+                    value_result: Some(value_result),
+                }
+            }
+            rejected @ Self::Rejected { .. } => rejected,
+        }
+    }
+
+    /// Returns the declared non-raster value-result shape for this exact mode.
+    #[must_use]
+    pub const fn value_result(self) -> Option<OperationValueResult> {
+        match self {
+            Self::Supported { value_result, .. } => value_result,
+            Self::Rejected { .. } => None,
+        }
+    }
+
     /// Rejects unsupported source modes through this operation's declaration.
     pub(crate) fn validate_mode(self) -> Result<(), PilError> {
         match self {
@@ -615,6 +391,32 @@ impl ModeSupport {
         ))
     }
 
+    /// Resolves Paste's mask channel from this mode's declared input contract.
+    ///
+    /// Returns `true` when the accepted mask supplies alpha and `false` when it
+    /// supplies luma. The public Paste wrapper uses this before source
+    /// normalization so it does not maintain a second accepted-mask table.
+    pub(crate) fn paste_mask_uses_alpha(self, mask_mode: Mode) -> Result<bool, PilError> {
+        let inputs = match self {
+            Self::Supported { inputs, .. } => inputs,
+            Self::Rejected { reason, kind, .. } => return Err(kind.into_error(reason)),
+        };
+        for contract in inputs {
+            let InputContract::PasteInputs { rules } = *contract else {
+                continue;
+            };
+            return rules
+                .masks
+                .iter()
+                .find(|rule| rule.mode == mask_mode)
+                .map(|rule| rule.alpha)
+                .ok_or_else(|| PilError::ValueError(rules.mask_rejection.into()));
+        }
+        Err(PilError::InternalError(
+            "Paste support omitted its mask contract".into(),
+        ))
+    }
+
     /// Validates an ImageChops secondary identity from this mode's declaration.
     ///
     /// The secondary identity is supplied lazily so source rejection can
@@ -629,7 +431,11 @@ impl ModeSupport {
             unreachable!("validated Chops source mode was rejected")
         };
         for contract in inputs {
-            let InputContract::ChopsBinaryModes { modes, rejection_reason } = *contract else {
+            let InputContract::ChopsBinaryModes {
+                modes,
+                rejection_reason,
+                ..
+            } = *contract else {
                 continue;
             };
             return if modes.contains(&other_mode) {
@@ -785,6 +591,7 @@ impl ModeSupport {
             architectures,
             output,
             inputs,
+            value_result: None,
         }
     }
 
@@ -814,21 +621,20 @@ impl ModeSupport {
         if let Some(guard) = self.assess_inputs(input)? {
             return Ok(SupportAssessment::Deferred { implementation: default.id, guard });
         }
-        if ctx.supports_architecture(ctx.architecture()) {
-            for implementation in architectures {
-                if !ctx.permits_architecture(implementation.id.architecture)
-                    || !implementation.compiled
-                    || !implementation.requires.iter().all(|&arch| ctx.supports_architecture(arch)) {
-                    continue;
-                }
-                match implementation.guard.assess(input) {
-                    GuardAssessment::Deferred => return Ok(SupportAssessment::Deferred {
-                        implementation: implementation.id,
-                        guard: UnresolvedGuard::Implementation(implementation.guard),
-                    }),
-                    GuardAssessment::Satisfied => break,
-                    GuardAssessment::Ineligible => (),
-                }
+        for implementation in prioritized_implementations(architectures, ctx.architecture()) {
+            if !ctx.permits_architecture(implementation.id.architecture)
+                || !ctx.supports_architecture(implementation.id.architecture)
+                || !implementation.compiled
+                || !implementation.requires.iter().all(|&arch| ctx.supports_architecture(arch)) {
+                continue;
+            }
+            match implementation.guard.assess_for_mode(input, default.id.mode) {
+                GuardAssessment::Deferred => return Ok(SupportAssessment::Deferred {
+                    implementation: implementation.id,
+                    guard: UnresolvedGuard::Implementation(implementation.guard),
+                }),
+                GuardAssessment::Satisfied => break,
+                GuardAssessment::Ineligible => (),
             }
         }
         self.select(ctx, input).map(SupportAssessment::Ready)
@@ -853,6 +659,7 @@ impl ModeSupport {
             requested_backend: ctx.backend(),
             requested_architecture: ctx.architecture(),
             implementation: default.id,
+            guard: default.guard,
             fallback: (ctx.architecture() != Architecture::Default)
                 .then_some(FallbackReason::MissingSpecialization),
         };
@@ -861,25 +668,29 @@ impl ModeSupport {
         }
         if !ctx.supports_architecture(ctx.architecture()) {
             selection.fallback = Some(FallbackReason::UnavailableHardware);
-            return Ok(selection);
         }
-        for implementation in architectures {
+        for implementation in prioritized_implementations(architectures, ctx.architecture()) {
             if !ctx.permits_architecture(implementation.id.architecture) {
                 continue;
             }
             let reason = if !implementation.compiled {
                 FallbackReason::UnavailableBuild
-            } else if !implementation.requires.iter().all(|&arch| ctx.supports_architecture(arch)) {
+            } else if !ctx.supports_architecture(implementation.id.architecture)
+                || !implementation.requires.iter().all(|&arch| ctx.supports_architecture(arch))
+            {
                 FallbackReason::UnavailableHardware
             } else {
-                match implementation.guard.assess(input) {
+                match implementation.guard.assess_for_mode(input, default.id.mode) {
                     GuardAssessment::Ineligible => FallbackReason::IneligibleRequest,
                     GuardAssessment::Deferred => return Err(PilError::InternalError(
                         "strategy preparation requires materialized input facts".into(),
                     )),
                     GuardAssessment::Satisfied => {
                         selection.implementation = implementation.id;
-                        if selection.fallback == Some(FallbackReason::MissingSpecialization) {
+                        selection.guard = implementation.guard;
+                        if implementation.id.architecture == ctx.architecture()
+                            && selection.fallback == Some(FallbackReason::MissingSpecialization)
+                        {
                             selection.fallback = None;
                         }
                         return Ok(selection);
@@ -902,9 +713,14 @@ pub struct OperationSupport {
     pub operation: OperationId,
     /// Requirements checked during assessment and preparation.
     pub inputs: &'static [InputContract],
-    /// Prepared child operations whose contracts participate in this operation.
+    /// Child operation contracts referenced by composed routes or strategies.
     composed_operations: &'static [OperationId],
-    classify: fn(Mode) -> ModeSupport,
+    classify: Option<fn(Mode) -> ModeSupport>,
+    classify_route: Option<fn(Mode) -> OperationModeRoute>,
+    classify_target_composition:
+        Option<fn(Mode, Mode) -> Option<OperationTargetComposition>>,
+    /// Output identity retained by lazy metadata when a source mode is rejected.
+    rejected_output: Option<OutputModeRule>,
 }
 
 impl OperationSupport {
@@ -914,7 +730,15 @@ impl OperationSupport {
         inputs: &'static [InputContract],
         classify: fn(Mode) -> ModeSupport,
     ) -> Self {
-        Self { operation, inputs, composed_operations: &[], classify }
+        Self {
+            operation,
+            inputs,
+            composed_operations: &[],
+            classify: Some(classify),
+            classify_route: None,
+            classify_target_composition: None,
+            rejected_output: None,
+        }
     }
 
     /// Declares nested prepared operations that contribute concrete strategies.
@@ -924,10 +748,102 @@ impl OperationSupport {
         classify: fn(Mode) -> ModeSupport,
         composed_operations: &'static [OperationId],
     ) -> Self {
-        Self { operation, inputs, composed_operations, classify }
+        Self {
+            operation,
+            inputs,
+            composed_operations,
+            classify: Some(classify),
+            classify_route: None,
+            classify_target_composition: None,
+            rejected_output: None,
+        }
     }
 
-    /// Returns the child operation contracts used by this prepared strategy.
+    /// Binds complete wrapper routes and their direct prepared admissions.
+    pub const fn routed(
+        operation: OperationId,
+        inputs: &'static [InputContract],
+        classify_route: fn(Mode) -> OperationModeRoute,
+        composed_operations: &'static [OperationId],
+    ) -> Self {
+        Self {
+            operation,
+            inputs,
+            composed_operations,
+            classify: None,
+            classify_route: Some(classify_route),
+            classify_target_composition: None,
+            rejected_output: None,
+        }
+    }
+
+    /// Declares the output identity exposed by lazy metadata before a rejected
+    /// source mode reports its operation error.
+    #[must_use]
+    pub const fn with_rejected_output(mut self, output: OutputModeRule) -> Self {
+        self.rejected_output = Some(output);
+        self
+    }
+
+    /// Returns the declared wrapper paths for one exact source mode.
+    #[must_use]
+    pub fn route_paths_for_mode(&self, mode: Mode) -> &'static [OperationRoutePath] {
+        self.route_for_mode(mode).paths()
+    }
+
+    /// Selects the first conditional pipeline child whose wrapper guards pass.
+    #[must_use]
+    pub fn conditional_pipeline_child(
+        &self,
+        mode: Mode,
+        inputs: OperationRouteInputs,
+    ) -> Option<OperationId> {
+        self.route_paths_for_mode(mode)
+            .iter()
+            .find_map(|path| path.conditional_pipeline_child(mode, inputs))
+    }
+
+    /// Adds exact source/target wrapper compositions to the operation view.
+    ///
+    /// Direct target strategies remain in each source mode's `ModeSupport`;
+    /// this classifier declares only the wrapper-owned pair routes that add
+    /// child transitions or wrapper-specific outcomes.
+    #[must_use]
+    pub const fn with_target_compositions(
+        mut self,
+        classify: fn(Mode, Mode) -> Option<OperationTargetComposition>,
+    ) -> Self {
+        self.classify_target_composition = Some(classify);
+        self
+    }
+
+    /// Returns the wrapper-owned route for an exact source/target pair, if any.
+    #[must_use]
+    pub fn target_composition_for(
+        &self,
+        source: Mode,
+        target: Mode,
+    ) -> Option<OperationTargetComposition> {
+        self.classify_target_composition.and_then(|classify| classify(source, target))
+    }
+
+    /// Enumerates wrapper-owned target compositions for one exact source mode.
+    pub fn target_compositions_for(
+        &self,
+        source: Mode,
+    ) -> impl Iterator<Item = OperationTargetComposition> + '_ {
+        Mode::ALL.into_iter().filter_map(move |target| {
+            self.classify_target_composition.and_then(|classify| classify(source, target))
+        })
+    }
+
+    /// Returns the declared lazy output identity for rejected source modes.
+    #[must_use]
+    pub const fn rejected_output(&self) -> Option<OutputModeRule> {
+        self.rejected_output
+    }
+
+    /// Returns the child operation contracts referenced by this declaration.
     #[must_use]
     pub const fn composed_operations(&self) -> &'static [OperationId] {
         self.composed_operations
@@ -942,17 +858,44 @@ impl OperationSupport {
     /// Returns this operation's explicit contract for one mode.
     #[must_use]
     pub fn for_mode(&self, mode: Mode) -> ModeSupport {
-        (self.classify)(mode)
+        match self.classify_route {
+            Some(classify_route) => classify_route(mode).prepared_support(),
+            None => self.classify.expect("operation support needs a mode classifier")(mode),
+        }
+    }
+
+    /// Returns the full public route, including wrapper fallbacks and their outcomes.
+    #[must_use]
+    pub fn route_for_mode(&self, mode: Mode) -> OperationModeRoute {
+        match self.classify_route {
+            Some(classify_route) => classify_route(mode),
+            None => OperationModeRoute::Prepared {
+                support: self.classify.expect("operation support needs a mode classifier")(mode),
+                intermediate_mode: None,
+                paths: &[],
+            },
+        }
     }
 
     /// Returns the contract scope for one exact source and target mode pair.
     #[must_use]
     pub fn scope_for_target(&self, source: Mode, target: Mode) -> Option<SupportScope> {
+        if let Some(composition) = self.target_composition_for(source, target) {
+            return match composition.outcome {
+                OperationRouteOutcome::Produces => Some(composition.scope),
+                OperationRouteOutcome::Rejects { .. } => None,
+            };
+        }
         self.for_mode(source).scope_for_target(target)
     }
 
     /// Enumerates all identities, including rejected and internal modes.
     pub fn modes(&self) -> impl Iterator<Item = ModeSupport> {
-        Mode::ALL.into_iter().map(self.classify)
+        Mode::ALL.into_iter().map(|mode| self.for_mode(mode))
+    }
+
+    /// Enumerates all exact modes with their complete public routes.
+    pub fn routes(&self) -> impl Iterator<Item = OperationModeRoute> + '_ {
+        Mode::ALL.into_iter().map(|mode| self.route_for_mode(mode))
     }
 }

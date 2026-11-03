@@ -40,6 +40,8 @@ pub enum TransformFill {
     FloatingComponents(Vec<f64>),
     /// A scalar real value, accepted by mode F.
     FloatingScalar(f64),
+    /// A Python list, which Pillow does not unwrap as a color tuple.
+    InvalidList,
     /// An object that is not a supported fill representation.
     Invalid,
 }

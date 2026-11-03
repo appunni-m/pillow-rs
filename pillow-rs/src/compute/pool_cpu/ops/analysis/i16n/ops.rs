@@ -38,3 +38,26 @@ pub(crate) fn integer_samples(
         architecture => Err(helpers::missing_architecture(Mode::ImageI16N, architecture)),
     }
 }
+crate::compute::pool_cpu::ops::analysis::helpers::bbox::declare_getbbox_owner!(
+    i16n,
+    ImageI16N,
+    crate::compute::pool_cpu::ops::analysis::helpers::get_data::Luma16Image,
+);
+
+crate::compute::pool_cpu::ops::analysis::helpers::histogram_execution::declare_histogram_owner!(
+    ImageI16N,
+    crate::compute::pool_cpu::ops::analysis::helpers::get_data::Luma16Image,
+    crate::compute::pool_cpu::ops::analysis::i16n::default::histogram_impl::execute,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::stat_execution::declare_stat_owner!(
+    ImageI16N,
+    crate::compute::pool_cpu::ops::analysis::helpers::get_data::Luma16Image,
+    crate::compute::pool_cpu::ops::analysis::i16n::default::stat_impl::execute,
+);
+// NO_PILLOW_SUPPORT: the Rust/JS byte-valued extrema API exposes a compatibility projection.
+crate::compute::pool_cpu::ops::analysis::helpers::extrema_bytes_execution::
+    declare_getextrema_bytes_owner!(
+    ImageI16N,
+    crate::compute::pool_cpu::ops::analysis::helpers::get_data::Luma16Image,
+    crate::compute::pool_cpu::ops::analysis::i16n::default::extrema_bytes_impl::execute,
+);

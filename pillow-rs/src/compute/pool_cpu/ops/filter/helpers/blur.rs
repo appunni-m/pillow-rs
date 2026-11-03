@@ -1,6 +1,13 @@
 //! Public box and Gaussian blur orchestration.
 
-use super::{CheckedDims, PilError};
+// TODO(pillow-rs#3ptb): freeze BoxBlur, BoxBlurXY, and GaussianBlur output and
+// selected/fallback receipts across declared exact modes and architectures in
+// CPU parity. Source comparison against the archived implementation is complete.
+
+use crate::checked_dims::CheckedDims;
+use crate::error::PilError;
+
+pub(crate) const BOX_BLUR_BIAS: u32 = 1 << 23;
 
 #[path = "kernels/blur_line_steps.rs"]
 mod blur_line_steps;
@@ -239,7 +246,6 @@ fn blur_vertical_passes(
 
 // ── PIL-style box blur ──
 
-const BOX_BLUR_BIAS: u32 = super::BOX_BLUR_BIAS;
 const UNIFORM_BOX_BLUR_MAX_PIXELS: usize = 64 * 64;
 
 /// Check whether a box blur has no image domain or no active radius.
@@ -506,6 +512,46 @@ pub(crate) fn execute_gaussian_blur_native_bytes(
         gaussian_blur_box_radius(sigma),
         3,
     )
+}
+
+/// Copy an identity blur result in native byte layout and publish its path.
+pub(in crate::compute::pool_cpu::ops::filter) fn copy_native_byte_blur_input(
+    image: &crate::raster::DynamicImage,
+    mode: crate::raster::Mode,
+    channels: usize,
+) -> Result<crate::raster::DynamicImage, PilError> {
+    if image.mode() != mode || !(1..=4).contains(&channels) {
+        return Err(PilError::InternalError(
+            "native-byte blur identity received a mismatched mode or layout".into(),
+        ));
+    }
+    let dimensions = CheckedDims::new_allow_empty(
+        image.width(),
+        image.height(),
+        channels as u8,
+    )?;
+    if image.as_bytes().len() != dimensions.total_bytes() {
+        return Err(PilError::InternalError(
+            "native-byte blur identity input does not match its dimensions".into(),
+        ));
+    }
+    let mut output = dimensions.alloc_buffer();
+    let (vector_blocks, scalar_tail) =
+        crate::compute::pool_cpu::helpers::bytes::vector_copy::copy_native_bytes(
+            image.as_bytes(),
+            &mut output,
+        )
+        .ok_or_else(|| PilError::InternalError("native-byte blur copy shape mismatch".into()))?;
+    crate::compute::record_pipeline_operation_path("native-copy");
+    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+    crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+    crate::compute::pool_cpu::helpers::dynamic_image::from_raw_bytes(
+        mode,
+        image.width(),
+        image.height(),
+        output,
+    )
+    .ok_or_else(|| PilError::InternalError("native-byte blur identity output mode mismatch".into()))
 }
 
 /// Match Pillow's three-pass Gaussian-to-box radius calculation.

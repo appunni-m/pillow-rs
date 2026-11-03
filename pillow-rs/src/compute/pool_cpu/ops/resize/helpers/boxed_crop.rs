@@ -1,5 +1,6 @@
 //! Exact integer crop and identity shortcuts for boxed Resize.
 
+use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
 use crate::raster::{DynamicImage, Mode};
 
@@ -14,27 +15,39 @@ pub(crate) fn narrow_valid_bounds(
     source_size: (u32, u32),
     bounds: (f64, f64, f64, f64),
 ) -> Option<(f64, f64, f64, f64)> {
+    let bounds = validate_bounds(bounds, source_size).ok()?;
+    if bounds.0.is_finite() && bounds.1.is_finite() && bounds.2.is_finite() && bounds.3.is_finite() {
+        Some(bounds)
+    } else {
+        None
+    }
+}
+
+/// Narrows and validates source-box coordinates at Pillow's float32 boundary.
+pub(crate) fn validate_bounds(
+    bounds: (f64, f64, f64, f64),
+    source_size: (u32, u32),
+) -> Result<(f64, f64, f64, f64), PilError> {
     let bounds = (
         f64::from(bounds.0 as f32),
         f64::from(bounds.1 as f32),
         f64::from(bounds.2 as f32),
         f64::from(bounds.3 as f32),
     );
-    if !bounds.0.is_finite()
-        || !bounds.1.is_finite()
-        || !bounds.2.is_finite()
-        || !bounds.3.is_finite()
-        || bounds.0 < 0.0
-        || bounds.1 < 0.0
-        || bounds.2 > f64::from(source_size.0 as f32)
-        || bounds.3 > f64::from(source_size.1 as f32)
-        || bounds.2 < bounds.0
-        || bounds.3 < bounds.1
-    {
-        None
-    } else {
-        Some(bounds)
+    if bounds.0 < 0.0 || bounds.1 < 0.0 {
+        return Err(PilError::ValueError("box offset can't be negative".into()));
     }
+    if bounds.2 > f64::from(source_size.0 as f32)
+        || bounds.3 > f64::from(source_size.1 as f32)
+    {
+        return Err(PilError::ValueError(
+            "box can't exceed original image size".into(),
+        ));
+    }
+    if bounds.2 < bounds.0 || bounds.3 < bounds.1 {
+        return Err(PilError::ValueError("box can't be empty".into()));
+    }
+    Ok(bounds)
 }
 
 fn exact_crop(

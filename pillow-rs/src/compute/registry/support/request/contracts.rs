@@ -5,6 +5,7 @@ use super::{
     PasteInputRules, PasteMaskRule, RequestFacts, StrategyInputs, UnresolvedGuard,
 };
 use crate::error::PilError;
+use crate::pipeline::ExpandMargins;
 use crate::raster::Mode;
 
 pub(super) fn assess(
@@ -21,6 +22,7 @@ pub(super) fn assess(
         | InputContract::EffectSpreadDistance
         | InputContract::EffectNoiseSigma
         | InputContract::EffectMandelbrotParameters
+        | InputContract::QuantizeParameters { .. }
         | InputContract::Rotate
         | InputContract::TransformParameters
         | InputContract::PosterizeBits
@@ -44,6 +46,7 @@ pub(super) fn assess(
         InputContract::ExpandedDimensions { bytes_per_pixel } => {
             assess_expanded_dimensions(contract, input, bytes_per_pixel)
         }
+        InputContract::ExpandFill(_) | InputContract::PadFill(_) => Ok(None),
         InputContract::PaletteMetadata if input.palette == PaletteKnowledge::Unknown => {
             Ok(Some(UnresolvedGuard::PaletteMetadata))
         }
@@ -62,8 +65,8 @@ pub(super) fn assess(
                 rejection_reason,
             )
         }
-        InputContract::ChopsBinaryModes { modes, rejection_reason } => {
-            assess_chops_binary_modes(input, modes, rejection_reason)
+        contract @ InputContract::ChopsBinaryModes { .. } => {
+            assess_chops_binary_modes(input, contract)
         }
         InputContract::SameModeSecondaryImage { mode, rejection_reason } => {
             assess_same_mode_secondary_image(input, mode, rejection_reason)
@@ -88,6 +91,10 @@ pub(super) fn assess(
         | InputContract::CallerValidatedPixelIndex
         | InputContract::CallerValidatedRawI16ByteRows
         | InputContract::CallerValidatedGetDataBandIndex { .. }
+        | InputContract::CallerValidatedGetChannelIndex { .. }
+        | InputContract::GetBBoxAlphaOnly { .. }
+        | InputContract::HistogramMask { .. }
+        | InputContract::HistogramExtrema { .. }
         | InputContract::OrderedPixelWrites => Ok(None),
     }
 }
@@ -321,12 +328,21 @@ fn assess_convert_target(
 
 fn assess_chops_binary_modes(
     input: StrategyInputs,
-    modes: &'static [Mode],
-    rejection_reason: &'static str,
+    contract: InputContract,
 ) -> Result<Option<UnresolvedGuard>, PilError> {
+    let InputContract::ChopsBinaryModes {
+        modes,
+        rejection_reason,
+        ..
+    } = contract
+    else {
+        return Err(PilError::InternalError(
+            "Chops mode assessment received another input contract".into(),
+        ));
+    };
     match input.request {
         RequestFacts::Unspecified => Ok(Some(UnresolvedGuard::InputContract(
-            InputContract::ChopsBinaryModes { modes, rejection_reason },
+            contract,
         ))),
         RequestFacts::ChopsBinary { other, .. } if modes.contains(&other.mode) => Ok(None),
         RequestFacts::ChopsBinary { .. } => {
@@ -351,6 +367,15 @@ fn assess_same_mode_secondary_image(
             Ok(None)
         }
         RequestFacts::SameModeSecondaryImage { .. } => {
+            Err(PilError::ValueError(rejection_reason.into()))
+        }
+        RequestFacts::AlphaComposite { source, .. }
+            if source.mode == mode
+                && (source.width, source.height) == (input.width, input.height) =>
+        {
+            Ok(None)
+        }
+        RequestFacts::AlphaComposite { .. } => {
             Err(PilError::ValueError(rejection_reason.into()))
         }
         _ => Err(wrong_request("same-mode secondary image")),
@@ -523,6 +548,7 @@ fn assess_request(
         | (InputContract::EffectSpreadDistance, RequestFacts::Unspecified)
         | (InputContract::EffectNoiseSigma, RequestFacts::Unspecified)
         | (InputContract::EffectMandelbrotParameters, RequestFacts::Unspecified)
+        | (InputContract::QuantizeParameters { .. }, RequestFacts::Unspecified)
         | (InputContract::Rotate, RequestFacts::Unspecified)
         | (InputContract::TransformParameters, RequestFacts::Unspecified)
         | (InputContract::PosterizeBits, RequestFacts::Unspecified)
@@ -541,6 +567,62 @@ fn assess_request(
         }
         (InputContract::EffectSpreadDistance, RequestFacts::EffectSpread { .. })
         | (InputContract::EffectNoiseSigma, RequestFacts::EffectNoise { .. }) => Ok(None),
+        (
+            InputContract::QuantizeParameters {
+                min_colors,
+                max_colors,
+                method_restricted_modes,
+                allowed_methods,
+                palette_mode: expected_palette_mode,
+                palette_sources,
+                unavailable_methods,
+                kmeans_nonnegative,
+                colors_rejection,
+                pillow_rgba_method_rejection,
+                alpha_method_rejection,
+                palette_mode_rejection,
+                palette_source_rejection,
+                unavailable_method_rejection,
+                kmeans_rejection,
+            },
+            RequestFacts::Quantize {
+                source_mode,
+                colors,
+                method,
+                kmeans,
+                palette_mode,
+            },
+        ) => {
+            if colors < min_colors || colors > max_colors {
+                return Err(PilError::ValueError(colors_rejection.into()));
+            }
+            if method_restricted_modes.contains(&source_mode)
+                && !allowed_methods.contains(&method)
+            {
+                let rejection = if source_mode == Mode::ImageRgba8 {
+                    pillow_rgba_method_rejection
+                } else {
+                    alpha_method_rejection
+                };
+                return Err(PilError::ValueError(rejection.into()));
+            }
+            if let Some(palette_mode) = palette_mode {
+                if palette_mode != expected_palette_mode {
+                    return Err(PilError::ValueError(palette_mode_rejection.into()));
+                }
+                if !palette_sources.contains(&source_mode) {
+                    return Err(PilError::ValueError(palette_source_rejection.into()));
+                }
+                return Ok(None);
+            }
+            if unavailable_methods.contains(&method) {
+                return Err(PilError::ValueError(unavailable_method_rejection.into()));
+            }
+            if kmeans_nonnegative && kmeans.is_some_and(|iterations| iterations < 0) {
+                return Err(PilError::ValueError(kmeans_rejection.into()));
+            }
+            Ok(None)
+        }
         (
             InputContract::EffectMandelbrotParameters,
             RequestFacts::EffectMandelbrot { extent_bits, quality },
@@ -600,11 +682,23 @@ fn assess_request(
                 Ok(None)
             }
         }
-        (InputContract::Thumbnail, RequestFacts::Thumbnail { width, height, .. }) => {
+        (
+            InputContract::Thumbnail,
+            RequestFacts::Thumbnail {
+                width,
+                height,
+                reducing_gap_bits,
+                ..
+            },
+        ) => {
             if width == 0 || height == 0 {
                 Err(PilError::ValueError("thumbnail size must be > 0".into()))
             } else if input.width == 0 || input.height == 0 {
                 Err(PilError::ValueError("height and width must be > 0".into()))
+            } else if reducing_gap_bits.is_some_and(|bits| f64::from_bits(bits) < 1.0) {
+                Err(PilError::ValueError(
+                    "reducing_gap must be 1.0 or greater".into(),
+                ))
             } else {
                 Ok(None)
             }
@@ -647,6 +741,7 @@ fn assess_request(
         (InputContract::EffectMandelbrotParameters, _) => {
             Err(wrong_request("EffectMandelbrot"))
         }
+        (InputContract::QuantizeParameters { .. }, _) => Err(wrong_request("Quantize")),
         (InputContract::Filter3x3Parameters, _) => Err(wrong_request("Filter3x3")),
         (InputContract::Filter5x5Parameters, _) => Err(wrong_request("Filter5x5")),
         (InputContract::GaussianBlurSigma, _) => Err(wrong_request("GaussianBlur")),
@@ -719,16 +814,17 @@ fn assess_expanded_dimensions(
     Ok(None)
 }
 
-fn expanded_dimensions(width: u32, height: u32, border: u32) -> Result<(u32, u32), PilError> {
-    let border_twice = border.checked_mul(2).ok_or_else(|| {
-        PilError::DimensionError("expand border overflows dimensions".into())
-    })?;
-    let width = width.checked_add(border_twice).ok_or_else(|| {
-        PilError::DimensionError("expanded image width overflows".into())
-    })?;
-    let height = height.checked_add(border_twice).ok_or_else(|| {
-        PilError::DimensionError("expanded image height overflows".into())
-    })?;
+fn expanded_dimensions(
+    width: u32,
+    height: u32,
+    border: ExpandMargins,
+) -> Result<(u32, u32), PilError> {
+    let width = i128::from(width) + i128::from(border.left) + i128::from(border.right);
+    let height = i128::from(height) + i128::from(border.top) + i128::from(border.bottom);
+    let width = u32::try_from(width)
+        .map_err(|_| PilError::DimensionError("expanded image width is invalid".into()))?;
+    let height = u32::try_from(height)
+        .map_err(|_| PilError::DimensionError("expanded image height is invalid".into()))?;
     Ok((width, height))
 }
 

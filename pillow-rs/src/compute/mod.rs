@@ -64,6 +64,7 @@ pub(crate) use telemetry::{
     record_eager_cpu_operation_receipt_with_selection,
     record_pipeline_allocation, record_pipeline_backend_fallback,
     clear_pipeline_operation_architecture, record_pipeline_operation_architecture,
+    record_pipeline_operation_selection,
     record_pipeline_operation_handoff, record_pipeline_operation_mode_conversion,
     record_pipeline_operation_path, record_pipeline_operation_scalar_tail,
     record_pipeline_operation_unsupported, record_pipeline_operation_vector_blocks,
@@ -71,6 +72,7 @@ pub(crate) use telemetry::{
     record_pipeline_resource_telemetry, reset_pipeline_allocation_telemetry,
     reset_pipeline_operation_telemetry, take_pipeline_allocation_telemetry,
     take_pipeline_operation_telemetry,
+    PipelineOperationTelemetryCapture,
 };
 #[cfg(feature = "gpu")]
 pub(crate) use telemetry::{
@@ -87,10 +89,13 @@ pub(crate) use backend_state::{
 pub(crate) use eager::{
     execute_eager_cpu_getprojection, execute_eager_cpu_linear_gradient,
     execute_eager_cpu_mandelbrot, execute_eager_cpu_radial_gradient,
-    execute_eager_cpu_arch_bytes, execute_eager_cpu_arch_image_operation,
-    execute_eager_cpu_arch_image_operation_with_route,
-    execute_eager_cpu_shared_result,
+    execute_eager_cpu_arch_bytes_with_context,
+    execute_eager_cpu_arch_image_operation_with_context,
+    execute_eager_native_copy_result, execute_eager_native_copy_result_with_receipts,
+    execute_eager_native_identity_result, execute_eager_native_identity_result_with_receipts,
 };
+#[cfg(test)]
+pub(crate) use eager::execute_eager_cpu_arch_bytes;
 #[cfg(test)]
 pub(crate) use eager::execute_eager_cpu_image_operation;
 #[cfg(feature = "gpu")]
@@ -99,7 +104,8 @@ pub(crate) use eager::{
     gpu_rgb_projection_supported, gpu_rgb_projection_terminal_supported,
 };
 pub(crate) use execution::{
-    PreparedExecution, execute_prepared, execute_prepared_cpu_arch_operation,
+    PreparedExecution, execute_prepared, execute_prepared_cpu_arch_convert_output,
+    execute_prepared_cpu_arch_operation,
     execute_prepared_cpu_arch_terminal, execute_prepared_cpu_terminal, execute_prepared_shared,
     execute_prepared_shared_with_palette,
     execute_prepared_with_palette, prepare_execution,
@@ -347,18 +353,21 @@ pub use pool_gpu::stream::{
 };
 pub(crate) mod registry;
 pub use registry::support::{
-    BandIndexRule, DrawRequestKind, DrawTextMaskKind, F32RankCompatibility, FallbackReason,
-    ImplementationId, ImplementationSupport, InputContract, MergeBandModeRule,
-    ModeChannelCapacity, ModeSupport, OperationId, OperationSupport, OutputModeRule,
-    PaletteKnowledge, PasteInputRules, PasteMaskRule, PayloadOutput, PixelWriteRunFacts,
-    RejectionKind, RequestFacts, SecondaryInputFacts, StrategyGuard, StrategyInputs,
-    StrategySelection, SupportAssessment, SupportScope, UnresolvedGuard,
+    BandIndexRule, DrawRequestKind, DrawTextMaskKind, ExpandFillRule, F32RankCompatibility,
+    FallbackReason, ImplementationId, ImplementationSupport, InputContract, MergeBandModeRule,
+    ModeChannelCapacity, ModeSupport, OperationId, OperationModeRoute, OperationModeTransition,
+    OperationRouteGuard, OperationRouteOutcome, OperationRoutePath, OperationRouteStage,
+    OperationSupport, OperationTargetComposition, OperationTargetCompositionKind, PadFillRule,
+    OperationValueResult,
+    OperationTransitionSource, OutputModeRule, PaletteKnowledge, PasteInputRules, PasteMaskRule, PayloadOutput,
+    PixelWriteRunFacts, RejectionKind, RequestFacts, SecondaryInputFacts, StrategyGuard,
+    StrategyInputs, StrategySelection, SupportAssessment, SupportScope, UnresolvedGuard,
 };
 
 pub(crate) use pool_cpu::CpuPool;
 pub(crate) use pool_cpu::ops::analysis::ops::{
-    ProjectionOutput, execute_cmyk8_in_context as cpu_cmyk_projection_in_context,
-    execute_rgb8_in_context as cpu_rgb_projection_in_context,
+    ProjectionOutput, execute_cmyk8_selected as cpu_cmyk_projection_selected,
+    execute_rgb8_selected as cpu_rgb_projection_selected,
     prepare as prepare_cpu_getprojection,
 };
 #[cfg(feature = "gpu")]

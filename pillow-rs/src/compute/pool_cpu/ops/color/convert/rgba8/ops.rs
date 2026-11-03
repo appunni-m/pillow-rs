@@ -7,8 +7,8 @@ crate::compute::pool_cpu::ops::color::convert::helpers::binary::declare_mode_str
 use crate::compute::{
     Architecture,
     registry::support::{
-        ImplementationSupport, ModeSupport, OperationId, OutputModeRule, StrategyGuard,
-        StrategySelection,
+        ImplementationSupport, InputContract, ModeSupport, OperationId, OutputModeRule,
+        StrategyGuard, StrategySelection,
     },
 };
 use crate::error::PilError;
@@ -20,20 +20,38 @@ const SSE2_AVAILABLE: bool = cfg!(any(
 ));
 const WASM_SIMD128_AVAILABLE: bool = cfg!(all(target_arch = "wasm32", target_feature = "simd128"));
 
-macro_rules! architecture_targets {
-    ($architecture:ident, $available:expr, $requirements:expr; $($target:ident),+ $(,)?) => {
-        $(ImplementationSupport::cpu(
-            OperationId::Convert,
-            Mode::ImageRgba8,
-            Architecture::$architecture,
-            $available,
-            $requirements,
-            StrategyGuard::ConvertTargetMode(Mode::$target),
-        ),)+
+macro_rules! architecture_catalog {
+    (
+        $mode:ident,
+        singles [$($single:expr),* $(,)?],
+        groups [
+            $(
+                $guard:ident, $architecture:ident, $available:expr, $requirements:expr;
+                [$($target:ident),+ $(,)?]
+            ),+ $(,)?
+        ]
+    ) => {
+        [
+            $($single,)*
+            $(
+                $(
+                    ImplementationSupport::cpu(
+                        OperationId::Convert,
+                        Mode::$mode,
+                        Architecture::$architecture,
+                        $available,
+                        $requirements,
+                        StrategyGuard::$guard(Mode::$target),
+                    ),
+                )+
+            )+
+        ]
     };
 }
 
-static ARCHITECTURES: [ImplementationSupport; 36] = [
+static ARCHITECTURES: [ImplementationSupport; 36] = architecture_catalog!(
+    ImageRgba8,
+    singles [
     ImplementationSupport::cpu(
         OperationId::Convert,
         Mode::ImageRgba8,
@@ -146,66 +164,65 @@ static ARCHITECTURES: [ImplementationSupport; 36] = [
         &[Architecture::Neon],
         StrategyGuard::ConvertTargetMode(Mode::ImageLuma8),
     ),
-    architecture_targets!(
-        Sse2,
-        SSE2_AVAILABLE,
-        &[Architecture::Sse2];
-        ImageLumaA8,
-        ImageCmyk8,
-        ImageYCbCr8,
-        ImageHsv8,
-        ImageI32,
-        ImageF32,
-        ImageRgba8,
-    ),
-    architecture_targets!(
-        Neon,
-        cfg!(all(target_arch = "aarch64", target_feature = "neon")),
-        &[Architecture::Neon];
-        ImageLumaA8,
-        ImageCmyk8,
-        ImageYCbCr8,
-        ImageHsv8,
-        ImageI32,
-        ImageF32,
-        ImageRgba8,
-    ),
-    ImplementationSupport::cpu(
-        OperationId::Convert,
-        Mode::ImageRgba8,
-        Architecture::WasmSimd128,
-        WASM_SIMD128_AVAILABLE,
-        &[Architecture::WasmSimd128],
-        StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageRgbx8),
-    ),
-    ImplementationSupport::cpu(
-        OperationId::Convert,
-        Mode::ImageRgba8,
-        Architecture::WasmSimd128,
-        WASM_SIMD128_AVAILABLE,
-        &[Architecture::WasmSimd128],
-        StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageRgbPremultiplied8),
-    ),
-    architecture_targets!(
-        WasmSimd128,
-        WASM_SIMD128_AVAILABLE,
-        &[Architecture::WasmSimd128];
-        ImageRgb8,
-        ImageRgba8,
-        ImageLumaA8,
-        ImageCmyk8,
-        ImageYCbCr8,
-        ImageHsv8,
-        ImageI32,
-        ImageF32,
-    ),
+    ],
+    groups [
+        ConvertTargetMode, Sse2, SSE2_AVAILABLE, &[Architecture::Sse2]; [
+            ImageLumaA8,
+            ImageCmyk8,
+            ImageYCbCr8,
+            ImageHsv8,
+            ImageI32,
+            ImageF32,
+            ImageRgba8,
+        ],
+        ConvertTargetMode, Neon, cfg!(all(target_arch = "aarch64", target_feature = "neon")),
+        &[Architecture::Neon]; [
+            ImageLumaA8,
+            ImageCmyk8,
+            ImageYCbCr8,
+            ImageHsv8,
+            ImageI32,
+            ImageF32,
+            ImageRgba8,
+        ],
+        ConvertTargetModeNonEmpty, WasmSimd128, WASM_SIMD128_AVAILABLE,
+        &[Architecture::WasmSimd128]; [ImageRgbx8],
+        ConvertTargetModeNonEmpty, WasmSimd128, WASM_SIMD128_AVAILABLE,
+        &[Architecture::WasmSimd128]; [ImageRgbPremultiplied8],
+        ConvertTargetMode, WasmSimd128, WASM_SIMD128_AVAILABLE, &[Architecture::WasmSimd128]; [
+            ImageRgb8,
+            ImageRgba8,
+            ImageLumaA8,
+            ImageCmyk8,
+            ImageYCbCr8,
+            ImageHsv8,
+            ImageI32,
+            ImageF32,
+        ],
+    ]
+);
+
+// NO_PILLOW_SUPPORT: Pillow has no RGBA converters to La, I;16 identities, or LAB.
+const CORE_ONLY_TARGETS: &[Mode] = &[
+    Mode::ImageLaPremultiplied8,
+    Mode::ImageI16,
+    Mode::ImageI16L,
+    Mode::ImageI16B,
+    Mode::ImageI16N,
+    Mode::ImageLab8,
 ];
+const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
+    targets: super::super::ops::RGBA_TARGETS,
+    core_only_targets: CORE_ONLY_TARGETS,
+    core_only_reason: Some("Pillow has no matching RGBA source-target conversion"),
+    rejection_reason: "image has wrong mode",
+}];
 
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::Convert,
     Mode::ImageRgba8,
     OutputModeRule::ByTargetModeWithPalette,
-    &super::super::ops::RGBA_INPUTS,
+    INPUTS,
     &ARCHITECTURES,
 );
 

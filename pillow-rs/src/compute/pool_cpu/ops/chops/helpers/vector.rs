@@ -2,20 +2,28 @@
 
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
-use crate::raster::{DynamicImage, GenericImageView, Mode};
+use crate::raster::buffer::ImageBuffer;
+use crate::raster::traits::Pixel;
 use wide::{f32x8, u8x16, u16x16};
 
 use super::binary::BinaryOperation;
 
 /// Executes a validated native-byte architecture strategy.
-pub(crate) fn execute(
-    image: &DynamicImage,
+pub(crate) fn execute<P>(
+    image: &ImageBuffer<P, Vec<u8>>,
     request: super::super::ops::ChopsRequest,
-    other: Option<&DynamicImage>,
-    mode: Mode,
-) -> Result<DynamicImage, PilError> {
+    other: Option<&ImageBuffer<P, Vec<u8>>>,
+) -> Result<ImageBuffer<P, Vec<u8>>, PilError>
+where
+    P: Pixel<Subpixel = u8>,
+{
     let operation = match request {
-        super::super::ops::ChopsRequest::Invert => return execute_invert(image, mode),
+        super::super::ops::ChopsRequest::Offset { .. } => {
+            return Err(PilError::InternalError(
+                "Chops Offset must be dispatched by its exact-mode strategy".into(),
+            ));
+        }
+        super::super::ops::ChopsRequest::Invert => return execute_invert(image),
         super::super::ops::ChopsRequest::Binary(operation) => operation,
         _ => {
             return Err(PilError::InternalError(
@@ -28,42 +36,34 @@ pub(crate) fn execute(
     })?;
     match operation {
         operation @ (BinaryOperation::Add { .. } | BinaryOperation::Subtract { .. }) => {
-            execute_native(image, other, mode, operation)
+            execute_native(image, other, operation)
         }
-        BinaryOperation::Multiply => execute_bytes(image, other, mode, multiply_block),
-        BinaryOperation::Screen => execute_bytes(image, other, mode, screen_block),
-        BinaryOperation::Darker => execute_bytes(image, other, mode, darker_block),
-        BinaryOperation::Lighter => execute_bytes(image, other, mode, lighter_block),
-        BinaryOperation::Difference => execute_bytes(image, other, mode, difference_block),
-        BinaryOperation::Overlay => execute_bytes(image, other, mode, overlay_block),
-        BinaryOperation::HardLight => execute_bytes(image, other, mode, hard_light_block),
-        BinaryOperation::SoftLight => execute_bytes(image, other, mode, soft_light_block),
-        BinaryOperation::AddModulo => execute_bytes(image, other, mode, add_modulo_block),
-        BinaryOperation::SubtractModulo => {
-            execute_bytes(image, other, mode, subtract_modulo_block)
-        }
-        BinaryOperation::LogicalAnd if mode == Mode::One => {
-            execute_bytes(image, other, mode, logical_and_block)
-        }
-        BinaryOperation::LogicalOr if mode == Mode::One => {
-            execute_bytes(image, other, mode, logical_or_block)
-        }
-        BinaryOperation::LogicalXor if mode == Mode::One => {
-            execute_bytes(image, other, mode, logical_xor_block)
-        }
-        _ => Err(PilError::InternalError(
-            "Chops vector request was not admitted for its mode".into(),
-        )),
+        BinaryOperation::Multiply => execute_bytes(image, other, multiply_block),
+        BinaryOperation::Screen => execute_bytes(image, other, screen_block),
+        BinaryOperation::Darker => execute_bytes(image, other, darker_block),
+        BinaryOperation::Lighter => execute_bytes(image, other, lighter_block),
+        BinaryOperation::Difference => execute_bytes(image, other, difference_block),
+        BinaryOperation::Overlay => execute_bytes(image, other, overlay_block),
+        BinaryOperation::HardLight => execute_bytes(image, other, hard_light_block),
+        BinaryOperation::SoftLight => execute_bytes(image, other, soft_light_block),
+        BinaryOperation::AddModulo => execute_bytes(image, other, add_modulo_block),
+        BinaryOperation::SubtractModulo => execute_bytes(image, other, subtract_modulo_block),
+        BinaryOperation::LogicalAnd => execute_bytes(image, other, logical_and_block),
+        BinaryOperation::LogicalOr => execute_bytes(image, other, logical_or_block),
+        BinaryOperation::LogicalXor => execute_bytes(image, other, logical_xor_block),
     }
 }
 
-fn execute_invert(image: &DynamicImage, mode: Mode) -> Result<DynamicImage, PilError> {
-    let channels = super::binary::byte_channels(mode).ok_or_else(|| {
-        PilError::InternalError("Chops invert strategy received a non-byte mode".into())
-    })?;
+fn execute_invert<P>(
+    image: &ImageBuffer<P, Vec<u8>>,
+) -> Result<ImageBuffer<P, Vec<u8>>, PilError>
+where
+    P: Pixel<Subpixel = u8>,
+{
+    let channels = P::CHANNEL_COUNT;
     let dimensions = CheckedDims::new_allow_empty(image.width(), image.height(), channels)?;
-    let source = image.as_bytes();
-    if image.mode() != mode || source.len() != dimensions.total_bytes() {
+    let source = image.as_raw().as_slice();
+    if source.len() != dimensions.total_bytes() {
         return Err(PilError::InternalError(
             "Chops invert source did not match its admitted native layout".into(),
         ));
@@ -81,8 +81,10 @@ fn execute_invert(image: &DynamicImage, mode: Mode) -> Result<DynamicImage, PilE
         }
         crate::compute::pool_cpu::helpers::bytes::native_invert::NativeInvertOutput::Exact(bytes) => {
             crate::compute::record_pipeline_operation_path("vector");
-            super::output::from_raw_bytes(mode, image.width(), image.height(), bytes)
-                .ok_or_else(|| PilError::InternalError("invert Chops buffer shape mismatch".into()))
+            let mut output = ImageBuffer::<P, Vec<u8>>::from_raw(image.width(), image.height(), bytes)
+                .ok_or_else(|| PilError::InternalError("invert Chops buffer shape mismatch".into()))?;
+            super::unary::carry_inverted_hidden_lanes(image, &mut output)?;
+            Ok(output)
         }
         crate::compute::pool_cpu::helpers::bytes::native_invert::NativeInvertOutput::Prefix(_) => {
             Err(PilError::InternalError(
@@ -92,29 +94,24 @@ fn execute_invert(image: &DynamicImage, mode: Mode) -> Result<DynamicImage, PilE
     }
 }
 
-fn execute_bytes<K>(
-    image: &DynamicImage,
-    other: &DynamicImage,
-    mode: Mode,
+fn execute_bytes<P, K>(
+    image: &ImageBuffer<P, Vec<u8>>,
+    other: &ImageBuffer<P, Vec<u8>>,
     kernel: K,
-) -> Result<DynamicImage, PilError>
+) -> Result<ImageBuffer<P, Vec<u8>>, PilError>
 where
+    P: Pixel<Subpixel = u8>,
     K: Fn([u8; 16], [u8; 16]) -> [u8; 16],
 {
-    let channels = super::binary::byte_channels(mode).ok_or_else(|| {
-        PilError::InternalError("Chops vector strategy received a non-byte mode".into())
-    })?;
-    if image.mode() != mode
-        || super::binary::byte_channels(other.mode()) != Some(channels)
-        || image.dimensions() != other.dimensions()
-    {
+    let channels = P::CHANNEL_COUNT;
+    if image.dimensions() != other.dimensions() {
         return Err(PilError::InternalError(
             "Chops vector operands did not match their admitted native layout".into(),
         ));
     }
     let dimensions = CheckedDims::new_allow_empty(image.width(), image.height(), channels)?;
-    let left = image.as_bytes();
-    let right = other.as_bytes();
+    let left = image.as_raw().as_slice();
+    let right = other.as_raw().as_slice();
     if left.len() != dimensions.total_bytes() || right.len() != dimensions.total_bytes() {
         return Err(PilError::InternalError(
             "Chops vector operands did not match their image dimensions".into(),
@@ -131,7 +128,7 @@ where
     );
     crate::compute::record_pipeline_operation_scalar_tail(0);
     crate::compute::record_pipeline_operation_path("vector");
-    super::output::from_raw_bytes(mode, image.width(), image.height(), output)
+    ImageBuffer::<P, Vec<u8>>::from_raw(image.width(), image.height(), output)
         .ok_or_else(|| PilError::ValueError("channel_op_binary buffer error".into()))
 }
 
@@ -156,26 +153,23 @@ where
     }
 }
 
-fn execute_native(
-    image: &DynamicImage,
-    other: &DynamicImage,
-    mode: Mode,
+fn execute_native<P>(
+    image: &ImageBuffer<P, Vec<u8>>,
+    other: &ImageBuffer<P, Vec<u8>>,
     operation: BinaryOperation,
-) -> Result<DynamicImage, PilError> {
-    let channels = super::binary::byte_channels(mode).ok_or_else(|| {
-        PilError::InternalError("Chops vector strategy received a non-byte mode".into())
-    })?;
-    if image.mode() != mode
-        || super::binary::byte_channels(other.mode()) != Some(channels)
-        || image.dimensions() != other.dimensions()
-    {
+) -> Result<ImageBuffer<P, Vec<u8>>, PilError>
+where
+    P: Pixel<Subpixel = u8>,
+{
+    let channels = P::CHANNEL_COUNT;
+    if image.dimensions() != other.dimensions() {
         return Err(PilError::InternalError(
             "Chops vector operands did not match their admitted native layout".into(),
         ));
     }
     let dimensions = CheckedDims::new_allow_empty(image.width(), image.height(), channels)?;
-    let left = image.as_bytes();
-    let right = other.as_bytes();
+    let left = image.as_raw().as_slice();
+    let right = other.as_raw().as_slice();
     if left.len() != dimensions.total_bytes() || right.len() != dimensions.total_bytes() {
         return Err(PilError::InternalError(
             "Chops vector operands did not match their image dimensions".into(),
@@ -212,40 +206,35 @@ fn execute_native(
         );
     }
     crate::compute::record_pipeline_operation_path("vector");
-    super::output::from_raw_bytes(mode, image.width(), image.height(), output)
+    ImageBuffer::<P, Vec<u8>>::from_raw(image.width(), image.height(), output)
         .ok_or_else(|| PilError::ValueError("channel_op_binary buffer error".into()))
 }
 
 /// Applies an admitted Add/Sub vector strategy to an owned batch intermediate.
-pub(crate) fn execute_in_place(
-    image: &mut DynamicImage,
+pub(crate) fn execute_in_place<P>(
+    image: &mut ImageBuffer<P, Vec<u8>>,
     request: super::super::ops::ChopsRequest,
-    other: &DynamicImage,
-    mode: Mode,
-) -> Result<(), PilError> {
+    other: &ImageBuffer<P, Vec<u8>>,
+) -> Result<(), PilError>
+where
+    P: Pixel<Subpixel = u8>,
+{
     let super::super::ops::ChopsRequest::Binary(operation) = request else {
         return Err(PilError::InternalError(
             "Chops in-place vector strategy received a non-binary request".into(),
         ));
     };
     let (scale, offset, subtract) = affine_parameters(operation)?;
-    let channels = super::binary::byte_channels(mode).ok_or_else(|| {
-        PilError::InternalError("Chops in-place strategy received a non-byte mode".into())
-    })?;
-    if image.mode() != mode
-        || super::binary::byte_channels(other.mode()) != Some(channels)
-        || image.dimensions() != other.dimensions()
-    {
+    let channels = P::CHANNEL_COUNT;
+    if image.dimensions() != other.dimensions() {
         return Err(PilError::InternalError(
             "Chops vector operands did not match their admitted native layout".into(),
         ));
     }
     let dimensions = CheckedDims::new_allow_empty(image.width(), image.height(), channels)?;
     let height = image.height() as usize;
-    let right = other.as_bytes();
-    let left = image.as_bytes_mut().ok_or_else(|| {
-        PilError::InternalError("Chops in-place strategy has no mutable native bytes".into())
-    })?;
+    let right = other.as_raw().as_slice();
+    let left: &mut [u8] = image;
     if left.len() != dimensions.total_bytes() || right.len() != dimensions.total_bytes() {
         return Err(PilError::InternalError(
             "Chops vector operands did not match their image dimensions".into(),

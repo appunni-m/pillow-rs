@@ -20,38 +20,29 @@ pub(crate) const MODE: Mode = Mode::ImagePalette8;
 pub(crate) const CHANNELS: usize = 1;
 pub(crate) const FLOAT_MODE: bool = false;
 
-pub(crate) fn apply_text(
+/// TODO(pillow-rs#3ptb): verify negative-origin P fontmode-1 output, palette
+/// metadata retention, and error ordering in CPU parity.
+pub(crate) fn apply_text<const RGBA_MASK: bool>(
     input: super::super::TextComposeInput<'_>,
 ) -> Result<super::super::TextComposeResult, PilError> {
-    let result = match input.palette {
-        crate::compute::registry::support::PaletteKnowledge::Present => {
-            default::text_impl::apply_paletted(
-                input.image,
-                input.x,
-                input.y,
-                input.width,
-                input.height,
-                input.pixels.as_ref(),
-                input.fill.0,
-            )
-        }
-        crate::compute::registry::support::PaletteKnowledge::Absent => {
-            default::text_impl::apply_unpaletted(
-                input.image,
-                input.x,
-                input.y,
-                input.width,
-                input.height,
-                input.pixels.as_ref(),
-                input.fill.0,
-            )
-        }
+    match input.palette {
+        crate::compute::registry::support::PaletteKnowledge::Present
+        | crate::compute::registry::support::PaletteKnowledge::Absent => {}
         crate::compute::registry::support::PaletteKnowledge::Unknown => {
             return Err(PilError::InternalError(
                 "Draw Text palette metadata was not prepared".into(),
             ));
         }
-    }?;
+    }
+    let result = default::text_impl::apply::<RGBA_MASK>(
+        input.image,
+        input.x,
+        input.y,
+        input.width,
+        input.height,
+        input.pixels,
+        input.fill.0,
+    )?;
     Ok(super::super::TextComposeResult::Updated(result))
 }
 

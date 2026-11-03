@@ -5,6 +5,10 @@ use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
 use crate::raster::GrayImage;
 
+pub(crate) const fn effective_filter(_requested: ResampleFilter) -> ResampleFilter {
+    ResampleFilter::Nearest
+}
+
 pub(crate) fn resize(
     context: &ExecutionContext,
     architecture: Architecture,

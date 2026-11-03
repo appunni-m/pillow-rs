@@ -25,7 +25,11 @@ where
     }
     if let Some(degree) = discrete_angle(request) {
         if degree == 180 || request.expand || dimensions.0 == dimensions.1 {
-            return rotate_discrete::<P, CHANNELS>(image, degree);
+            return rotate_discrete::<P, CHANNELS>(
+                image,
+                degree,
+                degree == 180 || request.expand,
+            );
         }
     }
     execute_affine::<P, CHANNELS, FORCE_NEAREST, ALPHA>(image, request)
@@ -77,6 +81,7 @@ where
 fn rotate_discrete<P: Pixel<Subpixel = u8>, const CHANNELS: usize>(
     image: &ImageBuffer<P, Vec<u8>>,
     degree: u32,
+    allow_empty_output: bool,
 ) -> Result<ImageBuffer<P, Vec<u8>>, PilError> {
     let (width, height) = image.dimensions();
     let (output_width, output_height) = if degree == 180 {
@@ -84,7 +89,11 @@ fn rotate_discrete<P: Pixel<Subpixel = u8>, const CHANNELS: usize>(
     } else {
         (height, width)
     };
-    let dimensions = CheckedDims::new(output_width, output_height, CHANNELS as u8)?;
+    let dimensions = if allow_empty_output && (output_width == 0 || output_height == 0) {
+        CheckedDims::new_allow_empty(output_width, output_height, CHANNELS as u8)?
+    } else {
+        CheckedDims::new(output_width, output_height, CHANNELS as u8)?
+    };
     let mut output = dimensions.alloc_buffer();
     for y in 0..output_height {
         for x in 0..output_width {
@@ -134,7 +143,7 @@ pub(super) fn fill_sample<const CHANNELS: usize>(
     }
 }
 
-fn affine_nearest<const CHANNELS: usize>(
+pub(super) fn affine_nearest<const CHANNELS: usize>(
     source: &[u8],
     source_size: (u32, u32),
     geometry: Geometry,

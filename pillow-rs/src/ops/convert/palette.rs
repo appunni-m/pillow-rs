@@ -117,22 +117,19 @@ pub(super) fn convert_prepared_palette(
         matrix: None,
         dither: prepared_dither,
     };
-    let selected_backend = crate::compute::preferred_active_backend()?
-        .map(|(backend, _)| backend)
-        .unwrap_or(Backend::Cpu);
-    let execution_backend = if selected_backend == Backend::Gpu {
-        Backend::Cpu
-    } else {
-        selected_backend
-    };
-    let fallback_reason = (selected_backend == Backend::Gpu)
-        .then(|| "Convert palette metadata is produced by the CPU wrapper route".to_owned());
+    let (selected_backend, context) = image.cpu_arch_execution_route()?;
+    let fallback_reason = (selected_backend == Some(Backend::Gpu)).then(|| {
+        format!(
+            "Convert palette metadata is produced by the CPU wrapper route; used CPU {:?}",
+            context.architecture()
+        )
+    });
     let mut palette_output = None;
-    let raster = crate::compute::execute_eager_cpu_arch_image_operation_with_route(
+    let raster = crate::compute::execute_eager_cpu_arch_image_operation_with_context(
         "Convert",
         source.as_ref(),
+        context,
         selected_backend,
-        execution_backend,
         fallback_reason,
         |context| {
             let prepared = crate::compute::registry::prepare_cpu(&operation, input, context)?;

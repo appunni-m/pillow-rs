@@ -1,6 +1,7 @@
 //! Serial composition of prepared CPU operation strategies.
 
-use crate::compute::registry::support::{OperationInputs, PaletteInput};
+use crate::compute::pool_cpu::ops::imageops::helpers::hidden_lanes as imageops_hidden_lanes;
+use crate::compute::registry::support::{OperationInputs, PaletteInput, StrategySelection};
 use crate::compute::{
     Architecture, Backend, ExecutionContext, account_host_buffer_boundary,
     begin_pipeline_operation_telemetry, finish_pipeline_operation_telemetry, host_resource_telemetry,
@@ -28,111 +29,164 @@ pub(super) fn execute_batch(
     let mut resources = host_resource_telemetry(image);
     let mut index = 0;
     while index < ops.len() {
-        let fused = {
-            let input = result.as_ref().unwrap_or(image);
-            execute_fused_run(ops, index, input, context)?
-        };
-        if let Some(step) = fused {
-            let input = result.as_ref().unwrap_or(image);
-            if let Some(next) = step.output {
-                account_host_buffer_boundary(&mut resources, input, &next);
-                result = Some(next);
-            }
-            resources.fused_operation_count = resources
-                .fused_operation_count
-                .saturating_add(step.operations as u64);
-            index = step.next_index;
-            continue;
-        }
-
-        let op = &ops[index];
-        if matches!(op, PipelineOp::Invert | PipelineOp::InvertChops)
-            && let Some(mut owned) = result.take()
-        {
-            if let Some(plan) = prepare_owned_invert(&owned, op, context) {
-                begin_pipeline_operation_telemetry(crate::compute::registry::variant_key(op));
-                if let Err(error) = execute_owned_invert(&mut owned, &plan) {
-                    finish_failed_prepared_run(std::slice::from_ref(op), plan.architecture);
-                    return Err(error);
-                }
-                crate::compute::record_pipeline_operation_architecture(plan.architecture);
-                finish_pipeline_operation_telemetry();
-                result = Some(owned);
-                index += 1;
-                continue;
-            }
-            result = Some(owned);
-        }
-
-        if matches!(op, PipelineOp::Add { .. } | PipelineOp::Subtract { .. })
-            && let Some(mut owned) = result.take()
-        {
-            execute_owned_chops_affine(&mut owned, op, context, &mut resources)?;
-            result = Some(owned);
-            index += 1;
-            continue;
-        }
-
-        let input = result.as_ref().unwrap_or(image);
-        begin_pipeline_operation_telemetry(crate::compute::registry::variant_key(op));
-        let operation_palette = match input.mode() {
-            crate::raster::Mode::ImagePalette8 | crate::raster::Mode::ImagePaletteAlpha8 => {
-                palette
-            }
-            _ => PaletteInput::default(),
-        };
-        let inputs = OperationInputs {
-            image: input,
-            palette: operation_palette,
-        };
-        let prepared = match crate::compute::registry::prepare_cpu(op, inputs, context) {
-            Ok(prepared) => prepared,
-            Err(error) => {
-                record_pipeline_operation_path("cpu");
-                finish_pipeline_operation_telemetry();
-                return Err(error);
-            }
-        };
-        let uses_default =
-            prepared.selection().implementation.architecture == Architecture::Default;
-        let output = match prepared.execute() {
-            Ok(output) => output,
-            Err(error) => {
-                if uses_default {
-                    record_pipeline_operation_path("cpu");
-                }
-                finish_pipeline_operation_telemetry();
-                return Err(error);
-            }
-        };
-        if uses_default {
-            record_pipeline_operation_path("cpu");
-        }
-        finish_pipeline_operation_telemetry();
-        account_host_buffer_boundary(&mut resources, input, &output);
-        result = Some(output);
-        index += 1;
+        index = execute_batch_step(
+            ops,
+            index,
+            image,
+            context,
+            palette,
+            &mut result,
+            &mut resources,
+        )?;
     }
 
-    let output = match result {
+    let output = finish_batch_output(ops, image, result, &mut resources);
+    crate::compute::record_pipeline_resource_telemetry(resources);
+    Ok(output)
+}
+
+fn execute_batch_step(
+    ops: &[PipelineOp],
+    index: usize,
+    image: &DynamicImage,
+    context: &ExecutionContext,
+    palette: PaletteInput<'_>,
+    result: &mut Option<DynamicImage>,
+    resources: &mut crate::compute::PipelineResourceTelemetry,
+) -> Result<usize, PilError> {
+    let fused = {
+        let input = result.as_ref().unwrap_or(image);
+        execute_fused_run(ops, index, input, context)?
+    };
+    if let Some(step) = fused {
+        let input = result.as_ref().unwrap_or(image);
+        if let Some(next) = step.output {
+            account_host_buffer_boundary(resources, input, &next);
+            *result = Some(next);
+        }
+        resources.fused_operation_count = resources
+            .fused_operation_count
+            .saturating_add(step.operations as u64);
+        return Ok(step.next_index);
+    }
+
+    let op = &ops[index];
+    if execute_owned_special(op, context, result, resources)? {
+        return Ok(index + 1);
+    }
+    execute_prepared_operation(op, image, context, palette, result, resources)?;
+    Ok(index + 1)
+}
+
+fn execute_owned_special(
+    op: &PipelineOp,
+    context: &ExecutionContext,
+    result: &mut Option<DynamicImage>,
+    resources: &mut crate::compute::PipelineResourceTelemetry,
+) -> Result<bool, PilError> {
+    if matches!(op, PipelineOp::Invert | PipelineOp::InvertChops)
+        && let Some(mut owned) = result.take()
+    {
+        if let Some(plan) = prepare_owned_invert(&owned, op, context) {
+            begin_pipeline_operation_telemetry(crate::compute::registry::variant_key(op));
+            if let Err(error) = execute_owned_invert(&mut owned, &plan) {
+                finish_failed_prepared_run(std::slice::from_ref(op), &plan.selection);
+                return Err(error);
+            }
+            crate::compute::record_pipeline_operation_selection(&plan.selection);
+            finish_pipeline_operation_telemetry();
+            *result = Some(owned);
+            return Ok(true);
+        }
+        *result = Some(owned);
+    }
+
+    if matches!(op, PipelineOp::Add { .. } | PipelineOp::Subtract { .. })
+        && let Some(mut owned) = result.take()
+    {
+        execute_owned_chops_affine(&mut owned, op, context, resources)?;
+        *result = Some(owned);
+        return Ok(true);
+    }
+    Ok(false)
+}
+
+fn execute_prepared_operation(
+    op: &PipelineOp,
+    image: &DynamicImage,
+    context: &ExecutionContext,
+    palette: PaletteInput<'_>,
+    result: &mut Option<DynamicImage>,
+    resources: &mut crate::compute::PipelineResourceTelemetry,
+) -> Result<(), PilError> {
+    let input = result.as_ref().unwrap_or(image);
+    begin_pipeline_operation_telemetry(crate::compute::registry::variant_key(op));
+    let operation_palette = match input.mode() {
+        crate::raster::Mode::ImagePalette8 | crate::raster::Mode::ImagePaletteAlpha8 => palette,
+        _ => PaletteInput::default(),
+    };
+    let inputs = OperationInputs {
+        image: input,
+        palette: operation_palette,
+    };
+    let prepared = match crate::compute::registry::prepare_cpu(op, inputs, context) {
+        Ok(prepared) => prepared,
+        Err(error) => {
+            record_pipeline_operation_path("cpu");
+            finish_pipeline_operation_telemetry();
+            return Err(error);
+        }
+    };
+    let uses_default = prepared.selection().implementation.architecture == Architecture::Default;
+    let output = match prepared.execute() {
+        Ok(output) => output,
+        Err(error) => {
+            if uses_default {
+                record_pipeline_operation_path("cpu");
+            }
+            finish_pipeline_operation_telemetry();
+            return Err(error);
+        }
+    };
+    if uses_default {
+        record_pipeline_operation_path("cpu");
+    }
+    finish_pipeline_operation_telemetry();
+    account_host_buffer_boundary(resources, input, &output);
+    *result = Some(output);
+    Ok(())
+}
+
+fn finish_batch_output(
+    ops: &[PipelineOp],
+    image: &DynamicImage,
+    result: Option<DynamicImage>,
+    resources: &mut crate::compute::PipelineResourceTelemetry,
+) -> DynamicImage {
+    match result {
         Some(output) => output,
         None => {
             let output = image.clone();
             if !ops.is_empty() {
                 crate::compute::record_pipeline_allocation(output.as_bytes().len());
-                account_host_buffer_boundary(&mut resources, image, &output);
+                account_host_buffer_boundary(resources, image, &output);
             }
             output
         }
-    };
-    crate::compute::record_pipeline_resource_telemetry(resources);
-    Ok(output)
+    }
 }
 
 struct OwnedInvertPlan {
     mode: crate::raster::Mode,
-    architecture: Architecture,
+    selection: StrategySelection,
     channels: usize,
+    kind: OwnedInvertKind,
+}
+
+#[derive(Clone, Copy)]
+enum OwnedInvertKind {
+    ImageOpsPoint,
+    Chops,
 }
 
 fn execute_owned_chops_affine(
@@ -160,7 +214,7 @@ fn execute_owned_chops_affine(
     let architecture = plan.selection().implementation.architecture;
     let uses_default = architecture == Architecture::Default;
     let can_execute_in_place = plan.can_execute_in_place(image);
-    crate::compute::record_pipeline_operation_architecture(architecture);
+    crate::compute::record_pipeline_operation_selection(plan.selection());
     if uses_default || !can_execute_in_place {
         let output = match plan.execute(image) {
             Ok(output) => output,
@@ -178,6 +232,9 @@ fn execute_owned_chops_affine(
         account_host_buffer_boundary(resources, image, &output);
         *image = output;
     } else if let Err(error) = plan.execute_in_place(image) {
+        // The archived SIMD batch reports an admitted in-place kernel failure
+        // as unsupported; keep the failed architecture route visible here.
+        record_pipeline_operation_path("unsupported");
         finish_pipeline_operation_telemetry();
         return Err(error);
     }
@@ -191,31 +248,39 @@ fn prepare_owned_invert(
     context: &ExecutionContext,
 ) -> Option<OwnedInvertPlan> {
     let mode = image.mode();
-    let support = match op {
-        PipelineOp::Invert => crate::compute::pool_cpu::ops::imageops::ops::INVERT_SUPPORT
-            .for_mode(mode),
+    let (support, kind) = match op {
+        PipelineOp::Invert => (
+            crate::compute::pool_cpu::ops::imageops::ops::INVERT_SUPPORT.for_mode(mode),
+            OwnedInvertKind::ImageOpsPoint,
+        ),
         PipelineOp::InvertChops => {
-            crate::compute::pool_cpu::ops::chops::ops::INVERT_SUPPORT.for_mode(mode)
+            (
+                crate::compute::pool_cpu::ops::chops::ops::INVERT_SUPPORT.for_mode(mode),
+                OwnedInvertKind::Chops,
+            )
         }
         _ => return None,
     };
-    let channels = match mode {
+    if !matches!(
+        mode,
         crate::raster::Mode::One
-        | crate::raster::Mode::ImageLuma8
-        | crate::raster::Mode::ImagePalette8 => 1,
-        crate::raster::Mode::ImageLumaA8
-        | crate::raster::Mode::ImageLaPremultiplied8
-        | crate::raster::Mode::ImagePaletteAlpha8 => 2,
-        crate::raster::Mode::ImageRgb8
-        | crate::raster::Mode::ImageYCbCr8
-        | crate::raster::Mode::ImageLab8
-        | crate::raster::Mode::ImageHsv8 => 3,
-        crate::raster::Mode::ImageRgba8
-        | crate::raster::Mode::ImageRgbPremultiplied8
-        | crate::raster::Mode::ImageRgbx8
-        | crate::raster::Mode::ImageCmyk8 => 4,
-        _ => return None,
-    };
+            | crate::raster::Mode::ImageLuma8
+            | crate::raster::Mode::ImageLumaA8
+            | crate::raster::Mode::ImageLaPremultiplied8
+            | crate::raster::Mode::ImagePalette8
+            | crate::raster::Mode::ImagePaletteAlpha8
+            | crate::raster::Mode::ImageRgb8
+            | crate::raster::Mode::ImageRgba8
+            | crate::raster::Mode::ImageRgbPremultiplied8
+            | crate::raster::Mode::ImageRgbx8
+            | crate::raster::Mode::ImageCmyk8
+            | crate::raster::Mode::ImageYCbCr8
+            | crate::raster::Mode::ImageLab8
+            | crate::raster::Mode::ImageHsv8
+    ) {
+        return None;
+    }
+    let channels = mode.band_count();
     let selection = super::ops::imageops::helpers::strategy::select_invert_strategy(
         support,
         image.width(),
@@ -227,11 +292,14 @@ fn prepare_owned_invert(
     let architecture = selection.implementation.architecture;
     (architecture != Architecture::Default).then_some(OwnedInvertPlan {
         mode,
-        architecture,
+        selection,
         channels,
+        kind,
     })
 }
 
+// TODO(pillow-rs#3ptb): verify raw-byte Paste follow-on parity for both
+// in-place inversion lane policies before closing this source path.
 fn execute_owned_invert(image: &mut DynamicImage, plan: &OwnedInvertPlan) -> Result<(), PilError> {
     if image.mode() != plan.mode {
         return Err(PilError::InternalError(
@@ -239,18 +307,46 @@ fn execute_owned_invert(image: &mut DynamicImage, plan: &OwnedInvertPlan) -> Res
         ));
     }
     let (width, height) = image.dimensions();
-    let Some(bytes) = image.as_bytes_mut() else {
-        return Err(PilError::InternalError(
+    let mut hidden_lanes = image.take_hidden_pixel_lanes();
+    let result = if let Some(bytes) = image.as_bytes_mut() {
+        crate::compute::pool_cpu::helpers::bytes::native_invert::invert_in_place(
+            bytes,
+            width,
+            height,
+            plan.channels,
+            true,
+        )
+    } else {
+        Err(PilError::InternalError(
             "owned Invert strategy has no mutable native bytes".into(),
-        ));
+        ))
     };
-    crate::compute::pool_cpu::helpers::bytes::native_invert::invert_in_place(
-        bytes,
-        width,
-        height,
-        plan.channels,
-        true,
-    )
+    if let Err(error) = result {
+        if !image.replace_hidden_pixel_lanes(hidden_lanes) {
+            return Err(PilError::InternalError(
+                "owned Invert failed to restore source physical lanes".into(),
+            ));
+        }
+        return Err(error);
+    }
+
+    match plan.kind {
+        OwnedInvertKind::ImageOpsPoint => {
+            imageops_hidden_lanes::initialize_point_output_lanes(image)
+        }
+        OwnedInvertKind::Chops => {
+            if let Some(lanes) = &mut hidden_lanes {
+                lanes.map_values_in_place(|value| !value);
+            }
+            if image.replace_hidden_pixel_lanes(hidden_lanes) {
+                Ok(())
+            } else {
+                Err(PilError::InternalError(
+                    "owned Chops Invert physical lane extent mismatch".into(),
+                ))
+            }
+        }
+    }
 }
 
 struct FusedStep {
@@ -290,7 +386,7 @@ fn execute_fused_run(
                 for op in run {
                     record_fused_operation_telemetry(
                         op,
-                        architecture,
+                        &selection,
                         if architecture == Architecture::Default { "cpu" } else { "vector" },
                         0,
                         0,
@@ -302,7 +398,7 @@ fn execute_fused_run(
         for op in run {
             record_fused_operation_telemetry(
                 op,
-                architecture,
+                &selection,
                 if architecture == Architecture::Default { "cpu" } else { "vector" },
                 0,
                 0,
@@ -387,21 +483,23 @@ fn execute_alpha_composite_mirror_run(
         }
     };
     let fused_ops = &ops[start..start + 2];
-    let alpha_architecture = strategy.selection().implementation.architecture;
-    let mirror_architecture = strategy.mirror_selection().implementation.architecture;
+    let alpha_selection = *strategy.selection();
+    let mirror_selection = *strategy.mirror_selection();
+    let alpha_architecture = alpha_selection.implementation.architecture;
+    let mirror_architecture = mirror_selection.implementation.architecture;
     let execution = match strategy.execute() {
         Ok(execution) => execution,
         Err(error) => {
             record_fused_operation_telemetry(
                 &fused_ops[0],
-                alpha_architecture,
+                &alpha_selection,
                 if alpha_architecture == Architecture::Default { "cpu" } else { "vector" },
                 0,
                 0,
             );
             record_fused_operation_telemetry(
                 &fused_ops[1],
-                mirror_architecture,
+                &mirror_selection,
                 if mirror_architecture == Architecture::Default { "cpu" } else { "native-copy" },
                 0,
                 0,
@@ -412,14 +510,14 @@ fn execute_alpha_composite_mirror_run(
     let vector = alpha_architecture != Architecture::Default;
     record_fused_operation_telemetry(
         &fused_ops[0],
-        alpha_architecture,
+        &alpha_selection,
         if vector { "vector" } else { "cpu" },
         execution.composite_vector_blocks,
         execution.composite_scalar_tail,
     );
     record_fused_operation_telemetry(
         &fused_ops[1],
-        mirror_architecture,
+        &mirror_selection,
         if vector { "native-copy" } else { "cpu" },
         execution.mirror_vector_blocks,
         execution.mirror_scalar_tail,
@@ -433,13 +531,13 @@ fn execute_alpha_composite_mirror_run(
 
 fn record_fused_operation_telemetry(
     op: &PipelineOp,
-    architecture: Architecture,
+    selection: &StrategySelection,
     path: &'static str,
     vector_blocks: u64,
     scalar_tail: u64,
 ) {
     begin_pipeline_operation_telemetry(crate::compute::registry::variant_key(op));
-    crate::compute::record_pipeline_operation_architecture(architecture);
+    crate::compute::record_pipeline_operation_selection(selection);
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
     record_pipeline_operation_path(path);
@@ -468,26 +566,29 @@ fn execute_chops_multiply_screen_run(
     };
 
     let fused_ops = &ops[start..start + 2];
-    let architecture = prepared.selection().implementation.architecture;
-    let uses_default = architecture == Architecture::Default;
-    for op in fused_ops {
-        begin_pipeline_operation_telemetry(crate::compute::registry::variant_key(op));
-    }
+    let selection = *prepared.selection();
+    let architecture = selection.implementation.architecture;
     let output = match prepared.execute() {
         Ok(output) => output,
         Err(error) => {
-            finish_failed_prepared_run(fused_ops, architecture);
+            for op in fused_ops {
+                begin_pipeline_operation_telemetry(crate::compute::registry::variant_key(op));
+            }
+            finish_failed_prepared_run(fused_ops, &selection);
             return Err(error);
         }
     };
-    let path = if uses_default { "cpu" } else { "vector" };
-    for _ in fused_ops {
-        crate::compute::record_pipeline_operation_architecture(architecture);
-        record_pipeline_operation_path(path);
-        finish_pipeline_operation_telemetry();
+    for op in fused_ops {
+        record_fused_operation_telemetry(
+            op,
+            &selection,
+            output.path,
+            output.vector_blocks,
+            output.scalar_tail,
+        );
     }
     Ok(Some(FusedStep {
-        output: Some(output),
+        output: Some(output.image),
         next_index: start + 2,
         operations: 2,
     }))
@@ -514,12 +615,13 @@ fn execute_rgb_putpixel_thumbnail_run(
 
     let end = putpixel_end + 1;
     let fused_ops = &ops[start..end];
-    let architecture = plan.architecture();
+    let selection = *plan.selection();
+    let architecture = selection.implementation.architecture;
     for op in fused_ops {
         begin_pipeline_operation_telemetry(crate::compute::registry::variant_key(op));
     }
     let output = plan.execute();
-    finish_cpu_operation_telemetry(fused_ops, Some(architecture));
+    finish_cpu_operation_telemetry(fused_ops, Some(&selection));
     output.map(|output| {
         Some(FusedStep {
             output: Some(output),
@@ -549,12 +651,15 @@ fn execute_transpose_run(
     }
 
     let TransposeTransform::Method(method) = transform else {
+        // No transpose implementation runs for a cancelled sequence. Preserve
+        // that fact in the receipt rather than attributing the no-op to CPU or
+        // to an architecture that was never selected.
         if !super::ops::transpose::helpers::pixel::identity_can_defer_output(image) {
             return Ok(None);
         }
         for op in &ops[start..end] {
             begin_pipeline_operation_telemetry(crate::compute::registry::variant_key(op));
-            record_pipeline_operation_path("cpu");
+            record_pipeline_operation_path("native-identity");
             finish_pipeline_operation_telemetry();
         }
         return Ok(Some(FusedStep {
@@ -571,7 +676,8 @@ fn execute_transpose_run(
             return Err(error);
         }
     };
-    let architecture = strategy.selection().implementation.architecture;
+    let selection = *strategy.selection();
+    let architecture = selection.implementation.architecture;
     let uses_default = architecture == Architecture::Default;
     for op in &ops[start..end] {
         begin_pipeline_operation_telemetry(crate::compute::registry::variant_key(op));
@@ -579,11 +685,11 @@ fn execute_transpose_run(
     let output = match strategy.execute() {
         Ok(output) => output,
         Err(error) => {
-            finish_failed_prepared_run(&ops[start..end], architecture);
+            finish_failed_prepared_run(&ops[start..end], &selection);
             return Err(error);
         }
     };
-    finish_prepared_transpose_run(&ops[start..end], uses_default, architecture);
+    finish_prepared_transpose_run(&ops[start..end], uses_default, &selection);
     Ok(Some(FusedStep {
         output: Some(output),
         next_index: end,
@@ -599,9 +705,10 @@ fn finish_failed_unprepared_run(ops: &[PipelineOp]) {
     }
 }
 
-fn finish_failed_prepared_run(ops: &[PipelineOp], architecture: Architecture) {
+fn finish_failed_prepared_run(ops: &[PipelineOp], selection: &StrategySelection) {
+    let architecture = selection.implementation.architecture;
     for _ in ops {
-        crate::compute::record_pipeline_operation_architecture(architecture);
+        crate::compute::record_pipeline_operation_selection(selection);
         if architecture == Architecture::Default {
             record_pipeline_operation_path("cpu");
         }
@@ -612,11 +719,11 @@ fn finish_failed_prepared_run(ops: &[PipelineOp], architecture: Architecture) {
 fn finish_prepared_transpose_run(
     ops: &[PipelineOp],
     uses_default: bool,
-    architecture: Architecture,
+    selection: &StrategySelection,
 ) {
     let path = if uses_default { "cpu" } else { "native-copy" };
     for _ in ops {
-        crate::compute::record_pipeline_operation_architecture(architecture);
+        crate::compute::record_pipeline_operation_selection(selection);
         record_pipeline_operation_path(path);
         finish_pipeline_operation_telemetry();
     }
@@ -632,7 +739,9 @@ fn execute_point_run(
     if super::ops::imageops::helpers::point_lut::is_identity(&lut, bands) {
         for op in ops {
             begin_pipeline_operation_telemetry(crate::compute::registry::variant_key(op));
-            record_pipeline_operation_path("cpu");
+            // No mode/architecture kernel runs for an identity LUT. The one
+            // required owned clone is a native identity operation.
+            record_pipeline_operation_path("native-identity");
             finish_pipeline_operation_telemetry();
         }
         return Ok(image.clone());
@@ -653,7 +762,8 @@ fn execute_point_run(
             return Err(error);
         }
     };
-    let architecture = prepared.selection().implementation.architecture;
+    let selection = *prepared.selection();
+    let architecture = selection.implementation.architecture;
     let uses_default = architecture == Architecture::Default;
     for op in ops {
         begin_pipeline_operation_telemetry(crate::compute::registry::variant_key(op));
@@ -661,13 +771,13 @@ fn execute_point_run(
     let output = match prepared.execute() {
         Ok(output) => output,
         Err(error) => {
-            finish_failed_prepared_run(ops, architecture);
+            finish_failed_prepared_run(ops, &selection);
             return Err(error);
         }
     };
     let path = if uses_default { "cpu" } else { "vector" };
     for _ in ops {
-        crate::compute::record_pipeline_operation_architecture(architecture);
+        crate::compute::record_pipeline_operation_selection(&selection);
         record_pipeline_operation_path(path);
         finish_pipeline_operation_telemetry();
     }
@@ -699,7 +809,8 @@ fn execute_put_pixel_run(
             return Err(error);
         }
     };
-    let architecture = prepared.selection().implementation.architecture;
+    let selection = *prepared.selection();
+    let architecture = selection.implementation.architecture;
     let uses_default = architecture == Architecture::Default;
     if uses_default {
         for op in ops {
@@ -708,11 +819,11 @@ fn execute_put_pixel_run(
     }
     let output = prepared.execute();
     if uses_default {
-        finish_cpu_operation_telemetry(ops, Some(architecture));
+        finish_cpu_operation_telemetry(ops, Some(&selection));
     } else if output.is_err() {
         for op in ops {
             begin_pipeline_operation_telemetry(crate::compute::registry::variant_key(op));
-            crate::compute::record_pipeline_operation_architecture(architecture);
+            crate::compute::record_pipeline_operation_selection(&selection);
             record_pipeline_operation_path("vector");
             finish_pipeline_operation_telemetry();
         }
@@ -722,22 +833,27 @@ fn execute_put_pixel_run(
 
 fn finish_cpu_operation_telemetry(
     ops: &[PipelineOp],
-    architecture: Option<Architecture>,
+    selection: Option<&StrategySelection>,
 ) {
+    let architecture = selection.map(|selection| selection.implementation.architecture);
     let path = match architecture {
         Some(Architecture::Default) | None => "cpu",
         Some(_) => "vector",
     };
     for _ in ops {
-        if let Some(architecture) = architecture {
-            crate::compute::record_pipeline_operation_architecture(architecture);
+        if let Some(selection) = selection {
+            crate::compute::record_pipeline_operation_selection(selection);
         }
         record_pipeline_operation_path(path);
         finish_pipeline_operation_telemetry();
     }
 }
 
-// TODO(pillow-rs#3ptb): finish the remaining prepared-batch caller review.
-// RGB PutPixel+Thumbnail binds its sparse reduction to the exact prepared RGB
-// Resize/ResizeBoxed strategy. Draw runs, AlphaComposite+Mirror, transpose,
-// Multiply+Screen, PutPixel, and byte-point runs have prepared CPU paths.
+// TODO(pillow-rs#3ptb): verify prepared-batch output, fallback, and selection
+// receipts across the frozen CPU parity matrix. Source review maps each batch
+// route to its exact-mode contract: generic registry preparation; Draw runs;
+// guarded AlphaComposite+Mirror; same-source Multiply+Screen; composed byte
+// point LUTs; transpose runs; prepared PutPixel batches; and RGB PutPixel plus
+// Thumbnail using the selected Resize/ResizeBoxed child. Owned Invert and
+// Chops Add/Sub use the selected mode/architecture strategy only when its
+// in-place guard admits it, otherwise they use the prepared allocating route.

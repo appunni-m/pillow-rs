@@ -16,6 +16,8 @@ type Source = ImageBuffer<Rgb<u16>, Vec<u16>>;
 const TARGETS: &[Mode] = &[
     Mode::ImageRgb16,
     Mode::One,
+    Mode::ImageLaPremultiplied8,
+    Mode::ImageRgbPremultiplied8,
     Mode::ImageLuma8, Mode::ImageLumaA8, Mode::ImageRgb8, Mode::ImageRgba8,
     Mode::ImagePalette8, Mode::ImagePaletteAlpha8,
     Mode::ImageI16, Mode::ImageI16L, Mode::ImageI16B, Mode::ImageI16N,

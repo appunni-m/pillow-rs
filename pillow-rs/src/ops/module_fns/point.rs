@@ -1,8 +1,8 @@
 //! Pillow point/eval operations and their host-neutral input contract.
 
+use crate::compute::pool_cpu::ops::eval::scalar;
+use crate::compute::{Backend, ExecutionContext, PipelineOperationTelemetryCapture};
 use crate::error::PilError;
-use crate::compute::pool_cpu::ops::eval::{helpers::mode::pillow_band_count, scalar};
-use crate::compute::{Backend, ExecutionContext};
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
 use crate::raster::Mode;
@@ -11,23 +11,109 @@ fn exact_mode(image: &Image) -> Result<Mode, PilError> {
     image.mode_identity()
 }
 
-fn cpu_point_context(image: &Image) -> Result<ExecutionContext, PilError> {
-    let requested_backend = match image.backend() {
-        Some(backend) => backend,
-        None => crate::compute::preferred_active_backend()?
-            .map(|(backend, _)| backend)
-            .unwrap_or(Backend::Cpu),
-    };
+fn cpu_point_context(image: &Image) -> Result<(Option<Backend>, ExecutionContext), PilError> {
     // PointScalar and PointFloat are CPU-owned. A SIMD request is resolved by
-    // the context to CPU plus the detected architecture; GPU requests use the
-    // CPU fallback until GPU point strategies are declared.
-    // TODO(pillow-rs#3ptb): report this eager GPU-to-CPU fallback through the
-    // prepared operation receipt once direct point operations use that route.
-    let execution_backend = match requested_backend {
-        Backend::Gpu => Backend::Cpu,
-        backend => backend,
+    // the injected context to CPU plus the detected architecture; GPU requests
+    // use the CPU fallback until GPU point strategies are declared.
+    image.cpu_arch_execution_route()
+}
+
+fn execute_scalar_point<F>(
+    image: &Image,
+    operation: &'static str,
+    execute: F,
+) -> Result<Image, PilError>
+where
+    F: FnOnce(scalar::PreparedScalarPoint) -> Result<Image, PilError>,
+{
+    let (requested_backend, context) = cpu_point_context(image)?;
+    let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
+    let prepared = scalar::prepare(image, &context)?;
+    operation_receipts.capture();
+    let selection = prepared.selection();
+    if !Backend::pipeline_telemetry_enabled() {
+        return execute(prepared);
+    }
+
+    let telemetry =
+        crate::compute::begin_eager_cpu_operation_telemetry(operation, requested_backend);
+    operation_receipts.restore();
+    match execute(prepared) {
+        Ok(result) => match result.materialized_shared() {
+            Ok(output) => {
+                crate::compute::finish_eager_cpu_operation_telemetry_with_selection(
+                    telemetry,
+                    output.as_bytes().len(),
+                    operation,
+                    selection,
+                );
+                Ok(result)
+            }
+            Err(error) => {
+                crate::compute::cancel_eager_cpu_operation_telemetry(telemetry);
+                Err(error)
+            }
+        },
+        Err(error) => {
+            crate::compute::cancel_eager_cpu_operation_telemetry(telemetry);
+            Err(error)
+        }
+    }
+}
+
+fn execute_float_point(image: &Image, lut: &[f64]) -> Result<Image, PilError> {
+    let (requested_backend, context) = cpu_point_context(image)?;
+    let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
+    let mode = match image.known_mode_identity() {
+        Some(mode) => mode,
+        None => image.materialized_shared()?.mode(),
     };
-    Ok(ExecutionContext::for_routed_backend(execution_backend))
+    crate::compute::pool_cpu::ops::eval::ops::validate_float_lut_length(mode, lut)?;
+
+    let input = image.materialized_shared()?;
+    if input.mode() != mode {
+        return Err(PilError::InternalError(
+            "point float source mode did not match its DynamicImage variant".into(),
+        ));
+    }
+    operation_receipts.capture();
+    let execute = || {
+        crate::compute::pool_cpu::ops::eval::ops::execute_float(
+            input.as_ref(),
+            mode,
+            lut,
+            &context,
+        )
+        .and_then(|(output, selection)| {
+            let output_bytes = output.as_bytes().len();
+            Image::from_dynamic_with_mode(output, Some(Mode::ImageF32))
+                .map(|image| (image, output_bytes, selection))
+        })
+    };
+    if !Backend::pipeline_telemetry_enabled() {
+        return execute().map(|(image, _, _)| image);
+    }
+
+    let telemetry = crate::compute::begin_eager_cpu_operation_telemetry(
+        "PointFloat",
+        requested_backend,
+    );
+    operation_receipts.restore();
+    match execute() {
+        Ok((image, output_bytes, selection)) => {
+            crate::compute::finish_eager_cpu_operation_telemetry_with_selection(
+                telemetry,
+                output_bytes,
+                "PointFloat",
+                selection,
+            );
+            Ok(image)
+        }
+        Err(error) => {
+            crate::compute::cancel_eager_cpu_operation_telemetry(telemetry);
+            Err(error)
+        }
+    }
 }
 
 /// Host-neutral input classification for the callable form of `Image.eval`.
@@ -110,7 +196,7 @@ pub fn eval_replicated(image: &Image, lut: &[u8], n_bands: usize) -> Result<Imag
 /// or [`PilError::ValueError`] when `lut` is not a valid single-band or
 /// already-expanded table.
 pub fn eval_replicated_for_image(image: &Image, lut: &[u8]) -> Result<Image, PilError> {
-    let n_bands = pillow_band_count(exact_mode(image)?);
+    let n_bands = exact_mode(image)?.pillow_band_count();
     eval_replicated(image, lut, n_bands)
 }
 
@@ -140,9 +226,9 @@ where
 /// and these native scalar buffers are not represented by the byte-oriented
 /// `Eval` pipeline operation.
 pub fn eval_point_transform(image: &Image, scale: f64, offset: f64) -> Result<Image, PilError> {
-    let context = cpu_point_context(image)?;
-    let prepared = scalar::prepare(image, &context)?;
-    scalar::execute_affine(prepared, scale, offset)
+    execute_scalar_point(image, "PointScalar", |prepared| {
+        scalar::execute_affine(prepared, scale, offset)
+    })
 }
 
 /// Applies a host callback to each scalar sample in an integer or float image.
@@ -150,13 +236,13 @@ pub fn eval_point_transform(image: &Image, scale: f64, offset: f64) -> Result<Im
 /// Unlike byte-valued point operations, scalar images do not have a bounded
 /// 256-entry lookup table. The caller owns the callback; Rust owns image
 /// materialization, sample decoding, and output conversion.
-pub fn eval_point_callable<F>(image: &Image, mut callback: F) -> Result<Image, PilError>
+pub fn eval_point_callable<F>(image: &Image, callback: F) -> Result<Image, PilError>
 where
     F: FnMut(f64) -> Result<f64, PilError>,
 {
-    let context = cpu_point_context(image)?;
-    let prepared = scalar::prepare(image, &context)?;
-    scalar::execute_callable(prepared, callback)
+    execute_scalar_point(image, "PointScalar", |prepared| {
+        scalar::execute_callable(prepared, callback)
+    })
 }
 
 /// Validates and applies a pre-expanded Pillow lookup table.
@@ -181,7 +267,7 @@ pub fn eval_validated(image: &Image, lut: &[u8]) -> Result<Image, PilError> {
             "point operation not supported for this mode".to_owned(),
         ));
     }
-    let n_bands = pillow_band_count(mode);
+    let n_bands = mode.pillow_band_count();
     let expected = 256 * n_bands;
     if lut.len() != expected {
         return Err(PilError::ValueError("wrong number of lut entries".into()));
@@ -207,8 +293,7 @@ pub fn eval_validated(image: &Image, lut: &[u8]) -> Result<Image, PilError> {
 /// Returns [`PilError::ValueError`] when the LUT length or source mode does
 /// not match Pillow's single-band floating-output path.
 pub fn eval_float(image: &Image, lut: &[f64]) -> Result<Image, PilError> {
-    let context = cpu_point_context(image)?;
-    crate::compute::pool_cpu::ops::eval::ops::execute_float(image, lut, &context)
+    execute_float_point(image, lut)
 }
 
 /// Builds a floating-point point-operation LUT from a host callback.

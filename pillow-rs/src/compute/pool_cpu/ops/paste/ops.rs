@@ -2,9 +2,9 @@
 //!
 //! Exact L-mask NEON subkernel guards are declared beside each byte mode's
 //! architecture support; the same-mode generic vector strategy remains the
-//! fallback for other requests. TODO(pillow-rs#3ptb): move Rayon clipping to
-//! `pool_parallel`, cover mode-by-architecture paths and telemetry in parity,
-//! and finish per-mode source review.
+//! fallback for other requests. TODO(pillow-rs#3ptb): carry the archived Rayon
+//! clipping route into the later `pool_parallel` stage if retained, then cover
+//! all mode-by-architecture paths and selection telemetry in CPU parity.
 
 use std::sync::Arc;
 

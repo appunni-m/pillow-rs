@@ -1,7 +1,9 @@
 //! Architecture declarations shared by the exact Paste mode strategies.
 
 use crate::compute::Architecture;
-use crate::compute::registry::support::{ImplementationSupport, OperationId, StrategyGuard};
+use crate::compute::registry::support::{
+    ImplementationSupport, OperationId, StrategyGuard, StrategySelection,
+};
 use crate::raster::Mode;
 
 /// Declares the 128-bit Paste implementations built for the target.
@@ -96,14 +98,41 @@ pub(crate) const fn cpu_architectures_for_l_mask_neon(
     ]
 }
 
+/// Reports whether the prepared operation selected the exact NEON L-mask row strategy.
+pub(crate) fn l_mask_neon_selected(
+    selection: &StrategySelection,
+    mode: Mode,
+    channels: u8,
+    minimum_clipped_width: u32,
+) -> bool {
+    matches!(
+        selection.guard,
+        StrategyGuard::PasteLMaskNeon {
+            mode: selected_mode,
+            channels: selected_channels,
+            minimum_clipped_width: selected_minimum,
+        } | StrategyGuard::CompositeLMaskNeon {
+            mode: selected_mode,
+            channels: selected_channels,
+            minimum_clipped_width: selected_minimum,
+        } if selected_mode == mode
+            && selected_channels == channels
+            && selected_minimum == minimum_clipped_width
+    )
+}
+
 macro_rules! byte_architecture_impl {
     ($channels:literal, $image_type:path, $variant:ident) => {
-        pub(crate) fn execute(
-            strategy: $crate::compute::pool_cpu::ops::paste::helpers::plan::BytePlan<'_>,
-        ) -> Result<$crate::raster::DynamicImage, $crate::error::PilError> {
+        pub(crate) fn execute<I>(
+            strategy: $crate::compute::pool_cpu::ops::paste::helpers::plan::BytePlan<'_, I>,
+        ) -> Result<$crate::raster::DynamicImage, $crate::error::PilError>
+        where
+            I: ::std::ops::Deref<Target = $crate::raster::DynamicImage>,
+        {
             let (width, height) = strategy.destination_size;
             let bytes = $crate::compute::pool_cpu::ops::paste::helpers::vector::execute::<
                 $channels,
+                I,
             >(strategy)?;
             let image = <$image_type>::from_raw(width, height, bytes).ok_or_else(|| {
                 $crate::error::PilError::InternalError(
@@ -124,14 +153,15 @@ macro_rules! luma16_architecture_impl {
         ) -> Result<$crate::raster::DynamicImage, $crate::error::PilError> {
             let (width, height) = strategy.destination_size;
             let source_image = std::sync::Arc::clone(&strategy.source);
-            let source = match source_image.as_ref() {
-                $crate::raster::DynamicImage::$variant(image) => image.as_raw(),
-                _ => {
-                    return Err($crate::error::PilError::InternalError(
+            let source =
+                $crate::compute::pool_cpu::ops::paste::helpers::i16::source_samples(
+                    source_image.as_ref(),
+                )
+                .ok_or_else(|| {
+                    $crate::error::PilError::InternalError(
                         "I;16 vector Paste source mode changed after preparation".into(),
-                    ));
-                }
-            };
+                    )
+                })?;
             let samples = $crate::compute::pool_cpu::ops::paste::helpers::i16_vector::execute(
                 strategy,
                 source,

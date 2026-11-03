@@ -1,12 +1,13 @@
 //! Shared 128-bit byte fill/copy kernel for exact-mode ImageOps.expand plans.
 
 use crate::error::PilError;
+use crate::pipeline::ExpandMargins;
 use crate::raster::{GenericImageView, ImageBuffer, Pixel};
 use wide::u8x16;
 
 pub(crate) fn expand_buffer<P>(
     input: &ImageBuffer<P, Vec<u8>>,
-    border: u32,
+    border: ExpandMargins,
     channels: u8,
     fill: (u8, u8, u8, u8),
 ) -> Result<(ImageBuffer<P, Vec<u8>>, u64, u64), PilError>
@@ -37,7 +38,12 @@ where
         .checked_mul(output_height as usize)
         .ok_or_else(|| PilError::DimensionError("expanded image size overflows".into()))?;
 
-    let (samples, vector_blocks, scalar_tail) = if border == 0 {
+    let Some(uniform_border) = border.uniform_nonnegative() else {
+        return Err(PilError::InternalError(
+            "SIMD Expand received asymmetric or negative margins".into(),
+        ));
+    };
+    let (samples, vector_blocks, scalar_tail) = if uniform_border == 0 {
         vector_copy(input.as_raw())?
     } else {
         match channels {
@@ -49,7 +55,7 @@ where
                 output_height,
                 output_stride,
                 output_len,
-                border,
+                uniform_border,
                 fill,
             )?,
             2 => expand_luma_alpha(
@@ -59,7 +65,7 @@ where
                 output_height,
                 output_stride,
                 output_len,
-                border,
+                uniform_border,
                 fill,
             )?,
             _ => {

@@ -18,6 +18,33 @@ pub(crate) const fn byte_architectures(
         OperationId::ChopsInvert => StrategyGuard::NativePointwiseBytesIncludingEmpty { channels },
         _ => StrategyGuard::ChopsEqualDimensions { channels },
     };
+    architecture_strategies(operation, mode, guard)
+}
+
+pub(crate) const fn offset_byte_architectures(
+    mode: Mode,
+    channels: u8,
+) -> [ImplementationSupport; 3] {
+    architecture_strategies(
+        OperationId::ChopsOffset,
+        mode,
+        StrategyGuard::ChopsOffsetNativeBytes { channels },
+    )
+}
+
+pub(crate) const fn offset_i16_architectures(mode: Mode) -> [ImplementationSupport; 3] {
+    architecture_strategies(
+        OperationId::ChopsOffset,
+        mode,
+        StrategyGuard::ChopsOffsetNativeI16,
+    )
+}
+
+const fn architecture_strategies(
+    operation: OperationId,
+    mode: Mode,
+    guard: StrategyGuard,
+) -> [ImplementationSupport; 3] {
     [
         ImplementationSupport::cpu(
             operation,
@@ -47,6 +74,25 @@ pub(crate) const fn byte_architectures(
             guard,
         ),
     ]
+}
+
+macro_rules! declare_byte_offset_architectures {
+    ($mode:expr, $channels:expr) => {
+        static OFFSET_ARCHITECTURES: [ImplementationSupport; 3] =
+            $crate::compute::pool_cpu::ops::chops::helpers::strategy::offset_byte_architectures(
+                $mode,
+                $channels,
+            );
+    };
+}
+
+macro_rules! declare_i16_offset_architectures {
+    ($mode:expr) => {
+        static OFFSET_ARCHITECTURES: [ImplementationSupport; 3] =
+            $crate::compute::pool_cpu::ops::chops::helpers::strategy::offset_i16_architectures(
+                $mode,
+            );
+    };
 }
 
 macro_rules! declare_byte_invert_architectures {
@@ -134,10 +180,16 @@ macro_rules! declare_byte_binary_architectures {
                 $mode,
                 $channels,
             );
-        fn binary_architectures_for(
+        static OFFSET_ARCHITECTURES: [ImplementationSupport; 3] =
+            $crate::compute::pool_cpu::ops::chops::helpers::strategy::offset_byte_architectures(
+                $mode,
+                $channels,
+            );
+        fn architecture_for(
             operation: OperationId,
         ) -> &'static [ImplementationSupport] {
             match operation {
+                OperationId::ChopsOffset => &OFFSET_ARCHITECTURES,
                 OperationId::ChopsAdd => &ADD_ARCHITECTURES,
                 OperationId::ChopsSubtract => &SUBTRACT_ARCHITECTURES,
                 OperationId::ChopsMultiply => &MULTIPLY_ARCHITECTURES,
@@ -181,4 +233,6 @@ macro_rules! declare_logical_architectures {
 
 pub(crate) use declare_byte_binary_architectures;
 pub(crate) use declare_byte_invert_architectures;
+pub(crate) use declare_byte_offset_architectures;
+pub(crate) use declare_i16_offset_architectures;
 pub(crate) use declare_logical_architectures;

@@ -1,7 +1,8 @@
 //! Native pixel movement shared by the transpose family.
 
-use crate::raster::{GenericImageView, ImageBuffer, Pixel};
+use crate::error::PilError;
 use crate::pipeline::TransposeMethod;
+use crate::raster::{DynamicImage, GenericImageView, ImageBuffer, Pixel};
 
 /// An identity transpose run may defer its required owned output until the
 /// batch terminal only when the input contains exactly its logical pixels.
@@ -14,6 +15,57 @@ pub(crate) fn identity_can_defer_output(image: &crate::raster::DynamicImage) -> 
         image.color().bytes_per_pixel(),
     )
     .is_ok_and(|dims| dims.total_bytes() == image.as_bytes().len())
+}
+
+/// Remap omitted physical pixel lanes with the same source pixel mapping as a
+/// mode-preserving transpose-family operation.
+pub(crate) fn remap_hidden_lanes(
+    source: &DynamicImage,
+    output: &mut DynamicImage,
+    method: TransposeMethod,
+) -> Result<(), PilError> {
+    let (source_width, source_height) = source.dimensions();
+    let (output_width, output_height) = output.dimensions();
+    let swaps_axes = matches!(
+        method,
+        TransposeMethod::Rotate90
+            | TransposeMethod::Rotate270
+            | TransposeMethod::Transpose
+            | TransposeMethod::Transverse
+    );
+    let expected_dimensions = if swaps_axes {
+        (source_height, source_width)
+    } else {
+        (source_width, source_height)
+    };
+    if source.mode() != output.mode() || output.dimensions() != expected_dimensions {
+        return Err(PilError::InternalError(
+            "transpose output did not preserve the source mode and dimensions".into(),
+        ));
+    }
+
+    let source_width = source_width as usize;
+    let source_height = source_height as usize;
+    let output_width = output_width as usize;
+    if !output.remap_hidden_pixel_lanes_from(source, |destination_index| {
+        let x = destination_index % output_width;
+        let y = destination_index / output_width;
+        let (source_x, source_y) = match method {
+            TransposeMethod::FlipLeftRight => (source_width - 1 - x, y),
+            TransposeMethod::FlipTopBottom => (x, source_height - 1 - y),
+            TransposeMethod::Rotate180 => (source_width - 1 - x, source_height - 1 - y),
+            TransposeMethod::Transpose => (y, x),
+            TransposeMethod::Rotate90 => (source_width - 1 - y, x),
+            TransposeMethod::Rotate270 => (y, source_height - 1 - x),
+            TransposeMethod::Transverse => (source_width - 1 - y, source_height - 1 - x),
+        };
+        source_y * source_width + source_x
+    }) {
+        return Err(PilError::InternalError(
+            "transpose hidden pixel lanes did not match the output extent".into(),
+        ));
+    }
+    Ok(())
 }
 
 const TRANSPOSE_TILE_SIZE: usize = 32;

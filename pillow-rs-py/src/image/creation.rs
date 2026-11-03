@@ -165,17 +165,16 @@ impl PyImage {
 
     fn tobytes_encoded(
         &self,
-        mode: &str,
         encoder_name: &str,
         args: Vec<String>,
         py: Python<'_>,
     ) -> PyResult<Py<PyBytes>> {
-        let mode = mode.to_owned();
+        let mode = self.inner.mode_identity().map_err(map_error)?;
         let encoder_name = encoder_name.to_owned();
         let bytes = py
             .detach(|| {
                 self.inner
-                    .tobytes_encoded_shared(&mode, &encoder_name, &args)
+                    .tobytes_encoded_shared(mode, &encoder_name, &args)
             })
             .map_err(map_error)?;
         Ok(telemetry::materialize_python_bytes(py, bytes.as_ref()))

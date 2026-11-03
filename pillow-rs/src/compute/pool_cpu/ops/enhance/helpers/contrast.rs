@@ -2,7 +2,8 @@
 
 use crate::compute::helpers::enhance::ContrastBase;
 use crate::error::PilError;
-use crate::raster::{ImageBuffer, Pixel};
+use crate::raster::buffer::HiddenPixelLanes;
+use crate::raster::{DynamicImage, ImageBuffer, Mode, Pixel};
 
 pub(crate) fn execute(
     source: &[u8],
@@ -33,17 +34,11 @@ pub(crate) fn execute(
     let mut output = Vec::with_capacity(source.len());
     for pixel in source.chunks_exact(channels) {
         for (channel, &sample) in pixel.iter().enumerate() {
-            let original = f32::from(sample);
-            let midpoint = if base.alpha == Some(channel) {
-                original
+            if base.alpha == Some(channel) {
+                output.push(sample);
             } else {
-                f32::from(base.values[channel])
-            };
-            output.push(
-                factor
-                    .mul_add(original - midpoint, midpoint)
-                    .clamp(0.0, 255.0) as u8,
-            );
+                output.push(contrast_byte(sample, base.values[channel], factor));
+            }
         }
     }
     Ok(output)
@@ -56,20 +51,89 @@ fn contrast_lookup(base: &ContrastBase, factor: f64) -> Option<Vec<u8>> {
     }
     let mut lookup = Vec::with_capacity(base.channels * 256);
     for channel in 0..base.channels {
-        let midpoint = f32::from(base.values[channel]);
         for sample in 0..=u8::MAX {
             if base.alpha == Some(channel) {
                 lookup.push(sample);
             } else {
-                lookup.push(
-                    factor
-                        .mul_add(f32::from(sample) - midpoint, midpoint)
-                        .clamp(0.0, 255.0) as u8,
-                );
+                lookup.push(contrast_byte(sample, base.values[channel], factor));
             }
         }
     }
     Some(lookup)
+}
+
+#[inline]
+pub(crate) fn contrast_byte(sample: u8, midpoint: u8, factor: f32) -> u8 {
+    factor
+        .mul_add(f32::from(sample) - f32::from(midpoint), f32::from(midpoint))
+        .clamp(0.0, 255.0) as u8
+}
+
+/// Applies Contrast's native byte formula to compact omitted pixel lanes.
+pub(crate) fn carry_hidden_lanes(
+    source: &DynamicImage,
+    output: &mut DynamicImage,
+    base: &ContrastBase,
+    factor: f64,
+) -> Result<(), PilError> {
+    if source.mode() != output.mode() || source.dimensions() != output.dimensions() {
+        return Err(PilError::InternalError(
+            "Contrast output did not preserve its source layout".into(),
+        ));
+    }
+    let mode = source.mode();
+    let Some(lane_count) = mode.hidden_pixel_lane_count() else {
+        return Ok(());
+    };
+    if !matches!(
+        mode,
+        Mode::ImageLumaA8 | Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageHsv8
+    ) {
+        return Err(PilError::InternalError(
+            "Contrast has no physical-lane strategy for this mode".into(),
+        ));
+    }
+    let pixel_count = (source.width() as usize)
+        .checked_mul(source.height() as usize)
+        .ok_or_else(|| PilError::DimensionError("Contrast lane extent overflow".into()))?;
+    let mut midpoints = [0; 2];
+    for lane in 0..lane_count {
+        let offset = mode.hidden_pixel_lane_offset(lane).ok_or_else(|| {
+            PilError::InternalError("Contrast hidden-lane offset was unavailable".into())
+        })?;
+        midpoints[lane] = base.values[offset];
+    }
+    if lane_count == 2 && midpoints[0] != midpoints[1] {
+        return Err(PilError::InternalError(
+            "Contrast hidden lanes require distinct midpoint handling".into(),
+        ));
+    }
+
+    let alpha = factor as f32;
+    let lanes = match source.hidden_pixel_lanes() {
+        Some(lanes) if lanes.lane_count() != lane_count || lanes.pixel_count() != pixel_count => {
+            return Err(PilError::InternalError(
+                "Contrast source lane payload did not match its mode".into(),
+            ));
+        }
+        Some(lanes) if alpha == 1.0 => Some(lanes.clone()),
+        Some(_) | None if alpha == 0.0 => {
+            let lanes = HiddenPixelLanes::constant(lane_count, pixel_count, midpoints)
+                .ok_or_else(|| PilError::InternalError("invalid Contrast lane layout".into()))?;
+            (pixel_count > 0).then_some(lanes)
+        }
+        Some(lanes) => Some(lanes.map_values(|sample| {
+            contrast_byte(sample, midpoints[0], alpha)
+        })),
+        None => None,
+    };
+    if output.replace_hidden_pixel_lanes(lanes) {
+        Ok(())
+    } else {
+        Err(PilError::InternalError(
+            "Contrast output physical lanes did not match its mode".into(),
+        ))
+    }
 }
 
 pub(crate) fn execute_vector<P, const CHANNELS: usize>(

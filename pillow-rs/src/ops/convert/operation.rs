@@ -44,19 +44,8 @@ impl Image {
         {
             return Ok(converted);
         }
-        if let Some(converted) =
-            try_convert_prestandard(self, src_mode, mode, &matrix, dither, _palette, _colors)?
-        {
+        if let Some(converted) = try_convert_prestandard(self, src_mode, mode, &matrix, dither)? {
             return Ok(converted);
-        }
-
-        if matches!(mode, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
-            && crate::compute::pool_cpu::ops::color::convert::ops::SUPPORT
-                .for_mode(src_mode)
-                .scope_for_target(mode)
-                .is_some()
-        {
-            return super::palette::convert_prepared_palette(self, src_mode, mode, dither);
         }
 
         if mode == Mode::One {
@@ -66,30 +55,13 @@ impl Image {
 
         if !(src_mode == Mode::ImageRgb8 && mode == Mode::ImageLuma8)
             && crate::compute::pool_cpu::ops::color::convert::ops::SUPPORT
-                .for_mode(src_mode)
-                .scope_for_target(mode)
+                .scope_for_target(src_mode, mode)
                 .is_some()
         {
             if prepared_convert_validates_dither(src_mode, mode) {
                 let _ = parse_dither(dither)?;
             }
             return Ok(push_pipeline_convert(self, mode));
-        }
-
-        if let Some(converted) = super::nonstandard::try_convert_between_nonstandard_modes(
-            self,
-            src_mode,
-            mode,
-            matrix.clone(),
-            dither,
-            _colors,
-        )? {
-            return Ok(converted);
-        }
-        if let Some(converted) =
-            super::nonstandard::try_convert_nonstandard_source(self, src_mode, mode)?
-        {
-            return Ok(converted);
         }
 
         let _ = parse_dither(dither)?;
@@ -106,19 +78,17 @@ impl Image {
 }
 
 fn push_pipeline_convert(image: &Image, mode: Mode) -> Image {
-    let mut result = Image::push_op(
+    Image::push_op(
         image,
         PipelineOp::Convert {
             mode,
             matrix: None,
             dither: None,
         },
-    );
-    result.set_pipeline_output_mode(Some(mode));
-    result
+    )
 }
 
-fn prepared_convert_validates_dither(source: Mode, target: Mode) -> bool {
+pub(super) fn prepared_convert_validates_dither(source: Mode, target: Mode) -> bool {
     // The prior One→L route widened to L, whose same-mode conversion returned
     // before parsing dither. Preserve that validation behavior on the direct
     // One strategy.
@@ -166,15 +136,17 @@ fn validate_convert_request(
     if !has_matrix && source_mode == target_mode {
         return Ok(());
     }
-    if source_mode == Mode::ImageLaPremultiplied8
-        && !matches!(target_mode, Mode::ImageLaPremultiplied8 | Mode::ImageLumaA8)
-        && !has_matrix
+    if !has_matrix
+        && source_mode == Mode::ImageLaPremultiplied8
+        && let Some(composition) = crate::compute::pool_cpu::ops::color::convert::ops::SUPPORT
+            .target_composition_for(source_mode, target_mode)
+        && composition.kind
+            == crate::compute::registry::support::OperationTargetCompositionKind::ConvertGuard
+        && let crate::compute::registry::support::OperationRouteOutcome::Rejects {
+            reason, kind, ..
+        } = composition.outcome
     {
-        // Only La->LA has a direct converter. All other destinations
-        // retry through the L base, which Pillow cannot produce from La.
-        return Err(PilError::ValueError(
-            "conversion from La to L not supported".into(),
-        ));
+        return Err(kind.into_error(reason));
     }
     // Check the target before source-specific dispatch; PA is handled by its
     // dedicated path below rather than by ColorMode.
@@ -190,8 +162,6 @@ fn try_convert_prestandard(
     target_mode: Mode,
     matrix: &Option<Vec<f64>>,
     dither: Option<&str>,
-    palette: Option<&str>,
-    colors: Option<u32>,
 ) -> Result<Option<Image>, PilError> {
     // Preserve the archived matrix path's L normalization for bilevel data.
     // Ordinary conversions use the native One strategy, which expands each
@@ -218,14 +188,9 @@ fn try_convert_prestandard(
     if let Some(matrix) = matrix {
         return execute_matrix_conversion(image, target_mode, matrix).map(Some);
     }
-    if let Some(converted) = super::dispatch::try_convert_early_modes(
-        image,
-        source_mode,
-        target_mode,
-        dither,
-        palette,
-        colors,
-    )? {
+    if let Some(converted) =
+        super::dispatch::try_convert_early_modes(image, source_mode, target_mode, dither)?
+    {
         return Ok(Some(converted));
     }
     // Convert::SUPPORT declares this source-to-LAB composition and its child
@@ -254,22 +219,24 @@ fn execute_matrix_conversion(
         image: &materialized,
         palette: crate::compute::registry::support::PaletteInput::default(),
     };
-    let selected_backend = crate::compute::preferred_active_backend()?
-        .map(|(backend, _)| backend)
-        .unwrap_or(crate::compute::Backend::Cpu);
     // Matrix conversion is currently CPU-owned. Preserve an explicit SIMD
-    // request so its architecture selection and Default fallback are recorded;
-    // GPU matrix execution can be added with the GPU operation contract.
+    // request and its architecture context; GPU-selected execution keeps that
+    // original request while recording the CPU fallback architecture.
     // TODO(pillow-rs#brg0): route an active GPU request through a GPU-owned
     // matrix strategy when that backend declares this operation.
-    let requested_backend = match selected_backend {
-        crate::compute::Backend::Gpu => crate::compute::Backend::Cpu,
-        backend => backend,
-    };
-    let result = crate::compute::execute_eager_cpu_arch_image_operation(
+    let (requested_backend, context) = image.cpu_arch_execution_route()?;
+    let fallback_reason = (requested_backend == Some(crate::compute::Backend::Gpu)).then(|| {
+        format!(
+            "GPU matrix Convert has no strategy; used CPU {:?}",
+            context.architecture()
+        )
+    });
+    let result = crate::compute::execute_eager_cpu_arch_image_operation_with_context(
         "Convert",
         &materialized,
+        context,
         requested_backend,
+        fallback_reason,
         |context| {
             let prepared = crate::compute::registry::prepare_cpu(&operation, inputs, context)?;
             let selection = *prepared.selection();

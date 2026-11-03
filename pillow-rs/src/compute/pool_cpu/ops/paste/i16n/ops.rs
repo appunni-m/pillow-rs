@@ -12,7 +12,7 @@ use crate::raster::{DynamicImage, ImageBuffer, Luma, Mode};
 pub(crate) type Strategy<'a> = Luma16Plan<'a>;
 
 const RULES: PasteInputRules = PasteInputRules {
-    source_modes: &[Mode::ImageI16N],
+    source_modes: super::super::helpers::contracts::I16_PIXEL_SIZE_SOURCES,
     unmasked_only_sources: &[],
     compact_sources: &[],
     compact_masks: &[],

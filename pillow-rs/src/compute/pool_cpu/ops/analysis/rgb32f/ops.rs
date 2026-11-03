@@ -25,3 +25,39 @@ pub(crate) fn execute_get_data(
         architecture => Err(helpers::missing_architecture(Mode::ImageRgb32F, architecture)),
     }
 }
+crate::compute::pool_cpu::ops::analysis::helpers::bbox::declare_getbbox_owner!(
+    rgb32f,
+    ImageRgb32F,
+    crate::raster::Rgb32FImage,
+);
+
+// NO_PILLOW_SUPPORT: native-width multiband extrema are a core extension.
+crate::compute::pool_cpu::ops::analysis::helpers::extrema::declare_getextrema_owner!(
+    ImageRgb32F,
+    crate::raster::Rgb32FImage,
+    crate::compute::pool_cpu::ops::analysis::helpers::extrema::f32_bands,
+);
+
+// NO_PILLOW_SUPPORT: native float multiband histograms extend the core API.
+crate::compute::pool_cpu::ops::analysis::helpers::histogram_execution::declare_histogram_owner!(
+    ImageRgb32F,
+    crate::raster::Rgb32FImage,
+    crate::compute::pool_cpu::ops::analysis::rgb32f::default::histogram_impl::execute,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::getcolors_execution::declare_getcolors_owner!(
+    ImageRgb32F,
+    crate::raster::Rgb32FImage,
+    crate::compute::pool_cpu::ops::analysis::rgb32f::default::getcolors_impl::execute,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::stat_execution::declare_stat_owner!(
+    ImageRgb32F,
+    crate::raster::Rgb32FImage,
+    crate::compute::pool_cpu::ops::analysis::rgb32f::default::stat_impl::execute,
+);
+// NO_PILLOW_SUPPORT: the Rust/JS byte-valued extrema API exposes a compatibility projection.
+crate::compute::pool_cpu::ops::analysis::helpers::extrema_bytes_execution::
+    declare_getextrema_bytes_owner!(
+    ImageRgb32F,
+    crate::raster::Rgb32FImage,
+    crate::compute::pool_cpu::ops::analysis::rgb32f::default::extrema_bytes_impl::execute,
+);

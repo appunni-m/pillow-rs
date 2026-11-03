@@ -15,6 +15,17 @@ pub(crate) fn execute(
         ));
     };
     let normalized = std::array::from_fn(|index| kernel[index] / scale);
+    if super::super::default::filter5x5_impl::uniform_i32_filter5x5_is_identity(
+        source.as_raw(),
+        source.width() as usize,
+        source.height() as usize,
+        &normalized,
+        offset + 0.5,
+    ) {
+        crate::compute::record_pipeline_operation_path("scalar-control");
+        return Ok(DynamicImage::ImageI32(source.clone()));
+    }
+
     let mut output = source.as_raw().to_vec();
     super::filter5x5_kernel::native_filter_5x5_i32_rows(
         source.as_raw(),

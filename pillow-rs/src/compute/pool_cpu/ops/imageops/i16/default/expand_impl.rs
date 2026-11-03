@@ -2,22 +2,30 @@
 use crate::raster::{ImageBuffer, Luma};
 
 use crate::error::PilError;
+use crate::pipeline::NativeColorInput;
 
 pub(super) type Input = ImageBuffer<Luma<u16>, Vec<u16>>;
 
 
 pub(super) struct Kernel<'a> {
     input: &'a Input,
-    border: u32,
+    border: crate::pipeline::ExpandMargins,
     fill: [u16; 1],
 }
 
 pub(super) fn prepare(
     input: &Input,
-    border: u32,
+    border: crate::pipeline::ExpandMargins,
     fill: (u8, u8, u8, u8),
+    native_fill: Option<NativeColorInput>,
 ) -> Kernel<'_> {
-    Kernel { input, border, fill: [u16::from(fill.0)] }
+    // Pillow's I;16 fill stores the scalar's low 16 bits. Keep that wrap in
+    // the native u16 sample owner instead of projecting through the byte fill.
+    let fill = match native_fill {
+        Some(input) => [input.component(0, i64::from(fill.0)) as u16],
+        None => [u16::from(fill.0)],
+    };
+    Kernel { input, border, fill }
 }
 
 pub(super) fn execute(kernel: Kernel<'_>) -> Result<Input, PilError> {

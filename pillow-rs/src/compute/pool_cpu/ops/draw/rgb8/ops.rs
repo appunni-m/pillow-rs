@@ -6,10 +6,10 @@ use crate::compute::pool_cpu::ops::draw::BitmapMask;
 use crate::raster::{DynamicImage, Mode};
 use crate::compute::pool_cpu::ops::draw::TextComposeResult;
 
-pub(crate) fn apply_text(
+pub(crate) fn apply_text<const RGBA_MASK: bool>(
     input: super::super::TextComposeInput<'_>,
 ) -> Result<TextComposeResult, PilError> {
-    default::text_impl::apply(
+    default::text_impl::apply::<RGBA_MASK>(
         input.image,
         input.x,
         input.y,
@@ -17,7 +17,6 @@ pub(crate) fn apply_text(
         input.height,
         input.pixels.as_ref(),
         input.fill,
-        input.mask_kind == crate::compute::registry::support::DrawTextMaskKind::Rgba,
     )
 }
 
@@ -30,7 +29,7 @@ pub(crate) fn try_native_bitmap(
     x: i32,
     y: i32,
     color: (u8, u8, u8, u8),
-) -> Option<DynamicImage> {
+) -> Result<Option<DynamicImage>, PilError> {
     default::bitmap_impl::apply(
         image,
         mask,

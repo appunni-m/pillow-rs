@@ -1,11 +1,14 @@
 //! Effect operation contracts and exact-mode strategy composition.
 //!
-//! TODO(pillow-rs#3ptb): finish comparing every effect mode/architecture
-//! contract against the archived SIMD source and add any missing strategy or
-//! fallback. Rayon scheduling remains owned by `pool_parallel`.
+//! TODO(pillow-rs#3ptb): verify frozen CPU parity for every declared mode and
+//! architecture, including generator outputs, Spread/Noise RNG receipts,
+//! unavailable-architecture fallback, and direct/eager caller ordering.
+//! Rayon scheduling remains owned by `pool_parallel`.
+//! EffectSpread remaps retained physical lanes with the same relocation
+//! decisions as its selected Default or vector strategy.
 
 use crate::compute::registry::support::{
-    InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport,
+    InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport, OutputModeRule,
     PaletteKnowledge, RejectionKind, RequestFacts, StrategyInputs, StrategySelection,
 };
 use crate::compute::ExecutionContext;
@@ -442,7 +445,8 @@ pub(crate) static EFFECT_NOISE_SUPPORT: OperationSupport = OperationSupport::new
     OperationId::EffectNoise,
     NOISE_INPUTS,
     classify_noise,
-);
+)
+.with_rejected_output(OutputModeRule::Fixed(Mode::ImageLuma8));
 
 pub(crate) fn prepare_spread<'a>(
     image: &'a DynamicImage,

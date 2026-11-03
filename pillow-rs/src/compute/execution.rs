@@ -157,6 +157,60 @@ pub(crate) fn execute_prepared_cpu_arch_operation(
     )
 }
 
+/// Executes a palette-target Convert while retaining its wrapper output data.
+///
+/// The raster strategy owns indices and per-pixel alpha. The Image wrapper
+/// owns the generated palette and source-metadata policy, so keep those
+/// results together across the lazy materialization boundary.
+pub(crate) fn execute_prepared_cpu_arch_convert_output(
+    prepared: &PreparedExecution,
+    op: &PipelineOp,
+    input: crate::compute::registry::support::OperationInputs<'_>,
+) -> Result<crate::compute::pool_cpu::ops::color::convert::ops::PreparedConvertOutput, PilError> {
+    let gpu_fallback = prepared.selected_backend == Backend::Gpu;
+    let context = if gpu_fallback {
+        ExecutionContext::for_routed_backend(Backend::Cpu)
+    } else {
+        prepared.context
+    };
+    let fallback_reason = if gpu_fallback {
+        Some(format!(
+            "Convert palette metadata is produced by the CPU wrapper route; used CPU {:?}",
+            context.architecture()
+        ))
+    } else {
+        prepared.fallback_reason.clone()
+    };
+    let mut output_data = None;
+    let image = super::eager::execute_cpu_arch_operation(
+        registry::variant_key(op),
+        input.image,
+        context,
+        prepared.requested_backend,
+        prepared.route_ns,
+        prepared.validation_ns,
+        fallback_reason,
+        |context| {
+            let operation = registry::prepare_cpu(op, input, context)?;
+            let selection = *operation.selection();
+            let output = operation.execute_convert_output()?;
+            output_data = Some((output.palette, output.palette_alpha, output.wrapper_metadata));
+            Ok((output.image, selection))
+        },
+    )?;
+    let (palette, palette_alpha, wrapper_metadata) = output_data.ok_or_else(|| {
+        PilError::InternalError("prepared palette conversion omitted its wrapper output".into())
+    })?;
+    Ok(
+        crate::compute::pool_cpu::ops::color::convert::ops::PreparedConvertOutput {
+            image,
+            palette,
+            palette_alpha,
+            wrapper_metadata,
+        },
+    )
+}
+
 /// Performs the route and validation phases before a source image is
 /// materialized. Keeping this separate preserves the explicit-backend contract
 /// while allowing the actual backend phase to be measured later.
@@ -578,9 +632,7 @@ pub(crate) fn execute_prepared_shared_with_palette(
                 let _ = take_pipeline_dispatch_count();
                 let _ = take_pipeline_resize_coeff_cache_stats();
                 begin_pipeline_operation_telemetry(registry::variant_key(&ops[0]));
-                crate::compute::record_pipeline_operation_architecture(
-                    selection.implementation.architecture,
-                );
+                crate::compute::record_pipeline_operation_selection(&selection);
                 record_pipeline_operation_path(if selection.implementation.architecture
                     == crate::compute::Architecture::Default
                 {

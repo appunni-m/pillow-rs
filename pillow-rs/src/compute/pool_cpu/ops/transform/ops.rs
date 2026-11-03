@@ -8,6 +8,13 @@
 //! and alpha/padding behavior. `fill.rs` handles palette index/color
 //! normalization and errors. Keep mesh on Default: its archived adapter
 //! groups scalar samples but has no vector kernel.
+//! TODO(pillow-rs#3ptb): verify every mode/method/filter and architecture,
+//! including unavailable-architecture and Default fallback receipts, plus
+//! empty-mesh P palette retention with a non-default source palette.
+//! `helpers::hidden_lanes` composes omitted physical bytes after the selected
+//! mode/architecture kernel. Nearest sampling follows that architecture's
+//! sampler; filtered LA/La/PA repeats the resulting first band into physical
+//! lanes 1 and 2, while filtered three-band modes retain the output fill byte.
 
 use crate::compute::pool_cpu::ops::transform::helpers::strategy::{
     self, Strategy,
@@ -135,7 +142,10 @@ impl PreparedTransform<'_> {
     }
 
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
-        match self.mode {
+        let source = self.strategy.implementation.image;
+        let request = self.strategy.implementation.request;
+        let architecture = self.strategy.selection().implementation.architecture;
+        let mut output = match self.mode {
             Mode::One => super::one::ops::execute(self.strategy),
             Mode::ImageLuma8 => super::luma8::ops::execute(self.strategy),
             Mode::ImageLumaA8 => super::luma_a8::ops::execute(self.strategy),
@@ -159,7 +169,9 @@ impl PreparedTransform<'_> {
             mode => Err(PilError::InternalError(format!(
                 "rejected Transform mode {mode:?} reached execution"
             ))),
-        }
+        }?;
+        super::helpers::hidden_lanes::finish(source, &mut output, request, architecture)?;
+        Ok(output)
     }
 }
 

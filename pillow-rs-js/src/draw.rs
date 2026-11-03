@@ -8,10 +8,10 @@ type DrawTextColorAndKind = ((u8, u8, u8, u8), bool);
 // ── ImageDraw ────────────────────────────────────────────────────
 use pillow_rs::Draw;
 
-fn js_text_color_and_kind(draw: &Draw, value: &JsValue) -> Result<DrawTextColorAndKind, JsValue> {
+fn js_text_color_and_kind(draw: &mut Draw, value: &JsValue) -> Result<DrawTextColorAndKind, JsValue> {
     let input = js_draw_color_input(value);
     let is_integer = matches!(&input, pillow_rs::DrawColorInput::Integer(_));
-    draw.text_color_with_input(input)
+    draw.resolve_text_color_with_input(input)
         .map(|color| (color, is_integer))
         .map_err(err)
 }
@@ -117,7 +117,7 @@ impl ImageDraw {
     ) -> Result<(), JsValue> {
         let color = self
             .draw
-            .color_with_input(js_draw_color_input(&fill))
+            .resolve_draw_color_with_input(js_draw_color_input(&fill))
             .map_err(err)?;
         self.draw
             .polyline_with_input_joint(
@@ -138,8 +138,8 @@ impl ImageDraw {
         width: Option<u32>,
     ) -> Result<(), JsValue> {
         let (x0, y0, x1, y1) = js_draw_box_coordinates(&xy)?;
-        let fill = js_draw_optional_color(&self.draw, &fill)?;
-        let outline = js_draw_optional_color(&self.draw, &outline)?;
+        let fill = js_draw_optional_color(&mut self.draw, &fill)?;
+        let outline = js_draw_optional_color(&mut self.draw, &outline)?;
         self.draw
             .rectangle(x0, y0, x1, y1, fill, outline, width.unwrap_or(1))
             .map_err(err)
@@ -154,8 +154,8 @@ impl ImageDraw {
         width: Option<u32>,
     ) -> Result<(), JsValue> {
         let (x0, y0, x1, y1) = js_draw_box_coordinates(&xy)?;
-        let fill = js_draw_optional_color(&self.draw, &fill)?;
-        let outline = js_draw_optional_color(&self.draw, &outline)?;
+        let fill = js_draw_optional_color(&mut self.draw, &fill)?;
+        let outline = js_draw_optional_color(&mut self.draw, &outline)?;
         self.draw
             .ellipse(x0, y0, x1, y1, fill, outline, width.unwrap_or(1))
             .map_err(err)
@@ -173,7 +173,7 @@ impl ImageDraw {
         let (x0, y0, x1, y1) = js_draw_box_coordinates(&xy)?;
         let fill = self
             .draw
-            .color_with_input(js_draw_color_input(&fill))
+            .resolve_draw_color_with_input(js_draw_color_input(&fill))
             .map_err(err)?;
         self.draw
             .arc(x0, y0, x1, y1, start, end, fill, width.unwrap_or(1))
@@ -191,8 +191,8 @@ impl ImageDraw {
         width: Option<u32>,
     ) -> Result<(), JsValue> {
         let (x0, y0, x1, y1) = js_draw_box_coordinates(&xy)?;
-        let fill = js_draw_optional_color(&self.draw, &fill)?;
-        let outline = js_draw_optional_color(&self.draw, &outline)?;
+        let fill = js_draw_optional_color(&mut self.draw, &fill)?;
+        let outline = js_draw_optional_color(&mut self.draw, &outline)?;
         self.draw
             .chord(
                 x0,
@@ -219,8 +219,8 @@ impl ImageDraw {
         width: Option<u32>,
     ) -> Result<(), JsValue> {
         let (x0, y0, x1, y1) = js_draw_box_coordinates(&xy)?;
-        let fill = js_draw_optional_color(&self.draw, &fill)?;
-        let outline = js_draw_optional_color(&self.draw, &outline)?;
+        let fill = js_draw_optional_color(&mut self.draw, &fill)?;
+        let outline = js_draw_optional_color(&mut self.draw, &outline)?;
         self.draw
             .pieslice(
                 x0,
@@ -246,8 +246,8 @@ impl ImageDraw {
         width: Option<u32>,
     ) -> Result<(), JsValue> {
         let center = js_draw_circle_center_input(&xy);
-        let fill = js_draw_optional_color(&self.draw, &fill)?;
-        let outline = js_draw_optional_color(&self.draw, &outline)?;
+        let fill = js_draw_optional_color(&mut self.draw, &fill)?;
+        let outline = js_draw_optional_color(&mut self.draw, &outline)?;
         self.draw
             .circle_with_input(center, radius, fill, outline, width.unwrap_or(1))
             .map_err(err)
@@ -263,8 +263,8 @@ impl ImageDraw {
         width: Option<u32>,
     ) -> Result<(), JsValue> {
         let input = js_draw_box_input(&xy);
-        let fill = js_draw_optional_color(&self.draw, &fill)?;
-        let outline = js_draw_optional_color(&self.draw, &outline)?;
+        let fill = js_draw_optional_color(&mut self.draw, &fill)?;
+        let outline = js_draw_optional_color(&mut self.draw, &outline)?;
         self.draw
             .rounded_rectangle_with_input(input, radius, fill, outline, width.unwrap_or(1))
             .map_err(err)
@@ -278,8 +278,8 @@ impl ImageDraw {
         outline: JsValue,
         width: Option<u32>,
     ) -> Result<(), JsValue> {
-        let fill = js_draw_optional_color(&self.draw, &fill)?;
-        let outline = js_draw_optional_color(&self.draw, &outline)?;
+        let fill = js_draw_optional_color(&mut self.draw, &fill)?;
+        let outline = js_draw_optional_color(&mut self.draw, &outline)?;
         self.draw
             .polygon_with_input(
                 js_draw_points_input(&points),
@@ -294,7 +294,7 @@ impl ImageDraw {
     pub fn point_with_input(&mut self, points: JsValue, fill: JsValue) -> Result<(), JsValue> {
         let fill = self
             .draw
-            .color_with_input(js_draw_color_input(&fill))
+            .resolve_draw_color_with_input(js_draw_color_input(&fill))
             .map_err(err)?;
         self.draw
             .point_with_input(js_draw_points_input(&points), fill)
@@ -308,8 +308,8 @@ impl ImageDraw {
         fill: JsValue,
         outline: JsValue,
     ) -> Result<(), JsValue> {
-        let fill = js_draw_optional_color(&self.draw, &fill)?;
-        let outline = js_draw_optional_color(&self.draw, &outline)?;
+        let fill = js_draw_optional_color(&mut self.draw, &fill)?;
+        let outline = js_draw_optional_color(&mut self.draw, &outline)?;
         self.draw
             .shape_with_input(js_draw_points_input(&points), fill, outline)
             .map_err(err)
@@ -352,8 +352,8 @@ impl ImageDraw {
             pillow_rs::RegularPolygonSides::Invalid,
             pillow_rs::RegularPolygonSides::Value,
         );
-        let fill = js_draw_optional_color(&self.draw, &fill)?;
-        let outline = js_draw_optional_color(&self.draw, &outline)?;
+        let fill = js_draw_optional_color(&mut self.draw, &fill)?;
+        let outline = js_draw_optional_color(&mut self.draw, &outline)?;
         self.draw
             .regular_polygon(circle, sides, rotation, fill, outline, width.unwrap_or(1))
             .map_err(err)

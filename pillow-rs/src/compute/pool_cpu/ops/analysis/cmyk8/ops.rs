@@ -1,5 +1,4 @@
 use crate::compute::Architecture;
-use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{
     ImplementationSupport, ModeSupport, OperationId, OutputModeRule, StrategyGuard,
     StrategySelection,
@@ -96,13 +95,46 @@ pub(crate) fn execute(
     Ok(ProjectionOutput::vector(result.axes, result.vector_blocks, result.scalar_tail))
 }
 
-/// Build CMYK axes from bounded positive writes after selecting the declared
-/// mode/architecture strategy. `None` asks the caller to use the full scan.
+/// Build CMYK axes from bounded positive writes under the prepared strategy.
+/// `None` asks the caller to use the full scan.
 pub(crate) fn execute_positive_writes(
-    context: &ExecutionContext,
+    selection: StrategySelection,
     width: u32,
     height: u32,
     ops: &[PipelineOp],
-) -> Result<Option<ProjectionOutput>, PilError> {
-    super::helpers::positive_writes::execute_in_context(context, width, height, ops)
+) -> Option<ProjectionOutput> {
+    super::helpers::positive_writes::execute_selected(selection, width, height, ops)
 }
+crate::compute::pool_cpu::ops::analysis::helpers::bbox::declare_getbbox_owner!(
+    cmyk8,
+    ImageCmyk8,
+    crate::raster::RgbaImage,
+);
+
+crate::compute::pool_cpu::ops::analysis::helpers::extrema::declare_getextrema_owner!(
+    ImageCmyk8,
+    crate::raster::RgbaImage,
+    crate::compute::pool_cpu::ops::analysis::helpers::extrema::bytes,
+);
+
+crate::compute::pool_cpu::ops::analysis::helpers::histogram_execution::declare_histogram_owner!(
+    ImageCmyk8,
+    crate::raster::RgbaImage,
+    crate::compute::pool_cpu::ops::analysis::cmyk8::default::histogram_impl::execute,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::getcolors_execution::declare_getcolors_owner!(
+    ImageCmyk8,
+    crate::raster::RgbaImage,
+    crate::compute::pool_cpu::ops::analysis::cmyk8::default::getcolors_impl::execute,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::stat_execution::declare_stat_owner!(
+    ImageCmyk8,
+    crate::raster::RgbaImage,
+    crate::compute::pool_cpu::ops::analysis::cmyk8::default::stat_impl::execute,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::extrema_bytes_execution::
+    declare_getextrema_bytes_owner!(
+    ImageCmyk8,
+    crate::raster::RgbaImage,
+    crate::compute::pool_cpu::ops::analysis::cmyk8::default::extrema_bytes_impl::execute,
+);

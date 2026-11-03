@@ -1,5 +1,19 @@
 use super::*;
 
+mod expand;
+mod pad;
+pub use expand::{
+    expand, expand_with_input, expand_with_margins, expand_with_margins_and_input,
+    expand_with_output_size_and_position, prepare_expand_fill, resolve_expand_fill_palette,
+    validate_expand_output_size, PreparedExpandFill,
+};
+pub use pad::{
+    pad, pad_fill_preflight, pad_filter_preflight, pad_geometry_preflight,
+    pad_preflight_with_input, pad_with_input, pad_with_input_and_containment,
+    pad_with_preflight, pad_with_preflight_and_fill, PadFillPreflight, PadGeometryPreflight,
+    PadPreflight,
+};
+
 type AspectDimensions = ((u32, u32), (u32, u32));
 
 fn resolve_centering(input: CenteringInput) -> Result<(f64, f64), PilError> {
@@ -22,6 +36,9 @@ fn resolve_centering(input: CenteringInput) -> Result<(f64, f64), PilError> {
         CenteringInput::Invalid => Err(PilError::TypeError(
             "cannot unpack non-iterable NoneType object".into(),
         )),
+        CenteringInput::PadPosition(_, _) => Err(PilError::TypeError(
+            "cannot unpack non-iterable pad position object".into(),
+        )),
     }
 }
 
@@ -37,45 +54,27 @@ fn normalize_fit_centering(value: f64) -> f64 {
     }
 }
 
-/// Resolve `ImageOps.pad` centering only after `contain` has determined that
-/// padding is needed.
-///
-/// Pillow indexes only the coordinate for the axis that receives padding. A
-/// one-element sequence is therefore valid when width is padded, and extra
-/// sequence values are ignored. This is deliberately separate from
-/// `ImageOps.fit`, which unpacks both coordinates before doing any work.
-fn resolve_pad_centering(
-    input: CenteringInput,
-    width_padded: bool,
-    height_padded: bool,
-) -> Result<(f64, f64), PilError> {
+fn native_geometry_color_input(
+    input: &ImageOpsColor,
+) -> Option<crate::pipeline::NativeColorInput> {
     match input {
-        CenteringInput::Default => Ok((0.5, 0.5)),
-        CenteringInput::Scalar(_) => Err(PilError::TypeError(
-            "'float' object is not subscriptable".into(),
-        )),
-        CenteringInput::Invalid => Err(PilError::TypeError(
-            "'NoneType' object is not subscriptable".into(),
-        )),
-        CenteringInput::Values(values) => {
-            let x = if width_padded {
-                values
-                    .first()
-                    .copied()
-                    .ok_or_else(|| PilError::IndexError("tuple index out of range".into()))?
-            } else {
-                0.5
-            };
-            let y = if height_padded {
-                values
-                    .get(1)
-                    .copied()
-                    .ok_or_else(|| PilError::IndexError("tuple index out of range".into()))?
-            } else {
-                0.5
-            };
-            Ok((x, y))
+        ImageOpsColor::Scalar(value) => Some(crate::pipeline::NativeColorInput::scalar(*value)),
+        ImageOpsColor::Components(values) => {
+            crate::pipeline::NativeColorInput::components(values)
         }
+        ImageOpsColor::TupleComponents(values) => {
+            crate::pipeline::NativeColorInput::components(values)
+        }
+        ImageOpsColor::FloatingScalar(value) => {
+            Some(crate::pipeline::NativeColorInput::floating_scalar(*value))
+        }
+        ImageOpsColor::FloatingComponents(values) => {
+            crate::pipeline::NativeColorInput::floating_components(values)
+        }
+        ImageOpsColor::TupleComponentsWithFallback { fallback, .. } => {
+            return native_geometry_color_input(fallback);
+        }
+        _ => None,
     }
 }
 
@@ -144,6 +143,17 @@ fn contain_dimensions(image: &Image, w: u32, h: u32) -> Result<AspectDimensions,
     Ok((source, dimensions))
 }
 
+/// Captures the output dimensions that `ImageOps.contain` computes before
+/// `Image.resize` parses the filter.
+#[doc(hidden)]
+pub fn contain_geometry_preflight(
+    image: &Image,
+    w: u32,
+    h: u32,
+) -> Result<(u32, u32), PilError> {
+    contain_dimensions(image, w, h).map(|(_, dimensions)| dimensions)
+}
+
 /// Validate the dimensions produced by `ImageOps.contain` or `ImageOps.cover`
 /// before queuing the resize. Pillow's empty-width source is the one valid
 /// zero-axis result: when its height is unchanged, the resize request equals
@@ -191,14 +201,17 @@ fn cover_dimensions(image: &Image, w: u32, h: u32) -> Result<AspectDimensions, P
     Ok((source, dimensions))
 }
 
-/// Return which axes `ImageOps.pad` will fill after its `contain` step.
-/// `None` preserves deferred error handling for zero-sized inputs, where
-/// Pillow evaluates the aspect-ratio division before it can inspect color or
-/// centering.
-fn pad_containment_axes(image: &Image, w: u32, h: u32) -> Result<Option<(bool, bool)>, PilError> {
-    let (iw, ih) = image.size()?;
-    Ok(pad_containment_dimensions(iw, ih, w, h).map(|(new_w, new_h)| (new_w != w, new_h != h)))
+/// Captures the output dimensions that `ImageOps.cover` computes before
+/// `Image.resize` parses the filter.
+#[doc(hidden)]
+pub fn cover_geometry_preflight(
+    image: &Image,
+    w: u32,
+    h: u32,
+) -> Result<(u32, u32), PilError> {
+    cover_dimensions(image, w, h).map(|(_, dimensions)| dimensions)
 }
+
 fn parse_imageops_filter(
     input: Option<ResampleInput>,
 ) -> Result<crate::pipeline::ResampleFilter, PilError> {
@@ -217,6 +230,14 @@ fn parse_imageops_filter(
     }
 }
 
+/// Parses the strict filter value accepted by Pillow ImageOps wrappers.
+#[doc(hidden)]
+pub fn parse_imageops_filter_input(
+    input: Option<ResampleInput>,
+) -> Result<crate::pipeline::ResampleFilter, PilError> {
+    parse_imageops_filter(input)
+}
+
 /// Validates the resampling argument accepted by `ImageOps.deform`.
 ///
 /// Normalize the target facade's symbolic names and validate numeric values;
@@ -224,31 +245,6 @@ fn parse_imageops_filter(
 pub fn validate_deform_resample(input: Option<ResampleInput>) -> Result<(), PilError> {
     parse_resample_input(input).map(|_| ())
 }
-/// Adds a border around an image.
-///
-/// # Errors
-///
-/// Currently returns `Ok(Image)`; deferred pipeline execution reports later
-/// materialization failures.
-pub fn expand(image: &Image, border: u32, fill: (u8, u8, u8, u8)) -> Result<Image, PilError> {
-    Ok(Image::push_op(image, PipelineOp::Expand { border, fill }))
-}
-
-/// Expands an image after resolving the fill against its native Pillow mode.
-///
-/// Keeping the host value intact until the mode is known preserves native
-/// component counts and meanings: CMYK's fourth component is K, RGBX's is X,
-/// and a three-component color receives Pillow's opaque fourth byte for both.
-pub fn expand_with_input(
-    image: &Image,
-    border: u32,
-    fill: ImageOpsColor,
-) -> Result<Image, PilError> {
-    let mode = image.mode_identity()?;
-    let fill = resolve_imageops_color(fill, mode)?.unwrap_or((0, 0, 0, 0));
-    expand(image, border, fill)
-}
-
 /// Resizes an image to fit within `(w, h)` while preserving aspect ratio.
 ///
 /// # Errors
@@ -356,19 +352,7 @@ pub fn fit_with_input(
     centering: CenteringInput,
 ) -> Result<Image, PilError> {
     let filter_was_none = filter.is_none();
-    // Pillow treats an explicit `(0.5, 0.5)` pair exactly like the omitted
-    // default, but it still preserves an explicitly supplied resampling
-    // method. Normalize the centering in core so that the default path cannot
-    // discard that method before building the pipeline operation.
-    let centering = match centering {
-        CenteringInput::Values(values)
-            if values.len() == 2 && values[0] == 0.5 && values[1] == 0.5 =>
-        {
-            CenteringInput::Default
-        }
-        centering => centering,
-    };
-    let centering = resolve_centering(centering)?;
+    let centering = resolve_fit_centering(centering)?;
     let bleed = normalize_fit_bleed(bleed);
     // ImageOps.fit performs its centering unpack and crop-ratio divisions
     // before delegating to Image.resize. In particular, a zero source height
@@ -390,6 +374,70 @@ pub fn fit_with_input(
             centering,
         },
     ))
+}
+
+/// Validates `ImageOps.fit` centering and aspect geometry before host filter
+/// coercion, matching the order in which Pillow delegates to `Image.resize`.
+#[doc(hidden)]
+pub fn fit_geometry_preflight(
+    image: &Image,
+    w: u32,
+    h: u32,
+    bleed: f64,
+    centering: CenteringInput,
+) -> Result<(f64, f64, f64, f64), PilError> {
+    let centering = resolve_fit_centering(centering)?;
+    let bleed = normalize_fit_bleed(bleed);
+    validate_fit_geometry(image, w, h, bleed)?;
+    Ok(fit_box_coordinates(image.size()?, (w, h), bleed, centering))
+}
+
+/// Computes Pillow `ImageOps.fit`'s crop box after its early geometry checks.
+///
+/// Kept outside the pixel path so the Python facade can retain this geometry
+/// while converting the filter and then resize the wrapper's current image.
+pub(crate) fn fit_box_coordinates(
+    (source_width, source_height): (u32, u32),
+    (width, height): (u32, u32),
+    bleed: f64,
+    centering: (f64, f64),
+) -> (f64, f64, f64, f64) {
+    let bleed_width = bleed * f64::from(source_width);
+    let bleed_height = bleed * f64::from(source_height);
+    let live_width = f64::from(source_width) - 2.0 * bleed_width;
+    let live_height = f64::from(source_height) - 2.0 * bleed_height;
+    let live_ratio = live_width / live_height;
+    let target_ratio = f64::from(width) / f64::from(height);
+    let (crop_width, crop_height) = if (live_ratio - target_ratio).abs() < 1e-10 {
+        (live_width, live_height)
+    } else if live_ratio >= target_ratio {
+        (target_ratio * live_height, live_height)
+    } else {
+        (live_width, live_width / target_ratio)
+    };
+    let crop_left = bleed_width + (live_width - crop_width) * centering.0;
+    let crop_top = bleed_height + (live_height - crop_height) * centering.1;
+    (
+        crop_left,
+        crop_top,
+        crop_left + crop_width,
+        crop_top + crop_height,
+    )
+}
+
+fn resolve_fit_centering(centering: CenteringInput) -> Result<(f64, f64), PilError> {
+    // Pillow treats an explicit `(0.5, 0.5)` pair like the omitted default.
+    // Keep the original filter-presence check separate so it still controls
+    // the no-filter Fit fast path below.
+    let centering = match centering {
+        CenteringInput::Values(values)
+            if values.len() == 2 && values[0] == 0.5 && values[1] == 0.5 =>
+        {
+            CenteringInput::Default
+        }
+        centering => centering,
+    };
+    resolve_centering(centering)
 }
 
 // Pillow's ImageOps.fit normalizes invalid bleed values before calculating the
@@ -459,136 +507,6 @@ fn validate_fit_resize_dimensions(
         return Err(PilError::ValueError("height and width must be > 0".into()));
     }
     Ok(())
-}
-
-/// Resizes and pads an image to exactly `(w, h)`.
-///
-/// # Errors
-///
-/// Returns [`PilError::ValueError`] when `filter` is unknown.
-pub fn pad(
-    image: &Image,
-    w: u32,
-    h: u32,
-    filter: Option<&str>,
-    color: Option<(u8, u8, u8, u8)>,
-    centering: (f64, f64),
-) -> Result<Image, PilError> {
-    let filter = parse_resample(filter)?;
-    if w > 0 && h > 0 && image.size()? == (w, h) {
-        // `ImageOps.pad` returns an independent copy when no resize or border
-        // is needed. Skip a queued Pad pass so every backend avoids the
-        // identity placement work, including callers below the Python facade.
-        return Ok(image.copy());
-    }
-    Ok(Image::push_op(
-        image,
-        PipelineOp::Pad {
-            w,
-            h,
-            filter,
-            color,
-            centering,
-        },
-    ))
-}
-
-/// `ImageOps.pad` with filter and centering validation owned by core.
-pub fn pad_with_input(
-    image: &Image,
-    w: u32,
-    h: u32,
-    filter: Option<ResampleInput>,
-    color: ImageOpsColor,
-    centering: CenteringInput,
-) -> Result<Image, PilError> {
-    pad_with_input_and_containment(image, w, h, filter, color, centering)
-        .map(|(result, _is_contained)| result)
-}
-
-/// `ImageOps.pad` plus whether the result is its metadata-preserving contain
-/// result or a newly created padded canvas.
-pub fn pad_with_input_and_containment(
-    image: &Image,
-    w: u32,
-    h: u32,
-    filter: Option<ResampleInput>,
-    color: ImageOpsColor,
-    centering: CenteringInput,
-) -> Result<(Image, bool), PilError> {
-    let filter_was_none = filter.is_none();
-    let color_was_none = matches!(&color, ImageOpsColor::None);
-    let filter = parse_imageops_filter(filter)?;
-
-    // Pillow's `pad` calls `contain` before touching either optional boundary
-    // argument. If the resized image already has the requested dimensions,
-    // malformed color/centering values are intentionally ignored.
-    let containment_axes = pad_containment_axes(image, w, h)?;
-    // Pillow evaluates ``contain`` before constructing the padded canvas. A
-    // zero-height source or destination therefore raises division by zero at
-    // the public call boundary. A zero-width destination normally reaches
-    // ``Image.new`` and raises its non-positive-dimension ValueError, except
-    // when an empty-width source keeps the same height: that contain result
-    // remains empty and can be padded. Keep these checks after
-    // ``pad_containment_axes`` so the aspect-ratio guard remains exercised by
-    // valid public zero-dimension inputs.
-    let (_, source_height) = image.size()?;
-    if source_height == 0 || h == 0 {
-        return Err(PilError::ZeroDivisionError("division by zero".into()));
-    }
-    let (source_width, _) = image.size()?;
-    if w == 0 && !(source_width == 0 && source_height == h) {
-        return Err(PilError::ValueError("height and width must be > 0".into()));
-    }
-    if let Some((new_w, new_h)) = pad_containment_dimensions(source_width, source_height, w, h) {
-        let zero_axis = new_w == 0 || new_h == 0;
-        let zero_width_source_resize = source_width == 0 && new_h == source_height;
-        if zero_axis && !zero_width_source_resize {
-            return Err(PilError::ValueError("height and width must be > 0".into()));
-        }
-    }
-    if containment_axes == Some((false, false)) {
-        if (source_width, source_height) == (w, h) {
-            // ImageOps.pad still returns an independent copy when the input
-            // already has the requested size. Match Image.copy semantics
-            // (including clearing source format metadata) without scheduling
-            // a no-op Pad pass on CPU, SIMD, or GPU.
-            return Ok((image.copy(), true));
-        }
-        return Ok((
-            Image::push_op(
-                image,
-                PipelineOp::Pad {
-                    w,
-                    h,
-                    filter,
-                    color: None,
-                    centering: (0.5, 0.5),
-                },
-            ),
-            true,
-        ));
-    }
-
-    let (width_padded, height_padded) = containment_axes.unwrap_or((true, true));
-    let centering = resolve_pad_centering(centering, width_padded, height_padded)?;
-    let color = resolve_imageops_color(color, image.mode_identity()?)?;
-    if filter_was_none && color_was_none && centering == (0.5, 0.5) {
-        return pad(image, w, h, None, color, centering).map(|result| (result, false));
-    }
-    Ok((
-        Image::push_op(
-            image,
-            PipelineOp::Pad {
-                w,
-                h,
-                filter,
-                color,
-                centering,
-            },
-        ),
-        false,
-    ))
 }
 
 /// `ImageOps.scale` with the integer/enum resampling value exposed by Pillow.

@@ -563,9 +563,9 @@ fn filter_5x5_i32_fast_path(
     kernel: &[f32; 25],
     offset: f32,
     fma: &impl F32MulAdd,
-) -> Option<Vec<u8>> {
+) -> Option<(Vec<u8>, bool)> {
     if uniform_i32_filter5x5_is_identity(raw, width, height, kernel, offset + 0.5) {
-        return Some(raw.to_vec());
+        return Some((raw.to_vec(), true));
     }
 
     let first_sample_is_bounded = raw.get(..4).is_some_and(|sample| {
@@ -583,7 +583,7 @@ fn filter_5x5_i32_fast_path(
         ) && let Some(output) =
             filter_5x5_i32_bounded_binomial_from_samples(raw, samples.as_ref(), width, height)
         {
-            return Some(output);
+            return Some((output, false));
         }
     }
 
@@ -602,7 +602,7 @@ pub(super) fn execute(
     scale: f32,
     offset: f32,
 ) -> Result<DynamicImage, PilError> {
-    execute_with_fma(img, kernel, scale, offset, &PortableF32Fma)
+    execute_with_fma(img, kernel, scale, offset, &PortableF32Fma).map(|(image, _)| image)
 }
 
 pub(super) fn execute_with_fma(
@@ -611,7 +611,7 @@ pub(super) fn execute_with_fma(
     scale: f32,
     offset: f32,
     fma: &impl F32MulAdd,
-) -> Result<DynamicImage, PilError> {
+) -> Result<(DynamicImage, bool), PilError> {
     // Exact ImageI32 variants store one little-endian i32 word per four-byte pixel.
     let (w_u32, h_u32) = (img.width(), img.height());
     let DynamicImage::ImageI32(image) = img else {
@@ -633,7 +633,7 @@ pub(super) fn execute_with_fma(
     
 
     
-    if let Some(output) = filter_5x5_i32_fast_path(
+    if let Some((output, identity)) = filter_5x5_i32_fast_path(
         raw,
         w_u32 as usize,
         h_u32 as usize,
@@ -641,7 +641,7 @@ pub(super) fn execute_with_fma(
         offset,
         fma,
     ) {
-        return filter_5x5_i32_image(w_u32, h_u32, output);
+        return filter_5x5_i32_image(w_u32, h_u32, output).map(|image| (image, identity));
     }
 
     let mut out = raw.to_vec();
@@ -662,7 +662,7 @@ pub(super) fn execute_with_fma(
         );
     }
 
-    filter_5x5_i32_image(w_u32, h_u32, out)
+    filter_5x5_i32_image(w_u32, h_u32, out).map(|image| (image, false))
 }
 
 #[cfg(test)]

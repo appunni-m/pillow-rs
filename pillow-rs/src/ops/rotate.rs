@@ -115,6 +115,24 @@ impl RotatePointInput {
     }
 }
 
+/// A parsed and validated Rotate request ready to enqueue on an image.
+///
+/// The Python adapter uses this between argument validation and dirty-palette
+/// realization so validation happens once before the source captures the new
+/// palette metadata in its output graph.
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy)]
+pub struct PreparedRotate {
+    mode: Option<Mode>,
+    angle: f64,
+    expand: bool,
+    fill: Option<(u8, u8, u8, u8)>,
+    center: Option<(f64, f64)>,
+    translate: Option<(f64, f64)>,
+    filter: ResampleFilter,
+    nearest: bool,
+}
+
 /// Validates Pillow-compatible rotate arguments and returns the effective
 /// expansion flag.
 pub fn normalize_rotate(
@@ -151,7 +169,55 @@ fn normalize_rotate_at_angle(
 }
 
 impl Image {
-    /// Applies the Pillow-compatible rotate contract before queuing rotation.
+    /// Parses and validates Rotate inputs without adding an operation.
+    #[doc(hidden)]
+    pub fn prepare_rotate_with_input(
+        &self,
+        angle: f64,
+        resample: RotateResampleInput,
+        expand: RotateExpandInput,
+        center: RotatePointInput,
+        translate: RotatePointInput,
+        fillcolor: ImageOpsColor,
+    ) -> Result<PreparedRotate, PilError> {
+        let (normalized_angle, expand, requested_filter, requested_nearest) =
+            normalize_rotate_request(angle, resample, expand)?;
+        let source_mode = self.mode_identity()?;
+        let nearest = requested_nearest
+            || matches!(source_mode, Mode::One | Mode::ImagePalette8);
+        let filter = if nearest {
+            ResampleFilter::Nearest
+        } else {
+            requested_filter
+        };
+        let fill = resolve_rotate_fill(self, source_mode, fillcolor)?;
+        let (center, translate) = resolve_rotate_points(center, translate)?;
+        Ok(PreparedRotate {
+            mode: Some(source_mode),
+            angle: normalized_angle.rem_euclid(360.0),
+            expand,
+            fill,
+            center,
+            translate,
+            filter,
+            nearest,
+        })
+    }
+
+    /// Queues a request returned by [`Self::prepare_rotate_with_input`].
+    #[doc(hidden)]
+    pub fn rotate_prepared(&self, prepared: PreparedRotate) -> Result<Image, PilError> {
+        if let Some(prepared_mode) = prepared.mode {
+            if self.mode_identity()? != prepared_mode {
+                return Err(PilError::InternalError(
+                    "prepared Rotate request belongs to a different image mode".into(),
+                ));
+            }
+        }
+        Ok(self.enqueue_rotate(prepared))
+    }
+
+    /// Applies the Pillow-compatible Rotate contract before queuing rotation.
     pub fn rotate_with_input(
         &self,
         angle: f64,
@@ -161,98 +227,47 @@ impl Image {
         translate: RotatePointInput,
         fillcolor: ImageOpsColor,
     ) -> Result<Image, PilError> {
-        let expand_requested = match &expand {
-            RotateExpandInput::Boolean(value) => *value,
-            RotateExpandInput::Integer(value) => *value != 0,
-        };
-        // Pillow calculates the expanded bounds with ``ceil``/``floor``.
-        // Python raises while converting the NaN result when a non-finite
-        // angle is used with expansion; keep the failure at rotate() rather
-        // than queueing a pipeline that later reports a zero-sized image.
-        if expand_requested && !angle.is_finite() {
-            return Err(PilError::ValueError(
-                "cannot convert float NaN to integer".into(),
-            ));
-        }
-        let normalized_angle = angle % 360.0;
-        let requested_nearest = rotate_uses_nearest(&resample);
-        let requested_filter = rotate_filter(&resample);
-        // Pillow skips resampling-name validation only for an exact multiple of
-        // 360 degrees. Route every other angle through the public normalizer;
-        // its contract is specifically the non-zero-angle path.
-        let expand = if normalized_angle % 360.0 != 0.0 {
-            normalize_rotate(resample, expand)?
-        } else {
-            normalize_rotate_at_angle(normalized_angle, resample, expand)?
-        };
-        // Pillow forces nearest-neighbour sampling for indexed images even
-        // when the caller supplies BILINEAR/BICUBIC. Treat that effective
-        // choice as part of the queued operation so the fast path and lazy
-        // geometry planner see the same contract as the native rotate call.
-        let source_mode = self.mode_identity()?;
-        let nearest = requested_nearest
-            || matches!(source_mode, Mode::One | Mode::ImagePalette8);
-        let filter = if nearest {
-            ResampleFilter::Nearest
-        } else {
-            requested_filter
-        };
-        // Pillow rotate delegates filling to transform's image constructor.
-        // Reuse its mode-aware raw sample rules, including the fourth CMYK /
-        // RGBa / RGBX byte and both bytes of typed scalar samples.
-        let fillcolor = match fillcolor {
-            ImageOpsColor::None => None,
-            color => {
-                use crate::ops::transform::TransformFill;
-                let fill = match color {
-                    ImageOpsColor::Scalar(value) => TransformFill::Scalar(value),
-                    ImageOpsColor::Components(values) => TransformFill::Components(values),
-                    ImageOpsColor::Name(name) => TransformFill::Name(name),
-                    ImageOpsColor::Invalid => TransformFill::Invalid,
-                    ImageOpsColor::None => unreachable!(),
-                };
-                let (fill, _) = self.public_transform_fill(Some(fill))?;
-                Some(if matches!(
-                    source_mode,
-                    Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8
-                ) {
-                    (fill.0, fill.0, fill.0, fill.1)
-                } else {
-                    fill
-                })
-            }
-        };
-        let center_truthy = center.is_truthy();
-        let translate_truthy = translate.is_truthy();
-        if center_truthy || translate_truthy {
-            center.validate()?;
-            translate.validate()?;
-        }
-        let center = center.into_values();
-        let translate = translate.into_values();
-        // The ordinary nearest-neighbor call has the same normalized contract
-        // as the public core method. Reuse it after Pillow-compatible validation so
-        // the Python and WASM entry points share one rotation constructor.
-        if nearest && center.is_none() && translate.is_none() {
-            return self.rotate_with_options(
-                normalized_angle,
-                expand,
-                fillcolor,
-                None,
-                None,
-                filter,
-                true,
-            );
-        }
-        self.rotate_with_options(
-            normalized_angle,
+        let prepared =
+            self.prepare_rotate_with_input(angle, resample, expand, center, translate, fillcolor)?;
+        Ok(self.enqueue_rotate(prepared))
+    }
+
+    fn enqueue_rotate(&self, prepared: PreparedRotate) -> Image {
+        Image::push_op(
+            self,
+            PipelineOp::Rotate {
+                angle: prepared.angle,
+                expand: prepared.expand,
+                fill: prepared.fill,
+                center: prepared.center,
+                translate: prepared.translate,
+                filter: prepared.filter,
+                nearest: prepared.nearest,
+            },
+        )
+    }
+
+    fn rotate_with_options(
+        &self,
+        angle: f64,
+        expand: bool,
+        fillcolor: Option<(u8, u8, u8, u8)>,
+        center: Option<(f64, f64)>,
+        translate: Option<(f64, f64)>,
+        filter: ResampleFilter,
+        nearest: bool,
+    ) -> Result<Image, PilError> {
+        let prepared = PreparedRotate {
+            mode: None,
+            angle: angle.rem_euclid(360.0),
             expand,
-            fillcolor,
+            fill: fillcolor,
             center,
             translate,
             filter,
             nearest,
-        )
+        };
+        Ok(self.enqueue_rotate(prepared))
     }
 
     /// Rotates the image by `angle` degrees.
@@ -281,33 +296,93 @@ impl Image {
             true,
         )
     }
+}
 
-    fn rotate_with_options(
-        &self,
-        angle: f64,
-        expand: bool,
-        fillcolor: Option<(u8, u8, u8, u8)>,
-        center: Option<(f64, f64)>,
-        translate: Option<(f64, f64)>,
-        filter: ResampleFilter,
-        nearest: bool,
-    ) -> Result<Image, PilError> {
-        // Python's ``angle % 360.0`` always yields a non-negative remainder.
-        // Keep the normalized angle in the queued operation so trigonometric
-        // rounding is independent of whether the caller supplied `-x` or
-        // its equivalent `360-x`.
-        let angle = angle.rem_euclid(360.0);
-        Ok(Image::push_op(
-            self,
-            PipelineOp::Rotate {
-                angle,
-                expand,
-                fill: fillcolor,
-                center,
-                translate,
-                filter,
-                nearest,
-            },
-        ))
+fn normalize_rotate_request(
+    angle: f64,
+    resample: RotateResampleInput,
+    expand: RotateExpandInput,
+) -> Result<(f64, bool, ResampleFilter, bool), PilError> {
+    let expand_requested = match &expand {
+        RotateExpandInput::Boolean(value) => *value,
+        RotateExpandInput::Integer(value) => *value != 0,
+    };
+    // Pillow calculates the expanded bounds with ``ceil``/``floor``.
+    // Python raises while converting the NaN result when a non-finite
+    // angle is used with expansion; keep the failure at rotate() rather
+    // than queueing a pipeline that later reports a zero-sized image.
+    if expand_requested && !angle.is_finite() {
+        return Err(PilError::ValueError(
+            "cannot convert float NaN to integer".into(),
+        ));
     }
+    let normalized_angle = angle % 360.0;
+    let requested_nearest = rotate_uses_nearest(&resample);
+    let requested_filter = rotate_filter(&resample);
+    // Pillow skips resampling-name validation only for an exact multiple of
+    // 360 degrees. Route every other angle through the public normalizer.
+    let expand = if normalized_angle % 360.0 != 0.0 {
+        normalize_rotate(resample, expand)?
+    } else {
+        normalize_rotate_at_angle(normalized_angle, resample, expand)?
+    };
+    Ok((normalized_angle, expand, requested_filter, requested_nearest))
+}
+
+fn resolve_rotate_fill(
+    image: &Image,
+    source_mode: Mode,
+    fillcolor: ImageOpsColor,
+) -> Result<Option<(u8, u8, u8, u8)>, PilError> {
+    match fillcolor {
+        ImageOpsColor::None => Ok(None),
+        color => {
+            use crate::ops::transform::TransformFill;
+            let fill = match color {
+                ImageOpsColor::Scalar(value) => TransformFill::Scalar(value),
+                ImageOpsColor::Components(values) => TransformFill::Components(values),
+                ImageOpsColor::TupleComponents(values) => TransformFill::Components(values),
+                ImageOpsColor::TupleNumericComponents(_) => TransformFill::Invalid,
+                ImageOpsColor::TupleComponentsWithFallback { .. } => TransformFill::Invalid,
+                ImageOpsColor::WideTupleComponents { .. } => TransformFill::Invalid,
+                ImageOpsColor::ListComponents(_)
+                | ImageOpsColor::ListNumericComponents(_)
+                | ImageOpsColor::InvalidList =>
+                {
+                    TransformFill::InvalidList
+                }
+                ImageOpsColor::FloatingScalar(value) => TransformFill::FloatingScalar(value),
+                ImageOpsColor::FloatingComponents(values) => {
+                    TransformFill::FloatingComponents(values)
+                }
+                ImageOpsColor::Name(name) => TransformFill::Name(name),
+                ImageOpsColor::Invalid => TransformFill::Invalid,
+                ImageOpsColor::None => unreachable!(),
+            };
+            let (fill, _) = image.public_transform_fill(Some(fill))?;
+            // Two-sample luma-alpha carriers read their alpha fill from byte 3.
+            Ok(Some(if matches!(
+                source_mode,
+                Mode::ImageLumaA8
+                    | Mode::ImageLaPremultiplied8
+                    | Mode::ImagePaletteAlpha8
+                    | Mode::ImageLumaA16
+            ) {
+                (fill.0, fill.0, fill.0, fill.1)
+            } else {
+                fill
+            }))
+        }
+    }
+}
+
+fn resolve_rotate_points(
+    center: RotatePointInput,
+    translate: RotatePointInput,
+) -> Result<(Option<(f64, f64)>, Option<(f64, f64)>), PilError> {
+    if center.is_truthy() || translate.is_truthy() {
+        center.validate()?;
+        translate.validate()?;
+    }
+    Ok((center.into_values(), translate.into_values()))
 }

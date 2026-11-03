@@ -5,10 +5,10 @@ use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
 use crate::compute::pool_cpu::ops::draw::TextComposeResult;
 
-pub(crate) fn apply_text(
+pub(crate) fn apply_text<const RGBA_MASK: bool>(
     input: super::super::TextComposeInput<'_>,
 ) -> Result<TextComposeResult, PilError> {
-    default::text_impl::apply(
+    default::text_impl::apply::<RGBA_MASK>(
         input.image,
         input.x,
         input.y,
@@ -16,9 +16,6 @@ pub(crate) fn apply_text(
         input.height,
         input.pixels.as_ref(),
         input.fill,
-        false,
-        input.mask_kind == crate::compute::registry::support::DrawTextMaskKind::Rgba,
-        input.blend_rgba_overlay,
     )
 }
 

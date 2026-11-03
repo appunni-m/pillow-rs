@@ -77,3 +77,36 @@ pub(crate) fn palette_indices_view<'a>(
         )),
     }
 }
+crate::compute::pool_cpu::ops::analysis::helpers::bbox::declare_getbbox_owner!(
+    palette8,
+    ImagePalette8,
+    crate::raster::GrayImage,
+);
+
+crate::compute::pool_cpu::ops::analysis::helpers::extrema::declare_getextrema_owner!(
+    ImagePalette8,
+    crate::raster::GrayImage,
+    crate::compute::pool_cpu::ops::analysis::helpers::extrema::bytes,
+);
+
+crate::compute::pool_cpu::ops::analysis::helpers::histogram_execution::declare_histogram_owner!(
+    ImagePalette8,
+    crate::raster::GrayImage,
+    crate::compute::pool_cpu::ops::analysis::palette8::default::histogram_impl::execute,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::getcolors_execution::declare_getcolors_owner!(
+    ImagePalette8,
+    crate::raster::GrayImage,
+    crate::compute::pool_cpu::ops::analysis::palette8::default::getcolors_impl::execute,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::stat_execution::declare_stat_owner!(
+    ImagePalette8,
+    crate::raster::GrayImage,
+    crate::compute::pool_cpu::ops::analysis::palette8::default::stat_impl::execute,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::extrema_bytes_execution::
+    declare_getextrema_bytes_owner!(
+    ImagePalette8,
+    crate::raster::GrayImage,
+    crate::compute::pool_cpu::ops::analysis::palette8::default::extrema_bytes_impl::execute,
+);

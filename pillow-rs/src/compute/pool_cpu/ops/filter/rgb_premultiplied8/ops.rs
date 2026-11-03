@@ -1,4 +1,4 @@
-use super::super::ops::{core_only, core_only_serial, inputs_for};
+use super::super::ops::{core_only, core_only_serial, inputs_for, pillow_kernel};
 use crate::compute::Architecture;
 use crate::compute::registry::support::{
     ImplementationSupport, ModeSupport, OperationId, OutputModeRule, StrategySelection,
@@ -38,7 +38,6 @@ static BOX_BLUR_ARCHITECTURES: [ImplementationSupport; 5] =
     );
 
 crate::compute::pool_cpu::ops::filter::helpers::native_filter3x3_architectures!(MODE, 4);
-// NO_PILLOW_SUPPORT: Pillow 12.2 Kernel is documented for L/RGB; this mode extends it.
 crate::compute::pool_cpu::ops::filter::helpers::native_filter3x3_arch_leaf!(ImageRgbPremultiplied8, RgbaImage, 4);
 crate::compute::pool_cpu::ops::filter::helpers::native_filter5x5_architectures!(MODE, 4);
 crate::compute::pool_cpu::ops::filter::helpers::native_filter5x5_arch_leaf!(ImageRgbPremultiplied8, RgbaImage, 4);
@@ -46,12 +45,8 @@ crate::compute::pool_cpu::ops::filter::helpers::native_filter5x5_arch_leaf!(Imag
 
 pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId) -> ModeSupport {
     match operation {
-        // NO_PILLOW_SUPPORT: Pillow 12.2 Kernel is documented for L and RGB only;
-        // this native mode strategy extends that contract.
-        OperationId::Filter3x3 => core_only(OperationId::Filter3x3, MODE, FILTER3X3_ARCHITECTURES),
-        // NO_PILLOW_SUPPORT: Pillow 12.2 Kernel is documented for L and RGB only;
-        // this native mode strategy extends that contract.
-        OperationId::Filter5x5 => core_only(OperationId::Filter5x5, MODE, FILTER5X5_ARCHITECTURES),
+        OperationId::Filter3x3 => pillow_kernel(OperationId::Filter3x3, MODE, FILTER3X3_ARCHITECTURES),
+        OperationId::Filter5x5 => pillow_kernel(OperationId::Filter5x5, MODE, FILTER5X5_ARCHITECTURES),
         OperationId::GaussianBlur => ModeSupport::cpu(
             OperationId::GaussianBlur,
             MODE,

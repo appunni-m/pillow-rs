@@ -404,19 +404,42 @@ fn gather_rgb_3x3(
     values: &mut [u8x16; 9],
 ) {
     for (row_index, row_start) in rows.into_iter().enumerate() {
-        let mut columns = [[0u8; LANES]; 3];
-        for lane in 0..active {
-            let source_x = x + lane;
-            let center = source_x * 3 + channel;
-            columns[0][lane] = raw[row_start + source_x.saturating_sub(1) * 3 + channel];
-            columns[1][lane] = raw[row_start + center];
-            columns[2][lane] =
-                raw[row_start + source_x.saturating_add(1).min(width - 1) * 3 + channel];
-        }
-        for (column_index, column) in columns.into_iter().enumerate() {
-            values[row_index * 3 + column_index] = u8x16::new(column);
-        }
+        values[row_index * 3..row_index * 3 + 3].copy_from_slice(&gather_rgb_row_columns(
+            raw, row_start, width, channel, x, active,
+        ));
     }
+}
+
+/// Gather all three RGB columns in one lane walk, as in the archived SIMD
+/// kernel, so the clamped source coordinate is calculated once per pixel.
+#[inline(always)]
+fn gather_rgb_row_columns(
+    raw: &[u8],
+    row_start: usize,
+    width: usize,
+    channel: usize,
+    x: usize,
+    active: usize,
+) -> [u8x16; 3] {
+    let mut left = [0u8; LANES];
+    let mut center = [0u8; LANES];
+    let mut right = [0u8; LANES];
+    for (lane, ((left_value, center_value), right_value)) in left
+        .iter_mut()
+        .zip(center.iter_mut())
+        .zip(right.iter_mut())
+        .enumerate()
+        .take(active)
+    {
+        let source_x = x + lane;
+        let center_offset = source_x * 3 + channel;
+        let left_offset = source_x.saturating_sub(1) * 3 + channel;
+        let right_offset = source_x.saturating_add(1).min(width - 1) * 3 + channel;
+        *left_value = raw[row_start + left_offset];
+        *center_value = raw[row_start + center_offset];
+        *right_value = raw[row_start + right_offset];
+    }
+    [u8x16::new(left), u8x16::new(center), u8x16::new(right)]
 }
 
 #[inline(always)]

@@ -9,22 +9,28 @@ use crate::compute::pool_cpu::ops::paste::helpers::{
 use crate::error::PilError;
 use crate::raster::Mode;
 
-pub(crate) fn supports(plan: &BytePlan<'_>) -> bool {
+pub(crate) fn supports<I>(plan: &BytePlan<'_, I>) -> bool
+where
+    I: std::ops::Deref<Target = crate::raster::DynamicImage>,
+{
     plan.source.mode() == Mode::ImageRgba8
-        && plan.source_layout == SourceLayout::FourBytesToRgb
+        && plan.source_layout == SourceLayout::PhysicalFourBytesToRgb
         && !plan.broadcast_source
         && plan.mask.is_none()
 }
 
-pub(crate) fn execute(plan: &BytePlan<'_>) -> Result<Vec<u8>, PilError> {
-    let mut output = plan.destination.to_vec();
+pub(crate) fn execute<I>(plan: &BytePlan<'_, I>) -> Result<Vec<u8>, PilError>
+where
+    I: std::ops::Deref<Target = crate::raster::DynamicImage>,
+{
+    let mut output = plan.initialize_destination()?;
     if plan.region.is_empty() {
         crate::compute::record_pipeline_operation_path("vector");
         return Ok(output);
     }
     let source_stride = checked_stride(plan.source_size.0, 4)?;
     let destination_stride = checked_stride(plan.destination_size.0, 3)?;
-    let source = plan.source.as_bytes();
+    let source = plan.source_bytes();
 
     for row in 0..plan.region.height {
         let source_y = plan

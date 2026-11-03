@@ -8,8 +8,8 @@ use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 
 // TODO(pillow-rs#brg0): Add exact F32 NaN and mixed signed-zero parity cases
-// for each rank operation and architecture. The content guard routes these
-// inputs through Default; architecture parity remains unverified.
+// for each rank operation and architecture. Default mirrors Pillow's serial
+// partition comparisons; the content guard keeps these samples off vector paths.
 const MODE: Mode = Mode::ImageF32;
 pub(in crate::compute::pool_cpu::ops::filter) const MAX_RANK_WINDOW: u32 =
     super::helpers::MAX_RANK_WINDOW;
@@ -17,7 +17,7 @@ pub(in crate::compute::pool_cpu::ops::filter) const MAX_RANK_WINDOW: u32 =
 pub(in crate::compute::pool_cpu::ops::filter) fn rank_compatibility(
     raw: &[u8],
 ) -> F32RankCompatibility {
-    if super::helpers::requires_default_comparator_sort(raw) {
+    if super::helpers::requires_default_comparator(raw) {
         F32RankCompatibility::DefaultComparator
     } else {
         F32RankCompatibility::VectorOrdering

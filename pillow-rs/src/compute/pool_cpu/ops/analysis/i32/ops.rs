@@ -37,3 +37,58 @@ pub(crate) fn scalar_samples(
         architecture => Err(helpers::missing_architecture(Mode::ImageI32, architecture)),
     }
 }
+crate::compute::pool_cpu::ops::analysis::helpers::bbox::declare_getbbox_owner!(
+    i32,
+    ImageI32,
+    crate::raster::RgbaImage,
+);
+
+crate::compute::pool_cpu::ops::analysis::helpers::extrema::declare_getextrema_owner!(
+    ImageI32,
+    crate::raster::RgbaImage,
+    crate::compute::pool_cpu::ops::analysis::helpers::extrema::i32_scalar,
+);
+
+crate::compute::pool_cpu::ops::analysis::helpers::histogram_execution::declare_histogram_owner!(
+    ImageI32,
+    crate::raster::RgbaImage,
+    crate::compute::pool_cpu::ops::analysis::i32::default::histogram_impl::execute,
+);
+
+pub(crate) fn execute_histogram_with_extrema(
+    image: &RgbaImage,
+    selection: StrategySelection,
+    mask_raw: Option<&[u8]>,
+    minimum: i32,
+    maximum: i32,
+) -> Result<Vec<u32>, PilError> {
+    match crate::compute::pool_cpu::ops::analysis::helpers::histogram_execution::
+        selected_histogram_architecture(selection, Mode::ImageI32)?
+    {
+        Architecture::Default => super::default::histogram_impl::execute_with_extrema(
+            image, mask_raw, minimum, maximum,
+        ),
+        architecture => Err(PilError::InternalError(format!(
+            "Histogram has no {:?} {architecture:?} strategy",
+            Mode::ImageI32,
+        ))),
+    }
+}
+
+crate::compute::pool_cpu::ops::analysis::helpers::getcolors_execution::declare_getcolors_owner!(
+    ImageI32,
+    crate::raster::RgbaImage,
+    crate::compute::pool_cpu::ops::analysis::i32::default::getcolors_impl::execute,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::stat_execution::declare_stat_owner!(
+    ImageI32,
+    crate::raster::RgbaImage,
+    crate::compute::pool_cpu::ops::analysis::i32::default::stat_impl::execute,
+);
+// NO_PILLOW_SUPPORT: the Rust/JS byte-valued extrema API exposes a compatibility projection.
+crate::compute::pool_cpu::ops::analysis::helpers::extrema_bytes_execution::
+    declare_getextrema_bytes_owner!(
+    ImageI32,
+    crate::raster::RgbaImage,
+    crate::compute::pool_cpu::ops::analysis::i32::default::extrema_bytes_impl::execute,
+);

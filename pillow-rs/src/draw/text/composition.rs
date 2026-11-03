@@ -23,6 +23,9 @@ impl Draw {
             {
                 self.replace_paletted_text_output(image)
             }
+            TextComposeResult::Updated(image) if mode == Mode::ImagePaletteAlpha8 => {
+                self.replace_palette_alpha_output(image)
+            }
             TextComposeResult::Updated(image) => {
                 self.image = Image::from_dynamic(image);
                 Ok(())

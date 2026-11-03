@@ -305,6 +305,7 @@ fn gpu_f_resize_dyadic_collect_plan(
             PipelineOp::PutData {
                 data,
                 payload_mode: Mode::ImageF32,
+                ..
             } => {
                 let expected = CheckedDims::new(dimensions.0, dimensions.1, 4)
                     .ok()

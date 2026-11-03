@@ -3,8 +3,8 @@ use std::borrow::Cow;
 use super::grayscale::cmyk_muldiv255_byte;
 use crate::raster::{DynamicImage, Mode, RgbImage};
 
-#[cfg(feature = "parallel")]
-const CMYK_TO_RGB_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
+// TODO(pillow-rs#3ptb): if parallel scheduling is retained, move it into the
+// separate `pool_parallel` backend after CPU source closure.
 
 /// Maps an RGB buffer to Pillow's default CMYK inverse: C=255-R, M=255-G,
 /// Y=255-B, K=0.
@@ -85,21 +85,6 @@ pub fn cmyk_to_rgb(img: &DynamicImage) -> DynamicImage {
     };
     let mut out = RgbImage::new(w, h);
     if w == 0 || h == 0 {
-        return DynamicImage::ImageRgb8(out);
-    }
-    #[cfg(feature = "parallel")]
-    if w as usize * h as usize >= CMYK_TO_RGB_PARALLEL_PIXEL_THRESHOLD {
-        let source_stride = w as usize * 4;
-        let output_stride = w as usize * 3;
-        crate::par_rows_mut!(
-            out.as_mut(),
-            output_stride,
-            h as usize,
-            |_row_start, _row_end, y, row| {
-                let source_start = y as usize * source_stride;
-                cmyk_to_rgb_row(&cmyk[source_start..source_start + source_stride], row);
-            }
-        );
         return DynamicImage::ImageRgb8(out);
     }
     cmyk_to_rgb_rows(&cmyk, &mut out);

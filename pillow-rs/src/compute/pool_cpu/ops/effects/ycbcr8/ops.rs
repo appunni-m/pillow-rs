@@ -82,9 +82,36 @@ pub(crate) fn prepare_spread<'a>(
     let selection = strategy::select(SPREAD_SUPPORT, facts, ctx)?;
     let implementation = match selection.implementation.architecture {
         Architecture::Default => SpreadImplementation::Default(spread_impl::prepare(input, distance)),
-        Architecture::Sse2 => SpreadImplementation::Sse2(sse2_spread::prepare(input.as_raw(), input.width(), input.height(), 3, distance)),
-        Architecture::Neon => SpreadImplementation::Neon(neon_spread::prepare(input.as_raw(), input.width(), input.height(), 3, distance)),
-        Architecture::WasmSimd128 => SpreadImplementation::WasmSimd128(wasm_spread::prepare(input.as_raw(), input.width(), input.height(), 3, distance)),
+        Architecture::Sse2 => SpreadImplementation::Sse2(
+            sse2_spread::prepare_with_hidden_lanes(
+                input.as_raw(),
+                input.width(),
+                input.height(),
+                3,
+                distance,
+                input.hidden_pixel_lanes(),
+            ),
+        ),
+        Architecture::Neon => SpreadImplementation::Neon(
+            neon_spread::prepare_with_hidden_lanes(
+                input.as_raw(),
+                input.width(),
+                input.height(),
+                3,
+                distance,
+                input.hidden_pixel_lanes(),
+            ),
+        ),
+        Architecture::WasmSimd128 => SpreadImplementation::WasmSimd128(
+            wasm_spread::prepare_with_hidden_lanes(
+                input.as_raw(),
+                input.width(),
+                input.height(),
+                3,
+                distance,
+                input.hidden_pixel_lanes(),
+            ),
+        ),
         architecture => return Err(PilError::InternalError(format!(
             "unexpected {architecture:?} architecture selected for EffectSpread mode ImageYCbCr8"
         ))),
@@ -94,8 +121,20 @@ pub(crate) fn prepare_spread<'a>(
 
 
 fn from_spread_vector(output: spread_vector::Output) -> Result<Input, PilError> {
-    Input::from_raw(output.width, output.height, output.bytes)
-        .ok_or_else(|| PilError::InternalError("EffectSpread vector output shape mismatch".into()))
+    let spread_vector::Output {
+        width,
+        height,
+        bytes,
+        hidden_lanes,
+    } = output;
+    let mut image = Input::from_raw(width, height, bytes)
+        .ok_or_else(|| PilError::InternalError("EffectSpread vector output shape mismatch".into()))?;
+    if !image.replace_hidden_pixel_lanes(hidden_lanes) {
+        return Err(PilError::InternalError(
+            "EffectSpread vector hidden lane extent mismatch".into(),
+        ));
+    }
+    Ok(image)
 }
 
 pub(crate) fn execute_spread(plan: SpreadStrategy<'_>) -> Result<DynamicImage, PilError> {

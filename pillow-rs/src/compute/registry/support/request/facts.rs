@@ -1,6 +1,6 @@
 //! Typed materialized facts supplied to operation support declarations.
 
-use crate::pipeline::{ResampleFilter, TransposeMethod};
+use crate::pipeline::{ExpandMargins, ResampleFilter, TransposeMethod};
 use crate::raster::Mode;
 use super::{ModeChannelCapacity, PaletteKnowledge};
 
@@ -73,6 +73,19 @@ pub enum RequestFacts {
         /// Escape iteration quality.
         quality: i32,
     },
+    /// Exact typed input facts for a public Quantize request.
+    Quantize {
+        /// Exact source identity from the DynamicImage variant.
+        source_mode: Mode,
+        /// Requested number of palette entries.
+        colors: u32,
+        /// Requested quantizer method.
+        method: u32,
+        /// Optional k-means iterations; absent for caller-supplied palettes.
+        kmeans: Option<i64>,
+        /// Exact palette image identity, when the caller supplied one.
+        palette_mode: Option<Mode>,
+    },
     /// Expanded byte lookup table supplied to the exact-mode Eval operation.
     EvalLut {
         /// Number of table entries across all native bands.
@@ -98,6 +111,8 @@ pub enum RequestFacts {
         height: u32,
         /// Filter selected by the public image wrapper.
         filter: ResampleFilter,
+        /// Optional reduction gap, represented by exact IEEE-754 bits.
+        reducing_gap_bits: Option<u64>,
     },
     /// Contain's requested target and filter, before its aspect-ratio sizing.
     Contain {
@@ -351,6 +366,15 @@ pub enum RequestFacts {
         /// Secondary raster identity and dimensions.
         other: SecondaryInputFacts,
     },
+    /// AlphaComposite's secondary raster and ignored wrapper offsets.
+    AlphaComposite {
+        /// Materialized source identity and dimensions.
+        source: SecondaryInputFacts,
+        /// Destination offset retained for architecture eligibility.
+        destination_offset: (i32, i32),
+        /// Source offset retained for architecture eligibility.
+        source_offset: (i32, i32),
+    },
     /// Exact source, optional mask, and region facts for a Paste request.
     Paste {
         /// Source raster identity and dimensions after public normalization.
@@ -408,8 +432,8 @@ pub enum RequestFacts {
     },
     /// Border width used by native-mode ImageOps.expand.
     Expand {
-        /// Pixels added at each edge.
-        border: u32,
+        /// Independent left, top, right, and bottom margins.
+        border: ExpandMargins,
     },
 }
 
@@ -437,12 +461,12 @@ pub enum PixelWriteRunFacts {
     Ineligible,
 }
 
-/// F32 rank sample properties used to preserve the serial comparator's result.
+/// F32 rank sample properties used to preserve Pillow's serial selection result.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum F32RankCompatibility {
-    /// No NaNs or mixed signs of zero are present.
+    /// The samples admit the vector's total-order selection.
     VectorOrdering,
-    /// The Default comparator sort must preserve output sample selection.
+    /// Use Default's Pillow-compatible comparison/partition order.
     DefaultComparator,
 }
 
@@ -530,13 +554,22 @@ impl StrategyInputs {
 
     /// Supplies final dimensions and filter to the exact Thumbnail contract.
     #[must_use]
-    pub const fn with_thumbnail(
+    pub fn with_thumbnail(
         mut self,
         width: u32,
         height: u32,
         filter: ResampleFilter,
+        reducing_gap: Option<f64>,
     ) -> Self {
-        self.request = RequestFacts::Thumbnail { width, height, filter };
+        self.request = RequestFacts::Thumbnail {
+            width,
+            height,
+            filter,
+            reducing_gap_bits: match reducing_gap {
+                Some(gap) => Some(gap.to_bits()),
+                None => None,
+            },
+        };
         self
     }
 
@@ -788,9 +821,9 @@ impl StrategyInputs {
         self
     }
 
-    /// Supplies the border used by the exact-mode ImageOps.expand strategy.
+    /// Supplies the margins used by the exact-mode ImageOps.expand strategy.
     #[must_use]
-    pub const fn with_expand_border(mut self, border: u32) -> Self {
+    pub const fn with_expand_border(mut self, border: ExpandMargins) -> Self {
         self.request = RequestFacts::Expand { border };
         self
     }
@@ -853,6 +886,22 @@ impl StrategyInputs {
     #[must_use]
     pub const fn with_same_mode_secondary_image(mut self, other: SecondaryInputFacts) -> Self {
         self.request = RequestFacts::SameModeSecondaryImage { other };
+        self
+    }
+
+    /// Supplies AlphaComposite's exact source and wrapper offsets to strategy guards.
+    #[must_use]
+    pub const fn with_alpha_composite(
+        mut self,
+        source: SecondaryInputFacts,
+        destination_offset: (i32, i32),
+        source_offset: (i32, i32),
+    ) -> Self {
+        self.request = RequestFacts::AlphaComposite {
+            source,
+            destination_offset,
+            source_offset,
+        };
         self
     }
 

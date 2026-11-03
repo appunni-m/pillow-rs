@@ -1,7 +1,5 @@
 //! Pillow-compatible open-addressed color-count table.
 
-use crate::raster::{DynamicImage, GenericImageView};
-
 use super::super::FormattedPixelValue;
 
 /// Pillow's `ImagingGetColors` hash-table sizes and associated probing
@@ -38,7 +36,7 @@ const PILLOW_COLOR_TABLE_SIZES: &[(u32, u32)] = &[
     (1073741824, 83),
 ];
 
-pub(in crate::image) fn pillow_color_table_parameters(maxcolors: u32) -> Option<(u32, u32)> {
+pub(crate) fn pillow_color_table_parameters(maxcolors: u32) -> Option<(u32, u32)> {
     PILLOW_COLOR_TABLE_SIZES
         .iter()
         .find(|(size, _)| *size > maxcolors)
@@ -47,7 +45,7 @@ pub(in crate::image) fn pillow_color_table_parameters(maxcolors: u32) -> Option<
 
 pub(in crate::image) const PILLOW_COLOR_DIRECT_TABLE_MAX_BYTES: usize = 8 * 1024 * 1024;
 
-pub(in crate::image) fn pillow_color_direct_table_slots(
+pub(crate) fn pillow_color_direct_table_slots(
     code_mask: u32,
     pixel_count: usize,
 ) -> Option<usize> {
@@ -61,25 +59,13 @@ pub(in crate::image) fn pillow_color_direct_table_slots(
         .then_some(slots)
 }
 
-pub(in crate::image) fn pillow_image_pixel_count(image: &DynamicImage) -> usize {
-    let (width, height) = image.dimensions();
-    usize::try_from(width)
-        .ok()
-        .and_then(|width| {
-            usize::try_from(height)
-                .ok()
-                .and_then(|height| width.checked_mul(height))
-        })
-        .unwrap_or(0)
-}
-
-pub(in crate::image) enum PillowColorCounts {
+pub(crate) enum PillowColorCounts {
     Direct(Vec<u64>),
     Sparse(std::collections::HashMap<u32, (u32, u32)>),
 }
 
 impl PillowColorCounts {
-    pub(in crate::image) fn new(
+    pub(crate) fn new(
         code_mask: u32,
         sparse_capacity: usize,
         pixel_count: usize,
@@ -101,7 +87,7 @@ impl PillowColorCounts {
         Self::Sparse(std::collections::HashMap::with_capacity(sparse_capacity))
     }
 
-    pub(in crate::image) fn count(
+    pub(crate) fn count(
         &mut self,
         colors: &mut usize,
         pixel: u32,
@@ -129,7 +115,7 @@ impl PillowColorCounts {
         }
     }
 
-    pub(in crate::image) fn count_repeated(
+    pub(crate) fn count_repeated(
         &mut self,
         colors: &mut usize,
         pixel: u32,
@@ -164,7 +150,7 @@ impl PillowColorCounts {
         }
     }
 
-    pub(in crate::image) fn into_slot_order(
+    pub(crate) fn into_slot_order(
         self,
         distinct_colors: usize,
     ) -> Vec<(u32, (u32, u32))> {
@@ -284,7 +270,7 @@ fn count_pillow_color_sparse(
 /// Count scalar pixels after the prefix check has ruled out adjacent runs.
 /// Match the storage representation once instead of redispatching through the
 /// enum for every sample.
-pub(in crate::image) fn count_pillow_color_scalar_samples(
+pub(crate) fn count_pillow_color_scalar_samples(
     counts: &mut PillowColorCounts,
     colors: &mut usize,
     bytes: &[u8],
@@ -424,7 +410,7 @@ fn count_pillow_color_sparse_repeated(
     }
 }
 
-pub(in crate::image) fn pillow_color_components(pixel: u32, bands: usize) -> FormattedPixelValue {
+pub(crate) fn pillow_color_components(pixel: u32, bands: usize) -> FormattedPixelValue {
     let bytes = pixel.to_ne_bytes();
     match bands {
         // Pillow's four-byte LA storage places alpha in the final byte.
@@ -441,7 +427,7 @@ pub(in crate::image) fn pillow_color_components(pixel: u32, bands: usize) -> For
     }
 }
 
-pub(in crate::image) fn pillow_color_pixel(components: &[u8]) -> u32 {
+pub(crate) fn pillow_color_pixel(components: &[u8]) -> u32 {
     let mut bytes = [0u8; 4];
     match components {
         [luma, alpha] => {

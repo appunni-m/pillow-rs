@@ -1,5 +1,6 @@
 //! Native-byte Brightness kernel shared by exact mode architecture strategies.
 
+use super::native;
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::raster::{ImageBuffer, Pixel};
@@ -49,7 +50,8 @@ pub(crate) fn execute(
             "Brightness vector input did not match its admitted layout".into(),
         ));
     }
-    if factor == 1.0 {
+    let alpha = factor as f32;
+    if alpha == 1.0 {
         crate::compute::record_pipeline_operation_path("native-copy");
         return Ok(source.to_vec());
     }
@@ -58,12 +60,11 @@ pub(crate) fn execute(
     let (active, inactive) = active_masks(usize::from(channels), usize::from(active_channels));
     let active = u8x16::new(active);
     let inactive = u8x16::new(inactive);
-    let factor_fp = (factor * 1000.0) as u32;
     let shift = if right_shift_factors {
-        match factor_fp {
-            500 => Some(1),
-            250 => Some(2),
-            125 => Some(3),
+        match alpha {
+            0.5 => Some(1),
+            0.25 => Some(2),
+            0.125 => Some(3),
             _ => None,
         }
     } else {
@@ -72,7 +73,7 @@ pub(crate) fn execute(
     if let Some(shift) = shift {
         apply(source, &mut output, active, inactive, |input| input >> shift);
     } else {
-        let tables = lut_tables(factor_fp);
+        let tables = lut_tables(alpha);
         apply(source, &mut output, active, inactive, |input| {
             lut_chunk(input, &tables)
         });
@@ -124,11 +125,11 @@ fn apply<F>(
     }
 }
 
-fn lut_tables(factor_fp: u32) -> [u8x16; 16] {
+fn lut_tables(alpha: f32) -> [u8x16; 16] {
     std::array::from_fn(|table| {
         u8x16::new(std::array::from_fn(|lane| {
-            let value = (table * 16 + lane) as u64;
-            ((value * u64::from(factor_fp) / 1000).min(255)) as u8
+            let value = (table * 16 + lane) as u8;
+            native::blend_u8(0, value, alpha)
         }))
     })
 }

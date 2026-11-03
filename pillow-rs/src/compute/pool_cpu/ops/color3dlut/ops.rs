@@ -6,10 +6,12 @@
 //! Source comparison with the archived CPU/SIMD adapters is complete. The
 //! public Image method enters this plan through the registry as its CPU
 //! execution entry point.
+//! Pillow's three-channel LUT copies the fourth physical byte through when the
+//! target is RGB; Default and architecture paths preserve it on compact output.
 
 use crate::compute::{ExecutionContext, registry::support::{
     InputContract, ModeChannelCapacity, ModeSupport, OperationId, OperationInputs,
-    OperationSupport, RejectionKind,
+    OperationSupport, OutputModeRule, RejectionKind,
 }};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
@@ -70,7 +72,8 @@ pub(crate) static SUPPORT: OperationSupport = OperationSupport::new(
     OperationId::Color3DLut,
     &TARGET_INPUTS,
     classify_mode,
-);
+)
+.with_rejected_output(OutputModeRule::ByTargetMode);
 
 pub(crate) fn prepare<'a>(
     image: &'a DynamicImage,

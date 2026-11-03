@@ -6,7 +6,19 @@
 //! treating the family as source-reviewed. Byte-backed exact modes declare
 //! native-byte nearest strategies; byte modes also declare their archived
 //! bilinear kernel where supported. Three-byte modes retain the contiguous-run
-//! copy fast path. Each mode's Default strategy remains its same-mode fallback.
+//! copy fast path. Empty-source requests use each exact mode's Default path;
+//! every mode's Default strategy is also its architecture fallback.
+//! Exact identity and discrete 90/180/270-degree paths remap retained physical
+//! lanes with their pixels. Affine nearest samples retained lanes from the
+//! selected Default/vector nearest geometry; filtered LA-family output repeats
+//! luma into the omitted bytes, while filtered RGB-family output preserves the
+//! configured physical padding fill. Runtime lane parity remains pending.
+//! TODO(pillow-rs#3ptb): a future I;16* Architecture strategy must sample
+//! typed u16 values with Pillow's floating Geometry.c affine and exact fill
+//! semantics. Do not port the archived raw-byte SIMD nearest kernel: its signed
+//! 16.16 stepping and byte-plane sampling are not equivalent. Keep these four
+//! exact modes Default-only with same-mode fallback until such a strategy is
+//! implemented and parity-verified.
 //! Core-only mode support is marked `NO_PILLOW_SUPPORT` beside its
 //! implementation.
 
@@ -72,8 +84,14 @@ pub(crate) const ROTATE_INPUTS: &[InputContract] = &[InputContract::Rotate];
 
 macro_rules! declare_rotate_modes {
     ($($mode:ident => $module:ident),+ $(,)?) => {
-        pub(crate) enum PreparedRotate<'a> {
+        enum RotateStrategy<'a> {
             $($mode(super::$module::ops::Strategy<'a>),)+
+        }
+
+        pub(crate) struct PreparedRotate<'a> {
+            image: &'a DynamicImage,
+            request: RotateRequest,
+            strategy: RotateStrategy<'a>,
         }
 
         fn classify_mode(mode: Mode) -> ModeSupport {
@@ -84,20 +102,26 @@ macro_rules! declare_rotate_modes {
             image: &'a DynamicImage,
             request: RotateRequest,
             context: &ExecutionContext,
-        ) -> Result<PreparedRotate<'a>, PilError> {
+        ) -> Result<RotateStrategy<'a>, PilError> {
             match image {
                 $(DynamicImage::$mode(input) => super::$module::ops::prepare(input, request, context)
-                    .map(PreparedRotate::$mode),)+
+                    .map(RotateStrategy::$mode),)+
             }
         }
 
         impl PreparedRotate<'_> {
             pub(crate) fn selection(&self) -> &StrategySelection {
-                match self { $(Self::$mode(plan) => plan.selection(),)+ }
+                match &self.strategy { $(RotateStrategy::$mode(plan) => plan.selection(),)+ }
             }
 
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
-                match self { $(Self::$mode(plan) => super::$module::ops::execute(plan),)+ }
+                let architecture = self.selection().implementation.architecture;
+                let Self { image, request, strategy } = self;
+                let mut output = match strategy {
+                    $(RotateStrategy::$mode(plan) => super::$module::ops::execute(plan),)+
+                }?;
+                super::helpers::hidden_lanes::finish(image, &mut output, request, architecture)?;
+                Ok(output)
             }
         }
     };
@@ -155,7 +179,12 @@ pub(crate) fn prepare<'a>(
     request: RotateRequest,
     context: &ExecutionContext,
 ) -> Result<PreparedRotate<'a>, PilError> {
-    prepare_mode(image, request, context)
+    let strategy = prepare_mode(image, request, context)?;
+    Ok(PreparedRotate {
+        image,
+        request,
+        strategy,
+    })
 }
 
 pub(crate) fn execute(

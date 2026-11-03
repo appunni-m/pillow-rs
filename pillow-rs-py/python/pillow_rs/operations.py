@@ -132,5 +132,6 @@ def thumbnail(
     image: Image,
     size: Tuple[int, int],
     resample: Union[int, str] = Resampling.BICUBIC,
+    reducing_gap=2.0,
 ) -> None:
-    image.thumbnail(size, resample)
+    image.thumbnail(size, resample, reducing_gap)

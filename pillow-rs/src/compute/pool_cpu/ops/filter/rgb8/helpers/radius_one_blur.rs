@@ -194,7 +194,15 @@ fn vertical_radius_one_pass(
         for x in (0..row_stride).step_by(LANES) {
             let count = (row_stride - x).min(LANES);
             let load = |base: usize| {
-                u32x16::from(u16x16::from(load_padded_u8x16(source, base + x, count)))
+                if count == LANES {
+                    u32x16::from(u16x16::from(load_u8x16(source, base + x)))
+                } else {
+                    u32x16::from(u16x16::from(load_padded_u8x16(
+                        source,
+                        base + x,
+                        count,
+                    )))
+                }
             };
             let sum = load(sum_top) + load(sum_middle) + load(sum_bottom);
             let edges = if fractional_weight == 0 {
@@ -302,10 +310,15 @@ fn box_blur_radius_one_rows(
     let scalar_bytes = row_stride.saturating_sub(blocks_per_row * LANES);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_bytes.saturating_mul(height) as u64);
 
+    let whole_weight = BLUR_SCALE / 3;
+    if height == 1 {
+        horizontal_radius_one_row(source, destination, width, whole_weight, 0);
+        return Ok(());
+    }
+
     let ring_height = dimensions.height.min(3);
     let ring_dimensions = CheckedDims::new(dimensions.width, ring_height, 3)?;
     let mut ring = ring_dimensions.alloc_buffer();
-    let whole_weight = BLUR_SCALE / 3;
     let whole_weight_vector = u32x16::splat(whole_weight);
     let fractional_weight_vector = u32x16::splat(0);
     let horizontal_rounding_bias = u32x16::splat(BLUR_BIAS);
@@ -353,7 +366,11 @@ fn box_blur_radius_one_rows(
         for x in (0..row_stride).step_by(LANES) {
             let count = (row_stride - x).min(LANES);
             let load = |start: usize| {
-                u16x16::from(load_padded_u8x16(&ring, start + x, count))
+                if count == LANES {
+                    u16x16::from(load_u8x16(&ring, start + x))
+                } else {
+                    u16x16::from(load_padded_u8x16(&ring, start + x, count))
+                }
             };
             let sum = u32x16::from(
                 load(top_start) + load(center_start) + load(bottom_start),
@@ -413,6 +430,19 @@ pub(super) fn execute_box_blur_radius_one(
         return Err(PilError::InternalError(
             "RGB BoxBlur strategy received invalid native dimensions".into(),
         ));
+    }
+    if super::super::super::helpers::native_small_uniform_bytes(
+        input.as_raw(),
+        dimensions.width,
+        dimensions.height,
+        3,
+        super::super::super::helpers::SMALL_UNIFORM_BYTE_MAX_PIXELS,
+    ) {
+        return super::super::super::helpers::copy_native_byte_blur_input(
+            image,
+            crate::raster::Mode::ImageRgb8,
+            3,
+        );
     }
     let mut output = vec![0u8; dimensions.total_bytes()];
     box_blur_radius_one_rows(input.as_raw(), &mut output, dimensions)?;

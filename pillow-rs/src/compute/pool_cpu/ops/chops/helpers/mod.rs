@@ -2,7 +2,7 @@
 
 pub(crate) mod binary;
 pub(crate) mod fusion;
-pub(crate) mod output;
+pub(crate) mod offset;
 pub(crate) mod strategy;
 pub(crate) mod unary;
 pub(crate) mod vector;

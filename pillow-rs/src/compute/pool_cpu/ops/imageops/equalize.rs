@@ -103,7 +103,7 @@ impl PreparedEqualize<'_> {
 
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         use super::helpers::strategy::NativeByteArchitecture as Architecture;
-        match (self.source, self.architecture) {
+        let mut output = match (self.source, self.architecture) {
             (Source::Luma(input), Architecture::Default) => {
                 super::luma8::default::equalize_impl::execute(input, &self.lut)
             }
@@ -140,7 +140,9 @@ impl PreparedEqualize<'_> {
             (Source::Palette(input), Architecture::WasmSimd128) => {
                 super::palette8::wasm_simd128::equalize_impl::execute(&input, &self.lut)
             }
-        }
+        }?;
+        super::helpers::hidden_lanes::initialize_point_output_lanes(&mut output)?;
+        Ok(output)
     }
 }
 

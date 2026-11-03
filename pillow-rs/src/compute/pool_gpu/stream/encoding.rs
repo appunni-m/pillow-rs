@@ -501,7 +501,14 @@ fn encode_relocation_stage(
         PipelineOp::Flip => (1, 0, 0, (0, 0, 0, 0)),
         PipelineOp::Crop { left, top, .. } => (7, *left, *top, (0, 0, 0, 0)),
         PipelineOp::CropBorder { border } => (7, *border, *border, (0, 0, 0, 0)),
-        PipelineOp::Expand { border, fill } => (8, *border, *border, *fill),
+        PipelineOp::Expand { border, fill } => {
+            let Some(border) = border.uniform_nonnegative() else {
+                return Err(PilError::InternalError(
+                    "GPU relocation received asymmetric or negative Expand margins".into(),
+                ));
+            };
+            (8, border, border, *fill)
+        }
         _ => {
             return Err(PilError::InternalError(
                 "unrecognized native relocation".into(),

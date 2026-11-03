@@ -99,66 +99,6 @@ fn blend_u16_samples<const CHANNELS: usize>(
     }
 }
 
-pub(super) fn execute_i32(
-    source: &DynamicImage,
-    destination: &DynamicImage,
-    mask: Samples<'_>,
-) -> Result<DynamicImage, PilError> {
-    let source_dims =
-        CheckedDims::new_allow_empty(source.width(), source.height(), 4)?;
-    let destination_dims =
-        CheckedDims::new_allow_empty(destination.width(), destination.height(), 4)?;
-    let source_bytes = source.as_bytes();
-    let destination_bytes = destination.as_bytes();
-    if source_bytes.len() != source_dims.total_bytes()
-        || destination_bytes.len() != destination_dims.total_bytes()
-        || mask.len() != source_dims.total_bytes() / 4
-    {
-        return Err(PilError::InternalError(
-            "Composite i32 storage does not match its dimensions".into(),
-        ));
-    }
-    let mut output = destination_bytes.to_vec();
-    blend_i32_samples(
-        source_bytes,
-        &mut output,
-        mask,
-        source.width() as usize,
-        destination.width() as usize,
-        source.width().min(destination.width()) as usize,
-        source.height().min(destination.height()) as usize,
-    );
-    super::output::i32_image(destination.width(), destination.height(), output)
-}
-
-fn blend_i32_samples(
-    source: &[u8],
-    destination: &mut [u8],
-    mask: Samples<'_>,
-    source_width: usize,
-    destination_width: usize,
-    overlap_width: usize,
-    overlap_height: usize,
-) {
-    for y in 0..overlap_height {
-        for x in 0..overlap_width {
-            let source_pixel = y * source_width + x;
-            let destination_pixel = y * destination_width + x;
-            let source_index = source_pixel * 4;
-            let destination_index = destination_pixel * 4;
-            let alpha = i64::from(mask.get(source_pixel));
-            let inverse = 255 - alpha;
-            let source_sample = read_i32(source, source_index);
-            let destination_sample = read_i32(destination, destination_index);
-            let blended = (i64::from(source_sample) * alpha
-                + i64::from(destination_sample) * inverse)
-                / 255;
-            destination[destination_index..destination_index + 4]
-                .copy_from_slice(&(blended as i32).to_ne_bytes());
-        }
-    }
-}
-
 pub(super) fn execute_f32(
     source: &DynamicImage,
     destination: &DynamicImage,
@@ -240,15 +180,6 @@ fn blend_f32_samples(
 
 fn read_u16(bytes: &[u8], index: usize) -> u16 {
     u16::from_ne_bytes([bytes[index], bytes[index + 1]])
-}
-
-fn read_i32(bytes: &[u8], index: usize) -> i32 {
-    i32::from_ne_bytes([
-        bytes[index],
-        bytes[index + 1],
-        bytes[index + 2],
-        bytes[index + 3],
-    ])
 }
 
 fn read_f32(bytes: &[u8], index: usize) -> f32 {

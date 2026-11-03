@@ -9,9 +9,17 @@ pub(crate) fn pad<P>(image: &ImageBuffer<P, Vec<u16>>, frame: PadFrame) -> Resul
 where
     P: Pixel<Subpixel = u16>,
 {
-    let fill = match frame.color {
-        Some(color) => [color.0 as u16, color.3 as u16, color.0 as u16, color.0 as u16],
-        None => [0, 0, 0, 0],
+    let fill = match frame.native_color {
+        Some(input) => [
+            input.component(0, 0) as u16,
+            input.component(1, 0) as u16,
+            0,
+            0,
+        ],
+        None => match frame.color {
+            Some(color) => [color.0 as u16, color.3 as u16, color.0 as u16, color.0 as u16],
+            None => [0; 4],
+        },
     };
     samples::pad(image, frame, fill)
 }

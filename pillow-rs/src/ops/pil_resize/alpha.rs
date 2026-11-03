@@ -67,7 +67,6 @@ pub(super) fn premultiply_channel(value: u8, alpha: u8) -> u8 {
     ((value as u16 * alpha as u16 + 127) / 255) as u8
 }
 
-#[cfg(any(not(feature = "parallel"), test))]
 pub(super) fn premultiply_alpha_row(source: &[u8], channels: usize, output: &mut [u8]) {
     debug_assert!(matches!(channels, 2 | 4));
     debug_assert_eq!(source.len(), output.len());

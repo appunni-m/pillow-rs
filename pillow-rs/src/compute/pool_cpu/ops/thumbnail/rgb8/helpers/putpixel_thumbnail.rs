@@ -24,7 +24,7 @@ pub(crate) fn prepare(
             "RGB thumbnail fusion source changed after admission".into(),
         ));
     };
-    let PipelineOp::Thumbnail { w, h, filter } = thumbnail else {
+    let PipelineOp::Thumbnail { w, h, filter, .. } = thumbnail else {
         return Err(PilError::InternalError(
             "RGB thumbnail fusion operation changed after admission".into(),
         ));
@@ -57,6 +57,17 @@ pub(crate) fn prepare(
     );
     let reduced = RgbImage::from_raw(reduced_width, reduced_height, reduced_bytes)
         .ok_or_else(|| PilError::InternalError("RGB reduction buffer shape mismatch".into()))?;
+    let mut reduced = DynamicImage::ImageRgb8(reduced);
+    crate::compute::pool_cpu::ops::reduce::helpers::hidden_lanes::finish(
+        image,
+        &mut reduced,
+        (2, 2),
+    )?;
+    let DynamicImage::ImageRgb8(reduced) = reduced else {
+        return Err(PilError::InternalError(
+            "RGB thumbnail reduction changed its mode".into(),
+        ));
+    };
     Ok(ReducedRgbThumbnail {
         image: reduced,
         source_dimensions: (source_width, source_height),

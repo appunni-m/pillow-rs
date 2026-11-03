@@ -3,10 +3,21 @@
 //! TODO(pillow-rs#3ptb): add ModeFilter mode, palette, and backend-fallback
 //! parity cases; include the RGBA radius-seven small-shape architecture
 //! fallback; cover the exact-binomial I32 AVX/FMA route and ineligible-request
-//! Default fallback; add parity cases for ModeFilter(P), UnsharpMask(P),
+//! Default fallback; freeze non-finite/out-of-i32-range I16 and non-finite I32
+//! kernel cast behavior; add parity cases for ModeFilter(P), UnsharpMask(P),
 //! GaussianBlur(PA), non-rank F32 rejection, Kernel mode-before-parameter
-//! errors, and Python mode validation before `_apply`. Keep Rayon out of this
-//! serial owner.
+//! errors, and verify Python load, filter-protocol, and mode-preflight ordering
+//! around `_apply`. Freeze size-3-or-larger rank-filter empty-image behavior
+//! as a safe empty result; Pillow 12.2 reaches an edge read in `ImagingExpand`.
+//! Compact mode lanes follow Pillow's physical-byte rules: Filter.c copies the
+//! border and zeros omitted lanes in its interior, BoxBlur filters all four
+//! bytes, and UnsharpMask applies the same blend to the filtered lanes. Native
+//! rank and ModeFilter extensions process omitted bytes independently.
+//! TODO(pillow-rs#3ptb): freeze these physical-lane cases in CPU parity.
+//! Keep Rayon out of this serial owner.
+//!
+//! NO_PILLOW_SUPPORT: rank filters keep zero-sized rasters empty for windows
+//! of size three or larger; Pillow 12.2's expansion path reaches an edge read.
 
 use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{
@@ -16,7 +27,7 @@ use crate::compute::registry::support::{
 };
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
-use crate::raster::{DynamicImage, Mode};
+use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, Mode, RgbImage, RgbaImage};
 
 const NO_INPUTS: &[crate::compute::registry::support::InputContract] = &[];
 const FILTER3X3_INPUTS: &[InputContract] = &[InputContract::Filter3x3Parameters];
@@ -25,7 +36,7 @@ const GAUSSIAN_BLUR_INPUTS: &[InputContract] = &[InputContract::GaussianBlurSigm
 const BOX_BLUR_INPUTS: &[InputContract] = &[InputContract::BoxBlurParameters];
 const UNSHARP_INPUTS: &[InputContract] = &[InputContract::UnsharpMaskParameters];
 const PALETTE_MODE: &str = "cannot filter palette images";
-const INTERNAL_MODE: &str = "CPU filter does not support this internal raster mode";
+pub(super) const INTERNAL_MODE: &str = "CPU filter does not support this internal raster mode";
 const WRONG_UNSHARP_MODE: &str = "image has wrong mode";
 const RANK_WINDOW: &[InputContract] = &[InputContract::OddRankWindow {
     rank_required: false,
@@ -51,9 +62,6 @@ pub(super) const fn inputs_for(operation: OperationId) -> &'static [InputContrac
 
 fn core_only_reason(operation: OperationId) -> &'static str {
     match operation {
-        OperationId::Filter3x3 | OperationId::Filter5x5 => {
-            "native per-mode kernel filtering extends Pillow's documented L/RGB contract"
-        }
         OperationId::GaussianBlur | OperationId::BoxBlur => {
             "native per-mode blur extends Pillow's supported uint8 mode set"
         }
@@ -62,6 +70,9 @@ fn core_only_reason(operation: OperationId) -> &'static str {
         | OperationId::MinFilter
         | OperationId::RankFilter => {
             "native per-channel rank filtering extends Pillow's scalar mode contract"
+        }
+        OperationId::ModeFilter => {
+            "native per-channel byte filtering extends Pillow's single-band ModeFilter contract"
         }
         _ => "native filter mode extension",
     }
@@ -84,6 +95,21 @@ pub(super) fn core_only(
 
 pub(super) fn core_only_serial(operation: OperationId, mode: Mode) -> ModeSupport {
     core_only(operation, mode, &[])
+}
+
+/// Declares a native Filter3x3 or Filter5x5 strategy implemented by Pillow.
+pub(super) fn pillow_kernel(
+    operation: OperationId,
+    mode: Mode,
+    architectures: &'static [ImplementationSupport],
+) -> ModeSupport {
+    ModeSupport::cpu(
+        operation,
+        mode,
+        OutputModeRule::Preserve,
+        inputs_for(operation),
+        architectures,
+    )
 }
 
 fn rejected(mode: Mode, reason: &'static str) -> ModeSupport {
@@ -115,11 +141,11 @@ fn support_for_mode(operation: OperationId, mode: Mode) -> ModeSupport {
         Mode::ImageHsv8 => super::hsv8::ops::support(operation),
         Mode::ImageI32 => super::i32::ops::support(operation),
         Mode::ImageF32 => super::f32::ops::support(operation),
-        Mode::ImageI16
-        | Mode::ImageI16L
-        | Mode::ImageI16B
-        | Mode::ImageI16N
-        | Mode::ImageLumaA16
+        Mode::ImageI16 => super::i16::ops::support(operation),
+        Mode::ImageI16L => super::i16l::ops::support(operation),
+        Mode::ImageI16B => super::i16b::ops::support(operation),
+        Mode::ImageI16N => super::i16n::ops::support(operation),
+        Mode::ImageLumaA16
         | Mode::ImageRgb16
         | Mode::ImageRgba16
         | Mode::ImageRgb32F
@@ -129,11 +155,13 @@ fn support_for_mode(operation: OperationId, mode: Mode) -> ModeSupport {
 
 fn mode_filter_support_for_mode(mode: Mode) -> ModeSupport {
     match mode {
-        Mode::One
-        | Mode::ImageLuma8
-        | Mode::ImageLumaA8
+        Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => {
+            ModeSupport::serial(OperationId::ModeFilter, mode, MODE_FILTER_INPUTS)
+        }
+        // NO_PILLOW_SUPPORT: Pillow C ModeFilter only accepts one-band uint8;
+        // the core extension applies its established algorithm per native band.
+        Mode::ImageLumaA8
         | Mode::ImageLaPremultiplied8
-        | Mode::ImagePalette8
         | Mode::ImagePaletteAlpha8
         | Mode::ImageRgb8
         | Mode::ImageRgba8
@@ -142,9 +170,14 @@ fn mode_filter_support_for_mode(mode: Mode) -> ModeSupport {
         | Mode::ImageCmyk8
         | Mode::ImageYCbCr8
         | Mode::ImageLab8
-        | Mode::ImageHsv8 => {
-            ModeSupport::serial(OperationId::ModeFilter, mode, MODE_FILTER_INPUTS)
-        }
+        | Mode::ImageHsv8 => ModeSupport::cpu_core_only(
+            OperationId::ModeFilter,
+            mode,
+            OutputModeRule::Preserve,
+            MODE_FILTER_INPUTS,
+            &[],
+            "native per-channel byte filtering extends Pillow's single-band ModeFilter contract",
+        ),
         Mode::ImageI32
         | Mode::ImageF32
         | Mode::ImageI16
@@ -160,6 +193,8 @@ fn mode_filter_support_for_mode(mode: Mode) -> ModeSupport {
 }
 
 fn unsharp_support_for_mode(mode: Mode) -> ModeSupport {
+    // Pillow 12.2 UnsharpMask delegates to ImagingGaussianBlur, whose admitted
+    // uint8 identities are L, LA, La, RGB, RGBA, RGBa, RGBX, and CMYK.
     match mode {
         Mode::ImageRgb8 => super::rgb8::ops::unsharp_mask_support(),
         Mode::ImageLuma8
@@ -284,12 +319,20 @@ impl PreparedUnsharpMask<'_> {
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let Self { original, blur, blend } = self;
         let mut blurred = blur.execute()?;
-        let Some(blurred_bytes) = blurred.as_bytes_mut() else {
-            return Err(PilError::InternalError(
-                "UnsharpMask Gaussian blur has no mutable native byte storage".into(),
-            ));
-        };
-        blend.execute(original.as_bytes(), blurred_bytes)?;
+        {
+            let Some(blurred_bytes) = blurred.as_bytes_mut() else {
+                return Err(PilError::InternalError(
+                    "UnsharpMask Gaussian blur has no mutable native byte storage".into(),
+                ));
+            };
+            blend.execute(original.as_bytes(), blurred_bytes)?;
+        }
+        super::helpers::hidden_lanes::finish_unsharp(
+            original,
+            &mut blurred,
+            blend.percent,
+            blend.threshold,
+        )?;
         Ok(blurred)
     }
 }
@@ -297,9 +340,141 @@ impl PreparedUnsharpMask<'_> {
 /// Prepared direct ModeFilter with its exact mode contract and serial selection.
 pub(crate) struct PreparedModeFilter<'a> {
     image: &'a DynamicImage,
-    mode: Mode,
+    strategy: ModeFilterStrategy<'a>,
     size: u32,
     selection: StrategySelection,
+}
+
+enum ModeFilterStrategy<'a> {
+    One(&'a GrayImage),
+    Luma8(&'a GrayImage),
+    // NO_PILLOW_SUPPORT: Pillow C ModeFilter rejects two-band rasters.
+    LumaA8(&'a GrayAlphaImage),
+    // NO_PILLOW_SUPPORT: Pillow C ModeFilter rejects two-band rasters.
+    LaPremultiplied8(&'a GrayAlphaImage),
+    Palette8(&'a GrayImage),
+    // NO_PILLOW_SUPPORT: Pillow C ModeFilter rejects two-band rasters.
+    PaletteAlpha8(&'a GrayAlphaImage),
+    // NO_PILLOW_SUPPORT: Pillow C ModeFilter rejects three-band rasters.
+    Rgb8(&'a RgbImage),
+    // NO_PILLOW_SUPPORT: Pillow C ModeFilter rejects four-band rasters.
+    Rgba8(&'a RgbaImage),
+    // NO_PILLOW_SUPPORT: Pillow C ModeFilter rejects four-band rasters.
+    RgbPremultiplied8(&'a RgbaImage),
+    // NO_PILLOW_SUPPORT: Pillow C ModeFilter rejects four-band rasters.
+    Rgbx8(&'a RgbaImage),
+    // NO_PILLOW_SUPPORT: Pillow C ModeFilter rejects four-band rasters.
+    Cmyk8(&'a RgbaImage),
+    // NO_PILLOW_SUPPORT: Pillow C ModeFilter rejects three-band rasters.
+    Ycbcr8(&'a RgbImage),
+    // NO_PILLOW_SUPPORT: Pillow C ModeFilter rejects three-band rasters.
+    Lab8(&'a RgbImage),
+    // NO_PILLOW_SUPPORT: Pillow C ModeFilter rejects three-band rasters.
+    Hsv8(&'a RgbImage),
+}
+
+impl<'a> ModeFilterStrategy<'a> {
+    fn for_image(image: &'a DynamicImage) -> (Mode, Option<Self>) {
+        match image {
+            DynamicImage::One(image) => (Mode::One, Some(ModeFilterStrategy::One(image))),
+            DynamicImage::ImageLuma8(image) => {
+                (Mode::ImageLuma8, Some(ModeFilterStrategy::Luma8(image)))
+            }
+            DynamicImage::ImageLumaA8(image) => {
+                (Mode::ImageLumaA8, Some(ModeFilterStrategy::LumaA8(image)))
+            }
+            DynamicImage::ImageLaPremultiplied8(image) => (
+                Mode::ImageLaPremultiplied8,
+                Some(ModeFilterStrategy::LaPremultiplied8(image)),
+            ),
+            DynamicImage::ImagePalette8(image) => {
+                (Mode::ImagePalette8, Some(ModeFilterStrategy::Palette8(image)))
+            }
+            DynamicImage::ImagePaletteAlpha8(image) => (
+                Mode::ImagePaletteAlpha8,
+                Some(ModeFilterStrategy::PaletteAlpha8(image)),
+            ),
+            DynamicImage::ImageRgb8(image) => {
+                (Mode::ImageRgb8, Some(ModeFilterStrategy::Rgb8(image)))
+            }
+            DynamicImage::ImageRgba8(image) => {
+                (Mode::ImageRgba8, Some(ModeFilterStrategy::Rgba8(image)))
+            }
+            DynamicImage::ImageRgbPremultiplied8(image) => (
+                Mode::ImageRgbPremultiplied8,
+                Some(ModeFilterStrategy::RgbPremultiplied8(image)),
+            ),
+            DynamicImage::ImageRgbx8(image) => {
+                (Mode::ImageRgbx8, Some(ModeFilterStrategy::Rgbx8(image)))
+            }
+            DynamicImage::ImageCmyk8(image) => {
+                (Mode::ImageCmyk8, Some(ModeFilterStrategy::Cmyk8(image)))
+            }
+            DynamicImage::ImageYCbCr8(image) => {
+                (Mode::ImageYCbCr8, Some(ModeFilterStrategy::Ycbcr8(image)))
+            }
+            DynamicImage::ImageLab8(image) => {
+                (Mode::ImageLab8, Some(ModeFilterStrategy::Lab8(image)))
+            }
+            DynamicImage::ImageHsv8(image) => {
+                (Mode::ImageHsv8, Some(ModeFilterStrategy::Hsv8(image)))
+            }
+            DynamicImage::ImageI32(_) => (Mode::ImageI32, None),
+            DynamicImage::ImageF32(_) => (Mode::ImageF32, None),
+            DynamicImage::ImageI16(_) => (Mode::ImageI16, None),
+            DynamicImage::ImageI16L(_) => (Mode::ImageI16L, None),
+            DynamicImage::ImageI16B(_) => (Mode::ImageI16B, None),
+            DynamicImage::ImageI16N(_) => (Mode::ImageI16N, None),
+            DynamicImage::ImageLumaA16(_) => (Mode::ImageLumaA16, None),
+            DynamicImage::ImageRgb16(_) => (Mode::ImageRgb16, None),
+            DynamicImage::ImageRgba16(_) => (Mode::ImageRgba16, None),
+            DynamicImage::ImageRgb32F(_) => (Mode::ImageRgb32F, None),
+            DynamicImage::ImageRgba32F(_) => (Mode::ImageRgba32F, None),
+        }
+    }
+
+    fn execute(self, size: u32) -> Result<DynamicImage, PilError> {
+        use super::helpers::mode_filter;
+        match self {
+            Self::One(image) => mode_filter::execute::<_, 1>(image, size).map(DynamicImage::One),
+            Self::Luma8(image) => {
+                mode_filter::execute::<_, 1>(image, size).map(DynamicImage::ImageLuma8)
+            }
+            Self::LumaA8(image) => {
+                mode_filter::execute::<_, 2>(image, size).map(DynamicImage::ImageLumaA8)
+            }
+            Self::LaPremultiplied8(image) => mode_filter::execute::<_, 2>(image, size)
+                .map(DynamicImage::ImageLaPremultiplied8),
+            Self::Palette8(image) => {
+                mode_filter::execute::<_, 1>(image, size).map(DynamicImage::ImagePalette8)
+            }
+            Self::PaletteAlpha8(image) => mode_filter::execute::<_, 2>(image, size)
+                .map(DynamicImage::ImagePaletteAlpha8),
+            Self::Rgb8(image) => {
+                mode_filter::execute::<_, 3>(image, size).map(DynamicImage::ImageRgb8)
+            }
+            Self::Rgba8(image) => {
+                mode_filter::execute::<_, 4>(image, size).map(DynamicImage::ImageRgba8)
+            }
+            Self::RgbPremultiplied8(image) => mode_filter::execute::<_, 4>(image, size)
+                .map(DynamicImage::ImageRgbPremultiplied8),
+            Self::Rgbx8(image) => {
+                mode_filter::execute::<_, 4>(image, size).map(DynamicImage::ImageRgbx8)
+            }
+            Self::Cmyk8(image) => {
+                mode_filter::execute::<_, 4>(image, size).map(DynamicImage::ImageCmyk8)
+            }
+            Self::Ycbcr8(image) => {
+                mode_filter::execute::<_, 3>(image, size).map(DynamicImage::ImageYCbCr8)
+            }
+            Self::Lab8(image) => {
+                mode_filter::execute::<_, 3>(image, size).map(DynamicImage::ImageLab8)
+            }
+            Self::Hsv8(image) => {
+                mode_filter::execute::<_, 3>(image, size).map(DynamicImage::ImageHsv8)
+            }
+        }
+    }
 }
 
 impl PreparedModeFilter<'_> {
@@ -308,7 +483,9 @@ impl PreparedModeFilter<'_> {
     }
 
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
-        super::helpers::execute_mode_filter(self.image, self.mode, self.size)
+        let mut output = self.strategy.execute(self.size)?;
+        super::helpers::hidden_lanes::finish_mode_filter(self.image, &mut output, self.size)?;
+        Ok(output)
     }
 }
 
@@ -318,8 +495,8 @@ pub(crate) fn prepare_mode_filter<'a>(
     size: u32,
     context: &ExecutionContext,
 ) -> Result<PreparedModeFilter<'a>, PilError> {
+    let (mode, strategy) = ModeFilterStrategy::for_image(image);
     let inputs = OperationInputs { image, palette: PaletteInput::default() };
-    let mode = inputs.mode();
     let facts = inputs.facts().with_filter_window(size, None);
     let selection = match MODE_FILTER_SUPPORT.for_mode(mode).assess(context, facts)? {
         SupportAssessment::Ready(selection) => selection,
@@ -330,7 +507,10 @@ pub(crate) fn prepare_mode_filter<'a>(
             ));
         }
     };
-    Ok(PreparedModeFilter { image, mode, size, selection })
+    let strategy = strategy.ok_or_else(|| {
+        PilError::InternalError("accepted ModeFilter mode has no typed strategy".into())
+    })?;
+    Ok(PreparedModeFilter { image, strategy, size, selection })
 }
 
 /// Select the direct UnsharpMask blend from its declared exact-mode strategy.
@@ -440,7 +620,8 @@ impl PreparedFilter<'_> {
         let request = self.request;
         let selection = &self.selection;
         let context = self.context;
-        if selection.implementation.architecture != crate::compute::Architecture::Default
+        let output = if selection.implementation.architecture
+            != crate::compute::Architecture::Default
             && matches!(
                 request,
                 FilterRequest::GaussianBlur { .. }
@@ -448,34 +629,44 @@ impl PreparedFilter<'_> {
                     | FilterRequest::BoxBlurXY { .. }
             )
         {
-            return execute_architecture_blur(image, self.mode, request, selection, &context);
-        }
-        match self.mode {
-            Mode::One => super::one::ops::execute(image, request, selection),
-            Mode::ImageLuma8 => super::luma8::ops::execute(image, request, selection),
-            Mode::ImageLumaA8 => super::luma_a8::ops::execute(image, request, selection),
-            Mode::ImageLaPremultiplied8 => {
-                super::la_premultiplied8::ops::execute(image, request, selection)
+            execute_architecture_blur(image, self.mode, request, selection, &context)
+        } else {
+            match self.mode {
+                Mode::One => super::one::ops::execute(image, request, selection),
+                Mode::ImageLuma8 => super::luma8::ops::execute(image, request, selection),
+                Mode::ImageLumaA8 => super::luma_a8::ops::execute(image, request, selection),
+                Mode::ImageLaPremultiplied8 => {
+                    super::la_premultiplied8::ops::execute(image, request, selection)
+                }
+                Mode::ImagePaletteAlpha8 => {
+                    super::palette_alpha8::ops::execute(image, request, selection)
+                }
+                Mode::ImageRgb8 => super::rgb8::ops::execute(image, request, selection),
+                Mode::ImageRgba8 => {
+                    super::rgba8::ops::execute(image, request, selection, &context)
+                }
+                Mode::ImageRgbPremultiplied8 => {
+                    super::rgb_premultiplied8::ops::execute(image, request, selection)
+                }
+                Mode::ImageRgbx8 => super::rgbx8::ops::execute(image, request, selection),
+                Mode::ImageCmyk8 => super::cmyk8::ops::execute(image, request, selection),
+                Mode::ImageYCbCr8 => super::ycbcr8::ops::execute(image, request, selection),
+                Mode::ImageLab8 => super::lab8::ops::execute(image, request, selection),
+                Mode::ImageHsv8 => super::hsv8::ops::execute(image, request, selection),
+                Mode::ImageI32 => super::i32::ops::execute(image, request, selection),
+                Mode::ImageF32 => super::f32::ops::execute(image, request, selection),
+                Mode::ImageI16 => super::i16::ops::execute(image, request, selection),
+                Mode::ImageI16L => super::i16l::ops::execute(image, request, selection),
+                Mode::ImageI16B => super::i16b::ops::execute(image, request, selection),
+                Mode::ImageI16N => super::i16n::ops::execute(image, request, selection),
+                _ => Err(PilError::InternalError(
+                    "rejected raster mode reached prepared filter execution".into(),
+                )),
             }
-            Mode::ImagePaletteAlpha8 => {
-                super::palette_alpha8::ops::execute(image, request, selection)
-            }
-            Mode::ImageRgb8 => super::rgb8::ops::execute(image, request, selection),
-            Mode::ImageRgba8 => super::rgba8::ops::execute(image, request, selection, &context),
-            Mode::ImageRgbPremultiplied8 => {
-                super::rgb_premultiplied8::ops::execute(image, request, selection)
-            }
-            Mode::ImageRgbx8 => super::rgbx8::ops::execute(image, request, selection),
-            Mode::ImageCmyk8 => super::cmyk8::ops::execute(image, request, selection),
-            Mode::ImageYCbCr8 => super::ycbcr8::ops::execute(image, request, selection),
-            Mode::ImageLab8 => super::lab8::ops::execute(image, request, selection),
-            Mode::ImageHsv8 => super::hsv8::ops::execute(image, request, selection),
-            Mode::ImageI32 => super::i32::ops::execute(image, request, selection),
-            Mode::ImageF32 => super::f32::ops::execute(image, request, selection),
-            _ => Err(PilError::InternalError(
-                "rejected raster mode reached prepared filter execution".into(),
-            )),
-        }
+        }?;
+        let mut output = output;
+        super::helpers::hidden_lanes::finish(image, &mut output, request)?;
+        Ok(output)
     }
 }
 

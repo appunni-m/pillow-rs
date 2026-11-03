@@ -11,9 +11,22 @@ pub(super) fn alpha_composite_vector_guard(
     if channels != 2 && channels != 4 {
         return GuardAssessment::Ineligible;
     }
-    if !((input.width as usize)
-        .checked_mul(input.height as usize)
-        .is_some_and(|pixels| pixels >= 8))
+    let (destination_offset, source_offset) = match input.request {
+        RequestFacts::AlphaComposite {
+            destination_offset,
+            source_offset,
+            ..
+        } => (destination_offset, source_offset),
+        RequestFacts::Unspecified => return GuardAssessment::Deferred,
+        _ => return GuardAssessment::Ineligible,
+    };
+    if destination_offset != (0, 0) || source_offset != (0, 0) {
+        return GuardAssessment::Ineligible;
+    }
+    if !input
+        .width
+        .checked_mul(input.height)
+        .is_some_and(|pixels| pixels == 0 || pixels >= 8)
     {
         return GuardAssessment::Ineligible;
     }
@@ -28,8 +41,8 @@ pub(super) fn paste_l_mask_neon_guard(
 ) -> GuardAssessment {
     let exact_channels = match mode {
         Mode::ImageLuma8 => 1,
-        Mode::ImageLumaA8 => 2,
-        Mode::ImageRgb8 => 3,
+        Mode::ImageLumaA8 | Mode::ImagePaletteAlpha8 => 2,
+        Mode::ImageRgb8 | Mode::ImageHsv8 => 3,
         Mode::ImageRgba8 | Mode::ImageCmyk8 => 4,
         _ => return GuardAssessment::Ineligible,
     };
@@ -131,11 +144,9 @@ pub(super) fn merge_native_interleave_guard(
     target_mode: Mode,
     channels: u8,
 ) -> GuardAssessment {
-    let minimum_pixels = match channels {
-        2 => 8,
-        3 | 4 => 4,
-        _ => return GuardAssessment::Ineligible,
-    };
+    if !(2..=4).contains(&channels) {
+        return GuardAssessment::Ineligible;
+    }
     let RequestFacts::MergeBands {
         target_mode: requested_mode,
         band_count,
@@ -161,9 +172,6 @@ pub(super) fn merge_native_interleave_guard(
     let Some(pixels) = (input.width as usize).checked_mul(input.height as usize) else {
         return GuardAssessment::Ineligible;
     };
-    if pixels < minimum_pixels {
-        return GuardAssessment::Ineligible;
-    }
     match input.byte_len {
         None => GuardAssessment::Deferred,
         Some(length) if length == pixels => GuardAssessment::Satisfied,
@@ -270,6 +278,77 @@ pub(super) fn composite_native_byte_vector_guard(
     }
 }
 
+pub(super) fn composite_l_mask_neon_guard(
+    input: StrategyInputs,
+    mode: Mode,
+    channels: u8,
+    minimum_clipped_width: u32,
+) -> GuardAssessment {
+    let exact_channels = match mode {
+        Mode::ImageLuma8 => 1,
+        Mode::ImageLumaA8 | Mode::ImagePaletteAlpha8 => 2,
+        Mode::ImageRgb8 | Mode::ImageHsv8 => 3,
+        Mode::ImageRgba8 | Mode::ImageCmyk8 => 4,
+        _ => return GuardAssessment::Ineligible,
+    };
+    if channels != exact_channels {
+        return GuardAssessment::Ineligible;
+    }
+    let RequestFacts::CompositeInputs {
+        source_mode,
+        destination,
+        mask,
+        mask_alpha,
+    } = input.request
+    else {
+        return if input.request == RequestFacts::Unspecified {
+            GuardAssessment::Deferred
+        } else {
+            GuardAssessment::Ineligible
+        };
+    };
+    if source_mode != mode
+        || destination.mode != mode
+        || mask.mode != Mode::ImageLuma8
+        || mask_alpha
+        || (mask.width, mask.height) != (input.width, input.height)
+    {
+        return GuardAssessment::Ineligible;
+    }
+    // Composite overlays image1 at (0, 0); image2 is the output canvas and can
+    // have different dimensions, so the NEON row threshold uses the overlap.
+    let clipped_width = input.width.min(destination.width);
+    let clipped_height = input.height.min(destination.height);
+    if clipped_width < minimum_clipped_width || clipped_height == 0 {
+        return GuardAssessment::Ineligible;
+    }
+    let Some(source_pixels) = (input.width as usize).checked_mul(input.height as usize) else {
+        return GuardAssessment::Ineligible;
+    };
+    let Some(destination_pixels) =
+        (destination.width as usize).checked_mul(destination.height as usize)
+    else {
+        return GuardAssessment::Ineligible;
+    };
+    let Some(source_bytes) = source_pixels.checked_mul(usize::from(channels)) else {
+        return GuardAssessment::Ineligible;
+    };
+    let Some(destination_bytes) = destination_pixels.checked_mul(usize::from(channels)) else {
+        return GuardAssessment::Ineligible;
+    };
+    match (input.byte_len, destination.byte_len, mask.byte_len) {
+        (Some(source), Some(destination), Some(mask))
+            if source == source_bytes
+                && destination == destination_bytes
+                && mask == source_pixels =>
+        {
+            GuardAssessment::Satisfied
+        }
+        (None, _, _) | (_, None, _) | (_, _, None) => GuardAssessment::Deferred,
+        _ => GuardAssessment::Ineligible,
+    }
+}
+
 pub(super) fn put_alpha_bytes_guard(
     input: StrategyInputs,
     channels: u8,
@@ -318,7 +397,10 @@ pub(super) fn effect_spread_bytes_guard(
     channels: u8,
 ) -> GuardAssessment {
     match input.request {
-        RequestFacts::EffectSpread { distance } if distance != 1 => (),
+        // The archived SIMD adapter admitted distance one. Its selected
+        // architecture advances the same process RNG and returns the native
+        // identity image without executing pixel-vector blocks.
+        RequestFacts::EffectSpread { .. } => (),
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
         _ => return GuardAssessment::Ineligible,
     }
@@ -362,6 +444,9 @@ pub(super) fn expand_vector_guard(input: StrategyInputs, channels: u8) -> GuardA
         RequestFacts::Expand { border } => border,
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
         _ => return GuardAssessment::Ineligible,
+    };
+    let Some(border) = border.uniform_nonnegative() else {
+        return GuardAssessment::Ineligible;
     };
     let Some(expected) = (input.width as usize)
         .checked_mul(input.height as usize)
@@ -407,7 +492,7 @@ pub(super) fn alpha_mask_guard(input: StrategyInputs, channels: u8, minimum_pixe
 }
 
 pub(super) fn rgba_transpose_avx2_guard(input: StrategyInputs) -> GuardAssessment {
-    let layout = StrategyGuard::CheckedNativeBytes { channels: 4 }.assess(input);
+    let layout = native_transpose_storage_guard(input, 4, true);
     if !matches!(layout, GuardAssessment::Satisfied) {
         return layout;
     }
@@ -426,8 +511,12 @@ pub(super) fn rgba_transpose_avx2_guard(input: StrategyInputs) -> GuardAssessmen
     }
 }
 
-pub(super) fn native_transpose_bytes_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
-    let layout = StrategyGuard::CheckedNativeBytes { channels }.assess(input);
+pub(super) fn native_transpose_bytes_guard(
+    input: StrategyInputs,
+    channels: u8,
+    allow_empty: bool,
+) -> GuardAssessment {
+    let layout = native_transpose_storage_guard(input, channels, allow_empty);
     if !matches!(layout, GuardAssessment::Satisfied) {
         return layout;
     }
@@ -435,6 +524,33 @@ pub(super) fn native_transpose_bytes_guard(input: StrategyInputs, channels: u8) 
         RequestFacts::Unspecified => GuardAssessment::Deferred,
         RequestFacts::Transpose { .. } => layout,
         _ => GuardAssessment::Ineligible,
+    }
+}
+
+/// Transpose uses the logical raster prefix and ignores trailing backing
+/// samples. Empty rasters are admitted only when their storage is empty, as in
+/// the archived adapter.
+fn native_transpose_storage_guard(
+    input: StrategyInputs,
+    channels: u8,
+    allow_empty: bool,
+) -> GuardAssessment {
+    let expected = crate::checked_dims::CheckedDims::new_allow_empty(
+        input.width,
+        input.height,
+        channels,
+    )
+    .ok()
+    .map(|dimensions| dimensions.total_bytes());
+    match (expected, input.byte_len) {
+        (None, _) => GuardAssessment::Ineligible,
+        (Some(0), _) if !allow_empty => GuardAssessment::Ineligible,
+        (Some(0), None) => GuardAssessment::Deferred,
+        (Some(0), Some(0)) => GuardAssessment::Satisfied,
+        (Some(0), Some(_)) => GuardAssessment::Ineligible,
+        (Some(_), None) => GuardAssessment::Deferred,
+        (Some(expected), Some(actual)) if actual >= expected => GuardAssessment::Satisfied,
+        (Some(_), Some(_)) => GuardAssessment::Ineligible,
     }
 }
 

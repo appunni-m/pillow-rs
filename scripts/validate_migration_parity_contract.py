@@ -766,6 +766,16 @@ def _validate_descriptor(
         )
         if (
             isinstance(literal, dict)
+            and literal.get("protocol") == "paste-convert-override"
+        ):
+            _validate_paste_convert_override_literal(
+                literal,
+                f"{path}.value",
+                prior_steps,
+                prior_image_steps,
+            )
+        elif (
+            isinstance(literal, dict)
             and literal.get("protocol") == "capture-viewer"
         ):
             _validate_capture_viewer_literal(
@@ -804,6 +814,24 @@ def _validate_descriptor(
                 )
     else:
         raise _error(f"{path}.kind", "unsupported value descriptor")
+
+
+def _validate_paste_convert_override_literal(
+    value: Any,
+    path: str,
+    prior_steps: set[str],
+    prior_image_steps: set[str],
+) -> None:
+    """Validate the fixed input-only Paste convert-override protocol."""
+
+    value = _exact(value, {"protocol", "image_step_id"}, path)
+    if value["protocol"] != "paste-convert-override":
+        raise _error(f"{path}.protocol", "unsupported Paste convert override protocol")
+    image_step_id = _string(value["image_step_id"], f"{path}.image_step_id")
+    if image_step_id not in prior_steps:
+        raise _error(f"{path}.image_step_id", "must reference an earlier workflow step")
+    if image_step_id not in prior_image_steps:
+        raise _error(f"{path}.image_step_id", "must reference an earlier image result")
 
 
 def _validate_asset(asset: Any, path: str, asset_ids: set[str], fixture_root: Path | None) -> str:
@@ -1025,6 +1053,15 @@ def _literal_type(value: Any) -> str:
         return "sequence"
     if isinstance(value, dict):
         protocol = value.get("protocol")
+        if (
+            protocol == "paste-convert-override"
+            and set(value) == {"protocol", "image_step_id"}
+            and isinstance(value.get("image_step_id"), str)
+            and bool(value["image_step_id"])
+        ):
+            # The runner returns the referenced public Image after attaching
+            # an input-only convert() override, so this value is an image.
+            return "image"
         if protocol == "image-with-info":
             size = value.get("size")
             assignment = value.get("assignment", "update")

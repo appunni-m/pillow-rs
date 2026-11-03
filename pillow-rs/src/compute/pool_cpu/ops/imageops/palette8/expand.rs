@@ -5,5 +5,9 @@ mod default;
 
 use crate::compute::pool_cpu::ops::imageops::helpers::strategy::declare_expand_byte_mode;
 
-declare_expand_byte_mode!(ImagePalette8, 1);
+declare_expand_byte_mode!(
+    ImagePalette8,
+    1,
+    crate::compute::registry::support::ExpandFillRule::PaletteIndexOrColor,
+);
 

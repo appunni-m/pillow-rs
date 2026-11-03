@@ -75,6 +75,11 @@ pub fn parse_color_str(s: &str) -> Result<(u8, u8, u8, u8), crate::error::PilErr
 /// css fallback below clamps to 8-bit, so the legacy forms must be parsed
 /// here before delegating.
 pub fn parse_color_str_unclamped(s: &str) -> Result<(i32, i32, i32, i32), crate::error::PilError> {
+    if s.len() > 100 {
+        return Err(crate::error::PilError::ValueError(
+            "color specifier is too long".to_owned(),
+        ));
+    }
     let lowered = s.to_ascii_lowercase();
     let bad =
         || crate::error::PilError::ValueError(format!("unknown color specifier: '{lowered}'"));

@@ -22,6 +22,12 @@ impl<'py> IntoPyObject<'py> for PyGetColorsEntry {
             pillow_rs::FormattedPixelValue::Components(values) => {
                 PyTuple::new(py, values)?.into_py_any(py)?
             }
+            pillow_rs::FormattedPixelValue::U16Components(values) => {
+                PyTuple::new(py, values)?.into_py_any(py)?
+            }
+            pillow_rs::FormattedPixelValue::FloatComponents(values) => {
+                PyTuple::new(py, values.into_iter().map(f64::from))?.into_py_any(py)?
+            }
             pillow_rs::FormattedPixelValue::InlineComponents { bytes, bands } => {
                 PyTuple::new(py, bytes.into_iter().take(usize::from(bands)))?.into_py_any(py)?
             }

@@ -10,6 +10,16 @@ use crate::raster::{
 pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, PilError> {
     match target {
         Mode::ImageLuma8 => Ok(DynamicImage::ImageLuma8(luma(source))),
+        Mode::ImageLaPremultiplied8 | Mode::ImageRgbPremultiplied8 => {
+            super::super::super::helpers::premultiplied::from_rgb_samples(
+                source.width(),
+                source.height(),
+                source.pixels().map(|pixel| {
+                    crate::color::ycbcr_pixel_to_rgb(pixel[0], pixel[1], pixel[2])
+                }),
+                target,
+            )
+        }
         Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
             super::super::super::helpers::luma16::from_luma8_samples(
                 source.width(),

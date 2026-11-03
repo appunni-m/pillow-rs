@@ -128,10 +128,11 @@ macro_rules! declare_strategies {
         impl BatchStrategy<'_> {
             #[inline]
             pub(crate) fn execute(self) -> Result<crate::raster::DynamicImage, crate::error::PilError> {
+                let _selection = *self.selection();
                 match self.implementation {
                     BatchArchitectureStrategy::Default(input) => pixel_scalar::execute_batch(input),
                     $(#[cfg($batch_cfg)] BatchArchitectureStrategy::$batch_variant(input) =>
-                        super::$batch_module::put_pixel_impl::execute_batch(input),)*
+                        super::$batch_module::put_pixel_impl::execute_batch(input, _selection),)*
                 }
             }
         }

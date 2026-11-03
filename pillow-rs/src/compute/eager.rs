@@ -4,11 +4,12 @@ use super::backend_state::active_lock;
 #[cfg(feature = "gpu")]
 use super::pool_gpu;
 use super::{
-    Backend, DynamicImage, ExecutionContext, PilError, PipelineOp, PipelineResourceTelemetry, PipelineTelemetry,
+    Backend, DynamicImage, ExecutionContext, PilError, PipelineOp,
+    PipelineOperationTelemetryCapture, PipelineResourceTelemetry, PipelineTelemetry,
     begin_pipeline_operation_telemetry, elapsed_ns, finish_pipeline_operation_telemetry,
     host_resource_telemetry, pipeline_telemetry_enabled, pipeline_timestamp,
     record_pipeline_allocation, record_pipeline_operation_handoff,
-    record_pipeline_operation_architecture, record_pipeline_operation_mode_conversion,
+    record_pipeline_operation_selection, record_pipeline_operation_mode_conversion,
     record_pipeline_operation_path,
     record_pipeline_operation_scalar_tail, record_pipeline_operation_vector_blocks,
     record_pipeline_resource_telemetry, record_pipeline_telemetry,
@@ -60,7 +61,7 @@ pub(crate) fn execute_eager_cpu_getprojection(
     let result = output.axes;
     if timed {
         begin_pipeline_operation_telemetry("GetProjection");
-        record_pipeline_operation_architecture(selection.implementation.architecture);
+        record_pipeline_operation_selection(&selection);
         record_pipeline_operation_vector_blocks(output.vector_blocks);
         record_pipeline_operation_scalar_tail(output.scalar_tail);
         record_pipeline_operation_path(if output.vector_blocks == 0 { "cpu" } else { "vector" });
@@ -158,7 +159,7 @@ pub(crate) fn execute_eager_gpu_rgb_getprojection(
             validation_ns: 0,
             backend_ns,
             dispatch_count,
-            fallback_reason: None,
+            fallback_reason,
             resource,
             resize_coeff_cache_hits: 0,
             resize_coeff_cache_misses: 0,
@@ -247,49 +248,24 @@ pub(crate) fn execute_eager_cpu_image_operation(
     Ok(result)
 }
 
-/// Executes a prepared CPU architecture strategy for one eager image operation.
-///
-/// The active operation frame surrounds preparation and execution so a selected
-/// vector implementation can attach its block and tail evidence to this receipt.
-pub(crate) fn execute_eager_cpu_arch_image_operation(
+/// Executes an eager CPU architecture strategy with the already-resolved
+/// Backend/Architecture context from its owning Image route.
+pub(crate) fn execute_eager_cpu_arch_image_operation_with_context(
     operation: &'static str,
     input: &DynamicImage,
-    requested_backend: Backend,
-    execute: impl FnOnce(
-        &ExecutionContext,
-    ) -> Result<(DynamicImage, crate::compute::registry::support::StrategySelection), PilError>,
-) -> Result<DynamicImage, PilError> {
-    execute_eager_cpu_arch_image_operation_with_route(
-        operation,
-        input,
-        requested_backend,
-        requested_backend,
-        None,
-        execute,
-    )
-}
-
-/// Executes a CPU architecture strategy while retaining the original routed backend receipt.
-pub(crate) fn execute_eager_cpu_arch_image_operation_with_route(
-    operation: &'static str,
-    input: &DynamicImage,
-    requested_backend: Backend,
-    execution_backend: Backend,
+    context: ExecutionContext,
+    requested_backend: Option<Backend>,
     fallback_reason: Option<String>,
     execute: impl FnOnce(
         &ExecutionContext,
     ) -> Result<(DynamicImage, crate::compute::registry::support::StrategySelection), PilError>,
 ) -> Result<DynamicImage, PilError> {
-    let timed = pipeline_telemetry_enabled();
-    let route_start = timed.then(pipeline_timestamp).flatten();
-    let context = ExecutionContext::for_routed_backend(execution_backend);
-    let route_ns = elapsed_ns(route_start);
     execute_cpu_arch_operation(
         operation,
         input,
         context,
-        Some(requested_backend),
-        route_ns,
+        requested_backend,
+        0,
         0,
         fallback_reason,
         execute,
@@ -297,6 +273,7 @@ pub(crate) fn execute_eager_cpu_arch_image_operation_with_route(
 }
 
 /// Executes a prepared CPU architecture strategy into a caller-owned byte slice.
+#[cfg(test)]
 pub(crate) fn execute_eager_cpu_arch_bytes(
     operation: &'static str,
     input: &DynamicImage,
@@ -314,6 +291,59 @@ pub(crate) fn execute_eager_cpu_arch_bytes(
     let route_start = timed.then(pipeline_timestamp).flatten();
     let context = ExecutionContext::for_routed_backend(requested_backend);
     let route_ns = elapsed_ns(route_start);
+    execute_eager_cpu_arch_bytes_with_route(
+        operation,
+        input,
+        context,
+        Some(requested_backend),
+        route_ns,
+        output,
+        execute,
+    )
+}
+
+/// Executes caller-owned CPU output with a context resolved by the owning Image.
+pub(crate) fn execute_eager_cpu_arch_bytes_with_context(
+    operation: &'static str,
+    input: &DynamicImage,
+    context: ExecutionContext,
+    requested_backend: Option<Backend>,
+    output: &mut [u8],
+    execute: impl FnOnce(
+        &ExecutionContext,
+        &mut [u8],
+    ) -> Result<Option<(
+        crate::compute::registry::support::StrategySelection,
+        (u64, u64, &'static str),
+    )>, PilError>,
+) -> Result<Option<()>, PilError> {
+    execute_eager_cpu_arch_bytes_with_route(
+        operation,
+        input,
+        context,
+        requested_backend,
+        0,
+        output,
+        execute,
+    )
+}
+
+fn execute_eager_cpu_arch_bytes_with_route(
+    operation: &'static str,
+    input: &DynamicImage,
+    context: ExecutionContext,
+    requested_backend: Option<Backend>,
+    route_ns: u64,
+    output: &mut [u8],
+    execute: impl FnOnce(
+        &ExecutionContext,
+        &mut [u8],
+    ) -> Result<Option<(
+        crate::compute::registry::support::StrategySelection,
+        (u64, u64, &'static str),
+    )>, PilError>,
+) -> Result<Option<()>, PilError> {
+    let timed = pipeline_telemetry_enabled();
     if timed {
         reset_eager_image_operation_telemetry();
     }
@@ -346,7 +376,7 @@ pub(crate) fn execute_eager_cpu_arch_bytes(
     };
     let backend_ns = elapsed_ns(backend_start);
     if timed {
-        record_pipeline_operation_architecture(selection.implementation.architecture);
+        record_pipeline_operation_selection(&selection);
         record_pipeline_operation_vector_blocks(vector_blocks);
         record_pipeline_operation_scalar_tail(scalar_tail);
         record_pipeline_operation_path(path);
@@ -372,7 +402,7 @@ pub(crate) fn execute_eager_cpu_arch_bytes(
         let _ = take_pipeline_resize_coeff_cache_stats();
         let fallback_reason = selection.fallback.map_or_else(
             || {
-                (requested_backend == Backend::Simd
+                (requested_backend == Some(Backend::Simd)
                     && selection.requested_architecture == crate::compute::Architecture::Default)
                     .then(|| format!("{operation} used CPU Default for a SIMD request"))
             },
@@ -383,7 +413,7 @@ pub(crate) fn execute_eager_cpu_arch_bytes(
             )),
         );
         record_pipeline_telemetry(PipelineTelemetry {
-            requested_backend: Some(requested_backend),
+            requested_backend,
             actual_backend: Backend::Cpu,
             operation_count: 1,
             route_ns,
@@ -414,6 +444,9 @@ pub(crate) fn execute_cpu_arch_operation(
 ) -> Result<DynamicImage, PilError> {
     let timed = pipeline_telemetry_enabled();
     if timed {
+        // TODO(pillow-rs#3ptb): when this eager child follows lazy source
+        // materialization, compose the source graph receipt instead of
+        // resetting it. Keep source and child contexts independently routed.
         reset_eager_image_operation_telemetry();
     }
 
@@ -468,7 +501,7 @@ fn record_cpu_arch_operation_telemetry(
     backend_ns: u64,
     routed_fallback_reason: Option<String>,
 ) {
-    record_pipeline_operation_architecture(selection.implementation.architecture);
+    record_pipeline_operation_selection(&selection);
     let mode_conversion = u64::from(input.mode() != result.mode());
     if selection.implementation.architecture == crate::compute::Architecture::Default {
         record_pipeline_operation_path("cpu");
@@ -526,16 +559,100 @@ fn record_cpu_arch_operation_telemetry(
     });
 }
 
-/// Execute a CPU operation whose independent result shares immutable pixels
+/// Execute a native identity operation whose result shares immutable pixels
 /// with its input until either image is mutated.
-pub(crate) fn execute_eager_cpu_shared_result<T>(
+///
+/// Identity routes are wrapper-owned and do not select a CPU architecture.
+pub(crate) fn execute_eager_native_identity_result<T>(
     operation: &'static str,
     input: &DynamicImage,
+    requested_backend: Option<Backend>,
+    execute: impl FnOnce() -> Result<T, PilError>,
+) -> Result<T, PilError> {
+    execute_eager_native_result(
+        operation,
+        input,
+        requested_backend,
+        "native-identity",
+        None,
+        None,
+        execute,
+    )
+}
+
+/// Execute a native identity result after preserving earlier lazy graph receipts.
+pub(crate) fn execute_eager_native_identity_result_with_receipts<T>(
+    operation: &'static str,
+    input: &DynamicImage,
+    requested_backend: Option<Backend>,
+    operation_receipts: PipelineOperationTelemetryCapture,
+    execute: impl FnOnce() -> Result<T, PilError>,
+) -> Result<T, PilError> {
+    execute_eager_native_result(
+        operation,
+        input,
+        requested_backend,
+        "native-identity",
+        None,
+        Some(operation_receipts),
+        execute,
+    )
+}
+
+/// Execute a wrapper-owned native image copy without selecting an Architecture.
+pub(crate) fn execute_eager_native_copy_result<T>(
+    operation: &'static str,
+    input: &DynamicImage,
+    requested_backend: Option<Backend>,
+    execute: impl FnOnce() -> Result<T, PilError>,
+) -> Result<T, PilError> {
+    execute_eager_native_result(
+        operation,
+        input,
+        requested_backend,
+        "native-copy",
+        Some(input.as_bytes().len()),
+        None,
+        execute,
+    )
+}
+
+/// Execute a native copy result after preserving earlier lazy graph receipts.
+pub(crate) fn execute_eager_native_copy_result_with_receipts<T>(
+    operation: &'static str,
+    input: &DynamicImage,
+    requested_backend: Option<Backend>,
+    operation_receipts: PipelineOperationTelemetryCapture,
+    execute: impl FnOnce() -> Result<T, PilError>,
+) -> Result<T, PilError> {
+    execute_eager_native_result(
+        operation,
+        input,
+        requested_backend,
+        "native-copy",
+        Some(input.as_bytes().len()),
+        Some(operation_receipts),
+        execute,
+    )
+}
+
+fn execute_eager_native_result<T>(
+    operation: &'static str,
+    input: &DynamicImage,
+    requested_backend: Option<Backend>,
+    path: &'static str,
+    copied_output_bytes: Option<usize>,
+    mut operation_receipts: Option<PipelineOperationTelemetryCapture>,
     execute: impl FnOnce() -> Result<T, PilError>,
 ) -> Result<T, PilError> {
     let timed = pipeline_telemetry_enabled();
+    // TODO(pillow-rs#3ptb): aggregate source graph timing and resources when
+    // the caller supplies prior operation receipts.
     if timed {
         reset_eager_image_operation_telemetry();
+    }
+    if let Some(operation_receipts) = &mut operation_receipts {
+        operation_receipts.restore();
     }
 
     let backend_start = timed.then(pipeline_timestamp).flatten();
@@ -551,25 +668,40 @@ pub(crate) fn execute_eager_cpu_shared_result<T>(
     let backend_ns = elapsed_ns(backend_start);
     if timed {
         begin_pipeline_operation_telemetry(operation);
-        record_pipeline_operation_path("cpu");
+        record_pipeline_operation_path(path);
         finish_pipeline_operation_telemetry();
 
-        // The returned image retains this existing pixel buffer by Arc; do
-        // not count a second buffer or a full-frame copy.
-        record_pipeline_resource_telemetry(host_resource_telemetry(input));
+        let mut resource = host_resource_telemetry(input);
+        if let Some(output_bytes) = copied_output_bytes {
+            let input_bytes = input.as_bytes().len() as u64;
+            let output_bytes = output_bytes as u64;
+            resource.host_buffer_count = resource
+                .host_buffer_count
+                .saturating_add(u64::from(output_bytes != 0));
+            resource.host_buffer_bytes = resource.host_buffer_bytes.saturating_add(output_bytes);
+            resource.peak_live_host_bytes = resource
+                .peak_live_host_bytes
+                .max(input_bytes.saturating_add(output_bytes));
+        }
+        record_pipeline_resource_telemetry(resource);
         let resource = take_pipeline_resource_telemetry();
         let _ = take_pipeline_backend_override();
         let dispatch_count = take_pipeline_dispatch_count();
         let _ = take_pipeline_resize_coeff_cache_stats();
+        let fallback_reason = requested_backend
+            .filter(|backend| *backend == Backend::Gpu)
+            .map(|_| {
+                format!("{operation} used a native host path without GPU dispatch")
+            });
         record_pipeline_telemetry(PipelineTelemetry {
-            requested_backend: Some(Backend::Cpu),
+            requested_backend,
             actual_backend: Backend::Cpu,
             operation_count: 1,
             route_ns: 0,
             validation_ns: 0,
             backend_ns,
             dispatch_count,
-            fallback_reason: None,
+            fallback_reason,
             resource,
             resize_coeff_cache_hits: 0,
             resize_coeff_cache_misses: 0,

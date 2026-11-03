@@ -150,7 +150,15 @@ fn vertical_radius_one_pass(
         for x in (0..row_stride).step_by(LANES) {
             let count = (row_stride - x).min(LANES);
             let load = |base: usize| {
-                u32x16::from(u16x16::from(load_padded_u8x16(source, base + x, count)))
+                if count == LANES {
+                    u32x16::from(u16x16::from(load_u8x16(source, base + x)))
+                } else {
+                    u32x16::from(u16x16::from(load_padded_u8x16(
+                        source,
+                        base + x,
+                        count,
+                    )))
+                }
             };
             let sum = load(sum_top) + load(sum_middle) + load(sum_bottom);
             let edges = if fractional_weight == 0 {

@@ -21,20 +21,18 @@ pub(crate) fn clip_u8(value: f64) -> u8 {
 pub(crate) const fn payload_bytes_per_pixel(mode: Mode) -> Option<usize> {
     match mode {
         Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => Some(1),
-        Mode::ImageLumaA8 | Mode::ImagePaletteAlpha8 => Some(2),
-        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageHsv8 => Some(3),
+        Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => Some(2),
+        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => Some(3),
         Mode::ImageRgba8
         | Mode::ImageRgbPremultiplied8
         | Mode::ImageRgbx8
         | Mode::ImageCmyk8
         | Mode::ImageI32
         | Mode::ImageF32 => Some(4),
-        Mode::ImageLaPremultiplied8
-        | Mode::ImageI16
+        Mode::ImageI16
         | Mode::ImageI16L
         | Mode::ImageI16B
         | Mode::ImageI16N
-        | Mode::ImageLab8
         | Mode::ImageLumaA16
         | Mode::ImageRgb16
         | Mode::ImageRgba16

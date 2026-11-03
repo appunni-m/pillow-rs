@@ -3,14 +3,17 @@
 //! Public ImageOps wrappers route through prepared exact-mode CPU plans.
 //! Batch-fused point operations use prepared Eval, and owned-intermediate
 //! Invert uses the exact mode and architecture selected by its support plan.
+//! Point operations and Expand compose omitted physical lanes after their exact-mode kernels.
+//! TODO(pillow-rs#3ptb): freeze raw-byte follow-on Paste parity for point and Expand outputs.
 
 use crate::compute::{
     Architecture,
     ExecutionContext,
     registry::support::{
         ImplementationSupport, InputContract, ModeSupport, OperationId, OperationInputs,
-        OperationSupport, OutputModeRule, PaletteKnowledge, RequestFacts, RejectionKind,
-        StrategyGuard, StrategyInputs, StrategySelection, SupportAssessment,
+        OperationModeRoute, OperationRouteOutcome, OperationRouteStage, OperationSupport,
+        OutputModeRule, PaletteKnowledge, RequestFacts, RejectionKind, StrategyGuard,
+        StrategyInputs, StrategySelection, SupportAssessment, SupportScope,
     },
 };
 use crate::compute::pool_cpu::ops::crop::ops::{CropRequest, PreparedCrop};
@@ -142,7 +145,7 @@ impl PreparedCropBorder<'_> {
 
 pub(crate) fn prepare_crop_border<'a>(
     image: &'a DynamicImage,
-    border: u32,
+    border: crate::pipeline::ExpandMargins,
     ctx: &ExecutionContext,
 ) -> Result<PreparedCropBorder<'a>, PilError> {
     let (width, height) = image.dimensions();
@@ -238,9 +241,11 @@ macro_rules! declare_invert_modes {
             }
 
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
-                match self {
+                let mut output = match self {
                     $(Self::$mode(strategy) => super::$module::ops::execute(strategy),)+
-                }
+                }?;
+                super::helpers::hidden_lanes::initialize_point_output_lanes(&mut output)?;
+                Ok(output)
             }
         }
     };
@@ -279,6 +284,91 @@ fn rejection_error(mode: Mode) -> PilError {
 /// Exact-mode support contract for ImageOps Invert and its CoreOnly routes.
 pub(crate) static INVERT_SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::Invert, &[], classify_mode);
+
+const INVERT_CHILDREN: &[OperationId] = &[OperationId::Invert];
+
+fn imageops_invert_rejection(mode: Mode) -> Option<&'static str> {
+    match mode {
+        Mode::ImageLumaA8 => Some("not supported for mode LA"),
+        Mode::ImagePaletteAlpha8 => Some("not supported for mode PA"),
+        Mode::ImageRgba8 => Some("not supported for mode RGBA"),
+        Mode::ImageCmyk8 => Some("not supported for mode CMYK"),
+        _ => None,
+    }
+}
+
+fn classify_imageops_invert_route(mode: Mode) -> OperationModeRoute {
+    let child_support = INVERT_SUPPORT.for_mode(mode);
+    let scope = if mode.pillow_name().is_some() {
+        SupportScope::Pillow
+    } else {
+        SupportScope::CoreOnly {
+            reason: "this internal raster identity has no Pillow ImageOps route",
+        }
+    };
+    let (support, operations, outcome) = match imageops_invert_rejection(mode) {
+        Some(reason) => (
+            ModeSupport::Rejected { mode, reason, kind: RejectionKind::OsError },
+            &[][..],
+            OperationRouteOutcome::Rejects {
+                stage: OperationRouteStage::WrapperGuard,
+                reason,
+                kind: RejectionKind::OsError,
+            },
+        ),
+        None => match child_support {
+            ModeSupport::Supported { .. } => (
+                child_support,
+                INVERT_CHILDREN,
+                OperationRouteOutcome::Produces,
+            ),
+            ModeSupport::Rejected { reason, kind, .. } => (
+                child_support,
+                INVERT_CHILDREN,
+                OperationRouteOutcome::Rejects {
+                    stage: OperationRouteStage::ChildAdmission,
+                    reason,
+                    kind,
+                },
+            ),
+        },
+    };
+
+    OperationModeRoute::ComposedFallback {
+        mode,
+        intermediate_mode: None,
+        scope,
+        operations,
+        output: OutputModeRule::Preserve,
+        outcome,
+        prepared_support: support,
+    }
+}
+
+/// Public ImageOps wrapper contract, distinct from the prepared Invert child.
+// TODO(pillow-rs#3ptb): Freeze the four immediate wrapper rejections and
+// deferred child-admission timing in CPU parity, including route receipts.
+pub(crate) static IMAGEOPS_INVERT_SUPPORT: OperationSupport = OperationSupport::routed(
+    OperationId::ImageOpsInvert,
+    &[],
+    classify_imageops_invert_route,
+    INVERT_CHILDREN,
+);
+
+pub(crate) fn validate_imageops_invert_mode(mode: Mode) -> Result<(), PilError> {
+    match IMAGEOPS_INVERT_SUPPORT.route_for_mode(mode) {
+        OperationModeRoute::ComposedFallback {
+            outcome:
+                OperationRouteOutcome::Rejects {
+                    stage: OperationRouteStage::WrapperGuard,
+                    reason,
+                    kind,
+                },
+            ..
+        } => Err(kind.into_error(reason)),
+        _ => Ok(()),
+    }
+}
 
 const POSTERIZE_INPUTS: &[InputContract] = &[InputContract::PosterizeBits];
 const POSTERIZE_LUMA_INPUTS: &[InputContract] = &[
@@ -494,7 +584,8 @@ declare_colorize_modes! {
 
 /// Pillow's exact `L` source mode and fixed-RGB output contract for Colorize.
 pub(crate) static COLORIZE_SUPPORT: OperationSupport =
-    OperationSupport::new(OperationId::Colorize, &[], classify_colorize_mode);
+    OperationSupport::new(OperationId::Colorize, &[], classify_colorize_mode)
+        .with_rejected_output(OutputModeRule::Fixed(Mode::ImageRgb8));
 
 /// Prepared Colorize input, LUT, and exact source-mode selection.
 pub(crate) struct PreparedColorize<'a> {
@@ -513,7 +604,7 @@ impl PreparedColorize<'_> {
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let mode = self.selection.implementation.mode;
         let architecture = self.selection.implementation.architecture;
-        match (mode, architecture) {
+        let mut output = match (mode, architecture) {
             (Mode::ImageLuma8, Architecture::Default) => {
                 super::luma8::default::colorize_impl::execute(
                     self.source, self.width, self.height, &self.lut,
@@ -533,7 +624,9 @@ impl PreparedColorize<'_> {
             _ => Err(PilError::InternalError(
                 "colorize selection has no matching CPU kernel".into(),
             )),
-        }
+        }?;
+        super::helpers::hidden_lanes::initialize_point_output_lanes(&mut output)?;
+        Ok(output)
     }
 }
 
@@ -642,7 +735,7 @@ impl PreparedPosterize<'_> {
     }
 
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
-        match (self.source, self.architecture) {
+        let mut output = match (self.source, self.architecture) {
             (NativeBytePointSource::Luma(input), PointArchitecture::Default) => {
                 super::luma8::default::posterize_impl::execute(input, self.bits)
             }
@@ -679,7 +772,9 @@ impl PreparedPosterize<'_> {
             (NativeBytePointSource::Rgb(input), PointArchitecture::WasmSimd128) => {
                 super::rgb8::wasm_simd128::posterize_impl::execute(input, self.bits)
             }
-        }
+        }?;
+        super::helpers::hidden_lanes::initialize_point_output_lanes(&mut output)?;
+        Ok(output)
     }
 }
 
@@ -697,7 +792,7 @@ impl PreparedSolarize<'_> {
     }
 
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
-        match (self.source, self.architecture) {
+        let mut output = match (self.source, self.architecture) {
             (NativeBytePointSource::Luma(input), PointArchitecture::Default) => {
                 super::luma8::default::solarize_impl::execute(input, self.threshold)
             }
@@ -734,7 +829,9 @@ impl PreparedSolarize<'_> {
             (NativeBytePointSource::Rgb(input), PointArchitecture::WasmSimd128) => {
                 super::rgb8::wasm_simd128::solarize_impl::execute(input, self.threshold)
             }
-        }
+        }?;
+        super::helpers::hidden_lanes::initialize_point_output_lanes(&mut output)?;
+        Ok(output)
     }
 }
 

@@ -45,13 +45,16 @@ pub(crate) fn luma_mask(luma: &GrayImage, mask: MaskStrategy<'_>) -> GrayAlphaIm
 }
 
 pub(crate) fn luma_alpha_mask(luma: &GrayAlphaImage, mask: MaskStrategy<'_>) -> GrayAlphaImage {
-    let mut output = GrayAlphaImage::new(luma.width(), luma.height());
+    let mut output = luma.clone();
+    let hidden_lanes = output.take_hidden_pixel_lanes();
     let mask = mask.samples();
-    for ((destination, source), alpha) in output.pixels_mut().zip(luma.pixels())
-        .zip(mask) {
-        destination[0] = source[0];
-        destination[1] = *alpha;
+    for (pixel, alpha) in output.as_mut().chunks_exact_mut(2).zip(mask) {
+        pixel[1] = *alpha;
     }
+    // putband changes the visible alpha band and leaves Pillow's other raw
+    // lanes untouched. Preserve those lanes across the compact carrier write.
+    let lanes_restored = output.replace_hidden_pixel_lanes(hidden_lanes);
+    debug_assert!(lanes_restored);
     output
 }
 

@@ -26,3 +26,39 @@ pub(crate) fn execute_get_data(
         architecture => Err(helpers::missing_architecture(Mode::ImageLumaA16, architecture)),
     }
 }
+crate::compute::pool_cpu::ops::analysis::helpers::bbox::declare_getbbox_owner!(
+    luma_a16,
+    ImageLumaA16,
+    crate::compute::pool_cpu::ops::analysis::helpers::get_data::LumaA16Image,
+);
+
+// NO_PILLOW_SUPPORT: native-width multiband extrema are a core extension.
+crate::compute::pool_cpu::ops::analysis::helpers::extrema::declare_getextrema_owner!(
+    ImageLumaA16,
+    crate::compute::pool_cpu::ops::analysis::helpers::get_data::LumaA16Image,
+    crate::compute::pool_cpu::ops::analysis::helpers::extrema::u16_bands,
+);
+
+// NO_PILLOW_SUPPORT: native-width multiband histograms extend the core API.
+crate::compute::pool_cpu::ops::analysis::helpers::histogram_execution::declare_histogram_owner!(
+    ImageLumaA16,
+    crate::compute::pool_cpu::ops::analysis::helpers::get_data::LumaA16Image,
+    crate::compute::pool_cpu::ops::analysis::luma_a16::default::histogram_impl::execute,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::getcolors_execution::declare_getcolors_owner!(
+    ImageLumaA16,
+    crate::compute::pool_cpu::ops::analysis::helpers::get_data::LumaA16Image,
+    crate::compute::pool_cpu::ops::analysis::luma_a16::default::getcolors_impl::execute,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::stat_execution::declare_stat_owner!(
+    ImageLumaA16,
+    crate::compute::pool_cpu::ops::analysis::helpers::get_data::LumaA16Image,
+    crate::compute::pool_cpu::ops::analysis::luma_a16::default::stat_impl::execute,
+);
+// NO_PILLOW_SUPPORT: the Rust/JS byte-valued extrema API exposes a compatibility projection.
+crate::compute::pool_cpu::ops::analysis::helpers::extrema_bytes_execution::
+    declare_getextrema_bytes_owner!(
+    ImageLumaA16,
+    crate::compute::pool_cpu::ops::analysis::helpers::get_data::LumaA16Image,
+    crate::compute::pool_cpu::ops::analysis::luma_a16::default::extrema_bytes_impl::execute,
+);

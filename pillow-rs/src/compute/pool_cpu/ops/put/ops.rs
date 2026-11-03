@@ -3,27 +3,38 @@
 //! Pipeline callbacks for PutPixel, PutData, PutAlpha, and PutAlphaData are
 //! registered and consumed by the serial CPU batch executor. Consecutive
 //! PutPixel runs also compose with the prepared RGB Thumbnail fusion.
-//! TODO(pillow-rs#3ptb): finish auditing wrapper metadata paths for
-//! Backend/Architecture context bypasses and reconcile mode-changing callers.
-//! Immediate PutData callbacks use their own exact-mode support declaration and
-//! a sequence-scoped CPU Default execution context.
+//! TODO(pillow-rs#3ptb): verify PutAlpha/PutAlphaData public mode-change and
+//! validation/error ordering, CoreOnly high-depth outputs, and RGBa alpha
+//! values 0, 1, 254, and 255 with constant and mask inputs in CPU parity.
+//! Wrapper mode validation and transitions now use these prepared declarations;
+//! source review found no separate Backend/Architecture selection in the
+//! wrappers. Cover callback PutData/PutPixel selection, including La/LAB
+//! packed/component lane retention, exact-mode band validation, GetChannel
+//! selection receipts, and deferred terminal receipts.
+//! Immediate PutData callbacks use their exact-mode support declaration and a
+//! sequence-scoped routed CPU context; a missing architecture specialization
+//! selects the native Default implementation.
 //! GetData's direct output-buffer route uses the prepared ExtractBand strategy.
 //! Source review confirmed PutData's cross-carrier ConvertBuffer routes are
 //! semantic: they construct the requested 1/2/3/4-channel payload carrier
 //! before applying the byte prefix, matching the archived operation. Same-
 //! carrier paths write the exact source carrier directly and preserve its mode.
-//! PutAlpha, PutAlphaData, and ExtractBand conversion routes were reviewed
-//! against the archived contracts. Mask-to-L normalization remains semantic;
-//! exact one-channel masks borrow their bytes in Default paths. Same-carrier
-//! alpha outputs keep their single required result copy, and ExtractBand reads
-//! native channels directly. This source review remains unvalidated.
+//! PutAlpha, PutAlphaData, and ExtractBand conversion routes were compared with
+//! the archive. RGBa alpha replacement is corrected to Pillow's explicit
+//! unpremultiplication before alpha replacement because the archived generic
+//! carrier conversion retained premultiplied samples. Mask-to-L normalization
+//! remains semantic; exact one-channel masks borrow their bytes in Default
+//! paths. Same-carrier alpha outputs keep their single required result copy,
+//! and ExtractBand reads native channels directly. This source review remains
+//! unvalidated.
 // NO_PILLOW_SUPPORT: Internal high-depth raster identities have declared
-// core-only band and mutation routes; their narrowing and output rules remain
-// explicit in each mode contract.
+// core-only band, GetChannel, and mutation routes; ExtractBand preserves u16
+// and f32 samples in their native scalar output modes.
 //!
 //! This internal operation retains its original defensive index behavior.
 //! Image::getchannel validates public selectors, rejects I/F, and preserves
-//! P-mode identity before queuing it; those wrapper contracts remain separate.
+//! P-mode identity before queuing it; GetChannel declares those wrapper routes
+//! at its operation-level support entry.
 
 use crate::compute::{ExecutionContext, registry::support::{
     ModeSupport, OperationId, OperationInputs, OperationSupport, StrategyInputs,
@@ -41,7 +52,10 @@ macro_rules! declare_modes {
             $($mode(super::$module::ops::Strategy<'a>),)+
         }
         pub(crate) enum PreparedPutData<'a> {
-            $($mode(super::$module::ops::DataStrategy<'a>),)+
+            $($mode(
+                super::$module::ops::DataStrategy<'a>,
+                super::helpers::put_data::HiddenLaneUpdate<'a>,
+            ),)+
         }
         pub(crate) enum PreparedPutAlpha<'a> {
             $($mode(super::$module::ops::AlphaStrategy<'a>),)+
@@ -82,12 +96,22 @@ macro_rules! declare_modes {
         }
 
         pub(crate) fn prepare_put_data<'a>(
-            image: &'a DynamicImage, data: &'a [u8], payload: Mode, ctx: &ExecutionContext,
+            image: &'a DynamicImage,
+            data: &'a [u8],
+            payload: Mode,
+            hidden_lanes: Option<bytes::Bytes>,
+            ctx: &ExecutionContext,
         ) -> Result<PreparedPutData<'a>, PilError> {
+            let lane_update = super::helpers::put_data::HiddenLaneUpdate::new(
+                image,
+                payload,
+                data.len(),
+                hidden_lanes,
+            );
             match image {
                 $(DynamicImage::$mode(input) =>
                     super::$module::ops::prepare_data(input, data, payload, ctx)
-                        .map(PreparedPutData::$mode),)+
+                        .map(|strategy| PreparedPutData::$mode(strategy, lane_update)),)+
             }
         }
 
@@ -126,9 +150,7 @@ macro_rules! declare_modes {
             }
 
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
-                match self {
-                    $(Self::$mode(strategy) => super::$module::ops::execute(strategy),)+
-                }
+                match self { $(Self::$mode(strategy) => strategy.execute(),)+ }
             }
 
             pub(crate) fn execute_into(
@@ -154,11 +176,17 @@ macro_rules! declare_modes {
 
         impl PreparedPutData<'_> {
             pub(crate) fn selection(&self) -> &StrategySelection {
-                match self { $(Self::$mode(strategy) => strategy.selection(),)+ }
+                match self { $(Self::$mode(strategy, _) => strategy.selection(),)+ }
             }
 
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
-                match self { $(Self::$mode(strategy) => strategy.execute(),)+ }
+                match self {
+                    $(Self::$mode(strategy, update) => {
+                        let mut output = strategy.execute()?;
+                        super::helpers::put_data::apply_hidden_lane_update(&mut output, update)?;
+                        Ok(output)
+                    },)+
+                }
             }
         }
 
@@ -271,18 +299,12 @@ pub(crate) fn select_put_data_l16_bytes(
         .select_serial(context)
 }
 
-pub(crate) fn prepare_put_data_l16_bytes(
-    data: &[u8],
-    dimensions: crate::checked_dims::CheckedDims,
-    scale: f64,
-    offset: f64,
-) -> Result<Vec<u8>, PilError> {
-    super::helpers::put_data_l16_bytes::prepare_raw_bytes(data, dimensions, scale, offset)
-}
-
 pub(crate) fn execute_put_data_l16_bytes(
     image: &mut DynamicImage,
-    raw: &[u8],
+    data: &[u8],
+    entry_count: usize,
+    scale: f64,
+    offset: f64,
     selection: StrategySelection,
 ) -> Result<(), PilError> {
     let mode = image.mode();
@@ -300,16 +322,24 @@ pub(crate) fn execute_put_data_l16_bytes(
     }
     match image {
         DynamicImage::ImageI16(image) => {
-            super::i16::default::put_data_impl::execute_l16_bytes(image, raw)
+            super::i16::default::put_data_impl::execute_l16_bytes(
+                image, data, entry_count, scale, offset,
+            )
         }
         DynamicImage::ImageI16L(image) => {
-            super::i16l::default::put_data_impl::execute_l16_bytes(image, raw)
+            super::i16l::default::put_data_impl::execute_l16_bytes(
+                image, data, entry_count, scale, offset,
+            )
         }
         DynamicImage::ImageI16B(image) => {
-            super::i16b::default::put_data_impl::execute_l16_bytes(image, raw)
+            super::i16b::default::put_data_impl::execute_l16_bytes(
+                image, data, entry_count, scale, offset,
+            )
         }
         DynamicImage::ImageI16N(image) => {
-            super::i16n::default::put_data_impl::execute_l16_bytes(image, raw)
+            super::i16n::default::put_data_impl::execute_l16_bytes(
+                image, data, entry_count, scale, offset,
+            )
         }
         _ => Err(PilError::InternalError(
             "putdata I;16 storage mismatch".into(),
@@ -325,6 +355,7 @@ fn classify_data_value_at_mode(mode: Mode) -> ModeSupport {
         Mode::One
         | Mode::ImageLuma8
         | Mode::ImageLumaA8
+        | Mode::ImageLaPremultiplied8
         | Mode::ImagePalette8
         | Mode::ImagePaletteAlpha8
         | Mode::ImageRgb8
@@ -333,6 +364,7 @@ fn classify_data_value_at_mode(mode: Mode) -> ModeSupport {
         | Mode::ImageRgbx8
         | Mode::ImageCmyk8
         | Mode::ImageYCbCr8
+        | Mode::ImageLab8
         | Mode::ImageHsv8
         | Mode::ImageI32
         | Mode::ImageF32
@@ -346,16 +378,6 @@ fn classify_data_value_at_mode(mode: Mode) -> ModeSupport {
             PUT_DATA_VALUE_AT_INPUTS,
             &[],
         ),
-        Mode::ImageLaPremultiplied8 => ModeSupport::Rejected {
-            mode,
-            reason: "unsupported putdata mode: La",
-            kind: crate::compute::registry::support::RejectionKind::ValueError,
-        },
-        Mode::ImageLab8 => ModeSupport::Rejected {
-            mode,
-            reason: "unsupported putdata mode: LAB",
-            kind: crate::compute::registry::support::RejectionKind::ValueError,
-        },
         Mode::ImageLumaA16
         | Mode::ImageRgb16
         | Mode::ImageRgba16
@@ -707,9 +729,13 @@ pub(crate) fn prepare_pixel_pipeline<'a>(
 pub(crate) fn prepare_data_pipeline<'a>(
     input: OperationInputs<'a>, op: &'a PipelineOp, ctx: &ExecutionContext,
 ) -> Result<crate::compute::registry::PreparedOperation<'a>, PilError> {
-    let PipelineOp::PutData { data, payload_mode } = op else {
+    let PipelineOp::PutData {
+        data,
+        hidden_lanes,
+        payload_mode,
+    } = op else {
         return Err(PilError::ValueError("expected PutData op".into()));
     };
-    prepare_put_data(input.image, data, *payload_mode, ctx)
+    prepare_put_data(input.image, data, *payload_mode, hidden_lanes.clone(), ctx)
         .map(crate::compute::registry::PreparedOperation::from_put_data)
 }

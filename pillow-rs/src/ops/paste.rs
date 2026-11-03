@@ -5,4 +5,8 @@ mod input;
 mod operations;
 mod types;
 
-pub use types::{AlphaCompositeBox, PasteBoxInput, PasteMaskInput, PasteSource, PasteSourceInput};
+pub use types::{
+    AlphaCompositeBox, PasteBoxInput, PasteColorComponent, PasteMaskInput, PasteSource,
+    PasteSourceInput,
+};
+pub use operations::{PasteBoxPlan, PasteSourcePlan};

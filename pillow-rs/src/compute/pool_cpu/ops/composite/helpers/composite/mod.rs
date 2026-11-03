@@ -5,6 +5,5 @@ mod execute;
 mod mask;
 mod numeric;
 mod output;
-mod vector;
 
-pub(crate) use execute::{execute, execute_selected};
+pub(crate) use execute::{execute, execute_byte_selected};

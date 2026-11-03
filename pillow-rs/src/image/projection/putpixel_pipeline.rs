@@ -2,6 +2,7 @@
 //! architecture strategies. GPU terminal admission remains backend-specific.
 
 use super::{Arc, DynamicImage, Image, Mode, PilError, PipelineOp, PipelineOps, ProjectionAxes};
+use crate::compute::registry::support::StrategySelection;
 
 type ProjectionResult = (Vec<u32>, Vec<u32>, u64, u64);
 
@@ -11,8 +12,8 @@ type ProjectionResult = (Vec<u32>, Vec<u32>, u64, u64);
 struct PreparedPutPixelProjection<'a> {
     mode: Mode,
     terminal_backend: crate::compute::Backend,
-    execution_context: crate::compute::ExecutionContext,
     prepared: crate::compute::PreparedExecution,
+    strategy_selection: Option<StrategySelection>,
     ops: &'a [PipelineOp],
     input: Arc<DynamicImage>,
     source_is_known_zero: bool,
@@ -43,30 +44,26 @@ fn projection_terminal_backend(
 
 impl Image {
     fn cmyk_projection_with_putpixel_ops(
-        context: &crate::compute::ExecutionContext,
+        selection: StrategySelection,
         image: &crate::raster::RgbaImage,
         ops: &[PipelineOp],
         source_is_known_zero: bool,
     ) -> Result<(Vec<u32>, Vec<u32>), PilError> {
         Self::cmyk_projection_with_putpixel_ops_using(image, ops, source_is_known_zero, || {
-            let output = crate::compute::cpu_cmyk_projection_in_context(context, image)?;
+            let output = crate::compute::cpu_cmyk_projection_selected(image, selection)?;
             Ok((output.axes.0, output.axes.1, output.vector_blocks, output.scalar_tail))
         })
         .map(|(horizontal, vertical, _, _)| (horizontal, vertical))
     }
 
     fn rgb_projection_with_putpixel_ops(
-        context: &crate::compute::ExecutionContext,
+        selection: StrategySelection,
         image: &crate::raster::RgbImage,
         ops: &[PipelineOp],
         source_is_known_zero: bool,
     ) -> Result<(Vec<u32>, Vec<u32>), PilError> {
         Self::rgb_projection_with_putpixel_ops_using(image, ops, source_is_known_zero, || {
-            let output = crate::compute::cpu_rgb_projection_in_context(
-                context,
-                image,
-                Mode::ImageRgb8,
-            )?;
+            let output = crate::compute::cpu_rgb_projection_selected(image, selection)?;
             Ok((output.axes.0, output.axes.1, output.vector_blocks, output.scalar_tail))
         })
         .map(|(horizontal, vertical, _, _)| (horizontal, vertical))
@@ -236,6 +233,14 @@ impl Image {
         if input.mode() != mode {
             return Ok(None);
         }
+        let strategy_selection = if terminal_backend == crate::compute::Backend::Gpu {
+            None
+        } else {
+            Some(
+                *crate::compute::prepare_cpu_getprojection(input.as_ref(), &execution_context)?
+                    .selection(),
+            )
+        };
         #[cfg(feature = "gpu")]
         if terminal_backend == crate::compute::Backend::Gpu {
             let supported = match mode {
@@ -259,8 +264,8 @@ impl Image {
         Ok(Some(PreparedPutPixelProjection {
             mode,
             terminal_backend,
-            execution_context,
             prepared,
+            strategy_selection,
             ops,
             input,
             source_is_known_zero,
@@ -275,14 +280,20 @@ impl Image {
         let DynamicImage::ImageCmyk8(image) = execution.input.as_ref() else {
             return Ok(None);
         };
+        let selection = execution.strategy_selection.ok_or_else(|| {
+            PilError::InternalError(
+                "CPU GetProjection terminal did not prepare a mode strategy".into(),
+            )
+        })?;
         crate::compute::execute_prepared_cpu_terminal(
             &execution.prepared,
             execution.ops,
             execution.input.as_ref(),
             execution.output_sizes,
+            &selection,
             || {
                 Self::cmyk_projection_with_putpixel_ops(
-                    &execution.execution_context,
+                    selection,
                     image,
                     execution.ops,
                     execution.source_is_known_zero,
@@ -299,14 +310,20 @@ impl Image {
         let DynamicImage::ImageRgb8(image) = execution.input.as_ref() else {
             return Ok(None);
         };
+        let selection = execution.strategy_selection.ok_or_else(|| {
+            PilError::InternalError(
+                "CPU GetProjection terminal did not prepare a mode strategy".into(),
+            )
+        })?;
         crate::compute::execute_prepared_cpu_terminal(
             &execution.prepared,
             execution.ops,
             execution.input.as_ref(),
             execution.output_sizes,
+            &selection,
             || {
                 Self::rgb_projection_with_putpixel_ops(
-                    &execution.execution_context,
+                    selection,
                     image,
                     execution.ops,
                     execution.source_is_known_zero,
@@ -323,26 +340,29 @@ impl Image {
         let DynamicImage::ImageCmyk8(image) = execution.input.as_ref() else {
             return Ok(None);
         };
+        let selection = execution.strategy_selection.ok_or_else(|| {
+            PilError::InternalError(
+                "CPU GetProjection terminal did not prepare a mode strategy".into(),
+            )
+        })?;
         crate::compute::execute_prepared_cpu_arch_terminal(
             &execution.prepared,
             execution.ops,
             execution.input.as_ref(),
             execution.output_sizes,
+            &selection,
             || {
                 if execution.source_is_known_zero
                     && let Some(output) = crate::compute::pool_cpu::ops::analysis::cmyk8::ops::execute_positive_writes(
-                        &execution.execution_context,
+                        selection,
                         image.width(),
                         image.height(),
                         execution.ops,
-                    )?
+                    )
                 {
                     return Ok((output.axes, output.vector_blocks, output.scalar_tail));
                 }
-                let output = crate::compute::cpu_cmyk_projection_in_context(
-                    &execution.execution_context,
-                    image,
-                )?;
+                let output = crate::compute::cpu_cmyk_projection_selected(image, selection)?;
                 let (horizontal, vertical, _, _) = Self::cmyk_projection_with_putpixel_ops_using(
                     image,
                     execution.ops,
@@ -362,17 +382,19 @@ impl Image {
         let DynamicImage::ImageRgb8(image) = execution.input.as_ref() else {
             return Ok(None);
         };
+        let selection = execution.strategy_selection.ok_or_else(|| {
+            PilError::InternalError(
+                "CPU GetProjection terminal did not prepare a mode strategy".into(),
+            )
+        })?;
         crate::compute::execute_prepared_cpu_arch_terminal(
             &execution.prepared,
             execution.ops,
             execution.input.as_ref(),
             execution.output_sizes,
+            &selection,
             || {
-                let output = crate::compute::cpu_rgb_projection_in_context(
-                    &execution.execution_context,
-                    image,
-                    Mode::ImageRgb8,
-                )?;
+                let output = crate::compute::cpu_rgb_projection_selected(image, selection)?;
                 let (horizontal, vertical, _, _) = Self::rgb_projection_with_putpixel_ops_using(
                     image,
                     execution.ops,
@@ -388,21 +410,47 @@ impl Image {
     fn execute_prepared_putpixel_projection(
         execution: PreparedPutPixelProjection<'_>,
     ) -> Result<Option<ProjectionAxes>, PilError> {
-        match (execution.mode, execution.terminal_backend) {
-            (Mode::ImageCmyk8, crate::compute::Backend::Cpu) => {
+        let architecture = execution
+            .strategy_selection
+            .map(|selection| selection.implementation.architecture);
+        match (execution.mode, execution.terminal_backend, architecture) {
+            (
+                Mode::ImageCmyk8,
+                crate::compute::Backend::Cpu | crate::compute::Backend::Simd,
+                Some(crate::compute::Architecture::Default),
+            ) => {
                 Self::execute_cmyk_cpu_putpixel_projection(&execution)
             }
-            (Mode::ImageRgb8, crate::compute::Backend::Cpu) => {
+            (
+                Mode::ImageRgb8,
+                crate::compute::Backend::Cpu | crate::compute::Backend::Simd,
+                Some(crate::compute::Architecture::Default),
+            ) => {
                 Self::execute_rgb_cpu_putpixel_projection(&execution)
             }
-            (Mode::ImageCmyk8, crate::compute::Backend::Simd) => {
+            (
+                Mode::ImageCmyk8,
+                crate::compute::Backend::Cpu | crate::compute::Backend::Simd,
+                Some(_),
+            ) => {
                 Self::execute_cmyk_arch_putpixel_projection(&execution)
             }
-            (Mode::ImageRgb8, crate::compute::Backend::Simd) => {
+            (
+                Mode::ImageRgb8,
+                crate::compute::Backend::Cpu | crate::compute::Backend::Simd,
+                Some(_),
+            ) => {
                 Self::execute_rgb_arch_putpixel_projection(&execution)
             }
+            (
+                Mode::ImageCmyk8 | Mode::ImageRgb8,
+                crate::compute::Backend::Cpu | crate::compute::Backend::Simd,
+                None,
+            ) => Err(PilError::InternalError(
+                "CPU GetProjection terminal did not prepare a mode strategy".into(),
+            )),
             #[cfg(feature = "gpu")]
-            (Mode::ImageCmyk8, crate::compute::Backend::Gpu) => {
+            (Mode::ImageCmyk8, crate::compute::Backend::Gpu, _) => {
                 crate::compute::execute_prepared_gpu_cmyk_projection_terminal(
                     &execution.prepared,
                     execution.ops,
@@ -412,7 +460,7 @@ impl Image {
                 .map(Some)
             }
             #[cfg(feature = "gpu")]
-            (Mode::ImageRgb8, crate::compute::Backend::Gpu) => {
+            (Mode::ImageRgb8, crate::compute::Backend::Gpu, _) => {
                 crate::compute::execute_prepared_gpu_rgb_projection_terminal(
                     &execution.prepared,
                     execution.ops,
@@ -422,7 +470,7 @@ impl Image {
                 .map(Some)
             }
             #[cfg(not(feature = "gpu"))]
-            (_, crate::compute::Backend::Gpu) => Ok(None),
+            (_, crate::compute::Backend::Gpu, _) => Ok(None),
             _ => Ok(None),
         }
     }

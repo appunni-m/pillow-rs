@@ -118,12 +118,12 @@ fn transform_float_array(value: &JsValue) -> Option<Vec<f64>> {
 
 pub(crate) fn js_transform_fill(
     value: &JsValue,
-    mode: &str,
+    mode: pillow_rs::Mode,
 ) -> Result<Option<pillow_rs::TransformFill>, JsValue> {
     if value.is_null() || value.is_undefined() {
         return Ok(None);
     }
-    if mode == "P" {
+    if mode == pillow_rs::Mode::ImagePalette8 {
         return transform_palette_fill(value).map(Some);
     }
     if let Some(boolean) = value.as_bool() {

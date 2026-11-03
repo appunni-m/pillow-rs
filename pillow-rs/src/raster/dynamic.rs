@@ -4,8 +4,8 @@
 //! Codec translation is delegated to the Pillow-owned image I/O adapters.
 
 use super::buffer::{
-    ConvertBuffer, GrayAlphaImage, GrayImage, ImageBuffer, Rgb32FImage, RgbImage, Rgba32FImage,
-    RgbaImage,
+    ConvertBuffer, GrayAlphaImage, GrayImage, HiddenPixelLanes, ImageBuffer, Rgb32FImage, RgbImage,
+    Rgba32FImage, RgbaImage,
 };
 use super::color::{self, ColorType, Luma, LumaA, Rgb, Rgba};
 use super::mode::Mode;
@@ -167,6 +167,17 @@ pub(crate) fn crop_buffer<P: Pixel>(
             output.put_pixel(dx, dy, pixel);
         }
     }
+    let source_width = image.width() as usize;
+    let output_width = width as usize;
+    output
+        .remap_hidden_pixel_lanes_from(image, |index| {
+            let output_x = index % output_width;
+            let output_y = index / output_width;
+            let source_x = x.saturating_add(output_x as u32) as usize;
+            let source_y = y.saturating_add(output_y as u32) as usize;
+            source_y * source_width + source_x
+        })
+        .expect("crop maps valid source pixels");
     output
 }
 
@@ -475,6 +486,76 @@ impl DynamicImage {
             | DynamicImage::ImageF32(image) => Some(image.as_mut()),
             _ => None,
         }
+    }
+
+    /// Replaces physical lanes omitted from the compact Pillow-mode carrier.
+    pub(crate) fn replace_hidden_pixel_lanes(
+        &mut self,
+        lanes: Option<HiddenPixelLanes>,
+    ) -> bool {
+        match self {
+            Self::ImageLumaA8(image)
+            | Self::ImageLaPremultiplied8(image)
+            | Self::ImagePaletteAlpha8(image) => image.replace_hidden_pixel_lanes(lanes),
+            Self::ImageRgb8(image)
+            | Self::ImageYCbCr8(image)
+            | Self::ImageLab8(image)
+            | Self::ImageHsv8(image) => image.replace_hidden_pixel_lanes(lanes),
+            _ => lanes.is_none(),
+        }
+    }
+
+    /// Takes physical lanes omitted from this image's compact logical carrier.
+    pub(crate) fn take_hidden_pixel_lanes(&mut self) -> Option<HiddenPixelLanes> {
+        match self {
+            Self::ImageLumaA8(image)
+            | Self::ImageLaPremultiplied8(image)
+            | Self::ImagePaletteAlpha8(image) => image.take_hidden_pixel_lanes(),
+            Self::ImageRgb8(image)
+            | Self::ImageYCbCr8(image)
+            | Self::ImageLab8(image)
+            | Self::ImageHsv8(image) => image.take_hidden_pixel_lanes(),
+            _ => None,
+        }
+    }
+
+    /// Returns physical lanes omitted by this image's compact logical carrier.
+    pub(crate) fn hidden_pixel_lanes(&self) -> Option<&HiddenPixelLanes> {
+        match self {
+            Self::ImageLumaA8(image)
+            | Self::ImageLaPremultiplied8(image)
+            | Self::ImagePaletteAlpha8(image) => image.hidden_pixel_lanes(),
+            Self::ImageRgb8(image)
+            | Self::ImageYCbCr8(image)
+            | Self::ImageLab8(image)
+            | Self::ImageHsv8(image) => image.hidden_pixel_lanes(),
+            _ => None,
+        }
+    }
+
+    /// Remaps omitted physical lanes from a same-mode source into this image.
+    pub(crate) fn remap_hidden_pixel_lanes_from<F>(&mut self, source: &Self, source_index: F) -> bool
+    where
+        F: FnMut(usize) -> usize,
+    {
+        if self.mode() != source.mode() {
+            return false;
+        }
+        let expected_lanes = self.mode().hidden_pixel_lane_count();
+        let Some(pixel_count) = (self.width() as usize).checked_mul(self.height() as usize) else {
+            return false;
+        };
+        let hidden_lanes = match source.hidden_pixel_lanes() {
+            Some(lanes) if Some(lanes.lane_count()) == expected_lanes => {
+                let Some(lanes) = lanes.remap(pixel_count, source_index) else {
+                    return false;
+                };
+                Some(lanes)
+            }
+            Some(_) => return false,
+            None => None,
+        };
+        self.replace_hidden_pixel_lanes(hidden_lanes)
     }
 
     /// Return this image's color type.

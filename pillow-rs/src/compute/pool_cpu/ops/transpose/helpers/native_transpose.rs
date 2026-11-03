@@ -56,10 +56,10 @@ fn transpose_bytes<const CHANNELS: usize, const TILE: usize>(
     height: u32,
     method: &TransposeMethod,
 ) -> Result<(Vec<u8>, u32, u32, u64, u64), PilError> {
-    let input = crate::checked_dims::CheckedDims::new(width, height, CHANNELS as u8)?;
-    if source.len() != input.total_bytes() {
+    let input = crate::checked_dims::CheckedDims::new_allow_empty(width, height, CHANNELS as u8)?;
+    let Some(source) = source.get(..input.total_bytes()) else {
         return Err(PilError::InternalError("native transpose source shape mismatch".into()));
-    }
+    };
     let swaps_axes = matches!(
         method,
         TransposeMethod::Rotate90
@@ -72,7 +72,7 @@ fn transpose_bytes<const CHANNELS: usize, const TILE: usize>(
     } else {
         (width, height)
     };
-    let output_dims = crate::checked_dims::CheckedDims::new(
+    let output_dims = crate::checked_dims::CheckedDims::new_allow_empty(
         output_width,
         output_height,
         CHANNELS as u8,

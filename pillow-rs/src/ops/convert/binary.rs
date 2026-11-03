@@ -23,19 +23,21 @@ pub(super) fn convert_to_binary(
         matrix: None,
         dither,
     };
-    let selected_backend = crate::compute::preferred_active_backend()?
-        .map(|(backend, _)| backend)
-        .unwrap_or(Backend::Cpu);
-    // Binary Convert is CPU-owned. Preserve SIMD architecture selection while
-    // routing an active GPU request through its established CPU fallback.
-    let requested_backend = match selected_backend {
-        Backend::Gpu => Backend::Cpu,
-        backend => backend,
-    };
-    let output = crate::compute::execute_eager_cpu_arch_image_operation(
+    // Binary Convert is CPU-owned. Preserve the selected CPU Architecture
+    // when GPU preference falls back and retain the original request receipt.
+    let (requested_backend, context) = image.cpu_arch_execution_route()?;
+    let fallback_reason = (requested_backend == Some(Backend::Gpu)).then(|| {
+        format!(
+            "GPU Convert has no binary target strategy; used CPU {:?}",
+            context.architecture()
+        )
+    });
+    let output = crate::compute::execute_eager_cpu_arch_image_operation_with_context(
         "Convert",
         source.as_ref(),
+        context,
         requested_backend,
+        fallback_reason,
         |context| {
             let prepared = crate::compute::registry::prepare_cpu(&operation, input, context)?;
             let selection = *prepared.selection();

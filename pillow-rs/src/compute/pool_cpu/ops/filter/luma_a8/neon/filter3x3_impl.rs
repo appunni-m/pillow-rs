@@ -19,7 +19,11 @@ pub(crate) fn execute(
             "NEON Filter3x3 strategy received a non-3x3 request".into(),
         ));
     };
-    if !binomial3x3_parameters_match(&kernel, scale, offset) || source.width() < 16 {
+    if source.width() < 3
+        || source.height() < 3
+        || !binomial3x3_parameters_match(&kernel, scale, offset)
+        || source.width() < 16
+    {
         return super::super::ops::execute_filter3x3_vectorized(
             image,
             FilterRequest::Filter3x3 {

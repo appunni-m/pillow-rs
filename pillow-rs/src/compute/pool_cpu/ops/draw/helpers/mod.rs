@@ -5,6 +5,7 @@ pub(crate) mod bitmap_mask;
 pub(crate) mod bitmap_region;
 pub(crate) mod gray_alpha_bitmap;
 pub(crate) mod gray_alpha_text;
+pub(crate) mod hidden_lanes;
 pub(crate) mod i16_text;
 pub(crate) mod i16_bitmap;
 pub(crate) mod numeric_text;

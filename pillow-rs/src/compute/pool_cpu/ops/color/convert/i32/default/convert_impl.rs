@@ -29,14 +29,8 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
 }
 
 fn convert_luma16(source: &RgbaImage, target: Mode) -> Result<DynamicImage, PilError> {
-    if target == Mode::ImageI16N {
-        return super::super::super::helpers::luma16::from_luma8_samples(
-            source.width(),
-            source.height(),
-            target,
-            source.pixels().map(|pixel| sample(pixel.0)),
-        );
-    }
+    // I;16 identities share unsigned-u16 sample semantics. Preserve the
+    // clamped numeric value; the selected identity controls byte order later.
     super::super::super::helpers::luma16::from_u16_samples(
         source.width(),
         source.height(),
@@ -120,7 +114,7 @@ pub(crate) fn execute_palette_target(
             }
             return Ok(super::super::super::ops::PreparedConvertOutput {
                 image: DynamicImage::ImagePaletteAlpha8(output),
-                palette: Some(crate::ops::quantize::identity_grayscale_palette()),
+                palette: Some(crate::compute::pool_cpu::helpers::quantization::identity_grayscale_palette()),
                 palette_alpha: None,
                 wrapper_metadata: Some(super::super::super::ops::ConvertWrapperMetadata::ExifOnly),
             });
@@ -129,7 +123,7 @@ pub(crate) fn execute_palette_target(
     };
     Ok(super::super::super::ops::PreparedConvertOutput {
         image: DynamicImage::ImagePalette8(indices),
-        palette: Some(crate::ops::quantize::identity_grayscale_palette()),
+        palette: Some(crate::compute::pool_cpu::helpers::quantization::identity_grayscale_palette()),
         palette_alpha: None,
         wrapper_metadata: Some(super::super::super::ops::ConvertWrapperMetadata::Drop),
     })

@@ -16,6 +16,6 @@ pub(crate) fn apply(
     };
     // F stores raw sample bytes in the four-byte carrier; preserve the byte
     // blend instead of interpreting each carrier as an RGBA pixel.
-    raw_four_band_bitmap::apply(&mut canvas, x, y, mask_width, mask_height, mask, color);
+    raw_four_band_bitmap::apply::<false>(&mut canvas, x, y, mask_width, mask_height, mask, color);
     Ok(DynamicImage::ImageF32(canvas))
 }

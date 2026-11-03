@@ -1,4 +1,11 @@
 //! Typed ImageOps geometry contracts and prepared Resize composition.
+//! Prepared Resize results, including their physical lanes, flow through Pad's
+//! lane composition after each Pad strategy. The direct fused Resize-to-Pad
+//! windows belong to L and RGBX, neither of which has omitted physical lanes.
+// TODO(pillow-rs#3ptb): verify CPU parity for direct Rust, PyO3, and JavaScript
+// geometry calls, including nested Resize identity, validation/error order,
+// and architecture selection/fallback receipts. Source call-chain review is
+// recorded in `docs/CPU_REFACTOR_INVENTORY.md`.
 
 // NO_PILLOW_SUPPORT: internal high-depth raster identities compose their
 // native Resize strategies, although Pillow has no corresponding mode names.
@@ -10,6 +17,7 @@ use crate::compute::{ExecutionContext, registry::support::{
 use crate::error::PilError;
 use crate::pipeline::{PipelineOp, ResampleFilter};
 use crate::raster::{DynamicImage, Mode};
+use super::helpers::{bankers_round, contain_dimensions, cover_dimensions, fit_box};
 
 const CONTAIN_INPUTS: &[InputContract] = &[InputContract::ContainParameters];
 const COVER_INPUTS: &[InputContract] = &[InputContract::CoverParameters];
@@ -140,9 +148,7 @@ impl PreparedGeometry<'_> {
         match self.work {
             GeometryWork::Copy(image) => Ok(image.clone()),
             GeometryWork::Resize(resize) => {
-                crate::compute::record_pipeline_operation_architecture(
-                    resize.selection().implementation.architecture,
-                );
+                crate::compute::record_pipeline_operation_selection(resize.selection());
                 resize.execute()
             }
         }
@@ -180,137 +186,6 @@ fn resize_plan<'a>(
         work: GeometryWork::Resize(resize),
         selection,
     })
-}
-
-fn bankers_round(value: f64) -> f64 {
-    let floor = value.floor();
-    let fraction = value - floor;
-    if fraction == 0.5 {
-        if floor % 2.0 == 0.0 { floor } else { floor + 1.0 }
-    } else {
-        (value + 0.5).floor()
-    }
-}
-
-fn contain_dimensions(
-    source: (u32, u32),
-    target: (u32, u32),
-) -> Result<(u32, u32), PilError> {
-    let (source_width, source_height) = source;
-    let (width, height) = target;
-    if source_height == 0 || height == 0 {
-        return Err(PilError::ZeroDivisionError("division by zero".into()));
-    }
-    let image_ratio = f64::from(source_width) / f64::from(source_height);
-    let target_ratio = f64::from(width) / f64::from(height);
-    let size = if (image_ratio - target_ratio).abs() < 1e-10 {
-        (width, height)
-    } else if image_ratio > target_ratio {
-        (
-            width,
-            bankers_round(f64::from(source_height) / f64::from(source_width)
-                * f64::from(width)) as u32,
-        )
-    } else {
-        (
-            bankers_round(f64::from(source_width) / f64::from(source_height)
-                * f64::from(height)) as u32,
-            height,
-        )
-    };
-    validate_contain_cover_size(source, size)?;
-    Ok(size)
-}
-
-fn cover_dimensions(
-    source: (u32, u32),
-    target: (u32, u32),
-) -> Result<(u32, u32), PilError> {
-    let (source_width, source_height) = source;
-    let (width, height) = target;
-    if source_height == 0 || height == 0 {
-        return Err(PilError::ZeroDivisionError("division by zero".into()));
-    }
-    let image_ratio = f64::from(source_width) / f64::from(source_height);
-    let target_ratio = f64::from(width) / f64::from(height);
-    let size = if (image_ratio - target_ratio).abs() < 1e-10 {
-        (width, height)
-    } else if image_ratio < target_ratio {
-        if source_width == 0 {
-            return Err(PilError::ZeroDivisionError("division by zero".into()));
-        }
-        (
-            width,
-            bankers_round(f64::from(source_height) / f64::from(source_width)
-                * f64::from(width)) as u32,
-        )
-    } else {
-        (
-            bankers_round(f64::from(source_width) / f64::from(source_height)
-                * f64::from(height)) as u32,
-            height,
-        )
-    };
-    validate_contain_cover_size(source, size)?;
-    Ok(size)
-}
-
-fn validate_contain_cover_size(
-    source: (u32, u32),
-    target: (u32, u32),
-) -> Result<(), PilError> {
-    let empty_width_copy = source.0 == 0 && target.0 == 0 && target.1 == source.1;
-    if (target.0 == 0 || target.1 == 0) && !empty_width_copy {
-        return Err(PilError::ValueError("height and width must be > 0".into()));
-    }
-    Ok(())
-}
-
-fn fit_box(
-    source: (u32, u32),
-    target: (u32, u32),
-    bleed: f64,
-    centering: (f64, f64),
-) -> Result<Option<(f64, f64, f64, f64)>, PilError> {
-    let (source_width, source_height) = source;
-    let (width, height) = target;
-    if source_height == 0 {
-        return Err(PilError::ZeroDivisionError("float division by zero".into()));
-    }
-    if height == 0 {
-        return Err(PilError::ZeroDivisionError("division by zero".into()));
-    }
-    if source_width == 0 {
-        if width == 0 && height == source_height && bleed == 0.0 {
-            return Ok(None);
-        }
-        if width == 0 || height < source_height {
-            return Err(PilError::ValueError("height and width must be > 0".into()));
-        }
-    } else if width == 0 {
-        return Err(PilError::ValueError("height and width must be > 0".into()));
-    }
-    let bleed_width = bleed * f64::from(source_width);
-    let bleed_height = bleed * f64::from(source_height);
-    let live_width = f64::from(source_width) - 2.0 * bleed_width;
-    let live_height = f64::from(source_height) - 2.0 * bleed_height;
-    let live_ratio = live_width / live_height;
-    let target_ratio = f64::from(width) / f64::from(height);
-    let (crop_width, crop_height) = if (live_ratio - target_ratio).abs() < 1e-10 {
-        (live_width, live_height)
-    } else if live_ratio >= target_ratio {
-        (target_ratio * live_height, live_height)
-    } else {
-        (live_width, live_width / target_ratio)
-    };
-    let crop_left = bleed_width + (live_width - crop_width) * centering.0;
-    let crop_top = bleed_height + (live_height - crop_height) * centering.1;
-    Ok(Some((
-        crop_left,
-        crop_top,
-        crop_left + crop_width,
-        crop_top + crop_height,
-    )))
 }
 
 fn select_contain(
@@ -425,16 +300,11 @@ fn prepare_fit<'a>(
     let Some(bounds) = bounds else {
         return Ok(PreparedGeometry { work: GeometryWork::Copy(inputs.image), selection });
     };
-    let effective_filter = if inputs.mode() == Mode::ImagePalette8 {
-        ResampleFilter::Nearest
-    } else {
-        filter
-    };
     resize_plan(
         inputs,
         width,
         height,
-        effective_filter,
+        filter,
         Some(bounds),
         selection,
         context,
@@ -468,7 +338,9 @@ pub(crate) fn prepare_pipeline<'a>(
             prepare_fit(inputs, *w, *h, *filter, *bleed, *centering, context)
                 .map(crate::compute::registry::PreparedOperation::from_fit)
         }
-        PipelineOp::Pad { .. } => {
+        PipelineOp::Pad { .. }
+        | PipelineOp::PadTyped { .. }
+        | PipelineOp::PadPositioned { .. } => {
             super::pad::ops::prepare_pipeline(inputs, op, context)
         }
         PipelineOp::Scale { factor, filter } => prepare_scale(inputs, *factor, *filter, context)

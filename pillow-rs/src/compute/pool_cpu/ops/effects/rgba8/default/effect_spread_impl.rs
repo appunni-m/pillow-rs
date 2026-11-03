@@ -10,5 +10,7 @@ pub(crate) fn prepare(input: &Input, distance: u32) -> Kernel<'_> {
 }
 
 pub(crate) fn execute(kernel: Kernel<'_>) -> Result<Input, PilError> {
-    crate::compute::pool_cpu::ops::effects::helpers::spread::execute(kernel)
+    crate::compute::pool_cpu::ops::effects::helpers::spread::execute_with_distance_one_identity(
+        kernel,
+    )
 }

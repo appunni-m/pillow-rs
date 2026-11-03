@@ -13,6 +13,31 @@ pub(crate) const fn support(
     architectures: &'static [ImplementationSupport],
 ) -> ModeSupport {
     match mode {
+        Mode::One => ModeSupport::Rejected {
+            mode,
+            reason: "conversion from 1 to LA not supported",
+            kind: RejectionKind::ValueError,
+        },
+        Mode::ImageLaPremultiplied8 => ModeSupport::Rejected {
+            mode,
+            reason: "unsupported putalpha mode: La",
+            kind: RejectionKind::ValueError,
+        },
+        Mode::ImageLab8 => ModeSupport::Rejected {
+            mode,
+            reason: "unsupported putalpha mode: LAB",
+            kind: RejectionKind::ValueError,
+        },
+        Mode::ImageYCbCr8 => ModeSupport::Rejected {
+            mode,
+            reason: "conversion from YCbCr to RGBA not supported",
+            kind: RejectionKind::ValueError,
+        },
+        Mode::ImageHsv8 => ModeSupport::Rejected {
+            mode,
+            reason: "conversion from HSV to RGBA not supported",
+            kind: RejectionKind::ValueError,
+        },
         Mode::ImageI32 => ModeSupport::Rejected {
             mode,
             reason: "conversion from I to LA not supported",
@@ -33,6 +58,18 @@ pub(crate) const fn support(
                 "native unsigned 16-bit alpha output extends Pillow putalpha",
             )
         }
+        Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => ModeSupport::cpu_core_only(
+            operation,
+            mode,
+            output,
+            inputs,
+            architectures,
+            "native high-depth alpha output extends Pillow putalpha",
+        ),
         _ => ModeSupport::cpu(operation, mode, output, inputs, architectures),
     }
 }

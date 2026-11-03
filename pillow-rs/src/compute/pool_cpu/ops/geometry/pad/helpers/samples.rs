@@ -54,28 +54,18 @@ where
         return Err(PilError::InternalError("Pad source buffer shape mismatch".into()));
     }
 
-    let copy_width = usize::try_from(frame.content_width.min(frame.width))
-        .map_err(|_| PilError::DimensionError("Pad content width overflow".into()))?;
-    let copy_height = usize::try_from(frame.content_height.min(frame.height))
-        .map_err(|_| PilError::DimensionError("Pad content height overflow".into()))?;
-    let offset_x = usize::try_from(frame.offset_x)
-        .map_err(|_| PilError::DimensionError("Pad horizontal offset overflow".into()))?;
-    let offset_y = usize::try_from(frame.offset_y)
-        .map_err(|_| PilError::DimensionError("Pad vertical offset overflow".into()))?;
+    let x_window = dimensions::clipped_axis(frame.offset_x, source_width, width);
+    let y_window = dimensions::clipped_axis(frame.offset_y, source_height, height);
+    let copy_width = x_window.length;
+    let copy_height = y_window.length;
     let copy_samples = copy_width
         .checked_mul(channels)
         .ok_or_else(|| PilError::DimensionError("Pad content row overflow".into()))?;
-    if offset_x.checked_add(copy_width).map_or(true, |end| end > width)
-        || offset_y.checked_add(copy_height).map_or(true, |end| end > height)
-        || copy_width > source_width
-        || copy_height > source_height
-    {
-        return Err(PilError::InternalError("Pad content window exceeds its image".into()));
-    }
-
     for y in 0..copy_height {
-        let source_start = y * source_stride;
-        let target_start = (offset_y + y) * row_samples + offset_x * channels;
+        let source_start = (y_window.source_start + y) * source_stride
+            + x_window.source_start * channels;
+        let target_start = (y_window.destination_start + y) * row_samples
+            + x_window.destination_start * channels;
         output[target_start..target_start + copy_samples]
             .copy_from_slice(&source.as_raw()[source_start..source_start + copy_samples]);
     }
@@ -83,6 +73,7 @@ where
     ImageBuffer::from_raw(frame.width, frame.height, output)
         .ok_or_else(|| PilError::InternalError("Pad output buffer shape mismatch".into()))
 }
+
 
 /// Builds a vertical Pad by appending complete fill rows around native samples.
 pub(crate) fn pad_vertical_append<P, T>(

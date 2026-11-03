@@ -1,8 +1,55 @@
 //! Native-sample projection loops shared by exact-mode strategies.
 
-use crate::raster::{RgbImage, RgbaImage};
+use crate::raster::{Mode, RgbImage, RgbaImage};
 
 pub(crate) type ProjectionAxes = (Vec<u32>, Vec<u32>);
+
+/// Result and execution evidence produced by a prepared projection strategy.
+#[derive(Debug)]
+pub(crate) struct ProjectionOutput {
+    /// Horizontal and vertical `0`/`1` projection axes.
+    pub(crate) axes: ProjectionAxes,
+    /// Number of full vector blocks processed by an architecture kernel.
+    pub(crate) vector_blocks: u64,
+    /// Number of scalar pixels processed by a vector kernel's tail path.
+    pub(crate) scalar_tail: u64,
+}
+
+impl ProjectionOutput {
+    pub(crate) fn serial(axes: ProjectionAxes) -> Self {
+        Self { axes, vector_blocks: 0, scalar_tail: 0 }
+    }
+
+    pub(crate) fn vector(axes: ProjectionAxes, vector_blocks: u64, scalar_tail: u64) -> Self {
+        Self { axes, vector_blocks, scalar_tail }
+    }
+}
+
+pub(crate) fn native_pixel_bytes(mode: Mode) -> usize {
+    match mode {
+        Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => 1,
+        Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => 2,
+        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => 3,
+        Mode::ImageRgba8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8
+        | Mode::ImageI32
+        | Mode::ImageF32 => 4,
+        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => 2,
+        Mode::ImageLumaA16 => 4,
+        Mode::ImageRgb16 => 6,
+        Mode::ImageRgba16 => 8,
+        Mode::ImageRgb32F => 12,
+        Mode::ImageRgba32F => 16,
+    }
+}
+
+pub(crate) fn storage_error(mode: Mode) -> crate::error::PilError {
+    crate::error::PilError::InternalError(format!(
+        "GetProjection mode {mode:?} did not match its exact raster variant"
+    ))
+}
 
 /// Project native samples without changing their mode or pixel representation.
 pub(crate) fn project_native_bytes(

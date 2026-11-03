@@ -1,6 +1,6 @@
 use super::{
     Bound, PyAny, PyInt, PyList, PyOverflowError, PyResult, PyTuple, PyTypeError, PyValueError,
-    chops_offset_from_python,
+    c_int_from_python, chops_offset_from_python,
 };
 use pyo3::types::{PyAnyMethods, PyFloat, PySequenceMethods, PyTupleMethods, PyTypeMethods};
 
@@ -205,8 +205,8 @@ pub(crate) fn putpixel_coordinates_from_python(xy: &Bound<'_, PyAny>) -> PyResul
         )));
     }
     Ok((
-        chops_offset_from_python(&sequence.get_item(0)?)? as i32,
-        chops_offset_from_python(&sequence.get_item(1)?)? as i32,
+        c_int_from_python(&sequence.get_item(0)?)?,
+        c_int_from_python(&sequence.get_item(1)?)?,
     ))
 }
 

@@ -1,11 +1,8 @@
 //! Serial native-sample implementations for ImagePalette8.
 
-use crate::compute::pool_cpu::ops::composite::ops::CompositeLayout;
 use crate::error::PilError;
-use crate::raster::{DynamicImage, Mode};
+use crate::raster::DynamicImage;
 use std::sync::Arc;
-
-const MODE: Mode = Mode::ImagePalette8;
 
 pub(crate) fn merge(
     source: &DynamicImage,
@@ -15,20 +12,4 @@ pub(crate) fn merge(
         return Err(PilError::InternalError("identity Merge received extra bands".into()));
     }
     Ok(source.clone())
-}
-
-pub(crate) fn composite(
-    source: &DynamicImage,
-    destination: &DynamicImage,
-    mask: &DynamicImage,
-    mask_alpha: bool,
-) -> Result<DynamicImage, PilError> {
-    crate::compute::pool_cpu::ops::composite::helpers::composite::execute(
-        source,
-        destination,
-        mask,
-        mask_alpha,
-        MODE,
-        CompositeLayout::Byte { channels: 1 },
-    )
 }

@@ -1,7 +1,11 @@
 //! CPU implementations for median, min, max, and arbitrary-rank filters.
+//!
+//! Rank-window coordinates clamp to the source edge. This fuses Pillow's
+//! `ImageFilter.RankFilter` edge expansion and the native kernel's matching
+//! output crop without allocating an expanded image.
 
 use super::uniform_image::{SMALL_UNIFORM_BYTE_MAX_PIXELS, native_small_uniform_bytes};
-use super::CheckedDims;
+use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 
 /// Push one source index into a monotonic queue used by a byte min/max line.

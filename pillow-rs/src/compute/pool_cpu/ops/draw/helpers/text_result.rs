@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use crate::raster::DynamicImage;
 use crate::compute::registry::support::{DrawTextMaskKind, PaletteKnowledge};
 
@@ -15,16 +13,12 @@ pub(crate) struct TextComposeInput<'a> {
     pub width: u32,
     /// Glyph-mask height in pixels.
     pub height: u32,
-    /// Coverage bytes or the RGBA-expanded mask consumed by the selected mode.
-    pub pixels: Cow<'a, [u8]>,
+    /// Native FreeType coverage or RGBA mask bytes.
+    pub pixels: &'a [u8],
     /// FreeType mask identity supplied to the support contract.
     pub mask_kind: DrawTextMaskKind,
     /// Resolved Pillow draw ink.
     pub fill: (u8, u8, u8, u8),
-    /// Whether the resolved fill originated as an integer ink.
-    pub fill_is_integer: bool,
-    /// Whether the RGBA canvas uses the ImageDraw overlay blend path.
-    pub blend_rgba_overlay: bool,
     /// Resolved palette state for the exact P-mode strategy.
     pub palette: PaletteKnowledge,
 }

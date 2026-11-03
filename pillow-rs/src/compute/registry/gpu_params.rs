@@ -494,7 +494,7 @@ fn transform_params(op: &PipelineOp) -> Option<Vec<u32>> {
 fn data_mutation_params(op: &PipelineOp) -> Option<Vec<u32>> {
     let params = match op {
         // ── PutData: data length ──
-        PipelineOp::PutData { data, payload_mode } => {
+        PipelineOp::PutData { data, payload_mode, .. } => {
             vec![data.len() as u32, gpu_put_data_mode_code(*payload_mode)?]
         }
 
@@ -504,9 +504,12 @@ fn data_mutation_params(op: &PipelineOp) -> Option<Vec<u32>> {
         // ── Expand: border, fill_color ──
         // src_w/src_h come from the header (cur_w/cur_h), not from extract_params.
         PipelineOp::Expand { border, fill } => {
+            let Some(border) = border.uniform_nonnegative() else {
+                return None;
+            };
             let (r, g, b, a) = *fill;
             vec![
-                *border,
+                border,
                 (r as u32) | ((g as u32) << 8) | ((b as u32) << 16) | ((a as u32) << 24),
             ]
         }

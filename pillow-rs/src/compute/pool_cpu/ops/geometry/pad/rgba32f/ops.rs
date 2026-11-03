@@ -6,7 +6,7 @@ use crate::raster::{DynamicImage, Mode};
 use super::default::pad_impl;
 use crate::compute::pool_cpu::ops::geometry::pad::helpers::dimensions::PadFrame;
 
-pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu_core_only(OperationId::Pad, Mode::ImageRgba32F, OutputModeRule::Preserve, super::super::ops::INPUTS, &[], "native high-depth Pad extends the Pillow operation contract");
+pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu_core_only(OperationId::Pad, Mode::ImageRgba32F, OutputModeRule::Preserve, super::super::ops::NATIVE_F32_FILL_INPUTS, &[], "native high-depth Pad extends the Pillow operation contract");
 
 pub(crate) fn pad(image: &DynamicImage, frame: PadFrame) -> Result<DynamicImage, PilError> {
     let DynamicImage::ImageRgba32F(image) = image else {

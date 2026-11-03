@@ -1,6 +1,7 @@
 use crate::font::{PyFont, imagefont_text_input_from_python};
 use crate::*;
 use pyo3::{pyclass, pymethods};
+use pyo3::types::PyTupleMethods;
 
 // --- ImageDraw ---
 
@@ -103,10 +104,107 @@ fn draw_color_input_from_python(
     if let Ok(value) = val.extract::<f64>() {
         return Ok(pillow_rs::DrawColorInput::Float(value));
     }
-    if let Ok(value) = val.extract::<Vec<i64>>() {
-        return Ok(pillow_rs::DrawColorInput::Components(value));
+    if val.cast::<PyTuple>().is_ok() {
+        return Ok(match draw_integer_tuple_components(val) {
+            Some((values, false)) => pillow_rs::DrawColorInput::TupleComponents(
+                values
+                    .into_iter()
+                    .map(|component| match component {
+                        pillow_rs::PaletteColorComponent::Integer(value) => value,
+                        _ => unreachable!("integer tuple values use integer components"),
+                    })
+                    .collect(),
+            ),
+            Some((values, true)) => {
+                pillow_rs::DrawColorInput::TupleComponentsWithWideInteger(values)
+            }
+            None => match draw_float_tuple_components(val) {
+                Some(values) => pillow_rs::DrawColorInput::TupleFloatComponents(values),
+                None => match draw_mixed_numeric_tuple_components(val) {
+                    Some(values) => pillow_rs::DrawColorInput::TupleMixedComponents(values),
+                    None => pillow_rs::DrawColorInput::InvalidTuple,
+                },
+            },
+        });
+    }
+    if val.cast::<PyList>().is_ok() {
+        return Ok(val.extract::<Vec<i64>>().map_or(
+            pillow_rs::DrawColorInput::InvalidList,
+            pillow_rs::DrawColorInput::ListComponents,
+        ));
     }
     Ok(pillow_rs::DrawColorInput::Invalid)
+}
+
+/// Keeps arbitrary-size Python integers on the integer-tuple route.
+///
+/// Their exact magnitude preserves `ImagePalette.colors` key equality after a
+/// failed byte conversion without narrowing Python's integer value.
+fn draw_integer_tuple_components(
+    val: &Bound<'_, PyAny>,
+) -> Option<(Vec<pillow_rs::PaletteColorComponent>, bool)> {
+    if let Ok(values) = val.extract::<Vec<i64>>() {
+        return Some((
+            values
+                .into_iter()
+                .map(pillow_rs::PaletteColorComponent::Integer)
+                .collect(),
+            false,
+        ));
+    }
+
+    let tuple = val.cast::<PyTuple>().ok()?;
+    let mut values = Vec::with_capacity(tuple.len());
+    let mut contains_wide_integer = false;
+    for component in tuple.iter() {
+        if !component.is_instance_of::<PyInt>() {
+            return None;
+        }
+        let value = crate::inputs::palette_integer_component_from_python(&component)?;
+        contains_wide_integer |= matches!(
+            &value,
+            pillow_rs::PaletteColorComponent::WideInteger { .. }
+        );
+        values.push(value);
+    }
+    Some((values, contains_wide_integer))
+}
+
+/// Preserves Python float tuple values for palette equality and error ordering.
+fn draw_float_tuple_components(val: &Bound<'_, PyAny>) -> Option<Vec<f64>> {
+    let tuple = val.cast::<PyTuple>().ok()?;
+    let mut values = Vec::with_capacity(tuple.len());
+    for component in tuple.iter() {
+        if !component.is_instance_of::<PyFloat>() {
+            return None;
+        }
+        values.push(component.extract::<f64>().ok()?);
+    }
+    Some(values)
+}
+
+/// Retains integer/float kinds so P palette errors follow tuple byte order.
+fn draw_mixed_numeric_tuple_components(
+    val: &Bound<'_, PyAny>,
+) -> Option<Vec<pillow_rs::PaletteColorComponent>> {
+    let tuple = val.cast::<PyTuple>().ok()?;
+    let mut values = Vec::with_capacity(tuple.len());
+    let mut contains_integer = false;
+    let mut contains_float = false;
+    for component in tuple.iter() {
+        if component.is_instance_of::<PyInt>() {
+            contains_integer = true;
+            values.push(crate::inputs::palette_integer_component_from_python(&component)?);
+        } else if component.is_instance_of::<PyFloat>() {
+            contains_float = true;
+            values.push(pillow_rs::PaletteColorComponent::Float(
+                component.extract::<f64>().ok()?,
+            ));
+        } else {
+            return None;
+        }
+    }
+    (contains_integer && contains_float).then_some(values)
 }
 
 pub(super) fn draw_features_from_python(
@@ -137,6 +235,25 @@ impl PyDraw {
         let draw = pillow_rs::Draw::new(borrowed.inner.clone(), mode);
         draw.validate_mode().map_err(map_error)?;
         Ok(PyDraw { draw })
+    }
+
+    fn set_palette_reserved_indices(&mut self, indices: Vec<u32>) {
+        self.draw.set_palette_reserved_indices(&indices);
+    }
+
+    fn _set_palette(&mut self, data: Vec<u8>, mode: &str) -> PyResult<()> {
+        self.draw
+            .set_palette_data(&data, mode)
+            .map_err(map_error)
+    }
+
+    fn _validate_embedded_color(&self) -> PyResult<()> {
+        self.draw
+            .validate_text_options(&pillow_rs::ImageFontTextOptions {
+                embedded_color: true,
+                ..pillow_rs::ImageFontTextOptions::default()
+            })
+            .map_err(map_error)
     }
 
     #[pyo3(signature = (xy, fill=None, width=0, joint=None))]
@@ -225,6 +342,10 @@ impl PyDraw {
         bitmap: &Bound<'_, PyImage>,
         fill: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
+        // The Python facade loads before resolving palette ink. Keep direct
+        // calls to this lower-level binding on the same error and mutation
+        // order; PyImage.load releases the GIL while materializing.
+        bitmap.call_method0("load")?;
         let fill_input = draw_color_input_from_python(fill)?;
         let bmp = bitmap.borrow();
         self.draw
@@ -459,7 +580,7 @@ impl PyDraw {
             .map_err(map_error)
     }
 
-    #[pyo3(signature = (xy, text, fill=None, font=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None, embedded_color=false, stroke_fill=None))]
+    #[pyo3(signature = (xy, text, fill=None, font=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None, embedded_color=false, stroke_fill=None, font_size=None))]
     #[allow(clippy::too_many_arguments)] // Mirrors the public Pillow ImageDraw API.
     fn text(
         &mut self,
@@ -474,11 +595,30 @@ impl PyDraw {
         anchor: Option<String>,
         embedded_color: bool,
         stroke_fill: Option<&Bound<'_, PyAny>>,
+        font_size: Option<f32>,
     ) -> PyResult<()> {
+        let default_font = if font.is_none() {
+            Some(
+                pillow_rs::FreeTypeFont::load_default(font_size.unwrap_or(10.0))
+                    .map_err(map_error)?,
+            )
+        } else {
+            None
+        };
+        self.draw
+            .validate_text_options(&pillow_rs::ImageFontTextOptions {
+                embedded_color,
+                ..pillow_rs::ImageFontTextOptions::default()
+            })
+            .map_err(map_error)?;
         let (color, text_fill_is_integer) = self.text_color_and_kind(fill)?;
-        let stroke_fill = stroke_fill
-            .map(|value| self.text_color_and_kind(Some(value)))
-            .transpose()?;
+        let stroke_fill = if stroke_width != 0.0 {
+            stroke_fill
+                .map(|value| self.text_color_and_kind(Some(value)))
+                .transpose()?
+        } else {
+            None
+        };
         let (features, features_invalid) = draw_features_from_python(features);
         let options = pillow_rs::ImageFontTextOptions {
             direction,
@@ -495,14 +635,22 @@ impl PyDraw {
             ..pillow_rs::ImageFontTextOptions::default()
         };
         let borrowed = font.map(|font| font.borrow());
+        let font = borrowed
+            .as_ref()
+            .map(|font| &font.inner)
+            .or(default_font.as_ref())
+            .ok_or_else(|| {
+                map_error(pillow_rs::PilError::InternalError(
+                    "draw text font was not prepared".into(),
+                ))
+            })?;
         self.draw
-            .text_with_optional_font_input(
+            .text_with_options_input(
                 xy.0 as i32,
                 xy.1 as i32,
                 imagefont_text_input_from_python(text)?,
-                borrowed.as_ref().map(|font| &font.inner),
+                font,
                 color,
-                None,
                 &options,
             )
             .map_err(map_error)
@@ -527,10 +675,28 @@ impl PyDraw {
         align: Option<String>,
         stroke_fill: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
+        let default_font = if font.is_none() {
+            Some(
+                pillow_rs::FreeTypeFont::load_default(font_size.unwrap_or(10.0))
+                    .map_err(map_error)?,
+            )
+        } else {
+            None
+        };
+        self.draw
+            .validate_text_options(&pillow_rs::ImageFontTextOptions {
+                embedded_color,
+                ..pillow_rs::ImageFontTextOptions::default()
+            })
+            .map_err(map_error)?;
         let (color, text_fill_is_integer) = self.text_color_and_kind(fill)?;
-        let stroke_fill = stroke_fill
-            .map(|value| self.text_color_and_kind(Some(value)))
-            .transpose()?;
+        let stroke_fill = if stroke_width != 0.0 {
+            stroke_fill
+                .map(|value| self.text_color_and_kind(Some(value)))
+                .transpose()?
+        } else {
+            None
+        };
         let (features, features_invalid) = draw_features_from_python(features);
         let options = pillow_rs::ImageFontTextOptions {
             direction,
@@ -548,15 +714,24 @@ impl PyDraw {
             ..pillow_rs::ImageFontTextOptions::default()
         };
         let borrowed = font.map(|font| font.borrow());
+        let font = borrowed
+            .as_ref()
+            .map(|font| &font.inner)
+            .or(default_font.as_ref())
+            .ok_or_else(|| {
+                map_error(pillow_rs::PilError::InternalError(
+                    "draw text font was not prepared".into(),
+                ))
+            })?;
         self.draw
             .multiline_text_with_optional_font_input(
                 xy.0,
                 xy.1,
                 imagefont_text_input_from_python(text)?,
-                borrowed.as_ref().map(|font| &font.inner),
+                Some(font),
                 color,
                 f64::from(spacing.unwrap_or(4)),
-                font_size,
+                None,
                 &options,
             )
             .map_err(map_error)
@@ -702,21 +877,21 @@ impl PyDraw {
     }
 
     /// Parse a draw color, using the image mode to determine byte representation.
-    fn color(&self, val: Option<&Bound<'_, PyAny>>) -> PyResult<(u8, u8, u8, u8)> {
+    fn color(&mut self, val: Option<&Bound<'_, PyAny>>) -> PyResult<(u8, u8, u8, u8)> {
         self.draw
-            .color_with_input(draw_color_input_from_python(val)?)
+            .resolve_draw_color_with_input(draw_color_input_from_python(val)?)
             .map_err(map_error)
     }
 
     /// Parse an ImageDraw text ink while retaining integer-versus-component origin.
     fn text_color_and_kind(
-        &self,
+        &mut self,
         val: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<((u8, u8, u8, u8), bool)> {
         let input = draw_color_input_from_python(val)?;
         let is_integer = matches!(&input, pillow_rs::DrawColorInput::Integer(_));
         self.draw
-            .text_color_with_input(input)
+            .resolve_text_color_with_input(input)
             .map(|color| (color, is_integer))
             .map_err(map_error)
     }

@@ -5,8 +5,10 @@ use crate::raster::{GenericImageView, Mode};
 
 use super::{
     Arc, DynamicImage, FormattedPixelValue, Image, PipelineOp,
-    is_l16_identity, pillow_band_count,
+    is_l16_identity,
 };
+
+mod native_pixel;
 
 /// Host-neutral value extracted for a public `Image.putpixel` call.
 #[derive(Debug, Clone, PartialEq)]
@@ -22,6 +24,14 @@ pub enum PutPixelValue {
     /// A value that is not a supported scalar or component sequence.
     Invalid,
 }
+
+mod palette_components;
+
+pub use palette_components::PaletteColorComponent;
+use palette_components::{
+    expand_palette_metadata, palette_component_matches_byte, palette_component_to_byte,
+    palette_components_equal,
+};
 
 impl Image {
     /// Returns one pixel as an RGBA tuple.
@@ -71,72 +81,11 @@ impl Image {
     /// Returns one pixel with Pillow's mode-specific scalar or tuple shape.
     pub fn getpixel_formatted(&self, x: u32, y: u32) -> Result<FormattedPixelValue, PilError> {
         let img = self.materialized_shared()?;
-        let mode = Self::mode_from_materialized(&img);
         let (width, height) = (img.width(), img.height());
-        if is_l16_identity(mode) {
-            if x >= width || y >= height {
-                return Err(PilError::IndexError("image index out of range".into()));
-            }
-            let index = (y as usize)
-                .checked_mul(width as usize)
-                .and_then(|row| row.checked_add(x as usize))
-                .ok_or_else(|| PilError::InternalError("pixel index overflow".into()))?;
-            return img
-                .to_luma16()
-                .as_raw()
-                .get(index)
-                .copied()
-                .map(|value| FormattedPixelValue::Integer(i32::from(value)))
-                .ok_or_else(|| PilError::InternalError("I;16 pixel index out of bounds".into()));
+        if x >= width || y >= height {
+            return Err(PilError::IndexError("image index out of range".into()));
         }
-        if matches!(mode, Mode::ImageI32 | Mode::ImageF32) {
-            if x >= width || y >= height {
-                return Err(PilError::IndexError("image index out of range".into()));
-            }
-            let index = (y as usize)
-                .checked_mul(width as usize)
-                .and_then(|row| row.checked_add(x as usize))
-                .ok_or_else(|| PilError::InternalError("pixel index overflow".into()))?;
-            let offset = index
-                .checked_mul(4)
-                .ok_or_else(|| PilError::InternalError("scalar pixel offset overflow".into()))?;
-            let end = offset
-                .checked_add(4)
-                .ok_or_else(|| PilError::InternalError("scalar pixel offset overflow".into()))?;
-            let sample = img.as_bytes().get(offset..end).ok_or_else(|| {
-                PilError::InternalError("scalar pixel index out of bounds".into())
-            })?;
-            if mode == Mode::ImageI32 {
-                return Ok(FormattedPixelValue::Integer(i32::from_le_bytes([
-                    sample[0], sample[1], sample[2], sample[3],
-                ])));
-            }
-            return Ok(FormattedPixelValue::Float(f32::from_le_bytes([
-                sample[0], sample[1], sample[2], sample[3],
-            ]) as f64));
-        }
-
-        let (r, g, b, a) = self.getpixel(x, y)?;
-        Ok(match mode {
-            Mode::ImageLuma8 | Mode::One | Mode::ImagePalette8 => {
-                FormattedPixelValue::Scalar(r)
-            }
-            Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => {
-                FormattedPixelValue::Components(vec![r, a])
-            }
-            Mode::ImageRgb8 => FormattedPixelValue::Components(vec![r, g, b]),
-            // Pillow stores LAB A/B samples in the unsigned byte image as
-            // values biased by 128. Merge applies that native C encoding;
-            // decode it again at the public pixel boundary.
-            Mode::ImageLab8 => {
-                FormattedPixelValue::Components(vec![r, g.wrapping_sub(128), b.wrapping_sub(128)])
-            }
-            Mode::ImageRgba8
-            | Mode::ImageRgbPremultiplied8
-            | Mode::ImageRgbx8
-            | Mode::ImageCmyk8 => FormattedPixelValue::Components(vec![r, g, b, a]),
-            _ => FormattedPixelValue::Components(vec![r, g, b]),
-        })
+        native_pixel::formatted_pixel(&img, x, y)
     }
 
     /// Queues an in-place single-pixel write.
@@ -200,7 +149,31 @@ impl Image {
     /// 256 colors. The returned palette is present only when allocation changed
     /// it.
     fn resolve_palette_color(&self, color: [u8; 3]) -> Result<(u8, Option<Vec<u8>>), PilError> {
-        self.resolve_palette_color_with_reserved(color, &[])
+        let reserved = self.palette_reserved_indices();
+        self.resolve_palette_color_with_reserved(color, &reserved)
+    }
+
+    // Pillow reserves only the current `Image.info` values during allocation;
+    // do not infer an index from a retained palette-alpha sidecar.
+    fn palette_reserved_indices(&self) -> Vec<u32> {
+        self.compatibility_info()
+            .into_iter()
+            .filter_map(|(name, value)| {
+                if !matches!(name.as_str(), "background" | "transparency") {
+                    return None;
+                }
+                let index = match value {
+                    super::ImageInfoValue::Integer(index) => u32::try_from(index).ok(),
+                    super::ImageInfoValue::Float(index)
+                        if index.is_finite() && index.fract() == 0.0 =>
+                    {
+                        (0.0..=255.0).contains(&index).then_some(index as u32)
+                    }
+                    _ => None,
+                }?;
+                (index < 256).then_some(index)
+            })
+            .collect()
     }
 
     fn resolve_palette_color_with_reserved(
@@ -222,39 +195,56 @@ impl Image {
         }
 
         let entries = palette.len() / 3;
-        let mut next = entries;
-        while next < 256 && reserved.contains(&(next as u32)) {
-            next += 1;
-        }
-        let index = if next < 256 {
-            next
-        } else {
-            let mut used = [false; 256];
-            for index in self.tobytes()? {
-                used[usize::from(index)] = true;
-            }
-            let transparent_index = self
-                .palette_alpha()
-                .filter(|alpha| alpha.len() == 1 && alpha[0] == 0)
-                .map(|_| 0);
-            (0..256)
-                .rev()
-                .find(|&index| {
-                    !used[index]
-                        && Some(index) != transparent_index
-                        && !reserved.contains(&(index as u32))
-                })
-                .ok_or_else(|| {
-                    PilError::ValueError("cannot allocate more than 256 colors".into())
-                })?
-        };
+        let index = self.palette_allocation_index(entries, reserved, true)?;
 
         if index >= entries {
+            // ImagePalette advances the returned index past reserved slots,
+            // then appends bytes at the current palette length without padding.
             palette.extend_from_slice(&color);
         } else {
             palette[index * 3..index * 3 + 3].copy_from_slice(&color);
         }
         Ok((index as u8, Some(palette)))
+    }
+
+    fn palette_allocation_index(
+        &self,
+        entries: usize,
+        reserved: &[u32],
+        reuse_unused: bool,
+    ) -> Result<usize, PilError> {
+        // TODO(pillow-rs#3ptb): freeze P/PA parity for reserved metadata
+        // indices in short palettes and full-palette reuse, including when
+        // public Python `Image.info` overrides a retained palette-alpha marker.
+        // Pillow skips `background`/`transparency`, but appends at the current
+        // palette end even when the returned index is later.
+        let mut next = entries;
+        while next < 256 && reserved.contains(&(next as u32)) {
+            next += 1;
+        }
+        if next < 256 {
+            return Ok(next);
+        }
+        if !reuse_unused {
+            return Err(PilError::ValueError(
+                "cannot allocate more than 256 colors".into(),
+            ));
+        }
+        let mut used = [false; 256];
+        for index in self.tobytes()? {
+            used[usize::from(index)] = true;
+        }
+        (0..256)
+            .rev()
+            .find(|&index| !used[index] && !reserved.contains(&(index as u32)))
+            .ok_or_else(|| PilError::ValueError("cannot allocate more than 256 colors".into()))
+    }
+
+    pub(crate) fn ensure_draw_palette_entry_available(
+        &self,
+        reserved: &[u32],
+    ) -> Result<(), PilError> {
+        self.draw_palette_allocation_index(reserved).map(|_| ())
     }
 
     /// Queues a Pillow-style single-integer pixel write.
@@ -337,14 +327,11 @@ impl Image {
         pixel_index: usize,
         input: crate::compute::pool_cpu::ops::put::ops::PutPixelValueAtInput,
     ) -> Result<(), PilError> {
-        let context = crate::compute::ExecutionContext::for_routed_backend(
-            crate::compute::Backend::Cpu,
-        );
+        let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
         let selection = crate::compute::pool_cpu::ops::put::ops::select_put_pixel_value_at(
             mode,
             &context,
         )?;
-        let requested_backend = self.requested_backend_for_eager_cpu_mutation();
 
         self.load()?;
         let Image::Loaded(data) = self else {
@@ -429,7 +416,7 @@ impl Image {
         }
         match value {
             PutPixelValue::FloatComponents(values) => {
-                self.prepare_palette_float_components(&values)
+                self.prepare_palette_float_components(&values, reserved)
             }
             PutPixelValue::Components(values) if matches!(values.len(), 3 | 4) => {
                 self.prepare_palette_integer_components(&values, reserved)
@@ -438,41 +425,248 @@ impl Image {
         }
     }
 
-    fn prepare_palette_float_components(&self, values: &[f64]) -> Result<PutPixelValue, PilError> {
-        // Python palette keys compare equal integer and float components
-        // before bytes(color) validates a newly allocated entry.
+    /// Resolves a P-mode ImageOps color through its cloned palette.
+    ///
+    /// This reproduces ImagePalette.getcolor's append-only slot selection:
+    /// existing entries retain their first index, while new entries append at
+    /// the current end and fail once the palette already has 256 entries.
+    pub(crate) fn resolve_palette_fill_color(
+        &self,
+        components: &[PaletteColorComponent],
+    ) -> Result<(u8, Vec<u8>, Option<Vec<u8>>), PilError> {
         let rgba = self.palette_mode() == Some("RGBA");
+        let mut color = components.to_vec();
+        if !rgba && color.len() == 4 {
+            if !palette_component_matches_byte(&color[3], u8::MAX) {
+                return Err(PilError::ValueError(
+                    "cannot add non-opaque RGBA color to RGB palette".into(),
+                ));
+            }
+            color.truncate(3);
+        } else if rgba && color.len() == 3 {
+            color.push(PaletteColorComponent::Integer(i64::from(u8::MAX)));
+        }
+
+        let channels = if rgba { 4 } else { 3 };
+        if color.len() != channels {
+            return Err(PilError::TypeError("unknown color specifier".into()));
+        }
         let palette = if rgba {
             self.getpalette_rgba()
         } else {
             self.extract_palette()
         }
         .unwrap_or_default();
-        let mut color = values.to_vec();
-        if rgba && color.len() == 3 {
-            color.push(255.0);
+        if let Some(index) = palette.chunks_exact(channels).position(|entry| {
+            entry
+                .iter()
+                .zip(&color)
+                .all(|(&byte, component)| palette_component_matches_byte(component, byte))
+        }) {
+            let (rgb, alpha) = expand_palette_metadata(palette, rgba);
+            return Ok((index as u8, rgb, alpha));
         }
-        if let Some(index) = palette
-            .chunks_exact(if rgba { 4 } else { 3 })
+
+        let index = palette.len() / channels;
+        if index >= 256 {
+            return Err(PilError::ValueError(
+                "cannot allocate more than 256 colors".into(),
+            ));
+        }
+        let color = color
+            .iter()
+            .map(palette_component_to_byte)
+            .collect::<Result<Vec<_>, _>>()?;
+        let start = index * channels;
+        let end = (start + channels).min(palette.len());
+        let mut updated = Vec::with_capacity(palette.len() + channels);
+        updated.extend_from_slice(&palette[..start]);
+        updated.extend_from_slice(&color);
+        updated.extend_from_slice(&palette[end..]);
+        let (rgb, alpha) = expand_palette_metadata(updated, rgba);
+        Ok((index as u8, rgb, alpha))
+    }
+
+    /// Resolves numeric Draw tuple components through Pillow's P palette.
+    pub(crate) fn prepare_draw_palette_tuple_components(
+        &mut self,
+        components: &[PaletteColorComponent],
+        reserved: &[u32],
+        color_cache: &mut Vec<(Vec<PaletteColorComponent>, u8)>,
+    ) -> Result<PutPixelValue, PilError> {
+        let rgba_palette = self.palette_mode() == Some("RGBA");
+        let mut color = components.to_vec();
+        if rgba_palette && color.len() == 3 {
+            color.push(PaletteColorComponent::Integer(255));
+        } else if !rgba_palette && color.len() == 4 {
+            let opaque = match &color[3] {
+                PaletteColorComponent::Integer(value) => *value == 255,
+                PaletteColorComponent::Float(value) => *value == 255.0,
+                PaletteColorComponent::WideInteger { .. } => false,
+            };
+            if !opaque {
+                return Err(PilError::ValueError(
+                    "cannot add non-opaque RGBA color to RGB palette".into(),
+                ));
+            }
+            color.truncate(3);
+        }
+
+        if let Some((_, index)) = color_cache
+            .iter()
+            .find(|(cached, _)| palette_components_equal(cached, &color))
+        {
+            return Ok(PutPixelValue::Integer(i64::from(*index)));
+        }
+
+        let lookup_color: Vec<f64> = color
+            .iter()
+            .map(|component| match component {
+                PaletteColorComponent::Integer(value) => *value as f64,
+                PaletteColorComponent::WideInteger { .. } => f64::NAN,
+                PaletteColorComponent::Float(value) => *value,
+            })
+            .collect();
+        if let Some(index) = self.palette_float_match_index(&lookup_color, rgba_palette) {
+            color_cache.push((color, index as u8));
+            return Ok(PutPixelValue::Integer(index as i64));
+        }
+
+        let index = self.draw_palette_allocation_index(reserved)?;
+        // Pillow inserts the ImagePalette.colors key after choosing a slot but
+        // before `bytes(color)` validates component types and ranges. Retain
+        // that mutation even when the conversion below returns an error.
+        color_cache.push((color.clone(), index as u8));
+
+        let mut integer_color = Vec::with_capacity(color.len());
+        for component in &color {
+            match component {
+                PaletteColorComponent::Integer(value) if (0..=255).contains(value) => {
+                    integer_color.push(*value);
+                }
+                PaletteColorComponent::Integer(_)
+                | PaletteColorComponent::WideInteger { .. } => {
+                    return Err(PilError::ValueError(
+                        "bytes must be in range(0, 256)".into(),
+                    ));
+                }
+                PaletteColorComponent::Float(_) => {
+                    return Err(PilError::TypeError(
+                        "'float' object cannot be interpreted as an integer".into(),
+                    ));
+                }
+            }
+        }
+
+        let channels = if rgba_palette { 4 } else { 3 };
+        if integer_color.len() == channels {
+            return self.prepare_palette_integer_components(&integer_color, reserved);
+        }
+
+        if integer_color.is_empty() {
+            return Ok(PutPixelValue::Integer(index as i64));
+        }
+
+        let mode = if rgba_palette { "RGBA" } else { "RGB" };
+        let mut palette = if rgba_palette {
+            self.getpalette_rgba()
+        } else {
+            self.extract_palette()
+        }
+        .unwrap_or_default();
+        let start = index * channels;
+        if start < palette.len() {
+            let end = (start + channels).min(palette.len());
+            palette.splice(start..end, integer_color.iter().map(|&value| value as u8));
+        } else {
+            palette.extend(integer_color.iter().map(|&value| value as u8));
+        }
+        // TODO(pillow-rs#3ptb): the indexed raster stores complete RGB/RGBA
+        // entries, so an incomplete trailing raw palette entry is discarded
+        // here. Python's ImagePalette retains those bytes until realization.
+        self.replace_indexed_palette_from_draw(&palette, mode)?;
+        Ok(PutPixelValue::Integer(index as i64))
+    }
+
+    fn draw_palette_allocation_index(&self, reserved: &[u32]) -> Result<usize, PilError> {
+        let rgba_palette = self.palette_mode() == Some("RGBA");
+        let channels = if rgba_palette { 4 } else { 3 };
+        let palette = if rgba_palette {
+            self.getpalette_rgba()
+        } else {
+            self.extract_palette()
+        }
+        .unwrap_or_default();
+        self.palette_allocation_index(palette.len() / channels, reserved, true)
+    }
+
+    fn palette_float_match_index(&self, color: &[f64], rgba_palette: bool) -> Option<usize> {
+        let palette = if rgba_palette {
+            self.getpalette_rgba()
+        } else {
+            self.extract_palette()
+        }
+        .unwrap_or_default();
+        palette
+            .chunks_exact(if rgba_palette { 4 } else { 3 })
             .position(|entry| {
                 entry.len() == color.len()
                     && entry
                         .iter()
-                        .zip(&color)
+                        .zip(color)
                         .all(|(&byte, &value)| f64::from(byte) == value)
             })
-        {
-            return Ok(if self.known_mode_identity() == Some(crate::raster::Mode::ImagePaletteAlpha8) {
+    }
+
+    fn normalize_palette_float_color(
+        &self,
+        values: &[f64],
+    ) -> Result<(Vec<f64>, bool), PilError> {
+        let rgba_palette = self.palette_mode() == Some("RGBA");
+        let mut color = values.to_vec();
+        if rgba_palette && color.len() == 3 {
+            color.push(255.0);
+        } else if !rgba_palette && color.len() == 4 {
+            if color[3] != 255.0 {
+                return Err(PilError::ValueError(
+                    "cannot add non-opaque RGBA color to RGB palette".into(),
+                ));
+            }
+            color.truncate(3);
+        }
+        Ok((color, rgba_palette))
+    }
+
+    fn prepare_palette_float_components(
+        &self,
+        values: &[f64],
+        reserved: &[u32],
+    ) -> Result<PutPixelValue, PilError> {
+        // TODO(pillow-rs#3ptb): parity-check nonstandard tuple arities and
+        // palette-color cache state after `bytes(color)` rejects float values.
+        // Python palette keys compare equal integer and float components
+        // before `bytes(color)` validates a new entry. Normalize tuple arity
+        // first, then preserve Pillow's allocation-error precedence.
+        let pa = self.known_mode_identity() == Some(crate::raster::Mode::ImagePaletteAlpha8);
+        let (color, rgba) = self.normalize_palette_float_color(values)?;
+        let palette = if rgba {
+            self.getpalette_rgba()
+        } else {
+            self.extract_palette()
+        }
+        .unwrap_or_default();
+        if let Some(index) = self.palette_float_match_index(&color, rgba) {
+            return Ok(if pa {
                 PutPixelValue::Components(vec![index as i64, 255])
             } else {
                 PutPixelValue::Integer(index as i64)
             });
         }
         let channels = if rgba { 4 } else { 3 };
-        if self.known_mode_identity() == Some(crate::raster::Mode::ImagePaletteAlpha8) && palette.len() / channels >= 256 {
-            return Err(PilError::ValueError(
-                "cannot allocate more than 256 colors".into(),
-            ));
+        if pa {
+            self.palette_allocation_index(palette.len() / channels, reserved, false)?;
+        } else {
+            self.ensure_draw_palette_entry_available(reserved)?;
         }
         Err(PilError::TypeError(
             "'float' object cannot be interpreted as an integer".into(),
@@ -518,6 +712,18 @@ impl Image {
                 ));
             }
         }
+        if !pa
+            && (values[..3].iter().any(|&value| !(0..=255).contains(&value))
+                || (rgba_palette
+                    && values
+                        .get(3)
+                        .is_some_and(|&value| !(0..=255).contains(&value))))
+        {
+            // Pillow selects an available palette index before `bytes(color)`
+            // validates component ranges. If the palette cannot allocate,
+            // that failure takes precedence over the byte-range error.
+            self.ensure_draw_palette_entry_available(reserved)?;
+        }
         let mut color = [0u8; 3];
         for (byte, &value) in color.iter_mut().zip(&values[..3]) {
             *byte = u8::try_from(value)
@@ -538,7 +744,7 @@ impl Image {
         } else {
             let (index, palette) = self.resolve_palette_color_with_reserved(color, reserved)?;
             if let Some(palette) = palette {
-                self.putpalette(&palette, "RGB")?;
+                self.replace_indexed_palette(&palette, "RGB")?;
             }
             index
         };
@@ -563,40 +769,28 @@ impl Image {
             return Ok(index as u8);
         }
         let entries = palette.len() / 4;
-        let mut next = entries;
-        while next < 256 && reserved.contains(&(next as u32)) {
-            next += 1;
-        }
-        let index = if next < 256 {
-            next
-        } else if !pa {
-            let mut used = [false; 256];
-            for index in self.tobytes()? {
-                used[usize::from(index)] = true;
-            }
-            (0..256)
-                .rev()
-                .find(|&index| !used[index] && !reserved.contains(&(index as u32)))
-                .ok_or_else(|| {
-                    PilError::ValueError("cannot allocate more than 256 colors".into())
-                })?
-        } else {
-            return Err(PilError::ValueError(
-                "cannot allocate more than 256 colors".into(),
-            ));
-        };
+        let index = self.palette_allocation_index(entries, reserved, !pa)?;
         if index >= entries {
+            // Match ImagePalette's direct append even when the returned index
+            // was advanced past reserved background/transparency slots.
             palette.extend_from_slice(&color);
         } else {
             palette[index * 4..index * 4 + 4].copy_from_slice(&color);
         }
-        self.putpalette(&palette, "RGBA")?;
+        self.replace_indexed_palette(&palette, "RGBA")?;
         Ok(index as u8)
     }
 
     /// Applies Pillow's public `putpixel` scalar/tuple normalization.
     pub fn putpixel_value(&mut self, x: u32, y: u32, value: PutPixelValue) -> Result<(), PilError> {
-        let value = self.prepare_putpixel_palette(value, &[])?;
+        let allocates_palette_color = self.has_palette_samples()
+            && matches!(&value, PutPixelValue::Components(values) if matches!(values.len(), 3 | 4));
+        let value = if allocates_palette_color {
+            let reserved = self.palette_reserved_indices();
+            self.prepare_putpixel_palette(value, &reserved)?
+        } else {
+            self.prepare_putpixel_palette(value, &[])?
+        };
         let mode = self.mode_identity()?;
         match value {
             PutPixelValue::Integer(value) => {
@@ -644,7 +838,7 @@ impl Image {
                 if let [value] = values.as_slice() {
                     return self.putpixel_value(x, y, PutPixelValue::Integer(*value));
                 }
-                let bands = pillow_band_count(mode);
+                let bands = mode.band_count();
                 let palette_color = matches!(mode, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
                     && matches!(values.len(), 3 | 4);
                 if !palette_color
@@ -666,7 +860,7 @@ impl Image {
                     .map(|&value| value.clamp(0, 255) as u8)
                     .collect();
                 match bytes.as_slice() {
-                    [value, alpha] => self.putpixel(x, y, *value, 0, 0, *alpha),
+                    [value, alpha] => self.putpixel(x, y, *value, *value, *value, *alpha),
                     [r, g, b] => self.putpixel(x, y, *r, *g, *b, 255),
                     [r, g, b, a] => self.putpixel(x, y, *r, *g, *b, *a),
                     _ => Err(PilError::InternalError(

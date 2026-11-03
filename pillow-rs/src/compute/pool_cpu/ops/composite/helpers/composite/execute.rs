@@ -6,61 +6,62 @@ use crate::compute::Architecture;
 use crate::compute::registry::support::{OperationId, StrategySelection};
 use crate::compute::pool_cpu::ops::composite::ops::CompositeLayout;
 
-pub(crate) fn execute_selected(
-    source: &DynamicImage,
-    destination: &DynamicImage,
-    mask: &DynamicImage,
+/// Executes the selected byte-mode architecture through that exact Paste mode strategy.
+pub(crate) fn execute_byte_selected<'a, F>(
+    source: &'a DynamicImage,
+    destination: &'a DynamicImage,
+    mask: &'a DynamicImage,
     mask_alpha: bool,
     mode: Mode,
-    layout: CompositeLayout,
+    channels: u8,
     selection: &StrategySelection,
-) -> Result<DynamicImage, PilError> {
+    execute_architecture: F,
+) -> Result<DynamicImage, PilError>
+where
+    F: FnOnce(
+        crate::compute::pool_cpu::ops::paste::helpers::plan::BytePlan<
+            'a,
+            &'a DynamicImage,
+        >,
+    ) -> Result<DynamicImage, PilError>,
+{
     super::super::strategy::require_operation_mode(
         selection,
         OperationId::CompositeModule,
         mode,
     )?;
-    match selection.implementation.architecture {
-        Architecture::Default => execute(source, destination, mask, mask_alpha, mode, layout),
-        #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
-        Architecture::Sse2 if vector_mode(mode) => match layout {
-            CompositeLayout::Byte { channels } => {
-                super::vector::execute(source, destination, mask, mask_alpha, mode, channels)
-            }
-            _ => Err(unbound(mode, selection)),
-        },
-        #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-        Architecture::Neon if vector_mode(mode) => match layout {
-            CompositeLayout::Byte { channels } => {
-                super::vector::execute(source, destination, mask, mask_alpha, mode, channels)
-            }
-            _ => Err(unbound(mode, selection)),
-        },
-        #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
-        Architecture::WasmSimd128 if vector_mode(mode) => match layout {
-            CompositeLayout::Byte { channels } => {
-                super::vector::execute(source, destination, mask, mask_alpha, mode, channels)
-            }
-            _ => Err(unbound(mode, selection)),
-        },
-        _ => Err(unbound(mode, selection)),
+    if destination.mode() != mode
+        || crate::compute::pool_cpu::ops::paste::helpers::layout::byte_carrier_pixel_width(mode)
+            != Some(usize::from(channels))
+    {
+        return Err(PilError::InternalError(
+            "Composite byte architecture received a mismatched exact mode".into(),
+        ));
     }
-}
-
-fn vector_mode(mode: Mode) -> bool {
-    matches!(
+    let plan = crate::compute::pool_cpu::ops::paste::helpers::plan::composite_byte_plan(
+        destination,
         mode,
-        Mode::One
-            | Mode::ImageLuma8
-            | Mode::ImagePalette8
-            | Mode::ImageLumaA8
-            | Mode::ImagePaletteAlpha8
-            | Mode::ImageRgb8
-            | Mode::ImageHsv8
-            | Mode::ImageYCbCr8
-            | Mode::ImageRgba8
-            | Mode::ImageCmyk8
-            | Mode::ImageRgbx8
+        source,
+        mask,
+        mask_alpha,
+        *selection,
+    )?;
+    crate::compute::pool_cpu::ops::paste::helpers::plan::execute_with_hidden_lanes(
+        plan,
+        |plan| match selection.implementation.architecture {
+            Architecture::Default => execute(
+                source,
+                destination,
+                mask,
+                mask_alpha,
+                mode,
+                CompositeLayout::Byte { channels },
+            ),
+            Architecture::Sse2 | Architecture::Neon | Architecture::WasmSimd128 => {
+                execute_architecture(plan)
+            }
+            _ => Err(unbound(mode, selection)),
+        },
     )
 }
 
@@ -87,7 +88,6 @@ pub(crate) fn execute(
         CompositeLayout::U16 { channels } => {
             super::numeric::execute_u16(source, destination, samples, mode, channels)
         }
-        CompositeLayout::I32 => super::numeric::execute_i32(source, destination, samples),
         CompositeLayout::F32 { channels } => {
             super::numeric::execute_f32(source, destination, samples, mode, channels)
         }

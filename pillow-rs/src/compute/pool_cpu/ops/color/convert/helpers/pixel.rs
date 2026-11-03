@@ -1,29 +1,11 @@
 //! Native sample arithmetic shared by Convert's exact target strategies.
 
-use crate::raster::{DynamicImage, Mode, RgbImage, Rgba, RgbaImage};
+pub(crate) use crate::compute::pool_cpu::helpers::bytes::unpremultiply::unpremultiply_byte;
+use crate::raster::{DynamicImage, RgbImage, Rgba, RgbaImage};
 
 #[inline]
 pub(crate) fn premultiply_byte(value: u8, alpha: u8) -> u8 {
     ((u16::from(value) * u16::from(alpha) + 127) / 255) as u8
-}
-
-#[inline]
-pub(crate) fn unpremultiply_byte(value: u8, alpha: u8) -> u8 {
-    if alpha == 0 {
-        value
-    } else {
-        ((u32::from(value) * 255 / u32::from(alpha)).min(255)) as u8
-    }
-}
-
-pub(crate) fn scalar_i32(image: &DynamicImage) -> DynamicImage {
-    if let Some((width, height, samples)) = native_luma16(image) {
-        let output = RgbaImage::from_fn(width, height, |x, y| {
-            Rgba(samples[(y * width + x) as usize].to_le_bytes())
-        });
-        return DynamicImage::ImageI32(output);
-    }
-    scalar_i32_rgb8(&image.to_rgb8())
 }
 
 pub(crate) fn scalar_i32_rgb8(rgb: &RgbImage) -> DynamicImage {
@@ -44,16 +26,6 @@ pub(crate) fn scalar_i32_rgb(red: u8, green: u8, blue: u8) -> [u8; 4] {
     value.to_le_bytes()
 }
 
-pub(crate) fn scalar_f32(image: &DynamicImage) -> DynamicImage {
-    if let Some((width, height, samples)) = native_luma16(image) {
-        let output = RgbaImage::from_fn(width, height, |x, y| {
-            Rgba(f32::from(samples[(y * width + x) as usize]).to_le_bytes())
-        });
-        return DynamicImage::ImageF32(output);
-    }
-    scalar_f32_rgb8(&image.to_rgb8())
-}
-
 pub(crate) fn scalar_f32_rgb8(rgb: &RgbImage) -> DynamicImage {
     let output = RgbaImage::from_fn(rgb.width(), rgb.height(), |x, y| {
         let pixel = rgb.get_pixel(x, y);
@@ -66,14 +38,4 @@ pub(crate) fn scalar_f32_rgb8(rgb: &RgbImage) -> DynamicImage {
 pub(crate) fn scalar_f32_rgb(red: u8, green: u8, blue: u8) -> [u8; 4] {
     let sum = i32::from(red) * 299 + i32::from(green) * 587 + i32::from(blue) * 114;
     (sum as f32 / 1000.0_f32).to_le_bytes()
-}
-
-fn native_luma16(image: &DynamicImage) -> Option<(u32, u32, &[u16])> {
-    match image {
-        DynamicImage::ImageI16(source)
-        | DynamicImage::ImageI16L(source)
-        | DynamicImage::ImageI16B(source)
-        | DynamicImage::ImageI16N(source) => Some((source.width(), source.height(), source.as_raw())),
-        _ => None,
-    }
 }

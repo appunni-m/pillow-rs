@@ -143,9 +143,11 @@ pub fn variant_key(op: &PipelineOp) -> &'static str {
         PipelineOp::Contain { .. } => "Contain",
         PipelineOp::Cover { .. } => "Cover",
         PipelineOp::Fit { .. } => "Fit",
-        PipelineOp::Pad { .. } => "Pad",
+        PipelineOp::Pad { .. }
+        | PipelineOp::PadTyped { .. }
+        | PipelineOp::PadPositioned { .. } => "Pad",
         PipelineOp::Scale { .. } => "Scale",
-        PipelineOp::Expand { .. } => "Expand",
+        PipelineOp::Expand { .. } | PipelineOp::ExpandTyped { .. } => "Expand",
         PipelineOp::CropBorder { .. } => "CropBorder",
         PipelineOp::Add { .. } => "Add",
         PipelineOp::Subtract { .. } => "Subtract",

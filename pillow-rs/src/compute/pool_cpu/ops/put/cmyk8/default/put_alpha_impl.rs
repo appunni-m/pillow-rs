@@ -14,12 +14,12 @@ pub(crate) fn prepare(image: &Input, alpha: u8) -> Kernel<'_> {
 
 #[inline]
 pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
-    // Preserve the original CMYK-to-RGB arithmetic, then write the required
-    // RGBA result directly without cloning the converted RGB frame.
-    let rgb = crate::color::cmyk_buffer_to_rgb(input.image);
-    let mut output = crate::raster::RgbaImage::new(rgb.width(), rgb.height());
-    for (destination, source) in output.pixels_mut().zip(rgb.pixels()) {
-        *destination = Rgba([source[0], source[1], source[2], input.alpha]);
+    // Preserve the shared CMYK pixel arithmetic while writing the required
+    // RGBA result directly, without allocating an intermediate RGB frame.
+    let mut output = crate::raster::RgbaImage::new(input.image.width(), input.image.height());
+    for (destination, source) in output.pixels_mut().zip(input.image.pixels()) {
+        let [red, green, blue] = crate::color::cmyk_pixel_to_rgb(source.0);
+        *destination = Rgba([red, green, blue, input.alpha]);
     }
     Ok(DynamicImage::ImageRgba8(output))
 }

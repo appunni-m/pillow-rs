@@ -10,6 +10,16 @@ use crate::raster::{
 pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, PilError> {
     match target {
         Mode::ImageLuma8 => Ok(DynamicImage::ImageLuma8(grayscale(source))),
+        Mode::ImageLaPremultiplied8 | Mode::ImageRgbPremultiplied8 => {
+            super::super::super::helpers::premultiplied::from_rgb_samples(
+                source.width(),
+                source.height(),
+                source
+                    .pixels()
+                    .map(|pixel| crate::color::cmyk_pixel_to_rgb(pixel.0)),
+                target,
+            )
+        }
         Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
             super::super::super::helpers::luma16::from_luma8_samples(
                 source.width(),
@@ -23,7 +33,10 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
         }
         Mode::ImageLumaA8 => Ok(DynamicImage::ImageLumaA8(luma_alpha(source))),
         Mode::ImageRgb8 => Ok(DynamicImage::ImageRgb8(rgb(source))),
-        Mode::ImageRgba8 => Ok(DynamicImage::ImageRgba8(rgba(source))),
+        Mode::ImageRgba8 => Ok(DynamicImage::ImageRgba8(opaque_rgb(source))),
+        // Pillow's CMYK->RGBX route uses the same RGB result and opaque byte
+        // as RGBA; the output mode identity still differs.
+        Mode::ImageRgbx8 => Ok(DynamicImage::ImageRgbx8(opaque_rgb(source))),
         Mode::ImageCmyk8 => Ok(DynamicImage::ImageCmyk8(source.clone())),
         Mode::ImageYCbCr8 => Ok(DynamicImage::ImageYCbCr8(ycbcr(source))),
         Mode::ImageHsv8 => Ok(DynamicImage::ImageHsv8(hsv(source))),
@@ -85,7 +98,7 @@ fn rgb(source: &RgbaImage) -> RgbImage {
     output
 }
 
-fn rgba(source: &RgbaImage) -> RgbaImage {
+fn opaque_rgb(source: &RgbaImage) -> RgbaImage {
     let mut output = RgbaImage::new(source.width(), source.height());
     for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
         let [red, green, blue] = crate::color::cmyk_pixel_to_rgb(pixel.0);

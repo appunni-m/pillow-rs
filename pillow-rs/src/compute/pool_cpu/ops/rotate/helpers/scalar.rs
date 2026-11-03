@@ -19,7 +19,7 @@ use super::cubic::{
 /// transform kernel operates on one signed 32-bit or float32 sample. Pillow's
 /// scalar affine kernels accumulate the bilinear value in double precision;
 /// `F` then stores float32 and `I` truncates the result toward zero.
-pub(crate) fn rotate_arbitrary_scalar(
+pub(crate) fn rotate_arbitrary_scalar<const FLOAT: bool>(
     source: &[u8],
     source_size: (u32, u32),
     destination_size: (u32, u32),
@@ -27,13 +27,12 @@ pub(crate) fn rotate_arbitrary_scalar(
     affine: [f64; 6],
     fill: (u8, u8, u8, u8),
     filter: ResampleFilter,
-    is_float: bool,
     output: &mut [u8],
 ) {
     let [a, b, c, d, e, f] = affine;
     let (source_width, source_height) = source_size;
     let (destination_width, destination_height) = destination_size;
-    let scalar_fill = if is_float {
+    let scalar_fill = if FLOAT {
         f32::from_le_bytes([fill.0, fill.1, fill.2, fill.3]) as f64
     } else {
         i32::from_le_bytes([fill.0, fill.1, fill.2, fill.3]) as f64
@@ -43,7 +42,7 @@ pub(crate) fn rotate_arbitrary_scalar(
         for output_index in (0..destination_width as usize * destination_height as usize)
             .map(|index| index * channels)
         {
-            let bytes = if is_float {
+            let bytes = if FLOAT {
                 (scalar_fill as f32).to_le_bytes()
             } else {
                 (scalar_fill as i32).to_le_bytes()
@@ -65,7 +64,7 @@ pub(crate) fn rotate_arbitrary_scalar(
             let sy = d.mul_add(xin, e * yin) + f;
             let output_index = (dy * destination_width + dx) as usize * channels;
 
-            let value = rotate_scalar_sample(
+            let value = rotate_scalar_sample::<FLOAT>(
                 source,
                 source_width,
                 source_height,
@@ -73,11 +72,10 @@ pub(crate) fn rotate_arbitrary_scalar(
                 sx,
                 sy,
                 filter,
-                is_float,
                 scalar_fill,
             );
 
-            let bytes = if is_float {
+            let bytes = if FLOAT {
                 (value as f32).to_le_bytes()
             } else {
                 (value as i32).to_le_bytes()
@@ -88,7 +86,7 @@ pub(crate) fn rotate_arbitrary_scalar(
 }
 
 #[inline(always)]
-fn rotate_scalar_sample(
+fn rotate_scalar_sample<const FLOAT: bool>(
     source: &[u8],
     source_width: u32,
     source_height: u32,
@@ -96,7 +94,6 @@ fn rotate_scalar_sample(
     sx: f64,
     sy: f64,
     filter: ResampleFilter,
-    is_float: bool,
     scalar_fill: f64,
 ) -> f64 {
     let in_bounds = sx >= 0.0 && sx < source_width as f64 && sy >= 0.0 && sy < source_height as f64;
@@ -107,37 +104,34 @@ fn rotate_scalar_sample(
     let sample_x = sx - 0.5;
     let sample_y = sy - 0.5;
     if matches!(filter, ResampleFilter::Bicubic) {
-        rotate_scalar_bicubic_sample(
+        rotate_scalar_bicubic_sample::<FLOAT>(
             source,
             source_width,
             source_height,
             channels,
             sample_x,
             sample_y,
-            is_float,
         )
     } else {
-        rotate_scalar_bilinear_sample(
+        rotate_scalar_bilinear_sample::<FLOAT>(
             source,
             source_width,
             source_height,
             channels,
             sample_x,
             sample_y,
-            is_float,
         )
     }
 }
 
 #[inline(always)]
-fn rotate_scalar_bicubic_sample(
+fn rotate_scalar_bicubic_sample<const FLOAT: bool>(
     source: &[u8],
     source_width: u32,
     source_height: u32,
     channels: usize,
     sample_x: f64,
     sample_y: f64,
-    is_float: bool,
 ) -> f64 {
     let floor_x = sample_x.floor() as i64;
     let floor_y = sample_y.floor() as i64;
@@ -155,7 +149,7 @@ fn rotate_scalar_bicubic_sample(
             (base_x + 3).clamp(0, i64::from(source_width - 1)) as u32,
         ];
         let read_index = |x| ((yy * source_width + x) as usize) * channels;
-        *output = if is_float {
+        *output = if FLOAT {
             rotate_cubic_horizontal_f32(
                 taps.map(|x| {
                     let index = read_index(x);
@@ -183,7 +177,7 @@ fn rotate_scalar_bicubic_sample(
             )
         };
     }
-    if is_float {
+    if FLOAT {
         rotate_cubic_vertical_f64_fma(rows, fy)
     } else {
         rotate_cubic_vertical_f64(rows, fy)
@@ -191,14 +185,13 @@ fn rotate_scalar_bicubic_sample(
 }
 
 #[inline(always)]
-fn rotate_scalar_bilinear_sample(
+fn rotate_scalar_bilinear_sample<const FLOAT: bool>(
     source: &[u8],
     source_width: u32,
     source_height: u32,
     channels: usize,
     sample_x: f64,
     sample_y: f64,
-    is_float: bool,
 ) -> f64 {
     let floor_x = sample_x.floor() as i64;
     let floor_y = sample_y.floor() as i64;
@@ -210,7 +203,7 @@ fn rotate_scalar_bilinear_sample(
     let fy = sample_y - floor_y as f64;
     let read = |x, y| {
         let index = ((y * source_width + x) as usize) * channels;
-        if is_float {
+        if FLOAT {
             f32::from_le_bytes([
                 source[index],
                 source[index + 1],
@@ -230,31 +223,30 @@ fn rotate_scalar_bilinear_sample(
     let p10 = read(x1, y0);
     let p01 = read(x0, y1);
     let p11 = read(x1, y1);
-    let horizontal_top = if is_float {
+    let horizontal_top = if FLOAT {
         f64::from((p10 as f32) - (p00 as f32)).mul_add(fx, p00)
     } else {
         let p00 = p00 as i32;
         let p10 = p10 as i32;
         f64::from(p10.wrapping_sub(p00)) * fx + f64::from(p00)
     };
-    let horizontal_bottom = if is_float {
+    let horizontal_bottom = if FLOAT {
         f64::from((p11 as f32) - (p01 as f32)).mul_add(fx, p01)
     } else {
         let p01 = p01 as i32;
         let p11 = p11 as i32;
         f64::from(p11.wrapping_sub(p01)) * fx + f64::from(p01)
     };
-    if is_float {
+    if FLOAT {
         (horizontal_bottom - horizontal_top).mul_add(fy, horizontal_top)
     } else {
         (horizontal_bottom - horizontal_top) * fy + horizontal_top
     }
 }
 
-pub(crate) fn execute(
+pub(crate) fn execute<const FLOAT: bool>(
     image: &RgbaImage,
     request: RotateRequest,
-    is_float: bool,
 ) -> Result<RgbaImage, crate::error::PilError> {
     let discrete = discrete_angle(request).is_some_and(|degree| {
         degree == 180 || request.expand || image.width() == image.height()
@@ -262,7 +254,7 @@ pub(crate) fn execute(
     if request.nearest || is_identity(request) || discrete {
         return super::byte::execute::<Rgba<u8>, 4, false, false>(image, request);
     }
-    execute_filtered(image, request, is_float)
+    execute_filtered::<FLOAT>(image, request)
 }
 
 fn is_identity(request: RotateRequest) -> bool {
@@ -271,15 +263,14 @@ fn is_identity(request: RotateRequest) -> bool {
         && request.angle.rem_euclid(360.0).abs() <= f64::EPSILON
 }
 
-fn execute_filtered(
+fn execute_filtered<const FLOAT: bool>(
     image: &RgbaImage,
     request: RotateRequest,
-    is_float: bool,
 ) -> Result<RgbaImage, crate::error::PilError> {
     let geometry = rotate_geometry(image.width(), image.height(), request);
     let dimensions = crate::checked_dims::CheckedDims::new(geometry.width, geometry.height, 4)?;
     let mut output = dimensions.alloc_buffer();
-    rotate_arbitrary_scalar(
+    rotate_arbitrary_scalar::<FLOAT>(
         image.as_raw(),
         image.dimensions(),
         (geometry.width, geometry.height),
@@ -287,7 +278,6 @@ fn execute_filtered(
         geometry.affine,
         request.fill.unwrap_or((0, 0, 0, 0)),
         request.filter,
-        is_float,
         &mut output,
     );
     crate::image_utils::typed_bytes_to_buffer::<Rgba<u8>>(dimensions, output)

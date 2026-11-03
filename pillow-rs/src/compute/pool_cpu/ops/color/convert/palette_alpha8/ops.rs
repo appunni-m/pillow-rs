@@ -12,6 +12,8 @@ use crate::raster::{DynamicImage, GrayAlphaImage, Mode};
 
 const TARGETS: &[Mode] = &[
     Mode::ImagePaletteAlpha8,
+    Mode::ImageLaPremultiplied8,
+    Mode::ImageRgbPremultiplied8,
     Mode::One,
     Mode::ImageLuma8,
     Mode::ImageLumaA8,
@@ -29,12 +31,22 @@ const TARGETS: &[Mode] = &[
     Mode::ImageI32,
     Mode::ImageF32,
 ];
+// NO_PILLOW_SUPPORT: PA-to-I;16, LAB, and premultiplied targets are Rust extensions.
+const CORE_ONLY_TARGETS: &[Mode] = &[
+    Mode::ImageLaPremultiplied8,
+    Mode::ImageRgbPremultiplied8,
+    Mode::ImageI16,
+    Mode::ImageI16L,
+    Mode::ImageI16B,
+    Mode::ImageI16N,
+    Mode::ImageLab8,
+];
 const INPUTS: &[InputContract] = &[
     InputContract::PaletteMetadata,
     InputContract::ConvertTarget {
         targets: TARGETS,
-        core_only_targets: &[],
-        core_only_reason: None,
+        core_only_targets: CORE_ONLY_TARGETS,
+        core_only_reason: Some("Pillow has no matching PA source-target conversion"),
         rejection_reason: "image has wrong mode",
     },
 ];

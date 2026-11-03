@@ -25,6 +25,22 @@ pub enum PasteSource {
     RawRgba(i64, i64, i64, i64),
 }
 
+/// One Python component retained while Pillow Paste applies mode-specific coercion.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PasteColorComponent {
+    /// An integer that fits the signed 64-bit carrier.
+    Integer(i64),
+    /// An arbitrary-width integer with its optional Python-float conversion.
+    WideInteger {
+        /// The value produced by Python's float conversion, when representable.
+        float_value: Option<f64>,
+    },
+    /// A Python float component.
+    Float(f64),
+    /// A non-numeric component retained by type name without invoking coercion.
+    Invalid { type_name: String },
+}
+
 /// Host-neutral source argument for Pillow-compatible `Image.paste`.
 #[derive(Debug, Clone)]
 pub enum PasteSourceInput {
@@ -32,13 +48,24 @@ pub enum PasteSourceInput {
     Image(Box<Image>),
     /// A scalar color value before mode-specific validation.
     Scalar(i64),
+    /// An arbitrary-width integer before mode-specific conversion.
+    WideInteger {
+        /// The value produced by Python's float conversion, when representable.
+        float_value: Option<f64>,
+    },
     /// A floating-point scalar, accepted by Pillow for `F` images.
     Float(f64),
-    /// A tuple/list color before mode-specific arity validation.
+    /// A legacy Rust component sequence; host bindings preserve tuple/list tags.
     Components(Vec<i64>),
+    /// A Python tuple with its numeric component kinds retained.
+    TupleComponents(Vec<PasteColorComponent>),
+    /// A Python list, rejected by Pillow's native Paste color parser.
+    List,
     /// A Pillow color string before mode-specific conversion.
     String(String),
-    /// A value that is neither an image nor a supported color value.
+    /// A non-sequence value that is neither an image nor a supported color.
+    InvalidType(String),
+    /// A value whose host type was not retained by a legacy Rust caller.
     Invalid,
 }
 

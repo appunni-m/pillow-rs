@@ -29,7 +29,16 @@ pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
     }
 }
 
-pub(crate) fn execute_l16_bytes(input: &mut Input, raw: &[u8]) -> Result<(), PilError> {
-    super::super::super::helpers::put_data_l16_bytes::write_native_endian(input.as_mut(), raw);
+pub(crate) fn execute_l16_bytes(
+    input: &mut Input,
+    data: &[u8],
+    entry_count: usize,
+    scale: f64,
+    offset: f64,
+) -> Result<(), PilError> {
+    let width = input.width();
+    super::super::super::helpers::put_data_l16_bytes::write_byte_prefix::<
+        { cfg!(target_endian = "big") },
+    >(input.as_mut(), width, data, entry_count, scale, offset);
     Ok(())
 }

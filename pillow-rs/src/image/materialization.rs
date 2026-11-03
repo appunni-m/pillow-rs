@@ -6,14 +6,18 @@ use image_slash_star::{Decoded, DecodedImage, ImageFormat, ImageInfo};
 
 use super::codec_adapter::decoded_to_dynamic;
 
+use crate::compute::registry::support::{ModeSupport, OperationId, OutputModeRule};
 use crate::error::PilError;
 use crate::pipeline::{PipelineOp, ResampleFilter, TransformMethod};
 use crate::raster::{DynamicImage, Mode};
 
+mod palette_output;
+use palette_output::{evaluate_palette_target_convert, retain_preserved_palette_metadata};
+
 use super::{
-    Image, LoadedData, PalettedData, PipelinePrefixCache, declared_pipeline_mode, expand_palette,
-    expand_palette_alpha, materialization_cache, padded_palette, take_cached_materialization,
-    validate_scalar_storage,
+    Image, LoadedData, PalettedData, PipelinePaletteOutput, PipelinePrefixCache,
+    declared_pipeline_mode, expand_palette, expand_palette_alpha, materialization_cache,
+    padded_palette, take_cached_materialization, validate_scalar_storage,
 };
 
 fn image_from_materialized(
@@ -142,12 +146,13 @@ impl Image {
             | PipelineOp::DrawChord { .. }
             | PipelineOp::DrawPieslice { .. }
             | PipelineOp::DrawPoint { .. }
-            // ImageChops.invert applies 255-index directly to P samples. Its
-            // newly allocated core intentionally has no palette.
+            // ImageChops.invert applies 255-index directly to P samples.
+            // Pillow's Image._new copies the source palette onto the new
+            // indexed wrapper, so the lazy Image retains that metadata too.
             | PipelineOp::InvertChops
             // Pillow's Chops.c arithmetic also operates on raw indexed
-            // samples for P/PA images. The result remains indexed, but its
-            // newly allocated core has no palette attached.
+            // samples for P/PA images. Image._new preserves the primary
+            // operand's palette when wrapping that new indexed core.
             | PipelineOp::Add { .. }
             | PipelineOp::Subtract { .. }
             | PipelineOp::Multiply { .. }
@@ -163,7 +168,8 @@ impl Image {
             // ImageOps.expand allocates the destination in the source mode;
             // P and PA therefore carry raw index (and alpha) samples through
             // the border operation instead of being expanded to RGB(A).
-            | PipelineOp::Expand { .. }
+                        | PipelineOp::Expand { .. }
+                        | PipelineOp::ExpandTyped { .. }
             // Image.merge accepts a P image as the first single-byte band of
             // a multi-band result. Keep its raw index values; expanding the
             // palette here would turn an index such as 1 into its RGB entry.
@@ -174,12 +180,6 @@ impl Image {
             // Pillow's Image.point maps P indices directly, and Image._new
             // copies the source palette. Image.eval delegates to point.
             | PipelineOp::Eval { .. }
-            // Pillow mutates palette indices directly for putdata, while
-            // putalpha promotes each index to a PA (index, alpha) pair.
-            | PipelineOp::PutData {
-                payload_mode: Mode::ImagePalette8 | Mode::ImagePaletteAlpha8,
-                ..
-            }
             | PipelineOp::PutAlpha {
                 mode: Mode::ImagePalette8 | Mode::ImagePaletteAlpha8,
                 ..
@@ -192,6 +192,8 @@ impl Image {
             // resize step uses nearest-neighbour samples for these modes,
             // and the pad fill is another raw index/alpha pair.
             | PipelineOp::Pad { .. }
+            | PipelineOp::PadTyped { .. }
+            | PipelineOp::PadPositioned { .. }
             // ImageOps.scale delegates to the resize path. Indexed P/PA
             // samples force nearest-neighbour scaling and remain indexed;
             // expanding them here would change the public result mode before
@@ -205,29 +207,30 @@ impl Image {
         }
     }
 
-    /// Whether an indexed ImageChops result intentionally has no palette.
+    /// Returns whether PutData's declared payload keeps an indexed source mode.
     ///
-    /// Pillow's `libImaging/Chops.c` allocates a fresh indexed core for these
-    /// operations and does not copy `Image.palette`. Keep the policy beside
-    /// pipeline construction so every result is handled through the invariant
-    /// that [`Self::push_op`] always creates an [`Image::Pipeline`].
-    pub(super) fn indexed_chops_result_without_palette(op: &PipelineOp) -> bool {
-        matches!(
-            op,
-            PipelineOp::InvertChops
-                | PipelineOp::Add { .. }
-                | PipelineOp::Subtract { .. }
-                | PipelineOp::Multiply { .. }
-                | PipelineOp::Screen { .. }
-                | PipelineOp::Darker { .. }
-                | PipelineOp::Lighter { .. }
-                | PipelineOp::Difference { .. }
-                | PipelineOp::Overlay { .. }
-                | PipelineOp::HardLight { .. }
-                | PipelineOp::SoftLight { .. }
-                | PipelineOp::AddModulo { .. }
-                | PipelineOp::SubtractModulo { .. }
-        )
+    /// TODO(pillow-rs#3ptb): freeze P/PA exact-width and cross-width payload
+    /// output, palette metadata, and selected/fallback receipt parity.
+    ///
+    /// Reuse the operation-level payload/output contract so cross-width payloads
+    /// cannot retain a P/PA wrapper when execution produces another mode.
+    fn putdata_preserves_palette_output(source: &Image, op: &PipelineOp) -> bool {
+        let (Some(source_mode @ (Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)),
+            PipelineOp::PutData { payload_mode, .. }) =
+            (source.known_mode_identity(), op)
+        else {
+            return false;
+        };
+        let ModeSupport::Supported {
+            output: OutputModeRule::ByPayload(outputs),
+            ..
+        } = OperationId::PutData.support().for_mode(source_mode)
+        else {
+            return false;
+        };
+        outputs
+            .iter()
+            .any(|output| output.payload == *payload_mode && output.output == source_mode)
     }
 
     /// Returns whether an operation can stay in the source's indexed sample
@@ -238,7 +241,7 @@ impl Image {
     /// direct filter on `P` cannot bypass `validate_filter` and become
     /// accepted.
     pub(super) fn is_palette_safe_op_for_source(source: &Image, op: &PipelineOp) -> bool {
-        Self::is_palette_safe_op(op)
+        Self::is_palette_safe_op(op) || Self::putdata_preserves_palette_output(source, op)
             // Same-mode P/PA conversion is a wrapper copy; retain indexed
             // samples and their attached palette through internal pipelines.
             || (source.has_palette_samples()
@@ -420,12 +423,13 @@ impl Image {
                 .clone(),
             Image::Bytes {
                 source,
+                header_mode,
                 materialized,
                 ..
             } => materialized
                 .get_or_init(|| {
-                    decoded_to_dynamic(source.decode().map_err(map_deferred_decode_error)?)
-                        .map(Arc::new)
+                    let decoded = source.decode().map_err(map_deferred_decode_error)?;
+                    decoded_to_dynamic(&decoded, source.info().mode, *header_mode).map(Arc::new)
                 })
                 .clone(),
             Image::Pipeline {
@@ -441,15 +445,20 @@ impl Image {
                 .get_or_init(|| {
                     let _origin_scope = ops.telemetry_origin_scope();
                     let output_mode = declared_pipeline_mode(mode);
-                    Self::evaluate_pipeline(
+                    let (image, palette_output) = Self::evaluate_pipeline(
                         source,
                         ops.as_slice(),
                         &output_mode,
                         *backend,
                         palette,
                         palette_alpha,
+                        ops.preserves_palette(),
                         ops.prefix_cache(),
-                    )
+                    )?;
+                    if let Some(output) = palette_output {
+                        ops.cache_palette_output(output)?;
+                    }
+                    Ok(image)
                 })
                 .clone(),
         }
@@ -479,9 +488,15 @@ impl Image {
         backend: Option<crate::compute::Backend>,
         palette: &Option<Vec<u8>>,
         palette_alpha: &Option<Vec<u8>>,
+        preserves_palette: bool,
         prefix_cache: Option<&PipelinePrefixCache>,
-    ) -> Result<Arc<DynamicImage>, PilError> {
-        if let Some(prefix_cache) =
+    ) -> Result<(Arc<DynamicImage>, Option<PipelinePaletteOutput>), PilError> {
+        if ops.is_empty() {
+            return Self::validate_declared_pipeline_mode(source.materialized_shared()?, *output_mode)
+                .map(|image| (image, None));
+        }
+        let mut palette_output = None;
+        let result = if let Some(prefix_cache) =
             prefix_cache.filter(|cache| cache.ops_len > 0 && cache.ops_len < ops.len())
         {
             let prefix_ops = &ops[..prefix_cache.ops_len];
@@ -490,6 +505,7 @@ impl Image {
                 .get_or_init(|| {
                     let prepared = crate::compute::prepare_execution(prefix_ops, backend)?;
                     let source_image = source.materialized_shared()?;
+                    let mut prefix_palette_output = None;
                     Self::evaluate_pipeline_with_image(
                         source,
                         source_image.as_ref(),
@@ -499,6 +515,8 @@ impl Image {
                         &prepared,
                         palette,
                         palette_alpha,
+                        &mut prefix_palette_output,
+                        preserves_palette,
                     )
                 })
                 .clone()?;
@@ -513,26 +531,31 @@ impl Image {
                 rgb: resolved_palette.as_deref(),
                 alpha: &resolved_alpha,
             };
-            return crate::compute::execute_prepared_shared_with_palette(
+            crate::compute::execute_prepared_shared_with_palette(
                 &prepared,
                 suffix_ops,
                 &prefix_image,
                 *output_mode,
                 inputs,
-            );
-        }
-        let prepared = crate::compute::prepare_execution(ops, backend)?;
-        let source_image = source.materialized_shared()?;
-        Self::evaluate_pipeline_with_image(
-            source,
-            source_image.as_ref(),
-            &source_image,
-            ops,
-            output_mode,
-            &prepared,
-            palette,
-            palette_alpha,
-        )
+            )?
+        } else {
+            let prepared = crate::compute::prepare_execution(ops, backend)?;
+            let source_image = source.materialized_shared()?;
+            Self::evaluate_pipeline_with_image(
+                source,
+                source_image.as_ref(),
+                &source_image,
+                ops,
+                output_mode,
+                &prepared,
+                palette,
+                palette_alpha,
+                &mut palette_output,
+                preserves_palette,
+            )?
+        };
+        Self::validate_declared_pipeline_mode(result, *output_mode)
+            .map(|image| (image, palette_output))
     }
 
     pub(super) fn evaluate_pipeline_uncached(
@@ -542,19 +565,62 @@ impl Image {
         backend: Option<crate::compute::Backend>,
         palette: &Option<Vec<u8>>,
         palette_alpha: &Option<Vec<u8>>,
-    ) -> Result<Arc<DynamicImage>, PilError> {
+        preserves_palette: bool,
+    ) -> Result<(Arc<DynamicImage>, Option<PipelinePaletteOutput>), PilError> {
+        if ops.is_empty() {
+            return Self::validate_declared_pipeline_mode(
+                Arc::new(source.materialize_uncached()?),
+                *output_mode,
+            )
+            .map(|image| (image, None));
+        }
         let prepared = crate::compute::prepare_execution(ops, backend)?;
-        let source_image = Arc::new(source.materialize_uncached()?);
-        Self::evaluate_pipeline_with_image(
+        let (source_pixels, source_palette_output) = source.materialize_uncached_with_metadata()?;
+        let source_image = Arc::new(source_pixels);
+        let resolved_palette = palette.clone().or_else(|| {
+            source_palette_output
+                .as_ref()
+                .and_then(|output| output.palette.clone())
+        });
+        let resolved_palette = resolved_palette.or_else(|| source.extract_palette());
+        let resolved_alpha = palette_alpha.clone().or_else(|| {
+            source_palette_output
+                .as_ref()
+                .and_then(|output| output.palette_alpha.clone())
+        });
+        let resolved_alpha = resolved_alpha.or_else(|| source.palette_alpha());
+        let mut palette_output = None;
+        let result = Self::evaluate_pipeline_with_image(
             source,
             source_image.as_ref(),
             &source_image,
             ops,
             output_mode,
             &prepared,
-            palette,
-            palette_alpha,
-        )
+            &resolved_palette,
+            &resolved_alpha,
+            &mut palette_output,
+            preserves_palette,
+        )?;
+        Self::validate_declared_pipeline_mode(result, *output_mode)
+            .map(|image| (image, palette_output))
+    }
+
+    /// Keeps the producer's exact raster identity aligned with declared
+    /// pipeline metadata without reinterpreting its samples.
+    fn validate_declared_pipeline_mode(
+        result: Arc<DynamicImage>,
+        declared_mode: Option<Mode>,
+    ) -> Result<Arc<DynamicImage>, PilError> {
+        if let Some(expected) = declared_mode {
+            let actual = result.mode();
+            if actual != expected {
+                return Err(PilError::InternalError(format!(
+                    "pipeline output mode mismatch: declared {expected:?}, produced {actual:?}"
+                )));
+            }
+        }
+        Ok(result)
     }
 
     fn evaluate_palette_cpu_operation(
@@ -769,7 +835,20 @@ impl Image {
         prepared: &crate::compute::PreparedExecution,
         palette: &Option<Vec<u8>>,
         palette_alpha: &Option<Vec<u8>>,
+        palette_output: &mut Option<PipelinePaletteOutput>,
+        preserves_palette: bool,
     ) -> Result<Arc<DynamicImage>, PilError> {
+        if let Some((image, output)) = evaluate_palette_target_convert(
+            source,
+            img,
+            ops,
+            prepared,
+            palette,
+            palette_alpha,
+        )? {
+            *palette_output = Some(output);
+            return Ok(image);
+        }
         if let Some(result) = Self::evaluate_palette_cpu_operation(
             source,
             img,
@@ -778,6 +857,13 @@ impl Image {
             palette,
             palette_alpha,
         )? {
+            *palette_output = retain_preserved_palette_metadata(
+                source,
+                &result,
+                palette,
+                palette_alpha,
+                preserves_palette,
+            );
             return Ok(result);
         }
         if let Some(result) = Self::evaluate_palette_pipeline(
@@ -789,6 +875,13 @@ impl Image {
             palette,
             palette_alpha,
         )? {
+            *palette_output = retain_preserved_palette_metadata(
+                source,
+                &result,
+                palette,
+                palette_alpha,
+                preserves_palette,
+            );
             return Ok(result);
         }
         // RGBX carries padding rather than alpha; preserve its exact source
@@ -816,22 +909,44 @@ impl Image {
                 .or(resolved_alpha.as_deref())
                 .unwrap_or_default(),
         };
-        crate::compute::execute_prepared_shared_with_palette(
+        let result = crate::compute::execute_prepared_shared_with_palette(
             prepared,
             ops,
             shared_img,
             execution_mode,
             inputs,
-        )
+        )?;
+        *palette_output = retain_preserved_palette_metadata(
+            source,
+            &result,
+            palette,
+            palette_alpha,
+            preserves_palette,
+        );
+        Ok(result)
     }
 
     fn materialize_uncached(&self) -> Result<DynamicImage, PilError> {
+        self.materialize_uncached_with_metadata()
+            .map(|(image, _)| image)
+    }
+
+    fn materialize_uncached_with_metadata(
+        &self,
+    ) -> Result<(DynamicImage, Option<PipelinePaletteOutput>), PilError> {
         match self {
-            Image::Loaded(data) => Ok(data.image.as_ref().clone()),
-            Image::Paletted(data) => Ok(data.indices.clone()),
-            Image::Bytes { source, .. } => decoded_to_dynamic(
+            Image::Loaded(data) => Ok((data.image.as_ref().clone(), None)),
+            Image::Paletted(data) => Ok((data.indices.clone(), None)),
+            Image::Bytes {
+                source,
+                header_mode,
+                ..
+            } => decoded_to_dynamic(
                 &image_slash_star::decode(source.bytes()).map_err(map_deferred_decode_error)?,
-            ),
+                source.info().mode,
+                *header_mode,
+            )
+            .map(|image| (image, None)),
             Image::Pipeline {
                 source,
                 ops,
@@ -850,22 +965,9 @@ impl Image {
                     *backend,
                     palette,
                     palette_alpha,
+                    ops.preserves_palette(),
                 )
-                .and_then(|image| {
-                    let image = image.as_ref().clone();
-                    let Some(mode) = output_mode else {
-                        return Ok(image);
-                    };
-                    let Some(name) = super::mode_boundary::pillow_mode_name(*mode) else {
-                        return Ok(image);
-                    };
-                    image.with_mode(*mode).map_err(|_| {
-                        PilError::InternalError(format!(
-                            "pipeline output storage does not match Pillow mode {}",
-                            name
-                        ))
-                    })
-                })
+                .map(|(image, palette_output)| (image.as_ref().clone(), palette_output))
             }
         }
     }

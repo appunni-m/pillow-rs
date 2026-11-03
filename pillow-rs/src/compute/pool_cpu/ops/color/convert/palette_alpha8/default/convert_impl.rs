@@ -13,6 +13,12 @@ pub(crate) fn execute(
     target: Mode,
 ) -> Result<DynamicImage, PilError> {
     match target {
+        Mode::ImageLaPremultiplied8 => Ok(DynamicImage::ImageLaPremultiplied8(
+            premultiplied_luma_alpha(source, palette),
+        )),
+        Mode::ImageRgbPremultiplied8 => Ok(DynamicImage::ImageRgbPremultiplied8(
+            premultiplied_rgba(source, palette),
+        )),
         Mode::ImageLuma8 => Ok(DynamicImage::ImageLuma8(luma(source, palette))),
         Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
             super::super::super::helpers::luma16::from_luma8_samples(
@@ -36,6 +42,42 @@ pub(crate) fn execute(
         Mode::ImageF32 => Ok(DynamicImage::ImageF32(to_f32(source, palette))),
         _ => Err(PilError::ValueError("image has wrong mode".into())),
     }
+}
+
+fn premultiplied_luma_alpha(
+    source: &GrayAlphaImage,
+    palette: PaletteInput<'_>,
+) -> GrayAlphaImage {
+    let mut output = GrayAlphaImage::new(source.width(), source.height());
+    for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
+        let [red, green, blue] = super::super::super::helpers::palette::color(pixel[0], palette);
+        let luma = crate::color::rgb_to_luma_u8(red, green, blue);
+        let luma = crate::compute::pool_cpu::ops::color::convert::helpers::pixel::premultiply_byte(
+            luma, pixel[1],
+        );
+        *destination = LumaA([luma, pixel[1]]);
+    }
+    output
+}
+
+fn premultiplied_rgba(source: &GrayAlphaImage, palette: PaletteInput<'_>) -> RgbaImage {
+    let mut output = RgbaImage::new(source.width(), source.height());
+    for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
+        let [red, green, blue] = super::super::super::helpers::palette::color(pixel[0], palette);
+        *destination = Rgba([
+            crate::compute::pool_cpu::ops::color::convert::helpers::pixel::premultiply_byte(
+                red, pixel[1],
+            ),
+            crate::compute::pool_cpu::ops::color::convert::helpers::pixel::premultiply_byte(
+                green, pixel[1],
+            ),
+            crate::compute::pool_cpu::ops::color::convert::helpers::pixel::premultiply_byte(
+                blue, pixel[1],
+            ),
+            pixel[1],
+        ]);
+    }
+    output
 }
 
 pub(crate) fn execute_palette_target(

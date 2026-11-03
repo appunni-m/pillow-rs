@@ -81,8 +81,22 @@ impl<'a, P: Pixel<Subpixel = u8>> ByteCrop<'a, P> {
                 + self.region.left as usize * channels;
             output.extend_from_slice(&source[source_start..source_start + output_stride]);
         }
-        ImageBuffer::from_raw(self.region.width, self.region.height, output)
-            .ok_or_else(|| PilError::InternalError(self.shape_error.into()))
+        let mut output = ImageBuffer::from_raw(self.region.width, self.region.height, output)
+            .ok_or_else(|| PilError::InternalError(self.shape_error.into()))?;
+        let source_width = self.region.source_width as usize;
+        let left = self.region.left as usize;
+        let top = self.region.top as usize;
+        let output_width = self.region.width as usize;
+        if !output.remap_hidden_pixel_lanes_from(self.image, |destination_index| {
+            let x = destination_index % output_width;
+            let y = destination_index / output_width;
+            (top + y) * source_width + left + x
+        }) {
+            return Err(PilError::InternalError(
+                "crop hidden pixel lanes did not match the output extent".into(),
+            ));
+        }
+        Ok(output)
     }
 }
 

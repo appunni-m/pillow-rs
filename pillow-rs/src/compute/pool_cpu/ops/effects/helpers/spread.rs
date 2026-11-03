@@ -39,7 +39,39 @@ pub(crate) fn execute<P: Pixel>(
         kernel.input.height(),
         kernel.distance,
     )?;
-    gather_native_samples(kernel.input, &mapping)
+    let mut output = gather_native_samples(kernel.input, &mapping)?;
+    if output
+        .remap_hidden_pixel_lanes_from(kernel.input, |index| {
+            mapping.get(index).copied().unwrap_or(usize::MAX)
+        })
+        .is_none()
+    {
+        return Err(PilError::InternalError(
+            "effect_spread hidden lane mapping was invalid".into(),
+        ));
+    }
+    Ok(output)
+}
+
+/// Preserve the archived Default identity fast path for Pillow's L, LA, RGB,
+/// and RGBA spread strategies. Other mode owners use [`execute`] so their
+/// native-mode extension behavior remains explicit at the call site.
+pub(crate) fn execute_with_distance_one_identity<P: Pixel>(
+    kernel: Kernel<'_, P>,
+) -> Result<ImageBuffer<P, Vec<P::Subpixel>>, PilError> {
+    if kernel.distance == 1 && kernel.input.width() != 0 && kernel.input.height() != 0 {
+        i32::try_from(kernel.input.width())
+            .map_err(|_| PilError::ValueError("effect_spread width is too large".into()))?;
+        i32::try_from(kernel.input.height())
+            .map_err(|_| PilError::ValueError("effect_spread height is too large".into()))?;
+        crate::compute::helpers::effects::effect_spread_advance_identity_rng(
+            kernel.input.width(),
+            kernel.input.height(),
+        )?;
+        return Ok(kernel.input.clone());
+    }
+
+    execute(kernel)
 }
 
 fn gather_native_samples<P: Pixel>(

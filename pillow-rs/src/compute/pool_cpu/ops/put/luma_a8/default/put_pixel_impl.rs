@@ -22,11 +22,24 @@ pub(crate) fn prepare_batch<'a>(input: &'a Input, ops: &'a [PipelineOp]) -> Batc
 #[inline]
 pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
     let color = input.write.color;
-    Ok(DynamicImage::ImageLumaA8(helpers::write(input, LumaA([color.0, color.3]))))
+    let image = helpers::write_with_hidden_lanes(
+        input,
+        LumaA([color.0, color.3]),
+        2,
+        [color.1, color.2],
+        |pixel| [pixel.0[0], pixel.0[0]],
+    )?;
+    Ok(DynamicImage::ImageLumaA8(image))
 }
 
 #[inline]
 pub(crate) fn execute_batch(input: BatchKernel<'_>) -> Result<DynamicImage, PilError> {
-    helpers::write_batch(input, |color| LumaA([color.0, color.3]))
-        .map(DynamicImage::ImageLumaA8)
+    helpers::write_batch_with_hidden_lanes(
+        input,
+        |color| LumaA([color.0, color.3]),
+        |color| [color.1, color.2],
+        2,
+        |pixel| [pixel.0[0], pixel.0[0]],
+    )
+    .map(DynamicImage::ImageLumaA8)
 }

@@ -55,6 +55,15 @@ pub(crate) fn formatted_pixel_to_js(value: pillow_rs::FormattedPixelValue) -> Js
         pillow_rs::FormattedPixelValue::Components(values) => {
             js_sys::Array::from_iter(values.into_iter().map(JsValue::from)).into()
         }
+        pillow_rs::FormattedPixelValue::U16Components(values) => {
+            js_sys::Array::from_iter(values.into_iter().map(JsValue::from)).into()
+        }
+        pillow_rs::FormattedPixelValue::FloatComponents(values) => {
+            js_sys::Array::from_iter(
+                values.into_iter().map(|value| JsValue::from_f64(f64::from(value))),
+            )
+            .into()
+        }
         pillow_rs::FormattedPixelValue::InlineComponents { bytes, bands } => {
             js_sys::Array::from_iter(
                 bytes
@@ -120,6 +129,26 @@ pub(crate) fn formatted_extrema_to_js(value: pillow_rs::FormattedExtrema) -> JsV
                 let pair = js_sys::Array::new();
                 pair.push(&JsValue::from(minimum));
                 pair.push(&JsValue::from(maximum));
+                array.push(&pair);
+            }
+            array.into()
+        }
+        pillow_rs::FormattedExtrema::MultipleInteger(values) => {
+            let array = js_sys::Array::new();
+            for (minimum, maximum) in values {
+                let pair = js_sys::Array::new();
+                pair.push(&JsValue::from(minimum));
+                pair.push(&JsValue::from(maximum));
+                array.push(&pair);
+            }
+            array.into()
+        }
+        pillow_rs::FormattedExtrema::MultipleFloat(values) => {
+            let array = js_sys::Array::new();
+            for (minimum, maximum) in values {
+                let pair = js_sys::Array::new();
+                pair.push(&JsValue::from_f64(minimum));
+                pair.push(&JsValue::from_f64(maximum));
                 array.push(&pair);
             }
             array.into()

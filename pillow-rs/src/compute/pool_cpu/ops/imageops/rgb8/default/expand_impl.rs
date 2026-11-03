@@ -8,13 +8,13 @@ pub(super) type Input = RgbImage;
 
 pub(super) struct Kernel<'a> {
     input: &'a Input,
-    border: u32,
+    border: crate::pipeline::ExpandMargins,
     fill: [u8; 3],
 }
 
 pub(super) fn prepare(
     input: &Input,
-    border: u32,
+    border: crate::pipeline::ExpandMargins,
     fill: (u8, u8, u8, u8),
 ) -> Kernel<'_> {
     Kernel { input, border, fill: [fill.0, fill.1, fill.2] }

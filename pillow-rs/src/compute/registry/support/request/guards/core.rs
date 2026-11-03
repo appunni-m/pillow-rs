@@ -3,11 +3,17 @@
 use super::super::{
     GuardAssessment, RequestFacts, SecondaryInputFacts, StrategyGuard, StrategyInputs,
 };
+use crate::pipeline::ResampleFilter;
 use crate::raster::Mode;
 
 pub(super) fn thumbnail_i32_stream_guard(input: StrategyInputs) -> GuardAssessment {
-    let (width, height, filter) = match input.request {
-        RequestFacts::Thumbnail { width, height, filter } => (width, height, filter),
+    let (width, height, filter, reducing_gap_bits) = match input.request {
+        RequestFacts::Thumbnail {
+            width,
+            height,
+            filter,
+            reducing_gap_bits,
+        } => (width, height, filter, reducing_gap_bits),
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
         _ => return GuardAssessment::Ineligible,
     };
@@ -18,11 +24,15 @@ pub(super) fn thumbnail_i32_stream_guard(input: StrategyInputs) -> GuardAssessme
         width.max(1).min(input.width),
         height.max(1).min(input.height),
     );
-    if !crate::compute::helpers::resampling::thumbnail::uses_even_two_by_two_reduction(
+    let reducing_gap = reducing_gap_bits.map(f64::from_bits);
+    let Ok(factors) = crate::compute::helpers::resampling::thumbnail::reduce_factors_with_gap(
         (input.width, input.height),
         output,
-        filter,
-    ) {
+        reducing_gap,
+    ) else {
+        return GuardAssessment::Ineligible;
+    };
+    if matches!(filter, ResampleFilter::Nearest) || factors != (2, 2) {
         return GuardAssessment::Ineligible;
     }
     let source_layout = checked_native_bytes_guard(input, 4);
@@ -217,11 +227,64 @@ pub(super) fn chops_add_subtract_guard(
     chops_native_bytes_guard(input, other, channels)
 }
 
+pub(super) fn chops_offset_native_bytes_guard(
+    input: StrategyInputs,
+    channels: u8,
+) -> GuardAssessment {
+    // Preserve the archived capability check's checked-u32 shape arithmetic.
+    // On very large images it deliberately fell back when the byte count did
+    // not fit u32, even if the host's usize could represent the allocation.
+    let expected = input
+        .width
+        .checked_mul(u32::from(channels))
+        .and_then(|row_bytes| row_bytes.checked_mul(input.height));
+    match (expected, input.byte_len) {
+        (None, _) => GuardAssessment::Ineligible,
+        (Some(_), None) => GuardAssessment::Deferred,
+        (Some(0), Some(0)) => {
+            GuardAssessment::Satisfied
+        }
+        (Some(expected), Some(actual))
+            if expected >= 16 && usize::try_from(expected).ok() == Some(actual) =>
+        {
+            GuardAssessment::Satisfied
+        }
+        _ => GuardAssessment::Ineligible,
+    }
+}
+
+pub(super) fn chops_offset_native_i16_guard(input: StrategyInputs) -> GuardAssessment {
+    // Match the archived I;16 capability predicate's checked-u32 byte count.
+    // The typed SIMD kernel needs one complete 16-byte block, except that an
+    // empty image is a valid no-op. Smaller non-empty inputs use the exact
+    // mode's serial Default strategy.
+    let expected = input
+        .width
+        .checked_mul(input.height)
+        .and_then(|pixels| pixels.checked_mul(2));
+    match (expected, input.byte_len) {
+        (None, _) => GuardAssessment::Ineligible,
+        (Some(_), None) => GuardAssessment::Deferred,
+        (Some(0), Some(0)) => GuardAssessment::Satisfied,
+        (Some(expected), Some(actual))
+            if expected >= 16 && usize::try_from(expected).ok() == Some(actual) =>
+        {
+            GuardAssessment::Satisfied
+        }
+        _ => GuardAssessment::Ineligible,
+    }
+}
+
 fn chops_native_bytes_guard(
     input: StrategyInputs,
     other: SecondaryInputFacts,
     channels: u8,
 ) -> GuardAssessment {
+    // The archived SIMD adapters left La and LAB secondary operands on the
+    // exact-mode Default path, even when their storage width matched.
+    if matches!(other.mode, Mode::ImageLaPremultiplied8 | Mode::ImageLab8) {
+        return GuardAssessment::Ineligible;
+    }
     let primary = native_bytes_guard(input, channels);
     if !matches!(primary, GuardAssessment::Satisfied) {
         return primary;
@@ -254,8 +317,8 @@ pub(super) fn filter3x3_native_bytes_vectorizable_guard(
         _ => return GuardAssessment::Ineligible,
     };
     let scale = f32::from_bits(scale_bits);
-    if input.width < 3
-        || input.height < 3
+    if input.width == 0
+        || input.height == 0
         || !scale.is_finite()
         || scale == 0.0
         || kernel_bits.iter().any(|bits| !f32::from_bits(*bits).is_finite())
@@ -288,7 +351,7 @@ pub(super) fn filter5x5_native_bytes_vectorizable_guard(
         && kernel_bits
             .iter()
             .all(|bits| f32::from_bits(*bits).is_finite());
-    if input.width < 5 || input.height < 5 || !valid_parameters {
+    if input.width == 0 || input.height == 0 || !valid_parameters {
         GuardAssessment::Ineligible
     } else {
         GuardAssessment::Satisfied
@@ -307,6 +370,13 @@ pub(super) fn filter5x5_i32_binomial_fma_guard(input: StrategyInputs) -> GuardAs
     if !scale.is_finite() || scale == 0.0 || f32::from_bits(offset_bits) != 0.0 {
         return GuardAssessment::Ineligible;
     }
+    let layout = checked_native_bytes_guard(input, 4);
+    if !matches!(layout, GuardAssessment::Satisfied) {
+        return layout;
+    }
+    if input.width == 0 || input.height == 0 {
+        return GuardAssessment::Ineligible;
+    }
 
     let factors = [1.0f32, 4.0, 6.0, 4.0, 1.0];
     let exact_binomial = kernel_bits.iter().enumerate().all(|(index, bits)| {
@@ -319,6 +389,27 @@ pub(super) fn filter5x5_i32_binomial_fma_guard(input: StrategyInputs) -> GuardAs
         normalized.to_bits() == expected.to_bits()
     });
     if exact_binomial {
+        GuardAssessment::Satisfied
+    } else {
+        GuardAssessment::Ineligible
+    }
+}
+
+pub(super) fn filter5x5_i32_vectorizable_guard(input: StrategyInputs) -> GuardAssessment {
+    let (kernel_bits, scale_bits) = match input.request {
+        RequestFacts::Filter5x5 { kernel_bits, scale_bits, .. } => (kernel_bits, scale_bits),
+        RequestFacts::Unspecified => return GuardAssessment::Deferred,
+        _ => return GuardAssessment::Ineligible,
+    };
+    let layout = checked_native_bytes_guard(input, 4);
+    if !matches!(layout, GuardAssessment::Satisfied) {
+        return layout;
+    }
+    let scale = f32::from_bits(scale_bits);
+    let valid_parameters = scale.is_finite()
+        && scale != 0.0
+        && kernel_bits.iter().all(|bits| f32::from_bits(*bits).is_finite());
+    if input.width != 0 && input.height != 0 && valid_parameters {
         GuardAssessment::Satisfied
     } else {
         GuardAssessment::Ineligible
@@ -531,14 +622,15 @@ pub(super) fn filter3x3_i32_vectorizable_guard(
     if !matches!(layout, GuardAssessment::Satisfied) {
         return layout;
     }
-    if input.width < 6 || input.height < 3 {
-        return GuardAssessment::Ineligible;
-    }
     let scale = f32::from_bits(scale_bits);
     let valid_parameters = scale.is_finite()
         && scale != 0.0
         && kernel_bits.iter().all(|bits| f32::from_bits(*bits).is_finite());
-    if valid_parameters { GuardAssessment::Satisfied } else { GuardAssessment::Ineligible }
+    if valid_parameters && input.width != 0 && input.height != 0 {
+        GuardAssessment::Satisfied
+    } else {
+        GuardAssessment::Ineligible
+    }
 }
 
 pub(super) fn convert_target_guard(
@@ -572,10 +664,7 @@ pub(super) fn rotate_vector_bytes_guard(
     if !(1..=4).contains(&channels) {
         return GuardAssessment::Ineligible;
     }
-    let layout = StrategyGuard::CheckedNativeBytes { channels }.assess(input);
-    if !matches!(layout, GuardAssessment::Satisfied) {
-        return layout;
-    }
+    let empty_input = input.width == 0 || input.height == 0;
     let (angle_bits, expand, center_bits, translate_bits, filter, nearest) = match input.request {
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
         RequestFacts::Rotate {
@@ -583,10 +672,6 @@ pub(super) fn rotate_vector_bytes_guard(
         } => (angle_bits, expand, center_bits, translate_bits, filter, nearest),
         _ => return GuardAssessment::Ineligible,
     };
-    let nearest = force_nearest || nearest;
-    if !nearest && (!bilinear || filter != 1) {
-        return GuardAssessment::Ineligible;
-    }
     let angle = f64::from_bits(angle_bits);
     let finite_pair = |bits: Option<(u64, u64)>| {
         bits.is_none_or(|(x, y)| f64::from_bits(x).is_finite() && f64::from_bits(y).is_finite())
@@ -594,19 +679,43 @@ pub(super) fn rotate_vector_bytes_guard(
     if !angle.is_finite() || !finite_pair(center_bits) || !finite_pair(translate_bits) {
         return GuardAssessment::Ineligible;
     }
+    // Empty-source behavior depends on the exact Default fast path: archived
+    // discrete paths preserve some empty outputs, while affine paths may
+    // reject or fill an expanded image. Keep that case on Default instead of
+    // a generic vector shortcut.
+    // TODO(pillow-rs#3ptb): verify empty outputs and architecture receipts in
+    // the frozen CPU parity matrix.
+    if empty_input {
+        return GuardAssessment::Ineligible;
+    }
+    let layout = StrategyGuard::CheckedNativeBytes { channels }.assess(input);
+    if !matches!(layout, GuardAssessment::Satisfied) {
+        return layout;
+    }
     let center = center_bits.map(|(x, y)| (f64::from_bits(x), f64::from_bits(y)));
     let translate = translate_bits.map(|(x, y)| (f64::from_bits(x), f64::from_bits(y)));
+    if angle.rem_euclid(360.0).abs() <= f64::EPSILON
+        && center_bits.is_none()
+        && translate_bits.is_none()
+    {
+        return layout;
+    }
     if center_bits.is_none() && translate_bits.is_none() {
         let normalized = angle.rem_euclid(360.0);
-        if normalized.abs() <= f64::EPSILON {
-            return GuardAssessment::Ineligible;
-        }
-        let discrete = [90.0, 180.0, 270.0].into_iter().find(|value| normalized == *value);
-        if discrete.is_some_and(|degree| degree == 180.0 || expand || input.width == input.height) {
-            return GuardAssessment::Ineligible;
+        let discrete = [90.0, 180.0, 270.0]
+            .into_iter()
+            .find(|value| normalized == *value);
+        if discrete.is_some_and(|degree| {
+            degree == 180.0 || expand || input.width == input.height
+        }) {
+            return layout;
         }
     }
-    if !rotate_nearest_geometry_supported(
+    let nearest = force_nearest || nearest;
+    if !nearest && (!bilinear || filter != 1) {
+        return GuardAssessment::Ineligible;
+    }
+    if !rotate_output_geometry_supported(
         input.width,
         input.height,
         channels,
@@ -709,7 +818,7 @@ pub(super) fn transform_i16_affine_guard(
     checked_native_bytes_guard(input, 2)
 }
 
-fn rotate_nearest_geometry_supported(
+fn rotate_output_geometry_supported(
     width: u32,
     height: u32,
     channels: u8,

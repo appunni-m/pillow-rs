@@ -1,5 +1,6 @@
 //! Bounded execution telemetry and receipt collection for compute backends.
 
+use super::registry::support::{FallbackReason, StrategySelection};
 use super::{Architecture, Backend, PipelineTelemetrySample};
 
 #[path = "telemetry/eager_cpu.rs"]
@@ -100,11 +101,12 @@ pub struct PipelineResourceTelemetry {
 /// Evidence for one public operation inside a backend execution.
 ///
 /// `path` is intentionally a small controlled vocabulary.  `vector` means a
-/// vector kernel processed at least one block; `native-copy` is for bandwidth
-/// operations such as crop; `scalar-control` is the scalar part of a valid
-/// SIMD-capable operation (geometry, validation, or a tail); `cpu` means the
-/// CPU backend produced the operation; and `unsupported` means strict SIMD
-/// rejected it during contextual preflight.
+/// vector kernel processed at least one block; `native-identity` means the
+/// wrapper returned the existing pixel buffer without a kernel; `native-copy`
+/// is for bandwidth operations such as crop; `scalar-control` is the scalar
+/// part of a valid SIMD-capable operation (geometry, validation, or a tail);
+/// `cpu` means the CPU backend produced the operation; and `unsupported` means
+/// strict SIMD rejected it during contextual preflight.
 #[derive(Debug, Clone)]
 pub struct PipelineOperationTelemetry {
     /// Registry key for the public pipeline operation.
@@ -113,6 +115,14 @@ pub struct PipelineOperationTelemetry {
     pub path: &'static str,
     /// CPU architecture selected by the prepared operation, when available.
     pub selected_architecture: Option<Architecture>,
+    /// Strategy fallbacks selected while executing this operation.
+    ///
+    /// This records mode/architecture strategy selection only. Backend routing
+    /// fallback remains in [`PipelineTelemetry`]. Composite operations can
+    /// retain more than one reason when their child strategies differ. `None`
+    /// means this execution path did not provide a prepared selection; an empty
+    /// list means a selection was recorded without a strategy fallback.
+    pub strategy_fallbacks: Option<Vec<FallbackReason>>,
     /// Number of vector blocks processed by the operation.
     pub vector_block_count: u64,
     /// Number of scalar tail elements processed after vector blocks.
@@ -131,6 +141,7 @@ struct PipelineOperationSample {
     operation: &'static str,
     path: &'static str,
     selected_architecture: Option<Architecture>,
+    strategy_fallbacks: Option<Vec<FallbackReason>>,
     vector_block_count: u64,
     scalar_tail_count: u64,
     mode_conversion_count: u64,
@@ -396,6 +407,60 @@ pub(crate) fn reset_pipeline_operation_telemetry() {
     });
 }
 
+/// Collects operation receipts from multiple ordered materialization steps.
+///
+/// Each lazy image evaluation writes into the thread-local receipt list. This
+/// collector drains those receipts between steps and restores them in order
+/// before a terminal operation records its own receipt.
+pub(crate) struct PipelineOperationTelemetryCapture {
+    enabled: bool,
+    restored: bool,
+    samples: Vec<PipelineOperationSample>,
+}
+
+impl PipelineOperationTelemetryCapture {
+    /// Starts a fresh ordered receipt capture when telemetry is enabled.
+    pub(crate) fn begin() -> Self {
+        let enabled = pipeline_telemetry_enabled();
+        if enabled {
+            reset_pipeline_operation_telemetry();
+        }
+        Self {
+            enabled,
+            restored: false,
+            samples: Vec::new(),
+        }
+    }
+
+    /// Saves receipts emitted by the most recently completed materialization.
+    pub(crate) fn capture(&mut self) {
+        if !self.enabled {
+            return;
+        }
+        LAST_PIPELINE_OPERATION_TELEMETRY.with(|last| {
+            self.samples.append(&mut *last.borrow_mut());
+        });
+    }
+
+    /// Restores captured receipts before the next operation appends its own.
+    pub(crate) fn restore(&mut self) {
+        if !self.enabled || self.restored {
+            return;
+        }
+        self.capture();
+        LAST_PIPELINE_OPERATION_TELEMETRY.with(|last| {
+            last.borrow_mut().append(&mut self.samples);
+        });
+        self.restored = true;
+    }
+}
+
+impl Drop for PipelineOperationTelemetryCapture {
+    fn drop(&mut self) {
+        self.restore();
+    }
+}
+
 /// Takes operation-level execution evidence collected on this thread.
 pub fn take_pipeline_operation_telemetry() -> Vec<PipelineOperationTelemetry> {
     LAST_PIPELINE_OPERATION_TELEMETRY.with(|last| {
@@ -405,6 +470,7 @@ pub fn take_pipeline_operation_telemetry() -> Vec<PipelineOperationTelemetry> {
                 operation: sample.operation,
                 path: sample.path,
                 selected_architecture: sample.selected_architecture,
+                strategy_fallbacks: sample.strategy_fallbacks,
                 vector_block_count: sample.vector_block_count,
                 scalar_tail_count: sample.scalar_tail_count,
                 mode_conversion_count: sample.mode_conversion_count,
@@ -427,6 +493,7 @@ pub(crate) fn begin_pipeline_operation_telemetry(operation: &'static str) {
             // vector block or a native-copy path actually ran.
             path: "scalar-control",
             selected_architecture: None,
+            strategy_fallbacks: None,
             vector_block_count: 0,
             scalar_tail_count: 0,
             mode_conversion_count: 0,
@@ -555,6 +622,7 @@ pub(crate) fn record_pipeline_operation_unsupported(operation: &'static str) {
             operation,
             path: "unsupported",
             selected_architecture: None,
+            strategy_fallbacks: None,
             vector_block_count: 0,
             scalar_tail_count: 0,
             mode_conversion_count: 0,
@@ -572,6 +640,24 @@ pub(crate) fn record_pipeline_operation_architecture(architecture: Architecture)
     ACTIVE_PIPELINE_OPERATION_TELEMETRY.with(|active| {
         if let Some(sample) = active.borrow_mut().last_mut() {
             sample.selected_architecture = Some(architecture);
+        }
+    });
+}
+
+/// Record the concrete mode/architecture strategy selected for an operation.
+pub(crate) fn record_pipeline_operation_selection(selection: &StrategySelection) {
+    if !pipeline_telemetry_enabled() {
+        return;
+    }
+    ACTIVE_PIPELINE_OPERATION_TELEMETRY.with(|active| {
+        if let Some(sample) = active.borrow_mut().last_mut() {
+            sample.selected_architecture = Some(selection.implementation.architecture);
+            let fallbacks = sample.strategy_fallbacks.get_or_insert_with(Vec::new);
+            if let Some(reason) = selection.fallback
+                && !fallbacks.contains(&reason)
+            {
+                fallbacks.push(reason);
+            }
         }
     });
 }

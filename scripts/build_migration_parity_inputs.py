@@ -46624,6 +46624,138 @@ def brightness_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
     return cases
 
 
+def paste_convert_override_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Pin raw-pixel-size Paste behavior when convert() returns its input."""
+    target = "PIL.Image.Image"
+    if surface_id != target:
+        return []
+
+    def inline_asset(asset_id: str, raw: bytes) -> dict[str, Any]:
+        return {
+            "id": asset_id,
+            "kind": "inline",
+            "encoding": "base64",
+            "data": base64.b64encode(raw).decode("ascii"),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+            "media_type": "application/octet-stream",
+        }
+
+    def image_step(step_id: str, mode: str, asset_id: str) -> dict[str, Any]:
+        return {
+            "step_id": step_id,
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "receiver": None,
+            "arguments": {
+                "mode": literal(mode),
+                "size": literal([2, 1]),
+                "data": asset_value(asset_id),
+            },
+        }
+
+    def make_case(
+        name: str,
+        destination_mode: str,
+        source_mode: str,
+        destination_data: bytes,
+        source_data: bytes,
+        mask_data: bytes | None = None,
+        *,
+        expect_pixel_output: bool = True,
+    ) -> dict[str, Any]:
+        destination_asset = f"paste-override-{name}-destination"
+        source_asset = f"paste-override-{name}-source"
+        assets = [
+            inline_asset(destination_asset, destination_data),
+            inline_asset(source_asset, source_data),
+        ]
+        steps = [
+            image_step("destination", destination_mode, destination_asset),
+            image_step("source", source_mode, source_asset),
+        ]
+        arguments: dict[str, Any] = {
+            "im": literal(
+                {"protocol": "paste-convert-override", "image_step_id": "source"}
+            ),
+            "box": literal([0, 0]),
+        }
+        if mask_data is not None:
+            mask_asset = f"paste-override-{name}-mask"
+            assets.append(inline_asset(mask_asset, mask_data))
+            steps.append(image_step("mask", "L", mask_asset))
+            arguments["mask"] = binding("mask")
+        steps.append(
+            {
+                "step_id": "call",
+                "surface": target,
+                "operation": "paste",
+                "receiver": binding("destination"),
+                "arguments": arguments,
+            }
+        )
+        observations = ["call"]
+        if expect_pixel_output:
+            steps.append(
+                {
+                    "step_id": "observe-destination",
+                    "surface": target,
+                    "operation": "tobytes",
+                    "receiver": binding("destination"),
+                    "arguments": {},
+                }
+            )
+            observations.append("observe-destination")
+        return {
+            "case_id": f"{target}.paste.nuanced.convert-override-{name}",
+            "surface": target,
+            "operation": "paste",
+            "covers": [f"{target}.paste.behavior.default"],
+            "assets": assets,
+            "steps": steps,
+            "observations": observations,
+        }
+
+    return [
+        make_case(
+            "rgba-to-cmyk-same-pixel-size",
+            "CMYK",
+            "RGBA",
+            bytes((10, 20, 30, 40, 50, 60, 70, 80)),
+            bytes((101, 111, 121, 131, 141, 151, 161, 171)),
+        ),
+        make_case(
+            "rgb-to-rgba-same-pixel-size",
+            "RGBA",
+            "RGB",
+            bytes((3, 5, 7, 11, 13, 17, 19, 23)),
+            bytes((31, 37, 41, 43, 47, 53)),
+        ),
+        make_case(
+            "l-to-p-same-pixel-size",
+            "P",
+            "L",
+            bytes((1, 2)),
+            bytes((200, 210)),
+        ),
+        make_case(
+            "rgba-to-l-different-pixel-size",
+            "L",
+            "RGBA",
+            bytes((1, 2)),
+            bytes((101, 102, 103, 104, 105, 106, 107, 108)),
+            expect_pixel_output=False,
+        ),
+        make_case(
+            "la-to-rgba-masked-hidden-lanes",
+            "RGBA",
+            "LA",
+            bytes((2, 3, 5, 7, 11, 13, 17, 19)),
+            bytes((23, 29, 31, 37)),
+            mask_data=bytes((0, 128)),
+        ),
+    ]
+
+
 def native_paste_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
     """Keep native-byte paste clipping and packed-tail regressions generated."""
     target = "PIL.Image.Image"
@@ -56653,6 +56785,16 @@ def build_inputs(
                 parity_cases.append(native_case)
                 existing_signatures.add(signature)
                 appended_nuanced.append(native_case)
+                added_nuanced_cases += 1
+
+        # The input-only protocol constructs the user-observed instance
+        # convert() override on both Pillow and the replacement facade.
+        for override_case in paste_convert_override_parity_cases(surface_id):
+            signature = case_signature(override_case)
+            if signature not in existing_signatures:
+                parity_cases.append(override_case)
+                existing_signatures.add(signature)
+                appended_nuanced.append(override_case)
                 added_nuanced_cases += 1
 
         # These GetChannel edge stimuli extend parity only. Keep them out of

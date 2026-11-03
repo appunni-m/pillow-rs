@@ -3,7 +3,7 @@ use super::BOX_BLUR_BIAS;
 /// The direct row-major form keeps every source row contiguous and avoids the
 /// generic transposed-line accumulator for this common radius.
 
-pub(in crate::compute::pool_cpu::ops::filter::blur) fn blur_luma_vertical_radius_one_rows(
+pub(in crate::compute::pool_cpu::ops::filter::helpers::blur) fn blur_luma_vertical_radius_one_rows(
     source: &[u8],
     destination: &mut [u8],
     width: usize,
@@ -67,7 +67,7 @@ pub(in crate::compute::pool_cpu::ops::filter::blur) fn blur_luma_vertical_radius
 
 /// Apply one interleaved vertical Gaussian box pass with five replicated-edge taps.
 
-pub(in crate::compute::pool_cpu::ops::filter::blur) fn blur_interleaved_vertical_radius_one_fractional_rows(
+pub(in crate::compute::pool_cpu::ops::filter::helpers::blur) fn blur_interleaved_vertical_radius_one_fractional_rows(
     source: &[u8],
     destination: &mut [u8],
     width: usize,

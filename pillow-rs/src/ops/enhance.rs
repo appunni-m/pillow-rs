@@ -23,18 +23,6 @@ fn exact_mode(image: &Image) -> Result<Mode, PilError> {
     image.mode_identity()
 }
 
-fn uppercase_a_band(mode: Mode) -> Option<usize> {
-    match mode {
-        Mode::ImageLumaA8 | Mode::ImagePaletteAlpha8 | Mode::ImageLab8 => Some(1),
-        Mode::ImageRgba8 => Some(3),
-        // NO_PILLOW_SUPPORT: internal high-depth alpha rasters retain their
-        // declared alpha sample while constructing a native core base.
-        Mode::ImageLumaA16 => Some(1),
-        Mode::ImageRgba16 | Mode::ImageRgba32F => Some(3),
-        _ => None,
-    }
-}
-
 fn validate_operation_mode(image: &Image, operation: OperationId) -> Result<Mode, PilError> {
     let mode = exact_mode(image)?;
     match mode_support(operation, mode) {
@@ -44,7 +32,7 @@ fn validate_operation_mode(image: &Image, operation: OperationId) -> Result<Mode
 }
 
 fn has_prepared_mode_strategy(operation: OperationId, mode: Mode) -> bool {
-    matches!(mode_support(operation, mode), ModeSupport::Supported { .. })
+    operation.support().route_for_mode(mode).has_prepared_strategy()
 }
 
 impl Image {
@@ -97,11 +85,12 @@ impl Image {
     /// Returns conversion or materialization failures during construction.
     pub fn color_degenerate(&self) -> Result<Image, PilError> {
         let mode = exact_mode(self)?;
-        let intermediate = if uppercase_a_band(mode).is_some() {
-            Mode::ImageLumaA8
-        } else {
-            Mode::ImageLuma8
-        };
+        let route = OperationId::ColorSaturation.support().route_for_mode(mode);
+        let intermediate = route.intermediate_mode().ok_or_else(|| {
+            PilError::InternalError(
+                "ColorSaturation support omitted its degenerate intermediate mode".into(),
+            )
+        })?;
         if matches!(mode, Mode::ImageLuma8 | Mode::ImageLumaA8) {
             return Ok(self.clone());
         }
@@ -159,9 +148,10 @@ impl Image {
     /// Builds the base image retained by a Pillow contrast enhancer.
     ///
     /// The mean is rounded after conversion to L. Converting that constant
-    /// image back to the source mode defines the per-band base, and uppercase
-    /// alpha is copied from this image at construction time. Later source
-    /// mutations must not alter this snapshot.
+    /// image back to the source mode defines the per-band base. Pillow's
+    /// uppercase `A` band is copied at construction time, including LAB's
+    /// color-space component. Later source mutations must not alter this
+    /// snapshot.
     ///
     /// # Errors
     ///
@@ -209,8 +199,8 @@ impl Image {
         } else if source.mode() != Mode::ImageLuma8 {
             base = base.convert(mode, None, None, None, None)?;
         }
-        if let Some(alpha) = uppercase_a_band(source.mode()) {
-            base.putalpha_data(&self.getchannel(alpha as i32)?)?;
+        if let Some(band) = source.mode().uppercase_a_band_index() {
+            base.putalpha_data(&self.getchannel(band as i32)?)?;
         }
         // Pillow creates this image during __init__, including conversion
         // errors. Materialize now so enhancement only blends the saved base.

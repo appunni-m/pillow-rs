@@ -1,14 +1,16 @@
 """Internal Python Image class that wraps the Rust implementation."""
+from abc import ABC, abstractmethod
 from copy import deepcopy
+from math import floor as _floor
 from operator import index as _index
 from pathlib import Path
 from struct import iter_unpack as _iter_unpack
 from sys import maxsize as _MAX_INDEX
-from typing import Any, Optional, Tuple, Union
+from typing import Any, Optional, Protocol, Sequence, Tuple, Union
 
 from . import _core
 from ._core import Image as RustImage
-from .enums import Palette, Resampling, Transpose
+from .enums import Palette, Resampling, Transform, Transpose
 
 
 def _image_data_bands(mode):
@@ -193,6 +195,23 @@ class UnidentifiedImageError(OSError):
     """Pillow-compatible class for bytes that no registered decoder accepts."""
 
 
+class SupportsGetData(Protocol):
+    """Protocol for Pillow's legacy transform-method data provider."""
+
+    def getdata(self) -> Tuple[Transform, Sequence[int]]:
+        """Return a transform method and the method-specific data."""
+        ...
+
+
+class ImageTransformHandler(ABC):
+    """Base class for custom handlers passed to :meth:`Image.transform`."""
+
+    @abstractmethod
+    def transform(self, size: Tuple[int, int], image: "Image", **options: Any) -> "Image":
+        """Return the transformed image using the provided Pillow options."""
+        raise NotImplementedError
+
+
 class _ClosedImage:
     """Released image storage that preserves Pillow's closed-image error."""
 
@@ -218,7 +237,13 @@ class Image:
     BICUBIC = Resampling.BICUBIC
     LANCZOS = Resampling.LANCZOS
     Resampling = Resampling
+    Transform = Transform
     Transpose = Transpose
+    AFFINE = Transform.AFFINE
+    EXTENT = Transform.EXTENT
+    PERSPECTIVE = Transform.PERSPECTIVE
+    QUAD = Transform.QUAD
+    MESH = Transform.MESH
     # Transpose constants matching PIL.Image.<name> access pattern
     FLIP_LEFT_RIGHT = Transpose.FLIP_LEFT_RIGHT
     FLIP_TOP_BOTTOM = Transpose.FLIP_TOP_BOTTOM
@@ -340,9 +365,40 @@ class Image:
         box=None,
         reducing_gap=None,
     ) -> "Image":
+        palette = self.__dict__.get("_palette_object")
+        if palette is not None and palette.dirty and self.mode in ("P", "PA"):
+            # Pillow validates the filter and reducing gap, normalizes size,
+            # then takes its identity-copy or source-load path.
+            # TODO(pillow-rs#3ptb): parity-check custom geometry/gap objects
+            # whose comparisons or numeric conversion raise at this boundary.
+            filter_code = self._rust_image._resize_filter_code(resample)
+            if reducing_gap is not None and reducing_gap < 1.0:
+                raise ValueError("reducing_gap must be 1.0 or greater")
+            if box is None:
+                box = (0, 0) + self.size
+            size = tuple(size)
+            full_box = (0, 0) + self.size
+            if self.size == size and box == full_box:
+                # The identity copy loads but does not use reducing_gap.
+                # Pass canonical geometry so Pillow-compatible identity inputs
+                # avoid later integer/box coercion in the Rust binding.
+                size = self.size
+                box = full_box
+                reducing_gap = None
+            self._realize_dirty_palette()
+            return self._new(
+                self._rust_image.resize(size, filter_code, box, reducing_gap)
+            )
         return self._new(self._rust_image.resize(size, resample, box, reducing_gap))
 
     def crop(self, box: Optional[Tuple[float, float, float, float]] = None) -> "Image":
+        # Pillow rejects reversed coordinates before loading the source.
+        if box is not None:
+            if box[2] < box[0]:
+                raise ValueError("Coordinate 'right' is less than 'left'")
+            if box[3] < box[1]:
+                raise ValueError("Coordinate 'lower' is less than 'upper'")
+        self._realize_dirty_palette()
         return self._new(self._rust_image.crop(box))
 
     def rotate(
@@ -354,12 +410,26 @@ class Image:
         translate: Optional[Tuple[float, float]] = None,
         fillcolor: Optional[Any] = None,
     ) -> "Image":
-        rust_image = self._rust_image.rotate(
-            float(angle), resample, expand, center, translate, fillcolor
-        )
+        angle = float(angle)
+        palette = self.__dict__.get("_palette_object")
+        if palette is not None and palette.dirty and self.mode in ("P", "PA"):
+            # Pillow validates Rotate inputs before loading. Prepare the typed
+            # request once, commit the dirty palette, then queue against the
+            # updated source metadata.
+            plan = self._rust_image._prepare_rotate(
+                angle, resample, expand, center, translate, fillcolor
+            )
+            self._realize_dirty_palette()
+            rust_image = self._rust_image._rotate_prepared(plan)
+        else:
+            rust_image = self._rust_image.rotate(
+                angle, resample, expand, center, translate, fillcolor
+            )
         return self._new(rust_image)
 
     def transpose(self, method: Union[int, str]) -> "Image":
+        # Pillow loads before the core transpose validates its method.
+        self._realize_dirty_palette()
         if self._transpose_loads_info:
             self.load()
             self.info
@@ -377,6 +447,8 @@ class Image:
         palette: str = Palette.WEB,
         colors: int = 256,
     ) -> "Image":
+        # Pillow's convert loads before resolving or validating the target.
+        self._realize_dirty_palette()
         rust_image = self._rust_image.convert(
             mode, matrix=matrix, dither=dither, palette=palette, colors=colors
         )
@@ -394,49 +466,173 @@ class Image:
         ] = None,
         mask: Optional["Image"] = None,
     ) -> None:
+        # Pillow handles Image-as-mask shorthand before normal box processing.
+        if isinstance(box, Image):
+            if mask is not None:
+                raise ValueError(
+                    "If using second argument as mask, third argument must be None"
+                )
+            mask = box
+            box = None
+        # Pillow inspects box length and expands a two-coordinate box before
+        # resolving or loading the source, then passes coordinates after loads.
+        if box is None:
+            box = (0, 0)
+        box_length = len(box)
+        if box_length == 2:
+            if isinstance(im, Image):
+                size = im.size
+            elif isinstance(mask, Image):
+                size = mask.size
+            else:
+                raise ValueError("cannot determine region size; use 4-item box")
+            box += (box[0] + size[0], box[1] + size[1])
+            box_length = 4
+        box_plan = self._rust_image._paste_prepare_box(
+            box,
+            mask is not None,
+            isinstance(im, Image) or isinstance(mask, Image),
+            box_length,
+        )
+        effective_mask = mask
+        is_image_source = isinstance(im, Image)
+        resolved_image_source = False
+        if is_image_source:
+            im.load()
+            requires_conversion = im.mode != self.mode and (
+                self.mode != "RGB" or im.mode not in ("LA", "RGBA", "RGBa")
+            )
+            if not requires_conversion:
+                resolved_image_source = True
+            else:
+                convert_method = im.convert
+                if (
+                    type(im) is not Image
+                    or "convert" in getattr(im, "__dict__", {})
+                    or getattr(convert_method, "__func__", convert_method)
+                    is not _BASE_IMAGE_CONVERT_METHOD
+                ):
+                    # Let Python overrides run before destination and mask
+                    # callbacks, as Pillow does. The exact base Image path
+                    # keeps its mode strategy in Rust.
+                    # Pillow 12.3.0 compatibility: its paste wrapper trusts a
+                    # convert() override's returned mode, while the native
+                    # paste path accepts matching physical pixel sizes. Keep
+                    # that observable behavior without promising that arbitrary
+                    # modes are interchangeable through the public API.
+                    im = convert_method(self.mode)
+                    resolved_image_source = True
+        # Image conversion and color-string resolution happen before the
+        # destination load; raw numeric source coercion is retained for the
+        # final core call, after destination and mask loading.
+        if is_image_source and resolved_image_source:
+            source_plan = self._rust_image._paste_prepare_resolved_image_source(
+                im._rust_image
+            )
+        else:
+            source_plan = self._rust_image._paste_prepare_source(
+                im, effective_mask is not None, is_image_source
+            )
+        self.load()
         self._native_info_known_empty = False
-        self._rust_image.paste(im, box, mask)
+        mask_is_active = bool(effective_mask) if effective_mask is not None else False
+        if mask_is_active:
+            effective_mask.load()
+        self._rust_image._paste_apply_prepared(
+            box_plan,
+            source_plan,
+            mask if mask_is_active else None,
+        )
 
     def split(self) -> Tuple["Image", ...]:
+        # Pillow loads pixel storage before splitting the bands.
+        self.load()
         return tuple(self._new(image) for image in self._rust_image.split())
 
     def getbands(self) -> Tuple[str, ...]:
         return self._rust_image.getbands()
 
     def copy(self) -> "Image":
+        self._realize_dirty_palette()
         return self._new(self._rust_image.copy())
 
     def filter(self, filter_type) -> "Image":
+        # Pillow loads before validating the filter argument.
+        self.load()
         return self._new(self._rust_image.filter(filter_type))
 
     def thumbnail(
         self,
         size: Tuple[int, int],
         resample: Union[int, str] = Resampling.BICUBIC,
-        reducing_gap=None,
+        reducing_gap=2.0,
     ) -> None:
         """Scale image to fit within size. Aspect ratio handled in Rust."""
-        del reducing_gap
+        provided_size = tuple(map(_floor, size))
+        width, height = provided_size
+        plan = self._rust_image._thumbnail_preflight((width, height))
+        if plan is None:
+            return
+        box = None
+        if reducing_gap is not None:
+            draft = self.draft(
+                None,
+                (
+                    int(size[0] * reducing_gap),
+                    int(size[1] * reducing_gap),
+                ),
+            )
+            if draft is not None:
+                box = draft[1]
+        # Pillow skips resize input conversion if draft changed the image to
+        # the already selected target size.
+        if self._rust_image.size == plan.output_size:
+            return
+        # Keep user-defined string conversion outside a PyImage borrow: a
+        # custom filter can call back into this wrapper and mutate its image.
+        filter_code = _core._thumbnail_filter_code(resample)
+        if reducing_gap is not None and reducing_gap < 1.0:
+            raise ValueError("reducing_gap must be 1.0 or greater")
+        reducing_gap = _core._thumbnail_reducing_gap(reducing_gap)
+        palette = self.__dict__.get("_palette_object")
+        if palette is not None and palette.dirty and self.mode in ("P", "PA"):
+            # Commit Python-owned palette bytes only after Pillow's no-op,
+            # geometry, filter, and reducing-gap checks have succeeded.
+            self._realize_dirty_palette()
         self._native_info_known_empty = False
-        if self._has_getdata_views:
+        if box is not None:
+            resized = self._rust_image.resize(
+                plan.output_size, filter_code, box, reducing_gap
+            )
+            self._rust_image = resized
+        elif self._rust_image.size == plan.output_size:
+            # Filter or gap coercion may resize this wrapper reentrantly after
+            # the earlier target-size check. Pillow still completes its
+            # already-entered resize call and replaces the core with the
+            # current mode's identity-resized copy.
+            self._rust_image = self._rust_image.resize(
+                plan.output_size, filter_code, None, reducing_gap
+            )
+        elif self._has_getdata_views:
             # Pillow replaces its core during thumbnail; previously returned
             # getdata sequences keep the old core alive. Detach this wrapper
-            # only when thumbnail actually changes the image. A no-op must
-            # leave the core shared so later in-place writes remain visible.
+            # only after the resize branch is reached.
             current = self._rust_image
             replacement = current._clone_handle()
-            replacement.thumbnail(size, resample)
-            if replacement.size != current.size:
-                self._rust_image = replacement
+            replacement._thumbnail_apply_prepared(plan, filter_code, reducing_gap)
+            self._rust_image = replacement
         else:
-            self._rust_image.thumbnail(size, resample)
+            self._rust_image._thumbnail_apply_prepared(plan, filter_code, reducing_gap)
 
     def tobytes(self, encoder_name: str = "raw", *args) -> bytes:
-        return self._rust_image.tobytes_encoded(self.mode, encoder_name, args)
+        self._realize_dirty_palette()
+        return self._rust_image.tobytes_encoded(encoder_name, args)
 
     def getpixel(self, xy: Tuple[int, int]):
         """Get pixel value at (x, y). Mode dispatch done in Rust."""
-        return self._rust_image.getpixel_formatted(xy)
+        # Pillow loads before converting the coordinate iterable to a tuple.
+        self.load()
+        return self._rust_image.getpixel_formatted(tuple(xy))
 
     def putpixel(self, xy: Tuple[int, int], value):
         """Set pixel value at (x, y). Accepts int, tuple, or list.
@@ -445,7 +641,10 @@ class Image:
         accepted for palette colors; ordinary component values use tuples.
         Negative coordinates count from the right or bottom edge.
         """
-        self._native_info_known_empty = False
+        # Pillow's _ensure_mutable() loads before parsing coordinates or the
+        # pixel value. This also materializes any pending Rust pipeline before
+        # the in-place write becomes visible.
+        self.load()
         try:
             self._rust_image.putpixel_mode(xy, value, self._info)
         finally:
@@ -458,41 +657,79 @@ class Image:
     def quantize(self, colors: int = 256, method=None, kmeans: int = 0,
                  palette=None, dither: int = 1):
         """Reduce colors using median cut algorithm."""
+        # Pillow loads the source before defaulting or validating the method.
+        self._realize_dirty_palette()
+        if isinstance(palette, Image) and (
+            self.mode != "RGBA" or method is None or method in (2, 3)
+        ):
+            # Pillow loads a reference palette only after its RGBA method
+            # restriction, but before validating the reference/source modes.
+            palette._realize_dirty_palette()
         return self._new(
             self._rust_image.quantize(colors, method, kmeans, dither != 0, palette)
         )
 
     def getbbox(self, *, alpha_only: bool = True):
         """Bounding box of non-zero regions."""
+        # Pillow loads before coercing the native alpha_only argument.
+        self.load()
         return self._rust_image.getbbox(alpha_only)
 
     def getextrema(self):
         """Min/max pixel values per band. Returns tuple matching PIL format."""
+        # Pillow loads before querying sample extrema.
+        self.load()
         return self._rust_image.getextrema_formatted()
 
     def histogram(self, mask=None, extrema=None):
-        """Image histogram per band."""
-        return self._rust_image.histogram_with_input(mask)
+        """Image histogram per band, optionally ranged for I/F samples."""
+        # Pillow loads the source before checking mask truthiness, then loads
+        # a truthy mask before handing both cores to the histogram operation.
+        self.load()
+        if mask:
+            mask.load()
+        else:
+            mask = None
+        return self._rust_image.histogram_with_input(mask, extrema)
 
     def getchannel(self, channel):
-        """Extract a single channel as an L-mode image."""
+        """Extract a channel, preserving native single-band and scalar modes."""
+        # Pillow loads before parsing or resolving the selector.
+        self.load()
         return self._new(self._rust_image.getchannel(channel))
 
     def putalpha(self, alpha):
         """Set/replace the alpha channel."""
+        # Pillow's _ensure_mutable() loads the image before coercing alpha.
+        self.load()
         self._native_info_known_empty = False
         self._sync_observed_info()
-        self._rust_image.putalpha_input(alpha)
-        self._sync_observed_info()
+        try:
+            self._rust_image.putalpha_input(alpha)
+        finally:
+            # Pillow can promote the destination before rejecting an invalid
+            # alpha input. Keep a retained public info mapping in sync even
+            # when the core reports that later validation error.
+            self._sync_observed_info()
 
     def reduce(self, factor, box=None):
         """Reduce image by integer factor through the Rust core."""
+        # Pillow normalizes factor/box and takes the identity copy before
+        # loading. Its non-identity P path loads immediately before reduction.
+        if not isinstance(factor, (list, tuple)):
+            factor = (factor, factor)
+        if box is None:
+            box = (0, 0) + self.size
+        if factor == (1, 1) and box == (0, 0) + self.size:
+            return self.copy()
+        self._realize_dirty_palette()
         return self._new(self._rust_image.reduce(factor, box))
 
     def load(self):
         """Load pixel data and return a mutable Pillow-style pixel view."""
         self._native_info_known_empty = False
         self._sync_observed_info()
+        self._realize_dirty_palette()
         self._rust_image.load()
         self._sync_observed_info()
         return PixelAccess(self)
@@ -504,17 +741,20 @@ class Image:
 
     def getcolors(self, maxcolors=256):
         """Return list of [count, color] pairs or None if too many colors."""
+        # Pillow loads before coercing maxcolors in the ImagingCore call.
+        self.load()
         return self._rust_image.getcolors_formatted(maxcolors)
 
     def getdata(self, band=None):
         """Return pixel data through Pillow's ``ImagingCore`` sequence API."""
+        # Pillow loads before validating an explicit band index.
+        self.load()
         if band is not None:
             values = self._rust_image.getdata_formatted(band)
             # Pillow keeps the original mode for single-band 1/L/P images;
             # selecting a channel from a multiband image produces an L core.
             result_mode = self.mode if self.mode in ("1", "L", "P") else "L"
             return ImagingCore(values, result_mode, self.size)
-        self.load()
         mode, size = self.mode, self.size
         self._has_getdata_views = True
         values = _ImageDataSequence(self._rust_image, mode, size)
@@ -522,16 +762,28 @@ class Image:
 
     def putdata(self, data, scale=1.0, offset=0.0):
         """Replace pixels from scalar samples or multiband color tuples."""
+        # Pillow's _ensure_mutable() loads before checking/coercing `data`.
+        self.load()
         self._native_info_known_empty = False
         self._rust_image.putdata_formatted(data, scale, offset)
 
     def getprojection(self):
         """Return horizontal and vertical projections."""
+        # Pillow loads before scanning projections.
+        self.load()
         return self._rust_image.getprojection()
 
     def entropy(self, mask=None, extrema=None):
-        """Calculate image entropy."""
-        return self._rust_image.entropy_with_input(mask)
+        """Calculate image entropy, optionally ranging native I/F samples."""
+        # NO_PILLOW_SUPPORT: Pillow's Image.entropy accepts only a mask.
+        # Pillow loads the source before checking mask truthiness, then loads
+        # a truthy mask before handing both cores to the entropy operation.
+        self.load()
+        if mask:
+            mask.load()
+        else:
+            mask = None
+        return self._rust_image.entropy_with_input(mask, extrema)
 
     def seek(self, frame):
         """Seek to frame in multi-frame image."""
@@ -552,6 +804,7 @@ class Image:
 
     def point(self, lut, mode=None):
         """Apply lookup table or function to each pixel."""
+        self._realize_dirty_palette()
         return self._new(self._rust_image.point(lut, mode))
 
     def effect_spread(self, distance):
@@ -560,6 +813,8 @@ class Image:
 
     def apply_transparency(self):
         """Commit P-mode transparency to its palette without changing pixels."""
+        if self.mode == "P" and "transparency" in self.info:
+            self._realize_dirty_palette()
         self._native_info_known_empty = False
         self._sync_observed_info()
         result = self._rust_image.apply_transparency()
@@ -604,7 +859,51 @@ class Image:
         has 226 colors (678 bytes), while an encoded or explicitly attached
         palette may retain trailing black entries.
         """
+        # Pillow loads and realizes dirty palette metadata before reading it.
+        self.load()
         return self._rust_image.getpalette_with_input(rawmode)
+
+    def _realize_dirty_palette(self):
+        """Commit Python ImagePalette bytes when Pillow would load the image."""
+        # TODO(pillow-rs#3ptb): finish validation-ordered realization in save
+        # and transform. Paste now realizes source, destination, and active mask
+        # in Pillow's order; source-core aliasing and subclass convert hooks are
+        # tracked at the Paste owner. Thumbnail preflights geometry and filter
+        # before palette commit; explicit-source RemapPalette delays load until
+        # after dest_map parsing.
+        palette = self.__dict__.get("_palette_object")
+        if palette is None or not palette.dirty or self.mode not in ("P", "PA"):
+            return
+
+        mode, data = palette.getdata()
+        self._rust_image.putpalette(data, mode)
+        palette.dirty = 0
+        palette.rawmode = None
+        has_transparency = "transparency" in self.info
+        if mode in ("LA", "PA"):
+            self._rust_image.commit_palette_alpha()
+            # Pillow installs the raw palette before parsing transparency, so
+            # keep its public metadata stable even if the later setter errors.
+            self._native_info = deepcopy(self._rust_image.compatibility_info())
+            self._native_info_omitted = self._native_info_omitted.difference(
+                {"transparency"}
+            )
+            self._native_info_rebaseline = False
+            if has_transparency:
+                transparency = self.info["transparency"]
+                if isinstance(transparency, int):
+                    self._rust_image.putpalettealpha(transparency, 0)
+                else:
+                    self._rust_image.putpalettealphas(transparency)
+                palette.mode = "RGBA"
+            elif palette.mode != mode:
+                palette.palette = bytearray(
+                    self._rust_image.getpalette_with_input(palette.mode) or []
+                )
+        elif palette.mode != mode:
+            palette.palette = bytearray(
+                self._rust_image.getpalette_with_input(palette.mode) or []
+            )
 
     def getxmp(self):
         """Return XMP metadata. Returns empty dict."""
@@ -688,7 +987,7 @@ class Image:
         colortable = list(
             map(
                 lambda color: qRgb(*color),
-                self._rust_image.indexed_color_table(mode),
+                self._rust_image.indexed_color_table(),
             )
         )
 
@@ -804,10 +1103,17 @@ class Image:
 
     def tobitmap(self, name="image"):
         """Convert to X11 bitmap format."""
+        self._realize_dirty_palette()
         return self._rust_image.tobitmap()
 
     def remap_palette(self, dest_map, source_palette=None):
         """Remap image palette using destination map."""
+        if self.mode not in ("L", "P"):
+            raise ValueError("illegal image mode")
+        # Pillow loads P before reading the source palette, but delays its
+        # load for an explicit source_palette until after dest_map processing.
+        if self.mode == "P" and source_palette is None:
+            self._realize_dirty_palette()
         return self._new(
             self._rust_image.remap_palette(list(dest_map), source_palette)
         )
@@ -817,7 +1123,23 @@ class Image:
         return None
 
     def transform(self, size, method, data=None, resample=0, fill=1, fillcolor=None):
-        """General affine/perspective/mesh transform delegated to Rust."""
+        """Apply a built-in transform or dispatch a Pillow method object."""
+        if isinstance(method, ImageTransformHandler):
+            if self.mode == "LA" and resample != Resampling.NEAREST:
+                premultiplied = self.convert("La")
+                return method.transform(
+                    size, premultiplied, resample=resample, fill=fill
+                ).convert("LA")
+            if self.mode == "RGBA" and resample != Resampling.NEAREST:
+                premultiplied = self.convert("RGBa")
+                return method.transform(
+                    size, premultiplied, resample=resample, fill=fill
+                ).convert("RGBA")
+            return method.transform(size, self, resample=resample, fill=fill)
+
+        if hasattr(method, "getdata"):
+            method, data = method.getdata()
+
         return self._new(
             self._rust_image.transform(size, method, data, resample, fill, fillcolor)
         )
@@ -934,6 +1256,9 @@ class Image:
             and self.mode == other.mode
             and self.tobytes() == other.tobytes()
         )
+
+
+_BASE_IMAGE_CONVERT_METHOD = Image.convert
 
 
 class PixelAccess:

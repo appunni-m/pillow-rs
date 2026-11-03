@@ -6,7 +6,7 @@ use crate::raster::{DynamicImage, Mode};
 use super::default::pad_impl;
 use crate::compute::pool_cpu::ops::geometry::pad::helpers::dimensions::PadFrame;
 
-pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(OperationId::Pad, Mode::ImageI16B, OutputModeRule::Preserve, super::super::ops::INPUTS, &[]);
+pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(OperationId::Pad, Mode::ImageI16B, OutputModeRule::Preserve, super::super::ops::NATIVE_U16_FILL_INPUTS, &[]);
 
 pub(crate) fn pad(image: &DynamicImage, frame: PadFrame) -> Result<DynamicImage, PilError> {
     let DynamicImage::ImageI16B(image) = image else {

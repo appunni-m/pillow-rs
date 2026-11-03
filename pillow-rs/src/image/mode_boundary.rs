@@ -5,8 +5,9 @@
 
 use crate::raster::Mode;
 
-/// TODO(pillow-rs#3ptb): keep this parser only at host/API boundaries; remove
-/// internal callers once those entry points accept `Mode` directly.
+/// TODO(pillow-rs#3ptb): replace the remaining GPU result-metadata caller with
+/// a typed `Mode` when the GPU compatibility route adopts the raster contract.
+/// CPU operation selection reads the mode carried by `DynamicImage` directly.
 pub(crate) fn parse_pillow_mode(name: &str) -> Option<Mode> {
     Mode::from_pillow_name(name)
 }

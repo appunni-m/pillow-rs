@@ -47,19 +47,7 @@ pub(super) fn execute(
         ));
     }
     if is_identity_copy(request) {
-        crate::compute::record_pipeline_operation_path("vector");
-        crate::compute::record_pipeline_operation_vector_blocks(
-            image.as_bytes().len().div_ceil(16) as u64,
-        );
-        return crate::compute::pool_cpu::helpers::dynamic_image::from_raw_bytes(
-            mode,
-            image.width(),
-            image.height(),
-            image.as_bytes().to_vec(),
-        )
-        .ok_or_else(|| {
-            PilError::InternalError("native-byte blur identity output shape mismatch".into())
-        });
+        return super::copy_native_byte_blur_input(image, mode, channels);
     }
     let plan = blur_plan(request)?;
     if crate::compute::pool_cpu::ops::filter::helpers::native_small_uniform_bytes(
@@ -69,15 +57,7 @@ pub(super) fn execute(
         channels,
         crate::compute::pool_cpu::ops::filter::helpers::SMALL_UNIFORM_BYTE_MAX_PIXELS,
     ) {
-        return crate::compute::pool_cpu::helpers::dynamic_image::from_raw_bytes(
-            mode,
-            image.width(),
-            image.height(),
-            image.as_bytes().to_vec(),
-        )
-        .ok_or_else(|| {
-            PilError::InternalError("native-byte blur identity output shape mismatch".into())
-        });
+        return super::copy_native_byte_blur_input(image, mode, channels);
     }
 
     let horizontal = execute_axis(
@@ -384,6 +364,21 @@ fn blur_block(
     output_count: usize,
     region: Region,
 ) {
+    if axis.fractional_weight == 0 {
+        blur_block_no_fractional(
+            source,
+            destination,
+            accumulator,
+            channels,
+            axis,
+            last,
+            output_start,
+            output_count,
+            region,
+        );
+        return;
+    }
+
     let mut sums = [[0u32; LANES]; 4];
     let mut fractions = [[0u32; LANES]; 4];
     for lane in 0..output_count {
@@ -394,11 +389,9 @@ fn blur_block(
                 .wrapping_sub(u32::from(source[subtract * channels + channel]))
                 .wrapping_add(u32::from(source[add * channels + channel]));
             sums[channel][lane] = accumulator[channel];
-            if axis.fractional_weight != 0 {
-                fractions[channel][lane] = u32::from(source[far_left * channels + channel])
-                    .wrapping_add(u32::from(source[far_right * channels + channel]))
-                    .wrapping_mul(axis.fractional_weight);
-            }
+            fractions[channel][lane] = u32::from(source[far_left * channels + channel])
+                .wrapping_add(u32::from(source[far_right * channels + channel]))
+                .wrapping_mul(axis.fractional_weight);
         }
     }
     store_blur_block(
@@ -410,6 +403,40 @@ fn blur_block(
         &sums,
         &fractions,
     );
+}
+
+fn blur_block_no_fractional(
+    source: &[u8],
+    destination: &mut [u8],
+    accumulator: &mut [u32; 4],
+    channels: usize,
+    axis: BlurAxis,
+    last: usize,
+    output_start: usize,
+    output_count: usize,
+    region: Region,
+) {
+    let mut sums = [[0u32; LANES]; 4];
+    for lane in 0..output_count {
+        let output = output_start + lane;
+        let (subtract, add, _, _) = sample_indices(region, output, axis.radius, last);
+        for channel in 0..channels {
+            accumulator[channel] = accumulator[channel]
+                .wrapping_sub(u32::from(source[subtract * channels + channel]))
+                .wrapping_add(u32::from(source[add * channels + channel]));
+            sums[channel][lane] = accumulator[channel];
+        }
+    }
+
+    let bias = u32x8::splat(BOX_BLUR_BIAS);
+    let weight = u32x8::splat(axis.whole_weight);
+    for channel in 0..channels {
+        let weighted = (u32x8::new(sums[channel]) * weight + bias) >> 24u32;
+        let values = weighted.to_array();
+        for lane in 0..output_count {
+            destination[(output_start + lane) * channels + channel] = values[lane] as u8;
+        }
+    }
 }
 
 fn sample_indices(region: Region, output: usize, radius: usize, last: usize) -> (usize, usize, usize, usize) {
@@ -431,10 +458,8 @@ fn store_blur_block(
     fractions: &[[u32; LANES]; 4],
 ) {
     for channel in 0..channels {
-        let mut weighted = u32x8::new(sums[channel]) * u32x8::splat(axis.whole_weight);
-        if axis.fractional_weight != 0 {
-            weighted = weighted + u32x8::new(fractions[channel]);
-        }
+        let weighted = u32x8::new(sums[channel]) * u32x8::splat(axis.whole_weight)
+            + u32x8::new(fractions[channel]);
         let values = ((weighted + u32x8::splat(BOX_BLUR_BIAS)) >> 24u32).to_array();
         for lane in 0..output_count {
             destination[(output_start + lane) * channels + channel] = values[lane] as u8;

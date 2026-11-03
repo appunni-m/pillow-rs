@@ -3,14 +3,18 @@
 use crate::compute::{ExecutionContext, pool_cpu::helpers::execution::prepared::Prepared};
 use crate::compute::registry::support::{InputContract, ModeSupport, OperationId, OutputModeRule, PaletteKnowledge, StrategyInputs};
 use crate::error::PilError;
+use crate::pipeline::NativeColorInput;
 use crate::raster::{DynamicImage, Mode};
 
 #[path = "default/expand_impl.rs"]
 mod default;
 
-const INPUTS: &[InputContract] = &[InputContract::ExpandedDimensions { bytes_per_pixel: 6 }];
-// NO_PILLOW_SUPPORT: this native ImageRgb16 expansion keeps internal sample storage
-// and defines each fill byte as its same-valued native numeric sample.
+const INPUTS: &[InputContract] = &[
+    InputContract::ExpandedDimensions { bytes_per_pixel: 6 },
+    InputContract::ExpandFill(crate::compute::registry::support::ExpandFillRule::NativeU16),
+];
+// NO_PILLOW_SUPPORT: this native ImageRgb16 expansion preserves internal
+// sample storage and writes scalar/component fills as native u16 values.
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
     OperationId::Expand,
     Mode::ImageRgb16,
@@ -28,8 +32,18 @@ pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
 
 pub(crate) fn prepare<'a>(
     input: &'a default::Input,
-    border: u32,
+    border: crate::pipeline::ExpandMargins,
     fill: (u8, u8, u8, u8),
+    ctx: &ExecutionContext,
+) -> Result<Strategy<'a>, PilError> {
+    prepare_with_native_fill(input, border, fill, None, ctx)
+}
+
+pub(crate) fn prepare_with_native_fill<'a>(
+    input: &'a default::Input,
+    border: crate::pipeline::ExpandMargins,
+    fill: (u8, u8, u8, u8),
+    native_fill: Option<NativeColorInput>,
     ctx: &ExecutionContext,
 ) -> Result<Strategy<'a>, PilError> {
     let facts = StrategyInputs {
@@ -41,7 +55,7 @@ pub(crate) fn prepare<'a>(
     }
     .with_expand_border(border);
     let selection = super::super::helpers::strategy::select_expand(SUPPORT, facts, ctx)?;
-    let kernel = default::prepare(input, border, fill);
+    let kernel = default::prepare(input, border, fill, native_fill);
     Ok(Prepared::new(ArchitectureStrategy::Default(kernel), selection))
 }
 

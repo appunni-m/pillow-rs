@@ -25,3 +25,36 @@ pub(crate) fn execute_get_data(
         architecture => Err(helpers::missing_architecture(Mode::ImageYCbCr8, architecture)),
     }
 }
+crate::compute::pool_cpu::ops::analysis::helpers::bbox::declare_getbbox_owner!(
+    ycbcr8,
+    ImageYCbCr8,
+    crate::raster::RgbImage,
+);
+
+crate::compute::pool_cpu::ops::analysis::helpers::extrema::declare_getextrema_owner!(
+    ImageYCbCr8,
+    crate::raster::RgbImage,
+    crate::compute::pool_cpu::ops::analysis::helpers::extrema::bytes,
+);
+
+crate::compute::pool_cpu::ops::analysis::helpers::histogram_execution::declare_histogram_owner!(
+    ImageYCbCr8,
+    crate::raster::RgbImage,
+    crate::compute::pool_cpu::ops::analysis::ycbcr8::default::histogram_impl::execute,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::getcolors_execution::declare_getcolors_owner!(
+    ImageYCbCr8,
+    crate::raster::RgbImage,
+    crate::compute::pool_cpu::ops::analysis::ycbcr8::default::getcolors_impl::execute,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::stat_execution::declare_stat_owner!(
+    ImageYCbCr8,
+    crate::raster::RgbImage,
+    crate::compute::pool_cpu::ops::analysis::ycbcr8::default::stat_impl::execute,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::extrema_bytes_execution::
+    declare_getextrema_bytes_owner!(
+    ImageYCbCr8,
+    crate::raster::RgbImage,
+    crate::compute::pool_cpu::ops::analysis::ycbcr8::default::extrema_bytes_impl::execute,
+);

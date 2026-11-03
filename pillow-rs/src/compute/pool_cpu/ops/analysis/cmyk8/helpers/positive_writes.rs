@@ -1,14 +1,12 @@
 //! Vectorized CMYK projection for a proven zero source and a small set of writes.
 
 use crate::compute::Architecture;
-use crate::compute::ExecutionContext;
-use crate::compute::registry::support::{PaletteKnowledge, RequestFacts, StrategyInputs};
-use crate::error::PilError;
+use crate::compute::registry::support::StrategySelection;
 use crate::pipeline::PipelineOp;
 use wide::u32x4;
 
 use super::super::super::helpers::projection_vector::VectorProjection;
-use super::super::ops::{ProjectionOutput, SUPPORT};
+use super::super::ops::ProjectionOutput;
 
 const MAX_WRITES: usize = 8;
 
@@ -47,34 +45,22 @@ pub(crate) fn execute(width: u32, height: u32, ops: &[PipelineOp]) -> Option<Vec
     })
 }
 
-/// Select the declared CMYK architecture before running the small-write path.
-pub(crate) fn execute_in_context(
-    context: &ExecutionContext,
+/// Run the small-write path under the already selected CMYK strategy.
+pub(crate) fn execute_selected(
+    selection: StrategySelection,
     width: u32,
     height: u32,
     ops: &[PipelineOp],
-) -> Result<Option<ProjectionOutput>, PilError> {
-    let selection = SUPPORT.select(
-        context,
-        StrategyInputs {
-            width,
-            height,
-            byte_len: None,
-            palette: PaletteKnowledge::Unknown,
-            request: RequestFacts::Unspecified,
-        },
-    )?;
+) -> Option<ProjectionOutput> {
     if selection.implementation.architecture == Architecture::Default {
-        return Ok(None);
+        return None;
     }
-    let Some(result) = execute(width, height, ops) else {
-        return Ok(None);
-    };
-    Ok(Some(ProjectionOutput::vector(
+    let result = execute(width, height, ops)?;
+    Some(ProjectionOutput::vector(
         result.axes,
         result.vector_blocks,
         result.scalar_tail,
-    )))
+    ))
 }
 
 fn fill_axis(output: &mut [u32], marks: &[u32]) -> (u64, u64) {

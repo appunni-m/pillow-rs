@@ -5,16 +5,41 @@ crate::compute::pool_cpu::ops::color::convert::helpers::binary::declare_mode_str
 );
 
 use crate::compute::{Architecture, registry::support::{
-    ModeSupport, OperationId, StrategySelection,
+    InputContract, ModeSupport, OperationId, StrategySelection,
 }};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode, RgbaImage};
+
+// NO_PILLOW_SUPPORT: Pillow's F converters implement only L and I outputs.
+const CORE_ONLY_TARGETS: &[Mode] = &[
+    Mode::One,
+    Mode::ImageLumaA8,
+    Mode::ImageI16,
+    Mode::ImageI16L,
+    Mode::ImageI16B,
+    Mode::ImageI16N,
+    Mode::ImageRgb8,
+    Mode::ImageRgba8,
+    Mode::ImageRgbx8,
+    Mode::ImageCmyk8,
+    Mode::ImageYCbCr8,
+    Mode::ImageHsv8,
+    Mode::ImageLab8,
+    Mode::ImagePalette8,
+    Mode::ImagePaletteAlpha8,
+];
+const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
+    targets: super::super::ops::SCALAR_TARGETS,
+    core_only_targets: CORE_ONLY_TARGETS,
+    core_only_reason: Some("Pillow has no matching F source-target conversion"),
+    rejection_reason: "image has wrong mode",
+}];
 
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::Convert,
     Mode::ImageF32,
     crate::compute::registry::support::OutputModeRule::ByTargetModeWithPalette,
-    &super::super::ops::SCALAR_INPUTS,
+    INPUTS,
     &[],
 );
 

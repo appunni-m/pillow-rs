@@ -4,13 +4,13 @@ use super::super::FormattedPixelValue;
 use super::pillow_table::{PillowColorCounts, pillow_color_components, pillow_color_pixel};
 use crate::raster::Mode;
 
-pub(in crate::image) enum RgbGrayscaleColorCounts {
+pub(crate) enum RgbGrayscaleColorCounts {
     NotGrayscale,
     TooManyColors,
     Colors(Vec<(u32, FormattedPixelValue)>),
 }
 
-pub(in crate::image) enum ScalarColorDomainCounts {
+pub(crate) enum ScalarColorDomainCounts {
     NotApplicable,
     TooManyColors,
     Colors(Vec<(u32, FormattedPixelValue)>),
@@ -54,7 +54,7 @@ fn scalar_byte_domain_index(mode: Mode, pixel: u32) -> Option<usize> {
     }
 }
 
-pub(in crate::image) fn scalar_byte_domain_is_plausible(mode: Mode, bytes: &[u8]) -> bool {
+pub(crate) fn scalar_byte_domain_is_plausible(mode: Mode, bytes: &[u8]) -> bool {
     let sample_count = bytes.len() / 4;
     if sample_count == 0 {
         return true;
@@ -86,7 +86,7 @@ pub(in crate::image) fn scalar_byte_domain_is_plausible(mode: Mode, bytes: &[u8]
     true
 }
 
-pub(in crate::image) fn getcolors_scalar_byte_domain(
+pub(crate) fn getcolors_scalar_byte_domain(
     mode: Mode,
     bytes: &[u8],
     maxcolors: usize,
@@ -181,11 +181,11 @@ fn scalar_byte_domain_counts(
     )
 }
 
-pub(in crate::image) const SCALAR_I_SPARSE_RUN_COLOR_LIMIT: usize = 4096;
-pub(in crate::image) const SCALAR_I_REPEATED_RUN_MIN_PREFIX_SAMPLES: usize = 256;
-pub(in crate::image) const SCALAR_I_REPEATED_RUN_MIN_DIRECT_SLOTS: usize = 65_536;
+pub(crate) const SCALAR_I_SPARSE_RUN_COLOR_LIMIT: usize = 4096;
+pub(crate) const SCALAR_I_REPEATED_RUN_MIN_PREFIX_SAMPLES: usize = 256;
+pub(crate) const SCALAR_I_REPEATED_RUN_MIN_DIRECT_SLOTS: usize = 65_536;
 
-pub(in crate::image) fn getcolors_scalar_i_repeated_runs(
+pub(crate) fn getcolors_scalar_i_repeated_runs(
     bytes: &[u8],
     maxcolors: usize,
     code_mask: u32,
@@ -263,7 +263,7 @@ pub(in crate::image) fn getcolors_scalar_i_repeated_runs(
     )
 }
 
-pub(in crate::image) fn scalar_prefix_has_repeated_samples(bytes: &[u8]) -> bool {
+pub(crate) fn scalar_prefix_has_repeated_samples(bytes: &[u8]) -> bool {
     let mut samples = bytes.chunks_exact(4).take(64);
     let Some(mut previous) = samples.next() else {
         return false;
@@ -281,7 +281,7 @@ pub(in crate::image) fn scalar_prefix_has_repeated_samples(bytes: &[u8]) -> bool
     false
 }
 
-pub(in crate::image) fn scalar_i_prefix_has_long_run(bytes: &[u8]) -> bool {
+pub(crate) fn scalar_i_prefix_has_long_run(bytes: &[u8]) -> bool {
     let Some(first) = bytes.get(..4) else {
         return false;
     };
@@ -291,7 +291,7 @@ pub(in crate::image) fn scalar_i_prefix_has_long_run(bytes: &[u8]) -> bool {
         .all(|sample| sample == first)
 }
 
-pub(in crate::image) fn getcolors_rgb8_grayscale(
+pub(crate) fn getcolors_rgb8_grayscale(
     image: &crate::raster::RgbImage,
     maxcolors: usize,
     code_mask: u32,

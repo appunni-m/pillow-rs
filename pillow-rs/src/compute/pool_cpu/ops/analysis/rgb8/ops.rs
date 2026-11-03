@@ -93,3 +93,36 @@ pub(crate) fn execute(
     };
     Ok(ProjectionOutput::vector(result.axes, result.vector_blocks, result.scalar_tail))
 }
+crate::compute::pool_cpu::ops::analysis::helpers::bbox::declare_getbbox_owner!(
+    rgb8,
+    ImageRgb8,
+    crate::raster::RgbImage,
+);
+
+crate::compute::pool_cpu::ops::analysis::helpers::extrema::declare_getextrema_owner!(
+    ImageRgb8,
+    crate::raster::RgbImage,
+    crate::compute::pool_cpu::ops::analysis::helpers::extrema::bytes,
+);
+
+crate::compute::pool_cpu::ops::analysis::helpers::histogram_execution::declare_histogram_owner!(
+    ImageRgb8,
+    crate::raster::RgbImage,
+    crate::compute::pool_cpu::ops::analysis::rgb8::default::histogram_impl::execute,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::getcolors_execution::declare_getcolors_owner!(
+    ImageRgb8,
+    crate::raster::RgbImage,
+    crate::compute::pool_cpu::ops::analysis::rgb8::default::getcolors_impl::execute,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::stat_execution::declare_stat_owner!(
+    ImageRgb8,
+    crate::raster::RgbImage,
+    crate::compute::pool_cpu::ops::analysis::rgb8::default::stat_impl::execute,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::extrema_bytes_execution::
+    declare_getextrema_bytes_owner!(
+    ImageRgb8,
+    crate::raster::RgbImage,
+    crate::compute::pool_cpu::ops::analysis::rgb8::default::extrema_bytes_impl::execute,
+);

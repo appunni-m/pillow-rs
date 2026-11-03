@@ -185,7 +185,7 @@ pub(crate) fn execute_sharpness(
 ) -> Result<crate::raster::DynamicImage, crate::error::PilError> {
     let architecture = strategy.selection().implementation.architecture;
     let (source, factor) = strategy.implementation;
-    match architecture {
+    let mut output = match architecture {
         crate::compute::Architecture::Default => {
             super::default::sharpness_impl::execute(source, factor).map(crate::raster::DynamicImage::ImageHsv8)
         }
@@ -193,5 +193,12 @@ pub(crate) fn execute_sharpness(
             "unexpected {architecture:?} architecture selected for Sharpness mode {}",
             crate::raster::Mode::ImageHsv8.pillow_name().unwrap_or("internal"),
         ))),
-    }
+    }?;
+    super::helpers::sharpness::carry_hidden_lanes(
+        source,
+        &mut output,
+        crate::raster::Mode::ImageHsv8,
+        factor,
+    )?;
+    Ok(output)
 }

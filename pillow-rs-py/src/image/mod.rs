@@ -25,6 +25,11 @@ pub(super) fn register_image_class(m: &Bound<'_, PyModule>) -> PyResult<()> {
 pub(super) fn register_adapter_classes(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPointTransform>()?;
     m.add_class::<PyImageSequenceIterator>()?;
+    m.add_class::<operations::PyRotatePlan>()?;
+    m.add_class::<operations::PyPasteBoxPlan>()?;
+    m.add_class::<operations::PyPasteSourcePlan>()?;
+    m.add_class::<operations::PyThumbnailPlan>()?;
+    operations::register_adapter_functions(m)?;
     Ok(())
 }
 pub(super) fn register_analysis(m: &Bound<'_, PyModule>) -> PyResult<()> {

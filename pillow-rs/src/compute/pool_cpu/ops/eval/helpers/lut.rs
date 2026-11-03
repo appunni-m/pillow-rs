@@ -1,5 +1,33 @@
 //! Scalar byte-LUT mapping shared by exact byte modes.
 
+use crate::error::PilError;
+use crate::raster::buffer::HiddenPixelLanes;
+use crate::raster::DynamicImage;
+
+/// Restores the omitted lanes written by Pillow's mode-specific Point loops.
+/// Point allocates clean output storage and writes only its declared bands, so
+/// compact-mode padding/intervening lanes remain zero in the result.
+pub(crate) fn initialize_point_hidden_lanes(output: &mut DynamicImage) -> Result<(), PilError> {
+    let Some(lane_count) = output.mode().hidden_pixel_lane_count() else {
+        return Ok(());
+    };
+    let pixel_count = (output.width() as usize)
+        .checked_mul(output.height() as usize)
+        .ok_or_else(|| PilError::InternalError("Eval output dimensions overflowed".into()))?;
+    if pixel_count == 0 {
+        return Ok(());
+    }
+    let lanes = HiddenPixelLanes::constant(lane_count, pixel_count, [0; 2])
+        .ok_or_else(|| PilError::InternalError("Eval mode had an invalid hidden-lane layout".into()))?;
+    if output.replace_hidden_pixel_lanes(Some(lanes)) {
+        Ok(())
+    } else {
+        Err(PilError::InternalError(
+            "Eval output could not retain its hidden physical lanes".into(),
+        ))
+    }
+}
+
 /// Applies one channel-major 256-entry table per native byte band.
 pub(crate) fn map_native_byte_lut<const CHANNELS: usize>(
     source: &[u8],

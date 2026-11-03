@@ -1,11 +1,11 @@
-use super::super::ops::{core_only, inputs_for};
+use super::super::ops::{inputs_for, pillow_kernel};
 use crate::compute::Architecture;
 use crate::compute::registry::support::{
     ImplementationSupport, ModeSupport, OperationId, OutputModeRule, RejectionKind,
     StrategyGuard, StrategySelection,
 };
 use crate::error::PilError;
-use crate::raster::{DynamicImage, Mode};
+use crate::raster::{DynamicImage, Mode, RgbaImage};
 
 pub(super) const MODE: Mode = Mode::ImageI32;
 
@@ -64,7 +64,7 @@ const FILTER5X5_ARCHITECTURES: &[ImplementationSupport] = &[
             target_feature = "fma"
         )),
         &[Architecture::Avx2Fma],
-        StrategyGuard::Always,
+        StrategyGuard::Filter5x5I32Vectorizable,
     ),
     ImplementationSupport::cpu(
         OperationId::Filter5x5,
@@ -75,6 +75,10 @@ const FILTER5X5_ARCHITECTURES: &[ImplementationSupport] = &[
         StrategyGuard::Filter5x5I32BinomialFma,
     ),
 ];
+
+// TODO(pillow-rs#3ptb): Freeze I32 Filter3x3/Filter5x5 output and
+// architecture/fallback receipts in the CPU parity matrix, including the
+// guarded AVX/FMA Filter5x5 route.
 
 fn rejected() -> ModeSupport {
     ModeSupport::Rejected {
@@ -87,14 +91,8 @@ fn rejected() -> ModeSupport {
 
 pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId) -> ModeSupport {
     match operation {
-        // NO_PILLOW_SUPPORT: Pillow 12.2 Kernel is documented for L and RGB only;
-        // this native mode strategy extends that contract.
-        OperationId::Filter3x3 => core_only(OperationId::Filter3x3, MODE, AVX2_FMA_FILTER3X3),
-        // NO_PILLOW_SUPPORT: Pillow 12.2 Kernel is documented for L and RGB only;
-        // this native mode strategy extends that contract.
-        OperationId::Filter5x5 => {
-            core_only(OperationId::Filter5x5, MODE, FILTER5X5_ARCHITECTURES)
-        }
+        OperationId::Filter3x3 => pillow_kernel(OperationId::Filter3x3, MODE, AVX2_FMA_FILTER3X3),
+        OperationId::Filter5x5 => pillow_kernel(OperationId::Filter5x5, MODE, FILTER5X5_ARCHITECTURES),
         OperationId::GaussianBlur | OperationId::BoxBlur => rejected(),
         OperationId::MedianFilter => ModeSupport::serial(
             OperationId::MedianFilter, Mode::ImageI32, inputs_for(OperationId::MedianFilter),
@@ -121,6 +119,29 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
     request: super::super::ops::FilterRequest,
     selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
+    let no_interior = match &request {
+        super::super::ops::FilterRequest::Filter3x3 { .. } => {
+            image.width() <= 2 || image.height() <= 2
+        }
+        super::super::ops::FilterRequest::Filter5x5 { .. } => {
+            image.width() <= 4 || image.height() <= 4
+        }
+        _ => false,
+    };
+    if selection.implementation.architecture != Architecture::Default && no_interior {
+        let DynamicImage::ImageI32(source) = image else {
+            return Err(PilError::InternalError(
+                "I-mode filter identity received a non-I raster".into(),
+            ));
+        };
+        let output = crate::compute::pool_cpu::ops::filter::helpers::execute_native_filter_identity_copy(
+            source.as_raw(),
+        )?;
+        let output = RgbaImage::from_raw(source.width(), source.height(), output).ok_or_else(|| {
+            PilError::InternalError("I-mode filter identity output does not match its mode".into())
+        })?;
+        return Ok(DynamicImage::ImageI32(output));
+    }
     match selection.implementation.architecture {
         Architecture::Default => default::execute(image, request),
         Architecture::Avx2Fma => match request {

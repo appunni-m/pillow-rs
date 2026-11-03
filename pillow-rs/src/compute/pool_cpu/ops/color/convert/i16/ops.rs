@@ -5,18 +5,40 @@ crate::compute::pool_cpu::ops::color::convert::helpers::binary::declare_mode_str
 );
 
 use crate::compute::{Architecture, registry::support::{
-    ModeSupport, OperationId, StrategySelection,
+    InputContract, ModeSupport, OperationId, StrategySelection,
 }};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, ImageBuffer, Luma, Mode};
 
 type Samples = ImageBuffer<Luma<u16>, Vec<u16>>;
 
+// NO_PILLOW_SUPPORT: these native targets are Rust extensions for I;16.
+const CORE_ONLY_TARGETS: &[Mode] = &[
+    Mode::One,
+    Mode::ImageLumaA8,
+    Mode::ImagePalette8,
+    Mode::ImagePaletteAlpha8,
+    Mode::ImageI16L,
+    Mode::ImageI16B,
+    Mode::ImageI16N,
+    Mode::ImageLab8,
+    Mode::ImageRgba8,
+    Mode::ImageCmyk8,
+    Mode::ImageYCbCr8,
+    Mode::ImageHsv8,
+];
+const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
+    targets: super::super::ops::I16_TARGETS,
+    core_only_targets: CORE_ONLY_TARGETS,
+    core_only_reason: Some("Pillow has no matching I;16 source-target conversion"),
+    rejection_reason: "image has wrong mode",
+}];
+
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::Convert,
     Mode::ImageI16,
     crate::compute::registry::support::OutputModeRule::ByTargetModeWithPalette,
-    &super::super::ops::I16_INPUTS,
+    INPUTS,
     &ARCHITECTURES,
 );
 

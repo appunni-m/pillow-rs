@@ -12,6 +12,8 @@ use crate::raster::{DynamicImage, Mode};
 const INPUTS: &[InputContract] =
     &[InputContract::ReduceFactors { identity_only: false }];
 
+// NO_PILLOW_SUPPORT: the archived native-byte reducer is retained as a Rust
+// extension for bilevel input; Pillow rejects Reduce for mode `1`.
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(OperationId::Reduce, Mode::One, OutputModeRule::Preserve, INPUTS, &[]);
 
 pub(crate) enum ArchitectureStrategy<'a> {

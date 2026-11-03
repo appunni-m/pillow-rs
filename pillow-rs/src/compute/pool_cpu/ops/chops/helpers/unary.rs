@@ -1,22 +1,16 @@
 //! Serial native-mode ImageChops unary strategies.
 
 use crate::error::PilError;
-use crate::raster::{DynamicImage, GrayImage, Luma, Mode};
+use crate::raster::buffer::ImageBuffer;
+use crate::raster::traits::Pixel;
+use crate::raster::{DynamicImage, GrayImage, Luma};
 
-pub(crate) fn constant(image: &DynamicImage, value: u8) -> DynamicImage {
-    // NO_PILLOW_SUPPORT for internal high-depth sources: this core-only route
-    // accepts representations that Pillow does not expose as modes.
+pub(crate) fn constant(width: u32, height: u32, value: u8) -> DynamicImage {
     DynamicImage::ImageLuma8(GrayImage::from_pixel(
-        image.width(),
-        image.height(),
+        width,
+        height,
         Luma([value]),
     ))
-}
-
-pub(crate) fn offset(image: &DynamicImage, x: i32, y: i32) -> DynamicImage {
-    // NO_PILLOW_SUPPORT for internal high-depth sources: preserve their exact
-    // native representation through this core-only route.
-    image.offset_with_mode(x, y)
 }
 
 pub(crate) fn duplicate(image: &DynamicImage) -> DynamicImage {
@@ -25,10 +19,62 @@ pub(crate) fn duplicate(image: &DynamicImage) -> DynamicImage {
     image.clone()
 }
 
-pub(crate) fn invert(image: &DynamicImage, mode: Mode) -> Result<DynamicImage, PilError> {
-    // Internal high-depth identities use this direct native-byte extension;
-    // they are not Pillow ImageChops mode contracts.
-    let bytes = image.as_bytes().iter().map(|byte| 255 - byte).collect();
-    super::output::from_raw_bytes(mode, image.width(), image.height(), bytes)
-        .ok_or_else(|| PilError::InternalError("invert Chops buffer shape mismatch".into()))
+pub(crate) fn invert<P, S>(
+    image: &ImageBuffer<P, Vec<S>>,
+) -> Result<ImageBuffer<P, Vec<S>>, PilError>
+where
+    P: Pixel<Subpixel = S>,
+    S: InvertSample,
+{
+    let values = image
+        .as_raw()
+        .iter()
+        .copied()
+        .map(InvertSample::invert_storage)
+        .collect();
+    let mut output = ImageBuffer::<P, Vec<S>>::from_raw(image.width(), image.height(), values)
+        .ok_or_else(|| PilError::InternalError("invert Chops buffer shape mismatch".into()))?;
+    carry_inverted_hidden_lanes(image, &mut output)?;
+    Ok(output)
+}
+
+pub(crate) fn carry_inverted_hidden_lanes<P, S>(
+    source: &ImageBuffer<P, Vec<S>>,
+    output: &mut ImageBuffer<P, Vec<S>>,
+) -> Result<(), PilError>
+where
+    P: Pixel<Subpixel = S>,
+{
+    let lanes = source
+        .hidden_pixel_lanes()
+        .map(|lanes| lanes.map_values(|value| !value));
+    if output.replace_hidden_pixel_lanes(lanes) {
+        Ok(())
+    } else {
+        Err(PilError::InternalError(
+            "invert Chops hidden lane shape mismatch".into(),
+        ))
+    }
+}
+
+pub(crate) trait InvertSample: Copy {
+    fn invert_storage(self) -> Self;
+}
+
+impl InvertSample for u8 {
+    fn invert_storage(self) -> Self {
+        !self
+    }
+}
+
+impl InvertSample for u16 {
+    fn invert_storage(self) -> Self {
+        !self
+    }
+}
+
+impl InvertSample for f32 {
+    fn invert_storage(self) -> Self {
+        Self::from_bits(!self.to_bits())
+    }
 }

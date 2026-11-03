@@ -9,6 +9,17 @@ use crate::image::Image;
 use crate::pipeline::PipelineOp;
 use crate::raster::DynamicImage;
 
+fn cpu_only_filter_route(
+    image: &Image,
+    operation: &'static str,
+) -> Result<(Backend, ExecutionContext, Option<String>), PilError> {
+    let (requested_backend, context) = image.cpu_arch_execution_route()?;
+    let routed_backend = requested_backend.unwrap_or(Backend::Cpu);
+    let fallback_reason = (requested_backend == Some(Backend::Gpu))
+        .then(|| format!("{operation} has no GPU strategy"));
+    Ok((routed_backend, context, fallback_reason))
+}
+
 /// Formats the Pillow-compatible representation of a Color3DLUT filter.
 pub fn color3dlut_repr(
     table_type: &str,
@@ -83,10 +94,16 @@ fn color3dlut_table_length_error(
 /// The Python `MaxFilter`, `MinFilter`, `MedianFilter`, and `RankFilter`
 /// constructors retain the caller's size.  Their native filter call rejects
 /// zero and even sizes; silently rounding those values changes the operation
-/// instead of reporting the same public error.
+/// instead of reporting the same public error. Pillow's rank kernel also
+/// bounds the float32 workspace against C `INT_MAX` before allocation.
 fn validate_rank_filter_size(size: u32) -> Result<(), PilError> {
-    if size == 0 || size.is_multiple_of(2) || size.checked_mul(size).is_none() {
+    if size == 0 || size.is_multiple_of(2) {
         return Err(PilError::ValueError("bad filter size".into()));
+    }
+    let area = u64::from(size) * u64::from(size);
+    let max_float_workspace_samples = i32::MAX as u64 / std::mem::size_of::<f32>() as u64;
+    if area > max_float_workspace_samples {
+        return Err(PilError::ValueError("filter size too large".into()));
     }
     Ok(())
 }
@@ -400,22 +417,10 @@ impl Image {
         threshold: i32,
     ) -> Result<Image, PilError> {
         self.validate_filter("UnsharpMask")?;
+        let (routed_backend, context, fallback_reason) =
+            cpu_only_filter_route(self, "UnsharpMask")?;
         let img = self.materialized_shared_for_ops()?;
         let mode = img.mode();
-        let routed_backend = match self.backend() {
-            Some(backend) => backend,
-            None => crate::compute::active_backends()?.first().copied().unwrap_or(Backend::Cpu),
-        };
-        let routed_context = ExecutionContext::for_routed_backend(routed_backend);
-        let (context, fallback_reason) = if routed_context.backend() == Backend::Cpu {
-            (routed_context, None)
-        } else {
-            // UnsharpMask currently composes CPU-only blur and blend strategies.
-            (
-                ExecutionContext::for_routed_backend(Backend::Cpu),
-                Some("UnsharpMask has no GPU strategy".to_owned()),
-            )
-        };
         let result = crate::compute::eager::execute_cpu_arch_operation(
             "UnsharpMask",
             img.as_ref(),
@@ -490,6 +495,9 @@ impl Image {
     ///   - Supports any channel count (1=L, 2=LA, 3=RGB, 4=RGBA)
     ///   - For P-mode (palette): operates on palette indices, preserves palette
     ///
+    /// Pillow defines ModeFilter for single-band 8-bit images. Rust also
+    /// provides a native per-band extension for multiband byte modes.
+    ///
     /// # Errors
     ///
     /// Returns [`PilError`] when materialization, allocation checks, or raw image
@@ -505,19 +513,8 @@ impl Image {
         let palette = self.palette();
         let palette_alpha = self.palette_alpha();
         let image = self.materialized_shared_for_ops()?;
-        let routed_backend = match self.backend() {
-            Some(backend) => backend,
-            None => crate::compute::active_backends()?.first().copied().unwrap_or(Backend::Cpu),
-        };
-        let routed_context = ExecutionContext::for_routed_backend(routed_backend);
-        let (context, fallback_reason) = if routed_context.backend() == Backend::Cpu {
-            (routed_context, None)
-        } else {
-            (
-                ExecutionContext::for_routed_backend(Backend::Cpu),
-                Some("ModeFilter has no GPU strategy".to_owned()),
-            )
-        };
+        let (routed_backend, context, fallback_reason) =
+            cpu_only_filter_route(self, "ModeFilter")?;
         let result = crate::compute::eager::execute_cpu_arch_operation(
             "ModeFilter",
             image.as_ref(),
@@ -569,9 +566,7 @@ impl Image {
     pub fn rank_filter(&self, size: u32, rank: u32) -> Result<Image, PilError> {
         self.validate_filter("RankFilter")?;
         validate_rank_filter_size(size)?;
-        let window = size
-            .checked_mul(size)
-            .ok_or_else(|| PilError::ValueError("bad filter size".into()))?;
+        let window = size * size;
         if rank >= window {
             return Err(PilError::ValueError("bad rank value".into()));
         }

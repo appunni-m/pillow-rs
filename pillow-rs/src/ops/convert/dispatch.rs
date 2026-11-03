@@ -1,10 +1,11 @@
-use crate::color;
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
-
-use super::mode::is_luma16_mode;
+use crate::compute::registry::support::{
+    OperationId, OperationModeTransition, OperationTargetComposition,
+    OperationTargetCompositionKind, OperationTransitionSource, OutputModeRule,
+};
 
 pub(super) fn try_convert_scalar_to_rgbx(
     image: &Image,
@@ -14,18 +15,15 @@ pub(super) fn try_convert_scalar_to_rgbx(
         return Ok(None);
     }
     if crate::compute::pool_cpu::ops::color::convert::ops::SUPPORT
-        .for_mode(source_mode)
-        .scope_for_target(Mode::ImageRgbx8)
+        .scope_for_target(source_mode, Mode::ImageRgbx8)
         .is_none()
     {
         return Ok(None);
     }
     // TODO(pillow-rs#3ptb): parity-check I/F→RGBX for every CPU Architecture
     // request and verify the exact output identity plus fallback receipt.
-    let requested_backend = crate::compute::preferred_active_backend()?
-        .map(|(backend, _)| backend)
-        .unwrap_or(crate::compute::Backend::Cpu);
-    if requested_backend == crate::compute::Backend::Gpu {
+    let (requested_backend, context) = image.cpu_arch_execution_route()?;
+    if requested_backend == Some(crate::compute::Backend::Gpu) {
         // TODO(pillow-rs#3ptb): route GPU-selected I/F→RGBX through a native
         // GPU strategy when the GPU Convert family is migrated.
         return Ok(None);
@@ -44,10 +42,10 @@ pub(super) fn try_convert_scalar_to_rgbx(
             alpha: &[],
         },
     };
-    let raster = crate::compute::execute_eager_cpu_arch_image_operation_with_route(
+    let raster = crate::compute::execute_eager_cpu_arch_image_operation_with_context(
         "Convert",
         source.as_ref(),
-        requested_backend,
+        context,
         requested_backend,
         None,
         |context| {
@@ -64,8 +62,6 @@ pub(super) fn try_convert_early_modes(
     source_mode: Mode,
     target_mode: Mode,
     dither: Option<&str>,
-    palette: Option<&str>,
-    colors: Option<u32>,
 ) -> Result<Option<Image>, PilError> {
     if source_mode == Mode::ImageRgb8
         && matches!(
@@ -77,16 +73,14 @@ pub(super) fn try_convert_early_modes(
         // destinations. Reuse the native LA/RGBA converters and carry the
         // Pillow mode tag on the lazy result so SIMD and GPU can execute the
         // pixel work instead of materializing through the eager mode adapter.
-        let pipeline_mode = target_mode;
-        let mut result = Image::push_op(
+        let result = Image::push_op(
             image,
             PipelineOp::Convert {
-                mode: pipeline_mode,
+                mode: target_mode,
                 matrix: None,
                 dither: None,
             },
         );
-        result.set_pipeline_output_mode(Some(pipeline_mode));
         return Ok(Some(result));
     }
     if source_mode == Mode::ImageCmyk8 && target_mode == Mode::ImageRgb8 {
@@ -119,7 +113,7 @@ pub(super) fn try_convert_early_modes(
         _ => None,
     };
     if let Some(mode) = native_alpha_target {
-        let mut result = Image::push_op(
+        let result = Image::push_op(
             image,
             PipelineOp::Convert {
                 mode,
@@ -127,114 +121,125 @@ pub(super) fn try_convert_early_modes(
                 dither: None,
             },
         );
-        result.set_pipeline_output_mode(Some(target_mode));
         return Ok(Some(result));
     }
-    if target_mode == Mode::ImageLab8 {
-        if crate::compute::pool_cpu::ops::color::convert::ops::SUPPORT
-            .scope_for_target(source_mode, target_mode)
-            .is_none()
-        {
-            return Ok(None);
-        }
-        return Ok(Some(convert_to_lab(image, source_mode)?));
-    }
-    if let Some(converted) =
-        convert_to_premultiplied(image, source_mode, target_mode, dither, palette, colors)?
+    if let Some(composition) = crate::compute::pool_cpu::ops::color::convert::ops::SUPPORT
+        .target_composition_for(source_mode, target_mode)
     {
-        return Ok(Some(converted));
-    }
-    if target_mode == Mode::ImageRgbx8 {
-        return Ok(Some(convert_to_rgbx(
-            image,
-            source_mode,
-            target_mode,
-            dither,
-            palette,
-            colors,
-        )?));
+        return execute_target_composition(image, dither, composition).map(Some);
     }
     Ok(None)
 }
 
-fn convert_to_lab(image: &Image, source_mode: Mode) -> Result<Image, PilError> {
-    // The prepared ConvertLab operation consumes exact RGB8 samples.
-    // Unsigned-16 luma retains the existing clipped-L-before-RGB route.
-    let rgb = if is_luma16_mode(source_mode) {
-        image
-            .convert(Mode::ImageLuma8, None, None, None, None)?
-            .convert(Mode::ImageRgb8, None, None, None, None)?
-    } else {
-        image.convert(Mode::ImageRgb8, None, None, None, None)?
-    };
-    let mut result = Image::push_op(
+fn execute_target_composition(
+    image: &Image,
+    dither: Option<&str>,
+    composition: OperationTargetComposition,
+) -> Result<Image, PilError> {
+    if let crate::compute::registry::support::OperationRouteOutcome::Rejects {
+        reason, kind, ..
+    } = composition.outcome
+    {
+        return Err(kind.into_error(reason));
+    }
+    if composition.output != OutputModeRule::ByTargetMode {
+        return Err(PilError::InternalError(
+            "Convert wrapper composition omitted its declared target output".into(),
+        ));
+    }
+    let transition = composition.transitions.first().ok_or_else(|| {
+        PilError::InternalError("Convert composition omitted its child transition".into())
+    })?;
+    let base_mode = transition.target;
+    match composition.kind {
+        OperationTargetCompositionKind::ConvertLab => {
+            convert_to_lab(image, composition.transitions)
+        }
+        OperationTargetCompositionKind::ConvertPremultiplied => convert_to_premultiplied(
+            image,
+            composition.source_mode,
+            composition.target_mode,
+            base_mode,
+            dither,
+        ),
+        OperationTargetCompositionKind::ConvertRgbx => convert_to_rgbx(
+            image,
+            composition.source_mode,
+            composition.target_mode,
+            base_mode,
+            dither,
+        ),
+        OperationTargetCompositionKind::ConvertPalette => super::palette::convert_prepared_palette(
+            image,
+            composition.source_mode,
+            composition.target_mode,
+            dither,
+        ),
+        OperationTargetCompositionKind::ConvertGuard => Err(PilError::InternalError(
+            "Convert guard route unexpectedly declared a successful composition".into(),
+        )),
+    }
+}
+
+fn convert_to_lab(
+    image: &Image,
+    transitions: &[OperationModeTransition],
+) -> Result<Image, PilError> {
+    let mut converted: Option<Image> = None;
+    for transition in transitions {
+        let source = match transition.operation {
+            OperationId::Convert => match transition.source {
+                OperationTransitionSource::Input => image,
+                OperationTransitionSource::Previous => converted.as_ref().ok_or_else(|| {
+                    PilError::InternalError(
+                        "ConvertLab transition omitted its previous image".into(),
+                    )
+                })?,
+            },
+            OperationId::ConvertLab => break,
+            _ => {
+                return Err(PilError::InternalError(
+                    "ConvertLab route declared a non-Convert child".into(),
+                ));
+            }
+        };
+        converted = Some(source.convert(transition.target, None, None, None, None)?);
+    }
+    let rgb = converted.ok_or_else(|| {
+        PilError::InternalError("ConvertLab composition omitted RGB normalization".into())
+    })?;
+    Ok(Image::push_op(
         &rgb,
         PipelineOp::ConvertLab {
             icc_profile: crate::lab::pillow_lab_icc_profile().into(),
         },
-    );
-    result.set_pipeline_output_mode(Some(crate::raster::Mode::ImageLab8));
-    Ok(result)
+    ))
 }
 
 fn convert_to_premultiplied(
     image: &Image,
     source_mode: Mode,
     target_mode: Mode,
+    base_mode: Mode,
     dither: Option<&str>,
-    palette: Option<&str>,
-    colors: Option<u32>,
-) -> Result<Option<Image>, PilError> {
-    if !matches!(
+) -> Result<Image, PilError> {
+    // RGB has direct opaque RGBa/La converters; RGBA->La normalizes through RGB.
+    super::nonstandard::execute_eager_convert_composition(
+        image,
+        source_mode,
+        base_mode,
         target_mode,
-        Mode::ImageRgbPremultiplied8 | Mode::ImageLaPremultiplied8
-    ) {
-        return Ok(None);
-    }
-    if source_mode == Mode::ImagePalette8 {
-        return Err(PilError::ValueError("conversion not supported".into()));
-    }
-    if crate::compute::pool_cpu::ops::color::convert::ops::SUPPORT
-        .for_mode(source_mode)
-        .scope_for_target(target_mode)
-        .is_some()
-    {
-        // Prepared mode strategies own every declared source/target pair.
-        return Ok(None);
-    }
-    super::nonstandard::with_eager_cpu_convert_receipt(
-        || {
-            if matches!(
-                source_mode,
-                Mode::One
-                    | Mode::ImageLuma8
-                    | Mode::ImageLumaA8
-                    | Mode::ImageI32
-                    | Mode::ImageF32
-            ) || is_luma16_mode(source_mode)
-            {
-                return Err(PilError::ValueError(format!(
-                    "conversion from L to {} not supported",
-                    target_mode.pillow_name().unwrap_or("unknown")
-                )));
+        dither,
+        |converted, _source| match converted {
+            DynamicImage::ImageRgb8(rgb) => {
+                crate::compute::pool_cpu::ops::color::convert::helpers::premultiplied::from_rgb(
+                    &rgb,
+                    target_mode,
+                )
             }
-            // RGB has direct opaque RGBa/La converters; RGBA->La normalizes through RGB.
-            let rgb = image.convert(Mode::ImageRgb8, None, dither, palette, colors)?;
-            let rgb = rgb.materialized_shared()?;
-            let converted = if target_mode == Mode::ImageRgbPremultiplied8 {
-                DynamicImage::ImageRgba8(rgb.to_rgba8())
-            } else {
-                DynamicImage::ImageLumaA8(color::pil_grayscale_alpha(&rgb)?)
-            };
-            Ok(Some(Image::from_dynamic_with_mode(
-                converted,
-                Some(target_mode),
-            )?))
-        },
-        |result| {
-            result
-                .as_ref()
-                .map_or(0, super::nonstandard::eager_convert_image_bytes)
+            _ => Err(PilError::InternalError(
+                "Convert premultiplication child returned an unsupported mode".into(),
+            )),
         },
     )
 }
@@ -243,34 +248,32 @@ fn convert_to_rgbx(
     image: &Image,
     source_mode: Mode,
     target_mode: Mode,
+    base_mode: Mode,
     dither: Option<&str>,
-    palette: Option<&str>,
-    colors: Option<u32>,
 ) -> Result<Image, PilError> {
-    super::nonstandard::with_eager_cpu_convert_receipt(
-        || {
-            // LA/PA preserve alpha in X; RGBA's direct converter supplies 255.
-            let base_mode = if matches!(source_mode, Mode::ImageLumaA8 | Mode::ImagePaletteAlpha8) {
-                Mode::ImageRgba8
-            } else {
-                Mode::ImageRgb8
-            };
-            let converted = image.convert(base_mode, None, dither, palette, colors)?;
-            let mut rgba = converted.materialized_shared()?.to_rgba8();
+    // The declared route selects RGBA for LA/PA and RGB for other sources.
+    super::nonstandard::execute_eager_convert_composition(
+        image,
+        source_mode,
+        base_mode,
+        target_mode,
+        dither,
+        |converted, source| {
+            let mut rgba = converted.to_rgba8();
             if source_mode == Mode::ImagePalette8
                 && let Some(alpha) = image.palette_alpha()
             {
-                let indices = image.materialized_shared()?;
+                let DynamicImage::ImagePalette8(indices) = source else {
+                    return Err(PilError::InternalError(
+                        "Convert RGBX palette child did not retain P indices".into(),
+                    ));
+                };
                 for (pixel, &index) in rgba.pixels_mut().zip(indices.as_bytes()) {
                     pixel[3] = alpha.get(usize::from(index)).copied().unwrap_or(255);
                 }
             }
-            Image::from_dynamic_with_mode(
-                DynamicImage::ImageRgba8(rgba),
-                Some(target_mode),
-            )
+            Ok(DynamicImage::ImageRgba8(rgba))
         },
-        super::nonstandard::eager_convert_image_bytes,
     )
 }
 
