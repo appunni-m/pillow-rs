@@ -69,23 +69,20 @@ the baseline. Keep `pillow-rs-bad` as reference.
 
 ## Current pending matrix
 
-Snapshot based on `develop` commit `0508e1ef4` (pushed). The CPU source tree
-remains incomplete and unverified. Current WIP changes resolve absent
-physical-lane state from canonical mode fallbacks in Chops, Blend, Brightness,
-Sharpness, Filter3x3/Filter5x5, nearest Rotate, and same-size Pad. Transform fill-lane
-normalization has also been traced to its public fill adapter; nearest
-two-band Transform now reconstructs explicit packed fill lanes when a source
-has no sidecar and those lanes differ from its output luma. The prior WIP
-checkpoint also committed source corrections from the previous Clippy
-diagnostics and recorded them in the inventory. On `0508e1ef4`, `make
-docs-lint` passed. `make fmt` and `make clippy` stopped at the public-API
-boundary gate before running Cargo formatting or Clippy; reported violations
-are in public export/module visibility declarations and wildcard imports in
-the preserved legacy archive. The commit hook's large-file check passed. No
-build, tests, parity, benchmark, or coverage ran for this checkpoint. Earlier
-direct formatting/compiler failures are historical and do not verify this
-commit. This matrix tracks pending work; it is not support or verification
-evidence.
+Snapshot refreshed on `develop` commit `b536c0e8a` (local WIP, unpushed). The
+CPU source tree remains incomplete. Current work removes uncalled Put,
+family-level and per-mode assessment/execution forwarding wrappers while
+keeping the operation support declarations and prepared execution paths. The
+active Draw module no longer exports its unreferenced batch wrapper. Recent
+CPU-only `cargo check -p pillow-rs --lib --no-default-features --features
+image-codecs-all` reached lint evaluation with no E-coded type or name
+resolution errors, then failed on denied diagnostics: 120 `dead_code`, 335
+`unused_imports`, 75 `deprecated`, 18 `unsafe_code`, 3 `unused_macro_rules`, 2
+`unused_variables`, and 1 `unreachable_patterns`; it also reported 40 warnings.
+No formatter, separate lint target, tests, parity, benchmark, or coverage ran
+for these WIP commits. This check does not establish a successful build or
+runtime correctness. This matrix tracks pending work; it is not support or
+verification evidence.
 Detailed mappings and source TODOs remain in [CPU refactor
 inventory](CPU_REFACTOR_INVENTORY.md). Refresh this matrix at each completed
 checkpoint.
