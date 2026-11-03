@@ -788,6 +788,9 @@ use super::traits::GenericImage as GenericImageTrait;
 
 impl GenericImageTrait for DynamicImage {
     fn put_pixel(&mut self, x: u32, y: u32, pixel: Self::Pixel) {
+        // These mode-tagged compact carriers retain bytes outside the logical
+        // pixel. GenericImage writes only that logical pixel, so keep the
+        // existing physical-lane payload unchanged.
         match self {
             DynamicImage::One(img)
             | DynamicImage::ImageLuma8(img)
@@ -799,14 +802,14 @@ impl GenericImageTrait for DynamicImage {
             | DynamicImage::ImageLaPremultiplied8(img)
             | DynamicImage::ImagePaletteAlpha8(img) => {
                 let p = pixel.to_luma_alpha();
-                img.put_pixel(x, y, p);
+                img.put_pixel_preserving_hidden_lanes(x, y, p);
             }
             DynamicImage::ImageRgb8(img)
             | DynamicImage::ImageYCbCr8(img)
             | DynamicImage::ImageLab8(img)
             | DynamicImage::ImageHsv8(img) => {
                 let p = pixel.to_rgb();
-                img.put_pixel(x, y, p);
+                img.put_pixel_preserving_hidden_lanes(x, y, p);
             }
             DynamicImage::ImageRgba8(img)
             | DynamicImage::ImageRgbPremultiplied8(img)

@@ -11,6 +11,9 @@ use super::color::{FromColor, Luma, LumaA, Rgb, Rgba};
 
 use super::traits::{GenericImage, GenericImageView, Pixel, Primitive};
 
+#[path = "buffer/mutable.rs"]
+mod mutable;
+
 mod iterators;
 pub use self::iterators::{
     EnumeratePixels, EnumeratePixelsMut, EnumerateRows, EnumerateRowsMut, Pixels, PixelsMut, Rows,
