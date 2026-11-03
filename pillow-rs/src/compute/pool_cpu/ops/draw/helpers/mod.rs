@@ -23,6 +23,7 @@ mod polygon;
 mod primitives;
 mod rounded_rect;
 pub(crate) mod simd;
+pub(crate) mod strategy;
 
 mod native;
 

@@ -1,4 +1,4 @@
-use crate::compute::Architecture;
+use crate::compute::{Architecture, registry::support::StrategySelection};
 use crate::compute::registry::support::ModeSupport;
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
@@ -40,16 +40,17 @@ pub(crate) fn support() -> ModeSupport {
 }
 
 
-pub(crate) fn execute_with_architecture(
+pub(crate) fn execute(
     image: &DynamicImage,
     ops: &[PipelineOp],
-    architecture: Architecture,
+    selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
     let DynamicImage::ImageI32(pixels) = image else {
         return Err(PilError::InternalError(
             "Draw strategy received a different raster variant".into(),
         ));
     };
+    let architecture = super::super::helpers::strategy::selected_architecture(selection, MODE)?;
     match architecture {
         Architecture::Default => {
             let output = super::default::draw_impl::execute(pixels, ops)?;

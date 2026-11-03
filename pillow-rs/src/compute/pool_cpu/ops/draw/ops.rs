@@ -23,7 +23,9 @@
 //! backend, and nonempty guards; the wrapper evaluates that declaration. The
 //! Source tracing confirms the queued child receipt is Paste; route parity
 //! remains TODO. Text masks are dispatched without an expanded intermediate
-//! buffer; parity remains pending.
+//! buffer; parity remains pending. TODO(pillow-rs#3ptb): continue passing
+//! `StrategySelection` into direct Text/Bitmap mode owners and audit the eager
+//! native Bitmap fast route.
 
 use crate::compute::{Architecture, Backend, ExecutionContext};
 use crate::compute::registry::support::{
@@ -628,7 +630,7 @@ pub(crate) fn execute_batch(
         ));
     }
     super::helpers::validate_draw_ops(ops)?;
-    execute_mode(image, ops, mode, implementation.architecture)
+    execute_mode(image, ops, mode, &selection)
 }
 
 pub(crate) fn prepare_batch(
@@ -644,59 +646,59 @@ fn execute_mode(
     image: &DynamicImage,
     ops: &[PipelineOp],
     mode: Mode,
-    architecture: Architecture,
+    selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
     match mode {
-        Mode::One => super::one::ops::execute_with_architecture(image, ops, architecture),
+        Mode::One => super::one::ops::execute(image, ops, selection),
         Mode::ImageLuma8 => {
-            super::luma8::ops::execute_with_architecture(image, ops, architecture)
+            super::luma8::ops::execute(image, ops, selection)
         }
         Mode::ImageLumaA8 => {
-            super::luma_a8::ops::execute_with_architecture(image, ops, architecture)
+            super::luma_a8::ops::execute(image, ops, selection)
         }
         Mode::ImageLaPremultiplied8 => {
-            super::la_premultiplied8::ops::execute_with_architecture(image, ops, architecture)
+            super::la_premultiplied8::ops::execute(image, ops, selection)
         }
         Mode::ImagePalette8 => {
-            super::palette8::ops::execute_with_architecture(image, ops, architecture)
+            super::palette8::ops::execute(image, ops, selection)
         }
         Mode::ImagePaletteAlpha8 => {
-            super::palette_alpha8::ops::execute_with_architecture(image, ops, architecture)
+            super::palette_alpha8::ops::execute(image, ops, selection)
         }
         Mode::ImageRgb8 => {
-            super::rgb8::ops::execute_with_architecture(image, ops, architecture)
+            super::rgb8::ops::execute(image, ops, selection)
         }
         Mode::ImageRgba8 => {
-            super::rgba8::ops::execute_with_architecture(image, ops, architecture)
+            super::rgba8::ops::execute(image, ops, selection)
         }
         Mode::ImageRgbPremultiplied8 => {
-            super::rgb_premultiplied8::ops::execute_with_architecture(image, ops, architecture)
+            super::rgb_premultiplied8::ops::execute(image, ops, selection)
         }
         Mode::ImageRgbx8 => {
-            super::rgbx8::ops::execute_with_architecture(image, ops, architecture)
+            super::rgbx8::ops::execute(image, ops, selection)
         }
         Mode::ImageCmyk8 => {
-            super::cmyk8::ops::execute_with_architecture(image, ops, architecture)
+            super::cmyk8::ops::execute(image, ops, selection)
         }
         Mode::ImageYCbCr8 => {
-            super::ycbcr8::ops::execute_with_architecture(image, ops, architecture)
+            super::ycbcr8::ops::execute(image, ops, selection)
         }
         Mode::ImageLab8 => {
-            super::lab8::ops::execute_with_architecture(image, ops, architecture)
+            super::lab8::ops::execute(image, ops, selection)
         }
         Mode::ImageHsv8 => {
-            super::hsv8::ops::execute_with_architecture(image, ops, architecture)
+            super::hsv8::ops::execute(image, ops, selection)
         }
         Mode::ImageI32 => {
-            super::i32::ops::execute_with_architecture(image, ops, architecture)
+            super::i32::ops::execute(image, ops, selection)
         }
         Mode::ImageF32 => {
-            super::f32::ops::execute_with_architecture(image, ops, architecture)
+            super::f32::ops::execute(image, ops, selection)
         }
-        Mode::ImageI16 => super::i16::ops::execute(image, ops),
-        Mode::ImageI16L => super::i16l::ops::execute(image, ops),
-        Mode::ImageI16B => super::i16b::ops::execute(image, ops),
-        Mode::ImageI16N => super::i16n::ops::execute(image, ops),
+        Mode::ImageI16 => super::i16::ops::execute(image, ops, selection),
+        Mode::ImageI16L => super::i16l::ops::execute(image, ops, selection),
+        Mode::ImageI16B => super::i16b::ops::execute(image, ops, selection),
+        Mode::ImageI16N => super::i16n::ops::execute(image, ops, selection),
         Mode::ImageLumaA16
         | Mode::ImageRgb16
         | Mode::ImageRgba16

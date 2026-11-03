@@ -1,3 +1,4 @@
+use crate::compute::registry::support::StrategySelection;
 use crate::compute::registry::support::ModeSupport;
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
@@ -38,7 +39,9 @@ pub(crate) fn support() -> ModeSupport {
 pub(crate) fn execute(
     image: &DynamicImage,
     ops: &[PipelineOp],
+    selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
+    super::super::helpers::strategy::require_default_selection(selection, MODE)?;
     let DynamicImage::ImageI16B(pixels) = image else {
         return Err(PilError::InternalError("Draw strategy received a different raster variant".into()));
     };
