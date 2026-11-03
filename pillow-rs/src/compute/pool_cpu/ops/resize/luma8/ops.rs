@@ -1,19 +1,21 @@
 //! Exact ImageLuma8 mode dispatch for Resize.
 
 use crate::compute::{Architecture, ExecutionContext};
+use crate::compute::registry::support::StrategySelection;
 use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
 use crate::raster::GrayImage;
 
 pub(crate) fn resize(
     context: &ExecutionContext,
-    architecture: Architecture,
+    selection: &StrategySelection,
     image: &GrayImage,
     width: u32,
     height: u32,
     filter: ResampleFilter,
     bounds: Option<(f64, f64, f64, f64)>,
 ) -> Result<GrayImage, PilError> {
+    let architecture = selection.implementation.architecture;
     if !matches!(filter, ResampleFilter::Nearest) {
         match architecture {
             Architecture::Sse2 | Architecture::Neon | Architecture::WasmSimd128 => {
@@ -77,7 +79,7 @@ pub(crate) fn resize(
     }
     super::super::helpers::strategy::resize_byte_nearest::<_, 1>(
         context,
-        architecture,
+        selection,
         image.as_raw(),
         image.dimensions(),
         width,

@@ -1,22 +1,24 @@
 //! Exact rgb8 mode selection for Resize.
 
 use crate::compute::{Architecture, Backend, ExecutionContext};
+use crate::compute::registry::support::StrategySelection;
 use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
 use crate::raster::RgbImage;
 
 pub(crate) fn resize(
     context: &ExecutionContext,
-    architecture: Architecture,
+    selection: &StrategySelection,
     image: &RgbImage,
     width: u32,
     height: u32,
     filter: ResampleFilter,
     bounds: Option<(f64, f64, f64, f64)>,
 ) -> Result<RgbImage, PilError> {
+    let architecture = selection.implementation.architecture;
     super::super::helpers::strategy::resize_byte_native::<_, 3>(
         context,
-        architecture,
+        selection,
         image.as_raw(),
         image.dimensions(),
         width,
@@ -24,7 +26,7 @@ pub(crate) fn resize(
         filter,
         bounds,
         || super::default::resize_impl::execute(image, width, height, filter, bounds),
-        |architecture, bounds| match architecture {
+        |bounds| match architecture {
             Architecture::Sse2 => match bounds {
                 Some(bounds) => super::sse2::resize_impl::execute_boxed(
                     image, width, height, bounds, filter,
@@ -59,7 +61,7 @@ pub(crate) fn resize(
 /// Resize or ResizeBoxed selection.
 pub(crate) fn resize_with_sparse_rows(
     context: &ExecutionContext,
-    architecture: Architecture,
+    selection: &StrategySelection,
     image: &RgbImage,
     width: u32,
     height: u32,
@@ -67,6 +69,7 @@ pub(crate) fn resize_with_sparse_rows(
     filter: ResampleFilter,
     sparse_source_rows: &[bool],
 ) -> Result<RgbImage, PilError> {
+    let architecture = selection.implementation.architecture;
     if context.backend() != Backend::Cpu {
         return Err(PilError::InternalError(
             "sparse RGB Resize requires the CPU backend".into(),

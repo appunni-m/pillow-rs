@@ -71,7 +71,7 @@ impl PreparedResize<'_> {
         );
         super::super::helpers::pad_window::supports(
             self.image,
-            self.selection.implementation.architecture,
+            &self.selection,
             filtered,
         )
     }
@@ -89,7 +89,7 @@ impl PreparedResize<'_> {
             self.width,
             self.height,
             filter,
-            self.selection.implementation.architecture,
+            &self.selection,
             output,
         )
     }
@@ -184,7 +184,7 @@ impl PreparedResize<'_> {
         };
         let output = super::super::rgb8::ops::resize_with_sparse_rows(
             &self.context,
-            self.selection.implementation.architecture,
+            &self.selection,
             image,
             self.width,
             self.height,
@@ -224,7 +224,7 @@ fn execute_mode(
         | Mode::ImageHsv8 => super::super::helpers::mode_dispatch::execute_byte_mode(
             image,
             &context,
-            selection.implementation.architecture,
+            &selection,
             width,
             height,
             filter,
@@ -237,7 +237,7 @@ fn execute_mode(
             height,
             filter,
             bounds,
-            selection.implementation.architecture,
+            &selection,
         ),
         Mode::ImageF32 => super::super::f32::ops::resize(
             &context,
@@ -246,13 +246,13 @@ fn execute_mode(
             height,
             filter,
             bounds,
-            selection.implementation.architecture,
+            &selection,
         ),
         Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
             super::super::helpers::mode_dispatch::execute_luma16_mode(
                 image,
                 &context,
-                selection.implementation.architecture,
+                &selection,
                 width,
                 height,
                 filter,
@@ -267,7 +267,7 @@ fn execute_mode(
             super::super::helpers::mode_dispatch::execute_typed_mode(
                 image,
                 &context,
-                selection.implementation.architecture,
+                &selection,
                 width,
                 height,
                 filter,

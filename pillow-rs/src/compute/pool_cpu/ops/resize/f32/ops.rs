@@ -5,6 +5,7 @@
 //! path; nearest, empty, and unboxed identity requests remain Default.
 
 use crate::compute::{Architecture, ExecutionContext};
+use crate::compute::registry::support::StrategySelection;
 use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
 use crate::raster::{DynamicImage, RgbaImage};
@@ -16,8 +17,9 @@ pub(crate) fn resize(
     height: u32,
     filter: ResampleFilter,
     bounds: super::super::helpers::typed_nearest::BoxBounds,
-    architecture: Architecture,
+    selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
+    let architecture = selection.implementation.architecture;
     let DynamicImage::ImageF32(input) = image else {
         return Err(PilError::InternalError(
             "ImageF32 Resize strategy received another raster mode".into(),
@@ -31,7 +33,7 @@ pub(crate) fn resize(
         {
             let vertical = resize_selected(
                 context,
-                architecture,
+                selection,
                 input,
                 image.width(),
                 height,
@@ -40,7 +42,7 @@ pub(crate) fn resize(
             )?;
             resize_selected(
                 context,
-                architecture,
+                selection,
                 &vertical,
                 width,
                 height,
@@ -48,20 +50,21 @@ pub(crate) fn resize(
                 Some((left, 0.0, right, f64::from(height))),
             )?
         }
-        _ => resize_selected(context, architecture, input, width, height, filter, bounds)?,
+        _ => resize_selected(context, selection, input, width, height, filter, bounds)?,
     };
     Ok(DynamicImage::ImageF32(output))
 }
 
 fn resize_selected(
     _context: &ExecutionContext,
-    architecture: Architecture,
+    selection: &StrategySelection,
     input: &RgbaImage,
     width: u32,
     height: u32,
     filter: ResampleFilter,
     bounds: super::super::helpers::typed_nearest::BoxBounds,
 ) -> Result<RgbaImage, PilError> {
+    let architecture = selection.implementation.architecture;
     match architecture {
         Architecture::Default => {
             super::default::resize_impl::execute(input, width, height, filter, bounds)

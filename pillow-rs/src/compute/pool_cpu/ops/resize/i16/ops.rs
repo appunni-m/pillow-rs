@@ -1,5 +1,6 @@
 //! Exact ImageI16 strategy with Pillow's little-endian resampling contract.
 
+use crate::compute::registry::support::StrategySelection;
 use crate::pipeline::ResampleFilter;
 use crate::raster::{DynamicImage, ImageBuffer, Luma};
 
@@ -17,15 +18,16 @@ pub(crate) fn resize(
 
 pub(crate) fn resize_selected(
     context: &crate::compute::ExecutionContext,
-    architecture: crate::compute::Architecture,
+    selection: &StrategySelection,
     input: &ImageBuffer<Luma<u16>, Vec<u16>>,
     width: u32,
     height: u32,
     filter: crate::pipeline::ResampleFilter,
     bounds: super::super::helpers::typed_nearest::BoxBounds,
 ) -> Result<DynamicImage, crate::error::PilError> {
+    let architecture = selection.implementation.architecture;
     let output = if architecture == crate::compute::Architecture::Default {
-        super::super::helpers::strategy::require_default_architecture(context, architecture)?;
+        super::super::helpers::strategy::require_default_architecture(context, selection)?;
         super::default::resize_impl::execute(input, width, height, filter, bounds)
     } else {
         if bounds.is_some() {

@@ -1,13 +1,15 @@
 //! Selected implementation checks for native Resize mode owners.
 
 use crate::compute::{Architecture, Backend, ExecutionContext};
+use crate::compute::registry::support::StrategySelection;
 use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
 
 pub(crate) fn require_default_architecture(
     context: &ExecutionContext,
-    architecture: Architecture,
+    selection: &StrategySelection,
 ) -> Result<(), PilError> {
+    let architecture = selection.implementation.architecture;
     if context.backend() != Backend::Cpu {
         return Err(PilError::InternalError(
             "CPU Resize mode received a non-CPU execution context".into(),
@@ -44,7 +46,7 @@ pub(crate) fn require_architecture(
 /// Selects a declared native-byte nearest kernel or the mode's Default route.
 pub(crate) fn resize_byte_nearest<T, const CHANNELS: usize>(
     context: &ExecutionContext,
-    architecture: Architecture,
+    selection: &StrategySelection,
     source: &[u8],
     source_size: (u32, u32),
     width: u32,
@@ -54,8 +56,9 @@ pub(crate) fn resize_byte_nearest<T, const CHANNELS: usize>(
     default: impl FnOnce() -> Result<T, PilError>,
     from_bytes: impl FnOnce(Vec<u8>) -> Result<T, PilError>,
 ) -> Result<T, PilError> {
+    let architecture = selection.implementation.architecture;
     if architecture == Architecture::Default {
-        require_default_architecture(context, architecture)?;
+        require_default_architecture(context, selection)?;
         return default();
     }
     if !matches!(filter, ResampleFilter::Nearest) {
@@ -92,7 +95,7 @@ pub(crate) fn resize_byte_nearest<T, const CHANNELS: usize>(
 /// Selects the mode's serial Default route or its declared native-byte strategy.
 pub(crate) fn resize_byte_native<T, const CHANNELS: usize>(
     context: &ExecutionContext,
-    architecture: Architecture,
+    selection: &StrategySelection,
     source: &[u8],
     source_size: (u32, u32),
     width: u32,
@@ -100,14 +103,12 @@ pub(crate) fn resize_byte_native<T, const CHANNELS: usize>(
     filter: ResampleFilter,
     bounds: super::typed_nearest::BoxBounds,
     default: impl FnOnce() -> Result<T, PilError>,
-    filtered_vector: impl FnOnce(
-        Architecture,
-        Option<(f64, f64, f64, f64)>,
-    ) -> Result<Vec<u8>, PilError>,
+    filtered_vector: impl FnOnce(Option<(f64, f64, f64, f64)>) -> Result<Vec<u8>, PilError>,
     from_bytes: impl FnOnce(Vec<u8>) -> Result<T, PilError>,
 ) -> Result<T, PilError> {
+    let architecture = selection.implementation.architecture;
     if architecture == Architecture::Default {
-        require_default_architecture(context, architecture)?;
+        require_default_architecture(context, selection)?;
         return default();
     }
     require_architecture(context, architecture)?;
@@ -121,7 +122,7 @@ pub(crate) fn resize_byte_native<T, const CHANNELS: usize>(
         (ResampleFilter::Nearest, None) => {
             super::native_nearest::execute::<CHANNELS>(source, source_size, (width, height))?
         }
-        (_, bounds) => filtered_vector(architecture, bounds)?,
+        (_, bounds) => filtered_vector(bounds)?,
     };
     from_bytes(output)
 }

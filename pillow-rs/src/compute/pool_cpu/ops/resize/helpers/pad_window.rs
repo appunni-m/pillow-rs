@@ -1,15 +1,17 @@
 //! Mode/architecture dispatch for prepared Resize output windows.
 
 use crate::compute::Architecture;
+use crate::compute::registry::support::StrategySelection;
 use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
 use crate::raster::{DynamicImage, Mode};
 
 pub(crate) fn supports(
     image: &DynamicImage,
-    architecture: Architecture,
+    selection: &StrategySelection,
     filtered: bool,
 ) -> bool {
+    let architecture = selection.implementation.architecture;
     filtered
         && matches!(image.mode(), Mode::ImageLuma8 | Mode::ImageRgbx8)
         && matches!(
@@ -26,9 +28,10 @@ pub(crate) fn execute(
     width: u32,
     height: u32,
     filter: ResampleFilter,
-    architecture: Architecture,
+    selection: &StrategySelection,
     output: &mut [u8],
 ) -> Result<bool, PilError> {
+    let architecture = selection.implementation.architecture;
     match (architecture, image) {
         (Architecture::Default, DynamicImage::ImageLuma8(image)) => Ok(
             super::super::luma8::default::resize_impl::execute_into_window(

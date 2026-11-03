@@ -4,6 +4,7 @@
 //! Ordinary unboxed nearest can use NEON; boxed nearest remains scalar.
 
 use crate::compute::{Architecture, ExecutionContext};
+use crate::compute::registry::support::StrategySelection;
 use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
 use crate::raster::DynamicImage;
@@ -15,8 +16,9 @@ pub(crate) fn resize(
     height: u32,
     filter: ResampleFilter,
     bounds: super::super::helpers::typed_nearest::BoxBounds,
-    architecture: Architecture,
+    selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
+    let architecture = selection.implementation.architecture;
     let DynamicImage::ImageI32(input) = image else {
         return Err(PilError::InternalError(
             "ImageI32 Resize strategy received another raster mode".into(),
