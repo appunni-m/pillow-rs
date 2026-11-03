@@ -14,7 +14,7 @@
 use crate::raster::GenericImageView;
 use std::sync::Arc;
 
-use crate::compute::{Architecture, ExecutionContext};
+use crate::compute::{Architecture, ExecutionContext, PipelineOperationTelemetryCapture};
 use crate::compute::registry::support::{
     InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport, OutputModeRule,
     PaletteInput, RejectionKind, SecondaryInputFacts, StrategySelection, SupportAssessment,
@@ -549,7 +549,12 @@ pub(crate) fn prepare_plan(
     if let ModeSupport::Rejected { reason, kind, .. } = support {
         return Err(kind.into_error(reason));
     }
-    let other = secondary(op).map(|image| image.materialized_shared_for_ops()).transpose()?;
+    let mut secondary_receipts = PipelineOperationTelemetryCapture::begin_preserving_current();
+    let other = secondary(op)
+        .map(|image| image.materialized_shared_for_ops())
+        .transpose()?;
+    secondary_receipts.capture();
+    secondary_receipts.restore();
     let facts = match other.as_deref() {
         Some(image) => {
             let other = SecondaryInputFacts {
@@ -619,8 +624,12 @@ pub(crate) fn prepare_fused_multiply_screen<'a>(
         return Ok(None);
     }
 
+    let mut secondary_receipts = PipelineOperationTelemetryCapture::begin_preserving_current();
     let other = multiply_other.materialized_shared_for_ops()?;
+    secondary_receipts.capture();
     let screen_other = screen_other.materialized_shared_for_ops()?;
+    secondary_receipts.capture();
+    secondary_receipts.restore();
     if other.mode() != mode
         || screen_other.mode() != mode
         || other.dimensions() != image.dimensions()

@@ -416,6 +416,9 @@ pub(crate) struct PipelineOperationTelemetryCapture {
     enabled: bool,
     restored: bool,
     samples: Vec<PipelineOperationSample>,
+    previous_samples: Option<Vec<PipelineOperationSample>>,
+    previous_active: Option<Vec<PipelineOperationSample>>,
+    previous_handoffs: Option<u64>,
 }
 
 impl PipelineOperationTelemetryCapture {
@@ -429,7 +432,35 @@ impl PipelineOperationTelemetryCapture {
             enabled,
             restored: false,
             samples: Vec::new(),
+            previous_samples: None,
+            previous_active: None,
+            previous_handoffs: None,
         }
+    }
+
+    /// Starts a nested capture without discarding the caller's ordered receipts.
+    pub(crate) fn begin_preserving_current() -> Self {
+        let enabled = pipeline_telemetry_enabled();
+        let mut capture = Self {
+            enabled,
+            restored: false,
+            samples: Vec::new(),
+            previous_samples: None,
+            previous_active: None,
+            previous_handoffs: None,
+        };
+        if enabled {
+            capture.previous_samples = Some(LAST_PIPELINE_OPERATION_TELEMETRY.with(|last| {
+                std::mem::take(&mut *last.borrow_mut())
+            }));
+            capture.previous_active = Some(ACTIVE_PIPELINE_OPERATION_TELEMETRY.with(|active| {
+                std::mem::take(&mut *active.borrow_mut())
+            }));
+            capture.previous_handoffs = Some(PENDING_PIPELINE_HANDOFFS.with(|pending| {
+                std::mem::take(&mut *pending.borrow_mut())
+            }));
+        }
+        capture
     }
 
     /// Saves receipts emitted by the most recently completed materialization.
@@ -448,6 +479,22 @@ impl PipelineOperationTelemetryCapture {
             return;
         }
         self.capture();
+        if let Some(mut previous_samples) = self.previous_samples.take() {
+            previous_samples.append(&mut self.samples);
+            LAST_PIPELINE_OPERATION_TELEMETRY.with(|last| {
+                *last.borrow_mut() = previous_samples;
+            });
+            let previous_active = self.previous_active.take().unwrap_or_default();
+            ACTIVE_PIPELINE_OPERATION_TELEMETRY.with(|active| {
+                *active.borrow_mut() = previous_active;
+            });
+            let previous_handoffs = self.previous_handoffs.take().unwrap_or_default();
+            PENDING_PIPELINE_HANDOFFS.with(|pending| {
+                *pending.borrow_mut() = previous_handoffs;
+            });
+            self.restored = true;
+            return;
+        }
         LAST_PIPELINE_OPERATION_TELEMETRY.with(|last| {
             last.borrow_mut().append(&mut self.samples);
         });

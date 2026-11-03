@@ -1632,3 +1632,13 @@ their prior ordering. The selected Backend/Architecture context reaches the
 same specialized Filter owner and no pixel algorithm changed. Other eager
 architecture callers remain under source review. No build, formatting,
 checkstyle, lint, tests, parity, benchmark, or coverage ran.
+
+Nested Chops operand receipts (2026-11-04): binary Chops and fused
+Multiply/Screen now preserve the caller's active and completed operation
+receipts while lazy secondary images materialize, then append each secondary
+graph's receipts before the Chops operation completes. The two fused operands
+are captured separately so materializing the second cannot erase the first
+graph's receipt list. Pixel algorithms and operation error order are unchanged.
+Other multi-image CPU preparation paths remain under source review. Source-only;
+no build, formatting, checkstyle, lint, tests, parity, benchmark, or coverage
+ran.
