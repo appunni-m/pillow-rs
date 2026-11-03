@@ -463,9 +463,11 @@ impl DynamicImage {
 
     /// Return a mutable view of native image storage when it is byte-addressable.
     ///
-    /// Compute backends use this only after taking ownership of an intermediate
-    /// pipeline result.  Keeping the method limited to 8-bit rasters prevents a
-    /// byte-oriented SIMD kernel from accidentally reinterpreting typed samples.
+    /// Acquiring the view invalidates any omitted physical-lane payload through
+    /// the carrier's generic mutable access. Mode-specific callers that must
+    /// preserve those lanes need to snapshot and restore or recompute them.
+    /// Keeping the method limited to 8-bit rasters prevents a byte-oriented
+    /// kernel from accidentally reinterpreting typed samples.
     pub(crate) fn as_bytes_mut(&mut self) -> Option<&mut [u8]> {
         match self {
             DynamicImage::One(image)

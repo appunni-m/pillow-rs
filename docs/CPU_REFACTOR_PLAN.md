@@ -348,6 +348,16 @@ the already-filtered GaussianBlur lane payload, restores it after blending the
 logical carrier, then applies the same UnsharpMask formula to those lanes.
 Source review only; runtime mode/architecture parity remains pending.
 
+Mutable native-byte access audit (2026-11-03): the maintained Rust source has
+four `DynamicImage::as_bytes_mut` call sites. PutData routes compact carriers
+through lane-aware writers; batch Invert snapshots and restores or transforms
+the sidecar; ContrastDegenerate rebuilds the exact output lane payload; and
+UnsharpMask now preserves the GaussianBlur lane output across its blend. The
+accessor docs now state that acquiring its generic mutable view invalidates
+omitted lanes and that preserving callers must snapshot and restore or
+recompute them. This does not close the broader audit of direct `ImageBuffer`
+mutable APIs or downstream raw-byte parity.
+
 EffectSpread physical-lane follow-up (2026-11-03): the Default strategy remaps hidden lanes through its existing Pillow relocation map. Selected SSE2, NEON, and Wasm SIMD128 strategies preserve per-pixel hidden lanes using a cloned starting RNG state and the same destination decisions as the active-byte kernel; the process RNG still advances only once. Constant sidecars remain compact, and absent producer state stays absent. No build, formatter, checkstyle, lint, test, parity, or benchmark ran.
 
 Paste wrapper validation follow-up (2026-11-03): the final staged call now
