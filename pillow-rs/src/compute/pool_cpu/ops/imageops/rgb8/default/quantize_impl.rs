@@ -31,7 +31,11 @@ pub(crate) fn execute_rgb_samples(
     match method {
         2 => quantize_octree(pixels, width, height, colors),
         1 => Ok(quantize_maxcoverage(pixels, colors, kmeans)),
-        _ => Ok(quantize_median_cut(pixels, colors, kmeans)),
+        0 => Ok(quantize_median_cut(pixels, colors, kmeans)),
+        3 => Err(PilError::ValueError(
+            "dependency required by this method was not enabled at compile time".into(),
+        )),
+        _ => Err(PilError::ValueError("quantization error".into())),
     }
 }
 

@@ -412,11 +412,15 @@ where
             let (indices, palette) = maxcoverage_quantize_source(source, colors, kmeans);
             Ok((indices, flatten_rgb_palette(&palette), None))
         }
-        _ => {
+        0 => {
             let (indices, mut palette) = median_cut_quantize_source(source, colors);
             let indices = refine_median_cut_kmeans(source, indices, &mut palette, kmeans);
             Ok((indices, flatten_rgb_palette(&palette), None))
         }
+        3 => Err(PilError::ValueError(
+            "dependency required by this method was not enabled at compile time".into(),
+        )),
+        _ => Err(PilError::ValueError("quantization error".into())),
     }
 }
 

@@ -659,13 +659,15 @@ class Image:
                  palette=None, dither: int = 1):
         """Reduce colors using median cut algorithm."""
         # Pillow loads the source before defaulting or validating the method.
-        self._realize_dirty_palette()
+        self.load()
+        # TODO(pillow-rs#3ptb): preserve truthiness and load/mode callbacks for
+        # arbitrary palette objects; the core currently accepts only Image.
         if isinstance(palette, Image) and (
             self.mode != "RGBA" or method is None or method in (2, 3)
         ):
             # Pillow loads a reference palette only after its RGBA method
             # restriction, but before validating the reference/source modes.
-            palette._realize_dirty_palette()
+            palette.load()
         return self._new(
             self._rust_image.quantize(colors, method, kmeans, dither != 0, palette)
         )

@@ -1909,6 +1909,24 @@ storage-boundary, fallback, and receipt parity remain pending in its existing
 TODO. Source-only; no build, formatting, checkstyle, lint, test, parity,
 benchmark, or coverage ran.
 
+Quantize method and load-order source audit (2026-11-04): Pillow 12.2 loads the
+source before method validation. RGBA accepts methods 2/3 only; other values
+receive its RGBA-specific `ValueError`. With a supplied palette, L/RGB skip
+color-count, method, and k-means checks after palette/source-mode validation.
+Without a palette, negative k-means is rejected before the core quantizer;
+nonempty input validates colors before methods, method 3 reports the missing
+dependency in this build, and other unknown values report
+`ValueError("quantization error")`. Empty input returns empty P before
+color/method validation and has an empty palette. The support contract and
+mode dispatch now preserve these routes. The Python facade loads source and
+palette Images in Pillow's order. Arbitrary palette truthiness and host
+attribute callbacks remain a code TODO. Source references: [Pillow 12.2
+Image.quantize](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py#L1176-L1250),
+[Pillow 12.2 quantizer dispatch](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Quant.c#L1588-L1792),
+[empty-image binding path](https://github.com/python-pillow/Pillow/blob/12.2.0/src/_imaging.c#L1650-L1663).
+Source-only; compile, mode × architecture output/fault parity, and lazy-load
+fault ordering remain pending. No quality gates or tests ran.
+
 ImageOps Invert mode-scope source review (2026-11-04): Pillow 12.2 routes mode
 `1` through `point` and other modes through `_lut`; `_lut` supports `L` and
 `RGB`, raises `NotImplementedError` for `P`, and raises `OSError` for other

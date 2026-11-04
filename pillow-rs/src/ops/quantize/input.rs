@@ -9,7 +9,8 @@ pub enum QuantizePalette {
     None,
     /// An image object was supplied as the palette argument.
     Image(Box<Image>),
-    /// A non-image palette argument was supplied and is ignored by Pillow's
-    /// compatibility path until a real palette image is provided.
+    /// A non-image palette argument was supplied by the host adapter.
+    /// TODO(pillow-rs#3ptb): preserve Python palette truthiness and `load`/`mode`
+    /// attribute callbacks; this currently falls through as no palette.
     Other,
 }

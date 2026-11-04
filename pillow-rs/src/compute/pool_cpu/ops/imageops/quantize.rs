@@ -16,6 +16,7 @@ use crate::raster::{DynamicImage, Mode};
 use crate::compute::registry::support::PaletteInput;
 
 const ALLOWED_ALPHA_METHODS: &[u32] = &[2, 3];
+const RECOGNIZED_QUANTIZE_METHODS: &[u32] = &[0, 1, 2, 3];
 const METHOD_RESTRICTED_MODES: &[Mode] = &[
     Mode::ImageLumaA8,
     Mode::ImageLaPremultiplied8,
@@ -32,6 +33,7 @@ const QUANTIZE_INPUT: crate::compute::registry::support::InputContract =
     crate::compute::registry::support::InputContract::QuantizeParameters {
         min_colors: 1,
         max_colors: 256,
+        recognized_methods: RECOGNIZED_QUANTIZE_METHODS,
         method_restricted_modes: METHOD_RESTRICTED_MODES,
         allowed_methods: ALLOWED_ALPHA_METHODS,
         palette_mode: Mode::ImagePalette8,
@@ -39,6 +41,7 @@ const QUANTIZE_INPUT: crate::compute::registry::support::InputContract =
         unavailable_methods: UNAVAILABLE_METHODS,
         kmeans_nonnegative: true,
         colors_rejection: "bad number of colors",
+        invalid_method_rejection: "quantization error",
         pillow_rgba_method_rejection: "Fast Octree (method == 2) and libimagequant (method == 3) \
              are the only valid methods for quantizing RGBA images",
         alpha_method_rejection:
@@ -148,23 +151,6 @@ pub(crate) fn default_method(mode: Mode) -> u32 {
     quantize_mode_strategy(mode).default_method
 }
 
-/// Validates the public color count using the operation's declared bounds.
-pub(crate) fn validate_color_count(colors: i64) -> Result<(), PilError> {
-    let crate::compute::registry::support::InputContract::QuantizeParameters {
-        min_colors,
-        max_colors,
-        colors_rejection,
-        ..
-    } = QUANTIZE_INPUT
-    else {
-        unreachable!("Quantize input declaration must describe its parameters");
-    };
-    if colors < i64::from(min_colors) || colors > i64::from(max_colors) {
-        return Err(PilError::ValueError(colors_rejection.into()));
-    }
-    Ok(())
-}
-
 /// Preserves the pre-materialization RGBA method rejection through its declaration.
 pub(crate) fn validate_pillow_rgba_method(mode: Mode, method: u32) -> Result<(), PilError> {
     let crate::compute::registry::support::InputContract::QuantizeParameters {
@@ -219,6 +205,19 @@ impl PreparedQuantize<'_, '_> {
     pub(crate) fn execute(self) -> Result<Image, PilError> {
         self.validate_selection()?;
         let (width, height) = (self.image.width(), self.image.height());
+        if width == 0 || height == 0 {
+            // Pillow returns an empty P image before validating colors/methods
+            // or entering a quantizer; its new palette has zero entries.
+            return build_paletted_image(
+                width,
+                height,
+                QuantizedColors {
+                    indices: Vec::new(),
+                    palette: Vec::new(),
+                    alpha: None,
+                },
+            );
+        }
         let quantized = quantize_by_method(
             self.image,
             self.palette,

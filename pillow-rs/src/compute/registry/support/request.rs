@@ -114,6 +114,8 @@ pub enum InputContract {
         min_colors: u32,
         /// Inclusive maximum palette size.
         max_colors: u32,
+        /// Method identifiers with defined dispatch outcomes for nonempty input.
+        recognized_methods: &'static [u32],
         /// Exact modes whose quantization contract restricts the method set.
         method_restricted_modes: &'static [Mode],
         /// Methods accepted by those mode strategies.
@@ -128,6 +130,8 @@ pub enum InputContract {
         kmeans_nonnegative: bool,
         /// Existing invalid palette-size error.
         colors_rejection: &'static str,
+        /// Pillow's error for an unrecognized nonempty quantizer method.
+        invalid_method_rejection: &'static str,
         /// Pillow's existing RGBA method error.
         pillow_rgba_method_rejection: &'static str,
         /// Extension error for other method-restricted alpha modes.

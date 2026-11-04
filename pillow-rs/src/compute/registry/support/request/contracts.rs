@@ -575,6 +575,7 @@ fn assess_request(
             InputContract::QuantizeParameters {
                 min_colors,
                 max_colors,
+                recognized_methods,
                 method_restricted_modes,
                 allowed_methods,
                 palette_mode: expected_palette_mode,
@@ -582,6 +583,7 @@ fn assess_request(
                 unavailable_methods,
                 kmeans_nonnegative,
                 colors_rejection,
+                invalid_method_rejection,
                 pillow_rgba_method_rejection,
                 alpha_method_rejection,
                 palette_mode_rejection,
@@ -597,9 +599,6 @@ fn assess_request(
                 palette_mode,
             },
         ) => {
-            if colors < min_colors || colors > max_colors {
-                return Err(PilError::ValueError(colors_rejection.into()));
-            }
             if method_restricted_modes.contains(&source_mode)
                 && !allowed_methods.contains(&method)
             {
@@ -619,11 +618,19 @@ fn assess_request(
                 }
                 return Ok(None);
             }
-            if unavailable_methods.contains(&method) {
-                return Err(PilError::ValueError(unavailable_method_rejection.into()));
-            }
             if kmeans_nonnegative && kmeans.is_some_and(|iterations| iterations < 0) {
                 return Err(PilError::ValueError(kmeans_rejection.into()));
+            }
+            if input.width != 0 && input.height != 0 {
+                if colors < min_colors || colors > max_colors {
+                    return Err(PilError::ValueError(colors_rejection.into()));
+                }
+                if !recognized_methods.contains(&method) {
+                    return Err(PilError::ValueError(invalid_method_rejection.into()));
+                }
+                if unavailable_methods.contains(&method) {
+                    return Err(PilError::ValueError(unavailable_method_rejection.into()));
+                }
             }
             Ok(None)
         }

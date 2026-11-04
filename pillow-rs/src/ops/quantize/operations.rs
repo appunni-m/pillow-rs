@@ -19,7 +19,6 @@ impl Image {
         dither: Option<bool>,
     ) -> Result<Image, PilError> {
         let colors = colors.unwrap_or(256);
-        crate::compute::pool_cpu::ops::imageops::quantize::validate_color_count(i64::from(colors))?;
         let source_mode = self.mode_identity()?;
         let method = method.map(|method| method as u32).unwrap_or_else(|| {
             crate::compute::pool_cpu::ops::imageops::quantize::default_method(source_mode)
@@ -109,7 +108,6 @@ impl Image {
         _dither: bool,
         method: u32,
     ) -> Result<Image, PilError> {
-        crate::compute::pool_cpu::ops::imageops::quantize::validate_color_count(i64::from(colors))?;
         let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
         let image = self.materialize()?;
         operation_receipts.capture();
