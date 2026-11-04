@@ -139,6 +139,16 @@ and CoreOnly parity remain pending. Official source references and the
 remaining Convert
 mode/target matrix are in the [CPU refactor inventory](CPU_REFACTOR_INVENTORY.md).
 
+Convert routing clarification (2026-11-04): the exact source-mode support row
+and requested target select the Rust strategy directly. Pillow base-mode retry
+behavior is used only to derive expected outputs and Pillow support; ordinary
+Convert strategies consume the original source raster and write the final target
+without materializing an intermediate L, RGB, or RGBA image. LAB remains an
+explicit ImageCms composition selected by the source/target route. A Default
+architecture fallback means only that a requested architecture has no declared
+kernel. Output, fault, palette, and selection parity remain pending under
+`pillow-rs#3ptb`.
+
 Reduce's top-level dispatch has now been source-reviewed across all 25 modes.
 Seven byte modes and Pillow `F` declare vector routes; the remaining modes use
 their typed Default owners. Prepared execution retains the selected mode and
