@@ -1806,3 +1806,10 @@ execution. TODO(pillow-rs#3ptb): define callable Point's reentrant callback
 order and image snapshot contract before changing its live shared borrow.
 Output/fault parity remains pending. Source-only; no build, formatting,
 checkstyle, lint, tests, parity, benchmark, or coverage ran.
+
+Encoded byte argument borrow staging (2026-11-04): `tobytes_encoded` now
+extracts encoder arguments before borrowing the image, then performs mode
+lookup and encoding against the current image. This keeps custom sequence
+conversion outside the PyImage borrow without changing encoder dispatch.
+Output/fault parity remains pending. Source-only; no build, formatting,
+checkstyle, lint, tests, parity, benchmark, or coverage ran.

@@ -172,16 +172,18 @@ impl PyImage {
     }
 
     fn tobytes_encoded(
-        &self,
+        slf: Py<Self>,
         encoder_name: &str,
         args: Vec<String>,
         py: Python<'_>,
     ) -> PyResult<Py<PyBytes>> {
-        let mode = self.inner.mode_identity().map_err(map_error)?;
+        let image = slf.bind(py).borrow();
+        let mode = image.inner.mode_identity().map_err(map_error)?;
         let encoder_name = encoder_name.to_owned();
         let bytes = py
             .detach(|| {
-                self.inner
+                image
+                    .inner
                     .tobytes_encoded_shared(mode, &encoder_name, &args)
             })
             .map_err(map_error)?;
