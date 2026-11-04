@@ -87,10 +87,13 @@ The maintained-source scan found 27 direct architecture-instruction files in
 nine operation families; their support/dispatch paths have now been traced.
 This does not close the broader module-declaration or prepared-selection audit.
 Recent WIP source audits include complete Transpose mode/architecture
-declarations and the ImageOps Invert mode-scope review. Invert now declares
-Pillow's P and high-depth rejection contracts in operation support, records
-Rust-only modes as CoreOnly, and leaves output/fault parity pending. The
-instruction-free wrapper and all-family prepared-selection audits remain open.
+declarations, ImageOps Invert mode scope, and the ImageOps point/histogram
+strategies. Invert now declares Pillow's P and high-depth rejection contracts
+in operation support, records Rust-only modes as CoreOnly, and leaves
+output/fault parity pending. Posterize/Solarize/Autocontrast's P paths are
+CoreOnly, while Equalize's P-to-RGB transition is Pillow-defined. The
+Expand also has an exhaustive 25-mode strategy map with mode-owned fill rules.
+The instruction-free wrapper and all-family prepared-selection audits remain open.
 Recent source-only checkpoints thread `StrategySelection` through Rotate and
 Transform hidden-lane helpers; native-byte Filter extrema, rank, and blur
 helpers; LA/RGBA AlphaComposite architecture binding; the UnsharpMask
@@ -1919,3 +1922,31 @@ declared `CoreOnly` with `NO_PILLOW_SUPPORT` at each mode strategy. The P-mode
 native child remains a core extension while the ImageOps wrapper rejects it.
 ImageOps output and fault parity remain pending; source-only, with no build,
 formatting, checkstyle, lint, test, parity, benchmark, or coverage run.
+
+ImageOps point and histogram-strategy audit (2026-11-04): Posterize and
+Solarize declare exact L/RGB strategies plus an explicitly CoreOnly P-index
+extension; all other modes reject through their operation support. Autocontrast
+has the same Pillow L/RGB and CoreOnly P split. Equalize's P route is a Pillow
+defined transition: it expands the palette to RGB, computes the RGB histogram,
+and returns RGB, reflected by `OutputModeRule::Fixed(RGB)`. Colorize accepts
+only L and returns RGB; its exhaustive classifier retains Pillow's assertion
+fault for all other modes. Each selected architecture is retained by the
+prepared mode owner and dispatched through that exact mode's architecture
+module. The palette-to-RGB step for Equalize is semantic output behavior, not
+conversion for kernel reuse. Source checks against [Pillow 12.2 ImageOps
+Equalize and Colorize](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageOps.py#L1936-L2105)
+agree with these routes. Output, fault-order, and per-architecture parity
+remain pending; source-only, with no build, formatting, checkstyle, lint, test,
+parity, benchmark, or coverage run.
+
+ImageOps Expand mode/architecture source audit (2026-11-04): the family
+declaration maps every one of the 25 `Mode` and `DynamicImage` identities to a
+mode-owned strategy and forwards `ExecutionContext` to that owner. Byte modes
+declare Default plus selected SSE2/NEON/Wasm paths; typed modes declare their
+Default strategy and exact native fill rule. The separate typed-fill entry
+admits a mode only when its support contract declares `NativeU16` or
+`NativeF32`, then dispatches that mode's typed strategy. Internal high-depth
+extensions use explicit `NO_PILLOW_SUPPORT` annotations. The support output
+preserves source mode. Source-only; output, fill, and fallback parity remain
+pending, and no build, formatting, checkstyle, lint, test, parity, benchmark,
+or coverage ran.
