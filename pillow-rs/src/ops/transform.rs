@@ -71,6 +71,99 @@ pub enum ReduceBox {
     InvalidType(String),
 }
 
+fn reduce_c_int(value: i64) -> Result<i32, PilError> {
+    i32::try_from(value).map_err(|_| {
+        PilError::OverflowError(if value < 0 {
+            "signed integer is less than minimum".into()
+        } else {
+            "signed integer is greater than maximum".into()
+        })
+    })
+}
+
+fn parse_reduce_factors(factor: ReduceFactor) -> Result<(i32, i32), PilError> {
+    let values = match factor {
+        ReduceFactor::Scalar(value) => [value, value].to_vec(),
+        ReduceFactor::Sequence(values) => values,
+        ReduceFactor::FloatingSequence(_) => {
+            return Err(PilError::TypeError(
+                "'float' object cannot be interpreted as an integer".into(),
+            ));
+        }
+        ReduceFactor::Invalid(type_name) => {
+            return Err(PilError::TypeError(format!(
+                "'{type_name}' object cannot be interpreted as an integer"
+            )));
+        }
+    };
+    if values.len() != 2 {
+        return Err(PilError::TypeError(format!(
+            "argument 1 must be sequence of length 2, not {}",
+            values.len()
+        )));
+    }
+
+    Ok((reduce_c_int(values[0])?, reduce_c_int(values[1])?))
+}
+
+fn validate_reduce_factors(x_factor: i32, y_factor: i32) -> Result<(u32, u32), PilError> {
+    if x_factor <= 0 || y_factor <= 0 {
+        return Err(PilError::ValueError("scale must be > 0".into()));
+    }
+    Ok((x_factor as u32, y_factor as u32))
+}
+
+fn parse_reduce_box_coordinates(
+    box_coords: Option<ReduceBox>,
+    width: i32,
+    height: i32,
+) -> Result<(i32, i32, i32, i32), PilError> {
+    match box_coords {
+        None => (0, 0, width, height),
+        Some(ReduceBox::Sequence(values)) if values.len() == 4 => {
+            let mut coordinates = [0; 4];
+            for (slot, value) in coordinates.iter_mut().zip(values) {
+                *slot = reduce_c_int(value)?;
+            }
+            (coordinates[0], coordinates[1], coordinates[2], coordinates[3])
+        }
+        Some(ReduceBox::Sequence(values)) => {
+            return Err(PilError::TypeError(format!(
+                "argument 2 must be sequence of length 4, not {}",
+                values.len()
+            )));
+        }
+        Some(ReduceBox::Invalid) => {
+            return Err(PilError::TypeError("box must be a 4-item sequence".into()));
+        }
+        Some(ReduceBox::InvalidType(type_name)) => {
+            return Err(PilError::TypeError(format!(
+                "argument 2 must be 4-item sequence, not {type_name}"
+            )));
+        }
+    }
+}
+
+fn validate_reduce_box(
+    coordinates: (i32, i32, i32, i32),
+    width: i32,
+    height: i32,
+) -> Result<(), PilError> {
+    let (left, top, right, bottom) = coordinates;
+    if left < 0 || top < 0 {
+        return Err(PilError::ValueError("box offset can't be negative".into()));
+    }
+    if right > width || bottom > height {
+        return Err(PilError::ValueError(
+            "box can't exceed original image size".into(),
+        ));
+    }
+    if right <= left || bottom <= top {
+        return Err(PilError::ValueError("box can't be empty".into()));
+    }
+    Ok(())
+}
+
 impl Image {
     /// Reduces an image using Pillow's public scalar/sequence contract.
     ///
@@ -82,90 +175,42 @@ impl Image {
         factor: ReduceFactor,
         box_coords: Option<ReduceBox>,
     ) -> Result<Image, PilError> {
-        let factors = match factor {
-            ReduceFactor::Scalar(value) => [value, value].to_vec(),
-            ReduceFactor::Sequence(values) => values,
-            ReduceFactor::FloatingSequence(_) => {
-                return Err(PilError::TypeError(
-                    "'float' object cannot be interpreted as an integer".into(),
-                ));
+        let (x_scale, y_scale) = parse_reduce_factors(factor)?;
+        let box_was_supplied = box_coords.is_some();
+        let validated_factors = if box_was_supplied {
+            None
+        } else {
+            let factors = validate_reduce_factors(x_scale, y_scale)?;
+            if factors == (1, 1) {
+                return Ok(self.copy());
             }
-            ReduceFactor::Invalid(type_name) => {
-                return Err(PilError::TypeError(format!(
-                    "'{type_name}' object cannot be interpreted as an integer"
-                )));
-            }
+            Some(factors)
         };
-        if factors.len() != 2 {
-            return Err(PilError::TypeError(format!(
-                "argument 1 must be sequence of length 2, not {}",
-                factors.len()
-            )));
-        }
-        if self.has_palette_mode() && (box_coords.is_some() || factors.as_slice() != [1, 1]) {
-            // Pillow permits the indexed-image no-op P.reduce(1), but
-            // ImagingReduce rejects actual indexed reduction and every
-            // optional-box form before constructing a result image.
+        let (width, height) = self.size()?;
+        let width = reduce_c_int(i64::from(width))?;
+        let height = reduce_c_int(i64::from(height))?;
+        let coordinates = parse_reduce_box_coordinates(box_coords, width, height)?;
+        let (x_factor, y_factor) = match validated_factors {
+            Some(factors) => factors,
+            None => validate_reduce_factors(x_scale, y_scale)?,
+        };
+        validate_reduce_box(coordinates, width, height)?;
+
+        if self.has_palette_mode() && (x_factor != 1 || y_factor != 1) {
+            // Pillow validates scale and box bounds before ImagingReduce
+            // rejects real P-mode downsampling.
             return Err(PilError::ValueError("image has wrong mode".into()));
         }
-        let x_factor = u32::try_from(factors[0])
-            .ok()
-            .filter(|&value| value > 0)
-            .ok_or_else(|| PilError::ValueError("scale must be > 0".into()))?;
-        let y_factor = u32::try_from(factors[1])
-            .ok()
-            .filter(|&value| value > 0)
-            .ok_or_else(|| PilError::ValueError("scale must be > 0".into()))?;
+        if x_factor == 1 && y_factor == 1 {
+            return self.crop(Some(coordinates));
+        }
 
-        let Some(box_coords) = box_coords else {
-            return self.reduce(x_factor, y_factor);
-        };
-        let source = match box_coords {
-            ReduceBox::Sequence(values) if values.len() == 4 => {
-                let coords = values
-                    .into_iter()
-                    .map(|value| {
-                        i32::try_from(value)
-                            // Pillow converts the Python coordinate through a C
-                            // long before entering ImagingReduce; an out-of-range
-                            // value is therefore an OverflowError, not a generic
-                            // value-shape failure.
-                            .map_err(|_| {
-                                if value > i64::from(i32::MAX) {
-                                    PilError::OverflowError(
-                                        "signed integer is greater than maximum".into(),
-                                    )
-                                } else {
-                                    PilError::OverflowError(
-                                        "signed integer is less than minimum".into(),
-                                    )
-                                }
-                            })
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
-                // Pillow's imaging core rejects reversed reduce boxes before
-                // crop validation and reports the generic empty-box error.
-                if coords[2] < coords[0] || coords[3] < coords[1] {
-                    return Err(PilError::ValueError("box can't be empty".into()));
-                }
-                self.crop(Some((coords[0], coords[1], coords[2], coords[3])))?
-            }
-            ReduceBox::Sequence(values) => {
-                return Err(PilError::TypeError(format!(
-                    "argument 2 must be sequence of length 4, not {}",
-                    values.len()
-                )));
-            }
-            ReduceBox::Invalid => {
-                return Err(PilError::TypeError("box must be a 4-item sequence".into()));
-            }
-            ReduceBox::InvalidType(type_name) => {
-                return Err(PilError::TypeError(format!(
-                    "argument 2 must be 4-item sequence, not {type_name}"
-                )));
-            }
-        };
-        source.reduce(x_factor, y_factor)
+        let full_box = coordinates == (0, 0, width, height);
+        if full_box {
+            self.reduce(x_factor, y_factor)
+        } else {
+            self.crop(Some(coordinates))?.reduce(x_factor, y_factor)
+        }
     }
 
     fn transform_affine_palette_index_with_filter(

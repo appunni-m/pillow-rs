@@ -1371,7 +1371,7 @@ SIMD candidate modes by source family:
 
 ## 4. CPU/SIMD architecture and parallel inventory
 
-### Reduce family mode and architecture migration (source review complete; parity pending)
+### Reduce family mode and architecture migration (source review in progress; parity pending)
 
 The new operation owner is present at pillow-rs/src/compute/pool_cpu/ops/reduce.
 Its top-level ops.rs classifies every one of the 25 exact Mode identities,
@@ -1402,7 +1402,7 @@ Default fallback, including edges, vector tails, and sparse RGB inputs.
 | One, ImageLuma8 | Native one-byte reducer with mode-preserving output; One is an explicit Rust extension marked `NO_PILLOW_SUPPORT` because Pillow rejects Reduce for mode `1`. ImageLuma8 declares AVX2 and portable SSE2/NEON/wasm SIMD lane strategies. |
 | ImageLumaA8 | Native LA bytes with archived premultiply/average/unpremultiply arithmetic; declares AVX2 and portable SSE2/NEON/wasm SIMD lane strategies. |
 | ImageLaPremultiplied8 | Native LA bytes averaged without straight-alpha premultiplication. |
-| ImagePalette8 | Explicit identity-only strategy; actual P reduction is rejected by the factor contract, matching the public Pillow contract. |
+| ImagePalette8 | Factor-one requests use the native crop/copy path; actual P downsampling is rejected after scale and box validation, matching Pillow dispatch order. |
 | ImagePaletteAlpha8 | Native two-byte index/alpha reduction with no alpha premultiplication or palette conversion; Default only, matching the archived CPU path. |
 | ImageRgb8 | Native RGB reducer retaining the archived dense-even and sparse 2x2 paths plus the general RGB row kernel; AVX2 and portable SSE2/NEON/wasm SIMD handle lane reduction, including the 2x2 and 3x5 blocks. |
 | ImageRgba8 | Native RGBA reducer retaining premultiplied-alpha arithmetic and its specialized block sum; declares AVX2 and portable SSE2/NEON/wasm SIMD lane strategies. |
@@ -1420,14 +1420,25 @@ its I/F scalar helpers; RGB PutPixel/Thumbnail fusion calls the shared sparse-
 row reducer. Caller review covers the public `reduce_public` validation and
 lazy pipeline entry, the prepared registry route, exact-mode result execution,
 and Thumbnail's nested Reduce plan using the same injected `ExecutionContext`.
-P's identity-only contract and PA's native two-byte behavior agree with the
-public wrapper and archived CPU path. The only remaining Reduce-specific source
-migration is archived Rayon scheduling for the later `pool_parallel` backend;
+The earlier P identity-only description was incorrect: factor-one P sub-boxes
+use Pillow's crop path. PA retains its native two-byte behavior. The only
+remaining Reduce-specific source migration is archived Rayon scheduling for
+the later `pool_parallel` backend;
 `pool_cpu` remains serial. Mode-by-architecture parity is still pending, and no
 unit tests are being added for this family. No build, formatting, lint, parity,
 or benchmark verification has run. The archived SIMD instructions and guards
 are in `pool_cpu/legacy/pool_simd/ops/adapters/reduce.rs` and its
 `reduce/kernels` files.
+
+Reduce source audit correction (2026-11-04): the Python facade materializes
+before nonidentity factor/box conversion, and identity requests materialize
+through `copy()`. Core validation converts C-int scales and box coordinates
+before scale positivity and box semantics, then checks negative offsets, source
+bounds, and empty boxes before P-mode downsampling rejection. Factor-one P
+sub-boxes crop directly. TODO: the PyO3 input adapter still narrows Python
+integers to `i64` and primitive vectors; arbitrary-size integers, custom
+`__index__` callbacks/exceptions, and parser arity-versus-item-conversion
+ordering remain source gaps.
 
 Source audit refinement (2026-11-02): the native typed u16/f32 reducer
 now converts row coordinates to `usize` before flattening the sample

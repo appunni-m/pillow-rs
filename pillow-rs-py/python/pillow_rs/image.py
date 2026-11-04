@@ -553,7 +553,8 @@ class Image:
         return self._rust_image.getbands()
 
     def copy(self) -> "Image":
-        self._realize_dirty_palette()
+        # Pillow materializes the source before copying it.
+        self.load()
         return self._new(self._rust_image.copy())
 
     def filter(self, filter_type) -> "Image":
@@ -722,7 +723,8 @@ class Image:
             box = (0, 0) + self.size
         if factor == (1, 1) and box == (0, 0) + self.size:
             return self.copy()
-        self._realize_dirty_palette()
+        # Pillow loads before its core parser converts factor and box items.
+        self.load()
         return self._new(self._rust_image.reduce(factor, box))
 
     def load(self):
