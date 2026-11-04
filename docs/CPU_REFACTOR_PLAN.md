@@ -1970,3 +1970,17 @@ extensions use explicit `NO_PILLOW_SUPPORT` annotations. The support output
 preserves source mode. Source-only; output, fill, and fallback parity remain
 pending, and no build, formatting, checkstyle, lint, test, parity, benchmark,
 or coverage ran.
+
+Draw custom-font callback correction (2026-11-04): Pillow 12.2 wraps the
+`getmask2` lookup, call, and offset use in an `AttributeError` fallback, then
+tries the full `getmask` signature and falls back to `getmask(text)` only on
+`TypeError`. The Python facade now preserves that callback/fault order and
+forwards variadic arguments to custom mask methods. Native Rust FreeType
+requests carry argument-presence flags into the font options; BASIC rendering
+intentionally ignores their values. The Python package currently exposes no
+`ImageText.Text` type, and custom-font `textbbox`/`textlength` are still
+unimplemented. TODO(pillow-rs#3ptb): add/consume ImageText state and line
+positions, implement custom-font metrics, and verify callback faults and
+RGB/RGBA composition in frozen CPU parity. Source-only; no build, formatting,
+checkstyle, lint, test, parity, benchmark, or coverage ran. Source:
+[Pillow 12.2 ImageDraw text](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageDraw.py#L3220-L3285).

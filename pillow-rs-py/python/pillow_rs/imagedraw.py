@@ -8,6 +8,9 @@ from . import imagecolor
 from .image import Image
 
 
+_UNSET = object()
+
+
 class Draw:
     """Draw lines, rectangles, ellipses, polygons, and text on images."""
 
@@ -100,14 +103,13 @@ class Draw:
 
     def _draw_custom_font_mask(
         self, xy, text, font, fill, mode, direction, features, language,
-        stroke_width, anchor, ink, **kwargs
+        stroke_width, anchor, ink, *args, **kwargs
     ):
         x, y = float(xy[0]), float(xy[1])
         x_int, y_int = int(x), int(y)
         start = (x - x_int, y - y_int)
-        getmask2 = getattr(font, "getmask2", None)
-        if getmask2 is not None:
-            mask, offset = getmask2(
+        try:
+            mask, offset = font.getmask2(
                 text,
                 mode,
                 direction=direction,
@@ -118,11 +120,12 @@ class Draw:
                 anchor=anchor,
                 ink=ink,
                 start=start,
+                *args,
                 **kwargs,
             )
             x_int += offset[0]
             y_int += offset[1]
-        else:
+        except AttributeError:
             try:
                 mask = font.getmask(
                     text,
@@ -134,6 +137,7 @@ class Draw:
                     anchor,
                     ink,
                     start=start,
+                    *args,
                     **kwargs,
                 )
             except TypeError:
@@ -391,12 +395,17 @@ class Draw:
 
     def text(self, xy, text, fill=None, font=None, anchor=None, spacing=4,
              align="left", direction=None, features=None, language=None,
-             stroke_width=0, stroke_fill=None, embedded_color=False, *,
-             font_size=None):
-        # TODO(pillow-rs#3ptb): preserve ImageText.Text state and arbitrary
-        # getmask2 args for custom fonts. Plain string line layout and returned
-        # offsets use the custom font's mode-aware metric/mask methods below.
-        font, embedded_color = self._prepare_text_font(font, font_size, embedded_color)
+             stroke_width=0, stroke_fill=None, embedded_color=False, *args,
+             font_size=_UNSET, **kwargs):
+        # TODO(pillow-rs#3ptb): consume an existing ImageText.Text instance's
+        # font, mode, options, and precomputed line positions.
+        requested_font_size = None if font_size is _UNSET else font_size
+        font, embedded_color = self._prepare_text_font(
+            font, requested_font_size, embedded_color
+        )
+        mask_kwargs = dict(kwargs)
+        if font_size is not _UNSET:
+            mask_kwargs["font_size"] = font_size
         fill = self._palette_ink(fill)
         if stroke_width:
             stroke_fill = self._palette_ink(stroke_fill)
@@ -416,6 +425,8 @@ class Draw:
                     embedded_color,
                     stroke_fill,
                     None,
+                    has_args=bool(args),
+                    has_kwargs=bool(mask_kwargs),
                 )
             elif hasattr(font, 'getmask') or hasattr(font, 'getmask2'):
                 stroke_color = stroke_fill if stroke_fill is not None else fill
@@ -432,6 +443,7 @@ class Draw:
                             (line_x, line_y), line_text, font, stroke_color,
                             stroke_mode, direction, features, language,
                             stroke_width, line_anchor, stroke_ink,
+                            *args, **mask_kwargs,
                         )
                         if stroke_ink == fill_ink:
                             continue
@@ -442,12 +454,15 @@ class Draw:
                     self._draw_custom_font_mask(
                         (line_x, line_y), line_text, font, fill, fill_mode,
                         direction, features, language, 0, line_anchor, fill_ink,
+                        *args, **mask_kwargs,
                     )
             else:
                 self._draw.text(
                     (float(xy[0]), float(xy[1])), text, fill, font,
                     direction, features, language, float(stroke_width), anchor,
                     embedded_color, stroke_fill,
+                    has_args=bool(args),
+                    has_kwargs=bool(mask_kwargs),
                 )
         finally:
             self._sync()

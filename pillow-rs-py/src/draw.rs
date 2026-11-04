@@ -605,7 +605,7 @@ impl PyDraw {
             .map_err(map_error)
     }
 
-    #[pyo3(signature = (xy, text, fill=None, font=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None, embedded_color=false, stroke_fill=None, font_size=None))]
+    #[pyo3(signature = (xy, text, fill=None, font=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None, embedded_color=false, stroke_fill=None, font_size=None, has_args=false, has_kwargs=false))]
     #[allow(clippy::too_many_arguments)] // Mirrors the public Pillow ImageDraw API.
     fn text(
         &mut self,
@@ -621,6 +621,8 @@ impl PyDraw {
         embedded_color: bool,
         stroke_fill: Option<&Bound<'_, PyAny>>,
         font_size: Option<f32>,
+        has_args: bool,
+        has_kwargs: bool,
     ) -> PyResult<()> {
         let default_font = if font.is_none() {
             Some(
@@ -655,6 +657,8 @@ impl PyDraw {
             stroke_fill: stroke_fill.map(|(color, _)| color),
             text_fill_is_integer,
             stroke_fill_is_integer: stroke_fill.is_some_and(|(_, is_integer)| is_integer),
+            has_args,
+            has_kwargs,
             anchor,
             anchor_invalid_length_error: true,
             ..pillow_rs::ImageFontTextOptions::default()
