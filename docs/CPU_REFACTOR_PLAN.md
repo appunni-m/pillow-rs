@@ -83,6 +83,9 @@ gates. The reviewed operation support declarations constrain selection by
 mode, architecture, and operation guard; executable strategies consume the
 prepared selection and retain same-mode Default fallbacks. The broader audit of
 instruction-free architecture wrappers and other CPU families remains open.
+The maintained-source scan found 27 direct architecture-instruction files in
+nine operation families; their support/dispatch paths have now been traced.
+This does not close the broader module-declaration or prepared-selection audit.
 Recent source-only checkpoints thread `StrategySelection` through Rotate and
 Transform hidden-lane helpers; native-byte Filter extrema, rank, and blur
 helpers; LA/RGBA AlphaComposite architecture binding; the UnsharpMask
@@ -1866,6 +1869,19 @@ declaration, whose architecture requirements match `ExecutionContext` feature
 checks. RGB Merge's SSSE3 and NEON interleavers likewise require their
 mode-specific Merge declaration and guard; other architecture folders use
 portable `wide` wrappers. No direct instruction path outside these declarations
-was found in the reviewed families. This is static source review only; other
-CPU families still require the same audit. No build, formatting, checkstyle,
-lint, test, parity, benchmark, or coverage ran.
+was found in the reviewed families. This is static source review only; the
+broader instruction-free wrapper audit remains open. No build, formatting,
+checkstyle, lint, test, parity, benchmark, or coverage ran.
+
+Direct CPU instruction reachability pass (2026-11-04): all 27 maintained Rust
+files found by the `core::arch`, `std::arch`, and target-feature scan were
+traced across Color Convert, Composite, Eval, Filter, Grayscale, Paste, Reduce,
+Resize, and Transpose. Direct instruction leaves are reached through the
+operation's mode/architecture support and prepared dispatch, with exact request
+guards where required; mode strategies retain their declared Default fallback.
+The I32 Filter AVX/FMA inline-assembly path is likewise restricted to the
+prepared `Architecture::AvxFma` selection. This source pass does not audit all
+instruction-free architecture wrapper declarations or every family boundary
+for prepared-selection propagation; the existing `pool_cpu/ops/mod.rs` TODO
+remains open. No build, formatting, checkstyle, lint, test, parity, benchmark,
+or coverage ran.
