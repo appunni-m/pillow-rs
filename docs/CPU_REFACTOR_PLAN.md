@@ -1823,3 +1823,12 @@ The binding now follows that order, builds callback tables without a live
 PyImage borrow, then executes against the current image so callback mutations
 are visible. Non-callable table extraction also completes before the execution
 borrow. Source: [Pillow 12.2.0 Image.point](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py#L1826-L1879). Output and fault parity remain pending. Source-only; no build, formatting, checkstyle, lint, tests, parity, benchmark, or coverage ran.
+
+GetPixel input-order review (2026-11-04): the binding now loads the image
+before applying Python's `tuple(xy)` conversion, and performs that potentially
+re-entrant conversion without a PyImage borrow. It accepts the iterable inputs
+accepted by Pillow's wrapper, then extracts x and y in order before checking
+coordinates and reading the pixel. Negative indices are normalized against
+their respective dimensions. Remaining C-int boundary, fault-order, and
+runtime parity checks are tracked in the existing GetPixel TODO. Source:
+[Pillow 12.2.0 Image.getpixel](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py#L1612-L1625). No build, formatting, checkstyle, lint, tests, parity, benchmark, or coverage ran.

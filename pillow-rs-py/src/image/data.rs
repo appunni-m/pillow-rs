@@ -308,7 +308,17 @@ impl PyImage {
         xy: &Bound<'_, PyAny>,
         py: Python<'_>,
     ) -> PyResult<Py<PyAny>> {
-        let coordinates = xy.cast::<PyTuple>()?;
+        // Pillow loads before tuple(xy); conversion can execute user code and
+        // therefore must happen after releasing the image borrow.
+        {
+            let mut image = slf.bind(py).borrow_mut();
+            py.detach(|| image.inner.load()).map_err(map_error)?;
+        }
+        let coordinates = py
+            .import("builtins")?
+            .getattr("tuple")?
+            .call1((xy,))?
+            .cast_into::<PyTuple>()?;
         if coordinates.len() != 2 {
             return Err(PyValueError::new_err(format!(
                 "expected tuple of length 2, but got tuple of length {}",
