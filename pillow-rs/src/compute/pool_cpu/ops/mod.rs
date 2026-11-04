@@ -8,9 +8,11 @@
 // Resize, Chops, Pad, Crop, Transpose, and supported Draw routes are
 // source-reviewed for prepared-selection flow. Thumbnail's I32 stream
 // consumes its selection; ImageOps Quantize threads selection through all 25
-// modes. Analysis's Projection, Histogram, and dispatched GetData routes use
-// their prepared selection; its loaded byte-view identity route has no kernel
-// selection. Continue the family audit and finish Draw's semantic/fault review.
+// modes. Analysis's Projection, Histogram, dispatched GetData, GetBBox,
+// GetExtrema, GetExtremaBytes, GetColors, and Stat routes consume prepared
+// selections; Stat prepares its Histogram child with the same context. The
+// loaded byte-view identity route has no kernel selection. Continue the family
+// audit and finish Draw's semantic/fault review.
 
 pub(crate) mod analysis;
 pub(crate) mod chops;
