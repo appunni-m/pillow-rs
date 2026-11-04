@@ -30,8 +30,10 @@ const TARGETS: &[Mode] = &[
     Mode::ImageI32,
     Mode::ImageF32,
 ];
-// NO_PILLOW_SUPPORT: these extra LAB targets are Rust extensions; Pillow only
-// defines LAB identity and ImageCms conversion to RGB, RGBA, and RGBX.
+// TODO(pillow-rs#3ptb): verify Pillow-supported and CoreOnly LAB target
+// outputs, ImageCms routes, error behavior, and selection receipts.
+// NO_PILLOW_SUPPORT: Pillow's LAB wrapper exposes identity and ImageCms
+// conversion to RGB, RGBA, and RGBX; the remaining native outputs extend it.
 const CORE_ONLY_TARGETS: &[Mode] = &[
     Mode::One,
     Mode::ImageLuma8,
@@ -53,9 +55,7 @@ const CORE_ONLY_TARGETS: &[Mode] = &[
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: TARGETS,
     core_only_targets: CORE_ONLY_TARGETS,
-    core_only_reason: Some(
-        "these LAB target routes are Rust extensions; Pillow wrapper fallback parity is unverified",
-    ),
+    core_only_reason: Some("Pillow's LAB wrapper only exposes RGB-family ImageCms targets"),
     rejection_reason: "image has wrong mode",
 }];
 

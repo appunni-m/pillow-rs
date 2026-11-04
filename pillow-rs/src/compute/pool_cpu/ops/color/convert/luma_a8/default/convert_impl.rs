@@ -99,8 +99,8 @@ pub(crate) fn execute(
     }
 }
 
-// Pillow's wrapper normalizes LA through L before constructing a grayscale
-// palette; per-pixel LA alpha does not affect the palette index.
+// The LA source/target matrix uses luma-only palette values; write the final
+// palette output from the luma lane without constructing an intermediate L raster.
 pub(crate) fn execute_palette_target(
     source: &GrayAlphaImage,
     target: Mode,

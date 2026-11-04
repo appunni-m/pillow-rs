@@ -207,6 +207,8 @@ pub(super) fn classify_mode(mode: Mode) -> ModeSupport {
 ///
 /// LAB conversion uses its exact-mode source and target strategies. The
 /// complete mode/target output and fault matrix remains pending CPU parity.
+// TODO(pillow-rs#3ptb): close the complete source × target × declared
+// architecture output/fault matrix before the CPU parity gate.
 // Archive source review: SIMD's generic byte-layout preflight admits L, LA,
 // RGB, and RGBA carriers with their explicit Pillow aliases; RGBa alpha
 // transforms, CMYK→RGB, I;16 conversions, and One/L→I;16 use separate paths.
@@ -222,8 +224,9 @@ pub(super) fn classify_mode(mode: Mode) -> ModeSupport {
 // paths; its same-mode target stays on Default, with AVX2/SSSE3 limited to L.
 // Source review compares all 25 source modes against the archived Convert
 // families; the per-source target and architecture maps are recorded in the
-// CPU refactor inventory. Keep runtime parity, selection/fallback receipts,
-// and target build availability pending until the CPU verification gate.
+// CPU refactor inventory. Keep runtime parity, selection receipts, declared
+// Default-architecture fallback receipts, and target build availability
+// pending until the CPU verification gate.
 // Same-mode routes use each source mode's Default identity path. P/PA
 // conversion also produces wrapper-owned palette/alpha metadata. The public
 // Image boundary and its dedicated lazy materialization path publish those

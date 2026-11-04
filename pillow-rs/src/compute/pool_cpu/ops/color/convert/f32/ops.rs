@@ -10,10 +10,10 @@ use crate::compute::{Architecture, registry::support::{
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode, RgbaImage};
 
-// Pillow's wrapper reaches the declared scalar targets through F's L
-// base-mode fallback when no direct F converter exists. The output and fault
-// routes remain pending CPU parity, including non-finite float samples.
-// TODO(pillow-rs#3ptb): verify all F fallback targets and dither behavior.
+// The declared F source/target row uses Pillow's L-derived results where a
+// direct F converter is absent; this owner writes each final target directly.
+// Output and fault parity remain pending, including non-finite float samples.
+// TODO(pillow-rs#3ptb): verify every F source/target pair and dither behavior.
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: super::super::ops::SCALAR_TARGETS,
     core_only_targets: &[],

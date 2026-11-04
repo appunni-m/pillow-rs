@@ -108,8 +108,8 @@ fn to_f32(source: &RgbaImage) -> RgbaImage {
     output
 }
 
-// Pillow's wrapper normalizes I through its L base mode before constructing a
-// grayscale palette. Build the same index and palette output directly.
+// I-to-palette uses Pillow's L-derived grayscale values; write the palette
+// indices directly from I samples without constructing an intermediate L raster.
 pub(crate) fn execute_palette_target(
     source: &RgbaImage,
     target: Mode,

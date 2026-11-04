@@ -33,7 +33,8 @@ const TARGETS: &[Mode] = &[
     Mode::ImageI32,
     Mode::ImageF32,
 ];
-// Pillow retries unsupported YCbCr conversions through its RGB base mode.
+// This target row includes Pillow results derived through RGB; the YCbCr owner
+// writes each final target from its native samples.
 const CORE_ONLY_TARGETS: &[Mode] = &[];
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: TARGETS,

@@ -45,7 +45,8 @@ pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, P
     }
 }
 
-// Pillow normalizes YCbCr to its RGB base mode before building a palette target.
+// YCbCr palette output uses Pillow's RGB-derived colors; map native YCbCr
+// samples directly into the requested palette representation.
 pub(crate) fn execute_palette_target(
     source: &RgbImage,
     target: Mode,

@@ -34,8 +34,9 @@ const TARGETS: &[Mode] = &[
     Mode::ImageI32,
     Mode::ImageF32,
 ];
-// Pillow reaches every declared target through its direct CMYK converters,
-// RGB base-mode fallback, or the dedicated RGBA/ImageCms LAB route.
+// This row declares Pillow's direct CMYK outputs and RGB-derived target
+// results; LAB remains an explicit RGBA/ImageCms composition. CMYK kernels
+// write final outputs directly from native samples.
 const CORE_ONLY_TARGETS: &[Mode] = &[];
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: TARGETS,

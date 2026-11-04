@@ -10,9 +10,9 @@ use crate::compute::{Architecture, registry::support::{
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode, RgbaImage};
 
-// Pillow's wrapper reaches every scalar target either through its direct I
-// converter or through the L base-mode fallback. The I;16N output is clipped
-// through L before widening; keep that fused result covered by CPU parity.
+// The declared I source/target row includes Pillow's L-derived results where
+// a direct I converter is absent. I;16N clips through L before widening; this
+// owner writes that final result without constructing an intermediate raster.
 // TODO(pillow-rs#3ptb): verify I→I;16N for negative, >255, and in-range
 // samples, including the mode's native byte order.
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {

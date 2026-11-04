@@ -47,7 +47,8 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
     }
 }
 
-// Pillow normalizes CMYK to its RGB base mode before building a palette target.
+// CMYK palette output uses Pillow's RGB-derived colors; map native CMYK
+// samples directly into the requested palette representation.
 pub(crate) fn execute_palette_target(
     source: &RgbaImage,
     target: Mode,

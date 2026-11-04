@@ -15,8 +15,8 @@ pub(crate) fn execute(source: &GrayImage, target: Mode) -> Result<DynamicImage, 
     )
 }
 
-// Pillow's wrapper normalizes `1` through L before constructing a grayscale
-// palette. Normalize the expanded samples directly in this mode-owned path.
+// The `1` source/target matrix uses expanded 0/255 palette values; write the
+// final palette output directly from this mode-owned path.
 pub(crate) fn execute_palette_target(
     source: &GrayImage,
     target: Mode,
