@@ -99,7 +99,8 @@ pub(crate) fn execute(
     }
 }
 
-// NO_PILLOW_SUPPORT: Pillow's palette converter rejects native `LA` input.
+// Pillow's wrapper normalizes LA through L before constructing a grayscale
+// palette; per-pixel LA alpha does not affect the palette index.
 pub(crate) fn execute_palette_target(
     source: &GrayAlphaImage,
     target: Mode,

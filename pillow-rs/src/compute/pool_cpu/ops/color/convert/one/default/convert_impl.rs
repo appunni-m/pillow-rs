@@ -15,7 +15,8 @@ pub(crate) fn execute(source: &GrayImage, target: Mode) -> Result<DynamicImage, 
     )
 }
 
-// NO_PILLOW_SUPPORT: Pillow's palette converter rejects bilevel `1` input.
+// Pillow's wrapper normalizes `1` through L before constructing a grayscale
+// palette. Normalize the expanded samples directly in this mode-owned path.
 pub(crate) fn execute_palette_target(
     source: &GrayImage,
     target: Mode,

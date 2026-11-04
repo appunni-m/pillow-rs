@@ -2060,3 +2060,18 @@ receipts remain TODOs under `pillow-rs#3ptb`; no validation has run. Sources:
 [Convert.c F-to-L](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L650-L664),
 [Convert.c I;16 converters](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L723-L747),
 [Convert.c I;16N table](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1462-L1482).
+
+One/LA Convert fallback correction (2026-11-04): the One and LA mode support
+contracts no longer classify their missing direct `Convert.c` target pairs as
+CoreOnly. Pillow assigns both modes the L base and retries unsupported direct
+targets through L. One's native path normalizes its expanded samples to 0/255;
+LA's paths consume only its luma lane for bilevel, palette, and typed outputs.
+Those fused paths preserve the wrapper's L intermediate results for LA, P/PA,
+and I;16* targets. Palette metadata and target mode remain attached by the
+existing wrapper result path. Exact sample, dither, metadata, fault, and
+architecture parity remains TODO under `pillow-rs#3ptb`; no validation ran.
+Sources: [ImageMode.py base modes](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageMode.py#L37-L57),
+[Image.convert fallback](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py#L1139-L1151),
+[Convert.c One/L/LA routes](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1373-L1401),
+[Convert.c L-to-I;16 routes](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1463-L1482),
+[Convert.c grayscale palette route](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1093-L1148).

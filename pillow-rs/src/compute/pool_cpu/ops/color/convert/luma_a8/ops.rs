@@ -91,22 +91,11 @@ static ARCHITECTURES: [ImplementationSupport; 33] = [
     wasm_simd128(StrategyGuard::ConvertTargetMode(Mode::ImageF32)),
 ];
 
-// NO_PILLOW_SUPPORT: Pillow has no direct LA conversions for these targets.
-const CORE_ONLY_TARGETS: &[Mode] = &[
-    Mode::One,
-    Mode::ImagePalette8,
-    Mode::ImagePaletteAlpha8,
-    Mode::ImageI16,
-    Mode::ImageI16L,
-    Mode::ImageI16B,
-    Mode::ImageI16N,
-    Mode::ImageI32,
-    Mode::ImageF32,
-];
+// Pillow's wrapper routes these missing direct LA converters through L.
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: super::super::ops::LA_TARGETS,
-    core_only_targets: CORE_ONLY_TARGETS,
-    core_only_reason: Some("Pillow has no matching LA source-target conversion"),
+    core_only_targets: &[],
+    core_only_reason: None,
     rejection_reason: "image has wrong mode",
 }];
 

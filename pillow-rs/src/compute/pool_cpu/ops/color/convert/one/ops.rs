@@ -61,20 +61,11 @@ static ARCHITECTURES: [ImplementationSupport; 12] = architecture_catalog!(
     ]
 );
 
-// NO_PILLOW_SUPPORT: these 1-to-target pairs are Rust extensions.
-const CORE_ONLY_TARGETS: &[Mode] = &[
-    Mode::ImageLumaA8,
-    Mode::ImagePalette8,
-    Mode::ImagePaletteAlpha8,
-    Mode::ImageI16,
-    Mode::ImageI16L,
-    Mode::ImageI16B,
-    Mode::ImageI16N,
-];
+// Pillow's wrapper routes these missing direct `1` converters through L.
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: super::super::ops::LUMA_TARGETS,
-    core_only_targets: CORE_ONLY_TARGETS,
-    core_only_reason: Some("Pillow has no matching bilevel source-target conversion"),
+    core_only_targets: &[],
+    core_only_reason: None,
     rejection_reason: "image has wrong mode",
 }];
 
