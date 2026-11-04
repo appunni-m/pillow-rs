@@ -2878,6 +2878,12 @@ Remaining put-family work includes typed wrapper boundaries and complete caller 
   parity, benchmark, or coverage command has run for this family; source review
   remains in progress.
 
+- Pillow 12.2 `ImageDraw.text` creates its default font only when `font is
+  None`. The Python facade now uses that sentinel check, preserving valid
+  falsey custom-font objects. Existing `ImageText.Text`, custom-font metrics,
+  callback order, and output/fault parity remain pending. Source:
+  [ImageDraw.text](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageDraw.py#L3150-L3164).
+
 ### ImageOps source progress: incomplete and unvalidated
 
 - Public ImageOps mode admission in `ops/imageops/point.rs` now matches typed `Mode` identities rather than Pillow strings. Exact mode lookup uses the wrapper's cached identity; when a lazy pipeline has no identity yet, the current materialization fallback is explicitly pending removal once all pipeline transitions preserve a known exact mode.

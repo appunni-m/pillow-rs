@@ -2154,3 +2154,11 @@ I;16 base mode](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Imag
 [Convert.c I;16 functions](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L720-L830),
 [Convert.c I;16 target table](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1462-L1486),
 [Convert.c palette and bilevel paths](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1101-L1148).
+
+Draw falsey-font source correction (2026-11-04): Pillow 12.2 creates the
+default font only when `font is None`. The Python facade now uses the same
+sentinel check, preserving a valid custom font whose truth value is false.
+Existing `ImageText.Text`, custom-font metrics, callback ordering, and exact
+Draw output/fault parity remain pending. Source: [Pillow 12.2
+ImageDraw.text](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageDraw.py#L3150-L3164).
+No tests or quality checks ran.

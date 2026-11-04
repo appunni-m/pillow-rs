@@ -86,7 +86,7 @@ class Draw:
     def _prepare_text_font(self, font, font_size, embedded_color):
         # Pillow creates ImageText.Text, including its default font, before
         # validating embedded-color mode or resolving the fill ink.
-        if not font:
+        if font is None:
             font = self._getfont(font_size)
         embedded_color = bool(embedded_color)
         if embedded_color:
