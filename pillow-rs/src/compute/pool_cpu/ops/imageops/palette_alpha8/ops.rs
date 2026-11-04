@@ -12,6 +12,8 @@ declare_invert_native_mode!(
     Some("ImageOps.invert extends Pillow with native PA inversion"),
 );
 
+// NO_PILLOW_SUPPORT: Pillow quantizes only L, P, RGB, and RGBA; this adds a
+// native PA strategy that resolves palette colors and alpha during sampling.
 pub(crate) fn execute_quantize_with_palette(
     samples: &[u8],
     palette: crate::compute::registry::support::PaletteInput<'_>,

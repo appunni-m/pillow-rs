@@ -1920,7 +1920,9 @@ dependency in this build, and other unknown values report
 color/method validation and has an empty palette. The support contract and
 mode dispatch now preserve these routes. The Python facade loads source and
 palette Images in Pillow's order. Arbitrary palette truthiness and host
-attribute callbacks remain a code TODO. Source references: [Pillow 12.2
+attribute callbacks remain a code TODO. All 21 CoreOnly mode owners now carry
+an adjacent `NO_PILLOW_SUPPORT` note; Pillow's quantizer only admits L, P, RGB,
+and RGBA. Source references: [Pillow 12.2
 Image.quantize](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py#L1176-L1250),
 [Pillow 12.2 quantizer dispatch](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Quant.c#L1588-L1792),
 [empty-image binding path](https://github.com/python-pillow/Pillow/blob/12.2.0/src/_imaging.c#L1650-L1663).

@@ -12,4 +12,6 @@ declare_invert_mode!(
 );
 
 use crate::compute::pool_cpu::ops::imageops::helpers::strategy::declare_quantize_native_mode;
+// NO_PILLOW_SUPPORT: Pillow quantizes only L, P, RGB, and RGBA; this adds
+// exact YCbCr strategy over its native three-byte samples.
 declare_quantize_native_mode!(u8, "ImageYCbCr8", ImageYCbCr8);

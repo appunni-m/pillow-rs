@@ -12,4 +12,6 @@ declare_invert_mode!(
 );
 
 use crate::compute::pool_cpu::ops::imageops::helpers::strategy::declare_quantize_native_mode;
+// NO_PILLOW_SUPPORT: Pillow quantizes only L, P, RGB, and RGBA; this adds an
+// RGBX strategy that ignores the unused padding byte.
 declare_quantize_native_mode!(u8, "ImageRgbx8", ImageRgbx8);

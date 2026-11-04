@@ -12,4 +12,6 @@ declare_invert_mode!(
 );
 
 use crate::compute::pool_cpu::ops::imageops::helpers::strategy::declare_quantize_native_mode;
+// NO_PILLOW_SUPPORT: Pillow quantizes only L, P, RGB, and RGBA; this adds a
+// native RGBa strategy with alpha-aware octree reduction.
 declare_quantize_native_mode!(u8, "ImageRgbPremultiplied8", ImageRgbPremultiplied8);

@@ -12,4 +12,6 @@ declare_invert_native_mode!(
 );
 
 use crate::compute::pool_cpu::ops::imageops::helpers::strategy::declare_quantize_native_mode;
+// NO_PILLOW_SUPPORT: Pillow quantizes only L, P, RGB, and RGBA; this extends
+// palette reduction to exact CMYK mode using its native carrier projection.
 declare_quantize_native_mode!(u8, "ImageCmyk8", ImageCmyk8);
