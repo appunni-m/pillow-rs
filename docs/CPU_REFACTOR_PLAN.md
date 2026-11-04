@@ -1735,3 +1735,13 @@ finish. The core algorithms are unchanged. Other effectful PyO3 argument
 conversions still need review, and output, callback, and fault-order parity
 remain pending. No build, formatting, checkstyle, lint, tests, parity,
 benchmark, or coverage ran.
+
+Sequence callback borrow staging (2026-11-04): AlphaComposite snapshots its
+source image, then parses destination and source sequences in order before
+borrowing the destination for mutation. RemapPalette parses its destination
+map and optional source palette before borrowing the live image. This lets
+custom sequence methods re-enter the wrapper without an active PyO3 image
+borrow and preserves the existing core operation order. Remaining effectful
+PyO3 argument conversions and runtime output/fault parity are still open.
+Source-only; no build, formatting, checkstyle, lint, tests, parity, benchmark,
+or coverage ran.

@@ -648,7 +648,7 @@ impl PyImage {
 
     #[pyo3(signature = (im, dest=None, source=None))]
     fn alpha_composite(
-        &mut self,
+        slf: Py<Self>,
         im: &Bound<'_, PyImage>,
         dest: Option<&Bound<'_, PyAny>>,
         source: Option<&Bound<'_, PyAny>>,
@@ -673,9 +673,12 @@ impl PyImage {
                 )
             },
         );
+        // Sequence conversion above may execute Python code that re-enters
+        // this image. Acquire its mutable borrow only for the core write.
+        let mut image = slf.bind(py).borrow_mut();
+        let image = &mut image.inner;
         py.detach(|| {
-            self.inner
-                .alpha_composite_public(&source_image, dest, source_box)
+            image.alpha_composite_public(&source_image, dest, source_box)
         })
         .map_err(map_error)
     }
@@ -789,17 +792,24 @@ impl PyImage {
 
     #[pyo3(signature = (dest_map, source_palette=None))]
     fn remap_palette(
-        &mut self,
-        dest_map: Vec<u8>,
-        source_palette: Option<Vec<u8>>,
+        slf: Py<Self>,
+        dest_map: &Bound<'_, PyAny>,
+        source_palette: Option<&Bound<'_, PyAny>>,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
+        // These sequence extractions can call user-defined iteration methods.
+        let dest_map = dest_map.extract::<Vec<u8>>()?;
+        let source_palette = source_palette
+            .map(|palette| palette.extract::<Vec<u8>>())
+            .transpose()?;
+        let image = slf.bind(py).borrow();
+        let image = &image.inner;
         let remapped = py
             .detach(|| match source_palette.as_deref() {
-                None => self.inner.remap_palette(&dest_map),
-                Some(source_palette) => self
-                    .inner
-                    .remap_palette_with_source(&dest_map, Some(source_palette)),
+                None => image.remap_palette(&dest_map),
+                Some(source_palette) => {
+                    image.remap_palette_with_source(&dest_map, Some(source_palette))
+                }
             })
             .map(|i| PyImage { inner: i })
             .map_err(map_error)?;
