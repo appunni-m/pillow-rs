@@ -17,6 +17,7 @@ pub(crate) fn execute(source: &RgbaImage) -> Result<(GrayAlphaImage, u64, usize)
     let vector_blocks = super::super::super::helpers::four_byte_to_luma_alpha::append(
         source.as_raw(),
         &mut output,
+        crate::raster::Mode::ImageRgba8,
     );
     if output.len() != output_dims.total_bytes() {
         return Err(PilError::InternalError(

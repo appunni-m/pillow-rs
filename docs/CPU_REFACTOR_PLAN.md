@@ -2101,3 +2101,23 @@ omits them. Exact output/fault/architecture parity remains TODO under
 [Convert.c RGBX and RGB target routes](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1411-L1452),
 [Convert.c RGB-to-La](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L222-L228),
 [Convert.c opaque alpha expansion](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L380-L388).
+
+RGBa Convert direct target-matrix correction (2026-11-04): the exact target
+row remains visible in Convert's `RGB_PREMULTIPLIED_TARGETS`, and the RGBa
+source owner now classifies every declared target as Pillow-supported. Pillow's
+RGB base path is only the output oracle; Rust computes each result directly
+from the native RGBa carrier without allocating an intermediate RGB image.
+Straight-color routes unpremultiply each sample as it enters the selected
+target kernel: One, L, LA, La, I;16*, RGB, RGBA, RGBX, CMYK, YCbCr, HSV, I, and
+F. P/PA remain a separate direct palette strategy: Pillow's `topalette` reads
+the stored RGBa color lanes and writes opaque PA alpha. The Default and declared
+SSE2/NEON/Wasm kernels now use the same source-mode arithmetic. RGBa-to-YCbCr
+and HSV leave the output's omitted X lane at the opaque RGB result; LAB
+continues through the existing ImageCms composition. TODO(pillow-rs#3ptb):
+verify every target's exact samples, palette metadata, dither, hidden lanes,
+faults, and declared architecture paths after the CPU source pass is complete.
+Sources: [ImageMode.py bases](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageMode.py#L37-L57),
+[Image.convert wrapper](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py#L1139-L1151),
+[Convert.c palette strategy](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1093-L1277),
+[Convert.c RGBa direct converters](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L2949-L3022),
+[Convert.c RGBa converter table](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1411-L1452).

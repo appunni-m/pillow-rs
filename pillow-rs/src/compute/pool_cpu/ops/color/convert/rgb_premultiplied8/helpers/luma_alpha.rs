@@ -1,4 +1,4 @@
-//! Native RGBa-to-LA output construction retaining stored premultiplied samples.
+//! Native RGBa-to-LA output construction.
 
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
@@ -17,6 +17,7 @@ pub(crate) fn execute(source: &RgbaImage) -> Result<(GrayAlphaImage, u64, usize)
     let vector_blocks = super::super::super::helpers::four_byte_to_luma_alpha::append(
         source.as_raw(),
         &mut output,
+        crate::raster::Mode::ImageRgbPremultiplied8,
     );
     if output.len() != output_dims.total_bytes() {
         return Err(PilError::InternalError(

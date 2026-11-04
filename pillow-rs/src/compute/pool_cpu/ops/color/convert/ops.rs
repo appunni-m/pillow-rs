@@ -67,6 +67,7 @@ pub(super) const RGBA_TARGETS: &[Mode] = &[
     Mode::ImageI32,
     Mode::ImageF32,
 ];
+// RGBa's exact source row in Convert's supported mode-target matrix.
 pub(super) const RGB_PREMULTIPLIED_TARGETS: &[Mode] = &[
     Mode::One,
     Mode::ImageLuma8,

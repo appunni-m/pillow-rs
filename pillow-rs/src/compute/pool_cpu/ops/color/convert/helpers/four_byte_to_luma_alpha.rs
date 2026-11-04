@@ -1,6 +1,7 @@
 //! Native four-byte-to-LA kernel shared by the RGBA and RGBa Convert strategies.
 
 use crate::compute::pool_cpu::helpers::channel::gather::gather_interleaved_channel;
+use crate::raster::Mode;
 use std::vec::Vec;
 use wide::{i16x8, u8x16, u16x8, u16x16};
 
@@ -13,10 +14,10 @@ const LA_ALPHA_LANES: u8x16 = u8x16::new([
     0, u8::MAX, 0, u8::MAX, 0, u8::MAX, 0, u8::MAX, 0, u8::MAX, 0, u8::MAX, 0, u8::MAX, 0, u8::MAX,
 ]);
 
-/// Appends the archived native four-byte-to-LA vector kernel output.
+/// Appends the exact four-byte-to-LA output for the selected source mode.
 ///
 /// The mode owner validates the source and reserves the exact output extent.
-pub(crate) fn append(source: &[u8], output: &mut Vec<u8>) -> u64 {
+pub(crate) fn append(source: &[u8], output: &mut Vec<u8>, source_mode: Mode) -> u64 {
     for source_block in source.chunks(64) {
         let active_pixels = source_block.len() / 4;
         let mut padded = [0u8; 64];
@@ -27,15 +28,30 @@ pub(crate) fn append(source: &[u8], output: &mut Vec<u8>) -> u64 {
             load_block(&padded, 32),
             load_block(&padded, 48),
         ];
-        let red = u16x16::from(gather_interleaved_channel::<4, 0>(&blocks));
-        let green = u16x16::from(gather_interleaved_channel::<4, 1>(&blocks));
-        let blue = u16x16::from(gather_interleaved_channel::<4, 2>(&blocks));
+        let (red, green, blue, alpha) = if source_mode == Mode::ImageRgbPremultiplied8 {
+            let straight = blocks.map(|block| {
+                crate::compute::pool_cpu::ops::color::convert::helpers::alpha::
+                    unpremultiply_block::<4>(block)
+            });
+            (
+                u16x16::from(gather_interleaved_channel::<4, 0>(&straight)),
+                u16x16::from(gather_interleaved_channel::<4, 1>(&straight)),
+                u16x16::from(gather_interleaved_channel::<4, 2>(&straight)),
+                u8x16::splat(u8::MAX),
+            )
+        } else {
+            (
+                u16x16::from(gather_interleaved_channel::<4, 0>(&blocks)),
+                u16x16::from(gather_interleaved_channel::<4, 1>(&blocks)),
+                u16x16::from(gather_interleaved_channel::<4, 2>(&blocks)),
+                gather_interleaved_channel::<4, 3>(&blocks),
+            )
+        };
         let base = red * u16x16::splat(77) + green * u16x16::splat(150) + blue * u16x16::splat(29);
         let residual = green * u16x16::splat(70) + blue * u16x16::splat(47)
             - red * u16x16::splat(117)
             + u16x16::splat(32768);
         let luma = pack_u16x16((base + (residual >> 8u32)) >> 8u32);
-        let alpha = gather_interleaved_channel::<4, 3>(&blocks);
         append_la(output, luma, alpha, active_pixels);
     }
     source.len().div_ceil(32) as u64

@@ -54,6 +54,28 @@ pub(crate) fn convert_for_mode(
 
     let no_dither = dither.is_some_and(|method| matches!(method, DitherMethod::None));
     match (source_mode, no_dither) {
+        (Mode::ImageRgbPremultiplied8, true) => {
+            let DynamicImage::ImageRgbPremultiplied8(image) = source else {
+                unreachable!("RGBa binary strategy must retain its native carrier")
+            };
+            let mut output = GrayImage::new(image.width(), image.height());
+            for (destination, pixel) in output.pixels_mut().zip(image.pixels()) {
+                let [red, green, blue] = straight_rgb(pixel);
+                let luma = 299 * i32::from(red)
+                    + 587 * i32::from(green)
+                    + 114 * i32::from(blue);
+                destination[0] = if luma >= 128_000 { 255 } else { 0 };
+            }
+            Ok(DynamicImage::One(output))
+        }
+        (Mode::ImageRgbPremultiplied8, false) => {
+            let DynamicImage::ImageRgbPremultiplied8(image) = source else {
+                unreachable!("RGBa binary strategy must retain its native carrier")
+            };
+            let mut output = GrayImage::new(image.width(), image.height());
+            diffuse_rgb_samples(image.pixels().map(straight_rgb), &mut output)?;
+            Ok(DynamicImage::One(output))
+        }
         (Mode::ImagePalette8 | Mode::ImagePaletteAlpha8, _) | (_, true) => {
             let gray = binary_luma(source, source_mode, inputs.palette.rgb)?;
             let (width, height) = gray.dimensions();
@@ -112,6 +134,21 @@ fn threshold_binary(gray: &GrayImage, output: &mut GrayImage) {
     for (out_pixel, gray_pixel) in output.pixels_mut().zip(gray.pixels()) {
         out_pixel[0] = if gray_pixel[0] >= 128 { 255 } else { 0 };
     }
+}
+
+#[inline]
+fn straight_rgb(pixel: &crate::raster::Rgba<u8>) -> [u8; 3] {
+    [
+        crate::compute::pool_cpu::ops::color::convert::helpers::pixel::unpremultiply_byte(
+            pixel[0], pixel[3],
+        ),
+        crate::compute::pool_cpu::ops::color::convert::helpers::pixel::unpremultiply_byte(
+            pixel[1], pixel[3],
+        ),
+        crate::compute::pool_cpu::ops::color::convert::helpers::pixel::unpremultiply_byte(
+            pixel[2], pixel[3],
+        ),
+    ]
 }
 
 pub(crate) fn diffuse_rgb_rows(rgb: &[u8], output: &mut GrayImage) -> Result<(), PilError> {

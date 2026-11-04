@@ -29,7 +29,7 @@ pub(crate) fn to_cmyk<const CHANNELS: usize>(
     let mut vector_blocks = 0u64;
     for start in (0..source_dims.total_pixels()).step_by(4) {
         let active = (source_dims.total_pixels() - start).min(4);
-        let (red, green, blue) = rgb_block4::<CHANNELS>(source, start, active);
+        let (red, green, blue) = rgb_block4::<CHANNELS>(source, start, active, source_mode);
         let cyan = (u8x16::splat(u8::MAX) - u8x16::new(red)).to_array();
         let magenta = (u8x16::splat(u8::MAX) - u8x16::new(green)).to_array();
         let yellow = (u8x16::splat(u8::MAX) - u8x16::new(blue)).to_array();
@@ -60,7 +60,7 @@ pub(crate) fn to_ycbcr<const CHANNELS: usize>(
     let tables = ycbcr_tables();
     for start in (0..source_dims.total_pixels()).step_by(8) {
         let active = (source_dims.total_pixels() - start).min(8);
-        let (red, green, blue) = rgb_block::<CHANNELS>(source, start, active);
+        let (red, green, blue) = rgb_block::<CHANNELS>(source, start, active, source_mode);
         append_ycbcr_block(red, green, blue, active, tables, &mut output);
         vector_blocks = vector_blocks.saturating_add(1);
     }
@@ -85,7 +85,7 @@ pub(crate) fn to_hsv<const CHANNELS: usize>(
     let mut vector_blocks = 0u64;
     for start in (0..source_dims.total_pixels()).step_by(8) {
         let active = (source_dims.total_pixels() - start).min(8);
-        let (red, green, blue) = rgb_block::<CHANNELS>(source, start, active);
+        let (red, green, blue) = rgb_block::<CHANNELS>(source, start, active, source_mode);
         append_hsv_block(red, green, blue, active, &mut output);
         vector_blocks = vector_blocks.saturating_add(1);
     }
@@ -110,7 +110,7 @@ pub(crate) fn to_i32<const CHANNELS: usize>(
     let mut vector_blocks = 0u64;
     for start in (0..source_dims.total_pixels()).step_by(8) {
         let active = (source_dims.total_pixels() - start).min(8);
-        let (red, green, blue) = rgb_block::<CHANNELS>(source, start, active);
+        let (red, green, blue) = rgb_block::<CHANNELS>(source, start, active, source_mode);
         let values = luma_i32(red, green, blue);
         for value in values.into_iter().take(active) {
             output.extend_from_slice(&value.to_le_bytes());
@@ -138,7 +138,7 @@ pub(crate) fn to_f32<const CHANNELS: usize>(
     let mut vector_blocks = 0u64;
     for start in (0..source_dims.total_pixels()).step_by(8) {
         let active = (source_dims.total_pixels() - start).min(8);
-        let (red, green, blue) = rgb_block::<CHANNELS>(source, start, active);
+        let (red, green, blue) = rgb_block::<CHANNELS>(source, start, active, source_mode);
         let sum = rgb_luma_sum(red, green, blue);
         let values = f32x8::new(sum.to_array().map(|value| value as f32)) / f32x8::splat(1000.0);
         for value in values.to_array().into_iter().take(active) {
@@ -167,7 +167,7 @@ pub(crate) fn to_luma_alpha_opaque<const CHANNELS: usize>(
     let mut vector_blocks = 0u64;
     for start in (0..source_dims.total_pixels()).step_by(8) {
         let active = (source_dims.total_pixels() - start).min(8);
-        let (red, green, blue) = rgb_block::<CHANNELS>(source, start, active);
+        let (red, green, blue) = rgb_block::<CHANNELS>(source, start, active, source_mode);
         let luma = luma_i32(red, green, blue).map(|value| value.min(255) as u8);
         append_opaque_luma_alpha(luma, active, &mut output);
         vector_blocks = vector_blocks.saturating_add(1);
@@ -209,7 +209,33 @@ fn rgb_block<const CHANNELS: usize>(
     source: &[u8],
     start: usize,
     active: usize,
+    source_mode: Mode,
 ) -> ([u8; 8], [u8; 8], [u8; 8]) {
+    if source_mode == Mode::ImageRgbPremultiplied8 {
+        debug_assert_eq!(CHANNELS, 4);
+        let mut red = [0u8; 8];
+        let mut green = [0u8; 8];
+        let mut blue = [0u8; 8];
+        for block_offset in (0..active).step_by(4) {
+            let block_pixels = (active - block_offset).min(4);
+            let byte_start = (start + block_offset) * CHANNELS;
+            let byte_length = block_pixels * CHANNELS;
+            let mut packed = [0u8; 16];
+            packed[..byte_length]
+                .copy_from_slice(&source[byte_start..byte_start + byte_length]);
+            let straight = crate::compute::pool_cpu::ops::color::convert::helpers::alpha::
+                unpremultiply_block::<4>(u8x16::new(packed))
+                .to_array();
+            for lane in 0..block_pixels {
+                let output_lane = block_offset + lane;
+                red[output_lane] = straight[lane * 4];
+                green[output_lane] = straight[lane * 4 + 1];
+                blue[output_lane] = straight[lane * 4 + 2];
+            }
+        }
+        return (red, green, blue);
+    }
+
     let red = std::array::from_fn(|lane| {
         if lane < active { source[(start + lane) * CHANNELS] } else { 0 }
     });
@@ -226,7 +252,29 @@ fn rgb_block4<const CHANNELS: usize>(
     source: &[u8],
     start: usize,
     active: usize,
+    source_mode: Mode,
 ) -> ([u8; 16], [u8; 16], [u8; 16]) {
+    if source_mode == Mode::ImageRgbPremultiplied8 {
+        debug_assert_eq!(CHANNELS, 4);
+        let byte_start = start * CHANNELS;
+        let byte_length = active * CHANNELS;
+        let mut packed = [0u8; 16];
+        packed[..byte_length].copy_from_slice(&source[byte_start..byte_start + byte_length]);
+        let straight = crate::compute::pool_cpu::ops::color::convert::helpers::alpha::
+            unpremultiply_block::<4>(u8x16::new(packed))
+            .to_array();
+        let red = std::array::from_fn(|lane| {
+            if lane < active { straight[lane * 4] } else { 0 }
+        });
+        let green = std::array::from_fn(|lane| {
+            if lane < active { straight[lane * 4 + 1] } else { 0 }
+        });
+        let blue = std::array::from_fn(|lane| {
+            if lane < active { straight[lane * 4 + 2] } else { 0 }
+        });
+        return (red, green, blue);
+    }
+
     let red = std::array::from_fn(|lane| {
         if lane < active { source[(start + lane) * CHANNELS] } else { 0 }
     });

@@ -158,27 +158,13 @@ static ARCHITECTURES: [ImplementationSupport; 35] = architecture_targets!(
     ]
 );
 
-// RGBa-to-LAB uses the RGBa -> RGBA -> ImageCms route.
-const CORE_ONLY_TARGETS: &[Mode] = &[
-    Mode::One,
-    Mode::ImageLuma8,
-    Mode::ImageLumaA8,
-    Mode::ImageI16,
-    Mode::ImageI16L,
-    Mode::ImageI16B,
-    Mode::ImageI16N,
-    Mode::ImageLaPremultiplied8,
-    Mode::ImageRgbx8,
-    Mode::ImageCmyk8,
-    Mode::ImageYCbCr8,
-    Mode::ImageHsv8,
-    Mode::ImageI32,
-    Mode::ImageF32,
-];
+// This owner computes each supported target directly. LAB is handled by
+// ImageCms, while P/PA use their dedicated palette strategy.
+const CORE_ONLY_TARGETS: &[Mode] = &[];
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: super::super::ops::RGB_PREMULTIPLIED_TARGETS,
     core_only_targets: CORE_ONLY_TARGETS,
-    core_only_reason: Some("listed RGBa target routes need Pillow-wrapper parity review"),
+    core_only_reason: None,
     rejection_reason: "image has wrong mode",
 }];
 
@@ -237,12 +223,16 @@ pub(crate) fn execute(
             "Convert selected an undeclared RGBa architecture".into(),
         )),
     }?;
-    super::super::helpers::physical_lanes::preserve_fourth_byte(
-        source.as_raw(),
-        source.width(),
-        source.height(),
-        target,
-        &mut output,
-    )?;
+    // Pillow-compatible RGBa-to-YCbCr/HSV outputs have opaque physical X;
+    // other RGB-family conversions retain the original fourth lane.
+    if !matches!(target, Mode::ImageYCbCr8 | Mode::ImageHsv8) {
+        super::super::helpers::physical_lanes::preserve_fourth_byte(
+            source.as_raw(),
+            source.width(),
+            source.height(),
+            target,
+            &mut output,
+        )?;
+    }
     Ok(output)
 }

@@ -37,8 +37,9 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
         Mode::ImageLumaA8 => {
             let mut output = GrayAlphaImage::new(width, height);
             for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
-                let luma = crate::color::rgb_to_luma_u8(pixel[0], pixel[1], pixel[2]);
-                *destination = LumaA([luma, pixel[3]]);
+                let [red, green, blue] = straight_rgb(pixel);
+                let luma = crate::color::rgb_to_luma_u8(red, green, blue);
+                *destination = LumaA([luma, u8::MAX]);
             }
             Ok(DynamicImage::ImageLumaA8(output))
         }
@@ -71,10 +72,18 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
         Mode::ImageRgbx8 => Ok(DynamicImage::ImageRgbx8(unpremultiply_rgba(source, true))),
         Mode::ImageCmyk8 => Ok(DynamicImage::ImageCmyk8(rgb_to_cmyk(source))),
         Mode::ImageYCbCr8 => Ok(DynamicImage::ImageYCbCr8(
-            crate::color::rgb_bytes_to_ycbcr::<4>(source.as_raw(), width, height),
+            crate::color::rgb_pixels_to_ycbcr(
+                width,
+                height,
+                source.pixels().map(straight_rgb),
+            ),
         )),
         Mode::ImageHsv8 => Ok(DynamicImage::ImageHsv8(
-            crate::color::rgb_bytes_to_hsv::<4>(source.as_raw(), width, height),
+            crate::color::rgb_pixels_to_hsv(
+                width,
+                height,
+                source.pixels().map(straight_rgb),
+            ),
         )),
         Mode::ImageI32 => Ok(DynamicImage::ImageI32(scalar_i32(source))),
         Mode::ImageF32 => Ok(DynamicImage::ImageF32(scalar_f32(source))),
@@ -95,8 +104,8 @@ pub(crate) fn execute_palette_target(
     } else {
         super::super::super::ops::ConvertWrapperMetadata::PreserveSource
     };
-    // The archived Rgba-to-Rgb conversion drops the alpha byte without
-    // unpremultiplying the stored RGB samples before palette quantization.
+    // Pillow's palette strategy consumes RGBa's stored color lanes directly;
+    // PA output receives opaque per-pixel alpha.
     crate::compute::pool_cpu::ops::color::convert::helpers::palette::web_palette_from_pixels(
         source.width(),
         source.height(),
@@ -125,10 +134,11 @@ fn unpremultiply_rgba(source: &RgbaImage, opaque_alpha: bool) -> RgbaImage {
 fn rgb_to_cmyk(source: &RgbaImage) -> RgbaImage {
     let mut output = RgbaImage::new(source.width(), source.height());
     for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
+        let [red, green, blue] = straight_rgb(pixel);
         *destination = Rgba([
-            u8::MAX.wrapping_sub(pixel[0]),
-            u8::MAX.wrapping_sub(pixel[1]),
-            u8::MAX.wrapping_sub(pixel[2]),
+            u8::MAX.wrapping_sub(red),
+            u8::MAX.wrapping_sub(green),
+            u8::MAX.wrapping_sub(blue),
             0,
         ]);
     }
@@ -138,9 +148,10 @@ fn rgb_to_cmyk(source: &RgbaImage) -> RgbaImage {
 fn scalar_i32(source: &RgbaImage) -> RgbaImage {
     let mut output = RgbaImage::new(source.width(), source.height());
     for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
+        let [red, green, blue] = straight_rgb(pixel);
         *destination = Rgba(
             crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_i32_rgb(
-                pixel[0], pixel[1], pixel[2],
+                red, green, blue,
             ),
         );
     }
@@ -150,9 +161,10 @@ fn scalar_i32(source: &RgbaImage) -> RgbaImage {
 fn scalar_f32(source: &RgbaImage) -> RgbaImage {
     let mut output = RgbaImage::new(source.width(), source.height());
     for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
+        let [red, green, blue] = straight_rgb(pixel);
         *destination = Rgba(
             crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_f32_rgb(
-                pixel[0], pixel[1], pixel[2],
+                red, green, blue,
             ),
         );
     }
@@ -162,4 +174,13 @@ fn scalar_f32(source: &RgbaImage) -> RgbaImage {
 #[inline]
 fn unpremultiply(value: u8, alpha: u8) -> u8 {
     crate::compute::pool_cpu::ops::color::convert::helpers::pixel::unpremultiply_byte(value, alpha)
+}
+
+#[inline]
+fn straight_rgb(pixel: &Rgba<u8>) -> [u8; 3] {
+    [
+        unpremultiply(pixel[0], pixel[3]),
+        unpremultiply(pixel[1], pixel[3]),
+        unpremultiply(pixel[2], pixel[3]),
+    ]
 }
