@@ -73,6 +73,10 @@ Baseline: `3f9dfd4036caa061eabcf2255c9f34a745df9c7e`; continue from the current
 `develop` HEAD and preserve all later WIP commits. The CPU source migration
 remains in review and is not ready for validation gates. See the append-only
 checkpoint notes below for recent source changes and explicit remaining TODOs.
+WIP commits `5a5e4ecce` and `857080498` stage Point callbacks outside image
+borrows and align GetPixel load/tuple-conversion order with Pillow. Existing
+callback and input-order paths have received source review only; the full CPU
+implementation and its validation gates remain incomplete.
 Recent source-only checkpoints thread `StrategySelection` through Rotate and
 Transform hidden-lane helpers; native-byte Filter extrema, rank, and blur
 helpers; LA/RGBA AlphaComposite architecture binding; the UnsharpMask
@@ -148,10 +152,12 @@ Chops, Pad, Draw, Thumbnail, Quantize, Resize, geometry sidecars, Filter, and
 Composite context propagation remain uncompiled and runtime-unverified. The
 audit is not a completion proof: operation support declarations, ownership,
 source behavior, algorithm coverage, inert-archive review, and function-size
-limits remain open. Current touched-file counts are `buffer.rs` 996 lines,
-`dynamic.rs` 961 lines, `traits/view.rs` 241 lines, and `buffer/mutable.rs` 21
-lines; all are below 1,000. Refresh the full source inventory and Clippy-counted
-function inventory only after source closure.
+limits remain open. A current physical-line scan shows the largest maintained
+Rust files below 1,000 lines: `raster/buffer.rs` 998, `image/materialization.rs`
+994, `compute/pool_cpu/ops/analysis/ops.rs` 994, `pipeline.rs` 990, and
+`pillow-rs-py/src/image/operations.rs` 985. This is not the required
+Clippy-counted function audit. Refresh the complete source and function
+inventories only after source closure.
 
 The last focused library compilation passed for the earlier Resize
 selection-context refactor with
