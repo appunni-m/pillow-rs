@@ -2121,3 +2121,21 @@ Sources: [ImageMode.py bases](https://github.com/python-pillow/Pillow/blob/12.2.
 [Convert.c palette strategy](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1093-L1277),
 [Convert.c RGBa direct converters](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L2949-L3022),
 [Convert.c RGBa converter table](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1411-L1452).
+
+I;16 Convert direct-matrix update (2026-11-04): the top-level I;16 target row
+now includes RGBX, and the four exact source strategies implement the declared
+targets directly. The kernels do not materialize an intermediate L image:
+typed samples feed the L, LA, RGB-family, color-space, I/F, palette, and bilevel
+outputs in their final loops. The bilevel error-diffusion kernel consumes the
+clipped native sample iterator directly; grayscale P/PA writes clipped palette
+indices and opaque PA alpha. The SIMD matrix now declares RGBX alongside L,
+LA, RGB, RGBA, CMYK, I, and F for SSE2, NEON, and Wasm SIMD128. Cross-alias
+I;16 targets preserve full u16 samples as Rust extensions; I;16N→I and
+I;16N→F also remain CoreOnly extensions. TODO(pillow-rs#3ptb): verify all
+I;16 source × target × architecture samples, palette metadata, dither, faults,
+and selection receipts after source review is complete. Sources: [ImageMode.py
+I;16 base mode](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageMode.py#L62-L80),
+[Image.convert wrapper](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py#L1139-L1151),
+[Convert.c I;16 functions](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L720-L830),
+[Convert.c I;16 target table](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1462-L1486),
+[Convert.c palette and bilevel paths](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1101-L1148).

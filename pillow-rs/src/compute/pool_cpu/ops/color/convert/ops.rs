@@ -94,6 +94,8 @@ const LA_PREMULTIPLIED_TARGETS: &[Mode] = &[
     Mode::ImageLaPremultiplied8,
     Mode::ImageLumaA8,
 ];
+// TODO(pillow-rs#3ptb): verify every I;16 source/target pair, including the
+// native-u16 extensions, across all declared architectures and fault cases.
 pub(super) const I16_TARGETS: &[Mode] = &[
     Mode::One,
     Mode::ImageLuma8,
@@ -107,6 +109,7 @@ pub(super) const I16_TARGETS: &[Mode] = &[
     Mode::ImageLab8,
     Mode::ImageRgb8,
     Mode::ImageRgba8,
+    Mode::ImageRgbx8,
     Mode::ImageCmyk8,
     Mode::ImageYCbCr8,
     Mode::ImageHsv8,

@@ -12,25 +12,16 @@ use crate::raster::{DynamicImage, ImageBuffer, Luma, Mode};
 
 type Samples = ImageBuffer<Luma<u16>, Vec<u16>>;
 
-// NO_PILLOW_SUPPORT: these native targets are Rust extensions for I;16L.
+// NO_PILLOW_SUPPORT: cross-alias I;16 conversion keeps the native u16 range.
 const CORE_ONLY_TARGETS: &[Mode] = &[
-    Mode::One,
-    Mode::ImageLumaA8,
-    Mode::ImagePalette8,
-    Mode::ImagePaletteAlpha8,
     Mode::ImageI16,
     Mode::ImageI16B,
     Mode::ImageI16N,
-    Mode::ImageRgb8,
-    Mode::ImageRgba8,
-    Mode::ImageCmyk8,
-    Mode::ImageYCbCr8,
-    Mode::ImageHsv8,
 ];
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: super::super::ops::I16_TARGETS,
     core_only_targets: CORE_ONLY_TARGETS,
-    core_only_reason: Some("Pillow has no matching I;16L source-target conversion"),
+    core_only_reason: Some("cross-alias conversion preserves the full native u16 sample"),
     rejection_reason: "image has wrong mode",
 }];
 
@@ -42,7 +33,7 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     &ARCHITECTURES,
 );
 
-static ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 21] =
+static ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 24] =
     super::super::helpers::luma16::architecture_support(Mode::ImageI16L);
 
 pub(crate) fn execute(

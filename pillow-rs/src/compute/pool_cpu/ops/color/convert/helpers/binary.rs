@@ -5,7 +5,9 @@ use crate::compute::{Architecture, registry::support::StrategySelection};
 use crate::compute::registry::support::OperationInputs;
 use crate::error::PilError;
 use crate::pipeline::DitherMethod;
-use crate::raster::{DynamicImage, GrayImage, Mode};
+use crate::raster::{DynamicImage, GrayImage, ImageBuffer, Luma, Mode};
+
+type Luma16Samples = ImageBuffer<Luma<u16>, Vec<u16>>;
 
 /// Declares the target-`1` strategy in one exact source-mode owner.
 macro_rules! declare_mode_strategy {
@@ -43,6 +45,9 @@ pub(crate) fn convert_for_mode(
         ));
     }
     let source = inputs.image;
+    if let Some(samples) = luma16_samples(source, source_mode) {
+        return convert_luma16(samples, no_dither(dither));
+    }
     if source_mode == Mode::One {
         if let DynamicImage::One(source) = source {
             return Ok(DynamicImage::One(source.clone()));
@@ -52,7 +57,7 @@ pub(crate) fn convert_for_mode(
         return crate::color::cmyk_to_binary_truncate(source).map(DynamicImage::One);
     }
 
-    let no_dither = dither.is_some_and(|method| matches!(method, DitherMethod::None));
+    let no_dither = no_dither(dither);
     match (source_mode, no_dither) {
         (Mode::ImageRgbPremultiplied8, true) => {
             let DynamicImage::ImageRgbPremultiplied8(image) = source else {
@@ -99,10 +104,44 @@ pub(crate) fn convert_for_mode(
             let gray = binary_luma(source, source_mode, inputs.palette.rgb)?;
             let (width, height) = gray.dimensions();
             let mut output = GrayImage::new(width, height);
-            diffuse_gray_rows(&gray, &mut output);
+            diffuse_gray_rows(&gray, &mut output)?;
             Ok(DynamicImage::One(output))
         }
     }
+}
+
+fn no_dither(dither: Option<&DitherMethod>) -> bool {
+    dither.is_some_and(|method| matches!(method, DitherMethod::None))
+}
+
+fn luma16_samples(source: &DynamicImage, source_mode: Mode) -> Option<&Luma16Samples> {
+    match (source_mode, source) {
+        (Mode::ImageI16, DynamicImage::ImageI16(image)) => Some(image),
+        (Mode::ImageI16L, DynamicImage::ImageI16L(image)) => Some(image),
+        (Mode::ImageI16B, DynamicImage::ImageI16B(image)) => Some(image),
+        (Mode::ImageI16N, DynamicImage::ImageI16N(image)) => Some(image),
+        _ => None,
+    }
+}
+
+fn convert_luma16(source: &Luma16Samples, no_dither: bool) -> Result<DynamicImage, PilError> {
+    let mut output = GrayImage::new(source.width(), source.height());
+    if no_dither {
+        for (destination, sample) in output.pixels_mut().zip(source.as_raw()) {
+            destination[0] = if clip_luma16(*sample) >= 128 { 255 } else { 0 };
+        }
+    } else {
+        diffuse_gray_samples(
+            source.as_raw().iter().copied().map(clip_luma16),
+            &mut output,
+        )?;
+    }
+    Ok(DynamicImage::One(output))
+}
+
+#[inline]
+fn clip_luma16(sample: u16) -> u8 {
+    sample.min(u16::from(u8::MAX)) as u8
 }
 
 fn binary_luma(
@@ -212,18 +251,33 @@ pub(crate) fn diffuse_rgb_samples(
     Ok(())
 }
 
-fn diffuse_gray_rows(gray: &GrayImage, output: &mut GrayImage) {
+fn diffuse_gray_rows(gray: &GrayImage, output: &mut GrayImage) -> Result<(), PilError> {
+    diffuse_gray_samples(gray.as_raw().iter().copied(), output)
+}
+
+fn diffuse_gray_samples(
+    samples: impl ExactSizeIterator<Item = u8>,
+    output: &mut GrayImage,
+) -> Result<(), PilError> {
     let (width, height) = output.dimensions();
     let width_usize = width as usize;
-    let source: Vec<i32> = gray.pixels().map(|pixel| i32::from(pixel[0])).collect();
+    let expected_pixels = CheckedDims::new_allow_empty(width, height, 1)?.total_pixels();
+    if samples.len() != expected_pixels {
+        return Err(PilError::InternalError(
+            "binary grayscale source did not match its output extent".into(),
+        ));
+    }
+    let mut samples = samples;
     let mut errors = vec![0i32; (width + 1) as usize];
     for y in 0..height as usize {
         let mut carry = 0i32;
         let mut delayed_five = 0i32;
         let mut delayed_one = 0i32;
         for x in 0..width_usize {
-            let index = y * width_usize + x;
-            let value = (source[index] + (carry + errors[x + 1]) / 16).clamp(0, 255);
+            let sample = samples.next().ok_or_else(|| {
+                PilError::InternalError("binary grayscale source ended before its output".into())
+            })?;
+            let value = (i32::from(sample) + (carry + errors[x + 1]) / 16).clamp(0, 255);
             let quantized = if value > 128 { 255 } else { 0 };
             output.get_pixel_mut(x as u32, y as u32)[0] = quantized as u8;
             carry = value - quantized;
@@ -238,4 +292,10 @@ fn diffuse_gray_rows(gray: &GrayImage, output: &mut GrayImage) {
         }
         errors[width_usize] = delayed_five;
     }
+    if samples.next().is_some() {
+        return Err(PilError::InternalError(
+            "binary grayscale source exceeded its output extent".into(),
+        ));
+    }
+    Ok(())
 }

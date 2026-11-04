@@ -29,7 +29,7 @@ macro_rules! architecture_strategy {
     };
 }
 
-pub(crate) const fn architecture_support(mode: Mode) -> [ImplementationSupport; 21] {
+pub(crate) const fn architecture_support(mode: Mode) -> [ImplementationSupport; 24] {
     [
         architecture_strategy!(mode, ImageLuma8, Sse2, SSE2_AVAILABLE, &[Architecture::Sse2]),
         architecture_strategy!(mode, ImageLuma8, Neon, cfg!(all(target_arch = "aarch64", target_feature = "neon")), &[Architecture::Neon]),
@@ -43,6 +43,9 @@ pub(crate) const fn architecture_support(mode: Mode) -> [ImplementationSupport; 
         architecture_strategy!(mode, ImageRgba8, Sse2, SSE2_AVAILABLE, &[Architecture::Sse2]),
         architecture_strategy!(mode, ImageRgba8, Neon, cfg!(all(target_arch = "aarch64", target_feature = "neon")), &[Architecture::Neon]),
         architecture_strategy!(mode, ImageRgba8, WasmSimd128, cfg!(all(target_arch = "wasm32", target_feature = "simd128")), &[Architecture::WasmSimd128]),
+        architecture_strategy!(mode, ImageRgbx8, Sse2, SSE2_AVAILABLE, &[Architecture::Sse2]),
+        architecture_strategy!(mode, ImageRgbx8, Neon, cfg!(all(target_arch = "aarch64", target_feature = "neon")), &[Architecture::Neon]),
+        architecture_strategy!(mode, ImageRgbx8, WasmSimd128, cfg!(all(target_arch = "wasm32", target_feature = "simd128")), &[Architecture::WasmSimd128]),
         architecture_strategy!(mode, ImageCmyk8, Sse2, SSE2_AVAILABLE, &[Architecture::Sse2]),
         architecture_strategy!(mode, ImageCmyk8, Neon, cfg!(all(target_arch = "aarch64", target_feature = "neon")), &[Architecture::Neon]),
         architecture_strategy!(mode, ImageCmyk8, WasmSimd128, cfg!(all(target_arch = "wasm32", target_feature = "simd128")), &[Architecture::WasmSimd128]),
@@ -101,23 +104,50 @@ where
     }
 }
 
-// NO_PILLOW_SUPPORT: Pillow's palette converter rejects all four I;16 sources.
 pub(crate) fn execute_palette_target(
     source: &Samples,
     target: Mode,
 ) -> Result<super::super::ops::PreparedConvertOutput, PilError> {
-    // Match DynamicImage::to_luma8's saturating u16-to-u8 mapping without
-    // materializing an intermediate L raster before building palette indices.
-    // TODO(pillow-rs#3ptb): cover every exact I;16 source, P/PA target, and
-    // requested Architecture in CPU parity.
-    super::luma8::execute_palette_target(
-        source.width(),
-        source.height(),
-        target,
-        source
-            .pixels()
-            .map(|pixel| pixel[0].min(u16::from(u8::MAX)) as u8),
-    )
+    let (width, height) = source.dimensions();
+    let identity_palette = crate::compute::pool_cpu::helpers::quantization::identity_grayscale_palette();
+    match target {
+        Mode::ImagePalette8 => {
+            let indices = source
+                .as_raw()
+                .iter()
+                .copied()
+                .map(clip)
+                .collect::<Vec<_>>();
+            let image = GrayImage::from_raw(width, height, indices).ok_or_else(|| {
+                PilError::InternalError("I;16 Convert palette output shape mismatch".into())
+            })?;
+            Ok(super::super::ops::PreparedConvertOutput {
+                image: DynamicImage::ImagePalette8(image),
+                palette: Some(identity_palette),
+                palette_alpha: None,
+                wrapper_metadata: Some(
+                    super::super::ops::ConvertWrapperMetadata::PreserveSource,
+                ),
+            })
+        }
+        Mode::ImagePaletteAlpha8 => {
+            let dims = CheckedDims::new_allow_empty(width, height, 2)?;
+            let mut bytes = Vec::with_capacity(dims.total_bytes());
+            for sample in source.as_raw() {
+                bytes.extend_from_slice(&[clip(*sample), u8::MAX]);
+            }
+            let image = GrayAlphaImage::from_raw(width, height, bytes).ok_or_else(|| {
+                PilError::InternalError("I;16 Convert palette-alpha output shape mismatch".into())
+            })?;
+            Ok(super::super::ops::PreparedConvertOutput {
+                image: DynamicImage::ImagePaletteAlpha8(image),
+                palette: Some(identity_palette),
+                palette_alpha: None,
+                wrapper_metadata: Some(super::super::ops::ConvertWrapperMetadata::ExifOnly),
+            })
+        }
+        _ => Err(PilError::ValueError("image has wrong mode".into())),
+    }
 }
 
 pub(crate) fn execute_native_vector(
@@ -133,6 +163,7 @@ fn execute(source: &Samples, target: Mode) -> Result<DynamicImage, PilError> {
         Mode::ImageLumaA8 => Ok(DynamicImage::ImageLumaA8(to_luma_alpha(source))),
         Mode::ImageRgb8 => Ok(DynamicImage::ImageRgb8(to_rgb(source))),
         Mode::ImageRgba8 => Ok(DynamicImage::ImageRgba8(to_rgba(source))),
+        Mode::ImageRgbx8 => Ok(DynamicImage::ImageRgbx8(to_rgbx(source))),
         Mode::ImageCmyk8 => Ok(DynamicImage::ImageCmyk8(to_cmyk(source))),
         Mode::ImageYCbCr8 => Ok(DynamicImage::ImageYCbCr8(to_ycbcr(source))),
         Mode::ImageHsv8 => Ok(DynamicImage::ImageHsv8(to_hsv(source))),
@@ -146,11 +177,8 @@ fn execute_i16_target(
     source: &Samples,
     target: Mode,
 ) -> Result<DynamicImage, PilError> {
-    // TODO(pillow-rs#3ptb): verify CoreOnly source/target alias pairs with
-    // samples above 255 and mode-specific byte export in the CPU parity lane.
-    // I;16 variants share native u16 storage; only their external byte-order
-    // contract differs. Preserve every sample when selecting another I;16
-    // identity so reads and writes apply endianness at the image boundary.
+    // I;16 aliases keep their full numeric samples; byte order is applied at
+    // the image boundary when the target mode is materialized or serialized.
     let samples = source.clone();
     match target {
         Mode::ImageI16 => Ok(DynamicImage::ImageI16(samples)),
@@ -196,7 +224,11 @@ fn vector_target_channels(target: Mode) -> Result<u8, PilError> {
         Mode::ImageLuma8 => Ok(1),
         Mode::ImageLumaA8 => Ok(2),
         Mode::ImageRgb8 => Ok(3),
-        Mode::ImageRgba8 | Mode::ImageCmyk8 | Mode::ImageI32 | Mode::ImageF32 => Ok(4),
+        Mode::ImageRgba8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8
+        | Mode::ImageI32
+        | Mode::ImageF32 => Ok(4),
         _ => Err(PilError::ValueError("image has wrong mode".into())),
     }
 }
@@ -253,6 +285,7 @@ fn append_clipped_samples(target: Mode, samples: [u8; 8], active: usize, output:
             Mode::ImageLumaA8 => output.extend_from_slice(&[sample, u8::MAX]),
             Mode::ImageRgb8 => output.extend_from_slice(&[sample, sample, sample]),
             Mode::ImageRgba8 => output.extend_from_slice(&[sample, sample, sample, u8::MAX]),
+            Mode::ImageRgbx8 => output.extend_from_slice(&[sample, sample, sample, u8::MAX]),
             Mode::ImageCmyk8 => output.extend_from_slice(&[0, 0, 0, u8::MAX.wrapping_sub(sample)]),
             _ => unreachable!("target was classified before writing native u16 samples"),
         }
@@ -288,6 +321,8 @@ fn finish_vector(
             .map(DynamicImage::ImageRgb8),
         Mode::ImageRgba8 => RgbaImage::from_raw(source.width(), source.height(), output)
             .map(DynamicImage::ImageRgba8),
+        Mode::ImageRgbx8 => RgbaImage::from_raw(source.width(), source.height(), output)
+            .map(DynamicImage::ImageRgbx8),
         Mode::ImageCmyk8 => RgbaImage::from_raw(source.width(), source.height(), output)
             .map(DynamicImage::ImageCmyk8),
         Mode::ImageI32 => RgbaImage::from_raw(source.width(), source.height(), output)
@@ -319,6 +354,13 @@ fn to_rgb(source: &Samples) -> RgbImage {
 }
 
 fn to_rgba(source: &Samples) -> RgbaImage {
+    RgbaImage::from_fn(source.width(), source.height(), |x, y| {
+        let sample = clip(source.get_pixel(x, y)[0]);
+        Rgba([sample, sample, sample, u8::MAX])
+    })
+}
+
+fn to_rgbx(source: &Samples) -> RgbaImage {
     RgbaImage::from_fn(source.width(), source.height(), |x, y| {
         let sample = clip(source.get_pixel(x, y)[0]);
         Rgba([sample, sample, sample, u8::MAX])
