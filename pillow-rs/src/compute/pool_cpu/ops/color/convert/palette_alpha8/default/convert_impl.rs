@@ -12,13 +12,14 @@ pub(crate) fn execute(
     palette: PaletteInput<'_>,
     target: Mode,
 ) -> Result<DynamicImage, PilError> {
-    // Pillow discards PA alpha for RGB, YCbCr, and HSV targets, emitting opaque X.
+    // The PA-to-La/RGBa rows follow PA's RGB base mode and therefore use
+    // opaque alpha. RGBX is a direct palette converter and keeps PA alpha.
     match target {
         Mode::ImageLaPremultiplied8 => Ok(DynamicImage::ImageLaPremultiplied8(
-            premultiplied_luma_alpha(source, palette),
+            opaque_luma_alpha(source, palette),
         )),
         Mode::ImageRgbPremultiplied8 => Ok(DynamicImage::ImageRgbPremultiplied8(
-            premultiplied_rgba(source, palette),
+            opaque_rgba(source, palette),
         )),
         Mode::ImageLuma8 => Ok(DynamicImage::ImageLuma8(luma(source, palette))),
         Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
@@ -36,6 +37,7 @@ pub(crate) fn execute(
         Mode::ImageLumaA8 => Ok(DynamicImage::ImageLumaA8(luma_alpha(source, palette))),
         Mode::ImageRgb8 => Ok(DynamicImage::ImageRgb8(rgb(source, palette))),
         Mode::ImageRgba8 => Ok(DynamicImage::ImageRgba8(rgba(source, palette))),
+        Mode::ImageRgbx8 => Ok(DynamicImage::ImageRgbx8(rgba(source, palette))),
         Mode::ImageCmyk8 => Ok(DynamicImage::ImageCmyk8(cmyk(source, palette))),
         Mode::ImageYCbCr8 => Ok(DynamicImage::ImageYCbCr8(ycbcr(source, palette))),
         Mode::ImageHsv8 => Ok(DynamicImage::ImageHsv8(hsv(source, palette))),
@@ -45,7 +47,7 @@ pub(crate) fn execute(
     }
 }
 
-fn premultiplied_luma_alpha(
+fn opaque_luma_alpha(
     source: &GrayAlphaImage,
     palette: PaletteInput<'_>,
 ) -> GrayAlphaImage {
@@ -53,30 +55,16 @@ fn premultiplied_luma_alpha(
     for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
         let [red, green, blue] = super::super::super::helpers::palette::color(pixel[0], palette);
         let luma = crate::color::rgb_to_luma_u8(red, green, blue);
-        let luma = crate::compute::pool_cpu::ops::color::convert::helpers::pixel::premultiply_byte(
-            luma, pixel[1],
-        );
-        *destination = LumaA([luma, pixel[1]]);
+        *destination = LumaA([luma, u8::MAX]);
     }
     output
 }
 
-fn premultiplied_rgba(source: &GrayAlphaImage, palette: PaletteInput<'_>) -> RgbaImage {
+fn opaque_rgba(source: &GrayAlphaImage, palette: PaletteInput<'_>) -> RgbaImage {
     let mut output = RgbaImage::new(source.width(), source.height());
     for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
         let [red, green, blue] = super::super::super::helpers::palette::color(pixel[0], palette);
-        *destination = Rgba([
-            crate::compute::pool_cpu::ops::color::convert::helpers::pixel::premultiply_byte(
-                red, pixel[1],
-            ),
-            crate::compute::pool_cpu::ops::color::convert::helpers::pixel::premultiply_byte(
-                green, pixel[1],
-            ),
-            crate::compute::pool_cpu::ops::color::convert::helpers::pixel::premultiply_byte(
-                blue, pixel[1],
-            ),
-            pixel[1],
-        ]);
+        *destination = Rgba([red, green, blue, u8::MAX]);
     }
     output
 }

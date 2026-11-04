@@ -23,29 +23,23 @@ const TARGETS: &[Mode] = &[
     Mode::ImageI16N,
     Mode::ImagePalette8,
     Mode::ImageRgb8,
-    Mode::ImageLab8,
     Mode::ImageRgba8,
+    Mode::ImageRgbx8,
+    Mode::ImageLab8,
     Mode::ImageCmyk8,
     Mode::ImageYCbCr8,
     Mode::ImageHsv8,
     Mode::ImageI32,
     Mode::ImageF32,
 ];
-// PA-to-LAB uses the palette-aware PA -> RGBA -> ImageCms route.
-const CORE_ONLY_TARGETS: &[Mode] = &[
-    Mode::ImageLaPremultiplied8,
-    Mode::ImageRgbPremultiplied8,
-    Mode::ImageI16,
-    Mode::ImageI16L,
-    Mode::ImageI16B,
-    Mode::ImageI16N,
-];
+// TODO(pillow-rs#3ptb): verify every PA target's samples, palette metadata,
+// auxiliary lanes, and error behavior against the explicit Convert matrix.
 const INPUTS: &[InputContract] = &[
     InputContract::PaletteMetadata,
     InputContract::ConvertTarget {
         targets: TARGETS,
-        core_only_targets: CORE_ONLY_TARGETS,
-        core_only_reason: Some("listed PA target routes still need Pillow-wrapper parity review"),
+        core_only_targets: &[],
+        core_only_reason: None,
         rejection_reason: "image has wrong mode",
     },
 ];

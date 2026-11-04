@@ -130,8 +130,13 @@ lane. LAB-to-RGB/RGBA/RGBX now has a native serial transform and preserves the
 auxiliary lane. The declared Rust-only LAB target routes now write L, LA,
 premultiplied, bilevel, palette, I;16, CMYK, YCbCr, HSV, I, and F outputs
 directly from generated samples without materializing an intermediate image.
-Exact outputs, Pillow wrapper-fallback parity, and fault-order verification
-remain pending. Official source references and the remaining Convert
+The Convert-to-LAB composition now uses an exhaustive match over `Mode` to
+declare each source normalization route. PA-to-La and PA-to-RGBa use the
+RGB-base opaque-alpha result in direct palette-sample loops; PA-to-RGBX uses
+Pillow's direct palette route and retains PA alpha. PA declares RGBX and has
+no CoreOnly targets. Exact outputs, mode-transition, metadata, fault-order,
+and CoreOnly parity remain pending. Official source references and the
+remaining Convert
 mode/target matrix are in the [CPU refactor inventory](CPU_REFACTOR_INVENTORY.md).
 
 Reduce's top-level dispatch has now been source-reviewed across all 25 modes.

@@ -104,14 +104,31 @@ pub(super) enum LabNormalization {
     ViaRgb,
 }
 
+// Complete source-mode matrix for Convert's LAB target. Keep every Mode arm
+// explicit so a new source cannot silently inherit a normalization route.
 pub(super) const fn lab_normalization(source: Mode) -> LabNormalization {
     match source {
-        Mode::ImageRgb8 | Mode::ImageRgba8 | Mode::ImageRgbx8 => LabNormalization::Direct,
+        Mode::ImageRgb8 | Mode::ImageRgba8 | Mode::ImageRgbx8 | Mode::ImageLab8 => {
+            LabNormalization::Direct
+        }
         Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N | Mode::ImageF32 => {
             LabNormalization::ViaLuma
         }
         Mode::ImageYCbCr8 | Mode::ImageHsv8 => LabNormalization::ViaRgb,
-        _ => LabNormalization::ToRgba,
+        Mode::One
+        | Mode::ImageLuma8
+        | Mode::ImageLumaA8
+        | Mode::ImageLaPremultiplied8
+        | Mode::ImagePalette8
+        | Mode::ImagePaletteAlpha8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageCmyk8
+        | Mode::ImageI32
+        | Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => LabNormalization::ToRgba,
     }
 }
 
@@ -370,6 +387,7 @@ const fn uses_prepared_rgbx_route(mode: Mode) -> bool {
         Mode::ImageRgb8
             | Mode::ImageLumaA8
             | Mode::ImageRgba8
+            | Mode::ImagePaletteAlpha8
             | Mode::ImageRgbPremultiplied8
             | Mode::ImageRgbx8
             | Mode::ImageLab8
