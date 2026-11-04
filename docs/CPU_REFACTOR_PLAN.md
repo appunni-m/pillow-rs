@@ -77,10 +77,12 @@ WIP commits `5a5e4ecce` and `857080498` stage Point callbacks outside image
 borrows and align GetPixel load/tuple-conversion order with Pillow. Existing
 callback and input-order paths have received source review only; the full CPU
 implementation and its validation gates remain incomplete.
-The Paste architecture-module audit found its direct AArch64 intrinsic code
-under target-gated NEON modules; generic architecture wrappers use the shared
-portable `wide` kernel, and support declarations gate strategies by target.
-Other CPU families still need the same reachability review.
+The direct-instruction reachability reviews for Paste, Color Convert, and
+Composite found those instructions behind architecture and target-feature
+gates. The reviewed operation support declarations constrain selection by
+mode, architecture, and operation guard; executable strategies consume the
+prepared selection and retain same-mode Default fallbacks. The broader audit of
+instruction-free architecture wrappers and other CPU families remains open.
 Recent source-only checkpoints thread `StrategySelection` through Rotate and
 Transform hidden-lane helpers; native-byte Filter extrema, rank, and blur
 helpers; LA/RGBA AlphaComposite architecture binding; the UnsharpMask
@@ -1851,3 +1853,19 @@ mark SSE2, NEON, and Wasm SIMD128 available only for matching target configs.
 No architecture instruction is called through an ungated module in this
 family. Remaining CPU families still need this audit. Source-only; no builds,
 lint, tests, parity, or benchmarks ran.
+
+Color Convert and Composite architecture reachability review (2026-11-04):
+the direct intrinsic paths in Color Convert are the RGB8/NEON, RGBA8/NEON,
+RGBA8/SSSE3, and CMYK8/NEON routes. Their mode owners declare the supported
+target modes and required architecture; `ops.rs` dispatches by the prepared
+selection and applies the target-mode guards. Target-feature leaves are called
+only by the corresponding selected wrappers, with mode-specific Default
+fallbacks retained. Composite's direct AVX/FMA and NEON Blend blocks are
+entered only by `execute_selected` for modes in the native-vector support
+declaration, whose architecture requirements match `ExecutionContext` feature
+checks. RGB Merge's SSSE3 and NEON interleavers likewise require their
+mode-specific Merge declaration and guard; other architecture folders use
+portable `wide` wrappers. No direct instruction path outside these declarations
+was found in the reviewed families. This is static source review only; other
+CPU families still require the same audit. No build, formatting, checkstyle,
+lint, test, parity, benchmark, or coverage ran.
