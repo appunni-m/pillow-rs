@@ -2075,3 +2075,16 @@ Sources: [ImageMode.py base modes](https://github.com/python-pillow/Pillow/blob/
 [Convert.c One/L/LA routes](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1373-L1401),
 [Convert.c L-to-I;16 routes](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1463-L1482),
 [Convert.c grayscale palette route](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1093-L1148).
+
+RGBA Convert fallback correction (2026-11-04): Pillow's RGBA base is RGB.
+RGBA→La and RGBA→I;16* are therefore reached by dropping to RGB, then applying
+the corresponding RGB converter. The RGBA→La kernel now emits the RGB-derived
+luma with opaque alpha, matching `rgb2la`; it no longer carries the source
+alpha through this wrapper route. The existing native-luma I;16* outputs match
+the RGB converter's luma bytes and target byte order, so these targets are no
+longer CoreOnly. Exact output, fault, and architecture parity remains TODO
+under `pillow-rs#3ptb`; no validation ran. Sources: [ImageMode.py RGBA base](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageMode.py#L45-L57),
+[Image.convert fallback](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py#L1139-L1151),
+[Convert.c RGB-to-La and I;16](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L222-L254),
+[Convert.c RGBA and RGB routes](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L391-L410),
+[Convert.c mode converter table](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1411-L1443).

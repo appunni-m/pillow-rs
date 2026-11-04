@@ -203,17 +203,11 @@ static ARCHITECTURES: [ImplementationSupport; 36] = architecture_catalog!(
 );
 
 // RGBA-to-LAB uses the direct ImageCms route and retains its auxiliary lane.
-const CORE_ONLY_TARGETS: &[Mode] = &[
-    Mode::ImageLaPremultiplied8,
-    Mode::ImageI16,
-    Mode::ImageI16L,
-    Mode::ImageI16B,
-    Mode::ImageI16N,
-];
+// Pillow's wrapper routes missing direct RGBA targets through RGB.
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: super::super::ops::RGBA_TARGETS,
-    core_only_targets: CORE_ONLY_TARGETS,
-    core_only_reason: Some("listed RGBA target routes still need Pillow-wrapper parity review"),
+    core_only_targets: &[],
+    core_only_reason: None,
     rejection_reason: "image has wrong mode",
 }];
 

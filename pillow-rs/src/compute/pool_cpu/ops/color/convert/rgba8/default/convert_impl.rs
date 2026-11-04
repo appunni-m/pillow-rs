@@ -26,9 +26,9 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
             let mut output = GrayAlphaImage::new(width, height);
             for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
                 let luma = crate::color::rgb_to_luma_u8(pixel[0], pixel[1], pixel[2]);
-                let luma = crate::compute::pool_cpu::ops::color::convert::helpers::pixel::
-                    premultiply_byte(luma, pixel[3]);
-                *destination = LumaA([luma, pixel[3]]);
+                // Pillow retries RGBA→La through RGB, which drops the source
+                // alpha before RGB→La and therefore emits opaque alpha.
+                *destination = LumaA([luma, u8::MAX]);
             }
             Ok(DynamicImage::ImageLaPremultiplied8(output))
         }
