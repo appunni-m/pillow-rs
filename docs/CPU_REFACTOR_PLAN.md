@@ -1754,3 +1754,12 @@ borrow and preserves the existing core operation order. Remaining effectful
 PyO3 argument conversions and runtime output/fault parity are still open.
 Source-only; no build, formatting, checkstyle, lint, tests, parity, benchmark,
 or coverage ran.
+
+Save/Seek callback borrow staging (2026-11-04): Save extracts format and
+compression arguments before PathLike conversion, keeps the image borrow only
+for encoding, and releases it before calling a file object's `write` method.
+Seek parses its frame value before taking the mutable image borrow. This keeps
+Python callbacks outside PyO3 image borrows while preserving the source-level
+argument order. Runtime output and fault-order parity remain pending.
+Source-only; no build, formatting, checkstyle, lint, tests, parity, benchmark,
+or coverage ran.

@@ -116,12 +116,18 @@ impl PyImage {
 
     #[pyo3(signature = (fp, format=None, compress_level=None))]
     fn save(
-        &mut self,
+        slf: Py<Self>,
         fp: &Bound<'_, PyAny>,
-        format: Option<String>,
-        compress_level: Option<i64>,
+        format: Option<&Bound<'_, PyAny>>,
+        compress_level: Option<&Bound<'_, PyAny>>,
         py: Python<'_>,
     ) -> PyResult<()> {
+        // Match PyO3's original argument conversion order before path
+        // conversion, without holding a PyImage borrow across __index__.
+        let format = format.map(|value| value.extract::<String>()).transpose()?;
+        let compress_level = compress_level
+            .map(|value| value.extract::<i64>())
+            .transpose()?;
         let path = host_path_from_python(fp)?;
         if let Some(path) = path.as_deref() {
             if path.is_dir() {
@@ -146,9 +152,11 @@ impl PyImage {
         let format = pillow_rs::Image::resolve_save_format(format.as_deref(), extension)
             .map_err(map_error)?;
         let encoder_options = save_options::encoder_options(&format, compress_level)?;
-        let encoded = py
-            .detach(|| self.inner.encode_with_options(&format, &encoder_options))
-            .map_err(map_error)?;
+        let encoded = {
+            let image = slf.bind(py).borrow();
+            py.detach(|| image.inner.encode_with_options(&format, &encoder_options))
+                .map_err(map_error)?
+        };
         if let Some(path) = path {
             py.detach(|| std::fs::write(path, &encoded))
                 .map_err(|error| map_error(error.into()))
@@ -203,8 +211,10 @@ impl PyImage {
         py.detach(|| self.inner.load()).map_err(map_error)
     }
 
-    fn seek(&mut self, frame: u32, py: Python<'_>) -> PyResult<()> {
-        py.detach(|| self.inner.seek(frame)).map_err(map_error)
+    fn seek(slf: Py<Self>, frame: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<()> {
+        let frame = frame.extract::<u32>()?;
+        let mut image = slf.bind(py).borrow_mut();
+        py.detach(|| image.inner.seek(frame)).map_err(map_error)
     }
 
     fn tell(&self) -> u32 {
