@@ -32,6 +32,8 @@ class Draw:
         if self._image.mode != "P":
             return ink
         if isinstance(ink, str):
+            # Pillow resolves a P-mode string to RGB before checking whether
+            # an attached palette can turn that tuple into an index.
             ink = imagecolor.getcolor(ink, self._image.mode)
         if not self._image._rust_image.has_attached_palette():
             return ink

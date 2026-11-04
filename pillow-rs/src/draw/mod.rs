@@ -306,6 +306,10 @@ fn draw_color_error() -> PilError {
     )
 }
 
+fn draw_single_band_color_error() -> PilError {
+    PilError::TypeError("color must be int or single-element tuple".to_owned())
+}
+
 fn draw_python_list_color_error(mode: Mode) -> PilError {
     let message = if mode == Mode::ImageF32 {
         "must be real number, not list"
@@ -594,7 +598,16 @@ impl Draw {
             DrawColorInput::None => {
                 Ok(self.default_shape_ink()?.unwrap_or((0, 0, 0, 255)))
             }
-            DrawColorInput::String(value) => crate::color::parse_color_str(&value),
+            DrawColorInput::String(value) => {
+                let color = crate::color::parse_color_str(&value)?;
+                if mode == Mode::ImagePalette8 {
+                    // ImageColor.getcolor(..., "P") resolves to RGB. Without
+                    // a palette, Pillow's single-band draw ink rejects it.
+                    Err(draw_single_band_color_error())
+                } else {
+                    Ok(color)
+                }
+            }
             DrawColorInput::Integer(value) => resolve_integer_color(mode, value),
             DrawColorInput::Float(value) if mode == Mode::ImageF32 => {
                 let bytes = (value as f32).to_le_bytes();
@@ -631,11 +644,34 @@ impl Draw {
             }
             DrawColorInput::TupleFloatComponents(_)
             | DrawColorInput::TupleMixedComponents(_)
+                if mode == Mode::ImagePalette8 =>
+            {
+                Err(draw_single_band_color_error())
+            }
+            DrawColorInput::TupleComponentsWithWideInteger(values)
+                if mode == Mode::ImagePalette8 && values.len() == 1 =>
+            {
+                Err(PilError::OverflowError(
+                    "Python int too large to convert to C long long".to_owned(),
+                ))
+            }
+            DrawColorInput::TupleComponentsWithWideInteger(_)
+                if mode == Mode::ImagePalette8 =>
+            {
+                Err(draw_single_band_color_error())
+            }
+            DrawColorInput::TupleFloatComponents(_)
+            | DrawColorInput::TupleMixedComponents(_)
             | DrawColorInput::TupleComponentsWithWideInteger(_) => {
                 Err(draw_color_error())
             }
             DrawColorInput::ListComponents(_) | DrawColorInput::InvalidList => {
                 Err(draw_python_list_color_error(mode))
+            }
+            DrawColorInput::InvalidTuple | DrawColorInput::Invalid
+                if mode == Mode::ImagePalette8 =>
+            {
+                Err(draw_single_band_color_error())
             }
             DrawColorInput::InvalidTuple => Err(draw_color_error()),
             DrawColorInput::Invalid => Err(draw_color_error()),
@@ -653,12 +689,11 @@ impl Draw {
         {
             let components = match &input {
                 DrawColorInput::String(value) => {
-                    let (red, green, blue, alpha) = crate::color::parse_color_str(value)?;
+                    let (red, green, blue, _) = crate::color::parse_color_str(value)?;
                     Some(vec![
                         PaletteColorComponent::Integer(i64::from(red)),
                         PaletteColorComponent::Integer(i64::from(green)),
                         PaletteColorComponent::Integer(i64::from(blue)),
-                        PaletteColorComponent::Integer(i64::from(alpha)),
                     ])
                 }
                 DrawColorInput::Components(values) | DrawColorInput::TupleComponents(values) => {
@@ -758,33 +793,6 @@ impl Draw {
             return self.bitmap(x, y, bitmap, None);
         }
         let mode = self.effective_mode()?;
-        if mode == Mode::ImagePalette8
-            && (matches!(&input, DrawColorInput::String(_))
-                || matches!(
-                    &input,
-                    DrawColorInput::Components(values) | DrawColorInput::TupleComponents(values)
-                        if values.len() > 1
-                )
-                || matches!(
-                    &input,
-                    DrawColorInput::TupleComponentsWithWideInteger(values)
-                        if values.len() > 1
-                )
-                || matches!(&input, DrawColorInput::TupleFloatComponents(values) if values.len() > 1)
-                || matches!(&input, DrawColorInput::TupleMixedComponents(values) if values.len() > 1))
-            && self
-                .image
-                .palette_input()
-                .rgb
-                .is_none()
-        {
-            // Without a palette, Pillow's P-mode bitmap ink resolver does
-            // not turn an RGB(A) tuple or color string into an index. It
-            // returns no ink and leaves the destination unchanged; using the
-            // first component here would incorrectly paint that byte as an
-            // index.
-            return Ok(());
-        }
         if let DrawColorInput::Components(values) | DrawColorInput::TupleComponents(values) = &input {
             if is_single_band_draw_mode(mode) && mode != Mode::ImagePalette8 && values.len() != 1 {
                 if mode == Mode::ImageF32 {

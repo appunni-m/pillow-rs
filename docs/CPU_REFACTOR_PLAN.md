@@ -1995,3 +1995,16 @@ validation before default-ink selection on the no-fill Rust path. Frozen CPU
 mode-by-architecture parity remains pending. Source: [Pillow 12.2
 ImageDraw initialization and Bitmap](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageDraw.py#L2288-L2341),
 [`_imaging.c::getink`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/_imaging.c#L3090-L3305).
+
+Draw P-mode Bitmap ink correction (2026-11-04): Pillow converts string ink
+through `ImageColor.getcolor(..., "P")` before consulting the palette. That
+produces an RGB tuple; an attached palette maps it to an index, while no
+palette leaves a three-component value that single-band `draw_ink` rejects
+with `TypeError`. Rust Bitmap previously treated this case as a successful
+no-op, and direct Rust string input retained the parsed alpha for palette
+allocation. The Python wrapper now parses before the palette check, Rust drops
+the string alpha for P palette allocation, and the no-palette route follows
+the regular single-band arity error. Source-only; focused CPU output/fault
+parity remains pending. Sources: [Pillow 12.2 ImageDraw `_getink` and Bitmap](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageDraw.py#L2395-L2482),
+[ImageColor.getcolor](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageColor.py#L1017-L1078),
+[`_imaging.c::getink`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/_imaging.c#L3090-L3305).
