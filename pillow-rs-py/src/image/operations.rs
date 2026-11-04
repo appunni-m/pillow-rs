@@ -290,7 +290,7 @@ impl PyImage {
 
     #[pyo3(signature = (box_plan, source_plan, mask=None))]
     fn _paste_apply_prepared(
-        &mut self,
+        slf: pyo3::Py<Self>,
         box_plan: pyo3::PyRef<'_, PyPasteBoxPlan>,
         source_plan: pyo3::PyRef<'_, PyPasteSourcePlan>,
         mask: Option<&Bound<'_, PyAny>>,
@@ -315,15 +315,21 @@ impl PyImage {
                     PyTypeError::new_err("prepared Paste source was missing")
                 })?;
                 let source = source.bind(py);
-                let mode = self.inner.mode_identity().map_err(map_error)?;
+                let mode = slf
+                    .bind(py)
+                    .borrow()
+                    .inner
+                    .mode_identity()
+                    .map_err(map_error)?;
                 let input = paste_source_from_python(&source, mode)?;
-                self.inner
-                    .prepare_paste_source(input)
+                pillow_rs::Image::prepare_paste_source_for_mode(mode, input)
                     .map_err(map_error)?
             }
         };
         let mask = paste_mask_from_python(mask)?;
-        py.detach(|| self.inner.paste_prepared(box_plan, source_plan, mask))
+        let mut destination = slf.bind(py).borrow_mut();
+        let destination = &mut destination.inner;
+        py.detach(|| destination.paste_prepared(box_plan, source_plan, mask))
             .map_err(map_error)
     }
 

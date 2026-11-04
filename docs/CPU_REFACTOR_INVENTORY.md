@@ -732,6 +732,18 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   [`Paste.c`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Paste.c#L301-L329),
   [`Convert.c`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L2990-L3020).
   Source-only; no build, formatter, checkstyle, lint, test, parity, or benchmark ran.
+- Paste parser/reentrancy source correction (2026-11-04): CPython's nested
+  `(iiii)` parser rejects bytes and non-sequences, checks sequence length, then
+  fetches and converts each item in order. Unicode and bytearray therefore take
+  the sequence path. The binding now follows those boundaries.
+  `_paste_apply_prepared` retains a Python object handle and delays its mutable
+  `PyImage` borrow until after box, numeric source, and mask adaptation, so user
+  callbacks can re-enter the wrapper without failing on an active PyO3 borrow.
+  Source/destination aliasing and callback-driven
+  mode/palette mutation still need frozen CPU parity. Sources:
+  [CPython 3.13 `converttuple`](https://github.com/python/cpython/blob/3.13/Python/getargs.c#L2922-L3048),
+  [Pillow 12.2 `_paste`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/_imaging.c).
+  Source-only; no checks ran.
 
 This inventory records the source and evidence denominator before rebuilding pool_cpu. It is a migration ledger, not a claim that the listed mode literals prove support. Each function's exact mode support, output identity, rejection behavior, shared helpers, and architecture fallback must be confirmed from its implementation before it is copied into the maintained tree. The source path lists are taken from the baseline Git tree, so every archived file can be checked against 3f9dfd403.
 
@@ -1430,16 +1442,19 @@ or benchmark verification has run. The archived SIMD instructions and guards
 are in `pool_cpu/legacy/pool_simd/ops/adapters/reduce.rs` and its
 `reduce/kernels` files.
 
-Reduce source audit correction (2026-11-04): the Python facade materializes
-before nonidentity factor/box conversion, and identity requests materialize
-through `copy()`. The full path converts C-int scales and box coordinates
-before core checks scale positivity and box semantics, then checks negative
-offsets, source bounds, and empty boxes before P-mode downsampling rejection.
-Factor-one P sub-boxes crop directly. The PyO3 adapter now converts each factor and
-coordinate with the shared C-int parser, preserving arbitrary-size integer
-overflow and custom `__index__` exceptions before entering core. TODO: verify
-sequence-subclass callback and mutation behavior against Pillow's parser during
-frozen CPU parity.
+Reduce parser source correction (2026-11-04): CPython's nested `(ii)` and
+`(iiii)` parser checks `PySequence_Check` (excluding bytes), checks sequence
+length, then fetches and converts each item in order. Strings and bytearrays
+follow the sequence path. The PyO3 adapter now follows those boundaries and
+uses the shared C-int conversion, preserving arbitrary-size integer overflow
+and custom `__index__` exceptions before entering core. The Python facade
+materializes before nonidentity factor/box conversion, and identity requests
+materialize through `copy()`. Core checks scale positivity and box semantics,
+then negative offsets, source bounds, and empty boxes before P-mode downsampling
+rejection. Factor-one P sub-boxes crop directly. Sequence-subclass callback and
+mutation behavior remains a frozen CPU parity TODO. Sources: [Pillow 12.2.0
+`_reduce`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/_imaging.c),
+[CPython 3.13 `converttuple`](https://github.com/python/cpython/blob/3.13/Python/getargs.c#L2922-L3048).
 
 Source audit refinement (2026-11-02): the native typed u16/f32 reducer
 now converts row coordinates to `usize` before flattening the sample

@@ -193,8 +193,9 @@ fn paste_box_sequence_coordinates(
         )));
     }
 
-    // SAFETY: `value` is a live GIL-bound Python object and the C parser uses
-    // PySequence_Size after its PySequence_Check guard.
+    // Match PyArg_ParseTuple's `(iiii)` parser: check length once, then fetch
+    // and convert each item in order so callbacks run at Pillow's boundaries.
+    // SAFETY: `value` is a live GIL-bound object; PySequence_Check succeeded.
     let length = unsafe { pyo3::ffi::PySequence_Size(value.as_ptr()) };
     if length < 0 {
         return Err(PyErr::fetch(py));
@@ -207,8 +208,6 @@ fn paste_box_sequence_coordinates(
 
     let mut coordinates = Vec::with_capacity(4);
     for index in 0..4 {
-        // Match PyArg_ParseTuple's `(iiii)` parser: read each sequence slot
-        // directly, in order, after Pillow's source and mask loads.
         // SAFETY: `value` is a live GIL-bound object, the sequence check and
         // length check succeeded, and PySequence_GetItem returns a new ref.
         let item = unsafe {

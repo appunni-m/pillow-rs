@@ -154,7 +154,7 @@ fn parse_reduce_box_coordinates(
         }
         Some(ReduceBox::InvalidType(type_name)) => {
             return Err(PilError::TypeError(format!(
-                "argument 2 must be 4-item tuple, not {type_name}"
+                "argument 2 must be 4-item sequence, not {type_name}"
             )));
         }
     }

@@ -122,6 +122,15 @@ impl Image {
         source_input: PasteSourceInput,
     ) -> Result<PasteSourcePlan, PilError> {
         let destination_mode = self.mode_identity()?;
+        Self::prepare_paste_source_for_mode(destination_mode, source_input)
+    }
+
+    /// Prepares a non-image Paste source after the host captured destination mode.
+    #[doc(hidden)]
+    pub fn prepare_paste_source_for_mode(
+        destination_mode: Mode,
+        source_input: PasteSourceInput,
+    ) -> Result<PasteSourcePlan, PilError> {
         let source = match source_input {
             PasteSourceInput::Image(image) => PasteSource::from_parts(Some(*image), 0, 0, 0, 255),
             PasteSourceInput::Scalar(value) => paste_scalar_source(value, destination_mode),
