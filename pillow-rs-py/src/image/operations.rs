@@ -587,7 +587,11 @@ impl PyImage {
         Ok(PyImage { inner: rs })
     }
 
-    fn getchannel(&mut self, channel: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<PyImage> {
+    fn getchannel(
+        slf: Py<Self>,
+        channel: &Bound<'_, PyAny>,
+        py: Python<'_>,
+    ) -> PyResult<PyImage> {
         let selector = if let Ok(channel) = channel.extract::<i32>() {
             pillow_rs::ChannelSelector::Index(channel)
         } else if let Ok(channel) = channel.extract::<String>() {
@@ -595,13 +599,19 @@ impl PyImage {
         } else {
             pillow_rs::ChannelSelector::Invalid(channel.get_type().name()?.to_string())
         };
+        let image = slf.bind(py).borrow();
+        let image = &image.inner;
         let rs = py
-            .detach(|| self.inner.getchannel_selector(selector))
+            .detach(|| image.getchannel_selector(selector))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
-    fn putalpha_input(&mut self, alpha: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<()> {
+    fn putalpha_input(
+        slf: Py<Self>,
+        alpha: &Bound<'_, PyAny>,
+        py: Python<'_>,
+    ) -> PyResult<()> {
         let input = if let Some(mask) = image_from_python(alpha) {
             pillow_rs::PutAlphaInput::Image(Box::new(mask))
         } else if let Ok(value) = alpha.extract::<i64>() {
@@ -614,7 +624,11 @@ impl PyImage {
         } else {
             pillow_rs::PutAlphaInput::Invalid(alpha.get_type().name()?.to_string())
         };
-        py.detach(|| self.inner.putalpha_with_input(input))
+        // `__index__` conversion above may re-enter this image; borrow it only
+        // once host-language coercion has finished.
+        let mut image = slf.bind(py).borrow_mut();
+        let image = &mut image.inner;
+        py.detach(|| image.putalpha_with_input(input))
             .map_err(map_error)
     }
 

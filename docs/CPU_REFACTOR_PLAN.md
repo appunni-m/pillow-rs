@@ -1725,3 +1725,13 @@ stay on native typed sample paths. The active CPU tree still has no Rayon or
 fault, palette-metadata, architecture-reachability, or mode/architecture
 parity. Those checks remain pending; no build, formatting, checkstyle, lint,
 tests, parity, benchmark, or coverage ran.
+
+Python callback borrow staging (2026-11-04): PutAlpha and palette setters now
+coerce host inputs before borrowing the image. GetData extracts its optional
+band, GetPixel extracts both tuple coordinates in order, and GetChannel parses
+its selector before borrowing. These Python conversions can re-enter and
+mutate the wrapper; each operation now borrows the live image only after they
+finish. The core algorithms are unchanged. Other effectful PyO3 argument
+conversions still need review, and output, callback, and fault-order parity
+remain pending. No build, formatting, checkstyle, lint, tests, parity,
+benchmark, or coverage ran.

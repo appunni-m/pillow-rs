@@ -154,24 +154,43 @@ impl PyImage {
     }
 
     #[pyo3(signature = (data, rawmode="RGB"))]
-    fn putpalette(&mut self, data: Vec<u8>, rawmode: &str, py: Python<'_>) -> PyResult<()> {
-        let rawmode = rawmode.to_owned();
-        py.detach(|| self.inner.putpalette(&data, &rawmode))
+    fn putpalette(
+        slf: Py<Self>,
+        data: &Bound<'_, PyAny>,
+        rawmode: &Bound<'_, PyAny>,
+        py: Python<'_>,
+    ) -> PyResult<()> {
+        let data = data.extract::<Vec<u8>>()?;
+        let rawmode = rawmode.extract::<String>()?;
+        let mut image = slf.bind(py).borrow_mut();
+        let image = &mut image.inner;
+        py.detach(|| image.putpalette(&data, &rawmode))
             .map_err(map_error)
     }
 
-    fn putpalettealpha(&mut self, index: i32, alpha: i32, py: Python<'_>) -> PyResult<()> {
-        py.detach(|| self.inner.putpalettealpha(index, alpha))
+    fn putpalettealpha(
+        slf: Py<Self>,
+        index: &Bound<'_, PyAny>,
+        alpha: &Bound<'_, PyAny>,
+        py: Python<'_>,
+    ) -> PyResult<()> {
+        let index = index.extract::<i32>()?;
+        let alpha = alpha.extract::<i32>()?;
+        let mut image = slf.bind(py).borrow_mut();
+        let image = &mut image.inner;
+        py.detach(|| image.putpalettealpha(index, alpha))
             .map_err(map_error)
     }
 
     fn putpalettealphas(
-        &mut self,
+        slf: Py<Self>,
         values: &Bound<'_, PyAny>,
         py: Python<'_>,
     ) -> PyResult<()> {
         let values = palette_alpha_bytes(values)?;
-        py.detach(|| self.inner.putpalettealphas(&values))
+        let mut image = slf.bind(py).borrow_mut();
+        let image = &mut image.inner;
+        py.detach(|| image.putpalettealphas(&values))
             .map_err(map_error)
     }
 
@@ -203,34 +222,41 @@ impl PyImage {
     }
 
     /// Return getdata formatted as PIL expects.
-    fn getdata_formatted(&mut self, band: Option<i32>, py: Python<'_>) -> PyResult<Py<PyAny>> {
+    fn getdata_formatted(
+        slf: Py<Self>,
+        band: Option<&Bound<'_, PyAny>>,
+        py: Python<'_>,
+    ) -> PyResult<Py<PyAny>> {
+        // Extract a custom index object before borrowing the image: its
+        // `__index__` method may re-enter and mutate this wrapper.
+        let band = band.map(|value| value.extract::<i32>()).transpose()?;
+        let image = slf.bind(py).borrow();
+        let image = &image.inner;
         if let Some(band) = band {
-            if let Some(values) = self.inner.getdata_band_view(band).map_err(map_error)? {
+            if let Some(values) = image.getdata_band_view(band).map_err(map_error)? {
                 // Copy owned P/L storage directly into the immutable Python
                 // snapshot, avoiding a Rust-side buffer and extra detach.
                 return Ok(PyBytes::new(py, values).into());
             }
 
-            if matches!(&self.inner, RsImage::Loaded(_) | RsImage::Paletted(_)) {
-                let output_len = self.inner.getdata_band_len(band).map_err(map_error)?;
+            if matches!(image, RsImage::Loaded(_) | RsImage::Paletted(_)) {
+                let output_len = image.getdata_band_len(band).map_err(map_error)?;
                 let bytes = PyBytes::new_with(py, output_len, |output| {
-                    py.detach(|| self.inner.getdata_band_into(band, output))
-                        .map_err(map_error)
+                    py.detach(|| image.getdata_band_into(band, output)).map_err(map_error)
                 })?;
                 return Ok(bytes.into());
             }
 
             let output_len = py
-                .detach(|| self.inner.getdata_band_len(band))
+                .detach(|| image.getdata_band_len(band))
                 .map_err(map_error)?;
             let bytes = PyBytes::new_with(py, output_len, |output| {
-                py.detach(|| self.inner.getdata_band_into(band, output))
-                    .map_err(map_error)
+                py.detach(|| image.getdata_band_into(band, output)).map_err(map_error)
             })?;
             return Ok(bytes.into());
         }
 
-        let mode = self.inner.mode_identity().map_err(map_error)?;
+        let mode = image.mode_identity().map_err(map_error)?;
         if !matches!(
             mode,
             pillow_rs::Mode::ImageI32
@@ -240,12 +266,12 @@ impl PyImage {
                 | pillow_rs::Mode::ImageI16B
                 | pillow_rs::Mode::ImageI16N
         ) {
-            let values = py.detach(|| self.inner.getdata(None)).map_err(map_error)?;
+            let values = py.detach(|| image.getdata(None)).map_err(map_error)?;
             return Ok(PyBytes::new(py, &values).into());
         }
 
         let formatted = py
-            .detach(|| self.inner.getdata_formatted(band))
+            .detach(|| image.getdata_formatted(band))
             .map_err(map_error)?;
         Python::attach(|py| match formatted {
             // A selected band is already a one-byte-per-pixel snapshot.
@@ -277,17 +303,30 @@ impl PyImage {
         })
     }
 
-    fn getpixel_formatted(&self, xy: (i32, i32), py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let xy = image_coordinates_in_bounds(&self.inner, xy)?;
-        if let Some(rgb) = self
-            .inner
-            .getpixel_rgb_if_loaded(xy.0, xy.1)
-            .map_err(map_error)?
-        {
+    fn getpixel_formatted(
+        slf: Py<Self>,
+        xy: &Bound<'_, PyAny>,
+        py: Python<'_>,
+    ) -> PyResult<Py<PyAny>> {
+        let coordinates = xy.cast::<PyTuple>()?;
+        if coordinates.len() != 2 {
+            return Err(PyValueError::new_err(format!(
+                "expected tuple of length 2, but got tuple of length {}",
+                coordinates.len()
+            )));
+        }
+        // Match PyO3's tuple extractor order while allowing __index__ hooks to
+        // run before acquiring an image borrow.
+        let x = coordinates.get_item(0)?.extract::<i32>()?;
+        let y = coordinates.get_item(1)?.extract::<i32>()?;
+        let image = slf.bind(py).borrow();
+        let image = &image.inner;
+        let xy = image_coordinates_in_bounds(image, (x, y))?;
+        if let Some(rgb) = image.getpixel_rgb_if_loaded(xy.0, xy.1).map_err(map_error)? {
             return PyTuple::new(py, rgb)?.into_py_any(py);
         }
         let value = py
-            .detach(|| self.inner.getpixel_formatted(xy.0, xy.1))
+            .detach(|| image.getpixel_formatted(xy.0, xy.1))
             .map_err(map_error)?;
         Python::attach(|py| match value {
             pillow_rs::FormattedPixelValue::Scalar(value) => Ok(value.into_py_any(py)?),
