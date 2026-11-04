@@ -84,10 +84,17 @@ class Draw:
         return self.getfont()
 
     def _prepare_text_font(self, font, font_size, embedded_color):
+        # TODO(pillow-rs#3ptb): freeze the None-versus-falsey font_size cases
+        # in CPU Draw parity.
         # Pillow creates ImageText.Text, including its default font, before
         # validating embedded-color mode or resolving the fill ink.
         if font is None:
             font = self._getfont(font_size)
+        elif not font:
+            # ImageText.Text uses `font or ImageFont.load_default()` after
+            # ImageDraw's explicit None-only font-size branch.
+            from . import imagefont as ImageFont
+            font = ImageFont.load_default()
         embedded_color = bool(embedded_color)
         if embedded_color:
             self._draw._validate_embedded_color()

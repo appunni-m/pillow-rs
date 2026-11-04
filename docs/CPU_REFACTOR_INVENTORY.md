@@ -2878,11 +2878,13 @@ Remaining put-family work includes typed wrapper boundaries and complete caller 
   parity, benchmark, or coverage command has run for this family; source review
   remains in progress.
 
-- Pillow 12.2 `ImageDraw.text` creates its default font only when `font is
-  None`. The Python facade now uses that sentinel check, preserving valid
-  falsey custom-font objects. Existing `ImageText.Text`, custom-font metrics,
-  callback order, and output/fault parity remain pending. Source:
-  [ImageDraw.text](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageDraw.py#L3150-L3164).
+- Pillow 12.2 first uses `font is None` to apply the `font_size` default-font
+  branch, then `ImageText.Text` uses `font or ImageFont.load_default()`. The
+  facade preserves both steps: an omitted font uses `_getfont(font_size)`,
+  while a supplied falsey font uses the plain default without `font_size`.
+  Existing `ImageText.Text`, custom-font metrics, callback order, and
+  output/fault parity remain pending. Sources: [ImageDraw.text](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageDraw.py#L3150-L3164)
+  and [ImageText.Text](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageText.py#L1332-L1408).
 
 ### ImageOps source progress: incomplete and unvalidated
 
