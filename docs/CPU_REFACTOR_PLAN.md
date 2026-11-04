@@ -1789,3 +1789,11 @@ blur and max/min/median/mode/rank filters parse radii, sizes, and rank first.
 Their core algorithms and selection paths are unchanged. Callback/output
 parity remains pending. Source-only; no build, formatting, checkstyle, lint,
 tests, parity, benchmark, or coverage ran.
+
+Typed numeric input borrow staging (2026-11-04): KernelFilter, thumbnail
+preflight/application, Quantize, UnsharpMask, Color3DLut, EffectSpread, and
+enhancement operations now retain a Py handle through PyO3 numeric extraction
+and borrow the image only for core access. ColorTransparency likewise parses
+its Python value before borrowing. Core algorithms and defaults are unchanged.
+Output and callback/fault-order parity remain pending. Source-only; no build,
+formatting, checkstyle, lint, tests, parity, benchmark, or coverage ran.

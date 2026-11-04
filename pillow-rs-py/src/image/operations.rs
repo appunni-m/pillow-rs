@@ -411,15 +411,16 @@ impl PyImage {
     }
 
     fn kernel_filter(
-        &self,
+        slf: Py<Self>,
         kernel: Option<Vec<f64>>,
         scale: Option<f64>,
         offset: f64,
         size: (u32, u32),
         py: Python<'_>,
     ) -> PyResult<PyImage> {
+        let image = slf.bind(py).borrow();
         let rs = py
-            .detach(|| self.inner.kernel_filter(kernel, scale, offset, size))
+            .detach(|| image.inner.kernel_filter(kernel, scale, offset, size))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -437,10 +438,12 @@ impl PyImage {
     }
 
     fn _thumbnail_preflight(
-        &self,
+        slf: Py<Self>,
         size: (i64, i64),
+        py: Python<'_>,
     ) -> PyResult<Option<PyThumbnailPlan>> {
-        let prepared = self.inner.prepare_thumbnail(size).map_err(map_error)?;
+        let image = slf.bind(py).borrow();
+        let prepared = image.inner.prepare_thumbnail(size).map_err(map_error)?;
         Ok(prepared.map(|prepared| PyThumbnailPlan {
             output_size: prepared.output_size(),
             prepared,
@@ -448,15 +451,16 @@ impl PyImage {
     }
 
     fn _thumbnail_apply_prepared(
-        &mut self,
+        slf: Py<Self>,
         plan: pyo3::PyRef<'_, PyThumbnailPlan>,
         filter_code: i32,
         reducing_gap: Option<f64>,
         py: Python<'_>,
     ) -> PyResult<()> {
         let prepared = plan.prepared;
+        let mut image = slf.bind(py).borrow_mut();
         py.detach(|| {
-            self.inner.thumbnail_with_plan(
+            image.inner.thumbnail_with_plan(
                 prepared,
                 Some(pillow_rs::ResampleInput::Code(i64::from(filter_code))),
                 reducing_gap,
@@ -467,7 +471,7 @@ impl PyImage {
 
     #[pyo3(signature = (colors=None, method=None, kmeans=None, dither=None, palette=None))]
     fn quantize(
-        &self,
+        slf: Py<Self>,
         colors: Option<i32>,
         method: Option<i32>,
         kmeans: Option<i32>,
@@ -482,9 +486,11 @@ impl PyImage {
                     pillow_rs::QuantizePalette::Image(Box::new(image))
                 }),
         };
+        let image = slf.bind(py).borrow();
         let rs = py
             .detach(|| {
-                self.inner
+                image
+                    .inner
                     .quantize_with_input(colors, method, kmeans, palette, dither)
             })
             .map_err(map_error)?;
@@ -514,7 +520,7 @@ impl PyImage {
     }
 
     fn unsharp_mask(
-        &self,
+        slf: Py<Self>,
         radius: Option<f64>,
         percent: Option<i32>,
         threshold: Option<i32>,
@@ -523,8 +529,9 @@ impl PyImage {
         let radius = radius.unwrap_or(2.0) as f32;
         let percent = percent.unwrap_or(150);
         let threshold = threshold.unwrap_or(3);
+        let image = slf.bind(py).borrow();
         let rs = py
-            .detach(|| self.inner.unsharp_mask(radius, percent, threshold))
+            .detach(|| image.inner.unsharp_mask(radius, percent, threshold))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -616,7 +623,7 @@ impl PyImage {
     }
 
     fn color3dlut(
-        &self,
+        slf: Py<Self>,
         size: (u32, u32, u32),
         table: Vec<f64>,
         channels: Option<u32>,
@@ -634,8 +641,9 @@ impl PyImage {
                 })
             })
             .transpose()?;
+        let image = slf.bind(py).borrow();
         let rs = py
-            .detach(|| self.inner.color3dlut(input, target_mode))
+            .detach(|| image.inner.color3dlut(input, target_mode))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -813,8 +821,9 @@ impl PyImage {
             .map_err(map_error)
     }
 
-    fn effect_spread(&self, distance: u32, py: Python<'_>) -> PyResult<PyImage> {
-        py.detach(|| pillow_rs::image_effect_spread(&self.inner, distance))
+    fn effect_spread(slf: Py<Self>, distance: u32, py: Python<'_>) -> PyResult<PyImage> {
+        let image = slf.bind(py).borrow();
+        py.detach(|| pillow_rs::image_effect_spread(&image.inner, distance))
             .map(|i| PyImage { inner: i })
             .map_err(map_error)
     }
@@ -874,10 +883,12 @@ impl PyImage {
         py.detach(|| self.inner.tobitmap()).map_err(map_error)
     }
 
-    fn enhance_brightness(&self, factor: f64) -> PyResult<PyImage> {
-        let inner = self.inner.clone();
-        let rs = Python::attach(|py| py.detach(|| inner.enhance_brightness(factor)))
-            .map_err(map_error)?;
+    fn enhance_brightness(slf: Py<Self>, factor: f64) -> PyResult<PyImage> {
+        let rs = Python::attach(|py| {
+            let inner = slf.bind(py).borrow().inner.clone();
+            py.detach(|| inner.enhance_brightness(factor))
+        })
+        .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
@@ -889,17 +900,21 @@ impl PyImage {
         Ok(PyImage { inner: rs })
     }
 
-    fn enhance_contrast(&self, factor: f64) -> PyResult<PyImage> {
-        let inner = self.inner.clone();
-        let rs =
-            Python::attach(|py| py.detach(|| inner.enhance_contrast(factor))).map_err(map_error)?;
+    fn enhance_contrast(slf: Py<Self>, factor: f64) -> PyResult<PyImage> {
+        let rs = Python::attach(|py| {
+            let inner = slf.bind(py).borrow().inner.clone();
+            py.detach(|| inner.enhance_contrast(factor))
+        })
+        .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
-    fn enhance_color(&self, factor: f64) -> PyResult<PyImage> {
-        let inner = self.inner.clone();
-        let rs =
-            Python::attach(|py| py.detach(|| inner.enhance_color(factor))).map_err(map_error)?;
+    fn enhance_color(slf: Py<Self>, factor: f64) -> PyResult<PyImage> {
+        let rs = Python::attach(|py| {
+            let inner = slf.bind(py).borrow().inner.clone();
+            py.detach(|| inner.enhance_color(factor))
+        })
+        .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
@@ -909,7 +924,11 @@ impl PyImage {
         Ok(PyImage { inner: rs })
     }
 
-    fn color_transparency(&self, value: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<Py<PyAny>> {
+    fn color_transparency(
+        slf: Py<Self>,
+        value: &Bound<'_, PyAny>,
+        py: Python<'_>,
+    ) -> PyResult<Py<PyAny>> {
         // Color's metadata normalizer accepts component lists and converts
         // invalid input into a warning; public putpixel has stricter errors.
         let value = if let Ok(value) = value.extract::<i64>() {
@@ -923,14 +942,17 @@ impl PyImage {
         } else {
             pillow_rs::PutPixelValue::Invalid
         };
-        let value = self.inner.color_transparency(value).map_err(map_error)?;
+        let image = slf.bind(py).borrow();
+        let value = image.inner.color_transparency(value).map_err(map_error)?;
         image_info_value_to_python(py, value)
     }
 
-    fn enhance_sharpness(&self, factor: f64) -> PyResult<PyImage> {
-        let inner = self.inner.clone();
-        let rs = Python::attach(|py| py.detach(|| inner.enhance_sharpness(factor)))
-            .map_err(map_error)?;
+    fn enhance_sharpness(slf: Py<Self>, factor: f64) -> PyResult<PyImage> {
+        let rs = Python::attach(|py| {
+            let inner = slf.bind(py).borrow().inner.clone();
+            py.detach(|| inner.enhance_sharpness(factor))
+        })
+        .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 }
