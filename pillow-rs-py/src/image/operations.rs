@@ -74,6 +74,25 @@ fn rotate_input_from_python(
     Ok((center, translate, expand, resample, fillcolor))
 }
 
+fn point_lut_from_python(input: &Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
+    pillow_rs::make_lut(1, |sample| {
+        let result = input.call1((sample,)).map_err(|error| {
+            pillow_rs::PilError::ValueError(format!("LUT function failed: {error}"))
+        })?;
+        let rounded = result.call_method0("__round__").map_err(|error| {
+            pillow_rs::PilError::ValueError(format!("LUT function failed: {error}"))
+        })?;
+        rounded.extract::<i32>().map_err(|_| {
+            pillow_rs::PilError::ValueError("LUT function must return an integer".to_owned())
+        })
+    })
+    .map_err(map_error)
+}
+
+fn point_float_lut_from_python(input: &Bound<'_, PyAny>) -> PyResult<Vec<f64>> {
+    pillow_rs::image_eval_float_lut(|sample| input.call1((sample,))?.extract::<f64>())
+}
+
 #[pymethods]
 impl PyImage {
     fn _resize_filter_code(
@@ -752,14 +771,18 @@ impl PyImage {
     /// Applies a sequence or callable LUT through the Rust-owned public path.
     #[pyo3(signature = (input, mode=None))]
     fn point(
-        &self,
+        slf: Py<Self>,
         input: &Bound<'_, PyAny>,
         mode: Option<&str>,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
-        // TODO(pillow-rs#3ptb): callable LUTs can re-enter this image while
-        // the shared PyImage borrow is live. Specify callback order and image
-        // snapshot semantics before changing this borrow lifetime.
+        // Pillow loads before invoking a point callable. Keep that order while
+        // releasing the PyImage borrow before callbacks can re-enter it.
+        let source_mode = {
+            let mut image = slf.bind(py).borrow_mut();
+            py.detach(|| image.inner.load()).map_err(map_error)?;
+            image.inner.mode_identity().map_err(map_error)?
+        };
         let input_kind = if input.is_instance_of::<PyString>() {
             pillow_rs::EvalInputKind::String
         } else {
@@ -768,7 +791,6 @@ impl PyImage {
         pillow_rs::validate_eval_input(input_kind).map_err(map_error)?;
         let target_mode = mode.and_then(pillow_rs::Mode::from_pillow_name);
         if target_mode == Some(pillow_rs::Mode::ImageF32) {
-            let source_mode = self.inner.mode_identity().map_err(map_error)?;
             if matches!(
                 source_mode,
                 pillow_rs::Mode::One
@@ -776,20 +798,18 @@ impl PyImage {
                     | pillow_rs::Mode::ImagePalette8
             ) {
                 let lut = if input.is_callable() {
-                    pillow_rs::image_eval_float_lut(|sample| {
-                        input.call1((sample,))?.extract::<f64>()
-                    })?
+                    point_float_lut_from_python(input)?
                 } else {
                     input.extract::<Vec<f64>>()?
                 };
+                let image = slf.bind(py).borrow();
                 return py
-                    .detach(|| pillow_rs::image_eval_float(&self.inner, &lut))
+                    .detach(|| pillow_rs::image_eval_float(&image.inner, &lut))
                     .map(|i| PyImage { inner: i })
                     .map_err(map_error);
             }
         }
         if input.is_callable() {
-            let source_mode = self.inner.mode_identity().map_err(map_error)?;
             if matches!(
                 source_mode,
                 pillow_rs::Mode::ImageI32
@@ -800,30 +820,25 @@ impl PyImage {
                     | pillow_rs::Mode::ImageF32
             ) {
                 let (scale, offset) = point_transform_from_python(input, py)?;
+                let image = slf.bind(py).borrow();
                 return py
-                    .detach(|| pillow_rs::image_eval_point_transform(&self.inner, scale, offset))
+                    .detach(|| {
+                        pillow_rs::image_eval_point_transform(&image.inner, scale, offset)
+                    })
                     .map(|i| PyImage { inner: i })
                     .map_err(map_error);
             }
-            return pillow_rs::image_eval_callable(&self.inner, |sample| {
-                let result = input.call1((sample,)).map_err(|error| {
-                    pillow_rs::PilError::ValueError(format!("LUT function failed: {error}"))
-                })?;
-                let rounded = result.call_method0("__round__").map_err(|error| {
-                    pillow_rs::PilError::ValueError(format!("LUT function failed: {error}"))
-                })?;
-                rounded.extract::<i32>().map_err(|_| {
-                    pillow_rs::PilError::ValueError(
-                        "LUT function must return an integer".to_owned(),
-                    )
-                })
-            })
-            .map(|i| PyImage { inner: i })
-            .map_err(map_error);
+            let lut = point_lut_from_python(input)?;
+            let image = slf.bind(py).borrow();
+            return py
+                .detach(|| pillow_rs::image_eval_replicated_for_image(&image.inner, &lut))
+                .map(|i| PyImage { inner: i })
+                .map_err(map_error);
         }
 
         let lut = input.extract::<Vec<u8>>()?;
-        py.detach(|| pillow_rs::image_eval_validated(&self.inner, &lut))
+        let image = slf.bind(py).borrow();
+        py.detach(|| pillow_rs::image_eval_validated(&image.inner, &lut))
             .map(|i| PyImage { inner: i })
             .map_err(map_error)
     }

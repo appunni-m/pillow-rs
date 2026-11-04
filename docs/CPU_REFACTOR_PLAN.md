@@ -1802,10 +1802,12 @@ Filter/Transform callback borrow staging (2026-11-04): Filter now performs
 callable, attribute, and name callbacks before borrowing the image to validate
 and snapshot it; `_apply` runs after that borrow is released. Transform parses
 data, snapshots Mode for fill parsing, then reacquires the live image for
-execution. TODO(pillow-rs#3ptb): define callable Point's reentrant callback
-order and image snapshot contract before changing its live shared borrow.
-Output/fault parity remains pending. Source-only; no build, formatting,
-checkstyle, lint, tests, parity, benchmark, or coverage ran.
+execution. Point now loads before callback invocation, captures the initial mode
+for Pillow's callable strategy choice, releases the PyImage borrow while the
+callable builds its table or affine transform, and reacquires the live image
+for application. This preserves mutations made by the callback before point
+execution. Output/fault parity remains pending. Source-only; no build,
+formatting, checkstyle, lint, tests, parity, benchmark, or coverage ran.
 
 Encoded byte argument borrow staging (2026-11-04): `tobytes_encoded` now
 extracts encoder arguments before borrowing the image, then performs mode
@@ -1813,3 +1815,11 @@ lookup and encoding against the current image. This keeps custom sequence
 conversion outside the PyImage borrow without changing encoder dispatch.
 Output/fault parity remains pending. Source-only; no build, formatting,
 checkstyle, lint, tests, parity, benchmark, or coverage ran.
+
+Point callback borrow staging (2026-11-04): Pillow 12.2 loads the image before
+calling a point LUT function, evaluates the callable before applying the LUT
+to the image, and chooses its scalar-transform route from the initial mode.
+The binding now follows that order, builds callback tables without a live
+PyImage borrow, then executes against the current image so callback mutations
+are visible. Non-callable table extraction also completes before the execution
+borrow. Source: [Pillow 12.2.0 Image.point](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py#L1826-L1879). Output and fault parity remain pending. Source-only; no build, formatting, checkstyle, lint, tests, parity, benchmark, or coverage ran.
