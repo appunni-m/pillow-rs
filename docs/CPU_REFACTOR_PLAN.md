@@ -1797,3 +1797,12 @@ and borrow the image only for core access. ColorTransparency likewise parses
 its Python value before borrowing. Core algorithms and defaults are unchanged.
 Output and callback/fault-order parity remain pending. Source-only; no build,
 formatting, checkstyle, lint, tests, parity, benchmark, or coverage ran.
+
+Filter/Transform callback borrow staging (2026-11-04): Filter now performs
+callable, attribute, and name callbacks before borrowing the image to validate
+and snapshot it; `_apply` runs after that borrow is released. Transform parses
+data, snapshots Mode for fill parsing, then reacquires the live image for
+execution. TODO(pillow-rs#3ptb): define callable Point's reentrant callback
+order and image snapshot contract before changing its live shared borrow.
+Output/fault parity remains pending. Source-only; no build, formatting,
+checkstyle, lint, tests, parity, benchmark, or coverage ran.

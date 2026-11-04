@@ -366,7 +366,11 @@ impl PyImage {
             .collect())
     }
 
-    fn filter(&self, filter_type: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<PyImage> {
+    fn filter(
+        slf: Py<Self>,
+        filter_type: &Bound<'_, PyAny>,
+        py: Python<'_>,
+    ) -> PyResult<PyImage> {
         let filter = if filter_type.is_callable() {
             filter_type.call0()?
         } else {
@@ -383,15 +387,15 @@ impl PyImage {
             .ok()
             .and_then(|value| value.extract::<String>().ok())
             .unwrap_or_else(|| type_name.clone());
-        self.inner
-            .validate_filter(&validation_name)
-            .map_err(map_error)?;
-        let image = Py::new(
-            py,
-            PyImage {
-                inner: self.inner.clone(),
-            },
-        )?;
+        let inner = {
+            let image = slf.bind(py).borrow();
+            image
+                .inner
+                .validate_filter(&validation_name)
+                .map_err(map_error)?;
+            image.inner.clone()
+        };
+        let image = Py::new(py, PyImage { inner })?;
         let result = filter.call_method1("_apply", (image,))?;
         let result = result.extract::<PyRef<'_, PyImage>>()?;
         Ok(PyImage {
@@ -753,6 +757,9 @@ impl PyImage {
         mode: Option<&str>,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
+        // TODO(pillow-rs#3ptb): callable LUTs can re-enter this image while
+        // the shared PyImage borrow is live. Specify callback order and image
+        // snapshot semantics before changing this borrow lifetime.
         let input_kind = if input.is_instance_of::<PyString>() {
             pillow_rs::EvalInputKind::String
         } else {
@@ -831,7 +838,7 @@ impl PyImage {
     #[pyo3(signature = (size, method, data=None, resample=0, fill=1, fillcolor=None))]
     #[allow(clippy::too_many_arguments)] // Mirrors the public Pillow Image.transform API.
     fn transform(
-        &self,
+        slf: Py<Self>,
         size: (u32, u32),
         method: i32,
         data: Option<&Bound<'_, PyAny>>,
@@ -841,12 +848,17 @@ impl PyImage {
         py: Python<'_>,
     ) -> PyResult<PyImage> {
         let data = transform_data_from_python(data)?;
-        let mode = self.inner.mode_identity().map_err(map_error)?;
+        let mode = {
+            let image = slf.bind(py).borrow();
+            image.inner.mode_identity().map_err(map_error)?
+        };
         let fillcolor = transform_fill_from_python(fillcolor, mode)?;
         let resample = resample.unwrap_or(0);
         let fill = fill.unwrap_or(1);
+        let image = slf.bind(py).borrow();
         py.detach(|| {
-            self.inner
+            image
+                .inner
                 .transform_public(size, method, data, resample, fill, fillcolor)
         })
         .map(|i| PyImage { inner: i })
