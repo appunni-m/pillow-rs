@@ -1,13 +1,16 @@
 //! Exact-mode operation families for serial CPU execution.
 // TODO(pillow-rs#3ptb): finish the architecture-module declaration audit for
 // the remaining families. Direct-instruction paths were traced across all
-// families; Transpose's per-mode declarations were checked on 2026-11-04.
+// families; Transpose's per-mode declarations and Analysis's RGB8/CMYK8
+// GetProjection declarations were checked on 2026-11-04.
 // TODO(pillow-rs#3ptb): finish the family-by-family audit that every execution
 // boundary consumes the prepared selection derived from ExecutionContext.
 // Resize, Chops, Pad, Crop, Transpose, and supported Draw routes are
 // source-reviewed for prepared-selection flow. Thumbnail's I32 stream
 // consumes its selection; ImageOps Quantize threads selection through all 25
-// modes. Continue the family audit and finish Draw's semantic/fault review.
+// modes. Analysis's Projection, Histogram, and dispatched GetData routes use
+// their prepared selection; its loaded byte-view identity route has no kernel
+// selection. Continue the family audit and finish Draw's semantic/fault review.
 
 pub(crate) mod analysis;
 pub(crate) mod chops;
