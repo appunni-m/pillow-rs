@@ -1781,3 +1781,11 @@ handle while parsing. Existing argument conversion order and core algorithms
 are unchanged. Geometry output and callback/fault-order parity remain pending.
 Source-only; no build, formatting, checkstyle, lint, tests, parity, benchmark,
 or coverage ran.
+
+Mode and filter input borrow staging (2026-11-04): Convert now extracts its
+matrix and color count before mode/dither/palette parsing, then borrows the
+current image. Reduce parses factor then box before borrowing. Gaussian/box
+blur and max/min/median/mode/rank filters parse radii, sizes, and rank first.
+Their core algorithms and selection paths are unchanged. Callback/output
+parity remains pending. Source-only; no build, formatting, checkstyle, lint,
+tests, parity, benchmark, or coverage ran.

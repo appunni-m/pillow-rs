@@ -208,14 +208,18 @@ impl PyImage {
 
     #[pyo3(signature = (mode=None, matrix=None, dither=None, palette=None, colors=None))]
     fn convert(
-        &self,
+        slf: Py<Self>,
         mode: Option<&Bound<'_, PyAny>>,
-        matrix: Option<Vec<f64>>,
+        matrix: Option<&Bound<'_, PyAny>>,
         dither: Option<&Bound<'_, PyAny>>,
         palette: Option<&Bound<'_, PyAny>>,
-        colors: Option<u32>,
+        colors: Option<&Bound<'_, PyAny>>,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
+        let matrix = matrix
+            .map(|value| value.extract::<Vec<f64>>())
+            .transpose()?;
+        let colors = colors.map(|value| value.extract::<u32>()).transpose()?;
         let dither = match dither {
             None => pillow_rs::DitherInput::None,
             Some(value) => {
@@ -230,9 +234,11 @@ impl PyImage {
         };
         let mode = convert_mode_input_from_python(mode)?;
         let palette = convert_palette_input_from_python(palette)?;
+        let image = slf.bind(py).borrow();
         let rs = py
             .detach(|| {
-                self.inner
+                image
+                    .inner
                     .convert_with_input(mode, matrix, dither, palette, colors)
             })
             .map_err(map_error)?;
@@ -487,17 +493,19 @@ impl PyImage {
 
     #[pyo3(signature = (radius=None))]
     fn gaussian_blur(
-        &self,
+        slf: Py<Self>,
         radius: Option<&Bound<'_, PyAny>>,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
         let (radius_x, radius_y) = blur_radius_pair_from_python(radius, 2.0)?;
+        let image = slf.bind(py).borrow();
         let rs = py
             .detach(|| {
                 if radius_x == radius_y {
-                    self.inner.gaussian_blur(radius_x as f32)
+                    image.inner.gaussian_blur(radius_x as f32)
                 } else {
-                    self.inner
+                    image
+                        .inner
                         .gaussian_blur_xy(radius_x as f32, radius_y as f32)
                 }
             })
@@ -522,61 +530,87 @@ impl PyImage {
     }
 
     #[pyo3(signature = (size=3))]
-    fn max_filter(&self, size: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<PyImage> {
+    fn max_filter(
+        slf: Py<Self>,
+        size: &Bound<'_, PyAny>,
+        py: Python<'_>,
+    ) -> PyResult<PyImage> {
         let size = filter_size_from_python(size, false)?;
+        let image = slf.bind(py).borrow();
         let rs = py
-            .detach(|| self.inner.max_filter(size))
+            .detach(|| image.inner.max_filter(size))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
     #[pyo3(signature = (size=3))]
-    fn min_filter(&self, size: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<PyImage> {
+    fn min_filter(
+        slf: Py<Self>,
+        size: &Bound<'_, PyAny>,
+        py: Python<'_>,
+    ) -> PyResult<PyImage> {
         let size = filter_size_from_python(size, false)?;
+        let image = slf.bind(py).borrow();
         let rs = py
-            .detach(|| self.inner.min_filter(size))
+            .detach(|| image.inner.min_filter(size))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
     #[pyo3(signature = (size=3))]
-    fn median_filter(&self, size: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<PyImage> {
+    fn median_filter(
+        slf: Py<Self>,
+        size: &Bound<'_, PyAny>,
+        py: Python<'_>,
+    ) -> PyResult<PyImage> {
         let size = filter_size_from_python(size, false)?;
+        let image = slf.bind(py).borrow();
         let rs = py
-            .detach(|| self.inner.median_filter(size))
+            .detach(|| image.inner.median_filter(size))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
     #[pyo3(signature = (radius=None))]
-    fn box_blur(&self, radius: Option<&Bound<'_, PyAny>>, py: Python<'_>) -> PyResult<PyImage> {
+    fn box_blur(
+        slf: Py<Self>,
+        radius: Option<&Bound<'_, PyAny>>,
+        py: Python<'_>,
+    ) -> PyResult<PyImage> {
         let (radius_x, radius_y) = blur_radius_pair_from_python(radius, 2.0)?;
+        let image = slf.bind(py).borrow();
         let rs = py
-            .detach(|| self.inner.box_blur_xy(radius_x as f32, radius_y as f32))
+            .detach(|| image.inner.box_blur_xy(radius_x as f32, radius_y as f32))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
     #[pyo3(signature = (size=3))]
-    fn mode_filter(&self, size: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<PyImage> {
+    fn mode_filter(
+        slf: Py<Self>,
+        size: &Bound<'_, PyAny>,
+        py: Python<'_>,
+    ) -> PyResult<PyImage> {
         let size = filter_size_from_python(size, true)?;
+        let image = slf.bind(py).borrow();
         let rs = py
-            .detach(|| self.inner.mode_filter(size))
+            .detach(|| image.inner.mode_filter(size))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
     #[pyo3(signature = (size=3, rank=0))]
     fn rank_filter(
-        &self,
+        slf: Py<Self>,
         size: &Bound<'_, PyAny>,
         rank: &Bound<'_, PyAny>,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
         let size = filter_size_from_python(size, false)?;
         let rank = filter_rank_from_python(rank)?;
+        let image = slf.bind(py).borrow();
         let rs = py
-            .detach(|| self.inner.rank_filter(size, rank))
+            .detach(|| image.inner.rank_filter(size, rank))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -652,15 +686,16 @@ impl PyImage {
     }
 
     fn reduce(
-        &self,
+        slf: Py<Self>,
         factor: &Bound<'_, PyAny>,
         box_coords: Option<&Bound<'_, PyAny>>,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
         let factor = reduce_factor_from_python(factor)?;
         let box_coords = box_coords.map(reduce_box_from_python).transpose()?;
+        let image = slf.bind(py).borrow();
         let rs = py
-            .detach(|| self.inner.reduce_public(factor, box_coords))
+            .detach(|| image.inner.reduce_public(factor, box_coords))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
