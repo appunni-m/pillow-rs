@@ -1726,6 +1726,15 @@ fault, palette-metadata, architecture-reachability, or mode/architecture
 parity. Those checks remain pending; no build, formatting, checkstyle, lint,
 tests, parity, benchmark, or coverage ran.
 
+Analysis callback borrow staging (2026-11-04): Histogram and Entropy classify
+the mask before borrowing the source, snapshot its mode for extrema parsing,
+release that borrow while Python converts the extrema values, then borrow the
+live image for execution. GetColors parses its optional integer limit before
+borrowing. Invalid-mask delegation and mask/mode/extrema ordering remain
+unchanged. Other effectful conversions and runtime output/fault parity remain
+open. Source-only; no build, formatting, checkstyle, lint, tests, parity,
+benchmark, or coverage ran.
+
 Python callback borrow staging (2026-11-04): PutAlpha and palette setters now
 coerce host inputs before borrowing the image. GetData extracts its optional
 band, GetPixel extracts both tuple coordinates in order, and GetChannel parses

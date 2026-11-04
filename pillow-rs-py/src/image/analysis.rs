@@ -85,33 +85,42 @@ impl PyImage {
 
     #[pyo3(signature = (mask=None, extrema=None))]
     fn histogram_with_input(
-        &self,
+        slf: Py<Self>,
         mask: Option<&Bound<'_, PyAny>>,
         extrema: Option<&Bound<'_, PyAny>>,
         py: Python<'_>,
     ) -> PyResult<Vec<u32>> {
         let mask = image_analysis_mask_from_python(mask)?;
         if matches!(&mask, pillow_rs::ImageAnalysisMask::Invalid(_)) {
+            let image = slf.bind(py).borrow();
             return py
-                .detach(|| self.inner.histogram_with_input(mask))
+                .detach(|| image.inner.histogram_with_input(mask))
                 .map_err(map_error);
         }
         let masked = matches!(&mask, pillow_rs::ImageAnalysisMask::Image(_));
-        let mode = self.inner.mode_identity().map_err(map_error)?;
+        let mode = {
+            let image = slf.bind(py).borrow();
+            image.inner.mode_identity().map_err(map_error)?
+        };
         let extrema = histogram_extrema_from_python(extrema, mode, masked)?;
-        py.detach(|| self.inner.histogram_with_input_and_extrema(mask, extrema))
+        let image = slf.bind(py).borrow();
+        py.detach(|| image.inner.histogram_with_input_and_extrema(mask, extrema))
             .map_err(map_error)
     }
 
     /// Return getcolors formatted as PIL expects.
     fn getcolors_formatted(
-        &mut self,
-        maxcolors: Option<i32>,
+        slf: Py<Self>,
+        maxcolors: Option<&Bound<'_, PyAny>>,
         py: Python<'_>,
     ) -> PyResult<Option<Py<PyAny>>> {
-        let maxcolors = maxcolors.unwrap_or(256);
+        let maxcolors = maxcolors
+            .map(|value| value.extract::<i32>())
+            .transpose()?
+            .unwrap_or(256);
+        let image = slf.bind(py).borrow();
         let formatted = py
-            .detach(|| self.inner.getcolors_formatted_with_signed_limit(maxcolors))
+            .detach(|| image.inner.getcolors_formatted_with_signed_limit(maxcolors))
             .map_err(map_error)?;
         Python::attach(|py| match formatted {
             None => Ok(None),
@@ -133,21 +142,26 @@ impl PyImage {
 
     #[pyo3(signature = (mask=None, extrema=None))]
     fn entropy_with_input(
-        &mut self,
+        slf: Py<Self>,
         mask: Option<&Bound<'_, PyAny>>,
         extrema: Option<&Bound<'_, PyAny>>,
         py: Python<'_>,
     ) -> PyResult<f64> {
         let mask = image_analysis_mask_from_python(mask)?;
         if matches!(&mask, pillow_rs::ImageAnalysisMask::Invalid(_)) {
+            let image = slf.bind(py).borrow();
             return py
-                .detach(|| self.inner.entropy_with_input(mask))
+                .detach(|| image.inner.entropy_with_input(mask))
                 .map_err(map_error);
         }
         let masked = matches!(&mask, pillow_rs::ImageAnalysisMask::Image(_));
-        let mode = self.inner.mode_identity().map_err(map_error)?;
+        let mode = {
+            let image = slf.bind(py).borrow();
+            image.inner.mode_identity().map_err(map_error)?
+        };
         let extrema = histogram_extrema_from_python(extrema, mode, masked)?;
-        py.detach(|| self.inner.entropy_with_input_and_extrema(mask, extrema))
+        let image = slf.bind(py).borrow();
+        py.detach(|| image.inner.entropy_with_input_and_extrema(mask, extrema))
             .map_err(map_error)
     }
 
