@@ -2008,3 +2008,20 @@ the regular single-band arity error. Source-only; focused CPU output/fault
 parity remains pending. Sources: [Pillow 12.2 ImageDraw `_getink` and Bitmap](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageDraw.py#L2395-L2482),
 [ImageColor.getcolor](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageColor.py#L1017-L1078),
 [`_imaging.c::getink`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/_imaging.c#L3090-L3305).
+
+CMYK Convert fallback reachability review (2026-11-04): Pillow 12.2 gives
+CMYK the RGB base mode. `Image.convert` retries an unsupported direct target
+through that base; RGB can reach CMYK's declared bilevel, luma/alpha, palette,
+I;16, premultiplied, YCbCr, I, and F targets. Palette construction accepts the
+normalized RGB carrier. The dedicated LAB branch normalizes CMYK through RGBA
+and applies the sRGB-to-LAB ImageCms transform. The CMYK mode strategy no
+longer labels those Pillow-supported target pairs CoreOnly, and its palette
+path comment now records the wrapper fallback. This changes support
+classification only; target output, palette metadata, dither, fault, and
+architecture parity remain TODOs for the frozen CPU matrix. Sources: [Pillow
+12.2 ImageMode.py](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageMode.py#L45-L52),
+[Image.convert](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py#L1118-L1151),
+[Convert.c RGB conversion table](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1402-L1487),
+[Convert.c palette conversion](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1093-L1106).
+Source-only; no builds, formatting, checkstyle, lint, tests, parity,
+benchmark, or coverage ran.

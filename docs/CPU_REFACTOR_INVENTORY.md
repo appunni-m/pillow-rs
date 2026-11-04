@@ -262,6 +262,18 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   inputs produce the archived scalar-control result, and the output variant is
   exactly `ImageRgb8`. No source difference was found in this slice; it remains
   uncompiled and unvalidated.
+- Pillow 12.2 Convert reachability review confirms every maintained CMYK
+  target is Pillow-supported. `ImageMode.getmode("CMYK").basemode` is RGB;
+  when a direct conversion fails, `Image.convert` retries through that base
+  mode. The fallback reaches Pillow's scalar, I;16, bilevel, premultiplied,
+  YCbCr, and palette conversion paths; palette conversion accepts normalized
+  RGB. LAB uses the separate wrapper route through RGBA and ImageCms. CMYK no
+  longer marks these targets CoreOnly. The mode-owned direct kernels still
+  require exact output, palette metadata, dithering, fault, and fallback
+  parity against these Pillow routes. Sources: [ImageMode.py](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageMode.py#L45-L52),
+  [Image.convert](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py#L1118-L1151),
+  [Convert.c RGB conversion table](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1402-L1487),
+  [Convert.c palette conversion](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1093-L1106).
 - Source-only review of archived L→RGB/RGBA expansion is complete. The exact
   16-pixel shuffle tables, partial-block padding, three-byte RGB packing, and
   RGBA alpha fill of 255 are retained in the `luma8` helper reached through the

@@ -34,28 +34,13 @@ const TARGETS: &[Mode] = &[
     Mode::ImageI32,
     Mode::ImageF32,
 ];
-// TODO(pillow-rs#3ptb): Pillow's wrapper also converts CMYK to LAB through
-// RGBA and ImageCms; reconcile all CoreOnly targets with wrapper fallbacks.
-const CORE_ONLY_TARGETS: &[Mode] = &[
-    Mode::One,
-    Mode::ImageLuma8,
-    Mode::ImageLumaA8,
-    Mode::ImagePalette8,
-    Mode::ImagePaletteAlpha8,
-    Mode::ImageI16,
-    Mode::ImageI16L,
-    Mode::ImageI16B,
-    Mode::ImageI16N,
-    Mode::ImageLaPremultiplied8,
-    Mode::ImageRgbPremultiplied8,
-    Mode::ImageYCbCr8,
-    Mode::ImageI32,
-    Mode::ImageF32,
-];
+// Pillow reaches every declared target through its direct CMYK converters,
+// RGB base-mode fallback, or the dedicated RGBA/ImageCms LAB route.
+const CORE_ONLY_TARGETS: &[Mode] = &[];
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: TARGETS,
     core_only_targets: CORE_ONLY_TARGETS,
-    core_only_reason: Some("listed CMYK target routes need Pillow-wrapper parity review"),
+    core_only_reason: None,
     rejection_reason: "image has wrong mode",
 }];
 

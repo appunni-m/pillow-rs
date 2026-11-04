@@ -47,7 +47,7 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
     }
 }
 
-// NO_PILLOW_SUPPORT: Pillow's palette converter rejects native `CMYK` input.
+// Pillow normalizes CMYK to its RGB base mode before building a palette target.
 pub(crate) fn execute_palette_target(
     source: &RgbaImage,
     target: Mode,
