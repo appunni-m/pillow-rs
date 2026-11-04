@@ -2088,3 +2088,16 @@ under `pillow-rs#3ptb`; no validation ran. Sources: [ImageMode.py RGBA base](htt
 [Convert.c RGB-to-La and I;16](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L222-L254),
 [Convert.c RGBA and RGB routes](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L391-L410),
 [Convert.c mode converter table](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1411-L1443).
+
+RGBX Convert fallback correction (2026-11-04): the RGBX source strategy no
+longer marks I;16*, RGBA, `La`, or `RGBa` as CoreOnly. Pillow assigns RGBX the
+RGB base and retries these targets through RGB. The existing fused mode-owned
+outputs match those routes: I;16* widens RGB luma; RGBA and RGBa use opaque
+alpha; `La` uses RGB-derived luma and opaque alpha. Removed stale comments that
+described these routes as Pillow-unsupported because the direct converter table
+omits them. Exact output/fault/architecture parity remains TODO under
+`pillow-rs#3ptb`; no validation ran. Sources: [ImageMode.py RGBX base](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageMode.py#L45-L57),
+[Image.convert fallback](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py#L1139-L1151),
+[Convert.c RGBX and RGB target routes](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1411-L1452),
+[Convert.c RGB-to-La](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L222-L228),
+[Convert.c opaque alpha expansion](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L380-L388).

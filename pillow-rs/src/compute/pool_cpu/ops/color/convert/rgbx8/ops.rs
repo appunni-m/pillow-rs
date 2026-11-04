@@ -177,20 +177,11 @@ static ARCHITECTURES: [ImplementationSupport; 36] = architecture_catalog!(
     ]
 );
 
-// NO_PILLOW_SUPPORT: these remaining RGBX source-target pairs are Rust extensions.
-const CORE_ONLY_TARGETS: &[Mode] = &[
-    Mode::ImageI16,
-    Mode::ImageI16L,
-    Mode::ImageI16B,
-    Mode::ImageI16N,
-    Mode::ImageRgba8,
-    Mode::ImageLaPremultiplied8,
-    Mode::ImageRgbPremultiplied8,
-];
+// Pillow's wrapper routes the missing direct RGBX converters through RGB.
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: super::super::ops::RGBX_TARGETS,
-    core_only_targets: CORE_ONLY_TARGETS,
-    core_only_reason: Some("Pillow has no matching RGBX source-target conversion"),
+    core_only_targets: &[],
+    core_only_reason: None,
     rejection_reason: "image has wrong mode",
 }];
 

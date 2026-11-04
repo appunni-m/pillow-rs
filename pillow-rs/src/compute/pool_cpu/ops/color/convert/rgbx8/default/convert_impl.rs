@@ -28,7 +28,8 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
         Mode::ImageLumaA8 => {
             Ok(DynamicImage::ImageLumaA8(opaque_luma_alpha(source)))
         }
-        // NO_PILLOW_SUPPORT: Pillow's Convert table rejects RGBX to La.
+        // Pillow's wrapper converts RGBX to RGB, then RGB to La; the latter
+        // emits opaque alpha.
         Mode::ImageLaPremultiplied8 => {
             Ok(DynamicImage::ImageLaPremultiplied8(opaque_luma_alpha(source)))
         }
@@ -43,7 +44,8 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
         Mode::ImageRgba8 => {
             Ok(DynamicImage::ImageRgba8(opaque_rgba(source)))
         }
-        // NO_PILLOW_SUPPORT: Pillow's Convert table rejects RGBX to RGBa.
+        // Pillow's wrapper converts RGBX to RGB, then adds opaque alpha for
+        // the requested premultiplied RGBa mode.
         Mode::ImageRgbPremultiplied8 => {
             Ok(DynamicImage::ImageRgbPremultiplied8(opaque_rgba(source)))
         }
