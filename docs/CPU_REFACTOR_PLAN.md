@@ -2025,3 +2025,18 @@ architecture parity remain TODOs for the frozen CPU matrix. Sources: [Pillow
 [Convert.c palette conversion](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1093-L1106).
 Source-only; no builds, formatting, checkstyle, lint, tests, parity,
 benchmark, or coverage ran.
+
+HSV/YCbCr Convert fallback reachability review (2026-11-04): Pillow 12.2
+assigns both sources the RGB base mode. Its wrapper retries unsupported direct
+conversions through RGB, and Pillow's RGB strategy supports every target
+currently declared by these two source-mode owners, including palette and
+premultiplied outputs. Their target declarations no longer mark those pairs
+CoreOnly; palette comments now record the wrapper normalization. Pillow also
+supports RGBX via the same base fallback, and both mode owners now declare and
+execute that target with X=255. Existing target output, alpha-lane, palette,
+dither, fault, and architecture parity remains pending. Sources: [Pillow 12.2
+ImageMode.py](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageMode.py#L48-L52),
+[Image.convert](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py#L1118-L1151),
+[Convert.c](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1402-L1487).
+Source-only; no builds, formatting, checkstyle, lint, tests, parity,
+benchmark, or coverage ran.

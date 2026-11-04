@@ -34,6 +34,7 @@ pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, P
         }
         Mode::ImageLumaA8 => Ok(DynamicImage::ImageLumaA8(luma_alpha(source))),
         Mode::ImageRgb8 => Ok(DynamicImage::ImageRgb8(rgb(source))),
+        Mode::ImageRgbx8 => Ok(DynamicImage::ImageRgbx8(rgbx(source))),
         Mode::ImageRgba8 => Ok(DynamicImage::ImageRgba8(rgba(source))),
         Mode::ImageCmyk8 => Ok(DynamicImage::ImageCmyk8(cmyk(source))),
         Mode::ImageYCbCr8 => Ok(DynamicImage::ImageYCbCr8(source.clone())),
@@ -44,7 +45,7 @@ pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, P
     }
 }
 
-// NO_PILLOW_SUPPORT: Pillow's palette converter rejects native `YCbCr` input.
+// Pillow normalizes YCbCr to its RGB base mode before building a palette target.
 pub(crate) fn execute_palette_target(
     source: &RgbImage,
     target: Mode,
@@ -91,6 +92,15 @@ fn rgb(source: &RgbImage) -> RgbImage {
 }
 
 fn rgba(source: &RgbImage) -> RgbaImage {
+    let mut output = RgbaImage::new(source.width(), source.height());
+    for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
+        let [red, green, blue] = crate::color::ycbcr_pixel_to_rgb(pixel[0], pixel[1], pixel[2]);
+        *destination = Rgba([red, green, blue, u8::MAX]);
+    }
+    output
+}
+
+fn rgbx(source: &RgbImage) -> RgbaImage {
     let mut output = RgbaImage::new(source.width(), source.height());
     for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
         let [red, green, blue] = crate::color::ycbcr_pixel_to_rgb(pixel[0], pixel[1], pixel[2]);

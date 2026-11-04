@@ -274,6 +274,16 @@ Related Kata issues: pillow-rs#3ptb (active CPU goal), pillow-rs#brg0 (related p
   [Image.convert](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py#L1118-L1151),
   [Convert.c RGB conversion table](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1402-L1487),
   [Convert.c palette conversion](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1093-L1106).
+- HSV and YCbCr also declare RGB as their Pillow base mode. Pillow's wrapper
+  fallback reaches every currently declared target for both modes, including
+  palette and premultiplied destinations, so their CoreOnly target sets were
+  cleared and their palette comments now describe the base-mode path. The
+  direct target kernels now include exact RGBX outputs with X=255. The
+  mode-owned direct kernels still need per-target output, alpha-lane, palette,
+  dither, fault, and architecture parity.
+  Sources: [ImageMode.py](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageMode.py#L48-L52),
+  [Image.convert](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py#L1118-L1151),
+  [Convert.c](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1402-L1487).
 - Source-only review of archived L→RGB/RGBA expansion is complete. The exact
   16-pixel shuffle tables, partial-block padding, three-byte RGB packing, and
   RGBA alpha fill of 255 are retained in the `luma8` helper reached through the
