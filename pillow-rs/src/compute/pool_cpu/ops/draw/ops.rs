@@ -23,8 +23,10 @@
 //! backend, and nonempty guards; the wrapper evaluates that declaration. The
 //! Source tracing confirms the queued child receipt is Paste; route parity
 //! remains TODO. Text masks are dispatched without an expanded intermediate
-//! buffer; parity remains pending. TODO(pillow-rs#3ptb): finish source and
-//! fault-contract review for direct Text/Bitmap and eager native Bitmap paths.
+//! buffer; parity remains pending. The Python facade and direct PyO3 Bitmap
+//! entry load the mask before fill parsing/palette resolution; remaining
+//! direct Text/Bitmap and eager native Bitmap source/fault review is pending.
+//! TODO(pillow-rs#3ptb): finish that source review and fault-contract pass.
 
 use crate::compute::{Architecture, Backend, ExecutionContext};
 use crate::compute::registry::support::{
