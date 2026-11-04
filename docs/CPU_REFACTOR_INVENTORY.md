@@ -1432,13 +1432,14 @@ are in `pool_cpu/legacy/pool_simd/ops/adapters/reduce.rs` and its
 
 Reduce source audit correction (2026-11-04): the Python facade materializes
 before nonidentity factor/box conversion, and identity requests materialize
-through `copy()`. Core validation converts C-int scales and box coordinates
-before scale positivity and box semantics, then checks negative offsets, source
-bounds, and empty boxes before P-mode downsampling rejection. Factor-one P
-sub-boxes crop directly. TODO: the PyO3 input adapter still narrows Python
-integers to `i64` and primitive vectors; arbitrary-size integers, custom
-`__index__` callbacks/exceptions, and parser arity-versus-item-conversion
-ordering remain source gaps.
+through `copy()`. The full path converts C-int scales and box coordinates
+before core checks scale positivity and box semantics, then checks negative
+offsets, source bounds, and empty boxes before P-mode downsampling rejection.
+Factor-one P sub-boxes crop directly. The PyO3 adapter now converts each factor and
+coordinate with the shared C-int parser, preserving arbitrary-size integer
+overflow and custom `__index__` exceptions before entering core. TODO: verify
+sequence-subclass callback and mutation behavior against Pillow's parser during
+frozen CPU parity.
 
 Source audit refinement (2026-11-02): the native typed u16/f32 reducer
 now converts row coordinates to `usize` before flattening the sample

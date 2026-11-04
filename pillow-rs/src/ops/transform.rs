@@ -54,6 +54,8 @@ pub enum ReduceFactor {
     Scalar(i64),
     /// A factor sequence supplied by the caller.
     Sequence(Vec<i64>),
+    /// A factor sequence with a different arity, before item conversion.
+    SequenceLength { length: usize, tuple: bool },
     /// A factor sequence whose items are not integers.
     FloatingSequence(Vec<f64>),
     /// A value that could not be represented as an integer or sequence.
@@ -65,6 +67,8 @@ pub enum ReduceFactor {
 pub enum ReduceBox {
     /// Crop coordinates in Pillow order `(left, upper, right, lower)`.
     Sequence(Vec<i64>),
+    /// A box sequence with a different arity, before item conversion.
+    SequenceLength { length: usize, tuple: bool },
     /// A value that could not be represented as a coordinate sequence.
     Invalid,
     /// A value with a known host type that is not a coordinate sequence.
@@ -85,6 +89,12 @@ fn parse_reduce_factors(factor: ReduceFactor) -> Result<(i32, i32), PilError> {
     let values = match factor {
         ReduceFactor::Scalar(value) => [value, value].to_vec(),
         ReduceFactor::Sequence(values) => values,
+        ReduceFactor::SequenceLength { length, tuple } => {
+            return Err(PilError::TypeError(format!(
+                "argument 1 must be {} of length 2, not {length}",
+                if tuple { "tuple" } else { "sequence" }
+            )));
+        }
         ReduceFactor::FloatingSequence(_) => {
             return Err(PilError::TypeError(
                 "'float' object cannot be interpreted as an integer".into(),
@@ -133,12 +143,18 @@ fn parse_reduce_box_coordinates(
                 values.len()
             )));
         }
+        Some(ReduceBox::SequenceLength { length, tuple }) => {
+            return Err(PilError::TypeError(format!(
+                "argument 2 must be {} of length 4, not {length}",
+                if tuple { "tuple" } else { "sequence" }
+            )));
+        }
         Some(ReduceBox::Invalid) => {
             return Err(PilError::TypeError("box must be a 4-item sequence".into()));
         }
         Some(ReduceBox::InvalidType(type_name)) => {
             return Err(PilError::TypeError(format!(
-                "argument 2 must be 4-item sequence, not {type_name}"
+                "argument 2 must be 4-item tuple, not {type_name}"
             )));
         }
     }
@@ -167,9 +183,9 @@ fn validate_reduce_box(
 impl Image {
     /// Reduces an image using Pillow's public scalar/sequence contract.
     ///
-    /// Python and other bindings only extract primitive values into the
-    /// neutral enums above. Factor arity, positivity, coordinate conversion,
-    /// and the optional crop all remain in the core implementation.
+    /// Bindings preserve sequence arity and convert integer items through their
+    /// host protocol. The core owns scale positivity, box bounds, mode
+    /// rejection, and the optional crop.
     pub fn reduce_public(
         &self,
         factor: ReduceFactor,

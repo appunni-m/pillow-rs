@@ -1,8 +1,11 @@
 use super::{
     Bound, PyAny, PyDict, PyErr, PyInt, PyList, PyOverflowError, PyResult, PyString, PyTuple,
-    PyTypeError, PyValueError, Python,
+    PyTypeError, PyValueError, Python, c_int_from_python,
 };
-use pyo3::types::{PyAnyMethods, PyBool, PyFloat, PyListMethods, PyTupleMethods, PyTypeMethods};
+use pyo3::types::{
+    PyAnyMethods, PyBool, PyByteArray, PyBytes, PyFloat, PyListMethods, PyTupleMethods,
+    PyTypeMethods,
+};
 
 pub(crate) fn autocontrast_cutoff_counts_from_python(
     py: Python<'_>,
@@ -595,29 +598,96 @@ pub(crate) fn transform_fill_from_python(
     Ok(Some(pillow_rs::TransformFill::Invalid))
 }
 
+enum ReduceSequence<'py> {
+    NotSequence,
+    WrongLength { length: usize, tuple: bool },
+    Items(Vec<Bound<'py, PyAny>>),
+}
+
+fn reduce_sequence_items<'py>(
+    value: &Bound<'py, PyAny>,
+    expected_length: usize,
+) -> PyResult<ReduceSequence<'py>> {
+    if let Ok(tuple) = value.cast::<PyTuple>() {
+        if tuple.len() != expected_length {
+            return Ok(ReduceSequence::WrongLength {
+                length: tuple.len(),
+                tuple: true,
+            });
+        }
+        return Ok(ReduceSequence::Items(tuple.iter().collect()));
+    }
+    if value.is_instance_of::<PyString>()
+        || value.is_instance_of::<PyBytes>()
+        || value.is_instance_of::<PyByteArray>()
+        // SAFETY: `value` is a live GIL-bound object; this checks its sequence slot.
+        || unsafe { pyo3::ffi::PySequence_Check(value.as_ptr()) == 0 }
+    {
+        return Ok(ReduceSequence::NotSequence);
+    }
+
+    // SAFETY: `value` is live and PySequence_Check succeeded above.
+    let length = unsafe { pyo3::ffi::PySequence_Size(value.as_ptr()) };
+    if length < 0 {
+        return Err(PyErr::fetch(value.py()));
+    }
+    if length as usize != expected_length {
+        return Ok(ReduceSequence::WrongLength {
+            length: length as usize,
+            tuple: false,
+        });
+    }
+
+    // PyArg_ParseTuple materializes non-tuple sequences with PySequence_Tuple
+    // before converting any items. The returned pointer is a new reference.
+    // SAFETY: `value` is a live GIL-bound sequence; PySequence_Tuple returns a
+    // new tuple reference or NULL with a Python exception set.
+    let tuple = unsafe {
+        Bound::from_owned_ptr_or_err(value.py(), pyo3::ffi::PySequence_Tuple(value.as_ptr()))
+    }?;
+    let tuple = tuple.cast::<PyTuple>()?;
+    if tuple.len() != expected_length {
+        return Ok(ReduceSequence::WrongLength {
+            length: tuple.len(),
+            tuple: true,
+        });
+    }
+    Ok(ReduceSequence::Items(tuple.iter().collect()))
+}
+
 pub(crate) fn reduce_factor_from_python(
     value: &Bound<'_, PyAny>,
 ) -> PyResult<pillow_rs::ReduceFactor> {
-    if let Ok(value) = value.extract::<i64>() {
-        return Ok(pillow_rs::ReduceFactor::Scalar(value));
+    match reduce_sequence_items(value, 2)? {
+        ReduceSequence::WrongLength { length, tuple } => Err(PyTypeError::new_err(format!(
+            "argument 1 must be {} of length 2, not {length}",
+            if tuple { "tuple" } else { "sequence" }
+        ))),
+        ReduceSequence::Items(items) => items
+            .iter()
+            .map(|item| c_int_from_python(item).map(i64::from))
+            .collect::<PyResult<Vec<_>>>()
+            .map(pillow_rs::ReduceFactor::Sequence),
+        ReduceSequence::NotSequence => Ok(pillow_rs::ReduceFactor::Scalar(i64::from(
+            c_int_from_python(value)?,
+        ))),
     }
-    if let Ok(values) = value.extract::<Vec<i64>>() {
-        return Ok(pillow_rs::ReduceFactor::Sequence(values));
-    }
-    if let Ok(values) = value.extract::<Vec<f64>>() {
-        return Ok(pillow_rs::ReduceFactor::FloatingSequence(values));
-    }
-    Ok(pillow_rs::ReduceFactor::Invalid(
-        value.get_type().name()?.to_string(),
-    ))
 }
 
 pub(crate) fn reduce_box_from_python(value: &Bound<'_, PyAny>) -> PyResult<pillow_rs::ReduceBox> {
-    let value = match value.extract::<Vec<i64>>() {
-        Ok(value) => pillow_rs::ReduceBox::Sequence(value),
-        Err(_) => pillow_rs::ReduceBox::InvalidType(value.get_type().name()?.to_string()),
-    };
-    Ok(value)
+    match reduce_sequence_items(value, 4)? {
+        ReduceSequence::WrongLength { length, tuple } => {
+            Ok(pillow_rs::ReduceBox::SequenceLength { length, tuple })
+        }
+        ReduceSequence::Items(items) => items
+            .iter()
+            .map(|item| c_int_from_python(item).map(i64::from))
+            .collect::<PyResult<Vec<_>>>()
+            .map(pillow_rs::ReduceBox::Sequence),
+        ReduceSequence::NotSequence => Ok(pillow_rs::ReduceBox::InvalidType(
+            value.get_type().name()?.to_string(),
+        )),
+    }
 }
 
 pub(crate) fn centering_from_python(value: &Bound<'_, PyAny>) -> pillow_rs::CenteringInput {
