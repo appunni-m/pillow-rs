@@ -1984,3 +1984,14 @@ positions, implement custom-font metrics, and verify callback faults and
 RGB/RGBA composition in frozen CPU parity. Source-only; no build, formatting,
 checkstyle, lint, test, parity, benchmark, or coverage ran. Source:
 [Pillow 12.2 ImageDraw text](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageDraw.py#L3220-L3285).
+
+Draw implicit Bitmap ink correction (2026-11-04): Pillow initializes its
+default drawing ink with `draw_ink(-1)`, except that `I` and `F` use `1`.
+The mode-specific ink conversion makes omitted fill zero for scalar byte
+modes, white for packed multiband modes, one for `I`/`F`, and 65535 for
+`I;16`. Bitmap previously supplied white bytes for every mode. It now uses the
+shared mode-resolved Draw ink rule already used by Text, while retaining mask
+validation before default-ink selection on the no-fill Rust path. Frozen CPU
+mode-by-architecture parity remains pending. Source: [Pillow 12.2
+ImageDraw initialization and Bitmap](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageDraw.py#L2288-L2341),
+[`_imaging.c::getink`](https://github.com/python-pillow/Pillow/blob/12.2.0/src/_imaging.c#L3090-L3305).

@@ -698,10 +698,10 @@ impl Draw {
         self.color_with_input(input)
     }
 
-    /// Resolve an ImageDraw text ink according to Pillow's mode-specific
-    /// default. ImageDraw initializes text's implicit ink from
-    /// `draw_ink(-1)` (or `draw_ink(1)` for `I`/`F`), which is not the same
-    /// as the geometric primitive default represented by `None` here.
+    /// Resolve an ImageDraw ink according to Pillow's mode-specific default.
+    /// ImageDraw initializes its implicit ink from `draw_ink(-1)` (or
+    /// `draw_ink(1)` for `I`/`F`), which is not the same as the geometric
+    /// primitive default represented by `None` here.
     pub fn text_color_with_input(
         &self,
         input: DrawColorInput,
@@ -710,7 +710,12 @@ impl Draw {
             return self.color_with_input(input);
         }
 
-        match self.effective_mode()? {
+        Ok(Self::default_draw_ink_for_mode(self.effective_mode()?))
+    }
+
+    /// Resolve ImageDraw's omitted fill from the already selected draw mode.
+    pub(crate) fn default_draw_ink_for_mode(mode: Mode) -> (u8, u8, u8, u8) {
+        match mode {
             Mode::ImageRgb8
             | Mode::ImageRgba8
             | Mode::ImageRgbPremultiplied8
@@ -721,12 +726,11 @@ impl Draw {
             | Mode::ImageCmyk8
             | Mode::ImageYCbCr8
             | Mode::ImageLab8
-            | Mode::ImageHsv8 => {
-                Ok((255, 255, 255, 255))
-            }
-            Mode::ImageI32 => Ok((1, 0, 0, 0)),
-            Mode::ImageF32 => Ok((0, 0, 128, 63)),
-            _ => Ok((0, 0, 0, 255)),
+            | Mode::ImageHsv8 => (255, 255, 255, 255),
+            Mode::ImageI32 => (1, 0, 0, 0),
+            Mode::ImageF32 => (0, 0, 128, 63),
+            Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => (255, 255, 0, 0),
+            _ => (0, 0, 0, 255),
         }
     }
 
@@ -750,10 +754,10 @@ impl Draw {
         bitmap: &Image,
         input: DrawColorInput,
     ) -> Result<(), PilError> {
-        let mode = self.effective_mode()?;
         if matches!(input, DrawColorInput::None) {
             return self.bitmap(x, y, bitmap, None);
         }
+        let mode = self.effective_mode()?;
         if mode == Mode::ImagePalette8
             && (matches!(&input, DrawColorInput::String(_))
                 || matches!(

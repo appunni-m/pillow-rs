@@ -35,11 +35,11 @@ impl Draw {
         bitmap: &Image,
         fill: Option<(u8, u8, u8, u8)>,
     ) -> Result<(), PilError> {
-        let color = fill.unwrap_or((255, 255, 255, 255));
         let bmp_mode = bitmap.mode_identity()?;
         crate::compute::pool_cpu::ops::draw::ops::validate_bitmap_mask_mode(bmp_mode)?;
         let (bmp_w, bmp_h) = bitmap.size()?;
         let mode = self.effective_mode()?;
+        let color = fill.unwrap_or_else(|| Draw::default_draw_ink_for_mode(mode));
         // Pending Image pipelines keep their exact output mode on the wrapper.
         let raster_mode = self.image.mode_identity()?;
         let (requested_backend, context) = self.cpu_execution_context()?;
