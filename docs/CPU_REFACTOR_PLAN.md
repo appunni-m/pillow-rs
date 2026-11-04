@@ -1885,3 +1885,18 @@ instruction-free architecture wrapper declarations or every family boundary
 for prepared-selection propagation; the existing `pool_cpu/ops/mod.rs` TODO
 remains open. No build, formatting, checkstyle, lint, test, parity, benchmark,
 or coverage ran.
+
+Transpose strategy declaration audit (2026-11-04): the family-level
+`declare_modes!` classification covers all 25 exact `Mode` variants. Thirteen
+native-byte modes and four I;16 identities use their corresponding prepared
+SSE2/NEON/Wasm strategies; seven typed modes are explicitly Default-only, and
+RGBA keeps its explicit AVX2 transpose strategy alongside native-byte routes.
+The shared declaration macros build the public `OperationSupport`, select
+from the injected `ExecutionContext` and request facts, and store the concrete
+mode/architecture variant with its `StrategySelection`. The mode-module cfgs
+match the declared architecture modules. Default and architecture owners read
+the exact mode's native carrier without changing mode to reuse an algorithm.
+This closes the Transpose mode/architecture declaration review only; output,
+storage-boundary, fallback, and receipt parity remain pending in its existing
+TODO. Source-only; no build, formatting, checkstyle, lint, test, parity,
+benchmark, or coverage ran.

@@ -1,7 +1,7 @@
 //! Exact-mode operation families for serial CPU execution.
-// TODO(pillow-rs#3ptb): audit every architecture module declaration against
-// its mode support and dispatch cfg. Keep architecture implementations until
-// target-specific reachability is verified.
+// TODO(pillow-rs#3ptb): finish the architecture-module declaration audit for
+// the remaining families. Direct-instruction paths were traced across all
+// families; Transpose's per-mode declarations were checked on 2026-11-04.
 // TODO(pillow-rs#3ptb): finish the family-by-family audit that every execution
 // boundary consumes the prepared selection derived from ExecutionContext.
 // Resize, Chops, Pad, Crop, Transpose, and supported Draw routes are
