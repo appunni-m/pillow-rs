@@ -29,13 +29,15 @@ class Draw:
         self._image._rust_image = self._draw.image
 
     def _palette_ink(self, ink):
-        if self._image.mode != "P" or not self._image._rust_image.has_attached_palette():
+        if self._image.mode != "P":
             return ink
-        self._prepare_palette_allocation()
         if isinstance(ink, str):
             ink = imagecolor.getcolor(ink, self._image.mode)
+        if not self._image._rust_image.has_attached_palette():
+            return ink
         if not isinstance(ink, tuple):
             return ink
+        self._prepare_palette_allocation()
         palette = self._image.palette
         previous_palette = palette.palette[:]
         index = palette.getcolor(ink, self._image)
