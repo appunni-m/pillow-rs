@@ -77,6 +77,10 @@ WIP commits `5a5e4ecce` and `857080498` stage Point callbacks outside image
 borrows and align GetPixel load/tuple-conversion order with Pillow. Existing
 callback and input-order paths have received source review only; the full CPU
 implementation and its validation gates remain incomplete.
+The Paste architecture-module audit found its direct AArch64 intrinsic code
+under target-gated NEON modules; generic architecture wrappers use the shared
+portable `wide` kernel, and support declarations gate strategies by target.
+Other CPU families still need the same reachability review.
 Recent source-only checkpoints thread `StrategySelection` through Rotate and
 Transform hidden-lane helpers; native-byte Filter extrema, rank, and blur
 helpers; LA/RGBA AlphaComposite architecture binding; the UnsharpMask
@@ -1838,3 +1842,12 @@ coordinates and reading the pixel. Negative indices are normalized against
 their respective dimensions. Remaining C-int boundary, fault-order, and
 runtime parity checks are tracked in the existing GetPixel TODO. Source:
 [Pillow 12.2.0 Image.getpixel](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py#L1612-L1625). No build, formatting, checkstyle, lint, tests, parity, benchmark, or coverage ran.
+
+Paste architecture reachability review (2026-11-04): the family’s direct
+`core::arch::aarch64` intrinsics occur only in NEON row kernels declared under
+`aarch64` plus `neon` cfgs. Architecture folders also contain portable wrapper
+modules over the shared `wide` kernel; their operation support declarations
+mark SSE2, NEON, and Wasm SIMD128 available only for matching target configs.
+No architecture instruction is called through an ungated module in this
+family. Remaining CPU families still need this audit. Source-only; no builds,
+lint, tests, parity, or benchmarks ran.
