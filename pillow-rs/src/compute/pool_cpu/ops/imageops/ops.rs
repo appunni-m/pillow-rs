@@ -348,34 +348,45 @@ pub(crate) static INVERT_SUPPORT: OperationSupport =
 
 const INVERT_CHILDREN: &[OperationId] = &[OperationId::Invert];
 
-fn imageops_invert_rejection(mode: Mode) -> Option<&'static str> {
+fn imageops_invert_rejection(mode: Mode) -> Option<(&'static str, RejectionKind)> {
     match mode {
-        Mode::ImageLumaA8 => Some("not supported for mode LA"),
-        Mode::ImagePaletteAlpha8 => Some("not supported for mode PA"),
-        Mode::ImageRgba8 => Some("not supported for mode RGBA"),
-        Mode::ImageCmyk8 => Some("not supported for mode CMYK"),
+        Mode::ImagePalette8 => Some((
+            "mode P support coming soon",
+            RejectionKind::NotImplementedError,
+        )),
+        Mode::ImageLumaA8 => Some(("not supported for mode LA", RejectionKind::OsError)),
+        Mode::ImagePaletteAlpha8 => Some(("not supported for mode PA", RejectionKind::OsError)),
+        Mode::ImageRgba8 => Some(("not supported for mode RGBA", RejectionKind::OsError)),
+        Mode::ImageCmyk8 => Some(("not supported for mode CMYK", RejectionKind::OsError)),
+        Mode::ImageI32 => Some(("not supported for mode I", RejectionKind::OsError)),
+        Mode::ImageF32 => Some(("not supported for mode F", RejectionKind::OsError)),
+        Mode::ImageI16 => Some(("not supported for mode I;16", RejectionKind::OsError)),
+        Mode::ImageI16L => Some(("not supported for mode I;16L", RejectionKind::OsError)),
+        Mode::ImageI16B => Some(("not supported for mode I;16B", RejectionKind::OsError)),
+        Mode::ImageI16N => Some(("not supported for mode I;16N", RejectionKind::OsError)),
         _ => None,
     }
 }
 
 fn classify_imageops_invert_route(mode: Mode) -> OperationModeRoute {
     let child_support = INVERT_SUPPORT.for_mode(mode);
-    let scope = if mode.pillow_name().is_some() {
-        SupportScope::Pillow
-    } else {
-        // NO_PILLOW_SUPPORT: internal raster identities have no Pillow ImageOps mode route.
-        SupportScope::CoreOnly {
+    let wrapper_rejection = imageops_invert_rejection(mode);
+    let scope = match (wrapper_rejection, child_support) {
+        (Some(_), _) if mode.pillow_name().is_some() => SupportScope::Pillow,
+        (_, ModeSupport::Supported { scope, .. }) => scope,
+        (_, ModeSupport::Rejected { .. }) if mode.pillow_name().is_some() => SupportScope::Pillow,
+        _ => SupportScope::CoreOnly {
             reason: "this internal raster identity has no Pillow ImageOps route",
-        }
+        },
     };
-    let (support, operations, outcome) = match imageops_invert_rejection(mode) {
-        Some(reason) => (
-            ModeSupport::Rejected { mode, reason, kind: RejectionKind::OsError },
+    let (support, operations, outcome) = match wrapper_rejection {
+        Some((reason, kind)) => (
+            ModeSupport::Rejected { mode, reason, kind },
             &[][..],
             OperationRouteOutcome::Rejects {
                 stage: OperationRouteStage::WrapperGuard,
                 reason,
-                kind: RejectionKind::OsError,
+                kind,
             },
         ),
         None => match child_support {
@@ -408,7 +419,8 @@ fn classify_imageops_invert_route(mode: Mode) -> OperationModeRoute {
 }
 
 /// Public ImageOps wrapper contract, distinct from the prepared Invert child.
-// TODO(pillow-rs#3ptb): Freeze the four immediate wrapper rejections and
+// TODO(pillow-rs#3ptb): Freeze P's NotImplementedError, Pillow's unsupported
+// high-depth wrapper errors, the four immediate byte-mode rejections, and the
 // deferred child-admission timing in CPU parity, including route receipts.
 pub(crate) static IMAGEOPS_INVERT_SUPPORT: OperationSupport = OperationSupport::routed(
     OperationId::ImageOpsInvert,

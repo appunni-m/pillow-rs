@@ -86,6 +86,11 @@ instruction-free architecture wrappers and other CPU families remains open.
 The maintained-source scan found 27 direct architecture-instruction files in
 nine operation families; their support/dispatch paths have now been traced.
 This does not close the broader module-declaration or prepared-selection audit.
+Recent WIP source audits include complete Transpose mode/architecture
+declarations and the ImageOps Invert mode-scope review. Invert now declares
+Pillow's P and high-depth rejection contracts in operation support, records
+Rust-only modes as CoreOnly, and leaves output/fault parity pending. The
+instruction-free wrapper and all-family prepared-selection audits remain open.
 Recent source-only checkpoints thread `StrategySelection` through Rotate and
 Transform hidden-lane helpers; native-byte Filter extrema, rank, and blur
 helpers; LA/RGBA AlphaComposite architecture binding; the UnsharpMask
@@ -1900,3 +1905,17 @@ This closes the Transpose mode/architecture declaration review only; output,
 storage-boundary, fallback, and receipt parity remain pending in its existing
 TODO. Source-only; no build, formatting, checkstyle, lint, test, parity,
 benchmark, or coverage ran.
+
+ImageOps Invert mode-scope source review (2026-11-04): Pillow 12.2 routes mode
+`1` through `point` and other modes through `_lut`; `_lut` supports `L` and
+`RGB`, raises `NotImplementedError` for `P`, and raises `OSError` for other
+unsupported Pillow modes ([source](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageOps.py#L1735-L1756),
+[invert route](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageOps.py#L2683-L2697)).
+The Rust ImageOps support contract now owns `P`'s declared `NotImplementedError`
+and the Pillow unsupported high-depth `OSError` routes, instead of duplicating
+the `P` rejection in the public operation wrapper. Rust-only inversion for
+`La`, `RGBa`, `RGBX`, `YCbCr`, `LAB`, and `HSV` remains available and is now
+declared `CoreOnly` with `NO_PILLOW_SUPPORT` at each mode strategy. The P-mode
+native child remains a core extension while the ImageOps wrapper rejects it.
+ImageOps output and fault parity remain pending; source-only, with no build,
+formatting, checkstyle, lint, test, parity, benchmark, or coverage run.

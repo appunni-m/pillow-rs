@@ -184,11 +184,6 @@ pub fn invert(image: &Image) -> Result<Image, PilError> {
 /// the underlying inversion operation.
 pub fn invert_ops(image: &Image) -> Result<Image, PilError> {
     let mode = mode_identity(image)?;
-    if mode == Mode::ImagePalette8 {
-        return Err(PilError::NotImplementedError(
-            "mode P support coming soon".into(),
-        ));
-    }
     invert_for_mode(image, mode)
 }
 

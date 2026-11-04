@@ -481,17 +481,39 @@ pub(crate) fn select_invert_strategy(
 
 macro_rules! declare_invert_mode {
     ($mode:ident, $input:ty, $implementation:path, $bytes_per_pixel:expr) => {
+        declare_invert_mode!(
+            $mode,
+            $input,
+            $implementation,
+            $bytes_per_pixel,
+            None::<&'static str>
+        );
+    };
+    ($mode:ident, $input:ty, $implementation:path, $bytes_per_pixel:expr, $core_only_reason:expr) => {
         pub(crate) const SUPPORT: crate::compute::registry::support::ModeSupport =
-            crate::compute::registry::support::ModeSupport::cpu(
-                crate::compute::registry::support::OperationId::Invert,
-                crate::raster::Mode::$mode,
-                crate::compute::registry::support::OutputModeRule::Preserve,
-                &[crate::compute::registry::support::InputContract::CheckedByteDimensions {
-                    bytes_per_pixel: $bytes_per_pixel,
-                    allow_empty: true,
-                }],
-                &[],
-            );
+            match $core_only_reason {
+                Some(reason) => crate::compute::registry::support::ModeSupport::cpu_core_only(
+                    crate::compute::registry::support::OperationId::Invert,
+                    crate::raster::Mode::$mode,
+                    crate::compute::registry::support::OutputModeRule::Preserve,
+                    &[crate::compute::registry::support::InputContract::CheckedByteDimensions {
+                        bytes_per_pixel: $bytes_per_pixel,
+                        allow_empty: true,
+                    }],
+                    &[],
+                    reason,
+                ),
+                None => crate::compute::registry::support::ModeSupport::cpu(
+                    crate::compute::registry::support::OperationId::Invert,
+                    crate::raster::Mode::$mode,
+                    crate::compute::registry::support::OutputModeRule::Preserve,
+                    &[crate::compute::registry::support::InputContract::CheckedByteDimensions {
+                        bytes_per_pixel: $bytes_per_pixel,
+                        allow_empty: true,
+                    }],
+                    &[],
+                ),
+            };
 
         pub(crate) enum ArchitectureStrategy<'a> {
             Default(&'a $input),
