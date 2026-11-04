@@ -225,12 +225,13 @@ impl PyImage {
 
     #[pyo3(signature = (box_coords, has_mask, position_size_available, known_length=None))]
     fn _paste_prepare_box(
-        &self,
+        slf: Py<Self>,
         box_coords: Option<&Bound<'_, PyAny>>,
         has_mask: bool,
         position_size_available: bool,
         known_length: Option<usize>,
     ) -> PyResult<PyPasteBoxPlan> {
+        let _keep_self_alive = slf;
         let (box_input, pending_coordinates) =
             paste_box_for_staged_plan(box_coords, known_length)?;
         let prepared = pillow_rs::Image::prepare_paste_box(
@@ -248,11 +249,15 @@ impl PyImage {
     }
 
     fn _paste_prepare_source(
-        &self,
+        slf: Py<Self>,
         source: &Bound<'_, PyAny>,
         is_image_source: bool,
     ) -> PyResult<PyPasteSourcePlan> {
-        let mode = self.inner.mode_identity().map_err(map_error)?;
+        let py = source.py();
+        let mode = {
+            let image = slf.bind(py).borrow();
+            image.inner.mode_identity().map_err(map_error)?
+        };
         let source_input = if is_image_source {
             paste_source_from_python(source, mode)?
         } else if source.cast::<PyString>().is_ok() {
@@ -263,10 +268,8 @@ impl PyImage {
                 deferred_source: Some(source.clone().unbind()),
             });
         };
-        let prepared = self
-            .inner
-            .prepare_paste_source(source_input)
-            .map_err(map_error)?;
+        let image = slf.bind(py).borrow();
+        let prepared = image.inner.prepare_paste_source(source_input).map_err(map_error)?;
         Ok(PyPasteSourcePlan {
             prepared: Some(prepared),
             deferred_source: None,

@@ -1763,3 +1763,12 @@ Python callbacks outside PyO3 image borrows while preserving the source-level
 argument order. Runtime output and fault-order parity remain pending.
 Source-only; no build, formatting, checkstyle, lint, tests, parity, benchmark,
 or coverage ran.
+
+Paste preparation borrow staging (2026-11-04): the box preparation bridge no
+longer borrows its image while checking or retaining coordinates. Source
+preparation captures destination mode before Python color coercion, then
+reacquires the live destination for the existing mode-aware core preparation;
+final Paste parsing already uses a handle and takes its mutable borrow after
+callbacks. Paste output, reentrant mutation, and fault-order parity remain
+pending. Source-only; no build, formatting, checkstyle, lint, tests, parity,
+benchmark, or coverage ran.
