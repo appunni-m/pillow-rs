@@ -22,69 +22,69 @@ fn palette_alpha_bytes(value: &Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
     Ok(bytes.to_vec())
 }
 
+struct PreparedPalettePutPixel<'py> {
+    value: pillow_rs::PutPixelValue,
+    deferred_alpha: Option<Bound<'py, PyAny>>,
+    reserved: Vec<u32>,
+}
+
 fn prepare_palette_putpixel<'py>(
-    image: &mut pillow_rs::Image,
     value: &Bound<'py, PyAny>,
     mode: pillow_rs::Mode,
+    palette_mode: Option<&str>,
     info: Option<&Bound<'py, PyDict>>,
-) -> PyResult<(Option<pillow_rs::PutPixelValue>, Option<Bound<'py, PyAny>>)> {
+) -> PyResult<Option<PreparedPalettePutPixel<'py>>> {
     let is_palette = matches!(
         mode,
         pillow_rs::Mode::ImagePalette8 | pillow_rs::Mode::ImagePaletteAlpha8
     );
-    let palette_color = is_palette
-        && (value.is_instance_of::<PyList>() || value.is_instance_of::<PyTuple>())
-        && matches!(value.len()?, 3 | 4);
-    let deferred_alpha = if palette_color
-        && mode == pillow_rs::Mode::ImagePaletteAlpha8
-        && value.len()? == 4
+    if !is_palette
+        || !(value.is_instance_of::<PyList>() || value.is_instance_of::<PyTuple>())
+        || !matches!(value.len()?, 3 | 4)
     {
+        return Ok(None);
+    }
+    let deferred_alpha = if mode == pillow_rs::Mode::ImagePaletteAlpha8 && value.len()? == 4 {
         Some(value.get_item(3)?)
     } else {
         None
     };
-    let prepared = if palette_color {
-        // The palette wrapper precedes coordinate parsing. PA's alpha
-        // conversion happens later, after allocation and bounds checks.
-        let rgb_only = mode == pillow_rs::Mode::ImagePaletteAlpha8
-            || image.palette_mode() != Some("RGBA");
-        if mode == pillow_rs::Mode::ImagePalette8
-            && rgb_only
-            && value.len()? == 4
-            && !value.get_item(3)?.eq(255)?
-        {
-            return Err(PyValueError::new_err(
-                "cannot add non-opaque RGBA color to RGB palette",
-            ));
-        }
-        let components = PyTuple::new(
-            value.py(),
-            (0..if rgb_only { 3 } else { value.len()? })
-                .map(|index| value.get_item(index))
-                .collect::<PyResult<Vec<_>>>()?,
-        )?;
-        let value = putpixel_value_from_python(components.as_any(), mode)?;
-        let mut reserved = Vec::with_capacity(2);
-        if let Some(info) = info {
-            for key in ["background", "transparency"] {
-                if let Some(value) = info.get_item(key)?
-                    && let Ok(value) = value.extract::<f64>()
-                    && (0.0..=255.0).contains(&value)
-                    && value.fract() == 0.0
-                {
-                    reserved.push(value as u32);
-                }
+    // The palette wrapper precedes coordinate parsing. PA's alpha conversion
+    // happens later, after palette allocation and coordinate bounds checks.
+    let rgb_only = mode == pillow_rs::Mode::ImagePaletteAlpha8 || palette_mode != Some("RGBA");
+    if mode == pillow_rs::Mode::ImagePalette8
+        && rgb_only
+        && value.len()? == 4
+        && !value.get_item(3)?.eq(255)?
+    {
+        return Err(PyValueError::new_err(
+            "cannot add non-opaque RGBA color to RGB palette",
+        ));
+    }
+    let components = PyTuple::new(
+        value.py(),
+        (0..if rgb_only { 3 } else { value.len()? })
+            .map(|index| value.get_item(index))
+            .collect::<PyResult<Vec<_>>>()?,
+    )?;
+    let value = putpixel_value_from_python(components.as_any(), mode)?;
+    let mut reserved = Vec::with_capacity(2);
+    if let Some(info) = info {
+        for key in ["background", "transparency"] {
+            if let Some(value) = info.get_item(key)?
+                && let Ok(value) = value.extract::<f64>()
+                && (0.0..=255.0).contains(&value)
+                && value.fract() == 0.0
+            {
+                reserved.push(value as u32);
             }
         }
-        Some(
-            image
-                .prepare_putpixel_palette(value, &reserved)
-                .map_err(map_error)?,
-        )
-    } else {
-        None
-    };
-    Ok((prepared, deferred_alpha))
+    }
+    Ok(Some(PreparedPalettePutPixel {
+        value,
+        deferred_alpha,
+        reserved,
+    }))
 }
 
 // TODO(pillow-rs#3ptb): parity-check negative pixel indices, C-int boundaries,
@@ -112,13 +112,6 @@ fn image_coordinates_in_bounds(
         ));
     }
     Ok((x as u32, y as u32))
-}
-
-fn putpixel_coordinates_in_bounds(
-    image: &pillow_rs::Image,
-    xy: &Bound<'_, PyAny>,
-) -> PyResult<(u32, u32)> {
-    image_coordinates_in_bounds(image, putpixel_coordinates_from_python(xy)?)
 }
 
 #[pymethods]
@@ -330,24 +323,65 @@ impl PyImage {
     /// Mode-aware putpixel: expands values according to PIL's per-mode semantics.
     #[pyo3(signature = (xy, value, info=None))]
     fn putpixel_mode(
-        &mut self,
+        slf: Py<Self>,
         xy: &Bound<'_, PyAny>,
         value: &Bound<'_, PyAny>,
         info: Option<&Bound<'_, PyDict>>,
+        py: Python<'_>,
     ) -> PyResult<()> {
-        let mode = self.inner.mode_identity().map_err(map_error)?;
-        let (prepared, deferred_alpha) =
-            prepare_palette_putpixel(&mut self.inner, value, mode, info)?;
-        let (x, y) = putpixel_coordinates_in_bounds(&self.inner, xy)?;
+        let (mode, palette_mode) = {
+            let image = slf.bind(py).borrow();
+            (
+                image.inner.mode_identity().map_err(map_error)?,
+                image.inner.palette_mode().map(str::to_owned),
+            )
+        };
+        let palette_input =
+            prepare_palette_putpixel(value, mode, palette_mode.as_deref(), info)?;
+        let (prepared, deferred_alpha) = match palette_input {
+            Some(input) => {
+                let PreparedPalettePutPixel {
+                    value,
+                    deferred_alpha,
+                    reserved,
+                } = input;
+                let prepared = slf
+                    .bind(py)
+                    .borrow_mut()
+                    .inner
+                    .prepare_putpixel_palette(value, &reserved)
+                    .map_err(map_error)?;
+                (Some(prepared), deferred_alpha)
+            }
+            None => (None, None),
+        };
+        // Coordinate `__index__` callbacks run after palette allocation but
+        // without holding a PyImage borrow.
+        let coordinates = putpixel_coordinates_from_python(xy)?;
+        let (x, y) = {
+            let image = slf.bind(py).borrow();
+            image_coordinates_in_bounds(&image.inner, coordinates)?
+        };
         // `putpixel_value_from_python` must retain flexible coercion and error
         // ordering for arbitrary sequences. Ordinary RGB byte tuples contain
         // exact built-in ints, so write those native channels directly and
         // skip constructing a temporary component vector.
-        if mode == pillow_rs::Mode::ImageRgb8
+        let coercion_mode = slf
+            .bind(py)
+            .borrow()
+            .inner
+            .mode_identity()
+            .map_err(map_error)?;
+        if coercion_mode == pillow_rs::Mode::ImageRgb8
             && prepared.is_none()
             && let Some([r, g, b]) = exact_rgb_tuple_from_python(value)
         {
-            return self.inner.putpixel(x, y, r, g, b, 255).map_err(map_error);
+            return slf
+                .bind(py)
+                .borrow_mut()
+                .inner
+                .putpixel(x, y, r, g, b, 255)
+                .map_err(map_error);
         }
         let value = match prepared {
             Some(pillow_rs::PutPixelValue::Components(mut values)) if deferred_alpha.is_some() => {
@@ -357,23 +391,30 @@ impl PyImage {
                 pillow_rs::PutPixelValue::Components(values)
             }
             Some(value) => value,
-            None => putpixel_value_from_python(value, mode)?,
+            None => putpixel_value_from_python(value, coercion_mode)?,
         };
-        let result = if mode == pillow_rs::Mode::ImageRgb8 {
+        let write_mode = slf
+            .bind(py)
+            .borrow()
+            .inner
+            .mode_identity()
+            .map_err(map_error)?;
+        let mut image = slf.bind(py).borrow_mut();
+        let result = if write_mode == pillow_rs::Mode::ImageRgb8 {
             match value {
                 pillow_rs::PutPixelValue::Integer(value) => {
-                    // The mode was already resolved above for Python value
-                    // parsing. RGB integer inks are stored as the low three
-                    // bytes, so send that normalized pixel directly instead
-                    // of resolving the same mode again in putpixel_value.
+                    // RGB integer inks are stored as the low three bytes, so
+                    // send that normalized pixel directly instead of
+                    // resolving the same mode again in putpixel_value.
                     let bytes = value.to_le_bytes();
-                    self.inner
+                    image
+                        .inner
                         .putpixel(x, y, bytes[0], bytes[1], bytes[2], bytes[3])
                 }
-                value => self.inner.putpixel_value(x, y, value),
+                value => image.inner.putpixel_value(x, y, value),
             }
         } else {
-            self.inner.putpixel_value(x, y, value)
+            image.inner.putpixel_value(x, y, value)
         };
         result.map_err(map_error)
     }
