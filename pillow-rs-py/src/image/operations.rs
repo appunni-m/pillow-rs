@@ -74,26 +74,13 @@ fn rotate_input_from_python(
     Ok((center, translate, expand, resample, fillcolor))
 }
 
-fn prepare_rotate_input(
-    image: &PyImage,
-    angle: f64,
-    resample: Option<&Bound<'_, PyAny>>,
-    expand: Option<&Bound<'_, PyAny>>,
-    center: Option<&Bound<'_, PyAny>>,
-    translate: Option<&Bound<'_, PyAny>>,
-    fillcolor: Option<&Bound<'_, PyAny>>,
-) -> PyResult<pillow_rs::PreparedRotate> {
-    let (center, translate, expand, resample, fillcolor) =
-        rotate_input_from_python(resample, expand, center, translate, fillcolor)?;
-    image
-        .inner
-        .prepare_rotate_with_input(angle, resample, expand, center, translate, fillcolor)
-        .map_err(map_error)
-}
-
 #[pymethods]
 impl PyImage {
-    fn _resize_filter_code(&self, resample: Option<&Bound<'_, PyAny>>) -> PyResult<i32> {
+    fn _resize_filter_code(
+        slf: Py<Self>,
+        resample: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<i32> {
+        let _keep_self_alive = slf;
         let input = resample_input_from_python(resample)?;
         let filter = pillow_rs::parse_resample_input(input).map_err(map_error)?;
         Ok(resample_filter_code(filter))
@@ -101,26 +88,41 @@ impl PyImage {
 
     #[pyo3(signature = (size, resample=None, box_coords=None, reducing_gap=None))]
     fn resize(
-        &self,
-        size: (i64, i64),
+        slf: Py<Self>,
+        size: &Bound<'_, PyAny>,
         resample: Option<&Bound<'_, PyAny>>,
-        box_coords: Option<(f64, f64, f64, f64)>,
-        reducing_gap: Option<f64>,
+        box_coords: Option<&Bound<'_, PyAny>>,
+        reducing_gap: Option<&Bound<'_, PyAny>>,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
+        let size = size.extract::<(i64, i64)>()?;
+        let box_coords = box_coords
+            .map(|value| value.extract::<(f64, f64, f64, f64)>())
+            .transpose()?;
+        let reducing_gap = reducing_gap.map(|value| value.extract::<f64>()).transpose()?;
         let resample = resample_input_from_python(resample)?;
+        let image = slf.bind(py).borrow();
         let rs = py
             .detach(|| {
-                self.inner
+                image
+                    .inner
                     .resize_with_options(size, resample, box_coords, reducing_gap)
             })
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
-    fn crop(&self, box_coords: Option<(f64, f64, f64, f64)>, py: Python<'_>) -> PyResult<PyImage> {
+    fn crop(
+        slf: Py<Self>,
+        box_coords: Option<&Bound<'_, PyAny>>,
+        py: Python<'_>,
+    ) -> PyResult<PyImage> {
+        let box_coords = box_coords
+            .map(|value| value.extract::<(f64, f64, f64, f64)>())
+            .transpose()?;
+        let image = slf.bind(py).borrow();
         let rs = py
-            .detach(|| self.inner.crop_float(box_coords))
+            .detach(|| image.inner.crop_float(box_coords))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -128,8 +130,8 @@ impl PyImage {
     #[pyo3(signature = (angle, resample=None, expand=None, center=None, translate=None, fillcolor=None))]
     #[allow(clippy::too_many_arguments)] // Mirrors the public Pillow Image.rotate API.
     fn rotate(
-        &self,
-        angle: f64,
+        slf: Py<Self>,
+        angle: &Bound<'_, PyAny>,
         resample: Option<&Bound<'_, PyAny>>,
         expand: Option<&Bound<'_, PyAny>>,
         center: Option<&Bound<'_, PyAny>>,
@@ -137,11 +139,14 @@ impl PyImage {
         fillcolor: Option<&Bound<'_, PyAny>>,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
+        let angle = angle.extract::<f64>()?;
         let (center, translate, expand, resample, fillcolor) =
             rotate_input_from_python(resample, expand, center, translate, fillcolor)?;
+        let image = slf.bind(py).borrow();
         let rs = py
             .detach(|| {
-                self.inner
+                image
+                    .inner
                     .rotate_with_input(angle, resample, expand, center, translate, fillcolor)
             })
             .map_err(map_error)?;
@@ -151,17 +156,23 @@ impl PyImage {
     #[pyo3(signature = (angle, resample=None, expand=None, center=None, translate=None, fillcolor=None))]
     #[allow(clippy::too_many_arguments)] // Mirrors the public Pillow Image.rotate API.
     fn _prepare_rotate(
-        &self,
-        angle: f64,
+        slf: Py<Self>,
+        angle: &Bound<'_, PyAny>,
         resample: Option<&Bound<'_, PyAny>>,
         expand: Option<&Bound<'_, PyAny>>,
         center: Option<&Bound<'_, PyAny>>,
         translate: Option<&Bound<'_, PyAny>>,
         fillcolor: Option<&Bound<'_, PyAny>>,
+        py: Python<'_>,
     ) -> PyResult<PyRotatePlan> {
-        let prepared = prepare_rotate_input(
-            self, angle, resample, expand, center, translate, fillcolor,
-        )?;
+        let angle = angle.extract::<f64>()?;
+        let (center, translate, expand, resample, fillcolor) =
+            rotate_input_from_python(resample, expand, center, translate, fillcolor)?;
+        let image = slf.bind(py).borrow();
+        let prepared = image
+            .inner
+            .prepare_rotate_with_input(angle, resample, expand, center, translate, fillcolor)
+            .map_err(map_error)?;
         Ok(PyRotatePlan { prepared })
     }
 
@@ -177,14 +188,19 @@ impl PyImage {
         Ok(PyImage { inner })
     }
 
-    fn transpose(&self, method: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<PyImage> {
+    fn transpose(
+        slf: Py<Self>,
+        method: &Bound<'_, PyAny>,
+        py: Python<'_>,
+    ) -> PyResult<PyImage> {
         let input = transpose_input_from_python(method)?;
+        let image = slf.bind(py).borrow();
         // Ordinary transpose only queues metadata. Paletted source cloning
         // copies its index buffer, so keep that work outside the GIL.
-        let rs = if matches!(&self.inner, RsImage::Paletted(_)) {
-            py.detach(|| self.inner.transpose_with_input(input))
+        let rs = if matches!(&image.inner, RsImage::Paletted(_)) {
+            py.detach(|| image.inner.transpose_with_input(input))
         } else {
-            self.inner.transpose_with_input(input)
+            image.inner.transpose_with_input(input)
         }
         .map_err(map_error)?;
         Ok(PyImage { inner: rs })

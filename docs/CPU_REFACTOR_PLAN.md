@@ -1772,3 +1772,12 @@ final Paste parsing already uses a handle and takes its mutable borrow after
 callbacks. Paste output, reentrant mutation, and fault-order parity remain
 pending. Source-only; no build, formatting, checkstyle, lint, tests, parity,
 benchmark, or coverage ran.
+
+Geometry input borrow staging (2026-11-04): Resize extracts size, box, and
+reducing-gap values before parsing its resampling selector and borrowing the
+image. Crop, Rotate, and Transpose likewise finish coordinate, angle, or method
+conversion before borrowing. The resize-filter helper now holds only a Py
+handle while parsing. Existing argument conversion order and core algorithms
+are unchanged. Geometry output and callback/fault-order parity remain pending.
+Source-only; no build, formatting, checkstyle, lint, tests, parity, benchmark,
+or coverage ran.
