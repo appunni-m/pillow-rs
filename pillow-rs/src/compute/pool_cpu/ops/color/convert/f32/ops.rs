@@ -10,27 +10,14 @@ use crate::compute::{Architecture, registry::support::{
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode, RgbaImage};
 
-// NO_PILLOW_SUPPORT: Pillow's F converters implement only L and I outputs.
-const CORE_ONLY_TARGETS: &[Mode] = &[
-    Mode::One,
-    Mode::ImageLumaA8,
-    Mode::ImageI16,
-    Mode::ImageI16L,
-    Mode::ImageI16B,
-    Mode::ImageI16N,
-    Mode::ImageRgb8,
-    Mode::ImageRgba8,
-    Mode::ImageRgbx8,
-    Mode::ImageCmyk8,
-    Mode::ImageYCbCr8,
-    Mode::ImageHsv8,
-    Mode::ImagePalette8,
-    Mode::ImagePaletteAlpha8,
-];
+// Pillow's wrapper reaches the declared scalar targets through F's L
+// base-mode fallback when no direct F converter exists. The output and fault
+// routes remain pending CPU parity, including non-finite float samples.
+// TODO(pillow-rs#3ptb): verify all F fallback targets and dither behavior.
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: super::super::ops::SCALAR_TARGETS,
-    core_only_targets: CORE_ONLY_TARGETS,
-    core_only_reason: Some("Pillow has no matching F source-target conversion"),
+    core_only_targets: &[],
+    core_only_reason: None,
     rejection_reason: "image has wrong mode",
 }];
 

@@ -10,22 +10,15 @@ use crate::compute::{Architecture, registry::support::{
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode, RgbaImage};
 
-// NO_PILLOW_SUPPORT: Pillow's I converters omit these exact target pairs.
-const CORE_ONLY_TARGETS: &[Mode] = &[
-    Mode::One,
-    Mode::ImageLumaA8,
-    Mode::ImageI16N,
-    Mode::ImagePalette8,
-    Mode::ImagePaletteAlpha8,
-    Mode::ImageCmyk8,
-    Mode::ImageYCbCr8,
-];
-// TODO(pillow-rs#3ptb): add CoreOnly CPU parity for I→I;16N with negative,
-// above-u16, >255, and in-range samples; Pillow has no I-to-I;16N converter.
+// Pillow's wrapper reaches every scalar target either through its direct I
+// converter or through the L base-mode fallback. The I;16N output is clipped
+// through L before widening; keep that fused result covered by CPU parity.
+// TODO(pillow-rs#3ptb): verify I→I;16N for negative, >255, and in-range
+// samples, including the mode's native byte order.
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: super::super::ops::SCALAR_TARGETS,
-    core_only_targets: CORE_ONLY_TARGETS,
-    core_only_reason: Some("Pillow has no matching I source-target conversion"),
+    core_only_targets: &[],
+    core_only_reason: None,
     rejection_reason: "image has wrong mode",
 }];
 

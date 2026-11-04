@@ -2040,3 +2040,23 @@ ImageMode.py](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageM
 [Convert.c](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1402-L1487).
 Source-only; no builds, formatting, checkstyle, lint, tests, parity,
 benchmark, or coverage ran.
+
+Scalar Convert fallback correction (2026-11-04): this supersedes the earlier
+inventory notes that treated F32→I;16* and I→I;16N as Rust-only extensions.
+Pillow 12.2 assigns `I` and
+`F` the `L` base mode, and `Image.convert` retries a failed direct target after
+normalizing through that base. The `F`→`I;16*` strategies now fuse Pillow's
+`F`→`L` byte clamp/truncation with the `L`→u16 widening. `I`→`I;16N` likewise
+clips through the `I`→`L` byte result before widening; its direct `I;16`,
+`I;16L`, and `I;16B` strategies retain their full u16 clamp. All declared
+scalar targets for these two modes are therefore Pillow-reachable and no
+longer classified CoreOnly. Rust writes directly into the requested native
+carrier without constructing an intermediate image. Non-finite F behavior,
+all fallback target outputs, palette metadata, dither, faults, and architecture
+receipts remain TODOs under `pillow-rs#3ptb`; no validation has run. Sources:
+[ImageMode.py base modes](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageMode.py#L37-L80),
+[Image.convert fallback](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py#L1139-L1151),
+[Convert.c F-to-L and I-to-L](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L572-L584),
+[Convert.c F-to-L](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L650-L664),
+[Convert.c I;16 converters](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L723-L747),
+[Convert.c I;16N table](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L1462-L1482).

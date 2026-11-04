@@ -11,7 +11,15 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
         Mode::ImageLuma8 => Ok(DynamicImage::ImageLuma8(
             crate::compute::pool_cpu::ops::grayscale::i32::default::grayscale_impl::execute(source),
         )),
-        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
+        Mode::ImageI16N => super::super::super::helpers::luma16::from_u16_samples(
+            source.width(),
+            source.height(),
+            target,
+            source
+                .pixels()
+                .map(|pixel| u16::from(sample(pixel.0))),
+        ),
+        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B => {
             convert_luma16(source, target)
         }
         Mode::ImageLumaA8 => Ok(DynamicImage::ImageLumaA8(luma_alpha(source))),
@@ -100,7 +108,8 @@ fn to_f32(source: &RgbaImage) -> RgbaImage {
     output
 }
 
-// NO_PILLOW_SUPPORT: Pillow's palette converter rejects scalar `I` input.
+// Pillow's wrapper normalizes I through its L base mode before constructing a
+// grayscale palette. Build the same index and palette output directly.
 pub(crate) fn execute_palette_target(
     source: &RgbaImage,
     target: Mode,

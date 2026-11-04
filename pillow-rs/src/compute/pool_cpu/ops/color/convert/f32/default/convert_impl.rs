@@ -12,15 +12,13 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
             crate::compute::pool_cpu::ops::grayscale::f32::default::grayscale_impl::execute(source),
         )),
         Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
-            // NO_PILLOW_SUPPORT: scalar F samples map directly to unsigned
-            // 16-bit range by clamping and truncating, like the native F→I cast.
-            // TODO(pillow-rs#3ptb): cover negative, fractional, >255 and
-            // out-of-u16-range inputs for all I;16 byte-order identities.
+            // Pillow routes F→I;16 through L, clipping and truncating to a
+            // byte before widening. Fuse both steps into the native u16 output.
             super::super::super::helpers::luma16::from_u16_samples(
                 source.width(),
                 source.height(),
                 target,
-                source.pixels().map(|pixel| sample_i16(pixel.0)),
+                source.pixels().map(|pixel| u16::from(sample(pixel.0))),
             )
         }
         Mode::ImageLumaA8 => Ok(DynamicImage::ImageLumaA8(luma_alpha(source))),
@@ -99,7 +97,8 @@ fn to_i32(source: &RgbaImage) -> RgbaImage {
     output
 }
 
-// NO_PILLOW_SUPPORT: Pillow's palette converter rejects scalar `F` input.
+// Pillow's wrapper normalizes F through its L base mode before constructing a
+// grayscale palette. Build the same index and palette output directly.
 pub(crate) fn execute_palette_target(
     source: &RgbaImage,
     target: Mode,
@@ -133,7 +132,3 @@ fn sample(bytes: [u8; 4]) -> u8 {
     f32::from_le_bytes(bytes).clamp(0.0, 255.0) as u8
 }
 
-#[inline]
-fn sample_i16(bytes: [u8; 4]) -> u16 {
-    f32::from_le_bytes(bytes).clamp(0.0, f32::from(u16::MAX)) as u16
-}
