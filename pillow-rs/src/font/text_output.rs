@@ -52,6 +52,7 @@ impl FreeTypeFont {
         match text {
             ImageFontTextInput::Text(text) => self.getbbox_with_options(&text, options),
             ImageFontTextInput::Bytes(text) => self.getbbox_bytes_with_options(&text, options),
+            ImageFontTextInput::InvalidType => invalid_text_after_layout_check(options),
         }
     }
 
@@ -64,6 +65,7 @@ impl FreeTypeFont {
         match text {
             ImageFontTextInput::Text(text) => self.getlength_with_options(&text, options),
             ImageFontTextInput::Bytes(text) => self.getlength_bytes_with_options(&text, options),
+            ImageFontTextInput::InvalidType => invalid_text_after_layout_check(options),
         }
     }
 
@@ -76,6 +78,7 @@ impl FreeTypeFont {
         match text {
             ImageFontTextInput::Text(text) => self.getmask_with_options(&text, options),
             ImageFontTextInput::Bytes(text) => self.getmask_bytes_with_options(&text, options),
+            ImageFontTextInput::InvalidType => invalid_text_after_layout_check(options),
         }
     }
 
@@ -88,6 +91,7 @@ impl FreeTypeFont {
         match text {
             ImageFontTextInput::Text(text) => self.getmask2_with_options(&text, options),
             ImageFontTextInput::Bytes(text) => self.getmask2_bytes_with_options(&text, options),
+            ImageFontTextInput::InvalidType => invalid_text_after_layout_check(options),
         }
     }
 
@@ -184,7 +188,7 @@ impl FreeTypeFont {
         text: ImageFontTextInput,
         orientation: Option<&str>,
     ) -> Result<(u32, u32, Vec<u8>), PilError> {
-        let text = text.into_text();
+        let text = text.into_text()?;
         self.get_transposed_mask(&text, orientation)
     }
 
@@ -198,4 +202,9 @@ impl FreeTypeFont {
     ) -> Result<(u32, u32, Vec<u8>), PilError> {
         imagingft::render_text_binary(self, text, fill, spacing)
     }
+}
+
+fn invalid_text_after_layout_check<T>(options: &ImageFontTextOptions) -> Result<T, PilError> {
+    imagingft::validate_basic_layout_options(options)?;
+    Err(PilError::TypeError("expected string or bytes".into()))
 }

@@ -1,7 +1,9 @@
 //! Native u16 rotation, including Pillow's byte-plane I;16 filter behavior.
 
 use crate::checked_dims::CheckedDims;
-use crate::compute::pool_cpu::ops::rotate::helpers::geometry::{discrete_angle, rotate_geometry};
+use crate::compute::pool_cpu::ops::rotate::helpers::geometry::{
+    discrete_angle, identity_contract, rotate_geometry,
+};
 use crate::compute::pool_cpu::ops::rotate::ops::RotateRequest;
 use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
@@ -11,7 +13,7 @@ pub(crate) fn execute<const BIG_ENDIAN: bool>(
     image: &ImageBuffer<Luma<u16>, Vec<u16>>,
     request: RotateRequest,
 ) -> Result<ImageBuffer<Luma<u16>, Vec<u16>>, PilError> {
-    if is_identity(request) {
+    if identity_contract(request) {
         return Ok(image.clone());
     }
     if let Some(degree) = discrete_angle(request) {
@@ -24,12 +26,6 @@ pub(crate) fn execute<const BIG_ENDIAN: bool>(
         return execute_nearest::<BIG_ENDIAN>(image, request);
     }
     execute_filtered::<BIG_ENDIAN>(image, request)
-}
-
-fn is_identity(request: RotateRequest) -> bool {
-    request.center.is_none()
-        && request.translate.is_none()
-        && request.angle.rem_euclid(360.0).abs() <= f64::EPSILON
 }
 
 fn rotate_discrete(

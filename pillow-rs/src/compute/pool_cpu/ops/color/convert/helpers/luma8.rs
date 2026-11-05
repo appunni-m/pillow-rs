@@ -19,6 +19,7 @@ where
         Mode::ImageLumaA8 => Ok(DynamicImage::ImageLumaA8(to_luma_a8(width, height, samples))),
         Mode::ImageRgb8 => Ok(DynamicImage::ImageRgb8(to_rgb8(width, height, samples))),
         Mode::ImageRgba8 => Ok(DynamicImage::ImageRgba8(to_rgba8(width, height, samples))),
+        Mode::ImageRgbx8 => Ok(DynamicImage::ImageRgbx8(to_rgbx8(width, height, samples))),
         Mode::ImageCmyk8 => Ok(DynamicImage::ImageCmyk8(to_cmyk8(width, height, samples))),
         Mode::ImageYCbCr8 => Ok(DynamicImage::ImageYCbCr8(to_ycbcr8(width, height, samples))),
         Mode::ImageHsv8 => Ok(DynamicImage::ImageHsv8(to_hsv8(width, height, samples))),
@@ -95,6 +96,14 @@ fn to_rgb8<I: Iterator<Item = u8>>(width: u32, height: u32, samples: I) -> RgbIm
 }
 
 fn to_rgba8<I: Iterator<Item = u8>>(width: u32, height: u32, samples: I) -> RgbaImage {
+    let mut output = RgbaImage::new(width, height);
+    for (pixel, sample) in output.pixels_mut().zip(samples) {
+        *pixel = Rgba([sample, sample, sample, 255]);
+    }
+    output
+}
+
+fn to_rgbx8<I: Iterator<Item = u8>>(width: u32, height: u32, samples: I) -> RgbaImage {
     let mut output = RgbaImage::new(width, height);
     for (pixel, sample) in output.pixels_mut().zip(samples) {
         *pixel = Rgba([sample, sample, sample, 255]);

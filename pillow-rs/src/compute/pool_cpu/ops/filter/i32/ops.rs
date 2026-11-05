@@ -93,7 +93,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId)
     match operation {
         OperationId::Filter3x3 => pillow_kernel(OperationId::Filter3x3, MODE, AVX2_FMA_FILTER3X3),
         OperationId::Filter5x5 => pillow_kernel(OperationId::Filter5x5, MODE, FILTER5X5_ARCHITECTURES),
-        OperationId::GaussianBlur | OperationId::BoxBlur => rejected(),
+        OperationId::GaussianBlur | OperationId::BoxBlur | OperationId::BoxBlurXY => rejected(),
         OperationId::MedianFilter => ModeSupport::serial(
             OperationId::MedianFilter, Mode::ImageI32, inputs_for(OperationId::MedianFilter),
         ),

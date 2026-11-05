@@ -13,6 +13,7 @@ pub(super) const LUMA_TARGETS: &[Mode] = &[
     Mode::ImagePaletteAlpha8,
     Mode::ImageRgb8,
     Mode::ImageRgba8,
+    Mode::ImageRgbx8,
     Mode::ImageLab8,
     Mode::ImageI16,
     Mode::ImageI16L,
@@ -93,7 +94,11 @@ pub(super) const RGB_PREMULTIPLIED_TARGETS: &[Mode] = &[
 const LA_PREMULTIPLIED_TARGETS: &[Mode] = &[
     Mode::ImageLaPremultiplied8,
     Mode::ImageLumaA8,
+    Mode::ImageLab8,
 ];
+const LA_PREMULTIPLIED_CORE_ONLY_TARGETS: &[Mode] = &[Mode::ImageLab8];
+const LA_PREMULTIPLIED_CORE_ONLY_REASON: &str =
+    "direct native La-to-LAB conversion extends Pillow's La conversion contract";
 // TODO(pillow-rs#3ptb): verify every I;16 source/target pair, including the
 // native-u16 extensions, across all declared architectures and fault cases.
 pub(super) const I16_TARGETS: &[Mode] = &[
@@ -158,19 +163,24 @@ pub(super) const SCALAR_TARGETS: &[Mode] = &[
     Mode::ImagePalette8,
     Mode::ImagePaletteAlpha8,
 ];
-const MATRIX_TARGETS: &[Mode] = &[Mode::ImageLuma8, Mode::ImageRgb8];
+// NO_PILLOW_SUPPORT: a 12-coefficient RGB matrix can feed the native LAB
+// encoder directly without materializing an intermediate RGB image.
+const MATRIX_TARGETS: &[Mode] = &[Mode::ImageLuma8, Mode::ImageRgb8, Mode::ImageLab8];
+const MATRIX_CORE_ONLY_TARGETS: &[Mode] = &[Mode::ImageLab8];
 const MATRIX_INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: MATRIX_TARGETS,
-    core_only_targets: &[],
-    core_only_reason: None,
+    core_only_targets: MATRIX_CORE_ONLY_TARGETS,
+    core_only_reason: Some(
+        "direct matrix conversion to LAB extends Pillow's RGB matrix contract",
+    ),
     rejection_reason: "image has wrong mode",
 }];
 
 pub(crate) const LA_PREMULTIPLIED_INPUTS: &[InputContract] =
     &[InputContract::ConvertTarget {
         targets: LA_PREMULTIPLIED_TARGETS,
-        core_only_targets: &[],
-        core_only_reason: None,
+        core_only_targets: LA_PREMULTIPLIED_CORE_ONLY_TARGETS,
+        core_only_reason: Some(LA_PREMULTIPLIED_CORE_ONLY_REASON),
         rejection_reason: "conversion from La to L not supported",
     }];
 pub(super) fn classify_mode(mode: Mode) -> ModeSupport {
@@ -204,9 +214,6 @@ pub(super) fn classify_mode(mode: Mode) -> ModeSupport {
 }
 
 /// Complete source-mode and typed-target contract for Convert.
-///
-/// LAB conversion uses its exact-mode source and target strategies. The
-/// complete mode/target output and fault matrix remains pending CPU parity.
 // TODO(pillow-rs#3ptb): close the complete source × target × declared
 // architecture output/fault matrix before the CPU parity gate.
 // Archive source review: SIMD's generic byte-layout preflight admits L, LA,
@@ -216,10 +223,11 @@ pub(super) fn classify_mode(mode: Mode) -> ModeSupport {
 // Source review now confirms the One and L source/target routes, their exact
 // architecture sets and build guards, normalized One samples, and empty-path
 // receipts against the archived adapter. L same-mode output remains the
-// Default identity path; palette and LAB targets use their declared wrapper
-// compositions. The exact LA target contract, alpha transformations, vector
-// targets, and empty-path receipts are source-reviewed as well. RGB8's 20
-// targets, 38 architecture guards, and Default/composed branches now reconcile
+// Default identity path; P/PA targets attach wrapper-owned palette metadata,
+// while LAB runs in each exact source-mode Convert strategy. The exact LA
+// target contract, alpha transformations, vector targets, and empty-path
+// receipts are source-reviewed as well. RGB8's 20 targets, 38 architecture
+// guards, and Default/vector branches now reconcile
 // with the archived luma, alpha, color-space, typed, palette, binary, and LAB
 // paths; its same-mode target stays on Default, with AVX2/SSSE3 limited to L.
 // Source review compares all 25 source modes against the archived Convert
@@ -232,13 +240,10 @@ pub(super) fn classify_mode(mode: Mode) -> ModeSupport {
 // Image boundary and its dedicated lazy materialization path publish those
 // sidecars; the generic raster-only prepared entry still needs a result type
 // that carries them. Internal high-depth identities are CoreOnly.
-const CONVERT_CHILDREN: &[OperationId] = &[OperationId::ConvertLab];
-
-pub(crate) static SUPPORT: OperationSupport = OperationSupport::composed(
+pub(crate) static SUPPORT: OperationSupport = OperationSupport::new(
     OperationId::Convert,
     &[],
     classify_mode,
-    CONVERT_CHILDREN,
 )
 .with_rejected_output(OutputModeRule::ByTargetMode)
 .with_target_compositions(super::helpers::target_compositions::classify_target_composition);

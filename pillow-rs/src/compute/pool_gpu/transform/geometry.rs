@@ -28,12 +28,13 @@ pub(in crate::compute::pool_gpu) fn gpu_rotate_has_exact_transpose_lowering(
         expand,
         center,
         translate,
+        affine,
         ..
     } = op
     else {
         return false;
     };
-    if center.is_some() || translate.is_some() {
+    if center.is_some() || translate.is_some() || affine.is_some() {
         return false;
     }
     if mode.is_some_and(|value| {

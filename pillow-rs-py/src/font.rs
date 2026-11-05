@@ -1,9 +1,11 @@
-use crate::draw::draw_features_from_python;
+use crate::draw::draw_features_presence_from_python;
 use crate::*;
 use pillow_rs::PilError;
 use pyo3::{pyclass, pyfunction, pymethods, wrap_pyfunction};
 
 mod pilfont;
+mod text_layout;
+mod text_wrap;
 #[cfg(test)]
 pub(crate) use pilfont::PilFontLoadCache;
 use pilfont::PyPilFont;
@@ -31,6 +33,13 @@ fn transposed_font_bbox(
 #[pyfunction]
 fn validate_transposed_font_length(orientation: Option<&str>) -> PyResult<()> {
     pillow_rs::validate_transposed_length(orientation).map_err(map_error)
+}
+
+#[pyfunction]
+fn imagefont_text_font_mode(mode: &str, embedded_color: bool) -> &'static str {
+    let mode = pillow_rs::Mode::from_pillow_name(mode)
+        .unwrap_or(pillow_rs::Mode::ImageLuma8);
+    pillow_rs::imagefont_text_font_mode(mode, embedded_color)
 }
 
 /// Enable a backend route for future automatic image routing.
@@ -122,14 +131,22 @@ fn imagefont_source_from_python(
 pub(super) fn imagefont_text_input_from_python(
     value: &Bound<'_, PyAny>,
 ) -> PyResult<pillow_rs::ImageFontTextInput> {
-    if let Ok(bytes) = value.cast::<PyBytes>() {
-        return Ok(pillow_rs::ImageFontTextInput::Bytes(
-            bytes.as_bytes().to_vec(),
-        ));
+    Ok(crate::inputs::font_text_input_from_python(value))
+}
+
+pub(super) fn imagefont_wrap_text_to_python(
+    py: Python<'_>,
+    text: pillow_rs::ImageFontTextInput,
+) -> PyResult<Py<PyAny>> {
+    match text {
+        pillow_rs::ImageFontTextInput::Text(text) => text.into_py_any(py),
+        pillow_rs::ImageFontTextInput::Bytes(bytes) => {
+            Ok(PyBytes::new(py, &bytes).into_any().unbind())
+        }
+        pillow_rs::ImageFontTextInput::InvalidType => {
+            Err(PyTypeError::new_err("expected string or bytes"))
+        }
     }
-    Ok(pillow_rs::ImageFontTextInput::Text(
-        value.str()?.to_string(),
-    ))
 }
 
 fn imagefont_variation_name_input_from_python(
@@ -227,12 +244,13 @@ impl PyFont {
         stroke_width: f32,
         anchor: Option<String>,
     ) -> PyResult<(f32, f32, f32, f32)> {
-        let (features, features_invalid) = draw_features_from_python(features);
+        let text = imagefont_text_input_from_python(text)?;
+        let features_invalid = draw_features_presence_from_python(features);
         let options = pillow_rs::ImageFontTextOptions {
             mode,
             embedded_color: false,
             direction,
-            features,
+            features: None,
             features_invalid,
             language,
             stroke_width,
@@ -241,10 +259,177 @@ impl PyFont {
         };
         pillow_rs::imagefont_getbbox_input_with_options(
             &self.inner,
-            imagefont_text_input_from_python(text)?,
+            text,
             &options,
         )
         .map_err(map_error)
+    }
+
+    #[pyo3(signature = (text, xy, mode, embedded_color, spacing, stroke_width, anchor, align))]
+    fn _image_text_split_positions(
+        &self,
+        text: &str,
+        xy: (f64, f64),
+        mode: &str,
+        embedded_color: bool,
+        spacing: f64,
+        stroke_width: f32,
+        anchor: Option<String>,
+        align: String,
+    ) -> PyResult<Vec<(f64, f64, String, String)>> {
+        let mode = pillow_rs::Mode::from_pillow_name(mode)
+            .unwrap_or(pillow_rs::Mode::ImageLuma8);
+        let options = pillow_rs::ImageFontTextOptions {
+            embedded_color,
+            stroke_width,
+            anchor,
+            align: Some(align),
+            anchor_invalid_length_error: true,
+            ..pillow_rs::ImageFontTextOptions::default()
+        };
+        pillow_rs::imagefont_text_split_positions(
+            &self.inner,
+            mode,
+            xy,
+            text,
+            spacing,
+            &options,
+        )
+        .map(|lines| {
+            lines
+                .into_iter()
+                .map(|line| (line.x, line.y, line.anchor, line.text))
+                .collect()
+        })
+        .map_err(map_error)
+    }
+
+    #[pyo3(signature = (text, xy, mode, embedded_color, spacing, stroke_width, anchor, align))]
+    fn _image_text_layout_bbox(
+        &self,
+        text: &str,
+        xy: (f64, f64),
+        mode: &str,
+        embedded_color: bool,
+        spacing: f64,
+        stroke_width: f32,
+        anchor: Option<String>,
+        align: String,
+    ) -> PyResult<(f64, f64, f64, f64)> {
+        let mode = pillow_rs::Mode::from_pillow_name(mode)
+            .unwrap_or(pillow_rs::Mode::ImageLuma8);
+        let options = pillow_rs::ImageFontTextOptions {
+            embedded_color,
+            stroke_width,
+            anchor,
+            align: Some(align),
+            anchor_invalid_length_error: true,
+            ..pillow_rs::ImageFontTextOptions::default()
+        };
+        pillow_rs::imagefont_text_layout_bbox(
+            &self.inner,
+            mode,
+            xy,
+            text,
+            spacing,
+            &options,
+        )
+        .map_err(map_error)
+    }
+
+    fn _image_text_get_length(
+        &self,
+        text: &Bound<'_, PyAny>,
+        mode: &str,
+        embedded_color: bool,
+    ) -> PyResult<f32> {
+        let text = imagefont_text_input_from_python(text)?;
+        let mode = pillow_rs::Mode::from_pillow_name(mode)
+            .unwrap_or(pillow_rs::Mode::ImageLuma8);
+        pillow_rs::imagefont_text_length(&self.inner, mode, embedded_color, text)
+            .map_err(map_error)
+    }
+
+    #[pyo3(signature = (text, width, height, mode, embedded_color, spacing, stroke_width))]
+    #[allow(clippy::too_many_arguments)]
+    fn _image_text_wrap(
+        &self,
+        py: Python<'_>,
+        text: &Bound<'_, PyAny>,
+        width: f64,
+        height: Option<f64>,
+        mode: &str,
+        embedded_color: bool,
+        spacing: f64,
+        stroke_width: f32,
+    ) -> PyResult<(Vec<Py<PyAny>>, Py<PyAny>)> {
+        let text = imagefont_text_input_from_python(text)?;
+        let mode = pillow_rs::Mode::from_pillow_name(mode)
+            .unwrap_or(pillow_rs::Mode::ImageLuma8);
+        let result = pillow_rs::imagefont_text_wrap(
+            &self.inner,
+            mode,
+            text,
+            width,
+            height,
+            spacing,
+            stroke_width,
+            embedded_color,
+        )
+        .map_err(map_error)?;
+        let lines = result
+            .lines
+            .into_iter()
+            .map(|line| imagefont_wrap_text_to_python(py, line))
+            .collect::<PyResult<Vec<_>>>()?;
+        let remaining = imagefont_wrap_text_to_python(py, result.remaining)?;
+        Ok((lines, remaining))
+    }
+
+    #[pyo3(signature = (text, width, height, mode, embedded_color, spacing, stroke_width, scaling, limit))]
+    #[allow(clippy::too_many_arguments)]
+    fn _image_text_wrap_scaled(
+        &self,
+        py: Python<'_>,
+        text: &Bound<'_, PyAny>,
+        width: f64,
+        height: f64,
+        mode: &str,
+        embedded_color: bool,
+        spacing: f64,
+        stroke_width: f32,
+        scaling: &str,
+        limit: f64,
+    ) -> PyResult<Option<(Vec<Py<PyAny>>, Py<PyAny>, Option<Py<PyFont>>)>> {
+        let text = imagefont_text_input_from_python(text)?;
+        let mode = pillow_rs::Mode::from_pillow_name(mode)
+            .unwrap_or(pillow_rs::Mode::ImageLuma8);
+        let scaling = pillow_rs::imagefont_text_scaling(scaling, limit);
+        let Some((result, font)) = pillow_rs::imagefont_text_wrap_scaled(
+            &self.inner,
+            mode,
+            text,
+            width,
+            height,
+            spacing,
+            stroke_width,
+            embedded_color,
+            scaling,
+        )
+        .map_err(map_error)?
+        else {
+            return Ok(None);
+        };
+        let lines = result
+            .lines
+            .into_iter()
+            .map(|line| imagefont_wrap_text_to_python(py, line))
+            .collect::<PyResult<Vec<_>>>()?;
+        let remaining = imagefont_wrap_text_to_python(py, result.remaining)?;
+        let font = font
+            .map(|inner| Py::new(py, PyFont { inner }))
+            .transpose()?;
+        Ok(Some((lines, remaining, font)))
     }
 
     #[pyo3(signature = (text, mode=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None, ink=None, start=None))]
@@ -261,12 +446,13 @@ impl PyFont {
         ink: Option<i64>,
         start: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<PyImage> {
-        let (features, features_invalid) = draw_features_from_python(features);
+        let text = imagefont_text_input_from_python(text)?;
+        let features_invalid = draw_features_presence_from_python(features);
         let (start, start_invalid) = imagefont_start_from_python(start);
         let options = pillow_rs::ImageFontTextOptions {
             mode,
             direction,
-            features,
+            features: None,
             features_invalid,
             language,
             stroke_width,
@@ -278,7 +464,7 @@ impl PyFont {
         };
         let (width, height, pixels) = pillow_rs::imagefont_getmask_input_with_options(
             &self.inner,
-            imagefont_text_input_from_python(text)?,
+            text,
             &options,
         )
         .map_err(map_error)?;
@@ -325,13 +511,14 @@ impl PyFont {
         has_args: bool,
         has_kwargs: bool,
     ) -> PyResult<(PyImage, (i32, i32))> {
-        let (features, features_invalid) = draw_features_from_python(features);
+        let text = imagefont_text_input_from_python(text)?;
+        let features_invalid = draw_features_presence_from_python(features);
         let (start, start_invalid) = imagefont_start_from_python(start);
         let options = pillow_rs::ImageFontTextOptions {
             mode,
             embedded_color: false,
             direction,
-            features,
+            features: None,
             features_invalid,
             language,
             stroke_width,
@@ -347,7 +534,7 @@ impl PyFont {
         };
         let (width, height, pixels, offset) = pillow_rs::imagefont_getmask2_input_with_options(
             &self.inner,
-            imagefont_text_input_from_python(text)?,
+            text,
             &options,
         )
         .map_err(map_error)?;
@@ -379,13 +566,14 @@ impl PyFont {
         ink: Option<i64>,
         start: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<(PyImage, (i32, i32))> {
-        let (features, features_invalid) = draw_features_from_python(features);
+        let text = imagefont_text_input_from_python(text)?;
+        let features_invalid = draw_features_presence_from_python(features);
         let (start, start_invalid) = imagefont_start_from_python(start);
         let options = pillow_rs::ImageFontTextOptions {
             mode,
             embedded_color: false,
             direction,
-            features,
+            features: None,
             features_invalid,
             language,
             stroke_width,
@@ -401,7 +589,7 @@ impl PyFont {
         };
         let (width, height, pixels, offset) = pillow_rs::imagefont_native_render_input(
             &self.inner,
-            imagefont_text_input_from_python(text)?,
+            text,
             &options,
         )
         .map_err(map_error)?;
@@ -473,18 +661,19 @@ impl PyFont {
         features: Option<&Bound<'_, PyAny>>,
         language: Option<String>,
     ) -> PyResult<f32> {
-        let (features, features_invalid) = draw_features_from_python(features);
+        let text = imagefont_text_input_from_python(text)?;
+        let features_invalid = draw_features_presence_from_python(features);
         let options = pillow_rs::ImageFontTextOptions {
             mode,
             direction,
-            features,
+            features: None,
             features_invalid,
             language,
             ..pillow_rs::ImageFontTextOptions::default()
         };
         pillow_rs::imagefont_getlength_input_with_options(
             &self.inner,
-            imagefont_text_input_from_python(text)?,
+            text,
             &options,
         )
         .map_err(map_error)
@@ -598,6 +787,9 @@ pub(super) fn register_classes(m: &Bound<'_, PyModule>) -> PyResult<()> {
     Ok(())
 }
 pub(super) fn register_functions(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(imagefont_text_font_mode, m)?)?;
+    text_layout::register_functions(m)?;
+    text_wrap::register_functions(m)?;
     m.add_function(wrap_pyfunction!(transposed_font_bbox, m)?)?;
     m.add_function(wrap_pyfunction!(validate_transposed_font_length, m)?)?;
     m.add_function(wrap_pyfunction!(transposed_font_orientation, m)?)?;

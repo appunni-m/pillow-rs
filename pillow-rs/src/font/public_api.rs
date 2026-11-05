@@ -2,10 +2,197 @@
 
 use super::{
     FontMaskAndOffset, FontSizeAndOffset, FreeTypeFont, ImageFontFaceInfo, ImageFontLoadOptions,
-    ImageFontSourceInput, ImageFontTextInput, ImageFontTextOptions, ImageFontVariantOptions,
+    ImageFontSourceInput, ImageFontTextInput, ImageFontTextLine, ImageFontTextOptions,
+    ImageFontTextBoundsCallbacks, ImageFontTextPositionCallbacks, ImageFontTextScaling,
+    ImageFontTextWrapCallbacks, ImageFontTextWrapResult,
+    ImageFontVariantOptions,
     ImageFontVariationAxesInput, ImageFontVariationAxis, ImageFontVariationNameInput,
 };
 use crate::error::PilError;
+use crate::raster::Mode;
+
+/// Select the font mask mode used by ImageText.Text for one raster identity.
+#[doc(hidden)]
+pub fn imagefont_text_font_mode(mode: Mode, embedded_color: bool) -> &'static str {
+    super::text_layout::text_layout_font_mode(mode, embedded_color)
+}
+
+/// Resolve Pillow's text-wrap scaling selector into its core strategy.
+#[doc(hidden)]
+pub fn imagefont_text_scaling(name: &str, limit: f64) -> ImageFontTextScaling {
+    if name == "shrink" {
+        ImageFontTextScaling::Shrink { limit }
+    } else {
+        ImageFontTextScaling::Grow { limit }
+    }
+}
+
+/// Run the Rust-owned wrapping state machine with host callbacks for metrics
+/// and Python protocols.
+#[doc(hidden)]
+pub fn imagefont_text_wrap_with_callbacks<C: ImageFontTextWrapCallbacks>(
+    callbacks: &mut C,
+    text: ImageFontTextInput,
+    has_height: bool,
+    has_scaling: bool,
+) -> Result<Option<ImageFontTextWrapResult>, C::Error> {
+    super::text_wrap::wrap_with_callbacks(callbacks, text, has_height, has_scaling)
+}
+
+/// Split text into Pillow-positioned lines using the shared core layout.
+#[doc(hidden)]
+pub fn imagefont_text_split_positions(
+    font: &FreeTypeFont,
+    mode: Mode,
+    xy: (f64, f64),
+    text: &str,
+    spacing: f64,
+    options: &ImageFontTextOptions,
+) -> Result<Vec<ImageFontTextLine>, PilError> {
+    let lines = text.split('\n').collect::<Vec<_>>();
+    let positioned = super::text_layout::multiline_text_positions(
+        xy.0, xy.1, &lines, font, spacing, options, mode,
+    )?;
+    Ok(positioned
+        .into_iter()
+        .map(|line| ImageFontTextLine {
+            x: line.x,
+            y: line.y,
+            anchor: line.anchor,
+            text: line.text.to_owned(),
+        })
+        .collect())
+}
+
+/// Compute the positioned multiline text bounds used by ImageText.Text.
+#[doc(hidden)]
+pub fn imagefont_text_layout_bbox(
+    font: &FreeTypeFont,
+    mode: Mode,
+    xy: (f64, f64),
+    text: &str,
+    spacing: f64,
+    options: &ImageFontTextOptions,
+) -> Result<(f64, f64, f64, f64), PilError> {
+    let font_mode = super::text_layout::text_layout_font_mode(mode, options.embedded_color);
+    let lines = imagefont_text_split_positions(font, mode, xy, text, spacing, options)?;
+    let mut bounds: Option<(f64, f64, f64, f64)> = None;
+    for line in lines {
+        let mut bbox_options = options.clone();
+        bbox_options.mode = Some(font_mode.to_owned());
+        bbox_options.embedded_color = false;
+        bbox_options.anchor = Some(line.anchor);
+        bbox_options.align = None;
+        bbox_options.stroke_fill = None;
+        let bbox = font.getbbox_with_options(&line.text, &bbox_options)?;
+        let line_bounds = (
+            f64::from(bbox.0) + line.x,
+            f64::from(bbox.1) + line.y,
+            f64::from(bbox.2) + line.x,
+            f64::from(bbox.3) + line.y,
+        );
+        bounds = Some(match bounds {
+            Some(current) => (
+                current.0.min(line_bounds.0),
+                current.1.min(line_bounds.1),
+                current.2.max(line_bounds.2),
+                current.3.max(line_bounds.3),
+            ),
+            None => line_bounds,
+        });
+    }
+    bounds.ok_or_else(|| PilError::InternalError("text layout produced no lines".into()))
+}
+
+/// Aggregate callback-provided line bounds using core-owned min/max traversal.
+#[doc(hidden)]
+pub fn imagefont_text_layout_bbox_with_callbacks<C: ImageFontTextBoundsCallbacks>(
+    callbacks: &mut C,
+) -> Result<[C::Value; 4], C::Error> {
+    super::text_layout::bounds_with_callbacks(callbacks)
+}
+
+/// Split text into positioned lines using the Rust-owned layout strategy.
+#[doc(hidden)]
+pub fn imagefont_text_split_with_callbacks<C: ImageFontTextPositionCallbacks>(
+    callbacks: &mut C,
+) -> Result<Vec<C::Line>, C::Error> {
+    super::text_layout::split_with_callbacks(callbacks)
+}
+
+/// Measure a single ImageText.Text line with its mode-specific font mask mode.
+#[doc(hidden)]
+pub fn imagefont_text_length(
+    font: &FreeTypeFont,
+    mode: Mode,
+    embedded_color: bool,
+    text: ImageFontTextInput,
+) -> Result<f32, PilError> {
+    let text = text.into_text()?;
+    if text.contains('\n') {
+        return Err(PilError::ValueError(
+            "can't measure length of multiline text".into(),
+        ));
+    }
+    let font_mode = super::text_layout::text_layout_font_mode(mode, embedded_color);
+    let options = ImageFontTextOptions {
+        mode: Some(font_mode.to_owned()),
+        ..ImageFontTextOptions::default()
+    };
+    font.getlength_with_options(&text, &options)
+}
+
+/// Wrap Unicode or byte ImageText text in the Rust core.
+#[doc(hidden)]
+#[allow(clippy::too_many_arguments)]
+pub fn imagefont_text_wrap(
+    font: &FreeTypeFont,
+    mode: Mode,
+    text: ImageFontTextInput,
+    width: f64,
+    height: Option<f64>,
+    spacing: f64,
+    stroke_width: f32,
+    embedded_color: bool,
+) -> Result<ImageFontTextWrapResult, PilError> {
+    super::text_wrap::wrap_text(
+        font,
+        mode,
+        text,
+        width,
+        height,
+        spacing,
+        stroke_width,
+        embedded_color,
+    )
+}
+
+/// Apply Pillow's FreeType font-size scaling strategy while wrapping text.
+#[doc(hidden)]
+#[allow(clippy::too_many_arguments)]
+pub fn imagefont_text_wrap_scaled(
+    font: &FreeTypeFont,
+    mode: Mode,
+    text: ImageFontTextInput,
+    width: f64,
+    height: f64,
+    spacing: f64,
+    stroke_width: f32,
+    embedded_color: bool,
+    scaling: ImageFontTextScaling,
+) -> Result<Option<(ImageFontTextWrapResult, Option<FreeTypeFont>)>, PilError> {
+    super::text_wrap::wrap_text_scaled(
+        font,
+        mode,
+        text,
+        width,
+        height,
+        spacing,
+        stroke_width,
+        embedded_color,
+        scaling,
+    )
+}
 
 /// Load a TrueType/OpenType face from bytes at the requested Pillow point size.
 pub fn imagefont_from_bytes(data: Vec<u8>, size: f32) -> Result<FreeTypeFont, PilError> {

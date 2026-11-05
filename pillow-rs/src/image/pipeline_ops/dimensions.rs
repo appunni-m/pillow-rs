@@ -161,8 +161,11 @@ pub fn known_pipeline_op_dimensions(
             expand,
             center,
             translate,
+            output_size,
             ..
-        } => known_rotated_dimensions(*angle, *expand, *center, *translate, (width, height)),
+        } => (*output_size).or_else(|| {
+            known_rotated_dimensions(*angle, *expand, *center, *translate, (width, height))
+        }),
         PipelineOp::Reduce { x_factor, y_factor } => Some((
             width.div_ceil((*x_factor).max(1)),
             height.div_ceil((*y_factor).max(1)),

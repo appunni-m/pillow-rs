@@ -22,10 +22,11 @@ else:
 
 from . import imagechops as ImageChops
 from . import imagecolor as ImageColor
+from . import imagefont as ImageFont
+from . import imagetext as ImageText
 from . import imagedraw as ImageDraw
 from . import imageenhance as ImageEnhance
 from . import imagefilter as ImageFilter
-from . import imagefont as ImageFont
 from . import imageops as ImageOps
 from . import imagepalette as ImagePalette
 from . import imagestat as ImageStat
@@ -45,7 +46,7 @@ __version__ = "12.2.3"
 __all__ = [
     "GpuBatchExecutor", "GpuImage", "BatchResult", "BatchError", "QueueFull", "ResultBackpressure", "Results",
     "Image", "ImageMode", "ImageFormat",
-    "ImageOps", "ImageChops", "ImageColor", "ImageDraw",
+    "ImageOps", "ImageChops", "ImageColor", "ImageDraw", "ImageText",
     "ImageEnhance", "ImageFilter", "ImageFont",
     "ImagePalette", "ImageStat", "ImageSequence",
     "Resampling", "Transform", "Transpose", "Dither", "Palette",

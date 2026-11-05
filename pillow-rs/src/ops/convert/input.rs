@@ -133,8 +133,14 @@ impl Image {
         }
         // Pillow rejects matrix conversions to unsupported target modes before
         // it validates the coefficient count. This ordering is observable for
-        // an invalid mode paired with a short matrix.
-        if matrix.is_some() && !matches!(target_mode, Mode::ImageLuma8 | Mode::ImageRgb8) {
+        // an invalid mode paired with a short matrix. LAB is a Rust-only
+        // extension implemented as a direct source-to-LAB strategy.
+        if matrix.is_some()
+            && !matches!(
+                target_mode,
+                Mode::ImageLuma8 | Mode::ImageRgb8 | Mode::ImageLab8
+            )
+        {
             return Err(PilError::ValueError("illegal conversion".to_owned()));
         }
         if let Some(matrix) = matrix.as_ref()

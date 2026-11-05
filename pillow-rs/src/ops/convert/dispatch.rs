@@ -1,10 +1,9 @@
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
-use crate::raster::{DynamicImage, Mode};
+use crate::raster::Mode;
 use crate::compute::registry::support::{
-    OperationId, OperationModeTransition, OperationTargetComposition,
-    OperationTargetCompositionKind, OperationTransitionSource, OutputModeRule,
+    OperationTargetComposition, OperationTargetCompositionKind, OutputModeRule,
 };
 
 pub(super) fn try_convert_scalar_to_rgbx(
@@ -148,28 +147,10 @@ fn execute_target_composition(
             "Convert wrapper composition omitted its declared target output".into(),
         ));
     }
-    let transition = composition.transitions.first().ok_or_else(|| {
-        PilError::InternalError("Convert composition omitted its child transition".into())
-    })?;
-    let base_mode = transition.target;
     match composition.kind {
-        OperationTargetCompositionKind::ConvertLab => {
-            convert_to_lab(image, composition.transitions)
-        }
-        OperationTargetCompositionKind::ConvertPremultiplied => convert_to_premultiplied(
-            image,
-            composition.source_mode,
-            composition.target_mode,
-            base_mode,
-            dither,
-        ),
-        OperationTargetCompositionKind::ConvertRgbx => convert_to_rgbx(
-            image,
-            composition.source_mode,
-            composition.target_mode,
-            base_mode,
-            dither,
-        ),
+        OperationTargetCompositionKind::ConvertPremultiplied => Err(PilError::InternalError(
+            "Convert premultiplied rejection route unexpectedly admitted execution".into(),
+        )),
         OperationTargetCompositionKind::ConvertPalette => super::palette::convert_prepared_palette(
             image,
             composition.source_mode,
@@ -180,101 +161,5 @@ fn execute_target_composition(
             "Convert guard route unexpectedly declared a successful composition".into(),
         )),
     }
-}
-
-fn convert_to_lab(
-    image: &Image,
-    transitions: &[OperationModeTransition],
-) -> Result<Image, PilError> {
-    let mut converted: Option<Image> = None;
-    for transition in transitions {
-        let source = match transition.operation {
-            OperationId::Convert => match transition.source {
-                OperationTransitionSource::Input => image,
-                OperationTransitionSource::Previous => converted.as_ref().ok_or_else(|| {
-                    PilError::InternalError(
-                        "ConvertLab transition omitted its previous image".into(),
-                    )
-                })?,
-            },
-            OperationId::ConvertLab => break,
-            _ => {
-                return Err(PilError::InternalError(
-                    "ConvertLab route declared a non-Convert child".into(),
-                ));
-            }
-        };
-        converted = Some(source.convert(transition.target, None, None, None, None)?);
-    }
-    let lab_input = converted.as_ref().unwrap_or(image);
-    Ok(Image::push_op(
-        lab_input,
-        PipelineOp::ConvertLab {
-            icc_profile: crate::lab::pillow_lab_icc_profile().into(),
-        },
-    ))
-}
-
-fn convert_to_premultiplied(
-    image: &Image,
-    source_mode: Mode,
-    target_mode: Mode,
-    base_mode: Mode,
-    dither: Option<&str>,
-) -> Result<Image, PilError> {
-    // RGB has direct opaque RGBa/La converters; RGBA->La normalizes through RGB.
-    super::nonstandard::execute_eager_convert_composition(
-        image,
-        source_mode,
-        base_mode,
-        target_mode,
-        dither,
-        |converted, _source| match converted {
-            DynamicImage::ImageRgb8(rgb) => {
-                crate::compute::pool_cpu::ops::color::convert::helpers::premultiplied::from_rgb_samples(
-                    rgb.width(),
-                    rgb.height(),
-                    rgb.pixels().map(|pixel| [pixel[0], pixel[1], pixel[2]]),
-                    target_mode,
-                )
-            }
-            _ => Err(PilError::InternalError(
-                "Convert premultiplication child returned an unsupported mode".into(),
-            )),
-        },
-    )
-}
-
-fn convert_to_rgbx(
-    image: &Image,
-    source_mode: Mode,
-    target_mode: Mode,
-    base_mode: Mode,
-    dither: Option<&str>,
-) -> Result<Image, PilError> {
-    // The declared route selects RGBA for LA/PA and RGB for other sources.
-    super::nonstandard::execute_eager_convert_composition(
-        image,
-        source_mode,
-        base_mode,
-        target_mode,
-        dither,
-        |converted, source| {
-            let mut rgba = converted.to_rgba8();
-            if source_mode == Mode::ImagePalette8
-                && let Some(alpha) = image.palette_alpha()
-            {
-                let DynamicImage::ImagePalette8(indices) = source else {
-                    return Err(PilError::InternalError(
-                        "Convert RGBX palette child did not retain P indices".into(),
-                    ));
-                };
-                for (pixel, &index) in rgba.pixels_mut().zip(indices.as_raw()) {
-                    pixel[3] = alpha.get(usize::from(index)).copied().unwrap_or(255);
-                }
-            }
-            Ok(DynamicImage::ImageRgba8(rgba))
-        },
-    )
 }
 

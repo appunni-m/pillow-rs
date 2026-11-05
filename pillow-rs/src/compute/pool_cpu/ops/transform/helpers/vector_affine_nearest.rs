@@ -16,6 +16,35 @@ pub(crate) fn execute<const CHANNELS: usize>(
     affine: [f64; 6],
     fill: [u8; 4],
 ) -> Result<Vec<u8>, PilError> {
+    if !(1..=4).contains(&CHANNELS) {
+        return Err(PilError::InternalError(
+            "Transform vector kernel has an invalid native channel count".into(),
+        ));
+    }
+    if output_dimensions.0 == 0 || output_dimensions.1 == 0 {
+        return Ok(Vec::new());
+    }
+    let output_len = byte_len::<CHANNELS>(output_dimensions.0, output_dimensions.1)?;
+    let mut output = vec![0; output_len];
+    execute_into::<CHANNELS>(
+        source,
+        source_dimensions,
+        output_dimensions,
+        affine,
+        fill,
+        &mut output,
+    )?;
+    Ok(output)
+}
+
+pub(crate) fn execute_into<const CHANNELS: usize>(
+    source: &[u8],
+    source_dimensions: (u32, u32),
+    output_dimensions: (u32, u32),
+    affine: [f64; 6],
+    fill: [u8; 4],
+    output: &mut [u8],
+) -> Result<(), PilError> {
     let (source_width, source_height) = source_dimensions;
     let (output_width, output_height) = output_dimensions;
     if !(1..=4).contains(&CHANNELS) {
@@ -23,24 +52,29 @@ pub(crate) fn execute<const CHANNELS: usize>(
             "Transform vector kernel has an invalid native channel count".into(),
         ));
     }
+    let output_len = byte_len::<CHANNELS>(output_width, output_height)?;
+    if output.len() != output_len {
+        return Err(PilError::InternalError(
+            "Transform affine nearest destination buffer shape mismatch".into(),
+        ));
+    }
     if output_width == 0 || output_height == 0 {
-        return Ok(Vec::new());
+        return Ok(());
     }
     let source_len = byte_len::<CHANNELS>(source_width, source_height)?;
-    let output_len = byte_len::<CHANNELS>(output_width, output_height)?;
     if source.len() != source_len {
         return Err(PilError::InternalError(
             "Transform vector source buffer shape mismatch".into(),
         ));
     }
-    let output = match affine_nearest_fixed(affine, output_width, output_height) {
+    match affine_nearest_fixed(affine, output_width, output_height) {
         Some(steps) => sample_fixed::<CHANNELS>(
             source,
             source_dimensions,
             output_dimensions,
             steps,
             fill,
-            output_len,
+            output,
         ),
         None => sample_floating::<CHANNELS>(
             source,
@@ -48,10 +82,10 @@ pub(crate) fn execute<const CHANNELS: usize>(
             output_dimensions,
             affine,
             fill,
-            output_len,
+            output,
         )?,
-    };
-    Ok(output)
+    }
+    Ok(())
 }
 
 fn byte_len<const CHANNELS: usize>(width: u32, height: u32) -> Result<usize, PilError> {
@@ -67,16 +101,14 @@ fn sample_fixed<const CHANNELS: usize>(
     output_dimensions: (u32, u32),
     steps: [i64; 6],
     fill: [u8; 4],
-    output_len: usize,
-) -> Vec<u8> {
+    output: &mut [u8],
+) {
     let (output_width, _) = output_dimensions;
     let [step_x, step_y, origin_x, step_x_y, step_y_y, origin_y] = steps;
     let offsets_x = i64x8::new(std::array::from_fn(|lane| lane as i64 * step_x));
     let offsets_y = i64x8::new(std::array::from_fn(|lane| lane as i64 * step_x_y));
     let step_x_vector = i64x8::splat(step_x * VECTOR_PIXELS as i64);
     let step_y_vector = i64x8::splat(step_x_y * VECTOR_PIXELS as i64);
-    let mut output = vec![0; output_len];
-
     for (row_index, row) in output
         .chunks_exact_mut(output_width as usize * CHANNELS)
         .enumerate()
@@ -100,7 +132,6 @@ fn sample_fixed<const CHANNELS: usize>(
         }
     }
     record_vector_work(output_dimensions, VECTOR_PIXELS);
-    output
 }
 
 fn sample_floating<const CHANNELS: usize>(
@@ -109,12 +140,11 @@ fn sample_floating<const CHANNELS: usize>(
     output_dimensions: (u32, u32),
     affine: [f64; 6],
     fill: [u8; 4],
-    output_len: usize,
-) -> Result<Vec<u8>, PilError> {
+    output: &mut [u8],
+) -> Result<(), PilError> {
     let (output_width, output_height) = output_dimensions;
     let [a, b, c, d, e, f] = affine;
     let pixels_per_vector = VECTOR_BYTES / CHANNELS;
-    let mut output = vec![0; output_len];
     let mut blocks = 0u64;
 
     for destination_y in 0..output_height as usize {
@@ -150,7 +180,7 @@ fn sample_floating<const CHANNELS: usize>(
     crate::compute::record_pipeline_operation_path("vector");
     crate::compute::record_pipeline_operation_vector_blocks(blocks);
     crate::compute::record_pipeline_operation_scalar_tail(0);
-    Ok(output)
+    Ok(())
 }
 
 fn record_vector_work(dimensions: (u32, u32), pixels_per_block: usize) {

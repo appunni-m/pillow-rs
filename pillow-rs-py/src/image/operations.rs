@@ -8,6 +8,7 @@ use pyo3::{pyclass, pyfunction, pymethods};
 #[pyclass(name = "_RotatePlan", frozen)]
 pub(super) struct PyRotatePlan {
     prepared: pillow_rs::PreparedRotate,
+    output_size: (u32, u32),
 }
 
 #[pyclass(name = "_PasteBoxPlan", frozen)]
@@ -51,27 +52,6 @@ pub(super) fn register_adapter_functions(m: &Bound<'_, pyo3::types::PyModule>) -
     m.add_function(pyo3::wrap_pyfunction!(thumbnail_filter_code, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(thumbnail_reducing_gap, m)?)?;
     Ok(())
-}
-
-fn rotate_input_from_python(
-    resample: Option<&Bound<'_, PyAny>>,
-    expand: Option<&Bound<'_, PyAny>>,
-    center: Option<&Bound<'_, PyAny>>,
-    translate: Option<&Bound<'_, PyAny>>,
-    fillcolor: Option<&Bound<'_, PyAny>>,
-) -> PyResult<(
-    pillow_rs::RotatePointInput,
-    pillow_rs::RotatePointInput,
-    pillow_rs::RotateExpandInput,
-    pillow_rs::RotateResampleInput,
-    pillow_rs::ImageOpsColor,
-)> {
-    let center = rotate_point_input_from_python(center)?;
-    let translate = rotate_point_input_from_python(translate)?;
-    let expand = rotate_expand_input_from_python(expand)?;
-    let resample = rotate_resample_input_from_python(resample)?;
-    let fillcolor = imageops_color_from_python(fillcolor);
-    Ok((center, translate, expand, resample, fillcolor))
 }
 
 fn point_lut_from_python(input: &Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
@@ -146,63 +126,82 @@ impl PyImage {
         Ok(PyImage { inner: rs })
     }
 
-    #[pyo3(signature = (angle, resample=None, expand=None, center=None, translate=None, fillcolor=None))]
-    #[allow(clippy::too_many_arguments)] // Mirrors the public Pillow Image.rotate API.
-    fn rotate(
-        slf: Py<Self>,
-        angle: &Bound<'_, PyAny>,
-        resample: Option<&Bound<'_, PyAny>>,
-        expand: Option<&Bound<'_, PyAny>>,
-        center: Option<&Bound<'_, PyAny>>,
-        translate: Option<&Bound<'_, PyAny>>,
-        fillcolor: Option<&Bound<'_, PyAny>>,
-        py: Python<'_>,
-    ) -> PyResult<PyImage> {
-        let angle = angle.extract::<f64>()?;
-        let (center, translate, expand, resample, fillcolor) =
-            rotate_input_from_python(resample, expand, center, translate, fillcolor)?;
-        let image = slf.bind(py).borrow();
-        let rs = py
-            .detach(|| {
-                image
-                    .inner
-                    .rotate_with_input(angle, resample, expand, center, translate, fillcolor)
-            })
-            .map_err(map_error)?;
-        Ok(PyImage { inner: rs })
-    }
-
-    #[pyo3(signature = (angle, resample=None, expand=None, center=None, translate=None, fillcolor=None))]
-    #[allow(clippy::too_many_arguments)] // Mirrors the public Pillow Image.rotate API.
+    #[pyo3(signature = (angle, output_size, resample=None, expand=false, fillcolor=None))]
+    #[allow(clippy::too_many_arguments)] // Mirrors the internal Pillow Rotate boundary.
     fn _prepare_rotate(
         slf: Py<Self>,
-        angle: &Bound<'_, PyAny>,
+        angle: f64,
+        output_size: &Bound<'_, PyAny>,
         resample: Option<&Bound<'_, PyAny>>,
-        expand: Option<&Bound<'_, PyAny>>,
-        center: Option<&Bound<'_, PyAny>>,
-        translate: Option<&Bound<'_, PyAny>>,
+        expand: bool,
         fillcolor: Option<&Bound<'_, PyAny>>,
         py: Python<'_>,
     ) -> PyResult<PyRotatePlan> {
-        let angle = angle.extract::<f64>()?;
-        let (center, translate, expand, resample, fillcolor) =
-            rotate_input_from_python(resample, expand, center, translate, fillcolor)?;
-        let image = slf.bind(py).borrow();
-        let prepared = image
+        let mode = slf
+            .bind(py)
+            .borrow()
             .inner
-            .prepare_rotate_with_input(angle, resample, expand, center, translate, fillcolor)
+            .mode_identity()
             .map_err(map_error)?;
-        Ok(PyRotatePlan { prepared })
+        let (width, height) = nonnegative_output_size_items_from_python(output_size)?;
+        let (pre_size_fill, deferred_fill) =
+            rotate_fill_preflight_from_python(py, fillcolor, mode)?;
+        let deferred_fill = deferred_fill.as_ref().map(|fill| fill.bind(py));
+        let prepare_fill = |value| {
+            let fillcolor = rotate_fill_from_python(value, mode)?;
+            slf.bind(py)
+                .borrow()
+                .inner
+                .prepare_rotate_fill_with_input(fillcolor)
+                .map_err(map_error)
+        };
+        // Pillow classifies P sequences and resolves named/all-integer RGB(A)
+        // colors before `_fill`; remaining color coercion follows C-int sizes.
+        let pre_size_prepared = pre_size_fill
+            .map(|fill| {
+                slf.bind(py)
+                    .borrow()
+                    .inner
+                    .prepare_rotate_fill_with_input(fill)
+                    .map_err(map_error)
+            })
+            .transpose()?;
+        let width = c_int_from_python(&width)?;
+        let height = c_int_from_python(&height)?;
+        let output_size = (width as u32, height as u32);
+        let prepared = match pre_size_prepared {
+            Some(prepared) => prepared,
+            None => prepare_fill(deferred_fill.as_ref().or(fillcolor))?,
+        };
+        let resample = rotate_resample_input_from_python(resample)?;
+        let prepared = prepared
+            .with_python_resample(angle, resample, expand)
+            .map_err(map_error)?;
+        Ok(PyRotatePlan {
+            prepared,
+            output_size,
+        })
     }
 
     fn _rotate_prepared(
-        &self,
+        slf: Py<Self>,
         plan: pyo3::PyRef<'_, PyRotatePlan>,
+        affine: &Bound<'_, PyAny>,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
-        let prepared = plan.prepared;
+        // Rotate supplies a built-in six-tuple. Parse its coefficients here,
+        // after the facade has loaded the source: Pillow's `_imaging.getlist`
+        // applies `PyFloat_AsDouble` to each value at this boundary, so custom
+        // coefficient `__float__` callbacks keep the same place in the flow.
+        let affine = affine.extract::<(f64, f64, f64, f64, f64, f64)>()?;
+        let matrix = [affine.0, affine.1, affine.2, affine.3, affine.4, affine.5];
+        let prepared = plan
+            .prepared
+            .clone()
+            .with_affine(matrix, plan.output_size);
+        let image = slf.bind(py).borrow();
         let inner = py
-            .detach(|| self.inner.rotate_prepared(prepared))
+            .detach(|| image.inner.rotate_prepared(prepared))
             .map_err(map_error)?;
         Ok(PyImage { inner })
     }
@@ -498,7 +497,7 @@ impl PyImage {
         colors: Option<i32>,
         method: Option<i32>,
         kmeans: Option<i32>,
-        dither: Option<bool>,
+        dither: Option<i32>,
         palette: Option<&Bound<'_, PyAny>>,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
@@ -514,7 +513,13 @@ impl PyImage {
             .detach(|| {
                 image
                     .inner
-                    .quantize_with_input(colors, method, kmeans, palette, dither)
+                    .quantize_with_input(
+                        colors,
+                        method,
+                        kmeans,
+                        palette,
+                        dither.map(|value| value != 0),
+                    )
             })
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
@@ -691,31 +696,6 @@ impl PyImage {
         Ok(PyImage { inner: rs })
     }
 
-    fn putalpha_input(
-        slf: Py<Self>,
-        alpha: &Bound<'_, PyAny>,
-        py: Python<'_>,
-    ) -> PyResult<()> {
-        let input = if let Some(mask) = image_from_python(alpha) {
-            pillow_rs::PutAlphaInput::Image(Box::new(mask))
-        } else if let Ok(value) = alpha.extract::<i64>() {
-            pillow_rs::PutAlphaInput::Integer(value)
-        } else if alpha.is_instance_of::<PyInt>() {
-            // Clamp arbitrary-size Python integers in the core's byte domain
-            // without narrowing or converting through floating point.
-            let value = if alpha.lt(0)? { i64::MIN } else { i64::MAX };
-            pillow_rs::PutAlphaInput::Integer(value)
-        } else {
-            pillow_rs::PutAlphaInput::Invalid(alpha.get_type().name()?.to_string())
-        };
-        // `__index__` conversion above may re-enter this image; borrow it only
-        // once host-language coercion has finished.
-        let mut image = slf.bind(py).borrow_mut();
-        let image = &mut image.inner;
-        py.detach(|| image.putalpha_with_input(input))
-            .map_err(map_error)
-    }
-
     fn reduce(
         slf: Py<Self>,
         factor: &Bound<'_, PyAny>,
@@ -848,36 +828,6 @@ impl PyImage {
         py.detach(|| pillow_rs::image_effect_spread(&image.inner, distance))
             .map(|i| PyImage { inner: i })
             .map_err(map_error)
-    }
-
-    #[pyo3(signature = (size, method, data=None, resample=0, fill=1, fillcolor=None))]
-    #[allow(clippy::too_many_arguments)] // Mirrors the public Pillow Image.transform API.
-    fn transform(
-        slf: Py<Self>,
-        size: (u32, u32),
-        method: i32,
-        data: Option<&Bound<'_, PyAny>>,
-        resample: Option<i32>,
-        fill: Option<i32>,
-        fillcolor: Option<&Bound<'_, PyAny>>,
-        py: Python<'_>,
-    ) -> PyResult<PyImage> {
-        let data = transform_data_from_python(data)?;
-        let mode = {
-            let image = slf.bind(py).borrow();
-            image.inner.mode_identity().map_err(map_error)?
-        };
-        let fillcolor = transform_fill_from_python(fillcolor, mode)?;
-        let resample = resample.unwrap_or(0);
-        let fill = fill.unwrap_or(1);
-        let image = slf.bind(py).borrow();
-        py.detach(|| {
-            image
-                .inner
-                .transform_public(size, method, data, resample, fill, fillcolor)
-        })
-        .map(|i| PyImage { inner: i })
-        .map_err(map_error)
     }
 
     #[pyo3(signature = (dest_map, source_palette=None))]

@@ -665,18 +665,38 @@ pub(crate) fn rotate_vector_bytes_guard(
         return GuardAssessment::Ineligible;
     }
     let empty_input = input.width == 0 || input.height == 0;
-    let (angle_bits, expand, center_bits, translate_bits, filter, nearest) = match input.request {
-        RequestFacts::Unspecified => return GuardAssessment::Deferred,
-        RequestFacts::Rotate {
-            angle_bits, expand, center_bits, translate_bits, filter, nearest, ..
-        } => (angle_bits, expand, center_bits, translate_bits, filter, nearest),
-        _ => return GuardAssessment::Ineligible,
+    let RequestFacts::Rotate {
+        angle_bits,
+        expand,
+        center_bits,
+        translate_bits,
+        affine_bits,
+        output_size,
+        filter,
+        nearest,
+        ..
+    } = input.request
+    else {
+        return if input.request == RequestFacts::Unspecified {
+            GuardAssessment::Deferred
+        } else {
+            GuardAssessment::Ineligible
+        };
     };
     let angle = f64::from_bits(angle_bits);
     let finite_pair = |bits: Option<(u64, u64)>| {
         bits.is_none_or(|(x, y)| f64::from_bits(x).is_finite() && f64::from_bits(y).is_finite())
     };
-    if !angle.is_finite() || !finite_pair(center_bits) || !finite_pair(translate_bits) {
+    let finite_affine = affine_bits.is_none_or(|values| {
+        values
+            .into_iter()
+            .all(|value| f64::from_bits(value).is_finite())
+    });
+    if !angle.is_finite()
+        || !finite_pair(center_bits)
+        || !finite_pair(translate_bits)
+        || !finite_affine
+    {
         return GuardAssessment::Ineligible;
     }
     // Empty-source behavior depends on the exact Default fast path: archived
@@ -692,15 +712,14 @@ pub(crate) fn rotate_vector_bytes_guard(
     if !matches!(layout, GuardAssessment::Satisfied) {
         return layout;
     }
-    let center = center_bits.map(|(x, y)| (f64::from_bits(x), f64::from_bits(y)));
-    let translate = translate_bits.map(|(x, y)| (f64::from_bits(x), f64::from_bits(y)));
-    if angle.rem_euclid(360.0).abs() <= f64::EPSILON
+    if affine_bits.is_none()
+        && angle.rem_euclid(360.0).abs() <= f64::EPSILON
         && center_bits.is_none()
         && translate_bits.is_none()
     {
         return layout;
     }
-    if center_bits.is_none() && translate_bits.is_none() {
+    if affine_bits.is_none() && center_bits.is_none() && translate_bits.is_none() {
         let normalized = angle.rem_euclid(360.0);
         let discrete = [90.0, 180.0, 270.0]
             .into_iter()
@@ -715,15 +734,7 @@ pub(crate) fn rotate_vector_bytes_guard(
     if !nearest && (!bilinear || filter != 1) {
         return GuardAssessment::Ineligible;
     }
-    if !rotate_output_geometry_supported(
-        input.width,
-        input.height,
-        channels,
-        angle,
-        expand,
-        center,
-        translate,
-    ) {
+    if !rotate_output_geometry_supported(input, channels) {
         return GuardAssessment::Ineligible;
     }
     layout
@@ -818,24 +829,48 @@ pub(crate) fn transform_i16_affine_guard(
     checked_native_bytes_guard(input, 2)
 }
 
-fn rotate_output_geometry_supported(
-    width: u32,
-    height: u32,
-    channels: u8,
-    angle: f64,
-    expand: bool,
-    center: Option<(f64, f64)>,
-    translate: Option<(f64, f64)>,
-) -> bool {
+fn rotate_output_geometry_supported(input: StrategyInputs, channels: u8) -> bool {
+    let width = input.width;
+    let height = input.height;
     if width == 0 || height == 0 {
         return false;
     }
+    let RequestFacts::Rotate {
+        angle_bits,
+        expand,
+        center_bits,
+        translate_bits,
+        affine_bits,
+        output_size,
+        ..
+    } = input.request
+    else {
+        return false;
+    };
+    if let Some(affine_bits) = affine_bits {
+        let Some((output_width, output_height)) = output_size else {
+            return false;
+        };
+        return affine_bits
+            .into_iter()
+            .all(|value| f64::from_bits(value).is_finite())
+            && output_width != 0
+            && output_height != 0
+            && output_width
+                .checked_mul(output_height)
+                .and_then(|pixels| pixels.checked_mul(u32::from(channels)))
+                .is_some_and(|output_bytes| output_bytes != 0)
+            && crate::checked_dims::CheckedDims::new(output_width, output_height, channels).is_ok();
+    }
+    let angle = f64::from_bits(angle_bits);
     let (sw, sh) = (f64::from(width), f64::from(height));
     let radians = -angle.to_radians();
     let a = crate::ops::rotate::round_rotate_coefficient(radians.cos());
     let b = crate::ops::rotate::round_rotate_coefficient(radians.sin());
     let d = crate::ops::rotate::round_rotate_coefficient(-radians.sin());
     let e = a;
+    let center = center_bits.map(|(x, y)| (f64::from_bits(x), f64::from_bits(y)));
+    let translate = translate_bits.map(|(x, y)| (f64::from_bits(x), f64::from_bits(y)));
     let (center_x, center_y) = center.unwrap_or((sw / 2.0, sh / 2.0));
     let (translate_x, translate_y) = translate.unwrap_or((0.0, 0.0));
     let c = a * (-center_x - translate_x) + b * (-center_y - translate_y) + center_x;

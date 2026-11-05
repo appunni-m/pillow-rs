@@ -16,6 +16,49 @@ pub(crate) fn execute(
     request: TransformRequest<'_>,
     order: ByteOrder,
 ) -> Result<Vec<u16>, PilError> {
+    let (source_layout, destination, fill) = prepare(source, source_dimensions, request)?;
+    let mut output = vec![0; destination.total_pixels()];
+    execute_prepared(
+        source,
+        source_layout,
+        destination,
+        request,
+        order,
+        fill,
+        &mut output,
+    )?;
+    Ok(output)
+}
+
+pub(crate) fn execute_into(
+    source: &[u16],
+    source_dimensions: (u32, u32),
+    request: TransformRequest<'_>,
+    order: ByteOrder,
+    output: &mut [u16],
+) -> Result<(), PilError> {
+    let (source_layout, destination, fill) = prepare(source, source_dimensions, request)?;
+    if output.len() != destination.total_pixels() {
+        return Err(PilError::InternalError(
+            "I;16 Transform destination buffer shape mismatch".into(),
+        ));
+    }
+    execute_prepared(
+        source,
+        source_layout,
+        destination,
+        request,
+        order,
+        fill,
+        output,
+    )
+}
+
+fn prepare(
+    source: &[u16],
+    source_dimensions: (u32, u32),
+    request: TransformRequest<'_>,
+) -> Result<(CheckedDims, CheckedDims, u16), PilError> {
     if !matches!(request.method, TransformMethod::Affine) {
         return Err(PilError::InternalError(
             "I;16 architecture Transform received a non-affine request".into(),
@@ -31,24 +74,45 @@ pub(crate) fn execute(
     let fill = request
         .fill
         .map_or(0, |color| u16::from_le_bytes([color.0, color.1]));
+    Ok((source_layout, destination, fill))
+}
+
+fn execute_prepared(
+    source: &[u16],
+    source_layout: CheckedDims,
+    destination: CheckedDims,
+    request: TransformRequest<'_>,
+    order: ByteOrder,
+    fill: u16,
+    output: &mut [u16],
+) -> Result<(), PilError> {
     match request.filter {
-        ResampleFilter::Nearest => execute_nearest(source, source_layout, destination, request, fill),
-        ResampleFilter::Bilinear => {
-            execute_bilinear(source, source_layout, destination, request, order, fill)
+        ResampleFilter::Nearest => {
+            execute_nearest_into(source, source_layout, destination, request, fill, output)
         }
+        ResampleFilter::Bilinear => execute_bilinear_into(
+            source,
+            source_layout,
+            destination,
+            request,
+            order,
+            fill,
+            output,
+        ),
         _ => Err(PilError::InternalError(
             "I;16 architecture Transform received an unsupported filter".into(),
         )),
     }
 }
 
-fn execute_nearest(
+fn execute_nearest_into(
     source: &[u16],
     source_layout: CheckedDims,
     destination: CheckedDims,
     request: TransformRequest<'_>,
     fill: u16,
-) -> Result<Vec<u16>, PilError> {
+    output: &mut [u16],
+) -> Result<(), PilError> {
     let [a, b, c, d, e, f] = request.data else {
         return Err(PilError::InternalError(
             "I;16 affine Transform coefficients changed after admission".into(),
@@ -58,7 +122,6 @@ fn execute_nearest(
     let source_height = source_layout.height as usize;
     let width = destination.width as usize;
     let height = destination.height as usize;
-    let mut output = Vec::with_capacity(destination.total_pixels());
     let mut vector_blocks = 0u64;
 
     for y in 0..height {
@@ -97,23 +160,26 @@ fn execute_nearest(
                     samples[lane] = source[input_y as usize * source_width + input_x as usize];
                 }
             }
-            output.extend_from_slice(&u16x8::new(samples).to_array()[..count]);
+            let output_start = y * width + x;
+            output[output_start..output_start + count]
+                .copy_from_slice(&u16x8::new(samples).to_array()[..count]);
             vector_blocks = vector_blocks.saturating_add(1);
             x += count;
         }
     }
     record_vector_work(vector_blocks);
-    Ok(output)
+    Ok(())
 }
 
-fn execute_bilinear(
+fn execute_bilinear_into(
     source: &[u16],
     source_layout: CheckedDims,
     destination: CheckedDims,
     request: TransformRequest<'_>,
     order: ByteOrder,
     fill: u16,
-) -> Result<Vec<u16>, PilError> {
+    output: &mut [u16],
+) -> Result<(), PilError> {
     let fill_bytes = order.encode(fill);
     let source_width = source_layout.width as usize;
     let mut source_plane = Vec::with_capacity(source_layout.total_pixels());
@@ -137,10 +203,10 @@ fn execute_bilinear(
             "I;16 bilinear Transform output plane shape mismatch".into(),
         ));
     }
-    Ok(output_plane
-        .into_iter()
-        .map(|sample| order.decode([sample, fill_bytes[1]]))
-        .collect())
+    for (destination, sample) in output.iter_mut().zip(output_plane) {
+        *destination = order.decode([sample, fill_bytes[1]]);
+    }
+    Ok(())
 }
 
 fn floor_coordinate(value: f64) -> i64 {

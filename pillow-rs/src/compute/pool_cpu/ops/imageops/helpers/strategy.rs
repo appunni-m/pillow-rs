@@ -480,7 +480,7 @@ pub(crate) fn select_invert_strategy(
 }
 
 macro_rules! declare_invert_mode {
-    ($mode:ident, $input:ty, $implementation:path, $bytes_per_pixel:expr) => {
+    ($mode:ident, $input:ty, $implementation:path, $bytes_per_pixel:expr $(,)?) => {
         declare_invert_mode!(
             $mode,
             $input,
@@ -489,7 +489,7 @@ macro_rules! declare_invert_mode {
             None::<&'static str>
         );
     };
-    ($mode:ident, $input:ty, $implementation:path, $bytes_per_pixel:expr, $core_only_reason:expr) => {
+    ($mode:ident, $input:ty, $implementation:path, $bytes_per_pixel:expr, $core_only_reason:expr $(,)?) => {
         pub(crate) const SUPPORT: crate::compute::registry::support::ModeSupport =
             match $core_only_reason {
                 Some(reason) => crate::compute::registry::support::ModeSupport::cpu_core_only(

@@ -41,6 +41,9 @@ pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId)
         OperationId::BoxBlur => ModeSupport::serial(
             OperationId::BoxBlur, Mode::ImageCmyk8, inputs_for(OperationId::BoxBlur),
         ),
+        OperationId::BoxBlurXY => ModeSupport::serial(
+            OperationId::BoxBlurXY, Mode::ImageCmyk8, inputs_for(OperationId::BoxBlurXY),
+        ),
         // NO_PILLOW_SUPPORT: Pillow 12.2 rank filters require scalar storage;
         // this native mode strategy filters native channels.
         OperationId::MedianFilter => core_only(OperationId::MedianFilter, MODE, &MEDIAN_FILTER_ARCHITECTURES),

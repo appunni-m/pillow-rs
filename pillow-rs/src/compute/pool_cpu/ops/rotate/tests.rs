@@ -15,6 +15,8 @@ fn request(angle: f64, expand: bool, filter: ResampleFilter, nearest: bool) -> R
         fill: None,
         center: None,
         translate: None,
+        affine: None,
+        output_size: None,
         filter,
         nearest,
     }

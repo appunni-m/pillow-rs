@@ -22,32 +22,17 @@ impl PyImage {
     fn new(
         _cls: &Bound<'_, PyType>,
         mode: &str,
-        size: (u32, u32),
+        size: &Bound<'_, PyAny>,
         color: Option<&Bound<'_, PyAny>>,
+        py: Python<'_>,
     ) -> PyResult<Self> {
-        let input = match color {
-            Some(value) if mode == "RGB" && value.is_exact_instance_of::<PyTuple>() => {
-                match value.extract::<(u8, u8, u8)>() {
-                    Ok(rgb) => pillow_rs::NewColorInput::from_parts(
-                        None,
-                        None,
-                        Some(rgb),
-                        None,
-                        None,
-                        None,
-                        None,
-                        true,
-                    ),
-                    Err(_) => new_color_input_from_python(color),
-                }
-            }
-            _ => new_color_input_from_python(color),
-        };
+        let size = new_size_from_python(size, py)?;
         let mode = pillow_rs::Mode::from_pillow_name(mode).ok_or_else(|| {
             map_error(pillow_rs::PilError::ValueError(
                 "unrecognized image mode".into(),
             ))
         })?;
+        let input = new_color_input_from_python(mode, color)?;
         let img = RsImage::new_with_input(size.0, size.1, mode, input).map_err(map_error)?;
         Ok(PyImage { inner: img })
     }
@@ -114,21 +99,50 @@ impl PyImage {
         .map_err(map_error)
     }
 
-    #[pyo3(signature = (fp, format=None, compress_level=None))]
+    #[pyo3(signature = (fp, format=None, compress_level=None, before_encode=None))]
     fn save(
         slf: Py<Self>,
         fp: &Bound<'_, PyAny>,
         format: Option<&Bound<'_, PyAny>>,
         compress_level: Option<&Bound<'_, PyAny>>,
+        before_encode: Option<&Bound<'_, PyAny>>,
         py: Python<'_>,
     ) -> PyResult<()> {
-        // Match PyO3's original argument conversion order before path
-        // conversion, without holding a PyImage borrow across __index__.
-        let format = format.map(|value| value.extract::<String>()).transpose()?;
-        let compress_level = compress_level
-            .map(|value| value.extract::<i64>())
-            .transpose()?;
+        // TODO(pillow-rs#3ptb): freeze file-object name/extension, writer-option,
+        // and path/write fault precedence in CPU parity.
+        // Preserve format extraction before PathLike conversion. Compression
+        // conversion follows the wrapper load and filesystem preflight below.
+        let format = format
+            .map(|value| value.extract::<String>())
+            .transpose()?
+            .filter(|format| !format.is_empty());
         let path = host_path_from_python(fp)?;
+        let extension = path
+            .as_deref()
+            .and_then(|path| path.extension())
+            .and_then(|extension| extension.to_str());
+        let extension_format = if format.is_none() {
+            Some(pillow_rs::Image::resolve_save_format(None, extension).map_err(map_error)?)
+        } else {
+            None
+        };
+        if let Some(before_encode) = before_encode {
+            // The Python Image wrapper injects its virtual load method here so
+            // dirty palettes are realized after format discovery and before
+            // the Rust encoder reads the image. No PyImage borrow is active.
+            before_encode.call0()?;
+        }
+        let format = match format {
+            Some(format) => {
+                pillow_rs::Image::resolve_save_format(Some(&format), extension)
+                    .map_err(map_error)?
+            }
+            None => extension_format.ok_or_else(|| {
+                pyo3::exceptions::PyRuntimeError::new_err(
+                    "save format extension was not resolved",
+                )
+            })?,
+        };
         if let Some(path) = path.as_deref() {
             if path.is_dir() {
                 return Err(pyo3::exceptions::PyIsADirectoryError::new_err((
@@ -145,12 +159,9 @@ impl PyImage {
                 )));
             }
         }
-        let extension = path
-            .as_deref()
-            .and_then(|path| path.extension())
-            .and_then(|extension| extension.to_str());
-        let format = pillow_rs::Image::resolve_save_format(format.as_deref(), extension)
-            .map_err(map_error)?;
+        let compress_level = compress_level
+            .map(|value| value.extract::<i64>())
+            .transpose()?;
         let encoder_options = save_options::encoder_options(&format, compress_level)?;
         let encoded = {
             let image = slf.bind(py).borrow();

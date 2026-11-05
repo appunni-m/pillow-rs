@@ -3,7 +3,7 @@ use super::{
     PyTypeError, PyValueError, Python, c_int_from_python,
 };
 use pyo3::types::{
-    PyAnyMethods, PyBool, PyBytes, PyFloat, PyListMethods, PyTupleMethods, PyTypeMethods,
+    PyAnyMethods, PyBytes, PyFloat, PyListMethods, PyTupleMethods, PyTypeMethods,
 };
 
 pub(crate) fn autocontrast_cutoff_counts_from_python(
@@ -117,73 +117,200 @@ pub(crate) fn rotate_resample_input_from_python(
     }
 }
 
-pub(crate) fn rotate_expand_input_from_python(
+pub(crate) fn nonnegative_output_size_items_from_python<'py>(
+    value: &Bound<'py, PyAny>,
+) -> PyResult<(Bound<'py, PyAny>, Bound<'py, PyAny>)> {
+    if value.cast::<PyTuple>().is_err() && value.cast::<PyList>().is_err() {
+        return Err(PyValueError::new_err("Size must be a list or tuple"));
+    }
+    if value.len()? != 2 {
+        return Err(PyValueError::new_err(
+            "Size must be a sequence of length 2",
+        ));
+    }
+    let width = value.get_item(0)?;
+    if width.lt(0)? {
+        return Err(PyValueError::new_err("Width and height must be >= 0"));
+    }
+    let height = value.get_item(1)?;
+    if height.lt(0)? {
+        return Err(PyValueError::new_err("Width and height must be >= 0"));
+    }
+    Ok((width, height))
+}
+
+pub(crate) fn rotate_fill_preflight_from_python(
+    py: Python<'_>,
     value: Option<&Bound<'_, PyAny>>,
-) -> PyResult<pillow_rs::RotateExpandInput> {
-    match value {
-        Some(value) if value.is_instance_of::<PyBool>() => Ok(
-            pillow_rs::RotateExpandInput::Boolean(value.extract::<bool>()?),
-        ),
-        None => Ok(pillow_rs::RotateExpandInput::Boolean(false)),
-        Some(value) => match value.extract::<i64>() {
-            Ok(value) => Ok(pillow_rs::RotateExpandInput::Integer(value)),
-            Err(_) => Ok(pillow_rs::RotateExpandInput::Boolean(value.is_truthy()?)),
-        },
+    mode: pillow_rs::Mode,
+) -> PyResult<(Option<pillow_rs::ImageOpsColor>, Option<Py<PyAny>>)> {
+    let Some(value) = value else {
+        return Ok((None, None));
+    };
+    if value.cast::<PyString>().is_ok() {
+        return rotate_fill_from_python(Some(value), mode).map(|fill| (Some(fill), None));
+    }
+    if mode != pillow_rs::Mode::ImagePalette8 {
+        return Ok((None, None));
+    }
+    if value.cast::<PyTuple>().is_err() && value.cast::<PyList>().is_err() {
+        return Ok((None, None));
+    }
+
+    // Image.new runs `all(isinstance(item, int) for item in color)` before
+    // the native fill call for every P list/tuple, then materializes a tuple
+    // when that check succeeds. Preserve both iteration boundaries here.
+    let mut all_integers = true;
+    for item in value.try_iter()? {
+        if !item?.is_instance_of::<PyInt>() {
+            all_integers = false;
+            break;
+        }
+    }
+    if !all_integers {
+        return Ok((None, None));
+    }
+
+    let color = py.import("builtins")?.getattr("tuple")?.call1((value,))?;
+    if !matches!(color.len()?, 3 | 4) {
+        return Ok((None, Some(color.unbind())));
+    }
+    let fill = palette_transform_fill_from_python(&color)?;
+    Ok((Some(imageops_color_from_transform_fill(fill)), None))
+}
+
+pub(crate) fn rotate_fill_from_python(
+    value: Option<&Bound<'_, PyAny>>,
+    mode: pillow_rs::Mode,
+) -> PyResult<pillow_rs::ImageOpsColor> {
+    if mode == pillow_rs::Mode::ImagePalette8 {
+        let Some(value) = value else {
+            return Ok(pillow_rs::ImageOpsColor::None);
+        };
+        if value.cast::<PyTuple>().is_ok() {
+            let tuple = value.cast::<PyTuple>()?;
+            return transform_tuple_fill_from_python(tuple, mode)
+                .map(imageops_color_from_transform_fill);
+        }
+        if value.cast::<PyList>().is_ok() {
+            return Ok(pillow_rs::ImageOpsColor::InvalidList);
+        }
+        return transform_scalar_fill_from_python(value, mode, true)
+            .map(imageops_color_from_transform_fill);
+    }
+    Ok(transform_fill_from_python(value, mode)?
+        .map(imageops_color_from_transform_fill)
+        .unwrap_or(pillow_rs::ImageOpsColor::None))
+}
+
+pub(crate) fn transform_fill_preflight_from_python(
+    py: Python<'_>,
+    value: Option<&Bound<'_, PyAny>>,
+    mode: pillow_rs::Mode,
+) -> PyResult<(Option<pillow_rs::TransformFill>, Option<Py<PyAny>>)> {
+    let Some(value) = value else {
+        return Ok((None, None));
+    };
+    if value.cast::<PyString>().is_ok() {
+        return transform_fill_from_python(Some(value), mode)
+            .map(|fill| (fill, None));
+    }
+    if mode != pillow_rs::Mode::ImagePalette8
+        || (value.cast::<PyTuple>().is_err() && value.cast::<PyList>().is_err())
+    {
+        return Ok((None, None));
+    }
+
+    // Image.new classifies every P list/tuple before native size conversion.
+    let mut all_integers = true;
+    for item in value.try_iter()? {
+        if !item?.is_instance_of::<PyInt>() {
+            all_integers = false;
+            break;
+        }
+    }
+    if !all_integers {
+        return Ok((None, None));
+    }
+
+    // The Python wrapper materializes tuple(color) after the integer check,
+    // including when its arity does not select the temporary-palette route.
+    let color = py.import("builtins")?.getattr("tuple")?.call1((value,))?;
+    if !matches!(color.len()?, 3 | 4) {
+        return Ok((None, Some(color.unbind())));
+    }
+    palette_transform_fill_from_python(&color).map(|fill| (Some(fill), None))
+}
+
+pub(crate) fn transform_fill_after_size_from_python(
+    value: Option<&Bound<'_, PyAny>>,
+    mode: pillow_rs::Mode,
+) -> PyResult<Option<pillow_rs::TransformFill>> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    if mode == pillow_rs::Mode::ImagePalette8 {
+        if value.cast::<PyTuple>().is_ok() {
+            let tuple = value.cast::<PyTuple>()?;
+            return transform_tuple_fill_from_python(tuple, mode).map(Some);
+        }
+        if value.cast::<PyList>().is_ok() {
+            return Ok(Some(pillow_rs::TransformFill::InvalidList));
+        }
+        return transform_scalar_fill_from_python(value, mode, true).map(Some);
+    }
+    transform_fill_from_python(Some(value), mode)
+}
+
+fn imageops_color_from_transform_fill(fill: pillow_rs::TransformFill) -> pillow_rs::ImageOpsColor {
+    match fill {
+        pillow_rs::TransformFill::Scalar(value) => pillow_rs::ImageOpsColor::Scalar(value),
+        pillow_rs::TransformFill::Components(values) => {
+            pillow_rs::ImageOpsColor::Components(values)
+        }
+        pillow_rs::TransformFill::PaletteComponents(values) => {
+            pillow_rs::ImageOpsColor::TupleNumericComponents(values)
+        }
+        pillow_rs::TransformFill::Name(value) => pillow_rs::ImageOpsColor::Name(value),
+        pillow_rs::TransformFill::FloatingComponents(values) => {
+            pillow_rs::ImageOpsColor::FloatingComponents(values)
+        }
+        pillow_rs::TransformFill::FloatingScalar(value) => {
+            pillow_rs::ImageOpsColor::FloatingScalar(value)
+        }
+        pillow_rs::TransformFill::InvalidList => pillow_rs::ImageOpsColor::InvalidList,
+        pillow_rs::TransformFill::Invalid => pillow_rs::ImageOpsColor::Invalid,
     }
 }
 
-pub(crate) fn rotate_point_input_from_python(
-    value: Option<&Bound<'_, PyAny>>,
-) -> PyResult<pillow_rs::RotatePointInput> {
-    let Some(value) = value else {
-        return Ok(pillow_rs::RotatePointInput::Default);
-    };
-    if let Ok(values) = value.extract::<Vec<f64>>() {
-        return Ok(pillow_rs::RotatePointInput::Values(values));
+fn imageops_native_f32_fill_from_python(
+    value: &Bound<'_, PyAny>,
+) -> PyResult<pillow_rs::ImageOpsColor> {
+    if value.is_instance_of::<PyInt>() {
+        return match value.extract::<i64>() {
+            Ok(value) => Ok(pillow_rs::ImageOpsColor::Scalar(value)),
+            Err(error) if error.is_instance_of::<PyOverflowError>(value.py()) => value
+                .extract::<f64>()
+                .map(pillow_rs::ImageOpsColor::FloatingScalar),
+            Err(error) => Err(error),
+        };
     }
-    Ok(pillow_rs::RotatePointInput::Invalid {
-        type_name: value.get_type().name()?.to_string(),
-        truthy: value.is_truthy()?,
-    })
-}
-
-pub(crate) fn imageops_color_from_python(
-    value: Option<&Bound<'_, PyAny>>,
-) -> pillow_rs::ImageOpsColor {
-    let Some(value) = value else {
-        return pillow_rs::ImageOpsColor::None;
-    };
-    if let Ok(value) = value.extract::<String>() {
-        return pillow_rs::ImageOpsColor::Name(value);
-    }
-    if let Ok(value) = value.extract::<i64>() {
-        return pillow_rs::ImageOpsColor::Scalar(value);
-    }
-    if let Ok(value) = value.extract::<f64>() {
-        return pillow_rs::ImageOpsColor::FloatingScalar(value);
+    if value.is_instance_of::<PyFloat>() {
+        return value
+            .extract::<f64>()
+            .map(pillow_rs::ImageOpsColor::FloatingScalar);
     }
     if let Ok(tuple) = value.cast::<PyTuple>() {
-        if let Ok(values) = tuple.extract::<Vec<i64>>() {
-            return pillow_rs::ImageOpsColor::TupleComponents(values);
-        }
-        if let Ok(values) = tuple.extract::<Vec<f64>>() {
-            return pillow_rs::ImageOpsColor::FloatingComponents(values);
-        }
-        // TODO(pillow-rs#3ptb): retain tuple values for Rotate's 1/2-component
-        // coercion and custom numeric types; Expand and Pad use the typed fill
-        // adapter after capturing the destination mode.
-        return pillow_rs::ImageOpsColor::Invalid;
+        return tuple
+            .extract::<Vec<f64>>()
+            .map(pillow_rs::ImageOpsColor::FloatingComponents);
     }
-    if let Ok(list) = value.cast::<PyList>() {
-        if let Ok(values) = list.extract::<Vec<i64>>() {
-            return pillow_rs::ImageOpsColor::ListComponents(values);
-        }
-        // TODO(pillow-rs#3ptb): preserve oversized integer-list components for
-        // Rotate's remaining ImageOps fill path; Expand and Pad use the typed
-        // fill adapter after capturing the destination mode.
-        return pillow_rs::ImageOpsColor::InvalidList;
+    if value.cast::<PyList>().is_ok() {
+        return Ok(pillow_rs::ImageOpsColor::InvalidList);
     }
-    pillow_rs::ImageOpsColor::Invalid
+    value
+        .extract::<f64>()
+        .map(pillow_rs::ImageOpsColor::FloatingScalar)
 }
 
 /// Adapts an Image.new fill using its exact destination Mode.
@@ -216,7 +343,7 @@ pub(crate) fn imageops_fill_from_python(
         return imageops_float_fill_from_python(value);
     }
     if matches!(mode, pillow_rs::Mode::ImageRgb32F | pillow_rs::Mode::ImageRgba32F) {
-        return Ok(imageops_color_from_python(Some(value)));
+        return imageops_native_f32_fill_from_python(value);
     }
     if mode == pillow_rs::Mode::ImagePalette8 {
         return imageops_palette_fill_from_python(py, value);
@@ -474,7 +601,7 @@ pub(crate) fn palette_transform_fill_type_error() -> PyErr {
     PyTypeError::new_err("color must be int or single-element tuple")
 }
 
-pub(crate) fn palette_transform_integer_from_python(value: &Bound<'_, PyAny>) -> PyResult<i64> {
+fn long_long_from_python(value: &Bound<'_, PyAny>) -> PyResult<i64> {
     value.extract::<i64>().map_err(|error| {
         if error.is_instance_of::<PyOverflowError>(value.py()) {
             PyOverflowError::new_err("int too big to convert")
@@ -497,7 +624,7 @@ pub(crate) fn palette_transform_sequence_from_python<'py>(
         if !value.is_instance_of::<PyInt>() {
             return Err(palette_transform_fill_type_error());
         }
-        return palette_transform_integer_from_python(&value).map(pillow_rs::TransformFill::Scalar);
+        return long_long_from_python(&value).map(pillow_rs::TransformFill::Scalar);
     }
     if !matches!(len, 3 | 4) {
         return Err(palette_transform_fill_type_error());
@@ -551,18 +678,48 @@ pub(crate) fn palette_transform_fill_from_python(
     value: &Bound<'_, PyAny>,
 ) -> PyResult<pillow_rs::TransformFill> {
     if value.is_instance_of::<PyInt>() {
-        return palette_transform_integer_from_python(value).map(pillow_rs::TransformFill::Scalar);
+        return long_long_from_python(value).map(pillow_rs::TransformFill::Scalar);
     }
     if let Ok(value) = value.extract::<String>() {
         return Ok(pillow_rs::TransformFill::Name(value));
     }
     if let Ok(values) = value.cast::<PyTuple>() {
+        if let Some(fill) =
+            palette_transform_integer_color_from_python(values.iter(), values.len())
+        {
+            return Ok(fill);
+        }
         return palette_transform_sequence_from_python(values.iter(), values.len(), true);
     }
     if let Ok(values) = value.cast::<PyList>() {
+        if let Some(fill) =
+            palette_transform_integer_color_from_python(values.iter(), values.len())
+        {
+            return Ok(fill);
+        }
         return palette_transform_sequence_from_python(values.iter(), values.len(), false);
     }
     Err(palette_transform_fill_type_error())
+}
+
+/// Preserves wide integer lanes for Image.new's temporary P RGB(A) palette.
+fn palette_transform_integer_color_from_python<'py>(
+    values: impl IntoIterator<Item = Bound<'py, PyAny>>,
+    len: usize,
+) -> Option<pillow_rs::TransformFill> {
+    if !matches!(len, 3 | 4) {
+        return None;
+    }
+    let components = values
+        .into_iter()
+        .map(|value| {
+            value
+                .is_instance_of::<PyInt>()
+                .then(|| palette_integer_component_from_python(&value))
+                .flatten()
+        })
+        .collect::<Option<Vec<_>>>()?;
+    Some(pillow_rs::TransformFill::PaletteComponents(components))
 }
 
 pub(crate) fn transform_fill_from_python(
@@ -575,26 +732,96 @@ pub(crate) fn transform_fill_from_python(
     if mode == pillow_rs::Mode::ImagePalette8 {
         return palette_transform_fill_from_python(value).map(Some);
     }
-    if let Ok(value) = value.extract::<i64>() {
-        return Ok(Some(pillow_rs::TransformFill::Scalar(value)));
+    if let Ok(tuple) = value.cast::<PyTuple>() {
+        return transform_tuple_fill_from_python(tuple, mode).map(Some);
     }
-    // Pillow's mode-F transform accepts a scalar real fill. Keep scalar floats
-    // distinct from float tuples so the core can enforce the mode-specific
-    // scalar-versus-sequence contract; byte and integer modes still report
-    // their native type error.
-    if let Ok(value) = value.extract::<f64>() {
-        return Ok(Some(pillow_rs::TransformFill::FloatingScalar(value)));
+    if value.cast::<PyList>().is_ok() {
+        return Ok(Some(pillow_rs::TransformFill::InvalidList));
     }
-    if let Ok(value) = value.extract::<String>() {
-        return Ok(Some(pillow_rs::TransformFill::Name(value)));
+    transform_scalar_fill_from_python(value, mode, true).map(Some)
+}
+
+fn transform_tuple_fill_from_python(
+    tuple: &Bound<'_, PyTuple>,
+    mode: pillow_rs::Mode,
+) -> PyResult<pillow_rs::TransformFill> {
+    // Pillow's getink unwraps singleton tuples before selecting its scalar or
+    // tuple parser, including the resulting mode-specific errors.
+    if tuple.len() == 1 {
+        return transform_singleton_tuple_fill_from_python(&tuple.get_item(0)?, mode);
     }
-    if let Ok(value) = value.extract::<Vec<i64>>() {
-        return Ok(Some(pillow_rs::TransformFill::Components(value)));
+    if mode == pillow_rs::Mode::ImageF32 {
+        return Ok(pillow_rs::TransformFill::FloatingComponents(Vec::new()));
     }
-    if let Ok(value) = value.extract::<Vec<f64>>() {
-        return Ok(Some(pillow_rs::TransformFill::FloatingComponents(value)));
+    if !transform_tuple_arity_is_valid(tuple.len(), mode) {
+        return Ok(pillow_rs::TransformFill::Components(Vec::new()));
     }
-    Ok(Some(pillow_rs::TransformFill::Invalid))
+
+    // Pillow parses its first component as C long long and later components
+    // as C int; keep the same left-to-right overflow and __index__ behavior.
+    let mut components = Vec::with_capacity(tuple.len());
+    for (index, value) in tuple.iter().enumerate() {
+        let component = if index == 0 {
+            long_long_from_python(&value)?
+        } else {
+            i64::from(c_int_from_python(&value)?)
+        };
+        components.push(component);
+    }
+    Ok(pillow_rs::TransformFill::Components(components))
+}
+
+fn transform_singleton_tuple_fill_from_python(
+    value: &Bound<'_, PyAny>,
+    mode: pillow_rs::Mode,
+) -> PyResult<pillow_rs::TransformFill> {
+    if mode == pillow_rs::Mode::ImageF32 {
+        return transform_scalar_fill_from_python(value, mode, false);
+    }
+    if value.is_instance_of::<PyInt>() {
+        return long_long_from_python(value).map(pillow_rs::TransformFill::Scalar);
+    }
+    match mode.band_count() {
+        1 => Ok(pillow_rs::TransformFill::Invalid),
+        2 => Err(pyo3::exceptions::PySystemError::new_err(
+            "new style getargs format but argument is not a tuple",
+        )),
+        _ => Ok(pillow_rs::TransformFill::Components(Vec::new())),
+    }
+}
+
+fn transform_tuple_arity_is_valid(len: usize, mode: pillow_rs::Mode) -> bool {
+    match mode.band_count() {
+        1 => false,
+        2 => len == 2,
+        _ => matches!(len, 3 | 4),
+    }
+}
+
+fn transform_scalar_fill_from_python(
+    value: &Bound<'_, PyAny>,
+    mode: pillow_rs::Mode,
+    allow_name: bool,
+) -> PyResult<pillow_rs::TransformFill> {
+    if allow_name {
+        if let Ok(value) = value.extract::<String>() {
+            return Ok(pillow_rs::TransformFill::Name(value));
+        }
+    }
+    if mode == pillow_rs::Mode::ImageF32 {
+        return value
+            .extract::<f64>()
+            .map(pillow_rs::TransformFill::FloatingScalar);
+    }
+    if value.is_instance_of::<PyInt>() {
+        return long_long_from_python(value).map(pillow_rs::TransformFill::Scalar);
+    }
+    if value.is_instance_of::<PyFloat>() {
+        return value
+            .extract::<f64>()
+            .map(pillow_rs::TransformFill::FloatingScalar);
+    }
+    Ok(pillow_rs::TransformFill::Invalid)
 }
 
 enum ReduceSequence {
@@ -686,78 +913,4 @@ pub(crate) fn centering_from_python(value: &Bound<'_, PyAny>) -> pillow_rs::Cent
         return pillow_rs::CenteringInput::Values(values);
     }
     pillow_rs::CenteringInput::Invalid
-}
-
-pub(crate) fn pad_centering_from_python(
-    value: &Bound<'_, PyAny>,
-    padded_axes: (bool, bool),
-    padding_gaps: (u32, u32),
-    paste_size: (u32, u32),
-) -> PyResult<pillow_rs::CenteringInput> {
-    let zero = value.py().eval("0", None, None)?;
-    let (x, y) = if padded_axes.0 {
-        let coordinate = value.get_item(0)?;
-        (
-            pad_centering_component_from_python(&coordinate, padding_gaps.0)?,
-            zero.clone(),
-        )
-    } else if padded_axes.1 {
-        let coordinate = value.get_item(1)?;
-        (
-            zero.clone(),
-            pad_centering_component_from_python(&coordinate, padding_gaps.1)?,
-        )
-    } else {
-        (zero.clone(), zero)
-    };
-
-    // Image.paste first forms (x + width, y + height) in Python, then the
-    // native `(iiii)` parser converts all four coordinates to C ints.
-    let operator = value.py().import("operator")?;
-    let right = operator.getattr("add")?.call1((x.clone(), paste_size.0))?;
-    let lower = operator.getattr("add")?.call1((y.clone(), paste_size.1))?;
-    let x = super::images::paste_box_coordinate_from_python(&x)? as i32;
-    let y = super::images::paste_box_coordinate_from_python(&y)? as i32;
-    super::images::paste_box_coordinate_from_python(&right)?;
-    super::images::paste_box_coordinate_from_python(&lower)?;
-    Ok(pillow_rs::CenteringInput::PadPosition(x, y))
-}
-
-fn pad_centering_component_from_python(
-    value: &Bound<'_, PyAny>,
-    gap: u32,
-) -> PyResult<Bound<'_, PyAny>> {
-    if value.is_exact_instance_of::<PyFloat>() {
-        let numeric_value = value.extract::<f64>()?;
-        let upper = if numeric_value > 1.0 {
-            1.0
-        } else {
-            numeric_value
-        };
-        let clamped = if upper > 0.0 { upper } else { 0.0 };
-        let builtins = value.py().import("builtins")?;
-        return Ok(builtins
-            .getattr("round")?
-            .call1((f64::from(gap) * clamped,))?);
-    }
-    if value.is_exact_instance_of::<PyInt>() || value.is_exact_instance_of::<PyBool>() {
-        let nonpositive = value.call_method1("__le__", (0,))?.extract::<bool>()?;
-        let integer = value.py().import("builtins")?.getattr("int")?;
-        return Ok(integer.call1((if nonpositive { 0 } else { gap },))?);
-    }
-
-    let builtins = value.py().import("builtins")?;
-    let clamped_upper = builtins
-        .getattr("min")?
-        .call1((value.clone(), 1))?;
-    let clamped = builtins
-        .getattr("max")?
-        .call1((0, clamped_upper))?;
-    let product = value
-        .py()
-        .import("operator")?
-        .getattr("mul")?
-        .call1((gap, clamped.clone()))?;
-    let rounded = builtins.getattr("round")?.call1((product,))?;
-    Ok(rounded)
 }

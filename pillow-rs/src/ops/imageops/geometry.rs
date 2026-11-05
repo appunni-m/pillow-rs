@@ -1,5 +1,15 @@
 use super::*;
 
+mod callbacks;
+pub use callbacks::{
+    ImageOpsAspectArithmetic, ImageOpsAspectCallbacks, ImageOpsAspectComparison,
+    ImageOpsAspectOperation, ImageOpsAspectSize, ImageOpsFitCallbacks,
+    ImageOpsBorderCallbacks, ImageOpsCropCallbacks, ImageOpsExpandGeometryCallbacks,
+    ImageOpsFitConstant, ImageOpsScaleCallbacks, aspect_size_with_callbacks,
+    crop_box_with_callbacks, expand_geometry_with_callbacks, fit_box_with_callbacks,
+    scale_size_with_callbacks,
+};
+
 mod expand;
 mod pad;
 pub use expand::{
@@ -109,7 +119,7 @@ fn pad_containment_dimensions(
     }
     let source_ratio = f64::from(source_w) / f64::from(source_h);
     let destination_ratio = f64::from(target_w) / f64::from(target_h);
-    if (source_ratio - destination_ratio).abs() < 1e-10 {
+    if source_ratio == destination_ratio {
         Some((target_w, target_h))
     } else if source_ratio > destination_ratio {
         Some((
@@ -184,7 +194,7 @@ fn cover_dimensions(image: &Image, w: u32, h: u32) -> Result<AspectDimensions, P
     }
     let image_ratio = f64::from(source.0) / f64::from(source.1);
     let destination_ratio = f64::from(w) / f64::from(h);
-    let dimensions = if (image_ratio - destination_ratio).abs() < 1e-10 {
+    let dimensions = if image_ratio == destination_ratio {
         (w, h)
     } else if image_ratio < destination_ratio {
         if source.0 == 0 {
@@ -410,7 +420,7 @@ pub(crate) fn fit_box_coordinates(
     let live_height = f64::from(source_height) - 2.0 * bleed_height;
     let live_ratio = live_width / live_height;
     let target_ratio = f64::from(width) / f64::from(height);
-    let (crop_width, crop_height) = if (live_ratio - target_ratio).abs() < 1e-10 {
+    let (crop_width, crop_height) = if live_ratio == target_ratio {
         (live_width, live_height)
     } else if live_ratio >= target_ratio {
         (target_ratio * live_height, live_height)
@@ -511,73 +521,87 @@ fn validate_fit_resize_dimensions(
     Ok(())
 }
 
+/// Compute Pillow's ties-to-even target dimensions before public `resize`.
+#[doc(hidden)]
+pub fn scale_geometry_preflight(image: &Image, factor: f64) -> Result<(f64, f64), PilError> {
+    if factor <= 0.0 {
+        return Err(PilError::ValueError(
+            "the factor must be greater than 0".to_owned(),
+        ));
+    }
+    let (width, height) = image.size()?;
+    if factor.is_nan() {
+        return Err(PilError::ValueError(
+            "cannot convert float NaN to integer".to_owned(),
+        ));
+    }
+    if factor == 1.0 {
+        return Ok((f64::from(width), f64::from(height)));
+    }
+    Ok((
+        round_scaled_dimension(width, factor)?,
+        round_scaled_dimension(height, factor)?,
+    ))
+}
+
+fn round_scaled_dimension(dimension: u32, factor: f64) -> Result<f64, PilError> {
+    let value = f64::from(dimension) * factor;
+    if value.is_nan() {
+        return Err(PilError::ValueError(
+            "cannot convert float NaN to integer".to_owned(),
+        ));
+    }
+    if value.is_infinite() {
+        return Err(PilError::OverflowError(
+            "cannot convert float infinity to integer".to_owned(),
+        ));
+    }
+    let lower = value.floor();
+    let fraction = value - lower;
+    let rounded = if fraction < 0.5 {
+        lower
+    } else if fraction > 0.5 || (lower as u64) % 2 == 1 {
+        lower + 1.0
+    } else {
+        lower
+    };
+    Ok(rounded)
+}
+
+fn scale_dimension_to_u32(value: f64) -> Result<u32, PilError> {
+    if value > f64::from(u32::MAX) {
+        return Err(PilError::OverflowError(
+            "signed integer is greater than maximum".into(),
+        ));
+    }
+    Ok(value as u32)
+}
+
 /// `ImageOps.scale` with the integer/enum resampling value exposed by Pillow.
 pub fn scale_with_input(
     image: &Image,
     factor: f64,
     filter: Option<ResampleInput>,
 ) -> Result<Image, PilError> {
-    // Pillow's ``factor <= 0`` check intentionally does not catch NaN.  The
-    // later Python ``round`` then reports the conversion error for NaN, while
-    // positive infinity reports its distinct overflow error. Preserve those
-    // public distinctions before constructing the lazy resize.
-    if factor.is_nan() {
-        return Err(PilError::ValueError(
-            "cannot convert float NaN to integer".to_owned(),
-        ));
-    }
     // Pillow returns ``image.copy()`` before it inspects ``resample`` when
     // the factor is exactly one. Keep this fast path ahead of filter parsing,
     // including for empty images and invalid filter values.
     if factor == 1.0 {
         return Ok(image.copy());
     }
+    if factor.is_nan() {
+        return Err(PilError::ValueError(
+            "cannot convert float NaN to integer".to_owned(),
+        ));
+    }
     if factor <= 0.0 {
         return Err(PilError::ValueError(
             "the factor must be greater than 0".to_owned(),
         ));
     }
-
-    // ImageOps.scale computes dimensions with Python's ties-to-even round and
-    // immediately delegates to Image.resize.  Resize rejects a rounded zero;
-    // do that check here so the lazy target has the same public call boundary
-    // as Pillow instead of allowing its backend's minimum-size clamp to turn
-    // the request into a 1x1 image.
-    let (width, height) = image.size()?;
-    let rounded_dimension = |dimension: u32| {
-        let value = f64::from(dimension) * factor;
-        // ``round(inf)`` and ``round(nan)`` fail before Pillow delegates to
-        // Image.resize. In particular, ``inf * 0`` is NaN, so an empty image
-        // receives the NaN conversion error rather than the infinity one.
-        if value.is_nan() {
-            return Err(PilError::ValueError(
-                "cannot convert float NaN to integer".to_owned(),
-            ));
-        }
-        if value.is_infinite() {
-            return Err(PilError::OverflowError(
-                "cannot convert float infinity to integer".to_owned(),
-            ));
-        }
-        let lower = value.floor();
-        let fraction = value - lower;
-        let rounded = if fraction < 0.5 {
-            lower
-        } else if fraction > 0.5 || (lower as u64) % 2 == 1 {
-            lower + 1.0
-        } else {
-            lower
-        };
-        if rounded > f64::from(u32::MAX) {
-            Err(PilError::OverflowError(
-                "signed integer is greater than maximum".into(),
-            ))
-        } else {
-            Ok(rounded as u32)
-        }
-    };
-    let rounded_width = rounded_dimension(width)?;
-    let rounded_height = rounded_dimension(height)?;
+    let (rounded_width, rounded_height) = scale_geometry_preflight(image, factor)?;
+    let rounded_width = scale_dimension_to_u32(rounded_width)?;
+    let rounded_height = scale_dimension_to_u32(rounded_height)?;
 
     // The input language records Image.Resampling enum members by name. The
     // Python source side materializes that name as an IntEnum; normalize the
@@ -590,6 +614,7 @@ pub fn scale_with_input(
     // zero dimensions still fail at the resize boundary; do not let the
     // backend's minimum-size clamp turn them into a one-pixel image.
     if rounded_width == 0 || rounded_height == 0 {
+        let (width, height) = image.size()?;
         if width == 0 && height == 0 {
             return Ok(image.copy());
         }
@@ -609,10 +634,22 @@ pub fn scale_with_input(
 /// returns a lazy image; doing the same here prevents an invalid request from
 /// queueing a `CropBorder` operation and then failing only at materialization.
 pub fn crop(image: &Image, border: u32) -> Result<Image, PilError> {
+    crop_box_geometry_preflight(image, border)?;
+    Ok(Image::push_op(image, PipelineOp::CropBorder { border }))
+}
+
+/// Return the same-border crop box used by `ImageOps.crop`.
+///
+/// This lets a host wrapper preserve public `Image.crop()` dispatch while
+/// leaving ordinary integer geometry and reversed-coordinate errors in core.
+#[doc(hidden)]
+pub fn crop_box_geometry_preflight(
+    image: &Image,
+    border: u32,
+) -> Result<(u32, u32, u32, u32), PilError> {
     let (width, height) = image.size()?;
-    // Use division instead of `2 * border` so an oversized u32 border cannot
-    // wrap before the comparison.  Equality is valid and produces Pillow's
-    // empty image; only a strictly larger border is rejected.
+    // Avoid `2 * border`, which could wrap for an oversized u32. Equality is
+    // valid and produces an empty image; only a strictly larger border fails.
     if border > width / 2 {
         return Err(PilError::ValueError(
             "Coordinate 'right' is less than 'left'".into(),
@@ -623,5 +660,5 @@ pub fn crop(image: &Image, border: u32) -> Result<Image, PilError> {
             "Coordinate 'lower' is less than 'upper'".into(),
         ));
     }
-    Ok(Image::push_op(image, PipelineOp::CropBorder { border }))
+    Ok((border, border, width - border, height - border))
 }

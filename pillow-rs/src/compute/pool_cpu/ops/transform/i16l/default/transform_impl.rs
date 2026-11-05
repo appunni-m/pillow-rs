@@ -1,6 +1,7 @@
 //! Native u16 Transform implementation for exact mode ImageI16L.
 
 use crate::compute::pool_cpu::ops::transform::helpers::luma16::{self, ByteOrder};
+use crate::compute::pool_cpu::ops::transform::helpers::luma16_mode_default_into;
 use crate::compute::pool_cpu::ops::transform::ops::TransformRequest;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, GenericImageView, ImageBuffer};
@@ -21,4 +22,47 @@ pub(crate) fn execute(
     let output = ImageBuffer::from_raw(request.width, request.height, samples)
         .ok_or_else(|| PilError::InternalError("Transform I;16 output buffer shape mismatch".into()))?;
     Ok(DynamicImage::ImageI16L(output))
+}
+
+luma16_mode_default_into!(ImageI16L, Little, "I;16L");
+
+pub(crate) fn apply_mesh_record(
+    input: &DynamicImage,
+    output: &mut DynamicImage,
+    request: TransformRequest<'_>,
+    box_coordinates: (i64, i64, i64, i64),
+    coefficients: [f64; 8],
+    source_scratch: &mut Vec<u8>,
+    output_plane: &mut Option<Vec<u8>>,
+) -> Result<(), PilError> {
+    let (DynamicImage::ImageI16L(source), DynamicImage::ImageI16L(destination)) = (input, output)
+    else {
+        return Err(PilError::InternalError("Transform I;16L MESH mode mismatch".into()));
+    };
+    luma16::apply_mesh_record(
+        source.as_raw(),
+        destination.as_mut(),
+        source.dimensions(),
+        request,
+        ByteOrder::Little,
+        box_coordinates,
+        coefficients,
+        source_scratch,
+        output_plane,
+    )
+}
+
+pub(crate) fn finish_mesh(
+    output: &mut DynamicImage,
+    _request: TransformRequest<'_>,
+    output_plane: Option<&[u8]>,
+) -> Result<(), PilError> {
+    let DynamicImage::ImageI16L(destination) = output else {
+        return Err(PilError::InternalError("Transform I;16L MESH output mismatch".into()));
+    };
+    luma16::finish_mesh_records(
+        destination.as_mut(),
+        ByteOrder::Little,
+        output_plane,
+    )
 }

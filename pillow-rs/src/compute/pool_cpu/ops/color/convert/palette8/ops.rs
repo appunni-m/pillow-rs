@@ -17,6 +17,7 @@ const TARGETS: &[Mode] = &[
     Mode::ImageLumaA8,
     Mode::ImagePaletteAlpha8,
     Mode::ImageRgb8,
+    Mode::ImageRgbx8,
     Mode::ImageLab8,
     Mode::ImageRgba8,
     Mode::ImageCmyk8,
@@ -25,7 +26,7 @@ const TARGETS: &[Mode] = &[
     Mode::ImageI32,
     Mode::ImageF32,
 ];
-// Palette-to-LAB uses the palette-aware P -> RGBA -> ImageCms route.
+// Palette-to-LAB reads palette RGB entries in this mode strategy.
 const CORE_ONLY_TARGETS: &[Mode] = &[];
 const INPUTS: &[InputContract] = &[
     InputContract::PaletteMetadata,

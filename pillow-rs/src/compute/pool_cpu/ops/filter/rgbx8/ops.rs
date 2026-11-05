@@ -36,6 +36,12 @@ static BOX_BLUR_ARCHITECTURES: [ImplementationSupport; 5] =
         MODE,
         4,
     );
+static BOX_BLUR_XY_ARCHITECTURES: [ImplementationSupport; 5] =
+    crate::compute::pool_cpu::ops::filter::helpers::native_byte_blur_architectures(
+        OperationId::BoxBlurXY,
+        MODE,
+        4,
+    );
 
 crate::compute::pool_cpu::ops::filter::helpers::native_filter3x3_architectures!(MODE, 4);
 crate::compute::pool_cpu::ops::filter::helpers::native_filter3x3_arch_leaf!(ImageRgbx8, RgbaImage, 4);
@@ -60,6 +66,13 @@ pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId)
             OutputModeRule::Preserve,
             inputs_for(OperationId::BoxBlur),
             &BOX_BLUR_ARCHITECTURES,
+        ),
+        OperationId::BoxBlurXY => ModeSupport::cpu(
+            OperationId::BoxBlurXY,
+            MODE,
+            OutputModeRule::Preserve,
+            inputs_for(OperationId::BoxBlurXY),
+            &BOX_BLUR_XY_ARCHITECTURES,
         ),
         // NO_PILLOW_SUPPORT: Pillow 12.2 rank filters require scalar storage;
         // this native mode strategy filters native channels.

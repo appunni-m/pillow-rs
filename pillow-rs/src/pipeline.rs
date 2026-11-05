@@ -224,6 +224,10 @@ pub enum PipelineOp {
         center: Option<(f64, f64)>,
         /// Optional post-rotation translation in pixels.
         translate: Option<(f64, f64)>,
+        /// Optional precomputed reverse-affine coefficients from a host wrapper.
+        affine: Option<[f64; 6]>,
+        /// Optional host-computed destination size paired with `affine`.
+        output_size: Option<(u32, u32)>,
         /// Resampling filter requested by the public rotate call.
         filter: ResampleFilter,
         /// Whether nearest-neighbor resampling was requested.

@@ -1,4 +1,5 @@
 """Internal Python Image class that wraps the Rust implementation."""
+import math as _math
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from math import floor as _floor
@@ -21,6 +22,90 @@ def _image_data_bands(mode):
     if mode in ("RGB", "YCbCr", "HSV", "LAB"):
         return 3
     return 4
+
+
+def _rotate_affine_parameters(size, angle, expand, center, translate):
+    """Build Pillow's reverse-affine matrix, output size, and angle value."""
+    width, height = size
+    post_translate = (0, 0) if translate is None else translate
+    if center is None:
+        center = (width / 2, height / 2)
+
+    radians = -_math.radians(angle)
+    normalized_angle = -_math.degrees(radians)
+    matrix = [
+        round(_math.cos(radians), 15),
+        round(_math.sin(radians), 15),
+        0.0,
+        round(-_math.sin(radians), 15),
+        round(_math.cos(radians), 15),
+        0.0,
+    ]
+
+    def transform(x, y):
+        a, b, c, d, e, f = matrix
+        return a * x + b * y + c, d * x + e * y + f
+
+    matrix[2], matrix[5] = transform(
+        -center[0] - post_translate[0],
+        -center[1] - post_translate[1],
+    )
+    matrix[2] += center[0]
+    matrix[5] += center[1]
+
+    expanded = bool(expand)
+    if expanded:
+        corners_x = []
+        corners_y = []
+        for x, y in ((0, 0), (width, 0), (width, height), (0, height)):
+            transformed_x, transformed_y = transform(x, y)
+            corners_x.append(transformed_x)
+            corners_y.append(transformed_y)
+        output_width = _math.ceil(max(corners_x)) - _math.floor(min(corners_x))
+        output_height = _math.ceil(max(corners_y)) - _math.floor(min(corners_y))
+        matrix[2], matrix[5] = transform(
+            -(output_width - width) / 2.0,
+            -(output_height - height) / 2.0,
+        )
+        width, height = output_width, output_height
+
+    return (width, height), tuple(matrix), expanded, normalized_angle
+
+
+def _transform_method_data(method, data, box_size):
+    """Apply Pillow's non-mesh data shaping before filter validation."""
+    width, height = box_size
+    if method == Transform.AFFINE:
+        return method, data[:6]
+    if method == Transform.EXTENT:
+        x0, y0, x1, y1 = data
+        x_scale = (x1 - x0) / width
+        y_scale = (y1 - y0) / height
+        return Transform.AFFINE, (x_scale, 0, x0, 0, y_scale, y0)
+    if method == Transform.PERSPECTIVE:
+        return method, data[:8]
+    if method == Transform.QUAD:
+        # Preserve Pillow's sequence callbacks and operator order before it
+        # validates resampling. Keep this expression in Python so custom
+        # numeric values control subtraction and multiplication semantics.
+        nw = data[:2]
+        sw = data[2:4]
+        se = data[4:6]
+        ne = data[6:8]
+        x0, y0 = nw
+        As = 1.0 / width
+        At = 1.0 / height
+        return method, (
+            x0,
+            (ne[0] - x0) * As,
+            (sw[0] - x0) * At,
+            (se[0] - sw[0] - ne[0] + x0) * As * At,
+            y0,
+            (ne[1] - y0) * As,
+            (sw[1] - y0) * At,
+            (se[1] - sw[1] - ne[1] + y0) * As * At,
+        )
+    raise ValueError("unknown transformation method")
 
 
 class _CompactImageDataSequence:
@@ -290,6 +375,22 @@ class Image:
         self._native_info_rebaseline = True
         self._native_info_omitted = source._native_info_omitted
 
+    def _capture_info_state(self):
+        """Snapshot the shallow public info and lazy native merge baseline."""
+        info = self.info.copy()
+        return (
+            info,
+            self._native_info,
+            self._native_info_omitted,
+        )
+
+    def _copy_info_state_from_snapshot(self, snapshot):
+        """Copy info state captured before a callback-capable operation."""
+        self._info = snapshot[0]
+        self._native_info = snapshot[1]
+        self._native_info_rebaseline = True
+        self._native_info_omitted = snapshot[2]
+
     def _new(self, rust_image):
         """Wrap a derived image with Pillow's shallow metadata-copy semantics."""
         if self._transpose_loads_info:
@@ -339,9 +440,36 @@ class Image:
         size: Tuple[int, int],
         color: Union[int, Tuple[int, ...], str, None] = None,
     ) -> "Image":
-        # Preserve omission across the Python facade so the Rust core owns
-        # Pillow's mode-specific default-color path.
+        # Keep Pillow's Python validation and color preprocessing ahead of the
+        # native size and fill parser.
+        if not isinstance(size, (list, tuple)):
+            raise ValueError("Size must be a list or tuple")
+        if len(size) != 2:
+            raise ValueError("Size must be a sequence of length 2")
+        if size[0] < 0 or size[1] < 0:
+            raise ValueError("Width and height must be >= 0")
+
+        if isinstance(color, str):
+            from .imagecolor import getcolor
+
+            color = getcolor(color, mode)
+
+        palette = None
+        if (
+            mode == "P"
+            and isinstance(color, (list, tuple))
+            and all(isinstance(value, int) for value in color)
+        ):
+            color_ints = tuple(color)
+            if len(color_ints) in (3, 4):
+                from .imagepalette import ImagePalette
+
+                palette = ImagePalette()
+                color = palette.getcolor(color_ints)
+
         result = cls(RustImage.new(mode, size, color))
+        if palette is not None:
+            result._palette_object = palette
         # Image.new has no source format, decoder fields, or pending metadata.
         result._native_info_known_empty = True
         return result
@@ -356,7 +484,9 @@ class Image:
     ) -> None:
         # This Image owns one still frame, so save_all has no sequence to add.
         # Preserve PNG's public compression override used by ImageShow viewers.
-        self._rust_image.save(fp, format, options.get("compress_level"))
+        self._rust_image.save(
+            fp, format, options.get("compress_level"), self.load
+        )
 
     def resize(
         self,
@@ -410,21 +540,74 @@ class Image:
         translate: Optional[Tuple[float, float]] = None,
         fillcolor: Optional[Any] = None,
     ) -> "Image":
-        angle = float(angle)
-        palette = self.__dict__.get("_palette_object")
-        if palette is not None and palette.dirty and self.mode in ("P", "PA"):
-            # Pillow validates Rotate inputs before loading. Prepare the typed
-            # request once, commit the dirty palette, then queue against the
-            # updated source metadata.
-            plan = self._rust_image._prepare_rotate(
-                angle, resample, expand, center, translate, fillcolor
+        angle = angle % 360.0
+        if not (center or translate):
+            if angle == 0:
+                return self.copy()
+            if angle == 180:
+                return self.transpose(Transpose.ROTATE_180)
+            if angle in (90, 270) and (expand or self.width == self.height):
+                method = (
+                    Transpose.ROTATE_90 if angle == 90 else Transpose.ROTATE_270
+                )
+                return self.transpose(method)
+        # The fixed affine tuple is converted after load, matching Pillow's
+        # PyFloat_AsDouble order. TODO(pillow-rs#3ptb): parity-check coefficient
+        # callbacks that mutate the source, fill faults/output, and receipts.
+        output_size, affine, expanded, angle = _rotate_affine_parameters(
+            self.size, angle, expand, center, translate
+        )
+        transform_method = self.transform
+        instance_dict = object.__getattribute__(self, "__dict__")
+        if (
+            "transform" in instance_dict
+            or getattr(transform_method, "__func__", transform_method)
+            is not _BASE_IMAGE_TRANSFORM_METHOD
+        ):
+            # Pillow dispatches through self.transform after matrix creation.
+            return transform_method(
+                output_size,
+                Transform.AFFINE,
+                affine,
+                resample,
+                fillcolor=fillcolor,
             )
-            self._realize_dirty_palette()
-            rust_image = self._rust_image._rotate_prepared(plan)
-        else:
-            rust_image = self._rust_image.rotate(
-                angle, resample, expand, center, translate, fillcolor
-            )
+
+        source_loaded = False
+        if self.mode in ("LA", "RGBA") and resample != Resampling.NEAREST:
+            convert_method = self.convert
+            premultiplied_mode = {"LA": "La", "RGBA": "RGBa"}[self.mode]
+            if (
+                "convert" in instance_dict
+                or getattr(convert_method, "__func__", convert_method)
+                is not _BASE_IMAGE_CONVERT_METHOD
+            ):
+                # Keep Python's virtual convert/transform/convert composition
+                # observable for subclasses. The ordinary base Image path
+                # stays in the native exact-mode Rotate strategy below.
+                converted = convert_method(premultiplied_mode)
+                rotated = converted.transform(
+                    output_size,
+                    Transform.AFFINE,
+                    affine,
+                    resample,
+                    fillcolor=fillcolor,
+                )
+                return rotated.convert(self.mode)
+
+            # Transform's built-in alpha route loads before fill and filter
+            # preparation. The exact-mode Rotate strategy handles its native
+            # premultiplied filtering without creating a converted raster.
+            self.load()
+            source_loaded = True
+        plan = self._rust_image._prepare_rotate(
+            angle, output_size, resample, expanded, fillcolor
+        )
+        if not source_loaded:
+            # Pillow validates fill and resampling before loading, then
+            # converts the affine values at the native boundary afterward.
+            self.load()
+        rust_image = self._rust_image._rotate_prepared(plan, affine)
         return self._new(rust_image)
 
     def transpose(self, method: Union[int, str]) -> "Image":
@@ -660,17 +843,39 @@ class Image:
         """Reduce colors using median cut algorithm."""
         # Pillow loads the source before defaulting or validating the method.
         self.load()
-        # TODO(pillow-rs#3ptb): preserve truthiness and load/mode callbacks for
-        # arbitrary palette objects; the core currently accepts only Image.
-        if isinstance(palette, Image) and (
-            self.mode != "RGBA" or method is None or method in (2, 3)
-        ):
+        method_to_check = method
+        if method_to_check is None:
+            method_to_check = 0
+            if self.mode == "RGBA":
+                method_to_check = 2
+        if self.mode == "RGBA" and method_to_check not in (2, 3):
+            # Pillow rejects RGBA methods before evaluating palette truthiness
+            # or invoking any palette callbacks.
+            raise ValueError(
+                "Fast Octree (method == 2) and libimagequant (method == 3) "
+                "are the only valid methods for quantizing RGBA images"
+            )
+
+        if palette:
             # Pillow loads a reference palette only after its RGBA method
             # restriction, but before validating the reference/source modes.
             palette.load()
-        return self._new(
-            self._rust_image.quantize(colors, method, kmeans, dither != 0, palette)
-        )
+            if palette.mode != "P":
+                raise ValueError("bad mode for palette image")
+            if self.mode not in {"RGB", "L"}:
+                raise ValueError("only RGB or L mode images can be quantized to a palette")
+            if not isinstance(palette, Image):
+                # TODO(pillow-rs#3ptb): Adapt arbitrary valid ImagingCore
+                # carriers and preserve host mode overrides. Pillow reaches
+                # palette.im after these checks.
+                palette.im
+                raise TypeError("palette must be a Pillow-rs Image")
+            return self._new(
+                self._rust_image.quantize(256, None, 0, dither, palette)
+            )
+
+        # Pillow does not consume dither on its no-palette quantize path.
+        return self._new(self._rust_image.quantize(colors, method, kmeans, None, None))
 
     def getbbox(self, *, alpha_only: bool = True):
         """Bounding box of non-zero regions."""
@@ -708,7 +913,45 @@ class Image:
         self._native_info_known_empty = False
         self._sync_observed_info()
         try:
-            self._rust_image.putalpha_input(alpha)
+            if type(alpha) is Image:
+                if alpha is self:
+                    # Pillow promotes the destination before inspecting the
+                    # mask mode. Aliasing makes that promotion change alpha's
+                    # mode too, so preserve it before the core mask check.
+                    self._rust_image.prepare_putalpha_data_input()
+                    self._rust_image.putalpha_image_input(alpha._rust_image)
+                    return
+                # Pillow rejects unsupported destinations before loading the
+                # mask. For supported 1/L masks, load the actual wrapper so its
+                # materialized and observed-info state is retained.
+                self._rust_image.validate_putalpha_data_destination()
+                if alpha.mode in ("1", "L"):
+                    try:
+                        alpha.load()
+                    except BaseException:
+                        # Pillow promotes the destination before mask loading;
+                        # preserve that visible mutation when loading fails.
+                        self._rust_image.prepare_putalpha_data_input()
+                        raise
+                self._rust_image.putalpha_image_input(alpha._rust_image)
+            else:
+                is_builtin_integer = type(alpha) is int or type(alpha) is bool
+                if not is_builtin_integer:
+                    # Pillow changes the destination mode before checking
+                    # whether a non-scalar argument is an Image or coercing it.
+                    self._rust_image.prepare_putalpha_input()
+                if isinstance(alpha, Image):
+                    if alpha.mode not in ("1", "L"):
+                        raise ValueError("illegal image mode")
+                    alpha.load()
+                    if alpha.mode == "1":
+                        alpha = alpha.convert("L")
+                    self._rust_image.putalpha_image_input(alpha._rust_image)
+                    return
+                if is_builtin_integer:
+                    self._rust_image.putalpha_input(alpha)
+                else:
+                    self._rust_image.putalpha_input_prepared(alpha)
         finally:
             # Pillow can promote the destination before rejecting an invalid
             # alpha input. Keep a retained public info mapping in sync even
@@ -869,10 +1112,12 @@ class Image:
 
     def _realize_dirty_palette(self):
         """Commit Python ImagePalette bytes when Pillow would load the image."""
-        # TODO(pillow-rs#3ptb): finish validation-ordered realization in save
-        # and transform. Paste now realizes source, destination, and active mask
-        # in Pillow's order; source-core aliasing and subclass convert hooks are
-        # tracked at the Paste owner. Thumbnail preflights geometry and filter
+        # TODO(pillow-rs#3ptb): verify dirty-palette Transform fill and output
+        # metadata against the frozen CPU matrix. Save invokes this through
+        # Image.load after resolving its format. Paste realizes source,
+        # destination, and active mask in Pillow's order; source-core aliasing
+        # and subclass convert hooks are tracked at the Paste owner. Thumbnail
+        # preflights geometry and filter
         # before palette commit; explicit-source RemapPalette delays load until
         # after dest_map parsing.
         palette = self.__dict__.get("_palette_object")
@@ -1128,25 +1373,104 @@ class Image:
 
     def transform(self, size, method, data=None, resample=0, fill=1, fillcolor=None):
         """Apply a built-in transform or dispatch a Pillow method object."""
+        if self.mode in ("LA", "RGBA") and resample != Resampling.NEAREST:
+            premultiplied_mode = {"LA": "La", "RGBA": "RGBa"}[self.mode]
+            return (
+                self.convert(premultiplied_mode)
+                .transform(size, method, data, resample, fill, fillcolor)
+                .convert(self.mode)
+            )
+
         if isinstance(method, ImageTransformHandler):
-            if self.mode == "LA" and resample != Resampling.NEAREST:
-                premultiplied = self.convert("La")
-                return method.transform(
-                    size, premultiplied, resample=resample, fill=fill
-                ).convert("LA")
-            if self.mode == "RGBA" and resample != Resampling.NEAREST:
-                premultiplied = self.convert("RGBa")
-                return method.transform(
-                    size, premultiplied, resample=resample, fill=fill
-                ).convert("RGBA")
             return method.transform(size, self, resample=resample, fill=fill)
 
         if hasattr(method, "getdata"):
             method, data = method.getdata()
+        if data is None:
+            raise ValueError("missing method data")
 
-        return self._new(
-            self._rust_image.transform(size, method, data, resample, fill, fillcolor)
-        )
+        source = self._rust_image
+        mode = source.mode
+        # The native plan allocates an exact-mode destination and captures the
+        # backend/architecture context before built-in method-data callbacks.
+        plan = source._transform_prepare(size, fillcolor)
+        # TODO(pillow-rs#3ptb): verify overridden mode/palette properties and
+        # reentrant palette mutation against Pillow's pre-callback snapshot.
+        palette = self.__dict__.get("_palette_object")
+        palette_copy = None
+        if mode == "P":
+            palette = self.palette
+            if palette is not None and (
+                palette.dirty
+                or palette.rawmode is not None
+                or palette.palette
+                or palette._colors is not None
+            ):
+                palette_copy = palette.copy()
+        info_snapshot = self._capture_info_state()
+        palette_was_dirty = palette is not None and palette.dirty
+
+        method_is_mesh = method == Transform.MESH
+        method_box_size = None
+        if not method_is_mesh:
+            box = (0, 0) + size
+            method_box_size = (box[2] - box[0], box[3] - box[1])
+
+        if not method_is_mesh:
+            method, data = _transform_method_data(method, data, method_box_size)
+
+        if method_is_mesh:
+            # Pillow allocates the destination before requesting the first mesh
+            # item, then transforms and pastes each quad before advancing.
+            mesh_state = source._transform_mesh_begin(plan)
+            empty_mesh = True
+            for box, quad in data:
+                quad_size = (box[2] - box[0], box[3] - box[1])
+                _, coefficients = _transform_method_data(
+                    Transform.QUAD, quad, quad_size
+                )
+                current_source = self._rust_image
+                current_source._transform_validate_filter(resample)
+                self.load()
+                current_source = self._rust_image
+                # A callback may replace the source between records. The Rust
+                # core checks this captured source against the output mode.
+                current_source._transform_mesh_record(
+                    mesh_state, box, coefficients, resample
+                )
+                empty_mesh = False
+            rust_image = self._rust_image._transform_mesh_finish(mesh_state)
+        else:
+            current_source = self._rust_image
+            current_source._transform_validate_filter(resample)
+            self.load()
+            current_source = self._rust_image
+            data_plan = current_source._transform_data(method, data, resample)
+            rust_image = current_source._transform_apply(plan, data_plan)
+            empty_mesh = False
+        if (
+            not empty_mesh
+            and self._rust_image is source
+            and palette_was_dirty
+            and mode in ("P", "PA")
+            and rust_image.mode == mode
+        ):
+            # The typed Transform request has passed core validation. Pillow
+            # then loads the source during its raster transform, committing
+            # Python-owned palette edits before the returned image is exposed.
+            # Its already-planned P/PA pixels are index/alpha based, so replace
+            # the P output's core palette from the snapshot Pillow copied
+            # before loading. PA creates a new empty-palette output instead.
+            self.load()
+            if mode == "P" and palette_copy is not None:
+                palette_mode, palette_data = palette_copy.getdata()
+                rust_image.putpalette(palette_data, palette_mode)
+
+        result = Image(rust_image)
+        result._copy_info_state_from_snapshot(info_snapshot)
+        if palette_copy is not None:
+            result._palette_object = palette_copy
+        return result
 
     def verify(self):
         """Verify file contents. Raises exception if corrupted."""
@@ -1265,6 +1589,7 @@ class Image:
 
 
 _BASE_IMAGE_CONVERT_METHOD = Image.convert
+_BASE_IMAGE_TRANSFORM_METHOD = Image.transform
 
 
 class PixelAccess:

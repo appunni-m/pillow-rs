@@ -163,29 +163,6 @@ fn try_convert_prestandard(
     matrix: &Option<Vec<f64>>,
     dither: Option<&str>,
 ) -> Result<Option<Image>, PilError> {
-    // Preserve the archived matrix path's L normalization for bilevel data.
-    // Ordinary conversions use the native One strategy, which expands each
-    // stored nonzero sample directly into the destination's native layout.
-    if source_mode == Mode::One && let Some(matrix) = matrix {
-        // Preserve Pillow's archived bilevel normalization before selecting
-        // the prepared matrix strategy for its resulting L source.
-        let (materialized, mut operation_receipts) =
-            image.materialized_shared_for_ops_with_receipts()?;
-        let mut gray = crate::raster::GrayImage::new(materialized.width(), materialized.height());
-        for (output, input) in gray.pixels_mut().zip(materialized.to_luma8().pixels()) {
-            output[0] = if input[0] != 0 { 255 } else { 0 };
-        }
-        let expanded = crate::raster::DynamicImage::ImageLuma8(gray);
-        return execute_matrix_conversion_from_source(
-            image,
-            &expanded,
-            target_mode,
-            matrix,
-            &mut operation_receipts,
-        )
-        .map(Some);
-    }
-
     // Pillow applies the matrix before its same-mode fast path.
     if let Some(matrix) = matrix {
         return execute_matrix_conversion(image, target_mode, matrix).map(Some);
@@ -195,8 +172,9 @@ fn try_convert_prestandard(
     {
         return Ok(Some(converted));
     }
-    // Convert::SUPPORT declares this source-to-LAB composition and its child
-    // ConvertLab operation; this wrapper builds the corresponding lazy graph.
+    // Preserve the existing eager wrapper for native I;16 destinations.
+    // LAB and other declared targets continue to the single prepared Convert
+    // operation, where the exact source-mode strategy writes the final mode.
     super::luma16::try_convert_to_luma16(image, source_mode, target_mode)
 }
 
@@ -223,7 +201,12 @@ fn execute_matrix_conversion_from_source(
     matrix: &[f64],
     operation_receipts: &mut crate::compute::PipelineOperationTelemetryCapture,
 ) -> Result<Image, PilError> {
-    if !matches!(target_mode, Mode::ImageLuma8 | Mode::ImageRgb8) {
+    // The LAB matrix extension requires twelve coefficients to produce one
+    // RGB sample before the direct LAB kernel runs.
+    if !matches!(
+        target_mode,
+        Mode::ImageLuma8 | Mode::ImageRgb8 | Mode::ImageLab8
+    ) {
         return Err(PilError::ValueError(format!(
             "Matrix must be 4 or 12 elements, got {}",
             matrix.len()

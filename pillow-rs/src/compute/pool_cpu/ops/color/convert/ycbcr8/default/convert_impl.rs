@@ -8,6 +8,15 @@ use crate::raster::{
 };
 
 pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, PilError> {
+    if target == Mode::ImageLab8 {
+        return super::super::super::helpers::lab_target::execute(
+            source.width(),
+            source.height(),
+            source.pixels().map(|pixel| {
+                crate::color::ycbcr_pixel_to_rgb(pixel[0], pixel[1], pixel[2])
+            }),
+        );
+    }
     match target {
         Mode::ImageLuma8 => Ok(DynamicImage::ImageLuma8(luma(source))),
         Mode::ImageLaPremultiplied8 | Mode::ImageRgbPremultiplied8 => {

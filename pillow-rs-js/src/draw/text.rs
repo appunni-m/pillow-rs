@@ -1,4 +1,4 @@
-use super::{ImageDraw, ImageFont, JsValue, js_text_color_and_kind, wasm_bindgen};
+use super::{ImageDraw, ImageFont, JsValue, js_text_color, wasm_bindgen};
 use crate::{JsFontOptionsInput, err, js_font_options, js_font_text_input};
 #[wasm_bindgen]
 impl ImageDraw {
@@ -49,12 +49,10 @@ impl ImageDraw {
             anchor_invalid_length_error: true,
             ..JsFontOptionsInput::default()
         });
-        let (color, text_fill_is_integer) = js_text_color_and_kind(&mut self.draw, &fill)?;
-        options.text_fill_is_integer = text_fill_is_integer;
+        let color = js_text_color(&mut self.draw, &fill)?;
         if !stroke_fill.is_null() && !stroke_fill.is_undefined() {
-            let (color, is_integer) = js_text_color_and_kind(&mut self.draw, &stroke_fill)?;
+            let color = js_text_color(&mut self.draw, &stroke_fill)?;
             options.stroke_fill = Some(color);
-            options.stroke_fill_is_integer = is_integer;
         }
         self.draw
             .text_with_optional_font_input(
@@ -98,12 +96,10 @@ impl ImageDraw {
             anchor_invalid_length_error: true,
             ..JsFontOptionsInput::default()
         });
-        let (color, text_fill_is_integer) = js_text_color_and_kind(&mut self.draw, &fill)?;
-        options.text_fill_is_integer = text_fill_is_integer;
+        let color = js_text_color(&mut self.draw, &fill)?;
         if !stroke_fill.is_null() && !stroke_fill.is_undefined() {
-            let (color, is_integer) = js_text_color_and_kind(&mut self.draw, &stroke_fill)?;
+            let color = js_text_color(&mut self.draw, &stroke_fill)?;
             options.stroke_fill = Some(color);
-            options.stroke_fill_is_integer = is_integer;
         }
         self.draw
             .multiline_text_with_optional_font_input(

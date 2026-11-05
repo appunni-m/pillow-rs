@@ -9,31 +9,6 @@ use crate::raster::Mode;
 
 use super::super::ops::classify_mode;
 
-// Pillow's wrapper admits these source modes for direct RGBX conversion.
-const PILLOW_RGBX_SOURCES: &[Mode] = &[
-    Mode::One,
-    Mode::ImageLuma8,
-    Mode::ImageLumaA8,
-    Mode::ImagePalette8,
-    Mode::ImagePaletteAlpha8,
-    Mode::ImageRgb8,
-    Mode::ImageRgba8,
-    Mode::ImageRgbx8,
-    Mode::ImageLab8,
-    Mode::ImageCmyk8,
-    Mode::ImageI32,
-];
-
-const TO_RGB: &[OperationModeTransition] = &[OperationModeTransition {
-    operation: OperationId::Convert,
-    source: OperationTransitionSource::Input,
-    target: Mode::ImageRgb8,
-}];
-const TO_RGBA: &[OperationModeTransition] = &[OperationModeTransition {
-    operation: OperationId::Convert,
-    source: OperationTransitionSource::Input,
-    target: Mode::ImageRgba8,
-}];
 const TO_P: &[OperationModeTransition] = &[OperationModeTransition {
     operation: OperationId::Convert,
     source: OperationTransitionSource::Input,
@@ -44,93 +19,6 @@ const TO_PA: &[OperationModeTransition] = &[OperationModeTransition {
     source: OperationTransitionSource::Input,
     target: Mode::ImagePaletteAlpha8,
 }];
-const DIRECT_TO_LAB: &[OperationModeTransition] = &[OperationModeTransition {
-    operation: OperationId::ConvertLab,
-    source: OperationTransitionSource::Input,
-    target: Mode::ImageLab8,
-}];
-const TO_LAB: &[OperationModeTransition] = &[
-    OperationModeTransition {
-        operation: OperationId::Convert,
-        source: OperationTransitionSource::Input,
-        target: Mode::ImageRgba8,
-    },
-    OperationModeTransition {
-        operation: OperationId::ConvertLab,
-        source: OperationTransitionSource::Previous,
-        target: Mode::ImageLab8,
-    },
-];
-const LUMA_TO_LAB: &[OperationModeTransition] = &[
-    OperationModeTransition {
-        operation: OperationId::Convert,
-        source: OperationTransitionSource::Input,
-        target: Mode::ImageLuma8,
-    },
-    OperationModeTransition {
-        operation: OperationId::Convert,
-        source: OperationTransitionSource::Previous,
-        target: Mode::ImageRgba8,
-    },
-    OperationModeTransition {
-        operation: OperationId::ConvertLab,
-        source: OperationTransitionSource::Previous,
-        target: Mode::ImageLab8,
-    },
-];
-const RGB_TO_LAB: &[OperationModeTransition] = &[
-    OperationModeTransition {
-        operation: OperationId::Convert,
-        source: OperationTransitionSource::Input,
-        target: Mode::ImageRgb8,
-    },
-    OperationModeTransition {
-        operation: OperationId::Convert,
-        source: OperationTransitionSource::Previous,
-        target: Mode::ImageRgba8,
-    },
-    OperationModeTransition {
-        operation: OperationId::ConvertLab,
-        source: OperationTransitionSource::Previous,
-        target: Mode::ImageLab8,
-    },
-];
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum LabNormalization {
-    Direct,
-    ToRgba,
-    ViaLuma,
-    ViaRgb,
-}
-
-// Complete source-mode matrix for Convert's LAB target. Keep every Mode arm
-// explicit so a new source cannot silently inherit a normalization route.
-pub(super) const fn lab_normalization(source: Mode) -> LabNormalization {
-    match source {
-        Mode::ImageRgb8 | Mode::ImageRgba8 | Mode::ImageRgbx8 | Mode::ImageLab8 => {
-            LabNormalization::Direct
-        }
-        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N | Mode::ImageF32 => {
-            LabNormalization::ViaLuma
-        }
-        Mode::ImageYCbCr8 | Mode::ImageHsv8 => LabNormalization::ViaRgb,
-        Mode::One
-        | Mode::ImageLuma8
-        | Mode::ImageLumaA8
-        | Mode::ImageLaPremultiplied8
-        | Mode::ImagePalette8
-        | Mode::ImagePaletteAlpha8
-        | Mode::ImageRgbPremultiplied8
-        | Mode::ImageCmyk8
-        | Mode::ImageI32
-        | Mode::ImageLumaA16
-        | Mode::ImageRgb16
-        | Mode::ImageRgba16
-        | Mode::ImageRgb32F
-        | Mode::ImageRgba32F => LabNormalization::ToRgba,
-    }
-}
 
 pub(crate) fn classify_target_composition(
     source: Mode,
@@ -138,20 +26,15 @@ pub(crate) fn classify_target_composition(
 ) -> Option<OperationTargetComposition> {
     if source == Mode::ImageLaPremultiplied8
         && !matches!(target, Mode::ImageLaPremultiplied8 | Mode::ImageLumaA8)
+        && prepared_support.scope_for_target(target).is_none()
     {
         return Some(classify_convert_guard(source, target, classify_mode(source)));
     }
     if source != target && matches!(target, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8) {
         return classify_palette_composition(source, target, classify_mode(source));
     }
-    if target == Mode::ImageLab8 && source != Mode::ImageLab8 {
-        return classify_lab_composition(source, target, classify_mode(source));
-    }
     if is_premultiplied_target(target) {
         return classify_premultiplied_composition(source, target, classify_mode(source));
-    }
-    if target == Mode::ImageRgbx8 && !uses_prepared_rgbx_route(source) {
-        return classify_rgbx_composition(source, target, classify_mode(source));
     }
     None
 }
@@ -193,30 +76,6 @@ fn classify_convert_guard(
         "conversion from La to L not supported",
         RejectionKind::ValueError,
     )
-}
-
-fn classify_lab_composition(
-    source: Mode,
-    target: Mode,
-    prepared_support: ModeSupport,
-) -> Option<OperationTargetComposition> {
-    let scope = prepared_support.scope_for_target(target)?;
-    let transitions = match lab_normalization(source) {
-        LabNormalization::Direct => DIRECT_TO_LAB,
-        LabNormalization::ToRgba => TO_LAB,
-        LabNormalization::ViaLuma => LUMA_TO_LAB,
-        LabNormalization::ViaRgb => RGB_TO_LAB,
-    };
-    Some(OperationTargetComposition {
-        source_mode: source,
-        target_mode: target,
-        kind: OperationTargetCompositionKind::ConvertLab,
-        scope,
-        transitions,
-        output: OutputModeRule::ByTargetMode,
-        outcome: OperationRouteOutcome::Produces,
-        prepared_support,
-    })
 }
 
 fn classify_premultiplied_composition(
@@ -269,57 +128,6 @@ fn classify_premultiplied_composition(
         reason,
         kind,
     ))
-}
-
-fn classify_rgbx_composition(
-    source: Mode,
-    target: Mode,
-    prepared_support: ModeSupport,
-) -> Option<OperationTargetComposition> {
-    // NO_PILLOW_SUPPORT: the internal LA16 route keeps its alpha byte in X,
-    // matching LA's native padding-lane conversion.
-    let base = if matches!(
-        source,
-        Mode::ImageLumaA8 | Mode::ImageLumaA16 | Mode::ImagePaletteAlpha8
-    ) {
-        Mode::ImageRgba8
-    } else {
-        Mode::ImageRgb8
-    };
-    let Some(base_scope) = prepared_support.scope_for_target(base) else {
-        let (reason, kind) = target_rejection(prepared_support, base)
-            .unwrap_or(("image has wrong mode", RejectionKind::ValueError));
-        return Some(rejected_target_composition(
-            source,
-            target,
-            OperationTargetCompositionKind::ConvertRgbx,
-            prepared_support.scope().unwrap_or(SupportScope::Pillow),
-            prepared_support,
-            OperationRouteStage::SourceConversion,
-            reason,
-            kind,
-        ));
-    };
-    let scope = prepared_support.scope_for_target(target).unwrap_or_else(|| {
-        if PILLOW_RGBX_SOURCES.contains(&source) {
-            base_scope
-        } else {
-            // NO_PILLOW_SUPPORT: Pillow has no direct conversion from this source to RGBX.
-            SupportScope::CoreOnly {
-                reason: "Pillow has no direct conversion from this source to RGBX",
-            }
-        }
-    });
-    Some(OperationTargetComposition {
-        source_mode: source,
-        target_mode: target,
-        kind: OperationTargetCompositionKind::ConvertRgbx,
-        scope,
-        transitions: if base == Mode::ImageRgba8 { TO_RGBA } else { TO_RGB },
-        output: OutputModeRule::ByTargetMode,
-        outcome: OperationRouteOutcome::Produces,
-        prepared_support,
-    })
 }
 
 fn rejected_target_composition(
@@ -378,20 +186,5 @@ const fn rejects_luma_to_premultiplied(mode: Mode) -> bool {
             | Mode::ImageI16L
             | Mode::ImageI16B
             | Mode::ImageI16N
-    )
-}
-
-const fn uses_prepared_rgbx_route(mode: Mode) -> bool {
-    matches!(
-        mode,
-        Mode::ImageRgb8
-            | Mode::ImageLumaA8
-            | Mode::ImageRgba8
-            | Mode::ImagePaletteAlpha8
-            | Mode::ImageRgbPremultiplied8
-            | Mode::ImageRgbx8
-            | Mode::ImageLab8
-            | Mode::ImageI32
-            | Mode::ImageF32
     )
 }

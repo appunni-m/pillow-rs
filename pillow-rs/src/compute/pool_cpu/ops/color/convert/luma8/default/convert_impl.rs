@@ -7,6 +7,13 @@ pub(crate) fn execute(source: &GrayImage, target: Mode) -> Result<DynamicImage, 
     if target == Mode::ImageLuma8 {
         return Ok(DynamicImage::ImageLuma8(source.clone()));
     }
+    if target == Mode::ImageLab8 {
+        return super::super::super::helpers::lab_target::execute(
+            source.width(),
+            source.height(),
+            source.pixels().map(|pixel| [pixel[0]; 3]),
+        );
+    }
     super::super::super::helpers::luma8::execute(
         source.width(),
         source.height(),

@@ -18,6 +18,11 @@ def _normalize_layout_engine(layout_engine):
     return _core.imagefont_normalize_layout_engine(layout_engine)
 
 
+def _string_length_check(text):
+    if len(text) > MAX_STRING_LENGTH:
+        raise ValueError("too many characters in string")
+
+
 class ImagingCore:
     """Stable Python facade for Pillow's internal mask storage contract."""
 
@@ -257,12 +262,14 @@ class FreeTypeFont:
 
     def getbbox(self, text, mode="", direction=None, features=None, language=None,
                 stroke_width=0, anchor=None):
+        _string_length_check(text)
         return _pillow_bbox_tuple(self._rust_font.getbbox_with_options(
             text, mode, direction, features, language,
             stroke_width, anchor
         ))
 
     def getlength(self, text, mode="", direction=None, features=None, language=None):
+        _string_length_check(text)
         return self._rust_font.getlength_with_options(
             text, mode, direction, features, language
         )
@@ -270,6 +277,7 @@ class FreeTypeFont:
     def getmask(self, text, mode="", direction=None, features=None, language=None,
                 stroke_width=0, anchor=None, ink=0, start=None):
         """Return glyph mask through Pillow's ImagingCore-compatible contract."""
+        _string_length_check(text)
         from .image import Image as PILImage
         image = self._rust_font.getmask_alpha_with_options(
             text, mode, direction, features, language,
@@ -301,6 +309,7 @@ class FreeTypeFont:
                  ``(offset_x, offset_y)``. ``mode="RGBA"`` returns an
                  RGBA mask.
         """
+        _string_length_check(text)
         from .image import Image as PILImage
         image, offset = self._rust_font.getmask2_image_with_options(
             text, mode, direction, features, language,
@@ -451,6 +460,7 @@ class TransposedFont:
     def getmask(self, text, mode="", *args, **kwargs):
         """Create a bitmap for the text, optionally transposed."""
         if isinstance(self.font, FreeTypeFont):
+            _string_length_check(text)
             from .image import Image as PILImage
             image = self.font._rust_font.get_transposed_mask_image(
                 text, self._orientation_name

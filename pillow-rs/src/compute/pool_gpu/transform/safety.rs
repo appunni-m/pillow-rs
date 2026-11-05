@@ -366,12 +366,13 @@ pub(in crate::compute::pool_gpu) fn gpu_rotate_nearest_affine_is_exact(
         fill,
         center,
         translate,
+        affine,
         ..
     } = op
     else {
         return false;
     };
-    if !*nearest {
+    if !*nearest || affine.is_some() {
         return false;
     }
     let Some((affine, (w, h))) = gpu_rotate_affine(

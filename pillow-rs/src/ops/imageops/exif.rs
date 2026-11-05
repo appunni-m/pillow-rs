@@ -9,7 +9,22 @@ pub fn exif_transpose(image: &Image, in_place: bool) -> Result<Option<Image>, Pi
     let raw_exif = image.getexif();
     // Pillow maps EXIF's eight orientation values onto these named transpose
     // operations; the rotation directions are intentionally asymmetric.
-    let method = match exif_get_orientation(&raw_exif).unwrap_or(1) {
+    let orientation = exif_get_orientation(&raw_exif).unwrap_or(1);
+    exif_transpose_with_orientation(image, orientation, in_place)
+}
+
+/// Applies the orientation chosen from an earlier EXIF snapshot.
+///
+/// The Python adapter selects orientation before invoking a potentially
+/// effectful `in_place.__bool__`. It then applies that selected method to the
+/// image's current raster and removes the orientation from its current EXIF,
+/// matching the wrapper's order if truth testing mutates the image.
+pub fn exif_transpose_with_orientation(
+    image: &Image,
+    orientation: u32,
+    in_place: bool,
+) -> Result<Option<Image>, PilError> {
+    let method = match orientation {
         2 => Some("FLIP_LEFT_RIGHT"),
         3 => Some("ROTATE_180"),
         4 => Some("FLIP_TOP_BOTTOM"),
@@ -22,7 +37,7 @@ pub fn exif_transpose(image: &Image, in_place: bool) -> Result<Option<Image>, Pi
 
     match method {
         Some(method) => {
-            let exif = exif_remove_orientation(&raw_exif);
+            let exif = exif_remove_orientation(&image.getexif());
             image
                 .transpose(method)?
                 .with_exif_metadata(Some(exif))

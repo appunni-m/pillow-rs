@@ -2,6 +2,7 @@ use super::{Draw, DrawColorInput, Mode};
 use crate::compute::ExecutionContext;
 use crate::compute::registry::support::StrategySelection;
 use crate::error::PilError;
+use crate::font::text_layout::multiline_text_positions;
 
 mod composition;
 
@@ -46,21 +47,6 @@ impl Draw {
         i64::from(i32::from_le_bytes([fill.0, fill.1, fill.2, fill.3]))
     }
 }
-
-struct PositionedTextLine<'a> {
-    x: f64,
-    y: f64,
-    text: &'a str,
-    anchor: String,
-}
-
-struct MultilineAnchor {
-    value: String,
-    horizontal: char,
-    vertical: char,
-    vertical_direction: bool,
-}
-
 impl Draw {
     /// Draws text at `(x, y)` using a loaded font.
     ///
@@ -312,7 +298,6 @@ impl Draw {
                 text,
                 font,
                 stroke_fill,
-                options.stroke_fill_is_integer,
                 &stroke_options,
                 context,
             )?;
@@ -328,7 +313,6 @@ impl Draw {
                 text,
                 font,
                 fill,
-                options.text_fill_is_integer,
                 &fill_options,
                 context,
             )?;
@@ -340,7 +324,6 @@ impl Draw {
             text,
             font,
             fill,
-            options.text_fill_is_integer,
             options,
             context,
         )?;
@@ -354,7 +337,6 @@ impl Draw {
         text: &str,
         font: &crate::font::FreeTypeFont,
         fill: (u8, u8, u8, u8),
-        fill_is_integer: bool,
         options: &crate::font::ImageFontTextOptions,
         context: &ExecutionContext,
     ) -> Result<(u32, u32, Option<StrategySelection>), PilError> {
@@ -411,7 +393,6 @@ impl Draw {
             mode,
             options.embedded_color,
             mask_kind,
-            fill_is_integer,
             options.ink,
             palette,
         )?;
@@ -439,190 +420,4 @@ impl Draw {
         self.apply_text_output(execution_mode, palette, output)?;
         Ok((w, h, Some(selection)))
     }
-}
-
-// TODO(pillow-rs#brg0): verify anchored, font-size, and spacing Text outputs in CPU parity.
-fn multiline_text_positions<'a>(
-    x: f64,
-    y: f64,
-    lines: &[&'a str],
-    font: &crate::font::FreeTypeFont,
-    spacing: f64,
-    options: &crate::font::ImageFontTextOptions,
-    mode: Mode,
-) -> Result<Vec<PositionedTextLine<'a>>, PilError> {
-    let anchor = resolve_multiline_anchor(lines.len(), options)?;
-    if lines.len() == 1 {
-        return Ok(vec![PositionedTextLine {
-            x,
-            y,
-            text: lines[0],
-            anchor: anchor.value,
-        }]);
-    }
-    let font_mode = text_layout_font_mode(mode, options.embedded_color);
-    let line_spacing = multiline_line_spacing(font, options, font_mode, spacing)?;
-    if anchor.vertical_direction {
-        return Ok(vertical_text_positions(x, y, lines, line_spacing, &anchor));
-    }
-    horizontal_text_positions(x, y, lines, font, options, font_mode, line_spacing, &anchor)
-}
-
-fn resolve_multiline_anchor(
-    line_count: usize,
-    options: &crate::font::ImageFontTextOptions,
-) -> Result<MultilineAnchor, PilError> {
-    let vertical_direction = options.direction.as_deref() == Some("ttb");
-    let default_anchor = if vertical_direction { "lt" } else { "la" };
-    let value = options.anchor.as_deref().unwrap_or(default_anchor);
-    let chars = value.chars().collect::<Vec<_>>();
-    if chars.len() != 2 {
-        return Err(PilError::ValueError(
-            if options.anchor_invalid_length_error {
-                "anchor must be a 2 character string".into()
-            } else {
-                format!("bad anchor specified: {value}")
-            },
-        ));
-    }
-    if line_count > 1 && matches!(chars[1], 't' | 'b') && !vertical_direction {
-        return Err(PilError::ValueError(
-            "anchor not supported for multiline text".into(),
-        ));
-    }
-    Ok(MultilineAnchor {
-        value: value.to_owned(),
-        horizontal: chars[0],
-        vertical: chars[1],
-        vertical_direction,
-    })
-}
-
-fn text_layout_font_mode(mode: Mode, embedded_color: bool) -> &'static str {
-    if embedded_color {
-        "RGBA"
-    } else if matches!(mode, Mode::One | Mode::ImagePalette8 | Mode::ImageI32 | Mode::ImageF32) {
-        "1"
-    } else {
-        "L"
-    }
-}
-
-fn multiline_line_spacing(
-    font: &crate::font::FreeTypeFont,
-    options: &crate::font::ImageFontTextOptions,
-    font_mode: &str,
-    spacing: f64,
-) -> Result<f64, PilError> {
-    let mut bbox_options = options.clone();
-    bbox_options.mode = Some(font_mode.to_owned());
-    bbox_options.direction = None;
-    bbox_options.anchor = None;
-    Ok(f64::from(font.getbbox_with_options("A", &bbox_options)?.3)
-        + f64::from(options.stroke_width)
-        + spacing)
-}
-
-fn vertical_text_positions<'a>(
-    x: f64,
-    y: f64,
-    lines: &[&'a str],
-    line_spacing: f64,
-    anchor: &MultilineAnchor,
-) -> Vec<PositionedTextLine<'a>> {
-    lines
-        .iter()
-        .enumerate()
-        .map(|(index, &text)| PositionedTextLine {
-            x: x + index as f64 * line_spacing,
-            y,
-            text,
-            anchor: anchor.value.clone(),
-        })
-        .collect()
-}
-
-fn horizontal_text_positions<'a>(
-    x: f64,
-    y: f64,
-    lines: &[&'a str],
-    font: &crate::font::FreeTypeFont,
-    options: &crate::font::ImageFontTextOptions,
-    font_mode: &str,
-    line_spacing: f64,
-    anchor: &MultilineAnchor,
-) -> Result<Vec<PositionedTextLine<'a>>, PilError> {
-    let mut width_options = options.clone();
-    width_options.mode = Some(font_mode.to_owned());
-    width_options.stroke_width = 0.0;
-    width_options.anchor = None;
-    let widths = lines
-        .iter()
-        .map(|line| font.getlength_with_options(line, &width_options))
-        .collect::<Result<Vec<_>, _>>()?;
-    let max_width = widths.iter().copied().fold(0.0_f32, f32::max) as f64;
-    let align = options.align.as_deref().unwrap_or("left");
-    if !matches!(align, "left" | "center" | "right" | "justify") {
-        return Err(PilError::ValueError(
-            "align must be \"left\", \"center\", \"right\" or \"justify\"".into(),
-        ));
-    }
-
-    let mut top = y;
-    if anchor.vertical == 'm' {
-        top -= (lines.len() - 1) as f64 * line_spacing / 2.0;
-    } else if anchor.vertical == 'd' {
-        top -= (lines.len() - 1) as f64 * line_spacing;
-    }
-    let mut positioned = Vec::new();
-    for (index, &line) in lines.iter().enumerate() {
-        let width_difference = max_width - f64::from(widths[index]);
-        let mut left = match align {
-            "center" => x + width_difference / 2.0,
-            "right" => x + width_difference,
-            _ => x,
-        };
-        if align == "justify" && width_difference != 0.0 && index + 1 != lines.len() {
-            let words = line.split(' ').collect::<Vec<_>>();
-            if words.len() > 1 {
-                if anchor.horizontal == 'm' {
-                    left -= max_width / 2.0;
-                } else if anchor.horizontal == 'r' {
-                    left -= max_width;
-                }
-                let word_widths = words
-                    .iter()
-                    .map(|word| font.getlength_with_options(word, &width_options))
-                    .collect::<Result<Vec<_>, _>>()?;
-                let extra = (max_width
-                    - word_widths.iter().map(|width| f64::from(*width)).sum::<f64>())
-                    / (words.len() - 1) as f64;
-                let word_anchor = format!("l{}", anchor.vertical);
-                for (word, width) in words.into_iter().zip(word_widths) {
-                    positioned.push(PositionedTextLine {
-                        x: left,
-                        y: top,
-                        text: word,
-                        anchor: word_anchor.clone(),
-                    });
-                    left += f64::from(width) + extra;
-                }
-                top += line_spacing;
-                continue;
-            }
-        }
-        if anchor.horizontal == 'm' {
-            left -= width_difference / 2.0;
-        } else if anchor.horizontal == 'r' {
-            left -= width_difference;
-        }
-        positioned.push(PositionedTextLine {
-            x: left,
-            y: top,
-            text: line,
-            anchor: anchor.value.clone(),
-        });
-        top += line_spacing;
-    }
-    Ok(positioned)
 }

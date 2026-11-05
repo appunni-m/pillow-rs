@@ -318,6 +318,7 @@ impl Image {
             Image::Loaded(data) => data.info.clone(),
             Image::Paletted(data) => data.info.clone(),
             Image::Bytes { info, .. } => info.clone(),
+            Image::Pipeline { ops, .. } if ops.source_info_suppressed() => None,
             Image::Pipeline { source, ops, .. } => match ops.palette_output() {
                 Some(output) => match output.wrapper_metadata {
                     crate::compute::pool_cpu::ops::color::convert::ops::ConvertWrapperMetadata::PreserveSource

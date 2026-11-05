@@ -520,10 +520,15 @@ fn expand_gpu_rotate(
         translate,
         filter,
         nearest,
+        affine,
+        ..
     } = op
     else {
         return op.clone();
     };
+    if affine.is_some() {
+        return op.clone();
+    }
     if gpu_rotate_requires_exact_host_control(image, logical_mode)
         && !matches!(logical_mode, Some("1" | "P"))
         && !matches!(

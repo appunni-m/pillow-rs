@@ -114,8 +114,6 @@ pub(crate) fn js_font_options(input: JsFontOptionsInput<'_>) -> pillow_rs::Image
         language: input.language,
         stroke_width: input.stroke_width as f32,
         stroke_fill: None,
-        text_fill_is_integer: false,
-        stroke_fill_is_integer: false,
         align: None,
         stroke_filled: input.stroke_filled,
         anchor: input.anchor,

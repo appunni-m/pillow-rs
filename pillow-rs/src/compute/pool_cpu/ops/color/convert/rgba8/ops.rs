@@ -202,7 +202,7 @@ static ARCHITECTURES: [ImplementationSupport; 36] = architecture_catalog!(
     ]
 );
 
-// RGBA-to-LAB uses the direct ImageCms route and retains its auxiliary lane.
+// RGBA-to-LAB reads RGB components directly; alpha is not part of LAB output.
 // Pillow's wrapper routes missing direct RGBA targets through RGB.
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: super::super::ops::RGBA_TARGETS,

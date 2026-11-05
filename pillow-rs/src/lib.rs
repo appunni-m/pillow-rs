@@ -269,6 +269,11 @@ pub use crate::font::FontMaskAndBounds;
 pub use crate::font::FontMaskAndOffset;
 pub use crate::font::FontSizeAndOffset;
 pub use crate::font::FontTextBounds;
+pub use crate::font::ImageFontTextLine;
+pub use crate::font::ImageFontTextBoundsCallbacks;
+pub use crate::font::ImageFontTextPositionArithmetic;
+pub use crate::font::ImageFontTextPositionCallbacks;
+pub use crate::font::ImageFontTextPositionComparison;
 pub use crate::font::FreeTypeFont;
 pub use crate::font::ImageFontBBoxValue;
 pub use crate::font::ImageFontFaceInfo;
@@ -276,6 +281,10 @@ pub use crate::font::ImageFontLoadOptions;
 pub use crate::font::ImageFontSourceInput;
 pub use crate::font::ImageFontTextInput;
 pub use crate::font::ImageFontTextOptions;
+pub use crate::font::ImageFontTextWrapCallbacks;
+pub use crate::font::ImageFontTextScaling;
+pub use crate::font::ImageFontTextWrapResult;
+pub use crate::font::ImageFontTextWrapWidthCheck;
 pub use crate::font::ImageFontVariantOptions;
 pub use crate::font::ImageFontVariationAxesInput;
 pub use crate::font::ImageFontVariationAxis;
@@ -388,8 +397,46 @@ pub use crate::ops::imageops::autocontrast_lut_from_histogram as imageops_autoco
 pub use crate::ops::imageops::autocontrast_lut_from_histogram_and_counts as
     imageops_autocontrast_lut_from_histogram_and_counts;
 pub use crate::ops::imageops::colorize as imageops_colorize;
+#[doc(hidden)]
+pub use crate::ops::imageops::colorize_lut_from_range_lengths as
+    imageops_colorize_lut_from_range_lengths;
 pub use crate::ops::imageops::contain as imageops_contain;
 pub use crate::ops::imageops::contain_with_input as imageops_contain_with_input;
+#[doc(hidden)]
+pub use crate::ops::imageops::aspect_size_with_callbacks as
+    imageops_aspect_size_with_callbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsAspectArithmetic;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsAspectCallbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsAspectComparison;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsAspectOperation;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsAspectSize;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsFitCallbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsFitConstant;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsBorderCallbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsCropCallbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsExpandGeometryCallbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsScaleCallbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::fit_box_with_callbacks as imageops_fit_box_with_callbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::crop_box_with_callbacks as imageops_crop_box_with_callbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::expand_geometry_with_callbacks as
+    imageops_expand_geometry_with_callbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::scale_size_with_callbacks as
+    imageops_scale_size_with_callbacks;
 #[doc(hidden)]
 pub use crate::ops::imageops::contain_geometry_preflight as imageops_contain_geometry_preflight;
 pub use crate::ops::imageops::cover as imageops_cover;
@@ -397,11 +444,20 @@ pub use crate::ops::imageops::cover_with_input as imageops_cover_with_input;
 #[doc(hidden)]
 pub use crate::ops::imageops::cover_geometry_preflight as imageops_cover_geometry_preflight;
 pub use crate::ops::imageops::crop as imageops_crop;
+#[doc(hidden)]
+pub use crate::ops::imageops::crop_box_geometry_preflight as
+    imageops_crop_box_geometry_preflight;
 pub use crate::ops::imageops::equalize as imageops_equalize;
 pub use crate::ops::imageops::equalize_with_mask as imageops_equalize_with_mask;
+#[doc(hidden)]
+pub use crate::ops::imageops::equalize_lut_from_histogram as
+    imageops_equalize_lut_from_histogram;
 pub use crate::ops::imageops::exif_get_orientation;
 pub use crate::ops::imageops::exif_remove_orientation;
 pub use crate::ops::imageops::exif_transpose as imageops_exif_transpose;
+#[doc(hidden)]
+pub use crate::ops::imageops::exif_transpose_with_orientation as
+    imageops_exif_transpose_with_orientation;
 pub use crate::ops::imageops::expand as imageops_expand;
 pub use crate::ops::imageops::expand_with_input as imageops_expand_with_input;
 pub use crate::ops::imageops::expand_with_margins as imageops_expand_with_margins;
@@ -457,6 +513,8 @@ pub use crate::ops::imageops::PadPreflight;
 pub use crate::ops::imageops::PadGeometryPreflight;
 pub use crate::ops::imageops::posterize as imageops_posterize;
 pub use crate::ops::imageops::scale_with_input as imageops_scale_with_input;
+#[doc(hidden)]
+pub use crate::ops::imageops::scale_geometry_preflight as imageops_scale_geometry_preflight;
 pub use crate::ops::imageops::solarize as imageops_solarize;
 #[doc(hidden)]
 pub use crate::ops::imageops::solarize_comparison_table as imageops_solarize_comparison_table;
@@ -530,6 +588,12 @@ pub use crate::ops::rotate::PreparedRotate;
 pub use crate::ops::rotate::normalize_rotate as normalize_python_rotate;
 pub use crate::ops::transform::ReduceBox;
 pub use crate::ops::transform::ReduceFactor;
+#[doc(hidden)]
+pub use crate::ops::transform::PreparedTransformFill;
+#[doc(hidden)]
+pub use crate::ops::transform::PreparedTransformOutput;
+#[doc(hidden)]
+pub use crate::ops::transform::TransformMeshAccumulator;
 pub use crate::ops::transform::TransformData;
 pub use crate::ops::transform::TransformFill;
 pub use crate::ops::transpose::TransposeInput;
@@ -592,6 +656,36 @@ pub use crate::font::public_api::imagefont_size;
 pub use crate::font::public_api::imagefont_text_bbox;
 
 pub use crate::font::public_api::imagefont_text_bbox_bytes;
+
+#[doc(hidden)]
+pub use crate::font::public_api::imagefont_text_split_positions;
+
+#[doc(hidden)]
+pub use crate::font::public_api::imagefont_text_layout_bbox;
+
+#[doc(hidden)]
+pub use crate::font::public_api::imagefont_text_layout_bbox_with_callbacks;
+
+#[doc(hidden)]
+pub use crate::font::public_api::imagefont_text_split_with_callbacks;
+
+#[doc(hidden)]
+pub use crate::font::public_api::imagefont_text_length;
+
+#[doc(hidden)]
+pub use crate::font::public_api::imagefont_text_wrap;
+
+#[doc(hidden)]
+pub use crate::font::public_api::imagefont_text_wrap_scaled;
+
+#[doc(hidden)]
+pub use crate::font::public_api::imagefont_text_wrap_with_callbacks;
+
+#[doc(hidden)]
+pub use crate::font::public_api::imagefont_text_font_mode;
+
+#[doc(hidden)]
+pub use crate::font::public_api::imagefont_text_scaling;
 
 pub use crate::font::public_api::imagefont_getname;
 

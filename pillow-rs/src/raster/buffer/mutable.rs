@@ -1,4 +1,8 @@
-use super::*;
+use std::ops::{Deref, DerefMut};
+
+use crate::raster::traits::Pixel;
+
+use super::ImageBuffer;
 
 impl<P, Container> ImageBuffer<P, Container>
 where

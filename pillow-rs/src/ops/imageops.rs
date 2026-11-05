@@ -14,19 +14,30 @@ mod exif;
 mod geometry;
 mod point;
 
-pub(crate) use color::{resolve_imageops_color, resolve_pad_palette_fill};
+pub(crate) use color::{
+    resolve_imageops_color, resolve_pad_palette_fill, resolve_palette_tuple_bytes,
+};
 pub(crate) use geometry::fit_box_coordinates;
-pub use exif::{exif_get_orientation, exif_remove_orientation, exif_transpose};
+pub use exif::{
+    exif_get_orientation, exif_remove_orientation, exif_transpose,
+    exif_transpose_with_orientation,
+};
 pub use geometry::{
+    ImageOpsAspectArithmetic, ImageOpsAspectCallbacks, ImageOpsAspectComparison,
+    ImageOpsAspectOperation, ImageOpsAspectSize, ImageOpsFitCallbacks, ImageOpsFitConstant,
+    ImageOpsBorderCallbacks, ImageOpsCropCallbacks, ImageOpsExpandGeometryCallbacks,
+    ImageOpsScaleCallbacks, aspect_size_with_callbacks, crop_box_with_callbacks,
+    expand_geometry_with_callbacks, fit_box_with_callbacks, scale_size_with_callbacks,
     contain, contain_geometry_preflight, contain_with_input, cover, cover_geometry_preflight,
-    cover_with_input, crop, expand, expand_canvas_with_prepared_fill, expand_with_input,
+    cover_with_input, crop, crop_box_geometry_preflight, expand,
+    expand_canvas_with_prepared_fill, expand_with_input,
     expand_with_margins, expand_with_margins_and_input, fit, fit_with_input, pad,
     fit_geometry_preflight, pad_fill_preflight, pad_filter_preflight,
     pad_geometry_preflight, pad_preflight_with_input, pad_with_input,
     pad_with_input_and_containment, pad_with_preflight, pad_with_preflight_and_fill,
     parse_imageops_filter_input, prepare_expand_fill, prepare_expand_fill_for_mode,
     finish_expand_fill_palette_from_host, resolve_expand_fill_palette, scale_with_input,
-    validate_deform_resample, validate_expand_output_size_for_mode,
+    scale_geometry_preflight, validate_deform_resample, validate_expand_output_size_for_mode,
     validate_prepared_expand_output_size, PadFillPreflight,
     PadGeometryPreflight, PadPreflight, PreparedExpandFill,
 };

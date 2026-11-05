@@ -34,3 +34,15 @@ pub(crate) fn execute(plan: Strategy<'_>) -> Result<DynamicImage, PilError> {
         ))),
     }
 }
+
+pub(crate) fn execute_into(
+    plan: Strategy<'_>,
+    output: &mut DynamicImage,
+) -> Result<(), PilError> {
+    strategy::execute_into(
+        plan,
+        output,
+        super::default::transform_impl::execute_into,
+        None,
+    )
+}

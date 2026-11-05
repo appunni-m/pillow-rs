@@ -10,6 +10,14 @@ pub(crate) struct Geometry {
 }
 
 pub(crate) fn rotate_geometry(width: u32, height: u32, request: RotateRequest) -> Geometry {
+    if let Some(affine) = request.affine {
+        let (width, height) = request.output_size.unwrap_or((width, height));
+        return Geometry {
+            width,
+            height,
+            affine,
+        };
+    }
     let sw = f64::from(width);
     let sh = f64::from(height);
     let radians = -request.angle.to_radians();
@@ -67,7 +75,11 @@ fn transform(a: f64, b: f64, c: f64, d: f64, e: f64, f: f64, x: f64, y: f64) -> 
 }
 
 pub(crate) fn discrete_angle(request: RotateRequest) -> Option<u32> {
-    if request.center.is_some() || request.translate.is_some() || !request.angle.is_finite() {
+    if request.center.is_some()
+        || request.translate.is_some()
+        || request.affine.is_some()
+        || !request.angle.is_finite()
+    {
         return None;
     }
     [90.0, 180.0, 270.0]
@@ -80,6 +92,7 @@ pub(crate) fn identity_contract(request: RotateRequest) -> bool {
     request.angle.is_finite()
         && request.center.is_none()
         && request.translate.is_none()
+        && request.affine.is_none()
         && request.angle.rem_euclid(360.0).abs() <= f64::EPSILON
 }
 

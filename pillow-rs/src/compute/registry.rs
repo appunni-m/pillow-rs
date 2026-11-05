@@ -127,6 +127,8 @@ pub fn variant_key(op: &PipelineOp) -> &'static str {
         PipelineOp::Filter5x5 { .. } => "Filter5x5",
         PipelineOp::GaussianBlur { .. } => "GaussianBlur",
         PipelineOp::BoxBlur { .. } => "BoxBlur",
+        // These variants share an executor entry and GPU shader; their typed
+        // support identities remain distinct through `PipelineOp::operation_id`.
         PipelineOp::BoxBlurXY { .. } => "BoxBlur",
         PipelineOp::MedianFilter { .. } => "MedianFilter",
         PipelineOp::MaxFilter { .. } => "MaxFilter",

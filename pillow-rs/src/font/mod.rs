@@ -27,6 +27,130 @@ pub(crate) mod imagingft;
 pub(crate) mod pilfont;
 pub(crate) mod public_api;
 mod text_output;
+pub(crate) mod text_layout;
+pub(crate) mod text_wrap;
+mod text_layout_callbacks;
+pub use text_layout_callbacks::{
+    ImageFontTextBoundsCallbacks, ImageFontTextPositionArithmetic,
+    ImageFontTextPositionCallbacks, ImageFontTextPositionComparison,
+};
+
+/// One positioned line produced by Pillow's multiline text layout.
+#[doc(hidden)]
+#[derive(Clone, Debug, PartialEq)]
+pub struct ImageFontTextLine {
+    /// Horizontal line position before pixel-mask placement.
+    pub x: f64,
+    /// Vertical line position before pixel-mask placement.
+    pub y: f64,
+    /// Anchor passed to the font when rendering this line.
+    pub anchor: String,
+    /// Text content for this line.
+    pub text: String,
+}
+
+/// Word-wrapped text and any text that did not fit the requested height.
+#[doc(hidden)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ImageFontTextWrapResult {
+    /// Lines accepted by the width and optional height constraints.
+    pub lines: Vec<ImageFontTextInput>,
+    /// Unconsumed source text, including any trailing whitespace.
+    pub remaining: ImageFontTextInput,
+    /// Number of source characters or bytes consumed by accepted lines.
+    pub consumed: usize,
+    /// Identity for retaining host-derived remainder values during scaling.
+    pub wrap_id: u64,
+}
+
+/// Font-size strategy selected by `ImageText.Text.wrap`.
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ImageFontTextScaling {
+    /// Reduce size until all input fits, stopping at `limit`.
+    Shrink { limit: f64 },
+    /// Increase size while all input fits, stopping at `limit`.
+    Grow { limit: f64 },
+}
+
+/// The width comparison made by Pillow's `ImageText.Text` wrapping loop.
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ImageFontTextWrapWidthCheck {
+    /// Test whether a candidate line is within the width.
+    Fits,
+    /// Test whether one word exceeds the width.
+    Exceeds,
+}
+
+/// Host callbacks used by the Rust-owned ImageText wrapping state machine.
+///
+/// Implementations adapt font metrics, Python numeric comparisons, and
+/// `font_variant()` calls. Tokenization, line formation, scaling policy, and
+/// remainder selection stay in `pillow-rs`.
+#[doc(hidden)]
+pub trait ImageFontTextWrapCallbacks {
+    /// Callback error type; host errors remain intact while core errors convert.
+    type Error: From<PilError>;
+
+    /// Measure a line and perform the requested width comparison.
+    fn width_check(
+        &mut self,
+        text: &ImageFontTextInput,
+        check: ImageFontTextWrapWidthCheck,
+    ) -> Result<bool, Self::Error>;
+
+    /// Evaluate the height condition for the candidate lines.
+    fn height_fits(
+        &mut self,
+        lines: &[ImageFontTextInput],
+        last_line: &ImageFontTextInput,
+    ) -> Result<bool, Self::Error>;
+
+    /// Materialize a source suffix after one complete wrap pass.
+    fn capture_remaining_text(
+        &mut self,
+        _remaining: &ImageFontTextInput,
+        _consumed: usize,
+        _wrap_id: u64,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    /// Apply Python's truth test to the source suffix at the consumed offset.
+    fn has_remaining_text(
+        &mut self,
+        remaining: &ImageFontTextInput,
+        consumed: usize,
+        wrap_id: u64,
+    ) -> Result<bool, Self::Error>;
+
+    /// Release host-derived state for a candidate that the core discarded.
+    fn discard_remaining_text(&mut self, _wrap_id: u64) {}
+
+    /// Compare the selected scaling value with Pillow's `"shrink"` string.
+    fn scaling_is_shrink(&mut self) -> Result<bool, Self::Error>;
+
+    /// Return `ceil(font.size)` for shrink or `floor(font.size)` for grow.
+    fn initial_size(&mut self, round_up: bool) -> Result<i64, Self::Error>;
+
+    /// Evaluate `size == max(limit, 1)` for shrink.
+    fn shrink_limit_reached(&mut self, size: i64) -> Result<bool, Self::Error>;
+
+    /// Evaluate `size == limit` for grow.
+    fn grow_limit_reached(&mut self, size: i64) -> Result<bool, Self::Error>;
+
+    /// Create the candidate font variant at `size`.
+    fn font_variant(&mut self, size: i64) -> Result<(), Self::Error>;
+
+    /// Apply Pillow's final grow-size variant only when it differs from current.
+    fn restore_font(&mut self, size: i64) -> Result<(), Self::Error>;
+
+    /// Preserve the host failure when growth exits before assigning `last_wrap`.
+    fn missing_grow_wrap(&mut self) -> Result<(), Self::Error> {
+        Err(PilError::InternalError("text scaling produced no prior wrap".into()).into())
+    }
+}
 
 /// Pillow `FreeTypeFont`-compatible handle backed by the pure-Rust FreeType path.
 pub struct FreeTypeFont {
@@ -58,15 +182,17 @@ pub enum ImageFontSourceInput {
 
 /// Host-neutral text input for Pillow's font methods.
 ///
-/// Bindings only classify the host value as text or byte text. The conversion
-/// to Pillow's byte-preserving text representation belongs to the core so all
-/// font-facing bindings use the same behavior.
+/// Bindings classify host values as text, byte text, or invalid input. The
+/// conversion to Pillow's byte-preserving text representation and error order
+/// belong to the core so font-facing bindings share the same behavior.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ImageFontTextInput {
     /// Unicode text supplied by the host.
     Text(String),
     /// Pillow byte text, interpreted as one Latin-1 code point per byte.
     Bytes(Vec<u8>),
+    /// A host value that is neither text nor byte text.
+    InvalidType,
 }
 
 /// Host-neutral input for Pillow's named-variation setter.
@@ -116,10 +242,11 @@ pub struct ImageFontFaceInfo<'a> {
 }
 
 impl ImageFontTextInput {
-    pub(crate) fn into_text(self) -> String {
+    pub(crate) fn into_text(self) -> Result<String, PilError> {
         match self {
-            Self::Text(text) => text,
-            Self::Bytes(bytes) => pillow_bytes_to_text(&bytes),
+            Self::Text(text) => Ok(text),
+            Self::Bytes(bytes) => Ok(pillow_bytes_to_text(&bytes)),
+            Self::InvalidType => Err(PilError::TypeError("expected string or bytes".into())),
         }
     }
 }
@@ -204,14 +331,6 @@ pub struct ImageFontTextOptions {
     pub stroke_width: f32,
     /// ImageDraw ink used for the outline pass, when it differs from the fill.
     pub stroke_fill: Option<(u8, u8, u8, u8)>,
-    /// Whether the resolved fill originated as an integer ink.
-    ///
-    /// CMYK drawing treats integer inks as a single-channel value. Keep this
-    /// input distinction because a white component tuple resolves to the same
-    /// bytes as Pillow's default color but must paint all four channels.
-    pub text_fill_is_integer: bool,
-    /// Whether the resolved stroke ink originated as an integer ink.
-    pub stroke_fill_is_integer: bool,
     /// Pillow's multiline text alignment mode.
     pub align: Option<String>,
     /// Pillow `getmask2(..., stroke_filled=True)` keyword.
@@ -429,7 +548,7 @@ impl FreeTypeFont {
         align: &str,
         options: &ImageFontTextOptions,
     ) -> Result<(i32, i32, i32, i32), PilError> {
-        let text = text.into_text();
+        let text = text.into_text()?;
         self.multiline_textbbox(xy, &text, spacing, align, options)
     }
 
@@ -610,7 +729,13 @@ impl FreeTypeFont {
         text: ImageFontTextInput,
         options: &ImageFontTextOptions,
     ) -> Result<FontMaskAndOffset, PilError> {
-        let text = text.into_text();
+        let text = match text {
+            ImageFontTextInput::InvalidType => {
+                imagingft::validate_basic_layout_options(options)?;
+                return Err(PilError::TypeError("expected string or bytes".into()));
+            }
+            text => text.into_text()?,
+        };
         self.native_render(&text, options)
     }
 

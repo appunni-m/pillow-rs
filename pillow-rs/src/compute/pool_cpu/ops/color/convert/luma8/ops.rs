@@ -335,7 +335,7 @@ static ARCHITECTURES: [ImplementationSupport; 39] = [
     ),
 ];
 
-// LAB uses the explicit L -> RGBA -> ImageCms route in the Convert wrapper.
+// LAB reads native L samples and writes final LAB output in this mode strategy.
 const CORE_ONLY_TARGETS: &[Mode] = &[];
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: super::super::ops::LUMA_TARGETS,

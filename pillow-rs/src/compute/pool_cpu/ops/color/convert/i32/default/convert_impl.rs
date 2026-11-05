@@ -7,6 +7,16 @@ use crate::raster::{
 };
 
 pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, PilError> {
+    if target == Mode::ImageLab8 {
+        return super::super::super::helpers::lab_target::execute(
+            source.width(),
+            source.height(),
+            source.pixels().map(|pixel| {
+                let value = sample(pixel.0);
+                [value; 3]
+            }),
+        );
+    }
     match target {
         Mode::ImageLuma8 => Ok(DynamicImage::ImageLuma8(
             crate::compute::pool_cpu::ops::grayscale::i32::default::grayscale_impl::execute(source),

@@ -7,8 +7,14 @@
 
 use crate::compute::{Backend, ExecutionContext};
 use crate::error::PilError;
-use crate::image::{Image, ImageInfoValue, PaletteColorComponent, PutPixelValue};
+use crate::image::{Image, ImageInfoValue, PaletteColorComponent};
 use crate::raster::{DynamicImage, Mode};
+
+mod color_input;
+
+use color_input::{
+    draw_single_band_color_error, is_double_band_draw_mode, is_single_band_draw_mode,
+};
 
 type DrawColor = (u8, u8, u8, u8);
 type ShapeInks = (Option<DrawColor>, Option<DrawColor>);
@@ -96,6 +102,9 @@ pub enum DrawColorInput {
     String(String),
     /// An integer color value.
     Integer(i64),
+    /// An arbitrary-size scalar Python integer, retained until the drawing
+    /// mode decides whether Pillow parses it as a long long or a float.
+    WideInteger(PaletteColorComponent),
     /// A floating-point color value, used by `F` mode.
     Float(f64),
     /// A component sequence supplied by a Rust caller.
@@ -109,8 +118,8 @@ pub enum DrawColorInput {
     TupleMixedComponents(Vec<PaletteColorComponent>),
     /// Integer tuple with at least one component outside i64.
     ///
-    /// Wide integer components retain their exact magnitude for palette-key
-    /// equality; non-P draw modes keep the invalid-tuple behavior.
+    /// Retained until the mode selects long-long, C-int, float, or palette-key
+    /// handling for each component.
     TupleComponentsWithWideInteger(Vec<PaletteColorComponent>),
     /// Python list components, which do not trigger P mode palette allocation.
     ListComponents(Vec<i64>),
@@ -298,166 +307,6 @@ pub enum RegularPolygonSides {
     Invalid,
 }
 
-fn draw_color_error() -> PilError {
-    PilError::TypeError(
-        // Pillow's ImageDraw._getink() reports this exact message for a
-        // component sequence with an unsupported arity.
-        "color must be int, or tuple of one, three or four elements".to_owned(),
-    )
-}
-
-fn draw_single_band_color_error() -> PilError {
-    PilError::TypeError("color must be int or single-element tuple".to_owned())
-}
-
-fn draw_python_list_color_error(mode: Mode) -> PilError {
-    let message = if mode == Mode::ImageF32 {
-        "must be real number, not list"
-    } else if mode.band_count() == 1 {
-        "color must be int or single-element tuple"
-    } else {
-        "color must be int or tuple"
-    };
-    PilError::TypeError(message.to_owned())
-}
-
-fn is_l16_mode(mode: Mode) -> bool {
-    matches!(
-        mode,
-        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N
-    )
-}
-
-fn is_single_band_draw_mode(mode: Mode) -> bool {
-    matches!(
-        mode,
-        Mode::One
-            | Mode::ImageLuma8
-            | Mode::ImagePalette8
-            | Mode::ImageI32
-            | Mode::ImageF32
-    )
-}
-
-fn is_double_band_draw_mode(mode: Mode) -> bool {
-    matches!(
-        mode,
-        Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8
-    )
-}
-
-fn draw_float_color_error(mode: Mode) -> PilError {
-    if matches!(
-        mode,
-        Mode::One
-            | Mode::ImageLuma8
-            | Mode::ImagePalette8
-            | Mode::ImageI32
-            | Mode::ImageI16
-            | Mode::ImageI16L
-            | Mode::ImageI16B
-            | Mode::ImageI16N
-    ) {
-        PilError::TypeError("color must be int or single-element tuple".to_owned())
-    } else {
-        PilError::TypeError("color must be int or tuple".to_owned())
-    }
-}
-
-fn draw_byte(value: i64) -> u8 {
-    // Pillow clamps tuple components to the byte range before handing them to
-    // the ImagingDraw backend; integer inks use a separate packed path below.
-    value.clamp(0, 255) as u8
-}
-
-// TODO(pillow-rs#3ptb): verify scalar long-long, tuple C-int, singleton, and wide-int boundaries in CPU parity.
-fn resolve_integer_color(mode: Mode, value: i64) -> Result<(u8, u8, u8, u8), PilError> {
-    if mode == Mode::ImageF32 {
-        // Pillow first converts Python integers to double in PyFloat_AsDouble.
-        let bytes = (value as f64 as f32).to_le_bytes();
-        return Ok((bytes[0], bytes[1], bytes[2], bytes[3]));
-    }
-    if mode == Mode::ImageI32 {
-        // Pillow reads a signed long long, then stores its low 32 bits in I.
-        let bytes = (value as i32).to_le_bytes();
-        return Ok((bytes[0], bytes[1], bytes[2], bytes[3]));
-    }
-    if is_l16_mode(mode) {
-        // Pillow's I;16* draw path packs an integer as a native 32-bit ink
-        // and stores its low two bytes. Keep the packed little-endian bytes
-        // here; the native canvas applies the declared I;16B byte-order tag
-        // when turning them into its host-native u16 sample.
-        let bytes = (value as i32 as u16).to_le_bytes();
-        return Ok((bytes[0], bytes[1], 0, 255));
-    }
-    if matches!(
-        mode,
-        Mode::ImagePaletteAlpha8 | Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8
-    ) {
-        // Pillow packs integer multi-band inks into all four bytes. The native
-        // PA/LA/La owners consume the first byte as their sample and byte 3 as
-        // alpha, matching Pillow's two-band getink representation.
-        let bytes = value.to_le_bytes();
-        return Ok((bytes[0], bytes[1], bytes[2], bytes[3]));
-    }
-    // Pillow's multi-band UINT8 ink path extracts the low four bytes from its
-    // signed long-long value (ABGR compatibility packing).
-    let packed = value.to_le_bytes();
-    let value = draw_byte(value);
-    Ok(match mode {
-        // Multi-band integer inks are packed little-endian by Pillow's
-        // ImagingDraw implementation, including values outside one byte.
-        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageHsv8 | Mode::ImageLab8 => {
-            (packed[0], packed[1], packed[2], 255)
-        }
-        Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8 | Mode::ImageRgbx8 | Mode::ImageCmyk8 => {
-            (packed[0], packed[1], packed[2], packed[3])
-        }
-        _ => (value, value, value, 255),
-    })
-}
-
-fn resolve_component_color(mode: Mode, values: &[i64]) -> Result<(u8, u8, u8, u8), PilError> {
-    if is_l16_mode(mode) {
-        if values.len() != 1 {
-            return Err(PilError::TypeError(
-                "color must be int or single-element tuple".to_owned(),
-            ));
-        }
-        let bytes = (values[0] as i32 as u16).to_le_bytes();
-        return Ok((bytes[0], bytes[1], 0, 255));
-    }
-    // Pillow unwraps singleton tuples before resolving ink, so tuple(value,)
-    // follows the scalar packed path for every mode.
-    if values.len() == 1 {
-        return resolve_integer_color(mode, values[0]);
-    }
-    let components = || values.iter().copied().map(draw_byte).collect::<Vec<_>>();
-    if is_double_band_draw_mode(mode) {
-        let components = components();
-        return match components.as_slice() {
-            [value, alpha] => Ok((*value, *value, *value, *alpha)),
-            _ => Err(PilError::TypeError(
-                "color must be int, or tuple of one or two elements".to_owned(),
-            )),
-        };
-    }
-    if is_single_band_draw_mode(mode) {
-        let message = if mode == Mode::ImageF32 {
-            "must be real number, not tuple"
-        } else {
-            "color must be int or single-element tuple"
-        };
-        return Err(PilError::TypeError(message.to_owned()));
-    }
-    let components = components();
-    match components.as_slice() {
-        [r, g, b] => Ok((*r, *g, *b, 255)),
-        [r, g, b, a] => Ok((*r, *g, *b, *a)),
-        _ => Err(draw_color_error()),
-    }
-}
-
 impl Draw {
     /// Creates a drawing context for `image`.
     ///
@@ -591,196 +440,6 @@ impl Draw {
         Ok(())
     }
 
-    /// Resolves a host-neutral color according to Pillow's drawing-mode rules.
-    pub fn color_with_input(&self, input: DrawColorInput) -> Result<(u8, u8, u8, u8), PilError> {
-        let mode = self.effective_mode()?;
-        match input {
-            DrawColorInput::None => {
-                Ok(self.default_shape_ink()?.unwrap_or((0, 0, 0, 255)))
-            }
-            DrawColorInput::String(value) => {
-                let color = crate::color::parse_color_str(&value)?;
-                if mode == Mode::ImagePalette8 {
-                    // ImageColor.getcolor(..., "P") resolves to RGB. Without
-                    // a palette, Pillow's single-band draw ink rejects it.
-                    Err(draw_single_band_color_error())
-                } else {
-                    Ok(color)
-                }
-            }
-            DrawColorInput::Integer(value) => resolve_integer_color(mode, value),
-            DrawColorInput::Float(value) if mode == Mode::ImageF32 => {
-                let bytes = (value as f32).to_le_bytes();
-                Ok((bytes[0], bytes[1], bytes[2], bytes[3]))
-            }
-            DrawColorInput::Float(_) => Err(draw_float_color_error(mode)),
-            DrawColorInput::Components(values) | DrawColorInput::TupleComponents(values) => {
-                resolve_component_color(mode, &values)
-            }
-            DrawColorInput::TupleFloatComponents(values)
-                if mode == Mode::ImageF32 && values.len() == 1 =>
-            {
-                let bytes = (values[0] as f32).to_le_bytes();
-                Ok((bytes[0], bytes[1], bytes[2], bytes[3]))
-            }
-            DrawColorInput::TupleMixedComponents(values)
-                if mode == Mode::ImageF32 && values.len() == 1 =>
-            {
-                match &values[0] {
-                    PaletteColorComponent::Integer(value) => {
-                        resolve_integer_color(mode, *value)
-                    }
-                    PaletteColorComponent::Float(value) => {
-                        let bytes = (*value as f32).to_le_bytes();
-                        Ok((bytes[0], bytes[1], bytes[2], bytes[3]))
-                    }
-                    PaletteColorComponent::WideInteger { .. } => Err(draw_color_error()),
-                }
-            }
-            DrawColorInput::TupleFloatComponents(_) | DrawColorInput::TupleMixedComponents(_)
-                if mode == Mode::ImageF32 =>
-            {
-                Err(PilError::TypeError("must be real number, not tuple".to_owned()))
-            }
-            DrawColorInput::TupleFloatComponents(_)
-            | DrawColorInput::TupleMixedComponents(_)
-                if mode == Mode::ImagePalette8 =>
-            {
-                Err(draw_single_band_color_error())
-            }
-            DrawColorInput::TupleComponentsWithWideInteger(values)
-                if mode == Mode::ImagePalette8 && values.len() == 1 =>
-            {
-                Err(PilError::OverflowError(
-                    "Python int too large to convert to C long long".to_owned(),
-                ))
-            }
-            DrawColorInput::TupleComponentsWithWideInteger(_)
-                if mode == Mode::ImagePalette8 =>
-            {
-                Err(draw_single_band_color_error())
-            }
-            DrawColorInput::TupleFloatComponents(_)
-            | DrawColorInput::TupleMixedComponents(_)
-            | DrawColorInput::TupleComponentsWithWideInteger(_) => {
-                Err(draw_color_error())
-            }
-            DrawColorInput::ListComponents(_) | DrawColorInput::InvalidList => {
-                Err(draw_python_list_color_error(mode))
-            }
-            DrawColorInput::InvalidTuple | DrawColorInput::Invalid
-                if mode == Mode::ImagePalette8 =>
-            {
-                Err(draw_single_band_color_error())
-            }
-            DrawColorInput::InvalidTuple => Err(draw_color_error()),
-            DrawColorInput::Invalid => Err(draw_color_error()),
-        }
-    }
-
-    /// Resolves a host-neutral Draw color and installs palette entries for P
-    /// tuple/string colors before the operation is queued.
-    pub fn resolve_draw_color_with_input(
-        &mut self,
-        input: DrawColorInput,
-    ) -> Result<(u8, u8, u8, u8), PilError> {
-        if self.effective_mode()? == Mode::ImagePalette8
-            && self.image.palette_input().rgb.is_some()
-        {
-            let components = match &input {
-                DrawColorInput::String(value) => {
-                    let (red, green, blue, _) = crate::color::parse_color_str(value)?;
-                    Some(vec![
-                        PaletteColorComponent::Integer(i64::from(red)),
-                        PaletteColorComponent::Integer(i64::from(green)),
-                        PaletteColorComponent::Integer(i64::from(blue)),
-                    ])
-                }
-                DrawColorInput::Components(values) | DrawColorInput::TupleComponents(values) => {
-                    Some(
-                        values
-                            .iter()
-                            .copied()
-                            .map(PaletteColorComponent::Integer)
-                            .collect(),
-                    )
-                }
-                DrawColorInput::TupleComponentsWithWideInteger(values) => Some(
-                    values.clone(),
-                ),
-                DrawColorInput::TupleFloatComponents(values) => Some(
-                    values
-                        .iter()
-                        .copied()
-                        .map(PaletteColorComponent::Float)
-                        .collect(),
-                ),
-                DrawColorInput::TupleMixedComponents(values) => Some(values.clone()),
-                _ => None,
-            };
-            if let Some(components) = components {
-                let color = self.image.prepare_draw_palette_tuple_components(
-                    &components,
-                    &self.palette_reserved_indices,
-                    &mut self.palette_color_cache,
-                )?;
-                if let PutPixelValue::Integer(index) = color {
-                    let index = index as u8;
-                    return Ok((index, index, index, 255));
-                }
-            }
-        }
-        self.color_with_input(input)
-    }
-
-    /// Resolve an ImageDraw ink according to Pillow's mode-specific default.
-    /// ImageDraw initializes its implicit ink from `draw_ink(-1)` (or
-    /// `draw_ink(1)` for `I`/`F`), which is not the same as the geometric
-    /// primitive default represented by `None` here.
-    pub fn text_color_with_input(
-        &self,
-        input: DrawColorInput,
-    ) -> Result<(u8, u8, u8, u8), PilError> {
-        if !matches!(input, DrawColorInput::None) {
-            return self.color_with_input(input);
-        }
-
-        Ok(Self::default_draw_ink_for_mode(self.effective_mode()?))
-    }
-
-    /// Resolve ImageDraw's omitted fill from the already selected draw mode.
-    pub(crate) fn default_draw_ink_for_mode(mode: Mode) -> (u8, u8, u8, u8) {
-        match mode {
-            Mode::ImageRgb8
-            | Mode::ImageRgba8
-            | Mode::ImageRgbPremultiplied8
-            | Mode::ImageRgbx8
-            | Mode::ImageLumaA8
-            | Mode::ImageLaPremultiplied8
-            | Mode::ImagePaletteAlpha8
-            | Mode::ImageCmyk8
-            | Mode::ImageYCbCr8
-            | Mode::ImageLab8
-            | Mode::ImageHsv8 => (255, 255, 255, 255),
-            Mode::ImageI32 => (1, 0, 0, 0),
-            Mode::ImageF32 => (0, 0, 128, 63),
-            Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => (255, 255, 0, 0),
-            _ => (0, 0, 0, 255),
-        }
-    }
-
-    /// Resolves a text ink and any P-mode palette entry before raster work.
-    pub fn resolve_text_color_with_input(
-        &mut self,
-        input: DrawColorInput,
-    ) -> Result<(u8, u8, u8, u8), PilError> {
-        if matches!(&input, DrawColorInput::None) {
-            self.text_color_with_input(input)
-        } else {
-            self.resolve_draw_color_with_input(input)
-        }
-    }
-
     /// Validates a bitmap fill and delegates the complete operation to core.
     pub fn bitmap_with_input(
         &mut self,
@@ -789,8 +448,22 @@ impl Draw {
         bitmap: &Image,
         input: DrawColorInput,
     ) -> Result<(), PilError> {
+        let fill = self.resolve_bitmap_fill_with_input(input)?;
+        self.bitmap(x, y, bitmap, fill)
+    }
+
+    /// Validate and resolve a Bitmap fill before the wrapper parses `xy`.
+    ///
+    /// # Errors
+    ///
+    /// Returns the mode-specific fill error that Bitmap reports before
+    /// coordinate or mask validation.
+    pub fn resolve_bitmap_fill_with_input(
+        &mut self,
+        input: DrawColorInput,
+    ) -> Result<Option<(u8, u8, u8, u8)>, PilError> {
         if matches!(input, DrawColorInput::None) {
-            return self.bitmap(x, y, bitmap, None);
+            return Ok(None);
         }
         let mode = self.effective_mode()?;
         if let DrawColorInput::Components(values) | DrawColorInput::TupleComponents(values) = &input {
@@ -811,7 +484,7 @@ impl Draw {
             }
         }
         let color = self.resolve_draw_color_with_input(input)?;
-        self.bitmap(x, y, bitmap, Some(color))
+        Ok(Some(color))
     }
 
     /// Returns the original Pillow mode of the drawing target.

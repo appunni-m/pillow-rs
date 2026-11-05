@@ -8,6 +8,13 @@ use crate::raster::{
 };
 
 pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, PilError> {
+    if target == Mode::ImageLab8 {
+        return super::super::super::helpers::lab_target::execute(
+            source.width(),
+            source.height(),
+            source.pixels().map(|pixel| [pixel[0], pixel[1], pixel[2]]),
+        );
+    }
     let (width, height) = source.dimensions();
     match target {
         Mode::ImageLuma8 => {
@@ -28,8 +35,7 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
         Mode::ImageLumaA8 => {
             Ok(DynamicImage::ImageLumaA8(opaque_luma_alpha(source)))
         }
-        // Pillow's wrapper converts RGBX to RGB, then RGB to La; the latter
-        // emits opaque alpha.
+        // Compute RGB-derived luma and opaque alpha directly from RGBX lanes.
         Mode::ImageLaPremultiplied8 => {
             Ok(DynamicImage::ImageLaPremultiplied8(opaque_luma_alpha(source)))
         }
@@ -44,8 +50,8 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
         Mode::ImageRgba8 => {
             Ok(DynamicImage::ImageRgba8(opaque_rgba(source)))
         }
-        // Pillow's wrapper converts RGBX to RGB, then adds opaque alpha for
-        // the requested premultiplied RGBa mode.
+        // An opaque RGB sample needs no premultiplication arithmetic; discard
+        // X and write the final carrier directly from native RGBX lanes.
         Mode::ImageRgbPremultiplied8 => {
             Ok(DynamicImage::ImageRgbPremultiplied8(opaque_rgba(source)))
         }

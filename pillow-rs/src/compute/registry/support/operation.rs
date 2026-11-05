@@ -68,6 +68,8 @@ pub enum OperationId {
     GaussianBlur,
     /// Apply Pillow's native-byte box blur.
     BoxBlur,
+    /// Apply Pillow-compatible box blur with independent axis radii and passes.
+    BoxBlurXY,
     /// Sharpen byte samples by blending the source with its Gaussian blur.
     UnsharpMask,
     /// Apply Pillow's median rank filter.
@@ -238,6 +240,7 @@ impl OperationId {
             | Self::Filter5x5
             | Self::GaussianBlur
             | Self::BoxBlur
+            | Self::BoxBlurXY
             | Self::UnsharpMask
             | Self::MedianFilter
             | Self::MaxFilter
@@ -349,6 +352,7 @@ fn filter_support(id: OperationId) -> &'static OperationSupport {
         OperationId::Filter5x5 => &cpu_ops::filter::ops::FILTER5X5_SUPPORT,
         OperationId::GaussianBlur => &cpu_ops::filter::ops::GAUSSIAN_BLUR_SUPPORT,
         OperationId::BoxBlur => &cpu_ops::filter::ops::BOX_BLUR_SUPPORT,
+        OperationId::BoxBlurXY => &cpu_ops::filter::ops::BOX_BLUR_XY_SUPPORT,
         OperationId::UnsharpMask => &cpu_ops::filter::ops::UNSHARP_MASK_SUPPORT,
         OperationId::MedianFilter => &cpu_ops::filter::ops::MEDIAN_FILTER_SUPPORT,
         OperationId::MaxFilter => &cpu_ops::filter::ops::MAX_FILTER_SUPPORT,

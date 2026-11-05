@@ -44,6 +44,75 @@ pub(crate) fn lookup_tables(
     lut
 }
 
+/// Builds the RGB point LUT from the lengths of Pillow's Python `range`
+/// expressions. The binding evaluates those expressions so custom integer
+/// callbacks run in Pillow's order; table arithmetic stays in Rust.
+pub(crate) fn lookup_table_from_range_lengths(
+    black: (u8, u8, u8),
+    white: (u8, u8, u8),
+    mid: Option<(u8, u8, u8)>,
+    lengths: (usize, usize, usize, usize),
+) -> Result<Vec<u8>, PilError> {
+    let channel_len = lengths
+        .0
+        .checked_add(lengths.1)
+        .and_then(|len| len.checked_add(lengths.2))
+        .and_then(|len| len.checked_add(lengths.3))
+        .ok_or_else(|| PilError::ValueError("colorize lookup table is too large".into()))?;
+    let output_len = channel_len
+        .checked_mul(3)
+        .ok_or_else(|| PilError::ValueError("colorize lookup table is too large".into()))?;
+    let mut output = Vec::new();
+    output
+        .try_reserve_exact(output_len)
+        .map_err(|_| PilError::ValueError("colorize lookup table is too large".into()))?;
+
+    for channel in 0..3 {
+        let start = [black.0, black.1, black.2][channel];
+        let end = [white.0, white.1, white.2][channel];
+        let middle = mid.map(|color| [color.0, color.1, color.2][channel]);
+        append_constant(&mut output, start, lengths.0)?;
+        if let Some(middle) = middle {
+            append_interpolation(&mut output, start, middle, lengths.1)?;
+            append_interpolation(&mut output, middle, end, lengths.2)?;
+        } else {
+            append_interpolation(&mut output, start, end, lengths.1)?;
+        }
+        append_constant(&mut output, end, lengths.3)?;
+    }
+    Ok(output)
+}
+
+fn append_constant(output: &mut Vec<u8>, value: u8, length: usize) -> Result<(), PilError> {
+    output
+        .try_reserve(length)
+        .map_err(|_| PilError::ValueError("colorize lookup table is too large".into()))?;
+    output.resize(output.len() + length, value);
+    Ok(())
+}
+
+fn append_interpolation(
+    output: &mut Vec<u8>,
+    start: u8,
+    end: u8,
+    length: usize,
+) -> Result<(), PilError> {
+    output
+        .try_reserve(length)
+        .map_err(|_| PilError::ValueError("colorize lookup table is too large".into()))?;
+    if length == 0 {
+        return Ok(());
+    }
+    let denominator = length as i128;
+    let start = i128::from(start);
+    let delta = i128::from(end) - start;
+    for index in 0..length {
+        let numerator = (index as i128) * delta;
+        output.push((start + numerator.div_euclid(denominator)) as u8);
+    }
+    Ok(())
+}
+
 fn interpolate(index: i32, start: i32, end: i32, from: i32, to: i32) -> i32 {
     let span = end - start;
     if span == 0 {

@@ -1,7 +1,9 @@
 //! Scalar I/F affine interpolation path.
 
 use crate::pipeline::ResampleFilter;
-use crate::compute::pool_cpu::ops::rotate::helpers::geometry::{discrete_angle, rotate_geometry};
+use crate::compute::pool_cpu::ops::rotate::helpers::geometry::{
+    discrete_angle, identity_contract, rotate_geometry,
+};
 use crate::compute::pool_cpu::ops::rotate::ops::RotateRequest;
 use crate::raster::{GenericImageView, ImageBuffer, Rgba, RgbaImage};
 
@@ -251,16 +253,10 @@ pub(crate) fn execute<const FLOAT: bool>(
     let discrete = discrete_angle(request).is_some_and(|degree| {
         degree == 180 || request.expand || image.width() == image.height()
     });
-    if request.nearest || is_identity(request) || discrete {
+    if request.nearest || identity_contract(request) || discrete {
         return super::byte::execute::<Rgba<u8>, 4, false, false>(image, request);
     }
     execute_filtered::<FLOAT>(image, request)
-}
-
-fn is_identity(request: RotateRequest) -> bool {
-    request.center.is_none()
-        && request.translate.is_none()
-        && request.angle.rem_euclid(360.0).abs() <= f64::EPSILON
 }
 
 fn execute_filtered<const FLOAT: bool>(

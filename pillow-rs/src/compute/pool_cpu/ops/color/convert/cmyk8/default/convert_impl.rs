@@ -8,6 +8,15 @@ use crate::raster::{
 };
 
 pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, PilError> {
+    if target == Mode::ImageLab8 {
+        return super::super::super::helpers::lab_target::execute(
+            source.width(),
+            source.height(),
+            source
+                .pixels()
+                .map(|pixel| crate::color::cmyk_pixel_to_rgb(pixel.0)),
+        );
+    }
     // CMYK stores C/M/Y/K, not alpha; color-space outputs synthesize opaque X.
     match target {
         Mode::ImageLuma8 => Ok(DynamicImage::ImageLuma8(grayscale(source))),

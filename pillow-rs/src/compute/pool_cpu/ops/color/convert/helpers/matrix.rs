@@ -83,18 +83,13 @@ where
 }
 
 fn apply_matrix<P>(
-    pixels: impl Iterator<Item = P>,
+    pixels: impl ExactSizeIterator<Item = P>,
     mut to_rgb: impl FnMut(P) -> Rgb<u8>,
     width: u32,
     height: u32,
     target_mode: Mode,
     matrix: &[f64],
 ) -> Result<DynamicImage, PilError> {
-    #[inline(always)]
-    fn round_clip(value: f64) -> u8 {
-        value.round().clamp(0.0, 255.0) as u8
-    }
-
     match (matrix.len(), target_mode) {
         (4, Mode::ImageRgb8) => {
             // Pillow 12.2 retains a legacy four-coefficient RGB-output path:
@@ -139,31 +134,43 @@ fn apply_matrix<P>(
         }
         (12, Mode::ImageRgb8) => {
             let pixels: Vec<u8> = pixels
-                .flat_map(|pixel| {
-                    let pixel = to_rgb(pixel);
-                    let red = f64::from(pixel[0]);
-                    let green = f64::from(pixel[1]);
-                    let blue = f64::from(pixel[2]);
-                    [
-                        round_clip(
-                            matrix[0] * red + matrix[1] * green + matrix[2] * blue + matrix[3],
-                        ),
-                        round_clip(
-                            matrix[4] * red + matrix[5] * green + matrix[6] * blue + matrix[7],
-                        ),
-                        round_clip(
-                            matrix[8] * red + matrix[9] * green + matrix[10] * blue + matrix[11],
-                        ),
-                    ]
-                })
+                .flat_map(|pixel| apply_rgb_matrix(to_rgb(pixel), matrix))
                 .collect();
             Ok(DynamicImage::ImageRgb8(
                 RgbImage::from_raw(width, height, pixels)
                     .ok_or_else(|| PilError::ValueError("matrix conversion failed".into()))?,
             ))
         }
+        (12, Mode::ImageLab8) => {
+            // NO_PILLOW_SUPPORT: keep the 3x4 matrix output in a sample
+            // iterator and feed it to the LAB kernel without an RGB image.
+            // TODO(pillow-rs#3ptb): verify source-mode results, four-coefficient
+            // rejection, and Default/fallback receipts in CPU parity.
+            let rgb_samples = pixels.map(|pixel| apply_rgb_matrix(to_rgb(pixel), matrix));
+            super::lab_target::execute(width, height, rgb_samples)
+        }
+        (length, Mode::ImageLab8) => Err(PilError::ValueError(format!(
+            "LAB matrix conversion requires 12 elements, got {length}"
+        ))),
         (length, _) => Err(PilError::ValueError(format!(
             "Matrix must be 4 or 12 elements, got {length}"
         ))),
     }
+}
+
+#[inline(always)]
+fn apply_rgb_matrix(pixel: Rgb<u8>, matrix: &[f64]) -> [u8; 3] {
+    let red = f64::from(pixel[0]);
+    let green = f64::from(pixel[1]);
+    let blue = f64::from(pixel[2]);
+    [
+        round_clip(matrix[0] * red + matrix[1] * green + matrix[2] * blue + matrix[3]),
+        round_clip(matrix[4] * red + matrix[5] * green + matrix[6] * blue + matrix[7]),
+        round_clip(matrix[8] * red + matrix[9] * green + matrix[10] * blue + matrix[11]),
+    ]
+}
+
+#[inline(always)]
+fn round_clip(value: f64) -> u8 {
+    value.round().clamp(0.0, 255.0) as u8
 }

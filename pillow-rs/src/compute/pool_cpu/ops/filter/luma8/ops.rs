@@ -29,6 +29,12 @@ static BOX_BLUR_ARCHITECTURES: [ImplementationSupport; 5] =
         MODE,
         1,
     );
+static BOX_BLUR_XY_ARCHITECTURES: [ImplementationSupport; 5] =
+    super::super::helpers::native_byte_blur_architectures(
+        OperationId::BoxBlurXY,
+        MODE,
+        1,
+    );
 
 super::super::helpers::native_filter3x3_architectures!(MODE, 1);
 super::super::helpers::native_filter3x3_arch_leaf!(ImageLuma8, GrayImage, 1);
@@ -125,6 +131,13 @@ pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId)
             OutputModeRule::Preserve,
             inputs_for(OperationId::BoxBlur),
             &BOX_BLUR_ARCHITECTURES,
+        ),
+        OperationId::BoxBlurXY => ModeSupport::cpu(
+            OperationId::BoxBlurXY,
+            MODE,
+            OutputModeRule::Preserve,
+            inputs_for(OperationId::BoxBlurXY),
+            &BOX_BLUR_XY_ARCHITECTURES,
         ),
         OperationId::MedianFilter => ModeSupport::cpu(
             OperationId::MedianFilter,

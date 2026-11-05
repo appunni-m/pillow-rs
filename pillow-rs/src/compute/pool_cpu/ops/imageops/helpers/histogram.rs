@@ -616,38 +616,59 @@ pub(crate) fn equalize_lut_for_bytes(
     }
 
     let mut lut = vec![0u8; channels * 256];
-    for channel in 0..channels {
-        let start = channel * 256;
-        for value in 0..=u8::MAX {
-            lut[start + usize::from(value)] = value;
-        }
-
-        // PIL equalize: step = (sum(non-zero bins) - last_bin_count) / 255
-        // and lut[i] = floor((step/2 + cumulative_histogram) / step).
-        let mut nonzero_bins = 0usize;
-        let mut last_nonzero_count = 0u32;
-        let mut total = 0u32;
-        for &count in &histograms[channel] {
-            total += count;
-            if count > 0 {
-                nonzero_bins += 1;
-                last_nonzero_count = count;
-            }
-        }
-        if nonzero_bins <= 1 {
-            continue;
-        }
-        let step = (total - last_nonzero_count) / 255;
-        if step == 0 {
-            continue;
-        }
-        let mut n = step / 2;
-        for value in 0..=u8::MAX {
-            lut[start + usize::from(value)] = (n / step).min(255) as u8;
-            n += histograms[channel][usize::from(value)];
-        }
+    for (histogram, table) in histograms[..channels]
+        .iter()
+        .zip(lut.chunks_exact_mut(256))
+    {
+        fill_equalize_lut_channel(histogram, table);
     }
     Some(lut)
+}
+
+/// Builds an Equalize LUT from the eager public histogram result.
+pub(crate) fn equalize_lut_from_histogram(histogram: &[u32]) -> Option<Vec<u8>> {
+    if histogram.len() % 256 != 0 {
+        return None;
+    }
+    let mut lut = vec![0u8; histogram.len()];
+    for (counts, table) in histogram
+        .chunks_exact(256)
+        .zip(lut.chunks_exact_mut(256))
+    {
+        fill_equalize_lut_channel(counts, table);
+    }
+    Some(lut)
+}
+
+fn fill_equalize_lut_channel(histogram: &[u32], lut: &mut [u8]) {
+    for (value, output) in lut.iter_mut().enumerate() {
+        *output = value as u8;
+    }
+
+    // PIL equalize: step = (sum(non-zero bins) - last_bin_count) / 255
+    // and lut[i] = floor((step/2 + cumulative_histogram) / step).
+    let mut nonzero_bins = 0usize;
+    let mut last_nonzero_count = 0u32;
+    let mut total = 0u32;
+    for &count in histogram {
+        total += count;
+        if count > 0 {
+            nonzero_bins += 1;
+            last_nonzero_count = count;
+        }
+    }
+    if nonzero_bins <= 1 {
+        return;
+    }
+    let step = (total - last_nonzero_count) / 255;
+    if step == 0 {
+        return;
+    }
+    let mut cumulative = step / 2;
+    for (value, &count) in histogram.iter().enumerate() {
+        lut[value] = (cumulative / step).min(255) as u8;
+        cumulative += count;
+    }
 }
 pub(crate) fn lut_is_identity(lut: &[u8], channels: usize) -> bool {
     lut.len() == channels.saturating_mul(256)

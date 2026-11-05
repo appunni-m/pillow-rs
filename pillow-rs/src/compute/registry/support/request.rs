@@ -94,8 +94,10 @@ pub enum InputContract {
     Filter5x5Parameters,
     /// GaussianBlur receives the requested sigma without normalization.
     GaussianBlurSigma,
-    /// BoxBlur receives exactly one integer or independent-axis radius request.
+    /// BoxBlur receives exactly one integer radius.
     BoxBlurParameters,
+    /// BoxBlurXY receives independent floating-point radii and a pass count.
+    BoxBlurXYParameters,
     /// UnsharpMask receives its Gaussian radius, blend percent, and threshold.
     UnsharpMaskParameters,
     /// Sharpness receives its exact blend factor, including non-finite values.
@@ -470,7 +472,7 @@ pub enum StrategyGuard {
     Filter5x5I32BinomialFma,
     /// I32 Filter5x5 has exact storage and an interior accepted by the AVX2 kernel.
     Filter5x5I32Vectorizable,
-    /// Native-byte BoxBlur or GaussianBlur with an exact mode layout.
+    /// Native-byte BoxBlur, BoxBlurXY, or GaussianBlur with an exact mode layout.
     FilterNativeByteBlur {
         /// Physical byte channels in this exact mode's storage.
         channels: u8,

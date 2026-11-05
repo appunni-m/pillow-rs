@@ -42,6 +42,9 @@ pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId)
         // NO_PILLOW_SUPPORT: Pillow 12.2 blur accepts a narrower uint8 mode set;
         // this native mode strategy extends it.
         OperationId::BoxBlur => core_only_serial(OperationId::BoxBlur, MODE),
+        // NO_PILLOW_SUPPORT: Pillow 12.2 blur accepts a narrower uint8 mode set;
+        // this native mode strategy extends it.
+        OperationId::BoxBlurXY => core_only_serial(OperationId::BoxBlurXY, MODE),
         // NO_PILLOW_SUPPORT: Pillow 12.2 rank filters require scalar storage;
         // this native mode strategy filters native channels.
         OperationId::MedianFilter => core_only(OperationId::MedianFilter, MODE, &MEDIAN_FILTER_ARCHITECTURES),

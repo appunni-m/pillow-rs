@@ -17,6 +17,7 @@ pub(super) fn assess(
         | InputContract::Filter5x5Parameters
         | InputContract::GaussianBlurSigma
         | InputContract::BoxBlurParameters
+        | InputContract::BoxBlurXYParameters
         | InputContract::UnsharpMaskParameters
         | InputContract::SharpnessFactor
         | InputContract::EffectSpreadDistance
@@ -400,7 +401,6 @@ fn assess_draw_inputs(
         bitmap_mask_mode,
         embedded_color,
         text_mask_kind,
-        text_fill_is_integer,
         text_ink,
         ..
     } = input.request
@@ -432,7 +432,6 @@ fn assess_draw_inputs(
             context_mode,
             embedded_color,
             text_mask_kind,
-            text_fill_is_integer,
             text_ink,
             contract,
         ),
@@ -478,7 +477,6 @@ fn assess_draw_text(
     context_mode: Option<Mode>,
     embedded_color: Option<bool>,
     text_mask_kind: Option<DrawTextMaskKind>,
-    text_fill_is_integer: Option<bool>,
     text_ink: Option<i64>,
     contract: InputContract,
 ) -> Result<Option<UnresolvedGuard>, PilError> {
@@ -498,13 +496,11 @@ fn assess_draw_text(
         Some(context_mode),
         Some(embedded_color),
         Some(text_mask_kind),
-        Some(_text_fill_is_integer),
     ) = (
         raster_mode,
         context_mode,
         embedded_color,
         text_mask_kind,
-        text_fill_is_integer,
     )
     else {
         return defer_draw_inputs(contract);
@@ -547,6 +543,7 @@ fn assess_request(
         | (InputContract::Filter5x5Parameters, RequestFacts::Unspecified)
         | (InputContract::GaussianBlurSigma, RequestFacts::Unspecified)
         | (InputContract::BoxBlurParameters, RequestFacts::Unspecified)
+        | (InputContract::BoxBlurXYParameters, RequestFacts::Unspecified)
         | (InputContract::UnsharpMaskParameters, RequestFacts::Unspecified)
         | (InputContract::SharpnessFactor, RequestFacts::Unspecified)
         | (InputContract::EffectSpreadDistance, RequestFacts::Unspecified)
@@ -663,10 +660,8 @@ fn assess_request(
         (InputContract::Filter3x3Parameters, RequestFacts::Filter3x3 { .. })
         | (InputContract::Filter5x5Parameters, RequestFacts::Filter5x5 { .. })
         | (InputContract::GaussianBlurSigma, RequestFacts::GaussianBlur { .. })
-        | (
-            InputContract::BoxBlurParameters,
-            RequestFacts::BoxBlur { .. } | RequestFacts::BoxBlurXY { .. },
-        )
+        | (InputContract::BoxBlurParameters, RequestFacts::BoxBlur { .. })
+        | (InputContract::BoxBlurXYParameters, RequestFacts::BoxBlurXY { .. })
         | (InputContract::UnsharpMaskParameters, RequestFacts::UnsharpMask { .. }) => Ok(None),
         (InputContract::SharpnessFactor, RequestFacts::Sharpness { .. }) => Ok(None),
         (InputContract::PosterizeBits, RequestFacts::Posterize { bits })
@@ -757,6 +752,7 @@ fn assess_request(
         (InputContract::Filter5x5Parameters, _) => Err(wrong_request("Filter5x5")),
         (InputContract::GaussianBlurSigma, _) => Err(wrong_request("GaussianBlur")),
         (InputContract::BoxBlurParameters, _) => Err(wrong_request("BoxBlur")),
+        (InputContract::BoxBlurXYParameters, _) => Err(wrong_request("BoxBlurXY")),
         (InputContract::UnsharpMaskParameters, _) => Err(wrong_request("UnsharpMask")),
         (InputContract::SharpnessFactor, _) => Err(wrong_request("Sharpness")),
         (InputContract::EffectNoiseSigma, _) => Err(wrong_request("EffectNoise")),

@@ -10,7 +10,9 @@ pub enum QuantizePalette {
     /// An image object was supplied as the palette argument.
     Image(Box<Image>),
     /// A non-image palette argument was supplied by the host adapter.
-    /// TODO(pillow-rs#3ptb): preserve Python palette truthiness and `load`/`mode`
-    /// attribute callbacks; this currently falls through as no palette.
+    /// Python adapters should resolve falsey values to `None` before crossing
+    /// the Rust boundary. A truthy value without a supported image carrier is
+    /// an error, never an implicit request for an automatically generated
+    /// palette.
     Other,
 }

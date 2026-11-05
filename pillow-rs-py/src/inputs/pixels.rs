@@ -1,6 +1,6 @@
 use super::{
-    Bound, PyAny, PyInt, PyList, PyOverflowError, PyResult, PyTuple, PyTypeError, PyValueError,
-    c_int_from_python, chops_offset_from_python,
+    Bound, PyAny, PyBytes, PyErr, PyInt, PyList, PyOverflowError, PyResult, PyTuple,
+    PyTypeError, PyValueError, Python, c_int_from_python, chops_offset_from_python,
 };
 use pyo3::types::{PyAnyMethods, PyFloat, PySequenceMethods, PyTupleMethods, PyTypeMethods};
 
@@ -159,31 +159,256 @@ pub(crate) fn exact_rgb_tuple_from_python(value: &Bound<'_, PyAny>) -> Option<[u
 }
 
 pub(crate) fn new_color_input_from_python(
+    mode: pillow_rs::Mode,
     color: Option<&Bound<'_, PyAny>>,
-) -> pillow_rs::NewColorInput {
-    let (hex, single, rgb, rgba, la, int32_val, float_val) = if let Some(value) = color {
-        (
-            value.extract::<String>().ok(),
-            value.extract::<u8>().ok(),
-            value.extract::<(u8, u8, u8)>().ok(),
-            value.extract::<(u8, u8, u8, u8)>().ok(),
-            value.extract::<(u8, u8)>().ok(),
-            value.extract::<i32>().ok(),
-            value.extract::<f64>().ok(),
-        )
-    } else {
-        (None, None, None, None, None, None, None)
+) -> PyResult<pillow_rs::NewColorInput> {
+    // TODO(pillow-rs#3ptb): freeze custom numeric, wide-tuple, P palette, and
+    // size-callback output/fault cases; allocation-before-fill fault order is
+    // still a source-level difference when construction fails for memory.
+    let Some(value) = color else {
+        return Ok(new_color_input(None, None, None, None, None, None, None, false));
     };
-    pillow_rs::NewColorInput::from_parts(
-        hex,
-        single,
-        rgb,
-        rgba,
-        la,
-        int32_val,
-        float_val,
-        color.is_some(),
+    if let Ok(string) = value.extract::<String>() {
+        return Ok(new_color_input(
+            Some(string), None, None, None, None, None, None, true,
+        ));
+    }
+
+    if mode == pillow_rs::Mode::ImageF32 {
+        let tuple = value.cast::<PyTuple>().ok();
+        let scalar = match tuple.as_ref().filter(|tuple| tuple.len() == 1) {
+            Some(tuple) => tuple.get_item(0)?,
+            None => value.clone(),
+        };
+        return Ok(new_color_input(
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(scalar.extract::<f64>()?),
+            true,
+        ));
+    }
+
+    let tuple = value.cast::<PyTuple>().ok();
+    let tuple_length = tuple.as_ref().map(|tuple| tuple.len());
+    let scalar = match tuple.as_ref().filter(|tuple| tuple.len() == 1) {
+        Some(tuple) => tuple.get_item(0)?,
+        None => value.clone(),
+    };
+    if scalar.is_instance_of::<PyInt>() {
+        return Ok(new_color_integer_input(mode, new_color_integer(&scalar)?));
+    }
+    if mode.band_count() == 1 {
+        return Err(new_color_type_error(mode));
+    }
+    if tuple_length == Some(1) && mode.band_count() == 2 {
+        return Err(pyo3::exceptions::PySystemError::new_err(
+            "new style getargs format but argument is not a tuple",
+        ));
+    }
+    let Some(tuple) = tuple else {
+        return Err(new_color_type_error(mode));
+    };
+    new_color_tuple_input(mode, &tuple)
+}
+
+#[allow(
+    clippy::too_many_arguments,
+    reason = "keeps the mode-classified constructor payload at one boundary"
+)]
+fn new_color_input(
+    string: Option<String>,
+    single: Option<u8>,
+    rgb: Option<(u8, u8, u8)>,
+    rgba: Option<(u8, u8, u8, u8)>,
+    la: Option<(u8, u8)>,
+    integer: Option<i32>,
+    float: Option<f64>,
+    provided: bool,
+) -> pillow_rs::NewColorInput {
+    pillow_rs::NewColorInput::from_parts(string, single, rgb, rgba, la, integer, float, provided)
+}
+
+fn new_color_type_error(mode: pillow_rs::Mode) -> PyTypeError {
+    if mode.band_count() == 1 {
+        PyTypeError::new_err("color must be int or single-element tuple")
+    } else {
+        PyTypeError::new_err("color must be int or tuple")
+    }
+}
+
+fn new_color_integer(value: &Bound<'_, PyAny>) -> PyResult<i64> {
+    value.extract::<i64>()
+}
+
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "the value is clamped to the u8 range before conversion"
+)]
+fn new_color_byte(value: i64) -> u8 {
+    value.clamp(0, i64::from(u8::MAX)) as u8
+}
+
+fn new_color_integer_input(mode: pillow_rs::Mode, value: i64) -> pillow_rs::NewColorInput {
+    if matches!(
+        mode,
+        pillow_rs::Mode::ImagePalette8 | pillow_rs::Mode::ImageLuma8 | pillow_rs::Mode::One
+    ) {
+        return new_color_input(
+            None,
+            Some(new_color_byte(value)),
+            None,
+            None,
+            None,
+            None,
+            None,
+            true,
+        );
+    }
+    if matches!(
+        mode,
+        pillow_rs::Mode::ImageI32
+            | pillow_rs::Mode::ImageI16
+            | pillow_rs::Mode::ImageI16L
+            | pillow_rs::Mode::ImageI16B
+            | pillow_rs::Mode::ImageI16N
+    ) {
+        let [byte0, byte1, byte2, byte3, ..] = value.to_le_bytes();
+        let integer = i32::from_le_bytes([byte0, byte1, byte2, byte3]);
+        return new_color_input(None, None, None, None, None, Some(integer), None, true);
+    }
+
+    let [red, green, blue, alpha, ..] = value.to_le_bytes();
+    new_color_input(
+        None,
+        None,
+        None,
+        Some((red, green, blue, alpha)),
+        None,
+        None,
+        None,
+        true,
     )
+}
+
+fn new_color_tuple_input(
+    mode: pillow_rs::Mode,
+    values: &Bound<'_, PyTuple>,
+) -> PyResult<pillow_rs::NewColorInput> {
+    let length = values.len();
+    let bands = mode.band_count();
+    if bands == 2 && !matches!(length, 1 | 2) {
+        return Err(PyTypeError::new_err(
+            "color must be int, or tuple of one or two elements",
+        ));
+    }
+    if bands >= 3 && !matches!(length, 3 | 4) {
+        return Err(PyTypeError::new_err(
+            "color must be int, or tuple of one, three or four elements",
+        ));
+    }
+
+    let first = new_color_byte(new_color_integer(&values.get_item(0)?)?);
+    if bands == 1 {
+        return Ok(new_color_input(None, Some(first), None, None, None, None, None, true));
+    }
+    let second = new_color_byte(i64::from(c_int_from_python(&values.get_item(1)?)?));
+    if bands == 2 {
+        return Ok(new_color_input(
+            None,
+            None,
+            None,
+            None,
+            Some((first, second)),
+            None,
+            None,
+            true,
+        ));
+    }
+    let third = new_color_byte(i64::from(c_int_from_python(&values.get_item(2)?)?));
+    if length == 3 {
+        return Ok(new_color_input(
+            None,
+            None,
+            Some((first, second, third)),
+            None,
+            None,
+            None,
+            None,
+            true,
+        ));
+    }
+    let alpha = new_color_byte(i64::from(c_int_from_python(&values.get_item(3)?)?));
+    Ok(new_color_input(
+        None,
+        None,
+        None,
+        Some((first, second, third, alpha)),
+        None,
+        None,
+        None,
+        true,
+    ))
+}
+
+pub(crate) fn new_size_from_python(
+    value: &Bound<'_, PyAny>,
+    py: Python<'_>,
+) -> PyResult<(u32, u32)> {
+    // SAFETY: `value` is live and GIL-bound; the sequence check only inspects
+    // its CPython sequence slots.
+    let is_sequence = unsafe { pyo3::ffi::PySequence_Check(value.as_ptr()) != 0 };
+    if !is_sequence || value.is_instance_of::<PyBytes>() {
+        let type_name = value.get_type().name()?.to_string();
+        return Err(PyTypeError::new_err(format!(
+            "argument 2 must be 2-item sequence, not {type_name}"
+        )));
+    }
+
+    // Match Pillow's nested C-int size conversion after Python _check_size.
+    // SAFETY: `value` is live and PySequence_Check succeeded above.
+    let length = unsafe { pyo3::ffi::PySequence_Size(value.as_ptr()) };
+    if length < 0 {
+        return Err(PyErr::fetch(py));
+    }
+    if length != 2 {
+        return Err(PyTypeError::new_err(format!(
+            "argument 2 must be sequence of length 2, not {length}"
+        )));
+    }
+
+    let width = new_size_component(value, py, 0)?;
+    let height = new_size_component(value, py, 1)?;
+    if width < 0 || height < 0 {
+        return Err(PyValueError::new_err("Width and height must be >= 0"));
+    }
+    let width = u32::try_from(width)
+        .map_err(|_| PyValueError::new_err("Width and height must be >= 0"))?;
+    let height = u32::try_from(height)
+        .map_err(|_| PyValueError::new_err("Width and height must be >= 0"))?;
+    Ok((width, height))
+}
+
+fn new_size_component(value: &Bound<'_, PyAny>, py: Python<'_>, index: isize) -> PyResult<i32> {
+    // SAFETY: `value` is live and the sequence and length checks succeeded.
+    let item = unsafe {
+        Bound::from_owned_ptr_or_err(
+            py,
+            pyo3::ffi::PySequence_GetItem(value.as_ptr(), index),
+        )
+    };
+    let item = match item {
+        Ok(item) => item,
+        Err(_sequence_error) => {
+            return Err(PyTypeError::new_err(format!(
+                "argument 2, item {index} is not retrievable"
+            )));
+        }
+    };
+    c_int_from_python(&item)
 }
 
 pub(crate) fn putpixel_coordinates_from_python(xy: &Bound<'_, PyAny>) -> PyResult<(i32, i32)> {

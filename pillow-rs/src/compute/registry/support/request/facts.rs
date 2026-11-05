@@ -46,8 +46,6 @@ pub enum RequestFacts {
         embedded_color: Option<bool>,
         /// Exact FreeType mask representation consumed by the Text owner.
         text_mask_kind: Option<DrawTextMaskKind>,
-        /// Whether the resolved text fill originated as an integer ink.
-        text_fill_is_integer: Option<bool>,
         /// Packed FreeType foreground ink, when the text mask uses one.
         text_ink: Option<i64>,
     },
@@ -400,6 +398,10 @@ pub enum RequestFacts {
         center_bits: Option<(u64, u64)>,
         /// Exact post-rotation translation coordinates.
         translate_bits: Option<(u64, u64)>,
+        /// Optional exact host-computed affine coefficients.
+        affine_bits: Option<[u64; 6]>,
+        /// Destination dimensions paired with host-computed coefficients.
+        output_size: Option<(u32, u32)>,
         /// Resampling selector: 0 nearest, 1 bilinear, 2 bicubic.
         filter: u8,
         /// Whether the wrapper requested nearest-neighbor sampling.

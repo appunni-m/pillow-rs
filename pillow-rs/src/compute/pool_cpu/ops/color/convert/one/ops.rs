@@ -61,7 +61,8 @@ static ARCHITECTURES: [ImplementationSupport; 12] = architecture_catalog!(
     ]
 );
 
-// Pillow's wrapper routes these missing direct `1` converters through L.
+// The `1` mode uses expanded 0/255 samples; this exact One-mode owner writes
+// each declared final target directly from those bytes.
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: super::super::ops::LUMA_TARGETS,
     core_only_targets: &[],

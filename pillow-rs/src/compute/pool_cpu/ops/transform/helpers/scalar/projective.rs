@@ -12,6 +12,51 @@ pub(in crate::compute::pool_cpu::ops::transform) fn transform_projective_scalar3
     _fill_is_none: bool,
     quad: bool,
 ) -> Result<Vec<u8>, PilError> {
+    let output_len = usize::try_from(dst_w)
+        .ok()
+        .and_then(|width| {
+            usize::try_from(dst_h)
+                .ok()
+                .and_then(|height| width.checked_mul(height))
+        })
+        .and_then(|pixels| pixels.checked_mul(4))
+        .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
+    let mut output = vec![0; output_len];
+    let fill_word = fill
+        .map(|color| [color.0, color.1, color.2, color.3])
+        .unwrap_or([0; 4]);
+    for pixel in output.chunks_exact_mut(4) {
+        pixel.copy_from_slice(&fill_word);
+    }
+    transform_projective_scalar32_into::<IS_FLOAT>(
+        source,
+        source_dimensions,
+        dst_w,
+        dst_h,
+        data,
+        filter,
+        fill,
+        _fill_is_none,
+        quad,
+        &mut output,
+    )?;
+    Ok(output)
+}
+
+pub(in crate::compute::pool_cpu::ops::transform) fn transform_projective_scalar32_into<
+    const IS_FLOAT: bool,
+>(
+    source: &[u8],
+    source_dimensions: (u32, u32),
+    dst_w: u32,
+    dst_h: u32,
+    data: &[f64],
+    filter: &ResampleFilter,
+    _fill: Option<(u8, u8, u8, u8)>,
+    _fill_is_none: bool,
+    quad: bool,
+    output: &mut [u8],
+) -> Result<(), PilError> {
     let (src_w, src_h) = source_dimensions;
     let source_len = usize::try_from(src_w)
         .ok()
@@ -21,7 +66,7 @@ pub(in crate::compute::pool_cpu::ops::transform) fn transform_projective_scalar3
                 .and_then(|height| width.checked_mul(height))
         })
         .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
-    let output_len = usize::try_from(dst_w)
+    let output_pixels = usize::try_from(dst_w)
         .ok()
         .and_then(|width| {
             usize::try_from(dst_h)
@@ -34,14 +79,14 @@ pub(in crate::compute::pool_cpu::ops::transform) fn transform_projective_scalar3
             "Scalar32 projective source buffer shape mismatch".into(),
         ));
     }
-    let fill_word = fill
-        .map(|color| [color.0, color.1, color.2, color.3])
-        .unwrap_or([0; 4]);
-    let _ = output_len
+    let output_len = output_pixels
         .checked_mul(4)
         .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
-    let mut output = fill_word.repeat(output_len);
-
+    if output.len() != output_len {
+        return Err(PilError::InternalError(
+            "Scalar32 projective destination buffer shape mismatch".into(),
+        ));
+    }
     let quad_coefficients = if quad {
         if dst_w == 0 || dst_h == 0 {
             None
@@ -93,19 +138,22 @@ pub(in crate::compute::pool_cpu::ops::transform) fn transform_projective_scalar3
                 && sy >= 0.0
                 && sy < f64::from(src_h)
             {
-                output[output_index * 4..output_index * 4 + 4].copy_from_slice(
-                    &sample_transform_scalar32::<IS_FLOAT>(source, src_w, src_h, sx, sy, filter),
-                );
+                let start = output_index * 4;
+                output[start..start + 4].copy_from_slice(&sample_transform_scalar32::<IS_FLOAT>(
+                    source, src_w, src_h, sx, sy, filter,
+                ));
             }
         }
     }
 
-    Ok(output)
+    Ok(())
 }
 
 /// Apply Pillow's typed 32-bit filters to a piecewise quadrilateral mesh.
 #[inline]
-fn transform_mesh_scalar32_record<const IS_FLOAT: bool>(
+pub(in crate::compute::pool_cpu::ops::transform) fn transform_mesh_scalar32_record<
+    const IS_FLOAT: bool,
+>(
     source: &[u8],
     source_width: u32,
     source_height: u32,
@@ -147,6 +195,69 @@ fn transform_mesh_scalar32_record<const IS_FLOAT: bool>(
         (y1_s - y0_s) * inverse_height,
         (y2_s - y1_s - y3_s + y0_s) * inverse_width * inverse_height,
     ];
+    apply_mesh_scalar32_record_with_coefficients::<IS_FLOAT>(
+        source,
+        source_width,
+        source_height,
+        source_width_f64,
+        source_height_f64,
+        destination_width,
+        destination_height,
+        (x0_d, y0_d, x1_d, y1_d),
+        coefficients,
+        output,
+        fill_is_none,
+        filter,
+    );
+}
+
+pub(in crate::compute::pool_cpu::ops::transform) fn transform_mesh_scalar32_record_with_coefficients<
+    const IS_FLOAT: bool,
+>(
+    source: &[u8],
+    source_width: u32,
+    source_height: u32,
+    source_width_f64: f64,
+    source_height_f64: f64,
+    destination_width: u32,
+    destination_height: u32,
+    box_coordinates: (i64, i64, i64, i64),
+    coefficients: [f64; 8],
+    output: &mut [u8],
+    fill_is_none: bool,
+    filter: &ResampleFilter,
+) {
+    apply_mesh_scalar32_record_with_coefficients::<IS_FLOAT>(
+        source,
+        source_width,
+        source_height,
+        source_width_f64,
+        source_height_f64,
+        destination_width,
+        destination_height,
+        box_coordinates,
+        coefficients,
+        output,
+        fill_is_none,
+        filter,
+    );
+}
+
+#[inline]
+fn apply_mesh_scalar32_record_with_coefficients<const IS_FLOAT: bool>(
+    source: &[u8],
+    source_width: u32,
+    source_height: u32,
+    source_width_f64: f64,
+    source_height_f64: f64,
+    destination_width: u32,
+    destination_height: u32,
+    (x0_d, y0_d, x1_d, y1_d): (i64, i64, i64, i64),
+    coefficients: [f64; 8],
+    output: &mut [u8],
+    fill_is_none: bool,
+    filter: &ResampleFilter,
+) {
     let x0 = x0_d.max(0).min(i64::from(destination_width));
     let y0 = y0_d.max(0).min(i64::from(destination_height));
     let x1 = x1_d.max(0).min(i64::from(destination_width));

@@ -64,6 +64,144 @@ pub(crate) fn finish(
     Ok(())
 }
 
+pub(crate) fn initialize_mesh_output(
+    output: &DynamicImage,
+) -> Result<Option<Vec<u8>>, PilError> {
+    let mode = output.mode();
+    let Some(lane_count) = mode.hidden_pixel_lane_count() else {
+        return Ok(None);
+    };
+    let pixel_count = pixel_count(output)?;
+    let value_count = pixel_count
+        .checked_mul(lane_count)
+        .ok_or_else(invalid_lanes)?;
+    let mut values = Vec::new();
+    values
+        .try_reserve_exact(value_count)
+        .map_err(|error| PilError::MemoryError(error.to_string()))?;
+    if let Some(lanes) = output.hidden_pixel_lanes() {
+        if lanes.lane_count() != lane_count || lanes.pixel_count() != pixel_count {
+            return Err(invalid_lanes());
+        }
+        for index in 0..pixel_count {
+            values.extend_from_slice(lanes.for_pixel(index).ok_or_else(invalid_lanes)?);
+        }
+    } else {
+        values.resize(value_count, 0);
+    }
+    Ok(Some(values))
+}
+
+pub(crate) fn apply_mesh_record(
+    source: &DynamicImage,
+    output: &DynamicImage,
+    request: TransformRequest<'_>,
+    box_coordinates: (i64, i64, i64, i64),
+    coefficients: [f64; 8],
+    selection: &StrategySelection,
+    output_lanes: &mut Option<Vec<u8>>,
+    source_lanes: &mut Vec<u8>,
+) -> Result<(), PilError> {
+    let mode = source.mode();
+    validate_selection(selection, mode)?;
+    let Some(lane_count) = mode.hidden_pixel_lane_count() else {
+        return Ok(());
+    };
+    let values = output_lanes.as_mut().ok_or_else(invalid_lanes)?;
+    let expected = pixel_count_from_request(request)?
+        .checked_mul(lane_count)
+        .ok_or_else(invalid_lanes)?;
+    if values.len() != expected {
+        return Err(invalid_lanes());
+    }
+    if matches!(request.filter, ResampleFilter::Nearest) {
+        source_lane_plane_into(source, mode, lane_count, source_lanes)?;
+        return projective::transform_mesh_record_with_coefficients(
+            source_lanes,
+            source.dimensions(),
+            (request.width, request.height),
+            box_coordinates,
+            coefficients,
+            values,
+            lane_count,
+            ResampleFilter::Nearest,
+            request.fill_is_none,
+        );
+    }
+    apply_filtered_mesh_lanes(output, mode, request, box_coordinates, values)
+}
+
+pub(crate) fn attach_mesh_output(
+    output: &mut DynamicImage,
+    values: Option<Vec<u8>>,
+) -> Result<(), PilError> {
+    let Some(values) = values else {
+        return Ok(());
+    };
+    let mode = output.mode();
+    let lane_count = mode.hidden_pixel_lane_count().ok_or_else(invalid_lanes)?;
+    let lanes = HiddenPixelLanes::per_pixel(lane_count, pixel_count(output)?, values)
+        .ok_or_else(invalid_lanes)?;
+    if !output.replace_hidden_pixel_lanes(Some(lanes)) {
+        return Err(invalid_lanes());
+    }
+    Ok(())
+}
+
+fn apply_filtered_mesh_lanes(
+    output: &DynamicImage,
+    mode: Mode,
+    request: TransformRequest<'_>,
+    box_coordinates: (i64, i64, i64, i64),
+    lanes: &mut [u8],
+) -> Result<(), PilError> {
+    if matches!(
+        mode,
+        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8
+    ) {
+        // Filtered three-band kernels leave the hidden fourth byte unchanged.
+        return Ok(());
+    }
+    let (left, top, right, bottom) = clipped_mesh_box(box_coordinates, request.width, request.height);
+    if left >= right || top >= bottom {
+        return Ok(());
+    }
+    let lane_count = mode.hidden_pixel_lane_count().ok_or_else(invalid_lanes)?;
+    let logical = output.as_bytes();
+    let carrier_width = mode.byte_carrier_pixel_width().ok_or_else(invalid_lanes)?;
+    let row_width = request.width as usize;
+    for y in top..bottom {
+        for x in left..right {
+            let pixel_index = y as usize * row_width + x as usize;
+            let lane_offset = pixel_index * lane_count;
+            match mode {
+                Mode::ImageLumaA8
+                | Mode::ImageLaPremultiplied8
+                | Mode::ImagePaletteAlpha8 => {
+                    let sample = logical[pixel_index * carrier_width];
+                    lanes[lane_offset..lane_offset + lane_count].fill(sample);
+                }
+                _ => return Err(invalid_lanes()),
+            }
+        }
+    }
+    Ok(())
+}
+
+fn clipped_mesh_box(
+    coordinates: (i64, i64, i64, i64),
+    dimensions: (u32, u32),
+) -> (i64, i64, i64, i64) {
+    let (left, top, right, bottom) = coordinates;
+    let (width, height) = dimensions;
+    (
+        left.clamp(0, i64::from(width)),
+        top.clamp(0, i64::from(height)),
+        right.clamp(0, i64::from(width)),
+        bottom.clamp(0, i64::from(height)),
+    )
+}
+
 // A missing source sidecar is recoverable from luma except when a nearest
 // transform's explicit packed fill carries different physical bytes.
 fn two_band_fill_matches_luma(mode: Mode, request: TransformRequest<'_>) -> bool {
@@ -114,6 +252,17 @@ fn source_lane_plane(
     mode: Mode,
     lane_count: usize,
 ) -> Result<Vec<u8>, PilError> {
+    let mut output = Vec::new();
+    source_lane_plane_into(source, mode, lane_count, &mut output)?;
+    Ok(output)
+}
+
+fn source_lane_plane_into(
+    source: &DynamicImage,
+    mode: Mode,
+    lane_count: usize,
+    output: &mut Vec<u8>,
+) -> Result<(), PilError> {
     let pixel_count = pixel_count(source)?;
     let output_len = pixel_count
         .checked_mul(lane_count)
@@ -131,9 +280,9 @@ fn source_lane_plane(
     }) {
         return Err(invalid_lanes());
     }
-    let mut output = Vec::new();
+    output.clear();
     output
-        .try_reserve_exact(output_len)
+        .try_reserve_exact(output_len.saturating_sub(output.capacity()))
         .map_err(|error| PilError::MemoryError(error.to_string()))?;
     for index in 0..pixel_count {
         if let Some(lanes) = retained {
@@ -147,7 +296,7 @@ fn source_lane_plane(
             output.extend_from_slice(&fallback[..lane_count]);
         }
     }
-    Ok(output)
+    Ok(())
 }
 
 fn sample_default<const CHANNELS: usize>(

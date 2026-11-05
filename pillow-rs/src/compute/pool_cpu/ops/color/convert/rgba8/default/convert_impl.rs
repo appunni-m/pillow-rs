@@ -7,6 +7,13 @@ use crate::raster::{
 };
 
 pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, PilError> {
+    if target == Mode::ImageLab8 {
+        return super::super::super::helpers::lab_target::execute(
+            source.width(),
+            source.height(),
+            source.pixels().map(|pixel| [pixel[0], pixel[1], pixel[2]]),
+        );
+    }
     let (width, height) = source.dimensions();
     match target {
         Mode::ImageLuma8 => {

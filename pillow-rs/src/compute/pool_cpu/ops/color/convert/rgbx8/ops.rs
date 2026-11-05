@@ -177,7 +177,8 @@ static ARCHITECTURES: [ImplementationSupport; 36] = architecture_catalog!(
     ]
 );
 
-// Pillow's wrapper routes the missing direct RGBX converters through RGB.
+// Every admitted RGBX target has a direct source-mode strategy. Pillow-specific
+// alpha and padding behavior is encoded in the selected target implementation.
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: super::super::ops::RGBX_TARGETS,
     core_only_targets: &[],

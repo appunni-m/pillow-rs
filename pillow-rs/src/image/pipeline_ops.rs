@@ -26,6 +26,7 @@ pub struct PipelineOps {
     prefix_cache: Option<PipelinePrefixCache>,
     palette_output: Arc<OnceLock<PipelinePaletteOutput>>,
     source_format_suppressed: bool,
+    source_info_suppressed: bool,
     preserves_palette: bool,
 }
 
@@ -69,6 +70,7 @@ impl PipelineOps {
             prefix_cache: None,
             palette_output: Arc::new(OnceLock::new()),
             source_format_suppressed: false,
+            source_info_suppressed: false,
             preserves_palette: false,
         }
     }
@@ -93,6 +95,7 @@ impl PipelineOps {
             prefix_cache: None,
             palette_output: Arc::new(OnceLock::new()),
             source_format_suppressed: false,
+            source_info_suppressed: false,
             preserves_palette: false,
         }
     }
@@ -120,6 +123,7 @@ impl PipelineOps {
             prefix_cache: self.prefix_cache.clone(),
             palette_output: Arc::new(OnceLock::new()),
             source_format_suppressed: false,
+            source_info_suppressed: self.source_info_suppressed,
             preserves_palette: false,
         }
     }
@@ -246,6 +250,17 @@ impl PipelineOps {
     /// Returns whether copy semantics suppress a preserved source format.
     pub(crate) fn source_format_suppressed(&self) -> bool {
         self.source_format_suppressed
+    }
+
+    /// Marks an allocated canvas whose source Image.info provenance is dropped.
+    pub(crate) fn suppress_source_info(&mut self) {
+        self.source_info_suppressed = true;
+    }
+
+    /// Returns whether an operation replaced the source metadata with a new
+    /// canvas and therefore does not inherit Image.info or EXIF data.
+    pub(crate) fn source_info_suppressed(&self) -> bool {
+        self.source_info_suppressed
     }
 
     /// Records whether the output contract inherits its source palette.
@@ -766,6 +781,12 @@ fn pipeline_output_palette(
                 !matches!(filter, crate::pipeline::ResampleFilter::Nearest)
             }
             PipelineOp::Filter3x3 { .. } | PipelineOp::Filter5x5 { .. } => true,
+            // Pillow's Image.transform creates a new PA destination without
+            // copying the source palette. Keep the native index/alpha samples
+            // while clearing palette metadata from the result.
+            // TODO(pillow-rs#3ptb): verify PA palette metadata and sample
+            // preservation, plus the contrasting P palette-copy behavior.
+            PipelineOp::Transform { .. } => true,
             _ => false,
         };
     let preserve_palette = palette_safe
@@ -785,6 +806,12 @@ fn pipeline_output_palette(
 }
 
 impl Image {
+    pub(crate) fn suppress_pipeline_source_info(&mut self) {
+        if let Image::Pipeline { ops, .. } = self {
+            ops.suppress_source_info();
+        }
+    }
+
     /// Replaces palette metadata on an already queued pipeline operation.
     pub(crate) fn set_pipeline_output_palette(
         &mut self,

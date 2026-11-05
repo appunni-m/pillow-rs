@@ -12,11 +12,21 @@ pub(crate) fn execute(
     palette: PaletteInput<'_>,
     target: Mode,
 ) -> Result<DynamicImage, PilError> {
+    if target == Mode::ImageLab8 {
+        return super::super::super::helpers::lab_target::execute(
+            source.width(),
+            source.height(),
+            source.pixels().map(|index| {
+                super::super::super::helpers::palette::color(index[0], palette)
+            }),
+        );
+    }
     // Pillow emits opaque X for palette-to-RGB, YCbCr, and HSV conversions.
     match target {
         Mode::ImageLuma8 => Ok(DynamicImage::ImageLuma8(luma(source, palette))),
         Mode::ImageLumaA8 => Ok(DynamicImage::ImageLumaA8(luma_alpha(source, palette))),
         Mode::ImageRgb8 => Ok(DynamicImage::ImageRgb8(rgb(source, palette))),
+        Mode::ImageRgbx8 => Ok(DynamicImage::ImageRgbx8(rgbx(source, palette))),
         Mode::ImageRgba8 => Ok(DynamicImage::ImageRgba8(rgba(source, palette))),
         Mode::ImageCmyk8 => Ok(DynamicImage::ImageCmyk8(cmyk(source, palette))),
         Mode::ImageYCbCr8 => Ok(DynamicImage::ImageYCbCr8(ycbcr(source, palette))),
@@ -82,6 +92,16 @@ fn rgba(source: &GrayImage, palette: PaletteInput<'_>) -> RgbaImage {
         let color = super::super::super::helpers::palette::color(index[0], palette);
         let alpha = super::super::super::helpers::palette::alpha(index[0], palette);
         *destination = Rgba([color[0], color[1], color[2], alpha]);
+    }
+    output
+}
+
+fn rgbx(source: &GrayImage, palette: PaletteInput<'_>) -> RgbaImage {
+    let mut output = RgbaImage::new(source.width(), source.height());
+    for (destination, index) in output.pixels_mut().zip(source.pixels()) {
+        let color = super::super::super::helpers::palette::color(index[0], palette);
+        let padding = super::super::super::helpers::palette::alpha(index[0], palette);
+        *destination = Rgba([color[0], color[1], color[2], padding]);
     }
     output
 }

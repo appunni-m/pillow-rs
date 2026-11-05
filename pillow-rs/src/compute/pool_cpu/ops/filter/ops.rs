@@ -35,6 +35,7 @@ const FILTER3X3_INPUTS: &[InputContract] = &[InputContract::Filter3x3Parameters]
 const FILTER5X5_INPUTS: &[InputContract] = &[InputContract::Filter5x5Parameters];
 const GAUSSIAN_BLUR_INPUTS: &[InputContract] = &[InputContract::GaussianBlurSigma];
 const BOX_BLUR_INPUTS: &[InputContract] = &[InputContract::BoxBlurParameters];
+const BOX_BLUR_XY_INPUTS: &[InputContract] = &[InputContract::BoxBlurXYParameters];
 const UNSHARP_INPUTS: &[InputContract] = &[InputContract::UnsharpMaskParameters];
 const PALETTE_MODE: &str = "cannot filter palette images";
 pub(super) const INTERNAL_MODE: &str = "CPU filter does not support this internal raster mode";
@@ -53,6 +54,7 @@ pub(super) const fn inputs_for(operation: OperationId) -> &'static [InputContrac
         OperationId::Filter5x5 => FILTER5X5_INPUTS,
         OperationId::GaussianBlur => GAUSSIAN_BLUR_INPUTS,
         OperationId::BoxBlur => BOX_BLUR_INPUTS,
+        OperationId::BoxBlurXY => BOX_BLUR_XY_INPUTS,
         OperationId::UnsharpMask => UNSHARP_INPUTS,
         OperationId::MedianFilter | OperationId::MaxFilter | OperationId::MinFilter => RANK_WINDOW,
         OperationId::RankFilter => RANK_WINDOW_VALUE,
@@ -63,7 +65,7 @@ pub(super) const fn inputs_for(operation: OperationId) -> &'static [InputContrac
 
 fn core_only_reason(operation: OperationId) -> &'static str {
     match operation {
-        OperationId::GaussianBlur | OperationId::BoxBlur => {
+        OperationId::GaussianBlur | OperationId::BoxBlur | OperationId::BoxBlurXY => {
             "native per-mode blur extends Pillow's supported uint8 mode set"
         }
         OperationId::MedianFilter
@@ -314,6 +316,10 @@ pub(crate) static BOX_BLUR_SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::BoxBlur, BOX_BLUR_INPUTS, |mode| {
         support_for_mode(OperationId::BoxBlur, mode)
     });
+pub(crate) static BOX_BLUR_XY_SUPPORT: OperationSupport =
+    OperationSupport::new(OperationId::BoxBlurXY, BOX_BLUR_XY_INPUTS, |mode| {
+        support_for_mode(OperationId::BoxBlurXY, mode)
+    });
 pub(crate) static UNSHARP_MASK_SUPPORT: OperationSupport = OperationSupport::new(
     OperationId::UnsharpMask,
     UNSHARP_INPUTS,
@@ -541,7 +547,8 @@ impl FilterRequest {
             Self::Filter3x3 { .. } => OperationId::Filter3x3,
             Self::Filter5x5 { .. } => OperationId::Filter5x5,
             Self::GaussianBlur { .. } => OperationId::GaussianBlur,
-            Self::BoxBlur { .. } | Self::BoxBlurXY { .. } => OperationId::BoxBlur,
+            Self::BoxBlur { .. } => OperationId::BoxBlur,
+            Self::BoxBlurXY { .. } => OperationId::BoxBlurXY,
             Self::MedianFilter { .. } => OperationId::MedianFilter,
             Self::MaxFilter { .. } => OperationId::MaxFilter,
             Self::MinFilter { .. } => OperationId::MinFilter,

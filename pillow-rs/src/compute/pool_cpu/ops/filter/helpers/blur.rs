@@ -585,8 +585,8 @@ pub(in crate::compute::pool_cpu::ops::filter) fn validate_native_byte_blur_selec
     let implementation = selection.implementation;
     let operation = match request {
         super::super::ops::FilterRequest::GaussianBlur { .. } => OperationId::GaussianBlur,
-        super::super::ops::FilterRequest::BoxBlur { .. }
-        | super::super::ops::FilterRequest::BoxBlurXY { .. } => OperationId::BoxBlur,
+        super::super::ops::FilterRequest::BoxBlur { .. } => OperationId::BoxBlur,
+        super::super::ops::FilterRequest::BoxBlurXY { .. } => OperationId::BoxBlurXY,
         _ => {
             return Err(PilError::InternalError(
                 "native-byte blur received a non-blur request".into(),

@@ -2,35 +2,41 @@ use crate::error::PilError;
 use super::projective::cubic_sample;
 use super::scalar::affine_nearest_fixed;
 
-pub(super) fn transform_affine_luma_nearest(
+pub(super) fn transform_affine_luma_nearest_into(
     raw: &[u8],
     source_dimensions: (u32, u32),
     dst_w: u32,
     dst_h: u32,
     affine: [f64; 6],
     fill: Option<(u8, u8, u8, u8)>,
-) -> Result<Option<Vec<u8>>, PilError> {
+    output: &mut [u8],
+) -> Result<bool, PilError> {
     let Some([step_x, step_y, origin_x, step_x_y, step_y_y, origin_y]) =
         affine_nearest_fixed(affine, dst_w, dst_h)
     else {
-        return Ok(None);
+        return Ok(false);
     };
     let width = usize::try_from(dst_w)
         .map_err(|_| PilError::ValueError("transform output is too large".into()))?;
     let height = usize::try_from(dst_h)
         .map_err(|_| PilError::ValueError("transform output is too large".into()))?;
     if width == 0 || height == 0 {
-        return Ok(None);
+        return Ok(false);
     }
     let output_len = width
         .checked_mul(height)
         .ok_or_else(|| PilError::ValueError("transform output is too large".into()))?;
+    if output.len() != output_len {
+        return Err(PilError::InternalError(
+            "Transform L nearest destination buffer shape mismatch".into(),
+        ));
+    }
     let (source_width, source_height) = source_dimensions;
     let source_width = usize::try_from(source_width)
         .map_err(|_| PilError::ValueError("transform source is too large".into()))?;
     let source_height = i64::from(source_height);
     let fill = fill.map_or(0, |color| color.0);
-    let mut output = vec![fill; output_len];
+    output.fill(fill);
 
     for (y, row) in output.chunks_exact_mut(width).enumerate() {
         let mut sx = origin_x + y as i64 * step_y;
@@ -46,39 +52,45 @@ pub(super) fn transform_affine_luma_nearest(
         }
     }
 
-    Ok(Some(output))
+    Ok(true)
 }
 
-pub(super) fn transform_affine_luma_alpha_nearest(
+pub(super) fn transform_affine_luma_alpha_nearest_into(
     raw: &[u8],
     source_dimensions: (u32, u32),
     dst_w: u32,
     dst_h: u32,
     affine: [f64; 6],
     fill: Option<(u8, u8, u8, u8)>,
-) -> Result<Option<Vec<u8>>, PilError> {
+    output: &mut [u8],
+) -> Result<bool, PilError> {
     let Some([step_x, step_y, origin_x, step_x_y, step_y_y, origin_y]) =
         affine_nearest_fixed(affine, dst_w, dst_h)
     else {
-        return Ok(None);
+        return Ok(false);
     };
     let width = usize::try_from(dst_w)
         .map_err(|_| PilError::ValueError("transform output is too large".into()))?;
     let height = usize::try_from(dst_h)
         .map_err(|_| PilError::ValueError("transform output is too large".into()))?;
     if width == 0 || height == 0 {
-        return Ok(None);
+        return Ok(false);
     }
     let output_len = width
         .checked_mul(height)
         .and_then(|pixels| pixels.checked_mul(2))
         .ok_or_else(|| PilError::ValueError("transform output is too large".into()))?;
+    if output.len() != output_len {
+        return Err(PilError::InternalError(
+            "Transform LA nearest destination buffer shape mismatch".into(),
+        ));
+    }
     let (source_width, source_height) = source_dimensions;
     let source_width = usize::try_from(source_width)
         .map_err(|_| PilError::ValueError("transform source is too large".into()))?;
     let source_height = i64::from(source_height);
     let fill = fill.map_or([0, 0], |color| [color.0, color.1]);
-    let mut output = vec![0; output_len];
+    output.fill(0);
 
     for (y, row) in output.chunks_exact_mut(width * 2).enumerate() {
         let mut sx = origin_x + y as i64 * step_y;
@@ -97,39 +109,45 @@ pub(super) fn transform_affine_luma_alpha_nearest(
         }
     }
 
-    Ok(Some(output))
+    Ok(true)
 }
 
-pub(super) fn transform_affine_rgb_nearest(
+pub(super) fn transform_affine_rgb_nearest_into(
     raw: &[u8],
     source_dimensions: (u32, u32),
     dst_w: u32,
     dst_h: u32,
     affine: [f64; 6],
     fill: Option<(u8, u8, u8, u8)>,
-) -> Result<Option<Vec<u8>>, PilError> {
+    output: &mut [u8],
+) -> Result<bool, PilError> {
     let Some([step_x, step_y, origin_x, step_x_y, step_y_y, origin_y]) =
         affine_nearest_fixed(affine, dst_w, dst_h)
     else {
-        return Ok(None);
+        return Ok(false);
     };
     let width = usize::try_from(dst_w)
         .map_err(|_| PilError::ValueError("transform output is too large".into()))?;
     let height = usize::try_from(dst_h)
         .map_err(|_| PilError::ValueError("transform output is too large".into()))?;
     if width == 0 || height == 0 {
-        return Ok(None);
+        return Ok(false);
     }
     let output_len = width
         .checked_mul(height)
         .and_then(|pixels| pixels.checked_mul(3))
         .ok_or_else(|| PilError::ValueError("transform output is too large".into()))?;
+    if output.len() != output_len {
+        return Err(PilError::InternalError(
+            "Transform RGB nearest destination buffer shape mismatch".into(),
+        ));
+    }
     let (source_width, source_height) = source_dimensions;
     let source_width = usize::try_from(source_width)
         .map_err(|_| PilError::ValueError("transform source is too large".into()))?;
     let source_height = i64::from(source_height);
     let fill = fill.map_or([0, 0, 0], |color| [color.0, color.1, color.2]);
-    let mut output = vec![0; output_len];
+    output.fill(0);
 
     for (y, row) in output.chunks_exact_mut(width * 3).enumerate() {
         let mut sx = origin_x + y as i64 * step_y;
@@ -148,7 +166,7 @@ pub(super) fn transform_affine_rgb_nearest(
         }
     }
 
-    Ok(Some(output))
+    Ok(true)
 }
 
 #[inline(always)]
@@ -355,6 +373,54 @@ pub(super) fn transform_affine_generic(
     nearest: bool,
     bicubic: bool,
 ) -> Result<Vec<u8>, PilError> {
+    let output_len = usize::try_from(dst_w)
+        .ok()
+        .and_then(|width| {
+            usize::try_from(dst_h)
+                .ok()
+                .and_then(|height| width.checked_mul(height))
+        })
+        .and_then(|pixels| pixels.checked_mul(channels))
+        .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
+    let mut output = vec![0u8; output_len];
+    transform_affine_generic_into(
+        raw,
+        source_dimensions,
+        dst_w,
+        dst_h,
+        aff_a,
+        aff_b,
+        aff_c,
+        aff_d,
+        aff_e,
+        aff_f,
+        fill,
+        channels,
+        nearest,
+        bicubic,
+        &mut output,
+    )?;
+    Ok(output)
+}
+
+/// Apply the generic affine sampler into a caller-owned native output buffer.
+pub(super) fn transform_affine_generic_into(
+    raw: &[u8],
+    source_dimensions: (u32, u32),
+    dst_w: u32,
+    dst_h: u32,
+    aff_a: f64,
+    aff_b: f64,
+    aff_c: f64,
+    aff_d: f64,
+    aff_e: f64,
+    aff_f: f64,
+    fill: Option<(u8, u8, u8, u8)>,
+    channels: usize,
+    nearest: bool,
+    bicubic: bool,
+    out: &mut [u8],
+) -> Result<(), PilError> {
     let (sw, sh) = source_dimensions;
     let output_len = usize::try_from(dst_w)
         .ok()
@@ -365,10 +431,14 @@ pub(super) fn transform_affine_generic(
         })
         .and_then(|pixels| pixels.checked_mul(channels))
         .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
+    if out.len() != output_len {
+        return Err(PilError::InternalError(
+            "Transform affine destination buffer shape mismatch".into(),
+        ));
+    }
     // Both legacy fill defaults have zero in every stored channel. The mode
     // owner supplies the exact channel count and output identity.
     let fill_color = fill.unwrap_or((0, 0, 0, 0));
-    let mut out = vec![0u8; output_len];
     let affine = [aff_a, aff_b, aff_c, aff_d, aff_e, aff_f];
 
     if nearest && let Some(steps) = affine_nearest_fixed(affine, dst_w, dst_h) {
@@ -381,7 +451,7 @@ pub(super) fn transform_affine_generic(
             steps,
             fill_color,
         );
-        return Ok(out);
+        return Ok(());
     }
 
     transform_affine_generic_pixels(
@@ -396,5 +466,5 @@ pub(super) fn transform_affine_generic(
         bicubic,
     );
 
-    Ok(out)
+    Ok(())
 }

@@ -3,10 +3,12 @@
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::{PipelineOp, ResampleFilter, TransformMethod};
+use crate::raster::Mode;
 
 mod fill;
 mod public;
 pub(crate) use fill::public_transform_fill;
+pub use public::{PreparedTransformOutput, TransformMeshAccumulator};
 
 /// Host-neutral transform data after the binding has performed only Python
 /// sequence extraction.
@@ -18,11 +20,10 @@ pub enum TransformData {
     Mesh(Vec<(Vec<f64>, Vec<f64>)>),
     /// Nested mesh records whose item arity still belongs to core validation.
     RawMesh(Vec<Vec<Vec<f64>>>),
-    /// A mapping supplied where Pillow expects mesh data. Pillow iterates the
-    /// mapping's keys and reports the resulting unpacking error from core.
+    /// A mapping supplied where mesh records are expected without key payloads.
     Mapping,
-    /// A string supplied where Pillow expects mesh data. Each character is a
-    /// one-item iterable, so the core reports the unpacking error.
+    /// A string supplied where Pillow expects mesh data. Empty strings are
+    /// empty meshes; non-empty characters produce the unpacking error.
     Text(String),
     /// A value that could not be interpreted as affine or mesh data.
     Invalid(String),
@@ -33,8 +34,12 @@ pub enum TransformData {
 pub enum TransformFill {
     /// A scalar Pillow fill value.
     Scalar(i64),
-    /// A three- or four-component fill value.
+    /// Integer tuple components interpreted according to the destination mode.
     Components(Vec<i64>),
+    /// Integer RGB(A) components for mode `P`, retaining arbitrary-width
+    /// Python integers until palette byte validation.
+    #[doc(hidden)]
+    PaletteComponents(Vec<crate::image::PaletteColorComponent>),
     /// A named/hex color that must be parsed by core.
     Name(String),
     /// A sequence whose components are not integers.
@@ -45,6 +50,17 @@ pub enum TransformFill {
     InvalidList,
     /// An object that is not a supported fill representation.
     Invalid,
+}
+
+/// Mode-resolved destination fill staged before Transform data callbacks.
+#[doc(hidden)]
+#[derive(Debug, Clone)]
+pub struct PreparedTransformFill {
+    mode: Mode,
+    fill: (u8, u8, u8, u8),
+    palette_fill: Option<u8>,
+    temporary_palette: Option<Vec<u8>>,
+    fill_is_none: bool,
 }
 
 /// Host-neutral factor input for the public `Image.reduce` method.

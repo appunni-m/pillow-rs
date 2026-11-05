@@ -881,6 +881,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       `-- mod.rs
 |   |   |   |       |   |-- helpers/
 |   |   |   |       |   |   |-- binary.rs
+|   |   |   |       |   |   |-- dispatch.rs
 |   |   |   |       |   |   |-- fusion.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   |-- offset/
@@ -1168,6 +1169,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   |-- native_rgb.rs
 |   |   |   |       |   |   |   |-- palette.rs
+|   |   |   |       |   |   |   |-- physical_lanes.rs
 |   |   |   |       |   |   |   |-- pixel.rs
 |   |   |   |       |   |   |   |-- premultiplied.rs
 |   |   |   |       |   |   |   |-- prepared.rs
@@ -1267,6 +1269,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |   |-- default/
 |   |   |   |       |   |   |   |   |-- convert_impl.rs
 |   |   |   |       |   |   |   |   `-- mod.rs
+|   |   |   |       |   |   |   |-- helpers/
+|   |   |   |       |   |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   |   `-- to_srgb.rs
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- ops.rs
 |   |   |   |       |   |   |-- luma8/
@@ -1493,6 +1498,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       |-- mod.rs
 |   |   |   |       |   |       `-- ops.rs
 |   |   |   |       |   |-- helpers/
+|   |   |   |       |   |   |-- lab_kernel.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   |-- remap_palette.rs
 |   |   |   |       |   |   `-- strategy.rs
@@ -1522,11 +1528,23 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   `-- wasm_simd128/
 |   |   |   |       |   |       |-- mod.rs
 |   |   |   |       |   |       `-- remap_palette_impl.rs
-|   |   |   |       |   `-- rgb8/
+|   |   |   |       |   |-- rgb8/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- convert_lab_impl.rs
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- tests.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   `-- ops.rs
+|   |   |   |       |   |-- rgba8/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- convert_lab_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   `-- ops.rs
+|   |   |   |       |   `-- rgbx8/
 |   |   |   |       |       |-- default/
 |   |   |   |       |       |   |-- convert_lab_impl.rs
-|   |   |   |       |       |   |-- mod.rs
-|   |   |   |       |       |   `-- tests.rs
+|   |   |   |       |       |   `-- mod.rs
 |   |   |   |       |       |-- mod.rs
 |   |   |   |       |       `-- ops.rs
 |   |   |   |       |-- color3dlut/
@@ -2136,6 +2154,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |   |-- layout.rs
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- strategy.rs
+|   |   |   |       |   |   |-- strategy.rs
 |   |   |   |       |   |   |-- text_coords.rs
 |   |   |   |       |   |   |-- text_mask.rs
 |   |   |   |       |   |   |-- text_result.rs
@@ -2478,6 +2497,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   |-- noise.rs
 |   |   |   |       |   |   |-- noise_vector.rs
+|   |   |   |       |   |   |-- pixel_buffer.rs
 |   |   |   |       |   |   |-- radial_gradient.rs
 |   |   |   |       |   |   |-- spread.rs
 |   |   |   |       |   |   |-- spread_vector.rs
@@ -3358,7 +3378,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |-- cmyk8/
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- filter_impl.rs
-|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- mode_filter_impl.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- f32/
@@ -3419,7 +3440,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |-- hsv8/
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- filter_impl.rs
-|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- mode_filter_impl.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- i16/
@@ -3472,20 +3494,23 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |-- la_premultiplied8/
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- filter_impl.rs
-|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- mode_filter_impl.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- lab8/
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- filter_impl.rs
-|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- mode_filter_impl.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- luma8/
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- filter5x5_impl.rs
 |   |   |   |       |   |   |   |-- filter_impl.rs
-|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- mode_filter_impl.rs
 |   |   |   |       |   |   |-- helpers/
 |   |   |   |       |   |   |   |-- binomial5x5_kernel.rs
 |   |   |   |       |   |   |   |-- box_blur_radius_one.rs
@@ -3501,7 +3526,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- filter5x5_impl.rs
 |   |   |   |       |   |   |   |-- filter_impl.rs
-|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- mode_filter_impl.rs
 |   |   |   |       |   |   |-- helpers/
 |   |   |   |       |   |   |   |-- binomial5x5_kernel.rs
 |   |   |   |       |   |   |   |-- filter5x5.rs
@@ -3519,21 +3545,30 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |-- one/
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- filter_impl.rs
-|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- mode_filter_impl.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- ops.rs
+|   |   |   |       |   |-- palette8/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- mode_filter_impl.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- palette_alpha8/
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- filter_impl.rs
-|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- mode_filter_impl.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- rgb8/
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- filter5x5_impl.rs
 |   |   |   |       |   |   |   |-- filter_impl.rs
-|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- mode_filter_impl.rs
 |   |   |   |       |   |   |-- helpers/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   |-- radius_one_blur.rs
@@ -3543,7 +3578,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |-- rgb_premultiplied8/
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- filter_impl.rs
-|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- mode_filter_impl.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- rgba8/
@@ -3555,7 +3591,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- filter5x5_impl.rs
 |   |   |   |       |   |   |   |-- filter_impl.rs
-|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- mode_filter_impl.rs
 |   |   |   |       |   |   |-- helpers/
 |   |   |   |       |   |   |   |-- gaussian_blur_radius_seven.rs
 |   |   |   |       |   |   |   |-- gaussian_blur_uniform.rs
@@ -3571,13 +3608,15 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |-- rgbx8/
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- filter_impl.rs
-|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- mode_filter_impl.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   `-- ycbcr8/
 |   |   |   |       |       |-- default/
 |   |   |   |       |       |   |-- filter_impl.rs
-|   |   |   |       |       |   `-- mod.rs
+|   |   |   |       |       |   |-- mod.rs
+|   |   |   |       |       |   `-- mode_filter_impl.rs
 |   |   |   |       |       |-- mod.rs
 |   |   |   |       |       `-- ops.rs
 |   |   |   |       |-- geometry/
@@ -4314,6 +4353,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |-- ops.rs
 |   |   |   |       |   |-- palette8/
 |   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- autocontrast_impl.rs
 |   |   |   |       |   |   |   |-- equalize_impl.rs
 |   |   |   |       |   |   |   |-- expand_impl.rs
 |   |   |   |       |   |   |   |-- invert_impl.rs
@@ -4324,6 +4364,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- expand.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   |-- neon/
+|   |   |   |       |   |   |   |-- autocontrast_impl.rs
 |   |   |   |       |   |   |   |-- equalize_impl.rs
 |   |   |   |       |   |   |   |-- invert_impl.rs
 |   |   |   |       |   |   |   |-- mod.rs
@@ -4331,12 +4372,14 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |   `-- solarize_impl.rs
 |   |   |   |       |   |   |-- ops.rs
 |   |   |   |       |   |   |-- sse2/
+|   |   |   |       |   |   |   |-- autocontrast_impl.rs
 |   |   |   |       |   |   |   |-- equalize_impl.rs
 |   |   |   |       |   |   |   |-- invert_impl.rs
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   |-- posterize_impl.rs
 |   |   |   |       |   |   |   `-- solarize_impl.rs
 |   |   |   |       |   |   `-- wasm_simd128/
+|   |   |   |       |   |       |-- autocontrast_impl.rs
 |   |   |   |       |   |       |-- equalize_impl.rs
 |   |   |   |       |   |       |-- invert_impl.rs
 |   |   |   |       |   |       |-- mod.rs
@@ -6380,6 +6423,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |   `-- thumbnail_impl.rs
 |   |   |   |       |   |   |-- helpers/
 |   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   |-- strategy.rs
 |   |   |   |       |   |   |   `-- streaming.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
@@ -7615,7 +7659,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- entropy.rs
 |   |   |   |-- materialization/
 |   |   |   |   |-- lifecycle.rs
-|   |   |   |   `-- palette_output.rs
+|   |   |   |   |-- palette_output.rs
+|   |   |   |   `-- receipts.rs
 |   |   |   |-- materialization.rs
 |   |   |   |-- metadata.rs
 |   |   |   |-- mode_boundary.rs
@@ -7735,7 +7780,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |-- pipeline.rs
 |   |   `-- raster/
 |   |       |-- buffer/
-|   |       |   `-- iterators.rs
+|   |       |   |-- iterators.rs
+|   |       |   `-- mutable.rs
 |   |       |-- buffer.rs
 |   |       |-- color/
 |   |       |   |-- blend.rs

@@ -27,6 +27,11 @@ impl Image {
             source_mode,
             method,
         )?;
+        if matches!(&palette, QuantizePalette::Other) {
+            return Err(PilError::TypeError(
+                "palette must be a supported Pillow-rs Image".to_owned(),
+            ));
+        }
         if let QuantizePalette::Image(palette_image) = &palette {
             if palette_image.mode_identity()? != Mode::ImagePalette8 {
                 return Err(PilError::ValueError("bad mode for palette image".to_owned()));

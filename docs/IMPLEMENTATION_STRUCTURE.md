@@ -203,6 +203,24 @@ identity that execution will consume, without translating through a string or
 an image-slash-star descriptor. Review these API signatures together with the
 Python parsing and codec adapters to verify the ownership boundary.
 
+#### Thin host bindings
+
+`pillow-rs` owns image-operation logic: mode-specific rules, support and
+strategy decisions, pixel algorithms, geometry, palette allocation, metadata
+transitions, and composition of image operations. `pillow-rs-py` and Python
+facades convert Python objects into typed inputs, invoke Python protocols or
+overrides when Pillow exposes them, and delegate image work to `pillow-rs`.
+They do not implement pixel algorithms, calculate operation LUTs or geometry,
+or choose mode-specific execution paths.
+
+Keep Python callback order observable. When a wrapper must call a public Python
+method, custom converter, iterator, or numeric protocol before or between core
+operations, retain those calls at the boundary and move the decisions and image
+work into typed core APIs. The binding should pass the resolved values and
+callback results to core; it should not reproduce the operation's rules around
+them. Record callback-dependent order beside the core entry point and keep the
+Python facade to argument adaptation, callback invocation, and delegation.
+
 ### 2.2. Physical pixel lanes
 
 The exact `DynamicImage` variant remains the sole mode identity. `Mode` owns the

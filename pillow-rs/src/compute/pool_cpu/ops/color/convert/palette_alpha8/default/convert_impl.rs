@@ -12,6 +12,15 @@ pub(crate) fn execute(
     palette: PaletteInput<'_>,
     target: Mode,
 ) -> Result<DynamicImage, PilError> {
+    if target == Mode::ImageLab8 {
+        return super::super::super::helpers::lab_target::execute(
+            source.width(),
+            source.height(),
+            source.pixels().map(|index| {
+                super::super::super::helpers::palette::color(index[0], palette)
+            }),
+        );
+    }
     // The PA-to-La/RGBa rows follow PA's RGB base mode and therefore use
     // opaque alpha. RGBX is a direct palette converter and keeps PA alpha.
     match target {

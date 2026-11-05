@@ -128,10 +128,30 @@ pub fn autocontrast_lut_from_histogram_and_counts(
 ///
 /// Returns [`PilError::OsError`] for alpha modes that Pillow does not support,
 /// or another [`PilError`] when mode detection fails.
+// TODO(pillow-rs#3ptb): Verify this lazy Rust API's mode/architecture route,
+// output, and fallback receipts in the frozen CPU matrix. Python ImageOps
+// composes the eager Histogram and Point paths for Pillow callback order.
 pub fn equalize(image: &Image) -> Result<Image, PilError> {
     let mode = mode_identity(image)?;
     OperationId::Equalize.support().for_mode(mode).validate_mode()?;
     Ok(Image::push_op(image, PipelineOp::Equalize))
+}
+
+/// Builds the Equalize lookup table from counts collected by a host wrapper.
+///
+/// The host can collect a histogram eagerly to preserve callback ordering;
+/// table arithmetic and mode admission remain in the Rust operation layer.
+#[doc(hidden)]
+pub fn equalize_lut_from_histogram(
+    image: &Image,
+    histogram: &[u32],
+) -> Result<Vec<u8>, PilError> {
+    let lut = crate::compute::pool_cpu::ops::imageops::helpers::histogram::
+        equalize_lut_from_histogram(histogram)
+        .ok_or_else(|| PilError::ValueError("invalid Equalize histogram length".into()))?;
+    let mode = mode_identity(image)?;
+    OperationId::Equalize.support().for_mode(mode).validate_mode()?;
+    Ok(lut)
 }
 
 /// Equalizes an image after validating an optional Pillow mask.
@@ -329,12 +349,27 @@ pub fn validate_colorize_mode(image: &Image) -> Result<(), PilError> {
     OperationId::Colorize.support().for_mode(mode).validate_mode()
 }
 
+/// Builds the three channel tables used by the Python ImageOps Colorize
+/// composition after the host has evaluated Pillow's dynamic range inputs.
+#[doc(hidden)]
+pub fn colorize_lut_from_range_lengths(
+    black: (u8, u8, u8),
+    white: (u8, u8, u8),
+    mid: Option<(u8, u8, u8)>,
+    lengths: (usize, usize, usize, usize),
+) -> Result<Vec<u8>, PilError> {
+    crate::compute::pool_cpu::ops::imageops::helpers::colorize::
+        lookup_table_from_range_lengths(black, white, mid, lengths)
+}
+
 /// Colorizes an `L` image by mapping black and white endpoints.
 ///
 /// # Errors
 ///
 /// Returns [`PilError::AssertionError`] when the source mode is not `"L"`, or
 /// another [`PilError`] when mode detection fails.
+// TODO(pillow-rs#3ptb): Verify this typed lazy API's native output and
+// mode/architecture receipts separately from Python wrapper callback order.
 pub fn colorize(
     image: &Image,
     black: (u8, u8, u8),

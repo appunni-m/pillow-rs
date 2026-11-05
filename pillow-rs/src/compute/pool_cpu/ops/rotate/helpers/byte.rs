@@ -2,7 +2,7 @@
 
 use crate::checked_dims::CheckedDims;
 use crate::compute::pool_cpu::ops::rotate::helpers::geometry::{
-    discrete_angle, rotate_geometry, Geometry,
+    discrete_angle, identity_contract, rotate_geometry, Geometry,
 };
 use crate::compute::pool_cpu::ops::rotate::helpers::nearest::{
     contiguous_three_byte_run_len, positive_step_in_bounds_span, fill_three_byte, fill_rgba,
@@ -20,7 +20,7 @@ where
     P: Pixel<Subpixel = u8>,
 {
     let dimensions = (image.width(), image.height());
-    if is_identity(request) {
+    if identity_contract(request) {
         return Ok(image.clone());
     }
     if let Some(degree) = discrete_angle(request) {
@@ -33,12 +33,6 @@ where
         }
     }
     execute_affine::<P, CHANNELS, FORCE_NEAREST, ALPHA>(image, request)
-}
-
-fn is_identity(request: RotateRequest) -> bool {
-    request.center.is_none()
-        && request.translate.is_none()
-        && request.angle.rem_euclid(360.0).abs() <= f64::EPSILON
 }
 
 fn execute_affine<P, const CHANNELS: usize, const FORCE_NEAREST: bool, const ALPHA: bool>(

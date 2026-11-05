@@ -76,6 +76,7 @@ where
         Mode::ImageLuma8 => Ok(DynamicImage::ImageLuma8(luma(source))),
         Mode::ImageLumaA8 => Ok(DynamicImage::ImageLumaA8(luma_alpha(source))),
         Mode::ImageRgb8 => Ok(DynamicImage::ImageRgb8(rgb(source))),
+        Mode::ImageRgbx8 => Ok(DynamicImage::ImageRgbx8(rgbx(source))),
         Mode::ImageRgba8 => Ok(DynamicImage::ImageRgba8(rgba(source))),
         Mode::ImageLaPremultiplied8 => Ok(DynamicImage::ImageLaPremultiplied8(
             premultiplied_luma_alpha(source),
@@ -213,6 +214,18 @@ where
     let mut output = RgbImage::new(source.width(), source.height());
     for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
         *destination = pixel.rgb8();
+    }
+    output
+}
+
+fn rgbx<P: HighDepthPixel>(source: &ImageBuffer<P, Vec<P::Subpixel>>) -> RgbaImage
+where
+    P::Subpixel: Primitive,
+{
+    let mut output = RgbaImage::new(source.width(), source.height());
+    for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
+        let [red, green, blue] = pixel.rgb8().0;
+        *destination = Rgba([red, green, blue, u8::MAX]);
     }
     output
 }

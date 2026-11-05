@@ -182,8 +182,6 @@ pub(super) fn transform_projective_generic(
     channels: usize,
     quad: bool,
 ) -> Result<Vec<u8>, PilError> {
-    let (src_w, src_h) = source_dimensions;
-    let fill_color = fill.unwrap_or((0, 0, 0, 255));
     let pixel_count = usize::try_from(dst_w)
         .ok()
         .and_then(|width| {
@@ -196,6 +194,52 @@ pub(super) fn transform_projective_generic(
         .checked_mul(channels)
         .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
     let mut out = vec![0u8; byte_count];
+    transform_projective_generic_into(
+        raw,
+        source_dimensions,
+        dst_w,
+        dst_h,
+        data,
+        filter,
+        fill,
+        channels,
+        quad,
+        &mut out,
+    )?;
+    Ok(out)
+}
+
+/// Apply the generic projective sampler into a caller-owned native output.
+pub(super) fn transform_projective_generic_into(
+    raw: &[u8],
+    source_dimensions: (u32, u32),
+    dst_w: u32,
+    dst_h: u32,
+    data: &[f64],
+    filter: &ResampleFilter,
+    fill: Option<(u8, u8, u8, u8)>,
+    channels: usize,
+    quad: bool,
+    out: &mut [u8],
+) -> Result<(), PilError> {
+    let (src_w, src_h) = source_dimensions;
+    let pixel_count = usize::try_from(dst_w)
+        .ok()
+        .and_then(|width| {
+            usize::try_from(dst_h)
+                .ok()
+                .and_then(|height| width.checked_mul(height))
+        })
+        .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
+    let byte_count = pixel_count
+        .checked_mul(channels)
+        .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
+    if out.len() != byte_count {
+        return Err(PilError::InternalError(
+            "Transform projective destination buffer shape mismatch".into(),
+        ));
+    }
+    let fill_color = fill.unwrap_or((0, 0, 0, 255));
     let nearest = matches!(filter, ResampleFilter::Nearest);
 
     for dy in 0..dst_h {
@@ -222,11 +266,11 @@ pub(super) fn transform_projective_generic(
         }
     }
 
-    Ok(out)
+    Ok(())
 }
 
 #[inline(always)]
-fn transform_mesh_source_coordinate(
+pub(super) fn transform_mesh_source_coordinate(
     coefficients: [f64; 8],
     local_x: f64,
     local_y: f64,
@@ -369,100 +413,256 @@ pub(super) fn transform_mesh_with_filter(
     filter: ResampleFilter,
     fill_is_none: bool,
 ) -> Result<Vec<u8>, PilError> {
-    let (sw, sh) = source_dimensions;
-    let fill_color = fill.unwrap_or((0, 0, 0, 255));
+    let output_len = mesh_output_len(dst_w, dst_h, channels)?;
+    let mut out = vec![0u8; output_len];
+    transform_mesh_with_filter_into(
+        raw,
+        source_dimensions,
+        dst_w,
+        dst_h,
+        mesh_data,
+        fill,
+        channels,
+        filter,
+        fill_is_none,
+        &mut out,
+    )?;
+    Ok(out)
+}
 
-    let output_len = usize::try_from(dst_w)
+/// Apply a complete MESH request into a caller-owned native output buffer.
+pub(super) fn transform_mesh_with_filter_into(
+    raw: &[u8],
+    source_dimensions: (u32, u32),
+    dst_w: u32,
+    dst_h: u32,
+    mesh_data: &[f64],
+    fill: Option<(u8, u8, u8, u8)>,
+    channels: usize,
+    filter: ResampleFilter,
+    fill_is_none: bool,
+    out: &mut [u8],
+) -> Result<(), PilError> {
+    let fill_color = fill.unwrap_or((0, 0, 0, 255));
+    if out.len() != mesh_output_len(dst_w, dst_h, channels)? {
+        return Err(PilError::InternalError(
+            "Transform MESH destination buffer shape mismatch".into(),
+        ));
+    }
+    let fill_bytes = [fill_color.0, fill_color.1, fill_color.2, fill_color.3];
+    for destination in out.chunks_exact_mut(channels) {
+        destination.copy_from_slice(&fill_bytes[..channels]);
+    }
+    for mesh in mesh_data.chunks_exact(12) {
+        transform_mesh_record_with_filter(
+            raw,
+            source_dimensions,
+            (dst_w, dst_h),
+            mesh,
+            out,
+            channels,
+            filter,
+            fill_is_none,
+        )?;
+    }
+    Ok(())
+}
+
+/// Applies one MESH record directly to an existing output buffer.
+///
+/// The caller initializes the output once and can then stream records into it
+/// while retaining the original source raster between host callbacks.
+pub(in crate::compute::pool_cpu::ops::transform) fn transform_mesh_record_with_filter(
+    raw: &[u8],
+    source_dimensions: (u32, u32),
+    destination_dimensions: (u32, u32),
+    mesh: &[f64],
+    output: &mut [u8],
+    channels: usize,
+    filter: ResampleFilter,
+    fill_is_none: bool,
+) -> Result<(), PilError> {
+    let (dst_w, dst_h) = destination_dimensions;
+    if mesh.len() != 12 || output.len() != mesh_output_len(dst_w, dst_h, channels)? {
+        return Err(PilError::InternalError(
+            "Transform MESH record or output shape mismatch".into(),
+        ));
+    }
+    let mesh: &[f64; 12] = mesh
+        .try_into()
+        .map_err(|_| PilError::InternalError("Transform MESH record shape mismatch".into()))?;
+    apply_mesh_record(
+        raw,
+        source_dimensions,
+        destination_dimensions,
+        mesh,
+        output,
+        channels,
+        filter,
+        fill_is_none,
+    );
+    Ok(())
+}
+
+/// Applies a host-shaped MESH record with QUAD coefficients already resolved.
+pub(in crate::compute::pool_cpu::ops::transform) fn transform_mesh_record_with_coefficients(
+    raw: &[u8],
+    source_dimensions: (u32, u32),
+    destination_dimensions: (u32, u32),
+    box_coordinates: (i64, i64, i64, i64),
+    coefficients: [f64; 8],
+    output: &mut [u8],
+    channels: usize,
+    filter: ResampleFilter,
+    fill_is_none: bool,
+) -> Result<(), PilError> {
+    let (dst_w, dst_h) = destination_dimensions;
+    if output.len() != mesh_output_len(dst_w, dst_h, channels)? {
+        return Err(PilError::InternalError(
+            "Transform MESH output shape mismatch".into(),
+        ));
+    }
+    apply_mesh_record_geometry(
+        raw,
+        source_dimensions,
+        destination_dimensions,
+        box_coordinates,
+        coefficients,
+        output,
+        channels,
+        filter,
+        fill_is_none,
+    );
+    Ok(())
+}
+
+fn apply_mesh_record(
+    raw: &[u8],
+    source_dimensions: (u32, u32),
+    destination_dimensions: (u32, u32),
+    mesh: &[f64; 12],
+    output: &mut [u8],
+    channels: usize,
+    filter: ResampleFilter,
+    fill_is_none: bool,
+) {
+    let Some((box_coordinates, coefficients)) = mesh_coefficients(mesh) else {
+        return;
+    };
+    apply_mesh_record_geometry(
+        raw,
+        source_dimensions,
+        destination_dimensions,
+        box_coordinates,
+        coefficients,
+        output,
+        channels,
+        filter,
+        fill_is_none,
+    );
+}
+
+fn apply_mesh_record_geometry(
+    raw: &[u8],
+    source_dimensions: (u32, u32),
+    destination_dimensions: (u32, u32),
+    box_coordinates: (i64, i64, i64, i64),
+    coefficients: [f64; 8],
+    output: &mut [u8],
+    channels: usize,
+    filter: ResampleFilter,
+    fill_is_none: bool,
+) {
+    let (dst_w, _) = destination_dimensions;
+    let (bx0, by0, bx1, by1) = clipped_mesh_box(box_coordinates, destination_dimensions);
+    if bx0 >= bx1 || by0 >= by1 {
+        return;
+    }
+    for destination_y in by0..by1 {
+        let local_y = (destination_y - by0) as f64 + 0.5;
+        for destination_x in bx0..bx1 {
+            let local_x = (destination_x - bx0) as f64 + 0.5;
+            // Preserve Geometry.c's fused arithmetic order. Folding the
+            // cross-term into local_x * local_y changes boundary truncation.
+            let (sx, sy) = transform_mesh_source_coordinate(coefficients, local_x, local_y);
+            let out_idx =
+                ((destination_y as usize * dst_w as usize) + destination_x as usize) * channels;
+            let destination = &mut output[out_idx..out_idx + channels];
+            if fill_is_none {
+                // Pillow streams mesh records into the same output. A failed
+                // sample clears the pixel only when fillcolor is omitted;
+                // with explicit fill, preserve any earlier record's pixel.
+                destination.fill(0);
+            }
+            transform_mesh_sample_pixel(
+                raw,
+                destination,
+                source_dimensions,
+                channels,
+                fill_is_none,
+                filter,
+                sx,
+                sy,
+            );
+        }
+    }
+}
+
+fn mesh_output_len(width: u32, height: u32, channels: usize) -> Result<usize, PilError> {
+    if channels == 0 {
+        return Err(PilError::InternalError(
+            "Transform MESH requires at least one channel".into(),
+        ));
+    }
+    usize::try_from(width)
         .ok()
         .and_then(|width| {
-            usize::try_from(dst_h)
+            usize::try_from(height)
                 .ok()
                 .and_then(|height| width.checked_mul(height))
         })
         .and_then(|pixels| pixels.checked_mul(channels))
-        .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
-    let fill_bytes = [fill_color.0, fill_color.1, fill_color.2, fill_color.3];
-    let mut out = vec![0u8; output_len];
-    for destination in out.chunks_exact_mut(channels) {
-        destination.copy_from_slice(&fill_bytes[..channels]);
+        .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))
+}
+
+fn mesh_coefficients(mesh: &[f64; 12]) -> Option<((i64, i64, i64, i64), [f64; 8])> {
+    let [x0, y0, x1, y1]: [f64; 4] = mesh[..4].try_into().ok()?;
+    let (x0_d, y0_d, x1_d, y1_d) = (x0 as i64, y0 as i64, x1 as i64, y1 as i64);
+    let width = x1_d.saturating_sub(x0_d);
+    let height = y1_d.saturating_sub(y0_d);
+    // Empty/inverted boxes contribute no pixels and cannot create an
+    // unbounded loop.
+    if width <= 0 || height <= 0 {
+        return None;
     }
+    let [x0, y0, x1, y1, x2, y2, x3, y3]: [f64; 8] = mesh[4..12].try_into().ok()?;
+    let inverse_width = 1.0 / width as f64;
+    let inverse_height = 1.0 / height as f64;
+    Some((
+        (x0_d, y0_d, x1_d, y1_d),
+        [
+            x0,
+            (x3 - x0) * inverse_width,
+            (x1 - x0) * inverse_height,
+            (x2 - x1 - x3 + x0) * inverse_width * inverse_height,
+            y0,
+            (y3 - y0) * inverse_width,
+            (y1 - y0) * inverse_height,
+            (y2 - y1 - y3 + y0) * inverse_width * inverse_height,
+        ],
+    ))
+}
 
-    // Process each mesh element
-    for mesh in mesh_data.chunks_exact(12) {
-        let x0_d = mesh[0] as i64;
-        let y0_d = mesh[1] as i64;
-        let x1_d = mesh[2] as i64;
-        let y1_d = mesh[3] as i64;
-        let width = x1_d.saturating_sub(x0_d);
-        let height = y1_d.saturating_sub(y0_d);
-        // Python computes these divisors before entering the C transform.
-        // Valid mesh boxes are positive; an empty/inverted box contributes no
-        // pixels here and, importantly, cannot create an unbounded loop.
-        if width <= 0 || height <= 0 {
-            continue;
-        }
-
-        let x0_s = mesh[4];
-        let y0_s = mesh[5];
-        let x1_s = mesh[6];
-        let y1_s = mesh[7];
-        let x2_s = mesh[8];
-        let y2_s = mesh[9];
-        let x3_s = mesh[10];
-        let y3_s = mesh[11];
-        let width_f = width as f64;
-        let height_f = height as f64;
-        let inverse_width = 1.0 / width_f;
-        let inverse_height = 1.0 / height_f;
-        let coefficients = [
-            x0_s,
-            (x3_s - x0_s) * inverse_width,
-            (x1_s - x0_s) * inverse_height,
-            (x2_s - x1_s - x3_s + x0_s) * inverse_width * inverse_height,
-            y0_s,
-            (y3_s - y0_s) * inverse_width,
-            (y1_s - y0_s) * inverse_height,
-            (y2_s - y1_s - y3_s + y0_s) * inverse_width * inverse_height,
-        ];
-
-        // ImagingGenericTransform clips the box, then passes coordinates
-        // relative to that clipped lower-left corner to the map function.
-        let bx0 = x0_d.max(0).min(i64::from(dst_w));
-        let by0 = y0_d.max(0).min(i64::from(dst_h));
-        let bx1 = x1_d.max(0).min(i64::from(dst_w));
-        let by1 = y1_d.max(0).min(i64::from(dst_h));
-        if bx0 >= bx1 || by0 >= by1 {
-            continue;
-        }
-
-        for destination_y in by0..by1 {
-            let local_y = (destination_y - by0) as f64 + 0.5;
-            for destination_x in bx0..bx1 {
-                let local_x = (destination_x - bx0) as f64 + 0.5;
-                // Pillow src/libImaging/Geometry.c quad_transform is compiled
-                // into two linear
-                // fused additions followed by a rounded x-product and a
-                // final fused y-product on this target. Keep the cross-term
-                // multiplication separate from the final `mul_add`; folding
-                // it into `local_x * local_y` changes boundary truncation.
-                let (sx, sy) = transform_mesh_source_coordinate(coefficients, local_x, local_y);
-                let out_idx =
-                    ((destination_y as usize * dst_w as usize) + destination_x as usize) * channels;
-                transform_mesh_sample_pixel(
-                    raw,
-                    &mut out[out_idx..out_idx + channels],
-                    (sw, sh),
-                    channels,
-                    fill_is_none,
-                    filter,
-                    sx,
-                    sy,
-                );
-            }
-        }
-    }
-
-    Ok(out)
+fn clipped_mesh_box(
+    (x0, y0, x1, y1): (i64, i64, i64, i64),
+    (dst_w, dst_h): (u32, u32),
+) -> (i64, i64, i64, i64) {
+    (
+        x0.max(0).min(i64::from(dst_w)),
+        y0.max(0).min(i64::from(dst_h)),
+        x1.max(0).min(i64::from(dst_w)),
+        y1.max(0).min(i64::from(dst_h)),
+    )
 }
 
 #[inline]

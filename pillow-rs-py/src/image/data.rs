@@ -325,10 +325,10 @@ impl PyImage {
                 coordinates.len()
             )));
         }
-        // Match PyO3's tuple extractor order while allowing __index__ hooks to
-        // run before acquiring an image borrow.
-        let x = coordinates.get_item(0)?.extract::<i32>()?;
-        let y = coordinates.get_item(1)?.extract::<i32>()?;
+        // Match Pillow's C-int range and error while allowing __index__ hooks
+        // to run in tuple order before acquiring an image borrow.
+        let x = c_int_from_python(&coordinates.get_item(0)?)?;
+        let y = c_int_from_python(&coordinates.get_item(1)?)?;
         let image = slf.bind(py).borrow();
         let image = &image.inner;
         let xy = image_coordinates_in_bounds(image, (x, y))?;

@@ -167,9 +167,12 @@ pub(super) fn op_output_dims(op: &PipelineOp, cur_w: u32, cur_h: u32) -> Option<
             fill,
             center,
             translate,
+            output_size,
             ..
-        } => gpu_rotate_affine(*angle, *expand, *fill, *center, *translate, cur_w, cur_h)
-            .map(|(_, dimensions)| dimensions),
+        } => (*output_size).or_else(|| {
+            gpu_rotate_affine(*angle, *expand, *fill, *center, *translate, cur_w, cur_h)
+                .map(|(_, dimensions)| dimensions)
+        }),
         PipelineOp::Thumbnail { w, h, .. } => gpu_thumbnail_output_dims(cur_w, cur_h, *w, *h),
         PipelineOp::Fit { w, h, .. } => Some((*w, *h)),
         PipelineOp::Transpose { method } => {

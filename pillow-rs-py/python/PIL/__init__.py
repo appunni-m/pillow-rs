@@ -35,6 +35,7 @@ from pillow_rs import imagedraw as ImageDraw
 from pillow_rs import imageenhance as ImageEnhance
 from pillow_rs import imagefilter as ImageFilter
 from pillow_rs import imagefont as ImageFont
+from pillow_rs import imagetext as ImageText
 from pillow_rs import imageops as ImageOps
 from pillow_rs import imagepalette as ImagePalette
 from pillow_rs import imagesequence as ImageSequence
@@ -65,6 +66,7 @@ for _name, _module in {
     "ImageEnhance": ImageEnhance,
     "ImageFilter": ImageFilter,
     "ImageFont": ImageFont,
+    "ImageText": ImageText,
     "ImageOps": ImageOps,
     "ImagePalette": ImagePalette,
     "ImageSequence": ImageSequence,
@@ -84,6 +86,7 @@ __all__ = [
     "ImageEnhance",
     "ImageFilter",
     "ImageFont",
+    "ImageText",
     "ImagePalette",
     "ImageStat",
     "ImageSequence",

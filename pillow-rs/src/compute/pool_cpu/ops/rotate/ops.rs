@@ -44,6 +44,8 @@ pub(crate) struct RotateRequest {
     pub(crate) fill: Option<(u8, u8, u8, u8)>,
     pub(crate) center: Option<(f64, f64)>,
     pub(crate) translate: Option<(f64, f64)>,
+    pub(crate) affine: Option<[f64; 6]>,
+    pub(crate) output_size: Option<(u32, u32)>,
     pub(crate) filter: ResampleFilter,
     pub(crate) nearest: bool,
 }
@@ -56,13 +58,26 @@ impl RotateRequest {
             fill: self.fill,
             center_bits: self.center.map(|(x, y)| (x.to_bits(), y.to_bits())),
             translate_bits: self.translate.map(|(x, y)| (x.to_bits(), y.to_bits())),
+            affine_bits: self.affine.map(|values| values.map(f64::to_bits)),
+            output_size: self.output_size,
             filter: filter_code(self.filter),
             nearest: self.nearest,
         }
     }
 
     fn from_pipeline(op: &PipelineOp) -> Result<Self, PilError> {
-        let PipelineOp::Rotate { angle, expand, fill, center, translate, filter, nearest } = op else {
+        let PipelineOp::Rotate {
+            angle,
+            expand,
+            fill,
+            center,
+            translate,
+            affine,
+            output_size,
+            filter,
+            nearest,
+        } = op
+        else {
             return Err(PilError::ValueError("expected Rotate op".into()));
         };
         Ok(Self {
@@ -71,6 +86,8 @@ impl RotateRequest {
             fill: *fill,
             center: *center,
             translate: *translate,
+            affine: *affine,
+            output_size: *output_size,
             filter: *filter,
             nearest: *nearest,
         })

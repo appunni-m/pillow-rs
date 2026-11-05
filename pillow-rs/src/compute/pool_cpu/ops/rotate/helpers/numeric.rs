@@ -2,7 +2,7 @@
 
 use crate::checked_dims::CheckedDims;
 use crate::compute::pool_cpu::ops::rotate::helpers::geometry::{
-    discrete_angle, rotate_geometry,
+    discrete_angle, identity_contract, rotate_geometry,
 };
 use crate::compute::pool_cpu::ops::rotate::ops::RotateRequest;
 use crate::error::PilError;
@@ -38,7 +38,7 @@ where
     P: Pixel<Subpixel = S>,
     S: NativeSample,
 {
-    if is_identity(request) {
+    if identity_contract(request) {
         return Ok(image.clone());
     }
     if let Some(degree) = discrete_angle(request) {
@@ -53,12 +53,6 @@ where
         return rotate_90_non_expand::<P, S, CHANNELS>(image, degree, request.fill);
     }
     execute_affine::<P, S, CHANNELS, FORCE_NEAREST, ALPHA>(image, request)
-}
-
-fn is_identity(request: RotateRequest) -> bool {
-    request.center.is_none()
-        && request.translate.is_none()
-        && request.angle.rem_euclid(360.0).abs() <= f64::EPSILON
 }
 
 fn execute_affine<P, S, const CHANNELS: usize, const FORCE_NEAREST: bool, const ALPHA: bool>(

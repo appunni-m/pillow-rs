@@ -35,8 +35,7 @@ const TARGETS: &[Mode] = &[
     Mode::ImageF32,
 ];
 // This row declares Pillow's direct CMYK outputs and RGB-derived target
-// results; LAB remains an explicit RGBA/ImageCms composition. CMYK kernels
-// write final outputs directly from native samples.
+// results. CMYK kernels write final outputs directly from native samples.
 const CORE_ONLY_TARGETS: &[Mode] = &[];
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: TARGETS,

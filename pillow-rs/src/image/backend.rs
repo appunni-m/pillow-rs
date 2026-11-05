@@ -62,11 +62,15 @@ impl Image {
         }
         let preserves_palette = ops.preserves_palette();
         let source_format_suppressed = ops.source_format_suppressed();
+        let source_info_suppressed = ops.source_info_suppressed();
         let mut rebuilt_ops =
             PipelineOps::from_vec_with_origins(flattened_ops, operation_origins)
                 .with_palette_preservation(preserves_palette);
         if source_format_suppressed {
             rebuilt_ops.suppress_source_format();
+        }
+        if source_info_suppressed {
+            rebuilt_ops.suppress_source_info();
         }
         *ops = rebuilt_ops;
         *backend = Some(b);

@@ -5,6 +5,7 @@ pub(crate) mod binary;
 pub(crate) mod high_depth;
 pub(crate) mod four_byte_layout;
 pub(crate) mod four_byte_to_luma_alpha;
+pub(crate) mod lab_target;
 pub(crate) mod luma8;
 pub(crate) mod luma16;
 pub(crate) mod matrix;

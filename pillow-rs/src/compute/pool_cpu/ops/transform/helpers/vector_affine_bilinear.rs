@@ -14,6 +14,43 @@ pub(crate) fn execute<const CHANNELS: usize, const ALPHA: bool>(
     source_dimensions: (u32, u32),
     request: TransformRequest<'_>,
 ) -> Result<Vec<u8>, PilError> {
+    let (source_layout, destination, affine) =
+        prepare::<CHANNELS>(source, source_dimensions, request)?;
+    let mut output = destination.alloc_buffer();
+    execute_pixels::<CHANNELS, ALPHA>(
+        source,
+        source_layout,
+        destination,
+        affine,
+        normalize_fill::<CHANNELS>(request.fill),
+        &mut output,
+    )?;
+    Ok(output)
+}
+
+pub(crate) fn execute_into<const CHANNELS: usize, const ALPHA: bool>(
+    source: &[u8],
+    source_dimensions: (u32, u32),
+    request: TransformRequest<'_>,
+    output: &mut [u8],
+) -> Result<(), PilError> {
+    let (source_layout, destination, affine) =
+        prepare::<CHANNELS>(source, source_dimensions, request)?;
+    execute_pixels::<CHANNELS, ALPHA>(
+        source,
+        source_layout,
+        destination,
+        affine,
+        normalize_fill::<CHANNELS>(request.fill),
+        output,
+    )
+}
+
+fn prepare<const CHANNELS: usize>(
+    source: &[u8],
+    source_dimensions: (u32, u32),
+    request: TransformRequest<'_>,
+) -> Result<(CheckedDims, CheckedDims, [f64; 6]), PilError> {
     if CHANNELS == 0 || CHANNELS > 4 {
         return Err(PilError::InternalError(
             "Transform bilinear kernel has an invalid native channel count".into(),
@@ -42,14 +79,7 @@ pub(crate) fn execute<const CHANNELS: usize, const ALPHA: bool>(
         ));
     }
     let destination = CheckedDims::new(request.width, request.height, CHANNELS as u8)?;
-    let fill = normalize_fill::<CHANNELS>(request.fill);
-    execute_pixels::<CHANNELS, ALPHA>(
-        source,
-        source_layout,
-        destination,
-        [*a, *b, *c, *d, *e, *f],
-        fill,
-    )
+    Ok((source_layout, destination, [*a, *b, *c, *d, *e, *f]))
 }
 
 fn normalize_fill<const CHANNELS: usize>(
@@ -69,8 +99,13 @@ fn execute_pixels<const CHANNELS: usize, const ALPHA: bool>(
     destination: CheckedDims,
     affine: [f64; 6],
     fill: (u8, u8, u8, u8),
-) -> Result<Vec<u8>, PilError> {
-    let mut output = destination.alloc_buffer();
+    output: &mut [u8],
+) -> Result<(), PilError> {
+    if output.len() != destination.total_bytes() {
+        return Err(PilError::InternalError(
+            "Transform bilinear destination buffer shape mismatch".into(),
+        ));
+    }
     let alpha_channel = ALPHA.then_some(CHANNELS - 1);
     let sampler = BilinearSampler {
         source,
@@ -136,7 +171,7 @@ fn execute_pixels<const CHANNELS: usize, const ALPHA: bool>(
     crate::compute::record_pipeline_operation_path("vector");
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    Ok(output)
+    Ok(())
 }
 
 struct BilinearSampler<'a> {

@@ -462,6 +462,7 @@ impl Image {
         match self {
             Image::Loaded(data) => data.exif.clone().unwrap_or_default(),
             Image::Paletted(data) => data.exif.clone().unwrap_or_default(),
+            Image::Pipeline { ops, .. } if ops.source_info_suppressed() => Vec::new(),
             Image::Pipeline { source, ops, .. } => match ops.palette_output() {
                 Some(output)
                     if matches!(

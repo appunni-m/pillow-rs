@@ -45,7 +45,7 @@ fn transform_affine_f32_pixels(
     affine: [f64; 6],
     filter: &ResampleFilter,
     fill_word: f32,
-    output: &mut [f32],
+    output: &mut [u8],
 ) {
     let (src_w, src_h) = source_dimensions;
     let (dst_w, dst_h) = destination_dimensions;
@@ -82,7 +82,10 @@ fn transform_affine_f32_pixels(
                 let ix = sx as i64;
                 let iy = sy as i64;
                 if ix >= 0 && ix < src_w_i && iy >= 0 && iy < src_h_i {
-                    output[output_index] = source[(iy as usize) * src_w as usize + ix as usize];
+                    let start = output_index * 4;
+                    output[start..start + 4].copy_from_slice(
+                        &source[(iy as usize) * src_w as usize + ix as usize].to_le_bytes(),
+                    );
                 }
                 continue;
             }
@@ -110,7 +113,9 @@ fn transform_affine_f32_pixels(
                         source[y1 * src_w as usize + x1],
                         dx_fraction,
                     );
-                    output[output_index] = (bottom - top).mul_add(dy_fraction, top) as f32;
+                    let start = output_index * 4;
+                    output[start..start + 4]
+                        .copy_from_slice(&((bottom - top).mul_add(dy_fraction, top) as f32).to_le_bytes());
                 }
                 ResampleFilter::Bicubic => {
                     let x = floor_x - 1;
@@ -131,12 +136,20 @@ fn transform_affine_f32_pixels(
                         ];
                         rows[row as usize] = affine_f32_bicubic_horizontal(samples, dx_fraction);
                     }
-                    output[output_index] = affine_f32_bicubic_vertical(rows, dy_fraction) as f32;
+                    let start = output_index * 4;
+                    output[start..start + 4].copy_from_slice(
+                        &(affine_f32_bicubic_vertical(rows, dy_fraction) as f32).to_le_bytes(),
+                    );
                 }
                 // Image.transform accepts only nearest, bilinear, and bicubic
                 // filters. Keep an internal fallback deterministic if a direct
                 // Rust caller constructs another descriptor.
-                _ => output[output_index] = source.first().copied().unwrap_or(fill_word),
+                _ => {
+                    let start = output_index * 4;
+                    output[start..start + 4].copy_from_slice(
+                        &source.first().copied().unwrap_or(fill_word).to_le_bytes(),
+                    );
+                }
             }
         }
     }
@@ -160,6 +173,45 @@ pub(in crate::compute::pool_cpu::ops::transform) fn transform_affine_f32(
     filter: &ResampleFilter,
     fill: Option<(u8, u8, u8, u8)>,
 ) -> Result<Vec<u8>, PilError> {
+    let output_len = usize::try_from(dst_w)
+        .ok()
+        .and_then(|width| {
+            usize::try_from(dst_h)
+                .ok()
+                .and_then(|height| width.checked_mul(height))
+        })
+        .and_then(|pixels| pixels.checked_mul(4))
+        .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
+    let mut output = vec![0; output_len];
+    let fill_word = fill
+        .map(|color| f32::from_le_bytes([color.0, color.1, color.2, color.3]))
+        .unwrap_or(0.0);
+    for pixel in output.chunks_exact_mut(4) {
+        pixel.copy_from_slice(&fill_word.to_le_bytes());
+    }
+    transform_affine_f32_into(
+        raw,
+        source_dimensions,
+        dst_w,
+        dst_h,
+        data,
+        filter,
+        fill,
+        &mut output,
+    )?;
+    Ok(output)
+}
+
+pub(in crate::compute::pool_cpu::ops::transform) fn transform_affine_f32_into(
+    raw: &[u8],
+    source_dimensions: (u32, u32),
+    dst_w: u32,
+    dst_h: u32,
+    data: &[f64],
+    filter: &ResampleFilter,
+    fill: Option<(u8, u8, u8, u8)>,
+    output: &mut [u8],
+) -> Result<(), PilError> {
     let (src_w, src_h) = source_dimensions;
     let source_len = usize::try_from(src_w)
         .ok()
@@ -169,7 +221,7 @@ pub(in crate::compute::pool_cpu::ops::transform) fn transform_affine_f32(
                 .and_then(|height| width.checked_mul(height))
         })
         .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
-    let output_len = usize::try_from(dst_w)
+    let output_pixels = usize::try_from(dst_w)
         .ok()
         .and_then(|width| {
             usize::try_from(dst_h)
@@ -177,6 +229,14 @@ pub(in crate::compute::pool_cpu::ops::transform) fn transform_affine_f32(
                 .and_then(|height| width.checked_mul(height))
         })
         .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
+    let output_len = output_pixels
+        .checked_mul(4)
+        .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
+    if output.len() != output_len {
+        return Err(PilError::InternalError(
+            "F affine destination buffer shape mismatch".into(),
+        ));
+    }
     let source = raw
         .chunks_exact(4)
         .take(source_len)
@@ -191,7 +251,6 @@ pub(in crate::compute::pool_cpu::ops::transform) fn transform_affine_f32(
     let fill_word = fill
         .map(|color| f32::from_le_bytes([color.0, color.1, color.2, color.3]))
         .unwrap_or(0.0);
-    let mut output = vec![fill_word; output_len];
     transform_affine_f32_pixels(
         &source,
         (src_w, src_h),
@@ -199,14 +258,10 @@ pub(in crate::compute::pool_cpu::ops::transform) fn transform_affine_f32(
         [data[0], data[1], data[2], data[3], data[4], data[5]],
         filter,
         fill_word,
-        &mut output,
+        output,
     );
 
-    let bytes = output
-        .into_iter()
-        .flat_map(f32::to_le_bytes)
-        .collect::<Vec<_>>();
-    Ok(bytes)
+    Ok(())
 }
 
 /// Sample one FLOAT32 word with Pillow's generic-transform filter contract.

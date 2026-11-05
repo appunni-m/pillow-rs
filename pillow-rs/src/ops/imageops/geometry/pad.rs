@@ -388,7 +388,10 @@ fn pad_with_resolved_preflight(
         && fill.color_was_none
         && centering == (0.5, 0.5)
     {
-        return pad(image, w, h, None, color, centering).map(|result| (result, false));
+        return pad(image, w, h, None, color, centering).map(|mut result| {
+            result.suppress_pipeline_source_info();
+            (result, false)
+        });
     }
     let op = if let Some(position) = position {
         PipelineOp::PadPositioned {
@@ -419,6 +422,7 @@ fn pad_with_resolved_preflight(
         }
     };
     let mut output = Image::push_op(image, op);
+    output.suppress_pipeline_source_info();
     if let Some((palette, alpha)) = fill.output_palette {
         output.set_pipeline_output_palette(Some(palette), alpha);
     }
@@ -468,6 +472,7 @@ pub fn pad(
     color: Option<(u8, u8, u8, u8)>,
     centering: (f64, f64),
 ) -> Result<Image, PilError> {
+    let geometry = pad_geometry_preflight(image, w, h)?;
     let filter = parse_resample(filter)?;
     if w > 0 && h > 0 && image.size()? == (w, h) {
         // `ImageOps.pad` returns an independent copy when no resize or border
@@ -475,7 +480,7 @@ pub fn pad(
         // identity placement work, including callers below the Python facade.
         return Ok(image.copy());
     }
-    Ok(Image::push_op(
+    let mut output = Image::push_op(
         image,
         PipelineOp::Pad {
             w,
@@ -484,7 +489,11 @@ pub fn pad(
             color,
             centering,
         },
-    ))
+    );
+    if geometry.containment_axes != Some((false, false)) {
+        output.suppress_pipeline_source_info();
+    }
+    Ok(output)
 }
 
 /// `ImageOps.pad` with filter and centering validation owned by core.

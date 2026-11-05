@@ -398,6 +398,6 @@ fn to_f32(source: &Samples) -> RgbaImage {
 }
 
 #[inline]
-fn clip(sample: u16) -> u8 {
+pub(crate) fn clip(sample: u16) -> u8 {
     sample.min(u16::from(u8::MAX)) as u8
 }

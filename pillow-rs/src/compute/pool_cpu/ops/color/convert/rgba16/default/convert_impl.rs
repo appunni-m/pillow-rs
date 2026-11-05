@@ -3,10 +3,21 @@
 use crate::error::PilError;
 use crate::pipeline::DitherMethod;
 use crate::raster::{DynamicImage, ImageBuffer, Mode, Rgba};
+use super::super::super::helpers::high_depth::HighDepthPixel;
 
 type Source = ImageBuffer<Rgba<u16>, Vec<u16>>;
 
 pub(crate) fn execute(source: &Source, target: Mode) -> Result<DynamicImage, PilError> {
+    if target == Mode::ImageLab8 {
+        return super::super::super::helpers::lab_target::execute(
+            source.width(),
+            source.height(),
+            source.pixels().map(|pixel| {
+                let rgba = pixel.rgba8();
+                [rgba[0], rgba[1], rgba[2]]
+            }),
+        );
+    }
     if super::super::super::helpers::luma16::is_luma16_target(target) {
         return super::super::super::helpers::high_depth::execute_i16(source, target);
     }

@@ -15,7 +15,9 @@
 //! Mode-owned Bitmap/Text and Default/SIMD geometry writers preserve omitted
 //! physical lanes using the same mode-specific sidecar. TODO(pillow-rs#3ptb):
 //! verify I;16, PA L-mask, RGBa PREBLEND, and public Bitmap fast-route outputs
-//! in parity; finish direct Text ink and palette/error-order review.
+//! in parity; verify direct Text output and selected-route receipts.
+//! The five internal high-depth modes report an explicit ValueError rejection
+//! because no byte-mask Bitmap/Text strategy is implemented for them.
 //! Pillow 12.2's `ImagingFill2` confirms I;16 L masks blend both sample bytes,
 //! while 1/RGBA/RGBa masks step through the raw row byte prefix; RGBa reads
 //! alpha and applies PREBLEND. Draw support declares the compatible
@@ -24,9 +26,12 @@
 //! Source tracing confirms the queued child receipt is Paste; route parity
 //! remains TODO. Text masks are dispatched without an expanded intermediate
 //! buffer; parity remains pending. The Python facade and direct PyO3 Bitmap
-//! entry load the mask before fill parsing/palette resolution; remaining
-//! direct Text/Bitmap and eager native Bitmap source/fault review is pending.
-//! TODO(pillow-rs#3ptb): finish that source review and fault-contract pass.
+//! entry load the mask before fill parsing/palette resolution. Bitmap ordering
+//! is source-reviewed: both resolve fill before coordinates, then core validates
+//! the mask and selects its declared strategy. The RGB and CMYK eager paths run
+//! only after that selection. Direct Text resolves fill and conditional stroke
+//! ink in the Pillow drawing context before line layout; exact output, callback,
+//! fault, and route receipts remain parity work.
 
 use crate::compute::{Architecture, Backend, ExecutionContext};
 use crate::compute::registry::support::{
@@ -65,8 +70,6 @@ const DRAW_INPUTS: &[crate::compute::registry::support::InputContract] = &[
         embedded_color_rejection: "Embedded color supported only in RGB and RGBA modes",
     },
 ];
-const NO_ARCHITECTURES: &[ImplementationSupport] = &[];
-
 const fn draw_vector_architectures(mode: Mode) -> [ImplementationSupport; 3] {
     [
         ImplementationSupport::cpu(
@@ -238,32 +241,32 @@ impl PreparedDraw<'_> {
 }
 
 pub(crate) fn mode_support(mode: Mode) -> ModeSupport {
-    let architectures = match mode {
-        Mode::One => &ONE_ARCHITECTURES,
-        Mode::ImageLuma8 => &LUMA8_ARCHITECTURES,
-        Mode::ImageLumaA8 => &LUMA_A8_ARCHITECTURES,
-        Mode::ImageLaPremultiplied8 => &LA_PREMULTIPLIED8_ARCHITECTURES,
-        Mode::ImagePalette8 => &PALETTE8_ARCHITECTURES,
-        Mode::ImagePaletteAlpha8 => &PALETTE_ALPHA8_ARCHITECTURES,
-        Mode::ImageRgb8 => &RGB8_ARCHITECTURES,
-        Mode::ImageRgba8 => &RGBA8_ARCHITECTURES,
-        Mode::ImageRgbPremultiplied8 => &RGB_PREMULTIPLIED8_ARCHITECTURES,
-        Mode::ImageRgbx8 => &RGBX8_ARCHITECTURES,
-        Mode::ImageCmyk8 => &CMYK8_ARCHITECTURES,
-        Mode::ImageYCbCr8 => &YCBCR8_ARCHITECTURES,
-        Mode::ImageLab8 => &LAB8_ARCHITECTURES,
-        Mode::ImageHsv8 => &HSV8_ARCHITECTURES,
-        Mode::ImageI32 => &I32_ARCHITECTURES,
-        Mode::ImageF32 => &F32_ARCHITECTURES,
-        Mode::ImageI16
-        | Mode::ImageI16L
-        | Mode::ImageI16B
-        | Mode::ImageI16N
-        | Mode::ImageLumaA16
+    let architectures: Option<&[ImplementationSupport]> = match mode {
+        Mode::One => Some(&ONE_ARCHITECTURES),
+        Mode::ImageLuma8 => Some(&LUMA8_ARCHITECTURES),
+        Mode::ImageLumaA8 => Some(&LUMA_A8_ARCHITECTURES),
+        Mode::ImageLaPremultiplied8 => Some(&LA_PREMULTIPLIED8_ARCHITECTURES),
+        Mode::ImagePalette8 => Some(&PALETTE8_ARCHITECTURES),
+        Mode::ImagePaletteAlpha8 => Some(&PALETTE_ALPHA8_ARCHITECTURES),
+        Mode::ImageRgb8 => Some(&RGB8_ARCHITECTURES),
+        Mode::ImageRgba8 => Some(&RGBA8_ARCHITECTURES),
+        Mode::ImageRgbPremultiplied8 => Some(&RGB_PREMULTIPLIED8_ARCHITECTURES),
+        Mode::ImageRgbx8 => Some(&RGBX8_ARCHITECTURES),
+        Mode::ImageCmyk8 => Some(&CMYK8_ARCHITECTURES),
+        Mode::ImageYCbCr8 => Some(&YCBCR8_ARCHITECTURES),
+        Mode::ImageLab8 => Some(&LAB8_ARCHITECTURES),
+        Mode::ImageHsv8 => Some(&HSV8_ARCHITECTURES),
+        Mode::ImageI32 => Some(&I32_ARCHITECTURES),
+        Mode::ImageF32 => Some(&F32_ARCHITECTURES),
+        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => Some(&[]),
+        Mode::ImageLumaA16
         | Mode::ImageRgb16
         | Mode::ImageRgba16
         | Mode::ImageRgb32F
-        | Mode::ImageRgba32F => NO_ARCHITECTURES,
+        | Mode::ImageRgba32F => None,
+    };
+    let Some(architectures) = architectures else {
+        return unsupported_mode(mode);
     };
     ModeSupport::cpu(
         OperationId::Draw,
@@ -272,6 +275,14 @@ pub(crate) fn mode_support(mode: Mode) -> ModeSupport {
         DRAW_INPUTS,
         architectures,
     )
+}
+
+pub(crate) fn unsupported_mode(mode: Mode) -> ModeSupport {
+    ModeSupport::Rejected {
+        mode,
+        reason: "unsupported image mode",
+        kind: crate::compute::registry::support::RejectionKind::ValueError,
+    }
 }
 
 /// Selects the exact raster-mode strategy for direct Bitmap execution.
@@ -299,7 +310,6 @@ pub(crate) fn select_bitmap_strategy(
             bitmap_mask_mode: Some(bitmap_mask_mode),
             embedded_color: None,
             text_mask_kind: None,
-            text_fill_is_integer: None,
             text_ink: None,
         },
     )
@@ -313,7 +323,6 @@ pub(crate) fn select_text_strategy(
     context_mode: Mode,
     embedded_color: bool,
     text_mask_kind: DrawTextMaskKind,
-    text_fill_is_integer: bool,
     text_ink: Option<i64>,
     palette: PaletteKnowledge,
 ) -> Result<StrategySelection, PilError> {
@@ -329,7 +338,6 @@ pub(crate) fn select_text_strategy(
             bitmap_mask_mode: None,
             embedded_color: Some(embedded_color),
             text_mask_kind: Some(text_mask_kind),
-            text_fill_is_integer: Some(text_fill_is_integer),
             text_ink,
         },
     )
@@ -579,7 +587,6 @@ fn prepare_mode(
             bitmap_mask_mode: None,
             embedded_color: None,
             text_mask_kind: None,
-            text_fill_is_integer: None,
             text_ink: None,
         }
     };

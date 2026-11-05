@@ -2,7 +2,7 @@ use super::TransformFill;
 use crate::error::PilError;
 use crate::raster::Mode;
 
-type TransformFillResult = ((u8, u8, u8, u8), Option<u8>);
+type TransformFillResult = ((u8, u8, u8, u8), Option<u8>, Option<Vec<u8>>);
 
 fn transform_component(value: i64) -> Result<u8, PilError> {
     u8::try_from(value).map_err(|_| PilError::ValueError("bytes must be in range(0, 256)".into()))
@@ -51,7 +51,8 @@ fn transform_fill_arity_error(mode: Mode) -> PilError {
     PilError::TypeError(message.into())
 }
 
-fn transform_float_scalar_error(mode: Mode) -> PilError {
+fn transform_scalar_type_error(mode: Mode) -> PilError {
+    // Pillow's getink separates one-band scalar faults from packed colors.
     let message = match mode {
         Mode::One
         | Mode::ImageLuma8
@@ -180,7 +181,7 @@ fn transform_components_fill(
         | Mode::ImageRgba16
         | Mode::ImageRgba32F => rgba_component_fill(mode, values)?,
     };
-    Ok((fill, default_palette_fill))
+    Ok((fill, default_palette_fill, None))
 }
 
 fn transform_palette_components(
@@ -190,7 +191,7 @@ fn transform_palette_components(
     match values {
         [value] => {
             let index = (*value).clamp(0, i64::from(u8::MAX)) as u8;
-            Ok(((index, 0, 0, 255), Some(index)))
+            Ok(((index, 0, 0, 255), Some(index), None))
         }
         [red, green, blue] => {
             let _ = (
@@ -198,20 +199,28 @@ fn transform_palette_components(
                 transform_component(*green)?,
                 transform_component(*blue)?,
             );
-            Ok(((0, 0, 0, 255), default_palette_fill))
+            Ok((
+                (0, 0, 0, 255),
+                default_palette_fill,
+                Some(vec![*red as u8, *green as u8, *blue as u8]),
+            ))
         }
         [red, green, blue, alpha] => {
+            if *alpha != i64::from(u8::MAX) {
+                return Err(PilError::ValueError(
+                    "cannot add non-opaque RGBA color to RGB palette".into(),
+                ));
+            }
             let _ = (
                 transform_component(*red)?,
                 transform_component(*green)?,
                 transform_component(*blue)?,
             );
-            if transform_component(*alpha)? != 255 {
-                return Err(PilError::ValueError(
-                    "cannot add non-opaque RGBA color to RGB palette".into(),
-                ));
-            }
-            Ok(((0, 0, 0, 255), default_palette_fill))
+            Ok((
+                (0, 0, 0, 255),
+                default_palette_fill,
+                Some(vec![*red as u8, *green as u8, *blue as u8]),
+            ))
         }
         _ => Err(transform_fill_arity_error(Mode::ImagePalette8)),
     }
@@ -339,10 +348,10 @@ pub(crate) fn public_transform_fill(
         // Image.transform creates an uninitialized image when no fill
         // color is supplied. The native transform then leaves exposed
         // pixels zeroed, including alpha, rather than using opaque black.
-        None => Ok(((0, 0, 0, 0), default_palette_fill)),
+        None => Ok(((0, 0, 0, 0), default_palette_fill, None)),
         Some(TransformFill::Scalar(value)) if palette_mode => {
             let index = value.clamp(0, i64::from(u8::MAX)) as u8;
-            Ok(((index, 0, 0, 255), Some(index)))
+            Ok(((index, 0, 0, 255), Some(index), None))
         }
         Some(TransformFill::Scalar(value))
             if matches!(
@@ -351,7 +360,7 @@ pub(crate) fn public_transform_fill(
             ) =>
         {
             let (luma, lane_one, lane_two, alpha) = packed_transform_scalar(value);
-            Ok(((luma, alpha, lane_one, lane_two), None))
+            Ok(((luma, alpha, lane_one, lane_two), None, None))
         }
         Some(TransformFill::Scalar(value)) => {
             let fill = match mode {
@@ -366,10 +375,22 @@ pub(crate) fn public_transform_fill(
                 }
                 _ => packed_transform_scalar(value),
             };
-            Ok((fill, None))
+            Ok((fill, None, None))
         }
         Some(TransformFill::Components(values)) => {
             transform_components_fill(mode, &values, default_palette_fill)
+        }
+        Some(TransformFill::PaletteComponents(values)) if palette_mode => {
+            let [red, green, blue] =
+                crate::ops::imageops::resolve_palette_tuple_bytes(&values)?;
+            Ok((
+                (0, 0, 0, u8::MAX),
+                default_palette_fill,
+                Some(vec![red, green, blue]),
+            ))
+        }
+        Some(TransformFill::PaletteComponents(_)) => {
+            Err(PilError::TypeError("color must be int or tuple".into()))
         }
         Some(TransformFill::Name(name)) => {
             // Color parsing and mode conversion belong to core. Pillow's
@@ -377,27 +398,34 @@ pub(crate) fn public_transform_fill(
             // palette and rasterizes them as index zero.
             let (r, g, b, a) = crate::color::parse_color_str_unclamped(&name)?;
             if palette_mode {
-                return Ok(((0, 0, 0, 255), default_palette_fill));
+                let palette = vec![
+                    transform_component(i64::from(r))?,
+                    transform_component(i64::from(g))?,
+                    transform_component(i64::from(b))?,
+                ];
+                return Ok((
+                    (0, 0, 0, 255),
+                    default_palette_fill,
+                    Some(palette),
+                ));
             }
             let color = crate::color::getcolor_for_mode(r, g, b, a, mode);
-            Ok((transform_color_value_fill(mode, color)?, None))
+            Ok((transform_color_value_fill(mode, color)?, None, None))
         }
         Some(TransformFill::FloatingScalar(value)) if mode == Mode::ImageF32 => {
-            Ok((packed_transform_float64(value), None))
+            Ok((packed_transform_float64(value), None, None))
         }
-        Some(TransformFill::FloatingScalar(_)) => Err(transform_float_scalar_error(mode)),
+        Some(TransformFill::FloatingScalar(_)) => Err(transform_scalar_type_error(mode)),
         Some(TransformFill::FloatingComponents(values)) if mode == Mode::ImageF32 => {
             match values.as_slice() {
-                [value] => Ok((packed_transform_float64(*value), None)),
+                [value] => Ok((packed_transform_float64(*value), None, None)),
                 _ => Err(transform_fill_arity_error(mode)),
             }
         }
         Some(TransformFill::FloatingComponents(_)) => Err(PilError::TypeError(
             "'float' object cannot be interpreted as an integer".into(),
         )),
-        Some(TransformFill::Invalid) => {
-            Err(PilError::TypeError("color must be int or tuple".into()))
-        }
+        Some(TransformFill::Invalid) => Err(transform_scalar_type_error(mode)),
         Some(TransformFill::InvalidList) => Err(transform_list_error(mode)),
     }
 }

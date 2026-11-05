@@ -32,6 +32,7 @@ pub(crate) use layout::getbbox_binary;
 pub(crate) use layout::{
     getbbox, getbbox_with_options, getlength, getlength_and_bbox, getlength_with_options,
     getmetrics, native_face_info, native_getlength_26dot6, native_getsize,
+    validate_basic_layout_options,
 };
 #[cfg(feature = "test-api")]
 pub(crate) use render::render_text_binary;

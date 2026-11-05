@@ -1,4 +1,6 @@
 //! P-mode support declaration and architecture selection for RemapPalette.
+// TODO(pillow-rs#3ptb): verify index output, palette metadata, empty input,
+// and Default/vector selection receipts in the frozen CPU parity matrix.
 
 use crate::compute::{Architecture, ExecutionContext};
 use crate::compute::registry::support::{
@@ -38,7 +40,7 @@ impl Prepared<'_> {
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         let bytes = match self.selection.implementation.architecture {
             Architecture::Default => {
-                super::super::helpers::remap_palette::scalar(self.source.as_raw(), self.dest_map)
+                super::default::remap_palette_impl::execute(self.source, self.dest_map)
             }
             Architecture::Sse2 => super::sse2::remap_palette_impl::execute(
                 self.source.as_raw(),

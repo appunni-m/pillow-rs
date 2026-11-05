@@ -99,7 +99,7 @@ pub(crate) fn getbbox_binary(
     bbox_from_run_with_flags(font, text, TGT_MONO)
 }
 
-pub(super) fn validate_basic_layout_options(
+pub(crate) fn validate_basic_layout_options(
     options: &ImageFontTextOptions,
 ) -> Result<(), PilError> {
     if options.direction.is_some()

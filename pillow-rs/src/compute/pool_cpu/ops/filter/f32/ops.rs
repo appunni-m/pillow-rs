@@ -97,6 +97,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId)
         OperationId::Filter5x5 => rejected(Mode::ImageF32),
         OperationId::GaussianBlur => rejected(Mode::ImageF32),
         OperationId::BoxBlur => rejected(Mode::ImageF32),
+        OperationId::BoxBlurXY => rejected(Mode::ImageF32),
         OperationId::MedianFilter => ModeSupport::cpu(
             OperationId::MedianFilter,
             MODE,

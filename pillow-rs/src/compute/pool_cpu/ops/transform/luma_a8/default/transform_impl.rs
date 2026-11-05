@@ -1,6 +1,6 @@
 //! Default Transform implementation for exact mode ImageLumaA8.
 
-use crate::compute::pool_cpu::ops::transform::helpers::byte_mode_default;
+use crate::compute::pool_cpu::ops::transform::helpers::{byte_mode_default, byte_mode_mesh_record};
 
 byte_mode_default!(
     ImageLumaA8,
@@ -11,4 +11,6 @@ byte_mode_default!(
     LumaAlpha,
     "transform ImageLumaA8 output buffer shape mismatch"
 );
+
+byte_mode_mesh_record!(ImageLumaA8, 2, true, "ImageLumaA8");
 

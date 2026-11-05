@@ -630,8 +630,8 @@ impl Image {
         )
     }
 
-    /// Creates an indexed image from a no-op transform while retaining the
-    /// source image's palette and public image metadata.
+    /// Creates an indexed Transform destination with its source palette and
+    /// public image metadata.
     pub(crate) fn new_palette_index_from_source(
         source: &Image,
         width: u32,

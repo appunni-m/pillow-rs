@@ -94,6 +94,12 @@ static BOX_BLUR_ARCHITECTURES: [ImplementationSupport; 5] =
         MODE,
         4,
     );
+static BOX_BLUR_XY_ARCHITECTURES: [ImplementationSupport; 5] =
+    super::super::helpers::native_byte_blur_architectures(
+        OperationId::BoxBlurXY,
+        MODE,
+        4,
+    );
 static MEDIAN_FILTER_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] = super::super::helpers::native_byte_filter_architectures(
     OperationId::MedianFilter, MODE,
     crate::compute::registry::support::StrategyGuard::FilterNativeByteRankWindow { channels: 4 },
@@ -126,6 +132,13 @@ pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId)
             OutputModeRule::Preserve,
             inputs_for(OperationId::BoxBlur),
             &BOX_BLUR_ARCHITECTURES,
+        ),
+        OperationId::BoxBlurXY => ModeSupport::cpu(
+            OperationId::BoxBlurXY,
+            MODE,
+            OutputModeRule::Preserve,
+            inputs_for(OperationId::BoxBlurXY),
+            &BOX_BLUR_XY_ARCHITECTURES,
         ),
         // NO_PILLOW_SUPPORT: Pillow 12.2 rank filters require scalar storage;
         // this native mode strategy filters native channels.

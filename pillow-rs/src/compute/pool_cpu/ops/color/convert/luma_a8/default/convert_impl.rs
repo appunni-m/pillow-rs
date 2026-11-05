@@ -10,6 +10,13 @@ pub(crate) fn execute(
     source: &GrayAlphaImage,
     target: Mode,
 ) -> Result<DynamicImage, PilError> {
+    if target == Mode::ImageLab8 {
+        return super::super::super::helpers::lab_target::execute(
+            source.width(),
+            source.height(),
+            source.pixels().map(|pixel| [pixel[0]; 3]),
+        );
+    }
     let (width, height) = source.dimensions();
     match target {
         Mode::ImageLuma8 => {

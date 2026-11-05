@@ -158,8 +158,8 @@ static ARCHITECTURES: [ImplementationSupport; 35] = architecture_targets!(
     ]
 );
 
-// This owner computes each supported target directly. LAB is handled by
-// ImageCms, while P/PA use their dedicated palette strategy.
+// This owner computes each supported target directly. LAB reads unpremultiplied
+// RGB samples; P/PA use their dedicated palette strategy.
 const CORE_ONLY_TARGETS: &[Mode] = &[];
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: super::super::ops::RGB_PREMULTIPLIED_TARGETS,

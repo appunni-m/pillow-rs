@@ -1,6 +1,7 @@
 //! Channel extraction and alpha mutation methods for [`Image`].
 // TODO(pillow-rs#3ptb): verify PutAlpha/PutAlphaData wrapper mode-change,
-// mutation, metadata, and error order in CPU parity, including integer coercion.
+// mutation, metadata, and error order in CPU parity, including integer
+// coercion and exact-image-mask aliasing.
 // Their operation declarations now
 // agree with the wrapper's Pillow-defined rejections. Native-width modes with
 // exact implementations are admitted by the Rust API as CoreOnly extensions;
@@ -21,8 +22,10 @@
 // mask graph receipts while it validates the mask and queues the destination
 // operation lazily.
 // The operation route declares copy, shared-buffer, eager, and ExtractBand
-// child paths per mode. PutAlpha's Rust/Python ordering and metadata paths have
-// been source-reviewed; value and receipt parity remains open.
+// child paths per mode. Callback-capable Python putalpha values now see the
+// destination's Pillow promotion before coercion; exact built-in integers and
+// exact facade Image masks keep direct routes. Value and receipt parity remains
+// open.
 
 use std::sync::Arc;
 
@@ -462,8 +465,8 @@ impl Image {
     ///
     /// # Errors
     ///
-    /// Currently returns `Ok(())`; materialization reports later pipeline
-    /// failures.
+    /// Returns an error when the source mode has no declared PutAlpha
+    /// strategy. Deferred pixel-execution errors are reported on materialize.
     pub fn putalpha(&mut self, alpha: u8) -> Result<(), PilError> {
         let image_mode = self.mode_identity()?;
         validate_putalpha_mode(OperationId::PutAlpha, image_mode)?;
@@ -476,6 +479,52 @@ impl Image {
         );
         *self = new_self;
         Ok(())
+    }
+
+    /// Validates whether this image can accept image-backed alpha insertion.
+    ///
+    /// The Python adapter uses this before loading an exact Image mask, because
+    /// Pillow rejects unsupported destination modes before it loads the mask.
+    /// This check leaves the image and its pending operations unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns the operation's declared mode rejection for unsupported images.
+    #[doc(hidden)]
+    pub fn validate_putalpha_data_destination(&self) -> Result<(), PilError> {
+        let mode = self.mode_identity()?;
+        validate_putalpha_mode(OperationId::PutAlphaData, mode)
+    }
+
+    /// Applies the opaque-alpha promotion for the image-mask PutAlpha route.
+    ///
+    /// The Python adapter uses this before validating a self-alias mask and
+    /// after a mask-load failure whose destination promotion must persist.
+    ///
+    /// # Errors
+    ///
+    /// Returns the operation's declared mode rejection or promotion error.
+    #[doc(hidden)]
+    pub fn prepare_putalpha_data_input(&mut self) -> Result<(), PilError> {
+        let mode = self.mode_identity()?;
+        validate_putalpha_mode(OperationId::PutAlphaData, mode)?;
+        promote_putalpha_destination(self, mode)
+    }
+
+    /// Prepares Pillow's destination mode before a host callback converts an
+    /// alpha value. The Python binding calls this only for values whose
+    /// coercion can execute user code; ordinary scalar and exact image inputs
+    /// retain their direct single-operation routes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the current mode has no declared PutAlpha
+    /// strategy or its promotion cannot be planned.
+    #[doc(hidden)]
+    pub fn prepare_putalpha_input(&mut self) -> Result<(), PilError> {
+        let mode = self.mode_identity()?;
+        validate_putalpha_mode(OperationId::PutAlpha, mode)?;
+        promote_putalpha_destination(self, mode)
     }
 
     /// Applies the Python-facing scalar-or-mask `putalpha` contract.
