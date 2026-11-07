@@ -21,8 +21,10 @@ pub(crate) use color::{
 };
 pub(crate) use geometry::fit_box_coordinates;
 pub use exif::{
-    exif_get_orientation, exif_remove_orientation, exif_transpose,
-    exif_transpose_with_orientation,
+    exif_get_orientation, exif_remove_orientation, exif_remove_xmp_orientation,
+    exif_transpose, exif_transpose_with_orientation, ImageOpsExifXmpValue,
+    EXIF_XMP_ATTRIBUTE_PREFIX, EXIF_XMP_ATTRIBUTE_SUFFIX, EXIF_XMP_ELEMENT_PREFIX,
+    EXIF_XMP_ELEMENT_SUFFIX,
 };
 pub use colorize::*;
 pub use equalize::*;

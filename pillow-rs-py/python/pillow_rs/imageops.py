@@ -10,6 +10,7 @@ from typing import Tuple, Union
 from .image import Image
 from . import _core
 
+_BASE_RE_SUB = re.sub
 _EQUALIZE_FAST_BUILTINS = (len, range, sum, list)
 
 _BASE_IMAGE_SIZE = Image.size
@@ -186,18 +187,7 @@ def exif_transpose(image: Image, *, in_place=False):
             if key not in info:
                 continue
             value = info[key]
-            for pattern in (
-                r'tiff:Orientation="([0-9])"',
-                r"<tiff:Orientation>([0-9])</tiff:Orientation>",
-            ):
-                if isinstance(value, str):
-                    value = re.sub(pattern, "", value)
-                elif isinstance(value, tuple):
-                    value = tuple(
-                        re.sub(pattern.encode(), b"", item) for item in value
-                    )
-                else:
-                    value = re.sub(pattern.encode(), b"", value)
+            value = _core.ops_exif_transpose_xmp_value(re, _BASE_RE_SUB, value)
             info[key] = value
 
         if not in_place:

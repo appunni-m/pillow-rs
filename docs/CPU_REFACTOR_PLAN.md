@@ -258,13 +258,17 @@ order; the redundant prevalidation binding is removed. Deform output/fault and
 selection parity remains open.
 `ImageOps.exif_transpose` now loads before EXIF inspection and updates the
 wrapper `info` mapping only when orientation changes. It carries the core's
-updated EXIF bytes into existing `exif` and raw-profile entries and removes the
-two Pillow-recognized orientation markers from string, tuple, or byte XMP
-values. The first `in_place` truth test now follows the EXIF orientation read;
-the wrapper retains the original value for the later metadata-target and return
-tests. Unchanged orientations defer copying to public `Image.copy()`, and the
-EXIF/raw-profile metadata branch follows Pillow's `if`/`elif`. Exact
-`Exif.tobytes()` serialization and output/fault parity remain open.
+updated EXIF bytes into existing `exif` and raw-profile entries. Rust now owns
+the two XMP orientation-marker rewrites over Unicode codepoints, byte buffers,
+and byte tuples; PyO3 adapts those host values and preserves Pillow's
+`re.sub` callback route when it is overridden or a value is not bytes-like.
+Python retains only the `info` mapping membership, lookup, and assignment
+sequence. The first `in_place` truth test now follows the EXIF orientation
+read; the wrapper retains the original value for the later metadata-target and
+return tests. Unchanged orientations defer copying to public `Image.copy()`,
+and the EXIF/raw-profile metadata branch follows Pillow's `if`/`elif`. Exact
+`Exif.tobytes()` serialization and XMP output/fault/callback parity remain
+open; this source change is unverified.
 The direct-instruction reachability reviews for Paste, Color Convert, and
 Composite found those instructions behind architecture and target-feature
 gates. The reviewed operation support declarations constrain selection by

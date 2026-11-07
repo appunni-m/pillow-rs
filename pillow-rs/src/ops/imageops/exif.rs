@@ -1,5 +1,108 @@
 use super::*;
 
+/// ASCII prefix of Pillow's XMP attribute Orientation pattern.
+#[doc(hidden)]
+pub const EXIF_XMP_ATTRIBUTE_PREFIX: &str = "tiff:Orientation=\"";
+/// ASCII suffix of Pillow's XMP attribute Orientation pattern.
+#[doc(hidden)]
+pub const EXIF_XMP_ATTRIBUTE_SUFFIX: &str = "\"";
+/// ASCII prefix of Pillow's XMP element Orientation pattern.
+#[doc(hidden)]
+pub const EXIF_XMP_ELEMENT_PREFIX: &str = "<tiff:Orientation>";
+/// ASCII suffix of Pillow's XMP element Orientation pattern.
+#[doc(hidden)]
+pub const EXIF_XMP_ELEMENT_SUFFIX: &str = "</tiff:Orientation>";
+
+/// Input values accepted by Pillow's `ImageOps.exif_transpose` XMP handling.
+#[doc(hidden)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ImageOpsExifXmpValue {
+    /// A Python string represented as Unicode codepoints, including surrogates.
+    TextCodepoints(Vec<u32>),
+    /// A bytes-like XMP value.
+    Bytes(Vec<u8>),
+    /// The tuple-of-bytes XMP form.
+    BytesTuple(Vec<Vec<u8>>),
+}
+
+/// Removes Pillow's two recognized EXIF orientation markers from an XMP value.
+#[doc(hidden)]
+pub fn exif_remove_xmp_orientation(value: ImageOpsExifXmpValue) -> ImageOpsExifXmpValue {
+    match value {
+        ImageOpsExifXmpValue::TextCodepoints(value) => {
+            ImageOpsExifXmpValue::TextCodepoints(remove_xmp_orientation_codepoints(&value))
+        }
+        ImageOpsExifXmpValue::Bytes(value) => {
+            ImageOpsExifXmpValue::Bytes(remove_xmp_orientation_bytes(&value))
+        }
+        ImageOpsExifXmpValue::BytesTuple(values) => ImageOpsExifXmpValue::BytesTuple(
+            values
+                .iter()
+                .map(|value| remove_xmp_orientation_bytes(value))
+                .collect(),
+        ),
+    }
+}
+
+fn remove_xmp_orientation_codepoints(value: &[u32]) -> Vec<u32> {
+    let attribute_prefix = ascii_codepoints(EXIF_XMP_ATTRIBUTE_PREFIX.as_bytes());
+    let attribute_suffix = ascii_codepoints(EXIF_XMP_ATTRIBUTE_SUFFIX.as_bytes());
+    let attribute =
+        remove_orientation_pattern(value, &attribute_prefix, &attribute_suffix, |value| {
+            (u32::from(b'0')..=u32::from(b'9')).contains(&value)
+        });
+    let element_prefix = ascii_codepoints(EXIF_XMP_ELEMENT_PREFIX.as_bytes());
+    let element_suffix = ascii_codepoints(EXIF_XMP_ELEMENT_SUFFIX.as_bytes());
+    remove_orientation_pattern(&attribute, &element_prefix, &element_suffix, |value| {
+        (u32::from(b'0')..=u32::from(b'9')).contains(&value)
+    })
+}
+
+fn remove_xmp_orientation_bytes(value: &[u8]) -> Vec<u8> {
+    let attribute = remove_orientation_pattern(
+        value,
+        EXIF_XMP_ATTRIBUTE_PREFIX.as_bytes(),
+        EXIF_XMP_ATTRIBUTE_SUFFIX.as_bytes(),
+        |value| value.is_ascii_digit(),
+    );
+    remove_orientation_pattern(
+        &attribute,
+        EXIF_XMP_ELEMENT_PREFIX.as_bytes(),
+        EXIF_XMP_ELEMENT_SUFFIX.as_bytes(),
+        |value| value.is_ascii_digit(),
+    )
+}
+
+fn ascii_codepoints(value: &[u8]) -> Vec<u32> {
+    value.iter().map(|value| u32::from(*value)).collect()
+}
+
+fn remove_orientation_pattern<T: Copy + PartialEq>(
+    value: &[T],
+    prefix: &[T],
+    suffix: &[T],
+    is_digit: impl Fn(T) -> bool,
+) -> Vec<T> {
+    let matched_len = prefix.len() + 1 + suffix.len();
+    let mut output = Vec::with_capacity(value.len());
+    let mut index = 0;
+    while index < value.len() {
+        let prefix_end = index + prefix.len();
+        let digit_end = prefix_end + 1;
+        let suffix_end = digit_end + suffix.len();
+        let matches = value.get(index..prefix_end) == Some(prefix)
+            && value.get(prefix_end).is_some_and(|value| is_digit(*value))
+            && value.get(digit_end..suffix_end) == Some(suffix);
+        if matches {
+            index += matched_len;
+        } else {
+            output.push(value[index]);
+            index += 1;
+        }
+    }
+    output
+}
+
 /// Applies the EXIF orientation transform used by `ImageOps.exif_transpose`.
 ///
 /// The returned image is `Some` for a transformed image, or for a copy when

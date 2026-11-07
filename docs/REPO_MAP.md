@@ -1163,6 +1163,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |   |-- four_byte_layout.rs
 |   |   |   |       |   |   |   |-- four_byte_to_luma_alpha.rs
 |   |   |   |       |   |   |   |-- high_depth.rs
+|   |   |   |       |   |   |   |-- lab_target.rs
 |   |   |   |       |   |   |   |-- luma16.rs
 |   |   |   |       |   |   |   |-- luma8.rs
 |   |   |   |       |   |   |   |-- matrix.rs
@@ -1499,10 +1500,14 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       `-- ops.rs
 |   |   |   |       |   |-- helpers/
 |   |   |   |       |   |   |-- lab_kernel.rs
+|   |   |   |       |   |   |-- lab_to_srgb.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   |-- remap_palette.rs
 |   |   |   |       |   |   `-- strategy.rs
 |   |   |   |       |   |-- luma8/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- remap_palette_impl.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   |-- neon/
 |   |   |   |       |   |   |   |-- mod.rs
@@ -1517,6 +1522,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |-- mod.rs
 |   |   |   |       |   |-- ops.rs
 |   |   |   |       |   |-- palette8/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- remap_palette_impl.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   |-- neon/
 |   |   |   |       |   |   |   |-- mod.rs
@@ -2118,6 +2126,12 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   `-- wasm_simd128/
 |   |   |   |       |   |       |-- draw_impl.rs
 |   |   |   |       |   |       `-- mod.rs
+|   |   |   |       |   |-- floodfill/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- operations.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- helpers/
 |   |   |   |       |   |   |-- arcs.rs
 |   |   |   |       |   |   |-- bitmap_mask.rs
@@ -7606,16 +7620,24 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   `-- transpose_tests.rs
 |   |   |-- data/
 |   |   |   |-- lab-identity-profile.icc
-|   |   |   `-- lcms-lab-lut.u16le
+|   |   |   |-- lcms-lab-lut.u16le
+|   |   |   `-- srgb-output-profile.icc
 |   |   |-- draw/
 |   |   |   |-- bitmap.rs
+|   |   |   |-- color_input.rs
 |   |   |   |-- curves.rs
+|   |   |   |-- floodfill.rs
 |   |   |   |-- geometry.rs
+|   |   |   |-- line_joint.rs
 |   |   |   |-- mod.rs
 |   |   |   |-- primitives.rs
+|   |   |   |-- rounded_rectangle.rs
+|   |   |   |-- rounded_rectangle_program.rs
 |   |   |   |-- text/
 |   |   |   |   `-- composition.rs
-|   |   |   `-- text.rs
+|   |   |   |-- text.rs
+|   |   |   |-- text_lines.rs
+|   |   |   `-- text_mask.rs
 |   |   |-- error.rs
 |   |   |-- font/
 |   |   |   |-- courb08.luma
@@ -7635,7 +7657,11 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   `-- tests.rs
 |   |   |   |-- pilfont.rs
 |   |   |   |-- public_api.rs
-|   |   |   `-- text_output.rs
+|   |   |   |-- text_layout.rs
+|   |   |   |-- text_layout_callbacks.rs
+|   |   |   |-- text_output.rs
+|   |   |   |-- text_value.rs
+|   |   |   `-- text_wrap.rs
 |   |   |-- format.rs
 |   |   |-- image/
 |   |   |   |-- backend.rs
@@ -7700,7 +7726,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |-- luma16.rs
 |   |   |   |   |-- mod.rs
 |   |   |   |   |-- mode.rs
-|   |   |   |   |-- nonstandard.rs
 |   |   |   |   |-- operation.rs
 |   |   |   |   |-- palette.rs
 |   |   |   |   `-- tests.rs
@@ -7709,10 +7734,20 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- filter.rs
 |   |   |   |-- imageops/
 |   |   |   |   |-- color.rs
+|   |   |   |   |-- colorize/
+|   |   |   |   |   |-- mod.rs
+|   |   |   |   |   `-- ops.rs
+|   |   |   |   |-- equalize/
+|   |   |   |   |   |-- mod.rs
+|   |   |   |   |   `-- ops.rs
 |   |   |   |   |-- exif.rs
 |   |   |   |   |-- geometry/
+|   |   |   |   |   |-- callbacks.rs
 |   |   |   |   |   |-- expand.rs
-|   |   |   |   |   `-- pad.rs
+|   |   |   |   |   |-- fit_callbacks.rs
+|   |   |   |   |   |-- pad.rs
+|   |   |   |   |   |-- pad_route.rs
+|   |   |   |   |   `-- scale_callbacks.rs
 |   |   |   |   |-- geometry.rs
 |   |   |   |   `-- point.rs
 |   |   |   |-- imageops.rs
@@ -7774,36 +7809,39 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- transpose.rs
 |   |   |   `-- utils.rs
 |   |   |-- par.rs
+|   |   |-- path.rs
 |   |   |-- pipeline/
 |   |   |   |-- support.rs
 |   |   |   `-- transpose_tests.rs
 |   |   |-- pipeline.rs
-|   |   `-- raster/
-|   |       |-- buffer/
-|   |       |   |-- iterators.rs
-|   |       |   `-- mutable.rs
-|   |       |-- buffer.rs
-|   |       |-- color/
-|   |       |   |-- blend.rs
-|   |       |   |-- from_color.rs
-|   |       |   |-- from_primitive.rs
-|   |       |   |-- invert.rs
-|   |       |   |-- mod.rs
-|   |       |   |-- pixel_luma.rs
-|   |       |   |-- pixel_rgb.rs
-|   |       |   `-- types.rs
-|   |       |-- dynamic/
-|   |       |   |-- mode.rs
-|   |       |   `-- transform.rs
-|   |       |-- dynamic.rs
-|   |       |-- error.rs
-|   |       |-- mod.rs
-|   |       |-- mode.rs
-|   |       `-- traits/
-|   |           |-- mod.rs
-|   |           |-- pixel.rs
-|   |           |-- primitive.rs
-|   |           `-- view.rs
+|   |   |-- raster/
+|   |   |   |-- buffer/
+|   |   |   |   |-- iterators.rs
+|   |   |   |   `-- mutable.rs
+|   |   |   |-- buffer.rs
+|   |   |   |-- color/
+|   |   |   |   |-- blend.rs
+|   |   |   |   |-- from_color.rs
+|   |   |   |   |-- from_primitive.rs
+|   |   |   |   |-- invert.rs
+|   |   |   |   |-- mod.rs
+|   |   |   |   |-- pixel_luma.rs
+|   |   |   |   |-- pixel_rgb.rs
+|   |   |   |   `-- types.rs
+|   |   |   |-- dynamic/
+|   |   |   |   |-- mode.rs
+|   |   |   |   `-- transform.rs
+|   |   |   |-- dynamic.rs
+|   |   |   |-- error.rs
+|   |   |   |-- identities.rs
+|   |   |   |-- mod.rs
+|   |   |   |-- mode.rs
+|   |   |   `-- traits/
+|   |   |       |-- mod.rs
+|   |   |       |-- pixel.rs
+|   |   |       |-- primitive.rs
+|   |   |       `-- view.rs
+|   |   `-- test_api.rs
 |   `-- tests/
 |       `-- fixtures/
 |           `-- manifest.yaml
@@ -7866,21 +7904,33 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |       |-- imagechops.py
 |   |       |-- imagecolor.py
 |   |       |-- imagedraw.py
+|   |       |-- imagedraw2.py
 |   |       |-- imageenhance.py
 |   |       |-- imagefilter.py
 |   |       |-- imagefont.py
 |   |       |-- imageops.py
 |   |       |-- imagepalette.py
+|   |       |-- imagepath.py
 |   |       |-- imagesequence.py
 |   |       |-- imageshow.py
 |   |       |-- imagestat.py
+|   |       |-- imagetext.py
 |   |       `-- operations.py
 |   `-- src/
 |       |-- backend.rs
+|       |-- draw/
+|       |   |-- custom_font_mask.rs
+|       |   |-- floodfill.rs
+|       |   |-- input.rs
+|       |   |-- rounded_rectangle.rs
+|       |   |-- text_layout.rs
+|       |   `-- text_lines.rs
 |       |-- draw.rs
 |       |-- errors.rs
 |       |-- font/
-|       |   `-- pilfont.rs
+|       |   |-- pilfont.rs
+|       |   |-- text_layout.rs
+|       |   `-- text_wrap.rs
 |       |-- font.rs
 |       |-- getcolors.rs
 |       |-- gpu_batch.rs
@@ -7894,14 +7944,25 @@ It is a navigation aid, not an API-support or coverage claim.
 |       |   |-- operations.rs
 |       |   |-- point.rs
 |       |   |-- properties.rs
-|       |   `-- sequence.rs
+|       |   |-- put_alpha.rs
+|       |   |-- sequence.rs
+|       |   `-- transform.rs
 |       |-- image_chops.rs
 |       |-- image_color.rs
 |       |-- image_filter.rs
+|       |-- image_ops/
+|       |   |-- autocontrast.rs
+|       |   |-- colorize.rs
+|       |   |-- equalize.rs
+|       |   |-- expand.rs
+|       |   |-- pad.rs
+|       |   `-- size_route.rs
 |       |-- image_ops.rs
+|       |-- image_path.rs
 |       |-- inputs/
 |       |   |-- analysis.rs
 |       |   |-- filters.rs
+|       |   |-- float_buffer.rs
 |       |   |-- images.rs
 |       |   |-- masks.rs
 |       |   |-- ops.rs

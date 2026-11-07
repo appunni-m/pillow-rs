@@ -9,6 +9,7 @@ use pyo3::types::{
 mod autocontrast;
 mod colorize;
 mod equalize;
+mod exif;
 mod expand;
 mod pad;
 mod size_route;
@@ -733,6 +734,7 @@ pub(super) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(ops_grayscale, m)?)?;
     colorize::register(m)?;
     expand::register(m)?;
+    exif::register(m)?;
     pad::register(m)?;
     size_route::register(m)?;
     m.add_function(wrap_pyfunction!(ops_exif_transpose, m)?)?;

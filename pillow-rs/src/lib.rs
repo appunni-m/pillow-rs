@@ -517,6 +517,18 @@ pub use crate::ops::imageops::equalize_lut_from_histogram as
     imageops_equalize_lut_from_histogram;
 pub use crate::ops::imageops::exif_get_orientation;
 pub use crate::ops::imageops::exif_remove_orientation;
+#[doc(hidden)]
+pub use crate::ops::imageops::exif_remove_xmp_orientation;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsExifXmpValue;
+#[doc(hidden)]
+pub use crate::ops::imageops::EXIF_XMP_ATTRIBUTE_PREFIX;
+#[doc(hidden)]
+pub use crate::ops::imageops::EXIF_XMP_ATTRIBUTE_SUFFIX;
+#[doc(hidden)]
+pub use crate::ops::imageops::EXIF_XMP_ELEMENT_PREFIX;
+#[doc(hidden)]
+pub use crate::ops::imageops::EXIF_XMP_ELEMENT_SUFFIX;
 pub use crate::ops::imageops::exif_transpose as imageops_exif_transpose;
 #[doc(hidden)]
 pub use crate::ops::imageops::exif_transpose_with_orientation as
