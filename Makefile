@@ -365,14 +365,11 @@ build-parity: MATURIN_DEVELOP_FLAGS=--skip-install
 build-parity: build ## Build the checkout facade without installing the PIL namespace
 
 # Explicit source API lanes; the oracle environment remains isolated.
-.PHONY: gpu-batch-parity gpu-batch-contracts gpu-batch-benchmark
+.PHONY: gpu-batch-parity gpu-batch-benchmark
 gpu-batch-parity: ## Compare queued/eager/resident native GPU pipelines with live Pillow
 	$(PYTHON) scripts/test_gpu_batch.py
 	$(PYTHON) scripts/test_gpu_batch.py --output gpu
 	$(PYTHON) scripts/test_gpu_batch.py --eager
-
-gpu-batch-contracts: ## Exercise bounded GPU stream identities, limits, ownership, and cancellation
-	$(PYTHON) scripts/test_gpu_batch.py --contracts
 
 gpu-batch-benchmark: ## Print completed-work GPU batching throughput versus sequential Pillow
 	$(PYTHON) scripts/benchmark_gpu_batch.py

@@ -10,7 +10,7 @@ enabled.
 | Task | Command | Effect |
 | --- | --- | --- |
 | Python development environment | `make setup-venv PYTHON=python3.12` | Creates this checkout's virtual environment and installs pinned tools |
-| Explicit GPU stream parity/contracts | `make gpu-batch-parity gpu-batch-contracts` after `make build-parity` | Requires a usable GPU; checks live Pillow pixels and bounded streaming ownership |
+| Explicit GPU stream parity | `make gpu-batch-parity` after `make build-parity` | Requires a usable GPU; compares live Pillow pixels for queued and eager execution |
 | Explicit GPU batch timing | `make gpu-batch-benchmark` | Prints completed-work queued/eager GPU throughput versus sequential Pillow without JSON artifacts |
 | Build for comparison | `make build-parity` | Builds the replacement without installing over the Pillow oracle |
 | Build for application use | `make build` | Installs the replacement into the selected environment |

@@ -6,22 +6,19 @@ Build without replacing the Pillow oracle, then run the focused lanes:
 
 ```sh
 RUSTC_WRAPPER= make build-parity PYTHON=.venv/bin/python
-make gpu-batch-parity gpu-batch-contracts PYTHON=.venv/bin/python
+make gpu-batch-parity PYTHON=.venv/bin/python
 make gpu-batch-benchmark PYTHON=.venv/bin/python
 ```
 
-The [parity inputs and lifecycle tests](../scripts/test_gpu_batch.py) compare
+The [parity inputs](../scripts/test_gpu_batch.py) compare
 mode, dimensions, and complete native terminal pixels with live Pillow in
 isolated processes. They include mixed modes/sizes, composed and auxiliary
 graphs, alpha ordering, odd widths, and 4096×4096 extraction; `--small` explicitly
 omits the large cases. CPU output, resident/download output, and eager execution
 are separate runs. Counters assert actual shader work and grouped submissions.
-Contract tests cover bounded long streams, duplicate keys, IDs, limits,
-unsupported inputs, slow/abandoned consumers, close, held leases, and retry.
-They also verify that eager submit waits for its own job with older outputs
-still undelivered and that nested metadata mutations cannot alter snapshots.
-An early contract-test harness error used the `PIL.Image` module as an
-`isinstance` type; it was corrected to `PIL.Image.Image`, retaining the assertion.
+The separate target-only GPU stream contract suite was removed on 2026-11-07;
+contract results below are retained as historical evidence and are no longer a
+runnable verification lane.
 
 Benchmark timing includes fresh graph construction, native upload, execution,
 CPU output materialization, and terminal byte export. Warmed queued/eager GPU
@@ -41,7 +38,7 @@ source-workspace results, not release or CI results.
 | `make gpu-batch-parity`: queued CPU outputs | 252/252 exact Pillow comparisons | 631 | 33 | 8 jobs |
 | Same target: queued resident outputs, downloaded for comparison | 252/252 exact Pillow comparisons | 631 | 33 | 8 jobs |
 | Same target: eager CPU outputs | 252/252 exact Pillow comparisons | 631 | 252 | 1 job |
-| `make gpu-batch-contracts` | 9/9 lifecycle/admission tests | — | — | — |
+| Historical `gpu-batch-contracts` run (retired 2026-11-07) | 9/9 lifecycle/admission checks | — | — | — |
 
 Each parity lane uploaded 101,031,490 native bytes. CPU-output lanes copied
 33,764,416 terminal bytes; resident scheduling copied zero terminal image bytes

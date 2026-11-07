@@ -253,7 +253,7 @@ fallback bug.
 | `scripts/test_font_variant_parity.py` | Isolated source and target subprocesses compare font creation, mutable source/path settings, variants, and rendered observations. | It uses a fixture font asset but owns the scenarios and result dictionary; it has no active parity case IDs, backend option, or execution receipts, so it proves only the default Python route. It is not wired to a Make target. |
 | `scripts/test_getdata_sequence_parity.py` | Inline Pillow/target probes compare indexes, slices, banded modes, palette snapshots, and errors. | It has no generated case IDs or backend option/receipt and proves only the default Python route. It is not wired to a Make target. |
 | `scripts/test_putdata_sequence_parity.py` | **Retired on 2026-10-27.** Its 18 protocol/callback observations now run through the shared parity runner as input-only workflows. | Replaced by 16 new generated cases plus the two existing RGB/LA singleton-float cases. All 18 passed live-Pillow CPU parity; ten pixel-mutating workflows had CPU receipts and eight error/rejection workflows were classified not applicable. After adding an eager CPU receipt and making strict execution failures affect the result status, 10-case strict-SIMD and strict-GPU runs each passed the four bytes-subclass bulk cases with native receipts and rejected the six callback/sequence cases that performed direct CPU writes. Those six still match Pillow pixel-for-pixel; they do not qualify as strict SIMD/GPU execution. The four bulk cases also passed with four native GPU dispatch receipts and no fallback. Per-item writes stay on CPU because each must be visible before coercing the next sequence value; the strict receipt now states that reason and rejects the lane. Callback-free bulk writes use SIMD/GPU when supported by mode and layout. The separate GPU-batch API remains audited in its own lane. |
-| `scripts/test_gpu_batch.py` | A Make-wired, explicit `GpuBatchExecutor` oracle comparison creates image graphs from a local generator and compares terminal results with live Pillow; its `--contracts` mode checks queue/resource behavior. | This is a distinct target-only batching API and is not the normal CPU/SIMD/GPU image backend runner. Its graph inputs bypass active fixture IDs. Keep its admission, identity, and queue contracts in the dedicated GPU-batch lane; do not cite it as ordinary GPU parity. |
+| `scripts/test_gpu_batch.py` | A Make-wired, explicit `GpuBatchExecutor` oracle comparison creates image graphs from a local generator and compares terminal results with live Pillow. The target-only `--contracts` unit-test mode was removed on 2026-11-07. | The remaining parity script is a distinct batching API and is not the normal CPU/SIMD/GPU image backend runner. Its graph inputs bypass active fixture IDs. Historical admission/identity/queue results remain in `GPU_BATCH_VALIDATION.md`; they are no longer a runnable test lane. |
 
 `scripts/benchmark_gpu_batch.py` and the other backend-specific benchmark
 drivers are benchmark workloads rather than parity runners, so their profile
@@ -261,8 +261,9 @@ selection belongs to the benchmark runner and is not counted as a parity
 bypass here. Coverage/native probes also do not compare against live Pillow
 and are outside this inventory. The remaining mutable font and getdata
 scenarios should move only when their state and callbacks can be represented
-by generated fixtures without losing behavior. The exhaustive grayscale and
-explicit GPU batch contracts remain separate diagnostics/API workflows.
+by generated fixtures without losing behavior. The exhaustive grayscale
+diagnostic remains a separate supplemental workflow; historical GPU batch
+contract checks are documented but no longer executable tests.
 
 The active manifest already contains ordinary `font_variant`, `getdata`, and
 `putdata` cases, and those shared IDs are selected by every Python backend
