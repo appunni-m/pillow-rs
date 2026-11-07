@@ -3,7 +3,7 @@
 use crate::error::PilError;
 use crate::pipeline::DitherMethod;
 use crate::raster::{
-    DynamicImage, GenericImageView, GrayAlphaImage, Mode, RgbImage, Rgba, RgbaImage,
+    DynamicImage, GrayAlphaImage, Mode, RgbImage, Rgba, RgbaImage,
 };
 
 pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, PilError> {

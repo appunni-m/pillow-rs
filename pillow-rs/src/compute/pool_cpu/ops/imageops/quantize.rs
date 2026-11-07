@@ -650,6 +650,7 @@ fn build_paletted_image(
         backend: None,
         palette: Some(quantized.palette),
         palette_alpha: quantized.alpha,
+        compatibility_icc_profile: None,
         materialized: crate::image::materialization_cache(),
         shape: crate::image::pipeline_shape_cache(),
         mode: crate::image::pipeline_mode_cache_for(Some(Mode::ImagePalette8)),

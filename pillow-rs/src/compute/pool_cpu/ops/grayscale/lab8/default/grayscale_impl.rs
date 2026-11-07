@@ -1,4 +1,4 @@
-//! Archived serial grayscale loop for the exact lab8 identity.
+//! Serial grayscale strategy for Pillow's LAB mode.
 
 use crate::error::PilError;
 use crate::raster::{RgbImage, Rgb, GrayImage};
@@ -12,6 +12,12 @@ pub(crate) fn prepare(input: &Input) -> Result<Kernel<'_>, PilError> {
 }
 
 pub(crate) fn execute(input: Kernel<'_>) -> Result<GrayImage, PilError> {
-    let bytes = crate::color::grayscale_rgb_bytes::<3>(input.input.as_raw(), input.dimensions, 32768);
+    // Stream the shared LAB-to-sRGB transform directly into luma, so the
+    // Rust-only LAB grayscale extension does not materialize an RGB raster.
+    let bytes = crate::compute::pool_cpu::ops::color::helpers::lab_to_srgb::srgb_pixels(input.input)
+        .map(|[red, green, blue]| {
+            crate::color::grayscale_rgb_pixel(&[red, green, blue], 32768)
+        })
+        .collect();
     finish(input.input.width(), input.input.height(), bytes)
 }

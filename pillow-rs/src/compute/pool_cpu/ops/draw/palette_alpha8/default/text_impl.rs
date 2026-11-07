@@ -4,7 +4,6 @@ use crate::compute::pool_cpu::helpers::bytes::hidden_lanes::{
 use crate::compute::pool_cpu::ops::draw::TextComposeResult;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Pixel};
-use crate::raster::{GenericImage, GenericImageView};
 
 pub(crate) fn apply<const RGBA_MASK: bool>(
     mut image: DynamicImage,

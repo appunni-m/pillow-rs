@@ -193,7 +193,7 @@ fn native_lut_chunk(input: u8x16, tables: &[u8x16; 16]) -> u8x16 {
     let low = input & u8x16::splat(0x0f);
     let high: u8x16 = input >> 4u32;
     let lookups: [u8x16; 16] =
-        std::array::from_fn(|index| tables[index].swizzle_relaxed(low));
+        std::array::from_fn(|index| tables[index].shuffle(low));
     let bit0 = (high & u8x16::splat(1)).simd_eq(u8x16::splat(0));
     let bit1 = (high & u8x16::splat(2)).simd_eq(u8x16::splat(0));
     let bit2 = (high & u8x16::splat(4)).simd_eq(u8x16::splat(0));

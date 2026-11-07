@@ -4,7 +4,6 @@ use crate::compute::pool_cpu::ops::color::helpers::lab_kernel;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, ImageBuffer, Mode, RgbImage};
 
-pub(crate) use crate::compute::pool_cpu::ops::color::helpers::lab_kernel::convert_rgb_bytes;
 
 /// Executes the ImageRgb8 strategy and retains its physical padding lane.
 pub(crate) fn execute(input: &RgbImage) -> Result<DynamicImage, PilError> {

@@ -21,10 +21,17 @@ impl GpuPool {
         let cpu_context = crate::compute::ExecutionContext::for_routed_backend(
             crate::compute::Backend::Cpu,
         );
+        let logical_mode = mode
+            .map(|name| {
+                crate::raster::Mode::from_pillow_name(name).ok_or_else(|| {
+                    PilError::ValueError("unknown Pillow image mode".into())
+                })
+            })
+            .transpose()?;
         let exact = crate::compute::CpuPool.execute_batch_with_context(
             ops,
             img,
-            mode,
+            logical_mode,
             &cpu_context,
         )?;
 
@@ -57,7 +64,14 @@ impl GpuPool {
             let context = crate::compute::ExecutionContext::for_routed_backend(
                 crate::compute::Backend::Cpu,
             );
-            return cpu.execute_batch_with_context(ops, img, mode, &context);
+            let logical_mode = mode
+                .map(|name| {
+                    crate::raster::Mode::from_pillow_name(name).ok_or_else(|| {
+                        PilError::ValueError("unknown Pillow image mode".into())
+                    })
+                })
+                .transpose()?;
+            return cpu.execute_batch_with_context(ops, img, logical_mode, &context);
         }
 
         // An explicitly locked GPU is a parity lane, not a permission to

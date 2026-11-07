@@ -1296,6 +1296,15 @@ def slug(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9]+", "-", value).strip("-").lower()
 
 
+def mode_slug(value: str) -> str:
+    """Keep Pillow's case-distinct premultiplied modes distinct in case IDs."""
+
+    return {
+        "La": "la-premultiplied",
+        "RGBa": "rgba-premultiplied",
+    }.get(value, slug(value))
+
+
 def literal(value: Any) -> dict[str, Any]:
     return {"kind": "literal", "value": value}
 
@@ -1359,6 +1368,15 @@ def public_index_literal(value: int) -> dict[str, Any]:
     return {
         "protocol": "public-index",
         "value": value,
+    }
+
+
+def public_index_error_literal(error_type: str) -> dict[str, Any]:
+    """Build a scalar whose ``__index__`` raises the requested public error."""
+
+    return {
+        "protocol": "public-index-error",
+        "error_type": error_type,
     }
 
 
@@ -2223,6 +2241,7 @@ class WorkflowBuilder:
     _step_counter: int = 0
     _image_steps: dict[str, str] = field(default_factory=dict)
     _font_step: str | None = None
+    _text_step: str | None = None
     scenario_values: dict[str, dict[str, Any]] = field(default_factory=dict)
     scenario_mode: str | None = None
     scenario_draw_mode: str | None = None
@@ -2245,6 +2264,7 @@ class WorkflowBuilder:
     scenario_observe_result: str | None = None
     scenario_materialize_result: bool = False
     scenario_observe_receiver: bool = False
+    scenario_observe_receiver_operations: list[str] = field(default_factory=list)
     scenario_observe_stat_properties: bool = False
     scenario_outline_curve: bool = False
     scenario_outline_empty: bool = False
@@ -2362,6 +2382,19 @@ class WorkflowBuilder:
             }
         )
         return actual_id
+
+    def observe_image_receiver_operations(self, receiver_step: str) -> list[str]:
+        """Append explicit public observations for a workflow's source image."""
+        return [
+            self.add_step(
+                "PIL.Image.Image",
+                operation_id,
+                receiver=binding(receiver_step),
+                arguments={},
+                step_id=f"observe-receiver-{slug(operation_id)}",
+            )
+            for operation_id in self.scenario_observe_receiver_operations
+        ]
 
     def ensure_image(self, mode: str | None = None, label: str = "image") -> str:
         requested_mode = mode or self.mode
@@ -2723,10 +2756,27 @@ class WorkflowBuilder:
                 )
             self._image_steps[cache_key] = step_id
             return step_id
-        if self.edge in {"mode-filter-pattern", "mode-filter-no-majority"} and label == "image":
-            if requested_mode != "L":
-                raise ValueError("mode-filter pattern edges require L mode")
-            if self.edge == "mode-filter-pattern":
+        if self.edge in {
+            "mode-filter-pattern",
+            "mode-filter-no-majority",
+            "mode-filter-pa-palette",
+        } and label == "image":
+            if self.edge == "mode-filter-pa-palette":
+                if requested_mode != "PA":
+                    raise ValueError("mode-filter PA palette edge requires PA mode")
+                # Distinct indices and alpha values exercise both PA channels
+                # before Image.filter's split/filter/merge route.
+                data = bytes(
+                    [
+                        1, 11, 1, 21, 1, 31,
+                        2, 12, 2, 22, 2, 32,
+                        3, 13, 3, 23, 3, 33,
+                    ]
+                )
+                size = [3, 3]
+            elif requested_mode not in {"L", "P"}:
+                raise ValueError("mode-filter pattern edges require L or P mode")
+            elif self.edge == "mode-filter-pattern":
                 # A public frombytes workflow with a 3x3 all-100 center makes
                 # the mode filter select a nonzero value instead of retaining
                 # the initial histogram bucket (zero). Uniform Image.new
@@ -2756,12 +2806,25 @@ class WorkflowBuilder:
                 "frombytes",
                 receiver=None,
                 arguments={
-                    "mode": literal("L"),
+                    "mode": literal(requested_mode),
                     "size": literal(size),
                     "data": data_desc,
                 },
                 step_id=self.next_step_id(f"setup-{label}"),
             )
+            if requested_mode in {"P", "PA"}:
+                palette = [
+                    component
+                    for index in range(256)
+                    for component in (index,) * 3
+                ]
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(step_id),
+                    arguments={"data": literal(palette), "rawmode": literal("RGB")},
+                    step_id=self.next_step_id(f"setup-{label}-palette"),
+                )
             self._image_steps[cache_key] = step_id
             return step_id
         if self.edge == "loaded-p-paste-source" and label == "im":
@@ -3219,7 +3282,7 @@ class WorkflowBuilder:
                 data = bytes(rng.randrange(256) for _ in range(n_pixels * 3))
             elif requested_mode in {"RGBA", "RGBX", "RGBa", "CMYK"}:
                 data = bytes(rng.randrange(256) for _ in range(n_pixels * 4))
-            elif requested_mode in {"LA", "PA"}:
+            elif requested_mode in {"LA", "La", "PA"}:
                 data = bytes(rng.randrange(256) for _ in range(n_pixels * 2))
             elif requested_mode == "L":
                 data = bytes(rng.randrange(256) for _ in range(n_pixels))
@@ -4368,6 +4431,37 @@ class WorkflowBuilder:
             return binding(enhance_step)
         if surface == "PIL.ImageFont.FreeTypeFont":
             return binding(self.ensure_font())
+        if surface == "PIL.ImageText.Text":
+            text = self.scenario_values.get("text", literal("Hello"))
+            if text.get("kind") == "bytes" and isinstance(text.get("value"), list):
+                text = self.inline_bytes(
+                    "image-text-input",
+                    bytes(text["value"]),
+                    "application/octet-stream",
+                )
+            font_step = self.ensure_font()
+            font = binding(font_step)
+            metric_override = self.scenario_values.get("font_metric_override")
+            if metric_override is not None:
+                font = literal(
+                    {
+                        "protocol": "font-metric-override",
+                        "font_step_id": font_step,
+                        **metric_override,
+                    }
+                )
+            text_step = self.add_step(
+                "PIL.ImageText",
+                "Text",
+                receiver=None,
+                arguments={
+                    "text": text,
+                    "font": font,
+                },
+                step_id=self.next_step_id("setup-image-text"),
+            )
+            self._text_step = text_step
+            return binding(text_step)
         if surface == "PIL.ImageFont.ImageFont":
             font_step = self.add_step(
                 "PIL.ImageFont",
@@ -4738,6 +4832,18 @@ class WorkflowBuilder:
                     "application/octet-stream",
                 )
 
+        if (
+            parameter_id == "font"
+            and self.scenario_values.get("font_metric_override") is not None
+        ):
+            return literal(
+                {
+                    "protocol": "font-metric-override",
+                    "font_step_id": self.ensure_font(),
+                    **self.scenario_values["font_metric_override"],
+                }
+            )
+
         if parameter_id == "font" and self.scenario_font is not None:
             if "font" in value_types and "path" not in value_types:
                 return binding(self.ensure_font())
@@ -4843,6 +4949,31 @@ class WorkflowBuilder:
                 value = transpose_values[value]
             if value is not None:
                 return literal(value)
+
+        if (
+            parameter_id == "width"
+            and self.primary_surface == "PIL.ImageText.Text"
+            and self.primary_operation == "wrap"
+        ):
+            text_override = self.scenario_values.get("text_subclass_override")
+            if text_override is not None:
+                if self._text_step is None:
+                    raise ValueError(
+                        "Text subclass override requires its Text receiver step"
+                    )
+                override = dict(text_override)
+                wrap_width = override.pop("wrap_width", 25)
+                return literal(
+                    {
+                        "protocol": "image-text-subclass-hook-override",
+                        "text_step_id": self._text_step,
+                        "width": wrap_width,
+                        **override,
+                    }
+                )
+            # Keep the default wrap workflow on a successful one-line path.
+            # Focused parameter cases and explicit scenarios return above.
+            return literal(500)
 
         if (
             self.primary_operation == "transform"
@@ -6981,6 +7112,11 @@ class WorkflowBuilder:
                         step_id="observe-receiver",
                     )
                 )
+            observations.extend(
+                self.observe_image_receiver_operations(
+                    observation_step or receiver_step
+                )
+            )
             if self.scenario_observe_result is not None:
                 observations.append(
                     self.add_step(
@@ -7225,6 +7361,11 @@ class WorkflowBuilder:
                     )
                 )
 
+        if self.scenario_observe_receiver_operations:
+            observations.extend(
+                self.observe_image_receiver_operations(self.ensure_image())
+            )
+
         if self.scenario_observe_stat_properties:
             # A Stat constructor or a Stat.extrema reduction is a public
             # workflow.  Observe the properties on the constructed Stat
@@ -7391,6 +7532,7 @@ def build_parity_case(
     scenario_observe_result: str | None = None,
     scenario_materialize_result: bool = False,
     scenario_observe_receiver: bool = False,
+    scenario_observe_receiver_operations: list[str] | None = None,
     scenario_observe_stat_properties: bool = False,
     scenario_outline_curve: bool = False,
     scenario_outline_empty: bool = False,
@@ -7445,6 +7587,7 @@ def build_parity_case(
         scenario_observe_result=scenario_observe_result,
         scenario_materialize_result=scenario_materialize_result,
         scenario_observe_receiver=scenario_observe_receiver,
+        scenario_observe_receiver_operations=scenario_observe_receiver_operations or [],
         scenario_observe_stat_properties=scenario_observe_stat_properties,
         scenario_outline_curve=scenario_outline_curve,
         scenario_outline_empty=scenario_outline_empty,
@@ -14804,9 +14947,9 @@ def build_nuanced_cases(
         """Build valid ImageOps inputs for non-native SIMD fallback modes.
 
         Ordinary L/LA/RGB/RGBA byte images use native byte transforms in the
-        SIMD adapter. CMYK and palette images exercise the public packed
-        scalar path for operations whose ImageOps contract accepts them.
-        Posterize's unsupported modes stay in its separate error batch.
+        SIMD adapter. CMYK images exercise the public packed scalar path for
+        operations whose ImageOps contract accepts them. Palette Solarize is a
+        Rust-only extension and is intentionally excluded from Pillow parity.
         """
 
         if pattern < 50:
@@ -14821,12 +14964,9 @@ def build_nuanced_cases(
             values: dict[str, Any] = {}
         else:
             operation = "solarize"
-            mode = "CMYK" if pattern < 75 else "P"
+            mode = "CMYK"
             seed = 7 + (pattern * 37) % 240
-            if mode == "CMYK":
-                pixel = [seed, (seed + 41) % 256, (seed + 83) % 256, (seed + 127) % 256]
-            else:
-                pixel = seed
+            pixel = [seed, (seed + 41) % 256, (seed + 83) % 256, (seed + 127) % 256]
             values = {"threshold": literal((pattern * 19) % 256)}
 
         return {
@@ -16198,6 +16338,221 @@ def build_nuanced_cases(
             "values": {"text": literal("A\u0301\nAV🙂")},
         },
         {
+            "surface": "PIL.ImageText.Text",
+            "operation": "wrap",
+            "requirement_suffix": "behavior.default",
+            "name": "lone-surrogate-height-remainder",
+            "values": {
+                "text": literal("A" + chr(0xD800) + "V"),
+                "width": literal(500),
+                "height": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.ImageText.Text",
+            "operation": "wrap",
+            "requirement_suffix": "behavior.default",
+            "name": "font-getbbox-instance-override",
+            "values": {
+                "text": literal("ab cd"),
+                "width": literal(25),
+                "height": literal(30),
+                "font_metric_override": {"method": "getbbox"},
+            },
+        },
+        {
+            "surface": "PIL.ImageText.Text",
+            "operation": "wrap",
+            "requirement_suffix": "behavior.default",
+            "name": "font-getbbox-instance-override-fault-order",
+            "values": {
+                "text": literal("ab cd"),
+                "width": literal(25),
+                "height": literal(30),
+                "font_metric_override": {"method": "getbbox", "raise_on_call": 3},
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "textlength",
+            "requirement_suffix": "behavior.default",
+            "name": "font-getlength-instance-override",
+            "font": "font/fonts/DejaVuSans.ttf",
+            "values": {
+                "text": literal("abc"),
+                "font_metric_override": {"method": "getlength"},
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "textlength",
+            "requirement_suffix": "behavior.default",
+            "name": "font-getlength-instance-override-fault-order",
+            "font": "font/fonts/DejaVuSans.ttf",
+            "values": {
+                "text": literal("abc"),
+                "font_metric_override": {
+                    "method": "getlength",
+                    "raise_on_call": 1,
+                },
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "textbbox",
+            "requirement_suffix": "behavior.default",
+            "name": "none-font-size-selects-sized-default",
+            "mode": "RGB",
+            "size": [64, 36],
+            "values": {
+                "text": literal("WIP"),
+                "font": literal(None),
+                "font_size": literal(32),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "textbbox",
+            "requirement_suffix": "behavior.default",
+            "name": "falsey-font-uses-unsized-default",
+            "mode": "RGB",
+            "size": [64, 36],
+            "values": {
+                "text": literal("WIP"),
+                "font": literal({"protocol": "falsey-font"}),
+                "font_size": literal(32),
+            },
+        },
+        *(
+            {
+                "surface": "PIL.ImageDraw.ImageDraw",
+                "operation": "text",
+                "requirement_suffix": "behavior.default",
+                "name": f"custom-font-getmask2-unpack-{count}",
+                "values": {
+                    "text": literal("X"),
+                    "font": literal(
+                        {"protocol": "custom-font-mask", "result_count": count}
+                    ),
+                },
+            }
+            for count in (0, 1, 3)
+        ),
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "custom-font-getmask2-duplicate-start-keyword",
+            "values": {
+                "text": literal("X"),
+                "font": literal(
+                    {
+                        "protocol": "custom-font-mask",
+                        "duplicate_keyword": "start",
+                    }
+                ),
+                "kwargs": literal({"start": [0, 0]}),
+            },
+        },
+        {
+            "surface": "PIL.ImageText.Text",
+            "operation": "wrap",
+            "requirement_suffix": "behavior.default",
+            "name": "text-subclass-getbbox-override",
+            "values": {
+                "text": literal("ab cd"),
+                "height": literal(30),
+                "text_subclass_override": {"method": "_get_bbox"},
+            },
+        },
+        {
+            "surface": "PIL.ImageText.Text",
+            "operation": "wrap",
+            "requirement_suffix": "behavior.default",
+            "name": "text-subclass-getbbox-override-fault-order",
+            "values": {
+                "text": literal("ab cd"),
+                "height": literal(30),
+                "text_subclass_override": {
+                    "method": "_get_bbox",
+                    "raise_on_call": 3,
+                },
+            },
+        },
+        {
+            "surface": "PIL.ImageText.Text",
+            "operation": "wrap",
+            "requirement_suffix": "behavior.default",
+            "name": "text-subclass-split-override-output",
+            "values": {
+                "text": literal("ab cd"),
+                "height": literal(10),
+                "text_subclass_override": {
+                    "method": "_split",
+                    "wrap_width": 500,
+                    "y_offset": -100,
+                },
+            },
+        },
+        {
+            "surface": "PIL.ImageText.Text",
+            "operation": "wrap",
+            "requirement_suffix": "behavior.default",
+            "name": "text-subclass-get-fontmode-fault-order",
+            "values": {
+                "text": literal("ab cd"),
+                "height": literal(30),
+                "text_subclass_override": {
+                    "method": "_get_fontmode",
+                    "raise_on_call": 1,
+                },
+            },
+        },
+        {
+            "surface": "PIL.ImageText.Text",
+            "operation": "wrap",
+            "requirement_suffix": "behavior.default",
+            "name": "bytes-height-remainder",
+            "values": {
+                "text": bytes_literal([65, 233]),
+                "width": literal(500),
+                "height": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.ImageText.Text",
+            "operation": "wrap",
+            "requirement_suffix": "behavior.default",
+            "name": "scaling-shrink-mutates-font",
+            "values": {
+                "text": literal("Hello World"),
+                "width": literal(70),
+                "height": literal(24),
+                "scaling": literal("shrink"),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getlength",
+            "requirement_suffix": "parameter.text",
+            "name": "lone-surrogate",
+            "values": {"text": literal("A" + chr(0xD800) + "V")},
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getbbox",
+            "requirement_suffix": "parameter.text",
+            "name": "lone-surrogate",
+            "values": {"text": literal("A" + chr(0xD800) + "V")},
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask",
+            "requirement_suffix": "parameter.text",
+            "name": "lone-surrogate",
+            "values": {"text": literal("A" + chr(0xD800) + "V")},
+        },
+        {
             "surface": "PIL.ImageFont.FreeTypeFont",
             "operation": "getbbox",
             "requirement_suffix": "parameter.text",
@@ -17157,6 +17512,14 @@ def build_nuanced_cases(
             "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "text",
             "requirement_suffix": "parameter.text",
+            "name": "lone-surrogate-multiline",
+            "font": "font/fonts/DejaVuSans.ttf",
+            "values": {"text": literal("A\n" + chr(0xD800) + "V")},
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "parameter.text",
             "name": "bytes-latin1",
             "font": "font/fonts/DejaVuSans.ttf",
             "values": {"text": bytes_literal([65, 233])},
@@ -17370,6 +17733,14 @@ def build_nuanced_cases(
             "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "textbbox",
             "requirement_suffix": "parameter.text",
+            "name": "lone-surrogate-multiline",
+            "font": "font/fonts/DejaVuSans.ttf",
+            "values": {"text": literal("A\n" + chr(0xD800) + "V")},
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "textbbox",
+            "requirement_suffix": "parameter.text",
             "name": "bytes-latin1",
             "font": "font/fonts/DejaVuSans.ttf",
             "values": {"text": bytes_literal([65, 233])},
@@ -17381,6 +17752,14 @@ def build_nuanced_cases(
             "name": "bytes-latin1",
             "font": "font/fonts/DejaVuSans.ttf",
             "values": {"text": bytes_literal([65, 233])},
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "textlength",
+            "requirement_suffix": "parameter.text",
+            "name": "lone-surrogate",
+            "font": "font/fonts/DejaVuSans.ttf",
+            "values": {"text": literal("A" + chr(0xD800) + "V")},
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
@@ -18019,6 +18398,7 @@ def build_nuanced_cases(
             "chain": "p-attached-palette-text",
             "mode": "P",
             "observe_receiver": True,
+            "observe_receiver_operations": ["getpalette"],
             "values": {
                 "text": literal("A"),
                 "fill": literal(1),
@@ -18031,11 +18411,69 @@ def build_nuanced_cases(
             "name": "attached-palette-negative-position",
             "chain": "p-attached-palette-text",
             "mode": "P",
+            "observe_receiver": True,
+            "observe_receiver_operations": ["getpalette"],
             "values": {
                 "xy": literal([-3, -3]),
                 "text": literal("A"),
                 "fill": literal(1),
             },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "attached-palette-new-color",
+            "chain": "p-attached-palette-text",
+            "mode": "P",
+            "observe_receiver": True,
+            "observe_receiver_operations": ["getpalette"],
+            "values": {
+                "text": literal("A"),
+                "fill": literal([70, 80, 90]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "attached-palette-allocation-before-anchor-error",
+            "chain": "p-attached-palette-text",
+            "mode": "P",
+            "values": {
+                "text": literal("A"),
+                "fill": literal([70, 80, 90]),
+                "anchor": literal("bad-anchor"),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "attached-palette-float-tuple-cache-after-error",
+            "chain": "p-attached-palette-text",
+            "mode": "P",
+            "observe_receiver": True,
+            "observe_receiver_operations": ["getpalette"],
+            "values": {
+                "text": literal("A"),
+                "fill": literal([70.5, 80, 90]),
+            },
+            # ImagePalette.getcolor inserts this tuple in its public color
+            # cache before bytes(color) raises. The later point call binds only
+            # to the pre-existing Draw object, so it can reveal that mutation.
+            "independent_steps_after_call": [
+                {
+                    "step_id": "post-error-cached-color-point",
+                    "surface": "PIL.ImageDraw.ImageDraw",
+                    "operation": "point",
+                    "receiver": binding("setup-draw"),
+                    "arguments": {
+                        "xy": literal([0, 0]),
+                        "fill": literal([70.5, 80, 90]),
+                    },
+                }
+            ],
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
@@ -20147,6 +20585,258 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "cmyk-integer-packed-ink",
+            "mode": "CMYK",
+            "size": [24, 18],
+            "edge": "noise-fill",
+            "seed": 20261112,
+            "values": {
+                "text": literal("CMYK"),
+                "fill": literal([211, 37, 89, 173]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "f-float-text-ink-bits",
+            "mode": "F",
+            "size": [24, 18],
+            "font": "font/fonts/DejaVuSans.ttf",
+            "observe_receiver": True,
+            "values": {
+                "text": literal("F"),
+                "fill": literal(1.25),
+            },
+        },
+        *(
+            {
+                "surface": "PIL.ImageDraw.ImageDraw",
+                "operation": "text",
+                "requirement_suffix": "behavior.default",
+                "name": f"{mode.lower().replace(';', '-')}-native-mask-byte-order",
+                "mode": mode,
+                "size": [24, 18],
+                "font": "font/fonts/DejaVuSans.ttf",
+                "observe_receiver": True,
+                "values": {
+                    "text": literal("I16"),
+                    "fill": literal(211),
+                },
+            }
+            for mode in ("I;16", "I;16L", "I;16B", "I;16N")
+        ),
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
+            "name": "lab-tuple-ink-encoding",
+            "mode": "LAB",
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([211, 37, 89]),
+            },
+        },
+        *(
+            {
+                "surface": "PIL.ImageDraw.ImageDraw",
+                "operation": "point",
+                "requirement_suffix": "behavior.default",
+                "name": f"rgb-scalar-i64-{name}",
+                "mode": "RGB",
+                "observe_receiver": True,
+                "values": {
+                    "xy": literal([2, 2]),
+                    "fill": literal(value),
+                },
+            }
+            for name, value in (
+                ("min", -(1 << 63)),
+                ("max", (1 << 63) - 1),
+            )
+        ),
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-scalar-overflow-i64",
+            "mode": "RGB",
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal(1 << 63),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-scalar-underflow-i64",
+            "mode": "RGB",
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal(-(1 << 63) - 1),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-singleton-tuple-packed-ink",
+            "mode": "RGB",
+            "observe_receiver": True,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([0x12345678]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-tuple-c-int-max",
+            "mode": "RGB",
+            "observe_receiver": True,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([1, (1 << 31) - 1, 3]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-tuple-c-int-overflow",
+            "mode": "RGB",
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([1, 1 << 31, 3]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-tuple-c-int-underflow",
+            "mode": "RGB",
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([1, -(1 << 31) - 1, 3]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-tuple-first-long-long-overflow",
+            "mode": "RGB",
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([1 << 63, 0, 0]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-tuple-first-long-long-underflow",
+            "mode": "RGB",
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([-(1 << 63) - 1, 0, 0]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-tuple-wide-channel-c-int-overflow",
+            "mode": "RGB",
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([0, 1 << 31, 0]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
+            "name": "f-scalar-wide-integer",
+            "mode": "F",
+            "observe_receiver": True,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal(1 << 100),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
+            "name": "f-scalar-wide-negative-integer",
+            "mode": "F",
+            "observe_receiver": True,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal(-(1 << 100)),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
+            "name": "f-scalar-int-to-float-overflow",
+            "mode": "F",
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal(1 << 1024),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "rgbx-fourth-byte-alpha-blend",
+            "mode": "RGBX",
+            "size": [24, 18],
+            "edge": "noise-fill",
+            "seed": 20261109,
+            "values": {
+                "text": literal("RGBX"),
+                "fill": literal([211, 17, 83, 129]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-premultiplied-channel-alpha-blend",
+            "mode": "RGBa",
+            "size": [24, 18],
+            "edge": "noise-fill",
+            "seed": 20261110,
+            "values": {
+                "text": literal("RGBa"),
+                "fill": literal([211, 17, 83, 129]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "luma-premultiplied-alpha-fill",
+            "mode": "La",
+            "size": [24, 18],
+            "edge": "noise-fill",
+            "seed": 20261111,
+            "values": {
+                "text": literal("La"),
+                "fill": literal([211, 129]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "multiline_text",
             "requirement_suffix": "behavior.default",
             "name": "centered-anchored",
@@ -21021,6 +21711,67 @@ def build_nuanced_cases(
                 },
             }
             for mode in ("P", "PA")
+        ),
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "thumbnail",
+            "requirement_suffix": "parameter.resample",
+            "name": "pa-filtered-bilinear",
+            "mode": "PA",
+            "edge": "nonzero-pixel",
+            "pixel": [3, 128],
+            "size": [16, 16],
+            "observe_receiver": True,
+            "values": {
+                "size": literal([4, 4]),
+                "resample": literal(2),
+            },
+        },
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "thumbnail",
+                "requirement_suffix": "parameter.resample",
+                "name": f"pa-filtered-{filter_name}",
+                "mode": "PA",
+                "edge": "nonzero-pixel",
+                "pixel": [3, 128],
+                "size": [16, 16],
+                "observe_receiver": True,
+                "values": {
+                    "size": literal([4, 4]),
+                    "resample": literal(filter_code),
+                },
+            }
+            for filter_name, filter_code in (
+                ("box", 4),
+                ("hamming", 5),
+                ("bicubic", 3),
+                ("lanczos", 1),
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "thumbnail",
+                "requirement_suffix": "parameter.reducing-gap",
+                "name": f"pa-bilinear-reducing-gap-{gap_name}",
+                "mode": "PA",
+                "edge": "nonzero-pixel",
+                "pixel": [3, 128],
+                "size": [16, 16],
+                "observe_receiver": True,
+                "values": {
+                    "size": literal([4, 4]),
+                    "resample": literal(2),
+                    "reducing_gap": literal(reducing_gap),
+                },
+            }
+            for gap_name, reducing_gap in (
+                ("none", None),
+                ("one", 1.0),
+                ("four", 4.0),
+            )
         ),
         {
             "surface": "PIL.Image.Image",
@@ -28036,11 +28787,26 @@ def build_nuanced_cases(
             }
             for index, (canvas_mode, fill) in enumerate(
                 (
-                    ("RGB", [211, 37, 89]),
-                    ("RGBA", [211, 37, 89, 173]),
+                    ("1", 1),
                     ("L", 211),
                     ("LA", [211, 173]),
+                    ("La", [211, 173]),
                     ("P", 37),
+                    ("PA", [37, 173]),
+                    ("RGB", [211, 37, 89]),
+                    ("RGBA", [211, 37, 89, 173]),
+                    ("RGBa", [211, 37, 89, 173]),
+                    ("RGBX", [211, 37, 89, 173]),
+                    ("CMYK", [211, 37, 89, 173]),
+                    ("YCbCr", [211, 37, 89]),
+                    ("LAB", [211, 37, 89]),
+                    ("HSV", [211, 37, 89]),
+                    ("I", 211),
+                    ("F", 211.0),
+                    ("I;16", 211),
+                    ("I;16L", 211),
+                    ("I;16B", 211),
+                    ("I;16N", 211),
                 )
             )
             for mask_index, (bitmap_mode, bitmap_color, xy) in enumerate(
@@ -29196,26 +29962,6 @@ def build_nuanced_cases(
         # of ImageOps.autocontrast through public image/mask pixels and an
         # observed result. Keep the input matrix bounded at 100 cases.
         *(autocontrast_mask_nonzero_spec(pattern) for pattern in range(100)),
-        # Coverage batch 2026-08-14ar: exercise the reachable public
-        # ImageOps.posterize mode-P NotImplementedError branch with
-        # representative valid palette images and bit-depth inputs.
-        *(
-            {
-                "surface": "PIL.ImageOps",
-                "operation": "posterize",
-                "requirement_suffix": "behavior.default",
-                "name": f"coverage-batch-imageops-posterize-p-{case_number}",
-                "mode": "P",
-                "size": size,
-                "edge": "nonzero-pixel",
-                "pixel": pixel,
-                "values": {"bits": literal(bits)},
-            }
-            for case_number, size, pixel, bits in (
-                ("000", [5, 4], 7, 1),
-                ("001", [6, 4], 36, 2),
-            )
-        ),
         # Coverage batch 2026-08-15a: exercise public CMYK/P ImageOps modes
         # that select the packed SIMD scalar fallback rather than the native
         # byte transform. Keep this at exactly 100 valid input cases.
@@ -31249,6 +31995,23 @@ def build_nuanced_cases(
             {
                 "surface": "PIL.ImageOps",
                 "operation": "expand",
+                "requirement_suffix": "parameter.fill",
+                "name": f"{mode.lower().replace(';', '-')}-fill-low-16-{kind}",
+                "mode": mode,
+                "size": [1, 1],
+                "values": {
+                    "border": literal(1),
+                    "fill": literal(fill),
+                },
+                "observe_result": "tobytes",
+            }
+            for mode in ("I;16", "I;16L", "I;16B", "I;16N")
+            for kind, fill in (("high", 70000), ("negative", -1))
+        ),
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": "expand",
                 "requirement_suffix": "behavior.default",
                 "name": f"{mode.lower()}-scalar-fill-keeps-native-fourth-zero",
                 "mode": mode,
@@ -32003,6 +32766,24 @@ def build_nuanced_cases(
             "name": "no-majority",
             "mode": "L",
             "edge": "mode-filter-no-majority",
+            "values": {"size": literal(3)},
+        },
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "ModeFilter",
+            "requirement_suffix": "behavior.default",
+            "name": "palette-index-output-and-palette-preserved",
+            "mode": "P",
+            "edge": "mode-filter-pattern",
+            "values": {"size": literal(3)},
+        },
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "ModeFilter",
+            "requirement_suffix": "mode.pa",
+            "name": "multiband-merge-palette-metadata",
+            "mode": "PA",
+            "edge": "mode-filter-pa-palette",
             "values": {"size": literal(3)},
         },
         {
@@ -33605,15 +34386,6 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "putalpha",
             "requirement_suffix": "behavior.default",
-            "name": "i16-frombytes-unsupported",
-            "mode": "I;16",
-            "scenario_inline_image": "i16-frombytes",
-            "values": {"alpha": literal(192)},
-        },
-        {
-            "surface": "PIL.Image.Image",
-            "operation": "putalpha",
-            "requirement_suffix": "behavior.default",
             "name": "i-mask-unsupported",
             "mode": "I",
             "mask_mode": "L",
@@ -33698,6 +34470,28 @@ def build_nuanced_cases(
             "name": "invalid-alpha-type",
             "mode": "RGBA",
             "values": {"alpha": literal("not-an-alpha")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putalpha",
+            "requirement_suffix": "behavior.default",
+            "name": "scalar-index-value-error-fallback",
+            "mode": "RGB",
+            "observe_receiver": True,
+            "values": {
+                "alpha": literal(public_index_error_literal("ValueError")),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putalpha",
+            "requirement_suffix": "behavior.default",
+            "name": "scalar-index-attribute-error-fallback",
+            "mode": "RGB",
+            "observe_receiver": True,
+            "values": {
+                "alpha": literal(public_index_error_literal("AttributeError")),
+            },
         },
         {
             "surface": "PIL.Image.Image",
@@ -35512,6 +36306,26 @@ def build_nuanced_cases(
             "name": "invalid-selector-type",
             "mode": "RGBA",
             "values": {"channel": literal([0])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getchannel",
+            "requirement_suffix": "behavior.default",
+            "name": "index-value-error-propagates",
+            "mode": "RGB",
+            "values": {
+                "channel": literal(public_index_error_literal("ValueError")),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getchannel",
+            "requirement_suffix": "behavior.default",
+            "name": "index-attribute-error-propagates",
+            "mode": "RGB",
+            "values": {
+                "channel": literal(public_index_error_literal("AttributeError")),
+            },
         },
         {
             "surface": "PIL.Image.Image",
@@ -40432,19 +41246,48 @@ def build_nuanced_cases(
             {
                 "surface": "PIL.ImageFilter",
                 "operation": filter_name,
-                "requirement_suffix": f"mode.{mode.lower()}",
-                "name": f"coverage-batch-filter-{mode.lower()}-size-{size}",
+                "requirement_suffix": f"mode.{mode_slug(mode)}",
+                "name": f"coverage-batch-filter-{mode_slug(mode)}-size-{size}",
                 "mode": mode,
                 "edge": "nonzero-pixel",
                 "pixel": pixel,
                 "values": {"size": literal(size)},
             }
-            for filter_name in ("MaxFilter", "MinFilter", "MedianFilter", "ModeFilter")
+            for filter_name in ("MaxFilter", "MinFilter", "MedianFilter")
             for mode, pixel in (
                 ("L", 180),
                 ("LA", [180, 128]),
                 ("RGB", [180, 120, 60]),
                 ("RGBA", [180, 120, 60, 128]),
+            )
+            for size in (1, 3, 5)
+        ),
+        *(
+            {
+                "surface": "PIL.ImageFilter",
+                "operation": "ModeFilter",
+                "requirement_suffix": f"mode.{mode_slug(mode)}",
+                "name": f"coverage-batch-filter-{mode_slug(mode)}-size-{size}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "values": {"size": literal(size)},
+            }
+            for mode, pixel in (
+                ("1", 1),
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("La", [180, 128]),
+                ("P", 180),
+                ("PA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+                ("RGBa", [180, 120, 60, 128]),
+                ("RGBX", [180, 120, 60, 128]),
+                ("CMYK", [180, 120, 60, 128]),
+                ("YCbCr", [180, 120, 60]),
+                ("LAB", [180, 120, 60]),
+                ("HSV", [180, 120, 60]),
             )
             for size in (1, 3, 5)
         ),
@@ -40886,7 +41729,7 @@ def build_nuanced_cases(
                 ("solarize", "L", 0, {"threshold": literal(128)}, "simd-campaign-pattern", 104),
                 ("solarize", "RGB", [0, 0, 0], {"threshold": literal(128)}, "simd-campaign-pattern", 105),
                 ("solarize", "RGB", [17, 83, 149], {"threshold": literal(127)}, "nonzero-pixel", None),
-                ("posterize", "P", 11, {"bits": literal(4)}, "nonzero-pixel", None),
+                ("posterize", "L", 11, {"bits": literal(4)}, "nonzero-pixel", None),
                 ("posterize", "PA", [11, 191], {"bits": literal(7)}, "nonzero-pixel", None),
                 ("posterize", "RGB", [17, 83, 149], {"bits": literal(8)}, "nonzero-pixel", None),
                 ("posterize", "RGBA", [17, 83, 149, 127], {"bits": literal(1)}, "nonzero-pixel", None),
@@ -43130,6 +43973,9 @@ def build_nuanced_cases(
             scenario_observe_result=spec.get("observe_result"),
             scenario_materialize_result=spec.get("materialize_result", False),
             scenario_observe_receiver=spec.get("observe_receiver", False),
+            scenario_observe_receiver_operations=spec.get(
+                "observe_receiver_operations", []
+            ),
             scenario_observe_stat_properties=spec.get(
                 "observe_stat_properties", False
             ),
@@ -43137,6 +43983,29 @@ def build_nuanced_cases(
             scenario_outline_empty=spec.get("outline_empty", False),
             scenario_comparisons=spec.get("comparisons"),
         )
+        independent_steps = spec.get("independent_steps_after_call", [])
+        if independent_steps:
+            call_index = next(
+                index
+                for index, step in enumerate(case["steps"])
+                if step["step_id"] == "call"
+            )
+            existing_step_ids = {step["step_id"] for step in case["steps"]}
+            new_step_ids = [step["step_id"] for step in independent_steps]
+            if len(new_step_ids) != len(set(new_step_ids)) or any(
+                step_id in existing_step_ids for step_id in new_step_ids
+            ):
+                raise ValueError(
+                    f"{case['case_id']}: duplicate independent continuation step ID"
+                )
+            case["steps"][call_index + 1 : call_index + 1] = copy.deepcopy(
+                independent_steps
+            )
+            call_observation_index = case["observations"].index("call")
+            case["observations"][call_observation_index + 1 : call_observation_index + 1] = (
+                new_step_ids
+            )
+            case["continue_independent_steps_after_error"] = True
         if spec.get("observe_font_style"):
             # These public name/variant observations already belong to the
             # committed corpus. Keep regeneration from silently dropping them.
@@ -44044,7 +44913,7 @@ def convert_mode_audit_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             "steps": steps,
             "observations": ["call", "materialize"],
         }
-        if target == "LAB":
+        if target == "LAB" and mode != "LAB":
             case["comparisons"] = {
                 "call": {
                     "kind": "image",
@@ -44055,6 +44924,20 @@ def convert_mode_audit_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                         "LittleCMS creates an ICC profile timestamp at runtime; "
                         "compare all pixels and profile bytes exactly except the "
                         "validated dateTimeNumber field"
+                    ),
+                }
+            }
+        elif mode == "LAB" and target in {"RGB", "RGBA", "RGBX"}:
+            case["comparisons"] = {
+                "call": {
+                    "kind": "image",
+                    "pixel_mode": "exact",
+                    "maximum_channel_delta": 0,
+                    "metadata_mode": "dynamic_icc_datetime",
+                    "reason": (
+                        "LittleCMS creates an sRGB ICC profile timestamp at runtime; "
+                        "compare all pixels and metadata exactly except the validated "
+                        "dateTimeNumber field"
                     ),
                 }
             }
@@ -44072,6 +44955,11 @@ def convert_mode_audit_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                                for i in range(width * height))
             for target in [*modes, "LAB"]:
                 cases.append(make_case(mode, target, (width, height), raw, f"{width}x{height}"))
+    for label, value in (("negative", -1), ("above-byte", 300), ("in-range", 128)):
+        raw = struct.pack("<i", value)
+        cases.append(
+            make_case("I", "I;16N", (1, 1), raw, f"i16n-{label}")
+        )
     values = (0, 1, 2, 7, 13, 63, 64, 127, 128, 129, 191, 254, 255)
     for mode, target in (("LA", "La"), ("La", "LA"), ("RGBA", "RGBa"),
                          ("RGBa", "RGBA"), ("RGBa", "RGB"), ("RGBA", "RGBX"),
@@ -44085,6 +44973,9 @@ def convert_mode_audit_parity_cases(surface_id: str) -> list[dict[str, Any]]:
         raw = struct.pack(">14H" if mode == "I;16B" else "<14H", *words)
         for target in ("I", "F", "P", "PA", "HSV", "YCbCr"):
             cases.append(make_case(mode, target, (7, 2), raw, "typed-boundaries"))
+    lab_raw = random.Random("convert-LAB-source-boundaries").randbytes(17 * 3 * 3)
+    for target in ("LAB", "RGB", "RGBA", "RGBX"):
+        cases.append(make_case("LAB", target, (17, 3), lab_raw, "source-17x3"))
     return cases
 
 
@@ -46358,7 +47249,7 @@ def solarize_threshold_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                 "assets": assets, "steps": steps, "observations": ["call", "materialize"]}
 
     modes = {"1": 0, "L": 1, "LA": 2, "RGB": 3, "RGBA": 4, "RGBa": 4, "La": 2,
-             "RGBX": 4, "CMYK": 4, "P": 1, "PA": 2, "HSV": 3, "YCbCr": 3,
+             "RGBX": 4, "CMYK": 4, "PA": 2, "HSV": 3, "YCbCr": 3,
              "I": 4, "F": 4, "I;16": 2, "I;16L": 2, "I;16B": 2, "I;16N": 2}
     for mode, channels in modes.items():
         for index, threshold in enumerate((-1, 0, 0.5, 127.5, 128, 255, 255.1, 256, 300,
@@ -46621,6 +47512,60 @@ def brightness_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                     "observations": ["call", "materialize"],
                 }
             )
+    raw = bytes([10])
+    cases.append(
+        {
+            "case_id": f"{target}.enhance.nuanced.float32-factor-rounding-sample-10",
+            "surface": target,
+            "operation": "enhance",
+            "covers": [f"{target}.enhance.parameter.factor"],
+            "assets": [
+                {
+                    "id": "pixels",
+                    "kind": "inline",
+                    "encoding": "base64",
+                    "data": base64.b64encode(raw).decode(),
+                    "sha256": hashlib.sha256(raw).hexdigest(),
+                    "media_type": "application/octet-stream",
+                }
+            ],
+            "steps": [
+                {
+                    "step_id": "image",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("L"),
+                        "size": literal([1, 1]),
+                        "data": asset_value("pixels"),
+                    },
+                },
+                {
+                    "step_id": "enhancer",
+                    "surface": "PIL.ImageEnhance",
+                    "operation": "Brightness",
+                    "receiver": None,
+                    "arguments": {"image": binding("image")},
+                },
+                {
+                    "step_id": "call",
+                    "surface": target,
+                    "operation": "enhance",
+                    "receiver": binding("enhancer"),
+                    "arguments": {"factor": literal(0.09999999999999999)},
+                },
+                {
+                    "step_id": "materialize",
+                    "surface": "PIL.Image.Image",
+                    "operation": "tobytes",
+                    "receiver": binding("call"),
+                    "arguments": {},
+                },
+            ],
+            "observations": ["enhancer", "call", "materialize"],
+        }
+    )
     return cases
 
 
@@ -48633,7 +49578,7 @@ def metadata_result_parity_cases(surface_id: str) -> list[dict[str, Any]]:
         )
 
     if surface_id == "PIL.Image.Image":
-        return [
+        cases = [
             unary_case("PIL.Image.Image", "copy"),
             unary_case(
                 "PIL.Image.Image", "convert", arguments={"mode": literal("L")}
@@ -48675,6 +49620,46 @@ def metadata_result_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                 arguments={"dest_map": literal(list(range(256)))},
             ),
         ]
+        image = literal(image_with_info("ModeFilter source", mode="L"))
+        cases.append(
+            make_case(
+                "PIL.Image.Image",
+                "filter",
+                "mode-filter-info-map-copy",
+                [
+                    {
+                        "step_id": "mode-filter",
+                        "surface": "PIL.ImageFilter",
+                        "operation": "ModeFilter",
+                        "receiver": None,
+                        "arguments": {"size": literal(3)},
+                    },
+                    {
+                        "step_id": "call",
+                        "surface": "PIL.Image.Image",
+                        "operation": "filter",
+                        "receiver": image,
+                        "arguments": {"filter": binding("mode-filter")},
+                    },
+                    {
+                        "step_id": "result-info",
+                        "surface": "PIL.Image.Image",
+                        "operation": "info",
+                        "receiver": binding("call"),
+                        "arguments": {},
+                    },
+                    {
+                        "step_id": "result-bytes",
+                        "surface": "PIL.Image.Image",
+                        "operation": "tobytes",
+                        "receiver": binding("call"),
+                        "arguments": {},
+                    },
+                ],
+                ["call", "result-info", "result-bytes"],
+            )
+        )
+        return cases
 
     if surface_id == "PIL.ImageOps":
         cases = [
@@ -48903,6 +49888,9 @@ def build_crash_quarantine_cases(
                 case_id=f"{prefix}.nuanced.{slug(spec['name'])}",
                 scenario_font=spec.get("font"),
                 scenario_observe_receiver=spec.get("observe_receiver", False),
+            scenario_observe_receiver_operations=spec.get(
+                "observe_receiver_operations", []
+            ),
             )
         )
     return cases

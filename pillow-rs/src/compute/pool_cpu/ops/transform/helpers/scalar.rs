@@ -414,6 +414,24 @@ fn sample_transform_scalar32<const IS_FLOAT: bool>(
     sy: f64,
     filter: &ResampleFilter,
 ) -> [u8; 4] {
+    if matches!(filter, ResampleFilter::Nearest) {
+        // Pillow's Geometry.c nearest callback casts the mapped source
+        // coordinate directly. The half-pixel shift belongs to filtered
+        // sampling; applying it here moves samples left/up at every pixel.
+        if !sx.is_finite()
+            || !sy.is_finite()
+            || sx < 0.0
+            || sy < 0.0
+            || sx >= f64::from(src_w)
+            || sy >= f64::from(src_h)
+        {
+            return [0; 4];
+        }
+        let index = (sy as usize * src_w as usize + sx as usize) * 4;
+        return source[index..index + 4]
+            .try_into()
+            .expect("native sample width");
+    }
     if IS_FLOAT {
         sample_transform_f32(source, src_w, src_h, sx, sy, filter).to_le_bytes()
     } else {
@@ -656,7 +674,8 @@ pub(super) fn f64_fma_c(left: f64, right: f64, addend: f64) -> f64 {
 #[path = "scalar/projective.rs"]
 mod projective;
 pub(in crate::compute::pool_cpu::ops::transform) use projective::{
-    transform_mesh_scalar32, transform_projective_scalar32,
+    transform_mesh_scalar32, transform_mesh_scalar32_record_with_coefficients,
+    transform_projective_scalar32, transform_projective_scalar32_into,
 };
 
 /// Pillow uses 16.16 nearest affine coordinates when the map is not a

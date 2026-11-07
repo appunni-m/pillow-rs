@@ -1,7 +1,6 @@
 use crate::compute::pool_cpu::ops::draw::BitmapRegion;
 use crate::error::PilError;
 use crate::raster::DynamicImage;
-use crate::raster::GenericImageView;
 
 pub(crate) fn apply<const RGBA_MASK: bool>(
     mut image: DynamicImage,

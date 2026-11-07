@@ -76,7 +76,15 @@ fn draw_byte(value: i64) -> u8 {
     value.clamp(0, 255) as u8
 }
 
-// TODO(pillow-rs#3ptb): verify scalar long-long, tuple C-int, singleton, and wide-int boundaries in CPU parity.
+fn draw_component_byte(mode: Mode, channel: usize, value: i64) -> Result<u8, PilError> {
+    let value = draw_c_int_byte(value)?;
+    if mode == Mode::ImageLab8 && matches!(channel, 1 | 2) {
+        Ok(value.wrapping_add(128))
+    } else {
+        Ok(value)
+    }
+}
+
 fn resolve_integer_color(mode: Mode, value: i64) -> Result<(u8, u8, u8, u8), PilError> {
     if mode == Mode::ImageF32 {
         // Pillow first converts Python integers to double in PyFloat_AsDouble.
@@ -161,26 +169,33 @@ fn resolve_component_color(mode: Mode, values: &[i64]) -> Result<(u8, u8, u8, u8
     match values {
         [r, g, b] => Ok((
             draw_byte(*r),
-            draw_c_int_byte(*g)?,
-            draw_c_int_byte(*b)?,
+            draw_component_byte(mode, 1, *g)?,
+            draw_component_byte(mode, 2, *b)?,
             255,
         )),
         [r, g, b, a] => Ok((
             draw_byte(*r),
-            draw_c_int_byte(*g)?,
-            draw_c_int_byte(*b)?,
-            draw_c_int_byte(*a)?,
+            draw_component_byte(mode, 1, *g)?,
+            draw_component_byte(mode, 2, *b)?,
+            draw_component_byte(mode, 3, *a)?,
         )),
         _ => Err(draw_color_error()),
     }
 }
 
 fn integer_overflow_long_long() -> PilError {
-    PilError::OverflowError("Python int too large to convert to C long long".to_owned())
+    // Pillow surfaces CPython's PyLong_AsLongLong message for both signs.
+    PilError::OverflowError("int too big to convert".to_owned())
 }
 
-fn integer_overflow_c_int() -> PilError {
-    PilError::OverflowError("Python int too large to convert to C int".to_owned())
+fn integer_overflow_c_int(negative: bool) -> PilError {
+    // Tuple channels follow CPython's signed C-int conversion messages.
+    let message = if negative {
+        "signed integer is less than minimum"
+    } else {
+        "signed integer is greater than maximum"
+    };
+    PilError::OverflowError(message.to_owned())
 }
 
 fn integer_overflow_float() -> PilError {
@@ -250,9 +265,6 @@ fn resolve_wide_integer_color(
     mode: Mode,
     value: &PaletteColorComponent,
 ) -> Result<(u8, u8, u8, u8), PilError> {
-    if mode != Mode::ImageF32 {
-        return Err(integer_overflow_long_long());
-    }
     let PaletteColorComponent::WideInteger {
         negative,
         magnitude,
@@ -260,13 +272,16 @@ fn resolve_wide_integer_color(
     else {
         return Err(integer_overflow_long_long());
     };
+    if mode != Mode::ImageF32 {
+        return Err(integer_overflow_long_long());
+    }
     let value = wide_integer_as_f64(*negative, magnitude).ok_or_else(integer_overflow_float)?;
     let bytes = (value as f32).to_le_bytes();
     Ok((bytes[0], bytes[1], bytes[2], bytes[3]))
 }
 
 fn draw_c_int_byte(value: i64) -> Result<u8, PilError> {
-    let value = i32::try_from(value).map_err(|_| integer_overflow_c_int())?;
+    let value = i32::try_from(value).map_err(|_| integer_overflow_c_int(value < 0))?;
     Ok(draw_byte(i64::from(value)))
 }
 
@@ -310,15 +325,15 @@ fn resolve_wide_integer_components(
         match value {
             PaletteColorComponent::Integer(value) => {
                 if index > 0 && i32::try_from(*value).is_err() {
-                    return Err(integer_overflow_c_int());
+                    return Err(integer_overflow_c_int(*value < 0));
                 }
                 integer_values.push(*value);
             }
             PaletteColorComponent::WideInteger { .. } if index == 0 => {
                 return Err(integer_overflow_long_long());
             }
-            PaletteColorComponent::WideInteger { .. } => {
-                return Err(integer_overflow_c_int());
+            PaletteColorComponent::WideInteger { negative, .. } => {
+                return Err(integer_overflow_c_int(*negative));
             }
             PaletteColorComponent::Float(_) => return Err(draw_color_error()),
         }

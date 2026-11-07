@@ -55,7 +55,7 @@ pub(crate) fn resize(
 }
 
 fn resize_selected(
-    context: &ExecutionContext,
+    _context: &ExecutionContext,
     selection: &StrategySelection,
     input: &RgbaImage,
     width: u32,
@@ -70,7 +70,7 @@ fn resize_selected(
         }
         #[cfg(target_arch = "x86_64")]
         Architecture::AvxFma => super::avx::resize_impl::execute(
-            context, input, width, height, filter, bounds, selection,
+            _context, input, width, height, filter, bounds, selection,
         ),
         _ => Err(PilError::InternalError(format!(
             "ImageF32 Resize received non-F32 implementation selection {architecture:?}"

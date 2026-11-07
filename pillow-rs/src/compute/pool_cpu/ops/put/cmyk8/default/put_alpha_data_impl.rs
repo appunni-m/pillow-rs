@@ -3,7 +3,7 @@
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Rgba};
 use super::super::super::helpers::{
-    alpha_mask::MaskStrategy, put_alpha_data::{self as helpers, AlphaDataInput},
+    alpha_mask::MaskStrategy, put_alpha_data::AlphaDataInput,
 };
 
 pub(crate) type Input = crate::raster::RgbaImage;

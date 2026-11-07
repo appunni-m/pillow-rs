@@ -147,7 +147,7 @@ fn replace_target_lanes(
     lanes: Option<HiddenPixelLanes>,
 ) -> Result<(), PilError> {
     let has_expected_mode = matches!(
-        (target, output),
+        (target, &*output),
         (Mode::ImageRgb8, DynamicImage::ImageRgb8(_))
             | (Mode::ImageYCbCr8, DynamicImage::ImageYCbCr8(_))
             | (Mode::ImageLab8, DynamicImage::ImageLab8(_))

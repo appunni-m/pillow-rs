@@ -1,7 +1,7 @@
-use super::super::ops::{core_only, core_only_serial, inputs_for, pillow_kernel};
+use super::super::ops::{core_only, inputs_for, pillow_kernel};
 use crate::compute::Architecture;
 use crate::compute::registry::support::{
-    ImplementationSupport, ModeSupport, OperationId, OutputModeRule, StrategyGuard,
+    ImplementationSupport, ModeSupport, OperationId, OutputModeRule,
     StrategySelection,
 };
 use crate::error::PilError;
@@ -229,7 +229,7 @@ fn execute_gaussian_blur(
 }
 
 pub(in crate::compute::pool_cpu::ops::filter) fn mode_filter_support() -> crate::compute::registry::support::ModeSupport {
-    super::super::ops::core_only_serial(crate::compute::registry::support::OperationId::ModeFilter, MODE)
+    super::super::ops::serial_mode_filter(MODE)
 }
 
 pub(in crate::compute::pool_cpu::ops::filter) fn execute_mode_filter(

@@ -130,15 +130,102 @@ fn write_rounded_rect_outline(
     Ok(())
 }
 
+fn rounded_rect_corners(
+    x0: i32,
+    y0: i32,
+    x1: i32,
+    y1: i32,
+    diameter: f64,
+    full_x: bool,
+    full_y: bool,
+) -> Vec<RoundedRectCorner> {
+    if full_x {
+        vec![
+            (
+                x0,
+                y0,
+                (f64::from(x0) + diameter) as i32,
+                (f64::from(y0) + diameter) as i32,
+                180.0_f32,
+                360.0_f32,
+            ),
+            (
+                x0,
+                (f64::from(y1) - diameter) as i32,
+                (f64::from(x0) + diameter) as i32,
+                y1,
+                0.0,
+                180.0,
+            ),
+        ]
+    } else if full_y {
+        vec![
+            (
+                x0,
+                y0,
+                (f64::from(x0) + diameter) as i32,
+                (f64::from(y0) + diameter) as i32,
+                90.0_f32,
+                270.0_f32,
+            ),
+            (
+                (f64::from(x1) - diameter) as i32,
+                y0,
+                x1,
+                (f64::from(y0) + diameter) as i32,
+                270.0,
+                90.0,
+            ),
+        ]
+    } else {
+        vec![
+            (
+                x0,
+                y0,
+                (f64::from(x0) + diameter) as i32,
+                (f64::from(y0) + diameter) as i32,
+                180.0_f32,
+                270.0_f32,
+            ),
+            (
+                (f64::from(x1) - diameter) as i32,
+                y0,
+                x1,
+                (f64::from(y0) + diameter) as i32,
+                270.0,
+                360.0,
+            ),
+            (
+                (f64::from(x1) - diameter) as i32,
+                (f64::from(y1) - diameter) as i32,
+                x1,
+                y1,
+                0.0,
+                90.0,
+            ),
+            (
+                x0,
+                (f64::from(y1) - diameter) as i32,
+                (f64::from(x0) + diameter) as i32,
+                y1,
+                90.0,
+                180.0,
+            ),
+        ]
+    }
+}
+
 fn rounded_rect_geometry(x0: i32, y0: i32, x1: i32, y1: i32, radius: f64) -> RoundedRectGeometry {
     let mut diameter = radius * 2.0;
-    let full_x = diameter >= f64::from(x1 - x0 - 1);
+    let width_span = f64::from(x1) - f64::from(x0);
+    let height_span = f64::from(y1) - f64::from(y0);
+    let full_x = diameter >= width_span - 1.0;
     if full_x {
-        diameter = f64::from(x1 - x0);
+        diameter = width_span;
     }
-    let full_y = full_x && diameter >= f64::from(y1 - y0 - 1);
+    let full_y = diameter >= height_span - 1.0;
     if full_y {
-        diameter = f64::from(y1 - y0);
+        diameter = height_span;
     }
     if full_x && full_y {
         return RoundedRectGeometry::Ellipse;
@@ -147,26 +234,8 @@ fn rounded_rect_geometry(x0: i32, y0: i32, x1: i32, y1: i32, radius: f64) -> Rou
         return RoundedRectGeometry::Rectangle;
     }
 
-    let diameter = diameter as i32;
-    let radius = diameter / 2;
-    let corners = if full_x {
-        vec![
-            (x0, y0, x0 + diameter, y0 + diameter, 180.0_f32, 360.0_f32),
-            (x0, y1 - diameter, x0 + diameter, y1, 0.0, 180.0),
-        ]
-    } else if full_y {
-        vec![
-            (x0, y0, x0 + diameter, y0 + diameter, 90.0_f32, 270.0_f32),
-            (x1 - diameter, y0, x1, y0 + diameter, 270.0, 90.0),
-        ]
-    } else {
-        vec![
-            (x0, y0, x0 + diameter, y0 + diameter, 180.0_f32, 270.0_f32),
-            (x1 - diameter, y0, x1, y0 + diameter, 270.0, 360.0),
-            (x1 - diameter, y1 - diameter, x1, y1, 0.0, 90.0),
-            (x0, y1 - diameter, x0 + diameter, y1, 90.0, 180.0),
-        ]
-    };
+    let radius = (diameter / 2.0).floor() as i32;
+    let corners = rounded_rect_corners(x0, y0, x1, y1, diameter, full_x, full_y);
     RoundedRectGeometry::Spans(RoundedRectSpanGeometry {
         corners,
         x0,

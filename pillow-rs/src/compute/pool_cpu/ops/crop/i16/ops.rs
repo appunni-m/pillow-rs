@@ -11,10 +11,10 @@ use crate::compute::{Architecture, ExecutionContext, registry::support::{
     OutputModeRule,
 }};
 use crate::error::PilError;
-use crate::raster::{DynamicImage, GenericImageView, Mode};
+use crate::raster::{DynamicImage, Mode};
 use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
 
-use super::{default, neon, sse2, wasm_simd128};
+use super::{neon, sse2, wasm_simd128};
 use super::super::helpers::{crop::CropRegion, strategy::luma16_copy_architectures};
 
 static ARCHITECTURES: [ImplementationSupport; 3] =

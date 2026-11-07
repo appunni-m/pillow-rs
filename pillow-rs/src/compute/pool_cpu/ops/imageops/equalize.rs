@@ -2,7 +2,7 @@
 
 use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{
-    InputContract, ModeSupport, OperationInputs, PaletteKnowledge, RejectionKind, RequestFacts,
+    InputContract, ModeSupport, OperationInputs, RejectionKind, RequestFacts,
     StrategySelection,
 };
 use crate::error::PilError;

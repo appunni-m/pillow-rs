@@ -2,7 +2,9 @@ use super::{
     Bound, PyAny, PyBytes, PyErr, PyInt, PyList, PyOverflowError, PyResult, PyTuple,
     PyTypeError, PyValueError, Python, c_int_from_python, chops_offset_from_python,
 };
-use pyo3::types::{PyAnyMethods, PyFloat, PySequenceMethods, PyTupleMethods, PyTypeMethods};
+use pyo3::types::{
+    PyAnyMethods, PyFloat, PySequence, PySequenceMethods, PyTupleMethods, PyTypeMethods,
+};
 
 pub(crate) fn putpixel_value_from_python(
     value: &Bound<'_, PyAny>,
@@ -232,7 +234,7 @@ fn new_color_input(
     pillow_rs::NewColorInput::from_parts(string, single, rgb, rgba, la, integer, float, provided)
 }
 
-fn new_color_type_error(mode: pillow_rs::Mode) -> PyTypeError {
+fn new_color_type_error(mode: pillow_rs::Mode) -> PyErr {
     if mode.band_count() == 1 {
         PyTypeError::new_err("color must be int or single-element tuple")
     } else {
@@ -356,12 +358,15 @@ fn new_color_tuple_input(
 
 pub(crate) fn new_size_from_python(
     value: &Bound<'_, PyAny>,
-    py: Python<'_>,
+    _py: Python<'_>,
 ) -> PyResult<(u32, u32)> {
-    // SAFETY: `value` is live and GIL-bound; the sequence check only inspects
-    // its CPython sequence slots.
-    let is_sequence = unsafe { pyo3::ffi::PySequence_Check(value.as_ptr()) != 0 };
-    if !is_sequence || value.is_instance_of::<PyBytes>() {
+    let Ok(sequence) = value.cast::<PySequence>() else {
+        let type_name = value.get_type().name()?.to_string();
+        return Err(PyTypeError::new_err(format!(
+            "argument 2 must be 2-item sequence, not {type_name}"
+        )));
+    };
+    if value.is_instance_of::<PyBytes>() {
         let type_name = value.get_type().name()?.to_string();
         return Err(PyTypeError::new_err(format!(
             "argument 2 must be 2-item sequence, not {type_name}"
@@ -369,19 +374,15 @@ pub(crate) fn new_size_from_python(
     }
 
     // Match Pillow's nested C-int size conversion after Python _check_size.
-    // SAFETY: `value` is live and PySequence_Check succeeded above.
-    let length = unsafe { pyo3::ffi::PySequence_Size(value.as_ptr()) };
-    if length < 0 {
-        return Err(PyErr::fetch(py));
-    }
+    let length = sequence.len()?;
     if length != 2 {
         return Err(PyTypeError::new_err(format!(
             "argument 2 must be sequence of length 2, not {length}"
         )));
     }
 
-    let width = new_size_component(value, py, 0)?;
-    let height = new_size_component(value, py, 1)?;
+    let width = new_size_component(&sequence, 0)?;
+    let height = new_size_component(&sequence, 1)?;
     if width < 0 || height < 0 {
         return Err(PyValueError::new_err("Width and height must be >= 0"));
     }
@@ -392,15 +393,8 @@ pub(crate) fn new_size_from_python(
     Ok((width, height))
 }
 
-fn new_size_component(value: &Bound<'_, PyAny>, py: Python<'_>, index: isize) -> PyResult<i32> {
-    // SAFETY: `value` is live and the sequence and length checks succeeded.
-    let item = unsafe {
-        Bound::from_owned_ptr_or_err(
-            py,
-            pyo3::ffi::PySequence_GetItem(value.as_ptr(), index),
-        )
-    };
-    let item = match item {
+fn new_size_component(value: &Bound<'_, PySequence>, index: usize) -> PyResult<i32> {
+    let item = match value.get_item(index) {
         Ok(item) => item,
         Err(_sequence_error) => {
             return Err(PyTypeError::new_err(format!(

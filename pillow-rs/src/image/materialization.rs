@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use image_slash_star::{Decoded, DecodedImage, ImageFormat, ImageInfo};
+use image_slash_star::{ImageFormat, ImageInfo};
 
 use super::codec_adapter::decoded_to_dynamic;
 
@@ -18,7 +18,7 @@ use palette_output::{evaluate_palette_target_convert, retain_preserved_palette_m
 use super::{
     Image, LoadedData, PalettedData, PipelinePaletteOutput, PipelinePrefixCache,
     declared_pipeline_mode, expand_palette, expand_palette_alpha, materialization_cache,
-    padded_palette, take_cached_materialization, validate_scalar_storage,
+    padded_palette, validate_scalar_storage,
 };
 
 fn image_from_materialized(
@@ -279,11 +279,17 @@ impl Image {
             // pipeline while the raw PA samples are updated.
             || (source.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
                 && matches!(op, PipelineOp::PutPixel { .. }))
-            // PA resize filters the raw index/alpha pair without expanding
-            // the palette. The newly allocated Pillow image does not carry
-            // the source palette object, so output metadata clears it below.
+            // PA resize and thumbnail filter the raw index/alpha pair without
+            // expanding the palette. The newly allocated Pillow image does
+            // not carry the source palette object, so output metadata clears
+            // it below.
             || (source.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
-                && matches!(op, PipelineOp::Resize { .. } | PipelineOp::ResizeBoxed { .. }))
+                && matches!(
+                    op,
+                    PipelineOp::Resize { .. }
+                        | PipelineOp::ResizeBoxed { .. }
+                        | PipelineOp::Thumbnail { .. }
+                ))
             || (source.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
                 && matches!(
                     op,
@@ -469,21 +475,6 @@ impl Image {
         }
     }
 
-    /// Consumes an image into an owned materialization, reusing a unique
-    /// cached pixel buffer when no other handle shares it.
-    pub(crate) fn materialize_owned(self) -> Result<DynamicImage, PilError> {
-        let shared = self.materialized_shared_for_ops()?;
-        drop(shared);
-        let cached = match self {
-            Image::Loaded(data) => Ok(data.image),
-            Image::Paletted(data) => take_cached_materialization(data.materialized),
-            Image::Bytes { materialized, .. } | Image::Pipeline { materialized, .. } => {
-                take_cached_materialization(materialized)
-            }
-        }?;
-        Ok(Arc::try_unwrap(cached).unwrap_or_else(|shared| shared.as_ref().clone()))
-    }
-
     /// Evaluates a pipeline without publishing its result into the pipeline's
     /// ordinary materialization cache.
     fn evaluate_pipeline(
@@ -646,6 +637,16 @@ impl Image {
         // mode strategy when GPU execution adopts the typed palette contract.
         let palette_strategy = match (source.known_mode_identity(), ops.first()) {
             (_, Some(PipelineOp::Grayscale)) => true,
+            (
+                Some(Mode::ImagePaletteAlpha8),
+                Some(PipelineOp::Convert { mode, .. }),
+            ) if !matches!(mode, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8) => {
+                // PA's second sample has destination-specific conversion
+                // behavior. Keep Convert on the PA strategy so RGBX and RGBa
+                // retain their distinct fourth-lane contracts instead of
+                // normalizing through RGBA first.
+                true
+            }
             (
                 Some(Mode::ImagePalette8 | Mode::ImagePaletteAlpha8),
                 Some(PipelineOp::Equalize | PipelineOp::EqualizeMasked { .. }),

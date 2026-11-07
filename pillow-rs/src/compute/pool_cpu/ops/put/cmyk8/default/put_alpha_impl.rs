@@ -2,7 +2,7 @@
 
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Rgba};
-use super::super::super::helpers::put_alpha::{self as helpers, AlphaInput};
+use super::super::super::helpers::put_alpha::AlphaInput;
 
 pub(crate) type Input = crate::raster::RgbaImage;
 pub(crate) type Kernel<'a> = AlphaInput<'a, crate::raster::Rgba<u8>>;

@@ -1,7 +1,4 @@
 //! `ImageCmyk8` band semantics and context-selected architecture strategies.
-// TODO(pillow-rs#3ptb): parity-check the direct scalar CMYK-to-RGBA paths for
-// constant and mask alpha against the frozen mode × architecture cases.
-
 use crate::compute::registry::support::BandIndexRule;
 use super::super::helpers::extract_band_strategy::{declare_into, declare_strategies};
 

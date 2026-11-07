@@ -26,6 +26,7 @@
 
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
+#[cfg(any(test, feature = "test-api"))]
 use crate::raster::DynamicImage;
 use super::{Backend, ExecutionContext};
 use self::support::OperationInputs;
@@ -243,6 +244,7 @@ pub fn prepare_cpu<'a>(
 /// # Errors
 ///
 /// Propagates preparation and execution errors without rerouting or retrying.
+#[cfg(any(test, feature = "test-api"))]
 pub fn execute_cpu<'a>(
     op: &'a PipelineOp,
     input: OperationInputs<'a>,

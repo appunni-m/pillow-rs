@@ -6,7 +6,7 @@ use super::kernels::{
 use super::{DrawLayout, has_visible_draw_rectangle, valid_draw_rectangle};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
-use crate::raster::{DynamicImage, GenericImageView};
+use crate::raster::{DynamicImage};
 
 pub(super) fn execute(
     image: &DynamicImage,
@@ -164,6 +164,7 @@ fn simd_draw_polygon(
         fill,
         outline,
         width,
+        outline_width,
         alpha_blend_rgb,
     } = op
     else {
@@ -174,7 +175,16 @@ fn simd_draw_polygon(
     // pool_cpu::ops::draw::op_draw_polygon instead of painting an extra stroke
     // that is observable only after materialization.
     let outline = if layout.float_mode { None } else { *outline };
-    simd_draw_polygon_native(img, points, *fill, outline, *width, *alpha_blend_rgb, layout)?
+    simd_draw_polygon_native(
+        img,
+        points,
+        *fill,
+        outline,
+        *width,
+        *outline_width,
+        *alpha_blend_rgb,
+        layout,
+    )?
         .ok_or_else(|| vector_strategy_mismatch("DrawPolygon"))
 }
 

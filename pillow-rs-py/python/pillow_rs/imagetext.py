@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import math
-from typing import NamedTuple
+from typing import AnyStr, Generic, NamedTuple
 
 from . import imagefont as ImageFont
 from . import _core
 
+Font = ImageFont.ImageFont | ImageFont.FreeTypeFont | ImageFont.TransposedFont
+_Ink = float | tuple[int, ...] | str
+
 _BASE_FREETYPE_GETBBOX = ImageFont.FreeTypeFont.getbbox
 _BASE_FREETYPE_GETLENGTH = ImageFont.FreeTypeFont.getlength
+_BASE_FREETYPE_GETMASK = ImageFont.FreeTypeFont.getmask
+_BASE_FREETYPE_GETMASK2 = ImageFont.FreeTypeFont.getmask2
 _BASE_FREETYPE_FONT_VARIANT = ImageFont.FreeTypeFont.font_variant
 
 
@@ -37,19 +42,19 @@ class _Line(NamedTuple):
     text: str | bytes
 
 
-class Text:
+class Text(Generic[AnyStr]):
     """Text, font, and layout options carried together for ImageDraw."""
 
     def __init__(
         self,
-        text,
-        font=None,
-        mode="RGB",
-        spacing=4,
-        direction=None,
-        features=None,
-        language=None,
-    ):
+        text: AnyStr,
+        font: Font | None = None,
+        mode: str = "RGB",
+        spacing: float = 4,
+        direction: str | None = None,
+        features: list[str] | None = None,
+        language: str | None = None,
+    ) -> None:
         self.text = text
         self.font = font or ImageFont.load_default()
         self.mode = mode
@@ -61,12 +66,12 @@ class Text:
         self.stroke_width = 0
         self.stroke_fill = None
 
-    def embed_color(self):
+    def embed_color(self) -> None:
         if self.mode not in ("RGB", "RGBA"):
             raise ValueError("Embedded color supported only in RGB and RGBA modes")
         self.embedded_color = True
 
-    def stroke(self, width=0, fill=None):
+    def stroke(self, width: float = 0, fill: _Ink | None = None) -> None:
         self.stroke_width = width
         self.stroke_fill = fill
 
@@ -79,7 +84,7 @@ class Text:
             return "RGBA"
         return "L"
 
-    def get_length(self):
+    def get_length(self) -> float:
         if self._can_get_length_in_core():
             return self.font._rust_font._image_text_get_length(
                 self.text,
@@ -199,7 +204,12 @@ class Text:
             anchor,
         )
 
-    def get_bbox(self, xy=(0, 0), anchor=None, align="left"):
+    def get_bbox(
+        self,
+        xy: tuple[float, float] = (0, 0),
+        anchor: str | None = None,
+        align: str = "left",
+    ) -> tuple[float, float, float, float]:
         if self._can_split_in_core(xy, anchor, align, None):
             return self.font._rust_font._image_text_layout_bbox(
                 self.text,
@@ -219,7 +229,12 @@ class Text:
             align,
         )
 
-    def wrap(self, width, height=None, scaling=None):
+    def wrap(
+        self,
+        width: int,
+        height: int | None = None,
+        scaling: str | tuple[str, int] | None = None,
+    ) -> Text[AnyStr] | None:
         if isinstance(self.font, ImageFont.TransposedFont):
             raise ValueError("TransposedFont not supported")
         if self.direction not in (None, "ltr"):
@@ -397,3 +412,48 @@ _BASE_TEXT_CAN_SPLIT = Text._can_split_in_core
 _BASE_TEXT_CAN_WRAP = Text._can_wrap_in_core
 _BASE_TEXT_CAN_SCALED_WRAP = Text._can_scaled_wrap_in_core
 _BASE_TEXT_WRAP = Text.wrap
+
+
+def _can_use_native_font_metrics(font):
+    """Whether native layout can preserve the font's public metric methods."""
+    return (
+        type(font) is ImageFont.FreeTypeFont
+        and type(font._rust_font) is ImageFont._core.ImageFont
+        and ImageFont.FreeTypeFont.getbbox is _BASE_FREETYPE_GETBBOX
+        and ImageFont.FreeTypeFont.getlength is _BASE_FREETYPE_GETLENGTH
+        and "getbbox" not in font.__dict__
+        and "getlength" not in font.__dict__
+    )
+
+
+def _can_use_native_draw_font(font):
+    """Whether direct Rust drawing preserves the built-in font API route."""
+    return (
+        _can_use_native_font_metrics(font)
+        and ImageFont.FreeTypeFont.getmask is _BASE_FREETYPE_GETMASK
+        and ImageFont.FreeTypeFont.getmask2 is _BASE_FREETYPE_GETMASK2
+        and "getmask" not in font.__dict__
+        and "getmask2" not in font.__dict__
+    )
+
+
+def _has_base_text_layout_methods():
+    """Whether direct layout preserves ImageText.Text's method dispatch."""
+    return (
+        Text._split is _BASE_TEXT_SPLIT
+        and Text._get_fontmode is _BASE_TEXT_GET_FONTMODE
+        and Text._get_bbox is _BASE_TEXT_GET_BBOX
+        and Text._can_split_in_core is _BASE_TEXT_CAN_SPLIT
+    )
+
+
+def _can_use_native_draw_text(image_text):
+    """Whether direct drawing can bypass the Python ImageText callbacks."""
+    return (
+        type(image_text) is Text
+        and _has_base_text_layout_methods()
+        and all(
+            name not in image_text.__dict__
+            for name in ("_split", "_get_fontmode", "_get_bbox", "_can_split_in_core")
+        )
+    )

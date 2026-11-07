@@ -17,7 +17,7 @@ pub(crate) fn execute(source: &GrayImage) -> Result<(Vec<u8>, u64), PilError> {
         let mut luma = [0u8; 16];
         luma[..active].copy_from_slice(&source.as_raw()[start..start + active]);
         luma[15] = u8::MAX;
-        let interleaved = u8x16::new(luma).swizzle_relaxed(LUMA_TO_LA).to_array();
+        let interleaved = u8x16::new(luma).shuffle(LUMA_TO_LA).to_array();
         output.extend_from_slice(&interleaved[..active * 2]);
         vector_blocks = vector_blocks.saturating_add(1);
     }

@@ -5,9 +5,8 @@ use crate::compute::pool_cpu::ops::put::helpers::put_alpha_vector::{
     simd_put_alpha_block, write_put_alpha_scalar,
 };
 use crate::error::PilError;
-use crate::raster::{GrayImage, ImageBuffer, Pixel, Rgb, Rgba, RgbaImage};
+use crate::raster::{GrayImage, ImageBuffer, Pixel, Rgb, RgbaImage};
 use super::put_alpha_data::AlphaDataInput;
-use super::alpha_mask::MaskStrategy;
 use wide::u8x16;
 
 const RGB_MASK_VECTOR_THRESHOLD: usize = 512 * 512;
@@ -50,7 +49,7 @@ pub(super) fn rgb_mask_row(source: &[u8], mask: &[u8], output: &mut [u8]) {
         padded[..12].copy_from_slice(source_block);
         padded[12..].copy_from_slice(mask_block);
         output_block.copy_from_slice(
-            &u8x16::new(padded).swizzle_relaxed(u8x16::new(SHUFFLE)).to_array(),
+            &u8x16::new(padded).shuffle(u8x16::new(SHUFFLE)).to_array(),
         );
     }
     for pixel in vector_pixels..width {

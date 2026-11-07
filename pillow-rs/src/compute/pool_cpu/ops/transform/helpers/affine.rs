@@ -444,7 +444,7 @@ pub(super) fn transform_affine_generic_into(
     if nearest && let Some(steps) = affine_nearest_fixed(affine, dst_w, dst_h) {
         transform_affine_fixed_nearest_pixels(
             raw,
-            &mut out,
+            out,
             (sw, sh),
             (dst_w, dst_h),
             channels,
@@ -456,7 +456,7 @@ pub(super) fn transform_affine_generic_into(
 
     transform_affine_generic_pixels(
         raw,
-        &mut out,
+        out,
         (sw, sh),
         (dst_w, dst_h),
         affine,

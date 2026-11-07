@@ -1,5 +1,9 @@
 //! Reusable mode-level strategy declaration for simple transpose operations.
 
+#[allow(
+    unused_macro_rules,
+    reason = "target-gated modes instantiate this declaration shape on supported architectures"
+)]
 macro_rules! declare_transpose_mode {
     ($mode:ident, $input:ty, $flip_impl:path, $mirror_impl:path, $transpose_impl:path) => {
         $crate::compute::pool_cpu::ops::transpose::helpers::strategy::declare_transpose_mode! {

@@ -21,7 +21,7 @@ fn fill_horizontal_row(
             let indices = u8x16::new(std::array::from_fn(|lane| {
                 if lane < 8 { lane as u8 + offset } else { 0 }
             }));
-            u16x8::from_u8x16_low(window.swizzle_relaxed(indices))
+            u16x8::from_u8x16_low(window.shuffle(indices))
         };
         let weighted = tap(0)
             + tap(1) * u16x8::splat(4)

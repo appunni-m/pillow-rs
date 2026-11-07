@@ -277,13 +277,17 @@ class FreeTypeFont:
     def getmask(self, text, mode="", direction=None, features=None, language=None,
                 stroke_width=0, anchor=None, ink=0, start=None):
         """Return glyph mask through Pillow's ImagingCore-compatible contract."""
-        _string_length_check(text)
-        from .image import Image as PILImage
-        image = self._rust_font.getmask_alpha_with_options(
-            text, mode, direction, features, language,
-            stroke_width, anchor, ink, start
-        )
-        return ImagingCore(PILImage(image))
+        return self.getmask2(
+            text,
+            mode,
+            direction=direction,
+            features=features,
+            language=language,
+            stroke_width=stroke_width,
+            anchor=anchor,
+            ink=ink,
+            start=start,
+        )[0]
 
     def getmask2(self, text, mode="", direction=None, features=None, language=None,
                  stroke_width=0, anchor=None, ink=0, start=None, *args, **kwargs):
@@ -459,13 +463,6 @@ class TransposedFont:
 
     def getmask(self, text, mode="", *args, **kwargs):
         """Create a bitmap for the text, optionally transposed."""
-        if isinstance(self.font, FreeTypeFont):
-            _string_length_check(text)
-            from .image import Image as PILImage
-            image = self.font._rust_font.get_transposed_mask_image(
-                text, self._orientation_name
-            )
-            return ImagingCore(PILImage(image))
         im = self.font.getmask(text, mode, *args, **kwargs)
         if self.orientation is not None:
             return im.transpose(self.orientation)

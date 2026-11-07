@@ -4,7 +4,7 @@ use crate::draw::DrawCanvas;
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::buffer::HiddenPixelLanes;
-use crate::raster::{GenericImageView, ImageBuffer, Luma, Pixel};
+use crate::raster::{ImageBuffer, Luma, Pixel};
 
 /// Direct writer for one exact byte-backed mode strategy.
 pub(crate) struct NativeByteCanvas<

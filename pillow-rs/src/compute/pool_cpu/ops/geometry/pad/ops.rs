@@ -4,11 +4,10 @@
 // and composed Resize in CPU parity.
 
 use crate::compute::{Architecture, ExecutionContext, registry::support::{
-    InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport, PadFillRule,
-    OutputModeRule, StrategyInputs, StrategySelection, SupportAssessment,
+    InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport, PadFillRule, StrategyInputs, StrategySelection, SupportAssessment,
 }};
 use crate::error::PilError;
-use crate::pipeline::{PipelineOp, ResampleFilter};
+use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
 
 use super::helpers::dimensions::{self, PadFrame};

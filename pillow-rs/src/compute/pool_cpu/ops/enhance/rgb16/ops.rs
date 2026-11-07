@@ -5,9 +5,9 @@ use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
 use crate::compute::registry::support::{
     InputContract, ModeSupport, OperationId, OutputModeRule, StrategyInputs,
 };
-use crate::compute::{Architecture, registry::support::StrategySelection};
+use crate::compute::Architecture;
 use crate::error::PilError;
-use crate::raster::{DynamicImage, ImageBuffer, Mode, Rgb};
+use crate::raster::{DynamicImage, ImageBuffer, Mode};
 
 const INPUTS: &[InputContract] = &[InputContract::ExactNativeBytes {
     channels: 6,

@@ -46,12 +46,12 @@ fn weighted_horizontal_radius_one_row(
     for x in (0..width).step_by(LANES) {
         let center_bytes = load_block(source, x, right_edge);
         let left_one_bytes = if x == 0 {
-            center_bytes.swizzle_relaxed(left_one_indices)
+            center_bytes.shuffle(left_one_indices)
         } else {
             load_block(source, x - 1, right_edge)
         };
         let left_two_bytes = if x == 0 {
-            center_bytes.swizzle_relaxed(left_two_indices)
+            center_bytes.shuffle(left_two_indices)
         } else {
             load_block(source, x - 2, right_edge)
         };

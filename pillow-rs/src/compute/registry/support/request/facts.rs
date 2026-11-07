@@ -2,7 +2,7 @@
 
 use crate::pipeline::{ExpandMargins, ResampleFilter, TransposeMethod};
 use crate::raster::Mode;
-use super::{ModeChannelCapacity, PaletteKnowledge};
+use super::PaletteKnowledge;
 
 /// Direct or batched Draw request being prepared by the shared family owner.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -228,7 +228,10 @@ pub enum RequestFacts {
         sigma_bits: u32,
     },
     /// Integer BoxBlur radius supplied by the exact operation request.
-    BoxBlur { radius: u32 },
+    BoxBlur {
+        /// Integer blur radius from the operation request.
+        radius: u32,
+    },
     /// Independent BoxBlurXY radii and pass count supplied by the request.
     BoxBlurXY {
         /// Horizontal radius bit pattern.

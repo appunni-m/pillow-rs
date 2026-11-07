@@ -7,7 +7,7 @@ use crate::compute::pool_cpu::ops::rotate::helpers::geometry::{
 use crate::compute::pool_cpu::ops::rotate::ops::RotateRequest;
 use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
-use crate::raster::{GenericImageView, ImageBuffer, Pixel};
+use crate::raster::{ImageBuffer, Pixel};
 
 pub(crate) trait NativeSample: Copy + Default {
     fn to_f64(self) -> f64;

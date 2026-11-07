@@ -1,15 +1,38 @@
 use crate::font::PyFont;
 use crate::*;
-use pyo3::{pyclass, pymethods};
+use pyo3::{pyclass, pymethods, Py, Python};
+use pyo3::types::PyInt;
 
 mod input;
+mod floodfill;
+pub(super) mod custom_font_mask;
+mod rounded_rectangle;
+mod text_lines;
 
 use input::{
     draw_box_input_from_python, draw_circle_center_input_from_python,
-    draw_bitmap_position_from_python, draw_color_input_from_python, draw_points_input_from_python,
+    draw_bitmap_position_from_python, draw_points_input_from_python,
+};
+
+fn draw_line_with_input(
+    draw: &mut pillow_rs::Draw,
+    xy: &Bound<'_, PyAny>,
+    color: (u8, u8, u8, u8),
+    width: &Bound<'_, PyAny>,
+    joint: Option<&str>,
+) -> PyResult<i32> {
+    let width = c_int_from_python(width)?;
+    let points = draw_points_input_from_python(xy)?;
+    draw.polyline_with_input_joint(points, color, width.max(0) as u32, joint)
+        .map_err(map_error)?;
+    Ok(width)
+}
+pub(crate) use input::{
+    draw_color_input_from_python, draw_features_presence_from_python,
     draw_text_input_from_python,
 };
-pub(super) use input::draw_features_presence_from_python;
+
+pub(super) mod text_layout;
 
 // --- ImageDraw ---
 
@@ -58,8 +81,49 @@ pub struct PyDraw {
     draw: pillow_rs::Draw,
 }
 
+#[pyclass(name = "_LineCurveJointPlan")]
+struct PyLineCurveJointPlan {
+    plan: pillow_rs::DrawCurveJointPlan,
+}
+
+#[pymethods]
+impl PyLineCurveJointPlan {
+    fn _angles(&self) -> (f64, f64) {
+        self.plan.angles()
+    }
+
+    fn _gap_angle(&self, first: bool) -> f64 {
+        self.plan.gap_angle(first)
+    }
+}
+
 #[pymethods]
 impl PyDraw {
+    #[staticmethod]
+    #[pyo3(signature = (pixel, x, y, value, border=None, thresh=0, native_image=None))]
+    fn _floodfill(
+        py: Python<'_>,
+        pixel: &Bound<'_, PyAny>,
+        x: &Bound<'_, PyAny>,
+        y: &Bound<'_, PyAny>,
+        value: &Bound<'_, PyAny>,
+        border: Option<&Bound<'_, PyAny>>,
+        thresh: i32,
+        native_image: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        let threshold = PyInt::new(py, thresh);
+        floodfill::execute(
+            py,
+            pixel,
+            x,
+            y,
+            value,
+            border,
+            threshold.as_any(),
+            native_image,
+        )
+    }
+
     #[new]
     #[pyo3(signature = (image, mode=None))]
     fn new(
@@ -87,10 +151,6 @@ impl PyDraw {
         Ok(PyDraw { draw })
     }
 
-    fn set_palette_reserved_indices(&mut self, indices: Vec<u32>) {
-        self.draw.set_palette_reserved_indices(&indices);
-    }
-
     fn _set_palette(&mut self, data: Vec<u8>, mode: &str) -> PyResult<()> {
         self.draw
             .set_palette_data(&data, mode)
@@ -109,25 +169,51 @@ impl PyDraw {
     #[pyo3(signature = (xy, fill=None, width=0, joint=None))]
     fn line(
         &mut self,
+        py: Python<'_>,
         xy: &Bound<'_, PyAny>,
         fill: Option<&Bound<'_, PyAny>>,
-        width: Option<u32>,
+        width: i32,
         joint: Option<String>,
     ) -> PyResult<()> {
         let color = self.color(fill)?;
-        let points = draw_points_input_from_python(xy);
-        let w = pillow_rs::normalize_draw_width(width);
-        self.draw
-            .polyline_with_input_joint(points, color, w, joint.as_deref())
-            .map_err(map_error)
+        let width = PyInt::new(py, width);
+        draw_line_with_input(&mut self.draw, xy, color, width.as_any(), joint.as_deref())
+            .map(|_| ())
     }
 
+    fn _line_base(
+        &mut self,
+        xy: &Bound<'_, PyAny>,
+        fill: Option<&Bound<'_, PyAny>>,
+        width: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        let color = self.color(fill)?;
+        draw_line_with_input(&mut self.draw, xy, color, width, None).map(|_| ())
+    }
+
+    fn _line_curve_joint_plan(
+        &self,
+        py: Python<'_>,
+        angles: &Bound<'_, PyAny>,
+    ) -> PyResult<Option<Py<PyLineCurveJointPlan>>> {
+        let angles = angles.extract::<Vec<f64>>()?;
+        let Ok(angles) = <[f64; 2]>::try_from(angles) else {
+            return Ok(None);
+        };
+        let Some(plan) = self.draw.curve_joint_plan_from_angles(angles)
+        else {
+            return Ok(None);
+        };
+        Py::new(py, PyLineCurveJointPlan { plan }).map(Some)
+    }
+
+    #[pyo3(signature = (xy, fill=None, outline=None, width=1))]
     fn rectangle(
         &mut self,
         xy: &Bound<'_, PyAny>,
         fill: Option<&Bound<'_, PyAny>>,
         outline: Option<&Bound<'_, PyAny>>,
-        width: Option<u32>,
+        width: i32,
     ) -> PyResult<()> {
         let fill_color = if let Some(_f) = fill {
             Some(self.color(fill)?)
@@ -139,8 +225,8 @@ impl PyDraw {
         } else {
             None
         };
-        let xy =
-            pillow_rs::normalize_draw_box(draw_box_input_from_python(xy)).map_err(map_error)?;
+        let xy = pillow_rs::normalize_draw_box(draw_box_input_from_python(xy)?)
+            .map_err(map_error)?;
         self.draw
             .rectangle(
                 xy.0,
@@ -149,17 +235,18 @@ impl PyDraw {
                 xy.3,
                 fill_color,
                 out_color,
-                pillow_rs::normalize_draw_width(width),
+                width.max(0) as u32,
             )
             .map_err(map_error)
     }
 
+    #[pyo3(signature = (xy, fill=None, outline=None, width=1))]
     fn ellipse(
         &mut self,
         xy: &Bound<'_, PyAny>,
         fill: Option<&Bound<'_, PyAny>>,
         outline: Option<&Bound<'_, PyAny>>,
-        width: Option<u32>,
+        width: i32,
     ) -> PyResult<()> {
         let fill_color = if let Some(_f) = fill {
             Some(self.color(fill)?)
@@ -171,8 +258,8 @@ impl PyDraw {
         } else {
             None
         };
-        let xy =
-            pillow_rs::normalize_draw_box(draw_box_input_from_python(xy)).map_err(map_error)?;
+        let xy = pillow_rs::normalize_draw_box(draw_box_input_from_python(xy)?)
+            .map_err(map_error)?;
         self.draw
             .ellipse(
                 xy.0,
@@ -181,7 +268,7 @@ impl PyDraw {
                 xy.3,
                 fill_color,
                 out_color,
-                pillow_rs::normalize_draw_width(width),
+                width.max(0) as u32,
             )
             .map_err(map_error)
     }
@@ -196,10 +283,7 @@ impl PyDraw {
         // calls to this lower-level binding on the same error and mutation
         // order; PyImage.load releases the GIL while materializing.
         bitmap.call_method0("load")?;
-        let fill = self
-            .draw
-            .resolve_bitmap_fill_with_input(draw_color_input_from_python(fill)?)
-            .map_err(map_error)?;
+        let fill = fill.map(|value| self.color(Some(value))).transpose()?;
         // Pillow flattens one point from `xy` after resolving ink.
         // Keep flat and single-nested coordinate pairs on that path.
         let (x, y) = draw_bitmap_position_from_python(xy)?;
@@ -215,30 +299,100 @@ impl PyDraw {
             .map_err(map_error)
     }
 
+    fn draw_ink(&mut self, fill: &Bound<'_, PyAny>) -> PyResult<i32> {
+        self.draw
+            .draw_ink_with_input(draw_color_input_from_python(Some(fill))?)
+            .map_err(map_error)
+    }
+
+    fn text_fill_from_ink(&self, py: Python<'_>, ink: i32) -> PyResult<Py<PyAny>> {
+        match self
+            .draw
+            .text_fill_from_ink(i64::from(ink))
+            .map_err(map_error)?
+        {
+            pillow_rs::DrawTextFillValue::Integer(value) => value.into_py_any(py),
+            pillow_rs::DrawTextFillValue::Float(value) => value.into_py_any(py),
+        }
+    }
+
+    #[pyo3(name = "_draw_text_lines")]
+    #[allow(clippy::too_many_arguments)]
+    fn draw_text_lines(
+        slf: Py<Self>,
+        py: Python<'_>,
+        owner: &Bound<'_, PyAny>,
+        host_helpers_fn: &Bound<'_, PyAny>,
+        float_fn: &Bound<'_, PyAny>,
+        xy: &Bound<'_, PyAny>,
+        image_text: &Bound<'_, PyAny>,
+        text: &Bound<'_, PyAny>,
+        font: &Bound<'_, PyAny>,
+        fill: &Bound<'_, PyAny>,
+        stroke_fill: &Bound<'_, PyAny>,
+        fill_ink: i64,
+        stroke_ink: Option<i64>,
+        stroke_width: &Bound<'_, PyAny>,
+        anchor: &Bound<'_, PyAny>,
+        align: &Bound<'_, PyAny>,
+        direction: &Bound<'_, PyAny>,
+        features: &Bound<'_, PyAny>,
+        language: &Bound<'_, PyAny>,
+        embedded_color: &Bound<'_, PyAny>,
+        args: &Bound<'_, PyAny>,
+        mask_kwargs: &Bound<'_, PyAny>,
+        native_text_input: bool,
+    ) -> PyResult<()> {
+        // Custom-font callbacks may re-enter this PyDraw through owner.bitmap.
+        // The callback adapter takes short borrows only for direct Rust draws.
+        let mode = {
+            let draw = slf.borrow(py);
+            draw.draw.draw_mode_identity().map_err(map_error)?
+        };
+        text_lines::draw_text_lines(
+            py,
+            slf,
+            mode,
+            owner,
+            host_helpers_fn,
+            float_fn,
+            xy,
+            image_text,
+            text,
+            font,
+            fill,
+            stroke_fill,
+            fill_ink,
+            stroke_ink,
+            stroke_width,
+            anchor,
+            align,
+            direction,
+            features,
+            language,
+            embedded_color,
+            args,
+            mask_kwargs,
+            native_text_input,
+        )
+    }
+
     fn text_color_mask(
         &mut self,
         xy: (i32, i32),
         color: &Bound<'_, PyImage>,
         coverage: &Bound<'_, PyImage>,
     ) -> PyResult<()> {
-        color.call_method0("load")?;
-        coverage.call_method0("load")?;
-        let color = color.borrow();
-        let coverage = coverage.borrow();
-        self.draw
-            .paste_text_color_mask(xy, &color.inner, &coverage.inner)
-            .map_err(map_error)
+        text_color_mask_impl(&mut self.draw, xy, color, coverage)
     }
 
-    fn regular_polygon(
-        &mut self,
+    #[pyo3(signature = (bounding_circle, n_sides, rotation=0.0))]
+    fn regular_polygon_vertices(
+        &self,
         bounding_circle: &Bound<'_, PyAny>,
         n_sides: &Bound<'_, PyAny>,
-        rotation: Option<f64>,
-        fill: Option<&Bound<'_, PyAny>>,
-        outline: Option<&Bound<'_, PyAny>>,
-        width: Option<u32>,
-    ) -> PyResult<()> {
+        rotation: f64,
+    ) -> PyResult<Vec<(i32, i32)>> {
         let circle = if let Ok((x, y, radius)) = bounding_circle.extract::<(f64, f64, f64)>() {
             pillow_rs::RegularPolygonCircle::Flat(x, y, radius)
         } else if let Ok(((x, y), radius)) = bounding_circle.extract::<((f64, f64), f64)>() {
@@ -250,25 +404,8 @@ impl PyDraw {
             pillow_rs::RegularPolygonSides::Invalid,
             pillow_rs::RegularPolygonSides::Value,
         );
-        let fill_color = if let Some(_f) = fill {
-            Some(self.color(fill)?)
-        } else {
-            None
-        };
-        let out_color = if let Some(_o) = outline {
-            Some(self.color(outline)?)
-        } else {
-            None
-        };
         self.draw
-            .regular_polygon(
-                circle,
-                sides,
-                rotation.unwrap_or(0.0),
-                fill_color,
-                out_color,
-                pillow_rs::normalize_draw_width(width),
-            )
+            .regular_polygon_vertices(circle, sides, rotation)
             .map_err(map_error)
     }
 
@@ -291,7 +428,7 @@ impl PyDraw {
         };
         self.draw
             .polygon_with_input(
-                draw_points_input_from_python(xy),
+                draw_points_input_from_python(xy)?,
                 fill_color,
                 out_color,
                 pillow_rs::normalize_draw_width(width),
@@ -299,10 +436,31 @@ impl PyDraw {
             .map_err(map_error)
     }
 
+    #[pyo3(name = "_prepare_polygon_mask_input")]
+    fn prepare_polygon_mask_input(&self, xy: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.draw
+            .prepare_polygon_mask_input(draw_points_input_from_python(xy)?)
+            .map_err(map_error)
+    }
+
+    #[pyo3(name = "_polygon_outline")]
+    fn polygon_outline(
+        &mut self,
+        xy: &Bound<'_, PyAny>,
+        outline: &Bound<'_, PyAny>,
+        width: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        let width = c_int_from_python(width)?;
+        let outline = Some(self.color(Some(outline))?);
+        self.draw
+            .polygon_outline_with_input(draw_points_input_from_python(xy)?, outline, width)
+            .map_err(map_error)
+    }
+
     fn point(&mut self, xy: &Bound<'_, PyAny>, fill: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
         let color = self.color(fill)?;
         self.draw
-            .point_with_input(draw_points_input_from_python(xy), color)
+            .point_with_input(draw_points_input_from_python(xy)?, color)
             .map_err(map_error)
     }
 
@@ -316,9 +474,9 @@ impl PyDraw {
             rust_outline.close();
             rust_outline.points.clone()
         } else {
-            let input = draw_points_input_from_python(shape);
             let fill = fill.map(|_| self.color(fill)).transpose()?;
             let outline = outline.map(|_| self.color(outline)).transpose()?;
+            let input = draw_points_input_from_python(shape)?;
             return self
                 .draw
                 .shape_with_input(input, fill, outline)
@@ -339,8 +497,8 @@ impl PyDraw {
         width: Option<u32>,
     ) -> PyResult<()> {
         let color = self.color(fill)?;
-        let xy =
-            pillow_rs::normalize_draw_box(draw_box_input_from_python(xy)).map_err(map_error)?;
+        let xy = pillow_rs::normalize_draw_box(draw_box_input_from_python(xy)?)
+            .map_err(map_error)?;
         self.draw
             .arc(
                 xy.0,
@@ -363,12 +521,12 @@ impl PyDraw {
         end: f64,
         fill: Option<&Bound<'_, PyAny>>,
         outline: Option<&Bound<'_, PyAny>>,
-        width: Option<u32>,
+        width: i32,
     ) -> PyResult<()> {
         let fc = fill.map(|_| self.color(fill)).transpose()?;
         let oc = outline.map(|_| self.color(outline)).transpose()?;
-        let xy =
-            pillow_rs::normalize_draw_box(draw_box_input_from_python(xy)).map_err(map_error)?;
+        let xy = pillow_rs::normalize_draw_box(draw_box_input_from_python(xy)?)
+            .map_err(map_error)?;
         self.draw
             .chord(
                 xy.0,
@@ -379,7 +537,7 @@ impl PyDraw {
                 end,
                 fc,
                 oc,
-                pillow_rs::normalize_draw_width(width),
+                width.max(0) as u32,
             )
             .map_err(map_error)
     }
@@ -392,12 +550,12 @@ impl PyDraw {
         end: f64,
         fill: Option<&Bound<'_, PyAny>>,
         outline: Option<&Bound<'_, PyAny>>,
-        width: Option<u32>,
+        width: i32,
     ) -> PyResult<()> {
         let fc = fill.map(|_| self.color(fill)).transpose()?;
         let oc = outline.map(|_| self.color(outline)).transpose()?;
-        let xy =
-            pillow_rs::normalize_draw_box(draw_box_input_from_python(xy)).map_err(map_error)?;
+        let xy = pillow_rs::normalize_draw_box(draw_box_input_from_python(xy)?)
+            .map_err(map_error)?;
         self.draw
             .pieslice(
                 xy.0,
@@ -408,7 +566,7 @@ impl PyDraw {
                 end,
                 fc,
                 oc,
-                pillow_rs::normalize_draw_width(width),
+                width.max(0) as u32,
             )
             .map_err(map_error)
     }
@@ -431,192 +589,6 @@ impl PyDraw {
                 fc,
                 oc,
                 pillow_rs::normalize_draw_width(width),
-            )
-            .map_err(map_error)
-    }
-
-    #[pyo3(signature = (xy, radius=0.0, fill=None, outline=None, width=1))]
-    fn rounded_rectangle(
-        &mut self,
-        xy: &Bound<'_, PyAny>,
-        radius: f64,
-        fill: Option<&Bound<'_, PyAny>>,
-        outline: Option<&Bound<'_, PyAny>>,
-        width: Option<u32>,
-    ) -> PyResult<()> {
-        let fc = fill.map(|_| self.color(fill)).transpose()?;
-        let oc = outline.map(|_| self.color(outline)).transpose()?;
-        self.draw
-            .rounded_rectangle_with_input(
-                draw_box_input_from_python(xy),
-                radius,
-                fc,
-                oc,
-                pillow_rs::normalize_draw_width(width),
-            )
-            .map_err(map_error)
-    }
-
-    #[pyo3(signature = (xy, text, fill=None, font=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None, embedded_color=false, stroke_fill=None, font_size=None, has_args=false, has_kwargs=false))]
-    #[allow(clippy::too_many_arguments)] // Mirrors the public Pillow ImageDraw API.
-    fn text(
-        &mut self,
-        xy: (f64, f64),
-        text: &Bound<'_, PyAny>,
-        fill: Option<&Bound<'_, PyAny>>,
-        font: Option<&Bound<'_, PyFont>>,
-        direction: Option<String>,
-        features: Option<&Bound<'_, PyAny>>,
-        language: Option<String>,
-        stroke_width: f32,
-        anchor: Option<String>,
-        embedded_color: bool,
-        stroke_fill: Option<&Bound<'_, PyAny>>,
-        font_size: Option<f32>,
-        has_args: bool,
-        has_kwargs: bool,
-    ) -> PyResult<()> {
-        let default_font = if font.is_none() {
-            Some(
-                pillow_rs::FreeTypeFont::load_default(font_size.unwrap_or(10.0))
-                    .map_err(map_error)?,
-            )
-        } else {
-            None
-        };
-        // Pillow's ImageText.Text stores the input before embedded-color
-        // validation; defer host text conversion until after ink resolution.
-        self.draw
-            .validate_text_options(&pillow_rs::ImageFontTextOptions {
-                embedded_color,
-                ..pillow_rs::ImageFontTextOptions::default()
-            })
-            .map_err(map_error)?;
-        let color = self.text_color(fill)?;
-        let stroke_fill = if stroke_width != 0.0 {
-            stroke_fill
-                .map(|value| self.text_color(Some(value)))
-                .transpose()?
-        } else {
-            None
-        };
-        let text = draw_text_input_from_python(text)?;
-        let features_invalid = draw_features_presence_from_python(features);
-        let options = pillow_rs::ImageFontTextOptions {
-            direction,
-            embedded_color,
-            features: None,
-            features_invalid,
-            language,
-            stroke_width,
-            stroke_fill,
-            // ImageText._split passes fractional line coordinates through
-            // FreeType's start offset while integer coordinates anchor the mask.
-            start: Some((xy.0.fract(), xy.1.fract())),
-            has_args,
-            has_kwargs,
-            anchor,
-            anchor_invalid_length_error: true,
-            ..pillow_rs::ImageFontTextOptions::default()
-        };
-        let borrowed = font.map(|font| font.borrow());
-        let font = borrowed
-            .as_ref()
-            .map(|font| &font.inner)
-            .or(default_font.as_ref())
-            .ok_or_else(|| {
-                map_error(pillow_rs::PilError::InternalError(
-                    "draw text font was not prepared".into(),
-                ))
-            })?;
-        self.draw
-            .text_with_options_input(
-                xy.0 as i32,
-                xy.1 as i32,
-                text,
-                font,
-                color,
-                &options,
-            )
-            .map_err(map_error)
-    }
-
-    #[pyo3(signature = (xy, text, fill=None, font=None, spacing=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None, embedded_color=false, font_size=None, align=None, stroke_fill=None))]
-    #[allow(clippy::too_many_arguments)] // Mirrors the public Pillow ImageDraw API.
-    fn multiline_text(
-        &mut self,
-        xy: (f64, f64),
-        text: &Bound<'_, PyAny>,
-        fill: Option<&Bound<'_, PyAny>>,
-        font: Option<&Bound<'_, PyFont>>,
-        spacing: Option<i32>,
-        direction: Option<String>,
-        features: Option<&Bound<'_, PyAny>>,
-        language: Option<String>,
-        stroke_width: f32,
-        anchor: Option<String>,
-        embedded_color: bool,
-        font_size: Option<f32>,
-        align: Option<String>,
-        stroke_fill: Option<&Bound<'_, PyAny>>,
-    ) -> PyResult<()> {
-        let default_font = if font.is_none() {
-            Some(
-                pillow_rs::FreeTypeFont::load_default(font_size.unwrap_or(10.0))
-                    .map_err(map_error)?,
-            )
-        } else {
-            None
-        };
-        self.draw
-            .validate_text_options(&pillow_rs::ImageFontTextOptions {
-                embedded_color,
-                ..pillow_rs::ImageFontTextOptions::default()
-            })
-            .map_err(map_error)?;
-        let color = self.text_color(fill)?;
-        let stroke_fill = if stroke_width != 0.0 {
-            stroke_fill
-                .map(|value| self.text_color(Some(value)))
-                .transpose()?
-        } else {
-            None
-        };
-        let text = draw_text_input_from_python(text)?;
-        let features_invalid = draw_features_presence_from_python(features);
-        let options = pillow_rs::ImageFontTextOptions {
-            direction,
-            embedded_color,
-            features: None,
-            features_invalid,
-            language,
-            stroke_width,
-            stroke_fill,
-            anchor,
-            align: Some(align.unwrap_or_else(|| "left".into())),
-            anchor_invalid_length_error: true,
-            ..pillow_rs::ImageFontTextOptions::default()
-        };
-        let borrowed = font.map(|font| font.borrow());
-        let font = borrowed
-            .as_ref()
-            .map(|font| &font.inner)
-            .or(default_font.as_ref())
-            .ok_or_else(|| {
-                map_error(pillow_rs::PilError::InternalError(
-                    "draw text font was not prepared".into(),
-                ))
-            })?;
-        self.draw
-            .multiline_text_with_optional_font_input(
-                xy.0,
-                xy.1,
-                text,
-                Some(font),
-                color,
-                f64::from(spacing.unwrap_or(4)),
-                None,
-                &options,
             )
             .map_err(map_error)
     }
@@ -763,6 +735,20 @@ impl PyDraw {
     }
 }
 
+pub(super) fn text_color_mask_impl(
+    draw: &mut pillow_rs::Draw,
+    xy: (i32, i32),
+    color: &Bound<'_, PyImage>,
+    coverage: &Bound<'_, PyImage>,
+) -> PyResult<()> {
+    color.call_method0("load")?;
+    coverage.call_method0("load")?;
+    let color = color.borrow();
+    let coverage = coverage.borrow();
+    draw.paste_text_color_mask(xy, &color.inner, &coverage.inner)
+        .map_err(map_error)
+}
+
 impl PyDraw {
     fn draw_get_image(&self) -> PyResult<pillow_rs::Image> {
         self.draw.image_clone().map_err(map_error)
@@ -770,24 +756,22 @@ impl PyDraw {
 
     /// Parse a draw color, using the image mode to determine byte representation.
     fn color(&mut self, val: Option<&Bound<'_, PyAny>>) -> PyResult<(u8, u8, u8, u8)> {
-        self.draw
-            .resolve_draw_color_with_input(draw_color_input_from_python(val)?)
-            .map_err(map_error)
+        let Some(val) = val else {
+            return self
+                .draw
+                .resolve_draw_color_with_input(pillow_rs::DrawColorInput::None)
+                .map_err(map_error);
+        };
+        let ink = val.extract::<i32>()?;
+        self.draw.color_from_draw_ink(ink).map_err(map_error)
     }
 
-    /// Parse an ImageDraw text ink using the image mode's native byte layout.
-    fn text_color(
-        &mut self,
-        val: Option<&Bound<'_, PyAny>>,
-    ) -> PyResult<(u8, u8, u8, u8)> {
-        self.draw
-            .resolve_text_color_with_input(draw_color_input_from_python(val)?)
-            .map_err(map_error)
-    }
 }
 
 pub(super) fn register_classes(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<PyLineCurveJointPlan>()?;
     m.add_class::<PyDraw>()?;
     m.add_class::<PyOutline>()?;
+    rounded_rectangle::register_class(m)?;
     Ok(())
 }

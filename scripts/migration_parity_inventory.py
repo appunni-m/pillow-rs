@@ -94,6 +94,32 @@ class EndpointSeed:
 
 CORRECTIONS: tuple[Endpoint, ...] = (
     Endpoint(
+        surface="PIL.ImageText",
+        operation="Text",
+        kind="type",
+        source_path="PIL.ImageText.Text",
+        classification="endpoint",
+        authority="workflow-correction",
+        legacy_refs=(),
+        correction_reason=(
+            "Public ImageText.Text construction is required to express the "
+            "Pillow 12.2 wrap workflow without inventing a runner-only object."
+        ),
+    ),
+    Endpoint(
+        surface="PIL.ImageText.Text",
+        operation="wrap",
+        kind="method",
+        source_path="PIL.ImageText.Text.wrap",
+        classification="endpoint",
+        authority="workflow-correction",
+        legacy_refs=(),
+        correction_reason=(
+            "Pillow 12.2 exposes ImageText.Text.wrap as a public method; "
+            "include it so text wrapping is part of the active parity contract."
+        ),
+    ),
+    Endpoint(
         surface="PIL.ImageDraw",
         operation="Draw",
         kind="function",
@@ -636,7 +662,7 @@ def validate_inventory() -> dict[str, int]:
     ):
         raise ValueError("font endpoints are not on canonical public surfaces")
     payload = render_json(endpoints, legacy_rows)
-    if EXPECTED_AUTHORITY_SHA256 not in payload or '"endpoint_count": 214' not in payload:
+    if EXPECTED_AUTHORITY_SHA256 not in payload or '"endpoint_count": 216' not in payload:
         raise ValueError("diagnostic inventory does not record frozen authority metadata")
     return {
         "legacy_rows": legacy_rows,

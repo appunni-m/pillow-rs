@@ -8,13 +8,11 @@ use crate::compute::registry::support::{
     ModeSupport,
     OperationId,
     OutputModeRule,
-    StrategySelection,
 };
 use crate::compute::{Architecture, ExecutionContext};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode, RgbImage};
 
-use super::default::eval_impl as default;
 
 const CHANNELS: usize = 3;
 const INPUTS: &[InputContract] = &[

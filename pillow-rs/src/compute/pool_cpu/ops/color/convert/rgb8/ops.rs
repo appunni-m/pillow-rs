@@ -4,9 +4,9 @@ crate::compute::pool_cpu::ops::color::convert::helpers::binary::declare_mode_str
     crate::raster::Mode::ImageRgb8
 );
 
-use crate::compute::{Architecture, ExecutionContext, registry::support::{
-    ImplementationSupport, InputContract, ModeSupport, OperationId, OperationInputs,
-    OutputModeRule, StrategyGuard, StrategySelection,
+use crate::compute::{Architecture, registry::support::{
+    ImplementationSupport, InputContract, ModeSupport, OperationId, OutputModeRule,
+    StrategyGuard, StrategySelection,
 }};
 use crate::error::PilError;
 use crate::pipeline::DitherMethod;
@@ -376,44 +376,16 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     &ARCHITECTURES,
 );
 
-pub(crate) struct Prepared<'a> {
-    source: &'a RgbImage,
-    target: Mode,
-    selection: StrategySelection,
-}
-
-impl Prepared<'_> {
-    pub(crate) fn selection(&self) -> &StrategySelection {
-        &self.selection
-    }
-
-    pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
-        // SAFETY: prepare selected this strategy from SUPPORT using the same
-        // source, target, and execution context retained in this plan.
-        unsafe { execute(self.source, self.target, self.selection) }
-    }
-}
-
-pub(crate) fn prepare<'a>(
-    input: OperationInputs<'a>,
-    target: Mode,
-    ctx: &ExecutionContext,
-) -> Result<Prepared<'a>, PilError> {
-    let DynamicImage::ImageRgb8(source) = input.image else {
-        return Err(PilError::InternalError(
-            "RGB8 Convert strategy received another source mode".into(),
-        ));
-    };
-    let selection = SUPPORT.select(ctx, input.facts().with_convert_target(target))?;
-    Ok(Prepared { source, target, selection })
-}
-
 /// Executes the concrete RGB8 architecture strategy selected from `SUPPORT`.
 ///
 /// # Safety
 ///
 /// `selection` must come from [`SUPPORT`] for this RGB8 source and target,
 /// with architecture capabilities checked by the same execution context.
+#[allow(
+    unsafe_code,
+    reason = "architecture dispatch relies on the validated Convert strategy selection"
+)]
 pub(crate) unsafe fn execute(
     source: &RgbImage,
     target: Mode,

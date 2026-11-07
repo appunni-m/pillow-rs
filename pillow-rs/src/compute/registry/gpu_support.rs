@@ -402,7 +402,7 @@ fn gpu_pixel_shader_contract(op: &PipelineOp) -> Option<bool> {
             matrix.is_none()
                 && dither.is_none()
                 && matches!(
-                    mode,
+                    *mode,
                     ColorMode::L
                         | ColorMode::LA
                         | ColorMode::RGB

@@ -15,7 +15,9 @@ pub(crate) fn apply<const RGBA_MASK: bool>(
     let DynamicImage::ImageI16(mut canvas) = image else {
         return Ok(TextComposeResult::NotApplicable);
     };
-    if !i16_text::apply::<RGBA_MASK>(&mut canvas, x, y, width, height, pixels, fill) {
+    if !i16_text::apply::<RGBA_MASK, false>(
+        &mut canvas, x, y, width, height, pixels, fill,
+    ) {
         return Ok(TextComposeResult::Unchanged);
     }
     Ok(TextComposeResult::Updated(DynamicImage::ImageI16(canvas)))

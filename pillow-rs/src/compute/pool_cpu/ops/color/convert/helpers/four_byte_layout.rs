@@ -22,7 +22,7 @@ pub(crate) fn drop_fourth_byte(
         let active = (pixels - start).min(4);
         let padded = padded_four_byte_block(source, start, active);
         let block = u8x16::new(padded)
-            .swizzle_relaxed(DROP_FOURTH_BYTE_LANES)
+            .shuffle(DROP_FOURTH_BYTE_LANES)
             .to_array();
         output.extend_from_slice(&block[..active * 3]);
         vector_blocks = vector_blocks.saturating_add(1);
@@ -45,7 +45,7 @@ pub(crate) fn copy_four_byte_pixels(
         let active = (pixels - start).min(4);
         let active_bytes = active * 4;
         let padded = padded_four_byte_block(source, start, active);
-        let block = u8x16::new(padded).swizzle_relaxed(IDENTITY_LANES).to_array();
+        let block = u8x16::new(padded).shuffle(IDENTITY_LANES).to_array();
         output.extend_from_slice(&block[..active_bytes]);
         vector_blocks = vector_blocks.saturating_add(1);
     }

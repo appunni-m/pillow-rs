@@ -39,7 +39,6 @@ pub(in crate::compute::pool_cpu::ops::filter) use i16_kernel::{
     execute_u16_filter3x3, execute_u16_filter5x5,
 };
 pub(crate) use blur::gaussian_blur_box_parameters;
-pub(crate) use crate::compute::helpers::filters::binomial3x3_parameters_match;
 pub(crate) use filter3x3::{
     execute_filter3x3_la_binomial_bytes, execute_filter3x3_la_binomial_vector_bytes,
     execute_filter3x3_native_bytes, execute_filter3x3_small_uniform_bytes,

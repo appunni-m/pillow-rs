@@ -13,7 +13,6 @@ use crate::image::Image;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
 
-use super::MergeLayout;
 
 const MERGE_SINGLE: &[InputContract] = &[InputContract::MergeBandLayout {
     band_count: 1,

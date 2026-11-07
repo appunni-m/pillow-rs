@@ -7,7 +7,6 @@ pub use result::{StatResult, StatValue, stat_from_histogram, stat_from_list};
 use crate::compute::registry::support::OperationId;
 use crate::compute::PipelineOperationTelemetryCapture;
 use crate::error::PilError;
-use crate::raster::Mode;
 
 use super::{FormattedExtrema, FormattedPixelValue, Image};
 
@@ -185,12 +184,14 @@ impl Image {
         &self,
         maxcolors: u32,
     ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {
-        let mode = self.mode_identity()?;
-        OperationId::GetColors.support().for_mode(mode).validate_mode()?;
-        let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
         let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
         let image = self.materialized_shared()?;
         operation_receipts.capture();
+        // Pillow loads before selecting its mode-specific histogram or
+        // low-level getcolors path; unsupported-mode errors follow decoding.
+        let mode = image.mode();
+        OperationId::GetColors.support().for_mode(mode).validate_mode()?;
+        let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
         let telemetry = if crate::compute::Backend::pipeline_telemetry_enabled() {
             // This timing/resource sample covers the terminal scan; ordered
             // source graph operation receipts are restored separately.
@@ -242,9 +243,13 @@ impl Image {
         if maxcolors >= 0 {
             return self.getcolors(maxcolors as u32);
         }
-        let mode = self.mode_identity()?;
+        let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
+        let image = self.materialized_shared()?;
+        operation_receipts.capture();
+        // The public method loads before Pillow's low-level mode rejection,
+        // including when a negative limit guarantees a `None` result.
+        let mode = image.mode();
         OperationId::GetColors.support().for_mode(mode).validate_mode()?;
-        self.materialized_shared()?;
         Ok(None)
     }
 

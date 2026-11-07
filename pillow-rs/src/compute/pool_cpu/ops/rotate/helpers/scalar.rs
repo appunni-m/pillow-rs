@@ -5,7 +5,7 @@ use crate::compute::pool_cpu::ops::rotate::helpers::geometry::{
     discrete_angle, identity_contract, rotate_geometry,
 };
 use crate::compute::pool_cpu::ops::rotate::ops::RotateRequest;
-use crate::raster::{GenericImageView, ImageBuffer, Rgba, RgbaImage};
+use crate::raster::{Rgba, RgbaImage};
 
 use super::cubic::{
     horizontal_f32 as rotate_cubic_horizontal_f32,

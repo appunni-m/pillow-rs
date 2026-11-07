@@ -301,10 +301,18 @@ pub(super) fn resolve_batch_auxiliary_images(
             let context = draw_context.ok_or_else(|| {
                 PilError::InternalError("GPU Draw preview has no CPU execution context".into())
             })?;
-            Some(crate::compute::pool_cpu::ops::draw::execute_draw_batch(
-                draw_preview.as_ref().unwrap_or(image),
-                std::slice::from_ref(op),
+            let source = draw_preview.as_ref().unwrap_or(image);
+            let single_op = std::slice::from_ref(op);
+            let selection = crate::compute::pool_cpu::ops::draw::ops::prepare_batch(
+                source,
+                single_op,
                 context,
+            )?;
+            Some(crate::compute::pool_cpu::ops::draw::ops::execute_batch(
+                source,
+                single_op,
+                source.mode(),
+                selection,
             )?)
         } else {
             None

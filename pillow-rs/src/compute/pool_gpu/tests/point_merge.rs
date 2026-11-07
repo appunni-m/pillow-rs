@@ -278,8 +278,16 @@ fn assert_contrast_mean_after_exact_putpixel_case(
         },
         PipelineOp::Contrast { factor: 0.5 },
     ];
-    let prefixed = crate::compute::pool_cpu::ops::effects::op_put_pixel(&image, x, y, color)
-        .expect("exact PutPixel prefix");
+    let context = crate::compute::ExecutionContext::new(
+        crate::compute::Backend::Cpu,
+        crate::compute::Architecture::Default,
+    );
+    let prefixed = crate::compute::pool_cpu::ops::put::ops::execute_put_pixel(
+        &image,
+        crate::compute::pool_cpu::ops::put::ops::PixelWrite { x, y, color },
+        &context,
+    )
+    .expect("exact PutPixel prefix");
     assert_eq!(
         gpu_contrast_mean_after_exact_prefix(&image, &ops),
         gpu_contrast_mean(&prefixed),

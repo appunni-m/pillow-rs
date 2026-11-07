@@ -5,12 +5,10 @@
 use crate::compute::{ExecutionContext, registry::support::{
     ModeSupport,
     OperationId,
-    PaletteKnowledge,
 }};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 
-use super::default;
 use super::super::helpers::crop::CropRegion;
 use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
 

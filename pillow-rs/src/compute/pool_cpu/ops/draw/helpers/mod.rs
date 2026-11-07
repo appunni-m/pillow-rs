@@ -27,6 +27,6 @@ pub(crate) mod strategy;
 
 mod native;
 
-pub(crate) use canvas::{ConfigureDrawCanvas, Luma16Canvas, NativeByteCanvas};
+pub(crate) use canvas::{Luma16Canvas, NativeByteCanvas};
 pub(crate) use dispatch::{draw_op_on_canvas, is_draw_op, validate_draw_ops};
 pub(crate) use native::{execute_byte_buffer, execute_float_buffer, execute_luma16_buffer};

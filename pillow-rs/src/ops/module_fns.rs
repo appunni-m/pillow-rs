@@ -381,6 +381,10 @@ pub fn effect_mandelbrot(
     extent: (f64, f64, f64, f64),
     quality: i32,
 ) -> Result<Image, PilError> {
+    let (x0, y0, x1, y1) = extent;
+    if quality < 2 || x0 >= x1 || y0 >= y1 {
+        return Err(PilError::ValueError("unrecognized argument value".into()));
+    }
     let (width, height) = size;
     if width == 0 || height == 0 {
         return Image::new(width, height, Mode::ImageLuma8, (0, 0, 0, 255));

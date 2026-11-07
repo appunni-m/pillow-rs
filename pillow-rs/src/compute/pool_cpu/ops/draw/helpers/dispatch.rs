@@ -3,8 +3,8 @@ use super::canvas::ConfigureDrawCanvas;
 use super::ellipse::draw_ellipse_on_canvas;
 use super::polygon::draw_polygon_on_canvas;
 use super::primitives::{draw_line_on_canvas, draw_rect_on_canvas};
-use super::rounded_rect::{draw_rounded_rect_on_canvas, validate_rounded_rect};
-use crate::draw::{DrawCanvas, plot};
+use super::rounded_rect::draw_rounded_rect_on_canvas;
+use crate::draw::{DrawCanvas, plot, validate_rounded_rect};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 
@@ -164,6 +164,7 @@ fn draw_primitive_operation<C: DrawCanvas, const FLOAT_MODE: bool>(
             fill,
             outline,
             width,
+            outline_width,
             ..
         } => draw_polygon_on_canvas(
             canvas,
@@ -172,6 +173,7 @@ fn draw_primitive_operation<C: DrawCanvas, const FLOAT_MODE: bool>(
             // The archived F-mode Draw path deliberately ignores polygon outline ink.
             if FLOAT_MODE { None } else { *outline },
             *width,
+            *outline_width,
         ),
         PipelineOp::DrawPoint { points, fill, .. } => {
             let (img_w, img_h) = (canvas.width(), canvas.height());

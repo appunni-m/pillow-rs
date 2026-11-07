@@ -12,19 +12,11 @@ use crate::raster::{DynamicImage, ImageBuffer, Luma, Mode};
 
 type Samples = ImageBuffer<Luma<u16>, Vec<u16>>;
 
-// NO_PILLOW_SUPPORT: these typed outputs keep native u16 samples without an
-// 8-bit base-mode conversion.
-const CORE_ONLY_TARGETS: &[Mode] = &[
-    Mode::ImageI16,
-    Mode::ImageI16L,
-    Mode::ImageI16B,
-    Mode::ImageI32,
-    Mode::ImageF32,
-];
+const CORE_ONLY_TARGETS: &[Mode] = &[];
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: super::super::ops::I16_TARGETS,
     core_only_targets: CORE_ONLY_TARGETS,
-    core_only_reason: Some("typed conversions preserve the full native u16 sample"),
+    core_only_reason: None,
     rejection_reason: "image has wrong mode",
 }];
 

@@ -162,7 +162,8 @@ fn apply_filtered_mesh_lanes(
         // Filtered three-band kernels leave the hidden fourth byte unchanged.
         return Ok(());
     }
-    let (left, top, right, bottom) = clipped_mesh_box(box_coordinates, request.width, request.height);
+    let (left, top, right, bottom) =
+        clipped_mesh_box(box_coordinates, (request.width, request.height));
     if left >= right || top >= bottom {
         return Ok(());
     }

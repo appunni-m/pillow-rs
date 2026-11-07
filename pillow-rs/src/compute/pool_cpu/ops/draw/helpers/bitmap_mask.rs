@@ -5,8 +5,8 @@ use crate::raster::Mode;
 /// nonzero coverage, `L` blends physical destination bytes and promotes a
 /// nonzero mask to full coverage only for zero-alpha destinations, `RGBA`
 /// blends from its alpha byte, and `RGBa` applies PREBLEND to each byte.
-/// TODO(pillow-rs#3ptb): verify PA's alpha-aware L coverage and RGBa-mask
-/// PREBLEND across every supported destination mode in CPU parity.
+/// The generated CPU parity matrix exercises each declared mask mode against
+/// every supported destination mode, including PA's zero-alpha L promotion.
 pub(crate) struct BitmapMask<'a> {
     mode: Mode,
     width: u32,

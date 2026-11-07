@@ -9,8 +9,6 @@
 use crate::raster::{DynamicImage, ImageBuffer};
 #[cfg(feature = "gpu")]
 use std::sync::{Arc, OnceLock};
-#[cfg(not(target_arch = "wasm32"))]
-use std::time::{SystemTime, UNIX_EPOCH};
 
 pub(crate) const GRID: usize = 33;
 const CHANNELS: usize = 3;
@@ -18,66 +16,53 @@ const LUT_VALUES: usize = GRID * GRID * GRID * CHANNELS;
 const LUT_BYTES: usize = LUT_VALUES * 2;
 #[cfg(feature = "gpu")]
 pub(crate) const GPU_TABLE_WORDS: usize = GRID * GRID * GRID * 2;
-const LAB_PROFILE_TEMPLATE: &[u8; 572] = include_bytes!("data/lab-identity-profile.icc");
-
-#[cfg(target_arch = "wasm32")]
-fn unix_timestamp_seconds() -> u64 {
-    // `std::time::SystemTime::now()` is unsupported on `wasm32-unknown-unknown`.
-    // Date.now() is available in both browser and Node hosts and preserves the
-    // whole-second timestamp that LittleCMS writes into the profile header.
-    let milliseconds = js_sys::Date::now();
-    if milliseconds.is_finite() && milliseconds >= 0.0 {
-        (milliseconds / 1_000.0) as u64
-    } else {
-        0
-    }
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn unix_timestamp_seconds() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
-}
-
 #[repr(align(2))]
 struct AlignedLut([u8; LUT_BYTES]);
 
 static LUT_BYTES_LE: AlignedLut = AlignedLut(*include_bytes!("data/lcms-lab-lut.u16le"));
 
-/// Build the profile Pillow's `ImageCms.createProfile("LAB")` attaches.
-/// LittleCMS stamps profile creation time at whole-second precision; preserve
-/// that observable field while keeping the profile bytes otherwise static.
-pub(crate) fn pillow_lab_icc_profile() -> Vec<u8> {
-    let seconds = unix_timestamp_seconds();
-    let days = (seconds / 86_400) as i64;
-    let within_day = seconds % 86_400;
-    let z = days + 719_468;
-    let era = z / 146_097;
-    let day_of_era = z - era * 146_097;
-    let year_of_era =
-        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+/// Returns the built-in LAB identity profile with the creation time Pillow
+/// records when its ImageCms LAB conversion is constructed.
+pub(crate) fn identity_profile() -> Vec<u8> {
+    profile_with_current_creation_time(include_bytes!("data/lab-identity-profile.icc").to_vec())
+}
+
+/// Returns the generated sRGB output profile Pillow attaches to LAB transforms.
+pub(crate) fn output_srgb_profile() -> Vec<u8> {
+    profile_with_current_creation_time(include_bytes!("data/srgb-output-profile.icc").to_vec())
+}
+
+fn profile_with_current_creation_time(mut profile: Vec<u8>) -> Vec<u8> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let (year, month, day) = utc_date(now / 86_400);
+    let seconds_of_day = now % 86_400;
+    let hour = seconds_of_day / 3_600;
+    let minute = (seconds_of_day % 3_600) / 60;
+    let second = seconds_of_day % 60;
+    let values = [year, month, day, hour, minute, second];
+    for (slot, value) in profile[24..36].chunks_exact_mut(2).zip(values) {
+        slot.copy_from_slice(&(value as u16).to_be_bytes());
+    }
+    profile
+}
+
+fn utc_date(days_since_epoch: u64) -> (u64, u64, u64) {
+    let days = days_since_epoch as i64 + 719_468;
+    let era = days.div_euclid(146_097);
+    let day_of_era = days - era * 146_097;
+    let year_of_era = (day_of_era - day_of_era / 1_460 + day_of_era / 36_524
+        - day_of_era / 146_096)
+        / 365;
     let mut year = year_of_era + era * 400;
     let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
     let month_prime = (5 * day_of_year + 2) / 153;
     let day = day_of_year - (153 * month_prime + 2) / 5 + 1;
     let month = month_prime + if month_prime < 10 { 3 } else { -9 };
-    year += if month <= 2 { 1 } else { 0 };
-
-    let date = [
-        (year as u16).to_be_bytes(),
-        (month as u16).to_be_bytes(),
-        (day as u16).to_be_bytes(),
-        ((within_day / 3_600) as u16).to_be_bytes(),
-        (((within_day / 60) % 60) as u16).to_be_bytes(),
-        ((within_day % 60) as u16).to_be_bytes(),
-    ];
-    let mut profile = LAB_PROFILE_TEMPLATE.to_vec();
-    for (index, part) in date.into_iter().enumerate() {
-        profile[24 + index * 2..26 + index * 2].copy_from_slice(&part);
-    }
-    profile
+    year += i64::from(month <= 2);
+    (year as u64, month as u64, day as u64)
 }
 
 /// Return the RGB-to-LAB CLUT packed as two u32 words per grid vertex.

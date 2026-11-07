@@ -5,10 +5,9 @@ use crate::compute::pool_cpu::helpers::bytes::hidden_lanes::{
 use crate::error::PilError;
 use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{Rgb, RgbImage};
-use crate::raster::{GenericImage, GenericImageView};
 
 /// Blend a three-byte raster without adding an intermediate alpha channel.
-pub(crate) fn apply(
+pub(crate) fn apply<const RGB_PREMULTIPLIED_IS_OPAQUE: bool>(
     canvas: &mut RgbImage,
     x: i32,
     y: i32,
@@ -21,7 +20,12 @@ pub(crate) fn apply(
     let (image_width, image_height) = canvas.dimensions();
     for mask_y in 0..mask_height {
         for mask_x in 0..mask_width {
-            let coverage = mask.coverage(mask_x, mask_y);
+            let mask_coverage = mask.coverage(mask_x, mask_y);
+            let coverage = if RGB_PREMULTIPLIED_IS_OPAQUE && mask.is_premultiplied() {
+                u8::MAX
+            } else {
+                mask_coverage
+            };
             if mask.should_skip(coverage) {
                 continue;
             }

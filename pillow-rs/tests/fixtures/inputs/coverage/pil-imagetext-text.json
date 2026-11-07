@@ -1,0 +1,36 @@
+{
+  "schema": "migration-parity/coverage-input@1",
+  "plans": [
+    {
+      "plan_id": "pil-imagetext-text.coverage-plan",
+      "covers": [
+        "PIL.ImageText.Text.wrap.behavior.default",
+        "PIL.ImageText.Text.wrap.parameter.width",
+        "PIL.ImageText.Text.wrap.parameter.height",
+        "PIL.ImageText.Text.wrap.parameter.scaling"
+      ],
+      "target_profile": "python-cpu",
+      "selectors": {
+        "parity_case_ids": [
+          "PIL.ImageText.Text.wrap.behavior.default",
+          "PIL.ImageText.Text.wrap.parameter.height",
+          "PIL.ImageText.Text.wrap.parameter.scaling",
+          "PIL.ImageText.Text.wrap.nuanced.lone-surrogate-height-remainder",
+          "PIL.ImageText.Text.wrap.nuanced.font-getbbox-instance-override",
+          "PIL.ImageText.Text.wrap.nuanced.font-getbbox-instance-override-fault-order",
+          "PIL.ImageText.Text.wrap.nuanced.text-subclass-getbbox-override",
+          "PIL.ImageText.Text.wrap.nuanced.text-subclass-getbbox-override-fault-order",
+          "PIL.ImageText.Text.wrap.nuanced.text-subclass-split-override-output",
+          "PIL.ImageText.Text.wrap.nuanced.text-subclass-get-fontmode-fault-order",
+          "PIL.ImageText.Text.wrap.nuanced.bytes-height-remainder",
+          "PIL.ImageText.Text.wrap.nuanced.scaling-shrink-mutates-font"
+        ],
+        "command_ids": []
+      },
+      "component_ids": [
+        "image-text"
+      ],
+      "command_id": "coverage"
+    }
+  ]
+}

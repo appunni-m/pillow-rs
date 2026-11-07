@@ -124,43 +124,6 @@ where
     output
 }
 
-fn transpose_diagonal<P>(
-    image: &ImageBuffer<P, Vec<P::Subpixel>>,
-    transverse: bool,
-) -> ImageBuffer<P, Vec<P::Subpixel>>
-where
-    P: Pixel,
-{
-    let (width, height) = image.dimensions();
-    let mut output = ImageBuffer::from_fn(height, width, |x, y| {
-        let (source_x, source_y) = if transverse {
-            (
-                width.saturating_sub(1).saturating_sub(y),
-                height.saturating_sub(1).saturating_sub(x),
-            )
-        } else {
-            (y, x)
-        };
-        *image.get_pixel(source_x, source_y)
-    });
-    let input_width = width as usize;
-    let input_height = height as usize;
-    carry_hidden_lanes(image, &mut output, |index| {
-        let x = index % input_height;
-        let y = index / input_height;
-        let (source_x, source_y) = if transverse {
-            (
-                input_width.saturating_sub(1).saturating_sub(y),
-                input_height.saturating_sub(1).saturating_sub(x),
-            )
-        } else {
-            (y, x)
-        };
-        source_y * input_width + source_x
-    });
-    output
-}
-
 macro_rules! map_mode_preserving {
     ($image:expr, $operation:ident $(, $argument:expr)* $(,)?) => {
         match $image {
@@ -224,8 +187,4 @@ impl DynamicImage {
         map_mode_preserving!(self, rotate_counter_clockwise)
     }
 
-    /// Apply a diagonal transpose while retaining the image's native pixel type.
-    pub(crate) fn transpose_diagonal(&self, transverse: bool) -> DynamicImage {
-        map_mode_preserving!(self, transpose_diagonal, transverse)
-    }
 }

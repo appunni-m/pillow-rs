@@ -4,7 +4,7 @@ use std::sync::{Arc, OnceLock};
 
 use crate::compute::registry::support::{ModeSupport, OutputModeRule};
 use crate::error::PilError;
-use crate::pipeline::{ColorMode, PipelineOp};
+use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
 
 use super::Image;
@@ -407,6 +407,11 @@ fn output_mode_from_rule(op: &PipelineOp, source: Mode, output: OutputModeRule) 
 // mode. TODO(pillow-rs#3ptb): verify these metadata/error outcomes in frozen
 // CPU parity; no runtime validation has run for this audit.
 fn output_mode_from_operation_contract(op: &PipelineOp, source: Mode) -> Option<Mode> {
+    if let PipelineOp::Merge { mode, .. } = op {
+        // Merge chooses its result identity from the requested target mode;
+        // the source is only the first single-band image and may be L.
+        return Some(*mode);
+    }
     let support = op.support();
     let rule = match support.for_mode(source) {
         ModeSupport::Supported { output, .. } => output,
@@ -481,18 +486,6 @@ impl std::ops::Deref for PipelineOps {
 
 /// Shared once-initialized operation-ready pixel result for lazy image nodes.
 pub type MaterializationCache = Arc<OnceLock<Result<Arc<DynamicImage>, PilError>>>;
-
-pub(super) fn take_cached_materialization(
-    cache: MaterializationCache,
-) -> Result<Arc<DynamicImage>, PilError> {
-    match Arc::try_unwrap(cache) {
-        Ok(cache) => cache.into_inner(),
-        Err(cache) => cache.get().cloned(),
-    }
-    .ok_or_else(|| {
-        PilError::InternalError("materialized image cache was unexpectedly empty".to_owned())
-    })?
-}
 
 /// A materialized prefix that can be shared by flattened sibling pipelines.
 ///
@@ -663,6 +656,7 @@ fn new_pipeline_node(
         backend,
         palette,
         palette_alpha,
+        compatibility_icc_profile: None,
         materialized: materialization_cache(),
         shape: pipeline_shape_cache(),
         mode: pipeline_mode_cache_for(output_mode),
@@ -769,6 +763,33 @@ fn pipeline_output_palette(
     op: &PipelineOp,
     palette_safe: bool,
 ) -> (Option<Vec<u8>>, Option<Vec<u8>>, bool) {
+    let palette_chop = matches!(
+        op,
+        PipelineOp::Add { .. }
+            | PipelineOp::Subtract { .. }
+            | PipelineOp::Multiply { .. }
+            | PipelineOp::Screen { .. }
+            | PipelineOp::Darker { .. }
+            | PipelineOp::Lighter { .. }
+            | PipelineOp::Difference { .. }
+            | PipelineOp::Overlay { .. }
+            | PipelineOp::HardLight { .. }
+            | PipelineOp::SoftLight { .. }
+            | PipelineOp::AddModulo { .. }
+            | PipelineOp::SubtractModulo { .. }
+    );
+    if palette_chop
+        && source.has_palette_samples()
+        && matches!(
+            source.known_mode_identity(),
+            Some(Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
+        )
+    {
+        // ImageChops wraps a new indexed core with Image._new. The wrapper's
+        // palette object remains attached, while the core palette exposed by
+        // getpalette() is empty; retain that observable empty result here.
+        return (Some(Vec::new()), Some(Vec::new()), false);
+    }
     let palette_dropped_by_pa_operation =
         source.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
         && match op {
@@ -838,6 +859,19 @@ impl Image {
     /// when the operation can preserve them; mode-changing operations declare
     /// a replacement output identity when the contract can resolve it.
     pub fn push_op(source: &Image, op: PipelineOp) -> Image {
+        let generated_icc_profile = match &op {
+            PipelineOp::ConvertLab { icc_profile } => Some(Arc::clone(icc_profile)),
+            PipelineOp::Convert {
+                mode: crate::raster::Mode::ImageRgb8
+                | crate::raster::Mode::ImageRgba8
+                | crate::raster::Mode::ImageRgbx8,
+                matrix: None,
+                ..
+            } if source.known_mode_identity() == Some(crate::raster::Mode::ImageLab8) => {
+                Some(crate::lab::output_srgb_profile().into())
+            }
+            _ => source.compatibility_icc_profile().map(Arc::from),
+        };
         let PipelineOutputMetadata {
             source_is_paletted,
             palette_safe,
@@ -868,7 +902,7 @@ impl Image {
                         })
                     )
         );
-        match source {
+        let mut output = match source {
             // Keep a concrete sample-layout boundary around palette expansion
             // and P↔PA transitions. A flattened batch has only one external
             // mode tag, so it cannot correctly run P operations before
@@ -918,7 +952,15 @@ impl Image {
                 palette_alpha,
                 preserves_palette,
             ),
+        };
+        if let Image::Pipeline {
+            compatibility_icc_profile,
+            ..
+        } = &mut output
+        {
+            *compatibility_icc_profile = generated_icc_profile;
         }
+        output
     }
 
     /// Returns a lazy one-operation pipeline with an explicit output mode.
@@ -938,6 +980,7 @@ impl Image {
             backend: source.backend(),
             palette: None,
             palette_alpha: None,
+            compatibility_icc_profile: None,
             materialized: materialization_cache(),
             shape: pipeline_shape_cache(),
             mode: pipeline_mode_cache_for(Some(output_mode)),

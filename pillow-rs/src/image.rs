@@ -71,7 +71,7 @@ pub use pipeline_ops::{
     MaterializationCache, PipelineModeCache, PipelineOps, PipelinePrefixCache,
     PipelineShapeCache,
 };
-use pipeline_ops::{known_pipeline_op_dimensions, take_cached_materialization};
+use pipeline_ops::known_pipeline_op_dimensions;
 pub(crate) use pipeline_ops::{
     cached_pipeline_mode, declared_pipeline_mode, known_pipeline_op_mode,
     known_pipeline_op_mode_for_source, materialization_cache, pipeline_mode_cache_for,
@@ -319,6 +319,8 @@ pub enum Image {
         palette: Option<Vec<u8>>,
         /// Per-entry palette alpha retained for index-preserving operations.
         palette_alpha: Option<Vec<u8>>,
+        /// Generated ICC profile attached by an in-pipeline color transform.
+        compatibility_icc_profile: Option<Arc<[u8]>>,
         /// Pipeline output initialized by the first implicit or explicit load.
         materialized: MaterializationCache,
         /// Shape metadata initialized by the first property query.

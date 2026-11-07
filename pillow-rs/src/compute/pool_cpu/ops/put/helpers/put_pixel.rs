@@ -6,7 +6,6 @@ use crate::compute::registry::support::{
 };
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
-use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{GenericImageView, ImageBuffer, Pixel};
 
 /// Color normalization and single-write coordinate validation belong to Image's caller.

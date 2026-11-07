@@ -7,7 +7,7 @@ use crate::pipeline::NativeColorInput;
 pub(super) type Input = Rgba32FImage;
 
 
-pub(super) struct Kernel<'a> {
+pub(crate) struct Kernel<'a> {
     input: &'a Input,
     border: crate::pipeline::ExpandMargins,
     fill: [f32; 4],

@@ -3,7 +3,7 @@
 use crate::compute::pool_cpu::ops::crop::helpers::crop::CropRegion;
 use crate::compute::pool_cpu::helpers::bytes::vector_copy::copy_native_bytes;
 use crate::error::PilError;
-use crate::raster::{GenericImageView, ImageBuffer, Luma};
+use crate::raster::{ImageBuffer, Luma};
 
 pub(crate) fn crop_luma16(
     image: &ImageBuffer<Luma<u16>, Vec<u16>>,

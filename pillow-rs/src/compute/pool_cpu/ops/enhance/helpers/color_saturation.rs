@@ -181,8 +181,8 @@ where
         let alpha = gather_interleaved_channel::<4, 3>(&blocks);
         let output_vectors = [LUMA_TO_RGBA_0, LUMA_TO_RGBA_1, LUMA_TO_RGBA_2, LUMA_TO_RGBA_3]
             .map(|indices| {
-                ((luma.swizzle_relaxed(indices) & RGBA_COLOR_LANES)
-                    | (alpha.swizzle_relaxed(indices) & RGBA_ALPHA_LANES))
+                ((luma.shuffle(indices) & RGBA_COLOR_LANES)
+                    | (alpha.shuffle(indices) & RGBA_ALPHA_LANES))
                     .to_array()
             });
         for (block_index, vector) in output_vectors.into_iter().enumerate() {

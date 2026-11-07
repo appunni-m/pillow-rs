@@ -1795,10 +1795,20 @@ modules:
       - gpu
       - simd
       supported_modes:
+      - '1'
       - L
       - LA
+      - La
+      - P
+      - PA
       - RGB
       - RGBA
+      - RGBa
+      - RGBX
+      - CMYK
+      - YCbCr
+      - LAB
+      - HSV
     - name: RankFilter
       signature: 'ImageFilter.RankFilter(size: int, rank: int)'
       status: implemented

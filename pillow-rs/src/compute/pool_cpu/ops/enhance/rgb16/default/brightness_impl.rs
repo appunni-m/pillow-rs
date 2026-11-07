@@ -1,7 +1,7 @@
 // NO_PILLOW_SUPPORT: ImageRgb16 is an internal native raster identity.
 use crate::compute::pool_cpu::ops::enhance::helpers::native;
 use crate::error::PilError;
-use crate::raster::{ImageBuffer, Rgb};
+use crate::raster::ImageBuffer;
 
 type Image = ImageBuffer<crate::raster::Rgb<u16>, Vec<u16>>;
 

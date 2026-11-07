@@ -1,6 +1,6 @@
 //! Closed operation dispatch over plans already prepared by their family owner.
 
-use super::support::{OperationId, OperationSupport, StrategySelection};
+use super::support::StrategySelection;
 use crate::error::PilError;
 use crate::raster::DynamicImage;
 
@@ -115,7 +115,6 @@ declare_prepared_operations! {
     Expand, imageops, PreparedExpand, from_expand;
     ExtractBand, put, PreparedExtractBand, from_extract_band;
     PutPixel, put, PreparedPutPixel, from_put_pixel;
-    PutPixelBatch, put, PreparedPutPixelBatch, from_put_pixel_batch;
     PutData, put, PreparedPutData, from_put_data;
     PutAlpha, put, PreparedPutAlpha, from_put_alpha;
     PutAlphaData, put, PreparedPutAlphaData, from_put_alpha_data;
@@ -160,17 +159,6 @@ impl PreparedOperation<'_> {
         }
     }
 
-    /// Returns the operation identity carried by the selected implementation.
-    #[must_use]
-    pub fn operation(&self) -> OperationId {
-        self.selection().implementation.operation
-    }
-
-    /// Returns the operation owner's exhaustive support declaration.
-    #[must_use]
-    pub fn support(&self) -> &'static OperationSupport {
-        self.operation().support()
-    }
 }
 
 impl std::fmt::Debug for PreparedOperation<'_> {

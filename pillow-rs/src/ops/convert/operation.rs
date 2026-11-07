@@ -172,6 +172,26 @@ fn try_convert_prestandard(
     {
         return Ok(Some(converted));
     }
+    if target_mode == Mode::ImageLab8 {
+        // Pillow's LAB path first normalizes non-RGB-family input to RGBA,
+        // then applies its sRGB→LAB transform and attaches the generated
+        // output identity profile. Keep both stages explicit in the lazy
+        // pipeline so the typed LAB strategy and metadata stay together.
+        // NO_PILLOW_SUPPORT: this native normalization also accepts the
+        // Rust-only premultiplied-LA source identity.
+        let normalized = if matches!(source_mode, Mode::ImageRgb8 | Mode::ImageRgba8 | Mode::ImageRgbx8) {
+            image.clone()
+        } else {
+            image.convert(Mode::ImageRgba8, None, None, None, None)?
+        };
+        let profile = crate::lab::identity_profile().into();
+        return Ok(Some(Image::push_op(
+            &normalized,
+            PipelineOp::ConvertLab {
+                icc_profile: profile,
+            },
+        )));
+    }
     // Preserve the existing eager wrapper for native I;16 destinations.
     // LAB and other declared targets continue to the single prepared Convert
     // operation, where the exact source-mode strategy writes the final mode.

@@ -1,70 +1,11 @@
 use super::{
-    Bound, PyAny, PyDict, PyErr, PyInt, PyList, PyOverflowError, PyResult, PyString, PyTuple,
+    Bound, Py, PyAny, PyDict, PyErr, PyInt, PyList, PyOverflowError, PyResult, PyString, PyTuple,
     PyTypeError, PyValueError, Python, c_int_from_python,
 };
 use pyo3::types::{
-    PyAnyMethods, PyBytes, PyFloat, PyListMethods, PyTupleMethods, PyTypeMethods,
+    PyAnyMethods, PyBytes, PyFloat, PyListMethods, PySequence, PySequenceMethods, PyTupleMethods,
+    PyTypeMethods,
 };
-
-pub(crate) fn autocontrast_cutoff_counts_from_python(
-    py: Python<'_>,
-    histogram: &[u32],
-    value: Option<&Bound<'_, PyAny>>,
-) -> PyResult<(i128, i128)> {
-    let Some(value) = value.filter(|value| !value.is_none()) else {
-        return Ok((0, 0));
-    };
-    let total = histogram
-        .iter()
-        .map(|&count| u64::from(count))
-        .sum::<u64>();
-    let total = i64::try_from(total)
-        .map_err(|_| PyOverflowError::new_err("histogram count exceeds Python integer range"))?;
-    if value.cast::<PyTuple>().is_ok() {
-        let operator = py.import("operator")?;
-        let low = operator.getattr("getitem")?.call1((value, 0))?;
-        let low = autocontrast_cutoff_count_from_python(py, total, &low)?;
-        let high = operator.getattr("getitem")?.call1((value, 1))?;
-        let high = autocontrast_cutoff_count_from_python(py, total, &high)?;
-        return Ok((low, high));
-    }
-
-    let cutoff = autocontrast_cutoff_count_from_python(py, total, value)?;
-    Ok((cutoff, cutoff))
-}
-
-fn autocontrast_cutoff_count_from_python(
-    py: Python<'_>,
-    total: i64,
-    cutoff: &Bound<'_, PyAny>,
-) -> PyResult<i128> {
-    let operator = py.import("operator")?;
-    let product = operator.getattr("mul")?.call1((total, cutoff))?;
-    let percentage = operator
-        .getattr("floordiv")?
-        .call1((product, 100))?;
-    let count = py.import("builtins")?.getattr("int")?.call1((percentage,))?;
-    if operator
-        .getattr("lt")?
-        .call1((count.clone(), 0))?
-        .extract::<bool>()?
-    {
-        // Only the sign of a negative trim can affect the final LUT: it makes
-        // the corresponding edge bin nonempty; its magnitude cannot move the
-        // output bounds beyond that edge.
-        return Ok(-1);
-    }
-    if operator
-        .getattr("gt")?
-        .call1((count.clone(), total))?
-        .extract::<bool>()?
-    {
-        // A trim beyond the whole channel removes every existing bin. One past
-        // the total is sufficient even if Python produced a larger int.
-        return Ok(i128::from(total) + 1);
-    }
-    count.extract::<i64>().map(i128::from)
-}
 
 pub(crate) fn resample_input_from_python(
     value: Option<&Bound<'_, PyAny>>,
@@ -150,33 +91,8 @@ pub(crate) fn rotate_fill_preflight_from_python(
     if value.cast::<PyString>().is_ok() {
         return rotate_fill_from_python(Some(value), mode).map(|fill| (Some(fill), None));
     }
-    if mode != pillow_rs::Mode::ImagePalette8 {
-        return Ok((None, None));
-    }
-    if value.cast::<PyTuple>().is_err() && value.cast::<PyList>().is_err() {
-        return Ok((None, None));
-    }
-
-    // Image.new runs `all(isinstance(item, int) for item in color)` before
-    // the native fill call for every P list/tuple, then materializes a tuple
-    // when that check succeeds. Preserve both iteration boundaries here.
-    let mut all_integers = true;
-    for item in value.try_iter()? {
-        if !item?.is_instance_of::<PyInt>() {
-            all_integers = false;
-            break;
-        }
-    }
-    if !all_integers {
-        return Ok((None, None));
-    }
-
-    let color = py.import("builtins")?.getattr("tuple")?.call1((value,))?;
-    if !matches!(color.len()?, 3 | 4) {
-        return Ok((None, Some(color.unbind())));
-    }
-    let fill = palette_transform_fill_from_python(&color)?;
-    Ok((Some(imageops_color_from_transform_fill(fill)), None))
+    let (fill, deferred) = palette_image_new_fill_preflight_from_python(py, value, mode)?;
+    Ok((fill.map(imageops_color_from_transform_fill), deferred))
 }
 
 pub(crate) fn rotate_fill_from_python(
@@ -215,13 +131,22 @@ pub(crate) fn transform_fill_preflight_from_python(
         return transform_fill_from_python(Some(value), mode)
             .map(|fill| (fill, None));
     }
+    palette_image_new_fill_preflight_from_python(py, value, mode)
+}
+
+fn palette_image_new_fill_preflight_from_python(
+    py: Python<'_>,
+    value: &Bound<'_, PyAny>,
+    mode: pillow_rs::Mode,
+) -> PyResult<(Option<pillow_rs::TransformFill>, Option<Py<PyAny>>)> {
     if mode != pillow_rs::Mode::ImagePalette8
         || (value.cast::<PyTuple>().is_err() && value.cast::<PyList>().is_err())
     {
         return Ok((None, None));
     }
 
-    // Image.new classifies every P list/tuple before native size conversion.
+    // Pillow's Image.new accepts three/four-component integer lists as P
+    // colors, after checking each item and materializing tuple(color).
     let mut all_integers = true;
     for item in value.try_iter()? {
         if !item?.is_instance_of::<PyInt>() {
@@ -233,11 +158,12 @@ pub(crate) fn transform_fill_preflight_from_python(
         return Ok((None, None));
     }
 
-    // The Python wrapper materializes tuple(color) after the integer check,
-    // including when its arity does not select the temporary-palette route.
     let color = py.import("builtins")?.getattr("tuple")?.call1((value,))?;
     if !matches!(color.len()?, 3 | 4) {
-        return Ok((None, Some(color.unbind())));
+        // Pillow keeps the original list when its materialized tuple does not
+        // select the temporary RGB(A)-palette path; the native fill parser
+        // then reports the list's original type.
+        return Ok((None, None));
     }
     palette_transform_fill_from_python(&color).map(|fill| (Some(fill), None))
 }
@@ -835,35 +761,26 @@ fn reduce_sequence_items(
     expected_length: usize,
     argument_index: usize,
 ) -> PyResult<ReduceSequence> {
-    // SAFETY: `value` is a live, GIL-bound Python object; this checks its
-    // sequence slots without taking ownership or retaining the pointer.
-    let is_sequence = unsafe { pyo3::ffi::PySequence_Check(value.as_ptr()) != 0 };
-    if !is_sequence || value.is_instance_of::<PyBytes>() {
+    let Ok(sequence) = value.cast::<PySequence>() else {
+        return Ok(ReduceSequence::NotSequence);
+    };
+    if value.cast::<PyBytes>().is_ok() {
         return Ok(ReduceSequence::NotSequence);
     }
 
-    // SAFETY: `value` is live and PySequence_Check succeeded above.
-    let length = unsafe { pyo3::ffi::PySequence_Size(value.as_ptr()) };
-    if length < 0 {
-        return Err(PyErr::fetch(value.py()));
-    }
-    if length as usize != expected_length {
-        return Ok(ReduceSequence::WrongLength { length: length as usize });
+    let length = sequence.len()?;
+    if length != expected_length {
+        return Ok(ReduceSequence::WrongLength {
+            length: length as usize,
+        });
     }
 
     let mut items = Vec::with_capacity(expected_length);
     for index in 0..expected_length {
-        // Match PyArg_ParseTuple: fetch and convert one item before fetching
-        // the next, including for tuple and sequence subclasses.
-        // SAFETY: `value` is a live GIL-bound sequence; this returns a new
-        // reference or NULL with a Python exception set.
-        let item = unsafe {
-            Bound::from_owned_ptr_or_err(
-                value.py(),
-                pyo3::ffi::PySequence_GetItem(value.as_ptr(), index as isize),
-            )
-        };
-        let item = match item {
+        // Pillow's low-level Reduce parser checks length, then gets and
+        // converts each item in order. It clears a failed item lookup and
+        // reports the indexed retrieval TypeError.
+        let item = match sequence.get_item(index) {
             Ok(item) => item,
             Err(_sequence_error) => {
                 return Err(PyTypeError::new_err(format!(
@@ -893,10 +810,7 @@ pub(crate) fn reduce_factor_from_python(
 pub(crate) fn reduce_box_from_python(value: &Bound<'_, PyAny>) -> PyResult<pillow_rs::ReduceBox> {
     match reduce_sequence_items(value, 4, 2)? {
         ReduceSequence::WrongLength { length } => {
-            Ok(pillow_rs::ReduceBox::SequenceLength {
-                length,
-                tuple: false,
-            })
+            Ok(pillow_rs::ReduceBox::SequenceLength { length })
         }
         ReduceSequence::Items(items) => Ok(pillow_rs::ReduceBox::Sequence(items)),
         ReduceSequence::NotSequence => Ok(pillow_rs::ReduceBox::InvalidType(

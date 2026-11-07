@@ -7,7 +7,6 @@
 //! TODO(pillow-rs#3ptb): move the archived Rayon row path to the later
 //! `pool_parallel` owner; do not move its scheduling into this CPU family.
 use crate::compute::registry::support::{
-    InputContract,
     ModeSupport,
     OperationId,
     OperationInputs,

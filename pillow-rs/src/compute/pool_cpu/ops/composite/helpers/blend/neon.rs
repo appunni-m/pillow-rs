@@ -40,10 +40,15 @@ unsafe fn blend_block(left: [u8; 16], right: [u8; 16], alpha: f32) -> [u8; 16] {
         let zero = vdupq_n_f32(0.0);
         let maximum = vdupq_n_f32(255.0);
 
+        macro_rules! shift_channel {
+            ($value:expr, 0) => { $value };
+            ($value:expr, $amount:literal) => { vshrq_n_u32($value, $amount) };
+        }
+
         macro_rules! blend_channel {
-            ($shift:literal) => {{
-                let left = vandq_u32(vshrq_n_u32(left, $shift), mask);
-                let right = vandq_u32(vshrq_n_u32(right, $shift), mask);
+            ($shift:tt) => {{
+                let left = vandq_u32(shift_channel!(left, $shift), mask);
+                let right = vandq_u32(shift_channel!(right, $shift), mask);
                 let left = vcvtq_f32_u32(left);
                 let right = vcvtq_f32_u32(right);
                 let value = vfmaq_f32(left, vsubq_f32(right, left), alpha);

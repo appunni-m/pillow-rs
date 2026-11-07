@@ -26,10 +26,10 @@ pub(crate) fn to_rgba(source: &GrayAlphaImage) -> Result<RgbaImage, PilError> {
         let low = u8x16::new(low_lanes);
         let high = u8x16::new(high_lanes);
         let vectors = [
-            low.swizzle_relaxed(LA_TO_RGBA_0).to_array(),
-            low.swizzle_relaxed(LA_TO_RGBA_1).to_array(),
-            high.swizzle_relaxed(LA_TO_RGBA_0).to_array(),
-            high.swizzle_relaxed(LA_TO_RGBA_1).to_array(),
+            low.shuffle(LA_TO_RGBA_0).to_array(),
+            low.shuffle(LA_TO_RGBA_1).to_array(),
+            high.shuffle(LA_TO_RGBA_0).to_array(),
+            high.shuffle(LA_TO_RGBA_1).to_array(),
         ];
         for (block_index, vector) in vectors.into_iter().enumerate() {
             let block_pixels = active_pixels.saturating_sub(block_index * 4).min(4);
@@ -57,8 +57,8 @@ pub(crate) fn to_rgbx(source: &GrayAlphaImage) -> Result<RgbaImage, PilError> {
         let active_pixels = active_bytes / 2;
         let lanes = std::array::from_fn(|lane| input.get(start + lane).copied().unwrap_or(0));
         let source_block = u8x16::new(lanes);
-        let first = source_block.swizzle_relaxed(LA_TO_RGBA_0).to_array();
-        let second = source_block.swizzle_relaxed(LA_TO_RGBA_1).to_array();
+        let first = source_block.shuffle(LA_TO_RGBA_0).to_array();
+        let second = source_block.shuffle(LA_TO_RGBA_1).to_array();
         let first_pixels = active_pixels.min(4);
         output.extend_from_slice(&first[..first_pixels * 4]);
         let second_pixels = active_pixels.saturating_sub(4).min(4);

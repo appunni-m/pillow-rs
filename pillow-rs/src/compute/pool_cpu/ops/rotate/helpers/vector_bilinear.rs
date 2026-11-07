@@ -7,7 +7,7 @@ use crate::compute::pool_cpu::ops::rotate::helpers::vector_interpolation::{
 };
 use crate::compute::pool_cpu::ops::rotate::ops::RotateRequest;
 use crate::error::PilError;
-use crate::raster::{GenericImageView, ImageBuffer, Pixel};
+use crate::raster::{ImageBuffer, Pixel};
 use wide::f64x8;
 
 pub(crate) fn execute<P, const CHANNELS: usize, const ALPHA: bool>(

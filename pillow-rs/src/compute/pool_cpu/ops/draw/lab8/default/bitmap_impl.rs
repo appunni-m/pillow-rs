@@ -15,7 +15,9 @@ pub(crate) fn apply(
         return Err(PilError::ValueError("mode mismatch".into()));
     };
     let mut hidden_lanes = canvas.take_hidden_pixel_lanes();
-    three_band_bitmap::apply(
+    // Pillow overwrites LAB pixels for RGBa bitmap masks, even when the mask
+    // alpha is zero; other declared mask modes retain their coverage blend.
+    three_band_bitmap::apply::<true>(
         &mut canvas,
         x,
         y,

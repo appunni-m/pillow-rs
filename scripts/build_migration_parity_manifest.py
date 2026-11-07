@@ -127,7 +127,7 @@ COMPONENTS: dict[str, tuple[str, ...]] = {
         "pillow-rs/src/ops/split.rs",
         "pillow-rs/src/ops/transform.rs",
         "pillow-rs/src/ops/transpose.rs",
-        "pillow-rs/src/compute/pool_cpu/ops/geometry.rs",
+        "pillow-rs/src/compute/pool_cpu/ops/geometry/ops.rs",
     ),
     "image-show": (
         "pillow-rs-py/python/PIL/ImageShow.py",
@@ -140,7 +140,7 @@ COMPONENTS: dict[str, tuple[str, ...]] = {
     "image-filter": (
         "pillow-rs-py/python/pillow_rs/imagefilter.py",
         "pillow-rs/src/ops/filter.rs",
-        "pillow-rs/src/compute/pool_cpu/ops/filter.rs",
+        "pillow-rs/src/compute/pool_cpu/ops/filter/ops.rs",
         "pillow-rs/src/ops/param_filters.rs",
     ),
     "image-enhance": (
@@ -170,6 +170,13 @@ COMPONENTS: dict[str, tuple[str, ...]] = {
         "pillow-rs/src/font/pilfont.rs",
         "pillow-rs/src/lib.rs",
     ),
+    "image-text": (
+        "pillow-rs-py/python/pillow_rs/imagetext.py",
+        "pillow-rs-py/src/font/text_wrap.rs",
+        "pillow-rs/src/font/text_wrap.rs",
+        "pillow-rs/src/font/text_layout.rs",
+        "pillow-rs/src/font/text_value.rs",
+    ),
     "image-stat": (
         "pillow-rs-py/python/pillow_rs/imagestat.py",
         "pillow-rs/src/ops/analysis.rs",
@@ -190,6 +197,15 @@ COMPONENTS: dict[str, tuple[str, ...]] = {
 def slug(value: str) -> str:
     normalized = re.sub(r"[^A-Za-z0-9]+", "-", value).strip("-")
     return normalized.lower()
+
+
+def mode_slug(value: str) -> str:
+    """Keep Pillow's case-distinct premultiplied modes distinct in IDs."""
+
+    return {
+        "La": "la-premultiplied",
+        "RGBa": "rgba-premultiplied",
+    }.get(value, slug(value))
 
 
 def requirement_prefix(endpoint: Endpoint) -> str:
@@ -491,7 +507,7 @@ def target_candidates(endpoint: Endpoint) -> list[str]:
     if surface == "PIL.ImageDraw":
         return [f"pillow_rs.ImageDraw.{operation}"]
     if surface == "PIL.ImageDraw.ImageDraw":
-        return [f"pillow_rs.ImageDraw.Draw.{operation}"]
+        return [f"pillow_rs.ImageDraw.ImageDraw.{operation}"]
     if surface == "PIL.ImagePalette":
         return [f"pillow_rs.ImagePalette.{operation}"]
     if surface == "PIL.ImagePalette.ImagePalette":
@@ -574,6 +590,14 @@ def result_shape(
     endpoint: Endpoint,
     signature: inspect.Signature,
 ) -> tuple[str, list[str]]:
+    if endpoint.source_path == "PIL.ImageText.Text":
+        # Text is a public value object. Compare its exposed constructor state,
+        # including the selected font, instead of only checking its type name.
+        return "record", ["record"]
+    if endpoint.source_path == "PIL.ImageText.Text.wrap":
+        # The parity record contains both wrap()'s returned remainder and the
+        # receiver's public state after Pillow's mutating call.
+        return "record", ["record"]
     if endpoint.kind == "constant":
         return "scalar", ["integer"]
     if endpoint.kind == "property_get":
@@ -879,9 +903,15 @@ def operation_requirements(
         # not enumerate that mode.
         supported_modes.append("CMYK")
     for mode in supported_modes:
+        mode_id = (
+            mode_slug(str(mode))
+            if endpoint.surface == "PIL.ImageFilter"
+            and endpoint.operation == "ModeFilter"
+            else slug(str(mode))
+        )
         requirements.append(
             requirement(
-                f"{prefix}.mode.{slug(str(mode))}",
+                f"{prefix}.mode.{mode_id}",
                 "mode",
                 f"Public behavior for image mode {mode!r}.",
                 ["parity", "coverage"],
@@ -960,6 +990,8 @@ def component_for(endpoint: Endpoint) -> str:
     surface = endpoint.surface
     if endpoint.authority == "target-only-contract":
         return "gpu-batch"
+    if surface.startswith("PIL.ImageText"):
+        return "image-text"
     if surface.startswith("PIL.ImageShow"):
         return "image-show"
     if surface.startswith("PIL.ImageDraw"):
@@ -990,6 +1022,7 @@ def surface_kind(surface: str) -> str:
         "PIL.Image.Image",
         "PIL.GpuBatchExecutor",
         "PIL.ImageDraw.ImageDraw",
+        "PIL.ImageText.Text",
         "PIL.ImageEnhance.Brightness",
         "PIL.ImageEnhance.Color",
         "PIL.ImageEnhance.Contrast",
@@ -1108,6 +1141,11 @@ def operation_contract(
     parameters = parameters_from_signature(
         source_signature, kind=endpoint.kind
     )
+    if endpoint.source_path == "PIL.ImageText.Text":
+        parameters_by_id = {parameter["id"]: parameter for parameter in parameters}
+        if "text" in parameters_by_id:
+            # AnyStr is the public str-or-bytes text contract.
+            parameters_by_id["text"]["value_types"] = ["string", "bytes"]
     if endpoint.source_path == "PIL.ImageShow.register":
         viewer_parameter = next(
             (parameter for parameter in parameters if parameter["id"] == "viewer"),
@@ -1218,6 +1256,9 @@ def operation_contract(
         for parameter in parameters:
             if parameter["id"] == "alpha":
                 add_unique(parameter["value_types"], "string")
+                # Input-only public-index-error literals materialize Python
+                # scalars whose __index__ raises AttributeError or ValueError.
+                add_unique(parameter["value_types"], "any_json")
     if endpoint.source_path == "PIL.Image.Image.transform":
         # The transform implementation accepts a broad runtime sequence and
         # reports invalid host values from its native conversion path. Keep

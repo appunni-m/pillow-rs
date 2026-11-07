@@ -2,9 +2,7 @@ use crate::compute::pool_cpu::ops::draw::{TextComposeResult, text_coords};
 use crate::draw::blend_u8;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Rgba};
-use crate::raster::{GenericImage, GenericImageView};
 
-/// TODO(pillow-rs#brg0): verify L/RGBA mask blending and stroked Text in CPU parity.
 pub(crate) fn apply<const RGBA_MASK: bool>(
     image: DynamicImage,
     x: i32,

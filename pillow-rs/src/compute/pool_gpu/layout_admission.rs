@@ -95,7 +95,7 @@ pub(super) fn gpu_luma16_convert_is_supported(ops: &[PipelineOp], image: &Dynami
     }
     let direct = matches!(ops, [PipelineOp::Convert { mode, matrix: None, dither: None }]
         if gpu_standard_color_mode_code(mode).is_some()
-            || matches!(mode, ColorMode::I | ColorMode::F));
+            || matches!(*mode, ColorMode::I | ColorMode::F));
     // I;16N historically converts through clipped L before producing I/F.
     // Keep that two-step contract on-device instead of materializing the
     // intermediate on the host.

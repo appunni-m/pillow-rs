@@ -65,33 +65,6 @@ pub(crate) fn begin_eager_cpu_operation_telemetry_with_reason(
     }
 }
 
-/// Record a host-owned data view that the binding copies into its final
-/// language-level bytes object after this core method returns.
-pub(crate) fn record_eager_cpu_operation_receipt(
-    operation: &'static str,
-    requested_backend: Option<Backend>,
-    output_bytes: usize,
-) {
-    let telemetry = begin_eager_cpu_operation_telemetry(operation, requested_backend);
-    finish_eager_cpu_operation_telemetry(telemetry, output_bytes);
-}
-
-/// Record a host-owned operation with a specific reason that prevents use of
-/// the requested accelerated backend.
-pub(crate) fn record_eager_cpu_operation_receipt_with_reason(
-    operation: &'static str,
-    requested_backend: Option<Backend>,
-    output_bytes: usize,
-    fallback_detail: &'static str,
-) {
-    let telemetry = begin_eager_cpu_operation_telemetry_with_reason(
-        operation,
-        requested_backend,
-        Some(fallback_detail),
-    );
-    finish_eager_cpu_operation_telemetry(telemetry, output_bytes);
-}
-
 /// Record a host-owned operation with its reason and prepared strategy.
 pub(crate) fn record_eager_cpu_operation_receipt_with_selection(
     operation: &'static str,

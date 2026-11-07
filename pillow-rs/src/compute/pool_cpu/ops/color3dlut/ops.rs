@@ -30,37 +30,81 @@ pub(super) const TARGET_INPUTS: [InputContract; 1] = [InputContract::Color3DLutT
 
 pub(crate) type PreparedColor3DLut<'a> = super::helpers::strategy::Strategy<'a>;
 
+#[derive(Clone, Copy)]
+enum Color3DLutModeStrategy {
+    Rgb8,
+    Rgba8,
+    Cmyk8,
+    Ycbcr8,
+    Lab8,
+    Hsv8,
+}
+
+impl Color3DLutModeStrategy {
+    fn for_mode(mode: Mode) -> Option<Self> {
+        match mode {
+            Mode::ImageRgb8 => Some(Self::Rgb8),
+            Mode::ImageRgba8 => Some(Self::Rgba8),
+            Mode::ImageCmyk8 => Some(Self::Cmyk8),
+            Mode::ImageYCbCr8 => Some(Self::Ycbcr8),
+            Mode::ImageLab8 => Some(Self::Lab8),
+            Mode::ImageHsv8 => Some(Self::Hsv8),
+            _ => None,
+        }
+    }
+
+    fn support(self) -> ModeSupport {
+        match self {
+            Self::Rgb8 => super::rgb8::ops::SUPPORT,
+            Self::Rgba8 => super::rgba8::ops::SUPPORT,
+            Self::Cmyk8 => super::cmyk8::ops::SUPPORT,
+            Self::Ycbcr8 => super::ycbcr8::ops::SUPPORT,
+            Self::Lab8 => super::lab8::ops::SUPPORT,
+            Self::Hsv8 => super::hsv8::ops::SUPPORT,
+        }
+    }
+
+    fn prepare<'a>(
+        self,
+        image: &'a DynamicImage,
+        size: (u32, u32, u32),
+        table: &'a [f64],
+        channels: u32,
+        target_mode: Mode,
+        ctx: &ExecutionContext,
+    ) -> Result<PreparedColor3DLut<'a>, PilError> {
+        match self {
+            Self::Rgb8 => super::rgb8::ops::prepare(
+                image, size, table, channels, target_mode, ctx,
+            ),
+            Self::Rgba8 => super::rgba8::ops::prepare(
+                image, size, table, channels, target_mode, ctx,
+            ),
+            Self::Cmyk8 => super::cmyk8::ops::prepare(
+                image, size, table, channels, target_mode, ctx,
+            ),
+            Self::Ycbcr8 => super::ycbcr8::ops::prepare(
+                image, size, table, channels, target_mode, ctx,
+            ),
+            Self::Lab8 => super::lab8::ops::prepare(
+                image, size, table, channels, target_mode, ctx,
+            ),
+            Self::Hsv8 => super::hsv8::ops::prepare(
+                image, size, table, channels, target_mode, ctx,
+            ),
+        }
+    }
+}
+
 fn classify_mode(mode: Mode) -> ModeSupport {
-    match mode {
-        Mode::ImageRgb8 => super::rgb8::ops::SUPPORT,
-        Mode::ImageRgba8 => super::rgba8::ops::SUPPORT,
-        Mode::ImageCmyk8 => super::cmyk8::ops::SUPPORT,
-        Mode::ImageYCbCr8 => super::ycbcr8::ops::SUPPORT,
-        Mode::ImageLab8 => super::lab8::ops::SUPPORT,
-        Mode::ImageHsv8 => super::hsv8::ops::SUPPORT,
-        Mode::ImagePalette8 => ModeSupport::Rejected {
+    match Color3DLutModeStrategy::for_mode(mode) {
+        Some(strategy) => strategy.support(),
+        None if mode == Mode::ImagePalette8 => ModeSupport::Rejected {
             mode,
             reason: PALETTE_MODE_ERROR,
             kind: RejectionKind::ValueError,
         },
-        Mode::One
-        | Mode::ImageLuma8
-        | Mode::ImageLumaA8
-        | Mode::ImageLaPremultiplied8
-        | Mode::ImagePaletteAlpha8
-        | Mode::ImageRgbPremultiplied8
-        | Mode::ImageRgbx8
-        | Mode::ImageI32
-        | Mode::ImageF32
-        | Mode::ImageI16
-        | Mode::ImageI16L
-        | Mode::ImageI16B
-        | Mode::ImageI16N
-        | Mode::ImageLumaA16
-        | Mode::ImageRgb16
-        | Mode::ImageRgba16
-        | Mode::ImageRgb32F
-        | Mode::ImageRgba32F => ModeSupport::Rejected {
+        None => ModeSupport::Rejected {
             mode,
             reason: SOURCE_MODE_ERROR,
             kind: RejectionKind::ValueError,
@@ -76,6 +120,7 @@ pub(crate) static SUPPORT: OperationSupport = OperationSupport::new(
 .with_rejected_output(OutputModeRule::ByTargetMode);
 
 pub(crate) fn prepare<'a>(
+    mode: Mode,
     image: &'a DynamicImage,
     size: (u32, u32, u32),
     table: &'a [f64],
@@ -83,28 +128,13 @@ pub(crate) fn prepare<'a>(
     target_mode: Mode,
     ctx: &ExecutionContext,
 ) -> Result<PreparedColor3DLut<'a>, PilError> {
-    match image.mode() {
-        Mode::ImageRgb8 => super::rgb8::ops::prepare(
-            image, size, table, channels, target_mode, ctx,
-        ),
-        Mode::ImageRgba8 => super::rgba8::ops::prepare(
-            image, size, table, channels, target_mode, ctx,
-        ),
-        Mode::ImageCmyk8 => super::cmyk8::ops::prepare(
-            image, size, table, channels, target_mode, ctx,
-        ),
-        Mode::ImageYCbCr8 => super::ycbcr8::ops::prepare(
-            image, size, table, channels, target_mode, ctx,
-        ),
-        Mode::ImageLab8 => super::lab8::ops::prepare(
-            image, size, table, channels, target_mode, ctx,
-        ),
-        Mode::ImageHsv8 => super::hsv8::ops::prepare(
-            image, size, table, channels, target_mode, ctx,
-        ),
-        mode => match classify_mode(mode) {
+    match Color3DLutModeStrategy::for_mode(mode) {
+        Some(strategy) => strategy.prepare(image, size, table, channels, target_mode, ctx),
+        None => match classify_mode(mode) {
             ModeSupport::Rejected { reason, kind, .. } => Err(kind.into_error(reason)),
-            ModeSupport::Supported { .. } => unreachable!("supported Color3DLut mode missed dispatch"),
+            ModeSupport::Supported { .. } => {
+                unreachable!("supported Color3DLut mode missed dispatch")
+            }
         },
     }
 }
@@ -123,11 +153,12 @@ pub(crate) fn prepare_pipeline<'a>(
     } = op else {
         return Err(PilError::ValueError("expected Color3DLut op".into()));
     };
-    if *source_mode != input.image.mode() {
+    let mode = input.mode();
+    if *source_mode != mode {
         return Err(PilError::InternalError(
             "Color3DLut source mode did not match the materialized image".into(),
         ));
     }
-    let plan = prepare(input.image, *size, table, *channels, *target_mode, ctx)?;
+    let plan = prepare(mode, input.image, *size, table, *channels, *target_mode, ctx)?;
     Ok(crate::compute::registry::PreparedOperation::from_color3dlut(plan))
 }

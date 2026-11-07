@@ -129,11 +129,20 @@ pub enum PixelValueShape {
     /// One f64 API value sourced from an F32 sample.
     F64Scalar,
     /// A tuple of byte samples in Pillow band order.
-    U8Components { bands: u8 },
+    U8Components {
+        /// Number of byte samples in the returned tuple.
+        bands: u8,
+    },
     /// A tuple of native unsigned 16-bit samples.
-    U16Components { bands: u8 },
+    U16Components {
+        /// Number of native unsigned 16-bit samples in the tuple.
+        bands: u8,
+    },
     /// A tuple of native 32-bit floating-point samples.
-    F32Components { bands: u8 },
+    F32Components {
+        /// Number of float32 samples in the tuple.
+        bands: u8,
+    },
     /// The Rust/JavaScript convenience API's fixed four-byte RGBA result.
     Rgba8,
 }

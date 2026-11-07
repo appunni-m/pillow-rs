@@ -1,11 +1,13 @@
 //! Filter support contracts and prepared CPU dispatch.
 //!
-//! TODO(pillow-rs#3ptb): add ModeFilter mode, palette, and backend-fallback
-//! parity cases; include the RGBA radius-seven small-shape architecture
-//! fallback; cover the exact-binomial I32 AVX/FMA route and ineligible-request
+//! TODO(pillow-rs#3ptb): run the added ModeFilter mode, P index/palette, and
+//! L info-map parity cases; add backend-fallback receipts and target-only
+//! output/selection coverage for all fourteen Pillow-supported byte modes.
+//! Include the RGBA radius-seven small-shape
+//! architecture fallback; cover the exact-binomial I32 AVX/FMA route and ineligible-request
 //! Default fallback; freeze non-finite/out-of-i32-range I16 and non-finite I32
-//! kernel cast behavior; add parity cases for ModeFilter(P), UnsharpMask(P),
-//! GaussianBlur(PA), non-rank F32 rejection, Kernel mode-before-parameter
+//! kernel cast behavior; add parity cases for UnsharpMask(P), GaussianBlur(PA),
+//! non-rank F32 rejection, Kernel mode-before-parameter
 //! errors, and verify Python load, filter-protocol, and mode-preflight ordering
 //! around `_apply`. Freeze size-3-or-larger rank-filter empty-image behavior
 //! as a safe empty result; Pillow 12.2 reaches an edge read in `ImagingExpand`.
@@ -13,7 +15,7 @@
 //! border and zeros omitted lanes in its interior, deriving canonical input
 //! lanes when no sidecar exists; BoxBlur filters all four bytes, and
 //! UnsharpMask applies the same blend to the filtered lanes. Native rank and
-//! ModeFilter extensions process omitted bytes independently.
+//! ModeFilter kernels process omitted bytes independently.
 //! TODO(pillow-rs#3ptb): freeze these physical-lane cases in CPU parity.
 //! Keep Rayon out of this serial owner.
 //!
@@ -74,9 +76,6 @@ fn core_only_reason(operation: OperationId) -> &'static str {
         | OperationId::RankFilter => {
             "native per-channel rank filtering extends Pillow's scalar mode contract"
         }
-        OperationId::ModeFilter => {
-            "native per-channel byte filtering extends Pillow's single-band ModeFilter contract"
-        }
         _ => "native filter mode extension",
     }
 }
@@ -100,6 +99,10 @@ pub(super) fn core_only(
 
 pub(super) fn core_only_serial(operation: OperationId, mode: Mode) -> ModeSupport {
     core_only(operation, mode, &[])
+}
+
+pub(super) fn serial_mode_filter(mode: Mode) -> ModeSupport {
+    ModeSupport::serial(OperationId::ModeFilter, mode, MODE_FILTER_INPUTS)
 }
 
 /// Declares a native Filter3x3 or Filter5x5 strategy implemented by Pillow.
@@ -529,7 +532,7 @@ pub(crate) fn prepare_unsharp_mask<'a>(
 }
 
 #[derive(Clone, Copy)]
-pub(in crate::compute::pool_cpu::ops::filter) enum FilterRequest {
+pub(crate) enum FilterRequest {
     Filter3x3 { kernel: [f32; 9], scale: f32, offset: f32 },
     Filter5x5 { kernel: [f32; 25], scale: f32, offset: f32 },
     GaussianBlur { sigma: f32 },
@@ -729,7 +732,6 @@ pub(crate) fn prepare_pipeline<'a>(
         FilterRequest::RankFilter { size, rank } => {
             rank_window_facts(inputs, size, Some(rank), ctx)
         }
-        _ => inputs.facts(),
     };
     let selection = match operation.support().for_mode(mode).assess(ctx, facts)? {
         SupportAssessment::Ready(selection) => selection,

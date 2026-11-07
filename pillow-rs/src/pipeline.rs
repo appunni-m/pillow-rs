@@ -891,6 +891,8 @@ pub enum PipelineOp {
         outline: Option<(u8, u8, u8, u8)>,
         /// Outline width.
         width: u32,
+        /// Signed C-int outline width after Pillow's polygon width transform.
+        outline_width: Option<i32>,
         /// Blend RGBA ink into an RGB destination instead of replacing pixels.
         alpha_blend_rgb: bool,
     },

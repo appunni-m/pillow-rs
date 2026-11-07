@@ -585,21 +585,6 @@ fn clear_failed_execution_telemetry() {
     let _ = take_pipeline_resize_coeff_cache_stats();
 }
 
-/// Executes a prepared pipeline while retaining an immutable source buffer
-/// when a proven I-mode 3x3 identity filter can share it safely.
-///
-/// The source and result images remain independent at the public API: image
-/// mutation uses `Arc::make_mut`, so sharing here only avoids copying when the
-/// filtered result remains read-only.
-pub(crate) fn execute_prepared_shared(
-    prepared: &PreparedExecution,
-    ops: &[PipelineOp],
-    img: &Arc<DynamicImage>,
-    logical_mode: Option<Mode>,
-) -> Result<Arc<DynamicImage>, PilError> {
-    execute_prepared_shared_with_palette(prepared, ops, img, logical_mode, PaletteInput::default())
-}
-
 /// Shared-result counterpart to [`execute_prepared_with_palette`].
 pub(crate) fn execute_prepared_shared_with_palette(
     prepared: &PreparedExecution,

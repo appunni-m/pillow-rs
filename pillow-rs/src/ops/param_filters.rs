@@ -5,9 +5,9 @@
 
 use crate::compute::{Backend, ExecutionContext};
 use crate::error::PilError;
-use crate::image::Image;
+use crate::image::{Image, PalettedData};
 use crate::pipeline::PipelineOp;
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, Mode};
 
 fn cpu_only_filter_route(
     image: &Image,
@@ -488,16 +488,14 @@ impl Image {
     /// Each pixel becomes the most common value in its neighborhood when that
     /// value occurs more than twice; otherwise the original pixel is preserved.
     ///
-    /// PIL C behavior:
-    ///   - Single-band only at C level; multi-band processed per-channel
-    ///   - Strict `>` tie-breaking (lower value wins)
-    ///   - If max count ≤ 2, original pixel is preserved unchanged
-    ///   - Pixels outside image boundary are SKIPPED (not clamped/replicated)
-    ///   - Supports any channel count (1=L, 2=LA, 3=RGB, 4=RGBA)
-    ///   - For P-mode (palette): operates on palette indices, preserves palette
-    ///
-    /// Pillow defines ModeFilter for single-band 8-bit images. Rust also
-    /// provides a native per-band extension for multiband byte modes.
+    /// Pillow's public `Image.filter` accepts `1`, `L`, and `P` directly and
+    /// splits `LA`, `La`, `PA`, `RGB`, `RGBA`, `RGBa`, `RGBX`, `CMYK`, `YCbCr`,
+    /// `LAB`, and `HSV` into L bands before filtering and merging them. The CPU
+    /// implementation applies the same independent byte-channel strategy while
+    /// preserving the exact mode. P mode filters palette indices and retains
+    /// its palette. The kernel uses strict `>` tie-breaking (the lower value
+    /// wins), keeps the center sample when the maximum count is at most two,
+    /// and skips samples outside the image boundary.
     ///
     /// # Errors
     ///
@@ -511,6 +509,7 @@ impl Image {
         // Keep zero distinct from the normalized rank-family filters.
         let size = if size <= 1 { size } else { size | 1 };
 
+        let source_mode = self.mode_identity()?;
         let palette = self.palette();
         let palette_alpha = self.palette_alpha();
         let (image, mut operation_receipts) =
@@ -536,7 +535,7 @@ impl Image {
                 },
             )?;
 
-        if let Some(pal) = palette {
+        if source_mode == Mode::ImagePalette8 {
             let DynamicImage::ImagePalette8(indices) = result else {
                 return Err(PilError::InternalError(
                     "ModeFilter changed palette index mode".into(),
@@ -544,15 +543,18 @@ impl Image {
             };
             // A palette image materializes as one-band indices, so the raw
             // output remains an exact P raster rather than a tagged L carrier.
-            return Ok(Image::Paletted(crate::image::PalettedData {
-                indices: DynamicImage::ImagePalette8(indices),
-                palette: pal,
-                palette_alpha: palette_alpha.unwrap_or_default(),
-                source_format: None,
-                info: None,
-                exif: None,
-                materialized: crate::image::materialization_cache(),
-            }));
+            if let Some(palette) = palette {
+                return Ok(Image::Paletted(PalettedData {
+                    indices: DynamicImage::ImagePalette8(indices),
+                    palette,
+                    palette_alpha: palette_alpha.unwrap_or_default(),
+                    source_format: None,
+                    info: None,
+                    exif: None,
+                    materialized: crate::image::materialization_cache(),
+                }));
+            }
+            return Ok(Image::from_dynamic(DynamicImage::ImagePalette8(indices)));
         }
         Ok(Image::from_dynamic(result))
     }

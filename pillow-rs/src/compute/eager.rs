@@ -1,11 +1,10 @@
 //! Direct eager operations and execution receipts outside lazy image pipelines.
 //!
-use super::backend_state::active_lock;
 #[cfg(feature = "gpu")]
 use super::pool_gpu;
 use super::{
     Backend, DynamicImage, ExecutionContext, PilError, PipelineOp,
-    PipelineOperationTelemetryCapture, PipelineResourceTelemetry, PipelineTelemetry,
+    PipelineOperationTelemetryCapture, PipelineTelemetry,
     begin_pipeline_operation_telemetry, elapsed_ns, finish_pipeline_operation_telemetry,
     host_resource_telemetry, pipeline_telemetry_enabled, pipeline_timestamp,
     record_pipeline_allocation, record_pipeline_operation_handoff,

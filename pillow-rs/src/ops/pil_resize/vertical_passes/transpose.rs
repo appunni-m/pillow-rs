@@ -1,6 +1,8 @@
+#[cfg(test)]
 const RESIZE_VERTICAL_TRANSPOSE_THRESHOLD: usize = 512 * 512;
 
 #[inline]
+#[cfg(test)]
 pub(in crate::ops::pil_resize) fn should_transpose_vertical(
     source_rows: u32,
     output_width: u32,
@@ -15,6 +17,7 @@ pub(in crate::ops::pil_resize) fn should_transpose_vertical(
 
 /// Reorder the horizontal-pass result from `[source_y][output_x][channel]` to
 /// `[output_x][source_y][channel]` for the cache-local vertical pass.
+#[cfg(test)]
 pub(in crate::ops::pil_resize) fn transpose_resize_intermediate(
     source: &[u8],
     source_rows: u32,

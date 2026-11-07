@@ -2,7 +2,7 @@
 
 use crate::compute::pool_cpu::helpers::quantization::{
     kmeans_refine_source, maxcoverage_quantize_source, median_cut_quantize_source,
-    quantize_octree_rgb_source, quantize_rgba_samples, quantize_rgba_source, RgbPixelSource,
+    quantize_octree_rgb_source, quantize_rgba_source, RgbPixelSource,
     RgbaPixelSource,
 };
 use crate::compute::registry::support::PaletteInput;
@@ -92,17 +92,6 @@ pub(crate) fn execute_f32_scalar(
     method: u32,
 ) -> Result<(Vec<u8>, Vec<u8>, Option<Vec<u8>>), PilError> {
     execute(&F32ScalarSamples(samples), width, height, colors, kmeans, method)
-}
-
-/// Applies the alpha-aware octree to tightly packed RGBA byte samples.
-pub(crate) fn execute_rgba_samples(
-    samples: &[u8],
-    width: u32,
-    height: u32,
-    colors: usize,
-) -> Result<(Vec<u8>, Vec<u8>, Option<Vec<u8>>), PilError> {
-    let (indices, palette, alpha) = quantize_rgba_samples(samples, width, height, colors)?;
-    Ok((indices, palette, Some(alpha)))
 }
 
 /// Quantizes two- or four-channel native samples into an alpha palette.

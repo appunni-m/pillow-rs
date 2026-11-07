@@ -247,8 +247,3 @@ fn secondary_facts(image: &DynamicImage) -> SecondaryInputFacts {
         byte_len: Some(image.as_bytes().len()),
     }
 }
-
-
-pub(crate) use blend::prepare_blend_module;
-pub(crate) use composite_module::prepare_composite_module;
-pub(crate) use merge::prepare_merge;

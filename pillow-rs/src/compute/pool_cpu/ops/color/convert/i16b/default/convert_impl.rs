@@ -15,5 +15,5 @@ pub(crate) fn execute(source: &Samples, target: Mode) -> Result<DynamicImage, Pi
             }),
         );
     }
-    super::super::super::helpers::luma16::execute_mode(source, target)
+    super::super::super::helpers::luma16::execute_mode(source, Mode::ImageI16B, target)
 }

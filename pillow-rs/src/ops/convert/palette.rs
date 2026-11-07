@@ -6,7 +6,6 @@ use crate::compute::Backend;
 use crate::compute::registry::support::{OperationInputs, PaletteInput};
 use crate::error::PilError;
 use crate::image::{Image, LoadedData, PipelineOps};
-use crate::pipeline::DitherMethod;
 use crate::raster::{DynamicImage, Mode};
 
 /// Per-entry alpha table Pillow applies when converting a palette image to an
@@ -217,6 +216,7 @@ fn wrap_prepared_palette(
                 backend: None,
                 palette: Some(palette),
                 palette_alpha,
+                compatibility_icc_profile: image.compatibility_icc_profile().map(Arc::from),
                 materialized: crate::image::materialization_cache(),
                 shape: crate::image::pipeline_shape_cache(),
                 mode: crate::image::pipeline_mode_cache_for(Some(Mode::ImagePalette8)),

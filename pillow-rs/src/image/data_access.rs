@@ -10,7 +10,7 @@ use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
 
 use super::{
-    FormattedImageData, Image, PutDataInput, PutDataValue, PutDataValueKind, image_mode_name,
+    FormattedImageData, Image, PutDataInput, PutDataValue, PutDataValueKind,
     materialization_cache,
 };
 

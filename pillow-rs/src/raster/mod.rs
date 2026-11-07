@@ -4,6 +4,9 @@
 //! `image-slash-star`. This module contains only the materialized pixel model
 //! required by Pillow operations.
 
+#[macro_use]
+mod identities;
+
 pub(crate) mod buffer;
 pub(crate) mod color;
 pub(crate) mod dynamic;

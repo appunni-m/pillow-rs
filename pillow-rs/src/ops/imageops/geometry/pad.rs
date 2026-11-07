@@ -1,3 +1,4 @@
+use super::callbacks::{ImageOpsPadAxis, ImageOpsPadCallbacks};
 use super::{native_geometry_color_input, pad_containment_dimensions, parse_imageops_filter};
 use crate::compute::registry::support::{InputContract, ModeSupport, OperationId, PadFillRule};
 use crate::error::PilError;
@@ -92,6 +93,38 @@ pub fn pad_fill_preflight(
     color: ImageOpsColor,
 ) -> Result<PadFillPreflight, PilError> {
     prepare_pad_fill(image, preflight, color)
+}
+
+/// Runs the custom-protocol Pad fallback while keeping its decisions in core.
+#[doc(hidden)]
+pub fn pad_fallback_with_callbacks<C: ImageOpsPadCallbacks>(
+    callbacks: &mut C,
+    size: &C::Value,
+    method: &C::Value,
+    color: &C::Value,
+    centering: &C::Value,
+) -> Result<C::Image, C::Error> {
+    let resized = callbacks.contain(size, method)?;
+    if callbacks.resized_size_matches(&resized, size)? {
+        return Ok(resized);
+    }
+
+    let mut output = callbacks.new_canvas(size, color)?;
+    if callbacks.resized_palette_is_truthy(&resized)? {
+        let palette = callbacks.resized_palette(&resized)?;
+        if !callbacks.palette_is_none(&palette)? {
+            callbacks.put_palette(&mut output, &palette)?;
+        }
+    }
+
+    let axis = if callbacks.width_differs(&resized, size)? {
+        ImageOpsPadAxis::Horizontal
+    } else {
+        ImageOpsPadAxis::Vertical
+    };
+    let offset = callbacks.centered_offset(axis, &resized, size, centering)?;
+    callbacks.paste_at(&mut output, &resized, axis, &offset)?;
+    Ok(output)
 }
 
 fn prepare_pad_fill(

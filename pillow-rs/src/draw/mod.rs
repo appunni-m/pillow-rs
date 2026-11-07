@@ -11,13 +11,50 @@ use crate::image::{Image, ImageInfoValue, PaletteColorComponent};
 use crate::raster::{DynamicImage, Mode};
 
 mod color_input;
+pub(crate) mod floodfill;
+mod line_joint;
+#[doc(hidden)]
+pub use line_joint::DrawCurveJointPlan;
+#[doc(hidden)]
+pub use floodfill::{
+    execute_floodfill, prepare_floodfill, FloodFillAccess, FloodFillError, PreparedFloodFill,
+};
 
 use color_input::{
-    draw_single_band_color_error, is_double_band_draw_mode, is_single_band_draw_mode,
+    is_double_band_draw_mode, is_single_band_draw_mode,
 };
 
 type DrawColor = (u8, u8, u8, u8);
 type ShapeInks = (Option<DrawColor>, Option<DrawColor>);
+
+pub(crate) fn validate_rounded_rect(
+    x0: i32,
+    y0: i32,
+    x1: i32,
+    y1: i32,
+) -> Result<(), PilError> {
+    if x1 < x0 {
+        return Err(PilError::ValueError(
+            "x1 must be greater than or equal to x0".to_owned(),
+        ));
+    }
+    if y1 < y0 {
+        return Err(PilError::ValueError(
+            "y1 must be greater than or equal to y0".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+/// Native Python value passed from Draw's resolved ink to a font mask.
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum DrawTextFillValue {
+    /// Integer ink used by byte and integer drawing contexts.
+    Integer(i64),
+    /// Float ink whose bit pattern came from Pillow's packed four-byte ink.
+    Float(f32),
+}
 
 /// Drawing context for Pillow-style image mutation.
 ///
@@ -58,6 +95,8 @@ pub enum DrawPointsInput {
     Flat(Vec<i32>),
     /// Nested `(x, y)` point values.
     Nested(Vec<Vec<i32>>),
+    /// Pillow-flattened coordinates retained until operation validation.
+    PillowCoordinates(Vec<f64>),
     /// A list/tuple sequence whose elements are not supported coordinates.
     InvalidSequence,
     /// A value that could not be represented as either supported sequence.
@@ -89,8 +128,17 @@ pub enum DrawBoxInput {
     Flat(Vec<i32>),
     /// Nested `((x0, y0), (x1, y1))` values.
     Nested(Vec<Vec<i32>>),
+    /// Pillow-flattened coordinates, retained as doubles until ordering checks.
+    PillowCoordinates(Vec<f64>),
     /// A value that could not be represented as a supported sequence.
     Invalid,
+}
+
+fn pillow_path_coordinate_to_i32(value: f64) -> i32 {
+    // TODO(pillow-rs#3ptb): Pillow's C double-to-int cast is undefined for
+    // non-finite or out-of-range coordinates; Rust saturates those casts.
+    // Resolve the observed platform output in the focused CPU parity pass.
+    value as i32
 }
 
 /// Host-neutral color input for ImageDraw operations.
@@ -146,6 +194,25 @@ pub fn normalize_draw_width(width: Option<u32>) -> u32 {
 pub fn normalize_draw_box(input: DrawBoxInput) -> Result<(i32, i32, i32, i32), PilError> {
     let error = || PilError::TypeError("coordinate list must contain exactly 2 coordinates".into());
     match input {
+        DrawBoxInput::PillowCoordinates(values) if values.len() == 4 => {
+            if values[2] < values[0] {
+                return Err(PilError::ValueError(
+                    "x1 must be greater than or equal to x0".into(),
+                ));
+            }
+            if values[3] < values[1] {
+                return Err(PilError::ValueError(
+                    "y1 must be greater than or equal to y0".into(),
+                ));
+            }
+            Ok((
+                pillow_path_coordinate_to_i32(values[0]),
+                pillow_path_coordinate_to_i32(values[1]),
+                pillow_path_coordinate_to_i32(values[2]),
+                pillow_path_coordinate_to_i32(values[3]),
+            ))
+        }
+        DrawBoxInput::PillowCoordinates(_) => Err(error()),
         DrawBoxInput::Flat(values) if values.len() == 4 => {
             Ok((values[0], values[1], values[2], values[3]))
         }
@@ -177,7 +244,9 @@ pub fn normalize_draw_box(input: DrawBoxInput) -> Result<(i32, i32, i32, i32), P
 pub fn normalize_rounded_rectangle_box(
     input: DrawBoxInput,
 ) -> Result<(i32, i32, i32, i32), PilError> {
-    if matches!(&input, DrawBoxInput::Flat(values) if values.len() == 2) {
+    if matches!(&input, DrawBoxInput::Flat(values) if values.len() == 2)
+        || matches!(&input, DrawBoxInput::PillowCoordinates(values) if values.len() == 2)
+    {
         return Err(PilError::ValueError(
             "not enough values to unpack (expected 4, got 2)".into(),
         ));
@@ -213,6 +282,26 @@ fn normalize_draw_points(
                 .map(|point| (point[0], point[1]))
                 .collect())
         }
+        DrawPointsInput::PillowCoordinates(values) => {
+            if values.len() % 2 != 0 {
+                return Err(wrong_number());
+            }
+            if allow_short && values.len() < 4 {
+                return Ok(Vec::new());
+            }
+            if values.len() < 4 {
+                return Err(too_few());
+            }
+            Ok(values
+                .chunks_exact(2)
+                .map(|point| {
+                    (
+                        pillow_path_coordinate_to_i32(point[0]),
+                        pillow_path_coordinate_to_i32(point[1]),
+                    )
+                })
+                .collect())
+        }
         DrawPointsInput::Nested(values) => {
             if values.iter().any(|point| point.len() != 2) {
                 return Err(wrong_point());
@@ -226,6 +315,66 @@ fn normalize_draw_points(
             Ok(values
                 .into_iter()
                 .map(|point| (point[0], point[1]))
+                .collect())
+        }
+        DrawPointsInput::InvalidSequence => Err(wrong_point()),
+        DrawPointsInput::Invalid => Err(invalid_input()),
+    }
+}
+
+fn normalize_draw_points_f64(
+    input: DrawPointsInput,
+    allow_short: bool,
+) -> Result<Vec<(f64, f64)>, PilError> {
+    let too_few =
+        || PilError::TypeError("coordinate list must contain at least 2 coordinates".into());
+    let invalid_input = || PilError::TypeError("argument must be sequence".into());
+    let wrong_number = || PilError::ValueError("wrong number of coordinates".into());
+    let wrong_point = || PilError::ValueError("incorrect coordinate type".into());
+    match input {
+        DrawPointsInput::Flat(values) => {
+            if values.len() % 2 != 0 {
+                return Err(wrong_number());
+            }
+            if allow_short && values.len() < 4 {
+                return Ok(Vec::new());
+            }
+            if values.len() < 4 {
+                return Err(too_few());
+            }
+            Ok(values
+                .chunks_exact(2)
+                .map(|point| (f64::from(point[0]), f64::from(point[1])))
+                .collect())
+        }
+        DrawPointsInput::PillowCoordinates(values) => {
+            if values.len() % 2 != 0 {
+                return Err(wrong_number());
+            }
+            if allow_short && values.len() < 4 {
+                return Ok(Vec::new());
+            }
+            if values.len() < 4 {
+                return Err(too_few());
+            }
+            Ok(values
+                .chunks_exact(2)
+                .map(|point| (point[0], point[1]))
+                .collect())
+        }
+        DrawPointsInput::Nested(values) => {
+            if values.iter().any(|point| point.len() != 2) {
+                return Err(wrong_point());
+            }
+            if values.len() < 2 {
+                if allow_short {
+                    return Ok(Vec::new());
+                }
+                return Err(too_few());
+            }
+            Ok(values
+                .into_iter()
+                .map(|point| (f64::from(point[0]), f64::from(point[1])))
                 .collect())
         }
         DrawPointsInput::InvalidSequence => Err(wrong_point()),
@@ -248,6 +397,23 @@ fn normalize_draw_point_input(input: DrawPointsInput) -> Result<Vec<(i32, i32)>,
             Ok(values
                 .chunks_exact(2)
                 .map(|point| (point[0], point[1]))
+                .collect())
+        }
+        DrawPointsInput::PillowCoordinates(values) => {
+            if values.is_empty() {
+                return Ok(Vec::new());
+            }
+            if values.len() % 2 != 0 {
+                return Err(wrong_number());
+            }
+            Ok(values
+                .chunks_exact(2)
+                .map(|point| {
+                    (
+                        pillow_path_coordinate_to_i32(point[0]),
+                        pillow_path_coordinate_to_i32(point[1]),
+                    )
+                })
                 .collect())
         }
         DrawPointsInput::Nested(values) => {
@@ -416,6 +582,12 @@ impl Draw {
         }
     }
 
+    /// Return the resolved drawing-context mode for host callback strategies.
+    #[doc(hidden)]
+    pub fn draw_mode_identity(&self) -> Result<Mode, PilError> {
+        self.effective_mode()
+    }
+
     /// Whether Pillow requested an RGBA drawing context over an RGB image.
     fn alpha_blend_rgb(&self) -> bool {
         self.draw_mode == Some(Mode::ImageRgba8)
@@ -578,12 +750,33 @@ mod bitmap;
 mod curves;
 mod geometry;
 mod primitives;
+mod rounded_rectangle;
 mod text;
+mod text_lines;
+mod text_mask;
+pub use rounded_rectangle::{
+    prepare_rounded_rectangle_with_callbacks, rounded_rectangle_outline_bounds_with_callbacks,
+    RoundedRectangleBounds, RoundedRectangleColor, RoundedRectangleDrawStep,
+    RoundedRectangleEarlyPath, RoundedRectangleOutlineBorder, RoundedRectangleOutlineCallbacks,
+    RoundedRectanglePreparationCallbacks, RoundedRectanglePreparationError,
+    RoundedRectanglePreparedGeometry, RoundedRectangleProgram,
+    RoundedRectangleProgramCallbacks, RoundedRectangleProgramError,
+    RoundedRectangleProgramResponse, RoundedRectangleProgramStep,
+};
+pub use self::text::draw_text_bbox_font_mode;
+pub use self::text::{draw_uses_direct_text_route, DrawTextRouteCallbacks, DrawTextRouteCheck};
+pub use self::text_mask::{
+    draw_custom_font_mask_with_callbacks, DrawTextMaskCallbacks, DrawTextMaskPosition,
+};
+pub use self::text_lines::{
+    draw_text_lines_with_callbacks, DrawTextLine, DrawTextLinesCallbacks,
+};
 
 pub use geometry::outline_curve_points;
 pub(crate) use geometry::{
     DrawCanvas, blend_u8, bresenham_line, for_each_bresenham_point, for_each_polygon_fill_span,
     pil_blend, plot, scanline_polygon_fill, wide_line_polygon_points,
+    wide_line_polygon_points_signed,
 };
 
 #[cfg(test)]

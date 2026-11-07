@@ -1,4 +1,4 @@
-use super::{Bound, PyAny, PyOverflowError, PyResult, PyTypeError, PyValueError, c_int_from_python};
+use super::{Bound, PyAny, PyResult, PyTypeError, PyValueError, c_int_from_python};
 use pyo3::types::PyAnyMethods;
 
 pub(crate) fn filter_size_from_python(

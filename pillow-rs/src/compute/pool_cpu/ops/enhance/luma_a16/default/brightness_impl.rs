@@ -1,7 +1,7 @@
 // NO_PILLOW_SUPPORT: ImageLumaA16 is an internal native raster identity.
 use crate::compute::pool_cpu::ops::enhance::helpers::native;
 use crate::error::PilError;
-use crate::raster::{ImageBuffer, LumaA};
+use crate::raster::ImageBuffer;
 
 type Image = ImageBuffer<crate::raster::LumaA<u16>, Vec<u16>>;
 

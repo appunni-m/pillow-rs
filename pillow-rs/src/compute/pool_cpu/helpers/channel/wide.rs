@@ -37,7 +37,7 @@ pub(crate) fn gather<const CHANNELS: usize, const CHANNEL: usize>(
         });
         let mut selected = u8x16::splat(0);
         for block in 0..CHANNELS {
-            selected |= input_vectors[block].swizzle_relaxed(selectors[block]) & masks[block];
+            selected |= input_vectors[block].shuffle(selectors[block]) & masks[block];
         }
         output.extend_from_slice(&selected.to_array());
     }
@@ -101,7 +101,7 @@ pub(crate) fn gather_into<const CHANNELS: usize, const CHANNEL: usize>(
         });
         let mut selected = u8x16::splat(0);
         for block in 0..CHANNELS {
-            selected |= input_vectors[block].swizzle_relaxed(selectors[block]) & masks[block];
+            selected |= input_vectors[block].shuffle(selectors[block]) & masks[block];
         }
         selected_output.copy_from_slice(&selected.to_array());
     }

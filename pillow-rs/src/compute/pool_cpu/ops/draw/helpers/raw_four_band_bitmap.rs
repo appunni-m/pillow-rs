@@ -1,6 +1,5 @@
 use crate::compute::pool_cpu::ops::draw::BitmapMask;
 use crate::raster::RgbaImage;
-use crate::raster::{GenericImage, GenericImageView};
 
 /// Blend four stored bytes while leaving the owning mode strategy in control.
 pub(crate) fn apply<const ALPHA_CHANNEL: bool>(

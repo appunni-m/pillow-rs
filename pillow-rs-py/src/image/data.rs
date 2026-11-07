@@ -1,25 +1,21 @@
 use super::RsImage;
 use crate::*;
-use pyo3::buffer::PyUntypedBuffer;
 use pyo3::exceptions::PyBufferError;
+use pyo3::prelude::PyModule;
 use pyo3::pymethods;
 
 fn palette_alpha_bytes(value: &Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
-    let buffer = PyUntypedBuffer::get(value)?;
-    if !buffer.is_c_contiguous() {
+    let memoryview = PyModule::import(value.py(), "builtins")?
+        .getattr("memoryview")?
+        .call1((value,))?;
+    if !memoryview.getattr("c_contiguous")?.extract::<bool>()? {
         return Err(PyBufferError::new_err(
             "underlying buffer is not C-contiguous",
         ));
     }
-    let length = buffer.len_bytes();
-    if length == 0 {
-        return Ok(Vec::new());
-    }
-    // SAFETY: PyUntypedBuffer holds a live reference to the exporting object;
-    // C-contiguity guarantees `length` adjacent bytes, and the GIL stays held
-    // while this slice is copied into Rust-owned storage.
-    let bytes = unsafe { std::slice::from_raw_parts(buffer.buf_ptr().cast::<u8>(), length) };
-    Ok(bytes.to_vec())
+    Ok(memoryview
+        .call_method0("tobytes")?
+        .extract::<Vec<u8>>()?)
 }
 
 struct PreparedPalettePutPixel<'py> {
@@ -157,11 +153,11 @@ impl PyImage {
     fn putpalette(
         slf: Py<Self>,
         data: &Bound<'_, PyAny>,
-        rawmode: &Bound<'_, PyAny>,
+        rawmode: &str,
         py: Python<'_>,
     ) -> PyResult<()> {
         let data = data.extract::<Vec<u8>>()?;
-        let rawmode = rawmode.extract::<String>()?;
+        let rawmode = rawmode.to_owned();
         let mut image = slf.bind(py).borrow_mut();
         let image = &mut image.inner;
         py.detach(|| image.putpalette(&data, &rawmode))
@@ -311,32 +307,37 @@ impl PyImage {
         // Pillow loads before tuple(xy); conversion can execute user code and
         // therefore must happen after releasing the image borrow.
         {
-            let mut image = slf.bind(py).borrow_mut();
-            py.detach(|| image.inner.load()).map_err(map_error)?;
+            let inner = slf.bind(py).borrow().inner.clone();
+            let (result, inner) = py.detach(move || {
+                let mut inner = inner;
+                let result = inner.load();
+                (result, inner)
+            });
+            slf.bind(py).borrow_mut().inner = inner;
+            result.map_err(map_error)?;
         }
         let coordinates = py
             .import("builtins")?
             .getattr("tuple")?
             .call1((xy,))?
             .cast_into::<PyTuple>()?;
-        if coordinates.len() != 2 {
+        if coordinates.len()? != 2 {
             return Err(PyValueError::new_err(format!(
                 "expected tuple of length 2, but got tuple of length {}",
-                coordinates.len()
+                coordinates.len()?
             )));
         }
         // Match Pillow's C-int range and error while allowing __index__ hooks
         // to run in tuple order before acquiring an image borrow.
         let x = c_int_from_python(&coordinates.get_item(0)?)?;
         let y = c_int_from_python(&coordinates.get_item(1)?)?;
-        let image = slf.bind(py).borrow();
-        let image = &image.inner;
-        let xy = image_coordinates_in_bounds(image, (x, y))?;
+        let image = slf.bind(py).borrow().inner.clone();
+        let xy = image_coordinates_in_bounds(&image, (x, y))?;
         if let Some(rgb) = image.getpixel_rgb_if_loaded(xy.0, xy.1).map_err(map_error)? {
             return PyTuple::new(py, rgb)?.into_py_any(py);
         }
         let value = py
-            .detach(|| image.getpixel_formatted(xy.0, xy.1))
+            .detach(move || image.getpixel_formatted(xy.0, xy.1))
             .map_err(map_error)?;
         Python::attach(|py| match value {
             pillow_rs::FormattedPixelValue::Scalar(value) => Ok(value.into_py_any(py)?),

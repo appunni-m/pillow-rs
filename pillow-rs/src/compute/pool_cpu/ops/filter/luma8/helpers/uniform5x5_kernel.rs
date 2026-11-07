@@ -30,7 +30,7 @@ pub(super) fn filter(
                 let indices = u8x16::new(std::array::from_fn(|lane| {
                     if lane < 8 { lane as u8 + offset } else { 0 }
                 }));
-                u16x8::from_u8x16_low(window.swizzle_relaxed(indices))
+                u16x8::from_u8x16_low(window.shuffle(indices))
             };
             let sum = tap(0) + tap(1) + tap(2) + tap(3) + tap(4);
             destination[x..x + 8].copy_from_slice(&sum.to_array());

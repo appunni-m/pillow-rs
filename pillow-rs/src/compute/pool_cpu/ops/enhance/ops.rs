@@ -43,7 +43,6 @@ use crate::compute::registry::support::{
     OperationRouteOutcome, OperationRouteStage, OperationSupport, OutputModeRule,
     RejectionKind, StrategySelection, SupportScope,
 };
-use crate::compute::Architecture;
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, ImageBuffer, Mode, Pixel};
@@ -858,9 +857,8 @@ pub(crate) static CONTRAST_SUPPORT: OperationSupport = OperationSupport::routed(
 /// CoreOnly extensions because Pillow's Image.blend rejects non-u8 storage.
 /// Byte Default and architecture owners use the same Pillow float32 blend
 /// expression; binary right-shift fast paths apply only after float32 rounding.
-/// TODO(pillow-rs#3ptb): verify sample 10 with factor 0.09999999999999999 => 1,
-/// all modes under Default and each declared vector architecture, including
-/// architecture selection/fallback receipts in CPU parity.
+/// TODO(pillow-rs#3ptb): verify all modes under Default and each declared vector
+/// architecture, including architecture selection/fallback receipts in parity.
 pub(crate) static SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::Brightness, INPUTS, classify_mode);
 

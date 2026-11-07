@@ -7,7 +7,12 @@ pub enum PaletteColorComponent {
     Integer(i64),
     /// An arbitrary-size integer outside the core tuple carrier, stored as a
     /// normalized sign and big-endian magnitude.
-    WideInteger { negative: bool, magnitude: Vec<u8> },
+    WideInteger {
+        /// Whether the original integer was negative.
+        negative: bool,
+        /// Absolute value as a normalized big-endian byte sequence.
+        magnitude: Vec<u8>,
+    },
     /// A floating-point component whose kind affects `bytes(tuple)` errors.
     Float(f64),
 }

@@ -9,7 +9,6 @@ use crate::compute::registry::support::{
 };
 use crate::error::PilError;
 use crate::raster::{DynamicImage, GrayAlphaImage, Mode};
-use super::default;
 
 pub(crate) const MODE: Mode = Mode::ImageLumaA8;
 
@@ -82,7 +81,7 @@ impl Strategy<'_> {
                 "LA AlphaComposite preparation changed its source mode".into(),
             ));
         };
-        let output = match self.architecture {
+        let mut output = match self.architecture {
             ArchitectureStrategy::Default => {
                 super::default::alpha_composite_impl::execute(source, self.destination)?
             }
@@ -93,6 +92,11 @@ impl Strategy<'_> {
             #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
             ArchitectureStrategy::WasmSimd128 => super::wasm_simd128::alpha_composite_impl::execute(source, self.destination)?,
         };
+        super::super::helpers::alpha_composite::preserve_luma_alpha_lanes(
+            source,
+            self.destination,
+            &mut output,
+        )?;
         Ok(DynamicImage::ImageLumaA8(output))
     }
 }

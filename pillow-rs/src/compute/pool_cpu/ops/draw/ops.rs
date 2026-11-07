@@ -13,9 +13,10 @@
 //! modes, indexed palette presence, mask representation, ink provenance/value, and
 //! embedded-color facts, then executes the selected raster owner.
 //! Mode-owned Bitmap/Text and Default/SIMD geometry writers preserve omitted
-//! physical lanes using the same mode-specific sidecar. TODO(pillow-rs#3ptb):
-//! verify I;16, PA L-mask, RGBa PREBLEND, and public Bitmap fast-route outputs
-//! in parity; verify direct Text output and selected-route receipts.
+//! physical lanes using the same mode-specific sidecar. Focused CPU parity
+//! covers every supported Bitmap mask against every public byte mode.
+//! TODO(pillow-rs#3ptb): verify direct Bitmap/Text selected-route receipts and
+//! backend fallback selection across operation × mode × architecture.
 //! The five internal high-depth modes report an explicit ValueError rejection
 //! because no byte-mask Bitmap/Text strategy is implemented for them.
 //! Pillow 12.2's `ImagingFill2` confirms I;16 L masks blend both sample bytes,
@@ -25,19 +26,20 @@
 //! backend, and nonempty guards; the wrapper evaluates that declaration. The
 //! Source tracing confirms the queued child receipt is Paste; route parity
 //! remains TODO. Text masks are dispatched without an expanded intermediate
-//! buffer; parity remains pending. The Python facade and direct PyO3 Bitmap
-//! entry load the mask before fill parsing/palette resolution. Bitmap ordering
+//! buffer; the complete mode and route receipt matrix remains TODO. The Python
+//! facade and direct PyO3 Bitmap entry load the mask before fill
+//! parsing/palette resolution. Bitmap ordering
 //! is source-reviewed: both resolve fill before coordinates, then core validates
 //! the mask and selects its declared strategy. The RGB and CMYK eager paths run
 //! only after that selection. Direct Text resolves fill and conditional stroke
-//! ink in the Pillow drawing context before line layout; exact output, callback,
-//! fault, and route receipts remain parity work.
+//! ink in the Pillow drawing context before line layout. Focused CPU cases
+//! cover selected native modes, F-mode packed ink, and callback/error behavior;
+//! complete output, fault, and route receipts remain parity work.
 
 use crate::compute::{Architecture, Backend, ExecutionContext};
 use crate::compute::registry::support::{
     DrawRequestKind, DrawTextMaskKind, ImplementationSupport, InputContract, ModeSupport,
-    OperationId, OperationInputs, OperationModeRoute, OperationRouteGuard,
-    OperationRouteInputs, OperationRoutePath, OperationSupport, OutputModeRule,
+    OperationId, OperationInputs, OperationModeRoute, OperationRouteGuard, OperationRoutePath, OperationSupport, OutputModeRule,
     PaletteKnowledge, RequestFacts, StrategyGuard, StrategyInputs, StrategySelection,
     SupportAssessment,
 };

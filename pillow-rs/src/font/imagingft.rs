@@ -12,8 +12,8 @@
 
 use super::{
     FontLengthAndBounds, FontMaskAndBounds, FontMaskAndOffset, FontSizeAndOffset, FreeTypeFont,
-    ImageFontFaceInfo, ImageFontLoadOptions, ImageFontTextOptions, ImageFontVariantOptions,
-    ImageFontVariationAxis,
+    FontTextRef, ImageFontFaceInfo, ImageFontLoadOptions, ImageFontTextOptions,
+    ImageFontVariantOptions, ImageFontVariationAxis,
 };
 use crate::error::PilError;
 use crate::image::Image;
@@ -30,15 +30,16 @@ mod variation;
 #[cfg(feature = "test-api")]
 pub(crate) use layout::getbbox_binary;
 pub(crate) use layout::{
-    getbbox, getbbox_with_options, getlength, getlength_and_bbox, getlength_with_options,
-    getmetrics, native_face_info, native_getlength_26dot6, native_getsize,
+    getbbox, getbbox_text, getbbox_text_with_options, getlength_and_bbox_text, getlength_text,
+    getlength_text_with_options, getmetrics, native_face_info, native_getlength_26dot6,
+    native_getlength_26dot6_text, native_getsize, native_getsize_text,
     validate_basic_layout_options,
 };
 #[cfg(feature = "test-api")]
 pub(crate) use render::render_text_binary;
 pub(crate) use render::{
-    getmask, getmask_with_options, getmask2, getmask2_with_options, getmask2_with_start,
-    native_render,
+    getmask2, getmask2_text_with_options, getmask2_text_with_start,
+    getmask_text, getmask_text_with_options, native_render, native_render_text,
 };
 pub(crate) use variation::{
     font_variant, font_variant_with_options, get_variation_axes, get_variation_names,
@@ -52,7 +53,7 @@ const BASIC_LAYOUT_CACHE_CAPACITY: usize = 512;
 
 #[derive(Default)]
 struct BasicLayoutCache {
-    glyph_indices: HashMap<char, u32>,
+    glyph_indices: HashMap<u32, u32>,
     advances: HashMap<(u32, i32), i32>,
     kernings: HashMap<(u32, u32), i32>,
 }
@@ -661,7 +662,15 @@ pub(crate) fn get_transposed_mask(
     text: &str,
     orientation: Option<&str>,
 ) -> Result<(u32, u32, Vec<u8>), PilError> {
-    let (width, height, pixels) = getmask(font, text)?;
+    get_transposed_mask_text(font, FontTextRef::String(text), orientation)
+}
+
+pub(crate) fn get_transposed_mask_text(
+    font: &FreeTypeFont,
+    text: FontTextRef<'_>,
+    orientation: Option<&str>,
+) -> Result<(u32, u32, Vec<u8>), PilError> {
+    let (width, height, pixels) = render::getmask_text(font, text)?;
     let image = Image::from_luma_mask(width, height, pixels)?;
     let transformed = if let Some(method) = orientation {
         image.transpose(method)?

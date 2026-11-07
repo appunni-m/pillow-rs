@@ -5,8 +5,8 @@ use crate::pipeline::ResampleFilter;
 ///
 /// Pillow represents perspective transforms as an inverse homography and
 /// quadrilateral transforms as a bilinear map from output coordinates to the
-/// four source corners. Keeping both calculations here lets the public core
-/// route methods 2 and 3 through the same lazy pipeline as affine transforms.
+/// four source corners. QUAD coefficients are prepared once at the public
+/// boundary and remain in that form in the lazy pipeline.
 #[inline(always)]
 fn projective_source_at(
     destination: (u32, u32),
@@ -20,24 +20,12 @@ fn projective_source_at(
         if dst_w == 0 || dst_h == 0 {
             return None;
         }
-        // Pillow's Image.__transformer first converts QUAD's raw NW/SW/SE/NE
-        // corners to bilinear coefficients, then evaluates pixel centers.
+        // QUAD data are already the (x0, x1, x2, x3, y0, y1, y2, y3)
+        // coefficients prepared from the public NW/SW/SE/NE corners.
         let dx = dx + 0.5;
         let dy = dy + 0.5;
-        let x0 = data[0];
-        let y0 = data[1];
-        let sw = f64::from(dst_w);
-        let sh = f64::from(dst_h);
-        let inverse_width = 1.0 / sw;
-        let inverse_height = 1.0 / sh;
-        let x1 = (data[6] - x0) * inverse_width;
-        let x2 = (data[2] - x0) * inverse_height;
-        let x3 = (data[4] - data[2] - data[6] + x0) * inverse_width * inverse_height;
-        let y1 = (data[7] - y0) * inverse_width;
-        let y2 = (data[3] - y0) * inverse_height;
-        let y3 = (data[5] - data[3] - data[7] + y0) * inverse_width * inverse_height;
-        let x = x0 + x1 * dx + x2 * dy + x3 * dx * dy;
-        let y = y0 + y1 * dx + y2 * dy + y3 * dx * dy;
+        let x = data[0] + data[1] * dx + data[2] * dy + data[3] * dx * dy;
+        let y = data[4] + data[5] * dx + data[6] * dy + data[7] * dx * dy;
         return Some((x, y));
     }
 

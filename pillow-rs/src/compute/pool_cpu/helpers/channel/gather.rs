@@ -16,7 +16,7 @@ pub(crate) fn gather_interleaved_channel<const CHANNELS: usize, const CHANNEL: u
                 0x80
             }
         }));
-        samples |= bytes.swizzle_relaxed(select);
+        samples |= bytes.shuffle(select);
     }
     samples
 }

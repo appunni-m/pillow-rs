@@ -1,4 +1,4 @@
-use super::{imagefont_text_input_from_python, imagefont_wrap_text_to_python};
+use super::{imagefont_text_input_from_python, imagefont_text_input_to_python};
 use crate::map_error;
 use pillow_rs::{
     ImageFontTextInput, ImageFontTextWrapCallbacks, ImageFontTextWrapWidthCheck, PilError,
@@ -6,8 +6,8 @@ use pillow_rs::{
 use pyo3::basic::CompareOp;
 use pyo3::conversion::IntoPyObjectExt;
 use pyo3::exceptions::{PyTypeError, PyUnboundLocalError};
-use pyo3::buffer::PyBuffer;
 use pyo3::prelude::{Bound, Py, PyAny, PyErr, PyModule, PyResult, Python};
+use pyo3::pyfunction;
 use pyo3::types::{
     PyAnyMethods, PyBytes, PyDict, PyDictMethods, PyList, PyListMethods, PyModuleMethods,
     PyString,
@@ -41,7 +41,7 @@ struct PythonWrapCallbacks<'py> {
 
 impl PythonWrapCallbacks<'_> {
     fn line_bbox(&self, text: &ImageFontTextInput) -> PyResult<Bound<'_, PyAny>> {
-        let text = imagefont_wrap_text_to_python(self.py, text.clone())?;
+        let text = imagefont_text_input_to_python(self.py, text.clone())?;
         let font = self
             .active_font
             .as_ref()
@@ -74,10 +74,10 @@ impl PythonWrapCallbacks<'_> {
     }
 
     fn invoke_font_variant(&mut self, size: i64) -> PyResult<()> {
-        let font = self.current_wrapper_font()?;
+        let font = self.current_wrapper_font()?.unbind();
         let kwargs = PyDict::new(self.py);
         kwargs.set_item("size", size)?;
-        self.active_font = Some(font.call_method("font_variant", (), Some(&kwargs))?);
+        self.active_font = Some(font.bind(self.py).call_method("font_variant", (), Some(&kwargs))?);
         self.changed_font = true;
         Ok(())
     }
@@ -85,7 +85,7 @@ impl PythonWrapCallbacks<'_> {
     fn to_python_lines(&self, lines: &[ImageFontTextInput]) -> PyResult<Bound<'_, PyList>> {
         let result = PyList::empty(self.py);
         for line in lines {
-            result.append(imagefont_wrap_text_to_python(self.py, line.clone())?)?;
+            result.append(imagefont_text_input_to_python(self.py, line.clone())?)?;
         }
         Ok(result)
     }
@@ -238,12 +238,19 @@ impl ImageFontTextWrapCallbacks for PythonWrapCallbacks<'_> {
 
     fn restore_font(&mut self, size: i64) -> Result<(), Self::Error> {
         let selected_size = size;
-        let font = self.current_wrapper_font().map_err(WrapCallbackError::Python)?;
-        let font_size = font.getattr("size").map_err(WrapCallbackError::Python)?;
+        let font = self
+            .current_wrapper_font()
+            .map_err(WrapCallbackError::Python)?
+            .unbind();
+        let font_size = font
+            .bind(self.py)
+            .getattr("size")
+            .map_err(WrapCallbackError::Python)?
+            .unbind();
         let size = size.into_py_any(self.py).map_err(WrapCallbackError::Python)?;
         let changed = size
             .bind(self.py)
-            .rich_compare(&font_size, CompareOp::Ne)
+            .rich_compare(font_size.bind(self.py), CompareOp::Ne)
             .and_then(|value| value.is_truthy())
             .map_err(WrapCallbackError::Python)?;
         if changed {
@@ -326,7 +333,7 @@ fn imagefont_text_wrap_with_callbacks(
     let lines = result
         .lines
         .into_iter()
-        .map(|line| imagefont_wrap_text_to_python(py, line))
+        .map(|line| imagefont_text_input_to_python(py, line))
         .collect::<PyResult<Vec<_>>>()?;
     let remaining = callbacks
         .take_remaining_text(result.wrap_id, consumed)?
@@ -343,23 +350,25 @@ fn wrap_text_input_from_python(
     py: Python<'_>,
     text: &Bound<'_, PyAny>,
 ) -> PyResult<ImageFontTextInput> {
-    // TODO(pillow-rs#3ptb): use a core text carrier that preserves lone Python
-    // surrogate code points; the shared String carrier currently decodes lossily.
     let input = imagefont_text_input_from_python(text)?;
     if !matches!(&input, ImageFontTextInput::InvalidType) {
         return Ok(input);
     }
-    if let Ok(buffer) = PyBuffer::<u8>::get(text) {
-        if let Ok(bytes) = buffer.to_vec(py) {
-            return Ok(ImageFontTextInput::Bytes(bytes));
-        }
-    }
     if let Ok(builtins) = PyModule::import(py, "builtins") {
         if let Ok(view) = builtins.call_method1("memoryview", (text,)) {
+            if !view
+                .getattr("c_contiguous")
+                .and_then(|value| value.extract::<bool>())
+                .unwrap_or(false)
+            {
+                // PyBUF_SIMPLE rejects non-contiguous exporters; let the
+                // established regex path produce the same public failure.
+            } else {
             if let Ok(value) = view.call_method0("tobytes") {
                 if let Ok(bytes) = value.extract::<Vec<u8>>() {
                     return Ok(ImageFontTextInput::Bytes(bytes));
                 }
+            }
             }
         }
     }

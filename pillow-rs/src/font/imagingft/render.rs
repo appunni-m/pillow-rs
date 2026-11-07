@@ -2,8 +2,8 @@
 use super::layout::TGT_MONO;
 use super::layout::{
     GlyphRun, RDR, RunGlyph, TGT_NORM, anchored_bbox, bbox_from_glyph_run,
-    bbox_from_run_with_flags, glyph_run, glyph_run_with_slot_visitor, pixel, round26,
-    text_load_flags, validate_basic_layout_options, validate_text_length,
+    bbox_from_run_text_with_flags, glyph_run_text, glyph_run_with_slot_visitor_text, pixel,
+    round26, text_load_flags, validate_basic_layout_options, validate_text_length,
 };
 use super::*;
 
@@ -19,47 +19,64 @@ pub(crate) fn native_render(
     text: &str,
     options: &ImageFontTextOptions,
 ) -> Result<FontMaskAndOffset, PilError> {
-    getmask2_with_options(font, text, options)
+    native_render_text(font, FontTextRef::String(text), options)
 }
 
-pub(crate) fn getmask(font: &FreeTypeFont, text: &str) -> Result<(u32, u32, Vec<u8>), PilError> {
+pub(crate) fn native_render_text(
+    font: &FreeTypeFont,
+    text: FontTextRef<'_>,
+    options: &ImageFontTextOptions,
+) -> Result<FontMaskAndOffset, PilError> {
+    getmask2_text_with_options(font, text, options)
+}
+
+pub(crate) fn getmask_text(
+    font: &FreeTypeFont,
+    text: FontTextRef<'_>,
+) -> Result<(u32, u32, Vec<u8>), PilError> {
     validate_text_length(text)?;
     mask_from_run_with_start(font, text, TGT_NORM, (0.0, 0.0))
 }
 
-pub(crate) fn getmask_with_options(
+pub(crate) fn getmask_text_with_options(
     font: &FreeTypeFont,
-    text: &str,
+    text: FontTextRef<'_>,
     options: &ImageFontTextOptions,
 ) -> Result<(u32, u32, Vec<u8>), PilError> {
-    let (width, height, pixels, _) = getmask2_with_options(font, text, options)?;
+    let (width, height, pixels, _) = getmask2_text_with_options(font, text, options)?;
     Ok((width, height, pixels))
 }
 
 /// Render a Pillow-compatible mask together with its BASIC-layout offset.
 pub(crate) fn getmask2(font: &FreeTypeFont, text: &str) -> Result<FontMaskAndOffset, PilError> {
+    getmask2_text(font, FontTextRef::String(text))
+}
+
+pub(crate) fn getmask2_text(
+    font: &FreeTypeFont,
+    text: FontTextRef<'_>,
+) -> Result<FontMaskAndOffset, PilError> {
     validate_text_length(text)?;
-    getmask2_with_start(font, text, (0.0, 0.0))
+    getmask2_text_with_start(font, text, (0.0, 0.0))
 }
 
 /// Render a Pillow-compatible mask with a fractional raster start.
 ///
 /// Pillow applies `start` to the mask canvas and glyph origin while leaving
 /// the returned BASIC-layout offset unchanged.
-pub(crate) fn getmask2_with_start(
+pub(crate) fn getmask2_text_with_start(
     font: &FreeTypeFont,
-    text: &str,
+    text: FontTextRef<'_>,
     start: (f64, f64),
 ) -> Result<FontMaskAndOffset, PilError> {
     validate_text_length(text)?;
-    let (width, height, pixels, bbox) =
-        mask_from_run_with_start_and_bbox(font, text, TGT_NORM, start)?;
+    let (width, height, pixels, bbox) = mask_from_run_with_start_and_bbox(font, text, TGT_NORM, start)?;
     Ok((width, height, pixels, (bbox.0, bbox.1)))
 }
 
-pub(crate) fn getmask2_with_options(
+pub(crate) fn getmask2_text_with_options(
     font: &FreeTypeFont,
-    text: &str,
+    text: FontTextRef<'_>,
     options: &ImageFontTextOptions,
 ) -> Result<FontMaskAndOffset, PilError> {
     validate_text_length(text)?;
@@ -70,7 +87,7 @@ pub(crate) fn getmask2_with_options(
         ));
     }
     if options_are_default_mask_options(options) {
-        return getmask2(font, text);
+        return getmask2_text(font, text);
     }
     let load_flags = text_load_flags(options);
     let _pillow_ignored_public_args = (options.ink, options.has_args, options.has_kwargs);
@@ -95,7 +112,7 @@ pub(crate) fn getmask2_with_options(
     } else {
         mask_from_run_with_start(font, text, load_flags, start)?
     };
-    let bbox = bbox_from_run_with_flags(
+    let bbox = bbox_from_run_text_with_flags(
         font,
         text,
         if options.stroke_width != 0.0 {
@@ -129,6 +146,16 @@ fn options_are_default_mask_options(options: &ImageFontTextOptions) -> bool {
 pub(crate) fn render_text_binary(
     font: &FreeTypeFont,
     text: &str,
+    fill: (u8, u8, u8, u8),
+    spacing: f32,
+) -> Result<(u32, u32, Vec<u8>), PilError> {
+    render_text_binary_text(font, FontTextRef::String(text), fill, spacing)
+}
+
+#[cfg(feature = "test-api")]
+pub(crate) fn render_text_binary_text(
+    font: &FreeTypeFont,
+    text: FontTextRef<'_>,
     fill: (u8, u8, u8, u8),
     spacing: f32,
 ) -> Result<(u32, u32, Vec<u8>), PilError> {
@@ -172,7 +199,7 @@ fn pack_rgba(
 
 fn mask_from_run_with_start(
     ttf: &FreeTypeFont,
-    text: &str,
+    text: FontTextRef<'_>,
     load_flags: i32,
     start: (f64, f64),
 ) -> Result<(u32, u32, Vec<u8>), PilError> {
@@ -183,18 +210,18 @@ fn mask_from_run_with_start(
 
 fn mask_from_run_with_start_and_bbox(
     ttf: &FreeTypeFont,
-    text: &str,
+    text: FontTextRef<'_>,
     load_flags: i32,
     start: (f64, f64),
 ) -> Result<FontMaskAndBounds, PilError> {
     let mut loaded_slots = Vec::new();
     let run = if load_flags == TGT_NORM {
-        glyph_run_with_slot_visitor(ttf, text, load_flags, |slot, _, _| {
+        glyph_run_with_slot_visitor_text(ttf, text, load_flags, |slot, _, _| {
             loaded_slots.push(slot);
             Ok(())
         })?
     } else {
-        glyph_run(ttf, text, load_flags)?
+        glyph_run_text(ttf, text, load_flags)?
     };
     if run.glyphs.is_empty() {
         return Ok((0, 0, vec![], (0, 0, 0, 0)));
@@ -287,7 +314,7 @@ fn mask_from_run_with_start_and_bbox(
 /// rendered coverage in alpha.
 fn color_mask_from_run_with_start(
     ttf: &FreeTypeFont,
-    text: &str,
+    text: FontTextRef<'_>,
     load_flags: i32,
     start: (f64, f64),
     foreground: (u8, u8, u8),
@@ -305,7 +332,7 @@ fn color_mask_from_run_with_start(
             alpha: 255,
         },
     ))?;
-    let run = glyph_run(ttf, text, load_flags)?;
+    let run = glyph_run_text(ttf, text, load_flags)?;
     if run.glyphs.is_empty() {
         return Ok((0, 0, vec![]));
     }
@@ -375,7 +402,7 @@ fn grayscale_mask_to_rgba(mask: Vec<u8>, foreground: (u8, u8, u8)) -> Vec<u8> {
 
 fn stroked_mask_from_run_with_start(
     ttf: &FreeTypeFont,
-    text: &str,
+    text: FontTextRef<'_>,
     load_flags: i32,
     start: (f64, f64),
     stroke_width: f32,
@@ -390,7 +417,7 @@ fn stroked_mask_from_run_with_start(
         return Ok((side, side, vec![0; side.saturating_mul(side) as usize]));
     }
 
-    let run = glyph_run(ttf, text, load_flags)?;
+    let run = glyph_run_text(ttf, text, load_flags)?;
     let face = &ttf.engine.face;
     let stroker = new_stroker(&ttf.engine.library)?;
     let radius = (stroke_width * 64.0).round() as ffi::FT_Fixed;
@@ -440,7 +467,7 @@ fn stroked_mask_from_run_with_start(
     // cboxes loaded under `FT_LOAD_NO_BITMAP`.  Strikes and outlines can
     // report different advances, so the pen line must come from the
     // default-load run while the cboxes come from the no-bitmap run.
-    let bbox_run = glyph_run(ttf, text, stroked_load_flags)?;
+    let bbox_run = glyph_run_text(ttf, text, stroked_load_flags)?;
     let merged_run = GlyphRun {
         glyphs: run
             .glyphs

@@ -4,7 +4,7 @@ use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::compute::{Architecture, registry::support::{ImplementationSupport, OperationId, StrategyGuard}};
 use crate::raster::{
-    DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, ImageBuffer, Luma, LumaA, Mode,
+    DynamicImage, GrayAlphaImage, GrayImage, ImageBuffer, Luma, LumaA, Mode,
     Rgb, RgbImage, Rgba, RgbaImage,
 };
 use wide::{u16x8, u32x8};
@@ -61,12 +61,13 @@ pub(crate) const fn architecture_support(mode: Mode) -> [ImplementationSupport; 
 /// Converts a native u16 raster; I;16N changes decode byte order, not sample range.
 pub(crate) fn execute_mode(
     source: &Samples,
+    source_mode: Mode,
     target: Mode,
 ) -> Result<DynamicImage, PilError> {
     if is_luma16_target(target) {
-        return execute_i16_target(source, target);
+        return execute_i16_target(source, source_mode, target);
     }
-    execute(source, target)
+    execute(source, source_mode, target)
 }
 
 pub(crate) fn from_luma8_samples<I>(
@@ -152,12 +153,14 @@ pub(crate) fn execute_palette_target(
 
 pub(crate) fn execute_native_vector(
     source: &Samples,
+    source_mode: Mode,
     target: Mode,
 ) -> Result<DynamicImage, PilError> {
-    execute_vector(source, target)
+    execute_vector(source, source_mode, target)
 }
 
-fn execute(source: &Samples, target: Mode) -> Result<DynamicImage, PilError> {
+// Pillow clips I;16N to I/F at 255; other I;16 variants preserve full samples.
+fn execute(source: &Samples, source_mode: Mode, target: Mode) -> Result<DynamicImage, PilError> {
     match target {
         Mode::ImageLuma8 => Ok(DynamicImage::ImageLuma8(to_luma(source))),
         Mode::ImageLumaA8 => Ok(DynamicImage::ImageLumaA8(to_luma_alpha(source))),
@@ -167,19 +170,29 @@ fn execute(source: &Samples, target: Mode) -> Result<DynamicImage, PilError> {
         Mode::ImageCmyk8 => Ok(DynamicImage::ImageCmyk8(to_cmyk(source))),
         Mode::ImageYCbCr8 => Ok(DynamicImage::ImageYCbCr8(to_ycbcr(source))),
         Mode::ImageHsv8 => Ok(DynamicImage::ImageHsv8(to_hsv(source))),
-        Mode::ImageI32 => Ok(DynamicImage::ImageI32(to_i32(source))),
-        Mode::ImageF32 => Ok(DynamicImage::ImageF32(to_f32(source))),
+        Mode::ImageI32 => Ok(DynamicImage::ImageI32(to_i32(source, source_mode))),
+        Mode::ImageF32 => Ok(DynamicImage::ImageF32(to_f32(source, source_mode))),
         _ => Err(PilError::ValueError("image has wrong mode".into())),
     }
 }
 
 fn execute_i16_target(
     source: &Samples,
+    source_mode: Mode,
     target: Mode,
 ) -> Result<DynamicImage, PilError> {
-    // I;16 aliases keep their full numeric samples; byte order is applied at
-    // the image boundary when the target mode is materialized or serialized.
-    let samples = source.clone();
+    // Pillow preserves samples only for same-mode I;16 conversion and clips
+    // cross-mode I;16 conversions to the byte range.
+    let samples = if source_mode == target {
+        source.clone()
+    } else {
+        Samples::from_raw(
+            source.width(),
+            source.height(),
+            source.as_raw().iter().copied().map(|sample| u16::from(clip(sample))).collect(),
+        )
+        .ok_or_else(|| PilError::InternalError("I;16 Convert output shape mismatch".into()))?
+    };
     match target {
         Mode::ImageI16 => Ok(DynamicImage::ImageI16(samples)),
         Mode::ImageI16L => Ok(DynamicImage::ImageI16L(samples)),
@@ -198,7 +211,7 @@ pub(crate) const fn is_luma16_target(target: Mode) -> bool {
     )
 }
 
-fn execute_vector(source: &Samples, target: Mode) -> Result<DynamicImage, PilError> {
+fn execute_vector(source: &Samples, source_mode: Mode, target: Mode) -> Result<DynamicImage, PilError> {
     let target_channels = vector_target_channels(target)?;
     let source_dims = CheckedDims::new_allow_empty(source.width(), source.height(), 1)?;
     if source.as_raw().len() != source_dims.total_pixels() {
@@ -213,7 +226,7 @@ fn execute_vector(source: &Samples, target: Mode) -> Result<DynamicImage, PilErr
         let active = (source_dims.total_pixels() - start).min(8);
         let lanes = std::array::from_fn(|lane| source.as_raw().get(start + lane).copied().unwrap_or(0));
         let samples = u16x8::new(lanes);
-        append_target_samples(target, samples, active, &mut output);
+        append_target_samples(source_mode, target, samples, active, &mut output);
         vector_blocks = vector_blocks.saturating_add(1);
     }
     finish_vector(source, target, output, output_dims.total_bytes(), vector_blocks)
@@ -234,11 +247,22 @@ fn vector_target_channels(target: Mode) -> Result<u8, PilError> {
 }
 
 fn append_target_samples(
+    source_mode: Mode,
     target: Mode,
     samples: u16x8,
     active: usize,
     output: &mut Vec<u8>,
 ) {
+    // Keep SIMD I;16N to I/F arithmetic aligned with the scalar mode strategy.
+    let samples = if source_mode == Mode::ImageI16N
+        && matches!(target, Mode::ImageI32 | Mode::ImageF32)
+    {
+        samples
+            .simd_gt(u16x8::splat(u16::from(u8::MAX)))
+            .select(u16x8::splat(u16::from(u8::MAX)), samples)
+    } else {
+        samples
+    };
     if target == Mode::ImageI32 {
         for value in samples.to_array().into_iter().take(active) {
             output.extend_from_slice(&i32::from(value).to_le_bytes());
@@ -385,15 +409,27 @@ fn to_hsv(source: &Samples) -> RgbImage {
     })
 }
 
-fn to_i32(source: &Samples) -> RgbaImage {
+fn to_i32(source: &Samples, source_mode: Mode) -> RgbaImage {
     RgbaImage::from_fn(source.width(), source.height(), |x, y| {
-        Rgba(i32::from(source.get_pixel(x, y)[0]).to_le_bytes())
+        let sample = source.get_pixel(x, y)[0];
+        let sample = if source_mode == Mode::ImageI16N {
+            u16::from(clip(sample))
+        } else {
+            sample
+        };
+        Rgba(i32::from(sample).to_le_bytes())
     })
 }
 
-fn to_f32(source: &Samples) -> RgbaImage {
+fn to_f32(source: &Samples, source_mode: Mode) -> RgbaImage {
     RgbaImage::from_fn(source.width(), source.height(), |x, y| {
-        Rgba(f32::from(source.get_pixel(x, y)[0]).to_le_bytes())
+        let sample = source.get_pixel(x, y)[0];
+        let sample = if source_mode == Mode::ImageI16N {
+            u16::from(clip(sample))
+        } else {
+            sample
+        };
+        Rgba(f32::from(sample).to_le_bytes())
     })
 }
 

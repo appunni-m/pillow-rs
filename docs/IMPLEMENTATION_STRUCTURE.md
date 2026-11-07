@@ -37,10 +37,14 @@ pool, or execution path. Report the actual backend and architecture separately.
 
 ## 2. Mode-bearing raster
 
-`pillow-rs/src/raster/dynamic.rs` owns the materialized image enum.
-Its flat variants carry the exact mode identity and the appropriate buffer.
-The enum discriminant is the stored identity; do not add a separately stored
-`Mode` plus `PixelStorage` pair to each materialized image.
+`pillow-rs/src/raster/identities.rs` owns the canonical list of raster
+identities and their payload types. `raster/dynamic.rs` generates the
+materialized image enum from that list; `raster/mode.rs` generates the
+payload-free selector from the same list. Their methods remain with their
+respective types. The flat `DynamicImage` variants carry the exact mode
+identity and appropriate buffer. The enum discriminant is the stored identity;
+do not add a separately stored `Mode` plus `PixelStorage` pair to each
+materialized image.
 
 For example, `ImageLuma8(buffer)`, `ImagePalette8(buffer)`,
 `ImageRgba8(buffer)`, and `ImageCmyk8(buffer)`

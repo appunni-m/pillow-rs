@@ -1,7 +1,7 @@
 use super::super::ops::{inputs_for, pillow_kernel};
 use crate::compute::Architecture;
 use crate::compute::registry::support::{
-    ImplementationSupport, ModeSupport, OperationId, OutputModeRule, RejectionKind,
+    ImplementationSupport, ModeSupport, OperationId, RejectionKind,
     StrategyGuard, StrategySelection,
 };
 use crate::error::PilError;
@@ -76,9 +76,9 @@ const FILTER5X5_ARCHITECTURES: &[ImplementationSupport] = &[
     ),
 ];
 
-// TODO(pillow-rs#3ptb): Freeze I32 Filter3x3/Filter5x5 output and
-// architecture/fallback receipts in the CPU parity matrix, including the
-// guarded AVX/FMA Filter5x5 route.
+// TODO(pillow-rs#3ptb): freeze I32 Filter3x3/Filter5x5 architecture and
+// fallback receipts, including the guarded AVX/FMA Filter5x5 route. Focused
+// output parity covers varied values, i32 edges, and small vector guards.
 
 fn rejected() -> ModeSupport {
     ModeSupport::Rejected {

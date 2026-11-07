@@ -6,14 +6,16 @@
 //!
 //! Mode-specific filter, reducing-gap, and I32/F32 resize decisions are
 //! selected through `mode_strategy` before execution.
-//! The archived mode branches are source-reviewed against these owners: `1`
-//! `1`, `P`, and `PA` force nearest; straight-alpha `LA` and `RGBA` skip
-//! reducing-gap; premultiplied `La` reduces its stored samples like the
-//! archived implementation. F32 and I32 use exact typed owners; all other
-//! modes compose native Reduce and Resize. No active caller uses the archived
+//! Pillow's Resize path forces nearest for `1` and `P`; `PA` keeps the
+//! requested filter. Straight-alpha `LA` and `RGBA` skip reducing-gap;
+//! premultiplied `La` reduces its stored samples like the archived
+//! implementation. F32 and I32 use exact typed owners; all other modes
+//! compose native Reduce and Resize. No active caller uses the archived
 //! adapter.
 //! TODO(pillow-rs#3ptb): complete Thumbnail parity for every declared exact
 //! mode and architecture in the operation × mode × architecture matrix.
+//! TODO(pillow-rs#3ptb): verify the PA filter/reducing-gap matrix against each
+//! declared architecture strategy, including fallback-selection receipts.
 //! F32's even 2x2 vector reduction runs through its nested exact-mode Reduce
 //! strategy; general I32 reduction is scalar.
 //! Thumbnail's support contract links its conditional Reduce and Resize
@@ -24,8 +26,7 @@
 // native Reduce and Resize strategies, but Pillow does not expose those modes.
 
 use crate::compute::{Architecture, Backend, ExecutionContext, registry::support::{
-    ImplementationSupport, ModeSupport, OperationId, OperationInputs, OperationSupport,
-    OutputModeRule, StrategyGuard, StrategySelection, SupportAssessment,
+    ModeSupport, OperationId, OperationInputs, OperationSupport, StrategySelection, SupportAssessment,
 }};
 use crate::error::PilError;
 use crate::pipeline::{PipelineOp, ResampleFilter};

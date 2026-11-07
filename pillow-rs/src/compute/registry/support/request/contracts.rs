@@ -49,7 +49,8 @@ pub(super) fn assess(
         }
         InputContract::ExpandFill(_)
         | InputContract::PadFill(_)
-        | InputContract::AutocontrastParameters => Ok(None),
+        | InputContract::AutocontrastParameters
+        | InputContract::FloodFillInputs => Ok(None),
         InputContract::PaletteMetadata if input.palette == PaletteKnowledge::Unknown => {
             Ok(Some(UnresolvedGuard::PaletteMetadata))
         }

@@ -443,6 +443,6 @@ pub(crate) static BOXED_SUPPORT: OperationSupport = OperationSupport::new(
 #[path = "helpers/prepared.rs"]
 mod prepared;
 pub(crate) use prepared::{
-    effective_filter, native_luma16_resize, native_typed_resize, prepare_direct,
+    effective_filter, prepare_direct,
     prepare_direct_with_selection, prepare_pipeline, PreparedResize,
 };

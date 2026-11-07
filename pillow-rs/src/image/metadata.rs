@@ -147,9 +147,11 @@ impl Image {
         // Pillow's Image.convert("LAB") stores the generated output profile
         // in the result's info dictionary. Carry it on the conversion op so
         // the profile's creation timestamp stays tied to that conversion.
-        if self.known_mode_identity() == Some(Mode::ImageLab8)
-            && let Some(profile) = self.pipeline_lab_icc_profile()
-        {
+        if let Some(profile) = self.compatibility_icc_profile().or_else(|| {
+            (self.known_mode_identity() == Some(Mode::ImageLab8))
+                .then(|| self.pipeline_lab_icc_profile())
+                .flatten()
+        }) {
             fields.push((
                 "icc_profile".to_owned(),
                 ImageInfoValue::Bytes(profile.to_vec()),
@@ -256,6 +258,17 @@ impl Image {
                 ImageInfoValue::IntegerList(vec![1, 1]),
             ),
         ]
+    }
+
+    pub(crate) fn compatibility_icc_profile(&self) -> Option<&[u8]> {
+        match self {
+            Image::Pipeline {
+                compatibility_icc_profile: Some(profile),
+                ..
+            } => Some(profile.as_ref()),
+            Image::Pipeline { source, .. } => source.compatibility_icc_profile(),
+            _ => None,
+        }
     }
 
     fn pipeline_lab_icc_profile(&self) -> Option<&[u8]> {

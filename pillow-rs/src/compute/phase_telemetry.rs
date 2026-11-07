@@ -1,7 +1,10 @@
 //! Opt-in phase-level timings kept separate from scored end-to-end latency.
 
-use super::{Backend, elapsed_ns, pipeline_telemetry_enabled, pipeline_timestamp};
+use super::{Backend, pipeline_telemetry_enabled};
+#[cfg(test)]
+use super::{elapsed_ns, pipeline_timestamp};
 use std::cell::RefCell;
+#[cfg(test)]
 use std::time::Instant;
 
 #[derive(Debug, Default)]
@@ -13,6 +16,7 @@ struct PipelinePhaseTimings {
 
 #[derive(Clone, Copy)]
 enum PipelinePhase {
+    #[cfg(test)]
     TransposeOutputAllocationZeroFill,
     #[cfg(target_arch = "x86_64")]
     TransposeAvx2Executor,
@@ -36,6 +40,7 @@ pub(super) fn clear() {
 }
 
 /// Begin a phase timer only for an explicitly enabled diagnostic receipt.
+#[cfg(test)]
 pub(crate) fn pipeline_phase_timestamp() -> Option<Instant> {
     pipeline_telemetry_enabled()
         .then(pipeline_timestamp)
@@ -45,6 +50,7 @@ pub(crate) fn pipeline_phase_timestamp() -> Option<Instant> {
 /// Record the checked output allocation and zero-fill phase for native SIMD
 /// Transpose. This is diagnostic evidence, not a replacement for end-to-end
 /// call timing.
+#[cfg(test)]
 pub(crate) fn record_transpose_output_allocation_timing(start: Option<Instant>) {
     if let Some(start) = start {
         add_pipeline_phase_timing(
@@ -56,6 +62,7 @@ pub(crate) fn record_transpose_output_allocation_timing(start: Option<Instant>) 
 
 /// Record a successfully admitted AVX2 Transpose executor call.
 #[cfg(target_arch = "x86_64")]
+#[cfg(test)]
 pub(crate) fn record_transpose_avx2_executor_timing(start: Option<Instant>) {
     if let Some(start) = start {
         add_pipeline_phase_timing(
@@ -78,6 +85,7 @@ fn add_pipeline_phase_timing(phase: PipelinePhase, nanoseconds: u64) {
     LAST_PIPELINE_PHASE_TIMINGS.with(|last| {
         let mut last = last.borrow_mut();
         let field = match phase {
+            #[cfg(test)]
             PipelinePhase::TransposeOutputAllocationZeroFill => {
                 &mut last.transpose_output_allocation_zero_fill_ns
             }

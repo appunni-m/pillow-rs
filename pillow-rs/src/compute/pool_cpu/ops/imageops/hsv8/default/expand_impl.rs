@@ -6,7 +6,7 @@ use crate::error::PilError;
 pub(super) type Input = RgbImage;
 
 
-pub(super) struct Kernel<'a> {
+pub(crate) struct Kernel<'a> {
     input: &'a Input,
     border: crate::pipeline::ExpandMargins,
     fill: [u8; 3],

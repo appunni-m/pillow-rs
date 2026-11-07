@@ -41,7 +41,8 @@
 //!
 //! # Public API Boundary
 //!
-//! `pillow-rs/src/lib.rs` is the single public API definition for this crate.
+//! `pillow-rs/src/lib.rs` is the public API root for this crate. Root symbols
+//! are re-exported here; feature-gated test controls live in `test_api.rs`.
 //! Implementation modules are private crate internals; downstream callers,
 //! including the Python and WebAssembly bindings, must use the exact root
 //! symbols re-exported below such as [`Image`], [`FreeTypeFont`], [`Draw`],
@@ -89,8 +90,6 @@
 
 #[cfg(feature = "parallel")]
 use rayon as _;
-#[cfg(feature = "test-api")]
-use std::collections::BTreeMap;
 
 // ============================================================================
 // AS PER DESIGN — DO NOT REMOVE THESE MODULES:
@@ -127,6 +126,8 @@ mod image_utils;
 mod lab;
 /// Reusable image operation implementations.
 mod ops;
+/// Two-dimensional vector paths used by drawing APIs.
+mod path;
 #[cfg(feature = "parallel")]
 /// Approved parallel iteration helpers for pixel and row operations.
 mod par;
@@ -140,31 +141,13 @@ mod raster;
 
 /// Test-build-only controls for deterministic target fault contracts.
 #[cfg(feature = "test-api")]
-pub mod test_api {
-    /// Arm the allow-listed deterministic GPU batch fault for the next executor.
-    pub fn arm_fault(point: &str) -> Result<(), String> {
-        match point {
-            "gpu_batch.admission.device_failure" => {
-                #[cfg(feature = "gpu")]
-                {
-                    crate::compute::arm_gpu_batch_admission_failure();
-                    Ok(())
-                }
-                #[cfg(not(feature = "gpu"))]
-                {
-                    Err("GPU batch fault requires the gpu feature".into())
-                }
-            }
-            _ => Err(format!("unknown migration parity fault point: {point}")),
-        }
-    }
+pub mod test_api;
 
-    /// Clear an armed fault before the next fixture-driven workflow.
-    pub fn clear_fault() {
-        #[cfg(feature = "gpu")]
-        crate::compute::clear_gpu_batch_test_fault();
-    }
-}
+#[cfg(feature = "test-api")]
+pub use crate::test_api::{
+    backend_cpu_supports, backend_gpu_supports, backend_simd_supports,
+    backend_support_matrix_json, backend_support_registry, BackendSupportEntry,
+};
 
 pub use crate::color::ColorOutputMode;
 pub use crate::color::ColorValue;
@@ -252,10 +235,39 @@ pub use crate::compute::backend_enabled;
 pub use crate::compute::disable_backend;
 pub use crate::compute::enable_backend;
 pub use crate::draw::Draw;
+#[doc(hidden)]
+pub use crate::draw::DrawCurveJointPlan;
+#[doc(hidden)]
+pub use crate::draw::{
+    execute_floodfill, prepare_floodfill, FloodFillAccess, FloodFillError, PreparedFloodFill,
+};
+pub use crate::path::ImagePath;
 pub use crate::draw::DrawBoxInput;
 pub use crate::draw::DrawCircleCenterInput;
 pub use crate::draw::DrawColorInput;
 pub use crate::draw::DrawPointsInput;
+#[doc(hidden)]
+pub use crate::draw::DrawTextFillValue;
+#[doc(hidden)]
+pub use crate::draw::{
+    prepare_rounded_rectangle_with_callbacks, rounded_rectangle_outline_bounds_with_callbacks,
+    RoundedRectangleBounds, RoundedRectangleColor, RoundedRectangleDrawStep,
+    RoundedRectangleEarlyPath, RoundedRectangleOutlineBorder, RoundedRectangleOutlineCallbacks,
+    RoundedRectanglePreparationCallbacks, RoundedRectanglePreparationError,
+    RoundedRectanglePreparedGeometry, RoundedRectangleProgram,
+    RoundedRectangleProgramCallbacks, RoundedRectangleProgramError,
+    RoundedRectangleProgramResponse, RoundedRectangleProgramStep,
+};
+#[doc(hidden)]
+pub use crate::draw::draw_text_bbox_font_mode;
+#[doc(hidden)]
+pub use crate::draw::{draw_uses_direct_text_route, DrawTextRouteCallbacks, DrawTextRouteCheck};
+#[doc(hidden)]
+pub use crate::draw::{
+    draw_custom_font_mask_with_callbacks, DrawTextMaskCallbacks, DrawTextMaskPosition,
+};
+#[doc(hidden)]
+pub use crate::draw::{draw_text_lines_with_callbacks, DrawTextLine, DrawTextLinesCallbacks};
 pub use crate::draw::RegularPolygonCircle;
 pub use crate::draw::RegularPolygonSides;
 pub use crate::draw::normalize_draw_box;
@@ -394,17 +406,31 @@ pub use crate::ops::imageops::autocontrast_with_options_and_mask as imageops_aut
 #[doc(hidden)]
 pub use crate::ops::imageops::autocontrast_lut_from_histogram as imageops_autocontrast_lut_from_histogram;
 #[doc(hidden)]
-pub use crate::ops::imageops::autocontrast_lut_from_histogram_and_counts as
-    imageops_autocontrast_lut_from_histogram_and_counts;
-pub use crate::ops::imageops::colorize as imageops_colorize;
+pub use crate::ops::imageops::autocontrast_lut_with_callbacks as
+    imageops_autocontrast_lut_with_callbacks;
 #[doc(hidden)]
-pub use crate::ops::imageops::colorize_lut_from_range_lengths as
-    imageops_colorize_lut_from_range_lengths;
+pub use crate::ops::imageops::autocontrast_result_from_lut_with_callbacks as
+    imageops_autocontrast_result_from_lut_with_callbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::autocontrast_with_callbacks as
+    imageops_autocontrast_with_callbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsAutocontrastCallbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsAutocontrastResultCallbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsAutocontrastSourceCallbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::equalize_with_callbacks as imageops_equalize_with_callbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsEqualizeCallbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::colorize_with_callbacks as imageops_colorize_with_callbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsColorizeCallbacks;
+pub use crate::ops::imageops::colorize as imageops_colorize;
 pub use crate::ops::imageops::contain as imageops_contain;
 pub use crate::ops::imageops::contain_with_input as imageops_contain_with_input;
-#[doc(hidden)]
-pub use crate::ops::imageops::aspect_size_with_callbacks as
-    imageops_aspect_size_with_callbacks;
 #[doc(hidden)]
 pub use crate::ops::imageops::ImageOpsAspectArithmetic;
 #[doc(hidden)]
@@ -418,25 +444,62 @@ pub use crate::ops::imageops::ImageOpsAspectSize;
 #[doc(hidden)]
 pub use crate::ops::imageops::ImageOpsFitCallbacks;
 #[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsFitRouteCallbacks;
+#[doc(hidden)]
 pub use crate::ops::imageops::ImageOpsFitConstant;
 #[doc(hidden)]
 pub use crate::ops::imageops::ImageOpsBorderCallbacks;
 #[doc(hidden)]
 pub use crate::ops::imageops::ImageOpsCropCallbacks;
 #[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsCropRouteCallbacks;
+#[doc(hidden)]
 pub use crate::ops::imageops::ImageOpsExpandGeometryCallbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsExpandCallbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsPadAxis;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsPadCallbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsPadRouteCallbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsAspectRouteCallbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsNativeSizeCallbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsNativeSizeProperty;
 #[doc(hidden)]
 pub use crate::ops::imageops::ImageOpsScaleCallbacks;
 #[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsScaleRouteCallbacks;
+#[doc(hidden)]
 pub use crate::ops::imageops::fit_box_with_callbacks as imageops_fit_box_with_callbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::fit_box_with_route_callbacks as
+    imageops_fit_box_with_route_callbacks;
 #[doc(hidden)]
 pub use crate::ops::imageops::crop_box_with_callbacks as imageops_crop_box_with_callbacks;
 #[doc(hidden)]
-pub use crate::ops::imageops::expand_geometry_with_callbacks as
-    imageops_expand_geometry_with_callbacks;
+pub use crate::ops::imageops::crop_box_with_route_callbacks as
+    imageops_crop_box_with_route_callbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::expand_with_callbacks as imageops_expand_with_callbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::pad_fallback_with_callbacks as
+    imageops_pad_fallback_with_callbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::native_size_pair_with_callbacks as
+    imageops_native_size_pair_with_callbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::aspect_size_with_route_callbacks as
+    imageops_aspect_size_with_route_callbacks;
 #[doc(hidden)]
 pub use crate::ops::imageops::scale_size_with_callbacks as
     imageops_scale_size_with_callbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::scale_with_route_callbacks as
+    imageops_scale_with_route_callbacks;
 #[doc(hidden)]
 pub use crate::ops::imageops::contain_geometry_preflight as imageops_contain_geometry_preflight;
 pub use crate::ops::imageops::cover as imageops_cover;
@@ -501,6 +564,8 @@ pub use crate::ops::imageops::pad_preflight_with_input as imageops_pad_preflight
 pub use crate::ops::imageops::pad_with_input as imageops_pad_with_input;
 #[doc(hidden)]
 pub use crate::ops::imageops::pad_with_input_and_containment as imageops_pad_with_input_and_containment;
+#[doc(hidden)]
+pub use crate::ops::imageops::pad_with_route_callbacks as imageops_pad_with_route_callbacks;
 #[doc(hidden)]
 pub use crate::ops::imageops::pad_with_preflight as imageops_pad_with_preflight;
 #[doc(hidden)]
@@ -596,6 +661,8 @@ pub use crate::ops::transform::PreparedTransformOutput;
 pub use crate::ops::transform::TransformMeshAccumulator;
 pub use crate::ops::transform::TransformData;
 pub use crate::ops::transform::TransformFill;
+#[doc(hidden)]
+pub use crate::ops::transform::transform_resample_public_error;
 pub use crate::ops::transpose::TransposeInput;
 pub use crate::ops::transpose::normalize_transpose_input;
 pub use crate::ops::transpose::normalize_transposed_font_input;
@@ -661,6 +728,12 @@ pub use crate::font::public_api::imagefont_text_bbox_bytes;
 pub use crate::font::public_api::imagefont_text_split_positions;
 
 #[doc(hidden)]
+pub use crate::font::public_api::imagefont_text_split_positions_input;
+
+#[doc(hidden)]
+pub use crate::font::public_api::imagefont_text_layout_bbox_input;
+
+#[doc(hidden)]
 pub use crate::font::public_api::imagefont_text_layout_bbox;
 
 #[doc(hidden)]
@@ -697,7 +770,11 @@ pub use crate::font::public_api::imagefont_getlength;
 
 pub use crate::font::public_api::imagefont_native_getlength_26dot6;
 
+pub use crate::font::public_api::imagefont_native_getlength_26dot6_input;
+
 pub use crate::font::public_api::imagefont_native_getsize;
+
+pub use crate::font::public_api::imagefont_native_getsize_input;
 
 pub use crate::font::public_api::imagefont_native_render;
 
@@ -807,144 +884,3 @@ pub use crate::font::public_api::imagefont_get_transposed_mask_input;
 
 #[cfg(feature = "test-api")]
 pub use crate::font::public_api::imagefont_render_text_binary;
-
-/// Public executor capability summary for one registered operation.
-#[cfg(feature = "test-api")]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct BackendSupportEntry {
-    /// CPU mode/architecture strategy entry marker.
-    pub cpu_fn: Option<()>,
-    /// GPU shader name when the operation has a shader.
-    pub gpu_shader: Option<&'static str>,
-    /// GPU shader source marker.
-    pub gpu_source: Option<()>,
-}
-
-/// Returns the backend capability registry as explicit public summary data.
-#[cfg(feature = "test-api")]
-pub fn backend_support_registry() -> Result<BTreeMap<&'static str, BackendSupportEntry>, PilError> {
-    Ok(crate::compute::registry::registry()?
-        .iter()
-        .map(|(name, entry)| {
-            (
-                *name,
-                BackendSupportEntry {
-                    cpu_fn: entry.cpu_fn.map(|_| ()),
-                    gpu_shader: {
-                        #[cfg(feature = "gpu")]
-                        {
-                            entry.gpu_shader
-                        }
-                        #[cfg(not(feature = "gpu"))]
-                        {
-                            None
-                        }
-                    },
-                    gpu_source: {
-                        #[cfg(feature = "gpu")]
-                        {
-                            entry.gpu_source.map(|_| ())
-                        }
-                        #[cfg(not(feature = "gpu"))]
-                        {
-                            None
-                        }
-                    },
-                },
-            )
-        })
-        .collect())
-}
-
-/// Returns whether CPU declares support for a pipeline operation.
-#[cfg(feature = "test-api")]
-pub fn backend_cpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
-    crate::compute::registry::cpu_supports(op)
-}
-
-/// Returns whether the legacy SIMD request alias has a CPU operation entry.
-#[cfg(feature = "test-api")]
-pub fn backend_simd_supports(op: &PipelineOp) -> Result<bool, PilError> {
-    crate::compute::registry::cpu_supports(op)
-}
-
-/// Returns whether GPU declares support for a pipeline operation.
-#[cfg(feature = "test-api")]
-pub fn backend_gpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
-    #[cfg(feature = "gpu")]
-    {
-        crate::compute::registry::gpu_supports(op)
-    }
-    #[cfg(not(feature = "gpu"))]
-    {
-        let _ = op;
-        Ok(false)
-    }
-}
-
-/// Returns the backend support matrix as deterministic pretty JSON.
-#[cfg(feature = "test-api")]
-pub fn backend_support_matrix_json() -> Result<String, PilError> {
-    let registry = backend_support_registry()?;
-    let operations = registry
-        .iter()
-        .map(|(name, entry)| {
-            format!(
-                "{{\"operation\":\"{name}\",\"cpu\":{},\"gpu_shader\":{}}}",
-                entry.cpu_fn.is_some(),
-                entry.gpu_shader.is_some()
-            )
-        })
-        .collect::<Vec<_>>();
-    let counts = backend_support_matrix_counts(&registry);
-
-    let operations_json = operations
-        .iter()
-        .map(|entry| entry.to_string())
-        .collect::<Vec<_>>()
-        .join(",\n    ");
-
-    Ok(format!(
-        concat!(
-            "{{\n",
-            "  \"totals\": {{\n",
-            "    \"operations\": {operations},\n",
-            "    \"cpu\": {cpu},\n",
-            "    \"gpu_shader\": {gpu_shader}\n",
-            "  }},\n",
-            "  \"operations\": [\n",
-            "    {operations_json}\n",
-            "  ]\n",
-            "}}"
-        ),
-        operations = registry.len(),
-        cpu = counts.cpu,
-        gpu_shader = counts.gpu_shader,
-        operations_json = operations_json
-    ))
-}
-
-#[cfg(feature = "test-api")]
-struct BackendSupportMatrixCounts {
-    cpu: usize,
-    gpu_shader: usize,
-}
-
-#[cfg(feature = "test-api")]
-fn backend_support_matrix_counts(
-    registry: &BTreeMap<&'static str, BackendSupportEntry>,
-) -> BackendSupportMatrixCounts {
-    let cpu = registry
-        .values()
-        .filter(|entry| entry.cpu_fn.is_some())
-        .count();
-    let gpu_shader = registry
-        .values()
-        .filter(|entry| entry.gpu_shader.is_some())
-        .count();
-
-    BackendSupportMatrixCounts {
-        cpu,
-        gpu_shader,
-    }
-}

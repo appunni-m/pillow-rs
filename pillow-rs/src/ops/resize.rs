@@ -1,7 +1,7 @@
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::{PipelineOp, ResampleFilter};
-use crate::raster::{GenericImageView, Mode};
+use crate::raster::{Mode};
 
 mod reducing_gap;
 use reducing_gap::apply_reducing_gap;
@@ -150,7 +150,7 @@ impl Image {
     /// Resizes a floating source region, optionally reducing by integer factors first.
     ///
     /// `reducing_gap` follows Pillow: values below one are invalid, and
-    /// nearest/indexed and filtered LA/RGBA paths ignore a valid gap.
+    /// nearest resampling plus filtered LA/RGBA paths ignore a valid gap.
     ///
     /// # Errors
     ///
@@ -174,16 +174,16 @@ impl Image {
             // Keep the shared decode cache without cloning the pixel buffer.
             self.materialized_shared()?;
         }
-        let (w, h) = positive_dimensions(size, "height and width must be > 0")?;
         let (source_w, source_h) = self.size()?;
         let mode = self.mode_identity()?;
         let full_box = (0.0, 0.0, f64::from(source_w), f64::from(source_h));
         let mut bounds = box_coords.unwrap_or(full_box);
-        if (w, h) == (source_w, source_h) && bounds == full_box {
+        if size == (i64::from(source_w), i64::from(source_h)) && bounds == full_box {
             // The resize executors already copy identity geometry before
             // filtering. Retain their ordinary backend execution boundary.
-            return self.resize_with_filter((w, h), filter, mode);
+            return self.resize_with_filter((source_w, source_h), filter, mode);
         }
+        let (w, h) = positive_dimensions(size, "height and width must be > 0")?;
         if matches!(mode, Mode::One | Mode::ImagePalette8) {
             filter = ResampleFilter::Nearest;
         }
@@ -291,7 +291,7 @@ impl Image {
             return Ok(None);
         }
         let dimensions = Self::thumbnail_dimensions(size, source_size)?;
-        if dimensions == (0, 0) || dimensions == source_size {
+        if dimensions == source_size {
             return Ok(None);
         }
         Ok(Some(ThumbnailPlan { dimensions }))
@@ -306,8 +306,8 @@ impl Image {
 
     /// Queues an in-place Pillow-style thumbnail resize from public input.
     ///
-    /// Indexed modes, including `"PA"`, force nearest sampling to preserve the
-    /// raw sample layout.
+    /// Bilevel and `"P"` modes force nearest sampling; `"PA"` uses the
+    /// requested filter.
     ///
     /// # Errors
     ///
@@ -372,6 +372,18 @@ impl Image {
         if source_size == dimensions {
             return Ok(());
         }
+        if dimensions.0 == 0 || dimensions.1 == 0 {
+            // Pillow's resize reaches reducing-gap division before the native
+            // resize rejects a zero target dimension, except in modes whose
+            // resize strategy forces nearest-neighbor sampling.
+            let mode = self.materialized_shared()?.mode();
+            let effective_filter =
+                crate::compute::pool_cpu::ops::resize::ops::effective_filter(mode, filter);
+            if reducing_gap.is_some() && effective_filter != ResampleFilter::Nearest {
+                return Err(PilError::ZeroDivisionError("division by zero".into()));
+            }
+            return Err(PilError::ValueError("height and width must be > 0".into()));
+        }
         if source_size.0 == 0 || source_size.1 == 0 {
             // Pillow's aspect-preserving size can be positive even when the
             // source has a zero dimension. Its subsequent Image.resize call
@@ -403,9 +415,8 @@ impl Image {
         mode: Mode,
         reducing_gap: Option<f64>,
     ) -> Result<(), PilError> {
-        // PIL forces NEAREST for indexed samples, including PA's raw
-        // index/alpha pairs, to preserve the sample layout.
-        if matches!(mode, Mode::One | Mode::ImagePalette8 | Mode::ImagePaletteAlpha8) {
+        // Pillow's resize path forces NEAREST only for bilevel and P images.
+        if matches!(mode, Mode::One | Mode::ImagePalette8) {
             *filter = ResampleFilter::Nearest;
         }
         let new_self = Image::push_op(
@@ -433,16 +444,21 @@ impl Image {
         if source_width == 0 {
             return Self::thumbnail_dimensions_zero_width(size);
         }
-        // Pillow evaluates x / y before it rejects a negative width. Preserve
-        // its division error for requests containing a zero dimension.
-        if size.0 == 0 || size.1 == 0 {
-            if size.0 == 0 && size.1 == 0 && source_width == 0 && source_height == 0 {
-                return Ok((0, 0));
-            }
+        // Pillow evaluates x / y before rejecting a negative width. A zero
+        // requested height therefore fails here, while a zero width remains
+        // valid geometry and reaches Image.resize's load/size checks.
+        if size.1 == 0 {
             return Err(PilError::ZeroDivisionError("division by zero".into()));
         }
         if size.0 < 0 {
             return Err(PilError::ValueError("scale must be > 0".into()));
+        }
+        if size.1 < 0 {
+            let width = thumbnail_bound(size.0);
+            return Ok((
+                width,
+                Self::thumbnail_height_for_width(width, (source_width, source_height))?,
+            ));
         }
 
         // Pillow accepts arbitrarily large positive bounds for thumbnail and
@@ -455,12 +471,6 @@ impl Image {
         } else {
             requested_width.min(source_width)
         };
-        if size.1 < 0 {
-            return Ok((
-                width,
-                Self::thumbnail_height_for_width(width, (source_width, source_height))?,
-            ));
-        }
         let requested_height = thumbnail_bound(size.1);
         let height = if source_height == 0 {
             // Pillow raises ZeroDivisionError for a positive thumbnail bound

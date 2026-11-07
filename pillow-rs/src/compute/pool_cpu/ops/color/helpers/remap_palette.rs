@@ -53,11 +53,11 @@ fn inverse_map(dest_map: &[u8]) -> [u8; 256] {
 fn native_lut_chunk(input: u8x16, tables: &[u8x16; 16]) -> u8x16 {
     let low = input & u8x16::splat(0x0f);
     let high: u8x16 = input >> 4u32;
-    let mut output = tables[0].swizzle_relaxed(low);
+    let mut output = tables[0].shuffle(low);
     for (index, table) in tables.iter().enumerate().skip(1) {
         let selected = high
             .simd_eq(u8x16::splat(index as u8))
-            .select(table.swizzle_relaxed(low), output);
+            .select(table.shuffle(low), output);
         output = selected;
     }
     output

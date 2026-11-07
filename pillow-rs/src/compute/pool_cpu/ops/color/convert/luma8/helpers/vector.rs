@@ -38,7 +38,7 @@ fn identity(source: &GrayImage) -> Result<DynamicImage, PilError> {
         let lanes = std::array::from_fn(|lane| {
             source.as_raw().get(start + lane).copied().unwrap_or(0)
         });
-        let block = u8x16::new(lanes).swizzle_relaxed(IDENTITY_LANES).to_array();
+        let block = u8x16::new(lanes).shuffle(IDENTITY_LANES).to_array();
         output.extend_from_slice(&block[..active]);
         blocks = blocks.saturating_add(1);
     }

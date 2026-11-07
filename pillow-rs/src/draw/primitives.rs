@@ -1,6 +1,7 @@
 use super::{
-    Draw, DrawBoxInput, DrawPointsInput, RegularPolygonCircle, RegularPolygonSides,
-    normalize_draw_point_input, normalize_draw_points, normalize_rounded_rectangle_box,
+    normalize_draw_point_input, normalize_draw_points, normalize_draw_points_f64,
+    normalize_rounded_rectangle_box, pillow_path_coordinate_to_i32, Draw, DrawBoxInput,
+    DrawCurveJointPlan, DrawPointsInput, RegularPolygonCircle, RegularPolygonSides,
 };
 use crate::error::PilError;
 use crate::image::Image;
@@ -88,96 +89,90 @@ impl Draw {
         width: u32,
         joint: Option<&str>,
     ) -> Result<(), PilError> {
-        let points = normalize_draw_points(input, true)?;
+        let points = normalize_draw_points(input.clone(), true)?;
         if points.len() < 2 {
             return Ok(());
         }
         self.polyline(&points, fill, width)?;
+        if joint == Some("curve") && width > 4 {
+            let joint_points = normalize_draw_points_f64(input, true)?;
+            self.draw_curve_joints(&joint_points, fill, width)?;
+        }
+        Ok(())
+    }
 
-        // This mirrors ImageDraw.ImageDraw.line's Python-level implementation:
-        // the native draw_lines call paints the segments first, then curve
-        // joints are filled with pieslices. Widths up to four intentionally
-        // retain the native line-only behavior.
-        if joint != Some("curve") || width <= 4 {
+    /// Plans Pillow's joint strategy from angles calculated by the host API.
+    #[doc(hidden)]
+    pub fn curve_joint_plan_from_angles(
+        &self,
+        angles: [f64; 2],
+    ) -> Option<DrawCurveJointPlan> {
+        DrawCurveJointPlan::from_angles(angles)
+    }
+
+    fn draw_curve_joints(
+        &mut self,
+        points: &[(f64, f64)],
+        fill: (u8, u8, u8, u8),
+        width: u32,
+    ) -> Result<(), PilError> {
+        if points.len() < 3 {
             return Ok(());
         }
-
-        let width_f = f64::from(width);
         for window in points.windows(3) {
-            let [start, point, end] = [window[0], window[1], window[2]];
-            let angles = [
-                f64::from(point.0 - start.0)
-                    .atan2(f64::from(start.1 - point.1))
-                    .to_degrees()
-                    .rem_euclid(360.0),
-                f64::from(end.0 - point.0)
-                    .atan2(f64::from(point.1 - end.1))
-                    .to_degrees()
-                    .rem_euclid(360.0),
-            ];
-            if angles[0] == angles[1] {
+            let Some(plan) = DrawCurveJointPlan::from_points(window[0], window[1], window[2])
+            else {
                 continue;
-            }
-
-            let flipped = (angles[1] > angles[0] && angles[1] - 180.0 > angles[0])
-                || (angles[1] < angles[0] && angles[1] + 180.0 > angles[0]);
-            let coords = (
-                (f64::from(point.0) - width_f / 2.0 + 1.0) as i32,
-                (f64::from(point.1) - width_f / 2.0 + 1.0) as i32,
-                (f64::from(point.0) + width_f / 2.0 - 1.0) as i32,
-                (f64::from(point.1) + width_f / 2.0 - 1.0) as i32,
-            );
-            let (start_angle, end_angle) = if flipped {
-                (angles[1] + 90.0, angles[0] + 90.0)
-            } else {
-                (angles[0] - 90.0, angles[1] - 90.0)
             };
-            self.pieslice(
-                coords.0,
-                coords.1,
-                coords.2,
-                coords.3,
-                start_angle - 90.0,
-                end_angle - 90.0,
-                Some(fill),
-                None,
-                1,
-            )?;
+            self.draw_curve_joint(plan, window[1], fill, width)?;
+        }
+        Ok(())
+    }
 
-            if width > 8 {
-                let distance = width_f / 2.0 - 1.0;
-                let coord_at_angle = |angle: f64| {
-                    let angle = (angle - 90.0).to_radians();
-                    let dx = distance * angle.cos();
-                    let dy = distance * angle.sin();
-                    let adjust = |coordinate: f64, delta: f64| {
-                        coordinate
-                            + if delta > 0.0 {
-                                delta.floor()
-                            } else {
-                                delta.ceil()
-                            }
-                    };
-                    (
-                        adjust(f64::from(point.0), dx) as i32,
-                        adjust(f64::from(point.1), dy) as i32,
-                    )
-                };
-                let gap_points = if flipped {
-                    vec![
-                        coord_at_angle(angles[0] + 90.0),
-                        point,
-                        coord_at_angle(angles[1] + 90.0),
-                    ]
-                } else {
-                    vec![
-                        coord_at_angle(angles[0] - 90.0),
-                        point,
-                        coord_at_angle(angles[1] - 90.0),
-                    ]
-                };
-                self.polyline(&gap_points, fill, 3)?;
-            }
+    fn draw_curve_joint(
+        &mut self,
+        plan: DrawCurveJointPlan,
+        center: (f64, f64),
+        fill: (u8, u8, u8, u8),
+        width: u32,
+    ) -> Result<(), PilError> {
+        let (bounds, start, end) = plan.pieslice(center, width);
+        let coords = (
+            pillow_path_coordinate_to_i32(bounds[0].0),
+            pillow_path_coordinate_to_i32(bounds[0].1),
+            pillow_path_coordinate_to_i32(bounds[1].0),
+            pillow_path_coordinate_to_i32(bounds[1].1),
+        );
+        self.pieslice(
+            coords.0,
+            coords.1,
+            coords.2,
+            coords.3,
+            start,
+            end,
+            Some(fill),
+            None,
+            1,
+        )?;
+
+        if width > 8 {
+            let distance = f64::from(width) / 2.0 - 1.0;
+            let offsets = plan.gap_offsets(distance);
+            let gap_points = [
+                (
+                    pillow_path_coordinate_to_i32(center.0 + f64::from(offsets[0].0)),
+                    pillow_path_coordinate_to_i32(center.1 + f64::from(offsets[0].1)),
+                ),
+                (
+                    pillow_path_coordinate_to_i32(center.0),
+                    pillow_path_coordinate_to_i32(center.1),
+                ),
+                (
+                    pillow_path_coordinate_to_i32(center.0 + f64::from(offsets[1].0)),
+                    pillow_path_coordinate_to_i32(center.1 + f64::from(offsets[1].1)),
+                ),
+            ];
+            self.polyline(&gap_points, fill, 3)?;
         }
         Ok(())
     }
@@ -305,6 +300,40 @@ impl Draw {
                 fill,
                 outline,
                 width: _width,
+                outline_width: None,
+                alpha_blend_rgb: self.alpha_blend_rgb(),
+            },
+        );
+        Ok(())
+    }
+
+    /// Validate the coordinate input used by Pillow's intermediate polygon mask.
+    #[doc(hidden)]
+    pub fn prepare_polygon_mask_input(&self, input: DrawPointsInput) -> Result<(), PilError> {
+        normalize_draw_points(input, false).map(|_| ())
+    }
+
+    /// Draw a polygon outline using Pillow's already-transformed signed C width.
+    #[doc(hidden)]
+    pub fn polygon_outline_with_input(
+        &mut self,
+        input: DrawPointsInput,
+        outline: Option<(u8, u8, u8, u8)>,
+        outline_width: i32,
+    ) -> Result<(), PilError> {
+        let points = normalize_draw_points(input, false)?;
+        let (_, outline) = self.shape_inks(None, outline)?;
+        if points.len() < 2 || outline.is_none() {
+            return Ok(());
+        }
+        self.image = Image::push_op(
+            &self.image,
+            PipelineOp::DrawPolygon {
+                points: points.into(),
+                fill: None,
+                outline,
+                width: 0,
+                outline_width: Some(outline_width),
                 alpha_blend_rgb: self.alpha_blend_rgb(),
             },
         );
@@ -334,19 +363,17 @@ impl Draw {
         self.shape(&points, fill, outline)
     }
 
-    /// Draws a regular polygon from Pillow's bounding-circle representation.
+    /// Computes Pillow's regular-polygon vertices without drawing them.
     ///
-    /// Vertex generation, Pillow's two-decimal rounding, and side-count
-    /// validation live in core so every binding uses the same geometry.
-    pub fn regular_polygon(
-        &mut self,
+    /// Keeping geometry separate lets the Python facade preserve Pillow's
+    /// order: compute vertices first, then dispatch through the public
+    /// overridable `ImageDraw.polygon` method.
+    pub fn regular_polygon_vertices(
+        &self,
         bounding_circle: RegularPolygonCircle,
         n_sides: RegularPolygonSides,
         rotation: f64,
-        fill: Option<(u8, u8, u8, u8)>,
-        outline: Option<(u8, u8, u8, u8)>,
-        width: u32,
-    ) -> Result<(), PilError> {
+    ) -> Result<Vec<(i32, i32)>, PilError> {
         let n_sides = match n_sides {
             RegularPolygonSides::Value(value) if value > 2 => usize::try_from(value)
                 .map_err(|_| PilError::ValueError("n_sides should be an int > 2".into()))?,
@@ -379,6 +406,23 @@ impl Draw {
             let y = ((radius * theta.sin() + cy) * 100.0).round() / 100.0;
             points.push((x as i32, y as i32));
         }
+        Ok(points)
+    }
+
+    /// Draws a regular polygon from Pillow's bounding-circle representation.
+    ///
+    /// Vertex generation, Pillow's two-decimal rounding, and side-count
+    /// validation live in core so every binding uses the same geometry.
+    pub fn regular_polygon(
+        &mut self,
+        bounding_circle: RegularPolygonCircle,
+        n_sides: RegularPolygonSides,
+        rotation: f64,
+        fill: Option<(u8, u8, u8, u8)>,
+        outline: Option<(u8, u8, u8, u8)>,
+        width: u32,
+    ) -> Result<(), PilError> {
+        let points = self.regular_polygon_vertices(bounding_circle, n_sides, rotation)?;
         self.polygon(&points, fill, outline, width)
     }
 
@@ -448,5 +492,57 @@ impl Draw {
     ) -> Result<(), PilError> {
         let (x0, y0, x1, y1) = normalize_rounded_rectangle_box(input)?;
         self.rounded_rectangle(x0, y0, x1, y1, radius, fill, outline, width)
+    }
+
+    /// Normalizes and draws a rounded rectangle with selected corners.
+    #[allow(clippy::too_many_arguments)] // Mirrors ImageDraw's arguments plus corner selection.
+    pub fn rounded_rectangle_with_corners_input(
+        &mut self,
+        input: DrawBoxInput,
+        radius: f64,
+        fill: Option<(u8, u8, u8, u8)>,
+        outline: Option<(u8, u8, u8, u8)>,
+        width: u32,
+        corners: [bool; 4],
+        all_corners: bool,
+    ) -> Result<(), PilError> {
+        self.rounded_rectangle_with_corners_diameter_input(
+            input,
+            radius * 2.0,
+            fill,
+            outline,
+            width,
+            corners,
+            all_corners,
+        )
+    }
+
+    /// Normalizes and draws selected rounded-rectangle corners from an
+    /// adapter-computed diameter.
+    #[doc(hidden)]
+    #[allow(clippy::too_many_arguments)]
+    pub fn rounded_rectangle_with_corners_diameter_input(
+        &mut self,
+        input: DrawBoxInput,
+        diameter: f64,
+        fill: Option<(u8, u8, u8, u8)>,
+        outline: Option<(u8, u8, u8, u8)>,
+        width: u32,
+        corners: [bool; 4],
+        all_corners: bool,
+    ) -> Result<(), PilError> {
+        let (x0, y0, x1, y1) = normalize_rounded_rectangle_box(input)?;
+        self.rounded_rectangle_with_corners_diameter(
+            x0,
+            y0,
+            x1,
+            y1,
+            diameter,
+            fill,
+            outline,
+            width,
+            corners,
+            all_corners,
+        )
     }
 }

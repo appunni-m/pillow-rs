@@ -15,10 +15,3 @@ pub(crate) fn parse_pillow_mode(name: &str) -> Option<Mode> {
 pub(crate) const fn pillow_mode_name(mode: Mode) -> Option<&'static str> {
     mode.pillow_name()
 }
-
-pub(crate) const fn pillow_mode_name_opt(mode: Option<Mode>) -> Option<&'static str> {
-    match mode {
-        Some(mode) => pillow_mode_name(mode),
-        None => None,
-    }
-}

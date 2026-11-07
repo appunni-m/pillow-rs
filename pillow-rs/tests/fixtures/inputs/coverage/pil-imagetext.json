@@ -1,0 +1,35 @@
+{
+  "schema": "migration-parity/coverage-input@1",
+  "plans": [
+    {
+      "plan_id": "pil-imagetext.coverage-plan",
+      "covers": [
+        "PIL.ImageText.Text.behavior.default",
+        "PIL.ImageText.Text.parameter.text",
+        "PIL.ImageText.Text.parameter.font",
+        "PIL.ImageText.Text.parameter.mode",
+        "PIL.ImageText.Text.parameter.spacing",
+        "PIL.ImageText.Text.parameter.direction",
+        "PIL.ImageText.Text.parameter.features",
+        "PIL.ImageText.Text.parameter.language"
+      ],
+      "target_profile": "python-cpu",
+      "selectors": {
+        "parity_case_ids": [
+          "PIL.ImageText.Text.behavior.default",
+          "PIL.ImageText.Text.parameter.font",
+          "PIL.ImageText.Text.parameter.mode",
+          "PIL.ImageText.Text.parameter.spacing",
+          "PIL.ImageText.Text.parameter.direction",
+          "PIL.ImageText.Text.parameter.features",
+          "PIL.ImageText.Text.parameter.language"
+        ],
+        "command_ids": []
+      },
+      "component_ids": [
+        "image-text"
+      ],
+      "command_id": "coverage"
+    }
+  ]
+}

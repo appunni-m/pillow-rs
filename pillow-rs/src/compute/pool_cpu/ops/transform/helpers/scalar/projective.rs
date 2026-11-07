@@ -87,38 +87,16 @@ pub(in crate::compute::pool_cpu::ops::transform) fn transform_projective_scalar3
             "Scalar32 projective destination buffer shape mismatch".into(),
         ));
     }
-    let quad_coefficients = if quad {
-        if dst_w == 0 || dst_h == 0 {
-            None
-        } else {
-            let x0 = data[0];
-            let y0 = data[1];
-            let inverse_width = 1.0 / f64::from(dst_w);
-            let inverse_height = 1.0 / f64::from(dst_h);
-            Some([
-                x0,
-                (data[6] - x0) * inverse_width,
-                (data[2] - x0) * inverse_height,
-                (data[4] - data[2] - data[6] + x0) * inverse_width * inverse_height,
-                y0,
-                (data[7] - y0) * inverse_width,
-                (data[3] - y0) * inverse_height,
-                (data[5] - data[3] - data[7] + y0) * inverse_width * inverse_height,
-            ])
-        }
-    } else {
-        None
-    };
     let source_at = |dx: f64, dy: f64| -> Option<(f64, f64)> {
         let xin = dx + 0.5;
         let yin = dy + 0.5;
-        let (sx, sy) = if let Some(coefficients) = quad_coefficients {
-            let sx_linear = coefficients[1].mul_add(xin, coefficients[0]);
-            let sx_linear = coefficients[2].mul_add(yin, sx_linear);
-            let sx = (coefficients[3] * xin).mul_add(yin, sx_linear);
-            let sy_linear = coefficients[5].mul_add(xin, coefficients[4]);
-            let sy_linear = coefficients[6].mul_add(yin, sy_linear);
-            let sy = (coefficients[7] * xin).mul_add(yin, sy_linear);
+        let (sx, sy) = if quad {
+            let sx_linear = data[1].mul_add(xin, data[0]);
+            let sx_linear = data[2].mul_add(yin, sx_linear);
+            let sx = (data[3] * xin).mul_add(yin, sx_linear);
+            let sy_linear = data[5].mul_add(xin, data[4]);
+            let sy_linear = data[6].mul_add(yin, sy_linear);
+            let sy = (data[7] * xin).mul_add(yin, sy_linear);
             (sx, sy)
         } else {
             let denominator = data[6].mul_add(xin, data[7] * yin) + 1.0;

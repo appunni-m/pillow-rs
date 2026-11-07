@@ -1,8 +1,9 @@
 //! Public box and Gaussian blur orchestration.
 
-// TODO(pillow-rs#3ptb): freeze BoxBlur, BoxBlurXY, and GaussianBlur output and
-// selected/fallback receipts across declared exact modes and architectures in
-// CPU parity. Source comparison against the archived implementation is complete.
+// TODO(pillow-rs#3ptb): freeze BoxBlurXY output plus architecture/fallback
+// receipts for BoxBlur, BoxBlurXY, and GaussianBlur across declared modes.
+// Focused Pillow output covers L, LA, RGB, and RGBA under the current CPU
+// Architecture.
 
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;

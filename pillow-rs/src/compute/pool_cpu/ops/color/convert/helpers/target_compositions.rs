@@ -24,17 +24,18 @@ pub(crate) fn classify_target_composition(
     source: Mode,
     target: Mode,
 ) -> Option<OperationTargetComposition> {
+    let prepared_support = classify_mode(source);
     if source == Mode::ImageLaPremultiplied8
         && !matches!(target, Mode::ImageLaPremultiplied8 | Mode::ImageLumaA8)
         && prepared_support.scope_for_target(target).is_none()
     {
-        return Some(classify_convert_guard(source, target, classify_mode(source)));
+        return Some(classify_convert_guard(source, target, prepared_support));
     }
     if source != target && matches!(target, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8) {
-        return classify_palette_composition(source, target, classify_mode(source));
+        return classify_palette_composition(source, target, prepared_support);
     }
     if is_premultiplied_target(target) {
-        return classify_premultiplied_composition(source, target, classify_mode(source));
+        return classify_premultiplied_composition(source, target, prepared_support);
     }
     None
 }

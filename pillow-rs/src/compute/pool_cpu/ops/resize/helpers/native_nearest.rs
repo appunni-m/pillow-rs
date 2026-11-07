@@ -207,7 +207,7 @@ fn vector_block<const CHANNELS: usize>(
             indices[lane] = u8::try_from(source_pixel.checked_add(channel)?).ok()?;
         }
     }
-    Some(u8x16::new(source_bytes).swizzle_relaxed(u8x16::new(indices)).to_array())
+    Some(u8x16::new(source_bytes).shuffle(u8x16::new(indices)).to_array())
 }
 
 fn gather_block<const CHANNELS: usize>(

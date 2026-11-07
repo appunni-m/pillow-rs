@@ -66,8 +66,8 @@ fn load_block(bytes: &[u8; 64], offset: usize) -> u8x16 {
 
 fn append_la(output: &mut Vec<u8>, luma: u8x16, alpha: u8x16, active_pixels: usize) {
     let vectors = [LA_DUPLICATE_0, LA_DUPLICATE_1].map(|indices| {
-        ((luma.swizzle_relaxed(indices) & LA_LUMA_LANES)
-            | (alpha.swizzle_relaxed(indices) & LA_ALPHA_LANES))
+        ((luma.shuffle(indices) & LA_LUMA_LANES)
+            | (alpha.shuffle(indices) & LA_ALPHA_LANES))
             .to_array()
     });
     let first_pixels = active_pixels.min(8);

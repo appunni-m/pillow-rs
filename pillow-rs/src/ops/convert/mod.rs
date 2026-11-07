@@ -5,7 +5,6 @@ mod dispatch;
 mod input;
 mod luma16;
 mod mode;
-mod nonstandard;
 mod operation;
 mod palette;
 

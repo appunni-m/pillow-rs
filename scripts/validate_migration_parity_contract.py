@@ -490,6 +490,7 @@ def _validate_comparison(value: Any, path: str) -> None:
             "exact",
             "declared_only",
             "ignored",
+            "dynamic_icc_datetime",
             "dynamic_lab_icc_datetime",
         }:
             raise _error(f"{path}.comparison.metadata_mode", "unsupported metadata policy")
@@ -764,7 +765,11 @@ def _validate_descriptor(
             prior_steps,
             prior_image_steps,
         )
-        if (
+        if isinstance(literal, dict) and literal.get("protocol") == "falsey-font":
+            _validate_falsey_font_literal(literal, f"{path}.value")
+        elif isinstance(literal, dict) and literal.get("protocol") == "custom-font-mask":
+            _validate_custom_font_mask_literal(literal, f"{path}.value")
+        elif (
             isinstance(literal, dict)
             and literal.get("protocol") == "paste-convert-override"
         ):
@@ -794,6 +799,25 @@ def _validate_descriptor(
                 prior_steps,
                 prior_image_steps,
             )
+        elif (
+            isinstance(literal, dict)
+            and literal.get("protocol") == "font-metric-override"
+        ):
+            _validate_font_metric_override_literal(
+                literal,
+                f"{path}.value",
+                prior_steps,
+            )
+        elif (
+            isinstance(literal, dict)
+            and literal.get("protocol")
+            == "image-text-subclass-hook-override"
+        ):
+            _validate_image_text_subclass_hook_override_literal(
+                literal,
+                f"{path}.value",
+                prior_steps,
+            )
     elif kind == "asset":
         _exact(descriptor, {"kind", "asset_id"}, path)
         if descriptor["asset_id"] not in assets:
@@ -816,6 +840,40 @@ def _validate_descriptor(
         raise _error(f"{path}.kind", "unsupported value descriptor")
 
 
+def _descriptor_binding_steps(value: Any) -> set[str]:
+    """Collect workflow step references from a value descriptor tree."""
+
+    if isinstance(value, dict):
+        if value.get("protocol") == "paste-convert-override":
+            step_id = value.get("image_step_id")
+            return {step_id} if isinstance(step_id, str) else set()
+        if value.get("protocol") in DISPLAY_LITERAL_PROTOCOLS:
+            step_id = value.get("image_step_id")
+            return {step_id} if isinstance(step_id, str) else set()
+        if value.get("kind") == "binding":
+            step_id = value.get("step_id")
+            return {step_id} if isinstance(step_id, str) else set()
+        if value.get("kind") == "bindings":
+            step_ids = value.get("step_ids")
+            if isinstance(step_ids, list):
+                return {step_id for step_id in step_ids if isinstance(step_id, str)}
+            return set()
+        return set().union(
+            *(_descriptor_binding_steps(item) for item in value.values())
+        )
+    if isinstance(value, (list, tuple)):
+        return set().union(*(_descriptor_binding_steps(item) for item in value))
+    return set()
+
+
+def _step_binding_dependencies(step: dict[str, Any]) -> set[str]:
+    """Return the direct receiver and argument bindings for one workflow step."""
+
+    return _descriptor_binding_steps(step.get("receiver")) | _descriptor_binding_steps(
+        step.get("arguments", {})
+    )
+
+
 def _validate_paste_convert_override_literal(
     value: Any,
     path: str,
@@ -832,6 +890,103 @@ def _validate_paste_convert_override_literal(
         raise _error(f"{path}.image_step_id", "must reference an earlier workflow step")
     if image_step_id not in prior_image_steps:
         raise _error(f"{path}.image_step_id", "must reference an earlier image result")
+
+
+def _validate_falsey_font_literal(value: Any, path: str) -> None:
+    """Validate the input-only falsey custom Font protocol."""
+
+    value = _exact(value, {"protocol"}, path)
+    if value["protocol"] != "falsey-font":
+        raise _error(f"{path}.protocol", "unsupported falsey Font protocol")
+
+
+def _validate_custom_font_mask_literal(value: Any, path: str) -> None:
+    """Validate the input-only custom Font getmask2 result protocol."""
+
+    value = _mapping(value, path)
+    if value.get("protocol") != "custom-font-mask":
+        raise _error(f"{path}.protocol", "unsupported custom Font mask protocol")
+    if set(value) == {"protocol", "result_count"}:
+        if type(value["result_count"]) is not int or value["result_count"] not in {
+            0,
+            1,
+            3,
+        }:
+            raise _error(f"{path}.result_count", "expected 0, 1, or 3")
+        return
+    if set(value) == {"protocol", "duplicate_keyword"}:
+        if value["duplicate_keyword"] != "start":
+            raise _error(f"{path}.duplicate_keyword", "only the start collision is supported")
+        return
+    raise _error(path, "custom Font mask protocol fields do not match a supported case")
+
+
+def _validate_font_metric_override_literal(
+    value: Any,
+    path: str,
+    prior_steps: set[str],
+) -> None:
+    """Validate an input-only instance override for font metrics."""
+
+    value = _mapping(value, path)
+    allowed = {"protocol", "font_step_id", "method", "raise_on_call"}
+    if not {"protocol", "font_step_id"}.issubset(value) or set(value) - allowed:
+        raise _error(path, "unexpected font metric override fields")
+    if value["protocol"] != "font-metric-override":
+        raise _error(f"{path}.protocol", "unsupported font metric override protocol")
+    font_step_id = _string(value["font_step_id"], f"{path}.font_step_id")
+    if font_step_id not in prior_steps:
+        raise _error(f"{path}.font_step_id", "must reference an earlier workflow step")
+    method = _string(value.get("method", "getbbox"), f"{path}.method")
+    if method not in {"getbbox", "getlength"}:
+        raise _error(f"{path}.method", "unsupported font metric method")
+    if "raise_on_call" in value and (
+        type(value["raise_on_call"]) is not int or value["raise_on_call"] < 1
+    ):
+        raise _error(f"{path}.raise_on_call", "expected a positive integer")
+
+
+def _validate_image_text_subclass_hook_override_literal(
+    value: Any,
+    path: str,
+    prior_steps: set[str],
+) -> None:
+    """Validate an input-only Text subclass hook for ImageText.Text.wrap."""
+
+    value = _mapping(value, path)
+    allowed = {
+        "protocol",
+        "text_step_id",
+        "width",
+        "method",
+        "raise_on_call",
+        "y_offset",
+        "fontmode",
+    }
+    if not {"protocol", "text_step_id", "width"}.issubset(value) or set(value) - allowed:
+        raise _error(path, "unexpected ImageText subclass override fields")
+    if value["protocol"] != "image-text-subclass-hook-override":
+        raise _error(f"{path}.protocol", "unsupported ImageText subclass override")
+    text_step_id = _string(value["text_step_id"], f"{path}.text_step_id")
+    if text_step_id not in prior_steps:
+        raise _error(f"{path}.text_step_id", "must reference an earlier workflow step")
+    if type(value["width"]) is not int:
+        raise _error(f"{path}.width", "expected an integer")
+    method = _string(value.get("method", "_get_bbox"), f"{path}.method")
+    if method not in {"_get_bbox", "_get_fontmode", "_split"}:
+        raise _error(f"{path}.method", "unsupported ImageText subclass method")
+    if "y_offset" in value and method != "_split":
+        raise _error(f"{path}.y_offset", "only supported for _split override")
+    if "y_offset" in value and type(value["y_offset"]) is not int:
+        raise _error(f"{path}.y_offset", "expected an integer for _split override")
+    if "fontmode" in value and method != "_get_fontmode":
+        raise _error(f"{path}.fontmode", "only supported for _get_fontmode override")
+    if "fontmode" in value and value["fontmode"] not in {"1", "L", "RGBA"}:
+        raise _error(f"{path}.fontmode", "unsupported _get_fontmode result")
+    if "raise_on_call" in value and (
+        type(value["raise_on_call"]) is not int or value["raise_on_call"] < 1
+    ):
+        raise _error(f"{path}.raise_on_call", "expected a positive integer")
 
 
 def _validate_asset(asset: Any, path: str, asset_ids: set[str], fixture_root: Path | None) -> str:
@@ -1062,6 +1217,34 @@ def _literal_type(value: Any) -> str:
             # The runner returns the referenced public Image after attaching
             # an input-only convert() override, so this value is an image.
             return "image"
+        if (
+            protocol == "font-metric-override"
+            and isinstance(value.get("font_step_id"), str)
+            and bool(value["font_step_id"])
+        ):
+            # The runner mutates the referenced public font instance and
+            # returns it as a Text or Draw operation font value.
+            return "font"
+        if protocol == "falsey-font" and set(value) == {"protocol"}:
+            # The runner materializes a custom falsey Font accepted by the
+            # public method and used by ImageDraw's fallback path.
+            return "font"
+        if protocol == "custom-font-mask" and (
+            set(value) == {"protocol", "result_count"}
+            or set(value) == {"protocol", "duplicate_keyword"}
+        ):
+            # The runner materializes a truthy custom Font whose mask method
+            # exercises the public Draw callback protocol.
+            return "font"
+        if (
+            protocol == "image-text-subclass-hook-override"
+            and isinstance(value.get("text_step_id"), str)
+            and bool(value["text_step_id"])
+            and type(value.get("width")) is int
+        ):
+            # The runner attaches an override to the referenced Text object
+            # and returns the configured value as the wrap width.
+            return "integer"
         if protocol == "image-with-info":
             size = value.get("size")
             assignment = value.get("assignment", "update")
@@ -1237,6 +1420,80 @@ def _reject_output_fields(value: Any, path: str) -> None:
             _reject_output_fields(child, f"{path}[{index}]")
 
 
+def _validate_independent_error_continuation(
+    case: dict[str, Any],
+    path: str,
+    verification: str,
+    surface: str,
+    operation: str,
+    steps: list[dict[str, Any]],
+    step_map: dict[str, dict[str, Any]],
+    observations: list[str],
+) -> None:
+    """Validate opt-in continuation after a public workflow error."""
+
+    if case["continue_independent_steps_after_error"] is not True:
+        raise _error(
+            f"{path}.continue_independent_steps_after_error",
+            "when present, this field must be true",
+        )
+    if verification != "parity":
+        raise _error(
+            f"{path}.continue_independent_steps_after_error",
+            "independent continuation is supported only for parity cases",
+        )
+    primary_step = step_map.get("call")
+    if primary_step is None or (
+        primary_step["surface"], primary_step["operation"]
+    ) != (surface, operation):
+        raise _error(
+            f"{path}.continue_independent_steps_after_error",
+            "requires the primary operation at step 'call'",
+        )
+    if "call" not in observations:
+        raise _error(
+            f"{path}.continue_independent_steps_after_error",
+            "the primary 'call' step must be observed",
+        )
+
+    step_positions = {
+        step["step_id"]: index for index, step in enumerate(steps)
+    }
+    call_index = step_positions["call"]
+    dependency_map = {
+        step["step_id"]: _step_binding_dependencies(step) for step in steps
+    }
+
+    def depends_on_call(step_id: str) -> bool:
+        pending = list(dependency_map[step_id])
+        visited: set[str] = set()
+        while pending:
+            dependency = pending.pop()
+            if dependency == "call":
+                return True
+            if dependency in visited:
+                continue
+            visited.add(dependency)
+            pending.extend(dependency_map.get(dependency, ()))
+        return False
+
+    later_observations = [
+        step_id
+        for step_id in observations
+        if step_positions[step_id] > call_index
+    ]
+    if not later_observations:
+        raise _error(
+            f"{path}.continue_independent_steps_after_error",
+            "requires an observed step after the primary call",
+        )
+    if any(depends_on_call(step_id) for step_id in later_observations):
+        raise _error(
+            f"{path}.observations",
+            "post-error observations must not depend on the failed primary call",
+        )
+
+
 def _validate_parity_document(document: Any, relative: str, operation_index: dict[tuple[str, str], dict[str, Any]], requirement_index: dict[str, dict[str, Any]], fixture_root: Path, item_ids: set[str], fault_points: dict[str, dict[str, Any]], fault_contracts: dict[str, dict[str, Any]]) -> None:
     document = _exact(document, {"schema", "cases"}, relative)
     _reject_output_fields(document, relative)
@@ -1244,7 +1501,19 @@ def _validate_parity_document(document: Any, relative: str, operation_index: dic
         path = f"{relative}.cases[{index}]"
         case = _optional_exact(
             case,
-            {"case_id", "surface", "operation", "covers", "assets", "steps", "observations", "comparisons", "verification", "fault"},
+            {
+                "case_id",
+                "surface",
+                "operation",
+                "covers",
+                "assets",
+                "steps",
+                "observations",
+                "comparisons",
+                "verification",
+                "fault",
+                "continue_independent_steps_after_error",
+            },
             path,
         )
         required_case_keys = {"case_id", "surface", "operation", "covers", "assets", "steps", "observations"}
@@ -1393,6 +1662,17 @@ def _validate_parity_document(document: Any, relative: str, operation_index: dic
             raise _error(f"{path}.observations", "a parity case must observe at least one step")
         if any(observation not in step_ids for observation in observations):
             raise _error(f"{path}.observations", "unknown observed step")
+        if "continue_independent_steps_after_error" in case:
+            _validate_independent_error_continuation(
+                case,
+                path,
+                verification,
+                surface,
+                operation,
+                steps,
+                step_map,
+                observations,
+            )
         primary_observed = [step_id for step_id in observations if step_map[step_id]["surface"] == surface and step_map[step_id]["operation"] == operation]
         if not primary_observed:
             raise _error(f"{path}.observations", "primary operation must be observed")

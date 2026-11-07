@@ -24,7 +24,7 @@ pub(crate) fn execute(source: &RgbImage) -> Result<(Vec<u8>, u64), PilError> {
         let source_start = start * 3;
         let mut padded = [0u8; 16];
         padded[..input_len].copy_from_slice(&source.as_raw()[source_start..source_start + input_len]);
-        let block = u8x16::new(padded).swizzle_relaxed(IDENTITY_LANES).to_array();
+        let block = u8x16::new(padded).shuffle(IDENTITY_LANES).to_array();
         output.extend_from_slice(&block[..input_len]);
         vector_blocks = vector_blocks.saturating_add(1);
     }

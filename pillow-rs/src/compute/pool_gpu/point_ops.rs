@@ -80,7 +80,7 @@ fn extract_specialized_lut(op: &PipelineOp) -> Option<[u32; 256]> {
         whitepoint,
     } = op
     {
-        let channels = crate::compute::pool_cpu::ops::imageops::colorize_lut(
+        let channels = crate::compute::pool_cpu::ops::imageops::helpers::colorize::lookup_tables(
             black,
             white,
             *mid,

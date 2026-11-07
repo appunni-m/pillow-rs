@@ -15,7 +15,10 @@ pub(crate) fn require_default_architecture(
             "CPU Resize mode received a non-CPU execution context".into(),
         ));
     }
-    if implementation.operation != OperationId::Resize
+    if !matches!(
+        implementation.operation,
+        OperationId::Resize | OperationId::ResizeBoxed
+    )
         || selection.requested_architecture != context.architecture()
     {
         return Err(PilError::InternalError(
@@ -41,7 +44,10 @@ pub(crate) fn require_architecture(
             "CPU Resize mode received a non-CPU execution context".into(),
         ));
     }
-    if implementation.operation != OperationId::Resize
+    if !matches!(
+        implementation.operation,
+        OperationId::Resize | OperationId::ResizeBoxed
+    )
         || selection.requested_architecture != context.architecture()
     {
         return Err(PilError::InternalError(
@@ -82,7 +88,7 @@ pub(crate) fn resize_byte_nearest<T, const CHANNELS: usize>(
             "native-byte nearest Resize received an unsupported request".into(),
         ));
     }
-    let architecture = require_architecture(context, selection)?;
+    require_architecture(context, selection)?;
     match architecture {
         #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
         Architecture::Sse2 => (),
@@ -127,7 +133,7 @@ pub(crate) fn resize_byte_native<T, const CHANNELS: usize>(
         require_default_architecture(context, selection)?;
         return default();
     }
-    let architecture = require_architecture(context, selection)?;
+    let _architecture = require_architecture(context, selection)?;
     let output = match (filter, bounds) {
         (ResampleFilter::Nearest, Some(bounds)) => super::native_nearest::execute_boxed::<CHANNELS>(
             source,

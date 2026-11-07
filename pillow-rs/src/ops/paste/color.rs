@@ -129,9 +129,9 @@ fn luma16_color(source: &PasteSource) -> Result<ResolvedPasteColor, PilError> {
     match source {
         PasteSource::Scalar(value) => Ok(ResolvedPasteColor::Luma16(u16::from(*value))),
         PasteSource::RawScalar(value) => {
-            let bytes = value.to_le_bytes();
+            let low_byte = value.to_le_bytes()[0];
             Ok(ResolvedPasteColor::Luma16(u16::from_le_bytes([
-                bytes[0], bytes[1],
+                low_byte, low_byte,
             ])))
         }
         _ => Err(bad_single_color()),

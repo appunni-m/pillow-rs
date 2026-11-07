@@ -8,6 +8,8 @@ use crate::compute::pool_cpu::ops as cpu_ops;
 pub enum OperationId {
     /// Draw one Pillow primitive directly into the mode-bearing raster.
     Draw,
+    /// Fill a four-connected region through Pillow's pixel-access contract.
+    FloodFill,
     /// A crop with coordinates normalized by the image API.
     Crop,
     /// Remove an equal border from all edges, allowing valid empty output.
@@ -219,6 +221,7 @@ impl OperationId {
     #[must_use]
     pub fn support(self) -> &'static OperationSupport {
         match self {
+            Self::FloodFill => &cpu_ops::draw::floodfill::ops::SUPPORT,
             Self::Draw
             | Self::Crop
             | Self::CropBorder

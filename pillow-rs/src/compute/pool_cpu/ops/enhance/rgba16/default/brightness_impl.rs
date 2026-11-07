@@ -1,7 +1,7 @@
 // NO_PILLOW_SUPPORT: ImageRgba16 is an internal native raster identity.
 use crate::compute::pool_cpu::ops::enhance::helpers::native;
 use crate::error::PilError;
-use crate::raster::{ImageBuffer, Rgba};
+use crate::raster::ImageBuffer;
 
 type Image = ImageBuffer<crate::raster::Rgba<u16>, Vec<u16>>;
 

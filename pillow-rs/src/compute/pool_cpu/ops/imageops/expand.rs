@@ -9,7 +9,6 @@ use crate::compute::registry::support::{
     ExpandFillRule,
     InputContract,
     ModeSupport,
-    OperationId,
     StrategySelection,
 };
 use crate::error::PilError;
@@ -95,8 +94,8 @@ pub(crate) fn prepare<'a>(
     prepare_image(image, border, fill, ctx)
 }
 
-// TODO(pillow-rs#3ptb): Freeze I;16 low-16-bit fill wrap, CoreOnly typed
-// component fills, and Default/lower-architecture fallback receipts in CPU parity.
+// TODO(pillow-rs#3ptb): Freeze CoreOnly typed component fills and
+// Default/lower-architecture fallback receipts in CPU parity.
 pub(crate) fn prepare_with_native_fill<'a>(
     image: &'a DynamicImage,
     border: crate::pipeline::ExpandMargins,

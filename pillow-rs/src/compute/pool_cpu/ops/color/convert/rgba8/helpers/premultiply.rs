@@ -40,7 +40,7 @@ fn alpha_lane_mask() -> u8x16 {
 }
 
 fn premultiply_block(input: u8x16) -> u8x16 {
-    let alpha = input.swizzle_relaxed(u8x16::new(alpha_indices()));
+    let alpha = input.shuffle(u8x16::new(alpha_indices()));
     let values = u16x16::from(input);
     let alpha = u16x16::from(alpha);
     let scaled = div255(values * alpha + u16x16::splat(127));

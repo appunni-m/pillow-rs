@@ -99,7 +99,7 @@ pub enum TransformMethod {
     Affine,
     /// Perspective transform with eight coefficients.
     Perspective,
-    /// Quadrilateral mapping.
+    /// Quadrilateral mapping with bilinear coefficients in the pipeline payload.
     Quad,
     /// Mesh transform made of local quadrilateral mappings.
     Mesh,

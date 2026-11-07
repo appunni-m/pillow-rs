@@ -2,21 +2,6 @@ use super::arcs::{draw_arc_on_canvas, draw_pieslice_on_canvas};
 use super::ellipse::draw_ellipse_on_canvas;
 use super::primitives::draw_rect_on_canvas;
 use crate::draw::DrawCanvas;
-use crate::error::PilError;
-
-pub(super) fn validate_rounded_rect(x0: i32, y0: i32, x1: i32, y1: i32) -> Result<(), PilError> {
-    if x1 < x0 {
-        return Err(PilError::ValueError(
-            "x1 must be greater than or equal to x0".to_owned(),
-        ));
-    }
-    if y1 < y0 {
-        return Err(PilError::ValueError(
-            "y1 must be greater than or equal to y0".to_owned(),
-        ));
-    }
-    Ok(())
-}
 
 /// Draw a rounded rectangle into an already-owned native canvas.
 ///
@@ -35,13 +20,15 @@ pub(super) fn draw_rounded_rect_on_canvas<C: DrawCanvas>(
     width: u32,
 ) {
     let mut diameter = radius * 2.0;
-    let full_x = diameter >= f64::from(x1 - x0 - 1);
+    let width_span = f64::from(x1) - f64::from(x0);
+    let height_span = f64::from(y1) - f64::from(y0);
+    let full_x = diameter >= width_span - 1.0;
     if full_x {
-        diameter = f64::from(x1 - x0);
+        diameter = width_span;
     }
-    let full_y = full_x && diameter >= f64::from(y1 - y0 - 1);
+    let full_y = diameter >= height_span - 1.0;
     if full_y {
-        diameter = f64::from(y1 - y0);
+        diameter = height_span;
     }
     if full_x && full_y {
         draw_ellipse_on_canvas(canvas, x0, y0, x1, y1, fill, outline, width);
@@ -52,8 +39,7 @@ pub(super) fn draw_rounded_rect_on_canvas<C: DrawCanvas>(
         return;
     }
 
-    let diameter = diameter as i32;
-    let radius = diameter / 2;
+    let radius = (diameter / 2.0).floor() as i32;
     let corners = rounded_rect_corners(x0, y0, x1, y1, diameter, full_x, full_y);
 
     if let Some(fill_color) = fill {
@@ -85,26 +71,82 @@ fn rounded_rect_corners(
     y0: i32,
     x1: i32,
     y1: i32,
-    diameter: i32,
+    diameter: f64,
     full_x: bool,
     full_y: bool,
 ) -> Vec<RoundedCorner> {
     if full_x {
         vec![
-            (x0, y0, x0 + diameter, y0 + diameter, 180.0, 360.0),
-            (x0, y1 - diameter, x0 + diameter, y1, 0.0, 180.0),
+            (
+                x0,
+                y0,
+                (f64::from(x0) + diameter) as i32,
+                (f64::from(y0) + diameter) as i32,
+                180.0,
+                360.0,
+            ),
+            (
+                x0,
+                (f64::from(y1) - diameter) as i32,
+                (f64::from(x0) + diameter) as i32,
+                y1,
+                0.0,
+                180.0,
+            ),
         ]
     } else if full_y {
         vec![
-            (x0, y0, x0 + diameter, y0 + diameter, 90.0, 270.0),
-            (x1 - diameter, y0, x1, y0 + diameter, 270.0, 90.0),
+            (
+                x0,
+                y0,
+                (f64::from(x0) + diameter) as i32,
+                (f64::from(y0) + diameter) as i32,
+                90.0,
+                270.0,
+            ),
+            (
+                (f64::from(x1) - diameter) as i32,
+                y0,
+                x1,
+                (f64::from(y0) + diameter) as i32,
+                270.0,
+                90.0,
+            ),
         ]
     } else {
         vec![
-            (x0, y0, x0 + diameter, y0 + diameter, 180.0, 270.0),
-            (x1 - diameter, y0, x1, y0 + diameter, 270.0, 360.0),
-            (x1 - diameter, y1 - diameter, x1, y1, 0.0, 90.0),
-            (x0, y1 - diameter, x0 + diameter, y1, 90.0, 180.0),
+            (
+                x0,
+                y0,
+                (f64::from(x0) + diameter) as i32,
+                (f64::from(y0) + diameter) as i32,
+                180.0,
+                270.0,
+            ),
+            (
+                (f64::from(x1) - diameter) as i32,
+                y0,
+                x1,
+                (f64::from(y0) + diameter) as i32,
+                270.0,
+                360.0,
+            ),
+            (
+                (f64::from(x1) - diameter) as i32,
+                (f64::from(y1) - diameter) as i32,
+                x1,
+                y1,
+                0.0,
+                90.0,
+            ),
+            (
+                x0,
+                (f64::from(y1) - diameter) as i32,
+                (f64::from(x0) + diameter) as i32,
+                y1,
+                90.0,
+                180.0,
+            ),
         ]
     }
 }

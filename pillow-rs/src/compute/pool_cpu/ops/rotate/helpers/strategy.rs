@@ -1,12 +1,12 @@
 //! Input facts and selection shared by Rotate mode declarations.
 
 use crate::compute::registry::support::{
-    ModeSupport, PaletteKnowledge, RequestFacts, StrategyInputs, StrategySelection,
+    ModeSupport, PaletteKnowledge, StrategyInputs, StrategySelection,
     SupportAssessment,
 };
 use crate::compute::ExecutionContext;
 use crate::error::PilError;
-use crate::raster::{GenericImageView, ImageBuffer, Pixel};
+use crate::raster::{ImageBuffer, Pixel};
 
 use super::super::ops::RotateRequest;
 

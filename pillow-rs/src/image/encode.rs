@@ -36,6 +36,9 @@ impl Image {
         let save_format = parse_format_str(format)?;
         let upper_format = format.to_ascii_uppercase();
         let mode = self.mode_identity()?;
+        // TODO(image-slash-star#nype): implement I (I32) → PNG encoding in
+        // the codec. `PIL.Image.Image.save.nuanced.i-png` currently succeeds
+        // in Pillow but the pinned encoder rejects ImageMode::I32.
         // Pillow's encoders reject unsupported mode/format combinations with
         // an OSError naming both; replicate the public messages exactly.
         let rejection = match upper_format.as_str() {

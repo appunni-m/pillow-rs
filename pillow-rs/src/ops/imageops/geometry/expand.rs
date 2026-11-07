@@ -1,4 +1,5 @@
 use crate::checked_dims::CheckedDims;
+use super::callbacks::{expand_geometry_values_with_callbacks, ImageOpsExpandCallbacks};
 use super::native_geometry_color_input;
 use crate::compute::registry::support::{ExpandFillRule, InputContract, ModeSupport, OperationId};
 use crate::error::PilError;
@@ -80,12 +81,16 @@ pub fn resolve_expand_fill_palette(
     }
     let source_palette = matches!(mode, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
         .then(|| (image.palette(), image.palette_alpha()));
-    if let ImageOpsColor::PaletteFill { index, palette } = &prepared.input {
+    let palette_fill = match &prepared.input {
+        ImageOpsColor::PaletteFill { index, palette } => Some((*index, palette.clone())),
+        _ => None,
+    };
+    if let Some((index, fill_palette)) = palette_fill {
         let (palette, palette_alpha) = match image.palette() {
             Some(palette) => (palette, image.palette_alpha()),
-            None => (palette.clone(), None),
+            None => (fill_palette, None),
         };
-        apply_expand_palette_fill(&mut prepared, *index, palette, palette_alpha);
+        apply_expand_palette_fill(&mut prepared, index, palette, palette_alpha);
     } else if let Some((index, palette, palette_alpha)) =
         resolve_expand_palette_fill(image, &prepared.input, prepared.fill_rule)?
     {
@@ -109,10 +114,14 @@ pub fn finish_expand_fill_palette_from_host(
         ));
     }
     if prepared.fill_rule == ExpandFillRule::PaletteIndexOrColor {
-        if let ImageOpsColor::PaletteFill { index, palette } = &prepared.input
-            && mode == Mode::ImagePalette8
-        {
-            apply_expand_palette_fill(&mut prepared, *index, palette.clone(), None);
+        let palette_fill = match &prepared.input {
+            ImageOpsColor::PaletteFill { index, palette } if mode == Mode::ImagePalette8 => {
+                Some((*index, palette.clone()))
+            }
+            _ => None,
+        };
+        if let Some((index, palette)) = palette_fill {
+            apply_expand_palette_fill(&mut prepared, index, palette, None);
         }
         if let Some(components) = super::color::palette_fill_components(&prepared.input)? {
             match mode {
@@ -146,6 +155,77 @@ pub fn finish_expand_fill_palette_from_host(
     }
     prepared.palette_resolved = true;
     Ok(prepared)
+}
+
+/// Runs Pillow ImageOps.expand sequencing through host callbacks and typed Rust strategies.
+#[doc(hidden)]
+pub fn expand_with_callbacks<C: ImageOpsExpandCallbacks>(
+    callbacks: &mut C,
+    border: &C::Value,
+    initial_fill: &C::Value,
+) -> Result<C::Output, C::Error>
+where
+    C::Error: From<PilError>,
+{
+    let (width, height, left, top) = expand_geometry_values_with_callbacks(callbacks, border)?;
+    drop(callbacks.expand_geometry_tuple(&width, &height, &left, &top)?);
+
+    let fill_mode = callbacks.image_mode()?;
+    let mut fill = initial_fill.clone();
+    if callbacks.value_is_string(&fill)? {
+        fill = callbacks.color_from_name(&fill, &fill_mode)?;
+    }
+
+    let source_palette = callbacks.image_palette()?;
+    let palette = if let Some(source_palette) = source_palette.as_ref() {
+        if callbacks.palette_is_truthy(source_palette)? {
+            let palette_mode = callbacks.palette_mode(source_palette)?;
+            let palette = callbacks.copy_palette(&palette_mode)?;
+            if callbacks.value_is_tuple(&fill)? {
+                let length = callbacks.value_tuple_length(&fill)?;
+                if matches!(length, 3 | 4) {
+                    fill = callbacks.palette_get_color(&palette, &fill)?;
+                }
+            }
+            Some((palette, palette_mode))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let target_mode = callbacks.image_mode()?;
+    let size = callbacks.size_pair(&width, &height)?;
+    if callbacks.size_is_negative(&size, 0)? || callbacks.size_is_negative(&size, 1)? {
+        return Err(PilError::ValueError("Width and height must be >= 0".into()).into());
+    }
+    let width = callbacks.size_component_as_c_int(&size, 0)?;
+    let height = callbacks.size_component_as_c_int(&size, 1)?;
+    if width < 0 || height < 0 {
+        return Err(PilError::ValueError("Width and height must be >= 0".into()).into());
+    }
+    let mode = callbacks.mode_identity(&target_mode)?;
+    let size = (width as u32, height as u32);
+    callbacks.run_core(move || validate_expand_output_size_for_mode(mode, size))?;
+
+    let input = callbacks.fill_input(mode, &fill)?;
+    let prepared = callbacks.run_core(move || {
+        let prepared = prepare_expand_fill_for_mode(mode, input)?;
+        finish_expand_fill_palette_from_host(mode, prepared)
+    })?;
+    let constructor = callbacks.capture_wrapper_constructor()?;
+    let canvas = callbacks
+        .run_core(move || expand_canvas_with_prepared_fill(size, &prepared))?;
+    let mut output = callbacks.wrap_canvas(&constructor, canvas)?;
+    if let Some((palette, palette_mode)) = palette {
+        if callbacks.palette_is_truthy(&palette)? {
+            callbacks.put_palette(&mut output, &palette, &palette_mode)?;
+        }
+    }
+    callbacks.paste(&mut output, &left, &top)?;
+    callbacks.load_output(&mut output)?;
+    Ok(output)
 }
 
 fn apply_expand_palette_fill(
@@ -364,18 +444,6 @@ fn expand_bytes_per_pixel(mode: Mode) -> Result<u8, PilError> {
         .ok_or_else(|| {
             PilError::InternalError("Expand support omitted its exact-mode dimensions".into())
         })
-}
-
-fn expand_trailing_margin(
-    output_extent: u32,
-    source_extent: u32,
-    leading_margin: i64,
-    axis: &str,
-) -> Result<i64, PilError> {
-    i64::try_from(
-        i128::from(output_extent) - i128::from(source_extent) - i128::from(leading_margin),
-    )
-    .map_err(|_| PilError::DimensionError(format!("expanded image {axis} is invalid")))
 }
 
 fn resolve_expand_palette_fill(

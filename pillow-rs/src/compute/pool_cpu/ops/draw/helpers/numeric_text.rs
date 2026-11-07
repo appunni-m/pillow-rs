@@ -1,5 +1,4 @@
 use crate::raster::RgbaImage;
-use crate::raster::{GenericImage, GenericImageView};
 
 /// Write the fill's raw four-byte sample when a numeric text pixel is covered.
 pub(crate) fn apply<const RGBA_MASK: bool>(

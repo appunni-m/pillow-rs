@@ -32,6 +32,10 @@ from pillow_rs import (
 from pillow_rs import imagechops as ImageChops
 from pillow_rs import imagecolor as ImageColor
 from pillow_rs import imagedraw as ImageDraw
+from pillow_rs import imagedraw2 as ImageDraw2
+# Pillow's ImageDraw2 module exposes the PIL.Image module it imports.
+ImageDraw2.Image = Image
+from pillow_rs import imagepath as ImagePath
 from pillow_rs import imageenhance as ImageEnhance
 from pillow_rs import imagefilter as ImageFilter
 from pillow_rs import imagefont as ImageFont
@@ -63,6 +67,8 @@ for _name, _module in {
     "ImageChops": ImageChops,
     "ImageColor": ImageColor,
     "ImageDraw": ImageDraw,
+    "ImageDraw2": ImageDraw2,
+    "ImagePath": ImagePath,
     "ImageEnhance": ImageEnhance,
     "ImageFilter": ImageFilter,
     "ImageFont": ImageFont,
@@ -83,6 +89,8 @@ __all__ = [
     "ImageChops",
     "ImageColor",
     "ImageDraw",
+    "ImageDraw2",
+    "ImagePath",
     "ImageEnhance",
     "ImageFilter",
     "ImageFont",

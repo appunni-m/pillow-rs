@@ -149,7 +149,9 @@ fn encode_samples<const CHANNELS: usize>(
     source: &RgbImage,
     mut encode: impl FnMut([u8; 3]) -> [u8; CHANNELS],
 ) -> Result<Vec<u8>, PilError> {
-    let dimensions = CheckedDims::new_allow_empty(source.width(), source.height(), CHANNELS)?;
+    let channels = u8::try_from(CHANNELS)
+        .map_err(|_| PilError::InternalError("LAB Convert channel count was invalid".into()))?;
+    let dimensions = CheckedDims::new_allow_empty(source.width(), source.height(), channels)?;
     let mut output = Vec::with_capacity(dimensions.total_bytes());
     for sample in super::super::helpers::to_srgb::srgb_pixels(source) {
         output.extend_from_slice(&encode(sample));

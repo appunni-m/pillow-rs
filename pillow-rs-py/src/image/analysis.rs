@@ -1,7 +1,11 @@
 use super::arrays::image_info_to_python;
 use crate::*;
+use pyo3::basic::CompareOp;
 use pyo3::pymethods;
 use pyo3::{pyfunction, wrap_pyfunction};
+
+// Pillow's ImagingGetColors table has no configured size greater than this.
+const GETCOLORS_MAX_TABLE_LIMIT: i32 = 1_073_741_824;
 
 #[pymethods]
 impl PyImage {
@@ -92,48 +96,124 @@ impl PyImage {
     ) -> PyResult<Vec<u32>> {
         let mask = image_analysis_mask_from_python(mask)?;
         if matches!(&mask, pillow_rs::ImageAnalysisMask::Invalid(_)) {
-            let image = slf.bind(py).borrow();
+            let inner = slf.bind(py).borrow().inner.clone();
             return py
-                .detach(|| image.inner.histogram_with_input(mask))
+                .detach(move || inner.histogram_with_input(mask))
                 .map_err(map_error);
         }
         let masked = matches!(&mask, pillow_rs::ImageAnalysisMask::Image(_));
         let mode = {
-            let image = slf.bind(py).borrow();
-            image.inner.mode_identity().map_err(map_error)?
+            slf.bind(py).borrow().inner.mode_identity().map_err(map_error)?
         };
         let extrema = histogram_extrema_from_python(extrema, mode, masked)?;
-        let image = slf.bind(py).borrow();
-        py.detach(|| image.inner.histogram_with_input_and_extrema(mask, extrema))
+        let inner = slf.bind(py).borrow().inner.clone();
+        py.detach(move || inner.histogram_with_input_and_extrema(mask, extrema))
             .map_err(map_error)
     }
 
     /// Return getcolors formatted as PIL expects.
+    #[pyo3(signature = (maxcolors=None, histogram_mode=None))]
     fn getcolors_formatted(
         slf: Py<Self>,
         maxcolors: Option<&Bound<'_, PyAny>>,
+        histogram_mode: Option<bool>,
         py: Python<'_>,
     ) -> PyResult<Option<Py<PyAny>>> {
-        let maxcolors = maxcolors
-            .map(|value| value.extract::<i32>())
-            .transpose()?
-            .unwrap_or(256);
-        let image = slf.bind(py).borrow();
-        let formatted = py
-            .detach(|| image.inner.getcolors_formatted_with_signed_limit(maxcolors))
-            .map_err(map_error)?;
-        Python::attach(|py| match formatted {
-            None => Ok(None),
-            Some(results) => Ok(Some(
-                PyList::new(
-                    py,
-                    results
-                        .into_iter()
-                        .map(|(count, color)| getcolors::PyGetColorsEntry { count, color }),
-                )?
-                .into_py_any(py)?,
-            )),
-        })
+        let inner = slf.bind(py).borrow().inner.clone();
+        let mode = inner.mode_identity().map_err(map_error)?;
+        let rust_histogram_mode = matches!(
+            mode,
+            pillow_rs::Mode::One
+                | pillow_rs::Mode::ImageLuma8
+                | pillow_rs::Mode::ImagePalette8
+        );
+        let histogram_mode = histogram_mode.unwrap_or(rust_histogram_mode);
+        let formatted = if histogram_mode && rust_histogram_mode {
+            // Keep this public operation on its GetColors support declaration;
+            // the exact-mode owners produce the same ascending histogram pairs.
+            py.detach({
+                let inner = inner.clone();
+                move || inner.getcolors_formatted(u32::MAX)
+            })
+                .map_err(map_error)?
+        } else if histogram_mode {
+            // A public mode override can select Pillow's histogram branch for
+            // a different underlying raster mode. Histogram supplies its first
+            // 256 bins, just as the public wrapper consumes them.
+            let histogram = py
+                .detach({
+                    let inner = inner.clone();
+                    move || inner.histogram()
+                })
+                .map_err(map_error)?;
+            Some(
+                histogram
+                    .into_iter()
+                    .take(256)
+                    .enumerate()
+                    .filter_map(|(index, count)| {
+                        (count > 0).then_some((
+                            count,
+                            pillow_rs::FormattedPixelValue::Scalar(index as u8),
+                        ))
+                    })
+                    .collect(),
+            )
+        } else {
+            // TODO(pillow-rs#3ptb): carry this public route through the core
+            // so a visible-mode override can force low-level ordering for an
+            // underlying 1/L/P raster.
+            let maxcolors = maxcolors
+                .map(|value| value.extract::<i32>())
+                .transpose()?
+                .unwrap_or(256);
+            let rejected_mode = matches!(
+                pillow_rs::OperationId::GetColors
+                    .support()
+                    .for_mode(mode),
+                pillow_rs::ModeSupport::Rejected { .. }
+            );
+            if maxcolors >= GETCOLORS_MAX_TABLE_LIMIT
+                && (rust_histogram_mode || rejected_mode)
+            {
+                return Err(map_error(pillow_rs::PilError::MemoryError(
+                    String::new(),
+                )));
+            }
+            if rust_histogram_mode {
+                // Pillow's low-level ImagingGetColors rejects image8 storage
+                // after parsing maxcolors; an unrepresentable table limit
+                // fails first because its lookup finds no table size.
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "image has wrong mode",
+                ));
+            }
+            py.detach({
+                let inner = inner.clone();
+                move || inner.getcolors_formatted_with_signed_limit(maxcolors)
+            })
+            .map_err(map_error)?
+        };
+        let Some(results) = formatted else {
+            return Ok(None);
+        };
+        let values = PyList::new(
+            py,
+            results
+                .into_iter()
+                .map(|(count, color)| getcolors::PyGetColorsEntry { count, color }),
+        )?;
+        if histogram_mode {
+            if let Some(maxcolors) = maxcolors {
+                let too_many = PyInt::new(py, values.len())
+                    .rich_compare(maxcolors, CompareOp::Gt)?
+                    .is_truthy()?;
+                if too_many {
+                    return Ok(None);
+                }
+            }
+        }
+        Ok(Some(values.into_py_any(py)?))
     }
 
     fn getprojection(&mut self, py: Python<'_>) -> PyResult<(Vec<u32>, Vec<u32>)> {
@@ -149,19 +229,18 @@ impl PyImage {
     ) -> PyResult<f64> {
         let mask = image_analysis_mask_from_python(mask)?;
         if matches!(&mask, pillow_rs::ImageAnalysisMask::Invalid(_)) {
-            let image = slf.bind(py).borrow();
+            let inner = slf.bind(py).borrow().inner.clone();
             return py
-                .detach(|| image.inner.entropy_with_input(mask))
+                .detach(move || inner.entropy_with_input(mask))
                 .map_err(map_error);
         }
         let masked = matches!(&mask, pillow_rs::ImageAnalysisMask::Image(_));
         let mode = {
-            let image = slf.bind(py).borrow();
-            image.inner.mode_identity().map_err(map_error)?
+            slf.bind(py).borrow().inner.mode_identity().map_err(map_error)?
         };
         let extrema = histogram_extrema_from_python(extrema, mode, masked)?;
-        let image = slf.bind(py).borrow();
-        py.detach(|| image.inner.entropy_with_input_and_extrema(mask, extrema))
+        let inner = slf.bind(py).borrow().inner.clone();
+        py.detach(move || inner.entropy_with_input_and_extrema(mask, extrema))
             .map_err(map_error)
     }
 

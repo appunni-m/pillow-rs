@@ -2,7 +2,7 @@
 
 use crate::error::PilError;
 use crate::raster::buffer::HiddenPixelLanes;
-use crate::raster::{DynamicImage, GenericImageView, Mode, RgbImage, RgbaImage};
+use crate::raster::{DynamicImage, Mode, RgbImage, RgbaImage};
 
 const PRECISION_BITS: i32 = 6;
 pub(super) const SCALE_BITS: u32 = 18;

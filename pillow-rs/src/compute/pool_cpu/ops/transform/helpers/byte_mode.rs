@@ -75,7 +75,7 @@ macro_rules! byte_mode_mesh_record {
             let (
                 $crate::raster::DynamicImage::$variant(source),
                 $crate::raster::DynamicImage::$variant(destination),
-            ) = (input, output)
+            ) = (input, &mut *output)
             else {
                 return Err($crate::error::PilError::InternalError(concat!(
                     "Transform MESH expected exact ",
@@ -125,8 +125,6 @@ macro_rules! byte_mode_nearest {
             input: &$crate::raster::DynamicImage,
             request: $crate::compute::pool_cpu::ops::transform::ops::TransformRequest<'_>,
         ) -> Result<$crate::raster::DynamicImage, $crate::error::PilError> {
-            use $crate::raster::GenericImageView;
-
             let $crate::raster::DynamicImage::$variant(source) = input else {
                 return Err($crate::error::PilError::InternalError(
                     concat!("Transform mode strategy expected ", $mode_name).into(),
@@ -146,8 +144,6 @@ macro_rules! byte_mode_nearest {
             request: $crate::compute::pool_cpu::ops::transform::ops::TransformRequest<'_>,
             output: &mut $crate::raster::DynamicImage,
         ) -> Result<(), $crate::error::PilError> {
-            use $crate::raster::GenericImageView;
-
             let (
                 $crate::raster::DynamicImage::$variant(source),
                 $crate::raster::DynamicImage::$variant(_),
@@ -178,8 +174,6 @@ macro_rules! byte_mode_vector {
             input: &$crate::raster::DynamicImage,
             request: $crate::compute::pool_cpu::ops::transform::ops::TransformRequest<'_>,
         ) -> Result<$crate::raster::DynamicImage, $crate::error::PilError> {
-            use $crate::raster::GenericImageView;
-
             let $crate::raster::DynamicImage::$variant(source) = input else {
                 return Err($crate::error::PilError::InternalError(
                     concat!("Transform mode strategy expected ", $mode_name).into(),
@@ -208,8 +202,6 @@ macro_rules! byte_mode_vector {
             request: $crate::compute::pool_cpu::ops::transform::ops::TransformRequest<'_>,
             output: &mut $crate::raster::DynamicImage,
         ) -> Result<(), $crate::error::PilError> {
-            use $crate::raster::GenericImageView;
-
             let (
                 $crate::raster::DynamicImage::$variant(source),
                 $crate::raster::DynamicImage::$variant(_),
@@ -280,8 +272,6 @@ macro_rules! luma16_mode_vector {
             input: &$crate::raster::DynamicImage,
             request: $crate::compute::pool_cpu::ops::transform::ops::TransformRequest<'_>,
         ) -> Result<$crate::raster::DynamicImage, $crate::error::PilError> {
-            use $crate::raster::GenericImageView;
-
             let $crate::raster::DynamicImage::$variant(source) = input else {
                 return Err($crate::error::PilError::InternalError(
                     concat!("Transform mode strategy expected ", $mode_name).into(),
@@ -303,8 +293,6 @@ macro_rules! luma16_mode_vector {
             request: $crate::compute::pool_cpu::ops::transform::ops::TransformRequest<'_>,
             output: &mut $crate::raster::DynamicImage,
         ) -> Result<(), $crate::error::PilError> {
-            use $crate::raster::GenericImageView;
-
             let (
                 $crate::raster::DynamicImage::$variant(source),
                 $crate::raster::DynamicImage::$variant(destination),

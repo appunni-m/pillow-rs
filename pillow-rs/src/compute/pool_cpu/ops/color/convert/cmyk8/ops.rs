@@ -99,6 +99,10 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
 ///
 /// `selection` must come from [`SUPPORT`] for this source and target, with the
 /// selected architecture's requirements checked by the same execution context.
+#[allow(
+    unsafe_code,
+    reason = "architecture dispatch relies on the validated Convert strategy selection"
+)]
 pub(crate) unsafe fn execute(
     source: &RgbaImage,
     target: Mode,

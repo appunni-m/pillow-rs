@@ -95,16 +95,6 @@ fn process_rgb_row_range(
     }
 }
 
-pub(crate) fn reduce_rgb_row_range(
-    context: &RgbReduceRowContext<'_>,
-    y: u32,
-    row: &mut [u8],
-    start_x: u32,
-    end_x: u32,
-) {
-    process_rgb_row_range(context, y, row, start_x, end_x);
-}
-
 #[inline(always)]
 fn process_rgb_row(context: &RgbReduceRowContext<'_>, y: u32, row: &mut [u8]) {
     process_rgb_row_range(context, y, row, 0, context.output_width);

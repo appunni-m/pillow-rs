@@ -220,6 +220,10 @@ impl Prepared<'_> {
         }
     }
 
+    #[allow(
+        unsafe_code,
+        reason = "the retained strategy selection proves the architecture-specific Convert preconditions"
+    )]
     fn execute_mode(
         input: OperationInputs<'_>,
         target: Mode,

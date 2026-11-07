@@ -1,7 +1,5 @@
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Rgba};
-/// TODO(pillow-rs#3ptb): verify integer-packed CMYK Text inks in CPU parity.
-/// TODO(pillow-rs#brg0): verify the historical default-fill CMYK Text bytes.
 pub(crate) fn apply<const RGBA_MASK: bool>(
     mut image: DynamicImage,
     x: i32,

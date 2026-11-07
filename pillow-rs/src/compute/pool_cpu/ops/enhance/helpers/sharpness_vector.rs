@@ -438,9 +438,9 @@ fn filter_luma_block_integer(raw: &[u8], width: usize, y: usize, x_start: usize)
         let window: [u8; 16] = raw.get(start..start.checked_add(16)?)?.try_into().ok()?;
         let window = u8x16::new(window);
         Some((
-            u16x8::from_u8x16_low(window.swizzle_relaxed(u8x16::new(LEFT))),
-            u16x8::from_u8x16_low(window.swizzle_relaxed(u8x16::new(CENTER))),
-            u16x8::from_u8x16_low(window.swizzle_relaxed(u8x16::new(RIGHT))),
+            u16x8::from_u8x16_low(window.shuffle(u8x16::new(LEFT))),
+            u16x8::from_u8x16_low(window.shuffle(u8x16::new(CENTER))),
+            u16x8::from_u8x16_low(window.shuffle(u8x16::new(RIGHT))),
         ))
     };
     let (below_left, below_middle, below_right) = load_row(y + 1)?;

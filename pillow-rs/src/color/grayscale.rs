@@ -47,6 +47,7 @@ mod la_conversion_allocation_receipts;
 /// The conversion uses Pillow's rounded BT.601 fixed-point formula, not the
 /// `image` crate's sRGB luminance weights. The returned image has the same
 /// dimensions as `img` and one byte per pixel.
+#[cfg(test)]
 pub fn pil_grayscale(img: &DynamicImage) -> Result<crate::raster::GrayImage, PilError> {
     pil_grayscale_inner(img, true)
 }
@@ -189,6 +190,7 @@ pub(crate) fn cmyk_muldiv255_byte(channel: u8, ink: u8) -> u8 {
 ///
 /// The input is stored as RGBA where channels mean `C`, `M`, `Y`, and `K`.
 /// Output dimensions match the input and each output pixel is an `L` byte.
+#[cfg(test)]
 pub fn cmyk_to_grayscale(img: &DynamicImage) -> Result<crate::raster::GrayImage, PilError> {
     use crate::compute::pool_cpu::ops::grayscale::cmyk8::default::grayscale_impl;
     let source = match img {
@@ -284,18 +286,4 @@ pub fn cmyk_to_binary_truncate(img: &DynamicImage) -> Result<crate::raster::Gray
     }
     crate::raster::GrayImage::from_raw(w, h, output)
         .ok_or_else(|| PilError::InternalError("cmyk binary buffer mismatch".to_string()))
-}
-/// Converts an image to Pillow-compatible `LA`.
-///
-/// The luma channel uses [`pil_grayscale`]. The alpha channel is set to fully
-/// opaque (`255`) for every pixel.
-pub fn pil_grayscale_alpha(img: &DynamicImage) -> Result<crate::raster::GrayAlphaImage, PilError> {
-    let gray = pil_grayscale(img)?;
-    let (w, h) = gray.dimensions();
-    let mut ga = crate::raster::GrayAlphaImage::new(w, h);
-    for (gap, gp) in ga.pixels_mut().zip(gray.pixels()) {
-        gap[0] = gp[0];
-        gap[1] = 255;
-    }
-    Ok(ga)
 }

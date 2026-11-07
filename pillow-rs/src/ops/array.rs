@@ -60,14 +60,14 @@ const TYPE_MAP: &[TypeMapEntry] = &[
     TypeMapEntry {
         shape_tail: &[],
         typestr: "<u2",
-        mode: Mode::ImageI32,
+        mode: Mode::ImageI16,
         raw_mode: "I;16",
         color_modes: &[],
     },
     TypeMapEntry {
         shape_tail: &[],
         typestr: ">u2",
-        mode: Mode::ImageI32,
+        mode: Mode::ImageI16B,
         raw_mode: "I;16B",
         color_modes: &[],
     },
@@ -303,7 +303,7 @@ fn normalize_scalar_array(layout: &ArrayLayout, data: &[u8]) -> Result<Option<Ve
 
     let bytes_per_sample = match layout.raw_mode.as_str() {
         "I;8" => Some(1),
-        "I;16S" | "I;16BS" => Some(2),
+        "I;16" | "I;16B" | "I;16S" | "I;16BS" => Some(2),
         "I;32" | "I;32B" | "I;32BS" | "F;32BF" => Some(4),
         "F;64F" | "F;64BF" => Some(8),
         _ => None,
@@ -328,6 +328,8 @@ fn normalize_scalar_array(layout: &ArrayLayout, data: &[u8]) -> Result<Option<Ve
                 // Pillow's I;8 raw decoder widens the byte as unsigned even
                 // when the NumPy descriptor is signed |i1.
                 "I;8" => i32::from(sample[0]),
+                "I;16" => i32::from(u16::from_le_bytes([sample[0], sample[1]])),
+                "I;16B" => i32::from(u16::from_be_bytes([sample[0], sample[1]])),
                 "I;16S" => i32::from(i16::from_le_bytes([sample[0], sample[1]])),
                 "I;16BS" => i32::from(i16::from_be_bytes([sample[0], sample[1]])),
                 "I;32" => u32::from_le_bytes(sample.try_into().unwrap()) as i32,

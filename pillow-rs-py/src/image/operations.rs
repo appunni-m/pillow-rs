@@ -41,6 +41,15 @@ pub(super) fn thumbnail_filter_code(
     Ok(resample_filter_code(filter))
 }
 
+#[pyfunction(name = "_imageops_filter_code")]
+pub(super) fn imageops_filter_code(
+    method: Option<&Bound<'_, PyAny>>,
+) -> PyResult<i32> {
+    let input = resample_input_from_python(method)?;
+    let filter = pillow_rs::parse_imageops_filter_input(input).map_err(map_error)?;
+    Ok(resample_filter_code(filter))
+}
+
 #[pyfunction(name = "_thumbnail_reducing_gap")]
 pub(super) fn thumbnail_reducing_gap(
     value: Option<&Bound<'_, PyAny>>,
@@ -50,6 +59,7 @@ pub(super) fn thumbnail_reducing_gap(
 
 pub(super) fn register_adapter_functions(m: &Bound<'_, pyo3::types::PyModule>) -> PyResult<()> {
     m.add_function(pyo3::wrap_pyfunction!(thumbnail_filter_code, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(imageops_filter_code, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(thumbnail_reducing_gap, m)?)?;
     Ok(())
 }
@@ -100,13 +110,9 @@ impl PyImage {
             .transpose()?;
         let reducing_gap = reducing_gap.map(|value| value.extract::<f64>()).transpose()?;
         let resample = resample_input_from_python(resample)?;
-        let image = slf.bind(py).borrow();
+        let inner = slf.bind(py).borrow().inner.clone();
         let rs = py
-            .detach(|| {
-                image
-                    .inner
-                    .resize_with_options(size, resample, box_coords, reducing_gap)
-            })
+            .detach(move || inner.resize_with_options(size, resample, box_coords, reducing_gap))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -119,9 +125,9 @@ impl PyImage {
         let box_coords = box_coords
             .map(|value| value.extract::<(f64, f64, f64, f64)>())
             .transpose()?;
-        let image = slf.bind(py).borrow();
+        let inner = slf.bind(py).borrow().inner.clone();
         let rs = py
-            .detach(|| image.inner.crop_float(box_coords))
+            .detach(move || inner.crop_float(box_coords))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -171,7 +177,7 @@ impl PyImage {
         let output_size = (width as u32, height as u32);
         let prepared = match pre_size_prepared {
             Some(prepared) => prepared,
-            None => prepare_fill(deferred_fill.as_ref().or(fillcolor))?,
+            None => prepare_fill(deferred_fill.or(fillcolor))?,
         };
         let resample = rotate_resample_input_from_python(resample)?;
         let prepared = prepared
@@ -199,9 +205,9 @@ impl PyImage {
             .prepared
             .clone()
             .with_affine(matrix, plan.output_size);
-        let image = slf.bind(py).borrow();
+        let inner = slf.bind(py).borrow().inner.clone();
         let inner = py
-            .detach(|| image.inner.rotate_prepared(prepared))
+            .detach(move || inner.rotate_prepared(prepared))
             .map_err(map_error)?;
         Ok(PyImage { inner })
     }
@@ -212,13 +218,13 @@ impl PyImage {
         py: Python<'_>,
     ) -> PyResult<PyImage> {
         let input = transpose_input_from_python(method)?;
-        let image = slf.bind(py).borrow();
+        let inner = slf.bind(py).borrow().inner.clone();
         // Ordinary transpose only queues metadata. Paletted source cloning
         // copies its index buffer, so keep that work outside the GIL.
-        let rs = if matches!(&image.inner, RsImage::Paletted(_)) {
-            py.detach(|| image.inner.transpose_with_input(input))
+        let rs = if matches!(&inner, RsImage::Paletted(_)) {
+            py.detach(move || inner.transpose_with_input(input))
         } else {
-            image.inner.transpose_with_input(input)
+            inner.transpose_with_input(input)
         }
         .map_err(map_error)?;
         Ok(PyImage { inner: rs })
@@ -252,13 +258,9 @@ impl PyImage {
         };
         let mode = convert_mode_input_from_python(mode)?;
         let palette = convert_palette_input_from_python(palette)?;
-        let image = slf.bind(py).borrow();
+        let inner = slf.bind(py).borrow().inner.clone();
         let rs = py
-            .detach(|| {
-                image
-                    .inner
-                    .convert_with_input(mode, matrix, dither, palette, colors)
-            })
+            .detach(move || inner.convert_with_input(mode, matrix, dither, palette, colors))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -440,9 +442,9 @@ impl PyImage {
         size: (u32, u32),
         py: Python<'_>,
     ) -> PyResult<PyImage> {
-        let image = slf.bind(py).borrow();
+        let inner = slf.bind(py).borrow().inner.clone();
         let rs = py
-            .detach(|| image.inner.kernel_filter(kernel, scale, offset, size))
+            .detach(move || inner.kernel_filter(kernel, scale, offset, size))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -480,15 +482,18 @@ impl PyImage {
         py: Python<'_>,
     ) -> PyResult<()> {
         let prepared = plan.prepared;
-        let mut image = slf.bind(py).borrow_mut();
-        py.detach(|| {
-            image.inner.thumbnail_with_plan(
+        let inner = slf.bind(py).borrow().inner.clone();
+        let (result, inner) = py.detach(move || {
+            let mut inner = inner;
+            let result = inner.thumbnail_with_plan(
                 prepared,
                 Some(pillow_rs::ResampleInput::Code(i64::from(filter_code))),
                 reducing_gap,
-            )
-        })
-        .map_err(map_error)
+            );
+            (result, inner)
+        });
+        slf.bind(py).borrow_mut().inner = inner;
+        result.map_err(map_error)
     }
 
     #[pyo3(signature = (colors=None, method=None, kmeans=None, dither=None, palette=None))]
@@ -508,18 +513,16 @@ impl PyImage {
                     pillow_rs::QuantizePalette::Image(Box::new(image))
                 }),
         };
-        let image = slf.bind(py).borrow();
+        let inner = slf.bind(py).borrow().inner.clone();
         let rs = py
-            .detach(|| {
-                image
-                    .inner
-                    .quantize_with_input(
-                        colors,
-                        method,
-                        kmeans,
-                        palette,
-                        dither.map(|value| value != 0),
-                    )
+            .detach(move || {
+                inner.quantize_with_input(
+                    colors,
+                    method,
+                    kmeans,
+                    palette,
+                    dither.map(|value| value != 0),
+                )
             })
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
@@ -532,15 +535,13 @@ impl PyImage {
         py: Python<'_>,
     ) -> PyResult<PyImage> {
         let (radius_x, radius_y) = blur_radius_pair_from_python(radius, 2.0)?;
-        let image = slf.bind(py).borrow();
+        let inner = slf.bind(py).borrow().inner.clone();
         let rs = py
             .detach(|| {
                 if radius_x == radius_y {
-                    image.inner.gaussian_blur(radius_x as f32)
+                    inner.gaussian_blur(radius_x as f32)
                 } else {
-                    image
-                        .inner
-                        .gaussian_blur_xy(radius_x as f32, radius_y as f32)
+                    inner.gaussian_blur_xy(radius_x as f32, radius_y as f32)
                 }
             })
             .map_err(map_error)?;
@@ -557,9 +558,9 @@ impl PyImage {
         let radius = radius.unwrap_or(2.0) as f32;
         let percent = percent.unwrap_or(150);
         let threshold = threshold.unwrap_or(3);
-        let image = slf.bind(py).borrow();
+        let inner = slf.bind(py).borrow().inner.clone();
         let rs = py
-            .detach(|| image.inner.unsharp_mask(radius, percent, threshold))
+            .detach(move || inner.unsharp_mask(radius, percent, threshold))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -567,13 +568,14 @@ impl PyImage {
     #[pyo3(signature = (size=3))]
     fn max_filter(
         slf: Py<Self>,
-        size: &Bound<'_, PyAny>,
+        size: i32,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
-        let size = filter_size_from_python(size, false)?;
-        let image = slf.bind(py).borrow();
+        let size = PyInt::new(py, size);
+        let size = filter_size_from_python(size.as_any(), false)?;
+        let inner = slf.bind(py).borrow().inner.clone();
         let rs = py
-            .detach(|| image.inner.max_filter(size))
+            .detach(move || inner.max_filter(size))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -581,13 +583,14 @@ impl PyImage {
     #[pyo3(signature = (size=3))]
     fn min_filter(
         slf: Py<Self>,
-        size: &Bound<'_, PyAny>,
+        size: i32,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
-        let size = filter_size_from_python(size, false)?;
-        let image = slf.bind(py).borrow();
+        let size = PyInt::new(py, size);
+        let size = filter_size_from_python(size.as_any(), false)?;
+        let inner = slf.bind(py).borrow().inner.clone();
         let rs = py
-            .detach(|| image.inner.min_filter(size))
+            .detach(move || inner.min_filter(size))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -595,13 +598,14 @@ impl PyImage {
     #[pyo3(signature = (size=3))]
     fn median_filter(
         slf: Py<Self>,
-        size: &Bound<'_, PyAny>,
+        size: i32,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
-        let size = filter_size_from_python(size, false)?;
-        let image = slf.bind(py).borrow();
+        let size = PyInt::new(py, size);
+        let size = filter_size_from_python(size.as_any(), false)?;
+        let inner = slf.bind(py).borrow().inner.clone();
         let rs = py
-            .detach(|| image.inner.median_filter(size))
+            .detach(move || inner.median_filter(size))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -613,9 +617,9 @@ impl PyImage {
         py: Python<'_>,
     ) -> PyResult<PyImage> {
         let (radius_x, radius_y) = blur_radius_pair_from_python(radius, 2.0)?;
-        let image = slf.bind(py).borrow();
+        let inner = slf.bind(py).borrow().inner.clone();
         let rs = py
-            .detach(|| image.inner.box_blur_xy(radius_x as f32, radius_y as f32))
+            .detach(move || inner.box_blur_xy(radius_x as f32, radius_y as f32))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -623,13 +627,14 @@ impl PyImage {
     #[pyo3(signature = (size=3))]
     fn mode_filter(
         slf: Py<Self>,
-        size: &Bound<'_, PyAny>,
+        size: i32,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
-        let size = filter_size_from_python(size, true)?;
-        let image = slf.bind(py).borrow();
+        let size = PyInt::new(py, size);
+        let size = filter_size_from_python(size.as_any(), true)?;
+        let inner = slf.bind(py).borrow().inner.clone();
         let rs = py
-            .detach(|| image.inner.mode_filter(size))
+            .detach(move || inner.mode_filter(size))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -637,15 +642,17 @@ impl PyImage {
     #[pyo3(signature = (size=3, rank=0))]
     fn rank_filter(
         slf: Py<Self>,
-        size: &Bound<'_, PyAny>,
-        rank: &Bound<'_, PyAny>,
+        size: i32,
+        rank: i32,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
-        let size = filter_size_from_python(size, false)?;
-        let rank = filter_rank_from_python(rank)?;
-        let image = slf.bind(py).borrow();
+        let size = PyInt::new(py, size);
+        let size = filter_size_from_python(size.as_any(), false)?;
+        let rank = PyInt::new(py, rank);
+        let rank = filter_rank_from_python(rank.as_any())?;
+        let inner = slf.bind(py).borrow().inner.clone();
         let rs = py
-            .detach(|| image.inner.rank_filter(size, rank))
+            .detach(move || inner.rank_filter(size, rank))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -669,9 +676,9 @@ impl PyImage {
                 })
             })
             .transpose()?;
-        let image = slf.bind(py).borrow();
+        let inner = slf.bind(py).borrow().inner.clone();
         let rs = py
-            .detach(|| image.inner.color3dlut(input, target_mode))
+            .detach(move || inner.color3dlut(input, target_mode))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -681,17 +688,14 @@ impl PyImage {
         channel: &Bound<'_, PyAny>,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
-        let selector = if let Ok(channel) = channel.extract::<i32>() {
-            pillow_rs::ChannelSelector::Index(channel)
-        } else if let Ok(channel) = channel.extract::<String>() {
-            pillow_rs::ChannelSelector::Name(channel)
+        let selector = if channel.cast::<PyString>().is_ok() {
+            pillow_rs::ChannelSelector::Name(channel.extract::<String>()?)
         } else {
-            pillow_rs::ChannelSelector::Invalid(channel.get_type().name()?.to_string())
+            pillow_rs::ChannelSelector::Index(crate::inputs::c_int_from_python(channel)?)
         };
-        let image = slf.bind(py).borrow();
-        let image = &image.inner;
+        let image = slf.bind(py).borrow().inner.clone();
         let rs = py
-            .detach(|| image.getchannel_selector(selector))
+            .detach(move || image.getchannel_selector(selector))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -704,9 +708,9 @@ impl PyImage {
     ) -> PyResult<PyImage> {
         let factor = reduce_factor_from_python(factor)?;
         let box_coords = box_coords.map(reduce_box_from_python).transpose()?;
-        let image = slf.bind(py).borrow();
+        let inner = slf.bind(py).borrow().inner.clone();
         let rs = py
-            .detach(|| image.inner.reduce_public(factor, box_coords))
+            .detach(move || inner.reduce_public(factor, box_coords))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -740,12 +744,14 @@ impl PyImage {
         );
         // Sequence conversion above may execute Python code that re-enters
         // this image. Acquire its mutable borrow only for the core write.
-        let mut image = slf.bind(py).borrow_mut();
-        let image = &mut image.inner;
-        py.detach(|| {
-            image.alpha_composite_public(&source_image, dest, source_box)
-        })
-        .map_err(map_error)
+        let inner = slf.bind(py).borrow().inner.clone();
+        let (result, inner) = py.detach(move || {
+            let mut inner = inner;
+            let result = inner.alpha_composite_public(&source_image, dest, source_box);
+            (result, inner)
+        });
+        slf.bind(py).borrow_mut().inner = inner;
+        result.map_err(map_error)
     }
 
     /// Applies a sequence or callable LUT through the Rust-owned public path.
@@ -758,11 +764,15 @@ impl PyImage {
     ) -> PyResult<PyImage> {
         // Pillow loads before invoking a point callable. Keep that order while
         // releasing the PyImage borrow before callbacks can re-enter it.
-        let source_mode = {
-            let mut image = slf.bind(py).borrow_mut();
-            py.detach(|| image.inner.load()).map_err(map_error)?;
-            image.inner.mode_identity().map_err(map_error)?
-        };
+        let inner = slf.bind(py).borrow().inner.clone();
+        let (result, inner) = py.detach(move || {
+            let mut inner = inner;
+            let result = inner.load();
+            (result, inner)
+        });
+        slf.bind(py).borrow_mut().inner = inner;
+        result.map_err(map_error)?;
+        let source_mode = slf.bind(py).borrow().inner.mode_identity().map_err(map_error)?;
         let input_kind = if input.is_instance_of::<PyString>() {
             pillow_rs::EvalInputKind::String
         } else {
@@ -782,9 +792,9 @@ impl PyImage {
                 } else {
                     input.extract::<Vec<f64>>()?
                 };
-                let image = slf.bind(py).borrow();
+                let inner = slf.bind(py).borrow().inner.clone();
                 return py
-                    .detach(|| pillow_rs::image_eval_float(&image.inner, &lut))
+                    .detach(move || pillow_rs::image_eval_float(&inner, &lut))
                     .map(|i| PyImage { inner: i })
                     .map_err(map_error);
             }
@@ -800,32 +810,30 @@ impl PyImage {
                     | pillow_rs::Mode::ImageF32
             ) {
                 let (scale, offset) = point_transform_from_python(input, py)?;
-                let image = slf.bind(py).borrow();
+                let inner = slf.bind(py).borrow().inner.clone();
                 return py
-                    .detach(|| {
-                        pillow_rs::image_eval_point_transform(&image.inner, scale, offset)
-                    })
+                    .detach(move || pillow_rs::image_eval_point_transform(&inner, scale, offset))
                     .map(|i| PyImage { inner: i })
                     .map_err(map_error);
             }
             let lut = point_lut_from_python(input)?;
-            let image = slf.bind(py).borrow();
+            let inner = slf.bind(py).borrow().inner.clone();
             return py
-                .detach(|| pillow_rs::image_eval_replicated_for_image(&image.inner, &lut))
+                .detach(move || pillow_rs::image_eval_replicated_for_image(&inner, &lut))
                 .map(|i| PyImage { inner: i })
                 .map_err(map_error);
         }
 
         let lut = input.extract::<Vec<u8>>()?;
-        let image = slf.bind(py).borrow();
-        py.detach(|| pillow_rs::image_eval_validated(&image.inner, &lut))
+        let inner = slf.bind(py).borrow().inner.clone();
+        py.detach(move || pillow_rs::image_eval_validated(&inner, &lut))
             .map(|i| PyImage { inner: i })
             .map_err(map_error)
     }
 
     fn effect_spread(slf: Py<Self>, distance: u32, py: Python<'_>) -> PyResult<PyImage> {
-        let image = slf.bind(py).borrow();
-        py.detach(|| pillow_rs::image_effect_spread(&image.inner, distance))
+        let inner = slf.bind(py).borrow().inner.clone();
+        py.detach(move || pillow_rs::image_effect_spread(&inner, distance))
             .map(|i| PyImage { inner: i })
             .map_err(map_error)
     }

@@ -9,6 +9,10 @@ use crate::raster::{DynamicImage, Mode, RgbImage};
 ///
 /// The caller must use a NEON architecture selected from this mode's support
 /// declaration for the same target.
+#[allow(
+    unsafe_code,
+    reason = "the caller's strategy selection validates the NEON feature precondition"
+)]
 pub(crate) unsafe fn execute(
     source: &RgbImage,
     target: Mode,

@@ -5,7 +5,7 @@ use wide::{u8x16, u16x16, u32x16};
 
 pub(crate) fn unpremultiply_block<const CHANNELS: usize>(input: u8x16) -> u8x16 {
     debug_assert!(CHANNELS == 2 || CHANNELS == 4);
-    let alpha = input.swizzle_relaxed(u8x16::new(alpha_indices::<CHANNELS>()));
+    let alpha = input.shuffle(u8x16::new(alpha_indices::<CHANNELS>()));
     let alpha_values = alpha.to_array();
     let reciprocals = u32x16::new(std::array::from_fn(|lane| {
         65_536_u32.checked_div(u32::from(alpha_values[lane])).unwrap_or_default()

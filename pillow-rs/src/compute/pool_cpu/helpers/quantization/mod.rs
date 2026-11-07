@@ -21,8 +21,7 @@ pub(crate) use median_cut::{
     median_cut_quantize_rgb, median_cut_quantize_source,
 };
 pub(crate) use octree::{
-    quantize_octree_rgb, quantize_octree_rgb_source, quantize_octree_rgba,
-    quantize_octree_rgba_source,
+    quantize_octree_rgb, quantize_octree_rgb_source,
 };
 pub(crate) use rgba_palette::{quantize_rgba_samples, quantize_rgba_source};
 pub(crate) use web_palette::{identity_grayscale_palette, web_palette_quantize};

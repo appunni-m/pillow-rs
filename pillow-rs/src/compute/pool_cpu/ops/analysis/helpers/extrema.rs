@@ -1,7 +1,7 @@
 //! Native sample reductions shared by exact-mode GetExtrema strategies.
 
 use crate::image::FormattedExtrema;
-use crate::raster::{GenericImageView, ImageBuffer, Pixel};
+use crate::raster::{ImageBuffer, Pixel};
 
 /// Reduce native byte channels without inspecting a mode tag or changing pixels.
 pub(crate) fn bytes<P>(image: &ImageBuffer<P, Vec<u8>>) -> FormattedExtrema

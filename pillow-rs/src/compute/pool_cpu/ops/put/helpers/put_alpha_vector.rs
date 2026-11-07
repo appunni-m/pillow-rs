@@ -18,16 +18,16 @@ fn cmyk_block(source_block: [u8; 16], mask_block: [u8; 16]) -> [u8; 16] {
     // the new alpha sample. Keep the native CMYK bytes until this
     // vector block so the promotion uses the same integer rounding.
     let values = u8x16::new(source_block);
-    let c = u16x16::from(values.swizzle_relaxed(u8x16::new([
+    let c = u16x16::from(values.shuffle(u8x16::new([
         0, 4, 8, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     ])));
-    let m = u16x16::from(values.swizzle_relaxed(u8x16::new([
+    let m = u16x16::from(values.shuffle(u8x16::new([
         1, 5, 9, 13, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     ])));
-    let y = u16x16::from(values.swizzle_relaxed(u8x16::new([
+    let y = u16x16::from(values.shuffle(u8x16::new([
         2, 6, 10, 14, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     ])));
-    let k = u16x16::from(values.swizzle_relaxed(u8x16::new([
+    let k = u16x16::from(values.shuffle(u8x16::new([
         3, 7, 11, 15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     ])));
     let nk = u16x16::splat(255) - k;
@@ -56,7 +56,7 @@ fn cmyk_block(source_block: [u8; 16], mask_block: [u8; 16]) -> [u8; 16] {
         mask_block[2],
         mask_block[3],
     ])
-    .swizzle_relaxed(u8x16::new([
+    .shuffle(u8x16::new([
         0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15,
     ]))
     .to_array()
@@ -73,7 +73,7 @@ pub(crate) fn simd_put_alpha_block<const SOURCE: usize, const OUTPUT: usize, con
             inputs[8..].copy_from_slice(&mask_block[..8]);
             Some(
                 u8x16::new(inputs)
-                    .swizzle_relaxed(u8x16::new([
+                    .shuffle(u8x16::new([
                         0, 8, 1, 9, 2, 10, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15,
                     ]))
                     .to_array(),
@@ -82,7 +82,7 @@ pub(crate) fn simd_put_alpha_block<const SOURCE: usize, const OUTPUT: usize, con
         (2, 2) => {
             let values = u8x16::new(source_block);
             let alpha = u8x16::new(mask_block)
-                .swizzle_relaxed(u8x16::new([0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7]));
+                .shuffle(u8x16::new([0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7]));
             let alpha_mask = u8x16::new([
                 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255,
             ]);
@@ -94,7 +94,7 @@ pub(crate) fn simd_put_alpha_block<const SOURCE: usize, const OUTPUT: usize, con
             inputs[12..16].copy_from_slice(&mask_block[..4]);
             Some(
                 u8x16::new(inputs)
-                    .swizzle_relaxed(u8x16::new([
+                    .shuffle(u8x16::new([
                         0, 1, 2, 12, 3, 4, 5, 13, 6, 7, 8, 14, 9, 10, 11, 15,
                     ]))
                     .to_array(),
@@ -104,7 +104,7 @@ pub(crate) fn simd_put_alpha_block<const SOURCE: usize, const OUTPUT: usize, con
         (4, 4) => {
             let values = u8x16::new(source_block);
             let alpha = u8x16::new(mask_block)
-                .swizzle_relaxed(u8x16::new([0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3]));
+                .shuffle(u8x16::new([0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3]));
             let alpha_mask = u8x16::new([0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255]);
             let preserved = values & (u8x16::splat(255) ^ alpha_mask);
             Some((preserved | (alpha & alpha_mask)).to_array())

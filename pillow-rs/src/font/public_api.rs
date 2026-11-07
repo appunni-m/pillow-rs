@@ -1,7 +1,8 @@
 //! Public root wrappers for Pillow's ImageFont and FreeTypeFont API.
 
 use super::{
-    FontMaskAndOffset, FontSizeAndOffset, FreeTypeFont, ImageFontFaceInfo, ImageFontLoadOptions,
+    FontMaskAndOffset, FontSizeAndOffset, FontTextRef, FreeTypeFont, ImageFontFaceInfo,
+    ImageFontLoadOptions,
     ImageFontSourceInput, ImageFontTextInput, ImageFontTextLine, ImageFontTextOptions,
     ImageFontTextBoundsCallbacks, ImageFontTextPositionCallbacks, ImageFontTextScaling,
     ImageFontTextWrapCallbacks, ImageFontTextWrapResult,
@@ -49,9 +50,13 @@ pub fn imagefont_text_split_positions(
     spacing: f64,
     options: &ImageFontTextOptions,
 ) -> Result<Vec<ImageFontTextLine>, PilError> {
-    let lines = text.split('\n').collect::<Vec<_>>();
-    let positioned = super::text_layout::multiline_text_positions(
-        xy.0, xy.1, &lines, font, spacing, options, mode,
+    let positioned = text_split_positions(
+        font,
+        mode,
+        xy,
+        FontTextRef::String(text),
+        spacing,
+        options,
     )?;
     Ok(positioned
         .into_iter()
@@ -59,9 +64,50 @@ pub fn imagefont_text_split_positions(
             x: line.x,
             y: line.y,
             anchor: line.anchor,
-            text: line.text.to_owned(),
+            text: match line.text {
+                FontTextRef::String(text) => text.to_owned(),
+                FontTextRef::Codepoints(_) => unreachable!("string input retains string lines"),
+            },
         })
         .collect())
+}
+
+/// Split host-classified text into Pillow-positioned lines.
+#[doc(hidden)]
+pub fn imagefont_text_split_positions_input(
+    font: &FreeTypeFont,
+    mode: Mode,
+    xy: (f64, f64),
+    text: ImageFontTextInput,
+    spacing: f64,
+    options: &ImageFontTextOptions,
+) -> Result<Vec<ImageFontTextLine<ImageFontTextInput>>, PilError> {
+    let text = text.into_font_text()?;
+    let positioned = text_split_positions(font, mode, xy, text.as_ref(), spacing, options)?;
+    Ok(positioned
+        .into_iter()
+        .map(|line| ImageFontTextLine {
+            x: line.x,
+            y: line.y,
+            anchor: line.anchor,
+            text: line.text.to_input(),
+        })
+        .collect())
+}
+
+fn text_split_positions<'a>(
+    font: &FreeTypeFont,
+    mode: Mode,
+    xy: (f64, f64),
+    text: FontTextRef<'a>,
+    spacing: f64,
+    options: &ImageFontTextOptions,
+) -> Result<Vec<super::text_layout::PositionedTextLine<'a>>, PilError> {
+    let lines = text.split('\n');
+    let positioned = super::text_layout::multiline_text_positions(
+        xy.0, xy.1, &lines, font, spacing, options, mode,
+    )?;
+    Ok(positioned)
 }
 
 /// Compute the positioned multiline text bounds used by ImageText.Text.
@@ -74,8 +120,40 @@ pub fn imagefont_text_layout_bbox(
     spacing: f64,
     options: &ImageFontTextOptions,
 ) -> Result<(f64, f64, f64, f64), PilError> {
+    text_layout_bbox(
+        font,
+        mode,
+        xy,
+        FontTextRef::String(text),
+        spacing,
+        options,
+    )
+}
+
+/// Compute positioned multiline text bounds for host-classified text.
+#[doc(hidden)]
+pub fn imagefont_text_layout_bbox_input(
+    font: &FreeTypeFont,
+    mode: Mode,
+    xy: (f64, f64),
+    text: ImageFontTextInput,
+    spacing: f64,
+    options: &ImageFontTextOptions,
+) -> Result<(f64, f64, f64, f64), PilError> {
+    let text = text.into_font_text()?;
+    text_layout_bbox(font, mode, xy, text.as_ref(), spacing, options)
+}
+
+fn text_layout_bbox(
+    font: &FreeTypeFont,
+    mode: Mode,
+    xy: (f64, f64),
+    text: FontTextRef<'_>,
+    spacing: f64,
+    options: &ImageFontTextOptions,
+) -> Result<(f64, f64, f64, f64), PilError> {
     let font_mode = super::text_layout::text_layout_font_mode(mode, options.embedded_color);
-    let lines = imagefont_text_split_positions(font, mode, xy, text, spacing, options)?;
+    let lines = text_split_positions(font, mode, xy, text, spacing, options)?;
     let mut bounds: Option<(f64, f64, f64, f64)> = None;
     for line in lines {
         let mut bbox_options = options.clone();
@@ -84,7 +162,7 @@ pub fn imagefont_text_layout_bbox(
         bbox_options.anchor = Some(line.anchor);
         bbox_options.align = None;
         bbox_options.stroke_fill = None;
-        let bbox = font.getbbox_with_options(&line.text, &bbox_options)?;
+        let bbox = font.getbbox_text_with_options(line.text, &bbox_options)?;
         let line_bounds = (
             f64::from(bbox.0) + line.x,
             f64::from(bbox.1) + line.y,
@@ -128,8 +206,8 @@ pub fn imagefont_text_length(
     embedded_color: bool,
     text: ImageFontTextInput,
 ) -> Result<f32, PilError> {
-    let text = text.into_text()?;
-    if text.contains('\n') {
+    let text = text.into_font_text()?;
+    if text.as_ref().contains('\n') {
         return Err(PilError::ValueError(
             "can't measure length of multiline text".into(),
         ));
@@ -139,7 +217,7 @@ pub fn imagefont_text_length(
         mode: Some(font_mode.to_owned()),
         ..ImageFontTextOptions::default()
     };
-    font.getlength_with_options(&text, &options)
+    font.getlength_text_with_options(text.as_ref(), &options)
 }
 
 /// Wrap Unicode or byte ImageText text in the Rust core.
@@ -262,12 +340,28 @@ pub fn imagefont_native_getlength_26dot6(font: &FreeTypeFont, text: &str) -> Res
     font.native_getlength_26dot6(text)
 }
 
+/// Return native `_imagingft.Font.getlength()` for host-classified text input.
+pub fn imagefont_native_getlength_26dot6_input(
+    font: &FreeTypeFont,
+    text: ImageFontTextInput,
+) -> Result<i32, PilError> {
+    font.native_getlength_26dot6_input(text)
+}
+
 /// Return Pillow native `_imagingft.Font.getsize()` size and offset tuple.
 pub fn imagefont_native_getsize(
     font: &FreeTypeFont,
     text: &str,
 ) -> Result<FontSizeAndOffset, PilError> {
     font.native_getsize(text)
+}
+
+/// Return native `_imagingft.Font.getsize()` for host-classified text input.
+pub fn imagefont_native_getsize_input(
+    font: &FreeTypeFont,
+    text: ImageFontTextInput,
+) -> Result<FontSizeAndOffset, PilError> {
+    font.native_getsize_input(text)
 }
 
 /// Return Pillow native `_imagingft.Font.render()` mask and offset.

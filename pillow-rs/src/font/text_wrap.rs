@@ -2,7 +2,6 @@ use super::text_layout::multiline_text_positions;
 use super::{
     FreeTypeFont, ImageFontTextInput, ImageFontTextOptions, ImageFontTextScaling,
     ImageFontTextWrapCallbacks, ImageFontTextWrapResult, ImageFontTextWrapWidthCheck,
-    pillow_bytes_to_text,
 };
 use crate::error::PilError;
 use crate::raster::Mode;
@@ -10,6 +9,11 @@ use crate::raster::Mode;
 #[derive(Clone)]
 enum WrapUnit {
     Unicode(String),
+    // Keep Python code points intact, including lone surrogates. Standard
+    // FreeType, Draw, multiline, Text.wrap, instance-level font metrics, and
+    // subclass `_get_bbox`, `_split`, and `_get_fontmode` hooks are covered by
+    // CPU parity.
+    Codepoints(Vec<u32>),
     Bytes(Vec<u8>),
 }
 
@@ -17,6 +21,7 @@ impl WrapUnit {
     fn from_input(input: ImageFontTextInput) -> Result<Self, PilError> {
         match input {
             ImageFontTextInput::Text(text) => Ok(Self::Unicode(text)),
+            ImageFontTextInput::TextCodepoints(text) => Ok(Self::Codepoints(text)),
             ImageFontTextInput::Bytes(bytes) => Ok(Self::Bytes(bytes)),
             ImageFontTextInput::InvalidType => {
                 Err(PilError::TypeError("expected string or bytes".into()))
@@ -27,6 +32,7 @@ impl WrapUnit {
     fn empty_like(&self) -> Self {
         match self {
             Self::Unicode(_) => Self::Unicode(String::new()),
+            Self::Codepoints(_) => Self::Codepoints(Vec::new()),
             Self::Bytes(_) => Self::Bytes(Vec::new()),
         }
     }
@@ -34,6 +40,7 @@ impl WrapUnit {
     fn len(&self) -> usize {
         match self {
             Self::Unicode(text) => text.chars().count(),
+            Self::Codepoints(codepoints) => codepoints.len(),
             Self::Bytes(bytes) => bytes.len(),
         }
     }
@@ -41,6 +48,7 @@ impl WrapUnit {
     fn is_empty(&self) -> bool {
         match self {
             Self::Unicode(text) => text.is_empty(),
+            Self::Codepoints(codepoints) => codepoints.is_empty(),
             Self::Bytes(bytes) => bytes.is_empty(),
         }
     }
@@ -49,6 +57,12 @@ impl WrapUnit {
         match (self, other) {
             (Self::Unicode(left), Self::Unicode(right)) => {
                 Self::Unicode(format!("{left}{right}"))
+            }
+            (Self::Codepoints(left), Self::Codepoints(right)) => {
+                let mut joined = Vec::with_capacity(left.len() + right.len());
+                joined.extend_from_slice(left);
+                joined.extend_from_slice(right);
+                Self::Codepoints(joined)
             }
             (Self::Bytes(left), Self::Bytes(right)) => {
                 let mut joined = Vec::with_capacity(left.len() + right.len());
@@ -67,6 +81,9 @@ impl WrapUnit {
                     .unwrap_or_default()
                     .to_owned(),
             ),
+            (Self::Codepoints(text), Self::Codepoints(prefix)) => {
+                Self::Codepoints(text.get(prefix.len()..).unwrap_or_default().to_vec())
+            }
             (Self::Bytes(bytes), Self::Bytes(prefix)) => {
                 Self::Bytes(bytes.get(prefix.len()..).unwrap_or_default().to_vec())
             }
@@ -78,6 +95,17 @@ impl WrapUnit {
         match self {
             Self::Unicode(text) => {
                 Self::Unicode(text.trim_start_matches(is_python_whitespace).to_owned())
+            }
+            Self::Codepoints(codepoints) => {
+                let mut start = 0;
+                while start < codepoints.len() {
+                    let character = codepoint_char(codepoints[start]);
+                    if !is_python_whitespace(character) {
+                        break;
+                    }
+                    start += 1;
+                }
+                Self::Codepoints(codepoints[start..].to_vec())
             }
             Self::Bytes(bytes) => {
                 let start = bytes
@@ -92,6 +120,7 @@ impl WrapUnit {
     fn leading_newlines(&self) -> Vec<Self> {
         match self {
             Self::Unicode(text) => unicode_leading_newlines(text),
+            Self::Codepoints(codepoints) => codepoint_leading_newlines(codepoints),
             Self::Bytes(bytes) => byte_leading_newlines(bytes),
         }
     }
@@ -99,6 +128,9 @@ impl WrapUnit {
     fn suffix_from(&self, position: usize) -> Self {
         match self {
             Self::Unicode(text) => Self::Unicode(text.chars().skip(position).collect()),
+            Self::Codepoints(codepoints) => {
+                Self::Codepoints(codepoints.get(position..).unwrap_or_default().to_vec())
+            }
             Self::Bytes(bytes) => {
                 Self::Bytes(bytes.get(position..).unwrap_or_default().to_vec())
             }
@@ -108,6 +140,7 @@ impl WrapUnit {
     fn as_input(&self) -> ImageFontTextInput {
         match self {
             Self::Unicode(text) => ImageFontTextInput::Text(text.clone()),
+            Self::Codepoints(text) => ImageFontTextInput::TextCodepoints(text.clone()),
             Self::Bytes(bytes) => ImageFontTextInput::Bytes(bytes.clone()),
         }
     }
@@ -115,6 +148,7 @@ impl WrapUnit {
     fn tokens(&self) -> Vec<Self> {
         match self {
             Self::Unicode(text) => unicode_word_tokens(text),
+            Self::Codepoints(codepoints) => codepoint_word_tokens(codepoints),
             Self::Bytes(bytes) => byte_word_tokens(bytes),
         }
     }
@@ -202,11 +236,14 @@ impl ImageFontTextWrapCallbacks for NativeWrapCallbacks<'_> {
         let height = self
             .height
             .ok_or_else(|| PilError::InternalError("missing text wrap height".into()))?;
-        let candidate = lines
+        let owned_lines = lines
             .iter()
-            .map(text_input_to_unicode)
+            .map(|text| text.clone().into_font_text())
+            .collect::<Result<Vec<_>, _>>()?;
+        let candidate = owned_lines
+            .iter()
+            .map(super::FontText::as_ref)
             .collect::<Vec<_>>();
-        let candidate = candidate.iter().map(String::as_str).collect::<Vec<_>>();
         let options = ImageFontTextOptions {
             embedded_color: self.embedded_color,
             stroke_width: self.stroke_width,
@@ -470,16 +507,9 @@ fn adjusted_size<E: From<PilError>>(size: i64, amount: i64) -> Result<i64, E> {
 fn remaining_text_is_nonempty(text: &ImageFontTextInput) -> bool {
     match text {
         ImageFontTextInput::Text(text) => !text.is_empty(),
+        ImageFontTextInput::TextCodepoints(codepoints) => !codepoints.is_empty(),
         ImageFontTextInput::Bytes(bytes) => !bytes.is_empty(),
         ImageFontTextInput::InvalidType => true,
-    }
-}
-
-fn text_input_to_unicode(text: &ImageFontTextInput) -> String {
-    match text {
-        ImageFontTextInput::Text(text) => text.clone(),
-        ImageFontTextInput::Bytes(bytes) => pillow_bytes_to_text(bytes),
-        ImageFontTextInput::InvalidType => String::new(),
     }
 }
 
@@ -562,6 +592,63 @@ fn unicode_word_tokens(text: &str) -> Vec<WrapUnit> {
         tokens.push(WrapUnit::Unicode(text[start_byte..end_byte].to_owned()));
     }
     tokens
+}
+
+fn codepoint_char(codepoint: u32) -> char {
+    char::from_u32(codepoint).unwrap_or(char::REPLACEMENT_CHARACTER)
+}
+
+fn codepoint_word_tokens(codepoints: &[u32]) -> Vec<WrapUnit> {
+    let mut tokens = Vec::new();
+    let mut index = 0;
+    while index < codepoints.len() {
+        let start = index;
+        while index < codepoints.len() {
+            let character = codepoint_char(codepoints[index]);
+            if !is_python_whitespace(character) {
+                break;
+            }
+            index += 1;
+        }
+        let word_start = index;
+        while index < codepoints.len() {
+            let character = codepoint_char(codepoints[index]);
+            if is_python_whitespace(character) {
+                break;
+            }
+            index += 1;
+        }
+        if word_start == index {
+            break;
+        }
+        tokens.push(WrapUnit::Codepoints(codepoints[start..index].to_vec()));
+    }
+    tokens
+}
+
+fn codepoint_leading_newlines(codepoints: &[u32]) -> Vec<WrapUnit> {
+    let mut segments = Vec::new();
+    let mut index = 0;
+    while index < codepoints.len() {
+        let start = index;
+        while index < codepoints.len() {
+            let character = codepoint_char(codepoints[index]);
+            if character == '\n' || !is_python_whitespace(character) {
+                break;
+            }
+            index += 1;
+        }
+        if index < codepoints.len() {
+            let character = codepoint_char(codepoints[index]);
+            if character == '\n' {
+                index += 1;
+                segments.push(WrapUnit::Codepoints(codepoints[start..index].to_vec()));
+                continue;
+            }
+        }
+        break;
+    }
+    segments
 }
 
 fn byte_word_tokens(text: &[u8]) -> Vec<WrapUnit> {

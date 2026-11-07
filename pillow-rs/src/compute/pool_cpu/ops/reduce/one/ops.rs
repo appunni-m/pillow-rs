@@ -14,7 +14,14 @@ const INPUTS: &[InputContract] =
 
 // NO_PILLOW_SUPPORT: the archived native-byte reducer is retained as a Rust
 // extension for bilevel input; Pillow rejects Reduce for mode `1`.
-pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(OperationId::Reduce, Mode::One, OutputModeRule::Preserve, INPUTS, &[]);
+pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
+    OperationId::Reduce,
+    Mode::One,
+    OutputModeRule::Preserve,
+    INPUTS,
+    &[],
+    "native bilevel Reduce extends Pillow, which rejects this mode",
+);
 
 pub(crate) enum ArchitectureStrategy<'a> {
     Default {

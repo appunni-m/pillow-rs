@@ -3,6 +3,7 @@
 use crate::checked_dims::CheckedDims;
 use crate::compute::pool_cpu::ops::composite::ops::MergeLayout;
 use crate::error::PilError;
+use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{DynamicImage, Mode};
 use std::sync::Arc;
 
@@ -26,9 +27,11 @@ pub(crate) fn interleave(
         MergeLayout::Four => interleave_four(&bands, &mut output),
     }
 
-    crate::compute::pool_cpu::ops::composite::helpers::native_bytes::construct(
+    let mut output = crate::compute::pool_cpu::ops::composite::helpers::native_bytes::construct(
         width, height, mode, output,
-    )
+    )?;
+    preserve_merged_padding(&mut output, mode, layout, pixels)?;
+    Ok(output)
 }
 
 pub(crate) fn collect_bands<'a>(
@@ -75,6 +78,45 @@ fn interleave_three(bands: &[&[u8]], output: &mut [u8], lab_encoding: bool) {
             bands[2][index]
         };
     }
+}
+
+/// Retains zero-filled physical padding written by Pillow's band interleave.
+pub(crate) fn preserve_merged_padding(
+    output: &mut DynamicImage,
+    mode: Mode,
+    layout: MergeLayout,
+    pixel_count: usize,
+) -> Result<(), PilError> {
+    let lane_count = match layout {
+        MergeLayout::Two => 2,
+        MergeLayout::Three { .. } => 1,
+        MergeLayout::Four => 0,
+    };
+    let Some(expected_lanes) = mode.hidden_pixel_lane_count() else {
+        return if lane_count == 0 {
+            Ok(())
+        } else {
+            Err(PilError::InternalError(
+                "Merge layout declared omitted lanes for a full-storage mode".into(),
+            ))
+        };
+    };
+    if lane_count != expected_lanes {
+        return Err(PilError::InternalError(
+            "Merge layout did not match the mode's omitted lanes".into(),
+        ));
+    }
+    if pixel_count == 0 {
+        return Ok(());
+    }
+    let lanes = HiddenPixelLanes::constant(expected_lanes, pixel_count, [0, 0])
+        .ok_or_else(|| PilError::InternalError("Merge lane extent was invalid".into()))?;
+    if !output.replace_hidden_pixel_lanes(Some(lanes)) {
+        return Err(PilError::InternalError(
+            "Merge output lanes did not match its mode".into(),
+        ));
+    }
+    Ok(())
 }
 
 fn interleave_four(bands: &[&[u8]], output: &mut [u8]) {
@@ -139,9 +181,11 @@ pub(crate) fn interleave_wide(
         ((pixels - vector_pixels) * channels) as u64,
     );
     crate::compute::record_pipeline_operation_path("wide-shuffle");
-    crate::compute::pool_cpu::ops::composite::helpers::native_bytes::construct(
+    let mut output = crate::compute::pool_cpu::ops::composite::helpers::native_bytes::construct(
         width, height, mode, output,
-    )
+    )?;
+    preserve_merged_padding(&mut output, mode, layout, pixels)?;
+    Ok(output)
 }
 
 fn merge_wide_block(
@@ -169,7 +213,7 @@ fn merge_wide_block(
     Some((
         pixels_per_block * channels,
         wide::u8x16::new(packed)
-            .swizzle_relaxed(wide::u8x16::new(indices))
+            .shuffle(wide::u8x16::new(indices))
             .to_array(),
     ))
 }

@@ -313,6 +313,11 @@ pub enum InputContract {
         /// Existing embedded-color rejection.
         embedded_color_rejection: &'static str,
     },
+    /// FloodFill retains host values and mutates through PixelAccess callbacks.
+    /// The host performs Pillow's Python arithmetic and equality protocols;
+    /// seed and neighbor reads swallow ValueError/IndexError, while later
+    /// comparison and write failures propagate after completed mutations.
+    FloodFillInputs,
     /// Paste's exact source/mask relation, including its compact bitmap form.
     PasteInputs {
         /// Mode-specific source, mask, and size rules bound to execution.
@@ -332,7 +337,7 @@ pub enum InputContract {
         /// Whether this operation requires a caller-selected rank inside the window.
         rank_required: bool,
     },
-    /// Odd, positive square neighborhood after direct ModeFilter normalization.
+    /// Zero or odd positive square neighborhood after direct ModeFilter normalization.
     ModeFilterWindow,
     /// Merge's exact band count, accepted source identities, and size contract.
     MergeBandLayout {

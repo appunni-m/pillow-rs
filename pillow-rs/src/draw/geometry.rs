@@ -237,6 +237,45 @@ pub(crate) fn wide_line_polygon_points(
     y1: i32,
     width: u32,
 ) -> Option<[(i32, i32); 4]> {
+    wide_line_polygon_points_with_half_width(
+        x0,
+        y0,
+        x1,
+        y1,
+        f64::from(width.saturating_sub(1)) / 2.0,
+    )
+}
+
+/// Construct Pillow's wide-line polygon from the signed C width passed by
+/// `ImagingDrawPolygon` after the Python wrapper has transformed `width`.
+pub(crate) fn wide_line_polygon_points_signed(
+    x0: i32,
+    y0: i32,
+    x1: i32,
+    y1: i32,
+    width: i32,
+) -> Option<[(i32, i32); 4]> {
+    // Pillow computes `width - 1` as a C int before converting it to double.
+    // Use i64 here to keep Rust defined at i32::MIN while matching all other
+    // signed C-int widths. NO_PILLOW_SUPPORT: Pillow's signed subtraction
+    // overflows at i32::MIN, so Rust defines that boundary with i64 arithmetic.
+    let width_minus_one = i64::from(width) - 1;
+    wide_line_polygon_points_with_half_width(
+        x0,
+        y0,
+        x1,
+        y1,
+        width_minus_one as f64 / 2.0,
+    )
+}
+
+fn wide_line_polygon_points_with_half_width(
+    x0: i32,
+    y0: i32,
+    x1: i32,
+    y1: i32,
+    half_width: f64,
+) -> Option<[(i32, i32); 4]> {
     let delta_x = i64::from(x1) - i64::from(x0);
     let delta_y = i64::from(y1) - i64::from(y0);
     if delta_x == 0 && delta_y == 0 {
@@ -250,7 +289,6 @@ pub(crate) fn wide_line_polygon_points(
         .saturating_mul(delta_x)
         .saturating_add(delta_y.saturating_mul(delta_y));
     let length = (squared_length as f64).sqrt();
-    let half_width = f64::from(width.saturating_sub(1)) / 2.0;
     let ratio_max = f64::from(round_up(half_width)) / length;
     let ratio_min = f64::from(round_down(half_width)) / length;
     let offset_x_min = round_down(ratio_min * delta_y as f64);

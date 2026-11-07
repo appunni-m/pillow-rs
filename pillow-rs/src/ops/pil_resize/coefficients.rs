@@ -8,10 +8,12 @@ use std::sync::{Arc, Mutex, OnceLock};
 pub(super) const PRECISION_BITS: u32 = 22;
 pub(super) const PRECISION: i64 = 1i64 << PRECISION_BITS; // 2^22
 pub(super) const HALF_PRECISION: i64 = 1i64 << (PRECISION_BITS - 1); // 2^21
+#[cfg(test)]
 pub(super) const BOXED_ZERO_FAST_PATH_MAX_PIXELS: usize = 256 * 256;
 
 /// Round a float to u8, matching PIL's fixed-point rounding:
 ///   `(int)(v + 0.5)` clamped to [0, 255]
+#[cfg(test)]
 pub(super) fn pil_round(v: f64) -> u8 {
     let v = v + 0.5;
     if v <= 0.0 {
@@ -37,6 +39,7 @@ pub(crate) fn fixed_point_to_u8(sum: i64) -> u8 {
 }
 
 #[inline]
+#[cfg(test)]
 pub(super) fn fixed_point_to_u8_i32(sum: i32) -> u8 {
     let value = (sum + (1_i32 << (PRECISION_BITS - 1))) >> PRECISION_BITS;
     value.clamp(0, 255) as u8
@@ -74,6 +77,7 @@ impl FilterCoeffs {
 
 /// Prove every ordered byte-sample partial sum, including Pillow's rounding
 /// bias, fits in i32 before selecting the narrow HSV resize kernel.
+#[cfg(test)]
 pub(super) fn resize_u8_coefficients_fit_i32(coeffs: &FilterCoeffs) -> bool {
     if coeffs.count.len() != coeffs.offsets.len() {
         return false;

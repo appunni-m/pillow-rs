@@ -2,6 +2,7 @@
 
 use crate::checked_dims::CheckedDims;
 use crate::compute::pool_cpu::ops::composite::helpers::{merge, native_bytes};
+use crate::compute::pool_cpu::ops::composite::ops::MergeLayout;
 use crate::compute::registry::support::{StrategyGuard, StrategySelection};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
@@ -56,7 +57,13 @@ pub(crate) fn merge(
     let (output, vector_blocks, scalar_tail) = unsafe {
         interleave_rgb_ssse3(red, green, blue, pixels, output_len)
     };
-    let image = native_bytes::construct(width, height, Mode::ImageRgb8, output)?;
+    let mut image = native_bytes::construct(width, height, Mode::ImageRgb8, output)?;
+    merge::preserve_merged_padding(
+        &mut image,
+        Mode::ImageRgb8,
+        MergeLayout::Three { lab_encoding: false },
+        pixels,
+    )?;
     crate::compute::record_pipeline_allocation(output_len);
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);

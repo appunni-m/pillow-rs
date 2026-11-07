@@ -4,6 +4,7 @@
 use crate::compute::registry::support::StrategySelection;
 use crate::raster::{DynamicImage, Rgb32FImage};
 
+#[cfg(test)]
 pub(crate) fn resize(
     input: &Rgb32FImage,
     width: u32,

@@ -7,25 +7,30 @@ pub(crate) fn getmetrics(font: &FreeTypeFont) -> (u32, u32) {
     )
 }
 
-/// Return whether the loaded face exposes OpenType or Type 1 variation axes.
-pub(crate) fn getlength(font: &FreeTypeFont, text: &str) -> Result<f32, PilError> {
+pub(crate) fn getlength_text(font: &FreeTypeFont, text: FontTextRef<'_>) -> Result<f32, PilError> {
     validate_text_length(text)?;
     Ok(length_from_basic_layout_with_flags(font, text, 0)? as f32 / 64.0)
 }
 
-/// Return default-layout advance and bounds from one glyph pass.
-pub(crate) fn getlength_and_bbox(
+pub(crate) fn getlength_and_bbox_text(
     font: &FreeTypeFont,
-    text: &str,
+    text: FontTextRef<'_>,
 ) -> Result<FontLengthAndBounds, PilError> {
     validate_text_length(text)?;
-    let run = glyph_run(font, text, TGT_NORM)?;
+    let run = glyph_run_text(font, text, TGT_NORM)?;
     let length = run.final_pen as f32 / 64.0;
     let bbox = bbox_from_glyph_run(font, &run)?;
     Ok((length, bbox))
 }
 
 pub(crate) fn native_getlength_26dot6(font: &FreeTypeFont, text: &str) -> Result<i32, PilError> {
+    native_getlength_26dot6_text(font, FontTextRef::String(text))
+}
+
+pub(crate) fn native_getlength_26dot6_text(
+    font: &FreeTypeFont,
+    text: FontTextRef<'_>,
+) -> Result<i32, PilError> {
     validate_text_length(text)?;
     length_from_basic_layout_with_flags(font, text, 0)
 }
@@ -34,7 +39,14 @@ pub(crate) fn native_getsize(
     font: &FreeTypeFont,
     text: &str,
 ) -> Result<FontSizeAndOffset, PilError> {
-    let (left, top, right, bottom) = getbbox(font, text)?;
+    native_getsize_text(font, FontTextRef::String(text))
+}
+
+pub(crate) fn native_getsize_text(
+    font: &FreeTypeFont,
+    text: FontTextRef<'_>,
+) -> Result<FontSizeAndOffset, PilError> {
+    let (left, top, right, bottom) = getbbox_text(font, text)?;
     Ok(((right - left, bottom - top), (left, top)))
 }
 
@@ -55,32 +67,39 @@ pub(crate) fn native_face_info(font: &FreeTypeFont) -> ImageFontFaceInfo<'_> {
     }
 }
 
-pub(crate) fn getlength_with_options(
+pub(crate) fn getlength_text_with_options(
     font: &FreeTypeFont,
-    text: &str,
+    text: FontTextRef<'_>,
     options: &ImageFontTextOptions,
 ) -> Result<f32, PilError> {
     validate_text_length(text)?;
     validate_basic_layout_options(options)?;
     if options.mode.as_deref() != Some("1") {
-        return getlength(font, text);
+        return getlength_text(font, text);
     }
     Ok(length_from_basic_layout_with_flags(font, text, text_load_flags(options))? as f32 / 64.0)
 }
 
 pub(crate) fn getbbox(font: &FreeTypeFont, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
-    validate_text_length(text)?;
-    bbox_from_run(font, text)
+    getbbox_text(font, FontTextRef::String(text))
 }
 
-pub(crate) fn getbbox_with_options(
+pub(crate) fn getbbox_text(
     font: &FreeTypeFont,
-    text: &str,
+    text: FontTextRef<'_>,
+) -> Result<(i32, i32, i32, i32), PilError> {
+    validate_text_length(text)?;
+    bbox_from_run_text(font, text)
+}
+
+pub(crate) fn getbbox_text_with_options(
+    font: &FreeTypeFont,
+    text: FontTextRef<'_>,
     options: &ImageFontTextOptions,
 ) -> Result<(f32, f32, f32, f32), PilError> {
     validate_text_length(text)?;
     validate_basic_layout_options(options)?;
-    let bbox = bbox_from_run_with_flags(font, text, text_load_flags(options))?;
+    let bbox = bbox_from_run_text_with_flags(font, text, text_load_flags(options))?;
     let (left, top, right, bottom) = anchored_bbox(
         font,
         bbox,
@@ -96,7 +115,16 @@ pub(crate) fn getbbox_binary(
     font: &FreeTypeFont,
     text: &str,
 ) -> Result<(i32, i32, i32, i32), PilError> {
-    bbox_from_run_with_flags(font, text, TGT_MONO)
+    getbbox_binary_text(font, FontTextRef::String(text))
+}
+
+#[cfg(feature = "test-api")]
+pub(crate) fn getbbox_binary_text(
+    font: &FreeTypeFont,
+    text: FontTextRef<'_>,
+) -> Result<(i32, i32, i32, i32), PilError> {
+    validate_text_length(text)?;
+    bbox_from_run_text_with_flags(font, text, TGT_MONO)
 }
 
 pub(crate) fn validate_basic_layout_options(
@@ -125,8 +153,8 @@ pub(super) fn text_load_flags(options: &ImageFontTextOptions) -> i32 {
     }
 }
 
-pub(super) fn validate_text_length(text: &str) -> Result<(), PilError> {
-    if text.chars().count() > MAX_STRING_LENGTH {
+pub(super) fn validate_text_length(text: FontTextRef<'_>) -> Result<(), PilError> {
+    if text.len() > MAX_STRING_LENGTH {
         return Err(PilError::ValueError("too many characters in string".into()));
     }
     Ok(())
@@ -196,8 +224,8 @@ pub(super) fn native_long_to_i64(value: ffi::FT_Long) -> i64 {
     i64::from(value)
 }
 
-fn gid(face: &ffi::FT_Face, ch: char) -> u32 {
-    ffi::FT_Get_Char_Index(face, ch as ffi::FT_ULong)
+fn gid(face: &ffi::FT_Face, codepoint: u32) -> u32 {
+    ffi::FT_Get_Char_Index(face, codepoint as ffi::FT_ULong)
 }
 
 fn kern_26dot6(face: &ffi::FT_Face, l: u32, r: u32) -> i32 {
@@ -230,7 +258,7 @@ fn ceil26(x: i64) -> i32 {
 
 fn length_from_basic_layout_with_flags(
     ttf: &FreeTypeFont,
-    text: &str,
+    text: FontTextRef<'_>,
     load_flags: i32,
 ) -> Result<i32, PilError> {
     if text.is_empty() {
@@ -239,8 +267,8 @@ fn length_from_basic_layout_with_flags(
 
     let mut pen = 0i32;
     let mut prev: Option<u32> = None;
-    for ch in text.chars() {
-        let glyph_index = basic_layout_glyph_index(ttf, ch);
+    for codepoint in text.codepoints() {
+        let glyph_index = basic_layout_glyph_index(ttf, codepoint);
         let advance = basic_layout_advance_cached(ttf, glyph_index, load_flags)?;
         if let Some(previous) = prev.filter(|previous| *previous != 0 && glyph_index != 0) {
             pen = pen.saturating_add(basic_layout_kern_cached(ttf, previous, glyph_index));
@@ -252,22 +280,22 @@ fn length_from_basic_layout_with_flags(
     Ok(pen)
 }
 
-fn basic_layout_glyph_index(ttf: &FreeTypeFont, ch: char) -> u32 {
+fn basic_layout_glyph_index(ttf: &FreeTypeFont, codepoint: u32) -> u32 {
     if let Some(glyph_index) = ttf
         .engine
         .basic_layout_cache
         .borrow()
         .glyph_indices
-        .get(&ch)
+        .get(&codepoint)
         .copied()
     {
         return glyph_index;
     }
 
-    let glyph_index = gid(&ttf.engine.face, ch);
+    let glyph_index = gid(&ttf.engine.face, codepoint);
     insert_bounded(
         &mut ttf.engine.basic_layout_cache.borrow_mut().glyph_indices,
-        ch,
+        codepoint,
         glyph_index,
     );
     glyph_index
@@ -367,21 +395,20 @@ pub(super) struct RunGlyph {
     pub(super) layout_cbox: ffi::FT_BBox,
 }
 
-/// Load each glyph WITHOUT rendering, collect advances and metrics.
-pub(super) fn glyph_run(
+pub(super) fn glyph_run_text(
     ttf: &FreeTypeFont,
-    text: &str,
+    text: FontTextRef<'_>,
     load_flags: i32,
 ) -> Result<GlyphRun, PilError> {
-    glyph_run_with_slot_visitor(ttf, text, load_flags, |slot, _, _| {
+    glyph_run_with_slot_visitor_text(ttf, text, load_flags, |slot, _, _| {
         drop(slot);
         Ok(())
     })
 }
 
-pub(super) fn glyph_run_with_slot_visitor(
+pub(super) fn glyph_run_with_slot_visitor_text(
     ttf: &FreeTypeFont,
-    text: &str,
+    text: FontTextRef<'_>,
     load_flags: i32,
     mut visit_slot: impl FnMut(ffi::FT_GlyphSlot, u32, i32) -> Result<(), PilError>,
 ) -> Result<GlyphRun, PilError> {
@@ -398,8 +425,8 @@ pub(super) fn glyph_run_with_slot_visitor(
     let mut out = Vec::new();
     let mut max_pen = 0i32;
 
-    for ch in text.chars() {
-        let g = gid(face, ch);
+    for codepoint in text.codepoints() {
+        let g = gid(face, codepoint);
         // Match Pillow's BASIC layout order: load the current glyph first,
         // then adjust the preceding advance with pixel-rounded kerning.
         let slot = ffi::FT_Load_Glyph(face, g, load_flags).map_err(ft_error_to_pil)?;
@@ -431,16 +458,19 @@ pub(super) fn glyph_run_with_slot_visitor(
     })
 }
 
-fn bbox_from_run(ttf: &FreeTypeFont, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
-    bbox_from_run_with_flags(ttf, text, TGT_NORM)
+fn bbox_from_run_text(
+    ttf: &FreeTypeFont,
+    text: FontTextRef<'_>,
+) -> Result<(i32, i32, i32, i32), PilError> {
+    bbox_from_run_text_with_flags(ttf, text, TGT_NORM)
 }
 
-pub(super) fn bbox_from_run_with_flags(
+pub(super) fn bbox_from_run_text_with_flags(
     ttf: &FreeTypeFont,
-    text: &str,
+    text: FontTextRef<'_>,
     load_flags: i32,
 ) -> Result<(i32, i32, i32, i32), PilError> {
-    let run = glyph_run(ttf, text, load_flags)?;
+    let run = glyph_run_text(ttf, text, load_flags)?;
     bbox_from_glyph_run(ttf, &run)
 }
 

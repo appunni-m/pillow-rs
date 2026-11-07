@@ -317,7 +317,7 @@ fn format_geometry_params(op: &PipelineOp) -> Option<Vec<u32>> {
 
         // ── Convert: encode ColorMode as u32 code ──
         PipelineOp::Convert { mode, .. } => {
-            let code: u32 = match mode {
+            let code: u32 = match *mode {
                 ColorMode::L => 0,
                 ColorMode::LA => 1,
                 ColorMode::RGB => 2,
@@ -333,6 +333,7 @@ fn format_geometry_params(op: &PipelineOp) -> Option<Vec<u32>> {
                 ColorMode::RgbPremultiplied => 10,
                 ColorMode::LaPremultiplied => 11,
                 ColorMode::Rgbx => 12,
+                _ => return None,
             };
             vec![code]
         }

@@ -1,57 +1,40 @@
-use pyo3::prelude::{Bound, PyAny, PyErr, PyResult};
+use pyo3::prelude::{Bound, PyAny, PyErr, PyRef, PyResult};
 use pyo3::types::{
-    PyAnyMethods, PyBool, PyByteArray, PyBytes, PyBytesMethods, PyDict, PyFloat, PyInt, PyList,
-    PyListMethods, PyString, PyTuple, PyTupleMethods, PyTypeMethods,
+    PyAnyMethods, PyBool, PyByteArray, PyDict, PyFloat, PyInt, PyList, PyListMethods, PySequence,
+    PySequenceMethods, PyTuple, PyTupleMethods, PyTypeMethods,
 };
+
+use crate::PillowFloatPointBuffer;
 
 pub(super) fn draw_bitmap_position_from_python(
     xy: &Bound<'_, PyAny>,
 ) -> PyResult<(i32, i32)> {
-    if let Some(position) = draw_bitmap_position_from_float_buffer(xy) {
-        return position;
-    }
-    if !draw_bitmap_is_sequence(xy) {
-        return Err(pyo3::exceptions::PyTypeError::new_err(
-            "argument must be sequence",
-        ));
-    }
-    let length = draw_bitmap_sequence_length(xy)?;
     let mut coordinates = [0.0; 2];
     let mut coordinate_count = 0;
-
-    for index in 0..length {
-        let item = match draw_bitmap_sequence_item(xy, index) {
-            Ok(item) => item,
-            Err(error) if error.is_instance_of::<pyo3::exceptions::PyIndexError>(xy.py()) => {
-                break;
-            }
-            Err(error) => return Err(error),
-        };
-        append_draw_bitmap_coordinate(&item, &mut coordinates, &mut coordinate_count)?;
-    }
-
-    if coordinate_count % 2 != 0 {
-        return Err(pyo3::exceptions::PyValueError::new_err(
-            "wrong number of coordinates",
-        ));
-    }
-    if coordinate_count != 2 {
+    let flattened_count = draw_path_flatten_from_python(xy, |coordinate| {
+        if coordinate_count < coordinates.len() {
+            coordinates[coordinate_count] = coordinate;
+        }
+        coordinate_count = coordinate_count.saturating_add(1);
+        Ok(())
+    })?;
+    if flattened_count != 2 {
         return Err(draw_bitmap_single_point_error());
     }
     Ok((coordinates[0] as i32, coordinates[1] as i32))
 }
 
-fn append_draw_bitmap_coordinate(
+fn append_draw_path_coordinate(
     item: &Bound<'_, PyAny>,
-    coordinates: &mut [f64; 2],
+    emit: &mut impl FnMut(f64) -> PyResult<()>,
     coordinate_count: &mut usize,
 ) -> PyResult<()> {
-    if draw_bitmap_value_is_numeric(item) {
-        append_draw_bitmap_value(
-            draw_bitmap_sequence_number(item)?,
-            coordinates,
+    if draw_path_value_is_numeric(item) {
+        emit_draw_path_coordinate(
+            draw_path_sequence_number(item)?,
+            emit,
             coordinate_count,
-        );
+        )?;
         return Ok(());
     }
     if let Ok(list) = item.cast::<PyList>() {
@@ -60,27 +43,23 @@ fn append_draw_bitmap_coordinate(
                 "coordinate list must contain exactly 2 coordinates",
             ));
         }
-        for index in 0..2 {
-            let value = list.get_item(index)?;
-            if !draw_bitmap_value_is_numeric(&value) {
-                return Err(pyo3::exceptions::PyValueError::new_err(
-                    "coordinate list must contain numbers",
-                ));
-            }
-            append_draw_bitmap_value(
-                draw_bitmap_sequence_number(&value)?,
-                coordinates,
-                coordinate_count,
-            );
+        let x = list.get_item(0)?;
+        let y = list.get_item(1)?;
+        if !draw_path_value_is_numeric(&x) || !draw_path_value_is_numeric(&y) {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "coordinate list must contain numbers",
+            ));
         }
+        emit_draw_path_coordinate(draw_path_sequence_number(&x)?, emit, coordinate_count)?;
+        emit_draw_path_coordinate(draw_path_sequence_number(&y)?, emit, coordinate_count)?;
         return Ok(());
     }
     if let Ok(tuple) = item.cast::<PyTuple>() {
         let pair = tuple.extract::<(f64, f64)>().map_err(|_| {
             pyo3::exceptions::PyValueError::new_err("incorrect coordinate type")
         })?;
-        append_draw_bitmap_value(pair.0, coordinates, coordinate_count);
-        append_draw_bitmap_value(pair.1, coordinates, coordinate_count);
+        emit_draw_path_coordinate(pair.0, emit, coordinate_count)?;
+        emit_draw_path_coordinate(pair.1, emit, coordinate_count)?;
         return Ok(());
     }
     Err(pyo3::exceptions::PyValueError::new_err(
@@ -88,10 +67,15 @@ fn append_draw_bitmap_coordinate(
     ))
 }
 
-fn draw_bitmap_sequence_number(value: &Bound<'_, PyAny>) -> PyResult<f64> {
+fn draw_path_sequence_number(value: &Bound<'_, PyAny>) -> PyResult<f64> {
+    if value.is_instance_of::<PyFloat>() {
+        return value.extract::<f64>();
+    }
     if value.is_instance_of::<PyInt>() {
         // Pillow's path adapter narrows Python integers through C `long` and
-        // then `float` before storing them as a double coordinate.
+        // then `float` before storing them as a double coordinate. PyLong_Check
+        // also includes int subclasses, so keep their stored integer value on
+        // this conversion path instead of invoking their Python `__float__`.
         return value
             .extract::<std::os::raw::c_long>()
             .map(|value| f64::from(value as f32));
@@ -99,53 +83,73 @@ fn draw_bitmap_sequence_number(value: &Bound<'_, PyAny>) -> PyResult<f64> {
     value.extract::<f64>()
 }
 
-fn draw_bitmap_position_from_float_buffer(
-    xy: &Bound<'_, PyAny>,
-) -> Option<PyResult<(i32, i32)>> {
-    // SAFETY: Py_buffer is a C output structure whose all-zero state is valid
-    // input for PyObject_GetBuffer to initialize.
-    let mut view: pyo3::ffi::Py_buffer = unsafe { std::mem::zeroed() };
-    // Pillow requests a simple buffer and interprets its contents as native
-    // float32 coordinates, regardless of the exporter's declared format.
-    let acquired = unsafe {
-        pyo3::ffi::PyObject_GetBuffer(xy.as_ptr(), &mut view, pyo3::ffi::PyBUF_SIMPLE)
-    };
-    if acquired < 0 {
-        // PyPath_Flatten clears buffer acquisition errors and tries sequences.
-        unsafe { pyo3::ffi::PyErr_Clear() };
-        return None;
-    }
-
-    let result = draw_bitmap_position_from_float_buffer_view(&view);
-    // SAFETY: a successful PyObject_GetBuffer initialized `view`, and this
-    // function releases exactly that acquired view while the GIL is held.
-    unsafe { pyo3::ffi::PyBuffer_Release(&mut view) };
-    Some(result)
+fn draw_path_coordinates_from_python(value: &Bound<'_, PyAny>) -> PyResult<Vec<f64>> {
+    let mut coordinates = Vec::new();
+    draw_path_flatten_from_python(value, |coordinate| {
+        coordinates
+            .try_reserve(1)
+            .map_err(|_| pyo3::exceptions::PyMemoryError::new_err("path is too large"))?;
+        coordinates.push(coordinate);
+        Ok(())
+    })?;
+    Ok(coordinates)
 }
 
-fn draw_bitmap_position_from_float_buffer_view(
-    view: &pyo3::ffi::Py_buffer,
-) -> PyResult<(i32, i32)> {
-    let float_pair_bytes = 2 * std::mem::size_of::<f32>();
-    let point_count = usize::try_from(view.len)
-        .ok()
-        .map(|length| length / float_pair_bytes)
-        .unwrap_or_default();
-    if point_count != 1 || view.buf.is_null() {
-        return Err(draw_bitmap_single_point_error());
+fn draw_path_flatten_from_python(
+    value: &Bound<'_, PyAny>,
+    mut emit: impl FnMut(f64) -> PyResult<()>,
+) -> PyResult<usize> {
+    let mut coordinate_count = 0;
+    if let Ok(path) = value.extract::<PyRef<'_, crate::image_path::PyImagePath>>() {
+        for [x, y] in path.points_for_draw() {
+            emit_draw_path_coordinate(x, &mut emit, &mut coordinate_count)?;
+            emit_draw_path_coordinate(y, &mut emit, &mut coordinate_count)?;
+        }
+        return Ok(coordinate_count);
     }
+    if let Some(buffer) = PillowFloatPointBuffer::from_python(value) {
+        let mut coordinate_count = 0;
+        for index in 0..buffer.coordinate_count() {
+            emit_draw_path_coordinate(buffer.coordinate(index)?, &mut emit, &mut coordinate_count)?;
+        }
+        return Ok(coordinate_count);
+    }
+    if !draw_path_is_sequence(value) {
+        return Err(pyo3::exceptions::PyTypeError::new_err(
+            "argument must be sequence",
+        ));
+    }
+    let length = draw_path_sequence_length(value)?;
+    let is_builtin_sequence = value.cast::<PyList>().is_ok() || value.cast::<PyTuple>().is_ok();
+    for index in 0..length {
+        let item = match draw_path_sequence_item(value, index) {
+            Ok(item) => item,
+            Err(error)
+                if !is_builtin_sequence
+                    && error.is_instance_of::<pyo3::exceptions::PyIndexError>(value.py()) =>
+            {
+                break;
+            }
+            Err(error) => return Err(error),
+        };
+        append_draw_path_coordinate(&item, &mut emit, &mut coordinate_count)?;
+    }
+    if coordinate_count % 2 != 0 {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "wrong number of coordinates",
+        ));
+    }
+    Ok(coordinate_count)
+}
 
-    // SAFETY: one point requires at least two f32 values. PyBUF_SIMPLE gives a
-    // contiguous byte view; read_unaligned handles exporters without f32
-    // alignment. The view stays acquired until both values have been copied.
-    let coordinates = unsafe {
-        let values = view.buf.cast::<f32>();
-        [
-            std::ptr::read_unaligned(values),
-            std::ptr::read_unaligned(values.add(1)),
-        ]
-    };
-    Ok((coordinates[0] as i32, coordinates[1] as i32))
+fn emit_draw_path_coordinate(
+    coordinate: f64,
+    emit: &mut impl FnMut(f64) -> PyResult<()>,
+    coordinate_count: &mut usize,
+) -> PyResult<()> {
+    emit(coordinate)?;
+    *coordinate_count = coordinate_count.saturating_add(1);
+    Ok(())
 }
 
 fn draw_bitmap_single_point_error() -> PyErr {
@@ -154,79 +158,48 @@ fn draw_bitmap_single_point_error() -> PyErr {
     )
 }
 
-fn append_draw_bitmap_value(
-    value: f64,
-    coordinates: &mut [f64; 2],
-    coordinate_count: &mut usize,
-) {
-    if *coordinate_count < coordinates.len() {
-        coordinates[*coordinate_count] = value;
-    }
-    *coordinate_count = (*coordinate_count).saturating_add(1);
+fn draw_path_value_is_numeric(value: &Bound<'_, PyAny>) -> bool {
+    value.is_instance_of::<PyInt>()
+        || value.is_instance_of::<PyFloat>()
+        || value.get_type().hasattr("__float__").unwrap_or(false)
+        || value.get_type().hasattr("__index__").unwrap_or(false)
 }
 
-fn draw_bitmap_value_is_numeric(value: &Bound<'_, PyAny>) -> bool {
-    // SAFETY: `value` is a live GIL-bound Python object. PyNumber_Check reads
-    // its type slots and neither takes ownership nor retains the pointer.
-    unsafe { pyo3::ffi::PyNumber_Check(value.as_ptr()) != 0 }
+fn draw_path_is_sequence(value: &Bound<'_, PyAny>) -> bool {
+    value.cast::<PySequence>().is_ok()
 }
 
-fn draw_bitmap_is_sequence(value: &Bound<'_, PyAny>) -> bool {
-    // SAFETY: `value` is a live GIL-bound Python object. PySequence_Check only
-    // inspects its type slots and does not retain the pointer.
-    unsafe { pyo3::ffi::PySequence_Check(value.as_ptr()) != 0 }
+fn draw_path_sequence_length(value: &Bound<'_, PyAny>) -> PyResult<usize> {
+    Ok(value.cast::<PySequence>()?.len()?)
 }
 
-fn draw_bitmap_sequence_length(value: &Bound<'_, PyAny>) -> PyResult<usize> {
-    // SAFETY: the live Python object passed PySequence_Check immediately before
-    // this call, and the GIL is held for the duration of the binding.
-    let length = unsafe { pyo3::ffi::PySequence_Size(value.as_ptr()) };
-    if length < 0 {
-        return Err(PyErr::fetch(value.py()));
-    }
-    Ok(length as usize)
-}
-
-fn draw_bitmap_sequence_item(
-    value: &Bound<'_, PyAny>,
+fn draw_path_sequence_item<'py>(
+    value: &Bound<'py, PyAny>,
     index: usize,
-) -> PyResult<Bound<'_, PyAny>> {
-    // PySequence_Size returns Py_ssize_t, so every loop index is representable
-    // as isize. The live sequence and GIL satisfy PySequence_GetItem's inputs.
-    let index = isize::try_from(index).map_err(|_| {
-        pyo3::exceptions::PyOverflowError::new_err("coordinate sequence is too large")
-    })?;
-    // SAFETY: `value` passed PySequence_Check and remains live under the GIL;
-    // PySequence_GetItem returns a new owned reference or NULL with an error.
-    unsafe {
-        Bound::from_owned_ptr_or_err(
-            value.py(),
-            pyo3::ffi::PySequence_GetItem(value.as_ptr(), index),
-        )
+) -> PyResult<Bound<'py, PyAny>> {
+    if let Ok(list) = value.cast::<PyList>() {
+        return list.get_item(index);
     }
+    if let Ok(tuple) = value.cast::<PyTuple>() {
+        return tuple.get_item(index);
+    }
+    value.cast::<PySequence>()?.get_item(index)
 }
 
-pub(super) fn draw_points_input_from_python(xy: &Bound<'_, PyAny>) -> pillow_rs::DrawPointsInput {
-    if let Ok(values) = xy.extract::<Vec<i32>>() {
-        return pillow_rs::DrawPointsInput::Flat(values);
-    }
-    if let Ok(points) = xy.extract::<Vec<Vec<i32>>>() {
-        return pillow_rs::DrawPointsInput::Nested(points);
-    }
-    if xy.is_instance_of::<PyList>() || xy.is_instance_of::<PyTuple>() {
-        return pillow_rs::DrawPointsInput::InvalidSequence;
-    }
-    pillow_rs::DrawPointsInput::Invalid
+pub(super) fn draw_points_input_from_python(
+    xy: &Bound<'_, PyAny>,
+) -> PyResult<pillow_rs::DrawPointsInput> {
+    Ok(pillow_rs::DrawPointsInput::PillowCoordinates(
+        draw_path_coordinates_from_python(xy)?,
+    ))
 }
 
-pub(super) fn draw_box_input_from_python(xy: &Bound<'_, PyAny>) -> pillow_rs::DrawBoxInput {
-    if let Ok(points) = xy.extract::<Vec<Vec<i32>>>() {
-        return pillow_rs::DrawBoxInput::Nested(points);
-    }
-    if let Ok(values) = xy.extract::<Vec<i32>>() {
-        return pillow_rs::DrawBoxInput::Flat(values);
-    }
-    pillow_rs::DrawBoxInput::Invalid
+pub(super) fn draw_box_input_from_python(
+    xy: &Bound<'_, PyAny>,
+) -> PyResult<pillow_rs::DrawBoxInput> {
+    Ok(pillow_rs::DrawBoxInput::PillowCoordinates(
+        draw_path_coordinates_from_python(xy)?,
+    ))
 }
 
 pub(super) fn draw_circle_center_input_from_python(
@@ -247,7 +220,7 @@ pub(super) fn draw_circle_center_input_from_python(
     )
 }
 
-pub(super) fn draw_color_input_from_python(
+pub(crate) fn draw_color_input_from_python(
     val: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<pillow_rs::DrawColorInput> {
     let Some(val) = val else {
@@ -378,7 +351,7 @@ fn draw_mixed_numeric_tuple_components(
     (contains_integer && contains_float).then_some(values)
 }
 
-pub(super) fn draw_features_presence_from_python(
+pub(crate) fn draw_features_presence_from_python(
     features: Option<&Bound<'_, PyAny>>,
 ) -> bool {
     // This build has BASIC layout only. Pillow rejects every non-None feature
@@ -387,18 +360,12 @@ pub(super) fn draw_features_presence_from_python(
     features.is_some()
 }
 
-pub(super) fn draw_text_input_from_python(
+pub(crate) fn draw_text_input_from_python(
     value: &Bound<'_, PyAny>,
 ) -> PyResult<pillow_rs::ImageFontTextInput> {
-    if let Ok(value) = value.cast::<PyBytes>() {
-        return Ok(pillow_rs::ImageFontTextInput::Bytes(
-            value.as_bytes().to_vec(),
-        ));
-    }
-    if let Ok(value) = value.cast::<PyString>() {
-        return Ok(pillow_rs::ImageFontTextInput::Text(
-            value.to_string_lossy().into_owned(),
-        ));
+    let input = crate::inputs::font_text_input_from_python(value)?;
+    if !matches!(&input, pillow_rs::ImageFontTextInput::InvalidType) {
+        return Ok(input);
     }
     if value.is_instance_of::<PyByteArray>() {
         return Err(pyo3::exceptions::PyTypeError::new_err(

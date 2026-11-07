@@ -4,8 +4,7 @@ use crate::inputs::{
     c_int_from_python, nonnegative_output_size_items_from_python, transform_data_from_python,
     transform_fill_after_size_from_python, transform_fill_preflight_from_python,
 };
-use pyo3::exceptions::PyValueError;
-use pyo3::prelude::{Bound, PyAny, PyResult, Python};
+use pyo3::prelude::{Bound, Py, PyAny, PyResult, Python};
 use pyo3::types::{PyAnyMethods, PyDict, PyDictMethods, PyTuple, PyTupleMethods};
 use pyo3::{pyclass, pymethods};
 
@@ -36,7 +35,7 @@ fn validate_transform_resample_membership(
     }
 
     let unusable = PyTuple::new(py, [4, 5, 1])?;
-    if unusable.contains(value)? {
+    let code = if unusable.contains(value)? {
         let names = PyDict::new(py);
         names.set_item(4, "Image.Resampling.BOX")?;
         names.set_item(5, "Image.Resampling.HAMMING")?;
@@ -45,15 +44,18 @@ fn validate_transform_resample_membership(
             .as_any()
             .call_method1("__getitem__", (value,))?
             .extract::<String>()?;
-        let display = value.str()?.to_string();
-        return Err(PyValueError::new_err(format!(
-            "{name} ({display}) cannot be used."
-        )));
-    }
-
+        Some(match name.as_str() {
+            "Image.Resampling.LANCZOS" => 1,
+            "Image.Resampling.BOX" => 4,
+            "Image.Resampling.HAMMING" => 5,
+            _ => unreachable!("resampling name came from the local mapping"),
+        })
+    } else {
+        None
+    };
     let display = value.str()?.to_string();
-    Err(PyValueError::new_err(format!(
-        "Unknown resampling filter ({display})."
+    Err(map_error(pillow_rs::transform_resample_public_error(
+        code, &display,
     )))
 }
 
@@ -61,27 +63,14 @@ fn transform_mesh_resample_from_python_after_load(
     value: &Bound<'_, PyAny>,
 ) -> PyResult<i32> {
     let code = c_int_from_python(value)?;
-    match code {
-        0 | 2 | 3 => Ok(code),
-        1 | 4 | 5 => {
-            let name = match code {
-                1 => "Image.Resampling.LANCZOS",
-                4 => "Image.Resampling.BOX",
-                5 => "Image.Resampling.HAMMING",
-                _ => unreachable!(),
-            };
-            let display = value.str()?.to_string();
-            Err(PyValueError::new_err(format!(
-                "{name} ({display}) cannot be used."
-            )))
-        }
-        _ => {
-            let display = value.str()?.to_string();
-            Err(PyValueError::new_err(format!(
-                "Unknown resampling filter ({display})."
-            )))
-        }
+    if matches!(code, 0 | 2 | 3) {
+        return Ok(code);
     }
+    let display = value.str()?.to_string();
+    Err(map_error(pillow_rs::transform_resample_public_error(
+        Some(code),
+        &display,
+    )))
 }
 
 fn transform_mesh_box_from_python(
@@ -135,7 +124,7 @@ impl PyImage {
                 let image = slf.bind(py).borrow();
                 image
                     .inner
-                    .prepare_transform_fill_for_mode(mode, fill)
+                    .prepare_transform_fill_for_mode(mode, Some(fill))
                     .map_err(map_error)
             })
             .transpose()?;
@@ -146,7 +135,7 @@ impl PyImage {
             Some(prepared) => prepared,
             None => {
                 let fill = transform_fill_after_size_from_python(
-                    deferred_fill.as_ref().or(fillcolor),
+                    deferred_fill.or(fillcolor),
                     mode,
                 )?;
                 let image = slf.bind(py).borrow();

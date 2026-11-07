@@ -1,4 +1,6 @@
+#[cfg(test)]
 use super::alpha::premultiply_alpha_row;
+#[cfg(test)]
 use super::alpha::premultiply_channel;
 use super::coefficients::fixed_point_to_u8;
 use super::*;
@@ -99,6 +101,7 @@ pub(crate) fn horizontal_pass_rgb_row(
 /// This is the horizontal pass: it computes one row of the intermediate image
 /// from one row of the source image. Uses PIL's fixed-point arithmetic:
 ///   `result = (sum + (1 << (PRECISION_BITS - 1))) >> PRECISION_BITS`
+#[cfg(test)]
 pub(super) fn horizontal_pass_row(
     src_row: &[u8],
     _src_w: u32,
@@ -159,6 +162,7 @@ pub(super) fn horizontal_pass_row(
 }
 
 #[inline]
+#[cfg(test)]
 pub(super) fn horizontal_pass_row_alpha(
     src_row: &[u8],
     channels: usize,
@@ -198,6 +202,7 @@ pub(super) fn horizontal_pass_row_alpha(
 /// This is the vertical pass: it computes one column of the final image
 /// from one column of the intermediate image. Uses PIL's fixed-point arithmetic.
 /// Returns a single value per channel for this (x, y) position.
+#[cfg(test)]
 pub(super) fn horizontal_pass_rows(
     work_bytes: &[u8],
     source_width: u32,
@@ -227,6 +232,7 @@ pub(super) fn horizontal_pass_rows(
     }
 }
 
+#[cfg(test)]
 pub(super) fn horizontal_pass_rows_alpha(
     source: &[u8],
     source_width: u32,
@@ -265,6 +271,7 @@ pub(super) fn horizontal_pass_rows_alpha(
 
 /// Boxed-resize variant that runs the horizontal pass only for source rows
 /// referenced by the rebased vertical coefficient table.
+#[cfg(test)]
 pub(super) fn horizontal_pass_boxed_rows(
     work_bytes: &[u8],
     source_width: u32,

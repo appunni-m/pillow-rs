@@ -25,6 +25,8 @@ from . import imagecolor as ImageColor
 from . import imagefont as ImageFont
 from . import imagetext as ImageText
 from . import imagedraw as ImageDraw
+from . import imagedraw2 as ImageDraw2
+from . import imagepath as ImagePath
 from . import imageenhance as ImageEnhance
 from . import imagefilter as ImageFilter
 from . import imageops as ImageOps
@@ -46,7 +48,7 @@ __version__ = "12.2.3"
 __all__ = [
     "GpuBatchExecutor", "GpuImage", "BatchResult", "BatchError", "QueueFull", "ResultBackpressure", "Results",
     "Image", "ImageMode", "ImageFormat",
-    "ImageOps", "ImageChops", "ImageColor", "ImageDraw", "ImageText",
+    "ImageOps", "ImageChops", "ImageColor", "ImageDraw", "ImageDraw2", "ImagePath", "ImageText",
     "ImageEnhance", "ImageFilter", "ImageFont",
     "ImagePalette", "ImageStat", "ImageSequence",
     "Resampling", "Transform", "Transpose", "Dither", "Palette",

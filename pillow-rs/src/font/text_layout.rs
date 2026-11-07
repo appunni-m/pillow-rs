@@ -1,6 +1,6 @@
 use crate::error::PilError;
 use crate::font::{
-    ImageFontTextBoundsCallbacks, ImageFontTextPositionArithmetic,
+    FontTextRef, ImageFontTextBoundsCallbacks, ImageFontTextPositionArithmetic,
     ImageFontTextPositionCallbacks, ImageFontTextPositionComparison,
 };
 use crate::raster::Mode;
@@ -307,7 +307,7 @@ fn adjust_anchor<C: ImageFontTextPositionCallbacks>(
 pub(crate) struct PositionedTextLine<'a> {
     pub(crate) x: f64,
     pub(crate) y: f64,
-    pub(crate) text: &'a str,
+    pub(crate) text: FontTextRef<'a>,
     pub(crate) anchor: String,
 }
 
@@ -318,11 +318,10 @@ struct MultilineAnchor {
     vertical_direction: bool,
 }
 
-// TODO(pillow-rs#brg0): verify anchored, font-size, and spacing Text outputs in CPU parity.
 pub(crate) fn multiline_text_positions<'a>(
     x: f64,
     y: f64,
-    lines: &[&'a str],
+    lines: &[FontTextRef<'a>],
     font: &crate::font::FreeTypeFont,
     spacing: f64,
     options: &crate::font::ImageFontTextOptions,
@@ -406,7 +405,7 @@ fn multiline_line_spacing(
 fn vertical_text_positions<'a>(
     x: f64,
     y: f64,
-    lines: &[&'a str],
+    lines: &[FontTextRef<'a>],
     line_spacing: f64,
     anchor: &MultilineAnchor,
 ) -> Vec<PositionedTextLine<'a>> {
@@ -425,7 +424,7 @@ fn vertical_text_positions<'a>(
 fn horizontal_text_positions<'a>(
     x: f64,
     y: f64,
-    lines: &[&'a str],
+    lines: &[FontTextRef<'a>],
     font: &crate::font::FreeTypeFont,
     options: &crate::font::ImageFontTextOptions,
     font_mode: &str,
@@ -441,7 +440,7 @@ fn horizontal_text_positions<'a>(
     width_options.stroke_fill = None;
     let widths = lines
         .iter()
-        .map(|line| font.getlength_with_options(line, &width_options))
+        .map(|line| font.getlength_text_with_options(*line, &width_options))
         .collect::<Result<Vec<_>, _>>()?;
     let max_width = widths.iter().copied().fold(0.0_f32, f32::max) as f64;
     let align = options.align.as_deref().unwrap_or("left");
@@ -466,7 +465,7 @@ fn horizontal_text_positions<'a>(
             _ => x,
         };
         if align == "justify" && width_difference != 0.0 && index + 1 != lines.len() {
-            let words = line.split(' ').collect::<Vec<_>>();
+            let words = line.split(' ');
             if words.len() > 1 {
                 if anchor.horizontal == 'm' {
                     left -= max_width / 2.0;
@@ -475,7 +474,7 @@ fn horizontal_text_positions<'a>(
                 }
                 let word_widths = words
                     .iter()
-                    .map(|word| font.getlength_with_options(word, &width_options))
+                    .map(|word| font.getlength_text_with_options(*word, &width_options))
                     .collect::<Result<Vec<_>, _>>()?;
                 let extra = (max_width
                     - word_widths.iter().map(|width| f64::from(*width)).sum::<f64>())

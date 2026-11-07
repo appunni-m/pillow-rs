@@ -1,6 +1,6 @@
 use crate::compute::pool_cpu::ops::enhance::helpers::native;
 use crate::error::PilError;
-use crate::raster::{ImageBuffer, Luma};
+use crate::raster::ImageBuffer;
 
 type Image = ImageBuffer<crate::raster::Luma<u16>, Vec<u16>>;
 

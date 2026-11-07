@@ -1,7 +1,8 @@
 //! Channel extraction and alpha mutation methods for [`Image`].
 // TODO(pillow-rs#3ptb): verify PutAlpha/PutAlphaData wrapper mode-change,
 // mutation, metadata, and error order in CPU parity, including integer
-// coercion and exact-image-mask aliasing.
+// coercion and exact-image-mask aliasing. GetChannel parity must also cover
+// custom __index__ exceptions and str-subclass comparisons in getbands().index.
 // Their operation declarations now
 // agree with the wrapper's Pillow-defined rejections. Native-width modes with
 // exact implementations are admitted by the Rust API as CoreOnly extensions;
@@ -36,7 +37,7 @@ use crate::compute::registry::support::{
 };
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
-use crate::raster::{DynamicImage, GenericImageView, Mode};
+use crate::raster::{DynamicImage, Mode};
 
 use super::Image;
 

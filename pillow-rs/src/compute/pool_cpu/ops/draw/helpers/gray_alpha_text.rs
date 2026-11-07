@@ -4,7 +4,6 @@ use crate::compute::pool_cpu::helpers::bytes::hidden_lanes::{
 use crate::error::PilError;
 use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{GrayAlphaImage, Pixel};
-use crate::raster::{GenericImage, GenericImageView};
 
 /// Apply Pillow's L-mask semantics to native LA and La sample pairs.
 pub(crate) fn apply<const RGBA_MASK: bool>(
@@ -50,7 +49,6 @@ pub(crate) fn apply<const RGBA_MASK: bool>(
     Ok(true)
 }
 
-// TODO(pillow-rs#brg0): verify LA/La text alpha-fill behavior in CPU parity.
 fn blend_pixel<const RGBA_MASK: bool>(
     canvas: &mut GrayAlphaImage,
     x: u32,

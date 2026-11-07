@@ -1,5 +1,5 @@
 use crate::compute::pool_cpu::ops::draw::{BitmapMask, BitmapRegion};
-use crate::raster::{ImageBuffer, Luma, Mode, Pixel};
+use crate::raster::{ImageBuffer, Luma, Mode};
 
 type Luma16Image = ImageBuffer<Luma<u16>, Vec<u16>>;
 
@@ -9,7 +9,7 @@ type Luma16Image = ImageBuffer<Luma<u16>, Vec<u16>>;
 /// `RGBa` paths step through the raw row byte prefix at one byte per mask
 /// pixel; RGBa uses alpha coverage with PREBLEND. The selected mask strategy
 /// is fixed before the loop, with no sample projection or full-frame rewrite.
-pub(crate) fn apply(
+pub(crate) fn apply<const SWAP_BYTES: bool>(
     canvas: &mut Luma16Image,
     x: i32,
     y: i32,
@@ -19,7 +19,7 @@ pub(crate) fn apply(
     color: (u8, u8, u8, u8),
 ) {
     match mask.mode() {
-        Mode::One => apply_mask::<true, false, false>(
+        Mode::One => apply_mask::<SWAP_BYTES, true, false, false>(
             canvas,
             x,
             y,
@@ -28,7 +28,7 @@ pub(crate) fn apply(
             mask.data(),
             color,
         ),
-        Mode::ImageLuma8 => apply_mask::<false, true, false>(
+        Mode::ImageLuma8 => apply_mask::<SWAP_BYTES, false, true, false>(
             canvas,
             x,
             y,
@@ -37,7 +37,7 @@ pub(crate) fn apply(
             mask.data(),
             color,
         ),
-        Mode::ImageRgba8 => apply_mask::<false, false, false>(
+        Mode::ImageRgba8 => apply_mask::<SWAP_BYTES, false, false, false>(
             canvas,
             x,
             y,
@@ -46,7 +46,7 @@ pub(crate) fn apply(
             mask.data(),
             color,
         ),
-        Mode::ImageRgbPremultiplied8 => apply_mask::<false, false, true>(
+        Mode::ImageRgbPremultiplied8 => apply_mask::<SWAP_BYTES, false, false, true>(
             canvas,
             x,
             y,
@@ -59,7 +59,12 @@ pub(crate) fn apply(
     }
 }
 
-fn apply_mask<const BINARY: bool, const LUMA: bool, const PREMULTIPLIED: bool>(
+fn apply_mask<
+    const SWAP_BYTES: bool,
+    const BINARY: bool,
+    const LUMA: bool,
+    const PREMULTIPLIED: bool,
+>(
     canvas: &mut Luma16Image,
     x: i32,
     y: i32,
@@ -97,23 +102,34 @@ fn apply_mask<const BINARY: bool, const LUMA: bool, const PREMULTIPLIED: bool>(
             }
             let image_x = (i64::from(x) + i64::from(mask_x)) as usize;
             if BINARY {
-                bytes[row_start + image_x] = color.0;
+                let offset = storage_offset::<SWAP_BYTES>(row_start + image_x);
+                bytes[offset] = color.0;
             } else if LUMA {
                 let offset = row_start + image_x * 2;
-                bytes[offset] = crate::draw::pil_blend(color.0, bytes[offset], coverage);
-                bytes[offset + 1] =
-                    crate::draw::pil_blend(color.1, bytes[offset + 1], coverage);
+                let first = storage_offset::<SWAP_BYTES>(offset);
+                let second = storage_offset::<SWAP_BYTES>(offset + 1);
+                bytes[first] = crate::draw::pil_blend(color.0, bytes[first], coverage);
+                bytes[second] = crate::draw::pil_blend(color.1, bytes[second], coverage);
             } else if PREMULTIPLIED {
-                let offset = row_start + image_x;
+                let offset = storage_offset::<SWAP_BYTES>(row_start + image_x);
                 bytes[offset] = crate::compute::pool_cpu::helpers::bytes::preblend::apply(
                     color.0,
                     bytes[offset],
                     coverage,
                 );
             } else {
-                let offset = row_start + image_x;
+                let offset = storage_offset::<SWAP_BYTES>(row_start + image_x);
                 bytes[offset] = crate::draw::pil_blend(color.0, bytes[offset], coverage);
             }
         }
+    }
+}
+
+#[inline(always)]
+fn storage_offset<const SWAP_BYTES: bool>(public_offset: usize) -> usize {
+    if SWAP_BYTES {
+        public_offset ^ 1
+    } else {
+        public_offset
     }
 }

@@ -39,9 +39,9 @@ pub(crate) fn to_rgb(source: &GrayImage) -> Result<RgbImage, PilError> {
         lanes[..active_pixels].copy_from_slice(&source.as_raw()[start..start + active_pixels]);
         let input = u8x16::new(lanes);
         blocks.push([
-            input.swizzle_relaxed(LUMA_TO_RGB_0).to_array(),
-            input.swizzle_relaxed(LUMA_TO_RGB_1).to_array(),
-            input.swizzle_relaxed(LUMA_TO_RGB_2).to_array(),
+            input.shuffle(LUMA_TO_RGB_0).to_array(),
+            input.shuffle(LUMA_TO_RGB_1).to_array(),
+            input.shuffle(LUMA_TO_RGB_2).to_array(),
         ]);
         vector_blocks = vector_blocks.saturating_add(1);
     }
@@ -65,10 +65,10 @@ pub(crate) fn to_rgba(source: &GrayImage) -> Result<RgbaImage, PilError> {
         lanes[..active_pixels].copy_from_slice(&source.as_raw()[start..start + active_pixels]);
         let input = u8x16::new(lanes);
         let vectors = [
-            input.swizzle_relaxed(LUMA_TO_RGBA_0).to_array(),
-            input.swizzle_relaxed(LUMA_TO_RGBA_1).to_array(),
-            input.swizzle_relaxed(LUMA_TO_RGBA_2).to_array(),
-            input.swizzle_relaxed(LUMA_TO_RGBA_3).to_array(),
+            input.shuffle(LUMA_TO_RGBA_0).to_array(),
+            input.shuffle(LUMA_TO_RGBA_1).to_array(),
+            input.shuffle(LUMA_TO_RGBA_2).to_array(),
+            input.shuffle(LUMA_TO_RGBA_3).to_array(),
         ];
         blocks.push(vectors.map(|vector| {
             ((u8x16::new(vector) & RGBA_COLOR_LANES) | RGBA_ALPHA_LANES).to_array()

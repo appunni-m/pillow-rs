@@ -61,6 +61,6 @@ fn rgb_to_rgba_block(source: &[u8], start_pixel: usize) -> [u8; 16] {
     input[..12].copy_from_slice(&source[source_start..source_start + 12]);
     input[15] = u8::MAX;
     u8x16::new(input)
-        .swizzle_relaxed(RGB_TO_RGBA_BYTES)
+        .shuffle(RGB_TO_RGBA_BYTES)
         .to_array()
 }

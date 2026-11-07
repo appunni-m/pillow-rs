@@ -1,5 +1,7 @@
 use super::primitives::draw_line_on_canvas;
-use crate::draw::{DrawCanvas, bresenham_line, scanline_polygon_fill};
+use crate::draw::{
+    DrawCanvas, bresenham_line, plot, scanline_polygon_fill, wide_line_polygon_points_signed,
+};
 
 pub(super) struct BinaryMask {
     width: u32,
@@ -63,6 +65,7 @@ pub(super) fn draw_polygon_on_canvas<C: DrawCanvas>(
     fill: Option<(u8, u8, u8, u8)>,
     outline: Option<(u8, u8, u8, u8)>,
     width: u32,
+    outline_width: Option<i32>,
 ) {
     let (img_w, img_h) = (canvas.width(), canvas.height());
     if points.is_empty() {
@@ -73,9 +76,22 @@ pub(super) fn draw_polygon_on_canvas<C: DrawCanvas>(
         scanline_polygon_fill(canvas, points, fc, img_w, img_h, false);
     }
 
-    let Some(outline_color) = outline.filter(|color| Some(*color) != fill && width != 0) else {
+    let Some(outline_color) = outline.filter(|color| {
+        Some(*color) != fill && (width != 0 || outline_width.is_some())
+    }) else {
         return;
     };
+    if let Some(outline_width) = outline_width {
+        draw_polygon_outline_with_signed_width(
+            canvas,
+            points,
+            outline_color,
+            outline_width,
+            img_w,
+            img_h,
+        );
+        return;
+    }
     if width == 1 {
         for index in 0..points.len() {
             let (x0, y0) = points[index];
@@ -89,14 +105,66 @@ pub(super) fn draw_polygon_on_canvas<C: DrawCanvas>(
     // so the requested stroke grows inward instead of expanding the shape.
     let mut mask = BinaryMask::new(img_w, img_h);
     scanline_polygon_fill(&mut mask, points, (255, 255, 255, 255), img_w, img_h, false);
-    let mut masked = MaskedCanvas {
-        canvas,
-        mask: &mask,
-    };
     let stroke_width = width.saturating_mul(2).saturating_sub(1);
     for index in 0..points.len() {
         let (x0, y0) = points[index];
         let (x1, y1) = points[(index + 1) % points.len()];
+        if x0 == x1 && y0 == y1 {
+            plot(canvas, x0, y0, outline_color, img_w, img_h, false);
+            continue;
+        }
+        let mut masked = MaskedCanvas {
+            canvas,
+            mask: &mask,
+        };
         draw_line_on_canvas(&mut masked, x0, y0, x1, y1, outline_color, stroke_width);
+    }
+}
+
+fn draw_polygon_outline_with_signed_width<C: DrawCanvas>(
+    canvas: &mut C,
+    points: &[(i32, i32)],
+    color: (u8, u8, u8, u8),
+    width: i32,
+    image_width: u32,
+    image_height: u32,
+) {
+    if width == 1 {
+        for index in 0..points.len() {
+            let (x0, y0) = points[index];
+            let (x1, y1) = points[(index + 1) % points.len()];
+            bresenham_line(canvas, x0, y0, x1, y1, color, image_width, image_height, false);
+        }
+        return;
+    }
+
+    let mut mask = BinaryMask::new(image_width, image_height);
+    scanline_polygon_fill(
+        &mut mask,
+        points,
+        (255, 255, 255, 255),
+        image_width,
+        image_height,
+        false,
+    );
+    for index in 0..points.len() {
+        let (x0, y0) = points[index];
+        let (x1, y1) = points[(index + 1) % points.len()];
+        let Some(stroke_points) = wide_line_polygon_points_signed(x0, y0, x1, y1, width) else {
+            plot(canvas, x0, y0, color, image_width, image_height, false);
+            continue;
+        };
+        let mut masked = MaskedCanvas {
+            canvas,
+            mask: &mask,
+        };
+        scanline_polygon_fill(
+            &mut masked,
+            &stroke_points,
+            color,
+            image_width,
+            image_height,
+            false,
+        );
     }
 }

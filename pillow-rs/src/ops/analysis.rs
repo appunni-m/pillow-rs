@@ -25,9 +25,19 @@ pub enum ImageAnalysisMask {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum HistogramExtrema {
     /// Signed 32-bit lower and upper sample values for `I` mode.
-    ImageI32 { minimum: i32, maximum: i32 },
+    ImageI32 {
+        /// Minimum signed sample value in the image.
+        minimum: i32,
+        /// Maximum signed sample value in the image.
+        maximum: i32,
+    },
     /// Float32 lower and upper sample values for `F` mode.
-    ImageF32 { minimum: f32, maximum: f32 },
+    ImageF32 {
+        /// Minimum float sample value in the image.
+        minimum: f32,
+        /// Maximum float sample value in the image.
+        maximum: f32,
+    },
 }
 
 mod bbox;

@@ -1,7 +1,7 @@
 //! Direct unpremultiplication from native La samples.
 
 use crate::error::PilError;
-use crate::raster::{DynamicImage, GenericImageView, GrayAlphaImage, LumaA, Mode};
+use crate::raster::{DynamicImage, GrayAlphaImage, LumaA, Mode};
 use super::super::super::helpers::pixel::unpremultiply_byte;
 
 pub(crate) fn execute(

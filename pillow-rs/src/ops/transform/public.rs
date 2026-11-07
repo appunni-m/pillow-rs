@@ -19,22 +19,40 @@ fn parse_transform_resample(code: i32) -> Result<ResampleFilter, PilError> {
         1 | 4 | 5 => {
             // Pillow distinguishes known resize-only filters from an
             // unknown integer in Image.transform's public error contract.
+            Err(transform_resample_public_error(Some(code), &code.to_string()))
+        }
+        // Image.transform has a narrower public filter contract than resize;
+        // Pillow reports only its three accepted filters here.
+        other => Err(transform_resample_public_error(
+            Some(other),
+            &other.to_string(),
+        )),
+    }
+}
+
+/// Formats a Pillow `Image.transform` resampling error using the host value's
+/// display text while keeping the public contract in the Rust core.
+pub fn transform_resample_public_error(code: Option<i32>, display: &str) -> PilError {
+    let Some(code) = code else {
+        return PilError::ValueError(format!(
+            "Unknown resampling filter ({display}). {TRANSFORM_RESAMPLE_GUIDANCE}"
+        ));
+    };
+    match code {
+        1 | 4 | 5 => {
             let name = match code {
                 1 => "Image.Resampling.LANCZOS",
                 4 => "Image.Resampling.BOX",
                 5 => "Image.Resampling.HAMMING",
                 _ => unreachable!(),
             };
-            Err(PilError::ValueError(format!(
-                "{name} ({code}) cannot be used. {TRANSFORM_RESAMPLE_GUIDANCE}"
-            )))
+            PilError::ValueError(format!(
+                "{name} ({display}) cannot be used. {TRANSFORM_RESAMPLE_GUIDANCE}"
+            ))
         }
-        // Image.transform has a narrower public filter contract than resize;
-        // Pillow reports only its three accepted filters here.
-        other => Err(PilError::ValueError(format!(
-            "Unknown resampling filter ({}). {}",
-            other, TRANSFORM_RESAMPLE_GUIDANCE
-        ))),
+        _ => PilError::ValueError(format!(
+            "Unknown resampling filter ({display}). {TRANSFORM_RESAMPLE_GUIDANCE}"
+        )),
     }
 }
 
@@ -137,6 +155,26 @@ fn validate_extent_data(extent: &[f64], size: (u32, u32)) -> Result<(), PilError
     Ok(())
 }
 
+fn quad_coefficients(size: (u32, u32), corners: &[f64]) -> Result<[f64; 8], PilError> {
+    if size.0 == 0 || size.1 == 0 {
+        return Err(PilError::ZeroDivisionError("division by zero".into()));
+    }
+    let x0 = corners[0];
+    let y0 = corners[1];
+    let inverse_width = 1.0 / f64::from(size.0);
+    let inverse_height = 1.0 / f64::from(size.1);
+    Ok([
+        x0,
+        (corners[6] - x0) * inverse_width,
+        (corners[2] - x0) * inverse_height,
+        (corners[4] - corners[2] - corners[6] + x0) * inverse_width * inverse_height,
+        y0,
+        (corners[7] - y0) * inverse_width,
+        (corners[3] - y0) * inverse_height,
+        (corners[5] - corners[3] - corners[7] + y0) * inverse_width * inverse_height,
+    ])
+}
+
 fn preflight_mesh_data(data: Option<&TransformData>) -> Result<bool, PilError> {
     match data {
         Some(TransformData::Mesh(items)) => {
@@ -213,7 +251,7 @@ pub struct PreparedTransformOutput {
 
 impl TransformMeshAccumulator {
     /// Returns the allocated destination image after the streamed records run.
-    pub fn finish(self) -> Result<Image, PilError> {
+    pub fn finish(mut self) -> Result<Image, PilError> {
         let mode = self.prepared.mode;
         let data = [0.0; 12];
         let method = TransformMethod::Mesh;
@@ -284,13 +322,11 @@ impl Image {
         fillcolor: Option<TransformFill>,
     ) -> Result<PreparedTransformFill, PilError> {
         let fill_is_none = fillcolor.is_none();
-        let (fill, palette_fill, temporary_palette) =
-            super::fill::public_transform_fill(fillcolor, mode)?;
+        let (fill, palette_fill, _) = super::fill::public_transform_fill(fillcolor, mode)?;
         Ok(PreparedTransformFill {
             mode,
             fill,
             palette_fill,
-            temporary_palette,
             fill_is_none,
         })
     }
@@ -319,13 +355,7 @@ impl Image {
             ));
         }
         crate::checked_dims::CheckedDims::new(size.0, size.1, 1)?;
-        let mut output = empty_transform_output(self, size, prepared.fill, prepared.palette_fill)?;
-        if prepared.mode == Mode::ImagePalette8
-            && let Some(palette) = &prepared.temporary_palette
-            && self.palette().is_none_or(|source| source.is_empty())
-        {
-            output.replace_indexed_palette(palette, "RGB")?;
-        }
+        let output = empty_transform_output(self, size, prepared.fill, prepared.palette_fill)?;
         let (_, context) = self.cpu_arch_execution_route_advisory();
         Ok(PreparedTransformOutput {
             output,
@@ -474,7 +504,7 @@ impl Image {
         } else {
             requested_filter
         };
-        let mut output = self.apply_public_transform_method(
+        self.apply_public_transform_method(
             size,
             method,
             data,
@@ -482,18 +512,7 @@ impl Image {
             prepared.palette_fill,
             filter,
             prepared.fill_is_none,
-        )?;
-        if mode == Mode::ImagePalette8
-            && let Some(palette) = prepared.temporary_palette
-            && self.palette().is_none_or(|source| source.is_empty())
-        {
-            // Image.new("P", ..., RGB(A)) gives the new raster a temporary
-            // palette. An existing source palette takes precedence in the
-            // wrapper; when it is absent, retain the fill palette on this lazy
-            // output without materializing the transform.
-            output.replace_indexed_palette(&palette, "RGB")?;
-        }
-        Ok(output)
+        )
     }
 
     /// Executes a non-MESH host Transform into the destination prepared before
@@ -501,7 +520,7 @@ impl Image {
     #[doc(hidden)]
     pub fn transform_prepared_output_public(
         &self,
-        destination: PreparedTransformOutput,
+        mut destination: PreparedTransformOutput,
         method: i32,
         data: Option<TransformData>,
         resample: i32,
@@ -712,9 +731,10 @@ impl Image {
                 fill_is_none,
             )
         } else {
+            let coefficients = quad_coefficients(size, &data[..8])?;
             self.transform_quad_with_palette_fill(
                 size,
-                &data[..8],
+                &coefficients,
                 fill,
                 palette_fill,
                 filter,
@@ -794,13 +814,25 @@ fn empty_transform_output(
     // while Image.new stores its alpha in the fourth slot.
     let image_fill = if matches!(
         mode,
-        crate::raster::Mode::ImageLumaA8 | crate::raster::Mode::ImagePaletteAlpha8
+        crate::raster::Mode::ImageLumaA8
+            | crate::raster::Mode::ImageLaPremultiplied8
+            | crate::raster::Mode::ImagePaletteAlpha8
     ) {
         (fill.0, 0, 0, fill.1)
     } else {
         fill
     };
-    Image::new(size.0, size.1, mode, image_fill)
+    let mut output = Image::new(size.0, size.1, mode, image_fill)?;
+    if mode == crate::raster::Mode::ImagePaletteAlpha8
+        && let Image::Loaded(data) = &mut output
+    {
+        // PA stores its alpha with each pixel but keeps the RGB palette as
+        // image metadata. Transform allocates a fresh raster and retains that
+        // metadata just as Pillow's Image.transform does.
+        data.palette = image.palette();
+        data.palette_alpha = image.palette_alpha();
+    }
+    Ok(output)
 }
 
 #[cfg(test)]

@@ -5,7 +5,7 @@ use crate::compute::registry::support::{ModeSupport, OperationId};
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
-use crate::raster::{DynamicImage, Mode};
+use crate::raster::Mode;
 
 fn mode_support(operation: OperationId, mode: Mode) -> ModeSupport {
     operation.support().for_mode(mode)

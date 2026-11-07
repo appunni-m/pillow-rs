@@ -163,11 +163,10 @@ impl PyImage {
             .map(|value| value.extract::<i64>())
             .transpose()?;
         let encoder_options = save_options::encoder_options(&format, compress_level)?;
-        let encoded = {
-            let image = slf.bind(py).borrow();
-            py.detach(|| image.inner.encode_with_options(&format, &encoder_options))
-                .map_err(map_error)?
-        };
+        let inner = slf.bind(py).borrow().inner.clone();
+        let encoded = py
+            .detach(move || inner.encode_with_options(&format, &encoder_options))
+            .map_err(map_error)?;
         if let Some(path) = path {
             py.detach(|| std::fs::write(path, &encoded))
                 .map_err(|error| map_error(error.into()))
@@ -188,15 +187,11 @@ impl PyImage {
         args: Vec<String>,
         py: Python<'_>,
     ) -> PyResult<Py<PyBytes>> {
-        let image = slf.bind(py).borrow();
-        let mode = image.inner.mode_identity().map_err(map_error)?;
+        let inner = slf.bind(py).borrow().inner.clone();
+        let mode = inner.mode_identity().map_err(map_error)?;
         let encoder_name = encoder_name.to_owned();
         let bytes = py
-            .detach(|| {
-                image
-                    .inner
-                    .tobytes_encoded_shared(mode, &encoder_name, &args)
-            })
+            .detach(move || inner.tobytes_encoded_shared(mode, &encoder_name, &args))
             .map_err(map_error)?;
         Ok(telemetry::materialize_python_bytes(py, bytes.as_ref()))
     }
@@ -226,8 +221,14 @@ impl PyImage {
 
     fn seek(slf: Py<Self>, frame: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<()> {
         let frame = frame.extract::<u32>()?;
-        let mut image = slf.bind(py).borrow_mut();
-        py.detach(|| image.inner.seek(frame)).map_err(map_error)
+        let inner = slf.bind(py).borrow().inner.clone();
+        let (result, inner) = py.detach(move || {
+            let inner = inner;
+            let result = inner.seek(frame);
+            (result, inner)
+        });
+        slf.bind(py).borrow_mut().inner = inner;
+        result.map_err(map_error)
     }
 
     fn tell(&self) -> u32 {

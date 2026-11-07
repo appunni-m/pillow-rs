@@ -141,7 +141,7 @@ pub(crate) fn resolve_imageops_color(
         }
         ImageOpsColor::ListNumericComponents(_) => Err(python_list_color_error(mode)),
         ImageOpsColor::PaletteFill { index, .. } if mode == Mode::ImagePalette8 => {
-            Ok(Some((*index, *index, *index, u8::MAX)))
+            Ok(Some((index, index, index, u8::MAX)))
         }
         ImageOpsColor::PaletteFill { .. } => {
             Err(PilError::TypeError("color must be int or tuple".into()))

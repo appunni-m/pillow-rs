@@ -27,7 +27,6 @@ pub(crate) fn execute(
     let source_bytes = source.as_bytes();
     let other_bytes = other.as_bytes();
     if source.mode() != mode
-        || other.mode() != mode
         || source.dimensions() != other.dimensions()
         || source_bytes.len() != dimensions.total_bytes()
         || other_bytes.len() != dimensions.total_bytes()
@@ -322,9 +321,7 @@ pub(crate) fn execute_selected(
     selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
     super::strategy::require_operation_mode(selection, OperationId::BlendModule, mode)?;
-    if source.mode() != mode
-        || other.mode() != mode
-        || source.dimensions() != other.dimensions()
+    if source.mode() != mode || source.dimensions() != other.dimensions()
     {
         return Err(PilError::ValueError("images do not match".into()));
     }

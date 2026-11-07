@@ -7,7 +7,7 @@ use crate::pipeline::NativeColorInput;
 pub(super) type Input = ImageBuffer<LumaA<u16>, Vec<u16>>;
 
 
-pub(super) struct Kernel<'a> {
+pub(crate) struct Kernel<'a> {
     input: &'a Input,
     border: crate::pipeline::ExpandMargins,
     fill: [u16; 2],

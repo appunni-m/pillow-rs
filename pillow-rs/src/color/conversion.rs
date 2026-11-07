@@ -63,13 +63,6 @@ fn cmyk_to_rgb_rows(source: &[u8], output: &mut RgbImage) {
     }
 }
 
-/// Original serial CMYK conversion over a mode-selected native buffer.
-pub(crate) fn cmyk_buffer_to_rgb(source: &crate::raster::RgbaImage) -> RgbImage {
-    let mut output = RgbImage::new(source.width(), source.height());
-    cmyk_to_rgb_rows(source.as_raw(), &mut output);
-    output
-}
-
 /// Converts CMYK storage to RGB using Pillow-compatible integer arithmetic.
 ///
 /// The input is an RGBA buffer interpreted as `C`, `M`, `Y`, `K`. The returned
@@ -187,6 +180,7 @@ fn hsv_factors() -> &'static [[f32; 3]] {
 /// The result is stored back to f32, and the final `(int)(h * 255.0)` truncates.
 /// This function matches PIL pixel-for-pixel by mimicking the exact precision
 /// flow: f32 divisions → f64 promotions for constant arithmetic → f32 storage.
+#[cfg(test)]
 pub fn rgb_to_hsv(img: &DynamicImage) -> DynamicImage {
     let rgb = match img {
         DynamicImage::ImageRgb8(rgb) => Cow::Borrowed(rgb),
@@ -272,14 +266,6 @@ pub(crate) fn rgb_pixel_to_hsv(r: u8, g: u8, b: u8) -> [u8; 3] {
 /// The returned image is `RGB8` storage interpreted as `Y`, `Cb`, `Cr`.
 /// Uses precomputed tables matching PIL's ConvertYCbCr.c with SCALE=6.
 /// Table formula: `table[i] = (int)(i * coeff * 64 + 0.5)`.
-pub fn rgb_to_ycbcr(img: &DynamicImage) -> DynamicImage {
-    let rgb = match img {
-        DynamicImage::ImageRgb8(rgb) => Cow::Borrowed(rgb),
-        _ => Cow::Owned(img.to_rgb8()),
-    };
-    DynamicImage::ImageYCbCr8(rgb_buffer_to_ycbcr(rgb.as_ref()))
-}
-
 /// Applies Pillow's fixed-point RGB-to-YCbCr conversion to native RGB8 bytes.
 pub(crate) fn rgb_buffer_to_ycbcr(rgb: &RgbImage) -> crate::raster::RgbImage {
     rgb_bytes_to_ycbcr::<3>(rgb.as_raw(), rgb.width(), rgb.height())
@@ -553,6 +539,7 @@ pub fn f_to_rgb(img: &DynamicImage) -> DynamicImage {
 /// This is the `i2l` path in Pillow's `Convert.c`: values at or below zero
 /// become zero, values at or above 255 become 255, and interior values are
 /// truncated rather than rounded.
+#[cfg(test)]
 pub fn i_to_l(img: &DynamicImage) -> DynamicImage {
     use crate::compute::pool_cpu::ops::grayscale::i32::default::grayscale_impl;
     let source = match img {
@@ -567,6 +554,7 @@ pub fn i_to_l(img: &DynamicImage) -> DynamicImage {
 ///
 /// This is the `f2l` path in Pillow's `Convert.c`, including truncation of
 /// interior floating-point samples.
+#[cfg(test)]
 pub fn f_to_l(img: &DynamicImage) -> DynamicImage {
     use crate::compute::pool_cpu::ops::grayscale::f32::default::grayscale_impl;
     let source = match img {
@@ -577,6 +565,7 @@ pub fn f_to_l(img: &DynamicImage) -> DynamicImage {
 }
 
 /// Converts Pillow `I` storage to `F` storage using the direct `i2f` path.
+#[cfg(test)]
 pub fn i_to_f(img: &DynamicImage) -> DynamicImage {
     let (w, h) = (img.width(), img.height());
     let rgba = match img {
@@ -594,6 +583,7 @@ pub fn i_to_f(img: &DynamicImage) -> DynamicImage {
 }
 
 /// Converts Pillow `F` storage to `I` storage using the direct `f2i` path.
+#[cfg(test)]
 pub fn f_to_i(img: &DynamicImage) -> DynamicImage {
     let (w, h) = (img.width(), img.height());
     let rgba = match img {
@@ -610,16 +600,6 @@ pub fn f_to_i(img: &DynamicImage) -> DynamicImage {
     DynamicImage::ImageRgba8(out)
 }
 
-/// Converts a luma image to YCbCr through Pillow's direct `l2ycbcr` path.
-pub fn luma_to_ycbcr(img: &DynamicImage) -> DynamicImage {
-    let luma = img.to_luma8();
-    let (w, h) = luma.dimensions();
-    let mut out = RgbImage::new(w, h);
-    for (op, ip) in out.pixels_mut().zip(luma.pixels()) {
-        *op = crate::raster::Rgb([ip[0], 128, 128]);
-    }
-    DynamicImage::ImageYCbCr8(out)
-}
 
 /// Converts `P` palette-index storage to RGB.
 ///

@@ -4,7 +4,6 @@ use crate::compute::pool_cpu::helpers::bytes::hidden_lanes::{
 };
 use crate::error::PilError;
 use crate::raster::{DynamicImage, LumaA, Pixel};
-use crate::raster::{GenericImage, GenericImageView};
 
 pub(crate) fn apply(
     image: DynamicImage,

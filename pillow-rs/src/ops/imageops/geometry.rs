@@ -1,26 +1,41 @@
 use super::*;
 
 mod callbacks;
+mod fit_callbacks;
+mod scale_callbacks;
 pub use callbacks::{
     ImageOpsAspectArithmetic, ImageOpsAspectCallbacks, ImageOpsAspectComparison,
-    ImageOpsAspectOperation, ImageOpsAspectSize, ImageOpsFitCallbacks,
-    ImageOpsBorderCallbacks, ImageOpsCropCallbacks, ImageOpsExpandGeometryCallbacks,
-    ImageOpsFitConstant, ImageOpsScaleCallbacks, aspect_size_with_callbacks,
-    crop_box_with_callbacks, expand_geometry_with_callbacks, fit_box_with_callbacks,
-    scale_size_with_callbacks,
+    ImageOpsAspectOperation, ImageOpsAspectSize,
+    ImageOpsBorderCallbacks, ImageOpsCropCallbacks, ImageOpsCropRouteCallbacks,
+    ImageOpsExpandGeometryCallbacks,
+    ImageOpsExpandCallbacks, ImageOpsPadAxis, ImageOpsPadCallbacks,
+    ImageOpsAspectRouteCallbacks, ImageOpsNativeSizeCallbacks, ImageOpsNativeSizeProperty,
+    aspect_size_with_route_callbacks,
+    crop_box_with_callbacks, crop_box_with_route_callbacks,
+    native_size_pair_with_callbacks,
+};
+pub use fit_callbacks::{
+    ImageOpsFitCallbacks, ImageOpsFitConstant, ImageOpsFitRouteCallbacks,
+    fit_box_with_callbacks, fit_box_with_route_callbacks,
+};
+pub use scale_callbacks::{
+    ImageOpsScaleCallbacks, ImageOpsScaleRouteCallbacks, scale_size_with_callbacks,
+    scale_with_route_callbacks,
 };
 
 mod expand;
 mod pad;
+mod pad_route;
+pub use pad_route::{ImageOpsPadRouteCallbacks, pad_with_route_callbacks};
 pub use expand::{
-    expand, expand_canvas_with_prepared_fill, expand_with_input, expand_with_margins,
-    expand_with_margins_and_input, prepare_expand_fill, prepare_expand_fill_for_mode,
-    finish_expand_fill_palette_from_host, resolve_expand_fill_palette,
+    expand, expand_canvas_with_prepared_fill, expand_with_callbacks, expand_with_input, expand_with_margins,
+    expand_with_margins_and_input, prepare_expand_fill_for_mode,
+    finish_expand_fill_palette_from_host,
     validate_expand_output_size_for_mode, validate_prepared_expand_output_size,
     PreparedExpandFill,
 };
 pub use pad::{
-    pad, pad_fill_preflight, pad_filter_preflight, pad_geometry_preflight,
+    pad, pad_fallback_with_callbacks, pad_fill_preflight, pad_filter_preflight, pad_geometry_preflight,
     pad_preflight_with_input, pad_with_input, pad_with_input_and_containment,
     pad_with_preflight, pad_with_preflight_and_fill, PadFillPreflight, PadGeometryPreflight,
     PadPreflight,

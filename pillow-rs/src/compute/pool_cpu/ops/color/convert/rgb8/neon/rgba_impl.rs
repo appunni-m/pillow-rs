@@ -8,6 +8,10 @@ use crate::raster::{RgbImage, RgbaImage};
 /// # Safety
 ///
 /// The caller must ensure that the host supports NEON.
+#[allow(
+    unsafe_code,
+    reason = "the selected architecture establishes the NEON feature precondition"
+)]
 pub(crate) unsafe fn execute(source: &RgbImage) -> Result<RgbaImage, PilError> {
     let pixels = (source.width() as usize)
         .checked_mul(source.height() as usize)

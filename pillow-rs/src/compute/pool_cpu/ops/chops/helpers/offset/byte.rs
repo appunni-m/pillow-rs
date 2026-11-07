@@ -4,7 +4,6 @@ use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::raster::buffer::ImageBuffer;
 use crate::raster::traits::Pixel;
-use crate::raster::GenericImageView;
 use wide::u8x16;
 
 /// Load sixteen bytes from a circular row without splitting the operation
@@ -36,8 +35,8 @@ pub(super) fn circular_byte_block(source: &[u8], start: usize) -> Option<u8x16> 
             head_indices[lane] = u8::try_from(lane - first_len).ok()?;
         }
     }
-    let tail_values = tail.swizzle_relaxed(u8x16::new(tail_indices));
-    let head_values = head.swizzle_relaxed(u8x16::new(head_indices));
+    let tail_values = tail.shuffle(u8x16::new(tail_indices));
+    let head_values = head.shuffle(u8x16::new(head_indices));
     let mask = u8x16::new(tail_mask);
     Some((tail_values & mask) | (head_values & (u8x16::splat(u8::MAX) ^ mask)))
 }
@@ -95,7 +94,7 @@ pub(super) fn narrow_rotated_row(
     for (lane, index) in indices.iter_mut().enumerate() {
         *index = u8::try_from((shift_bytes + lane) % row_len).ok()?;
     }
-    Some(loaded.swizzle_relaxed(u8x16::new(indices)))
+    Some(loaded.shuffle(u8x16::new(indices)))
 }
 
 /// Process a narrow-row offset as a vector stream over the frame buffer.
@@ -146,7 +145,7 @@ fn offset_narrow_bytes(
                     u8::try_from(row_offset + destination_lane - lane).ok()?;
                 mask[destination_lane] = u8::MAX;
             }
-            let selected = rotated.swizzle_relaxed(u8x16::new(indices));
+            let selected = rotated.shuffle(u8x16::new(indices));
             block = u8x16::new(mask).select(selected, block);
             lane += row_end_lane;
         }
@@ -173,7 +172,7 @@ fn offset_narrow_bytes(
                     u8::try_from(row_offset + destination_lane - lane).ok()?;
                 mask[destination_lane] = u8::MAX;
             }
-            let selected = rotated.swizzle_relaxed(u8x16::new(indices));
+            let selected = rotated.shuffle(u8x16::new(indices));
             block = u8x16::new(mask).select(selected, block);
             lane += row_end_lane;
         }

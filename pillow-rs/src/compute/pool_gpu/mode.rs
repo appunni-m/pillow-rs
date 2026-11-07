@@ -118,7 +118,7 @@ pub(super) fn gpu_transform_fill(op: &PipelineOp, logical_mode: Option<&str>, mo
 /// representation needs a different buffer layout and therefore remains an
 /// explicit preflight failure.
 pub(super) fn gpu_standard_color_mode_code(mode: &ColorMode) -> Option<u32> {
-    match mode {
+    match *mode {
         ColorMode::L => Some(0),
         ColorMode::LA => Some(1),
         ColorMode::RGB => Some(2),
@@ -132,7 +132,7 @@ pub(super) fn gpu_standard_color_mode_code(mode: &ColorMode) -> Option<u32> {
 /// boundary, but their output representation is restored by the final
 /// color-type conversion and the public explicit mode on the lazy image.
 pub(super) fn gpu_convert_target_mode_code(mode: &ColorMode) -> Option<u32> {
-    match mode {
+    match *mode {
         ColorMode::L => Some(0),
         ColorMode::LA => Some(1),
         ColorMode::RGB => Some(2),
@@ -157,7 +157,7 @@ pub(super) fn gpu_convert_target_mode_code(mode: &ColorMode) -> Option<u32> {
 /// corresponding mode code.
 pub(super) fn gpu_mode_after_op(mode: u32, op: &PipelineOp) -> u32 {
     match op {
-        PipelineOp::Convert { mode: target, .. } => match target {
+        PipelineOp::Convert { mode: target, .. } => match *target {
             ColorMode::I16 => 5,
             ColorMode::RgbPremultiplied => 9,
             ColorMode::LaPremultiplied => 10,
@@ -248,8 +248,20 @@ pub(super) fn gpu_contrast_mean_after_exact_prefix(
     else {
         return None;
     };
-    let prefixed =
-        crate::compute::pool_cpu::ops::effects::op_put_pixel(img, *x, *y, *color).ok()?;
+    let context = crate::compute::ExecutionContext::new(
+        crate::compute::Backend::Cpu,
+        crate::compute::Architecture::Default,
+    );
+    let prefixed = crate::compute::pool_cpu::ops::put::ops::execute_put_pixel(
+        img,
+        crate::compute::pool_cpu::ops::put::ops::PixelWrite {
+            x: *x,
+            y: *y,
+            color: *color,
+        },
+        &context,
+    )
+    .ok()?;
     gpu_contrast_mean(&prefixed)
 }
 
@@ -258,7 +270,7 @@ pub(super) fn gpu_contrast_mean_after_exact_prefix(
 /// public result must expose the requested number of bands rather than the
 /// source image's type.
 pub(super) fn gpu_output_color_type(mode: &ColorMode) -> Option<crate::raster::ColorType> {
-    match mode {
+    match *mode {
         ColorMode::L => Some(crate::raster::ColorType::L8),
         ColorMode::LA => Some(crate::raster::ColorType::La8),
         ColorMode::RGB => Some(crate::raster::ColorType::Rgb8),

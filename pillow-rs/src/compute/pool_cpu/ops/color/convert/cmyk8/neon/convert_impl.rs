@@ -6,7 +6,13 @@ use crate::raster::{DynamicImage, RgbImage, RgbaImage};
 use fearless_simd::prelude::{SimdBase, SimdInterleaved, SimdNarrow, SimdWiden};
 use fearless_simd::{Neon, u8x16 as SafeU8x16, u16x8 as SafeU16x8};
 
+#[allow(
+    unsafe_code,
+    reason = "the prepared Convert strategy verifies the host's NEON capability"
+)]
 pub(crate) fn execute(source: &RgbaImage) -> Result<DynamicImage, PilError> {
+    // SAFETY: this function is reached only through the prepared Convert
+    // strategy whose requirements include the host's NEON capability.
     // SAFETY: this function is reached only through the prepared Convert
     // strategy whose requirements include the host's NEON capability.
     unsafe { execute_neon(source) }.map(DynamicImage::ImageRgb8)

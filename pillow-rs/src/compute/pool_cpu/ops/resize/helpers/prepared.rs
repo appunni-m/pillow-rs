@@ -1,7 +1,6 @@
 //! Prepared Resize mode and architecture execution plans.
 
 use super::{BOXED_SUPPORT, SUPPORT};
-use crate::checked_dims::CheckedDims;
 use crate::compute::{
     Architecture, ExecutionContext,
     registry::support::{
@@ -433,6 +432,7 @@ pub(crate) fn prepare_pipeline<'a>(
     Ok(crate::compute::registry::PreparedOperation::from_resize(plan))
 }
 
+#[cfg(test)]
 pub(crate) fn native_luma16_resize(
     image: &DynamicImage,
     destination_width: u32,
@@ -473,6 +473,7 @@ pub(crate) fn native_luma16_resize(
     }
 }
 
+#[cfg(test)]
 pub(crate) fn native_typed_resize(
     image: &DynamicImage,
     destination_width: u32,

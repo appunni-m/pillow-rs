@@ -1,6 +1,5 @@
 use crate::compute::pool_cpu::ops::draw::BitmapRegion;
 use crate::raster::{ImageBuffer, Luma};
-use crate::raster::GenericImageView;
 
 type Luma16Image = ImageBuffer<Luma<u16>, Vec<u16>>;
 
@@ -10,7 +9,7 @@ type Luma16Image = ImageBuffer<Luma<u16>, Vec<u16>>;
 /// `fill_mask_RGBA` instead steps through the raw row byte prefix at one byte
 /// per mask pixel. Reading and writing the native carrier as bytes preserves
 /// both without projecting samples to 8-bit or rewriting the full canvas.
-pub(crate) fn apply<const RGBA_MASK: bool>(
+pub(crate) fn apply<const RGBA_MASK: bool, const SWAP_BYTES: bool>(
     canvas: &mut Luma16Image,
     x: i32,
     y: i32,
@@ -47,15 +46,26 @@ pub(crate) fn apply<const RGBA_MASK: bool>(
 
             let image_x = (i64::from(x) + i64::from(mask_x)) as usize;
             if RGBA_MASK {
-                let output = image_row + image_x;
+                let output = storage_offset::<SWAP_BYTES>(image_row + image_x);
                 bytes[output] = crate::draw::pil_blend(ink.0, bytes[output], coverage);
             } else {
                 let output = image_row + image_x * 2;
-                bytes[output] = crate::draw::pil_blend(ink.0, bytes[output], coverage);
-                bytes[output + 1] = crate::draw::pil_blend(ink.1, bytes[output + 1], coverage);
+                let first = storage_offset::<SWAP_BYTES>(output);
+                let second = storage_offset::<SWAP_BYTES>(output + 1);
+                bytes[first] = crate::draw::pil_blend(ink.0, bytes[first], coverage);
+                bytes[second] = crate::draw::pil_blend(ink.1, bytes[second], coverage);
             }
         }
     }
 
     true
+}
+
+#[inline(always)]
+fn storage_offset<const SWAP_BYTES: bool>(public_offset: usize) -> usize {
+    if SWAP_BYTES {
+        public_offset ^ 1
+    } else {
+        public_offset
+    }
 }

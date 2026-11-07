@@ -27,10 +27,18 @@
 // fault receipts remain parity work. The direct/eager caller trace now covers
 // all 28 non-PipelineOp identities; see docs/CPU_REFACTOR_PLAN.md. This is
 // source wiring only, not output, fault-order, callback-order, or receipt proof.
+// Analysis GetData and Effects mode dispatch/selection are now also source-
+// traced through their exact-mode owners; parity remains pending.
+// Grayscale's 24 exact-mode owners, `La` rejection, Default fallbacks, and
+// declared RGB/alpha/color-space architecture routes now consume their
+// prepared selections; its LAB-to-L route streams the shared color transform.
+// Pixel, fault-order, and receipt parity remain pending.
 // Transform's public direct-destination path also passes the exact-mode
 // prepared selection to execution and reports the selected Default/vector
 // path; MESH is guarded to Default. Output, callback, and receipt parity remain
 // pending.
+// FloodFill's public core preparation boundary resolves the stored Mode and
+// routed ExecutionContext before passing both to the CPU family selector.
 // TODO(pillow-rs#3ptb): finish the remaining family-by-family source audit of
 // execution boundaries and verify every declared mode/architecture strategy
 // reaches its exact implementation without bypassing prepared selection.

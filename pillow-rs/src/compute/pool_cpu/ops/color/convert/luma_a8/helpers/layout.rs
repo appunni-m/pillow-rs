@@ -48,7 +48,7 @@ pub(crate) fn convert(
             }
         }
         let lanes = u8x16::new(padded)
-            .swizzle_relaxed(u8x16::new(indices))
+            .shuffle(u8x16::new(indices))
             .to_array();
         output.extend_from_slice(&lanes[..active * target_channels]);
         vector_blocks = vector_blocks.saturating_add(1);

@@ -241,7 +241,9 @@ fn host_autocontrast_dispatch_op(
         || (matches!(image, DynamicImage::ImageLuma8(_)) && mode == Some("L"))
         || (matches!(image, DynamicImage::ImageRgb8(_)) && mode == Some("RGB")));
     if mask.is_none() && native_layout {
-        let lut = crate::compute::pool_cpu::ops::imageops::autocontrast_lut(image, options, None)?;
+        let lut = crate::compute::pool_cpu::ops::imageops::helpers::histogram::autocontrast_lut(
+            image, options, None,
+        )?;
         if image.width() == 0 || image.height() == 0 {
             // Validate parameters through the exact native histogram path,
             // then retain the operation identity for the empty no-dispatch

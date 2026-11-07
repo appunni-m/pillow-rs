@@ -10,7 +10,7 @@ use crate::image::color_count::{
     scalar_byte_domain_is_plausible, scalar_i_prefix_has_long_run,
     scalar_prefix_has_repeated_samples,
 };
-use crate::raster::{GenericImageView, GrayImage, ImageBuffer, Mode, Pixel, RgbImage, RgbaImage};
+use crate::raster::{GrayImage, ImageBuffer, Mode, Pixel, RgbImage, RgbaImage};
 use std::collections::HashMap;
 
 pub(crate) type GetColorsOutput = Option<Vec<(u32, FormattedPixelValue)>>;

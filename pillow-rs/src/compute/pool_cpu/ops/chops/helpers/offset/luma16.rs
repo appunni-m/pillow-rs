@@ -4,7 +4,6 @@ use super::byte::{circular_byte_block, narrow_rotated_row};
 use crate::error::PilError;
 use crate::raster::buffer::ImageBuffer;
 use crate::raster::color::Luma;
-use crate::raster::GenericImageView;
 use wide::u8x16;
 
 /// Copy one Pillow `I;16*` offset row through native byte vectors.
@@ -97,7 +96,7 @@ fn offset_luma16_narrow_block(
                     u8::try_from(row_offset + destination_lane - lane).ok()?;
                 mask[destination_lane] = u8::MAX;
             }
-            let selected = rotated.swizzle_relaxed(u8x16::new(indices));
+            let selected = rotated.shuffle(u8x16::new(indices));
             block = u8x16::new(mask).select(selected, block);
         }
         lane += segment_len;

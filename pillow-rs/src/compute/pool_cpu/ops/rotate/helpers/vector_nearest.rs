@@ -4,7 +4,7 @@ use crate::checked_dims::CheckedDims;
 use crate::compute::pool_cpu::ops::rotate::helpers::geometry::{rotate_geometry, Geometry};
 use crate::compute::pool_cpu::ops::rotate::ops::RotateRequest;
 use crate::error::PilError;
-use crate::raster::{GenericImageView, ImageBuffer, Pixel};
+use crate::raster::{ImageBuffer, Pixel};
 use wide::u8x16;
 
 pub(crate) fn execute<P, const CHANNELS: usize>(

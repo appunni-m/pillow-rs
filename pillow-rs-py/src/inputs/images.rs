@@ -1,8 +1,8 @@
-use super::{Bound, Py, PyAny, PyErr, PyList, PyResult, PyTuple};
+use super::{Bound, Py, PyAny, PyList, PyResult, PyTuple, Python};
 use crate::PyImage;
 use pillow_rs::Image as RsImage;
 use pyo3::types::{
-    PyAnyMethods, PyBytes, PyFloat, PyInt, PyListMethods, PyString, PyTupleMethods,
+    PyAnyMethods, PyBytes, PyFloat, PyInt, PySequence, PySequenceMethods, PyTupleMethods,
     PyTypeMethods,
 };
 
@@ -181,12 +181,15 @@ pub(crate) fn paste_box_coordinate_from_python(value: &Bound<'_, PyAny>) -> PyRe
 
 fn paste_box_sequence_coordinates(
     value: &Bound<'_, PyAny>,
-    py: Python<'_>,
+    _py: Python<'_>,
 ) -> PyResult<Vec<i64>> {
-    // SAFETY: `value` is a live, GIL-bound Python object and this C API only
-    // checks its sequence slots without taking ownership or retaining the ptr.
-    let is_sequence = unsafe { pyo3::ffi::PySequence_Check(value.as_ptr()) != 0 };
-    if !is_sequence || value.is_instance_of::<PyBytes>() {
+    let Ok(sequence) = value.cast::<PySequence>() else {
+        let type_name = value.get_type().name()?.to_string();
+        return Err(pyo3::exceptions::PyTypeError::new_err(format!(
+            "argument 2 must be 4-item sequence, not {type_name}"
+        )));
+    };
+    if value.is_instance_of::<PyBytes>() {
         let type_name = value.get_type().name()?.to_string();
         return Err(pyo3::exceptions::PyTypeError::new_err(format!(
             "argument 2 must be 4-item sequence, not {type_name}"
@@ -195,11 +198,7 @@ fn paste_box_sequence_coordinates(
 
     // Match PyArg_ParseTuple's `(iiii)` parser: check length once, then fetch
     // and convert each item in order so callbacks run at Pillow's boundaries.
-    // SAFETY: `value` is a live GIL-bound object; PySequence_Check succeeded.
-    let length = unsafe { pyo3::ffi::PySequence_Size(value.as_ptr()) };
-    if length < 0 {
-        return Err(PyErr::fetch(py));
-    }
+    let length = sequence.len()?;
     if length != 4 {
         return Err(pyo3::exceptions::PyTypeError::new_err(format!(
             "argument 2 must be sequence of length 4, not {length}"
@@ -208,15 +207,7 @@ fn paste_box_sequence_coordinates(
 
     let mut coordinates = Vec::with_capacity(4);
     for index in 0..4 {
-        // SAFETY: `value` is a live GIL-bound object, the sequence check and
-        // length check succeeded, and PySequence_GetItem returns a new ref.
-        let item = unsafe {
-            Bound::from_owned_ptr_or_err(
-                py,
-                pyo3::ffi::PySequence_GetItem(value.as_ptr(), index as isize),
-            )
-        };
-        let item = match item {
+        let item = match sequence.get_item(index) {
             Ok(item) => item,
             Err(_sequence_error) => {
                 // Pillow clears failures from PySequence_GetItem and reports

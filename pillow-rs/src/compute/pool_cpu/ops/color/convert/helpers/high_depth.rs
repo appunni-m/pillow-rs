@@ -3,7 +3,7 @@
 use crate::error::PilError;
 use crate::pipeline::DitherMethod;
 use crate::raster::{
-    DynamicImage, FromColor, GenericImageView, GrayAlphaImage, GrayImage, ImageBuffer, Luma,
+    DynamicImage, FromColor, GrayAlphaImage, GrayImage, ImageBuffer, Luma,
     LumaA, Mode, Pixel, Primitive, Rgb, RgbImage, Rgba, RgbaImage,
 };
 

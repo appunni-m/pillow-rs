@@ -20,8 +20,7 @@ use crate::compute::pool_cpu::ops::transform::helpers::strategy::{
     self, Strategy,
 };
 use crate::compute::registry::support::{
-    InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport,
-    OutputModeRule, RejectionKind, RequestFacts, StrategySelection,
+    InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport, RejectionKind, RequestFacts, StrategySelection,
 };
 use crate::compute::{Architecture, ExecutionContext};
 use crate::error::PilError;

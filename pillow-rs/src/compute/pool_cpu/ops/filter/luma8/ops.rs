@@ -378,13 +378,7 @@ fn execute_filter3x3(
 }
 
 pub(in crate::compute::pool_cpu::ops::filter) fn mode_filter_support() -> crate::compute::registry::support::ModeSupport {
-    crate::compute::registry::support::ModeSupport::serial(
-        crate::compute::registry::support::OperationId::ModeFilter,
-        MODE,
-        super::super::ops::inputs_for(
-            crate::compute::registry::support::OperationId::ModeFilter,
-        ),
-    )
+    super::super::ops::serial_mode_filter(MODE)
 }
 
 pub(in crate::compute::pool_cpu::ops::filter) fn execute_mode_filter(

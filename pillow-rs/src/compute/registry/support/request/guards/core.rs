@@ -671,7 +671,7 @@ pub(crate) fn rotate_vector_bytes_guard(
         center_bits,
         translate_bits,
         affine_bits,
-        output_size,
+        output_size: _,
         filter,
         nearest,
         ..

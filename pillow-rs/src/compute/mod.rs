@@ -60,11 +60,10 @@ pub(crate) use telemetry::{
     finish_eager_cpu_operation_telemetry,
     finish_eager_cpu_operation_telemetry_with_selection,
     finish_pipeline_operation_telemetry, host_resource_telemetry,
-    record_eager_cpu_operation_receipt, record_eager_cpu_operation_receipt_with_reason,
     record_eager_cpu_operation_receipt_with_selection,
     record_eager_cpu_operation_receipt_with_selection_and_receipts,
     record_pipeline_allocation, record_pipeline_backend_fallback,
-    clear_pipeline_operation_architecture, record_pipeline_operation_architecture,
+    clear_pipeline_operation_architecture,
     record_pipeline_operation_selection,
     record_pipeline_operation_handoff, record_pipeline_operation_mode_conversion,
     record_pipeline_operation_path, record_pipeline_operation_scalar_tail,
@@ -109,7 +108,7 @@ pub(crate) use eager::{
 pub(crate) use execution::{
     PreparedExecution, execute_prepared, execute_prepared_cpu_arch_convert_output,
     execute_prepared_cpu_arch_operation,
-    execute_prepared_cpu_arch_terminal, execute_prepared_cpu_terminal, execute_prepared_shared,
+    execute_prepared_cpu_arch_terminal, execute_prepared_cpu_terminal,
     execute_prepared_shared_with_palette,
     execute_prepared_with_palette, prepare_execution,
 };
@@ -119,9 +118,10 @@ pub(crate) use execution::{
     merge_pipeline_resource_telemetry,
 };
 #[cfg(target_arch = "x86_64")]
-pub(crate) use phase_telemetry::record_transpose_avx2_executor_timing;
+#[cfg(test)]
 pub(crate) use phase_telemetry::{
-    pipeline_phase_timestamp, record_transpose_output_allocation_timing,
+    pipeline_phase_timestamp, record_transpose_avx2_executor_timing,
+    record_transpose_output_allocation_timing,
 };
 
 /// Return `(multiplier, offset)` when a 256-entry byte LUT is exactly the
@@ -373,7 +373,7 @@ pub use registry::support::{
 
 pub(crate) use pool_cpu::CpuPool;
 pub(crate) use pool_cpu::ops::analysis::ops::{
-    ProjectionOutput, execute_cmyk8_selected as cpu_cmyk_projection_selected,
+    execute_cmyk8_selected as cpu_cmyk_projection_selected,
     execute_rgb8_selected as cpu_rgb_projection_selected,
     prepare as prepare_cpu_getprojection,
 };

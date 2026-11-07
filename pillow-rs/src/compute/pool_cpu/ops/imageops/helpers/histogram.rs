@@ -1,8 +1,6 @@
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
-use crate::image::Image;
 use crate::raster::{DynamicImage, GrayImage, RgbImage};
-use std::sync::Arc;
 use wide::u8x16;
 
 /// Reduce a native L byte slice to its extrema using portable vector lanes.
@@ -46,7 +44,7 @@ pub(crate) fn native_luma_lut_tables(lut: &[u8]) -> Option<[u8x16; 16]> {
 fn native_luma_lut_chunk(input: u8x16, tables: &[u8x16; 16]) -> u8x16 {
     let low = input & u8x16::splat(0x0f);
     let high: u8x16 = input >> 4u32;
-    let lookups: [u8x16; 16] = std::array::from_fn(|index| tables[index].swizzle_relaxed(low));
+    let lookups: [u8x16; 16] = std::array::from_fn(|index| tables[index].shuffle(low));
     let bit0 = (high & u8x16::splat(1)).simd_eq(u8x16::splat(0));
     let bit1 = (high & u8x16::splat(2)).simd_eq(u8x16::splat(0));
     let bit2 = (high & u8x16::splat(4)).simd_eq(u8x16::splat(0));
@@ -137,31 +135,6 @@ pub(crate) fn autocontrast_lut_from_histogram(
     };
     let ignored = normalize_ignored_bins(&options.ignore)?;
     build_autocontrast_lut(&histogram, options.cutoff, &ignored)
-}
-
-/// Build one channel's LUT from Pillow-computed integer cutoff counts.
-pub(crate) fn autocontrast_lut_from_cutoff_counts(
-    histogram: &[u32],
-    cutoff_counts: (i128, i128),
-) -> Result<Vec<u8>, PilError> {
-    if histogram.len() != 256 {
-        return Err(PilError::ValueError(
-            "histogram must contain one complete 256-bin channel".into(),
-        ));
-    }
-    let mut bins = [0usize; 256];
-    for (count, &value) in bins.iter_mut().zip(histogram) {
-        *count = value as usize;
-    }
-    let mut lut = vec![0u8; 256];
-    build_lut_channel(
-        &mut lut,
-        bins,
-        normalize_cutoff_count(cutoff_counts.0),
-        normalize_cutoff_count(cutoff_counts.1),
-        None,
-    );
-    Ok(lut)
 }
 
 struct AutocontrastHistogram {
@@ -325,12 +298,6 @@ fn cutoff_count(total: usize, cutoff: f64) -> Result<(bool, usize), PilError> {
     Ok((negative, magnitude))
 }
 
-fn normalize_cutoff_count(count: i128) -> (bool, usize) {
-    let negative = count < 0;
-    let magnitude = count.saturating_abs().min(usize::MAX as i128) as usize;
-    (negative, magnitude)
-}
-
 fn trim_histogram_edge(histogram: &mut [usize; 256], cutoff: (bool, usize), high: bool) {
     if cutoff.0 {
         let edge = if high { &mut histogram[255] } else { &mut histogram[0] };
@@ -409,10 +376,18 @@ fn build_lut_channel(
 }
 
 fn fill_channel_from_bounds(channel: &mut [u8], low: u8, high: u8) {
+    fill_autocontrast_lut_from_bounds(channel, usize::from(low), usize::from(high));
+}
+
+pub(crate) fn fill_autocontrast_lut_from_bounds(
+    channel: &mut [u8],
+    low: usize,
+    high: usize,
+) {
     if high <= low {
         fill_identity_channel(channel);
     } else {
-        fill_contrast_channel(channel, f64::from(low), f64::from(high));
+        fill_contrast_channel(channel, low as f64, high as f64);
     }
 }
 

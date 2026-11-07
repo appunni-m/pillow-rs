@@ -662,6 +662,15 @@ declare_write_modes! {
     }
 }
 
+/// Execute one prepared CPU PutPixel write for GPU host-control calculations.
+pub(crate) fn execute_put_pixel(
+    image: &DynamicImage,
+    write: PixelWrite,
+    context: &ExecutionContext,
+) -> Result<DynamicImage, PilError> {
+    prepare_put_pixel(image, write, context)?.execute()
+}
+
 pub(crate) static PUT_PIXEL_SUPPORT: OperationSupport = OperationSupport::new(
     OperationId::PutPixel, &[], classify_pixel_mode,
 );

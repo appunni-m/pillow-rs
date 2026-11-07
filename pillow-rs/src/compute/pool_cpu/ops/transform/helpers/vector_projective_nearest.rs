@@ -76,8 +76,6 @@ pub(crate) fn execute_into<const CHANNELS: usize>(
     let coefficients: [f64; 8] = coefficients
         .try_into()
         .map_err(|_| PilError::InternalError("Transform coefficient count changed".into()))?;
-    let destination_width_f = output_width as f64;
-    let destination_height_f = output_height as f64;
     let mut blocks = 0u64;
 
     for y in 0..output_height as usize {
@@ -89,8 +87,6 @@ pub(crate) fn execute_into<const CHANNELS: usize>(
                 x,
                 y,
                 count,
-                destination_width_f,
-                destination_height_f,
             );
             for lane in 0..count {
                 let output_pixel = y * output_width as usize + x + lane;
@@ -135,8 +131,6 @@ fn source_points(
     destination_x: usize,
     destination_y: usize,
     count: usize,
-    destination_width: f64,
-    destination_height: f64,
 ) -> ([f64; LANES], [f64; LANES]) {
     let [a, b, c, d, e, f, g, h] = coefficients;
     let x = f64x8::new(std::array::from_fn(|lane| {
@@ -150,22 +144,14 @@ fn source_points(
     if quad {
         let x = x + f64x8::splat(0.5);
         let y = y + f64x8::splat(0.5);
-        let inverse_width = 1.0 / destination_width;
-        let inverse_height = 1.0 / destination_height;
-        let x1 = (g - a) * inverse_width;
-        let x2 = (c - a) * inverse_height;
-        let x3 = (e - c - g + a) * inverse_width * inverse_height;
-        let y1 = (h - b) * inverse_width;
-        let y2 = (d - b) * inverse_height;
-        let y3 = (f - d - h + b) * inverse_width * inverse_height;
         let source_x = f64x8::splat(a)
-            + f64x8::splat(x1) * x
-            + f64x8::splat(x2) * y
-            + f64x8::splat(x3) * x * y;
-        let source_y = f64x8::splat(b)
-            + f64x8::splat(y1) * x
-            + f64x8::splat(y2) * y
-            + f64x8::splat(y3) * x * y;
+            + f64x8::splat(b) * x
+            + f64x8::splat(c) * y
+            + f64x8::splat(d) * x * y;
+        let source_y = f64x8::splat(e)
+            + f64x8::splat(f) * x
+            + f64x8::splat(g) * y
+            + f64x8::splat(h) * x * y;
         (source_x.to_array(), source_y.to_array())
     } else {
         let x = x + f64x8::splat(0.5);

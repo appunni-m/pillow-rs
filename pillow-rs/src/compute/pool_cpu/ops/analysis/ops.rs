@@ -11,9 +11,6 @@ use crate::compute::registry::support::{
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 
-pub(crate) use super::helpers::histogram_execution::{
-    prepare_entropy_histogram, prepare_histogram,
-};
 pub(crate) use super::helpers::bbox_execution::prepare as prepare_get_bbox;
 pub(crate) use super::helpers::extrema_execution::prepare as prepare_get_extrema;
 pub(crate) use super::helpers::extrema_bytes_execution::{
@@ -29,7 +26,7 @@ pub(crate) use get_bbox::GET_BBOX_SUPPORT;
 #[path = "ops/get_projection.rs"]
 mod get_projection;
 pub(crate) use get_projection::{
-    execute_cmyk8_selected, execute_rgb8_selected, prepare, PreparedProjection,
+    execute_cmyk8_selected, execute_rgb8_selected, prepare,
     ProjectionOutput, SUPPORT,
 };
 

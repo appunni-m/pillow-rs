@@ -15,7 +15,7 @@ pub(crate) fn apply(
         return Err(PilError::ValueError("mode mismatch".into()));
     };
     let mut hidden_lanes = canvas.take_hidden_pixel_lanes();
-    three_band_bitmap::apply(
+    three_band_bitmap::apply::<false>(
         &mut canvas,
         x,
         y,

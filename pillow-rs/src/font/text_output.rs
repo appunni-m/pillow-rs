@@ -1,6 +1,6 @@
 use super::{
-    FontMaskAndOffset, FreeTypeFont, ImageFontTextInput, ImageFontTextOptions, PilError, imagingft,
-    pillow_bytes_to_text,
+    FontMaskAndOffset, FontTextRef, FreeTypeFont, ImageFontTextInput,
+    ImageFontTextOptions, PilError, imagingft, pillow_bytes_to_text,
 };
 impl FreeTypeFont {
     /// Return Pillow's public text bounding box.
@@ -20,12 +20,20 @@ impl FreeTypeFont {
         text: &str,
         options: &ImageFontTextOptions,
     ) -> Result<(f32, f32, f32, f32), PilError> {
+        self.getbbox_text_with_options(FontTextRef::String(text), options)
+    }
+
+    pub(crate) fn getbbox_text_with_options(
+        &self,
+        text: FontTextRef<'_>,
+        options: &ImageFontTextOptions,
+    ) -> Result<(f32, f32, f32, f32), PilError> {
         if options.uses_default_layout() {
-            return self.getbbox(text).map(|(left, top, right, bottom)| {
+            return imagingft::getbbox_text(self, text).map(|(left, top, right, bottom)| {
                 (left as f32, top as f32, right as f32, bottom as f32)
             });
         }
-        imagingft::getbbox_with_options(self, text, options)
+        imagingft::getbbox_text_with_options(self, text, options)
     }
 
     /// Return Pillow's public text bounding box for byte text using optional layout arguments.
@@ -49,11 +57,11 @@ impl FreeTypeFont {
         text: ImageFontTextInput,
         options: &ImageFontTextOptions,
     ) -> Result<(f32, f32, f32, f32), PilError> {
-        match text {
-            ImageFontTextInput::Text(text) => self.getbbox_with_options(&text, options),
-            ImageFontTextInput::Bytes(text) => self.getbbox_bytes_with_options(&text, options),
-            ImageFontTextInput::InvalidType => invalid_text_after_layout_check(options),
-        }
+        let text = match text {
+            ImageFontTextInput::InvalidType => return invalid_text_after_layout_check(options),
+            text => text.into_font_text()?,
+        };
+        self.getbbox_text_with_options(text.as_ref(), options)
     }
 
     /// Return text length after applying Pillow's text-input rules.
@@ -62,11 +70,19 @@ impl FreeTypeFont {
         text: ImageFontTextInput,
         options: &ImageFontTextOptions,
     ) -> Result<f32, PilError> {
-        match text {
-            ImageFontTextInput::Text(text) => self.getlength_with_options(&text, options),
-            ImageFontTextInput::Bytes(text) => self.getlength_bytes_with_options(&text, options),
-            ImageFontTextInput::InvalidType => invalid_text_after_layout_check(options),
-        }
+        let text = match text {
+            ImageFontTextInput::InvalidType => return invalid_text_after_layout_check(options),
+            text => text.into_font_text()?,
+        };
+        self.getlength_text_with_options(text.as_ref(), options)
+    }
+
+    pub(crate) fn getlength_text_with_options(
+        &self,
+        text: FontTextRef<'_>,
+        options: &ImageFontTextOptions,
+    ) -> Result<f32, PilError> {
+        imagingft::getlength_text_with_options(self, text, options)
     }
 
     /// Render a mask after applying Pillow's text-input rules.
@@ -75,11 +91,19 @@ impl FreeTypeFont {
         text: ImageFontTextInput,
         options: &ImageFontTextOptions,
     ) -> Result<(u32, u32, Vec<u8>), PilError> {
-        match text {
-            ImageFontTextInput::Text(text) => self.getmask_with_options(&text, options),
-            ImageFontTextInput::Bytes(text) => self.getmask_bytes_with_options(&text, options),
-            ImageFontTextInput::InvalidType => invalid_text_after_layout_check(options),
-        }
+        let text = match text {
+            ImageFontTextInput::InvalidType => return invalid_text_after_layout_check(options),
+            text => text.into_font_text()?,
+        };
+        self.getmask_text_with_options(text.as_ref(), options)
+    }
+
+    pub(crate) fn getmask_text_with_options(
+        &self,
+        text: FontTextRef<'_>,
+        options: &ImageFontTextOptions,
+    ) -> Result<(u32, u32, Vec<u8>), PilError> {
+        imagingft::getmask_text_with_options(self, text, options)
     }
 
     /// Render a mask with offset after applying Pillow's text-input rules.
@@ -88,11 +112,19 @@ impl FreeTypeFont {
         text: ImageFontTextInput,
         options: &ImageFontTextOptions,
     ) -> Result<FontMaskAndOffset, PilError> {
-        match text {
-            ImageFontTextInput::Text(text) => self.getmask2_with_options(&text, options),
-            ImageFontTextInput::Bytes(text) => self.getmask2_bytes_with_options(&text, options),
-            ImageFontTextInput::InvalidType => invalid_text_after_layout_check(options),
-        }
+        let text = match text {
+            ImageFontTextInput::InvalidType => return invalid_text_after_layout_check(options),
+            text => text.into_font_text()?,
+        };
+        self.getmask2_text_with_options(text.as_ref(), options)
+    }
+
+    pub(crate) fn getmask2_text_with_options(
+        &self,
+        text: FontTextRef<'_>,
+        options: &ImageFontTextOptions,
+    ) -> Result<FontMaskAndOffset, PilError> {
+        imagingft::getmask2_text_with_options(self, text, options)
     }
 
     /// Return Pillow's public binary-mode text bounding box.
@@ -125,15 +157,7 @@ impl FreeTypeFont {
         text: &str,
         options: &ImageFontTextOptions,
     ) -> Result<FontMaskAndOffset, PilError> {
-        if let Some(start) = options.start
-            && options.uses_default_mask_except_start()
-        {
-            return self.getmask2_with_start(text, start);
-        }
-        if options.uses_default_mask() {
-            return self.getmask2(text);
-        }
-        imagingft::getmask2_with_options(self, text, options)
+        self.getmask2_text_with_options(FontTextRef::String(text), options)
     }
 
     /// Return Pillow's public `getmask2` result for byte text using optional render arguments.
@@ -142,16 +166,8 @@ impl FreeTypeFont {
         text: &[u8],
         options: &ImageFontTextOptions,
     ) -> Result<FontMaskAndOffset, PilError> {
-        if let Some(start) = options.start
-            && options.uses_default_mask_except_start()
-        {
-            return self.getmask2_bytes_with_start(text, start);
-        }
-        if options.uses_default_mask() {
-            return self.getmask2_bytes(text);
-        }
         let text = pillow_bytes_to_text(text);
-        self.getmask2_with_options(&text, options)
+        self.getmask2_text_with_options(FontTextRef::String(&text), options)
     }
 
     /// `getmask2` variant with Pillow's fractional start parameter.
@@ -160,7 +176,7 @@ impl FreeTypeFont {
         text: &str,
         start: (f64, f64),
     ) -> Result<FontMaskAndOffset, PilError> {
-        imagingft::getmask2_with_start(self, text, start)
+        imagingft::getmask2_text_with_start(self, FontTextRef::String(text), start)
     }
 
     /// `getmask2` byte-text variant with Pillow's fractional start parameter.
@@ -188,8 +204,13 @@ impl FreeTypeFont {
         text: ImageFontTextInput,
         orientation: Option<&str>,
     ) -> Result<(u32, u32, Vec<u8>), PilError> {
-        let text = text.into_text()?;
-        self.get_transposed_mask(&text, orientation)
+        let text = match text {
+            ImageFontTextInput::InvalidType => {
+                return Err(PilError::TypeError("expected string or bytes".into()));
+            }
+            text => text.into_font_text()?,
+        };
+        imagingft::get_transposed_mask_text(self, text.as_ref(), orientation)
     }
 
     /// Return Pillow-compatible binary-mode RGBA text rendering.

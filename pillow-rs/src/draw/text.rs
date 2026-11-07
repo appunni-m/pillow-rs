@@ -1,12 +1,161 @@
-use super::{Draw, DrawColorInput, Mode};
+use super::{Draw, DrawColorInput, DrawTextFillValue, Mode};
 use crate::compute::ExecutionContext;
 use crate::compute::registry::support::StrategySelection;
 use crate::error::PilError;
 use crate::font::text_layout::multiline_text_positions;
+use crate::font::FontTextRef;
 
 mod composition;
 
+/// Select the mask mode used by the custom-font ImageDraw bbox path.
+///
+/// Pillow's Draw bbox wrapper checks bilevel drawing contexts before
+/// embedded-color text, unlike the mask-rendering path.
+#[doc(hidden)]
+pub fn draw_text_bbox_font_mode(mode: Mode, embedded_color: bool) -> &'static str {
+    if matches!(
+        mode,
+        Mode::One | Mode::ImagePalette8 | Mode::ImageI32 | Mode::ImageF32
+    ) {
+        "1"
+    } else if embedded_color {
+        "RGBA"
+    } else {
+        "L"
+    }
+}
+
+/// Ordered host facts used to choose ImageDraw's direct FreeType text route.
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DrawTextRouteCheck {
+    /// The original input was a native string or bytes value.
+    NativeTextInput,
+    /// The wrapper is exactly the built-in ImageText.Text class.
+    ExactTextWrapper,
+    /// The stored text is exactly str or bytes.
+    NativeTextValue,
+    /// The stored Text mode is exactly a Pillow mode string.
+    ExactTextModeString,
+    /// The font is exactly the built-in FreeTypeFont class.
+    ExactFreeTypeFont,
+    /// Spacing is exactly an int.
+    ExactIntegerSpacing,
+    /// Spacing fits the native signed 32-bit path.
+    SpacingFitsNativeRange,
+    /// Stroke width is exactly an int.
+    ExactIntegerStrokeWidth,
+    /// Stroke width fits the native float conversion range.
+    StrokeWidthFitsNativeRange,
+    /// Embedded-color state is exactly a bool.
+    ExactEmbeddedColorBoolean,
+    /// Anchor is None or exactly a str.
+    AnchorSupportedType,
+    /// Alignment is exactly a str.
+    ExactAlignmentString,
+    /// Direction is None.
+    DirectionIsNone,
+    /// Features is None.
+    FeaturesAreNone,
+    /// Language is None.
+    LanguageIsNone,
+    /// Coordinates are exactly a tuple.
+    ExactCoordinateTuple,
+    /// Coordinate tuple length is two.
+    CoordinateTupleLengthTwo,
+    /// Both coordinates are exact built-ins whose truncation fits C-int.
+    NativeCoordinates,
+    /// No extra positional font-mask arguments were supplied.
+    NoExtraArguments,
+    /// No extra font-mask keyword arguments were supplied.
+    NoExtraKeywords,
+    /// The owner is built-in ImageDraw with its mode-derived font-mask mode.
+    DefaultFontMode,
+    /// ImageText and FreeTypeFont still expose the methods used by the built-in route.
+    BuiltinTextAndFontMethods,
+}
+
+/// Callback facts for the ordered direct-font route selector.
+#[doc(hidden)]
+pub trait DrawTextRouteCallbacks {
+    /// Error carrier for Python protocol and attribute failures.
+    type Error;
+
+    /// Prepare Pillow's ImageText type after the original input is accepted.
+    fn begin(&mut self) -> Result<(), Self::Error>;
+    /// Evaluate one host check when requested by the core selector.
+    fn check(&mut self, check: DrawTextRouteCheck) -> Result<bool, Self::Error>;
+    /// Return the exact stored Text mode, if the host value is recognized.
+    fn text_mode(&mut self) -> Result<Option<Mode>, Self::Error>;
+}
+
+/// Select the direct FreeType route, keeping host checks in Pillow order.
+/// TODO(pillow-rs#3ptb): freeze direct/custom Draw route and callback ordering.
+#[doc(hidden)]
+pub fn draw_uses_direct_text_route<C: DrawTextRouteCallbacks>(
+    draw_mode: Mode,
+    callbacks: &mut C,
+) -> Result<bool, C::Error> {
+    if !callbacks.check(DrawTextRouteCheck::NativeTextInput)? {
+        return Ok(false);
+    }
+    callbacks.begin()?;
+    let before_mode = [
+        DrawTextRouteCheck::ExactTextWrapper,
+        DrawTextRouteCheck::NativeTextValue,
+        DrawTextRouteCheck::ExactTextModeString,
+    ];
+    for check in before_mode {
+        if !callbacks.check(check)? {
+            return Ok(false);
+        }
+    }
+    if callbacks.text_mode()? != Some(draw_mode) {
+        return Ok(false);
+    }
+    let after_mode = [
+        DrawTextRouteCheck::ExactFreeTypeFont,
+        DrawTextRouteCheck::ExactIntegerSpacing,
+        DrawTextRouteCheck::SpacingFitsNativeRange,
+        DrawTextRouteCheck::ExactIntegerStrokeWidth,
+        DrawTextRouteCheck::StrokeWidthFitsNativeRange,
+        DrawTextRouteCheck::ExactEmbeddedColorBoolean,
+        DrawTextRouteCheck::AnchorSupportedType,
+        DrawTextRouteCheck::ExactAlignmentString,
+        DrawTextRouteCheck::DirectionIsNone,
+        DrawTextRouteCheck::FeaturesAreNone,
+        DrawTextRouteCheck::LanguageIsNone,
+        DrawTextRouteCheck::ExactCoordinateTuple,
+        DrawTextRouteCheck::CoordinateTupleLengthTwo,
+        DrawTextRouteCheck::NativeCoordinates,
+        DrawTextRouteCheck::NoExtraArguments,
+        DrawTextRouteCheck::NoExtraKeywords,
+        DrawTextRouteCheck::DefaultFontMode,
+        DrawTextRouteCheck::BuiltinTextAndFontMethods,
+    ];
+    for check in after_mode {
+        if !callbacks.check(check)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
 impl Draw {
+    /// Convert the resolved ink to the native value accepted by a font mask.
+    #[doc(hidden)]
+    pub fn text_fill_from_ink(&self, ink: i64) -> Result<DrawTextFillValue, PilError> {
+        if self.effective_mode()? != Mode::ImageF32 {
+            return Ok(DrawTextFillValue::Integer(ink));
+        }
+        let packed = i32::try_from(ink).map_err(|_| {
+            PilError::InternalError("float text ink did not fit its packed i32 carrier".into())
+        })?;
+        Ok(DrawTextFillValue::Float(f32::from_le_bytes(
+            packed.to_le_bytes(),
+        )))
+    }
+
     /// Resolve an ImageDraw text color to the native ink passed to font masks.
     ///
     /// Single-band and I;16 modes retain their scalar ink values. Multiband
@@ -19,6 +168,46 @@ impl Draw {
                 i64::from(u16::from_le_bytes([fill.0, fill.1]))
             }
             _ => Self::pack_text_ink(fill),
+        })
+    }
+
+    /// Resolve a Pillow ImageDraw ink to the signed 32-bit value accepted by
+    /// its drawing primitives.
+    #[doc(hidden)]
+    pub fn draw_ink_with_input(&mut self, input: DrawColorInput) -> Result<i32, PilError> {
+        i32::try_from(self.text_ink_with_input(input)?).map_err(|_| {
+            PilError::InternalError("draw ink did not fit its packed i32 carrier".into())
+        })
+    }
+
+    /// Decode Pillow's already-packed drawing ink into this crate's channel
+    /// carrier without interpreting it again as a user color.
+    #[doc(hidden)]
+    pub fn color_from_draw_ink(&self, ink: i32) -> Result<(u8, u8, u8, u8), PilError> {
+        let [red, green, blue, alpha] = ink.to_le_bytes();
+        Ok(match self.effective_mode()? {
+            Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => {
+                (red, red, red, 255)
+            }
+            Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
+                (red, green, 0, 255)
+            }
+            Mode::ImageI32 | Mode::ImageF32 => (red, green, blue, alpha),
+            Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => {
+                (red, green, blue, alpha)
+            }
+            Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => {
+                (red, green, blue, 255)
+            }
+            Mode::ImageRgba8
+            | Mode::ImageRgbPremultiplied8
+            | Mode::ImageRgbx8
+            | Mode::ImageCmyk8
+            | Mode::ImageLumaA16
+            | Mode::ImageRgb16
+            | Mode::ImageRgba16
+            | Mode::ImageRgb32F
+            | Mode::ImageRgba32F => (red, green, blue, alpha),
         })
     }
 
@@ -70,7 +259,7 @@ impl Draw {
         self.text_with_options_inner(
             x,
             y,
-            text,
+            FontTextRef::String(text),
             font,
             fill,
             &crate::font::ImageFontTextOptions::default(),
@@ -97,7 +286,7 @@ impl Draw {
         fill: (u8, u8, u8, u8),
         options: &crate::font::ImageFontTextOptions,
     ) -> Result<(), PilError> {
-        self.text_with_options_inner(x, y, text, font, fill, options)
+        self.text_with_options_inner(x, y, FontTextRef::String(text), font, fill, options)
             .map(|_| ())
     }
 
@@ -111,8 +300,9 @@ impl Draw {
         fill: (u8, u8, u8, u8),
         options: &crate::font::ImageFontTextOptions,
     ) -> Result<(), PilError> {
-        let text = text.into_text();
-        self.text_with_options(x, y, &text, font, fill, options)
+        let text = text.into_font_text()?;
+        self.text_with_options_inner(x, y, text.as_ref(), font, fill, options)
+            .map(|_| ())
     }
 
     /// Draw text using Pillow's optional-font and `font_size` rules.
@@ -159,7 +349,28 @@ impl Draw {
         spacing: f64,
         options: &crate::font::ImageFontTextOptions,
     ) -> Result<(), PilError> {
-        let lines = text.split('\n').collect::<Vec<_>>();
+        self.multiline_text_with_options_ref(
+            x,
+            y,
+            FontTextRef::String(text),
+            font,
+            fill,
+            spacing,
+            options,
+        )
+    }
+
+    fn multiline_text_with_options_ref(
+        &mut self,
+        x: f64,
+        y: f64,
+        text: FontTextRef<'_>,
+        font: &crate::font::FreeTypeFont,
+        fill: (u8, u8, u8, u8),
+        spacing: f64,
+        options: &crate::font::ImageFontTextOptions,
+    ) -> Result<(), PilError> {
+        let lines = text.split('\n');
         let positioned = multiline_text_positions(
             x,
             y,
@@ -181,7 +392,7 @@ impl Draw {
         &mut self,
         x: f64,
         y: f64,
-        text: &str,
+        text: FontTextRef<'_>,
         font: &crate::font::FreeTypeFont,
         fill: (u8, u8, u8, u8),
         options: &crate::font::ImageFontTextOptions,
@@ -224,8 +435,16 @@ impl Draw {
         options: &crate::font::ImageFontTextOptions,
     ) -> Result<(), PilError> {
         crate::font::with_text_font(font, size, |font| {
-            let text = text.into_text();
-            self.multiline_text_with_options(x, y, &text, font, fill, spacing, options)
+            let text = text.into_font_text()?;
+            self.multiline_text_with_options_ref(
+                x,
+                y,
+                text.as_ref(),
+                font,
+                fill,
+                spacing,
+                options,
+            )
         })
     }
 
@@ -233,7 +452,7 @@ impl Draw {
         &mut self,
         x: i32,
         y: i32,
-        text: &str,
+        text: FontTextRef<'_>,
         font: &crate::font::FreeTypeFont,
         fill: (u8, u8, u8, u8),
         options: &crate::font::ImageFontTextOptions,
@@ -244,8 +463,7 @@ impl Draw {
             crate::compute::begin_eager_cpu_operation_telemetry("DrawText", requested_backend);
         let mut operation_receipts =
             crate::compute::PipelineOperationTelemetryCapture::begin_preserving_current();
-        let result =
-            self.text_with_options_inner_selected(x, y, text, font, fill, options, &context);
+        let result = self.text_with_options_inner_selected(x, y, text, font, fill, options, &context);
         let output_bytes = if result.is_ok() {
             self.image
                 .materialized_shared()
@@ -280,7 +498,7 @@ impl Draw {
         &mut self,
         x: i32,
         y: i32,
-        text: &str,
+        text: FontTextRef<'_>,
         font: &crate::font::FreeTypeFont,
         fill: (u8, u8, u8, u8),
         options: &crate::font::ImageFontTextOptions,
@@ -334,7 +552,7 @@ impl Draw {
         &mut self,
         x: i32,
         y: i32,
-        text: &str,
+        text: FontTextRef<'_>,
         font: &crate::font::FreeTypeFont,
         fill: (u8, u8, u8, u8),
         options: &crate::font::ImageFontTextOptions,
@@ -369,7 +587,7 @@ impl Draw {
 
         // The mask alpha carries glyph coverage; RGB carries the foreground or
         // embedded glyph color for the RGBA-mask strategy.
-        let (w, h, mask, offset) = font.getmask2_with_options(text, &options)?;
+        let (w, h, mask, offset) = font.getmask2_text_with_options(text, &options)?;
         if w == 0 || h == 0 {
             return Ok((w, h, None));
         }

@@ -1,5 +1,7 @@
+#[cfg(test)]
 use crate::raster::DynamicImage;
 
+#[cfg(test)]
 pub(crate) fn premultiply_alpha(img: &DynamicImage) -> DynamicImage {
     match img {
         DynamicImage::ImageRgba8(rgba) => {
@@ -41,6 +43,7 @@ pub(crate) fn unpremultiply_rgba(rgba: &crate::raster::RgbaImage) -> crate::rast
     out
 }
 
+#[cfg(test)]
 pub(crate) fn unpremultiply_alpha(img: &DynamicImage) -> DynamicImage {
     match img {
         DynamicImage::ImageRgba8(rgba) | DynamicImage::ImageRgbPremultiplied8(rgba) => {
@@ -63,10 +66,12 @@ pub(crate) fn unpremultiply_alpha(img: &DynamicImage) -> DynamicImage {
 }
 
 #[inline]
+#[cfg(test)]
 pub(super) fn premultiply_channel(value: u8, alpha: u8) -> u8 {
     ((value as u16 * alpha as u16 + 127) / 255) as u8
 }
 
+#[cfg(test)]
 pub(super) fn premultiply_alpha_row(source: &[u8], channels: usize, output: &mut [u8]) {
     debug_assert!(matches!(channels, 2 | 4));
     debug_assert_eq!(source.len(), output.len());

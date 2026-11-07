@@ -4,7 +4,6 @@ use crate::compute::pool_cpu::helpers::bytes::hidden_lanes::{
 use crate::error::PilError;
 use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::RgbImage;
-use crate::raster::{GenericImage, GenericImageView};
 
 /// Composite RGBA glyph-mask coverage into a native three-byte raster.
 pub(crate) fn apply<const RGBA_MASK: bool>(

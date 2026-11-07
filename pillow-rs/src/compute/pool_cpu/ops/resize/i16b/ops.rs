@@ -1,9 +1,9 @@
 //! Exact ImageI16B strategy with Pillow's big-endian resampling contract.
 
 use crate::compute::registry::support::StrategySelection;
-use crate::pipeline::ResampleFilter;
 use crate::raster::{DynamicImage, ImageBuffer, Luma};
 
+#[cfg(test)]
 pub(crate) fn resize(
     input: &ImageBuffer<Luma<u16>, Vec<u16>>,
     width: u32,

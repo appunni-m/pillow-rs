@@ -4,6 +4,7 @@ use crate::raster::DynamicImage;
 #[cfg(target_arch = "x86_64")]
 use crate::compute::{Architecture, Backend, ExecutionContext};
 
+#[cfg(test)]
 const F_RESIZE_VECTOR_WIDTH: usize = 16;
 
 pub(crate) trait F64MulAdd: Sync {
@@ -20,6 +21,7 @@ pub(crate) trait F64MulAdd: Sync {
 }
 
 #[inline(always)]
+#[cfg(test)]
 fn f_resize_mul_add<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     fma: &F,
     weight: f64,
@@ -141,6 +143,7 @@ impl F64MulAdd for X86FmaToken {
 }
 
 #[inline(always)]
+#[cfg(test)]
 fn f_resize_accumulate<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     accumulator: &mut f64,
     weight: f64,
@@ -161,6 +164,7 @@ fn f_resize_accumulate<const FINITE_OPERANDS: bool, F: F64MulAdd>(
 }
 
 #[inline(always)]
+#[cfg(test)]
 pub(super) fn f_resize_accumulate_boxed_row<
     const FINITE_OPERANDS: bool,
     F: F64MulAdd,
@@ -248,6 +252,7 @@ pub(super) fn f_resize_accumulate_boxed_row<
     }
 }
 
+#[cfg(test)]
 pub(super) fn f_resize_boxed_horizontal_pass<
     const FINITE_OPERANDS: bool,
     F: F64MulAdd,
@@ -280,6 +285,7 @@ pub(super) fn f_resize_boxed_horizontal_pass<
     }
 }
 
+#[cfg(test)]
 pub(super) fn f_resize_boxed_vertical_pass<const FINITE_OPERANDS: bool, F: F64MulAdd>(
     intermediate: &[f32],
     output_width: usize,

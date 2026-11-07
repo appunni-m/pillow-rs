@@ -1,6 +1,6 @@
 //! Typed native-sample movement for Pillow's I;16 mode identities.
 
-use crate::raster::{EncodableLayout, GenericImageView, ImageBuffer, Pixel};
+use crate::raster::{EncodableLayout, ImageBuffer, Pixel};
 use wide::u16x8;
 
 /// Vertically flips an exact typed u16 raster without changing sample bits.

@@ -11,7 +11,6 @@ use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
 
-use super::CompositeLayout;
 use super::{secondary_facts, select_support};
 
 const COMPOSITE_LUMA_MASKS: &[Mode] = &[Mode::One, Mode::ImageLuma8];

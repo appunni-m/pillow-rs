@@ -1,9 +1,11 @@
+#[cfg(test)]
 use super::alpha::unpremultiply_channel;
 use super::coefficients::fixed_point_to_u8;
 use super::*;
 
 /// Resample an RGB column with fixed-point taps in the original accumulation order.
 #[inline(always)]
+#[cfg(test)]
 fn vertical_pass_rgb_col(
     intermediate: &[u8],
     out_x: u32,
@@ -97,6 +99,7 @@ fn vertical_pass_rgb_col(
 /// This is the vertical pass: it computes one column of the final image
 /// from one column of the intermediate image. Uses PIL's fixed-point arithmetic.
 /// Returns a single value per channel for this (x, y) position.
+#[cfg(test)]
 fn vertical_pass_col(
     intermediate: &[u8],
     _src_rows: u32,
@@ -154,13 +157,16 @@ fn vertical_pass_col(
 // transpose makes the samples for each output column contiguous.  Keep the
 // small-image path unchanged: the extra allocation and copy are not amortized
 // there, and preserving that path gives the benchmark a real crossover point.
+#[cfg(test)]
 mod transpose;
+#[cfg(test)]
 pub(super) use transpose::{should_transpose_vertical, transpose_resize_intermediate};
 
 #[cfg(all(test, not(feature = "parallel")))]
 mod resize_transpose_tests;
 
 #[inline]
+#[cfg(test)]
 fn vertical_pass_col_transposed(
     intermediate: &[u8],
     source_rows: u32,
@@ -314,6 +320,7 @@ pub(crate) fn vertical_pass_rgb_row(
     }
 }
 
+#[cfg(test)]
 pub(super) fn vertical_pass_rows(
     intermediate: &[u8],
     source_rows: u32,
@@ -366,6 +373,7 @@ pub(super) fn vertical_pass_rows(
     }
 }
 
+#[cfg(test)]
 fn vertical_pass_rows_transposed(
     intermediate: &[u8],
     source_rows: u32,
@@ -393,6 +401,7 @@ fn vertical_pass_rows_transposed(
 mod rgb_vertical_pass_tests;
 
 #[inline(always)]
+#[cfg(test)]
 fn write_vertical_pass_alpha_pixel(
     row: &mut [u8],
     start: usize,
@@ -411,6 +420,7 @@ fn write_vertical_pass_alpha_pixel(
 }
 
 #[inline]
+#[cfg(test)]
 pub(super) fn vertical_pass_rows_alpha(
     intermediate: &[u8],
     source_rows: u32,
@@ -461,6 +471,7 @@ pub(super) fn vertical_pass_rows_alpha(
     }
 }
 
+#[cfg(test)]
 fn vertical_pass_rows_alpha_transposed(
     intermediate: &[u8],
     source_rows: u32,

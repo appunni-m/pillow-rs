@@ -1,6 +1,6 @@
 //! L-mode support declaration and architecture selection for RemapPalette.
-// TODO(pillow-rs#3ptb): verify L-to-P output, empty input, and Default/vector
-// selection receipts in the frozen CPU parity matrix.
+// TODO(pillow-rs#3ptb): record Default/vector architecture selection receipts
+// for L-to-P, including fallback when an implementation is unavailable.
 
 use crate::compute::{Architecture, ExecutionContext};
 use crate::compute::registry::support::{

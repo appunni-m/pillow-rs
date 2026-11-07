@@ -6,6 +6,10 @@
     all(target_arch = "wasm32", target_feature = "simd128"),
     all(target_arch = "aarch64", target_feature = "neon"),
 ))]
+#[allow(
+    unused_macro_rules,
+    reason = "architecture-specific extract implementations instantiate this arm on their target"
+)]
 macro_rules! execute_architecture {
     (safe, $execute:expr) => { $execute };
     (unsafe, $execute:expr) => {{
@@ -27,6 +31,7 @@ macro_rules! declare_strategies {
     ($mode:ident, $rule:expr; $(
         $variant:ident, $module:ident, $cfg:meta, $requires:expr, $channels:literal, $safety:ident
     );* $(;)?) => {
+        #[allow(unused_imports)]
         use crate::compute::{Architecture, ExecutionContext, registry::support::{
             InputContract, ModeSupport, OperationId,
         }};

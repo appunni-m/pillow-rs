@@ -38,7 +38,10 @@ pub enum PasteColorComponent {
     /// A Python float component.
     Float(f64),
     /// A non-numeric component retained by type name without invoking coercion.
-    Invalid { type_name: String },
+    Invalid {
+        /// Host-language type name retained for Pillow-compatible errors.
+        type_name: String,
+    },
 }
 
 /// Host-neutral source argument for Pillow-compatible `Image.paste`.

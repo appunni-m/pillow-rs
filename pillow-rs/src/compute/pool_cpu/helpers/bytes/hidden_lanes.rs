@@ -1,7 +1,7 @@
 use crate::error::PilError;
 use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::Mode;
-use crate::raster::{GenericImageView, ImageBuffer, Pixel};
+use crate::raster::{ImageBuffer, Pixel};
 
 /// Returns the canonical omitted bytes for a logical pixel when no producer
 /// state was retained for its compact carrier.

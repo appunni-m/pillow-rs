@@ -3,7 +3,7 @@
 use crate::compute::registry::support::PaletteInput;
 use crate::error::PilError;
 use crate::raster::{
-    DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, Luma, LumaA, Mode, Rgb,
+    DynamicImage, GrayAlphaImage, GrayImage, Luma, LumaA, Mode, Rgb,
     RgbImage, Rgba, RgbaImage,
 };
 

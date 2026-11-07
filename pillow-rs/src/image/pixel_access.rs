@@ -656,9 +656,9 @@ impl Image {
         } else {
             palette.extend(integer_color.iter().map(|&value| value as u8));
         }
-        // TODO(pillow-rs#3ptb): the indexed raster stores complete RGB/RGBA
-        // entries, so an incomplete trailing raw palette entry is discarded
-        // here. Python's ImagePalette retains those bytes until realization.
+        // Pillow's public Python ImagePalette retains arbitrary trailing bytes
+        // in its own buffer. This core path installs only complete palette
+        // entries used by indexed pixels; the wrapper keeps its buffer intact.
         self.replace_indexed_palette_from_draw(&palette, mode)?;
         Ok(PutPixelValue::Integer(index as i64))
     }

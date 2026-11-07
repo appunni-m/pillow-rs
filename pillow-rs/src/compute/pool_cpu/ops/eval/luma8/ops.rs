@@ -14,7 +14,6 @@ use crate::compute::{Architecture, ExecutionContext};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode, GrayImage};
 
-use super::default::eval_impl as default;
 
 const CHANNELS: usize = 1;
 const INPUTS: &[InputContract] = &[

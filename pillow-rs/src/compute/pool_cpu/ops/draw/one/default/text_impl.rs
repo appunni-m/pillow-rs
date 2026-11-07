@@ -1,6 +1,5 @@
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Luma};
-use crate::raster::{GenericImage, GenericImageView};
 
 pub(crate) fn apply<const RGBA_MASK: bool>(
     mut image: DynamicImage,

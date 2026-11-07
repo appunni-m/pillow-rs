@@ -45,9 +45,18 @@ fn interleave_luma_bands(
         ));
     }
     let output = interleave_rgb_luma_bands(bands[0], bands[1], bands[2])?;
-    crate::compute::pool_cpu::ops::composite::helpers::native_bytes::construct(
+    let mut output = crate::compute::pool_cpu::ops::composite::helpers::native_bytes::construct(
         width, height, MODE, output,
-    )
+    )?;
+    crate::compute::pool_cpu::ops::composite::helpers::merge::preserve_merged_padding(
+        &mut output,
+        MODE,
+        crate::compute::pool_cpu::ops::composite::ops::MergeLayout::Three {
+            lab_encoding: false,
+        },
+        pixels,
+    )?;
+    Ok(output)
 }
 
 fn interleave_rgb_luma_bands(

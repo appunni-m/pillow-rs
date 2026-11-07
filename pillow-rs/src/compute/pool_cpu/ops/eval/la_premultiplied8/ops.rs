@@ -5,13 +5,11 @@ use crate::compute::registry::support::{
     InputContract,
     ModeSupport,
     OperationId,
-    StrategySelection,
 };
 use crate::compute::ExecutionContext;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode, GrayAlphaImage};
 
-use super::default::eval_impl as default;
 
 const INPUTS: &[InputContract] = &[
     InputContract::ByteLutEntries { channels: 2 },

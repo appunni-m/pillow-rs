@@ -646,6 +646,7 @@ impl Image {
                     ops: super::PipelineOps::empty(),
                     palette: Some(palette),
                     palette_alpha: Some(palette_alpha),
+                    compatibility_icc_profile: self.compatibility_icc_profile().map(Arc::from),
                     materialized: materialization_cache(),
                     shape: super::pipeline_shape_cache(),
                     mode: super::pipeline_mode_cache_for(Some(mode)),

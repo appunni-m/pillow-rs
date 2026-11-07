@@ -2,7 +2,7 @@
 
 use crate::error::PilError;
 use crate::raster::{
-    DynamicImage, GenericImageView, GrayAlphaImage, LumaA, Mode, Rgb, RgbImage,
+    DynamicImage, GrayAlphaImage, LumaA, Mode, Rgb, RgbImage,
     Rgba, RgbaImage,
 };
 

@@ -42,7 +42,11 @@ pub(in crate::compute::pool_gpu) fn gpu_luma16_f64_sample(
             coordinate.checked_mul(source_w)?.checked_add(line)?
         };
         let sample = *samples.get(index)?;
-        Some(luma16_resample_read(sample, big_endian))
+        Some(if big_endian {
+            luma16_resample_read::<true>(sample)
+        } else {
+            luma16_resample_read::<false>(sample)
+        })
     };
 
     let mut minimum_exponent = None;
@@ -99,7 +103,11 @@ pub(in crate::compute::pool_gpu) fn gpu_luma16_f64_sample(
         };
     }
 
-    let expected = luma16_resample_write(f64_accumulator, big_endian);
+    let expected = if big_endian {
+        luma16_resample_write::<true>(f64_accumulator)
+    } else {
+        luma16_resample_write::<false>(f64_accumulator)
+    };
     // The device reducer materializes an f32 before the I;16 byte-level
     // round/clip step.  That conversion can move a half-integer boundary even
     // though the exact integer sum agrees with the f64 accumulator, so prove
@@ -110,7 +118,11 @@ pub(in crate::compute::pool_gpu) fn gpu_luma16_f64_sample(
     if !shader_value.is_finite() {
         return None;
     }
-    let actual = luma16_resample_write(f64::from(shader_value), big_endian);
+    let actual = if big_endian {
+        luma16_resample_write::<true>(f64::from(shader_value))
+    } else {
+        luma16_resample_write::<false>(f64::from(shader_value))
+    };
     (actual == expected).then_some(actual)
 }
 

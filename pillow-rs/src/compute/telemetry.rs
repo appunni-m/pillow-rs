@@ -10,7 +10,6 @@ pub(crate) use eager_cpu::{
     begin_eager_cpu_operation_telemetry, cancel_eager_cpu_operation_telemetry,
     finish_eager_cpu_operation_telemetry,
     finish_eager_cpu_operation_telemetry_with_selection,
-    record_eager_cpu_operation_receipt, record_eager_cpu_operation_receipt_with_reason,
     record_eager_cpu_operation_receipt_with_selection,
     record_eager_cpu_operation_receipt_with_selection_and_receipts,
 };
@@ -677,18 +676,6 @@ pub(crate) fn record_pipeline_operation_unsupported(operation: &'static str) {
             handoff_count: 0,
             source: origin_for_event(operation),
         });
-    });
-}
-
-/// Record the concrete CPU architecture selected for the active operation.
-pub(crate) fn record_pipeline_operation_architecture(architecture: Architecture) {
-    if !pipeline_telemetry_enabled() {
-        return;
-    }
-    ACTIVE_PIPELINE_OPERATION_TELEMETRY.with(|active| {
-        if let Some(sample) = active.borrow_mut().last_mut() {
-            sample.selected_architecture = Some(architecture);
-        }
     });
 }
 

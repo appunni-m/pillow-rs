@@ -13,12 +13,13 @@
 //! selected Default/vector nearest geometry; filtered LA-family output repeats
 //! luma into the omitted bytes, while filtered RGB-family output preserves the
 //! configured physical padding fill. Runtime lane parity remains pending.
-//! TODO(pillow-rs#3ptb): a future I;16* Architecture strategy must sample
+//! TODO(pillow-rs#3ptb): any future I;16* Architecture strategy must sample
 //! typed u16 values with Pillow's floating Geometry.c affine and exact fill
-//! semantics. Do not port the archived raw-byte SIMD nearest kernel: its signed
-//! 16.16 stepping and byte-plane sampling are not equivalent. Keep these four
-//! exact modes Default-only with same-mode fallback until such a strategy is
-//! implemented and parity-verified.
+//! semantics. Default output parity covers all four exact identities, three
+//! filters, and arbitrary/custom transforms. Do not port the archived raw-byte
+//! SIMD nearest kernel: its signed 16.16 stepping and byte-plane sampling are
+//! not equivalent. Keep these modes Default-only with same-mode fallback until
+//! a typed strategy is implemented and parity-verified.
 //! Core-only mode support is marked `NO_PILLOW_SUPPORT` beside its
 //! implementation.
 
@@ -28,7 +29,6 @@ use crate::compute::registry::support::{
     OperationId,
     OperationInputs,
     OperationSupport,
-    PaletteKnowledge,
     RequestFacts,
     StrategySelection,
 };

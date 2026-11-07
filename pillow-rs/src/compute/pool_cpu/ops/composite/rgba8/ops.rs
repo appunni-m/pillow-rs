@@ -9,7 +9,6 @@ use crate::compute::registry::support::{
 };
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode, RgbaImage};
-use super::default;
 
 pub(crate) const MODE: Mode = Mode::ImageRgba8;
 

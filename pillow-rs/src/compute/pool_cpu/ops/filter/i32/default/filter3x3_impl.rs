@@ -2,7 +2,7 @@
 
 use crate::compute::pool_cpu::ops::filter::helpers::pillow_kernel_row_3;
 use crate::error::PilError;
-use crate::raster::{DynamicImage, RgbaImage};
+use crate::raster::DynamicImage;
 
 #[path = "i32_cross_smooth_kernel.rs"]
 mod i32_cross_smooth_kernel;

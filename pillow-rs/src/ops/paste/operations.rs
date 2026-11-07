@@ -328,6 +328,12 @@ impl Image {
         {
             return Err(PilError::ValueError("images do not match".to_owned()));
         }
+        if width == 0 || height == 0 {
+            // Pillow's low-level image Paste is a no-op for an empty source
+            // region. ImageOps.expand relies on this after constructing its
+            // filled canvas around a zero-area source.
+            return Ok(());
+        }
         let mask_alpha = paste_mask_uses_alpha(destination_mode, mask)?;
         let source_image = match plan.source {
             PasteSource::Image(image) => *image,
@@ -575,6 +581,9 @@ impl Image {
         {
             return Err(PilError::ValueError("images do not match".to_owned()));
         }
+        if width == 0 || height == 0 {
+            return Ok(());
+        }
         let mask_alpha = paste_mask_uses_alpha(destination_mode, mask)?;
         let (source_width, source_height) = if compact_solid_source {
             (1, 1)
@@ -703,6 +712,16 @@ fn resolve_paste_placement(
             let raw_height = bottom
                 .checked_sub(top)
                 .and_then(|value| u32::try_from(value).ok());
+            if let Some((source_width, source_height)) = source_size
+                && (source_width == 0 || source_height == 0)
+                && raw_width == Some(source_width)
+                && raw_height == Some(source_height)
+            {
+                // Pillow's ImageOps.expand pastes the original image into its
+                // filled canvas. Paste.c treats that exact empty source region
+                // as a no-op, including when only one source dimension is 0.
+                return Ok(Some((left, top, source_width, source_height)));
+            }
             let degenerate = raw_width.is_none_or(|value| value == 0)
                 || raw_height.is_none_or(|value| value == 0);
             // Pillow Paste.c no-ops a degenerate solid fill; image pastes still

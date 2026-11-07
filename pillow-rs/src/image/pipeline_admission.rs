@@ -75,7 +75,7 @@ impl Image {
         let Image::Pipeline {
             source,
             ops,
-            mode,
+            mode: _,
             ..
         } = self
         else {

@@ -171,20 +171,6 @@ macro_rules! declare_quantize_native_default {
             )
         }
     };
-    (rgba) => {
-        pub(crate) fn execute(
-            samples: &[u8],
-            width: u32,
-            height: u32,
-            colors: usize,
-            _kmeans: u32,
-            _method: u32,
-        ) -> Result<(Vec<u8>, Vec<u8>, Option<Vec<u8>>), $crate::error::PilError> {
-            $crate::compute::pool_cpu::ops::imageops::helpers::quantize_rgb_source::execute_rgba_samples(
-                samples, width, height, colors,
-            )
-        }
-    };
 }
 
 pub(crate) use declare_quantize_native_default;
@@ -480,15 +466,6 @@ pub(crate) fn select_invert_strategy(
 }
 
 macro_rules! declare_invert_mode {
-    ($mode:ident, $input:ty, $implementation:path, $bytes_per_pixel:expr $(,)?) => {
-        declare_invert_mode!(
-            $mode,
-            $input,
-            $implementation,
-            $bytes_per_pixel,
-            None::<&'static str>
-        );
-    };
     ($mode:ident, $input:ty, $implementation:path, $bytes_per_pixel:expr, $core_only_reason:expr $(,)?) => {
         pub(crate) const SUPPORT: crate::compute::registry::support::ModeSupport =
             match $core_only_reason {

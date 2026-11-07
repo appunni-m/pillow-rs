@@ -29,7 +29,9 @@ pub(crate) mod public_api;
 mod text_output;
 pub(crate) mod text_layout;
 pub(crate) mod text_wrap;
+mod text_value;
 mod text_layout_callbacks;
+pub(crate) use text_value::{FontText, FontTextRef};
 pub use text_layout_callbacks::{
     ImageFontTextBoundsCallbacks, ImageFontTextPositionArithmetic,
     ImageFontTextPositionCallbacks, ImageFontTextPositionComparison,
@@ -38,15 +40,15 @@ pub use text_layout_callbacks::{
 /// One positioned line produced by Pillow's multiline text layout.
 #[doc(hidden)]
 #[derive(Clone, Debug, PartialEq)]
-pub struct ImageFontTextLine {
+pub struct ImageFontTextLine<Text = String> {
     /// Horizontal line position before pixel-mask placement.
     pub x: f64,
     /// Vertical line position before pixel-mask placement.
     pub y: f64,
     /// Anchor passed to the font when rendering this line.
     pub anchor: String,
-    /// Text content for this line.
-    pub text: String,
+    /// Text content for this line, preserving host string codepoints.
+    pub text: Text,
 }
 
 /// Word-wrapped text and any text that did not fit the requested height.
@@ -189,6 +191,10 @@ pub enum ImageFontSourceInput {
 pub enum ImageFontTextInput {
     /// Unicode text supplied by the host.
     Text(String),
+    /// Python Unicode codepoints that Rust `String` cannot represent, such as
+    /// a string containing an unpaired surrogate.
+    #[doc(hidden)]
+    TextCodepoints(Vec<u32>),
     /// Pillow byte text, interpreted as one Latin-1 code point per byte.
     Bytes(Vec<u8>),
     /// A host value that is neither text nor byte text.
@@ -239,16 +245,6 @@ pub struct ImageFontFaceInfo<'a> {
     pub format: &'static str,
     /// Whether the loaded face has scalable outlines.
     pub is_scalable: bool,
-}
-
-impl ImageFontTextInput {
-    pub(crate) fn into_text(self) -> Result<String, PilError> {
-        match self {
-            Self::Text(text) => Ok(text),
-            Self::Bytes(bytes) => Ok(pillow_bytes_to_text(&bytes)),
-            Self::InvalidType => Err(PilError::TypeError("expected string or bytes".into())),
-        }
-    }
 }
 
 impl ImageFontVariationNameInput {
@@ -477,9 +473,26 @@ impl FreeTypeFont {
         align: &str,
         options: &ImageFontTextOptions,
     ) -> Result<(i32, i32, i32, i32), PilError> {
-        let lines: Vec<&str> = text.split('\n').collect();
+        self.multiline_textbbox_ref(
+            xy,
+            FontTextRef::String(text),
+            spacing,
+            align,
+            options,
+        )
+    }
+
+    fn multiline_textbbox_ref(
+        &self,
+        xy: (i32, i32),
+        text: FontTextRef<'_>,
+        spacing: i32,
+        align: &str,
+        options: &ImageFontTextOptions,
+    ) -> Result<(i32, i32, i32, i32), PilError> {
+        let lines = text.split('\n');
         if lines.len() == 1 {
-            let bbox = self.getbbox_with_options(text, options)?;
+            let bbox = self.getbbox_text_with_options(text, options)?;
             return Ok((
                 xy.0 + bbox.0 as i32,
                 xy.1 + bbox.1 as i32,
@@ -496,7 +509,7 @@ impl FreeTypeFont {
             Some(
                 lines
                     .iter()
-                    .map(|line| imagingft::getlength_and_bbox(self, line))
+                    .map(|line| imagingft::getlength_and_bbox_text(self, *line))
                     .collect::<Result<Vec<_>, _>>()?,
             )
         } else {
@@ -507,7 +520,7 @@ impl FreeTypeFont {
         } else {
             lines
                 .iter()
-                .map(|line| self.getlength_with_options(line, options))
+                .map(|line| self.getlength_text_with_options(*line, options))
                 .collect::<Result<Vec<_>, _>>()?
         };
         let max_width = widths.iter().copied().fold(0.0_f32, f32::max);
@@ -528,7 +541,7 @@ impl FreeTypeFont {
                 let bbox = metrics[index].1;
                 (bbox.0 as f32, bbox.1 as f32, bbox.2 as f32, bbox.3 as f32)
             } else {
-                self.getbbox_with_options(line, options)?
+                self.getbbox_text_with_options(*line, options)?
             };
             left = left.min(line_x + bbox.0 as f64);
             top = top.min(line_y + bbox.1 as f64);
@@ -548,8 +561,8 @@ impl FreeTypeFont {
         align: &str,
         options: &ImageFontTextOptions,
     ) -> Result<(i32, i32, i32, i32), PilError> {
-        let text = text.into_text()?;
-        self.multiline_textbbox(xy, &text, spacing, align, options)
+        let text = text.into_font_text()?;
+        self.multiline_textbbox_ref(xy, text.as_ref(), spacing, align, options)
     }
 
     /// Load a font face from bytes at the requested Pillow point size.
@@ -636,7 +649,7 @@ impl FreeTypeFont {
 
     /// Return the Pillow-compatible grayscale text mask.
     pub fn getmask(&self, text: &str) -> Result<(u32, u32, Vec<u8>), PilError> {
-        imagingft::getmask(self, text)
+        imagingft::getmask_text(self, FontTextRef::String(text))
     }
 
     /// Return the Pillow-compatible grayscale text mask for byte text.
@@ -651,17 +664,7 @@ impl FreeTypeFont {
         text: &str,
         options: &ImageFontTextOptions,
     ) -> Result<(u32, u32, Vec<u8>), PilError> {
-        if let Some(start) = options.start
-            && options.uses_default_mask_except_start()
-        {
-            return self
-                .getmask2_with_start(text, start)
-                .map(|(width, height, pixels, _)| (width, height, pixels));
-        }
-        if options.uses_default_mask() {
-            return self.getmask(text);
-        }
-        imagingft::getmask_with_options(self, text, options)
+        self.getmask_text_with_options(FontTextRef::String(text), options)
     }
 
     /// Return Pillow's public `getmask` result for byte text using optional render arguments.
@@ -670,18 +673,8 @@ impl FreeTypeFont {
         text: &[u8],
         options: &ImageFontTextOptions,
     ) -> Result<(u32, u32, Vec<u8>), PilError> {
-        if let Some(start) = options.start
-            && options.uses_default_mask_except_start()
-        {
-            return self
-                .getmask2_bytes_with_start(text, start)
-                .map(|(width, height, pixels, _)| (width, height, pixels));
-        }
-        if options.uses_default_mask() {
-            return self.getmask_bytes(text);
-        }
         let text = pillow_bytes_to_text(text);
-        self.getmask_with_options(&text, options)
+        self.getmask_text_with_options(FontTextRef::String(&text), options)
     }
 
     /// Return Pillow's public `(family, style)` font name tuple.
@@ -701,7 +694,7 @@ impl FreeTypeFont {
 
     /// Return Pillow's public text length in pixels.
     pub fn getlength(&self, text: &str) -> Result<f32, PilError> {
-        imagingft::getlength(self, text)
+        imagingft::getlength_text(self, FontTextRef::String(text))
     }
 
     /// Return Pillow native `_imagingft.Font.getlength()` 26.6 advance.
@@ -709,9 +702,27 @@ impl FreeTypeFont {
         imagingft::native_getlength_26dot6(self, text)
     }
 
+    /// Return native `_imagingft.Font.getlength()` after host text classification.
+    pub fn native_getlength_26dot6_input(
+        &self,
+        text: ImageFontTextInput,
+    ) -> Result<i32, PilError> {
+        let text = text.into_font_text()?;
+        imagingft::native_getlength_26dot6_text(self, text.as_ref())
+    }
+
     /// Return Pillow native `_imagingft.Font.getsize()` size and offset tuple.
     pub fn native_getsize(&self, text: &str) -> Result<FontSizeAndOffset, PilError> {
         imagingft::native_getsize(self, text)
+    }
+
+    /// Return native `_imagingft.Font.getsize()` after host text classification.
+    pub fn native_getsize_input(
+        &self,
+        text: ImageFontTextInput,
+    ) -> Result<FontSizeAndOffset, PilError> {
+        let text = text.into_font_text()?;
+        imagingft::native_getsize_text(self, text.as_ref())
     }
 
     /// Return Pillow native `_imagingft.Font.render()` mask and offset.
@@ -734,9 +745,9 @@ impl FreeTypeFont {
                 imagingft::validate_basic_layout_options(options)?;
                 return Err(PilError::TypeError("expected string or bytes".into()));
             }
-            text => text.into_text()?,
+            text => text.into_font_text()?,
         };
-        self.native_render(&text, options)
+        imagingft::native_render_text(self, text.as_ref(), options)
     }
 
     /// Return Pillow native `_imagingft.Font` public face attributes.
@@ -781,10 +792,7 @@ impl FreeTypeFont {
         text: &str,
         options: &ImageFontTextOptions,
     ) -> Result<f32, PilError> {
-        if options.uses_default_layout() {
-            return self.getlength(text);
-        }
-        imagingft::getlength_with_options(self, text, options)
+        self.getlength_text_with_options(FontTextRef::String(text), options)
     }
 
     /// Return Pillow's public text length for byte text using optional layout arguments.
@@ -793,11 +801,8 @@ impl FreeTypeFont {
         text: &[u8],
         options: &ImageFontTextOptions,
     ) -> Result<f32, PilError> {
-        if options.uses_default_layout() {
-            return self.getlength_bytes(text);
-        }
         let text = pillow_bytes_to_text(text);
-        self.getlength_with_options(&text, options)
+        self.getlength_text_with_options(FontTextRef::String(&text), options)
     }
 
     /// Return whether the font exposes variation axes.

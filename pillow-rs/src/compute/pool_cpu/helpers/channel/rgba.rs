@@ -16,7 +16,7 @@ pub(crate) fn rgb_to_rgba_block(source: &[u8], alpha: u8) -> [u8; 16] {
     let mut padded = [alpha; 16];
     padded[..12].copy_from_slice(source);
     u8x16::new(padded)
-        .swizzle_relaxed(u8x16::new(RGB_TO_RGBA_SHUFFLE))
+        .shuffle(u8x16::new(RGB_TO_RGBA_SHUFFLE))
         .to_array()
 }
 
@@ -27,7 +27,7 @@ pub(crate) fn rgba_to_rgb_block(source: &[u8]) -> [u8; 12] {
     let mut padded = [0u8; 16];
     padded[..source.len()].copy_from_slice(source);
     let shuffled = u8x16::new(padded)
-        .swizzle_relaxed(u8x16::new(RGBA_TO_RGB_SHUFFLE))
+        .shuffle(u8x16::new(RGBA_TO_RGB_SHUFFLE))
         .to_array();
     let mut output = [0u8; 12];
     output.copy_from_slice(&shuffled[..12]);

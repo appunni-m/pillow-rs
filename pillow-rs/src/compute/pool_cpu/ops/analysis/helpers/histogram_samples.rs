@@ -10,7 +10,7 @@
 // f32 clamp/NaN/rounding, RGB32F's opaque fourth band, and masked scans.
 
 use crate::error::PilError;
-use crate::raster::{GenericImageView, ImageBuffer, Pixel};
+use crate::raster::{ImageBuffer, Pixel};
 
 /// Counts the stored byte channels directly, without constructing another raster.
 // Pillow 12.2's unpackLA handles LA, La, and PA raw inputs by repeating the
@@ -261,7 +261,7 @@ pub(crate) fn i32_scalar(
     }
     let mut samples = image.pixels().map(|pixel| read_i32_sample(pixel.channels()));
     let Some(first) = samples.next() else {
-        return Ok(vec![0; 256]);
+        return Err(PilError::ValueError("min/max not given".into()));
     };
     let (mut minimum, mut maximum) = (first, first);
     for value in samples {
@@ -311,7 +311,7 @@ pub(crate) fn f32_scalar(
     }
     let mut samples = image.pixels().map(|pixel| read_f32_sample(pixel.channels()));
     let Some(first) = samples.next() else {
-        return Ok(vec![0; 256]);
+        return Err(PilError::ValueError("min/max not given".into()));
     };
     let (mut minimum, mut maximum) = (first, first);
     for value in samples {
@@ -348,7 +348,11 @@ pub(crate) fn f32_scalar_with_extrema(
     for pixel in image.pixels() {
         let value = read_f32_sample(pixel.channels());
         let scaled = ((value - minimum) * scale).trunc();
-        if scaled.is_finite() && (0.0..256.0).contains(&scaled) {
+        if scaled.is_nan() {
+            // The pinned Pillow build's float-to-int conversion bins NaN as
+            // zero for F histograms, including all-NaN degenerate images.
+            histogram[0] += 1;
+        } else if scaled.is_finite() && (0.0..256.0).contains(&scaled) {
             histogram[scaled as usize] += 1;
         }
     }

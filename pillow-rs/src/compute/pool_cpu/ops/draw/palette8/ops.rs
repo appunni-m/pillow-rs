@@ -22,8 +22,8 @@ pub(crate) const MODE: Mode = Mode::ImagePalette8;
 pub(crate) const CHANNELS: usize = 1;
 pub(crate) const FLOAT_MODE: bool = false;
 
-/// TODO(pillow-rs#3ptb): verify negative-origin P fontmode-1 output, palette
-/// metadata retention, and error ordering in CPU parity.
+/// TODO(pillow-rs#3ptb): verify P text's byte-conversion error and cached tuple
+/// reuse through the independent post-error `point` parity workflow.
 pub(crate) fn apply_text<const RGBA_MASK: bool>(
     selection: &StrategySelection,
     input: super::super::TextComposeInput<'_>,

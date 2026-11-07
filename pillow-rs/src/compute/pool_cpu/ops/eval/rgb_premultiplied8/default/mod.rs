@@ -1,2 +1,2 @@
 pub(crate) mod eval_impl;
-pub(crate) use eval_impl::{execute, prepare, Input, Kernel};
+pub(crate) use eval_impl::{execute, prepare, Kernel};

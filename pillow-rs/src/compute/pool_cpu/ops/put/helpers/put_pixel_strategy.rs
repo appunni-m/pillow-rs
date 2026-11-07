@@ -6,6 +6,7 @@ macro_rules! declare_strategies {
         batch [$($batch_variant:ident, $batch_module:ident, $batch_cfg:meta, $batch_requires:expr;)*]
     ) => {
         use crate::compute::{Architecture as WriteArch, ExecutionContext as WriteContext};
+        #[allow(unused_imports)]
         use crate::compute::registry::support::{
             InputContract as WriteContract,
             ModeSupport as WriteSupport, OperationId as WriteOperation,

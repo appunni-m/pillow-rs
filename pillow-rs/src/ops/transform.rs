@@ -8,7 +8,9 @@ use crate::raster::Mode;
 mod fill;
 mod public;
 pub(crate) use fill::public_transform_fill;
-pub use public::{PreparedTransformOutput, TransformMeshAccumulator};
+pub use public::{
+    PreparedTransformOutput, TransformMeshAccumulator, transform_resample_public_error,
+};
 
 /// Host-neutral transform data after the binding has performed only Python
 /// sequence extraction.
@@ -59,7 +61,6 @@ pub struct PreparedTransformFill {
     mode: Mode,
     fill: (u8, u8, u8, u8),
     palette_fill: Option<u8>,
-    temporary_palette: Option<Vec<u8>>,
     fill_is_none: bool,
 }
 
@@ -71,7 +72,10 @@ pub enum ReduceFactor {
     /// A factor sequence supplied by the caller.
     Sequence(Vec<i64>),
     /// A factor sequence with a different arity, before item conversion.
-    SequenceLength { length: usize, tuple: bool },
+    SequenceLength {
+        /// Number of coordinates supplied by the caller.
+        length: usize,
+    },
     /// A factor sequence whose items are not integers.
     FloatingSequence(Vec<f64>),
     /// A value that could not be represented as an integer or sequence.
@@ -84,7 +88,10 @@ pub enum ReduceBox {
     /// Crop coordinates in Pillow order `(left, upper, right, lower)`.
     Sequence(Vec<i64>),
     /// A box sequence with a different arity, before item conversion.
-    SequenceLength { length: usize, tuple: bool },
+    SequenceLength {
+        /// Number of matrix coefficients supplied by the caller.
+        length: usize,
+    },
     /// A value that could not be represented as a coordinate sequence.
     Invalid,
     /// A value with a known host type that is not a coordinate sequence.
@@ -105,10 +112,9 @@ fn parse_reduce_factors(factor: ReduceFactor) -> Result<(i32, i32), PilError> {
     let values = match factor {
         ReduceFactor::Scalar(value) => [value, value].to_vec(),
         ReduceFactor::Sequence(values) => values,
-        ReduceFactor::SequenceLength { length, tuple } => {
+        ReduceFactor::SequenceLength { length } => {
             return Err(PilError::TypeError(format!(
-                "argument 1 must be {} of length 2, not {length}",
-                if tuple { "tuple" } else { "sequence" }
+                "argument 1 must be sequence of length 2, not {length}"
             )));
         }
         ReduceFactor::FloatingSequence(_) => {
@@ -145,13 +151,13 @@ fn parse_reduce_box_coordinates(
     height: i32,
 ) -> Result<(i32, i32, i32, i32), PilError> {
     match box_coords {
-        None => (0, 0, width, height),
+        None => Ok((0, 0, width, height)),
         Some(ReduceBox::Sequence(values)) if values.len() == 4 => {
             let mut coordinates = [0; 4];
             for (slot, value) in coordinates.iter_mut().zip(values) {
                 *slot = reduce_c_int(value)?;
             }
-            (coordinates[0], coordinates[1], coordinates[2], coordinates[3])
+            Ok((coordinates[0], coordinates[1], coordinates[2], coordinates[3]))
         }
         Some(ReduceBox::Sequence(values)) => {
             return Err(PilError::TypeError(format!(
@@ -159,10 +165,9 @@ fn parse_reduce_box_coordinates(
                 values.len()
             )));
         }
-        Some(ReduceBox::SequenceLength { length, tuple }) => {
+        Some(ReduceBox::SequenceLength { length }) => {
             return Err(PilError::TypeError(format!(
-                "argument 2 must be {} of length 4, not {length}",
-                if tuple { "tuple" } else { "sequence" }
+                "argument 2 must be sequence of length 4, not {length}"
             )));
         }
         Some(ReduceBox::Invalid) => {

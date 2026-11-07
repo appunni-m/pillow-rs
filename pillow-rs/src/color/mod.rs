@@ -32,12 +32,10 @@ mod resolve;
 mod tests;
 
 pub(crate) use conversion::{
-    cmyk_to_rgb, convert_from_nonstandard, f_to_i, f_to_l, f_to_rgb, hsv_to_rgb, i_to_f, i_to_l,
-    i_to_rgb, luma_to_ycbcr, muldiv255, rgb_to_cmyk_inverse, rgb_to_hsv, rgb_to_ycbcr,
+    convert_from_nonstandard, muldiv255, rgb_to_cmyk_inverse,
 };
 pub(crate) use grayscale::{
-    cmyk_to_binary_truncate, cmyk_to_grayscale, cmyk_to_grayscale_truncate, pil_grayscale,
-    pil_grayscale_alpha, pil_grayscale_truncate, rgb_to_luma_u8, grayscale_rgb_bytes,
+    cmyk_to_binary_truncate, cmyk_to_grayscale_truncate, pil_grayscale_truncate, rgb_to_luma_u8, grayscale_rgb_bytes,
     grayscale_rgb_pixel,
 };
 pub use palette::{
@@ -50,7 +48,6 @@ pub(crate) use resolve::getcolor_for_mode;
 
 pub(crate) use grayscale::cmyk_muldiv255_byte as grayscale_cmyk_muldiv255_byte;
 pub(crate) use conversion::hsv_buffer_to_rgb;
-pub(crate) use conversion::cmyk_buffer_to_rgb;
 pub(crate) use conversion::{
     cmyk_pixel_to_rgb, hsv_pixel_to_rgb, rgb_buffer_to_hsv, rgb_buffer_to_ycbcr,
     rgb_bytes_to_hsv, rgb_bytes_to_ycbcr, rgb_pixels_to_hsv, rgb_pixels_to_ycbcr,

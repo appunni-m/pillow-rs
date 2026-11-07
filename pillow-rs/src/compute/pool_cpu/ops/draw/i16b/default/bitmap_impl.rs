@@ -14,6 +14,14 @@ pub(crate) fn apply(
     let DynamicImage::ImageI16B(canvas) = &mut image else {
         return Err(PilError::ValueError("mode mismatch".into()));
     };
-    i16_bitmap::apply(canvas, x, y, mask_width, mask_height, mask, color);
+    i16_bitmap::apply::<{ cfg!(target_endian = "little") }>(
+        canvas,
+        x,
+        y,
+        mask_width,
+        mask_height,
+        mask,
+        color,
+    );
     Ok(image)
 }

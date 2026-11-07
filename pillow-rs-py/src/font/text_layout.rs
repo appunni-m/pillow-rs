@@ -5,6 +5,7 @@ use pillow_rs::{
 };
 use pyo3::basic::CompareOp;
 use pyo3::exceptions::{PyAssertionError, PyValueError};
+use pyo3::pyfunction;
 use pyo3::prelude::{Bound, Py, PyAny, PyErr, PyModule, PyResult, Python};
 use pyo3::IntoPyObject;
 use pyo3::types::{
@@ -173,8 +174,8 @@ impl<'py> PythonPositionCallbacks<'py> {
     fn call_arithmetic(
         &self,
         method: &str,
-        left: &Bound<'_, PyAny>,
-        right: &Bound<'_, PyAny>,
+        left: &Bound<'py, PyAny>,
+        right: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
         self.operator.call_method1(method, (left, right))
     }
@@ -249,7 +250,7 @@ impl<'py> ImageFontTextPositionCallbacks for PythonPositionCallbacks<'py> {
     }
 
     fn next_line(&mut self) -> Result<Option<Self::Value>, Self::Error> {
-        let Some(iterator) = &self.line_iterator else {
+        let Some(iterator) = &mut self.line_iterator else {
             return Err(pillow_rs::PilError::InternalError(
                 "text layout iterator was not initialized".into(),
             )
@@ -521,15 +522,17 @@ fn imagefont_text_layout_bbox_with_callbacks(
 }
 
 #[pyfunction]
-#[pyo3(signature = (text_object, xy, anchor=None, align="left", lines=None))]
-fn imagefont_text_split_with_callbacks(
-    py: Python<'_>,
-    text_object: &Bound<'_, PyAny>,
-    xy: &Bound<'_, PyAny>,
-    anchor: Option<&Bound<'_, PyAny>>,
-    align: &Bound<'_, PyAny>,
-    lines: Option<&Bound<'_, PyAny>>,
+#[pyo3(signature = (text_object, xy, anchor=None, align=None, lines=None))]
+fn imagefont_text_split_with_callbacks<'py>(
+    py: Python<'py>,
+    text_object: &Bound<'py, PyAny>,
+    xy: &Bound<'py, PyAny>,
+    anchor: Option<&Bound<'py, PyAny>>,
+    align: Option<&Bound<'py, PyAny>>,
+    lines: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Py<PyList>> {
+    let default_align = PyString::new(py, "left");
+    let align = align.unwrap_or(default_align.as_any());
     let mut callbacks =
         PythonPositionCallbacks::new(py, text_object, xy, anchor, align, lines)?;
     let lines = pillow_rs::imagefont_text_split_with_callbacks(&mut callbacks).map_err(

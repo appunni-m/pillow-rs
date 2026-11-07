@@ -21,65 +21,8 @@ type LumaA16Image = ImageBuffer<LumaA<u16>, Vec<u16>>;
 type Rgb16Image = ImageBuffer<Rgb<u16>, Vec<u16>>;
 type Rgba16Image = ImageBuffer<Rgba<u16>, Vec<u16>>;
 
-macro_rules! for_each_dynamic_variant {
-    ($macro:ident) => {
-        $macro! {
-            /// Pillow's bilevel `1` mode, expanded to one byte per pixel.
-            One(GrayImage),
-            /// Pillow's 8-bit luma (`L`) mode.
-            ImageLuma8(GrayImage),
-            /// Pillow's 8-bit luma with alpha (`LA`) mode.
-            ImageLumaA8(GrayAlphaImage),
-            /// Pillow's premultiplied luma with alpha (`La`) mode.
-            ImageLaPremultiplied8(GrayAlphaImage),
-            /// Pillow's 8-bit palette-index (`P`) mode.
-            ImagePalette8(GrayImage),
-            /// Pillow's palette-index with alpha (`PA`) mode.
-            ImagePaletteAlpha8(GrayAlphaImage),
-            /// Pillow's 8-bit RGB mode.
-            ImageRgb8(RgbImage),
-            /// Pillow's 8-bit RGBA mode.
-            ImageRgba8(RgbaImage),
-            /// Pillow's premultiplied RGBA (`RGBa`) mode.
-            ImageRgbPremultiplied8(RgbaImage),
-            /// Pillow's 8-bit RGB with an unused padding byte (`RGBX`) mode.
-            ImageRgbx8(RgbaImage),
-            /// Pillow's 8-bit CMYK mode, stored in four raw bytes per pixel.
-            ImageCmyk8(RgbaImage),
-            /// Pillow's 8-bit YCbCr mode.
-            ImageYCbCr8(RgbImage),
-            /// Pillow's 8-bit LAB mode.
-            ImageLab8(RgbImage),
-            /// Pillow's 8-bit HSV mode.
-            ImageHsv8(RgbImage),
-            /// Pillow's signed 32-bit integer (`I`) samples in the existing raw carrier.
-            ImageI32(RgbaImage),
-            /// Pillow's 32-bit float (`F`) samples in the existing raw carrier.
-            ImageF32(RgbaImage),
-            /// Pillow's native-endian unsigned 16-bit (`I;16`) mode.
-            ImageI16(Luma16Image),
-            /// Pillow's little-endian unsigned 16-bit (`I;16L`) mode.
-            ImageI16L(Luma16Image),
-            /// Pillow's big-endian unsigned 16-bit (`I;16B`) mode.
-            ImageI16B(Luma16Image),
-            /// Pillow's native-order unsigned 16-bit (`I;16N`) mode.
-            ImageI16N(Luma16Image),
-            /// Internal 16-bit luma-alpha storage, not a Pillow mode identity.
-            ImageLumaA16(LumaA16Image),
-            /// Internal 16-bit RGB storage, not a Pillow mode identity.
-            ImageRgb16(Rgb16Image),
-            /// Internal 16-bit RGBA storage, not a Pillow mode identity.
-            ImageRgba16(Rgba16Image),
-            /// Internal 32-bit float RGB storage, not a Pillow mode identity.
-            ImageRgb32F(Rgb32FImage),
-            /// Internal 32-bit float RGBA storage, not a Pillow mode identity.
-            ImageRgba32F(Rgba32FImage),
-        }
-    };
-}
-
 macro_rules! define_dynamic_image {
-    ($( $(#[$attribute:meta])* $variant:ident($image:ty), )+) => {
+    (default; $( $(#[$attribute:meta])* $variant:ident($image:ty), )+) => {
         /// A materialized image whose variant preserves its exact Pillow mode.
         ///
         /// High-depth multichannel variants retain the existing internal
@@ -92,7 +35,15 @@ macro_rules! define_dynamic_image {
     };
 }
 
-for_each_dynamic_variant!(define_dynamic_image);
+for_each_raster_identity!(define_dynamic_image);
+
+macro_rules! dynamic_image_mode {
+    ($image:expr; $( $(#[$attribute:meta])* $variant:ident($image_ty:ty), )+) => {
+        match $image {
+            $(Self::$variant(_) => Mode::$variant,)+
+        }
+    };
+}
 
 macro_rules! dynamic_map(
     ($dynimage: expr, $image:pat_param, $action: expr) => (
@@ -132,7 +83,7 @@ fn luma16_to_u8(sample: u16) -> u8 {
 }
 
 macro_rules! impl_dynamic_clone {
-    ($( $(#[$attribute:meta])* $variant:ident($image:ty), )+) => {
+    (default; $( $(#[$attribute:meta])* $variant:ident($image:ty), )+) => {
         impl Clone for DynamicImage {
     fn clone(&self) -> Self {
         match self {
@@ -150,7 +101,7 @@ macro_rules! impl_dynamic_clone {
     };
 }
 
-for_each_dynamic_variant!(impl_dynamic_clone);
+for_each_raster_identity!(impl_dynamic_clone);
 
 #[inline]
 pub(crate) fn crop_buffer<P: Pixel>(
@@ -185,33 +136,7 @@ impl DynamicImage {
     /// Returns the exact raster identity from this image's existing variant tag.
     #[must_use]
     pub const fn mode(&self) -> Mode {
-        match self {
-            Self::One(_) => Mode::One,
-            Self::ImageLuma8(_) => Mode::ImageLuma8,
-            Self::ImageLumaA8(_) => Mode::ImageLumaA8,
-            Self::ImageLaPremultiplied8(_) => Mode::ImageLaPremultiplied8,
-            Self::ImagePalette8(_) => Mode::ImagePalette8,
-            Self::ImagePaletteAlpha8(_) => Mode::ImagePaletteAlpha8,
-            Self::ImageRgb8(_) => Mode::ImageRgb8,
-            Self::ImageRgba8(_) => Mode::ImageRgba8,
-            Self::ImageRgbPremultiplied8(_) => Mode::ImageRgbPremultiplied8,
-            Self::ImageRgbx8(_) => Mode::ImageRgbx8,
-            Self::ImageCmyk8(_) => Mode::ImageCmyk8,
-            Self::ImageYCbCr8(_) => Mode::ImageYCbCr8,
-            Self::ImageLab8(_) => Mode::ImageLab8,
-            Self::ImageHsv8(_) => Mode::ImageHsv8,
-            Self::ImageI32(_) => Mode::ImageI32,
-            Self::ImageF32(_) => Mode::ImageF32,
-            Self::ImageI16(_) => Mode::ImageI16,
-            Self::ImageI16L(_) => Mode::ImageI16L,
-            Self::ImageI16B(_) => Mode::ImageI16B,
-            Self::ImageI16N(_) => Mode::ImageI16N,
-            Self::ImageLumaA16(_) => Mode::ImageLumaA16,
-            Self::ImageRgb16(_) => Mode::ImageRgb16,
-            Self::ImageRgba16(_) => Mode::ImageRgba16,
-            Self::ImageRgb32F(_) => Mode::ImageRgb32F,
-            Self::ImageRgba32F(_) => Mode::ImageRgba32F,
-        }
+        for_each_raster_identity!(dynamic_image_mode, self)
     }
 
     /// Creates a dynamic image backed by a buffer of RGBA pixels.

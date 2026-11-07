@@ -1,94 +1,28 @@
 //! Pillow-owned raster identities used by typed operation contracts.
 
-/// Exact identity of a Pillow-owned raster, independently of its pixel layout.
-///
-/// [`super::DynamicImage`] stores this identity in its own variant tag. This
-/// payload-free selector is used for construction, conversion, lazy output
-/// metadata, and operation support; it is not stored beside materialized pixels.
-/// Host adapters own conversion to and from Pillow's string spellings.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum Mode {
-    /// Pillow's bilevel `1` mode, expanded to one byte per pixel.
-    One,
-    /// Pillow's 8-bit luma (`L`) mode.
-    ImageLuma8,
-    /// Pillow's 8-bit luma with alpha (`LA`) mode.
-    ImageLumaA8,
-    /// Pillow's premultiplied luma with alpha (`La`) mode.
-    ImageLaPremultiplied8,
-    /// Pillow's 8-bit palette-index (`P`) mode.
-    ImagePalette8,
-    /// Pillow's palette-index with alpha (`PA`) mode.
-    ImagePaletteAlpha8,
-    /// Pillow's 8-bit RGB mode.
-    ImageRgb8,
-    /// Pillow's 8-bit RGBA mode.
-    ImageRgba8,
-    /// Pillow's premultiplied RGBA (`RGBa`) mode.
-    ImageRgbPremultiplied8,
-    /// Pillow's 8-bit RGB with an unused padding byte (`RGBX`) mode.
-    ImageRgbx8,
-    /// Pillow's 8-bit CMYK mode, stored in four raw bytes per pixel.
-    ImageCmyk8,
-    /// Pillow's 8-bit YCbCr mode.
-    ImageYCbCr8,
-    /// Pillow's 8-bit LAB mode.
-    ImageLab8,
-    /// Pillow's 8-bit HSV mode.
-    ImageHsv8,
-    /// Pillow's signed 32-bit integer (`I`) samples in the existing raw carrier.
-    ImageI32,
-    /// Pillow's 32-bit float (`F`) samples in the existing raw carrier.
-    ImageF32,
-    /// Pillow's native-endian unsigned 16-bit (`I;16`) mode.
-    ImageI16,
-    /// Pillow's little-endian unsigned 16-bit (`I;16L`) mode.
-    ImageI16L,
-    /// Pillow's big-endian unsigned 16-bit (`I;16B`) mode.
-    ImageI16B,
-    /// Pillow's native-order unsigned 16-bit (`I;16N`) mode.
-    ImageI16N,
-    /// Internal 16-bit luma-alpha storage, not a Pillow mode identity.
-    ImageLumaA16,
-    /// Internal 16-bit RGB storage, not a Pillow mode identity.
-    ImageRgb16,
-    /// Internal 16-bit RGBA storage, not a Pillow mode identity.
-    ImageRgba16,
-    /// Internal 32-bit float RGB storage, not a Pillow mode identity.
-    ImageRgb32F,
-    /// Internal 32-bit float RGBA storage, not a Pillow mode identity.
-    ImageRgba32F,
+macro_rules! define_mode {
+    (default; $( $(#[$attribute:meta])* $variant:ident($payload:ty), )+) => {
+        /// Exact identity of a Pillow-owned raster, independently of its pixel layout.
+        ///
+        /// [`super::DynamicImage`] stores this identity in its own variant tag. This
+        /// payload-free selector is used for construction, conversion, lazy output
+        /// metadata, and operation support; it is not stored beside materialized pixels.
+        /// Host adapters own conversion to and from Pillow's string spellings.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+        pub enum Mode {
+            $( $(#[$attribute])* $variant, )+
+        }
+
+        impl Mode {
+            /// Every public and internal raster identity.
+            pub const ALL: [Self; 25] = [$(Self::$variant,)+];
+        }
+    };
 }
 
+for_each_raster_identity!(define_mode);
+
 impl Mode {
-    /// Every public and internal raster identity.
-    pub const ALL: [Self; 25] = [
-        Self::One,
-        Self::ImageLuma8,
-        Self::ImageLumaA8,
-        Self::ImageLaPremultiplied8,
-        Self::ImagePalette8,
-        Self::ImagePaletteAlpha8,
-        Self::ImageRgb8,
-        Self::ImageRgba8,
-        Self::ImageRgbPremultiplied8,
-        Self::ImageRgbx8,
-        Self::ImageCmyk8,
-        Self::ImageYCbCr8,
-        Self::ImageLab8,
-        Self::ImageHsv8,
-        Self::ImageI32,
-        Self::ImageF32,
-        Self::ImageI16,
-        Self::ImageI16L,
-        Self::ImageI16B,
-        Self::ImageI16N,
-        Self::ImageLumaA16,
-        Self::ImageRgb16,
-        Self::ImageRgba16,
-        Self::ImageRgb32F,
-        Self::ImageRgba32F,
-    ];
 
     /// Compatibility alias for Pillow's `L` mode.
     pub const L: Self = Self::ImageLuma8;

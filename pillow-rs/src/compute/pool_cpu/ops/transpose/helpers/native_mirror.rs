@@ -120,33 +120,33 @@ pub(crate) fn reverse_pixel_block(input: &[u8], channels: usize) -> Option<[u8; 
         _ => return None,
     };
     let input = u8x16::new(<[u8; 16]>::try_from(input).ok()?);
-    Some(input.swizzle_relaxed(u8x16::new(indices)).to_array())
+    Some(input.shuffle(u8x16::new(indices)).to_array())
 }
 
 fn reverse_rgb_block(input: &[u8]) -> Option<[u8; 48]> {
     let first = u8x16::new(<[u8; 16]>::try_from(input.get(..16)?).ok()?);
     let second = u8x16::new(<[u8; 16]>::try_from(input.get(16..32)?).ok()?);
     let third = u8x16::new(<[u8; 16]>::try_from(input.get(32..48)?).ok()?);
-    let block0_from_third = third.swizzle_relaxed(u8x16::new([
+    let block0_from_third = third.shuffle(u8x16::new([
         13, 14, 15, 10, 11, 12, 7, 8, 9, 4, 5, 6, 1, 2, 3, 0,
     ]));
-    let block0_from_second = second.swizzle_relaxed(u8x16::splat(14));
+    let block0_from_second = second.shuffle(u8x16::splat(14));
     let block0 = u8x16::new([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, u8::MAX])
         .select(block0_from_second, block0_from_third);
-    let block1_from_second = second.swizzle_relaxed(u8x16::new([
+    let block1_from_second = second.shuffle(u8x16::new([
         15, 0, 11, 12, 13, 8, 9, 10, 5, 6, 7, 2, 3, 4, 0, 0,
     ]));
-    let block1_from_third = third.swizzle_relaxed(u8x16::splat(0));
-    let block1_from_first = first.swizzle_relaxed(u8x16::splat(15));
+    let block1_from_third = third.shuffle(u8x16::splat(0));
+    let block1_from_first = first.shuffle(u8x16::splat(15));
     let block1 = u8x16::new([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, u8::MAX, 0]).select(
         block1_from_first,
         u8x16::new([0, u8::MAX, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
             .select(block1_from_third, block1_from_second),
     );
-    let block2_from_first = first.swizzle_relaxed(u8x16::new([
+    let block2_from_first = first.shuffle(u8x16::new([
         0, 12, 13, 14, 9, 10, 11, 6, 7, 8, 3, 4, 5, 0, 1, 2,
     ]));
-    let block2_from_second = second.swizzle_relaxed(u8x16::splat(1));
+    let block2_from_second = second.shuffle(u8x16::splat(1));
     let block2 = u8x16::new([u8::MAX, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
         .select(block2_from_second, block2_from_first);
     let mut output = [0u8; 48];

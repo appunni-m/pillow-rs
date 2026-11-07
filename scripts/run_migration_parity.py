@@ -641,6 +641,46 @@ class PublicIndexValue:
         return self._value
 
 
+class PublicIndexErrorValue:
+    """Public scalar whose ``__index__`` raises a requested Python error."""
+
+    def __init__(self, error_type: str):
+        self._error_type = error_type
+
+    def __index__(self) -> int:
+        error = {
+            "AttributeError": AttributeError,
+            "ValueError": ValueError,
+        }.get(self._error_type)
+        if error is None:
+            raise ValueError("public-index-error requires AttributeError or ValueError")
+        raise error("custom __index__ failure")
+
+
+class FalseyFontValue:
+    """Custom font value whose truthiness selects ImageText's default font."""
+
+    def __bool__(self) -> bool:
+        return False
+
+
+class CustomFontMaskValue:
+    """Truthy custom Font with a configured getmask2 result protocol."""
+
+    def __init__(self, result_count: int | None, duplicate_keyword: str | None):
+        self._result_count = result_count
+        self._duplicate_keyword = duplicate_keyword
+
+    def __bool__(self) -> bool:
+        return True
+
+    def getbbox(self, text: str | bytes, *_args: Any, **_kwargs: Any) -> tuple[int, int, int, int]:
+        return (0, 0, max(1, len(text)), 8)
+
+    def getmask2(self, *_args: Any, **_kwargs: Any) -> list[Any]:
+        return [None] * (self._result_count or 0)
+
+
 def decode_numpy_array(value: dict[str, Any]) -> Any:
     """Build a real buffer-backed array for valid ``fromarray`` parity."""
 
@@ -701,6 +741,19 @@ def decode_literal(
         return converted if preserve_lists else tuple(converted)
     if isinstance(value, dict):
         protocol = value.get("protocol")
+        if protocol == "falsey-font":
+            if set(value) != {"protocol"}:
+                raise ValueError("falsey-font protocol accepts no extra fields")
+            return FalseyFontValue()
+        if protocol == "custom-font-mask":
+            result_count = value.get("result_count")
+            duplicate_keyword = value.get("duplicate_keyword")
+            if result_count not in {0, 1, 3, None} or duplicate_keyword not in {
+                None,
+                "start",
+            }:
+                raise ValueError("custom-font-mask protocol has unsupported behavior")
+            return CustomFontMaskValue(result_count, duplicate_keyword)
         if protocol == "invalid-argument-type":
             if set(value) != {"protocol", "value"}:
                 raise ValueError(
@@ -780,6 +833,104 @@ def decode_literal(
             # subclass behavior observed in Pillow's Image.paste wrapper.
             image.convert = return_same_image
             return image
+        if protocol == "font-metric-override":
+            if bindings is None:
+                raise ValueError("font metric override requires workflow bindings")
+            try:
+                font = bindings[value["font_step_id"]]
+            except KeyError as exc:
+                raise ValueError("font metric override references an unknown font") from exc
+            method = value.get("method", "getbbox")
+            if method not in {"getbbox", "getlength"}:
+                raise ValueError("font metric override has an unsupported method")
+            raise_on_call = value.get("raise_on_call")
+            if raise_on_call is not None and (
+                not isinstance(raise_on_call, int)
+                or isinstance(raise_on_call, bool)
+                or raise_on_call < 1
+            ):
+                raise ValueError("font metric override call index must be a positive integer")
+            calls = 0
+
+            def metric(text: str | bytes, *_args: Any) -> Any:
+                nonlocal calls
+                calls += 1
+                if calls == raise_on_call:
+                    raise ValueError(f"custom {method} failure")
+                if method == "getbbox":
+                    return (0, 0, len(text) * 10, 8)
+                return float(len(text) * 10)
+
+            # Instance assignment mirrors a user override. Text.wrap must
+            # preserve this public metric protocol instead of using native
+            # FreeType metrics directly. Draw.textlength uses the same route.
+            setattr(font, method, metric)
+            return font
+        if protocol == "image-text-subclass-hook-override":
+            if bindings is None:
+                raise ValueError("ImageText subclass override requires workflow bindings")
+            try:
+                text_object = bindings[value["text_step_id"]]
+            except KeyError as exc:
+                raise ValueError(
+                    "ImageText subclass override references an unknown Text object"
+                ) from exc
+            raise_on_call = value.get("raise_on_call")
+            if raise_on_call is not None and (
+                type(raise_on_call) is not int or raise_on_call < 1
+            ):
+                raise ValueError(
+                    "ImageText subclass override call index must be a positive integer"
+                )
+            method = value.get("method", "_get_bbox")
+            calls = 0
+
+            def should_raise() -> None:
+                nonlocal calls
+                calls += 1
+                if calls == raise_on_call:
+                    raise ValueError("custom getbbox failure")
+
+            def getbbox(
+                self: Any, text: str | bytes, *_args: Any
+            ) -> tuple[int, int, int, int]:
+                should_raise()
+                return (0, 0, len(text) * 10, 8)
+
+            def getfontmode(self: Any) -> str:
+                should_raise()
+                return value.get("fontmode", "L")
+
+            def split(
+                self: Any,
+                xy: Any = (0, 0),
+                anchor: Any = None,
+                align: str = "left",
+                lines: Any = None,
+            ) -> list[Any]:
+                should_raise()
+                positioned = text_base._split(
+                    self, xy=xy, anchor=anchor, align=align, lines=lines
+                )
+                y_offset = value.get("y_offset", 0)
+                return [
+                    type(line)(line.x, line.y + y_offset, line.anchor, line.text)
+                    for line in positioned
+                ]
+
+            text_base = type(text_object)
+            overrides = {
+                "_get_bbox": getbbox,
+                "_get_fontmode": getfontmode,
+                "_split": split,
+            }
+            text_subclass = type(
+                f"{text_base.__name__}ParityHookSubclass",
+                (text_base,),
+                {method: overrides[method]},
+            )
+            text_object.__class__ = text_subclass
+            return value["width"]
         if protocol in {"putdata-read-pixel", "putdata-raise"}:
             # The sequence adapter evaluates these protocol records when the
             # source's __getitem__ is called, preserving materialization order.
@@ -817,6 +968,13 @@ def decode_literal(
             if not isinstance(value, int) or isinstance(value, bool):
                 raise ValueError("public-index requires an integer value")
             return PublicIndexValue(value)
+        if protocol == "public-index-error":
+            error_type = value.get("error_type")
+            if error_type not in {"AttributeError", "ValueError"}:
+                raise ValueError(
+                    "public-index-error requires AttributeError or ValueError"
+                )
+            return PublicIndexErrorValue(error_type)
         if protocol == "list":
             items = value.get("items")
             if not isinstance(items, list):
@@ -971,6 +1129,7 @@ SOURCE_MODULES = {
     "PIL.ImageEnhance": "PIL.ImageEnhance",
     "PIL.ImageFilter": "PIL.ImageFilter",
     "PIL.ImageFont": "PIL.ImageFont",
+    "PIL.ImageText": "PIL.ImageText",
     "PIL.ImageShow": "PIL.ImageShow",
     "PIL.ImageOps": "PIL.ImageOps",
     "PIL.ImagePalette": "PIL.ImagePalette",
@@ -991,6 +1150,7 @@ TARGET_MODULES = {
     "PIL.ImageEnhance": "PIL.ImageEnhance",
     "PIL.ImageFilter": "PIL.ImageFilter",
     "PIL.ImageFont": "PIL.ImageFont",
+    "PIL.ImageText": "PIL.ImageText",
     "PIL.ImageShow": "PIL.ImageShow",
     "PIL.ImageOps": "PIL.ImageOps",
     "PIL.ImagePalette": "PIL.ImagePalette",
@@ -1001,7 +1161,8 @@ TARGET_MODULES = {
 TARGET_TYPES = {
     "PIL.GpuBatchExecutor": ("pillow_rs.gpu_batch", "GpuBatchExecutor"),
     "PIL.Image.Image": ("PIL.Image", "Image"),
-    "PIL.ImageDraw.ImageDraw": ("PIL.ImageDraw", "Draw"),
+    "PIL.ImageDraw.ImageDraw": ("PIL.ImageDraw", "ImageDraw"),
+    "PIL.ImageText.Text": ("PIL.ImageText", "Text"),
     "PIL.ImageEnhance.Brightness": ("PIL.ImageEnhance", "Brightness"),
     "PIL.ImageEnhance.Color": ("PIL.ImageEnhance", "Color"),
     "PIL.ImageEnhance.Contrast": ("PIL.ImageEnhance", "Contrast"),
@@ -1310,11 +1471,6 @@ def _invoke_workflow_step(
     # workflow into an adapter-only ``TypeError``.
     if not callable(callable_value):
         return callable_value
-    if side == "target" and step["surface"] == "PIL.ImageDraw" and operation == "Draw" and "im" in keywords:
-        # The target facade intentionally spells this constructor argument
-        # ``image`` while the Pillow public constructor spells it ``im``.
-        # This is a target binding conversion, not a changed input workflow.
-        keywords["image"] = keywords.pop("im")
     if side == "target" and step["surface"] == "PIL.Image.Image" and operation == "filter" and "filter" in keywords:
         # Pillow names this public parameter ``filter``; the thin target
         # facade avoids shadowing the Python built-in and calls it
@@ -1558,6 +1714,33 @@ def _serialize_image_record(
     }
 
 
+def _serialize_image_text_object(value: Any) -> Any:
+    """Serialize Pillow's public ImageText state without object reprs."""
+
+    if value is None:
+        return None
+    font = getattr(value, "font", None)
+    return {
+        "type": type(value).__name__,
+        "text": json_safe(getattr(value, "text", None)),
+        "mode": json_safe(getattr(value, "mode", None)),
+        "spacing": json_safe(getattr(value, "spacing", None)),
+        "direction": json_safe(getattr(value, "direction", None)),
+        "features": json_safe(getattr(value, "features", None)),
+        "language": json_safe(getattr(value, "language", None)),
+        "embedded_color": json_safe(getattr(value, "embedded_color", None)),
+        "stroke_width": json_safe(getattr(value, "stroke_width", None)),
+        "stroke_fill": json_safe(getattr(value, "stroke_fill", None)),
+        "font": {
+            "type": type(font).__name__ if font is not None else None,
+            "size": json_safe(getattr(font, "size", None)),
+            "index": json_safe(getattr(font, "index", None)),
+            "encoding": json_safe(getattr(font, "encoding", None)),
+            "layout_engine": json_safe(getattr(font, "layout_engine", None)),
+        },
+    }
+
+
 def serialize_value(
     value: Any,
     shape: str,
@@ -1566,6 +1749,7 @@ def serialize_value(
     surface: str,
     operation: str,
     expected_handle: Any = None,
+    receiver: Any = None,
 ) -> Any:
     """Serialize the declared public result shape, never an implementation repr."""
 
@@ -1655,7 +1839,7 @@ def serialize_value(
         if value is None:
             return None
         if surface == "PIL.ImageDraw" and operation == "Draw":
-            expected_type = "ImageDraw" if side == "source" else "Draw"
+            expected_type = "ImageDraw"
             actual_type = type(value).__name__
             if actual_type != expected_type:
                 raise TypeError(
@@ -1702,6 +1886,16 @@ def serialize_value(
         except TypeError:
             return json_safe(value)
     if shape in {"mapping", "record"}:
+        if surface == "PIL.ImageText" and operation == "Text":
+            return _serialize_image_text_object(value)
+        if surface == "PIL.ImageText.Text" and operation == "wrap":
+            return {
+                "result": _serialize_image_text_object(value),
+                # wrap() also mutates the receiver's public text and may
+                # replace its font when scaling is requested. Preserve both
+                # the method result and that public post-call state.
+                "receiver_after": _serialize_image_text_object(receiver),
+            }
         if isinstance(value, dict):
             if surface == "PIL.Image.Image" and operation == "info":
                 value = _decode_display_file_captures(value, side=side)
@@ -1910,6 +2104,11 @@ def _descriptor_binding_steps(value: Any) -> set[str]:
         if value.get("kind") == "binding":
             step_id = value.get("step_id")
             return {step_id} if isinstance(step_id, str) else set()
+        if value.get("kind") == "bindings":
+            step_ids = value.get("step_ids")
+            if isinstance(step_ids, list):
+                return {step_id for step_id in step_ids if isinstance(step_id, str)}
+            return set()
         return set().union(
             *(_descriptor_binding_steps(item) for item in value.values())
         )
@@ -3224,6 +3423,10 @@ def run_case(
     bindings: dict[str, Any] = {}
     step_results: dict[str, dict[str, Any]] = {}
     blocked_reason: str | None = None
+    continue_independent_steps_after_error = (
+        case.get("continue_independent_steps_after_error") is True
+    )
+    failed_step_ids: set[str] = set()
     terminal_receipt_index: int | None = None
     direct_execution_receipt_index: int | None = None
     fault_contract_observation: dict[str, Any] | None = None
@@ -3275,12 +3478,28 @@ def run_case(
     for step_index, step in enumerate(case["steps"]):
         step_id = step["step_id"]
         if blocked_reason is not None:
-            step_results[step_id] = {
-                "step_id": step_id,
-                "status": "not_run",
-                "reason": blocked_reason,
-            }
-            continue
+            if not continue_independent_steps_after_error:
+                step_results[step_id] = {
+                    "step_id": step_id,
+                    "status": "not_run",
+                    "reason": blocked_reason,
+                }
+                failed_step_ids.add(step_id)
+                continue
+            dependencies = (
+                _descriptor_binding_steps(step.get("receiver"))
+                | _descriptor_binding_steps(step.get("arguments", {}))
+            )
+            failed_dependencies = dependencies & failed_step_ids
+            if failed_dependencies:
+                failed_dependency = min(failed_dependencies)
+                step_results[step_id] = {
+                    "step_id": step_id,
+                    "status": "not_run",
+                    "reason": f"dependency step {failed_dependency} failed",
+                }
+                failed_step_ids.add(step_id)
+                continue
         try:
             step_started_ns = time.perf_counter_ns()
             opdef = operation_definition(
@@ -3449,7 +3668,9 @@ def run_case(
                 "status": "error",
                 "error": error,
             }
-            blocked_reason = f"dependency step {step_id} failed"
+            if blocked_reason is None:
+                blocked_reason = f"dependency step {step_id} failed"
+            failed_step_ids.add(step_id)
 
     if not serialize_observations:
         execution_errors = [
@@ -3639,6 +3860,14 @@ def run_case(
             ):
                 receiver = bindings[receiver_descriptor["step_id"]]
                 expected_handle = getattr(receiver, "_rust_image", receiver)
+            observed_receiver = None
+            if (
+                step["surface"] == "PIL.ImageText.Text"
+                and step["operation"] == "wrap"
+                and isinstance(receiver_descriptor, dict)
+                and receiver_descriptor.get("kind") == "binding"
+            ):
+                observed_receiver = bindings[receiver_descriptor["step_id"]]
             value = serialize_value(
                 result["_value"],
                 shape,
@@ -3646,6 +3875,7 @@ def run_case(
                 surface=step["surface"],
                 operation=step["operation"],
                 expected_handle=expected_handle,
+                receiver=observed_receiver,
             )
             if pipeline_execution_api is not None and pipeline_execution_sink is not None:
                 receipt = pipeline_execution_api.take_pipeline_telemetry()
@@ -4284,16 +4514,16 @@ def _diff(path: str, kind: str, source: Any, target: Any, message: str) -> dict[
     }
 
 
-def _lab_profile_datetime(profile: bytes) -> _dt.datetime | None:
-    """Parse LittleCMS's live dateTimeNumber from its canonical LAB profile."""
+def _icc_profile_datetime(profile: bytes) -> _dt.datetime | None:
+    """Parse the live dateTimeNumber from supported canonical LittleCMS profiles."""
 
-    if (
-        len(profile) != 572
-        or int.from_bytes(profile[:4], "big") != len(profile)
+    profile_identity = (profile[12:16], profile[16:20], profile[20:24], len(profile))
+    if profile_identity not in {
+        (b"abst", b"Lab ", b"Lab ", 572),
+        (b"mntr", b"RGB ", b"XYZ ", 588),
+    } or (
+        int.from_bytes(profile[:4], "big") != len(profile)
         or profile[4:8] != b"lcms"
-        or profile[12:16] != b"abst"
-        or profile[16:20] != b"Lab "
-        or profile[20:24] != b"Lab "
         or profile[36:40] != b"acsp"
     ):
         return None
@@ -4307,7 +4537,7 @@ def _lab_profile_datetime(profile: bytes) -> _dt.datetime | None:
         return None
 
 
-def _image_with_lab_profile_datetime_cleared(
+def _image_with_icc_profile_datetime_cleared(
     image: dict[str, Any], profile: bytes
 ) -> dict[str, Any]:
     """Copy an image record with only the ICC dateTimeNumber cleared."""
@@ -4322,14 +4552,16 @@ def _image_with_lab_profile_datetime_cleared(
     return normalized
 
 
-def _same_lab_image_except_creation_time(source: Any, target: Any) -> bool:
-    """Compare a LAB image exactly except for its live ICC creation time."""
+def _same_image_except_icc_creation_time(
+    source: Any, target: Any, *, lab_only: bool = False
+) -> bool:
+    """Compare an image exactly except for its live ICC creation time."""
 
     if (
         not isinstance(source, dict)
         or not isinstance(target, dict)
-        or source.get("mode") != "LAB"
-        or target.get("mode") != "LAB"
+        or source.get("mode") != target.get("mode")
+        or (lab_only and source.get("mode") != "LAB")
     ):
         return False
 
@@ -4348,12 +4580,12 @@ def _same_lab_image_except_creation_time(source: Any, target: Any) -> bool:
             profile = base64.b64decode(profile_record["data"], validate=True)
         except (ValueError, binascii.Error):
             return False
-        if _lab_profile_datetime(profile) is None:
+        if _icc_profile_datetime(profile) is None:
             return False
         profiles.append(profile)
 
-    source_time = _lab_profile_datetime(profiles[0])
-    target_time = _lab_profile_datetime(profiles[1])
+    source_time = _icc_profile_datetime(profiles[0])
+    target_time = _icc_profile_datetime(profiles[1])
     assert source_time is not None and target_time is not None
     # Pillow and pillow-rs execute in separate adapter processes. The profile
     # timestamp is therefore not a shared expected value; retain a bounded
@@ -4361,9 +4593,9 @@ def _same_lab_image_except_creation_time(source: Any, target: Any) -> bool:
     if abs(source_time - target_time) > _dt.timedelta(days=1):
         return False
 
-    return _image_with_lab_profile_datetime_cleared(
+    return _image_with_icc_profile_datetime_cleared(
         source, profiles[0]
-    ) == _image_with_lab_profile_datetime_cleared(target, profiles[1])
+    ) == _image_with_icc_profile_datetime_cleared(target, profiles[1])
 
 
 def compare_value(source: Any, target: Any, policy: dict[str, Any], path: str) -> list[dict[str, Any]]:
@@ -4410,9 +4642,13 @@ def compare_value(source: Any, target: Any, policy: dict[str, Any], path: str) -
                 return [_diff(path, "image_size_mismatch", source_bytes, target_bytes, "stable image byte lengths differ")]
             return []
         if metadata_mode == "dynamic_lab_icc_datetime":
-            if _same_lab_image_except_creation_time(source, target):
+            if _same_image_except_icc_creation_time(source, target, lab_only=True):
                 return []
             return [_diff(path, "image_mismatch", source, target, "LAB image pixels or stable metadata differ")]
+        if metadata_mode == "dynamic_icc_datetime":
+            if _same_image_except_icc_creation_time(source, target):
+                return []
+            return [_diff(path, "image_mismatch", source, target, "image pixels or stable ICC metadata differ")]
         if metadata_mode == "ignored" and isinstance(source, dict) and isinstance(target, dict):
             left = source.get("bytes")
             right = target.get("bytes")

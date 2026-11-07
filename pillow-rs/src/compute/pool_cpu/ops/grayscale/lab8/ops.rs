@@ -1,5 +1,10 @@
 //! ImageLab8 semantics composed with its serial architecture strategy.
 
+// NO_PILLOW_SUPPORT: Pillow 12.2 raises `conversion from LAB to RGB not supported`
+// for ImageOps.grayscale(LAB). This native LAB-to-L route is a Rust extension.
+// TODO(pillow-rs#3ptb): add target-only output and Architecture receipt evidence;
+// Pillow parity cannot validate a route that the reference rejects.
+
 use crate::compute::{ExecutionContext, registry::support::{InputContract, ModeSupport, OperationId, OutputModeRule, StrategyInputs, PaletteKnowledge}};
 use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
 use crate::error::PilError;

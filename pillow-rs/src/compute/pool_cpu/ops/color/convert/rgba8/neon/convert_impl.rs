@@ -3,6 +3,10 @@
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode, RgbImage, RgbaImage};
 
+#[allow(
+    unsafe_code,
+    reason = "the prepared Convert strategy verifies the host's NEON capability"
+)]
 pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, PilError> {
     match target {
         Mode::ImageLuma8 => luma8(source),
@@ -55,6 +59,10 @@ fn luma8(source: &RgbaImage) -> Result<DynamicImage, PilError> {
 /// # Safety
 ///
 /// The caller must ensure that the host supports NEON.
+#[allow(
+    unsafe_code,
+    reason = "the selected architecture establishes the NEON feature precondition"
+)]
 pub(crate) unsafe fn execute_rgb(source: &RgbaImage) -> Result<RgbImage, PilError> {
     let pixels = (source.width() as usize)
         .checked_mul(source.height() as usize)

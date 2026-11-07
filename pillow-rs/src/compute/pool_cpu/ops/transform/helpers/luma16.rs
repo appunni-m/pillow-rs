@@ -105,10 +105,7 @@ pub(crate) fn apply_mesh_record(
             .map_or(0, |fill| u16::from_le_bytes([fill.0, fill.1]))
     };
     prepare_output_plane(destination, order, output_plane)?;
-    source_scratch.clear();
-    for &sample in source {
-        source_scratch.push(order.encode(sample)[0]);
-    }
+    filtered_mesh_source_plane(source, source_dimensions, order, source_scratch)?;
     let plane = output_plane.as_mut().ok_or_else(invalid_mesh_shape)?;
     super::projective::transform_mesh_record_with_coefficients(
         source_scratch,
@@ -130,6 +127,32 @@ pub(crate) fn apply_mesh_record(
         order,
         fill_value,
     );
+    Ok(())
+}
+
+fn filtered_mesh_source_plane(
+    source: &[u16],
+    dimensions: (u32, u32),
+    order: ByteOrder,
+    output: &mut Vec<u8>,
+) -> Result<(), PilError> {
+    let row_width = dimensions.0 as usize;
+    let expected_len = row_width
+        .checked_mul(dimensions.1 as usize)
+        .ok_or_else(invalid_mesh_shape)?;
+    output.clear();
+    output
+        .try_reserve_exact(expected_len)
+        .map_err(|error| PilError::MemoryError(error.to_string()))?;
+    // Pillow's filtered I;16 MESH output matches the first `row_width`
+    // encoded bytes in each source row, sampled as one-byte pixels. Preserve
+    // that mode-specific output while keeping the source raster typed u16.
+    for row in source.chunks(row_width.max(1)) {
+        output.extend(row.iter().flat_map(|&sample| order.encode(sample)).take(row_width));
+    }
+    if output.len() != expected_len {
+        return Err(invalid_mesh_shape());
+    }
     Ok(())
 }
 

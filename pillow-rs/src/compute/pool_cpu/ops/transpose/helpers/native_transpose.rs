@@ -6,7 +6,7 @@
 
 use crate::error::PilError;
 use crate::pipeline::TransposeMethod;
-use crate::raster::{EncodableLayout, GenericImageView, ImageBuffer, Pixel};
+use crate::raster::{EncodableLayout, ImageBuffer, Pixel};
 use wide::{f32x4, u8x16, u16x8};
 
 /// Transposes a typed byte image through the mode's selected native strategy.
@@ -316,7 +316,7 @@ fn transpose_tile<const CHANNELS: usize, const TILE: usize>(
         bytes[..TILE * CHANNELS].copy_from_slice(&source[start..start + TILE * CHANNELS]);
         *row = u8x16::new(bytes);
         if CHANNELS == 3 {
-            *row = row.swizzle_relaxed(u8x16::new([
+            *row = row.shuffle(u8x16::new([
                 0, 1, 2, 0, 3, 4, 5, 0, 6, 7, 8, 0, 9, 10, 11, 0,
             ]));
         }
@@ -385,7 +385,7 @@ fn transpose_row_group<const CHANNELS: usize, const TILE: usize>(
                     let row = if reverse_x { TILE - 1 - column_index } else { column_index };
                     let start = (local_y + row) * output_stride + output_x * CHANNELS;
                     let column = if CHANNELS == 3 || reverse_y {
-                        column.swizzle_relaxed(store_mask)
+                        column.shuffle(store_mask)
                     } else {
                         column
                     };

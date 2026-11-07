@@ -21,15 +21,14 @@ mod resize;
 mod samples;
 mod vertical_passes;
 
-pub(crate) use alpha::{premultiply_alpha, unpremultiply_alpha, unpremultiply_channel, unpremultiply_rgba};
+pub(crate) use alpha::{unpremultiply_channel, unpremultiply_rgba};
 #[cfg(test)]
 pub(crate) use boxed::pil_resize_boxed;
 pub(crate) use coefficients::{
-    FilterCoeffs, FilterCoeffsF64, compact_resize_coeffs_to_source_span, precompute_coeffs,
-    precompute_coeffs_boxed, precompute_coeffs_boxed_for_filter, precompute_coeffs_f64,
+    FilterCoeffs, FilterCoeffsF64, compact_resize_coeffs_to_source_span, precompute_coeffs, precompute_coeffs_boxed_for_filter, precompute_coeffs_f64,
     precompute_coeffs_f64_boxed, fixed_point_to_u8,
 };
-pub(crate) use filters::{filter_from_resample, pillow_sin_f64};
+pub(crate) use filters::filter_from_resample;
 pub(crate) use horizontal_passes::horizontal_pass_rgb_row;
 #[cfg(target_arch = "x86_64")]
 pub(crate) use float::X86FmaToken;
@@ -42,5 +41,5 @@ pub(crate) use luma16::luma16_resample_big_endian;
 pub(crate) use resize::{pil_preserve_mode, pil_resize};
 pub(crate) use vertical_passes::vertical_pass_rgb_row;
 pub(crate) use samples::{
-    f32_samples_borrowed_from_le_bytes, f32_samples_from_le_bytes, i32_samples_from_le_bytes,
+    f32_samples_from_le_bytes, i32_samples_from_le_bytes,
 };

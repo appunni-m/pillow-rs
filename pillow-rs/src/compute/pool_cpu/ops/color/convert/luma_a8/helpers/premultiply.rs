@@ -28,7 +28,7 @@ pub(crate) fn convert(source: &GrayAlphaImage) -> Result<(GrayAlphaImage, u64), 
         let mut padded = [0u8; 16];
         padded[..active_bytes].copy_from_slice(&source.as_raw()[start..start + active_bytes]);
         let input = u8x16::new(padded);
-        let alpha = input.swizzle_relaxed(alpha_indices);
+        let alpha = input.shuffle(alpha_indices);
         let scaled = div255_u16x16(
             u16x16::from(input) * u16x16::from(alpha) + u16x16::splat(127),
         );

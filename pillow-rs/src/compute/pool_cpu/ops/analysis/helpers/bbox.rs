@@ -321,6 +321,46 @@ pub(crate) fn u16_samples<const CHANNELS: usize>(
     )
 }
 
+/// Reproduces Pillow's I;16 GetBBox byte-prefix scan. Pillow inspects only
+/// `width * height` bytes of the two-byte raster and maps those bytes to
+/// pixel coordinates, so the upper half of the stored samples is not visited.
+pub(crate) fn u16_byte_prefix<const BIG_ENDIAN: bool>(
+    samples: &[u16],
+    width: u32,
+    height: u32,
+) -> BBox {
+    let pixel_count = (width as usize) * (height as usize);
+    if pixel_count == 0 {
+        return None;
+    }
+    let mut bounds = Bounds::new(width, height);
+    for byte_index in 0..pixel_count {
+        let Some(&sample) = samples.get(byte_index / 2) else {
+            break;
+        };
+        let bytes = if BIG_ENDIAN {
+            sample.to_be_bytes()
+        } else {
+            sample.to_le_bytes()
+        };
+        if bytes[byte_index % 2] != 0 {
+            bounds.include_index(byte_index);
+        }
+    }
+    bounds.finish()
+}
+
+pub(crate) fn u16_native_byte_prefix(samples: &[u16], width: u32, height: u32) -> BBox {
+    #[cfg(target_endian = "big")]
+    {
+        u16_byte_prefix::<true>(samples, width, height)
+    }
+    #[cfg(target_endian = "little")]
+    {
+        u16_byte_prefix::<false>(samples, width, height)
+    }
+}
+
 pub(crate) fn f32_samples<const CHANNELS: usize>(
     samples: &[f32],
     width: u32,

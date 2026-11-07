@@ -6,7 +6,10 @@ use super::super::super::clipping::{
     normalize_angles, pie_clip_state, pie_side_clip_state, ClipEllipseState,
 };
 use super::super::super::ellipse::for_each_ellipse_span;
-use crate::draw::{for_each_bresenham_point, for_each_polygon_fill_span, wide_line_polygon_points};
+use crate::draw::{
+    for_each_bresenham_point, for_each_polygon_fill_span, wide_line_polygon_points,
+    wide_line_polygon_points_signed,
+};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, GenericImageView};
 
@@ -394,6 +397,7 @@ pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_polygon_
     fill: Option<(u8, u8, u8, u8)>,
     outline: Option<(u8, u8, u8, u8)>,
     width: u32,
+    outline_width: Option<i32>,
     alpha_blend_rgb: bool,
     layout: DrawLayout,
 ) -> Result<Option<DynamicImage>, PilError> {
@@ -422,12 +426,14 @@ pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_polygon_
     // that mask as compact row intervals rather than materializing a second
     // full-frame image. Stroke spans are still emitted in edge order, so
     // repeated writes and RGB alpha blending retain CPU ordering.
-    if let Some(outline) = outline.filter(|color| Some(*color) != fill && width != 0) {
+    if let Some(outline) = outline.filter(|color| {
+        Some(*color) != fill && (width != 0 || outline_width.is_some())
+    }) {
         let mask = polygon_fill_intervals(points, image_width, image_height);
         for index in 0..points.len() {
             let (x0, y0) = points[index];
             let (x1, y1) = points[(index + 1) % points.len()];
-            if width == 1 {
+            if outline_width == Some(1) || (outline_width.is_none() && width == 1) {
                 for_each_bresenham_point(x0, y0, x1, y1, |x, y| {
                     if first_error.is_none()
                         && let Err(error) = writer.write(x, y, x, outline)
@@ -438,8 +444,16 @@ pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_polygon_
                 continue;
             }
 
-            let stroke_width = width.saturating_mul(2).saturating_sub(1);
-            if let Some(stroke_points) = wide_line_polygon_points(x0, y0, x1, y1, stroke_width) {
+            let stroke_points = match outline_width {
+                Some(stroke_width) => {
+                    wide_line_polygon_points_signed(x0, y0, x1, y1, stroke_width)
+                }
+                None => {
+                    let stroke_width = width.saturating_mul(2).saturating_sub(1);
+                    wide_line_polygon_points(x0, y0, x1, y1, stroke_width)
+                }
+            };
+            if let Some(stroke_points) = stroke_points {
                 for_each_polygon_fill_span(
                     &stroke_points,
                     image_width,
@@ -464,9 +478,6 @@ pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_polygon_
                     },
                 );
             } else if first_error.is_none()
-                && mask
-                    .get(&y0)
-                    .is_some_and(|row| row.iter().any(|&(left, right)| x0 >= left && x0 <= right))
                 && let Err(error) = writer.write(x0, y0, x0, outline)
             {
                 first_error = Some(error);
