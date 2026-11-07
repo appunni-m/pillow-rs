@@ -439,7 +439,6 @@ pub(crate) static BOXED_SUPPORT: OperationSupport = OperationSupport::new(
 );
 
 /// Resolve exact-mode filter policy before selecting or preparing a kernel.
-
 #[path = "helpers/prepared.rs"]
 mod prepared;
 pub(crate) use prepared::{

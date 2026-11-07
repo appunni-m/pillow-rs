@@ -46,7 +46,7 @@ may differ from the published version without directing users to unavailable pac
 
 ```sh
 make docs-setup
-make docs-test docs-lint
+make docs-lint
 make docs-examples
 make docs-build
 make docs-serve

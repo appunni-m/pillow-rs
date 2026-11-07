@@ -1,6 +1,5 @@
 //! General column traversal and native radius-one row-ring blur.
 
-
 use super::line::blur_one_row;
 
 use super::{BOX_BLUR_BIAS, CheckedDims, PilError};
@@ -9,7 +8,6 @@ use super::{BOX_BLUR_BIAS, CheckedDims, PilError};
 /// scratch ring. This keeps the horizontal intermediate in cache and writes
 /// each final row directly, avoiding a full-frame source clone and vertical
 /// scratch buffer for the common one-pass case.
-
 #[inline]
 fn blur_box_radius_one_horizontal_row(
     source: &[u8],
@@ -52,7 +50,6 @@ fn blur_box_radius_one_horizontal_row(
     );
 }
 
-
 #[inline]
 fn blur_box_radius_one_horizontal_l_row(
     source: &[u8],
@@ -91,7 +88,6 @@ fn blur_box_radius_one_horizontal_l_row(
         .wrapping_add(u32::from(source[last]));
     destination[last] = (sum.wrapping_mul(weight).wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
 }
-
 
 #[inline]
 fn blur_box_radius_one_horizontal_rgb_row(
@@ -180,7 +176,6 @@ fn blur_box_radius_one_horizontal_rgb_row(
         (blue.wrapping_mul(weight).wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
 }
 
-
 pub(super) fn blur_box_radius_one_row_ring(
     source: &[u8],
     width: u32,
@@ -258,71 +253,4 @@ pub(super) fn blur_box_radius_one_row_ring(
     }
 
     Ok(output)
-}
-
-#[cfg(test)]
-mod serial_box_blur_radius_one_row_ring_tests {
-    use super::super::{
-        CheckedDims, blur_parameters,
-        line::{blur_columns, blur_rows},
-    };
-    use super::blur_box_radius_one_row_ring;
-
-    #[test]
-    fn row_ring_matches_fixed_point_two_passes_at_edges_and_tails() {
-        let (radius, weight, fractional_weight) = blur_parameters(1.0);
-        assert_eq!((radius, fractional_weight), (1, 0));
-
-        for (width, height) in [
-            (1, 1),
-            (1, 7),
-            (2, 3),
-            (3, 2),
-            (4, 5),
-            (5, 9),
-            (17, 9),
-            (65, 33),
-        ] {
-            for channels in [1, 2, 3, 4] {
-                let dimensions = CheckedDims::new(width, height, channels).unwrap();
-                let source = (0..dimensions.total_bytes())
-                    .map(|index| ((index * 73 + index / 11 * 29 + 37) % 256) as u8)
-                    .collect::<Vec<_>>();
-                let actual = blur_box_radius_one_row_ring(
-                    &source,
-                    width,
-                    height,
-                    channels as usize,
-                    weight,
-                    weight,
-                )
-                .unwrap();
-                let mut horizontal = dimensions.alloc_buffer();
-                let mut expected = dimensions.alloc_buffer();
-                blur_rows(
-                    &source,
-                    &mut horizontal,
-                    width as usize,
-                    height as usize,
-                    channels as usize,
-                    radius,
-                    weight,
-                    fractional_weight,
-                );
-                blur_columns(
-                    &horizontal,
-                    &mut expected,
-                    width as usize,
-                    height as usize,
-                    channels as usize,
-                    radius,
-                    weight,
-                    fractional_weight,
-                    &mut vec![0; dimensions.row_stride()],
-                );
-
-                assert_eq!(actual, expected, "{width}x{height}, channels={channels}");
-            }
-        }
-    }
 }

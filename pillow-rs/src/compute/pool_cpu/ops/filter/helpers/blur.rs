@@ -21,22 +21,14 @@ mod radius_one;
 #[path = "blur/vector.rs"]
 mod vector;
 
-
 use box_rows::blur_box_radius_one_row_ring;
-#[cfg(test)]
-use line::blur_line;
-use line::{blur_columns, blur_line_step, blur_rows};
 
+use line::{blur_columns, blur_line_step, blur_rows};
 
 use radius_one::{
     blur_interleaved_rows_three_passes, blur_interleaved_vertical_radius_one_fractional_rows,
     blur_la_rows_three_passes_radius_one, blur_luma_rows_three_passes,
     blur_luma_vertical_radius_one_rows,
-};
-#[cfg(test)]
-use radius_one::{
-    blur_la_radius_one_fractional_line, blur_luma_radius_one_fractional_line,
-    blur_rgb_radius_one_fractional_line,
 };
 
 #[derive(Clone, Copy)]
@@ -61,7 +53,6 @@ fn blur_horizontal_passes(
     mut scratch: Vec<u8>,
     context: BoxBlurPassContext,
 ) -> (Vec<u8>, Vec<u8>) {
-    
 
     let BoxBlurPassContext {
         width,
@@ -276,7 +267,6 @@ fn small_uniform_box_blur_is_identity(
 
 /// Return whether Pillow's fixed-point box pass leaves one constant byte
 /// unchanged for every position in a replicated-edge line.
-
 #[inline]
 fn box_blur_preserves_constant_byte(
     value: u8,
@@ -306,7 +296,6 @@ fn box_blur_preserves_constant_byte(
 /// vertical fixed-point pass preserve each of its channel values. The full
 /// scan is intentional: sampled probes cannot prove that an arbitrary input
 /// is uniform.
-
 #[inline]
 fn uniform_four_channel_box_blur_is_identity(
     raw: &[u8],
@@ -351,7 +340,6 @@ fn uniform_four_channel_box_blur_is_identity(
 }
 
 /// Preserve the exact large-uniform four-channel Gaussian fast path.
-
 #[inline(always)]
 fn large_uniform_four_channel_gaussian_blur_is_identity(
     raw: &[u8],
@@ -430,7 +418,7 @@ fn pil_box_blur_xy_impl(
     let (vertical_radius, vertical_weight, vertical_fractional_weight) = blur_parameters(radius_y);
 
     // The fixed-point proof protects the large four-channel fast path.
-    
+
     if large_uniform_four_channel_gaussian_blur_is_identity(
         raw,
         width,
@@ -446,7 +434,6 @@ fn pil_box_blur_xy_impl(
         return Ok(None);
     }
 
-    
     if passes == 1
         && horizontal_radius == 1
         && vertical_radius == 1
@@ -647,7 +634,3 @@ pub(crate) fn execute_box_blur_xy_native_bytes(
     }
     pil_box_blur_xy(raw, width, height, channels, radius_x, radius_y, passes)
 }
-
-#[cfg(test)]
-#[path = "blur/tests.rs"]
-mod tests;

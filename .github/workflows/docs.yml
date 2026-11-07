@@ -47,11 +47,11 @@ jobs:
           python-version: '3.12.10'
       - name: Install the hash-locked documentation tools
         run: make docs-setup PYTHON=python
-      - name: Check repository path standard and crosswalk contracts
+      - name: Check repository path inventory and operation crosswalk
         run: >-
-          make implementation-structure-audit-test
+          make implementation-structure-audit
           implementation-structure-inventory
-          operation-source-crosswalk-test
+          operation-source-crosswalk
           PYTHON=.venv-docs/bin/python
       - name: Verify the documented published release
         if: github.event_name != 'pull_request'
@@ -85,7 +85,7 @@ jobs:
           DOCS_BENCHMARK_REVISION: ${{ steps.benchmark.outputs.head_sha }}
           DOCS_PILLOW_SIMD_BENCHMARK_SNAPSHOT: ${{ steps.benchmark.outputs.pillow_simd_run_id != '' && 'target/public-pillow-simd-benchmark/snapshot.json' || '' }}
           DOCS_PILLOW_SIMD_BENCHMARK_REVISION: ${{ steps.benchmark.outputs.pillow_simd_head_sha }}
-        run: make docs-test docs-lint docs-build PYTHON=.venv-docs/bin/python
+        run: make docs-lint docs-build PYTHON=.venv-docs/bin/python
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: target/site

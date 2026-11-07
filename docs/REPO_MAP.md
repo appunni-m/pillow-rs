@@ -79,9 +79,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- mod.rs
 |   |   |   |-- palette.rs
 |   |   |   |-- parse.rs
-|   |   |   |-- resolve.rs
-|   |   |   `-- tests.rs
-|   |   |-- color_grayscale_allocation_tests.rs
+|   |   |   `-- resolve.rs
 |   |   |-- compute/
 |   |   |   |-- backend_state.rs
 |   |   |   |-- eager/
@@ -128,7 +126,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |   |-- neon.rs
 |   |   |   |   |   |   |-- rgba.rs
 |   |   |   |   |   |   |-- ssse3.rs
-|   |   |   |   |   |   |-- tests.rs
 |   |   |   |   |   |   `-- wide.rs
 |   |   |   |   |   |-- dynamic_image.rs
 |   |   |   |   |   |-- execution/
@@ -1539,8 +1536,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |-- rgb8/
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- convert_lab_impl.rs
-|   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   `-- tests.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- rgba8/
@@ -3400,8 +3396,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- filter_impl.rs
 |   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   |-- rank_impl.rs
-|   |   |   |       |   |   |   `-- rank_tests.rs
+|   |   |   |       |   |   |   `-- rank_impl.rs
 |   |   |   |       |   |   |-- helpers/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   |-- rank_order.rs
@@ -3416,19 +3411,15 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |   |-- radius_one/
 |   |   |   |       |   |   |   |   `-- vertical.rs
 |   |   |   |       |   |   |   |-- radius_one.rs
-|   |   |   |       |   |   |   |-- tests.rs
 |   |   |   |       |   |   |   `-- vector.rs
 |   |   |   |       |   |   |-- blur.rs
 |   |   |   |       |   |   |-- byte_filter.rs
 |   |   |   |       |   |   |-- convolution.rs
 |   |   |   |       |   |   |-- extrema.rs
-|   |   |   |       |   |   |-- filter3x3/
-|   |   |   |       |   |   |   `-- tests.rs
 |   |   |   |       |   |   |-- filter3x3.rs
 |   |   |   |       |   |   |-- filter5x5/
 |   |   |   |       |   |   |   |-- native_bytes/
-|   |   |   |       |   |   |   |   |-- binomial.rs
-|   |   |   |       |   |   |   |   `-- tests.rs
+|   |   |   |       |   |   |   |   `-- binomial.rs
 |   |   |   |       |   |   |   `-- native_bytes.rs
 |   |   |   |       |   |   |-- filter5x5.rs
 |   |   |   |       |   |   |-- hidden_lanes.rs
@@ -3442,13 +3433,10 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   |-- mode_filter.rs
 |   |   |   |       |   |   |-- mode_leaf.rs
-|   |   |   |       |   |   |-- rank/
-|   |   |   |       |   |   |   `-- tests.rs
 |   |   |   |       |   |   |-- rank.rs
 |   |   |   |       |   |   |-- rank_vector.rs
 |   |   |   |       |   |   |-- rgb_blur_ring.rs
 |   |   |   |       |   |   |-- uniform_box.rs
-|   |   |   |       |   |   |-- uniform_box_tests.rs
 |   |   |   |       |   |   |-- uniform_image.rs
 |   |   |   |       |   |   `-- unsharp.rs
 |   |   |   |       |   |-- hsv8/
@@ -3495,10 +3483,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- filter3x3_impl.rs
-|   |   |   |       |   |   |   |-- filter3x3_tests.rs
 |   |   |   |       |   |   |   |-- filter5x5_bounded_binomial.rs
 |   |   |   |       |   |   |   |-- filter5x5_impl.rs
-|   |   |   |       |   |   |   |-- filter5x5_tests.rs
 |   |   |   |       |   |   |   |-- filter_impl.rs
 |   |   |   |       |   |   |   |-- i32_cross_smooth_kernel.rs
 |   |   |   |       |   |   |   |-- mod.rs
@@ -3600,8 +3586,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- avx2/
 |   |   |   |       |   |   |   |-- gaussian_blur_radius_seven.rs
 |   |   |   |       |   |   |   |-- gaussian_blur_radius_seven_impl.rs
-|   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   `-- tests.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- filter5x5_impl.rs
 |   |   |   |       |   |   |   |-- filter_impl.rs
@@ -3610,7 +3595,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- helpers/
 |   |   |   |       |   |   |   |-- gaussian_blur_radius_seven.rs
 |   |   |   |       |   |   |   |-- gaussian_blur_uniform.rs
-|   |   |   |       |   |   |   |-- gaussian_blur_uniform_tests.rs
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- radius_one_blur.rs
 |   |   |   |       |   |   |-- mod.rs
@@ -4517,9 +4501,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- expand.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
-|   |   |   |       |   |-- tests/
-|   |   |   |       |   |   |-- expand.rs
-|   |   |   |       |   |   `-- mod.rs
 |   |   |   |       |   `-- ycbcr8/
 |   |   |   |       |       |-- default/
 |   |   |   |       |       |   |-- expand_impl.rs
@@ -5412,10 +5393,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       |-- put_alpha_impl.rs
 |   |   |   |       |   |       |-- put_data_impl.rs
 |   |   |   |       |   |       `-- put_pixel_impl.rs
-|   |   |   |       |   |-- tests/
-|   |   |   |       |   |   |-- extract_band.rs
-|   |   |   |       |   |   |-- mod.rs
-|   |   |   |       |   |   `-- put_pixel.rs
 |   |   |   |       |   `-- ycbcr8/
 |   |   |   |       |       |-- default/
 |   |   |   |       |       |   |-- extract_band_impl.rs
@@ -6405,7 +6382,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   `-- wasm_simd128/
 |   |   |   |       |   |       |-- mod.rs
 |   |   |   |       |   |       `-- rotate_impl.rs
-|   |   |   |       |   |-- tests.rs
 |   |   |   |       |   `-- ycbcr8/
 |   |   |   |       |       |-- avx2/
 |   |   |   |       |       |   |-- mod.rs
@@ -7509,65 +7485,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |-- paste.rs
 |   |   |   |   |   `-- types.rs
 |   |   |   |   |-- stream.rs
-|   |   |   |   |-- tests/
-|   |   |   |   |   |-- affine_geometry.rs
-|   |   |   |   |   |-- dispatch_planners.rs
-|   |   |   |   |   |-- mod.rs
-|   |   |   |   |   |-- native_cover.rs
-|   |   |   |   |   |-- native_effects.rs
-|   |   |   |   |   |-- native_filters.rs
-|   |   |   |   |   |-- native_layout_planners.rs
-|   |   |   |   |   |-- native_luma/
-|   |   |   |   |   |   |-- extract_band.rs
-|   |   |   |   |   |   |-- mode_admission.rs
-|   |   |   |   |   |   |-- native_byte_filter.rs
-|   |   |   |   |   |   `-- order_statistic.rs
-|   |   |   |   |   |-- native_luma.rs
-|   |   |   |   |   |-- native_luma_transfer.rs
-|   |   |   |   |   |-- native_operations.rs
-|   |   |   |   |   |-- native_padding.rs
-|   |   |   |   |   |-- native_paste_execution.rs
-|   |   |   |   |   |-- native_paste_planning/
-|   |   |   |   |   |   |-- masked_paste_execution.rs
-|   |   |   |   |   |   |-- masked_paste_planners.rs
-|   |   |   |   |   |   `-- packing_and_native_planners.rs
-|   |   |   |   |   |-- native_paste_planning.rs
-|   |   |   |   |   |-- native_transform.rs
-|   |   |   |   |   |-- palette_projective/
-|   |   |   |   |   |   |-- palette_alpha_gpu.rs
-|   |   |   |   |   |   |-- palette_alpha_mesh.rs
-|   |   |   |   |   |   `-- palette_alpha_proofs.rs
-|   |   |   |   |   |-- palette_projective.rs
-|   |   |   |   |   |-- pipeline_fusion.rs
-|   |   |   |   |   |-- point_merge.rs
-|   |   |   |   |   |-- projective_filtered/
-|   |   |   |   |   |   `-- palette_partial_mesh.rs
-|   |   |   |   |   |-- projective_filtered.rs
-|   |   |   |   |   |-- projective_nearest_execution.rs
-|   |   |   |   |   |-- projective_nearest_execution_cases.rs
-|   |   |   |   |   |-- projective_nearest_proofs.rs
-|   |   |   |   |   |-- putalpha_planners.rs
-|   |   |   |   |   |-- readback.rs
-|   |   |   |   |   |-- resize_compact_box.rs
-|   |   |   |   |   |-- resize_float_execution.rs
-|   |   |   |   |   |-- resize_float_proofs/
-|   |   |   |   |   |   |-- box_and_average_proofs.rs
-|   |   |   |   |   |   |-- dyadic_and_f64_proofs.rs
-|   |   |   |   |   |   `-- finite_words_and_integer_rounding.rs
-|   |   |   |   |   |-- resize_float_proofs.rs
-|   |   |   |   |   |-- resize_geometry.rs
-|   |   |   |   |   |-- resize_integer.rs
-|   |   |   |   |   |-- resize_ordered_float.rs
-|   |   |   |   |   |-- resize_ordered_taps.rs
-|   |   |   |   |   |-- resize_streaming.rs
-|   |   |   |   |   |-- resize_thumbnail.rs
-|   |   |   |   |   |-- resource_pool.rs
-|   |   |   |   |   |-- rgb_compact.rs
-|   |   |   |   |   |-- transpose_execution.rs
-|   |   |   |   |   |-- transpose_planning.rs
-|   |   |   |   |   |-- typed_geometry.rs
-|   |   |   |   |   |-- typed_resize.rs
-|   |   |   |   |   `-- upload_reuse.rs
 |   |   |   |   |-- thumbnail.rs
 |   |   |   |   |-- transform/
 |   |   |   |   |   |-- geometry.rs
@@ -7616,8 +7533,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- telemetry/
 |   |   |   |   |-- eager_cpu.rs
 |   |   |   |   `-- origins.rs
-|   |   |   |-- telemetry.rs
-|   |   |   `-- transpose_tests.rs
+|   |   |   `-- telemetry.rs
 |   |   |-- data/
 |   |   |   |-- lab-identity-profile.icc
 |   |   |   |-- lcms-lab-lut.u16le
@@ -7653,8 +7569,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   `-- variation.rs
 |   |   |   |-- imagingft.rs
 |   |   |   |-- mod.rs
-|   |   |   |-- pilfont/
-|   |   |   |   `-- tests.rs
 |   |   |   |-- pilfont.rs
 |   |   |   |-- public_api.rs
 |   |   |   |-- text_layout.rs
@@ -7665,21 +7579,17 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |-- format.rs
 |   |   |-- image/
 |   |   |   |-- backend.rs
-|   |   |   |-- byte_export/
-|   |   |   |   `-- tests.rs
 |   |   |   |-- byte_export.rs
 |   |   |   |-- channel_access.rs
 |   |   |   |-- codec_adapter.rs
 |   |   |   |-- color_count/
 |   |   |   |   |-- pillow_table.rs
-|   |   |   |   |-- specialized.rs
-|   |   |   |   `-- tests.rs
+|   |   |   |   `-- specialized.rs
 |   |   |   |-- color_count.rs
 |   |   |   |-- construction.rs
 |   |   |   |-- data_access/
 |   |   |   |   |-- get.rs
-|   |   |   |   |-- put.rs
-|   |   |   |   `-- putdata_shared_bytes_tests.rs
+|   |   |   |   `-- put.rs
 |   |   |   |-- data_access.rs
 |   |   |   |-- encode.rs
 |   |   |   |-- entropy.rs
@@ -7699,15 +7609,12 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   `-- palette_components.rs
 |   |   |   |-- pixel_access.rs
 |   |   |   |-- projection/
-|   |   |   |   |-- getprojection_cmyk_tests.rs
-|   |   |   |   |-- getprojection_rgb_pipeline_tests.rs
 |   |   |   |   `-- putpixel_pipeline.rs
 |   |   |   |-- projection.rs
 |   |   |   |-- statistics/
 |   |   |   |   `-- result.rs
 |   |   |   `-- statistics.rs
 |   |   |-- image.rs
-|   |   |-- image_getchannel_receipt_tests.rs
 |   |   |-- image_sequence.rs
 |   |   |-- image_utils.rs
 |   |   |-- lab.rs
@@ -7727,8 +7634,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |-- mod.rs
 |   |   |   |   |-- mode.rs
 |   |   |   |   |-- operation.rs
-|   |   |   |   |-- palette.rs
-|   |   |   |   `-- tests.rs
+|   |   |   |   `-- palette.rs
 |   |   |   |-- crop.rs
 |   |   |   |-- enhance.rs
 |   |   |   |-- filter.rs
@@ -7756,12 +7662,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- lut_softlight.bin
 |   |   |   |-- mod.rs
 |   |   |   |-- module_fns/
-|   |   |   |   |-- point.rs
-|   |   |   |   `-- tests.rs
+|   |   |   |   `-- point.rs
 |   |   |   |-- module_fns.rs
-|   |   |   |-- param_filters/
-|   |   |   |   |-- color3dlut_transform_tests.rs
-|   |   |   |   `-- unsharp_tests.rs
 |   |   |   |-- param_filters.rs
 |   |   |   |-- paste/
 |   |   |   |   |-- color.rs
@@ -7771,9 +7673,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- paste.rs
 |   |   |   |-- pil_resize/
 |   |   |   |   |-- alpha.rs
-|   |   |   |   |-- boxed/
-|   |   |   |   |   |-- boxed_f_resize_eight_tap_tests.rs
-|   |   |   |   |   `-- boxed_f_resize_fma_tests.rs
 |   |   |   |   |-- boxed.rs
 |   |   |   |   |-- coefficients.rs
 |   |   |   |   |-- filters.rs
@@ -7783,13 +7682,10 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |-- cmyk.rs
 |   |   |   |   |   `-- hsv.rs
 |   |   |   |   |-- integer_modes.rs
-|   |   |   |   |-- integer_modes_tests.rs
 |   |   |   |   |-- luma16.rs
 |   |   |   |   |-- resize.rs
 |   |   |   |   |-- samples.rs
 |   |   |   |   |-- vertical_passes/
-|   |   |   |   |   |-- resize_transpose_tests.rs
-|   |   |   |   |   |-- rgb_vertical_pass_tests.rs
 |   |   |   |   |   `-- transpose.rs
 |   |   |   |   `-- vertical_passes.rs
 |   |   |   |-- pil_resize.rs
@@ -7811,8 +7707,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |-- par.rs
 |   |   |-- path.rs
 |   |   |-- pipeline/
-|   |   |   |-- support.rs
-|   |   |   `-- transpose_tests.rs
+|   |   |   `-- support.rs
 |   |   |-- pipeline.rs
 |   |   |-- raster/
 |   |   |   |-- buffer/
@@ -7954,6 +7849,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |       |   |-- autocontrast.rs
 |       |   |-- colorize.rs
 |       |   |-- equalize.rs
+|       |   |-- exif.rs
 |       |   |-- expand.rs
 |       |   |-- pad.rs
 |       |   `-- size_route.rs
@@ -8019,8 +7915,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |-- generate_migration_parity_docs.py
     |-- implementation_structure/
     |   |-- __init__.py
-    |   |-- audit.py
-    |   `-- test_audit.py
+    |   `-- audit.py
     |-- lint.sh
     |-- migration_benchmark_adapter.py
     |-- migration_benchmark_samples.py
@@ -8080,51 +7975,12 @@ It is a navigation aid, not an API-support or coverage claim.
     |   |-- python_bindings.py
     |   |-- rust_calls.py
     |   |-- rust_modules.py
-    |   |-- rust_source.py
-    |   |-- test_evidence.py
-    |   `-- test_operation_source_crosswalk.py
-    |-- test_benchmark_gpu_batch_contract.py
-    |-- test_build_perfdb_selected_run.py
-    |-- test_check_backend_boundaries.py
+    |   `-- rust_source.py
     |-- test_chops_affine_parity.py
-    |-- test_coverage_context.py
-    |-- test_docs_benchmark_selection.py
-    |-- test_docs_benchmark_view.py
-    |-- test_docs_evidence.py
-    |-- test_docs_performance_matrix.py
-    |-- test_docs_release.py
-    |-- test_docs_site.py
-    |-- test_font_native_cases.py
     |-- test_font_variant_parity.py
     |-- test_getdata_sequence_parity.py
     |-- test_gpu_batch.py
     |-- test_grayscale_rgb_domain.py
-    |-- test_migration_benchmark_attestation.py
-    |-- test_migration_benchmark_runner_identity.py
-    |-- test_migration_benchmark_samples.py
-    |-- test_migration_benchmark_selection.py
-    |-- test_migration_build_witness.py
-    |-- test_migration_execution_attestation.py
-    |-- test_migration_execution_identity.py
-    |-- test_migration_materialization_witness.py
-    |-- test_migration_parity_attestation.py
-    |-- test_migration_parity_display.py
-    |-- test_migration_parity_icc_timestamp.py
-    |-- test_migration_parity_selection.py
-    |-- test_migration_parity_serialization.py
-    |-- test_migration_parity_timing.py
-    |-- test_migration_producer_attestation.py
-    |-- test_migration_producer_identity.py
-    |-- test_optimization_goals.py
-    |-- test_parity_reduction.py
-    |-- test_performance_optimization_matrix.py
-    |-- test_pillow_simd_benchmark.py
-    |-- test_pillow_simd_suite_compatibility.py
-    |-- test_profile_migration_benchmark.py
-    |-- test_receipt_state.py
-    |-- test_release_tools.py
-    |-- test_rust_size_policy.py
-    |-- test_source_contracts.py
     |-- validate_migration_parity_contract.py
     `-- validate_migration_parity_result.py
 ```

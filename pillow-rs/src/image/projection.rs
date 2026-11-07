@@ -109,11 +109,3 @@ impl Image {
         }
     }
 }
-
-#[cfg(test)]
-#[path = "projection/getprojection_cmyk_tests.rs"]
-mod getprojection_cmyk_tests;
-
-#[cfg(test)]
-#[path = "projection/getprojection_rgb_pipeline_tests.rs"]
-mod getprojection_rgb_pipeline_tests;

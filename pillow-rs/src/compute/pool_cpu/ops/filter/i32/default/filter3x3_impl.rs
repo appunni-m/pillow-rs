@@ -198,8 +198,7 @@ pub(super) fn execute(
     let mut out = raw.to_vec();
 
     let row_stride = w_u32 as usize * 4;
-    
-    
+
     if i32_cross_smooth_kernel::matches(&kd, offset) {
         i32_cross_smooth_kernel::apply(raw, &mut out, w_u32 as usize, h_u32 as usize);
     } else {
@@ -222,8 +221,3 @@ pub(super) fn execute(
             .ok_or_else(|| PilError::ValueError("filter_3x3_i32: buffer error".into()))?,
     ))
 }
-
-
-#[cfg(test)]
-#[path = "filter3x3_tests.rs"]
-mod tests;

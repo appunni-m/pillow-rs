@@ -21,11 +21,3 @@ pub(in crate::compute::pool_cpu::ops::filter::f32) fn requires_default_comparato
     }
     false
 }
-
-/// Retains the old name for the existing migration-only unit-test module.
-#[cfg(test)]
-pub(in crate::compute::pool_cpu::ops::filter::f32) fn requires_default_comparator_sort(
-    raw: &[u8],
-) -> bool {
-    requires_default_comparator(raw)
-}

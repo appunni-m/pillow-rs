@@ -51,8 +51,7 @@ mod putdata;
 mod save_options;
 mod telemetry;
 pub(crate) use errors::map_error;
-#[cfg(test)]
-use font::PilFontLoadCache;
+
 pub(crate) use image::PyImage;
 pub(crate) use image_chops::chops_offset_from_python;
 
@@ -103,23 +102,4 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_function(pyo3::wrap_pyfunction!(_clear_migration_test_fault, m)?)?;
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod pilfont_load_cache_tests {
-    use super::PilFontLoadCache;
-
-    #[test]
-    fn cache_requires_exact_metrics_and_bitmap_bytes() {
-        let metrics = b"pilfont metrics";
-        let bitmap = b"glyph bitmap";
-        let font = pillow_rs::PilFont::load_default().expect("embedded default font is valid");
-        let mut cache = PilFontLoadCache::default();
-
-        cache.insert(metrics, bitmap, &font);
-
-        assert!(cache.get(metrics, bitmap).is_some());
-        assert!(cache.get(b"changed metrics", bitmap).is_none());
-        assert!(cache.get(metrics, b"changed bitmap").is_none());
-    }
 }

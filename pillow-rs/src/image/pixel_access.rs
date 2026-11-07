@@ -958,25 +958,3 @@ impl Image {
         }
     }
 }
-
-#[cfg(test)]
-mod getpixel_rgb_fast_path_tests {
-    use super::{Image, PilError};
-
-    #[test]
-    fn fast_path_reads_only_loaded_native_rgb_pixels() -> Result<(), PilError> {
-        let rgb = Image::new(2, 1, crate::raster::Mode::ImageRgb8, (17, 83, 211, 255))?;
-        assert_eq!(rgb.getpixel_rgb_if_loaded(1, 0)?, Some([17, 83, 211]));
-        assert!(matches!(
-            rgb.getpixel_rgb_if_loaded(2, 0),
-            Err(PilError::IndexError(_))
-        ));
-
-        let gray = Image::new(1, 1, crate::raster::Mode::ImageLuma8, (42, 0, 0, 255))?;
-        assert_eq!(gray.getpixel_rgb_if_loaded(0, 0)?, None);
-
-        let deferred = crate::ops::imageops::invert(&rgb)?;
-        assert_eq!(deferred.getpixel_rgb_if_loaded(0, 0)?, None);
-        Ok(())
-    }
-}

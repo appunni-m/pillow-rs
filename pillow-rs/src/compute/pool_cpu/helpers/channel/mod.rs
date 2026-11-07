@@ -16,5 +16,3 @@ pub(crate) mod wide;
 pub(crate) mod ssse3;
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 pub(crate) mod neon;
-#[cfg(all(test, target_arch = "x86_64"))]
-mod tests;

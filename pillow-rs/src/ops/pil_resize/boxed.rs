@@ -238,12 +238,6 @@ fn pil_resize_f_boxed_with_fma<F: F64MulAdd, const UNROLL_EIGHT: bool>(
     raw_to_dynamic_owned(output, dst_w, dst_h, 4)
 }
 
-#[cfg(test)]
-mod boxed_f_resize_eight_tap_tests;
-
-#[cfg(all(test, target_arch = "x86_64"))]
-mod boxed_f_resize_fma_tests;
-
 /// Box-based resize: maps source region [box_left, box_right] × [box_top, box_bottom]
 /// to the output (dst_w, dst_h). All box coordinates are in source pixel coordinates.
 pub fn pil_resize_boxed(

@@ -7,23 +7,19 @@
 // `pool_parallel` owner; this shared compatibility path stays serial.
 
 mod alpha;
-#[cfg(test)]
-mod boxed;
+
 mod coefficients;
 mod filters;
 mod float;
 mod horizontal_passes;
-#[cfg(test)]
-mod integer_modes;
+
 mod luma16;
-#[cfg(test)]
-mod resize;
+
 mod samples;
 mod vertical_passes;
 
 pub(crate) use alpha::{unpremultiply_channel, unpremultiply_rgba};
-#[cfg(test)]
-pub(crate) use boxed::pil_resize_boxed;
+
 pub(crate) use coefficients::{
     FilterCoeffs, FilterCoeffsF64, compact_resize_coeffs_to_source_span, precompute_coeffs, precompute_coeffs_boxed_for_filter, precompute_coeffs_f64,
     precompute_coeffs_f64_boxed, fixed_point_to_u8,
@@ -37,8 +33,7 @@ pub(crate) use float::{
     f_resize_samples_allow_finite_fma,
 };
 pub(crate) use luma16::luma16_resample_big_endian;
-#[cfg(test)]
-pub(crate) use resize::{pil_preserve_mode, pil_resize};
+
 pub(crate) use vertical_passes::vertical_pass_rgb_row;
 pub(crate) use samples::{
     f32_samples_from_le_bytes, i32_samples_from_le_bytes,

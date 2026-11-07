@@ -308,15 +308,6 @@ def classify_path(
             "rule": "javascript_host_integration",
             "reason": "JavaScript host I/O and display integrations are grouped under the binding package's host layer.",
         }
-    if path == "scripts/test_operation_source_crosswalk.py" and re.search(
-        r"(?m)^\s*(?:from|import)\s+source_crosswalk\b", content
-    ):
-        return {
-            "assessment": "review_candidate",
-            "rule": "workflow_test_separate_from_tool_package",
-            "expected_shape": "scripts/source_crosswalk/test_<contract>.py",
-            "reason": "The test imports a multi-file workflow package while living beside the CLI shim; confirm and co-locate it with that workflow's implementation.",
-        }
     if path in {
         "scripts/rust_size_baseline.json",
         "scripts/public_api_boundary_baseline.json",

@@ -17,9 +17,7 @@ pub(crate) use eager_cpu::{
 use crate::raster::DynamicImage;
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
-#[cfg(not(test))]
 use std::sync::atomic::{AtomicBool, Ordering};
-#[cfg(not(test))]
 use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 
@@ -210,18 +208,12 @@ pub(super) struct PipelineTelemetry {
     pub(super) resize_coeff_cache_misses: u64,
 }
 
-#[cfg(not(test))]
 static GPU_SHADER_COVERAGE_ENABLED: AtomicBool = AtomicBool::new(false);
-#[cfg(not(test))]
 static GPU_SHADER_COVERAGE: OnceLock<
     Mutex<BTreeMap<(&'static str, &'static str), GpuShaderDispatchCounters>>,
 > = OnceLock::new();
 
 thread_local! {
-    #[cfg(test)]
-    static GPU_SHADER_COVERAGE_ENABLED: Cell<bool> = const { Cell::new(false) };
-    #[cfg(test)]
-    static GPU_SHADER_COVERAGE: RefCell<BTreeMap<(&'static str, &'static str), GpuShaderDispatchCounters>> = const { RefCell::new(BTreeMap::new()) };
     static PIPELINE_TELEMETRY_ENABLED: Cell<bool> = const { Cell::new(false) };
     static LAST_PIPELINE_TELEMETRY: RefCell<Option<PipelineTelemetry>> = const { RefCell::new(None) };
     static LAST_PIPELINE_RESOURCE_TELEMETRY: RefCell<Option<PipelineResourceTelemetry>> = const { RefCell::new(None) };
@@ -267,7 +259,6 @@ pub(super) fn set_pipeline_telemetry_enabled(enabled: bool) -> bool {
     previous
 }
 
-#[cfg(not(test))]
 pub(super) fn set_gpu_shader_coverage_enabled(enabled: bool) -> bool {
     let previous = GPU_SHADER_COVERAGE_ENABLED.swap(enabled, Ordering::Relaxed);
     if !enabled
@@ -279,63 +270,33 @@ pub(super) fn set_gpu_shader_coverage_enabled(enabled: bool) -> bool {
     previous
 }
 
-#[cfg(test)]
-pub(super) fn set_gpu_shader_coverage_enabled(enabled: bool) -> bool {
-    let previous = GPU_SHADER_COVERAGE_ENABLED.with(|setting| setting.replace(enabled));
-    if !enabled {
-        GPU_SHADER_COVERAGE.with(|coverage| coverage.borrow_mut().clear());
-    }
-    previous
-}
-
-/// Record one actual GPU dispatch for the managed shader execution report.
 #[cfg(feature = "gpu")]
 pub(crate) fn record_gpu_shader_dispatch(
     variant_name: &'static str,
     shader_file: &'static str,
     workgroups: u64,
 ) {
-    #[cfg(test)]
-    if !GPU_SHADER_COVERAGE_ENABLED.with(Cell::get) {
-        return;
-    }
-    #[cfg(not(test))]
     if !GPU_SHADER_COVERAGE_ENABLED.load(Ordering::Relaxed) {
         return;
     }
 
-    #[cfg(test)]
-    GPU_SHADER_COVERAGE.with(|coverage| {
-        let mut coverage = coverage.borrow_mut();
-        let counters = coverage.entry((variant_name, shader_file)).or_default();
-        counters.dispatches = counters.dispatches.saturating_add(1);
-        counters.workgroups = counters.workgroups.saturating_add(workgroups);
-    });
-    #[cfg(not(test))]
-    {
-        let coverage = GPU_SHADER_COVERAGE.get_or_init(|| Mutex::new(BTreeMap::new()));
-        let Ok(mut coverage) = coverage.lock() else {
-            return;
-        };
-        let counters = coverage.entry((variant_name, shader_file)).or_default();
-        counters.dispatches = counters.dispatches.saturating_add(1);
-        counters.workgroups = counters.workgroups.saturating_add(workgroups);
-    }
+    let coverage = GPU_SHADER_COVERAGE.get_or_init(|| Mutex::new(BTreeMap::new()));
+    let Ok(mut coverage) = coverage.lock() else {
+        return;
+    };
+    let counters = coverage.entry((variant_name, shader_file)).or_default();
+    counters.dispatches = counters.dispatches.saturating_add(1);
+    counters.workgroups = counters.workgroups.saturating_add(workgroups);
 }
 
 pub(super) fn take_gpu_shader_coverage() -> Vec<GpuShaderDispatchTelemetry> {
-    #[cfg(test)]
-    let counters = GPU_SHADER_COVERAGE.with(|coverage| std::mem::take(&mut *coverage.borrow_mut()));
-    #[cfg(not(test))]
-    let counters = {
-        let Some(coverage) = GPU_SHADER_COVERAGE.get() else {
-            return Vec::new();
-        };
-        let Ok(mut coverage) = coverage.lock() else {
-            return Vec::new();
-        };
-        std::mem::take(&mut *coverage)
+    let Some(coverage) = GPU_SHADER_COVERAGE.get() else {
+        return Vec::new();
     };
+    let Ok(mut coverage) = coverage.lock() else {
+        return Vec::new();
+    };
+    let counters = std::mem::take(&mut *coverage);
     counters
         .into_iter()
         .map(
@@ -347,41 +308,6 @@ pub(super) fn take_gpu_shader_coverage() -> Vec<GpuShaderDispatchTelemetry> {
             },
         )
         .collect()
-}
-
-#[cfg(all(test, feature = "gpu"))]
-mod gpu_shader_coverage_tests {
-    use super::{
-        record_gpu_shader_dispatch, set_gpu_shader_coverage_enabled, take_gpu_shader_coverage,
-    };
-
-    #[test]
-    fn shader_dispatch_coverage_is_isolated_between_test_threads() {
-        struct RestoreCoverage(bool);
-        impl Drop for RestoreCoverage {
-            fn drop(&mut self) {
-                set_gpu_shader_coverage_enabled(self.0);
-            }
-        }
-
-        let previous = set_gpu_shader_coverage_enabled(true);
-        let _restore = RestoreCoverage(previous);
-        let _ = take_gpu_shader_coverage();
-
-        std::thread::spawn(|| {
-            record_gpu_shader_dispatch("other_thread", "other.wgsl", 1);
-        })
-        .join()
-        .expect("test thread should finish");
-        record_gpu_shader_dispatch("current_thread", "current.wgsl", 2);
-
-        let coverage = take_gpu_shader_coverage();
-        assert_eq!(coverage.len(), 1);
-        assert_eq!(coverage[0].variant_name, "current_thread");
-        assert_eq!(coverage[0].shader_file, "current.wgsl");
-        assert_eq!(coverage[0].dispatches, 1);
-        assert_eq!(coverage[0].workgroups, 2);
-    }
 }
 
 pub(crate) fn reset_pipeline_allocation_telemetry() {

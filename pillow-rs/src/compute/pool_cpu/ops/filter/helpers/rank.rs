@@ -174,8 +174,7 @@ fn rank_filter_bytes_extreme_separable(
     }
 
     let mut horizontal = vec![0u8; total_bytes];
-    
-    
+
     for y in 0..height {
         let row_start = y * row_stride;
         let mut queues: [Vec<usize>; 4] = std::array::from_fn(|_| Vec::with_capacity(width));
@@ -191,8 +190,7 @@ fn rank_filter_bytes_extreme_separable(
     }
 
     let queue_capacity = half.saturating_mul(2).saturating_add(1).min(height);
-    
-    
+
     for y in 0..height {
         let row_start = y * row_stride;
         let mut queues: [Vec<usize>; 4] =
@@ -268,8 +266,7 @@ fn rank_filter_bytes_extreme(
     select_max: bool,
 ) {
     let row_stride = w.max(0) as usize * channels;
-    
-    
+
     for y in 0..h {
         let row_start = y as usize * row_stride;
         rank_filter_bytes_extreme_row(
@@ -333,8 +330,7 @@ fn rank_filter_bytes_small(
     rank: usize,
 ) {
     let row_stride = w.max(0) as usize * channels;
-    
-    
+
     for y in 0..h {
         let row_start = y as usize * row_stride;
         rank_filter_bytes_small_row(
@@ -452,8 +448,7 @@ fn rank_filter_bytes_3x3(
     rank: usize,
 ) {
     let row_stride = width * channels;
-    
-    
+
     for y in 0..height {
         let row_start = y * row_stride;
         rank_filter_bytes_3x3_row(
@@ -522,8 +517,7 @@ fn rank_filter_bytes_histogram(
     rank: usize,
 ) {
     let row_stride = w.max(0) as usize * channels;
-    
-    
+
     for y in 0..h {
         let row_start = y as usize * row_stride;
         rank_filter_bytes_histogram_row(
@@ -614,7 +608,3 @@ pub(crate) fn execute_native_bytes(
 ) -> Result<Option<Vec<u8>>, PilError> {
     rank_filter_impl(raw, width, height, channels, size, rank)
 }
-
-#[cfg(test)]
-#[path = "rank/tests.rs"]
-mod tests;

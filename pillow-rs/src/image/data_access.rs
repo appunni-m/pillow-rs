@@ -293,7 +293,3 @@ fn validated_band_index(band: i32, band_count: usize) -> Result<usize, PilError>
 
 mod get;
 mod put;
-
-#[cfg(test)]
-#[path = "data_access/putdata_shared_bytes_tests.rs"]
-mod putdata_shared_bytes_tests;

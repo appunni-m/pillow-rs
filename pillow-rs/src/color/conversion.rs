@@ -180,16 +180,6 @@ fn hsv_factors() -> &'static [[f32; 3]] {
 /// The result is stored back to f32, and the final `(int)(h * 255.0)` truncates.
 /// This function matches PIL pixel-for-pixel by mimicking the exact precision
 /// flow: f32 divisions → f64 promotions for constant arithmetic → f32 storage.
-#[cfg(test)]
-pub fn rgb_to_hsv(img: &DynamicImage) -> DynamicImage {
-    let rgb = match img {
-        DynamicImage::ImageRgb8(rgb) => Cow::Borrowed(rgb),
-        _ => Cow::Owned(img.to_rgb8()),
-    };
-    DynamicImage::ImageHsv8(rgb_buffer_to_hsv(rgb.as_ref()))
-}
-
-/// Applies Pillow's RGB-to-HSV arithmetic directly to a native RGB8 buffer.
 pub(crate) fn rgb_buffer_to_hsv(rgb: &RgbImage) -> crate::raster::RgbImage {
     rgb_bytes_to_hsv::<3>(rgb.as_raw(), rgb.width(), rgb.height())
 }
@@ -539,72 +529,6 @@ pub fn f_to_rgb(img: &DynamicImage) -> DynamicImage {
 /// This is the `i2l` path in Pillow's `Convert.c`: values at or below zero
 /// become zero, values at or above 255 become 255, and interior values are
 /// truncated rather than rounded.
-#[cfg(test)]
-pub fn i_to_l(img: &DynamicImage) -> DynamicImage {
-    use crate::compute::pool_cpu::ops::grayscale::i32::default::grayscale_impl;
-    let source = match img {
-        DynamicImage::ImageI32(source) | DynamicImage::ImageRgba8(source) => Cow::Borrowed(source),
-        _ => Cow::Owned(img.to_rgba8()),
-    };
-    DynamicImage::ImageLuma8(grayscale_impl::execute(source.as_ref()))
-}
-
-/// Converts Pillow `F` storage to the intermediate `L` image used by
-/// `Image.convert` when the destination has no direct float converter.
-///
-/// This is the `f2l` path in Pillow's `Convert.c`, including truncation of
-/// interior floating-point samples.
-#[cfg(test)]
-pub fn f_to_l(img: &DynamicImage) -> DynamicImage {
-    use crate::compute::pool_cpu::ops::grayscale::f32::default::grayscale_impl;
-    let source = match img {
-        DynamicImage::ImageF32(source) | DynamicImage::ImageRgba8(source) => Cow::Borrowed(source),
-        _ => Cow::Owned(img.to_rgba8()),
-    };
-    DynamicImage::ImageLuma8(grayscale_impl::execute(source.as_ref()))
-}
-
-/// Converts Pillow `I` storage to `F` storage using the direct `i2f` path.
-#[cfg(test)]
-pub fn i_to_f(img: &DynamicImage) -> DynamicImage {
-    let (w, h) = (img.width(), img.height());
-    let rgba = match img {
-        // I mode is already stored as four little-endian bytes per sample.
-        // Borrow that scalar carrier rather than cloning the whole frame.
-        DynamicImage::ImageRgba8(rgba) => Cow::Borrowed(rgba.as_raw().as_slice()),
-        _ => Cow::Owned(img.to_rgba8().into_raw()),
-    };
-    let mut out = crate::raster::RgbaImage::new(w, h);
-    for (op, ip) in out.pixels_mut().zip(rgba.chunks_exact(4)) {
-        let value = i32::from_le_bytes([ip[0], ip[1], ip[2], ip[3]]) as f32;
-        *op = crate::raster::Rgba(value.to_le_bytes());
-    }
-    DynamicImage::ImageRgba8(out)
-}
-
-/// Converts Pillow `F` storage to `I` storage using the direct `f2i` path.
-#[cfg(test)]
-pub fn f_to_i(img: &DynamicImage) -> DynamicImage {
-    let (w, h) = (img.width(), img.height());
-    let rgba = match img {
-        // F mode is already stored as four little-endian bytes per sample.
-        // Borrow that scalar carrier rather than cloning the whole frame.
-        DynamicImage::ImageRgba8(rgba) => Cow::Borrowed(rgba.as_raw().as_slice()),
-        _ => Cow::Owned(img.to_rgba8().into_raw()),
-    };
-    let mut out = crate::raster::RgbaImage::new(w, h);
-    for (op, ip) in out.pixels_mut().zip(rgba.chunks_exact(4)) {
-        let value = f32::from_le_bytes([ip[0], ip[1], ip[2], ip[3]]) as i32;
-        *op = crate::raster::Rgba(value.to_le_bytes());
-    }
-    DynamicImage::ImageRgba8(out)
-}
-
-
-/// Converts `P` palette-index storage to RGB.
-///
-/// `img` is interpreted as one index byte per pixel. A missing palette or a
-/// missing entry maps to black, matching Pillow's empty/default `P` palette.
 pub fn p_to_rgb(img: &DynamicImage, palette: Option<&[u8]>) -> DynamicImage {
     let luma = img.to_luma8();
     let (w, h) = luma.dimensions();

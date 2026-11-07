@@ -1,5 +1,4 @@
-#[cfg(test)]
-use std::borrow::Cow;
+
 use std::sync::Arc;
 
 use crate::compute::Backend;
@@ -28,44 +27,6 @@ pub(super) fn palette_alpha_for_convert(img: &Image) -> Option<Vec<u8>> {
     img.palette_alpha().filter(|alpha| !alpha.is_empty())
 }
 
-#[cfg(test)]
-pub(super) fn split_rgba_for_palette(
-    source: &DynamicImage,
-) -> Result<(crate::raster::RgbImage, Vec<u8>), PilError> {
-    let rgba: Cow<'_, crate::raster::RgbaImage> = match source {
-        DynamicImage::ImageRgba8(rgba) => Cow::Borrowed(rgba),
-        other => Cow::Owned(other.to_rgba8()),
-    };
-    let width = rgba.width();
-    let height = rgba.height();
-    let pixel_count = (width as usize)
-        .checked_mul(height as usize)
-        .ok_or_else(|| PilError::ValueError("palette conversion failed".to_owned()))?;
-    let rgb_len = pixel_count
-        .checked_mul(3)
-        .ok_or_else(|| PilError::ValueError("palette conversion failed".to_owned()))?;
-    let rgba_len = pixel_count
-        .checked_mul(4)
-        .ok_or_else(|| PilError::ValueError("palette conversion failed".to_owned()))?;
-    let input = rgba
-        .as_raw()
-        .get(..rgba_len)
-        .ok_or_else(|| PilError::ValueError("palette conversion failed".to_owned()))?;
-    let mut rgb = Vec::with_capacity(rgb_len);
-    let mut alpha = Vec::with_capacity(pixel_count);
-    for pixel in input.chunks_exact(4) {
-        rgb.extend_from_slice(&pixel[..3]);
-        alpha.push(pixel[3]);
-    }
-    let rgb = crate::raster::RgbImage::from_raw(width, height, rgb)
-        .ok_or_else(|| PilError::ValueError("palette conversion failed".to_owned()))?;
-    Ok((rgb, alpha))
-}
-
-/// Attach a prepared P/PA raster and its wrapper-owned metadata to an `Image`.
-///
-/// Keep the generated palette and metadata policy outside the pixel kernel so
-/// each exact source-mode strategy can return its native index raster.
 pub(super) fn convert_prepared_palette(
     image: &Image,
     source_mode: Mode,
@@ -236,4 +197,3 @@ fn wrap_prepared_palette(
         )),
     }
 }
-

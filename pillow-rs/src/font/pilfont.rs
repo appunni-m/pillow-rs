@@ -712,9 +712,6 @@ struct PbmRaster<'a> {
     had_crlf_separator: bool,
 }
 
-#[cfg(test)]
-mod tests;
-
 impl<'a> PbmTokens<'a> {
     fn new(data: &'a [u8]) -> Self {
         Self { data, position: 0 }

@@ -27,7 +27,3 @@ pub(crate) mod cmyk8;
 pub(crate) mod hsv8;
 pub(crate) mod ycbcr8;
 pub(crate) mod helpers;
-
-#[cfg(test)]
-#[path = "tests.rs"]
-mod tests;

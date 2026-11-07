@@ -47,11 +47,7 @@ use pipeline_cache::*;
 mod device;
 use device::GpuInner;
 mod readback;
-#[cfg(test)]
-use readback::{
-    GPU_POLL_BACKOFF, GPU_POLL_FAST_BACKOFF, GPU_POLL_FAST_RETRIES, la_from_rgba_transport,
-    readback_poll_backoff, rgb_from_packed_readback, unpack_native_cover_packed_rows,
-};
+
 mod resize;
 use resize::*;
 mod geometry;
@@ -248,6 +244,3 @@ impl GpuPool {
         )
     }
 }
-
-#[cfg(test)]
-mod tests;

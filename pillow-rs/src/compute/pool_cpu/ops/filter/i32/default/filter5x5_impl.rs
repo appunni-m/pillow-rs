@@ -6,14 +6,11 @@ use crate::error::PilError;
 use crate::ops::pil_resize::i32_samples_from_le_bytes;
 use crate::raster::DynamicImage;
 
-
 pub(in crate::compute::pool_cpu::ops::filter::i32) trait F32MulAdd {
     fn mul_add(&self, sample: f32, weight: f32, accumulator: f32) -> f32;
 }
 
-
 struct PortableF32Fma;
-
 
 impl F32MulAdd for PortableF32Fma {
     #[inline(always)]
@@ -31,10 +28,6 @@ fn pillow_kernel_row_5_with_fma<F: F32MulAdd>(pixels: [f32; 5], kernel: &[f32], 
     fma.mul_add(pixels[4], kernel[4], sum)
 }
 
-/// Prove that the normalized 5x5 binomial kernel keeps all ordered partial
-/// sums finite and away from subnormals for every signed-I sample. Its exact
-/// dyadic coefficients and zero offset let x86 use hardware FMA without
-/// per-tap checks; arbitrary kernels keep the portable libm implementation.
 // ── 5x5 filter (I-mode) ──
 
 /// Apply a 5x5 kernel filter on I-mode (32-bit signed integer) data.
@@ -106,7 +99,6 @@ use bounded_binomial::{
     i32_filter5x5_bounded_binomial_kernel_is_applicable,
 };
 
-
 #[inline]
 fn read_i32_pixel_le(raw: &[u8], pixel_index: usize) -> i32 {
     let byte = pixel_index * 4;
@@ -138,7 +130,6 @@ fn filter_5x5_i32_output_with_copied_border(
 /// scalings of the weight-one row, and the weight-six row is twice a row
 /// weighted by three. Power-of-two scaling commutes with these finite normal
 /// f32 FMA results, while preserving Pillow's horizontal and vertical order.
-
 fn filter_5x5_i32_f32_binomial_scaled_rows_ring_with_fma<F: F32MulAdd>(
     raw: &[u8],
     samples: &[i32],
@@ -219,7 +210,6 @@ fn filter_5x5_i32_f32_binomial_scaled_rows_ring_with_fma<F: F32MulAdd>(
 
     Some(output)
 }
-
 
 fn filter_5x5_i32_bounded_binomial_from_samples(
     raw: &[u8],
@@ -321,7 +311,6 @@ fn filter_5x5_i32_bounded_binomial_from_samples(
 /// Reuse horizontal sums when every kernel row has identical coefficients.
 /// This preserves Pillow's per-row FMA and vertical accumulation order while
 /// avoiding four repeated horizontal dot products for each output pixel.
-
 fn filter_5x5_i32_f32_equal_rows_ring_with_fma<F: F32MulAdd>(
     raw: &[u8],
     samples: &[i32],
@@ -389,7 +378,6 @@ fn filter_5x5_i32_f32_equal_rows_ring_with_fma<F: F32MulAdd>(
 
     Some(output)
 }
-
 
 fn filter_5x5_i32_f32_ring_with_fma<F: F32MulAdd>(
     raw: &[u8],
@@ -493,22 +481,6 @@ fn filter_5x5_i32_f32_ring_with_fma<F: F32MulAdd>(
     Some(output)
 }
 
-#[cfg(test)]
-fn filter_5x5_i32_f32_ring(
-    raw: &[u8],
-    width: usize,
-    height: usize,
-    kernel: &[f32; 25],
-    offset: f32,
-) -> Option<Vec<u8>> {
-    filter_5x5_i32_f32_ring_with_fma(raw, width, height, kernel, offset, &PortableF32Fma)
-}
-
-/// Prove that a uniform I image is unchanged by this exact normalized 5x5
-/// convolution. The sample and the five row sums use the same f32 conversion,
-/// FMA order, vertical accumulation, bias, and truncation as
-/// [`filter_5x5_i32_row`]; only a proved byte-identical result may skip the
-/// per-pixel kernel.
 pub(crate) fn uniform_i32_filter5x5_is_identity(
     raw: &[u8],
     width: usize,
@@ -552,9 +524,6 @@ pub(crate) fn uniform_i32_filter5x5_is_identity(
     let filtered = if value >= 0.0 { value as i32 } else { 0 };
     filtered == sample_i32
 }
-
-
-
 
 fn filter_5x5_i32_fast_path(
     raw: &[u8],
@@ -631,9 +600,7 @@ pub(in crate::compute::pool_cpu::ops::filter::i32) fn execute_with_fma(
 
     // Select the integer factorization only when every sample is proven to
     // preserve Pillow's f32 arithmetic exactly.
-    
 
-    
     if let Some((output, identity)) = filter_5x5_i32_fast_path(
         raw,
         w_u32 as usize,
@@ -648,8 +615,7 @@ pub(in crate::compute::pool_cpu::ops::filter::i32) fn execute_with_fma(
     let mut out = raw.to_vec();
 
     let row_stride = w_u32 as usize * 4;
-    
-    
+
     for y in 0..h {
         let row_start = y as usize * row_stride;
         filter_5x5_i32_row(
@@ -665,7 +631,3 @@ pub(in crate::compute::pool_cpu::ops::filter::i32) fn execute_with_fma(
 
     filter_5x5_i32_image(w_u32, h_u32, out).map(|image| (image, false))
 }
-
-#[cfg(test)]
-#[path = "filter5x5_tests.rs"]
-mod tests;

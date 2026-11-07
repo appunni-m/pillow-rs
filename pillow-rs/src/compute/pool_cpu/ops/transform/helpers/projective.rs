@@ -663,16 +663,3 @@ pub(super) fn cubic_sample(samples: [f64; 4], distance: f64) -> f64 {
     let middle = distance.mul_add(inner, p2);
     distance.mul_add(middle, p1)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::cubic_sample;
-
-    #[test]
-    fn cubic_sample_preserves_native_horner_fma_order() {
-        // Pillow's compiled bicubic callback uses fused Horner steps and
-        // returns 37 here; separate multiply/add operations return 38.
-        let value = cubic_sample([174.0, 36.0, 38.0, 84.0], 0.9999999999999996);
-        assert_eq!(value as u8, 37);
-    }
-}

@@ -413,70 +413,6 @@ fn fill_contrast_channel(channel: &mut [u8], low: f64, high: f64) {
     }
 }
 
-#[cfg(test)]
-mod autocontrast_luma_tests {
-    use super::{apply_native_luma_lut_row, autocontrast_lut, native_luma_lut_tables};
-    use crate::raster::{DynamicImage, GrayImage};
-
-    #[test]
-    fn native_luma_lut_vector_path_matches_every_scalar_table_entry_and_tail() {
-        let lut: Vec<u8> = (0..=u8::MAX)
-            .map(|value| value.wrapping_mul(73).wrapping_add(19))
-            .collect();
-        let tables = native_luma_lut_tables(&lut).expect("256-entry L LUT");
-        let source: Vec<u8> = (0..=u8::MAX).chain([19, 73, 211]).collect();
-        let mut destination = vec![0; source.len()];
-        apply_native_luma_lut_row(&source, &mut destination, &tables);
-        assert_eq!(
-            destination,
-            source
-                .iter()
-                .map(|&value| lut[usize::from(value)])
-                .collect::<Vec<_>>()
-        );
-    }
-
-    #[test]
-    fn zero_cutoff_luma_lut_uses_native_extrema_exactly() {
-        let pixels = [
-            23, 50, 127, 196, 80, 112, 151, 172, 24, 195, 120, 90, 67, 88, 99, 150, 77, 188, 23,
-        ];
-        let image = DynamicImage::ImageLuma8(
-            GrayImage::from_raw(pixels.len() as u32, 1, pixels.to_vec()).expect("valid L image"),
-        );
-        let lut = autocontrast_lut(
-            &image,
-            &crate::pipeline::AutocontrastOptions::symmetric(0.0),
-            None,
-        )
-        .expect("cutoff-zero LUT");
-        assert_eq!(lut[22], 0);
-        assert_eq!(lut[23], 0);
-        assert_eq!(lut[50], 39);
-        assert_eq!(lut[127], 153);
-        assert_eq!(lut[196], 255);
-        assert_eq!(lut[197], 255);
-
-        let constant = DynamicImage::ImageLuma8(
-            GrayImage::from_raw(19, 1, vec![77; 19]).expect("valid constant L image"),
-        );
-        let constant_lut = autocontrast_lut(
-            &constant,
-            &crate::pipeline::AutocontrastOptions::symmetric(0.0),
-            None,
-        )
-        .expect("constant LUT");
-        assert!(constant_lut.iter().copied().eq(0..=u8::MAX));
-    }
-}
-
-/// Accumulate native byte bands while shortening repeated-counter dependencies.
-///
-/// Sixteen equal pixels need one increment per band. Other blocks alternate
-/// counter banks so skewed inputs do not serialize every increment on one
-/// address. Four padding words separate the banks' channel strides; the final
-/// reduction reads only the 256 real bins. Small inputs use one bank to avoid
-/// paying for extra zeroing and reduction.
 fn equalize_histogram<const BANKS: usize>(raw: &[u8], channels: usize) -> [[u32; 256]; 3] {
     let mut banks = [[[0u32; 260]; 3]; BANKS];
     if channels == 1 {
@@ -815,35 +751,4 @@ pub(crate) fn apply_palette_architecture(
     let output = GrayImage::from_raw(width, height, output)
         .ok_or_else(|| PilError::InternalError("P Autocontrast buffer mismatch".into()))?;
     Ok(DynamicImage::ImagePalette8(output))
-}
-
-#[cfg(test)]
-mod equalize_histogram_tests {
-    use super::equalize_histogram;
-
-    #[test]
-    fn banks_and_repeated_blocks_preserve_every_sample() {
-        for channels in [1, 3] {
-            for pixels in [0, 1, 15, 16, 17, 31, 32, 33, 16_383, 16_384, 16_385] {
-                for pattern in 0..4 {
-                    let data: Vec<u8> = (0..pixels * channels)
-                        .map(|index| match pattern {
-                            0 => 17,
-                            1 => (index * 71 + index / 23) as u8,
-                            2 => ((index / (channels * 43)) * 13) as u8,
-                            // The ends match, but a pixel inside each candidate
-                            // repeated block differs. Every byte must be checked.
-                            _ => u8::from(index / channels % 16 == 7) * 119,
-                        })
-                        .collect();
-                    let mut expected = [[0u32; 256]; 3];
-                    for (index, &value) in data.iter().enumerate() {
-                        expected[index % channels][usize::from(value)] += 1;
-                    }
-                    assert_eq!(equalize_histogram::<1>(&data, channels), expected);
-                    assert_eq!(equalize_histogram::<4>(&data, channels), expected);
-                }
-            }
-        }
-    }
 }

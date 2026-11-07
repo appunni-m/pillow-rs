@@ -329,7 +329,3 @@ pub enum Image {
         mode: PipelineModeCache,
     },
 }
-
-#[cfg(test)]
-#[path = "image_getchannel_receipt_tests.rs"]
-mod getchannel_receipt_tests;

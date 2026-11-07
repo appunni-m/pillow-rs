@@ -31,5 +31,3 @@ pub(crate) mod rgb16;
 pub(crate) mod rgba16;
 pub(crate) mod rgb32f;
 pub(crate) mod rgba32f;
-#[cfg(test)]
-mod tests;

@@ -22,9 +22,6 @@ pub(super) fn i32_filter5x5_binomial_kernel_is_applicable(kernel: &[f32; 25]) ->
 /// Whether an I-mode input can use the exact integer form of the normalized
 /// binomial 5x5 kernel. The 16-bit magnitude bound keeps every weighted
 /// partial sum below 2^24, so Pillow's f32 path is exact before its +0.5 cast.
-
-
-
 pub(super) fn i32_filter5x5_bounded_binomial_kernel_is_applicable(
     sample_count: usize,
     width: usize,
@@ -43,4 +40,3 @@ pub(super) fn i32_filter5x5_bounded_binomial_kernel_is_applicable(
     }
     i32_filter5x5_binomial_kernel_is_applicable(kernel)
 }
-

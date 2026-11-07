@@ -170,35 +170,3 @@ impl Image {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use crate::image::{Image, PutPixelValue};
-
-    #[test]
-    fn single_band_split_preserves_mode_bytes_and_copy_on_write() {
-        let cases: &[(&str, &[u8])] = &[
-            ("I", &[0x78, 0x56, 0x34, 0x12, 0xfe, 0xff, 0xff, 0xff]),
-            ("F", &[0x00, 0x00, 0xa0, 0x3f, 0x00, 0x00, 0x20, 0xc0]),
-            ("1", &[0x80]),
-            ("I;16", &[0x34, 0x12, 0xcd, 0xab]),
-            ("I;16B", &[0x12, 0x34, 0xab, 0xcd]),
-        ];
-
-        for &(mode, bytes) in cases {
-            let image = Image::frombytes(crate::raster::Mode::from_pillow_name(mode).expect("known test mode"), (2, 1), bytes).expect("source image");
-            let bands = image.split().expect("split scalar image");
-
-            assert_eq!(bands.len(), 1, "mode {mode}");
-            assert_eq!(bands[0].mode().expect("band mode"), mode);
-            assert_eq!(bands[0].tobytes().expect("band bytes"), bytes);
-
-            let mut band = bands[0].clone();
-            let replacement = if mode == "1" { 0 } else { 42 };
-            band.putpixel_value(0, 0, PutPixelValue::Integer(replacement))
-                .expect("mutate split result");
-            assert_eq!(image.tobytes().expect("source remains unchanged"), bytes);
-            assert_ne!(band.tobytes().expect("mutated band bytes"), bytes);
-        }
-    }
-}

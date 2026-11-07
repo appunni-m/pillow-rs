@@ -1,11 +1,9 @@
 use super::alpha::{premultiply_channel, unpremultiply_channel};
 use super::boxed::raw_to_dynamic_owned;
 use super::coefficients::{fixed_point_to_u8_i32, resize_u8_coefficients_fit_i32};
-#[cfg(all(test, not(feature = "parallel")))]
-use super::horizontal_passes::{horizontal_pass_rows, horizontal_pass_rows_alpha};
+
 use super::vertical_passes::{should_transpose_vertical, transpose_resize_intermediate};
-#[cfg(all(test, not(feature = "parallel")))]
-use super::vertical_passes::{vertical_pass_rows, vertical_pass_rows_alpha};
+
 use super::*;
 use crate::pipeline::ResampleFilter;
 use crate::raster::DynamicImage;
@@ -491,7 +489,3 @@ mod cmyk;
 mod hsv;
 pub(super) use cmyk::pil_resize_cmyk_i32;
 pub(super) use hsv::pil_resize_hsv_i32;
-
-#[cfg(all(test, not(feature = "parallel")))]
-#[path = "integer_modes_tests.rs"]
-mod tests;

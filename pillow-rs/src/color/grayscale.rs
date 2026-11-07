@@ -20,7 +20,7 @@ pub fn rgb_to_luma_u8(r: u8, g: u8, b: u8) -> u8 {
 
 // The x86 scalar path sums precomputed exact contributions so each pixel uses
 // small, cache-resident lookups instead of variable coefficient multiplies.
-#[cfg(any(test, target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 const fn grayscale_contribution_table(coefficient: u32) -> [u32; 256] {
     let mut table = [0; 256];
     let mut sample = 0;
@@ -31,32 +31,18 @@ const fn grayscale_contribution_table(coefficient: u32) -> [u32; 256] {
     table
 }
 
-#[cfg(any(test, target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 const GRAYSCALE_RED_CONTRIBUTIONS: [u32; 256] = grayscale_contribution_table(19595);
-#[cfg(any(test, target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 const GRAYSCALE_GREEN_CONTRIBUTIONS: [u32; 256] = grayscale_contribution_table(38470);
-#[cfg(any(test, target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 const GRAYSCALE_BLUE_CONTRIBUTIONS: [u32; 256] = grayscale_contribution_table(7471);
-
-#[cfg(test)]
-#[path = "../color_grayscale_allocation_tests.rs"]
-mod la_conversion_allocation_receipts;
 
 /// Converts an image to Pillow-compatible `L` grayscale.
 ///
 /// The conversion uses Pillow's rounded BT.601 fixed-point formula, not the
 /// `image` crate's sRGB luminance weights. The returned image has the same
 /// dimensions as `img` and one byte per pixel.
-#[cfg(test)]
-pub fn pil_grayscale(img: &DynamicImage) -> Result<crate::raster::GrayImage, PilError> {
-    pil_grayscale_inner(img, true)
-}
-
-/// Converts an image to grayscale with Pillow's mode `"1"` truncation rule.
-///
-/// `Image.convert("1")` uses the BT.601 coefficients without the rounding bias
-/// used by `"L"` conversion. The returned buffer is still an 8-bit grayscale
-/// image; callers perform the final binary thresholding step.
 pub fn pil_grayscale_truncate(img: &DynamicImage) -> Result<crate::raster::GrayImage, PilError> {
     pil_grayscale_inner(img, false)
 }
@@ -155,7 +141,7 @@ pub(crate) fn grayscale_rgb_pixel(pixel: &[u8], rounding: u32) -> u8 {
     }
 }
 
-#[cfg(any(test, target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 #[inline(always)]
 pub(super) fn grayscale_rgb_pixel_lookup(pixel: &[u8], rounding: u32) -> u8 {
     let sum = GRAYSCALE_RED_CONTRIBUTIONS[usize::from(pixel[0])]
@@ -163,19 +149,6 @@ pub(super) fn grayscale_rgb_pixel_lookup(pixel: &[u8], rounding: u32) -> u8 {
         + GRAYSCALE_BLUE_CONTRIBUTIONS[usize::from(pixel[2])]
         + rounding;
     (sum >> 16) as u8
-}
-
-#[cfg(test)]
-#[inline(always)]
-pub(super) fn grayscale_rgb_pixel_delta(pixel: &[u8], rounding: u32) -> u8 {
-    let green = i32::from(pixel[1]);
-    // The BT.601 coefficients sum to 65536, so G is an exact base and the
-    // correction needs only R/G and B/G differences:
-    // Y = G + (((R-G)*19595 + (B-G)*7471 + rounding) >> 16).
-    let correction = (i32::from(pixel[0]) - green) * 19595
-        + (i32::from(pixel[2]) - green) * 7471
-        + rounding as i32;
-    (green + (correction >> 16)) as u8
 }
 
 #[inline(always)]
@@ -190,23 +163,6 @@ pub(crate) fn cmyk_muldiv255_byte(channel: u8, ink: u8) -> u8 {
 ///
 /// The input is stored as RGBA where channels mean `C`, `M`, `Y`, and `K`.
 /// Output dimensions match the input and each output pixel is an `L` byte.
-#[cfg(test)]
-pub fn cmyk_to_grayscale(img: &DynamicImage) -> Result<crate::raster::GrayImage, PilError> {
-    use crate::compute::pool_cpu::ops::grayscale::cmyk8::default::grayscale_impl;
-    let source = match img {
-        DynamicImage::ImageCmyk8(source) | DynamicImage::ImageRgba8(source) => Cow::Borrowed(source),
-        _ => Cow::Owned(img.to_rgba8()),
-    };
-    grayscale_impl::execute(grayscale_impl::prepare(source.as_ref())?)
-}
-
-/// Converts CMYK storage to Pillow's truncated binary-conversion luminance.
-///
-/// Pillow's `convert("1")` path uses the integer `299/587/114` luma formula
-/// after expanding each CMYK sample to RGB. This is intentionally different
-/// from ordinary `L` conversion's rounded fixed-point formula because the
-/// difference changes threshold decisions near 128. Fuse both stages so the
-/// intermediate RGB frames are never materialized.
 #[inline]
 fn cmyk_pixel_to_truncated_luma(pixel: &[u8]) -> u8 {
     let ink = 255u32 - u32::from(pixel[3]);

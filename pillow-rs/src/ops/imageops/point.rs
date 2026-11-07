@@ -514,19 +514,6 @@ fn invert_for_mode(image: &Image, mode: Mode) -> Result<Image, PilError> {
 ///
 /// Returns [`PilError::OsError`] for alpha modes that Pillow does not support,
 /// or another [`PilError`] when mode detection fails.
-#[cfg(test)]
-pub fn invert(image: &Image) -> Result<Image, PilError> {
-    invert_for_mode(image, mode_identity(image)?)
-}
-
-/// Inverts through the `ImageOps.invert` compatibility path.
-///
-/// Unlike `ImageChops.invert`, Pillow raises for `P` mode here.
-///
-/// # Errors
-///
-/// Returns [`PilError::NotImplementedError`] for `P` mode, or errors from
-/// the underlying inversion operation.
 pub fn invert_ops(image: &Image) -> Result<Image, PilError> {
     let mode = mode_identity(image)?;
     invert_for_mode(image, mode)

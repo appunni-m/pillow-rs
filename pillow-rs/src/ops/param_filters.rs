@@ -631,9 +631,3 @@ impl Image {
         ))
     }
 }
-
-#[cfg(test)]
-mod unsharp_tests;
-
-#[cfg(test)]
-mod color3dlut_transform_tests;

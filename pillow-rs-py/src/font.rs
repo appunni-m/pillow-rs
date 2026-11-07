@@ -6,8 +6,7 @@ use pyo3::{pyclass, pyfunction, pymethods, wrap_pyfunction};
 mod pilfont;
 mod text_layout;
 mod text_wrap;
-#[cfg(test)]
-pub(crate) use pilfont::PilFontLoadCache;
+
 use pilfont::PyPilFont;
 
 type PythonFontBBox = (Py<PyAny>, Py<PyAny>, Py<PyAny>, Py<PyAny>);

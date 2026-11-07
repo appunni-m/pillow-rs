@@ -188,32 +188,6 @@ pub(super) fn plan_gpu_native_rgb_crop(
 /// RGBA-to-same-mode masked Paste with an L mask. RGB/HSV invocations own four
 /// pixels and emit three aligned words; RGBA uses one word per pixel and a
 /// bounded 2D grid when one dispatch axis cannot represent all groups.
-#[cfg(test)]
-pub(super) fn plan_gpu_native_masked_l_paste(
-    destination_width: u32,
-    destination_height: u32,
-    source_width: u32,
-    source_height: u32,
-    mask_width: u32,
-    mask_height: u32,
-    max_workgroups: u32,
-    max_storage_binding_bytes: u32,
-    max_buffer_bytes: u64,
-) -> Option<NativeMaskedBytePasteDispatch> {
-    plan_gpu_native_masked_byte_paste(
-        destination_width,
-        destination_height,
-        source_width,
-        source_height,
-        mask_width,
-        mask_height,
-        1,
-        max_workgroups,
-        max_storage_binding_bytes,
-        max_buffer_bytes,
-    )
-}
-
 pub(super) fn plan_gpu_native_masked_byte_paste(
     destination_width: u32,
     destination_height: u32,

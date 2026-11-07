@@ -4,19 +4,6 @@
 use crate::compute::registry::support::StrategySelection;
 use crate::raster::{DynamicImage, ImageBuffer, LumaA};
 
-#[cfg(test)]
-pub(crate) fn resize(
-    input: &ImageBuffer<LumaA<u16>, Vec<u16>>,
-    width: u32,
-    height: u32,
-    filter: crate::pipeline::ResampleFilter,
-    bounds: super::super::helpers::typed_nearest::BoxBounds,
-) -> DynamicImage {
-    DynamicImage::ImageLumaA16(super::default::resize_impl::execute(
-        input, width, height, filter, bounds,
-    ))
-}
-
 pub(crate) fn resize_selected(
     context: &crate::compute::ExecutionContext,
     selection: &StrategySelection,

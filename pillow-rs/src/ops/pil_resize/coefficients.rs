@@ -8,25 +8,9 @@ use std::sync::{Arc, Mutex, OnceLock};
 pub(super) const PRECISION_BITS: u32 = 22;
 pub(super) const PRECISION: i64 = 1i64 << PRECISION_BITS; // 2^22
 pub(super) const HALF_PRECISION: i64 = 1i64 << (PRECISION_BITS - 1); // 2^21
-#[cfg(test)]
-pub(super) const BOXED_ZERO_FAST_PATH_MAX_PIXELS: usize = 256 * 256;
 
 /// Round a float to u8, matching PIL's fixed-point rounding:
 ///   `(int)(v + 0.5)` clamped to [0, 255]
-#[cfg(test)]
-pub(super) fn pil_round(v: f64) -> u8 {
-    let v = v + 0.5;
-    if v <= 0.0 {
-        0
-    } else if v >= 256.0 {
-        255
-    } else {
-        v as u8
-    }
-}
-
-/// Convert a fixed-point sum to u8, matching PIL's:
-///   `(UINT8)((sum + (1 << (PRECISION_BITS - 1))) >> PRECISION_BITS)`
 pub(crate) fn fixed_point_to_u8(sum: i64) -> u8 {
     let v = (sum + HALF_PRECISION) >> PRECISION_BITS;
     if v <= 0 {
@@ -38,28 +22,6 @@ pub(crate) fn fixed_point_to_u8(sum: i64) -> u8 {
     }
 }
 
-#[inline]
-#[cfg(test)]
-pub(super) fn fixed_point_to_u8_i32(sum: i32) -> u8 {
-    let value = (sum + (1_i32 << (PRECISION_BITS - 1))) >> PRECISION_BITS;
-    value.clamp(0, 255) as u8
-}
-
-// ── PIL-compatible pixel range and weight computation ──
-
-/// Precompute filter coefficients for one dimension, using PIL's exact
-/// fixed-point arithmetic (PRECISION_BITS=22).
-///
-/// For each output pixel, computes:
-/// - xmin: first contributing source pixel index
-/// - count: number of contributing source pixels
-/// - weights: normalized filter weights in 22-bit fixed-point
-///
-/// This matches PIL's `precompute_coeffs`:
-///   center = (xx + 0.5) * scale
-///   xmin = (int)(center - support + 0.5)
-///   xmax = (int)(center + support + 0.5)
-///   weight = kernel((sx + 0.5 - center) * ss)  where ss = 1.0 / filterscale
 pub(crate) struct FilterCoeffs {
     pub(crate) xmin: Vec<i64>,
     pub(crate) count: Vec<usize>,
@@ -77,43 +39,6 @@ impl FilterCoeffs {
 
 /// Prove every ordered byte-sample partial sum, including Pillow's rounding
 /// bias, fits in i32 before selecting the narrow HSV resize kernel.
-#[cfg(test)]
-pub(super) fn resize_u8_coefficients_fit_i32(coeffs: &FilterCoeffs) -> bool {
-    if coeffs.count.len() != coeffs.offsets.len() {
-        return false;
-    }
-    for index in 0..coeffs.count.len() {
-        let Some(weights) = coeffs
-            .offsets
-            .get(index)
-            .and_then(|&start| {
-                start
-                    .checked_add(*coeffs.count.get(index)?)
-                    .map(|end| (start, end))
-            })
-            .and_then(|(start, end)| coeffs.weights.get(start..end))
-        else {
-            return false;
-        };
-        let Some(sum_abs) = weights.iter().try_fold(0u64, |sum, &weight| {
-            i32::try_from(weight).ok()?;
-            sum.checked_add(weight.unsigned_abs())
-        }) else {
-            return false;
-        };
-        let Some(bound) = sum_abs
-            .checked_mul(255)
-            .and_then(|bound| bound.checked_add(1 << (PRECISION_BITS - 1)))
-        else {
-            return false;
-        };
-        if bound > i32::MAX as u64 {
-            return false;
-        }
-    }
-    true
-}
-
 pub(crate) struct FilterCoeffsF64 {
     pub(crate) xmin: Vec<i64>,
     pub(crate) count: Vec<usize>,

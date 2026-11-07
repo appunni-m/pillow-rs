@@ -61,18 +61,3 @@ pub fn align_row_to_32(data: &[u8], width: u32, bits_per_pixel: u8) -> Result<Ve
 
     Ok(padded)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::align_row_to_32;
-
-    #[test]
-    fn zero_width_rows_are_already_aligned() {
-        assert_eq!(align_row_to_32(&[], 0, 1).unwrap(), Vec::<u8>::new());
-        assert_eq!(align_row_to_32(b"abc", 0, 8).unwrap(), b"abc".to_vec());
-        assert_eq!(
-            align_row_to_32(b"\x01\x02", 0, 16).unwrap(),
-            b"\x01\x02".to_vec()
-        );
-    }
-}

@@ -200,84 +200,6 @@ pub(crate) fn execute_eager_gpu_rgb_getprojection(
 /// retaining the same backend and host-buffer evidence as pipeline dispatch.
 /// Set `manual_output_allocation` when the closure does not record its result
 /// buffer through the normal allocation telemetry hook.
-#[cfg(test)]
-pub(crate) fn execute_eager_cpu_image_operation(
-    operation: &'static str,
-    input: &DynamicImage,
-    manual_output_allocation: bool,
-    execute: impl FnOnce(&ExecutionContext) -> Result<DynamicImage, PilError>,
-) -> Result<DynamicImage, PilError> {
-    let timed = pipeline_telemetry_enabled();
-    if timed {
-        reset_eager_image_operation_telemetry();
-    }
-
-    let route_start = timed.then(pipeline_timestamp).flatten();
-    let context = ExecutionContext::for_routed_backend(Backend::Cpu);
-    let route_ns = elapsed_ns(route_start);
-    let backend_start = timed.then(pipeline_timestamp).flatten();
-    let result = match execute(&context) {
-        Ok(result) => result,
-        Err(error) => {
-            if timed {
-                discard_eager_image_operation_telemetry();
-            }
-            return Err(error);
-        }
-    };
-    let backend_ns = elapsed_ns(backend_start);
-    if timed {
-        // Match pipeline boundary accounting for the exact raster mode
-        // change without adding work to telemetry-disabled eager calls.
-        let mode_conversion_count = u64::from(input.mode() != result.mode());
-        begin_pipeline_operation_telemetry(operation);
-        record_pipeline_operation_path("cpu");
-        record_pipeline_operation_mode_conversion(mode_conversion_count);
-        finish_pipeline_operation_telemetry();
-
-        let mut resource = host_resource_telemetry(input);
-        resource.mode_conversion_count = resource
-            .mode_conversion_count
-            .saturating_add(mode_conversion_count);
-        let output_bytes = result.as_bytes().len();
-        let output_bytes_u64 = output_bytes as u64;
-        resource.host_buffer_count = resource
-            .host_buffer_count
-            .saturating_add(u64::from(output_bytes != 0));
-        resource.host_buffer_bytes = resource.host_buffer_bytes.saturating_add(output_bytes_u64);
-        resource.peak_live_host_bytes = resource
-            .peak_live_host_bytes
-            .max((input.as_bytes().len() as u64).saturating_add(output_bytes_u64));
-        if manual_output_allocation {
-            record_pipeline_allocation(output_bytes);
-        }
-        let allocation = take_pipeline_allocation_telemetry();
-        resource.host_allocation_count = allocation.allocation_count;
-        resource.host_allocated_bytes = allocation.allocated_bytes;
-        record_pipeline_resource_telemetry(resource);
-        let resource = take_pipeline_resource_telemetry();
-        let _ = take_pipeline_backend_override();
-        let dispatch_count = take_pipeline_dispatch_count();
-        let _ = take_pipeline_resize_coeff_cache_stats();
-        record_pipeline_telemetry(PipelineTelemetry {
-            requested_backend: Some(Backend::Cpu),
-            actual_backend: Backend::Cpu,
-            operation_count: 1,
-            route_ns,
-            validation_ns: 0,
-            backend_ns,
-            dispatch_count,
-            fallback_reason: None,
-            resource,
-            resize_coeff_cache_hits: 0,
-            resize_coeff_cache_misses: 0,
-        });
-    }
-    Ok(result)
-}
-
-/// Executes an eager CPU architecture strategy with the already-resolved
-/// Backend/Architecture context from its owning Image route.
 pub(crate) fn execute_eager_cpu_arch_image_operation_with_context(
     operation: &'static str,
     input: &DynamicImage,
@@ -327,36 +249,6 @@ pub(crate) fn execute_eager_cpu_arch_image_operation_with_context_and_receipts(
 }
 
 /// Executes a prepared CPU architecture strategy into a caller-owned byte slice.
-#[cfg(test)]
-pub(crate) fn execute_eager_cpu_arch_bytes(
-    operation: &'static str,
-    input: &DynamicImage,
-    requested_backend: Backend,
-    output: &mut [u8],
-    execute: impl FnOnce(
-        &ExecutionContext,
-        &mut [u8],
-    ) -> Result<Option<(
-        crate::compute::registry::support::StrategySelection,
-        (u64, u64, &'static str),
-    )>, PilError>,
-) -> Result<Option<()>, PilError> {
-    let timed = pipeline_telemetry_enabled();
-    let route_start = timed.then(pipeline_timestamp).flatten();
-    let context = ExecutionContext::for_routed_backend(requested_backend);
-    let route_ns = elapsed_ns(route_start);
-    execute_eager_cpu_arch_bytes_with_route(
-        operation,
-        input,
-        context,
-        Some(requested_backend),
-        route_ns,
-        output,
-        execute,
-    )
-}
-
-/// Executes caller-owned CPU output with a context resolved by the owning Image.
 pub(crate) fn execute_eager_cpu_arch_bytes_with_context(
     operation: &'static str,
     input: &DynamicImage,

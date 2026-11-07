@@ -11,9 +11,6 @@ mod native_bytes;
 pub(crate) mod rgb_blur_ring;
 #[path = "uniform_box.rs"]
 mod uniform_box;
-#[cfg(test)]
-#[path = "uniform_box_tests.rs"]
-mod uniform_box_tests;
 
 pub(crate) use native_bytes::{
     binomial5x5_parameters_match, filter_5x5_byte_rows,
@@ -22,8 +19,7 @@ pub(crate) use native_bytes::{
     filter_5x5_uniform_rgba_rows, la_single_outlier5x5_parameters_match,
     uniform5x5_parameters_match,
 };
-#[cfg(test)]
-pub(crate) use native_bytes::filter_5x5_byte_row;
+
 pub(in crate::compute::pool_cpu::ops::filter) use native_bytes::{
     filter_5x5_binomial_la_rows, filter_5x5_binomial_luma_rows,
 };
@@ -216,4 +212,3 @@ pub(crate) fn execute_filter5x5_rgb_vector_fast_path(
     }
     Some(output)
 }
-

@@ -31,14 +31,14 @@ enabled.
 | Rust size policy and legacy inventory | [Rust size policy](RUST_SIZE_POLICY.md) | Defines counting rules, exclusions, baseline behavior, owners, and reducer issues |
 | Rust lint | `make clippy` | Runs workspace Clippy and reports function-size violations only above the 100-line hard limit |
 | Source map | `make repo-map-update` / `make repo-map-check` | Regenerates / validates the tracked source inventory |
-| Operation source crosswalk | `make operation-source-crosswalk` / `make operation-source-crosswalk-test` | Generates the ignored manifest→Python→PyO3→backend crosswalk, maps declared parity cases and benchmark workloads to public operations, includes the Rust module inventory, and checks focused contracts; input declarations never count as execution |
-| Implementation structure | `make implementation-structure-inventory` / `make implementation-structure-audit` / `make implementation-structure-audit-test` | Inventories every maintained path, audits additions and moves against the same guide, and checks path-classification and inventory-scope contracts |
+| Operation source crosswalk | `make operation-source-crosswalk` | Generates the ignored manifest→Python→PyO3→backend crosswalk and Rust module inventory; input declarations never count as execution |
+| Implementation structure | `make implementation-structure-inventory` / `make implementation-structure-audit` | Inventories maintained paths and audits additions and moves against the shared guide |
 | Full operation and pipeline benchmark | `MIGRATION_BENCHMARK_PROFILE=standard make migration-parity-benchmark` | Benchmarks every declared operation and pipeline workload against Pillow, CPU, SIMD, and GPU; see the protocol |
 | Selected Pillow-SIMD workloads | `PILLOW_ORACLE_PYTHON=<pillow-python> PILLOW_SIMD_PYTHON=<pillow-simd-python> .venv/bin/python scripts/run_pillow_simd_benchmark.py --workload-id <id>` | Runs only the named full-size parity-backed x86 workload, with separate result and parity artifacts; repeat `--workload-id` for additional cases |
 | Parallel CPU comparison | `MIGRATION_BENCHMARK_PROFILE=standard make migration-parity-benchmark-parallel-cpu` | Builds the opt-in Rayon feature and compares Parallel CPU with ordinary Pillow across the same full workload set |
 | Benchmark smoke test | `make bench MIGRATION_BENCHMARK_PROFILE=quick` | Runs the maintained smoke cohort; see the protocol |
 | Documentation setup | `make docs-setup` | Installs the hash-locked documentation tools into `.venv-docs` |
-| Documentation checks | `make docs-test docs-lint` | Tests validation guards and checks public sources |
+| Documentation checks | `make docs-lint` | Checks public document links, commands, attribution, and package identity |
 | Site build / preview | `make docs-build` / `make docs-serve` | Builds static HTML / serves it at localhost:8000 |
 | Version synchronization | `make release-lock-update` / `make release-version-check` | Refreshes Cargo/npm workspace versions / checks declarations with Python 3.12 |
 | Release preparation | `make release-check` | Builds and inspects registry artifacts; requires a clean checkout |
@@ -74,8 +74,7 @@ GPU-only API workflow and does not replace normal parity on GPU or SIMD.
 The root fontdone targets own a pinned checkout under `build/`. To contribute
 to fontdone itself, clone that repository separately and use its own Makefile.
 
-`make migration-parity-font-native-coverage` builds the test-only Rust font
-driver, checks its Python adapter, and records native font coverage observations
+`make migration-parity-font-native-coverage` builds the Rust font coverage
+driver and records native font coverage observations
 in `build/migration-parity/font-native-observations.json`. Returned values and
 API exceptions are reported separately; this command does not assert parity.
-Use `make migration-parity-font-native-test` for the focused harness checks.

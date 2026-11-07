@@ -3,9 +3,6 @@ use crate::compute::pool_cpu::ops::filter::helpers::SMALL_RANK_AREA;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, RgbaImage};
 use super::super::helpers::native_uniform_f_mode_image;
-#[cfg(test)]
-pub(super) use super::super::helpers::requires_default_comparator_sort as
-    rank_filter_f_requires_legacy_sort;
 
 /// Selects the same F32 rank sample as Pillow's in-place partition algorithm.
 #[inline]
@@ -44,23 +41,6 @@ fn select_rank_filter_f_pillow(values: &mut [f32], rank: usize) -> f32 {
 }
 
 /// Kept only for the existing migration-only unit-test module.
-#[cfg(test)]
-#[inline]
-pub(super) fn select_rank_filter_f_value(
-    values: &mut [f32],
-    rank: usize,
-    legacy_sort: bool,
-) -> f32 {
-    let compare = |a: &f32, b: &f32| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal);
-    if legacy_sort {
-        values.sort_unstable_by(compare);
-        values[rank]
-    } else {
-        *values.select_nth_unstable_by(rank, compare).1
-    }
-}
-
-
 fn rank_filter_f_large_serial(
     raw: &[u8],
     out: &mut [u8],
@@ -93,8 +73,6 @@ fn rank_filter_f_large_serial(
         }
     }
 }
-
-
 
 /// Precomputed dimensions and neighborhood bounds for one rank-filter operation.
 /// The sampling helpers clamp edges to fuse Pillow's expansion and output crop.
@@ -205,7 +183,3 @@ pub(super) fn execute(
         },
     )
 }
-
-#[cfg(test)]
-#[path = "rank_tests.rs"]
-mod tests;

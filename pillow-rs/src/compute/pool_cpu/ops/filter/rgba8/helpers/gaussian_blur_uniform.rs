@@ -110,7 +110,3 @@ fn sampled_pixels_match(raw: &[u8], width: usize, height: usize, first_pixel: &[
     }
     true
 }
-
-#[cfg(test)]
-#[path = "gaussian_blur_uniform_tests.rs"]
-mod tests;

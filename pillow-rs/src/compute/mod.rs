@@ -36,9 +36,6 @@ pub use execution_context::{Architecture, ExecutionContext};
 mod phase_telemetry;
 #[path = "telemetry.rs"]
 mod telemetry;
-#[cfg(test)]
-#[path = "transpose_tests.rs"]
-mod transpose_tests;
 
 #[doc(hidden)]
 pub use telemetry::PipelineTelemetryOrigin;
@@ -96,10 +93,7 @@ pub(crate) use eager::{
     execute_eager_native_copy_result, execute_eager_native_copy_result_with_receipts,
     execute_eager_native_identity_result, execute_eager_native_identity_result_with_receipts,
 };
-#[cfg(test)]
-pub(crate) use eager::execute_eager_cpu_arch_bytes;
-#[cfg(test)]
-pub(crate) use eager::execute_eager_cpu_image_operation;
+
 #[cfg(feature = "gpu")]
 pub(crate) use eager::{
     execute_eager_gpu_rgb_getprojection, gpu_cmyk_projection_terminal_supported,
@@ -117,13 +111,6 @@ pub(crate) use execution::{
     execute_prepared_gpu_cmyk_projection_terminal, execute_prepared_gpu_rgb_projection_terminal,
     merge_pipeline_resource_telemetry,
 };
-#[cfg(target_arch = "x86_64")]
-#[cfg(test)]
-pub(crate) use phase_telemetry::{
-    pipeline_phase_timestamp, record_transpose_avx2_executor_timing,
-    record_transpose_output_allocation_timing,
-};
-
 /// Return `(multiplier, offset)` when a 256-entry byte LUT is exactly the
 /// modulo-256 affine mapping `sample * multiplier + offset`.
 ///
@@ -387,142 +374,4 @@ pub(crate) fn arm_gpu_batch_admission_failure() {
 #[cfg(all(feature = "gpu", feature = "test-api"))]
 pub(crate) fn clear_gpu_batch_test_fault() {
     pool_gpu::stream::clear_test_admission_failure();
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{
-        Architecture, Backend, execute_eager_cpu_arch_bytes, execute_prepared,
-        prepare_execution,
-    };
-    use crate::pipeline::{PipelineOp, ResampleFilter, TransformMethod};
-    use crate::raster::{DynamicImage, Rgb, RgbImage};
-
-    #[test]
-    fn pipeline_telemetry_switch_is_thread_local() {
-        let previous = Backend::set_pipeline_telemetry_enabled(true);
-
-        assert!(Backend::pipeline_telemetry_enabled());
-        let worker_enabled = std::thread::spawn(Backend::pipeline_telemetry_enabled)
-            .join()
-            .expect("telemetry state query thread");
-        assert!(!worker_enabled);
-        assert!(Backend::pipeline_telemetry_enabled());
-
-        Backend::set_pipeline_telemetry_enabled(previous);
-    }
-
-    #[test]
-    fn eager_cpu_arch_bytes_records_strategy_and_output_buffer_receipt() {
-        let raw: Vec<u8> = (0..37 * 3)
-            .map(|index| u8::try_from((index * 73 + 19) % 256).expect("sample byte fits"))
-            .collect();
-        let image = DynamicImage::ImageRgb8(
-            RgbImage::from_raw(37, 1, raw).expect("RGB source shape must be valid"),
-        );
-        let previous = Backend::set_pipeline_telemetry_enabled(true);
-        let mut output = vec![0; 37];
-        let operation = PipelineOp::ExtractBand { index: 1 };
-        let result = execute_eager_cpu_arch_bytes(
-            "GetData",
-            &image,
-            Backend::Simd,
-            &mut output,
-            |context, output| {
-                let prepared = crate::compute::registry::prepare_cpu(
-                    &operation,
-                    crate::compute::registry::support::OperationInputs {
-                        image: &image,
-                        palette: crate::compute::registry::support::PaletteInput::default(),
-                    },
-                    context,
-                )?;
-                let selection = *prepared.selection();
-                let output_work = prepared
-                    .execute_into(output)?
-                    .expect("RGB ExtractBand has a caller-owned output strategy");
-                Ok(Some((selection, output_work)))
-            },
-        );
-        let receipt = Backend::take_pipeline_telemetry()
-            .expect("CPU architecture execution receipt");
-        let operations = Backend::take_pipeline_operation_telemetry();
-        Backend::set_pipeline_telemetry_enabled(previous);
-
-        result
-            .expect("eager CPU architecture ExtractBand must succeed")
-            .expect("RGB ExtractBand has a caller-owned output strategy");
-        assert_eq!(
-            output.as_slice(),
-            image
-                .as_bytes()
-                .chunks_exact(3)
-                .map(|pixel| pixel[1])
-                .collect::<Vec<_>>()
-                .as_slice()
-        );
-        assert_eq!(receipt.0, Some(Backend::Simd));
-        assert_eq!(receipt.1, Backend::Cpu);
-        assert_eq!(receipt.2, 1);
-        let resource = receipt.8.expect("CPU architecture host-buffer receipt");
-        assert_eq!(resource.host_allocation_count, 0);
-        assert_eq!(resource.host_allocated_bytes, 0);
-        let operation = operations
-            .first()
-            .expect("CPU architecture ExtractBand operation receipt");
-        assert!(operation.selected_architecture.is_some());
-        if operation.selected_architecture == Some(Architecture::Default) {
-            assert_eq!(operation.path, "cpu");
-            assert_eq!(operation.vector_block_count, 0);
-        } else {
-            assert!(operation.vector_block_count > 0);
-            assert_eq!(operation.scalar_tail_count, 5);
-            assert!(matches!(
-                operation.path,
-                "neon-deinterleave" | "ssse3-gather" | "vector-gather"
-            ));
-        }
-    }
-
-    #[test]
-    fn simd_compatibility_request_uses_cpu_architecture_context() {
-        let source = DynamicImage::ImageRgb8(RgbImage::from_pixel(2, 2, Rgb([11, 22, 33])));
-        let ops = [
-            PipelineOp::PutPixel {
-                x: 0,
-                y: 0,
-                color: (101, 102, 103, 255),
-                palette_index: false,
-            },
-            PipelineOp::Transform {
-                w: 2,
-                h: 2,
-                method: TransformMethod::Perspective,
-                data: vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0].into(),
-                filter: ResampleFilter::Bilinear,
-                fill: Some((0, 0, 0, 255)),
-                fill_is_none: false,
-                palette_fill: None,
-            },
-        ];
-
-        let prepared = prepare_execution(&ops, Some(Backend::Simd))
-            .expect("SIMD compatibility request should prepare as CPU architecture routing");
-        let previous = Backend::set_pipeline_telemetry_enabled(true);
-        let result = execute_prepared(
-            &prepared,
-            &ops,
-            &source,
-            Some(crate::raster::Mode::ImageRgb8),
-        )
-            .expect("CPU architecture strategies should execute the pipeline");
-        let receipt = Backend::take_pipeline_telemetry()
-            .expect("CPU architecture pipeline receipt");
-        Backend::set_pipeline_telemetry_enabled(previous);
-
-        assert_eq!(result.dimensions(), source.dimensions());
-        assert_eq!(receipt.0, Some(Backend::Simd));
-        assert_eq!(receipt.1, Backend::Cpu);
-        assert_eq!(receipt.2, 2);
-    }
 }

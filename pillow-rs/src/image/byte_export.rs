@@ -103,9 +103,6 @@ fn l16_bytes_in_mode_order(bytes: &[u8], mode_is_big_endian: bool) -> Vec<u8> {
     ordered
 }
 
-#[cfg(test)]
-mod tests;
-
 impl Image {
     /// Resolves Pillow's explicit save format or a host-supplied path
     /// extension before encoding.

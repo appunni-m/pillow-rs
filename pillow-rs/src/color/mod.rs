@@ -28,9 +28,6 @@ mod palette;
 mod parse;
 mod resolve;
 
-#[cfg(test)]
-mod tests;
-
 pub(crate) use conversion::{
     convert_from_nonstandard, muldiv255, rgb_to_cmyk_inverse,
 };

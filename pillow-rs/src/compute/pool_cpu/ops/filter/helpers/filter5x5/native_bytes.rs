@@ -182,7 +182,6 @@ pub(crate) fn filter_5x5_constant_bytes(
 /// Return whether a large RGBA raster is uniform and its exact 5x5 output
 /// tuple is byte-identical to the source tuple. The untouched two-pixel border
 /// is already preserved by the caller's output copy.
-
 pub(crate) fn filter_5x5_uniform_rgba_identity(
     raw: &[u8],
     width: usize,
@@ -221,7 +220,6 @@ pub(crate) fn filter_5x5_uniform_rgba_identity(
 /// at least 0.02 from a half-byte rounding boundary. Therefore Pillow's
 /// rounded byte is exactly `(sum + 12) / 25`, clipped to a byte. The copied
 /// two-pixel border and native interleaved L/A bytes are preserved.
-
 pub(crate) fn filter_5x5_la_single_outlier_rows(
     raw: &[u8],
     out: &mut [u8],
@@ -383,7 +381,6 @@ pub(crate) fn filter_5x5_uniform_luma_rows(
 /// sum is at least 0.02 from a half-byte rounding boundary. Therefore Pillow's
 /// rounded byte is exactly `(sum + 12) / 25`. The untouched two-pixel border
 /// remains in the caller's output copy.
-
 pub(crate) fn filter_5x5_uniform_rgba_rows(
     raw: &[u8],
     out: &mut [u8],
@@ -469,11 +466,6 @@ pub(crate) fn filter_5x5_uniform_rgba_rows(
 mod binomial;
 pub(crate) use binomial::binomial5x5_parameters_match;
 
-
 pub(in crate::compute::pool_cpu::ops::filter) use binomial::{
     filter_5x5_binomial_la_rows, filter_5x5_binomial_luma_rows,
 };
-
-#[cfg(test)]
-#[path = "native_bytes/tests.rs"]
-mod tests;

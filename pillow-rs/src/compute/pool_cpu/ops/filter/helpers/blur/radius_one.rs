@@ -29,7 +29,6 @@ fn store_radius_one_fractional_sample(
 }
 
 /// Blur one L row with Pillow's radius-one fractional taps.
-
 pub(super) fn blur_luma_radius_one_fractional_line(
     source: &[u8],
     destination: &mut [u8],
@@ -120,7 +119,6 @@ pub(super) fn blur_luma_radius_one_fractional_line(
 }
 
 /// Blur one RGB row for a radius-one fractional Gaussian box pass.
-
 pub(super) fn blur_rgb_radius_one_fractional_line(
     source: &[u8],
     destination: &mut [u8],
@@ -215,7 +213,6 @@ pub(super) fn blur_rgb_radius_one_fractional_line(
 }
 
 /// Blur one RGBA row for a radius-one fractional Gaussian box pass.
-
 pub(super) fn blur_rgba_radius_one_fractional_line(
     source: &[u8],
     destination: &mut [u8],
@@ -318,7 +315,6 @@ pub(super) fn blur_rgba_radius_one_fractional_line(
 /// byte rounding can stay in two reusable row buffers instead of two extra
 /// full-frame buffers. The same per-pass `blur_line` operation preserves the
 /// order and byte result of three image-wide horizontal passes.
-
 pub(super) fn blur_interleaved_rows_three_passes<const CHANNELS: usize>(
     source: &[u8],
     destination: &mut [u8],
@@ -425,7 +421,6 @@ pub(super) fn blur_interleaved_rows_three_passes<const CHANNELS: usize>(
 
 /// Apply one fractional radius-one Gaussian box pass to an LA row. The three
 /// regions keep the replicated edge indices out of the interior loop.
-
 pub(super) fn blur_la_radius_one_fractional_line(
     source: &[u8],
     destination: &mut [u8],
@@ -508,7 +503,6 @@ pub(super) fn blur_la_radius_one_fractional_line(
 
 /// Keep the exact byte rounding between the three horizontal passes while
 /// specializing the common LA GaussianBlur(radius=2) box radius.
-
 pub(super) fn blur_la_rows_three_passes_radius_one(
     source: &[u8],
     destination: &mut [u8],
@@ -555,7 +549,6 @@ pub(super) fn blur_la_rows_three_passes_radius_one(
 /// byte rounds can stay in two row buffers. This avoids writing and rereading
 /// two full-frame horizontal intermediates while retaining Pillow's pass
 /// order.
-
 pub(super) fn blur_luma_rows_three_passes(
     source: &[u8],
     destination: &mut [u8],

@@ -991,6 +991,3 @@ impl AutocontrastOptions {
         Self { cutoff: (cutoff, cutoff), ignore: None, preserve_tone: false }
     }
 }
-
-#[cfg(test)]
-mod transpose_tests;

@@ -5,7 +5,6 @@ pub(crate) use crate::compute::helpers::filters::binomial5x5_parameters_match;
 /// normalized coefficient is an exact multiple of 1/256 and the largest
 /// weighted sum is 65,280, so the ordered f32 accumulation is exactly
 /// representable and Pillow's final `+0.5` truncation equals `(sum + 128) / 256`.
-
 pub(in crate::compute::pool_cpu::ops::filter) fn filter_5x5_binomial_luma_rows(
     raw: &[u8],
     out: &mut [u8],
@@ -67,7 +66,6 @@ pub(in crate::compute::pool_cpu::ops::filter) fn filter_5x5_binomial_luma_rows(
 /// Apply the exact binomial kernel to native LA samples. Luminance and alpha
 /// are independent Pillow filter bands, so the ring stores both interleaved
 /// samples and never widens or reinterprets the image as RGBA.
-
 pub(in crate::compute::pool_cpu::ops::filter) fn filter_5x5_binomial_la_rows(
     raw: &[u8],
     out: &mut [u8],

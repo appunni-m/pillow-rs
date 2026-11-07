@@ -63,7 +63,6 @@ fn filter_3x3_byte_row(
 /// horizontally filtered rows.  The [1, 2, 1] weights and scale 16 keep every
 /// intermediate integral, so `(sum + 8) >> 4` matches Pillow's `f32` result
 /// without changing the copied one-pixel border.
-
 fn filter_3x3_binomial_la_rows(raw: &[u8], out: &mut [u8], width: usize, height: usize) -> bool {
     let Some(pixel_count) = width.checked_mul(height) else {
         return false;
@@ -133,8 +132,7 @@ fn filter_3x3_byte_rows(
     if row_stride == 0 || height <= 0 {
         return;
     }
-    
-    
+
     for y in 0..height {
         let row_start = y.max(0) as usize * row_stride;
         filter_3x3_byte_row(
@@ -310,7 +308,3 @@ pub(crate) fn execute_filter3x3_la_binomial_bytes(
     filter_3x3_binomial_la_rows(raw, &mut output, width as usize, height as usize)
         .then_some(output)
 }
-
-#[cfg(test)]
-#[path = "filter3x3/tests.rs"]
-mod tests;

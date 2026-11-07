@@ -26,8 +26,7 @@
 
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
-#[cfg(any(test, feature = "test-api"))]
-use crate::raster::DynamicImage;
+
 use super::{Backend, ExecutionContext};
 use self::support::OperationInputs;
 use std::collections::HashMap;
@@ -234,23 +233,6 @@ pub fn prepare_cpu<'a>(
         .cpu_fn
         .ok_or_else(|| PilError::ValueError(format!("CPU: no impl for {}", key)))?;
     f(input, op, ctx)
-}
-
-/// Prepares and executes one operation with the supplied image and context.
-///
-/// Use [`prepare_cpu`] when the caller needs to inspect the selection before
-/// consuming the plan.
-///
-/// # Errors
-///
-/// Propagates preparation and execution errors without rerouting or retrying.
-#[cfg(any(test, feature = "test-api"))]
-pub fn execute_cpu<'a>(
-    op: &'a PipelineOp,
-    input: OperationInputs<'a>,
-    ctx: &ExecutionContext,
-) -> Result<DynamicImage, PilError> {
-    prepare_cpu(op, input, ctx)?.execute()
 }
 
 fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> {

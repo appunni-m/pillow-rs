@@ -38,7 +38,7 @@ Later documentation commits do not change those receipts.
 make migration-parity-inputs-check
 make migration-parity-coverage-rust
 make migration-parity-changed-line-coverage MIGRATION_COVERAGE_DIFF_BASE=<base>
-make migration-parity-coverage-receipt-test
+make migration-parity-evidence-check
 ```
 
 Use distinct report paths for independent or incremental campaigns. The source
@@ -91,9 +91,9 @@ regenerate parity/coverage/benchmark inputs, then verify parity and coverage
 again. Matching coverage is necessary here but is not proof that two tests
 protect the same behavior. Keep distinct contracts and numerical regressions.
 
-`make migration-parity-reduction-test` checks the restoration and comparison
-guards. Reusing an output directory resumes matching completed measurements;
-changed sources, inputs, candidates or execution failures stop the comparison.
+The reducer checks restoration and exact coverage comparisons while it runs.
+Reusing an output directory resumes matching completed measurements; changed
+sources, inputs, candidates or execution failures stop the comparison.
 
 The manifest and [maturity guide](COMPATIBILITY.md) define the selected scope.
 Missing records, unavailable adapters, and unexecuted paths stay unmeasured.
@@ -111,7 +111,7 @@ operations, duplicate case IDs and unavailable drivers fail the command.
 
 The full Rust coverage lane builds and instruments that driver, includes font
 wrapper execution in Python coverage, and binds each backend's observation
-report to its coverage receipt. `make migration-parity-font-native-test` checks
-the adapter and failure-reporting guards. Keep native input removals separate
+report to its coverage receipt. The native runner records adapter dispatch and
+failure observations. Keep native input removals separate
 from generator-owned parity removals and compare fresh full-lane measurements
 before and after any native removal.

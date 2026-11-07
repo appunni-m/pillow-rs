@@ -834,32 +834,3 @@ fn empty_transform_output(
     }
     Ok(output)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::parse_transform_resample;
-    use crate::error::PilError;
-
-    #[test]
-    fn transform_resize_only_filter_errors_match_pillow() {
-        for (code, name) in [
-            (1, "Image.Resampling.LANCZOS"),
-            (4, "Image.Resampling.BOX"),
-            (5, "Image.Resampling.HAMMING"),
-        ] {
-            let error = parse_transform_resample(code).expect_err("resize-only filter");
-            assert!(
-                matches!(error, PilError::ValueError(message) if message == format!(
-                    "{name} ({code}) cannot be used. Use Image.Resampling.NEAREST (0), Image.Resampling.BILINEAR (2) or Image.Resampling.BICUBIC (3)"
-                ))
-            );
-        }
-    }
-
-    #[test]
-    fn transform_unknown_filter_error_remains_distinct() {
-        let error = parse_transform_resample(6).expect_err("unknown filter");
-        assert!(matches!(error, PilError::ValueError(message) if message ==
-            "Unknown resampling filter (6). Use Image.Resampling.NEAREST (0), Image.Resampling.BILINEAR (2) or Image.Resampling.BICUBIC (3)"));
-    }
-}

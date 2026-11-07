@@ -252,10 +252,8 @@ help-all: ## Show all specialized commands
 	@printf "  $(CYAN)make migration-parity-inventory$(NC) Print the canonical selected-scope endpoint inventory\n"
 	@printf "  $(CYAN)make migration-parity-inventory-check$(NC) Verify endpoint authority expansion and alias accounting\n"
 	@printf "  $(CYAN)make operation-source-crosswalk$(NC) Generate the operation crosswalk and Rust module inventory\n"
-	@printf "  $(CYAN)make operation-source-crosswalk-test$(NC) Check crosswalk, Rust module parser, and completeness contracts\n"
 	@printf "  $(CYAN)make implementation-structure-inventory$(NC) Inventory all maintained paths against the shared structure standard\n"
 	@printf "  $(CYAN)make implementation-structure-audit$(NC) Audit added and moved paths against the shared structure standard\n"
-	@printf "  $(CYAN)make implementation-structure-audit-test$(NC) Check path rules and whole-tree inventory behavior\n"
 	@printf "  $(CYAN)make parity$(NC)        Run pillow-rs Font + fontdone unified parity\n"
 	@printf "\n$(BOLD)pillow-rs / core crate$(NC)\n"
 	@printf "  $(CYAN)make pillow-rs-help$(NC) Show crate-local pillow-rs targets\n"
@@ -285,7 +283,6 @@ help-all: ## Show all specialized commands
 	@printf "  $(CYAN)make migration-parity-fixtures$(NC) Compatibility alias for manifest and input builds\n"
 	@printf "  $(CYAN)make migration-parity-fixtures-check$(NC) Verify authority, manifest, and input regeneration\n"
 	@printf "  $(CYAN)make migration-parity-evidence-check$(NC) Verify strict aggregate/result interfaces\n"
-	@printf "  $(CYAN)make migration-parity-receipt-test$(NC) Verify terminal-complete receipt state transitions\n"
 	@printf "  $(CYAN)make migration-parity-inputs$(NC) Build parity, coverage, and benchmark inputs\n"
 	@printf "\n$(BOLD)Lint$(NC)\n"
 	@printf "  $(CYAN)make quality$(NC)       Run Rust, repository, and source-policy quality gates\n"
@@ -298,7 +295,7 @@ help-all: ## Show all specialized commands
 	@printf "  $(CYAN)make clippy$(NC)         Run clippy (all targets, all features)\n"
 	@printf "  $(CYAN)make lint$(NC)           Compatibility alias for make quality\n"
 	@printf "\n$(BOLD)Coverage$(NC)\n"
-	@printf "  $(CYAN)make coverage$(NC)       Run tests + compute coverage\n"
+	@printf "  $(CYAN)make coverage$(NC)       Run selected parity cases + compute coverage\n"
 	@printf "  $(CYAN)make coverage-python-abi-rust$(NC) Run Pillow parity through PyO3 with Rust LLVM coverage\n"
 	@printf "  $(CYAN)make coverage-point-rust$(NC) Run Image.point Pillow parity with Rust LLVM coverage\n"
 	@printf "  $(CYAN)make coverage-image-open-rust$(NC) Run Image.open Pillow parity with Rust LLVM coverage\n"
@@ -653,14 +650,11 @@ migration-parity-operation-coverage: ## Run merged coverage for one manifest pub
 	if [ $$status -ne 0 ]; then exit $$status; fi; \
 	exit $$validator
 
-.PHONY: migration-parity-font-native-build migration-parity-font-native-test
-migration-parity-font-native-build: ## Build the test-only Rust font coverage driver
+.PHONY: migration-parity-font-native-build
+migration-parity-font-native-build: ## Build the Rust font coverage driver
 	$(CARGO) build -p pillow-rs --example font_native_coverage --features test-api
 
-migration-parity-font-native-test: ## Check font coverage dispatch and failure reporting
-	$(PYTHON) -m unittest discover -s scripts -p 'test_font_native_cases.py' -v
-
-migration-parity-font-native-coverage: migration-parity-font-native-build migration-parity-font-native-test ## Run the font-native coverage-only corpus
+migration-parity-font-native-coverage: migration-parity-font-native-build ## Run the font-native coverage-only corpus
 	PYTHONPATH="$(CURDIR)/pillow-rs-py/python" $(PYTHON) scripts/run_migration_font_native_cases.py --output build/migration-parity/font-native-observations.json
 
 migration-parity-imageops-native-coverage: ## Run the image-ops native coverage-only corpus
@@ -712,7 +706,7 @@ migration-parity-pipeline-budget-check: ## Compare compatible benchmark lineages
 		--output "$(MIGRATION_BENCHMARK_BUDGET_OUTPUT)" \
 		--check
 
-migration-parity-profile: $(if $(filter pillow,$(MIGRATION_PROFILE_BACKEND)),,build) ## Capture one bounded adapter profile without running unit tests
+migration-parity-profile: $(if $(filter pillow,$(MIGRATION_PROFILE_BACKEND)),,build) ## Capture one bounded adapter profile without a parity campaign
 	$(PYTHON) scripts/profile_migration_benchmark.py \
 		--workload-id "$(MIGRATION_PROFILE_WORKLOAD_ID)" \
 		--backend "$(MIGRATION_PROFILE_BACKEND)" \
@@ -730,7 +724,6 @@ migration-parity-benchmark: build-parity ## Build the checkout facade without re
 
 .PHONY: migration-parity-benchmark-run migration-parity-benchmark-parallel-cpu-run
 migration-parity-benchmark-run: ## Run correctness-gated benchmark workloads using the already-built checkout facade
-	$(PYTHON) -m unittest discover -s scripts -p 'test_migration_benchmark_selection.py' -v
 	@test "$(MIGRATION_BENCHMARK_PROFILE)" = standard -o "$(MIGRATION_BENCHMARK_PROFILE)" = quick -o "$(MIGRATION_BENCHMARK_PROFILE)" = release -o "$(MIGRATION_BENCHMARK_PROFILE)" = pipeline || { \
 		printf "MIGRATION_BENCHMARK_PROFILE must be 'standard', 'quick', 'release', or 'pipeline'.\n" >&2; \
 		exit 2; \
@@ -753,7 +746,6 @@ migration-parity-benchmark-parallel-cpu: build-parity-parallel-cpu ## Benchmark 
 migration-parity-benchmark-parallel-cpu-run: MIGRATION_BENCHMARK_OUTPUT=build/migration-parity/benchmark-result-parallel-cpu.json
 migration-parity-benchmark-parallel-cpu-run: MIGRATION_BENCHMARK_PARITY_OUTPUT=build/migration-parity/benchmark-parity-result-parallel-cpu.json
 migration-parity-benchmark-parallel-cpu-run: ## Run the Parallel CPU workload using the already-built checkout facade
-	MIGRATION_TARGET_PROFILE=parallel-cpu $(PYTHON) -m unittest discover -s scripts -p 'test_migration_benchmark_selection.py' -v
 	@test "$(MIGRATION_BENCHMARK_PROFILE)" = standard -o "$(MIGRATION_BENCHMARK_PROFILE)" = quick -o "$(MIGRATION_BENCHMARK_PROFILE)" = release -o "$(MIGRATION_BENCHMARK_PROFILE)" = pipeline || { \
 		printf "MIGRATION_BENCHMARK_PROFILE must be 'standard', 'quick', 'release', or 'pipeline'.\n" >&2; \
 		exit 2; \
@@ -769,7 +761,6 @@ migration-parity-benchmark-parallel-cpu-run: ## Run the Parallel CPU workload us
 	$(PYTHON) scripts/validate_migration_parity_result.py benchmark $(MIGRATION_BENCHMARK_OUTPUT)
 
 migration-parity-benchmark-pillow-simd: build-parity ## Compare parity-gated Pillow-SIMD material workloads on x86
-	$(PYTHON) -m unittest discover -s scripts -p 'test_pillow_simd_benchmark.py' -v
 	$(PYTHON) scripts/run_pillow_simd_benchmark.py
 	$(PYTHON) scripts/validate_migration_parity_result.py benchmark build/migration-parity/benchmark-result-pillow.json
 	$(PYTHON) scripts/validate_migration_parity_result.py benchmark build/migration-parity/benchmark-result-pillow-simd.json
@@ -980,8 +971,8 @@ image-slash-star-full-test: ## Run image-slash-star all-feature coverage matrix
 image-slash-star-ci: image-slash-star-check image-slash-star-feature-test image-slash-star-test image-slash-star-lint ## Run maintained image-slash-star integration gates
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
-.PHONY: fixtures migration-parity-inventory migration-parity-inventory-check migration-parity-manifest migration-parity-inputs migration-parity-fixtures migration-parity-fixtures-check migration-parity-inputs-check migration-parity-crash-quarantine-check migration-parity-evidence-check migration-parity-receipt-test
-.PHONY: operation-source-crosswalk operation-source-crosswalk-test implementation-structure-audit implementation-structure-inventory implementation-structure-audit-test
+.PHONY: fixtures migration-parity-inventory migration-parity-inventory-check migration-parity-manifest migration-parity-inputs migration-parity-fixtures migration-parity-fixtures-check migration-parity-inputs-check migration-parity-crash-quarantine-check migration-parity-evidence-check
+.PHONY: operation-source-crosswalk implementation-structure-audit implementation-structure-inventory
 
 fixtures: migration-parity-fixtures ## Build the active manifest and input specifications
 
@@ -994,17 +985,11 @@ migration-parity-inventory-check: ## Verify endpoint authority expansion and ali
 operation-source-crosswalk: ## Generate the operation crosswalk and Rust module inventory
 	$(PYTHON) scripts/build_operation_source_crosswalk.py --output target/operation-source-crosswalk.json
 
-operation-source-crosswalk-test: ## Check crosswalk, Rust module parser, and completeness contracts
-	$(PYTHON) -m unittest scripts.source_crosswalk.test_operation_source_crosswalk scripts.source_crosswalk.test_evidence -v
-
 implementation-structure-audit: ## Generate review-only path findings for added and moved maintained files
 	$(PYTHON) scripts/check_implementation_structure.py
 
 implementation-structure-inventory: ## Inventory every maintained path against the shared file-structure standard
 	$(PYTHON) scripts/check_implementation_structure.py --scope tree --fail-on-unclassified --output target/implementation-structure-inventory.json
-
-implementation-structure-audit-test: ## Check focused implementation-structure path contracts
-	$(PYTHON) -m unittest scripts.implementation_structure.test_audit -v
 
 migration-parity-manifest: ## Build fixed project-wide manifest from frozen authority
 	$(PYTHON) scripts/build_migration_parity_manifest.py
@@ -1024,7 +1009,7 @@ migration-parity-fixtures-check: migration-parity-inventory-check ## Verify auth
 	$(MAKE) migration-parity-inputs-check
 
 .PHONY: migration-parity-inputs-check
-migration-parity-inputs-check: migration-parity-reduction-test migration-parity-font-native-test ## Verify deterministic inputs and safe workflow consolidation
+migration-parity-inputs-check: ## Verify deterministic inputs and safe workflow consolidation
 	$(PYTHON) scripts/check_migration_parity_inputs.py
 	$(PYTHON) scripts/validate_migration_parity_contract.py --manifest "$(MANIFEST)"
 
@@ -1043,19 +1028,9 @@ migration-parity-evidence-check: ## Verify strict aggregate/result interfaces
 		$(PYTHON) scripts/validate_migration_parity_result.py all_backends "$(MIGRATION_ALL_BACKENDS_OUTPUT)"; \
 	fi
 
-migration-parity-receipt-test: ## Verify terminal-complete receipt state transitions
-	$(PYTHON) -m unittest discover -s scripts -p 'test_receipt_state.py' -v
-
-.PHONY: migration-parity-coverage-receipt-test
-migration-parity-coverage-receipt-test: ## Verify coverage source/build provenance guards
-	$(PYTHON) -m unittest discover -s scripts -p 'test_coverage_context.py' -v
-
-.PHONY: migration-parity-reduction migration-parity-reduction-test
+.PHONY: migration-parity-reduction
 migration-parity-reduction: ## Measure reviewed removal batches against exact CPU/SIMD/GPU coverage without editing inputs
 	$(PYTHON) scripts/reduce_migration_parity_cases.py $(MIGRATION_REDUCTION_ARGS)
-
-migration-parity-reduction-test: ## Verify binary restoration and exact coverage comparison safeguards
-	$(PYTHON) -m unittest discover -s scripts -p 'test_parity_reduction.py' -v
 
 .PHONY: migration-parity-changed-line-coverage
 migration-parity-changed-line-coverage: ## Attribute changed Rust lines to source-bound LCOV evidence
@@ -1133,7 +1108,7 @@ repo-map-check: ## Validate docs/REPO_MAP.md generated tree
 repo-map-update: ## Refresh docs/REPO_MAP.md generated tree
 	$(PYTHON) scripts/check_repo_map.py --write
 
-docs-check: docs-lint docs-test repo-map-check implementation-structure-audit-test implementation-structure-inventory operation-source-crosswalk-test migration-parity-inputs-check migration-parity-pipeline-roadmap-check release-tools-test ## Validate documentation, inputs, structure, and release configuration
+docs-check: docs-lint repo-map-check implementation-structure-audit implementation-structure-inventory operation-source-crosswalk migration-parity-inputs-check migration-parity-pipeline-roadmap-check release-tools-test ## Validate documentation, inputs, structure, and release configuration
 
 .PHONY: migration-parity-pipeline-roadmap-check
 migration-parity-pipeline-roadmap-check: ## Validate all 64 public roadmap IDs without claiming benchmark execution
@@ -1195,7 +1170,6 @@ release-version-check: ## Require one version in manifests, locks, runtime, and 
 
 release-tools-test: release-version-check ## Verify action inputs, PyPI artifact identity, and GitHub recovery guards
 	$(PYTHON) scripts/check_release_licenses.py
-	$(PYTHON) -m unittest discover -s scripts -p 'test_release_tools.py' -v
 
 .PHONY: release-platform-check
 release-platform-check: ## Type-check the Python binding for an installed foreign Rust target

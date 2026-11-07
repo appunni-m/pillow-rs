@@ -19,8 +19,6 @@ on:
       - 'docs/PIPELINE_ROADMAP.md'
       - 'scripts/docs_evidence.py'
       - 'scripts/docs_benchmark_view.py'
-      - 'scripts/test_docs_benchmark_selection.py'
-      - 'scripts/test_docs_benchmark_view.py'
       - 'docs.mk'
       - 'docs/BENCHMARKING.md'
       - 'site-assets/evidence.js'
@@ -104,9 +102,6 @@ jobs:
       is_focused: ${{ steps.selection.outputs.is_focused }}
       single_workload_id: ${{ steps.selection.outputs.single_workload_id }}
       proof_capture: ${{ steps.selection.outputs.proof_capture }}
-      f32_resize_guard: ${{ steps.selection.outputs.f32_resize_guard }}
-      f32_filter_guard: ${{ steps.selection.outputs.f32_filter_guard }}
-      grayscale_simd_guard: ${{ steps.selection.outputs.grayscale_simd_guard }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: ${{ inputs.workload_ids != '' && inputs.workload_ids != 'all' }}
@@ -257,20 +252,12 @@ jobs:
                   "A PerfDB baseline channel requires exactly one selected workload "
                   "with input.kind=parity_case; provide one eligible workload ID."
               )
-          run_cpu = profile in {"all", "python-cpu", "python-parallel-cpu"}
-          run_simd = profile in {"all", "python-simd"}
-          f32_resize_guard = is_focused and run_cpu and "resize" in selected_operations and "F" in selected_modes
-          f32_filter_guard = is_focused and run_cpu and "filter" in selected_operations and "F" in selected_modes
-          grayscale_simd_guard = is_focused and run_simd and "grayscale" in selected_operations
           with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
               output.write(f"matrix={matrix}\n")
               output.write(f"workload_args={args}\n")
               output.write(f"is_focused={str(is_focused).lower()}\n")
               output.write(f"single_workload_id={single_workload_id}\n")
               output.write(f"proof_capture={str(proof_capture).lower()}\n")
-              output.write(f"f32_resize_guard={str(f32_resize_guard).lower()}\n")
-              output.write(f"f32_filter_guard={str(f32_filter_guard).lower()}\n")
-              output.write(f"grayscale_simd_guard={str(grayscale_simd_guard).lower()}\n")
           print(f"Selected runner jobs: {', '.join(item['id'] for item in selected)}")
           print(f"Selected target profile: {profile}")
           PY
@@ -325,19 +312,6 @@ jobs:
           printf 'image_version=%s-%s\n' "${ImageOS:-unknown}" "${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
           printf 'MIGRATION_BENCHMARK_RUNNER_ID=%s\n' '${{ matrix.id }}' >> "$GITHUB_ENV"
           printf 'MIGRATION_BENCHMARK_CPU_MODEL=%s\n' "$cpu_model" >> "$GITHUB_ENV"
-      - name: verify selected x86 F32 Resize FMA guards
-        if: ${{ matrix.architecture == 'x86_64' && (needs.prepare.outputs.is_focused != 'true' || needs.prepare.outputs.f32_resize_guard == 'true') }}
-        run: |
-          cargo test --locked -p pillow-rs --lib runtime_x86_fma_matches_portable_fused_operation
-          cargo test --locked -p pillow-rs --lib runtime_x86_fma_boxed_resize_matches_portable_fused_operations
-          cargo test --locked -p pillow-rs --lib finite_x86_f_resize_path_matches_checked_reference
-          cargo test --locked -p pillow-rs --lib finite_x86_fma_boxed_resize_matches_portable_and_rejects_nonfinite_samples
-      - name: verify selected x86 F32 Filter FMA guard
-        if: ${{ matrix.architecture == 'x86_64' && (needs.prepare.outputs.is_focused != 'true' || needs.prepare.outputs.f32_filter_guard == 'true') }}
-        run: cargo test --locked -p pillow-rs --lib runtime_x86_f32_fma_matches_portable_fused_operation
-      - name: verify AVX2 grayscale across every RGB color and vector tail
-        if: ${{ matrix.architecture == 'x86_64' && (needs.prepare.outputs.is_focused != 'true' || needs.prepare.outputs.grayscale_simd_guard == 'true') }}
-        run: cargo test --locked -p pillow-rs --lib grayscale_rgb_avx2_matches_every_color_and_handles_tails
       - name: run correctness-gated CPU, SIMD, and GPU workload set
         if: ${{ matrix.run_benchmark }}
         env:

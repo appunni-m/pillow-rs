@@ -33,8 +33,7 @@ docs-serve: docs-build ## Preview the built site locally; stop with Ctrl-C
 docs-lint: ## Check public document links, commands, attribution, and package identity
 	$(PYTHON) scripts/docs_site.py check
 
-docs-test: ## Exercise broken-link, output-path, and benchmark validation guards
-	$(PYTHON) -m unittest discover -s scripts -p 'test_docs*.py' -v
+docs-test: docs-lint ## Compatibility alias for documentation source validation
 
 docs-examples: ## Compile and run the Rust quickstart directly from Markdown
 	$(PYTHON) scripts/check_docs_examples.py

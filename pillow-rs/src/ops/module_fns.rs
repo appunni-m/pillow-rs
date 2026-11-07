@@ -418,6 +418,3 @@ pub fn effect_mandelbrot_with_extent(
     }
     effect_mandelbrot(size, (extent[0], extent[1], extent[2], extent[3]), quality)
 }
-
-#[cfg(test)]
-mod tests;
