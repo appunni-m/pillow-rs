@@ -187,7 +187,13 @@ impl Image {
             Some((paste_x, paste_y)),
             None,
         )?;
-        Ok(canvas)
+        // Negative/out-of-bounds crops build a fresh canvas. Reapply the
+        // source pipeline's pinned backend to the composed crop-and-paste
+        // graph so the geometry path retains its injected execution context.
+        Ok(match self.backend() {
+            Some(backend) => canvas.use_backend(backend),
+            None => canvas,
+        })
     }
 
     /// Crops a non-negative Pillow box after its coordinates have been

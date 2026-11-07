@@ -1,6 +1,6 @@
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::{Bound, Py, PyAny, PyErr, PyModule, PyResult, Python};
-use pyo3::types::{PyAnyMethods, PyBytes, PyString, PyTuple, PyTupleMethods};
+use pyo3::types::{PyAnyMethods, PyBytes, PyModuleMethods, PyString, PyTuple, PyTupleMethods};
 use pyo3::{pyfunction, wrap_pyfunction};
 
 #[pyfunction]
