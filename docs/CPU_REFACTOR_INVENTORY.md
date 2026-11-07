@@ -6,6 +6,20 @@ Working checkout: `/Users/lazytrot/work/pillow-rs`, branch `develop`. Static
 lazy output modes now come from operation support contracts without
 wrapper cache overrides; mode metadata remains source-reviewed and
 runtime-unvalidated.
+
+Focused current-tree verification (2026-11-07): `make build-parity
+PYTHON=.venv/bin/python` completed successfully after the Convert helper
+visibility fix and formatting of touched Rust files. CPU-default parity reran
+the same frozen 1,523 active cases for Convert (1,335), GetChannel (148), and
+PutAlpha (40): 1,523 passed, zero failed or unrun. The parity result schema
+validated at
+`build/migration-parity/cpu-convert-getchannel-putalpha-rerun-20261107.json`.
+All changed Rust files pass direct `rustfmt --check`; repository-wide
+`make fmt clippy` remains blocked by existing public-API-boundary, formatting,
+and Clippy failures outside this WIP. `make docs-lint` passed. This does not
+complete the full CPU mode × architecture matrix or cover CoreOnly high-depth
+extension behavior. No benchmark or coverage ran; the overall CPU migration
+remains in progress.
 Latest CPU-only compiler check (2026-11-03, source at commits `a1ed8e869` and
 `b536c0e8a`): no E-coded type/name errors were emitted, but `cargo check`
 failed on denied lints (120 `dead_code`, 335 `unused_imports`, 75 `deprecated`,
@@ -2637,7 +2651,7 @@ coverage. Inspection used the pinned local `wide` 1.6.1 implementation:
 - Existing vector byte movement is composed for LA, PA, RGB, RGBA, RGBa, RGBX, CMYK, YCbCr, and HSV. x86_64 SSSE3 requires independently captured SSE2 and SSSE3 and uses the original bounded intrinsic gather. 32-bit x86 retains the original static SSSE3 or SSE2 wide gather. Wasm requires static SIMD128. NEON retains its original two-/three-channel gathers and four-channel structure load, with its token prepared once rather than probing in a leaf. Byte-only gathers do not gain an AVX2 label.
 - The declaration's `ExtractBandBytes` guard uses typed `RequestFacts::ExtractBand { index }` alongside dimensions/source length. Empty or overlong storage and out-of-native-range indices select the same mode's Default. Missing index/content facts remain deferred when needed; known-ineligible layouts can select Default without materialization. Mode-only metadata never invents a parameter value.
 - Shared gathers moved to CPU `helpers/channel`: grayscale and put reuse actual lane-selection/wide algorithms. The old private color gather adapters were removed after inspecting active callers. Their existing boundary test moved with the shared SSSE3 kernel; its inputs/assertions remain unchanged and its call now establishes the raw helper's safety contract explicitly. The two archived CPU ExtractBand regressions were restored under put with an injected Default context; their shapes, selectors, and assertions remain unchanged. Archived SIMD adapter tests still require relocation with the final API review.
-- CPU eager ExtractBand now reaches the typed prepared registry callback. Tiny-RGB `Image::getchannel` and loaded-image `GetData` use that same prepared CPU architecture strategy for compatibility SIMD requests; the exact mode-bearing source chooses the kernel. GetData writes into its caller-owned final byte slice without allocating an intermediate L image, and its receipt records the selected CPU architecture. `PreparedExtractBand::execute_into` itself returns `None` when the selected exact mode has no caller-owned sink strategy and executes only for the nine native byte identities that write directly to the final slice; no parallel mode-support list remains beside it. The remaining pipeline SIMD/GPU string admission table has an actionable TODO at the wrapper boundary. The public wrapper's two Cargo-parallel-feature exclusions were removed so enabling that feature does not change serial CPU eager admission. The pool facade/batch executor, shared metadata transitions, registry-wide assessment APIs, and the other put operations remain incomplete. The route is source-only and unvalidated; this is not a completed put-family or CPU checkpoint.
+- CPU eager ExtractBand now reaches the typed prepared registry callback. Tiny-RGB `Image::getchannel` and loaded-image `GetData` use that same prepared CPU architecture strategy for compatibility SIMD requests; the exact mode-bearing source chooses the kernel. GetData writes into its caller-owned final byte slice without allocating an intermediate L image, and its receipt records the selected CPU architecture. `PreparedExtractBand::execute_into` itself returns `None` when the selected exact mode has no caller-owned sink strategy and executes only for the nine native byte identities that write directly to the final slice; no parallel mode-support list remains beside it. The remaining pipeline SIMD/GPU string admission table has an actionable TODO at the wrapper boundary. The public wrapper's two Cargo-parallel-feature exclusions were removed so enabling that feature does not change serial CPU eager admission. The pool facade/batch executor, shared metadata transitions, registry-wide assessment APIs, and the other put operations remain incomplete. The selected public GetChannel CPU parity slice passes 148/148 cases; other ExtractBand callers, CoreOnly behavior, and terminal receipts remain open. This is not a completed put-family or CPU checkpoint.
 
 | Preserved source/function | Maintained destination and disposition |
 | --- | --- |
@@ -2713,6 +2727,21 @@ Remaining put-family work includes typed wrapper boundaries and complete caller 
 
 ### PutAlpha and PutAlphaData source progress: incomplete and unvalidated
 
+- Wrapper route/source review (2026-11-07): traced Python `Image.putalpha`
+  through the PyO3 adapter and core `Image` methods. The destination is loaded
+  before input handling; exact image destinations are checked before loading a
+  valid `1`/`L` mask; failed mask loading preserves Pillow's destination
+  promotion; exact self-aliasing promotes before the aliased mask is inspected;
+  custom numeric coercion preserves promotion and Python exception order; and
+  retained `info` state is synchronized on success and failure. `getchannel`
+  likewise loads before selector callbacks, resolves string selectors in the
+  Python wrapper, and delegates numeric extraction to the typed Rust route.
+  Source tracing found no additional code correction in these paths. TODO:
+  verify callback/mutation/error order, alias behavior, metadata, exact child
+  selection/fallback receipts, and operation × mode × architecture parity;
+  GPU terminal eligibility remains separate backend work. The focused CPU
+  default slice passes 40/40 active PutAlpha parity cases; callback, mutation,
+  metadata, and architecture-receipt coverage remains open.
 - The full source conversion review compared all 25 source identities' declared outputs and current Default owners against `legacy/ops/put.rs::{op_put_alpha,op_put_alpha_data}` and `legacy/ops/color.rs::op_extract_band`. The archived CMYK promotion, source-carrier changes, palette index/alpha handling, high-depth narrowing, and mask-to-L behavior are accounted for. Existing conversions remain only where the operation requires them; required output allocations/copies remain. This source review does not establish compiled behavior or parity.
 - `pipeline_output_mode` now uses the same `known_putalpha_mode` mapping as lazy mode planning. A queued L→LA, RGB→RGBA, P→PA, or CMYK→RGBA mutation therefore declares its actual output identity instead of caching the pre-operation source mode. Source-only; unvalidated.
 - Each operation now has an exhaustive 25-mode entry-point declaration, explicit outputs, typed source buffers, and a concrete Default owner. Constant alpha keeps native L/LA/P/PA layouts, promotes RGB/CMYK/other byte carriers as before, clips I;16 samples through the existing helper, and retains the CMYK MULDIV255 conversion path.
@@ -2995,14 +3024,22 @@ Convert architecture.
   fault, and fallback-receipt evidence remains pending the frozen CPU parity
   gate, as recorded in the direct matrix entry below.
 
-### Convert source progress: source review in progress; incomplete and unvalidated
+### Convert source progress: mode contract/dispatch review complete; implementation and runtime evidence remain open
 
-- Archived alpha route review: see the exact route and empty-input findings in
-  “Current source-only continuation.” The broader adapter/kernel map below is
-  still pending for ordinary layout and color-space routes, typed byte-source kernels, generic dispatcher guards, build availability, and scalar-control reconciliation
-  paths.
+- Archived source/target/guard and active build-dispatch reconciliation is
+  complete for all 25 exact source modes (RGB8, RGBa, CMYK, L, LA, La, One,
+  P, PA, RGBA, RGBX, I32, F32, YCbCr, HSV, LAB, I16, I16L, I16B, I16N,
+  LA16, RGB16, RGBA16, RGB32F, and RGBA32F). This closes the per-mode
+  contract-to-folder/dispatch inventory, not algorithm, caller, output, fault,
+  metadata, selection-receipt, or parity review.
 
-- The public Rust `Image::convert` API now takes exact `Mode` for its destination and reads the source via `mode_identity()`. Its dispatch and the conversion helpers use `Mode` matches, including nonstandard color/scalar conversion, binary output, palette output, I;16 routing, and matrix targets. `color::convert_from_nonstandard` now accepts `Mode`. Python and JavaScript parse valid Pillow strings into `Mode` before delegation; an invalid string is retained only as an external compatibility error input so matrix-validation order and diagnostics remain unchanged. Enhance, paste source preparation, and module Composite now pass typed modes to conversion. This removes the previously listed string conversion gap, but does not complete the archived source/target matrix review or prepared strategy caller audit.
+- The archived adapter/kernel notes below record individual arithmetic,
+  packing, tail, guard, and fallback findings. Remaining work is to finish any
+  kernel-level cases still marked there, reconcile prepared registry and direct
+  callers, and collect output/fault/metadata/selection receipts in the frozen
+  CPU parity matrix. Do not repeat the completed 25-row contract audit.
+
+- The public Rust `Image::convert` API now takes exact `Mode` for its destination and reads the source via `mode_identity()`. Its dispatch and the conversion helpers use `Mode` matches, including nonstandard color/scalar conversion, binary output, palette output, I;16 routing, and matrix targets. `color::convert_from_nonstandard` now accepts `Mode`. Python and JavaScript parse valid Pillow strings into `Mode` before delegation; an invalid string is retained only as an external compatibility error input so matrix-validation order and diagnostics remain unchanged. Enhance, paste source preparation, and module Composite now pass typed modes to conversion. This removes the previously listed string conversion gap. All 25 declared source/target rows have now received a mode-owner and dispatch review; prepared strategy callers, algorithm-level archive cases, and observable outputs/faults/receipts remain open.
 - After existing prestandard handling, each Convert source/target pair declared by `ModeSupport` now enters the prepared plan; the same declaration decides eligibility. Source review found `assess_convert_target` rejected typed targets `One` and `P` before checking their declared target lists, which blocked the eager binary and prepared-palette wrappers even after they materialized their source. Removed that stale unconditional rejection so the exact declared target membership now controls admission; this correction is source-only and unverified. Ordinary One conversions use the native One strategy instead of widening through L. Conversion to target One now dispatches through an exact source-mode owner selected from the injected CPU Architecture context; those mode entry points compose the shared Default threshold and Floyd–Steinberg helpers. SIMD requests fall back to Default until a binary architecture kernel is declared. The archived RGB/LAB error-diffusion distinction is preserved. At this checkpoint, One matrix conversion retained the archived L normalization; this statement is superseded by the 2026-11-05 direct One matrix correction recorded below. The public matrix path remains eager, but `ConvertMatrix` now has a top-level contract, exact source-mode selection, injected CPU architecture context, and a shared Default implementation that applies the preserved RGB sample projection and matrix arithmetic directly to each mode's native samples without a temporary RGB image. No archived SIMD matrix kernel exists, so SIMD requests use the declared Default fallback; GPU matrix execution remains a TODO beside the wrapper. The matrix strategy admits L/RGB targets for all 25 exact source identities; non-RGB source projections are explicitly CoreOnly. Declared I;16 source pairs for I/F, HSV, and YCbCr now use native u16 strategies; all four I;16-to-P/PA paths now clip native u16 samples directly into identity-palette indices without an intermediate L image. The four I;16 sources now declare cross-identity I;16 targets and execute from their native u16 buffers in their exact mode Default strategies; same-identity conversion preserves samples, while cross-identity conversion retains the archived clipped-L widening result. These target pairs have no architecture kernel and explicitly fall back to Default. LA16, RGB16, RGBA16, RGB32F, and RGBA32F declare the four I;16 targets as core-only routes and project native samples directly into the same luma bytes as their existing Default grayscale strategies, without an intermediate L raster. SIMD requests for these Default-only targets select the mode's Default implementation. LA, RGB, RGBA, RGBa, RGBX, CMYK, YCbCr, HSV, PA, LAB, I, and F now declare all four I;16 outputs and execute through their exact mode Default strategy; their native pixels are converted directly to the prior L-byte result where needed, without a temporary L image. I32 preserves its target-specific u16 clamp for I;16/I;16L/I;16B and clipped-L behavior for I;16N; F32 retains its clipped byte conversion. One and L keep their existing lazy prepared path. The eager recursive wrapper bridge was removed. `P` retains its exact `ValueError(`conversion not supported`)`, and `La` retains the earlier validation error. Declared RGBa source pairs no longer eagerly unpremultiply and route through RGB; their native source strategy now owns those conversions. RGB→L retains its dedicated Grayscale operation route. CMYK→I/F no longer materializes an intermediate RGB image. Every accepted P/PA source pair now enters its prepared strategy; `La` to other targets remains an explicit validation error. The generic P/PA wrapper quantizers were removed after this source-reachability review.
 - `color/convert/ops.rs` now publishes exact typed target contracts for the shared RGBA, RGBa, La, I;16, scalar, and RGBX source groups. The four exact I;16 identities share `I16_INPUTS`; scalar I/F and RGBX have separate contracts. Overlapping target lists do not widen any source's accepted target set.
 - Convert identity selection source correction (2026-11-02): `PreparedConvert::execute_with_output` returns the exact source raster for same-mode requests, so an architecture-specific copy kernel was not executed even when a broad target guard could select it. Convert target guards now receive the owning source identity and treat `source == target` as ineligible for architecture kernels. The mode's Default identity path is selected instead, with an `ineligible_request` fallback when a requested architecture would otherwise match. Pixel data and wrapper metadata are unchanged; receipt parity remains pending.
@@ -3015,10 +3052,9 @@ Convert architecture.
   "deferred conversion mode must be materialized first" error. Prepared
   palette contracts cover One/L/LA/I/F and all four I;16 identities→P/PA,
   RGB→P/PA, RGBA→P/PA, RGBa→P/PA,
-  RGBX→P/PA, LAB→P/PA, CMYK/YCbCr/HSV→P/PA, P→PA, and PA→P. Remaining source
-  pairs remain under source review. The Image wrapper's dedicated lazy P/PA
-  boundary executes the exact prepared strategy and publishes palette/alpha
-  metadata after materialization; its parity remains TODO. The generic
+  RGBX→P/PA, LAB→P/PA, CMYK/YCbCr/HSV→P/PA, P→PA, and PA→P. No source-mode
+  support pairs remain unclassified. Exact pixel output, wrapper palette/alpha
+  metadata, faults, selection receipts, and lazy P/PA behavior remain TODO. The generic
   raster-only `prepare_pipeline` path still rejects cross-mode P/PA pending a
   prepared result contract that carries those sidecars. Internal high-depth
   source routes to P/PA use native samples, are marked `NO_PILLOW_SUPPORT`,
@@ -3046,15 +3082,15 @@ Convert architecture.
 - Prepared conversion distinguishes the grayscale contract for target `L` from target `LA`: `L` composes the exact source mode's Default grayscale strategy, while `LA` uses Convert's generic grayscale semantics before its alpha-preservation path. This preserves the archived difference for an `RGBa` source, where target `L` unpremultiplies but target `LA` uses the stored premultiplied color samples.
 - CMYK8, YCbCr8, and HSV8 have independent support declarations and direct Default source strategies. CMYK derives RGB samples in each final-destination loop and retains the existing scalar arithmetic for L, LA, RGB, RGBA, YCbCr, HSV, I, and F. YCbCr uses its native Y channel for L/LA and directly applies the archived fixed-point RGB transform for color/scalar destinations. HSV uses the archived integer-domain lookup for RGB-derived destinations. Neither strategy materializes an intermediate RGB image.
 - P and PA now have independent target contracts and direct Default strategies that receive resolved `PaletteInput`. P preserves palette-provided alpha for LA/RGBA and uses opaque defaults when absent; PA preserves its per-pixel alpha only on alpha-bearing output paths and ignores it for RGB/scalar conversions. Both map palette indices directly into final destination loops without first expanding a whole RGB raster.
-- Registry type plumbing exposes the prepared Convert plan through the color-family facade. All 25 source identities now have separate Default strategy owners and support declarations, including LAB's existing identity route and the five internal high-depth storage identities. Luma8 uses the archived L→L 16-byte layout copy, L→LA and L→RGB/RGBA layout kernels, the CMYK/YCbCr/HSV/typed kernels, and all four I;16 widening routes under SSE2 and NEON selections; it now declares Wasm SIMD128 for those same vector targets using the shared portable kernels; its I;16 routes retain the archived zero-block vector receipt; reviewed generic targets now admit exact architecture routes and record scalar-control for empty images. LumaA8 now declares all 11 archived LA target routes under SSE2, NEON, and Wasm SIMD128 mode guards: native layout for L/LA/RGB, premultiplication for La, direct RGBA/RGBX expansion, direct CMYK/YCbCr/HSV, and typed I/F output. It retains native interleaved LA samples and exact result variants; generic empty targets retain the archived scalar-control receipt; the reviewed alpha route zero-block behavior is detailed above. RGB8→RGB retains the archived five-pixel layout-copy route under SSE2, NEON, and Wasm; the source and architecture owner review, including its empty guard, is detailed above. RGB8→Luma8 reuses the exact RGB8 Grayscale AVX2, SSSE3, SSE2, NEON, and Wasm SIMD128 kernels under Convert's typed target strategy; its target guard retains the archived empty-image scalar-control path. RGB8→LumaA8 uses a direct eight-pixel RGB/luma/opaque-alpha kernel under SSE2, NEON, and Wasm, and its Default route materializes the archived rounded L scratch before LA output. RGB8→CMYK uses the archived four-pixel inverse-channel kernel under SSE2, NEON, and Wasm, writing K=0 into the native CMYK carrier. RGB8→YCbCr uses the archived eight-pixel fixed-point table kernel under SSE2, NEON, and Wasm and writes directly to the YCbCr carrier. RGB8→HSV uses the archived eight-pixel float-lane conversion, preserving its tie order and f32 hue narrowing, under SSE2, NEON, and Wasm. RGB8→I/F use the archived eight-pixel typed-lane conversions under SSE2, NEON, and Wasm and write little-endian scalar bytes directly into their native four-byte carriers. RGB8→RGBA8 declares SSE2's archived four-pixel vector path, NEON's archived sixteen-pixel structure-load path, and the portable Wasm path; the empty-image receipt and allocation-failure handling are source-reconciled above. RGBA8 retains SSSE3/NEON specialized RGBA8→RGB8 hot loops, falling back to the portable wide-layout kernel if specialized output reservation fails, and declares the archived four-pixel wide-layout route under SSE2 and Wasm; RGBA identity uses its archived wide-layout route under SSE2, NEON, and Wasm. It reuses the exact RGBA8 Grayscale AVX2/SSSE3/SSE2/NEON/Wasm SIMD128 kernels for RGBA8→L and routes RGBA8→LA/RGBa/CMYK/YCbCr/HSV/I/F through native four-byte vector strategies under SSE2, NEON, and Wasm; RGBA8→RGBX8 uses the archived opaque-padding helper under SSE2, NEON, and Wasm. RGBX8 source declares the archived four-pixel wide layout route for RGB under SSE2 and Wasm alongside its portable LA/RGBA/CMYK/YCbCr/HSV/I/F routes; target-L grayscale and specialized SSSE3/NEON RGB loops stay mode-specific. Each path consumes its prepared selection and preserves the exact output Mode. RGBa native Convert routes use raw premultiplied RGB samples for LA/CMYK/YCbCr/HSV/I/F and preserve source alpha for LA; the archived alpha kernel unpremultiplies for La/RGB/RGBA/RGBX, setting opaque alpha for La and opaque padding for RGBX. The active SSE2/NEON/Wasm declarations compose these exact-mode owners, with nonempty guards for the unpremultiplication routes. RGBa→L reuses the already-existing Grayscale architecture kernels (AVX2/SSSE3/SSE2/NEON/Wasm SIMD128) only for nonempty images; the archived Convert adapter rejects RGBa→L as a vector route, so the maintained guard now selects same-mode Default for empty input. Empty raw color/typed routes retain scalar-control, zero-block receipts; empty alpha transforms fall back to Default. The RGBa target contract now lists all 20 Pillow identities, including its same-mode Default identity route; the public wrapper still uses its `image.copy()` fast path. Cross-mode targets for the five internal high-depth identities remain rejected at `is_convert_target_mode`; same-mode identity is a CoreOnly route that preserves each native raster variant. P/PA identity uses the prepared palette metadata policy and preserves the lazy wrapper palette. CMYK8→RGB declares the archived SSSE3 and NEON kernels plus the portable wide kernel under SSE2 and Wasm SIMD128; all routes process native CMYK samples. The four I;16 source modes now process native u16 values directly under SSE2/NEON/Wasm SIMD128 and retain full native u16 values for I/F; One→I;16 declares the archived 16-sample vector expansion. Archived SIMD Convert source files and their exact vector cases still need a one-to-one review against the maintained source/target declarations, excluding the alpha and RGB identity/layout routes reconciled above; remaining routes include other layout/color-space kernels, same-mode and empty-image guards, architecture build availability, and complete output identity; place retained cases beside their maintained owners and migrate any uncovered path. Do not treat the current dispatcher as a finished support/selection/implementation composition.
+- Registry type plumbing exposes the prepared Convert plan through the color-family facade. All 25 source identities now have separate Default strategy owners and support declarations, including LAB's existing identity route and the five internal high-depth storage identities. Luma8 same-mode requests use prepared identity; its nonidentity SSE2/NEON/Wasm SIMD128 routes cover L→LA/RGB/RGBA, CMYK/YCbCr/HSV/I/F, and all four I;16 targets through exact mode owners and shared portable kernels; its I;16 routes retain the archived zero-block vector receipt; reviewed generic targets now admit exact architecture routes and record scalar-control for empty images. LumaA8 has 11 archived output identities including same-mode LA; active SSE2/NEON/Wasm SIMD128 strategies cover the ten nonidentity vector targets: native layout for L/RGB, premultiplication for La, direct RGBA/RGBX expansion, direct CMYK/YCbCr/HSV, and typed I/F output. Same-mode LA uses prepared identity. It retains native interleaved samples and exact output variants; generic empty targets retain the archived scalar-control receipt, while the nonempty La guard and RGBX zero-block behavior are recorded above. RGB8→RGB retains the archived five-pixel layout-copy route under SSE2, NEON, and Wasm; the source and architecture owner review, including its empty guard, is detailed above. RGB8→Luma8 reuses the exact RGB8 Grayscale AVX2, SSSE3, SSE2, NEON, and Wasm SIMD128 kernels under Convert's typed target strategy; its target guard retains the archived empty-image scalar-control path. RGB8→LumaA8 uses a direct eight-pixel RGB/luma/opaque-alpha kernel under SSE2, NEON, and Wasm, and its Default route materializes the archived rounded L scratch before LA output. RGB8→CMYK uses the archived four-pixel inverse-channel kernel under SSE2, NEON, and Wasm, writing K=0 into the native CMYK carrier. RGB8→YCbCr uses the archived eight-pixel fixed-point table kernel under SSE2, NEON, and Wasm and writes directly to the YCbCr carrier. RGB8→HSV uses the archived eight-pixel float-lane conversion, preserving its tie order and f32 hue narrowing, under SSE2, NEON, and Wasm. RGB8→I/F use the archived eight-pixel typed-lane conversions under SSE2, NEON, and Wasm and write little-endian scalar bytes directly into their native four-byte carriers. RGB8→RGBA8 declares SSE2's archived four-pixel vector path, NEON's archived sixteen-pixel structure-load path, and the portable Wasm path; the empty-image receipt and allocation-failure handling are source-reconciled above. RGBA8 retains SSSE3/NEON specialized RGBA8→RGB8 hot loops, falling back to the portable wide-layout kernel if specialized output reservation fails, and declares the archived four-pixel wide-layout route under SSE2 and Wasm; RGBA same-mode requests use prepared identity; the unreachable SSE2/NEON/Wasm declarations and vector-copy implementation were removed. It reuses the exact RGBA8 Grayscale AVX2/SSSE3/SSE2/NEON/Wasm SIMD128 kernels for RGBA8→L and routes RGBA8→LA/RGBa/CMYK/YCbCr/HSV/I/F through native four-byte vector strategies under SSE2, NEON, and Wasm; RGBA8→RGBX8 uses the archived opaque-padding helper under SSE2, NEON, and Wasm. RGBX8 source declares the archived four-pixel wide layout route for RGB under SSE2 and Wasm alongside its portable LA/RGBA/CMYK/YCbCr/HSV/I/F routes; target-L grayscale and specialized SSSE3/NEON RGB loops stay mode-specific. Each path consumes its prepared selection and preserves the exact output Mode. RGBa native Convert routes use raw premultiplied RGB samples for LA/CMYK/YCbCr/HSV/I/F and preserve source alpha for LA; the archived alpha kernel unpremultiplies for La/RGB/RGBA/RGBX, setting opaque alpha for La and opaque padding for RGBX. The active SSE2/NEON/Wasm declarations compose these exact-mode owners, with nonempty guards for the unpremultiplication routes. RGBa→L reuses the already-existing Grayscale architecture kernels (AVX2/SSSE3/SSE2/NEON/Wasm SIMD128) only for nonempty images; the archived Convert adapter rejects RGBa→L as a vector route, so the maintained guard now selects same-mode Default for empty input. Empty raw color/typed routes retain scalar-control, zero-block receipts; empty alpha transforms fall back to Default. The RGBa target contract now lists all 20 Pillow identities, including its same-mode Default identity route; the public wrapper still uses its `image.copy()` fast path. Cross-mode targets for the five internal high-depth identities remain rejected at `is_convert_target_mode`; same-mode identity is a CoreOnly route that preserves each native raster variant. P/PA identity uses the prepared palette metadata policy and preserves the lazy wrapper palette. CMYK8→RGB declares the archived SSSE3 and NEON kernels plus the portable wide kernel under SSE2 and Wasm SIMD128; all routes process native CMYK samples. The four I;16 source modes now process native u16 values directly under SSE2/NEON/Wasm SIMD128 and retain full native u16 values for I/F; One→I;16 declares the archived 16-sample vector expansion. All 25 exact source owners now have a reviewed target contract, Default entry, declared architecture-to-folder mapping, and prepared identity decision. The archived kernel notes above contain the current one-to-one arithmetic and packing findings; any route-specific caveat stays open beside that note. Prepared registry/direct callers, output identity and metadata, observable errors, empty/fallback receipts, and full mode × target × architecture parity still gate completion; do not treat contract coverage as runtime proof.
 - Archived SIMD Convert admission was narrower than the 25-mode typed contract: generic byte-layout conversion recognizes L/LA/RGB/RGBA carriers with either no mode tag or the matching identity, plus RGBA storage explicitly tagged RGBa or RGBX. Special routes add the documented alpha pairs, CMYK→RGB, One/L→I;16, I;16→L/LA/RGB/RGBA/CMYK/I/F, and RGB8→LAB scalar control. Its ordinary vector destinations are L/LA/RGB/RGBA/CMYK/YCbCr/HSV/I/F. Other pairs were not admitted to this vector adapter and used the CPU route. Independently, `Image::convert` retains its same-mode `image.copy()` fast path. The operation contract now lists all 25 same-mode identities, including P/PA palette-preserving identity and CoreOnly same-mode identity for internal high-depth modes. Prepared execution clones the exact `DynamicImage` variant; cross-mode palette outputs remain wrapper-only until their metadata can travel through the lazy terminal. The per-file owner map below records candidate destinations; the remaining zero-size behavior, build availability, and source/target/architecture tuples still require one-to-one review.
 - Direct source comparison of `kernels/color_space.rs` with the maintained native Convert strategies reconciles its L/LA branches. Both exact modes read only the native luma sample for these targets and ignore LA alpha, preserving the archived source-channel contract. CMYK emits `[0, 0, 0, 255-L]` in four-pixel groups; YCbCr emits `[L, 128, 128]` in eight-pixel groups; HSV emits `[0, 0, L]` in eight-pixel groups. The active L and LA helpers retain those block widths and exact output identities (`ImageCmyk8`, `ImageYCbCr8`, and `ImageHsv8`); empty executions record scalar-control with zero vector blocks. The direct Luma8 and LA implementations avoid running the generic RGB color-space arithmetic for these neutral inputs while preserving its observable samples. Combined with the RGB-family comparison above, the archived color-space arithmetic and channel-selection review is complete; exact tuple dispatch, guards, and build availability remain under review.
 - Direct comparison of `kernels/dispatch/luma.rs` with the active RGBA and RGBX target-L owners and RGB/RGBX target-LA owners reconciles its generic routes: all use the same `19595/38470/7471` fixed-point coefficients and `+32768 >> 16` rounding; LA output writes opaque alpha for RGB/RGBX. Empty native layout conversions are intercepted by the archived adapter's scalar-control branch before this kernel, matching the maintained zero-block scalar-control receipt. RGB→L and RGBa→L use their separate Grayscale strategies. The separate RGBA/RGBa→LA layout route is reconciled below.
 - Direct comparison of `kernels/dispatch/typed.rs` with the exact-mode L, LA, RGB, RGBA, RGBa, and RGBX I/F owners reconciles typed projection and packing. L and LA copy the native luma sample into I or widen it directly to f32; LA alpha is ignored. Three- and four-byte RGB-family sources use the archived `19595/38470/7471 + 32768 >> 16` projection for I and `(299R + 587G + 114B) / 1000` for F; RGBA alpha, RGBa stored alpha, and RGBX padding do not participate. Every path writes each scalar with `to_le_bytes`, processes eight pixels per block, pads inactive input lanes with zero, and emits only active lanes. Maintained helpers preserve these projections, little-endian carriers, and eight-pixel tails, while each wrapper constructs its exact `ImageI32` or `ImageF32` output. Empty architecture executions preserve the zero-block scalar-control receipt. The arithmetic, channel selection, endianness, and active-lane review for the archived typed dispatcher is complete; exact tuple dispatch, guards, and build availability remain under review.
 - Luma8's architecture table now matches the archived vector-target set exactly: `L`, `RGB`, `RGBA`, `LA`, `CMYK`, `YCbCr`, `HSV`, `I`, `F`, and all four I;16 identities each have SSE2, NEON, and Wasm SIMD128 declarations. SSE2 is build-available on x86_64 or x86 with compile-time SSE2; NEON is AArch64-only; Wasm SIMD128 requires `wasm32` plus the `simd128` target feature. The mode owner routes each declared target to the corresponding concrete architecture file and routes other targets through Luma8 Default. Same-mode `L→L` and ordinary empty vector targets keep their scalar-control, zero-block receipts. The four I;16 targets preserve the archived special receipt: empty input remains a selected vector route with zero blocks. The source/target/architecture declarations, build guards, execution match, and empty-path distinction have been reconciled; cross-operation fallback behavior and final compile evidence remain pending.
-- LumaA8's archived vector source/target set is reconciled with its mode owner: `LA→L/LA/La/RGB/RGBA/RGBX/CMYK/YCbCr/HSV/I/F`. The ordinary exact-mode routes are declared for SSE2, NEON, and Wasm SIMD128; `LA→La` alone has a nonempty guard and therefore selects the same-mode Default implementation for zero-pixel input. The archived alpha adapter handles `LA→RGBX` separately from generic target admission; its active LA strategy preserves the fourth source alpha as the RGBX padding byte and retains the archived vector/zero-block receipt for empty input. Other empty architecture targets preserve scalar-control with zero blocks. The active architecture match and build conditions are explicit: SSE2 on x86_64 or compile-time-SSE2 x86, NEON on AArch64, and Wasm SIMD128 on wasm32 with `simd128`. Each exact target constructs its own raster variant; P/PA remain Default palette routes, not vector color-layout aliases. This LA tuple, guard, output-identity, and empty-path review is complete; full matrix parity and compile evidence remain pending.
+- LumaA8's archived vector source/target set is reconciled with its mode owner: `LA→L/LA/La/RGB/RGBA/RGBX/CMYK/YCbCr/HSV/I/F`. The ten nonidentity vector targets are declared for SSE2, NEON, and Wasm SIMD128; same-mode LA uses prepared identity. `LA→La` alone has a nonempty guard and therefore selects Default for zero-pixel input. The archived alpha adapter handles `LA→RGBX` separately from generic target admission; its active LA strategy preserves the fourth source alpha as the RGBX padding byte and retains the archived vector/zero-block receipt for empty input. Other empty architecture targets preserve scalar-control with zero blocks. The active architecture match and build conditions are explicit: SSE2 on x86_64 or compile-time-SSE2 x86, NEON on AArch64, and Wasm SIMD128 on wasm32 with `simd128`. Each exact target constructs its own raster variant; P/PA remain Default palette routes, not vector color-layout aliases. This LA tuple, guard, output-identity, and empty-path review is complete; full matrix parity and compile evidence remain pending.
 - The archived `La` alpha route accepts `La→LA`; same-mode `La→La` remains the wrapper's identity copy, and every other ordinary Convert target retains `conversion from La to L not supported`. `LA_PREMULTIPLIED_TARGETS` exposes those two accepted identities and the same rejection text. The maintained Default route preserves the alpha byte while applying the archived exact unpremultiply arithmetic; the SSE2, NEON, and Wasm SIMD128 strategies reuse the channel-specialized 16-byte kernel and emit the exact `ImageLumaA8` variant. Its nonempty target guard reproduces the old alpha adapter's zero-block unsupported result by selecting Default for empty input. The active build guards require x86 SSE2, AArch64 NEON, or wasm32 `simd128`, respectively. This exact source/target, mode error, kernel width, output, architecture, and empty fallback review is complete; final compile/parity evidence remains pending.
-- Direct comparison of `kernels/dispatch/layout.rs` and `kernels/layout.rs` with the active exact-mode owners reconciles all native byte-layout routes. Generic layout groups use `16 / max(source_channels, target_channels)` pixels per block: L→LA uses eight, LA→L/LA uses eight, LA→RGB uses five, RGB identity uses five, RGB→RGBA uses four, and RGBA/RGBX→RGB or RGBA uses four. The active owners preserve the archived channel maps: L→RGB/RGBA replicates luma and inserts opaque alpha; LA→L drops alpha, LA→LA preserves both bytes, and LA→RGB replicates luma; LA→RGBA uses the archived 16-pixel four-shuffle expansion and preserves alpha; LA→RGBX preserves alpha in its fourth byte. RGB→RGBA appends opaque alpha; RGBA identity copies all four bytes; RGBA/RGBX→RGB drops the fourth byte; RGBX→RGBA inserts opaque alpha. RGBA/RGBa→LA uses the archived `native_rgba_to_la_bytes` block: the active RGBA helper retains its `77/150/29` plus residual-shift arithmetic, and the RGBa helper's `19595/38470/7471 + 32768 >> 16` expression is algebraically identical to those staged shifts. Both preserve alpha and RGBa's stored premultiplied color lanes; neither unpremultiplies. The archived 16-pixel input grouping and eight-pixel output block count are preserved, and zero-pixel execution records scalar-control. Empty RGB→RGBA NEON execution records the archived scalar-control receipt. On NEON reservation failure, RGB→RGBA now falls through to the shared portable four-pixel layout helper; that helper uses the archived generic `Vec::with_capacity` allocation behavior. Exact architecture declarations and build availability remain part of the overall Convert audit.
+- Direct comparison of `kernels/dispatch/layout.rs` and `kernels/layout.rs` with the active exact-mode owners reconciles all native byte-layout routes. Generic layout groups use `16 / max(source_channels, target_channels)` pixels per block: L→LA uses eight, LA→L/LA uses eight, LA→RGB uses five, RGB identity uses five, RGB→RGBA uses four, and RGBA/RGBX→RGB or RGBA uses four. The active owners preserve the archived channel maps: L→RGB/RGBA replicates luma and inserts opaque alpha; LA→L drops alpha, LA→LA preserves both bytes, and LA→RGB replicates luma; LA→RGBA uses the archived 16-pixel four-shuffle expansion and preserves alpha; LA→RGBX preserves alpha in its fourth byte. RGB→RGBA appends opaque alpha; RGBA same-mode identity preserves its native bytes through the prepared identity path; RGBA/RGBX→RGB drops the fourth byte; RGBX→RGBA inserts opaque alpha. RGBA/RGBa→LA uses the archived `native_rgba_to_la_bytes` block: the active RGBA helper retains its `77/150/29` plus residual-shift arithmetic, and the RGBa helper's `19595/38470/7471 + 32768 >> 16` expression is algebraically identical to those staged shifts. Both preserve alpha and RGBa's stored premultiplied color lanes; neither unpremultiplies. The archived 16-pixel input grouping and eight-pixel output block count are preserved, and zero-pixel execution records scalar-control. Empty RGB→RGBA NEON execution records the archived scalar-control receipt. On NEON reservation failure, RGB→RGBA now falls through to the shared portable four-pixel layout helper; that helper uses the archived generic `Vec::with_capacity` allocation behavior. Exact architecture declarations and build availability remain part of the overall Convert audit.
 - RGBX→La and RGBX→RGBa are wrapper-accepted core extensions but absent from
   Pillow's [Convert table](https://github.com/python-pillow/Pillow/blob/main/src/libImaging/Convert.c#L1445-L1453).
   Their `RGBX_INPUTS` pairs are explicitly core-only, with `NO_PILLOW_SUPPORT`
@@ -3344,14 +3380,14 @@ an implementation.
 
 | Maintained TODO location | Pending route |
 | --- | --- |
-| `compute/pool_cpu/ops/color/convert/ops.rs` | Complete the one-to-one archived SIMD source/target/guard reconciliation; place every retained kernel under its exact mode/architecture owner or record why its path is unreachable; resolve any uncovered routes; preserve same-mode Default fallback and legacy target/error/allocation contracts; finish prepared registry and public caller review. |
+| `compute/pool_cpu/ops/color/convert/ops.rs` | All 25 source-mode target contracts, Default owners, declared architecture folders/dispatch arms, and prepared identity decisions have been reviewed. Do not repeat the mode-row audit. Remaining source work: close any route-specific kernel/archive TODO beside its detailed note; finish prepared registry and direct/eager caller review; preserve target/error/allocation/metadata behavior; then verify exact output, fault, selection/fallback, and empty-input receipts across the frozen mode × target × Architecture matrix. |
 | `image/channel_access.rs`, `compute/pool_cpu/ops/put/ops.rs`, `compute/pool_cpu/ops/analysis/ops.rs` | GetChannel's operation-level declaration covers exact mode band counts, P's palette-preserving identity, I/F rejection before materialization/index validation, CoreOnly classification for five internal high-depth identities, and its composed ExtractBand child. The wrapper reads selector bounds from the declaration, then retains its L identity shortcut, tiny-RGB eager route, backend-pinned lazy route, and P copy. CoreOnly u16 sources now produce `ImageI16` bands; f32 sources produce `ImageF32` bands with little-endian scalar bytes. Carry these routes and the child's selected/fallback receipts into the frozen CPU parity set. |
 | `ops/analysis.rs`, `compute/pool_cpu/ops/analysis/ops.rs`, `compute/pool_cpu/ops/analysis/helpers/extrema.rs`, `compute/pool_cpu/ops/analysis/helpers/bbox_execution.rs`, `compute/pool_cpu/ops/analysis/helpers/extrema_execution.rs`, `compute/pool_cpu/ops/analysis/helpers/extrema_bytes.rs`, `compute/pool_cpu/ops/analysis/helpers/extrema_bytes_execution.rs`, exact-mode `default/extrema_bytes_impl.rs` owners, `compute/pool_cpu/ops/analysis/helpers/get_data.rs`, `compute/pool_cpu/ops/analysis/helpers/getcolors.rs`, `compute/pool_cpu/ops/analysis/helpers/getcolors_execution.rs`, exact-mode `default/getcolors_impl.rs` owners, `compute/pool_cpu/ops/analysis/helpers/stat.rs`, `compute/pool_cpu/ops/analysis/helpers/stat_execution.rs`, exact-mode `default/stat_impl.rs` owners, `ops/analysis/histogram.rs`, `image/entropy.rs`, `image/statistics.rs` | Pillow-facing formatted GetExtrema now has `OperationId::GetExtrema`, an exhaustive mode support contract, injected CPU context, Default architecture fallback, and native byte/u16/f32 sample reductions through exact-mode owners. Internal LA16/RGB16/RGBA16/RGB32F/RGBA32F results are CoreOnly typed multiband extrema. `FormattedExtrema` and Python/JS formatters carry these typed results. The separate Rust/JS byte-valued `Image::getextrema()` now has `OperationId::GetExtremaBytes`, exhaustive exact-mode support, injected CPU context, one Default owner per exact mode, and native-carrier scans that preserve the previous byte-result semantics without materializing an RGBA raster. Its byte projections include typed-sample conversion only at the result boundary, raw I/F carrier lanes, and RGB32F's opaque fourth lane. Add operation × mode × architecture parity and the lazy terminal receipt TODO. GetData's prepared dispatch/direct reads, GetBBox dispatch, and formatted GetExtrema dispatch now live in focused helpers so family `ops.rs` stays below the 1,000-line limit. Histogram now has an exhaustive 25-mode support contract, 1/L mask declaration, prepared CPU selection, and materialized-call receipt; exact-mode Default owners scan all byte, I/F, I;16, and CoreOnly native u16/f32 inputs directly into the existing bins. Entropy has its own exhaustive support contract and composes the prepared Histogram child under the same injected CPU context, with a materialized-call receipt. These changes are source-only and unvalidated. Mode-owned band counts also drive histogram allocation, Entropy, GetColors, and multiband Split. Entropy now shares the exact Histogram rules for I/F, I;16, byte bands, and CoreOnly native bins. Stat now has a 25-mode contract, per-mode owners, injected CPU context, specialized I/F paths, and native CoreOnly Histogram composition. Its masked wrapper executes the prepared Histogram child through the selected exact-mode Stat owner using native u32 bins without a widened histogram allocation; lazy receipts remain a source TODO. GetColors has native per-mode counting and typed CoreOnly tuples; expanded 25-mode × Architecture parity and lazy terminal receipts remain source TODOs. Include Pillow mode/value cases and declared CPU route receipts in parity. |
 | `image/statistics.rs`, `compute/pool_cpu/ops/analysis/helpers/getcolors_execution.rs`, `compute/pool_cpu/ops/analysis/helpers/stat_execution.rs`, `image/entropy.rs`, `ops/analysis/histogram.rs`, `ops/split.rs`, `ops/quantize/operations.rs` | Split now has a composed operation contract; Quantize now has a `pool_cpu` operation owner and prepared context; mode × Architecture parity and lazy receipts remain pending. GetColors and unmasked Stat now have exhaustive support contracts, exact-mode Default owners, routed CPU context, and native CoreOnly paths; their expanded parity and lazy terminal receipt evidence remain pending. Stat's lazy receipt remains pending; Split child-selection/fallback receipts remain pending; Quantize has an ImageOps contract and context-driven CPU dispatch, with exact L/P/RGB/RGBA routes and native Default owners for all 21 CoreOnly modes. Materialized calls now record requested Backend and exact-mode selection; lazy receipt composition remains pending. Entropy uses its prepared support contract and composed Histogram child. Preserve Stat mask/error ordering, verify Split child routing and output identity, and verify Quantize CoreOnly mode-owner dispatch plus materialized and lazy receipt behavior. Source TODOs and the plan matrix track these gaps; work remains unvalidated. |
 | `ops/split.rs`, `compute/pool_cpu/ops/put/helpers/extract_band.rs`, `ops/analysis/bbox.rs` | Split and GetChannel use exact band counts and preserve CoreOnly u16/f32 samples through `ExtractBand`. GetBBox is now a direct CPU analysis operation with a public support descriptor, an exhaustive 25-mode classifier, alpha-band input contract, prepared selection, and one Default owner under each exact mode folder. Pillow `I` and `F` retain their raw-word predicates; each `I;16*` owner scans native u16 samples. Pillow's `GetBBox.c` source comparison confirms that three-band modes ignore padded storage, alpha-only selects only Pillow's five alpha-bearing modes, and internal high-depth modes use their native channel selection. This corrects the archived Rust I;16 byte-prefix scan, which missed samples with only a nonzero high byte. Direct host receipts now carry the selected architecture and fallback reason; lazy-pipeline terminal receipts that combine materialization with the CPU scan remain a TODO. The previous `to_rgba8` fallback and the local row unit test were removed. Pending: CPU parity for all 25 modes under Default and all nine non-Default Architecture requests, verifying same-mode Default fallback, I;16 high-byte cases, and alpha-only selection. This is source-only and unvalidated. |
 | `ops/convert/operation.rs` | Separately route matrix Convert through a GPU-owned matrix strategy when GPU declares it; the current typed eager wrapper deliberately executes this CPU-owned operation on CPU while GPU support remains outside the CPU migration. |
 | `compute/pool_cpu/ops/composite/ops.rs`, `compute/pool_cpu/ops/draw/ops.rs`, `compute/pool_cpu/ops/paste/ops.rs`, `compute/pool_cpu/ops/transform/ops.rs` | Keep each family source/caller review beside its operation owner: carry Composite's source-reviewed modes, mask pairs, and architecture routes into frozen CPU parity; finish Transform source review; all supported Draw geometry, Text, Bitmap, and native RGB/CMYK fast routes now pass the exact `StrategySelection` into their mode owners; finish Draw mode/error review and frozen parity; carry Paste's source-reviewed SIMD and owner routes into frozen CPU parity. `compute/pool_cpu/ops/mod.rs` only exports operation families. |
-| `compute/pool_cpu/ops/geometry/pad/ops.rs` | Move any remaining archived full-width convolution modes into exact mode/architecture Resize owners, and finish checking every padded mode against its same-mode Default fallback and prepared context. |
+| `compute/pool_cpu/ops/geometry/pad/ops.rs` | Archived full-width non-nearest Pad convolution was limited to L and RGBX. Both paths now compose the prepared Resize child and write into the final canvas through exact-mode L/RGBX adapters; `Resize::PreparedResize` retains and dispatches the selected Default/SSE2/NEON/Wasm SIMD128 strategy. No implementation gap remains for this archived branch. Finish checking every padded mode against its same-mode Default fallback and prepared context; verify Pad output/error, fill, palette, and child-selection behavior in CPU parity. |
 | `compute/pool_cpu/ops/enhance/ops.rs` | Contrast source review is complete: nine remaining identities reach Blend's preserved wrong-mode rejection, five internal high-depth identities reject while converting the constant base, and La/RGBa retain their exact conversion errors. Sharpness source review traces wrapper→registry→injected context→exact mode→architecture, confirms exact output identity for all 22 accepted modes and archived native behavior for the six Pillow-supported byte modes, and records explicit `NO_PILLOW_SUPPORT` markers on the other 16 native extensions. The six byte-mode architecture lists and dispatches cover all seven declared entries. Keep Sharpness in the frozen CPU parity matrix after source migration is complete. Expand parity across every operation × exact Mode × Architecture. |
 | `compute/pool_cpu/ops/filter/ops.rs` | Filter3x3 native-byte Default and architecture kernels are source-compared: coefficient order, arithmetic, border retention, RGB byte-stream, LA binomial path, and exact-mode reconstruction match the archive. Filter5x5 Default paths are source-compared: I32 keeps its typed path; L/LA/RGB/RGBA retain their archived special kernels and bounded fast paths; other admitted byte modes use native-byte rows; each leaf restores its exact variant. I32 also declares the archived AVX/FMA ring for the exact normalized binomial request and retains AVX2/FMA for its vector route. Include guarded exact-kernel selections and ineligible-request Default fallbacks in the frozen CPU parity matrix. P, F32, and internal high-depth rejections remain declared. Direct ModeFilter has an exact byte-mode support contract, normalized window facts, serial CPU context, palette-preserving wrapper, and native exact-variant output; its direct caller was moved out of `ops/param_filters.rs`. Its neighborhood, tie, threshold, P-index, and palette behavior were compared with `3f9dfd403`; the refactored caller records its prepared CPU architecture selection. The support declaration and closed strategy selector now route each accepted byte identity to its exact-mode Default leaf; those leaves call the shared native-byte helper without mode conversion. A P-mode nonzero-index case with a full palette is now in the parity input generator but has not been run; backend-fallback receipts remain pending. General Gaussian/BoxBlur source comparison covers the serial and native-byte architecture paths; the RGBA radius-seven implementation and its uniform proof are compared with the archive. L rank-window Default and vector paths are source-compared, including the preserved Apple ARM64 9x9 rank-40 performance regression. Finish comparisons for remaining exact-mode kernel routes and the other direct/eager Filter caller audit. Native-byte extrema/rank strategies and L/F32 rank vector strategies are represented in their exact mode owners. PA BoxBlur/BoxBlurXY and rank requests retain native index/alpha samples so prepared execution reaches the declared PA kernels; GaussianBlur remains rejected for PA. |
 | `compute/pool_cpu/ops/resize/ops.rs`, `compute/pool_cpu/ops/resize/{i32,f32}/ops.rs`, `compute/registry/registration/geometry.rs`, `ops/pil_resize/{resize,boxed,luma16,float}.rs` | The prepared path now preserves float32-bound identity/crop shortcuts and unchanged-axis float pass elision; native I;16 Default and vector paths preserve exact output identity for empty source extents. Still review boxed validation/error ordering, and keep the older whole-image dispatcher, boxed adapter, and integer-mode reducers test-only; production CPU execution uses prepared mode owners and shares only low-level coefficient, sample, and pass helpers; move any retained Rayon scheduling to `pool_parallel`; keep the GPU Pillow-string helper as separate migration debt. Public direct and nested geometry callers already enter prepared plans with injected context. All 14 byte modes declare ordinary nearest vector strategies. ImageLuma8 and eleven other byte modes declare unboxed filtered SSE2, NEON, and Wasm SIMD128 strategies when both coefficient axes satisfy the checked i32 bound; One and P remain nearest-only. Pad composes the exact ImageLuma8 strategies into its output window. All byte modes declare boxed nearest strategies, with filtered boxed convolution for all except One/P. I32/F32 filtered Resize and all four unboxed I;16 vector routes are declared with their Default fallbacks; I32 also declares NEON for unboxed nearest. Boxed I;16 remains Default. Thumbnail prepares nested Reduce/Resize work with the same context; its streamed I32 mode owner and AVX FMA adapter now consume the prepared `StrategySelection`. |
@@ -6156,3 +6192,291 @@ SHA-256 `4e85e8da04824c6b883075f32454f04d4795f584c4abb640cb61814d2bd984b8`.
 BoxBlur/GaussianBlur output parity is verified for these mode samples on the
 current CPU Architecture. BoxBlurXY output and route/fallback receipts remain
 open.
+
+Pad full-width Resize source review (2026-11-07): the archived SIMD Pad's
+full-width convolution branch is admitted only for non-nearest L and RGBX.
+The maintained Pad operation composes its exact-mode Resize selection and
+writes those outputs into the final canvas through the L and RGBX
+`resize_into_canvas` adapters. `PreparedResize::execute_into_pad_window`
+dispatches the selected Default/SSE2/NEON/Wasm SIMD128 implementation under
+the retained mode and architecture. Fill bytes match the mode-owned Pad
+strategies. This closes that source-migration item; the remaining Pad source
+audit and all runtime output/error/receipt parity remain pending. No validation
+ran.
+
+Convert owner-layout source audit (2026-11-07): each of the 25 exact source
+modes has a `default/convert_impl.rs`, and every architecture named in that
+mode's `ops.rs` has a matching architecture folder. This confirms folder and
+declaration alignment only; archived source/target/guard reconciliation,
+unreachable-path accounting, and caller review remain open. No validation ran.
+
+Convert RGB8 source reconciliation (2026-11-07): the archived native SIMD
+preflight admits RGB-to-L, LA, RGB, RGBA, CMYK, YCbCr, HSV, I, and F byte
+routes, with SSE2/NEON/Wasm SIMD128 generic paths and the separate
+SSSE3/AVX2 luma specialization. The maintained RGB8 declaration preserves
+those exact targets and architecture routes. P/PA palette conversion, LAB,
+and the four I;16 output identities remain Default-only, matching their
+separate archived paths or lack of a SIMD route. The new RGB-to-La and RGB-to-
+RGBa vector routes append opaque alpha and are explicit additional strategies;
+their output parity remains unverified. No validation ran.
+
+Convert RGBa source/build-dispatch review (2026-11-07): the exact target
+contract has 20 identities. Archived native-byte layout and alpha routes are
+accounted for by the active exact-mode Default owners; the architecture table
+declares SSE2/NEON/Wasm SIMD128 for generic native RGBa conversions and
+nonempty unpremultiplication routes, plus SSE2/SSSE3/AVX2/NEON/Wasm for
+RGBa-to-L through the Grayscale kernels. The source's same-mode copy,
+palette, LAB, and I;16 routes remain Default-only. Each availability predicate
+matches the corresponding cfg-gated execution arm, and every declared
+architecture has a mode-owned implementation folder. RGBa-to-L's nonempty
+vector route is an added strategy; the archived SIMD Convert adapter rejected
+that pair and its empty input selects same-mode Default. Exact output and
+fallback parity remain pending. No build or validation ran.
+
+Convert CMYK source/build-dispatch review (2026-11-07): the CMYK owner declares
+20 output identities and routes same-mode, RGB-derived colors, binary output,
+palette output, and typed I/F outputs through its exact-mode Default strategy
+and dedicated wrapper helpers. The archived SIMD adapter had one CMYK-source
+special case: CMYK-to-RGB. Its generic native-byte layout accepts only L, LA,
+RGB, RGBA, RGBa, and RGBX source identities, so it did not provide additional
+CMYK-source SIMD targets. The maintained declaration guards SSE2, SSSE3, NEON,
+and Wasm SIMD128 implementations to RGB output; the prepared dispatcher has
+matching target arms and the architecture folders exist. The shared vector
+helper preserves the archived CMYK channel formula and handles a scalar-sized
+tail; Default uses the same `cmyk_pixel_to_rgb` arithmetic. Output, faults,
+palette metadata, empty-input selection receipts, and CPU parity remain open.
+No build or validation ran.
+
+Convert Luma8 source/build-dispatch review (2026-11-07): the exact L source
+contract declares 18 output identities. Its prepared identity path preserves
+same-mode L samples; the Default owner composes LAB from L samples, uses the
+grayscale palette path for P/PA, and delegates One to the shared binary target
+strategy. The archived SIMD adapter's generic native-byte matrix covers L,
+LA, RGB, RGBA, CMYK,
+YCbCr, HSV, I, and F; its separate L→I;16 kernel is carried by four typed
+I;16 target identities. The maintained strategy matrix has 36 guarded
+entries: SSE2, NEON, and Wasm SIMD128 for twelve targets (LA, RGB, RGBA,
+CMYK, YCbCr, HSV, I, F, and four I;16 identities). Each architecture
+dispatcher enters the matching exact-mode helper, whose target match covers
+those same twelve modes. The same-mode L request now uses the prepared Default
+identity path: its three unreachable vector declarations and both
+mode-local identity branches were removed because support assessment excludes
+same-mode kernel selection.
+One, P, PA, RGBX, and LAB also remain Default-only. The archive had no generic
+SIMD route for RGBX or LAB, and its palette/binary targets were handled outside
+this adapter. Output, dither and palette faults, metadata, empty-input
+receipts, same-mode behavior, and CPU parity remain open. No build or
+validation ran.
+
+Convert LumaA8 source/build-dispatch review (2026-11-07): the exact LA source
+contract declares 19 output identities. Its same-mode result comes from the
+prepared identity path. The archived generic native-byte vector matrix covers
+LA-to-L, RGB, RGBA, CMYK, YCbCr, HSV, I, and F; archived alpha-special paths
+cover nonempty LA-to-La and LA-to-RGBX. The maintained declaration has 30
+architecture entries: SSE2, NEON, and Wasm SIMD128 for ten targets (L, La,
+RGB, RGBA, RGBX, CMYK, YCbCr, HSV, I, and F), with matching dispatch arms and
+architecture folders. Its vector helper uses the source luma lane for L/RGB,
+the dedicated expansion, typed, color, and premultiplication helpers for the
+other targets. RGBA/RGBX carry alpha in their output storage; the post-dispatch
+compatibility helper retains LA alpha in compact RGB/HSV hidden lanes, while
+YCbCr uses Pillow's opaque padding behavior. One, P, PA, LAB, and four I;16
+targets have no architecture entry. The same-mode LA vector declaration and
+both mode-local identity branches were removed because prepared identity
+returns before mode dispatch and same-mode architecture guards are ineligible.
+Empty alpha transforms preserve their nonempty fallback guard; other empty
+routes remain source-reviewed. Output bytes, hidden lanes, faults, palette
+metadata, architecture receipts, and CPU parity remain open. No build or
+validation ran.
+
+Convert One source/build-dispatch review (2026-11-07): the exact bilevel source
+contract declares 18 output identities. Same-mode One uses prepared identity;
+the Default owner expands nonzero source samples to 255 and feeds its declared
+L/LA/RGB/RGBA/RGBX/CMYK/YCbCr/HSV/I/F, LAB, palette, and I;16 targets through
+native sample helpers. The archived SIMD adapter admits the One byte carrier
+only for I;16 targets, using the special `1` source normalization; it rejects
+One for the generic layout SIMD matrix. The maintained catalog therefore has
+12 entries: SSE2, NEON, and Wasm SIMD128 for the four I;16 identities, with
+matching target dispatch and architecture folders. The I;16 helper expands
+every nonzero byte to 255 before widening to u16, including the archived
+zero-work vector receipt. All other nonidentity targets remain Default-only;
+P/PA use the palette-aware output boundary. Output/fault/palette metadata,
+empty-input receipts, architecture fallback receipts, and CPU parity remain
+open. No build or validation ran.
+
+Convert P source/build-dispatch review (2026-11-07): the exact palette-index
+contract declares 14 identities: One, L, LA, P, PA, RGB, RGBX, RGBA, CMYK,
+YCbCr, HSV, LAB, I, and F. Pillow's `frompalette` admits the listed direct
+palette conversions, while Python's LAB branch promotes P through RGBA before
+the profile transform; P's Pillow mode base is P, so unsupported native
+`frompalette` targets do not gain routes through generic base-mode fallback.
+The active P owner requires palette metadata, has no architecture strategies,
+and the archived SIMD generic-layout preflight also rejects P's one-byte
+carrier. Same-mode P retains its wrapper palette; P→PA retains the palette and
+expands per-index alpha; RGBX uses the palette alpha byte as its fourth output
+byte, while RGB/YCbCr/HSV use opaque padding. P→LAB now retains the palette
+alpha in LAB's hidden fourth byte, matching the Python RGBA intermediate. The
+Default owner handles other color/scalar targets directly from indexed palette
+samples, and target One uses the P-specific binary strategy: it compares the
+unrounded `299R + 587G + 114B` palette sum with `128000`, without an RGB raster
+or dithering. High-depth u16,
+La, and RGBa destinations are not in the Pillow P contract. Source references:
+[Pillow Convert.c palette routes](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L879-L1067),
+[Image.convert LAB route](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py#L1118-L1134),
+and [Pillow P mode base](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageMode.py#L42-L57).
+Palette faults, output bytes, metadata, hidden lanes, empty-input selection
+receipts, and CPU parity remain open. No build or validation ran.
+
+Convert PA source/build-dispatch review (2026-11-07): the exact palette-index
+and per-pixel-alpha source contract declares 20 output identities: One, L, LA,
+P, PA, La, RGBa, I;16 variants, RGB, RGBA, RGBX, LAB, CMYK, YCbCr, HSV, I,
+and F. PA requires palette metadata and has no declared architecture strategy;
+the archived SIMD byte-layout preflight accepts only L/LA/RGB/RGBA carriers,
+so PA's two-byte index/alpha carrier falls back to CPU. Its direct One path
+reads the palette color by index, ignores per-pixel alpha, applies the same
+unrounded weighted threshold as P, and bypasses dithering. The Default strategy
+keeps indexed data native for its declared targets; the LAB path restores the
+omitted physical lane from per-pixel alpha. Pillow's `PA` mode has RGB base
+mode, so base-mode fallback is part of the target-routing review; output
+bytes, alpha/padding lanes, high-depth route reachability, palette/wrapper
+metadata, faults, empty-input receipts, and CPU parity remain open. Sources:
+[Pillow palette luma formulas](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L39-L41),
+[Pillow P/PA-to-One kernels](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Convert.c#L3723-L3748),
+[Pillow mode base table](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageMode.py#L407-L438),
+and [Image.convert base-mode fallback](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/Image.py#L1118-L1151).
+No build or validation ran.
+
+
+Convert RGBA source/build-dispatch review (2026-11-07): the exact straight-RGBA contract declares 20 targets: One, L, LA, P, PA, La, I;16 variants, RGB, RGBA, LAB, RGBa, RGBX, CMYK, YCbCr, HSV, I, and F. Same-mode RGBA returns from the prepared identity path before mode execution. The three unreachable SSE2, NEON, and Wasm RGBA-to-RGBA declarations, their vector copy arm, and the Default clone arm were removed; the architecture catalog now has 33 declared entries subject to their availability guards. Its target coverage is RGB under SSE2/SSSE3/NEON/Wasm; L under AVX2/SSSE3/SSE2/NEON/Wasm; nonempty RGBX and RGBa under SSE2/NEON/Wasm; and LA, CMYK, YCbCr, HSV, I, and F under SSE2/NEON/Wasm. One, P/PA palette output, four I;16 targets, and LAB remain Default-only. Prepared palette targets synthesize their output metadata, while direct RGBA-to-LAB reads RGB lanes. Target bytes, alpha/padding lanes, palette metadata, architecture receipts/fallbacks, empty-input behavior, faults, and CPU parity remain open. Source-only; no build or validation ran.
+
+
+Convert RGBX source/build-dispatch review (2026-11-07): the exact RGBX contract declares 20 targets: One, L, LA, P, PA, I;16 variants, RGB, RGBA, RGBX, La, RGBa, CMYK, YCbCr, HSV, LAB, I, and F. Same-mode RGBX returns through prepared identity and has no architecture declaration. The 36 declared architecture entries map L to AVX2/SSSE3/SSE2/NEON/Wasm; RGB to SSSE3/SSE2/NEON/Wasm; and LA, RGBA, La, RGBa, CMYK, YCbCr, HSV, I, and F to SSE2/NEON/Wasm. The active target dispatcher and architecture folders cover those entries. One, palette output, I;16 targets, LAB, and same-mode RGBX remain Default-only. LAB preserves the source X lane in its hidden physical byte. RGBX-to-La and RGBX-to-RGBa are explicit Rust-only extensions with adjacent `NO_PILLOW_SUPPORT` comments. Exact lane/output parity, palette metadata, faults, empty-input and fallback receipts, and CPU parity remain open. Source-only; no build or validation ran.
+
+
+Convert La source/build-dispatch review (2026-11-07): the exact La contract declares three targets: same-mode La, LA, and LAB. Same-mode La returns through prepared identity; LAB is the direct native-sample Rust extension and is marked `NO_PILLOW_SUPPORT`. The only architecture strategy is La-to-LA unpremultiplication, declared for SSE2, NEON, and Wasm SIMD128 with a nonempty guard; the Default owner handles the same conversion and empty inputs. The archived SIMD Convert alpha adapter contains the matching exact `La`→`LA` unpremultiply route, while generic native-byte layout does not admit La. Unsupported targets retain the declared `conversion from La to L not supported` rejection. Removed the unreachable binary-target wrapper and the Default same-mode clone arm. Output/fault/empty-input receipts and parity remain open. Source-only; no build or validation ran.
+
+
+Convert I32 source/build-dispatch review (2026-11-07): the exact signed-I
+contract declares the 18 scalar targets in `SCALAR_TARGETS`, including I32
+identity (returned by prepared identity), One, palette targets, I16 variants,
+byte color targets, LAB, and F. The maintained owner currently declares only
+Default; the legacy SIMD archive contains no I32-specific source kernel, and
+its generic four-byte layout is not a typed I32 strategy. The Default owner
+reads the native little-endian scalar for direct target output; target L and
+palette indices use the existing I32 grayscale path, palette metadata is
+built at the wrapper boundary, and target One uses the mode-owned binary
+entry. Removed the unreachable I32 same-mode clone arm. Exact scalar ranges,
+target bytes and hidden lanes, palette metadata, fault behavior, empty-input
+receipts, any justified architecture specialization, and CPU parity remain
+open. Source-only; no build or validation ran.
+
+Convert F32 source/build-dispatch review (2026-11-07): the exact float-F
+contract declares the same 18 scalar targets. The maintained owner currently
+declares only Default; the legacy SIMD archive contains no F32-specific source
+kernel, and its generic four-byte layout is not a typed F32 strategy. The
+Default owner reads native little-endian float samples; target L and palette
+indices use the existing F32 grayscale path, I16 outputs follow the declared
+L-derived clipping path, and target One uses the mode-owned binary entry.
+Removed the unreachable F32 same-mode clone arm. NaN/infinity and out-of-range
+F-to-I behavior, exact target bytes, palette metadata, fault behavior,
+empty-input receipts, any justified architecture specialization, and CPU
+parity remain open. Source-only; no build or validation ran.
+
+
+Convert YCbCr source/build-dispatch review (2026-11-07): the exact YCbCr
+contract declares 20 targets and no CoreOnly targets. Prepared identity owns
+YCbCr→YCbCr; the mode's Default implementation writes the remaining output
+formats from native Y/Cb/Cr samples, including direct YCbCr→LAB conversion and
+scalar targets. It preserves the source's compact hidden lane for RGB-family
+outputs. No architecture strategy is declared: the archived SIMD YCbCr kernel
+converts to YCbCr from RGB/luma sources; its generic three-byte path treats
+YCbCr bytes as RGB and is not valid for this source mode. Removed the
+unreachable Default same-mode clone. TODO: complete target/fault/metadata and
+empty-input parity, then evaluate a native YCbCr-source vector kernel without
+changing the conversion arithmetic. Source-only; no build or validation ran.
+
+
+Convert HSV source/build-dispatch review (2026-11-07): the exact HSV
+contract declares 20 Pillow targets and no CoreOnly targets. Prepared identity
+owns HSV→HSV; the Default implementation derives outputs from native H/S/V
+samples and preserves the source compact hidden lane for RGB-family outputs.
+The archived SIMD HSV kernel is target-side RGB/luma→HSV; its generic three-byte
+path cannot treat HSV as RGB. Removed the unreachable Default same-mode clone.
+TODO: complete target/fault/metadata and empty-input parity, then evaluate an
+HSV-source vector kernel only if its arithmetic exactly matches Default.
+Source-only; no build or validation ran.
+
+
+Convert LAB source/build-dispatch review (2026-11-07): the exact LAB source
+contract declares 20 targets; identity and RGB, RGBA, RGBX are Pillow-facing,
+while the other 16 outputs are marked CoreOnly with adjacent
+`NO_PILLOW_SUPPORT` rationale. Prepared identity owns LAB→LAB. The Default
+owner uses its native-sample sRGB LUT path to write each target directly;
+palette, binary, and scalar outputs remain within this mode strategy. No LAB
+source architecture strategy exists in the archive; the generic three-byte
+kernel would misinterpret LAB lanes as RGB. Removed the unreachable Default
+same-mode clone. TODO: complete ImageCms output/error and CoreOnly output/fault
+parity, then assess a mode-specific LUT architecture kernel only if it can
+preserve exact RGB-family bytes. Source-only; no build or validation ran.
+
+
+Convert I16 source/build-dispatch review (2026-11-07): the exact native
+`I;16` source identity has 18 targets, no CoreOnly targets, and separate
+identity handling in Prepared Convert. It carries its own `Mode::ImageI16`
+into the u16 Default and architecture strategies. SSE2, NEON, and Wasm SIMD128
+entries cover L, LA, RGB, RGBA, RGBX, CMYK, I, and F; each vector block
+processes eight u16 samples. One, palettes, LAB, YCbCr, HSV, and I;16 targets
+are Default-only. Cross-alias I;16 conversion clips to 255; same-mode identity
+preserves full samples. Removed the unreachable clone branch in the shared
+cross-alias helper. Target bytes, I/F behavior, palette metadata, faults,
+selection/fallback receipts, empty input, and parity remain TODO.
+
+Convert I16L source/build-dispatch review (2026-11-07): the exact little-endian
+`I;16L` source identity has the same 18 targets, no CoreOnly targets, and its
+own `Mode::ImageI16L` selection. Its Default conversion and the SSE2, NEON, and
+Wasm SIMD128 strategies use the shared native-u16 implementation; the eight
+vector targets are L, LA, RGB, RGBA, RGBX, CMYK, I, and F. Same-mode identity
+preserves full samples, while cross-alias conversions clip to 255. One,
+palettes, LAB, YCbCr, HSV, and I;16 targets remain Default-only. Exact target
+bytes, faults, palette metadata, receipts/fallbacks, empty input, and parity
+remain TODO.
+
+Convert I16B source/build-dispatch review (2026-11-07): the exact big-endian
+`I;16B` source identity has the same 18 targets and no CoreOnly targets; its
+mode selection remains distinct from the other u16 variants. Default and the
+SSE2, NEON, and Wasm SIMD128 paths receive `Mode::ImageI16B` explicitly. The
+vector strategies cover L, LA, RGB, RGBA, RGBX, CMYK, I, and F in eight-sample
+blocks. Same-mode identity preserves full samples; cross-alias I;16 conversion
+clips to 255. All other targets use Default. Output/fault/metadata,
+architecture receipts, empty-input behavior, and parity remain TODO.
+
+Convert I16N source/build-dispatch review (2026-11-07): the exact native-order
+`I;16N` source identity has the same 18 targets and no CoreOnly targets, with
+its own mode injected into Default and architecture strategies. SSE2, NEON, and
+Wasm SIMD128 cover L, LA, RGB, RGBA, RGBX, CMYK, I, and F in eight-sample
+blocks; One, palettes, LAB, YCbCr, HSV, and I;16 targets use Default.
+Same-mode identity preserves the original samples. Cross-alias conversions
+clip to 255, and I/F targets also follow I;16N's byte-range rule. Output,
+fault, palette, receipt/fallback, empty-input, and parity TODOs remain. The four
+rows are structurally distinct strategies over a shared typed-u16 helper; no
+legacy or generic byte-mode dispatch is used. Source-only; no build or
+validation ran.
+
+
+Convert CoreOnly high-depth source/build-dispatch review (2026-11-07): the
+five exact internal modes—LA16, RGB16, RGBA16, RGB32F, and RGBA32F—each
+declare 22 target identities and mark the source operation CoreOnly with
+`NO_PILLOW_SUPPORT`. Same-mode requests return through prepared identity. Each
+mode's Default owner passes its exact typed raster to monomorphized high-depth
+helpers; L targets use the matching grayscale owner. No architecture-specific
+source strategy is declared. Target One now uses a mode-bound strategy that
+streams the same per-pixel RGB8 projection and truncating Pillow grayscale
+formula directly into thresholding or error diffusion, without an intermediate
+RGB raster. Palette targets remain Default and build wrapper metadata in the
+image boundary. Cross-conversions between different internal high-depth target
+modes are not in the current contracts and are rejected. TODO: freeze all
+target-only output/fault/metadata/selection receipts, decide whether cross-mode
+high-depth targets are part of the Rust contract, and assess typed architecture
+kernels only after parity and measurement. Float limits, non-finite values,
+alpha edges, and palette/dither outputs remain open. The release build passed;
+the 1,335-case public Convert CPU-default parity slice passed, but current
+Pillow cases do not exercise these CoreOnly source modes.

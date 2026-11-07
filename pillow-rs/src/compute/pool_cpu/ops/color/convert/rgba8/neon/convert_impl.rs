@@ -22,10 +22,10 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
                 Err(error) => Err(error),
             }
         }
-        Mode::ImageRgbx8 => super::super::helpers::opaque_padding::execute(source)
-            .map(DynamicImage::ImageRgbx8),
+        Mode::ImageRgbx8 => {
+            super::super::helpers::opaque_padding::execute(source).map(DynamicImage::ImageRgbx8)
+        }
         Mode::ImageLumaA8
-        | Mode::ImageRgba8
         | Mode::ImageRgbPremultiplied8
         | Mode::ImageCmyk8
         | Mode::ImageYCbCr8
@@ -39,12 +39,10 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
 }
 
 fn luma8(source: &RgbaImage) -> Result<DynamicImage, PilError> {
-    let kernel = crate::compute::pool_cpu::ops::grayscale::rgba8::default::grayscale_impl::prepare(
-        source,
-    )?;
-    let output = crate::compute::pool_cpu::ops::grayscale::rgba8::neon::grayscale_impl::execute(
-        kernel,
-    );
+    let kernel =
+        crate::compute::pool_cpu::ops::grayscale::rgba8::default::grayscale_impl::prepare(source)?;
+    let output =
+        crate::compute::pool_cpu::ops::grayscale::rgba8::neon::grayscale_impl::execute(kernel);
     let output = crate::compute::pool_cpu::ops::grayscale::helpers::luma::vector_output(
         source.width(),
         source.height(),

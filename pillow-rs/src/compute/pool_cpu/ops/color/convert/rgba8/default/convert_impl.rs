@@ -1,10 +1,7 @@
 //! Direct conversions from straight RGBA samples.
 
 use crate::error::PilError;
-use crate::raster::{
-    DynamicImage, GrayAlphaImage, LumaA, Mode, Rgb, RgbImage, Rgba,
-    RgbaImage,
-};
+use crate::raster::{DynamicImage, GrayAlphaImage, LumaA, Mode, Rgb, RgbImage, Rgba, RgbaImage};
 
 pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, PilError> {
     if target == Mode::ImageLab8 {
@@ -17,9 +14,14 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
     let (width, height) = source.dimensions();
     match target {
         Mode::ImageLuma8 => {
-            let kernel = crate::compute::pool_cpu::ops::grayscale::rgba8::default::grayscale_impl::prepare(source)?;
-            crate::compute::pool_cpu::ops::grayscale::rgba8::default::grayscale_impl::execute(kernel)
-                .map(DynamicImage::ImageLuma8)
+            let kernel =
+                crate::compute::pool_cpu::ops::grayscale::rgba8::default::grayscale_impl::prepare(
+                    source,
+                )?;
+            crate::compute::pool_cpu::ops::grayscale::rgba8::default::grayscale_impl::execute(
+                kernel,
+            )
+            .map(DynamicImage::ImageLuma8)
         }
         Mode::ImageLumaA8 => {
             let mut output = GrayAlphaImage::new(width, height);
@@ -46,15 +48,14 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
             }
             Ok(DynamicImage::ImageRgb8(output))
         }
-        Mode::ImageRgba8 => Ok(DynamicImage::ImageRgba8(source.clone())),
         Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
             super::super::super::helpers::luma16::from_luma8_samples(
                 width,
                 height,
                 target,
-                source.pixels().map(|pixel| {
-                    crate::color::rgb_to_luma_u8(pixel[0], pixel[1], pixel[2])
-                }),
+                source
+                    .pixels()
+                    .map(|pixel| crate::color::rgb_to_luma_u8(pixel[0], pixel[1], pixel[2])),
             )
         }
         Mode::ImageRgbPremultiplied8 => {
@@ -118,7 +119,10 @@ pub(crate) fn execute_palette_target(
     if target == Mode::ImagePalette8 {
         let (indices, palette, palette_alpha) =
             crate::compute::pool_cpu::helpers::quantization::quantize_rgba_samples(
-                source.as_raw(), width, height, 256,
+                source.as_raw(),
+                width,
+                height,
+                256,
             )?;
         return crate::compute::pool_cpu::ops::color::convert::helpers::palette::palette_index_output(
             width,
@@ -149,10 +153,7 @@ pub(crate) fn execute_palette_target(
         rgb_samples.extend_from_slice(&pixel[..3]);
     }
     let (indices, palette) =
-        crate::compute::pool_cpu::helpers::quantization::median_cut_quantize_rgb(
-            &rgb_samples,
-            256,
-        );
+        crate::compute::pool_cpu::helpers::quantization::median_cut_quantize_rgb(&rgb_samples, 256);
     let palette: Vec<u8> = palette
         .into_iter()
         .flat_map(|color| color.into_iter())

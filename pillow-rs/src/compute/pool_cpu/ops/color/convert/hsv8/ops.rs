@@ -4,9 +4,12 @@ crate::compute::pool_cpu::ops::color::convert::helpers::binary::declare_mode_str
     crate::raster::Mode::ImageHsv8
 );
 
-use crate::compute::{Architecture, registry::support::{
-    InputContract, ModeSupport, OperationId, OutputModeRule, StrategySelection,
-}};
+use crate::compute::{
+    Architecture,
+    registry::support::{
+        InputContract, ModeSupport, OperationId, OutputModeRule, StrategySelection,
+    },
+};
 use crate::error::PilError;
 use crate::pipeline::DitherMethod;
 use crate::raster::{DynamicImage, Mode, RgbImage};
@@ -34,8 +37,12 @@ const TARGETS: &[Mode] = &[
     Mode::ImageF32,
 ];
 // This target row includes Pillow results derived through RGB; the HSV owner
-// writes each final target from its native samples.
+// writes each final target from its native samples. The archived SIMD adapter
+// has no exact HSV-source kernel; its generic three-byte route treats the
+// stored H/S/V lanes as RGB and cannot be selected here.
 const CORE_ONLY_TARGETS: &[Mode] = &[];
+// TODO(pillow-rs#3ptb): evaluate exact HSV-source vector kernels after the
+// Default source row has complete parity evidence.
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: TARGETS,
     core_only_targets: CORE_ONLY_TARGETS,
@@ -62,9 +69,7 @@ pub(crate) fn execute(
             "Convert selected an undeclared HSV8 architecture".into(),
         )),
     }?;
-    super::super::helpers::physical_lanes::preserve_compact_rgb_lane(
-        source, target, &mut output,
-    )?;
+    super::super::helpers::physical_lanes::preserve_compact_rgb_lane(source, target, &mut output)?;
     Ok(output)
 }
 

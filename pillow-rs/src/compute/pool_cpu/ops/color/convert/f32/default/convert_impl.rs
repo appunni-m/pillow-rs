@@ -1,10 +1,7 @@
 //! Direct conversions from little-endian 32-bit float F samples.
 
 use crate::error::PilError;
-use crate::raster::{
-    DynamicImage, GrayAlphaImage, LumaA, Mode, Rgb, RgbImage, Rgba,
-    RgbaImage,
-};
+use crate::raster::{DynamicImage, GrayAlphaImage, LumaA, Mode, Rgb, RgbImage, Rgba, RgbaImage};
 
 pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, PilError> {
     if target == Mode::ImageLab8 {
@@ -40,7 +37,6 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
         Mode::ImageYCbCr8 => Ok(DynamicImage::ImageYCbCr8(ycbcr(source))),
         Mode::ImageHsv8 => Ok(DynamicImage::ImageHsv8(hsv(source))),
         Mode::ImageI32 => Ok(DynamicImage::ImageI32(to_i32(source))),
-        Mode::ImageF32 => Ok(DynamicImage::ImageF32(source.clone())),
         _ => Err(PilError::ValueError("image has wrong mode".into())),
     }
 }
@@ -114,7 +110,9 @@ pub(crate) fn execute_palette_target(
     target: Mode,
 ) -> Result<super::super::super::ops::PreparedConvertOutput, PilError> {
     let indices = match target {
-        Mode::ImagePalette8 => crate::compute::pool_cpu::ops::grayscale::f32::default::grayscale_impl::execute(source),
+        Mode::ImagePalette8 => {
+            crate::compute::pool_cpu::ops::grayscale::f32::default::grayscale_impl::execute(source)
+        }
         Mode::ImagePaletteAlpha8 => {
             let mut output = GrayAlphaImage::new(source.width(), source.height());
             for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
@@ -122,7 +120,9 @@ pub(crate) fn execute_palette_target(
             }
             return Ok(super::super::super::ops::PreparedConvertOutput {
                 image: DynamicImage::ImagePaletteAlpha8(output),
-                palette: Some(crate::compute::pool_cpu::helpers::quantization::identity_grayscale_palette()),
+                palette: Some(
+                    crate::compute::pool_cpu::helpers::quantization::identity_grayscale_palette(),
+                ),
                 palette_alpha: None,
                 wrapper_metadata: Some(super::super::super::ops::ConvertWrapperMetadata::ExifOnly),
             });
@@ -131,7 +131,9 @@ pub(crate) fn execute_palette_target(
     };
     Ok(super::super::super::ops::PreparedConvertOutput {
         image: DynamicImage::ImagePalette8(indices),
-        palette: Some(crate::compute::pool_cpu::helpers::quantization::identity_grayscale_palette()),
+        palette: Some(
+            crate::compute::pool_cpu::helpers::quantization::identity_grayscale_palette(),
+        ),
         palette_alpha: None,
         wrapper_metadata: Some(super::super::super::ops::ConvertWrapperMetadata::Drop),
     })
@@ -141,4 +143,3 @@ pub(crate) fn execute_palette_target(
 fn sample(bytes: [u8; 4]) -> u8 {
     f32::from_le_bytes(bytes).clamp(0.0, 255.0) as u8
 }
-

@@ -1,8 +1,10 @@
 //! CPU conversion to Pillow's expanded-byte bilevel representation.
 
 use crate::checked_dims::CheckedDims;
-use crate::compute::{Architecture, registry::support::StrategySelection};
-use crate::compute::registry::support::OperationInputs;
+use crate::compute::{
+    Architecture,
+    registry::support::{OperationInputs, PaletteInput, StrategySelection},
+};
 use crate::error::PilError;
 use crate::pipeline::DitherMethod;
 use crate::raster::{DynamicImage, GrayImage, ImageBuffer, Luma, Mode};
@@ -66,9 +68,7 @@ pub(crate) fn convert_for_mode(
             let mut output = GrayImage::new(image.width(), image.height());
             for (destination, pixel) in output.pixels_mut().zip(image.pixels()) {
                 let [red, green, blue] = straight_rgb(pixel);
-                let luma = 299 * i32::from(red)
-                    + 587 * i32::from(green)
-                    + 114 * i32::from(blue);
+                let luma = 299 * i32::from(red) + 587 * i32::from(green) + 114 * i32::from(blue);
                 destination[0] = if luma >= 128_000 { 255 } else { 0 };
             }
             Ok(DynamicImage::One(output))
@@ -81,7 +81,7 @@ pub(crate) fn convert_for_mode(
             diffuse_rgb_samples(image.pixels().map(straight_rgb), &mut output)?;
             Ok(DynamicImage::One(output))
         }
-        (Mode::ImagePalette8 | Mode::ImagePaletteAlpha8, _) | (_, true) => {
+        (_, true) => {
             let gray = binary_luma(source, source_mode, inputs.palette.rgb)?;
             let (width, height) = gray.dimensions();
             let mut output = GrayImage::new(width, height);
@@ -108,6 +108,35 @@ pub(crate) fn convert_for_mode(
             Ok(DynamicImage::One(output))
         }
     }
+}
+
+/// Threshold palette colors directly for P/PA-to-One, without dithering or an RGB raster.
+pub(crate) fn palette_indices_to_binary(
+    width: u32,
+    height: u32,
+    indices: impl ExactSizeIterator<Item = u8>,
+    palette: PaletteInput<'_>,
+    selection: StrategySelection,
+) -> Result<DynamicImage, PilError> {
+    if selection.implementation.architecture != Architecture::Default {
+        return Err(PilError::InternalError(
+            "Convert selected an undeclared binary architecture".into(),
+        ));
+    }
+    let dims = CheckedDims::new_allow_empty(width, height, 1)?;
+    if indices.len() != dims.total_pixels() {
+        return Err(PilError::InternalError(
+            "palette binary source did not match its output extent".into(),
+        ));
+    }
+    let mut output = GrayImage::new(width, height);
+    for (destination, index) in output.pixels_mut().zip(indices) {
+        let [red, green, blue] =
+            crate::compute::pool_cpu::ops::color::convert::helpers::palette::color(index, palette);
+        let luminance = 299 * i32::from(red) + 587 * i32::from(green) + 114 * i32::from(blue);
+        destination[0] = if luminance >= 128_000 { u8::MAX } else { 0 };
+    }
+    Ok(DynamicImage::One(output))
 }
 
 fn no_dither(dither: Option<&DitherMethod>) -> bool {
@@ -151,12 +180,7 @@ fn binary_luma(
 ) -> Result<GrayImage, PilError> {
     match source_mode {
         Mode::ImageCmyk8 => crate::color::cmyk_to_grayscale_truncate(source),
-        Mode::ImageHsv8
-        | Mode::ImageYCbCr8
-        | Mode::ImageI32
-        | Mode::ImageF32
-        | Mode::ImagePalette8
-        | Mode::ImagePaletteAlpha8 => {
+        Mode::ImageHsv8 | Mode::ImageYCbCr8 | Mode::ImageI32 | Mode::ImageF32 => {
             let rgb = crate::color::convert_from_nonstandard(source_mode, source, palette)
                 .ok_or_else(|| {
                     PilError::InternalError(
@@ -197,7 +221,8 @@ pub(crate) fn diffuse_rgb_rows(rgb: &[u8], output: &mut GrayImage) -> Result<(),
         ));
     }
     diffuse_rgb_samples(
-        rgb.chunks_exact(3).map(|pixel| [pixel[0], pixel[1], pixel[2]]),
+        rgb.chunks_exact(3)
+            .map(|pixel| [pixel[0], pixel[1], pixel[2]]),
         output,
     )
 }
@@ -255,7 +280,7 @@ fn diffuse_gray_rows(gray: &GrayImage, output: &mut GrayImage) -> Result<(), Pil
     diffuse_gray_samples(gray.as_raw().iter().copied(), output)
 }
 
-fn diffuse_gray_samples(
+pub(crate) fn diffuse_gray_samples(
     samples: impl ExactSizeIterator<Item = u8>,
     output: &mut GrayImage,
 ) -> Result<(), PilError> {

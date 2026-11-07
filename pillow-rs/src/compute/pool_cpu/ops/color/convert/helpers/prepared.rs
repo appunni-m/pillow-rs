@@ -1,8 +1,11 @@
 //! Prepared Convert execution and typed child-strategy selection.
 
-use crate::compute::{ExecutionContext, registry::support::{
-    OperationInputs, OperationRouteOutcome, StrategySelection, SupportAssessment,
-}};
+use crate::compute::{
+    ExecutionContext,
+    registry::support::{
+        OperationInputs, OperationRouteOutcome, StrategySelection, SupportAssessment,
+    },
+};
 use crate::error::PilError;
 use crate::pipeline::{DitherMethod, PipelineOp};
 use crate::raster::{DynamicImage, Mode};
@@ -82,12 +85,8 @@ impl Prepared<'_> {
             return Ok(self.identity_output());
         }
         if let Some(matrix) = self.matrix {
-            return super::matrix::convert_with_matrix(
-                self.input.image,
-                self.target,
-                matrix,
-            )
-            .map(PreparedConvertOutput::raster);
+            return super::matrix::convert_with_matrix(self.input.image, self.target, matrix)
+                .map(PreparedConvertOutput::raster);
         }
         if self.target == Mode::One {
             return self.execute_binary().map(PreparedConvertOutput::raster);
@@ -146,11 +145,7 @@ impl Prepared<'_> {
                 )
             }
             DynamicImage::ImagePaletteAlpha8(source) => {
-                super::super::palette_alpha8::ops::execute_palette_target(
-                    source,
-                    target,
-                    selection,
-                )
+                super::super::palette_alpha8::ops::execute_palette_target(source, target, selection)
             }
             DynamicImage::ImageRgb8(source) => {
                 super::super::rgb8::ops::execute_palette_target(source, target, dither, selection)
@@ -160,10 +155,7 @@ impl Prepared<'_> {
             }
             DynamicImage::ImageRgbPremultiplied8(source) => {
                 super::super::rgb_premultiplied8::ops::execute_palette_target(
-                    source,
-                    target,
-                    dither,
-                    selection,
+                    source, target, dither, selection,
                 )
             }
             DynamicImage::ImageRgbx8(source) => {
@@ -199,21 +191,25 @@ impl Prepared<'_> {
             DynamicImage::ImageI16N(source) => {
                 super::super::i16n::ops::execute_palette_target(source, target, selection)
             }
-            DynamicImage::ImageLumaA16(source) => super::super::luma_a16::ops::execute_palette_target(
-                source, target, dither, selection,
-            ),
-            DynamicImage::ImageRgb16(source) => super::super::rgb16::ops::execute_palette_target(
-                source, target, dither, selection,
-            ),
-            DynamicImage::ImageRgba16(source) => super::super::rgba16::ops::execute_palette_target(
-                source, target, dither, selection,
-            ),
-            DynamicImage::ImageRgb32F(source) => super::super::rgb32f::ops::execute_palette_target(
-                source, target, dither, selection,
-            ),
-            DynamicImage::ImageRgba32F(source) => super::super::rgba32f::ops::execute_palette_target(
-                source, target, dither, selection,
-            ),
+            DynamicImage::ImageLumaA16(source) => {
+                super::super::luma_a16::ops::execute_palette_target(
+                    source, target, dither, selection,
+                )
+            }
+            DynamicImage::ImageRgb16(source) => {
+                super::super::rgb16::ops::execute_palette_target(source, target, dither, selection)
+            }
+            DynamicImage::ImageRgba16(source) => {
+                super::super::rgba16::ops::execute_palette_target(source, target, dither, selection)
+            }
+            DynamicImage::ImageRgb32F(source) => {
+                super::super::rgb32f::ops::execute_palette_target(source, target, dither, selection)
+            }
+            DynamicImage::ImageRgba32F(source) => {
+                super::super::rgba32f::ops::execute_palette_target(
+                    source, target, dither, selection,
+                )
+            }
             _ => Err(PilError::InternalError(
                 "Convert selected an undeclared palette target strategy".into(),
             )),
@@ -250,11 +246,7 @@ impl Prepared<'_> {
                 return unsafe { super::super::rgba8::ops::execute(source, target, selection) };
             }
             DynamicImage::ImageRgbPremultiplied8(source) => {
-                return super::super::rgb_premultiplied8::ops::execute(
-                    source,
-                    target,
-                    selection,
-                );
+                return super::super::rgb_premultiplied8::ops::execute(source, target, selection);
             }
             DynamicImage::ImageRgbx8(source) => {
                 // SAFETY: prepare selected this strategy from the RGBX
@@ -280,11 +272,7 @@ impl Prepared<'_> {
                 return super::super::i16n::ops::execute(source, target, selection);
             }
             DynamicImage::ImageLaPremultiplied8(source) => {
-                return super::super::la_premultiplied8::ops::execute(
-                    source,
-                    target,
-                    selection,
-                );
+                return super::super::la_premultiplied8::ops::execute(source, target, selection);
             }
             DynamicImage::ImageCmyk8(source) => {
                 // SAFETY: prepare selected this strategy from the CMYK
@@ -348,11 +336,9 @@ impl Prepared<'_> {
             DynamicImage::ImageLumaA8(_) => {
                 super::super::luma_a8::ops::execute_binary(input, dither.as_ref(), selection)
             }
-            DynamicImage::ImageLaPremultiplied8(_) => super::super::la_premultiplied8::ops::execute_binary(
-                input,
-                dither.as_ref(),
-                selection,
-            ),
+            DynamicImage::ImageLaPremultiplied8(_) => Err(PilError::ValueError(
+                "conversion from La to L not supported".into(),
+            )),
             DynamicImage::ImagePalette8(_) => {
                 super::super::palette8::ops::execute_binary(input, dither.as_ref(), selection)
             }
@@ -365,11 +351,13 @@ impl Prepared<'_> {
             DynamicImage::ImageRgba8(_) => {
                 super::super::rgba8::ops::execute_binary(input, dither.as_ref(), selection)
             }
-            DynamicImage::ImageRgbPremultiplied8(_) => super::super::rgb_premultiplied8::ops::execute_binary(
-                input,
-                dither.as_ref(),
-                selection,
-            ),
+            DynamicImage::ImageRgbPremultiplied8(_) => {
+                super::super::rgb_premultiplied8::ops::execute_binary(
+                    input,
+                    dither.as_ref(),
+                    selection,
+                )
+            }
             DynamicImage::ImageRgbx8(_) => {
                 super::super::rgbx8::ops::execute_binary(input, dither.as_ref(), selection)
             }
@@ -444,7 +432,13 @@ pub(crate) fn prepare<'a>(
             ));
         }
     };
-    Ok(Prepared { input, target, matrix: None, dither, selection })
+    Ok(Prepared {
+        input,
+        target,
+        matrix: None,
+        dither,
+        selection,
+    })
 }
 
 pub(crate) fn prepare_matrix<'a>(
@@ -464,7 +458,13 @@ pub(crate) fn prepare_matrix<'a>(
             ));
         }
     };
-    Ok(Prepared { input, target, matrix: Some(matrix), dither: None, selection })
+    Ok(Prepared {
+        input,
+        target,
+        matrix: Some(matrix),
+        dither: None,
+        selection,
+    })
 }
 
 pub(crate) fn prepare_pipeline<'a>(
@@ -472,7 +472,12 @@ pub(crate) fn prepare_pipeline<'a>(
     op: &'a PipelineOp,
     ctx: &ExecutionContext,
 ) -> Result<crate::compute::registry::PreparedOperation<'a>, PilError> {
-    let PipelineOp::Convert { mode, matrix, dither } = op else {
+    let PipelineOp::Convert {
+        mode,
+        matrix,
+        dither,
+    } = op
+    else {
         return Err(PilError::ValueError("expected Convert op".into()));
     };
     // Image-facing cross-mode P/PA conversion consumes this selected plan via
@@ -485,4 +490,3 @@ pub(crate) fn prepare_pipeline<'a>(
     prepare(input, *mode, dither.clone(), ctx)
         .map(crate::compute::registry::PreparedOperation::from_convert)
 }
-

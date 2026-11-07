@@ -4,9 +4,12 @@ crate::compute::pool_cpu::ops::color::convert::helpers::binary::declare_mode_str
     crate::raster::Mode::ImageYCbCr8
 );
 
-use crate::compute::{Architecture, registry::support::{
-    InputContract, ModeSupport, OperationId, OutputModeRule, StrategySelection,
-}};
+use crate::compute::{
+    Architecture,
+    registry::support::{
+        InputContract, ModeSupport, OperationId, OutputModeRule, StrategySelection,
+    },
+};
 use crate::error::PilError;
 use crate::pipeline::DitherMethod;
 use crate::raster::{DynamicImage, Mode, RgbImage};
@@ -34,8 +37,12 @@ const TARGETS: &[Mode] = &[
     Mode::ImageF32,
 ];
 // This target row includes Pillow results derived through RGB; the YCbCr owner
-// writes each final target from its native samples.
+// writes each final target from its native samples. The archived SIMD adapter
+// has no exact YCbCr-source kernel; its generic three-byte route treats the
+// stored Y/Cb/Cr lanes as RGB and cannot be selected here.
 const CORE_ONLY_TARGETS: &[Mode] = &[];
+// TODO(pillow-rs#3ptb): evaluate exact YCbCr-source vector kernels after the
+// Default source row has complete parity evidence.
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: TARGETS,
     core_only_targets: CORE_ONLY_TARGETS,

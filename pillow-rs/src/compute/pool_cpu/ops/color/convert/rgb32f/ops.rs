@@ -1,12 +1,16 @@
 //! Internal RGB32F support and architecture selection for Convert.
 
-crate::compute::pool_cpu::ops::color::convert::helpers::binary::declare_mode_strategy!(
-    crate::raster::Mode::ImageRgb32F
+crate::compute::pool_cpu::ops::color::convert::helpers::high_depth::declare_native_binary_strategy!(
+    crate::raster::Mode::ImageRgb32F,
+    ImageRgb32F
 );
 
-use crate::compute::{Architecture, registry::support::{
-    InputContract, ModeSupport, OperationId, OutputModeRule, StrategySelection,
-}};
+use crate::compute::{
+    Architecture,
+    registry::support::{
+        InputContract, ModeSupport, OperationId, OutputModeRule, StrategySelection,
+    },
+};
 use crate::error::PilError;
 use crate::pipeline::DitherMethod;
 use crate::raster::{DynamicImage, ImageBuffer, Mode, Rgb};
@@ -18,12 +22,22 @@ const TARGETS: &[Mode] = &[
     Mode::One,
     Mode::ImageLaPremultiplied8,
     Mode::ImageRgbPremultiplied8,
-    Mode::ImageLuma8, Mode::ImageLumaA8, Mode::ImageRgb8, Mode::ImageRgba8,
+    Mode::ImageLuma8,
+    Mode::ImageLumaA8,
+    Mode::ImageRgb8,
+    Mode::ImageRgba8,
     Mode::ImageRgbx8,
-    Mode::ImagePalette8, Mode::ImagePaletteAlpha8,
-    Mode::ImageI16, Mode::ImageI16L, Mode::ImageI16B, Mode::ImageI16N,
+    Mode::ImagePalette8,
+    Mode::ImagePaletteAlpha8,
+    Mode::ImageI16,
+    Mode::ImageI16L,
+    Mode::ImageI16B,
+    Mode::ImageI16N,
     Mode::ImageLab8,
-    Mode::ImageCmyk8, Mode::ImageYCbCr8, Mode::ImageHsv8, Mode::ImageI32,
+    Mode::ImageCmyk8,
+    Mode::ImageYCbCr8,
+    Mode::ImageHsv8,
+    Mode::ImageI32,
     Mode::ImageF32,
 ];
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {

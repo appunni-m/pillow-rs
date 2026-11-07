@@ -7,7 +7,6 @@ use crate::raster::{DynamicImage, Mode, RgbImage, RgbaImage};
 pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, PilError> {
     match target {
         Mode::ImageRgb8 => convert_rgb(source),
-        Mode::ImageRgba8 => convert_identity(source),
         Mode::ImageLumaA8 => convert_luma_alpha(source),
         Mode::ImageRgbPremultiplied8 => convert_premultiplied(source),
         Mode::ImageRgbx8 => super::opaque_padding::execute(source).map(DynamicImage::ImageRgbx8),
@@ -29,12 +28,6 @@ fn convert_rgb(source: &RgbaImage) -> Result<DynamicImage, PilError> {
         )?;
     record_vector_output(blocks, allocation);
     Ok(DynamicImage::ImageRgb8(output))
-}
-
-fn convert_identity(source: &RgbaImage) -> Result<DynamicImage, PilError> {
-    let (output, blocks, allocation) = crate::compute::pool_cpu::ops::color::convert::helpers::four_byte_layout::copy_four_byte_pixels(source)?;
-    record_vector_output(blocks, allocation);
-    Ok(DynamicImage::ImageRgba8(output))
 }
 
 fn convert_luma_alpha(source: &RgbaImage) -> Result<DynamicImage, PilError> {
@@ -71,8 +64,9 @@ fn convert_ycbcr(source: &RgbaImage) -> Result<DynamicImage, PilError> {
         Mode::ImageRgba8,
     )?;
     let allocation = bytes.capacity();
-    let output = RgbImage::from_raw(source.width(), source.height(), bytes)
-        .ok_or_else(|| PilError::InternalError("RGBA Convert YCbCr output shape mismatch".into()))?;
+    let output = RgbImage::from_raw(source.width(), source.height(), bytes).ok_or_else(|| {
+        PilError::InternalError("RGBA Convert YCbCr output shape mismatch".into())
+    })?;
     record_vector_output(blocks, allocation);
     Ok(DynamicImage::ImageYCbCr8(output))
 }

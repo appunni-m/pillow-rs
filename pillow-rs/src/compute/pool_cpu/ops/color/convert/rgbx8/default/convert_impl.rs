@@ -2,10 +2,7 @@
 
 use crate::error::PilError;
 use crate::pipeline::DitherMethod;
-use crate::raster::{
-    DynamicImage, GrayAlphaImage, LumaA, Mode, Rgb, RgbImage, Rgba,
-    RgbaImage,
-};
+use crate::raster::{DynamicImage, GrayAlphaImage, LumaA, Mode, Rgb, RgbImage, Rgba, RgbaImage};
 
 pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, PilError> {
     if target == Mode::ImageLab8 {
@@ -18,27 +15,31 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
     let (width, height) = source.dimensions();
     match target {
         Mode::ImageLuma8 => {
-            let kernel = crate::compute::pool_cpu::ops::grayscale::rgbx8::default::grayscale_impl::prepare(source)?;
-            crate::compute::pool_cpu::ops::grayscale::rgbx8::default::grayscale_impl::execute(kernel)
-                .map(DynamicImage::ImageLuma8)
+            let kernel =
+                crate::compute::pool_cpu::ops::grayscale::rgbx8::default::grayscale_impl::prepare(
+                    source,
+                )?;
+            crate::compute::pool_cpu::ops::grayscale::rgbx8::default::grayscale_impl::execute(
+                kernel,
+            )
+            .map(DynamicImage::ImageLuma8)
         }
         Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
             super::super::super::helpers::luma16::from_luma8_samples(
                 width,
                 height,
                 target,
-                source.pixels().map(|pixel| {
-                    crate::color::rgb_to_luma_u8(pixel[0], pixel[1], pixel[2])
-                }),
+                source
+                    .pixels()
+                    .map(|pixel| crate::color::rgb_to_luma_u8(pixel[0], pixel[1], pixel[2])),
             )
         }
-        Mode::ImageLumaA8 => {
-            Ok(DynamicImage::ImageLumaA8(opaque_luma_alpha(source)))
-        }
+        Mode::ImageLumaA8 => Ok(DynamicImage::ImageLumaA8(opaque_luma_alpha(source))),
+        // NO_PILLOW_SUPPORT: Pillow's Convert table rejects RGBX to La.
         // Compute RGB-derived luma and opaque alpha directly from RGBX lanes.
-        Mode::ImageLaPremultiplied8 => {
-            Ok(DynamicImage::ImageLaPremultiplied8(opaque_luma_alpha(source)))
-        }
+        Mode::ImageLaPremultiplied8 => Ok(DynamicImage::ImageLaPremultiplied8(opaque_luma_alpha(
+            source,
+        ))),
         // Pillow discards RGBX's X byte and emits opaque RGB padding.
         Mode::ImageRgb8 => {
             let mut output = RgbImage::new(width, height);
@@ -47,9 +48,8 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
             }
             Ok(DynamicImage::ImageRgb8(output))
         }
-        Mode::ImageRgba8 => {
-            Ok(DynamicImage::ImageRgba8(opaque_rgba(source)))
-        }
+        Mode::ImageRgba8 => Ok(DynamicImage::ImageRgba8(opaque_rgba(source))),
+        // NO_PILLOW_SUPPORT: Pillow's Convert table rejects RGBX to RGBa.
         // An opaque RGB sample needs no premultiplication arithmetic; discard
         // X and write the final carrier directly from native RGBX lanes.
         Mode::ImageRgbPremultiplied8 => {
@@ -114,9 +114,7 @@ pub(crate) fn execute_palette_target(
     crate::compute::pool_cpu::ops::color::convert::helpers::palette::web_palette_from_pixels(
         source.width(),
         source.height(),
-        source
-            .pixels()
-            .map(|pixel| [pixel[0], pixel[1], pixel[2]]),
+        source.pixels().map(|pixel| [pixel[0], pixel[1], pixel[2]]),
         !matches!(dither, Some(DitherMethod::None)),
         target,
         metadata,

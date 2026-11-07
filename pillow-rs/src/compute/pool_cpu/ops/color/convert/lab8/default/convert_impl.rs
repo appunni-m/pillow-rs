@@ -19,13 +19,13 @@ pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, P
                 target,
             )
         }
-        Mode::ImageRgb8 => super::super::helpers::to_srgb::convert_to_rgb(source)
-            .map(DynamicImage::ImageRgb8),
+        Mode::ImageRgb8 => {
+            super::super::helpers::to_srgb::convert_to_rgb(source).map(DynamicImage::ImageRgb8)
+        }
         Mode::ImageRgba8 => super::super::helpers::to_srgb::convert_to_four_byte(source)
             .map(DynamicImage::ImageRgba8),
         Mode::ImageRgbx8 => super::super::helpers::to_srgb::convert_to_four_byte(source)
             .map(DynamicImage::ImageRgbx8),
-        Mode::ImageLab8 => Ok(DynamicImage::ImageLab8(source.clone())),
         Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
             super::super::super::helpers::luma16::from_luma8_samples(
                 source.width(),

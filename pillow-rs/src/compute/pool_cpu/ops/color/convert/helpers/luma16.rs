@@ -1,11 +1,14 @@
 //! Native u16 Convert outputs shared by the four exact I;16 source strategies.
 
 use crate::checked_dims::CheckedDims;
+use crate::compute::{
+    Architecture,
+    registry::support::{ImplementationSupport, OperationId, StrategyGuard},
+};
 use crate::error::PilError;
-use crate::compute::{Architecture, registry::support::{ImplementationSupport, OperationId, StrategyGuard}};
 use crate::raster::{
-    DynamicImage, GrayAlphaImage, GrayImage, ImageBuffer, Luma, LumaA, Mode,
-    Rgb, RgbImage, Rgba, RgbaImage,
+    DynamicImage, GrayAlphaImage, GrayImage, ImageBuffer, Luma, LumaA, Mode, Rgb, RgbImage, Rgba,
+    RgbaImage,
 };
 use wide::{u16x8, u32x8};
 
@@ -31,30 +34,156 @@ macro_rules! architecture_strategy {
 
 pub(crate) const fn architecture_support(mode: Mode) -> [ImplementationSupport; 24] {
     [
-        architecture_strategy!(mode, ImageLuma8, Sse2, SSE2_AVAILABLE, &[Architecture::Sse2]),
-        architecture_strategy!(mode, ImageLuma8, Neon, cfg!(all(target_arch = "aarch64", target_feature = "neon")), &[Architecture::Neon]),
-        architecture_strategy!(mode, ImageLuma8, WasmSimd128, cfg!(all(target_arch = "wasm32", target_feature = "simd128")), &[Architecture::WasmSimd128]),
-        architecture_strategy!(mode, ImageLumaA8, Sse2, SSE2_AVAILABLE, &[Architecture::Sse2]),
-        architecture_strategy!(mode, ImageLumaA8, Neon, cfg!(all(target_arch = "aarch64", target_feature = "neon")), &[Architecture::Neon]),
-        architecture_strategy!(mode, ImageLumaA8, WasmSimd128, cfg!(all(target_arch = "wasm32", target_feature = "simd128")), &[Architecture::WasmSimd128]),
+        architecture_strategy!(
+            mode,
+            ImageLuma8,
+            Sse2,
+            SSE2_AVAILABLE,
+            &[Architecture::Sse2]
+        ),
+        architecture_strategy!(
+            mode,
+            ImageLuma8,
+            Neon,
+            cfg!(all(target_arch = "aarch64", target_feature = "neon")),
+            &[Architecture::Neon]
+        ),
+        architecture_strategy!(
+            mode,
+            ImageLuma8,
+            WasmSimd128,
+            cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
+            &[Architecture::WasmSimd128]
+        ),
+        architecture_strategy!(
+            mode,
+            ImageLumaA8,
+            Sse2,
+            SSE2_AVAILABLE,
+            &[Architecture::Sse2]
+        ),
+        architecture_strategy!(
+            mode,
+            ImageLumaA8,
+            Neon,
+            cfg!(all(target_arch = "aarch64", target_feature = "neon")),
+            &[Architecture::Neon]
+        ),
+        architecture_strategy!(
+            mode,
+            ImageLumaA8,
+            WasmSimd128,
+            cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
+            &[Architecture::WasmSimd128]
+        ),
         architecture_strategy!(mode, ImageRgb8, Sse2, SSE2_AVAILABLE, &[Architecture::Sse2]),
-        architecture_strategy!(mode, ImageRgb8, Neon, cfg!(all(target_arch = "aarch64", target_feature = "neon")), &[Architecture::Neon]),
-        architecture_strategy!(mode, ImageRgb8, WasmSimd128, cfg!(all(target_arch = "wasm32", target_feature = "simd128")), &[Architecture::WasmSimd128]),
-        architecture_strategy!(mode, ImageRgba8, Sse2, SSE2_AVAILABLE, &[Architecture::Sse2]),
-        architecture_strategy!(mode, ImageRgba8, Neon, cfg!(all(target_arch = "aarch64", target_feature = "neon")), &[Architecture::Neon]),
-        architecture_strategy!(mode, ImageRgba8, WasmSimd128, cfg!(all(target_arch = "wasm32", target_feature = "simd128")), &[Architecture::WasmSimd128]),
-        architecture_strategy!(mode, ImageRgbx8, Sse2, SSE2_AVAILABLE, &[Architecture::Sse2]),
-        architecture_strategy!(mode, ImageRgbx8, Neon, cfg!(all(target_arch = "aarch64", target_feature = "neon")), &[Architecture::Neon]),
-        architecture_strategy!(mode, ImageRgbx8, WasmSimd128, cfg!(all(target_arch = "wasm32", target_feature = "simd128")), &[Architecture::WasmSimd128]),
-        architecture_strategy!(mode, ImageCmyk8, Sse2, SSE2_AVAILABLE, &[Architecture::Sse2]),
-        architecture_strategy!(mode, ImageCmyk8, Neon, cfg!(all(target_arch = "aarch64", target_feature = "neon")), &[Architecture::Neon]),
-        architecture_strategy!(mode, ImageCmyk8, WasmSimd128, cfg!(all(target_arch = "wasm32", target_feature = "simd128")), &[Architecture::WasmSimd128]),
+        architecture_strategy!(
+            mode,
+            ImageRgb8,
+            Neon,
+            cfg!(all(target_arch = "aarch64", target_feature = "neon")),
+            &[Architecture::Neon]
+        ),
+        architecture_strategy!(
+            mode,
+            ImageRgb8,
+            WasmSimd128,
+            cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
+            &[Architecture::WasmSimd128]
+        ),
+        architecture_strategy!(
+            mode,
+            ImageRgba8,
+            Sse2,
+            SSE2_AVAILABLE,
+            &[Architecture::Sse2]
+        ),
+        architecture_strategy!(
+            mode,
+            ImageRgba8,
+            Neon,
+            cfg!(all(target_arch = "aarch64", target_feature = "neon")),
+            &[Architecture::Neon]
+        ),
+        architecture_strategy!(
+            mode,
+            ImageRgba8,
+            WasmSimd128,
+            cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
+            &[Architecture::WasmSimd128]
+        ),
+        architecture_strategy!(
+            mode,
+            ImageRgbx8,
+            Sse2,
+            SSE2_AVAILABLE,
+            &[Architecture::Sse2]
+        ),
+        architecture_strategy!(
+            mode,
+            ImageRgbx8,
+            Neon,
+            cfg!(all(target_arch = "aarch64", target_feature = "neon")),
+            &[Architecture::Neon]
+        ),
+        architecture_strategy!(
+            mode,
+            ImageRgbx8,
+            WasmSimd128,
+            cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
+            &[Architecture::WasmSimd128]
+        ),
+        architecture_strategy!(
+            mode,
+            ImageCmyk8,
+            Sse2,
+            SSE2_AVAILABLE,
+            &[Architecture::Sse2]
+        ),
+        architecture_strategy!(
+            mode,
+            ImageCmyk8,
+            Neon,
+            cfg!(all(target_arch = "aarch64", target_feature = "neon")),
+            &[Architecture::Neon]
+        ),
+        architecture_strategy!(
+            mode,
+            ImageCmyk8,
+            WasmSimd128,
+            cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
+            &[Architecture::WasmSimd128]
+        ),
         architecture_strategy!(mode, ImageI32, Sse2, SSE2_AVAILABLE, &[Architecture::Sse2]),
-        architecture_strategy!(mode, ImageI32, Neon, cfg!(all(target_arch = "aarch64", target_feature = "neon")), &[Architecture::Neon]),
-        architecture_strategy!(mode, ImageI32, WasmSimd128, cfg!(all(target_arch = "wasm32", target_feature = "simd128")), &[Architecture::WasmSimd128]),
+        architecture_strategy!(
+            mode,
+            ImageI32,
+            Neon,
+            cfg!(all(target_arch = "aarch64", target_feature = "neon")),
+            &[Architecture::Neon]
+        ),
+        architecture_strategy!(
+            mode,
+            ImageI32,
+            WasmSimd128,
+            cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
+            &[Architecture::WasmSimd128]
+        ),
         architecture_strategy!(mode, ImageF32, Sse2, SSE2_AVAILABLE, &[Architecture::Sse2]),
-        architecture_strategy!(mode, ImageF32, Neon, cfg!(all(target_arch = "aarch64", target_feature = "neon")), &[Architecture::Neon]),
-        architecture_strategy!(mode, ImageF32, WasmSimd128, cfg!(all(target_arch = "wasm32", target_feature = "simd128")), &[Architecture::WasmSimd128]),
+        architecture_strategy!(
+            mode,
+            ImageF32,
+            Neon,
+            cfg!(all(target_arch = "aarch64", target_feature = "neon")),
+            &[Architecture::Neon]
+        ),
+        architecture_strategy!(
+            mode,
+            ImageF32,
+            WasmSimd128,
+            cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
+            &[Architecture::WasmSimd128]
+        ),
     ]
 }
 
@@ -65,7 +194,7 @@ pub(crate) fn execute_mode(
     target: Mode,
 ) -> Result<DynamicImage, PilError> {
     if is_luma16_target(target) {
-        return execute_i16_target(source, source_mode, target);
+        return execute_i16_target(source, target);
     }
     execute(source, source_mode, target)
 }
@@ -110,7 +239,8 @@ pub(crate) fn execute_palette_target(
     target: Mode,
 ) -> Result<super::super::ops::PreparedConvertOutput, PilError> {
     let (width, height) = source.dimensions();
-    let identity_palette = crate::compute::pool_cpu::helpers::quantization::identity_grayscale_palette();
+    let identity_palette =
+        crate::compute::pool_cpu::helpers::quantization::identity_grayscale_palette();
     match target {
         Mode::ImagePalette8 => {
             let indices = source
@@ -126,9 +256,7 @@ pub(crate) fn execute_palette_target(
                 image: DynamicImage::ImagePalette8(image),
                 palette: Some(identity_palette),
                 palette_alpha: None,
-                wrapper_metadata: Some(
-                    super::super::ops::ConvertWrapperMetadata::PreserveSource,
-                ),
+                wrapper_metadata: Some(super::super::ops::ConvertWrapperMetadata::PreserveSource),
             })
         }
         Mode::ImagePaletteAlpha8 => {
@@ -176,23 +304,20 @@ fn execute(source: &Samples, source_mode: Mode, target: Mode) -> Result<DynamicI
     }
 }
 
-fn execute_i16_target(
-    source: &Samples,
-    source_mode: Mode,
-    target: Mode,
-) -> Result<DynamicImage, PilError> {
-    // Pillow preserves samples only for same-mode I;16 conversion and clips
-    // cross-mode I;16 conversions to the byte range.
-    let samples = if source_mode == target {
-        source.clone()
-    } else {
-        Samples::from_raw(
-            source.width(),
-            source.height(),
-            source.as_raw().iter().copied().map(|sample| u16::from(clip(sample))).collect(),
-        )
-        .ok_or_else(|| PilError::InternalError("I;16 Convert output shape mismatch".into()))?
-    };
+fn execute_i16_target(source: &Samples, target: Mode) -> Result<DynamicImage, PilError> {
+    // Prepared Convert returns same-mode identity before this helper. Cross-
+    // alias I;16 conversions clip each sample to the byte range.
+    let samples = Samples::from_raw(
+        source.width(),
+        source.height(),
+        source
+            .as_raw()
+            .iter()
+            .copied()
+            .map(|sample| u16::from(clip(sample)))
+            .collect(),
+    )
+    .ok_or_else(|| PilError::InternalError("I;16 Convert output shape mismatch".into()))?;
     match target {
         Mode::ImageI16 => Ok(DynamicImage::ImageI16(samples)),
         Mode::ImageI16L => Ok(DynamicImage::ImageI16L(samples)),
@@ -211,7 +336,11 @@ pub(crate) const fn is_luma16_target(target: Mode) -> bool {
     )
 }
 
-fn execute_vector(source: &Samples, source_mode: Mode, target: Mode) -> Result<DynamicImage, PilError> {
+fn execute_vector(
+    source: &Samples,
+    source_mode: Mode,
+    target: Mode,
+) -> Result<DynamicImage, PilError> {
     let target_channels = vector_target_channels(target)?;
     let source_dims = CheckedDims::new_allow_empty(source.width(), source.height(), 1)?;
     if source.as_raw().len() != source_dims.total_pixels() {
@@ -219,17 +348,25 @@ fn execute_vector(source: &Samples, source_mode: Mode, target: Mode) -> Result<D
             "I;16 Convert source storage did not match its dimensions".into(),
         ));
     }
-    let output_dims = CheckedDims::new_allow_empty(source.width(), source.height(), target_channels)?;
+    let output_dims =
+        CheckedDims::new_allow_empty(source.width(), source.height(), target_channels)?;
     let mut output = Vec::with_capacity(output_dims.total_bytes());
     let mut vector_blocks = 0u64;
     for start in (0..source_dims.total_pixels()).step_by(8) {
         let active = (source_dims.total_pixels() - start).min(8);
-        let lanes = std::array::from_fn(|lane| source.as_raw().get(start + lane).copied().unwrap_or(0));
+        let lanes =
+            std::array::from_fn(|lane| source.as_raw().get(start + lane).copied().unwrap_or(0));
         let samples = u16x8::new(lanes);
         append_target_samples(source_mode, target, samples, active, &mut output);
         vector_blocks = vector_blocks.saturating_add(1);
     }
-    finish_vector(source, target, output, output_dims.total_bytes(), vector_blocks)
+    finish_vector(
+        source,
+        target,
+        output,
+        output_dims.total_bytes(),
+        vector_blocks,
+    )
 }
 
 fn vector_target_channels(target: Mode) -> Result<u8, PilError> {
@@ -254,15 +391,14 @@ fn append_target_samples(
     output: &mut Vec<u8>,
 ) {
     // Keep SIMD I;16N to I/F arithmetic aligned with the scalar mode strategy.
-    let samples = if source_mode == Mode::ImageI16N
-        && matches!(target, Mode::ImageI32 | Mode::ImageF32)
-    {
-        samples
-            .simd_gt(u16x8::splat(u16::from(u8::MAX)))
-            .select(u16x8::splat(u16::from(u8::MAX)), samples)
-    } else {
-        samples
-    };
+    let samples =
+        if source_mode == Mode::ImageI16N && matches!(target, Mode::ImageI32 | Mode::ImageF32) {
+            samples
+                .simd_gt(u16x8::splat(u16::from(u8::MAX)))
+                .select(u16x8::splat(u16::from(u8::MAX)), samples)
+        } else {
+            samples
+        };
     if target == Mode::ImageI32 {
         for value in samples.to_array().into_iter().take(active) {
             output.extend_from_slice(&i32::from(value).to_le_bytes());
@@ -289,11 +425,7 @@ fn append_float_samples(samples: u16x8, active: usize, output: &mut Vec<u8>) {
         let encoded = u32x8::splat((exponent + 127) << 23) | mantissa;
         bits = range.select(encoded, bits);
     }
-    append_f32_bytes(
-        bits.to_array().map(f32::from_bits),
-        active,
-        output,
-    );
+    append_f32_bytes(bits.to_array().map(f32::from_bits), active, output);
 }
 
 fn append_f32_bytes(values: [f32; 8], active: usize, output: &mut Vec<u8>) {
@@ -324,7 +456,9 @@ fn finish_vector(
     vector_blocks: u64,
 ) -> Result<DynamicImage, PilError> {
     if output.len() != expected_bytes {
-        return Err(PilError::InternalError("I;16 Convert output shape mismatch".into()));
+        return Err(PilError::InternalError(
+            "I;16 Convert output shape mismatch".into(),
+        ));
     }
     if vector_blocks == 0 {
         crate::compute::record_pipeline_operation_path("scalar-control");
@@ -336,25 +470,26 @@ fn finish_vector(
     if output.capacity() != 0 {
         crate::compute::record_pipeline_allocation(output.capacity());
     }
-    let image = match target {
-        Mode::ImageLuma8 => GrayImage::from_raw(source.width(), source.height(), output)
-            .map(DynamicImage::ImageLuma8),
-        Mode::ImageLumaA8 => GrayAlphaImage::from_raw(source.width(), source.height(), output)
-            .map(DynamicImage::ImageLumaA8),
-        Mode::ImageRgb8 => RgbImage::from_raw(source.width(), source.height(), output)
-            .map(DynamicImage::ImageRgb8),
-        Mode::ImageRgba8 => RgbaImage::from_raw(source.width(), source.height(), output)
-            .map(DynamicImage::ImageRgba8),
-        Mode::ImageRgbx8 => RgbaImage::from_raw(source.width(), source.height(), output)
-            .map(DynamicImage::ImageRgbx8),
-        Mode::ImageCmyk8 => RgbaImage::from_raw(source.width(), source.height(), output)
-            .map(DynamicImage::ImageCmyk8),
-        Mode::ImageI32 => RgbaImage::from_raw(source.width(), source.height(), output)
-            .map(DynamicImage::ImageI32),
-        Mode::ImageF32 => RgbaImage::from_raw(source.width(), source.height(), output)
-            .map(DynamicImage::ImageF32),
-        _ => None,
-    };
+    let image =
+        match target {
+            Mode::ImageLuma8 => GrayImage::from_raw(source.width(), source.height(), output)
+                .map(DynamicImage::ImageLuma8),
+            Mode::ImageLumaA8 => GrayAlphaImage::from_raw(source.width(), source.height(), output)
+                .map(DynamicImage::ImageLumaA8),
+            Mode::ImageRgb8 => RgbImage::from_raw(source.width(), source.height(), output)
+                .map(DynamicImage::ImageRgb8),
+            Mode::ImageRgba8 => RgbaImage::from_raw(source.width(), source.height(), output)
+                .map(DynamicImage::ImageRgba8),
+            Mode::ImageRgbx8 => RgbaImage::from_raw(source.width(), source.height(), output)
+                .map(DynamicImage::ImageRgbx8),
+            Mode::ImageCmyk8 => RgbaImage::from_raw(source.width(), source.height(), output)
+                .map(DynamicImage::ImageCmyk8),
+            Mode::ImageI32 => RgbaImage::from_raw(source.width(), source.height(), output)
+                .map(DynamicImage::ImageI32),
+            Mode::ImageF32 => RgbaImage::from_raw(source.width(), source.height(), output)
+                .map(DynamicImage::ImageF32),
+            _ => None,
+        };
     image.ok_or_else(|| PilError::InternalError("I;16 Convert output shape mismatch".into()))
 }
 
@@ -393,7 +528,12 @@ fn to_rgbx(source: &Samples) -> RgbaImage {
 
 fn to_cmyk(source: &Samples) -> RgbaImage {
     RgbaImage::from_fn(source.width(), source.height(), |x, y| {
-        Rgba([0, 0, 0, u8::MAX.wrapping_sub(clip(source.get_pixel(x, y)[0]))])
+        Rgba([
+            0,
+            0,
+            0,
+            u8::MAX.wrapping_sub(clip(source.get_pixel(x, y)[0])),
+        ])
     })
 }
 

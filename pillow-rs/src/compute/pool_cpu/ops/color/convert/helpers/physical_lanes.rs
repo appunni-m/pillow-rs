@@ -26,7 +26,7 @@ pub(crate) fn preserve_luma_alpha_lane(
         return Ok(());
     }
     // LA-to-RGB and LA-to-HSV expose alpha as the compact output's fourth byte.
-    replace_target_lane_values(
+    preserve_target_lane_values(
         target,
         source.width(),
         source.height(),
@@ -52,7 +52,7 @@ pub(crate) fn preserve_fourth_byte(
     let input = source.get(..dimensions.total_bytes()).ok_or_else(|| {
         PilError::InternalError("Convert source did not contain all four-byte pixels".into())
     })?;
-    replace_target_lane_values(
+    preserve_target_lane_values(
         target,
         width,
         height,
@@ -62,7 +62,7 @@ pub(crate) fn preserve_fourth_byte(
     Ok(())
 }
 
-fn replace_target_lane_values(
+pub(crate) fn preserve_target_lane_values(
     target: Mode,
     width: u32,
     height: u32,
@@ -134,7 +134,10 @@ fn uses_rgb_family_storage(target: Mode) -> bool {
 }
 
 fn carries_fourth_byte_to_color_space_target(target: Mode) -> bool {
-    matches!(target, Mode::ImageLab8 | Mode::ImageYCbCr8 | Mode::ImageHsv8)
+    matches!(
+        target,
+        Mode::ImageLab8 | Mode::ImageYCbCr8 | Mode::ImageHsv8
+    )
 }
 
 fn carries_luma_alpha_lane(target: Mode) -> bool {

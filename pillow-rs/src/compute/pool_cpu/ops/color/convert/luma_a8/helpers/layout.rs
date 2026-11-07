@@ -9,7 +9,7 @@ pub(crate) fn convert(
     source: &GrayAlphaImage,
     target_channels: usize,
 ) -> Result<(Vec<u8>, u64), PilError> {
-    if !(1..=4).contains(&target_channels) {
+    if !matches!(target_channels, 1 | 3) {
         return Err(PilError::InternalError(
             "LA Convert target has unsupported byte width".into(),
         ));
@@ -37,19 +37,13 @@ pub(crate) fn convert(
         let mut indices = [0u8; 16];
         for pixel in 0..pixels_per_vector {
             for channel in 0..target_channels {
-                let carries_alpha =
-                    (target_channels == 2 && channel == 1)
-                        || (target_channels == 4 && channel == 3);
-                let source_channel = if carries_alpha { 1 } else { 0 };
                 indices[pixel * target_channels + channel] =
-                    u8::try_from(pixel * 2 + source_channel).map_err(|_| {
+                    u8::try_from(pixel * 2).map_err(|_| {
                         PilError::InternalError("LA Convert shuffle index overflowed".into())
                     })?;
             }
         }
-        let lanes = u8x16::new(padded)
-            .shuffle(u8x16::new(indices))
-            .to_array();
+        let lanes = u8x16::new(padded).shuffle(u8x16::new(indices)).to_array();
         output.extend_from_slice(&lanes[..active * target_channels]);
         vector_blocks = vector_blocks.saturating_add(1);
     }

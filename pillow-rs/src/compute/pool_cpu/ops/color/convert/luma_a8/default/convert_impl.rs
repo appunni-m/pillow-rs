@@ -1,15 +1,9 @@
 //! Direct conversions from native `LA` samples.
 
 use crate::error::PilError;
-use crate::raster::{
-    DynamicImage, GrayAlphaImage, LumaA, Mode, Rgb, RgbImage,
-    Rgba, RgbaImage,
-};
+use crate::raster::{DynamicImage, GrayAlphaImage, LumaA, Mode, Rgb, RgbImage, Rgba, RgbaImage};
 
-pub(crate) fn execute(
-    source: &GrayAlphaImage,
-    target: Mode,
-) -> Result<DynamicImage, PilError> {
+pub(crate) fn execute(source: &GrayAlphaImage, target: Mode) -> Result<DynamicImage, PilError> {
     if target == Mode::ImageLab8 {
         return super::super::super::helpers::lab_target::execute(
             source.width(),
@@ -21,10 +15,11 @@ pub(crate) fn execute(
     match target {
         Mode::ImageLuma8 => {
             let kernel = crate::compute::pool_cpu::ops::grayscale::luma_a8::default::grayscale_impl::prepare(source)?;
-            crate::compute::pool_cpu::ops::grayscale::luma_a8::default::grayscale_impl::execute(kernel)
-                .map(DynamicImage::ImageLuma8)
+            crate::compute::pool_cpu::ops::grayscale::luma_a8::default::grayscale_impl::execute(
+                kernel,
+            )
+            .map(DynamicImage::ImageLuma8)
         }
-        Mode::ImageLumaA8 => Ok(DynamicImage::ImageLumaA8(source.clone())),
         Mode::ImageLaPremultiplied8 => {
             let mut output = GrayAlphaImage::new(width, height);
             for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {

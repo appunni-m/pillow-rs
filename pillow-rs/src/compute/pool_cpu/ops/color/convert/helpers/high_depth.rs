@@ -3,8 +3,8 @@
 use crate::error::PilError;
 use crate::pipeline::DitherMethod;
 use crate::raster::{
-    DynamicImage, FromColor, GrayAlphaImage, GrayImage, ImageBuffer, Luma,
-    LumaA, Mode, Pixel, Primitive, Rgb, RgbImage, Rgba, RgbaImage,
+    DynamicImage, FromColor, GrayAlphaImage, GrayImage, ImageBuffer, Luma, LumaA, Mode, Pixel,
+    Primitive, Rgb, RgbImage, Rgba, RgbaImage,
 };
 
 pub(crate) trait HighDepthPixel: Pixel {
@@ -15,8 +15,41 @@ pub(crate) trait HighDepthPixel: Pixel {
     fn rgba8(&self) -> Rgba<u8>;
 }
 
+macro_rules! declare_native_binary_strategy {
+    ($mode:expr, $variant:ident) => {
+        pub(crate) fn execute_binary(
+            inputs: $crate::compute::registry::support::OperationInputs<'_>,
+            dither: Option<&$crate::pipeline::DitherMethod>,
+            selection: $crate::compute::registry::support::StrategySelection,
+        ) -> Result<$crate::raster::DynamicImage, $crate::error::PilError> {
+            if selection.implementation.architecture != $crate::compute::Architecture::Default {
+                return Err($crate::error::PilError::InternalError(
+                    "Convert selected an undeclared high-depth binary architecture".into(),
+                ));
+            }
+            if inputs.mode() != $mode {
+                return Err($crate::error::PilError::InternalError(
+                    "Convert high-depth binary strategy received a different source mode".into(),
+                ));
+            }
+            let $crate::raster::DynamicImage::$variant(source) = inputs.image else {
+                return Err($crate::error::PilError::InternalError(
+                    "Convert high-depth binary strategy received a different image carrier".into(),
+                ));
+            };
+            $crate::compute::pool_cpu::ops::color::convert::helpers::high_depth::execute_binary(
+                source, dither,
+            )
+        }
+    };
+}
+
+pub(crate) use declare_native_binary_strategy;
+
 // TODO(pillow-rs#3ptb): freeze CPU parity for all five CoreOnly high-depth
 // source modes across declared targets, including float limits and alpha edges.
+// TODO(pillow-rs#3ptb): decide whether cross-high-depth target pairs belong in
+// the Rust-only contract and whether typed architecture kernels are warranted.
 
 impl<P> HighDepthPixel for P
 where
@@ -185,6 +218,33 @@ where
     )
 }
 
+// Convert each typed pixel through the same RGB8 and truncating grayscale
+// formulas as the old fallback, without materializing an intermediate raster.
+pub(crate) fn execute_binary<P>(
+    source: &ImageBuffer<P, Vec<P::Subpixel>>,
+    dither: Option<&DitherMethod>,
+) -> Result<DynamicImage, PilError>
+where
+    P: HighDepthPixel,
+    P::Subpixel: Primitive,
+{
+    let samples = source
+        .pixels()
+        .map(|pixel| crate::color::grayscale_rgb_pixel(&pixel.rgb8().0, 0));
+    let mut output = GrayImage::new(source.width(), source.height());
+    if dither.is_some_and(|method| matches!(method, &DitherMethod::None)) {
+        for (destination, sample) in output.pixels_mut().zip(samples) {
+            destination[0] = if sample >= 128 { u8::MAX } else { 0 };
+        }
+    } else {
+        crate::compute::pool_cpu::ops::color::convert::helpers::binary::diffuse_gray_samples(
+            samples,
+            &mut output,
+        )?;
+    }
+    Ok(DynamicImage::One(output))
+}
+
 fn luma<P: HighDepthPixel>(source: &ImageBuffer<P, Vec<P::Subpixel>>) -> GrayImage
 where
     P::Subpixel: Primitive,
@@ -282,9 +342,11 @@ where
     let mut output = RgbaImage::new(source.width(), source.height());
     for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
         let [red, green, blue] = pixel.rgb8().0;
-        *destination = Rgba(crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_i32_rgb(
-            red, green, blue,
-        ));
+        *destination = Rgba(
+            crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_i32_rgb(
+                red, green, blue,
+            ),
+        );
     }
     output
 }
@@ -296,9 +358,11 @@ where
     let mut output = RgbaImage::new(source.width(), source.height());
     for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
         let [red, green, blue] = pixel.rgb8().0;
-        *destination = Rgba(crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_f32_rgb(
-            red, green, blue,
-        ));
+        *destination = Rgba(
+            crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_f32_rgb(
+                red, green, blue,
+            ),
+        );
     }
     output
 }

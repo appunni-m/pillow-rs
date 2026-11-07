@@ -4,9 +4,6 @@ use crate::error::PilError;
 use crate::raster::{DynamicImage, GrayImage, Mode};
 
 pub(crate) fn execute(source: &GrayImage, target: Mode) -> Result<DynamicImage, PilError> {
-    if target == Mode::ImageLuma8 {
-        return Ok(DynamicImage::ImageLuma8(source.clone()));
-    }
     if target == Mode::ImageLab8 {
         return super::super::super::helpers::lab_target::execute(
             source.width(),

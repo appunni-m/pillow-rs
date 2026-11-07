@@ -3,8 +3,7 @@
 use crate::error::PilError;
 use crate::pipeline::DitherMethod;
 use crate::raster::{
-    DynamicImage, GrayAlphaImage, GrayImage, Luma, LumaA, Mode, RgbImage,
-    Rgba, RgbaImage,
+    DynamicImage, GrayAlphaImage, GrayImage, Luma, LumaA, Mode, RgbImage, Rgba, RgbaImage,
 };
 
 pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, PilError> {
@@ -12,9 +11,9 @@ pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, P
         return super::super::super::helpers::lab_target::execute(
             source.width(),
             source.height(),
-            source.pixels().map(|pixel| {
-                crate::color::hsv_pixel_to_rgb(pixel[0], pixel[1], pixel[2])
-            }),
+            source
+                .pixels()
+                .map(|pixel| crate::color::hsv_pixel_to_rgb(pixel[0], pixel[1], pixel[2])),
         );
     }
     match target {
@@ -23,9 +22,9 @@ pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, P
             super::super::super::helpers::premultiplied::from_rgb_samples(
                 source.width(),
                 source.height(),
-                source.pixels().map(|pixel| {
-                    crate::color::hsv_pixel_to_rgb(pixel[0], pixel[1], pixel[2])
-                }),
+                source
+                    .pixels()
+                    .map(|pixel| crate::color::hsv_pixel_to_rgb(pixel[0], pixel[1], pixel[2])),
                 target,
             )
         }
@@ -47,7 +46,6 @@ pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, P
         Mode::ImageRgba8 => Ok(DynamicImage::ImageRgba8(rgba(source))),
         Mode::ImageCmyk8 => Ok(DynamicImage::ImageCmyk8(cmyk(source))),
         Mode::ImageYCbCr8 => Ok(DynamicImage::ImageYCbCr8(ycbcr(source))),
-        Mode::ImageHsv8 => Ok(DynamicImage::ImageHsv8(source.clone())),
         Mode::ImageI32 => Ok(DynamicImage::ImageI32(to_i32(source))),
         Mode::ImageF32 => Ok(DynamicImage::ImageF32(to_f32(source))),
         _ => Err(PilError::ValueError("image has wrong mode".into())),
@@ -72,9 +70,9 @@ pub(crate) fn execute_palette_target(
     crate::compute::pool_cpu::ops::color::convert::helpers::palette::web_palette_from_pixels(
         source.width(),
         source.height(),
-        source.pixels().map(|pixel| {
-            crate::color::hsv_pixel_to_rgb(pixel[0], pixel[1], pixel[2])
-        }),
+        source
+            .pixels()
+            .map(|pixel| crate::color::hsv_pixel_to_rgb(pixel[0], pixel[1], pixel[2])),
         !matches!(dither, Some(DitherMethod::None)),
         target,
         metadata,
@@ -126,12 +124,7 @@ fn cmyk(source: &RgbImage) -> RgbaImage {
     let mut output = RgbaImage::new(source.width(), source.height());
     for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
         let [red, green, blue] = crate::color::hsv_pixel_to_rgb(pixel[0], pixel[1], pixel[2]);
-        *destination = Rgba([
-            u8::MAX - red,
-            u8::MAX - green,
-            u8::MAX - blue,
-            0,
-        ]);
+        *destination = Rgba([u8::MAX - red, u8::MAX - green, u8::MAX - blue, 0]);
     }
     output
 }
@@ -140,9 +133,9 @@ fn ycbcr(source: &RgbImage) -> RgbImage {
     crate::color::rgb_pixels_to_ycbcr(
         source.width(),
         source.height(),
-        source.pixels().map(|pixel| {
-            crate::color::hsv_pixel_to_rgb(pixel[0], pixel[1], pixel[2])
-        }),
+        source
+            .pixels()
+            .map(|pixel| crate::color::hsv_pixel_to_rgb(pixel[0], pixel[1], pixel[2])),
     )
 }
 
@@ -150,9 +143,11 @@ fn to_i32(source: &RgbImage) -> RgbaImage {
     let mut output = RgbaImage::new(source.width(), source.height());
     for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
         let [red, green, blue] = crate::color::hsv_pixel_to_rgb(pixel[0], pixel[1], pixel[2]);
-        *destination = Rgba(crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_i32_rgb(
-            red, green, blue,
-        ));
+        *destination = Rgba(
+            crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_i32_rgb(
+                red, green, blue,
+            ),
+        );
     }
     output
 }
@@ -161,9 +156,11 @@ fn to_f32(source: &RgbImage) -> RgbaImage {
     let mut output = RgbaImage::new(source.width(), source.height());
     for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
         let [red, green, blue] = crate::color::hsv_pixel_to_rgb(pixel[0], pixel[1], pixel[2]);
-        *destination = Rgba(crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_f32_rgb(
-            red, green, blue,
-        ));
+        *destination = Rgba(
+            crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_f32_rgb(
+                red, green, blue,
+            ),
+        );
     }
     output
 }

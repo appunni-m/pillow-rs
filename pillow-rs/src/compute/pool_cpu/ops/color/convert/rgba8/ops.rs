@@ -49,7 +49,7 @@ macro_rules! architecture_catalog {
     };
 }
 
-static ARCHITECTURES: [ImplementationSupport; 36] = architecture_catalog!(
+static ARCHITECTURES: [ImplementationSupport; 33] = architecture_catalog!(
     ImageRgba8,
     singles [
     ImplementationSupport::cpu(
@@ -173,7 +173,6 @@ static ARCHITECTURES: [ImplementationSupport; 36] = architecture_catalog!(
             ImageHsv8,
             ImageI32,
             ImageF32,
-            ImageRgba8,
         ],
         ConvertTargetMode, Neon, cfg!(all(target_arch = "aarch64", target_feature = "neon")),
         &[Architecture::Neon]; [
@@ -183,7 +182,6 @@ static ARCHITECTURES: [ImplementationSupport; 36] = architecture_catalog!(
             ImageHsv8,
             ImageI32,
             ImageF32,
-            ImageRgba8,
         ],
         ConvertTargetModeNonEmpty, WasmSimd128, WASM_SIMD128_AVAILABLE,
         &[Architecture::WasmSimd128]; [ImageRgbx8],
@@ -191,7 +189,6 @@ static ARCHITECTURES: [ImplementationSupport; 36] = architecture_catalog!(
         &[Architecture::WasmSimd128]; [ImageRgbPremultiplied8],
         ConvertTargetMode, WasmSimd128, WASM_SIMD128_AVAILABLE, &[Architecture::WasmSimd128]; [
             ImageRgb8,
-            ImageRgba8,
             ImageLumaA8,
             ImageCmyk8,
             ImageYCbCr8,
@@ -251,7 +248,10 @@ pub(crate) unsafe fn execute(
 ) -> Result<DynamicImage, PilError> {
     let mut output = match selection.implementation.architecture {
         Architecture::Default => super::default::convert_impl::execute(source, target),
-        #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "avx2"))]
+        #[cfg(all(
+            any(target_arch = "x86", target_arch = "x86_64"),
+            target_feature = "avx2"
+        ))]
         Architecture::Avx2 if target == Mode::ImageLuma8 => {
             super::avx2::convert_impl::execute(source)
         }
@@ -263,7 +263,10 @@ pub(crate) unsafe fn execute(
         Architecture::Ssse3 if target == Mode::ImageLuma8 => {
             super::ssse3::convert_impl::execute_luma(source)
         }
-        #[cfg(any(target_arch = "x86_64", all(target_arch = "x86", target_feature = "sse2")))]
+        #[cfg(any(
+            target_arch = "x86_64",
+            all(target_arch = "x86", target_feature = "sse2")
+        ))]
         Architecture::Sse2 => super::sse2::convert_impl::execute(source, target),
         #[cfg(target_arch = "x86_64")]
         Architecture::Ssse3 if target == Mode::ImageRgb8 => {
@@ -273,9 +276,7 @@ pub(crate) unsafe fn execute(
         #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
         Architecture::Neon => super::neon::convert_impl::execute(source, target),
         #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
-        Architecture::WasmSimd128 => {
-            super::wasm_simd128::convert_impl::execute(source, target)
-        }
+        Architecture::WasmSimd128 => super::wasm_simd128::convert_impl::execute(source, target),
         _ => Err(PilError::InternalError(
             "Convert selected an undeclared RGBA architecture".into(),
         )),

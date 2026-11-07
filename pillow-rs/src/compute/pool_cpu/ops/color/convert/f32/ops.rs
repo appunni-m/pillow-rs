@@ -4,9 +4,10 @@ crate::compute::pool_cpu::ops::color::convert::helpers::binary::declare_mode_str
     crate::raster::Mode::ImageF32
 );
 
-use crate::compute::{Architecture, registry::support::{
-    InputContract, ModeSupport, OperationId, StrategySelection,
-}};
+use crate::compute::{
+    Architecture,
+    registry::support::{InputContract, ModeSupport, OperationId, StrategySelection},
+};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode, RgbaImage};
 
@@ -14,6 +15,8 @@ use crate::raster::{DynamicImage, Mode, RgbaImage};
 // direct F converter is absent; this owner writes each final target directly.
 // Output and fault parity remain pending, including non-finite float samples.
 // TODO(pillow-rs#3ptb): verify every F source/target pair and dither behavior.
+// TODO(pillow-rs#3ptb): after Default parity, assess exact typed-F32
+// architecture strategies without routing scalar samples through byte layout.
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: super::super::ops::SCALAR_TARGETS,
     core_only_targets: &[],

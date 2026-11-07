@@ -1,13 +1,10 @@
 //! Direct unpremultiplication from native La samples.
 
+use super::super::super::helpers::pixel::unpremultiply_byte;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, GrayAlphaImage, LumaA, Mode};
-use super::super::super::helpers::pixel::unpremultiply_byte;
 
-pub(crate) fn execute(
-    source: &GrayAlphaImage,
-    target: Mode,
-) -> Result<DynamicImage, PilError> {
+pub(crate) fn execute(source: &GrayAlphaImage, target: Mode) -> Result<DynamicImage, PilError> {
     if target == Mode::ImageLab8 {
         // NO_PILLOW_SUPPORT: convert native premultiplied luma to straight
         // luma samples, then write LAB directly without an intermediate mode.
@@ -19,9 +16,6 @@ pub(crate) fn execute(
                 [luma; 3]
             }),
         );
-    }
-    if target == Mode::ImageLaPremultiplied8 {
-        return Ok(DynamicImage::ImageLaPremultiplied8(source.clone()));
     }
     if target != Mode::ImageLumaA8 {
         return Err(PilError::ValueError(
@@ -39,4 +33,3 @@ pub(crate) fn execute(
     }
     Ok(DynamicImage::ImageLumaA8(output))
 }
-

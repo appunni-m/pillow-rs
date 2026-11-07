@@ -1,13 +1,14 @@
 //! PA source-mode support and architecture selection for Convert.
 
-crate::compute::pool_cpu::ops::color::convert::helpers::binary::declare_mode_strategy!(
-    crate::raster::Mode::ImagePaletteAlpha8
-);
-
-use crate::compute::{Architecture, registry::support::{
-    InputContract, ModeSupport, OperationId, OutputModeRule, PaletteInput, StrategySelection,
-}};
+use crate::compute::{
+    Architecture,
+    registry::support::{
+        InputContract, ModeSupport, OperationId, OperationInputs, OutputModeRule, PaletteInput,
+        StrategySelection,
+    },
+};
 use crate::error::PilError;
+use crate::pipeline::DitherMethod;
 use crate::raster::{DynamicImage, GrayAlphaImage, Mode};
 
 const TARGETS: &[Mode] = &[
@@ -51,6 +52,26 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     INPUTS,
     &[],
 );
+
+pub(crate) fn execute_binary(
+    inputs: OperationInputs<'_>,
+    _dither: Option<&DitherMethod>,
+    selection: StrategySelection,
+) -> Result<DynamicImage, PilError> {
+    // Pillow thresholds palette entries directly and ignores PA pixel alpha.
+    let DynamicImage::ImagePaletteAlpha8(source) = inputs.image else {
+        return Err(PilError::InternalError(
+            "Convert selected PA binary strategy for a different source mode".into(),
+        ));
+    };
+    super::super::helpers::binary::palette_indices_to_binary(
+        source.width(),
+        source.height(),
+        source.pixels().map(|pixel| pixel[0]),
+        inputs.palette,
+        selection,
+    )
+}
 
 pub(crate) fn execute(
     source: &GrayAlphaImage,

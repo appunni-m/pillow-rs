@@ -53,13 +53,15 @@ const fn wasm_simd128(guard: StrategyGuard) -> ImplementationSupport {
     )
 }
 
-static ARCHITECTURES: [ImplementationSupport; 33] = [
+static ARCHITECTURES: [ImplementationSupport; 30] = [
     sse2(StrategyGuard::ConvertTargetMode(Mode::ImageLuma8)),
     neon(StrategyGuard::ConvertTargetMode(Mode::ImageLuma8)),
-    sse2(StrategyGuard::ConvertTargetMode(Mode::ImageLumaA8)),
-    neon(StrategyGuard::ConvertTargetMode(Mode::ImageLumaA8)),
-    sse2(StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageLaPremultiplied8)),
-    neon(StrategyGuard::ConvertTargetModeNonEmpty(Mode::ImageLaPremultiplied8)),
+    sse2(StrategyGuard::ConvertTargetModeNonEmpty(
+        Mode::ImageLaPremultiplied8,
+    )),
+    neon(StrategyGuard::ConvertTargetModeNonEmpty(
+        Mode::ImageLaPremultiplied8,
+    )),
     sse2(StrategyGuard::ConvertTargetMode(Mode::ImageRgb8)),
     neon(StrategyGuard::ConvertTargetMode(Mode::ImageRgb8)),
     sse2(StrategyGuard::ConvertTargetMode(Mode::ImageRgba8)),
@@ -77,7 +79,6 @@ static ARCHITECTURES: [ImplementationSupport; 33] = [
     sse2(StrategyGuard::ConvertTargetMode(Mode::ImageF32)),
     neon(StrategyGuard::ConvertTargetMode(Mode::ImageF32)),
     wasm_simd128(StrategyGuard::ConvertTargetMode(Mode::ImageLuma8)),
-    wasm_simd128(StrategyGuard::ConvertTargetMode(Mode::ImageLumaA8)),
     wasm_simd128(StrategyGuard::ConvertTargetModeNonEmpty(
         Mode::ImageLaPremultiplied8,
     )),
@@ -122,9 +123,7 @@ pub(crate) fn execute(
             "Convert selected an undeclared LA architecture".into(),
         )),
     }?;
-    super::super::helpers::physical_lanes::preserve_luma_alpha_lane(
-        source, target, &mut output,
-    )?;
+    super::super::helpers::physical_lanes::preserve_luma_alpha_lane(source, target, &mut output)?;
     Ok(output)
 }
 
@@ -134,10 +133,11 @@ pub(crate) fn execute_palette_target(
     selection: StrategySelection,
 ) -> Result<super::super::ops::PreparedConvertOutput, PilError> {
     match selection.implementation.architecture {
-        Architecture::Default => super::default::convert_impl::execute_palette_target(source, target),
+        Architecture::Default => {
+            super::default::convert_impl::execute_palette_target(source, target)
+        }
         _ => Err(PilError::InternalError(
             "Convert selected an undeclared LA palette architecture".into(),
         )),
     }
 }
-

@@ -1,9 +1,11 @@
 //! LAB8 source-mode support and architecture selection for Convert.
 
-use crate::compute::{Architecture, registry::support::{
-    InputContract, ModeSupport, OperationId, OperationInputs, OutputModeRule,
-    StrategySelection,
-}};
+use crate::compute::{
+    Architecture,
+    registry::support::{
+        InputContract, ModeSupport, OperationId, OperationInputs, OutputModeRule, StrategySelection,
+    },
+};
 use crate::error::PilError;
 use crate::pipeline::DitherMethod;
 use crate::raster::{DynamicImage, Mode, RgbImage};
@@ -32,6 +34,8 @@ const TARGETS: &[Mode] = &[
 ];
 // TODO(pillow-rs#3ptb): verify Pillow-supported and CoreOnly LAB target
 // outputs, ImageCms routes, error behavior, and selection receipts.
+// TODO(pillow-rs#3ptb): assess an architecture-specific LAB LUT kernel only
+// after it can preserve exact RGB/RGBA/RGBX output bytes.
 // NO_PILLOW_SUPPORT: Pillow's LAB wrapper exposes identity and ImageCms
 // conversion to RGB, RGBA, and RGBX; the remaining native outputs extend it.
 const CORE_ONLY_TARGETS: &[Mode] = &[
@@ -117,10 +121,6 @@ pub(crate) fn execute(
             "Convert selected an undeclared LAB8 architecture".into(),
         )),
     }?;
-    super::super::helpers::physical_lanes::preserve_compact_rgb_lane(
-        source,
-        target,
-        &mut output,
-    )?;
+    super::super::helpers::physical_lanes::preserve_compact_rgb_lane(source, target, &mut output)?;
     Ok(output)
 }

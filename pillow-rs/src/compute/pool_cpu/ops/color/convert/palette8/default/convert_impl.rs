@@ -3,8 +3,7 @@
 use crate::compute::registry::support::PaletteInput;
 use crate::error::PilError;
 use crate::raster::{
-    DynamicImage, GrayAlphaImage, GrayImage, Luma, LumaA, Mode, Rgb,
-    RgbImage, Rgba, RgbaImage,
+    DynamicImage, GrayAlphaImage, GrayImage, Luma, LumaA, Mode, Rgb, RgbImage, Rgba, RgbaImage,
 };
 
 pub(crate) fn execute(
@@ -13,13 +12,25 @@ pub(crate) fn execute(
     target: Mode,
 ) -> Result<DynamicImage, PilError> {
     if target == Mode::ImageLab8 {
-        return super::super::super::helpers::lab_target::execute(
+        // Pillow promotes P to RGBA before its LAB transform; retain that
+        // palette alpha in LAB's omitted physical byte.
+        let mut output = super::super::super::helpers::lab_target::execute(
             source.width(),
             source.height(),
-            source.pixels().map(|index| {
-                super::super::super::helpers::palette::color(index[0], palette)
-            }),
-        );
+            source
+                .pixels()
+                .map(|index| super::super::super::helpers::palette::color(index[0], palette)),
+        )?;
+        super::super::super::helpers::physical_lanes::preserve_target_lane_values(
+            Mode::ImageLab8,
+            source.width(),
+            source.height(),
+            source
+                .pixels()
+                .map(|index| super::super::super::helpers::palette::alpha(index[0], palette)),
+            &mut output,
+        )?;
+        return Ok(output);
     }
     // Pillow emits opaque X for palette-to-RGB, YCbCr, and HSV conversions.
     match target {
@@ -81,7 +92,9 @@ fn luma_alpha(source: &GrayImage, palette: PaletteInput<'_>) -> GrayAlphaImage {
 fn rgb(source: &GrayImage, palette: PaletteInput<'_>) -> RgbImage {
     let mut output = RgbImage::new(source.width(), source.height());
     for (destination, index) in output.pixels_mut().zip(source.pixels()) {
-        *destination = Rgb(super::super::super::helpers::palette::color(index[0], palette));
+        *destination = Rgb(super::super::super::helpers::palette::color(
+            index[0], palette,
+        ));
     }
     output
 }
@@ -139,9 +152,11 @@ fn to_i32(source: &GrayImage, palette: PaletteInput<'_>) -> RgbaImage {
     let mut output = RgbaImage::new(source.width(), source.height());
     for (destination, index) in output.pixels_mut().zip(source.pixels()) {
         let [red, green, blue] = super::super::super::helpers::palette::color(index[0], palette);
-        *destination = Rgba(crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_i32_rgb(
-            red, green, blue,
-        ));
+        *destination = Rgba(
+            crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_i32_rgb(
+                red, green, blue,
+            ),
+        );
     }
     output
 }
@@ -150,9 +165,11 @@ fn to_f32(source: &GrayImage, palette: PaletteInput<'_>) -> RgbaImage {
     let mut output = RgbaImage::new(source.width(), source.height());
     for (destination, index) in output.pixels_mut().zip(source.pixels()) {
         let [red, green, blue] = super::super::super::helpers::palette::color(index[0], palette);
-        *destination = Rgba(crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_f32_rgb(
-            red, green, blue,
-        ));
+        *destination = Rgba(
+            crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_f32_rgb(
+                red, green, blue,
+            ),
+        );
     }
     output
 }

@@ -1,17 +1,10 @@
 //! Shared portable wide-vector target kernels for the Luma8 architecture routes.
 
 use crate::error::PilError;
-use crate::raster::{
-    DynamicImage, GrayAlphaImage, GrayImage, Mode, RgbImage, RgbaImage,
-};
-use wide::u8x16;
-
-const IDENTITY_LANES: u8x16 =
-    u8x16::new([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, Mode, RgbImage, RgbaImage};
 
 pub(crate) fn execute(source: &GrayImage, target: Mode) -> Result<DynamicImage, PilError> {
     match target {
-        Mode::ImageLuma8 => identity(source),
         Mode::ImageRgb8 => super::expand_color::to_rgb(source).map(DynamicImage::ImageRgb8),
         Mode::ImageRgba8 => super::expand_color::to_rgba(source).map(DynamicImage::ImageRgba8),
         Mode::ImageLumaA8 => luma_alpha(source),
@@ -27,25 +20,6 @@ pub(crate) fn execute(source: &GrayImage, target: Mode) -> Result<DynamicImage, 
             "Convert selected an undeclared Luma8 architecture".into(),
         )),
     }
-}
-
-fn identity(source: &GrayImage) -> Result<DynamicImage, PilError> {
-    let (pixels, output_bytes) = super::layout::checked_layout(source, 1)?;
-    let mut output = Vec::with_capacity(output_bytes);
-    let mut blocks = 0u64;
-    for start in (0..pixels).step_by(16) {
-        let active = (pixels - start).min(16);
-        let lanes = std::array::from_fn(|lane| {
-            source.as_raw().get(start + lane).copied().unwrap_or(0)
-        });
-        let block = u8x16::new(lanes).shuffle(IDENTITY_LANES).to_array();
-        output.extend_from_slice(&block[..active]);
-        blocks = blocks.saturating_add(1);
-    }
-    record_vector_output(blocks, output.capacity());
-    let image = GrayImage::from_raw(source.width(), source.height(), output)
-        .ok_or_else(|| PilError::InternalError("Luma Convert L output shape mismatch".into()))?;
-    Ok(DynamicImage::ImageLuma8(image))
 }
 
 fn luma_alpha(source: &GrayImage) -> Result<DynamicImage, PilError> {
@@ -82,8 +56,9 @@ fn cmyk(source: &GrayImage) -> Result<DynamicImage, PilError> {
 fn ycbcr(source: &GrayImage) -> Result<DynamicImage, PilError> {
     let (bytes, blocks) = super::ycbcr::execute(source)?;
     record_vector_output(blocks, bytes.capacity());
-    let output = RgbImage::from_raw(source.width(), source.height(), bytes)
-        .ok_or_else(|| PilError::InternalError("Luma Convert YCbCr output shape mismatch".into()))?;
+    let output = RgbImage::from_raw(source.width(), source.height(), bytes).ok_or_else(|| {
+        PilError::InternalError("Luma Convert YCbCr output shape mismatch".into())
+    })?;
     Ok(DynamicImage::ImageYCbCr8(output))
 }
 

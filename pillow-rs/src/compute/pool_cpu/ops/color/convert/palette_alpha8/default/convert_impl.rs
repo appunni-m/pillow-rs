@@ -3,8 +3,7 @@
 use crate::compute::registry::support::PaletteInput;
 use crate::error::PilError;
 use crate::raster::{
-    DynamicImage, GrayAlphaImage, GrayImage, Luma, LumaA, Mode, Rgb,
-    RgbImage, Rgba, RgbaImage,
+    DynamicImage, GrayAlphaImage, GrayImage, Luma, LumaA, Mode, Rgb, RgbImage, Rgba, RgbaImage,
 };
 
 pub(crate) fn execute(
@@ -13,23 +12,33 @@ pub(crate) fn execute(
     target: Mode,
 ) -> Result<DynamicImage, PilError> {
     if target == Mode::ImageLab8 {
-        return super::super::super::helpers::lab_target::execute(
+        // Pillow promotes PA to RGBA before its LAB transform; retain the
+        // per-pixel alpha in LAB's omitted physical byte.
+        let mut output = super::super::super::helpers::lab_target::execute(
             source.width(),
             source.height(),
-            source.pixels().map(|index| {
-                super::super::super::helpers::palette::color(index[0], palette)
-            }),
-        );
+            source
+                .pixels()
+                .map(|index| super::super::super::helpers::palette::color(index[0], palette)),
+        )?;
+        super::super::super::helpers::physical_lanes::preserve_target_lane_values(
+            Mode::ImageLab8,
+            source.width(),
+            source.height(),
+            source.pixels().map(|pixel| pixel[1]),
+            &mut output,
+        )?;
+        return Ok(output);
     }
     // The PA-to-La/RGBa rows follow PA's RGB base mode and therefore use
     // opaque alpha. RGBX is a direct palette converter and keeps PA alpha.
     match target {
-        Mode::ImageLaPremultiplied8 => Ok(DynamicImage::ImageLaPremultiplied8(
-            opaque_luma_alpha(source, palette),
-        )),
-        Mode::ImageRgbPremultiplied8 => Ok(DynamicImage::ImageRgbPremultiplied8(
-            opaque_rgba(source, palette),
-        )),
+        Mode::ImageLaPremultiplied8 => Ok(DynamicImage::ImageLaPremultiplied8(opaque_luma_alpha(
+            source, palette,
+        ))),
+        Mode::ImageRgbPremultiplied8 => Ok(DynamicImage::ImageRgbPremultiplied8(opaque_rgba(
+            source, palette,
+        ))),
         Mode::ImageLuma8 => Ok(DynamicImage::ImageLuma8(luma(source, palette))),
         Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
             super::super::super::helpers::luma16::from_luma8_samples(
@@ -56,10 +65,7 @@ pub(crate) fn execute(
     }
 }
 
-fn opaque_luma_alpha(
-    source: &GrayAlphaImage,
-    palette: PaletteInput<'_>,
-) -> GrayAlphaImage {
+fn opaque_luma_alpha(source: &GrayAlphaImage, palette: PaletteInput<'_>) -> GrayAlphaImage {
     let mut output = GrayAlphaImage::new(source.width(), source.height());
     for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
         let [red, green, blue] = super::super::super::helpers::palette::color(pixel[0], palette);
@@ -121,7 +127,9 @@ fn luma_alpha(source: &GrayAlphaImage, palette: PaletteInput<'_>) -> GrayAlphaIm
 fn rgb(source: &GrayAlphaImage, palette: PaletteInput<'_>) -> RgbImage {
     let mut output = RgbImage::new(source.width(), source.height());
     for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
-        *destination = Rgb(super::super::super::helpers::palette::color(pixel[0], palette));
+        *destination = Rgb(super::super::super::helpers::palette::color(
+            pixel[0], palette,
+        ));
     }
     output
 }
@@ -168,9 +176,11 @@ fn to_i32(source: &GrayAlphaImage, palette: PaletteInput<'_>) -> RgbaImage {
     let mut output = RgbaImage::new(source.width(), source.height());
     for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
         let [red, green, blue] = super::super::super::helpers::palette::color(pixel[0], palette);
-        *destination = Rgba(crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_i32_rgb(
-            red, green, blue,
-        ));
+        *destination = Rgba(
+            crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_i32_rgb(
+                red, green, blue,
+            ),
+        );
     }
     output
 }
@@ -179,9 +189,11 @@ fn to_f32(source: &GrayAlphaImage, palette: PaletteInput<'_>) -> RgbaImage {
     let mut output = RgbaImage::new(source.width(), source.height());
     for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
         let [red, green, blue] = super::super::super::helpers::palette::color(pixel[0], palette);
-        *destination = Rgba(crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_f32_rgb(
-            red, green, blue,
-        ));
+        *destination = Rgba(
+            crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_f32_rgb(
+                red, green, blue,
+            ),
+        );
     }
     output
 }

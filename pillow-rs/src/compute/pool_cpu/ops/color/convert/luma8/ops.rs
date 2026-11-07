@@ -20,23 +20,7 @@ const SSE2_AVAILABLE: bool = cfg!(any(
 ));
 const WASM_SIMD128_AVAILABLE: bool = cfg!(all(target_arch = "wasm32", target_feature = "simd128"));
 
-static ARCHITECTURES: [ImplementationSupport; 39] = [
-    ImplementationSupport::cpu(
-        OperationId::Convert,
-        Mode::ImageLuma8,
-        Architecture::Sse2,
-        SSE2_AVAILABLE,
-        &[Architecture::Sse2],
-        StrategyGuard::ConvertTargetMode(Mode::ImageLuma8),
-    ),
-    ImplementationSupport::cpu(
-        OperationId::Convert,
-        Mode::ImageLuma8,
-        Architecture::Neon,
-        cfg!(target_arch = "aarch64"),
-        &[Architecture::Neon],
-        StrategyGuard::ConvertTargetMode(Mode::ImageLuma8),
-    ),
+static ARCHITECTURES: [ImplementationSupport; 36] = [
     ImplementationSupport::cpu(
         OperationId::Convert,
         Mode::ImageLuma8,
@@ -228,14 +212,6 @@ static ARCHITECTURES: [ImplementationSupport; 39] = [
         cfg!(target_arch = "aarch64"),
         &[Architecture::Neon],
         StrategyGuard::ConvertTargetMode(Mode::ImageI16N),
-    ),
-    ImplementationSupport::cpu(
-        OperationId::Convert,
-        Mode::ImageLuma8,
-        Architecture::WasmSimd128,
-        WASM_SIMD128_AVAILABLE,
-        &[Architecture::WasmSimd128],
-        StrategyGuard::ConvertTargetMode(Mode::ImageLuma8),
     ),
     ImplementationSupport::cpu(
         OperationId::Convert,
@@ -359,7 +335,10 @@ pub(crate) fn execute(
 ) -> Result<DynamicImage, PilError> {
     match selection.implementation.architecture {
         Architecture::Default => super::default::convert_impl::execute(source, target),
-        #[cfg(any(target_arch = "x86_64", all(target_arch = "x86", target_feature = "sse2")))]
+        #[cfg(any(
+            target_arch = "x86_64",
+            all(target_arch = "x86", target_feature = "sse2")
+        ))]
         Architecture::Sse2 => super::sse2::convert_impl::execute(source, target),
         #[cfg(target_arch = "aarch64")]
         Architecture::Neon => super::neon::convert_impl::execute(source, target),
@@ -377,7 +356,9 @@ pub(crate) fn execute_palette_target(
     selection: StrategySelection,
 ) -> Result<super::super::ops::PreparedConvertOutput, PilError> {
     match selection.implementation.architecture {
-        Architecture::Default => super::default::convert_impl::execute_palette_target(source, target),
+        Architecture::Default => {
+            super::default::convert_impl::execute_palette_target(source, target)
+        }
         _ => Err(PilError::InternalError(
             "Convert selected an undeclared Luma8 palette architecture".into(),
         )),
