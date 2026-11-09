@@ -37,6 +37,11 @@ except ModuleNotFoundError:
         manifest_fault_points,
     )
 
+try:
+    from migration_parity.target_output_contracts import CORE_ONLY_RAW_MODES
+except ModuleNotFoundError:
+    from scripts.migration_parity.target_output_contracts import CORE_ONLY_RAW_MODES
+
 from migration_parity_inventory import (
     AUTHORITY_PATH,
     EXPECTED_AUTHORITY_SHA256,
@@ -128,6 +133,17 @@ COMPONENTS: dict[str, tuple[str, ...]] = {
         "pillow-rs/src/ops/transform.rs",
         "pillow-rs/src/ops/transpose.rs",
         "pillow-rs/src/compute/pool_cpu/ops/geometry/ops.rs",
+    ),
+    "image-raw-input": (
+        "pillow-rs-py/python/PIL/Image.py",
+        "pillow-rs-py/python/pillow_rs/image.py",
+        "pillow-rs-py/src/image/creation.rs",
+        "pillow-rs-py/src/image/properties.rs",
+        "pillow-rs/src/image/construction.rs",
+        "pillow-rs/src/image/construction/internal_samples.rs",
+        "pillow-rs/src/image/metadata.rs",
+        "pillow-rs/src/raster/dynamic.rs",
+        "pillow-rs/src/raster/mode.rs",
     ),
     "image-show": (
         "pillow-rs-py/python/PIL/ImageShow.py",
@@ -917,6 +933,18 @@ def operation_requirements(
                 ["parity", "coverage"],
             )
         )
+    if endpoint.source_path == "PIL.Image.frombytes":
+        # pillow-rs exposes these exact typed carriers as Rust-only raw input
+        # identities. They have recorded-output coverage but no Pillow mode.
+        for _mode_name, mode_id, _raw in CORE_ONLY_RAW_MODES:
+            requirements.append(
+                requirement(
+                    f"{prefix}.mode.{mode_id}",
+                    "mode",
+                    f"Target-only typed raw-input behavior for {mode_id} (NO_PILLOW_SUPPORT).",
+                    ["target_output"],
+                )
+            )
     if endpoint.source_path == "PIL.Image.Image.histogram":
         # The target keeps an unsigned-16-bit histogram path that predates the
         # frozen authority row. Preserve its existing public requirement in
@@ -1303,6 +1331,9 @@ def operation_contract(
         target_signature = callable_signature(endpoint, target)
         target_signature_text = signature_text(endpoint, target_signature)
         target_support = {"status": "supported"}
+    coverage_component_ids = [component_for(endpoint)]
+    if endpoint.source_path == "PIL.Image.frombytes":
+        coverage_component_ids.append("image-raw-input")
     contract: dict[str, Any] = {
         "id": endpoint.operation,
         "kind": endpoint.kind,
@@ -1338,7 +1369,7 @@ def operation_contract(
             else {
                 "applicability": "required",
                 "target_profiles": [TARGET_PROFILE],
-                "component_ids": [component_for(endpoint)],
+                "component_ids": coverage_component_ids,
             }
         ),
     }
@@ -1379,10 +1410,18 @@ def coverage_components() -> list[dict[str, Any]]:
                 "target_profile": TARGET_PROFILE,
                 "paths": list(paths),
                 "dimensions": ["function", "line", "branch", "region"],
-                "thresholds": [
-                    {"dimension": dimension, "minimum_percent": 100}
-                    for dimension in ("function", "line", "branch", "region")
-                ],
+                # The raw-input component records reachability while its
+                # error and boundary contracts are still being added. Keep
+                # observed counts visible without treating this focused
+                # extension slice as a complete 100% gate.
+                "thresholds": (
+                    []
+                    if component_id == "image-raw-input"
+                    else [
+                        {"dimension": dimension, "minimum_percent": 100}
+                        for dimension in ("function", "line", "branch", "region")
+                    ]
+                ),
             }
         )
     return components
@@ -1572,8 +1611,8 @@ def build_manifest() -> dict[str, Any]:
         ],
         "interfaces": {
             "parity": {
-                "input_schema": "migration-parity/parity-input@2",
-                "result_schema": "migration-parity/parity-result@2",
+                "input_schema": "migration-parity/parity-input@3",
+                "result_schema": "migration-parity/parity-result@3",
                 "command_id": "parity",
             },
             "coverage": {
@@ -1588,11 +1627,11 @@ def build_manifest() -> dict[str, Any]:
             },
             "aggregation": {
                 "input_schemas": [
-                    "migration-parity/parity-result@2",
+                    "migration-parity/parity-result@3",
                     "migration-parity/coverage-result@1",
                     "migration-parity/benchmark-result@1",
                 ],
-                "result_schema": "migration-parity/status-report@1",
+                "result_schema": "migration-parity/status-report@2",
                 "command_id": "aggregate",
             },
         },
@@ -1608,6 +1647,7 @@ def build_manifest() -> dict[str, Any]:
             ],
             "evidence_outputs": [
                 "docs/generated/migration-parity-status.md",
+                "docs/generated/migration-parity-target-output-status.md",
                 "docs/generated/migration-coverage-status.md",
                 "docs/generated/migration-benchmark-status.md",
             ],

@@ -24,12 +24,12 @@ except ModuleNotFoundError:
 
 SCHEMA_MANIFEST = "migration-parity/manifest@3"
 SCHEMA_BY_LANE = {
-    "parity": "migration-parity/parity-input@2",
+    "parity": "migration-parity/parity-input@3",
     "coverage": "migration-parity/coverage-input@1",
     "benchmark": "migration-parity/benchmark-input@1",
 }
 LANES = tuple(SCHEMA_BY_LANE)
-REQUIREMENT_LANES = {*LANES, "fault_contract"}
+REQUIREMENT_LANES = {*LANES, "fault_contract", "target_output"}
 SURFACE_KINDS = {"namespace", "type", "format", "abi", "cli", "protocol", "service"}
 OPERATION_KINDS = {
     "function",
@@ -579,7 +579,7 @@ def validate_manifest(manifest: Any, *, manifest_path: Path | None = None) -> di
                 raise _error(f"manifest.{label}[{index}].identity_command_id", "unknown command")
     interfaces = _exact(manifest["interfaces"], {"parity", "coverage", "benchmark", "aggregation"}, "manifest.interfaces")
     expected_lanes = {
-        "parity": ("migration-parity/parity-input@2", "migration-parity/parity-result@2"),
+        "parity": ("migration-parity/parity-input@3", "migration-parity/parity-result@3"),
         "coverage": ("migration-parity/coverage-input@1", "migration-parity/coverage-result@1"),
         "benchmark": ("migration-parity/benchmark-input@1", "migration-parity/benchmark-result@1"),
     }
@@ -590,7 +590,7 @@ def validate_manifest(manifest: Any, *, manifest_path: Path | None = None) -> di
         if item["command_id"] not in command_ids:
             raise _error(f"manifest.interfaces.{lane}.command_id", "unknown command")
     aggregation = _exact(interfaces["aggregation"], {"input_schemas", "result_schema", "command_id"}, "manifest.interfaces.aggregation")
-    if aggregation["input_schemas"] != [item[1] for item in expected_lanes.values()] or aggregation["result_schema"] != "migration-parity/status-report@1":
+    if aggregation["input_schemas"] != [item[1] for item in expected_lanes.values()] or aggregation["result_schema"] != "migration-parity/status-report@2":
         raise _error("manifest.interfaces.aggregation", "aggregation schemas do not match fixed lane results")
     if aggregation["command_id"] not in command_ids:
         raise _error("manifest.interfaces.aggregation.command_id", "unknown command")
@@ -1380,15 +1380,19 @@ def validate_inputs(manifest: dict[str, Any], fixture_root: Path, *, lane: str |
             documents[relative] = document
     if "parity" in lanes:
         mapped_fault_requirements: dict[str, list[str]] = {}
+        mapped_target_output_requirements: dict[str, list[str]] = {}
         for relative in manifest["input_index"]["parity"]:
             document = documents[relative]
             for case in document["cases"]:
-                if case.get("verification", "parity") != "fault-contract":
+                verification = case.get("verification", "parity")
+                if verification == "fault-contract":
+                    destination = mapped_fault_requirements
+                elif verification == "expected-output":
+                    destination = mapped_target_output_requirements
+                else:
                     continue
                 for requirement_id in case["covers"]:
-                    mapped_fault_requirements.setdefault(requirement_id, []).append(
-                        case["case_id"]
-                    )
+                    destination.setdefault(requirement_id, []).append(case["case_id"])
         required_fault_requirements = {
             requirement["id"]
             for surface in manifest["surfaces"]
@@ -1405,6 +1409,22 @@ def validate_inputs(manifest: dict[str, Any], fixture_root: Path, *, lane: str |
                 "input_index.parity",
                 "required fault-contract requirements lack generated cases: "
                 + ", ".join(missing_fault_requirements),
+            )
+        required_target_output_requirements = {
+            requirement["id"]
+            for surface in manifest["surfaces"]
+            for operation in surface["operations"]
+            for requirement in operation["requirements"]
+            if "target_output" in requirement["lanes"]
+        }
+        missing_target_output_requirements = sorted(
+            required_target_output_requirements - mapped_target_output_requirements.keys()
+        )
+        if missing_target_output_requirements:
+            raise _error(
+                "input_index.parity",
+                "target-output requirements lack expected-output cases: "
+                + ", ".join(missing_target_output_requirements),
             )
     return documents
 
@@ -1512,6 +1532,7 @@ def _validate_parity_document(document: Any, relative: str, operation_index: dic
                 "comparisons",
                 "verification",
                 "fault",
+                "target_expectation",
                 "continue_independent_steps_after_error",
             },
             path,
@@ -1530,7 +1551,7 @@ def _validate_parity_document(document: Any, relative: str, operation_index: dic
         if primary_operation is None:
             raise _error(path, "unknown primary operation")
         verification = case.get("verification", "parity")
-        if verification not in {"parity", "fault-contract"}:
+        if verification not in {"parity", "fault-contract", "expected-output"}:
             raise _error(f"{path}.verification", "unsupported verification kind")
         fault = None
         if verification == "fault-contract":
@@ -1564,6 +1585,32 @@ def _validate_parity_document(document: Any, relative: str, operation_index: dic
                 )
         elif "fault" in case:
             raise _error(f"{path}.fault", "parity cases cannot declare fault injection")
+        target_expectation = None
+        if verification == "expected-output":
+            target_expectation = _exact(
+                case.get("target_expectation"),
+                {"observations"},
+                f"{path}.target_expectation",
+            )
+            expected_observations = _list(
+                target_expectation["observations"],
+                f"{path}.target_expectation.observations",
+            )
+            expected_ids: list[str] = []
+            for expected_index, expected in enumerate(expected_observations):
+                expected_path = f"{path}.target_expectation.observations[{expected_index}]"
+                expected = _exact(expected, {"step_id", "value"}, expected_path)
+                expected_ids.append(_string(expected["step_id"], f"{expected_path}.step_id"))
+            if expected_ids != case.get("observations"):
+                raise _error(
+                    f"{path}.target_expectation.observations",
+                    "must record an expected value for every observed step in order",
+                )
+        elif "target_expectation" in case:
+            raise _error(
+                f"{path}.target_expectation",
+                "only expected-output cases may record target expectations",
+            )
         covers = _id_array(case["covers"], f"{path}.covers")
         if not covers:
             raise _error(f"{path}.covers", "a parity case must cover at least one requirement")
@@ -1571,8 +1618,17 @@ def _validate_parity_document(document: Any, relative: str, operation_index: dic
             if requirement_id not in requirement_index:
                 raise _error(f"{path}.covers", f"unknown requirement {requirement_id!r}")
             requirement = requirement_index[requirement_id]
-            required_lane = "fault_contract" if verification == "fault-contract" else "parity"
-            if required_lane not in requirement["lanes"]:
+            required_lane = {
+                "parity": "parity",
+                "fault-contract": "fault_contract",
+                "expected-output": "target_output",
+            }[verification]
+            allowed_case_lanes = (
+                {"target_output", "coverage"}
+                if verification == "expected-output"
+                else {required_lane}
+            )
+            if not allowed_case_lanes.intersection(requirement["lanes"]):
                 raise _error(f"{path}.covers", f"requirement {requirement_id!r} is not applicable to this case")
             if verification == "fault-contract":
                 matching = [
@@ -1584,6 +1640,14 @@ def _validate_parity_document(document: Any, relative: str, operation_index: dic
                 ]
                 if len(matching) != 1 or fault["contract"] not in matching[0]["fault_contract"].get("contract_ids", []):
                     raise _error(f"{path}.covers", f"fault contract does not cover requirement {requirement_id!r}")
+        if verification == "expected-output" and not any(
+            "target_output" in requirement_index[requirement_id]["lanes"]
+            for requirement_id in covers
+        ):
+            raise _error(
+                f"{path}.covers",
+                "expected-output cases must cover a target-output requirement",
+            )
         assets = _list(case["assets"], f"{path}.assets")
         asset_ids: set[str] = set()
         for asset_index, asset in enumerate(assets):

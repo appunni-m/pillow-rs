@@ -38,9 +38,10 @@ BENCHMARK_SCHEMA = "migration-parity/benchmark-result@1"
 PARITY_SCHEMAS = {
     "migration-parity/parity-result@1",
     "migration-parity/parity-result@2",
+    "migration-parity/parity-result@3",
 }
 BENCHMARK_INPUT_SCHEMA = "migration-parity/benchmark-input@1"
-PARITY_INPUT_SCHEMA = "migration-parity/parity-input@2"
+PARITY_INPUT_SCHEMA = "migration-parity/parity-input@3"
 MANIFEST_SCHEMA = "migration-parity/manifest@3"
 EXECUTION_SCHEMA = "migration-parity/execution-attestation@1"
 PRODUCER_SCHEMA_V1 = "migration-parity/producer-attestation@1"
@@ -539,11 +540,15 @@ def build_selected_run(
     if parity.get("schema") not in PARITY_SCHEMAS or parity.get("status") != "completed":
         raise ValueError("parity report is incomplete or unsupported")
     parity_summary = parity.get("summary", {})
-    parity_failed = (
-        parity_summary.get("parity_cases", {}).get("failed")
-        if parity.get("schema") == "migration-parity/parity-result@2"
-        else parity_summary.get("failed")
-    )
+    if parity.get("schema") == "migration-parity/parity-result@2":
+        parity_failed = parity_summary.get("parity_cases", {}).get("failed")
+    elif parity.get("schema") == "migration-parity/parity-result@3":
+        parity_failed = sum(
+            parity_summary.get(kind, {}).get("failed", 0)
+            for kind in ("parity_cases", "expected_output_cases")
+        )
+    else:
+        parity_failed = parity_summary.get("failed")
     if parity_failed != 0 or parity.get("infrastructure_errors"):
         raise ValueError("parity report contains failed or infrastructure comparisons")
 

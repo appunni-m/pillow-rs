@@ -11,6 +11,8 @@ use crate::format::parse_format_str;
 use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{DynamicImage, Mode};
 
+mod internal_samples;
+
 use super::{Image, LoadedData, PalettedData, materialization_cache};
 
 const MODE1_BYTE_PIXELS: [[u8; 8]; 256] = {
@@ -702,6 +704,9 @@ impl Image {
     /// The unsigned 16-bit luma raw modes `I;16`, `I;16L`, `I;16B`, and
     /// `I;16N` consume two bytes per sample with the mode's declared byte
     /// order.
+    /// `ImageLumaA16`, `ImageRgb16`, `ImageRgba16`, `ImageRgb32F`, and
+    /// `ImageRgba32F` consume native-endian samples. These internal
+    /// raster identities are Rust extensions without Pillow mode spellings.
     /// Mode `"1"` expects Pillow's packed bitmap layout: eight pixels per byte,
     /// most-significant bit first, with each row padded to a byte boundary.
     ///
@@ -732,6 +737,10 @@ impl Image {
         data: Cow<'_, [u8]>,
     ) -> Result<Self, PilError> {
         let (w, h) = size;
+        // NO_PILLOW_SUPPORT: decode native sample layouts for internal modes.
+        if let Some(image) = internal_samples::decode(mode, size, data.as_ref())? {
+            return Ok(Self::from_dynamic(image));
+        }
         // Pillow's Unpack.c PA/PA entry uses unpackLA for byte pairs. Keep
         // the physical LA layout without interpreting indices as luma.
         let frombytes_mode = FromBytesMode::from_mode(mode)?;

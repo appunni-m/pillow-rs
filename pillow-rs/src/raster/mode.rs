@@ -106,6 +106,59 @@ impl Mode {
         }
     }
 
+    /// Parses a Rust variant name for a raw-input extension at a host boundary.
+    ///
+    /// These names are not Pillow modes. Keep them limited to APIs that
+    /// explicitly support the corresponding `NO_PILLOW_SUPPORT` raster.
+    #[must_use]
+    pub fn from_rust_name(name: &str) -> Option<Self> {
+        // NO_PILLOW_SUPPORT: these exact raster identities are Rust extensions.
+        match name {
+            "ImageLumaA16" => Some(Self::ImageLumaA16),
+            "ImageRgb16" => Some(Self::ImageRgb16),
+            "ImageRgba16" => Some(Self::ImageRgba16),
+            "ImageRgb32F" => Some(Self::ImageRgb32F),
+            "ImageRgba32F" => Some(Self::ImageRgba32F),
+            _ => None,
+        }
+    }
+
+    /// Returns this internal raster's Rust variant name for host extensions.
+    ///
+    /// Pillow-owned modes have their established spelling in [`Self::pillow_name`].
+    /// These names are reserved for explicitly documented `NO_PILLOW_SUPPORT`
+    /// host APIs.
+    #[must_use]
+    pub const fn rust_name(self) -> Option<&'static str> {
+        match self {
+            Self::ImageLumaA16 => Some("ImageLumaA16"),
+            Self::ImageRgb16 => Some("ImageRgb16"),
+            Self::ImageRgba16 => Some("ImageRgba16"),
+            Self::ImageRgb32F => Some("ImageRgb32F"),
+            Self::ImageRgba32F => Some("ImageRgba32F"),
+            Self::One
+            | Self::ImageLuma8
+            | Self::ImageLumaA8
+            | Self::ImageLaPremultiplied8
+            | Self::ImagePalette8
+            | Self::ImagePaletteAlpha8
+            | Self::ImageRgb8
+            | Self::ImageRgba8
+            | Self::ImageRgbPremultiplied8
+            | Self::ImageRgbx8
+            | Self::ImageCmyk8
+            | Self::ImageYCbCr8
+            | Self::ImageLab8
+            | Self::ImageHsv8
+            | Self::ImageI32
+            | Self::ImageF32
+            | Self::ImageI16
+            | Self::ImageI16L
+            | Self::ImageI16B
+            | Self::ImageI16N => None,
+        }
+    }
+
     /// Returns whether this exact raster identity is a public Pillow mode.
     ///
     /// Keep support classification on the typed identity instead of inferring

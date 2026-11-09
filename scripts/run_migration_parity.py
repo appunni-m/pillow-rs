@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """Run the fixed migration-parity input contract against Pillow and pillow-rs.
 
-The manifest and input documents are specifications.  This module is the
-runtime boundary that turns those documents into independently executed
-source/target workflows and a strict ``migration-parity/parity-result@2``
-artifact.  It deliberately does not read deprecated fixtures or expected
-outputs.
+The manifest and input documents are specifications. This module turns them
+into independently executed source/target workflows and strict
+``migration-parity/parity-result@3`` artifacts. Target-only expected outputs
+are explicit contracts and remain separate from Pillow comparisons.
 
 The side runner is invoked in a fresh Python process for each implementation.
 The source process imports the installed Pillow package and the target process
@@ -4119,7 +4118,7 @@ def load_cases(manifest: dict[str, Any], *, case_ids: set[str] | None, surface: 
     for relative in manifest["input_index"]["parity"]:
         path = ROOT / "pillow-rs" / "tests" / "fixtures" / relative
         payload = json.loads(path.read_text(encoding="utf-8"))
-        if payload.get("schema") != "migration-parity/parity-input@2":
+        if payload.get("schema") != "migration-parity/parity-input@3":
             raise ValueError(f"{relative}: invalid parity input schema")
         for case in payload["cases"]:
             known_case_ids.add(case["case_id"])
@@ -4843,6 +4842,59 @@ def compare_case(
                         )
                     )
         return ("pass" if not diffs else "fail"), diffs
+    if case.get("verification") == "expected-output":
+        target_observations = {
+            item["step_id"]: item for item in target.get("observations", [])
+        }
+        expected_observations = {
+            item["step_id"]: item["value"]
+            for item in case["target_expectation"]["observations"]
+        }
+        diffs = []
+        if target.get("status") != "completed":
+            diffs.append(
+                _diff(
+                    "status",
+                    "expected_output_status_mismatch",
+                    "completed",
+                    target.get("status"),
+                    "target-only expected-output workflow did not complete",
+                )
+            )
+        if set(target_observations) != set(expected_observations):
+            diffs.append(
+                _diff(
+                    "observations",
+                    "expected_output_observation_set_mismatch",
+                    sorted(expected_observations),
+                    sorted(target_observations),
+                    "target observations differ from the recorded output contract",
+                )
+            )
+        steps = {step["step_id"]: step for step in case["steps"]}
+        for step_id, expected in expected_observations.items():
+            actual = target_observations.get(step_id)
+            if actual is None or actual.get("status") != "ok":
+                diffs.append(
+                    _diff(
+                        f"{step_id}.status",
+                        "expected_output_step_mismatch",
+                        "ok",
+                        None if actual is None else actual.get("status"),
+                        "target-only expected-output step did not succeed",
+                    )
+                )
+                continue
+            step = steps[step_id]
+            diffs.extend(
+                compare_value(
+                    expected,
+                    actual.get("value"),
+                    comparison_policy(operation_index, step, case),
+                    f"{step_id}.value",
+                )
+            )
+        return ("pass" if not diffs else "fail"), diffs
     if source["status"] != target["status"]:
         return "fail", [_diff("status", "status_mismatch", source["status"], target["status"], "workflow status mismatch")]
     source_obs = {item["step_id"]: item for item in source["observations"]}
@@ -4928,7 +4980,7 @@ def build_identity(
         "inputs": [
             {
                 "path": path,
-                "schema": "migration-parity/parity-input@2",
+                "schema": "migration-parity/parity-input@3",
                 "sha256": sha256_file(ROOT / "pillow-rs" / "tests" / "fixtures" / path),
             }
             for path in input_paths
@@ -4973,19 +5025,24 @@ def git_dirty() -> bool:
 
 
 def verification_kind(case: dict[str, Any]) -> str:
-    return (
-        "fault_contract"
-        if case.get("verification", "parity") == "fault-contract"
-        else "parity"
-    )
+    return {
+        "parity": "parity",
+        "fault-contract": "fault_contract",
+        "expected-output": "expected_output",
+    }[case.get("verification", "parity")]
 
 
 def not_applicable_source_result(case: dict[str, Any]) -> dict[str, Any]:
+    reason = (
+        "Recorded target output contract; Pillow has no matching Rust-only mode."
+        if case.get("verification") == "expected-output"
+        else "The fault contract is target-only; Pillow has no GPU batch API."
+    )
     return {
         "case_id": case["case_id"],
         "status": "not_applicable",
         "observations": [],
-        "reason": "The fault contract is target-only; Pillow has no GPU batch API.",
+        "reason": reason,
     }
 
 
@@ -4995,7 +5052,7 @@ def parity_summary(
     infrastructure_error_count: int,
 ) -> dict[str, Any]:
     per_kind: dict[str, dict[str, int]] = {}
-    for kind in ("parity", "fault_contract"):
+    for kind in ("parity", "expected_output", "fault_contract"):
         members = [case for case in cases if verification_kind(case) == kind]
         member_outcomes = [outcomes[case["case_id"]] for case in members if case["case_id"] in outcomes]
         per_kind[kind] = {
@@ -5015,6 +5072,7 @@ def parity_summary(
         **totals,
         "infrastructure_errors": infrastructure_error_count,
         "parity_cases": per_kind["parity"],
+        "expected_output_cases": per_kind["expected_output"],
         "fault_contracts": per_kind["fault_contract"],
     }
 
@@ -5038,6 +5096,8 @@ def comparison_record(
     }
     if case.get("verification") == "fault-contract":
         record["fault_contract_id"] = case["fault"]["contract"]
+    elif case.get("verification") == "expected-output":
+        record["target_expectation"] = case["target_expectation"]
     return record
 
 
@@ -5170,7 +5230,7 @@ def run_orchestrator(args: argparse.Namespace) -> int:
     except RuntimeError as exc:
         summary = parity_summary(cases, {}, 1)
         result = {
-            "schema": "migration-parity/parity-result@2",
+            "schema": "migration-parity/parity-result@3",
             "identity": identity,
             "status": "infrastructure_failed",
             "summary": summary,
@@ -5188,7 +5248,7 @@ def run_orchestrator(args: argparse.Namespace) -> int:
         print(json.dumps(result["summary"], sort_keys=True))
         return 2
     for case in cases:
-        if verification_kind(case) == "fault_contract":
+        if verification_kind(case) in {"fault_contract", "expected_output"}:
             source_results[case["case_id"]] = not_applicable_source_result(case)
     if source_handshake is not None and source_handshake.get("version") != ORACLE_VERSION:
         raise RuntimeError(
@@ -5211,7 +5271,7 @@ def run_orchestrator(args: argparse.Namespace) -> int:
     identity["started_at"] = started
     identity["finished_at"] = now_rfc3339()
     result = {
-        "schema": "migration-parity/parity-result@2",
+        "schema": "migration-parity/parity-result@3",
         "identity": identity,
         "status": "completed",
         "summary": parity_summary(cases, outcome_by_case, 0),
@@ -5318,7 +5378,7 @@ def run_orchestrator_batched(
         # timestamps and final status are accurate even when a later batch
         # fails. JSON object key order is intentionally irrelevant to the
         # versioned result validator.
-        temporary.write('{"schema":"migration-parity/parity-result@2","comparisons":[')
+        temporary.write('{"schema":"migration-parity/parity-result@3","comparisons":[')
         for start in range(0, len(cases), batch_size):
             batch = cases[start : start + batch_size]
             source_cases = [
@@ -5410,7 +5470,7 @@ def run_orchestrator_batched(
                 elif batch_source_handshake != source_handshake:
                     raise RuntimeError("adapter identity changed between parity batches")
             for case in batch:
-                if verification_kind(case) == "fault_contract":
+                if verification_kind(case) in {"fault_contract", "expected_output"}:
                     source_results[case["case_id"]] = not_applicable_source_result(case)
             for case in batch:
                 outcome, diffs = compare_case(
@@ -5471,7 +5531,7 @@ def run_orchestrator_batched(
         attestation,
         output,
         result={
-            "schema": "migration-parity/parity-result@2",
+            "schema": "migration-parity/parity-result@3",
             "identity": identity,
             "status": status,
             "comparisons": comparison_selection,

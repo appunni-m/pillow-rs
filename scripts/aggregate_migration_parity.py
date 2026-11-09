@@ -35,9 +35,11 @@ DIMENSIONS = (
     "inventory_representation",
     "operation_contracts",
     "parity_input_mapping",
+    "target_output_input_mapping",
     "coverage_input_mapping",
     "benchmark_input_mapping",
     "parity_outcome",
+    "target_output_outcome",
     "function_coverage",
     "line_coverage",
     "branch_coverage",
@@ -81,7 +83,7 @@ def load_indexed_documents(
 
 def load_inputs(manifest: dict[str, Any]) -> dict[str, Any]:
     parity_docs = load_indexed_documents(
-        manifest, "parity", "migration-parity/parity-input@2"
+        manifest, "parity", "migration-parity/parity-input@3"
     )
     coverage_docs = load_indexed_documents(
         manifest, "coverage", "migration-parity/coverage-input@1"
@@ -217,7 +219,7 @@ def check_identity(
 
     allowed: dict[str, str] = {}
     for path in manifest["input_index"]["parity"]:
-        allowed[path] = "migration-parity/parity-input@2"
+        allowed[path] = "migration-parity/parity-input@3"
     if lane in {"coverage", "benchmark"}:
         for path in manifest["input_index"][lane]:
             allowed[path] = f"migration-parity/{lane}-input@1"
@@ -297,6 +299,8 @@ def static_mapping(
     operation_inputs: dict[str, list[str]] = {}
     if lane == "parity":
         for case_id, case in inputs["cases"].items():
+            if case.get("verification", "parity") != "parity":
+                continue
             covered.update(case.get("covers", []))
             key = f"{case['surface']}\0{case['operation']}"
             operation_inputs.setdefault(key, []).append(case_id)
@@ -354,6 +358,43 @@ def parity_outcome(
     else:
         outcome = "not_proven"
     details = [f"cases={len(case_ids)}", f"passed={outcomes.count('pass')}", f"failed={outcomes.count('fail')}"]
+    if missing:
+        details.append(f"missing={missing}")
+    return outcome, result["identity"]["run_id"], details
+
+
+def target_output_outcome(
+    case_ids: list[str],
+    result: dict[str, Any] | None,
+    compatible: bool,
+    target_profile: str,
+) -> tuple[str, str | None, list[str]]:
+    if not case_ids:
+        return "not_proven", None, ["no indexed target-output case"]
+    if result is None or not compatible:
+        return "not_proven", None, ["compatible target-output evidence unavailable"]
+    by_id = {
+        item["case_id"]: item
+        for item in result["comparisons"]
+        if item["target_profile"] == target_profile
+        and item.get("verification") == "expected_output"
+    }
+    selected = [by_id.get(case_id) for case_id in case_ids]
+    missing = sum(item is None for item in selected)
+    outcomes = [item["outcome"] for item in selected if item is not None]
+    if any(item == "fail" for item in outcomes):
+        outcome = "fail"
+    elif missing or any(item == "not_run" for item in outcomes):
+        outcome = "not_run"
+    elif outcomes and all(item == "pass" for item in outcomes):
+        outcome = "pass"
+    else:
+        outcome = "not_proven"
+    details = [
+        f"cases={len(case_ids)}",
+        f"passed={outcomes.count('pass')}",
+        f"failed={outcomes.count('fail')}",
+    ]
     if missing:
         details.append(f"missing={missing}")
     return outcome, result["identity"]["run_id"], details
@@ -449,7 +490,34 @@ def completeness(
             rows.append({"dimension": dimension, "target_profile": None, "numerator": fresh, "denominator": total, "evidence_id": None})
             continue
         for profile_id in profile_ids:
-            if dimension == "parity_input_mapping":
+            if dimension == "target_output_input_mapping":
+                denominator_ids = {
+                    case_id
+                    for case_id, case in inputs["cases"].items()
+                    if case.get("verification") == "expected-output"
+                }
+                covered = denominator_ids
+                evidence_id = None
+            elif dimension == "target_output_outcome":
+                denominator_ids = {
+                    case_id
+                    for case_id, case in inputs["cases"].items()
+                    if case.get("verification") == "expected-output"
+                }
+                result, compatible = results["parity"].get(profile_id, (None, False))
+                evidence_id = result["identity"]["run_id"] if result and compatible else None
+                by_id = {
+                    item["case_id"]: item
+                    for item in result["comparisons"]
+                    if item["target_profile"] == profile_id
+                    and item.get("verification") == "expected_output"
+                } if result and compatible else {}
+                covered = {
+                    case_id
+                    for case_id, item in by_id.items()
+                    if item["outcome"] == "pass"
+                }
+            elif dimension == "parity_input_mapping":
                 lane = "parity"
                 denominator_ids = requirements_for_lane(manifest, profile_id, lane)
                 covered, _ = static_mapping(manifest, inputs, profile_id, lane)
@@ -466,13 +534,18 @@ def completeness(
                 evidence_id = None
             elif dimension == "parity_outcome":
                 lane = "parity"
-                denominator_ids = set(inputs["cases"])
+                denominator_ids = {
+                    case_id
+                    for case_id, case in inputs["cases"].items()
+                    if case.get("verification", "parity") == "parity"
+                }
                 result, compatible = results[lane].get(profile_id, (None, False))
                 evidence_id = result["identity"]["run_id"] if result and compatible else None
                 by_id = {
                     item["case_id"]: item
                     for item in result["comparisons"]
                     if item["target_profile"] == profile_id
+                    and item.get("verification", "parity") == "parity"
                 } if result and compatible else {}
                 covered = {case_id for case_id, item in by_id.items() if item["outcome"] == "pass"}
             elif dimension in {"function_coverage", "line_coverage", "branch_coverage", "region_coverage"}:
@@ -700,8 +773,40 @@ def aggregate(args: argparse.Namespace) -> dict[str, Any]:
                 "benchmark": lane_summary(benchmark_app, benchmark_ids, benchmark[0], benchmark[1], benchmark[2]),
             })
 
+    target_output_cases = sorted(
+        (
+            {
+                "case_id": case_id,
+                "surface": case["surface"],
+                "operation": case["operation"],
+                "covers": list(case.get("covers", [])),
+                "target_expectation": case["target_expectation"],
+            }
+            for case_id, case in inputs["cases"].items()
+            if case.get("verification") == "expected-output"
+        ),
+        key=lambda item: item["case_id"],
+    )
+    target_outputs = {
+        "cases": target_output_cases,
+        "profiles": [],
+    }
+    target_output_ids = [item["case_id"] for item in target_output_cases]
+    for profile_id in profiles:
+        result, compatible = results["parity"].get(profile_id, (None, False))
+        outcome = target_output_outcome(
+            target_output_ids, result, compatible, profile_id
+        )
+        target_outputs["profiles"].append({
+            "target_profile": profile_id,
+            "input_ids": target_output_ids,
+            "outcome": outcome[0],
+            "evidence_id": outcome[1],
+            "details": outcome[2],
+        })
+
     report = {
-        "schema": "migration-parity/status-report@1",
+        "schema": "migration-parity/status-report@2",
         "manifest": {
             "path": relative(manifest_path),
             "schema": manifest["schema"],
@@ -711,6 +816,7 @@ def aggregate(args: argparse.Namespace) -> dict[str, Any]:
         "evidence": sorted(evidence, key=lambda item: item["lane"]),
         "completeness": completeness(manifest, inputs, profiles, results),
         "operations": operations,
+        "target_outputs": target_outputs,
         "stale_or_incompatible_evidence": sorted(stale, key=lambda item: item["lane"]),
     }
     args.output.resolve().parent.mkdir(parents=True, exist_ok=True)

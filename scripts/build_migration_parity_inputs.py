@@ -75,6 +75,11 @@ except ModuleNotFoundError:
     from scripts.migration_parity.gpu_batch_inputs import gpu_batch_fault_case
 
 try:
+    from migration_parity.target_output_contracts import core_only_frombytes_cases
+except ModuleNotFoundError:
+    from scripts.migration_parity.target_output_contracts import core_only_frombytes_cases
+
+try:
     from validate_migration_parity_contract import validate_manifest as validate_fixed_manifest
 except ModuleNotFoundError:  # imported as ``scripts.build_migration_parity_inputs`` in tests
     from scripts.validate_migration_parity_contract import validate_manifest as validate_fixed_manifest
@@ -57747,6 +57752,11 @@ def build_inputs(
             active_assets_root,
             surface_id,
         )
+        if surface_id == "PIL.Image":
+            # Target-only expected-output contracts still enter through the
+            # public Python facade and are selected by the ordinary coverage
+            # plans for this operation.
+            nuanced_cases.extend(core_only_frombytes_cases())
         if surface_id == "PIL.Image.Image":
             # The full-size native F resize parity case is the exact public
             # workflow used by its standard benchmark workload. Carry that
@@ -58059,7 +58069,7 @@ def build_inputs(
         write_json(
             parity_path,
             {
-                "schema": "migration-parity/parity-input@2",
+                "schema": "migration-parity/parity-input@3",
                 "cases": parity_cases,
             },
         )

@@ -54,6 +54,9 @@ def marker(manifest: dict[str, Any], manifest_path: Path) -> str:
 def specification(manifest: dict[str, Any], manifest_path: Path, inputs: dict[str, Any]) -> str:
     operations = operation_records(manifest)
     requirements = sum(len(operation.get("requirements", [])) for _, operation in operations)
+    target_profiles = ", ".join(
+        "`" + item["id"] + "`" for item in manifest["target_profiles"]
+    )
     lines = [
         "# Migration parity public contract",
         "",
@@ -69,7 +72,7 @@ def specification(manifest: dict[str, Any], manifest_path: Path, inputs: dict[st
         "",
         f"- Scope: `{manifest['scope']['id']}` (`{manifest['scope']['mode']}`)",
         f"- Oracle: `{manifest['oracles'][0]['name']} {manifest['oracles'][0]['version']}`",
-        f"- Target profiles: {', '.join(f'`{item["id"]}`' for item in manifest['target_profiles'])}",
+        f"- Target profiles: {target_profiles}",
         "- Parity cases and requirements are shared across target profiles; the runner selects the backend and records it in the result.",
         f"- Public surfaces: {len(manifest['surfaces'])}",
         f"- Operations: {len(operations)}",
@@ -177,6 +180,63 @@ def evidence_page(
     return "\n".join(lines)
 
 
+def target_output_page(
+    manifest: dict[str, Any],
+    manifest_path: Path,
+    status: dict[str, Any],
+) -> str:
+    target_outputs = status["target_outputs"]
+    lines = [
+        "# Migration target-output status",
+        "",
+        "This is a generated record of successful Rust-only outputs. These cases",
+        "are checked against recorded expectations and are kept separate from",
+        "Pillow parity and injected-fault results.",
+        "",
+        "```yaml",
+        marker(manifest, manifest_path),
+        "verification: expected_output",
+        "```",
+        "",
+        "## Backend target profiles",
+        "",
+        "| Target profile | Outcome | Cases | Passed | Failed | Evidence ID |",
+        "| --- | --- | ---: | ---: | ---: | --- |",
+    ]
+    for profile in target_outputs["profiles"]:
+        details = {}
+        for item in profile["details"]:
+            key, separator, value = item.partition("=")
+            if separator and value.isdigit():
+                details[key] = int(value)
+        lines.append(
+            f"| `{profile['target_profile']}` | {profile['outcome']} | "
+            f"{details.get('cases', len(profile['input_ids']))} | "
+            f"{details.get('passed', 0)} | {details.get('failed', 0)} | "
+            f"`{profile['evidence_id'] or 'not_proven'}` |"
+        )
+    lines.extend(
+        (
+            "",
+            "## Recorded expectations",
+            "",
+            "| Case ID | Operation | Mode | Size | Expected output record |",
+            "| --- | --- | --- | --- | --- |",
+        )
+    )
+    for case in target_outputs["cases"]:
+        observations = case["target_expectation"].get("observations", [])
+        value = observations[0].get("value", {}) if observations else {}
+        expected = json.dumps(value, separators=(",", ":"), sort_keys=True)
+        mode = value.get("mode", "—") if isinstance(value, dict) else "—"
+        size = value.get("size", "—") if isinstance(value, dict) else "—"
+        lines.append(
+            f"| `{case['case_id']}` | `{case['surface']}.{case['operation']}` | "
+            f"`{mode}` | `{size}` | `{expected}` |"
+        )
+    return "\n".join(lines)
+
+
 def run(args: argparse.Namespace) -> int:
     manifest_path = args.manifest.resolve()
     manifest = load_manifest(manifest_path)
@@ -190,6 +250,7 @@ def run(args: argparse.Namespace) -> int:
     files = {
         output_dir / "migration-parity-public-contract.md": specification(manifest, manifest_path, inputs),
         output_dir / "migration-parity-status.md": evidence_page("Migration parity status", "parity", manifest, manifest_path, status),
+        output_dir / "migration-parity-target-output-status.md": target_output_page(manifest, manifest_path, status),
         output_dir / "migration-coverage-status.md": evidence_page("Migration coverage status", "coverage", manifest, manifest_path, status),
         output_dir / "migration-benchmark-status.md": evidence_page("Migration benchmark status", "benchmark", manifest, manifest_path, status),
     }

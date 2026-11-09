@@ -22,7 +22,13 @@ impl PyImage {
 
     #[getter]
     fn mode(&mut self) -> PyResult<String> {
-        self.inner.mode().map_err(map_error)
+        let mode = self.inner.mode_identity().map_err(map_error)?;
+        // NO_PILLOW_SUPPORT: expose exact Rust names for internal-only rasters.
+        Ok(mode
+            .pillow_name()
+            .or_else(|| mode.rust_name())
+            .unwrap_or("unknown")
+            .to_owned())
     }
 
     #[getter]

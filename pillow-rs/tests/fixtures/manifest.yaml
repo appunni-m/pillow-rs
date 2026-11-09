@@ -178,8 +178,8 @@ commands:
   timeout_seconds: 300
 interfaces:
   parity:
-    input_schema: migration-parity/parity-input@2
-    result_schema: migration-parity/parity-result@2
+    input_schema: migration-parity/parity-input@3
+    result_schema: migration-parity/parity-result@3
     command_id: parity
   coverage:
     input_schema: migration-parity/coverage-input@1
@@ -191,10 +191,10 @@ interfaces:
     command_id: benchmark
   aggregation:
     input_schemas:
-    - migration-parity/parity-result@2
+    - migration-parity/parity-result@3
     - migration-parity/coverage-result@1
     - migration-parity/benchmark-result@1
-    result_schema: migration-parity/status-report@1
+    result_schema: migration-parity/status-report@2
     command_id: aggregate
 input_index:
   parity:
@@ -335,6 +335,24 @@ coverage_components:
     minimum_percent: 100
   - dimension: region
     minimum_percent: 100
+- id: image-raw-input
+  target_profile: python-cpu
+  paths:
+  - pillow-rs-py/python/PIL/Image.py
+  - pillow-rs-py/python/pillow_rs/image.py
+  - pillow-rs-py/src/image/creation.rs
+  - pillow-rs-py/src/image/properties.rs
+  - pillow-rs/src/image/construction.rs
+  - pillow-rs/src/image/construction/internal_samples.rs
+  - pillow-rs/src/image/metadata.rs
+  - pillow-rs/src/raster/dynamic.rs
+  - pillow-rs/src/raster/mode.rs
+  dimensions:
+  - function
+  - line
+  - branch
+  - region
+  thresholds: []
 - id: image-show
   target_profile: python-cpu
   paths:
@@ -1973,6 +1991,31 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.Image.frombytes.mode.core-only-luma-a16
+      dimension: mode
+      description: Target-only typed raw-input behavior for core-only-luma-a16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+    - id: PIL.Image.frombytes.mode.core-only-rgb16
+      dimension: mode
+      description: Target-only typed raw-input behavior for core-only-rgb16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+    - id: PIL.Image.frombytes.mode.core-only-rgba16
+      dimension: mode
+      description: Target-only typed raw-input behavior for core-only-rgba16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+    - id: PIL.Image.frombytes.mode.core-only-rgb32f
+      dimension: mode
+      description: Target-only typed raw-input behavior for core-only-rgb32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+    - id: PIL.Image.frombytes.mode.core-only-rgba32f
+      dimension: mode
+      description: Target-only typed raw-input behavior for core-only-rgba32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
     - id: PIL.Image.frombytes.parameter-combination.legacy-001
       dimension: parameter_combination
       description: 'Deprecated-authority parameter combination: {"mode":"RGB","size":[10,10]}'
@@ -1996,6 +2039,7 @@ surfaces:
       - python-cpu
       component_ids:
       - image-core
+      - image-raw-input
     benchmark:
       applicability: required
       target_profiles:
@@ -28265,5 +28309,6 @@ documentation:
   - docs/generated/migration-parity-public-contract.md
   evidence_outputs:
   - docs/generated/migration-parity-status.md
+  - docs/generated/migration-parity-target-output-status.md
   - docs/generated/migration-coverage-status.md
   - docs/generated/migration-benchmark-status.md

@@ -240,11 +240,14 @@ impl PyImage {
                 "decoder {decoder_name} not available"
             ))));
         }
-        let mode = pillow_rs::Mode::from_pillow_name(mode).ok_or_else(|| {
-            map_error(pillow_rs::PilError::ValueError(
-                "unrecognized image mode".into(),
-            ))
-        })?;
+        // NO_PILLOW_SUPPORT: accept Rust-only mode names only for typed raw input.
+        let mode = pillow_rs::Mode::from_pillow_name(mode)
+            .or_else(|| pillow_rs::Mode::from_rust_name(mode))
+            .ok_or_else(|| {
+                map_error(pillow_rs::PilError::ValueError(
+                    "unrecognized image mode".into(),
+                ))
+            })?;
         let decoder_name = decoder_name.to_owned();
         // PyO3 borrows immutable bytes and extracts owned vectors for mutable
         // sequences. Preserve that ownership so raw raster modes can adopt an

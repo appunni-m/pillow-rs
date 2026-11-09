@@ -1077,6 +1077,11 @@
           "PIL.Image.frombytes.nuanced.lab-blend-setup-1x0",
           "PIL.Image.frombytes.nuanced.lab-blend-setup-2x1",
           "PIL.Image.frombytes.nuanced.bytearray-rgb",
+          "PIL.Image.frombytes.expected-output.core-only-luma-a16",
+          "PIL.Image.frombytes.expected-output.core-only-rgb16",
+          "PIL.Image.frombytes.expected-output.core-only-rgba16",
+          "PIL.Image.frombytes.expected-output.core-only-rgb32f",
+          "PIL.Image.frombytes.expected-output.core-only-rgba32f",
           "pipeline-case.merge.materialized-smoke",
           "pipeline-case.blendmodule.materialized-smoke",
           "pipeline-case.compositemodule.materialized-smoke",
@@ -1087,7 +1092,8 @@
         "command_ids": []
       },
       "component_ids": [
-        "image-core"
+        "image-core",
+        "image-raw-input"
       ],
       "command_id": "coverage"
     }

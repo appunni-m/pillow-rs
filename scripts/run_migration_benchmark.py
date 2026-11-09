@@ -150,6 +150,7 @@ FROZEN_TARGET_PROFILES = ("python-cpu", "python-simd", "python-gpu")
 PARITY_RESULT_SCHEMAS = {
     "migration-parity/parity-result@1",
     "migration-parity/parity-result@2",
+    "migration-parity/parity-result@3",
 }
 FAULT_CONTRACT_TARGET_PROFILE = "python-gpu-fault-contract"
 FAULT_CONTRACT_TARGET_FEATURES = [
@@ -477,7 +478,7 @@ def load_parity_cases(manifest: dict[str, Any]) -> tuple[dict[str, dict[str, Any
     inputs: dict[str, str] = {}
     for relative in manifest["input_index"]["parity"]:
         payload = json.loads((FIXTURE_ROOT / relative).read_text(encoding="utf-8"))
-        if payload.get("schema") != "migration-parity/parity-input@2":
+        if payload.get("schema") != "migration-parity/parity-input@3":
             raise ValueError(f"{relative}: invalid parity input schema")
         for case in payload["cases"]:
             if case["case_id"] in cases:
@@ -558,11 +559,26 @@ def merge_parity_results(results: list[dict[str, Any]], timeout: int) -> dict[st
                 unique.append(record)
         return unique
 
-    comparisons = [
-        comparison
-        for result in results
-        for comparison in result["comparisons"]
-    ]
+    comparisons = []
+    for result in results:
+        for comparison in result["comparisons"]:
+            comparison = dict(comparison)
+            comparison.setdefault("verification", "parity")
+            comparisons.append(comparison)
+    summary_fields = ("selected", "executed", "passed", "failed", "not_run")
+    verification_kinds = ("parity_cases", "expected_output_cases", "fault_contracts")
+    kind_summaries = {
+        kind: {
+            field: sum(
+                result["summary"].get(kind, {}).get(field, 0)
+                if result.get("schema") != "migration-parity/parity-result@1"
+                else (result["summary"].get(field, 0) if kind == "parity_cases" else 0)
+                for result in results
+            )
+            for field in summary_fields
+        }
+        for kind in verification_kinds
+    }
     infrastructure = [
         error
         for result in results
@@ -594,23 +610,16 @@ def merge_parity_results(results: list[dict[str, Any]], timeout: int) -> dict[st
         },
     }
     return {
-        "schema": "migration-parity/parity-result@2",
+        "schema": "migration-parity/parity-result@3",
         "identity": identity,
         "status": "completed",
         "summary": {
             **{
-                field: sum(result["summary"][field] for result in results)
-                for field in ("selected", "executed", "passed", "failed", "not_run")
+                field: sum(kind_summaries[kind][field] for kind in verification_kinds)
+                for field in summary_fields
             },
             "infrastructure_errors": len(infrastructure),
-            "parity_cases": {
-                field: sum(result["summary"][field] for result in results)
-                for field in ("selected", "executed", "passed", "failed", "not_run")
-            },
-            "fault_contracts": {
-                field: 0
-                for field in ("selected", "executed", "passed", "failed", "not_run")
-            },
+            **kind_summaries,
         },
         "comparisons": comparisons,
         "infrastructure_errors": infrastructure,
@@ -676,6 +685,8 @@ def validate_reused_parity(
     if schema == "migration-parity/parity-result@1":
         parity_counts = summary
     elif schema == "migration-parity/parity-result@2":
+        parity_counts = summary.get("parity_cases", {}) if isinstance(summary, dict) else {}
+    elif schema == "migration-parity/parity-result@3":
         parity_counts = summary.get("parity_cases", {}) if isinstance(summary, dict) else {}
     else:
         parity_counts = {}
@@ -1669,7 +1680,7 @@ def identity(
                 "schema": (
                     "migration-parity/benchmark-input@1"
                     if "/benchmark/" in path
-                    else "migration-parity/parity-input@2"
+                    else "migration-parity/parity-input@3"
                 ),
                 "sha256": sha256(FIXTURE_ROOT / path),
             }
@@ -2241,7 +2252,7 @@ def run(args: argparse.Namespace) -> int:
         expected_inputs = [
             {
                 "path": input_path,
-                "schema": "migration-parity/parity-input@2",
+                "schema": "migration-parity/parity-input@3",
                 "sha256": sha256(FIXTURE_ROOT / input_path),
             }
             for input_path in sorted(

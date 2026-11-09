@@ -433,6 +433,19 @@ def workflow(value: dict[str, Any], label: str) -> None:
         )
 
 
+def target_expectation(value: Any, label: str) -> None:
+    """Validate a recorded target-only successful-output contract."""
+
+    exact(value, {"observations"}, label)
+    seen: list[str] = []
+    for index, observation in enumerate(value["observations"]):
+        prefix = f"{label}.observations[{index}]"
+        exact(observation, {"step_id", "value"}, prefix)
+        seen.append(string(observation["step_id"], f"{prefix}.step_id"))
+    if len(seen) != len(set(seen)):
+        raise ValueError(f"{label}.observations: duplicate step ID")
+
+
 def execution_evidence_summary(value: dict[str, Any], label: str) -> None:
     """Validate sidecar receipt counts, accepting the pre-bit summary shape."""
 
@@ -526,18 +539,35 @@ def execution_evidence_summary(value: dict[str, Any], label: str) -> None:
 def parity(result: dict[str, Any]) -> None:
     exact(result, {"schema", "identity", "status", "summary", "comparisons", "infrastructure_errors"}, "parity")
     schema = result["schema"]
-    if schema not in {"migration-parity/parity-result@1", "migration-parity/parity-result@2"}:
+    if schema not in {
+        "migration-parity/parity-result@1",
+        "migration-parity/parity-result@2",
+        "migration-parity/parity-result@3",
+    }:
         raise ValueError("parity.schema: unsupported schema")
     if result["status"] not in {"completed", "infrastructure_failed", "cancelled", "invalid"}:
         raise ValueError("parity.status: invalid artifact status")
     identity(result["identity"])
     legacy_fields = {"selected", "executed", "passed", "failed", "not_run", "infrastructure_errors"}
     v2_fields = legacy_fields | {"parity_cases", "fault_contracts"}
-    exact(result["summary"], legacy_fields if schema.endswith("@1") else v2_fields, "parity.summary")
+    v3_fields = legacy_fields | {"parity_cases", "expected_output_cases", "fault_contracts"}
+    expected_summary_fields = (
+        legacy_fields
+        if schema.endswith("@1")
+        else v2_fields
+        if schema.endswith("@2")
+        else v3_fields
+    )
+    exact(result["summary"], expected_summary_fields, "parity.summary")
     for field in legacy_fields:
         non_negative_int(result["summary"][field], f"parity.summary.{field}")
-    if schema.endswith("@2"):
-        for label in ("parity_cases", "fault_contracts"):
+    if not schema.endswith("@1"):
+        partition_names = (
+            ("parity_cases", "fault_contracts")
+            if schema.endswith("@2")
+            else ("parity_cases", "expected_output_cases", "fault_contracts")
+        )
+        for label in partition_names:
             counts = result["summary"][label]
             exact(counts, {"selected", "executed", "passed", "failed", "not_run"}, f"parity.summary.{label}")
             for field, value in counts.items():
@@ -547,7 +577,7 @@ def parity(result: dict[str, Any]) -> None:
             if counts["executed"] > counts["selected"]:
                 raise ValueError(f"parity.summary.{label}: executed exceeds selected")
         for field in ("selected", "executed", "passed", "failed", "not_run"):
-            if result["summary"][field] != sum(result["summary"][kind][field] for kind in ("parity_cases", "fault_contracts")):
+            if result["summary"][field] != sum(result["summary"][kind][field] for kind in partition_names):
                 raise ValueError(f"parity.summary.{field}: verification partitions disagree")
     if result["summary"]["executed"] != len(result["comparisons"]):
         raise ValueError("parity.summary.executed does not equal comparison count")
@@ -572,6 +602,8 @@ def parity(result: dict[str, Any]) -> None:
     infrastructure_errors(result["infrastructure_errors"])
     comparison_ids: list[tuple[str, str]] = []
     kind_counts = {"parity": 0, "fault_contract": 0}
+    if schema.endswith("@3"):
+        kind_counts["expected_output"] = 0
     kind_outcomes = {
         kind: {"pass": 0, "fail": 0, "not_run": 0}
         for kind in kind_counts
@@ -579,14 +611,17 @@ def parity(result: dict[str, Any]) -> None:
     for index, comparison in enumerate(result["comparisons"]):
         prefix = f"parity.comparisons[{index}]"
         base_fields = {"case_id", "target_profile", "requirements", "source", "target", "outcome", "diffs"}
-        if schema.endswith("@2"):
+        if schema.endswith("@2") or schema.endswith("@3"):
             if not isinstance(comparison, dict) or comparison.get("verification") not in kind_counts:
                 raise ValueError(f"{prefix}.verification: invalid verification kind")
             kind = comparison["verification"]
             exact(
                 comparison,
-                base_fields | {"verification", "fault_contract_id"}
+                base_fields
+                | {"verification", "fault_contract_id"}
                 if kind == "fault_contract"
+                else base_fields | {"verification", "target_expectation"}
+                if kind == "expected_output"
                 else base_fields | {"verification"},
                 prefix,
             )
@@ -595,6 +630,11 @@ def parity(result: dict[str, Any]) -> None:
                 string(comparison["fault_contract_id"], f"{prefix}.fault_contract_id")
                 if comparison["fault_contract_id"] not in FAULT_CONTRACTS:
                     raise ValueError(f"{prefix}.fault_contract_id: unknown contract")
+            elif kind == "expected_output":
+                target_expectation(
+                    comparison["target_expectation"],
+                    f"{prefix}.target_expectation",
+                )
         else:
             exact(comparison, base_fields, prefix)
         string(comparison["case_id"], f"{prefix}.case_id")
@@ -602,7 +642,7 @@ def parity(result: dict[str, Any]) -> None:
         requirements = id_array(comparison["requirements"], f"{prefix}.requirements")
         if comparison["outcome"] not in {"pass", "fail", "not_run"}:
             raise ValueError(f"{prefix}.outcome: invalid outcome")
-        if schema.endswith("@2"):
+        if schema.endswith("@2") or schema.endswith("@3"):
             kind_outcomes[comparison["verification"]][comparison["outcome"]] += 1
         workflow(comparison["source"], f"{prefix}.source")
         workflow(comparison["target"], f"{prefix}.target")
@@ -610,6 +650,11 @@ def parity(result: dict[str, Any]) -> None:
             if comparison["source"]["status"] != "not_applicable":
                 raise ValueError(f"{prefix}: target-only fault contract must mark oracle N/A")
             if "fault_contract_observation" not in comparison["target"]:
+                raise ValueError(f"{prefix}: missing runner-owned fault observation")
+        elif schema.endswith("@3") and comparison["verification"] in {"fault_contract", "expected_output"}:
+            if comparison["source"]["status"] != "not_applicable":
+                raise ValueError(f"{prefix}: target-only verification must mark oracle N/A")
+            if comparison["verification"] == "fault_contract" and "fault_contract_observation" not in comparison["target"]:
                 raise ValueError(f"{prefix}: missing runner-owned fault observation")
         elif comparison["source"]["status"] == "not_applicable":
             raise ValueError(f"{prefix}: parity case cannot mark its oracle N/A")
@@ -623,8 +668,12 @@ def parity(result: dict[str, Any]) -> None:
             for field in ("step_id", "path", "kind", "message"):
                 string(diff[field], f"{prefix}.diffs[{diff_index}].{field}")
     unique(comparison_ids, "parity.comparisons")
-    if schema.endswith("@2"):
-        for label, kind in (("parity_cases", "parity"), ("fault_contracts", "fault_contract")):
+    if not schema.endswith("@1"):
+        partitions = [("parity_cases", "parity")]
+        if schema.endswith("@3"):
+            partitions.append(("expected_output_cases", "expected_output"))
+        partitions.append(("fault_contracts", "fault_contract"))
+        for label, kind in partitions:
             counts = result["summary"][label]
             if counts["executed"] != kind_counts[kind]:
                 raise ValueError(f"parity summary {label}.executed does not match rows")
@@ -945,17 +994,31 @@ def all_backends(result: dict[str, Any]) -> None:
                 "parity_cases",
                 "fault_contracts",
             }
+            expected_output_summary_fields = versioned_summary_fields | {
+                "expected_output_cases",
+            }
             if not isinstance(summary, dict) or frozenset(summary) not in {
                 frozenset(summary_fields),
                 frozenset(versioned_summary_fields),
+                frozenset(expected_output_summary_fields),
             }:
                 raise ValueError(
                     f"{prefix}.summary: unsupported parity summary fields"
                 )
             for field, value in summary.items():
-                if field not in {"parity_cases", "fault_contracts"}:
+                if field not in {
+                    "parity_cases",
+                    "expected_output_cases",
+                    "fault_contracts",
+                }:
                     non_negative_int(value, f"{prefix}.summary.{field}")
-            if set(summary) == versioned_summary_fields:
+            if set(summary) in {
+                versioned_summary_fields,
+                expected_output_summary_fields,
+            }:
+                kinds = ["parity_cases", "fault_contracts"]
+                if "expected_output_cases" in summary:
+                    kinds.insert(1, "expected_output_cases")
                 outcome_fields = {
                     "selected",
                     "executed",
@@ -963,7 +1026,7 @@ def all_backends(result: dict[str, Any]) -> None:
                     "failed",
                     "not_run",
                 }
-                for kind in ("parity_cases", "fault_contracts"):
+                for kind in kinds:
                     kind_summary = summary[kind]
                     exact(
                         kind_summary,
@@ -990,7 +1053,7 @@ def all_backends(result: dict[str, Any]) -> None:
                     for field in outcome_fields:
                         if summary[field] != sum(
                             summary[other][field]
-                            for other in ("parity_cases", "fault_contracts")
+                            for other in kinds
                         ):
                             raise ValueError(
                                 f"{prefix}.summary.{field} does not match its lane counts"
@@ -1444,11 +1507,12 @@ def status_report(result: dict[str, Any]) -> None:
             "evidence",
             "completeness",
             "operations",
+            "target_outputs",
             "stale_or_incompatible_evidence",
         },
         "status",
     )
-    if result["schema"] != "migration-parity/status-report@1":
+    if result["schema"] != "migration-parity/status-report@2":
         raise ValueError("status.schema: unsupported schema")
     exact(result["manifest"], {"path", "schema", "sha256"}, "status.manifest")
     for index, target in enumerate(result["target_profiles"]):
@@ -1465,9 +1529,11 @@ def status_report(result: dict[str, Any]) -> None:
         "inventory_representation",
         "operation_contracts",
         "parity_input_mapping",
+        "target_output_input_mapping",
         "coverage_input_mapping",
         "benchmark_input_mapping",
         "parity_outcome",
+        "target_output_outcome",
         "function_coverage",
         "line_coverage",
         "branch_coverage",
@@ -1503,6 +1569,44 @@ def status_report(result: dict[str, Any]) -> None:
                 raise ValueError(f"{lane_prefix}.outcome: invalid outcome")
             if not isinstance(item[lane]["details"], list) or not all(isinstance(value, str) for value in item[lane]["details"]):
                 raise ValueError(f"{lane_prefix}.details: expected string array")
+    target_outputs = result["target_outputs"]
+    exact(target_outputs, {"cases", "profiles"}, "status.target_outputs")
+    for index, item in enumerate(target_outputs["cases"]):
+        prefix = f"status.target_outputs.cases[{index}]"
+        exact(
+            item,
+            {"case_id", "surface", "operation", "covers", "target_expectation"},
+            prefix,
+        )
+        string(item["case_id"], f"{prefix}.case_id")
+        string(item["surface"], f"{prefix}.surface")
+        string(item["operation"], f"{prefix}.operation")
+        if not isinstance(item["covers"], list) or not all(
+            isinstance(value, str) for value in item["covers"]
+        ):
+            raise ValueError(f"{prefix}.covers: expected string array")
+        if not isinstance(item["target_expectation"], dict):
+            raise ValueError(f"{prefix}.target_expectation: expected object")
+    for index, item in enumerate(target_outputs["profiles"]):
+        prefix = f"status.target_outputs.profiles[{index}]"
+        exact(
+            item,
+            {"target_profile", "input_ids", "outcome", "evidence_id", "details"},
+            prefix,
+        )
+        string(item["target_profile"], f"{prefix}.target_profile")
+        if not isinstance(item["input_ids"], list) or not all(
+            isinstance(value, str) for value in item["input_ids"]
+        ):
+            raise ValueError(f"{prefix}.input_ids: expected string array")
+        if item["outcome"] not in {"pass", "fail", "not_run", "not_proven"}:
+            raise ValueError(f"{prefix}.outcome: invalid outcome")
+        if item["evidence_id"] is not None:
+            string(item["evidence_id"], f"{prefix}.evidence_id")
+        if not isinstance(item["details"], list) or not all(
+            isinstance(value, str) for value in item["details"]
+        ):
+            raise ValueError(f"{prefix}.details: expected string array")
     for index, item in enumerate(result["stale_or_incompatible_evidence"]):
         exact(item, {"lane", "run_id", "reason", "identity_diff"}, f"status.stale_or_incompatible_evidence[{index}]")
         if not isinstance(item["identity_diff"], list) or not all(isinstance(value, str) for value in item["identity_diff"]):

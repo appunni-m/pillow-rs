@@ -163,6 +163,7 @@ def merge_backend_attestations(
     if result.get("schema") not in {
         "migration-parity/parity-result@1",
         "migration-parity/parity-result@2",
+        "migration-parity/parity-result@3",
     }:
         raise ValueError("merged producer attestation requires a parity report")
 

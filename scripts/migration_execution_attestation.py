@@ -335,6 +335,7 @@ def merge_parity_attestations(
     if result.get("schema") not in {
         "migration-parity/parity-result@1",
         "migration-parity/parity-result@2",
+        "migration-parity/parity-result@3",
     }:
         raise ValueError("merged execution attestation requires a parity report")
 
@@ -449,6 +450,7 @@ def validate_attestation(
     if result["schema"] in {
         "migration-parity/parity-result@1",
         "migration-parity/parity-result@2",
+        "migration-parity/parity-result@3",
     }:
         comparisons = result["comparisons"]
         expected = {(row["case_id"], row["target_profile"]) for row in comparisons}
@@ -469,8 +471,13 @@ def validate_attestation(
             if result["schema"].endswith("@1")
             or row.get("verification") == "parity"
         }
-        if result["schema"].endswith("@2") and any(
-            row.get("verification") not in {"parity", "fault_contract"}
+        allowed_verifications = (
+            {"parity", "fault_contract", "expected_output"}
+            if result["schema"].endswith("@3")
+            else {"parity", "fault_contract"}
+        )
+        if result["schema"].endswith(("@2", "@3")) and any(
+            row.get("verification") not in allowed_verifications
             for row in comparisons
         ):
             raise ValueError("invalid parity verification kind")
@@ -535,6 +542,7 @@ def validate_attestation(
     if result["schema"] in {
         "migration-parity/parity-result@1",
         "migration-parity/parity-result@2",
+        "migration-parity/parity-result@3",
     } and (
         set(source_observed) != source_cases
         or (

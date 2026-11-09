@@ -7,7 +7,7 @@ contract and indexed input mappings only; it contains no measured result.
 generator: scripts/generate_migration_parity_docs.py@1
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@3
-manifest_sha256: 4f615d2cf2e203e385ec44ae8869388ee6bd69afb45dedcf736b3b60a619defb
+manifest_sha256: c961cb80ace865f0ca092c3648bb86c1417638402efb7480f872a6085b027cee
 statement_status: declared
 ```
 
@@ -17,12 +17,12 @@ statement_status: declared
 - Oracle: `Pillow 12.2.0`
 - Target profiles: `python-cpu`, `python-simd`, `python-gpu`, `python-parallel-cpu`, `python-gpu-fault-contract`
 - Parity cases and requirements are shared across target profiles; the runner selects the backend and records it in the result.
-- Public surfaces: 27
-- Operations: 214
-- Requirements: 1820
-- Indexed parity cases: 17339
-- Indexed coverage plans: 25
-- Indexed benchmark workloads: 1032
+- Public surfaces: 29
+- Operations: 216
+- Requirements: 1851
+- Indexed parity cases: 17602
+- Indexed coverage plans: 27
+- Indexed benchmark workloads: 1034
 
 ## Declared operations
 
@@ -38,7 +38,7 @@ statement_status: declared
 | `PIL.Image` | `eval` | `function` | `PIL.Image.eval` | `pillow_rs.eval` | 12 |
 | `PIL.Image` | `fromarray` | `function` | `PIL.Image.fromarray` | `pillow_rs.fromarray` | 8 |
 | `PIL.Image` | `frombuffer` | `function` | `PIL.Image.frombuffer` | `pillow_rs.frombuffer` | 8 |
-| `PIL.Image` | `frombytes` | `function` | `PIL.Image.frombytes` | `pillow_rs.frombytes` | 16 |
+| `PIL.Image` | `frombytes` | `function` | `PIL.Image.frombytes` | `pillow_rs.frombytes` | 21 |
 | `PIL.Image` | `linear_gradient` | `function` | `PIL.Image.linear_gradient` | `pillow_rs.linear_gradient` | 5 |
 | `PIL.Image` | `merge` | `function` | `PIL.Image.merge` | `pillow_rs.merge` | 10 |
 | `PIL.Image` | `new` | `function` | `PIL.Image.new` | `pillow_rs.new` | 28 |
@@ -127,25 +127,25 @@ statement_status: declared
 | `PIL.ImageColor` | `getrgb` | `function` | `PIL.ImageColor.getrgb` | `pillow_rs.ImageColor.getrgb` | 3 |
 | `PIL.ImageDraw` | `Draw` | `function` | `PIL.ImageDraw.Draw` | `pillow_rs.ImageDraw.Draw` | 4 |
 | `PIL.ImageDraw` | `Outline` | `function` | `PIL.ImageDraw.Outline` | `pillow_rs.ImageDraw.Outline` | 2 |
-| `PIL.ImageDraw.ImageDraw` | `arc` | `method` | `PIL.ImageDraw.ImageDraw.arc` | `pillow_rs.ImageDraw.Draw.arc` | 16 |
-| `PIL.ImageDraw.ImageDraw` | `bitmap` | `method` | `PIL.ImageDraw.ImageDraw.bitmap` | `pillow_rs.ImageDraw.Draw.bitmap` | 13 |
-| `PIL.ImageDraw.ImageDraw` | `chord` | `method` | `PIL.ImageDraw.ImageDraw.chord` | `pillow_rs.ImageDraw.Draw.chord` | 17 |
-| `PIL.ImageDraw.ImageDraw` | `circle` | `method` | `PIL.ImageDraw.ImageDraw.circle` | `pillow_rs.ImageDraw.Draw.circle` | 16 |
-| `PIL.ImageDraw.ImageDraw` | `ellipse` | `method` | `PIL.ImageDraw.ImageDraw.ellipse` | `pillow_rs.ImageDraw.Draw.ellipse` | 15 |
-| `PIL.ImageDraw.ImageDraw` | `getfont` | `method` | `PIL.ImageDraw.ImageDraw.getfont` | `pillow_rs.ImageDraw.Draw.getfont` | 3 |
-| `PIL.ImageDraw.ImageDraw` | `line` | `method` | `PIL.ImageDraw.ImageDraw.line` | `pillow_rs.ImageDraw.Draw.line` | 16 |
-| `PIL.ImageDraw.ImageDraw` | `multiline_text` | `method` | `PIL.ImageDraw.ImageDraw.multiline_text` | `pillow_rs.ImageDraw.Draw.multiline_text` | 24 |
-| `PIL.ImageDraw.ImageDraw` | `multiline_textbbox` | `method` | `PIL.ImageDraw.ImageDraw.multiline_textbbox` | `pillow_rs.ImageDraw.Draw.multiline_textbbox` | 18 |
-| `PIL.ImageDraw.ImageDraw` | `pieslice` | `method` | `PIL.ImageDraw.ImageDraw.pieslice` | `pillow_rs.ImageDraw.Draw.pieslice` | 17 |
-| `PIL.ImageDraw.ImageDraw` | `point` | `method` | `PIL.ImageDraw.ImageDraw.point` | `pillow_rs.ImageDraw.Draw.point` | 13 |
-| `PIL.ImageDraw.ImageDraw` | `polygon` | `method` | `PIL.ImageDraw.ImageDraw.polygon` | `pillow_rs.ImageDraw.Draw.polygon` | 15 |
-| `PIL.ImageDraw.ImageDraw` | `rectangle` | `method` | `PIL.ImageDraw.ImageDraw.rectangle` | `pillow_rs.ImageDraw.Draw.rectangle` | 16 |
-| `PIL.ImageDraw.ImageDraw` | `regular_polygon` | `method` | `PIL.ImageDraw.ImageDraw.regular_polygon` | `pillow_rs.ImageDraw.Draw.regular_polygon` | 15 |
-| `PIL.ImageDraw.ImageDraw` | `rounded_rectangle` | `method` | `PIL.ImageDraw.ImageDraw.rounded_rectangle` | `pillow_rs.ImageDraw.Draw.rounded_rectangle` | 17 |
-| `PIL.ImageDraw.ImageDraw` | `shape` | `method` | `PIL.ImageDraw.ImageDraw.shape` | `pillow_rs.ImageDraw.Draw.shape` | 6 |
-| `PIL.ImageDraw.ImageDraw` | `text` | `method` | `PIL.ImageDraw.ImageDraw.text` | `pillow_rs.ImageDraw.Draw.text` | 25 |
-| `PIL.ImageDraw.ImageDraw` | `textbbox` | `method` | `PIL.ImageDraw.ImageDraw.textbbox` | `pillow_rs.ImageDraw.Draw.textbbox` | 18 |
-| `PIL.ImageDraw.ImageDraw` | `textlength` | `method` | `PIL.ImageDraw.ImageDraw.textlength` | `pillow_rs.ImageDraw.Draw.textlength` | 13 |
+| `PIL.ImageDraw.ImageDraw` | `arc` | `method` | `PIL.ImageDraw.ImageDraw.arc` | `pillow_rs.ImageDraw.ImageDraw.arc` | 16 |
+| `PIL.ImageDraw.ImageDraw` | `bitmap` | `method` | `PIL.ImageDraw.ImageDraw.bitmap` | `pillow_rs.ImageDraw.ImageDraw.bitmap` | 13 |
+| `PIL.ImageDraw.ImageDraw` | `chord` | `method` | `PIL.ImageDraw.ImageDraw.chord` | `pillow_rs.ImageDraw.ImageDraw.chord` | 17 |
+| `PIL.ImageDraw.ImageDraw` | `circle` | `method` | `PIL.ImageDraw.ImageDraw.circle` | `pillow_rs.ImageDraw.ImageDraw.circle` | 16 |
+| `PIL.ImageDraw.ImageDraw` | `ellipse` | `method` | `PIL.ImageDraw.ImageDraw.ellipse` | `pillow_rs.ImageDraw.ImageDraw.ellipse` | 15 |
+| `PIL.ImageDraw.ImageDraw` | `getfont` | `method` | `PIL.ImageDraw.ImageDraw.getfont` | `pillow_rs.ImageDraw.ImageDraw.getfont` | 3 |
+| `PIL.ImageDraw.ImageDraw` | `line` | `method` | `PIL.ImageDraw.ImageDraw.line` | `pillow_rs.ImageDraw.ImageDraw.line` | 16 |
+| `PIL.ImageDraw.ImageDraw` | `multiline_text` | `method` | `PIL.ImageDraw.ImageDraw.multiline_text` | `pillow_rs.ImageDraw.ImageDraw.multiline_text` | 24 |
+| `PIL.ImageDraw.ImageDraw` | `multiline_textbbox` | `method` | `PIL.ImageDraw.ImageDraw.multiline_textbbox` | `pillow_rs.ImageDraw.ImageDraw.multiline_textbbox` | 18 |
+| `PIL.ImageDraw.ImageDraw` | `pieslice` | `method` | `PIL.ImageDraw.ImageDraw.pieslice` | `pillow_rs.ImageDraw.ImageDraw.pieslice` | 17 |
+| `PIL.ImageDraw.ImageDraw` | `point` | `method` | `PIL.ImageDraw.ImageDraw.point` | `pillow_rs.ImageDraw.ImageDraw.point` | 13 |
+| `PIL.ImageDraw.ImageDraw` | `polygon` | `method` | `PIL.ImageDraw.ImageDraw.polygon` | `pillow_rs.ImageDraw.ImageDraw.polygon` | 15 |
+| `PIL.ImageDraw.ImageDraw` | `rectangle` | `method` | `PIL.ImageDraw.ImageDraw.rectangle` | `pillow_rs.ImageDraw.ImageDraw.rectangle` | 16 |
+| `PIL.ImageDraw.ImageDraw` | `regular_polygon` | `method` | `PIL.ImageDraw.ImageDraw.regular_polygon` | `pillow_rs.ImageDraw.ImageDraw.regular_polygon` | 15 |
+| `PIL.ImageDraw.ImageDraw` | `rounded_rectangle` | `method` | `PIL.ImageDraw.ImageDraw.rounded_rectangle` | `pillow_rs.ImageDraw.ImageDraw.rounded_rectangle` | 17 |
+| `PIL.ImageDraw.ImageDraw` | `shape` | `method` | `PIL.ImageDraw.ImageDraw.shape` | `pillow_rs.ImageDraw.ImageDraw.shape` | 6 |
+| `PIL.ImageDraw.ImageDraw` | `text` | `method` | `PIL.ImageDraw.ImageDraw.text` | `pillow_rs.ImageDraw.ImageDraw.text` | 25 |
+| `PIL.ImageDraw.ImageDraw` | `textbbox` | `method` | `PIL.ImageDraw.ImageDraw.textbbox` | `pillow_rs.ImageDraw.ImageDraw.textbbox` | 18 |
+| `PIL.ImageDraw.ImageDraw` | `textlength` | `method` | `PIL.ImageDraw.ImageDraw.textlength` | `pillow_rs.ImageDraw.ImageDraw.textlength` | 13 |
 | `PIL.ImageEnhance` | `Brightness` | `type` | `PIL.ImageEnhance.Brightness` | `pillow_rs.ImageEnhance.Brightness` | 8 |
 | `PIL.ImageEnhance` | `Color` | `type` | `PIL.ImageEnhance.Color` | `pillow_rs.ImageEnhance.Color` | 8 |
 | `PIL.ImageEnhance` | `Contrast` | `type` | `PIL.ImageEnhance.Contrast` | `pillow_rs.ImageEnhance.Contrast` | 8 |
@@ -168,7 +168,7 @@ statement_status: declared
 | `PIL.ImageFilter` | `MaxFilter` | `type` | `PIL.ImageFilter.MaxFilter` | `pillow_rs.ImageFilter.MaxFilter` | 7 |
 | `PIL.ImageFilter` | `MedianFilter` | `type` | `PIL.ImageFilter.MedianFilter` | `pillow_rs.ImageFilter.MedianFilter` | 7 |
 | `PIL.ImageFilter` | `MinFilter` | `type` | `PIL.ImageFilter.MinFilter` | `pillow_rs.ImageFilter.MinFilter` | 7 |
-| `PIL.ImageFilter` | `ModeFilter` | `type` | `PIL.ImageFilter.ModeFilter` | `pillow_rs.ImageFilter.ModeFilter` | 7 |
+| `PIL.ImageFilter` | `ModeFilter` | `type` | `PIL.ImageFilter.ModeFilter` | `pillow_rs.ImageFilter.ModeFilter` | 17 |
 | `PIL.ImageFilter` | `RankFilter` | `type` | `PIL.ImageFilter.RankFilter` | `pillow_rs.ImageFilter.RankFilter` | 8 |
 | `PIL.ImageFilter` | `SHARPEN` | `type` | `PIL.ImageFilter.SHARPEN` | `pillow_rs.ImageFilter.SHARPEN` | 11 |
 | `PIL.ImageFilter` | `SMOOTH` | `type` | `PIL.ImageFilter.SMOOTH` | `pillow_rs.ImageFilter.SMOOTH` | 6 |
@@ -218,9 +218,9 @@ statement_status: declared
 | `PIL.ImageOps` | `invert` | `function` | `PIL.ImageOps.invert` | `pillow_rs.ImageOps.invert` | 7 |
 | `PIL.ImageOps` | `mirror` | `function` | `PIL.ImageOps.mirror` | `pillow_rs.ImageOps.mirror` | 7 |
 | `PIL.ImageOps` | `pad` | `function` | `PIL.ImageOps.pad` | `pillow_rs.ImageOps.pad` | 11 |
-| `PIL.ImageOps` | `posterize` | `function` | `PIL.ImageOps.posterize` | `pillow_rs.ImageOps.posterize` | 8 |
+| `PIL.ImageOps` | `posterize` | `function` | `PIL.ImageOps.posterize` | `pillow_rs.ImageOps.posterize` | 9 |
 | `PIL.ImageOps` | `scale` | `function` | `PIL.ImageOps.scale` | `pillow_rs.ImageOps.scale` | 9 |
-| `PIL.ImageOps` | `solarize` | `function` | `PIL.ImageOps.solarize` | `pillow_rs.ImageOps.solarize` | 8 |
+| `PIL.ImageOps` | `solarize` | `function` | `PIL.ImageOps.solarize` | `pillow_rs.ImageOps.solarize` | 9 |
 | `PIL.ImagePalette` | `ImagePalette` | `type` | `PIL.ImagePalette.ImagePalette` | `pillow_rs.ImagePalette.ImagePalette` | 4 |
 | `PIL.ImagePalette.ImagePalette` | `copy` | `method` | `PIL.ImagePalette.ImagePalette.copy` | `pillow_rs.ImagePalette.ImagePalette.copy` | 5 |
 | `PIL.ImagePalette.ImagePalette` | `getcolor` | `method` | `PIL.ImagePalette.ImagePalette.getcolor` | `pillow_rs.ImagePalette.ImagePalette.getcolor` | 7 |
@@ -242,6 +242,8 @@ statement_status: declared
 | `PIL.ImageStat.Stat` | `sum` | `property_get` | `PIL.ImageStat.Stat.sum` | `pillow_rs.ImageStat.Stat.sum` | 5 |
 | `PIL.ImageStat.Stat` | `sum2` | `property_get` | `PIL.ImageStat.Stat.sum2` | `pillow_rs.ImageStat.Stat.sum2` | 5 |
 | `PIL.ImageStat.Stat` | `var` | `property_get` | `PIL.ImageStat.Stat.var` | `pillow_rs.ImageStat.Stat.var` | 5 |
+| `PIL.ImageText` | `Text` | `type` | `PIL.ImageText.Text` | `pillow_rs.ImageText.Text` | 9 |
+| `PIL.ImageText.Text` | `wrap` | `method` | `PIL.ImageText.Text.wrap` | `pillow_rs.ImageText.Text.wrap` | 5 |
 
 ## Lane inputs
 
@@ -251,6 +253,6 @@ accepted as input truth.
 
 | Lane | Documents |
 | --- | ---: |
-| parity | 27 |
-| coverage | 27 |
-| benchmark | 28 |
+| parity | 29 |
+| coverage | 29 |
+| benchmark | 30 |
