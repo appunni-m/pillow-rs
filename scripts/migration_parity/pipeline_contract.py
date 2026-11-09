@@ -173,12 +173,12 @@ TERMINAL_OBSERVATION_OPS = frozenset(
 def workflow_operation_is_proven_noop(
     case: dict[str, object], step: dict[str, object]
 ) -> bool:
-    """Recognize a narrow set of workflow-proven branches that queue no work.
+    """Recognize narrow workflow branches that execute no pixel backend.
 
     This is shared by receipt classification and observation-boundary checks.
-    It intentionally uses only literal workflow inputs and mirrors explicit
-    early returns in the public implementation; unknown sources or arguments
-    remain in the backend-proof cohort.
+    It uses literal workflow inputs to mirror public early returns and native
+    empty-storage paths; unknown sources or arguments remain in the backend-
+    proof cohort.
     """
 
     steps = case.get("steps")
@@ -198,6 +198,16 @@ def workflow_operation_is_proven_noop(
         if isinstance(value, dict) and value.get("kind") == "literal":
             return value.get("value")
         return None
+
+    def optional_literal(
+        arguments: object, name: str, default: object
+    ) -> tuple[bool, object]:
+        if not isinstance(arguments, dict) or name not in arguments:
+            return True, default
+        value = arguments[name]
+        if isinstance(value, dict) and value.get("kind") == "literal":
+            return True, value.get("value")
+        return False, None
 
     def binding_id(value: object) -> str | None:
         if isinstance(value, dict) and value.get("kind") == "binding":
@@ -246,6 +256,81 @@ def workflow_operation_is_proven_noop(
 
     key = (step.get("surface"), step.get("operation"))
     arguments = step.get("arguments")
+
+    if key == ("PIL.Image.Image", "verify"):
+        source = receiver_source(step)
+        # Image.open returns an ImageFile that overrides verify(). Derived and
+        # in-memory images use Image.Image.verify(), which does not materialize
+        # a pending pipeline.
+        return source is not None and (
+            source.get("surface"), source.get("operation")
+        ) != ("PIL.Image", "open")
+
+    if key == ("PIL.Image.Image", "reduce"):
+        factor = literal(arguments, "factor")
+        if isinstance(factor, (int, float)):
+            identity_factor = factor == 1
+        elif isinstance(factor, (list, tuple)) and len(factor) == 2:
+            identity_factor = all(
+                isinstance(value, (int, float)) and value == 1 for value in factor
+            )
+        else:
+            identity_factor = False
+        if not identity_factor:
+            return False
+
+        # Pillow's Image.reduce returns a copy before queuing a Reduce node
+        # when factor is (1, 1) and the box covers the full image. An omitted
+        # or None box is normalized to that full-image box by the wrapper.
+        if not isinstance(arguments, dict) or "box" not in arguments:
+            return True
+        box = literal(arguments, "box")
+        if box is None:
+            return True
+        image_size = source_size(receiver_source(step))
+        return (
+            image_size is not None
+            and isinstance(box, (list, tuple))
+            and tuple(box) == (0, 0, image_size[0], image_size[1])
+        )
+
+    if key == ("PIL.ImageOps", "crop"):
+        border_known, border = optional_literal(arguments, "border", 0)
+        image = argument_source(step, "image")
+        size = source_size(image)
+        return (
+            border_known
+            and isinstance(border, int)
+            and border >= 0
+            and size is not None
+            and border <= size[0] // 2
+            and border <= size[1] // 2
+            and (2 * border == size[0] or 2 * border == size[1])
+        )
+
+    if key == ("PIL.ImageOps", "grayscale"):
+        image = argument_source(step, "image")
+        if source_mode(image) == "L":
+            return True
+        size = source_size(image)
+        # Empty conversions return typed storage without dispatching a pixel
+        # kernel or publishing a fabricated backend receipt.
+        return size is not None and (size[0] == 0 or size[1] == 0)
+
+    if key in {
+        ("PIL.ImageDraw.ImageDraw", "chord"),
+        ("PIL.ImageDraw.ImageDraw", "circle"),
+        ("PIL.ImageDraw.ImageDraw", "ellipse"),
+        ("PIL.ImageDraw.ImageDraw", "pieslice"),
+        ("PIL.ImageDraw.ImageDraw", "rectangle"),
+        ("PIL.ImageDraw.ImageDraw", "rounded_rectangle"),
+    }:
+        fill_known, fill = optional_literal(arguments, "fill", None)
+        outline_known, outline = optional_literal(arguments, "outline", None)
+        width_known, width = optional_literal(arguments, "width", 1)
+        return fill_known and fill is None and outline_known and (
+            outline is None or (width_known and isinstance(width, int) and width == 0)
+        )
 
     if key == ("PIL.ImageDraw.ImageDraw", "line"):
         points = literal(arguments, "xy")
@@ -527,6 +612,8 @@ def workflow_pipeline_observation_gaps(
         )
 
     def materializes(step: dict[str, object]) -> bool:
+        if workflow_operation_is_proven_noop(case, step):
+            return False
         key = (step.get("surface"), step.get("operation"))
         return step.get("operation") in TERMINAL_OBSERVATION_OPS or (
             key in PIPELINE_RESULT_OPS

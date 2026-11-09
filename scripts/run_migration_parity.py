@@ -2072,7 +2072,9 @@ def _benchmark_receipt_can_skip_observation_serialization(
     )
 
 
-def _observation_materializes_pipeline(step: dict[str, Any]) -> bool:
+def _observation_materializes_pipeline(
+    case: dict[str, Any], step: dict[str, Any]
+) -> bool:
     """Return whether a successful observation proves a pipeline boundary.
 
     A workflow may expose an intermediate image and then continue into a
@@ -2083,6 +2085,8 @@ def _observation_materializes_pipeline(step: dict[str, Any]) -> bool:
     observing those values must not promote an unrelated earlier receipt.
     """
 
+    if workflow_operation_is_proven_noop(case, step):
+        return False
     key = (step.get("surface"), step.get("operation"))
     if key in _PIPELINE_FILTER_PARAMETER_OPS:
         return False
@@ -2552,6 +2556,8 @@ def _workflow_materialization_boundary_before(
             or index >= before_index
             or step.get("step_id") not in observations
         ):
+            continue
+        if workflow_operation_is_proven_noop(case, step):
             continue
         key = (step.get("surface"), step.get("operation"))
         operation = step.get("operation")
@@ -3215,6 +3221,11 @@ def strict_backend_pipeline_proof_error(
         or result.get("status") != "completed"
     ):
         return None
+    classification = classify_pipeline_case(case, receipts, result=result)
+    if classification["status"] == "not_applicable":
+        # Deferred setup work that the public workflow never materializes does
+        # not execute a backend and cannot require backend-selection proof.
+        return None
     gaps = workflow_pipeline_observation_gaps(case)
     if gaps:
         steps = ", ".join(step_id for step_id, _ in gaps[:5])
@@ -3223,7 +3234,6 @@ def strict_backend_pipeline_proof_error(
             f"strict {TARGET_BACKEND} parity has unobserved pipeline work "
             f"at step(s): {steps}{suffix}"
         )
-    classification = classify_pipeline_case(case, receipts, result=result)
     if classification["status"] in {
         "missing_receipt",
         "partial_receipt",
@@ -3627,7 +3637,7 @@ def run_case(
                             )
                         if (
                             terminal_receipt_index is not None
-                            and _observation_materializes_pipeline(step)
+                            and _observation_materializes_pipeline(case, step)
                         ):
                             set_receipt_terminal_complete(
                                 pipeline_execution_sink[terminal_receipt_index], True
@@ -3735,7 +3745,7 @@ def run_case(
                         )
                     if (
                         terminal_receipt_index is not None
-                        and _observation_materializes_pipeline(step)
+                        and _observation_materializes_pipeline(case, step)
                     ):
                         set_receipt_terminal_complete(
                             pipeline_execution_sink[terminal_receipt_index], True
@@ -3889,7 +3899,7 @@ def run_case(
                 # failure must not turn a completed prefix into a false gap.
                 if (
                     terminal_receipt_index is not None
-                    and _observation_materializes_pipeline(step)
+                    and _observation_materializes_pipeline(case, step)
                 ):
                     set_receipt_terminal_complete(
                         pipeline_execution_sink[terminal_receipt_index], True
