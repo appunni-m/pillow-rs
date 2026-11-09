@@ -27,33 +27,76 @@ CORE_ONLY_RAW_MODES: tuple[tuple[str, str, bytes], ...] = (
 
 
 # Sharpness has exact native strategies for these 16 modes, but no Pillow
-# parity contract. An impulse sample makes the expected 3x3 blur output
-# directly recordable: each center sample is thirteen times an integer, so
-# the five-center weight divided by the thirteen-kernel sum is exact.
+# parity contract. Store explicit degenerate, identity, and over-unity outputs
+# so the expected values do not depend on the Rust blend implementation.
 SHARPNESS_CORE_ONLY_MODES: tuple[
-    tuple[str, str, str, tuple[int | float, ...], int], ...
+    tuple[
+        str,
+        str,
+        str,
+        tuple[int | float, ...],
+        tuple[int | float, ...],
+        tuple[int | float, ...],
+    ],
+    ...,
 ] = (
-    ("La", "core-only-la-premultiplied", "u8", (13, 26), 1),
-    ("RGBa", "core-only-rgb-premultiplied", "u8", (13, 26, 39, 52), 3),
-    ("YCbCr", "core-only-ycbcr", "u8", (13, 26, 39), 3),
-    ("LAB", "core-only-lab", "u8", (13, 26, 39), 3),
-    ("HSV", "core-only-hsv", "u8", (13, 26, 39), 3),
-    ("I", "core-only-i", "i32n", (13,), 1),
-    ("F", "core-only-f", "f32n", (13.0,), 1),
-    ("I;16", "core-only-i16", "u16n", (13,), 1),
-    ("I;16L", "core-only-i16l", "u16le", (13,), 1),
-    ("I;16B", "core-only-i16b", "u16be", (13,), 1),
-    ("I;16N", "core-only-i16n", "u16n", (13,), 1),
-    ("ImageLumaA16", "core-only-luma-a16", "u16n", (13, 26), 1),
-    ("ImageRgb16", "core-only-rgb16", "u16n", (13, 26, 39), 3),
-    ("ImageRgba16", "core-only-rgba16", "u16n", (13, 26, 39, 52), 3),
-    ("ImageRgb32F", "core-only-rgb32f", "f32n", (13.0, 26.0, 39.0), 3),
+    ("La", "core-only-la-premultiplied", "u8", (234, 247), (90, 247), (255, 247)),
+    (
+        "RGBa",
+        "core-only-rgb-premultiplied",
+        "u8",
+        (234, 221, 208, 247),
+        (90, 85, 80, 247),
+        (255, 255, 255, 247),
+    ),
+    ("YCbCr", "core-only-ycbcr", "u8", (234, 221, 208), (90, 85, 80), (255, 255, 255)),
+    ("LAB", "core-only-lab", "u8", (234, 221, 208), (90, 85, 80), (255, 255, 255)),
+    ("HSV", "core-only-hsv", "u8", (234, 221, 208), (90, 85, 80), (255, 255, 255)),
+    ("I", "core-only-i", "i32n", (13,), (5,), (21,)),
+    ("F", "core-only-f", "f32n", (13.0,), (5.0,), (21.0,)),
+    ("I;16", "core-only-i16", "u16n", (52000,), (20000,), (65535,)),
+    ("I;16L", "core-only-i16l", "u16le", (52000,), (20000,), (65535,)),
+    ("I;16B", "core-only-i16b", "u16be", (52000,), (20000,), (65535,)),
+    ("I;16N", "core-only-i16n", "u16n", (52000,), (20000,), (65535,)),
+    (
+        "ImageLumaA16",
+        "core-only-luma-a16",
+        "u16n",
+        (52000, 65530),
+        (20000, 65530),
+        (65535, 65530),
+    ),
+    (
+        "ImageRgb16",
+        "core-only-rgb16",
+        "u16n",
+        (52000, 41600, 31200),
+        (20000, 16000, 12000),
+        (65535, 65535, 50400),
+    ),
+    (
+        "ImageRgba16",
+        "core-only-rgba16",
+        "u16n",
+        (52000, 41600, 31200, 65530),
+        (20000, 16000, 12000, 65530),
+        (65535, 65535, 50400, 65530),
+    ),
+    (
+        "ImageRgb32F",
+        "core-only-rgb32f",
+        "f32n",
+        (13.0, 26.0, 39.0),
+        (5.0, 10.0, 15.0),
+        (21.0, 42.0, 63.0),
+    ),
     (
         "ImageRgba32F",
         "core-only-rgba32f",
         "f32n",
         (13.0, 26.0, 39.0, 52.0),
-        3,
+        (5.0, 10.0, 15.0, 52.0),
+        (21.0, 42.0, 63.0, 52.0),
     ),
 )
 
@@ -62,24 +105,21 @@ def sharpness_core_only_cases() -> list[dict[str, Any]]:
     """Return recorded native Sharpness results through public Python calls."""
 
     cases: list[dict[str, Any]] = []
-    for mode, mode_id, sample_kind, center, active_channels in SHARPNESS_CORE_ONLY_MODES:
+    for (
+        mode,
+        mode_id,
+        sample_kind,
+        center,
+        degenerate,
+        sharpened,
+    ) in SHARPNESS_CORE_ONLY_MODES:
         source = _sharpness_impulse(mode, sample_kind, center)
-        result_center = tuple(
-            sample * 5 / 13 if channel < active_channels else sample
-            for channel, sample in enumerate(center)
-        )
-        result = _sharpness_impulse(mode, sample_kind, result_center)
         encoded_source = base64.b64encode(source).decode("ascii")
-        encoded_result = base64.b64encode(result).decode("ascii")
-        image_record = {
-            "kind": "image",
-            "mode": mode,
-            "size": [3, 3],
-            "format": None,
-            "info": {},
-            "palette": None,
-            "bytes": encoded_result,
-        }
+        factors = (
+            ("degenerate", 0.0, degenerate),
+            ("identity", 1.0, center),
+            ("sharpened", 2.0, sharpened),
+        )
         cases.append(
             {
                 "case_id": (
@@ -126,23 +166,58 @@ def sharpness_core_only_cases() -> list[dict[str, Any]]:
                             "image": {"kind": "binding", "step_id": "image"},
                         },
                     },
-                    {
-                        "step_id": "result",
-                        "surface": "PIL.ImageEnhance.Sharpness",
-                        "operation": "enhance",
-                        "receiver": {"kind": "binding", "step_id": "enhancer"},
-                        "arguments": {"factor": {"kind": "literal", "value": 0.0}},
-                    },
+                    *[
+                        {
+                            "step_id": "result-" + factor_name,
+                            "surface": "PIL.ImageEnhance.Sharpness",
+                            "operation": "enhance",
+                            "receiver": {"kind": "binding", "step_id": "enhancer"},
+                            "arguments": {
+                                "factor": {"kind": "literal", "value": factor}
+                            },
+                        }
+                        for factor_name, factor, _expected_center in factors
+                    ],
                 ],
-                "observations": ["result"],
+                "observations": [
+                    "result-" + factor_name
+                    for factor_name, _factor, _expected_center in factors
+                ],
                 "target_expectation": {
                     "observations": [
-                        {"step_id": "result", "value": image_record},
+                        {
+                            "step_id": "result-" + factor_name,
+                            "value": _sharpness_result_record(
+                                mode,
+                                sample_kind,
+                                expected_center,
+                            ),
+                        }
+                        for factor_name, _factor, expected_center in factors
                     ]
                 },
             }
         )
     return cases
+
+
+def _sharpness_result_record(
+    mode: str,
+    sample_kind: str,
+    center: tuple[int | float, ...],
+) -> dict[str, Any]:
+    """Encode a recorded mode-specific center output."""
+
+    result = _sharpness_impulse(mode, sample_kind, center)
+    return {
+        "kind": "image",
+        "mode": mode,
+        "size": [3, 3],
+        "format": None,
+        "info": {},
+        "palette": None,
+        "bytes": base64.b64encode(result).decode("ascii"),
+    }
 
 
 def _sharpness_impulse(

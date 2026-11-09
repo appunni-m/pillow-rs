@@ -441,7 +441,9 @@ def target_expectation(value: Any, label: str) -> None:
     for index, observation in enumerate(value["observations"]):
         prefix = f"{label}.observations[{index}]"
         exact(observation, {"step_id", "value"}, prefix)
-        seen.append(string(observation["step_id"], f"{prefix}.step_id"))
+        step_id = observation["step_id"]
+        string(step_id, f"{prefix}.step_id")
+        seen.append(step_id)
     if len(seen) != len(set(seen)):
         raise ValueError(f"{label}.observations: duplicate step ID")
 
