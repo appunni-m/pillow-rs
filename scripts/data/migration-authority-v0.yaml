@@ -2007,6 +2007,7 @@ modules:
       supported_modes:
       - L
       - LA
+      - P
       - RGB
       - RGBA
     - name: scale
@@ -2027,6 +2028,7 @@ modules:
       supported_modes:
       - L
       - LA
+      - P
       - RGB
       - RGBA
     - name: exif_transpose

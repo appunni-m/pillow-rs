@@ -85,9 +85,10 @@ pub(crate) const AUTOCONTRAST_SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
 
 // NO_PILLOW_SUPPORT: Pillow's ImageOps._lut rejects P. These native strategies
 // transform palette indices and preserve the Rust image's attached palette.
-// TODO(pillow-rs#3ptb): add target-only parity for P index output, palette
-// retention, and Default/SSE2/NEON/Wasm SIMD128 selection and fallback. The
-// active Pillow corpus has no P-mode Posterize case.
+// TODO(pillow-rs#3ptb): add target-only parity for this direct Rust strategy's
+// P index output, palette retention, and Default/SSE2/NEON/Wasm SIMD128
+// selection and fallback. The ImageOps wrapper's distinct P rejection is
+// covered by the Pillow parity corpus.
 pub(crate) const POSTERIZE_SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
     OperationId::Posterize,
     Mode::ImagePalette8,
@@ -99,9 +100,10 @@ pub(crate) const POSTERIZE_SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
 
 // NO_PILLOW_SUPPORT: Pillow's ImageOps._lut rejects P; this native strategy
 // solarizes index bytes and preserves the Rust image's attached palette.
-// TODO(pillow-rs#3ptb): add target-only parity for P index output, palette
-// retention, and Default/SSE2/NEON/Wasm SIMD128 selection and fallback. The
-// active Pillow corpus has no P-mode Solarize case.
+// TODO(pillow-rs#3ptb): add target-only parity for this direct Rust strategy's
+// P index output, palette retention, and Default/SSE2/NEON/Wasm SIMD128
+// selection and fallback. The ImageOps wrapper's distinct P rejection is
+// covered by the Pillow parity corpus.
 pub(crate) const SOLARIZE_SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
     OperationId::Solarize,
     Mode::ImagePalette8,

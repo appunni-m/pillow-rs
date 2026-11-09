@@ -4,7 +4,7 @@ scope:
   mode: full
   inventory:
     authority: scripts/migration_parity_inventory.py
-    revision: sha256:35bf53485e95506f328d0c3c9ab22696331739aa48300a373069014f64c33542+inventory-rule@2
+    revision: sha256:11b1e47393f220465450711938faf8e7a15b065586890b1f7b0cab12352a27e6+inventory-rule@2
     command_id: inventory
 oracles:
 - id: pillow
@@ -25669,6 +25669,12 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.ImageOps.posterize.mode.p
+      dimension: mode
+      description: Public behavior for image mode 'P'.
+      lanes:
+      - parity
+      - coverage
     - id: PIL.ImageOps.posterize.mode.rgb
       dimension: mode
       description: Public behavior for image mode 'RGB'.
@@ -25925,6 +25931,12 @@ surfaces:
     - id: PIL.ImageOps.solarize.mode.la
       dimension: mode
       description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageOps.solarize.mode.p
+      dimension: mode
+      description: Public behavior for image mode 'P'.
       lanes:
       - parity
       - coverage
