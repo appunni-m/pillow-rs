@@ -754,28 +754,31 @@ recorded target-result cases for `ImageLumaA16`, `ImageRgb16`, `ImageRgba16`,
 buffer `ValueError`, and accepted zero-width and zero-height rasters for each
 mode. They enter through the ordinary thin Python facade and are explicitly
 `NO_PILLOW_SUPPORT`; expected outputs and errors stay separate from Pillow
-comparisons and injected faults. In the current worktree, all twenty passed
+comparisons and injected faults. On clean commit `2773be01b`, the normal CPU
+profile passed all twenty cases (run
+`migration-parity-929d200d41e24d748fef68c0235026dd`); the same cases passed
 under Default, Neon, SSE2, SSE3, SSSE3, AVX, AVX2, AVX+FMA, and AVX2+FMA
-(180/180, zero infrastructure errors). The normal CPU target profile passed
-20/20. These results use the dirty worktree and will be repeated after its WIP
-commit for clean-source receipts. On this ARM host, x86 selectors use
-`UnavailableHardware` fallback, so native x86 kernels remain unverified.
+(180/180, zero infrastructure errors). These are construction contracts and
+do not exercise architecture-specific pixel strategies. Native x86 execution
+remains unavailable on this ARM host.
 
 The current CPU selection is 17,616 cases (17,596 Pillow-parity cases plus
 twenty recorded target results), case-ID SHA-256
 `e4e8ade188ad7965f44a70b36f438b61a6a2d54188771c15e43373710b85b0f6`. The full
-selection has not run. Focused Rust coverage on the dirty worktree executed one
-plan and passed all twenty cases. `internal_samples.rs` measured 49/56 lines,
-7/8 branches, 8/10 functions, and 96/112 regions. The one uncovered branch is
+selection has not run. Focused Rust coverage on clean commit `2773be01b`
+executed one plan and passed all twenty cases (run
+`migration-coverage-eef1a17440da4c2c9a3bb2b1889f280f`). `internal_samples.rs`
+measured 49/56 lines, 7/8 branches, 8/10 functions, and 96/112 regions. The one uncovered branch is
 the private decoder's unsupported-mode return; the current public `frombytes`
 routes send only these five modes to that decoder. The defensive
 `buffer_error` is also unobserved because exact byte-count and dimension checks
 make its `ImageBuffer::from_raw` failure impossible for valid inputs. TODO
 (`pillow-rs#3ptb`): recheck these paths if the decoder gains another caller; do
 not add a test-only Rust entry or claim them covered. The coverage receipt was
-not ingested into the aggregate collector. Target-output status remains
-separate from Pillow parity totals. The receipt is
-`build/migration-parity/core-only-mode-frombytes-20261109-boundaries/coverage-result-rust.json`.
+not ingested into the aggregate collector. The generated target-output page
+records the clean normal-CPU result separately from Pillow parity totals. The
+coverage receipt is
+`build/migration-parity/core-only-mode-frombytes-20261109-clean-2773be01b/coverage-result-rust.json`.
 
 Color3DLUT input source follow-up (2026-11-09): the Python adapter now accepts
 the low-level sequence protocol Pillow accepts, checks the exact table length
@@ -796,7 +799,7 @@ matrix; each operation's support view must come from its own declarations.
 | --- | --- | --- |
 | Input corpus | The active manifest (`476c662e967d`) indexes 17,617 unique cases: 17,596 Pillow-parity cases, twenty recorded Rust-only target results, and one GPU fault contract. The CPU selector chooses 17,616 cases, case-ID SHA-256 `e4e8ade188ad7965f44a70b36f438b61a6a2d54188771c15e43373710b85b0f6`. The last full pre-extension matrix executed 17,596 Pillow-parity cases; the twenty target-result cases have separate focused evidence below. The 29 indexed parity inputs comprise 27 case-bearing CPU inputs, an empty `pil.json`, and the single GPU-only fault case in `pil-gpubatchexecutor.json`. | Rerun the full 17,616-case CPU selection after remaining operation × Mode contracts are complete. |
 | Recorded differences | The last full pre-extension report had one failure: `PIL.Image.Image.save.nuanced.i-png`; Pillow completes the save and the target returns `OSError: unsupported Png: encode: PNG cannot encode this image mode`. This is the known I32→PNG encoder gap owned by image-slash-star (`image-slash-star#9h5w`, implementation `#nype`), not a CPU pixel mismatch. The historical 2026-11-06 full report had 56 differences (16 I;16 Convert output differences, 39 target-only statuses, and one I-to-PNG save); current focused reruns showed the 16 active I;16 Convert cases pass and the old source/inputs are not current proof. | Keep the encoder work in image-slash-star; do not add a competing encoder to pillow-rs. Rerun the affected case after the codec update, then complete the declared mode/architecture receipt matrix. |
-| Mode identity stimulus | All 20 Pillow mode spellings occur in active inputs. Rust `Mode::ALL` has 25 identities; the five internal high-depth identities have no Pillow mode spelling and use recorded target-result cases through Python `frombytes`. Their samples, short-buffer errors, and empty-dimension results pass under all nine CPU selectors in the current worktree. This proves typed raw-input identities and construction boundaries, not the operation × Mode matrix. | Generate the denominator from each operation's exhaustive support declaration. Use header-selected encoded inputs where image-slash-star exposes exact identities. Keep internal mode decoding in Rust and marked `NO_PILLOW_SUPPORT`; use focused coverage to find unexecuted branches. | Five `frombytes` identities are proven; operation/mode coverage is incomplete. |
+| Mode identity stimulus | All 20 Pillow mode spellings occur in active inputs. Rust `Mode::ALL` has 25 identities; the five internal high-depth identities have no Pillow mode spelling and use recorded target-result cases through Python `frombytes`. Their samples, short-buffer errors, and empty-dimension results pass on clean commit `2773be01b` under the normal CPU profile and all nine CPU selectors. This proves typed raw-input identities and construction boundaries, not the operation × Mode matrix. | Generate the denominator from each operation's exhaustive support declaration. Use header-selected encoded inputs where image-slash-star exposes exact identities. Keep internal mode decoding in Rust and marked `NO_PILLOW_SUPPORT`; use focused coverage to find unexecuted branches. | Five `frombytes` identities are proven; operation/mode coverage is incomplete. |
 | Mode strategies | The active corpus now exercises the public `ImageOps.posterize(P)` and `ImageOps.solarize(P)` rejection contracts. These cases do not execute the separate CoreOnly native-index strategies, whose output, palette retention, and architecture selection remain unproven. The overall corpus is not the complete operation × 25 exact `Mode` outcome matrix. | For every operation, verify each exact mode's declared output or rejection, including metadata and fault order. Exercise Pillow-owned modes through parity and reach Rust-only modes from Python with the raw-sample extension, marked `NO_PILLOW_SUPPORT`; use coverage to find Rust routes those inputs do not execute. |
 | Architecture strategies | `Architecture` has ten policies (Default, Neon, SSE2, SSE3, SSSE3, AVX, AVX2, AVX+FMA, AVX2+FMA, and Wasm SIMD128). The parity manifest has Backend profiles but no Architecture selector, and saved CPU reports do not prove each operation/mode strategy selection or fallback. | Derive the exact architecture leaves and guards from each support declaration; exercise eligible selection, unavailable/ineligible fallback or rejection, and observable receipts for every declared route. |
 | Edges and composition | Focused cases cover specific boundaries, callbacks, and multi-image paths; they do not close every operation's edge set. | Include empty and small dimensions, complete and partial vector blocks, mode boundaries, multi-image mode pairs, lazy/eager routes, and public error ordering where applicable. |
@@ -840,8 +843,8 @@ these artifacts as scoped evidence, not the full CPU acceptance run.
 
 The generated parity status page is current for manifest hash
 `c961cb80ace865f0ca092c3648bb86c1417638402efb7480f872a6085b027cee`; its
-target-output section will be regenerated from the expanded 17,616-case CPU
-selection after clean evidence is recorded. The current full selection remains
+target-output section now reports all twenty expected outputs and errors, with
+the clean CPU profile passing 20/20. The full 17,616-case CPU selection remains
 unrun.
 
 ### Operation-family source work
