@@ -217,29 +217,86 @@ def enum_variants(source: str) -> list[dict[str, Any]]:
 def variant_key_edges(source: str) -> list[dict[str, Any]]:
     body, start = item_body(source, r"\bfn\s+variant_key\s*\(")
     edges = []
-    pending = ""
+    pending_source = ""
+    pending_code = ""
+    block_source: str | None = None
+    block_code = ""
+    block_variants: list[str] = []
+    block_line = 0
     offset = 0
     for line in body.splitlines(keepends=True):
         visible = code_only(line)
-        if not visible.strip():
-            offset += len(line)
-            continue
-        pending += visible
-        if "=>" in visible:
-            left, right = pending.split("=>", 1)
-            key = re.search(r'"([A-Za-z0-9_]+)"', line)
-            if key:
-                for variant in re.findall(r"\bPipelineOp::([A-Za-z_][A-Za-z0-9_]*)", left):
-                    edges.append(
+        if block_source is not None:
+            block_source += line
+            block_code += visible
+            if block_code.count("{") <= block_code.count("}"):
+                key = _block_string_result(block_source)
+                if key:
+                    edges.extend(
+                        {
+                            "variant": variant,
+                            "key": key,
+                            "line": block_line,
+                        }
+                        for variant in block_variants
+                    )
+                block_source = None
+                block_code = ""
+                block_variants = []
+        else:
+            pending_source += line
+            pending_code += visible
+            if "=>" in visible:
+                left_code, right_code = pending_code.split("=>", 1)
+                _, right_source = pending_source.split("=>", 1)
+                variants = re.findall(
+                    r"\bPipelineOp::([A-Za-z_][A-Za-z0-9_]*)", left_code
+                )
+                key = re.search(r'"([A-Za-z0-9_]+)"', right_source)
+                if key:
+                    edges.extend(
                         {
                             "variant": variant,
                             "key": key.group(1),
                             "line": line_number(source, start + offset),
                         }
+                        for variant in variants
                     )
-            pending = ""
+                elif "{" in right_code and variants:
+                    block_source = right_source
+                    block_code = right_code
+                    block_variants = variants
+                    block_line = line_number(source, start + offset)
+                    if block_code.count("{") <= block_code.count("}"):
+                        block_key = _block_string_result(block_source)
+                        if block_key:
+                            edges.extend(
+                                {
+                                    "variant": variant,
+                                    "key": block_key,
+                                    "line": block_line,
+                                }
+                                for variant in block_variants
+                            )
+                        block_source = None
+                        block_code = ""
+                        block_variants = []
+                pending_source = ""
+                pending_code = ""
         offset += len(line)
     return edges
+
+
+def _block_string_result(source: str) -> str | None:
+    """Return a block arm's sole string expression, when it is unambiguous."""
+    code = code_only(source)
+    opening = code.find("{")
+    closing = code.rfind("}")
+    if opening < 0 or closing <= opening:
+        return None
+    expression = source[opening + 1 : closing]
+    match = re.fullmatch(r'\s*"([A-Za-z0-9_]+)"\s*,?\s*', expression)
+    return match.group(1) if match else None
 
 
 def invocations(source: str, pattern: str) -> Iterator[tuple[str, int]]:

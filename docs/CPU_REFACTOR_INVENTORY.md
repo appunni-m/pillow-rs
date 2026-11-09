@@ -8947,6 +8947,19 @@ target's gzip step; the final gzip archive passed `gzip -t`. The explicit CPU
 fault-contract lane selected zero cases, so fault-contract coverage remains
 open. No benchmark or coverage ran.
 
+CPU source-crosswalk parser correction (2026-11-09): the generator now follows
+manifest ImageDraw class methods directly instead of trying to traverse the
+`Draw()` factory as a method owner, reads `#[pyfunction(name = ...)]` exposure
+names from their decorators, groups adjacent PyO3 method attributes, and maps
+match arms whose registry key is returned from a block. The regenerated report
+maps all 216 public operations, all 175 Python-to-PyO3 calls, and all 87
+pipeline variants; it has no unresolved Python bindings, PyO3 calls, pipeline
+variants, or Rust module edges. Its four remaining review candidates are
+unreferenced GPU shader assets, retained for the GPU stage. The report is saved
+at `build/evidence/cpu-source-crosswalk-20261109.json` (SHA-256
+`f237b18bebdc2968d3637fabfd4d68cc03ef5131d187b1eec0410c1fd060686b`). These
+are audit-tool corrections only; no image behavior changed.
+
 The benchmark input tree at `3f9dfd403` has 1,032 unique workload IDs and
 sorted newline-delimited SHA-256
 `639e358082276c924343618d5a3b09c6945de012c91c1a80ac5a8ee2121ccb84`. The

@@ -116,10 +116,9 @@ class PyO3Index:
                 continue
             symbol = function.group(1)
             start = attribute.start()
-            attribute_body = source[
-                attribute.end() : attribute.end() + function.start()
-            ]
-            exposed = self._renamed_exposure(attribute_body, symbol)
+            exposed = self._renamed_exposure(
+                source[attribute.start() : attribute.end()], symbol
+            )
             declaration = PyO3Declaration(
                 "pyfunction", None, symbol, exposed, self._relative(path),
                 line_number(source, start), symbol in registered_functions,
@@ -154,11 +153,7 @@ class PyO3Index:
                 body_masked,
             ):
                 symbol = method.group(1)
-                attribute_start = body_masked.rfind("#[", 0, method.start())
-                previous_method = body_masked.rfind("\n    fn ", 0, method.start())
-                if previous_method > attribute_start:
-                    attribute_start = -1
-                prefix = body[attribute_start : method.start()] if attribute_start >= 0 else ""
+                prefix = _method_attributes(body, method.start())
                 exposed = self._renamed_exposure(prefix, symbol)
                 declaration = PyO3Declaration(
                     "pymethod", owner, symbol, exposed, self._relative(path),
@@ -226,6 +221,12 @@ class PyO3Index:
         self, kind: str, symbol: str, owner: str | None = None
     ) -> PyO3Declaration | None:
         return self.declarations.get((kind, owner, symbol))
+
+
+def _method_attributes(body: str, method_start: int) -> str:
+    """Return the contiguous Rust attributes immediately before a method."""
+    match = re.search(r"((?:\s*#\s*\[[^]]*\]\s*)*)$", body[:method_start])
+    return match.group(1) if match else ""
 
 
 def struct_field_type(source: str, struct_name: str, field_name: str) -> dict[str, Any]:

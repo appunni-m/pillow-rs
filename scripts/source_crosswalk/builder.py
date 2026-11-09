@@ -206,9 +206,11 @@ def build_crosswalk(root: Path = ROOT) -> dict[str, Any]:
             public_operation_count += 1
             operation_id = f"{surface['id']}.{operation['id']}"
             source_path = str(operation.get("source", {}).get("path") or operation_id)
-            public_path = source_path.replace(
-                "PIL.ImageDraw.ImageDraw", "PIL.ImageDraw.Draw", 1
-            )
+            # The manifest records methods on Pillow's ImageDraw class. The
+            # public ``Draw`` factory returns that class, but it is not itself
+            # the method owner and cannot be statically traversed as a method
+            # binding. Resolve the declared class path directly instead.
+            public_path = source_path
             operation_node_id = f"public-operation:{operation_id}"
             nodes[operation_node_id] = {
                 "id": operation_node_id,
