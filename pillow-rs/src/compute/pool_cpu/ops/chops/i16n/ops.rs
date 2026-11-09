@@ -37,13 +37,14 @@ pub(crate) fn execute(
         super::super::ops::ChopsRequest::Offset { x, y } => match architecture {
             Architecture::Default => super::default::ops::execute(image, request, other),
             Architecture::Sse2 => {
-                super::sse2::execute_offset(buffer, x, y, false).map(DynamicImage::ImageI16N)
+                super::sse2::execute_offset(buffer, x, y).map(DynamicImage::ImageI16N)
             }
             Architecture::Neon => {
-                super::neon::execute_offset(buffer, x, y, false).map(DynamicImage::ImageI16N)
+                super::neon::execute_offset(buffer, x, y).map(DynamicImage::ImageI16N)
             }
-            Architecture::WasmSimd128 => super::wasm_simd128::execute_offset(buffer, x, y, false)
-                .map(DynamicImage::ImageI16N),
+            Architecture::WasmSimd128 => {
+                super::wasm_simd128::execute_offset(buffer, x, y).map(DynamicImage::ImageI16N)
+            }
             _ => Err(PilError::InternalError(
                 "Chops Offset selected an unsupported architecture".into(),
             )),

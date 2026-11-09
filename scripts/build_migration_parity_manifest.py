@@ -42,8 +42,19 @@ try:
         BRIGHTNESS_PILLOW_MODES,
         BRIGHTNESS_REJECTED_MODES,
         BRIGHTNESS_TARGET_ONLY_MODES,
+        CHOPS_BINARY_OPERATIONS,
+        CHOPS_BINARY_PILLOW_MODES,
+        CHOPS_BINARY_REJECTED_PILLOW_MODES,
+        CHOPS_LOGICAL_OPERATIONS,
+        CHOPS_LOGICAL_PILLOW_MODES,
         CHOPS_INVERT_CORE_ONLY_MODES,
         CHOPS_INVERT_PILLOW_MODES,
+        CHOPS_DUPLICATE_CORE_ONLY_MODES,
+        CHOPS_DUPLICATE_PILLOW_MODES,
+        CHOPS_CONSTANT_CORE_ONLY_MODES,
+        CHOPS_CONSTANT_PILLOW_MODES,
+        CHOPS_OFFSET_CORE_ONLY_MODES,
+        CHOPS_OFFSET_PILLOW_MODES,
         CORE_ONLY_RAW_MODES,
         SHARPNESS_CORE_ONLY_MODES,
     )
@@ -52,8 +63,19 @@ except ModuleNotFoundError:
         BRIGHTNESS_PILLOW_MODES,
         BRIGHTNESS_REJECTED_MODES,
         BRIGHTNESS_TARGET_ONLY_MODES,
+        CHOPS_BINARY_OPERATIONS,
+        CHOPS_BINARY_PILLOW_MODES,
+        CHOPS_BINARY_REJECTED_PILLOW_MODES,
+        CHOPS_LOGICAL_OPERATIONS,
+        CHOPS_LOGICAL_PILLOW_MODES,
         CHOPS_INVERT_CORE_ONLY_MODES,
         CHOPS_INVERT_PILLOW_MODES,
+        CHOPS_DUPLICATE_CORE_ONLY_MODES,
+        CHOPS_DUPLICATE_PILLOW_MODES,
+        CHOPS_CONSTANT_CORE_ONLY_MODES,
+        CHOPS_CONSTANT_PILLOW_MODES,
+        CHOPS_OFFSET_CORE_ONLY_MODES,
+        CHOPS_OFFSET_PILLOW_MODES,
         CORE_ONLY_RAW_MODES,
         SHARPNESS_CORE_ONLY_MODES,
     )
@@ -69,6 +91,12 @@ from migration_parity_inventory import (
 )
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
+CHOPS_BINARY_SOURCE_PATHS = frozenset(
+    f"PIL.ImageChops.{operation}" for operation in CHOPS_BINARY_OPERATIONS
+)
+CHOPS_LOGICAL_SOURCE_PATHS = frozenset(
+    f"PIL.ImageChops.{operation}" for operation in CHOPS_LOGICAL_OPERATIONS
+)
 DEFAULT_OUTPUT = (
     WORKSPACE_ROOT / "pillow-rs" / "tests" / "fixtures" / "manifest.yaml"
 )
@@ -932,6 +960,39 @@ def operation_requirements(
     elif endpoint.source_path == "PIL.ImageChops.invert":
         # Invert has exact byte behavior across all Pillow storage modes.
         supported_modes = [mode for mode, _mode_id, _channels in CHOPS_INVERT_PILLOW_MODES]
+    elif endpoint.source_path == "PIL.ImageChops.duplicate":
+        # Duplicate preserves each exact Pillow raster identity, including
+        # the typed numeric modes accepted by the Rust mode enum.
+        supported_modes = [
+            mode
+            for mode, _mode_id, _bytes_per_pixel in CHOPS_DUPLICATE_PILLOW_MODES
+        ]
+    elif endpoint.source_path == "PIL.ImageChops.constant":
+        # Constant consumes any exact Pillow source mode before producing L.
+        supported_modes = [
+            mode
+            for mode, _mode_id, _bytes_per_pixel in CHOPS_CONSTANT_PILLOW_MODES
+        ]
+    elif endpoint.source_path in CHOPS_BINARY_SOURCE_PATHS:
+        # Every byte/numeric mode has a public result or rejection contract;
+        # internal high-depth modes use target-only rejection contracts.
+        supported_modes = [
+            mode
+            for mode, _mode_id, _bytes_per_pixel in (
+                *CHOPS_BINARY_PILLOW_MODES,
+                *CHOPS_BINARY_REJECTED_PILLOW_MODES,
+            )
+        ]
+    elif endpoint.source_path in CHOPS_LOGICAL_SOURCE_PATHS:
+        # Logical Chops is One-only. Keep every other Pillow spelling visible
+        # as an explicit mode rejection in the operation's mode matrix.
+        supported_modes = [
+            mode for mode, _mode_id, _bytes_per_pixel in CHOPS_LOGICAL_PILLOW_MODES
+        ]
+    elif endpoint.source_path == "PIL.ImageChops.offset":
+        # Pillow 12.2 has an unwritten-byte bug in the four I;16* Offset paths;
+        # those outputs use fixed sample-level contracts instead of that oracle.
+        supported_modes = [mode for mode, _mode_id, _bytes_per_pixel in CHOPS_OFFSET_PILLOW_MODES]
     if (
         endpoint.surface == "PIL.ImageEnhance"
         and endpoint.operation in {"Brightness", "Color", "Contrast", "Sharpness"}
@@ -962,6 +1023,39 @@ def operation_requirements(
                 for mode_name, mode_id, _channels in CHOPS_INVERT_PILLOW_MODES
                 if mode_name == mode
             )
+        elif endpoint.source_path == "PIL.ImageChops.duplicate":
+            mode_id = next(
+                mode_id
+                for mode_name, mode_id, _bytes_per_pixel in CHOPS_DUPLICATE_PILLOW_MODES
+                if mode_name == mode
+            )
+        elif endpoint.source_path == "PIL.ImageChops.constant":
+            mode_id = next(
+                mode_id
+                for mode_name, mode_id, _bytes_per_pixel in CHOPS_CONSTANT_PILLOW_MODES
+                if mode_name == mode
+            )
+        elif endpoint.source_path in CHOPS_BINARY_SOURCE_PATHS:
+            mode_id = next(
+                mode_id
+                for mode_name, mode_id, _bytes_per_pixel in (
+                    *CHOPS_BINARY_PILLOW_MODES,
+                    *CHOPS_BINARY_REJECTED_PILLOW_MODES,
+                )
+                if mode_name == mode
+            )
+        elif endpoint.source_path in CHOPS_LOGICAL_SOURCE_PATHS:
+            mode_id = next(
+                mode_id
+                for mode_name, mode_id, _bytes_per_pixel in CHOPS_LOGICAL_PILLOW_MODES
+                if mode_name == mode
+            )
+        elif endpoint.source_path == "PIL.ImageChops.offset":
+            mode_id = next(
+                mode_id
+                for mode_name, mode_id, _bytes_per_pixel in CHOPS_OFFSET_PILLOW_MODES
+                if mode_name == mode
+            )
         else:
             mode_id = (
                 mode_slug(str(mode))
@@ -969,12 +1063,27 @@ def operation_requirements(
                 and endpoint.operation == "ModeFilter"
                 else slug(str(mode))
             )
+        offset_i16_output = (
+            endpoint.source_path == "PIL.ImageChops.offset"
+            and mode in {"I;16", "I;16L", "I;16B", "I;16N"}
+        )
+        lanes = (
+            ["target_output", "coverage"]
+            if offset_i16_output
+            else ["parity", "coverage"]
+        )
+        description = (
+            f"Typed-sample Offset behavior for Pillow mode {mode!r}; "
+            "Pillow 12.2 leaves part of the output unwritten; Pillow 13.0 fixes it."
+            if offset_i16_output
+            else f"Public behavior for image mode {mode!r}."
+        )
         requirements.append(
             requirement(
                 f"{prefix}.mode.{mode_id}",
                 "mode",
-                f"Public behavior for image mode {mode!r}.",
-                ["parity", "coverage"],
+                description,
+                lanes,
             )
         )
     if endpoint.source_path == "PIL.Image.frombytes":
@@ -1035,6 +1144,58 @@ def operation_requirements(
                     f"{prefix}.mode.{mode_id}",
                     "mode",
                     f"Native ImageChops inversion for {mode_id}; no Pillow result contract (NO_PILLOW_SUPPORT).",
+                    ["target_output", "coverage"],
+                )
+            )
+    if endpoint.source_path == "PIL.ImageChops.duplicate":
+        for _mode, mode_id, _kind, _samples in CHOPS_DUPLICATE_CORE_ONLY_MODES:
+            requirements.append(
+                requirement(
+                    f"{prefix}.mode.{mode_id}",
+                    "mode",
+                    f"Native ImageChops Duplicate output for {mode_id} "
+                    "(NO_PILLOW_SUPPORT).",
+                    ["target_output", "coverage"],
+                )
+            )
+    if endpoint.source_path == "PIL.ImageChops.constant":
+        for _mode, mode_id, _kind, _samples in CHOPS_CONSTANT_CORE_ONLY_MODES:
+            requirements.append(
+                requirement(
+                    f"{prefix}.mode.{mode_id}",
+                    "mode",
+                    f"Native ImageChops Constant output for {mode_id} "
+                    "(NO_PILLOW_SUPPORT).",
+                    ["target_output", "coverage"],
+                )
+            )
+    if endpoint.source_path in CHOPS_BINARY_SOURCE_PATHS:
+        for _mode, mode_id, _raw in CORE_ONLY_RAW_MODES:
+            requirements.append(
+                requirement(
+                    f"{prefix}.mode.{mode_id}",
+                    "mode",
+                    f"ImageChops {endpoint.operation} rejection for internal {mode_id} (NO_PILLOW_SUPPORT).",
+                    ["target_output", "coverage"],
+                )
+            )
+    if endpoint.source_path in CHOPS_LOGICAL_SOURCE_PATHS:
+        for _mode, mode_id, _raw in CORE_ONLY_RAW_MODES:
+            requirements.append(
+                requirement(
+                    f"{prefix}.mode.{mode_id}",
+                    "mode",
+                    f"ImageChops {endpoint.operation} rejects internal {mode_id} (NO_PILLOW_SUPPORT).",
+                    ["target_output", "coverage"],
+                )
+            )
+    if endpoint.source_path == "PIL.ImageChops.offset":
+        for _mode, mode_id, _kind, _samples in CHOPS_OFFSET_CORE_ONLY_MODES:
+            requirements.append(
+                requirement(
+                    f"{prefix}.mode.{mode_id}",
+                    "mode",
+                    f"Native ImageChops Offset for {mode_id}; no Pillow result contract (NO_PILLOW_SUPPORT).",
                     ["target_output", "coverage"],
                 )
             )

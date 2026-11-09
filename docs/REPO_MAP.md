@@ -7597,6 +7597,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |-- pillow_table.rs
 |   |   |   |   `-- specialized.rs
 |   |   |   |-- color_count.rs
+|   |   |   |-- construction/
+|   |   |   |   `-- internal_samples.rs
 |   |   |   |-- construction.rs
 |   |   |   |-- data_access/
 |   |   |   |   |-- get.rs
@@ -7940,7 +7942,8 @@ It is a navigation aid, not an API-support or coverage claim.
     |   |-- fault_contracts.py
     |   |-- gpu_batch_inputs.py
     |   |-- pipeline_contract.py
-    |   `-- quantize_inputs.py
+    |   |-- quantize_inputs.py
+    |   `-- target_output_contracts.py
     |-- migration_parity_inventory.py
     |-- migration_producer_attestation.py
     |-- migration_producer_identity.py

@@ -28,26 +28,8 @@ fn execute_binary(
             "Chops mode strategy received a different raster variant".into(),
         ));
     };
-    let other = match other {
-        Some(
-            DynamicImage::ImageRgb8(other)
-            | DynamicImage::ImageYCbCr8(other)
-            | DynamicImage::ImageLab8(other)
-            | DynamicImage::ImageHsv8(other),
-        ) => other,
-        Some(_) => {
-            return Err(PilError::InternalError(
-                "Chops binary strategy received a different secondary raster variant".into(),
-            ));
-        }
-        None => {
-            return Err(PilError::InternalError(
-                "Chops binary plan lost its secondary image".into(),
-            ));
-        }
-    };
-    let output = super::super::super::helpers::binary::execute(buffer, other, operation)?;
-    Ok(DynamicImage::ImageYCbCr8(output))
+    super::super::super::helpers::three_band::execute(buffer, other, operation)
+        .map(DynamicImage::ImageYCbCr8)
 }
 
 fn execute_offset(image: &DynamicImage, x: i32, y: i32) -> Result<DynamicImage, PilError> {

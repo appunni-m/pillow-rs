@@ -5059,7 +5059,7 @@ def verification_kind(case: dict[str, Any]) -> str:
 
 def not_applicable_source_result(case: dict[str, Any]) -> dict[str, Any]:
     reason = (
-        "Recorded target output contract; Pillow has no matching Rust-only mode."
+        "Recorded target output contract; no live Pillow comparison is used for this case."
         if case.get("verification") == "expected-output"
         else "The fault contract is target-only; Pillow has no GPU batch API."
     )

@@ -79,28 +79,38 @@ the baseline. Keep `pillow-rs-bad` as reference.
 ## Current pending matrix
 
 Baseline: `3f9dfd4036caa061eabcf2255c9f34a745df9c7e`; continue from the current
-`develop` HEAD and preserve all later WIP commits. CPU family and direct-call
-source reviews are complete, including the operation/Mode/Architecture
-contracts, prepared routes, and fallback paths. On clean commit `ba4fc8e9c`,
-the full 17,616-case selection ran under all nine CPU selectors: each executed
-17,616, passed 17,615, and had zero infrastructure errors. The sole failure is
-the external I32-to-PNG encoder gap. All twenty recorded Rust-only outputs and
-errors passed in every selector. x86 selectors fell back because this run was
-on arm64, so native x86 execution remains unproven. The Rust coverage campaign
-completed 27 plans and 17,377 cases with no plan failures; active `pool_cpu`
-source line coverage was 39.0%. This broad figure identifies unexercised code
-but does not prove complete operation × Mode × Architecture behavior.
+`develop` HEAD and preserve all later WIP commits. Earlier CPU family and
+direct-call source reviews covered operation/Mode/Architecture contracts,
+prepared routes, and fallback paths. The clean run on `ba4fc8e9c` is historical:
+the full 17,616-case selection ran under all nine CPU selectors, with 17,615
+passing and one external I32-to-PNG encoder failure per selector. The twenty
+recorded Rust-only outputs and errors passed in that run. x86 selectors fell
+back on arm64, so native x86 execution remains unproven. The historical Rust
+coverage campaign completed 27 plans and 17,377 cases with no plan failures;
+active `pool_cpu` source line coverage was 39.0%. This broad figure identifies
+unexercised code but does not prove complete operation × Mode × Architecture
+behavior.
 
-The static quality and compilation gate is recorded as passed on 2026-11-09;
-no CPU source changed after the clean evidence revision. Remaining CPU
-acceptance is the operation × Mode output/error/receipt matrix, the external
-I32-to-PNG encoder gap, native x86 execution, and the CPU benchmark comparison.
+The current working tree has CPU source edits and parity-builder/fixture
+changes after that clean evidence revision, including typed-u16 Chops Offset
+strategies and their expected-output cases. Fixture generation on 2026-11-10
+produced 25,003 cases: the CPU profile selects 25,002 (24,750 Pillow-parity
+cases and 252 recorded expected outputs, excluding one GPU-only fault
+contract). The ImageChops input contains 10,070 cases, including 204 expected
+outputs. A previous WIP passed `make quality` on 2026-11-10 before the latest
+LAB and Offset changes; that result is historical. The current fixture rebuild,
+determinism check, and manifest contract validation pass, while the final
+quality and compile gates remain pending.
+The frozen CPU case IDs have SHA-256
+`a2005623bb7f9bcf243c030cc5e12ff4e028858b423427a892247e1fc96cf619`.
+Remaining CPU work is the full CPU parity/receipt campaign for Default, Neon,
+SSE2, SSE3, SSSE3, AVX, AVX2, AVX+FMA, and AVX2+FMA; the external I32-to-PNG
+encoder gap with image-slash-star; native x86 execution; and CPU performance.
 The public support declarations classify 113 operation identities across 25
-source modes; parameterized target modes, secondary inputs, and route guards
-add further cases beyond that source-mode denominator. CPU fault behavior is
-input-driven and still needs matrix evidence. `pool_parallel` remains future
-work and must wait until CPU acceptance. See the append-only checkpoint notes
-below for exact evidence and limitations.
+source modes; parameterized targets, secondary inputs, and route guards add
+cases beyond that source-mode denominator. `pool_parallel` remains future work
+and must wait until CPU acceptance. See the append-only checkpoint notes below
+for historical evidence and limitations.
 
 Lazy indexed mode-planning correction (2026-11-08): `known_pipeline_op_mode`
 uses accepted P/PA output contracts for fixed or explicit target transitions,
@@ -749,8 +759,8 @@ fault-order parity remain pending. Reference: [Pillow 12.2 ImageOps.py
 | 1 | CPU family implementation and source review | Source review complete; runtime unverified | Every family row below now has exact-mode contracts, Default/Architecture routing, prepared callers, same-mode fallback, and output identity mapped in source. Preserve the remaining operation × Mode × Architecture output and fault cases in the frozen CPU parity matrix. | Gate 2 |
 | 2 | Cross-cutting source closure | Source review complete; runtime receipts pending | Mode ownership, palette transitions, and injected Backend/Architecture context are source-mapped through direct, lazy, eager, fused, nested, fallback, and terminal routes. Supported lazy outputs use each operation's `OutputModeRule`; Convert, ConvertMatrix, Merge, RemapPalette, Color3DLut, ConvertLab, Grayscale, Colorize, and EffectNoise declare their rejected-route lazy output in `OperationSupport` instead of a planner-side mode switch. The source audit found no other rejected source-mode route that exposes a changed raster result before its error: mode-preserving routes retain the source identity; rejected Equalize has no raster result; PutAlpha wrappers reject those source modes before queueing; raw invalid `push_op` descriptors retain their deferred operation error without claiming a mode. PutData's payload contract is consulted when its payload differs from the source identity, and prefix reuse requires the planned output to equal the exact source mode. Source review has covered every active buffer-preserving `DynamicImage::with_mode` caller; the unused generic resize compatibility wrappers were removed after confirming their module declarations and callers were absent. Both cached and uncached pipeline evaluation compare declared output with the producer's exact `DynamicImage` variant. The mode planner maps every declared `OutputModeRule` form; materialization remains for P inputs lacking attached palette metadata before expansion, rejected raw descriptors with no declared lazy rejected output (preserving their execution-time error), and support contracts with no raster output. Verify these fallback, fault, and terminal strategy-receipt outcomes in frozen CPU parity. | Gate 3 |
 | 3 | Archive, dead-code, and size audit | Source review complete; quality evidence passed | Source scans found no active imports of `pool_cpu::legacy`, no Rayon/parallel iterator implementation in maintained `pool_cpu`, and no implementation definitions in maintained CPU `mod.rs` files. A baseline hash audit confirmed all 98 CPU and 182 SIMD source files from `3f9dfd403` are present and byte-identical in `pool_cpu/legacy`. The baseline/maintained CPU family lists match exactly: all 21 baseline operation families have active counterparts, with `analysis` added. Section 8 maps all 313 CPU and 569 SIMD declarations; the direct-caller and Cargo feature source audit is recorded in `docs/CPU_REFACTOR_INVENTORY.md`. Known GPU-to-CPU helper references remain assigned to the later GPU pass. Current CPU TODOs are parity/receipt evidence, target-only checks for declared CoreOnly strategies, future `pool_parallel` scheduling, or architecture opportunities to assess after measurement. `make quality` reports zero functions over 100 lines and zero files over 1,000 lines; 25 files are at least 800 lines. | Gate 4 |
-| 4 | Static quality and compilation | `make quality` passed on 2026-11-09, including formatting, Clippy ratchets, size limits, dependency checks, parity-input determinism, inventory, and manifest contracts. The implementation-structure audit/inventory and repo-map checks also passed; AArch64 and x86_64 Apple target checks passed for the CPU crate. The refreshed source crosswalk maps all 216 public bindings, 175 Python-to-PyO3 calls, and all 87 pipeline variants; Rust module edges are resolved. Its four remaining candidates are GPU shader assets, retained for the later GPU review. | Keep the four GPU asset candidates for GPU review; native x86 kernel execution remains unavailable on this Apple Silicon host. | Gate 5 |
-| 5 | CPU parity | The current 17,616-case selector run completed on 2026-11-09; the operation × Mode matrix remains incomplete | On clean `ba4fc8e9c4832ad0c360eeb30a88ed89a926451a`, Default, Neon, SSE2, SSE3, SSSE3, AVX, AVX2, AVX+FMA, and AVX2+FMA each executed 17,616 cases, passed 17,615, and had zero infrastructure errors. The 20 recorded Rust-only outcomes passed in every selector; the sole failure is the external I32→PNG encoder gap `PIL.Image.Image.save.nuanced.i-png`. x86 selectors fell back on arm64. The public support API exposes 2,825 source-mode classifications across 113 operation identities and 25 modes: 1,394 Pillow-supported, 472 CoreOnly-supported, and 959 rejected. These declarations do not prove operation execution or selection. | Add and run public Python parity workflows for each declared source-mode outcome, including errors and receipts; cover target-mode and secondary-input relations where declared; include recorded outputs for CoreOnly results. Verify every eligible specialization and fallback, then rerun the frozen CPU selection. Keep the codec encoder gap outside pillow-rs and run native x86 selectors on matching hardware. | Gate 6 |
+| 4 | Static quality and compilation | `make quality` passed on 2026-11-10 with the current Chops source edits and regenerated fixtures. Formatting, Clippy, function/file size policy, fixture determinism, manifest contracts, implementation-structure inventory, repo-map checks, source-contract ratchets, backend boundaries, and dependency audits passed. No runtime test ran. AArch64 and x86_64 Apple target checks are historical. | Keep the four GPU asset candidates for GPU review; native x86 kernel execution remains unavailable on this Apple Silicon host. | Gate 5 |
+| 5 | CPU parity | Historical clean run completed on 2026-11-09; regenerated 25,002-case CPU selector remains unrun. Frozen case-ID SHA-256: `a2005623bb7f9bcf243c030cc5e12ff4e028858b423427a892247e1fc96cf619`. | Run the public Python parity and receipt workflow for the frozen selector under Default, Neon, SSE2, SSE3, SSSE3, AVX, AVX2, AVX+FMA, and AVX2+FMA; verify every declared mode result/rejection, target-mode output, secondary-input relation, eligible specialization, and fallback. Keep the codec encoder gap outside pillow-rs and run native x86 selectors on matching hardware. | Gate 6 |
 | 6 | CPU performance | Not started; blocked by Gate 5. Workload IDs are reconciled; baseline timings are not. | The input set from `3f9dfd403` contains 1,032 workload IDs (SHA-256 `639e358082276c924343618d5a3b09c6945de012c91c1a80ac5a8ee2121ccb84`). The current set has 1,034 IDs (SHA-256 `66a153abc9a40aadb4cfeb5297108ffc0f19b89f40879186619c899ebcd112f9`): all 1,032 baseline IDs remain with identical workload definitions, no IDs were removed, and the only additions are `pil-imagetext-text.wrap.standard` and `pil-imagetext.text.standard`. Collect compatible baseline timings after Gate 5; then report each operation, mode, and architecture separately, with at most one confirmation repeat for questionable pairs. | CPU complete; Gate 7 |
 | 7 | Parallel CPU | Waiting for CPU completion | Move parallel scheduling into `pool_parallel`, then review and verify it as a separate backend and evidence profile. | Later backend work |
 
@@ -776,10 +786,12 @@ under Default, Neon, SSE2, SSE3, SSSE3, AVX, AVX2, AVX+FMA, and AVX2+FMA
 do not exercise architecture-specific pixel strategies. Native x86 execution
 remains unavailable on this ARM host.
 
-The current CPU selection is 17,616 cases (17,596 Pillow-parity cases plus
-twenty recorded target results), case-ID SHA-256
-`e4e8ade188ad7965f44a70b36f438b61a6a2d54188771c15e43373710b85b0f6`. The full
-selection has not run. Focused Rust coverage on clean commit `2773be01b`
+The historical CPU selection was 17,616 cases (17,596 Pillow-parity cases
+plus twenty recorded target results), case-ID SHA-256
+`e4e8ade188ad7965f44a70b36f438b61a6a2d54188771c15e43373710b85b0f6`. That
+selection passed except for the external I32-to-PNG encoder gap described
+above. The regenerated 25,002-case selection has not run. Focused Rust coverage on
+clean commit `2773be01b`
 executed one plan and passed all twenty cases (run
 `migration-coverage-eef1a17440da4c2c9a3bb2b1889f280f`). `internal_samples.rs`
 measured 49/56 lines, 7/8 branches, 8/10 functions, and 96/112 regions. The one uncovered branch is
@@ -811,7 +823,7 @@ matrix; each operation's support view must come from its own declarations.
 
 | Coverage area | Existing evidence | Required for CPU acceptance |
 | --- | --- | --- |
-| Input corpus | The active manifest (`476c662e967d`) indexes 17,617 unique cases: 17,596 Pillow-parity cases, twenty recorded Rust-only target results, and one GPU fault contract. The CPU selector chooses 17,616 cases, case-ID SHA-256 `e4e8ade188ad7965f44a70b36f438b61a6a2d54188771c15e43373710b85b0f6`. The last full pre-extension matrix executed 17,596 Pillow-parity cases; the twenty target-result cases have separate focused evidence below. The 29 indexed parity inputs comprise 27 case-bearing CPU inputs, an empty `pil.json`, and the single GPU-only fault case in `pil-gpubatchexecutor.json`. | Rerun the full 17,616-case CPU selection after remaining operation × Mode contracts are complete. |
+| Input corpus | Historical manifest `476c662e967d` indexed 17,617 unique cases. The regenerated fixture snapshot indexes 25,003: 24,762 Pillow-parity cases, 240 recorded expected outputs, and one GPU-only fault contract. Its CPU selector has 25,002 cases. The prior 17,616-case CPU run is historical evidence only; it does not cover this corpus. | After source review, check fixture determinism, freeze the final CPU case IDs and receipt guards, then run the generated CPU selection across the required CPU architecture selectors. |
 | Recorded differences | The last full pre-extension report had one failure: `PIL.Image.Image.save.nuanced.i-png`; Pillow completes the save and the target returns `OSError: unsupported Png: encode: PNG cannot encode this image mode`. This is the known I32→PNG encoder gap owned by image-slash-star (`image-slash-star#9h5w`, implementation `#nype`), not a CPU pixel mismatch. The historical 2026-11-06 full report had 56 differences (16 I;16 Convert output differences, 39 target-only statuses, and one I-to-PNG save); current focused reruns showed the 16 active I;16 Convert cases pass and the old source/inputs are not current proof. | Keep the encoder work in image-slash-star; do not add a competing encoder to pillow-rs. Rerun the affected case after the codec update, then complete the declared mode/architecture receipt matrix. |
 | Mode identity stimulus | All 20 Pillow mode spellings occur in active inputs. Rust `Mode::ALL` has 25 identities; the five internal high-depth identities have no Pillow mode spelling and use recorded target-result cases through Python `frombytes`. Their samples, short-buffer errors, and empty-dimension results pass on clean commit `2773be01b` under the normal CPU profile and all nine CPU selectors. This proves typed raw-input identities and construction boundaries, not the operation × Mode matrix. | Generate the denominator from each operation's exhaustive support declaration. Use header-selected encoded inputs where image-slash-star exposes exact identities. Keep internal mode decoding in Rust and marked `NO_PILLOW_SUPPORT`; use focused coverage to find unexecuted branches. | Five `frombytes` identities are proven; operation/mode coverage is incomplete. |
 | Mode strategies | The active corpus now exercises the public `ImageOps.posterize(P)` and `ImageOps.solarize(P)` rejection contracts. These cases do not execute the separate CoreOnly native-index strategies, whose output, palette retention, and architecture selection remain unproven. The overall corpus is not the complete operation × 25 exact `Mode` outcome matrix. | For every operation, verify each exact mode's declared output or rejection, including metadata and fault order. Exercise Pillow-owned modes through parity and reach Rust-only modes from Python with the raw-sample extension, marked `NO_PILLOW_SUPPORT`; use coverage to find Rust routes those inputs do not execute. |
@@ -822,8 +834,9 @@ There is no defensible operation × Mode × Architecture coverage percentage yet
 the manifest does not select Architecture, and its parity cases are not the
 cross-product of operation support declarations. The historical full report's
 17,436 selected IDs are 160 fewer than the prior 17,596 CPU IDs; the exact
-ID-level difference is not reconciled. The current 17,616 CPU selection adds
-twenty recorded target-result cases to the 17,596 prior Pillow-parity cases.
+ID-level difference is not reconciled. The historical 17,616-case CPU
+selection added twenty recorded target-result cases to the prior 17,596
+Pillow-parity cases. It does not cover the regenerated 25,002-case selection.
 Do not add overlapping focused counts to the full-report count.
 
 The broad 2026-11-07 WIP serial-CPU report
@@ -855,11 +868,11 @@ I-to-PNG save case ran only on Pillow. A rebuilt-target 27-case status/codec
 guard later passed 26/27; its sole remaining failure is I-to-PNG. Treat all
 these artifacts as scoped evidence, not the full CPU acceptance run.
 
-The generated parity status page is current for manifest hash
-`c961cb80ace865f0ca092c3648bb86c1417638402efb7480f872a6085b027cee`; its
-target-output section now reports all twenty expected outputs and errors, with
-the clean CPU profile passing 20/20. The full 17,616-case CPU selection remains
-unrun.
+The generated parity status page and its `c961cb80ace865f0ca092c3648bb86c1417638402efb7480f872a6085b027cee`
+manifest hash describe an earlier generated manifest. They report twenty
+expected outputs passing 20/20 on a clean CPU profile, but do not cover the
+regenerated 240-output corpus or current WIP. The regenerated 25,002-case CPU
+selection remains unrun.
 
 ### Operation-family source work
 
@@ -1171,8 +1184,8 @@ in the frozen CPU matrix.
 | Backend and Architecture context | CPU routing source review complete; owner audit and runtime receipts pending | The shared selector checks the requested Architecture before permitted lower-architecture declarations, preserves `MissingSpecialization` for lower implementations, and carries the selected guard in `StrategySelection` for execution. CPU-only direct Analysis, Quantize, point/eval, eager Filter, Draw, GetData, GetProjection, callback PutData/PutPixel, and the CPU-owned binary/matrix/I;16/palette Convert routes now use the shared image-pinned/active Backend plus CPU Architecture resolver (advisory where the old wrapper swallowed backend-state errors); GPU preference can therefore retain an active SIMD architecture for CPU fallback, while an explicit GPU pin stays CPU Default. Eager receipts treat SIMD as an architecture request: a selected SIMD strategy clears the provisional host-fallback note, while Default/lower-architecture selection records the strategy fallback; GPU-to-CPU stays a backend fallback. Per-operation telemetry now exposes optional typed strategy fallback reasons separately from pipeline-level backend fallback (`None` means selection is unavailable; an empty list means a recorded selection had no fallback), and prepared CPU batch, direct eager, composed, fused, and vector PutPixel batch selection paths record the actual `StrategySelection`. The owned batch Invert path keeps its exact byte-mode eligibility and derives its kernel band count from `Mode::band_count()`. Fused RGB/CMYK GetProjection terminal execution and receipts now consume the prepared selection directly; RGB PutPixel→Thumbnail fusion admission also passes the single Image-resolved Backend/Architecture snapshot into its support guard. Source audit (2026-11-05): CPU direct terminal pixel kernels pass the routed `ExecutionContext` into prepared selection; lazy operations select through registry preparation; identity/copy routes are declared mode paths with no pixel kernel; empty DrawText exits before selection. Static scans found no active `pool_cpu` imports of `legacy` or `pool_simd`, no Rayon use, and no production `ExecutionContext::new` or `Architecture::detected_host` inside CPU strategy code (host context resolution is centralized in `for_routed_backend`; explicit constructors are in tests). The remaining context-source TODO is GPU GetData terminal eligibility, deferred to the GPU stage. Audit owner declarations and verify exact, lower-architecture, build/hardware-unavailable, and guard-fallback receipts in parity. |
 | Operation support declarations | Declaration model and caller source audit complete; runtime evidence pending | Each operation exposes a `ModeSupport` outcome for all 25 exact modes, including input/output rules, Default strategy, architecture/build requirements, request guards, and rejection or fallback reasons. `OperationId::support()` maps all 103 identities to their family-owned declaration; `OperationSupport::modes/routes()` enumerate `Mode::ALL` through the same classifier. `PipelineOp::operation_id()` maps 75 identities and `PipelineOp::support()` delegates to that declaration; prepared plans expose the contract for their selected operation. `BoxBlur` and `BoxBlurXY` retain distinct identities and inputs while sharing an executor entry. `Equalize` and `EqualizeMasked` intentionally share one identity with optional-mask facts. Pad and Expand typed/positioned variants share semantic operation declarations and exact-mode fill rules. The source audit enumerated all 28 direct/eager identities and traced their support owners and caller use; kernel-backed paths select declared exact-mode strategies, while identity, copy, wrapper, and composed paths document their selection boundaries. `registry::cpu_supports()` remains a coarse executor-registration query, followed by exact mode assessment during preparation. Convert's source/target declarations include direct LAB rows for every mode, including CoreOnly `La` and internal modes; each streams into only the final LAB raster. This closes source caller-to-declaration reconciliation only; output, fault order, callbacks, route receipts, CPU parity, and performance remain pending. |
 | Archive, dead code, and source size | Pending | Account for all 98 archived CPU files, 182 archived SIMD files, the 84 baseline `PipelineOp` variants and the three current additions (87 total), 313 CPU and 569 SIMD baseline declarations, callers, modes, kernels, and fallbacks. Review active/archive correspondence, remove dead maintained code, and meet the 100-line function / 1,000-line file limits before validation. Keep CPU serial; do not add Rayon. Source-only archive/module-graph scan (2026-11-03): active `pool_cpu` has no references to `legacy` or `pool_simd`; the preserved baseline files remain outside the compiled module graph. Function-size review remains gated until source closure because it uses Clippy; archive correspondence and dead-code review are still pending. Latest physical-size scan (2026-11-08), using `RUST_SIZE_POLICY.md`'s exact component exclusions and Python `splitlines()` counts, covers 5,496 first-party Rust files and 380,911 physical lines. Twenty-seven files have at least 800 lines; none exceed 1,000. The largest is `pillow-rs/src/pipeline.rs` at 993 lines; `pillow-rs/src/image/pipeline_ops.rs` is now 896 lines after extracting its mode planner. The maintained `pool_cpu/ops` subtree contains 4,793 Rust files and 169,043 physical lines. The function-size and dead-code audits remain pending. |
-| Static quality and compilation | `make quality` passed on 2026-11-09, including formatting, Clippy ratchets, file/function limits, dependency checks, generated parity-input determinism, inventory, and manifest contracts. The implementation-structure audits and repo-map checks passed; AArch64 and x86_64 Apple CPU builds passed. The refreshed source crosswalk maps all 216 public operations, all 175 native Python calls, and 87 pipeline variants; four GPU shader asset candidates remain for the GPU pass. | Keep the GPU asset candidates for later review and retain the unavailable native x86 execution limitation. No unit-test suites for this migration. |
-| Full CPU parity | Last full pre-extension selection executed on 2026-11-09: 17,596 Pillow-parity cases, case-ID SHA-256 `17ff509ddf90db03e2fdbb8d1c8645f8bf3a8cbe8c24797383197e2401fd6b5b`. The 29 indexed parity inputs comprise 27 case-bearing CPU inputs in report identities, an empty `pil.json`, and the one GPU-only fault case in `pil-gpubatchexecutor.json`. Default, Neon, SSE2, SSE3, SSSE3, AVX, AVX2, AVX+FMA, and AVX2+FMA each executed 17,596, passed 17,595, and had zero infrastructure errors. The sole observed failure is `PIL.Image.Image.save.nuanced.i-png`, an image-slash-star I32→PNG encoding gap outside CPU execution. The five One Reduce cases and public P-mode ImageOps Posterize/Solarize rejection cases are included. All nine execution sidecars report 13,111 complete pipeline cases, 4,485 not applicable, no indeterminate/missing/partial receipts, and no incomplete terminal receipts. The x86 selectors fall back after `UnavailableHardware`; native x86 kernels were not exercised. Evidence is under `build/migration-parity/cpu-architecture/final-1935a89ac/`. Disk space was added after the initial compression error; every report is now compressed and the final archive passed `gzip -t`. The focused twenty-case `NO_PILLOW_SUPPORT` target-result slice passes under all nine selectors (180/180) in the current worktree; the expanded 17,616-case selection has not run in full. | Complete operation × Mode output/error coverage through the thin Python interface, including recorded target outputs and boundary cases; use coverage to identify unexecuted Rust paths. Do not add CPU fault contracts unless a deterministic internal fault with a distinct public outcome is identified. Keep the codec failure tracked as external work. Preserve all inputs and assertions. |
+| Static quality and compilation | `make quality` passed on 2026-11-10 with the current Chops source edits and regenerated fixtures. Formatting, Clippy, function/file size policy, fixture determinism, manifest contracts, implementation-structure inventory, repo-map checks, source-contract ratchets, backend boundaries, and dependency audits passed. No runtime test ran. AArch64 and x86_64 Apple target checks are historical. The refreshed source crosswalk maps all 216 public operations, all 175 native Python calls, and 87 pipeline variants; four GPU shader asset candidates remain for the GPU pass. | Keep the GPU asset candidates for later review and retain the unavailable native x86 execution limitation. No unit-test suites for this migration. |
+| Full CPU parity | Historical runs only; the regenerated 25,002-case selection is unrun. The last full pre-extension selection ran on 2026-11-09: 17,596 Pillow-parity cases, case-ID SHA-256 `17ff509ddf90db03e2fdbb8d1c8645f8bf3a8cbe8c24797383197e2401fd6b5b`. The 29 indexed parity inputs comprise 27 case-bearing CPU inputs in report identities, an empty `pil.json`, and the one GPU-only fault case in `pil-gpubatchexecutor.json`. Default, Neon, SSE2, SSE3, SSSE3, AVX, AVX2, AVX+FMA, and AVX2+FMA each executed 17,596, passed 17,595, and had zero infrastructure errors. The sole observed failure is `PIL.Image.Image.save.nuanced.i-png`, an image-slash-star I32→PNG encoding gap outside CPU execution. The five One Reduce cases and public P-mode ImageOps Posterize/Solarize rejection cases are included. All nine execution sidecars report 13,111 complete pipeline cases, 4,485 not applicable, no indeterminate/missing/partial receipts, and no incomplete terminal receipts. The x86 selectors fall back after `UnavailableHardware`; native x86 kernels were not exercised. Evidence is under `build/migration-parity/cpu-architecture/final-1935a89ac/`. Disk space was added after the initial compression error; every report is now compressed and the final archive passed `gzip -t`. A focused twenty-case `NO_PILLOW_SUPPORT` target-result slice passed under all nine selectors (180/180) on clean commit `2773be01b`; it does not verify the current WIP. | Complete operation × Mode output/error coverage through the thin Python interface, including recorded target outputs and boundary cases; use coverage to identify unexecuted Rust paths. Do not add CPU fault contracts unless a deterministic internal fault with a distinct public outcome is identified. Keep the codec failure tracked as external work. Preserve all inputs and assertions. |
 | CPU performance | Not started; parity gate remains open. Workload IDs are reconciled, but compatible baseline timing evidence is not. | The `3f9dfd403` input set has 1,032 IDs (SHA-256 `639e358082276c924343618d5a3b09c6945de012c91c1a80ac5a8ee2121ccb84`); the current set has 1,034 (SHA-256 `66a153abc9a40aadb4cfeb5297108ffc0f19b89f40879186619c899ebcd112f9`). All 1,032 baseline IDs remain with identical workload definitions, no IDs were removed, and the only additions are `pil-imagetext-text.wrap.standard` and `pil-imagetext.text.standard`. Collect compatible baseline timings after parity passes; then report each operation/mode/architecture separately, with at most one confirmation repeat for questionable pairs. |
 | Parallel CPU and later backends | Waiting on CPU completion | Start `pool_parallel` only after CPU source, quality, parity, and performance gates pass. Keep scheduling and evidence separate; GPU work follows later. |
 
@@ -1204,23 +1217,27 @@ Remaining `pillow_name()` calls format errors or diagnostics. The only
 metadata remains a separately tracked backend-stage TODO.
 
 Current Chops working-tree changes are source-only and unvalidated. They retain
-the exact-byte binary guards and fusion facts, selected architecture telemetry,
-LAB's native three-byte Default binary path, and Default-only `La` binary
-behavior. Every Chops mode's Default Offset owner now selects its exact
+the exact-byte binary guards and fusion facts and selected architecture
+telemetry. Binary Chops treats LAB as an ordinary Pillow-compatible three-band
+mode: RGB, YCbCr, LAB, and HSV operands use their native byte lanes, and the
+primary mode determines the output identity. The typed three-band helper
+accepts those secondary variants without image conversion. Matching same-width
+La and LAB secondary layouts are eligible for the primary mode's declared
+architecture strategy where one exists. Every Chops mode's Default Offset owner now selects its exact
 `DynamicImage` variant and calls a typed buffer helper; the generic
 `DynamicImage::offset_with_mode` route was removed from raster transforms.
 Accelerated byte and I;16 Offset owners pass typed buffers to shared kernels,
 which return the same buffer type without mode matching or output reconstruction.
 The checked-u32 guards, endian rules, palette retention, context flow,
 fallbacks, and selection/path receipts for Offset have been source-reviewed.
-The I;16 architecture guard now agrees with the kernel's 16-byte minimum and
-selects same-mode Default for smaller non-empty frames. Source review has
+The I;16 architecture guard requires eight samples per row and selects
+same-mode Default for narrower non-empty rows. Source review has
 compared the shared scalar and vector Add/Sub, Multiply/Screen, bytewise, LUT,
 and logical formulas to the archived CPU/SIMD code; no arithmetic discrepancy
 was found. The typed direct wrapper preserves the baseline channel-layout
-groups and declares LAB as a CoreOnly extension. LAB binary support is marked
-CoreOnly, while the archived
-vector guards keep La and LAB secondary operands on Default. Prepared
+groups. LAB uses Pillow parity rather than a CoreOnly classification, and its
+former chroma-bias adjustment was removed because it changed the raw-byte
+result. Prepared
 Multiply→Screen retains its archived exact modes and same-architecture
 requirement.
 The public Rust and Python caller paths, typed validation order, operation
@@ -5582,3 +5599,245 @@ has no declared architecture specialization. Focused Rust coverage passes
 matrix. Binary Chops, Offset/fusion paths, native x86 runtime, complete CPU
 parity, ordinary error/fault cases, the external I32-to-PNG gap, and performance
 remain pending.
+
+Offset mode-matrix WIP (2026-11-09; pre-resolution diagnostic): the expanded
+selection had 61 cases: all 20 Pillow modes, nine narrow-row cases, eight empty
+dimension cases for the four Pillow 16-bit modes, and five CoreOnly expected
+outputs. The initial 53-case matrix passed 49 cases under each of the nine
+selectors, including all five CoreOnly expectations; the same four mismatches
+were the large `I;16`, `I;16L`, `I;16B`, and `I;16N` cases. The eight empty
+dimension cases passed under all selectors (72/72). These byte-tail outputs,
+SIMD block counts, and scalar-tail byte counts describe the retired
+byte-oriented kernel, not the typed-u16 implementation now in the working
+tree. Five isolated CPython 3.12 /
+Pillow 12.2 runs of the same `I;16` input produced five different output-tail
+hashes. Pillow leaves the second half of each 16-bit storage row unwritten; its
+stable first-width-byte data matches Rust, whose output deterministically
+zero-fills that tail. The Neon receipt executed the native I;16 kernel (17
+vector blocks and 255 scalar-tail bytes per 31×17 case), and each 3×3 narrow
+I;16 alias used two vector blocks and two scalar-tail bytes. X86 selectors fell
+back as unavailable hardware on arm64. After the recorded-output decision,
+the five CoreOnly typed output cases were refreshed under all nine selectors
+and pass 45/45. Neon reports `missing_specialization` for all five and runs
+Default; no native high-depth Offset architecture kernel is claimed. For empty
+16-bit inputs, Neon selected
+its strategy and returned `native-copy` with zero vector blocks; Default ran
+directly. A Rust operation-coverage run previously
+executed 172/172 cases with zero failures, but its build did not expose the
+architecture selector, so its SIMD helper files remain uninstrumented.
+Offset I;16 contract decision (2026-11-09): Pillow's public Offset contract
+wraps pixels. Pillow 12.2's implementation treats its two-byte I;16* rows as a
+one-byte image in the shared loop, which visits only `width` bytes and leaves
+the rest unwritten. Pillow 13.0's release notes explicitly record this as a
+bug fix, and its implementation copies complete pixels. Rust therefore wraps
+typed `u16` samples. The four Pillow modes keep mode-specific expected-output
+contracts while the repository's Pillow 12.2 oracle remains pinned; this is
+not a `NO_PILLOW_SUPPORT` classification. The Default path now rotates typed
+pixels, and the SIMD path rotates `u16` vectors. Fixture generation now records
+four shapes for each mode (odd-width wide, narrow, zero-width, and zero-height)
+plus five existing CoreOnly outputs: 21 target-output cases total. No Pillow
+12.2 parity cases remain for these four modes. The regenerated fixture snapshot
+has 25,003 cases overall; its ImageChops input has 156 Offset Pillow-parity
+cases plus 21 Offset expected outputs. No parity run has checked the new
+source and fixtures.
+Manual source review of the typed-sample kernel and expected-output generator
+is complete; compiler and runtime evidence are still absent. The Default and
+SIMD owners preserve whole `u16` samples. The row-wise SIMD guard requires
+`width >= 8`; the 3×3 narrow expected-output case keeps total storage above
+16 bytes so it also covers the narrow-row fallback. Source inspection of the locked `wide` 1.7.1
+implementation confirms `u16x8` maps to SSE2, Wasm SIMD128, or NEON when the
+corresponding target feature is enabled; the strategy declarations use the
+same target-feature gates. This establishes the source-level mapping, not a
+runtime selection receipt or parity result.
+TODO(pillow-rs#3ptb): finish review of all current CPU WIP before any gates,
+then run the static/compile gates and frozen Offset output/error/receipt cases
+across Default and every declared architecture. Keep the Pillow 12.2 mismatch
+as a version-pinned historical bug; do not restore unstable unwritten-byte
+parity. Pillow 13.0 fixes this behavior upstream.
+
+Chops three-band raw-byte correction (2026-11-09): the Pillow 12.2 Python
+wrappers pass the second image to the native operation without requiring equal
+mode names. `Chops.c` admits equal band counts and evaluates each stored byte;
+its output keeps the primary image mode. The Rust support declaration already
+groups RGB, YCbCr, LAB, and HSV as compatible three-band inputs. The Default
+strategy accounts for LAB's biased chroma representation when LAB is the
+secondary image. Current three-band vector kernels do not, so architecture
+guards keep those accepted pairs on Default until the vector implementation
+handles LAB natively. This changes implementation selection, not the public
+mode-pair contract. Hidden physical lanes remain computed by the outer
+prepared plan. Focused architecture verification now passes; see the
+2026-11-10 Chops fallback checkpoint below.
+
+Rust-only successful-mode verification decision (2026-11-09): when Pillow
+cannot produce a declared Rust `Mode`, verify the public Python-to-Rust path
+with a fixed `expected-output` contract and the normal execution receipt. Keep
+the wrapper as input conversion and delegation; do not derive expected output
+in Python or substitute a Rust unit test. This is the contract for the five
+CoreOnly high-depth modes and any future successful `NO_PILLOW_SUPPORT` mode.
+
+Binary Chops mode-matrix checkpoint (2026-11-09): all twelve byte-binary
+operations declare and exercise all 25 `raster::Mode` identities: 14 Pillow
+byte modes, six Pillow numeric modes rejected by the operation, and five
+internal high-depth modes rejected by the operation. LAB was initially
+misclassified as a Rust-only extension. A Pillow 12.2 oracle accepts LAB and
+same-sized cross-mode three-byte pairs for all twelve operations, so LAB now
+uses the ordinary CPU support declaration and a native mode-specific byte
+mapping. Each operation has 32 live Pillow workflows: 20 same-mode cases and
+the twelve ordered mixed-mode pairs among RGB, YCbCr, LAB, and HSV. Five
+target-only expected-error contracts cover the internal high-depth modes.
+Across Default, Neon, SSE2, SSE3, SSSE3, AVX, AVX2, AVX+FMA, and AVX2+FMA, all
+3,996 selected outcomes pass with zero infrastructure errors. Execution
+receipts show RGB with LAB as its secondary input selects Default under Neon
+(`ineligible_request`); LAB has no declared architecture specialization and
+uses Default. The seven x86 selectors report
+`unavailable_hardware` on this arm64 host, so native x86 execution remains
+unverified. `La` has no archived architecture-specific Chops strategy, so its
+Neon fallback is declared; assess a native strategy later against the CPU
+performance target. Remaining: cover same-pixel-size pairs among `1`/`L`/`P`
+and `LA`/`La`/`PA`, dimension mismatches, parameter variants, and fused paths
+for the byte-binary family. Logical Chops, Constant, Offset, Duplicate, Invert,
+native x86 execution, full CPU parity, fault contracts, and the benchmark gate
+remain pending. The frozen selected case IDs have SHA-256
+`1b79ce61fae476ef7aad6e93a62d5fde4feb2acbc180e476dcfcba5db3b08dfa`.
+Reports and execution receipts are under
+`build/migration-parity/cpu-architecture/chops-binary-mode-matrix-cross-lab-20261109/`.
+
+Binary Chops exhaustive pair-matrix expansion (2026-11-10): the source builder
+now declares every ordered pair from the 20 Pillow mode spellings (14 accepted
+byte modes and six rejected numeric modes) for each of the twelve operations.
+It adds all three unequal-size layouts for every compatible ordered pair among
+the accepted modes, retains Add/Subtract parameter variants, and records each
+of the five CoreOnly modes in both operand positions for every binary
+operation. This closes the builder-side mode-pair and secondary-input gaps
+identified in the prior checkpoint. Fixture generation now includes this
+matrix: the corpus contains 25,003 total cases, with 24,762 Pillow-parity cases,
+240 expected outputs, and one GPU-only fault contract. The ImageChops input
+contains 10,070 cases, including 192 expected outputs. These generated IDs are
+not yet verified by determinism/manifest checks or runtime parity. The updated
+guard keeps LAB-secondary three-band pairs on Default until the vector kernels
+implement the same chroma mapping. The pre-guard full CPU run found 36 LAB
+cross-mode mismatches under Neon, in addition to the existing I32-to-PNG codec
+failure. After the guard and release rebuild, the 36 frozen case IDs pass on
+all nine architecture selectors (324/324), with zero infrastructure errors.
+Neon execution receipts show Default selected with `ineligible_request` for all
+36 cases. Reports and receipts are under
+`build/migration-parity/cpu-architecture/chops-lab-fallback-final/`. These
+focused results do not replace the pending full CPU parity gate. No coverage
+ran.
+
+Binary Chops pair-relation checkpoint (2026-11-09): the input builder now
+enumerates every distinct ordered pair among the fourteen Pillow byte modes
+for all twelve operations. Same-band pairs are active; cross-band pairs are
+expected to reject with `images do not match`. This adds the `1`/`L`/`P`,
+`LA`/`La`/`PA`, and four-band relations alongside the existing three-band
+relations. For each operation, it adds three unequal-dimension layouts for
+every primary mode to cover width/height clipping, row strides, and
+architecture fallback. Add and Subtract each receive two non-default
+scale/offset cases per mode. Generation produced 20,993 parity cases overall;
+the focused Chops selection contains 3,045 cases per CPU selector (27,405
+outcomes across nine selectors), including the pre-existing Add L/RGB mismatch
+case and 60 target-only rejection contracts. Its sorted case-ID SHA-256 is
+`5e26cc5872e174590f8ff4ea87c02f6dca5e8b4ea3f3ddef58e86234feed8485`.
+`make migration-parity-fixtures` regenerated the inputs, and
+`make migration-parity-inputs-check` passed deterministic input and manifest
+contract checks. All nine CPU selectors passed all 3,045 cases (27,405/27,405
+outcomes) with zero infrastructure errors. Neon receipts show 504 native
+architecture selections and 656 Default selections across 1,160 applicable
+operation receipts; 492 fall back for `ineligible_request` and 164 for
+`missing_specialization`. Each x86 selector records 1,160
+`unavailable_hardware` fallbacks on this arm64 host, so native x86 execution
+remains unverified. No coverage was run. The prior 444-case result applies
+only to its separate recorded case-ID hash. Pillow 12.2's public Chops wrappers
+pass both images to the operation; equal band counts and clipping each extent
+to the smaller input inform the matrix, with observed outputs remaining the
+acceptance criterion. Sources:
+[ImageChops.py](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageChops.py),
+[Chops.c](https://github.com/python-pillow/Pillow/blob/12.2.0/src/libImaging/Chops.c).
+Parity and execution receipts are under
+`build/migration-parity/cpu-architecture/<architecture>.parity.json.gz` and
+`<architecture>.execution.json.gz`.
+Fused Multiply/Screen parity, other Chops families, native x86 execution, full
+CPU fault and parity matrices, and the benchmark gate remain pending. Logical
+Chops mode coverage is recorded below.
+
+Logical Chops mode-matrix checkpoint (2026-11-09): the manifest now exposes
+all 20 Pillow mode spellings for `logical_and`, `logical_or`, and `logical_xor`;
+`1` is accepted and the other 19 are checked as invalid in both operand
+positions. The five internal high-depth modes receive recorded target error
+contracts for both positions, run through the public Python facade. The
+wrapper only constructs typed inputs and delegates; expected outcomes are
+fixed in the contract generator. Fixture generation produced 21,191 parity
+cases, and `make migration-parity-inputs-check` passed deterministic input and
+manifest validation. The frozen focused selection is 147 cases per selector:
+117 Pillow comparisons and 30 target-only error expectations. Its sorted
+case-ID SHA-256 is
+`bab72cc3b20845eff3c131cb83e39587bd3ec156a7df1246381634f6fa4b0c59`. All nine
+serial CPU selectors passed (1,323/1,323 outcomes) with zero infrastructure
+errors. Default selected Default for the three accepted `One` workflows;
+Neon selected its native vector strategy; the seven x86 selectors fell back
+to Default with `unavailable_hardware` on this arm64 host. Rejected-mode
+inputs exit during support validation and therefore have no execution-strategy
+receipt. No coverage was run. Artifacts are under
+`build/migration-parity/cpu-architecture/chops-logical-mode-matrix-20261109/`.
+
+Duplicate mode-matrix preparation (2026-11-09): source review confirms that
+`ChopsDuplicate` declares mode-preserving support for all 25 `raster::Mode`
+identities and routes through each exact mode owner before the typed clone.
+There is no architecture specialization; requested SIMD architectures resolve
+to the serial Default strategy. The manifest and input generator now include
+all 20 Pillow mode spellings plus five `NO_PILLOW_SUPPORT` internal-mode output
+contracts. Fixture generation produced 20 new Pillow mode cases and five
+recorded target outputs. The generated ImageChops input currently contains 55
+Duplicate cases total. This is fixture preparation only: no parity or coverage
+campaign has run for this matrix, and no execution-receipt result is claimed.
+
+Offset I;16 diagnosis (2026-11-09): five isolated Pillow 12.2 runs produced
+different unwritten tails for the same input. Pillow 12.2's `image8` alias
+indexes bytes, but its loop bound is pixels. Pillow 13.0 release notes confirm
+that Offset was fixed for 16-bit images. See the contract-decision checkpoint
+above and TODO(pillow-rs#3ptb) for remaining verification.
+
+Constant mode-matrix preparation (2026-11-09): the existing exact-mode
+declarations accept each of the 20 Pillow source modes and all five internal
+source modes, with a fixed `L` output. The manifest and input generator now
+include 20 mode-specific Pillow comparisons and five recorded CoreOnly output
+contracts. Generation confirms 54 total Constant inputs, including the 20 new
+mode cases and five target-only outputs. No parity or coverage campaign has
+run for Constant; output and architecture receipts remain unverified.
+
+LAB Chops regression checkpoint (2026-11-10): Pillow 12.2 exposes LAB `a`/`b`
+samples with a +128 byte bias, while its native Chops operations work on the
+signed-byte storage. The LAB Default strategy now maps those two channels into
+and out of that representation around the native byte operation; three-band
+mixed-mode pairs decode a LAB secondary operand as well. A focused run of the
+324 LAB Chops cases that failed in the earlier full CPU snapshot now passes
+against the pinned Pillow 12.2 oracle, including all recorded operations,
+mixed operands, and dimension variants. Build and focused parity passed; no
+unit tests ran. This is affected-case evidence only: the earlier 25,002-case
+full CPU snapshot still records 334 failures and has not been rerun after this
+fix. At this checkpoint, nine `I;16` Offset cases still used the 12.2 oracle;
+the following checkpoint records their resolution. The existing I32-to-PNG
+encoder gap is tracked under `image-slash-star#9h5w`. Native x86 execution and
+the final full CPU gate remain pending.
+
+I;16 Offset expected-output checkpoint (2026-11-10): Pillow 12.2's byte-indexed
+loop leaves half of each 16-bit output row unwritten; Pillow 13.0 fixes the
+operation. The typed-u16 wrapping contract remains in force. The twelve
+generated `simd-cov` cases for I;16L/I;16B/I;16N now use recorded target outputs
+and retain their case IDs and coverage selection. The omitted-yoffset case
+uses the public default of `xoffset`. Fixture generation, deterministic input
+checks, and manifest validation pass. Across nine CPU architecture selectors,
+all twelve target contracts pass on each selector (108/108). Run IDs are
+`migration-parity-9afe0efb5fe44f8c8038b05ecf8af1b8` (Default),
+`migration-parity-f2e00de77b4b4c90b85a017c9fc70a85` (Neon),
+`migration-parity-744cb70cf6b24e60916f473501696901` (SSE2),
+`migration-parity-73146a13265b4c5a80d1c17f649e29ff` (SSE3),
+`migration-parity-8ee601e5ec32412d8000415d00cbc0f9` (SSSE3),
+`migration-parity-1a380164f0064db09570fed5810dac79` (AVX),
+`migration-parity-a23ed168e290414d8a198aecf4c787fd` (AVX2),
+`migration-parity-8c5d1aa59f1f41609dc5dbb9113b6d49` (AVX+FMA), and
+`migration-parity-bc900c18da3b4570bf1124cef0bd6e8a` (AVX2+FMA). Reports are
+under `build/migration-parity/cpu-architecture/i16-offset-target-final/`.
+This does not replace the pending full CPU parity campaign; the old full
+snapshot still includes the single I32-to-PNG encoder failure tracked by
+`image-slash-star#9h5w`, and native x86 execution remains unproven.

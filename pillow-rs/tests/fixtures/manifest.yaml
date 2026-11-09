@@ -10846,6 +10846,12 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.ImageChops.add.mode.1
+      dimension: mode
+      description: Public behavior for image mode '1'.
+      lanes:
+      - parity
+      - coverage
     - id: PIL.ImageChops.add.mode.l
       dimension: mode
       description: Public behavior for image mode 'L'.
@@ -10855,6 +10861,24 @@ surfaces:
     - id: PIL.ImageChops.add.mode.la
       dimension: mode
       description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add.mode.la-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'La'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add.mode.p
+      dimension: mode
+      description: Public behavior for image mode 'P'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add.mode.pa
+      dimension: mode
+      description: Public behavior for image mode 'PA'.
       lanes:
       - parity
       - coverage
@@ -10869,6 +10893,108 @@ surfaces:
       description: Public behavior for image mode 'RGBA'.
       lanes:
       - parity
+      - coverage
+    - id: PIL.ImageChops.add.mode.rgb-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'RGBa'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add.mode.rgbx
+      dimension: mode
+      description: Public behavior for image mode 'RGBX'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add.mode.ycbcr
+      dimension: mode
+      description: Public behavior for image mode 'YCbCr'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add.mode.lab
+      dimension: mode
+      description: Public behavior for image mode 'LAB'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add.mode.hsv
+      dimension: mode
+      description: Public behavior for image mode 'HSV'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add.mode.i
+      dimension: mode
+      description: Public behavior for image mode 'I'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add.mode.f
+      dimension: mode
+      description: Public behavior for image mode 'F'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add.mode.i16
+      dimension: mode
+      description: Public behavior for image mode 'I;16'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add.mode.i16l
+      dimension: mode
+      description: Public behavior for image mode 'I;16L'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add.mode.i16b
+      dimension: mode
+      description: Public behavior for image mode 'I;16B'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add.mode.i16n
+      dimension: mode
+      description: Public behavior for image mode 'I;16N'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add.mode.core-only-luma-a16
+      dimension: mode
+      description: ImageChops add rejection for internal core-only-luma-a16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.add.mode.core-only-rgb16
+      dimension: mode
+      description: ImageChops add rejection for internal core-only-rgb16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.add.mode.core-only-rgba16
+      dimension: mode
+      description: ImageChops add rejection for internal core-only-rgba16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.add.mode.core-only-rgb32f
+      dimension: mode
+      description: ImageChops add rejection for internal core-only-rgb32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.add.mode.core-only-rgba32f
+      dimension: mode
+      description: ImageChops add rejection for internal core-only-rgba32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
       - coverage
     - id: PIL.ImageChops.add.performance.standard
       dimension: performance
@@ -10964,6 +11090,12 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.ImageChops.add_modulo.mode.1
+      dimension: mode
+      description: Public behavior for image mode '1'.
+      lanes:
+      - parity
+      - coverage
     - id: PIL.ImageChops.add_modulo.mode.l
       dimension: mode
       description: Public behavior for image mode 'L'.
@@ -10973,6 +11105,24 @@ surfaces:
     - id: PIL.ImageChops.add_modulo.mode.la
       dimension: mode
       description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add_modulo.mode.la-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'La'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add_modulo.mode.p
+      dimension: mode
+      description: Public behavior for image mode 'P'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add_modulo.mode.pa
+      dimension: mode
+      description: Public behavior for image mode 'PA'.
       lanes:
       - parity
       - coverage
@@ -10987,6 +11137,108 @@ surfaces:
       description: Public behavior for image mode 'RGBA'.
       lanes:
       - parity
+      - coverage
+    - id: PIL.ImageChops.add_modulo.mode.rgb-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'RGBa'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add_modulo.mode.rgbx
+      dimension: mode
+      description: Public behavior for image mode 'RGBX'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add_modulo.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add_modulo.mode.ycbcr
+      dimension: mode
+      description: Public behavior for image mode 'YCbCr'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add_modulo.mode.lab
+      dimension: mode
+      description: Public behavior for image mode 'LAB'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add_modulo.mode.hsv
+      dimension: mode
+      description: Public behavior for image mode 'HSV'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add_modulo.mode.i
+      dimension: mode
+      description: Public behavior for image mode 'I'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add_modulo.mode.f
+      dimension: mode
+      description: Public behavior for image mode 'F'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add_modulo.mode.i16
+      dimension: mode
+      description: Public behavior for image mode 'I;16'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add_modulo.mode.i16l
+      dimension: mode
+      description: Public behavior for image mode 'I;16L'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add_modulo.mode.i16b
+      dimension: mode
+      description: Public behavior for image mode 'I;16B'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add_modulo.mode.i16n
+      dimension: mode
+      description: Public behavior for image mode 'I;16N'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.add_modulo.mode.core-only-luma-a16
+      dimension: mode
+      description: ImageChops add_modulo rejection for internal core-only-luma-a16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.add_modulo.mode.core-only-rgb16
+      dimension: mode
+      description: ImageChops add_modulo rejection for internal core-only-rgb16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.add_modulo.mode.core-only-rgba16
+      dimension: mode
+      description: ImageChops add_modulo rejection for internal core-only-rgba16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.add_modulo.mode.core-only-rgb32f
+      dimension: mode
+      description: ImageChops add_modulo rejection for internal core-only-rgb32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.add_modulo.mode.core-only-rgba32f
+      dimension: mode
+      description: ImageChops add_modulo rejection for internal core-only-rgba32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
       - coverage
     - id: PIL.ImageChops.add_modulo.performance.standard
       dimension: performance
@@ -11327,9 +11579,27 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.ImageChops.constant.mode.1
+      dimension: mode
+      description: Public behavior for image mode '1'.
+      lanes:
+      - parity
+      - coverage
     - id: PIL.ImageChops.constant.mode.l
       dimension: mode
       description: Public behavior for image mode 'L'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.constant.mode.la
+      dimension: mode
+      description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.constant.mode.la-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'La'.
       lanes:
       - parity
       - coverage
@@ -11339,11 +11609,125 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.ImageChops.constant.mode.pa
+      dimension: mode
+      description: Public behavior for image mode 'PA'.
+      lanes:
+      - parity
+      - coverage
     - id: PIL.ImageChops.constant.mode.rgb
       dimension: mode
       description: Public behavior for image mode 'RGB'.
       lanes:
       - parity
+      - coverage
+    - id: PIL.ImageChops.constant.mode.rgba
+      dimension: mode
+      description: Public behavior for image mode 'RGBA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.constant.mode.rgb-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'RGBa'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.constant.mode.rgbx
+      dimension: mode
+      description: Public behavior for image mode 'RGBX'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.constant.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.constant.mode.ycbcr
+      dimension: mode
+      description: Public behavior for image mode 'YCbCr'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.constant.mode.lab
+      dimension: mode
+      description: Public behavior for image mode 'LAB'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.constant.mode.hsv
+      dimension: mode
+      description: Public behavior for image mode 'HSV'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.constant.mode.i
+      dimension: mode
+      description: Public behavior for image mode 'I'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.constant.mode.f
+      dimension: mode
+      description: Public behavior for image mode 'F'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.constant.mode.i16
+      dimension: mode
+      description: Public behavior for image mode 'I;16'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.constant.mode.i16l
+      dimension: mode
+      description: Public behavior for image mode 'I;16L'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.constant.mode.i16b
+      dimension: mode
+      description: Public behavior for image mode 'I;16B'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.constant.mode.i16n
+      dimension: mode
+      description: Public behavior for image mode 'I;16N'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.constant.mode.core-only-luma-a16
+      dimension: mode
+      description: Native ImageChops Constant output for core-only-luma-a16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.constant.mode.core-only-rgb16
+      dimension: mode
+      description: Native ImageChops Constant output for core-only-rgb16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.constant.mode.core-only-rgba16
+      dimension: mode
+      description: Native ImageChops Constant output for core-only-rgba16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.constant.mode.core-only-rgb32f
+      dimension: mode
+      description: Native ImageChops Constant output for core-only-rgb32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.constant.mode.core-only-rgba32f
+      dimension: mode
+      description: Native ImageChops Constant output for core-only-rgba32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
       - coverage
     - id: PIL.ImageChops.constant.performance.standard
       dimension: performance
@@ -11439,6 +11823,12 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.ImageChops.darker.mode.1
+      dimension: mode
+      description: Public behavior for image mode '1'.
+      lanes:
+      - parity
+      - coverage
     - id: PIL.ImageChops.darker.mode.l
       dimension: mode
       description: Public behavior for image mode 'L'.
@@ -11448,6 +11838,24 @@ surfaces:
     - id: PIL.ImageChops.darker.mode.la
       dimension: mode
       description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.darker.mode.la-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'La'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.darker.mode.p
+      dimension: mode
+      description: Public behavior for image mode 'P'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.darker.mode.pa
+      dimension: mode
+      description: Public behavior for image mode 'PA'.
       lanes:
       - parity
       - coverage
@@ -11462,6 +11870,108 @@ surfaces:
       description: Public behavior for image mode 'RGBA'.
       lanes:
       - parity
+      - coverage
+    - id: PIL.ImageChops.darker.mode.rgb-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'RGBa'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.darker.mode.rgbx
+      dimension: mode
+      description: Public behavior for image mode 'RGBX'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.darker.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.darker.mode.ycbcr
+      dimension: mode
+      description: Public behavior for image mode 'YCbCr'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.darker.mode.lab
+      dimension: mode
+      description: Public behavior for image mode 'LAB'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.darker.mode.hsv
+      dimension: mode
+      description: Public behavior for image mode 'HSV'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.darker.mode.i
+      dimension: mode
+      description: Public behavior for image mode 'I'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.darker.mode.f
+      dimension: mode
+      description: Public behavior for image mode 'F'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.darker.mode.i16
+      dimension: mode
+      description: Public behavior for image mode 'I;16'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.darker.mode.i16l
+      dimension: mode
+      description: Public behavior for image mode 'I;16L'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.darker.mode.i16b
+      dimension: mode
+      description: Public behavior for image mode 'I;16B'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.darker.mode.i16n
+      dimension: mode
+      description: Public behavior for image mode 'I;16N'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.darker.mode.core-only-luma-a16
+      dimension: mode
+      description: ImageChops darker rejection for internal core-only-luma-a16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.darker.mode.core-only-rgb16
+      dimension: mode
+      description: ImageChops darker rejection for internal core-only-rgb16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.darker.mode.core-only-rgba16
+      dimension: mode
+      description: ImageChops darker rejection for internal core-only-rgba16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.darker.mode.core-only-rgb32f
+      dimension: mode
+      description: ImageChops darker rejection for internal core-only-rgb32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.darker.mode.core-only-rgba32f
+      dimension: mode
+      description: ImageChops darker rejection for internal core-only-rgba32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
       - coverage
     - id: PIL.ImageChops.darker.performance.standard
       dimension: performance
@@ -11557,6 +12067,12 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.ImageChops.difference.mode.1
+      dimension: mode
+      description: Public behavior for image mode '1'.
+      lanes:
+      - parity
+      - coverage
     - id: PIL.ImageChops.difference.mode.l
       dimension: mode
       description: Public behavior for image mode 'L'.
@@ -11566,6 +12082,24 @@ surfaces:
     - id: PIL.ImageChops.difference.mode.la
       dimension: mode
       description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.difference.mode.la-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'La'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.difference.mode.p
+      dimension: mode
+      description: Public behavior for image mode 'P'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.difference.mode.pa
+      dimension: mode
+      description: Public behavior for image mode 'PA'.
       lanes:
       - parity
       - coverage
@@ -11580,6 +12114,108 @@ surfaces:
       description: Public behavior for image mode 'RGBA'.
       lanes:
       - parity
+      - coverage
+    - id: PIL.ImageChops.difference.mode.rgb-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'RGBa'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.difference.mode.rgbx
+      dimension: mode
+      description: Public behavior for image mode 'RGBX'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.difference.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.difference.mode.ycbcr
+      dimension: mode
+      description: Public behavior for image mode 'YCbCr'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.difference.mode.lab
+      dimension: mode
+      description: Public behavior for image mode 'LAB'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.difference.mode.hsv
+      dimension: mode
+      description: Public behavior for image mode 'HSV'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.difference.mode.i
+      dimension: mode
+      description: Public behavior for image mode 'I'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.difference.mode.f
+      dimension: mode
+      description: Public behavior for image mode 'F'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.difference.mode.i16
+      dimension: mode
+      description: Public behavior for image mode 'I;16'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.difference.mode.i16l
+      dimension: mode
+      description: Public behavior for image mode 'I;16L'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.difference.mode.i16b
+      dimension: mode
+      description: Public behavior for image mode 'I;16B'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.difference.mode.i16n
+      dimension: mode
+      description: Public behavior for image mode 'I;16N'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.difference.mode.core-only-luma-a16
+      dimension: mode
+      description: ImageChops difference rejection for internal core-only-luma-a16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.difference.mode.core-only-rgb16
+      dimension: mode
+      description: ImageChops difference rejection for internal core-only-rgb16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.difference.mode.core-only-rgba16
+      dimension: mode
+      description: ImageChops difference rejection for internal core-only-rgba16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.difference.mode.core-only-rgb32f
+      dimension: mode
+      description: ImageChops difference rejection for internal core-only-rgb32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.difference.mode.core-only-rgba32f
+      dimension: mode
+      description: ImageChops difference rejection for internal core-only-rgba32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
       - coverage
     - id: PIL.ImageChops.difference.performance.standard
       dimension: performance
@@ -11663,9 +12299,27 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.ImageChops.duplicate.mode.1
+      dimension: mode
+      description: Public behavior for image mode '1'.
+      lanes:
+      - parity
+      - coverage
     - id: PIL.ImageChops.duplicate.mode.l
       dimension: mode
       description: Public behavior for image mode 'L'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.duplicate.mode.la
+      dimension: mode
+      description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.duplicate.mode.la-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'La'.
       lanes:
       - parity
       - coverage
@@ -11675,11 +12329,125 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.ImageChops.duplicate.mode.pa
+      dimension: mode
+      description: Public behavior for image mode 'PA'.
+      lanes:
+      - parity
+      - coverage
     - id: PIL.ImageChops.duplicate.mode.rgb
       dimension: mode
       description: Public behavior for image mode 'RGB'.
       lanes:
       - parity
+      - coverage
+    - id: PIL.ImageChops.duplicate.mode.rgba
+      dimension: mode
+      description: Public behavior for image mode 'RGBA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.duplicate.mode.rgb-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'RGBa'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.duplicate.mode.rgbx
+      dimension: mode
+      description: Public behavior for image mode 'RGBX'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.duplicate.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.duplicate.mode.ycbcr
+      dimension: mode
+      description: Public behavior for image mode 'YCbCr'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.duplicate.mode.lab
+      dimension: mode
+      description: Public behavior for image mode 'LAB'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.duplicate.mode.hsv
+      dimension: mode
+      description: Public behavior for image mode 'HSV'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.duplicate.mode.i
+      dimension: mode
+      description: Public behavior for image mode 'I'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.duplicate.mode.f
+      dimension: mode
+      description: Public behavior for image mode 'F'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.duplicate.mode.i16
+      dimension: mode
+      description: Public behavior for image mode 'I;16'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.duplicate.mode.i16l
+      dimension: mode
+      description: Public behavior for image mode 'I;16L'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.duplicate.mode.i16b
+      dimension: mode
+      description: Public behavior for image mode 'I;16B'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.duplicate.mode.i16n
+      dimension: mode
+      description: Public behavior for image mode 'I;16N'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.duplicate.mode.core-only-luma-a16
+      dimension: mode
+      description: Native ImageChops Duplicate output for core-only-luma-a16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.duplicate.mode.core-only-rgb16
+      dimension: mode
+      description: Native ImageChops Duplicate output for core-only-rgb16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.duplicate.mode.core-only-rgba16
+      dimension: mode
+      description: Native ImageChops Duplicate output for core-only-rgba16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.duplicate.mode.core-only-rgb32f
+      dimension: mode
+      description: Native ImageChops Duplicate output for core-only-rgb32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.duplicate.mode.core-only-rgba32f
+      dimension: mode
+      description: Native ImageChops Duplicate output for core-only-rgba32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
       - coverage
     - id: PIL.ImageChops.duplicate.performance.standard
       dimension: performance
@@ -11775,6 +12543,12 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.ImageChops.hard_light.mode.1
+      dimension: mode
+      description: Public behavior for image mode '1'.
+      lanes:
+      - parity
+      - coverage
     - id: PIL.ImageChops.hard_light.mode.l
       dimension: mode
       description: Public behavior for image mode 'L'.
@@ -11784,6 +12558,24 @@ surfaces:
     - id: PIL.ImageChops.hard_light.mode.la
       dimension: mode
       description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.hard_light.mode.la-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'La'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.hard_light.mode.p
+      dimension: mode
+      description: Public behavior for image mode 'P'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.hard_light.mode.pa
+      dimension: mode
+      description: Public behavior for image mode 'PA'.
       lanes:
       - parity
       - coverage
@@ -11798,6 +12590,108 @@ surfaces:
       description: Public behavior for image mode 'RGBA'.
       lanes:
       - parity
+      - coverage
+    - id: PIL.ImageChops.hard_light.mode.rgb-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'RGBa'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.hard_light.mode.rgbx
+      dimension: mode
+      description: Public behavior for image mode 'RGBX'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.hard_light.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.hard_light.mode.ycbcr
+      dimension: mode
+      description: Public behavior for image mode 'YCbCr'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.hard_light.mode.lab
+      dimension: mode
+      description: Public behavior for image mode 'LAB'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.hard_light.mode.hsv
+      dimension: mode
+      description: Public behavior for image mode 'HSV'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.hard_light.mode.i
+      dimension: mode
+      description: Public behavior for image mode 'I'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.hard_light.mode.f
+      dimension: mode
+      description: Public behavior for image mode 'F'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.hard_light.mode.i16
+      dimension: mode
+      description: Public behavior for image mode 'I;16'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.hard_light.mode.i16l
+      dimension: mode
+      description: Public behavior for image mode 'I;16L'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.hard_light.mode.i16b
+      dimension: mode
+      description: Public behavior for image mode 'I;16B'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.hard_light.mode.i16n
+      dimension: mode
+      description: Public behavior for image mode 'I;16N'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.hard_light.mode.core-only-luma-a16
+      dimension: mode
+      description: ImageChops hard_light rejection for internal core-only-luma-a16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.hard_light.mode.core-only-rgb16
+      dimension: mode
+      description: ImageChops hard_light rejection for internal core-only-rgb16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.hard_light.mode.core-only-rgba16
+      dimension: mode
+      description: ImageChops hard_light rejection for internal core-only-rgba16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.hard_light.mode.core-only-rgb32f
+      dimension: mode
+      description: ImageChops hard_light rejection for internal core-only-rgb32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.hard_light.mode.core-only-rgba32f
+      dimension: mode
+      description: ImageChops hard_light rejection for internal core-only-rgba32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
       - coverage
     - id: PIL.ImageChops.hard_light.performance.standard
       dimension: performance
@@ -12125,6 +13019,12 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.ImageChops.lighter.mode.1
+      dimension: mode
+      description: Public behavior for image mode '1'.
+      lanes:
+      - parity
+      - coverage
     - id: PIL.ImageChops.lighter.mode.l
       dimension: mode
       description: Public behavior for image mode 'L'.
@@ -12134,6 +13034,24 @@ surfaces:
     - id: PIL.ImageChops.lighter.mode.la
       dimension: mode
       description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.lighter.mode.la-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'La'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.lighter.mode.p
+      dimension: mode
+      description: Public behavior for image mode 'P'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.lighter.mode.pa
+      dimension: mode
+      description: Public behavior for image mode 'PA'.
       lanes:
       - parity
       - coverage
@@ -12148,6 +13066,108 @@ surfaces:
       description: Public behavior for image mode 'RGBA'.
       lanes:
       - parity
+      - coverage
+    - id: PIL.ImageChops.lighter.mode.rgb-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'RGBa'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.lighter.mode.rgbx
+      dimension: mode
+      description: Public behavior for image mode 'RGBX'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.lighter.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.lighter.mode.ycbcr
+      dimension: mode
+      description: Public behavior for image mode 'YCbCr'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.lighter.mode.lab
+      dimension: mode
+      description: Public behavior for image mode 'LAB'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.lighter.mode.hsv
+      dimension: mode
+      description: Public behavior for image mode 'HSV'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.lighter.mode.i
+      dimension: mode
+      description: Public behavior for image mode 'I'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.lighter.mode.f
+      dimension: mode
+      description: Public behavior for image mode 'F'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.lighter.mode.i16
+      dimension: mode
+      description: Public behavior for image mode 'I;16'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.lighter.mode.i16l
+      dimension: mode
+      description: Public behavior for image mode 'I;16L'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.lighter.mode.i16b
+      dimension: mode
+      description: Public behavior for image mode 'I;16B'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.lighter.mode.i16n
+      dimension: mode
+      description: Public behavior for image mode 'I;16N'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.lighter.mode.core-only-luma-a16
+      dimension: mode
+      description: ImageChops lighter rejection for internal core-only-luma-a16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.lighter.mode.core-only-rgb16
+      dimension: mode
+      description: ImageChops lighter rejection for internal core-only-rgb16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.lighter.mode.core-only-rgba16
+      dimension: mode
+      description: ImageChops lighter rejection for internal core-only-rgba16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.lighter.mode.core-only-rgb32f
+      dimension: mode
+      description: ImageChops lighter rejection for internal core-only-rgb32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.lighter.mode.core-only-rgba32f
+      dimension: mode
+      description: ImageChops lighter rejection for internal core-only-rgba32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
       - coverage
     - id: PIL.ImageChops.lighter.performance.standard
       dimension: performance
@@ -12249,6 +13269,150 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.ImageChops.logical_and.mode.l
+      dimension: mode
+      description: Public behavior for image mode 'L'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_and.mode.la
+      dimension: mode
+      description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_and.mode.la-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'La'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_and.mode.p
+      dimension: mode
+      description: Public behavior for image mode 'P'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_and.mode.pa
+      dimension: mode
+      description: Public behavior for image mode 'PA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_and.mode.rgb
+      dimension: mode
+      description: Public behavior for image mode 'RGB'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_and.mode.rgba
+      dimension: mode
+      description: Public behavior for image mode 'RGBA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_and.mode.rgb-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'RGBa'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_and.mode.rgbx
+      dimension: mode
+      description: Public behavior for image mode 'RGBX'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_and.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_and.mode.ycbcr
+      dimension: mode
+      description: Public behavior for image mode 'YCbCr'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_and.mode.lab
+      dimension: mode
+      description: Public behavior for image mode 'LAB'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_and.mode.hsv
+      dimension: mode
+      description: Public behavior for image mode 'HSV'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_and.mode.i
+      dimension: mode
+      description: Public behavior for image mode 'I'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_and.mode.f
+      dimension: mode
+      description: Public behavior for image mode 'F'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_and.mode.i16
+      dimension: mode
+      description: Public behavior for image mode 'I;16'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_and.mode.i16l
+      dimension: mode
+      description: Public behavior for image mode 'I;16L'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_and.mode.i16b
+      dimension: mode
+      description: Public behavior for image mode 'I;16B'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_and.mode.i16n
+      dimension: mode
+      description: Public behavior for image mode 'I;16N'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_and.mode.core-only-luma-a16
+      dimension: mode
+      description: ImageChops logical_and rejects internal core-only-luma-a16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.logical_and.mode.core-only-rgb16
+      dimension: mode
+      description: ImageChops logical_and rejects internal core-only-rgb16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.logical_and.mode.core-only-rgba16
+      dimension: mode
+      description: ImageChops logical_and rejects internal core-only-rgba16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.logical_and.mode.core-only-rgb32f
+      dimension: mode
+      description: ImageChops logical_and rejects internal core-only-rgb32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.logical_and.mode.core-only-rgba32f
+      dimension: mode
+      description: ImageChops logical_and rejects internal core-only-rgba32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
     - id: PIL.ImageChops.logical_and.performance.standard
       dimension: performance
       description: Deterministic standard workload for PIL.ImageChops.logical_and.
@@ -12348,6 +13512,150 @@ surfaces:
       description: Public behavior for image mode '1'.
       lanes:
       - parity
+      - coverage
+    - id: PIL.ImageChops.logical_or.mode.l
+      dimension: mode
+      description: Public behavior for image mode 'L'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_or.mode.la
+      dimension: mode
+      description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_or.mode.la-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'La'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_or.mode.p
+      dimension: mode
+      description: Public behavior for image mode 'P'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_or.mode.pa
+      dimension: mode
+      description: Public behavior for image mode 'PA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_or.mode.rgb
+      dimension: mode
+      description: Public behavior for image mode 'RGB'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_or.mode.rgba
+      dimension: mode
+      description: Public behavior for image mode 'RGBA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_or.mode.rgb-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'RGBa'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_or.mode.rgbx
+      dimension: mode
+      description: Public behavior for image mode 'RGBX'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_or.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_or.mode.ycbcr
+      dimension: mode
+      description: Public behavior for image mode 'YCbCr'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_or.mode.lab
+      dimension: mode
+      description: Public behavior for image mode 'LAB'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_or.mode.hsv
+      dimension: mode
+      description: Public behavior for image mode 'HSV'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_or.mode.i
+      dimension: mode
+      description: Public behavior for image mode 'I'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_or.mode.f
+      dimension: mode
+      description: Public behavior for image mode 'F'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_or.mode.i16
+      dimension: mode
+      description: Public behavior for image mode 'I;16'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_or.mode.i16l
+      dimension: mode
+      description: Public behavior for image mode 'I;16L'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_or.mode.i16b
+      dimension: mode
+      description: Public behavior for image mode 'I;16B'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_or.mode.i16n
+      dimension: mode
+      description: Public behavior for image mode 'I;16N'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_or.mode.core-only-luma-a16
+      dimension: mode
+      description: ImageChops logical_or rejects internal core-only-luma-a16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.logical_or.mode.core-only-rgb16
+      dimension: mode
+      description: ImageChops logical_or rejects internal core-only-rgb16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.logical_or.mode.core-only-rgba16
+      dimension: mode
+      description: ImageChops logical_or rejects internal core-only-rgba16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.logical_or.mode.core-only-rgb32f
+      dimension: mode
+      description: ImageChops logical_or rejects internal core-only-rgb32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.logical_or.mode.core-only-rgba32f
+      dimension: mode
+      description: ImageChops logical_or rejects internal core-only-rgba32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
       - coverage
     - id: PIL.ImageChops.logical_or.performance.standard
       dimension: performance
@@ -12449,6 +13757,150 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.ImageChops.logical_xor.mode.l
+      dimension: mode
+      description: Public behavior for image mode 'L'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_xor.mode.la
+      dimension: mode
+      description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_xor.mode.la-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'La'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_xor.mode.p
+      dimension: mode
+      description: Public behavior for image mode 'P'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_xor.mode.pa
+      dimension: mode
+      description: Public behavior for image mode 'PA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_xor.mode.rgb
+      dimension: mode
+      description: Public behavior for image mode 'RGB'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_xor.mode.rgba
+      dimension: mode
+      description: Public behavior for image mode 'RGBA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_xor.mode.rgb-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'RGBa'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_xor.mode.rgbx
+      dimension: mode
+      description: Public behavior for image mode 'RGBX'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_xor.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_xor.mode.ycbcr
+      dimension: mode
+      description: Public behavior for image mode 'YCbCr'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_xor.mode.lab
+      dimension: mode
+      description: Public behavior for image mode 'LAB'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_xor.mode.hsv
+      dimension: mode
+      description: Public behavior for image mode 'HSV'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_xor.mode.i
+      dimension: mode
+      description: Public behavior for image mode 'I'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_xor.mode.f
+      dimension: mode
+      description: Public behavior for image mode 'F'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_xor.mode.i16
+      dimension: mode
+      description: Public behavior for image mode 'I;16'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_xor.mode.i16l
+      dimension: mode
+      description: Public behavior for image mode 'I;16L'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_xor.mode.i16b
+      dimension: mode
+      description: Public behavior for image mode 'I;16B'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_xor.mode.i16n
+      dimension: mode
+      description: Public behavior for image mode 'I;16N'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.logical_xor.mode.core-only-luma-a16
+      dimension: mode
+      description: ImageChops logical_xor rejects internal core-only-luma-a16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.logical_xor.mode.core-only-rgb16
+      dimension: mode
+      description: ImageChops logical_xor rejects internal core-only-rgb16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.logical_xor.mode.core-only-rgba16
+      dimension: mode
+      description: ImageChops logical_xor rejects internal core-only-rgba16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.logical_xor.mode.core-only-rgb32f
+      dimension: mode
+      description: ImageChops logical_xor rejects internal core-only-rgb32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.logical_xor.mode.core-only-rgba32f
+      dimension: mode
+      description: ImageChops logical_xor rejects internal core-only-rgba32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
     - id: PIL.ImageChops.logical_xor.performance.standard
       dimension: performance
       description: Deterministic standard workload for PIL.ImageChops.logical_xor.
@@ -12543,6 +13995,12 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.ImageChops.multiply.mode.1
+      dimension: mode
+      description: Public behavior for image mode '1'.
+      lanes:
+      - parity
+      - coverage
     - id: PIL.ImageChops.multiply.mode.l
       dimension: mode
       description: Public behavior for image mode 'L'.
@@ -12552,6 +14010,24 @@ surfaces:
     - id: PIL.ImageChops.multiply.mode.la
       dimension: mode
       description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.multiply.mode.la-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'La'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.multiply.mode.p
+      dimension: mode
+      description: Public behavior for image mode 'P'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.multiply.mode.pa
+      dimension: mode
+      description: Public behavior for image mode 'PA'.
       lanes:
       - parity
       - coverage
@@ -12566,6 +14042,108 @@ surfaces:
       description: Public behavior for image mode 'RGBA'.
       lanes:
       - parity
+      - coverage
+    - id: PIL.ImageChops.multiply.mode.rgb-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'RGBa'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.multiply.mode.rgbx
+      dimension: mode
+      description: Public behavior for image mode 'RGBX'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.multiply.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.multiply.mode.ycbcr
+      dimension: mode
+      description: Public behavior for image mode 'YCbCr'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.multiply.mode.lab
+      dimension: mode
+      description: Public behavior for image mode 'LAB'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.multiply.mode.hsv
+      dimension: mode
+      description: Public behavior for image mode 'HSV'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.multiply.mode.i
+      dimension: mode
+      description: Public behavior for image mode 'I'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.multiply.mode.f
+      dimension: mode
+      description: Public behavior for image mode 'F'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.multiply.mode.i16
+      dimension: mode
+      description: Public behavior for image mode 'I;16'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.multiply.mode.i16l
+      dimension: mode
+      description: Public behavior for image mode 'I;16L'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.multiply.mode.i16b
+      dimension: mode
+      description: Public behavior for image mode 'I;16B'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.multiply.mode.i16n
+      dimension: mode
+      description: Public behavior for image mode 'I;16N'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.multiply.mode.core-only-luma-a16
+      dimension: mode
+      description: ImageChops multiply rejection for internal core-only-luma-a16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.multiply.mode.core-only-rgb16
+      dimension: mode
+      description: ImageChops multiply rejection for internal core-only-rgb16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.multiply.mode.core-only-rgba16
+      dimension: mode
+      description: ImageChops multiply rejection for internal core-only-rgba16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.multiply.mode.core-only-rgb32f
+      dimension: mode
+      description: ImageChops multiply rejection for internal core-only-rgb32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.multiply.mode.core-only-rgba32f
+      dimension: mode
+      description: ImageChops multiply rejection for internal core-only-rgba32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
       - coverage
     - id: PIL.ImageChops.multiply.performance.standard
       dimension: performance
@@ -12676,9 +14254,39 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.ImageChops.offset.mode.1
+      dimension: mode
+      description: Public behavior for image mode '1'.
+      lanes:
+      - parity
+      - coverage
     - id: PIL.ImageChops.offset.mode.l
       dimension: mode
       description: Public behavior for image mode 'L'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.offset.mode.la
+      dimension: mode
+      description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.offset.mode.la-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'La'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.offset.mode.p
+      dimension: mode
+      description: Public behavior for image mode 'P'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.offset.mode.pa
+      dimension: mode
+      description: Public behavior for image mode 'PA'.
       lanes:
       - parity
       - coverage
@@ -12693,6 +14301,112 @@ surfaces:
       description: Public behavior for image mode 'RGBA'.
       lanes:
       - parity
+      - coverage
+    - id: PIL.ImageChops.offset.mode.rgb-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'RGBa'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.offset.mode.rgbx
+      dimension: mode
+      description: Public behavior for image mode 'RGBX'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.offset.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.offset.mode.ycbcr
+      dimension: mode
+      description: Public behavior for image mode 'YCbCr'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.offset.mode.lab
+      dimension: mode
+      description: Public behavior for image mode 'LAB'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.offset.mode.hsv
+      dimension: mode
+      description: Public behavior for image mode 'HSV'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.offset.mode.i
+      dimension: mode
+      description: Public behavior for image mode 'I'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.offset.mode.f
+      dimension: mode
+      description: Public behavior for image mode 'F'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.offset.mode.i16
+      dimension: mode
+      description: Typed-sample Offset behavior for Pillow mode 'I;16'; Pillow 12.2 leaves part of the
+        output unwritten; Pillow 13.0 fixes it.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.offset.mode.i16l
+      dimension: mode
+      description: Typed-sample Offset behavior for Pillow mode 'I;16L'; Pillow 12.2 leaves part of the
+        output unwritten; Pillow 13.0 fixes it.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.offset.mode.i16b
+      dimension: mode
+      description: Typed-sample Offset behavior for Pillow mode 'I;16B'; Pillow 12.2 leaves part of the
+        output unwritten; Pillow 13.0 fixes it.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.offset.mode.i16n
+      dimension: mode
+      description: Typed-sample Offset behavior for Pillow mode 'I;16N'; Pillow 12.2 leaves part of the
+        output unwritten; Pillow 13.0 fixes it.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.offset.mode.core-only-luma-a16
+      dimension: mode
+      description: Native ImageChops Offset for core-only-luma-a16; no Pillow result contract (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.offset.mode.core-only-rgb16
+      dimension: mode
+      description: Native ImageChops Offset for core-only-rgb16; no Pillow result contract (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.offset.mode.core-only-rgba16
+      dimension: mode
+      description: Native ImageChops Offset for core-only-rgba16; no Pillow result contract (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.offset.mode.core-only-rgb32f
+      dimension: mode
+      description: Native ImageChops Offset for core-only-rgb32f; no Pillow result contract (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.offset.mode.core-only-rgba32f
+      dimension: mode
+      description: Native ImageChops Offset for core-only-rgba32f; no Pillow result contract (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
       - coverage
     - id: PIL.ImageChops.offset.performance.standard
       dimension: performance
@@ -12788,9 +14502,39 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.ImageChops.overlay.mode.1
+      dimension: mode
+      description: Public behavior for image mode '1'.
+      lanes:
+      - parity
+      - coverage
     - id: PIL.ImageChops.overlay.mode.l
       dimension: mode
       description: Public behavior for image mode 'L'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.overlay.mode.la
+      dimension: mode
+      description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.overlay.mode.la-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'La'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.overlay.mode.p
+      dimension: mode
+      description: Public behavior for image mode 'P'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.overlay.mode.pa
+      dimension: mode
+      description: Public behavior for image mode 'PA'.
       lanes:
       - parity
       - coverage
@@ -12799,6 +14543,114 @@ surfaces:
       description: Public behavior for image mode 'RGB'.
       lanes:
       - parity
+      - coverage
+    - id: PIL.ImageChops.overlay.mode.rgba
+      dimension: mode
+      description: Public behavior for image mode 'RGBA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.overlay.mode.rgb-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'RGBa'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.overlay.mode.rgbx
+      dimension: mode
+      description: Public behavior for image mode 'RGBX'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.overlay.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.overlay.mode.ycbcr
+      dimension: mode
+      description: Public behavior for image mode 'YCbCr'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.overlay.mode.lab
+      dimension: mode
+      description: Public behavior for image mode 'LAB'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.overlay.mode.hsv
+      dimension: mode
+      description: Public behavior for image mode 'HSV'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.overlay.mode.i
+      dimension: mode
+      description: Public behavior for image mode 'I'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.overlay.mode.f
+      dimension: mode
+      description: Public behavior for image mode 'F'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.overlay.mode.i16
+      dimension: mode
+      description: Public behavior for image mode 'I;16'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.overlay.mode.i16l
+      dimension: mode
+      description: Public behavior for image mode 'I;16L'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.overlay.mode.i16b
+      dimension: mode
+      description: Public behavior for image mode 'I;16B'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.overlay.mode.i16n
+      dimension: mode
+      description: Public behavior for image mode 'I;16N'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.overlay.mode.core-only-luma-a16
+      dimension: mode
+      description: ImageChops overlay rejection for internal core-only-luma-a16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.overlay.mode.core-only-rgb16
+      dimension: mode
+      description: ImageChops overlay rejection for internal core-only-rgb16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.overlay.mode.core-only-rgba16
+      dimension: mode
+      description: ImageChops overlay rejection for internal core-only-rgba16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.overlay.mode.core-only-rgb32f
+      dimension: mode
+      description: ImageChops overlay rejection for internal core-only-rgb32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.overlay.mode.core-only-rgba32f
+      dimension: mode
+      description: ImageChops overlay rejection for internal core-only-rgba32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
       - coverage
     - id: PIL.ImageChops.overlay.performance.standard
       dimension: performance
@@ -12894,6 +14746,12 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.ImageChops.screen.mode.1
+      dimension: mode
+      description: Public behavior for image mode '1'.
+      lanes:
+      - parity
+      - coverage
     - id: PIL.ImageChops.screen.mode.l
       dimension: mode
       description: Public behavior for image mode 'L'.
@@ -12903,6 +14761,24 @@ surfaces:
     - id: PIL.ImageChops.screen.mode.la
       dimension: mode
       description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.screen.mode.la-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'La'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.screen.mode.p
+      dimension: mode
+      description: Public behavior for image mode 'P'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.screen.mode.pa
+      dimension: mode
+      description: Public behavior for image mode 'PA'.
       lanes:
       - parity
       - coverage
@@ -12917,6 +14793,108 @@ surfaces:
       description: Public behavior for image mode 'RGBA'.
       lanes:
       - parity
+      - coverage
+    - id: PIL.ImageChops.screen.mode.rgb-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'RGBa'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.screen.mode.rgbx
+      dimension: mode
+      description: Public behavior for image mode 'RGBX'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.screen.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.screen.mode.ycbcr
+      dimension: mode
+      description: Public behavior for image mode 'YCbCr'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.screen.mode.lab
+      dimension: mode
+      description: Public behavior for image mode 'LAB'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.screen.mode.hsv
+      dimension: mode
+      description: Public behavior for image mode 'HSV'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.screen.mode.i
+      dimension: mode
+      description: Public behavior for image mode 'I'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.screen.mode.f
+      dimension: mode
+      description: Public behavior for image mode 'F'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.screen.mode.i16
+      dimension: mode
+      description: Public behavior for image mode 'I;16'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.screen.mode.i16l
+      dimension: mode
+      description: Public behavior for image mode 'I;16L'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.screen.mode.i16b
+      dimension: mode
+      description: Public behavior for image mode 'I;16B'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.screen.mode.i16n
+      dimension: mode
+      description: Public behavior for image mode 'I;16N'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.screen.mode.core-only-luma-a16
+      dimension: mode
+      description: ImageChops screen rejection for internal core-only-luma-a16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.screen.mode.core-only-rgb16
+      dimension: mode
+      description: ImageChops screen rejection for internal core-only-rgb16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.screen.mode.core-only-rgba16
+      dimension: mode
+      description: ImageChops screen rejection for internal core-only-rgba16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.screen.mode.core-only-rgb32f
+      dimension: mode
+      description: ImageChops screen rejection for internal core-only-rgb32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.screen.mode.core-only-rgba32f
+      dimension: mode
+      description: ImageChops screen rejection for internal core-only-rgba32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
       - coverage
     - id: PIL.ImageChops.screen.performance.standard
       dimension: performance
@@ -13014,6 +14992,12 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.ImageChops.soft_light.mode.1
+      dimension: mode
+      description: Public behavior for image mode '1'.
+      lanes:
+      - parity
+      - coverage
     - id: PIL.ImageChops.soft_light.mode.l
       dimension: mode
       description: Public behavior for image mode 'L'.
@@ -13023,6 +15007,24 @@ surfaces:
     - id: PIL.ImageChops.soft_light.mode.la
       dimension: mode
       description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.soft_light.mode.la-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'La'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.soft_light.mode.p
+      dimension: mode
+      description: Public behavior for image mode 'P'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.soft_light.mode.pa
+      dimension: mode
+      description: Public behavior for image mode 'PA'.
       lanes:
       - parity
       - coverage
@@ -13037,6 +15039,108 @@ surfaces:
       description: Public behavior for image mode 'RGBA'.
       lanes:
       - parity
+      - coverage
+    - id: PIL.ImageChops.soft_light.mode.rgb-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'RGBa'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.soft_light.mode.rgbx
+      dimension: mode
+      description: Public behavior for image mode 'RGBX'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.soft_light.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.soft_light.mode.ycbcr
+      dimension: mode
+      description: Public behavior for image mode 'YCbCr'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.soft_light.mode.lab
+      dimension: mode
+      description: Public behavior for image mode 'LAB'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.soft_light.mode.hsv
+      dimension: mode
+      description: Public behavior for image mode 'HSV'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.soft_light.mode.i
+      dimension: mode
+      description: Public behavior for image mode 'I'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.soft_light.mode.f
+      dimension: mode
+      description: Public behavior for image mode 'F'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.soft_light.mode.i16
+      dimension: mode
+      description: Public behavior for image mode 'I;16'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.soft_light.mode.i16l
+      dimension: mode
+      description: Public behavior for image mode 'I;16L'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.soft_light.mode.i16b
+      dimension: mode
+      description: Public behavior for image mode 'I;16B'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.soft_light.mode.i16n
+      dimension: mode
+      description: Public behavior for image mode 'I;16N'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.soft_light.mode.core-only-luma-a16
+      dimension: mode
+      description: ImageChops soft_light rejection for internal core-only-luma-a16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.soft_light.mode.core-only-rgb16
+      dimension: mode
+      description: ImageChops soft_light rejection for internal core-only-rgb16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.soft_light.mode.core-only-rgba16
+      dimension: mode
+      description: ImageChops soft_light rejection for internal core-only-rgba16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.soft_light.mode.core-only-rgb32f
+      dimension: mode
+      description: ImageChops soft_light rejection for internal core-only-rgb32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.soft_light.mode.core-only-rgba32f
+      dimension: mode
+      description: ImageChops soft_light rejection for internal core-only-rgba32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
       - coverage
     - id: PIL.ImageChops.soft_light.performance.standard
       dimension: performance
@@ -13161,6 +15265,12 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.ImageChops.subtract.mode.1
+      dimension: mode
+      description: Public behavior for image mode '1'.
+      lanes:
+      - parity
+      - coverage
     - id: PIL.ImageChops.subtract.mode.l
       dimension: mode
       description: Public behavior for image mode 'L'.
@@ -13170,6 +15280,24 @@ surfaces:
     - id: PIL.ImageChops.subtract.mode.la
       dimension: mode
       description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract.mode.la-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'La'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract.mode.p
+      dimension: mode
+      description: Public behavior for image mode 'P'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract.mode.pa
+      dimension: mode
+      description: Public behavior for image mode 'PA'.
       lanes:
       - parity
       - coverage
@@ -13184,6 +15312,108 @@ surfaces:
       description: Public behavior for image mode 'RGBA'.
       lanes:
       - parity
+      - coverage
+    - id: PIL.ImageChops.subtract.mode.rgb-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'RGBa'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract.mode.rgbx
+      dimension: mode
+      description: Public behavior for image mode 'RGBX'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract.mode.ycbcr
+      dimension: mode
+      description: Public behavior for image mode 'YCbCr'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract.mode.lab
+      dimension: mode
+      description: Public behavior for image mode 'LAB'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract.mode.hsv
+      dimension: mode
+      description: Public behavior for image mode 'HSV'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract.mode.i
+      dimension: mode
+      description: Public behavior for image mode 'I'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract.mode.f
+      dimension: mode
+      description: Public behavior for image mode 'F'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract.mode.i16
+      dimension: mode
+      description: Public behavior for image mode 'I;16'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract.mode.i16l
+      dimension: mode
+      description: Public behavior for image mode 'I;16L'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract.mode.i16b
+      dimension: mode
+      description: Public behavior for image mode 'I;16B'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract.mode.i16n
+      dimension: mode
+      description: Public behavior for image mode 'I;16N'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract.mode.core-only-luma-a16
+      dimension: mode
+      description: ImageChops subtract rejection for internal core-only-luma-a16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.subtract.mode.core-only-rgb16
+      dimension: mode
+      description: ImageChops subtract rejection for internal core-only-rgb16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.subtract.mode.core-only-rgba16
+      dimension: mode
+      description: ImageChops subtract rejection for internal core-only-rgba16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.subtract.mode.core-only-rgb32f
+      dimension: mode
+      description: ImageChops subtract rejection for internal core-only-rgb32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.subtract.mode.core-only-rgba32f
+      dimension: mode
+      description: ImageChops subtract rejection for internal core-only-rgba32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
       - coverage
     - id: PIL.ImageChops.subtract.performance.standard
       dimension: performance
@@ -13279,6 +15509,12 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.ImageChops.subtract_modulo.mode.1
+      dimension: mode
+      description: Public behavior for image mode '1'.
+      lanes:
+      - parity
+      - coverage
     - id: PIL.ImageChops.subtract_modulo.mode.l
       dimension: mode
       description: Public behavior for image mode 'L'.
@@ -13288,6 +15524,24 @@ surfaces:
     - id: PIL.ImageChops.subtract_modulo.mode.la
       dimension: mode
       description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract_modulo.mode.la-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'La'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract_modulo.mode.p
+      dimension: mode
+      description: Public behavior for image mode 'P'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract_modulo.mode.pa
+      dimension: mode
+      description: Public behavior for image mode 'PA'.
       lanes:
       - parity
       - coverage
@@ -13302,6 +15556,108 @@ surfaces:
       description: Public behavior for image mode 'RGBA'.
       lanes:
       - parity
+      - coverage
+    - id: PIL.ImageChops.subtract_modulo.mode.rgb-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'RGBa'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract_modulo.mode.rgbx
+      dimension: mode
+      description: Public behavior for image mode 'RGBX'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract_modulo.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract_modulo.mode.ycbcr
+      dimension: mode
+      description: Public behavior for image mode 'YCbCr'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract_modulo.mode.lab
+      dimension: mode
+      description: Public behavior for image mode 'LAB'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract_modulo.mode.hsv
+      dimension: mode
+      description: Public behavior for image mode 'HSV'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract_modulo.mode.i
+      dimension: mode
+      description: Public behavior for image mode 'I'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract_modulo.mode.f
+      dimension: mode
+      description: Public behavior for image mode 'F'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract_modulo.mode.i16
+      dimension: mode
+      description: Public behavior for image mode 'I;16'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract_modulo.mode.i16l
+      dimension: mode
+      description: Public behavior for image mode 'I;16L'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract_modulo.mode.i16b
+      dimension: mode
+      description: Public behavior for image mode 'I;16B'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract_modulo.mode.i16n
+      dimension: mode
+      description: Public behavior for image mode 'I;16N'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.subtract_modulo.mode.core-only-luma-a16
+      dimension: mode
+      description: ImageChops subtract_modulo rejection for internal core-only-luma-a16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.subtract_modulo.mode.core-only-rgb16
+      dimension: mode
+      description: ImageChops subtract_modulo rejection for internal core-only-rgb16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.subtract_modulo.mode.core-only-rgba16
+      dimension: mode
+      description: ImageChops subtract_modulo rejection for internal core-only-rgba16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.subtract_modulo.mode.core-only-rgb32f
+      dimension: mode
+      description: ImageChops subtract_modulo rejection for internal core-only-rgb32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.subtract_modulo.mode.core-only-rgba32f
+      dimension: mode
+      description: ImageChops subtract_modulo rejection for internal core-only-rgba32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
       - coverage
     - id: PIL.ImageChops.subtract_modulo.performance.standard
       dimension: performance

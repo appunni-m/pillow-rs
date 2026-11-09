@@ -38,9 +38,6 @@ const BINARY_MODES_3: &[Mode] = &[
     Mode::ImageLab8,
     Mode::ImageHsv8,
 ];
-const LAB_CORE_ONLY_MODES: &[Mode] = &[Mode::ImageLab8];
-const LAB_CORE_ONLY_REASON: &str =
-    "native three-byte LAB Chops extends Pillow's binary mode contract";
 const BINARY_MODES_4: &[Mode] = &[
     Mode::ImageRgba8,
     Mode::ImageCmyk8,
@@ -61,9 +58,8 @@ const BINARY_INPUTS_2: &[InputContract] = &[InputContract::ChopsBinaryModes {
 }];
 const BINARY_INPUTS_3: &[InputContract] = &[InputContract::ChopsBinaryModes {
     modes: BINARY_MODES_3,
-    // NO_PILLOW_SUPPORT: LAB uses the native three-byte Chops strategy in Rust.
-    core_only_modes: LAB_CORE_ONLY_MODES,
-    core_only_reason: Some(LAB_CORE_ONLY_REASON),
+    core_only_modes: &[],
+    core_only_reason: None,
     rejection_reason: "images do not match",
 }];
 const BINARY_INPUTS_4: &[InputContract] = &[InputContract::ChopsBinaryModes {
@@ -95,9 +91,8 @@ const BINARY_INPUTS: &[InputContract] = &[InputContract::ChopsBinaryModes {
         Mode::ImageRgbPremultiplied8,
         Mode::ImageRgbx8,
     ],
-    // NO_PILLOW_SUPPORT: LAB participates in native three-byte Chops pairs only in Rust.
-    core_only_modes: LAB_CORE_ONLY_MODES,
-    core_only_reason: Some(LAB_CORE_ONLY_REASON),
+    core_only_modes: &[],
+    core_only_reason: None,
     rejection_reason: "images do not match",
 }];
 const NO_INPUTS: &[InputContract] = &[];
@@ -171,17 +166,6 @@ pub(super) fn mode_support_with_architectures(
     architectures: &'static [crate::compute::registry::support::ImplementationSupport],
 ) -> ModeSupport {
     if let Some(inputs) = binary_inputs_for(operation, mode) {
-        if mode == Mode::ImageLab8 {
-            // NO_PILLOW_SUPPORT: LAB binary Chops is a Rust-only native-byte extension.
-            return ModeSupport::cpu_core_only(
-                operation,
-                mode,
-                OutputModeRule::Preserve,
-                inputs,
-                architectures,
-                LAB_CORE_ONLY_REASON,
-            );
-        }
         return ModeSupport::cpu(
             operation,
             mode,

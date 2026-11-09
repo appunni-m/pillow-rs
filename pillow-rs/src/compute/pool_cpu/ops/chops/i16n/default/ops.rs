@@ -23,7 +23,7 @@ fn execute_offset(image: &DynamicImage, x: i32, y: i32) -> Result<DynamicImage, 
             "Chops mode strategy received a different raster variant".into(),
         ));
     };
-    let output = super::super::super::helpers::offset::offset_i16_samples(buffer, x, y, false);
+    let output = super::super::super::helpers::offset::offset_pixels(buffer, x, y);
     Ok(DynamicImage::ImageI16N(output))
 }
 

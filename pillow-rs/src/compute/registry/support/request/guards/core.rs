@@ -174,6 +174,12 @@ pub(crate) fn chops_equal_dimensions_guard(input: StrategyInputs, channels: u8) 
         RequestFacts::ChopsBinary { other, .. }
             if input.width == other.width && input.height == other.height =>
         {
+            // The serial three-band strategy maps LAB's biased chroma bytes
+            // to signed samples before applying the operation. The current
+            // native-byte vector kernels do not, so keep that pair on Default.
+            if channels == 3 && other.mode == Mode::ImageLab8 {
+                return GuardAssessment::Ineligible;
+            }
             chops_native_bytes_guard(input, other, channels)
         }
         RequestFacts::Unspecified => GuardAssessment::Deferred,
@@ -192,6 +198,11 @@ pub(crate) fn chops_add_subtract_guard(input: StrategyInputs, channels: u8) -> G
         _ => return GuardAssessment::Ineligible,
     };
     if input.width != other.width || input.height != other.height {
+        return GuardAssessment::Ineligible;
+    }
+    // Match the serial strategy's signed LAB chroma mapping until the vector
+    // implementation supports this secondary mode natively.
+    if channels == 3 && other.mode == Mode::ImageLab8 {
         return GuardAssessment::Ineligible;
     }
     let scale = f64::from_bits(scale_bits);
@@ -238,9 +249,9 @@ pub(crate) fn chops_offset_native_bytes_guard(
 
 pub(crate) fn chops_offset_native_i16_guard(input: StrategyInputs) -> GuardAssessment {
     // Match the archived I;16 capability predicate's checked-u32 byte count.
-    // The typed SIMD kernel needs one complete 16-byte block, except that an
-    // empty image is a valid no-op. Smaller non-empty inputs use the exact
-    // mode's serial Default strategy.
+    // The row-wise typed SIMD kernel needs a complete 8-sample row block,
+    // except that an empty image is a valid no-op. Narrow rows use the exact
+    // mode's serial Default strategy regardless of total image height.
     let expected = input
         .width
         .checked_mul(input.height)
@@ -250,7 +261,9 @@ pub(crate) fn chops_offset_native_i16_guard(input: StrategyInputs) -> GuardAsses
         (Some(_), None) => GuardAssessment::Deferred,
         (Some(0), Some(0)) => GuardAssessment::Satisfied,
         (Some(expected), Some(actual))
-            if expected >= 16 && usize::try_from(expected).ok() == Some(actual) =>
+            if input.width >= 8
+                && expected >= 16
+                && usize::try_from(expected).ok() == Some(actual) =>
         {
             GuardAssessment::Satisfied
         }
@@ -263,11 +276,6 @@ fn chops_native_bytes_guard(
     other: SecondaryInputFacts,
     channels: u8,
 ) -> GuardAssessment {
-    // The archived SIMD adapters left La and LAB secondary operands on the
-    // exact-mode Default path, even when their storage width matched.
-    if matches!(other.mode, Mode::ImageLaPremultiplied8 | Mode::ImageLab8) {
-        return GuardAssessment::Ineligible;
-    }
     let primary = native_bytes_guard(input, channels);
     if !matches!(primary, GuardAssessment::Satisfied) {
         return primary;

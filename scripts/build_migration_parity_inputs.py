@@ -77,16 +77,42 @@ except ModuleNotFoundError:
 try:
     from migration_parity.target_output_contracts import (
         brightness_target_output_cases,
+        CHOPS_BINARY_OPERATIONS,
+        CHOPS_BINARY_PILLOW_MODES,
+        CHOPS_BINARY_REJECTED_PILLOW_MODES,
+        CHOPS_LOGICAL_PILLOW_MODES,
+        CHOPS_DUPLICATE_PILLOW_MODES,
+        CHOPS_CONSTANT_PILLOW_MODES,
         CHOPS_INVERT_PILLOW_MODES,
         chops_invert_target_output_cases,
+        chops_duplicate_target_output_cases,
+        chops_constant_target_output_cases,
+        chops_binary_target_output_cases,
+        chops_logical_target_output_cases,
+        CHOPS_OFFSET_PILLOW_MODES,
+        chops_offset_campaign_target_expectation,
+        chops_offset_target_output_cases,
         core_only_frombytes_cases,
         sharpness_core_only_cases,
     )
 except ModuleNotFoundError:
     from scripts.migration_parity.target_output_contracts import (
         brightness_target_output_cases,
+        CHOPS_BINARY_OPERATIONS,
+        CHOPS_BINARY_PILLOW_MODES,
+        CHOPS_BINARY_REJECTED_PILLOW_MODES,
+        CHOPS_LOGICAL_PILLOW_MODES,
+        CHOPS_DUPLICATE_PILLOW_MODES,
+        CHOPS_CONSTANT_PILLOW_MODES,
         CHOPS_INVERT_PILLOW_MODES,
         chops_invert_target_output_cases,
+        chops_duplicate_target_output_cases,
+        chops_constant_target_output_cases,
+        chops_binary_target_output_cases,
+        chops_logical_target_output_cases,
+        CHOPS_OFFSET_PILLOW_MODES,
+        chops_offset_campaign_target_expectation,
+        chops_offset_target_output_cases,
         core_only_frombytes_cases,
         sharpness_core_only_cases,
     )
@@ -44077,6 +44103,12 @@ def build_nuanced_cases(
             scenario_outline_empty=spec.get("outline_empty", False),
             scenario_comparisons=spec.get("comparisons"),
         )
+        offset_target_expectation = chops_offset_campaign_target_expectation(case)
+        if offset_target_expectation is not None:
+            mode_id, target_expectation = offset_target_expectation
+            case["verification"] = "expected-output"
+            case["covers"] = [f"PIL.ImageChops.offset.mode.{mode_id}"]
+            case["target_expectation"] = target_expectation
         independent_steps = spec.get("independent_steps_after_call", [])
         if independent_steps:
             call_index = next(
@@ -44171,7 +44203,12 @@ def build_nuanced_cases(
     cases.extend(contrast_pixel_parity_cases(surface_id))
     cases.extend(brightness_pixel_parity_cases(surface_id))
     cases.extend(brightness_mode_variant_parity_cases(surface_id))
+    cases.extend(chops_binary_mode_parity_cases(surface_id))
+    cases.extend(chops_logical_mode_parity_cases(surface_id))
     cases.extend(chops_invert_mode_parity_cases(surface_id))
+    cases.extend(chops_duplicate_mode_parity_cases(surface_id))
+    cases.extend(chops_constant_mode_parity_cases(surface_id))
+    cases.extend(chops_offset_mode_parity_cases(surface_id))
     cases.extend(quantize_fast_octree_rgb_performance_parity_cases(surface_id))
     cases.extend(quantize_boundary_parity_cases(surface_id))
     cases.extend(color_pixel_parity_cases(surface_id))
@@ -47668,27 +47705,66 @@ def brightness_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
 def chops_invert_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
     """Cover Pillow byte-mode Invert routes missing from the fixed corpus."""
 
+    return _chops_unary_mode_parity_cases(
+        surface_id, "invert", CHOPS_INVERT_PILLOW_MODES
+    )
+
+
+def chops_duplicate_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Cover every Pillow mode accepted by the exact-mode Duplicate strategy."""
+
+    return _chops_unary_mode_parity_cases(
+        surface_id, "duplicate", CHOPS_DUPLICATE_PILLOW_MODES
+    )
+
+
+def chops_constant_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Cover Constant's fixed L output for every Pillow source mode."""
+
+    return _chops_unary_mode_parity_cases(
+        surface_id,
+        "constant",
+        CHOPS_CONSTANT_PILLOW_MODES,
+        extra_arguments={"value": literal(73)},
+    )
+
+
+def _chops_unary_mode_parity_cases(
+    surface_id: str,
+    operation: str,
+    modes: tuple[tuple[str, str, int], ...],
+    *,
+    extra_arguments: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Build deterministic mode-specific inputs for unary Chops operations."""
+
     target = "PIL.ImageChops"
     if surface_id != target:
         return []
     width, height = 31, 17
     cases = []
-    for mode, mode_id, channels in CHOPS_INVERT_PILLOW_MODES:
+    for mode, mode_id, channels in modes:
         byte_count = (
             ((width + 7) // 8) * height
             if mode == "1"
             else width * height * channels
         )
-        raw = random.Random(f"chops-invert-mode-{mode}").randbytes(byte_count)
+        seed = f"chops-{operation}-mode-{mode}"
+        raw = random.Random(seed).randbytes(byte_count)
+        arguments = {"image": binding("image")}
+        if extra_arguments:
+            arguments.update(extra_arguments)
         cases.append(
             {
-                "case_id": f"{target}.invert.nuanced.mode-active-{mode_id}",
+                "case_id": (
+                    f"{target}.{operation}.nuanced.mode-active-{mode_id}"
+                ),
                 "surface": target,
-                "operation": "invert",
-                "covers": [f"{target}.invert.mode.{mode_id}"],
+                "operation": operation,
+                "covers": [f"{target}.{operation}.mode.{mode_id}"],
                 "assets": [
                     {
-                        "id": "invert-source",
+                        "id": f"{operation}-source",
                         "kind": "inline",
                         "encoding": "base64",
                         "data": base64.b64encode(raw).decode("ascii"),
@@ -47705,19 +47781,296 @@ def chops_invert_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
                         "arguments": {
                             "mode": literal(mode),
                             "size": literal([width, height]),
-                            "data": asset_value("invert-source"),
+                            "data": asset_value(f"{operation}-source"),
                         },
                     },
                     {
                         "step_id": "result",
                         "surface": target,
-                        "operation": "invert",
+                        "operation": operation,
                         "receiver": None,
-                        "arguments": {"image": binding("image")},
+                        "arguments": arguments,
                     },
                 ],
                 "observations": ["result"],
             }
+        )
+    return cases
+
+
+def chops_binary_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Cover ordered Pillow-mode pairs, dimensions, and affine parameters."""
+
+    target = "PIL.ImageChops"
+    if surface_id != target:
+        return []
+    cases = []
+    supported_modes = set(CHOPS_BINARY_PILLOW_MODES)
+    mode_table = (
+        *CHOPS_BINARY_PILLOW_MODES,
+        *CHOPS_BINARY_REJECTED_PILLOW_MODES,
+    )
+    modes_by_band_count = {}
+    for mode in CHOPS_BINARY_PILLOW_MODES:
+        band_count = 1 if mode[0] == "1" else mode[2]
+        modes_by_band_count.setdefault(band_count, []).append(mode)
+    for operation in CHOPS_BINARY_OPERATIONS:
+        for image1_mode in mode_table:
+            image1_band_count = 1 if image1_mode[0] == "1" else image1_mode[2]
+            for image2_mode in mode_table:
+                image2_band_count = 1 if image2_mode[0] == "1" else image2_mode[2]
+                state = (
+                    "active"
+                    if image1_mode in supported_modes
+                    and image2_mode in supported_modes
+                    and image1_band_count == image2_band_count
+                    else "rejected"
+                )
+                cases.append(
+                    _chops_binary_mode_case(
+                        operation, image1_mode, image2_mode, state
+                    )
+                )
+        for band_count, group in modes_by_band_count.items():
+            for image1_mode in group:
+                for image2_mode in group:
+                    for dimension_case, image1_size, image2_size in (
+                        ("width-secondary-smaller", (31, 17), (29, 17)),
+                        ("height-secondary-smaller", (31, 17), (31, 15)),
+                        ("secondary-larger", (29, 15), (31, 17)),
+                    ):
+                        cases.append(
+                            _chops_binary_mode_case(
+                                operation,
+                                image1_mode,
+                                image2_mode,
+                                "active",
+                                image1_size=image1_size,
+                                image2_size=image2_size,
+                                case_suffix=(
+                                    f"dimensions-{dimension_case}-bands-{band_count}-"
+                                    f"{image1_mode[1]}-with-{image2_mode[1]}"
+                                ),
+                            )
+                        )
+        if operation in {"add", "subtract"}:
+            for image_mode in CHOPS_BINARY_PILLOW_MODES:
+                for parameter_case, scale, offset in (
+                    ("wide-scale", 2.0, 17),
+                    ("fractional-scale", 0.5, -9),
+                ):
+                    cases.append(
+                        _chops_binary_mode_case(
+                            operation,
+                            image_mode,
+                            image_mode,
+                            "active",
+                            case_suffix=(
+                                f"parameters-{parameter_case}-{image_mode[1]}"
+                            ),
+                            extra_arguments={
+                                "scale": literal(scale),
+                                "offset": literal(offset),
+                            },
+                        )
+                    )
+    return cases
+
+
+def chops_logical_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Exercise One acceptance and every Pillow mode's primary/secondary rejection."""
+
+    if surface_id != "PIL.ImageChops":
+        return []
+    one_mode = next(mode for mode in CHOPS_LOGICAL_PILLOW_MODES if mode[0] == "1")
+    cases = []
+    for operation in ("logical_and", "logical_or", "logical_xor"):
+        for mode in CHOPS_LOGICAL_PILLOW_MODES:
+            if mode[0] == "1":
+                continue
+            for invalid_position in ("image1", "image2"):
+                image1_mode, image2_mode = (
+                    (mode, one_mode)
+                    if invalid_position == "image1"
+                    else (one_mode, mode)
+                )
+                cases.append(
+                    _chops_binary_mode_case(
+                        operation,
+                        image1_mode,
+                        image2_mode,
+                        "rejected",
+                        image1_size=(1, 1),
+                        image2_size=(1, 1),
+                        case_suffix=(
+                            f"logical-{invalid_position}-{mode[1]}"
+                        ),
+                    )
+                )
+    return cases
+
+
+def _chops_binary_mode_case(
+    operation,
+    image1_mode,
+    image2_mode,
+    state,
+    *,
+    image1_size=(31, 17),
+    image2_size=(31, 17),
+    case_suffix=None,
+    extra_arguments=None,
+):
+    target = "PIL.ImageChops"
+    mode1, mode1_id, bytes_per_pixel1 = image1_mode
+    mode2, mode2_id, bytes_per_pixel2 = image2_mode
+    width1, height1 = image1_size
+    width2, height2 = image2_size
+    byte_count1 = (
+        ((width1 + 7) // 8) * height1
+        if mode1 == "1"
+        else width1 * height1 * bytes_per_pixel1
+    )
+    byte_count2 = (
+        ((width2 + 7) // 8) * height2
+        if mode2 == "1"
+        else width2 * height2 * bytes_per_pixel2
+    )
+    mode_seed = mode1 if mode1 == mode2 else f"{mode1}-with-{mode2}"
+    left = random.Random(f"chops-{operation}-{mode_seed}-left").randbytes(byte_count1)
+    right = random.Random(f"chops-{operation}-{mode_seed}-right").randbytes(byte_count2)
+    assets = [
+        {
+            "id": asset_id,
+            "kind": "inline",
+            "encoding": "base64",
+            "data": base64.b64encode(raw).decode("ascii"),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+            "media_type": "application/octet-stream",
+        }
+        for asset_id, raw in (("image1-data", left), ("image2-data", right))
+    ]
+    image_steps = [
+        {
+            "step_id": step_id,
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "receiver": None,
+            "arguments": {
+                "mode": literal(mode),
+                "size": literal(list(size)),
+                "data": asset_value(asset_id),
+            },
+        }
+        for step_id, mode, size, asset_id in (
+            ("image1", mode1, image1_size, "image1-data"),
+            ("image2", mode2, image2_size, "image2-data"),
+        )
+    ]
+    pair = mode1 != mode2
+    if case_suffix is not None:
+        case_id = f"{target}.{operation}.nuanced.{case_suffix}"
+    elif pair:
+        case_id = f"{target}.{operation}.nuanced.mode-pair-{mode1_id}-with-{mode2_id}"
+    else:
+        case_id = f"{target}.{operation}.nuanced.mode-{state}-{mode1_id}"
+    covers = list(dict.fromkeys((mode1_id, mode2_id)))
+    arguments = {"image1": binding("image1"), "image2": binding("image2")}
+    if extra_arguments:
+        arguments.update(extra_arguments)
+    return {
+        "case_id": case_id,
+        "surface": target,
+        "operation": operation,
+        "covers": [f"{target}.{operation}.mode.{mode_id}" for mode_id in covers],
+        "assets": assets,
+        "steps": [
+            *image_steps,
+            {
+                "step_id": "result",
+                "surface": target,
+                "operation": operation,
+                "receiver": None,
+                "arguments": arguments,
+            },
+        ],
+        "observations": ["result"],
+    }
+
+
+def chops_offset_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Exercise Pillow Offset modes with deterministic byte-level outputs."""
+
+    target = "PIL.ImageChops"
+    if surface_id != target:
+        return []
+
+    def mode_case(mode, mode_id, bytes_per_pixel, width, height, label):
+        byte_count = (
+            ((width + 7) // 8) * height
+            if mode == "1"
+            else width * height * bytes_per_pixel
+        )
+        raw = random.Random(f"chops-offset-{mode}-{label}").randbytes(byte_count)
+        return {
+            "case_id": f"{target}.offset.nuanced.{label}-{mode_id}",
+            "surface": target,
+            "operation": "offset",
+            "covers": [f"{target}.offset.mode.{mode_id}"],
+            "assets": [
+                {
+                    "id": "offset-source",
+                    "kind": "inline",
+                    "encoding": "base64",
+                    "data": base64.b64encode(raw).decode("ascii"),
+                    "sha256": hashlib.sha256(raw).hexdigest(),
+                    "media_type": "application/octet-stream",
+                }
+            ],
+            "steps": [
+                {
+                    "step_id": "image",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal(mode),
+                        "size": literal([width, height]),
+                        "data": asset_value("offset-source"),
+                    },
+                },
+                {
+                    "step_id": "result",
+                    "surface": target,
+                    "operation": "offset",
+                    "receiver": None,
+                    "arguments": {
+                        "image": binding("image"),
+                        "xoffset": literal(-4 if label == "mode-active" else 2),
+                        "yoffset": literal(3 if label == "mode-active" else -1),
+                    },
+                },
+            ],
+            "observations": ["result"],
+        }
+
+    unstable_i16_modes = {"I;16", "I;16L", "I;16B", "I;16N"}
+    cases = [
+        mode_case(mode, mode_id, bytes_per_pixel, 31, 17, "mode-active")
+        for mode, mode_id, bytes_per_pixel in CHOPS_OFFSET_PILLOW_MODES
+        if mode not in unstable_i16_modes
+    ]
+    mode_rows = {mode: (mode_id, bpp) for mode, mode_id, bpp in CHOPS_OFFSET_PILLOW_MODES}
+    for mode, width, height in (
+        ("1", 3, 6),
+        ("L", 7, 3),
+        ("LA", 7, 3),
+        ("RGB", 5, 3),
+        ("RGBA", 3, 6),
+    ):
+        mode_id, bytes_per_pixel = mode_rows[mode]
+        cases.append(
+            mode_case(mode, mode_id, bytes_per_pixel, width, height, "narrow-row")
         )
     return cases
 
@@ -57920,8 +58273,13 @@ def build_inputs(
             # fixed expected results through the public Python facade.
             nuanced_cases.extend(brightness_target_output_cases())
         if surface_id == "PIL.ImageChops":
-            # Core-only Invert routes use recorded native-mode byte outputs.
+            # Core-only Chops routes use native-mode outputs.
+            nuanced_cases.extend(chops_binary_target_output_cases())
+            nuanced_cases.extend(chops_logical_target_output_cases())
             nuanced_cases.extend(chops_invert_target_output_cases())
+            nuanced_cases.extend(chops_duplicate_target_output_cases())
+            nuanced_cases.extend(chops_constant_target_output_cases())
+            nuanced_cases.extend(chops_offset_target_output_cases())
         if surface_id == "PIL.Image.Image":
             # The full-size native F resize parity case is the exact public
             # workflow used by its standard benchmark workload. Carry that
