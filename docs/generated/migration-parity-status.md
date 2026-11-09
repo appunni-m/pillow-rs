@@ -13,13 +13,13 @@ lane: parity
 
 ## Evidence state
 
-- Compatible evidence IDs: none
-- Operation outcomes: not_proven=1070
-- Stale/incompatible artifacts: 1
+- Compatible evidence IDs: `migration-parity-95b10803e1814e1984181ec8b0e5866f`
+- Operation outcomes: not_proven=856, not_run=214
+- Stale/incompatible artifacts: 0
 
 | Dimension | Target profile | Covered | Total | Evidence ID |
 | --- | --- | ---: | ---: | --- |
-| `parity_outcome` | `python-cpu` | 0 | 17596 | `not_proven` |
+| `parity_outcome` | `python-cpu` | 0 | 17596 | `migration-parity-95b10803e1814e1984181ec8b0e5866f` |
 | `parity_outcome` | `python-simd` | 0 | 17596 | `not_proven` |
 | `parity_outcome` | `python-gpu` | 0 | 17596 | `not_proven` |
 | `parity_outcome` | `python-parallel-cpu` | 0 | 17596 | `not_proven` |

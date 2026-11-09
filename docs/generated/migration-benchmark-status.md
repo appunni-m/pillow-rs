@@ -15,7 +15,7 @@ lane: benchmark
 
 - Compatible evidence IDs: none
 - Operation outcomes: not_proven=222
-- Stale/incompatible artifacts: 1
+- Stale/incompatible artifacts: 0
 
 | Dimension | Target profile | Covered | Total | Evidence ID |
 | --- | --- | ---: | ---: | --- |

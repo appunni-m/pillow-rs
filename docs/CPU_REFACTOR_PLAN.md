@@ -754,20 +754,24 @@ recorded target-output cases for `ImageLumaA16`, `ImageRgb16`, `ImageRgba16`,
 facade and are explicitly `NO_PILLOW_SUPPORT`; the runner records them as
 expected-output cases, separate from Pillow comparisons and injected faults.
 All five passed under each of Default, Neon, SSE2, SSE3, SSSE3, AVX, AVX2,
-AVX+FMA, and AVX2+FMA (45/45, zero infrastructure errors). On this ARM host,
-x86 selectors use `UnavailableHardware` fallback, so native x86 kernels remain
-unverified. The current CPU selection is 17,601 cases (17,596 Pillow parity
+AVX+FMA, and AVX2+FMA (45/45, zero infrastructure errors) from clean commit
+`72f8dd8a4`. The normal CPU target profile also passed 5/5, and the generated
+target-output status page reports it separately from Pillow parity. On this
+ARM host, x86 selectors use `UnavailableHardware` fallback, so native x86
+kernels remain unverified. The current CPU selection is 17,601 cases (17,596 Pillow parity
 plus five recorded target outputs), case-ID SHA-256
 `91d64c9f434fc5f573d23b4acb7baeb63d54ab76c15a936e80501963a5d3e49f`; the full
-selection has not yet been rerun. Focused Rust coverage executed one plan and
-passed all five cases. In `internal_samples.rs`, coverage is 47/56 lines and
-4/8 branches. TODO: add recorded target error contracts for short sample data
-and empty dimensions, then remeasure the affected branches. The aggregate
+selection has not yet been rerun. Focused Rust coverage on commit
+`72f8dd8a4` executed one plan and passed all five cases. `internal_samples.rs`
+coverage is 47/56 lines, 4/8 branches, 8/10 functions, and 91/112 regions. The
+local coverage receipt was not ingested into the aggregate collector. TODO: add
+recorded target error contracts for short sample data and empty dimensions,
+then remeasure the affected branches. The aggregate
 status schema now reports target-output input mapping and outcomes separately,
 with its own generated report; expected-output cases remain excluded from
-Pillow parity totals. The focused matrix will be rerun against the updated
-manifest before its evidence is regenerated. The coverage receipt is
-`build/migration-parity/core-only-mode-frombytes-20261109/coverage-result-rust.json`.
+Pillow parity totals. The coverage receipt is
+`build/migration-parity/core-only-mode-frombytes-20261109-commit-72f8dd8/coverage-result-rust.json`
+(run `migration-coverage-211f20a9e40643e7922ab5b0544d575b`).
 
 Color3DLUT input source follow-up (2026-11-09): the Python adapter now accepts
 the low-level sequence protocol Pillow accepts, checks the exact table length
@@ -830,10 +834,11 @@ I-to-PNG save case ran only on Pillow. A rebuilt-target 27-case status/codec
 guard later passed 26/27; its sole remaining failure is I-to-PNG. Treat all
 these artifacts as scoped evidence, not the full CPU acceptance run.
 
-The checked-in generated parity status page still carries an older manifest
-and denominator. Regenerate it with evidence compatible with current manifest
-hash `476c662e967d` and the 17,601-case CPU selection; its current counts are
-stale.
+The generated parity status page is current for manifest hash
+`c961cb80ace865f0ca092c3648bb86c1417638402efb7480f872a6085b027cee` and the
+17,601-case CPU selection. Its focused Default result reports the five target
+outputs separately and does not count them as Pillow parity. The full
+17,601-case selection remains unrun.
 
 ### Operation-family source work
 

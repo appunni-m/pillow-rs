@@ -16,7 +16,7 @@ verification: expected_output
 
 | Target profile | Outcome | Cases | Passed | Failed | Evidence ID |
 | --- | --- | ---: | ---: | ---: | --- |
-| `python-cpu` | not_proven | 5 | 0 | 0 | `not_proven` |
+| `python-cpu` | pass | 5 | 5 | 0 | `migration-parity-95b10803e1814e1984181ec8b0e5866f` |
 | `python-simd` | not_proven | 5 | 0 | 0 | `not_proven` |
 | `python-gpu` | not_proven | 5 | 0 | 0 | `not_proven` |
 | `python-parallel-cpu` | not_proven | 5 | 0 | 0 | `not_proven` |
