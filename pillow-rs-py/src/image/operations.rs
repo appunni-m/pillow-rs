@@ -404,6 +404,10 @@ impl PyImage {
         self.inner.validate_filter(filter_name).map_err(map_error)
     }
 
+    fn preflight_enhance_sharpness(&self) -> PyResult<()> {
+        self.inner.preflight_enhance_sharpness().map_err(map_error)
+    }
+
     fn copy(&self) -> PyImage {
         PyImage {
             inner: self.inner.copy(),

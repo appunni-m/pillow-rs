@@ -18251,6 +18251,108 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.ImageEnhance.Sharpness.enhance.mode.rgbx
+      dimension: mode
+      description: Public behavior for image mode 'RGBX'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageEnhance.Sharpness.enhance.mode.core-only-la-premultiplied
+      dimension: mode
+      description: Native Sharpness extension for core-only-la-premultiplied (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageEnhance.Sharpness.enhance.mode.core-only-rgb-premultiplied
+      dimension: mode
+      description: Native Sharpness extension for core-only-rgb-premultiplied (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageEnhance.Sharpness.enhance.mode.core-only-ycbcr
+      dimension: mode
+      description: Native Sharpness extension for core-only-ycbcr (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageEnhance.Sharpness.enhance.mode.core-only-lab
+      dimension: mode
+      description: Native Sharpness extension for core-only-lab (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageEnhance.Sharpness.enhance.mode.core-only-hsv
+      dimension: mode
+      description: Native Sharpness extension for core-only-hsv (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageEnhance.Sharpness.enhance.mode.core-only-i
+      dimension: mode
+      description: Native Sharpness extension for core-only-i (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageEnhance.Sharpness.enhance.mode.core-only-f
+      dimension: mode
+      description: Native Sharpness extension for core-only-f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageEnhance.Sharpness.enhance.mode.core-only-i16
+      dimension: mode
+      description: Native Sharpness extension for core-only-i16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageEnhance.Sharpness.enhance.mode.core-only-i16l
+      dimension: mode
+      description: Native Sharpness extension for core-only-i16l (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageEnhance.Sharpness.enhance.mode.core-only-i16b
+      dimension: mode
+      description: Native Sharpness extension for core-only-i16b (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageEnhance.Sharpness.enhance.mode.core-only-i16n
+      dimension: mode
+      description: Native Sharpness extension for core-only-i16n (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageEnhance.Sharpness.enhance.mode.core-only-luma-a16
+      dimension: mode
+      description: Native Sharpness extension for core-only-luma-a16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageEnhance.Sharpness.enhance.mode.core-only-rgb16
+      dimension: mode
+      description: Native Sharpness extension for core-only-rgb16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageEnhance.Sharpness.enhance.mode.core-only-rgba16
+      dimension: mode
+      description: Native Sharpness extension for core-only-rgba16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageEnhance.Sharpness.enhance.mode.core-only-rgb32f
+      dimension: mode
+      description: Native Sharpness extension for core-only-rgb32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageEnhance.Sharpness.enhance.mode.core-only-rgba32f
+      dimension: mode
+      description: Native Sharpness extension for core-only-rgba32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
     - id: PIL.ImageEnhance.Sharpness.enhance.performance.standard
       dimension: performance
       description: Deterministic standard workload for PIL.ImageEnhance.Sharpness.enhance.

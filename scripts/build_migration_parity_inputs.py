@@ -75,9 +75,15 @@ except ModuleNotFoundError:
     from scripts.migration_parity.gpu_batch_inputs import gpu_batch_fault_case
 
 try:
-    from migration_parity.target_output_contracts import core_only_frombytes_cases
+    from migration_parity.target_output_contracts import (
+        core_only_frombytes_cases,
+        sharpness_core_only_cases,
+    )
 except ModuleNotFoundError:
-    from scripts.migration_parity.target_output_contracts import core_only_frombytes_cases
+    from scripts.migration_parity.target_output_contracts import (
+        core_only_frombytes_cases,
+        sharpness_core_only_cases,
+    )
 
 try:
     from validate_migration_parity_contract import validate_manifest as validate_fixed_manifest
@@ -16739,6 +16745,13 @@ def build_nuanced_cases(
             for class_name in ("Brightness", "Color", "Contrast", "Sharpness")
             for mode in ("1", "P")
         ),
+        {
+            "surface": "PIL.ImageEnhance",
+            "operation": "Sharpness",
+            "requirement_suffix": "behavior.default",
+            "name": "mode-pa-reject-at-enhance",
+            "mode": "PA",
+        },
         # Exercise the native CMYK branches in each ImageEnhance operation
         # through the public Image.new -> constructor -> enhance workflow.
         *(
@@ -57757,6 +57770,10 @@ def build_inputs(
             # public Python facade and are selected by the ordinary coverage
             # plans for this operation.
             nuanced_cases.extend(core_only_frombytes_cases())
+        if surface_id == "PIL.ImageEnhance.Sharpness":
+            # Every native-only exact-mode Sharpness route gets a recorded
+            # output contract through the public Python facade.
+            nuanced_cases.extend(sharpness_core_only_cases())
         if surface_id == "PIL.Image.Image":
             # The full-size native F resize parity case is the exact public
             # workflow used by its standard benchmark workload. Carry that
@@ -57808,6 +57825,15 @@ def build_inputs(
                 retained["covers"] = list(
                     dict.fromkeys([*retained["covers"], *nuanced_case["covers"]])
                 )
+            # Target-only expected-output cases can own coverage requirements
+            # without being generated from the Pillow parity requirement lane.
+            # Bind those requirements here, after the public workflow exists.
+            for requirement_id in nuanced_case["covers"]:
+                if (
+                    requirement_id in coverage_requirements
+                    and requirement_id not in case_by_requirement
+                ):
+                    case_by_requirement[requirement_id] = nuanced_case["case_id"]
         pipeline_case_pool = {
             **all_cases_by_id,
             **{case["case_id"]: case for case in parity_cases},

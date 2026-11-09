@@ -281,6 +281,24 @@ impl Image {
         Ok(inherit_pipeline_backend(self, blended))
     }
 
+    /// Checks mode errors that Pillow reports while constructing Sharpness.
+    ///
+    /// Palette images are rejected when Pillow builds the degenerate image.
+    /// Other unsupported modes remain deferred until `enhance_sharpness`,
+    /// matching the public error boundary while allowing native Sharpness
+    /// modes beyond the generic `SMOOTH` filter.
+    ///
+    /// # Errors
+    ///
+    /// Returns the palette-mode error raised during Pillow Sharpness construction.
+    pub fn preflight_enhance_sharpness(&self) -> Result<(), PilError> {
+        let mode = exact_mode(self)?;
+        if mode == Mode::ImagePalette8 {
+            mode_support(OperationId::Sharpness, mode).validate_mode()?;
+        }
+        Ok(())
+    }
+
     /// Adjusts sharpness by `factor`.
     ///
     /// `1.0` is unchanged, values below `1.0` blur, and values above `1.0`

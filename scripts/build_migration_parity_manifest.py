@@ -38,9 +38,15 @@ except ModuleNotFoundError:
     )
 
 try:
-    from migration_parity.target_output_contracts import CORE_ONLY_RAW_MODES
+    from migration_parity.target_output_contracts import (
+        CORE_ONLY_RAW_MODES,
+        SHARPNESS_CORE_ONLY_MODES,
+    )
 except ModuleNotFoundError:
-    from scripts.migration_parity.target_output_contracts import CORE_ONLY_RAW_MODES
+    from scripts.migration_parity.target_output_contracts import (
+        CORE_ONLY_RAW_MODES,
+        SHARPNESS_CORE_ONLY_MODES,
+    )
 
 from migration_parity_inventory import (
     AUTHORITY_PATH,
@@ -918,6 +924,14 @@ def operation_requirements(
         # native CMYK enhancement path even though the frozen legacy row did
         # not enumerate that mode.
         supported_modes.append("CMYK")
+    if (
+        endpoint.surface == "PIL.ImageEnhance.Sharpness"
+        and endpoint.operation == "enhance"
+        and "RGBX" not in supported_modes
+    ):
+        # Sharpness has an exact native RGBX strategy, including its padding
+        # lane, and the public mode is Pillow-defined.
+        supported_modes.append("RGBX")
     for mode in supported_modes:
         mode_id = (
             mode_slug(str(mode))
@@ -943,6 +957,25 @@ def operation_requirements(
                     "mode",
                     f"Target-only typed raw-input behavior for {mode_id} (NO_PILLOW_SUPPORT).",
                     ["target_output"],
+                )
+            )
+    if endpoint.source_path == "PIL.ImageEnhance.Sharpness.enhance":
+        # These exact native strategies intentionally extend Pillow's
+        # ImageEnhance support. Their outputs are recorded through the public
+        # Python facade and remain separate from Pillow-oracle parity.
+        for (
+            _mode_name,
+            mode_id,
+            _sample_kind,
+            _center,
+            _active_channels,
+        ) in SHARPNESS_CORE_ONLY_MODES:
+            requirements.append(
+                requirement(
+                    f"{prefix}.mode.{mode_id}",
+                    "mode",
+                    f"Native Sharpness extension for {mode_id} (NO_PILLOW_SUPPORT).",
+                    ["target_output", "coverage"],
                 )
             )
     if endpoint.source_path == "PIL.Image.Image.histogram":

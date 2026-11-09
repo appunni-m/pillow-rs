@@ -64,6 +64,7 @@
           "PIL.ImageEnhance.Contrast.nuanced.mode-p-reject",
           "PIL.ImageEnhance.Sharpness.nuanced.mode-1-reject",
           "PIL.ImageEnhance.Sharpness.nuanced.mode-p-reject",
+          "PIL.ImageEnhance.Sharpness.nuanced.mode-pa-reject-at-enhance",
           "PIL.ImageEnhance.Brightness.nuanced.mode-cmyk",
           "PIL.ImageEnhance.Color.nuanced.mode-cmyk",
           "PIL.ImageEnhance.Contrast.nuanced.mode-cmyk",

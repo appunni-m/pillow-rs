@@ -9043,3 +9043,25 @@ ResizeBoxed each support all 25 source identities, including five CoreOnly
 modes. This census covers source-mode classification only: target-mode pairs,
 secondary inputs, request guards, callbacks, and runtime selection receipts add
 further cases. It is a denominator, not parity evidence.
+
+Sharpness native-mode output slice (2026-11-09): added sixteen recorded
+expected-output workflows through the public Python facade for La, RGBa,
+YCbCr, LAB, HSV, I, F, I;16 variants, and the internal ImageLumaA16,
+ImageRgb16, ImageRgba16, ImageRgb32F, and ImageRgba32F modes. The five internal
+modes are marked `NO_PILLOW_SUPPORT`; their results remain target-only and do
+not enter Pillow parity totals. The same selection includes Pillow error-timing
+guards for modes `1`, `P`, and `PA`. All nineteen workflows passed under each
+of Default, Neon, SSE2, SSE3, SSSE3, AVX, AVX2, AVX+FMA, and AVX2+FMA (171/171,
+zero infrastructure errors). Execution receipts select Default directly,
+report `missing_specialization` for Neon, and `unavailable_hardware` for x86
+selectors on this arm64 host. The x86 kernel paths remain unverified here.
+
+Focused Rust coverage passed 19/19 workflows. All sixteen selected
+mode-specific Default Sharpness kernels measured 7/7 lines. The shared
+`helpers/sharpness.rs` measured 340/459 lines and 73/116 branches; other
+Sharpness factors, modes, and strategy branches are still outside this slice.
+The fresh coverage receipt is `build/migration-parity/sharpness-final-rust-coverage.json`;
+architecture reports are under `build/migration-parity/sharpness-final-architectures/`.
+`make migration-parity-inputs-check`, `make fmt`, and `make clippy` passed. This
+focused result does not close operation × Mode × Architecture coverage, the
+full CPU parity selection, native x86 execution, or the CPU benchmark gate.
