@@ -5569,3 +5569,16 @@ operation × Mode × Architecture matrix is claimed complete. The benchmark,
 native x86 runtime, and public fault-contract gates remain open.
 
 Brightness mode matrix checkpoint (2026-11-09): all 25 `raster::Mode` identities now have explicit Brightness outcomes through the public Python facade: ten Pillow parity modes, three Pillow rejection modes (`1`, `P`, `PA`), and twelve recorded target-output modes (LAB plus eleven CoreOnly high-depth/internal modes). The target-only expectations cover factors 0, 1, and 2 using native sample encodings; LAB is explicitly marked `NO_PILLOW_SUPPORT`. The 25 workflows pass under Default and each of nine architecture selectors (225/225); added La, RGBa, and RGBX non-identity cases pass 3/3 Default and 27/27 across selectors. Default focused Rust coverage passes 292/292, including full line/branch coverage for all 22 mode-specific Brightness owners. Receipts select Default directly, report `missing_specialization` for Neon, and `unavailable_hardware` for x86 selectors on arm64. Native architecture Brightness execution is not established by these fallback runs. The Neon coverage attempt is unavailable through the current coverage instrumentation build because it omits the test-api architecture setter. Remaining CPU acceptance is unchanged: operation × Mode × Architecture evidence, native x86 runtime, full CPU parity, ordinary error/fault cases, external I32-to-PNG codec completion, and the benchmark comparison.
+
+
+Chops Invert matrix checkpoint (2026-11-09): explicit requirements now cover
+all 25 Mode identities. Fourteen Pillow byte modes pass public Python parity;
+eleven CoreOnly numeric/high-depth modes pass recorded raw-byte expected
+outputs. The 38-workflow selection passes under Default and all nine CPU
+architecture selectors (342/342). Receipts show Default direct selection,
+Neon `missing_specialization`, and x86 `unavailable_hardware` on arm64; Invert
+has no declared architecture specialization. Focused Rust coverage passes
+61/61. This does not prove SIMD execution or complete the broader Chops family
+matrix. Binary Chops, Offset/fusion paths, native x86 runtime, complete CPU
+parity, ordinary error/fault cases, the external I32-to-PNG gap, and performance
+remain pending.

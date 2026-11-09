@@ -199,6 +199,31 @@ BRIGHTNESS_REJECTED_MODES: tuple[tuple[str, str], ...] = (
 )
 
 
+CHOPS_INVERT_PILLOW_MODES: tuple[tuple[str, str, int], ...] = (
+    ("1", "1", 0),
+    ("L", "l", 1),
+    ("LA", "la", 2),
+    ("La", "la-premultiplied", 2),
+    ("P", "p", 1),
+    ("PA", "pa", 2),
+    ("RGB", "rgb", 3),
+    ("RGBA", "rgba", 4),
+    ("RGBa", "rgb-premultiplied", 4),
+    ("RGBX", "rgbx", 4),
+    ("CMYK", "cmyk", 4),
+    ("YCbCr", "ycbcr", 3),
+    ("LAB", "lab", 3),
+    ("HSV", "hsv", 3),
+)
+
+# Reuse the fixed typed samples already exercised by Brightness so every
+# target-only core mode has one deterministic source representation.
+CHOPS_INVERT_CORE_ONLY_MODES = tuple(
+    (mode, mode_id, kind, source)
+    for mode, mode_id, kind, source, *_brightness_outputs in BRIGHTNESS_CORE_ONLY_MODES
+)
+
+
 def brightness_target_output_cases() -> list[dict[str, Any]]:
     """Return fixed no-Pillow Brightness outputs through public Python."""
 
@@ -268,11 +293,76 @@ def brightness_target_output_cases() -> list[dict[str, Any]]:
     return cases
 
 
+def chops_invert_target_output_cases() -> list[dict[str, Any]]:
+    """Return fixed raw-byte inversion outputs for native-only modes."""
+
+    cases: list[dict[str, Any]] = []
+    for mode, mode_id, sample_kind, samples in CHOPS_INVERT_CORE_ONLY_MODES:
+        source = _native_samples(sample_kind, samples)
+        inverted = bytes(value ^ 0xFF for value in source)
+        cases.append(
+            {
+                "case_id": (
+                    "PIL.ImageChops.invert.expected-output."
+                    f"{mode_id}.native-3x1"
+                ),
+                "surface": "PIL.ImageChops",
+                "operation": "invert",
+                "verification": "expected-output",
+                "covers": [f"PIL.ImageChops.invert.mode.{mode_id}"],
+                "assets": [
+                    {
+                        "id": "invert-source",
+                        "kind": "inline",
+                        "encoding": "base64",
+                        "data": base64.b64encode(source).decode("ascii"),
+                        "sha256": hashlib.sha256(source).hexdigest(),
+                        "media_type": "application/octet-stream",
+                    }
+                ],
+                "steps": [
+                    {
+                        "step_id": "image",
+                        "surface": "PIL.Image",
+                        "operation": "frombytes",
+                        "receiver": None,
+                        "arguments": {
+                            "mode": {"kind": "literal", "value": mode},
+                            "size": {"kind": "literal", "value": [3, 1]},
+                            "data": {"kind": "asset", "asset_id": "invert-source"},
+                        },
+                    },
+                    {
+                        "step_id": "result",
+                        "surface": "PIL.ImageChops",
+                        "operation": "invert",
+                        "receiver": None,
+                        "arguments": {"image": {"kind": "binding", "step_id": "image"}},
+                    },
+                ],
+                "observations": ["result"],
+                "target_expectation": {
+                    "observations": [
+                        {
+                            "step_id": "result",
+                            "value": _native_image_result_record(mode, inverted),
+                        }
+                    ]
+                },
+            }
+        )
+    return cases
+
+
 def _brightness_result_record(
     mode: str,
     sample_kind: str,
     samples: tuple[int | float, ...],
 ) -> dict[str, Any]:
+    return _native_image_result_record(mode, _native_samples(sample_kind, samples))
+
+
+def _native_image_result_record(mode: str, raw: bytes) -> dict[str, Any]:
     return {
         "kind": "image",
         "mode": mode,
@@ -280,7 +370,7 @@ def _brightness_result_record(
         "format": None,
         "info": {},
         "palette": None,
-        "bytes": base64.b64encode(_native_samples(sample_kind, samples)).decode("ascii"),
+        "bytes": base64.b64encode(raw).decode("ascii"),
     }
 
 

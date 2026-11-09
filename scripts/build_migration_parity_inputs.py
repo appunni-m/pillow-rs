@@ -77,12 +77,16 @@ except ModuleNotFoundError:
 try:
     from migration_parity.target_output_contracts import (
         brightness_target_output_cases,
+        CHOPS_INVERT_PILLOW_MODES,
+        chops_invert_target_output_cases,
         core_only_frombytes_cases,
         sharpness_core_only_cases,
     )
 except ModuleNotFoundError:
     from scripts.migration_parity.target_output_contracts import (
         brightness_target_output_cases,
+        CHOPS_INVERT_PILLOW_MODES,
+        chops_invert_target_output_cases,
         core_only_frombytes_cases,
         sharpness_core_only_cases,
     )
@@ -44167,6 +44171,7 @@ def build_nuanced_cases(
     cases.extend(contrast_pixel_parity_cases(surface_id))
     cases.extend(brightness_pixel_parity_cases(surface_id))
     cases.extend(brightness_mode_variant_parity_cases(surface_id))
+    cases.extend(chops_invert_mode_parity_cases(surface_id))
     cases.extend(quantize_fast_octree_rgb_performance_parity_cases(surface_id))
     cases.extend(quantize_boundary_parity_cases(surface_id))
     cases.extend(color_pixel_parity_cases(surface_id))
@@ -47657,6 +47662,63 @@ def brightness_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             "observations": ["enhancer", "call", "materialize"],
         }
     )
+    return cases
+
+
+def chops_invert_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Cover Pillow byte-mode Invert routes missing from the fixed corpus."""
+
+    target = "PIL.ImageChops"
+    if surface_id != target:
+        return []
+    width, height = 31, 17
+    cases = []
+    for mode, mode_id, channels in CHOPS_INVERT_PILLOW_MODES:
+        byte_count = (
+            ((width + 7) // 8) * height
+            if mode == "1"
+            else width * height * channels
+        )
+        raw = random.Random(f"chops-invert-mode-{mode}").randbytes(byte_count)
+        cases.append(
+            {
+                "case_id": f"{target}.invert.nuanced.mode-active-{mode_id}",
+                "surface": target,
+                "operation": "invert",
+                "covers": [f"{target}.invert.mode.{mode_id}"],
+                "assets": [
+                    {
+                        "id": "invert-source",
+                        "kind": "inline",
+                        "encoding": "base64",
+                        "data": base64.b64encode(raw).decode("ascii"),
+                        "sha256": hashlib.sha256(raw).hexdigest(),
+                        "media_type": "application/octet-stream",
+                    }
+                ],
+                "steps": [
+                    {
+                        "step_id": "image",
+                        "surface": "PIL.Image",
+                        "operation": "frombytes",
+                        "receiver": None,
+                        "arguments": {
+                            "mode": literal(mode),
+                            "size": literal([width, height]),
+                            "data": asset_value("invert-source"),
+                        },
+                    },
+                    {
+                        "step_id": "result",
+                        "surface": target,
+                        "operation": "invert",
+                        "receiver": None,
+                        "arguments": {"image": binding("image")},
+                    },
+                ],
+                "observations": ["result"],
+            }
+        )
     return cases
 
 
@@ -57857,6 +57919,9 @@ def build_inputs(
             # Native Brightness routes without a Pillow output contract have
             # fixed expected results through the public Python facade.
             nuanced_cases.extend(brightness_target_output_cases())
+        if surface_id == "PIL.ImageChops":
+            # Core-only Invert routes use recorded native-mode byte outputs.
+            nuanced_cases.extend(chops_invert_target_output_cases())
         if surface_id == "PIL.Image.Image":
             # The full-size native F resize parity case is the exact public
             # workflow used by its standard benchmark workload. Carry that

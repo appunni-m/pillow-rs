@@ -9082,3 +9082,26 @@ Brightness native-mode output slice (2026-11-09): the public Python manifest now
 The architecture receipts show Default selected directly, Neon falling back with `missing_specialization`, and x86 selectors falling back with `unavailable_hardware` on this arm64 host. Each selected Brightness execution used the Default implementation with no vector blocks; this is output/fallback evidence, not native Neon or x86 kernel evidence. Focused Default Rust coverage passed 292/292 workflows. All 22 mode-specific Default Brightness owners reached full line and branch coverage. Shared `helpers/native.rs` remains at 76/195 lines and 12/18 branches for this operation slice. Neon-specific coverage could not be collected: the coverage instrumentation rebuild omitted the test-api architecture setter even after `make build-parity-cpu-architecture`; parity receipts independently confirm Brightness uses the documented Default fallback for Neon. Artifacts are under `build/migration-parity/brightness-mode-matrix-architectures/`, `build/migration-parity/brightness-mode-variant-architectures/`, and `build/migration-parity/brightness-mode-matrix-rust-coverage.json`.
 
 This focused result does not close the operation × Mode × Architecture matrix, native x86 runtime, full CPU parity, codec-owned I32-to-PNG gap, public error/fault matrix, or CPU benchmark gate.
+
+
+Chops Invert mode matrix checkpoint (2026-11-09): the manifest now exposes all
+25 Mode identities for `PIL.ImageChops.invert`: fourteen Pillow byte modes and
+eleven CoreOnly numeric/high-depth modes. Each Pillow mode has a 31×17
+public-Python parity workflow; the eleven CoreOnly modes use fixed 3×1 raw-byte
+expected outputs, with `NO_PILLOW_SUPPORT` recorded in their target-only
+requirements. All 38 selected workflows passed under Default and each of the
+nine CPU architecture selectors (342/342, zero infrastructure errors).
+
+Receipts select Default directly, report `missing_specialization` for Neon,
+and `unavailable_hardware` for x86 selectors on this arm64 host. Invert has no
+declared architecture-specific implementation, so these results establish its
+Default fallback behavior rather than SIMD kernel execution. Focused Rust
+coverage passed 61/61 workflows. In this Invert-scoped LCOV slice, Chops files
+cover 965/4,571 lines and 79/538 branches; `helpers/vector.rs` and the byte and
+16-bit Offset helpers remain unhit. This slice does not establish coverage for
+Chops binary operations, Offset, or fusion. Artifacts are under
+`build/migration-parity/chops-invert-mode-matrix-final-architectures/` and
+`build/migration-parity/chops-invert-mode-matrix-final-rust-coverage.json`.
+The operation × Mode × Architecture matrix, native x86 execution, full CPU
+parity, public error/fault matrix, external I32-to-PNG codec gap, and benchmark
+gate remain open.

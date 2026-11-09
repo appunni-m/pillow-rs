@@ -11881,9 +11881,27 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.ImageChops.invert.mode.1
+      dimension: mode
+      description: Public behavior for image mode '1'.
+      lanes:
+      - parity
+      - coverage
     - id: PIL.ImageChops.invert.mode.l
       dimension: mode
       description: Public behavior for image mode 'L'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.invert.mode.la
+      dimension: mode
+      description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.invert.mode.la-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'La'.
       lanes:
       - parity
       - coverage
@@ -11893,11 +11911,125 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.ImageChops.invert.mode.pa
+      dimension: mode
+      description: Public behavior for image mode 'PA'.
+      lanes:
+      - parity
+      - coverage
     - id: PIL.ImageChops.invert.mode.rgb
       dimension: mode
       description: Public behavior for image mode 'RGB'.
       lanes:
       - parity
+      - coverage
+    - id: PIL.ImageChops.invert.mode.rgba
+      dimension: mode
+      description: Public behavior for image mode 'RGBA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.invert.mode.rgb-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'RGBa'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.invert.mode.rgbx
+      dimension: mode
+      description: Public behavior for image mode 'RGBX'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.invert.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.invert.mode.ycbcr
+      dimension: mode
+      description: Public behavior for image mode 'YCbCr'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.invert.mode.lab
+      dimension: mode
+      description: Public behavior for image mode 'LAB'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.invert.mode.hsv
+      dimension: mode
+      description: Public behavior for image mode 'HSV'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageChops.invert.mode.core-only-i
+      dimension: mode
+      description: Native ImageChops inversion for core-only-i; no Pillow result contract (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.invert.mode.core-only-f
+      dimension: mode
+      description: Native ImageChops inversion for core-only-f; no Pillow result contract (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.invert.mode.core-only-i16
+      dimension: mode
+      description: Native ImageChops inversion for core-only-i16; no Pillow result contract (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.invert.mode.core-only-i16l
+      dimension: mode
+      description: Native ImageChops inversion for core-only-i16l; no Pillow result contract (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.invert.mode.core-only-i16b
+      dimension: mode
+      description: Native ImageChops inversion for core-only-i16b; no Pillow result contract (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.invert.mode.core-only-i16n
+      dimension: mode
+      description: Native ImageChops inversion for core-only-i16n; no Pillow result contract (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.invert.mode.core-only-luma-a16
+      dimension: mode
+      description: Native ImageChops inversion for core-only-luma-a16; no Pillow result contract (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.invert.mode.core-only-rgb16
+      dimension: mode
+      description: Native ImageChops inversion for core-only-rgb16; no Pillow result contract (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.invert.mode.core-only-rgba16
+      dimension: mode
+      description: Native ImageChops inversion for core-only-rgba16; no Pillow result contract (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.invert.mode.core-only-rgb32f
+      dimension: mode
+      description: Native ImageChops inversion for core-only-rgb32f; no Pillow result contract (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageChops.invert.mode.core-only-rgba32f
+      dimension: mode
+      description: Native ImageChops inversion for core-only-rgba32f; no Pillow result contract (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
       - coverage
     - id: PIL.ImageChops.invert.performance.standard
       dimension: performance
