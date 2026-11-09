@@ -1,8 +1,8 @@
 //! Original vector allocation/traversal contracts, with layout and ISA already selected.
 
+use super::extract_band::{CheckedBand, vector_output};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Pixel};
-use super::extract_band::{CheckedBand, vector_output};
 
 fn validate_into<P: Pixel<Subpixel = u8>, const CHANNELS: usize>(
     input: &CheckedBand<'_, P>,
@@ -45,11 +45,22 @@ pub(crate) unsafe fn ssse3_into<P: Pixel<Subpixel = u8>, const CHANNELS: usize>(
             channel,
         )
     };
-    Ok((blocks, tail, if blocks == 0 { "scalar-gather" } else { "ssse3-gather" }))
+    Ok((
+        blocks,
+        tail,
+        if blocks == 0 {
+            "scalar-gather"
+        } else {
+            "ssse3-gather"
+        },
+    ))
 }
 
 #[cfg(any(
-    all(target_arch = "x86", any(target_feature = "sse2", target_feature = "ssse3")),
+    all(
+        target_arch = "x86",
+        any(target_feature = "sse2", target_feature = "ssse3")
+    ),
     all(target_arch = "wasm32", target_feature = "simd128"),
 ))]
 pub(crate) fn portable_into<P: Pixel<Subpixel = u8>, const CHANNELS: usize>(
@@ -60,12 +71,28 @@ pub(crate) fn portable_into<P: Pixel<Subpixel = u8>, const CHANNELS: usize>(
     let source = input.input.as_raw();
     let channel = input.index.min(CHANNELS - 1);
     let (blocks, tail) = match channel {
-        0 => crate::compute::pool_cpu::helpers::channel::wide::gather_into::<CHANNELS, 0>(source, output)?,
-        1 => crate::compute::pool_cpu::helpers::channel::wide::gather_into::<CHANNELS, 1>(source, output)?,
-        2 => crate::compute::pool_cpu::helpers::channel::wide::gather_into::<CHANNELS, 2>(source, output)?,
-        _ => crate::compute::pool_cpu::helpers::channel::wide::gather_into::<CHANNELS, 3>(source, output)?,
+        0 => crate::compute::pool_cpu::helpers::channel::wide::gather_into::<CHANNELS, 0>(
+            source, output,
+        )?,
+        1 => crate::compute::pool_cpu::helpers::channel::wide::gather_into::<CHANNELS, 1>(
+            source, output,
+        )?,
+        2 => crate::compute::pool_cpu::helpers::channel::wide::gather_into::<CHANNELS, 2>(
+            source, output,
+        )?,
+        _ => crate::compute::pool_cpu::helpers::channel::wide::gather_into::<CHANNELS, 3>(
+            source, output,
+        )?,
     };
-    Ok((blocks, tail, if blocks == 0 { "scalar-gather" } else { "vector-gather" }))
+    Ok((
+        blocks,
+        tail,
+        if blocks == 0 {
+            "scalar-gather"
+        } else {
+            "vector-gather"
+        },
+    ))
 }
 
 #[cfg(target_arch = "x86_64")]
@@ -83,28 +110,41 @@ pub(crate) unsafe fn ssse3<P: Pixel<Subpixel = u8>, const CHANNELS: usize>(
     let output = if CHANNELS == 3 {
         // SAFETY: the prepared owner established the documented instruction,
         // layout, index, and exact source-length preconditions.
-        let output = unsafe {
-            kernels::gather_interleaved_channel_ssse3(source, CHANNELS, channel)
-        };
+        let output =
+            unsafe { kernels::gather_interleaved_channel_ssse3(source, CHANNELS, channel) };
         crate::compute::record_pipeline_allocation(output.0.len());
         output
     } else {
-        let mut output = input.dimensions.alloc_buffer();
+        // ExtractBand writes one output byte per pixel, regardless of source
+        // pixel width. `dimensions` was validated using the source layout.
+        let mut output = vec![0; input.dimensions.total_pixels()];
+        crate::compute::record_pipeline_allocation(output.len());
         // SAFETY: the source contains exactly width*height*CHANNELS bytes;
         // the separately allocated output has width*height writable bytes.
         // Selection established the channel index and SSE2/SSSE3 capability.
         let (blocks, tail) = unsafe {
             kernels::gather_interleaved_channel_ssse3_into_raw(
-                source, output.as_mut_ptr(), CHANNELS, channel,
+                source,
+                output.as_mut_ptr(),
+                CHANNELS,
+                channel,
             )
         };
         (output, blocks, tail)
     };
-    vector_output(input.input.width(), input.input.height(), output, "ssse3-gather")
+    vector_output(
+        input.input.width(),
+        input.input.height(),
+        output,
+        "ssse3-gather",
+    )
 }
 
 #[cfg(any(
-    all(target_arch = "x86", any(target_feature = "sse2", target_feature = "ssse3")),
+    all(
+        target_arch = "x86",
+        any(target_feature = "sse2", target_feature = "ssse3")
+    ),
     all(target_arch = "wasm32", target_feature = "simd128"),
 ))]
 fn gather<const CHANNELS: usize>(source: &[u8], channel: usize) -> (Vec<u8>, u64, u64) {
@@ -118,24 +158,24 @@ fn gather<const CHANNELS: usize>(source: &[u8], channel: usize) -> (Vec<u8>, u64
 }
 
 #[cfg(any(
-    all(target_arch = "x86", any(target_feature = "sse2", target_feature = "ssse3")),
+    all(
+        target_arch = "x86",
+        any(target_feature = "sse2", target_feature = "ssse3")
+    ),
     all(target_arch = "wasm32", target_feature = "simd128"),
 ))]
 pub(crate) fn portable<P: Pixel<Subpixel = u8>, const CHANNELS: usize>(
     input: CheckedBand<'_, P>,
 ) -> Result<DynamicImage, PilError> {
     let channel = input.index.min(CHANNELS - 1);
-    let output = if CHANNELS == 3 {
-        let output = gather::<CHANNELS>(input.input.as_raw(), channel);
-        crate::compute::record_pipeline_allocation(output.0.len());
-        output
-    } else {
-        let mut output = input.dimensions.alloc_buffer();
-        let (gathered, blocks, tail) = gather::<CHANNELS>(input.input.as_raw(), channel);
-        output.copy_from_slice(&gathered);
-        (output, blocks, tail)
-    };
-    vector_output(input.input.width(), input.input.height(), output, "vector-gather")
+    let output = gather::<CHANNELS>(input.input.as_raw(), channel);
+    crate::compute::record_pipeline_allocation(output.0.len());
+    vector_output(
+        input.input.width(),
+        input.input.height(),
+        output,
+        "vector-gather",
+    )
 }
 
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
@@ -161,19 +201,20 @@ pub(crate) fn neon<P: Pixel<Subpixel = u8>, const CHANNELS: usize>(
     use crate::compute::pool_cpu::helpers::channel::neon;
     let input = kernel.input;
     let channel = input.index.min(CHANNELS - 1);
-    let mut output = if CHANNELS == 3 {
-        vec![0; input.input.as_raw().len() / CHANNELS]
-    } else {
-        input.dimensions.alloc_buffer()
-    };
+    let mut output = vec![0; input.dimensions.total_pixels()];
     let (blocks, tail) = neon::extract_channel_into::<CHANNELS>(
-        input.input.as_raw(), &mut output, channel, kernel.neon,
+        input.input.as_raw(),
+        &mut output,
+        channel,
+        kernel.neon,
     );
-    if CHANNELS == 3 {
-        crate::compute::record_pipeline_allocation(output.len());
-    }
-    vector_output(input.input.width(), input.input.height(),
-        (output, blocks, tail), "neon-deinterleave")
+    crate::compute::record_pipeline_allocation(output.len());
+    vector_output(
+        input.input.width(),
+        input.input.height(),
+        (output, blocks, tail),
+        "neon-deinterleave",
+    )
 }
 
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
@@ -187,5 +228,13 @@ pub(crate) fn neon_into<P: Pixel<Subpixel = u8>, const CHANNELS: usize>(
     let (blocks, tail) = crate::compute::pool_cpu::helpers::channel::neon::extract_channel_into::<
         CHANNELS,
     >(input.input.as_raw(), output, channel, kernel.neon);
-    Ok((blocks, tail, if blocks == 0 { "scalar-gather" } else { "neon-deinterleave" }))
+    Ok((
+        blocks,
+        tail,
+        if blocks == 0 {
+            "scalar-gather"
+        } else {
+            "neon-deinterleave"
+        },
+    ))
 }

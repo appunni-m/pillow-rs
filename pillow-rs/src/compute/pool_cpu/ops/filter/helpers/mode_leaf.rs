@@ -19,6 +19,16 @@ pub(crate) fn execute_native_filter_identity_copy(
     Ok(output)
 }
 
+pub(crate) fn record_filter3x3_vector_work(vector_blocks: u64, scalar_tail: u64) {
+    crate::compute::record_pipeline_operation_path("vector");
+    if vector_blocks != 0 {
+        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+    }
+    if scalar_tail != 0 {
+        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+    }
+}
+
 macro_rules! native_filter_mode_leaf {
     (
         $variant:ident,
@@ -540,13 +550,10 @@ macro_rules! native_filter3x3_arch_leaf {
                 None
             };
             let output = if let Some((output, vector_blocks, scalar_tail)) = la_binomial {
-                $crate::compute::record_pipeline_operation_path("vector");
-                if vector_blocks != 0 {
-                    $crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-                }
-                if scalar_tail != 0 {
-                    $crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-                }
+                $crate::compute::pool_cpu::ops::filter::helpers::record_filter3x3_vector_work(
+                    vector_blocks,
+                    scalar_tail,
+                );
                 output
             } else if let Some(output) =
                 $crate::compute::pool_cpu::ops::filter::helpers::execute_filter3x3_small_uniform_bytes(
@@ -560,10 +567,12 @@ macro_rules! native_filter3x3_arch_leaf {
                 )
             {
                 let input_bytes = input.as_raw();
-                if input_bytes[..$channels] == output[..$channels] {
-                    $crate::compute::pool_cpu::ops::filter::helpers::execute_native_filter_identity_copy(
-                        input_bytes,
-                    )?
+                let first_interior = (input.width() as usize + 1) * $channels;
+                if input_bytes[..$channels]
+                    == output[first_interior..first_interior + $channels]
+                {
+                    $crate::compute::record_pipeline_operation_path("native-copy");
+                    output
                 } else {
                     $crate::compute::record_pipeline_operation_path("scalar-control");
                     output
@@ -586,13 +595,10 @@ macro_rules! native_filter3x3_arch_leaf {
                             "filter output buffer does not match its mode".into(),
                         )
                     })?;
-                $crate::compute::record_pipeline_operation_path("vector");
-                if vector_blocks != 0 {
-                    $crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-                }
-                if scalar_tail != 0 {
-                    $crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-                }
+                $crate::compute::pool_cpu::ops::filter::helpers::record_filter3x3_vector_work(
+                    vector_blocks,
+                    scalar_tail,
+                );
                 output
             };
             $crate::raster::$carrier::from_raw(input.width(), input.height(), output)
