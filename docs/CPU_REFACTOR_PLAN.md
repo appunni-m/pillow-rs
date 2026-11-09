@@ -2,9 +2,9 @@
 
 Status: active. The baseline inventory is captured in
 [CPU refactor inventory](CPU_REFACTOR_INVENTORY.md). The original CPU and SIMD
-trees are preserved under pool_cpu/legacy; per-family mode and kernel contract
-review continues from that archive before each maintained implementation is
-written.
+trees remain preserved under pool_cpu/legacy as inert references. Maintained
+CPU source is in place; the current stage is quality, parity/strategy coverage,
+and performance completion.
 Baseline: `3f9dfd4036caa061eabcf2255c9f34a745df9c7e`.
 Issue: `pillow-rs#3ptb`; related parity findings: `pillow-rs#brg0`.
 
@@ -81,12 +81,22 @@ the baseline. Keep `pillow-rs-bad` as reference.
 Baseline: `3f9dfd4036caa061eabcf2255c9f34a745df9c7e`; continue from the current
 `develop` HEAD and preserve all later WIP commits. CPU family and direct-call
 source reviews are complete, including the operation/Mode/Architecture
-contracts, prepared routes, and fallback paths. Remaining active source TODOs
-are parity/selection receipts, architecture opportunities to assess after
-measurement, and future `pool_parallel` scheduling. Gate 3 now enters quality
-and compilation to verify dead-code, module/target reachability, and function
-size. CPU parity and performance gates remain incomplete. See the append-only
-checkpoint notes below for detailed source changes and remaining evidence.
+contracts, prepared routes, and fallback paths. On clean commit `ba4fc8e9c`,
+the full 17,616-case selection ran under all nine CPU selectors: each executed
+17,616, passed 17,615, and had zero infrastructure errors. The sole failure is
+the external I32-to-PNG encoder gap. All twenty recorded Rust-only outputs and
+errors passed in every selector. x86 selectors fell back because this run was
+on arm64, so native x86 execution remains unproven. The Rust coverage campaign
+completed 27 plans and 17,377 cases with no plan failures; active `pool_cpu`
+source line coverage was 39.0%. This broad figure identifies unexercised code
+but does not prove complete operation × Mode × Architecture behavior.
+
+Remaining CPU gates are the quality/compilation checks, review and closure of
+uncovered mode/architecture strategies through public Python parity workflows,
+native x86 runtime evidence, and the CPU benchmark comparison. CPU fault
+contracts are not yet represented in the manifest. `pool_parallel` remains
+future work and must wait until CPU acceptance. See the append-only checkpoint
+notes below for exact evidence and known limitations.
 
 Lazy indexed mode-planning correction (2026-11-08): `known_pipeline_op_mode`
 uses accepted P/PA output contracts for fixed or explicit target transitions,
@@ -5523,3 +5533,33 @@ thresholding would add work without changing Pillow-visible output. No
 dedicated One latency measurement was made. The whole CPU benchmark gate,
 final aggregate receipt refresh, native x86 runtime evidence, and codec-owned
 parity case remain pending; no coverage was run.
+
+Complete CPU matrix and Rust coverage refresh (2026-11-09): on clean
+`develop` commit `ba4fc8e9c4832ad0c360eeb30a88ed89a926451a`, the complete
+17,616-case selection ran under Default, Neon, SSE2, SSE3, SSSE3, AVX, AVX2,
+AVX+FMA, and AVX2+FMA. Every selector executed 17,616 cases: 17,595 of 17,596
+Pillow parity cases passed, all twenty recorded target-output/error cases
+passed, and the sole failure was
+`PIL.Image.Image.save.nuanced.i-png`. Pillow completed the save; the target
+returned `OSError: unsupported Png: encode: PNG cannot encode this image
+mode`. This is the image-slash-star encoder gap `image-slash-star#9h5w`, outside
+the Rust image-operation scope. There were zero infrastructure errors. The
+selection ID SHA-256 is
+`e4e8ade188ad7965f44a70b36f438b61a6a2d54188771c15e43373710b85b0f6`; reports
+and execution sidecars are under
+`build/migration-parity/cpu-architecture/final-2773be01b/`. x86 selectors
+recorded `UnavailableHardware` and used Default on this arm64 host; native x86
+kernels were not exercised. The manifest selected zero CPU fault contracts,
+so ordinary CPU error/fault-order cases still need coverage.
+
+The matching Rust coverage run completed 27/27 plans, 17,377 cases passed,
+zero failed, and zero infrastructure errors. Its LLVM report covers 70,624 of
+182,663 Rust lines overall (38.7%); the active `pool_cpu` entries cover 41,078
+of 105,284 lines (39.0%) and 3,641 of 10,623 branches (34.3%). Several large
+vector/helper files show zero hits in this run, including resize's bounded
+native-byte vector helper, Enhance sharpness, Chops, Draw SIMD shapes, Paste,
+Convert native RGB, and Filter rank/blur kernels. These are candidates for
+mode/architecture parity review; zero coverage alone does not distinguish an
+uncovered supported route from compile-time or hardware unavailability. No
+operation × Mode × Architecture matrix is claimed complete. The benchmark,
+native x86 runtime, and public fault-contract gates remain open.

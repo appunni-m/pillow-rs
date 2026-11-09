@@ -8996,3 +8996,36 @@ and only `pil-imagetext-text.wrap.standard` and
 `pil-imagetext.text.standard` were added. The selection discrepancy is
 reconciled; compatible baseline timing evidence and the CPU performance gate
 remain pending.
+
+Complete CPU matrix and Rust coverage refresh (2026-11-09): on clean
+`develop` commit `ba4fc8e9c4832ad0c360eeb30a88ed89a926451a`, the full 17,616
+selected contracts ran under Default, Neon, SSE2, SSE3, SSSE3, AVX, AVX2,
+AVX+FMA, and AVX2+FMA. Every selector executed 17,616 and passed 17,615:
+17,595/17,596 Pillow parity cases plus 20/20 recorded target-output/error
+cases. The sole failure in all selectors is
+`PIL.Image.Image.save.nuanced.i-png`: Pillow saves successfully while the
+target returns `OSError: unsupported Png: encode: PNG cannot encode this image
+mode`. This belongs to image-slash-star's PNG encoder gap
+`image-slash-star#9h5w`; no image-operation logic belongs in pillow-rs. There
+were zero infrastructure errors. Selection ID SHA-256:
+`e4e8ade188ad7965f44a70b36f438b61a6a2d54188771c15e43373710b85b0f6`. Reports
+and sidecars are under
+`build/migration-parity/cpu-architecture/final-2773be01b/`. The host is arm64;
+x86 selectors fell back after `UnavailableHardware`, so native x86 SIMD runtime
+is unverified. The CPU fault-contract selector contained zero cases; ordinary
+CPU error/fault-order behavior is still a parity gap.
+
+The matching Rust coverage campaign completed all 27 plans: 17,377 cases
+passed, none failed, and no infrastructure errors occurred. LLVM reports
+70,624/182,663 Rust lines (38.7%) overall. Active pool_cpu source files account
+for 41,078/105,284 lines (39.0%) and 3,641/10,623 branches (34.3%). Large
+zero-hit areas include resize native-byte vector helpers, Enhance sharpness,
+Chops vector paths, Draw SIMD shapes, Paste vector paths, Convert native RGB,
+and Filter rank/blur kernels. Review each against the declared Mode and
+Architecture contracts and add public Python parity cases where reachable;
+first establish whether zero hits mean missing case coverage or expected
+compile-time/hardware exclusion. Do not add test-only Rust entry points or
+ordinary unit tests. The report does not establish completion of the
+operation × Mode × Architecture matrix. Remaining CPU acceptance includes
+quality/compilation checks, native x86 execution, the public error/fault matrix,
+and the benchmark comparison.
