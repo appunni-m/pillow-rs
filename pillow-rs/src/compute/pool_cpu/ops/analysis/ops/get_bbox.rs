@@ -1,73 +1,43 @@
-//! GetBBox mode support contract.
+//! GetBBox family support aggregation.
 
-use crate::compute::registry::support::{
-    InputContract, ModeSupport, OperationId, OperationSupport,
-};
+use crate::compute::registry::support::{ModeSupport, OperationId, OperationSupport};
 use crate::raster::Mode;
-
-use super::NO_RASTER_OUTPUT;
-
-const GET_BBOX_ALPHA_MODES: &[Mode] = &[
-    Mode::ImageLumaA8,
-    Mode::ImageLaPremultiplied8,
-    Mode::ImagePaletteAlpha8,
-    Mode::ImageRgba8,
-    Mode::ImageRgbPremultiplied8,
-    Mode::ImageLumaA16,
-    Mode::ImageRgba16,
-    Mode::ImageRgba32F,
-];
-const GET_BBOX_INPUTS: &[InputContract] = &[InputContract::GetBBoxAlphaOnly {
-    alpha_modes: GET_BBOX_ALPHA_MODES,
-}];
 
 fn classify_get_bbox_mode(mode: Mode) -> ModeSupport {
     match mode {
-        // NO_PILLOW_SUPPORT: these native high-depth carriers extend GetBBox's Pillow modes.
-        Mode::ImageLumaA16
-        | Mode::ImageRgb16
-        | Mode::ImageRgba16
-        | Mode::ImageRgb32F
-        | Mode::ImageRgba32F => ModeSupport::cpu_core_only(
-            OperationId::GetBBox,
-            mode,
-            NO_RASTER_OUTPUT,
-            GET_BBOX_INPUTS,
-            &[],
-            "native high-depth GetBBox extends the Pillow mode contract",
-        ),
-        Mode::One
-        | Mode::ImageLuma8
-        | Mode::ImageLumaA8
-        | Mode::ImageLaPremultiplied8
-        | Mode::ImagePalette8
-        | Mode::ImagePaletteAlpha8
-        | Mode::ImageRgb8
-        | Mode::ImageRgba8
-        | Mode::ImageRgbPremultiplied8
-        | Mode::ImageRgbx8
-        | Mode::ImageCmyk8
-        | Mode::ImageYCbCr8
-        | Mode::ImageLab8
-        | Mode::ImageHsv8
-        | Mode::ImageI32
-        | Mode::ImageF32
-        | Mode::ImageI16
-        | Mode::ImageI16L
-        | Mode::ImageI16B
-        | Mode::ImageI16N => ModeSupport::cpu(
-            OperationId::GetBBox,
-            mode,
-            NO_RASTER_OUTPUT,
-            GET_BBOX_INPUTS,
-            &[],
-        ),
+        Mode::One => super::super::one::ops::get_bbox_mode_support(),
+        Mode::ImageLuma8 => super::super::luma8::ops::get_bbox_mode_support(),
+        Mode::ImageLumaA8 => super::super::luma_a8::ops::get_bbox_mode_support(),
+        Mode::ImageLaPremultiplied8 => {
+            super::super::la_premultiplied8::ops::get_bbox_mode_support()
+        }
+        Mode::ImagePalette8 => super::super::palette8::ops::get_bbox_mode_support(),
+        Mode::ImagePaletteAlpha8 => super::super::palette_alpha8::ops::get_bbox_mode_support(),
+        Mode::ImageRgb8 => super::super::rgb8::ops::get_bbox_mode_support(),
+        Mode::ImageRgba8 => super::super::rgba8::ops::get_bbox_mode_support(),
+        Mode::ImageRgbPremultiplied8 => {
+            super::super::rgb_premultiplied8::ops::get_bbox_mode_support()
+        }
+        Mode::ImageRgbx8 => super::super::rgbx8::ops::get_bbox_mode_support(),
+        Mode::ImageCmyk8 => super::super::cmyk8::ops::get_bbox_mode_support(),
+        Mode::ImageYCbCr8 => super::super::ycbcr8::ops::get_bbox_mode_support(),
+        Mode::ImageLab8 => super::super::lab8::ops::get_bbox_mode_support(),
+        Mode::ImageHsv8 => super::super::hsv8::ops::get_bbox_mode_support(),
+        Mode::ImageI32 => super::super::i32::ops::get_bbox_mode_support(),
+        Mode::ImageF32 => super::super::f32::ops::get_bbox_mode_support(),
+        Mode::ImageI16 => super::super::i16::ops::get_bbox_mode_support(),
+        Mode::ImageI16L => super::super::i16l::ops::get_bbox_mode_support(),
+        Mode::ImageI16B => super::super::i16b::ops::get_bbox_mode_support(),
+        Mode::ImageI16N => super::super::i16n::ops::get_bbox_mode_support(),
+        Mode::ImageLumaA16 => super::super::luma_a16::ops::get_bbox_mode_support(),
+        Mode::ImageRgb16 => super::super::rgb16::ops::get_bbox_mode_support(),
+        Mode::ImageRgba16 => super::super::rgba16::ops::get_bbox_mode_support(),
+        Mode::ImageRgb32F => super::super::rgb32f::ops::get_bbox_mode_support(),
+        Mode::ImageRgba32F => super::super::rgba32f::ops::get_bbox_mode_support(),
     }
 }
 
-/// Exhaustive GetBBox support, including the exact alpha-bearing mode set.
-// TODO(pillow-rs#3ptb): cover all 25 modes under Default and every non-Default
-// Architecture request; verify Default fallback, I;16* high-byte samples, and
-// alpha-only mode selection in the CPU parity matrix.
+/// Exhaustive GetBBox support aggregated from exact-mode owners.
+/// TODO(pillow-rs#3ptb): verify alpha-only inputs, bounds, and Default receipts.
 pub(crate) static GET_BBOX_SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::GetBBox, &[], classify_get_bbox_mode);

@@ -3,8 +3,8 @@
 use crate::raster::GenericImageView;
 
 use crate::error::PilError;
-use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::DynamicImage;
+use crate::raster::buffer::HiddenPixelLanes;
 
 /// Applies Pillow's byte blend expression with a black or mode-specific base.
 /// The factor has already crossed Pillow's C `float` boundary.
@@ -48,8 +48,11 @@ pub(crate) fn carry_brightness_hidden_lanes(
         Some(lanes) => Some(lanes.map_values(|sample| blend_u8(0, sample, alpha))),
         None if lane_count == 2 => None,
         None => {
-            let fallback = crate::compute::pool_cpu::helpers::bytes::hidden_lanes::
-                default_hidden_pixel_lanes(source.mode(), 0)
+            let fallback =
+                crate::compute::pool_cpu::helpers::bytes::hidden_lanes::default_hidden_pixel_lanes(
+                    source.mode(),
+                    0,
+                )
                 .ok_or_else(|| {
                     PilError::InternalError(
                         "Brightness mode omitted its physical-lane fallback".into(),
@@ -59,7 +62,8 @@ pub(crate) fn carry_brightness_hidden_lanes(
             if pixel_count == 0 || value == u8::MAX {
                 None
             } else {
-                HiddenPixelLanes::constant(lane_count, pixel_count, [value, 0]).map(Some)
+                HiddenPixelLanes::constant(lane_count, pixel_count, [value, 0])
+                    .map(Some)
                     .ok_or_else(|| {
                         PilError::InternalError("invalid Brightness lane layout".into())
                     })?
@@ -94,17 +98,12 @@ pub(crate) fn carry_color_saturation_hidden_lanes(
         .ok_or_else(|| PilError::DimensionError("ColorSaturation lane extent overflow".into()))?;
     let alpha = factor as f32;
     let lanes = match source {
-        DynamicImage::ImageLumaA8(_) => clone_color_saturation_lanes(
-            source.hidden_pixel_lanes(),
-            lane_count,
-            pixel_count,
-        )?,
-        DynamicImage::ImageRgb8(_) => color_saturation_rgb_lanes(
-            source.hidden_pixel_lanes(),
-            lane_count,
-            pixel_count,
-            alpha,
-        )?,
+        DynamicImage::ImageLumaA8(_) => {
+            clone_color_saturation_lanes(source.hidden_pixel_lanes(), lane_count, pixel_count)?
+        }
+        DynamicImage::ImageRgb8(_) => {
+            color_saturation_rgb_lanes(source.hidden_pixel_lanes(), lane_count, pixel_count, alpha)?
+        }
         _ => {
             return Err(PilError::InternalError(
                 "ColorSaturation has no physical-lane strategy for this mode".into(),
@@ -151,7 +150,9 @@ fn color_saturation_rgb_lanes(
         if factor == 0.0 {
             return constant_color_saturation_rgb_lane(lane_count, pixel_count);
         }
-        return Ok(Some(lanes.map_values(|sample| blend_byte(255, sample, factor))));
+        return Ok(Some(
+            lanes.map_values(|sample| blend_byte(255, sample, factor)),
+        ));
     }
     if factor == 0.0 {
         return constant_color_saturation_rgb_lane(lane_count, pixel_count);
@@ -210,12 +211,7 @@ pub(crate) fn scale_u8(
     output
 }
 
-pub(crate) fn scale_u16(
-    samples: &mut [u16],
-    channels: usize,
-    active_channels: usize,
-    factor: f64,
-) {
+pub(crate) fn scale_u16(samples: &mut [u16], channels: usize, active_channels: usize, factor: f64) {
     for pixel in samples.chunks_exact_mut(channels) {
         for sample in &mut pixel[..active_channels] {
             *sample = (f64::from(*sample) * factor).clamp(0.0, f64::from(u16::MAX)) as u16;
@@ -223,12 +219,7 @@ pub(crate) fn scale_u16(
     }
 }
 
-pub(crate) fn scale_f32(
-    samples: &mut [f32],
-    channels: usize,
-    active_channels: usize,
-    factor: f64,
-) {
+pub(crate) fn scale_f32(samples: &mut [f32], channels: usize, active_channels: usize, factor: f64) {
     let factor = factor as f32;
     for pixel in samples.chunks_exact_mut(channels) {
         for sample in &mut pixel[..active_channels] {
@@ -241,8 +232,8 @@ pub(crate) fn scale_i32_carrier(source: &[u8], factor: f64) -> Vec<u8> {
     let mut output = Vec::with_capacity(source.len());
     for sample in source.chunks_exact(4) {
         let value = i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]);
-        let scaled = (f64::from(value) * factor)
-            .clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32;
+        let scaled =
+            (f64::from(value) * factor).clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32;
         output.extend_from_slice(&scaled.to_le_bytes());
     }
     output

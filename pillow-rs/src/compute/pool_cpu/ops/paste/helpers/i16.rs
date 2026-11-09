@@ -17,7 +17,8 @@ pub(crate) fn source_samples(image: &DynamicImage) -> Option<&[u16]> {
 pub(crate) const fn high_byte_first(mode: Mode) -> bool {
     match mode {
         Mode::ImageI16B => true,
-        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16N => cfg!(target_endian = "big"),
+        Mode::ImageI16L => false,
+        Mode::ImageI16 | Mode::ImageI16N => cfg!(target_endian = "big"),
         _ => false,
     }
 }
@@ -45,7 +46,9 @@ pub(crate) fn execute(plan: Luma16Plan<'_>, source: &[u16]) -> Result<Vec<u16>, 
     let expected_source = sample_count(source_width, source_height)?;
     let expected_destination = sample_count(plan.destination_size.0, plan.destination_size.1)?;
     if source.len() != expected_source || plan.destination.len() != expected_destination {
-        return Err(PilError::InternalError("I;16 Paste storage did not match dimensions".into()));
+        return Err(PilError::InternalError(
+            "I;16 Paste storage did not match dimensions".into(),
+        ));
     }
     let mut output = plan.destination.to_vec();
     if plan.region.is_empty() {
@@ -55,21 +58,17 @@ pub(crate) fn execute(plan: Luma16Plan<'_>, source: &[u16]) -> Result<Vec<u16>, 
     let mask_layout = plan.mask_layout;
     let source_high_byte_first = high_byte_first(plan.source_mode);
     let destination_high_byte_first = high_byte_first(plan.mode);
-    let source_left = usize::try_from(plan.region.source_left)
-        .map_err(|_| overflow("source x"))?;
-    let destination_left = usize::try_from(plan.region.destination_left)
-        .map_err(|_| overflow("destination x"))?;
-    let source_top = usize::try_from(plan.region.source_top)
-        .map_err(|_| overflow("source y"))?;
-    let destination_top = usize::try_from(plan.region.destination_top)
-        .map_err(|_| overflow("destination y"))?;
-    let copy_width = usize::try_from(plan.region.width)
-        .map_err(|_| overflow("copy width"))?;
-    let copy_height = usize::try_from(plan.region.height)
-        .map_err(|_| overflow("copy height"))?;
+    let source_left = usize::try_from(plan.region.source_left).map_err(|_| overflow("source x"))?;
+    let destination_left =
+        usize::try_from(plan.region.destination_left).map_err(|_| overflow("destination x"))?;
+    let source_top = usize::try_from(plan.region.source_top).map_err(|_| overflow("source y"))?;
+    let destination_top =
+        usize::try_from(plan.region.destination_top).map_err(|_| overflow("destination y"))?;
+    let copy_width = usize::try_from(plan.region.width).map_err(|_| overflow("copy width"))?;
+    let copy_height = usize::try_from(plan.region.height).map_err(|_| overflow("copy height"))?;
     let source_width = usize::try_from(source_width).map_err(|_| overflow("source width"))?;
-    let destination_width = usize::try_from(destination_width)
-        .map_err(|_| overflow("destination width"))?;
+    let destination_width =
+        usize::try_from(destination_width).map_err(|_| overflow("destination width"))?;
     let mask_width = source_width;
 
     for row in 0..copy_height {
@@ -139,10 +138,7 @@ fn blend_byte(source: u8, destination: u8, mask: u8, premultiplied: bool) -> u8 
         preblend::apply(source, destination, mask)
     } else {
         let inverse = 255 - u32::from(mask);
-        ((u32::from(source) * u32::from(mask)
-            + u32::from(destination) * inverse
-            + 127)
-            / 255) as u8
+        ((u32::from(source) * u32::from(mask) + u32::from(destination) * inverse + 127) / 255) as u8
     }
 }
 

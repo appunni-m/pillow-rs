@@ -24,6 +24,90 @@ pub(crate) fn selected_histogram_architecture(
     Ok(implementation.architecture)
 }
 
+/// Builds Histogram and Entropy mode support for one exact-mode owner.
+pub(crate) fn mode_support(
+    mode: Mode,
+    result_bands: usize,
+    core_only: bool,
+) -> (
+    crate::compute::registry::support::ModeSupport,
+    crate::compute::registry::support::ModeSupport,
+) {
+    use crate::compute::registry::support::{
+        ModeSupport, OperationId, OperationValueResult, OutputModeRule,
+    };
+    let histogram = if core_only {
+        ModeSupport::cpu_core_only(
+            OperationId::Histogram,
+            mode,
+            OutputModeRule::NoRasterResult,
+            super::super::ops::HISTOGRAM_INPUTS,
+            &[],
+            "native high-depth Histogram extends Pillow's mode contract",
+        )
+    } else {
+        ModeSupport::cpu(
+            OperationId::Histogram,
+            mode,
+            OutputModeRule::NoRasterResult,
+            super::super::ops::HISTOGRAM_INPUTS,
+            &[],
+        )
+    }
+    .with_value_result(OperationValueResult::Histogram {
+        result_bands,
+        bins_per_band: 256,
+    });
+    let entropy = if core_only {
+        ModeSupport::cpu_core_only(
+            OperationId::Entropy,
+            mode,
+            OutputModeRule::NoRasterResult,
+            super::super::ops::ANALYSIS_MASK_INPUTS,
+            &[],
+            "native high-depth Entropy extends Pillow's mode contract",
+        )
+    } else {
+        ModeSupport::cpu(
+            OperationId::Entropy,
+            mode,
+            OutputModeRule::NoRasterResult,
+            super::super::ops::ANALYSIS_MASK_INPUTS,
+            &[],
+        )
+    };
+    (histogram, entropy)
+}
+
+macro_rules! declare_histogram_support {
+    ($mode:ident, $bands:literal, pillow $(,)?) => {
+        pub(crate) fn histogram_entropy_support() -> (
+            $crate::compute::registry::support::ModeSupport,
+            $crate::compute::registry::support::ModeSupport,
+        ) {
+            $crate::compute::pool_cpu::ops::analysis::helpers::histogram_execution::mode_support(
+                $crate::raster::Mode::$mode,
+                $bands,
+                false,
+            )
+        }
+    };
+    ($mode:ident, $bands:literal, core_only $(,)?) => {
+        pub(crate) fn histogram_entropy_support() -> (
+            $crate::compute::registry::support::ModeSupport,
+            $crate::compute::registry::support::ModeSupport,
+        ) {
+            $crate::compute::pool_cpu::ops::analysis::helpers::histogram_execution::mode_support(
+                $crate::raster::Mode::$mode,
+                $bands,
+                true,
+            )
+        }
+    };
+}
+
+pub(crate) use declare_histogram_support;
+
 /// Generates the exact-mode architecture owner for one Histogram implementation.
 macro_rules! declare_histogram_owner {
     ($mode:ident, $image_ty:ty, $implementation:path $(,)?) => {
@@ -33,16 +117,16 @@ macro_rules! declare_histogram_owner {
             mask_raw: Option<&[u8]>,
         ) -> Result<Vec<u32>, crate::error::PilError> {
             match crate::compute::pool_cpu::ops::analysis::helpers::histogram_execution::
-                selected_histogram_architecture(selection, crate::raster::Mode::$mode)?
-            {
-                crate::compute::Architecture::Default => {
-                    ($implementation)(image, mask_raw)
-                }
-                architecture => Err(crate::error::PilError::InternalError(format!(
-                    "Histogram has no {:?} {architecture:?} strategy",
-                    crate::raster::Mode::$mode,
-                ))),
-            }
+                        selected_histogram_architecture(selection, crate::raster::Mode::$mode)?
+                    {
+                        crate::compute::Architecture::Default => {
+                            ($implementation)(image, mask_raw)
+                        }
+                        architecture => Err(crate::error::PilError::InternalError(format!(
+                            "Histogram has no {:?} {architecture:?} strategy",
+                            crate::raster::Mode::$mode,
+                        ))),
+                    }
         }
     };
 }
@@ -113,8 +197,13 @@ fn validate_mask(
         ModeSupport::Supported { inputs, .. } => inputs,
         ModeSupport::Rejected { .. } => support_descriptor.inputs,
     };
-    let Some(InputContract::HistogramMask { modes, mode_rejection, size_rejection }) =
-        inputs.iter().find(|input| matches!(input, InputContract::HistogramMask { .. }))
+    let Some(InputContract::HistogramMask {
+        modes,
+        mode_rejection,
+        size_rejection,
+    }) = inputs
+        .iter()
+        .find(|input| matches!(input, InputContract::HistogramMask { .. }))
     else {
         return Err(PilError::InternalError(
             "Analysis support omitted its mask contract".into(),
@@ -152,9 +241,7 @@ impl PreparedHistogram<'_> {
             ));
         }
         let implementation = self.selection.implementation;
-        if implementation.operation != OperationId::Histogram
-            || implementation.mode != self.mode
-        {
+        if implementation.operation != OperationId::Histogram || implementation.mode != self.mode {
             return Err(PilError::InternalError(
                 "Histogram strategy selection did not match its operation and mode".into(),
             ));
@@ -186,20 +273,12 @@ fn execute_histogram_with_extrema(
     match (image, extrema) {
         (DynamicImage::ImageI32(image), HistogramExtrema::ImageI32 { minimum, maximum }) => {
             super::super::i32::ops::execute_histogram_with_extrema(
-                image,
-                selection,
-                mask_raw,
-                minimum,
-                maximum,
+                image, selection, mask_raw, minimum, maximum,
             )
         }
         (DynamicImage::ImageF32(image), HistogramExtrema::ImageF32 { minimum, maximum }) => {
             super::super::f32::ops::execute_histogram_with_extrema(
-                image,
-                selection,
-                mask_raw,
-                minimum,
-                maximum,
+                image, selection, mask_raw, minimum, maximum,
             )
         }
         _ => Err(PilError::InternalError(
@@ -218,9 +297,7 @@ fn execute_histogram_mode(
         | DynamicImage::ImageRgb16(_)
         | DynamicImage::ImageRgba16(_)
         | DynamicImage::ImageRgb32F(_)
-        | DynamicImage::ImageRgba32F(_) => {
-            execute_coreonly_histogram(image, selection, mask_raw)
-        }
+        | DynamicImage::ImageRgba32F(_) => execute_coreonly_histogram(image, selection, mask_raw),
         DynamicImage::One(_)
         | DynamicImage::ImageLuma8(_)
         | DynamicImage::ImageLumaA8(_)
@@ -250,66 +327,66 @@ fn execute_pillow_histogram(
     mask_raw: Option<&[u8]>,
 ) -> Result<Vec<u32>, PilError> {
     match image {
-        DynamicImage::One(image) => super::super::one::ops::execute_histogram(
-            image, selection, mask_raw,
-        ),
-        DynamicImage::ImageLuma8(image) => super::super::luma8::ops::execute_histogram(
-            image, selection, mask_raw,
-        ),
-        DynamicImage::ImageLumaA8(image) => super::super::luma_a8::ops::execute_histogram(
-            image, selection, mask_raw,
-        ),
+        DynamicImage::One(image) => {
+            super::super::one::ops::execute_histogram(image, selection, mask_raw)
+        }
+        DynamicImage::ImageLuma8(image) => {
+            super::super::luma8::ops::execute_histogram(image, selection, mask_raw)
+        }
+        DynamicImage::ImageLumaA8(image) => {
+            super::super::luma_a8::ops::execute_histogram(image, selection, mask_raw)
+        }
         DynamicImage::ImageLaPremultiplied8(image) => {
             super::super::la_premultiplied8::ops::execute_histogram(image, selection, mask_raw)
         }
-        DynamicImage::ImagePalette8(image) => super::super::palette8::ops::execute_histogram(
-            image, selection, mask_raw,
-        ),
+        DynamicImage::ImagePalette8(image) => {
+            super::super::palette8::ops::execute_histogram(image, selection, mask_raw)
+        }
         DynamicImage::ImagePaletteAlpha8(image) => {
             super::super::palette_alpha8::ops::execute_histogram(image, selection, mask_raw)
         }
-        DynamicImage::ImageRgb8(image) => super::super::rgb8::ops::execute_histogram(
-            image, selection, mask_raw,
-        ),
-        DynamicImage::ImageRgba8(image) => super::super::rgba8::ops::execute_histogram(
-            image, selection, mask_raw,
-        ),
+        DynamicImage::ImageRgb8(image) => {
+            super::super::rgb8::ops::execute_histogram(image, selection, mask_raw)
+        }
+        DynamicImage::ImageRgba8(image) => {
+            super::super::rgba8::ops::execute_histogram(image, selection, mask_raw)
+        }
         DynamicImage::ImageRgbPremultiplied8(image) => {
             super::super::rgb_premultiplied8::ops::execute_histogram(image, selection, mask_raw)
         }
-        DynamicImage::ImageRgbx8(image) => super::super::rgbx8::ops::execute_histogram(
-            image, selection, mask_raw,
-        ),
-        DynamicImage::ImageCmyk8(image) => super::super::cmyk8::ops::execute_histogram(
-            image, selection, mask_raw,
-        ),
-        DynamicImage::ImageYCbCr8(image) => super::super::ycbcr8::ops::execute_histogram(
-            image, selection, mask_raw,
-        ),
-        DynamicImage::ImageLab8(image) => super::super::lab8::ops::execute_histogram(
-            image, selection, mask_raw,
-        ),
-        DynamicImage::ImageHsv8(image) => super::super::hsv8::ops::execute_histogram(
-            image, selection, mask_raw,
-        ),
-        DynamicImage::ImageI32(image) => super::super::i32::ops::execute_histogram(
-            image, selection, mask_raw,
-        ),
-        DynamicImage::ImageF32(image) => super::super::f32::ops::execute_histogram(
-            image, selection, mask_raw,
-        ),
-        DynamicImage::ImageI16(image) => super::super::i16::ops::execute_histogram(
-            image, selection, mask_raw,
-        ),
-        DynamicImage::ImageI16L(image) => super::super::i16l::ops::execute_histogram(
-            image, selection, mask_raw,
-        ),
-        DynamicImage::ImageI16B(image) => super::super::i16b::ops::execute_histogram(
-            image, selection, mask_raw,
-        ),
-        DynamicImage::ImageI16N(image) => super::super::i16n::ops::execute_histogram(
-            image, selection, mask_raw,
-        ),
+        DynamicImage::ImageRgbx8(image) => {
+            super::super::rgbx8::ops::execute_histogram(image, selection, mask_raw)
+        }
+        DynamicImage::ImageCmyk8(image) => {
+            super::super::cmyk8::ops::execute_histogram(image, selection, mask_raw)
+        }
+        DynamicImage::ImageYCbCr8(image) => {
+            super::super::ycbcr8::ops::execute_histogram(image, selection, mask_raw)
+        }
+        DynamicImage::ImageLab8(image) => {
+            super::super::lab8::ops::execute_histogram(image, selection, mask_raw)
+        }
+        DynamicImage::ImageHsv8(image) => {
+            super::super::hsv8::ops::execute_histogram(image, selection, mask_raw)
+        }
+        DynamicImage::ImageI32(image) => {
+            super::super::i32::ops::execute_histogram(image, selection, mask_raw)
+        }
+        DynamicImage::ImageF32(image) => {
+            super::super::f32::ops::execute_histogram(image, selection, mask_raw)
+        }
+        DynamicImage::ImageI16(image) => {
+            super::super::i16::ops::execute_histogram(image, selection, mask_raw)
+        }
+        DynamicImage::ImageI16L(image) => {
+            super::super::i16l::ops::execute_histogram(image, selection, mask_raw)
+        }
+        DynamicImage::ImageI16B(image) => {
+            super::super::i16b::ops::execute_histogram(image, selection, mask_raw)
+        }
+        DynamicImage::ImageI16N(image) => {
+            super::super::i16n::ops::execute_histogram(image, selection, mask_raw)
+        }
         _ => Err(PilError::InternalError(
             "Pillow Histogram dispatcher received a CoreOnly mode".into(),
         )),
@@ -322,21 +399,21 @@ fn execute_coreonly_histogram(
     mask_raw: Option<&[u8]>,
 ) -> Result<Vec<u32>, PilError> {
     match image {
-        DynamicImage::ImageLumaA16(image) => super::super::luma_a16::ops::execute_histogram(
-            image, selection, mask_raw,
-        ),
-        DynamicImage::ImageRgb16(image) => super::super::rgb16::ops::execute_histogram(
-            image, selection, mask_raw,
-        ),
-        DynamicImage::ImageRgba16(image) => super::super::rgba16::ops::execute_histogram(
-            image, selection, mask_raw,
-        ),
-        DynamicImage::ImageRgb32F(image) => super::super::rgb32f::ops::execute_histogram(
-            image, selection, mask_raw,
-        ),
-        DynamicImage::ImageRgba32F(image) => super::super::rgba32f::ops::execute_histogram(
-            image, selection, mask_raw,
-        ),
+        DynamicImage::ImageLumaA16(image) => {
+            super::super::luma_a16::ops::execute_histogram(image, selection, mask_raw)
+        }
+        DynamicImage::ImageRgb16(image) => {
+            super::super::rgb16::ops::execute_histogram(image, selection, mask_raw)
+        }
+        DynamicImage::ImageRgba16(image) => {
+            super::super::rgba16::ops::execute_histogram(image, selection, mask_raw)
+        }
+        DynamicImage::ImageRgb32F(image) => {
+            super::super::rgb32f::ops::execute_histogram(image, selection, mask_raw)
+        }
+        DynamicImage::ImageRgba32F(image) => {
+            super::super::rgba32f::ops::execute_histogram(image, selection, mask_raw)
+        }
         _ => Err(PilError::InternalError(
             "CoreOnly Histogram dispatcher received a Pillow mode".into(),
         )),

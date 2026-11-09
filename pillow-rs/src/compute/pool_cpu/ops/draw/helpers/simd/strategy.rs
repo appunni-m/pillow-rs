@@ -1,4 +1,4 @@
-use super::layout::{layout_for_mode, DrawLayout};
+use super::layout::{DrawLayout, layout_for_mode};
 
 pub(crate) fn is_eligible(
     image: &crate::raster::DynamicImage,

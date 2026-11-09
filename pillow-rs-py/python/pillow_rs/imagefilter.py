@@ -1,136 +1,230 @@
 """ImageFilter — convolution kernels and filter classes. Pillow-compatible module."""
+from abc import ABC, abstractmethod
+from functools import reduce
+
 from ._core import Image as RustImage
 from . import _core
 from .image import Image
 
 
-# Built-in kernel filters. Pillow exposes each one as a callable public class,
-# not as a string selector. The target keeps the same class shape while the
-# Rust core receives the stable kernel name at application time.
-class _BuiltinFilter:
+class Filter(ABC):
+    @abstractmethod
+    def filter(self, rust_image: RustImage) -> RustImage:
+        """Transform a Rust-owned image handle and return the filtered handle."""
+
+
+class MultibandFilter(Filter):
+    """Marker for filters that process all image bands in one call."""
+
+
+# Built-ins use Rust's named kernels. Custom subclasses can supply Pillow's
+# ``filterargs`` tuple and use the native generic convolution entry point.
+class BuiltinFilter(MultibandFilter):
     kernel_name = ""
+    _kernel_name = ""
+    _kernel_filterargs = None
 
-    def _apply(self, rust_image):
-        return rust_image.filter_name(self.kernel_name)
+    def filter(self, rust_image):
+        if rust_image.mode == "P":
+            raise ValueError("cannot filter palette images")
+        # Preserve the mode-specific Rust fast path unless callers override
+        # Pillow's public filterargs or kernel name on this filter class.
+        if (
+            self.kernel_name == self._kernel_name
+            and self.filterargs is self._kernel_filterargs
+            and self.kernel_name
+        ):
+            return rust_image.filter_name(self.kernel_name)
+        return rust_image.filter(*self.filterargs)
 
 
-class BLUR(_BuiltinFilter):
+class BLUR(BuiltinFilter):
+    name = "Blur"
     kernel_name = "BLUR"
+    _kernel_name = kernel_name
+    filterargs = ((5, 5), 16, 0, (
+        1, 1, 1, 1, 1,
+        1, 0, 0, 0, 1,
+        1, 0, 0, 0, 1,
+        1, 0, 0, 0, 1,
+        1, 1, 1, 1, 1,
+    ))
+    _kernel_filterargs = filterargs
 
 
-class CONTOUR(_BuiltinFilter):
+class CONTOUR(BuiltinFilter):
+    name = "Contour"
     kernel_name = "CONTOUR"
+    _kernel_name = kernel_name
+    filterargs = ((3, 3), 1, 255, (-1, -1, -1, -1, 8, -1, -1, -1, -1))
+    _kernel_filterargs = filterargs
 
 
-class DETAIL(_BuiltinFilter):
+class DETAIL(BuiltinFilter):
+    name = "Detail"
     kernel_name = "DETAIL"
+    _kernel_name = kernel_name
+    filterargs = ((3, 3), 6, 0, (0, -1, 0, -1, 10, -1, 0, -1, 0))
+    _kernel_filterargs = filterargs
 
 
-class EDGE_ENHANCE(_BuiltinFilter):
+class EDGE_ENHANCE(BuiltinFilter):
+    name = "Edge-enhance"
     kernel_name = "EDGE_ENHANCE"
+    _kernel_name = kernel_name
+    filterargs = ((3, 3), 2, 0, (-1, -1, -1, -1, 10, -1, -1, -1, -1))
+    _kernel_filterargs = filterargs
 
 
-class EDGE_ENHANCE_MORE(_BuiltinFilter):
+class EDGE_ENHANCE_MORE(BuiltinFilter):
+    name = "Edge-enhance More"
     kernel_name = "EDGE_ENHANCE_MORE"
+    _kernel_name = kernel_name
+    filterargs = ((3, 3), 1, 0, (-1, -1, -1, -1, 9, -1, -1, -1, -1))
+    _kernel_filterargs = filterargs
 
 
-class EMBOSS(_BuiltinFilter):
+class EMBOSS(BuiltinFilter):
+    name = "Emboss"
     kernel_name = "EMBOSS"
+    _kernel_name = kernel_name
+    filterargs = ((3, 3), 1, 128, (-1, 0, 0, 0, 1, 0, 0, 0, 0))
+    _kernel_filterargs = filterargs
 
 
-class FIND_EDGES(_BuiltinFilter):
+class FIND_EDGES(BuiltinFilter):
+    name = "Find Edges"
     kernel_name = "FIND_EDGES"
+    _kernel_name = kernel_name
+    filterargs = ((3, 3), 1, 0, (-1, -1, -1, -1, 8, -1, -1, -1, -1))
+    _kernel_filterargs = filterargs
 
 
-class SHARPEN(_BuiltinFilter):
+class SHARPEN(BuiltinFilter):
+    name = "Sharpen"
     kernel_name = "SHARPEN"
+    _kernel_name = kernel_name
+    filterargs = ((3, 3), 16, 0, (-2, -2, -2, -2, 32, -2, -2, -2, -2))
+    _kernel_filterargs = filterargs
 
 
-class SMOOTH(_BuiltinFilter):
+class SMOOTH(BuiltinFilter):
+    name = "Smooth"
     kernel_name = "SMOOTH"
+    _kernel_name = kernel_name
+    filterargs = ((3, 3), 13, 0, (1, 1, 1, 1, 5, 1, 1, 1, 1))
+    _kernel_filterargs = filterargs
 
 
-class SMOOTH_MORE(_BuiltinFilter):
+class SMOOTH_MORE(BuiltinFilter):
+    name = "Smooth More"
     kernel_name = "SMOOTH_MORE"
+    _kernel_name = kernel_name
+    filterargs = ((5, 5), 100, 0, (
+        1, 1, 1, 1, 1,
+        1, 5, 5, 5, 1,
+        1, 5, 44, 5, 1,
+        1, 5, 5, 5, 1,
+        1, 1, 1, 1, 1,
+    ))
+    _kernel_filterargs = filterargs
 
 
-class GaussianBlur:
+class GaussianBlur(MultibandFilter):
+    name = "GaussianBlur"
+
     def __init__(self, radius=2):
         self.radius = radius
-    def _apply(self, rust_image):
+    def filter(self, rust_image):
         return rust_image.gaussian_blur(self.radius)
 
 
-class BoxBlur:
-    def __init__(self, radius=2):
+class BoxBlur(MultibandFilter):
+    name = "BoxBlur"
+
+    def __init__(self, radius):
         xy = radius if isinstance(radius, (tuple, list)) else (radius, radius)
         if xy[0] < 0 or xy[1] < 0:
             raise ValueError("radius must be >= 0")
         self.radius = radius
-    def _apply(self, rust_image):
+    def filter(self, rust_image):
         return rust_image.box_blur(self.radius)
 
 
-class UnsharpMask:
+class UnsharpMask(MultibandFilter):
+    name = "UnsharpMask"
+
     def __init__(self, radius=2, percent=150, threshold=3):
         self.radius = radius
         self.percent = percent
         self.threshold = threshold
-    def _apply(self, rust_image):
+    def filter(self, rust_image):
         return rust_image.unsharp_mask(self.radius, self.percent, self.threshold)
 
 
-class MaxFilter:
+class MaxFilter(Filter):
+    name = "Max"
+
     def __init__(self, size=3):
         self.size = size
-    def _apply(self, rust_image):
+    def filter(self, rust_image):
         return rust_image.max_filter(self.size)
 
 
-class MinFilter:
+class MinFilter(Filter):
+    name = "Min"
+
     def __init__(self, size=3):
         self.size = size
-    def _apply(self, rust_image):
+    def filter(self, rust_image):
         return rust_image.min_filter(self.size)
 
 
-class MedianFilter:
+class MedianFilter(Filter):
+    name = "Median"
+
     def __init__(self, size=3):
         self.size = size
-    def _apply(self, rust_image):
+    def filter(self, rust_image):
         return rust_image.median_filter(self.size)
 
 
-class ModeFilter:
+class ModeFilter(Filter):
     name = "Mode"
 
     def __init__(self, size=3):
         self.size = size
-    def _apply(self, rust_image):
-        return rust_image.mode_filter(self.size)
+    def filter(self, rust_image):
+        return rust_image.modefilter(self.size)
 
 
-class RankFilter:
-    def __init__(self, size=3, rank=0):
+class RankFilter(Filter):
+    name = "Rank"
+
+    def __init__(self, size, rank):
         self.size = size
         self.rank = rank
-    def _apply(self, rust_image):
+    def filter(self, rust_image):
         return rust_image.rank_filter(self.size, self.rank)
 
 
-class Kernel:
-    def __init__(self, size=(3, 3), kernel=None, scale=None, offset=0):
+class Kernel(BuiltinFilter):
+    name = "Kernel"
+
+    def __init__(self, size, kernel, scale=None, offset=0):
+        # Pillow computes the default scale before validating coefficient count.
+        if scale is None:
+            scale = reduce(lambda a, b: a + b, kernel)
+        if size[0] * size[1] != len(kernel):
+            raise ValueError("not enough coefficients in kernel")
         self.size = size
         self.kernel = kernel
-        _core.kernel_validate_coefficients(self.kernel, self.size)
         self.scale = scale
         self.offset = offset
-
-    def _apply(self, rust_image):
-        return rust_image.kernel_filter(self.kernel, self.scale, self.offset, self.size)
+        self.filterargs = size, scale, offset, kernel
 
 
-class Color3DLUT:
+class Color3DLUT(MultibandFilter):
     """Three-dimensional color lookup table.
 
     Transforms 3-channel pixels using the values of the channels as coordinates
@@ -231,9 +325,15 @@ class Color3DLUT:
             target_mode=result_mode,
         )
 
-    def _apply(self, rust_image):
+    def filter(self, rust_image):
         """Apply 3D LUT to image using Rust trilinear interpolation."""
-        return rust_image.color3dlut(self.size, self.table, self.channels, self.mode)
+        return rust_image.color_lut_3d(
+            self.mode or rust_image.mode,
+            Image.Resampling.BILINEAR,
+            self.channels,
+            self.size,
+            self.table,
+        )
 
     def __repr__(self):
         return _core.color3dlut_repr(

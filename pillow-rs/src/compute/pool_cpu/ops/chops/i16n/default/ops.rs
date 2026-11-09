@@ -23,12 +23,7 @@ fn execute_offset(image: &DynamicImage, x: i32, y: i32) -> Result<DynamicImage, 
             "Chops mode strategy received a different raster variant".into(),
         ));
     };
-    let output = super::super::super::helpers::offset::offset_i16_samples(
-        buffer,
-        x,
-        y,
-        false,
-    );
+    let output = super::super::super::helpers::offset::offset_i16_samples(buffer, x, y, false);
     Ok(DynamicImage::ImageI16N(output))
 }
 
@@ -38,6 +33,5 @@ fn execute_invert(image: &DynamicImage) -> Result<DynamicImage, PilError> {
             "Chops mode strategy received a different raster variant".into(),
         ));
     };
-    super::super::super::helpers::unary::invert(buffer)
-        .map(DynamicImage::ImageI16N)
+    super::super::super::helpers::unary::invert(buffer).map(DynamicImage::ImageI16N)
 }

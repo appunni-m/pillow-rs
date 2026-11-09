@@ -195,8 +195,8 @@ fn initial_horizontal_sums(
     for channel in 0..CHANNELS {
         sums[channel] = u32::from(source[channel]) * (RADIUS + 1) as u32;
         for position in 0..edge_a.saturating_sub(1) {
-            sums[channel] = sums[channel]
-                .wrapping_add(u32::from(source[position * CHANNELS + channel]));
+            sums[channel] =
+                sums[channel].wrapping_add(u32::from(source[position * CHANNELS + channel]));
         }
         sums[channel] = sums[channel]
             .wrapping_add(u32::from(source[last * CHANNELS + channel]) * last_count as u32);
@@ -248,7 +248,6 @@ fn blur_horizontal_region<K: RadiusSevenHorizontalKernel>(
     end.saturating_sub(start).div_ceil(BLOCK_PIXELS) as u64
 }
 
-
 #[inline(always)]
 fn blur_horizontal_block(
     source: &[u8],
@@ -274,7 +273,7 @@ fn blur_horizontal_block(
             accumulated[channel][lane] = accumulator[channel];
             fractional[channel][lane] = (u32::from(source[far_left * CHANNELS + channel])
                 + u32::from(source[far_right * CHANNELS + channel]))
-                .wrapping_mul(context.fractional_weight);
+            .wrapping_mul(context.fractional_weight);
         }
     }
     store_horizontal_block(
@@ -324,4 +323,3 @@ fn store_horizontal_block(
         }
     }
 }
-

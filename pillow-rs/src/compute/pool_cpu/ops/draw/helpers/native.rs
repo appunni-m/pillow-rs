@@ -76,4 +76,3 @@ pub(crate) fn execute_luma16_buffer<const DECLARED_BIG_ENDIAN: bool>(
     }
     Ok(output)
 }
-

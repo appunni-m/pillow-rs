@@ -19,45 +19,59 @@ mod point;
 pub(crate) use color::{
     resolve_imageops_color, resolve_pad_palette_fill, resolve_palette_tuple_bytes,
 };
-pub(crate) use geometry::fit_box_coordinates;
-pub use exif::{
-    exif_get_orientation, exif_remove_orientation, exif_remove_xmp_orientation,
-    exif_transpose, exif_transpose_with_orientation, ImageOpsExifXmpValue,
-    EXIF_XMP_ATTRIBUTE_PREFIX, EXIF_XMP_ATTRIBUTE_SUFFIX, EXIF_XMP_ELEMENT_PREFIX,
-    EXIF_XMP_ELEMENT_SUFFIX,
+pub use colorize::{
+    ImageOpsColorizeCallbacks, colorize, colorize_with_callbacks, validate_colorize_mode,
 };
-pub use colorize::*;
-pub use equalize::*;
+pub use equalize::{
+    ImageOpsEqualizeCallbacks, equalize, equalize_lut_from_histogram, equalize_with_callbacks,
+    equalize_with_mask,
+};
+pub use exif::{
+    EXIF_XMP_ATTRIBUTE_PREFIX, EXIF_XMP_ATTRIBUTE_SUFFIX, EXIF_XMP_ELEMENT_PREFIX,
+    EXIF_XMP_ELEMENT_SUFFIX, ImageOpsExifXmpValue, exif_get_orientation, exif_remove_orientation,
+    exif_remove_xmp_orientation, exif_transpose, exif_transpose_with_orientation,
+};
+pub(crate) use geometry::fit_box_coordinates;
 pub use geometry::{
     ImageOpsAspectArithmetic, ImageOpsAspectCallbacks, ImageOpsAspectComparison,
-    ImageOpsAspectOperation, ImageOpsAspectSize, ImageOpsFitCallbacks,
-    ImageOpsFitRouteCallbacks, ImageOpsFitConstant,
+    ImageOpsAspectOperation, ImageOpsAspectRouteCallbacks, ImageOpsAspectSize,
     ImageOpsBorderCallbacks, ImageOpsCropCallbacks, ImageOpsCropRouteCallbacks,
-    ImageOpsExpandGeometryCallbacks,
-    ImageOpsExpandCallbacks, ImageOpsPadAxis, ImageOpsPadCallbacks, ImageOpsPadRouteCallbacks,
-    ImageOpsScaleCallbacks,
-    ImageOpsScaleRouteCallbacks,
-    ImageOpsAspectRouteCallbacks, ImageOpsNativeSizeCallbacks, ImageOpsNativeSizeProperty,
-    aspect_size_with_route_callbacks,
-    crop_box_with_callbacks, crop_box_with_route_callbacks,
-    fit_box_with_callbacks, fit_box_with_route_callbacks,
-    scale_size_with_callbacks, scale_with_route_callbacks,
-    contain, contain_geometry_preflight, contain_with_input, cover, cover_geometry_preflight,
-    cover_with_input, crop, crop_box_geometry_preflight, expand,
-    expand_canvas_with_prepared_fill, expand_with_input,
-    expand_with_margins, expand_with_margins_and_input, fit, fit_with_input, pad,
-    fit_geometry_preflight, pad_fill_preflight, pad_filter_preflight,
-    pad_geometry_preflight, pad_preflight_with_input, pad_with_input,
+    ImageOpsExpandCallbacks, ImageOpsExpandGeometryCallbacks, ImageOpsFitCallbacks,
+    ImageOpsFitConstant, ImageOpsFitRouteCallbacks, ImageOpsNativeSizeCallbacks,
+    ImageOpsNativeSizeProperty, ImageOpsPadAxis, ImageOpsPadCallbacks, ImageOpsPadRouteCallbacks,
+    ImageOpsScaleCallbacks, ImageOpsScaleRouteCallbacks, PadFillPreflight, PadGeometryPreflight,
+    PadPreflight, PreparedExpandFill, aspect_size_with_route_callbacks, contain,
+    contain_geometry_preflight, contain_with_input, cover, cover_geometry_preflight,
+    cover_with_input, crop, crop_box_geometry_preflight, crop_box_with_callbacks,
+    crop_box_with_route_callbacks, expand, expand_canvas_with_prepared_fill, expand_with_callbacks,
+    expand_with_input, expand_with_margins, expand_with_margins_and_input,
+    finish_expand_fill_palette_from_host, fit, fit_box_with_callbacks,
+    fit_box_with_route_callbacks, fit_geometry_preflight, fit_with_input,
+    native_size_pair_with_callbacks, pad, pad_fallback_with_callbacks, pad_fill_preflight,
+    pad_filter_preflight, pad_geometry_preflight, pad_preflight_with_input, pad_with_input,
     pad_with_input_and_containment, pad_with_preflight, pad_with_preflight_and_fill,
-    parse_imageops_filter_input, native_size_pair_with_callbacks,
-    pad_fallback_with_callbacks, pad_with_route_callbacks,
-    prepare_expand_fill_for_mode,
-    expand_with_callbacks, finish_expand_fill_palette_from_host, scale_with_input,
-    scale_geometry_preflight, validate_deform_resample, validate_expand_output_size_for_mode,
-    validate_prepared_expand_output_size, PadFillPreflight,
-    PadGeometryPreflight, PadPreflight, PreparedExpandFill,
+    pad_with_route_callbacks, parse_imageops_filter_input, prepare_expand_fill_for_mode,
+    scale_geometry_preflight, scale_size_with_callbacks, scale_with_input,
+    scale_with_route_callbacks, validate_deform_resample, validate_expand_output_size_for_mode,
+    validate_prepared_expand_output_size,
 };
-pub use point::*;
+pub(crate) use geometry::{
+    contain_dimensions_from_sizes, cover_dimensions_from_sizes, round_positive_ties_even,
+    validate_aspect_resize_dimensions,
+};
+pub(crate) use geometry::{normalize_fit_bleed, normalize_fit_centering};
+pub(crate) use geometry::{scale_dimension_to_u32, scale_dimensions_preflight};
+pub use point::{
+    ImageOpsAutocontrastCallbacks, ImageOpsAutocontrastResultCallbacks,
+    ImageOpsAutocontrastSourceCallbacks, ImageOpsInvertCallbacks, ImageOpsLutBuildCallbacks,
+    ImageOpsLutCallbacks, ImageOpsPosterizeCallbacks, ImageOpsSolarizeCallbacks, autocontrast,
+    autocontrast_lut_from_histogram, autocontrast_lut_with_callbacks,
+    autocontrast_result_from_lut_with_callbacks, autocontrast_with_callbacks,
+    autocontrast_with_mask, autocontrast_with_options, autocontrast_with_options_and_mask, flip,
+    grayscale, imageops_lut_with_callbacks, invert_ops, invert_with_callbacks, mirror, posterize,
+    posterize_with_callbacks, solarize, solarize_comparison_table, solarize_with_callbacks,
+    solarize_with_input,
+};
 
 /// Host-neutral centering input for `ImageOps.fit` and `ImageOps.pad`.
 #[derive(Debug, Clone)]

@@ -351,7 +351,7 @@ pub(super) fn gpu_resize_coefficients_are_safe(
 /// Build the exact two-pass coefficient tables for ImageOps.fit's fractional
 /// source box.  The boxed builder performs Pillow's required f32 boundary
 /// conversion before calculating f64 centers and 22-bit weights; reusing it
-/// here keeps the GPU's control table identical to `pil_resize_boxed` while
+/// here keeps the GPU's control table identical to the maintained boxed Resize strategy while
 /// leaving all sample reads, accumulation, and writes on the device.
 /// This follows Pillow's `libImaging/Resample.c::precompute_coeffs` contract:
 /// `ImageOps.fit` passes its crop box through the float ABI before those

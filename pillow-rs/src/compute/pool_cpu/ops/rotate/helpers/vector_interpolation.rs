@@ -44,22 +44,26 @@ pub(crate) fn sample_coordinates(
 
 #[inline]
 pub(crate) fn fused_mul_add(a: f64x8, b: f64x8, c: f64x8) -> f64x8 {
-    #[cfg(any(target_feature = "fma", all(target_arch = "aarch64", target_feature = "neon")))]
+    #[cfg(any(
+        target_feature = "fma",
+        all(target_arch = "aarch64", target_feature = "neon")
+    ))]
     {
         a.mul_add(b, c)
     }
-    #[cfg(not(any(target_feature = "fma", all(target_arch = "aarch64", target_feature = "neon"))))]
+    #[cfg(not(any(
+        target_feature = "fma",
+        all(target_arch = "aarch64", target_feature = "neon")
+    )))]
     {
         let (a, b, c) = (a.to_array(), b.to_array(), c.to_array());
-        f64x8::new(std::array::from_fn(|lane| a[lane].mul_add(b[lane], c[lane])))
+        f64x8::new(std::array::from_fn(|lane| {
+            a[lane].mul_add(b[lane], c[lane])
+        }))
     }
 }
 
-pub(crate) fn bilinear_vector(
-    neighbors: [f64x8; 4],
-    fx: f64x8,
-    fy: f64x8,
-) -> f64x8 {
+pub(crate) fn bilinear_vector(neighbors: [f64x8; 4], fx: f64x8, fy: f64x8) -> f64x8 {
     let top = fused_mul_add(neighbors[1] - neighbors[0], fx, neighbors[0]);
     let bottom = fused_mul_add(neighbors[3] - neighbors[2], fx, neighbors[2]);
     fused_mul_add(bottom - top, fy, top)
@@ -106,11 +110,9 @@ pub(crate) fn gather_neighborhood(
         let divisor = f64x8::splat(255.0);
         let bias = f64x8::splat(0.5);
         for neighbor in 0..4 {
-            let premultiplied = (f64x8::new(values[neighbor])
-                * f64x8::new(alphas[neighbor])
-                / divisor
-                + bias)
-                .to_array();
+            let premultiplied =
+                (f64x8::new(values[neighbor]) * f64x8::new(alphas[neighbor]) / divisor + bias)
+                    .to_array();
             for (lane, value) in premultiplied.into_iter().enumerate() {
                 if samples[lane].valid {
                     values[neighbor][lane] = (value as u8) as f64;
@@ -121,15 +123,12 @@ pub(crate) fn gather_neighborhood(
     values.map(f64x8::new)
 }
 
-pub(crate) fn unpremultiply_vector(
-    premultiplied: f64x8,
-    alpha: [u8; LANES],
-) -> [u8; LANES] {
+pub(crate) fn unpremultiply_vector(premultiplied: f64x8, alpha: [u8; LANES]) -> [u8; LANES] {
     let premultiplied_bytes = premultiplied.to_array().map(|value| value as u8);
     let alpha_vector = f64x8::new(alpha.map(f64::from));
     let restored = (f64x8::new(premultiplied_bytes.map(f64::from)) * f64x8::splat(255.0)
         / alpha_vector.max(f64x8::splat(1.0)))
-        .to_array();
+    .to_array();
     std::array::from_fn(|lane| {
         if alpha[lane] == 0 {
             premultiplied_bytes[lane]

@@ -42,8 +42,8 @@ where
     }
 
     let source_width = usize::try_from(plan.source_size.0).map_err(|_| overflow("source width"))?;
-    let destination_width = usize::try_from(plan.destination_size.0)
-        .map_err(|_| overflow("destination width"))?;
+    let destination_width =
+        usize::try_from(plan.destination_size.0).map_err(|_| overflow("destination width"))?;
     let source_stride = source_width
         .checked_mul(4)
         .ok_or_else(|| overflow("source stride"))?;
@@ -100,26 +100,13 @@ where
         blend_row(source_row, destination_row, mask_row);
     }
 
-    let row_bytes = u64::from(plan.region.width).saturating_mul(4);
-    let remainder = row_bytes % 16;
-    let tail_blocks = if remainder == 0 {
-        0
-    } else if remainder <= 8 {
-        1
-    } else {
-        2
-    };
-    let vector_blocks = (row_bytes / 16)
-        .saturating_add(tail_blocks)
-        .saturating_mul(u64::from(plan.region.height));
-    let scalar_tail = (row_bytes % 8).saturating_mul(u64::from(plan.region.height));
-    if vector_blocks != 0 {
-        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-    }
-    if scalar_tail != 0 {
-        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    }
-    crate::compute::record_pipeline_operation_path("neon-cmyk-l-blend");
+    crate::compute::pool_cpu::ops::paste::helpers::telemetry::record_l_mask_neon(
+        plan.region.width,
+        plan.region.height,
+        4,
+        "neon-cmyk-l-blend",
+        true,
+    );
     Ok(Some(output))
 }
 

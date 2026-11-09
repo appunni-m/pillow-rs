@@ -1,15 +1,10 @@
 //! ImageLaPremultiplied8 Eval support and Default architecture selection.
 
-use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
-use crate::compute::registry::support::{
-    InputContract,
-    ModeSupport,
-    OperationId,
-};
 use crate::compute::ExecutionContext;
+use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
+use crate::compute::registry::support::{InputContract, ModeSupport, OperationId};
 use crate::error::PilError;
-use crate::raster::{DynamicImage, Mode, GrayAlphaImage};
-
+use crate::raster::{DynamicImage, GrayAlphaImage, Mode};
 
 const INPUTS: &[InputContract] = &[
     InputContract::ByteLutEntries { channels: 2 },
@@ -29,7 +24,6 @@ pub(crate) enum ArchitectureStrategy<'a> {
 
 pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
 
-
 pub(crate) fn prepare<'a>(
     input: &'a GrayAlphaImage,
     lut: &'a [u8],
@@ -43,7 +37,10 @@ pub(crate) fn prepare<'a>(
     );
     let selection = super::super::helpers::strategy::select(SUPPORT, facts, ctx)?;
     let kernel = super::default::prepare(input, lut);
-    Ok(Prepared::new(ArchitectureStrategy::Default(kernel), selection))
+    Ok(Prepared::new(
+        ArchitectureStrategy::Default(kernel),
+        selection,
+    ))
 }
 
 pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {

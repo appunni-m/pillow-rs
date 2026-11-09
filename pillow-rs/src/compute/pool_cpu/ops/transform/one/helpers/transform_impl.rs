@@ -2,4 +2,10 @@
 
 use crate::compute::pool_cpu::ops::transform::helpers::byte_mode_nearest;
 
-byte_mode_nearest!(One, crate::raster::GrayImage, 1, "One", "transform One output shape mismatch");
+byte_mode_nearest!(
+    One,
+    crate::raster::GrayImage,
+    1,
+    "One",
+    "transform One output shape mismatch"
+);

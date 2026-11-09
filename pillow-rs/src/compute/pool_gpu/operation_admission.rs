@@ -270,11 +270,10 @@ pub(super) fn gpu_operation_color_requires_cpu(
         // PutData and alpha promotion carry their logical source/target
         // layouts. Reject mismatches before a packed shader reinterprets the
         // existing storage in place.
-        PipelineOp::PutData { payload_mode, .. } => {
-            !mode_matches_color(*payload_mode, color)
+        PipelineOp::PutData { payload_mode, .. } => !mode_matches_color(*payload_mode, color),
+        PipelineOp::PutAlpha { mode, .. } | PipelineOp::PutAlphaData { mode, .. } => {
+            !mode_matches_color(*mode, color)
         }
-        PipelineOp::PutAlpha { mode, .. }
-        | PipelineOp::PutAlphaData { mode, .. } => !mode_matches_color(*mode, color),
         // The CPU ImageOps implementation runs Posterize/Solarize through
         // an RGB temporary and preserve_mode, which makes alpha opaque for
         // LA/RGBA. The packed shaders currently retain alpha, so keep those
@@ -309,21 +308,24 @@ pub(super) fn gpu_operation_color_requires_cpu(
 fn mode_matches_color(mode: Mode, color: crate::raster::ColorType) -> bool {
     matches!(
         (mode, color),
-        (Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8, crate::raster::ColorType::L8)
-            | (Mode::ImageLumaA8 | Mode::ImagePaletteAlpha8, crate::raster::ColorType::La8)
-            | (
-                Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageHsv8,
-                crate::raster::ColorType::Rgb8
-            )
-            | (
-                Mode::ImageRgba8
-                    | Mode::ImageRgbPremultiplied8
-                    | Mode::ImageRgbx8
-                    | Mode::ImageCmyk8
-                    | Mode::ImageI32
-                    | Mode::ImageF32,
-                crate::raster::ColorType::Rgba8
-            )
+        (
+            Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8,
+            crate::raster::ColorType::L8
+        ) | (
+            Mode::ImageLumaA8 | Mode::ImagePaletteAlpha8,
+            crate::raster::ColorType::La8
+        ) | (
+            Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageHsv8,
+            crate::raster::ColorType::Rgb8
+        ) | (
+            Mode::ImageRgba8
+                | Mode::ImageRgbPremultiplied8
+                | Mode::ImageRgbx8
+                | Mode::ImageCmyk8
+                | Mode::ImageI32
+                | Mode::ImageF32,
+            crate::raster::ColorType::Rgba8
+        )
     )
 }
 
@@ -504,7 +506,10 @@ pub(super) fn gpu_batch_capacity(
             // endpoint; account for the intermediate before allocating.
             high_water = high_water.max(pixels((out_w, cur_h))?);
         }
-        if let PipelineOp::PutData { data, payload_mode, .. } = op {
+        if let PipelineOp::PutData {
+            data, payload_mode, ..
+        } = op
+        {
             let Some(bytes_per_pixel) =
                 crate::compute::helpers::put_data::payload_bytes_per_pixel(*payload_mode)
             else {

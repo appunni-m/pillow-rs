@@ -53,7 +53,6 @@ fn blur_horizontal_passes(
     mut scratch: Vec<u8>,
     context: BoxBlurPassContext,
 ) -> (Vec<u8>, Vec<u8>) {
-
     let BoxBlurPassContext {
         width,
         height,
@@ -388,9 +387,7 @@ fn pil_box_blur_xy(
     radius_y: f32,
     passes: u32,
 ) -> Result<Option<Vec<u8>>, PilError> {
-    pil_box_blur_xy_impl(
-        raw, width, height, channels, radius_x, radius_y, passes,
-    )
+    pil_box_blur_xy_impl(raw, width, height, channels, radius_x, radius_y, passes)
 }
 
 fn pil_box_blur_xy_impl(
@@ -513,11 +510,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn copy_native_byte_blur_input(
             "native-byte blur identity received a mismatched mode or layout".into(),
         ));
     }
-    let dimensions = CheckedDims::new_allow_empty(
-        image.width(),
-        image.height(),
-        channels as u8,
-    )?;
+    let dimensions = CheckedDims::new_allow_empty(image.width(), image.height(), channels as u8)?;
     if image.as_bytes().len() != dimensions.total_bytes() {
         return Err(PilError::InternalError(
             "native-byte blur identity input does not match its dimensions".into(),
@@ -552,15 +545,14 @@ pub(crate) fn gaussian_blur_box_parameters(sigma: f32) -> (usize, u32, u32) {
     crate::compute::helpers::filters::gaussian_blur_box_parameters(sigma)
 }
 
-pub(in crate::compute::pool_cpu::ops::filter) fn execute_native_byte_blur(
+pub(in crate::compute::pool_cpu::ops::filter) fn execute_native_byte_blur<const CHANNELS: usize>(
     image: &crate::raster::DynamicImage,
     mode: crate::raster::Mode,
-    channels: usize,
     request: super::super::ops::FilterRequest,
     selection: &crate::compute::registry::support::StrategySelection,
     context: &crate::compute::ExecutionContext,
 ) -> Result<crate::raster::DynamicImage, PilError> {
-    vector::execute(image, mode, channels, request, selection, context)
+    vector::execute::<CHANNELS>(image, mode, request, selection, context)
 }
 
 pub(in crate::compute::pool_cpu::ops::filter) fn validate_native_byte_blur_selection(

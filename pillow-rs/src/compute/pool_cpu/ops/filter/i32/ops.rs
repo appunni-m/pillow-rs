@@ -1,8 +1,8 @@
 use super::super::ops::{inputs_for, pillow_kernel};
 use crate::compute::Architecture;
 use crate::compute::registry::support::{
-    ImplementationSupport, ModeSupport, OperationId, RejectionKind,
-    StrategyGuard, StrategySelection,
+    ImplementationSupport, ModeSupport, OperationId, RejectionKind, StrategyGuard,
+    StrategySelection,
 };
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode, RgbaImage};
@@ -88,23 +88,32 @@ fn rejected() -> ModeSupport {
     }
 }
 
-
 pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId) -> ModeSupport {
     match operation {
         OperationId::Filter3x3 => pillow_kernel(OperationId::Filter3x3, MODE, AVX2_FMA_FILTER3X3),
-        OperationId::Filter5x5 => pillow_kernel(OperationId::Filter5x5, MODE, FILTER5X5_ARCHITECTURES),
+        OperationId::Filter5x5 => {
+            pillow_kernel(OperationId::Filter5x5, MODE, FILTER5X5_ARCHITECTURES)
+        }
         OperationId::GaussianBlur | OperationId::BoxBlur | OperationId::BoxBlurXY => rejected(),
         OperationId::MedianFilter => ModeSupport::serial(
-            OperationId::MedianFilter, Mode::ImageI32, inputs_for(OperationId::MedianFilter),
+            OperationId::MedianFilter,
+            Mode::ImageI32,
+            inputs_for(OperationId::MedianFilter),
         ),
         OperationId::MaxFilter => ModeSupport::serial(
-            OperationId::MaxFilter, Mode::ImageI32, inputs_for(OperationId::MaxFilter),
+            OperationId::MaxFilter,
+            Mode::ImageI32,
+            inputs_for(OperationId::MaxFilter),
         ),
         OperationId::MinFilter => ModeSupport::serial(
-            OperationId::MinFilter, Mode::ImageI32, inputs_for(OperationId::MinFilter),
+            OperationId::MinFilter,
+            Mode::ImageI32,
+            inputs_for(OperationId::MinFilter),
         ),
         OperationId::RankFilter => ModeSupport::serial(
-            OperationId::RankFilter, Mode::ImageI32, inputs_for(OperationId::RankFilter),
+            OperationId::RankFilter,
+            Mode::ImageI32,
+            inputs_for(OperationId::RankFilter),
         ),
         _ => ModeSupport::Rejected {
             mode: MODE,
@@ -134,12 +143,16 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
                 "I-mode filter identity received a non-I raster".into(),
             ));
         };
-        let output = crate::compute::pool_cpu::ops::filter::helpers::execute_native_filter_identity_copy(
-            source.as_raw(),
-        )?;
-        let output = RgbaImage::from_raw(source.width(), source.height(), output).ok_or_else(|| {
-            PilError::InternalError("I-mode filter identity output does not match its mode".into())
-        })?;
+        let output =
+            crate::compute::pool_cpu::ops::filter::helpers::execute_native_filter_identity_copy(
+                source.as_raw(),
+            )?;
+        let output =
+            RgbaImage::from_raw(source.width(), source.height(), output).ok_or_else(|| {
+                PilError::InternalError(
+                    "I-mode filter identity output does not match its mode".into(),
+                )
+            })?;
         return Ok(DynamicImage::ImageI32(output));
     }
     match selection.implementation.architecture {
@@ -148,22 +161,28 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
             request @ super::super::ops::FilterRequest::Filter3x3 { .. } => {
                 super::avx2::execute_filter3x3(image, request)
             }
-            super::super::ops::FilterRequest::Filter5x5 { kernel, scale, offset } => {
-                super::avx2::execute(image, &kernel, scale, offset)
-            }
+            super::super::ops::FilterRequest::Filter5x5 {
+                kernel,
+                scale,
+                offset,
+            } => super::avx2::execute(image, &kernel, scale, offset),
             _ => Err(PilError::InternalError(
                 "AVX2/FMA filter selection received an unsupported convolution request".into(),
             )),
         },
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         Architecture::AvxFma => match request {
-            super::super::ops::FilterRequest::Filter5x5 { kernel, scale, offset } => {
-                avx::execute(image, &kernel, scale, offset)
-            }
+            super::super::ops::FilterRequest::Filter5x5 {
+                kernel,
+                scale,
+                offset,
+            } => super::avx::execute(image, &kernel, scale, offset),
             _ => Err(PilError::InternalError(
                 "AVX/FMA filter selection received an unsupported convolution request".into(),
             )),
         },
-        _ => Err(PilError::InternalError("filter selected an unowned architecture".into())),
+        _ => Err(PilError::InternalError(
+            "filter selected an unowned architecture".into(),
+        )),
     }
 }

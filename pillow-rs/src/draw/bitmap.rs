@@ -64,9 +64,7 @@ impl Draw {
             // costs dominate such a small blend. Keep the requested backend
             // route instead of disguising that case as CPU execution.
             let source = match mode {
-                Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => {
-                    PasteSource::Scalar(color.0)
-                }
+                Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => PasteSource::Scalar(color.0),
                 Mode::ImageLumaA8 => PasteSource::LumaAlpha(color.0, color.3),
                 _ => PasteSource::Rgba(color.0, color.1, color.2, color.3),
             };
@@ -209,10 +207,7 @@ impl Draw {
         let prepared = selection.ok_or_else(|| {
             PilError::InternalError("Draw Bitmap mode did not prepare a strategy".into())
         })?;
-        crate::compute::pool_cpu::ops::draw::ops::validate_direct_selection(
-            prepared,
-            raster_mode,
-        )?;
+        crate::compute::pool_cpu::ops::draw::ops::validate_direct_selection(prepared, raster_mode)?;
         self.apply_prepared_bitmap(prepared, x, y, bmp_w, bmp_h, &mask, color)?;
         Ok(prepared)
     }
@@ -246,14 +241,7 @@ impl Draw {
         };
         let image = self.image.materialize()?;
         let output = crate::compute::pool_cpu::ops::draw::ops::apply_bitmap(
-            prepared,
-            image,
-            x,
-            y,
-            bmp_w,
-            bmp_h,
-            mask,
-            color,
+            prepared, image, x, y, bmp_w, bmp_h, mask, color,
         )?;
         self.install_bitmap_output(selected_mode, output, paletted)?;
         Ok(())
@@ -323,7 +311,8 @@ impl Draw {
             x,
             y,
             color,
-        )? else {
+        )?
+        else {
             return Ok(false);
         };
         self.replace_draw_output(output);
@@ -346,9 +335,7 @@ impl Draw {
         // model. Keep those bytes in place while drawing: materializing an
         // owned image and then calling `to_rgba8()` makes two full-frame
         // copies even though this path performs no color conversion.
-        if raster_mode == Mode::ImageCmyk8
-            && bmp_mode == Mode::ImageLuma8
-        {
+        if raster_mode == Mode::ImageCmyk8 && bmp_mode == Mode::ImageLuma8 {
             let selection = selection.ok_or_else(|| {
                 PilError::InternalError(
                     "Draw CMYK Bitmap fast path has no prepared selection".into(),
@@ -372,6 +359,4 @@ impl Draw {
         }
         Ok(false)
     }
-
-
 }

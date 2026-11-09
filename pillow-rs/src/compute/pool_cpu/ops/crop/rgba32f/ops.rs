@@ -2,10 +2,10 @@
 
 // NO_PILLOW_SUPPORT: typed native sample crop extends the Pillow operation surface.
 
-use crate::compute::{ExecutionContext, registry::support::{
-    ModeSupport,
-    OperationId,
-}};
+use crate::compute::{
+    ExecutionContext,
+    registry::support::{ModeSupport, OperationId},
+};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 
@@ -27,7 +27,6 @@ pub(crate) enum ArchitectureStrategy<'a> {
 
 pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
 
-
 pub(crate) fn prepare<'a>(
     image: &'a super::default::crop_impl::Input,
     region: CropRegion,
@@ -35,11 +34,16 @@ pub(crate) fn prepare<'a>(
 ) -> Result<Strategy<'a>, PilError> {
     let implementation = super::default::crop_impl::prepare(image, region);
     let selection = SUPPORT.select_serial(ctx)?;
-    Ok(Prepared::new(ArchitectureStrategy::Default(implementation), selection))
+    Ok(Prepared::new(
+        ArchitectureStrategy::Default(implementation),
+        selection,
+    ))
 }
 
 pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
     match strategy.implementation {
-            ArchitectureStrategy::Default(implementation) => Ok(super::default::crop_impl::execute(implementation)),
+        ArchitectureStrategy::Default(implementation) => {
+            Ok(super::default::crop_impl::execute(implementation))
+        }
     }
 }

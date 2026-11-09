@@ -12,7 +12,5 @@ pub(crate) fn execute<P>(
 where
     P: Pixel<Subpixel = u8>,
 {
-    crate::compute::pool_cpu::ops::enhance::helpers::contrast::execute_image(
-        source, base, factor,
-    )
+    crate::compute::pool_cpu::ops::enhance::helpers::contrast::execute_image(source, base, factor)
 }

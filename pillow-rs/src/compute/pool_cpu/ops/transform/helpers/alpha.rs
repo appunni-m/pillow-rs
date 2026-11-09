@@ -9,8 +9,8 @@ pub(crate) fn premultiply(source: &[u8], channels: usize) -> Vec<u8> {
     {
         let alpha = source_pixel[alpha_index];
         for channel in 0..alpha_index {
-            output_pixel[channel] = ((u16::from(source_pixel[channel]) * u16::from(alpha) + 127)
-                / 255) as u8;
+            output_pixel[channel] =
+                ((u16::from(source_pixel[channel]) * u16::from(alpha) + 127) / 255) as u8;
         }
     }
     output
@@ -26,8 +26,8 @@ pub(crate) fn premultiply_into(source: &[u8], channels: usize, output: &mut Vec<
     {
         let alpha = source_pixel[alpha_index];
         for channel in 0..alpha_index {
-            output_pixel[channel] = ((u16::from(source_pixel[channel]) * u16::from(alpha) + 127)
-                / 255) as u8;
+            output_pixel[channel] =
+                ((u16::from(source_pixel[channel]) * u16::from(alpha) + 127) / 255) as u8;
         }
     }
 }

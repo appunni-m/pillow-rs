@@ -134,8 +134,7 @@ fn validate_coefficients(
     source_height: u32,
 ) -> Result<(), PilError> {
     let fits = usize::try_from(source_width).ok().is_some_and(|width| {
-        byte_coefficients_fit_source(horizontal, width)
-            && byte_coefficients_fit_i32(horizontal)
+        byte_coefficients_fit_source(horizontal, width) && byte_coefficients_fit_i32(horizontal)
     }) && usize::try_from(source_height).ok().is_some_and(|height| {
         byte_coefficients_fit_source(vertical, height) && byte_coefficients_fit_i32(vertical)
     });
@@ -181,11 +180,7 @@ fn build_horizontal_block(coefficients: &FilterCoeffs, output_x: usize) -> Optio
     Some(Block { taps })
 }
 
-fn build_horizontal_tap(
-    coefficients: &FilterCoeffs,
-    output_x: usize,
-    tap: usize,
-) -> Option<Tap> {
+fn build_horizontal_tap(coefficients: &FilterCoeffs, output_x: usize, tap: usize) -> Option<Tap> {
     let mut source_bases = [0; LANES];
     let mut weights = [0; LANES];
     for lane in 0..LANES {
@@ -224,10 +219,9 @@ fn horizontal_pass(
         let source_start = source_y.checked_mul(source_width)?;
         let output_start = source_y.checked_mul(output_width)?;
         let source_row = source.get(source_start..source_start.checked_add(source_width)?)?;
-        let output_row = intermediate
-            .get_mut(output_start..output_start.checked_add(output_width)?)?;
-        let (row_blocks, row_tail) =
-            horizontal_row(source_row, coefficients, plan, output_row)?;
+        let output_row =
+            intermediate.get_mut(output_start..output_start.checked_add(output_width)?)?;
+        let (row_blocks, row_tail) = horizontal_row(source_row, coefficients, plan, output_row)?;
         vector_blocks = vector_blocks.saturating_add(row_blocks);
         scalar_tail = scalar_tail.saturating_add(row_tail);
     }
@@ -366,11 +360,7 @@ fn vertical_row(
     Some((vector_blocks, scalar_tail))
 }
 
-fn vertical_scalar_tail(
-    context: VerticalTail<'_>,
-    start: usize,
-    output: &mut [u8],
-) -> Option<u64> {
+fn vertical_scalar_tail(context: VerticalTail<'_>, start: usize, output: &mut [u8]) -> Option<u64> {
     let weights = coefficient_slice(context.coefficients, context.output_y)?;
     let mut scalar_tail = 0_u64;
     for output_x in start..context.output_width {
@@ -394,9 +384,7 @@ fn vertical_scalar_tail(
 fn coefficient_slice(coefficients: &FilterCoeffs, index: usize) -> Option<&[i64]> {
     let start = *coefficients.offsets.get(index)?;
     let count = *coefficients.count.get(index)?;
-    coefficients
-        .weights
-        .get(start..start.checked_add(count)?)
+    coefficients.weights.get(start..start.checked_add(count)?)
 }
 
 fn record_vector_work(

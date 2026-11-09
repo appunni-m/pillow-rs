@@ -6,10 +6,7 @@
 
 use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{
-    ExpandFillRule,
-    InputContract,
-    ModeSupport,
-    StrategySelection,
+    ExpandFillRule, InputContract, ModeSupport, StrategySelection,
 };
 use crate::error::PilError;
 use crate::pipeline::NativeColorInput;
@@ -84,7 +81,6 @@ declare_expand_modes! {
     ImageRgba32F => rgba32f,
 }
 
-
 pub(crate) fn prepare<'a>(
     image: &'a DynamicImage,
     border: crate::pipeline::ExpandMargins,
@@ -111,9 +107,7 @@ pub(crate) fn prepare_with_native_fill<'a>(
     let declares_native_fill = inputs.iter().any(|contract| {
         matches!(
             contract,
-            InputContract::ExpandFill(
-                ExpandFillRule::NativeU16 | ExpandFillRule::NativeF32
-            )
+            InputContract::ExpandFill(ExpandFillRule::NativeU16 | ExpandFillRule::NativeF32)
         )
     });
     if !declares_native_fill {
@@ -123,39 +117,75 @@ pub(crate) fn prepare_with_native_fill<'a>(
     }
     match image {
         DynamicImage::ImageI16(input) => super::i16::expand::prepare_with_native_fill(
-            input, border, fill, Some(native_fill), ctx,
+            input,
+            border,
+            fill,
+            Some(native_fill),
+            ctx,
         )
         .map(PreparedExpand::ImageI16),
         DynamicImage::ImageI16L(input) => super::i16l::expand::prepare_with_native_fill(
-            input, border, fill, Some(native_fill), ctx,
+            input,
+            border,
+            fill,
+            Some(native_fill),
+            ctx,
         )
         .map(PreparedExpand::ImageI16L),
         DynamicImage::ImageI16B(input) => super::i16b::expand::prepare_with_native_fill(
-            input, border, fill, Some(native_fill), ctx,
+            input,
+            border,
+            fill,
+            Some(native_fill),
+            ctx,
         )
         .map(PreparedExpand::ImageI16B),
         DynamicImage::ImageI16N(input) => super::i16n::expand::prepare_with_native_fill(
-            input, border, fill, Some(native_fill), ctx,
+            input,
+            border,
+            fill,
+            Some(native_fill),
+            ctx,
         )
         .map(PreparedExpand::ImageI16N),
         DynamicImage::ImageLumaA16(input) => super::luma_a16::expand::prepare_with_native_fill(
-            input, border, fill, Some(native_fill), ctx,
+            input,
+            border,
+            fill,
+            Some(native_fill),
+            ctx,
         )
         .map(PreparedExpand::ImageLumaA16),
         DynamicImage::ImageRgb16(input) => super::rgb16::expand::prepare_with_native_fill(
-            input, border, fill, Some(native_fill), ctx,
+            input,
+            border,
+            fill,
+            Some(native_fill),
+            ctx,
         )
         .map(PreparedExpand::ImageRgb16),
         DynamicImage::ImageRgba16(input) => super::rgba16::expand::prepare_with_native_fill(
-            input, border, fill, Some(native_fill), ctx,
+            input,
+            border,
+            fill,
+            Some(native_fill),
+            ctx,
         )
         .map(PreparedExpand::ImageRgba16),
         DynamicImage::ImageRgb32F(input) => super::rgb32f::expand::prepare_with_native_fill(
-            input, border, fill, Some(native_fill), ctx,
+            input,
+            border,
+            fill,
+            Some(native_fill),
+            ctx,
         )
         .map(PreparedExpand::ImageRgb32F),
         DynamicImage::ImageRgba32F(input) => super::rgba32f::expand::prepare_with_native_fill(
-            input, border, fill, Some(native_fill), ctx,
+            input,
+            border,
+            fill,
+            Some(native_fill),
+            ctx,
         )
         .map(PreparedExpand::ImageRgba32F),
         _ => Err(PilError::InternalError(

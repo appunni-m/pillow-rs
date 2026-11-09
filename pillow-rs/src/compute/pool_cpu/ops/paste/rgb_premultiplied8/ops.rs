@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use crate::compute::pool_cpu::ops::paste::helpers::plan::BytePlan;
 use crate::compute::Architecture;
+use crate::compute::pool_cpu::ops::paste::helpers::plan::BytePlan;
 use crate::compute::registry::support::{
-    ImplementationSupport, OutputModeRule,
-    InputContract, ModeSupport, OperationId, PasteInputRules, StrategySelection,
+    ImplementationSupport, InputContract, ModeSupport, OperationId, OutputModeRule,
+    PasteInputRules, StrategySelection,
 };
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode, RgbaImage};
@@ -12,9 +12,13 @@ use crate::raster::{DynamicImage, Mode, RgbaImage};
 pub(crate) type Strategy<'a> = BytePlan<'a>;
 
 const RULES: PasteInputRules = PasteInputRules {
-    source_modes: super::super::helpers::contracts::physical_byte_sources(Mode::ImageRgbPremultiplied8),
+    source_modes: super::super::helpers::contracts::physical_byte_sources(
+        Mode::ImageRgbPremultiplied8,
+    ),
     unmasked_only_sources: &[],
-    compact_sources: super::super::helpers::contracts::compact_sources(Mode::ImageRgbPremultiplied8),
+    compact_sources: super::super::helpers::contracts::compact_sources(
+        Mode::ImageRgbPremultiplied8,
+    ),
     compact_masks: super::super::helpers::contracts::compact_masks(Mode::ImageRgbPremultiplied8),
     masks: super::super::helpers::contracts::MASKS,
     source_rejection: "images do not match",

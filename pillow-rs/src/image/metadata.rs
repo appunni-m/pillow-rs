@@ -7,9 +7,9 @@ use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, GenericImageView, Mode};
 
 use super::{
-    Image, ImageInfoValue, PaletteTransparency, PalettedData, cached_pipeline_mode,
-    known_pipeline_op_dimensions, known_pipeline_op_mode_for_source, materialization_cache,
-    PipelineModeState,
+    Image, ImageInfoValue, PaletteTransparency, PalettedData, PipelineModeState,
+    cached_pipeline_mode, known_pipeline_op_dimensions, known_pipeline_op_mode_with_expansion,
+    materialization_cache,
 };
 
 /// Prepared fields for Pillow's lightweight public EXIF compatibility object.
@@ -304,10 +304,7 @@ impl Image {
 
     /// Returns conversion-time fields that should be merged into the target
     /// image's Pillow compatibility metadata.
-    pub fn converted_compatibility_info(
-        &self,
-        target_mode: Mode,
-    ) -> Vec<(String, ImageInfoValue)> {
+    pub fn converted_compatibility_info(&self, target_mode: Mode) -> Vec<(String, ImageInfoValue)> {
         self.converted_transparency_info(target_mode)
             .map(|value| vec![("transparency".to_owned(), value)])
             .unwrap_or_default()
@@ -348,15 +345,16 @@ impl Image {
 
     /// Returns the observable Pillow palette mode.
     pub fn palette_mode(&self) -> Option<&'static str> {
-        (self.has_palette_mode() || self.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)).then(|| {
-            if self.pending_palette_transparency().is_none()
-                && self.palette_alpha().is_some_and(|alpha| !alpha.is_empty())
-            {
-                "RGBA"
-            } else {
-                "RGB"
-            }
-        })
+        (self.has_palette_mode() || self.known_mode_identity() == Some(Mode::ImagePaletteAlpha8))
+            .then(|| {
+                if self.pending_palette_transparency().is_none()
+                    && self.palette_alpha().is_some_and(|alpha| !alpha.is_empty())
+                {
+                    "RGBA"
+                } else {
+                    "RGB"
+                }
+            })
     }
 
     /// Returns whether mode, pending metadata, or a committed palette carries
@@ -696,9 +694,7 @@ impl Image {
                     .unwrap_or(*header_mode),
             ),
             Image::Pipeline {
-                materialized,
-                mode,
-                ..
+                materialized, mode, ..
             } => materialized
                 .get()
                 .and_then(|result| result.as_ref().ok())
@@ -717,10 +713,7 @@ impl Image {
             return Ok(mode);
         }
         if let Image::Pipeline {
-            source,
-            ops,
-            mode,
-            ..
+            source, ops, mode, ..
         } = self
         {
             let planned = mode.get_or_init(|| {
@@ -742,7 +735,11 @@ impl Image {
                     return Ok(PipelineModeState::Planned(Some(current)));
                 }
                 for op in ops.iter() {
-                    let Some(next) = known_pipeline_op_mode_for_source(source, op, current) else {
+                    let Some(next) = known_pipeline_op_mode_with_expansion(
+                        op,
+                        current,
+                        source.palette_expansion_mode(current),
+                    ) else {
                         return Ok(PipelineModeState::Planned(None));
                     };
                     current = next;
@@ -756,6 +753,11 @@ impl Image {
                 PipelineModeState::Planned(None) => {}
             }
         }
+        // TODO(pillow-rs#3ptb): verify the remaining materialization fallback
+        // classes in CPU parity. A P input without an attached palette cannot
+        // predeclare its palette-dependent expansion; rejected raw pipeline
+        // descriptors without a declared rejected output must retain their
+        // execution-time error; non-raster operations have no result identity.
         Ok(self.materialized_shared()?.mode())
     }
 

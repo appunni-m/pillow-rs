@@ -6,9 +6,7 @@ use pyo3::types::{
 
 use crate::PillowFloatPointBuffer;
 
-pub(super) fn draw_bitmap_position_from_python(
-    xy: &Bound<'_, PyAny>,
-) -> PyResult<(i32, i32)> {
+pub(super) fn draw_bitmap_position_from_python(xy: &Bound<'_, PyAny>) -> PyResult<(i32, i32)> {
     let mut coordinates = [0.0; 2];
     let mut coordinate_count = 0;
     let flattened_count = draw_path_flatten_from_python(xy, |coordinate| {
@@ -30,11 +28,7 @@ fn append_draw_path_coordinate(
     coordinate_count: &mut usize,
 ) -> PyResult<()> {
     if draw_path_value_is_numeric(item) {
-        emit_draw_path_coordinate(
-            draw_path_sequence_number(item)?,
-            emit,
-            coordinate_count,
-        )?;
+        emit_draw_path_coordinate(draw_path_sequence_number(item)?, emit, coordinate_count)?;
         return Ok(());
     }
     if let Ok(list) = item.cast::<PyList>() {
@@ -55,9 +49,9 @@ fn append_draw_path_coordinate(
         return Ok(());
     }
     if let Ok(tuple) = item.cast::<PyTuple>() {
-        let pair = tuple.extract::<(f64, f64)>().map_err(|_| {
-            pyo3::exceptions::PyValueError::new_err("incorrect coordinate type")
-        })?;
+        let pair = tuple
+            .extract::<(f64, f64)>()
+            .map_err(|_| pyo3::exceptions::PyValueError::new_err("incorrect coordinate type"))?;
         emit_draw_path_coordinate(pair.0, emit, coordinate_count)?;
         emit_draw_path_coordinate(pair.1, emit, coordinate_count)?;
         return Ok(());
@@ -153,9 +147,7 @@ fn emit_draw_path_coordinate(
 }
 
 fn draw_bitmap_single_point_error() -> PyErr {
-    pyo3::exceptions::PyTypeError::new_err(
-        "coordinate list must contain exactly 1 coordinate",
-    )
+    pyo3::exceptions::PyTypeError::new_err("coordinate list must contain exactly 1 coordinate")
 }
 
 fn draw_path_value_is_numeric(value: &Bound<'_, PyAny>) -> bool {
@@ -240,9 +232,7 @@ pub(crate) fn draw_color_input_from_python(
             Some(pillow_rs::PaletteColorComponent::Float(_)) => {
                 unreachable!("Python integers are retained as integer components")
             }
-            None => val
-                .extract::<i64>()
-                .map(pillow_rs::DrawColorInput::Integer),
+            None => val.extract::<i64>().map(pillow_rs::DrawColorInput::Integer),
         };
     }
     if let Ok(value) = val.extract::<f64>() {
@@ -305,10 +295,8 @@ fn draw_integer_tuple_components(
             return None;
         }
         let value = crate::inputs::palette_integer_component_from_python(&component)?;
-        contains_wide_integer |= matches!(
-            &value,
-            pillow_rs::PaletteColorComponent::WideInteger { .. }
-        );
+        contains_wide_integer |=
+            matches!(&value, pillow_rs::PaletteColorComponent::WideInteger { .. });
         values.push(value);
     }
     Some((values, contains_wide_integer))
@@ -338,7 +326,9 @@ fn draw_mixed_numeric_tuple_components(
     for component in tuple.iter() {
         if component.is_instance_of::<PyInt>() {
             contains_integer = true;
-            values.push(crate::inputs::palette_integer_component_from_python(&component)?);
+            values.push(crate::inputs::palette_integer_component_from_python(
+                &component,
+            )?);
         } else if component.is_instance_of::<PyFloat>() {
             contains_float = true;
             values.push(pillow_rs::PaletteColorComponent::Float(
@@ -351,9 +341,7 @@ fn draw_mixed_numeric_tuple_components(
     (contains_integer && contains_float).then_some(values)
 }
 
-pub(crate) fn draw_features_presence_from_python(
-    features: Option<&Bound<'_, PyAny>>,
-) -> bool {
+pub(crate) fn draw_features_presence_from_python(features: Option<&Bound<'_, PyAny>>) -> bool {
     // This build has BASIC layout only. Pillow rejects every non-None feature
     // object before iterating or converting it, so retain presence without
     // invoking Python sequence callbacks.

@@ -1,6 +1,6 @@
 use crate::error::PilError;
-use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::Mode;
+use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{ImageBuffer, Pixel};
 
 /// Returns the canonical omitted bytes for a logical pixel when no producer
@@ -31,9 +31,8 @@ pub(crate) fn default_hidden_lanes_for_bytes(
     if pixel_count == 0 {
         return Ok(None);
     }
-    let fallback = default_hidden_pixel_lanes(mode, 0).ok_or_else(|| {
-        PilError::InternalError("mode omitted its physical-lane fallback".into())
-    })?;
+    let fallback = default_hidden_pixel_lanes(mode, 0)
+        .ok_or_else(|| PilError::InternalError("mode omitted its physical-lane fallback".into()))?;
     let carrier_width = mode.byte_carrier_pixel_width().ok_or_else(|| {
         PilError::InternalError("mode omitted its byte-carrier pixel width".into())
     })?;

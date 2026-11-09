@@ -24,9 +24,8 @@ pub(crate) fn required(
     let source_width = image.width();
     let source_height = image.height();
     let (left, _, right, _) = bounds;
-    let horizontal_work = output_size.0 != source_width
-        || left != 0.0
-        || right != f64::from(source_width as f32);
+    let horizontal_work =
+        output_size.0 != source_width || left != 0.0 || right != f64::from(source_width as f32);
     pillow_mode_uses_tall_pass_order(image.mode())
         && horizontal_work
         && u64::from(source_height) > u64::from(source_width) * 100

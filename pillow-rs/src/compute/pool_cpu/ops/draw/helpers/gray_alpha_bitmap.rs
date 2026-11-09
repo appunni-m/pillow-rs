@@ -1,7 +1,7 @@
-use crate::compute::pool_cpu::ops::draw::BitmapMask;
 use crate::compute::pool_cpu::helpers::bytes::hidden_lanes::{
     hidden_lanes_for_pixel, update_hidden_lanes,
 };
+use crate::compute::pool_cpu::ops::draw::{BitmapMask, BitmapRegion};
 use crate::error::PilError;
 use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{GrayAlphaImage, Pixel, Rgb};
@@ -18,25 +18,24 @@ pub(crate) fn apply(
     hidden_lanes: &mut Option<HiddenPixelLanes>,
 ) -> Result<(), PilError> {
     let (image_width, image_height) = canvas.dimensions();
-    for mask_y in 0..mask_height {
-        for mask_x in 0..mask_width {
+    let region = BitmapRegion::clipped(x, y, image_width, image_height, mask_width, mask_height);
+    let Some((image_x_start, image_y_start)) =
+        region.destination_origin(x, y, image_width, image_height)
+    else {
+        return Ok(());
+    };
+    for mask_y in region.y_start..region.y_end {
+        let image_y = image_y_start + (mask_y - region.y_start);
+        for mask_x in region.x_start..region.x_end {
             let coverage = mask.coverage(mask_x, mask_y);
             if mask.should_skip(coverage) {
                 continue;
             }
-            let image_x = x + mask_x as i32;
-            let image_y = y + mask_y as i32;
-            if image_x < 0
-                || image_y < 0
-                || image_x as u32 >= image_width
-                || image_y as u32 >= image_height
-            {
-                continue;
-            }
+            let image_x = image_x_start + (mask_x - region.x_start);
             blend_pixel(
                 canvas,
-                image_x as u32,
-                image_y as u32,
+                image_x,
+                image_y,
                 coverage,
                 mask,
                 color,
@@ -58,12 +57,8 @@ fn blend_pixel(
 ) -> Result<(), PilError> {
     let pixel_index = y as usize * canvas.width() as usize + x as usize;
     let existing = canvas.get_pixel(x, y);
-    let previous_hidden = hidden_lanes_for_pixel(
-        hidden_lanes,
-        pixel_index,
-        2,
-        [existing[0], existing[0]],
-    )?;
+    let previous_hidden =
+        hidden_lanes_for_pixel(hidden_lanes, pixel_index, 2, [existing[0], existing[0]])?;
     let luma_coverage = mask.luma_coverage_for_alpha(coverage, existing[1]);
     let red = mask.blend_byte(color.0, existing[0], luma_coverage);
     let green = mask.blend_byte(color.1, existing[0], luma_coverage);

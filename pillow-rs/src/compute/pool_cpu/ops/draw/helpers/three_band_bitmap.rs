@@ -1,7 +1,7 @@
-use crate::compute::pool_cpu::ops::draw::BitmapMask;
 use crate::compute::pool_cpu::helpers::bytes::hidden_lanes::{
     hidden_lanes_for_pixel, update_hidden_lanes,
 };
+use crate::compute::pool_cpu::ops::draw::{BitmapMask, BitmapRegion};
 use crate::error::PilError;
 use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{Rgb, RgbImage};
@@ -18,8 +18,15 @@ pub(crate) fn apply<const RGB_PREMULTIPLIED_IS_OPAQUE: bool>(
     hidden_lanes: &mut Option<HiddenPixelLanes>,
 ) -> Result<(), PilError> {
     let (image_width, image_height) = canvas.dimensions();
-    for mask_y in 0..mask_height {
-        for mask_x in 0..mask_width {
+    let region = BitmapRegion::clipped(x, y, image_width, image_height, mask_width, mask_height);
+    let Some((image_x_start, image_y_start)) =
+        region.destination_origin(x, y, image_width, image_height)
+    else {
+        return Ok(());
+    };
+    for mask_y in region.y_start..region.y_end {
+        let image_y = image_y_start + (mask_y - region.y_start);
+        for mask_x in region.x_start..region.x_end {
             let mask_coverage = mask.coverage(mask_x, mask_y);
             let coverage = if RGB_PREMULTIPLIED_IS_OPAQUE && mask.is_premultiplied() {
                 u8::MAX
@@ -29,17 +36,9 @@ pub(crate) fn apply<const RGB_PREMULTIPLIED_IS_OPAQUE: bool>(
             if mask.should_skip(coverage) {
                 continue;
             }
-            let image_x = x + mask_x as i32;
-            let image_y = y + mask_y as i32;
-            if image_x < 0
-                || image_y < 0
-                || image_x as u32 >= image_width
-                || image_y as u32 >= image_height
-            {
-                continue;
-            }
-            let x = image_x as u32;
-            let y = image_y as u32;
+            let image_x = image_x_start + (mask_x - region.x_start);
+            let x = image_x;
+            let y = image_y;
             let pixel_index = y as usize * image_width as usize + x as usize;
             let background = canvas.get_pixel(x, y);
             let previous_hidden =

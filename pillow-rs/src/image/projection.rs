@@ -67,15 +67,13 @@ impl Image {
         };
         let requested = only_active_backend.then_some(backend);
         match backend {
-            Backend::Cpu | Backend::Simd => {
-                crate::compute::execute_eager_cpu_getprojection(
-                    image,
-                    &cpu_context,
-                    requested,
-                    None,
-                )
-                .map(Some)
-            }
+            Backend::Cpu | Backend::Simd => crate::compute::execute_eager_cpu_getprojection(
+                image,
+                &cpu_context,
+                requested,
+                None,
+            )
+            .map(Some),
             #[cfg(feature = "gpu")]
             Backend::Gpu if image.mode() == Mode::ImageRgb8 => {
                 if crate::compute::gpu_rgb_projection_supported(image) {
@@ -93,19 +91,17 @@ impl Image {
                     .map(Some)
                 }
             }
-            Backend::Gpu => {
-                crate::compute::execute_eager_cpu_getprojection(
-                    image,
-                    &cpu_context,
-                    requested,
-                    Some(format!(
-                        "GPU GetProjection is unsupported for mode {:?}; used CPU {:?}",
-                        image.mode(),
-                        cpu_context.architecture()
-                    )),
-                )
-                .map(Some)
-            }
+            Backend::Gpu => crate::compute::execute_eager_cpu_getprojection(
+                image,
+                &cpu_context,
+                requested,
+                Some(format!(
+                    "GPU GetProjection is unsupported for mode {:?}; used CPU {:?}",
+                    image.mode(),
+                    cpu_context.architecture()
+                )),
+            )
+            .map(Some),
         }
     }
 }

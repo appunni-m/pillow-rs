@@ -1,11 +1,9 @@
 use crate::compute::Architecture;
 use crate::compute::registry::support::StrategySelection;
 use crate::error::PilError;
-use crate::raster::{Mode, GrayImage};
+use crate::raster::{GrayImage, Mode};
 
-use super::super::helpers::get_data::{
-    self as helpers, GetDataOutput, GetDataRequest,
-};
+use super::super::helpers::get_data::{self as helpers, GetDataOutput, GetDataRequest};
 use super::default::get_data_impl;
 
 pub(crate) fn execute_get_data(
@@ -41,6 +39,7 @@ crate::compute::pool_cpu::ops::analysis::helpers::bbox::declare_getbbox_owner!(
     one,
     One,
     crate::raster::GrayImage,
+    Pillow,
 );
 
 crate::compute::pool_cpu::ops::analysis::helpers::extrema::declare_getextrema_owner!(
@@ -64,22 +63,19 @@ crate::compute::pool_cpu::ops::analysis::helpers::stat_execution::declare_stat_o
     crate::raster::GrayImage,
     crate::compute::pool_cpu::ops::analysis::one::default::stat_impl::execute,
 );
-crate::compute::pool_cpu::ops::analysis::helpers::extrema_bytes_execution::
-    declare_getextrema_bytes_owner!(
+crate::compute::pool_cpu::ops::analysis::helpers::extrema_bytes_execution::declare_getextrema_bytes_owner!(
     One,
     crate::raster::GrayImage,
     crate::compute::pool_cpu::ops::analysis::one::default::extrema_bytes_impl::execute,
 );
 
-pub(crate) const GET_PIXEL_SUPPORT:
-    crate::compute::registry::support::ModeSupport =
+pub(crate) const GET_PIXEL_SUPPORT: crate::compute::registry::support::ModeSupport =
     crate::compute::pool_cpu::ops::analysis::helpers::pixel_access::pillow_get_pixel_support(
         crate::raster::Mode::One,
         crate::compute::registry::support::PixelValueShape::U8Scalar,
     );
 
-pub(crate) const GET_PIXEL_RGBA_SUPPORT:
-    crate::compute::registry::support::ModeSupport =
+pub(crate) const GET_PIXEL_RGBA_SUPPORT: crate::compute::registry::support::ModeSupport =
     crate::compute::pool_cpu::ops::analysis::helpers::pixel_access::rgba_get_pixel_support(
         crate::raster::Mode::One,
     );
@@ -97,3 +93,32 @@ pub(crate) fn execute_get_pixel(
     )?;
     super::default::get_pixel_impl::execute(image, x, y)
 }
+crate::compute::pool_cpu::ops::analysis::helpers::getcolors_support::declare_getcolors_support!(
+    One, pillow,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::extrema_bytes_execution::declare_getextrema_bytes_support!(
+    One, pillow,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::extrema_execution::declare_getextrema_support!(
+    One, pillow,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::histogram_execution::declare_histogram_support!(
+    One, 1, pillow,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::stat_execution::declare_stat_support!(
+    One, pillow,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::split_support::declare_split_support!(
+    One, pillow, Identity,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::get_channel_support::declare_get_channel_route!(
+    One, 1, Pillow, Identity, Preserve,
+);
+
+crate::compute::pool_cpu::ops::analysis::helpers::get_data_support::declare_get_data_support!(
+    One, 1, Pillow, Pillow, Pillow,
+);
+
+crate::compute::pool_cpu::ops::analysis::helpers::projection_support::declare_projection_support!(
+    One, Pillow,
+);

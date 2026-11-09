@@ -50,7 +50,9 @@ pub(in crate::compute::pool_cpu::ops::filter::rgba8) fn prove_identity(
 }
 
 fn scan_uniform_pixels(raw: &[u8], first_pixel: &[u8]) -> ScanEvidence {
-    let pattern = u8x16::new(std::array::from_fn(|index| first_pixel[index % PIXEL_BYTES]));
+    let pattern = u8x16::new(std::array::from_fn(|index| {
+        first_pixel[index % PIXEL_BYTES]
+    }));
     let vector_end = raw.len() / VECTOR_BYTES * VECTOR_BYTES;
     let mut vector_blocks = 0u64;
     for block in raw[..vector_end].chunks_exact(VECTOR_BYTES) {
@@ -59,7 +61,10 @@ fn scan_uniform_pixels(raw: &[u8], first_pixel: &[u8]) -> ScanEvidence {
         };
         vector_blocks += 1;
         if !u8x16::new(bytes).simd_eq(pattern).all() {
-            return ScanEvidence { vector_blocks, ..ScanEvidence::default() };
+            return ScanEvidence {
+                vector_blocks,
+                ..ScanEvidence::default()
+            };
         }
     }
 
@@ -88,9 +93,8 @@ fn constant_pass_preserves(value: u8, (radius, whole, fractional): (usize, u32, 
         .wrapping_mul(window_pixels)
         .wrapping_mul(whole);
     if fractional != 0 {
-        weighted = weighted.wrapping_add(
-            (u32::from(value) + u32::from(value)).wrapping_mul(fractional),
-        );
+        weighted =
+            weighted.wrapping_add((u32::from(value) + u32::from(value)).wrapping_mul(fractional));
     }
     weighted.wrapping_add(ROUNDING_BIAS) >> BLUR_SCALE_BITS == u32::from(value)
 }

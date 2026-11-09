@@ -184,7 +184,11 @@ fn execute_bilinear_into(
     let source_width = source_layout.width as usize;
     let mut source_plane = Vec::with_capacity(source_layout.total_pixels());
     for row in source.chunks_exact(source_width) {
-        source_plane.extend(row.iter().flat_map(|&sample| order.encode(sample)).take(source_width));
+        source_plane.extend(
+            row.iter()
+                .flat_map(|&sample| order.encode(sample))
+                .take(source_width),
+        );
     }
     let byte_plane_request = TransformRequest {
         fill: Some((fill_bytes[0], 0, 0, 0)),

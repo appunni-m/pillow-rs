@@ -1,8 +1,8 @@
 //! Original constant alpha semantics for `ImageRgba32F`.
 
+use super::super::super::helpers::put_alpha::{self as helpers, AlphaInput};
 use crate::error::PilError;
 use crate::raster::DynamicImage;
-use super::super::super::helpers::put_alpha::{self as helpers, AlphaInput};
 
 pub(crate) type Input = crate::raster::Rgba32FImage;
 pub(crate) type Kernel<'a> = AlphaInput<'a, crate::raster::Rgba<f32>>;

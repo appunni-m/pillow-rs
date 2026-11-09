@@ -10,14 +10,21 @@
 // NO_PILLOW_SUPPORT: internal high-depth raster identities compose their
 // native Resize strategies, although Pillow has no corresponding mode names.
 
-use crate::compute::{ExecutionContext, registry::support::{
-    InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport,
-    OutputModeRule, StrategyInputs, StrategySelection, SupportAssessment,
-}};
+use super::helpers::{contain_dimensions, cover_dimensions, fit_box};
+use crate::compute::{
+    ExecutionContext,
+    registry::support::{
+        InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport, OutputModeRule,
+        StrategyInputs, StrategySelection, SupportAssessment,
+    },
+};
 use crate::error::PilError;
+use crate::ops::imageops::{
+    normalize_fit_bleed, normalize_fit_centering, scale_dimension_to_u32,
+    scale_dimensions_preflight,
+};
 use crate::pipeline::{PipelineOp, ResampleFilter};
 use crate::raster::{DynamicImage, Mode};
-use super::helpers::{bankers_round, contain_dimensions, cover_dimensions, fit_box};
 
 const CONTAIN_INPUTS: &[InputContract] = &[InputContract::ContainParameters];
 const COVER_INPUTS: &[InputContract] = &[InputContract::CoverParameters];
@@ -56,13 +63,9 @@ fn classify_mode(
         | Mode::ImageRgb16
         | Mode::ImageRgba16
         | Mode::ImageRgb32F
-        | Mode::ImageRgba32F => ModeSupport::cpu(
-            operation,
-            mode,
-            OutputModeRule::Preserve,
-            inputs,
-            &[],
-        ),
+        | Mode::ImageRgba32F => {
+            ModeSupport::cpu(operation, mode, OutputModeRule::Preserve, inputs, &[])
+        }
     }
 }
 
@@ -99,22 +102,20 @@ pub(crate) static COVER_SUPPORT: OperationSupport = OperationSupport::composed(
 );
 
 /// Complete typed support contract for Fit and its nested boxed Resize strategy.
-pub(crate) static FIT_SUPPORT: OperationSupport =
-    OperationSupport::composed(
-        OperationId::Fit,
-        FIT_INPUTS,
-        classify_fit,
-        BOXED_RESIZE_CHILD,
-    );
+pub(crate) static FIT_SUPPORT: OperationSupport = OperationSupport::composed(
+    OperationId::Fit,
+    FIT_INPUTS,
+    classify_fit,
+    BOXED_RESIZE_CHILD,
+);
 
 /// Complete typed support contract for Scale and its nested Resize strategy.
-pub(crate) static SCALE_SUPPORT: OperationSupport =
-    OperationSupport::composed(
-        OperationId::Scale,
-        SCALE_INPUTS,
-        classify_scale,
-        RESIZE_CHILD,
-    );
+pub(crate) static SCALE_SUPPORT: OperationSupport = OperationSupport::composed(
+    OperationId::Scale,
+    SCALE_INPUTS,
+    classify_scale,
+    RESIZE_CHILD,
+);
 
 enum GeometryWork<'a> {
     Copy(&'a DynamicImage),
@@ -230,7 +231,9 @@ fn select_fit(
     select(
         &FIT_SUPPORT,
         inputs.mode(),
-        inputs.facts().with_fit(width, height, filter, bleed, centering),
+        inputs
+            .facts()
+            .with_fit(width, height, filter, bleed, centering),
         context,
     )
 }
@@ -258,12 +261,22 @@ fn prepare_contain<'a>(
     filter: ResampleFilter,
     context: &ExecutionContext,
 ) -> Result<PreparedContain<'a>, PilError> {
-    let selection = select_contain(inputs, width, height, filter, context)?;
     let dimensions = contain_dimensions(
         (inputs.image.width(), inputs.image.height()),
         (width, height),
     )?;
-    resize_plan(inputs, dimensions.0, dimensions.1, filter, None, selection, context)
+    // ImageOps.contain computes and validates aspect geometry before
+    // delegating to Resize, so direct typed pipeline calls keep that order.
+    let selection = select_contain(inputs, width, height, filter, context)?;
+    resize_plan(
+        inputs,
+        dimensions.0,
+        dimensions.1,
+        filter,
+        None,
+        selection,
+        context,
+    )
 }
 
 fn prepare_cover<'a>(
@@ -273,12 +286,22 @@ fn prepare_cover<'a>(
     filter: ResampleFilter,
     context: &ExecutionContext,
 ) -> Result<PreparedCover<'a>, PilError> {
-    let selection = select_cover(inputs, width, height, filter, context)?;
     let dimensions = cover_dimensions(
         (inputs.image.width(), inputs.image.height()),
         (width, height),
     )?;
-    resize_plan(inputs, dimensions.0, dimensions.1, filter, None, selection, context)
+    // ImageOps.cover computes and validates aspect geometry before
+    // delegating to Resize, so direct typed pipeline calls keep that order.
+    let selection = select_cover(inputs, width, height, filter, context)?;
+    resize_plan(
+        inputs,
+        dimensions.0,
+        dimensions.1,
+        filter,
+        None,
+        selection,
+        context,
+    )
 }
 
 fn prepare_fit<'a>(
@@ -290,15 +313,24 @@ fn prepare_fit<'a>(
     centering: (f64, f64),
     context: &ExecutionContext,
 ) -> Result<PreparedFit<'a>, PilError> {
-    let selection = select_fit(inputs, width, height, filter, bleed, centering, context)?;
+    let bleed = normalize_fit_bleed(bleed);
+    let centering = (
+        normalize_fit_centering(centering.0),
+        normalize_fit_centering(centering.1),
+    );
     let bounds = fit_box(
         (inputs.image.width(), inputs.image.height()),
         (width, height),
         bleed,
         centering,
     )?;
+    // ImageOps.fit computes its crop box before delegating to Resize.
+    let selection = select_fit(inputs, width, height, filter, bleed, centering, context)?;
     let Some(bounds) = bounds else {
-        return Ok(PreparedGeometry { work: GeometryWork::Copy(inputs.image), selection });
+        return Ok(PreparedGeometry {
+            work: GeometryWork::Copy(inputs.image),
+            selection,
+        });
     };
     resize_plan(
         inputs,
@@ -317,10 +349,31 @@ fn prepare_scale<'a>(
     filter: ResampleFilter,
     context: &ExecutionContext,
 ) -> Result<PreparedScale<'a>, PilError> {
-    let width = bankers_round(f64::from(inputs.image.width()) * factor) as u32;
-    let height = bankers_round(f64::from(inputs.image.height()) * factor) as u32;
+    let source = (inputs.image.width(), inputs.image.height());
+    let (rounded_width, rounded_height) = scale_dimensions_preflight(source, factor)?;
+    if factor == 1.0 {
+        let selection = select_scale(inputs, factor, source.0, source.1, filter, context)?;
+        return Ok(PreparedGeometry {
+            work: GeometryWork::Copy(inputs.image),
+            selection,
+        });
+    }
+    let width = scale_dimension_to_u32(rounded_width)?;
+    let height = scale_dimension_to_u32(rounded_height)?;
+    if width == 0 || height == 0 {
+        if source == (0, 0) {
+            let selection = select_scale(inputs, factor, width, height, filter, context)?;
+            return Ok(PreparedGeometry {
+                work: GeometryWork::Copy(inputs.image),
+                selection,
+            });
+        }
+        return Err(PilError::ValueError("height and width must be > 0".into()));
+    }
+    // Validate scale arithmetic and output dimensions before strategy
+    // admission, matching the eager ImageOps.scale → Image.resize contract.
     let selection = select_scale(inputs, factor, width, height, filter, context)?;
-    resize_plan(inputs, width.max(1), height.max(1), filter, None, selection, context)
+    resize_plan(inputs, width, height, filter, None, selection, context)
 }
 
 /// Prepares Contain, Cover, Fit, or Scale with its exact mode and nested Resize plan.
@@ -334,13 +387,15 @@ pub(crate) fn prepare_pipeline<'a>(
             .map(crate::compute::registry::PreparedOperation::from_contain),
         PipelineOp::Cover { w, h, filter } => prepare_cover(inputs, *w, *h, *filter, context)
             .map(crate::compute::registry::PreparedOperation::from_cover),
-        PipelineOp::Fit { w, h, filter, bleed, centering } => {
-            prepare_fit(inputs, *w, *h, *filter, *bleed, *centering, context)
-                .map(crate::compute::registry::PreparedOperation::from_fit)
-        }
-        PipelineOp::Pad { .. }
-        | PipelineOp::PadTyped { .. }
-        | PipelineOp::PadPositioned { .. } => {
+        PipelineOp::Fit {
+            w,
+            h,
+            filter,
+            bleed,
+            centering,
+        } => prepare_fit(inputs, *w, *h, *filter, *bleed, *centering, context)
+            .map(crate::compute::registry::PreparedOperation::from_fit),
+        PipelineOp::Pad { .. } | PipelineOp::PadTyped { .. } | PipelineOp::PadPositioned { .. } => {
             super::pad::ops::prepare_pipeline(inputs, op, context)
         }
         PipelineOp::Scale { factor, filter } => prepare_scale(inputs, *factor, *filter, context)

@@ -12,13 +12,19 @@ pub(crate) fn execute(
         return Ok(DynamicImage::ImageLuma8(input.clone()));
     }
     let bytes = super::super::super::helpers::native_bytes::reduce_bytes::<1, false>(
-        input.as_raw(), input.width(), input.height(), x_factor, y_factor,
+        input.as_raw(),
+        input.width(),
+        input.height(),
+        x_factor,
+        y_factor,
     )?;
     let output = crate::raster::GrayImage::from_raw(
         input.width().div_ceil(x_factor.max(1)),
         input.height().div_ceil(y_factor.max(1)),
         bytes,
     )
-    .ok_or_else(|| PilError::InternalError("failed to construct native byte Reduce output".into()))?;
+    .ok_or_else(|| {
+        PilError::InternalError("failed to construct native byte Reduce output".into())
+    })?;
     Ok(DynamicImage::ImageLuma8(output))
 }

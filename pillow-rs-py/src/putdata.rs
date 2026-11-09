@@ -96,6 +96,16 @@ fn putdata_value_from_python(
         ));
     }
 
+    // TODO(pillow-rs#3ptb): verify malformed LA/RGB tuple shape wins over
+    // component conversion errors in the frozen CPU parity cases.
+    if !kind.accepts_component_arity(tuple_len) {
+        // Pillow checks the tuple shape before converting its components.
+        // Carry an invalid shape to core without triggering an earlier
+        // Python integer overflow or type error; core emits the canonical
+        // mode-specific arity error.
+        return Ok(PutDataValue::Components(Vec::new()));
+    }
+
     // Keep tuple extraction in the binding, but let the core own arity
     // validation. That preserves one canonical error path for every backend
     // and lets public parity inputs exercise the same shape checks as the

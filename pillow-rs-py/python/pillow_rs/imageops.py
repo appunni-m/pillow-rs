@@ -70,7 +70,7 @@ def equalize(image: Image, mask=None) -> Image:
 
 
 def invert(image: Image) -> Image:
-    return image._new(_core.ops_invert(image._rust_image))
+    return _core.ops_invert(image)
 
 
 def flip(image: Image) -> Image:
@@ -82,13 +82,11 @@ def mirror(image: Image) -> Image:
 
 
 def posterize(image: Image, bits: int) -> Image:
-    # NO_PILLOW_SUPPORT: The Rust P strategy applies the LUT to native indices.
-    return image._new(_core.ops_posterize(image._rust_image, bits))
+    return _core.ops_posterize(image, bits)
 
 
 def solarize(image: Image, threshold: int = 128) -> Image:
-    # NO_PILLOW_SUPPORT: The Rust P strategy applies the LUT to native indices.
-    return image._new(_core.ops_solarize(image._rust_image, threshold))
+    return _core.ops_solarize(image, threshold)
 
 
 def grayscale(image: Image) -> Image:

@@ -1,9 +1,9 @@
 //! Pillow physical-byte behavior for compact-carrier Rotate modes.
 
-use crate::compute::{Architecture, Backend};
 use crate::compute::pool_cpu::helpers::bytes::hidden_lanes::default_hidden_lanes_for_bytes;
 use crate::compute::pool_cpu::ops::rotate::ops::RotateRequest;
 use crate::compute::registry::support::{OperationId, StrategySelection};
+use crate::compute::{Architecture, Backend};
 use crate::error::PilError;
 use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{DynamicImage, GenericImageView, Mode};
@@ -42,7 +42,15 @@ pub(crate) fn finish(
     }
     let output_pixels = pixel_count(output)?;
     if request.nearest {
-        finish_nearest(source, output, request, selection, lane_count, source_pixels, output_pixels)
+        finish_nearest(
+            source,
+            output,
+            request,
+            selection,
+            lane_count,
+            source_pixels,
+            output_pixels,
+        )
     } else {
         finish_filtered(mode, output, request, lane_count, output_pixels)
     }
@@ -163,12 +171,9 @@ fn finish_nearest_without_source_lanes(
             .ok_or_else(invalid_lanes)?;
         return replace_lanes(output, Some(lanes));
     }
-    let source_lanes = default_hidden_lanes_for_bytes(
-        source.mode(),
-        source.as_bytes(),
-        source_pixels,
-    )?
-    .ok_or_else(invalid_lanes)?;
+    let source_lanes =
+        default_hidden_lanes_for_bytes(source.mode(), source.as_bytes(), source_pixels)?
+            .ok_or_else(invalid_lanes)?;
     let lanes = nearest_lanes::<1>(
         source,
         &source_lanes,
@@ -197,7 +202,9 @@ fn nearest_lanes<const CHANNELS: usize>(
         ));
     }
     let source_bytes = source_lane_bytes(source_lanes, CHANNELS, source_pixels)?;
-    let value_count = output_pixels.checked_mul(CHANNELS).ok_or_else(invalid_lanes)?;
+    let value_count = output_pixels
+        .checked_mul(CHANNELS)
+        .ok_or_else(invalid_lanes)?;
     let mut output_bytes = Vec::new();
     output_bytes
         .try_reserve_exact(value_count)
@@ -228,10 +235,7 @@ fn nearest_lanes<const CHANNELS: usize>(
     HiddenPixelLanes::per_pixel(CHANNELS, output_pixels, output_bytes).ok_or_else(invalid_lanes)
 }
 
-fn validate_selection(
-    selection: &StrategySelection,
-    mode: Mode,
-) -> Result<(), PilError> {
+fn validate_selection(selection: &StrategySelection, mode: Mode) -> Result<(), PilError> {
     let implementation = selection.implementation;
     if implementation.operation != OperationId::Rotate
         || implementation.mode != mode
@@ -276,7 +280,11 @@ fn repeat_output_luma(
         .byte_carrier_pixel_width()
         .ok_or_else(invalid_lanes)?;
     let logical = output.as_bytes();
-    if logical.len() < pixel_count.checked_mul(carrier_width).ok_or_else(invalid_lanes)? {
+    if logical.len()
+        < pixel_count
+            .checked_mul(carrier_width)
+            .ok_or_else(invalid_lanes)?
+    {
         return Err(invalid_lanes());
     }
     let value_count = pixel_count
@@ -327,9 +335,10 @@ fn validate_source_lanes(
     lane_count: usize,
     pixel_count: usize,
 ) -> Result<(), PilError> {
-    if source.hidden_pixel_lanes().is_some_and(|lanes| {
-        lanes.lane_count() != lane_count || lanes.pixel_count() != pixel_count
-    }) {
+    if source
+        .hidden_pixel_lanes()
+        .is_some_and(|lanes| lanes.lane_count() != lane_count || lanes.pixel_count() != pixel_count)
+    {
         return Err(invalid_lanes());
     }
     Ok(())

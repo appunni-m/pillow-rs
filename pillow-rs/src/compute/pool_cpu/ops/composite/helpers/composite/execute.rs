@@ -1,10 +1,10 @@
 //! Composite dispatch and validated mask sample preparation.
 
+use crate::compute::Architecture;
+use crate::compute::pool_cpu::ops::composite::ops::CompositeLayout;
+use crate::compute::registry::support::{OperationId, StrategySelection};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
-use crate::compute::Architecture;
-use crate::compute::registry::support::{OperationId, StrategySelection};
-use crate::compute::pool_cpu::ops::composite::ops::CompositeLayout;
 
 /// Executes the selected byte-mode architecture through that exact Paste mode strategy.
 pub(crate) fn execute_byte_selected<'a, F>(
@@ -19,17 +19,10 @@ pub(crate) fn execute_byte_selected<'a, F>(
 ) -> Result<DynamicImage, PilError>
 where
     F: FnOnce(
-        crate::compute::pool_cpu::ops::paste::helpers::plan::BytePlan<
-            'a,
-            &'a DynamicImage,
-        >,
+        crate::compute::pool_cpu::ops::paste::helpers::plan::BytePlan<'a, &'a DynamicImage>,
     ) -> Result<DynamicImage, PilError>,
 {
-    super::super::strategy::require_operation_mode(
-        selection,
-        OperationId::CompositeModule,
-        mode,
-    )?;
+    super::super::strategy::require_operation_mode(selection, OperationId::CompositeModule, mode)?;
     if destination.mode() != mode
         || crate::compute::pool_cpu::ops::paste::helpers::layout::byte_carrier_pixel_width(mode)
             != Some(usize::from(channels))
@@ -46,9 +39,8 @@ where
         mask_alpha,
         *selection,
     )?;
-    crate::compute::pool_cpu::ops::paste::helpers::plan::execute_with_hidden_lanes(
-        plan,
-        |plan| match selection.implementation.architecture {
+    crate::compute::pool_cpu::ops::paste::helpers::plan::execute_with_hidden_lanes(plan, |plan| {
+        match selection.implementation.architecture {
             Architecture::Default => execute(
                 source,
                 destination,
@@ -61,8 +53,8 @@ where
                 execute_architecture(plan)
             }
             _ => Err(unbound(mode, selection)),
-        },
-    )
+        }
+    })
 }
 
 fn unbound(mode: Mode, selection: &StrategySelection) -> PilError {

@@ -26,8 +26,7 @@ fn axis(radius: f32) -> (usize, u32, u32) {
 fn radius_one_plan(request: FilterRequest) -> Option<RadiusOnePlan> {
     let (horizontal, vertical, passes) = match request {
         FilterRequest::GaussianBlur { sigma } if sigma.is_finite() && sigma != 0.0 => {
-            let parameters =
-                crate::compute::helpers::filters::gaussian_blur_box_parameters(sigma);
+            let parameters = crate::compute::helpers::filters::gaussian_blur_box_parameters(sigma);
             (parameters, parameters, 3)
         }
         FilterRequest::BoxBlur { radius } if radius == 1 => {
@@ -149,9 +148,7 @@ fn horizontal_radius_one_rows(
         let mut x = 2usize;
         while x + 4 <= interior_end {
             let byte_start = x * 4;
-            let load = |pixel: usize| {
-                u32x16::from(u16x16::from(load_u8x16(input, pixel * 4)))
-            };
+            let load = |pixel: usize| u32x16::from(u16x16::from(load_u8x16(input, pixel * 4)));
             let neighbors = load(x - 1) + load(x) + load(x + 1);
             let edges = if fractional_weight_scalar == 0 {
                 u32x16::splat(0)
@@ -222,11 +219,7 @@ fn vertical_radius_one_rows(
                 if count == LANES {
                     u32x16::from(u16x16::from(load_u8x16(source, start + x)))
                 } else {
-                    u32x16::from(u16x16::from(load_padded_u8x16(
-                        source,
-                        start + x,
-                        count,
-                    )))
+                    u32x16::from(u16x16::from(load_padded_u8x16(source, start + x, count)))
                 }
             };
             let neighbors = load(top) + load(center) + load(bottom);

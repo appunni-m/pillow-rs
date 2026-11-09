@@ -1,9 +1,9 @@
 //! Native RGBa-to-RGBA conversion and alpha replacement for `ImageRgbPremultiplied8`.
 
+use super::super::super::helpers::put_alpha::AlphaInput;
 use crate::compute::pool_cpu::helpers::bytes::unpremultiply::unpremultiply_byte;
 use crate::error::PilError;
 use crate::raster::DynamicImage;
-use super::super::super::helpers::put_alpha::AlphaInput;
 
 pub(crate) type Input = crate::raster::RgbaImage;
 pub(crate) type Kernel<'a> = AlphaInput<'a, crate::raster::Rgba<u8>>;

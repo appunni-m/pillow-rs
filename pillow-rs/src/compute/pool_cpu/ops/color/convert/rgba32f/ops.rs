@@ -19,6 +19,10 @@ type Source = ImageBuffer<Rgba<f32>, Vec<f32>>;
 
 const TARGETS: &[Mode] = &[
     Mode::ImageRgba32F,
+    Mode::ImageLumaA16,
+    Mode::ImageRgb16,
+    Mode::ImageRgba16,
+    Mode::ImageRgb32F,
     Mode::One,
     Mode::ImageLaPremultiplied8,
     Mode::ImageRgbPremultiplied8,
@@ -47,7 +51,7 @@ const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     rejection_reason: "image has wrong mode",
 }];
 
-// NO_PILLOW_SUPPORT: RGBA32F's native conversions and identity route are core-only.
+// NO_PILLOW_SUPPORT: RGBA32F and direct cross-high-depth conversions are core-only.
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
     OperationId::Convert,
     Mode::ImageRgba32F,

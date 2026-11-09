@@ -4,9 +4,10 @@ crate::compute::pool_cpu::ops::color::convert::helpers::binary::declare_mode_str
     crate::raster::Mode::ImageI16B
 );
 
-use crate::compute::{Architecture, registry::support::{
-    InputContract, ModeSupport, OperationId, StrategySelection,
-}};
+use crate::compute::{
+    Architecture,
+    registry::support::{InputContract, ModeSupport, OperationId, StrategySelection},
+};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, ImageBuffer, Luma, Mode};
 
@@ -38,7 +39,10 @@ pub(crate) fn execute(
 ) -> Result<DynamicImage, PilError> {
     match selection.implementation.architecture {
         Architecture::Default => super::default::convert_impl::execute(source, target),
-        #[cfg(any(target_arch = "x86_64", all(target_arch = "x86", target_feature = "sse2")))]
+        #[cfg(any(
+            target_arch = "x86_64",
+            all(target_arch = "x86", target_feature = "sse2")
+        ))]
         Architecture::Sse2 => super::sse2::convert_impl::execute(source, target),
         #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
         Architecture::Neon => super::neon::convert_impl::execute(source, target),

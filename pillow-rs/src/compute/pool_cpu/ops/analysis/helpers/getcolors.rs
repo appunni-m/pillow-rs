@@ -127,18 +127,12 @@ where
 }
 
 /// Counts native I samples and formats them as signed integers.
-pub(crate) fn scalar_i32(
-    maxcolors: u32,
-    image: &RgbaImage,
-) -> Result<GetColorsOutput, PilError> {
+pub(crate) fn scalar_i32(maxcolors: u32, image: &RgbaImage) -> Result<GetColorsOutput, PilError> {
     scalar(maxcolors, Mode::ImageI32, image.as_raw())
 }
 
 /// Counts native F samples and formats their original f32 values.
-pub(crate) fn scalar_f32(
-    maxcolors: u32,
-    image: &RgbaImage,
-) -> Result<GetColorsOutput, PilError> {
+pub(crate) fn scalar_f32(maxcolors: u32, image: &RgbaImage) -> Result<GetColorsOutput, PilError> {
     scalar(maxcolors, Mode::ImageF32, image.as_raw())
 }
 
@@ -217,10 +211,7 @@ fn scalar_color_domain_counts(
             result => return result,
         }
     }
-    if pixel_count >= 4096
-        && !has_repeated_prefix
-        && scalar_byte_domain_is_plausible(mode, bytes)
-    {
+    if pixel_count >= 4096 && !has_repeated_prefix && scalar_byte_domain_is_plausible(mode, bytes) {
         match getcolors_scalar_byte_domain(mode, bytes, max_distinct, code_mask, code_polynomial) {
             ScalarColorDomainCounts::NotApplicable => {}
             result => return result,
@@ -354,7 +345,10 @@ where
     let bands = P::CHANNEL_COUNT;
     for pixel in image.pixels() {
         let samples = pixel.channels();
-        let mut key = NativeColorKey { bands, samples: [0; 4] };
+        let mut key = NativeColorKey {
+            bands,
+            samples: [0; 4],
+        };
         for (index, &sample) in samples.iter().enumerate() {
             key.samples[index] = key_sample(sample);
         }

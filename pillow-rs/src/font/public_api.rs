@@ -2,11 +2,9 @@
 
 use super::{
     FontMaskAndOffset, FontSizeAndOffset, FontTextRef, FreeTypeFont, ImageFontFaceInfo,
-    ImageFontLoadOptions,
-    ImageFontSourceInput, ImageFontTextInput, ImageFontTextLine, ImageFontTextOptions,
-    ImageFontTextBoundsCallbacks, ImageFontTextPositionCallbacks, ImageFontTextScaling,
-    ImageFontTextWrapCallbacks, ImageFontTextWrapResult,
-    ImageFontVariantOptions,
+    ImageFontLoadOptions, ImageFontSourceInput, ImageFontTextBoundsCallbacks, ImageFontTextInput,
+    ImageFontTextLine, ImageFontTextOptions, ImageFontTextPositionCallbacks, ImageFontTextScaling,
+    ImageFontTextWrapCallbacks, ImageFontTextWrapResult, ImageFontVariantOptions,
     ImageFontVariationAxesInput, ImageFontVariationAxis, ImageFontVariationNameInput,
 };
 use crate::error::PilError;
@@ -14,7 +12,7 @@ use crate::raster::Mode;
 
 /// Select the font mask mode used by ImageText.Text for one raster identity.
 #[doc(hidden)]
-pub fn imagefont_text_font_mode(mode: Mode, embedded_color: bool) -> &'static str {
+pub fn imagefont_text_font_mode(mode: Mode, embedded_color: bool) -> Mode {
     super::text_layout::text_layout_font_mode(mode, embedded_color)
 }
 
@@ -50,14 +48,8 @@ pub fn imagefont_text_split_positions(
     spacing: f64,
     options: &ImageFontTextOptions,
 ) -> Result<Vec<ImageFontTextLine>, PilError> {
-    let positioned = text_split_positions(
-        font,
-        mode,
-        xy,
-        FontTextRef::String(text),
-        spacing,
-        options,
-    )?;
+    let positioned =
+        text_split_positions(font, mode, xy, FontTextRef::String(text), spacing, options)?;
     Ok(positioned
         .into_iter()
         .map(|line| ImageFontTextLine {
@@ -120,14 +112,7 @@ pub fn imagefont_text_layout_bbox(
     spacing: f64,
     options: &ImageFontTextOptions,
 ) -> Result<(f64, f64, f64, f64), PilError> {
-    text_layout_bbox(
-        font,
-        mode,
-        xy,
-        FontTextRef::String(text),
-        spacing,
-        options,
-    )
+    text_layout_bbox(font, mode, xy, FontTextRef::String(text), spacing, options)
 }
 
 /// Compute positioned multiline text bounds for host-classified text.
@@ -157,7 +142,7 @@ fn text_layout_bbox(
     let mut bounds: Option<(f64, f64, f64, f64)> = None;
     for line in lines {
         let mut bbox_options = options.clone();
-        bbox_options.mode = Some(font_mode.to_owned());
+        bbox_options.mode = Some(font_mode);
         bbox_options.embedded_color = false;
         bbox_options.anchor = Some(line.anchor);
         bbox_options.align = None;
@@ -214,7 +199,7 @@ pub fn imagefont_text_length(
     }
     let font_mode = super::text_layout::text_layout_font_mode(mode, embedded_color);
     let options = ImageFontTextOptions {
-        mode: Some(font_mode.to_owned()),
+        mode: Some(font_mode),
         ..ImageFontTextOptions::default()
     };
     font.getlength_text_with_options(text.as_ref(), &options)

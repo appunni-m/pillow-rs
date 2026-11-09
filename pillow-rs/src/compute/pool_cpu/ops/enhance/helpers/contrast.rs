@@ -124,9 +124,7 @@ pub(crate) fn carry_hidden_lanes(
                 .ok_or_else(|| PilError::InternalError("invalid Contrast lane layout".into()))?;
             (pixel_count > 0).then_some(lanes)
         }
-        Some(lanes) => Some(lanes.map_values(|sample| {
-            contrast_byte(sample, midpoints[0], alpha)
-        })),
+        Some(lanes) => Some(lanes.map_values(|sample| contrast_byte(sample, midpoints[0], alpha))),
         None => None,
     };
     if output.replace_hidden_pixel_lanes(lanes) {
@@ -169,7 +167,6 @@ where
     P: Pixel<Subpixel = u8>,
 {
     let output = execute(source.as_raw(), base, factor)?;
-    ImageBuffer::from_raw(source.width(), source.height(), output).ok_or_else(|| {
-        PilError::InternalError("Contrast output dimensions were invalid".into())
-    })
+    ImageBuffer::from_raw(source.width(), source.height(), output)
+        .ok_or_else(|| PilError::InternalError("Contrast output dimensions were invalid".into()))
 }

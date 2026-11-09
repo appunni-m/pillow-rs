@@ -72,10 +72,7 @@ pub(crate) fn reduce_f32_vector_guard(input: StrategyInputs) -> GuardAssessment 
     }
 }
 
-pub(crate) fn brightness_vector_guard(
-    input: StrategyInputs,
-    channels: u8,
-) -> GuardAssessment {
+pub(crate) fn brightness_vector_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     let factor_bits = match input.request {
         RequestFacts::Brightness { factor_bits } => factor_bits,
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
@@ -98,10 +95,7 @@ pub(crate) fn brightness_vector_guard(
     }
 }
 
-pub(crate) fn contrast_vector_guard(
-    input: StrategyInputs,
-    channels: u8,
-) -> GuardAssessment {
+pub(crate) fn contrast_vector_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     let factor_bits = match input.request {
         RequestFacts::Contrast { factor_bits } => factor_bits,
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
@@ -125,10 +119,7 @@ pub(crate) fn contrast_vector_guard(
     }
 }
 
-pub(crate) fn sharpness_vector_guard(
-    input: StrategyInputs,
-    channels: u8,
-) -> GuardAssessment {
+pub(crate) fn sharpness_vector_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     let factor_bits = match input.request {
         RequestFacts::Sharpness { factor_bits } => factor_bits,
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
@@ -178,10 +169,7 @@ pub(crate) fn color_saturation_vector_guard(
     }
 }
 
-pub(crate) fn chops_equal_dimensions_guard(
-    input: StrategyInputs,
-    channels: u8,
-) -> GuardAssessment {
+pub(crate) fn chops_equal_dimensions_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     match input.request {
         RequestFacts::ChopsBinary { other, .. }
             if input.width == other.width && input.height == other.height =>
@@ -193,10 +181,7 @@ pub(crate) fn chops_equal_dimensions_guard(
     }
 }
 
-pub(crate) fn chops_add_subtract_guard(
-    input: StrategyInputs,
-    channels: u8,
-) -> GuardAssessment {
+pub(crate) fn chops_add_subtract_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     let (other, scale_bits, offset_bits) = match input.request {
         RequestFacts::ChopsBinary {
             other,
@@ -241,9 +226,7 @@ pub(crate) fn chops_offset_native_bytes_guard(
     match (expected, input.byte_len) {
         (None, _) => GuardAssessment::Ineligible,
         (Some(_), None) => GuardAssessment::Deferred,
-        (Some(0), Some(0)) => {
-            GuardAssessment::Satisfied
-        }
+        (Some(0), Some(0)) => GuardAssessment::Satisfied,
         (Some(expected), Some(actual))
             if expected >= 16 && usize::try_from(expected).ok() == Some(actual) =>
         {
@@ -312,7 +295,11 @@ pub(crate) fn filter3x3_native_bytes_vectorizable_guard(
         return layout;
     }
     let (kernel_bits, scale_bits) = match input.request {
-        RequestFacts::Filter3x3 { kernel_bits, scale_bits, .. } => (kernel_bits, scale_bits),
+        RequestFacts::Filter3x3 {
+            kernel_bits,
+            scale_bits,
+            ..
+        } => (kernel_bits, scale_bits),
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
         _ => return GuardAssessment::Ineligible,
     };
@@ -321,7 +308,9 @@ pub(crate) fn filter3x3_native_bytes_vectorizable_guard(
         || input.height == 0
         || !scale.is_finite()
         || scale == 0.0
-        || kernel_bits.iter().any(|bits| !f32::from_bits(*bits).is_finite())
+        || kernel_bits
+            .iter()
+            .any(|bits| !f32::from_bits(*bits).is_finite())
     {
         GuardAssessment::Ineligible
     } else {
@@ -337,7 +326,11 @@ pub(crate) fn filter5x5_native_bytes_vectorizable_guard(
         return GuardAssessment::Ineligible;
     }
     let (kernel_bits, scale_bits) = match input.request {
-        RequestFacts::Filter5x5 { kernel_bits, scale_bits, .. } => (kernel_bits, scale_bits),
+        RequestFacts::Filter5x5 {
+            kernel_bits,
+            scale_bits,
+            ..
+        } => (kernel_bits, scale_bits),
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
         _ => return GuardAssessment::Ineligible,
     };
@@ -360,9 +353,11 @@ pub(crate) fn filter5x5_native_bytes_vectorizable_guard(
 
 pub(crate) fn filter5x5_i32_binomial_fma_guard(input: StrategyInputs) -> GuardAssessment {
     let (kernel_bits, scale_bits, offset_bits) = match input.request {
-        RequestFacts::Filter5x5 { kernel_bits, scale_bits, offset_bits } => {
-            (kernel_bits, scale_bits, offset_bits)
-        }
+        RequestFacts::Filter5x5 {
+            kernel_bits,
+            scale_bits,
+            offset_bits,
+        } => (kernel_bits, scale_bits, offset_bits),
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
         _ => return GuardAssessment::Ineligible,
     };
@@ -397,7 +392,11 @@ pub(crate) fn filter5x5_i32_binomial_fma_guard(input: StrategyInputs) -> GuardAs
 
 pub(crate) fn filter5x5_i32_vectorizable_guard(input: StrategyInputs) -> GuardAssessment {
     let (kernel_bits, scale_bits) = match input.request {
-        RequestFacts::Filter5x5 { kernel_bits, scale_bits, .. } => (kernel_bits, scale_bits),
+        RequestFacts::Filter5x5 {
+            kernel_bits,
+            scale_bits,
+            ..
+        } => (kernel_bits, scale_bits),
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
         _ => return GuardAssessment::Ineligible,
     };
@@ -408,7 +407,9 @@ pub(crate) fn filter5x5_i32_vectorizable_guard(input: StrategyInputs) -> GuardAs
     let scale = f32::from_bits(scale_bits);
     let valid_parameters = scale.is_finite()
         && scale != 0.0
-        && kernel_bits.iter().all(|bits| f32::from_bits(*bits).is_finite());
+        && kernel_bits
+            .iter()
+            .all(|bits| f32::from_bits(*bits).is_finite());
     if input.width != 0 && input.height != 0 && valid_parameters {
         GuardAssessment::Satisfied
     } else {
@@ -431,9 +432,8 @@ pub(crate) fn filter_native_byte_blur_guard(
             } else if sigma == 0.0 {
                 (false, true)
             } else {
-                let radius = crate::compute::helpers::filters::gaussian_blur_three_pass_radius(
-                    sigma.abs(),
-                );
+                let radius =
+                    crate::compute::helpers::filters::gaussian_blur_three_pass_radius(sigma.abs());
                 (radius.is_finite() && radius > 0.0, false)
             }
         }
@@ -561,9 +561,11 @@ pub(crate) fn filter_f32_rank_window_guard(
     max_size: u32,
 ) -> GuardAssessment {
     let (size, rank, compatibility) = match input.request {
-        RequestFacts::FilterWindow { size, rank, f32_rank_compatibility } => {
-            (size, rank, f32_rank_compatibility)
-        }
+        RequestFacts::FilterWindow {
+            size,
+            rank,
+            f32_rank_compatibility,
+        } => (size, rank, f32_rank_compatibility),
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
         _ => return GuardAssessment::Ineligible,
     };
@@ -578,9 +580,7 @@ pub(crate) fn filter_f32_rank_window_guard(
     }
     match checked_native_bytes_guard(input, 4) {
         GuardAssessment::Satisfied => match compatibility {
-            Some(super::super::F32RankCompatibility::VectorOrdering) => {
-                GuardAssessment::Satisfied
-            }
+            Some(super::super::F32RankCompatibility::VectorOrdering) => GuardAssessment::Satisfied,
             Some(super::super::F32RankCompatibility::DefaultComparator) => {
                 GuardAssessment::Ineligible
             }
@@ -614,7 +614,11 @@ pub(crate) fn filter3x3_i32_vectorizable_guard(
     channels: u8,
 ) -> GuardAssessment {
     let (kernel_bits, scale_bits) = match input.request {
-        RequestFacts::Filter3x3 { kernel_bits, scale_bits, .. } => (kernel_bits, scale_bits),
+        RequestFacts::Filter3x3 {
+            kernel_bits,
+            scale_bits,
+            ..
+        } => (kernel_bits, scale_bits),
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
         _ => return GuardAssessment::Ineligible,
     };
@@ -625,7 +629,9 @@ pub(crate) fn filter3x3_i32_vectorizable_guard(
     let scale = f32::from_bits(scale_bits);
     let valid_parameters = scale.is_finite()
         && scale != 0.0
-        && kernel_bits.iter().all(|bits| f32::from_bits(*bits).is_finite());
+        && kernel_bits
+            .iter()
+            .all(|bits| f32::from_bits(*bits).is_finite());
     if valid_parameters && input.width != 0 && input.height != 0 {
         GuardAssessment::Satisfied
     } else {
@@ -724,9 +730,7 @@ pub(crate) fn rotate_vector_bytes_guard(
         let discrete = [90.0, 180.0, 270.0]
             .into_iter()
             .find(|value| normalized == *value);
-        if discrete.is_some_and(|degree| {
-            degree == 180.0 || expand || input.width == input.height
-        }) {
+        if discrete.is_some_and(|degree| degree == 180.0 || expand || input.width == input.height) {
             return layout;
         }
     }
@@ -860,7 +864,8 @@ fn rotate_output_geometry_supported(input: StrategyInputs, channels: u8) -> bool
                 .checked_mul(output_height)
                 .and_then(|pixels| pixels.checked_mul(u32::from(channels)))
                 .is_some_and(|output_bytes| output_bytes != 0)
-            && crate::checked_dims::CheckedDims::new(output_width, output_height, channels).is_ok();
+            && crate::checked_dims::CheckedDims::new(output_width, output_height, channels)
+                .is_ok();
     }
     let angle = f64::from_bits(angle_bits);
     let (sw, sh) = (f64::from(width), f64::from(height));
@@ -904,8 +909,7 @@ fn rotate_destination_dimensions(
     let (sw, sh) = (f64::from(width), f64::from(height));
     let transform = |x: f64, y: f64| (a * x + b * y + c, d * x + e * y + f);
     let corners = [(0.0, 0.0), (sw, 0.0), (sw, sh), (0.0, sh)];
-    let (mut min_x, mut min_y, mut max_x, mut max_y) =
-        (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
+    let (mut min_x, mut min_y, mut max_x, mut max_y) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
     for (x, y) in corners {
         let (rotated_x, rotated_y) = transform(x, y);
         min_x = min_x.min(rotated_x);
@@ -930,20 +934,14 @@ fn rotate_destination_dimensions(
     Some((output_width as u32, output_height as u32))
 }
 
-pub(crate) fn native_bytes_guard(
-    input: StrategyInputs,
-    channels: u8,
-) -> GuardAssessment {
+pub(crate) fn native_bytes_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     let expected = (input.width as usize)
         .checked_mul(input.height as usize)
         .and_then(|pixels| pixels.checked_mul(usize::from(channels)));
     exact_byte_layout(input.byte_len, expected)
 }
 
-pub(crate) fn checked_native_bytes_guard(
-    input: StrategyInputs,
-    channels: u8,
-) -> GuardAssessment {
+pub(crate) fn checked_native_bytes_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     let expected = crate::checked_dims::CheckedDims::new(input.width, input.height, channels)
         .ok()
         .map(|dims| dims.total_bytes());
@@ -958,4 +956,3 @@ fn exact_byte_layout(byte_len: Option<usize>, expected: Option<usize>) -> GuardA
         (Some(_), Some(_)) => GuardAssessment::Ineligible,
     }
 }
-

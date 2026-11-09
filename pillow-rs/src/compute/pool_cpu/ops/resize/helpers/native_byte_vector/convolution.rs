@@ -159,7 +159,8 @@ pub(super) fn resize_horizontal_convolution_row<
     output_row: &mut [u8],
     premultiplied_row: &mut [u8],
 ) -> Option<(u64, u64)> {
-    let source_row = if PREMULTIPLIED_ALPHA && (!USE_BOUNDED_I32 || CHANNELS == 2 || CHANNELS == 4) {
+    let source_row = if PREMULTIPLIED_ALPHA && (!USE_BOUNDED_I32 || CHANNELS == 2 || CHANNELS == 4)
+    {
         resize_premultiply_alpha_row::<CHANNELS>(source_row, premultiplied_row)?;
         &*premultiplied_row
     } else {
@@ -167,10 +168,7 @@ pub(super) fn resize_horizontal_convolution_row<
     };
 
     if USE_BOUNDED_I32 {
-        super::bounded_i32::resize_horizontal_bounded_i32_vector_row::<
-            CHANNELS,
-            PREMULTIPLIED_ALPHA,
-        >(
+        super::bounded_i32::resize_horizontal_bounded_i32_vector_row::<CHANNELS, PREMULTIPLIED_ALPHA>(
             source_row,
             coeffs,
             plan,
@@ -178,13 +176,7 @@ pub(super) fn resize_horizontal_convolution_row<
             output_row,
         )
     } else {
-        resize_horizontal_vector_row::<CHANNELS>(
-            source_row,
-            coeffs,
-            plan,
-            output_width,
-            output_row,
-        )
+        resize_horizontal_vector_row::<CHANNELS>(source_row, coeffs, plan, output_width, output_row)
     }
 }
 

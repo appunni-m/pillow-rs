@@ -1,6 +1,6 @@
 use super::{
-    FontMaskAndOffset, FontTextRef, FreeTypeFont, ImageFontTextInput,
-    ImageFontTextOptions, PilError, imagingft, pillow_bytes_to_text,
+    FontMaskAndOffset, FontTextRef, FreeTypeFont, ImageFontTextInput, ImageFontTextOptions,
+    PilError, imagingft, pillow_bytes_to_text,
 };
 impl FreeTypeFont {
     /// Return Pillow's public text bounding box.

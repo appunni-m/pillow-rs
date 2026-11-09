@@ -13,4 +13,3 @@ byte_mode_default!(
 );
 
 byte_mode_mesh_record!(ImagePalette8, 1, false, "ImagePalette8");
-

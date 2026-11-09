@@ -1,10 +1,32 @@
 //! Exact rgb_premultiplied8 mode selection for Resize.
 
+use crate::compute::registry::support::{ImplementationSupport, ModeSupport, StrategySelection};
 use crate::compute::{Architecture, ExecutionContext};
-use crate::compute::registry::support::StrategySelection;
 use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
-use crate::raster::RgbaImage;
+use crate::raster::{Mode, RgbaImage};
+
+static RESIZE_ARCHITECTURES: [ImplementationSupport; 3] =
+    super::super::helpers::support::native_byte_architectures(
+        Mode::ImageRgbPremultiplied8,
+        4,
+        false,
+    );
+static RESIZE_BOXED_ARCHITECTURES: [ImplementationSupport; 3] =
+    super::super::helpers::support::boxed_byte_architectures(
+        Mode::ImageRgbPremultiplied8,
+        4,
+        false,
+    );
+
+pub(crate) const SUPPORT: ModeSupport = super::super::helpers::support::native_mode_support(
+    Mode::ImageRgbPremultiplied8,
+    &RESIZE_ARCHITECTURES,
+);
+pub(crate) const BOXED_SUPPORT: ModeSupport = super::super::helpers::support::boxed_mode_support(
+    Mode::ImageRgbPremultiplied8,
+    &RESIZE_BOXED_ARCHITECTURES,
+);
 
 pub(crate) fn resize(
     context: &ExecutionContext,
@@ -28,15 +50,15 @@ pub(crate) fn resize(
         || super::default::resize_impl::execute(image, width, height, filter, bounds),
         |bounds| match architecture {
             Architecture::Sse2 => match bounds {
-                Some(bounds) => super::sse2::resize_impl::execute_boxed(
-                    image, width, height, bounds, filter,
-                ),
+                Some(bounds) => {
+                    super::sse2::resize_impl::execute_boxed(image, width, height, bounds, filter)
+                }
                 None => super::sse2::resize_impl::execute(image, width, height, filter),
             },
             Architecture::Neon => match bounds {
-                Some(bounds) => super::neon::resize_impl::execute_boxed(
-                    image, width, height, bounds, filter,
-                ),
+                Some(bounds) => {
+                    super::neon::resize_impl::execute_boxed(image, width, height, bounds, filter)
+                }
                 None => super::neon::resize_impl::execute(image, width, height, filter),
             },
             Architecture::WasmSimd128 => match bounds {
@@ -51,7 +73,9 @@ pub(crate) fn resize(
         },
         |bytes| {
             RgbaImage::from_raw(width, height, bytes).ok_or_else(|| {
-                PilError::ValueError("resize_rgba_premultiplied: failed to create output buffer".into())
+                PilError::ValueError(
+                    "resize_rgba_premultiplied: failed to create output buffer".into(),
+                )
             })
         },
     )

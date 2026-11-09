@@ -1,10 +1,10 @@
-use crate::compute::{Architecture, registry::support::StrategySelection};
+use crate::compute::pool_cpu::ops::draw::BitmapMask;
+use crate::compute::pool_cpu::ops::draw::TextComposeResult;
 use crate::compute::registry::support::ModeSupport;
+use crate::compute::{Architecture, registry::support::StrategySelection};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
-use crate::compute::pool_cpu::ops::draw::BitmapMask;
 use crate::raster::{DynamicImage, Mode};
-use crate::compute::pool_cpu::ops::draw::TextComposeResult;
 
 pub(crate) fn apply_text<const RGBA_MASK: bool>(
     selection: &StrategySelection,
@@ -34,16 +34,7 @@ pub(crate) fn try_native_bitmap(
     color: (u8, u8, u8, u8),
 ) -> Result<Option<DynamicImage>, PilError> {
     super::super::helpers::strategy::require_default_selection(selection, MODE)?;
-    super::default::bitmap_impl::apply(
-        image,
-        mask,
-        mask_mode,
-        mask_width,
-        mask_height,
-        x,
-        y,
-        color,
-    )
+    super::default::bitmap_impl::apply(image, mask, mask_mode, mask_width, mask_height, x, y, color)
 }
 
 pub(crate) fn apply_bitmap(
@@ -61,13 +52,16 @@ pub(crate) fn apply_bitmap(
 }
 
 pub(crate) const MODE: Mode = Mode::ImageRgb8;
+const ARCHITECTURES: super::super::helpers::support::VectorArchitectures =
+    super::super::helpers::support::vector_architectures(MODE);
+pub(crate) const SUPPORT: ModeSupport =
+    super::super::helpers::support::vector_support(MODE, &ARCHITECTURES);
 pub(crate) const CHANNELS: usize = 3;
 pub(crate) const FLOAT_MODE: bool = false;
 
 pub(crate) fn support() -> ModeSupport {
-    super::super::ops::mode_support(MODE)
+    SUPPORT
 }
-
 
 pub(crate) fn execute(
     image: &DynamicImage,

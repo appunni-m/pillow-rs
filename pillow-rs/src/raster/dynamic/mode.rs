@@ -17,8 +17,12 @@ impl DynamicImage {
         }
         match mode {
             Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => self.with_gray_mode(mode),
-            Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => self.with_gray_alpha_mode(mode),
-            Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => self.with_rgb_mode(mode),
+            Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => {
+                self.with_gray_alpha_mode(mode)
+            }
+            Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => {
+                self.with_rgb_mode(mode)
+            }
             Mode::ImageRgba8
             | Mode::ImageRgbPremultiplied8
             | Mode::ImageRgbx8
@@ -38,15 +42,18 @@ impl DynamicImage {
 
     fn with_gray_mode(self, mode: Mode) -> Result<Self, Self> {
         match (mode, self) {
-            (Mode::One, Self::One(image) | Self::ImageLuma8(image) | Self::ImagePalette8(image)) => {
-                Ok(Self::One(image))
-            }
-            (Mode::ImageLuma8, Self::One(image) | Self::ImageLuma8(image) | Self::ImagePalette8(image)) => {
-                Ok(Self::ImageLuma8(image))
-            }
-            (Mode::ImagePalette8, Self::One(image) | Self::ImageLuma8(image) | Self::ImagePalette8(image)) => {
-                Ok(Self::ImagePalette8(image))
-            }
+            (
+                Mode::One,
+                Self::One(image) | Self::ImageLuma8(image) | Self::ImagePalette8(image),
+            ) => Ok(Self::One(image)),
+            (
+                Mode::ImageLuma8,
+                Self::One(image) | Self::ImageLuma8(image) | Self::ImagePalette8(image),
+            ) => Ok(Self::ImageLuma8(image)),
+            (
+                Mode::ImagePalette8,
+                Self::One(image) | Self::ImageLuma8(image) | Self::ImagePalette8(image),
+            ) => Ok(Self::ImagePalette8(image)),
             (_, image) => Err(image),
         }
     }
@@ -202,5 +209,4 @@ impl DynamicImage {
             (_, image) => Err(image),
         }
     }
-
 }

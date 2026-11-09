@@ -1,11 +1,11 @@
 //! Rounded-rectangle SIMD span preparation and drawing.
 
+use super::super::super::super::clipping::{arc_clip_state, pie_clip_state};
+use super::super::super::DrawLayout;
 use super::{
     SimdDrawSpanWriter, simd_draw_ellipse_native, simd_draw_rectangle_native,
     simd_write_clipped_ellipse_spans, simd_write_rect_spans,
 };
-use super::super::super::DrawLayout;
-use super::super::super::super::clipping::{arc_clip_state, pie_clip_state};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, GenericImageView};
 

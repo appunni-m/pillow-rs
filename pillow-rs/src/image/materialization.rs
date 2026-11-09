@@ -11,6 +11,7 @@ use crate::error::PilError;
 use crate::pipeline::{PipelineOp, ResampleFilter, TransformMethod};
 use crate::raster::{DynamicImage, Mode};
 
+mod derived;
 mod palette_output;
 mod receipts;
 use palette_output::{evaluate_palette_target_convert, retain_preserved_palette_metadata};
@@ -76,16 +77,14 @@ fn map_deferred_decode_error(error: image_slash_star::ImageError) -> PilError {
     }
 }
 
-
 impl Image {
     // ── Materialize ──
 
     /// Execute the pipeline chain and return a decoded DynamicImage.
     /// This is where all the lazy work gets done.
-    /// Check whether an op can be applied directly to palette indices (P-mode),
-    /// versus needing actual RGB color values. Ops that operate on single-channel
-    /// pixel values (indices) are safe. Color-dependent ops (filters, enhance,
-    /// convert) need RGB.
+    /// Check whether an op can run on indexed P/PA samples without expanding
+    /// them to RGB. The mode strategy owns P filter normalization; PA filters
+    /// operate on their native index and alpha lanes.
     fn is_palette_safe_op(op: &PipelineOp) -> bool {
         if Self::palette_preserves_raw_samples(op) {
             return true;
@@ -96,19 +95,17 @@ impl Image {
                 // into it. P and PA operands are both blended as raw sample
                 // bytes; PA is not included in has_palette_mode because that
                 // helper intentionally means a single-byte palette index.
-                other.has_palette_mode() || other.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
+                other.has_palette_mode()
+                    || other.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
             }
             PipelineOp::PutPixel {
                 palette_index: true,
                 ..
             } => true,
             PipelineOp::Rotate { fill: None, .. } => true,
-            PipelineOp::Resize { filter, .. } | PipelineOp::ResizeBoxed { filter, .. } => {
-                matches!(filter, ResampleFilter::Nearest)
-            }
-            PipelineOp::Thumbnail { filter, .. } => {
-                matches!(filter, ResampleFilter::Nearest)
-            }
+            PipelineOp::Resize { .. }
+            | PipelineOp::ResizeBoxed { .. }
+            | PipelineOp::Thumbnail { .. } => true,
             PipelineOp::Transform {
                 method: TransformMethod::Affine,
                 filter: ResampleFilter::Nearest,
@@ -215,10 +212,11 @@ impl Image {
     ///
     /// Reuse the operation-level payload/output contract so cross-width payloads
     /// cannot retain a P/PA wrapper when execution produces another mode.
-    fn putdata_preserves_palette_output(source: &Image, op: &PipelineOp) -> bool {
-        let (Some(source_mode @ (Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)),
-            PipelineOp::PutData { payload_mode, .. }) =
-            (source.known_mode_identity(), op)
+    fn putdata_preserves_palette_output(mode: Mode, op: &PipelineOp) -> bool {
+        let (
+            source_mode @ (Mode::ImagePalette8 | Mode::ImagePaletteAlpha8),
+            PipelineOp::PutData { payload_mode, .. },
+        ) = (mode, op)
         else {
             return false;
         };
@@ -234,63 +232,47 @@ impl Image {
             .any(|output| output.payload == *payload_mode && output.output == source_mode)
     }
 
-    /// Returns whether an operation can stay in the source's indexed sample
+    /// Returns whether an operation can stay in this exact indexed sample
     /// layout. Pillow's `libImaging/Filter.c` `PA` path applies convolution to
-    /// the raw index/alpha bands and preserves the `PA` mode; unlike `P`, `PA`
-    /// is a valid input for the built-in convolution filters. Keep this
-    /// source-dependent exception out of [`Self::is_palette_safe_op`] so a
-    /// direct filter on `P` cannot bypass `validate_filter` and become
-    /// accepted.
-    pub(super) fn is_palette_safe_op_for_source(source: &Image, op: &PipelineOp) -> bool {
-        Self::is_palette_safe_op(op) || Self::putdata_preserves_palette_output(source, op)
+    /// the raw index/alpha bands and preserves `PA`; unlike `P`, it is a valid
+    /// input for built-in convolution filters. Keep the PA-specific exception
+    /// out of the generic classifier so P still follows its declared rejection.
+    pub(super) fn is_palette_safe_op_for_mode(mode: Mode, op: &PipelineOp) -> bool {
+        Self::is_palette_safe_op(op) || Self::putdata_preserves_palette_output(mode, op)
             // Same-mode P/PA conversion is a wrapper copy; retain indexed
             // samples and their attached palette through internal pipelines.
-            || (source.has_palette_samples()
+            || (matches!(mode, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
                 && matches!(
                     op,
                     PipelineOp::Convert {
-                        mode,
+                        mode: target_mode,
                         matrix: None,
                         ..
-                    } if source.known_mode_identity() == Some(*mode)
+                    } if mode == *target_mode
                 ))
             // Core-only P Posterize/Solarize strategies transform their
             // native index bytes and retain the source palette.
-            || (source.known_mode_identity() == Some(Mode::ImagePalette8)
+            || (mode == Mode::ImagePalette8
                 && matches!(op, PipelineOp::Posterize { .. } | PipelineOp::Solarize { .. }))
             // Rust-only ImageOps Autocontrast transforms P index bytes and
             // keeps the source palette attached to the indexed output.
-            || (source.known_mode_identity() == Some(Mode::ImagePalette8)
+            || (mode == Mode::ImagePalette8
                 && matches!(op, PipelineOp::Autocontrast { .. }))
             // The Rust ImageOps Invert strategies operate on native P/PA
             // samples and preserve their palette metadata. Python's Pillow
             // compatibility wrappers reject these modes before queuing Invert.
-            || (matches!(
-                source.known_mode_identity(),
-                Some(Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
-            )
+            || (matches!(mode, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
                 && matches!(op, PipelineOp::Invert))
             // A single-band Eval LUT over P maps indices, not palette colors.
-            || (source.known_mode_identity() == Some(Mode::ImagePalette8)
+            || (mode == Mode::ImagePalette8
                 && matches!(op, PipelineOp::Eval { lut } if lut.len() == 256))
             // PA.putpixel writes the native index/alpha sample pair. The
             // operation does not depend on the RGB palette, but a later
             // conversion does, so keep the palette attached to the lazy
             // pipeline while the raw PA samples are updated.
-            || (source.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
+            || (mode == Mode::ImagePaletteAlpha8
                 && matches!(op, PipelineOp::PutPixel { .. }))
-            // PA resize and thumbnail filter the raw index/alpha pair without
-            // expanding the palette. The newly allocated Pillow image does
-            // not carry the source palette object, so output metadata clears
-            // it below.
-            || (source.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
-                && matches!(
-                    op,
-                    PipelineOp::Resize { .. }
-                        | PipelineOp::ResizeBoxed { .. }
-                        | PipelineOp::Thumbnail { .. }
-                ))
-            || (source.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
+            || (mode == Mode::ImagePaletteAlpha8
                 && matches!(
                     op,
                     PipelineOp::Filter3x3 { .. } | PipelineOp::Filter5x5 { .. }
@@ -300,7 +282,7 @@ impl Image {
             // alpha samples in PA so prepared execution reaches those exact-mode
             // strategies instead of expanding the palette to RGBA. GaussianBlur
             // remains excluded because the PA strategy explicitly rejects it.
-            || (source.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
+            || (mode == Mode::ImagePaletteAlpha8
                 && matches!(
                     op,
                     PipelineOp::BoxBlur { .. }
@@ -317,38 +299,29 @@ impl Image {
             // different semantics; this source-specific case carries the
             // already-normalized PA index/alpha pair through the
             // native-channel rotate kernel.
-            || (source.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
+            || (mode == Mode::ImagePaletteAlpha8
                 && matches!(op, PipelineOp::Rotate { .. }))
             // Pillow keeps P rotation in its native index layout, including a
             // fillcolor. The rotate backend forces nearest sampling for P and
             // interprets the first normalized fill component as the raw index.
-            || (source.known_mode_identity() == Some(Mode::ImagePalette8)
+            || (mode == Mode::ImagePalette8
                 && matches!(op, PipelineOp::Rotate { .. }))
             // Pillow's ImagingTransform applies affine/projective sampling to
             // native P/PA samples and preserves the indexed mode. Keep this
             // channel-wise operation indexed so a retained RGB palette is not
             // expanded to RGBA before the transform runs.
-            || (matches!(
-                source.known_mode_identity(),
-                Some(Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
-            )
+            || (matches!(mode, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
                 && matches!(op, PipelineOp::Transform { .. }))
             // Pillow's ImageOps.fit keeps P/PA images indexed through the
             // boxed resize. P uses nearest-neighbour samples regardless of
             // the requested kernel; PA resamples its raw index/alpha bands.
-            || (matches!(
-                source.known_mode_identity(),
-                Some(Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
-            )
+            || (matches!(mode, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
                 && matches!(op, PipelineOp::Fit { .. }))
             // Pillow's ImageOps.contain/cover are resize wrappers. Their
             // indexed paths preserve P/PA samples and the source mode while
             // applying the requested kernel (P still forces nearest inside
             // the resize implementation).
-            || (matches!(
-                source.known_mode_identity(),
-                Some(Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
-            )
+            || (matches!(mode, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
                 && matches!(op, PipelineOp::Contain { .. } | PipelineOp::Cover { .. }))
     }
 
@@ -366,8 +339,7 @@ impl Image {
     /// `apply_transparency`, P encoding, and palette-index `putpixel` implement
     /// Pillow behavior that applies only to single-band P images.
     pub(super) fn has_palette_samples(&self) -> bool {
-        self.has_palette_mode()
-            || self.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
+        self.has_palette_mode() || self.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
     }
 
     /// Decodes or executes this image into a concrete pixel buffer.
@@ -440,7 +412,7 @@ impl Image {
             } => materialized
                 .get_or_init(|| {
                     let decoded = source.decode().map_err(map_deferred_decode_error)?;
-                    decoded_to_dynamic(&decoded, source.info().mode, *header_mode).map(Arc::new)
+                    decoded_to_dynamic(decoded, source.info().mode, *header_mode).map(Arc::new)
                 })
                 .clone(),
             Image::Pipeline {
@@ -488,8 +460,11 @@ impl Image {
         prefix_cache: Option<&PipelinePrefixCache>,
     ) -> Result<(Arc<DynamicImage>, Option<PipelinePaletteOutput>), PilError> {
         if ops.is_empty() {
-            return Self::validate_declared_pipeline_mode(source.materialized_shared()?, *output_mode)
-                .map(|image| (image, None));
+            return Self::validate_declared_pipeline_mode(
+                source.materialized_shared()?,
+                *output_mode,
+            )
+            .map(|image| (image, None));
         }
         let mut palette_output = None;
         let result = if let Some(prefix_cache) =
@@ -637,10 +612,9 @@ impl Image {
         // mode strategy when GPU execution adopts the typed palette contract.
         let palette_strategy = match (source.known_mode_identity(), ops.first()) {
             (_, Some(PipelineOp::Grayscale)) => true,
-            (
-                Some(Mode::ImagePaletteAlpha8),
-                Some(PipelineOp::Convert { mode, .. }),
-            ) if !matches!(mode, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8) => {
+            (Some(Mode::ImagePaletteAlpha8), Some(PipelineOp::Convert { mode, .. }))
+                if !matches!(mode, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8) =>
+            {
                 // PA's second sample has destination-specific conversion
                 // behavior. Keep Convert on the PA strategy so RGBX and RGBa
                 // retain their distinct fourth-lane contracts instead of
@@ -669,11 +643,7 @@ impl Image {
                 alpha: &palette_alpha,
             },
         };
-        let result = crate::compute::execute_prepared_cpu_arch_operation(
-            prepared,
-            &ops[0],
-            input,
-        )?;
+        let result = crate::compute::execute_prepared_cpu_arch_operation(prepared, &ops[0], input)?;
         Ok(Some(Arc::new(result)))
     }
 
@@ -704,7 +674,7 @@ impl Image {
         }
         let all_safe = ops
             .iter()
-            .all(|op| Self::is_palette_safe_op_for_source(source, op));
+            .all(|op| Self::is_palette_safe_op_for_mode(source_mode, op));
         if all_safe {
             let palette_mode = if *output_mode == Some(Mode::ImagePaletteAlpha8)
                 || source.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
@@ -748,18 +718,14 @@ impl Image {
         let pillow_output_mode = output_mode
             .as_ref()
             .copied()
-            .filter(|mode| mode.pillow_name().is_some());
+            .filter(|mode| mode.is_pillow_mode());
         if palette_mode == Mode::ImagePaletteAlpha8 {
             let expanded = expand_palette_alpha(
                 &img.to_luma_alpha8(),
                 palette.as_deref().unwrap_or_default(),
             );
-            let result = crate::compute::execute_prepared(
-                prepared,
-                ops,
-                &expanded,
-                pillow_output_mode,
-            )?;
+            let result =
+                crate::compute::execute_prepared(prepared, ops, &expanded, pillow_output_mode)?;
             return Ok(Some(Arc::new(result)));
         }
         if let Some(palette) = palette {
@@ -768,12 +734,8 @@ impl Image {
                 .or_else(|| source.palette_alpha())
                 .unwrap_or_default();
             let expanded = expand_palette(&img.to_luma8(), &palette, &palette_alpha);
-            let result = crate::compute::execute_prepared(
-                prepared,
-                ops,
-                &expanded,
-                pillow_output_mode,
-            )?;
+            let result =
+                crate::compute::execute_prepared(prepared, ops, &expanded, pillow_output_mode)?;
             return Ok(Some(Arc::new(result)));
         }
         Ok(None)
@@ -787,22 +749,20 @@ impl Image {
     ) -> Result<Option<Mode>, PilError> {
         // RemapPalette needs the source mode to distinguish L samples from P
         // indices; its pipeline result may stay P-tagged.
-        let remap_source_mode = if ops.len() == 1
-            && matches!(ops.first(), Some(PipelineOp::RemapPalette { .. }))
-        {
-            Some(source.mode_identity()?)
-        } else {
-            None
-        };
+        let remap_source_mode =
+            if ops.len() == 1 && matches!(ops.first(), Some(PipelineOp::RemapPalette { .. })) {
+                Some(source.mode_identity()?)
+            } else {
+                None
+            };
         // A one-step conversion also needs the source tag. RGBX and RGBa share
         // storage but have different fourth-byte semantics.
-        let convert_source_mode = if ops.len() == 1
-            && matches!(ops.first(), Some(PipelineOp::Convert { .. }))
-        {
-            Some(source.mode_identity()?)
-        } else {
-            None
-        };
+        let convert_source_mode =
+            if ops.len() == 1 && matches!(ops.first(), Some(PipelineOp::Convert { .. })) {
+                Some(source.mode_identity()?)
+            } else {
+                None
+            };
         // Encoded I;16 input uses generic Luma16 storage but retains its exact
         // source identity in the lazy image header.
         let source_luma16_mode = if remap_source_mode.is_none()
@@ -844,14 +804,9 @@ impl Image {
         palette_output: &mut Option<PipelinePaletteOutput>,
         preserves_palette: bool,
     ) -> Result<Arc<DynamicImage>, PilError> {
-        if let Some((image, output)) = evaluate_palette_target_convert(
-            source,
-            img,
-            ops,
-            prepared,
-            palette,
-            palette_alpha,
-        )? {
+        if let Some((image, output)) =
+            evaluate_palette_target_convert(source, img, ops, prepared, palette, palette_alpha)?
+        {
             *palette_output = Some(output);
             return Ok(image);
         }
@@ -892,12 +847,7 @@ impl Image {
         }
         // RGBX carries padding rather than alpha; preserve its exact source
         // identity instead of normalizing pixels to RGBA.
-        let execution_mode = Self::compatibility_execution_mode(
-            source,
-            img,
-            ops,
-            output_mode,
-        )?;
+        let execution_mode = Self::compatibility_execution_mode(source, img, ops, output_mode)?;
         let resolved_palette = if palette.is_none() {
             source.extract_palette()
         } else {

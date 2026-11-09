@@ -1,16 +1,15 @@
 pub(crate) type Input = crate::raster::GrayImage;
-use crate::compute::pool_cpu::ops::imageops::helpers::strategy::declare_invert_native_mode;
 use crate::compute::Architecture;
+use crate::compute::pool_cpu::ops::imageops::helpers::strategy;
+use crate::compute::pool_cpu::ops::imageops::helpers::strategy::declare_invert_native_mode;
 use crate::compute::registry::support::PaletteInput;
 use crate::compute::registry::support::StrategySelection;
-use crate::error::PilError;
-use crate::raster::{DynamicImage, GrayImage, RgbImage};
-use crate::compute::pool_cpu::ops::imageops::helpers::strategy;
 use crate::compute::registry::support::{
-    ImplementationSupport, InputContract, ModeSupport, OperationId, OutputModeRule,
-    StrategyGuard,
+    ImplementationSupport, InputContract, ModeSupport, OperationId, OutputModeRule, StrategyGuard,
 };
+use crate::error::PilError;
 use crate::raster::Mode;
+use crate::raster::{DynamicImage, GrayImage, RgbImage};
 
 // NO_PILLOW_SUPPORT: Pillow's ImageOps.invert rejects P. This Rust strategy
 // inverts the native palette indices and preserves the attached palette.
@@ -86,6 +85,9 @@ pub(crate) const AUTOCONTRAST_SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
 
 // NO_PILLOW_SUPPORT: Pillow's ImageOps._lut rejects P. These native strategies
 // transform palette indices and preserve the Rust image's attached palette.
+// TODO(pillow-rs#3ptb): add target-only parity for P index output, palette
+// retention, and Default/SSE2/NEON/Wasm SIMD128 selection and fallback. The
+// active Pillow corpus has no P-mode Posterize case.
 pub(crate) const POSTERIZE_SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
     OperationId::Posterize,
     Mode::ImagePalette8,
@@ -97,6 +99,9 @@ pub(crate) const POSTERIZE_SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
 
 // NO_PILLOW_SUPPORT: Pillow's ImageOps._lut rejects P; this native strategy
 // solarizes index bytes and preserves the Rust image's attached palette.
+// TODO(pillow-rs#3ptb): add target-only parity for P index output, palette
+// retention, and Default/SSE2/NEON/Wasm SIMD128 selection and fallback. The
+// active Pillow corpus has no P-mode Solarize case.
 pub(crate) const SOLARIZE_SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
     OperationId::Solarize,
     Mode::ImagePalette8,
@@ -108,7 +113,10 @@ pub(crate) const SOLARIZE_SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
 
 const EQUALIZE_INPUTS: &[InputContract] = &[
     InputContract::PaletteMetadata,
-    InputContract::CheckedByteDimensions { bytes_per_pixel: 1, allow_empty: true },
+    InputContract::CheckedByteDimensions {
+        bytes_per_pixel: 1,
+        allow_empty: true,
+    },
     InputContract::ImageOpsLumaMask,
 ];
 static EQUALIZE_ARCHITECTURES: [ImplementationSupport; 3] = strategy::cpu_architectures_for(
@@ -133,7 +141,11 @@ pub(crate) struct PreparedAutocontrast<'a> {
 
 impl<'a> PreparedAutocontrast<'a> {
     pub(crate) fn new(input: &'a GrayImage, lut: Vec<u8>, selection: StrategySelection) -> Self {
-        Self { input, lut, selection }
+        Self {
+            input,
+            lut,
+            selection,
+        }
     }
 
     pub(crate) fn selection(&self) -> &StrategySelection {
@@ -166,7 +178,11 @@ pub(crate) struct PreparedEqualize {
 
 impl PreparedEqualize {
     pub(crate) fn new(input: RgbImage, lut: Vec<u8>, selection: StrategySelection) -> Self {
-        Self { input, lut, selection }
+        Self {
+            input,
+            lut,
+            selection,
+        }
     }
 
     pub(crate) fn selection(&self) -> &StrategySelection {
@@ -199,7 +215,11 @@ pub(crate) struct PreparedPosterize<'a> {
 
 impl<'a> PreparedPosterize<'a> {
     pub(crate) fn new(input: &'a GrayImage, bits: u8, selection: StrategySelection) -> Self {
-        Self { input, bits, selection }
+        Self {
+            input,
+            bits,
+            selection,
+        }
     }
 
     pub(crate) fn selection(&self) -> &StrategySelection {
@@ -230,7 +250,11 @@ pub(crate) struct PreparedSolarize<'a> {
 
 impl<'a> PreparedSolarize<'a> {
     pub(crate) fn new(input: &'a GrayImage, threshold: u8, selection: StrategySelection) -> Self {
-        Self { input, threshold, selection }
+        Self {
+            input,
+            threshold,
+            selection,
+        }
     }
 
     pub(crate) fn selection(&self) -> &StrategySelection {
@@ -253,3 +277,9 @@ impl<'a> PreparedSolarize<'a> {
         }
     }
 }
+
+pub(crate) const CROP_BORDER_SUPPORT: crate::compute::registry::support::ModeSupport =
+    crate::compute::pool_cpu::ops::imageops::helpers::strategy::crop_border_serial_support(
+        crate::raster::Mode::ImagePalette8,
+        super::super::ops::CROP_BORDER_INPUTS,
+    );

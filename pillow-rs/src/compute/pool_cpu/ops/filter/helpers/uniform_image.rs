@@ -1,7 +1,6 @@
 //! Bounded exact-byte uniformity checks shared by CPU filter families.
 
-pub(in crate::compute::pool_cpu::ops::filter) const SMALL_UNIFORM_BYTE_MAX_PIXELS: usize =
-    64 * 64;
+pub(in crate::compute::pool_cpu::ops::filter) const SMALL_UNIFORM_BYTE_MAX_PIXELS: usize = 64 * 64;
 const ZERO_BYTE_MAX_PIXELS: usize = 256 * 256;
 
 /// Return whether a small native-byte image contains one repeated channel tuple.
@@ -53,4 +52,3 @@ pub(in crate::compute::pool_cpu::ops::filter) fn native_zero_bytes(
     };
     raw.len() == bytes && raw.iter().all(|&byte| byte == 0)
 }
-

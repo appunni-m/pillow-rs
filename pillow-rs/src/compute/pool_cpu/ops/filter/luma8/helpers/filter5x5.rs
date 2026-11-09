@@ -16,19 +16,9 @@ pub(crate) fn execute_special(
     }
     let mut output = raw.to_vec();
     let result = if uniform {
-        super::uniform5x5_kernel::filter(
-            raw,
-            &mut output,
-            width as usize,
-            height as usize,
-        )
+        super::uniform5x5_kernel::filter(raw, &mut output, width as usize, height as usize)
     } else {
-        super::binomial5x5_kernel::filter(
-            raw,
-            &mut output,
-            width as usize,
-            height as usize,
-        )
+        super::binomial5x5_kernel::filter(raw, &mut output, width as usize, height as usize)
     }?;
     crate::compute::record_pipeline_operation_path("vector");
     if result.0 != 0 {

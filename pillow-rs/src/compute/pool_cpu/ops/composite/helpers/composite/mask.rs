@@ -20,14 +20,15 @@ impl Samples<'_> {
     #[inline]
     pub(super) fn get(self, pixel: usize) -> u8 {
         let value = self.bytes[pixel * self.channels + self.sample];
-        if self.binary && value != 0 { 255 } else { value }
+        if self.binary && value != 0 {
+            255
+        } else {
+            value
+        }
     }
 }
 
-pub(super) fn samples(
-    mask: &DynamicImage,
-    mask_alpha: bool,
-) -> Result<Samples<'_>, PilError> {
+pub(super) fn samples(mask: &DynamicImage, mask_alpha: bool) -> Result<Samples<'_>, PilError> {
     let (channels, sample, binary) = match (mask.mode(), mask_alpha) {
         (Mode::One, false) => (1usize, 0usize, true),
         (Mode::ImageLuma8, false) => (1, 0, false),
@@ -40,5 +41,10 @@ pub(super) fn samples(
     if bytes.len() != dimensions.total_bytes() {
         return Err(PilError::ValueError("bad transparency mask".into()));
     }
-    Ok(Samples { bytes, channels, sample, binary })
+    Ok(Samples {
+        bytes,
+        channels,
+        sample,
+        binary,
+    })
 }

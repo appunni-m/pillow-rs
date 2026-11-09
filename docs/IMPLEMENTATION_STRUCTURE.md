@@ -584,8 +584,8 @@ migrated into their corresponding owner.
 | `reduce` | `Reduce` |
 | `color` | `Convert`, `ConvertLab`, `RemapPalette` |
 | `color3dlut` | `Color3DLut` |
-| `filter` | `Filter3x3`, `Filter5x5`, `GaussianBlur`, `BoxBlur`, `BoxBlurXY`, `MedianFilter`, `MaxFilter`, `MinFilter`, `RankFilter`, and direct `ModeFilter` |
-| `imageops` | `Autocontrast`, `Equalize`, `EqualizeMasked`, `Invert`, `Posterize`, `Solarize`, `Colorize`, `Quantize`, `Expand`, `CropBorder` |
+| `filter` | `Filter3x3`, `Filter5x5`, `GaussianBlur`, `BoxBlur`, `BoxBlurXY`, `MedianFilter`, `MaxFilter`, `MinFilter`, `RankFilter`, direct `ModeFilter`, and the private P-mode `ImagingCorePaletteRankFilter` callback |
+| `imageops` | `Autocontrast`, `Equalize`, `EqualizeMasked`, `Invert`, `Posterize`, `Solarize`, `Colorize`, `Quantize`, `Expand`, private callback `ImagingCoreExpand`, and `CropBorder` |
 | `geometry` | `Contain`, `Cover`, `Fit`, `Pad`, `Scale` |
 | `grayscale` | `Grayscale` |
 | `chops` | `Add`, `Subtract`, `Multiply`, `Screen`, `Darker`, `Lighter`, `Difference`, `Overlay`, `HardLight`, `SoftLight`, `AddModulo`, `SubtractModulo`, `LogicalAnd`, `LogicalOr`, `LogicalXor`, `Constant`, `Offset`, `Duplicate`, `InvertChops` |

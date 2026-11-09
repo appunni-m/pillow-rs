@@ -47,7 +47,7 @@ pub(super) fn fuse_gpu_transpose_ops(ops: &[PipelineOp]) -> Vec<PipelineOp> {
             index += 1;
             continue;
         };
-        let mut combined = Some(method.clone());
+        let mut combined = Some(*method);
         let mut consumed = 1usize;
         while index + consumed < ops.len() {
             let PipelineOp::Transpose { method: next } = &ops[index + consumed] else {
@@ -60,7 +60,7 @@ pub(super) fn fuse_gpu_transpose_ops(ops: &[PipelineOp]) -> Vec<PipelineOp> {
                         crate::pipeline::TransposeTransform::Method(method) => Some(method),
                     }
                 }
-                None => Some(next.clone()),
+                None => Some(*next),
             };
             consumed += 1;
         }

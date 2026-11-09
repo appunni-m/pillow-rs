@@ -1,6 +1,6 @@
 pub(crate) type Input = crate::raster::RgbImage;
-use crate::compute::pool_cpu::ops::imageops::helpers::strategy::declare_invert_native_mode;
 use crate::compute::Architecture;
+use crate::compute::pool_cpu::ops::imageops::helpers::strategy::declare_invert_native_mode;
 use crate::compute::registry::support::{
     ImplementationSupport, InputContract, ModeSupport, OperationId, OutputModeRule,
     StrategySelection,
@@ -12,7 +12,10 @@ declare_invert_native_mode!(ImageRgb8, Input, 3, 3);
 
 const AUTOCONTRAST_INPUTS: &[InputContract] = &[
     InputContract::AutocontrastParameters,
-    InputContract::CheckedByteDimensions { bytes_per_pixel: 3, allow_empty: true },
+    InputContract::CheckedByteDimensions {
+        bytes_per_pixel: 3,
+        allow_empty: true,
+    },
     InputContract::ImageOpsLumaMask,
 ];
 static AUTOCONTRAST_ARCHITECTURES: [ImplementationSupport; 3] =
@@ -30,7 +33,10 @@ pub(crate) const AUTOCONTRAST_SUPPORT: ModeSupport = ModeSupport::cpu(
 );
 
 const EQUALIZE_INPUTS: &[InputContract] = &[
-    InputContract::CheckedByteDimensions { bytes_per_pixel: 3, allow_empty: true },
+    InputContract::CheckedByteDimensions {
+        bytes_per_pixel: 3,
+        allow_empty: true,
+    },
     InputContract::ImageOpsLumaMask,
 ];
 static EQUALIZE_ARCHITECTURES: [ImplementationSupport; 3] =
@@ -56,7 +62,11 @@ pub(crate) struct PreparedEqualize<'a> {
 
 impl<'a> PreparedEqualize<'a> {
     pub(crate) fn new(input: &'a RgbImage, lut: Vec<u8>, selection: StrategySelection) -> Self {
-        Self { input, lut, selection }
+        Self {
+            input,
+            lut,
+            selection,
+        }
     }
 
     pub(crate) fn selection(&self) -> &StrategySelection {
@@ -87,7 +97,11 @@ pub(crate) struct PreparedAutocontrast<'a> {
 
 impl<'a> PreparedAutocontrast<'a> {
     pub(crate) fn new(input: &'a RgbImage, lut: Vec<u8>, selection: StrategySelection) -> Self {
-        Self { input, lut, selection }
+        Self {
+            input,
+            lut,
+            selection,
+        }
     }
 
     pub(crate) fn selection(&self) -> &StrategySelection {
@@ -99,12 +113,8 @@ impl<'a> PreparedAutocontrast<'a> {
             Architecture::Default => {
                 super::default::autocontrast_impl::execute(self.input, &self.lut)
             }
-            Architecture::Sse2 => {
-                super::sse2::histogram_impl::autocontrast(self.input, &self.lut)
-            }
-            Architecture::Neon => {
-                super::neon::histogram_impl::autocontrast(self.input, &self.lut)
-            }
+            Architecture::Sse2 => super::sse2::histogram_impl::autocontrast(self.input, &self.lut),
+            Architecture::Neon => super::neon::histogram_impl::autocontrast(self.input, &self.lut),
             Architecture::WasmSimd128 => {
                 super::wasm_simd128::histogram_impl::autocontrast(self.input, &self.lut)
             }
@@ -117,7 +127,10 @@ impl<'a> PreparedAutocontrast<'a> {
 
 const POSTERIZE_INPUTS: &[InputContract] = &[
     InputContract::PosterizeBits,
-    InputContract::CheckedByteDimensions { bytes_per_pixel: 3, allow_empty: true },
+    InputContract::CheckedByteDimensions {
+        bytes_per_pixel: 3,
+        allow_empty: true,
+    },
 ];
 static POSTERIZE_ARCHITECTURES: [ImplementationSupport; 3] =
     super::super::helpers::strategy::native_byte_point_architectures(
@@ -160,7 +173,11 @@ pub(crate) struct PreparedPosterize<'a> {
 
 impl<'a> PreparedPosterize<'a> {
     pub(crate) fn new(input: &'a RgbImage, bits: u8, selection: StrategySelection) -> Self {
-        Self { input, bits, selection }
+        Self {
+            input,
+            bits,
+            selection,
+        }
     }
 
     pub(crate) fn selection(&self) -> &StrategySelection {
@@ -191,7 +208,11 @@ pub(crate) struct PreparedSolarize<'a> {
 
 impl<'a> PreparedSolarize<'a> {
     pub(crate) fn new(input: &'a RgbImage, threshold: u8, selection: StrategySelection) -> Self {
-        Self { input, threshold, selection }
+        Self {
+            input,
+            threshold,
+            selection,
+        }
     }
 
     pub(crate) fn selection(&self) -> &StrategySelection {
@@ -229,9 +250,9 @@ pub(crate) fn execute_quantize(
         Mode::ImageRgb8,
     )?;
     match architecture {
-        Architecture::Default => super::default::quantize_impl::execute(
-            image, width, height, colors, kmeans, method,
-        ),
+        Architecture::Default => {
+            super::default::quantize_impl::execute(image, width, height, colors, kmeans, method)
+        }
         _ => Err(PilError::InternalError(
             "RGB Quantize selected an unimplemented architecture".into(),
         )),
@@ -257,3 +278,9 @@ pub(crate) fn execute_quantize_with_palette(
         )),
     }
 }
+
+pub(crate) const CROP_BORDER_SUPPORT: crate::compute::registry::support::ModeSupport =
+    crate::compute::pool_cpu::ops::imageops::helpers::strategy::crop_border_serial_support(
+        crate::raster::Mode::ImageRgb8,
+        super::super::ops::CROP_BORDER_INPUTS,
+    );

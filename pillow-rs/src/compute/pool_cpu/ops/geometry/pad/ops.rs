@@ -3,9 +3,13 @@
 // nonnumeric, and wide tuple values; verify P palette output, native fills,
 // and composed Resize in CPU parity.
 
-use crate::compute::{Architecture, ExecutionContext, registry::support::{
-    InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport, PadFillRule, StrategyInputs, StrategySelection, SupportAssessment,
-}};
+use crate::compute::{
+    Architecture, ExecutionContext,
+    registry::support::{
+        InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport, PadFillRule,
+        StrategyInputs, StrategySelection, SupportAssessment,
+    },
+};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
@@ -99,12 +103,9 @@ impl PreparedPad<'_> {
         let frame = self.frame;
         let selection = &self.selection;
         let architecture = selection.implementation.architecture;
-        if let Some(padded) = try_direct_resize_into_canvas(
-            source,
-            frame,
-            self.resize.as_ref(),
-            selection,
-        )? {
+        if let Some(padded) =
+            try_direct_resize_into_canvas(source, frame, self.resize.as_ref(), selection)?
+        {
             if let Some(resize) = self.resize.as_ref() {
                 crate::compute::record_pipeline_operation_selection(resize.selection());
             }
@@ -123,12 +124,9 @@ impl PreparedPad<'_> {
             PadContentSource::Input
         };
         let content = resized.as_ref().unwrap_or(source);
-        if let Some((image, vector_blocks, scalar_tail)) = try_vertical_append(
-            content,
-            frame,
-            selection,
-            content_source,
-        )? {
+        if let Some((image, vector_blocks, scalar_tail)) =
+            try_vertical_append(content, frame, selection, content_source)?
+        {
             record_vector_work(vector_blocks, scalar_tail);
             return finish_pad(content, image, frame);
         }
@@ -193,46 +191,36 @@ fn try_default_vertical_append(
             )
             .map(|output| output.map(|output| (DynamicImage::ImageLuma8(output), 0, 0)))
         }
-        (Input, DynamicImage::ImageRgb8(image)) => {
-            super::helpers::samples::pad_vertical_append(
-                image,
-                frame,
-                super::rgb8::default::pad_impl::fill(frame.color),
-            )
-            .map(|output| output.map(|output| (DynamicImage::ImageRgb8(output), 0, 0)))
-        }
-        (Input, DynamicImage::ImageHsv8(image)) => {
-            super::helpers::samples::pad_vertical_append(
-                image,
-                frame,
-                super::hsv8::default::pad_impl::fill(frame.color),
-            )
-            .map(|output| output.map(|output| (DynamicImage::ImageHsv8(output), 0, 0)))
-        }
-        (Input, DynamicImage::ImageRgba8(image)) => {
-            super::helpers::samples::pad_vertical_append(
-                image,
-                frame,
-                super::rgba8::default::pad_impl::fill(frame.color),
-            )
-            .map(|output| output.map(|output| (DynamicImage::ImageRgba8(output), 0, 0)))
-        }
-        (Resized, DynamicImage::ImageCmyk8(image)) => {
-            super::helpers::samples::pad_vertical_append(
-                image,
-                frame,
-                super::cmyk8::default::pad_impl::fill(frame.color),
-            )
-            .map(|output| output.map(|output| (DynamicImage::ImageCmyk8(output), 0, 0)))
-        }
-        (Resized, DynamicImage::ImageRgbx8(image)) => {
-            super::helpers::samples::pad_vertical_append(
-                image,
-                frame,
-                super::rgbx8::default::pad_impl::fill(frame.color),
-            )
-            .map(|output| output.map(|output| (DynamicImage::ImageRgbx8(output), 0, 0)))
-        }
+        (Input, DynamicImage::ImageRgb8(image)) => super::helpers::samples::pad_vertical_append(
+            image,
+            frame,
+            super::rgb8::default::pad_impl::fill(frame.color),
+        )
+        .map(|output| output.map(|output| (DynamicImage::ImageRgb8(output), 0, 0))),
+        (Input, DynamicImage::ImageHsv8(image)) => super::helpers::samples::pad_vertical_append(
+            image,
+            frame,
+            super::hsv8::default::pad_impl::fill(frame.color),
+        )
+        .map(|output| output.map(|output| (DynamicImage::ImageHsv8(output), 0, 0))),
+        (Input, DynamicImage::ImageRgba8(image)) => super::helpers::samples::pad_vertical_append(
+            image,
+            frame,
+            super::rgba8::default::pad_impl::fill(frame.color),
+        )
+        .map(|output| output.map(|output| (DynamicImage::ImageRgba8(output), 0, 0))),
+        (Resized, DynamicImage::ImageCmyk8(image)) => super::helpers::samples::pad_vertical_append(
+            image,
+            frame,
+            super::cmyk8::default::pad_impl::fill(frame.color),
+        )
+        .map(|output| output.map(|output| (DynamicImage::ImageCmyk8(output), 0, 0))),
+        (Resized, DynamicImage::ImageRgbx8(image)) => super::helpers::samples::pad_vertical_append(
+            image,
+            frame,
+            super::rgbx8::default::pad_impl::fill(frame.color),
+        )
+        .map(|output| output.map(|output| (DynamicImage::ImageRgbx8(output), 0, 0))),
         _ => Ok(None),
     }
 }
@@ -259,7 +247,10 @@ fn try_vector_vertical_append(
                 frame,
                 super::luma8::default::pad_impl::fill(frame.color),
             )
-            .map(|output| output.map(|(output, blocks, tail)| (DynamicImage::ImageLuma8(output), blocks, tail)))
+            .map(|output| {
+                output
+                    .map(|(output, blocks, tail)| (DynamicImage::ImageLuma8(output), blocks, tail))
+            })
         }
         DynamicImage::ImageRgb8(image) => {
             super::helpers::native_vector::pad_vertical_append::<_, false>(
@@ -267,7 +258,9 @@ fn try_vector_vertical_append(
                 frame,
                 super::rgb8::default::pad_impl::fill(frame.color),
             )
-            .map(|output| output.map(|(output, blocks, tail)| (DynamicImage::ImageRgb8(output), blocks, tail)))
+            .map(|output| {
+                output.map(|(output, blocks, tail)| (DynamicImage::ImageRgb8(output), blocks, tail))
+            })
         }
         DynamicImage::ImageRgba8(image) => {
             super::helpers::native_vector::pad_vertical_append::<_, true>(
@@ -275,7 +268,10 @@ fn try_vector_vertical_append(
                 frame,
                 super::rgba8::default::pad_impl::fill(frame.color),
             )
-            .map(|output| output.map(|(output, blocks, tail)| (DynamicImage::ImageRgba8(output), blocks, tail)))
+            .map(|output| {
+                output
+                    .map(|(output, blocks, tail)| (DynamicImage::ImageRgba8(output), blocks, tail))
+            })
         }
         DynamicImage::ImageCmyk8(image) => {
             super::helpers::native_vector::pad_vertical_append::<_, false>(
@@ -283,7 +279,10 @@ fn try_vector_vertical_append(
                 frame,
                 super::cmyk8::default::pad_impl::fill(frame.color),
             )
-            .map(|output| output.map(|(output, blocks, tail)| (DynamicImage::ImageCmyk8(output), blocks, tail)))
+            .map(|output| {
+                output
+                    .map(|(output, blocks, tail)| (DynamicImage::ImageCmyk8(output), blocks, tail))
+            })
         }
         DynamicImage::ImageRgbx8(image) => {
             super::helpers::native_vector::pad_vertical_append::<_, false>(
@@ -291,7 +290,10 @@ fn try_vector_vertical_append(
                 frame,
                 super::rgbx8::default::pad_impl::fill(frame.color),
             )
-            .map(|output| output.map(|(output, blocks, tail)| (DynamicImage::ImageRgbx8(output), blocks, tail)))
+            .map(|output| {
+                output
+                    .map(|(output, blocks, tail)| (DynamicImage::ImageRgbx8(output), blocks, tail))
+            })
         }
         _ => Ok(None),
     }
@@ -306,8 +308,7 @@ fn try_direct_resize_into_canvas(
     let Some(resize) = resize else {
         return Ok(None);
     };
-    let architecture =
-        super::helpers::strategies::selected_architecture(selection, image.mode())?;
+    let architecture = super::helpers::strategies::selected_architecture(selection, image.mode())?;
     if resize.selection().implementation.architecture != architecture {
         return Ok(None);
     }
@@ -347,30 +348,50 @@ fn pad_mode(
         Mode::One => super::one::ops::pad(image, frame, selection),
         Mode::ImageLuma8 => super::luma8::ops::pad(image, frame, selection),
         Mode::ImageLumaA8 => super::luma_a8::ops::pad(image, frame, selection),
-        Mode::ImageLaPremultiplied8 => super::la_premultiplied8::ops::pad(image, frame, selection)
-            .map(|image| (image, 0, 0)),
+        Mode::ImageLaPremultiplied8 => {
+            super::la_premultiplied8::ops::pad(image, frame, selection).map(|image| (image, 0, 0))
+        }
         Mode::ImagePalette8 => super::palette8::ops::pad(image, frame, selection),
         Mode::ImagePaletteAlpha8 => super::palette_alpha8::ops::pad(image, frame, selection),
         Mode::ImageRgb8 => super::rgb8::ops::pad(image, frame, selection),
         Mode::ImageRgba8 => super::rgba8::ops::pad(image, frame, selection),
-        Mode::ImageRgbPremultiplied8 => super::rgb_premultiplied8::ops::pad(image, frame, selection)
-            .map(|image| (image, 0, 0)),
+        Mode::ImageRgbPremultiplied8 => {
+            super::rgb_premultiplied8::ops::pad(image, frame, selection).map(|image| (image, 0, 0))
+        }
         Mode::ImageRgbx8 => super::rgbx8::ops::pad(image, frame, selection),
         Mode::ImageCmyk8 => super::cmyk8::ops::pad(image, frame, selection),
         Mode::ImageYCbCr8 => super::ycbcr8::ops::pad(image, frame, selection),
-        Mode::ImageLab8 => super::lab8::ops::pad(image, frame, selection).map(|image| (image, 0, 0)),
+        Mode::ImageLab8 => {
+            super::lab8::ops::pad(image, frame, selection).map(|image| (image, 0, 0))
+        }
         Mode::ImageHsv8 => super::hsv8::ops::pad(image, frame, selection),
         Mode::ImageI32 => super::i32::ops::pad(image, frame, selection),
         Mode::ImageF32 => super::f32::ops::pad(image, frame, selection),
         Mode::ImageI16 => super::i16::ops::pad(image, frame, selection).map(|image| (image, 0, 0)),
-        Mode::ImageI16L => super::i16l::ops::pad(image, frame, selection).map(|image| (image, 0, 0)),
-        Mode::ImageI16B => super::i16b::ops::pad(image, frame, selection).map(|image| (image, 0, 0)),
-        Mode::ImageI16N => super::i16n::ops::pad(image, frame, selection).map(|image| (image, 0, 0)),
-        Mode::ImageLumaA16 => super::luma_a16::ops::pad(image, frame, selection).map(|image| (image, 0, 0)),
-        Mode::ImageRgb16 => super::rgb16::ops::pad(image, frame, selection).map(|image| (image, 0, 0)),
-        Mode::ImageRgba16 => super::rgba16::ops::pad(image, frame, selection).map(|image| (image, 0, 0)),
-        Mode::ImageRgb32F => super::rgb32f::ops::pad(image, frame, selection).map(|image| (image, 0, 0)),
-        Mode::ImageRgba32F => super::rgba32f::ops::pad(image, frame, selection).map(|image| (image, 0, 0)),
+        Mode::ImageI16L => {
+            super::i16l::ops::pad(image, frame, selection).map(|image| (image, 0, 0))
+        }
+        Mode::ImageI16B => {
+            super::i16b::ops::pad(image, frame, selection).map(|image| (image, 0, 0))
+        }
+        Mode::ImageI16N => {
+            super::i16n::ops::pad(image, frame, selection).map(|image| (image, 0, 0))
+        }
+        Mode::ImageLumaA16 => {
+            super::luma_a16::ops::pad(image, frame, selection).map(|image| (image, 0, 0))
+        }
+        Mode::ImageRgb16 => {
+            super::rgb16::ops::pad(image, frame, selection).map(|image| (image, 0, 0))
+        }
+        Mode::ImageRgba16 => {
+            super::rgba16::ops::pad(image, frame, selection).map(|image| (image, 0, 0))
+        }
+        Mode::ImageRgb32F => {
+            super::rgb32f::ops::pad(image, frame, selection).map(|image| (image, 0, 0))
+        }
+        Mode::ImageRgba32F => {
+            super::rgba32f::ops::pad(image, frame, selection).map(|image| (image, 0, 0))
+        }
     }
 }
 
@@ -386,9 +407,7 @@ pub(crate) fn prepare_pipeline<'a>(
             filter,
             color,
             centering,
-        } => {
-            (w, h, filter, color, None, *centering, None)
-        }
+        } => (w, h, filter, color, None, *centering, None),
         PipelineOp::PadTyped {
             w,
             h,
@@ -396,9 +415,7 @@ pub(crate) fn prepare_pipeline<'a>(
             color,
             input,
             centering,
-        } => {
-            (w, h, filter, color, Some(*input), *centering, None)
-        }
+        } => (w, h, filter, color, Some(*input), *centering, None),
         PipelineOp::PadPositioned {
             w,
             h,
@@ -406,28 +423,28 @@ pub(crate) fn prepare_pipeline<'a>(
             color,
             native_color,
             position,
-        } => {
-            (
-                w,
-                h,
-                filter,
-                color,
-                *native_color,
-                (0.5, 0.5),
-                Some(*position),
-            )
-        }
+        } => (
+            w,
+            h,
+            filter,
+            color,
+            *native_color,
+            (0.5, 0.5),
+            Some(*position),
+        ),
         _ => return Err(PilError::ValueError("expected Pad op".into())),
     };
     let mode = inputs.mode();
     let facts = inputs.facts().with_pad(*w, *h, *filter, *color, centering);
-    let selection = select(mode, facts, context)?;
+    // Pillow ImageOps.pad computes its contain geometry before it reaches the
+    // resize/fill strategy. Keep direct prepared calls on that error order.
     let mut frame = dimensions::build(
         (inputs.image.width(), inputs.image.height()),
         (*w, *h),
         centering,
         *color,
     )?;
+    let selection = select(mode, facts, context)?;
     if let Some((x, y)) = position {
         frame.offset_x = i64::from(x);
         frame.offset_y = i64::from(y);
@@ -456,10 +473,12 @@ pub(crate) fn prepare_pipeline<'a>(
             context,
         )?)
     };
-    Ok(crate::compute::registry::PreparedOperation::from_pad(PreparedPad {
-        inputs,
-        frame,
-        resize,
-        selection,
-    }))
+    Ok(crate::compute::registry::PreparedOperation::from_pad(
+        PreparedPad {
+            inputs,
+            frame,
+            resize,
+            selection,
+        },
+    ))
 }

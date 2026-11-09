@@ -1,10 +1,10 @@
 //! Pillow-compatible entropy methods for [`Image`].
 
-use crate::compute::registry::support::StrategySelection;
-use crate::compute::{Backend, PipelineOperationTelemetryCapture};
 use crate::compute::pool_cpu::ops::analysis::helpers::histogram_execution::{
     prepare_entropy_histogram, prepare_entropy_histogram_with_extrema, prepare_entropy_mask,
 };
+use crate::compute::registry::support::StrategySelection;
+use crate::compute::{Backend, PipelineOperationTelemetryCapture};
 use crate::error::PilError;
 use crate::ops::analysis::HistogramExtrema;
 
@@ -25,10 +25,7 @@ impl Image {
 
     /// Computes entropy with an optional native `I`/`F` histogram range.
     // NO_PILLOW_SUPPORT: Pillow's public `Image.entropy` accepts a mask only.
-    pub fn entropy_with_extrema(
-        &self,
-        extrema: Option<HistogramExtrema>,
-    ) -> Result<f64, PilError> {
+    pub fn entropy_with_extrema(&self, extrema: Option<HistogramExtrema>) -> Result<f64, PilError> {
         self.entropy_with_mask_and_extrema(None, extrema)
     }
 
@@ -57,10 +54,14 @@ impl Image {
             None
         } else {
             match (image.mode(), extrema) {
-                (crate::raster::Mode::ImageI32, Some(value @ HistogramExtrema::ImageI32 { .. }))
-                | (crate::raster::Mode::ImageF32, Some(value @ HistogramExtrema::ImageF32 { .. })) => {
-                    Some(value)
-                }
+                (
+                    crate::raster::Mode::ImageI32,
+                    Some(value @ HistogramExtrema::ImageI32 { .. }),
+                )
+                | (
+                    crate::raster::Mode::ImageF32,
+                    Some(value @ HistogramExtrema::ImageF32 { .. }),
+                ) => Some(value),
                 (_, None) => None,
                 _ => {
                     return Err(PilError::ValueError(
@@ -72,10 +73,8 @@ impl Image {
         let telemetry = if Backend::pipeline_telemetry_enabled() {
             // This timing/resource sample covers the terminal scan; ordered
             // source and mask graph operation receipts are restored separately.
-            let telemetry = crate::compute::begin_eager_cpu_operation_telemetry(
-                "Entropy",
-                requested_backend,
-            );
+            let telemetry =
+                crate::compute::begin_eager_cpu_operation_telemetry("Entropy", requested_backend);
             operation_receipts.restore();
             Some(telemetry)
         } else {
@@ -120,8 +119,7 @@ fn entropy_from_bins(bins: &[u32]) -> f64 {
             let probability = f64::from(count) / total;
             // Pillow 12.2.0 `_entropy` accumulates `p * log(p) * M_LOG2E` and
             // negates once at return. Preserve this order and its fused update.
-            entropy = (probability * probability.ln())
-                .mul_add(std::f64::consts::LOG2_E, entropy);
+            entropy = (probability * probability.ln()).mul_add(std::f64::consts::LOG2_E, entropy);
         }
     }
     -entropy

@@ -105,8 +105,15 @@ pub(crate) fn js_font_options(input: JsFontOptionsInput<'_>) -> pillow_rs::Image
     let default = JsValue::NULL;
     let (features, features_invalid) = js_font_features(input.features.unwrap_or(&default));
     let (start, start_invalid) = js_font_start(input.start.unwrap_or(&default));
+    let mode = input.mode.and_then(|name| {
+        if name.is_empty() {
+            None
+        } else {
+            Some(pillow_rs::Mode::from_pillow_name(&name).unwrap_or(pillow_rs::Mode::ImageLuma8))
+        }
+    });
     pillow_rs::ImageFontTextOptions {
-        mode: input.mode,
+        mode,
         embedded_color: input.embedded_color,
         direction: input.direction,
         features,

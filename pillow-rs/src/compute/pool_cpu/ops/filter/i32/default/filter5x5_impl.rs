@@ -601,14 +601,9 @@ pub(in crate::compute::pool_cpu::ops::filter::i32) fn execute_with_fma(
     // Select the integer factorization only when every sample is proven to
     // preserve Pillow's f32 arithmetic exactly.
 
-    if let Some((output, identity)) = filter_5x5_i32_fast_path(
-        raw,
-        w_u32 as usize,
-        h_u32 as usize,
-        &kd,
-        offset,
-        fma,
-    ) {
+    if let Some((output, identity)) =
+        filter_5x5_i32_fast_path(raw, w_u32 as usize, h_u32 as usize, &kd, offset, fma)
+    {
         return filter_5x5_i32_image(w_u32, h_u32, output).map(|image| (image, identity));
     }
 

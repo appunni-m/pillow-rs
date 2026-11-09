@@ -154,4 +154,3 @@ pub(crate) unsafe fn execute(source: &[u8], expected_pixels: usize) -> (Vec<u8>,
     output.resize(expected_pixels, 0);
     (output, vector_blocks)
 }
-

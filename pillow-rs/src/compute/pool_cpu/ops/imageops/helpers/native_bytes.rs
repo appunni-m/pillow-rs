@@ -4,8 +4,7 @@ use crate::error::PilError;
 use wide::u8x16;
 
 pub(crate) use crate::compute::pool_cpu::helpers::bytes::native_invert::{
-    NativeInvertOutput,
-    invert,
+    NativeInvertOutput, invert,
 };
 
 /// Byte-wise point transform selected by the exact operation strategy.
@@ -34,14 +33,13 @@ pub(crate) fn pointwise(
             let mask = !((1u8 << shift) - 1);
             transform_pointwise_bytes(source, |input| input & u8x16::splat(mask))
         }
-        NativeBytePointTransform::Solarize { threshold } => transform_pointwise_bytes(
-            source,
-            |input| {
+        NativeBytePointTransform::Solarize { threshold } => {
+            transform_pointwise_bytes(source, |input| {
                 input
                     .simd_ge(u8x16::splat(threshold))
                     .select(u8x16::splat(u8::MAX) - input, input)
-            },
-        ),
+            })
+        }
     };
     crate::compute::record_pipeline_operation_vector_blocks(source.len().div_ceil(16) as u64);
     crate::compute::record_pipeline_operation_path("vector");
@@ -55,9 +53,8 @@ where
     let mut output = Vec::with_capacity(source.len());
     let mut chunks = source.chunks_exact(16);
     for chunk in &mut chunks {
-        let block = u8x16::new(
-            <[u8; 16]>::try_from(chunk).expect("chunks_exact yields 16-byte blocks"),
-        );
+        let block =
+            u8x16::new(<[u8; 16]>::try_from(chunk).expect("chunks_exact yields 16-byte blocks"));
         output.extend_from_slice(&transform(block).to_array());
     }
     let remainder = chunks.remainder();
@@ -68,4 +65,3 @@ where
     }
     output
 }
-

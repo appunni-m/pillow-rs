@@ -6,7 +6,10 @@ use wide::u8x16;
 
 pub(crate) fn scalar(source: &[u8], dest_map: &[u8]) -> Vec<u8> {
     let inverse = inverse_map(dest_map);
-    source.iter().map(|&sample| inverse[usize::from(sample)]).collect()
+    source
+        .iter()
+        .map(|&sample| inverse[usize::from(sample)])
+        .collect()
 }
 
 pub(crate) fn vector(source: &[u8], dest_map: &[u8]) -> Result<Vec<u8>, PilError> {

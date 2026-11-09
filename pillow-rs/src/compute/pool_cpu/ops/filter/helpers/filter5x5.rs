@@ -13,11 +13,10 @@ pub(crate) mod rgb_blur_ring;
 mod uniform_box;
 
 pub(crate) use native_bytes::{
-    binomial5x5_parameters_match, filter_5x5_byte_rows,
-    filter_5x5_constant_bytes, filter_5x5_la_single_outlier_rows,
-    filter_5x5_uniform_luma_rows, filter_5x5_uniform_rgba_identity,
-    filter_5x5_uniform_rgba_rows, la_single_outlier5x5_parameters_match,
-    uniform5x5_parameters_match,
+    binomial5x5_parameters_match, filter_5x5_byte_rows, filter_5x5_constant_bytes,
+    filter_5x5_la_single_outlier_rows, filter_5x5_uniform_luma_rows,
+    filter_5x5_uniform_rgba_identity, filter_5x5_uniform_rgba_rows,
+    la_single_outlier5x5_parameters_match, uniform5x5_parameters_match,
 };
 
 pub(in crate::compute::pool_cpu::ops::filter) use native_bytes::{
@@ -177,19 +176,15 @@ pub(crate) fn execute_filter5x5_rgb_vector_fast_path(
     if pixel_count > VECTOR_SMALL_UNIFORM_FILTER5X5_MAX_PIXELS
         && uniform5x5_parameters_match(kernel, scale, offset)
     {
-        if let Some(evidence) = super::filter5x5_rgb_vector::scan_uniform(
-            raw,
-            width_usize,
-            height_usize,
-        ) {
+        if let Some(evidence) =
+            super::filter5x5_rgb_vector::scan_uniform(raw, width_usize, height_usize)
+        {
             if evidence.vector_blocks != 0 {
                 crate::compute::record_pipeline_operation_path("vector");
                 crate::compute::record_pipeline_operation_vector_blocks(evidence.vector_blocks);
             }
             if evidence.scalar_tail_pixels != 0 {
-                crate::compute::record_pipeline_operation_scalar_tail(
-                    evidence.scalar_tail_pixels,
-                );
+                crate::compute::record_pipeline_operation_scalar_tail(evidence.scalar_tail_pixels);
             }
             if evidence.is_uniform {
                 return Some(raw.to_vec());

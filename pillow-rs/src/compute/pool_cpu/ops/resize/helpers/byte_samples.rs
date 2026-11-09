@@ -116,10 +116,7 @@ fn resize_with_sparse_source_rows<const CHANNELS: usize>(
 }
 
 fn is_empty(source_size: (u32, u32), destination_size: (u32, u32)) -> bool {
-    source_size.0 == 0
-        || source_size.1 == 0
-        || destination_size.0 == 0
-        || destination_size.1 == 0
+    source_size.0 == 0 || source_size.1 == 0 || destination_size.0 == 0 || destination_size.1 == 0
 }
 
 fn checked_channels<const CHANNELS: usize>() -> Result<u8, PilError> {
@@ -205,7 +202,11 @@ fn nearest<const CHANNELS: usize>(
     let mut source_x = scale_x * 0.5;
     for _ in 0..destination_width {
         let index = source_x as u32;
-        x_table.push(if index >= source_width { source_width - 1 } else { index });
+        x_table.push(if index >= source_width {
+            source_width - 1
+        } else {
+            index
+        });
         source_x += scale_x;
     }
     let source_stride = source_width as usize * CHANNELS;
@@ -369,27 +370,15 @@ fn filtered_boxed<const CHANNELS: usize>(
     let (source_width, source_height) = source_size;
     let (destination_width, destination_height) = destination_size;
     let (left, top, right, bottom) = bounds;
-    let horizontal = precompute_coeffs_boxed_for_filter(
-        destination_width,
-        source_width,
-        left,
-        right,
-        filter,
-    );
-    let mut vertical = precompute_coeffs_boxed_for_filter(
-        destination_height,
-        source_height,
-        top,
-        bottom,
-        filter,
-    );
+    let horizontal =
+        precompute_coeffs_boxed_for_filter(destination_width, source_width, left, right, filter);
+    let mut vertical =
+        precompute_coeffs_boxed_for_filter(destination_height, source_height, top, bottom, filter);
     let (left, top, right, bottom) = (left as f32, top as f32, right as f32, bottom as f32);
-    let need_horizontal = destination_width != source_width
-        || left != 0.0
-        || right != destination_width as f32;
-    let need_vertical = destination_height != source_height
-        || top != 0.0
-        || bottom != destination_height as f32;
+    let need_horizontal =
+        destination_width != source_width || left != 0.0 || right != destination_width as f32;
+    let need_vertical =
+        destination_height != source_height || top != 0.0 || bottom != destination_height as f32;
     let (first_source_row, intermediate_rows) = if need_vertical {
         compact_resize_coeffs_to_source_span(&mut vertical, source_height)
             .unwrap_or((0, source_height))
@@ -511,12 +500,7 @@ fn horizontal_row<const CHANNELS: usize>(
     output: &mut [u8],
 ) {
     if CHANNELS == 3 {
-        crate::ops::pil_resize::horizontal_pass_rgb_row(
-            source,
-            coefficients,
-            output_width,
-            output,
-        );
+        crate::ops::pil_resize::horizontal_pass_rgb_row(source, coefficients, output_width, output);
         return;
     }
     for output_x in 0..output_width as usize {

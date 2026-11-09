@@ -2,10 +2,10 @@
 
 use crate::checked_dims::CheckedDims;
 use crate::compute::pool_cpu::ops::rotate::helpers::geometry::{
-    discrete_angle, identity_contract, rotate_geometry, Geometry,
+    Geometry, discrete_angle, identity_contract, rotate_geometry,
 };
 use crate::compute::pool_cpu::ops::rotate::helpers::nearest::{
-    contiguous_three_byte_run_len, positive_step_in_bounds_span, fill_three_byte, fill_rgba,
+    contiguous_three_byte_run_len, fill_rgba, fill_three_byte, positive_step_in_bounds_span,
 };
 use crate::compute::pool_cpu::ops::rotate::ops::RotateRequest;
 use crate::error::PilError;
@@ -25,11 +25,7 @@ where
     }
     if let Some(degree) = discrete_angle(request) {
         if degree == 180 || request.expand || dimensions.0 == dimensions.1 {
-            return rotate_discrete::<P, CHANNELS>(
-                image,
-                degree,
-                degree == 180 || request.expand,
-            );
+            return rotate_discrete::<P, CHANNELS>(image, degree, degree == 180 || request.expand);
         }
     }
     execute_affine::<P, CHANNELS, FORCE_NEAREST, ALPHA>(image, request)
@@ -46,11 +42,19 @@ where
     let dimensions = CheckedDims::new(geometry.width, geometry.height, CHANNELS as u8)?;
     let mut output = dimensions.alloc_buffer();
     let nearest = FORCE_NEAREST || request.nearest;
-    let filter = if nearest { ResampleFilter::Nearest } else { request.filter };
+    let filter = if nearest {
+        ResampleFilter::Nearest
+    } else {
+        request.filter
+    };
     let fill = request.fill.unwrap_or((0, 0, 0, 0));
     if nearest {
         affine_nearest::<CHANNELS>(
-            image.as_raw(), (image.width(), image.height()), geometry, fill, &mut output,
+            image.as_raw(),
+            (image.width(), image.height()),
+            geometry,
+            fill,
+            &mut output,
         );
     } else {
         let mut source = image.as_raw().clone();
@@ -98,7 +102,14 @@ fn rotate_discrete<P: Pixel<Subpixel = u8>, const CHANNELS: usize>(
                 _ => unreachable!("discrete Rotate degree was validated"),
             };
             copy_pixel::<CHANNELS>(
-                image.as_raw(), &mut output, width, output_width, source_x, source_y, x, y,
+                image.as_raw(),
+                &mut output,
+                width,
+                output_width,
+                source_x,
+                source_y,
+                x,
+                y,
             );
         }
     }
@@ -121,10 +132,7 @@ fn copy_pixel<const CHANNELS: usize>(
         .copy_from_slice(&source[source_start..source_start + CHANNELS]);
 }
 
-pub(super) fn fill_sample<const CHANNELS: usize>(
-    fill: (u8, u8, u8, u8),
-    channel: usize,
-) -> u8 {
+pub(super) fn fill_sample<const CHANNELS: usize>(fill: (u8, u8, u8, u8), channel: usize) -> u8 {
     if CHANNELS == 2 && channel == 1 {
         fill.3
     } else {
@@ -149,7 +157,11 @@ pub(super) fn affine_nearest<const CHANNELS: usize>(
     let (step_x_x, step_y_x, step_x_y, step_y_y) = (fixed(a), fixed(b), fixed(d), fixed(e));
     let (origin_x, origin_y) = (fixed(c + a * 0.5 + b * 0.5), fixed(f + d * 0.5 + e * 0.5));
     affine_nearest_rows::<CHANNELS>(
-        source, source_size, geometry, fill, output,
+        source,
+        source_size,
+        geometry,
+        fill,
+        output,
         (origin_x, origin_y, step_x_x, step_y_x, step_x_y, step_y_y),
     );
 }
@@ -166,15 +178,11 @@ fn affine_nearest_rows<const CHANNELS: usize>(
         return;
     }
     if CHANNELS == 3 {
-        affine_nearest_rgb_rows::<CHANNELS>(
-            source, source_size, geometry, fill, output, fixed,
-        );
+        affine_nearest_rgb_rows::<CHANNELS>(source, source_size, geometry, fill, output, fixed);
         return;
     }
     if CHANNELS == 4 {
-        affine_nearest_rgba_rows::<CHANNELS>(
-            source, source_size, geometry, fill, output, fixed,
-        );
+        affine_nearest_rgba_rows::<CHANNELS>(source, source_size, geometry, fill, output, fixed);
         return;
     }
     affine_nearest_generic_rows::<CHANNELS>(source, source_size, geometry, fill, output, fixed);
@@ -190,9 +198,7 @@ fn affine_nearest_generic_rows<const CHANNELS: usize>(
 ) {
     let output_stride = geometry.width as usize * CHANNELS;
     for (y, row) in output.chunks_exact_mut(output_stride).enumerate() {
-        affine_nearest_generic_row::<CHANNELS>(
-            source, source_size, fill, fixed, y as u32, row,
-        );
+        affine_nearest_generic_row::<CHANNELS>(source, source_size, fill, fixed, y as u32, row);
     }
 }
 
@@ -244,25 +250,26 @@ fn affine_nearest_rgb_rows<const CHANNELS: usize>(
     let fill_pixel = [fill.0, fill.1, fill.2];
     let output_stride = geometry.width as usize * 3;
     for (y, row) in output.chunks_exact_mut(output_stride).enumerate() {
-        let span = positive_step_in_bounds_span(
-            y as u32, geometry.width, source_size, fixed,
-        );
+        let span = positive_step_in_bounds_span(y as u32, geometry.width, source_size, fixed);
         let Some((start, end, mut source_x, mut source_y)) = span else {
-            affine_nearest_generic_row::<CHANNELS>(
-                source, source_size, fill, fixed, y as u32, row,
-            );
+            affine_nearest_generic_row::<CHANNELS>(source, source_size, fill, fixed, y as u32, row);
             continue;
         };
         let (start_byte, end_byte) = (start * 3, end * 3);
         fill_three_byte(&mut row[..start_byte], fill_pixel);
         fill_three_byte(&mut row[end_byte..], fill_pixel);
         if !copy_contiguous_three_byte_runs(
-            source, row, source_size.0, start_byte, end - start,
-            &mut source_x, &mut source_y, step_x_x, step_x_y,
+            source,
+            row,
+            source_size.0,
+            start_byte,
+            end - start,
+            &mut source_x,
+            &mut source_y,
+            step_x_x,
+            step_x_y,
         ) {
-            affine_nearest_generic_row::<CHANNELS>(
-                source, source_size, fill, fixed, y as u32, row,
-            );
+            affine_nearest_generic_row::<CHANNELS>(source, source_size, fill, fixed, y as u32, row);
         }
     }
 }
@@ -281,16 +288,19 @@ fn copy_contiguous_three_byte_runs(
     let mut offset = 0;
     while offset < span_length {
         let Some(run_length) = contiguous_three_byte_run_len(
-            *source_x, *source_y, step_x_x, step_x_y, span_length - offset,
+            *source_x,
+            *source_y,
+            step_x_x,
+            step_x_y,
+            span_length - offset,
         ) else {
             return false;
         };
         if run_length < 4 {
             return false;
         }
-        let source_start = (((*source_y >> 16) as usize * source_width as usize)
-            + (*source_x >> 16) as usize)
-            * 3;
+        let source_start =
+            (((*source_y >> 16) as usize * source_width as usize) + (*source_x >> 16) as usize) * 3;
         let destination = destination_start + offset * 3;
         let copy_bytes = run_length * 3;
         row[destination..destination + copy_bytes]
@@ -342,18 +352,25 @@ fn affine_nearest_rgba_rows<const CHANNELS: usize>(
     let output_stride = geometry.width as usize * 4;
     let fill_pixel = [fill.0, fill.1, fill.2, fill.3];
     for (y, row) in output.chunks_exact_mut(output_stride).enumerate() {
-        let Some((start, end, source_x, source_y)) = positive_step_in_bounds_span(
-            y as u32, geometry.width, source_size, fixed,
-        ) else {
-            affine_nearest_generic_row::<CHANNELS>(
-                source, source_size, fill, fixed, y as u32, row,
-            );
+        let Some((start, end, source_x, source_y)) =
+            positive_step_in_bounds_span(y as u32, geometry.width, source_size, fixed)
+        else {
+            affine_nearest_generic_row::<CHANNELS>(source, source_size, fill, fixed, y as u32, row);
             continue;
         };
         let (start_byte, end_byte) = (start * 4, end * 4);
         fill_rgba(&mut row[..start_byte], fill_pixel);
         fill_rgba(&mut row[end_byte..], fill_pixel);
-        copy_rgba_span(source, row, source_size.0, start_byte, end - start, source_x, source_y, fixed);
+        copy_rgba_span(
+            source,
+            row,
+            source_size.0,
+            start_byte,
+            end - start,
+            source_x,
+            source_y,
+            fixed,
+        );
     }
 }
 
@@ -373,14 +390,26 @@ fn copy_rgba_span(
     let tail = span_length % 4;
     for (group_index, group) in span.chunks_exact_mut(16).enumerate() {
         for pixel_index in 0..4 {
-            copy_rgba_pixel(source, group, pixel_index * 4, source_width, source_x, source_y);
+            copy_rgba_pixel(
+                source,
+                group,
+                pixel_index * 4,
+                source_width,
+                source_x,
+                source_y,
+            );
             if group_index + 1 < groups || tail > 0 || pixel_index < 3 {
                 source_x += step_x_x;
                 source_y += step_x_y;
             }
         }
     }
-    for (tail_index, pixel) in span.chunks_exact_mut(16).into_remainder().chunks_exact_mut(4).enumerate() {
+    for (tail_index, pixel) in span
+        .chunks_exact_mut(16)
+        .into_remainder()
+        .chunks_exact_mut(4)
+        .enumerate()
+    {
         copy_rgba_pixel(source, pixel, 0, source_width, source_x, source_y);
         if tail_index + 1 < tail {
             source_x += step_x_x;
@@ -397,9 +426,8 @@ fn copy_rgba_pixel(
     source_x: i64,
     source_y: i64,
 ) {
-    let source_start = ((source_y >> 16) as usize * source_width as usize
-        + (source_x >> 16) as usize)
-        * 4;
+    let source_start =
+        ((source_y >> 16) as usize * source_width as usize + (source_x >> 16) as usize) * 4;
     destination[destination_offset..destination_offset + 4]
         .copy_from_slice(&source[source_start..source_start + 4]);
 }
@@ -429,7 +457,16 @@ fn affine_filter<const CHANNELS: usize>(
     }
 }
 
-fn sample_coordinates(a: f64, b: f64, c: f64, d: f64, e: f64, f: f64, x: u32, y: u32) -> (f64, f64) {
+fn sample_coordinates(
+    a: f64,
+    b: f64,
+    c: f64,
+    d: f64,
+    e: f64,
+    f: f64,
+    x: u32,
+    y: u32,
+) -> (f64, f64) {
     let (x, y) = (f64::from(x) + 0.5, f64::from(y) + 0.5);
     (a.mul_add(x, b * y) + c - 0.5, d.mul_add(x, e * y) + f - 0.5)
 }
@@ -447,7 +484,10 @@ fn sample_bilinear<const CHANNELS: usize>(
     start: usize,
 ) {
     let (width, height) = size;
-    let (x, y) = (x.clamp(0.0, f64::from(width - 1)), y.clamp(0.0, f64::from(height - 1)));
+    let (x, y) = (
+        x.clamp(0.0, f64::from(width - 1)),
+        y.clamp(0.0, f64::from(height - 1)),
+    );
     let (x0, y0) = (x.floor() as u32, y.floor() as u32);
     let (x1, y1) = ((x0 + 1).min(width - 1), (y0 + 1).min(height - 1));
     let (fx, fy) = (x - f64::from(x0), y - f64::from(y0));
@@ -484,7 +524,8 @@ fn sample_bicubic<const CHANNELS: usize>(
                 let source_x = (base_x + tap).clamp(0, i64::from(width - 1)) as u32;
                 sample::<CHANNELS>(source, width, source_x, source_y, channel) as f64
             });
-            *value = crate::compute::pool_cpu::ops::rotate::helpers::cubic::horizontal_f64(taps, fx);
+            *value =
+                crate::compute::pool_cpu::ops::rotate::helpers::cubic::horizontal_f64(taps, fx);
         }
         let value = crate::compute::pool_cpu::ops::rotate::helpers::cubic::horizontal_f64(rows, fy);
         output[start + channel] = value.clamp(0.0, 255.0) as u8;

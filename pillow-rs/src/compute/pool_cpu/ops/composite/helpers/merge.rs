@@ -21,9 +21,7 @@ pub(crate) fn interleave(
 
     match layout {
         MergeLayout::Two => interleave_two(&bands, &mut output),
-        MergeLayout::Three { lab_encoding } => {
-            interleave_three(&bands, &mut output, lab_encoding)
-        }
+        MergeLayout::Three { lab_encoding } => interleave_three(&bands, &mut output, lab_encoding),
         MergeLayout::Four => interleave_four(&bands, &mut output),
     }
 
@@ -188,11 +186,7 @@ pub(crate) fn interleave_wide(
     Ok(output)
 }
 
-fn merge_wide_block(
-    bands: &[&[u8]],
-    pixel: usize,
-    channels: usize,
-) -> Option<(usize, [u8; 16])> {
+fn merge_wide_block(bands: &[&[u8]], pixel: usize, channels: usize) -> Option<(usize, [u8; 16])> {
     let pixels_per_block = match channels {
         2 => 8,
         3 | 4 => 4,

@@ -45,12 +45,7 @@ pub(crate) fn preserve_luma_alpha_lanes(
     let pixel_count = validate_luma_alpha_lane_shapes(source, destination, output)?;
     let source_lanes = source.hidden_pixel_lanes();
     let destination_lanes = destination.hidden_pixel_lanes();
-    if input_lanes_match_luma(
-        source,
-        destination,
-        source_lanes,
-        destination_lanes,
-    )? {
+    if input_lanes_match_luma(source, destination, source_lanes, destination_lanes)? {
         return Ok(());
     }
 
@@ -68,21 +63,10 @@ pub(crate) fn preserve_luma_alpha_lanes(
         let source_channels = source_pixel.channels();
         let destination_channels = destination_pixel.channels();
         let output_channels = output_pixel.channels();
-        let source_hidden = luma_alpha_lanes_for_pixel(
-            source_lanes,
-            index,
-            source_channels[0],
-        )?;
-        let destination_hidden = luma_alpha_lanes_for_pixel(
-            destination_lanes,
-            index,
-            destination_channels[0],
-        )?;
-        let source_pixel = [
-            source_hidden[0],
-            source_hidden[1],
-            source_channels[1],
-        ];
+        let source_hidden = luma_alpha_lanes_for_pixel(source_lanes, index, source_channels[0])?;
+        let destination_hidden =
+            luma_alpha_lanes_for_pixel(destination_lanes, index, destination_channels[0])?;
+        let source_pixel = [source_hidden[0], source_hidden[1], source_channels[1]];
         let mut destination_pixel = [
             destination_hidden[0],
             destination_hidden[1],
@@ -116,8 +100,7 @@ fn validate_luma_alpha_lane_shapes(
     destination: &GrayAlphaImage,
     output: &GrayAlphaImage,
 ) -> Result<usize, PilError> {
-    if source.dimensions() != destination.dimensions()
-        || source.dimensions() != output.dimensions()
+    if source.dimensions() != destination.dimensions() || source.dimensions() != output.dimensions()
     {
         return Err(PilError::InternalError(
             "AlphaComposite lane images did not match".into(),
@@ -132,9 +115,12 @@ fn validate_luma_alpha_lane_shapes(
                 .and_then(|height| width.checked_mul(height))
         })
         .ok_or_else(|| PilError::DimensionError("AlphaComposite lane extent overflow".into()))?;
-    for lanes in [source.hidden_pixel_lanes(), destination.hidden_pixel_lanes()]
-        .into_iter()
-        .flatten()
+    for lanes in [
+        source.hidden_pixel_lanes(),
+        destination.hidden_pixel_lanes(),
+    ]
+    .into_iter()
+    .flatten()
     {
         if lanes.lane_count() != 2 || lanes.pixel_count() != pixel_count {
             return Err(PilError::InternalError(
@@ -154,17 +140,11 @@ fn input_lanes_match_luma(
     if source_lanes.is_none() && destination_lanes.is_none() {
         return Ok(true);
     }
-    for (index, (source_pixel, destination_pixel)) in source
-        .pixels()
-        .zip(destination.pixels())
-        .enumerate()
+    for (index, (source_pixel, destination_pixel)) in
+        source.pixels().zip(destination.pixels()).enumerate()
     {
         if !pixel_lanes_match_luma(source_lanes, index, source_pixel.channels()[0])?
-            || !pixel_lanes_match_luma(
-                destination_lanes,
-                index,
-                destination_pixel.channels()[0],
-            )?
+            || !pixel_lanes_match_luma(destination_lanes, index, destination_pixel.channels()[0])?
         {
             return Ok(false);
         }
@@ -201,10 +181,7 @@ fn luma_alpha_lanes_for_pixel(
 }
 
 #[inline]
-pub(crate) fn alpha_composite_pixel<const CHANNELS: usize>(
-    source: &[u8],
-    destination: &mut [u8],
-) {
+pub(crate) fn alpha_composite_pixel<const CHANNELS: usize>(source: &[u8], destination: &mut [u8]) {
     let source_alpha = u32::from(source[CHANNELS - 1]);
     if source_alpha == 0 {
         return;

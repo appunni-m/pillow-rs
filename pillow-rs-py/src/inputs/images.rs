@@ -7,6 +7,9 @@ use pyo3::types::{
 };
 
 pub(crate) fn image_from_python(value: &Bound<'_, PyAny>) -> Option<RsImage> {
+    if let Ok(image) = value.cast::<PyImage>() {
+        return Some(image.borrow().inner.clone());
+    }
     value.getattr("_rust_image").ok().and_then(|inner| {
         inner
             .cast::<PyImage>()
@@ -56,9 +59,9 @@ fn paste_component_from_python(
                 .call_method1("index", (value,))?
         };
         return match field {
-            PasteIntegerField::LongLong => {
-                Ok(pillow_rs::PasteColorComponent::Integer(integer.extract::<i64>()?))
-            }
+            PasteIntegerField::LongLong => Ok(pillow_rs::PasteColorComponent::Integer(
+                integer.extract::<i64>()?,
+            )),
             PasteIntegerField::CInt => {
                 let value = integer.extract::<std::os::raw::c_long>()?;
                 let value = i32::try_from(value).map_err(|_| {
@@ -79,7 +82,9 @@ fn paste_component_from_python(
         });
     }
     if value.is_instance_of::<PyFloat>() {
-        return Ok(pillow_rs::PasteColorComponent::Float(value.extract::<f64>()?));
+        return Ok(pillow_rs::PasteColorComponent::Float(
+            value.extract::<f64>()?,
+        ));
     }
     Ok(paste_invalid_component(value))
 }
@@ -104,8 +109,7 @@ fn paste_invalid_component(value: &Bound<'_, PyAny>) -> pillow_rs::PasteColorCom
         type_name: value
             .get_type()
             .name()
-            .map(|name| name.to_string())
-            .unwrap_or_else(|_| "object".to_owned()),
+            .map_or_else(|_| "object".to_owned(), |name| name.to_string()),
     }
 }
 
@@ -132,9 +136,7 @@ pub(crate) fn paste_source_from_python(
     if value.is_instance_of::<PyInt>() {
         return Ok(match value.extract::<i64>() {
             Ok(value) => pillow_rs::PasteSourceInput::Scalar(value),
-            Err(_) => pillow_rs::PasteSourceInput::WideInteger {
-                float_value: None,
-            },
+            Err(_) => pillow_rs::PasteSourceInput::WideInteger { float_value: None },
         });
     }
     if value.is_instance_of::<PyFloat>() {
@@ -159,8 +161,7 @@ pub(crate) fn paste_source_from_python(
         value
             .get_type()
             .name()
-            .map(|name| name.to_string())
-            .unwrap_or_else(|_| "object".to_owned()),
+            .map_or_else(|_| "object".to_owned(), |name| name.to_string()),
     ))
 }
 
@@ -179,10 +180,7 @@ pub(crate) fn paste_box_coordinate_from_python(value: &Bound<'_, PyAny>) -> PyRe
     Ok(i64::from(coordinate))
 }
 
-fn paste_box_sequence_coordinates(
-    value: &Bound<'_, PyAny>,
-    _py: Python<'_>,
-) -> PyResult<Vec<i64>> {
+fn paste_box_sequence_coordinates(value: &Bound<'_, PyAny>, _py: Python<'_>) -> PyResult<Vec<i64>> {
     let Ok(sequence) = value.cast::<PySequence>() else {
         let type_name = value.get_type().name()?.to_string();
         return Err(pyo3::exceptions::PyTypeError::new_err(format!(
@@ -226,7 +224,7 @@ pub(crate) fn resolve_deferred_paste_box_coordinates(
     coordinates: &DeferredPasteBoxCoordinates,
     py: Python<'_>,
 ) -> PyResult<Vec<i64>> {
-    paste_box_sequence_coordinates(&coordinates.value.bind(py), py)
+    paste_box_sequence_coordinates(coordinates.value.bind(py), py)
 }
 
 #[derive(Clone)]
@@ -257,12 +255,8 @@ pub(crate) fn paste_box_for_staged_plan(
     };
     // This valid placeholder keeps the core plan non-failing until the Python
     // wrapper reaches the same post-load parsing point as Pillow's C method.
-    Ok((
-        pillow_rs::PasteBoxInput::Values(vec![0; 4]),
-        Some(pending),
-    ))
+    Ok((pillow_rs::PasteBoxInput::Values(vec![0; 4]), Some(pending)))
 }
-
 
 pub(crate) fn paste_mask_from_python(
     value: Option<&Bound<'_, PyAny>>,

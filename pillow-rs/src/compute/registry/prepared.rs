@@ -158,7 +158,6 @@ impl PreparedOperation<'_> {
             _ => None,
         }
     }
-
 }
 
 impl std::fmt::Debug for PreparedOperation<'_> {

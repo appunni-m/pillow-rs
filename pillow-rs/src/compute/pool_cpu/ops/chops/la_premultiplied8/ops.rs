@@ -20,7 +20,10 @@ pub(crate) fn execute(
 ) -> Result<DynamicImage, PilError> {
     match image {
         DynamicImage::ImageLaPremultiplied8(_) => {
-            super::super::helpers::strategy::require_default_selection(selection, Mode::ImageLaPremultiplied8)?;
+            super::super::helpers::strategy::require_default_selection(
+                selection,
+                Mode::ImageLaPremultiplied8,
+            )?;
             super::default::ops::execute(image, request, other)
         }
         _ => Err(PilError::InternalError(

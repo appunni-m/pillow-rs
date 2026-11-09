@@ -1,8 +1,8 @@
 //! Wide RGBA AlphaComposite+Mirror kernel and its tail contract.
 
 use crate::checked_dims::CheckedDims;
-use crate::error::PilError;
 use crate::compute::pool_cpu::ops::composite::helpers::alpha_composite_vector;
+use crate::error::PilError;
 
 /// Vector-composites and mirrors full-frame RGBA inputs without an intermediate image.
 pub(crate) fn execute(
@@ -41,12 +41,25 @@ pub(crate) fn execute(
             vector_pixels,
             mirror_vector_blocks,
         )?;
-        process_scalar_tail(source, destination, &mut output, row_start, width, vector_pixels);
+        process_scalar_tail(
+            source,
+            destination,
+            &mut output,
+            row_start,
+            width,
+            vector_pixels,
+        );
     }
 
     let vector_blocks = (vector_groups_per_row * height) as u64;
     let scalar_tail = ((width - vector_pixels) * height) as u64;
-    Ok((output, vector_blocks, scalar_tail, mirror_vector_blocks, scalar_tail))
+    Ok((
+        output,
+        vector_blocks,
+        scalar_tail,
+        mirror_vector_blocks,
+        scalar_tail,
+    ))
 }
 
 fn process_vector_groups(
@@ -104,7 +117,9 @@ fn write_reversed_vector_group(
         crate::compute::pool_cpu::ops::transpose::helpers::native_mirror::reverse_pixel_block(
             block, 4,
         )
-        .ok_or_else(|| PilError::InternalError("SIMD RGBA mirror vector block is incomplete".into()))
+        .ok_or_else(|| {
+            PilError::InternalError("SIMD RGBA mirror vector block is incomplete".into())
+        })
     };
     let reversed_right = reverse(&composite[16..])?;
     let reversed_left = reverse(&composite[..16])?;

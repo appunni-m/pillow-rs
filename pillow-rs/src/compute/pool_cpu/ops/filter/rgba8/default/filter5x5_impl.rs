@@ -15,13 +15,7 @@ pub(super) fn execute(
     let normalized = helpers::normalized_filter5x5_kernel(kernel, scale);
     let rounding_bias = offset + 0.5;
     if uniform_kernel
-        && helpers::filter_5x5_uniform_rgba_identity(
-            raw,
-            width,
-            height,
-            &normalized,
-            rounding_bias,
-        )
+        && helpers::filter_5x5_uniform_rgba_identity(raw, width, height, &normalized, rounding_bias)
     {
         return raw.to_vec();
     }

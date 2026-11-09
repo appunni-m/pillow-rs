@@ -21,8 +21,7 @@ where
     }
     let channels = u8::try_from(CHANNELS)
         .map_err(|_| PilError::InternalError("Contrast channel count overflowed".into()))?;
-    let dimensions =
-        CheckedDims::new_allow_empty(source.width(), source.height(), channels)?;
+    let dimensions = CheckedDims::new_allow_empty(source.width(), source.height(), channels)?;
     let source_bytes = source.as_raw();
     if source_bytes.len() != dimensions.total_bytes() || source_bytes.len() < 8 {
         return Err(PilError::InternalError(
@@ -154,7 +153,10 @@ fn apply_native_lut<const CHANNELS: usize>(
         map_native_lut_row::<CHANNELS>(row, tables);
     }
     let blocks = if CHANNELS == 1 || CHANNELS == 3 {
-        width.div_ceil(16).saturating_mul(CHANNELS).saturating_mul(height)
+        width
+            .div_ceil(16)
+            .saturating_mul(CHANNELS)
+            .saturating_mul(height)
     } else {
         row_stride.div_ceil(16).saturating_mul(height)
     };

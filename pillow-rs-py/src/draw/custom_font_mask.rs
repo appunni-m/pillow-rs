@@ -1,14 +1,12 @@
+use super::text_color_mask_impl;
 use crate::PyImage;
 use crate::draw::PyDraw;
 use crate::map_error;
-use super::text_color_mask_impl;
-use pillow_rs::{DrawTextMaskCallbacks, DrawTextMaskPosition, PilError};
+use pillow_rs::{DrawTextMaskCallbacks, DrawTextMaskPosition, Mode, PilError};
 use pyo3::basic::CompareOp;
 use pyo3::exceptions::{PyAttributeError, PyTypeError, PyValueError};
 use pyo3::prelude::{Bound, Py, PyAny, PyErr, PyResult, Python};
-use pyo3::types::{
-    PyAnyMethods, PyDict, PyDictMethods, PyInt, PyModule, PyString, PyTuple,
-};
+use pyo3::types::{PyAnyMethods, PyDict, PyDictMethods, PyInt, PyModule, PyString, PyTuple};
 
 enum TextMaskError {
     Core(PilError),
@@ -156,7 +154,7 @@ impl<'py> DrawTextMaskCallbacks for PythonTextMaskCallbacks<'py> {
         })
     }
 
-    fn font_mask_mode(&mut self, _default: &str) -> Result<Self::Value, Self::Error> {
+    fn font_mask_mode(&mut self, _default: Mode) -> Result<Self::Value, Self::Error> {
         Ok(self.requested_mode.clone())
     }
 
@@ -210,9 +208,7 @@ impl<'py> DrawTextMaskCallbacks for PythonTextMaskCallbacks<'py> {
             .image_text
             .getattr("stroke_width")
             .map_err(TextMaskError::Python)?;
-        let anchor = line
-            .getattr("anchor")
-            .map_err(TextMaskError::Python)?;
+        let anchor = line.getattr("anchor").map_err(TextMaskError::Python)?;
         let mut positionals = vec![
             text,
             mode.clone(),
@@ -263,9 +259,7 @@ impl<'py> DrawTextMaskCallbacks for PythonTextMaskCallbacks<'py> {
         } else {
             &mut position.y
         };
-        *coordinate = coordinate
-            .add(amount)
-            .map_err(TextMaskError::Python)?;
+        *coordinate = coordinate.add(amount).map_err(TextMaskError::Python)?;
         Ok(())
     }
 
@@ -357,28 +351,17 @@ impl<'py> DrawTextMaskCallbacks for PythonTextMaskCallbacks<'py> {
             .getattr("size")
             .and_then(|size| size.get_item(0))
             .map_err(TextMaskError::Python)?;
-        let right = position
-            .x
-            .add(&width)
-            .map_err(TextMaskError::Python)?;
+        let right = position.x.add(&width).map_err(TextMaskError::Python)?;
         let height = coverage
             .getattr("size")
             .and_then(|size| size.get_item(1))
             .map_err(TextMaskError::Python)?;
-        let bottom = position
-            .y
-            .add(&height)
-            .map_err(TextMaskError::Python)?;
+        let bottom = position.y.add(&height).map_err(TextMaskError::Python)?;
         // ImageDraw.text evaluates (x, y, x + mask.size[0], y + mask.size[1])
         // before the native paste parser converts each coordinate.
         let box_coordinates = PyTuple::new(
             self.py,
-            [
-                position.x.clone(),
-                position.y.clone(),
-                right,
-                bottom,
-            ],
+            [position.x.clone(), position.y.clone(), right, bottom],
         )
         .map_err(TextMaskError::Python)?;
         let (x, y, _right, _bottom) = box_coordinates
@@ -400,8 +383,7 @@ impl<'py> DrawTextMaskCallbacks for PythonTextMaskCallbacks<'py> {
             .map_err(|error| TextMaskError::Python(error.into()))?;
         // This path mutates the native Draw directly and has no host callback.
         let mut draw = self.py_draw.borrow_mut(self.py);
-        text_color_mask_impl(&mut draw.draw, (x, y), color, coverage)
-            .map_err(TextMaskError::Python)
+        text_color_mask_impl(&mut draw.draw, (x, y), color, coverage).map_err(TextMaskError::Python)
     }
 
     fn draw_bitmap(
@@ -411,7 +393,10 @@ impl<'py> DrawTextMaskCallbacks for PythonTextMaskCallbacks<'py> {
         fill: &Self::Value,
     ) -> Result<(), Self::Error> {
         // Do not borrow PyDraw here: the public bitmap method re-enters it.
-        let method = self.owner.getattr("bitmap").map_err(TextMaskError::Python)?;
+        let method = self
+            .owner
+            .getattr("bitmap")
+            .map_err(TextMaskError::Python)?;
         let position = PyTuple::new(self.py, [position.x.clone(), position.y.clone()])
             .map_err(TextMaskError::Python)?;
         let positionals = PyTuple::new(self.py, [position.into_any(), mask_image.clone()])
@@ -440,7 +425,7 @@ pub(super) fn draw_custom_font_mask<'py>(
     line: &Bound<'py, PyAny>,
     image_text: &Bound<'py, PyAny>,
     fill: &Bound<'py, PyAny>,
-    default_mode: &str,
+    default_mode: Mode,
     direction: &Bound<'py, PyAny>,
     features: &Bound<'py, PyAny>,
     language: &Bound<'py, PyAny>,
@@ -467,12 +452,6 @@ pub(super) fn draw_custom_font_mask<'py>(
         args: args.clone(),
         mask_kwargs: mask_kwargs.clone(),
     };
-    pillow_rs::draw_custom_font_mask_with_callbacks(
-        &mut callbacks,
-        line,
-        fill,
-        ink,
-        default_mode,
-    )
-    .map_err(map_text_mask_error)
+    pillow_rs::draw_custom_font_mask_with_callbacks(&mut callbacks, line, fill, ink, default_mode)
+        .map_err(map_text_mask_error)
 }

@@ -16,10 +16,7 @@ use crate::image::Image;
 use crate::pipeline::PipelineOp;
 use crate::raster::DynamicImage;
 
-fn split_identity_source(
-    image: &Image,
-    cached_at_entry: bool,
-) -> Option<(&DynamicImage, bool)> {
+fn split_identity_source(image: &Image, cached_at_entry: bool) -> Option<(&DynamicImage, bool)> {
     match image {
         Image::Loaded(data) => Some((data.image.as_ref(), true)),
         Image::Paletted(data) => Some((&data.indices, false)),
@@ -49,8 +46,10 @@ fn split_identity_copy(image: &Image) -> Result<Vec<Image>, PilError> {
 }
 
 fn split_child_source(image: &Image, mode: crate::raster::Mode) -> Result<Image, PilError> {
-    let palette_samples =
-        matches!(mode, crate::raster::Mode::ImagePalette8 | crate::raster::Mode::ImagePaletteAlpha8);
+    let palette_samples = matches!(
+        mode,
+        crate::raster::Mode::ImagePalette8 | crate::raster::Mode::ImagePaletteAlpha8
+    );
     if matches!(image, Image::Pipeline { .. }) && !palette_samples {
         image.materialized_branch()
     } else {
@@ -113,8 +112,7 @@ impl Image {
                     )
                 };
             }
-            let mut operation_receipts =
-                crate::compute::PipelineOperationTelemetryCapture::begin();
+            let mut operation_receipts = crate::compute::PipelineOperationTelemetryCapture::begin();
             let input = self.materialized_shared()?;
             operation_receipts.capture();
             let requested_backend = crate::compute::Backend::pipeline_telemetry_enabled()
@@ -122,8 +120,7 @@ impl Image {
                 .flatten();
             let copy = || split_identity_copy(self);
             let copies_palette_indices =
-                matches!(self, Image::Bytes { .. })
-                    && mode == crate::raster::Mode::ImagePalette8;
+                matches!(self, Image::Bytes { .. }) && mode == crate::raster::Mode::ImagePalette8;
             return if copies_palette_indices {
                 crate::compute::execute_eager_native_copy_result_with_receipts(
                     "Split",
@@ -145,8 +142,7 @@ impl Image {
 
         // Determine logical band count from the exact raster mode; shared
         // carriers such as RGB32F do not have the carrier's channel count.
-        let mut operation_receipts =
-            crate::compute::PipelineOperationTelemetryCapture::begin();
+        let mut operation_receipts = crate::compute::PipelineOperationTelemetryCapture::begin();
         let img = self.materialized_shared()?;
         operation_receipts.capture();
         let n_bands = usize::from(img.mode().band_count());

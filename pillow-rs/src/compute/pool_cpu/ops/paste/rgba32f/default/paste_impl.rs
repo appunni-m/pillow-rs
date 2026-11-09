@@ -8,10 +8,15 @@ pub(crate) fn execute(strategy: NativeF32Plan<'_>) -> Result<DynamicImage, PilEr
     let source = std::sync::Arc::clone(&strategy.source);
     let source = match source.as_ref() {
         DynamicImage::ImageRgba32F(image) => image.as_raw(),
-        _ => return Err(PilError::InternalError("native f32 Paste source mode changed after preparation".into())),
+        _ => {
+            return Err(PilError::InternalError(
+                "native f32 Paste source mode changed after preparation".into(),
+            ));
+        }
     };
     let samples = typed::execute_f32::<4>(strategy, source)?;
-    let image = Rgba32FImage::from_raw(width, height, samples)
-        .ok_or_else(|| PilError::InternalError("native f32 Paste output dimensions were invalid".into()))?;
+    let image = Rgba32FImage::from_raw(width, height, samples).ok_or_else(|| {
+        PilError::InternalError("native f32 Paste output dimensions were invalid".into())
+    })?;
     Ok(DynamicImage::ImageRgba32F(image))
 }

@@ -1,4 +1,10 @@
-use super::*;
+use super::{
+    AspectCallbackError, PythonAspectCallbacks, aspect_callback_error, imageops_global_or_builtin,
+    wrapped_image_snapshot,
+};
+use pyo3::prelude::{Bound, Py, PyAny, PyModule, PyResult, Python};
+use pyo3::types::{PyAnyMethods, PyInt, PyModuleMethods, PyTuple};
+use pyo3::{pyfunction, wrap_pyfunction};
 
 impl<'py> pillow_rs::ImageOpsNativeSizeCallbacks for PythonAspectCallbacks<'py> {
     type Value = Bound<'py, PyAny>;
@@ -9,7 +15,7 @@ impl<'py> pillow_rs::ImageOpsNativeSizeCallbacks for PythonAspectCallbacks<'py> 
         let image_type = self.py.import("pillow_rs.imageops")?.getattr("Image")?;
         is_instance
             .call1((self.image.clone(), image_type))?
-            .extract::<bool>()
+            .is_truthy()
             .map_err(Into::into)
     }
 
@@ -35,10 +41,7 @@ impl<'py> pillow_rs::ImageOpsNativeSizeCallbacks for PythonAspectCallbacks<'py> 
         let type_function = imageops_global_or_builtin(self.py, "type")?;
         let image_type = type_function.call1((self.image.clone(),))?;
         let value = getattr.call1((image_type, property_name, self.py.None()))?;
-        let baseline = self
-            .py
-            .import("pillow_rs.imageops")?
-            .getattr(base_name)?;
+        let baseline = self.py.import("pillow_rs.imageops")?.getattr(base_name)?;
         Ok(value.is(&baseline))
     }
 
@@ -57,10 +60,7 @@ impl<'py> pillow_rs::ImageOpsNativeSizeCallbacks for PythonAspectCallbacks<'py> 
         self.size.get_item(index).map_err(Into::into)
     }
 
-    fn coordinate_is_exact_integer(
-        &mut self,
-        value: &Self::Value,
-    ) -> Result<bool, Self::Error> {
+    fn coordinate_is_exact_integer(&mut self, value: &Self::Value) -> Result<bool, Self::Error> {
         let type_function = imageops_global_or_builtin(self.py, "type")?;
         let actual = type_function.call1((value.clone(),))?;
         let integer_type = imageops_global_or_builtin(self.py, "int")?;
@@ -89,10 +89,7 @@ impl<'py> pillow_rs::ImageOpsAspectRouteCallbacks for PythonAspectCallbacks<'py>
 
     fn native_image(
         &mut self,
-    ) -> Result<
-        pillow_rs::Image,
-        <Self as pillow_rs::ImageOpsAspectCallbacks>::Error,
-    > {
+    ) -> Result<pillow_rs::Image, <Self as pillow_rs::ImageOpsAspectCallbacks>::Error> {
         wrapped_image_snapshot(&self.image).map_err(Into::into)
     }
 
@@ -131,12 +128,7 @@ fn ops_contain_size_with_route_callbacks(
     image: &Bound<'_, PyAny>,
     size: &Bound<'_, PyAny>,
 ) -> PyResult<Py<PyAny>> {
-    aspect_size_with_route_callbacks(
-        py,
-        image,
-        size,
-        pillow_rs::ImageOpsAspectOperation::Contain,
-    )
+    aspect_size_with_route_callbacks(py, image, size, pillow_rs::ImageOpsAspectOperation::Contain)
 }
 
 #[pyfunction]
@@ -145,16 +137,17 @@ fn ops_cover_size_with_route_callbacks(
     image: &Bound<'_, PyAny>,
     size: &Bound<'_, PyAny>,
 ) -> PyResult<Py<PyAny>> {
-    aspect_size_with_route_callbacks(
-        py,
-        image,
-        size,
-        pillow_rs::ImageOpsAspectOperation::Cover,
-    )
+    aspect_size_with_route_callbacks(py, image, size, pillow_rs::ImageOpsAspectOperation::Cover)
 }
 
 pub(super) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    module.add_function(wrap_pyfunction!(ops_contain_size_with_route_callbacks, module)?)?;
-    module.add_function(wrap_pyfunction!(ops_cover_size_with_route_callbacks, module)?)?;
+    module.add_function(wrap_pyfunction!(
+        ops_contain_size_with_route_callbacks,
+        module
+    )?)?;
+    module.add_function(wrap_pyfunction!(
+        ops_cover_size_with_route_callbacks,
+        module
+    )?)?;
     Ok(())
 }

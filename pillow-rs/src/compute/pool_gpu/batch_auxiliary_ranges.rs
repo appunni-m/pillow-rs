@@ -44,7 +44,10 @@ impl GpuBatchAuxiliaryPreparation<'_> {
             range.offset += (self.auxiliary_cache.img2_values.len() * 4) as u64;
             return Ok(Some(range));
         }
-        if let PipelineOp::PutData { data, payload_mode, .. } = self.op {
+        if let PipelineOp::PutData {
+            data, payload_mode, ..
+        } = self.op
+        {
             let values = if self.packed_luma_putdata {
                 pack_luma8_putdata(data, self.capacity)?
             } else {

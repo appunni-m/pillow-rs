@@ -148,9 +148,12 @@ fn exact_copy(source: &[u8], mask: [u8; 16], channels: usize) -> Result<Vec<u8>,
     }
     let remainder = chunks.remainder();
     let mask_offset = source.len() - remainder.len();
-    output.extend(remainder.iter().enumerate().map(|(index, value)| {
-        *value ^ mask[(mask_offset + index) % 16]
-    }));
+    output.extend(
+        remainder
+            .iter()
+            .enumerate()
+            .map(|(index, value)| *value ^ mask[(mask_offset + index) % 16]),
+    );
     crate::compute::record_pipeline_operation_vector_blocks((source.len() / 16) as u64);
     crate::compute::record_pipeline_operation_scalar_tail(remainder.len() as u64);
     Ok(output)

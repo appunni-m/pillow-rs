@@ -16,6 +16,10 @@ pub(crate) fn execute(
         ));
     };
     super::super::super::helpers::lut::apply_native_rgb_samples(
-        image, size, table, channels, target_mode,
+        image,
+        size,
+        table,
+        channels,
+        target_mode,
     )
 }

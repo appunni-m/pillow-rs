@@ -9,7 +9,9 @@ pub(crate) fn execute(strategy: Luma16Plan<'_>) -> Result<DynamicImage, PilError
         PilError::InternalError("I;16 Paste source mode changed after preparation".into())
     })?;
     let samples = i16::execute(strategy, source)?;
-    let image = ImageBuffer::<Luma<u16>, Vec<u16>>::from_raw(width, height, samples)
-        .ok_or_else(|| PilError::InternalError("I;16 Paste output dimensions were invalid".into()))?;
+    let image =
+        ImageBuffer::<Luma<u16>, Vec<u16>>::from_raw(width, height, samples).ok_or_else(|| {
+            PilError::InternalError("I;16 Paste output dimensions were invalid".into())
+        })?;
     Ok(DynamicImage::ImageI16B(image))
 }

@@ -1,7 +1,7 @@
-use crate::compute::pool_cpu::ops::draw::{BitmapMask, BitmapRegion};
 use crate::compute::pool_cpu::helpers::bytes::hidden_lanes::{
     hidden_lanes_for_pixel, update_hidden_lanes,
 };
+use crate::compute::pool_cpu::ops::draw::{BitmapMask, BitmapRegion};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, LumaA, Pixel};
 
@@ -19,22 +19,21 @@ pub(crate) fn apply(
     };
     let mut hidden_lanes = canvas.take_hidden_pixel_lanes();
     let (image_width, image_height) = canvas.dimensions();
-    let region = BitmapRegion::clipped(
-        x,
-        y,
-        image_width,
-        image_height,
-        mask_width,
-        mask_height,
-    );
+    let region = BitmapRegion::clipped(x, y, image_width, image_height, mask_width, mask_height);
+    let Some((image_x_start, image_y_start)) =
+        region.destination_origin(x, y, image_width, image_height)
+    else {
+        super::super::super::helpers::hidden_lanes::restore(&mut canvas, hidden_lanes)?;
+        return Ok(DynamicImage::ImagePaletteAlpha8(canvas));
+    };
     for mask_y in region.y_start..region.y_end {
-        let image_y = (i64::from(y) + i64::from(mask_y)) as u32;
+        let image_y = image_y_start + (mask_y - region.y_start);
         for mask_x in region.x_start..region.x_end {
+            let image_x = image_x_start + (mask_x - region.x_start);
             let coverage = mask.coverage(mask_x, mask_y);
             if mask.should_skip(coverage) {
                 continue;
             }
-            let image_x = (i64::from(x) + i64::from(mask_x)) as u32;
             let background = canvas.get_pixel(image_x, image_y);
             let pixel_index = image_y as usize * image_width as usize + image_x as usize;
             let previous_hidden = hidden_lanes_for_pixel(

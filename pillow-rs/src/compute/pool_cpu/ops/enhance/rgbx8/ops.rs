@@ -1,11 +1,11 @@
 //! ImageRgbx8 Brightness contract and Default strategy.
 
+use crate::compute::Architecture;
 use crate::compute::ExecutionContext;
 use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
 use crate::compute::registry::support::{
     InputContract, ModeSupport, OperationId, OutputModeRule, StrategyInputs,
 };
-use crate::compute::Architecture;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode, RgbaImage};
 
@@ -44,11 +44,8 @@ pub(crate) fn prepare<'a>(
     factor: f64,
     context: &ExecutionContext,
 ) -> Result<Strategy<'a>, PilError> {
-    let selection = crate::compute::pool_cpu::ops::enhance::helpers::strategy::select(
-        SUPPORT,
-        facts,
-        context,
-    )?;
+    let selection =
+        crate::compute::pool_cpu::ops::enhance::helpers::strategy::select(SUPPORT, facts, context)?;
     Ok(Prepared::new((source, factor), selection))
 }
 
@@ -56,8 +53,9 @@ pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> 
     let architecture = strategy.selection().implementation.architecture;
     let (source, factor) = strategy.implementation;
     match architecture {
-        Architecture::Default => super::default::brightness_impl::execute(source, factor)
-            .map(DynamicImage::ImageRgbx8),
+        Architecture::Default => {
+            super::default::brightness_impl::execute(source, factor).map(DynamicImage::ImageRgbx8)
+        }
         architecture => Err(PilError::InternalError(format!(
             "unexpected {architecture:?} architecture selected for Brightness mode {}",
             Mode::ImageRgbx8.pillow_name().unwrap_or("internal"),
@@ -79,9 +77,7 @@ pub(crate) fn prepare_color_saturation<'a>(
     Ok(Prepared::new((source, factor), selection))
 }
 
-pub(crate) fn execute_color_saturation(
-    strategy: Strategy<'_>,
-) -> Result<DynamicImage, PilError> {
+pub(crate) fn execute_color_saturation(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
     let architecture = strategy.selection().implementation.architecture;
     let (source, factor) = strategy.implementation;
     match architecture {
@@ -94,14 +90,14 @@ pub(crate) fn execute_color_saturation(
     }
 }
 
-
 const CONTRAST_CHANNELS: u8 = 4;
-const CONTRAST_INPUTS: &[crate::compute::registry::support::InputContract] =
-    &[crate::compute::registry::support::InputContract::ExactNativeBytes {
+const CONTRAST_INPUTS: &[crate::compute::registry::support::InputContract] = &[
+    crate::compute::registry::support::InputContract::ExactNativeBytes {
         channels: CONTRAST_CHANNELS,
         overflow_reason: "Contrast native dimensions overflowed",
         mismatch_reason: "Contrast source bytes did not match its dimensions",
-    }];
+    },
+];
 
 const CONTRAST_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 3] =
     crate::compute::pool_cpu::ops::enhance::helpers::strategy::contrast_architectures(
@@ -148,10 +144,12 @@ pub(crate) fn prepare_contrast<'a>(
             "Contrast base was unavailable for a declared exact mode".into(),
         )
     })?;
-    Ok(crate::compute::pool_cpu::helpers::execution::prepared::Prepared::new(
-        (source, base, factor),
-        selection,
-    ))
+    Ok(
+        crate::compute::pool_cpu::helpers::execution::prepared::Prepared::new(
+            (source, base, factor),
+            selection,
+        ),
+    )
 }
 
 /// Execute the strategy selected during preparation without reclassifying mode.
@@ -161,27 +159,27 @@ pub(crate) fn execute_contrast(
     let architecture = strategy.selection().implementation.architecture;
     let (source, base, factor) = strategy.implementation;
     match architecture {
-        crate::compute::Architecture::Default => super::default::contrast_impl::execute(
-            source,
-            &base,
-            factor,
-        )
-        .map(crate::raster::DynamicImage::ImageRgbx8),
-        crate::compute::Architecture::Sse2 => super::sse2::contrast_impl::execute(
-            source, &base, factor,
-        )
-        .map(crate::raster::DynamicImage::ImageRgbx8),
-        crate::compute::Architecture::Neon => super::neon::contrast_impl::execute(
-            source, &base, factor,
-        )
-        .map(crate::raster::DynamicImage::ImageRgbx8),
+        crate::compute::Architecture::Default => {
+            super::default::contrast_impl::execute(source, &base, factor)
+                .map(crate::raster::DynamicImage::ImageRgbx8)
+        }
+        crate::compute::Architecture::Sse2 => {
+            super::sse2::contrast_impl::execute(source, &base, factor)
+                .map(crate::raster::DynamicImage::ImageRgbx8)
+        }
+        crate::compute::Architecture::Neon => {
+            super::neon::contrast_impl::execute(source, &base, factor)
+                .map(crate::raster::DynamicImage::ImageRgbx8)
+        }
         crate::compute::Architecture::WasmSimd128 => {
             super::wasm_simd128::contrast_impl::execute(source, &base, factor)
                 .map(crate::raster::DynamicImage::ImageRgbx8)
         }
         architecture => Err(crate::error::PilError::InternalError(format!(
             "unexpected {architecture:?} architecture selected for Contrast mode {}",
-            crate::raster::Mode::ImageRgbx8.pillow_name().unwrap_or("internal"),
+            crate::raster::Mode::ImageRgbx8
+                .pillow_name()
+                .unwrap_or("internal"),
         ))),
     }
 }
@@ -210,7 +208,11 @@ pub(crate) const SHARPNESS_SUPPORT: crate::compute::registry::support::ModeSuppo
         &SHARPNESS_ARCHITECTURES,
     );
 
-pub(crate) type SharpnessStrategy<'a> = crate::compute::pool_cpu::helpers::execution::prepared::Prepared<(&'a crate::raster::RgbaImage, f64)>;
+pub(crate) type SharpnessStrategy<'a> =
+    crate::compute::pool_cpu::helpers::execution::prepared::Prepared<(
+        &'a crate::raster::RgbaImage,
+        f64,
+    )>;
 
 pub(crate) fn prepare_sharpness<'a>(
     source: &'a crate::raster::RgbaImage,
@@ -219,11 +221,16 @@ pub(crate) fn prepare_sharpness<'a>(
     context: &crate::compute::ExecutionContext,
 ) -> Result<SharpnessStrategy<'a>, crate::error::PilError> {
     let selection = crate::compute::pool_cpu::ops::enhance::helpers::strategy::select(
-        SHARPNESS_SUPPORT, facts.with_sharpness(factor), context,
+        SHARPNESS_SUPPORT,
+        facts.with_sharpness(factor),
+        context,
     )?;
-    Ok(crate::compute::pool_cpu::helpers::execution::prepared::Prepared::new(
-        (source, factor), selection,
-    ))
+    Ok(
+        crate::compute::pool_cpu::helpers::execution::prepared::Prepared::new(
+            (source, factor),
+            selection,
+        ),
+    )
 }
 
 pub(crate) fn execute_sharpness(
@@ -236,8 +243,10 @@ pub(crate) fn execute_sharpness(
             super::default::sharpness_impl::execute(source, factor)
                 .map(crate::raster::DynamicImage::ImageRgbx8)
         }
-        crate::compute::Architecture::Avx2Fma => super::avx2::sharpness_impl::execute(source, factor)
-            .map(crate::raster::DynamicImage::ImageRgbx8),
+        crate::compute::Architecture::Avx2Fma => {
+            super::avx2::sharpness_impl::execute(source, factor)
+                .map(crate::raster::DynamicImage::ImageRgbx8)
+        }
         crate::compute::Architecture::Avx2 => super::avx2::sharpness_impl::execute(source, factor)
             .map(crate::raster::DynamicImage::ImageRgbx8),
         crate::compute::Architecture::AvxFma => super::avx::sharpness_impl::execute(source, factor)
@@ -248,11 +257,15 @@ pub(crate) fn execute_sharpness(
             .map(crate::raster::DynamicImage::ImageRgbx8),
         crate::compute::Architecture::Neon => super::neon::sharpness_impl::execute(source, factor)
             .map(crate::raster::DynamicImage::ImageRgbx8),
-        crate::compute::Architecture::WasmSimd128 => super::wasm_simd128::sharpness_impl::execute(source, factor)
-            .map(crate::raster::DynamicImage::ImageRgbx8),
+        crate::compute::Architecture::WasmSimd128 => {
+            super::wasm_simd128::sharpness_impl::execute(source, factor)
+                .map(crate::raster::DynamicImage::ImageRgbx8)
+        }
         architecture => Err(crate::error::PilError::InternalError(format!(
             "unexpected {architecture:?} architecture selected for Sharpness mode {}",
-            crate::raster::Mode::ImageRgbx8.pillow_name().unwrap_or("internal"),
+            crate::raster::Mode::ImageRgbx8
+                .pillow_name()
+                .unwrap_or("internal"),
         ))),
     }
 }

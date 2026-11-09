@@ -36,9 +36,22 @@ fn validate_transposed_font_length(orientation: Option<&str>) -> PyResult<()> {
 
 #[pyfunction]
 fn imagefont_text_font_mode(mode: &str, embedded_color: bool) -> &'static str {
-    let mode = pillow_rs::Mode::from_pillow_name(mode)
-        .unwrap_or(pillow_rs::Mode::ImageLuma8);
+    let mode = pillow_rs::Mode::from_pillow_name(mode).unwrap_or(pillow_rs::Mode::ImageLuma8);
     pillow_rs::imagefont_text_font_mode(mode, embedded_color)
+        .pillow_name()
+        .expect("font mask mode is a Pillow raster identity")
+}
+
+/// Translate Pillow mode spellings before constructing core font options.
+/// Empty and unknown names retain the existing non-bilevel, non-color path.
+fn imagefont_text_mode_from_python(mode: Option<String>) -> Option<pillow_rs::Mode> {
+    mode.and_then(|name| {
+        if name.is_empty() {
+            None
+        } else {
+            Some(pillow_rs::Mode::from_pillow_name(&name).unwrap_or(pillow_rs::Mode::ImageLuma8))
+        }
+    })
 }
 
 /// Enable a backend route for future automatic image routing.
@@ -255,7 +268,7 @@ impl PyFont {
         let text = imagefont_text_input_from_python(text)?;
         let features_invalid = draw_features_presence_from_python(features);
         let options = pillow_rs::ImageFontTextOptions {
-            mode,
+            mode: imagefont_text_mode_from_python(mode),
             embedded_color: false,
             direction,
             features: None,
@@ -265,12 +278,8 @@ impl PyFont {
             anchor,
             ..pillow_rs::ImageFontTextOptions::default()
         };
-        pillow_rs::imagefont_getbbox_input_with_options(
-            &self.inner,
-            text,
-            &options,
-        )
-        .map_err(map_error)
+        pillow_rs::imagefont_getbbox_input_with_options(&self.inner, text, &options)
+            .map_err(map_error)
     }
 
     #[pyo3(signature = (text, xy, mode, embedded_color, spacing, stroke_width, anchor, align))]
@@ -286,8 +295,7 @@ impl PyFont {
         anchor: Option<String>,
         align: String,
     ) -> PyResult<Vec<(f64, f64, String, Py<PyAny>)>> {
-        let mode = pillow_rs::Mode::from_pillow_name(mode)
-            .unwrap_or(pillow_rs::Mode::ImageLuma8);
+        let mode = pillow_rs::Mode::from_pillow_name(mode).unwrap_or(pillow_rs::Mode::ImageLuma8);
         let options = pillow_rs::ImageFontTextOptions {
             embedded_color,
             stroke_width,
@@ -330,8 +338,7 @@ impl PyFont {
         anchor: Option<String>,
         align: String,
     ) -> PyResult<(f64, f64, f64, f64)> {
-        let mode = pillow_rs::Mode::from_pillow_name(mode)
-            .unwrap_or(pillow_rs::Mode::ImageLuma8);
+        let mode = pillow_rs::Mode::from_pillow_name(mode).unwrap_or(pillow_rs::Mode::ImageLuma8);
         let options = pillow_rs::ImageFontTextOptions {
             embedded_color,
             stroke_width,
@@ -358,10 +365,8 @@ impl PyFont {
         embedded_color: bool,
     ) -> PyResult<f32> {
         let text = imagefont_text_input_from_python(text)?;
-        let mode = pillow_rs::Mode::from_pillow_name(mode)
-            .unwrap_or(pillow_rs::Mode::ImageLuma8);
-        pillow_rs::imagefont_text_length(&self.inner, mode, embedded_color, text)
-            .map_err(map_error)
+        let mode = pillow_rs::Mode::from_pillow_name(mode).unwrap_or(pillow_rs::Mode::ImageLuma8);
+        pillow_rs::imagefont_text_length(&self.inner, mode, embedded_color, text).map_err(map_error)
     }
 
     #[pyo3(signature = (text, width, height, mode, embedded_color, spacing, stroke_width))]
@@ -378,8 +383,7 @@ impl PyFont {
         stroke_width: f32,
     ) -> PyResult<(Vec<Py<PyAny>>, Py<PyAny>)> {
         let text = imagefont_text_input_from_python(text)?;
-        let mode = pillow_rs::Mode::from_pillow_name(mode)
-            .unwrap_or(pillow_rs::Mode::ImageLuma8);
+        let mode = pillow_rs::Mode::from_pillow_name(mode).unwrap_or(pillow_rs::Mode::ImageLuma8);
         let result = pillow_rs::imagefont_text_wrap(
             &self.inner,
             mode,
@@ -416,8 +420,7 @@ impl PyFont {
         limit: f64,
     ) -> PyResult<Option<(Vec<Py<PyAny>>, Py<PyAny>, Option<Py<PyFont>>)>> {
         let text = imagefont_text_input_from_python(text)?;
-        let mode = pillow_rs::Mode::from_pillow_name(mode)
-            .unwrap_or(pillow_rs::Mode::ImageLuma8);
+        let mode = pillow_rs::Mode::from_pillow_name(mode).unwrap_or(pillow_rs::Mode::ImageLuma8);
         let scaling = pillow_rs::imagefont_text_scaling(scaling, limit);
         let Some((result, font)) = pillow_rs::imagefont_text_wrap_scaled(
             &self.inner,
@@ -464,7 +467,7 @@ impl PyFont {
         let features_invalid = draw_features_presence_from_python(features);
         let (start, start_invalid) = imagefont_start_from_python(start);
         let options = pillow_rs::ImageFontTextOptions {
-            mode,
+            mode: imagefont_text_mode_from_python(mode),
             direction,
             features: None,
             features_invalid,
@@ -476,12 +479,9 @@ impl PyFont {
             start_invalid,
             ..pillow_rs::ImageFontTextOptions::default()
         };
-        let (width, height, pixels) = pillow_rs::imagefont_getmask_input_with_options(
-            &self.inner,
-            text,
-            &options,
-        )
-        .map_err(map_error)?;
+        let (width, height, pixels) =
+            pillow_rs::imagefont_getmask_input_with_options(&self.inner, text, &options)
+                .map_err(map_error)?;
         let inner =
             pillow_rs::imagefont_mask_image(width, height, pixels, &options).map_err(map_error)?;
         Ok(PyImage { inner })
@@ -508,7 +508,7 @@ impl PyFont {
         let features_invalid = draw_features_presence_from_python(features);
         let (start, start_invalid) = imagefont_start_from_python(start);
         let options = pillow_rs::ImageFontTextOptions {
-            mode,
+            mode: imagefont_text_mode_from_python(mode),
             embedded_color: false,
             direction,
             features: None,
@@ -525,12 +525,9 @@ impl PyFont {
             has_kwargs,
             ..pillow_rs::ImageFontTextOptions::default()
         };
-        let (width, height, pixels, offset) = pillow_rs::imagefont_getmask2_input_with_options(
-            &self.inner,
-            text,
-            &options,
-        )
-        .map_err(map_error)?;
+        let (width, height, pixels, offset) =
+            pillow_rs::imagefont_getmask2_input_with_options(&self.inner, text, &options)
+                .map_err(map_error)?;
         let image =
             pillow_rs::imagefont_mask_image(width, height, pixels, &options).map_err(map_error)?;
         Ok((PyImage { inner: image }, offset))
@@ -571,7 +568,7 @@ impl PyFont {
         let features_invalid = draw_features_presence_from_python(features);
         let (start, start_invalid) = imagefont_start_from_python(start);
         let options = pillow_rs::ImageFontTextOptions {
-            mode,
+            mode: imagefont_text_mode_from_python(mode),
             embedded_color: false,
             direction,
             features: None,
@@ -588,12 +585,9 @@ impl PyFont {
             has_kwargs: false,
             ..pillow_rs::ImageFontTextOptions::default()
         };
-        let (width, height, pixels, offset) = pillow_rs::imagefont_native_render_input(
-            &self.inner,
-            text,
-            &options,
-        )
-        .map_err(map_error)?;
+        let (width, height, pixels, offset) =
+            pillow_rs::imagefont_native_render_input(&self.inner, text, &options)
+                .map_err(map_error)?;
         let image =
             pillow_rs::imagefont_mask_image(width, height, pixels, &options).map_err(map_error)?;
         Ok((PyImage { inner: image }, offset))
@@ -665,19 +659,15 @@ impl PyFont {
         let text = imagefont_text_input_from_python(text)?;
         let features_invalid = draw_features_presence_from_python(features);
         let options = pillow_rs::ImageFontTextOptions {
-            mode,
+            mode: imagefont_text_mode_from_python(mode),
             direction,
             features: None,
             features_invalid,
             language,
             ..pillow_rs::ImageFontTextOptions::default()
         };
-        pillow_rs::imagefont_getlength_input_with_options(
-            &self.inner,
-            text,
-            &options,
-        )
-        .map_err(map_error)
+        pillow_rs::imagefont_getlength_input_with_options(&self.inner, text, &options)
+            .map_err(map_error)
     }
 
     fn getmetrics(&self) -> (u32, u32) {

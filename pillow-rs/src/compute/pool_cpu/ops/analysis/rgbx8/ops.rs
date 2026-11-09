@@ -3,9 +3,7 @@ use crate::compute::registry::support::StrategySelection;
 use crate::error::PilError;
 use crate::raster::{Mode, RgbaImage};
 
-use super::super::helpers::get_data::{
-    self as helpers, GetDataOutput, GetDataRequest,
-};
+use super::super::helpers::get_data::{self as helpers, GetDataOutput, GetDataRequest};
 use super::default::get_data_impl;
 
 pub(crate) fn execute_get_data(
@@ -22,13 +20,17 @@ pub(crate) fn execute_get_data(
                 Ok(GetDataOutput::BandWritten)
             }
         },
-        architecture => Err(helpers::missing_architecture(Mode::ImageRgbx8, architecture)),
+        architecture => Err(helpers::missing_architecture(
+            Mode::ImageRgbx8,
+            architecture,
+        )),
     }
 }
 crate::compute::pool_cpu::ops::analysis::helpers::bbox::declare_getbbox_owner!(
     rgbx8,
     ImageRgbx8,
     crate::raster::RgbaImage,
+    Pillow,
 );
 
 crate::compute::pool_cpu::ops::analysis::helpers::extrema::declare_getextrema_owner!(
@@ -52,22 +54,19 @@ crate::compute::pool_cpu::ops::analysis::helpers::stat_execution::declare_stat_o
     crate::raster::RgbaImage,
     crate::compute::pool_cpu::ops::analysis::rgbx8::default::stat_impl::execute,
 );
-crate::compute::pool_cpu::ops::analysis::helpers::extrema_bytes_execution::
-    declare_getextrema_bytes_owner!(
+crate::compute::pool_cpu::ops::analysis::helpers::extrema_bytes_execution::declare_getextrema_bytes_owner!(
     ImageRgbx8,
     crate::raster::RgbaImage,
     crate::compute::pool_cpu::ops::analysis::rgbx8::default::extrema_bytes_impl::execute,
 );
 
-pub(crate) const GET_PIXEL_SUPPORT:
-    crate::compute::registry::support::ModeSupport =
+pub(crate) const GET_PIXEL_SUPPORT: crate::compute::registry::support::ModeSupport =
     crate::compute::pool_cpu::ops::analysis::helpers::pixel_access::pillow_get_pixel_support(
         crate::raster::Mode::ImageRgbx8,
         crate::compute::registry::support::PixelValueShape::U8Components { bands: 4 },
     );
 
-pub(crate) const GET_PIXEL_RGBA_SUPPORT:
-    crate::compute::registry::support::ModeSupport =
+pub(crate) const GET_PIXEL_RGBA_SUPPORT: crate::compute::registry::support::ModeSupport =
     crate::compute::pool_cpu::ops::analysis::helpers::pixel_access::rgba_get_pixel_support(
         crate::raster::Mode::ImageRgbx8,
     );
@@ -85,3 +84,32 @@ pub(crate) fn execute_get_pixel(
     )?;
     super::default::get_pixel_impl::execute(image, x, y)
 }
+crate::compute::pool_cpu::ops::analysis::helpers::getcolors_support::declare_getcolors_support!(
+    ImageRgbx8, pillow,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::extrema_bytes_execution::declare_getextrema_bytes_support!(
+    ImageRgbx8, pillow,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::extrema_execution::declare_getextrema_support!(
+    ImageRgbx8, pillow,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::histogram_execution::declare_histogram_support!(
+    ImageRgbx8, 4, pillow,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::stat_execution::declare_stat_support!(
+    ImageRgbx8, pillow,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::split_support::declare_split_support!(
+    ImageRgbx8, pillow, Bands,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::get_channel_support::declare_get_channel_route!(
+    ImageRgbx8, 4, Pillow, Child, Luma8,
+);
+
+crate::compute::pool_cpu::ops::analysis::helpers::get_data_support::declare_get_data_support!(
+    ImageRgbx8, 4, Pillow, Pillow, Pillow,
+);
+
+crate::compute::pool_cpu::ops::analysis::helpers::projection_support::declare_projection_support!(
+    ImageRgbx8, Pillow,
+);

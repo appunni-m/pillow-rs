@@ -2,11 +2,11 @@
 // TODO(pillow-rs#3ptb): verify index output, palette metadata, empty input,
 // and Default/vector selection receipts in the frozen CPU parity matrix.
 
-use crate::compute::{Architecture, ExecutionContext};
 use crate::compute::registry::support::{
     ImplementationSupport, InputContract, ModeSupport, OperationId, OperationInputs,
     OutputModeRule, StrategySelection,
 };
+use crate::compute::{Architecture, ExecutionContext};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, GrayImage, Mode};
 
@@ -42,14 +42,12 @@ impl Prepared<'_> {
             Architecture::Default => {
                 super::default::remap_palette_impl::execute(self.source, self.dest_map)
             }
-            Architecture::Sse2 => super::sse2::remap_palette_impl::execute(
-                self.source.as_raw(),
-                self.dest_map,
-            )?,
-            Architecture::Neon => super::neon::remap_palette_impl::execute(
-                self.source.as_raw(),
-                self.dest_map,
-            )?,
+            Architecture::Sse2 => {
+                super::sse2::remap_palette_impl::execute(self.source.as_raw(), self.dest_map)?
+            }
+            Architecture::Neon => {
+                super::neon::remap_palette_impl::execute(self.source.as_raw(), self.dest_map)?
+            }
             Architecture::WasmSimd128 => super::wasm_simd128::remap_palette_impl::execute(
                 self.source.as_raw(),
                 self.dest_map,
@@ -79,5 +77,9 @@ pub(crate) fn prepare<'a>(
         ));
     };
     let selection = super::super::helpers::strategy::select(SUPPORT, input, ctx)?;
-    Ok(Prepared { source, dest_map, selection })
+    Ok(Prepared {
+        source,
+        dest_map,
+        selection,
+    })
 }

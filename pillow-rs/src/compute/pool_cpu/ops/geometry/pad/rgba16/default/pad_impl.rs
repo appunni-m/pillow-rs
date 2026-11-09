@@ -5,7 +5,10 @@ use crate::compute::pool_cpu::ops::geometry::pad::helpers::{dimensions::PadFrame
 use crate::error::PilError;
 use crate::raster::{ImageBuffer, Pixel};
 
-pub(crate) fn pad<P>(image: &ImageBuffer<P, Vec<u16>>, frame: PadFrame) -> Result<ImageBuffer<P, Vec<u16>>, PilError>
+pub(crate) fn pad<P>(
+    image: &ImageBuffer<P, Vec<u16>>,
+    frame: PadFrame,
+) -> Result<ImageBuffer<P, Vec<u16>>, PilError>
 where
     P: Pixel<Subpixel = u16>,
 {
@@ -17,7 +20,12 @@ where
             input.component(3, 255) as u16,
         ],
         None => match frame.color {
-            Some(color) => [color.0 as u16, color.1 as u16, color.2 as u16, color.3 as u16],
+            Some(color) => [
+                color.0 as u16,
+                color.1 as u16,
+                color.2 as u16,
+                color.3 as u16,
+            ],
             None => [0; 4],
         },
     };

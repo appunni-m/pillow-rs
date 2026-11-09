@@ -1,7 +1,7 @@
 //! Resize-specific implementation eligibility guards.
 
-use super::core::checked_native_bytes_guard;
 use super::super::{GuardAssessment, RequestFacts, StrategyInputs};
+use super::core::checked_native_bytes_guard;
 use crate::compute::pool_cpu::ops::resize::helpers::boxed_crop;
 use crate::compute::pool_cpu::ops::resize::helpers::coefficients::{
     byte_coefficients_fit_i32, byte_coefficients_fit_source,
@@ -50,10 +50,14 @@ pub(crate) fn resize_filtered_fma_guard(input: StrategyInputs) -> GuardAssessmen
     }
 }
 
-
 pub(crate) fn resize_luma16_vector_guard(input: StrategyInputs) -> GuardAssessment {
     let (width, height) = match input.request {
-        RequestFacts::Resize { width, height, boxed: false, .. } => (width, height),
+        RequestFacts::Resize {
+            width,
+            height,
+            boxed: false,
+            ..
+        } => (width, height),
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
         _ => return GuardAssessment::Ineligible,
     };
@@ -195,10 +199,7 @@ pub(crate) fn resize_byte_filtered_vector_guard(
     }
     let horizontal = precompute_coeffs(width, input.width, filter);
     let vertical = precompute_coeffs(height, input.height, filter);
-    let coefficients_fit = match (
-        usize::try_from(input.width),
-        usize::try_from(input.height),
-    ) {
+    let coefficients_fit = match (usize::try_from(input.width), usize::try_from(input.height)) {
         (Ok(source_width), Ok(source_height)) => {
             byte_coefficients_fit_source(&horizontal, source_width)
                 && byte_coefficients_fit_source(&vertical, source_height)
@@ -298,9 +299,8 @@ pub(crate) fn resize_byte_boxed_vector_guard(
         return GuardAssessment::Ineligible;
     }
 
-    let horizontal_work = width != input.width
-        || bounds.0 != 0.0
-        || bounds.2 != f64::from(input.width as f32);
+    let horizontal_work =
+        width != input.width || bounds.0 != 0.0 || bounds.2 != f64::from(input.width as f32);
     if horizontal_work
         && u64::from(input.height) > u64::from(input.width) * 100
         && height < input.height
@@ -311,36 +311,23 @@ pub(crate) fn resize_byte_boxed_vector_guard(
         return GuardAssessment::Satisfied;
     }
 
-    let horizontal = precompute_coeffs_boxed_for_filter(
-        width,
-        input.width,
-        bounds.0,
-        bounds.2,
-        filter,
-    );
-    let vertical = precompute_coeffs_boxed_for_filter(
-        height,
-        input.height,
-        bounds.1,
-        bounds.3,
-        filter,
-    );
-    let coefficient_shape_is_valid = match (
-        usize::try_from(input.width),
-        usize::try_from(input.height),
-    ) {
-        (Ok(source_width), Ok(source_height)) => {
-            byte_coefficients_fit_source(&horizontal, source_width)
-                && byte_coefficients_fit_source(&vertical, source_height)
-                && byte_coefficients_fit_i32(&horizontal)
-                && byte_coefficients_fit_i32(&vertical)
-        }
-        _ => false,
-    };
+    let horizontal =
+        precompute_coeffs_boxed_for_filter(width, input.width, bounds.0, bounds.2, filter);
+    let vertical =
+        precompute_coeffs_boxed_for_filter(height, input.height, bounds.1, bounds.3, filter);
+    let coefficient_shape_is_valid =
+        match (usize::try_from(input.width), usize::try_from(input.height)) {
+            (Ok(source_width), Ok(source_height)) => {
+                byte_coefficients_fit_source(&horizontal, source_width)
+                    && byte_coefficients_fit_source(&vertical, source_height)
+                    && byte_coefficients_fit_i32(&horizontal)
+                    && byte_coefficients_fit_i32(&vertical)
+            }
+            _ => false,
+        };
     if coefficient_shape_is_valid {
         GuardAssessment::Satisfied
     } else {
         GuardAssessment::Ineligible
     }
 }
-

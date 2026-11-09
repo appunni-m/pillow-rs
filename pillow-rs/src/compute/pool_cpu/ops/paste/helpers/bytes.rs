@@ -1,7 +1,7 @@
 use std::ops::Deref;
 
-use crate::error::PilError;
 use crate::compute::pool_cpu::helpers::bytes::preblend;
+use crate::error::PilError;
 use crate::raster::DynamicImage;
 
 use super::layout::{MaskLayout, SourceLayout};
@@ -46,9 +46,7 @@ impl SourceMap<4, 4> for PhysicalFourBytesToFour {
 }
 
 /// Executes the prepared, exact-mode byte strategy without mode conversion.
-pub(crate) fn execute<const CHANNELS: usize, I>(
-    plan: BytePlan<'_, I>,
-) -> Result<Vec<u8>, PilError>
+pub(crate) fn execute<const CHANNELS: usize, I>(plan: BytePlan<'_, I>) -> Result<Vec<u8>, PilError>
 where
     I: Deref<Target = DynamicImage>,
 {
@@ -86,18 +84,14 @@ where
     let (region_width, _) = plan.region_size;
     let source_stride = checked_stride(source_width, SOURCE)?;
     let destination_stride = checked_stride(destination_width, DESTINATION)?;
-    let source_row_width = usize::try_from(source_width)
-        .map_err(|_| overflow("source width"))?;
-    let destination_row_width = usize::try_from(destination_width)
-        .map_err(|_| overflow("destination width"))?;
-    let region_row_width = usize::try_from(region_width)
-        .map_err(|_| overflow("region width"))?;
-    let source_left = usize::try_from(plan.region.source_left)
-        .map_err(|_| overflow("source x"))?;
-    let destination_left = usize::try_from(plan.region.destination_left)
-        .map_err(|_| overflow("destination x"))?;
-    let copy_width = usize::try_from(plan.region.width)
-        .map_err(|_| overflow("copy width"))?;
+    let source_row_width = usize::try_from(source_width).map_err(|_| overflow("source width"))?;
+    let destination_row_width =
+        usize::try_from(destination_width).map_err(|_| overflow("destination width"))?;
+    let region_row_width = usize::try_from(region_width).map_err(|_| overflow("region width"))?;
+    let source_left = usize::try_from(plan.region.source_left).map_err(|_| overflow("source x"))?;
+    let destination_left =
+        usize::try_from(plan.region.destination_left).map_err(|_| overflow("destination x"))?;
+    let copy_width = usize::try_from(plan.region.width).map_err(|_| overflow("copy width"))?;
     let mask_layout = plan.mask_layout;
     let mask_stride = mask_layout
         .map(|layout| checked_stride(region_width, layout.channels))
@@ -124,9 +118,8 @@ where
         let destination_start = destination_y
             .checked_mul(destination_stride)
             .ok_or_else(|| overflow("destination row offset"))?;
-        let destination_row = &mut output[
-            destination_start..destination_start + destination_row_width * DESTINATION
-        ];
+        let destination_row =
+            &mut output[destination_start..destination_start + destination_row_width * DESTINATION];
         let mask_row = match (mask_bytes, mask_stride) {
             (Some(bytes), Some(stride)) => {
                 let start = source_y
@@ -181,14 +174,11 @@ where
 {
     let source_stride = checked_stride(plan.source_size.0, SOURCE)?;
     let destination_stride = checked_stride(plan.destination_size.0, DESTINATION)?;
-    let source_left = usize::try_from(plan.region.source_left)
-        .map_err(|_| overflow("source x"))?;
-    let destination_left = usize::try_from(plan.region.destination_left)
-        .map_err(|_| overflow("destination x"))?;
-    let copy_width = usize::try_from(plan.region.width)
-        .map_err(|_| overflow("copy width"))?;
-    let copy_height = usize::try_from(plan.region.height)
-        .map_err(|_| overflow("copy height"))?;
+    let source_left = usize::try_from(plan.region.source_left).map_err(|_| overflow("source x"))?;
+    let destination_left =
+        usize::try_from(plan.region.destination_left).map_err(|_| overflow("destination x"))?;
+    let copy_width = usize::try_from(plan.region.width).map_err(|_| overflow("copy width"))?;
+    let copy_height = usize::try_from(plan.region.height).map_err(|_| overflow("copy height"))?;
     let source_start_x = source_left
         .checked_mul(SOURCE)
         .ok_or_else(|| overflow("source row offset"))?;
@@ -264,8 +254,7 @@ where
         .map_err(|_| overflow("copy width"))?
         .checked_mul(DESTINATION)
         .ok_or_else(|| overflow("row bytes"))?;
-    let copy_height = usize::try_from(plan.region.height)
-        .map_err(|_| overflow("copy height"))?;
+    let copy_height = usize::try_from(plan.region.height).map_err(|_| overflow("copy height"))?;
 
     for row in 0..copy_height {
         let source_y = usize::try_from(plan.region.source_top)

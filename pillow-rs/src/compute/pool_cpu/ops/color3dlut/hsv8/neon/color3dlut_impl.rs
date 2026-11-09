@@ -15,4 +15,3 @@ pub(crate) fn execute(
 ) -> Result<DynamicImage, PilError> {
     lut_vector::apply(image, Mode::ImageHsv8, size, table, channels, target_mode)
 }
-

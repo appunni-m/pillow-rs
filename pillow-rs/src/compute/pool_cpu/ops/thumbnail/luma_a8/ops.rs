@@ -1,7 +1,7 @@
 //! Pillow luma-alpha Thumbnail reducing-gap policy.
 
-use crate::pipeline::ResampleFilter;
 use crate::compute::registry::support::{ModeSupport, OperationId};
+use crate::pipeline::ResampleFilter;
 use crate::raster::Mode;
 
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::serial(

@@ -78,9 +78,8 @@ pub(super) fn plan_stage<'a>(
     let next_mode = if has_auxiliaries {
         mode.to_owned()
     } else {
-        let current = Mode::from_pillow_name(mode).ok_or_else(|| {
-            PilError::ValueError("GPU graph has an unknown Pillow mode".into())
-        })?;
+        let current = Mode::from_pillow_name(mode)
+            .ok_or_else(|| PilError::ValueError("GPU graph has an unknown Pillow mode".into()))?;
         crate::image::known_pipeline_op_mode(op, current)
             .and_then(Mode::pillow_name)
             .ok_or_else(|| {

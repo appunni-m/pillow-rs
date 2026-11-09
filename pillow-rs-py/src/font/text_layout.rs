@@ -1,13 +1,13 @@
 use crate::map_error;
 use pillow_rs::{
-    ImageFontTextBoundsCallbacks, ImageFontTextPositionArithmetic,
-    ImageFontTextPositionCallbacks, ImageFontTextPositionComparison,
+    ImageFontTextBoundsCallbacks, ImageFontTextPositionArithmetic, ImageFontTextPositionCallbacks,
+    ImageFontTextPositionComparison,
 };
+use pyo3::IntoPyObject;
 use pyo3::basic::CompareOp;
 use pyo3::exceptions::{PyAssertionError, PyValueError};
-use pyo3::pyfunction;
 use pyo3::prelude::{Bound, Py, PyAny, PyErr, PyModule, PyResult, Python};
-use pyo3::IntoPyObject;
+use pyo3::pyfunction;
 use pyo3::types::{
     PyAnyMethods, PyBytes, PyDict, PyDictMethods, PyIterator, PyList, PyListMethods,
     PyModuleMethods, PyString,
@@ -46,7 +46,9 @@ impl ImageFontTextBoundsCallbacks for PythonBoundsCallbacks<'_> {
     fn begin_line_bounds(&mut self, line: &Self::Value) -> Result<(), Self::Error> {
         let line = line.bind(self.py);
         let text = line.getattr("text").map_err(BoundsCallbackError::Python)?;
-        let anchor = line.getattr("anchor").map_err(BoundsCallbackError::Python)?;
+        let anchor = line
+            .getattr("anchor")
+            .map_err(BoundsCallbackError::Python)?;
         let kwargs = PyDict::new(self.py);
         kwargs
             .set_item("anchor", anchor)
@@ -61,10 +63,9 @@ impl ImageFontTextBoundsCallbacks for PythonBoundsCallbacks<'_> {
 
     fn bbox_coordinate(&mut self, index: usize) -> Result<Self::Value, Self::Error> {
         let Some(bbox) = &self.pending_bbox else {
-            return Err(pillow_rs::PilError::InternalError(
-                "text bounds were not prepared".into(),
-            )
-            .into());
+            return Err(
+                pillow_rs::PilError::InternalError("text bounds were not prepared".into()).into(),
+            );
         };
         bbox.get_item(index)
             .map(|value| value.unbind())
@@ -243,9 +244,8 @@ impl<'py> ImageFontTextPositionCallbacks for PythonPositionCallbacks<'py> {
         let source = self
             .ensure_line_source()
             .map_err(BoundsCallbackError::Python)?;
-        self.line_iterator = Some(
-            PyIterator::from_object(&source).map_err(BoundsCallbackError::Python)?,
-        );
+        self.line_iterator =
+            Some(PyIterator::from_object(&source).map_err(BoundsCallbackError::Python)?);
         Ok(())
     }
 
@@ -286,15 +286,15 @@ impl<'py> ImageFontTextPositionCallbacks for PythonPositionCallbacks<'py> {
     ) -> Result<bool, Self::Error> {
         anchor
             .get_item(index)
-            .and_then(|component| component.rich_compare(PyString::new(self.py, value), CompareOp::Eq))
+            .and_then(|component| {
+                component.rich_compare(PyString::new(self.py, value), CompareOp::Eq)
+            })
             .and_then(|result| result.is_truthy())
             .map_err(BoundsCallbackError::Python)
     }
 
     fn justified_anchor(&mut self, anchor: &Self::Value) -> Result<Self::Value, Self::Error> {
-        let component = anchor
-            .get_item(1)
-            .map_err(BoundsCallbackError::Python)?;
+        let component = anchor.get_item(1).map_err(BoundsCallbackError::Python)?;
         self.operator
             .call_method1("add", (PyString::new(self.py, "l"), component))
             .map_err(BoundsCallbackError::Python)
@@ -335,14 +335,7 @@ impl<'py> ImageFontTextPositionCallbacks for PythonPositionCallbacks<'py> {
             .getattr("stroke_width")
             .map_err(BoundsCallbackError::Python)?;
         let bbox = getbbox
-            .call1((
-                "A",
-                font_mode,
-                direction,
-                features,
-                language,
-                &stroke_width,
-            ))
+            .call1(("A", font_mode, direction, features, language, &stroke_width))
             .map_err(BoundsCallbackError::Python)?;
         let bottom = bbox.get_item(3).map_err(BoundsCallbackError::Python)?;
         let stroke_width = self
@@ -381,14 +374,13 @@ impl<'py> ImageFontTextPositionCallbacks for PythonPositionCallbacks<'py> {
             .text_object
             .getattr("language")
             .map_err(BoundsCallbackError::Python)?;
-        getlength.call1((line, font_mode, direction, features, language))
+        getlength
+            .call1((line, font_mode, direction, features, language))
             .map_err(BoundsCallbackError::Python)
     }
 
     fn split_words(&mut self, line: &Self::Value) -> Result<Vec<Self::Value>, Self::Error> {
-        let split = line
-            .getattr("split")
-            .map_err(BoundsCallbackError::Python)?;
+        let split = line.getattr("split").map_err(BoundsCallbackError::Python)?;
         let separator = if line.is_instance_of::<PyString>() {
             PyString::new(self.py, " ").into_any()
         } else {
@@ -474,9 +466,7 @@ impl<'py> ImageFontTextPositionCallbacks for PythonPositionCallbacks<'py> {
     ) -> Result<Self::Line, Self::Error> {
         PyModule::import(self.py, "pillow_rs.imagetext")
             .and_then(|module| module.getattr("_Line"))
-            .and_then(|line_type| line_type
-            .call1((x, y, anchor, text))
-            )
+            .and_then(|line_type| line_type.call1((x, y, anchor, text)))
             .map_err(BoundsCallbackError::Python)
     }
 
@@ -503,7 +493,9 @@ fn imagefont_text_layout_bbox_with_callbacks(
     anchor: Option<&Bound<'_, PyAny>>,
     align: &Bound<'_, PyAny>,
 ) -> PyResult<(Py<PyAny>, Py<PyAny>, Py<PyAny>, Py<PyAny>)> {
-    let anchor = anchor.cloned().unwrap_or_else(|| py.None().bind(py).clone());
+    let anchor = anchor
+        .cloned()
+        .unwrap_or_else(|| py.None().bind(py).clone());
     let lines = text_object.call_method1("_split", (xy, anchor, align))?;
     let lines = PyIterator::from_object(&lines)?;
     let mut callbacks = PythonBoundsCallbacks {
@@ -512,10 +504,12 @@ fn imagefont_text_layout_bbox_with_callbacks(
         lines,
         pending_bbox: None,
     };
-    let bounds = pillow_rs::imagefont_text_layout_bbox_with_callbacks(&mut callbacks)
-        .map_err(|error| match error {
-            BoundsCallbackError::Core(error) => map_error(error),
-            BoundsCallbackError::Python(error) => error,
+    let bounds =
+        pillow_rs::imagefont_text_layout_bbox_with_callbacks(&mut callbacks).map_err(|error| {
+            match error {
+                BoundsCallbackError::Core(error) => map_error(error),
+                BoundsCallbackError::Python(error) => error,
+            }
         })?;
     let [left, top, right, bottom] = bounds;
     Ok((left, top, right, bottom))
@@ -533,8 +527,7 @@ fn imagefont_text_split_with_callbacks<'py>(
 ) -> PyResult<Py<PyList>> {
     let default_align = PyString::new(py, "left");
     let align = align.unwrap_or(default_align.as_any());
-    let mut callbacks =
-        PythonPositionCallbacks::new(py, text_object, xy, anchor, align, lines)?;
+    let mut callbacks = PythonPositionCallbacks::new(py, text_object, xy, anchor, align, lines)?;
     let lines = pillow_rs::imagefont_text_split_with_callbacks(&mut callbacks).map_err(
         |error| match error {
             BoundsCallbackError::Core(error) => map_error(error),

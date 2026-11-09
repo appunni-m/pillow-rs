@@ -1,8 +1,8 @@
 //! `ImageRgba16` band semantics and context-selected architecture strategies.
 
 // NO_PILLOW_SUPPORT: native ImageRgba16 band and mutation strategies extend Pillow.
-use crate::compute::registry::support::BandIndexRule;
 use super::super::helpers::extract_band_strategy::declare_strategies;
+use crate::compute::registry::support::BandIndexRule;
 
 declare_strategies! {
     ImageRgba16, BandIndexRule::ClampToNative { channels: 4 };
@@ -25,3 +25,9 @@ use super::super::helpers::put_alpha_data_strategy::declare_strategies as declar
 declare_alpha_data_strategies! {
     ImageRgba16, ImageRgba16, 0, 4;
 }
+super::super::helpers::scalar_write_support::declare_scalar_write_support!(
+    ImageRgba16,
+    false,
+    false,
+    false,
+);

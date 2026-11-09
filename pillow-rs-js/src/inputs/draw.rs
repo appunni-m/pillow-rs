@@ -31,9 +31,12 @@ pub(crate) fn js_draw_color_input(value: &JsValue) -> pillow_rs::DrawColorInput 
             .iter()
             .all(|component| !matches!(component, pillow_rs::PaletteColorComponent::Float(_)))
         {
-            let wide = components
-                .iter()
-                .any(|component| matches!(component, pillow_rs::PaletteColorComponent::WideInteger { .. }));
+            let wide = components.iter().any(|component| {
+                matches!(
+                    component,
+                    pillow_rs::PaletteColorComponent::WideInteger { .. }
+                )
+            });
             return if wide {
                 pillow_rs::DrawColorInput::TupleComponentsWithWideInteger(components)
             } else {

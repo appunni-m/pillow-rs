@@ -17,17 +17,33 @@ pub(crate) trait NativeSample: Copy + Default {
 }
 
 impl NativeSample for u16 {
-    fn to_f64(self) -> f64 { f64::from(self) }
-    fn from_f64(value: f64) -> Self { value.clamp(0.0, f64::from(u16::MAX)) as u16 }
-    fn fill_sample(value: u8) -> Self { u16::from(value) * 257 }
-    fn alpha_max() -> f64 { f64::from(u16::MAX) }
+    fn to_f64(self) -> f64 {
+        f64::from(self)
+    }
+    fn from_f64(value: f64) -> Self {
+        value.clamp(0.0, f64::from(u16::MAX)) as u16
+    }
+    fn fill_sample(value: u8) -> Self {
+        u16::from(value) * 257
+    }
+    fn alpha_max() -> f64 {
+        f64::from(u16::MAX)
+    }
 }
 
 impl NativeSample for f32 {
-    fn to_f64(self) -> f64 { f64::from(self) }
-    fn from_f64(value: f64) -> Self { value as f32 }
-    fn fill_sample(value: u8) -> Self { f32::from(value) / 255.0 }
-    fn alpha_max() -> f64 { 1.0 }
+    fn to_f64(self) -> f64 {
+        f64::from(self)
+    }
+    fn from_f64(value: f64) -> Self {
+        value as f32
+    }
+    fn fill_sample(value: u8) -> Self {
+        f32::from(value) / 255.0
+    }
+    fn alpha_max() -> f64 {
+        1.0
+    }
 }
 
 pub(crate) fn execute<P, S, const CHANNELS: usize, const FORCE_NEAREST: bool, const ALPHA: bool>(
@@ -69,12 +85,29 @@ where
     let fill = native_fill::<S, CHANNELS>(request.fill);
     let nearest = FORCE_NEAREST || request.nearest;
     if nearest {
-        nearest_affine::<S, CHANNELS>(image.as_raw(), image.dimensions(), geometry, fill, &mut output);
+        nearest_affine::<S, CHANNELS>(
+            image.as_raw(),
+            image.dimensions(),
+            geometry,
+            fill,
+            &mut output,
+        );
     } else {
         let mut source = image.as_raw().clone();
-        if ALPHA { premultiply::<S, CHANNELS>(&mut source); }
-        filtered_affine::<S, CHANNELS>(&source, image.dimensions(), geometry, fill, request.filter, &mut output);
-        if ALPHA { unpremultiply::<S, CHANNELS>(&mut output); }
+        if ALPHA {
+            premultiply::<S, CHANNELS>(&mut source);
+        }
+        filtered_affine::<S, CHANNELS>(
+            &source,
+            image.dimensions(),
+            geometry,
+            fill,
+            request.filter,
+            &mut output,
+        );
+        if ALPHA {
+            unpremultiply::<S, CHANNELS>(&mut output);
+        }
     }
     ImageBuffer::from_raw(geometry.width, geometry.height, output)
         .ok_or_else(|| PilError::InternalError("Rotate native sample result shape mismatch".into()))
@@ -90,7 +123,11 @@ where
     S: NativeSample,
 {
     let (width, height) = image.dimensions();
-    let (out_width, out_height) = if degree == 180 { (width, height) } else { (height, width) };
+    let (out_width, out_height) = if degree == 180 {
+        (width, height)
+    } else {
+        (height, width)
+    };
     let dimensions = if allow_empty_output && (out_width == 0 || out_height == 0) {
         CheckedDims::new_allow_empty(out_width, out_height, CHANNELS as u8)?
     } else {
@@ -105,7 +142,16 @@ where
                 270 => (y, height - 1 - x),
                 _ => unreachable!("discrete Rotate degree was validated"),
             };
-            copy_pixel::<S, CHANNELS>(image.as_raw(), &mut output, width, out_width, source_x, source_y, x, y);
+            copy_pixel::<S, CHANNELS>(
+                image.as_raw(),
+                &mut output,
+                width,
+                out_width,
+                source_x,
+                source_y,
+                x,
+                y,
+            );
         }
     }
     ImageBuffer::from_raw(out_width, out_height, output)
@@ -125,7 +171,9 @@ where
     let dimensions = CheckedDims::new(width, height, CHANNELS as u8)?;
     let mut output = vec![S::default(); dimensions.total_pixels() * CHANNELS];
     let fill = native_fill::<S, CHANNELS>(fill);
-    output.chunks_exact_mut(CHANNELS).for_each(|pixel| pixel.copy_from_slice(&fill));
+    output
+        .chunks_exact_mut(CHANNELS)
+        .for_each(|pixel| pixel.copy_from_slice(&fill));
     let gap_x = width as f64 - height as f64;
     let gap_y = height as f64 - width as f64;
     let (dx, dy) = if degree == 90 {
@@ -141,7 +189,16 @@ where
                 (width as i32 - 1 - y as i32 + dy, x as i32 - dx)
             };
             if sx >= 0 && sx < width as i32 && sy >= 0 && sy < height as i32 {
-                copy_pixel::<S, CHANNELS>(image.as_raw(), &mut output, width, width, sx as u32, sy as u32, x, y);
+                copy_pixel::<S, CHANNELS>(
+                    image.as_raw(),
+                    &mut output,
+                    width,
+                    width,
+                    sx as u32,
+                    sy as u32,
+                    x,
+                    y,
+                );
             }
         }
     }
@@ -150,8 +207,14 @@ where
 }
 
 fn copy_pixel<S: Copy, const CHANNELS: usize>(
-    source: &[S], output: &mut [S], source_width: u32, output_width: u32,
-    sx: u32, sy: u32, dx: u32, dy: u32,
+    source: &[S],
+    output: &mut [S],
+    source_width: u32,
+    output_width: u32,
+    sx: u32,
+    sy: u32,
+    dx: u32,
+    dy: u32,
 ) {
     let source_start = (sy * source_width + sx) as usize * CHANNELS;
     let output_start = (dy * output_width + dx) as usize * CHANNELS;
@@ -159,19 +222,31 @@ fn copy_pixel<S: Copy, const CHANNELS: usize>(
         .copy_from_slice(&source[source_start..source_start + CHANNELS]);
 }
 
-fn native_fill<S: NativeSample, const CHANNELS: usize>(fill: Option<(u8, u8, u8, u8)>) -> [S; CHANNELS] {
+fn native_fill<S: NativeSample, const CHANNELS: usize>(
+    fill: Option<(u8, u8, u8, u8)>,
+) -> [S; CHANNELS] {
     let (r, g, b, a) = fill.unwrap_or((0, 0, 0, 0));
     std::array::from_fn(|channel| {
-        let value = if CHANNELS == 2 && channel == 1 { a } else {
-            match channel { 0 => r, 1 => g, 2 => b, _ => a }
+        let value = if CHANNELS == 2 && channel == 1 {
+            a
+        } else {
+            match channel {
+                0 => r,
+                1 => g,
+                2 => b,
+                _ => a,
+            }
         };
         S::fill_sample(value)
     })
 }
 
 fn nearest_affine<S: Copy, const CHANNELS: usize>(
-    source: &[S], source_size: (u32, u32), geometry: super::geometry::Geometry,
-    fill: [S; CHANNELS], output: &mut [S],
+    source: &[S],
+    source_size: (u32, u32),
+    geometry: super::geometry::Geometry,
+    fill: [S; CHANNELS],
+    output: &mut [S],
 ) {
     let [a, b, c, d, e, f] = geometry.affine;
     let fixed = |value: f64| (value.mul_add(65_536.0, 0.5).floor()) as i64;
@@ -183,9 +258,11 @@ fn nearest_affine<S: Copy, const CHANNELS: usize>(
             let sy = oy + i64::from(y) * yy + i64::from(x) * xy;
             let (sx, sy) = (sx >> 16, sy >> 16);
             let start = (y * geometry.width + x) as usize * CHANNELS;
-            if sx >= 0 && sx < i64::from(source_size.0) && sy >= 0 && sy < i64::from(source_size.1) {
+            if sx >= 0 && sx < i64::from(source_size.0) && sy >= 0 && sy < i64::from(source_size.1)
+            {
                 let source_start = (sy as u32 * source_size.0 + sx as u32) as usize * CHANNELS;
-                output[start..start + CHANNELS].copy_from_slice(&source[source_start..source_start + CHANNELS]);
+                output[start..start + CHANNELS]
+                    .copy_from_slice(&source[source_start..source_start + CHANNELS]);
             } else {
                 output[start..start + CHANNELS].copy_from_slice(&fill);
             }
@@ -194,8 +271,12 @@ fn nearest_affine<S: Copy, const CHANNELS: usize>(
 }
 
 fn filtered_affine<S: NativeSample, const CHANNELS: usize>(
-    source: &[S], size: (u32, u32), geometry: super::geometry::Geometry,
-    fill: [S; CHANNELS], filter: ResampleFilter, output: &mut [S],
+    source: &[S],
+    size: (u32, u32),
+    geometry: super::geometry::Geometry,
+    fill: [S; CHANNELS],
+    filter: ResampleFilter,
+    output: &mut [S],
 ) {
     let [a, b, c, d, e, f] = geometry.affine;
     for y in 0..geometry.height {
@@ -208,14 +289,26 @@ fn filtered_affine<S: NativeSample, const CHANNELS: usize>(
             if !in_filter_support(sx, sy, size) {
                 output[start..start + CHANNELS].copy_from_slice(&fill);
             } else {
-                sample_pixel::<S, CHANNELS>(source, size, sx, sy, filter, &mut output[start..start + CHANNELS]);
+                sample_pixel::<S, CHANNELS>(
+                    source,
+                    size,
+                    sx,
+                    sy,
+                    filter,
+                    &mut output[start..start + CHANNELS],
+                );
             }
         }
     }
 }
 
 fn sample_pixel<S: NativeSample, const CHANNELS: usize>(
-    source: &[S], size: (u32, u32), x: f64, y: f64, filter: ResampleFilter, output: &mut [S],
+    source: &[S],
+    size: (u32, u32),
+    x: f64,
+    y: f64,
+    filter: ResampleFilter,
+    output: &mut [S],
 ) {
     let (width, height) = size;
     for (channel, value) in output.iter_mut().enumerate() {
@@ -229,9 +322,17 @@ fn sample_pixel<S: NativeSample, const CHANNELS: usize>(
 }
 
 fn bilinear<S: NativeSample, const CHANNELS: usize>(
-    source: &[S], width: u32, height: u32, x: f64, y: f64, channel: usize,
+    source: &[S],
+    width: u32,
+    height: u32,
+    x: f64,
+    y: f64,
+    channel: usize,
 ) -> f64 {
-    let (x, y) = (x.clamp(0.0, f64::from(width - 1)), y.clamp(0.0, f64::from(height - 1)));
+    let (x, y) = (
+        x.clamp(0.0, f64::from(width - 1)),
+        y.clamp(0.0, f64::from(height - 1)),
+    );
     let (x0, y0) = (x.floor() as u32, y.floor() as u32);
     let (x1, y1) = ((x0 + 1).min(width - 1), (y0 + 1).min(height - 1));
     let (fx, fy) = (x - f64::from(x0), y - f64::from(y0));
@@ -243,7 +344,12 @@ fn bilinear<S: NativeSample, const CHANNELS: usize>(
 }
 
 fn bicubic<S: NativeSample, const CHANNELS: usize>(
-    source: &[S], width: u32, height: u32, x: f64, y: f64, channel: usize,
+    source: &[S],
+    width: u32,
+    height: u32,
+    x: f64,
+    y: f64,
+    channel: usize,
 ) -> f64 {
     let (floor_x, floor_y) = (x.floor() as i64, y.floor() as i64);
     let (base_x, base_y) = (floor_x - 1, floor_y - 1);
@@ -278,7 +384,9 @@ fn unpremultiply<S: NativeSample, const CHANNELS: usize>(samples: &mut [S]) {
     let scale = S::alpha_max();
     for pixel in samples.chunks_exact_mut(CHANNELS) {
         let alpha = pixel[CHANNELS - 1].to_f64();
-        if alpha == 0.0 { continue; }
+        if alpha == 0.0 {
+            continue;
+        }
         for sample in &mut pixel[..CHANNELS - 1] {
             *sample = S::from_f64(sample.to_f64() * scale / alpha);
         }

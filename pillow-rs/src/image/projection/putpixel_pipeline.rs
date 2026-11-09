@@ -51,7 +51,12 @@ impl Image {
     ) -> Result<(Vec<u32>, Vec<u32>), PilError> {
         Self::cmyk_projection_with_putpixel_ops_using(image, ops, source_is_known_zero, || {
             let output = crate::compute::cpu_cmyk_projection_selected(image, selection)?;
-            Ok((output.axes.0, output.axes.1, output.vector_blocks, output.scalar_tail))
+            Ok((
+                output.axes.0,
+                output.axes.1,
+                output.vector_blocks,
+                output.scalar_tail,
+            ))
         })
         .map(|(horizontal, vertical, _, _)| (horizontal, vertical))
     }
@@ -64,7 +69,12 @@ impl Image {
     ) -> Result<(Vec<u32>, Vec<u32>), PilError> {
         Self::rgb_projection_with_putpixel_ops_using(image, ops, source_is_known_zero, || {
             let output = crate::compute::cpu_rgb_projection_selected(image, selection)?;
-            Ok((output.axes.0, output.axes.1, output.vector_blocks, output.scalar_tail))
+            Ok((
+                output.axes.0,
+                output.axes.1,
+                output.vector_blocks,
+                output.scalar_tail,
+            ))
         })
         .map(|(horizontal, vertical, _, _)| (horizontal, vertical))
     }
@@ -217,9 +227,7 @@ impl Image {
         let execution_context = *prepared.context();
         let backend_matches = match terminal_backend {
             crate::compute::Backend::Cpu => prepared.is_serial_cpu_without_fallback(),
-            crate::compute::Backend::Simd => {
-                prepared.is_cpu_architecture_alias_without_fallback()
-            }
+            crate::compute::Backend::Simd => prepared.is_cpu_architecture_alias_without_fallback(),
             crate::compute::Backend::Gpu => prepared.is_gpu_without_fallback(),
         };
         if !backend_matches {
@@ -399,9 +407,20 @@ impl Image {
                     image,
                     execution.ops,
                     false,
-                    || Ok((output.axes.0, output.axes.1, output.vector_blocks, output.scalar_tail)),
+                    || {
+                        Ok((
+                            output.axes.0,
+                            output.axes.1,
+                            output.vector_blocks,
+                            output.scalar_tail,
+                        ))
+                    },
                 )?;
-                Ok(((horizontal, vertical), output.vector_blocks, output.scalar_tail))
+                Ok((
+                    (horizontal, vertical),
+                    output.vector_blocks,
+                    output.scalar_tail,
+                ))
             },
         )
         .map(Some)
@@ -418,30 +437,22 @@ impl Image {
                 Mode::ImageCmyk8,
                 crate::compute::Backend::Cpu | crate::compute::Backend::Simd,
                 Some(crate::compute::Architecture::Default),
-            ) => {
-                Self::execute_cmyk_cpu_putpixel_projection(&execution)
-            }
+            ) => Self::execute_cmyk_cpu_putpixel_projection(&execution),
             (
                 Mode::ImageRgb8,
                 crate::compute::Backend::Cpu | crate::compute::Backend::Simd,
                 Some(crate::compute::Architecture::Default),
-            ) => {
-                Self::execute_rgb_cpu_putpixel_projection(&execution)
-            }
+            ) => Self::execute_rgb_cpu_putpixel_projection(&execution),
             (
                 Mode::ImageCmyk8,
                 crate::compute::Backend::Cpu | crate::compute::Backend::Simd,
                 Some(_),
-            ) => {
-                Self::execute_cmyk_arch_putpixel_projection(&execution)
-            }
+            ) => Self::execute_cmyk_arch_putpixel_projection(&execution),
             (
                 Mode::ImageRgb8,
                 crate::compute::Backend::Cpu | crate::compute::Backend::Simd,
                 Some(_),
-            ) => {
-                Self::execute_rgb_arch_putpixel_projection(&execution)
-            }
+            ) => Self::execute_rgb_arch_putpixel_projection(&execution),
             (
                 Mode::ImageCmyk8 | Mode::ImageRgb8,
                 crate::compute::Backend::Cpu | crate::compute::Backend::Simd,

@@ -6,7 +6,6 @@ use crate::pipeline::NativeColorInput;
 
 pub(super) type Input = ImageBuffer<Rgb<u16>, Vec<u16>>;
 
-
 pub(crate) struct Kernel<'a> {
     input: &'a Input,
     border: crate::pipeline::ExpandMargins,
@@ -27,7 +26,11 @@ pub(super) fn prepare(
         ],
         None => [u16::from(fill.0), u16::from(fill.1), u16::from(fill.2)],
     };
-    Kernel { input, border, fill }
+    Kernel {
+        input,
+        border,
+        fill,
+    }
 }
 
 pub(super) fn execute(kernel: Kernel<'_>) -> Result<Input, PilError> {

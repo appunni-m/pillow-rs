@@ -3,11 +3,56 @@
 //! Filtered requests use declared AVX/FMA or NEON strategies when eligible.
 //! Ordinary unboxed nearest can use NEON; boxed nearest remains scalar.
 
+use crate::compute::registry::support::{
+    ImplementationSupport, ModeSupport, OperationId, OutputModeRule, StrategyGuard,
+    StrategySelection,
+};
 use crate::compute::{Architecture, ExecutionContext};
-use crate::compute::registry::support::StrategySelection;
 use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, Mode};
+
+static RESIZE_ARCHITECTURES: [ImplementationSupport; 2] = [
+    ImplementationSupport::cpu(
+        OperationId::Resize,
+        Mode::ImageI32,
+        Architecture::AvxFma,
+        cfg!(target_arch = "x86_64"),
+        &[Architecture::AvxFma],
+        StrategyGuard::ResizeFilteredFma,
+    ),
+    ImplementationSupport::cpu(
+        OperationId::Resize,
+        Mode::ImageI32,
+        Architecture::Neon,
+        cfg!(all(target_arch = "aarch64", target_feature = "neon")),
+        &[Architecture::Neon],
+        StrategyGuard::ResizeI32Neon,
+    ),
+];
+static RESIZE_BOXED_ARCHITECTURES: [ImplementationSupport; 1] = [ImplementationSupport::cpu(
+    OperationId::ResizeBoxed,
+    Mode::ImageI32,
+    Architecture::AvxFma,
+    cfg!(target_arch = "x86_64"),
+    &[Architecture::AvxFma],
+    StrategyGuard::ResizeFilteredFma,
+)];
+
+pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
+    OperationId::Resize,
+    Mode::ImageI32,
+    OutputModeRule::Preserve,
+    super::super::helpers::support::INPUTS,
+    &RESIZE_ARCHITECTURES,
+);
+pub(crate) const BOXED_SUPPORT: ModeSupport = ModeSupport::cpu(
+    OperationId::ResizeBoxed,
+    Mode::ImageI32,
+    OutputModeRule::Preserve,
+    super::super::helpers::support::INPUTS,
+    &RESIZE_BOXED_ARCHITECTURES,
+);
 
 pub(crate) fn resize(
     context: &ExecutionContext,

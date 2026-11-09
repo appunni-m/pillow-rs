@@ -16,7 +16,11 @@ pub(crate) fn execute(
         return Ok(DynamicImage::ImagePaletteAlpha8(input.clone()));
     }
     let bytes = super::super::super::helpers::native_bytes::reduce_bytes::<2, false>(
-        input.as_raw(), input.width(), input.height(), x_factor, y_factor,
+        input.as_raw(),
+        input.width(),
+        input.height(),
+        x_factor,
+        y_factor,
     )?;
     let output = crate::raster::GrayAlphaImage::from_raw(
         input.width().div_ceil(x_factor.max(1)),

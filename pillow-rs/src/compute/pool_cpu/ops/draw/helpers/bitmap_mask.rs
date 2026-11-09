@@ -69,11 +69,7 @@ impl<'a> BitmapMask<'a> {
     #[inline]
     pub(crate) fn blend_byte(&self, ink: u8, background: u8, coverage: u8) -> u8 {
         if self.is_premultiplied() {
-            crate::compute::pool_cpu::helpers::bytes::preblend::apply(
-                ink,
-                background,
-                coverage,
-            )
+            crate::compute::pool_cpu::helpers::bytes::preblend::apply(ink, background, coverage)
         } else {
             crate::draw::pil_blend(ink, background, coverage)
         }

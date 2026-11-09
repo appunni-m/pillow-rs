@@ -10,9 +10,7 @@ use crate::raster::{DynamicImage, Mode, Pixel};
 /// Pillow 12.2 allocates an initialized output in `ImagingPoint`, then its
 /// two- and three-band handlers write only their mode-defined lanes. Keep the
 /// omitted lanes at zero for later raw-byte operations such as Paste.
-pub(crate) fn initialize_point_output_lanes(
-    output: &mut DynamicImage,
-) -> Result<(), PilError> {
+pub(crate) fn initialize_point_output_lanes(output: &mut DynamicImage) -> Result<(), PilError> {
     let Some(lane_count) = output.mode().hidden_pixel_lane_count() else {
         return Ok(());
     };
@@ -59,13 +57,25 @@ pub(crate) fn compose_expand_lanes<P: Pixel<Subpixel = u8>>(
     }
 
     let source_pixels = pixel_count(source.width(), source.height())?;
-    if !source_overlaps_output(source.width(), source.height(), output.width(), output.height(), border) {
-        return replace_lanes(output, constant_lanes(lane_count, output_pixels, fill_lanes)?);
+    if !source_overlaps_output(
+        source.width(),
+        source.height(),
+        output.width(),
+        output.height(),
+        border,
+    ) {
+        return replace_lanes(
+            output,
+            constant_lanes(lane_count, output_pixels, fill_lanes)?,
+        );
     }
     if uniform_source_lanes(source, lane_count, source_pixels)
         .is_some_and(|source_lanes| source_lanes[..lane_count] == fill_lanes[..lane_count])
     {
-        return replace_lanes(output, constant_lanes(lane_count, output_pixels, fill_lanes)?);
+        return replace_lanes(
+            output,
+            constant_lanes(lane_count, output_pixels, fill_lanes)?,
+        );
     }
 
     let channels = usize::from(P::CHANNEL_COUNT);
@@ -111,9 +121,7 @@ fn expand_fill_lanes(mode: Mode, fill: (u8, u8, u8, u8)) -> Result<[u8; 2], PilE
         Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => {
             Ok([fill.1, fill.2])
         }
-        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => {
-            Ok([fill.3, 0])
-        }
+        Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => Ok([fill.3, 0]),
         _ => Err(PilError::InternalError(
             "Expand mode declares an unknown hidden-lane layout".into(),
         )),
@@ -139,10 +147,9 @@ fn source_overlaps_output(
 ) -> bool {
     let left = i128::from(border.left).max(0);
     let top = i128::from(border.top).max(0);
-    let right = (i128::from(border.left) + i128::from(source_width))
-        .min(i128::from(output_width));
-    let bottom = (i128::from(border.top) + i128::from(source_height))
-        .min(i128::from(output_height));
+    let right = (i128::from(border.left) + i128::from(source_width)).min(i128::from(output_width));
+    let bottom =
+        (i128::from(border.top) + i128::from(source_height)).min(i128::from(output_height));
     left < right && top < bottom
 }
 
@@ -182,7 +189,9 @@ fn append_source_lanes<P: Pixel<Subpixel = u8>>(
     } else {
         [u8::MAX, 0]
     };
-    let retained = source.hidden_pixel_lanes().and_then(|lanes| lanes.for_pixel(index));
+    let retained = source
+        .hidden_pixel_lanes()
+        .and_then(|lanes| lanes.for_pixel(index));
     for lane in 0..lane_count {
         output.push(
             retained

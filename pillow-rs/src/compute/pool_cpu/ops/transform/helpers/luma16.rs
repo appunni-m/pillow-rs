@@ -25,13 +25,7 @@ pub(crate) fn execute(
     let output = if nearest {
         execute_nearest(source, source_dimensions, request, fill_value)?
     } else {
-        execute_filtered(
-            source,
-            source_dimensions,
-            request,
-            order,
-            filtered_fill,
-        )?
+        execute_filtered(source, source_dimensions, request, order, filtered_fill)?
     };
     Ok(output)
 }
@@ -148,7 +142,11 @@ fn filtered_mesh_source_plane(
     // encoded bytes in each source row, sampled as one-byte pixels. Preserve
     // that mode-specific output while keeping the source raster typed u16.
     for row in source.chunks(row_width.max(1)) {
-        output.extend(row.iter().flat_map(|&sample| order.encode(sample)).take(row_width));
+        output.extend(
+            row.iter()
+                .flat_map(|&sample| order.encode(sample))
+                .take(row_width),
+        );
     }
     if output.len() != expected_len {
         return Err(invalid_mesh_shape());
@@ -217,11 +215,7 @@ fn set_filtered_mesh_high_byte(
             let local_x = (x - left) as f64 + 0.5;
             let local_y = (y - top) as f64 + 0.5;
             let (source_x, source_y) =
-                super::projective::transform_mesh_source_coordinate(
-                    coefficients,
-                    local_x,
-                    local_y,
-                );
+                super::projective::transform_mesh_source_coordinate(coefficients, local_x, local_y);
             let source_is_valid = source_x.is_finite()
                 && source_y.is_finite()
                 && source_x >= 0.0
@@ -240,10 +234,7 @@ fn set_filtered_mesh_high_byte(
     }
 }
 
-fn clipped_box(
-    coordinates: (i64, i64, i64, i64),
-    dimensions: (u32, u32),
-) -> (i64, i64, i64, i64) {
+fn clipped_box(coordinates: (i64, i64, i64, i64), dimensions: (u32, u32)) -> (i64, i64, i64, i64) {
     let (left, top, right, bottom) = coordinates;
     let (width, height) = dimensions;
     (
@@ -399,7 +390,11 @@ fn execute_filtered(
         .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
     let mut source_plane = Vec::with_capacity(source_plane_len);
     for row in source.chunks(row_width.max(1)) {
-        source_plane.extend(row.iter().flat_map(|&sample| order.encode(sample)).take(row_width));
+        source_plane.extend(
+            row.iter()
+                .flat_map(|&sample| order.encode(sample))
+                .take(row_width),
+        );
     }
     let fill_color = Some((fill[0], fill[1], 0, 0));
     let output_plane = match request.method {
@@ -468,7 +463,11 @@ fn execute_filtered_into(
         .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
     let mut source_plane = Vec::with_capacity(source_plane_len);
     for row in source.chunks(row_width.max(1)) {
-        source_plane.extend(row.iter().flat_map(|&sample| order.encode(sample)).take(row_width));
+        source_plane.extend(
+            row.iter()
+                .flat_map(|&sample| order.encode(sample))
+                .take(row_width),
+        );
     }
     let mut output_plane = vec![fill[0]; output_plane_len];
     let fill_color = Some((fill[0], fill[1], 0, 0));

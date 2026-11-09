@@ -2,10 +2,10 @@
 
 use crate::raster::GenericImageView;
 
-use crate::error::PilError;
 use crate::compute::pool_cpu::helpers::bytes::hidden_lanes::default_hidden_lanes_for_bytes;
-use crate::raster::buffer::HiddenPixelLanes;
+use crate::error::PilError;
 use crate::raster::DynamicImage;
+use crate::raster::buffer::HiddenPixelLanes;
 
 use super::super::ops::FilterRequest;
 
@@ -50,12 +50,9 @@ fn finish_missing_source_lanes(
         return replace_lanes(output, None);
     }
     let pixel_count = checked_pixel_count(source)?;
-    let source_lanes = default_hidden_lanes_for_bytes(
-        source.mode(),
-        source.as_bytes(),
-        pixel_count,
-    )?
-    .ok_or_else(invalid_lanes)?;
+    let source_lanes =
+        default_hidden_lanes_for_bytes(source.mode(), source.as_bytes(), pixel_count)?
+            .ok_or_else(invalid_lanes)?;
     validate_source_lanes(&source_lanes, lane_count, source)?;
     let lanes = filter_border_lanes(&source_lanes, source, radius)?;
     replace_lanes(output, Some(lanes))
@@ -159,7 +156,10 @@ fn filter_border_lanes(
     }
     if source_lanes.is_constant() {
         let first = source_lanes.for_pixel(0).ok_or_else(invalid_lanes)?;
-        if first[..source_lanes.lane_count()].iter().all(|value| *value == 0) {
+        if first[..source_lanes.lane_count()]
+            .iter()
+            .all(|value| *value == 0)
+        {
             return HiddenPixelLanes::constant(source_lanes.lane_count(), pixels, [0; 2])
                 .ok_or_else(invalid_lanes);
         }
@@ -170,10 +170,7 @@ fn filter_border_lanes(
     for pixel in 0..pixels {
         let x = pixel % width;
         let y = pixel / width;
-        let border = x < radius
-            || x + radius >= width
-            || y < radius
-            || y + radius >= height;
+        let border = x < radius || x + radius >= width || y < radius || y + radius >= height;
         let lanes = source_lanes.for_pixel(pixel).ok_or_else(invalid_lanes)?;
         if border {
             values.extend_from_slice(&lanes[..lane_count]);
@@ -236,11 +233,13 @@ fn execute_lane(
         FilterRequest::BoxBlur { radius } => {
             super::blur::execute_box_blur_native_bytes(input, width, height, 1, radius)?
         }
-        FilterRequest::BoxBlurXY { radius_x, radius_y, passes } => {
-            super::blur::execute_box_blur_xy_native_bytes(
-                input, width, height, 1, radius_x, radius_y, passes,
-            )?
-        }
+        FilterRequest::BoxBlurXY {
+            radius_x,
+            radius_y,
+            passes,
+        } => super::blur::execute_box_blur_xy_native_bytes(
+            input, width, height, 1, radius_x, radius_y, passes,
+        )?,
         FilterRequest::MedianFilter { size } => {
             super::rank::execute_native_bytes(input, width, height, 1, size, size * size / 2)?
         }
@@ -295,8 +294,7 @@ fn compact_lanes(
         {
             let mut lanes = [0; 2];
             lanes[..lane_count].copy_from_slice(&constant);
-            return HiddenPixelLanes::constant(lane_count, pixels, lanes)
-                .ok_or_else(invalid_lanes);
+            return HiddenPixelLanes::constant(lane_count, pixels, lanes).ok_or_else(invalid_lanes);
         }
     }
     HiddenPixelLanes::per_pixel(lane_count, pixels, values).ok_or_else(invalid_lanes)
@@ -333,7 +331,10 @@ fn checked_pixel_count(image: &DynamicImage) -> Result<usize, PilError> {
         .ok_or_else(|| PilError::DimensionError("Filter lane extent overflow".into()))
 }
 
-fn replace_lanes(output: &mut DynamicImage, lanes: Option<HiddenPixelLanes>) -> Result<(), PilError> {
+fn replace_lanes(
+    output: &mut DynamicImage,
+    lanes: Option<HiddenPixelLanes>,
+) -> Result<(), PilError> {
     if output.replace_hidden_pixel_lanes(lanes) {
         Ok(())
     } else {

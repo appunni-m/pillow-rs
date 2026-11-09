@@ -45,37 +45,22 @@ macro_rules! dynamic_image_mode {
     };
 }
 
-macro_rules! dynamic_map(
-    ($dynimage: expr, $image:pat_param, $action: expr) => (
+macro_rules! dynamic_map {
+    ($dynimage:expr, $image:pat_param, $action:expr) => {
+        for_each_raster_identity!(dynamic_map_dispatch, ($dynimage, $image, $action))
+    };
+}
+
+macro_rules! dynamic_map_dispatch {
+    (
+        ($dynimage:expr, $image:pat_param, $action:expr);
+        $( $(#[$attribute:meta])* $variant:ident($image_ty:ty), )+
+    ) => {
         match $dynimage {
-            DynamicImage::One($image) => $action,
-            DynamicImage::ImageLuma8($image) => $action,
-            DynamicImage::ImagePalette8($image) => $action,
-            DynamicImage::ImageLumaA8($image) => $action,
-            DynamicImage::ImageLaPremultiplied8($image) => $action,
-            DynamicImage::ImagePaletteAlpha8($image) => $action,
-            DynamicImage::ImageRgb8($image) => $action,
-            DynamicImage::ImageYCbCr8($image) => $action,
-            DynamicImage::ImageLab8($image) => $action,
-            DynamicImage::ImageHsv8($image) => $action,
-            DynamicImage::ImageRgba8($image) => $action,
-            DynamicImage::ImageRgbPremultiplied8($image) => $action,
-            DynamicImage::ImageRgbx8($image) => $action,
-            DynamicImage::ImageCmyk8($image) => $action,
-            DynamicImage::ImageI32($image) => $action,
-            DynamicImage::ImageF32($image) => $action,
-            DynamicImage::ImageI16($image) => $action,
-            DynamicImage::ImageI16L($image) => $action,
-            DynamicImage::ImageI16B($image) => $action,
-            DynamicImage::ImageI16N($image) => $action,
-            DynamicImage::ImageLumaA16($image) => $action,
-            DynamicImage::ImageRgb16($image) => $action,
-            DynamicImage::ImageRgba16($image) => $action,
-            DynamicImage::ImageRgb32F($image) => $action,
-            DynamicImage::ImageRgba32F($image) => $action,
+            $(DynamicImage::$variant($image) => $action,)+
         }
-    );
-);
+    };
+}
 
 #[inline]
 fn luma16_to_u8(sample: u16) -> u8 {
@@ -189,9 +174,9 @@ impl DynamicImage {
     #[must_use]
     pub fn to_luma8(&self) -> GrayImage {
         match self {
-            DynamicImage::One(x)
-            | DynamicImage::ImageLuma8(x)
-            | DynamicImage::ImagePalette8(x) => x.clone(),
+            DynamicImage::One(x) | DynamicImage::ImageLuma8(x) | DynamicImage::ImagePalette8(x) => {
+                x.clone()
+            }
             DynamicImage::ImageI16(image)
             | DynamicImage::ImageI16L(image)
             | DynamicImage::ImageI16B(image)
@@ -416,10 +401,7 @@ impl DynamicImage {
     }
 
     /// Replaces physical lanes omitted from the compact Pillow-mode carrier.
-    pub(crate) fn replace_hidden_pixel_lanes(
-        &mut self,
-        lanes: Option<HiddenPixelLanes>,
-    ) -> bool {
+    pub(crate) fn replace_hidden_pixel_lanes(&mut self, lanes: Option<HiddenPixelLanes>) -> bool {
         match self {
             Self::ImageLumaA8(image)
             | Self::ImageLaPremultiplied8(image)
@@ -461,7 +443,11 @@ impl DynamicImage {
     }
 
     /// Remaps omitted physical lanes from a same-mode source into this image.
-    pub(crate) fn remap_hidden_pixel_lanes_from<F>(&mut self, source: &Self, source_index: F) -> bool
+    pub(crate) fn remap_hidden_pixel_lanes_from<F>(
+        &mut self,
+        source: &Self,
+        source_index: F,
+    ) -> bool
     where
         F: FnMut(usize) -> usize,
     {
@@ -489,9 +475,9 @@ impl DynamicImage {
     #[must_use]
     pub fn color(&self) -> ColorType {
         match *self {
-            DynamicImage::One(_)
-            | DynamicImage::ImageLuma8(_)
-            | DynamicImage::ImagePalette8(_) => ColorType::L8,
+            DynamicImage::One(_) | DynamicImage::ImageLuma8(_) | DynamicImage::ImagePalette8(_) => {
+                ColorType::L8
+            }
             DynamicImage::ImageLumaA8(_)
             | DynamicImage::ImageLaPremultiplied8(_)
             | DynamicImage::ImagePaletteAlpha8(_) => ColorType::La8,
@@ -539,9 +525,7 @@ impl DynamicImage {
     #[must_use]
     pub fn crop_imm(&self, x: u32, y: u32, width: u32, height: u32) -> DynamicImage {
         match self {
-            DynamicImage::One(image) => {
-                DynamicImage::One(crop_buffer(image, x, y, width, height))
-            }
+            DynamicImage::One(image) => DynamicImage::One(crop_buffer(image, x, y, width, height)),
             DynamicImage::ImageLuma8(image) => {
                 DynamicImage::ImageLuma8(crop_buffer(image, x, y, width, height))
             }
@@ -551,12 +535,12 @@ impl DynamicImage {
             DynamicImage::ImageLumaA8(image) => {
                 DynamicImage::ImageLumaA8(crop_buffer(image, x, y, width, height))
             }
-            DynamicImage::ImageLaPremultiplied8(image) => DynamicImage::ImageLaPremultiplied8(
-                crop_buffer(image, x, y, width, height),
-            ),
-            DynamicImage::ImagePaletteAlpha8(image) => DynamicImage::ImagePaletteAlpha8(
-                crop_buffer(image, x, y, width, height),
-            ),
+            DynamicImage::ImageLaPremultiplied8(image) => {
+                DynamicImage::ImageLaPremultiplied8(crop_buffer(image, x, y, width, height))
+            }
+            DynamicImage::ImagePaletteAlpha8(image) => {
+                DynamicImage::ImagePaletteAlpha8(crop_buffer(image, x, y, width, height))
+            }
             DynamicImage::ImageRgb8(image) => {
                 DynamicImage::ImageRgb8(crop_buffer(image, x, y, width, height))
             }
@@ -572,9 +556,9 @@ impl DynamicImage {
             DynamicImage::ImageRgba8(image) => {
                 DynamicImage::ImageRgba8(crop_buffer(image, x, y, width, height))
             }
-            DynamicImage::ImageRgbPremultiplied8(image) => DynamicImage::ImageRgbPremultiplied8(
-                crop_buffer(image, x, y, width, height),
-            ),
+            DynamicImage::ImageRgbPremultiplied8(image) => {
+                DynamicImage::ImageRgbPremultiplied8(crop_buffer(image, x, y, width, height))
+            }
             DynamicImage::ImageRgbx8(image) => {
                 DynamicImage::ImageRgbx8(crop_buffer(image, x, y, width, height))
             }
@@ -831,9 +815,7 @@ impl GenericImageTrait for DynamicImage {
         // the logical copy below may overlap its source region.
         let hidden_lanes = match self.hidden_pixel_lanes() {
             Some(lanes) => {
-                if lanes.lane_count() != expected_lane_count
-                    || lanes.pixel_count() != pixel_count
-                {
+                if lanes.lane_count() != expected_lane_count || lanes.pixel_count() != pixel_count {
                     return false;
                 }
                 let Some(destination_right) = usize::try_from(x)
@@ -862,9 +844,7 @@ impl GenericImageTrait for DynamicImage {
                         && output_y >= destination_y
                         && output_y < destination_bottom
                     {
-                        (source_y + output_y - destination_y) * width_usize
-                            + source_x
-                            + output_x
+                        (source_y + output_y - destination_y) * width_usize + source_x + output_x
                             - destination_x
                     } else {
                         index

@@ -1,13 +1,19 @@
 //! Rotate entry point and exhaustive exact-mode strategy composition.
 //!
 //! Public rotation calls enqueue a typed `PipelineOp::Rotate`; the operation
-//! registry prepares this family with the routed CPU context. Complete the
-//! archived behavior and per-mode caller review under `pillow-rs#3ptb` before
-//! treating the family as source-reviewed. Byte-backed exact modes declare
-//! native-byte nearest strategies; byte modes also declare their archived
-//! bilinear kernel where supported. Three-byte modes retain the contiguous-run
-//! copy fast path. Empty-source requests use each exact mode's Default path;
-//! every mode's Default strategy is also its architecture fallback.
+//! registry prepares this family with the routed CPU context. The Python
+//! facade returns an identity copy and routes half-turn plus eligible quarter-
+//! turn calls through typed Transpose operations. Other base-image calls stage
+//! fill/filter preparation, load at Pillow's route-specific boundary, then
+//! attach host-computed affine coefficients.
+//! Subclass overrides retain public `transform`/`convert` dispatch. Direct Rust
+//! and JavaScript callers enqueue the same typed Rotate operation. All 25
+//! `DynamicImage` variants dispatch to an exact-mode owner, which selects from
+//! its `SUPPORT` declaration and returns that exact raster identity. Byte-backed
+//! exact modes declare native-byte nearest strategies; byte modes also declare
+//! their archived bilinear kernel where supported. Three-byte modes retain the
+//! contiguous-run copy fast path. Empty-source requests use each exact mode's
+//! Default path; every mode's Default strategy is also its architecture fallback.
 //! Exact identity and discrete 90/180/270-degree paths remap retained physical
 //! lanes with their pixels. Affine nearest samples retained lanes from the
 //! selected Default/vector nearest geometry; filtered LA-family output repeats
@@ -23,16 +29,11 @@
 //! Core-only mode support is marked `NO_PILLOW_SUPPORT` beside its
 //! implementation.
 
+use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{
-    InputContract,
-    ModeSupport,
-    OperationId,
-    OperationInputs,
-    OperationSupport,
-    RequestFacts,
+    InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport, RequestFacts,
     StrategySelection,
 };
-use crate::compute::ExecutionContext;
 use crate::error::PilError;
 use crate::pipeline::{PipelineOp, ResampleFilter};
 use crate::raster::{DynamicImage, Mode};
@@ -180,7 +181,6 @@ declare_rotate_modes! {
 
 pub(crate) static SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::Rotate, ROTATE_INPUTS, classify_mode);
-
 
 pub(crate) fn prepare<'a>(
     image: &'a DynamicImage,

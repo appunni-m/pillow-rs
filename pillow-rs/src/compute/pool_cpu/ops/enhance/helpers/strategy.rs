@@ -1,11 +1,11 @@
 //! Shared preparation for exact-mode native enhancement strategies.
 
+use crate::compute::Architecture;
+use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{
     ImplementationSupport, ModeSupport, OperationId, StrategyGuard, StrategyInputs,
     StrategySelection, SupportAssessment,
 };
-use crate::compute::Architecture;
-use crate::compute::ExecutionContext;
 use crate::error::PilError;
 
 pub(crate) const fn byte_architectures(

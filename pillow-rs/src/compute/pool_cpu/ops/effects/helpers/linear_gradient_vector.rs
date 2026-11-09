@@ -3,10 +3,7 @@
 use crate::error::PilError;
 use wide::u8x16;
 
-pub(crate) fn fill_pattern(
-    row: &mut [u8],
-    pattern: &[u8],
-) -> Result<(u64, u64), PilError> {
+pub(crate) fn fill_pattern(row: &mut [u8], pattern: &[u8]) -> Result<(u64, u64), PilError> {
     if pattern.is_empty() || pattern.len() > 16 || 16 % pattern.len() != 0 {
         return Err(PilError::InternalError(
             "LinearGradient vector pattern must divide a 16-byte block".into(),

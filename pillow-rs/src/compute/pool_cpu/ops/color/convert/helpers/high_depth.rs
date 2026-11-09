@@ -9,6 +9,11 @@ use crate::raster::{
 
 pub(crate) trait HighDepthPixel: Pixel {
     fn luma16(&self) -> Luma<u16>;
+    fn luma_alpha16(&self) -> LumaA<u16>;
+    fn rgb16(&self) -> Rgb<u16>;
+    fn rgba16(&self) -> Rgba<u16>;
+    fn rgb32f(&self) -> Rgb<f32>;
+    fn rgba32f(&self) -> Rgba<f32>;
     fn luma8(&self) -> Luma<u8>;
     fn luma_alpha8(&self) -> LumaA<u8>;
     fn rgb8(&self) -> Rgb<u8>;
@@ -48,14 +53,21 @@ pub(crate) use declare_native_binary_strategy;
 
 // TODO(pillow-rs#3ptb): freeze CPU parity for all five CoreOnly high-depth
 // source modes across declared targets, including float limits and alpha edges.
-// TODO(pillow-rs#3ptb): decide whether cross-high-depth target pairs belong in
-// the Rust-only contract and whether typed architecture kernels are warranted.
+// Cross-high-depth targets are a Rust-only extension. Each route converts
+// directly from the source pixel into the destination carrier in one pass.
+// TODO(pillow-rs#3ptb): assess architecture-specific kernels after focused
+// parity and per-target performance evidence; these routes currently use Default.
 
 impl<P> HighDepthPixel for P
 where
     P: Pixel,
     P::Subpixel: Primitive,
     Luma<u16>: FromColor<P>,
+    LumaA<u16>: FromColor<P>,
+    Rgb<u16>: FromColor<P>,
+    Rgba<u16>: FromColor<P>,
+    Rgb<f32>: FromColor<P>,
+    Rgba<f32>: FromColor<P>,
     Luma<u8>: FromColor<P>,
     LumaA<u8>: FromColor<P>,
     Rgb<u8>: FromColor<P>,
@@ -64,6 +76,41 @@ where
     #[inline(always)]
     fn luma16(&self) -> Luma<u16> {
         let mut output = Luma([0]);
+        output.copy_from_color(self);
+        output
+    }
+
+    #[inline(always)]
+    fn luma_alpha16(&self) -> LumaA<u16> {
+        let mut output = LumaA([0; 2]);
+        output.copy_from_color(self);
+        output
+    }
+
+    #[inline(always)]
+    fn rgb16(&self) -> Rgb<u16> {
+        let mut output = Rgb([0; 3]);
+        output.copy_from_color(self);
+        output
+    }
+
+    #[inline(always)]
+    fn rgba16(&self) -> Rgba<u16> {
+        let mut output = Rgba([0; 4]);
+        output.copy_from_color(self);
+        output
+    }
+
+    #[inline(always)]
+    fn rgb32f(&self) -> Rgb<f32> {
+        let mut output = Rgb([0.0; 3]);
+        output.copy_from_color(self);
+        output
+    }
+
+    #[inline(always)]
+    fn rgba32f(&self) -> Rgba<f32> {
+        let mut output = Rgba([0.0; 4]);
         output.copy_from_color(self);
         output
     }
@@ -105,6 +152,10 @@ where
     P: HighDepthPixel,
     P::Subpixel: Primitive,
 {
+    if let Some(output) = execute_cross_high_depth(source, target) {
+        return Ok(output);
+    }
+
     match target {
         Mode::ImageLuma8 => Ok(DynamicImage::ImageLuma8(luma(source))),
         Mode::ImageLumaA8 => Ok(DynamicImage::ImageLumaA8(luma_alpha(source))),
@@ -124,6 +175,56 @@ where
         Mode::ImageF32 => Ok(DynamicImage::ImageF32(to_f32(source))),
         _ => Err(PilError::ValueError("image has wrong mode".into())),
     }
+}
+
+fn execute_cross_high_depth<P>(
+    source: &ImageBuffer<P, Vec<P::Subpixel>>,
+    target: Mode,
+) -> Option<DynamicImage>
+where
+    P: HighDepthPixel,
+    P::Subpixel: Primitive,
+{
+    match target {
+        Mode::ImageLumaA16 => Some(DynamicImage::ImageLumaA16(map_pixels(source, |pixel| {
+            pixel.luma_alpha16()
+        }))),
+        Mode::ImageRgb16 => Some(DynamicImage::ImageRgb16(map_pixels(source, |pixel| {
+            pixel.rgb16()
+        }))),
+        Mode::ImageRgba16 => Some(DynamicImage::ImageRgba16(map_pixels(source, |pixel| {
+            pixel.rgba16()
+        }))),
+        Mode::ImageRgb32F => Some(DynamicImage::ImageRgb32F(map_pixels(source, |pixel| {
+            pixel.rgb32f()
+        }))),
+        Mode::ImageRgba32F => Some(DynamicImage::ImageRgba32F(map_pixels(source, |pixel| {
+            pixel.rgba32f()
+        }))),
+        _ => None,
+    }
+}
+
+fn map_pixels<P, Q>(
+    source: &ImageBuffer<P, Vec<P::Subpixel>>,
+    mut map: impl FnMut(&P) -> Q,
+) -> ImageBuffer<Q, Vec<Q::Subpixel>>
+where
+    P: Pixel,
+    P::Subpixel: Primitive,
+    Q: Pixel,
+    Q::Subpixel: Primitive,
+{
+    let sample_count = (source.width() as usize)
+        .checked_mul(source.height() as usize)
+        .and_then(|pixels| pixels.checked_mul(usize::from(Q::CHANNEL_COUNT)))
+        .expect("cross-high-depth output sample count fits usize");
+    let mut samples = Vec::with_capacity(sample_count);
+    for pixel in source.pixels() {
+        samples.extend_from_slice(map(pixel).channels());
+    }
+    ImageBuffer::from_raw(source.width(), source.height(), samples)
+        .expect("cross-high-depth output has the target pixel layout")
 }
 
 fn premultiplied_luma_alpha<P: HighDepthPixel>(

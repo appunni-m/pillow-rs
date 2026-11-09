@@ -1,16 +1,19 @@
 //! Pad contract and architecture selection for ImagePalette8.
 
-use crate::compute::{Architecture, registry::support::{
-    ImplementationSupport, ModeSupport, OperationId, OutputModeRule,
-    StrategySelection,
-}};
+use crate::compute::pool_cpu::ops::geometry::pad::helpers::dimensions::PadFrame;
+use crate::compute::{
+    Architecture,
+    registry::support::{
+        ImplementationSupport, ModeSupport, OperationId, OutputModeRule, StrategySelection,
+    },
+};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
-use crate::compute::pool_cpu::ops::geometry::pad::helpers::dimensions::PadFrame;
 
 static ARCHITECTURES: [ImplementationSupport; 3] =
     crate::compute::pool_cpu::ops::geometry::pad::helpers::strategies::byte_vector_architectures(
-        Mode::ImagePalette8, 1,
+        Mode::ImagePalette8,
+        1,
     );
 
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
@@ -27,12 +30,12 @@ pub(crate) fn pad(
     selection: &StrategySelection,
 ) -> Result<(DynamicImage, u64, u64), PilError> {
     let DynamicImage::ImagePalette8(image) = image else {
-        return Err(PilError::InternalError("Pad mode dispatch received a different raster".into()));
+        return Err(PilError::InternalError(
+            "Pad mode dispatch received a different raster".into(),
+        ));
     };
-    let architecture = super::super::helpers::strategies::selected_architecture(
-        selection,
-        Mode::ImagePalette8,
-    )?;
+    let architecture =
+        super::super::helpers::strategies::selected_architecture(selection, Mode::ImagePalette8)?;
     match architecture {
         Architecture::Default => super::default::pad_impl::pad(image, frame)
             .map(|output| (DynamicImage::ImagePalette8(output), 0, 0)),

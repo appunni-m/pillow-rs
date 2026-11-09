@@ -1,7 +1,7 @@
 //! Pillow palette-plane extraction from the native RGBA octree result.
 
-use super::octree::{quantize_octree_rgba, quantize_octree_rgba_source};
 use super::RgbaPixelSource;
+use super::octree::{quantize_octree_rgba, quantize_octree_rgba_source};
 use crate::error::PilError;
 
 /// Applies the RGBA FASTOCTREE policy and separates Pillow's palette channels.

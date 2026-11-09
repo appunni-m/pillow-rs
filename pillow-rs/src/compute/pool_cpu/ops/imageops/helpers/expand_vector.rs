@@ -14,12 +14,8 @@ pub(crate) fn expand_buffer<P>(
 where
     P: Pixel<Subpixel = u8>,
 {
-    let (output_width, output_height) = super::expand::expanded_dimensions(
-        input.width(),
-        input.height(),
-        border,
-        channels,
-    )?;
+    let (output_width, output_height) =
+        super::expand::expanded_dimensions(input.width(), input.height(), border, channels)?;
     let source_stride = (input.width() as usize)
         .checked_mul(usize::from(channels))
         .ok_or_else(|| PilError::DimensionError("expand source stride overflows".into()))?;
@@ -120,7 +116,9 @@ fn expand_luma(
         }
     }
     if output.len() != output_len || output_stride != output_width as usize {
-        return Err(PilError::InternalError("SIMD expand L output shape mismatch".into()));
+        return Err(PilError::InternalError(
+            "SIMD expand L output shape mismatch".into(),
+        ));
     }
     Ok((output, vector_blocks, scalar_tail))
 }
@@ -153,7 +151,11 @@ fn expand_luma_alpha(
         let row_start = y * output_stride;
         let row = &mut output[row_start..row_start + output_stride];
         if y < border || y >= source_end_y {
-            add_counts(&mut vector_blocks, &mut scalar_tail, fill_vector_row(row, fill, 2)?);
+            add_counts(
+                &mut vector_blocks,
+                &mut scalar_tail,
+                fill_vector_row(row, fill, 2)?,
+            );
             continue;
         }
         add_counts(
@@ -169,7 +171,10 @@ fn expand_luma_alpha(
         add_counts(
             &mut vector_blocks,
             &mut scalar_tail,
-            copy_bytes(&source[source_start..source_end], &mut row[copy_start..copy_end])?,
+            copy_bytes(
+                &source[source_start..source_end],
+                &mut row[copy_start..copy_end],
+            )?,
         );
         add_counts(
             &mut vector_blocks,
@@ -224,7 +229,11 @@ fn fill_vector_row(
 }
 
 fn expand_fill_sample(fill: (u8, u8, u8, u8), index: usize) -> u8 {
-    if index.is_multiple_of(2) { fill.0 } else { fill.3 }
+    if index.is_multiple_of(2) {
+        fill.0
+    } else {
+        fill.3
+    }
 }
 
 fn copy_bytes(source: &[u8], output: &mut [u8]) -> Result<(u64, u64), PilError> {

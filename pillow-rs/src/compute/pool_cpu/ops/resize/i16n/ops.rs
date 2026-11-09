@@ -1,7 +1,18 @@
 //! Exact ImageI16N strategy with Pillow's historical big-endian branch.
 
-use crate::compute::registry::support::StrategySelection;
-use crate::raster::{DynamicImage, ImageBuffer, Luma};
+use crate::compute::registry::support::{ModeSupport, OperationId, StrategySelection};
+use crate::raster::{DynamicImage, ImageBuffer, Luma, Mode};
+
+static RESIZE_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 3] =
+    super::super::helpers::support::luma16_architectures(Mode::ImageI16N);
+
+pub(crate) const SUPPORT: ModeSupport =
+    super::super::helpers::support::native_mode_support(Mode::ImageI16N, &RESIZE_ARCHITECTURES);
+pub(crate) const BOXED_SUPPORT: ModeSupport = ModeSupport::serial(
+    OperationId::ResizeBoxed,
+    Mode::ImageI16N,
+    super::super::helpers::support::INPUTS,
+);
 
 pub(crate) fn resize_selected(
     context: &crate::compute::ExecutionContext,
@@ -25,7 +36,10 @@ pub(crate) fn resize_selected(
         let architecture =
             super::super::helpers::strategy::require_architecture(context, selection)?;
         match architecture {
-            #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
+            #[cfg(all(
+                any(target_arch = "x86", target_arch = "x86_64"),
+                target_feature = "sse2"
+            ))]
             crate::compute::Architecture::Sse2 => {
                 super::sse2::resize_impl::execute(input, width, height, filter)
             }

@@ -1,17 +1,15 @@
 //! Scalar I/F affine interpolation path.
 
-use crate::pipeline::ResampleFilter;
 use crate::compute::pool_cpu::ops::rotate::helpers::geometry::{
     discrete_angle, identity_contract, rotate_geometry,
 };
 use crate::compute::pool_cpu::ops::rotate::ops::RotateRequest;
+use crate::pipeline::ResampleFilter;
 use crate::raster::{Rgba, RgbaImage};
 
 use super::cubic::{
-    horizontal_f32 as rotate_cubic_horizontal_f32,
-    horizontal_i32 as rotate_cubic_horizontal_i32,
-    vertical_f64 as rotate_cubic_vertical_f64,
-    vertical_f64_fma as rotate_cubic_vertical_f64_fma,
+    horizontal_f32 as rotate_cubic_horizontal_f32, horizontal_i32 as rotate_cubic_horizontal_i32,
+    vertical_f64 as rotate_cubic_vertical_f64, vertical_f64_fma as rotate_cubic_vertical_f64_fma,
 };
 
 /// Apply Pillow's bilinear/bicubic transform to native four-byte `I`/`F`
@@ -250,9 +248,8 @@ pub(crate) fn execute<const FLOAT: bool>(
     image: &RgbaImage,
     request: RotateRequest,
 ) -> Result<RgbaImage, crate::error::PilError> {
-    let discrete = discrete_angle(request).is_some_and(|degree| {
-        degree == 180 || request.expand || image.width() == image.height()
-    });
+    let discrete = discrete_angle(request)
+        .is_some_and(|degree| degree == 180 || request.expand || image.width() == image.height());
     if request.nearest || identity_contract(request) || discrete {
         return super::byte::execute::<Rgba<u8>, 4, false, false>(image, request);
     }

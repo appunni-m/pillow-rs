@@ -1,9 +1,7 @@
 //! Architecture declarations shared by exact-mode Transform strategies.
 
 use crate::compute::Architecture;
-use crate::compute::registry::support::{
-    ImplementationSupport, OperationId, StrategyGuard,
-};
+use crate::compute::registry::support::{ImplementationSupport, OperationId, StrategyGuard};
 use crate::raster::Mode;
 
 pub(crate) const fn architectures(mode: Mode, channels: u8) -> [ImplementationSupport; 5] {
@@ -76,11 +74,7 @@ pub(crate) const fn i16_affine_architectures(mode: Mode) -> [ImplementationSuppo
     ]
 }
 
-const fn for_mode(
-    mode: Mode,
-    channels: u8,
-    affine_bilinear: bool,
-) -> [ImplementationSupport; 5] {
+const fn for_mode(mode: Mode, channels: u8, affine_bilinear: bool) -> [ImplementationSupport; 5] {
     let guard = StrategyGuard::TransformByteKernels {
         channels,
         affine_nearest: true,

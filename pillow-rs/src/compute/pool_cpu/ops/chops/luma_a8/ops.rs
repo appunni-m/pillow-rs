@@ -1,14 +1,14 @@
 //! Exact luma_a8 Chops support and mode strategy.
 
-use crate::compute::registry::support::{
-    ImplementationSupport, ModeSupport, OperationId, StrategySelection,
-};
-use crate::compute::Architecture;
-use crate::error::PilError;
-use crate::raster::{DynamicImage, Mode};
 use super::super::helpers::strategy::{
     declare_byte_binary_architectures, declare_byte_invert_architectures,
 };
+use crate::compute::Architecture;
+use crate::compute::registry::support::{
+    ImplementationSupport, ModeSupport, OperationId, StrategySelection,
+};
+use crate::error::PilError;
+use crate::raster::{DynamicImage, Mode};
 
 pub(crate) const MODE: Mode = Mode::ImageLumaA8;
 const CHANNELS: u8 = 2;
@@ -35,13 +35,14 @@ pub(crate) fn execute(
         return match image {
             DynamicImage::ImageLumaA8(buffer) => match architecture {
                 Architecture::Default => super::default::ops::execute(image, request, other),
-                Architecture::Sse2 => super::sse2::execute_offset(buffer, x, y)
-                    .map(DynamicImage::ImageLumaA8),
-                Architecture::Neon => super::neon::execute_offset(buffer, x, y)
-                    .map(DynamicImage::ImageLumaA8),
+                Architecture::Sse2 => {
+                    super::sse2::execute_offset(buffer, x, y).map(DynamicImage::ImageLumaA8)
+                }
+                Architecture::Neon => {
+                    super::neon::execute_offset(buffer, x, y).map(DynamicImage::ImageLumaA8)
+                }
                 Architecture::WasmSimd128 => {
-                    super::wasm_simd128::execute_offset(buffer, x, y)
-                        .map(DynamicImage::ImageLumaA8)
+                    super::wasm_simd128::execute_offset(buffer, x, y).map(DynamicImage::ImageLumaA8)
                 }
                 _ => Err(PilError::InternalError(
                     "Chops Offset selected an unsupported architecture".into(),
@@ -62,20 +63,23 @@ pub(crate) fn execute(
                 Some(
                     DynamicImage::ImageLumaA8(other)
                     | DynamicImage::ImageLaPremultiplied8(other)
-                    | DynamicImage::ImagePaletteAlpha8(other)
+                    | DynamicImage::ImagePaletteAlpha8(other),
                 ) => Some(other),
                 None => None,
                 _ => {
                     return Err(PilError::InternalError(
-                        "Chops vector strategy received a different secondary raster variant".into(),
+                        "Chops vector strategy received a different secondary raster variant"
+                            .into(),
                     ));
                 }
             };
             match architecture {
-                Architecture::Sse2 => super::sse2::execute(buffer, request, other)
-                    .map(DynamicImage::ImageLumaA8),
-                Architecture::Neon => super::neon::execute(buffer, request, other)
-                    .map(DynamicImage::ImageLumaA8),
+                Architecture::Sse2 => {
+                    super::sse2::execute(buffer, request, other).map(DynamicImage::ImageLumaA8)
+                }
+                Architecture::Neon => {
+                    super::neon::execute(buffer, request, other).map(DynamicImage::ImageLumaA8)
+                }
                 Architecture::WasmSimd128 => super::wasm_simd128::execute(buffer, request, other)
                     .map(DynamicImage::ImageLumaA8),
                 _ => Err(PilError::InternalError(
@@ -132,7 +136,8 @@ pub(crate) fn execute_in_place(
                 | DynamicImage::ImagePaletteAlpha8(other) => other,
                 _ => {
                     return Err(PilError::InternalError(
-                        "Chops in-place strategy received a different secondary raster variant".into(),
+                        "Chops in-place strategy received a different secondary raster variant"
+                            .into(),
                     ));
                 }
             };

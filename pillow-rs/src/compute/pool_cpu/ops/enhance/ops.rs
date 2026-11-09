@@ -40,8 +40,8 @@ use crate::compute::helpers::enhance::ContrastBase;
 use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
 use crate::compute::registry::support::{
     InputContract, ModeSupport, OperationId, OperationInputs, OperationModeRoute,
-    OperationRouteOutcome, OperationRouteStage, OperationSupport, OutputModeRule,
-    RejectionKind, StrategySelection, SupportScope,
+    OperationRouteOutcome, OperationRouteStage, OperationSupport, OutputModeRule, RejectionKind,
+    StrategySelection, SupportScope,
 };
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
@@ -161,16 +161,14 @@ declare_color_saturation_modes! {
     ImageCmyk8 => cmyk8,
 }
 
-const COLOR_SATURATION_CHILDREN: &[OperationId] =
-    &[OperationId::Convert, OperationId::BlendModule];
+const COLOR_SATURATION_CHILDREN: &[OperationId] = &[OperationId::Convert, OperationId::BlendModule];
 const COLOR_SATURATION_CONVERT_BLEND: &[OperationId] = &[
     OperationId::Convert,
     OperationId::Convert,
     OperationId::BlendModule,
 ];
 const COLOR_SATURATION_SOURCE_CONVERSION: &[OperationId] = &[OperationId::Convert];
-const COLOR_SATURATION_ROUND_TRIP: &[OperationId] =
-    &[OperationId::Convert, OperationId::Convert];
+const COLOR_SATURATION_ROUND_TRIP: &[OperationId] = &[OperationId::Convert, OperationId::Convert];
 
 const fn color_saturation_intermediate_mode(mode: Mode) -> Mode {
     if mode.uppercase_a_band_index().is_some() {
@@ -218,14 +216,12 @@ fn color_saturation_rejection(
 
 fn color_saturation_composed_route(mode: Mode) -> OperationModeRoute {
     match mode {
-        Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => {
-            composed_color_saturation_route(
-                mode,
-                SupportScope::Pillow,
-                COLOR_SATURATION_CONVERT_BLEND,
-                OperationRouteOutcome::Produces,
-            )
-        }
+        Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => composed_color_saturation_route(
+            mode,
+            SupportScope::Pillow,
+            COLOR_SATURATION_CONVERT_BLEND,
+            OperationRouteOutcome::Produces,
+        ),
         Mode::One
         | Mode::ImagePalette8
         | Mode::ImagePaletteAlpha8
@@ -295,8 +291,7 @@ trait ContrastLaneContext {
     fn lane_context(&self) -> Option<(ContrastBase, f64)>;
 }
 
-impl<'a, P> ContrastLaneContext
-    for Prepared<(&'a ImageBuffer<P, Vec<u8>>, ContrastBase, f64)>
+impl<'a, P> ContrastLaneContext for Prepared<(&'a ImageBuffer<P, Vec<u8>>, ContrastBase, f64)>
 where
     P: Pixel<Subpixel = u8>,
 {
@@ -323,7 +318,7 @@ macro_rules! declare_contrast_modes {
             strategy: PreparedContrastMode<'a>,
         }
 
-        fn classify_contrast_mode(mode: Mode) -> ModeSupport {
+        pub(super) fn classify_contrast_mode(mode: Mode) -> ModeSupport {
             match mode {
                 $(Mode::$mode => super::$module::ops::CONTRAST_SUPPORT,)+
                 Mode::ImageLaPremultiplied8 => ModeSupport::Rejected {
@@ -357,7 +352,7 @@ macro_rules! declare_contrast_modes {
             }
         }
 
-        fn prepare_contrast_mode<'a>(
+        pub(super) fn prepare_contrast_mode<'a>(
             image: &'a DynamicImage,
             facts: crate::compute::registry::support::StrategyInputs,
             factor: f64,
@@ -573,8 +568,11 @@ fn classify_sharpness_mode(mode: Mode) -> ModeSupport {
 }
 
 /// Exhaustive exact-mode Sharpness support and same-mode Default fallback.
-pub(crate) static SHARPNESS_SUPPORT: OperationSupport =
-    OperationSupport::new(OperationId::Sharpness, SHARPNESS_INPUTS, classify_sharpness_mode);
+pub(crate) static SHARPNESS_SUPPORT: OperationSupport = OperationSupport::new(
+    OperationId::Sharpness,
+    SHARPNESS_INPUTS,
+    classify_sharpness_mode,
+);
 
 /// A concrete Sharpness mode strategy prepared by that mode’s owner.
 pub(crate) enum PreparedSharpness<'a> {
@@ -634,10 +632,14 @@ impl PreparedSharpness<'_> {
         match self {
             Self::ImageLuma8(strategy) => super::luma8::ops::execute_sharpness(strategy),
             Self::ImageLumaA8(strategy) => super::luma_a8::ops::execute_sharpness(strategy),
-            Self::ImageLaPremultiplied8(strategy) => super::la_premultiplied8::ops::execute_sharpness(strategy),
+            Self::ImageLaPremultiplied8(strategy) => {
+                super::la_premultiplied8::ops::execute_sharpness(strategy)
+            }
             Self::ImageRgb8(strategy) => super::rgb8::ops::execute_sharpness(strategy),
             Self::ImageRgba8(strategy) => super::rgba8::ops::execute_sharpness(strategy),
-            Self::ImageRgbPremultiplied8(strategy) => super::rgb_premultiplied8::ops::execute_sharpness(strategy),
+            Self::ImageRgbPremultiplied8(strategy) => {
+                super::rgb_premultiplied8::ops::execute_sharpness(strategy)
+            }
             Self::ImageRgbx8(strategy) => super::rgbx8::ops::execute_sharpness(strategy),
             Self::ImageCmyk8(strategy) => super::cmyk8::ops::execute_sharpness(strategy),
             Self::ImageYCbCr8(strategy) => super::ycbcr8::ops::execute_sharpness(strategy),
@@ -673,33 +675,97 @@ fn prepare_sharpness_mode<'a>(
     context: &ExecutionContext,
 ) -> Result<PreparedSharpness<'a>, PilError> {
     match image {
-        DynamicImage::ImageLuma8(source) => super::luma8::ops::prepare_sharpness(source, facts, factor, context).map(PreparedSharpness::ImageLuma8),
-        DynamicImage::ImageLumaA8(source) => super::luma_a8::ops::prepare_sharpness(source, facts, factor, context).map(PreparedSharpness::ImageLumaA8),
-        DynamicImage::ImageLaPremultiplied8(source) => super::la_premultiplied8::ops::prepare_sharpness(source, facts, factor, context).map(PreparedSharpness::ImageLaPremultiplied8),
-        DynamicImage::ImageRgb8(source) => super::rgb8::ops::prepare_sharpness(source, facts, factor, context).map(PreparedSharpness::ImageRgb8),
-        DynamicImage::ImageRgba8(source) => super::rgba8::ops::prepare_sharpness(source, facts, factor, context).map(PreparedSharpness::ImageRgba8),
-        DynamicImage::ImageRgbPremultiplied8(source) => super::rgb_premultiplied8::ops::prepare_sharpness(source, facts, factor, context).map(PreparedSharpness::ImageRgbPremultiplied8),
-        DynamicImage::ImageRgbx8(source) => super::rgbx8::ops::prepare_sharpness(source, facts, factor, context).map(PreparedSharpness::ImageRgbx8),
-        DynamicImage::ImageCmyk8(source) => super::cmyk8::ops::prepare_sharpness(source, facts, factor, context).map(PreparedSharpness::ImageCmyk8),
-        DynamicImage::ImageYCbCr8(source) => super::ycbcr8::ops::prepare_sharpness(source, facts, factor, context).map(PreparedSharpness::ImageYCbCr8),
-        DynamicImage::ImageLab8(source) => super::lab8::ops::prepare_sharpness(source, facts, factor, context).map(PreparedSharpness::ImageLab8),
-        DynamicImage::ImageHsv8(source) => super::hsv8::ops::prepare_sharpness(source, facts, factor, context).map(PreparedSharpness::ImageHsv8),
-        DynamicImage::ImageI32(source) => super::i32::ops::prepare_sharpness(source, facts, factor, context).map(PreparedSharpness::ImageI32),
-        DynamicImage::ImageF32(source) => super::f32::ops::prepare_sharpness(source, facts, factor, context).map(PreparedSharpness::ImageF32),
-        DynamicImage::ImageI16(source) => super::i16::ops::prepare_sharpness(source, facts, factor, context).map(PreparedSharpness::ImageI16),
-        DynamicImage::ImageI16L(source) => super::i16l::ops::prepare_sharpness(source, facts, factor, context).map(PreparedSharpness::ImageI16L),
-        DynamicImage::ImageI16B(source) => super::i16b::ops::prepare_sharpness(source, facts, factor, context).map(PreparedSharpness::ImageI16B),
-        DynamicImage::ImageI16N(source) => super::i16n::ops::prepare_sharpness(source, facts, factor, context).map(PreparedSharpness::ImageI16N),
-        DynamicImage::ImageLumaA16(source) => super::luma_a16::ops::prepare_sharpness(source, facts, factor, context).map(PreparedSharpness::ImageLumaA16),
-        DynamicImage::ImageRgb16(source) => super::rgb16::ops::prepare_sharpness(source, facts, factor, context).map(PreparedSharpness::ImageRgb16),
-        DynamicImage::ImageRgba16(source) => super::rgba16::ops::prepare_sharpness(source, facts, factor, context).map(PreparedSharpness::ImageRgba16),
-        DynamicImage::ImageRgb32F(source) => super::rgb32f::ops::prepare_sharpness(source, facts, factor, context).map(PreparedSharpness::ImageRgb32F),
-        DynamicImage::ImageRgba32F(source) => super::rgba32f::ops::prepare_sharpness(source, facts, factor, context).map(PreparedSharpness::ImageRgba32F),
+        DynamicImage::ImageLuma8(source) => {
+            super::luma8::ops::prepare_sharpness(source, facts, factor, context)
+                .map(PreparedSharpness::ImageLuma8)
+        }
+        DynamicImage::ImageLumaA8(source) => {
+            super::luma_a8::ops::prepare_sharpness(source, facts, factor, context)
+                .map(PreparedSharpness::ImageLumaA8)
+        }
+        DynamicImage::ImageLaPremultiplied8(source) => {
+            super::la_premultiplied8::ops::prepare_sharpness(source, facts, factor, context)
+                .map(PreparedSharpness::ImageLaPremultiplied8)
+        }
+        DynamicImage::ImageRgb8(source) => {
+            super::rgb8::ops::prepare_sharpness(source, facts, factor, context)
+                .map(PreparedSharpness::ImageRgb8)
+        }
+        DynamicImage::ImageRgba8(source) => {
+            super::rgba8::ops::prepare_sharpness(source, facts, factor, context)
+                .map(PreparedSharpness::ImageRgba8)
+        }
+        DynamicImage::ImageRgbPremultiplied8(source) => {
+            super::rgb_premultiplied8::ops::prepare_sharpness(source, facts, factor, context)
+                .map(PreparedSharpness::ImageRgbPremultiplied8)
+        }
+        DynamicImage::ImageRgbx8(source) => {
+            super::rgbx8::ops::prepare_sharpness(source, facts, factor, context)
+                .map(PreparedSharpness::ImageRgbx8)
+        }
+        DynamicImage::ImageCmyk8(source) => {
+            super::cmyk8::ops::prepare_sharpness(source, facts, factor, context)
+                .map(PreparedSharpness::ImageCmyk8)
+        }
+        DynamicImage::ImageYCbCr8(source) => {
+            super::ycbcr8::ops::prepare_sharpness(source, facts, factor, context)
+                .map(PreparedSharpness::ImageYCbCr8)
+        }
+        DynamicImage::ImageLab8(source) => {
+            super::lab8::ops::prepare_sharpness(source, facts, factor, context)
+                .map(PreparedSharpness::ImageLab8)
+        }
+        DynamicImage::ImageHsv8(source) => {
+            super::hsv8::ops::prepare_sharpness(source, facts, factor, context)
+                .map(PreparedSharpness::ImageHsv8)
+        }
+        DynamicImage::ImageI32(source) => {
+            super::i32::ops::prepare_sharpness(source, facts, factor, context)
+                .map(PreparedSharpness::ImageI32)
+        }
+        DynamicImage::ImageF32(source) => {
+            super::f32::ops::prepare_sharpness(source, facts, factor, context)
+                .map(PreparedSharpness::ImageF32)
+        }
+        DynamicImage::ImageI16(source) => {
+            super::i16::ops::prepare_sharpness(source, facts, factor, context)
+                .map(PreparedSharpness::ImageI16)
+        }
+        DynamicImage::ImageI16L(source) => {
+            super::i16l::ops::prepare_sharpness(source, facts, factor, context)
+                .map(PreparedSharpness::ImageI16L)
+        }
+        DynamicImage::ImageI16B(source) => {
+            super::i16b::ops::prepare_sharpness(source, facts, factor, context)
+                .map(PreparedSharpness::ImageI16B)
+        }
+        DynamicImage::ImageI16N(source) => {
+            super::i16n::ops::prepare_sharpness(source, facts, factor, context)
+                .map(PreparedSharpness::ImageI16N)
+        }
+        DynamicImage::ImageLumaA16(source) => {
+            super::luma_a16::ops::prepare_sharpness(source, facts, factor, context)
+                .map(PreparedSharpness::ImageLumaA16)
+        }
+        DynamicImage::ImageRgb16(source) => {
+            super::rgb16::ops::prepare_sharpness(source, facts, factor, context)
+                .map(PreparedSharpness::ImageRgb16)
+        }
+        DynamicImage::ImageRgba16(source) => {
+            super::rgba16::ops::prepare_sharpness(source, facts, factor, context)
+                .map(PreparedSharpness::ImageRgba16)
+        }
+        DynamicImage::ImageRgb32F(source) => {
+            super::rgb32f::ops::prepare_sharpness(source, facts, factor, context)
+                .map(PreparedSharpness::ImageRgb32F)
+        }
+        DynamicImage::ImageRgba32F(source) => {
+            super::rgba32f::ops::prepare_sharpness(source, facts, factor, context)
+                .map(PreparedSharpness::ImageRgba32F)
+        }
         DynamicImage::One(_)
         | DynamicImage::ImagePalette8(_)
-        | DynamicImage::ImagePaletteAlpha8(_) => {
-            Err(rejected_sharpness_error(image.mode()))
-        }
+        | DynamicImage::ImagePaletteAlpha8(_) => Err(rejected_sharpness_error(image.mode())),
     }
 }
 
@@ -724,133 +790,7 @@ pub(crate) fn prepare_sharpness_pipeline<'a>(
         .map(crate::compute::registry::PreparedOperation::from_sharpness)
 }
 
-const INPUTS: &[InputContract] = &[];
-
-const CONTRAST_CHILDREN: &[OperationId] = &[
-    OperationId::Convert,
-    OperationId::ConvertLab,
-    OperationId::BlendModule,
-    OperationId::ExtractBand,
-    OperationId::PutAlphaData,
-];
-
-const CONTRAST_SOURCE_CONVERSION: &[OperationId] = &[OperationId::Convert];
-const CONTRAST_CONVERT_BLEND: &[OperationId] = &[
-    OperationId::Convert,
-    OperationId::Convert,
-    OperationId::BlendModule,
-];
-const CONTRAST_PA_BLEND: &[OperationId] = &[
-    OperationId::Convert,
-    OperationId::Convert,
-    OperationId::ExtractBand,
-    OperationId::PutAlphaData,
-    OperationId::BlendModule,
-];
-const CONTRAST_ROUND_TRIP: &[OperationId] = &[OperationId::Convert, OperationId::Convert];
-
-fn contrast_rejection(
-    mode: Mode,
-    scope: SupportScope,
-    operations: &'static [OperationId],
-    stage: OperationRouteStage,
-    reason: &'static str,
-) -> OperationModeRoute {
-    OperationModeRoute::ComposedFallback {
-        mode,
-        intermediate_mode: Some(Mode::ImageLuma8),
-        scope,
-        operations,
-        output: OutputModeRule::Preserve,
-        outcome: OperationRouteOutcome::Rejects {
-            stage,
-            reason,
-            kind: RejectionKind::ValueError,
-        },
-        prepared_support: classify_contrast_mode(mode),
-    }
-}
-
-fn classify_contrast_route(mode: Mode) -> OperationModeRoute {
-    let prepared_support = classify_contrast_mode(mode);
-    if matches!(prepared_support, ModeSupport::Supported { .. }) {
-        return OperationModeRoute::Prepared {
-            support: prepared_support,
-            intermediate_mode: (mode == Mode::ImageLab8).then_some(Mode::ImageLuma8),
-            paths: &[],
-        };
-    }
-
-    match mode {
-        Mode::ImageLaPremultiplied8 => contrast_rejection(
-            mode,
-            SupportScope::Pillow,
-            CONTRAST_SOURCE_CONVERSION,
-            OperationRouteStage::SourceConversion,
-            "conversion from La to L not supported",
-        ),
-        Mode::ImageRgbPremultiplied8 => contrast_rejection(
-            mode,
-            SupportScope::Pillow,
-            CONTRAST_SOURCE_CONVERSION,
-            OperationRouteStage::WrapperGuard,
-            "conversion from L to RGBa not supported",
-        ),
-        Mode::ImagePaletteAlpha8 => contrast_rejection(
-            mode,
-            SupportScope::Pillow,
-            CONTRAST_PA_BLEND,
-            OperationRouteStage::ChildAdmission,
-            "image has wrong mode",
-        ),
-        Mode::One
-        | Mode::ImagePalette8
-        | Mode::ImageI32
-        | Mode::ImageF32
-        | Mode::ImageI16
-        | Mode::ImageI16L
-        | Mode::ImageI16B
-        | Mode::ImageI16N => contrast_rejection(
-            mode,
-            SupportScope::Pillow,
-            CONTRAST_CONVERT_BLEND,
-            OperationRouteStage::ChildAdmission,
-            "image has wrong mode",
-        ),
-        // NO_PILLOW_SUPPORT: this native high-depth conversion-first contract is Rust-only.
-        Mode::ImageLumaA16
-        | Mode::ImageRgb16
-        | Mode::ImageRgba16
-        | Mode::ImageRgb32F
-        | Mode::ImageRgba32F => contrast_rejection(
-            mode,
-            SupportScope::CoreOnly {
-                reason: "Contrast's conversion-first route has no Pillow mode identity",
-            },
-            CONTRAST_ROUND_TRIP,
-            OperationRouteStage::ResultConversion,
-            "image has wrong mode",
-        ),
-        Mode::ImageLuma8
-        | Mode::ImageLumaA8
-        | Mode::ImageRgb8
-        | Mode::ImageRgba8
-        | Mode::ImageRgbx8
-        | Mode::ImageCmyk8
-        | Mode::ImageYCbCr8
-        | Mode::ImageHsv8
-        | Mode::ImageLab8 => unreachable!("prepared Contrast mode was already selected"),
-    }
-}
-
-/// Complete public exact-mode routes and prepared support for Contrast.
-/// TODO(pillow-rs#3ptb): verify every route with CPU parity and architecture receipts.
-pub(crate) static CONTRAST_SUPPORT: OperationSupport = OperationSupport::routed(
-    OperationId::Contrast,
-    INPUTS,
-    classify_contrast_route,
-    CONTRAST_CHILDREN,
-);
+pub(super) const INPUTS: &[InputContract] = &[];
 
 /// Exhaustive source-mode support for native Brightness.
 /// I/F, I;16-family, and internal high-depth native routes are declared as
@@ -953,27 +893,4 @@ pub(crate) fn prepare_color_saturation_pipeline<'a>(
         .map(crate::compute::registry::PreparedOperation::from_color_saturation)
 }
 
-pub(crate) fn prepare_contrast<'a>(
-    input: OperationInputs<'a>,
-    factor: f64,
-    context: &ExecutionContext,
-) -> Result<PreparedContrast<'a>, PilError> {
-    prepare_contrast_mode(
-        input.image,
-        input.facts().with_contrast(factor),
-        factor,
-        context,
-    )
-}
-
-pub(crate) fn prepare_contrast_pipeline<'a>(
-    input: OperationInputs<'a>,
-    operation: &'a PipelineOp,
-    context: &ExecutionContext,
-) -> Result<crate::compute::registry::PreparedOperation<'a>, PilError> {
-    let PipelineOp::Contrast { factor } = operation else {
-        return Err(PilError::ValueError("expected Contrast op".into()));
-    };
-    prepare_contrast(input, *factor, context)
-        .map(crate::compute::registry::PreparedOperation::from_contrast)
-}
+pub(crate) use super::contrast::{CONTRAST_SUPPORT, prepare_contrast_pipeline};

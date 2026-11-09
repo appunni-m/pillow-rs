@@ -1,7 +1,5 @@
 //! Shared vector helpers for straight RGBA8 Convert strategies.
 
-pub(crate) mod opaque_padding;
-pub(crate) mod premultiply;
 #[cfg(any(
     target_arch = "x86_64",
     all(target_arch = "x86", target_feature = "sse2"),
@@ -9,6 +7,8 @@ pub(crate) mod premultiply;
     all(target_arch = "wasm32", target_feature = "simd128")
 ))]
 pub(crate) mod luma_alpha;
+pub(crate) mod opaque_padding;
+pub(crate) mod premultiply;
 #[cfg(any(
     target_arch = "x86_64",
     all(target_arch = "x86", target_feature = "sse2"),

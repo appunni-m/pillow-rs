@@ -1,6 +1,6 @@
-use crate::error::PilError;
 use super::projective::cubic_sample;
 use super::scalar::affine_nearest_fixed;
+use crate::error::PilError;
 
 pub(super) fn transform_affine_luma_nearest_into(
     raw: &[u8],

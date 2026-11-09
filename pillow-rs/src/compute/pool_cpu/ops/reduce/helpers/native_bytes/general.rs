@@ -152,14 +152,7 @@ fn average_rgba_block(
     block_height: usize,
     rounding: Rounding,
 ) -> [u8; 4] {
-    let sums = rgba_block_sums(
-        source,
-        width,
-        source_x,
-        source_y,
-        block_width,
-        block_height,
-    );
+    let sums = rgba_block_sums(source, width, source_x, source_y, block_width, block_height);
     let alpha = average(sums[3], rounding);
     [
         unpremultiply(average(sums[0], rounding), alpha),
@@ -169,6 +162,14 @@ fn average_rgba_block(
     ]
 }
 
+/// Reduces one native interleaved byte block.
+///
+/// With `PREMULTIPLIED = true`, this fuses Pillow's straight-alpha LA/RGBA
+/// `convert to La/RGBa → reduce → convert back` route: color samples are
+/// premultiplied before averaging and restored using the averaged alpha.
+/// With `false`, samples are averaged as stored, including premultiplied modes
+/// and layouts without alpha.
+/// Source: Pillow 12.2.0 `Image.reduce`.
 #[inline(always)]
 fn average_interleaved_block<const CHANNELS: usize, const PREMULTIPLIED: bool>(
     source: &[u8],
@@ -208,11 +209,7 @@ fn average_interleaved_block<const CHANNELS: usize, const PREMULTIPLIED: bool>(
 }
 
 /// Prepared native byte geometry shared by Default and architecture kernels.
-pub(crate) struct ByteReduceContext<
-    'a,
-    const CHANNELS: usize,
-    const PREMULTIPLIED: bool,
-> {
+pub(crate) struct ByteReduceContext<'a, const CHANNELS: usize, const PREMULTIPLIED: bool> {
     source: &'a [u8],
     geometry: Geometry,
     output_width: u32,
@@ -332,13 +329,7 @@ impl<'a, const CHANNELS: usize, const PREMULTIPLIED: bool>
         clippy::arithmetic_side_effects,
         reason = "the checked output row bounds each native destination range"
     )]
-    pub(crate) fn write_row_range(
-        &self,
-        y: u32,
-        row: &mut [u8],
-        start_x: u32,
-        end_x: u32,
-    ) {
+    pub(crate) fn write_row_range(&self, y: u32, row: &mut [u8], start_x: u32, end_x: u32) {
         for x in start_x..end_x {
             let (source_x, source_y, block_width, block_height, rounding) =
                 self.geometry.block(x, y);
@@ -392,12 +383,7 @@ pub(crate) fn reduce_bytes<const CHANNELS: usize, const PREMULTIPLIED: bool>(
     let row_stride = output_width as usize * CHANNELS;
     for y in 0..output_height {
         let start = y as usize * row_stride;
-        context.write_row_range(
-            y,
-            &mut output[start..start + row_stride],
-            0,
-            output_width,
-        );
+        context.write_row_range(y, &mut output[start..start + row_stride], 0, output_width);
     }
     Ok(output)
 }

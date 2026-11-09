@@ -1,5 +1,5 @@
-use crate::compute::{Architecture, registry::support::StrategySelection};
 use crate::compute::registry::support::ModeSupport;
+use crate::compute::{Architecture, registry::support::StrategySelection};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
@@ -19,6 +19,10 @@ pub(crate) fn apply_bitmap(
 }
 
 pub(crate) const MODE: Mode = Mode::ImageLaPremultiplied8;
+const ARCHITECTURES: super::super::helpers::support::VectorArchitectures =
+    super::super::helpers::support::vector_architectures(MODE);
+pub(crate) const SUPPORT: ModeSupport =
+    super::super::helpers::support::vector_support(MODE, &ARCHITECTURES);
 pub(crate) const CHANNELS: usize = 2;
 pub(crate) const FLOAT_MODE: bool = false;
 
@@ -39,9 +43,8 @@ pub(crate) fn apply_text<const RGBA_MASK: bool>(
 }
 
 pub(crate) fn support() -> ModeSupport {
-    super::super::ops::mode_support(MODE)
+    SUPPORT
 }
-
 
 pub(crate) fn execute(
     image: &DynamicImage,

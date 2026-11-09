@@ -17,7 +17,8 @@ pub(crate) fn resize<P: Pixel<Subpixel = u16>>(
     }
     let (source_width, source_height) = input.dimensions();
     let mut output = ImageBuffer::<P, Vec<u16>>::new(destination_width, destination_height);
-    if source_width == 0 || source_height == 0 || destination_width == 0 || destination_height == 0 {
+    if source_width == 0 || source_height == 0 || destination_width == 0 || destination_height == 0
+    {
         return output;
     }
 

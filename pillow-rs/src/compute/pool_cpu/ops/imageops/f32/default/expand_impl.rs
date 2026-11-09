@@ -5,7 +5,6 @@ use crate::error::PilError;
 
 pub(super) type Input = RgbaImage;
 
-
 pub(crate) struct Kernel<'a> {
     input: &'a Input,
     border: crate::pipeline::ExpandMargins,
@@ -17,7 +16,11 @@ pub(super) fn prepare(
     border: crate::pipeline::ExpandMargins,
     fill: (u8, u8, u8, u8),
 ) -> Kernel<'_> {
-    Kernel { input, border, fill: [fill.0, fill.1, fill.2, fill.3] }
+    Kernel {
+        input,
+        border,
+        fill: [fill.0, fill.1, fill.2, fill.3],
+    }
 }
 
 pub(super) fn execute(kernel: Kernel<'_>) -> Result<Input, PilError> {

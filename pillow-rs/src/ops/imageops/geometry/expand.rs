@@ -1,6 +1,6 @@
-use crate::checked_dims::CheckedDims;
-use super::callbacks::{expand_geometry_values_with_callbacks, ImageOpsExpandCallbacks};
+use super::callbacks::{ImageOpsExpandCallbacks, expand_geometry_values_with_callbacks};
 use super::native_geometry_color_input;
+use crate::checked_dims::CheckedDims;
 use crate::compute::registry::support::{ExpandFillRule, InputContract, ModeSupport, OperationId};
 use crate::error::PilError;
 use crate::image::Image;
@@ -130,12 +130,7 @@ pub fn finish_expand_fill_palette_from_host(
                     // RGB palette when ImageOps did not resolve the fill
                     // through an existing palette callback.
                     let palette = super::color::resolve_palette_tuple_bytes(&components)?;
-                    apply_expand_palette_fill(
-                        &mut prepared,
-                        0,
-                        palette.to_vec(),
-                        None,
-                    );
+                    apply_expand_palette_fill(&mut prepared, 0, palette.to_vec(), None);
                 }
                 Mode::ImagePalette8 => {
                     return Err(PilError::TypeError(
@@ -168,7 +163,6 @@ where
     C::Error: From<PilError>,
 {
     let (width, height, left, top) = expand_geometry_values_with_callbacks(callbacks, border)?;
-    drop(callbacks.expand_geometry_tuple(&width, &height, &left, &top)?);
 
     let fill_mode = callbacks.image_mode()?;
     let mut fill = initial_fill.clone();
@@ -181,11 +175,11 @@ where
         if callbacks.palette_is_truthy(source_palette)? {
             let palette_mode = callbacks.palette_mode(source_palette)?;
             let palette = callbacks.copy_palette(&palette_mode)?;
-            if callbacks.value_is_tuple(&fill)? {
-                let length = callbacks.value_tuple_length(&fill)?;
-                if matches!(length, 3 | 4) {
-                    fill = callbacks.palette_get_color(&palette, &fill)?;
-                }
+            if callbacks.value_is_tuple(&fill)?
+                && (callbacks.value_length_equals(&fill, 3)?
+                    || callbacks.value_length_equals(&fill, 4)?)
+            {
+                fill = callbacks.palette_get_color(&palette, &fill)?;
             }
             Some((palette, palette_mode))
         } else {
@@ -215,8 +209,7 @@ where
         finish_expand_fill_palette_from_host(mode, prepared)
     })?;
     let constructor = callbacks.capture_wrapper_constructor()?;
-    let canvas = callbacks
-        .run_core(move || expand_canvas_with_prepared_fill(size, &prepared))?;
+    let canvas = callbacks.run_core(move || expand_canvas_with_prepared_fill(size, &prepared))?;
     let mut output = callbacks.wrap_canvas(&constructor, canvas)?;
     if let Some((palette, palette_mode)) = palette {
         if callbacks.palette_is_truthy(&palette)? {
@@ -224,7 +217,6 @@ where
         }
     }
     callbacks.paste(&mut output, &left, &top)?;
-    callbacks.load_output(&mut output)?;
     Ok(output)
 }
 
@@ -287,10 +279,7 @@ pub fn validate_prepared_expand_output_size(
 }
 
 #[doc(hidden)]
-pub fn validate_expand_output_size_for_mode(
-    mode: Mode,
-    size: (u32, u32),
-) -> Result<(), PilError> {
+pub fn validate_expand_output_size_for_mode(mode: Mode, size: (u32, u32)) -> Result<(), PilError> {
     CheckedDims::new_allow_empty(size.0, size.1, expand_bytes_per_pixel(mode)?)?;
     Ok(())
 }
@@ -330,25 +319,31 @@ fn empty_expand_canvas(mode: Mode, fill: (u8, u8, u8, u8)) -> Result<Image, PilE
         return Ok(Image::new_palette_index(0, 0, fill.0));
     }
     let image = match mode {
-        Mode::ImageLumaA16 => DynamicImage::ImageLumaA16(
-            crate::raster::ImageBuffer::from_pixel(0, 0, crate::raster::LumaA([0, 0])),
-        ),
-        Mode::ImageRgb16 => DynamicImage::ImageRgb16(
-            crate::raster::ImageBuffer::from_pixel(0, 0, crate::raster::Rgb([0, 0, 0])),
-        ),
-        Mode::ImageRgba16 => DynamicImage::ImageRgba16(
-            crate::raster::ImageBuffer::from_pixel(0, 0, crate::raster::Rgba([0, 0, 0, 0])),
-        ),
-        Mode::ImageRgb32F => DynamicImage::ImageRgb32F(
-            crate::raster::Rgb32FImage::from_pixel(0, 0, crate::raster::Rgb([0.0, 0.0, 0.0])),
-        ),
-        Mode::ImageRgba32F => DynamicImage::ImageRgba32F(
-            crate::raster::Rgba32FImage::from_pixel(
-                0,
-                0,
-                crate::raster::Rgba([0.0, 0.0, 0.0, 0.0]),
-            ),
-        ),
+        Mode::ImageLumaA16 => DynamicImage::ImageLumaA16(crate::raster::ImageBuffer::from_pixel(
+            0,
+            0,
+            crate::raster::LumaA([0, 0]),
+        )),
+        Mode::ImageRgb16 => DynamicImage::ImageRgb16(crate::raster::ImageBuffer::from_pixel(
+            0,
+            0,
+            crate::raster::Rgb([0, 0, 0]),
+        )),
+        Mode::ImageRgba16 => DynamicImage::ImageRgba16(crate::raster::ImageBuffer::from_pixel(
+            0,
+            0,
+            crate::raster::Rgba([0, 0, 0, 0]),
+        )),
+        Mode::ImageRgb32F => DynamicImage::ImageRgb32F(crate::raster::Rgb32FImage::from_pixel(
+            0,
+            0,
+            crate::raster::Rgb([0.0, 0.0, 0.0]),
+        )),
+        Mode::ImageRgba32F => DynamicImage::ImageRgba32F(crate::raster::Rgba32FImage::from_pixel(
+            0,
+            0,
+            crate::raster::Rgba([0.0, 0.0, 0.0, 0.0]),
+        )),
         _ => return Image::new(0, 0, mode, fill),
     };
     Ok(Image::from_dynamic(image))

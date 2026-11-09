@@ -3,10 +3,7 @@
 use crate::error::PilError;
 use crate::raster::{DynamicImage, GrayAlphaImage, Mode};
 
-pub(crate) fn execute(
-    source: &GrayAlphaImage,
-    target: Mode,
-) -> Result<DynamicImage, PilError> {
+pub(crate) fn execute(source: &GrayAlphaImage, target: Mode) -> Result<DynamicImage, PilError> {
     if target != Mode::ImageLumaA8 {
         return Err(PilError::InternalError("invalid La Convert target".into()));
     }

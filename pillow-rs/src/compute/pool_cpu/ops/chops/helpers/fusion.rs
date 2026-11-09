@@ -2,9 +2,9 @@
 
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
+use crate::raster::DynamicImage;
 use crate::raster::buffer::ImageBuffer;
 use crate::raster::traits::Pixel;
-use crate::raster::DynamicImage;
 use wide::{u8x16, u16x16};
 
 pub(crate) struct FusedChopsOutput<I = DynamicImage> {
@@ -78,11 +78,7 @@ where
     for ((left, right), output) in left_blocks.iter().zip(right_blocks).zip(output_blocks) {
         *output = multiply_screen_block(*left, *right);
     }
-    for ((&left, &right), output) in left_tail
-        .iter()
-        .zip(right_tail)
-        .zip(output_tail)
-    {
+    for ((&left, &right), output) in left_tail.iter().zip(right_tail).zip(output_tail) {
         *output = multiply_then_screen(left, right);
     }
     let image = ImageBuffer::<P, Vec<u8>>::from_raw(image.width(), image.height(), output)

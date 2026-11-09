@@ -1,6 +1,4 @@
-use super::{
-    Draw, DrawCircleCenterInput, normalize_draw_circle_center, validate_rounded_rect,
-};
+use super::{Draw, DrawCircleCenterInput, normalize_draw_circle_center, validate_rounded_rect};
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
@@ -183,16 +181,7 @@ impl Draw {
         outline: Option<(u8, u8, u8, u8)>,
         _width: u32,
     ) -> Result<(), PilError> {
-        self.rounded_rectangle_with_diameter(
-            x0,
-            y0,
-            x1,
-            y1,
-            radius * 2.0,
-            fill,
-            outline,
-            _width,
-        )
+        self.rounded_rectangle_with_diameter(x0, y0, x1, y1, radius * 2.0, fill, outline, _width)
     }
 
     /// Draws a rounded rectangle from the diameter already computed by a
@@ -311,9 +300,8 @@ impl Draw {
         all_corners: bool,
     ) -> Result<(), PilError> {
         if all_corners && corners.iter().all(|corner| *corner) {
-            return self.rounded_rectangle_with_diameter(
-                x0, y0, x1, y1, diameter, fill, outline, width,
-            );
+            return self
+                .rounded_rectangle_with_diameter(x0, y0, x1, y1, diameter, fill, outline, width);
         }
         self.rounded_rectangle_with_partial_corners(
             x0, y0, x1, y1, diameter, fill, outline, width, corners,
@@ -492,12 +480,7 @@ fn queue_partial_pieslice(draw: &mut Draw, part: RoundedRectPart, color: (u8, u8
     );
 }
 
-fn queue_partial_arc(
-    draw: &mut Draw,
-    part: RoundedRectPart,
-    color: (u8, u8, u8, u8),
-    width: u32,
-) {
+fn queue_partial_arc(draw: &mut Draw, part: RoundedRectPart, color: (u8, u8, u8, u8), width: u32) {
     draw.image = Image::push_op(
         &draw.image,
         PipelineOp::DrawArc {

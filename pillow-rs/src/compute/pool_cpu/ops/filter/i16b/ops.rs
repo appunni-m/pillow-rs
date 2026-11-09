@@ -25,7 +25,9 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
     selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
     if selection.implementation.architecture != Architecture::Default {
-        return Err(PilError::InternalError("I;16B selected an unowned architecture".into()));
+        return Err(PilError::InternalError(
+            "I;16B selected an unowned architecture".into(),
+        ));
     }
     super::default::execute(image, request)
 }

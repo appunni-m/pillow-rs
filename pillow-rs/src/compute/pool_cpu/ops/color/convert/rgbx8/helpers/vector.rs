@@ -7,12 +7,8 @@ use crate::raster::{DynamicImage, Mode, RgbImage, RgbaImage};
 pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, PilError> {
     match target {
         Mode::ImageRgb8 => convert_rgb(source),
-        Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 => {
-            convert_luma_alpha(source, target)
-        }
-        Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8 => {
-            convert_rgba(source, target)
-        }
+        Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 => convert_luma_alpha(source, target),
+        Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8 => convert_rgba(source, target),
         Mode::ImageCmyk8 => convert_cmyk(source),
         Mode::ImageYCbCr8 => convert_ycbcr(source),
         Mode::ImageHsv8 => convert_hsv(source),
@@ -54,7 +50,10 @@ fn convert_luma_alpha(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
 }
 
 fn convert_rgba(source: &RgbaImage, target: Mode) -> Result<DynamicImage, PilError> {
-    let output = crate::compute::pool_cpu::ops::color::convert::rgba8::helpers::opaque_padding::execute(source)?;
+    let output =
+        crate::compute::pool_cpu::ops::color::convert::rgba8::helpers::opaque_padding::execute(
+            source,
+        )?;
     match target {
         Mode::ImageRgba8 => Ok(DynamicImage::ImageRgba8(output)),
         // NO_PILLOW_SUPPORT: the archived Pillow Convert table rejects RGBX to RGBa.
@@ -67,7 +66,10 @@ fn convert_rgba(source: &RgbaImage, target: Mode) -> Result<DynamicImage, PilErr
 
 fn convert_cmyk(source: &RgbaImage) -> Result<DynamicImage, PilError> {
     let (bytes, blocks) = native_rgb::to_cmyk::<4>(
-        source.as_raw(), source.width(), source.height(), Mode::ImageRgbx8,
+        source.as_raw(),
+        source.width(),
+        source.height(),
+        Mode::ImageRgbx8,
     )?;
     let allocation = bytes.capacity();
     let output = RgbaImage::from_raw(source.width(), source.height(), bytes)
@@ -78,18 +80,25 @@ fn convert_cmyk(source: &RgbaImage) -> Result<DynamicImage, PilError> {
 
 fn convert_ycbcr(source: &RgbaImage) -> Result<DynamicImage, PilError> {
     let (bytes, blocks) = native_rgb::to_ycbcr::<4>(
-        source.as_raw(), source.width(), source.height(), Mode::ImageRgbx8,
+        source.as_raw(),
+        source.width(),
+        source.height(),
+        Mode::ImageRgbx8,
     )?;
     let allocation = bytes.capacity();
-    let output = RgbImage::from_raw(source.width(), source.height(), bytes)
-        .ok_or_else(|| PilError::InternalError("RGBX Convert YCbCr output shape mismatch".into()))?;
+    let output = RgbImage::from_raw(source.width(), source.height(), bytes).ok_or_else(|| {
+        PilError::InternalError("RGBX Convert YCbCr output shape mismatch".into())
+    })?;
     record_vector_output(blocks, allocation);
     Ok(DynamicImage::ImageYCbCr8(output))
 }
 
 fn convert_hsv(source: &RgbaImage) -> Result<DynamicImage, PilError> {
     let (bytes, blocks) = native_rgb::to_hsv::<4>(
-        source.as_raw(), source.width(), source.height(), Mode::ImageRgbx8,
+        source.as_raw(),
+        source.width(),
+        source.height(),
+        Mode::ImageRgbx8,
     )?;
     let allocation = bytes.capacity();
     let output = RgbImage::from_raw(source.width(), source.height(), bytes)
@@ -100,7 +109,10 @@ fn convert_hsv(source: &RgbaImage) -> Result<DynamicImage, PilError> {
 
 fn convert_i32(source: &RgbaImage) -> Result<DynamicImage, PilError> {
     let (bytes, blocks) = native_rgb::to_i32::<4>(
-        source.as_raw(), source.width(), source.height(), Mode::ImageRgbx8,
+        source.as_raw(),
+        source.width(),
+        source.height(),
+        Mode::ImageRgbx8,
     )?;
     let allocation = bytes.capacity();
     let output = RgbaImage::from_raw(source.width(), source.height(), bytes)
@@ -111,7 +123,10 @@ fn convert_i32(source: &RgbaImage) -> Result<DynamicImage, PilError> {
 
 fn convert_f32(source: &RgbaImage) -> Result<DynamicImage, PilError> {
     let (bytes, blocks) = native_rgb::to_f32::<4>(
-        source.as_raw(), source.width(), source.height(), Mode::ImageRgbx8,
+        source.as_raw(),
+        source.width(),
+        source.height(),
+        Mode::ImageRgbx8,
     )?;
     let allocation = bytes.capacity();
     let output = RgbaImage::from_raw(source.width(), source.height(), bytes)

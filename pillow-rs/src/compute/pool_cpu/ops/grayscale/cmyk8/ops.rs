@@ -1,13 +1,16 @@
 //! CMYK semantics composed with declared concrete architecture strategies.
 
-use crate::compute::{Architecture, ExecutionContext, registry::support::{
-    ImplementationSupport, ModeSupport, OperationId, OutputModeRule, PaletteKnowledge,
-    StrategyGuard, StrategyInputs,
-}};
+use super::default::grayscale_impl;
 use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
+use crate::compute::{
+    Architecture, ExecutionContext,
+    registry::support::{
+        ImplementationSupport, ModeSupport, OperationId, OutputModeRule, PaletteKnowledge,
+        StrategyGuard, StrategyInputs,
+    },
+};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
-use super::default::grayscale_impl;
 
 const AVX2_REQUIREMENTS: &[Architecture] = if cfg!(target_feature = "ssse3") {
     &[Architecture::Sse2, Architecture::Ssse3, Architecture::Avx2]

@@ -1,5 +1,5 @@
-use super::types::{PasteColorComponent, PasteSource};
 use super::color::bad_single_color;
+use super::types::{PasteColorComponent, PasteSource};
 use crate::error::PilError;
 use crate::raster::Mode;
 
@@ -250,7 +250,9 @@ fn real_number_type_error(type_name: &str) -> PilError {
 }
 
 fn cannot_convert_to_integer(type_name: &str) -> PilError {
-    PilError::TypeError(format!("'{type_name}' object cannot be interpreted as an integer"))
+    PilError::TypeError(format!(
+        "'{type_name}' object cannot be interpreted as an integer"
+    ))
 }
 
 pub(super) fn paste_source_from_color_string(
@@ -308,12 +310,8 @@ pub(super) fn invalid_component_error(mode: Mode) -> PilError {
         | Mode::ImageI16
         | Mode::ImageI16L
         | Mode::ImageI16B
-        | Mode::ImageI16N => {
-            "color must be int or single-element tuple"
-        }
-        Mode::ImageLumaA8
-        | Mode::ImageLaPremultiplied8
-        | Mode::ImagePaletteAlpha8 => {
+        | Mode::ImageI16N => "color must be int or single-element tuple",
+        Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => {
             "color must be int, or tuple of one or two elements"
         }
         _ => "color must be int, or tuple of one, three or four elements",

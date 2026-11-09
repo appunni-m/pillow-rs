@@ -2,9 +2,7 @@
 
 use crate::checked_dims::CheckedDims;
 use crate::compute::pool_cpu::ops::rotate::helpers::geometry::rotate_geometry;
-use crate::compute::pool_cpu::ops::rotate::helpers::vector_interpolation::{
-    self, LANES,
-};
+use crate::compute::pool_cpu::ops::rotate::helpers::vector_interpolation::{self, LANES};
 use crate::compute::pool_cpu::ops::rotate::ops::RotateRequest;
 use crate::error::PilError;
 use crate::raster::{Rgba, RgbaImage};
@@ -51,7 +49,14 @@ pub(crate) fn execute<const FLOAT: bool>(
         while x < destination_width {
             let active = (destination_width - x).min(LANES);
             let samples = typed_samples::<FLOAT>(
-                image.as_raw(), width, height, geometry.affine, x, y, active, scalar_fill,
+                image.as_raw(),
+                width,
+                height,
+                geometry.affine,
+                x,
+                y,
+                active,
+                scalar_fill,
             );
             let values = bilinear_vector::<FLOAT>(&samples).to_array();
             for lane in 0..active {
@@ -102,7 +107,11 @@ fn typed_samples<const FLOAT: bool>(
     };
     for lane in 0..active {
         let sample = vector_interpolation::sample_coordinates(
-            affine, width, height, destination_x + lane, destination_y,
+            affine,
+            width,
+            height,
+            destination_x + lane,
+            destination_y,
         );
         if !sample.valid {
             continue;
@@ -119,7 +128,12 @@ fn typed_samples<const FLOAT: bool>(
 
 fn scalar_sample<const FLOAT: bool>(source: &[u8], width: usize, x: usize, y: usize) -> f64 {
     let index = (y * width + x) * 4;
-    let bytes = [source[index], source[index + 1], source[index + 2], source[index + 3]];
+    let bytes = [
+        source[index],
+        source[index + 1],
+        source[index + 2],
+        source[index + 3],
+    ];
     if FLOAT {
         f64::from(f32::from_le_bytes(bytes))
     } else {
@@ -145,8 +159,7 @@ fn bilinear_vector<const FLOAT: bool>(samples: &TypedSamples) -> f64x8 {
     let bottom_delta = difference(samples.p11, samples.p01);
     if FLOAT {
         let top = vector_interpolation::fused_mul_add(top_delta, fx, f64x8::new(samples.p00));
-        let bottom =
-            vector_interpolation::fused_mul_add(bottom_delta, fx, f64x8::new(samples.p01));
+        let bottom = vector_interpolation::fused_mul_add(bottom_delta, fx, f64x8::new(samples.p01));
         vector_interpolation::fused_mul_add(bottom - top, fy, top)
     } else {
         let top = top_delta * fx + f64x8::new(samples.p00);

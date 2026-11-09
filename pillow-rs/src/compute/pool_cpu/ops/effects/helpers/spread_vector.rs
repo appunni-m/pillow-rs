@@ -30,7 +30,14 @@ pub(crate) fn prepare<'a>(
     channels: usize,
     distance: u32,
 ) -> Kernel<'a> {
-    Kernel { source, width, height, channels, distance, hidden_lanes: None }
+    Kernel {
+        source,
+        width,
+        height,
+        channels,
+        distance,
+        hidden_lanes: None,
+    }
 }
 
 pub(crate) fn prepare_with_hidden_lanes<'a>(
@@ -41,7 +48,14 @@ pub(crate) fn prepare_with_hidden_lanes<'a>(
     distance: u32,
     hidden_lanes: Option<&'a HiddenPixelLanes>,
 ) -> Kernel<'a> {
-    Kernel { source, width, height, channels, distance, hidden_lanes }
+    Kernel {
+        source,
+        width,
+        height,
+        channels,
+        distance,
+        hidden_lanes,
+    }
 }
 
 pub(crate) fn execute_sse2(kernel: Kernel<'_>) -> Result<Output, PilError> {
@@ -60,21 +74,8 @@ fn execute_vector(kernel: Kernel<'_>) -> Result<Output, PilError> {
     let width = kernel.width;
     let height = kernel.height;
     let channels = kernel.channels;
-    let expected_len = usize::try_from(width)
-        .ok()
-        .and_then(|width| {
-            usize::try_from(height)
-                .ok()
-                .and_then(|height| width.checked_mul(height))
-        })
-        .and_then(|pixels| pixels.checked_mul(channels))
-        .ok_or_else(|| PilError::ValueError("SIMD EffectSpread image length overflow".into()))?;
     let source = kernel.source;
-    if source.len() != expected_len {
-        return Err(PilError::InternalError(
-            "SIMD EffectSpread source byte length did not match its dimensions".into(),
-        ));
-    }
+    validate_source(width, height, channels, source)?;
 
     if width == 0 || height == 0 {
         crate::compute::record_pipeline_operation_path("scalar-control");
@@ -118,10 +119,10 @@ fn execute_vector(kernel: Kernel<'_>) -> Result<Output, PilError> {
             for x in 0..width_i64 {
                 let source_pixel = (y * width_i64 + x) as usize;
                 let source_start = source_pixel * channels;
-                let destination_x = x + i64::from((u64::from(rng.next()) % distance) as u32)
-                    - half_distance;
-                let destination_y = y + i64::from((u64::from(rng.next()) % distance) as u32)
-                    - half_distance;
+                let destination_x =
+                    x + i64::from((u64::from(rng.next()) % distance) as u32) - half_distance;
+                let destination_y =
+                    y + i64::from((u64::from(rng.next()) % distance) as u32) - half_distance;
                 let source_block = load_pixel(source, source_start, channels);
                 if destination_x >= 0
                     && destination_x < width_i64
@@ -149,13 +150,9 @@ fn execute_vector(kernel: Kernel<'_>) -> Result<Output, PilError> {
     })?;
 
     let hidden_lanes = match (kernel.hidden_lanes, lane_rng) {
-        (Some(lanes), Some(rng)) => Some(carry_hidden_lanes(
-            lanes,
-            width,
-            height,
-            distance_u32,
-            rng,
-        )?),
+        (Some(lanes), Some(rng)) => {
+            Some(carry_hidden_lanes(lanes, width, height, distance_u32, rng)?)
+        }
         (Some(lanes), None) => Some(lanes.clone()),
         (None, _) => None,
     };
@@ -163,7 +160,35 @@ fn execute_vector(kernel: Kernel<'_>) -> Result<Output, PilError> {
     crate::compute::record_pipeline_operation_path("vector");
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(0);
-    Ok(Output { width, height, bytes: output, hidden_lanes })
+    Ok(Output {
+        width,
+        height,
+        bytes: output,
+        hidden_lanes,
+    })
+}
+
+fn validate_source(
+    width: u32,
+    height: u32,
+    channels: usize,
+    source: &[u8],
+) -> Result<(), PilError> {
+    let expected_len = usize::try_from(width)
+        .ok()
+        .and_then(|width| {
+            usize::try_from(height)
+                .ok()
+                .and_then(|height| width.checked_mul(height))
+        })
+        .and_then(|pixels| pixels.checked_mul(channels))
+        .ok_or_else(|| PilError::ValueError("SIMD EffectSpread image length overflow".into()))?;
+    if source.len() != expected_len {
+        return Err(PilError::InternalError(
+            "SIMD EffectSpread source byte length did not match its dimensions".into(),
+        ));
+    }
+    Ok(())
 }
 
 fn copy_vectorized(
@@ -187,7 +212,12 @@ fn copy_vectorized(
     crate::compute::record_pipeline_operation_path("native-copy");
     crate::compute::record_pipeline_operation_vector_blocks((vector_len / 16) as u64);
     crate::compute::record_pipeline_operation_scalar_tail((source.len() - vector_len) as u64);
-    Ok(Output { width, height, bytes: output, hidden_lanes })
+    Ok(Output {
+        width,
+        height,
+        bytes: output,
+        hidden_lanes,
+    })
 }
 
 fn carry_hidden_lanes(
@@ -244,10 +274,10 @@ fn update_spread_lanes(
     for y in 0..height_i64 {
         for x in 0..width_i64 {
             let source_pixel = (y * width_i64 + x) as usize;
-            let destination_x = x + i64::from((u64::from(rng.next()) % distance) as u32)
-                - half_distance;
-            let destination_y = y + i64::from((u64::from(rng.next()) % distance) as u32)
-                - half_distance;
+            let destination_x =
+                x + i64::from((u64::from(rng.next()) % distance) as u32) - half_distance;
+            let destination_y =
+                y + i64::from((u64::from(rng.next()) % distance) as u32) - half_distance;
             if destination_x >= 0
                 && destination_x < width_i64
                 && destination_y >= 0
@@ -278,9 +308,11 @@ fn copy_lane_pixel(
     let destination_end = destination_start
         .checked_add(lane_count)
         .ok_or_else(|| PilError::ValueError("SIMD EffectSpread lane range overflow".into()))?;
-    let destination = output.get_mut(destination_start..destination_end).ok_or_else(|| {
-        PilError::InternalError("SIMD EffectSpread lane output index was invalid".into())
-    })?;
+    let destination = output
+        .get_mut(destination_start..destination_end)
+        .ok_or_else(|| {
+            PilError::InternalError("SIMD EffectSpread lane output index was invalid".into())
+        })?;
     destination.copy_from_slice(source);
     Ok(())
 }

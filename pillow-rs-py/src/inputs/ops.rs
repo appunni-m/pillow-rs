@@ -65,9 +65,7 @@ pub(crate) fn nonnegative_output_size_items_from_python<'py>(
         return Err(PyValueError::new_err("Size must be a list or tuple"));
     }
     if value.len()? != 2 {
-        return Err(PyValueError::new_err(
-            "Size must be a sequence of length 2",
-        ));
+        return Err(PyValueError::new_err("Size must be a sequence of length 2"));
     }
     let width = value.get_item(0)?;
     if width.lt(0)? {
@@ -114,9 +112,10 @@ pub(crate) fn rotate_fill_from_python(
         return transform_scalar_fill_from_python(value, mode, true)
             .map(imageops_color_from_transform_fill);
     }
-    Ok(transform_fill_from_python(value, mode)?
-        .map(imageops_color_from_transform_fill)
-        .unwrap_or(pillow_rs::ImageOpsColor::None))
+    Ok(transform_fill_from_python(value, mode)?.map_or(
+        pillow_rs::ImageOpsColor::None,
+        imageops_color_from_transform_fill,
+    ))
 }
 
 pub(crate) fn transform_fill_preflight_from_python(
@@ -128,8 +127,7 @@ pub(crate) fn transform_fill_preflight_from_python(
         return Ok((None, None));
     };
     if value.cast::<PyString>().is_ok() {
-        return transform_fill_from_python(Some(value), mode)
-            .map(|fill| (fill, None));
+        return transform_fill_from_python(Some(value), mode).map(|fill| (fill, None));
     }
     palette_image_new_fill_preflight_from_python(py, value, mode)
 }
@@ -268,7 +266,10 @@ pub(crate) fn imageops_fill_from_python(
     if mode == pillow_rs::Mode::ImageF32 {
         return imageops_float_fill_from_python(value);
     }
-    if matches!(mode, pillow_rs::Mode::ImageRgb32F | pillow_rs::Mode::ImageRgba32F) {
+    if matches!(
+        mode,
+        pillow_rs::Mode::ImageRgb32F | pillow_rs::Mode::ImageRgba32F
+    ) {
         return imageops_native_f32_fill_from_python(value);
     }
     if mode == pillow_rs::Mode::ImagePalette8 {
@@ -276,9 +277,7 @@ pub(crate) fn imageops_fill_from_python(
     }
 
     if value.is_instance_of::<PyInt>() {
-        return value
-            .extract::<i64>()
-            .map(pillow_rs::ImageOpsColor::Scalar);
+        return value.extract::<i64>().map(pillow_rs::ImageOpsColor::Scalar);
     }
     if value.is_instance_of::<PyFloat>() {
         return value
@@ -307,16 +306,10 @@ pub(crate) fn imageops_fill_from_python(
             ));
         }
     }
-    if tuple.len() == 1
-        && mode.band_count() == 1
-        && !tuple.get_item(0)?.is_instance_of::<PyInt>()
-    {
+    if tuple.len() == 1 && mode.band_count() == 1 && !tuple.get_item(0)?.is_instance_of::<PyInt>() {
         return Ok(pillow_rs::ImageOpsColor::TupleComponents(Vec::new()));
     }
-    if tuple.len() == 1
-        && mode.band_count() >= 3
-        && !tuple.get_item(0)?.is_instance_of::<PyInt>()
-    {
+    if tuple.len() == 1 && mode.band_count() >= 3 && !tuple.get_item(0)?.is_instance_of::<PyInt>() {
         return Ok(pillow_rs::ImageOpsColor::TupleComponents(Vec::new()));
     }
 
@@ -340,9 +333,7 @@ fn imageops_palette_fill_from_python(
         return Ok(fill);
     }
     if value.is_instance_of::<PyInt>() {
-        return value
-            .extract::<i64>()
-            .map(pillow_rs::ImageOpsColor::Scalar);
+        return value.extract::<i64>().map(pillow_rs::ImageOpsColor::Scalar);
     }
     if let Ok(tuple) = value.cast::<PyTuple>() {
         if tuple.len() == 1 {
@@ -397,9 +388,7 @@ fn imageops_tuple_arity_is_valid(len: usize, mode: pillow_rs::Mode) -> bool {
     }
 }
 
-fn imageops_float_fill_from_python(
-    value: &Bound<'_, PyAny>,
-) -> PyResult<pillow_rs::ImageOpsColor> {
+fn imageops_float_fill_from_python(value: &Bound<'_, PyAny>) -> PyResult<pillow_rs::ImageOpsColor> {
     let scalar = if let Ok(tuple) = value.cast::<PyTuple>() {
         if tuple.len() == 1 {
             tuple.get_item(0)?
@@ -437,11 +426,7 @@ pub(crate) fn palette_integer_component_from_python(
         .ok()?
         .extract::<bool>()
         .ok()?;
-    let magnitude = int_type
-        .getattr("__abs__")
-        .ok()?
-        .call1((component,))
-        .ok()?;
+    let magnitude = int_type.getattr("__abs__").ok()?.call1((component,)).ok()?;
     let bits = int_type
         .getattr("bit_length")
         .ok()?
@@ -473,9 +458,10 @@ pub(crate) fn convert_mode_input_from_python(
     match value {
         None => Ok(pillow_rs::ConvertModeInput::None),
         Some(value) => match value.extract::<String>() {
-            Ok(value) => Ok(pillow_rs::Mode::from_pillow_name(&value)
-                .map(pillow_rs::ConvertModeInput::Mode)
-                .unwrap_or_else(|| pillow_rs::ConvertModeInput::InvalidName(value))),
+            Ok(value) => Ok(pillow_rs::Mode::from_pillow_name(&value).map_or_else(
+                || pillow_rs::ConvertModeInput::InvalidName(value),
+                pillow_rs::ConvertModeInput::Mode,
+            )),
             Err(_) => Ok(pillow_rs::ConvertModeInput::InvalidType(
                 value.get_type().name()?.to_string(),
             )),
@@ -610,16 +596,14 @@ pub(crate) fn palette_transform_fill_from_python(
         return Ok(pillow_rs::TransformFill::Name(value));
     }
     if let Ok(values) = value.cast::<PyTuple>() {
-        if let Some(fill) =
-            palette_transform_integer_color_from_python(values.iter(), values.len())
+        if let Some(fill) = palette_transform_integer_color_from_python(values.iter(), values.len())
         {
             return Ok(fill);
         }
         return palette_transform_sequence_from_python(values.iter(), values.len(), true);
     }
     if let Ok(values) = value.cast::<PyList>() {
-        if let Some(fill) =
-            palette_transform_integer_color_from_python(values.iter(), values.len())
+        if let Some(fill) = palette_transform_integer_color_from_python(values.iter(), values.len())
         {
             return Ok(fill);
         }
@@ -770,9 +754,7 @@ fn reduce_sequence_items(
 
     let length = sequence.len()?;
     if length != expected_length {
-        return Ok(ReduceSequence::WrongLength {
-            length: length as usize,
-        });
+        return Ok(ReduceSequence::WrongLength { length });
     }
 
     let mut items = Vec::with_capacity(expected_length);

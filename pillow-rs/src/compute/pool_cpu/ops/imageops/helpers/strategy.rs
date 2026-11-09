@@ -1,15 +1,21 @@
 //! Composition helpers for exact-mode imageops strategies.
 
-use crate::compute::{Architecture, Backend, ExecutionContext};
 use crate::compute::registry::support::{
-    ImplementationSupport, ModeSupport, OperationId, PaletteKnowledge,
-    RequestFacts, SecondaryInputFacts, StrategyGuard, StrategyInputs, StrategySelection,
-    SupportAssessment,
+    ImplementationSupport, InputContract, ModeSupport, OperationId, PaletteKnowledge, RequestFacts,
+    SecondaryInputFacts, StrategyGuard, StrategyInputs, StrategySelection, SupportAssessment,
 };
+use crate::compute::{Architecture, Backend, ExecutionContext};
 use crate::error::PilError;
 use crate::image::Image;
 use crate::raster::{DynamicImage, Mode};
 use std::sync::Arc;
+
+pub(crate) const fn crop_border_serial_support(
+    mode: Mode,
+    inputs: &'static [InputContract],
+) -> ModeSupport {
+    ModeSupport::serial(OperationId::CropBorder, mode, inputs)
+}
 
 pub(crate) fn selected_quantize_architecture(
     selection: &StrategySelection,
@@ -43,14 +49,15 @@ macro_rules! declare_quantize_native_mode {
                 $crate::raster::Mode::$mode,
             )?;
             match architecture {
-                $crate::compute::Architecture::Default => {
-                    super::default::quantize_impl::execute(
-                        samples, width, height, colors, kmeans, method,
-                    )
-                }
+                $crate::compute::Architecture::Default => super::default::quantize_impl::execute(
+                    samples, width, height, colors, kmeans, method,
+                ),
                 _ => Err($crate::error::PilError::InternalError(
-                    concat!($mode_name, " Quantize selected an unimplemented architecture")
-                        .into(),
+                    concat!(
+                        $mode_name,
+                        " Quantize selected an unimplemented architecture"
+                    )
+                    .into(),
                 )),
             }
         }
@@ -200,7 +207,11 @@ pub(crate) const fn native_byte_point_architectures(
     mode: Mode,
     channels: u8,
 ) -> [ImplementationSupport; 3] {
-    cpu_architectures_for(operation, mode, StrategyGuard::NativePointwiseBytes { channels })
+    cpu_architectures_for(
+        operation,
+        mode,
+        StrategyGuard::NativePointwiseBytes { channels },
+    )
 }
 
 pub(crate) const fn cpu_architectures_for(
@@ -447,16 +458,17 @@ pub(crate) fn select_invert_strategy(
     byte_len: usize,
     ctx: &crate::compute::ExecutionContext,
 ) -> Result<crate::compute::registry::support::StrategySelection, crate::error::PilError> {
-    use crate::compute::registry::support::{
-        PaletteKnowledge, StrategyInputs, SupportAssessment,
-    };
-    match support.assess(ctx, StrategyInputs {
-        width,
-        height,
-        byte_len: Some(byte_len),
-        palette: PaletteKnowledge::Unknown,
-        request: Default::default(),
-    })? {
+    use crate::compute::registry::support::{PaletteKnowledge, StrategyInputs, SupportAssessment};
+    match support.assess(
+        ctx,
+        StrategyInputs {
+            width,
+            height,
+            byte_len: Some(byte_len),
+            palette: PaletteKnowledge::Unknown,
+            request: Default::default(),
+        },
+    )? {
         SupportAssessment::Ready(selection) => Ok(selection),
         SupportAssessment::Rejected { reason, kind, .. } => Err(kind.into_error(reason)),
         SupportAssessment::Deferred { .. } => Err(crate::error::PilError::InternalError(
@@ -473,10 +485,12 @@ macro_rules! declare_invert_mode {
                     crate::compute::registry::support::OperationId::Invert,
                     crate::raster::Mode::$mode,
                     crate::compute::registry::support::OutputModeRule::Preserve,
-                    &[crate::compute::registry::support::InputContract::CheckedByteDimensions {
-                        bytes_per_pixel: $bytes_per_pixel,
-                        allow_empty: true,
-                    }],
+                    &[
+                        crate::compute::registry::support::InputContract::CheckedByteDimensions {
+                            bytes_per_pixel: $bytes_per_pixel,
+                            allow_empty: true,
+                        },
+                    ],
                     &[],
                     reason,
                 ),
@@ -484,10 +498,12 @@ macro_rules! declare_invert_mode {
                     crate::compute::registry::support::OperationId::Invert,
                     crate::raster::Mode::$mode,
                     crate::compute::registry::support::OutputModeRule::Preserve,
-                    &[crate::compute::registry::support::InputContract::CheckedByteDimensions {
-                        bytes_per_pixel: $bytes_per_pixel,
-                        allow_empty: true,
-                    }],
+                    &[
+                        crate::compute::registry::support::InputContract::CheckedByteDimensions {
+                            bytes_per_pixel: $bytes_per_pixel,
+                            allow_empty: true,
+                        },
+                    ],
                     &[],
                 ),
             };
@@ -496,9 +512,10 @@ macro_rules! declare_invert_mode {
             Default(&'a $input),
         }
 
-        pub(crate) type Strategy<'a> = crate::compute::pool_cpu::helpers::execution::prepared::Prepared<
-            ArchitectureStrategy<'a>,
-        >;
+        pub(crate) type Strategy<'a> =
+            crate::compute::pool_cpu::helpers::execution::prepared::Prepared<
+                ArchitectureStrategy<'a>,
+            >;
 
         pub(crate) fn prepare<'a>(
             input: &'a $input,
@@ -511,28 +528,25 @@ macro_rules! declare_invert_mode {
                 input.as_raw().len(),
                 ctx,
             )?;
-            Ok(Strategy::new(ArchitectureStrategy::Default(input), selection))
+            Ok(Strategy::new(
+                ArchitectureStrategy::Default(input),
+                selection,
+            ))
         }
 
         pub(crate) fn execute(
             strategy: Strategy<'_>,
         ) -> Result<crate::raster::DynamicImage, crate::error::PilError> {
-                match strategy.implementation {
-                    ArchitectureStrategy::Default(input) => $implementation(input),
-                }
+            match strategy.implementation {
+                ArchitectureStrategy::Default(input) => $implementation(input),
+            }
         }
     };
 }
 
 macro_rules! declare_invert_native_mode {
     ($mode:ident, $input:ty, $channels:expr, $bytes_per_pixel:expr $(,)?) => {
-        declare_invert_native_mode!(
-            $mode,
-            $input,
-            $channels,
-            $bytes_per_pixel,
-            None
-        );
+        declare_invert_native_mode!($mode, $input, $channels, $bytes_per_pixel, None);
     };
     ($mode:ident, $input:ty, $channels:expr, $bytes_per_pixel:expr, $core_only_reason:expr $(,)?) => {
         const ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 3] = [
@@ -540,7 +554,10 @@ macro_rules! declare_invert_native_mode {
                 crate::compute::registry::support::OperationId::Invert,
                 crate::raster::Mode::$mode,
                 crate::compute::Architecture::Sse2,
-                cfg!(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2")),
+                cfg!(all(
+                    any(target_arch = "x86", target_arch = "x86_64"),
+                    target_feature = "sse2"
+                )),
                 &[crate::compute::Architecture::Sse2],
                 crate::compute::registry::support::StrategyGuard::NativeBytePrefix {
                     channels: $channels,
@@ -569,29 +586,34 @@ macro_rules! declare_invert_native_mode {
         ];
 
         // NO_PILLOW_SUPPORT: `Some(reason)` declares the exact mode's native Invert extension.
-        pub(crate) const SUPPORT: crate::compute::registry::support::ModeSupport = match $core_only_reason {
-            Some(reason) => crate::compute::registry::support::ModeSupport::cpu_core_only(
-                crate::compute::registry::support::OperationId::Invert,
-                crate::raster::Mode::$mode,
-                crate::compute::registry::support::OutputModeRule::Preserve,
-                &[crate::compute::registry::support::InputContract::CheckedByteDimensions {
-                    bytes_per_pixel: $bytes_per_pixel,
-                    allow_empty: true,
-                }],
-                &ARCHITECTURES,
-                reason,
-            ),
-            None => crate::compute::registry::support::ModeSupport::cpu(
-                crate::compute::registry::support::OperationId::Invert,
-                crate::raster::Mode::$mode,
-                crate::compute::registry::support::OutputModeRule::Preserve,
-                &[crate::compute::registry::support::InputContract::CheckedByteDimensions {
-                    bytes_per_pixel: $bytes_per_pixel,
-                    allow_empty: true,
-                }],
-                &ARCHITECTURES,
-            ),
-        };
+        pub(crate) const SUPPORT: crate::compute::registry::support::ModeSupport =
+            match $core_only_reason {
+                Some(reason) => crate::compute::registry::support::ModeSupport::cpu_core_only(
+                    crate::compute::registry::support::OperationId::Invert,
+                    crate::raster::Mode::$mode,
+                    crate::compute::registry::support::OutputModeRule::Preserve,
+                    &[
+                        crate::compute::registry::support::InputContract::CheckedByteDimensions {
+                            bytes_per_pixel: $bytes_per_pixel,
+                            allow_empty: true,
+                        },
+                    ],
+                    &ARCHITECTURES,
+                    reason,
+                ),
+                None => crate::compute::registry::support::ModeSupport::cpu(
+                    crate::compute::registry::support::OperationId::Invert,
+                    crate::raster::Mode::$mode,
+                    crate::compute::registry::support::OutputModeRule::Preserve,
+                    &[
+                        crate::compute::registry::support::InputContract::CheckedByteDimensions {
+                            bytes_per_pixel: $bytes_per_pixel,
+                            allow_empty: true,
+                        },
+                    ],
+                    &ARCHITECTURES,
+                ),
+            };
 
         pub(crate) enum ArchitectureStrategy<'a> {
             Default(&'a $input),
@@ -620,8 +642,9 @@ macro_rules! declare_invert_native_mode {
             let implementation = match selection.implementation.architecture {
                 crate::compute::Architecture::Sse2 => ArchitectureStrategy::Sse2(input),
                 crate::compute::Architecture::Neon => ArchitectureStrategy::Neon(input),
-                crate::compute::Architecture::WasmSimd128 =>
-                    ArchitectureStrategy::WasmSimd128(input),
+                crate::compute::Architecture::WasmSimd128 => {
+                    ArchitectureStrategy::WasmSimd128(input)
+                }
                 _ => ArchitectureStrategy::Default(input),
             };
             Ok(Strategy {
@@ -643,11 +666,14 @@ macro_rules! declare_invert_native_mode {
                 self,
             ) -> Result<crate::raster::DynamicImage, crate::error::PilError> {
                 match self.prepared.implementation {
-                    ArchitectureStrategy::Default(input) => super::default::invert_impl::execute(input),
+                    ArchitectureStrategy::Default(input) => {
+                        super::default::invert_impl::execute(input)
+                    }
                     ArchitectureStrategy::Sse2(input) => super::sse2::invert_impl::execute(input),
                     ArchitectureStrategy::Neon(input) => super::neon::invert_impl::execute(input),
-                    ArchitectureStrategy::WasmSimd128(input) =>
-                        super::wasm_simd128::invert_impl::execute(input),
+                    ArchitectureStrategy::WasmSimd128(input) => {
+                        super::wasm_simd128::invert_impl::execute(input)
+                    }
                 }
             }
         }
@@ -662,20 +688,25 @@ macro_rules! declare_invert_native_mode {
 
 macro_rules! declare_invert_architecture {
     ($mode:ident, $carrier_mode:ident, $input:ty, $channels:expr, $invert_alpha:expr) => {
-        pub(crate) fn execute(input: &$input) -> Result<crate::raster::DynamicImage, crate::error::PilError> {
+        pub(crate) fn execute(
+            input: &$input,
+        ) -> Result<crate::raster::DynamicImage, crate::error::PilError> {
             use crate::compute::pool_cpu::ops::imageops::helpers::native_bytes::NativeInvertOutput;
             let (width, height) = input.dimensions();
             match crate::compute::pool_cpu::ops::imageops::helpers::native_bytes::invert(
-                input.as_raw(), width, height, $channels, $invert_alpha,
+                input.as_raw(),
+                width,
+                height,
+                $channels,
+                $invert_alpha,
             )? {
                 NativeInvertOutput::Empty => {
                     crate::compute::record_pipeline_operation_path("native-copy");
                     Ok(crate::raster::DynamicImage::$mode(input.clone()))
                 }
                 NativeInvertOutput::Exact(bytes) => {
-                    let image = crate::image_utils::raw_bytes_to_image(
-                        width, height, bytes, $channels,
-                    )?;
+                    let image =
+                        crate::image_utils::raw_bytes_to_image(width, height, bytes, $channels)?;
                     let crate::raster::DynamicImage::$carrier_mode(image) = image else {
                         return Err(crate::error::PilError::InternalError(
                             "Invert kernel returned a different carrier layout".into(),

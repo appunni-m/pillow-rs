@@ -58,12 +58,12 @@ pub(crate) fn formatted_pixel_to_js(value: pillow_rs::FormattedPixelValue) -> Js
         pillow_rs::FormattedPixelValue::U16Components(values) => {
             js_sys::Array::from_iter(values.into_iter().map(JsValue::from)).into()
         }
-        pillow_rs::FormattedPixelValue::FloatComponents(values) => {
-            js_sys::Array::from_iter(
-                values.into_iter().map(|value| JsValue::from_f64(f64::from(value))),
-            )
-            .into()
-        }
+        pillow_rs::FormattedPixelValue::FloatComponents(values) => js_sys::Array::from_iter(
+            values
+                .into_iter()
+                .map(|value| JsValue::from_f64(f64::from(value))),
+        )
+        .into(),
         pillow_rs::FormattedPixelValue::InlineComponents { bytes, bands } => {
             js_sys::Array::from_iter(
                 bytes

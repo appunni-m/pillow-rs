@@ -8,8 +8,7 @@ mod eager_cpu;
 pub(super) use eager_cpu::pipeline_timestamp;
 pub(crate) use eager_cpu::{
     begin_eager_cpu_operation_telemetry, cancel_eager_cpu_operation_telemetry,
-    finish_eager_cpu_operation_telemetry,
-    finish_eager_cpu_operation_telemetry_with_selection,
+    finish_eager_cpu_operation_telemetry, finish_eager_cpu_operation_telemetry_with_selection,
     record_eager_cpu_operation_receipt_with_selection,
     record_eager_cpu_operation_receipt_with_selection_and_receipts,
 };
@@ -376,15 +375,18 @@ impl PipelineOperationTelemetryCapture {
             previous_handoffs: None,
         };
         if enabled {
-            capture.previous_samples = Some(LAST_PIPELINE_OPERATION_TELEMETRY.with(|last| {
-                std::mem::take(&mut *last.borrow_mut())
-            }));
-            capture.previous_active = Some(ACTIVE_PIPELINE_OPERATION_TELEMETRY.with(|active| {
-                std::mem::take(&mut *active.borrow_mut())
-            }));
-            capture.previous_handoffs = Some(PENDING_PIPELINE_HANDOFFS.with(|pending| {
-                std::mem::take(&mut *pending.borrow_mut())
-            }));
+            capture.previous_samples = Some(
+                LAST_PIPELINE_OPERATION_TELEMETRY
+                    .with(|last| std::mem::take(&mut *last.borrow_mut())),
+            );
+            capture.previous_active = Some(
+                ACTIVE_PIPELINE_OPERATION_TELEMETRY
+                    .with(|active| std::mem::take(&mut *active.borrow_mut())),
+            );
+            capture.previous_handoffs = Some(
+                PENDING_PIPELINE_HANDOFFS
+                    .with(|pending| std::mem::take(&mut *pending.borrow_mut())),
+            );
         }
         capture
     }

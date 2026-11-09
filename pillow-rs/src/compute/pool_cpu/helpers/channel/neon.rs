@@ -1,9 +1,9 @@
 //! Original native NEON gathers with the capability token supplied by preparation.
 
-use wide::u8x16;
+use super::gather::gather_interleaved_channel;
 use fearless_simd::prelude::{SimdBase, SimdInterleaved};
 use fearless_simd::{Neon, u8x16 as SafeU8x16};
-use super::gather::gather_interleaved_channel;
+use wide::u8x16;
 
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 fearless_simd::kernel!(
@@ -76,7 +76,6 @@ fn gather_rgb_channel_neon_into<const CHANNEL: usize>(
     )
 }
 
-
 /// Extract one selected byte from packed LA with safe SIMD lane selection.
 /// Each vector block gathers sixteen luminance or alpha samples from two
 /// contiguous source vectors.
@@ -124,7 +123,6 @@ fn gather_la_channel_neon_into<const CHANNEL: usize>(
     )
 }
 
-
 /// Extract one selected byte from packed four-channel pixels with one NEON
 /// structure load. `vld4q_u8` deinterleaves sixteen pixels directly into four
 /// byte vectors, including CMYK and other four-byte native carriers.
@@ -159,9 +157,11 @@ fn gather_rgba_channel_neon_into<const CHANNEL: usize>(
     )
 }
 
-
 pub(crate) fn extract_channel_into<const CHANNELS: usize>(
-    source: &[u8], output: &mut [u8], channel: usize, neon: Neon,
+    source: &[u8],
+    output: &mut [u8],
+    channel: usize,
+    neon: Neon,
 ) -> (u64, u64) {
     match (CHANNELS, channel) {
         (2, 0) => gather_la_channel_neon_into::<0>(source, output),

@@ -6,12 +6,43 @@ use std::vec::Vec;
 use wide::{i16x8, u8x16, u16x8, u16x16};
 
 const LA_DUPLICATE_0: u8x16 = u8x16::new([0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7]);
-const LA_DUPLICATE_1: u8x16 = u8x16::new([8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15]);
+const LA_DUPLICATE_1: u8x16 =
+    u8x16::new([8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15]);
 const LA_LUMA_LANES: u8x16 = u8x16::new([
-    u8::MAX, 0, u8::MAX, 0, u8::MAX, 0, u8::MAX, 0, u8::MAX, 0, u8::MAX, 0, u8::MAX, 0, u8::MAX, 0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
 ]);
 const LA_ALPHA_LANES: u8x16 = u8x16::new([
-    0, u8::MAX, 0, u8::MAX, 0, u8::MAX, 0, u8::MAX, 0, u8::MAX, 0, u8::MAX, 0, u8::MAX, 0, u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
 ]);
 
 /// Appends the exact four-byte-to-LA output for the selected source mode.
@@ -29,10 +60,11 @@ pub(crate) fn append(source: &[u8], output: &mut Vec<u8>, source_mode: Mode) -> 
             load_block(&padded, 48),
         ];
         let (red, green, blue, alpha) = if source_mode == Mode::ImageRgbPremultiplied8 {
-            let straight = blocks.map(|block| {
-                crate::compute::pool_cpu::ops::color::convert::helpers::alpha::
+            let straight =
+                blocks.map(|block| {
+                    crate::compute::pool_cpu::ops::color::convert::helpers::alpha::
                     unpremultiply_block::<4>(block)
-            });
+                });
             (
                 u16x16::from(gather_interleaved_channel::<4, 0>(&straight)),
                 u16x16::from(gather_interleaved_channel::<4, 1>(&straight)),
@@ -66,8 +98,7 @@ fn load_block(bytes: &[u8; 64], offset: usize) -> u8x16 {
 
 fn append_la(output: &mut Vec<u8>, luma: u8x16, alpha: u8x16, active_pixels: usize) {
     let vectors = [LA_DUPLICATE_0, LA_DUPLICATE_1].map(|indices| {
-        ((luma.shuffle(indices) & LA_LUMA_LANES)
-            | (alpha.shuffle(indices) & LA_ALPHA_LANES))
+        ((luma.shuffle(indices) & LA_LUMA_LANES) | (alpha.shuffle(indices) & LA_ALPHA_LANES))
             .to_array()
     });
     let first_pixels = active_pixels.min(8);

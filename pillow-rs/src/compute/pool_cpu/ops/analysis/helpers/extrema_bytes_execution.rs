@@ -1,10 +1,10 @@
 //! Prepared execution for the Rust/JS byte-valued GetExtrema API.
 
+use super::super::ops::GET_EXTREMA_BYTES_SUPPORT;
 use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{OperationId, StrategySelection};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
-use super::super::ops::GET_EXTREMA_BYTES_SUPPORT;
 
 pub(crate) struct PreparedGetExtremaBytes<'a> {
     image: &'a DynamicImage,
@@ -37,84 +37,89 @@ impl PreparedGetExtremaBytes<'_> {
                 self.mode, implementation.architecture,
             )));
         }
-        match self.image {
-            DynamicImage::One(image) => super::super::one::ops::execute_getextrema_bytes(
-                image,
-                self.selection,
-            ),
-            DynamicImage::ImageLuma8(image) => super::super::luma8::ops::execute_getextrema_bytes(
-                image,
-                self.selection,
-            ),
-            DynamicImage::ImageLumaA8(image) => {
-                super::super::luma_a8::ops::execute_getextrema_bytes(image, self.selection)
-            }
-            DynamicImage::ImageLaPremultiplied8(image) => {
-                super::super::la_premultiplied8::ops::execute_getextrema_bytes(image, self.selection)
-            }
-            DynamicImage::ImagePalette8(image) => {
-                super::super::palette8::ops::execute_getextrema_bytes(image, self.selection)
-            }
-            DynamicImage::ImagePaletteAlpha8(image) => {
-                super::super::palette_alpha8::ops::execute_getextrema_bytes(image, self.selection)
-            }
-            DynamicImage::ImageRgb8(image) => {
-                super::super::rgb8::ops::execute_getextrema_bytes(image, self.selection)
-            }
-            DynamicImage::ImageRgba8(image) => {
-                super::super::rgba8::ops::execute_getextrema_bytes(image, self.selection)
-            }
-            DynamicImage::ImageRgbPremultiplied8(image) => {
-                super::super::rgb_premultiplied8::ops::execute_getextrema_bytes(image, self.selection)
-            }
-            DynamicImage::ImageRgbx8(image) => {
-                super::super::rgbx8::ops::execute_getextrema_bytes(image, self.selection)
-            }
-            DynamicImage::ImageCmyk8(image) => {
-                super::super::cmyk8::ops::execute_getextrema_bytes(image, self.selection)
-            }
-            DynamicImage::ImageYCbCr8(image) => {
-                super::super::ycbcr8::ops::execute_getextrema_bytes(image, self.selection)
-            }
-            DynamicImage::ImageLab8(image) => {
-                super::super::lab8::ops::execute_getextrema_bytes(image, self.selection)
-            }
-            DynamicImage::ImageHsv8(image) => {
-                super::super::hsv8::ops::execute_getextrema_bytes(image, self.selection)
-            }
-            DynamicImage::ImageI32(image) => {
-                super::super::i32::ops::execute_getextrema_bytes(image, self.selection)
-            }
-            DynamicImage::ImageF32(image) => {
-                super::super::f32::ops::execute_getextrema_bytes(image, self.selection)
-            }
-            DynamicImage::ImageI16(image) => {
-                super::super::i16::ops::execute_getextrema_bytes(image, self.selection)
-            }
-            DynamicImage::ImageI16L(image) => {
-                super::super::i16l::ops::execute_getextrema_bytes(image, self.selection)
-            }
-            DynamicImage::ImageI16B(image) => {
-                super::super::i16b::ops::execute_getextrema_bytes(image, self.selection)
-            }
-            DynamicImage::ImageI16N(image) => {
-                super::super::i16n::ops::execute_getextrema_bytes(image, self.selection)
-            }
-            DynamicImage::ImageLumaA16(image) => {
-                super::super::luma_a16::ops::execute_getextrema_bytes(image, self.selection)
-            }
-            DynamicImage::ImageRgb16(image) => {
-                super::super::rgb16::ops::execute_getextrema_bytes(image, self.selection)
-            }
-            DynamicImage::ImageRgba16(image) => {
-                super::super::rgba16::ops::execute_getextrema_bytes(image, self.selection)
-            }
-            DynamicImage::ImageRgb32F(image) => {
-                super::super::rgb32f::ops::execute_getextrema_bytes(image, self.selection)
-            }
-            DynamicImage::ImageRgba32F(image) => {
-                super::super::rgba32f::ops::execute_getextrema_bytes(image, self.selection)
-            }
+        execute_mode(self.image, self.selection)
+    }
+}
+
+fn execute_mode(
+    image: &DynamicImage,
+    selection: StrategySelection,
+) -> Result<Vec<(u8, u8)>, PilError> {
+    match image {
+        DynamicImage::One(image) => {
+            super::super::one::ops::execute_getextrema_bytes(image, selection)
+        }
+        DynamicImage::ImageLuma8(image) => {
+            super::super::luma8::ops::execute_getextrema_bytes(image, selection)
+        }
+        DynamicImage::ImageLumaA8(image) => {
+            super::super::luma_a8::ops::execute_getextrema_bytes(image, selection)
+        }
+        DynamicImage::ImageLaPremultiplied8(image) => {
+            super::super::la_premultiplied8::ops::execute_getextrema_bytes(image, selection)
+        }
+        DynamicImage::ImagePalette8(image) => {
+            super::super::palette8::ops::execute_getextrema_bytes(image, selection)
+        }
+        DynamicImage::ImagePaletteAlpha8(image) => {
+            super::super::palette_alpha8::ops::execute_getextrema_bytes(image, selection)
+        }
+        DynamicImage::ImageRgb8(image) => {
+            super::super::rgb8::ops::execute_getextrema_bytes(image, selection)
+        }
+        DynamicImage::ImageRgba8(image) => {
+            super::super::rgba8::ops::execute_getextrema_bytes(image, selection)
+        }
+        DynamicImage::ImageRgbPremultiplied8(image) => {
+            super::super::rgb_premultiplied8::ops::execute_getextrema_bytes(image, selection)
+        }
+        DynamicImage::ImageRgbx8(image) => {
+            super::super::rgbx8::ops::execute_getextrema_bytes(image, selection)
+        }
+        DynamicImage::ImageCmyk8(image) => {
+            super::super::cmyk8::ops::execute_getextrema_bytes(image, selection)
+        }
+        DynamicImage::ImageYCbCr8(image) => {
+            super::super::ycbcr8::ops::execute_getextrema_bytes(image, selection)
+        }
+        DynamicImage::ImageLab8(image) => {
+            super::super::lab8::ops::execute_getextrema_bytes(image, selection)
+        }
+        DynamicImage::ImageHsv8(image) => {
+            super::super::hsv8::ops::execute_getextrema_bytes(image, selection)
+        }
+        DynamicImage::ImageI32(image) => {
+            super::super::i32::ops::execute_getextrema_bytes(image, selection)
+        }
+        DynamicImage::ImageF32(image) => {
+            super::super::f32::ops::execute_getextrema_bytes(image, selection)
+        }
+        DynamicImage::ImageI16(image) => {
+            super::super::i16::ops::execute_getextrema_bytes(image, selection)
+        }
+        DynamicImage::ImageI16L(image) => {
+            super::super::i16l::ops::execute_getextrema_bytes(image, selection)
+        }
+        DynamicImage::ImageI16B(image) => {
+            super::super::i16b::ops::execute_getextrema_bytes(image, selection)
+        }
+        DynamicImage::ImageI16N(image) => {
+            super::super::i16n::ops::execute_getextrema_bytes(image, selection)
+        }
+        DynamicImage::ImageLumaA16(image) => {
+            super::super::luma_a16::ops::execute_getextrema_bytes(image, selection)
+        }
+        DynamicImage::ImageRgb16(image) => {
+            super::super::rgb16::ops::execute_getextrema_bytes(image, selection)
+        }
+        DynamicImage::ImageRgba16(image) => {
+            super::super::rgba16::ops::execute_getextrema_bytes(image, selection)
+        }
+        DynamicImage::ImageRgb32F(image) => {
+            super::super::rgb32f::ops::execute_getextrema_bytes(image, selection)
+        }
+        DynamicImage::ImageRgba32F(image) => {
+            super::super::rgba32f::ops::execute_getextrema_bytes(image, selection)
         }
     }
 }
@@ -163,3 +168,51 @@ macro_rules! declare_getextrema_bytes_owner {
 }
 
 pub(crate) use declare_getextrema_bytes_owner;
+pub(crate) const fn support(
+    mode: Mode,
+    core_only: bool,
+) -> crate::compute::registry::support::ModeSupport {
+    use crate::compute::registry::support::{
+        InputContract, ModeSupport, OperationId, OutputModeRule,
+    };
+    const NO_INPUTS: &[InputContract] = &[];
+    if core_only {
+        ModeSupport::cpu_core_only(
+            OperationId::GetExtremaBytes,
+            mode,
+            OutputModeRule::NoRasterResult,
+            NO_INPUTS,
+            &[],
+            "Rust/JS byte-valued extrema preserves the exact-mode result contract",
+        )
+    } else {
+        ModeSupport::cpu(
+            OperationId::GetExtremaBytes,
+            mode,
+            OutputModeRule::NoRasterResult,
+            NO_INPUTS,
+            &[],
+        )
+    }
+}
+
+macro_rules! declare_getextrema_bytes_support {
+    ($mode:ident, pillow $(,)?) => {
+        pub(crate) const GET_EXTREMA_BYTES_SUPPORT:
+            $crate::compute::registry::support::ModeSupport =
+            $crate::compute::pool_cpu::ops::analysis::helpers::extrema_bytes_execution::support(
+                $crate::raster::Mode::$mode,
+                false,
+            );
+    };
+    ($mode:ident, core_only $(,)?) => {
+        pub(crate) const GET_EXTREMA_BYTES_SUPPORT:
+            $crate::compute::registry::support::ModeSupport =
+            $crate::compute::pool_cpu::ops::analysis::helpers::extrema_bytes_execution::support(
+                $crate::raster::Mode::$mode,
+                true,
+            );
+    };
+}
+
+pub(crate) use declare_getextrema_bytes_support;

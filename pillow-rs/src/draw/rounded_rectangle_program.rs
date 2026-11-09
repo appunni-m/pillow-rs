@@ -301,7 +301,8 @@ impl<Value: Clone> RoundedRectangleProgram<Value> {
         &mut self,
         event: Event<Value>,
         callbacks: &mut C,
-    ) -> Result<Option<RoundedRectangleProgramStep<Value>>, RoundedRectangleProgramError<C::Error>> {
+    ) -> Result<Option<RoundedRectangleProgramStep<Value>>, RoundedRectangleProgramError<C::Error>>
+    {
         match event {
             Event::ReadCorner(index) => {
                 self.waiting = Some(ProgramRequest::Corner(index));
@@ -340,7 +341,8 @@ impl<Value: Clone> RoundedRectangleProgram<Value> {
         &mut self,
         instruction: Instruction<Value>,
         callbacks: &mut C,
-    ) -> Result<Option<RoundedRectangleProgramStep<Value>>, RoundedRectangleProgramError<C::Error>> {
+    ) -> Result<Option<RoundedRectangleProgramStep<Value>>, RoundedRectangleProgramError<C::Error>>
+    {
         match instruction {
             Instruction::Curves {
                 bounds,
@@ -461,10 +463,11 @@ impl<Value: Clone> RoundedRectangleProgram<Value> {
             }
         };
         if let Some(bounds) = rectangle {
-            self.events.push_back(Event::Draw(RoundedRectangleDrawStep::Rectangle {
-                bounds,
-                color,
-            }));
+            self.events
+                .push_back(Event::Draw(RoundedRectangleDrawStep::Rectangle {
+                    bounds,
+                    color,
+                }));
         }
         Ok(())
     }
@@ -513,7 +516,13 @@ impl<Value: Clone> RoundedRectangleProgram<Value> {
         Ok(())
     }
 
-    fn queue_corner_adjustment(&mut self, corner: usize, coordinate: usize, add: bool, radius: &Value) {
+    fn queue_corner_adjustment(
+        &mut self,
+        corner: usize,
+        coordinate: usize,
+        add: bool,
+        radius: &Value,
+    ) {
         self.events.push_back(Event::ReadCorner(corner));
         self.events.push_back(Event::AdjustCorner {
             corner,
@@ -727,20 +736,52 @@ fn rounded_curve_parts<Value: Clone, C: RoundedRectangleProgramCallbacks<Value =
 ) -> Result<Vec<(RoundedRectangleBounds<Value>, f64, f64)>, C::Error> {
     if full_x {
         return Ok(vec![
-            (curve_bounds(CurveCorner::TopLeft, bounds, diameter, callbacks)?, 180.0, 360.0),
-            (curve_bounds(CurveCorner::BottomLeft, bounds, diameter, callbacks)?, 0.0, 180.0),
+            (
+                curve_bounds(CurveCorner::TopLeft, bounds, diameter, callbacks)?,
+                180.0,
+                360.0,
+            ),
+            (
+                curve_bounds(CurveCorner::BottomLeft, bounds, diameter, callbacks)?,
+                0.0,
+                180.0,
+            ),
         ]);
     }
     if full_y {
         return Ok(vec![
-            (curve_bounds(CurveCorner::TopLeft, bounds, diameter, callbacks)?, 90.0, 270.0),
-            (curve_bounds(CurveCorner::TopRight, bounds, diameter, callbacks)?, 270.0, 90.0),
+            (
+                curve_bounds(CurveCorner::TopLeft, bounds, diameter, callbacks)?,
+                90.0,
+                270.0,
+            ),
+            (
+                curve_bounds(CurveCorner::TopRight, bounds, diameter, callbacks)?,
+                270.0,
+                90.0,
+            ),
         ]);
     }
     Ok(vec![
-        (curve_bounds(CurveCorner::TopLeft, bounds, diameter, callbacks)?, 180.0, 270.0),
-        (curve_bounds(CurveCorner::TopRight, bounds, diameter, callbacks)?, 270.0, 360.0),
-        (curve_bounds(CurveCorner::BottomRight, bounds, diameter, callbacks)?, 0.0, 90.0),
-        (curve_bounds(CurveCorner::BottomLeft, bounds, diameter, callbacks)?, 90.0, 180.0),
+        (
+            curve_bounds(CurveCorner::TopLeft, bounds, diameter, callbacks)?,
+            180.0,
+            270.0,
+        ),
+        (
+            curve_bounds(CurveCorner::TopRight, bounds, diameter, callbacks)?,
+            270.0,
+            360.0,
+        ),
+        (
+            curve_bounds(CurveCorner::BottomRight, bounds, diameter, callbacks)?,
+            0.0,
+            90.0,
+        ),
+        (
+            curve_bounds(CurveCorner::BottomLeft, bounds, diameter, callbacks)?,
+            90.0,
+            180.0,
+        ),
     ])
 }

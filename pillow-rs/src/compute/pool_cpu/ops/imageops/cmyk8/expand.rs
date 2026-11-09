@@ -6,4 +6,3 @@ mod default;
 use crate::compute::pool_cpu::ops::imageops::helpers::strategy::declare_expand_byte_mode;
 
 declare_expand_byte_mode!(ImageCmyk8, 4);
-

@@ -11,11 +11,7 @@ pub(crate) fn get_data(image: &RgbImage) -> Result<Vec<u8>, PilError> {
     Ok(output)
 }
 
-pub(crate) fn write_band(
-    image: &RgbImage,
-    band: usize,
-    output: &mut [u8],
-) -> Result<(), PilError> {
+pub(crate) fn write_band(image: &RgbImage, band: usize, output: &mut [u8]) -> Result<(), PilError> {
     helpers::write_lab_band(image.as_raw(), band, output);
     Ok(())
 }

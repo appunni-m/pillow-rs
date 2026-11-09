@@ -56,8 +56,7 @@ pub(crate) unsafe fn execute_into(
     let (reverse_x, reverse_y) = transpose_flags(method)?;
     let input_dims = crate::checked_dims::CheckedDims::new(width, height, CHANNELS as u8)?;
     let output_dims = crate::checked_dims::CheckedDims::new(height, width, CHANNELS as u8)?;
-    if image.as_raw().len() < input_dims.total_bytes()
-        || output.len() != output_dims.total_bytes()
+    if image.as_raw().len() < input_dims.total_bytes() || output.len() != output_dims.total_bytes()
     {
         return Err(PilError::InternalError(
             "AVX2 transpose buffer shape mismatch".into(),
@@ -84,13 +83,7 @@ pub(crate) unsafe fn execute_into(
         );
     }
     copy_bottom_edge(
-        source,
-        output,
-        width,
-        height,
-        full_rows,
-        reverse_x,
-        reverse_y,
+        source, output, width, height, full_rows, reverse_x, reverse_y,
     );
     copy_right_edge(
         source,
@@ -136,9 +129,15 @@ fn copy_bottom_edge(
     reverse_y: bool,
 ) {
     for output_y in full_rows..width {
-        let source_x = if reverse_x { width - 1 - output_y } else { output_y };
+        let source_x = if reverse_x {
+            width - 1 - output_y
+        } else {
+            output_y
+        };
         for output_x in 0..height {
-            copy_pixel(source, output, width, height, source_x, output_y, output_x, reverse_y);
+            copy_pixel(
+                source, output, width, height, source_x, output_y, output_x, reverse_y,
+            );
         }
     }
 }
@@ -154,9 +153,15 @@ fn copy_right_edge(
     reverse_y: bool,
 ) {
     for output_y in 0..full_rows {
-        let source_x = if reverse_x { width - 1 - output_y } else { output_y };
+        let source_x = if reverse_x {
+            width - 1 - output_y
+        } else {
+            output_y
+        };
         for output_x in full_columns..height {
-            copy_pixel(source, output, width, height, source_x, output_y, output_x, reverse_y);
+            copy_pixel(
+                source, output, width, height, source_x, output_y, output_x, reverse_y,
+            );
         }
     }
 }
@@ -171,7 +176,11 @@ fn copy_pixel(
     output_x: usize,
     reverse_y: bool,
 ) {
-    let source_y = if reverse_y { height - 1 - output_x } else { output_x };
+    let source_y = if reverse_y {
+        height - 1 - output_x
+    } else {
+        output_x
+    };
     let source_start = (source_y * width + source_x) * CHANNELS;
     let output_start = (output_y * height + output_x) * CHANNELS;
     output[output_start..output_start + CHANNELS]
@@ -189,7 +198,6 @@ unsafe fn transpose_full_tiles(
     reverse_x: bool,
     reverse_y: bool,
 ) {
-    let source_stride = width * CHANNELS;
     let output_stride = height * CHANNELS;
     let reverse_lanes = _mm256_setr_epi32(7, 6, 5, 4, 3, 2, 1, 0);
     // SAFETY: the caller proves AVX2 availability and passes full tile bounds.
@@ -211,7 +219,11 @@ unsafe fn transpose_full_tiles(
                     if reverse_y {
                         column = _mm256_permutevar8x32_epi32(column, reverse_lanes);
                     }
-                    let row = if reverse_x { TILE - 1 - column_index } else { column_index };
+                    let row = if reverse_x {
+                        TILE - 1 - column_index
+                    } else {
+                        column_index
+                    };
                     let start = (output_y_start + row) * output_stride + output_x_start * CHANNELS;
                     _mm256_storeu_si256(output.as_mut_ptr().add(start).cast(), column);
                 }

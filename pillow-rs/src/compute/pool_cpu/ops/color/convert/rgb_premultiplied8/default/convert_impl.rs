@@ -2,10 +2,7 @@
 
 use crate::error::PilError;
 use crate::pipeline::DitherMethod;
-use crate::raster::{
-    DynamicImage, GrayAlphaImage, LumaA, Mode, Rgb, RgbImage, Rgba,
-    RgbaImage,
-};
+use crate::raster::{DynamicImage, GrayAlphaImage, LumaA, Mode, Rgb, RgbImage, Rgba, RgbaImage};
 
 pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, PilError> {
     if target == Mode::ImageLab8 {
@@ -116,9 +113,7 @@ pub(crate) fn execute_palette_target(
     crate::compute::pool_cpu::ops::color::convert::helpers::palette::web_palette_from_pixels(
         source.width(),
         source.height(),
-        source
-            .pixels()
-            .map(|pixel| [pixel[0], pixel[1], pixel[2]]),
+        source.pixels().map(|pixel| [pixel[0], pixel[1], pixel[2]]),
         !matches!(dither, Some(DitherMethod::None)),
         target,
         metadata,

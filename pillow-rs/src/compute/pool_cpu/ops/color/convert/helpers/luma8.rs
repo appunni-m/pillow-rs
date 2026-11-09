@@ -16,7 +16,9 @@ where
 {
     match target {
         Mode::ImageLuma8 => Ok(DynamicImage::ImageLuma8(to_luma8(width, height, samples))),
-        Mode::ImageLumaA8 => Ok(DynamicImage::ImageLumaA8(to_luma_a8(width, height, samples))),
+        Mode::ImageLumaA8 => Ok(DynamicImage::ImageLumaA8(to_luma_a8(
+            width, height, samples,
+        ))),
         Mode::ImageRgb8 => Ok(DynamicImage::ImageRgb8(to_rgb8(width, height, samples))),
         Mode::ImageRgba8 => Ok(DynamicImage::ImageRgba8(to_rgba8(width, height, samples))),
         Mode::ImageRgbx8 => Ok(DynamicImage::ImageRgbx8(to_rgbx8(width, height, samples))),
@@ -41,7 +43,8 @@ pub(crate) fn execute_palette_target<I>(
 where
     I: Iterator<Item = u8>,
 {
-    let identity_palette = crate::compute::pool_cpu::helpers::quantization::identity_grayscale_palette();
+    let identity_palette =
+        crate::compute::pool_cpu::helpers::quantization::identity_grayscale_palette();
     match target {
         Mode::ImagePalette8 => {
             let indices = to_luma8(width, height, samples);
@@ -150,4 +153,3 @@ fn to_f32<I: Iterator<Item = u8>>(width: u32, height: u32, samples: I) -> RgbaIm
     }
     output
 }
-

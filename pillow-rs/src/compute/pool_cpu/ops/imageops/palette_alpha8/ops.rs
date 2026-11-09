@@ -36,3 +36,9 @@ pub(crate) fn execute_quantize_with_palette(
         )),
     }
 }
+
+pub(crate) const CROP_BORDER_SUPPORT: crate::compute::registry::support::ModeSupport =
+    crate::compute::pool_cpu::ops::imageops::helpers::strategy::crop_border_serial_support(
+        crate::raster::Mode::ImagePaletteAlpha8,
+        super::super::ops::CROP_BORDER_INPUTS,
+    );

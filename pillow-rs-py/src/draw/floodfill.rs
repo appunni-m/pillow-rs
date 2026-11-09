@@ -1,8 +1,6 @@
-use pyo3::prelude::{Bound, PyAny, PyErr, PyRef, PyResult, Python};
 use pyo3::exceptions::{PyIndexError, PyValueError};
-use pyo3::types::{
-    PyAnyMethods, PyInt, PyIterator, PySet, PySetMethods, PyTuple,
-};
+use pyo3::prelude::{Bound, PyAny, PyErr, PyRef, PyResult, Python};
+use pyo3::types::{PyAnyMethods, PyInt, PyIterator, PySet, PySetMethods, PyTuple};
 
 use crate::PyImage;
 
@@ -26,13 +24,13 @@ impl<'py> Point<'py> {
         PyTuple::new(py, [self.x.clone(), self.y.clone()])
     }
 
-    fn with_key(
-        py: Python<'py>,
-        x: Bound<'py, PyAny>,
-        y: Bound<'py, PyAny>,
-    ) -> PyResult<Self> {
+    fn with_key(py: Python<'py>, x: Bound<'py, PyAny>, y: Bound<'py, PyAny>) -> PyResult<Self> {
         let key = PyTuple::new(py, [x.clone(), y.clone()])?;
-        Ok(Self { x, y, key: Some(key) })
+        Ok(Self {
+            x,
+            y,
+            key: Some(key),
+        })
     }
 }
 
@@ -103,12 +101,7 @@ impl<'py, 'a> pillow_rs::FloodFillAccess for PythonFloodFillAccess<'py, 'a> {
         let down = Point::with_key(self.py, point.x.clone(), down)?;
         let up = point.y.sub(1)?;
         let up = Point::with_key(self.py, point.x.clone(), up)?;
-        Ok([
-            right,
-            left,
-            down,
-            up,
-        ])
+        Ok([right, left, down, up])
     }
 
     fn point_is_nonnegative(&mut self, point: &Self::Point) -> Result<bool, Self::Error> {
@@ -119,14 +112,12 @@ impl<'py, 'a> pillow_rs::FloodFillAccess for PythonFloodFillAccess<'py, 'a> {
     }
 
     fn get_pixel(&mut self, point: &Self::Point) -> Result<Self::Pixel, Self::Error> {
-        self.pixel.get_item(point.as_tuple(self.py)?).map_err(Into::into)
+        self.pixel
+            .get_item(point.as_tuple(self.py)?)
+            .map_err(Into::into)
     }
 
-    fn set_pixel(
-        &mut self,
-        point: &Self::Point,
-        value: &Self::Pixel,
-    ) -> Result<(), Self::Error> {
+    fn set_pixel(&mut self, point: &Self::Point, value: &Self::Pixel) -> Result<(), Self::Error> {
         self.pixel
             .set_item(point.as_tuple(self.py)?, value.clone())
             .map_err(Into::into)
@@ -153,9 +144,8 @@ impl<'py, 'a> pillow_rs::FloodFillAccess for PythonFloodFillAccess<'py, 'a> {
         second: &Self::ColorVector,
         index: usize,
     ) -> Result<Self::ColorDifference, Self::Error> {
-        let index = isize::try_from(index).map_err(|_| {
-            pyo3::exceptions::PyOverflowError::new_err("color tuple is too large")
-        })?;
+        let index = isize::try_from(index)
+            .map_err(|_| pyo3::exceptions::PyOverflowError::new_err("color tuple is too large"))?;
         let first_sample = first.get_item(index)?;
         let second_sample = second.get_item(index)?;
         first_sample.sub(&second_sample)?.abs().map_err(Into::into)
@@ -188,7 +178,10 @@ impl<'py, 'a> pillow_rs::FloodFillAccess for PythonFloodFillAccess<'py, 'a> {
         border: &Self::Pixel,
     ) -> Result<bool, Self::Error> {
         let excluded = PyTuple::new(self.py, [value.clone(), border.clone()])?;
-        excluded.contains(pixel).map(|contains| !contains).map_err(Into::into)
+        excluded
+            .contains(pixel)
+            .map(|contains| !contains)
+            .map_err(Into::into)
     }
 
     fn is_swallowed_error(&self, error: &Self::Error) -> bool {
@@ -197,10 +190,7 @@ impl<'py, 'a> pillow_rs::FloodFillAccess for PythonFloodFillAccess<'py, 'a> {
     }
 }
 
-fn tuple_or_scalar<'py>(
-    py: Python<'py>,
-    value: &Bound<'py, PyAny>,
-) -> PyResult<Bound<'py, PyAny>> {
+fn tuple_or_scalar<'py>(py: Python<'py>, value: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     if value.is_instance(&py.get_type::<PyTuple>())? {
         return Ok(value.clone());
     }
@@ -232,7 +222,11 @@ pub(super) fn execute<'py>(
     native_image: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<()> {
     let prepared = prepare_native_image(native_image)?;
-    let point = Point { x: x.clone(), y: y.clone(), key: None };
+    let point = Point {
+        x: x.clone(),
+        y: y.clone(),
+        key: None,
+    };
     let border = border.filter(|value| !value.is_none());
     let mut access = PythonFloodFillAccess { py, pixel };
     match pillow_rs::execute_floodfill(

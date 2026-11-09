@@ -5,14 +5,13 @@
 // NO_PILLOW_SUPPORT: Internal high-depth raster identities have explicit
 // typed-input grayscale strategies; Pillow defines no corresponding strings.
 
-use crate::compute::{ExecutionContext, registry::support::{
-    ModeSupport,
-    OperationId,
-    OperationSupport,
-    OutputModeRule,
-    RejectionKind,
-    StrategySelection,
-}};
+use crate::compute::{
+    ExecutionContext,
+    registry::support::{
+        ModeSupport, OperationId, OperationSupport, OutputModeRule, RejectionKind,
+        StrategySelection,
+    },
+};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
@@ -22,8 +21,12 @@ pub(crate) use crate::compute::registry::support::OperationInputs as GrayscaleIn
 const LA_REJECTION: &str = "conversion from La to L not supported";
 
 macro_rules! grayscale_result {
-    (fallible, $output:expr) => { $output };
-    (infallible, $output:expr) => { Ok($output) };
+    (fallible, $output:expr) => {
+        $output
+    };
+    (infallible, $output:expr) => {
+        Ok($output)
+    };
 }
 
 macro_rules! declare_grayscale_modes {
@@ -94,10 +97,9 @@ declare_grayscale_modes! {
     ImageRgba32F => rgba32f [] fallible,
 }
 
-pub(crate) static SUPPORT: OperationSupport = OperationSupport::new(
-    OperationId::Grayscale, &[], classify_mode,
-)
-.with_rejected_output(OutputModeRule::Fixed(Mode::ImageLuma8));
+pub(crate) static SUPPORT: OperationSupport =
+    OperationSupport::new(OperationId::Grayscale, &[], classify_mode)
+        .with_rejected_output(OutputModeRule::Fixed(Mode::ImageLuma8));
 
 pub(crate) fn prepare_pipeline<'a>(
     input: GrayscaleInputs<'a>,

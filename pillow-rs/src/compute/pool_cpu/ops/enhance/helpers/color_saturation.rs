@@ -2,8 +2,7 @@
 
 use crate::checked_dims::CheckedDims;
 use crate::compute::pool_cpu::helpers::channel::{
-    gather::gather_interleaved_channel,
-    wide::simd_pack_u16x16,
+    gather::gather_interleaved_channel, wide::simd_pack_u16x16,
 };
 use crate::error::PilError;
 use crate::raster::{ImageBuffer, Pixel};
@@ -94,9 +93,10 @@ where
         let base = wide::f32x8::new(std::array::from_fn(|lane| {
             let index = offset + lane;
             let pixel_start = index / usize::from(CHANNELS) * usize::from(CHANNELS);
-            f32::from(pixel_base::<BASE>(
-                &source_bytes[pixel_start..pixel_start + usize::from(CHANNELS)],
-            )[index % usize::from(CHANNELS)])
+            f32::from(
+                pixel_base::<BASE>(&source_bytes[pixel_start..pixel_start + usize::from(CHANNELS)])
+                    [index % usize::from(CHANNELS)],
+            )
         }));
         let values = scale.mul_add(input - base, base).to_array();
         for (destination, value) in result.iter_mut().zip(values) {
@@ -108,9 +108,8 @@ where
         let index = vector_bytes + tail_index;
         let pixel_start = index / usize::from(CHANNELS) * usize::from(CHANNELS);
         let base = f32::from(
-            pixel_base::<BASE>(
-                &source_bytes[pixel_start..pixel_start + usize::from(CHANNELS)],
-            )[index % usize::from(CHANNELS)],
+            pixel_base::<BASE>(&source_bytes[pixel_start..pixel_start + usize::from(CHANNELS)])
+                [index % usize::from(CHANNELS)],
         );
         *destination = factor
             .mul_add(f32::from(source_bytes[index]) - base, base)
@@ -118,7 +117,9 @@ where
     }
 
     crate::compute::record_pipeline_operation_vector_blocks((vector_bytes / 8) as u64);
-    crate::compute::record_pipeline_operation_scalar_tail((source_bytes.len() - vector_bytes) as u64);
+    crate::compute::record_pipeline_operation_scalar_tail(
+        (source_bytes.len() - vector_bytes) as u64,
+    );
     crate::compute::record_pipeline_operation_path("vector");
     ImageBuffer::from_raw(source.width(), source.height(), output).ok_or_else(|| {
         PilError::InternalError("ColorSaturation output dimensions were invalid".into())
@@ -127,9 +128,7 @@ where
 
 const LUMA_TO_RGBA_0: u8x16 = u8x16::new([0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3]);
 const LUMA_TO_RGBA_1: u8x16 = u8x16::new([4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7]);
-const LUMA_TO_RGBA_2: u8x16 = u8x16::new([
-    8, 8, 8, 8, 9, 9, 9, 9, 10, 10, 10, 10, 11, 11, 11, 11,
-]);
+const LUMA_TO_RGBA_2: u8x16 = u8x16::new([8, 8, 8, 8, 9, 9, 9, 9, 10, 10, 10, 10, 11, 11, 11, 11]);
 const LUMA_TO_RGBA_3: u8x16 = u8x16::new([
     12, 12, 12, 12, 13, 13, 13, 13, 14, 14, 14, 14, 15, 15, 15, 15,
 ]);
@@ -171,27 +170,29 @@ where
         let base = red * const { u16x16::splat(77) }
             + green * const { u16x16::splat(150) }
             + blue * const { u16x16::splat(29) };
-        let residual = green * const { u16x16::splat(70) }
-            + blue * const { u16x16::splat(47) }
+        let residual = green * const { u16x16::splat(70) } + blue * const { u16x16::splat(47) }
             - red * const { u16x16::splat(117) }
             + const { u16x16::splat(32768) };
-        let luma = u8x16::new(
-            simd_pack_u16x16((base + (residual >> 8u32)) >> 8u32).to_array(),
-        );
+        let luma = u8x16::new(simd_pack_u16x16((base + (residual >> 8u32)) >> 8u32).to_array());
         let alpha = gather_interleaved_channel::<4, 3>(&blocks);
-        let output_vectors = [LUMA_TO_RGBA_0, LUMA_TO_RGBA_1, LUMA_TO_RGBA_2, LUMA_TO_RGBA_3]
-            .map(|indices| {
-                ((luma.shuffle(indices) & RGBA_COLOR_LANES)
-                    | (alpha.shuffle(indices) & RGBA_ALPHA_LANES))
-                    .to_array()
-            });
+        let output_vectors = [
+            LUMA_TO_RGBA_0,
+            LUMA_TO_RGBA_1,
+            LUMA_TO_RGBA_2,
+            LUMA_TO_RGBA_3,
+        ]
+        .map(|indices| {
+            ((luma.shuffle(indices) & RGBA_COLOR_LANES)
+                | (alpha.shuffle(indices) & RGBA_ALPHA_LANES))
+                .to_array()
+        });
         for (block_index, vector) in output_vectors.into_iter().enumerate() {
             let block_pixels = active_pixels.saturating_sub(block_index * 4).min(4);
             output.extend_from_slice(&vector[..block_pixels * 4]);
         }
     }
     crate::compute::record_pipeline_operation_vector_blocks(
-        dimensions.total_pixels().div_ceil(4) as u64,
+        dimensions.total_pixels().div_ceil(4) as u64
     );
     crate::compute::record_pipeline_operation_scalar_tail(0);
     crate::compute::record_pipeline_operation_path("vector");
@@ -214,8 +215,7 @@ fn pixel_base<const BASE: u8>(pixel: &[u8]) -> [u8; 4] {
         BASE_CMYK => {
             let inverse_black = 255 - u32::from(pixel[3]);
             let rgb = |component: u8| {
-                (inverse_black
-                    - crate::color::muldiv255(u32::from(component), inverse_black)) as u8
+                (inverse_black - crate::color::muldiv255(u32::from(component), inverse_black)) as u8
             };
             let gray = crate::color::rgb_to_luma_u8(rgb(pixel[0]), rgb(pixel[1]), rgb(pixel[2]));
             [0, 0, 0, 255 - gray]

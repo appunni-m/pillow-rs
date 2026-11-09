@@ -6,8 +6,8 @@ mod merge;
 
 pub(crate) use blend::{BLEND_MODULE_SUPPORT, PreparedBlendModule, prepare_blend_pipeline};
 pub(crate) use composite_module::{
-    COMPOSITE_MODULE_SUPPORT, PreparedCompositeModule, prepare_composite_pipeline,
-    composite_wrapper_mask_alpha, validate_composite_wrapper_dimensions,
+    COMPOSITE_MODULE_SUPPORT, PreparedCompositeModule, composite_wrapper_mask_alpha,
+    prepare_composite_pipeline, validate_composite_wrapper_dimensions,
 };
 pub(crate) use merge::{MERGE_SUPPORT, PreparedMerge, prepare_merge_pipeline};
 
@@ -122,20 +122,12 @@ pub(crate) fn prepare<'a>(
     };
 
     match input.image {
-        DynamicImage::ImageLumaA8(destination) => {
-            Ok(PreparedAlphaComposite::ImageLumaA8(super::luma_a8::ops::prepare(
-                destination,
-                source,
-                selection,
-            )?))
-        }
-        DynamicImage::ImageRgba8(destination) => {
-            Ok(PreparedAlphaComposite::ImageRgba8(super::rgba8::ops::prepare(
-                destination,
-                source,
-                selection,
-            )?))
-        }
+        DynamicImage::ImageLumaA8(destination) => Ok(PreparedAlphaComposite::ImageLumaA8(
+            super::luma_a8::ops::prepare(destination, source, selection)?,
+        )),
+        DynamicImage::ImageRgba8(destination) => Ok(PreparedAlphaComposite::ImageRgba8(
+            super::rgba8::ops::prepare(destination, source, selection)?,
+        )),
         _ => Err(PilError::InternalError(
             "AlphaComposite support and mode routing disagree".into(),
         )),
@@ -233,9 +225,9 @@ fn select_support(
     match support.assess(ctx, facts)? {
         SupportAssessment::Ready(selection) => Ok(selection),
         SupportAssessment::Rejected { reason, kind, .. } => Err(kind.into_error(reason)),
-        SupportAssessment::Deferred { .. } => Err(PilError::InternalError(
-            format!("{operation} preparation received unresolved input facts"),
-        )),
+        SupportAssessment::Deferred { .. } => Err(PilError::InternalError(format!(
+            "{operation} preparation received unresolved input facts"
+        ))),
     }
 }
 

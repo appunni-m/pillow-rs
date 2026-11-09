@@ -19,7 +19,9 @@ pub(crate) fn apply<const RGBA_MASK: bool>(
     for text_y in 0..height {
         for text_x in 0..width {
             let pixel_index = (text_y * width + text_x) as usize;
-            let coverage = crate::compute::pool_cpu::ops::draw::helpers::text_mask::coverage::<RGBA_MASK>(pixels, pixel_index);
+            let coverage = crate::compute::pool_cpu::ops::draw::helpers::text_mask::coverage::<
+                RGBA_MASK,
+            >(pixels, pixel_index);
             if coverage == 0 {
                 continue;
             }

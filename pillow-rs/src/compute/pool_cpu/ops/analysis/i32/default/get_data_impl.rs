@@ -18,12 +18,7 @@ pub(crate) fn write_band(
 
 pub(crate) fn scalar_samples(image: &RgbaImage) -> Result<ScalarImageSamples, PilError> {
     let raw = image.as_raw();
-    helpers::validate_scalar_storage(
-        raw,
-        image.width(),
-        image.height(),
-        Mode::ImageI32,
-    )?;
+    helpers::validate_scalar_storage(raw, image.width(), image.height(), Mode::ImageI32)?;
     let values = raw
         .chunks_exact(4)
         .map(|sample| i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]))

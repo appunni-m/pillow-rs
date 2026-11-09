@@ -144,7 +144,8 @@ fn expand_margin_samples<T: Copy>(
         let source_start = source_y as usize * source_stride
             + (destination_start - i128::from(border.left)) as usize * channels;
         let copy_len = (destination_end - destination_start) as usize * channels;
-        let output_start = output_y as usize * output_stride + destination_start as usize * channels;
+        let output_start =
+            output_y as usize * output_stride + destination_start as usize * channels;
         output[output_start..output_start + copy_len]
             .copy_from_slice(&source[source_start..source_start + copy_len]);
     }
@@ -167,12 +168,8 @@ where
     P: Pixel<Subpixel = T>,
     T: Copy + Primitive,
 {
-    let (width, height) = expanded_dimensions(
-        input.width(),
-        input.height(),
-        border,
-        bytes_per_pixel,
-    )?;
+    let (width, height) =
+        expanded_dimensions(input.width(), input.height(), border, bytes_per_pixel)?;
     let samples = expand_samples(
         input.as_raw(),
         input.width(),
@@ -185,4 +182,69 @@ where
     )?;
     ImageBuffer::from_raw(width, height, samples)
         .ok_or_else(|| PilError::InternalError("Expand output dimensions were invalid".into()))
+}
+
+/// Replicate the nearest source edge around a typed raster.
+///
+/// This is the native sample behavior used by `ImagingCore.expand`; it keeps
+/// each exact mode's carrier and remaps omitted Pillow storage lanes from the
+/// same replicated source pixel.
+pub(crate) fn expand_edges_buffer<P, T>(
+    input: &ImageBuffer<P, Vec<T>>,
+    xmargin: u32,
+    ymargin: u32,
+) -> Result<ImageBuffer<P, Vec<T>>, PilError>
+where
+    P: Pixel<Subpixel = T>,
+    T: Copy + Primitive,
+{
+    let (source_width, source_height) = input.dimensions();
+    if xmargin == 0 && ymargin == 0 {
+        return Ok(input.clone());
+    }
+    if source_width == 0 || source_height == 0 {
+        return Err(PilError::ValueError(
+            "cannot replicate the edge of an empty image".into(),
+        ));
+    }
+
+    let width =
+        source_width
+            .checked_add(xmargin.checked_mul(2).ok_or_else(|| {
+                PilError::DimensionError("expanded image width is invalid".into())
+            })?)
+            .ok_or_else(|| PilError::DimensionError("expanded image width is invalid".into()))?;
+    let height =
+        source_height
+            .checked_add(ymargin.checked_mul(2).ok_or_else(|| {
+                PilError::DimensionError("expanded image height is invalid".into())
+            })?)
+            .ok_or_else(|| PilError::DimensionError("expanded image height is invalid".into()))?;
+    let bytes_per_pixel = std::mem::size_of::<T>()
+        .checked_mul(<P as Pixel>::CHANNEL_COUNT as usize)
+        .and_then(|bytes| u8::try_from(bytes).ok())
+        .ok_or_else(|| PilError::DimensionError("expanded image pixel size is invalid".into()))?;
+    crate::checked_dims::CheckedDims::new(width, height, bytes_per_pixel)?;
+
+    let mut output = ImageBuffer::from_fn(width, height, |x, y| {
+        let source_x = x.saturating_sub(xmargin).min(source_width - 1);
+        let source_y = y.saturating_sub(ymargin).min(source_height - 1);
+        *input.get_pixel(source_x, source_y)
+    });
+    output
+        .remap_hidden_pixel_lanes_from(input, |index| {
+            let output_x = index % width as usize;
+            let output_y = index / width as usize;
+            let source_x = (output_x as u32)
+                .saturating_sub(xmargin)
+                .min(source_width - 1);
+            let source_y = (output_y as u32)
+                .saturating_sub(ymargin)
+                .min(source_height - 1);
+            source_y as usize * source_width as usize + source_x as usize
+        })
+        .ok_or_else(|| {
+            PilError::InternalError("edge expansion could not remap hidden lanes".into())
+        })?;
+    Ok(output)
 }

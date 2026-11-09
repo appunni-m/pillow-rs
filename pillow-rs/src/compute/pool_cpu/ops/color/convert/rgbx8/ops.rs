@@ -227,7 +227,10 @@ pub(crate) unsafe fn execute(
 ) -> Result<DynamicImage, PilError> {
     let mut output = match selection.implementation.architecture {
         Architecture::Default => super::default::convert_impl::execute(source, target),
-        #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "avx2"))]
+        #[cfg(all(
+            any(target_arch = "x86", target_arch = "x86_64"),
+            target_feature = "avx2"
+        ))]
         Architecture::Avx2 if target == Mode::ImageLuma8 => {
             super::avx2::convert_impl::execute(source)
         }
@@ -248,7 +251,10 @@ pub(crate) unsafe fn execute(
             // SAFETY: SUPPORT admits this route only for its SSSE3 RGB path.
             unsafe { super::ssse3::convert_impl::execute_rgb(source) }
         }
-        #[cfg(any(target_arch = "x86_64", all(target_arch = "x86", target_feature = "sse2")))]
+        #[cfg(any(
+            target_arch = "x86_64",
+            all(target_arch = "x86", target_feature = "sse2")
+        ))]
         Architecture::Sse2 => super::sse2::convert_impl::execute(source, target),
         #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
         Architecture::WasmSimd128 => super::wasm_simd128::convert_impl::execute(source, target),

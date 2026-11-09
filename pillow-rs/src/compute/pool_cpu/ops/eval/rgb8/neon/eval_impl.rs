@@ -3,9 +3,13 @@
 //! The shared portable-wide LUT kernel remains the fallback for non-affine
 //! tables and for builds where this architecture strategy is unavailable.
 
-use crate::compute::pool_cpu::ops::eval::helpers::vector::{
-    self, Kernel, Mapped, Output,
-};
+#[cfg(all(
+    target_arch = "aarch64",
+    target_feature = "neon",
+    target_endian = "little"
+))]
+use crate::compute::pool_cpu::ops::eval::helpers::vector::Mapped;
+use crate::compute::pool_cpu::ops::eval::helpers::vector::{self, Kernel, Output};
 use crate::error::PilError;
 
 /// Execute the RGB NEON path selected by the exact mode strategy.
@@ -136,7 +140,11 @@ fn neon_rgb_lut_map(kernel: &Kernel<'_, 3>) -> Option<Mapped> {
         }
     }
     Some(Mapped {
-        output: Output { width: kernel.width(), height: kernel.height(), bytes },
+        output: Output {
+            width: kernel.width(),
+            height: kernel.height(),
+            bytes,
+        },
         vector_blocks: u64::try_from(vector_width / LANES * height).unwrap_or(u64::MAX),
         scalar_tail: None,
     })
@@ -148,10 +156,7 @@ fn neon_rgb_lut_map(kernel: &Kernel<'_, 3>) -> Option<Mapped> {
     target_endian = "little"
 ))]
 #[allow(unsafe_code)]
-fn neon_rgb_affine_map(
-    kernel: &Kernel<'_, 3>,
-    coefficients: [(u8, u8); 3],
-) -> Option<Mapped> {
+fn neon_rgb_affine_map(kernel: &Kernel<'_, 3>, coefficients: [(u8, u8); 3]) -> Option<Mapped> {
     use core::arch::aarch64 as neon;
 
     const CHANNELS_RGB: usize = 3;
@@ -212,7 +217,11 @@ fn neon_rgb_affine_map(
         }
     }
     Some(Mapped {
-        output: Output { width: kernel.width(), height: kernel.height(), bytes },
+        output: Output {
+            width: kernel.width(),
+            height: kernel.height(),
+            bytes,
+        },
         vector_blocks: u64::try_from(vector_width / LANES * height).unwrap_or(u64::MAX),
         scalar_tail: None,
     })

@@ -65,11 +65,7 @@ pub trait FloodFillAccess {
     /// Reads one point through the host's pixel-access protocol.
     fn get_pixel(&mut self, point: &Self::Point) -> Result<Self::Pixel, Self::Error>;
     /// Writes one point through the host's pixel-access protocol.
-    fn set_pixel(
-        &mut self,
-        point: &Self::Point,
-        value: &Self::Pixel,
-    ) -> Result<(), Self::Error>;
+    fn set_pixel(&mut self, point: &Self::Point, value: &Self::Pixel) -> Result<(), Self::Error>;
     /// Applies Pillow's tuple-or-scalar rule to both color values.
     fn color_vectors(
         &mut self,
@@ -243,14 +239,7 @@ fn fill_frontier<A: FloodFillAccess>(
     let mut points = access.frontier_iter(edge)?;
     while let Some(point) = access.frontier_next(&mut points)? {
         fill_neighbors(
-            access,
-            &point,
-            full_edge,
-            next_edge,
-            value,
-            border,
-            background,
-            threshold,
+            access, &point, full_edge, next_edge, value, border, background, threshold,
         )?;
     }
     Ok(())

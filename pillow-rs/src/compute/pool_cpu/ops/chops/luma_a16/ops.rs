@@ -18,9 +18,14 @@ pub(crate) fn execute(
 ) -> Result<DynamicImage, PilError> {
     match image {
         DynamicImage::ImageLumaA16(_) => {
-            super::super::helpers::strategy::require_default_selection(selection, Mode::ImageLumaA16)?;
+            super::super::helpers::strategy::require_default_selection(
+                selection,
+                Mode::ImageLumaA16,
+            )?;
             super::default::ops::execute(image, request, other)
         }
-        _ => Err(PilError::InternalError("Chops mode strategy received a different raster variant".into())),
+        _ => Err(PilError::InternalError(
+            "Chops mode strategy received a different raster variant".into(),
+        )),
     }
 }

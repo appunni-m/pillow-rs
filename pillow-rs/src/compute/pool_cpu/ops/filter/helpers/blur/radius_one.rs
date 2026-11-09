@@ -4,14 +4,11 @@ use super::BOX_BLUR_BIAS;
 
 use super::line::blur_line;
 
-
-
 pub(super) use vertical::{
     blur_interleaved_vertical_radius_one_fractional_rows, blur_luma_vertical_radius_one_rows,
 };
 #[path = "radius_one/vertical.rs"]
 mod vertical;
-
 
 #[inline(always)]
 fn store_radius_one_fractional_sample(

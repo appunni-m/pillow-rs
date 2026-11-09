@@ -4,19 +4,14 @@ use crate::error::PilError;
 use crate::raster::{GrayImage, RgbImage, RgbaImage};
 use wide::u8x16;
 
-const LUMA_TO_RGB_0: u8x16 =
-    u8x16::new([0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5]);
-const LUMA_TO_RGB_1: u8x16 =
-    u8x16::new([5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9, 10, 10]);
+const LUMA_TO_RGB_0: u8x16 = u8x16::new([0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5]);
+const LUMA_TO_RGB_1: u8x16 = u8x16::new([5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9, 10, 10]);
 const LUMA_TO_RGB_2: u8x16 = u8x16::new([
     10, 11, 11, 11, 12, 12, 12, 13, 13, 13, 14, 14, 14, 15, 15, 15,
 ]);
-const LUMA_TO_RGBA_0: u8x16 =
-    u8x16::new([0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3]);
-const LUMA_TO_RGBA_1: u8x16 =
-    u8x16::new([4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7]);
-const LUMA_TO_RGBA_2: u8x16 =
-    u8x16::new([8, 8, 8, 8, 9, 9, 9, 9, 10, 10, 10, 10, 11, 11, 11, 11]);
+const LUMA_TO_RGBA_0: u8x16 = u8x16::new([0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3]);
+const LUMA_TO_RGBA_1: u8x16 = u8x16::new([4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7]);
+const LUMA_TO_RGBA_2: u8x16 = u8x16::new([8, 8, 8, 8, 9, 9, 9, 9, 10, 10, 10, 10, 11, 11, 11, 11]);
 const LUMA_TO_RGBA_3: u8x16 = u8x16::new([
     12, 12, 12, 12, 13, 13, 13, 13, 14, 14, 14, 14, 15, 15, 15, 15,
 ]);
@@ -70,9 +65,11 @@ pub(crate) fn to_rgba(source: &GrayImage) -> Result<RgbaImage, PilError> {
             input.shuffle(LUMA_TO_RGBA_2).to_array(),
             input.shuffle(LUMA_TO_RGBA_3).to_array(),
         ];
-        blocks.push(vectors.map(|vector| {
-            ((u8x16::new(vector) & RGBA_COLOR_LANES) | RGBA_ALPHA_LANES).to_array()
-        }));
+        blocks.push(
+            vectors.map(|vector| {
+                ((u8x16::new(vector) & RGBA_COLOR_LANES) | RGBA_ALPHA_LANES).to_array()
+            }),
+        );
         vector_blocks = vector_blocks.saturating_add(1);
     }
     let mut output = blocks.into_flattened().into_flattened();

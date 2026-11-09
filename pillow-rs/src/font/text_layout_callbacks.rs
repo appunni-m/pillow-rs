@@ -16,17 +16,10 @@ pub trait ImageFontTextBoundsCallbacks {
     /// Read one coordinate from the host font's bounding box.
     fn bbox_coordinate(&mut self, index: usize) -> Result<Self::Value, Self::Error>;
     /// Read the x or y offset for one bounding-box coordinate.
-    fn line_offset(
-        &mut self,
-        line: &Self::Value,
-        index: usize,
-    ) -> Result<Self::Value, Self::Error>;
+    fn line_offset(&mut self, line: &Self::Value, index: usize)
+    -> Result<Self::Value, Self::Error>;
     /// Add a measured coordinate and its line position using host arithmetic.
-    fn add(
-        &mut self,
-        left: &Self::Value,
-        right: &Self::Value,
-    ) -> Result<Self::Value, Self::Error>;
+    fn add(&mut self, left: &Self::Value, right: &Self::Value) -> Result<Self::Value, Self::Error>;
 
     /// Apply the host's min(left, right) comparison and return value.
     fn minimum(

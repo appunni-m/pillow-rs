@@ -13,4 +13,3 @@ byte_mode_default!(
 );
 
 byte_mode_mesh_record!(ImageCmyk8, 4, false, "ImageCmyk8");
-

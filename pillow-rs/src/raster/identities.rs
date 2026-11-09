@@ -4,7 +4,9 @@ macro_rules! for_each_raster_identity {
     ($callback:ident) => {
         for_each_raster_identity! {@dispatch $callback, default}
     };
-    ($callback:ident, $argument:expr) => {
+    // Accept one token tree so callers can forward both expressions and
+    // pattern-bearing tuples to their generated match callback.
+    ($callback:ident, $argument:tt) => {
         for_each_raster_identity! {@dispatch $callback, $argument}
     };
     (@dispatch $callback:ident, $argument:tt) => {

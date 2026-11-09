@@ -2,8 +2,8 @@
 
 use crate::raster::GenericImageView;
 
-use crate::error::PilError;
 use crate::compute::pool_cpu::helpers::bytes::hidden_lanes::default_hidden_pixel_lanes;
+use crate::error::PilError;
 use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{DynamicImage, ImageBuffer, Mode, Pixel, RgbaImage};
 
@@ -16,9 +16,12 @@ fn checked_shape(width: u32, height: u32, channels: usize) -> Result<(usize, usi
         .checked_mul(height)
         .and_then(|pixels| pixels.checked_mul(channels))
         .ok_or_else(|| PilError::ValueError(BUFFER_ERROR.into()))?;
-    Ok((length, width.checked_mul(channels).ok_or_else(|| {
-        PilError::ValueError(BUFFER_ERROR.into())
-    })?))
+    Ok((
+        length,
+        width
+            .checked_mul(channels)
+            .ok_or_else(|| PilError::ValueError(BUFFER_ERROR.into()))?,
+    ))
 }
 
 fn check_channels<const CHANNELS: usize, const ACTIVE: usize>() -> Result<(), PilError> {
@@ -40,9 +43,7 @@ pub(crate) fn carry_hidden_lanes<P>(
 where
     P: Pixel<Subpixel = u8>,
 {
-    if output.mode() != mode
-        || output.dimensions() != (source.width(), source.height())
-    {
+    if output.mode() != mode || output.dimensions() != (source.width(), source.height()) {
         return Err(PilError::InternalError(
             "Sharpness output did not preserve its source layout".into(),
         ));
@@ -84,12 +85,8 @@ where
         for index in 0..pixel_count {
             let x = index % width;
             let y = index / width;
-            let interior = width >= 3
-                && height >= 3
-                && x > 0
-                && x + 1 < width
-                && y > 0
-                && y + 1 < height;
+            let interior =
+                width >= 3 && height >= 3 && x > 0 && x + 1 < width && y > 0 && y + 1 < height;
             for &sample in source_lanes.for_pixel(index).ok_or_else(|| {
                 PilError::InternalError("Sharpness source lane pixel was unavailable".into())
             })? {
@@ -138,8 +135,8 @@ fn default_sharpness_lanes(
         let y = index / width;
         let interior = x > 0 && x + 1 < width && y > 0 && y + 1 < height;
         let byte_offset = index * carrier_width;
-        let source_lanes = default_hidden_pixel_lanes(mode, source_bytes[byte_offset])
-            .ok_or_else(|| {
+        let source_lanes =
+            default_hidden_pixel_lanes(mode, source_bytes[byte_offset]).ok_or_else(|| {
                 PilError::InternalError("Sharpness mode omitted its physical-lane fallback".into())
             })?;
         let output_fallback = default_hidden_pixel_lanes(mode, output_bytes[byte_offset])
@@ -215,7 +212,10 @@ pub(crate) fn execute_u8<const CHANNELS: usize, const ACTIVE: usize>(
                     source[sample]
                 };
                 output[sample] = alpha
-                    .mul_add(f32::from(source[sample]) - f32::from(smooth), f32::from(smooth))
+                    .mul_add(
+                        f32::from(source[sample]) - f32::from(smooth),
+                        f32::from(smooth),
+                    )
                     .clamp(0.0, 255.0) as u8;
             }
         }
@@ -231,12 +231,8 @@ pub(crate) fn execute_u8_image<P, const CHANNELS: usize, const ACTIVE: usize>(
 where
     P: Pixel<Subpixel = u8>,
 {
-    let bytes = execute_u8::<CHANNELS, ACTIVE>(
-        source.as_raw(),
-        source.width(),
-        source.height(),
-        factor,
-    )?;
+    let bytes =
+        execute_u8::<CHANNELS, ACTIVE>(source.as_raw(), source.width(), source.height(), factor)?;
     ImageBuffer::from_raw(source.width(), source.height(), bytes)
         .ok_or_else(|| PilError::ValueError(BUFFER_ERROR.into()))
 }
@@ -282,7 +278,10 @@ pub(crate) fn execute_u16<const CHANNELS: usize, const ACTIVE: usize>(
                     source[sample]
                 };
                 output[sample] = alpha
-                    .mul_add(f32::from(source[sample]) - f32::from(smooth), f32::from(smooth))
+                    .mul_add(
+                        f32::from(source[sample]) - f32::from(smooth),
+                        f32::from(smooth),
+                    )
                     .clamp(0.0, f32::from(u16::MAX)) as u16;
             }
         }
@@ -298,12 +297,8 @@ pub(crate) fn execute_u16_image<P, const CHANNELS: usize, const ACTIVE: usize>(
 where
     P: Pixel<Subpixel = u16>,
 {
-    let samples = execute_u16::<CHANNELS, ACTIVE>(
-        source.as_raw(),
-        source.width(),
-        source.height(),
-        factor,
-    )?;
+    let samples =
+        execute_u16::<CHANNELS, ACTIVE>(source.as_raw(), source.width(), source.height(), factor)?;
     ImageBuffer::from_raw(source.width(), source.height(), samples)
         .ok_or_else(|| PilError::ValueError(BUFFER_ERROR.into()))
 }
@@ -363,12 +358,8 @@ pub(crate) fn execute_f32_image<P, const CHANNELS: usize, const ACTIVE: usize>(
 where
     P: Pixel<Subpixel = f32>,
 {
-    let samples = execute_f32::<CHANNELS, ACTIVE>(
-        source.as_raw(),
-        source.width(),
-        source.height(),
-        factor,
-    )?;
+    let samples =
+        execute_f32::<CHANNELS, ACTIVE>(source.as_raw(), source.width(), source.height(), factor)?;
     ImageBuffer::from_raw(source.width(), source.height(), samples)
         .ok_or_else(|| PilError::ValueError(BUFFER_ERROR.into()))
 }

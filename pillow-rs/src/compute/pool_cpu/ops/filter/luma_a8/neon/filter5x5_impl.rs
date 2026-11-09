@@ -15,7 +15,11 @@ pub(crate) fn execute(
             "NEON Filter5x5 strategy received a non-LA raster".into(),
         ));
     };
-    let super::super::super::ops::FilterRequest::Filter5x5 { kernel, scale, offset } = request
+    let super::super::super::ops::FilterRequest::Filter5x5 {
+        kernel,
+        scale,
+        offset,
+    } = request
     else {
         return Err(PilError::InternalError(
             "NEON Filter5x5 strategy received a non-5x5 request".into(),
@@ -74,7 +78,9 @@ pub(crate) fn execute(
     if scalar_tail != 0 {
         crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
     }
-    let output = GrayAlphaImage::from_raw(source.width(), source.height(), output)
-        .ok_or_else(|| PilError::ValueError("filter output buffer does not match its mode".into()))?;
+    let output =
+        GrayAlphaImage::from_raw(source.width(), source.height(), output).ok_or_else(|| {
+            PilError::ValueError("filter output buffer does not match its mode".into())
+        })?;
     Ok(DynamicImage::ImageLumaA8(output))
 }

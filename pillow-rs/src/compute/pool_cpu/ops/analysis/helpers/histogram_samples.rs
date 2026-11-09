@@ -68,10 +68,7 @@ where
 /// `(sample + 128) / 257` is the same rounded full-range mapping as
 /// `FromPrimitive<u16> for u8`, used by the archived byte projection. The
 /// source buffer remains u16; only the destination bin index is calculated.
-pub(crate) fn u16_bands<P>(
-    image: &ImageBuffer<P, Vec<u16>>,
-    mask_raw: Option<&[u8]>,
-) -> Vec<u32>
+pub(crate) fn u16_bands<P>(image: &ImageBuffer<P, Vec<u16>>, mask_raw: Option<&[u8]>) -> Vec<u32>
 where
     P: Pixel<Subpixel = u16>,
 {
@@ -107,10 +104,7 @@ where
 /// `FromPrimitive<f32> for u8`, which the archived byte projection used. Each
 /// bin is computed from the f32 sample without materializing that projected
 /// byte or another sample buffer.
-pub(crate) fn f32_bands<P>(
-    image: &ImageBuffer<P, Vec<f32>>,
-    mask_raw: Option<&[u8]>,
-) -> Vec<u32>
+pub(crate) fn f32_bands<P>(image: &ImageBuffer<P, Vec<f32>>, mask_raw: Option<&[u8]>) -> Vec<u32>
 where
     P: Pixel<Subpixel = f32>,
 {
@@ -172,11 +166,7 @@ where
 
 #[inline]
 fn f32_byte_bin(sample: f32) -> usize {
-    let normalized = if sample < 1.0 {
-        sample.max(0.0)
-    } else {
-        1.0
-    };
+    let normalized = if sample < 1.0 { sample.max(0.0) } else { 1.0 };
     normalized.mul_add(255.0, 0.0).round() as usize
 }
 
@@ -247,7 +237,11 @@ fn l16_byte_prefix<const BIG_ENDIAN: bool>(
 #[inline(always)]
 fn l16_prefix_byte<const BIG_ENDIAN: bool>(samples: &[u16], x: usize) -> u8 {
     let lane = x & 1;
-    let byte_shift = if BIG_ENDIAN { (lane ^ 1) << 3 } else { lane << 3 };
+    let byte_shift = if BIG_ENDIAN {
+        (lane ^ 1) << 3
+    } else {
+        lane << 3
+    };
     (samples[x >> 1] >> byte_shift) as u8
 }
 
@@ -259,7 +253,9 @@ pub(crate) fn i32_scalar(
     if mask_raw.is_some() {
         return Err(PilError::ValueError("image has wrong mode".into()));
     }
-    let mut samples = image.pixels().map(|pixel| read_i32_sample(pixel.channels()));
+    let mut samples = image
+        .pixels()
+        .map(|pixel| read_i32_sample(pixel.channels()));
     let Some(first) = samples.next() else {
         return Err(PilError::ValueError("min/max not given".into()));
     };
@@ -309,7 +305,9 @@ pub(crate) fn f32_scalar(
     if mask_raw.is_some() {
         return Err(PilError::ValueError("image has wrong mode".into()));
     }
-    let mut samples = image.pixels().map(|pixel| read_f32_sample(pixel.channels()));
+    let mut samples = image
+        .pixels()
+        .map(|pixel| read_f32_sample(pixel.channels()));
     let Some(first) = samples.next() else {
         return Err(PilError::ValueError("min/max not given".into()));
     };

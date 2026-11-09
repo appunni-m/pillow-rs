@@ -1,10 +1,9 @@
 //! Input facts and selection shared by Rotate mode declarations.
 
-use crate::compute::registry::support::{
-    ModeSupport, PaletteKnowledge, StrategyInputs, StrategySelection,
-    SupportAssessment,
-};
 use crate::compute::ExecutionContext;
+use crate::compute::registry::support::{
+    ModeSupport, PaletteKnowledge, StrategyInputs, StrategySelection, SupportAssessment,
+};
 use crate::error::PilError;
 use crate::raster::{ImageBuffer, Pixel};
 
@@ -17,7 +16,10 @@ pub(crate) fn facts<P: Pixel>(
     StrategyInputs {
         width: image.width(),
         height: image.height(),
-        byte_len: image.as_raw().len().checked_mul(std::mem::size_of::<P::Subpixel>()),
+        byte_len: image
+            .as_raw()
+            .len()
+            .checked_mul(std::mem::size_of::<P::Subpixel>()),
         palette: PaletteKnowledge::Absent,
         request: request.facts(),
     }

@@ -5,18 +5,16 @@ mod fit_callbacks;
 mod scale_callbacks;
 pub use callbacks::{
     ImageOpsAspectArithmetic, ImageOpsAspectCallbacks, ImageOpsAspectComparison,
-    ImageOpsAspectOperation, ImageOpsAspectSize,
+    ImageOpsAspectOperation, ImageOpsAspectRouteCallbacks, ImageOpsAspectSize,
     ImageOpsBorderCallbacks, ImageOpsCropCallbacks, ImageOpsCropRouteCallbacks,
-    ImageOpsExpandGeometryCallbacks,
-    ImageOpsExpandCallbacks, ImageOpsPadAxis, ImageOpsPadCallbacks,
-    ImageOpsAspectRouteCallbacks, ImageOpsNativeSizeCallbacks, ImageOpsNativeSizeProperty,
-    aspect_size_with_route_callbacks,
-    crop_box_with_callbacks, crop_box_with_route_callbacks,
+    ImageOpsExpandCallbacks, ImageOpsExpandGeometryCallbacks, ImageOpsNativeSizeCallbacks,
+    ImageOpsNativeSizeProperty, ImageOpsPadAxis, ImageOpsPadCallbacks,
+    aspect_size_with_route_callbacks, crop_box_with_callbacks, crop_box_with_route_callbacks,
     native_size_pair_with_callbacks,
 };
 pub use fit_callbacks::{
-    ImageOpsFitCallbacks, ImageOpsFitConstant, ImageOpsFitRouteCallbacks,
-    fit_box_with_callbacks, fit_box_with_route_callbacks,
+    ImageOpsFitCallbacks, ImageOpsFitConstant, ImageOpsFitRouteCallbacks, fit_box_with_callbacks,
+    fit_box_with_route_callbacks,
 };
 pub use scale_callbacks::{
     ImageOpsScaleCallbacks, ImageOpsScaleRouteCallbacks, scale_size_with_callbacks,
@@ -26,20 +24,19 @@ pub use scale_callbacks::{
 mod expand;
 mod pad;
 mod pad_route;
-pub use pad_route::{ImageOpsPadRouteCallbacks, pad_with_route_callbacks};
 pub use expand::{
-    expand, expand_canvas_with_prepared_fill, expand_with_callbacks, expand_with_input, expand_with_margins,
-    expand_with_margins_and_input, prepare_expand_fill_for_mode,
-    finish_expand_fill_palette_from_host,
+    PreparedExpandFill, expand, expand_canvas_with_prepared_fill, expand_with_callbacks,
+    expand_with_input, expand_with_margins, expand_with_margins_and_input,
+    finish_expand_fill_palette_from_host, prepare_expand_fill_for_mode,
     validate_expand_output_size_for_mode, validate_prepared_expand_output_size,
-    PreparedExpandFill,
 };
 pub use pad::{
-    pad, pad_fallback_with_callbacks, pad_fill_preflight, pad_filter_preflight, pad_geometry_preflight,
-    pad_preflight_with_input, pad_with_input, pad_with_input_and_containment,
-    pad_with_preflight, pad_with_preflight_and_fill, PadFillPreflight, PadGeometryPreflight,
-    PadPreflight,
+    PadFillPreflight, PadGeometryPreflight, PadPreflight, pad, pad_fallback_with_callbacks,
+    pad_fill_preflight, pad_filter_preflight, pad_geometry_preflight, pad_preflight_with_input,
+    pad_with_input, pad_with_input_and_containment, pad_with_preflight,
+    pad_with_preflight_and_fill,
 };
+pub use pad_route::{ImageOpsPadRouteCallbacks, pad_with_route_callbacks};
 
 type AspectDimensions = ((u32, u32), (u32, u32));
 
@@ -73,7 +70,7 @@ fn resolve_centering(input: CenteringInput) -> Result<(f64, f64), PilError> {
 /// `0.5` before computing its crop box. This also handles NaN and infinities,
 /// for which Rust's floating-point `clamp` would otherwise preserve a value
 /// that can make boxed coefficient spans invalid.
-fn normalize_fit_centering(value: f64) -> f64 {
+pub(crate) fn normalize_fit_centering(value: f64) -> f64 {
     if value.is_finite() && (0.0..=1.0).contains(&value) {
         value
     } else {
@@ -81,14 +78,10 @@ fn normalize_fit_centering(value: f64) -> f64 {
     }
 }
 
-fn native_geometry_color_input(
-    input: &ImageOpsColor,
-) -> Option<crate::pipeline::NativeColorInput> {
+fn native_geometry_color_input(input: &ImageOpsColor) -> Option<crate::pipeline::NativeColorInput> {
     match input {
         ImageOpsColor::Scalar(value) => Some(crate::pipeline::NativeColorInput::scalar(*value)),
-        ImageOpsColor::Components(values) => {
-            crate::pipeline::NativeColorInput::components(values)
-        }
+        ImageOpsColor::Components(values) => crate::pipeline::NativeColorInput::components(values),
         ImageOpsColor::TupleComponents(values) => {
             crate::pipeline::NativeColorInput::components(values)
         }
@@ -106,7 +99,7 @@ fn native_geometry_color_input(
 }
 
 /// Python's `round()` for the positive dimensions used by `ImageOps.contain`.
-fn round_positive_ties_even(value: f64) -> u32 {
+pub(crate) fn round_positive_ties_even(value: f64) -> u32 {
     let floor = value.floor();
     let fraction = value - floor;
     let rounded = if fraction < 0.5 {
@@ -153,6 +146,23 @@ fn pad_containment_dimensions(
     }
 }
 
+/// Computes the contain result for a captured source and target size.
+///
+/// This is shared by the public ImageOps facade and prepared backend
+/// strategies so aspect ratios and ties-to-even rounding have one owner.
+pub(crate) fn contain_dimensions_from_sizes(
+    source: (u32, u32),
+    target: (u32, u32),
+) -> Result<(u32, u32), PilError> {
+    if source.1 == 0 || target.1 == 0 {
+        return Err(PilError::ZeroDivisionError("division by zero".into()));
+    }
+    Ok(
+        pad_containment_dimensions(source.0, source.1, target.0, target.1)
+            .expect("non-zero contain heights were validated above"),
+    )
+}
+
 /// Return the dimensions that `ImageOps.contain` passes to `Image.resize`.
 ///
 /// Pillow evaluates both aspect-ratio divisions in `ImageOps.contain` before
@@ -162,22 +172,14 @@ fn pad_containment_dimensions(
 /// the resampling filter before `Image.resize` rejects those dimensions.
 fn contain_dimensions(image: &Image, w: u32, h: u32) -> Result<AspectDimensions, PilError> {
     let source = image.size()?;
-    if source.1 == 0 || h == 0 {
-        return Err(PilError::ZeroDivisionError("division by zero".into()));
-    }
-    let dimensions = pad_containment_dimensions(source.0, source.1, w, h)
-        .expect("non-zero contain heights were validated above");
+    let dimensions = contain_dimensions_from_sizes(source, (w, h))?;
     Ok((source, dimensions))
 }
 
 /// Captures the output dimensions that `ImageOps.contain` computes before
 /// `Image.resize` parses the filter.
 #[doc(hidden)]
-pub fn contain_geometry_preflight(
-    image: &Image,
-    w: u32,
-    h: u32,
-) -> Result<(u32, u32), PilError> {
+pub fn contain_geometry_preflight(image: &Image, w: u32, h: u32) -> Result<(u32, u32), PilError> {
     contain_dimensions(image, w, h).map(|(_, dimensions)| dimensions)
 }
 
@@ -185,7 +187,7 @@ pub fn contain_geometry_preflight(
 /// before queuing the resize. Pillow's empty-width source is the one valid
 /// zero-axis result: when its height is unchanged, the resize request equals
 /// the source and `Image.resize` returns a copy without rejecting width zero.
-fn validate_aspect_resize_dimensions(
+pub(crate) fn validate_aspect_resize_dimensions(
     (source_w, source_h): (u32, u32),
     (new_w, new_h): (u32, u32),
 ) -> Result<(), PilError> {
@@ -202,8 +204,11 @@ fn validate_aspect_resize_dimensions(
 /// the destination ratio is also zero. If the destination has positive width,
 /// Pillow divides by the source width while calculating the covering height
 /// and raises `ZeroDivisionError` before filter validation.
-fn cover_dimensions(image: &Image, w: u32, h: u32) -> Result<AspectDimensions, PilError> {
-    let source = image.size()?;
+pub(crate) fn cover_dimensions_from_sizes(
+    source: (u32, u32),
+    target: (u32, u32),
+) -> Result<(u32, u32), PilError> {
+    let (w, h) = target;
     if source.1 == 0 || h == 0 {
         return Err(PilError::ZeroDivisionError("division by zero".into()));
     }
@@ -225,17 +230,19 @@ fn cover_dimensions(image: &Image, w: u32, h: u32) -> Result<AspectDimensions, P
             h,
         )
     };
+    Ok(dimensions)
+}
+
+fn cover_dimensions(image: &Image, w: u32, h: u32) -> Result<AspectDimensions, PilError> {
+    let source = image.size()?;
+    let dimensions = cover_dimensions_from_sizes(source, (w, h))?;
     Ok((source, dimensions))
 }
 
 /// Captures the output dimensions that `ImageOps.cover` computes before
 /// `Image.resize` parses the filter.
 #[doc(hidden)]
-pub fn cover_geometry_preflight(
-    image: &Image,
-    w: u32,
-    h: u32,
-) -> Result<(u32, u32), PilError> {
+pub fn cover_geometry_preflight(image: &Image, w: u32, h: u32) -> Result<(u32, u32), PilError> {
     cover_dimensions(image, w, h).map(|(_, dimensions)| dimensions)
 }
 
@@ -470,7 +477,7 @@ fn resolve_fit_centering(centering: CenteringInput) -> Result<(f64, f64), PilErr
 // Pillow's ImageOps.fit normalizes invalid bleed values before calculating the
 // crop box. Keep this at the public core boundary so CPU, SIMD, and GPU receive
 // the same deferred operation value instead of each reimplementing the rule.
-fn normalize_fit_bleed(bleed: f64) -> f64 {
+pub(crate) fn normalize_fit_bleed(bleed: f64) -> f64 {
     if (0.0..0.5).contains(&bleed) {
         bleed
     } else {
@@ -545,9 +552,24 @@ pub fn scale_geometry_preflight(image: &Image, factor: f64) -> Result<(f64, f64)
         ));
     }
     let (width, height) = image.size()?;
+    scale_dimensions_preflight((width, height), factor)
+}
+
+/// Compute Pillow's ties-to-even Scale dimensions from a captured image size.
+/// The prepared CPU path uses the same validation and rounding as the eager
+/// facade before it selects a mode or architecture strategy.
+pub(crate) fn scale_dimensions_preflight(
+    (width, height): (u32, u32),
+    factor: f64,
+) -> Result<(f64, f64), PilError> {
     if factor.is_nan() {
         return Err(PilError::ValueError(
             "cannot convert float NaN to integer".to_owned(),
+        ));
+    }
+    if factor <= 0.0 {
+        return Err(PilError::ValueError(
+            "the factor must be greater than 0".to_owned(),
         ));
     }
     if factor == 1.0 {
@@ -583,7 +605,7 @@ fn round_scaled_dimension(dimension: u32, factor: f64) -> Result<f64, PilError> 
     Ok(rounded)
 }
 
-fn scale_dimension_to_u32(value: f64) -> Result<u32, PilError> {
+pub(crate) fn scale_dimension_to_u32(value: f64) -> Result<u32, PilError> {
     if value > f64::from(u32::MAX) {
         return Err(PilError::OverflowError(
             "signed integer is greater than maximum".into(),

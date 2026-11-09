@@ -2,9 +2,9 @@
 
 #![allow(unsafe_code)] // Mode strategies select this only after AVX2 capability checks.
 
+use super::super::general::ByteReduceContext;
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
-use super::super::general::ByteReduceContext;
 #[cfg(target_arch = "x86")]
 use std::arch::x86 as arch;
 #[cfg(target_arch = "x86_64")]
@@ -142,7 +142,11 @@ unsafe fn reduce_rgb_3x5_block(
 }
 
 #[target_feature(enable = "avx2")]
-unsafe fn write_special_rgb_vector<const CHANNELS: usize, const PREMULTIPLIED: bool, const RGB_3X5: bool>(
+unsafe fn write_special_rgb_vector<
+    const CHANNELS: usize,
+    const PREMULTIPLIED: bool,
+    const RGB_3X5: bool,
+>(
     context: &ByteReduceContext<'_, CHANNELS, PREMULTIPLIED>,
     factors: (u32, u32),
     output_x: u32,
@@ -196,9 +200,8 @@ unsafe fn write_generic_vector<const CHANNELS: usize, const PREMULTIPLIED: bool>
     output: &mut [u8],
 ) -> Result<(), PilError> {
     let (main_width, _) = context.main_dimensions();
-    let full_width_batch = valid_pixels != 0
-        && output_x < main_width
-        && valid_pixels as u32 <= main_width - output_x;
+    let full_width_batch =
+        valid_pixels != 0 && output_x < main_width && valid_pixels as u32 <= main_width - output_x;
     let mut sums = [[0u32; LANES]; 4];
     let mut multipliers = [0u32; LANES];
     let mut amends = [0u32; LANES];

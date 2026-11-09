@@ -2,15 +2,10 @@ use crate::compute::pool_cpu::ops::analysis::helpers::stat::{self, StatOutput, S
 use crate::error::PilError;
 use crate::raster::RgbaImage;
 
-pub(crate) fn execute(
-    image: &RgbaImage,
-    request: StatRequest<'_>,
-) -> Result<StatOutput, PilError> {
+pub(crate) fn execute(image: &RgbaImage, request: StatRequest<'_>) -> Result<StatOutput, PilError> {
     match request {
         StatRequest::Scalar => Ok(vec![stat::scalar_f32(image)?]),
-        StatRequest::FormattedHistogram(histogram) => {
-            Ok(stat::formatted_histogram(histogram))
-        }
+        StatRequest::FormattedHistogram(histogram) => Ok(stat::formatted_histogram(histogram)),
         StatRequest::Histogram(_) => Err(PilError::InternalError(
             "Stat scalar implementation received histogram input".into(),
         )),

@@ -64,10 +64,7 @@ unsafe fn execute_neon(source: &RgbaImage) -> Result<RgbImage, PilError> {
 #[cfg(target_arch = "aarch64")]
 #[inline(always)]
 fn convert_vector_blocks(neon: Neon, source: &[u8], output: &mut [u8]) {
-    for (source_block, output_block) in source
-        .chunks_exact(64)
-        .zip(output.chunks_exact_mut(48))
-    {
+    for (source_block, output_block) in source.chunks_exact(64).zip(output.chunks_exact_mut(48)) {
         let channels = SafeU8x16::<Neon>::load_four_interleaved(
             neon,
             source_block.try_into().expect("complete CMYK NEON block"),
@@ -83,19 +80,18 @@ fn convert_vector_blocks(neon: Neon, source: &[u8], output: &mut [u8]) {
         green.store_array(&mut green_lanes);
         blue.store_array(&mut blue_lanes);
         for lane in 0..16 {
-            output_block[lane * 3..lane * 3 + 3]
-                .copy_from_slice(&[red_lanes[lane], green_lanes[lane], blue_lanes[lane]]);
+            output_block[lane * 3..lane * 3 + 3].copy_from_slice(&[
+                red_lanes[lane],
+                green_lanes[lane],
+                blue_lanes[lane],
+            ]);
         }
     }
 }
 
 #[cfg(target_arch = "aarch64")]
 #[inline(always)]
-fn muldiv255_neon(
-    neon: Neon,
-    value: SafeU8x16<Neon>,
-    ink: SafeU8x16<Neon>,
-) -> SafeU8x16<Neon> {
+fn muldiv255_neon(neon: Neon, value: SafeU8x16<Neon>, ink: SafeU8x16<Neon>) -> SafeU8x16<Neon> {
     let (value_low, value_high) = value.widen();
     let (ink_low, ink_high) = ink.widen();
     let round = |product: SafeU16x8<Neon>| {
@@ -113,9 +109,7 @@ fn convert_scalar_tail(source: &[u8], output: &mut [u8], start: usize, end: usiz
         let cmyk = &source[source_start..source_start + 4];
         let ink = 255u32 - u32::from(cmyk[3]);
         output[output_start] = (ink - crate::color::muldiv255(u32::from(cmyk[0]), ink)) as u8;
-        output[output_start + 1] =
-            (ink - crate::color::muldiv255(u32::from(cmyk[1]), ink)) as u8;
-        output[output_start + 2] =
-            (ink - crate::color::muldiv255(u32::from(cmyk[2]), ink)) as u8;
+        output[output_start + 1] = (ink - crate::color::muldiv255(u32::from(cmyk[1]), ink)) as u8;
+        output[output_start + 2] = (ink - crate::color::muldiv255(u32::from(cmyk[2]), ink)) as u8;
     }
 }

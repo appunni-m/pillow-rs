@@ -552,16 +552,21 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- extrema_bytes.rs
 |   |   |   |       |   |   |-- extrema_bytes_execution.rs
 |   |   |   |       |   |   |-- extrema_execution.rs
+|   |   |   |       |   |   |-- get_channel_support.rs
 |   |   |   |       |   |   |-- get_data.rs
 |   |   |   |       |   |   |-- get_data_execution.rs
+|   |   |   |       |   |   |-- get_data_support.rs
 |   |   |   |       |   |   |-- getcolors.rs
 |   |   |   |       |   |   |-- getcolors_execution.rs
+|   |   |   |       |   |   |-- getcolors_support.rs
 |   |   |   |       |   |   |-- histogram_execution.rs
 |   |   |   |       |   |   |-- histogram_samples.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   |-- pixel_access.rs
 |   |   |   |       |   |   |-- projection.rs
+|   |   |   |       |   |   |-- projection_support.rs
 |   |   |   |       |   |   |-- projection_vector.rs
+|   |   |   |       |   |   |-- split_support.rs
 |   |   |   |       |   |   |-- stat.rs
 |   |   |   |       |   |   `-- stat_execution.rs
 |   |   |   |       |   |-- hsv8/
@@ -2165,6 +2170,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- strategy.rs
 |   |   |   |       |   |   |-- strategy.rs
+|   |   |   |       |   |   |-- support.rs
 |   |   |   |       |   |   |-- text_coords.rs
 |   |   |   |       |   |   |-- text_mask.rs
 |   |   |   |       |   |   |-- text_result.rs
@@ -2983,6 +2989,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       |-- contrast_impl.rs
 |   |   |   |       |   |       |-- mod.rs
 |   |   |   |       |   |       `-- sharpness_impl.rs
+|   |   |   |       |   |-- contrast.rs
 |   |   |   |       |   |-- f32/
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- brightness_impl.rs
@@ -4179,8 +4186,12 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   `-- wasm_simd128/
 |   |   |   |       |   |       |-- invert_impl.rs
 |   |   |   |       |   |       `-- mod.rs
+|   |   |   |       |   |-- colorize/
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- equalize.rs
 |   |   |   |       |   |-- expand.rs
+|   |   |   |       |   |-- expand_edges.rs
 |   |   |   |       |   |-- f32/
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- expand_impl.rs
@@ -4556,6 +4567,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- plan.rs
 |   |   |   |       |   |   |-- region.rs
 |   |   |   |       |   |   |-- strategy.rs
+|   |   |   |       |   |   |-- telemetry.rs
 |   |   |   |       |   |   |-- typed.rs
 |   |   |   |       |   |   `-- vector.rs
 |   |   |   |       |   |-- hsv8/
@@ -4909,8 +4921,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extract_band_impl.rs
 |   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   |-- put_alpha_data_impl.rs
-|   |   |   |       |   |   |   |-- put_alpha_impl.rs
 |   |   |   |       |   |   |   |-- put_data_impl.rs
 |   |   |   |       |   |   |   `-- put_pixel_impl.rs
 |   |   |   |       |   |   |-- mod.rs
@@ -4932,6 +4942,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- extract_band.rs
 |   |   |   |       |   |   |-- extract_band_strategy.rs
 |   |   |   |       |   |   |-- extract_band_vector.rs
+|   |   |   |       |   |   |-- imaging_core_band.rs
+|   |   |   |       |   |   |-- imaging_core_mode.rs
 |   |   |   |       |   |   |-- masked_store.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   |-- put_alpha.rs
@@ -4947,13 +4959,12 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- put_data_vector.rs
 |   |   |   |       |   |   |-- put_pixel.rs
 |   |   |   |       |   |   |-- put_pixel_strategy.rs
-|   |   |   |       |   |   `-- put_pixel_vector.rs
+|   |   |   |       |   |   |-- put_pixel_vector.rs
+|   |   |   |       |   |   `-- scalar_write_support.rs
 |   |   |   |       |   |-- hsv8/
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extract_band_impl.rs
 |   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   |-- put_alpha_data_impl.rs
-|   |   |   |       |   |   |   |-- put_alpha_impl.rs
 |   |   |   |       |   |   |   |-- put_data_impl.rs
 |   |   |   |       |   |   |   `-- put_pixel_impl.rs
 |   |   |   |       |   |   |-- mod.rs
@@ -5020,8 +5031,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extract_band_impl.rs
 |   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   |-- put_alpha_data_impl.rs
-|   |   |   |       |   |   |   |-- put_alpha_impl.rs
 |   |   |   |       |   |   |   |-- put_data_impl.rs
 |   |   |   |       |   |   |   `-- put_pixel_impl.rs
 |   |   |   |       |   |   |-- mod.rs
@@ -5038,11 +5047,13 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       |-- mod.rs
 |   |   |   |       |   |       |-- put_data_impl.rs
 |   |   |   |       |   |       `-- put_pixel_impl.rs
+|   |   |   |       |   |-- imaging_core_set_mode.rs
 |   |   |   |       |   |-- la_premultiplied8/
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extract_band_impl.rs
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   |-- put_alpha_data_impl.rs
+|   |   |   |       |   |   |   |-- put_alpha_helper.rs
 |   |   |   |       |   |   |   |-- put_alpha_impl.rs
 |   |   |   |       |   |   |   |-- put_data_impl.rs
 |   |   |   |       |   |   |   `-- put_pixel_impl.rs
@@ -5061,8 +5072,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extract_band_impl.rs
 |   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   |-- put_alpha_data_impl.rs
-|   |   |   |       |   |   |   |-- put_alpha_impl.rs
 |   |   |   |       |   |   |   |-- put_data_impl.rs
 |   |   |   |       |   |   |   `-- put_pixel_impl.rs
 |   |   |   |       |   |   |-- mod.rs
@@ -5152,8 +5161,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extract_band_impl.rs
 |   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   |-- put_alpha_data_impl.rs
-|   |   |   |       |   |   |   |-- put_alpha_impl.rs
 |   |   |   |       |   |   |   |-- put_data_impl.rs
 |   |   |   |       |   |   |   `-- put_pixel_impl.rs
 |   |   |   |       |   |   |-- mod.rs
@@ -5393,12 +5400,11 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       |-- put_alpha_impl.rs
 |   |   |   |       |   |       |-- put_data_impl.rs
 |   |   |   |       |   |       `-- put_pixel_impl.rs
+|   |   |   |       |   |-- value_at.rs
 |   |   |   |       |   `-- ycbcr8/
 |   |   |   |       |       |-- default/
 |   |   |   |       |       |   |-- extract_band_impl.rs
 |   |   |   |       |       |   |-- mod.rs
-|   |   |   |       |       |   |-- put_alpha_data_impl.rs
-|   |   |   |       |       |   |-- put_alpha_impl.rs
 |   |   |   |       |       |   |-- put_data_impl.rs
 |   |   |   |       |       |   `-- put_pixel_impl.rs
 |   |   |   |       |       |-- mod.rs
@@ -5742,6 +5748,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- pad_window.rs
 |   |   |   |       |   |   |-- prepared.rs
 |   |   |   |       |   |   |-- strategy.rs
+|   |   |   |       |   |   |-- support.rs
 |   |   |   |       |   |   |-- tall_boxed.rs
 |   |   |   |       |   |   |-- typed_f32.rs
 |   |   |   |       |   |   |-- typed_nearest.rs
@@ -7515,10 +7522,14 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |   |-- prelude.rs
 |   |   |   |   |   `-- transform.rs
 |   |   |   |   |-- support/
+|   |   |   |   |   |-- mode.rs
 |   |   |   |   |   |-- operation.rs
 |   |   |   |   |   |-- request/
+|   |   |   |   |   |   |-- contracts/
+|   |   |   |   |   |   |   `-- request.rs
 |   |   |   |   |   |   |-- contracts.rs
 |   |   |   |   |   |   |-- facts.rs
+|   |   |   |   |   |   |-- guard_assessment.rs
 |   |   |   |   |   |   |-- guards/
 |   |   |   |   |   |   |   |-- core.rs
 |   |   |   |   |   |   |   |-- draw.rs
@@ -7594,6 +7605,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- encode.rs
 |   |   |   |-- entropy.rs
 |   |   |   |-- materialization/
+|   |   |   |   |-- derived.rs
 |   |   |   |   |-- lifecycle.rs
 |   |   |   |   |-- palette_output.rs
 |   |   |   |   `-- receipts.rs
@@ -7603,9 +7615,11 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- palette.rs
 |   |   |   |-- pipeline_admission.rs
 |   |   |   |-- pipeline_ops/
-|   |   |   |   `-- dimensions.rs
+|   |   |   |   |-- dimensions.rs
+|   |   |   |   `-- mode.rs
 |   |   |   |-- pipeline_ops.rs
 |   |   |   |-- pixel_access/
+|   |   |   |   |-- palette.rs
 |   |   |   |   `-- palette_components.rs
 |   |   |   |-- pixel_access.rs
 |   |   |   |-- projection/
@@ -7673,17 +7687,11 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- paste.rs
 |   |   |   |-- pil_resize/
 |   |   |   |   |-- alpha.rs
-|   |   |   |   |-- boxed.rs
 |   |   |   |   |-- coefficients.rs
 |   |   |   |   |-- filters.rs
 |   |   |   |   |-- float.rs
 |   |   |   |   |-- horizontal_passes.rs
-|   |   |   |   |-- integer_modes/
-|   |   |   |   |   |-- cmyk.rs
-|   |   |   |   |   `-- hsv.rs
-|   |   |   |   |-- integer_modes.rs
 |   |   |   |   |-- luma16.rs
-|   |   |   |   |-- resize.rs
 |   |   |   |   |-- samples.rs
 |   |   |   |   |-- vertical_passes/
 |   |   |   |   |   `-- transpose.rs
@@ -7852,11 +7860,13 @@ It is a navigation aid, not an API-support or coverage claim.
 |       |   |-- exif.rs
 |       |   |-- expand.rs
 |       |   |-- pad.rs
+|       |   |-- point.rs
 |       |   `-- size_route.rs
 |       |-- image_ops.rs
 |       |-- image_path.rs
 |       |-- inputs/
 |       |   |-- analysis.rs
+|       |   |-- color_lut.rs
 |       |   |-- filters.rs
 |       |   |-- float_buffer.rs
 |       |   |-- images.rs

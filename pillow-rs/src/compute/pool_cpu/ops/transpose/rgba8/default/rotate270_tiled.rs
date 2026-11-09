@@ -56,7 +56,6 @@ fn rotate270_tiled(source: &[u8], output: &mut [u8], width: u32, height: u32) {
     let width = width as usize;
     let height = height as usize;
     let source_stride = width * usize::from(CHANNELS);
-    let output_stride = height * usize::from(CHANNELS);
     let tile_size = PACKED_RGBA_TILE_SIZE;
 
     debug_assert_eq!(output.len(), source_stride * height);
@@ -69,14 +68,7 @@ fn rotate270_tiled(source: &[u8], output: &mut [u8], width: u32, height: u32) {
             let output_x_end = (output_x_tile + tile_size).min(height);
             for output_y in (output_y_tile..output_y_end).step_by(4) {
                 for output_x in (output_x_tile..output_x_end).step_by(4) {
-                    transpose_rgba_block(
-                        source,
-                        output,
-                        width,
-                        height,
-                        output_x,
-                        output_y,
-                    );
+                    transpose_rgba_block(source, output, width, height, output_x, output_y);
                 }
             }
         }

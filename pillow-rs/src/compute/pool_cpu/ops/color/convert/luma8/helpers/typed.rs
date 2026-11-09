@@ -2,7 +2,7 @@
 
 use crate::error::PilError;
 use crate::raster::{GrayImage, ImageBuffer, Luma};
-use wide::{f32x8, u16x16, u32x8, u8x16};
+use wide::{f32x8, u8x16, u16x16, u32x8};
 
 pub(crate) fn to_i32(source: &GrayImage) -> Result<(Vec<u8>, u64), PilError> {
     let (pixels, output_bytes) = super::layout::checked_layout(source, 4)?;
@@ -24,7 +24,9 @@ pub(crate) fn to_i32(source: &GrayImage) -> Result<(Vec<u8>, u64), PilError> {
         vector_blocks = vector_blocks.saturating_add(1);
     }
     if output.len() != output_bytes {
-        return Err(PilError::InternalError("Luma Convert I output shape mismatch".into()));
+        return Err(PilError::InternalError(
+            "Luma Convert I output shape mismatch".into(),
+        ));
     }
     Ok((output, vector_blocks))
 }
@@ -48,7 +50,9 @@ pub(crate) fn to_f32(source: &GrayImage) -> Result<(Vec<u8>, u64), PilError> {
         vector_blocks = vector_blocks.saturating_add(1);
     }
     if output.len() != output_bytes {
-        return Err(PilError::InternalError("Luma Convert F output shape mismatch".into()));
+        return Err(PilError::InternalError(
+            "Luma Convert F output shape mismatch".into(),
+        ));
     }
     Ok((output, vector_blocks))
 }
@@ -61,10 +65,14 @@ pub(crate) fn to_i16(
     let mut vector_blocks = 0u64;
     for start in (0..pixels).step_by(16) {
         let active = (pixels - start).min(16);
-        let lanes = std::array::from_fn(|lane| {
-            source.as_raw().get(start + lane).copied().unwrap_or(0)
-        });
-        samples.extend(u16x16::from(u8x16::new(lanes)).to_array().into_iter().take(active));
+        let lanes =
+            std::array::from_fn(|lane| source.as_raw().get(start + lane).copied().unwrap_or(0));
+        samples.extend(
+            u16x16::from(u8x16::new(lanes))
+                .to_array()
+                .into_iter()
+                .take(active),
+        );
         vector_blocks = vector_blocks.saturating_add(1);
     }
     if samples.len() != pixels {

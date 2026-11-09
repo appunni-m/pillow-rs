@@ -77,12 +77,14 @@ macro_rules! byte_mode_mesh_record {
                 $crate::raster::DynamicImage::$variant(destination),
             ) = (input, &mut *output)
             else {
-                return Err($crate::error::PilError::InternalError(concat!(
-                    "Transform MESH expected exact ",
-                    $mode_name,
-                    " source and destination modes"
-                )
-                .into()));
+                return Err($crate::error::PilError::InternalError(
+                    concat!(
+                        "Transform MESH expected exact ",
+                        $mode_name,
+                        " source and destination modes"
+                    )
+                    .into(),
+                ));
             };
             $crate::compute::pool_cpu::ops::transform::helpers::byte::apply_mesh_record::<
                 $channels,
@@ -98,12 +100,14 @@ macro_rules! byte_mode_mesh_record {
             )?;
             if $alpha && !matches!(request.filter, $crate::pipeline::ResampleFilter::Nearest) {
                 let $crate::raster::DynamicImage::$variant(image) = output else {
-                    return Err($crate::error::PilError::InternalError(concat!(
-                        "Transform MESH alpha output expected exact ",
-                        $mode_name,
-                        " mode"
-                    )
-                    .into()));
+                    return Err($crate::error::PilError::InternalError(
+                        concat!(
+                            "Transform MESH alpha output expected exact ",
+                            $mode_name,
+                            " mode"
+                        )
+                        .into(),
+                    ));
                 };
                 $crate::compute::pool_cpu::ops::transform::helpers::alpha::unpremultiply_region(
                     image.as_mut(),
@@ -133,9 +137,8 @@ macro_rules! byte_mode_nearest {
             let bytes = $crate::compute::pool_cpu::ops::transform::helpers::byte_nearest::execute::<
                 $channels,
             >(source.as_raw(), source.dimensions(), request)?;
-            let output = <$image>::from_raw(request.width, request.height, bytes).ok_or_else(|| {
-                $crate::error::PilError::InternalError($shape_error.into())
-            })?;
+            let output = <$image>::from_raw(request.width, request.height, bytes)
+                .ok_or_else(|| $crate::error::PilError::InternalError($shape_error.into()))?;
             Ok($crate::raster::DynamicImage::$variant(output))
         }
 
@@ -150,7 +153,12 @@ macro_rules! byte_mode_nearest {
             ) = (input, &*output)
             else {
                 return Err($crate::error::PilError::InternalError(
-                    concat!("Transform mode strategy expected exact ", $mode_name, " buffers").into(),
+                    concat!(
+                        "Transform mode strategy expected exact ",
+                        $mode_name,
+                        " buffers"
+                    )
+                    .into(),
                 ));
             };
             let destination = output.as_bytes_mut().ok_or_else(|| {
@@ -162,7 +170,6 @@ macro_rules! byte_mode_nearest {
                 $channels,
             >(source.as_raw(), source.dimensions(), request, destination)
         }
-
     };
 }
 
@@ -247,11 +254,14 @@ macro_rules! luma16_mode_default_into {
                 $crate::raster::DynamicImage::$variant(destination),
             ) = (input, output)
             else {
-                return Err($crate::error::PilError::InternalError(concat!(
-                    "Transform mode strategy expected exact ",
-                    $mode_name,
-                    " buffers"
-                ).into()));
+                return Err($crate::error::PilError::InternalError(
+                    concat!(
+                        "Transform mode strategy expected exact ",
+                        $mode_name,
+                        " buffers"
+                    )
+                    .into(),
+                ));
             };
             $crate::compute::pool_cpu::ops::transform::helpers::luma16::execute_into(
                 source.as_raw(),
@@ -277,14 +287,16 @@ macro_rules! luma16_mode_vector {
                     concat!("Transform mode strategy expected ", $mode_name).into(),
                 ));
             };
-            let samples = $crate::compute::pool_cpu::ops::transform::helpers::vector_luma16::execute(
-                source.as_raw(),
-                source.dimensions(),
-                request,
-                $crate::compute::pool_cpu::ops::transform::helpers::luma16::ByteOrder::$order,
-            )?;
-            let output = $crate::raster::ImageBuffer::from_raw(request.width, request.height, samples)
-                .ok_or_else(|| $crate::error::PilError::InternalError($shape_error.into()))?;
+            let samples =
+                $crate::compute::pool_cpu::ops::transform::helpers::vector_luma16::execute(
+                    source.as_raw(),
+                    source.dimensions(),
+                    request,
+                    $crate::compute::pool_cpu::ops::transform::helpers::luma16::ByteOrder::$order,
+                )?;
+            let output =
+                $crate::raster::ImageBuffer::from_raw(request.width, request.height, samples)
+                    .ok_or_else(|| $crate::error::PilError::InternalError($shape_error.into()))?;
             Ok($crate::raster::DynamicImage::$variant(output))
         }
 
@@ -299,7 +311,12 @@ macro_rules! luma16_mode_vector {
             ) = (input, &mut *output)
             else {
                 return Err($crate::error::PilError::InternalError(
-                    concat!("Transform mode strategy expected exact ", $mode_name, " buffers").into(),
+                    concat!(
+                        "Transform mode strategy expected exact ",
+                        $mode_name,
+                        " buffers"
+                    )
+                    .into(),
                 ));
             };
             $crate::compute::pool_cpu::ops::transform::helpers::vector_luma16::execute_into(
@@ -310,7 +327,6 @@ macro_rules! luma16_mode_vector {
                 destination.as_mut(),
             )
         }
-
     };
 }
 

@@ -151,13 +151,8 @@ fn write_row<const CHANNELS: usize>(
         return Some((1, 0));
     }
     for output_x in (0..vector_width).step_by(pixels_per_vector) {
-        let values = vector_block::<CHANNELS>(
-            source,
-            source_row,
-            x_indices,
-            output_x,
-            pixels_per_vector,
-        )?;
+        let values =
+            vector_block::<CHANNELS>(source, source_row, x_indices, output_x, pixels_per_vector)?;
         let output_start = output_row.checked_add(output_x.checked_mul(CHANNELS)?)?;
         output
             .get_mut(output_start..output_start.checked_add(block_bytes)?)?
@@ -165,7 +160,8 @@ fn write_row<const CHANNELS: usize>(
         vector_blocks = vector_blocks.saturating_add(1);
     }
     for output_x in vector_width..output_width {
-        let source_start = source_row.checked_add(x_indices.get(output_x)?.checked_mul(CHANNELS)?)?;
+        let source_start =
+            source_row.checked_add(x_indices.get(output_x)?.checked_mul(CHANNELS)?)?;
         let output_start = output_row.checked_add(output_x.checked_mul(CHANNELS)?)?;
         let end = source_start.checked_add(CHANNELS)?;
         output
@@ -195,7 +191,8 @@ fn vector_block<const CHANNELS: usize>(
     }
     let source_start = source_row.checked_add(first_source)?;
     let mut source_bytes = [0u8; VECTOR_BYTES];
-    source_bytes[..span].copy_from_slice(source.get(source_start..source_start.checked_add(span)?)?);
+    source_bytes[..span]
+        .copy_from_slice(source.get(source_start..source_start.checked_add(span)?)?);
     let mut indices = [0u8; VECTOR_BYTES];
     for pixel in 0..pixel_count {
         let source_pixel = x_indices
@@ -207,7 +204,11 @@ fn vector_block<const CHANNELS: usize>(
             indices[lane] = u8::try_from(source_pixel.checked_add(channel)?).ok()?;
         }
     }
-    Some(u8x16::new(source_bytes).shuffle(u8x16::new(indices)).to_array())
+    Some(
+        u8x16::new(source_bytes)
+            .shuffle(u8x16::new(indices))
+            .to_array(),
+    )
 }
 
 fn gather_block<const CHANNELS: usize>(
@@ -219,7 +220,9 @@ fn gather_block<const CHANNELS: usize>(
 ) -> Option<[u8; VECTOR_BYTES]> {
     let mut output = [0u8; VECTOR_BYTES];
     for pixel in 0..pixel_count {
-        let source_pixel = x_indices.get(output_x.checked_add(pixel)?)?.checked_mul(CHANNELS)?;
+        let source_pixel = x_indices
+            .get(output_x.checked_add(pixel)?)?
+            .checked_mul(CHANNELS)?;
         let source_start = source_row.checked_add(source_pixel)?;
         let destination_start = pixel.checked_mul(CHANNELS)?;
         let channel_end = destination_start.checked_add(CHANNELS)?;

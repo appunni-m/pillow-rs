@@ -16,9 +16,10 @@ where
     I: Deref<Target = DynamicImage>,
 {
     let source = plan.source.deref();
-    let mask = plan.mask.as_deref().ok_or_else(|| {
-        PilError::InternalError("PA NEON Paste strategy lost its L mask".into())
-    })?;
+    let mask = plan
+        .mask
+        .as_deref()
+        .ok_or_else(|| PilError::InternalError("PA NEON Paste strategy lost its L mask".into()))?;
     if source.mode() != Mode::ImagePaletteAlpha8
         || plan.source_layout != SourceLayout::Native
         || plan.broadcast_source
@@ -77,11 +78,8 @@ where
         let destination_row = output
             .get_mut(destination_range)
             .ok_or_else(|| invalid_row("destination"))?;
-        vector_blocks = vector_blocks.saturating_add(blend_pa_row(
-            source_row,
-            destination_row,
-            mask_row,
-        ));
+        vector_blocks =
+            vector_blocks.saturating_add(blend_pa_row(source_row, destination_row, mask_row));
     }
 
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
@@ -164,5 +162,7 @@ fn checked_stride(width: u32, channels: usize, role: &str) -> Result<usize, PilE
 }
 
 fn invalid_row(role: &str) -> PilError {
-    PilError::InternalError(format!("PA NEON Paste {role} row was outside its validated storage"))
+    PilError::InternalError(format!(
+        "PA NEON Paste {role} row was outside its validated storage"
+    ))
 }

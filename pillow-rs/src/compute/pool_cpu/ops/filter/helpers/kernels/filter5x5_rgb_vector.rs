@@ -14,11 +14,7 @@ pub(crate) struct ScanEvidence {
 }
 
 /// Prove a large RGB image is constant, returning the vector work performed.
-pub(crate) fn scan_uniform(
-    raw: &[u8],
-    width: usize,
-    height: usize,
-) -> Option<ScanEvidence> {
+pub(crate) fn scan_uniform(raw: &[u8], width: usize, height: usize) -> Option<ScanEvidence> {
     let pixel_count = width.checked_mul(height)?;
     let expected_bytes = pixel_count.checked_mul(CHANNELS)?;
     if width == 0 || height == 0 || raw.len() != expected_bytes {
@@ -32,7 +28,9 @@ pub(crate) fn scan_uniform(
     let vector_pixels = pixel_count / INPUT_LANES * INPUT_LANES;
     let vector_bytes = vector_pixels.checked_mul(CHANNELS)?;
     let patterns: [u8x16; CHANNELS] = std::array::from_fn(|phase| {
-        u8x16::new(std::array::from_fn(|lane| first_pixel[(phase + lane) % CHANNELS]))
+        u8x16::new(std::array::from_fn(|lane| {
+            first_pixel[(phase + lane) % CHANNELS]
+        }))
     });
     let mut vector_blocks = 0u64;
     for group in raw[..vector_bytes].chunks_exact(CHANNELS * INPUT_LANES) {
@@ -109,9 +107,13 @@ fn sum_rows_into_columns(
             high += u16x8::from_u8x16_high(samples);
         }
         let middle = byte.checked_add(OUTPUT_LANES)?;
-        destination.get_mut(byte..middle)?.copy_from_slice(&low.to_array());
+        destination
+            .get_mut(byte..middle)?
+            .copy_from_slice(&low.to_array());
         let end = byte.checked_add(INPUT_LANES)?;
-        destination.get_mut(middle..end)?.copy_from_slice(&high.to_array());
+        destination
+            .get_mut(middle..end)?
+            .copy_from_slice(&high.to_array());
     }
     for byte in vector_end..row_stride {
         let mut sum = 0u16;
@@ -146,9 +148,13 @@ fn slide_columns(
             + u16x8::from_u8x16_low(entering);
         let high = load_u16x8(columns, middle)? - u16x8::from_u8x16_high(leaving)
             + u16x8::from_u8x16_high(entering);
-        columns.get_mut(byte..middle)?.copy_from_slice(&low.to_array());
+        columns
+            .get_mut(byte..middle)?
+            .copy_from_slice(&low.to_array());
         let end = byte.checked_add(INPUT_LANES)?;
-        columns.get_mut(middle..end)?.copy_from_slice(&high.to_array());
+        columns
+            .get_mut(middle..end)?
+            .copy_from_slice(&high.to_array());
     }
     for byte in vector_end..row_stride {
         let leaving = leaving_row.checked_mul(row_stride)?.checked_add(byte)?;

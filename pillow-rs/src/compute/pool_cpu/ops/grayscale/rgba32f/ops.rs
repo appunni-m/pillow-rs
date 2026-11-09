@@ -2,32 +2,57 @@
 
 // NO_PILLOW_SUPPORT: typed native RGBA32F grayscale extends Pillow.
 
-use crate::compute::{ExecutionContext, registry::support::{InputContract, ModeSupport, OperationId, OutputModeRule, StrategyInputs, PaletteKnowledge}};
+use super::default::grayscale_impl;
 use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
+use crate::compute::{
+    ExecutionContext,
+    registry::support::{
+        InputContract, ModeSupport, OperationId, OutputModeRule, PaletteKnowledge, StrategyInputs,
+    },
+};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
-use super::default::grayscale_impl;
 
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
-    OperationId::Grayscale, Mode::ImageRgba32F,
+    OperationId::Grayscale,
+    Mode::ImageRgba32F,
     OutputModeRule::Fixed(Mode::ImageLuma8),
-    &[InputContract::CheckedByteDimensions { bytes_per_pixel: 1, allow_empty: true }], &[],
+    &[InputContract::CheckedByteDimensions {
+        bytes_per_pixel: 1,
+        allow_empty: true,
+    }],
+    &[],
     "typed native RGBA32F grayscale extends Pillow for this internal raster identity",
 );
 
-pub(crate) enum ArchitectureStrategy<'a> { Default(grayscale_impl::Kernel<'a>) }
+pub(crate) enum ArchitectureStrategy<'a> {
+    Default(grayscale_impl::Kernel<'a>),
+}
 pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
 
-
-pub(crate) fn prepare<'a>(input: &'a grayscale_impl::Input, ctx: &ExecutionContext) -> Result<Strategy<'a>, PilError> {
+pub(crate) fn prepare<'a>(
+    input: &'a grayscale_impl::Input,
+    ctx: &ExecutionContext,
+) -> Result<Strategy<'a>, PilError> {
     let implementation = grayscale_impl::prepare(input)?;
-    let facts = StrategyInputs { width: input.width(), height: input.height(), byte_len: Some(core::mem::size_of_val(input.as_raw().as_slice())), palette: PaletteKnowledge::Unknown, request: Default::default() };
+    let facts = StrategyInputs {
+        width: input.width(),
+        height: input.height(),
+        byte_len: Some(core::mem::size_of_val(input.as_raw().as_slice())),
+        palette: PaletteKnowledge::Unknown,
+        request: Default::default(),
+    };
     let selection = SUPPORT.select(ctx, facts)?;
-    Ok(Prepared::new(ArchitectureStrategy::Default(implementation), selection))
+    Ok(Prepared::new(
+        ArchitectureStrategy::Default(implementation),
+        selection,
+    ))
 }
 
 pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
     match strategy.implementation {
-            ArchitectureStrategy::Default(input) => grayscale_impl::execute(input).map(DynamicImage::ImageLuma8),
+        ArchitectureStrategy::Default(input) => {
+            grayscale_impl::execute(input).map(DynamicImage::ImageLuma8)
+        }
     }
 }

@@ -221,9 +221,7 @@ impl Image {
         match self {
             Image::Paletted(_) => true,
             Image::Loaded(data) => data.palette.is_some(),
-            Image::Bytes { info, .. } => info
-                .as_ref()
-                .is_some_and(|info| info.palette.is_some()),
+            Image::Bytes { info, .. } => info.as_ref().is_some_and(|info| info.palette.is_some()),
             Image::Pipeline { palette, ops, .. } => {
                 palette.is_some()
                     || ops
@@ -282,7 +280,10 @@ impl Image {
                 .is_some_and(|palette| !palette.is_empty()),
             Image::Pipeline { palette, ops, .. } => palette
                 .as_ref()
-                .or_else(|| ops.palette_output().and_then(|output| output.palette.as_ref()))
+                .or_else(|| {
+                    ops.palette_output()
+                        .and_then(|output| output.palette.as_ref())
+                })
                 .is_some_and(|palette| !palette.is_empty()),
             Image::Bytes { info, .. } => info
                 .as_ref()
@@ -491,10 +492,7 @@ impl Image {
         let mode = self.mode_identity()?;
         if !matches!(
             mode,
-            Mode::ImageLuma8
-                | Mode::ImageLumaA8
-                | Mode::ImagePalette8
-                | Mode::ImagePaletteAlpha8
+            Mode::ImageLuma8 | Mode::ImageLumaA8 | Mode::ImagePalette8 | Mode::ImagePaletteAlpha8
         ) {
             return Err(PilError::ValueError("illegal image mode".to_owned()));
         }
@@ -679,6 +677,22 @@ impl Image {
 }
 
 impl Image {
+    /// Returns the mode used when indexed samples are expanded for a
+    /// palette-dependent operation, without decoding image pixels.
+    pub(crate) fn palette_expansion_mode(&self, source_mode: Mode) -> Option<Mode> {
+        match source_mode {
+            Mode::ImagePaletteAlpha8 => Some(Mode::ImageRgba8),
+            Mode::ImagePalette8 if self.has_attached_palette() => Some(
+                if self.palette_alpha().is_some_and(|alpha| !alpha.is_empty()) {
+                    Mode::ImageRgba8
+                } else {
+                    Mode::ImageRgb8
+                },
+            ),
+            _ => None,
+        }
+    }
+
     /// Extract palette from Paletted variant (for Pipeline propagation).
     pub(crate) fn extract_palette(&self) -> Option<Vec<u8>> {
         match self {

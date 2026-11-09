@@ -1,9 +1,9 @@
 //! Pillow physical-byte behavior for compact-carrier Transform modes.
 
 use super::{affine, projective, vector_affine_nearest, vector_projective_nearest};
-use crate::compute::{Architecture, Backend};
-use crate::compute::registry::support::{OperationId, StrategySelection};
 use crate::compute::pool_cpu::ops::transform::ops::TransformRequest;
+use crate::compute::registry::support::{OperationId, StrategySelection};
+use crate::compute::{Architecture, Backend};
 use crate::error::PilError;
 use crate::pipeline::{ResampleFilter, TransformMethod};
 use crate::raster::buffer::HiddenPixelLanes;
@@ -64,9 +64,7 @@ pub(crate) fn finish(
     Ok(())
 }
 
-pub(crate) fn initialize_mesh_output(
-    output: &DynamicImage,
-) -> Result<Option<Vec<u8>>, PilError> {
+pub(crate) fn initialize_mesh_output(output: &DynamicImage) -> Result<Option<Vec<u8>>, PilError> {
     let mode = output.mode();
     let Some(lane_count) = mode.hidden_pixel_lane_count() else {
         return Ok(None);
@@ -176,9 +174,7 @@ fn apply_filtered_mesh_lanes(
             let pixel_index = y as usize * row_width + x as usize;
             let lane_offset = pixel_index * lane_count;
             match mode {
-                Mode::ImageLumaA8
-                | Mode::ImageLaPremultiplied8
-                | Mode::ImagePaletteAlpha8 => {
+                Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => {
                     let sample = logical[pixel_index * carrier_width];
                     lanes[lane_offset..lane_offset + lane_count].fill(sample);
                 }
@@ -231,10 +227,7 @@ fn sample_source_lanes<const CHANNELS: usize>(
         .ok_or_else(invalid_lanes)
 }
 
-fn validate_selection(
-    selection: &StrategySelection,
-    mode: Mode,
-) -> Result<(), PilError> {
+fn validate_selection(selection: &StrategySelection, mode: Mode) -> Result<(), PilError> {
     let implementation = selection.implementation;
     if implementation.operation != OperationId::Transform
         || implementation.mode != mode
@@ -268,17 +261,19 @@ fn source_lane_plane_into(
     let output_len = pixel_count
         .checked_mul(lane_count)
         .ok_or_else(invalid_lanes)?;
-    let carrier_width = mode
-        .byte_carrier_pixel_width()
-        .ok_or_else(invalid_lanes)?;
+    let carrier_width = mode.byte_carrier_pixel_width().ok_or_else(invalid_lanes)?;
     let logical = source.as_bytes();
-    if logical.len() < pixel_count.checked_mul(carrier_width).ok_or_else(invalid_lanes)? {
+    if logical.len()
+        < pixel_count
+            .checked_mul(carrier_width)
+            .ok_or_else(invalid_lanes)?
+    {
         return Err(invalid_lanes());
     }
     let retained = source.hidden_pixel_lanes();
-    if retained.is_some_and(|lanes| {
-        lanes.lane_count() != lane_count || lanes.pixel_count() != pixel_count
-    }) {
+    if retained
+        .is_some_and(|lanes| lanes.lane_count() != lane_count || lanes.pixel_count() != pixel_count)
+    {
         return Err(invalid_lanes());
     }
     output.clear();
@@ -290,7 +285,10 @@ fn source_lane_plane_into(
             output.extend_from_slice(lanes.for_pixel(index).ok_or_else(invalid_lanes)?);
         } else {
             let fallback = match carrier_width {
-                2 => [logical[index * carrier_width], logical[index * carrier_width]],
+                2 => [
+                    logical[index * carrier_width],
+                    logical[index * carrier_width],
+                ],
                 3 => [u8::MAX, 0],
                 _ => return Err(invalid_lanes()),
             };
@@ -401,7 +399,11 @@ fn repeat_first_sample(
         .byte_carrier_pixel_width()
         .ok_or_else(invalid_lanes)?;
     let logical = image.as_bytes();
-    if logical.len() < pixel_count.checked_mul(carrier_width).ok_or_else(invalid_lanes)? {
+    if logical.len()
+        < pixel_count
+            .checked_mul(carrier_width)
+            .ok_or_else(invalid_lanes)?
+    {
         return Err(invalid_lanes());
     }
     let value_count = pixel_count

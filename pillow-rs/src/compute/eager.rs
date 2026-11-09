@@ -4,13 +4,12 @@
 use super::pool_gpu;
 use super::{
     Backend, DynamicImage, ExecutionContext, PilError, PipelineOp,
-    PipelineOperationTelemetryCapture, PipelineTelemetry,
-    begin_pipeline_operation_telemetry, elapsed_ns, finish_pipeline_operation_telemetry,
-    host_resource_telemetry, pipeline_telemetry_enabled, pipeline_timestamp,
-    record_pipeline_allocation, record_pipeline_operation_handoff,
-    record_pipeline_operation_selection, record_pipeline_operation_mode_conversion,
-    record_pipeline_operation_path,
-    record_pipeline_operation_scalar_tail, record_pipeline_operation_vector_blocks,
+    PipelineOperationTelemetryCapture, PipelineTelemetry, begin_pipeline_operation_telemetry,
+    elapsed_ns, finish_pipeline_operation_telemetry, host_resource_telemetry,
+    pipeline_telemetry_enabled, pipeline_timestamp, record_pipeline_allocation,
+    record_pipeline_operation_handoff, record_pipeline_operation_mode_conversion,
+    record_pipeline_operation_path, record_pipeline_operation_scalar_tail,
+    record_pipeline_operation_selection, record_pipeline_operation_vector_blocks,
     record_pipeline_resource_telemetry, record_pipeline_telemetry,
     reset_pipeline_allocation_telemetry, reset_pipeline_operation_telemetry,
     take_pipeline_allocation_telemetry, take_pipeline_backend_override,
@@ -92,7 +91,11 @@ fn execute_eager_cpu_getprojection_inner(
         record_pipeline_operation_selection(&selection);
         record_pipeline_operation_vector_blocks(output.vector_blocks);
         record_pipeline_operation_scalar_tail(output.scalar_tail);
-        record_pipeline_operation_path(if output.vector_blocks == 0 { "cpu" } else { "vector" });
+        record_pipeline_operation_path(if output.vector_blocks == 0 {
+            "cpu"
+        } else {
+            "vector"
+        });
         finish_pipeline_operation_telemetry();
         let selected_fallback = selection
             .fallback
@@ -208,7 +211,13 @@ pub(crate) fn execute_eager_cpu_arch_image_operation_with_context(
     fallback_reason: Option<String>,
     execute: impl FnOnce(
         &ExecutionContext,
-    ) -> Result<(DynamicImage, crate::compute::registry::support::StrategySelection), PilError>,
+    ) -> Result<
+        (
+            DynamicImage,
+            crate::compute::registry::support::StrategySelection,
+        ),
+        PilError,
+    >,
 ) -> Result<DynamicImage, PilError> {
     execute_cpu_arch_operation(
         operation,
@@ -233,7 +242,13 @@ pub(crate) fn execute_eager_cpu_arch_image_operation_with_context_and_receipts(
     operation_receipts: &mut PipelineOperationTelemetryCapture,
     execute: impl FnOnce(
         &ExecutionContext,
-    ) -> Result<(DynamicImage, crate::compute::registry::support::StrategySelection), PilError>,
+    ) -> Result<
+        (
+            DynamicImage,
+            crate::compute::registry::support::StrategySelection,
+        ),
+        PilError,
+    >,
 ) -> Result<DynamicImage, PilError> {
     execute_cpu_arch_operation_with_receipts(
         operation,
@@ -258,10 +273,13 @@ pub(crate) fn execute_eager_cpu_arch_bytes_with_context(
     execute: impl FnOnce(
         &ExecutionContext,
         &mut [u8],
-    ) -> Result<Option<(
-        crate::compute::registry::support::StrategySelection,
-        (u64, u64, &'static str),
-    )>, PilError>,
+    ) -> Result<
+        Option<(
+            crate::compute::registry::support::StrategySelection,
+            (u64, u64, &'static str),
+        )>,
+        PilError,
+    >,
 ) -> Result<Option<()>, PilError> {
     execute_eager_cpu_arch_bytes_with_route(
         operation,
@@ -284,10 +302,13 @@ fn execute_eager_cpu_arch_bytes_with_route(
     execute: impl FnOnce(
         &ExecutionContext,
         &mut [u8],
-    ) -> Result<Option<(
-        crate::compute::registry::support::StrategySelection,
-        (u64, u64, &'static str),
-    )>, PilError>,
+    ) -> Result<
+        Option<(
+            crate::compute::registry::support::StrategySelection,
+            (u64, u64, &'static str),
+        )>,
+        PilError,
+    >,
 ) -> Result<Option<()>, PilError> {
     let timed = pipeline_telemetry_enabled();
     if timed {
@@ -352,11 +373,12 @@ fn execute_eager_cpu_arch_bytes_with_route(
                     && selection.requested_architecture == crate::compute::Architecture::Default)
                     .then(|| format!("{operation} used CPU Default for a SIMD request"))
             },
-            |reason| Some(format!(
-                "{operation} selected {:?} after {reason:?} for requested {:?}",
-                selection.implementation.architecture,
-                selection.requested_architecture,
-            )),
+            |reason| {
+                Some(format!(
+                    "{operation} selected {:?} after {reason:?} for requested {:?}",
+                    selection.implementation.architecture, selection.requested_architecture,
+                ))
+            },
         );
         record_pipeline_telemetry(PipelineTelemetry {
             requested_backend,
@@ -386,7 +408,13 @@ pub(crate) fn execute_cpu_arch_operation(
     routed_fallback_reason: Option<String>,
     execute: impl FnOnce(
         &ExecutionContext,
-    ) -> Result<(DynamicImage, crate::compute::registry::support::StrategySelection), PilError>,
+    ) -> Result<
+        (
+            DynamicImage,
+            crate::compute::registry::support::StrategySelection,
+        ),
+        PilError,
+    >,
 ) -> Result<DynamicImage, PilError> {
     execute_cpu_arch_operation_with_receipts(
         operation,
@@ -412,7 +440,13 @@ fn execute_cpu_arch_operation_with_receipts(
     mut operation_receipts: Option<&mut PipelineOperationTelemetryCapture>,
     execute: impl FnOnce(
         &ExecutionContext,
-    ) -> Result<(DynamicImage, crate::compute::registry::support::StrategySelection), PilError>,
+    ) -> Result<
+        (
+            DynamicImage,
+            crate::compute::registry::support::StrategySelection,
+        ),
+        PilError,
+    >,
 ) -> Result<DynamicImage, PilError> {
     let timed = pipeline_telemetry_enabled();
     if timed {
@@ -511,8 +545,7 @@ fn record_cpu_arch_operation_telemetry(
         |reason| {
             Some(format!(
                 "{operation} selected {:?} after {reason:?} for requested {:?}",
-                selection.implementation.architecture,
-                selection.requested_architecture,
+                selection.implementation.architecture, selection.requested_architecture,
             ))
         },
     );
@@ -662,9 +695,7 @@ fn execute_eager_native_result<T>(
         let _ = take_pipeline_resize_coeff_cache_stats();
         let fallback_reason = requested_backend
             .filter(|backend| *backend == Backend::Gpu)
-            .map(|_| {
-                format!("{operation} used a native host path without GPU dispatch")
-            });
+            .map(|_| format!("{operation} used a native host path without GPU dispatch"));
         record_pipeline_telemetry(PipelineTelemetry {
             requested_backend,
             actual_backend: Backend::Cpu,

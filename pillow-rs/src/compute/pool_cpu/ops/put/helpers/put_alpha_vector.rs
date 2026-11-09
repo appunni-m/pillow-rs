@@ -3,11 +3,11 @@
 //! Const parameters specialize layouts before pixel execution. Architecture
 //! availability is established by the linked mode declaration, never here.
 
+use super::put_alpha::AlphaInput;
 use crate::checked_dims::CheckedDims;
 use crate::compute::pool_cpu::helpers::channel::wide::simd_pack_u16x16;
 use crate::error::PilError;
 use crate::raster::{ImageBuffer, Pixel, Rgb, Rgba, RgbaImage};
-use super::put_alpha::AlphaInput;
 use wide::{u8x16, u16x16};
 
 const NATIVE_BYTE_RGBA_MASK: [u8; 16] = [
@@ -200,9 +200,8 @@ pub(crate) fn simd_put_alpha_rgb_constant_bytes(
     let mut output = Vec::with_capacity(output_length);
     let vector_pixels = pixels / 4 * 4;
     for block in source[..vector_pixels * 3].chunks_exact(12) {
-        let packed = crate::compute::pool_cpu::helpers::channel::rgba::rgb_to_rgba_block(
-            block, alpha,
-        );
+        let packed =
+            crate::compute::pool_cpu::helpers::channel::rgba::rgb_to_rgba_block(block, alpha);
         output.extend_from_slice(&packed);
     }
     for pixel in vector_pixels..pixels {
@@ -242,10 +241,7 @@ fn simd_put_alpha_constant_bytes<const SOURCE: usize, const OUTPUT: usize, const
         let mut source_block = [0u8; 16];
         source_block[..source_bytes]
             .copy_from_slice(&source[source_start..source_start + source_bytes]);
-        let result = simd_put_alpha_block::<SOURCE, OUTPUT, CMYK>(
-            source_block,
-            [alpha; 16],
-        )?;
+        let result = simd_put_alpha_block::<SOURCE, OUTPUT, CMYK>(source_block, [alpha; 16])?;
         output[output_start..output_start + output_bytes].copy_from_slice(&result[..output_bytes]);
         pixel += pixels_per_vector;
     }
@@ -274,7 +270,9 @@ fn unsupported() -> PilError {
 }
 
 fn finish<P: Pixel<Subpixel = u8>>(
-    width: u32, height: u32, bytes: Vec<u8>,
+    width: u32,
+    height: u32,
+    bytes: Vec<u8>,
 ) -> Result<ImageBuffer<P, Vec<u8>>, PilError> {
     let dimensions = CheckedDims::new(width, height, P::CHANNEL_COUNT)?;
     crate::image_utils::typed_bytes_to_buffer(dimensions, bytes)
@@ -283,8 +281,12 @@ fn finish<P: Pixel<Subpixel = u8>>(
 pub(crate) fn rgb_constant(input: AlphaInput<'_, Rgb<u8>>) -> Result<RgbaImage, PilError> {
     let source = input.image;
     let (output, vectors, tail) = simd_put_alpha_rgb_constant_bytes(
-        source.as_raw(), source.width(), source.height(), input.alpha,
-    ).ok_or_else(unsupported)?;
+        source.as_raw(),
+        source.width(),
+        source.height(),
+        input.alpha,
+    )
+    .ok_or_else(unsupported)?;
     crate::compute::record_pipeline_operation_vector_blocks(vectors);
     crate::compute::record_pipeline_operation_scalar_tail(tail);
     finish(source.width(), source.height(), output)
@@ -293,22 +295,32 @@ pub(crate) fn rgb_constant(input: AlphaInput<'_, Rgb<u8>>) -> Result<RgbaImage, 
 pub(crate) fn rgba_constant(input: AlphaInput<'_, Rgba<u8>>) -> Result<RgbaImage, PilError> {
     let source = input.image;
     let (output, vectors) = simd_put_alpha_rgba_constant_bytes(
-        source.as_raw(), source.width(), source.height(), input.alpha,
-    ).ok_or_else(unsupported)?;
+        source.as_raw(),
+        source.width(),
+        source.height(),
+        input.alpha,
+    )
+    .ok_or_else(unsupported)?;
     crate::compute::record_pipeline_operation_vector_blocks(vectors);
     finish(source.width(), source.height(), output)
 }
 
 pub(crate) fn native_constant<
-    const SOURCE: usize, const OUTPUT: usize, const CMYK: bool,
-    P: Pixel<Subpixel = u8>, O: Pixel<Subpixel = u8>,
->(input: AlphaInput<'_, P>) -> Result<ImageBuffer<O, Vec<u8>>, PilError> {
+    const SOURCE: usize,
+    const OUTPUT: usize,
+    const CMYK: bool,
+    P: Pixel<Subpixel = u8>,
+    O: Pixel<Subpixel = u8>,
+>(
+    input: AlphaInput<'_, P>,
+) -> Result<ImageBuffer<O, Vec<u8>>, PilError> {
     let source = input.image;
-    let pixels = (source.width() as usize).checked_mul(source.height() as usize)
+    let pixels = (source.width() as usize)
+        .checked_mul(source.height() as usize)
         .ok_or_else(|| PilError::ValueError("SIMD PutAlpha pixel count overflow".into()))?;
-    let (output, vectors, tail) = simd_put_alpha_constant_bytes::<SOURCE, OUTPUT, CMYK>(
-        source.as_raw(), pixels, input.alpha,
-    ).ok_or_else(unsupported)?;
+    let (output, vectors, tail) =
+        simd_put_alpha_constant_bytes::<SOURCE, OUTPUT, CMYK>(source.as_raw(), pixels, input.alpha)
+            .ok_or_else(unsupported)?;
     crate::compute::record_pipeline_operation_vector_blocks(vectors);
     crate::compute::record_pipeline_operation_scalar_tail(tail);
     finish(source.width(), source.height(), output)

@@ -99,14 +99,17 @@ pub(crate) fn execute(plan: Strategy<'_>) -> Result<DynamicImage, PilError> {
     let architecture = plan.selection().implementation.architecture;
     let rotate = plan.implementation;
     match architecture {
-        Architecture::Avx2 => super::avx2::rotate_impl::execute(rotate.input, rotate.request)
-            .map(DynamicImage::One),
+        Architecture::Avx2 => {
+            super::avx2::rotate_impl::execute(rotate.input, rotate.request).map(DynamicImage::One)
+        }
         Architecture::Default => super::default::rotate_impl::execute(rotate.input, rotate.request)
             .map(DynamicImage::One),
-        Architecture::Sse2 => super::sse2::rotate_impl::execute(rotate.input, rotate.request)
-            .map(DynamicImage::One),
-        Architecture::Neon => super::neon::rotate_impl::execute(rotate.input, rotate.request)
-            .map(DynamicImage::One),
+        Architecture::Sse2 => {
+            super::sse2::rotate_impl::execute(rotate.input, rotate.request).map(DynamicImage::One)
+        }
+        Architecture::Neon => {
+            super::neon::rotate_impl::execute(rotate.input, rotate.request).map(DynamicImage::One)
+        }
         Architecture::WasmSimd128 => {
             super::wasm_simd128::rotate_impl::execute(rotate.input, rotate.request)
                 .map(DynamicImage::One)
@@ -116,4 +119,3 @@ pub(crate) fn execute(plan: Strategy<'_>) -> Result<DynamicImage, PilError> {
         ))),
     }
 }
-

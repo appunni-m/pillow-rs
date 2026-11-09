@@ -7,6 +7,10 @@ use crate::error::PilError;
 // NO_PILLOW_SUPPORT: this strategy rotates native u16 samples without re-tagging or converting the image.
 pub(crate) fn execute(input: &Input, request: RotateRequest) -> Result<Input, PilError> {
     crate::compute::pool_cpu::ops::rotate::helpers::numeric::execute::<
-        crate::raster::Rgba<u16>, u16, 4, false, true,
+        crate::raster::Rgba<u16>,
+        u16,
+        4,
+        false,
+        true,
     >(input, request)
 }

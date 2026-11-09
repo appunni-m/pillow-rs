@@ -1,8 +1,8 @@
 //! f64 proof for exact F-mode GPU resize admission.
 
 use super::super::{
-    CheckedDims, DynamicImage, FilterCoeffsF64, GPU_BUFFER_CAPACITY, GenericImageView, PipelineOp,
-    Mode, ResampleFilter, filter_from_resample, gpu_f_resize_f64_coefficients_fit_binding,
+    CheckedDims, DynamicImage, FilterCoeffsF64, GPU_BUFFER_CAPACITY, GenericImageView, Mode,
+    PipelineOp, ResampleFilter, filter_from_resample, gpu_f_resize_f64_coefficients_fit_binding,
     gpu_f_resize_f64_pass_bits, gpu_f_resize_nearest_pass_words, gpu_f_resize_relocate_words,
     gpu_f64_integer_parts, gpu_resize_coefficients, precompute_coeffs_f64,
 };

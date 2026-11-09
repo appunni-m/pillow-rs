@@ -50,9 +50,7 @@ fn select_order_statistic_vectors(values: &[u8x16], rank: u8) -> u8x16 {
         let midpoint = lower + ((upper - lower) >> 1u32);
         let mut count = u8x16::splat(0);
         for &value in values {
-            count += value
-                .simd_le(midpoint)
-                .select(one, u8x16::splat(0));
+            count += value.simd_le(midpoint).select(one, u8x16::splat(0));
         }
         let above_rank = count.simd_gt(rank);
         upper = above_rank.select(midpoint, upper);
@@ -280,12 +278,14 @@ fn gather_one_3x3(
 ) {
     let mut index = 0usize;
     for row_offset in 0..3 {
-        let source_y = y.saturating_add(row_offset).saturating_sub(1).min(height - 1);
+        let source_y = y
+            .saturating_add(row_offset)
+            .saturating_sub(1)
+            .min(height - 1);
         let row_start = source_y * row_stride;
         for column_offset in 0..3 {
-            values[index] = rank_filter_window_vector(
-                raw, row_start, width, 1, 0, x, active, 1, column_offset,
-            );
+            values[index] =
+                rank_filter_window_vector(raw, row_start, width, 1, 0, x, active, 1, column_offset);
             index += 1;
         }
     }
@@ -309,7 +309,15 @@ fn rank_filter_la_3x3_row(
     while x < width {
         let active_pixels = (width - x).min(LANES / 2);
         let mut values = [u8x16::splat(u8::MAX); 9];
-        gather_la_3x3(raw, row_stride, width, x, active_pixels, row_starts, &mut values);
+        gather_la_3x3(
+            raw,
+            row_stride,
+            width,
+            x,
+            active_pixels,
+            row_starts,
+            &mut values,
+        );
         let selected = if rank == 1 {
             select_second_order_statistic_vector(&values)
         } else {
@@ -359,7 +367,11 @@ fn gather_la_row_columns(
     let mut columns = [[u8::MAX; LANES]; 3];
     for lane in 0..active_pixels {
         let pixel_x = x + lane;
-        let neighbors = [pixel_x.saturating_sub(1), pixel_x, pixel_x.saturating_add(1).min(width - 1)];
+        let neighbors = [
+            pixel_x.saturating_sub(1),
+            pixel_x,
+            pixel_x.saturating_add(1).min(width - 1),
+        ];
         for (column, source_x) in neighbors.into_iter().enumerate() {
             let source = source_x * 2;
             columns[column][lane * 2] = source_row[source];

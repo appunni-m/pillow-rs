@@ -1,6 +1,6 @@
 use super::{
-    Bound, Py, PyAny, PyBytes, PyDict, PyErr, PyInt, PyList, PyOverflowError, PyResult,
-    PyString, PyTuple, PyTypeError, PyValueError, Python, chops_offset_from_python, map_error,
+    Bound, Py, PyAny, PyBytes, PyDict, PyErr, PyInt, PyList, PyOverflowError, PyResult, PyString,
+    PyTuple, PyTypeError, PyValueError, Python, chops_offset_from_python, map_error,
 };
 use pyo3::types::PyAnyMethods;
 use pyo3::types::PyBytesMethods;
@@ -40,7 +40,7 @@ pub(crate) fn font_text_input_from_python(
 
 pub(crate) fn c_int_from_python(value: &Bound<'_, PyAny>) -> PyResult<i32> {
     // Match PyArg_ParseTuple's C `i` conversion: PyLong_AsLong, then int bounds.
-    // TODO(CPU parity): verify None, bool, custom __index__, C-long overflow,
+    // TODO(pillow-rs#3ptb): verify None, bool, custom __index__, C-long overflow,
     // and both signed C-int boundaries.
     let value_as_long = value.extract::<std::os::raw::c_long>()?;
     i32::try_from(value_as_long).map_err(|_| {
@@ -54,6 +54,8 @@ pub(crate) fn c_int_from_python(value: &Bound<'_, PyAny>) -> PyResult<i32> {
 
 mod filters;
 pub(crate) use filters::*;
+mod color_lut;
+pub(crate) use color_lut::*;
 mod float_buffer;
 pub(crate) use float_buffer::PillowFloatPointBuffer;
 mod analysis;

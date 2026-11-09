@@ -36,6 +36,5 @@ fn execute_invert(image: &DynamicImage) -> Result<DynamicImage, PilError> {
             "Chops mode strategy received a different raster variant".into(),
         ));
     };
-    super::super::super::helpers::unary::invert(buffer)
-        .map(DynamicImage::ImageRgba32F)
+    super::super::super::helpers::unary::invert(buffer).map(DynamicImage::ImageRgba32F)
 }

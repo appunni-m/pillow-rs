@@ -2,7 +2,10 @@
 
 #[cfg(any(
     target_arch = "x86_64",
-    all(target_arch = "x86", any(target_feature = "sse2", target_feature = "ssse3")),
+    all(
+        target_arch = "x86",
+        any(target_feature = "sse2", target_feature = "ssse3")
+    ),
     all(target_arch = "wasm32", target_feature = "simd128"),
     all(target_arch = "aarch64", target_feature = "neon"),
 ))]
@@ -11,17 +14,24 @@
     reason = "architecture-specific extract implementations instantiate this arm on their target"
 )]
 macro_rules! execute_architecture {
-    (safe, $execute:expr) => { $execute };
+    (safe, $execute:expr) => {
+        $execute
+    };
     (unsafe, $execute:expr) => {{
         // SAFETY: preparation selected this implementation from its declared
         // hardware/build requirements and exact native-layout/index guard.
         #[allow(unsafe_code)]
-        unsafe { $execute }
+        unsafe {
+            $execute
+        }
     }};
 }
 #[cfg(any(
     target_arch = "x86_64",
-    all(target_arch = "x86", any(target_feature = "sse2", target_feature = "ssse3")),
+    all(
+        target_arch = "x86",
+        any(target_feature = "sse2", target_feature = "ssse3")
+    ),
     all(target_arch = "wasm32", target_feature = "simd128"),
     all(target_arch = "aarch64", target_feature = "neon"),
 ))]
@@ -102,8 +112,9 @@ macro_rules! declare_into {
             output: &mut [u8],
         ) -> Result<(u64, u64, &'static str), PilError> {
             match strategy.implementation {
-                ArchitectureStrategy::Default(input) =>
-                    super::super::helpers::extract_band::grouped_into::<_, $channels>(input, output),
+                ArchitectureStrategy::Default(input) => {
+                    super::super::helpers::extract_band::grouped_into::<_, $channels>(input, output)
+                }
                 #[cfg(any(
                     target_arch = "x86_64",
                     all(target_arch = "x86", target_feature = "ssse3"),
@@ -131,20 +142,23 @@ macro_rules! declare_into {
                     target_feature = "sse2",
                     not(target_feature = "ssse3"),
                 ))]
-                ArchitectureStrategy::Sse2(input) =>
+                ArchitectureStrategy::Sse2(input) => {
                     super::super::helpers::extract_band_vector::portable_into::<_, $channels>(
                         input, output,
-                    ),
+                    )
+                }
                 #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
-                ArchitectureStrategy::WasmSimd128(input) =>
+                ArchitectureStrategy::WasmSimd128(input) => {
                     super::super::helpers::extract_band_vector::portable_into::<_, $channels>(
                         input, output,
-                    ),
+                    )
+                }
                 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-                ArchitectureStrategy::Neon(input) =>
+                ArchitectureStrategy::Neon(input) => {
                     super::super::helpers::extract_band_vector::neon_into::<_, $channels>(
                         input, output,
-                    ),
+                    )
+                }
             }
         }
     };

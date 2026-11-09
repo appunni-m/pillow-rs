@@ -39,6 +39,5 @@ pub(crate) fn js_rotate_point(value: &JsValue) -> pillow_rs::RotatePointInput {
     }
     pillow_rs::RotatePointInput::Invalid {
         type_name: js_value_type_name(value),
-        truthy: true,
     }
 }

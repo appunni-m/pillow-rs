@@ -10,16 +10,36 @@ use crate::pipeline::PipelineOp;
 
 pub(crate) fn alpha_blend_enabled(op: &PipelineOp) -> bool {
     match op {
-        PipelineOp::DrawLine { alpha_blend_rgb, .. }
-        | PipelineOp::DrawRectangle { alpha_blend_rgb, .. }
-        | PipelineOp::DrawRoundedRect { alpha_blend_rgb, .. }
-        | PipelineOp::DrawEllipse { alpha_blend_rgb, .. }
-        | PipelineOp::DrawCircle { alpha_blend_rgb, .. }
-        | PipelineOp::DrawPolygon { alpha_blend_rgb, .. }
-        | PipelineOp::DrawArc { alpha_blend_rgb, .. }
-        | PipelineOp::DrawChord { alpha_blend_rgb, .. }
-        | PipelineOp::DrawPieslice { alpha_blend_rgb, .. }
-        | PipelineOp::DrawPoint { alpha_blend_rgb, .. } => *alpha_blend_rgb,
+        PipelineOp::DrawLine {
+            alpha_blend_rgb, ..
+        }
+        | PipelineOp::DrawRectangle {
+            alpha_blend_rgb, ..
+        }
+        | PipelineOp::DrawRoundedRect {
+            alpha_blend_rgb, ..
+        }
+        | PipelineOp::DrawEllipse {
+            alpha_blend_rgb, ..
+        }
+        | PipelineOp::DrawCircle {
+            alpha_blend_rgb, ..
+        }
+        | PipelineOp::DrawPolygon {
+            alpha_blend_rgb, ..
+        }
+        | PipelineOp::DrawArc {
+            alpha_blend_rgb, ..
+        }
+        | PipelineOp::DrawChord {
+            alpha_blend_rgb, ..
+        }
+        | PipelineOp::DrawPieslice {
+            alpha_blend_rgb, ..
+        }
+        | PipelineOp::DrawPoint {
+            alpha_blend_rgb, ..
+        } => *alpha_blend_rgb,
         _ => false,
     }
 }

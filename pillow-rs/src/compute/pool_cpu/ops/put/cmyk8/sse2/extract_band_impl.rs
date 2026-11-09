@@ -1,9 +1,9 @@
 //! Original sse2 native-band implementation for `cmyk8`.
 
+use super::super::super::helpers::extract_band_vector as vector;
+use super::super::default::extract_band_impl as scalar;
 use crate::error::PilError;
 use crate::raster::DynamicImage;
-use super::super::default::extract_band_impl as scalar;
-use super::super::super::helpers::extract_band_vector as vector;
 
 pub(crate) type Kernel<'a> = scalar::Kernel<'a>;
 

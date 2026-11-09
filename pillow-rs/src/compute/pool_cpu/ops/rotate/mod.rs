@@ -1,6 +1,9 @@
 //! Rotate mode strategies, geometry helpers, and native interpolation kernels.
 
+pub(crate) mod cmyk8;
 pub(crate) mod f32;
+pub(crate) mod helpers;
+pub(crate) mod hsv8;
 pub(crate) mod i16;
 pub(crate) mod i16b;
 pub(crate) mod i16l;
@@ -23,7 +26,4 @@ pub(crate) mod rgba16;
 pub(crate) mod rgba32f;
 pub(crate) mod rgba8;
 pub(crate) mod rgbx8;
-pub(crate) mod cmyk8;
-pub(crate) mod hsv8;
 pub(crate) mod ycbcr8;
-pub(crate) mod helpers;

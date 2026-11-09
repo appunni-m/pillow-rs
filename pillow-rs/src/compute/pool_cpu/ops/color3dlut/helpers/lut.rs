@@ -59,7 +59,11 @@ fn interpolate_channel(
     channel: usize,
     shifts: [i32; 3],
 ) -> i16 {
-    let left_left = interpolate(table[base + channel], table[base + channels + channel], shifts[0]);
+    let left_left = interpolate(
+        table[base + channel],
+        table[base + channels + channel],
+        shifts[0],
+    );
     let left_right = interpolate(
         table[base + sx * channels + channel],
         table[base + sx * channels + channels + channel],
@@ -98,8 +102,7 @@ pub(super) fn write_pixel(
         u32::from(pixel[1]) * scales[1],
         u32::from(pixel[2]) * scales[2],
     ];
-    let shifts = indices
-        .map(|index| ((SCALE_MASK & index) >> (SCALE_BITS - SHIFT_BITS)) as i32);
+    let shifts = indices.map(|index| ((SCALE_MASK & index) >> (SCALE_BITS - SHIFT_BITS)) as i32);
     let base = table_index_3d(
         (indices[0] >> SCALE_BITS) as usize,
         (indices[1] >> SCALE_BITS) as usize,
@@ -109,15 +112,16 @@ pub(super) fn write_pixel(
     ) * channels;
 
     for channel in 0..channels {
-        let value = interpolate_channel(
-            prepared, base, sx, sxy, channels, channel, shifts,
-        );
-        output[channel] = ((i32::from(value) + (1 << (PRECISION_BITS - 1)))
-            >> PRECISION_BITS)
+        let value = interpolate_channel(prepared, base, sx, sxy, channels, channel, shifts);
+        output[channel] = ((i32::from(value) + (1 << (PRECISION_BITS - 1))) >> PRECISION_BITS)
             .clamp(0, 255) as u8;
     }
     if channels == 3 && target_channels == 4 {
-        output[3] = if preserve_source_fourth { pixel[3] } else { 255 };
+        output[3] = if preserve_source_fourth {
+            pixel[3]
+        } else {
+            255
+        };
     }
 }
 
@@ -152,15 +156,14 @@ pub(crate) fn apply_native_rgb_samples(
     let target_channels = match target_mode {
         Mode::ImageRgb8 => 3,
         Mode::ImageRgba8 | Mode::ImageCmyk8 => 4,
-        _ => return Err(PilError::InternalError(
-            "validated color3dlut target mode was not RGB, RGBA, or CMYK".into(),
-        )),
+        _ => {
+            return Err(PilError::InternalError(
+                "validated color3dlut target mode was not RGB, RGBA, or CMYK".into(),
+            ));
+        }
     };
-    let output_dimensions = crate::checked_dims::CheckedDims::new_allow_empty(
-        width,
-        height,
-        target_channels as u8,
-    )?;
+    let output_dimensions =
+        crate::checked_dims::CheckedDims::new_allow_empty(width, height, target_channels as u8)?;
     let size = (size.0 as usize, size.1 as usize, size.2 as usize);
     let channels = channels as usize;
     let scales = color_scales(size);
@@ -182,7 +185,8 @@ pub(crate) fn apply_native_rgb_samples(
         );
     }
     let mut output = image_from_native_bytes(width, height, output, target_mode)?;
-    if target_mode == Mode::ImageRgb8 && channels == 3
+    if target_mode == Mode::ImageRgb8
+        && channels == 3
         && !output.replace_hidden_pixel_lanes(image.hidden_pixel_lanes().cloned())
     {
         return Err(PilError::InternalError(
@@ -224,15 +228,14 @@ pub(crate) fn apply_native_rgba_samples(
     let target_channels = match target_mode {
         Mode::ImageRgb8 => 3,
         Mode::ImageRgba8 | Mode::ImageCmyk8 => 4,
-        _ => return Err(PilError::InternalError(
-            "validated color3dlut target mode was not RGB, RGBA, or CMYK".into(),
-        )),
+        _ => {
+            return Err(PilError::InternalError(
+                "validated color3dlut target mode was not RGB, RGBA, or CMYK".into(),
+            ));
+        }
     };
-    let output_dimensions = crate::checked_dims::CheckedDims::new_allow_empty(
-        width,
-        height,
-        target_channels as u8,
-    )?;
+    let output_dimensions =
+        crate::checked_dims::CheckedDims::new_allow_empty(width, height, target_channels as u8)?;
     let size = (size.0 as usize, size.1 as usize, size.2 as usize);
     let channels = channels as usize;
     let scales = color_scales(size);
@@ -243,7 +246,12 @@ pub(crate) fn apply_native_rgba_samples(
         .zip(output.chunks_exact_mut(target_channels))
     {
         write_pixel(
-            [source_pixel[0], source_pixel[1], source_pixel[2], source_pixel[3]],
+            [
+                source_pixel[0],
+                source_pixel[1],
+                source_pixel[2],
+                source_pixel[3],
+            ],
             true,
             &prepared,
             size,
@@ -312,13 +320,12 @@ pub(crate) fn preserve_target_padding(
                     "Color3DLut four-band source shape mismatch".into(),
                 ));
             }
-            let padding = source_bytes
-                .chunks_exact(4)
-                .map(|pixel| pixel[3])
-                .collect();
-            Some(HiddenPixelLanes::per_pixel(1, pixel_count, padding).ok_or_else(|| {
-                PilError::InternalError("Color3DLut RGB output padding shape mismatch".into())
-            })?)
+            let padding = source_bytes.chunks_exact(4).map(|pixel| pixel[3]).collect();
+            Some(
+                HiddenPixelLanes::per_pixel(1, pixel_count, padding).ok_or_else(|| {
+                    PilError::InternalError("Color3DLut RGB output padding shape mismatch".into())
+                })?,
+            )
         }
         _ => {
             return Err(PilError::InternalError(

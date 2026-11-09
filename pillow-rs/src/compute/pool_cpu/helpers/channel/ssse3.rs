@@ -82,4 +82,3 @@ pub(crate) unsafe fn gather_interleaved_channel_ssse3_into_raw(
         (pixel_count - vector_pixels) as u64,
     )
 }
-

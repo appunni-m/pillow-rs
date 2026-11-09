@@ -13,12 +13,15 @@ fn output_sample_capacity(
     channels: usize,
     bytes_per_sample: usize,
 ) -> Result<usize, PilError> {
-    let bytes_per_pixel = channels.checked_mul(bytes_per_sample).ok_or_else(|| {
-        PilError::DimensionError("typed reducer pixel size overflow".into())
-    })?;
-    let dims = CheckedDims::new(width, height, u8::try_from(bytes_per_pixel).map_err(|_| {
-        PilError::DimensionError("typed reducer pixel size exceeds u8".into())
-    })?)?;
+    let bytes_per_pixel = channels
+        .checked_mul(bytes_per_sample)
+        .ok_or_else(|| PilError::DimensionError("typed reducer pixel size overflow".into()))?;
+    let dims = CheckedDims::new(
+        width,
+        height,
+        u8::try_from(bytes_per_pixel)
+            .map_err(|_| PilError::DimensionError("typed reducer pixel size exceeds u8".into()))?,
+    )?;
     dims.total_pixels()
         .checked_mul(channels)
         .ok_or_else(|| PilError::DimensionError("typed reducer sample count overflow".into()))

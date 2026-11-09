@@ -4,10 +4,13 @@ crate::compute::pool_cpu::ops::color::convert::helpers::binary::declare_mode_str
     crate::raster::Mode::ImageRgb8
 );
 
-use crate::compute::{Architecture, registry::support::{
-    ImplementationSupport, InputContract, ModeSupport, OperationId, OutputModeRule,
-    StrategyGuard, StrategySelection,
-}};
+use crate::compute::{
+    Architecture,
+    registry::support::{
+        ImplementationSupport, InputContract, ModeSupport, OperationId, OutputModeRule,
+        StrategyGuard, StrategySelection,
+    },
+};
 use crate::error::PilError;
 use crate::pipeline::DitherMethod;
 use crate::raster::{DynamicImage, Mode, RgbImage};
@@ -53,7 +56,10 @@ static ARCHITECTURES: [ImplementationSupport; 38] = [
         OperationId::Convert,
         Mode::ImageRgb8,
         Architecture::Avx2,
-        cfg!(any(target_arch = "x86_64", all(target_arch = "x86", target_feature = "avx2"))),
+        cfg!(any(
+            target_arch = "x86_64",
+            all(target_arch = "x86", target_feature = "avx2")
+        )),
         if cfg!(any(target_arch = "x86_64", target_feature = "ssse3")) {
             &[Architecture::Sse2, Architecture::Ssse3, Architecture::Avx2]
         } else {
@@ -393,7 +399,10 @@ pub(crate) unsafe fn execute(
 ) -> Result<DynamicImage, PilError> {
     let mut output = match selection.implementation.architecture {
         Architecture::Default => super::default::convert_impl::execute(source, target),
-        #[cfg(any(target_arch = "x86_64", all(target_arch = "x86", target_feature = "sse2")))]
+        #[cfg(any(
+            target_arch = "x86_64",
+            all(target_arch = "x86", target_feature = "sse2")
+        ))]
         Architecture::Sse2 => super::sse2::convert_impl::execute(source, target),
         #[cfg(all(
             any(target_arch = "x86", target_arch = "x86_64"),
@@ -403,15 +412,16 @@ pub(crate) unsafe fn execute(
         Architecture::Ssse3 if target == Mode::ImageLuma8 => {
             super::ssse3::convert_impl::execute(source)
         }
-        #[cfg(any(target_arch = "x86_64", all(target_arch = "x86", target_feature = "avx2")))]
+        #[cfg(any(
+            target_arch = "x86_64",
+            all(target_arch = "x86", target_feature = "avx2")
+        ))]
         Architecture::Avx2 if target == Mode::ImageLuma8 => {
             // SAFETY: SUPPORT admits this route only with its AVX2 requirements.
             unsafe { super::avx2::convert_impl::execute(source) }
         }
         #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
-        Architecture::WasmSimd128 => {
-            super::wasm_simd128::convert_impl::execute(source, target)
-        }
+        Architecture::WasmSimd128 => super::wasm_simd128::convert_impl::execute(source, target),
         #[cfg(target_arch = "aarch64")]
         Architecture::Neon => {
             // SAFETY: SUPPORT admits NEON only for the current aarch64 execution context.

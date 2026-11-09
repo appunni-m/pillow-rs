@@ -4,12 +4,18 @@ use super::prelude::{PilError, Registry};
 fn register_part_1(m: &mut Registry) {
     m.insert(
         "Convert",
-        gpu_entry!(crate::compute::pool_cpu::ops::color::convert::ops::prepare_pipeline, "convert.wgsl"),
+        gpu_entry!(
+            crate::compute::pool_cpu::ops::color::convert::ops::prepare_pipeline,
+            "convert.wgsl"
+        ),
     );
 
     m.insert(
         "ConvertLab",
-        gpu_entry!(crate::compute::pool_cpu::ops::color::ops::prepare_pipeline, "rgb_to_lab.wgsl"),
+        gpu_entry!(
+            crate::compute::pool_cpu::ops::color::ops::prepare_pipeline,
+            "rgb_to_lab.wgsl"
+        ),
     );
 
     m.insert(

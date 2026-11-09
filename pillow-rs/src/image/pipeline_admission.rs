@@ -38,8 +38,7 @@ impl Image {
         if !matches!(
             super::declared_pipeline_mode(mode),
             None | Some(crate::raster::Mode::ImageRgb8)
-        )
-            || ops.is_empty()
+        ) || ops.is_empty()
         {
             return false;
         }

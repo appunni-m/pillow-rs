@@ -97,34 +97,22 @@ pub(crate) fn horizontal_row<F: F64MulAdd>(
     if let Some((first_eight_tap, fixed_weights)) = fixed_weights {
         for dx in 0..*first_eight_tap {
             let first = coefficients.xmin[dx] as usize;
-            let accumulator = sum_general(
-                &coefficients.weights[dx],
-                first,
-                |sx| source_row[sx],
-                fma,
-            );
+            let accumulator =
+                sum_general(&coefficients.weights[dx], first, |sx| source_row[sx], fma);
             output_row[dx] = round_to_i32(accumulator);
         }
 
         let eight_tap_end = first_eight_tap + fixed_weights.len();
         for (dx, weights) in (*first_eight_tap..eight_tap_end).zip(fixed_weights) {
-            let accumulator = sum_eight_contiguous(
-                weights,
-                source_row,
-                coefficients.xmin[dx] as usize,
-                fma,
-            );
+            let accumulator =
+                sum_eight_contiguous(weights, source_row, coefficients.xmin[dx] as usize, fma);
             output_row[dx] = round_to_i32(accumulator);
         }
 
         for dx in eight_tap_end..output_row.len() {
             let first = coefficients.xmin[dx] as usize;
-            let accumulator = sum_general(
-                &coefficients.weights[dx],
-                first,
-                |sx| source_row[sx],
-                fma,
-            );
+            let accumulator =
+                sum_general(&coefficients.weights[dx], first, |sx| source_row[sx], fma);
             output_row[dx] = round_to_i32(accumulator);
         }
         return;
@@ -208,12 +196,7 @@ pub(crate) fn execute<F: F64MulAdd>(
     vertical: &FilterCoeffsF64,
     fma: &F,
 ) -> Result<RgbaImage, PilError> {
-    let max_vertical_taps = vertical
-        .weights
-        .iter()
-        .map(Vec::len)
-        .max()
-        .unwrap_or(0);
+    let max_vertical_taps = vertical.weights.iter().map(Vec::len).max().unwrap_or(0);
     let ring_rows = max_vertical_taps
         .checked_next_power_of_two()
         .ok_or_else(|| {

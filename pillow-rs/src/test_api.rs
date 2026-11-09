@@ -4,6 +4,14 @@ use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use std::collections::BTreeMap;
 
+/// Select the CPU architecture injected into routed operations in this thread.
+///
+/// This test-only hook lets the parity runner request declared strategies
+/// without adding a runtime architecture override to the library API.
+pub fn set_cpu_architecture(architecture: crate::compute::Architecture) {
+    crate::compute::set_test_cpu_architecture(architecture);
+}
+
 /// Arm the allow-listed deterministic GPU batch fault for the next executor.
 pub fn arm_fault(point: &str) -> Result<(), String> {
     match point {
@@ -163,8 +171,5 @@ fn backend_support_matrix_counts(
         .filter(|entry| entry.gpu_shader.is_some())
         .count();
 
-    BackendSupportMatrixCounts {
-        cpu,
-        gpu_shader,
-    }
+    BackendSupportMatrixCounts { cpu, gpu_shader }
 }

@@ -1,5 +1,5 @@
-use crate::compute::{Architecture, Backend};
 use crate::compute::registry::support::{OperationId, StrategySelection};
+use crate::compute::{Architecture, Backend};
 use crate::draw::{FloodFillAccess, FloodFillError};
 use crate::error::PilError;
 use crate::raster::Mode;
@@ -18,10 +18,7 @@ pub(crate) fn execute<A: FloodFillAccess>(
         .map_err(FloodFillError::Callback)
 }
 
-fn validate_selection(
-    mode: Mode,
-    selection: &StrategySelection,
-) -> Result<(), PilError> {
+fn validate_selection(mode: Mode, selection: &StrategySelection) -> Result<(), PilError> {
     let implementation = selection.implementation;
     if implementation.operation == OperationId::FloodFill
         && implementation.mode == mode

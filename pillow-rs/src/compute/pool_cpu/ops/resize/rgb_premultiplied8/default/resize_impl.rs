@@ -18,6 +18,7 @@ pub(crate) fn execute(
         filter,
         bounds,
     )?;
-    RgbaImage::from_raw(width, height, bytes)
-        .ok_or_else(|| PilError::ValueError("resize_rgba_premultiplied: failed to create output buffer".into()))
+    RgbaImage::from_raw(width, height, bytes).ok_or_else(|| {
+        PilError::ValueError("resize_rgba_premultiplied: failed to create output buffer".into())
+    })
 }

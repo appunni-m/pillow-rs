@@ -45,8 +45,8 @@ where
     }
 
     let source_width = usize::try_from(plan.source_size.0).map_err(|_| overflow("source width"))?;
-    let destination_width = usize::try_from(plan.destination_size.0)
-        .map_err(|_| overflow("destination width"))?;
+    let destination_width =
+        usize::try_from(plan.destination_size.0).map_err(|_| overflow("destination width"))?;
     let source_stride = source_width
         .checked_mul(3)
         .ok_or_else(|| overflow("source stride"))?;
@@ -103,22 +103,13 @@ where
         blend_row(source_row, destination_row, mask_row);
     }
 
-    let row_bytes = u64::from(plan.region.width).saturating_mul(3);
-    let remainder = row_bytes % 16;
-    let tail_blocks = if remainder == 0 {
-        0
-    } else if remainder <= 8 {
-        1
-    } else {
-        2
-    };
-    let vector_blocks = (row_bytes / 16)
-        .saturating_add(tail_blocks)
-        .saturating_mul(u64::from(plan.region.height));
-    if vector_blocks != 0 {
-        crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
-    }
-    crate::compute::record_pipeline_operation_path("neon-rgb-l-blend");
+    crate::compute::pool_cpu::ops::paste::helpers::telemetry::record_l_mask_neon(
+        plan.region.width,
+        plan.region.height,
+        3,
+        "neon-rgb-l-blend",
+        false,
+    );
     Ok(Some(output))
 }
 
@@ -219,13 +210,7 @@ fn blend_vector16_row(
     }
 }
 
-fn blend_vector8_row(
-    source: &[u8],
-    destination: &mut [u8],
-    mask: &[u8],
-    start: usize,
-    end: usize,
-) {
+fn blend_vector8_row(source: &[u8], destination: &mut [u8], mask: &[u8], start: usize, end: usize) {
     for start in (start..end).step_by(8) {
         let end = start
             .checked_add(8)

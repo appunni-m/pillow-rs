@@ -4,9 +4,9 @@ use crate::compute::registry::support::{InputContract, ModeSupport, OperationId,
 use crate::error::PilError;
 use crate::image::Image;
 use crate::ops::imageops::{
-    resolve_imageops_color, resolve_pad_palette_fill, CenteringInput, ImageOpsColor,
+    CenteringInput, ImageOpsColor, resolve_imageops_color, resolve_pad_palette_fill,
 };
-use crate::ops::resize::{parse_resample, ResampleInput};
+use crate::ops::resize::{ResampleInput, parse_resample};
 use crate::pipeline::{NativeColorInput, PipelineOp};
 
 /// Contain geometry evaluated before Image.resize parses the filter.
@@ -144,17 +144,14 @@ fn prepare_pad_fill(
     }
     let fill_rule = pad_fill_rule(mode)?;
     let native_color = match fill_rule {
-        PadFillRule::NativeU16 | PadFillRule::NativeF32 => {
-            native_geometry_color_input(&color)
-        }
+        PadFillRule::NativeU16 | PadFillRule::NativeF32 => native_geometry_color_input(&color),
         PadFillRule::ModeEncodedBytes | PadFillRule::PaletteIndexOrColor => None,
     };
     let palette = resolve_pad_palette_fill(image, fill_rule, &color)?;
     let (resolved_color, output_palette) = match palette {
-        Some((index, palette, alpha)) => (
-            Some((index, index, index, u8::MAX)),
-            Some((palette, alpha)),
-        ),
+        Some((index, palette, alpha)) => {
+            (Some((index, index, index, u8::MAX)), Some((palette, alpha)))
+        }
         None => (resolve_imageops_color(color.clone(), mode)?, None),
     };
     Ok(PadFillPreflight {
@@ -327,10 +324,8 @@ fn resize_after_pad_preflight_mutation(
         PilError::InternalError("Pad preflight omitted valid contain dimensions".into())
     })?;
     let mode = image.mode_identity()?;
-    let filter = crate::compute::pool_cpu::ops::resize::ops::effective_filter(
-        mode,
-        preflight.filter,
-    );
+    let filter =
+        crate::compute::pool_cpu::ops::resize::ops::effective_filter(mode, preflight.filter);
     let contained = Image::push_op(
         image,
         PipelineOp::Resize {
@@ -380,7 +375,11 @@ fn pad_with_resolved_preflight(
     // argument. If the resized image already has the requested dimensions,
     // malformed color/centering values are intentionally ignored.
     if containment_axes == Some((false, false)) {
-        if (planned_geometry.source_width, planned_geometry.source_height) == (w, h) {
+        if (
+            planned_geometry.source_width,
+            planned_geometry.source_height,
+        ) == (w, h)
+        {
             // ImageOps.pad still returns an independent copy when the input
             // already has the requested size. Match Image.copy semantics
             // (including clearing source format metadata) without scheduling
@@ -416,11 +415,7 @@ fn pad_with_resolved_preflight(
             None,
         ),
     };
-    if position.is_none()
-        && filter_was_none
-        && fill.color_was_none
-        && centering == (0.5, 0.5)
-    {
+    if position.is_none() && filter_was_none && fill.color_was_none && centering == (0.5, 0.5) {
         return pad(image, w, h, None, color, centering).map(|mut result| {
             result.suppress_pipeline_source_info();
             (result, false)

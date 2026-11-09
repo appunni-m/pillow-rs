@@ -1,12 +1,12 @@
 use super::kernels::{
-    simd_draw_arc_native, simd_draw_chord_native, simd_draw_ellipse_native,
-    simd_draw_line_native, simd_draw_pieslice_native, simd_draw_points_native,
-    simd_draw_polygon_native, simd_draw_rectangle_native, simd_draw_rounded_rect_native,
+    simd_draw_arc_native, simd_draw_chord_native, simd_draw_ellipse_native, simd_draw_line_native,
+    simd_draw_pieslice_native, simd_draw_points_native, simd_draw_polygon_native,
+    simd_draw_rectangle_native, simd_draw_rounded_rect_native,
 };
 use super::{DrawLayout, has_visible_draw_rectangle, valid_draw_rectangle};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
-use crate::raster::{DynamicImage};
+use crate::raster::DynamicImage;
 
 pub(super) fn execute(
     image: &DynamicImage,
@@ -171,9 +171,9 @@ fn simd_draw_polygon(
         return Err(PilError::ValueError("expected DrawPolygon op".into()));
     };
     // Pillow's floating-point ImagingDraw polygon path stores the fill sample
-    // but ignores the outline. Keep the SIMD adapter aligned with
-    // pool_cpu::ops::draw::op_draw_polygon instead of painting an extra stroke
-    // that is observable only after materialization.
+    // but ignores the outline. Keep the SIMD adapter aligned with this exact-
+    // mode Draw behavior instead of painting an extra stroke that becomes
+    // observable only after materialization.
     let outline = if layout.float_mode { None } else { *outline };
     simd_draw_polygon_native(
         img,
@@ -185,7 +185,7 @@ fn simd_draw_polygon(
         *alpha_blend_rgb,
         layout,
     )?
-        .ok_or_else(|| vector_strategy_mismatch("DrawPolygon"))
+    .ok_or_else(|| vector_strategy_mismatch("DrawPolygon"))
 }
 
 /// Draw a rounded rectangle using scalar corner geometry and native SIMD
@@ -403,4 +403,3 @@ fn simd_draw_pieslice(
     )?
     .ok_or_else(|| vector_strategy_mismatch("DrawPieslice"))
 }
-

@@ -7,11 +7,7 @@ use crate::raster::DynamicImage;
 // fault cases, architecture receipts, and default fallback receipts in CPU parity.
 /// Runs the shared LAB transform over samples already decoded by a source-mode strategy.
 #[inline]
-pub(crate) fn execute<I>(
-    width: u32,
-    height: u32,
-    samples: I,
-) -> Result<DynamicImage, PilError>
+pub(crate) fn execute<I>(width: u32, height: u32, samples: I) -> Result<DynamicImage, PilError>
 where
     I: ExactSizeIterator<Item = [u8; 3]>,
 {

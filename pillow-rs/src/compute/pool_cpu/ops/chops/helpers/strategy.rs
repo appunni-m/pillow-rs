@@ -1,10 +1,8 @@
 //! Architecture declarations shared by exact native-byte Chops modes.
 
-use crate::compute::registry::support::{
-    ImplementationSupport, OperationId, StrategyGuard,
-};
-use crate::compute::{Architecture, Backend};
 use crate::compute::registry::support::StrategySelection;
+use crate::compute::registry::support::{ImplementationSupport, OperationId, StrategyGuard};
+use crate::compute::{Architecture, Backend};
 use crate::error::PilError;
 use crate::raster::Mode;
 
@@ -98,8 +96,7 @@ macro_rules! declare_byte_offset_architectures {
     ($mode:expr, $channels:expr) => {
         static OFFSET_ARCHITECTURES: [ImplementationSupport; 3] =
             $crate::compute::pool_cpu::ops::chops::helpers::strategy::offset_byte_architectures(
-                $mode,
-                $channels,
+                $mode, $channels,
             );
     };
 }
@@ -200,12 +197,9 @@ macro_rules! declare_byte_binary_architectures {
             );
         static OFFSET_ARCHITECTURES: [ImplementationSupport; 3] =
             $crate::compute::pool_cpu::ops::chops::helpers::strategy::offset_byte_architectures(
-                $mode,
-                $channels,
+                $mode, $channels,
             );
-        fn architecture_for(
-            operation: OperationId,
-        ) -> &'static [ImplementationSupport] {
+        fn architecture_for(operation: OperationId) -> &'static [ImplementationSupport] {
             match operation {
                 OperationId::ChopsOffset => &OFFSET_ARCHITECTURES,
                 OperationId::ChopsAdd => &ADD_ARCHITECTURES,

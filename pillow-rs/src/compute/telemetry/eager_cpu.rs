@@ -1,13 +1,13 @@
 use super::{
-    Architecture, Backend, Instant, PipelineResourceTelemetry, PipelineTelemetry,
-    begin_pipeline_operation_telemetry, elapsed_ns, finish_pipeline_operation_telemetry,
-    pipeline_telemetry_enabled, record_pipeline_operation_path, record_pipeline_resource_telemetry,
-    record_pipeline_operation_selection, record_pipeline_telemetry,
-    reset_pipeline_allocation_telemetry,
-    reset_pipeline_operation_telemetry, take_pipeline_backend_override,
-    take_pipeline_dispatch_count, take_pipeline_resize_coeff_cache_stats,
-    take_pipeline_resource_telemetry, take_pipeline_telemetry,
-    PipelineOperationTelemetryCapture,
+    Architecture, Backend, Instant, PipelineOperationTelemetryCapture, PipelineResourceTelemetry,
+    PipelineTelemetry, begin_pipeline_operation_telemetry, elapsed_ns,
+    finish_pipeline_operation_telemetry, pipeline_telemetry_enabled,
+    record_pipeline_operation_path, record_pipeline_operation_selection,
+    record_pipeline_resource_telemetry, record_pipeline_telemetry,
+    reset_pipeline_allocation_telemetry, reset_pipeline_operation_telemetry,
+    take_pipeline_backend_override, take_pipeline_dispatch_count,
+    take_pipeline_resize_coeff_cache_stats, take_pipeline_resource_telemetry,
+    take_pipeline_telemetry,
 };
 pub(crate) struct EagerCpuOperationTelemetry {
     timed: bool,
@@ -168,11 +168,11 @@ pub(crate) fn finish_eager_cpu_operation_telemetry_with_selection(
         .or_else(|| {
             (telemetry.requested_backend == Some(Backend::Simd)
                 && selection.implementation.architecture == Architecture::Default)
-            .then(|| {
-                format!(
-                    "{operation} selected CPU Default while SIMD architecture was requested"
-                )
-            })
+                .then(|| {
+                    format!(
+                        "{operation} selected CPU Default while SIMD architecture was requested"
+                    )
+                })
         });
     if telemetry.requested_backend == Some(Backend::Simd) {
         telemetry.fallback_reason = None;

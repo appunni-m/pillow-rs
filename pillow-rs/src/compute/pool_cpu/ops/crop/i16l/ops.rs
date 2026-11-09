@@ -1,28 +1,24 @@
 //! Exact i16l crop semantics and its declared architecture strategy.
 
-use crate::compute::{Architecture, ExecutionContext, registry::support::{
-    ImplementationSupport,
-    ModeSupport,
-    OperationId,
-    PaletteKnowledge,
-    RequestFacts,
-    StrategyInputs,
-    StrategyGuard,
-    OutputModeRule,
-}};
+use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
+use crate::compute::{
+    Architecture, ExecutionContext,
+    registry::support::{
+        ImplementationSupport, ModeSupport, OperationId, OutputModeRule, PaletteKnowledge,
+        RequestFacts, StrategyGuard, StrategyInputs,
+    },
+};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
-use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
 
-use super::{neon, sse2, wasm_simd128};
 use super::super::helpers::{crop::CropRegion, strategy::luma16_copy_architectures};
+use super::{neon, sse2, wasm_simd128};
 
-static ARCHITECTURES: [ImplementationSupport; 3] =
-    luma16_copy_architectures(
-        OperationId::Crop,
-        Mode::ImageI16L,
-        StrategyGuard::NativeCropBytes { channels: 2 },
-    );
+static ARCHITECTURES: [ImplementationSupport; 3] = luma16_copy_architectures(
+    OperationId::Crop,
+    Mode::ImageI16L,
+    StrategyGuard::NativeCropBytes { channels: 2 },
+);
 
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::Crop,
@@ -34,13 +30,21 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
 
 pub(crate) enum ArchitectureStrategy<'a> {
     Default(super::default::crop_impl::Crop<'a>),
-    Sse2 { image: &'a super::default::crop_impl::Input, region: CropRegion },
-    Neon { image: &'a super::default::crop_impl::Input, region: CropRegion },
-    WasmSimd128 { image: &'a super::default::crop_impl::Input, region: CropRegion },
+    Sse2 {
+        image: &'a super::default::crop_impl::Input,
+        region: CropRegion,
+    },
+    Neon {
+        image: &'a super::default::crop_impl::Input,
+        region: CropRegion,
+    },
+    WasmSimd128 {
+        image: &'a super::default::crop_impl::Input,
+        region: CropRegion,
+    },
 }
 
 pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
-
 
 pub(crate) fn prepare<'a>(
     image: &'a super::default::crop_impl::Input,
@@ -64,15 +68,17 @@ pub(crate) fn prepare<'a>(
     );
     let selection = SUPPORT.select(ctx, inputs)?;
     let implementation = match selection.implementation.architecture {
-        Architecture::Default => ArchitectureStrategy::Default(
-            super::default::crop_impl::prepare(image, region),
-        ),
+        Architecture::Default => {
+            ArchitectureStrategy::Default(super::default::crop_impl::prepare(image, region))
+        }
         Architecture::Sse2 => ArchitectureStrategy::Sse2 { image, region },
         Architecture::Neon => ArchitectureStrategy::Neon { image, region },
         Architecture::WasmSimd128 => ArchitectureStrategy::WasmSimd128 { image, region },
-        architecture => return Err(PilError::InternalError(format!(
-            "unexpected {architecture:?} architecture selected for I;16L crop"
-        ))),
+        architecture => {
+            return Err(PilError::InternalError(format!(
+                "unexpected {architecture:?} architecture selected for I;16L crop"
+            )));
+        }
     };
     Ok(Prepared::new(implementation, selection))
 }

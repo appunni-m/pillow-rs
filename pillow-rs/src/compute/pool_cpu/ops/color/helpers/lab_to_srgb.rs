@@ -116,11 +116,7 @@ fn lab_to_srgb_pixel(lab: [u8; 3], clut: &[[u16; 3]]) -> [u8; 3] {
         axes[1].step * GRID,
         axes[2].step,
     ];
-    let fractions = [
-        axes[0].fraction,
-        axes[1].fraction,
-        axes[2].fraction,
-    ];
+    let fractions = [axes[0].fraction, axes[1].fraction, axes[2].fraction];
     let order = tetrahedron_order(fractions);
     let nodes = [
         base,

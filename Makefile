@@ -43,6 +43,8 @@ TIMEOUT      := 300
 MIGRATION_PARITY_OUTPUT ?= build/migration-parity/parity-result.json
 MIGRATION_PARITY_OUTPUTS ?= $(MIGRATION_PARITY_OUTPUT)
 MIGRATION_PARITY_AGGREGATE_ARGS = $(foreach output,$(MIGRATION_PARITY_OUTPUTS),--parity $(output))
+MIGRATION_CPU_ARCHITECTURES ?= default neon sse2 sse3 ssse3 avx avx2 avx_fma avx2_fma
+MIGRATION_CPU_ARCH_PARITY_DIR ?= build/migration-parity/cpu-architecture
 MIGRATION_PARALLEL_CPU_PARITY_OUTPUT ?= build/migration-parity/parity-result-parallel-cpu.json
 MIGRATION_PARITY_ARGS ?=
 MIGRATION_PARITY_CASE_IDS ?=
@@ -169,9 +171,11 @@ help: ## Show common contributor commands
 	@printf "%s\n" "pillow-rs — build, compare, contribute" "" \
 	  "  make setup-venv     Install pinned Python tools in this checkout" \
 	  "  make build-parity   Build without replacing the Pillow oracle" \
+	  "  make build-parity-cpu-architecture   Build CPU architecture parity hooks" \
 	  "  make build          Install the replacement for application use" \
 	  "  make test           Full backend and Node/browser campaign" \
 	  "  make quality        Run consolidated static quality gates" \
+	  "  make migration-parity-test-cpu-architectures  Run CPU parity for each architecture selector" \
 	  "  make install-hooks  Enable the local large-file pre-commit guard" \
 	  "  make fmt / clippy   Check Rust formatting / lint individually" \
 	  "  make bench          Run the declared benchmark cohort" \
@@ -192,6 +196,7 @@ help-all: ## Show all specialized commands
 	@printf "\n$(BOLD)Build$(NC)\n"
 	@printf "  $(CYAN)make build$(NC)          Build Python package (maturin develop --release)\n"
 	@printf "  $(CYAN)make build-parity$(NC)   Build the checkout facade without installing over Pillow\n"
+	@printf "  $(CYAN)make build-parity-cpu-architecture$(NC) Build test-only CPU architecture selection hooks\n"
 	@printf "  $(CYAN)make build-dev$(NC)      Build Python package (debug, faster compile)\n"
 	@printf "  $(CYAN)make build-wasm$(NC)     Build WASM package (dev)\n"
 	@printf "  $(CYAN)make build-wasm-release$(NC) Build WASM package (release)\n"
@@ -216,6 +221,7 @@ help-all: ## Show all specialized commands
 	@printf "  $(CYAN)make migration-parity-benchmark-pillow-simd$(NC) Compare matched x86 Pillow-SIMD workloads\n"
 	@printf "  $(CYAN)make test-all$(NC)       Run the all-backend public parity campaign\n"
 	@printf "  $(CYAN)make migration-parity-test$(NC) Run the canonical live-oracle migration parity suite\n"
+	@printf "  $(CYAN)make migration-parity-test-cpu-architectures$(NC) Run CPU parity for each architecture selector (no WASM)\n"
 	@printf "  $(CYAN)make migration-parity-test-parallel-cpu$(NC) Run parity with the opt-in Parallel CPU profile\n"
 	@printf "  $(CYAN)make migration-parity-test-gpu-fault-contract$(NC) Run the generated target-only GPU admission fault contract\n"
 	@printf "  $(CYAN)make migration-parity-test-gpu-strict$(NC) Audit GPU-only capability coverage (not the normal fallback lane)\n"
@@ -356,13 +362,16 @@ setup-ci: ## Install dev deps for CI
 	cd $(JS_SRC) && npm ci
 
 # ── Build ─────────────────────────────────────────────────────────────────────
-.PHONY: build build-parity build-parity-parallel-cpu build-parity-gpu-fault-contract build-dev build-wasm build-wasm-core build-wasm-release build-all python-compat-check
+.PHONY: build build-parity build-parity-cpu-architecture build-parity-parallel-cpu build-parity-gpu-fault-contract build-dev build-wasm build-wasm-core build-wasm-release build-all python-compat-check
 
 build: ## Build Python package (release)
 	$(MATURIN) develop $(MATURIN_DEVELOP_FLAGS) --manifest-path $(PY_SRC)/Cargo.toml --release --locked
 
 build-parity: MATURIN_DEVELOP_FLAGS=--skip-install
 build-parity: build ## Build the checkout facade without installing the PIL namespace
+
+build-parity-cpu-architecture: MATURIN_DEVELOP_FLAGS=--skip-install --features test-api
+build-parity-cpu-architecture: build ## Build test-only CPU architecture selection hooks without replacing Pillow
 
 # Explicit source API lanes; the oracle environment remains isolated.
 .PHONY: gpu-batch-parity gpu-batch-benchmark
@@ -492,7 +501,7 @@ parity: font-tests fontdone-parity ## Run pillow-rs Font + fontdone unified pari
 
 # ── pillow-rs / core crate ──────────────────────────────────────────────────
 .PHONY: pillow-rs-help pillow-rs-test
-.PHONY: migration-parity-test migration-parity-test-parallel-cpu migration-parity-test-gpu-fault-contract migration-parity-case migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-pillow-coverage migration-parity-pillow-missing-manifest migration-parity-coverage-rust migration-parity-operation-coverage migration-parity-font-native-coverage migration-parity-region-coverage migration-parity-pipeline-benchmark-coverage migration-parity-pipeline-report migration-parity-pipeline-roadmap-status migration-parity-pipeline-budget-check migration-parity-profile migration-parity-profile-all migration-parity-benchmark migration-parity-benchmark-parallel-cpu migration-parity-benchmark-pillow-simd migration-parity-benchmark-low-load migration-parity-pipeline-core-benchmark migration-parity-aggregate migration-parity-docs pillow-rs-py-binding-benchmark
+.PHONY: migration-parity-test migration-parity-test-cpu-architectures migration-parity-test-parallel-cpu migration-parity-test-gpu-fault-contract migration-parity-case migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-pillow-coverage migration-parity-pillow-missing-manifest migration-parity-coverage-rust migration-parity-operation-coverage migration-parity-font-native-coverage migration-parity-region-coverage migration-parity-pipeline-benchmark-coverage migration-parity-pipeline-report migration-parity-pipeline-roadmap-status migration-parity-pipeline-budget-check migration-parity-profile migration-parity-profile-all migration-parity-benchmark migration-parity-benchmark-parallel-cpu migration-parity-benchmark-pillow-simd migration-parity-benchmark-low-load migration-parity-pipeline-core-benchmark migration-parity-aggregate migration-parity-docs pillow-rs-py-binding-benchmark
 .PHONY: font-tests font-tests-release imagingft-tests imagingft-tests-release
 .PHONY: pillow-rs-public-api-boundary pillow-rs-fmt pillow-rs-fmt-fix pillow-rs-clippy pillow-rs-lint
 .PHONY: pillow-rs-build pillow-rs-build-release pillow-rs-bench
@@ -513,6 +522,31 @@ migration-parity-test: ## Run canonical input-only parity against live Pillow
 	validator=$$?; \
 	if [ $$status -ne 0 ]; then exit $$status; fi; \
 	exit $$validator
+
+migration-parity-test-cpu-architectures: build-parity-cpu-architecture ## Run CPU parity once for each declared non-WASM architecture selector
+	@set -eu; \
+	mkdir -p "$(MIGRATION_CPU_ARCH_PARITY_DIR)"; \
+	failed=0; \
+	for architecture in $(MIGRATION_CPU_ARCHITECTURES); do \
+		printf "CPU architecture parity: %s\n" "$$architecture"; \
+		parity_artifact="$(MIGRATION_CPU_ARCH_PARITY_DIR)/$$architecture.parity.json"; \
+		execution_artifact="$(MIGRATION_CPU_ARCH_PARITY_DIR)/$$architecture.execution.json"; \
+		if MIGRATION_TARGET_BACKEND=cpu \
+			MIGRATION_TARGET_ARCHITECTURE="$$architecture" \
+			MIGRATION_PARITY_EXECUTION_OUTPUT="$$execution_artifact" \
+			$(MAKE) migration-parity-test \
+				MIGRATION_PARITY_OUTPUT="$$parity_artifact"; then \
+			:; \
+		else \
+			status=$$?; \
+			printf "CPU architecture parity failed for %s (exit %s); continuing matrix.\n" "$$architecture" "$$status"; \
+			failed=1; \
+		fi; \
+		for artifact in "$$parity_artifact" "$$execution_artifact"; do \
+			if [ -f "$$artifact" ]; then gzip -1 -f "$$artifact"; fi; \
+		done; \
+	done; \
+	exit $$failed
 
 migration-parity-test-parallel-cpu: build-parity-parallel-cpu ## Run live Pillow parity through the opt-in Parallel CPU profile
 	MIGRATION_TARGET_BACKEND=cpu MIGRATION_TARGET_PROFILE=parallel-cpu \

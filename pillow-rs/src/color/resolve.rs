@@ -163,8 +163,7 @@ pub fn resolve_new_color(
     if matches!(
         mode,
         Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N
-    )
-        && let Some(v) = int32_val
+    ) && let Some(v) = int32_val
     {
         let bytes = (v as u16).to_le_bytes();
         return Ok((bytes[0], bytes[1], 0, 0));
@@ -195,11 +194,7 @@ pub fn resolve_new_color(
         }
         if matches!(
             mode,
-            Mode::ImageI32
-                | Mode::ImageI16
-                | Mode::ImageI16L
-                | Mode::ImageI16B
-                | Mode::ImageI16N
+            Mode::ImageI32 | Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N
         ) {
             return Err(crate::error::PilError::TypeError(
                 "color must be int or single-element tuple".to_owned(),
@@ -300,13 +295,7 @@ fn rgb_to_hsv_i32(r: i32, g: i32, b: i32) -> (i32, i32, i32) {
 /// Components retain their raw integer values; this function does not clamp
 /// them before luma or HSV calculations. Parse host strings with
 /// [`ColorOutputMode::parse_pillow_name`] at the binding boundary.
-pub fn getcolor(
-    r: i32,
-    g: i32,
-    b: i32,
-    a: i32,
-    mode: ColorOutputMode,
-) -> ColorValue {
+pub fn getcolor(r: i32, g: i32, b: i32, a: i32, mode: ColorOutputMode) -> ColorValue {
     // Pillow's getcolor computes from the raw (unclamped) parsed components:
     // `(r * 19595 + g * 38470 + b * 7471 + 0x8000) >> 16` and colorsys HSV on
     // r/255, so out-of-range values like rgb(300,0,0) produce 90 / (0,255,300).
@@ -377,13 +366,7 @@ fn premultiply_color_component(component: i32, alpha: i32) -> i32 {
 /// Pillow mode spelling. Internal raster identities use their documented
 /// carrier's color result; operation support still decides whether they can
 /// execute a requested transform.
-pub(crate) fn getcolor_for_mode(
-    r: i32,
-    g: i32,
-    b: i32,
-    a: i32,
-    mode: Mode,
-) -> ColorValue {
+pub(crate) fn getcolor_for_mode(r: i32, g: i32, b: i32, a: i32, mode: Mode) -> ColorValue {
     let luma = (r * 19595 + g * 38470 + b * 7471 + 0x8000) >> 16;
     match mode {
         Mode::ImageHsv8 => {

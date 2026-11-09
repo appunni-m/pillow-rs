@@ -112,10 +112,7 @@ unsafe fn blur_middle_block(
             ),
         );
         _mm256_storeu_si256(
-            destination
-                .as_mut_ptr()
-                .add(output_start * CHANNELS)
-                .cast(),
+            destination.as_mut_ptr().add(output_start * CHANNELS).cast(),
             packed,
         );
     }

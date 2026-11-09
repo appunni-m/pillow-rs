@@ -2,22 +2,22 @@
 
 use std::sync::Arc;
 
-use crate::compute::{Architecture, ExecutionContext};
 use crate::compute::registry::support::{
     ImplementationSupport, InputContract, MergeBandModeRule, ModeSupport, OperationId,
     OperationInputs, OperationSupport, OutputModeRule, RejectionKind, StrategyGuard,
     StrategyInputs, StrategySelection, SupportAssessment,
 };
+use crate::compute::{Architecture, ExecutionContext};
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
 
-
 const MERGE_SINGLE: &[InputContract] = &[InputContract::MergeBandLayout {
     band_count: 1,
     mode_rule: MergeBandModeRule::ExactTarget,
     count_rejection: "wrong number of bands",
+    first_mode_rejection: "images do not match",
     mode_rejection: "images do not match",
     size_rejection: "size mismatch",
 }];
@@ -25,6 +25,7 @@ const MERGE_TWO: &[InputContract] = &[InputContract::MergeBandLayout {
     band_count: 2,
     mode_rule: MergeBandModeRule::LumaOrFirstPalette,
     count_rejection: "wrong number of bands",
+    first_mode_rejection: "image has wrong mode",
     mode_rejection: "mode mismatch",
     size_rejection: "size mismatch",
 }];
@@ -32,6 +33,7 @@ const MERGE_THREE: &[InputContract] = &[InputContract::MergeBandLayout {
     band_count: 3,
     mode_rule: MergeBandModeRule::LumaOrFirstPalette,
     count_rejection: "wrong number of bands",
+    first_mode_rejection: "image has wrong mode",
     mode_rejection: "mode mismatch",
     size_rejection: "size mismatch",
 }];
@@ -39,9 +41,18 @@ const MERGE_FOUR: &[InputContract] = &[InputContract::MergeBandLayout {
     band_count: 4,
     mode_rule: MergeBandModeRule::LumaOrFirstPalette,
     count_rejection: "wrong number of bands",
+    first_mode_rejection: "image has wrong mode",
     mode_rejection: "mode mismatch",
     size_rejection: "size mismatch",
 }];
+
+// Pillow validates every band after the first as L and leaves band zero to
+// ImagingMerge. The typed path accepts byte-backed One/L/P there. Pillow's
+// native multi-band merge reads band zero as bytes without validating its
+// storage type; preserve safe one-byte outcomes and reject other carrier types
+// rather than reproducing invalid reads from I/F/I;16 storage.
+// TODO(pillow-rs#3ptb): freeze invalid first-band and high-depth fault outcomes
+// in parity, including the safe replacement for Pillow's invalid raw reads.
 
 const MERGE_RGB_SSSE3: &[Architecture] = &[Architecture::Ssse3];
 const MERGE_RGB_NEON: &[Architecture] = &[Architecture::Neon];
@@ -69,10 +80,7 @@ const fn merge_native_architecture(
     )
 }
 
-const fn merge_portable_architectures(
-    mode: Mode,
-    channels: u8,
-) -> [ImplementationSupport; 3] {
+const fn merge_portable_architectures(mode: Mode, channels: u8) -> [ImplementationSupport; 3] {
     [
         merge_native_architecture(
             mode,
@@ -175,8 +183,9 @@ impl PreparedMerge<'_> {
     }
 }
 
-fn merge_support(mode: Mode) -> ModeSupport {
-    let (input, output) = match mode {
+/// Merge's support mode is the requested output identity, not its first band.
+fn merge_support(target_mode: Mode) -> ModeSupport {
+    let (input, output) = match target_mode {
         Mode::One
         | Mode::ImageLuma8
         | Mode::ImagePalette8
@@ -185,37 +194,42 @@ fn merge_support(mode: Mode) -> ModeSupport {
         | Mode::ImageI16
         | Mode::ImageI16L
         | Mode::ImageI16B
-        | Mode::ImageI16N => (MERGE_SINGLE, OutputModeRule::Fixed(mode)),
+        | Mode::ImageI16N => (MERGE_SINGLE, OutputModeRule::ByTargetMode),
         Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => {
-            (MERGE_TWO, OutputModeRule::Fixed(mode))
+            (MERGE_TWO, OutputModeRule::ByTargetMode)
         }
         Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => {
-            (MERGE_THREE, OutputModeRule::Fixed(mode))
+            (MERGE_THREE, OutputModeRule::ByTargetMode)
         }
-        Mode::ImageRgba8
-        | Mode::ImageRgbPremultiplied8
-        | Mode::ImageRgbx8
-        | Mode::ImageCmyk8 => (MERGE_FOUR, OutputModeRule::Fixed(mode)),
+        Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8 | Mode::ImageRgbx8 | Mode::ImageCmyk8 => {
+            (MERGE_FOUR, OutputModeRule::ByTargetMode)
+        }
         Mode::ImageLumaA16
         | Mode::ImageRgb16
         | Mode::ImageRgba16
         | Mode::ImageRgb32F
         | Mode::ImageRgba32F => {
             return ModeSupport::Rejected {
-                mode,
+                mode: target_mode,
                 reason: "image has wrong mode",
                 kind: RejectionKind::ValueError,
             };
         }
     };
-    let architectures: &'static [ImplementationSupport] = match mode {
+    let architectures: &'static [ImplementationSupport] = match target_mode {
         Mode::ImageLumaA8 => &MERGE_LA_ARCHITECTURES,
         Mode::ImageRgb8 => MERGE_RGB_ARCHITECTURES,
         Mode::ImageRgba8 => &MERGE_RGBA_ARCHITECTURES,
         Mode::ImageCmyk8 => &MERGE_CMYK_ARCHITECTURES,
         _ => &[],
     };
-    ModeSupport::cpu(OperationId::Merge, mode, output, input, architectures)
+    ModeSupport::cpu(
+        OperationId::Merge,
+        target_mode,
+        output,
+        input,
+        architectures,
+    )
 }
 
 /// Complete exact-mode support contract for Image.merge.
@@ -293,7 +307,12 @@ pub(crate) fn prepare_merge<'a>(
         .skip(1)
         .map(Image::materialized_shared)
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(PreparedMerge { source: input.image, remaining, mode: target, selection })
+    Ok(PreparedMerge {
+        source: input.image,
+        remaining,
+        mode: target,
+        selection,
+    })
 }
 
 pub(crate) fn prepare_merge_pipeline<'a>(
@@ -318,12 +337,18 @@ fn execute_merge_mode(
         Mode::One => super::super::one::ops::merge(source, remaining, selection),
         Mode::ImageLuma8 => super::super::luma8::ops::merge(source, remaining, selection),
         Mode::ImageLumaA8 => super::super::luma_a8::ops::merge(source, remaining, selection),
-        Mode::ImageLaPremultiplied8 => super::super::la_premultiplied8::ops::merge(source, remaining, selection),
+        Mode::ImageLaPremultiplied8 => {
+            super::super::la_premultiplied8::ops::merge(source, remaining, selection)
+        }
         Mode::ImagePalette8 => super::super::palette8::ops::merge(source, remaining, selection),
-        Mode::ImagePaletteAlpha8 => super::super::palette_alpha8::ops::merge(source, remaining, selection),
+        Mode::ImagePaletteAlpha8 => {
+            super::super::palette_alpha8::ops::merge(source, remaining, selection)
+        }
         Mode::ImageRgb8 => super::super::rgb8::ops::merge(source, remaining, selection),
         Mode::ImageRgba8 => super::super::rgba8::ops::merge(source, remaining, selection),
-        Mode::ImageRgbPremultiplied8 => super::super::rgb_premultiplied8::ops::merge(source, remaining, selection),
+        Mode::ImageRgbPremultiplied8 => {
+            super::super::rgb_premultiplied8::ops::merge(source, remaining, selection)
+        }
         Mode::ImageRgbx8 => super::super::rgbx8::ops::merge(source, remaining, selection),
         Mode::ImageCmyk8 => super::super::cmyk8::ops::merge(source, remaining, selection),
         Mode::ImageYCbCr8 => super::super::ycbcr8::ops::merge(source, remaining, selection),
@@ -344,4 +369,3 @@ fn execute_merge_mode(
         )),
     }
 }
-

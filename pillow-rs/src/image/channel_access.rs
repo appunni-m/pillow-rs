@@ -1,7 +1,9 @@
 //! Channel extraction and alpha mutation methods for [`Image`].
 // TODO(pillow-rs#3ptb): verify PutAlpha/PutAlphaData wrapper mode-change,
 // mutation, metadata, and error order in CPU parity, including integer
-// coercion and exact-image-mask aliasing. GetChannel parity must also cover
+// coercion, exact-image-mask aliasing, callbacks observing promotion, and
+// callback-driven destination changes between band selection and the write.
+// GetChannel parity must also cover
 // custom __index__ exceptions and str-subclass comparisons in getbands().index.
 // Their operation declarations now
 // agree with the wrapper's Pillow-defined rejections. Native-width modes with
@@ -72,7 +74,10 @@ fn validate_putalpha_mode(operation: OperationId, mode: Mode) -> Result<(), PilE
 }
 
 fn promote_putalpha_destination(image: &mut Image, mode: Mode) -> Result<(), PilError> {
-    if !matches!(mode, Mode::ImageLumaA8 | Mode::ImagePaletteAlpha8 | Mode::ImageRgba8) {
+    if !matches!(
+        mode,
+        Mode::ImageLumaA8 | Mode::ImagePaletteAlpha8 | Mode::ImageRgba8
+    ) {
         image.putalpha(255)?;
     }
     Ok(())
@@ -84,9 +89,7 @@ fn validated_putalpha_mask(image: &Image, mask: &Image) -> Result<DynamicImage, 
         return Err(PilError::ValueError("illegal image mode".into()));
     }
     let mask_image = mask.materialize()?;
-    if !crate::compute::registry::support::PUT_ALPHA_DATA_MASK_MODES
-        .contains(&mask_image.mode())
-    {
+    if !crate::compute::registry::support::PUT_ALPHA_DATA_MASK_MODES.contains(&mask_image.mode()) {
         return Err(PilError::ValueError("illegal image mode".into()));
     }
     if (mask_image.width(), mask_image.height()) != image.size()? {
@@ -182,11 +185,8 @@ fn eager_getchannel_shared_buffer_identity(
     let Some(guards) = route.shared_buffer_identity_guards() else {
         return Ok(None);
     };
-    let dimensions = crate::checked_dims::CheckedDims::new_allow_empty(
-        pixels.width(),
-        pixels.height(),
-        1,
-    )?;
+    let dimensions =
+        crate::checked_dims::CheckedDims::new_allow_empty(pixels.width(), pixels.height(), 1)?;
     let pixel_count = u64::try_from(dimensions.total_pixels())
         .map_err(|_| PilError::DimensionError("GetChannel pixel count overflow".into()))?;
     let byte_length = pixels.as_bytes().len();
@@ -248,13 +248,8 @@ fn eager_getchannel_tiny_rgb_child(
         return Ok(None);
     }
     let backend = requested_backend.expect("satisfied backend guard must be present");
-    let extracted = eager_getchannel_tiny_rgb(
-        pixels,
-        channel,
-        backend,
-        context,
-        operation_receipts,
-    )?;
+    let extracted =
+        eager_getchannel_tiny_rgb(pixels, channel, backend, context, operation_receipts)?;
     let Some(extracted) = extracted else {
         return Ok(None);
     };
@@ -266,10 +261,7 @@ fn eager_getchannel_tiny_rgb_child(
     Ok(Some(result))
 }
 
-fn concrete_identity_source(
-    image: &Image,
-    cached_at_entry: bool,
-) -> Option<(&DynamicImage, bool)> {
+fn concrete_identity_source(image: &Image, cached_at_entry: bool) -> Option<(&DynamicImage, bool)> {
     match image {
         Image::Loaded(data) => Some((data.image.as_ref(), true)),
         Image::Paletted(data) => Some((&data.indices, false)),
@@ -460,7 +452,8 @@ impl Image {
     /// Queues replacement of the alpha channel.
     ///
     /// Materialization preserves Pillow-style mode intent: `L` becomes `LA`,
-    /// `RGB` becomes `RGBA`, and existing `LA`/`RGBA` alpha bytes are replaced.
+    /// premultiplied `La` becomes straight `LA`, `RGB` becomes `RGBA`, and
+    /// existing `LA`/`RGBA` alpha bytes are replaced.
     /// Native-width Rust modes with declared CoreOnly strategies remain
     /// available as a Rust extension without a Pillow parity claim.
     ///
@@ -551,9 +544,10 @@ impl Image {
         let image_mode = self.mode_identity()?;
         validate_putalpha_mode(OperationId::PutAlphaData, image_mode)?;
 
-        // Pillow promotes before mask validation. Because this wrapper holds
-        // exclusive access, apply the same visible mutation only on failure;
-        // valid calls stay on the direct native PutAlphaData route.
+        // The Python adapter promotes before invoking mask-mode/load callbacks.
+        // Direct Rust callers have no intervening host callback, so successful
+        // calls can use the exact source-mode PutAlphaData strategy directly;
+        // retain the promotion when validation fails.
         let mut operation_receipts = PipelineOperationTelemetryCapture::begin_preserving_current();
         let mask_img = match validated_putalpha_mask(self, mask) {
             Ok(mask) => mask,

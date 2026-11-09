@@ -1,8 +1,7 @@
 use super::{
-    Arc, Bytes, Image, PilError, PipelineOp, PutDataInput, PutDataValue,
-    PutDataValueKind, is_l16_identity, materialization_cache,
-    putdata_byte_width, putdata_bytes, putdata_hidden_lane_bytes, putdata_hidden_lanes,
-    unsupported_putdata_mode,
+    Arc, Bytes, Image, PilError, PipelineOp, PutDataInput, PutDataValue, PutDataValueKind,
+    is_l16_identity, materialization_cache, putdata_byte_width, putdata_bytes,
+    putdata_hidden_lane_bytes, putdata_hidden_lanes, unsupported_putdata_mode,
 };
 use crate::compute::PipelineOperationTelemetryCapture;
 use crate::image::PutDataExecutionContext;
@@ -53,7 +52,10 @@ impl Image {
             return Ok(false);
         }
         let payload_mode = self.mode_identity()?;
-        if !matches!(payload_mode, Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8) {
+        if !matches!(
+            payload_mode,
+            Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8
+        ) {
             return Ok(false);
         }
         self.validate_putdata_length(entry_count)?;
@@ -247,7 +249,10 @@ impl Image {
             self.putdata_l16_bytes_with_count(data, entry_count, scale, offset)?;
             return Ok(true);
         }
-        if matches!(image_mode, Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8) {
+        if matches!(
+            image_mode,
+            Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8
+        ) {
             if scale == 1.0 && offset == 0.0 && data.len() == entry_count {
                 // Bytes already contain the exact one-byte samples Pillow
                 // stores for these modes. Queue them directly instead of
@@ -303,10 +308,8 @@ impl Image {
         self.load()?;
         operation_receipts.capture();
         if let Image::Loaded(image_data) = self {
-            let selection = crate::compute::pool_cpu::ops::put::ops::select_put_data_l16_bytes(
-                mode,
-                &context,
-            )?;
+            let selection =
+                crate::compute::pool_cpu::ops::put::ops::select_put_data_l16_bytes(mode, &context)?;
             crate::compute::pool_cpu::ops::put::ops::execute_put_data_l16_bytes(
                 Arc::make_mut(&mut image_data.image),
                 data,
@@ -482,6 +485,154 @@ impl Image {
             selection,
         );
         context.operation_receipts.capture();
+        Ok(())
+    }
+}
+
+impl Image {
+    /// Changes the callback-visible ImagingCore mode through Pillow's native
+    /// same-mode, `1`/`L`, and RGB/RGBA/RGBX paths.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError::ValueError`] when the target transition is not
+    /// supported by the current mode, and propagates materialization errors.
+    pub fn imaging_core_setmode(&mut self, target: Mode) -> Result<(), PilError> {
+        let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
+        let source = self.mode_identity()?;
+        let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
+        let selection = crate::compute::pool_cpu::ops::put::ops::select_imaging_core_set_mode(
+            source, target, &context,
+        )?;
+        if source != target {
+            self.load()?;
+            operation_receipts.capture();
+            self.mutate_materialized_pixels(|image| {
+                crate::compute::pool_cpu::ops::put::ops::execute_imaging_core_set_mode(
+                    image, target, selection,
+                )
+            })?;
+        } else {
+            operation_receipts.capture();
+        }
+        crate::compute::record_eager_cpu_operation_receipt_with_selection_and_receipts(
+            "ImagingCoreSetMode",
+            requested_backend,
+            0,
+            "ImagingCore setmode uses the serial Default strategy",
+            selection,
+            operation_receipts,
+        );
+        Ok(())
+    }
+
+    /// Replaces one native band through Pillow's callback-visible ImagingCore API.
+    ///
+    /// Multiband destinations accept a one-byte single-band source; a
+    /// single-band destination requires the same exact mode. The destination
+    /// keeps its palette and metadata.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError::ValueError`] when the source, band, dimensions, or
+    /// stored sample layout does not match the destination.
+    pub fn imaging_core_putband(&mut self, source: &Image, band: i32) -> Result<(), PilError> {
+        let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
+        let source_mode = source.mode_identity()?;
+        crate::compute::pool_cpu::ops::put::helpers::imaging_core_band::validate_put_band_source(
+            source_mode,
+        )?;
+        let destination_mode = self.mode_identity()?;
+        let band =
+            crate::compute::pool_cpu::ops::put::helpers::imaging_core_band::validate_band_index(
+                band,
+                destination_mode.pillow_band_count(),
+            )?;
+        crate::compute::pool_cpu::ops::put::helpers::imaging_core_band::validate_put_band_layout(
+            destination_mode,
+            source_mode,
+            self.size()?,
+            source.size()?,
+        )?;
+        let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
+        let selection =
+            crate::compute::pool_cpu::ops::put::ops::select_put_band(destination_mode, &context)?;
+        let source_pixels = source.materialized_shared()?;
+        self.load()?;
+        operation_receipts.capture();
+        self.mutate_materialized_pixels(|destination| {
+            crate::compute::pool_cpu::ops::put::ops::execute_put_band(
+                destination,
+                source_pixels.as_ref(),
+                band,
+                selection,
+            )
+        })?;
+        crate::compute::record_eager_cpu_operation_receipt_with_selection_and_receipts(
+            "PutBand",
+            requested_backend,
+            0,
+            "ImagingCore band writes use the serial Default strategy",
+            selection,
+            operation_receipts,
+        );
+        Ok(())
+    }
+
+    /// Fills one native byte band through Pillow's callback-visible ImagingCore API.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError::ValueError`] when the destination mode or band is
+    /// unsupported, and propagates materialization errors.
+    pub fn imaging_core_fillband(&mut self, band: i32, value: i32) -> Result<(), PilError> {
+        let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
+        let mode = self.mode_identity()?;
+        let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
+        let selection = crate::compute::pool_cpu::ops::put::ops::select_fill_band(mode, &context)?;
+        let band =
+            crate::compute::pool_cpu::ops::put::helpers::imaging_core_band::validate_band_index(
+                band,
+                mode.pillow_band_count(),
+            )?;
+        let value = value.clamp(0, i32::from(u8::MAX)) as u8;
+        self.load()?;
+        operation_receipts.capture();
+        self.mutate_materialized_pixels(|image| {
+            crate::compute::pool_cpu::ops::put::ops::execute_fill_band(
+                image, band, value, selection,
+            )
+        })?;
+        crate::compute::record_eager_cpu_operation_receipt_with_selection_and_receipts(
+            "FillBand",
+            requested_backend,
+            0,
+            "ImagingCore band fills use the serial Default strategy",
+            selection,
+            operation_receipts,
+        );
+        Ok(())
+    }
+
+    fn mutate_materialized_pixels(
+        &mut self,
+        operation: impl FnOnce(&mut crate::raster::DynamicImage) -> Result<(), PilError>,
+    ) -> Result<(), PilError> {
+        match self {
+            Image::Loaded(data) => {
+                operation(Arc::make_mut(&mut data.image))?;
+                data.known_zero_fill = false;
+            }
+            Image::Paletted(data) => {
+                operation(&mut data.indices)?;
+                data.materialized = materialization_cache();
+            }
+            _ => {
+                return Err(PilError::InternalError(
+                    "ImagingCore band mutation did not materialize writable pixels".into(),
+                ));
+            }
+        }
         Ok(())
     }
 }

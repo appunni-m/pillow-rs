@@ -1,4 +1,3 @@
-
 use crate::raster::GenericImageView;
 use std::borrow::Cow;
 use std::ops::Deref;
@@ -168,20 +167,18 @@ where
                     )
                 });
             if let Some((source_x, source_y)) = source_position {
-                value = self.paste_hidden_lane(
-                    lane,
-                    source_x,
-                    source_y,
-                    source_physical,
-                    value,
-                )?;
+                value = self.paste_hidden_lane(lane, source_x, source_y, source_physical, value)?;
             }
             output.push(value);
         }
         Ok(())
     }
 
-    fn source_position(&self, destination_x: usize, destination_y: usize) -> Option<(usize, usize)> {
+    fn source_position(
+        &self,
+        destination_x: usize,
+        destination_y: usize,
+    ) -> Option<(usize, usize)> {
         let left = self.region.destination_left as usize;
         let top = self.region.destination_top as usize;
         let width = self.region.width as usize;
@@ -264,10 +261,10 @@ where
             ));
         }
         let inverse = 255 - u16::from(weight);
-        Ok(((u16::from(source) * u16::from(weight)
-            + u16::from(destination) * inverse
-            + 127)
-            / 255) as u8)
+        Ok(
+            ((u16::from(source) * u16::from(weight) + u16::from(destination) * inverse + 127) / 255)
+                as u8,
+        )
     }
 }
 
@@ -305,7 +302,11 @@ fn default_hidden_lane(mode: Mode, lane: usize, logical_first: u8) -> u8 {
 fn checked_extent(size: (u32, u32), part: &str) -> Result<usize, PilError> {
     usize::try_from(size.0)
         .ok()
-        .and_then(|width| usize::try_from(size.1).ok().and_then(|height| width.checked_mul(height)))
+        .and_then(|width| {
+            usize::try_from(size.1)
+                .ok()
+                .and_then(|height| width.checked_mul(height))
+        })
         .ok_or_else(|| paste_overflow(part))
 }
 
@@ -456,14 +457,19 @@ where
         SourceLayout::PhysicalFourBytesToLumaAlpha
         | SourceLayout::PhysicalFourBytesToRgb
         | SourceLayout::PhysicalFourBytesToFour
-            if byte_carrier_pixel_width(source_mode) == Some(4) => None,
+            if byte_carrier_pixel_width(source_mode) == Some(4) =>
+        {
+            None
+        }
         SourceLayout::PhysicalFourBytesToLumaAlpha
         | SourceLayout::PhysicalFourBytesToRgb
-        | SourceLayout::PhysicalFourBytesToFour => Some(
-            physical_four_byte_source(&*source).ok_or_else(|| {
-                PilError::InternalError("Paste source could not expose its physical pixel layout".into())
-            })?,
-        ),
+        | SourceLayout::PhysicalFourBytesToFour => {
+            Some(physical_four_byte_source(&*source).ok_or_else(|| {
+                PilError::InternalError(
+                    "Paste source could not expose its physical pixel layout".into(),
+                )
+            })?)
+        }
     };
     let source_bytes = source_physical
         .as_deref()
@@ -478,20 +484,32 @@ where
         "destination",
     )?;
 
-    let mask_layout = mask.as_deref().map(|image| {
-        mask_layout(image.mode(), mask_alpha).ok_or_else(|| {
-            PilError::InternalError("Paste mask strategy did not match mask mode".into())
+    let mask_layout = mask
+        .as_deref()
+        .map(|image| {
+            mask_layout(image.mode(), mask_alpha).ok_or_else(|| {
+                PilError::InternalError("Paste mask strategy did not match mask mode".into())
+            })
         })
-    }).transpose()?;
+        .transpose()?;
     if let (Some(image), Some(layout)) = (mask.as_deref(), mask_layout) {
-        check_byte_len(image.as_bytes(), image.dimensions(), layout.channels, "mask")?;
+        check_byte_len(
+            image.as_bytes(),
+            image.dimensions(),
+            layout.channels,
+            "mask",
+        )?;
         if image.dimensions() != region_size {
-            return Err(PilError::InternalError("Paste mask dimensions changed after admission".into()));
+            return Err(PilError::InternalError(
+                "Paste mask dimensions changed after admission".into(),
+            ));
         }
     }
     let broadcast_source = source_size != region_size;
     if broadcast_source && source_size != (1, 1) {
-        return Err(PilError::InternalError("Paste source dimensions changed after admission".into()));
+        return Err(PilError::InternalError(
+            "Paste source dimensions changed after admission".into(),
+        ));
     }
     let region = PasteRegion::clipped(position.0, position.1, region_size, destination_size);
     Ok(BytePlan {
@@ -513,8 +531,8 @@ where
     })
 }
 
-/// TODO(pillow-rs#3ptb): Freeze parity for all source/destination byte orders,
-/// masks, and clipped regions before claiming raw I;16 alias support.
+/// TODO(pillow-rs#3ptb): Verify source/destination byte-order pairs, masks, and
+/// clipped regions in CPU parity; source strategy mapping is reviewed.
 pub(crate) fn luma16_plan<'a>(
     destination: &'a [u16],
     destination_size: (u32, u32),
@@ -534,15 +552,25 @@ pub(crate) fn luma16_plan<'a>(
             "I;16 Paste requires a same-pixel-size source with matching dimensions".into(),
         ));
     }
-    let mask_layout = mask.as_deref().map(|image| {
-        mask_layout(image.mode(), mask_alpha).ok_or_else(|| {
-            PilError::InternalError("Paste mask strategy did not match mask mode".into())
+    let mask_layout = mask
+        .as_deref()
+        .map(|image| {
+            mask_layout(image.mode(), mask_alpha).ok_or_else(|| {
+                PilError::InternalError("Paste mask strategy did not match mask mode".into())
+            })
         })
-    }).transpose()?;
+        .transpose()?;
     if let (Some(image), Some(layout)) = (mask.as_deref(), mask_layout) {
-        check_byte_len(image.as_bytes(), image.dimensions(), layout.channels, "mask")?;
+        check_byte_len(
+            image.as_bytes(),
+            image.dimensions(),
+            layout.channels,
+            "mask",
+        )?;
         if image.dimensions() != region_size {
-            return Err(PilError::InternalError("Paste mask dimensions changed after admission".into()));
+            return Err(PilError::InternalError(
+                "Paste mask dimensions changed after admission".into(),
+            ));
         }
     }
     Ok(Luma16Plan {
@@ -571,7 +599,12 @@ pub(crate) fn native_u16_plan<'a>(
     region_size: (u32, u32),
     selection: StrategySelection,
 ) -> Result<NativeU16Plan<'a>, PilError> {
-    validate_native_source(source.as_ref(), mode, checked_sample_bytes(channels, 2)?, region_size)?;
+    validate_native_source(
+        source.as_ref(),
+        mode,
+        checked_sample_bytes(channels, 2)?,
+        region_size,
+    )?;
     let mask_layout = prepare_native_mask(mask.as_deref(), mask_alpha, region_size)?;
     Ok(NativeU16Plan {
         destination,
@@ -597,7 +630,12 @@ pub(crate) fn native_f32_plan<'a>(
     region_size: (u32, u32),
     selection: StrategySelection,
 ) -> Result<NativeF32Plan<'a>, PilError> {
-    validate_native_source(source.as_ref(), mode, checked_sample_bytes(channels, 4)?, region_size)?;
+    validate_native_source(
+        source.as_ref(),
+        mode,
+        checked_sample_bytes(channels, 4)?,
+        region_size,
+    )?;
     let mask_layout = prepare_native_mask(mask.as_deref(), mask_alpha, region_size)?;
     Ok(NativeF32Plan {
         destination,
@@ -616,15 +654,24 @@ fn prepare_native_mask(
     mask_alpha: bool,
     region_size: (u32, u32),
 ) -> Result<Option<MaskLayout>, PilError> {
-    let layout = mask.map(|image| {
-        mask_layout(image.mode(), mask_alpha).ok_or_else(|| {
-            PilError::InternalError("Paste mask strategy did not match mask mode".into())
+    let layout = mask
+        .map(|image| {
+            mask_layout(image.mode(), mask_alpha).ok_or_else(|| {
+                PilError::InternalError("Paste mask strategy did not match mask mode".into())
+            })
         })
-    }).transpose()?;
+        .transpose()?;
     if let (Some(image), Some(layout)) = (mask, layout) {
-        check_byte_len(image.as_bytes(), image.dimensions(), layout.channels, "mask")?;
+        check_byte_len(
+            image.as_bytes(),
+            image.dimensions(),
+            layout.channels,
+            "mask",
+        )?;
         if image.dimensions() != region_size {
-            return Err(PilError::InternalError("Paste mask dimensions changed after admission".into()));
+            return Err(PilError::InternalError(
+                "Paste mask dimensions changed after admission".into(),
+            ));
         }
     }
     Ok(layout)
@@ -637,11 +684,15 @@ fn validate_native_source(
     region_size: (u32, u32),
 ) -> Result<(), PilError> {
     if source.mode() != mode || source.dimensions() != region_size {
-        return Err(PilError::InternalError("native Paste requires an exact same-mode source".into()));
+        return Err(PilError::InternalError(
+            "native Paste requires an exact same-mode source".into(),
+        ));
     }
     let expected = sample_len(region_size, bytes_per_pixel)?;
     if source.as_bytes().len() != expected {
-        return Err(PilError::InternalError("native Paste source storage did not match dimensions".into()));
+        return Err(PilError::InternalError(
+            "native Paste source storage did not match dimensions".into(),
+        ));
     }
     Ok(())
 }
@@ -660,7 +711,9 @@ fn check_byte_len(
 ) -> Result<(), PilError> {
     let expected = sample_len(dimensions, channels)?;
     if bytes.len() != expected {
-        return Err(PilError::InternalError(format!("Paste {role} storage did not match dimensions")));
+        return Err(PilError::InternalError(format!(
+            "Paste {role} storage did not match dimensions"
+        )));
     }
     Ok(())
 }

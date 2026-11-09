@@ -6,8 +6,11 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::{JsValue, wasm_bindgen};
 
 fn parse_pillow_mode(mode: &str) -> Result<pillow_rs::Mode, JsValue> {
-    pillow_rs::Mode::from_pillow_name(mode)
-        .ok_or_else(|| err(pillow_rs::PilError::ValueError("unrecognized image mode".into())))
+    pillow_rs::Mode::from_pillow_name(mode).ok_or_else(|| {
+        err(pillow_rs::PilError::ValueError(
+            "unrecognized image mode".into(),
+        ))
+    })
 }
 
 fn putdata_uint8_values(
@@ -760,14 +763,9 @@ pub fn from_bytes_fn(
             "decoder {decoder_name} not available"
         ))));
     }
-    pillow_rs::image_frombytes(
-        parse_pillow_mode(mode)?,
-        (w, h),
-        &data,
-        &decoder_name,
-    )
-    .map(|i| Image { inner: i })
-    .map_err(err)
+    pillow_rs::image_frombytes(parse_pillow_mode(mode)?, (w, h), &data, &decoder_name)
+        .map(|i| Image { inner: i })
+        .map_err(err)
 }
 
 #[wasm_bindgen(js_name = "fromArrayFn")]
@@ -793,9 +791,7 @@ pub fn from_array_fn(
             })
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let mode = mode
-        .map(|name| parse_pillow_mode(&name))
-        .transpose()?;
+    let mode = mode.map(|name| parse_pillow_mode(&name)).transpose()?;
     let layout = pillow_rs::resolve_array_layout(&shape, typestr, mode).map_err(err)?;
     pillow_rs::from_resolved_array_interface(&layout, &data)
         .map(|i| Image { inner: i })

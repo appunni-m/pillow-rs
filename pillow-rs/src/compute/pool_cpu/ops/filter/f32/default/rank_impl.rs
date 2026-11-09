@@ -1,8 +1,8 @@
+use super::super::helpers::native_uniform_f_mode_image;
 use crate::checked_dims::CheckedDims;
 use crate::compute::pool_cpu::ops::filter::helpers::SMALL_RANK_AREA;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, RgbaImage};
-use super::super::helpers::native_uniform_f_mode_image;
 
 /// Selects the same F32 rank sample as Pillow's in-place partition algorithm.
 #[inline]

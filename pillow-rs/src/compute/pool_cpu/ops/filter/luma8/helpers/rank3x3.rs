@@ -149,8 +149,9 @@ pub(in crate::compute::pool_cpu::ops::filter::luma8) fn execute(
         crate::compute::record_pipeline_operation_path("native-copy");
         crate::compute::record_pipeline_operation_vector_blocks(copy_blocks);
         crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-        return GrayImage::from_raw(input.width(), input.height(), output)
-            .ok_or_else(|| PilError::ValueError("rank output buffer does not match L mode".into()));
+        return GrayImage::from_raw(input.width(), input.height(), output).ok_or_else(|| {
+            PilError::ValueError("rank output buffer does not match L mode".into())
+        });
     }
 
     let mut output = vec![0u8; expected];

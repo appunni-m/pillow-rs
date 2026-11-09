@@ -9,7 +9,9 @@ pub(crate) fn merge(
     remaining: &[Arc<DynamicImage>],
 ) -> Result<DynamicImage, PilError> {
     if !remaining.is_empty() {
-        return Err(PilError::InternalError("identity Merge received extra bands".into()));
+        return Err(PilError::InternalError(
+            "identity Merge received extra bands".into(),
+        ));
     }
     Ok(source.clone())
 }

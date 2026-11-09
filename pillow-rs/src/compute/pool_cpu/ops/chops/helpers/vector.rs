@@ -54,9 +54,7 @@ where
     }
 }
 
-fn execute_invert<P>(
-    image: &ImageBuffer<P, Vec<u8>>,
-) -> Result<ImageBuffer<P, Vec<u8>>, PilError>
+fn execute_invert<P>(image: &ImageBuffer<P, Vec<u8>>) -> Result<ImageBuffer<P, Vec<u8>>, PilError>
 where
     P: Pixel<Subpixel = u8>,
 {
@@ -79,10 +77,15 @@ where
             crate::compute::record_pipeline_operation_path("native-copy");
             Ok(image.clone())
         }
-        crate::compute::pool_cpu::helpers::bytes::native_invert::NativeInvertOutput::Exact(bytes) => {
+        crate::compute::pool_cpu::helpers::bytes::native_invert::NativeInvertOutput::Exact(
+            bytes,
+        ) => {
             crate::compute::record_pipeline_operation_path("vector");
-            let mut output = ImageBuffer::<P, Vec<u8>>::from_raw(image.width(), image.height(), bytes)
-                .ok_or_else(|| PilError::InternalError("invert Chops buffer shape mismatch".into()))?;
+            let mut output =
+                ImageBuffer::<P, Vec<u8>>::from_raw(image.width(), image.height(), bytes)
+                    .ok_or_else(|| {
+                        PilError::InternalError("invert Chops buffer shape mismatch".into())
+                    })?;
             super::unary::carry_inverted_hidden_lanes(image, &mut output)?;
             Ok(output)
         }
@@ -252,15 +255,8 @@ where
         );
         crate::compute::record_pipeline_operation_scalar_tail(0);
     } else {
-        let (blocks, scalar_tail) = apply_affine_in_place(
-            left,
-            right,
-            row_stride,
-            height,
-            scale,
-            offset,
-            subtract,
-        );
+        let (blocks, scalar_tail) =
+            apply_affine_in_place(left, right, row_stride, height, scale, offset, subtract);
         crate::compute::record_pipeline_operation_vector_blocks(
             u64::try_from(blocks).unwrap_or(u64::MAX),
         );
@@ -374,20 +370,23 @@ fn apply_affine_in_place(
                 .expect("complete affine vector block");
             let right_block = <[u8; 8]>::try_from(&right_row[start..start + 8])
                 .expect("complete affine vector block");
-            left_row[start..start + 8]
-                .copy_from_slice(&affine_block(left_block, right_block, scale, offset, subtract));
-        }
-        for index in vector_bytes..row_stride {
-            left_row[index] = affine_sample(
-                left_row[index],
-                right_row[index],
+            left_row[start..start + 8].copy_from_slice(&affine_block(
+                left_block,
+                right_block,
                 scale,
                 offset,
                 subtract,
-            );
+            ));
+        }
+        for index in vector_bytes..row_stride {
+            left_row[index] =
+                affine_sample(left_row[index], right_row[index], scale, offset, subtract);
         }
     }
-    (vector_bytes / 8 * height, (row_stride - vector_bytes) * height)
+    (
+        vector_bytes / 8 * height,
+        (row_stride - vector_bytes) * height,
+    )
 }
 
 fn apply_affine(
@@ -420,26 +419,18 @@ fn apply_affine(
             ));
         }
         for index in vector_bytes..row_stride {
-            output_row[index] = affine_sample(
-                left_row[index],
-                right_row[index],
-                scale,
-                offset,
-                subtract,
-            );
+            output_row[index] =
+                affine_sample(left_row[index], right_row[index], scale, offset, subtract);
         }
     }
-    (vector_bytes / 8 * height, (row_stride - vector_bytes) * height)
+    (
+        vector_bytes / 8 * height,
+        (row_stride - vector_bytes) * height,
+    )
 }
 
 #[inline(always)]
-fn affine_block(
-    left: [u8; 8],
-    right: [u8; 8],
-    scale: f32,
-    offset: f32,
-    subtract: bool,
-) -> [u8; 8] {
+fn affine_block(left: [u8; 8], right: [u8; 8], scale: f32, offset: f32, subtract: bool) -> [u8; 8] {
     let left = f32x8::new(left.map(f32::from));
     let right = f32x8::new(right.map(f32::from));
     let values = if subtract { left - right } else { left + right };
@@ -467,10 +458,8 @@ pub(super) fn divide_255(value: u16x16) -> u16x16 {
 fn multiply_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
     let left = u16x16::from(u8x16::new(left));
     let right = u16x16::from(u8x16::new(right));
-    crate::compute::pool_cpu::helpers::channel::wide::simd_pack_u16x16(
-        divide_255(left * right),
-    )
-    .to_array()
+    crate::compute::pool_cpu::helpers::channel::wide::simd_pack_u16x16(divide_255(left * right))
+        .to_array()
 }
 
 #[inline(always)]
@@ -562,9 +551,7 @@ fn soft_light_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
 
 #[inline(always)]
 fn logical_and_block(left: [u8; 16], right: [u8; 16]) -> [u8; 16] {
-    let nonzero = u8x16::new(left)
-        .min(u8x16::new(right))
-        .simd_eq(u8x16::ZERO);
+    let nonzero = u8x16::new(left).min(u8x16::new(right)).simd_eq(u8x16::ZERO);
     nonzero.select(u8x16::ZERO, u8x16::splat(255)).to_array()
 }
 

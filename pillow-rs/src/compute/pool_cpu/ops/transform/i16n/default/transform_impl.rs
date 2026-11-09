@@ -11,7 +11,9 @@ pub(crate) fn execute(
     request: TransformRequest<'_>,
 ) -> Result<DynamicImage, PilError> {
     let DynamicImage::ImageI16N(source) = input else {
-        return Err(PilError::InternalError("Transform I;16 source identity mismatch".into()));
+        return Err(PilError::InternalError(
+            "Transform I;16 source identity mismatch".into(),
+        ));
     };
     let samples = luma16::execute(
         source.as_raw(),
@@ -19,8 +21,10 @@ pub(crate) fn execute(
         request,
         ByteOrder::Native,
     )?;
-    let output = ImageBuffer::from_raw(request.width, request.height, samples)
-        .ok_or_else(|| PilError::InternalError("Transform I;16 output buffer shape mismatch".into()))?;
+    let output =
+        ImageBuffer::from_raw(request.width, request.height, samples).ok_or_else(|| {
+            PilError::InternalError("Transform I;16 output buffer shape mismatch".into())
+        })?;
     Ok(DynamicImage::ImageI16N(output))
 }
 
@@ -37,7 +41,9 @@ pub(crate) fn apply_mesh_record(
 ) -> Result<(), PilError> {
     let (DynamicImage::ImageI16N(source), DynamicImage::ImageI16N(destination)) = (input, output)
     else {
-        return Err(PilError::InternalError("Transform I;16N MESH mode mismatch".into()));
+        return Err(PilError::InternalError(
+            "Transform I;16N MESH mode mismatch".into(),
+        ));
     };
     luma16::apply_mesh_record(
         source.as_raw(),
@@ -58,11 +64,9 @@ pub(crate) fn finish_mesh(
     output_plane: Option<&[u8]>,
 ) -> Result<(), PilError> {
     let DynamicImage::ImageI16N(destination) = output else {
-        return Err(PilError::InternalError("Transform I;16N MESH output mismatch".into()));
+        return Err(PilError::InternalError(
+            "Transform I;16N MESH output mismatch".into(),
+        ));
     };
-    luma16::finish_mesh_records(
-        destination.as_mut(),
-        ByteOrder::Native,
-        output_plane,
-    )
+    luma16::finish_mesh_records(destination.as_mut(), ByteOrder::Native, output_plane)
 }

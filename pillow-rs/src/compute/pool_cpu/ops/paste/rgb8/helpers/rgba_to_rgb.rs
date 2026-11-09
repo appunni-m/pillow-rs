@@ -2,9 +2,7 @@
 
 use crate::compute::pool_cpu::helpers::channel::rgba::rgba_to_rgb_block;
 use crate::compute::pool_cpu::ops::paste::helpers::{
-    layout::SourceLayout,
-    plan::BytePlan,
-    region::checked_row_range,
+    layout::SourceLayout, plan::BytePlan, region::checked_row_range,
 };
 use crate::error::PilError;
 use crate::raster::Mode;
@@ -95,7 +93,9 @@ fn checked_stride(width: u32, channels: usize) -> Result<usize, PilError> {
 }
 
 fn invalid_shape(part: &'static str) -> PilError {
-    PilError::InternalError(format!("RGBA-to-RGB Paste {part} row did not match its plan"))
+    PilError::InternalError(format!(
+        "RGBA-to-RGB Paste {part} row did not match its plan"
+    ))
 }
 
 fn overflow(part: &'static str) -> PilError {

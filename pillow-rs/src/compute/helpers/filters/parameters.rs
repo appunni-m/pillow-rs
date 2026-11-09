@@ -31,21 +31,13 @@ pub(crate) fn gaussian_blur_box_parameters(sigma: f32) -> (usize, u32, u32) {
 }
 
 /// Whether a 3×3 request is the normalized binomial kernel used by native paths.
-pub(crate) fn binomial3x3_parameters_match(
-    kernel: &[f32; 9],
-    scale: f32,
-    offset: f32,
-) -> bool {
+pub(crate) fn binomial3x3_parameters_match(kernel: &[f32; 9], scale: f32, offset: f32) -> bool {
     const WEIGHTS: [f32; 9] = [1.0, 2.0, 1.0, 2.0, 4.0, 2.0, 1.0, 2.0, 1.0];
     scale == 16.0 && offset == 0.0 && kernel == &WEIGHTS
 }
 
 /// Whether a 5x5 request is the exact normalized binomial kernel.
-pub(crate) fn binomial5x5_parameters_match(
-    kernel: &[f32; 25],
-    scale: f32,
-    offset: f32,
-) -> bool {
+pub(crate) fn binomial5x5_parameters_match(kernel: &[f32; 25], scale: f32, offset: f32) -> bool {
     const WEIGHTS: [f32; 5] = [1.0, 4.0, 6.0, 4.0, 1.0];
     scale == 256.0
         && offset == 0.0
@@ -56,11 +48,7 @@ pub(crate) fn binomial5x5_parameters_match(
 }
 
 /// Whether a 5x5 request uses unit weights with denominator 25.
-pub(crate) fn uniform5x5_parameters_match(
-    kernel: &[f32; 25],
-    scale: f32,
-    offset: f32,
-) -> bool {
+pub(crate) fn uniform5x5_parameters_match(kernel: &[f32; 25], scale: f32, offset: f32) -> bool {
     scale == 25.0 && offset == 0.0 && kernel.iter().all(|&coefficient| coefficient == 1.0)
 }
 

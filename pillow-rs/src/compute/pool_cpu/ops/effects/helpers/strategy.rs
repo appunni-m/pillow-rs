@@ -1,8 +1,8 @@
 //! Request assessment for Effects mode strategies.
 
 use crate::compute::registry::support::{
-    ImplementationSupport, ModeSupport, OperationId, PaletteKnowledge, RequestFacts,
-    StrategyGuard, StrategyInputs, StrategySelection, SupportAssessment,
+    ImplementationSupport, ModeSupport, OperationId, PaletteKnowledge, RequestFacts, StrategyGuard,
+    StrategyInputs, StrategySelection, SupportAssessment,
 };
 use crate::compute::{Architecture, ExecutionContext};
 use crate::error::PilError;
@@ -15,7 +15,10 @@ pub(crate) fn facts<P: Pixel>(
     StrategyInputs {
         width: image.width(),
         height: image.height(),
-        byte_len: image.as_raw().len().checked_mul(std::mem::size_of::<P::Subpixel>()),
+        byte_len: image
+            .as_raw()
+            .len()
+            .checked_mul(std::mem::size_of::<P::Subpixel>()),
         palette: PaletteKnowledge::Absent,
         request,
     }

@@ -1,9 +1,9 @@
 //! Original image-backed alpha implementation compiled for `Sse2`.
 
+use super::super::super::helpers::put_alpha_data_vector::{self, NativeInput};
+use super::super::default::put_alpha_data_impl as scalar;
 use crate::error::PilError;
 use crate::raster::DynamicImage;
-use super::super::default::put_alpha_data_impl as scalar;
-use super::super::super::helpers::put_alpha_data_vector::{self, NativeInput};
 
 pub(crate) type Kernel<'a> = NativeInput<'a, crate::raster::LumaA<u8>>;
 
@@ -14,5 +14,6 @@ pub(crate) fn prepare(input: scalar::Kernel<'_>) -> Result<Kernel<'_>, PilError>
 
 #[inline]
 pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
-    put_alpha_data_vector::native_mask::<2, 2, false, _, _>(input).map(DynamicImage::ImagePaletteAlpha8)
+    put_alpha_data_vector::native_mask::<2, 2, false, _, _>(input)
+        .map(DynamicImage::ImagePaletteAlpha8)
 }

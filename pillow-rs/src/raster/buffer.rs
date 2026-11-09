@@ -3,8 +3,8 @@
 //! This module provides the `ImageBuffer<P, Container>` generic struct and type
 //! aliases like `RgbImage`, `GrayImage`, etc., matching the `image` crate.
 
-use std::marker::PhantomData;
 use std::hash::{Hash, Hasher};
+use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut, Index, IndexMut, Range};
 
 use super::color::{FromColor, Luma, LumaA, Rgb, Rgba};
@@ -38,9 +38,7 @@ pub struct ImageBuffer<P: Pixel, Container> {
 // are not part of the typed buffer's logical-pixel equality or hash contract.
 impl<P: Pixel, Container: PartialEq> PartialEq for ImageBuffer<P, Container> {
     fn eq(&self, other: &Self) -> bool {
-        self.width == other.width
-            && self.height == other.height
-            && self.data == other.data
+        self.width == other.width && self.height == other.height && self.data == other.data
     }
 }
 
@@ -72,11 +70,7 @@ enum HiddenLaneValues {
 }
 
 impl HiddenPixelLanes {
-    pub(crate) fn constant(
-        lane_count: usize,
-        pixel_count: usize,
-        values: [u8; 2],
-    ) -> Option<Self> {
+    pub(crate) fn constant(lane_count: usize, pixel_count: usize, values: [u8; 2]) -> Option<Self> {
         (1..=2).contains(&lane_count).then_some(Self {
             lane_count,
             pixel_count,
@@ -316,10 +310,7 @@ where
     }
 
     /// Replaces hidden physical lanes after validating the image extent.
-    pub(crate) fn replace_hidden_pixel_lanes(
-        &mut self,
-        lanes: Option<HiddenPixelLanes>,
-    ) -> bool {
+    pub(crate) fn replace_hidden_pixel_lanes(&mut self, lanes: Option<HiddenPixelLanes>) -> bool {
         let Some(pixel_count) = (self.width as usize).checked_mul(self.height as usize) else {
             return false;
         };
@@ -338,7 +329,11 @@ where
     }
 
     /// Carries physical lanes from a source buffer through a pixel-index map.
-    pub(crate) fn remap_hidden_pixel_lanes_from<F>(&mut self, source: &Self, source_index: F) -> Option<()>
+    pub(crate) fn remap_hidden_pixel_lanes_from<F>(
+        &mut self,
+        source: &Self,
+        source_index: F,
+    ) -> Option<()>
     where
         F: FnMut(usize) -> usize,
     {

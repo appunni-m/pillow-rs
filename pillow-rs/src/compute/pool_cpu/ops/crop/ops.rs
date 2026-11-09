@@ -18,14 +18,13 @@
 // exact typed sample-copy strategies even though Pillow has no mode spellings
 // for those carriers.
 
-use crate::compute::{ExecutionContext, registry::support::{
-    InputContract,
-    ModeSupport,
-    OperationId,
-    OperationInputs,
-    OperationSupport,
-    StrategySelection,
-}};
+use crate::compute::{
+    ExecutionContext,
+    registry::support::{
+        InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport,
+        StrategySelection,
+    },
+};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
@@ -122,7 +121,6 @@ pub(crate) static SUPPORT: OperationSupport = OperationSupport::new(
     classify_mode,
 );
 
-
 pub(crate) fn prepare<'a>(
     image: &'a DynamicImage,
     request: CropRequest,
@@ -136,9 +134,20 @@ pub(crate) fn prepare_pipeline<'a>(
     op: &'a PipelineOp,
     ctx: &ExecutionContext,
 ) -> Result<crate::compute::registry::PreparedOperation<'a>, PilError> {
-    let PipelineOp::Crop { left, top, right, bottom } = op else {
+    let PipelineOp::Crop {
+        left,
+        top,
+        right,
+        bottom,
+    } = op
+    else {
         return Err(PilError::ValueError("expected Crop op".into()));
     };
-    let request = CropRequest { left: *left, top: *top, right: *right, bottom: *bottom };
+    let request = CropRequest {
+        left: *left,
+        top: *top,
+        right: *right,
+        bottom: *bottom,
+    };
     prepare(input.image, request, ctx).map(crate::compute::registry::PreparedOperation::from_crop)
 }

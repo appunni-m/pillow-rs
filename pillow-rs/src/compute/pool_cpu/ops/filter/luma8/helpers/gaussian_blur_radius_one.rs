@@ -204,18 +204,26 @@ pub(in crate::compute::pool_cpu::ops::filter::luma8) fn execute_radius_one(
         super::super::super::helpers::SMALL_UNIFORM_BYTE_MAX_PIXELS,
     ) {
         let mut output = vec![0; input.as_raw().len()];
-        let (blocks, scalar_tail) = crate::compute::pool_cpu::helpers::bytes::vector_copy::copy_native_bytes(
-            input.as_raw(),
-            &mut output,
-        )
-        .ok_or_else(|| PilError::InternalError("L GaussianBlur identity copy shape mismatch".into()))?;
+        let (blocks, scalar_tail) =
+            crate::compute::pool_cpu::helpers::bytes::vector_copy::copy_native_bytes(
+                input.as_raw(),
+                &mut output,
+            )
+            .ok_or_else(|| {
+                PilError::InternalError("L GaussianBlur identity copy shape mismatch".into())
+            })?;
         crate::compute::record_pipeline_operation_path("native-copy");
         crate::compute::record_pipeline_operation_vector_blocks(blocks);
         crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
         output
     } else {
         crate::compute::record_pipeline_operation_path("vector");
-        gaussian_radius_one(input.as_raw(), dimensions.width as usize, dimensions.height as usize, radius)
+        gaussian_radius_one(
+            input.as_raw(),
+            dimensions.width as usize,
+            dimensions.height as usize,
+            radius,
+        )
     };
     GrayImage::from_raw(input.width(), input.height(), output)
         .map(DynamicImage::ImageLuma8)

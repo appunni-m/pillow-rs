@@ -70,22 +70,15 @@ pub(crate) fn resize<const CHANNELS: usize>(
         return Ok(destination_dims.alloc_buffer());
     }
     match bounds {
-        Some(bounds) => filtered_boxed::<CHANNELS>(
-            source,
-            source_size,
-            destination_size,
-            filter,
-            bounds,
-        ),
+        Some(bounds) => {
+            filtered_boxed::<CHANNELS>(source, source_size, destination_size, filter, bounds)
+        }
         None => filtered_standard::<CHANNELS>(source, source_size, destination_size, filter),
     }
 }
 
 fn is_empty(source_size: (u32, u32), destination_size: (u32, u32)) -> bool {
-    source_size.0 == 0
-        || source_size.1 == 0
-        || destination_size.0 == 0
-        || destination_size.1 == 0
+    source_size.0 == 0 || source_size.1 == 0 || destination_size.0 == 0 || destination_size.1 == 0
 }
 
 fn is_full_box_identity(
@@ -154,27 +147,15 @@ fn filtered_boxed<const CHANNELS: usize>(
     let (source_width, source_height) = source_size;
     let (destination_width, destination_height) = destination_size;
     let (left, top, right, bottom) = bounds;
-    let horizontal = precompute_coeffs_boxed_for_filter(
-        destination_width,
-        source_width,
-        left,
-        right,
-        filter,
-    );
-    let mut vertical = precompute_coeffs_boxed_for_filter(
-        destination_height,
-        source_height,
-        top,
-        bottom,
-        filter,
-    );
+    let horizontal =
+        precompute_coeffs_boxed_for_filter(destination_width, source_width, left, right, filter);
+    let mut vertical =
+        precompute_coeffs_boxed_for_filter(destination_height, source_height, top, bottom, filter);
     let (left, top, right, bottom) = (left as f32, top as f32, right as f32, bottom as f32);
-    let need_horizontal = destination_width != source_width
-        || left != 0.0
-        || right != destination_width as f32;
-    let need_vertical = destination_height != source_height
-        || top != 0.0
-        || bottom != destination_height as f32;
+    let need_horizontal =
+        destination_width != source_width || left != 0.0 || right != destination_width as f32;
+    let need_vertical =
+        destination_height != source_height || top != 0.0 || bottom != destination_height as f32;
     let (first_source_row, intermediate_rows) = if need_vertical {
         compact_resize_coeffs_to_source_span(&mut vertical, source_height)
             .unwrap_or((0, source_height))
@@ -207,7 +188,8 @@ fn filtered_standard_i32<const CHANNELS: usize>(
     let source_dims = CheckedDims::new(source_width, source_height, CHANNELS as u8).ok()?;
     let intermediate_dims =
         CheckedDims::new(destination_width, source_height, CHANNELS as u8).ok()?;
-    let output_dims = CheckedDims::new(destination_width, destination_height, CHANNELS as u8).ok()?;
+    let output_dims =
+        CheckedDims::new(destination_width, destination_height, CHANNELS as u8).ok()?;
     if horizontal.xmin.len() != destination_width as usize
         || vertical.xmin.len() != destination_height as usize
         || source.len() != source_dims.total_bytes()
@@ -257,8 +239,7 @@ fn horizontal_row_i32<const CHANNELS: usize>(
         for channel in 0..CHANNELS {
             let mut sum = 0_i32;
             for (tap, &weight) in weights.iter().enumerate() {
-                sum += i32::from(source[first_source + tap * CHANNELS + channel])
-                    * weight as i32;
+                sum += i32::from(source[first_source + tap * CHANNELS + channel]) * weight as i32;
             }
             output[output_x * CHANNELS + channel] = fixed_point_to_u8_i32(sum);
         }

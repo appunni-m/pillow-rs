@@ -20,8 +20,13 @@ struct NativeSharpnessPlan<'a, const CHANNELS: usize, const ACTIVE: usize> {
 /// Apply the archived fused vector filter and blend to one exact byte layout.
 /// Const parameters are supplied by the owning mode strategy so channel
 /// layout decisions are fixed before the pixel loop is entered.
-pub(crate) fn execute_image<P, const CHANNELS: usize, const ACTIVE: usize,
-    const GROUP_RGB_BYTES: bool, const GROUP_PIXELS: bool>(
+pub(crate) fn execute_image<
+    P,
+    const CHANNELS: usize,
+    const ACTIVE: usize,
+    const GROUP_RGB_BYTES: bool,
+    const GROUP_PIXELS: bool,
+>(
     source: &ImageBuffer<P, Vec<u8>>,
     factor: f64,
 ) -> Result<ImageBuffer<P, Vec<u8>>, PilError>
@@ -52,21 +57,17 @@ where
         1.0f32 / 13.0,
     ];
     let mut output = source.as_raw().to_vec();
-    let (vector_blocks, scalar_tail) = filter_blend::<
-        CHANNELS,
-        ACTIVE,
-        GROUP_RGB_BYTES,
-        GROUP_PIXELS,
-    >(
-        source.as_raw(),
-        &mut output,
-        width,
-        height,
-        &kernel,
-        0.5,
-        factor,
-    )
-    .ok_or_else(|| PilError::ValueError("enhance_sharpness: buffer error".into()))?;
+    let (vector_blocks, scalar_tail) =
+        filter_blend::<CHANNELS, ACTIVE, GROUP_RGB_BYTES, GROUP_PIXELS>(
+            source.as_raw(),
+            &mut output,
+            width,
+            height,
+            &kernel,
+            0.5,
+            factor,
+        )
+        .ok_or_else(|| PilError::ValueError("enhance_sharpness: buffer error".into()))?;
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
     crate::compute::record_pipeline_operation_path("vector");
@@ -75,8 +76,12 @@ where
 }
 
 #[inline]
-fn filter_blend<const CHANNELS: usize, const ACTIVE: usize,
-    const GROUP_RGB_BYTES: bool, const GROUP_PIXELS: bool>(
+fn filter_blend<
+    const CHANNELS: usize,
+    const ACTIVE: usize,
+    const GROUP_RGB_BYTES: bool,
+    const GROUP_PIXELS: bool,
+>(
     source: &[u8],
     output: &mut [u8],
     width: usize,
@@ -194,14 +199,8 @@ fn blend_grouped_pixels_row<const CHANNELS: usize, const ACTIVE: usize>(
     while x < plan.width - 1 {
         let active_pixels = (plan.width - 1 - x).min(pixels_per_block);
         let active_bytes = active_pixels * CHANNELS;
-        let smooth = filter_pixel_block_integer(
-            plan.source,
-            plan.width,
-            CHANNELS,
-            y,
-            x,
-            active_bytes,
-        );
+        let smooth =
+            filter_pixel_block_integer(plan.source, plan.width, CHANNELS, y, x, active_bytes);
         let source_start = source_row + x * CHANNELS;
         let original = std::array::from_fn(|lane| {
             if lane < active_bytes {

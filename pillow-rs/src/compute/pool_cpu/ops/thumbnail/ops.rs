@@ -25,9 +25,13 @@
 // NO_PILLOW_SUPPORT: The internal high-depth raster identities use their
 // native Reduce and Resize strategies, but Pillow does not expose those modes.
 
-use crate::compute::{Architecture, Backend, ExecutionContext, registry::support::{
-    ModeSupport, OperationId, OperationInputs, OperationSupport, StrategySelection, SupportAssessment,
-}};
+use crate::compute::{
+    Architecture, Backend, ExecutionContext,
+    registry::support::{
+        ModeSupport, OperationId, OperationInputs, OperationSupport, StrategySelection,
+        SupportAssessment,
+    },
+};
 use crate::error::PilError;
 use crate::pipeline::{PipelineOp, ResampleFilter};
 use crate::raster::{DynamicImage, Mode};
@@ -73,13 +77,12 @@ fn classify_mode(mode: Mode) -> ModeSupport {
 }
 
 /// Exhaustive typed source-mode support for Thumbnail's prepared strategies.
-pub(crate) static SUPPORT: OperationSupport =
-    OperationSupport::composed(
-        OperationId::Thumbnail,
-        INPUTS,
-        classify_mode,
-        COMPOSED_OPERATIONS,
-    );
+pub(crate) static SUPPORT: OperationSupport = OperationSupport::composed(
+    OperationId::Thumbnail,
+    INPUTS,
+    classify_mode,
+    COMPOSED_OPERATIONS,
+);
 
 /// Whether a validated RGB PutPixel prefix can use Thumbnail's sparse 2x2 path.
 pub(crate) fn rgb_putpixel_fusion_supported(
@@ -88,9 +91,7 @@ pub(crate) fn rgb_putpixel_fusion_supported(
     thumbnail: &PipelineOp,
     context: &ExecutionContext,
 ) -> bool {
-    if context.backend() != Backend::Cpu
-        || !matches!(image, DynamicImage::ImageRgb8(_))
-    {
+    if context.backend() != Backend::Cpu || !matches!(image, DynamicImage::ImageRgb8(_)) {
         return false;
     }
     if writes.is_empty()
@@ -111,7 +112,8 @@ pub(crate) fn rgb_putpixel_fusion_supported(
         h,
         filter,
         reducing_gap,
-    } = thumbnail else {
+    } = thumbnail
+    else {
         return false;
     };
     if *reducing_gap != Some(2.0) {
@@ -192,7 +194,8 @@ pub(crate) fn prepare_rgb_putpixel_thumbnail<'a>(
         h,
         filter,
         reducing_gap,
-    } = thumbnail else {
+    } = thumbnail
+    else {
         return Err(PilError::InternalError(
             "prepared RGB Thumbnail changed after admission".into(),
         ));
@@ -214,13 +217,12 @@ pub(crate) fn prepare_rgb_putpixel_thumbnail<'a>(
         reduced_facts,
         context,
     )?;
-    let resize_selection = if unboxed_resize_selection.implementation.architecture
-        == Architecture::Default
-    {
-        boxed_resize_selection
-    } else {
-        unboxed_resize_selection
-    };
+    let resize_selection =
+        if unboxed_resize_selection.implementation.architecture == Architecture::Default {
+            boxed_resize_selection
+        } else {
+            unboxed_resize_selection
+        };
     Ok(Some(PreparedRgbPutPixelThumbnail {
         image,
         writes,
@@ -290,15 +292,12 @@ fn select_mode(
     reducing_gap: Option<f64>,
     context: &ExecutionContext,
 ) -> Result<StrategySelection, PilError> {
-    match SUPPORT
-        .for_mode(mode)
-        .assess(
-            context,
-            inputs
-                .facts()
-                .with_thumbnail(width, height, filter, reducing_gap),
-        )?
-    {
+    match SUPPORT.for_mode(mode).assess(
+        context,
+        inputs
+            .facts()
+            .with_thumbnail(width, height, filter, reducing_gap),
+    )? {
         SupportAssessment::Ready(selection) => Ok(selection),
         SupportAssessment::Rejected { reason, kind, .. } => Err(kind.into_error(reason)),
         SupportAssessment::Deferred { .. } => Err(PilError::InternalError(
@@ -318,7 +317,8 @@ pub(crate) fn prepare_pipeline<'a>(
         h,
         filter,
         reducing_gap,
-    } = op else {
+    } = op
+    else {
         return Err(PilError::ValueError("expected Thumbnail op".into()));
     };
     let mode = inputs.mode();
@@ -336,8 +336,8 @@ pub(crate) fn prepare_pipeline<'a>(
     let stream_i32 = *w > 0
         && *h > 0
         && mode_strategy.streams_i32_thumbnail(source, output, effective_filter, factors);
-    let use_unboxed_resize = factors == (1, 1)
-        || mode_strategy.uses_unboxed_resize(source, output, factors);
+    let use_unboxed_resize =
+        factors == (1, 1) || mode_strategy.uses_unboxed_resize(source, output, factors);
     let resize_request = ThumbnailResizeRequest {
         source,
         output,
@@ -345,13 +345,7 @@ pub(crate) fn prepare_pipeline<'a>(
         filter: effective_filter,
         use_unboxed_resize,
     };
-    let children = prepare_composed_strategies(
-        inputs,
-        mode,
-        resize_request,
-        stream_i32,
-        context,
-    )?;
+    let children = prepare_composed_strategies(inputs, mode, resize_request, stream_i32, context)?;
     Ok(crate::compute::registry::PreparedOperation::from_thumbnail(
         PreparedThumbnail {
             inputs,
@@ -403,12 +397,7 @@ fn prepare_composed_strategies<'a>(
 
     let mut resize_facts = reduced_resize_facts(inputs, request.factors)?;
     resize_facts = match request.use_unboxed_resize {
-        true => resize_facts.with_resize(
-            request.output.0,
-            request.output.1,
-            request.filter,
-            false,
-        ),
+        true => resize_facts.with_resize(request.output.0, request.output.1, request.filter, false),
         false => resize_facts.with_boxed_resize(
             request.output.0,
             request.output.1,
@@ -560,4 +549,3 @@ fn resize_thumbnail_work_image(
     )?
     .execute()
 }
-

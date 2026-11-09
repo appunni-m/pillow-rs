@@ -43,11 +43,14 @@ pub(crate) fn finish(
         {
             return Ok(());
         }
-        return remap_lanes(source, output, bounds.0 as f32 as u32, bounds.1 as f32 as u32);
+        return remap_lanes(
+            source,
+            output,
+            bounds.0 as f32 as u32,
+            bounds.1 as f32 as u32,
+        );
     }
-    if bounds.is_none()
-        && (source.width(), source.height()) == (output.width(), output.height())
-    {
+    if bounds.is_none() && (source.width(), source.height()) == (output.width(), output.height()) {
         if output.hidden_pixel_lanes() == source.hidden_pixel_lanes() {
             return Ok(());
         }

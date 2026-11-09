@@ -18,7 +18,6 @@ pub(crate) fn execute(
         filter,
         bounds,
     )?;
-    RgbImage::from_raw(width, height, bytes).ok_or_else(|| {
-        PilError::ValueError("resize_ycbcr: failed to create output buffer".into())
-    })
+    RgbImage::from_raw(width, height, bytes)
+        .ok_or_else(|| PilError::ValueError("resize_ycbcr: failed to create output buffer".into()))
 }

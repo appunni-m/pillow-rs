@@ -1,7 +1,7 @@
 use super::{
-    normalize_draw_point_input, normalize_draw_points, normalize_draw_points_f64,
-    normalize_rounded_rectangle_box, pillow_path_coordinate_to_i32, Draw, DrawBoxInput,
-    DrawCurveJointPlan, DrawPointsInput, RegularPolygonCircle, RegularPolygonSides,
+    Draw, DrawBoxInput, DrawCurveJointPlan, DrawPointsInput, RegularPolygonCircle,
+    RegularPolygonSides, normalize_draw_point_input, normalize_draw_points,
+    normalize_draw_points_f64, normalize_rounded_rectangle_box, pillow_path_coordinate_to_i32,
 };
 use crate::error::PilError;
 use crate::image::Image;
@@ -103,10 +103,7 @@ impl Draw {
 
     /// Plans Pillow's joint strategy from angles calculated by the host API.
     #[doc(hidden)]
-    pub fn curve_joint_plan_from_angles(
-        &self,
-        angles: [f64; 2],
-    ) -> Option<DrawCurveJointPlan> {
+    pub fn curve_joint_plan_from_angles(&self, angles: [f64; 2]) -> Option<DrawCurveJointPlan> {
         DrawCurveJointPlan::from_angles(angles)
     }
 

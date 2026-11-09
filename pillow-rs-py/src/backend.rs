@@ -61,6 +61,30 @@ fn backend_enabled(name: &str) -> PyResult<bool> {
     }
 }
 
+#[cfg(feature = "test-api")]
+#[pyfunction]
+fn _set_migration_target_architecture(name: &str) -> PyResult<()> {
+    let architecture = match name {
+        "default" => pillow_rs::Architecture::Default,
+        "neon" => pillow_rs::Architecture::Neon,
+        "sse2" => pillow_rs::Architecture::Sse2,
+        "sse3" => pillow_rs::Architecture::Sse3,
+        "ssse3" => pillow_rs::Architecture::Ssse3,
+        "avx" => pillow_rs::Architecture::Avx,
+        "avx2" => pillow_rs::Architecture::Avx2,
+        "avx_fma" => pillow_rs::Architecture::AvxFma,
+        "avx2_fma" => pillow_rs::Architecture::Avx2Fma,
+        "wasm_simd128" => pillow_rs::Architecture::WasmSimd128,
+        _ => {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "unknown CPU architecture: {name}"
+            )));
+        }
+    };
+    pillow_rs::set_migration_test_cpu_architecture(architecture);
+    Ok(())
+}
+
 /// Enable or disable bounded image-pipeline execution telemetry.
 #[pyfunction]
 fn set_pipeline_telemetry(enabled: bool) -> bool {
@@ -108,7 +132,9 @@ fn pipeline_operation_telemetry_to_py(
         value.set_item("path", sample.path)?;
         value.set_item(
             "selected_architecture",
-            sample.selected_architecture.map(|architecture| architecture.name()),
+            sample
+                .selected_architecture
+                .map(|architecture| architecture.name()),
         )?;
         if let Some(reasons) = sample.strategy_fallbacks {
             let strategy_fallbacks = PyList::empty(py);
@@ -251,6 +277,8 @@ pub(super) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(parallel_feature_enabled, m)?)?;
     m.add_function(wrap_pyfunction!(active_backends, m)?)?;
     m.add_function(wrap_pyfunction!(backend_enabled, m)?)?;
+    #[cfg(feature = "test-api")]
+    m.add_function(wrap_pyfunction!(_set_migration_target_architecture, m)?)?;
     m.add_function(wrap_pyfunction!(set_pipeline_telemetry, m)?)?;
     m.add_function(wrap_pyfunction!(set_pipeline_telemetry_origin, m)?)?;
     m.add_function(wrap_pyfunction!(take_pipeline_telemetry, m)?)?;

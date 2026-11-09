@@ -23,9 +23,7 @@ pub(in crate::compute::pool_cpu::ops::filter::rgba8) fn execute_gaussian_blur_ra
         ));
     }
     let (radius, whole_weight, fractional_weight) =
-        crate::compute::pool_cpu::ops::filter::helpers::gaussian_blur_box_parameters(
-            sigma,
-        );
+        crate::compute::pool_cpu::ops::filter::helpers::gaussian_blur_box_parameters(sigma);
     if radius != 7 || fractional_weight == 0 {
         return Err(PilError::InternalError(
             "RGBA GaussianBlur AVX2 strategy received an unsupported radius".into(),

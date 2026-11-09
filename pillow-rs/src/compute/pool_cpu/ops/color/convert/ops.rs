@@ -170,19 +170,16 @@ const MATRIX_CORE_ONLY_TARGETS: &[Mode] = &[Mode::ImageLab8];
 const MATRIX_INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
     targets: MATRIX_TARGETS,
     core_only_targets: MATRIX_CORE_ONLY_TARGETS,
-    core_only_reason: Some(
-        "direct matrix conversion to LAB extends Pillow's RGB matrix contract",
-    ),
+    core_only_reason: Some("direct matrix conversion to LAB extends Pillow's RGB matrix contract"),
     rejection_reason: "image has wrong mode",
 }];
 
-pub(crate) const LA_PREMULTIPLIED_INPUTS: &[InputContract] =
-    &[InputContract::ConvertTarget {
-        targets: LA_PREMULTIPLIED_TARGETS,
-        core_only_targets: LA_PREMULTIPLIED_CORE_ONLY_TARGETS,
-        core_only_reason: Some(LA_PREMULTIPLIED_CORE_ONLY_REASON),
-        rejection_reason: "conversion from La to L not supported",
-    }];
+pub(crate) const LA_PREMULTIPLIED_INPUTS: &[InputContract] = &[InputContract::ConvertTarget {
+    targets: LA_PREMULTIPLIED_TARGETS,
+    core_only_targets: LA_PREMULTIPLIED_CORE_ONLY_TARGETS,
+    core_only_reason: Some(LA_PREMULTIPLIED_CORE_ONLY_REASON),
+    rejection_reason: "conversion from La to L not supported",
+}];
 pub(super) fn classify_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => super::one::ops::SUPPORT,
@@ -235,18 +232,14 @@ pub(super) fn classify_mode(mode: Mode) -> ModeSupport {
 // CPU refactor inventory. Keep runtime parity, selection receipts, declared
 // Default-architecture fallback receipts, and target build availability
 // pending until the CPU verification gate.
-// Same-mode routes use each source mode's Default identity path. P/PA
-// conversion also produces wrapper-owned palette/alpha metadata. The public
-// Image boundary and its dedicated lazy materialization path publish those
-// sidecars; the generic raster-only prepared entry still needs a result type
-// that carries them. Internal high-depth identities are CoreOnly.
-pub(crate) static SUPPORT: OperationSupport = OperationSupport::new(
-    OperationId::Convert,
-    &[],
-    classify_mode,
-)
-.with_rejected_output(OutputModeRule::ByTargetMode)
-.with_target_compositions(super::helpers::target_compositions::classify_target_composition);
+// Same-mode routes return the typed source raster from the prepared identity
+// path. P/PA conversion produces wrapper-owned palette/alpha metadata; the
+// Image boundary publishes those sidecars. Internal high-depth identities
+// and cross-high-depth targets are CoreOnly.
+pub(crate) static SUPPORT: OperationSupport =
+    OperationSupport::new(OperationId::Convert, &[], classify_mode)
+        .with_rejected_output(OutputModeRule::ByTargetMode)
+        .with_target_compositions(super::helpers::target_compositions::classify_target_composition);
 
 fn classify_matrix_mode(mode: Mode) -> ModeSupport {
     if mode == Mode::ImageRgb8 {
@@ -272,13 +265,10 @@ fn classify_matrix_mode(mode: Mode) -> ModeSupport {
 }
 
 /// Matrix conversion support, with one Default strategy for each exact source mode.
-pub(crate) static MATRIX_SUPPORT: OperationSupport = OperationSupport::new(
-    OperationId::ConvertMatrix,
-    &[],
-    classify_matrix_mode,
-)
-.with_rejected_output(OutputModeRule::ByTargetMode);
+pub(crate) static MATRIX_SUPPORT: OperationSupport =
+    OperationSupport::new(OperationId::ConvertMatrix, &[], classify_matrix_mode)
+        .with_rejected_output(OutputModeRule::ByTargetMode);
 
 pub(crate) use super::helpers::prepared::{
-    prepare_pipeline, ConvertWrapperMetadata, Prepared, PreparedConvertOutput,
+    ConvertWrapperMetadata, Prepared, PreparedConvertOutput, prepare_pipeline,
 };

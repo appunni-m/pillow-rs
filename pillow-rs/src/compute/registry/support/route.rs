@@ -205,7 +205,9 @@ impl OperationModeRoute {
         match self {
             Self::Prepared { support, .. } => support,
             Self::WrapperOwned { support, .. } => support,
-            Self::ComposedFallback { prepared_support, .. } => prepared_support,
+            Self::ComposedFallback {
+                prepared_support, ..
+            } => prepared_support,
         }
     }
 
@@ -213,8 +215,12 @@ impl OperationModeRoute {
     #[must_use]
     pub const fn intermediate_mode(self) -> Option<Mode> {
         match self {
-            Self::Prepared { intermediate_mode, .. }
-            | Self::ComposedFallback { intermediate_mode, .. } => intermediate_mode,
+            Self::Prepared {
+                intermediate_mode, ..
+            }
+            | Self::ComposedFallback {
+                intermediate_mode, ..
+            } => intermediate_mode,
             Self::WrapperOwned { .. } => None,
         }
     }

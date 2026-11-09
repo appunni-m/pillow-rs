@@ -2,8 +2,8 @@ use crate::compute::pool_cpu::helpers::bytes::hidden_lanes::{
     hidden_lanes_for_pixel, update_hidden_lanes,
 };
 use crate::error::PilError;
-use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::RgbImage;
+use crate::raster::buffer::HiddenPixelLanes;
 
 /// Composite RGBA glyph-mask coverage into a native three-byte raster.
 pub(crate) fn apply<const RGBA_MASK: bool>(
@@ -35,8 +35,7 @@ pub(crate) fn apply<const RGBA_MASK: bool>(
             }
             let image_x = image_x as u32;
             let image_y = image_y as u32;
-            let destination_index =
-                image_y as usize * image_width as usize + image_x as usize;
+            let destination_index = image_y as usize * image_width as usize + image_x as usize;
             let background = canvas.get_pixel(image_x, image_y);
             let previous_hidden =
                 hidden_lanes_for_pixel(hidden_lanes, destination_index, 1, [u8::MAX, 0])?;

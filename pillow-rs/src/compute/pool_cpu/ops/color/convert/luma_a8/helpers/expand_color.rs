@@ -5,7 +5,8 @@ use crate::raster::{GrayAlphaImage, RgbaImage};
 use wide::u8x16;
 
 const LA_TO_RGBA_0: u8x16 = u8x16::new([0, 0, 0, 1, 2, 2, 2, 3, 4, 4, 4, 5, 6, 6, 6, 7]);
-const LA_TO_RGBA_1: u8x16 = u8x16::new([8, 8, 8, 9, 10, 10, 10, 11, 12, 12, 12, 13, 14, 14, 14, 15]);
+const LA_TO_RGBA_1: u8x16 =
+    u8x16::new([8, 8, 8, 9, 10, 10, 10, 11, 12, 12, 12, 13, 14, 14, 14, 15]);
 
 pub(crate) fn to_rgba(source: &GrayAlphaImage) -> Result<RgbaImage, PilError> {
     let pixels = checked_pixels(source)?;

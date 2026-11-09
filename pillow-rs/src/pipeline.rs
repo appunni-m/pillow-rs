@@ -44,9 +44,7 @@ use std::sync::Arc;
 
 mod support;
 pub(crate) use support::TransposeTransform;
-pub use support::{
-    ColorMode, DitherMethod, ResampleFilter, TransformMethod, TransposeMethod,
-};
+pub use support::{ColorMode, DitherMethod, ResampleFilter, TransformMethod, TransposeMethod};
 
 /// Independent margins used by the Pillow `ImageOps.expand` operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -65,7 +63,12 @@ impl ExpandMargins {
     /// Creates equal margins on every edge.
     pub const fn uniform(border: u32) -> Self {
         let border = border as i64;
-        Self { left: border, top: border, right: border, bottom: border }
+        Self {
+            left: border,
+            top: border,
+            right: border,
+            bottom: border,
+        }
     }
 
     /// Returns the nonnegative symmetric margin when all edges match.
@@ -988,6 +991,10 @@ pub struct AutocontrastOptions {
 impl AutocontrastOptions {
     /// Creates the Pillow-default request with one cutoff used at both ends.
     pub fn symmetric(cutoff: f64) -> Self {
-        Self { cutoff: (cutoff, cutoff), ignore: None, preserve_tone: false }
+        Self {
+            cutoff: (cutoff, cutoff),
+            ignore: None,
+            preserve_tone: false,
+        }
     }
 }

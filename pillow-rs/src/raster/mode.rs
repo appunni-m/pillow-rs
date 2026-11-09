@@ -23,7 +23,6 @@ macro_rules! define_mode {
 for_each_raster_identity!(define_mode);
 
 impl Mode {
-
     /// Compatibility alias for Pillow's `L` mode.
     pub const L: Self = Self::ImageLuma8;
     /// Compatibility alias for Pillow's `LA` mode.
@@ -105,6 +104,50 @@ impl Mode {
             "I;16N" => Some(Self::ImageI16N),
             _ => None,
         }
+    }
+
+    /// Returns whether this exact raster identity is a public Pillow mode.
+    ///
+    /// Keep support classification on the typed identity instead of inferring
+    /// it from whether a formatting name happens to be present.
+    #[must_use]
+    pub const fn is_pillow_mode(self) -> bool {
+        match self {
+            Self::One
+            | Self::ImageLuma8
+            | Self::ImageLumaA8
+            | Self::ImageLaPremultiplied8
+            | Self::ImagePalette8
+            | Self::ImagePaletteAlpha8
+            | Self::ImageRgb8
+            | Self::ImageRgba8
+            | Self::ImageRgbPremultiplied8
+            | Self::ImageRgbx8
+            | Self::ImageCmyk8
+            | Self::ImageYCbCr8
+            | Self::ImageLab8
+            | Self::ImageHsv8
+            | Self::ImageI32
+            | Self::ImageF32
+            | Self::ImageI16
+            | Self::ImageI16L
+            | Self::ImageI16B
+            | Self::ImageI16N => true,
+            Self::ImageLumaA16
+            | Self::ImageRgb16
+            | Self::ImageRgba16
+            | Self::ImageRgb32F
+            | Self::ImageRgba32F => false,
+        }
+    }
+
+    /// Returns whether Pillow spells this mode with one character.
+    #[must_use]
+    pub const fn is_single_character_pillow_mode(self) -> bool {
+        matches!(
+            self,
+            Self::One | Self::ImageLuma8 | Self::ImagePalette8 | Self::ImageI32 | Self::ImageF32
+        )
     }
 
     /// Returns the Pillow spelling for modes with a Pillow representation.
@@ -203,9 +246,7 @@ impl Mode {
     pub(crate) const fn byte_carrier_pixel_width(self) -> Option<usize> {
         match self {
             Self::One | Self::ImageLuma8 | Self::ImagePalette8 => Some(1),
-            Self::ImageLumaA8 | Self::ImageLaPremultiplied8 | Self::ImagePaletteAlpha8 => {
-                Some(2)
-            }
+            Self::ImageLumaA8 | Self::ImageLaPremultiplied8 | Self::ImagePaletteAlpha8 => Some(2),
             Self::ImageRgb8 | Self::ImageYCbCr8 | Self::ImageLab8 | Self::ImageHsv8 => Some(3),
             Self::ImageRgba8
             | Self::ImageRgbPremultiplied8
@@ -266,7 +307,11 @@ impl Mode {
     /// Returns a byte-carrier byte's position in the Pillow physical pixel.
     #[must_use]
     pub(crate) const fn byte_carrier_physical_offset(self, byte: usize) -> Option<usize> {
-        match (self.byte_carrier_pixel_width(), self.hidden_pixel_lane_count(), byte) {
+        match (
+            self.byte_carrier_pixel_width(),
+            self.hidden_pixel_lane_count(),
+            byte,
+        ) {
             (Some(1), None, 0) => Some(0),
             (Some(2), Some(2), 0) => Some(0),
             (Some(2), Some(2), 1) => Some(3),
@@ -279,9 +324,10 @@ impl Mode {
     /// Returns Pillow's public band count, or zero for internal-only modes.
     #[must_use]
     pub const fn pillow_band_count(self) -> usize {
-        match self.pillow_name() {
-            Some(_) => self.band_count(),
-            None => 0,
+        if self.is_pillow_mode() {
+            self.band_count()
+        } else {
+            0
         }
     }
 

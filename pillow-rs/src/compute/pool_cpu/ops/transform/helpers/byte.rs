@@ -14,7 +14,11 @@ pub(crate) enum AffineNearestKernel {
     Rgb,
 }
 
-pub(crate) fn execute<const CHANNELS: usize, const FORCE_AFFINE_NEAREST: bool, const ALPHA: bool>(
+pub(crate) fn execute<
+    const CHANNELS: usize,
+    const FORCE_AFFINE_NEAREST: bool,
+    const ALPHA: bool,
+>(
     image: &DynamicImage,
     request: TransformRequest<'_>,
     nearest_kernel: AffineNearestKernel,
@@ -38,7 +42,11 @@ pub(crate) fn execute<const CHANNELS: usize, const FORCE_AFFINE_NEAREST: bool, c
     Ok(output)
 }
 
-pub(crate) fn execute_into<const CHANNELS: usize, const FORCE_AFFINE_NEAREST: bool, const ALPHA: bool>(
+pub(crate) fn execute_into<
+    const CHANNELS: usize,
+    const FORCE_AFFINE_NEAREST: bool,
+    const ALPHA: bool,
+>(
     image: &DynamicImage,
     request: TransformRequest<'_>,
     nearest_kernel: AffineNearestKernel,

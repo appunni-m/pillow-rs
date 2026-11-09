@@ -14,6 +14,8 @@ pub(crate) fn merge(
         source,
         remaining,
         MODE,
-        crate::compute::pool_cpu::ops::composite::ops::MergeLayout::Three { lab_encoding: false },
+        crate::compute::pool_cpu::ops::composite::ops::MergeLayout::Three {
+            lab_encoding: false,
+        },
     )
 }

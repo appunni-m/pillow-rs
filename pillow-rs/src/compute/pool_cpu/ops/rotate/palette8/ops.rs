@@ -116,4 +116,3 @@ pub(crate) fn execute(plan: Strategy<'_>) -> Result<DynamicImage, PilError> {
         ))),
     }
 }
-

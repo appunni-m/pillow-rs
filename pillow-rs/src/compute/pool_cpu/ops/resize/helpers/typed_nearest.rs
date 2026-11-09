@@ -12,10 +12,7 @@ pub(crate) fn resize<P: Pixel>(
 ) -> ImageBuffer<P, Vec<P::Subpixel>> {
     let mut output = ImageBuffer::new(destination_width, destination_height);
     let (source_width, source_height) = input.dimensions();
-    if source_width == 0
-        || source_height == 0
-        || destination_width == 0
-        || destination_height == 0
+    if source_width == 0 || source_height == 0 || destination_width == 0 || destination_height == 0
     {
         return output;
     }

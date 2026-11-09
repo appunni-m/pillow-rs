@@ -1,6 +1,4 @@
-use crate::compute::pool_cpu::ops::enhance::helpers::color_saturation::{
-    self, BASE_LUMA,
-};
+use crate::compute::pool_cpu::ops::enhance::helpers::color_saturation::{self, BASE_LUMA};
 use crate::error::PilError;
 use crate::raster::GrayImage;
 

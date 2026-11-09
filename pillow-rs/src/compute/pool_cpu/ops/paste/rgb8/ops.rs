@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use crate::compute::pool_cpu::ops::paste::helpers::plan::BytePlan;
 use crate::compute::Architecture;
+use crate::compute::pool_cpu::ops::paste::helpers::plan::BytePlan;
 use crate::compute::registry::support::{
-    ImplementationSupport, OutputModeRule,
-    InputContract, ModeSupport, OperationId, PasteInputRules, StrategySelection,
+    ImplementationSupport, InputContract, ModeSupport, OperationId, OutputModeRule,
+    PasteInputRules, StrategySelection,
 };
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode, RgbImage};
@@ -23,11 +23,7 @@ const RULES: PasteInputRules = PasteInputRules {
 const INPUTS: &[InputContract] = &[InputContract::PasteInputs { rules: &RULES }];
 
 static ARCHITECTURES: [ImplementationSupport; 4] =
-    super::super::helpers::strategy::cpu_architectures_for_l_mask_neon(
-        Mode::ImageRgb8,
-        3,
-        16,
-    );
+    super::super::helpers::strategy::cpu_architectures_for_l_mask_neon(Mode::ImageRgb8, 3, 16);
 
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::Paste,
@@ -64,16 +60,17 @@ where
     I: std::ops::Deref<Target = DynamicImage>,
 {
     let architecture = strategy.selection.implementation.architecture;
-    super::super::helpers::plan::execute_with_hidden_lanes(strategy, |strategy| {
-        match architecture {
-        Architecture::Default => super::default::paste_impl::execute(strategy),
-        Architecture::Sse2 => super::sse2::paste_impl::execute(strategy),
-        Architecture::Neon => super::neon::paste_impl::execute(strategy),
-        Architecture::WasmSimd128 => super::wasm_simd128::paste_impl::execute(strategy),
-        architecture => Err(PilError::InternalError(format!(
-            "unbound {architecture:?} Paste strategy for mode {:?}",
-            Mode::ImageRgb8
-        ))),
-        }
-    })
+    super::super::helpers::plan::execute_with_hidden_lanes(
+        strategy,
+        |strategy| match architecture {
+            Architecture::Default => super::default::paste_impl::execute(strategy),
+            Architecture::Sse2 => super::sse2::paste_impl::execute(strategy),
+            Architecture::Neon => super::neon::paste_impl::execute(strategy),
+            Architecture::WasmSimd128 => super::wasm_simd128::paste_impl::execute(strategy),
+            architecture => Err(PilError::InternalError(format!(
+                "unbound {architecture:?} Paste strategy for mode {:?}",
+                Mode::ImageRgb8
+            ))),
+        },
+    )
 }

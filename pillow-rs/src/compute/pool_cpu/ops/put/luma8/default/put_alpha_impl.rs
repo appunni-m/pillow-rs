@@ -1,8 +1,8 @@
 //! Original constant alpha semantics for `ImageLuma8`.
 
+use super::super::super::helpers::put_alpha::{self as helpers, AlphaInput};
 use crate::error::PilError;
 use crate::raster::DynamicImage;
-use super::super::super::helpers::put_alpha::{self as helpers, AlphaInput};
 
 pub(crate) type Input = crate::raster::GrayImage;
 pub(crate) type Kernel<'a> = AlphaInput<'a, crate::raster::Luma<u8>>;
@@ -14,5 +14,8 @@ pub(crate) fn prepare(image: &Input, alpha: u8) -> Kernel<'_> {
 
 #[inline]
 pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
-    Ok(DynamicImage::ImageLumaA8(helpers::luma_constant(input.image, input.alpha)))
+    Ok(DynamicImage::ImageLumaA8(helpers::luma_constant(
+        input.image,
+        input.alpha,
+    )))
 }

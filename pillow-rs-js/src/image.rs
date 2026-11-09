@@ -73,15 +73,22 @@ pub fn resolve_array_layout(
 ) -> Result<ArrayDescriptorLayout, JsValue> {
     let mode = mode
         .map(|name| {
-            pillow_rs::Mode::from_pillow_name(&name)
-                .ok_or_else(|| err(pillow_rs::PilError::ValueError("unrecognized image mode".into())))
+            pillow_rs::Mode::from_pillow_name(&name).ok_or_else(|| {
+                err(pillow_rs::PilError::ValueError(
+                    "unrecognized image mode".into(),
+                ))
+            })
         })
         .transpose()?;
     let layout = pillow_rs::resolve_array_layout(&shape, typestr, mode).map_err(err)?;
     let mode = layout
         .mode
         .pillow_name()
-        .ok_or_else(|| err(pillow_rs::PilError::ValueError("unsupported array image mode".into())))?
+        .ok_or_else(|| {
+            err(pillow_rs::PilError::ValueError(
+                "unsupported array image mode".into(),
+            ))
+        })?
         .to_owned();
     Ok(ArrayDescriptorLayout {
         mode,
@@ -107,8 +114,11 @@ impl Image {
         // Users can change the level at runtime via setLogLevel().
         #[cfg(feature = "debug-hooks")]
         console_log::init_with_level(log::Level::Warn).ok();
-        let mode = pillow_rs::Mode::from_pillow_name(mode)
-            .ok_or_else(|| err(pillow_rs::PilError::ValueError("unrecognized image mode".into())))?;
+        let mode = pillow_rs::Mode::from_pillow_name(mode).ok_or_else(|| {
+            err(pillow_rs::PilError::ValueError(
+                "unrecognized image mode".into(),
+            ))
+        })?;
         RsImage::new(w, h, mode, (r, g, b, a))
             .map(|i| Image { inner: i })
             .map_err(err)
@@ -297,7 +307,9 @@ impl Image {
     #[wasm_bindgen(js_name = "convert")]
     pub fn convert(&self, m: &str, dither: Option<String>) -> Result<Image, JsValue> {
         let mode = pillow_rs::Mode::from_pillow_name(m).ok_or_else(|| {
-            err(pillow_rs::PilError::ValueError("image has wrong mode".to_owned()))
+            err(pillow_rs::PilError::ValueError(
+                "image has wrong mode".to_owned(),
+            ))
         })?;
         self.inner
             .convert(mode, None, dither.as_deref(), None, None)

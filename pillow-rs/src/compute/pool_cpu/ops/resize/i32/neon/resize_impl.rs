@@ -1,10 +1,10 @@
 //! Filtered ImageI32 Resize with Pillow's two-pass rounding boundary.
 
 use crate::checked_dims::CheckedDims;
-use crate::compute::{Architecture, ExecutionContext};
-use crate::error::PilError;
 use crate::compute::helpers::resampling::rounding::round_up;
 use crate::compute::registry::support::StrategySelection;
+use crate::compute::{Architecture, ExecutionContext};
+use crate::error::PilError;
 use crate::ops::pil_resize::{FilterCoeffsF64, i32_samples_from_le_bytes};
 use crate::pipeline::ResampleFilter;
 use crate::raster::RgbaImage;
@@ -12,9 +12,9 @@ use wide::f64x8;
 
 use super::super::super::helpers::strategy::require_architecture;
 use super::super::super::helpers::typed_nearest::BoxBounds;
+use super::LANES;
 use super::kernels;
 use super::plan::{self, HorizontalPlan};
-use super::LANES;
 
 pub(crate) fn execute(
     context: &ExecutionContext,
@@ -49,8 +49,9 @@ pub(crate) fn execute(
         filter,
         None,
     );
-    let horizontal_plan = plan::build_horizontal(&horizontal, source_width as usize, width as usize)
-        .ok_or_else(invalid_plan)?;
+    let horizontal_plan =
+        plan::build_horizontal(&horizontal, source_width as usize, width as usize)
+            .ok_or_else(invalid_plan)?;
     let (output, blocks, used_neon) = execute_filtered(
         &source,
         source_width as usize,
@@ -80,7 +81,9 @@ fn resize_nearest(
     let mut output = output_dims.alloc_buffer();
     let mut vector_blocks = 0u64;
     for (output_y, &source_y) in y_indices.iter().enumerate() {
-        let source_row = source_y.checked_mul(source_width as usize).ok_or_else(invalid_plan)?;
+        let source_row = source_y
+            .checked_mul(source_width as usize)
+            .ok_or_else(invalid_plan)?;
         let output_row = output_y
             .checked_mul(width as usize)
             .and_then(|pixels| pixels.checked_mul(4))
@@ -181,17 +184,33 @@ fn horizontal_pass(
     let mut blocks = 0u64;
     let mut used_neon = false;
     for source_y in 0..source_height {
-        let source_start = source_y.checked_mul(source_width).ok_or_else(invalid_plan)?;
-        let source_row = source
-            .get(source_start..source_start.checked_add(source_width).ok_or_else(invalid_plan)?)
+        let source_start = source_y
+            .checked_mul(source_width)
             .ok_or_else(invalid_plan)?;
-        let intermediate_row = source_y.checked_mul(output_width).ok_or_else(invalid_plan)?;
+        let source_row = source
+            .get(
+                source_start
+                    ..source_start
+                        .checked_add(source_width)
+                        .ok_or_else(invalid_plan)?,
+            )
+            .ok_or_else(invalid_plan)?;
+        let intermediate_row = source_y
+            .checked_mul(output_width)
+            .ok_or_else(invalid_plan)?;
         for (block_index, block) in plan.blocks.iter().enumerate() {
             let output_x = block_index.checked_mul(LANES).ok_or_else(invalid_plan)?;
             let count = (output_width - output_x).min(LANES);
-            let destination_start = intermediate_row.checked_add(output_x).ok_or_else(invalid_plan)?;
+            let destination_start = intermediate_row
+                .checked_add(output_x)
+                .ok_or_else(invalid_plan)?;
             let destination = intermediate
-                .get_mut(destination_start..destination_start.checked_add(count).ok_or_else(invalid_plan)?)
+                .get_mut(
+                    destination_start
+                        ..destination_start
+                            .checked_add(count)
+                            .ok_or_else(invalid_plan)?,
+                )
                 .ok_or_else(invalid_plan)?;
             if let Some(values) = kernels::horizontal_block(source_row, block) {
                 destination.copy_from_slice(&values[..count]);
@@ -231,11 +250,13 @@ fn vertical_pass(
     let mut blocks = 0u64;
     let mut used_neon = false;
     for output_y in 0..output_height {
-        let first_source_y = usize::try_from(
-            *coefficients.xmin.get(output_y).ok_or_else(invalid_plan)?,
-        )
-        .map_err(|_| invalid_plan())?;
-        let weights = coefficients.weights.get(output_y).ok_or_else(invalid_plan)?;
+        let first_source_y =
+            usize::try_from(*coefficients.xmin.get(output_y).ok_or_else(invalid_plan)?)
+                .map_err(|_| invalid_plan())?;
+        let weights = coefficients
+            .weights
+            .get(output_y)
+            .ok_or_else(invalid_plan)?;
         let output_row = output_y
             .checked_mul(output_width)
             .and_then(|pixels| pixels.checked_mul(4))

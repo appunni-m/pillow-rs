@@ -79,9 +79,8 @@ impl Image {
         // Select only their direct byte-conversion strategy; byte modes select
         // GetDataBandInto exactly once in the caller-owned path above.
         let (requested_backend, context) = self.selected_getdata_route()?;
-        let selection = crate::compute::pool_cpu::ops::analysis::ops::select_get_data_band(
-            mode, &context,
-        )?;
+        let selection =
+            crate::compute::pool_cpu::ops::analysis::ops::select_get_data_band(mode, &context)?;
         if selection.implementation.operation
             != crate::compute::registry::support::OperationId::GetDataBand
             || selection.implementation.mode != mode
@@ -97,9 +96,7 @@ impl Image {
             Vec::len,
             || {
                 crate::compute::pool_cpu::ops::analysis::ops::get_data_band(
-                    image,
-                    band_index,
-                    selection,
+                    image, band_index, selection,
                 )
             },
         )
@@ -122,9 +119,8 @@ impl Image {
             return self.getdata_band(&img, band, &mut operation_receipts);
         }
         let (requested_backend, context) = self.selected_getdata_route()?;
-        let selection = crate::compute::pool_cpu::ops::analysis::ops::select_get_data(
-            img.mode(), &context,
-        )?;
+        let selection =
+            crate::compute::pool_cpu::ops::analysis::ops::select_get_data(img.mode(), &context)?;
         with_getdata_receipt(
             requested_backend,
             selection,
@@ -179,9 +175,8 @@ impl Image {
             Image::Loaded(data) => data.image.mode(),
             _ => return Ok(None),
         };
-        let selection = crate::compute::pool_cpu::ops::analysis::ops::select_get_data(
-            mode, &context,
-        )?;
+        let selection =
+            crate::compute::pool_cpu::ops::analysis::ops::select_get_data(mode, &context)?;
         let values = match self {
             Image::Paletted(data) => {
                 crate::compute::pool_cpu::ops::analysis::ops::get_data_palette_indices_view(
@@ -267,8 +262,9 @@ impl Image {
             return Ok(());
         }
 
-        let selection =
-            crate::compute::pool_cpu::ops::analysis::ops::select_get_data_band_into(mode, &context)?;
+        let selection = crate::compute::pool_cpu::ops::analysis::ops::select_get_data_band_into(
+            mode, &context,
+        )?;
         self.write_getdata_band_cpu(
             band_index,
             selected_backend,
@@ -357,8 +353,8 @@ impl Image {
         // can fuse it with pending image work and report its real receipt. P
         // and LAB stay on the host path: P needs raw indices, while LAB's a/b
         // samples need Pillow's signed-byte offset.
-        let extracted = Image::push_op(self, PipelineOp::ExtractBand { index: band })
-            .use_backend(backend);
+        let extracted =
+            Image::push_op(self, PipelineOp::ExtractBand { index: band }).use_backend(backend);
         let image = extracted.materialized_shared()?;
         operation_receipts.capture();
         operation_receipts.restore();
@@ -404,10 +400,7 @@ impl Image {
                 ));
             };
             crate::compute::pool_cpu::ops::analysis::ops::get_data_band_into(
-                img,
-                band,
-                selection,
-                output,
+                img, band, selection, output,
             )
         })();
         if result.is_ok() {
@@ -430,7 +423,10 @@ impl Image {
     /// list/tuple representation.
     pub fn getdata_formatted(&self, band: Option<i32>) -> Result<FormattedImageData, PilError> {
         let mode = self.mode_identity()?;
-        if matches!(mode, Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N) {
+        if matches!(
+            mode,
+            Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N
+        ) {
             if band.is_some() {
                 // Pillow's ImagingCore.getdata rejects every explicit band
                 // selection for I;16 modes with the mode error, rather than
@@ -441,16 +437,13 @@ impl Image {
             let image = self.materialized_shared()?;
             operation_receipts.capture();
             let (requested_backend, context) = self.selected_getdata_route()?;
-            let selection = crate::compute::pool_cpu::ops::analysis::ops::select_get_data(
-                mode, &context,
-            )?;
+            let selection =
+                crate::compute::pool_cpu::ops::analysis::ops::select_get_data(mode, &context)?;
             let values = with_getdata_receipt(
                 requested_backend,
                 selection,
                 &mut operation_receipts,
-                |values: &Vec<i32>| {
-                    values.len().saturating_mul(std::mem::size_of::<i32>())
-                },
+                |values: &Vec<i32>| values.len().saturating_mul(std::mem::size_of::<i32>()),
                 || {
                     crate::compute::pool_cpu::ops::analysis::ops::get_data_integer_samples(
                         image.as_ref(),
@@ -468,9 +461,8 @@ impl Image {
             let image = self.materialized_shared()?;
             operation_receipts.capture();
             let (requested_backend, context) = self.selected_getdata_route()?;
-            let selection = crate::compute::pool_cpu::ops::analysis::ops::select_get_data(
-                mode, &context,
-            )?;
+            let selection =
+                crate::compute::pool_cpu::ops::analysis::ops::select_get_data(mode, &context)?;
             let (formatted, _) = with_getdata_receipt(
                 requested_backend,
                 selection,

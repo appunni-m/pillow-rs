@@ -4,9 +4,7 @@ use crate::error::PilError;
 use crate::raster::GrayImage;
 use wide::u8x16;
 
-const LUMA_TO_LA: u8x16 = u8x16::new([
-    0, 15, 1, 15, 2, 15, 3, 15, 4, 15, 5, 15, 6, 15, 7, 15,
-]);
+const LUMA_TO_LA: u8x16 = u8x16::new([0, 15, 1, 15, 2, 15, 3, 15, 4, 15, 5, 15, 6, 15, 7, 15]);
 
 pub(crate) fn execute(source: &GrayImage) -> Result<(Vec<u8>, u64), PilError> {
     let (pixels, output_bytes) = super::layout::checked_layout(source, 2)?;

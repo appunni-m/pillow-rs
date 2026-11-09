@@ -4,19 +4,23 @@
 use crate::compute::ExecutionContext;
 use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
 use crate::compute::registry::support::{
-    InputContract, ModeSupport, OperationId, OutputModeRule, RequestFacts,
-    StrategyInputs,
+    InputContract, ModeSupport, OperationId, OutputModeRule, RequestFacts, StrategyInputs,
 };
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 
-const INPUTS: &[InputContract] =
-    &[InputContract::ReduceFactors { identity_only: false }];
+const INPUTS: &[InputContract] = &[InputContract::ReduceFactors {
+    identity_only: false,
+}];
 
 pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
-        OperationId::Reduce, Mode::ImageLumaA16, OutputModeRule::Preserve, INPUTS, &[],
-        "native typed Reduce strategy extends Pillow for this raster mode",
-    );
+    OperationId::Reduce,
+    Mode::ImageLumaA16,
+    OutputModeRule::Preserve,
+    INPUTS,
+    &[],
+    "native typed Reduce strategy extends Pillow for this raster mode",
+);
 
 pub(crate) enum ArchitectureStrategy<'a> {
     Default {
@@ -35,20 +39,29 @@ pub(crate) fn prepare<'a>(
 ) -> Result<Strategy<'a>, PilError> {
     let (x_factor, y_factor) = match facts.request {
         RequestFacts::Reduce { x_factor, y_factor } => (x_factor, y_factor),
-        _ => return Err(PilError::InternalError(
-            "Reduce mode strategy received facts for another operation".into(),
-        )),
+        _ => {
+            return Err(PilError::InternalError(
+                "Reduce mode strategy received facts for another operation".into(),
+            ));
+        }
     };
     let selection = super::super::helpers::strategy::select_mode(SUPPORT, facts, ctx)?;
     Ok(Prepared::new(
-        ArchitectureStrategy::Default { input, x_factor, y_factor },
+        ArchitectureStrategy::Default {
+            input,
+            x_factor,
+            y_factor,
+        },
         selection,
     ))
 }
 
 pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
     match strategy.implementation {
-        ArchitectureStrategy::Default { input, x_factor, y_factor } =>
-            super::default::reduce_impl::execute(input, x_factor, y_factor),
+        ArchitectureStrategy::Default {
+            input,
+            x_factor,
+            y_factor,
+        } => super::default::reduce_impl::execute(input, x_factor, y_factor),
     }
 }

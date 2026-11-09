@@ -1,8 +1,8 @@
 //! Native RGB8 quantization strategy for the CPU Default architecture.
 
 use crate::compute::pool_cpu::helpers::quantization::{
-    kmeans_refine, map_pixels_to_fixed_palette, maxcoverage_quantize_rgb,
-    median_cut_quantize_rgb, quantize_octree_rgb,
+    kmeans_refine, map_pixels_to_fixed_palette, maxcoverage_quantize_rgb, median_cut_quantize_rgb,
+    quantize_octree_rgb,
 };
 use crate::error::PilError;
 use crate::raster::RgbImage;

@@ -39,8 +39,7 @@ impl Image {
         validate_convert_request(src_mode, mode, matrix.is_some())?;
         if matches!(src_mode, Mode::ImageI32 | Mode::ImageF32)
             && mode == Mode::ImageRgbx8
-            && let Some(converted) =
-                super::dispatch::try_convert_scalar_to_rgbx(self, src_mode)?
+            && let Some(converted) = super::dispatch::try_convert_scalar_to_rgbx(self, src_mode)?
         {
             return Ok(converted);
         }
@@ -112,8 +111,7 @@ pub(super) fn prepared_convert_validates_dither(source: Mode, target: Mode) -> b
     }
     if is_nonstandard_mode(source) {
         return target != source
-            && !(source == Mode::ImageCmyk8
-                && matches!(target, Mode::ImageI32 | Mode::ImageF32))
+            && !(source == Mode::ImageCmyk8 && matches!(target, Mode::ImageI32 | Mode::ImageF32))
             && matches!(
                 target,
                 Mode::ImageHsv8
@@ -143,7 +141,9 @@ fn validate_convert_request(
         && composition.kind
             == crate::compute::registry::support::OperationTargetCompositionKind::ConvertGuard
         && let crate::compute::registry::support::OperationRouteOutcome::Rejects {
-            reason, kind, ..
+            reason,
+            kind,
+            ..
         } = composition.outcome
     {
         return Err(kind.into_error(reason));
@@ -179,7 +179,10 @@ fn try_convert_prestandard(
         // pipeline so the typed LAB strategy and metadata stay together.
         // NO_PILLOW_SUPPORT: this native normalization also accepts the
         // Rust-only premultiplied-LA source identity.
-        let normalized = if matches!(source_mode, Mode::ImageRgb8 | Mode::ImageRgba8 | Mode::ImageRgbx8) {
+        let normalized = if matches!(
+            source_mode,
+            Mode::ImageRgb8 | Mode::ImageRgba8 | Mode::ImageRgbx8
+        ) {
             image.clone()
         } else {
             image.convert(Mode::ImageRgba8, None, None, None, None)?

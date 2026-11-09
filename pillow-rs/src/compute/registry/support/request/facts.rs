@@ -1,8 +1,8 @@
 //! Typed materialized facts supplied to operation support declarations.
 
+use super::PaletteKnowledge;
 use crate::pipeline::{ExpandMargins, ResampleFilter, TransposeMethod};
 use crate::raster::Mode;
-use super::PaletteKnowledge;
 
 /// Direct or batched Draw request being prepared by the shared family owner.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -75,6 +75,8 @@ pub enum RequestFacts {
     Quantize {
         /// Exact source identity from the DynamicImage variant.
         source_mode: Mode,
+        /// Optional wrapper-visible mode used only for public admission.
+        visible_mode: Option<Mode>,
         /// Requested number of palette entries.
         colors: u32,
         /// Requested quantizer method.
@@ -513,11 +515,7 @@ impl StrategyInputs {
 
     /// Supplies the secondary image and alpha to the declared Blend contract.
     #[must_use]
-    pub const fn with_blend_inputs(
-        mut self,
-        other: SecondaryInputFacts,
-        alpha: f64,
-    ) -> Self {
+    pub const fn with_blend_inputs(mut self, other: SecondaryInputFacts, alpha: f64) -> Self {
         self.request = RequestFacts::BlendInputs {
             other,
             alpha_bits: alpha.to_bits(),
@@ -580,25 +578,23 @@ impl StrategyInputs {
 
     /// Supplies Contain's typed target and sampling parameters.
     #[must_use]
-    pub const fn with_contain(
-        mut self,
-        width: u32,
-        height: u32,
-        filter: ResampleFilter,
-    ) -> Self {
-        self.request = RequestFacts::Contain { width, height, filter };
+    pub const fn with_contain(mut self, width: u32, height: u32, filter: ResampleFilter) -> Self {
+        self.request = RequestFacts::Contain {
+            width,
+            height,
+            filter,
+        };
         self
     }
 
     /// Supplies Cover's typed target and sampling parameters.
     #[must_use]
-    pub const fn with_cover(
-        mut self,
-        width: u32,
-        height: u32,
-        filter: ResampleFilter,
-    ) -> Self {
-        self.request = RequestFacts::Cover { width, height, filter };
+    pub const fn with_cover(mut self, width: u32, height: u32, filter: ResampleFilter) -> Self {
+        self.request = RequestFacts::Cover {
+            width,
+            height,
+            filter,
+        };
         self
     }
 
@@ -964,4 +960,3 @@ impl StrategyInputs {
         self
     }
 }
-

@@ -12,7 +12,11 @@ pub(crate) struct Kernel {
 }
 
 pub(crate) fn prepare(width: u32, height: u32, sigma: f64) -> Kernel {
-    Kernel { width, height, sigma }
+    Kernel {
+        width,
+        height,
+        sigma,
+    }
 }
 
 pub(crate) fn execute_sse2(kernel: Kernel) -> Result<GrayImage, PilError> {

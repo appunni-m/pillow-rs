@@ -186,5 +186,4 @@ impl DynamicImage {
     pub fn rotate270(&self) -> DynamicImage {
         map_mode_preserving!(self, rotate_counter_clockwise)
     }
-
 }

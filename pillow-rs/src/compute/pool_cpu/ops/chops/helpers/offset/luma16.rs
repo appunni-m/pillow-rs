@@ -198,7 +198,13 @@ fn checked_luma16_source(
     let source = image
         .as_raw()
         .iter()
-        .flat_map(|sample| if big_endian { sample.to_be_bytes() } else { sample.to_ne_bytes() })
+        .flat_map(|sample| {
+            if big_endian {
+                sample.to_be_bytes()
+            } else {
+                sample.to_ne_bytes()
+            }
+        })
         .collect();
     Ok((width, height, source))
 }
@@ -222,7 +228,7 @@ fn offset_luma16_frame(
 
     if width_usize < 16 {
         (vector_blocks, scalar_tail) = offset_luma16_narrow(
-            &source,
+            source,
             &mut output,
             width_usize,
             height_usize,

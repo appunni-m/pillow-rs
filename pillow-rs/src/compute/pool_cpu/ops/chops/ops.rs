@@ -14,11 +14,11 @@
 use crate::raster::GenericImageView;
 use std::sync::Arc;
 
-use crate::compute::{Architecture, ExecutionContext, PipelineOperationTelemetryCapture};
 use crate::compute::registry::support::{
     InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport, OutputModeRule,
     PaletteInput, RejectionKind, SecondaryInputFacts, StrategySelection, SupportAssessment,
 };
+use crate::compute::{Architecture, ExecutionContext, PipelineOperationTelemetryCapture};
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
@@ -104,11 +104,10 @@ const NO_INPUTS: &[InputContract] = &[];
 
 macro_rules! operation_support {
     ($name:ident, $operation:ident, $inputs:ident) => {
-        pub(crate) static $name: OperationSupport = OperationSupport::new(
-            OperationId::$operation,
-            $inputs,
-            |mode| support_for_mode(OperationId::$operation, mode),
-        );
+        pub(crate) static $name: OperationSupport =
+            OperationSupport::new(OperationId::$operation, $inputs, |mode| {
+                support_for_mode(OperationId::$operation, mode)
+            });
     };
 }
 
@@ -192,7 +191,9 @@ pub(super) fn mode_support_with_architectures(
         );
     }
     match operation {
-        OperationId::ChopsLogicalAnd | OperationId::ChopsLogicalOr | OperationId::ChopsLogicalXor => {
+        OperationId::ChopsLogicalAnd
+        | OperationId::ChopsLogicalOr
+        | OperationId::ChopsLogicalXor => {
             if mode == Mode::One {
                 ModeSupport::cpu(
                     operation,
@@ -290,10 +291,9 @@ fn binary_inputs_for(operation: OperationId, mode: Mode) -> Option<&'static [Inp
         Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => {
             Some(BINARY_INPUTS_3)
         }
-        Mode::ImageRgba8
-        | Mode::ImageCmyk8
-        | Mode::ImageRgbPremultiplied8
-        | Mode::ImageRgbx8 => Some(BINARY_INPUTS_4),
+        Mode::ImageRgba8 | Mode::ImageCmyk8 | Mode::ImageRgbPremultiplied8 | Mode::ImageRgbx8 => {
+            Some(BINARY_INPUTS_4)
+        }
         _ => None,
     }
 }
@@ -403,12 +403,8 @@ impl PreparedChopsFusion<'_> {
     }
 
     pub(crate) fn execute(self) -> Result<super::helpers::fusion::FusedChopsOutput, PilError> {
-        let mut output = execute_fused_multiply_screen(
-            self.image,
-            &self.other,
-            self.mode,
-            &self.selection,
-        )?;
+        let mut output =
+            execute_fused_multiply_screen(self.image, &self.other, self.mode, &self.selection)?;
         let lanes = super::helpers::binary::output_hidden_lanes_with(
             self.image,
             &self.other,
@@ -453,7 +449,9 @@ impl ChopsExecutionPlan {
             || image.mode() != self.mode
             || !matches!(
                 self.request,
-                ChopsRequest::Binary(BinaryOperation::Add { .. } | BinaryOperation::Subtract { .. })
+                ChopsRequest::Binary(
+                    BinaryOperation::Add { .. } | BinaryOperation::Subtract { .. }
+                )
             )
         {
             return false;
@@ -469,9 +467,8 @@ impl ChopsExecutionPlan {
     pub(crate) fn execute(self, image: &DynamicImage) -> Result<DynamicImage, PilError> {
         let selection = &self.selection;
         let other = self.other.as_deref();
-        let mut output = super::helpers::dispatch::execute(
-            self.mode, image, self.request, other, selection,
-        )?;
+        let mut output =
+            super::helpers::dispatch::execute(self.mode, image, self.request, other, selection)?;
         if let ChopsRequest::Binary(operation) = self.request {
             let other = other.ok_or_else(|| {
                 PilError::InternalError("Chops binary plan lost its secondary image".into())
@@ -494,13 +491,17 @@ impl ChopsExecutionPlan {
             PilError::InternalError("Chops in-place plan lost its secondary image".into())
         })?;
         let hidden_lanes = match self.request {
-            ChopsRequest::Binary(operation) => Some(
-                super::helpers::binary::output_hidden_lanes(image, other, operation)?,
-            ),
+            ChopsRequest::Binary(operation) => Some(super::helpers::binary::output_hidden_lanes(
+                image, other, operation,
+            )?),
             _ => None,
         };
         super::helpers::dispatch::execute_in_place(
-            self.mode, image, self.request, other, selection,
+            self.mode,
+            image,
+            self.request,
+            other,
+            selection,
         )?;
         if let Some(hidden_lanes) = hidden_lanes {
             if !image.replace_hidden_pixel_lanes(hidden_lanes) {
@@ -565,9 +566,9 @@ pub(crate) fn prepare_plan(
             };
             match op {
                 PipelineOp::Add { scale, offset, .. }
-                | PipelineOp::Subtract { scale, offset, .. } => {
-                    input.facts().with_chops_affine_secondary(other, *scale, *offset)
-                }
+                | PipelineOp::Subtract { scale, offset, .. } => input
+                    .facts()
+                    .with_chops_affine_secondary(other, *scale, *offset),
                 _ => input.facts().with_chops_secondary(other),
             }
         }
@@ -577,7 +578,9 @@ pub(crate) fn prepare_plan(
         SupportAssessment::Ready(selection) => selection,
         SupportAssessment::Rejected { reason, kind, .. } => return Err(kind.into_error(reason)),
         SupportAssessment::Deferred { .. } => {
-            return Err(PilError::InternalError("materialized Chops inputs have unresolved support facts".into()));
+            return Err(PilError::InternalError(
+                "materialized Chops inputs have unresolved support facts".into(),
+            ));
         }
     };
     Ok(ChopsExecutionPlan {
@@ -596,8 +599,14 @@ pub(crate) fn prepare_fused_multiply_screen<'a>(
     screen: &PipelineOp,
     context: &ExecutionContext,
 ) -> Result<Option<PreparedChopsFusion<'a>>, PilError> {
-    let (PipelineOp::Multiply { other: multiply_other }, PipelineOp::Screen { other: screen_other }) =
-        (multiply, screen)
+    let (
+        PipelineOp::Multiply {
+            other: multiply_other,
+        },
+        PipelineOp::Screen {
+            other: screen_other,
+        },
+    ) = (multiply, screen)
     else {
         return Ok(None);
     };
@@ -613,11 +622,9 @@ pub(crate) fn prepare_fused_multiply_screen<'a>(
         Mode::ImageRgba8 => 4,
         _ => return Ok(None),
     };
-    let Ok(dimensions) = crate::checked_dims::CheckedDims::new_allow_empty(
-        image.width(),
-        image.height(),
-        channels,
-    ) else {
+    let Ok(dimensions) =
+        crate::checked_dims::CheckedDims::new_allow_empty(image.width(), image.height(), channels)
+    else {
         return Ok(None);
     };
     if dimensions.row_stride() == 0 || image.as_bytes().len() != dimensions.total_bytes() {

@@ -13,13 +13,10 @@ impl Draw {
         output: TextComposeResult,
     ) -> Result<(), PilError> {
         match output {
-            TextComposeResult::NotApplicable => {
-                Err(PilError::ValueError("mode mismatch".into()))
-            }
+            TextComposeResult::NotApplicable => Err(PilError::ValueError("mode mismatch".into())),
             TextComposeResult::Unchanged => Ok(()),
             TextComposeResult::Updated(image)
-                if mode == Mode::ImagePalette8
-                    && palette_state == PaletteKnowledge::Present =>
+                if mode == Mode::ImagePalette8 && palette_state == PaletteKnowledge::Present =>
             {
                 self.replace_paletted_text_output(image)
             }
@@ -43,7 +40,9 @@ impl Draw {
             .image
             .palette()
             .filter(|palette| !palette.is_empty())
-            .ok_or_else(|| PilError::InternalError("prepared Draw Text palette disappeared".into()))?;
+            .ok_or_else(|| {
+                PilError::InternalError("prepared Draw Text palette disappeared".into())
+            })?;
         let palette_alpha = self.image.palette_alpha().unwrap_or_default();
         let source_format = self.image.source_format();
         let info = self.image.image_info();

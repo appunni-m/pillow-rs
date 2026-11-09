@@ -1,4 +1,3 @@
-
 // A native I-mode convolution can amortize a uniformity proof over a larger
 // image than the byte filters: each interior output otherwise reads and
 // converts 25 four-byte samples. Keep the proof bounded so a nearly-uniform

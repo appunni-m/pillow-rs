@@ -3,7 +3,10 @@
 use wide::{i16x8, u8x16, u16x8, u16x16};
 
 #[cfg(any(
-    all(target_arch = "x86", any(target_feature = "sse2", target_feature = "ssse3")),
+    all(
+        target_arch = "x86",
+        any(target_feature = "sse2", target_feature = "ssse3")
+    ),
     all(target_arch = "wasm32", target_feature = "simd128"),
 ))]
 pub(crate) fn gather<const CHANNELS: usize, const CHANNEL: usize>(
@@ -54,7 +57,10 @@ pub(crate) fn gather<const CHANNELS: usize, const CHANNEL: usize>(
 }
 
 #[cfg(any(
-    all(target_arch = "x86", any(target_feature = "sse2", target_feature = "ssse3")),
+    all(
+        target_arch = "x86",
+        any(target_feature = "sse2", target_feature = "ssse3")
+    ),
     all(target_arch = "wasm32", target_feature = "simd128"),
 ))]
 pub(crate) fn gather_into<const CHANNELS: usize, const CHANNEL: usize>(
@@ -112,7 +118,10 @@ pub(crate) fn gather_into<const CHANNELS: usize, const CHANNEL: usize>(
     {
         *output_sample = pixel[CHANNEL];
     }
-    Ok(((vector_pixels / LANES) as u64, (pixel_count - vector_pixels) as u64))
+    Ok((
+        (vector_pixels / LANES) as u64,
+        (pixel_count - vector_pixels) as u64,
+    ))
 }
 
 #[inline]
@@ -122,5 +131,3 @@ pub(crate) fn simd_pack_u16x16(value: u16x16) -> u8x16 {
     let high: i16x8 = bytemuck::cast(high);
     u8x16::narrow_i16x8(low, high)
 }
-
-

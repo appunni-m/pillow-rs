@@ -5,9 +5,9 @@ use crate::compute::pool_cpu::helpers::bytes::hidden_lanes::{
     default_hidden_pixel_lanes, hidden_lanes_for_pixel_ref,
 };
 use crate::error::PilError;
+use crate::raster::DynamicImage;
 use crate::raster::buffer::{HiddenPixelLanes, ImageBuffer};
 use crate::raster::traits::Pixel;
-use crate::raster::DynamicImage;
 
 static OVERLAY_LUT: &[u8; 65_536] = include_bytes!("../../../../../ops/lut_overlay.bin");
 static HARD_LIGHT_LUT: &[u8; 65_536] = include_bytes!("../../../../../ops/lut_hardlight.bin");
@@ -71,15 +71,13 @@ impl BinaryOperation {
                 left.saturating_add(right)
             }
             Self::Add { scale, offset, .. } => {
-                ((f32::from(left) + f32::from(right)) / scale + offset).clamp(0.0, 255.0)
-                    as u8
+                ((f32::from(left) + f32::from(right)) / scale + offset).clamp(0.0, 255.0) as u8
             }
             Self::Subtract { scale, offset, .. } if scale == 1.0 && offset == 0.0 => {
                 left.saturating_sub(right)
             }
             Self::Subtract { scale, offset, .. } => {
-                ((f32::from(left) - f32::from(right)) / scale + offset).clamp(0.0, 255.0)
-                    as u8
+                ((f32::from(left) - f32::from(right)) / scale + offset).clamp(0.0, 255.0) as u8
             }
             Self::Multiply => ((u32::from(left) * u32::from(right)) / 255) as u8,
             Self::Screen => {
@@ -176,15 +174,11 @@ where
         if output_lane == u8::MAX {
             return Ok(None);
         }
-        return HiddenPixelLanes::constant(
-            lane_count,
-            output_pixel_count,
-            [output_lane, 0],
-        )
-        .map(Some)
-        .ok_or_else(|| {
-            PilError::InternalError("Chops physical lane result was invalid".into())
-        });
+        return HiddenPixelLanes::constant(lane_count, output_pixel_count, [output_lane, 0])
+            .map(Some)
+            .ok_or_else(|| {
+                PilError::InternalError("Chops physical lane result was invalid".into())
+            });
     }
     output_hidden_lanes_with_fallbacks(
         image,
@@ -341,54 +335,113 @@ fn apply(
     right_stride: usize,
     operation: BinaryOperation,
 ) {
+    macro_rules! rows {
+        ($map:expr) => {
+            apply_rows(
+                left,
+                right,
+                output,
+                width,
+                height,
+                channels,
+                left_stride,
+                right_stride,
+                $map,
+            )
+        };
+    }
+
+    macro_rules! lut {
+        ($table:expr) => {
+            apply_lut(
+                left,
+                right,
+                output,
+                width,
+                height,
+                channels,
+                left_stride,
+                right_stride,
+                $table,
+            )
+        };
+    }
+
     match operation {
         BinaryOperation::Add { scale, offset, .. } if scale == 1.0 && offset == 0.0 => {
-            apply_rows(left, right, output, width, height, channels, left_stride, right_stride, u8::saturating_add)
+            rows!(u8::saturating_add)
         }
-        BinaryOperation::Add { scale, offset, .. } => apply_rows(
-            left, right, output, width, height, channels, left_stride, right_stride,
-            |a, b| ((f32::from(a) + f32::from(b)) / scale + offset).clamp(0.0, 255.0) as u8,
-        ),
+        BinaryOperation::Add { scale, offset, .. } => {
+            rows!(|a, b| ((f32::from(a) + f32::from(b)) / scale + offset).clamp(0.0, 255.0) as u8)
+        }
         BinaryOperation::Subtract { scale, offset, .. } if scale == 1.0 && offset == 0.0 => {
-            apply_rows(left, right, output, width, height, channels, left_stride, right_stride, u8::saturating_sub)
+            rows!(u8::saturating_sub)
         }
-        BinaryOperation::Subtract { scale, offset, .. } => apply_rows(
-            left, right, output, width, height, channels, left_stride, right_stride,
-            |a, b| ((f32::from(a) - f32::from(b)) / scale + offset).clamp(0.0, 255.0) as u8,
-        ),
-        BinaryOperation::Multiply => apply_rows(left, right, output, width, height, channels, left_stride, right_stride, |a, b| ((u32::from(a) * u32::from(b)) / 255) as u8),
-        BinaryOperation::Screen => apply_rows(left, right, output, width, height, channels, left_stride, right_stride, |a, b| (255 - ((255 - u32::from(a)) * (255 - u32::from(b)) / 255)) as u8),
-        BinaryOperation::Darker => apply_rows(left, right, output, width, height, channels, left_stride, right_stride, u8::min),
-        BinaryOperation::Lighter => apply_rows(left, right, output, width, height, channels, left_stride, right_stride, u8::max),
-        BinaryOperation::Difference => apply_rows(left, right, output, width, height, channels, left_stride, right_stride, u8::abs_diff),
-        BinaryOperation::Overlay => apply_lut(left, right, output, width, height, channels, left_stride, right_stride, OVERLAY_LUT),
-        BinaryOperation::HardLight => apply_lut(left, right, output, width, height, channels, left_stride, right_stride, HARD_LIGHT_LUT),
-        BinaryOperation::SoftLight => apply_lut(left, right, output, width, height, channels, left_stride, right_stride, SOFT_LIGHT_LUT),
-        BinaryOperation::AddModulo => apply_rows(left, right, output, width, height, channels, left_stride, right_stride, u8::wrapping_add),
-        BinaryOperation::SubtractModulo => apply_rows(left, right, output, width, height, channels, left_stride, right_stride, u8::wrapping_sub),
-        BinaryOperation::LogicalAnd => apply_rows(left, right, output, width, height, channels, left_stride, right_stride, |a, b| u8::from(a != 0 && b != 0) * 255),
-        BinaryOperation::LogicalOr => apply_rows(left, right, output, width, height, channels, left_stride, right_stride, |a, b| u8::from((a | b) != 0) * 255),
-        BinaryOperation::LogicalXor => apply_rows(left, right, output, width, height, channels, left_stride, right_stride, |a, b| u8::from((a != 0) ^ (b != 0)) * 255),
+        BinaryOperation::Subtract { scale, offset, .. } => {
+            rows!(|a, b| ((f32::from(a) - f32::from(b)) / scale + offset).clamp(0.0, 255.0) as u8)
+        }
+        BinaryOperation::Multiply => rows!(|a, b| ((u32::from(a) * u32::from(b)) / 255) as u8),
+        BinaryOperation::Screen => {
+            rows!(|a, b| { (255 - ((255 - u32::from(a)) * (255 - u32::from(b)) / 255)) as u8 })
+        }
+        BinaryOperation::Darker => rows!(u8::min),
+        BinaryOperation::Lighter => rows!(u8::max),
+        BinaryOperation::Difference => rows!(u8::abs_diff),
+        BinaryOperation::Overlay => lut!(OVERLAY_LUT),
+        BinaryOperation::HardLight => lut!(HARD_LIGHT_LUT),
+        BinaryOperation::SoftLight => lut!(SOFT_LIGHT_LUT),
+        BinaryOperation::AddModulo => rows!(u8::wrapping_add),
+        BinaryOperation::SubtractModulo => rows!(u8::wrapping_sub),
+        BinaryOperation::LogicalAnd => rows!(|a, b| u8::from(a != 0 && b != 0) * 255),
+        BinaryOperation::LogicalOr => rows!(|a, b| u8::from((a | b) != 0) * 255),
+        BinaryOperation::LogicalXor => rows!(|a, b| u8::from((a != 0) ^ (b != 0)) * 255),
     }
 }
 
 fn apply_lut(
-    left: &[u8], right: &[u8], output: &mut [u8], width: usize, height: usize,
-    channels: usize, left_stride: usize, right_stride: usize, lut: &[u8; 65_536],
+    left: &[u8],
+    right: &[u8],
+    output: &mut [u8],
+    width: usize,
+    height: usize,
+    channels: usize,
+    left_stride: usize,
+    right_stride: usize,
+    lut: &[u8; 65_536],
 ) {
-    apply_rows(left, right, output, width, height, channels, left_stride, right_stride,
-        |a, b| lut[usize::from(a) * 256 + usize::from(b)]);
+    apply_rows(
+        left,
+        right,
+        output,
+        width,
+        height,
+        channels,
+        left_stride,
+        right_stride,
+        |a, b| lut[usize::from(a) * 256 + usize::from(b)],
+    );
 }
 
 fn apply_rows<F: Fn(u8, u8) -> u8>(
-    left: &[u8], right: &[u8], output: &mut [u8], width: usize, height: usize,
-    channels: usize, left_stride: usize, right_stride: usize, operation: F,
+    left: &[u8],
+    right: &[u8],
+    output: &mut [u8],
+    width: usize,
+    height: usize,
+    channels: usize,
+    left_stride: usize,
+    right_stride: usize,
+    operation: F,
 ) {
     let output_stride = width * channels;
     if output_stride == 0 || height == 0 {
         return;
     }
-    for (y, row) in output.chunks_exact_mut(output_stride).take(height).enumerate() {
+    for (y, row) in output
+        .chunks_exact_mut(output_stride)
+        .take(height)
+        .enumerate()
+    {
         let left_start = y * left_stride;
         let right_start = y * right_stride;
         let left_row = &left[left_start..left_start + output_stride];

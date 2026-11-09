@@ -2,11 +2,26 @@ use crate::compute::registry::support::PasteMaskRule;
 use crate::raster::Mode;
 
 pub(crate) const MASKS: &[PasteMaskRule] = &[
-    PasteMaskRule { mode: Mode::One, alpha: false },
-    PasteMaskRule { mode: Mode::ImageLuma8, alpha: false },
-    PasteMaskRule { mode: Mode::ImageLumaA8, alpha: true },
-    PasteMaskRule { mode: Mode::ImageRgba8, alpha: true },
-    PasteMaskRule { mode: Mode::ImageRgbPremultiplied8, alpha: true },
+    PasteMaskRule {
+        mode: Mode::One,
+        alpha: false,
+    },
+    PasteMaskRule {
+        mode: Mode::ImageLuma8,
+        alpha: false,
+    },
+    PasteMaskRule {
+        mode: Mode::ImageLumaA8,
+        alpha: true,
+    },
+    PasteMaskRule {
+        mode: Mode::ImageRgba8,
+        alpha: true,
+    },
+    PasteMaskRule {
+        mode: Mode::ImageRgbPremultiplied8,
+        alpha: true,
+    },
 ];
 
 pub(crate) const COMPACT_MASK_ONE: &[Mode] = &[Mode::One];
@@ -87,9 +102,7 @@ pub(crate) const fn same_mode_source(mode: Mode) -> &'static [Mode] {
 
 pub(crate) const fn compact_sources(mode: Mode) -> &'static [Mode] {
     match mode {
-        Mode::One
-        | Mode::ImageLuma8
-        | Mode::ImagePalette8 => PHYSICAL_ONE_BYTE_SOURCES,
+        Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => PHYSICAL_ONE_BYTE_SOURCES,
         Mode::ImageLumaA8
         | Mode::ImageLaPremultiplied8
         | Mode::ImagePaletteAlpha8

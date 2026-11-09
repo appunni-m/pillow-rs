@@ -124,12 +124,7 @@ pub trait GenericImage: GenericImageView {
     /// The source view exposes only [`Pixel`] values, so storage outside that
     /// logical value is not copied. Any such destination state follows
     /// [`GenericImage::put_pixel`].
-    fn copy_from<O>(
-        &mut self,
-        other: &O,
-        x: u32,
-        y: u32,
-    ) -> Result<(), crate::raster::RasterError>
+    fn copy_from<O>(&mut self, other: &O, x: u32, y: u32) -> Result<(), crate::raster::RasterError>
     where
         O: GenericImageView<Pixel = Self::Pixel>,
     {

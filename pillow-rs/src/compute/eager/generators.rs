@@ -2,11 +2,11 @@
 
 use super::super::backend_state::active_lock;
 use super::super::{
-    Backend, ExecutionContext, PipelineResourceTelemetry, PipelineTelemetry, elapsed_ns,
-    begin_pipeline_operation_telemetry, finish_pipeline_operation_telemetry,
-    pipeline_telemetry_enabled, pipeline_timestamp, record_pipeline_operation_selection,
-    record_pipeline_operation_mode_conversion, record_pipeline_operation_path,
-    record_pipeline_operation_scalar_tail, record_pipeline_operation_vector_blocks,
+    Backend, ExecutionContext, PipelineResourceTelemetry, PipelineTelemetry,
+    begin_pipeline_operation_telemetry, elapsed_ns, finish_pipeline_operation_telemetry,
+    pipeline_telemetry_enabled, pipeline_timestamp, record_pipeline_operation_mode_conversion,
+    record_pipeline_operation_path, record_pipeline_operation_scalar_tail,
+    record_pipeline_operation_selection, record_pipeline_operation_vector_blocks,
     record_pipeline_resource_telemetry, record_pipeline_telemetry,
     reset_pipeline_allocation_telemetry, reset_pipeline_operation_telemetry,
     take_pipeline_allocation_telemetry, take_pipeline_backend_override,
@@ -84,13 +84,13 @@ fn record_generator_receipt(
     record_pipeline_operation_selection(&selection);
     record_pipeline_operation_vector_blocks(generated.vector_blocks);
     record_pipeline_operation_scalar_tail(generated.scalar_tail);
-    record_pipeline_operation_path(if selection.implementation.architecture
-        == crate::compute::Architecture::Default
-    {
-        "cpu"
-    } else {
-        "vector"
-    });
+    record_pipeline_operation_path(
+        if selection.implementation.architecture == crate::compute::Architecture::Default {
+            "cpu"
+        } else {
+            "vector"
+        },
+    );
     record_pipeline_operation_mode_conversion(0);
     finish_pipeline_operation_telemetry();
 
@@ -133,14 +133,12 @@ fn generator_fallback(
         .map(|reason| {
             format!(
                 "{operation} selected {:?} after {reason:?} for requested {:?}",
-                selection.implementation.architecture,
-                selection.requested_architecture,
+                selection.implementation.architecture, selection.requested_architecture,
             )
         })
         .or_else(|| {
-            (route.requested_backend == Some(Backend::Gpu)).then(|| {
-                format!("{operation} has no GPU implementation; CPU Default was selected")
-            })
+            (route.requested_backend == Some(Backend::Gpu))
+                .then(|| format!("{operation} has no GPU implementation; CPU Default was selected"))
         })
         .or_else(|| {
             (route.requested_backend == Some(Backend::Simd)
@@ -152,10 +150,8 @@ fn generator_fallback(
 pub(crate) fn execute_eager_cpu_linear_gradient(mode: Mode) -> Result<DynamicImage, PilError> {
     let route = route_generator()?;
     let validation_start = route.timed.then(pipeline_timestamp).flatten();
-    let prepared = crate::compute::pool_cpu::ops::effects::ops::prepare_linear_gradient(
-        mode,
-        &route.context,
-    )?;
+    let prepared =
+        crate::compute::pool_cpu::ops::effects::ops::prepare_linear_gradient(mode, &route.context)?;
     let validation_ns = elapsed_ns(validation_start);
     let selection = *prepared.selection();
     begin_generator_receipt("LinearGradient", &route);
@@ -181,10 +177,8 @@ pub(crate) fn execute_eager_cpu_linear_gradient(mode: Mode) -> Result<DynamicIma
 pub(crate) fn execute_eager_cpu_radial_gradient(mode: Mode) -> Result<DynamicImage, PilError> {
     let route = route_generator()?;
     let validation_start = route.timed.then(pipeline_timestamp).flatten();
-    let prepared = crate::compute::pool_cpu::ops::effects::ops::prepare_radial_gradient(
-        mode,
-        &route.context,
-    )?;
+    let prepared =
+        crate::compute::pool_cpu::ops::effects::ops::prepare_radial_gradient(mode, &route.context)?;
     let validation_ns = elapsed_ns(validation_start);
     let selection = *prepared.selection();
     begin_generator_receipt("RadialGradient", &route);

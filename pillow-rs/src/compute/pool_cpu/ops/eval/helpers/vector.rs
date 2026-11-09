@@ -10,23 +10,42 @@ pub(crate) struct Kernel<'a, const CHANNELS: usize> {
     width: u32,
     height: u32,
     lut: &'a [u8],
-    tables: Option<LutTables>,
     identity: bool,
 }
 
 impl<'a, const CHANNELS: usize> Kernel<'a, CHANNELS> {
+    #[cfg(all(
+        target_arch = "aarch64",
+        target_feature = "neon",
+        target_endian = "little"
+    ))]
     pub(crate) fn source(&self) -> &[u8] {
         self.source
     }
 
+    #[cfg(all(
+        target_arch = "aarch64",
+        target_feature = "neon",
+        target_endian = "little"
+    ))]
     pub(crate) const fn width(&self) -> u32 {
         self.width
     }
 
+    #[cfg(all(
+        target_arch = "aarch64",
+        target_feature = "neon",
+        target_endian = "little"
+    ))]
     pub(crate) const fn height(&self) -> u32 {
         self.height
     }
 
+    #[cfg(all(
+        target_arch = "aarch64",
+        target_feature = "neon",
+        target_endian = "little"
+    ))]
     pub(crate) fn lut(&self) -> &[u8] {
         self.lut
     }
@@ -63,8 +82,13 @@ pub(crate) fn prepare<'a, const CHANNELS: usize>(
         ));
     }
     let identity = native_lut_is_identity::<CHANNELS>(lut);
-    let tables = (!identity).then(|| native_lut_tables::<CHANNELS>(lut)).transpose()?;
-    Ok(Kernel { source, width, height, lut, tables, identity })
+    Ok(Kernel {
+        source,
+        width,
+        height,
+        lut,
+        identity,
+    })
 }
 
 pub(crate) fn execute_sse2<const CHANNELS: usize>(
@@ -94,9 +118,7 @@ pub(crate) fn execute_neon<const CHANNELS: usize>(
     finish(map_wide(kernel)?)
 }
 
-fn copy_identity<const CHANNELS: usize>(
-    kernel: Kernel<'_, CHANNELS>,
-) -> Result<Output, PilError> {
+fn copy_identity<const CHANNELS: usize>(kernel: Kernel<'_, CHANNELS>) -> Result<Output, PilError> {
     let row_stride = (kernel.width as usize)
         .checked_mul(CHANNELS)
         .ok_or_else(|| PilError::InternalError("Eval vector row overflowed".into()))?;
@@ -125,9 +147,7 @@ pub(crate) fn finish(mapped: Mapped) -> Result<Output, PilError> {
     Ok(mapped.output)
 }
 
-fn map_wide<const CHANNELS: usize>(
-    kernel: Kernel<'_, CHANNELS>,
-) -> Result<Mapped, PilError> {
+fn map_wide<const CHANNELS: usize>(kernel: Kernel<'_, CHANNELS>) -> Result<Mapped, PilError> {
     let width = kernel.width as usize;
     let height = kernel.height as usize;
     let row_stride = width
@@ -141,23 +161,25 @@ fn map_wide<const CHANNELS: usize>(
             "Eval vector source did not match its native mode".into(),
         ));
     }
+    let tables = native_lut_tables::<CHANNELS>(kernel.lut)?;
     let mut bytes = vec![0u8; expected_len];
-    let tables = kernel.tables.as_ref().ok_or_else(|| {
-        PilError::InternalError("Eval vector LUT tables were not prepared".into())
-    })?;
     for y in 0..height {
         let start = y * row_stride;
         map_native_lut_row::<CHANNELS>(
             &kernel.source[start..start + row_stride],
             &mut bytes[start..start + row_stride],
-            tables,
+            &tables,
         );
     }
     let blocks = CHANNELS
         .saturating_mul(width.div_ceil(16))
         .saturating_mul(height);
     Ok(Mapped {
-        output: Output { width: kernel.width, height: kernel.height, bytes },
+        output: Output {
+            width: kernel.width,
+            height: kernel.height,
+            bytes,
+        },
         vector_blocks: u64::try_from(blocks).unwrap_or(u64::MAX),
         scalar_tail: Some(0),
     })
@@ -192,8 +214,7 @@ fn native_lut_tables<const CHANNELS: usize>(lut: &[u8]) -> Result<LutTables, Pil
 fn native_lut_chunk(input: u8x16, tables: &[u8x16; 16]) -> u8x16 {
     let low = input & u8x16::splat(0x0f);
     let high: u8x16 = input >> 4u32;
-    let lookups: [u8x16; 16] =
-        std::array::from_fn(|index| tables[index].shuffle(low));
+    let lookups: [u8x16; 16] = std::array::from_fn(|index| tables[index].shuffle(low));
     let bit0 = (high & u8x16::splat(1)).simd_eq(u8x16::splat(0));
     let bit1 = (high & u8x16::splat(2)).simd_eq(u8x16::splat(0));
     let bit2 = (high & u8x16::splat(4)).simd_eq(u8x16::splat(0));
@@ -213,9 +234,7 @@ fn map_native_lut_row<const CHANNELS: usize>(
     tables: &LutTables,
 ) {
     if CHANNELS == 1 {
-        for (source_chunk, destination_chunk) in
-            source.chunks(16).zip(destination.chunks_mut(16))
-        {
+        for (source_chunk, destination_chunk) in source.chunks(16).zip(destination.chunks_mut(16)) {
             let mut padded = [0u8; 16];
             padded[..source_chunk.len()].copy_from_slice(source_chunk);
             let mapped = native_lut_chunk(u8x16::new(padded), &tables[0]).to_array();

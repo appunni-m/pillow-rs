@@ -6,15 +6,10 @@
 //! PreparedEval restores the resulting zero values for omitted physical lanes.
 //! TODO(pillow-rs#3ptb): move the archived Rayon row path to the later
 //! `pool_parallel` owner; do not move its scheduling into this CPU family.
-use crate::compute::registry::support::{
-    ModeSupport,
-    OperationId,
-    OperationInputs,
-    OperationSupport,
-    RejectionKind,
-    StrategySelection,
-};
 use crate::compute::ExecutionContext;
+use crate::compute::registry::support::{
+    ModeSupport, OperationId, OperationInputs, OperationSupport, RejectionKind, StrategySelection,
+};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
@@ -168,7 +163,9 @@ pub(crate) fn prepare_pipeline<'a>(
         return Err(PilError::ValueError("expected Eval op".into()));
     };
     let strategy = prepare(input.image, lut, ctx)?;
-    Ok(crate::compute::registry::PreparedOperation::from_eval(strategy))
+    Ok(crate::compute::registry::PreparedOperation::from_eval(
+        strategy,
+    ))
 }
 
 /// Applies the declared source-mode float-LUT strategy and retains F output mode.

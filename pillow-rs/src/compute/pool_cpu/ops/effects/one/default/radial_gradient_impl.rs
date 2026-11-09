@@ -16,8 +16,9 @@ pub(crate) fn execute() -> Result<GeneratedImage, PilError> {
             }
         }
     }
-    let image = GrayImage::from_raw(WIDTH as u32, HEIGHT as u32, pixels)
-        .ok_or_else(|| PilError::InternalError("RadialGradient One buffer shape mismatch".into()))?;
+    let image = GrayImage::from_raw(WIDTH as u32, HEIGHT as u32, pixels).ok_or_else(|| {
+        PilError::InternalError("RadialGradient One buffer shape mismatch".into())
+    })?;
     Ok(GeneratedImage {
         image: DynamicImage::One(image),
         vector_blocks: 0,

@@ -36,7 +36,9 @@ macro_rules! rank_vector_architectures {
                     target_feature = "avx2"
                 )),
                 &[Architecture::Avx2],
-                StrategyGuard::FilterF32RankWindow { max_size: MAX_RANK_WINDOW },
+                StrategyGuard::FilterF32RankWindow {
+                    max_size: MAX_RANK_WINDOW,
+                },
             ),
             ImplementationSupport::cpu(
                 $operation,
@@ -48,7 +50,9 @@ macro_rules! rank_vector_architectures {
                     not(target_feature = "avx2")
                 )),
                 &[Architecture::Avx],
-                StrategyGuard::FilterF32RankWindow { max_size: MAX_RANK_WINDOW },
+                StrategyGuard::FilterF32RankWindow {
+                    max_size: MAX_RANK_WINDOW,
+                },
             ),
             ImplementationSupport::cpu(
                 $operation,
@@ -60,7 +64,9 @@ macro_rules! rank_vector_architectures {
                     not(target_feature = "avx")
                 )),
                 &[Architecture::Sse2],
-                StrategyGuard::FilterF32RankWindow { max_size: MAX_RANK_WINDOW },
+                StrategyGuard::FilterF32RankWindow {
+                    max_size: MAX_RANK_WINDOW,
+                },
             ),
             ImplementationSupport::cpu(
                 $operation,
@@ -68,7 +74,9 @@ macro_rules! rank_vector_architectures {
                 Architecture::Neon,
                 cfg!(all(target_arch = "aarch64", target_feature = "neon")),
                 &[Architecture::Neon],
-                StrategyGuard::FilterF32RankWindow { max_size: MAX_RANK_WINDOW },
+                StrategyGuard::FilterF32RankWindow {
+                    max_size: MAX_RANK_WINDOW,
+                },
             ),
             ImplementationSupport::cpu(
                 $operation,
@@ -76,7 +84,9 @@ macro_rules! rank_vector_architectures {
                 Architecture::WasmSimd128,
                 cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
                 &[Architecture::WasmSimd128],
-                StrategyGuard::FilterF32RankWindow { max_size: MAX_RANK_WINDOW },
+                StrategyGuard::FilterF32RankWindow {
+                    max_size: MAX_RANK_WINDOW,
+                },
             ),
         ];
     };
@@ -88,7 +98,11 @@ rank_vector_architectures!(MIN_ARCHITECTURES, OperationId::MinFilter);
 rank_vector_architectures!(RANK_ARCHITECTURES, OperationId::RankFilter);
 
 fn rejected(mode: Mode) -> ModeSupport {
-    ModeSupport::Rejected { mode, reason: "image has wrong mode", kind: RejectionKind::ValueError }
+    ModeSupport::Rejected {
+        mode,
+        reason: "image has wrong mode",
+        kind: RejectionKind::ValueError,
+    }
 }
 
 pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId) -> ModeSupport {
@@ -175,6 +189,8 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
                     PilError::ValueError("rank output buffer does not match F mode".into())
                 })
         }
-        _ => Err(PilError::InternalError("filter selected an unowned F architecture".into())),
+        _ => Err(PilError::InternalError(
+            "filter selected an unowned F architecture".into(),
+        )),
     }
 }

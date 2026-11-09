@@ -2,7 +2,7 @@
 
 use crate::checked_dims::CheckedDims;
 use crate::compute::pool_cpu::ops::rotate::helpers::vector_interpolation::{
-    self, RotateSample, LANES,
+    self, LANES, RotateSample,
 };
 use crate::compute::pool_cpu::ops::transform::ops::TransformRequest;
 use crate::error::PilError;
@@ -68,11 +68,7 @@ fn prepare<const CHANNELS: usize>(
             "affine bilinear Transform coefficients changed after admission".into(),
         ));
     };
-    let source_layout = CheckedDims::new(
-        source_dimensions.0,
-        source_dimensions.1,
-        CHANNELS as u8,
-    )?;
+    let source_layout = CheckedDims::new(source_dimensions.0, source_dimensions.1, CHANNELS as u8)?;
     if source.len() != source_layout.total_bytes() {
         return Err(PilError::InternalError(
             "Transform bilinear source buffer shape mismatch".into(),
@@ -82,9 +78,7 @@ fn prepare<const CHANNELS: usize>(
     Ok((source_layout, destination, [*a, *b, *c, *d, *e, *f]))
 }
 
-fn normalize_fill<const CHANNELS: usize>(
-    fill: Option<(u8, u8, u8, u8)>,
-) -> (u8, u8, u8, u8) {
+fn normalize_fill<const CHANNELS: usize>(fill: Option<(u8, u8, u8, u8)>) -> (u8, u8, u8, u8) {
     let fill = fill.unwrap_or((0, 0, 0, 0));
     if CHANNELS == 2 {
         (fill.0, 0, 0, fill.1)
@@ -155,13 +149,8 @@ fn execute_pixels<const CHANNELS: usize, const ALPHA: bool>(
             x += count;
         }
         while x < width {
-            let sample = vector_interpolation::sample_coordinates(
-                affine,
-                source_width,
-                source_height,
-                x,
-                y,
-            );
+            let sample =
+                vector_interpolation::sample_coordinates(affine, source_width, source_height, x, y);
             let output_start = row_start + x * CHANNELS;
             sampler.scalar_pixel(&mut output[output_start..output_start + CHANNELS], sample);
             scalar_tail = scalar_tail.saturating_add(1);

@@ -35,13 +35,13 @@ pub trait DrawTextLinesCallbacks {
     fn draw_custom_stroke(
         &mut self,
         line: &DrawTextLine<Self::Value>,
-        mode: &str,
+        mode: Mode,
     ) -> Result<(), Self::Error>;
     /// Draw the custom font's fill mask for one line.
     fn draw_custom_fill(
         &mut self,
         line: &DrawTextLine<Self::Value>,
-        mode: &str,
+        mode: Mode,
         embedded_color: bool,
     ) -> Result<(), Self::Error>;
 }

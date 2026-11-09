@@ -7,13 +7,8 @@ impl PyImage {
     #[new]
     fn py_new() -> PyResult<Self> {
         // Default 1x1 RGB image for compatibility
-        let img = RsImage::new(
-            1,
-            1,
-            pillow_rs::Mode::ImageRgb8,
-            (0, 0, 0, 0),
-        )
-        .map_err(map_error)?;
+        let img =
+            RsImage::new(1, 1, pillow_rs::Mode::ImageRgb8, (0, 0, 0, 0)).map_err(map_error)?;
         Ok(PyImage { inner: img })
     }
 
@@ -133,14 +128,10 @@ impl PyImage {
             before_encode.call0()?;
         }
         let format = match format {
-            Some(format) => {
-                pillow_rs::Image::resolve_save_format(Some(&format), extension)
-                    .map_err(map_error)?
-            }
+            Some(format) => pillow_rs::Image::resolve_save_format(Some(&format), extension)
+                .map_err(map_error)?,
             None => extension_format.ok_or_else(|| {
-                pyo3::exceptions::PyRuntimeError::new_err(
-                    "save format extension was not resolved",
-                )
+                pyo3::exceptions::PyRuntimeError::new_err("save format extension was not resolved")
             })?,
         };
         if let Some(path) = path.as_deref() {

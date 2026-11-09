@@ -1,9 +1,7 @@
 //! Architecture declarations shared by the exact I;16 crop identities.
 
 use crate::compute::Architecture;
-use crate::compute::registry::support::{
-    ImplementationSupport, OperationId, StrategyGuard,
-};
+use crate::compute::registry::support::{ImplementationSupport, OperationId, StrategyGuard};
 use crate::raster::Mode;
 
 pub(crate) const fn luma16_copy_architectures(

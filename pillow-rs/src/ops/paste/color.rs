@@ -7,9 +7,9 @@ impl PasteSource {
     pub(super) fn solid_color(&self, mode: Mode) -> Result<ResolvedPasteColor, PilError> {
         match mode {
             Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => single_band_color(self),
-            Mode::ImageLumaA8
-            | Mode::ImageLaPremultiplied8
-            | Mode::ImagePaletteAlpha8 => luma_alpha_color(self),
+            Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8 => {
+                luma_alpha_color(self)
+            }
             Mode::ImageRgb8
             | Mode::ImageRgba8
             | Mode::ImageRgbPremultiplied8
@@ -17,9 +17,7 @@ impl PasteSource {
             | Mode::ImageCmyk8
             | Mode::ImageYCbCr8
             | Mode::ImageLab8
-            | Mode::ImageHsv8 => {
-                multi_band_color(mode, self)
-            }
+            | Mode::ImageHsv8 => multi_band_color(mode, self),
             Mode::ImageI32 | Mode::ImageF32 => numeric_color(mode, self),
             Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
                 luma16_color(self)
@@ -68,10 +66,7 @@ fn luma_alpha_color(source: &PasteSource) -> Result<ResolvedPasteColor, PilError
 fn multi_band_color(mode: Mode, source: &PasteSource) -> Result<ResolvedPasteColor, PilError> {
     let preserves_alpha = matches!(
         mode,
-        Mode::ImageRgba8
-            | Mode::ImageRgbPremultiplied8
-            | Mode::ImageRgbx8
-            | Mode::ImageCmyk8
+        Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8 | Mode::ImageRgbx8 | Mode::ImageCmyk8
     );
     let alpha = |value| if preserves_alpha { value } else { 255 };
     let color = match source {

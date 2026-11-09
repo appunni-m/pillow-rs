@@ -1,13 +1,13 @@
 //! Shared assessment for the mode-owned Eval strategy declarations.
 
+use crate::compute::Architecture;
 use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{
     ImplementationSupport, InputContract, ModeSupport, OperationId, PaletteKnowledge, RequestFacts,
     StrategyGuard, StrategyInputs, StrategySelection, SupportAssessment,
 };
-use crate::compute::Architecture;
-use crate::raster::Mode;
 use crate::error::PilError;
+use crate::raster::Mode;
 
 pub(crate) const FLOAT_LUT_INPUTS: &[InputContract] = &[
     InputContract::PointFloatLutEntries { channels: 1 },
@@ -64,10 +64,7 @@ pub(crate) fn select(
     }
 }
 
-pub(crate) const fn cpu_architectures_for(
-    mode: Mode,
-    channels: u8,
-) -> [ImplementationSupport; 3] {
+pub(crate) const fn cpu_architectures_for(mode: Mode, channels: u8) -> [ImplementationSupport; 3] {
     [
         ImplementationSupport::cpu(
             OperationId::Eval,

@@ -41,6 +41,11 @@ pub struct PasteSourcePlan {
     resolved_color: Option<ResolvedPasteColor>,
 }
 
+struct PreparedPasteSource {
+    image: Option<Image>,
+    color: Option<ResolvedPasteColor>,
+}
+
 impl Image {
     /// Applies the Python `Image.paste` input contract before queuing paste.
     ///
@@ -94,9 +99,9 @@ impl Image {
                     Some(length) => PilError::TypeError(format!(
                         "argument 2 must be sequence of length 4, not {length}"
                     )),
-                    None => PilError::TypeError(format!(
-                        "object of type '{type_name}' has no len()"
-                    )),
+                    None => {
+                        PilError::TypeError(format!("object of type '{type_name}' has no len()"))
+                    }
                 });
             }
             PasteBoxInput::None | PasteBoxInput::Image(_) => {}
@@ -181,10 +186,7 @@ impl Image {
         };
         let (source, resolved_color) = match source {
             PasteSource::Image(image) => (
-                PasteSource::Image(Box::new(resolve_image_source(
-                    image,
-                    destination_mode,
-                )?)),
+                PasteSource::Image(Box::new(resolve_image_source(image, destination_mode)?)),
                 None,
             ),
             solid => {
@@ -328,10 +330,16 @@ impl Image {
         {
             return Err(PilError::ValueError("images do not match".to_owned()));
         }
+        if let PasteSource::Image(image) = &plan.source {
+            validate_paste_pixel_size(destination_mode, image.mode_identity()?)?;
+        }
         if width == 0 || height == 0 {
             // Pillow's low-level image Paste is a no-op for an empty source
             // region. ImageOps.expand relies on this after constructing its
             // filled canvas around a zero-area source.
+            return Ok(());
+        }
+        if !paste_region_intersects_destination((x, y), (width, height), self.size()?) {
             return Ok(());
         }
         let mask_alpha = paste_mask_uses_alpha(destination_mode, mask)?;
@@ -346,9 +354,8 @@ impl Image {
                 height,
             )?,
         };
-        // TODO(pillow-rs#3ptb): freeze mismatch ordering against invalid-mask
-        // and callback failures for subclass conversion results; also cover
-        // source/destination aliasing and reentrant palette/image mutation.
+        // TODO(pillow-rs#3ptb): verify clipping/mismatch and callback order,
+        // source/destination aliasing, and reentrant palette/image mutation.
         validate_paste_source_contract(
             destination_mode,
             &source_image,
@@ -542,10 +549,7 @@ impl Image {
         position: (i32, i32),
         mask: &Image,
     ) -> Result<(), PilError> {
-        if !matches!(
-            mask.mode_identity()?,
-            Mode::One | Mode::ImageLuma8
-        ) {
+        if !matches!(mask.mode_identity()?, Mode::One | Mode::ImageLuma8) {
             return Err(PilError::ValueError("bad transparency mask".to_owned()));
         }
         self.paste_impl(
@@ -581,7 +585,27 @@ impl Image {
         {
             return Err(PilError::ValueError("images do not match".to_owned()));
         }
+
+        let source = match source {
+            PasteSource::Image(image) => PreparedPasteSource {
+                image: Some(resolve_image_source(image, destination_mode)?),
+                color: None,
+            },
+            solid => PreparedPasteSource {
+                image: None,
+                color: Some(solid.solid_color(destination_mode)?),
+            },
+        };
+        if let Some(image) = &source.image {
+            if image.size()? != (width, height) {
+                return Err(PilError::ValueError("images do not match".to_owned()));
+            }
+            validate_paste_pixel_size(destination_mode, image.mode_identity()?)?;
+        }
         if width == 0 || height == 0 {
+            return Ok(());
+        }
+        if !paste_region_intersects_destination((x, y), (width, height), self.size()?) {
             return Ok(());
         }
         let mask_alpha = paste_mask_uses_alpha(destination_mode, mask)?;
@@ -590,12 +614,17 @@ impl Image {
         } else {
             (width, height)
         };
-        let source_image = resolve_paste_source(
-            source,
-            destination_mode,
-            source_width,
-            source_height,
-        )?;
+        let source_image = match (source.image, source.color) {
+            (Some(image), None) => image,
+            (None, Some(color)) => {
+                resolve_solid_source(color, destination_mode, source_width, source_height)?
+            }
+            _ => {
+                return Err(PilError::InternalError(
+                    "Paste source preparation produced an invalid state".into(),
+                ));
+            }
+        };
 
         let w = i32::try_from(width)
             .map_err(|_| PilError::ValueError("images do not match".to_owned()))?;
@@ -796,25 +825,34 @@ fn validate_paste_source_contract(
     Ok(())
 }
 
-fn resolve_paste_source(
-    source: PasteSource,
-    destination_mode: Mode,
-    width: u32,
-    height: u32,
-) -> Result<Image, PilError> {
-    match source {
-        PasteSource::Image(image) => resolve_image_source(image, destination_mode),
-        solid => {
-            let color = solid.solid_color(destination_mode)?;
-            resolve_solid_source(color, destination_mode, width, height)
-        }
+fn validate_paste_pixel_size(destination_mode: Mode, source_mode: Mode) -> Result<(), PilError> {
+    if let (Some(destination), Some(source)) = (
+        destination_mode.pillow_pixel_size(),
+        source_mode.pillow_pixel_size(),
+    ) && destination != source
+    {
+        return Err(PilError::ValueError("images do not match".to_owned()));
     }
+    Ok(())
 }
 
-fn resolve_image_source(
-    image: Box<Image>,
-    destination_mode: Mode,
-) -> Result<Image, PilError> {
+fn paste_region_intersects_destination(
+    position: (i32, i32),
+    region_size: (u32, u32),
+    destination_size: (u32, u32),
+) -> bool {
+    let left = i64::from(position.0);
+    let top = i64::from(position.1);
+    let right = left + i64::from(region_size.0);
+    let bottom = top + i64::from(region_size.1);
+    let clipped_left = left.max(0);
+    let clipped_top = top.max(0);
+    let clipped_right = right.min(i64::from(destination_size.0));
+    let clipped_bottom = bottom.min(i64::from(destination_size.1));
+    clipped_left < clipped_right && clipped_top < clipped_bottom
+}
+
+fn resolve_image_source(image: Box<Image>, destination_mode: Mode) -> Result<Image, PilError> {
     let source_mode = image.mode_identity()?;
     // Pillow skips conversion for LA, RGBA, and RGBa pasted into RGB because
     // those modes already use the destination's four-byte physical pixel. Its
@@ -827,9 +865,7 @@ fn resolve_image_source(
             ))
     {
         Ok(*image)
-    } else if destination_mode == Mode::ImagePaletteAlpha8
-        && source_mode == Mode::ImagePalette8
-    {
+    } else if destination_mode == Mode::ImagePaletteAlpha8 && source_mode == Mode::ImagePalette8 {
         // Pillow promotes P sources to opaque PA samples and retains each index.
         let mut promoted = *image;
         promoted.putalpha(255)?;
@@ -852,7 +888,11 @@ fn resolve_solid_source(
             let dims = CheckedDims::new(width, height, 1)?;
             let mut indices = dims.alloc_buffer();
             indices.fill(color.0);
-            Image::frombytes(crate::raster::Mode::ImagePalette8, (width, height), &indices)
+            Image::frombytes(
+                crate::raster::Mode::ImagePalette8,
+                (width, height),
+                &indices,
+            )
         }
         ResolvedPasteColor::Bytes(color) if destination_mode == Mode::ImagePaletteAlpha8 => {
             // PA uses the LA physical layout while retaining its palette tag.
@@ -860,11 +900,21 @@ fn resolve_solid_source(
         }
         ResolvedPasteColor::Integer(value) => {
             let bytes = value.to_le_bytes();
-            Image::new(width, height, crate::raster::Mode::ImageI32, (bytes[0], bytes[1], bytes[2], bytes[3]))
+            Image::new(
+                width,
+                height,
+                crate::raster::Mode::ImageI32,
+                (bytes[0], bytes[1], bytes[2], bytes[3]),
+            )
         }
         ResolvedPasteColor::Float(value) => {
             let bytes = value.to_le_bytes();
-            Image::new(width, height, crate::raster::Mode::ImageF32, (bytes[0], bytes[1], bytes[2], bytes[3]))
+            Image::new(
+                width,
+                height,
+                crate::raster::Mode::ImageF32,
+                (bytes[0], bytes[1], bytes[2], bytes[3]),
+            )
         }
         ResolvedPasteColor::Luma16(sample) => {
             let pixels = crate::raster::ImageBuffer::from_pixel(

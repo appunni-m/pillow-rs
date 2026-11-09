@@ -2,11 +2,11 @@
 
 use std::sync::Arc;
 
-use crate::compute::{Architecture, ExecutionContext};
 use crate::compute::registry::support::{
     ImplementationSupport, InputContract, ModeSupport, OperationId, OperationInputs,
     OperationSupport, OutputModeRule, StrategyGuard, StrategySelection,
 };
+use crate::compute::{Architecture, ExecutionContext};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
@@ -32,10 +32,7 @@ const COMPOSITE_SSE2: &[Architecture] = &[Architecture::Sse2];
 const COMPOSITE_NEON: &[Architecture] = &[Architecture::Neon];
 const COMPOSITE_WASM_SIMD128: &[Architecture] = &[Architecture::WasmSimd128];
 
-const fn composite_vector_architectures(
-    mode: Mode,
-    channels: u8,
-) -> [ImplementationSupport; 3] {
+const fn composite_vector_architectures(mode: Mode, channels: u8) -> [ImplementationSupport; 3] {
     [
         ImplementationSupport::cpu(
             OperationId::CompositeModule,
@@ -133,14 +130,23 @@ composite_architectures!(COMPOSITE_ONE_ARCHITECTURES, One, 1);
 composite_l_mask_architectures!(COMPOSITE_LUMA_ARCHITECTURES, ImageLuma8, 1, 16);
 composite_architectures!(COMPOSITE_PALETTE_ARCHITECTURES, ImagePalette8, 1);
 composite_l_mask_architectures!(COMPOSITE_LUMA_ALPHA_ARCHITECTURES, ImageLumaA8, 2, 8);
-composite_l_mask_architectures!(COMPOSITE_PALETTE_ALPHA_ARCHITECTURES, ImagePaletteAlpha8, 2, 1);
+composite_l_mask_architectures!(
+    COMPOSITE_PALETTE_ALPHA_ARCHITECTURES,
+    ImagePaletteAlpha8,
+    2,
+    1
+);
 composite_l_mask_architectures!(COMPOSITE_RGB_ARCHITECTURES, ImageRgb8, 3, 16);
 composite_l_mask_architectures!(COMPOSITE_HSV_ARCHITECTURES, ImageHsv8, 3, 16);
 composite_architectures!(COMPOSITE_YCBCR_ARCHITECTURES, ImageYCbCr8, 3);
 composite_l_mask_architectures!(COMPOSITE_RGBA_ARCHITECTURES, ImageRgba8, 4, 4);
 composite_l_mask_architectures!(COMPOSITE_CMYK_ARCHITECTURES, ImageCmyk8, 4, 16);
 composite_architectures!(COMPOSITE_RGBX_ARCHITECTURES, ImageRgbx8, 4);
-composite_architectures!(COMPOSITE_RGB_PREMULTIPLIED_ARCHITECTURES, ImageRgbPremultiplied8, 4);
+composite_architectures!(
+    COMPOSITE_RGB_PREMULTIPLIED_ARCHITECTURES,
+    ImageRgbPremultiplied8,
+    4
+);
 composite_architectures!(COMPOSITE_I32_ARCHITECTURES, ImageI32, 4);
 composite_architectures!(COMPOSITE_F32_ARCHITECTURES, ImageF32, 4);
 
@@ -193,8 +199,11 @@ fn composite_support(mode: Mode) -> ModeSupport {
 }
 
 /// Complete exact-mode support contract for Image.composite.
-pub(crate) static COMPOSITE_MODULE_SUPPORT: OperationSupport =
-    OperationSupport::new(OperationId::CompositeModule, COMPOSITE_INPUTS, composite_support);
+pub(crate) static COMPOSITE_MODULE_SUPPORT: OperationSupport = OperationSupport::new(
+    OperationId::CompositeModule,
+    COMPOSITE_INPUTS,
+    composite_support,
+);
 
 /// Validates the eager wrapper's size check from the same contract used by
 /// prepared Composite admission.
@@ -215,8 +224,12 @@ pub(crate) fn validate_composite_wrapper_dimensions(
 
 /// Selects luma or alpha mask samples from Composite's declared mode sets.
 pub(crate) fn composite_wrapper_mask_alpha(mask_mode: Mode) -> Result<bool, PilError> {
-    let InputContract::CompositeInputs { luma_masks, alpha_masks, mask_rejection, .. } =
-        COMPOSITE_INPUT
+    let InputContract::CompositeInputs {
+        luma_masks,
+        alpha_masks,
+        mask_rejection,
+        ..
+    } = COMPOSITE_INPUT
     else {
         return Err(PilError::InternalError(
             "Composite support omitted its mask contract".into(),
@@ -286,21 +299,20 @@ pub(crate) fn prepare_composite_pipeline<'a>(
     op: &'a PipelineOp,
     ctx: &ExecutionContext,
 ) -> Result<crate::compute::registry::PreparedOperation<'a>, PilError> {
-    let PipelineOp::CompositeModule { other, mask, mask_alpha } = op else {
+    let PipelineOp::CompositeModule {
+        other,
+        mask,
+        mask_alpha,
+    } = op
+    else {
         return Err(PilError::ValueError("expected CompositeModule op".into()));
     };
     // The archived executor resolves the mask before the destination image;
     // keep that ordering when either lazy input fails to materialize.
     let mask = mask.materialized_shared()?;
     let destination = other.materialized_shared()?;
-    prepare_composite_module(
-        input,
-        destination,
-        mask,
-        *mask_alpha,
-        ctx,
-    )
-    .map(crate::compute::registry::PreparedOperation::from_composite_module)
+    prepare_composite_module(input, destination, mask, *mask_alpha, ctx)
+        .map(crate::compute::registry::PreparedOperation::from_composite_module)
 }
 
 fn execute_composite_mode(
@@ -312,30 +324,92 @@ fn execute_composite_mode(
     selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
     match mode {
-        Mode::One => super::super::one::ops::composite(source, destination, mask, mask_alpha, selection),
-        Mode::ImageLuma8 => super::super::luma8::ops::composite(source, destination, mask, mask_alpha, selection),
-        Mode::ImageLumaA8 => super::super::luma_a8::ops::composite(source, destination, mask, mask_alpha, selection),
-        Mode::ImageLaPremultiplied8 => super::super::la_premultiplied8::ops::composite(source, destination, mask, mask_alpha, selection),
-        Mode::ImagePalette8 => super::super::palette8::ops::composite(source, destination, mask, mask_alpha, selection),
-        Mode::ImagePaletteAlpha8 => super::super::palette_alpha8::ops::composite(source, destination, mask, mask_alpha, selection),
-        Mode::ImageRgb8 => super::super::rgb8::ops::composite(source, destination, mask, mask_alpha, selection),
-        Mode::ImageRgba8 => super::super::rgba8::ops::composite(source, destination, mask, mask_alpha, selection),
-        Mode::ImageRgbPremultiplied8 => super::super::rgb_premultiplied8::ops::composite(source, destination, mask, mask_alpha, selection),
-        Mode::ImageRgbx8 => super::super::rgbx8::ops::composite(source, destination, mask, mask_alpha, selection),
-        Mode::ImageCmyk8 => super::super::cmyk8::ops::composite(source, destination, mask, mask_alpha, selection),
-        Mode::ImageYCbCr8 => super::super::ycbcr8::ops::composite(source, destination, mask, mask_alpha, selection),
-        Mode::ImageLab8 => super::super::lab8::ops::composite(source, destination, mask, mask_alpha, selection),
-        Mode::ImageHsv8 => super::super::hsv8::ops::composite(source, destination, mask, mask_alpha, selection),
-        Mode::ImageI32 => super::super::i32::ops::composite(source, destination, mask, mask_alpha, selection),
-        Mode::ImageF32 => super::super::f32::ops::composite(source, destination, mask, mask_alpha, selection),
-        Mode::ImageI16 => super::super::i16::ops::composite(source, destination, mask, mask_alpha, selection),
-        Mode::ImageI16L => super::super::i16l::ops::composite(source, destination, mask, mask_alpha, selection),
-        Mode::ImageI16B => super::super::i16b::ops::composite(source, destination, mask, mask_alpha, selection),
-        Mode::ImageI16N => super::super::i16n::ops::composite(source, destination, mask, mask_alpha, selection),
-        Mode::ImageLumaA16 => super::super::luma_a16::ops::composite(source, destination, mask, mask_alpha, selection),
-        Mode::ImageRgb16 => super::super::rgb16::ops::composite(source, destination, mask, mask_alpha, selection),
-        Mode::ImageRgba16 => super::super::rgba16::ops::composite(source, destination, mask, mask_alpha, selection),
-        Mode::ImageRgb32F => super::super::rgb32f::ops::composite(source, destination, mask, mask_alpha, selection),
-        Mode::ImageRgba32F => super::super::rgba32f::ops::composite(source, destination, mask, mask_alpha, selection),
+        Mode::One => {
+            super::super::one::ops::composite(source, destination, mask, mask_alpha, selection)
+        }
+        Mode::ImageLuma8 => {
+            super::super::luma8::ops::composite(source, destination, mask, mask_alpha, selection)
+        }
+        Mode::ImageLumaA8 => {
+            super::super::luma_a8::ops::composite(source, destination, mask, mask_alpha, selection)
+        }
+        Mode::ImageLaPremultiplied8 => super::super::la_premultiplied8::ops::composite(
+            source,
+            destination,
+            mask,
+            mask_alpha,
+            selection,
+        ),
+        Mode::ImagePalette8 => {
+            super::super::palette8::ops::composite(source, destination, mask, mask_alpha, selection)
+        }
+        Mode::ImagePaletteAlpha8 => super::super::palette_alpha8::ops::composite(
+            source,
+            destination,
+            mask,
+            mask_alpha,
+            selection,
+        ),
+        Mode::ImageRgb8 => {
+            super::super::rgb8::ops::composite(source, destination, mask, mask_alpha, selection)
+        }
+        Mode::ImageRgba8 => {
+            super::super::rgba8::ops::composite(source, destination, mask, mask_alpha, selection)
+        }
+        Mode::ImageRgbPremultiplied8 => super::super::rgb_premultiplied8::ops::composite(
+            source,
+            destination,
+            mask,
+            mask_alpha,
+            selection,
+        ),
+        Mode::ImageRgbx8 => {
+            super::super::rgbx8::ops::composite(source, destination, mask, mask_alpha, selection)
+        }
+        Mode::ImageCmyk8 => {
+            super::super::cmyk8::ops::composite(source, destination, mask, mask_alpha, selection)
+        }
+        Mode::ImageYCbCr8 => {
+            super::super::ycbcr8::ops::composite(source, destination, mask, mask_alpha, selection)
+        }
+        Mode::ImageLab8 => {
+            super::super::lab8::ops::composite(source, destination, mask, mask_alpha, selection)
+        }
+        Mode::ImageHsv8 => {
+            super::super::hsv8::ops::composite(source, destination, mask, mask_alpha, selection)
+        }
+        Mode::ImageI32 => {
+            super::super::i32::ops::composite(source, destination, mask, mask_alpha, selection)
+        }
+        Mode::ImageF32 => {
+            super::super::f32::ops::composite(source, destination, mask, mask_alpha, selection)
+        }
+        Mode::ImageI16 => {
+            super::super::i16::ops::composite(source, destination, mask, mask_alpha, selection)
+        }
+        Mode::ImageI16L => {
+            super::super::i16l::ops::composite(source, destination, mask, mask_alpha, selection)
+        }
+        Mode::ImageI16B => {
+            super::super::i16b::ops::composite(source, destination, mask, mask_alpha, selection)
+        }
+        Mode::ImageI16N => {
+            super::super::i16n::ops::composite(source, destination, mask, mask_alpha, selection)
+        }
+        Mode::ImageLumaA16 => {
+            super::super::luma_a16::ops::composite(source, destination, mask, mask_alpha, selection)
+        }
+        Mode::ImageRgb16 => {
+            super::super::rgb16::ops::composite(source, destination, mask, mask_alpha, selection)
+        }
+        Mode::ImageRgba16 => {
+            super::super::rgba16::ops::composite(source, destination, mask, mask_alpha, selection)
+        }
+        Mode::ImageRgb32F => {
+            super::super::rgb32f::ops::composite(source, destination, mask, mask_alpha, selection)
+        }
+        Mode::ImageRgba32F => {
+            super::super::rgba32f::ops::composite(source, destination, mask, mask_alpha, selection)
+        }
     }
 }

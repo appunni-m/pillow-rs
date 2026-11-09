@@ -1,8 +1,8 @@
 //! Scalar byte-LUT mapping shared by exact byte modes.
 
 use crate::error::PilError;
-use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::DynamicImage;
+use crate::raster::buffer::HiddenPixelLanes;
 
 /// Restores the omitted lanes written by Pillow's mode-specific Point loops.
 /// Point allocates clean output storage and writes only its declared bands, so
@@ -17,8 +17,9 @@ pub(crate) fn initialize_point_hidden_lanes(output: &mut DynamicImage) -> Result
     if pixel_count == 0 {
         return Ok(());
     }
-    let lanes = HiddenPixelLanes::constant(lane_count, pixel_count, [0; 2])
-        .ok_or_else(|| PilError::InternalError("Eval mode had an invalid hidden-lane layout".into()))?;
+    let lanes = HiddenPixelLanes::constant(lane_count, pixel_count, [0; 2]).ok_or_else(|| {
+        PilError::InternalError("Eval mode had an invalid hidden-lane layout".into())
+    })?;
     if output.replace_hidden_pixel_lanes(Some(lanes)) {
         Ok(())
     } else {
@@ -44,8 +45,7 @@ pub(crate) fn map_native_byte_lut<const CHANNELS: usize>(
     let mut all_affine = true;
     for (channel, coefficients) in affine.iter_mut().enumerate() {
         let start = channel * 256;
-        let Some(pair) =
-            crate::compute::byte_lut_affine_coefficients(&lut[start..start + 256])
+        let Some(pair) = crate::compute::byte_lut_affine_coefficients(&lut[start..start + 256])
         else {
             all_affine = false;
             break;

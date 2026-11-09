@@ -105,10 +105,7 @@ fn filtered_standard(
 }
 
 fn is_empty(source_size: (u32, u32), destination_size: (u32, u32)) -> bool {
-    source_size.0 == 0
-        || source_size.1 == 0
-        || destination_size.0 == 0
-        || destination_size.1 == 0
+    source_size.0 == 0 || source_size.1 == 0 || destination_size.0 == 0 || destination_size.1 == 0
 }
 
 fn standard_zero_source(input: &GrayImage, bounds: Option<(f64, f64, f64, f64)>) -> bool {

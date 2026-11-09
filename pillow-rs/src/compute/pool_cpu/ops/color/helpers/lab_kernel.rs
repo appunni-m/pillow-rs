@@ -14,7 +14,11 @@ struct Axis {
 }
 
 const fn make_axes() -> [Axis; 256] {
-    let mut axes = [Axis { cell: 0, fraction: 0, step: 1 }; 256];
+    let mut axes = [Axis {
+        cell: 0,
+        fraction: 0,
+        step: 1,
+    }; 256];
     let mut value = 0usize;
     while value < axes.len() {
         let scaled = value as u32 * 257 * 32;
@@ -33,7 +37,11 @@ const AXES: [Axis; 256] = make_axes();
 
 /// Converts tightly packed RGB8 samples to Pillow's packed LAB color samples.
 pub(crate) fn convert_rgb_bytes(source: &[u8], pixel_count: usize) -> Result<Vec<u8>, PilError> {
-    convert_color_bytes::<3>(source, pixel_count, "LAB conversion requires tightly packed RGB8 input")
+    convert_color_bytes::<3>(
+        source,
+        pixel_count,
+        "LAB conversion requires tightly packed RGB8 input",
+    )
 }
 
 /// Converts four-byte RGB-family pixels to LAB, ignoring only their auxiliary lane.
@@ -51,7 +59,11 @@ pub(crate) fn convert_four_byte_rgb_bytes(
 pub(crate) fn pixel_count(width: u32, height: u32) -> Result<usize, PilError> {
     usize::try_from(width)
         .ok()
-        .and_then(|width| usize::try_from(height).ok().and_then(|height| width.checked_mul(height)))
+        .and_then(|width| {
+            usize::try_from(height)
+                .ok()
+                .and_then(|height| width.checked_mul(height))
+        })
         .ok_or_else(|| PilError::InternalError("LAB image size overflow".into()))
 }
 
@@ -101,7 +113,10 @@ fn convert_color_bytes<const STRIDE: usize>(
         .checked_mul(CHANNELS)
         .ok_or_else(|| PilError::InternalError("LAB input size overflow".into()))?;
     let mut output = vec![0; output_len];
-    for (source, target) in source.chunks_exact(STRIDE).zip(output.chunks_exact_mut(CHANNELS)) {
+    for (source, target) in source
+        .chunks_exact(STRIDE)
+        .zip(output.chunks_exact_mut(CHANNELS))
+    {
         target.copy_from_slice(&convert_rgb_pixel([source[0], source[1], source[2]]));
     }
     Ok(output)
@@ -142,15 +157,17 @@ fn convert_rgb_pixel(rgb: [u8; 3]) -> [u8; 3] {
         let a1 = crate::lab::lut_value(v1 + channel);
         let a2 = crate::lab::lut_value(v2 + channel);
         let a3 = crate::lab::lut_value(v3 + channel);
-        let rest = (a1 - a0) * fractions[p]
-            + (a2 - a1) * fractions[q]
-            + (a3 - a2) * fractions[t]
-            + 0x8001;
+        let rest =
+            (a1 - a0) * fractions[p] + (a2 - a1) * fractions[q] + (a3 - a2) * fractions[t] + 0x8001;
         let lab_v4 = a0 + ((rest + (rest >> 16)) >> 16);
 
         // Pillow quantizes the LabV4 sample, then removes A/B's +128 bias.
         let packed = ((lab_v4 as u32 * 65281 + 8_388_608) >> 24) as u8;
-        output[channel] = if channel == 0 { packed } else { packed.wrapping_sub(128) };
+        output[channel] = if channel == 0 {
+            packed
+        } else {
+            packed.wrapping_sub(128)
+        };
     }
     output
 }

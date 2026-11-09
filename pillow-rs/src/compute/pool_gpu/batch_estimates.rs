@@ -217,9 +217,14 @@ fn add_auxiliary_arena_bytes(
     storage_alignment: usize,
     packed_luma_putdata: bool,
 ) -> Result<(), PilError> {
-    if let PipelineOp::PutData { data, payload_mode, .. } = op {
+    if let PipelineOp::PutData {
+        data, payload_mode, ..
+    } = op
+    {
         let channels = crate::compute::helpers::put_data::payload_bytes_per_pixel(*payload_mode)
-            .ok_or_else(|| PilError::ValueError("GPU PutData payload mode is unsupported".into()))?;
+            .ok_or_else(|| {
+                PilError::ValueError("GPU PutData payload mode is unsupported".into())
+            })?;
         let words = putdata_auxiliary_words(
             data.len(),
             channels,

@@ -63,9 +63,8 @@ impl Image {
         let preserves_palette = ops.preserves_palette();
         let source_format_suppressed = ops.source_format_suppressed();
         let source_info_suppressed = ops.source_info_suppressed();
-        let mut rebuilt_ops =
-            PipelineOps::from_vec_with_origins(flattened_ops, operation_origins)
-                .with_palette_preservation(preserves_palette);
+        let mut rebuilt_ops = PipelineOps::from_vec_with_origins(flattened_ops, operation_origins)
+            .with_palette_preservation(preserves_palette);
         if source_format_suppressed {
             rebuilt_ops.suppress_source_format();
         }
@@ -235,8 +234,7 @@ impl Image {
         Option<crate::compute::Backend>,
         crate::compute::ExecutionContext,
     ) {
-        let (requested_backend, _, context) =
-            self.cpu_arch_execution_route_advisory_with_policy();
+        let (requested_backend, _, context) = self.cpu_arch_execution_route_advisory_with_policy();
         (requested_backend, context)
     }
 
@@ -336,15 +334,9 @@ pub(crate) struct GpuResultMetadata {
 
 #[cfg(feature = "gpu")]
 impl GpuResultMetadata {
-    pub(crate) fn materialize(
-        &self,
-        image: DynamicImage,
-        mode: &str,
-    ) -> Result<Image, PilError> {
-        let mut result = Image::from_dynamic_with_mode(
-            image,
-            super::mode_boundary::parse_pillow_mode(mode),
-        )?;
+    pub(crate) fn materialize(&self, image: DynamicImage, mode: &str) -> Result<Image, PilError> {
+        let mut result =
+            Image::from_dynamic_with_mode(image, super::mode_boundary::parse_pillow_mode(mode))?;
         if let Image::Loaded(data) = &mut result {
             data.info = self.info.clone();
             data.exif = self.exif.clone();
@@ -501,9 +493,7 @@ impl Image {
             && let Some(pixels) = prefix.materialized.get()
         {
             let pixels = pixels.clone()?;
-            let pixel_mode = match declared_mode
-                .and_then(super::mode_boundary::pillow_mode_name)
-            {
+            let pixel_mode = match declared_mode.and_then(super::mode_boundary::pillow_mode_name) {
                 Some(mode) => mode.to_owned(),
                 None => gpu_dynamic_mode_name(&pixels)?,
             };

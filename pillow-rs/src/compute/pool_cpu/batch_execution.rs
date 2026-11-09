@@ -6,8 +6,8 @@ use crate::compute::pool_cpu::ops::imageops::helpers::hidden_lanes as imageops_h
 use crate::compute::registry::support::{OperationInputs, PaletteInput, StrategySelection};
 use crate::compute::{
     Architecture, Backend, ExecutionContext, account_host_buffer_boundary,
-    begin_pipeline_operation_telemetry, finish_pipeline_operation_telemetry, host_resource_telemetry,
-    record_pipeline_operation_path,
+    begin_pipeline_operation_telemetry, finish_pipeline_operation_telemetry,
+    host_resource_telemetry, record_pipeline_operation_path,
 };
 use crate::error::PilError;
 use crate::pipeline::{PipelineOp, TransposeTransform};
@@ -255,12 +255,10 @@ fn prepare_owned_invert(
             crate::compute::pool_cpu::ops::imageops::ops::INVERT_SUPPORT.for_mode(mode),
             OwnedInvertKind::ImageOpsPoint,
         ),
-        PipelineOp::InvertChops => {
-            (
-                crate::compute::pool_cpu::ops::chops::ops::INVERT_SUPPORT.for_mode(mode),
-                OwnedInvertKind::Chops,
-            )
-        }
+        PipelineOp::InvertChops => (
+            crate::compute::pool_cpu::ops::chops::ops::INVERT_SUPPORT.for_mode(mode),
+            OwnedInvertKind::Chops,
+        ),
         _ => return None,
     };
     if !matches!(
@@ -377,19 +375,19 @@ fn execute_fused_run(
             }
         };
         let architecture = selection.implementation.architecture;
-        let output = match super::ops::draw::ops::execute_batch(
-            image,
-            run,
-            image.mode(),
-            selection,
-        ) {
+        let output = match super::ops::draw::ops::execute_batch(image, run, image.mode(), selection)
+        {
             Ok(output) => output,
             Err(error) => {
                 for op in run {
                     record_fused_operation_telemetry(
                         op,
                         &selection,
-                        if architecture == Architecture::Default { "cpu" } else { "vector" },
+                        if architecture == Architecture::Default {
+                            "cpu"
+                        } else {
+                            "vector"
+                        },
                         0,
                         0,
                     );
@@ -401,7 +399,11 @@ fn execute_fused_run(
             record_fused_operation_telemetry(
                 op,
                 &selection,
-                if architecture == Architecture::Default { "cpu" } else { "vector" },
+                if architecture == Architecture::Default {
+                    "cpu"
+                } else {
+                    "vector"
+                },
                 0,
                 0,
             );
@@ -439,10 +441,9 @@ fn execute_fused_run(
             return Ok(Some(step));
         }
     }
-    if let Some(run) = super::ops::imageops::helpers::point_lut::compose_run(
-        &ops[start..],
-        image.mode(),
-    ) {
+    if let Some(run) =
+        super::ops::imageops::helpers::point_lut::compose_run(&ops[start..], image.mode())
+    {
         let end = start + run.operations;
         let output = execute_point_run(&ops[start..end], image, context, run.bands, run.values)?;
         return Ok(Some(FusedStep {
@@ -495,14 +496,22 @@ fn execute_alpha_composite_mirror_run(
             record_fused_operation_telemetry(
                 &fused_ops[0],
                 &alpha_selection,
-                if alpha_architecture == Architecture::Default { "cpu" } else { "vector" },
+                if alpha_architecture == Architecture::Default {
+                    "cpu"
+                } else {
+                    "vector"
+                },
                 0,
                 0,
             );
             record_fused_operation_telemetry(
                 &fused_ops[1],
                 &mirror_selection,
-                if mirror_architecture == Architecture::Default { "cpu" } else { "native-copy" },
+                if mirror_architecture == Architecture::Default {
+                    "cpu"
+                } else {
+                    "native-copy"
+                },
                 0,
                 0,
             );
@@ -610,7 +619,8 @@ fn execute_rgb_putpixel_thumbnail_run(
         &ops[start..putpixel_end],
         thumbnail,
         context,
-    )? else {
+    )?
+    else {
         return Ok(None);
     };
 
@@ -640,7 +650,7 @@ fn execute_transpose_run(
     let PipelineOp::Transpose { method } = &ops[start] else {
         return Ok(None);
     };
-    let mut transform = TransposeTransform::Method(method.clone());
+    let mut transform = TransposeTransform::Method(*method);
     let mut end = start + 1;
     while let Some(PipelineOp::Transpose { method }) = ops.get(end) {
         transform = transform.then(method);
@@ -831,10 +841,7 @@ fn execute_put_pixel_run(
     output
 }
 
-fn finish_cpu_operation_telemetry(
-    ops: &[PipelineOp],
-    selection: Option<&StrategySelection>,
-) {
+fn finish_cpu_operation_telemetry(ops: &[PipelineOp], selection: Option<&StrategySelection>) {
     let architecture = selection.map(|selection| selection.implementation.architecture);
     let path = match architecture {
         Some(Architecture::Default) | None => "cpu",

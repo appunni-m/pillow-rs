@@ -1,6 +1,6 @@
 //! Portable packed-vector implementation of the native LA 5x5 binomial kernel.
 
-use wide::{i16x8, u16x16, u8x16};
+use wide::{i16x8, u8x16, u16x16};
 
 #[inline]
 fn pack_u16x16(value: u16x16) -> u8x16 {
@@ -11,7 +11,12 @@ fn pack_u16x16(value: u16x16) -> u8x16 {
 }
 
 fn load_vector(samples: &[u16], start: usize) -> Option<u16x16> {
-    Some(u16x16::new(samples.get(start..start.checked_add(16)?)?.try_into().ok()?))
+    Some(u16x16::new(
+        samples
+            .get(start..start.checked_add(16)?)?
+            .try_into()
+            .ok()?,
+    ))
 }
 
 fn weighted_horizontal(raw: &[u8], row_start: usize, x: usize) -> Option<u16x16> {
@@ -21,17 +26,29 @@ fn weighted_horizontal(raw: &[u8], row_start: usize, x: usize) -> Option<u16x16>
         let bytes: [u8; 16] = raw.get(start..start.checked_add(16)?)?.try_into().ok()?;
         Some(u16x16::from(u8x16::new(bytes)))
     };
-    Some(load(0)? + load(4)? + (load(1)? + load(3)?) * u16x16::splat(4) + load(2)? * u16x16::splat(6))
+    Some(
+        load(0)?
+            + load(4)?
+            + (load(1)? + load(3)?) * u16x16::splat(4)
+            + load(2)? * u16x16::splat(6),
+    )
 }
 
-fn fill_horizontal_row(raw: &[u8], width: usize, source_y: usize, destination: &mut [u16]) -> Option<()> {
+fn fill_horizontal_row(
+    raw: &[u8],
+    width: usize,
+    source_y: usize,
+    destination: &mut [u16],
+) -> Option<()> {
     let row_samples = width.checked_mul(2)?;
     let row_start = source_y.checked_mul(row_samples)?;
     let vector_end = 2 + (width - 4) / 8 * 8;
     let mut x = 2usize;
     while x < vector_end {
         let samples = weighted_horizontal(raw, row_start, x)?.to_array();
-        destination.get_mut(x * 2..x * 2 + 16)?.copy_from_slice(&samples);
+        destination
+            .get_mut(x * 2..x * 2 + 16)?
+            .copy_from_slice(&samples);
         x += 8;
     }
     while x < width - 2 {
@@ -65,9 +82,11 @@ fn write_vertical_row(
     let mut x = 2usize;
     while x < vector_end {
         let start = x.checked_mul(2)?;
-        let packed = pack_u16x16((weighted_vertical(rows, start)? + u16x16::splat(128)) >> 8u32)
-            .to_array();
-        output.get_mut(output_row + start..output_row + start + 16)?.copy_from_slice(&packed);
+        let packed =
+            pack_u16x16((weighted_vertical(rows, start)? + u16x16::splat(128)) >> 8u32).to_array();
+        output
+            .get_mut(output_row + start..output_row + start + 16)?
+            .copy_from_slice(&packed);
         x += 8;
     }
     let scalar_start = x;
@@ -118,7 +137,12 @@ pub(crate) fn filter_5x5_binomial_la_rows(
         scalar_tail += row_tail;
         let next_source_y = y + 3;
         if next_source_y < height {
-            fill_horizontal_row(raw, width, next_source_y, &mut horizontal_rows[next_source_y % 5])?;
+            fill_horizontal_row(
+                raw,
+                width,
+                next_source_y,
+                &mut horizontal_rows[next_source_y % 5],
+            )?;
         }
     }
     Some((vector_blocks as u64, scalar_tail as u64))

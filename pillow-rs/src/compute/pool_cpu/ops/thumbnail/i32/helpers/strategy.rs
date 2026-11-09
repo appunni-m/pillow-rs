@@ -1,5 +1,5 @@
-use crate::compute::{Architecture, Backend};
 use crate::compute::registry::support::{OperationId, StrategySelection};
+use crate::compute::{Architecture, Backend};
 use crate::error::PilError;
 use crate::raster::Mode;
 

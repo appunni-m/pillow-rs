@@ -54,6 +54,25 @@ def convert(image: Image, mode: str) -> Image:
 
 def merge(mode: str, bands):
     """Merge single-band images into a multi-band image."""
+    (
+        expected_band_count,
+        subsequent_band_mode,
+        count_rejection,
+        mode_rejection,
+        size_rejection,
+    ) = _core.image_merge_callback_contract(mode)
+    if len(bands) != expected_band_count:
+        raise ValueError(count_rejection)
+    # Pillow observes these public callbacks before loading every input and
+    # passing the materialized rasters to the core merger.
+    if subsequent_band_mode is not None:
+        for band in bands[1:]:
+            if band.mode != subsequent_band_mode:
+                raise ValueError(mode_rejection)
+            if band.size != bands[0].size:
+                raise ValueError(size_rejection)
+    for band in bands:
+        band.load()
     merged = _core.image_merge(mode, bands)
     return bands[0]._new(merged)
 

@@ -3,9 +3,7 @@ use crate::compute::registry::support::StrategySelection;
 use crate::error::PilError;
 use crate::raster::{Mode, RgbImage};
 
-use super::super::helpers::get_data::{
-    self as helpers, GetDataOutput, GetDataRequest,
-};
+use super::super::helpers::get_data::{self as helpers, GetDataOutput, GetDataRequest};
 use super::default::get_data_impl;
 
 pub(crate) fn execute_get_data(
@@ -29,6 +27,7 @@ crate::compute::pool_cpu::ops::analysis::helpers::bbox::declare_getbbox_owner!(
     hsv8,
     ImageHsv8,
     crate::raster::RgbImage,
+    Pillow,
 );
 
 crate::compute::pool_cpu::ops::analysis::helpers::extrema::declare_getextrema_owner!(
@@ -52,22 +51,19 @@ crate::compute::pool_cpu::ops::analysis::helpers::stat_execution::declare_stat_o
     crate::raster::RgbImage,
     crate::compute::pool_cpu::ops::analysis::hsv8::default::stat_impl::execute,
 );
-crate::compute::pool_cpu::ops::analysis::helpers::extrema_bytes_execution::
-    declare_getextrema_bytes_owner!(
+crate::compute::pool_cpu::ops::analysis::helpers::extrema_bytes_execution::declare_getextrema_bytes_owner!(
     ImageHsv8,
     crate::raster::RgbImage,
     crate::compute::pool_cpu::ops::analysis::hsv8::default::extrema_bytes_impl::execute,
 );
 
-pub(crate) const GET_PIXEL_SUPPORT:
-    crate::compute::registry::support::ModeSupport =
+pub(crate) const GET_PIXEL_SUPPORT: crate::compute::registry::support::ModeSupport =
     crate::compute::pool_cpu::ops::analysis::helpers::pixel_access::pillow_get_pixel_support(
         crate::raster::Mode::ImageHsv8,
         crate::compute::registry::support::PixelValueShape::U8Components { bands: 3 },
     );
 
-pub(crate) const GET_PIXEL_RGBA_SUPPORT:
-    crate::compute::registry::support::ModeSupport =
+pub(crate) const GET_PIXEL_RGBA_SUPPORT: crate::compute::registry::support::ModeSupport =
     crate::compute::pool_cpu::ops::analysis::helpers::pixel_access::rgba_get_pixel_support(
         crate::raster::Mode::ImageHsv8,
     );
@@ -85,3 +81,32 @@ pub(crate) fn execute_get_pixel(
     )?;
     super::default::get_pixel_impl::execute(image, x, y)
 }
+crate::compute::pool_cpu::ops::analysis::helpers::getcolors_support::declare_getcolors_support!(
+    ImageHsv8, pillow,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::extrema_bytes_execution::declare_getextrema_bytes_support!(
+    ImageHsv8, pillow,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::extrema_execution::declare_getextrema_support!(
+    ImageHsv8, pillow,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::histogram_execution::declare_histogram_support!(
+    ImageHsv8, 3, pillow,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::stat_execution::declare_stat_support!(
+    ImageHsv8, pillow,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::split_support::declare_split_support!(
+    ImageHsv8, pillow, Bands,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::get_channel_support::declare_get_channel_route!(
+    ImageHsv8, 3, Pillow, Child, Luma8,
+);
+
+crate::compute::pool_cpu::ops::analysis::helpers::get_data_support::declare_get_data_support!(
+    ImageHsv8, 3, Pillow, Pillow, Pillow,
+);
+
+crate::compute::pool_cpu::ops::analysis::helpers::projection_support::declare_projection_support!(
+    ImageHsv8, Pillow,
+);

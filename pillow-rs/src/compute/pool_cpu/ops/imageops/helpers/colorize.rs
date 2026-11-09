@@ -85,12 +85,18 @@ pub(crate) fn execute_native_luma(
         .checked_mul(height as usize)
         .ok_or_else(|| PilError::ValueError("colorize output is too large".into()))?;
     if width == 0 || height == 0 || gray.len() != pixels {
-        return Err(PilError::InternalError("SIMD colorize buffer mismatch".into()));
+        return Err(PilError::InternalError(
+            "SIMD colorize buffer mismatch".into(),
+        ));
     }
     let output_bytes = pixels
         .checked_mul(3)
         .ok_or_else(|| PilError::ValueError("colorize output is too large".into()))?;
-    let tables = [native_lut_tables(&lut[0]), native_lut_tables(&lut[1]), native_lut_tables(&lut[2])];
+    let tables = [
+        native_lut_tables(&lut[0]),
+        native_lut_tables(&lut[1]),
+        native_lut_tables(&lut[2]),
+    ];
     let mut output = Vec::<[u8; 3]>::with_capacity(output_bytes / 3);
     let mut vector_blocks = 0u64;
 

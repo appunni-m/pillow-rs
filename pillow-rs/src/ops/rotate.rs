@@ -248,8 +248,7 @@ impl Image {
         let (normalized_angle, expand, requested_filter, requested_nearest) =
             normalize_rotate_request(angle, resample, expand)?;
         let source_mode = self.mode_identity()?;
-        let nearest = requested_nearest
-            || matches!(source_mode, Mode::One | Mode::ImagePalette8);
+        let nearest = requested_nearest || matches!(source_mode, Mode::One | Mode::ImagePalette8);
         let filter = if nearest {
             ResampleFilter::Nearest
         } else {
@@ -404,7 +403,12 @@ fn normalize_rotate_request(
     } else {
         normalize_rotate_at_angle(normalized_angle, resample, expand)?
     };
-    Ok((normalized_angle, expand, requested_filter, requested_nearest))
+    Ok((
+        normalized_angle,
+        expand,
+        requested_filter,
+        requested_nearest,
+    ))
 }
 
 fn resolve_rotate_fill(
@@ -413,9 +417,7 @@ fn resolve_rotate_fill(
 ) -> Result<(Option<(u8, u8, u8, u8)>, Option<Vec<u8>>), PilError> {
     match fillcolor {
         ImageOpsColor::None => Ok((None, None)),
-        ImageOpsColor::PaletteFill { index, palette }
-            if source_mode == Mode::ImagePalette8 =>
-        {
+        ImageOpsColor::PaletteFill { index, palette } if source_mode == Mode::ImagePalette8 => {
             Ok((Some((index, index, index, u8::MAX)), Some(palette)))
         }
         ImageOpsColor::PaletteFill { .. } => {

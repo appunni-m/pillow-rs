@@ -1,5 +1,11 @@
-use super::*;
-use pyo3::types::{PyIterator, PySlice, PyStringMethods};
+use super::{
+    imageops_global_or_builtin, imageops_mode_equals, imageops_mode_is_luma_or_rgb,
+    imageops_unsupported_mode_error,
+};
+use crate::map_error;
+use pyo3::prelude::{Bound, Py, PyAny, PyErr, PyModule, PyResult, Python};
+use pyo3::types::{PyAnyMethods, PyInt, PyIterator, PyList, PyModuleMethods, PySlice, PyTuple};
+use pyo3::{pyfunction, wrap_pyfunction};
 
 struct PythonAutocontrastLutCallbacks<'py> {
     py: Python<'py>,
@@ -41,9 +47,7 @@ impl<'py> pillow_rs::ImageOpsAutocontrastSourceCallbacks
     type Error = AutocontrastCallbackError;
 
     fn convert_to_luma(&mut self, image: &Self::Image) -> Result<Self::Image, Self::Error> {
-        image
-            .call_method1("convert", ("L",))
-            .map_err(Into::into)
+        image.call_method1("convert", ("L",)).map_err(Into::into)
     }
 
     fn histogram(
@@ -51,30 +55,11 @@ impl<'py> pillow_rs::ImageOpsAutocontrastSourceCallbacks
         image: &Self::Image,
         mask: &Self::Mask,
     ) -> Result<Self::Value, Self::Error> {
-        image
-            .call_method1("histogram", (mask,))
-            .map_err(Into::into)
+        image.call_method1("histogram", (mask,)).map_err(Into::into)
     }
 
-    fn preserve_tone_is_truthy(
-        &mut self,
-        value: &Self::PreserveTone,
-    ) -> Result<bool, Self::Error> {
+    fn preserve_tone_is_truthy(&mut self, value: &Self::PreserveTone) -> Result<bool, Self::Error> {
         value.is_truthy().map_err(Into::into)
-    }
-
-    fn mode(&mut self, image: &Self::Image) -> Result<pillow_rs::Mode, Self::Error> {
-        let rust_image = image.getattr("_rust_image")?;
-        let rust_image = rust_image
-            .cast::<PyImage>()
-            .map_err(PyErr::from)
-            .map_err(AutocontrastCallbackError::from)?;
-        rust_image
-            .borrow()
-            .inner
-            .mode_identity()
-            .map_err(map_error)
-            .map_err(AutocontrastCallbackError::from)
     }
 }
 
@@ -83,11 +68,31 @@ impl<'py> pillow_rs::ImageOpsAutocontrastResultCallbacks for PythonAutocontrastC
     type Output = Bound<'py, PyAny>;
     type Error = AutocontrastCallbackError;
 
+    fn image_mode_is_palette(&mut self) -> Result<bool, Self::Error> {
+        let mode = self.image.getattr("mode")?;
+        imageops_mode_equals(self.py, &mode, "P").map_err(Into::into)
+    }
+
+    fn image_mode_is_luma_or_rgb(&mut self) -> Result<bool, Self::Error> {
+        let mode = self.image.getattr("mode")?;
+        imageops_mode_is_luma_or_rgb(self.py, &mode).map_err(Into::into)
+    }
+
+    fn image_mode_is_rgb(&mut self) -> Result<bool, Self::Error> {
+        let mode = self.image.getattr("mode")?;
+        imageops_mode_equals(self.py, &mode, "RGB").map_err(Into::into)
+    }
+
+    fn palette_mode_error(&mut self) -> Result<Self::Error, Self::Error> {
+        Ok(AutocontrastCallbackError::Python(
+            pyo3::exceptions::PyNotImplementedError::new_err("mode P support coming soon"),
+        ))
+    }
+
     fn unsupported_mode_error(&mut self) -> Result<Self::Error, Self::Error> {
         let mode = self.image.getattr("mode")?;
-        let mode = mode.str()?.to_string_lossy().into_owned();
         Ok(AutocontrastCallbackError::Python(
-            pyo3::exceptions::PyOSError::new_err(format!("not supported for mode {mode}")),
+            imageops_unsupported_mode_error(self.py, &mode)?,
         ))
     }
 
@@ -99,7 +104,8 @@ impl<'py> pillow_rs::ImageOpsAutocontrastResultCallbacks for PythonAutocontrastC
     }
 
     fn repeat_lut(&mut self, lut: Self::Lut) -> Result<Self::Lut, Self::Error> {
-        lut.mul(3).map_err(Into::into)
+        let doubled = lut.add(&lut)?;
+        doubled.add(&lut).map_err(Into::into)
     }
 
     fn point(&mut self, lut: Self::Lut) -> Result<Self::Output, Self::Error> {
@@ -123,14 +129,10 @@ impl<'py> pillow_rs::ImageOpsAutocontrastCallbacks for PythonAutocontrastLutCall
         Ok(PyList::empty(self.py).into_any())
     }
 
-    fn channel_starts(
-        &mut self,
-        histogram: &Self::Value,
-    ) -> Result<Self::Iterator, Self::Error> {
+    fn channel_starts(&mut self, histogram: &Self::Value) -> Result<Self::Iterator, Self::Error> {
         // Python evaluates the `range` name before evaluating `len(histogram)`.
         let range = imageops_global_or_builtin(self.py, "range")?;
-        let length = imageops_global_or_builtin(self.py, "len")?
-            .call1((histogram,))?;
+        let length = imageops_global_or_builtin(self.py, "len")?.call1((histogram,))?;
         let starts = range.call1((0, length, 256))?;
         PyIterator::from_object(&starts).map_err(Into::into)
     }
@@ -161,10 +163,7 @@ impl<'py> pillow_rs::ImageOpsAutocontrastCallbacks for PythonAutocontrastLutCall
             .map_err(Into::into)
     }
 
-    fn ignore_indices(
-        &mut self,
-        ignore: &Self::Value,
-    ) -> Result<Self::Iterator, Self::Error> {
+    fn ignore_indices(&mut self, ignore: &Self::Value) -> Result<Self::Iterator, Self::Error> {
         PyIterator::from_object(ignore).map_err(Into::into)
     }
 
@@ -199,11 +198,7 @@ impl<'py> pillow_rs::ImageOpsAutocontrastCallbacks for PythonAutocontrastLutCall
         cutoff.get_item(index).map_err(Into::into)
     }
 
-    fn add(
-        &mut self,
-        left: &Self::Value,
-        right: &Self::Value,
-    ) -> Result<Self::Value, Self::Error> {
+    fn add(&mut self, left: &Self::Value, right: &Self::Value) -> Result<Self::Value, Self::Error> {
         left.add(right).map_err(Into::into)
     }
 
@@ -215,10 +210,7 @@ impl<'py> pillow_rs::ImageOpsAutocontrastCallbacks for PythonAutocontrastLutCall
         left.mul(right).map_err(Into::into)
     }
 
-    fn floor_divide_by_hundred(
-        &mut self,
-        value: &Self::Value,
-    ) -> Result<Self::Value, Self::Error> {
+    fn floor_divide_by_hundred(&mut self, value: &Self::Value) -> Result<Self::Value, Self::Error> {
         value
             .floor_div(PyInt::new(self.py, 100))
             .map_err(Into::into)
@@ -268,9 +260,7 @@ impl<'py> pillow_rs::ImageOpsAutocontrastCallbacks for PythonAutocontrastLutCall
     }
 
     fn cutoff_is_nonpositive(&mut self, cutoff: &Self::Value) -> Result<bool, Self::Error> {
-        cutoff
-            .le(PyInt::new(self.py, 0))
-            .map_err(Into::into)
+        cutoff.le(PyInt::new(self.py, 0)).map_err(Into::into)
     }
 
     fn histogram_bin_is_truthy(
@@ -278,10 +268,7 @@ impl<'py> pillow_rs::ImageOpsAutocontrastCallbacks for PythonAutocontrastLutCall
         channel: &Self::Value,
         index: usize,
     ) -> Result<bool, Self::Error> {
-        channel
-            .get_item(index)?
-            .is_truthy()
-            .map_err(Into::into)
+        channel.get_item(index)?.is_truthy().map_err(Into::into)
     }
 
     fn zero_value(&mut self) -> Result<Self::Value, Self::Error> {
@@ -307,11 +294,7 @@ impl<'py> pillow_rs::ImageOpsAutocontrastCallbacks for PythonAutocontrastLutCall
             .map_err(Into::into)
     }
 
-    fn extend_lut(
-        &mut self,
-        lut: &mut Self::Value,
-        channel_lut: &[u8],
-    ) -> Result<(), Self::Error> {
+    fn extend_lut(&mut self, lut: &mut Self::Value, channel_lut: &[u8]) -> Result<(), Self::Error> {
         let channel_lut = PyList::new(self.py, channel_lut)?;
         lut.call_method1("extend", (channel_lut,))?;
         Ok(())

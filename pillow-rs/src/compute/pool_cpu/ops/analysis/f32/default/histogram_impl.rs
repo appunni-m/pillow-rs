@@ -1,13 +1,8 @@
 use crate::error::PilError;
 use crate::raster::RgbaImage;
 
-pub(crate) fn execute(
-    image: &RgbaImage,
-    mask_raw: Option<&[u8]>,
-) -> Result<Vec<u32>, PilError> {
-    crate::compute::pool_cpu::ops::analysis::helpers::histogram_samples::f32_scalar(
-        image, mask_raw,
-    )
+pub(crate) fn execute(image: &RgbaImage, mask_raw: Option<&[u8]>) -> Result<Vec<u32>, PilError> {
+    crate::compute::pool_cpu::ops::analysis::helpers::histogram_samples::f32_scalar(image, mask_raw)
 }
 
 pub(crate) fn execute_with_extrema(
@@ -16,6 +11,7 @@ pub(crate) fn execute_with_extrema(
     minimum: f32,
     maximum: f32,
 ) -> Result<Vec<u32>, PilError> {
-    crate::compute::pool_cpu::ops::analysis::helpers::histogram_samples::
-        f32_scalar_with_extrema(image, mask_raw, minimum, maximum)
+    crate::compute::pool_cpu::ops::analysis::helpers::histogram_samples::f32_scalar_with_extrema(
+        image, mask_raw, minimum, maximum,
+    )
 }

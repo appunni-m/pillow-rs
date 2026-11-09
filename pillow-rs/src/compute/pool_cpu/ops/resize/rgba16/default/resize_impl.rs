@@ -10,7 +10,5 @@ pub(crate) fn execute(
     filter: ResampleFilter,
     bounds: super::super::super::helpers::typed_nearest::BoxBounds,
 ) -> ImageBuffer<Rgba<u16>, Vec<u16>> {
-    super::super::super::helpers::typed_u16::resize_with_alpha(
-        input, width, height, filter, bounds,
-    )
+    super::super::super::helpers::typed_u16::resize_with_alpha(input, width, height, filter, bounds)
 }

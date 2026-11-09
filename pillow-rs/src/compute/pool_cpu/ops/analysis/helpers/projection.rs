@@ -17,11 +17,19 @@ pub(crate) struct ProjectionOutput {
 
 impl ProjectionOutput {
     pub(crate) fn serial(axes: ProjectionAxes) -> Self {
-        Self { axes, vector_blocks: 0, scalar_tail: 0 }
+        Self {
+            axes,
+            vector_blocks: 0,
+            scalar_tail: 0,
+        }
     }
 
     pub(crate) fn vector(axes: ProjectionAxes, vector_blocks: u64, scalar_tail: u64) -> Self {
-        Self { axes, vector_blocks, scalar_tail }
+        Self {
+            axes,
+            vector_blocks,
+            scalar_tail,
+        }
     }
 }
 
@@ -114,9 +122,8 @@ pub(crate) fn project_stored_words(
     let mut remaining_columns = width;
     for (y, row) in bytes.chunks_exact(row_bytes).enumerate() {
         let row_nonzero = if remaining_columns == 0 {
-            row.chunks_exact(4).any(|sample| {
-                u32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]) != 0
-            })
+            row.chunks_exact(4)
+                .any(|sample| u32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]) != 0)
         } else {
             let mut row_nonzero = false;
             for (x, sample) in row.chunks_exact(4).enumerate() {

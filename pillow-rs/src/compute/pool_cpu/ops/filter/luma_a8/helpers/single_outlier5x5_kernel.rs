@@ -142,5 +142,8 @@ pub(crate) fn filter_5x5_single_outlier_la_rows(
     let interior_height = height - 4;
     let vector_blocks = horizontal_blocks.checked_mul(interior_height)?;
     let scalar_tail = ((width - 4) % 8).checked_mul(interior_height)?;
-    Some((u64::try_from(vector_blocks).ok()?, u64::try_from(scalar_tail).ok()?))
+    Some((
+        u64::try_from(vector_blocks).ok()?,
+        u64::try_from(scalar_tail).ok()?,
+    ))
 }

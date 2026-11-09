@@ -1,8 +1,8 @@
 //! Prepared exact-mode adapter for native-byte order-statistic kernels.
 
 use crate::checked_dims::CheckedDims;
-use crate::compute::{Architecture, Backend};
 use crate::compute::registry::support::{OperationId, StrategySelection};
+use crate::compute::{Architecture, Backend};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 
@@ -22,9 +22,11 @@ pub(crate) fn execute_native_byte_rank(
     selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
     let (size, rank, operation) = match request {
-        super::super::ops::FilterRequest::MedianFilter { size } => {
-            (size, size.saturating_mul(size) / 2, OperationId::MedianFilter)
-        }
+        super::super::ops::FilterRequest::MedianFilter { size } => (
+            size,
+            size.saturating_mul(size) / 2,
+            OperationId::MedianFilter,
+        ),
         super::super::ops::FilterRequest::RankFilter { size, rank } => {
             (size, rank, OperationId::RankFilter)
         }
@@ -111,9 +113,12 @@ fn rank_filter_native_bytes(
         let mut output = vec![0; raw.len()];
         let (blocks, scalar_tail) =
             crate::compute::pool_cpu::helpers::bytes::vector_copy::copy_native_bytes(
-                raw, &mut output,
+                raw,
+                &mut output,
             )
-            .ok_or_else(|| PilError::InternalError("byte rank identity copy shape mismatch".into()))?;
+            .ok_or_else(|| {
+                PilError::InternalError("byte rank identity copy shape mismatch".into())
+            })?;
         crate::compute::record_pipeline_operation_path("native-copy");
         crate::compute::record_pipeline_operation_vector_blocks(blocks);
         crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);

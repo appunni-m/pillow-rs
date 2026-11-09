@@ -1,9 +1,9 @@
 //! Native byte-sample Composite kernel.
 
+use super::mask::Samples;
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
-use super::mask::Samples;
 
 pub(super) fn execute(
     source: &DynamicImage,
@@ -30,15 +30,10 @@ fn execute_channels<const CHANNELS: usize>(
     mode: Mode,
 ) -> Result<DynamicImage, PilError> {
     let (source_width, source_height) = (source.width(), source.height());
-    let (destination_width, destination_height) =
-        (destination.width(), destination.height());
-    let source_dims =
-        CheckedDims::new_allow_empty(source_width, source_height, CHANNELS as u8)?;
-    let destination_dims = CheckedDims::new_allow_empty(
-        destination_width,
-        destination_height,
-        CHANNELS as u8,
-    )?;
+    let (destination_width, destination_height) = (destination.width(), destination.height());
+    let source_dims = CheckedDims::new_allow_empty(source_width, source_height, CHANNELS as u8)?;
+    let destination_dims =
+        CheckedDims::new_allow_empty(destination_width, destination_height, CHANNELS as u8)?;
     if source.as_bytes().len() != source_dims.total_bytes()
         || destination.as_bytes().len() != destination_dims.total_bytes()
         || mask.len() != source_dims.total_bytes() / CHANNELS
@@ -74,7 +69,7 @@ fn execute_channels<const CHANNELS: usize>(
 
     crate::compute::pool_cpu::ops::composite::helpers::native_bytes::construct(
         destination_width as u32,
-        destination_height as u32,
+        destination_height,
         mode,
         output,
     )

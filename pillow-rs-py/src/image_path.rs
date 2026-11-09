@@ -3,7 +3,7 @@ use std::cell::{Cell, RefCell};
 use pyo3::exceptions::{
     PyIndexError, PyMemoryError, PyOverflowError, PySystemError, PyTypeError, PyValueError,
 };
-use pyo3::prelude::{Bound, Py, PyAny, PyModule, PyResult, PyRef, Python};
+use pyo3::prelude::{Bound, Py, PyAny, PyModule, PyRef, PyResult, Python};
 use pyo3::types::{
     PyAnyMethods, PyFloat, PyInt, PyList, PyListMethods, PyModuleMethods, PySequence,
     PySequenceMethods, PySlice, PyTuple, PyTupleMethods, PyTypeMethods,
@@ -111,11 +111,7 @@ impl PyImagePath {
         value.extract::<(f64, f64)>().map(|(x, y)| [x, y])
     }
 
-    fn assign_point_from_tuple(
-        &self,
-        index: usize,
-        value: &Bound<'_, PyAny>,
-    ) -> PyResult<()> {
+    fn assign_point_from_tuple(&self, index: usize, value: &Bound<'_, PyAny>) -> PyResult<()> {
         let tuple = value.cast::<PyTuple>().map_err(|_| {
             PySystemError::new_err("new style getargs format but argument is not a tuple")
         })?;
@@ -170,19 +166,36 @@ impl PyImagePath {
 
     fn is_number(value: &Bound<'_, PyAny>) -> bool {
         [
-            "__add__", "__sub__", "__mul__", "__matmul__", "__truediv__",
-            "__floordiv__", "__mod__", "__divmod__", "__pow__", "__lshift__",
-            "__rshift__", "__and__", "__xor__", "__or__", "__neg__", "__pos__",
-            "__abs__", "__invert__", "__int__", "__float__", "__index__",
+            "__add__",
+            "__sub__",
+            "__mul__",
+            "__matmul__",
+            "__truediv__",
+            "__floordiv__",
+            "__mod__",
+            "__divmod__",
+            "__pow__",
+            "__lshift__",
+            "__rshift__",
+            "__and__",
+            "__xor__",
+            "__or__",
+            "__neg__",
+            "__pos__",
+            "__abs__",
+            "__invert__",
+            "__int__",
+            "__float__",
+            "__index__",
         ]
         .iter()
         .any(|name| value.get_type().hasattr(name).unwrap_or(false))
     }
 
     fn list_pair(value: &Bound<'_, PyAny>) -> PyResult<[f64; 2]> {
-        let list = value.cast::<PyList>().map_err(|_| {
-            PyValueError::new_err("coordinate list must contain numbers")
-        })?;
+        let list = value
+            .cast::<PyList>()
+            .map_err(|_| PyValueError::new_err("coordinate list must contain numbers"))?;
         if list.len() != 2 {
             return Err(PyValueError::new_err(
                 "coordinate list must contain exactly 2 coordinates",
@@ -201,10 +214,7 @@ impl PyImagePath {
         Ok(pair)
     }
 
-    fn append_coordinate(
-        value: &Bound<'_, PyAny>,
-        path: &mut PathPointBuilder,
-    ) -> PyResult<()> {
+    fn append_coordinate(value: &Bound<'_, PyAny>, path: &mut PathPointBuilder) -> PyResult<()> {
         if Self::is_number(value) {
             path.push_coordinate(Self::number(value)?);
             return Ok(());
@@ -214,9 +224,10 @@ impl PyImagePath {
             return Ok(());
         }
         if value.cast::<PyTuple>().is_ok() {
-            path.push_pair(Self::pair_from_tuple(value).map_err(|_| {
-                PyValueError::new_err("incorrect coordinate type")
-            })?);
+            path.push_pair(
+                Self::pair_from_tuple(value)
+                    .map_err(|_| PyValueError::new_err("incorrect coordinate type"))?,
+            );
             return Ok(());
         }
         Err(PyValueError::new_err("incorrect coordinate type"))
@@ -254,11 +265,15 @@ impl PyImagePath {
             } else if is_tuple {
                 value.cast::<PyTuple>()?.get_item(index)
             } else {
-                Self::sequence_item(&sequence, index)
+                Self::sequence_item(sequence, index)
             };
             let item = match item {
                 Ok(item) => item,
-                Err(error) if !is_list && !is_tuple && error.is_instance_of::<PyIndexError>(value.py()) => {
+                Err(error)
+                    if !is_list
+                        && !is_tuple
+                        && error.is_instance_of::<PyIndexError>(value.py()) =>
+                {
                     break;
                 }
                 Err(error) => return Err(error),
@@ -288,7 +303,6 @@ impl PyImagePath {
         }
         Self::points_from_sequence(value)
     }
-
 }
 
 #[pymethods]
@@ -333,8 +347,7 @@ impl PyImagePath {
                 let stop = stop.clamp(start as isize, length as isize) as usize;
                 PathPointBuilder::copy_points(&self.inner.borrow().as_points()[start..stop])?
             };
-            return Py::new(py, Self::from_core(sliced))
-                .map(|path| path.into_any());
+            return Py::new(py, Self::from_core(sliced)).map(|path| path.into_any());
         }
         let index = Self::index(index, py)?;
         let length = self.inner.borrow().len();
@@ -366,11 +379,7 @@ impl PyImagePath {
         self.assign_point_from_tuple(index as usize, value)
     }
 
-    fn __delitem__(
-        &self,
-        py: Python<'_>,
-        index: &Bound<'_, PyAny>,
-    ) -> PyResult<()> {
+    fn __delitem__(&self, py: Python<'_>, index: &Bound<'_, PyAny>) -> PyResult<()> {
         let index = Self::sequence_index(index, py)?;
         let length = self.inner.borrow().len();
         if index < 0 || usize::try_from(index).map_or(true, |index| index >= length) {
@@ -455,10 +464,7 @@ impl PyImagePath {
     }
 
     #[pyo3(signature = (*args))]
-    fn transform(
-        &self,
-        args: &Bound<'_, PyTuple>,
-    ) -> PyResult<()> {
+    fn transform(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
         let count = args.len();
         if !(1..=2).contains(&count) {
             return Err(PyTypeError::new_err(format!(
@@ -466,9 +472,9 @@ impl PyImagePath {
             )));
         }
         let matrix_value = args.get_item(0)?;
-        let matrix_sequence = matrix_value.cast::<PySequence>().map_err(|_| {
-            PyTypeError::new_err("transform() matrix must be a six-item sequence")
-        })?;
+        let matrix_sequence = matrix_value
+            .cast::<PySequence>()
+            .map_err(|_| PyTypeError::new_err("transform() matrix must be a six-item sequence"))?;
         let matrix_length = matrix_sequence.len()?;
         if matrix_length != 6 {
             return Err(PyTypeError::new_err(format!(
@@ -485,9 +491,7 @@ impl PyImagePath {
         } else {
             0.0
         };
-        self.inner
-            .borrow_mut()
-            .transform(matrix, wrap);
+        self.inner.borrow_mut().transform(matrix, wrap);
         Ok(())
     }
 }

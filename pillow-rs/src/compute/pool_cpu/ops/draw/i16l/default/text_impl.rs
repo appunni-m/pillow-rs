@@ -1,5 +1,5 @@
-use crate::compute::pool_cpu::ops::draw::helpers::i16_text;
 use crate::compute::pool_cpu::ops::draw::TextComposeResult;
+use crate::compute::pool_cpu::ops::draw::helpers::i16_text;
 use crate::error::PilError;
 use crate::raster::DynamicImage;
 
@@ -16,7 +16,13 @@ pub(crate) fn apply<const RGBA_MASK: bool>(
         return Ok(TextComposeResult::NotApplicable);
     };
     if !i16_text::apply::<RGBA_MASK, { cfg!(target_endian = "big") }>(
-        &mut canvas, x, y, width, height, pixels, fill,
+        &mut canvas,
+        x,
+        y,
+        width,
+        height,
+        pixels,
+        fill,
     ) {
         return Ok(TextComposeResult::Unchanged);
     }

@@ -2,7 +2,6 @@
 
 use std::sync::{Arc, OnceLock};
 
-use crate::compute::registry::support::{ModeSupport, OutputModeRule};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
@@ -11,6 +10,8 @@ use super::Image;
 
 mod dimensions;
 pub(super) use dimensions::known_pipeline_op_dimensions;
+mod mode;
+pub(crate) use mode::{known_pipeline_op_mode, known_pipeline_op_mode_with_expansion};
 
 /// Persistent operation list used by lazy image nodes.
 ///
@@ -366,111 +367,6 @@ fn op_preserves_mode(op: &PipelineOp) -> bool {
     )
 }
 
-fn target_mode_for_pipeline_op(op: &PipelineOp) -> Option<Mode> {
-    match op {
-        PipelineOp::Convert { mode, .. } | PipelineOp::Merge { mode, .. } => Some(*mode),
-        PipelineOp::Color3DLut { target_mode, .. } => Some(*target_mode),
-        _ => None,
-    }
-}
-
-/// Resolves a declared output rule against this operation's typed parameters.
-fn output_mode_from_rule(op: &PipelineOp, source: Mode, output: OutputModeRule) -> Option<Mode> {
-    match output {
-        OutputModeRule::NoRasterResult => None,
-        OutputModeRule::Preserve => Some(source),
-        OutputModeRule::Fixed(mode) => Some(mode),
-        OutputModeRule::ByTargetMode | OutputModeRule::ByTargetModeWithPalette => {
-            target_mode_for_pipeline_op(op)
-        }
-        OutputModeRule::ByPayload(outputs) => {
-            let PipelineOp::PutData { payload_mode, .. } = op else {
-                return None;
-            };
-            outputs
-                .iter()
-                .find(|output| output.payload == *payload_mode)
-                .map(|output| output.output)
-        }
-    }
-}
-
-/// Resolves the success output or the operation-declared lazy output retained
-/// when a rejected source mode reaches its existing wrapper error.
-// Source audit (2026-11-01): every pipeline operation with a rejected source
-// mode and a statically exposed changed output declares it here: Convert,
-// ConvertMatrix, ConvertLab, RemapPalette, Grayscale, Colorize, Color3DLut,
-// Merge, and EffectNoise. Other rejected routes either preserve source mode,
-// produce no raster result (such as rejected Equalize), or are rejected by the
-// public PutAlpha wrappers before queueing. A raw invalid `push_op` therefore
-// keeps its materialization-time operation error instead of claiming a result
-// mode. TODO(pillow-rs#3ptb): verify these metadata/error outcomes in frozen
-// CPU parity; no runtime validation has run for this audit.
-fn output_mode_from_operation_contract(op: &PipelineOp, source: Mode) -> Option<Mode> {
-    if let PipelineOp::Merge { mode, .. } = op {
-        // Merge chooses its result identity from the requested target mode;
-        // the source is only the first single-band image and may be L.
-        return Some(*mode);
-    }
-    let support = op.support();
-    let rule = match support.for_mode(source) {
-        ModeSupport::Supported { output, .. } => output,
-        ModeSupport::Rejected { .. } => support.rejected_output()?,
-    };
-    output_mode_from_rule(op, source, rule)
-}
-
-// Declared modes are checked against the producer's exact DynamicImage variant
-// by both materialization paths; never use a same-carrier retag to satisfy a
-// planner declaration. Routes without a static output contract keep the
-// materialization fallback, preserving metadata error timing.
-/// Computes a statically known logical mode for one pipeline operation.
-///
-/// This is intentionally conservative: `None` retains the existing
-/// materialization fallback and therefore cannot change public behavior. The
-/// mode cache is separate from the pixel cache because metadata reads must not
-/// publish or expose a partially executed image.
-pub(crate) fn known_pipeline_op_mode(op: &PipelineOp, current: Mode) -> Option<Mode> {
-    match output_mode_from_operation_contract(op, current) {
-        Some(mode) => Some(mode),
-        None if op_preserves_mode(op) => Some(current),
-        None => None,
-    }
-}
-
-/// Plans an operation's mode while accounting for an indexed source.
-///
-/// A mode-preserving operation may still expand palette indices when its
-/// source-specific route is not palette-safe. In that case, defer to the
-/// materialized result instead of reporting the input identity.
-/// Brightness and Sharpness reject P/PA through their typed wrappers;
-/// Contrast and ColorSaturation retain their eager conversion/blend fallback
-/// when no prepared strategy exists. Direct indexed pipeline admission checks
-/// the exact source mode before palette expansion.
-/// CPU indexed materialization now checks `PipelineOp::support` against the
-/// exact source mode before palette expansion, including direct `push_op` use.
-/// Autocontrast, Filter, GaussianBlur, Equalize, Posterize, and Solarize
-/// wrappers use their operation declarations for mode admission. BlendModule's
-/// wrapper and prepared path share its declared mode-pair contract, including
-/// direct P/PA rejection before palette expansion.
-/// TODO(pillow-rs#3ptb): verify indexed source metadata, wrapper error order,
-/// and eager Contrast/ColorSaturation base results in the frozen CPU parity
-/// cases before changing this source-specific fallback.
-pub(crate) fn known_pipeline_op_mode_for_source(
-    source: &Image,
-    op: &PipelineOp,
-    current: Mode,
-) -> Option<Mode> {
-    if matches!(current, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
-        && source.has_palette_samples()
-        && op_preserves_mode(op)
-        && !Image::is_palette_safe_op_for_source(source, op)
-    {
-        return None;
-    }
-    known_pipeline_op_mode(op, current)
-}
-
 /// Rounds a non-negative dimension using Python's ties-to-even rule.
 ///
 /// Metadata propagation must never manufacture a dimension for an invalid or
@@ -537,9 +433,7 @@ impl PipelineModeCache {
 
     fn with_declared_mode(mode: Mode) -> Self {
         let cache = Self::new();
-        let _ = cache
-            .state
-            .set(Ok(PipelineModeState::Declared(mode)));
+        let _ = cache.state.set(Ok(PipelineModeState::Declared(mode)));
         cache
     }
 
@@ -614,7 +508,10 @@ struct PipelineOutputMetadata {
 
 fn pipeline_output_metadata(source: &Image, op: &PipelineOp) -> PipelineOutputMetadata {
     let source_is_paletted = source.has_palette_samples();
-    let palette_safe = source_is_paletted && Image::is_palette_safe_op_for_source(source, op);
+    let palette_safe = source_is_paletted
+        && source
+            .known_mode_identity()
+            .is_some_and(|mode| Image::is_palette_safe_op_for_mode(mode, op));
     let promotes_p_to_pa = source.has_palette_mode()
         && matches!(
             op,
@@ -729,7 +626,9 @@ fn pipeline_output_mode(
             | PipelineOp::PutAlpha { .. }
             | PipelineOp::PutAlphaData { .. }
     ) {
-        source_mode.and_then(|mode| known_pipeline_op_mode_for_source(source, op, mode))
+        source_mode.and_then(|mode| {
+            known_pipeline_op_mode_with_expansion(op, mode, source.palette_expansion_mode(mode))
+        })
     } else if source_is_paletted {
         if source_mode == Some(Mode::ImagePaletteAlpha8)
             && matches!(op, PipelineOp::PutPixel { .. })
@@ -745,12 +644,18 @@ fn pipeline_output_mode(
                 })
                 .or_else(|| {
                     source_mode.and_then(|mode| {
-                        known_pipeline_op_mode_for_source(source, op, mode)
+                        known_pipeline_op_mode_with_expansion(
+                            op,
+                            mode,
+                            source.palette_expansion_mode(mode),
+                        )
                     })
                 })
         }
     } else {
-        source_mode.and_then(|mode| known_pipeline_op_mode(op, mode))
+        source_mode.and_then(|mode| {
+            known_pipeline_op_mode_with_expansion(op, mode, source.palette_expansion_mode(mode))
+        })
     };
 
     // The lazy planner owns palette-dependent transitions; operation support
@@ -790,8 +695,8 @@ fn pipeline_output_palette(
         // getpalette() is empty; retain that observable empty result here.
         return (Some(Vec::new()), Some(Vec::new()), false);
     }
-    let palette_dropped_by_pa_operation =
-        source.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
+    let palette_dropped_by_pa_operation = source.known_mode_identity()
+        == Some(Mode::ImagePaletteAlpha8)
         && match op {
             PipelineOp::Resize { filter, .. }
             | PipelineOp::ResizeBoxed { filter, .. }
@@ -862,9 +767,10 @@ impl Image {
         let generated_icc_profile = match &op {
             PipelineOp::ConvertLab { icc_profile } => Some(Arc::clone(icc_profile)),
             PipelineOp::Convert {
-                mode: crate::raster::Mode::ImageRgb8
-                | crate::raster::Mode::ImageRgba8
-                | crate::raster::Mode::ImageRgbx8,
+                mode:
+                    crate::raster::Mode::ImageRgb8
+                    | crate::raster::Mode::ImageRgba8
+                    | crate::raster::Mode::ImageRgbx8,
                 matrix: None,
                 ..
             } if source.known_mode_identity() == Some(crate::raster::Mode::ImageLab8) => {
@@ -911,9 +817,9 @@ impl Image {
                 if palette_conversion
                     || (source_is_paletted
                         && (!palette_safe
-                        || promotes_p_to_pa
-                        || source.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
-                        || deferred_palette_conversion)) =>
+                            || promotes_p_to_pa
+                            || source.known_mode_identity() == Some(Mode::ImagePaletteAlpha8)
+                            || deferred_palette_conversion)) =>
             {
                 new_pipeline_node(
                     Arc::new(source.clone()),

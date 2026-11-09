@@ -1,6 +1,8 @@
 //! Original byte-prefix replacement, with source and payload strategies already chosen.
 
-use crate::compute::registry::support::{PaletteKnowledge, PayloadOutput, RequestFacts, StrategyInputs};
+use crate::compute::registry::support::{
+    PaletteKnowledge, PayloadOutput, RequestFacts, StrategyInputs,
+};
 use crate::error::PilError;
 use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{DynamicImage, ImageBuffer, Mode, Pixel};
@@ -242,12 +244,11 @@ where
                 (pixel_index % image.width() as usize) as u32,
                 (pixel_index / image.width() as usize) as u32,
             );
-            fallback(&pixel)
+            fallback(pixel)
         };
         let values = if has_lane_data {
             let mut values = [0; 2];
-            values[..lane_count]
-                .copy_from_slice(&lane_data[lane_offset..lane_offset + lane_count]);
+            values[..lane_count].copy_from_slice(&lane_data[lane_offset..lane_offset + lane_count]);
             values
         } else {
             default
@@ -281,13 +282,19 @@ where
 }
 
 pub(crate) fn facts<P: Pixel>(
-    image: &ImageBuffer<P, Vec<P::Subpixel>>, data: &[u8], payload: Mode,
+    image: &ImageBuffer<P, Vec<P::Subpixel>>,
+    data: &[u8],
+    payload: Mode,
 ) -> StrategyInputs {
     StrategyInputs {
-        width: image.width(), height: image.height(),
+        width: image.width(),
+        height: image.height(),
         byte_len: Some(core::mem::size_of_val(image.as_raw().as_slice())),
         palette: PaletteKnowledge::Unknown,
-        request: RequestFacts::PutData { payload_mode: payload, data_len: data.len() },
+        request: RequestFacts::PutData {
+            payload_mode: payload,
+            data_len: data.len(),
+        },
     }
 }
 
@@ -301,11 +308,18 @@ struct Prefix {
 impl Prefix {
     fn new(width: u32, height: u32, channels: u8, data_len: usize) -> Self {
         let expected = width as usize * height as usize * usize::from(channels);
-        Self { width, height, expected, copy_len: data_len.min(expected) }
+        Self {
+            width,
+            height,
+            expected,
+            copy_len: data_len.min(expected),
+        }
     }
 
     fn apply<P: Pixel<Subpixel = u8>>(
-        self, original: ImageBuffer<P, Vec<u8>>, data: &[u8],
+        self,
+        original: ImageBuffer<P, Vec<u8>>,
+        data: &[u8],
     ) -> Result<ImageBuffer<P, Vec<u8>>, PilError> {
         let mut pixels = original.into_raw();
         pixels[..self.copy_len].copy_from_slice(&data[..self.copy_len]);
@@ -316,7 +330,10 @@ impl Prefix {
 
 #[inline]
 pub(crate) fn converted<P: Pixel<Subpixel = u8>>(
-    width: u32, height: u32, data: &[u8], convert: impl FnOnce() -> ImageBuffer<P, Vec<u8>>,
+    width: u32,
+    height: u32,
+    data: &[u8],
+    convert: impl FnOnce() -> ImageBuffer<P, Vec<u8>>,
 ) -> Result<ImageBuffer<P, Vec<u8>>, PilError> {
     let prefix = Prefix::new(width, height, P::CHANNEL_COUNT, data.len());
     prefix.apply(convert(), data)
@@ -324,13 +341,18 @@ pub(crate) fn converted<P: Pixel<Subpixel = u8>>(
 
 #[inline]
 pub(crate) fn native<P: Pixel<Subpixel = u8>>(
-    image: &ImageBuffer<P, Vec<u8>>, data: &[u8],
+    image: &ImageBuffer<P, Vec<u8>>,
+    data: &[u8],
 ) -> Result<ImageBuffer<P, Vec<u8>>, PilError> {
     let prefix = Prefix::new(image.width(), image.height(), P::CHANNEL_COUNT, data.len());
-    if prefix.expected != 0 && prefix.copy_len == prefix.expected
+    if prefix.expected != 0
+        && prefix.copy_len == prefix.expected
         && let Some(output) = ImageBuffer::from_raw(
-            image.width(), image.height(), data[..prefix.expected].to_vec(),
-        ) {
+            image.width(),
+            image.height(),
+            data[..prefix.expected].to_vec(),
+        )
+    {
         return Ok(output);
     }
     prefix.apply(image.clone(), data)

@@ -1,14 +1,16 @@
 //! Omitted physical-byte behavior for Pillow Reduce.
 //!
-//! Pillow's `Reduce.c` writes zero to physical bytes outside the logical bands
-//! for two- and three-band outputs. A 1x1 factor is instead an image copy and
-//! retains its source bytes. The exact source audit is in
-//! `docs/CPU_REFACTOR_INVENTORY.md`.
+//! `Reduce.c` writes only logical bands, and its `ImagingNewDirty` output does
+//! not define omitted physical bytes. This Rust path chooses zero padding for
+//! non-identity reductions and preserves source bytes on identity copies.
+//! TODO(pillow-rs#3ptb): keep follow-on raw-byte Paste behavior out of Pillow
+//! parity claims where the reference padding is allocator-dependent. The exact
+//! source audit is in `docs/CPU_REFACTOR_INVENTORY.md`.
 
 use crate::error::PilError;
 use crate::raster::{DynamicImage, buffer::HiddenPixelLanes};
 
-/// Preserves copied lanes or installs Pillow's zeroed reduction padding.
+/// Preserves copied lanes or installs Rust's zero padding after reduction.
 pub(crate) fn finish(
     source: &DynamicImage,
     output: &mut DynamicImage,

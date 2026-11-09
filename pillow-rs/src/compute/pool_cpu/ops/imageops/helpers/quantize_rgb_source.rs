@@ -1,9 +1,9 @@
 //! RGB quantization kernels over statically dispatched native mode samples.
 
 use crate::compute::pool_cpu::helpers::quantization::{
-    kmeans_refine_source, maxcoverage_quantize_source, median_cut_quantize_source,
-    quantize_octree_rgb_source, quantize_rgba_source, RgbPixelSource,
-    RgbaPixelSource,
+    RgbPixelSource, RgbaPixelSource, kmeans_refine_source, map_native_to_fixed_palette,
+    maxcoverage_quantize_source, median_cut_quantize_source, quantize_octree_rgb_source,
+    quantize_rgba_source,
 };
 use crate::compute::registry::support::PaletteInput;
 use crate::error::PilError;
@@ -57,6 +57,21 @@ where
     execute(&source, width, height, colors, kmeans, method)
 }
 
+/// Maps native RGB lanes from an interleaved mode carrier to a fixed palette.
+pub(crate) fn execute_interleaved_with_palette<T, const CHANNELS: usize>(
+    samples: &[T],
+    width: u32,
+    height: u32,
+    palette: &[[u8; 3]],
+    dither: bool,
+) -> Result<Vec<u8>, PilError>
+where
+    T: QuantizeSampleToU8,
+{
+    let source = InterleavedRgbSamples::<T, CHANNELS>::new(samples);
+    map_native_to_fixed_palette(&source, width, height, palette, dither)
+}
+
 /// Runs quantization over I;16 samples using its clipped byte projection.
 pub(crate) fn execute_clipped_luma16(
     samples: &[u16],
@@ -79,7 +94,14 @@ pub(crate) fn execute_i32_scalar(
     kmeans: u32,
     method: u32,
 ) -> Result<(Vec<u8>, Vec<u8>, Option<Vec<u8>>), PilError> {
-    execute(&I32ScalarSamples(samples), width, height, colors, kmeans, method)
+    execute(
+        &I32ScalarSamples(samples),
+        width,
+        height,
+        colors,
+        kmeans,
+        method,
+    )
 }
 
 /// Quantizes native F-mode scalars using the raster float-to-byte projection.
@@ -91,7 +113,14 @@ pub(crate) fn execute_f32_scalar(
     kmeans: u32,
     method: u32,
 ) -> Result<(Vec<u8>, Vec<u8>, Option<Vec<u8>>), PilError> {
-    execute(&F32ScalarSamples(samples), width, height, colors, kmeans, method)
+    execute(
+        &F32ScalarSamples(samples),
+        width,
+        height,
+        colors,
+        kmeans,
+        method,
+    )
 }
 
 /// Quantizes two- or four-channel native samples into an alpha palette.
@@ -226,7 +255,8 @@ impl RgbaPixelSource for PremultipliedLumaAlphaSamples<'_> {
         let offset = index * 2;
         let alpha = self.0[offset + 1];
         let luma = crate::compute::pool_cpu::helpers::bytes::unpremultiply::unpremultiply_byte(
-            self.0[offset], alpha,
+            self.0[offset],
+            alpha,
         );
         [luma, luma, luma, alpha]
     }

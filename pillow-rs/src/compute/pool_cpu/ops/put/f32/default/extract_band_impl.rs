@@ -1,8 +1,8 @@
 //! Original serial ExtractBand algorithm for `ImageF32`.
 
+use super::super::super::helpers::extract_band::{self as helpers, CheckedBand};
 use crate::error::PilError;
 use crate::raster::DynamicImage;
-use super::super::super::helpers::extract_band::{self as helpers, CheckedBand};
 
 pub(crate) type Input = crate::raster::RgbaImage;
 pub(crate) type Kernel<'a> = CheckedBand<'a, crate::raster::Rgba<u8>>;

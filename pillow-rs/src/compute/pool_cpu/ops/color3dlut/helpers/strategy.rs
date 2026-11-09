@@ -1,8 +1,11 @@
 //! Prepared Color3DLut execution retaining exact mode and routing selection.
 
-use crate::compute::{ExecutionContext, registry::support::{
-    ModeSupport, RequestFacts, StrategyInputs, StrategySelection, SupportAssessment,
-}};
+use crate::compute::{
+    ExecutionContext,
+    registry::support::{
+        ModeSupport, RequestFacts, StrategyInputs, StrategySelection, SupportAssessment,
+    },
+};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 
@@ -37,16 +40,25 @@ impl<'a> Strategy<'a> {
         let selection = match support.assess(ctx, facts)? {
             SupportAssessment::Ready(selection) => selection,
             SupportAssessment::Rejected { reason, kind, .. } => return Err(kind.into_error(reason)),
-            SupportAssessment::Deferred { .. } => return Err(PilError::InternalError(
-                "materialized Color3DLut strategy remained deferred".into(),
-            )),
+            SupportAssessment::Deferred { .. } => {
+                return Err(PilError::InternalError(
+                    "materialized Color3DLut strategy remained deferred".into(),
+                ));
+            }
         };
         if image.mode() != mode {
             return Err(PilError::InternalError(
                 "Color3DLut strategy received a mismatched source mode".into(),
             ));
         }
-        Ok(Self { image, size, table, channels, target_mode, selection })
+        Ok(Self {
+            image,
+            size,
+            table,
+            channels,
+            target_mode,
+            selection,
+        })
     }
 
     pub(crate) fn selection(&self) -> &StrategySelection {
@@ -55,8 +67,22 @@ impl<'a> Strategy<'a> {
 
     pub(crate) fn into_parts(
         self,
-    ) -> (&'a DynamicImage, (u32, u32, u32), &'a [f64], u32, Mode, StrategySelection) {
-        (self.image, self.size, self.table, self.channels, self.target_mode, self.selection)
+    ) -> (
+        &'a DynamicImage,
+        (u32, u32, u32),
+        &'a [f64],
+        u32,
+        Mode,
+        StrategySelection,
+    ) {
+        (
+            self.image,
+            self.size,
+            self.table,
+            self.channels,
+            self.target_mode,
+            self.selection,
+        )
     }
 
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {

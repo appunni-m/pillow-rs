@@ -26,8 +26,5 @@ pub(super) const fn is_nonstandard_mode(mode: Mode) -> bool {
 /// Internal high-depth raster identities remain representable but unsupported
 /// by this operation until they have an explicit native conversion contract.
 pub(super) const fn is_convert_target_mode(mode: Mode) -> bool {
-    match mode.pillow_name() {
-        Some(_) => true,
-        None => false,
-    }
+    mode.is_pillow_mode()
 }

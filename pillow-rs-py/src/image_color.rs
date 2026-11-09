@@ -74,6 +74,17 @@ fn palette_getcolor_validate(
     Ok((pal, idx))
 }
 
+/// Select an ImagePalette slot in core while leaving Python object mutation at
+/// the facade boundary.
+#[pyfunction]
+fn _palette_allocation_index_from_histogram(
+    entries: usize,
+    reserved: Vec<u32>,
+    histogram: Vec<u64>,
+) -> Option<usize> {
+    pillow_rs::Image::palette_allocation_index_from_histogram(entries, &reserved, &histogram)
+}
+
 /// Save palette data to a text file.
 #[pyfunction]
 fn palette_save_to_file(palette: Vec<u8>, mode: &str, fp: &str) -> PyResult<()> {
@@ -88,6 +99,10 @@ pub(super) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(getcolor, m)?)?;
     m.add_function(wrap_pyfunction!(palette_getcolor_append, m)?)?;
     m.add_function(wrap_pyfunction!(palette_getcolor_validate, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        _palette_allocation_index_from_histogram,
+        m
+    )?)?;
     m.add_function(wrap_pyfunction!(palette_save_to_file, m)?)?;
     m.add_function(wrap_pyfunction!(palette_to_text, m)?)?;
     Ok(())

@@ -1,16 +1,15 @@
 //! FloodFill support declaration, selection, and Default strategy orchestration.
 
+use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{
     ModeSupport, OperationId, OperationSupport, OutputModeRule,
 };
-use crate::compute::ExecutionContext;
 use crate::draw::{FloodFillAccess, FloodFillError, PreparedFloodFill};
 use crate::error::PilError;
 use crate::raster::Mode;
 
-const FLOODFILL_INPUTS: &[crate::compute::registry::support::InputContract] = &[
-    crate::compute::registry::support::InputContract::FloodFillInputs,
-];
+const FLOODFILL_INPUTS: &[crate::compute::registry::support::InputContract] =
+    &[crate::compute::registry::support::InputContract::FloodFillInputs];
 
 fn classify_mode(mode: Mode) -> ModeSupport {
     match mode {
@@ -90,4 +89,3 @@ pub(crate) fn execute<A: FloodFillAccess>(
         threshold,
     )
 }
-

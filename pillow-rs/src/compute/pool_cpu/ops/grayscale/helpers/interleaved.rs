@@ -73,4 +73,3 @@ pub(crate) fn grayscale_interleaved<const CHANNELS: usize>(source: &[u8]) -> Vec
     }
     output
 }
-

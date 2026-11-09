@@ -91,14 +91,8 @@ fn filter_row(
             let row_start = source_y * width;
             let source_row = &raw[row_start..row_start + width];
             for column_offset in 0..size {
-                values[value_index] = luma_window_vector(
-                    source_row,
-                    width,
-                    x,
-                    active,
-                    half,
-                    column_offset,
-                );
+                values[value_index] =
+                    luma_window_vector(source_row, width, x, active, half, column_offset);
                 value_index += 1;
             }
         }
@@ -123,7 +117,9 @@ pub(in crate::compute::pool_cpu::ops::filter::luma8) fn execute(
         return Err(PilError::InternalError("L rank window overflow".into()));
     };
     if size == 0 || size % 2 == 0 || size > MAX_SIZE || rank as usize >= area {
-        return Err(PilError::InternalError("L rank received an unsupported window".into()));
+        return Err(PilError::InternalError(
+            "L rank received an unsupported window".into(),
+        ));
     }
     let width = input.width() as usize;
     let height = input.height() as usize;
@@ -131,7 +127,9 @@ pub(in crate::compute::pool_cpu::ops::filter::luma8) fn execute(
         return Err(PilError::InternalError("L rank dimensions overflow".into()));
     };
     if width == 0 || height == 0 || expected != input.as_raw().len() {
-        return Err(PilError::InternalError("L rank received invalid native dimensions".into()));
+        return Err(PilError::InternalError(
+            "L rank received invalid native dimensions".into(),
+        ));
     }
     let vector_blocks = width.div_ceil(LANES) as u64 * height as u64;
     if crate::compute::pool_cpu::ops::filter::helpers::native_small_uniform_bytes(
@@ -151,12 +149,12 @@ pub(in crate::compute::pool_cpu::ops::filter::luma8) fn execute(
         crate::compute::record_pipeline_operation_path("native-copy");
         crate::compute::record_pipeline_operation_vector_blocks(copy_blocks);
         crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-        return GrayImage::from_raw(input.width(), input.height(), output)
-            .ok_or_else(|| PilError::ValueError("rank output buffer does not match L mode".into()));
+        return GrayImage::from_raw(input.width(), input.height(), output).ok_or_else(|| {
+            PilError::ValueError("rank output buffer does not match L mode".into())
+        });
     }
 
     let size = size as usize;
-    let area = area as usize;
     let mut output = vec![0u8; expected];
     for y in 0..height {
         let row_start = y * width;

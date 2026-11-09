@@ -2,8 +2,8 @@ use super::{Draw, DrawColorInput, DrawTextFillValue, Mode};
 use crate::compute::ExecutionContext;
 use crate::compute::registry::support::StrategySelection;
 use crate::error::PilError;
-use crate::font::text_layout::multiline_text_positions;
 use crate::font::FontTextRef;
+use crate::font::text_layout::multiline_text_positions;
 
 mod composition;
 
@@ -12,16 +12,16 @@ mod composition;
 /// Pillow's Draw bbox wrapper checks bilevel drawing contexts before
 /// embedded-color text, unlike the mask-rendering path.
 #[doc(hidden)]
-pub fn draw_text_bbox_font_mode(mode: Mode, embedded_color: bool) -> &'static str {
+pub fn draw_text_bbox_font_mode(mode: Mode, embedded_color: bool) -> Mode {
     if matches!(
         mode,
         Mode::One | Mode::ImagePalette8 | Mode::ImageI32 | Mode::ImageF32
     ) {
-        "1"
+        Mode::One
     } else if embedded_color {
-        "RGBA"
+        Mode::ImageRgba8
     } else {
-        "L"
+        Mode::ImageLuma8
     }
 }
 
@@ -186,9 +186,7 @@ impl Draw {
     pub fn color_from_draw_ink(&self, ink: i32) -> Result<(u8, u8, u8, u8), PilError> {
         let [red, green, blue, alpha] = ink.to_le_bytes();
         Ok(match self.effective_mode()? {
-            Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => {
-                (red, red, red, 255)
-            }
+            Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 => (red, red, red, 255),
             Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
                 (red, green, 0, 255)
             }
@@ -371,15 +369,8 @@ impl Draw {
         options: &crate::font::ImageFontTextOptions,
     ) -> Result<(), PilError> {
         let lines = text.split('\n');
-        let positioned = multiline_text_positions(
-            x,
-            y,
-            &lines,
-            font,
-            spacing,
-            options,
-            self.effective_mode()?,
-        )?;
+        let positioned =
+            multiline_text_positions(x, y, &lines, font, spacing, options, self.effective_mode()?)?;
         for line in positioned {
             let mut line_options = options.clone();
             line_options.anchor = Some(line.anchor);
@@ -436,15 +427,7 @@ impl Draw {
     ) -> Result<(), PilError> {
         crate::font::with_text_font(font, size, |font| {
             let text = text.into_font_text()?;
-            self.multiline_text_with_options_ref(
-                x,
-                y,
-                text.as_ref(),
-                font,
-                fill,
-                spacing,
-                options,
-            )
+            self.multiline_text_with_options_ref(x, y, text.as_ref(), font, fill, spacing, options)
         })
     }
 
@@ -463,7 +446,8 @@ impl Draw {
             crate::compute::begin_eager_cpu_operation_telemetry("DrawText", requested_backend);
         let mut operation_receipts =
             crate::compute::PipelineOperationTelemetryCapture::begin_preserving_current();
-        let result = self.text_with_options_inner_selected(x, y, text, font, fill, options, &context);
+        let result =
+            self.text_with_options_inner_selected(x, y, text, font, fill, options, &context);
         let output_bytes = if result.is_ok() {
             self.image
                 .materialized_shared()
@@ -525,26 +509,12 @@ impl Draw {
             fill_options.stroke_filled = false;
             fill_options.stroke_fill = None;
             fill_options.ink = Some(Self::pack_text_ink(fill));
-            let (width, height, fill_selection) = self.text_render_and_compose(
-                x,
-                y,
-                text,
-                font,
-                fill,
-                &fill_options,
-                context,
-            )?;
+            let (width, height, fill_selection) =
+                self.text_render_and_compose(x, y, text, font, fill, &fill_options, context)?;
             return Ok(((width, height), fill_selection.or(stroke_selection)));
         }
-        let (width, height, selection) = self.text_render_and_compose(
-            x,
-            y,
-            text,
-            font,
-            fill,
-            options,
-            context,
-        )?;
+        let (width, height, selection) =
+            self.text_render_and_compose(x, y, text, font, fill, options, context)?;
         Ok(((width, height), selection))
     }
 
@@ -568,7 +538,7 @@ impl Draw {
         );
         let mut options = options.clone();
         if binary && options.mode.is_none() {
-            options.mode = Some("1".to_string());
+            options.mode = Some(Mode::One);
         }
         if options.stroke_width != 0.0 {
             // Pillow's ImageDraw.text path requests the outside-border

@@ -3,16 +3,11 @@
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode, RgbImage};
 
-pub(crate) fn execute(
-    source: &RgbImage,
-    target: Mode,
-) -> Result<DynamicImage, PilError> {
+pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, PilError> {
     match target {
         Mode::ImageLuma8 => luma8(source),
         Mode::ImageLumaA8 => super::super::helpers::vector::luma_alpha(source, target),
-        Mode::ImageLaPremultiplied8 => {
-            super::super::helpers::vector::luma_alpha(source, target)
-        }
+        Mode::ImageLaPremultiplied8 => super::super::helpers::vector::luma_alpha(source, target),
         Mode::ImageRgb8 => super::super::helpers::vector::identity(source),
         Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8 | Mode::ImageRgbx8 => {
             let output = super::super::helpers::rgba::execute(source)?;

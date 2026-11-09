@@ -260,13 +260,7 @@ pub(crate) fn wide_line_polygon_points_signed(
     // signed C-int widths. NO_PILLOW_SUPPORT: Pillow's signed subtraction
     // overflows at i32::MIN, so Rust defines that boundary with i64 arithmetic.
     let width_minus_one = i64::from(width) - 1;
-    wide_line_polygon_points_with_half_width(
-        x0,
-        y0,
-        x1,
-        y1,
-        width_minus_one as f64 / 2.0,
-    )
+    wide_line_polygon_points_with_half_width(x0, y0, x1, y1, width_minus_one as f64 / 2.0)
 }
 
 fn wide_line_polygon_points_with_half_width(

@@ -1,8 +1,8 @@
-use crate::compute::{Architecture, Backend};
 use crate::compute::registry::support::{
     ModeSupport, OperationId, OperationValueResult, OutputModeRule, PixelValueShape,
     StrategySelection,
 };
+use crate::compute::{Architecture, Backend};
 use crate::error::PilError;
 use crate::image::FormattedPixelValue;
 use crate::raster::{
@@ -117,7 +117,9 @@ pub(crate) fn scalar_f32(
     y: u32,
 ) -> Result<FormattedPixelValue, PilError> {
     let sample = scalar_bytes(image, x, y)?;
-    Ok(FormattedPixelValue::Float(f64::from(f32::from_le_bytes(sample))))
+    Ok(FormattedPixelValue::Float(f64::from(f32::from_le_bytes(
+        sample,
+    ))))
 }
 
 /// Reads one native unsigned 16-bit luma sample.
@@ -163,20 +165,12 @@ pub(crate) fn components_u16_4(
 }
 
 /// Reads native 32-bit float RGB samples.
-pub(crate) fn components_f32_3(
-    image: &Rgb32FImage,
-    x: u32,
-    y: u32,
-) -> FormattedPixelValue {
+pub(crate) fn components_f32_3(image: &Rgb32FImage, x: u32, y: u32) -> FormattedPixelValue {
     FormattedPixelValue::FloatComponents(image.get_pixel(x, y).0.to_vec())
 }
 
 /// Reads native 32-bit float RGBA samples.
-pub(crate) fn components_f32_4(
-    image: &Rgba32FImage,
-    x: u32,
-    y: u32,
-) -> FormattedPixelValue {
+pub(crate) fn components_f32_4(image: &Rgba32FImage, x: u32, y: u32) -> FormattedPixelValue {
     FormattedPixelValue::FloatComponents(image.get_pixel(x, y).0.to_vec())
 }
 
@@ -222,8 +216,9 @@ fn scalar_bytes(image: &RgbaImage, x: u32, y: u32) -> Result<[u8; 4], PilError> 
     let end = offset
         .checked_add(4)
         .ok_or_else(|| PilError::InternalError("scalar pixel offset overflow".into()))?;
-    let sample = image.as_raw().get(offset..end).ok_or_else(|| {
-        PilError::InternalError("scalar pixel index out of bounds".into())
-    })?;
+    let sample = image
+        .as_raw()
+        .get(offset..end)
+        .ok_or_else(|| PilError::InternalError("scalar pixel index out of bounds".into()))?;
     Ok([sample[0], sample[1], sample[2], sample[3]])
 }

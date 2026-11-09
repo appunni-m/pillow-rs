@@ -1,4 +1,11 @@
 pub(crate) type Input = crate::raster::GrayImage;
 use crate::compute::pool_cpu::ops::transpose::helpers::strategy::declare_native_byte_transpose_mode;
 
-declare_native_byte_transpose_mode!(ImageLuma8, Input, super::default::flip_impl::execute, super::default::mirror_impl::execute, super::default::transpose_impl::execute, 1);
+declare_native_byte_transpose_mode!(
+    ImageLuma8,
+    Input,
+    super::default::flip_impl::execute,
+    super::default::mirror_impl::execute,
+    super::default::transpose_impl::execute,
+    1
+);

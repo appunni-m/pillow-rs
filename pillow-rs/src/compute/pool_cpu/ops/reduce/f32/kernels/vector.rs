@@ -25,9 +25,10 @@ pub(crate) fn execute(
     let source_width = usize::try_from(input.width()).map_err(|_| {
         PilError::InternalError("ImageF32 Reduce source width does not fit usize".into())
     })?;
-    let mut output = Vec::with_capacity(
-        super::super::helpers::storage::output_capacity(output_width, output_height)?,
-    );
+    let mut output = Vec::with_capacity(super::super::helpers::storage::output_capacity(
+        output_width,
+        output_height,
+    )?);
     for output_y in 0..output_height as usize {
         let source_top = output_y * 2 * source_width;
         let source_bottom = source_top + source_width;

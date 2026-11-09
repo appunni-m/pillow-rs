@@ -68,7 +68,24 @@ type MergeLayoutContract = (
     &'static str,
     &'static str,
     &'static str,
+    &'static str,
 );
+
+/// Python-visible callback order derived from Merge's typed support contract.
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy)]
+pub struct MergeCallbackContract {
+    /// Number of input bands required by the requested output mode.
+    pub expected_band_count: usize,
+    /// Mode required for bands after the first, when the Pillow wrapper checks one.
+    pub subsequent_band_mode: Option<Mode>,
+    /// Error text for an incorrect band count.
+    pub count_rejection: &'static str,
+    /// Error text for an invalid later-band mode.
+    pub mode_rejection: &'static str,
+    /// Error text for a band whose dimensions differ from band zero.
+    pub size_rejection: &'static str,
+}
 
 fn merge_layout_contract(mode: Mode) -> Result<MergeLayoutContract, PilError> {
     let mode_support = OperationId::Merge.support().for_mode(mode);
@@ -81,6 +98,7 @@ fn merge_layout_contract(mode: Mode) -> Result<MergeLayoutContract, PilError> {
             band_count,
             mode_rule,
             count_rejection,
+            first_mode_rejection,
             mode_rejection,
             size_rejection,
         } = *contract
@@ -89,6 +107,7 @@ fn merge_layout_contract(mode: Mode) -> Result<MergeLayoutContract, PilError> {
                 band_count,
                 mode_rule,
                 count_rejection,
+                first_mode_rejection,
                 mode_rejection,
                 size_rejection,
             ));
@@ -99,41 +118,70 @@ fn merge_layout_contract(mode: Mode) -> Result<MergeLayoutContract, PilError> {
     ))
 }
 
+/// Returns host callback constraints from the same declaration used by Merge.
+///
+/// Python adapters use this to preserve `Image.merge`'s observable order while
+/// keeping all mode and arity rules in the core support contract.
+#[doc(hidden)]
+pub fn merge_callback_contract(mode: Mode) -> Result<MergeCallbackContract, PilError> {
+    let (
+        expected_band_count,
+        mode_rule,
+        count_rejection,
+        _first_mode_rejection,
+        mode_rejection,
+        size_rejection,
+    ) = merge_layout_contract(mode)?;
+    let subsequent_band_mode = match mode_rule {
+        MergeBandModeRule::ExactTarget if expected_band_count > 1 => Some(mode),
+        MergeBandModeRule::ExactTarget => None,
+        MergeBandModeRule::LumaOrFirstPalette => Some(Mode::ImageLuma8),
+    };
+    Ok(MergeCallbackContract {
+        expected_band_count,
+        subsequent_band_mode,
+        count_rejection,
+        mode_rejection,
+        size_rejection,
+    })
+}
+
 fn validate_merge_shape(mode: Mode, band_count: usize) -> Result<(), PilError> {
-    let (expected, _, count_rejection, _, _) = merge_layout_contract(mode)?;
+    let (expected, _, count_rejection, _, _, _) = merge_layout_contract(mode)?;
     if band_count != expected {
         return Err(PilError::ValueError(count_rejection.into()));
     }
     Ok(())
 }
 
-fn validate_merge_band_modes(mode: Mode, bands: &[Image]) -> Result<(), PilError> {
-    let (_, mode_rule, _, mode_rejection, _) = merge_layout_contract(mode)?;
-    for (index, band) in bands.iter().enumerate() {
-        let band_mode = band.mode_identity()?;
-        let valid = match mode_rule {
-            MergeBandModeRule::ExactTarget => band_mode == mode,
-            MergeBandModeRule::LumaOrFirstPalette => {
-                band_mode == Mode::ImageLuma8
-                    || (index == 0 && band_mode == Mode::ImagePalette8)
+fn validate_merge_bands(mode: Mode, bands: &[Image]) -> Result<(), PilError> {
+    let (_, mode_rule, _, first_mode_rejection, mode_rejection, size_rejection) =
+        merge_layout_contract(mode)?;
+    match mode_rule {
+        MergeBandModeRule::ExactTarget => {
+            if bands[0].mode_identity()? != mode {
+                return Err(PilError::ValueError(first_mode_rejection.into()));
             }
-        };
-        if !valid {
-            return Err(PilError::ValueError(mode_rejection.into()));
         }
-    }
-    Ok(())
-}
-
-fn validate_merge_band_sizes(mode: Mode, bands: &[Image]) -> Result<(), PilError> {
-    let (_, _, _, _, size_rejection) = merge_layout_contract(mode)?;
-    let expected = bands[0].size()?;
-    for band in bands.iter().skip(1) {
-        // Pillow's ImagingMerge rejects mismatched dimensions at the public
-        // call boundary. Keep this validation eager so a lazy pipeline cannot
-        // defer the ValueError into result serialization.
-        if band.size()? != expected {
-            return Err(PilError::ValueError(size_rejection.into()));
+        MergeBandModeRule::LumaOrFirstPalette => {
+            for band in bands.iter().skip(1) {
+                // Pillow checks each later band's mode before its size, then
+                // leaves band zero's native storage check to ImagingMerge.
+                if band.mode_identity()? != Mode::ImageLuma8 {
+                    return Err(PilError::ValueError(mode_rejection.into()));
+                }
+                let band_size = band.size()?;
+                let first_size = bands[0].size()?;
+                if band_size != first_size {
+                    return Err(PilError::ValueError(size_rejection.into()));
+                }
+            }
+            if !matches!(
+                bands[0].mode_identity()?,
+                Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8
+            ) {
+                return Err(PilError::ValueError(first_mode_rejection.into()));
+            }
         }
     }
     Ok(())
@@ -162,8 +210,7 @@ pub enum MergeInput {
 /// the wrong length.
 pub fn merge(mode: Mode, bands: &[Image]) -> Result<Image, PilError> {
     validate_merge_shape(mode, bands.len())?;
-    validate_merge_band_modes(mode, bands)?;
-    validate_merge_band_sizes(mode, bands)?;
+    validate_merge_bands(mode, bands)?;
 
     Ok(Image::push_op(
         &bands[0],

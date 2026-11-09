@@ -2,12 +2,8 @@
 
 use wide::u8x16;
 
-const RGB_TO_RGBA_SHUFFLE: [u8; 16] = [
-    0, 1, 2, 12, 3, 4, 5, 13, 6, 7, 8, 14, 9, 10, 11, 15,
-];
-const RGBA_TO_RGB_SHUFFLE: [u8; 16] = [
-    0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14, 0, 0, 0, 0,
-];
+const RGB_TO_RGBA_SHUFFLE: [u8; 16] = [0, 1, 2, 12, 3, 4, 5, 13, 6, 7, 8, 14, 9, 10, 11, 15];
+const RGBA_TO_RGB_SHUFFLE: [u8; 16] = [0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14, 0, 0, 0, 0];
 
 /// Inserts an opaque or supplied alpha byte into one four-pixel RGB block.
 #[inline(always)]

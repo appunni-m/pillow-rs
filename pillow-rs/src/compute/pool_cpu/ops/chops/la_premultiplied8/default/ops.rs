@@ -29,9 +29,11 @@ fn execute_binary(
         ));
     };
     let other = match other {
-        Some(DynamicImage::ImageLumaA8(other) |
-        DynamicImage::ImageLaPremultiplied8(other) |
-        DynamicImage::ImagePaletteAlpha8(other)) => other,
+        Some(
+            DynamicImage::ImageLumaA8(other)
+            | DynamicImage::ImageLaPremultiplied8(other)
+            | DynamicImage::ImagePaletteAlpha8(other),
+        ) => other,
         Some(_) => {
             return Err(PilError::InternalError(
                 "Chops binary strategy received a different secondary raster variant".into(),
@@ -63,6 +65,5 @@ fn execute_invert(image: &DynamicImage) -> Result<DynamicImage, PilError> {
             "Chops mode strategy received a different raster variant".into(),
         ));
     };
-    super::super::super::helpers::unary::invert(buffer)
-        .map(DynamicImage::ImageLaPremultiplied8)
+    super::super::super::helpers::unary::invert(buffer).map(DynamicImage::ImageLaPremultiplied8)
 }

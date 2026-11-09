@@ -1,10 +1,10 @@
 //! Exact ImageI32 Thumbnail support and architecture dispatch.
 
-use crate::compute::{Architecture, ExecutionContext};
 use crate::compute::registry::support::{
     ImplementationSupport, ModeSupport, OperationId, OutputModeRule, StrategyGuard,
     StrategySelection,
 };
+use crate::compute::{Architecture, ExecutionContext};
 use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
 use crate::raster::{DynamicImage, Mode};
@@ -50,17 +50,11 @@ pub(crate) fn execute(
     };
     let architecture = super::helpers::strategy::selected_architecture(selection)?;
     let output_image = match architecture {
-        Architecture::Default => {
-            super::default::thumbnail_impl::execute(input, output, filter)
-        }
+        Architecture::Default => super::default::thumbnail_impl::execute(input, output, filter),
         #[cfg(target_arch = "x86_64")]
-        Architecture::AvxFma => super::avx::thumbnail_impl::execute(
-            _context,
-            input,
-            output,
-            filter,
-            selection,
-        ),
+        Architecture::AvxFma => {
+            super::avx::thumbnail_impl::execute(_context, input, output, filter, selection)
+        }
         _ => Err(PilError::InternalError(format!(
             "ImageI32 Thumbnail received non-I32 implementation selection {architecture:?}"
         ))),

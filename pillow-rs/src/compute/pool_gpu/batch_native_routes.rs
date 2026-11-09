@@ -201,7 +201,10 @@ impl GpuInner {
             && matches!(image, DynamicImage::ImageRgb8(_))
             && matches!(mode, None | Some("RGB"))
             && let Some(alpha_mask) = auxiliary.third.as_deref()
-            && matches!(alpha_mask, DynamicImage::One(_) | DynamicImage::ImageLuma8(_))
+            && matches!(
+                alpha_mask,
+                DynamicImage::One(_) | DynamicImage::ImageLuma8(_)
+            )
             && alpha_mask.dimensions() == image.dimensions()
             && let Some(dispatch) = plan_native_rgb_put_alpha_data_dispatch(
                 image.width(),
@@ -245,7 +248,10 @@ impl GpuInner {
             && matches!(image, DynamicImage::ImageRgba8(_))
             && matches!(mode, None | Some("RGBA"))
             && let Some(alpha_mask) = auxiliary.third.as_deref()
-            && matches!(alpha_mask, DynamicImage::One(_) | DynamicImage::ImageLuma8(_))
+            && matches!(
+                alpha_mask,
+                DynamicImage::One(_) | DynamicImage::ImageLuma8(_)
+            )
             && alpha_mask.dimensions() == image.dimensions()
             && let Some(dispatch) = plan_native_rgba_put_alpha_data_dispatch(
                 image.width(),

@@ -62,7 +62,8 @@ where
     F: FnMut(&[u8; 16], usize, &mut Vec<u8>),
 {
     let source_dims = CheckedDims::new_allow_empty(source.width(), source.height(), 4)?;
-    let output_dims = CheckedDims::new_allow_empty(source.width(), source.height(), output_channels)?;
+    let output_dims =
+        CheckedDims::new_allow_empty(source.width(), source.height(), output_channels)?;
     if source.as_raw().len() != source_dims.total_bytes() {
         return Err(PilError::InternalError(
             "RGBa Convert source storage did not match its dimensions".into(),
@@ -90,11 +91,7 @@ where
     Ok((output, vector_blocks))
 }
 
-fn append_luma_alpha(
-    pixels: &[u8; 16],
-    active_pixels: usize,
-    output: &mut Vec<u8>,
-) {
+fn append_luma_alpha(pixels: &[u8; 16], active_pixels: usize, output: &mut Vec<u8>) {
     for pixel in pixels.chunks_exact(4).take(active_pixels) {
         let luma = crate::color::rgb_to_luma_u8(pixel[0], pixel[1], pixel[2]);
         output.extend_from_slice(&[luma, u8::MAX]);

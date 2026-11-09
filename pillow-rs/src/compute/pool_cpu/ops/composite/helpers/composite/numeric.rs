@@ -1,9 +1,9 @@
 //! Native typed-sample Composite kernels for high-depth rasters.
 
+use super::mask::Samples;
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
-use super::mask::Samples;
 
 pub(super) fn execute_u16(
     source: &DynamicImage,
@@ -29,11 +29,8 @@ fn execute_u16_channels<const CHANNELS: usize>(
     mask: Samples<'_>,
     mode: Mode,
 ) -> Result<DynamicImage, PilError> {
-    let source_dims = CheckedDims::new_allow_empty(
-        source.width(),
-        source.height(),
-        (CHANNELS * 2) as u8,
-    )?;
+    let source_dims =
+        CheckedDims::new_allow_empty(source.width(), source.height(), (CHANNELS * 2) as u8)?;
     let destination_dims = CheckedDims::new_allow_empty(
         destination.width(),
         destination.height(),
@@ -107,16 +104,10 @@ pub(super) fn execute_f32(
     channels: u8,
 ) -> Result<DynamicImage, PilError> {
     let bytes_per_pixel = channels * 4;
-    let source_dims = CheckedDims::new_allow_empty(
-        source.width(),
-        source.height(),
-        bytes_per_pixel,
-    )?;
-    let destination_dims = CheckedDims::new_allow_empty(
-        destination.width(),
-        destination.height(),
-        bytes_per_pixel,
-    )?;
+    let source_dims =
+        CheckedDims::new_allow_empty(source.width(), source.height(), bytes_per_pixel)?;
+    let destination_dims =
+        CheckedDims::new_allow_empty(destination.width(), destination.height(), bytes_per_pixel)?;
     let source_bytes = source.as_bytes();
     let destination_bytes = destination.as_bytes();
     if source_bytes.len() != source_dims.total_bytes()
@@ -167,10 +158,7 @@ fn blend_f32_samples(
                 let destination_index = (destination_pixel * channels + channel) * 4;
                 let source_sample = read_f32(source, source_index);
                 let destination_sample = read_f32(destination, destination_index);
-                let blended = source_sample.mul_add(
-                    weight,
-                    destination_sample * (1.0 - weight),
-                );
+                let blended = source_sample.mul_add(weight, destination_sample * (1.0 - weight));
                 destination[destination_index..destination_index + 4]
                     .copy_from_slice(&blended.to_ne_bytes());
             }

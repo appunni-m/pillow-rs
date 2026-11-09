@@ -38,16 +38,16 @@ pub(crate) fn execute(
                 image, width, height, filter, output,
             ),
         ),
-        (Architecture::Sse2, DynamicImage::ImageLuma8(image)) => Ok(
-            super::super::luma8::sse2::resize_impl::execute_into_window(
+        (Architecture::Sse2, DynamicImage::ImageLuma8(image)) => {
+            Ok(super::super::luma8::sse2::resize_impl::execute_into_window(
                 image, width, height, filter, output,
-            ),
-        ),
-        (Architecture::Neon, DynamicImage::ImageLuma8(image)) => Ok(
-            super::super::luma8::neon::resize_impl::execute_into_window(
+            ))
+        }
+        (Architecture::Neon, DynamicImage::ImageLuma8(image)) => {
+            Ok(super::super::luma8::neon::resize_impl::execute_into_window(
                 image, width, height, filter, output,
-            ),
-        ),
+            ))
+        }
         (Architecture::WasmSimd128, DynamicImage::ImageLuma8(image)) => Ok(
             super::super::luma8::wasm_simd128::resize_impl::execute_into_window(
                 image, width, height, filter, output,

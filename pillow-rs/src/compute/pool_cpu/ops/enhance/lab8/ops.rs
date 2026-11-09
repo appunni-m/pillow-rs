@@ -1,12 +1,12 @@
 //! ImageLab8 Brightness contract and Default strategy.
 
+use crate::compute::Architecture;
 use crate::compute::ExecutionContext;
 use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
 use crate::compute::registry::support::{
     InputContract, ModeSupport, OperationId, OutputModeRule, PaletteKnowledge, RequestFacts,
     SecondaryInputFacts, StrategyInputs, StrategySelection,
 };
-use crate::compute::Architecture;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, GrayImage, Luma, Mode, RgbImage};
 
@@ -157,9 +157,8 @@ fn rgb_contrast_lab(
             "ConvertLab selected an undeclared RGB architecture".into(),
         ));
     }
-    let image = crate::compute::pool_cpu::ops::color::rgb8::default::convert_lab_impl::execute(
-        source,
-    )?;
+    let image =
+        crate::compute::pool_cpu::ops::color::rgb8::default::convert_lab_impl::execute(source)?;
     let DynamicImage::ImageLab8(lab) = image else {
         return Err(PilError::InternalError(
             "ConvertLab returned another mode during Contrast preparation".into(),
@@ -198,9 +197,7 @@ fn rounded_mean(gray: &GrayImage) -> u8 {
     (sum as f64 / samples.len() as f64 + 0.5) as u8
 }
 
-pub(crate) fn execute_contrast(
-    strategy: ContrastStrategy<'_>,
-) -> Result<DynamicImage, PilError> {
+pub(crate) fn execute_contrast(strategy: ContrastStrategy<'_>) -> Result<DynamicImage, PilError> {
     if strategy.selection.implementation.architecture != Architecture::Default {
         return Err(PilError::InternalError(
             "LAB Contrast selected an undeclared architecture".into(),
@@ -222,11 +219,8 @@ pub(crate) fn prepare<'a>(
     factor: f64,
     context: &ExecutionContext,
 ) -> Result<Strategy<'a>, PilError> {
-    let selection = crate::compute::pool_cpu::ops::enhance::helpers::strategy::select(
-        SUPPORT,
-        facts,
-        context,
-    )?;
+    let selection =
+        crate::compute::pool_cpu::ops::enhance::helpers::strategy::select(SUPPORT, facts, context)?;
     Ok(Prepared::new((source, factor), selection))
 }
 
@@ -234,8 +228,9 @@ pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> 
     let architecture = strategy.selection().implementation.architecture;
     let (source, factor) = strategy.implementation;
     match architecture {
-        Architecture::Default => super::default::brightness_impl::execute(source, factor)
-            .map(DynamicImage::ImageLab8),
+        Architecture::Default => {
+            super::default::brightness_impl::execute(source, factor).map(DynamicImage::ImageLab8)
+        }
         architecture => Err(PilError::InternalError(format!(
             "unexpected {architecture:?} architecture selected for Brightness mode {}",
             Mode::ImageLab8.pillow_name().unwrap_or("internal"),
@@ -263,7 +258,11 @@ pub(crate) const SHARPNESS_SUPPORT: crate::compute::registry::support::ModeSuppo
         "native Sharpness extension has no Pillow parity contract",
     );
 
-pub(crate) type SharpnessStrategy<'a> = crate::compute::pool_cpu::helpers::execution::prepared::Prepared<(&'a crate::raster::RgbImage, f64)>;
+pub(crate) type SharpnessStrategy<'a> =
+    crate::compute::pool_cpu::helpers::execution::prepared::Prepared<(
+        &'a crate::raster::RgbImage,
+        f64,
+    )>;
 
 pub(crate) fn prepare_sharpness<'a>(
     source: &'a crate::raster::RgbImage,
@@ -272,11 +271,16 @@ pub(crate) fn prepare_sharpness<'a>(
     context: &crate::compute::ExecutionContext,
 ) -> Result<SharpnessStrategy<'a>, crate::error::PilError> {
     let selection = crate::compute::pool_cpu::ops::enhance::helpers::strategy::select(
-        SHARPNESS_SUPPORT, facts.with_sharpness(factor), context,
+        SHARPNESS_SUPPORT,
+        facts.with_sharpness(factor),
+        context,
     )?;
-    Ok(crate::compute::pool_cpu::helpers::execution::prepared::Prepared::new(
-        (source, factor), selection,
-    ))
+    Ok(
+        crate::compute::pool_cpu::helpers::execution::prepared::Prepared::new(
+            (source, factor),
+            selection,
+        ),
+    )
 }
 
 pub(crate) fn execute_sharpness(
@@ -286,11 +290,14 @@ pub(crate) fn execute_sharpness(
     let (source, factor) = strategy.implementation;
     let mut output = match architecture {
         crate::compute::Architecture::Default => {
-            super::default::sharpness_impl::execute(source, factor).map(crate::raster::DynamicImage::ImageLab8)
+            super::default::sharpness_impl::execute(source, factor)
+                .map(crate::raster::DynamicImage::ImageLab8)
         }
         architecture => Err(crate::error::PilError::InternalError(format!(
             "unexpected {architecture:?} architecture selected for Sharpness mode {}",
-            crate::raster::Mode::ImageLab8.pillow_name().unwrap_or("internal"),
+            crate::raster::Mode::ImageLab8
+                .pillow_name()
+                .unwrap_or("internal"),
         ))),
     }?;
     crate::compute::pool_cpu::ops::enhance::helpers::sharpness::carry_hidden_lanes(

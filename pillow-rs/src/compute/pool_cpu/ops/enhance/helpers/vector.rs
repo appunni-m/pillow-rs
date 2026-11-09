@@ -71,7 +71,9 @@ pub(crate) fn execute(
         None
     };
     if let Some(shift) = shift {
-        apply(source, &mut output, active, inactive, |input| input >> shift);
+        apply(source, &mut output, active, inactive, |input| {
+            input >> shift
+        });
     } else {
         let tables = lut_tables(alpha);
         apply(source, &mut output, active, inactive, |input| {
@@ -101,13 +103,8 @@ fn active_masks(channels: usize, active_channels: usize) -> ([u8; 16], [u8; 16])
 /// Applies flat 16-byte blocks with the mode strategy's repeated channel mask.
 /// Partial-channel layouts are LA (2-byte pixels) and RGBA (4-byte pixels),
 /// whose strides divide a vector block; three-byte modes activate every lane.
-fn apply<F>(
-    source: &[u8],
-    output: &mut [u8],
-    active: u8x16,
-    inactive: u8x16,
-    transform: F,
-) where
+fn apply<F>(source: &[u8], output: &mut [u8], active: u8x16, inactive: u8x16, transform: F)
+where
     F: Fn(u8x16) -> u8x16,
 {
     let (source_blocks, source_tail) = source.as_chunks::<16>();

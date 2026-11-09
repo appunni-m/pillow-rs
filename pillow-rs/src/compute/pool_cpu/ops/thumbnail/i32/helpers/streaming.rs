@@ -1,9 +1,9 @@
 //! Stream ImageI32's 2x2 reducing-gap samples into the existing resize ring.
 
 use crate::checked_dims::CheckedDims;
+use crate::compute::helpers::resampling::rounding::round_up;
 use crate::compute::pool_cpu::ops::resize::helpers::coefficients;
 use crate::compute::pool_cpu::ops::resize::i32::helpers::streaming as resize_streaming;
-use crate::compute::helpers::resampling::rounding::round_up;
 use crate::error::PilError;
 use crate::ops::pil_resize::{F64MulAdd, FilterCoeffsF64, i32_samples_from_le_bytes};
 use crate::pipeline::ResampleFilter;
@@ -44,13 +44,7 @@ fn horizontal_ring_row<F: F64MulAdd>(
     reduce_source_row_pair(source, source_width, reduced_row, reduced_y);
     let ring_start = (reduced_y & ring_mask) * destination_width;
     let ring_row = &mut ring[ring_start..ring_start + destination_width];
-    resize_streaming::horizontal_row(
-        reduced_row,
-        ring_row,
-        horizontal,
-        fixed_weights,
-        fma,
-    );
+    resize_streaming::horizontal_row(reduced_row, ring_row, horizontal, fixed_weights, fma);
 }
 
 fn vertical_output_row<F: F64MulAdd>(
@@ -72,9 +66,8 @@ fn vertical_output_row<F: F64MulAdd>(
                 |source_y| ring[(source_y & ring_mask) * destination_width + output_x],
                 fma,
             );
-            output_sample.copy_from_slice(
-                &resize_streaming::round_to_i32(accumulator).to_le_bytes(),
-            );
+            output_sample
+                .copy_from_slice(&resize_streaming::round_to_i32(accumulator).to_le_bytes());
         }
     } else {
         for (output_x, output_sample) in output.chunks_exact_mut(4).enumerate() {
@@ -84,9 +77,8 @@ fn vertical_output_row<F: F64MulAdd>(
                 |source_y| ring[(source_y & ring_mask) * destination_width + output_x],
                 fma,
             );
-            output_sample.copy_from_slice(
-                &resize_streaming::round_to_i32(accumulator).to_le_bytes(),
-            );
+            output_sample
+                .copy_from_slice(&resize_streaming::round_to_i32(accumulator).to_le_bytes());
         }
     }
 }
@@ -103,7 +95,9 @@ fn execute_stream<F: F64MulAdd>(
     let maximum_vertical_taps = vertical.weights.iter().map(Vec::len).max().unwrap_or(0);
     let ring_rows = maximum_vertical_taps
         .checked_next_power_of_two()
-        .ok_or_else(|| PilError::ValueError("resize_i: vertical coefficient span is too large".into()))?;
+        .ok_or_else(|| {
+            PilError::ValueError("resize_i: vertical coefficient span is too large".into())
+        })?;
     let ring_samples = ring_rows
         .checked_mul(destination_width)
         .ok_or_else(|| PilError::ValueError("resize_i: vertical ring is too large".into()))?;
@@ -163,16 +157,13 @@ pub(crate) fn execute<F: F64MulAdd>(
             "streamed I thumbnail reduction requires even source dimensions".into(),
         ));
     }
-    let source_dimensions = CheckedDims::new_allow_empty(source_dimensions.0, source_dimensions.1, 4)?;
+    let source_dimensions =
+        CheckedDims::new_allow_empty(source_dimensions.0, source_dimensions.1, 4)?;
     let source = i32_samples_from_le_bytes(input.as_raw(), source_dimensions.total_pixels());
     let source_dimensions = input.dimensions();
     let reduced_dimensions = (source_dimensions.0 / 2, source_dimensions.1 / 2);
-    let (horizontal, vertical) = coefficients::for_resize(
-        reduced_dimensions,
-        destination,
-        filter,
-        None,
-    );
+    let (horizontal, vertical) =
+        coefficients::for_resize(reduced_dimensions, destination, filter, None);
     execute_stream(
         &source,
         source_dimensions,

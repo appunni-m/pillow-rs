@@ -1,7 +1,7 @@
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::{PipelineOp, ResampleFilter};
-use crate::raster::{Mode};
+use crate::raster::Mode;
 
 mod reducing_gap;
 use reducing_gap::apply_reducing_gap;
@@ -278,10 +278,7 @@ impl Image {
     ///
     /// Returns the same size and geometry errors as the initial phase of
     /// [`Self::thumbnail`].
-    pub fn prepare_thumbnail(
-        &self,
-        size: (i64, i64),
-    ) -> Result<Option<ThumbnailPlan>, PilError> {
+    pub fn prepare_thumbnail(&self, size: (i64, i64)) -> Result<Option<ThumbnailPlan>, PilError> {
         let source_size = self.size()?;
         if size.0 >= i64::from(source_size.0)
             && size.1 >= i64::from(source_size.1)

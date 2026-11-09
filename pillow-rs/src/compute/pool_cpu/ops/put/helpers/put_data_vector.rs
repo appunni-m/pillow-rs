@@ -1,15 +1,18 @@
 //! Original serial native-vector prefix copies, after concrete strategy admission.
 
+use super::put_data::DataInput;
 use crate::checked_dims::CheckedDims;
 use crate::compute::pool_cpu::helpers::bytes::vector_copy::copy_native_bytes;
 use crate::error::PilError;
 use crate::raster::{ImageBuffer, Pixel};
-use super::put_data::DataInput;
 
 pub(crate) fn execute<P: Pixel<Subpixel = u8>>(
     input: DataInput<'_, P>,
 ) -> Result<ImageBuffer<P, Vec<u8>>, PilError> {
-    let expected_len = input.image.width().checked_mul(input.image.height())
+    let expected_len = input
+        .image
+        .width()
+        .checked_mul(input.image.height())
         .and_then(|pixels| pixels.checked_mul(u32::from(P::CHANNEL_COUNT)))
         .map(|bytes| bytes as usize)
         .ok_or_else(|| PilError::ValueError("SIMD PutData byte count overflow".into()))?;
@@ -23,8 +26,10 @@ pub(crate) fn execute<P: Pixel<Subpixel = u8>>(
                 PilError::InternalError("SIMD PutData buffer shape mismatch".into())
             })?;
         if copy_len != 0 {
-            let (blocks, tail) = copy_native_bytes(&input.data[..copy_len], &mut output[..copy_len])
-                .ok_or_else(|| PilError::InternalError("SIMD PutData prefix shape mismatch".into()))?;
+            let (blocks, tail) =
+                copy_native_bytes(&input.data[..copy_len], &mut output[..copy_len]).ok_or_else(
+                    || PilError::InternalError("SIMD PutData prefix shape mismatch".into()),
+                )?;
             vector_blocks = vector_blocks.saturating_add(blocks);
             scalar_tail = scalar_tail.saturating_add(tail);
         }
@@ -33,8 +38,7 @@ pub(crate) fn execute<P: Pixel<Subpixel = u8>>(
     crate::compute::record_pipeline_operation_path("native-copy");
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
     crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
-    let dimensions = CheckedDims::new_allow_empty(
-        input.image.width(), input.image.height(), P::CHANNEL_COUNT,
-    )?;
+    let dimensions =
+        CheckedDims::new_allow_empty(input.image.width(), input.image.height(), P::CHANNEL_COUNT)?;
     crate::image_utils::typed_bytes_to_buffer(dimensions, output)
 }

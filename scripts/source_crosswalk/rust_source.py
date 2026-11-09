@@ -260,7 +260,8 @@ def function_index(root: Path, repo_root: Path) -> dict[str, list[dict[str, Any]
         source = path.read_text(encoding="utf-8")
         masked = code_only(source)
         for match in re.finditer(
-            r"\b(?:(?:pub)(?:\([^)]*\))?\s+)?(?:(?:unsafe|async)\s+)*fn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(",
+            r"\b(?:(?:pub)(?:\([^)]*\))?\s+)?(?:(?:unsafe|async)\s+)*fn\s+"
+            r"([A-Za-z_][A-Za-z0-9_]*)(?:\s*<[^()\n]*>)?\s*\(",
             masked,
         ):
             name = match.group(1)
@@ -356,58 +357,55 @@ def parse_registry(source: str) -> tuple[list[dict[str, Any]], list[dict[str, An
 def parse_registry_modules(
     sources: dict[str, str],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Index operation registrations split across registry initializer modules."""
-    module_path = (REGISTRATION_ROOT / "mod.rs").as_posix()
-    module_source = sources[module_path]
-    draw_macro, _ = item_body(module_source, r"\bmacro_rules!\s+draw_entry\b")
-    draw_shader_match = re.search(r'"([^"\n]+\.wgsl)"', draw_macro)
-    draw_shader = draw_shader_match.group(1) if draw_shader_match else None
-
+    """Index CPU/GPU registrations split across current initializer modules."""
     registrations = []
-    simd_entries = []
+    simd_entries: list[dict[str, Any]] = []
     for path, source in sorted(sources.items()):
-        for call, offset in invocations(source, r"\bm\.insert\s*\("):
+        masked = code_only(source)
+        aliases = {
+            match.group(1): match.group(2)
+            for match in re.finditer(
+                r"\blet\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"
+                r"(crate::compute::pool_cpu::ops::"
+                r"[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)\s*;",
+                masked,
+            )
+        }
+        for call, offset in invocations(source, r"\b(?:m|entries)\.insert\s*\("):
             key_match = re.search(r'\(\s*"([A-Za-z0-9_]+)"', call)
             if not key_match:
                 continue
+            function_match = re.search(
+                r"\bgpu_entry\s*!\s*\(\s*([^,]+?)\s*,", code_only(call)
+            )
+            if function_match is None:
+                continue
+            function_path = function_match.group(1).strip()
+            function_path = aliases.get(function_path, function_path)
+            cpu_source_path = cpu_function_source_path(function_path)
             shaders = re.findall(r'"([^"\n]+\.wgsl)"', call)
             registrations.append(
                 {
                     "key": key_match.group(1),
                     "path": path,
                     "line": line_number(source, offset),
-                    "text": call,
+                    "text": function_path,
+                    "cpu_source_path": cpu_source_path,
                     "shader": shaders[-1] if shaders else None,
                 }
             )
-        for call, offset in invocations(source, r"\bdraw_entry\s*!\s*"):
-            key_match = re.search(r'\(\s*[^,]+,\s*"([A-Za-z0-9_]+)"', call)
-            if key_match:
-                registrations.append(
-                    {
-                        "key": key_match.group(1),
-                        "path": path,
-                        "line": line_number(source, offset),
-                        "text": call,
-                        "shader": draw_shader,
-                    }
-                )
-        for call, offset in invocations(source, r"\bsimd_set\s*\("):
-            match = re.search(
-                r'\(\s*m\s*,\s*"([A-Za-z0-9_]+)"\s*,\s*adapters::([A-Za-z_][A-Za-z0-9_]*)\s*\)',
-                call,
-            )
-            if not match:
-                continue
-            simd_entries.append(
-                {
-                    "key": match.group(1),
-                    "symbol": match.group(2),
-                    "path": path,
-                    "line": line_number(source, offset),
-                }
-            )
     return registrations, simd_entries
+
+
+def cpu_function_source_path(function_path: str) -> str | None:
+    """Resolve a fully qualified CPU operation path to its Rust source file."""
+    prefix = "crate::compute::pool_cpu::ops::"
+    if not function_path.startswith(prefix):
+        return None
+    modules = function_path.removeprefix(prefix).split("::")[:-1]
+    if not modules:
+        return None
+    return Path("pillow-rs/src/compute/pool_cpu/ops", *modules).with_suffix(".rs").as_posix()
 
 
 def cpu_registration_imports(source: str) -> dict[str, str]:

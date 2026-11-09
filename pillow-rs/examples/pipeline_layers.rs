@@ -9,8 +9,8 @@
 #![allow(unused_crate_dependencies)]
 
 use pillow_rs::{
-    Backend, Image, Mode, PilError, chops_multiply, chops_screen, image_eval_validated, imageops_invert,
-    imageops_mirror,
+    Backend, Image, Mode, PilError, chops_multiply, chops_screen, image_eval_validated,
+    imageops_invert, imageops_mirror,
 };
 use std::env;
 use std::time::Instant;

@@ -190,12 +190,13 @@ pub(crate) fn transpose_bytes<const CHANNELS: usize>(
     let Some(source) = source.get(..input.total_bytes()) else {
         return Ok(None);
     };
-    let (output_width, output_height) = if swaps_axes { (height, width) } else { (width, height) };
-    let output_dims = crate::checked_dims::CheckedDims::new(
-        output_width,
-        output_height,
-        CHANNELS as u8,
-    )?;
+    let (output_width, output_height) = if swaps_axes {
+        (height, width)
+    } else {
+        (width, height)
+    };
+    let output_dims =
+        crate::checked_dims::CheckedDims::new(output_width, output_height, CHANNELS as u8)?;
     let mut output = output_dims.alloc_buffer();
 
     if swaps_axes {
@@ -205,7 +206,14 @@ pub(crate) fn transpose_bytes<const CHANNELS: usize>(
             TRANSPOSE_TILE_SIZE
         };
         if should_tile_transpose(width, height) {
-            transpose_bytes_tiled::<CHANNELS>(source, &mut output, width, height, method, tile_size);
+            transpose_bytes_tiled::<CHANNELS>(
+                source,
+                &mut output,
+                width,
+                height,
+                method,
+                tile_size,
+            );
         } else {
             transpose_bytes_serial::<CHANNELS>(source, &mut output, width, height, method);
         }
@@ -265,17 +273,24 @@ fn transpose_bytes_serial<const CHANNELS: usize>(
     let height = height as usize;
     let source_stride = width * CHANNELS;
     let output_stride = height * CHANNELS;
-    let reverse_x = matches!(method, TransposeMethod::Rotate90 | TransposeMethod::Transverse);
-    let reverse_y = matches!(method, TransposeMethod::Rotate270 | TransposeMethod::Transverse);
+    let reverse_x = matches!(
+        method,
+        TransposeMethod::Rotate90 | TransposeMethod::Transverse
+    );
+    let reverse_y = matches!(
+        method,
+        TransposeMethod::Rotate270 | TransposeMethod::Transverse
+    );
     for (output_y, row) in output.chunks_exact_mut(output_stride).enumerate() {
-        let source_x = if reverse_x { width - 1 - output_y } else { output_y };
+        let source_x = if reverse_x {
+            width - 1 - output_y
+        } else {
+            output_y
+        };
         let offset = source_x * CHANNELS;
         let source_rows = source.chunks_exact(source_stride);
         if reverse_y {
-            for (pixel, original) in row
-                .chunks_exact_mut(CHANNELS)
-                .zip(source_rows.rev())
-            {
+            for (pixel, original) in row.chunks_exact_mut(CHANNELS).zip(source_rows.rev()) {
                 let start = offset;
                 pixel.copy_from_slice(&original[start..start + CHANNELS]);
             }
@@ -299,19 +314,29 @@ fn transpose_bytes_tiled<const CHANNELS: usize>(
     let height = height as usize;
     let source_stride = width * CHANNELS;
     let output_stride = height * CHANNELS;
-    let reverse_x = matches!(method, TransposeMethod::Rotate90 | TransposeMethod::Transverse);
-    let reverse_y = matches!(method, TransposeMethod::Rotate270 | TransposeMethod::Transverse);
+    let reverse_x = matches!(
+        method,
+        TransposeMethod::Rotate90 | TransposeMethod::Transverse
+    );
+    let reverse_y = matches!(
+        method,
+        TransposeMethod::Rotate270 | TransposeMethod::Transverse
+    );
 
     for tile_y in (0..width).step_by(tile_size) {
         let tile_y_end = (tile_y + tile_size).min(width);
         for block_x in (0..height).step_by(tile_size) {
             let block_x_end = (block_x + tile_size).min(height);
             for output_y in tile_y..tile_y_end {
-                let source_x = if reverse_x { width - 1 - output_y } else { output_y };
+                let source_x = if reverse_x {
+                    width - 1 - output_y
+                } else {
+                    output_y
+                };
                 let row_start = output_y * output_stride;
                 let row = &mut output[row_start..row_start + output_stride];
-                let pixels = row[block_x * CHANNELS..block_x_end * CHANNELS]
-                    .chunks_exact_mut(CHANNELS);
+                let pixels =
+                    row[block_x * CHANNELS..block_x_end * CHANNELS].chunks_exact_mut(CHANNELS);
                 if reverse_y {
                     let first = (height - 1 - block_x) * source_stride + source_x * CHANNELS;
                     for (offset, pixel) in pixels.enumerate() {
@@ -352,7 +377,11 @@ where
             | TransposeMethod::Transpose
             | TransposeMethod::Transverse
     );
-    let (output_width, output_height) = if swaps_axes { (height, width) } else { (width, height) };
+    let (output_width, output_height) = if swaps_axes {
+        (height, width)
+    } else {
+        (width, height)
+    };
     ImageBuffer::from_fn(output_width, output_height, |x, y| {
         let (source_x, source_y) = transpose_source_coordinates(method, width, height, x, y);
         *image.get_pixel(source_x, source_y)

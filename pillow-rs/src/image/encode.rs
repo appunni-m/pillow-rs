@@ -42,18 +42,12 @@ impl Image {
         // Pillow's encoders reject unsupported mode/format combinations with
         // an OSError naming both; replicate the public messages exactly.
         let rejection = match upper_format.as_str() {
-            "PNG" if mode == crate::raster::Mode::ImageF32 => {
-                Some("cannot write mode F as PNG")
-            }
+            "PNG" if mode == crate::raster::Mode::ImageF32 => Some("cannot write mode F as PNG"),
             "PNG" if mode == crate::raster::Mode::ImageCmyk8 => {
                 Some("cannot write mode CMYK as PNG")
             }
-            "BMP" if mode == crate::raster::Mode::ImageI32 => {
-                Some("cannot write mode I as BMP")
-            }
-            "BMP" if mode == crate::raster::Mode::ImageF32 => {
-                Some("cannot write mode F as BMP")
-            }
+            "BMP" if mode == crate::raster::Mode::ImageI32 => Some("cannot write mode I as BMP"),
+            "BMP" if mode == crate::raster::Mode::ImageF32 => Some("cannot write mode F as BMP"),
             "BMP" if mode == crate::raster::Mode::ImageCmyk8 => {
                 Some("cannot write mode CMYK as BMP")
             }

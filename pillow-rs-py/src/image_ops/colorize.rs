@@ -1,36 +1,24 @@
-use super::*;
-use pyo3::types::{PyIterator, PyList, PyListMethods, PyString, PyTuple};
+use super::imageops_global_or_builtin;
+use super::point::{PythonImageOpsCallbacks, map_imageops_callback_error};
+use pyo3::basic::CompareOp;
+use pyo3::prelude::{Bound, Py, PyAny, PyModule, PyResult, Python};
+use pyo3::types::{
+    PyAnyMethods, PyInt, PyIterator, PyList, PyListMethods, PyModuleMethods, PyString,
+};
+use pyo3::{pyfunction, wrap_pyfunction};
 
-struct PythonColorizeCallbacks<'py> {
-    py: Python<'py>,
-}
-
-enum ColorizeCallbackError {
-    Core(pillow_rs::PilError),
-    Python(PyErr),
-}
-
-impl From<pillow_rs::PilError> for ColorizeCallbackError {
-    fn from(error: pillow_rs::PilError) -> Self {
-        Self::Core(error)
-    }
-}
-
-impl From<PyErr> for ColorizeCallbackError {
-    fn from(error: PyErr) -> Self {
-        Self::Python(error)
-    }
-}
-
-impl<'py> pillow_rs::ImageOpsColorizeCallbacks for PythonColorizeCallbacks<'py> {
-    type Image = Bound<'py, PyAny>;
+impl<'py> pillow_rs::ImageOpsColorizeCallbacks for PythonImageOpsCallbacks<'py> {
     type Value = Bound<'py, PyAny>;
     type Sequence = Bound<'py, PyList>;
     type Range = Bound<'py, PyAny>;
     type Iterator = Bound<'py, PyIterator>;
-    type Lut = Bound<'py, PyAny>;
-    type Output = Bound<'py, PyAny>;
-    type Error = ColorizeCallbackError;
+
+    fn image_mode_is_luma(&mut self, image: &Self::Image) -> Result<bool, Self::Error> {
+        Ok(image
+            .getattr("mode")?
+            .rich_compare(PyString::new(self.py, "L"), CompareOp::Eq)?
+            .is_truthy()?)
+    }
 
     fn point_is_nonnegative(&mut self, value: &Self::Value) -> Result<bool, Self::Error> {
         PyInt::new(self.py, 0).le(value).map_err(Into::into)
@@ -49,12 +37,18 @@ impl<'py> pillow_rs::ImageOpsColorizeCallbacks for PythonColorizeCallbacks<'py> 
     }
 
     fn resolve_color(&mut self, color: &Self::Value) -> Result<Self::Value, Self::Error> {
-        if !color.is_instance_of::<PyString>() {
+        let is_instance = imageops_global_or_builtin(self.py, "isinstance")?;
+        let string_type = imageops_global_or_builtin(self.py, "str")?;
+        let is_string = is_instance.call1((color, string_type))?.is_truthy()?;
+        if !is_string {
             return Ok(color.clone());
         }
-        let color = color.extract::<String>()?;
-        let (red, green, blue, _) = pillow_rs::parse_color_str(&color)?;
-        Ok(PyTuple::new(self.py, [red, green, blue])?.into_any())
+        let pil = self.py.import("PIL")?;
+        let image_color = pil.getattr("ImageColor")?;
+        image_color
+            .getattr("getcolor")?
+            .call1((color, "RGB"))
+            .map_err(Into::into)
     }
 
     fn integer(&mut self, value: i64) -> Result<Self::Value, Self::Error> {
@@ -97,11 +91,7 @@ impl<'py> pillow_rs::ImageOpsColorizeCallbacks for PythonColorizeCallbacks<'py> 
             .map_err(Into::into)
     }
 
-    fn component(
-        &mut self,
-        color: &Self::Value,
-        index: usize,
-    ) -> Result<Self::Value, Self::Error> {
+    fn component(&mut self, color: &Self::Value, index: usize) -> Result<Self::Value, Self::Error> {
         color.get_item(index).map_err(Into::into)
     }
 
@@ -129,11 +119,7 @@ impl<'py> pillow_rs::ImageOpsColorizeCallbacks for PythonColorizeCallbacks<'py> 
         left.floor_div(right).map_err(Into::into)
     }
 
-    fn add(
-        &mut self,
-        left: &Self::Value,
-        right: &Self::Value,
-    ) -> Result<Self::Value, Self::Error> {
+    fn add(&mut self, left: &Self::Value, right: &Self::Value) -> Result<Self::Value, Self::Error> {
         left.add(right).map_err(Into::into)
     }
 
@@ -148,24 +134,7 @@ impl<'py> pillow_rs::ImageOpsColorizeCallbacks for PythonColorizeCallbacks<'py> 
     }
 
     fn convert_to_rgb(&mut self, image: &Self::Image) -> Result<Self::Image, Self::Error> {
-        image
-            .call_method1("convert", ("RGB",))
-            .map_err(Into::into)
-    }
-
-    fn point(
-        &mut self,
-        image: &Self::Image,
-        lut: Self::Lut,
-    ) -> Result<Self::Output, Self::Error> {
-        image.call_method1("point", (lut,)).map_err(Into::into)
-    }
-}
-
-fn map_colorize_callback_error(error: ColorizeCallbackError) -> PyErr {
-    match error {
-        ColorizeCallbackError::Core(error) => map_error(error),
-        ColorizeCallbackError::Python(error) => error,
+        image.call_method1("convert", ("RGB",)).map_err(Into::into)
     }
 }
 
@@ -180,16 +149,8 @@ fn ops_imageops_colorize_with_callbacks(
     midpoint: &Bound<'_, PyAny>,
     whitepoint: &Bound<'_, PyAny>,
 ) -> PyResult<Py<PyAny>> {
-    let rust_image = image.getattr("_rust_image")?;
-    let rust_image = rust_image.cast::<PyImage>()?;
-    let mode = rust_image
-        .borrow()
-        .inner
-        .mode_identity()
-        .map_err(map_error)?;
-    let mut callbacks = PythonColorizeCallbacks { py };
+    let mut callbacks = PythonImageOpsCallbacks { py };
     pillow_rs::imageops_colorize_with_callbacks(
-        mode,
         &mut callbacks,
         image.clone(),
         black.clone(),
@@ -200,10 +161,13 @@ fn ops_imageops_colorize_with_callbacks(
         whitepoint.clone(),
     )
     .map(|result| result.unbind())
-    .map_err(map_colorize_callback_error)
+    .map_err(map_imageops_callback_error)
 }
 
 pub(super) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    module.add_function(wrap_pyfunction!(ops_imageops_colorize_with_callbacks, module)?)?;
+    module.add_function(wrap_pyfunction!(
+        ops_imageops_colorize_with_callbacks,
+        module
+    )?)?;
     Ok(())
 }

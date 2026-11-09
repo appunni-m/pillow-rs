@@ -103,7 +103,8 @@ pub(super) fn gpu_int_filter_is_supported(ops: &[PipelineOp], image: &DynamicIma
                 }
             }
             PipelineOp::PutData {
-                payload_mode: Mode::ImageI32, ..
+                payload_mode: Mode::ImageI32,
+                ..
             } => continue,
             _ => return false,
         }
@@ -456,7 +457,8 @@ fn expand_thumbnail_integer_reduction(
         filter,
         reducing_gap,
         ..
-    } = op else {
+    } = op
+    else {
         return None;
     };
     if *reducing_gap != Some(2.0) {

@@ -59,12 +59,8 @@ fn blend_pixel<const RGBA_MASK: bool>(
 ) -> Result<(), PilError> {
     let pixel_index = y as usize * canvas.width() as usize + x as usize;
     let background = canvas.get_pixel(x, y);
-    let previous_hidden = hidden_lanes_for_pixel(
-        hidden_lanes,
-        pixel_index,
-        2,
-        [background[0], background[0]],
-    )?;
+    let previous_hidden =
+        hidden_lanes_for_pixel(hidden_lanes, pixel_index, 2, [background[0], background[0]])?;
     // Pillow's fill_mask_L raises the color-channel mask to full coverage only
     // when the destination alpha is zero. Its integer expression is a
     // zero/nonzero alpha test, not proportional alpha scaling.

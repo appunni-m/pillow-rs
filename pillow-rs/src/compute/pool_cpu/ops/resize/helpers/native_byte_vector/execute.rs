@@ -4,7 +4,7 @@ use super::{bounded_i32, boxed, convolution, plan, telemetry};
 
 use crate::checked_dims::CheckedDims;
 use crate::compute::pool_cpu::ops::resize::helpers::coefficients::{
-    byte_coefficients_fit_source, byte_coefficients_fit_i32,
+    byte_coefficients_fit_i32, byte_coefficients_fit_source,
 };
 use crate::error::PilError;
 use crate::ops::pil_resize::precompute_coeffs;
@@ -48,7 +48,11 @@ pub(crate) fn execute_boxed_with_sparse_rows<
     )
 }
 
-pub(crate) fn execute<const CHANNELS: usize, const PREMULTIPLIED_ALPHA: bool, const USE_BOUNDED_I32: bool>(
+pub(crate) fn execute<
+    const CHANNELS: usize,
+    const PREMULTIPLIED_ALPHA: bool,
+    const USE_BOUNDED_I32: bool,
+>(
     source: &[u8],
     source_size: (u32, u32),
     destination_size: (u32, u32),
@@ -160,8 +164,7 @@ fn execute_into_with_row_facts<
         ));
     }
     let source_dims = CheckedDims::new(source_size.0, source_size.1, CHANNELS as u8)?;
-    let intermediate_dims =
-        CheckedDims::new(destination_size.0, source_size.1, CHANNELS as u8)?;
+    let intermediate_dims = CheckedDims::new(destination_size.0, source_size.1, CHANNELS as u8)?;
     if source.len() != source_dims.total_bytes() {
         return Err(PilError::InternalError(
             "filtered native-byte Resize received an invalid source buffer".into(),
@@ -204,37 +207,31 @@ fn execute_into_with_row_facts<
         Vec::new()
     };
 
-    let (horizontal_blocks, horizontal_tail) = horizontal_pass::<
-        CHANNELS,
-        PREMULTIPLIED_ALPHA,
-        USE_BOUNDED_I32,
-    >(
-        source,
-        source_height,
-        source_stride,
-        output_width,
-        intermediate_stride,
-        &horizontal,
-        &plan,
-        &mut premultiplied_row,
-        &mut intermediate,
-        sparse_source_rows,
-    )
-    .ok_or_else(invalid_kernel_plan)?;
-    let (vertical_blocks, vertical_tail) = vertical_pass::<
-        CHANNELS,
-        PREMULTIPLIED_ALPHA,
-        USE_BOUNDED_I32,
-    >(
-        &intermediate,
-        output_width,
-        source_height,
-        output_height,
-        &vertical,
-        output,
-        sparse_source_rows,
-    )
-    .ok_or_else(invalid_kernel_plan)?;
+    let (horizontal_blocks, horizontal_tail) =
+        horizontal_pass::<CHANNELS, PREMULTIPLIED_ALPHA, USE_BOUNDED_I32>(
+            source,
+            source_height,
+            source_stride,
+            output_width,
+            intermediate_stride,
+            &horizontal,
+            &plan,
+            &mut premultiplied_row,
+            &mut intermediate,
+            sparse_source_rows,
+        )
+        .ok_or_else(invalid_kernel_plan)?;
+    let (vertical_blocks, vertical_tail) =
+        vertical_pass::<CHANNELS, PREMULTIPLIED_ALPHA, USE_BOUNDED_I32>(
+            &intermediate,
+            output_width,
+            source_height,
+            output_height,
+            &vertical,
+            output,
+            sparse_source_rows,
+        )
+        .ok_or_else(invalid_kernel_plan)?;
     telemetry::record_vector_work(
         horizontal_blocks,
         vertical_blocks,
@@ -255,10 +252,7 @@ fn validate_channels<
             (CHANNELS, PREMULTIPLIED_ALPHA),
             (2, true) | (3, false) | (4, false) | (4, true)
         );
-    if (1..=4).contains(&CHANNELS)
-        && has_valid_alpha_layout
-        && has_valid_bounded_i32_layout
-    {
+    if (1..=4).contains(&CHANNELS) && has_valid_alpha_layout && has_valid_bounded_i32_layout {
         Ok(())
     } else {
         Err(PilError::DimensionError(
@@ -286,7 +280,11 @@ fn validate_coefficients(
     }
 }
 
-fn horizontal_pass<const CHANNELS: usize, const PREMULTIPLIED_ALPHA: bool, const USE_BOUNDED_I32: bool>(
+fn horizontal_pass<
+    const CHANNELS: usize,
+    const PREMULTIPLIED_ALPHA: bool,
+    const USE_BOUNDED_I32: bool,
+>(
     source: &[u8],
     source_height: usize,
     source_stride: usize,
@@ -304,7 +302,8 @@ fn horizontal_pass<const CHANNELS: usize, const PREMULTIPLIED_ALPHA: bool, const
         let source_start = source_y.checked_mul(source_stride)?;
         let source_row = source.get(source_start..source_start.checked_add(source_stride)?)?;
         let output_start = source_y.checked_mul(output_stride)?;
-        let output_row = intermediate.get_mut(output_start..output_start.checked_add(output_stride)?)?;
+        let output_row =
+            intermediate.get_mut(output_start..output_start.checked_add(output_stride)?)?;
         if sparse_source_rows.is_some_and(|rows| !rows[source_y]) {
             output_row.fill(0);
             continue;
@@ -327,7 +326,11 @@ fn horizontal_pass<const CHANNELS: usize, const PREMULTIPLIED_ALPHA: bool, const
     Some((vector_blocks, scalar_tail))
 }
 
-fn vertical_pass<const CHANNELS: usize, const PREMULTIPLIED_ALPHA: bool, const USE_BOUNDED_I32: bool>(
+fn vertical_pass<
+    const CHANNELS: usize,
+    const PREMULTIPLIED_ALPHA: bool,
+    const USE_BOUNDED_I32: bool,
+>(
     intermediate: &[u8],
     output_width: usize,
     source_height: usize,
@@ -355,10 +358,7 @@ fn vertical_pass<const CHANNELS: usize, const PREMULTIPLIED_ALPHA: bool, const U
             continue;
         }
         let (blocks, tail) = if USE_BOUNDED_I32 {
-            bounded_i32::resize_vertical_bounded_i32_vector_row::<
-                CHANNELS,
-                PREMULTIPLIED_ALPHA,
-            >(
+            bounded_i32::resize_vertical_bounded_i32_vector_row::<CHANNELS, PREMULTIPLIED_ALPHA>(
                 intermediate,
                 output_width,
                 source_height,

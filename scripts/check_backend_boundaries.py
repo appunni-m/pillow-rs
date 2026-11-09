@@ -20,31 +20,10 @@ RUST_SOURCE_ROOTS = (
 )
 CORE_LIBRARY = Path("pillow-rs/src/lib.rs")
 PARALLEL_MODULE = Path("pillow-rs/src/par.rs")
-SIMD_ADAPTER_FACADE = Path("pillow-rs/src/compute/pool_simd/ops/adapters.rs")
-SIMD_FACADE_FUNCTIONS = frozenset(
-    {
-        "simd_unsupported",
-        "simd_supports_for_image",
-        "preserves_native_contract",
-        "simd_supports_for_shape",
-        "simd_in_place_supported",
-        "simd_execute_in_place",
-    }
-)
-TOP_LEVEL_FUNCTION = re.compile(
-    r"(?m)^(?:(?:pub(?:\([^)]*\))?|async|unsafe|const|extern(?:[ \t]+\"[^\"]+\")?)[ \t]+)*"
-    r"fn[ \t]+([A-Za-z_][A-Za-z0-9_]*)\b"
-)
-SIMD_FACADE_SUPPORT_REEXPORT = re.compile(
-    r"(?m)^\s*(?:pub(?:\([^)]*\))?\s+)?use\s+(?:self::)?support::"
-    r"([A-Za-z_][A-Za-z0-9_]*)\s*;"
-)
+SIMD_EXECUTOR_ROOT = Path("pillow-rs/src/compute/pool_simd")
 RAYON_CODE = re.compile(
     r"\brayon\s*::|\buse\s+rayon\b|\.(?:into_)?par_iter(?:_mut)?\s*\(|"
     r"\bpar_chunks(?:_mut)?\s*\("
-)
-DIRECT_FACADE_INSPECTION = re.compile(
-    r"\b(?:img|shape)\s*\."
 )
 
 
@@ -134,35 +113,6 @@ def parallel_module_gate_violations(root: Path = ROOT) -> list[str]:
     return []
 
 
-def simd_facade_violations(source: str) -> list[str]:
-    """Keep operation admission and implementation in focused family modules."""
-    defined = set(TOP_LEVEL_FUNCTION.findall(source))
-    reexported = set(SIMD_FACADE_SUPPORT_REEXPORT.findall(source))
-    unexpected = sorted(defined - SIMD_FACADE_FUNCTIONS)
-    unexpected_reexports = sorted(reexported - SIMD_FACADE_FUNCTIONS)
-    missing = sorted(SIMD_FACADE_FUNCTIONS - defined - reexported)
-    findings = [
-        f"{SIMD_ADAPTER_FACADE}: {name} belongs in adapters/<family>.rs, not the dispatch facade"
-        for name in unexpected
-    ]
-    findings.extend(
-        f"{SIMD_ADAPTER_FACADE}: {name} is not an allowed support re-export"
-        for name in unexpected_reexports
-    )
-    findings.extend(
-        f"{SIMD_ADAPTER_FACADE}: expected dispatch function is missing: {name}"
-        for name in missing
-    )
-    for number, line in enumerate(source.splitlines(), start=1):
-        code = line.split("//", 1)[0]
-        if DIRECT_FACADE_INSPECTION.search(code):
-            findings.append(
-                f"{SIMD_ADAPTER_FACADE}:{number}: image and shape admission belongs in "
-                "adapters/<family>.rs; the facade should delegate it"
-            )
-    return findings
-
-
 def main() -> int:
     try:
         packages = [
@@ -203,14 +153,12 @@ def main() -> int:
         if not rayon_dependencies or any(not dependency.get("optional") for dependency in rayon_dependencies):
             errors.append("the core Rayon dependency must remain optional")
 
+    if (ROOT / SIMD_EXECUTOR_ROOT).exists():
+        errors.append(
+            f"{SIMD_EXECUTOR_ROOT}: SIMD must be folded into CPU architecture strategies"
+        )
     errors.extend(rayon_violations())
     errors.extend(parallel_module_gate_violations())
-    try:
-        facade_source = (ROOT / SIMD_ADAPTER_FACADE).read_text(encoding="utf-8")
-    except OSError as error:
-        errors.append(f"could not read SIMD adapter facade: {error}")
-    else:
-        errors.extend(simd_facade_violations(facade_source))
     if errors:
         print("Backend-boundary violations:", file=sys.stderr)
         for error in errors:
@@ -218,8 +166,8 @@ def main() -> int:
         return 1
 
     print(
-        "Backend-boundary checks passed: defaults stay serial, SIMD/GPU code has no Rayon scheduling, "
-        "Rayon stays in Parallel CPU, and the SIMD facade delegates family admission."
+        "Backend-boundary checks passed: CPU and GPU code stay serial, SIMD uses CPU architecture "
+        "strategies, and Rayon stays in Parallel CPU."
     )
     return 0
 

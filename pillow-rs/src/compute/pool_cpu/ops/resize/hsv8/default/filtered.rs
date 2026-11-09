@@ -3,10 +3,10 @@
 use crate::checked_dims::CheckedDims;
 use crate::ops::pil_resize::FilterCoeffs;
 
+use crate::compute::pool_cpu::ops::resize::helpers::byte_samples;
 use crate::compute::pool_cpu::ops::resize::helpers::coefficients::{
     byte_coefficients_fit_i32, byte_coefficients_fit_source, fixed_point_to_u8_i32,
 };
-use crate::compute::pool_cpu::ops::resize::helpers::byte_samples;
 
 pub(crate) fn execute(
     source: &[u8],
@@ -16,8 +16,7 @@ pub(crate) fn execute(
     vertical: &FilterCoeffs,
 ) -> Option<Vec<u8>> {
     let (source_width, source_height) = (source_size.0 as usize, source_size.1 as usize);
-    let (output_width, output_height) =
-        (destination_size.0 as usize, destination_size.1 as usize);
+    let (output_width, output_height) = (destination_size.0 as usize, destination_size.1 as usize);
     let source_dims = CheckedDims::new(source_size.0, source_size.1, 3).ok()?;
     let intermediate_dims = CheckedDims::new(destination_size.0, source_size.1, 3).ok()?;
     let output_dims = CheckedDims::new(destination_size.0, destination_size.1, 3).ok()?;

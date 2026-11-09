@@ -48,7 +48,8 @@ impl<'a> FontTextRef<'a> {
     }
 
     pub(crate) fn contains(self, value: char) -> bool {
-        self.codepoints().any(|codepoint| codepoint == u32::from(value))
+        self.codepoints()
+            .any(|codepoint| codepoint == u32::from(value))
     }
 
     pub(crate) fn split(self, separator: char) -> Vec<Self> {

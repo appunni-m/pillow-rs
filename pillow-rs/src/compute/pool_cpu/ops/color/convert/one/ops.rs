@@ -85,7 +85,10 @@ pub(crate) fn execute(
 ) -> Result<DynamicImage, PilError> {
     match selection.implementation.architecture {
         Architecture::Default => super::default::convert_impl::execute(source, target),
-        #[cfg(any(target_arch = "x86_64", all(target_arch = "x86", target_feature = "sse2")))]
+        #[cfg(any(
+            target_arch = "x86_64",
+            all(target_arch = "x86", target_feature = "sse2")
+        ))]
         Architecture::Sse2 if is_luma16_target(target) => {
             super::sse2::convert_impl::execute(source, target)
         }
@@ -109,7 +112,9 @@ pub(crate) fn execute_palette_target(
     selection: StrategySelection,
 ) -> Result<super::super::ops::PreparedConvertOutput, PilError> {
     match selection.implementation.architecture {
-        Architecture::Default => super::default::convert_impl::execute_palette_target(source, target),
+        Architecture::Default => {
+            super::default::convert_impl::execute_palette_target(source, target)
+        }
         _ => Err(PilError::InternalError(
             "Convert selected an undeclared One palette architecture".into(),
         )),

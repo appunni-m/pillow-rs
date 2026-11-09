@@ -34,7 +34,10 @@ fn sample_window_vector(
     column_offset: usize,
 ) -> f32x8 {
     let mut values = [0.0f32; LANES];
-    let source_y = y.saturating_add(row_offset).saturating_sub(half).min(height - 1);
+    let source_y = y
+        .saturating_add(row_offset)
+        .saturating_sub(half)
+        .min(height - 1);
     for (lane, value) in values.iter_mut().enumerate().take(active) {
         let source_x = x_start
             .saturating_add(lane)
@@ -91,12 +94,16 @@ fn filter_row(
             values[..area]
                 .iter()
                 .copied()
-                .fold(f32x8::splat(f32::INFINITY), |current, value| current.min(value))
+                .fold(f32x8::splat(f32::INFINITY), |current, value| {
+                    current.min(value)
+                })
         } else if rank + 1 == area {
             values[..area]
                 .iter()
                 .copied()
-                .fold(f32x8::splat(f32::NEG_INFINITY), |current, value| current.max(value))
+                .fold(f32x8::splat(f32::NEG_INFINITY), |current, value| {
+                    current.max(value)
+                })
         } else {
             sort_vectors(&mut values[..area]);
             values[rank]
@@ -114,22 +121,27 @@ pub(in crate::compute::pool_cpu::ops::filter::f32) fn execute(
     rank: u32,
 ) -> Result<Vec<u8>, PilError> {
     let Some(area) = (size as usize).checked_mul(size as usize) else {
-        return Err(PilError::InternalError("F rank vector window overflow".into()));
+        return Err(PilError::InternalError(
+            "F rank vector window overflow".into(),
+        ));
     };
     if size == 0 || size % 2 == 0 || size > MAX_SIZE || rank as usize >= area {
-        return Err(PilError::InternalError("F rank vector received an unsupported window".into()));
+        return Err(PilError::InternalError(
+            "F rank vector received an unsupported window".into(),
+        ));
     }
     let (width, height) = (width as usize, height as usize);
     let expected = width
         .checked_mul(height)
         .and_then(|pixels| pixels.checked_mul(4));
     if width == 0 || height == 0 || expected != Some(raw.len()) {
-        return Err(PilError::InternalError("F rank vector received invalid native dimensions".into()));
+        return Err(PilError::InternalError(
+            "F rank vector received invalid native dimensions".into(),
+        ));
     }
 
     let size = size as usize;
     let half = size / 2;
-    let area = area as usize;
     let rank = rank as usize;
     if area > 1 && super::native_uniform_f_mode_image(raw, width, height) {
         crate::compute::record_pipeline_operation_path("native-identity");

@@ -70,17 +70,12 @@ fn putalpha_input_impl(
 
     // `__index__` conversion above may re-enter this image; borrow it only
     // once host-language coercion has finished.
-    update_core_image(&slf, py, move |image| image.putalpha_with_input(input))
-        .map(|_| true)
+    update_core_image(&slf, py, move |image| image.putalpha_with_input(input)).map(|_| true)
 }
 
 #[pymethods]
 impl PyImage {
-    fn putalpha_input(
-        slf: Py<Self>,
-        alpha: &Bound<'_, PyAny>,
-        py: Python<'_>,
-    ) -> PyResult<()> {
+    fn putalpha_input(slf: Py<Self>, alpha: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<()> {
         putalpha_input_impl(slf, alpha, py, true, false).map(|_| ())
     }
 
@@ -103,9 +98,7 @@ impl PyImage {
     }
 
     fn prepare_putalpha_data_input(&mut self) -> PyResult<()> {
-        self.inner
-            .prepare_putalpha_data_input()
-            .map_err(map_error)
+        self.inner.prepare_putalpha_data_input().map_err(map_error)
     }
 
     fn putalpha_image_input(

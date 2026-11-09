@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use crate::raster::{DynamicImage, Mode};
 
-use super::data_access::{is_l16_identity, l16_identity_uses_big_endian};
 use super::Image;
+use super::data_access::{is_l16_identity, l16_identity_uses_big_endian};
 
 /// Host-neutral input for converting Pillow's scalar `ImagingCore` view to bytes.
 #[derive(Debug, Clone)]

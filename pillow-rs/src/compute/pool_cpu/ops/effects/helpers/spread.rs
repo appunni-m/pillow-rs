@@ -34,11 +34,8 @@ pub(crate) fn execute<P: Pixel>(
         return Ok(kernel.input.clone());
     }
 
-    let mapping = effect_spread_indices(
-        kernel.input.width(),
-        kernel.input.height(),
-        kernel.distance,
-    )?;
+    let mapping =
+        effect_spread_indices(kernel.input.width(), kernel.input.height(), kernel.distance)?;
     let mut output = gather_native_samples(kernel.input, &mapping)?;
     if output
         .remap_hidden_pixel_lanes_from(kernel.input, |index| {

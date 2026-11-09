@@ -40,14 +40,8 @@ impl DrawCurveJointPlan {
     pub fn pieslice(&self, center: (f64, f64), width: u32) -> ([(f64, f64); 2], f64, f64) {
         let width = f64::from(width);
         let bounds = [
-            (
-                center.0 - width / 2.0 + 1.0,
-                center.1 - width / 2.0 + 1.0,
-            ),
-            (
-                center.0 + width / 2.0 - 1.0,
-                center.1 + width / 2.0 - 1.0,
-            ),
+            (center.0 - width / 2.0 + 1.0, center.1 - width / 2.0 + 1.0),
+            (center.0 + width / 2.0 - 1.0, center.1 + width / 2.0 - 1.0),
         ];
         let (start, end) = self.angles();
         (bounds, start, end)

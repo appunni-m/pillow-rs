@@ -1,12 +1,10 @@
 //! Exact ImageI16L Rotate support and serial strategy.
 
+use crate::compute::ExecutionContext;
 use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
 use crate::compute::pool_cpu::ops::rotate::helpers::strategy;
 use crate::compute::pool_cpu::ops::rotate::ops::RotateRequest;
-use crate::compute::registry::support::{
-    ModeSupport, OperationId, OutputModeRule,
-};
-use crate::compute::ExecutionContext;
+use crate::compute::registry::support::{ModeSupport, OperationId, OutputModeRule};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 
@@ -38,7 +36,9 @@ pub(crate) fn prepare<'a>(
 }
 
 pub(crate) fn execute(plan: Strategy<'_>) -> Result<DynamicImage, PilError> {
-    let image = super::default::rotate_impl::execute(plan.implementation.input, plan.implementation.request)?;
+    let image = super::default::rotate_impl::execute(
+        plan.implementation.input,
+        plan.implementation.request,
+    )?;
     Ok(DynamicImage::ImageI16L(image))
 }
-

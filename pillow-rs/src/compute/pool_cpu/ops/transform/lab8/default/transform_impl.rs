@@ -13,4 +13,3 @@ byte_mode_default!(
 );
 
 byte_mode_mesh_record!(ImageLab8, 3, false, "ImageLab8");
-

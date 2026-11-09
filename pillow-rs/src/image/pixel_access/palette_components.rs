@@ -166,10 +166,7 @@ pub(super) fn palette_components_equal(
         })
 }
 
-pub(super) fn palette_component_matches_byte(
-    component: &PaletteColorComponent,
-    byte: u8,
-) -> bool {
+pub(super) fn palette_component_matches_byte(component: &PaletteColorComponent, byte: u8) -> bool {
     match component {
         PaletteColorComponent::Integer(value) => *value == i64::from(byte),
         PaletteColorComponent::WideInteger { .. } => false,
@@ -177,15 +174,13 @@ pub(super) fn palette_component_matches_byte(
     }
 }
 
-pub(super) fn palette_component_to_byte(
-    component: &PaletteColorComponent,
-) -> Result<u8, PilError> {
+pub(super) fn palette_component_to_byte(component: &PaletteColorComponent) -> Result<u8, PilError> {
     match component {
         PaletteColorComponent::Integer(value) => u8::try_from(*value)
             .map_err(|_| PilError::ValueError("bytes must be in range(0, 256)".into())),
-        PaletteColorComponent::WideInteger { .. } => {
-            Err(PilError::ValueError("bytes must be in range(0, 256)".into()))
-        }
+        PaletteColorComponent::WideInteger { .. } => Err(PilError::ValueError(
+            "bytes must be in range(0, 256)".into(),
+        )),
         PaletteColorComponent::Float(_) => Err(PilError::TypeError(
             "'float' object cannot be interpreted as an integer".into(),
         )),

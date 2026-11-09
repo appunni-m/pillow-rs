@@ -1,9 +1,11 @@
 //! Original serial single and clone-once ordered writes for `ImageRgb8`.
 
+use super::super::super::helpers::put_pixel::{
+    self as helpers, BatchInput, PixelInput, PixelWrite,
+};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Rgb};
-use super::super::super::helpers::put_pixel::{self as helpers, BatchInput, PixelInput, PixelWrite};
 
 pub(crate) type Input = crate::raster::RgbImage;
 pub(crate) type Kernel<'a> = PixelInput<'a, Rgb<u8>>;
@@ -11,7 +13,10 @@ pub(crate) type BatchKernel<'a> = BatchInput<'a, Rgb<u8>>;
 
 #[inline]
 pub(crate) fn prepare(input: &Input, write: PixelWrite) -> Kernel<'_> {
-    PixelInput { image: input, write }
+    PixelInput {
+        image: input,
+        write,
+    }
 }
 
 #[inline]

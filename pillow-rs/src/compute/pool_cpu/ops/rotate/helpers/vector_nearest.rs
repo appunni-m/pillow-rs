@@ -1,7 +1,7 @@
 //! Native-byte fixed-point nearest-neighbor Rotate kernel.
 
 use crate::checked_dims::CheckedDims;
-use crate::compute::pool_cpu::ops::rotate::helpers::geometry::{rotate_geometry, Geometry};
+use crate::compute::pool_cpu::ops::rotate::helpers::geometry::{Geometry, rotate_geometry};
 use crate::compute::pool_cpu::ops::rotate::ops::RotateRequest;
 use crate::error::PilError;
 use crate::raster::{ImageBuffer, Pixel};
@@ -48,9 +48,8 @@ where
     let dimensions = CheckedDims::new_allow_empty(geometry.width, geometry.height, CHANNELS as u8)?;
     let mut output = dimensions.alloc_buffer();
     let fill = request.fill.unwrap_or((0, 0, 0, 0));
-    let fill_block = std::array::from_fn(|index| {
-        super::byte::fill_sample::<CHANNELS>(fill, index % CHANNELS)
-    });
+    let fill_block =
+        std::array::from_fn(|index| super::byte::fill_sample::<CHANNELS>(fill, index % CHANNELS));
     let fill_bytes = u8x16::new(fill_block).to_array();
     let mut vector_blocks = 0_u64;
     for chunk in output.chunks_mut(16) {
@@ -245,7 +244,9 @@ fn copy_vector_bytes(source: &[u8], destination: &mut [u8]) -> Option<(u64, u64)
     for offset in (0..vector_length).step_by(16) {
         let end = offset.checked_add(16)?;
         let source_block: [u8; 16] = source.get(offset..end)?.try_into().ok()?;
-        destination.get_mut(offset..end)?.copy_from_slice(&u8x16::new(source_block).to_array());
+        destination
+            .get_mut(offset..end)?
+            .copy_from_slice(&u8x16::new(source_block).to_array());
     }
     destination
         .get_mut(vector_length..)?

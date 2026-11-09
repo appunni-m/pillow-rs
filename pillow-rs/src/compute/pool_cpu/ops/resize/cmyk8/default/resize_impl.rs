@@ -43,8 +43,9 @@ pub(crate) fn execute(
         &horizontal,
         &vertical,
     ) {
-        return RgbaImage::from_raw(width, height, bytes)
-            .ok_or_else(|| PilError::ValueError("resize_cmyk: failed to create output buffer".into()));
+        return RgbaImage::from_raw(width, height, bytes).ok_or_else(|| {
+            PilError::ValueError("resize_cmyk: failed to create output buffer".into())
+        });
     }
     let bytes = super::super::super::helpers::byte_samples::filtered_standard_with_coefficients::<4>(
         input.as_raw(),

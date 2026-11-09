@@ -79,8 +79,11 @@ pub fn eval_fn(img: &Image, lut: Vec<u8>, _n_bands: usize) -> Result<Image, JsVa
 #[wasm_bindgen(js_name = "linearGradientFn")]
 /// Creates a linear gradient image in the requested mode.
 pub fn linear_gradient(mode: &str) -> Result<Image, JsValue> {
-    let mode = pillow_rs::Mode::from_pillow_name(mode)
-        .ok_or_else(|| err(pillow_rs::PilError::ValueError("image has wrong mode".into())))?;
+    let mode = pillow_rs::Mode::from_pillow_name(mode).ok_or_else(|| {
+        err(pillow_rs::PilError::ValueError(
+            "image has wrong mode".into(),
+        ))
+    })?;
     pillow_rs::image_linear_gradient(mode)
         .map(|i| Image { inner: i })
         .map_err(err)
@@ -89,8 +92,11 @@ pub fn linear_gradient(mode: &str) -> Result<Image, JsValue> {
 #[wasm_bindgen(js_name = "radialGradientFn")]
 /// Creates a radial gradient image in the requested mode.
 pub fn radial_gradient(mode: &str) -> Result<Image, JsValue> {
-    let mode = pillow_rs::Mode::from_pillow_name(mode)
-        .ok_or_else(|| err(pillow_rs::PilError::ValueError("image has wrong mode".into())))?;
+    let mode = pillow_rs::Mode::from_pillow_name(mode).ok_or_else(|| {
+        err(pillow_rs::PilError::ValueError(
+            "image has wrong mode".into(),
+        ))
+    })?;
     pillow_rs::image_radial_gradient(mode)
         .map(|i| Image { inner: i })
         .map_err(err)

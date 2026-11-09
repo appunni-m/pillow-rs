@@ -25,29 +25,22 @@ pub(crate) fn apply<const RGBA_MASK: bool>(
     for text_y in 0..height {
         for text_x in 0..width {
             let pixel_index = (text_y * width + text_x) as usize;
-            let coverage = crate::compute::pool_cpu::ops::draw::helpers::text_mask::coverage::<RGBA_MASK>(mask, pixel_index);
+            let coverage = crate::compute::pool_cpu::ops::draw::helpers::text_mask::coverage::<
+                RGBA_MASK,
+            >(mask, pixel_index);
             if coverage == 0 {
                 continue;
             }
-            let Some((image_x, image_y)) = text_coords::destination(
-                x,
-                y,
-                text_x,
-                text_y,
-                image_width,
-                image_height,
-            ) else {
+            let Some((image_x, image_y)) =
+                text_coords::destination(x, y, text_x, text_y, image_width, image_height)
+            else {
                 continue;
             };
             let destination_offset =
                 (image_y as usize * image_width as usize + image_x as usize) * 3;
             let destination_index = image_y as usize * image_width as usize + image_x as usize;
-            let previous_hidden = hidden_lanes_for_pixel(
-                &hidden_lanes,
-                destination_index,
-                1,
-                [u8::MAX, 0],
-            )?;
+            let previous_hidden =
+                hidden_lanes_for_pixel(&hidden_lanes, destination_index, 1, [u8::MAX, 0])?;
             let inverse = 255u16 - u16::from(coverage);
             let source = crate::compute::pool_cpu::ops::draw::helpers::text_mask::color::<RGBA_MASK>(
                 mask,

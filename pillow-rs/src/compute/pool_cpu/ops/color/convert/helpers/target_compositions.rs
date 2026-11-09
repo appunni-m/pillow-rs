@@ -161,18 +161,21 @@ fn target_rejection(support: ModeSupport, target: Mode) -> Option<(&'static str,
     match support {
         ModeSupport::Rejected { reason, kind, .. } => Some((reason, kind)),
         ModeSupport::Supported { inputs, .. } => inputs.iter().find_map(|input| match input {
-            InputContract::ConvertTarget { targets, rejection_reason, .. }
-                if !targets.contains(&target) =>
-            {
-                Some((*rejection_reason, RejectionKind::ValueError))
-            }
+            InputContract::ConvertTarget {
+                targets,
+                rejection_reason,
+                ..
+            } if !targets.contains(&target) => Some((*rejection_reason, RejectionKind::ValueError)),
             _ => None,
         }),
     }
 }
 
 const fn is_premultiplied_target(mode: Mode) -> bool {
-    matches!(mode, Mode::ImageLaPremultiplied8 | Mode::ImageRgbPremultiplied8)
+    matches!(
+        mode,
+        Mode::ImageLaPremultiplied8 | Mode::ImageRgbPremultiplied8
+    )
 }
 
 const fn rejects_luma_to_premultiplied(mode: Mode) -> bool {

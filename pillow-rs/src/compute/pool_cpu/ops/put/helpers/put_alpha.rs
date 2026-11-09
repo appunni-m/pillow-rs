@@ -1,8 +1,8 @@
 //! Typed dependencies and original scalar alpha-insertion loops.
 
 use crate::raster::{
-    GrayAlphaImage, GrayImage, ImageBuffer, Luma, LumaA, Pixel, Rgb, RgbImage, Rgba, RgbaImage,
-    Rgb32FImage, Rgba32FImage,
+    GrayAlphaImage, GrayImage, ImageBuffer, Luma, LumaA, Pixel, Rgb, Rgb32FImage, RgbImage, Rgba,
+    Rgba32FImage, RgbaImage,
 };
 
 pub(crate) struct AlphaInput<'a, P: Pixel> {
@@ -10,8 +10,9 @@ pub(crate) struct AlphaInput<'a, P: Pixel> {
     pub(crate) alpha: u8,
 }
 
-pub(crate) fn facts<P: Pixel>(input: &AlphaInput<'_, P>)
-    -> crate::compute::registry::support::StrategyInputs {
+pub(crate) fn facts<P: Pixel>(
+    input: &AlphaInput<'_, P>,
+) -> crate::compute::registry::support::StrategyInputs {
     crate::compute::registry::support::StrategyInputs {
         width: input.image.width(),
         height: input.image.height(),
@@ -45,8 +46,11 @@ pub(crate) fn replace_luma_alpha(source: &GrayAlphaImage, alpha: u8) -> GrayAlph
 
 pub(crate) fn rgb_constant(rgb: &RgbImage, alpha: u8) -> RgbaImage {
     let mut output = RgbaImage::new(rgb.width(), rgb.height());
-    for (destination, source) in output.as_mut().chunks_exact_mut(4)
-        .zip(rgb.as_raw().chunks_exact(3)) {
+    for (destination, source) in output
+        .as_mut()
+        .chunks_exact_mut(4)
+        .zip(rgb.as_raw().chunks_exact(3))
+    {
         destination[..3].copy_from_slice(source);
         destination[3] = alpha;
     }

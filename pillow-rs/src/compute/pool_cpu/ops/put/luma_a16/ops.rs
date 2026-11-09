@@ -1,8 +1,8 @@
 //! `ImageLumaA16` band semantics and context-selected architecture strategies.
 
 // NO_PILLOW_SUPPORT: native ImageLumaA16 band and mutation strategies extend Pillow.
-use crate::compute::registry::support::BandIndexRule;
 use super::super::helpers::extract_band_strategy::declare_strategies;
+use crate::compute::registry::support::BandIndexRule;
 
 declare_strategies! {
     ImageLumaA16, BandIndexRule::ClampToNative { channels: 2 };
@@ -25,3 +25,9 @@ use super::super::helpers::put_alpha_data_strategy::declare_strategies as declar
 declare_alpha_data_strategies! {
     ImageLumaA16, ImageLumaA16, 0, 4;
 }
+super::super::helpers::scalar_write_support::declare_scalar_write_support!(
+    ImageLumaA16,
+    false,
+    false,
+    false,
+);

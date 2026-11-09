@@ -3,11 +3,7 @@
 use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
 
-pub(crate) fn reduce_factors(
-    source: (u32, u32),
-    output: (u32, u32),
-    enabled: bool,
-) -> (u32, u32) {
+pub(crate) fn reduce_factors(source: (u32, u32), output: (u32, u32), enabled: bool) -> (u32, u32) {
     if !enabled || source.0 == 0 || source.1 == 0 || output.0 == 0 || output.1 == 0 {
         return (1, 1);
     }

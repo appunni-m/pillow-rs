@@ -3,9 +3,6 @@ use crate::compute::pool_cpu::ops::analysis::helpers::getcolors::{self, GetColor
 use crate::error::PilError;
 use crate::raster::Rgb32FImage;
 
-pub(crate) fn execute(
-    maxcolors: u32,
-    image: &Rgb32FImage,
-) -> Result<GetColorsOutput, PilError> {
+pub(crate) fn execute(maxcolors: u32, image: &Rgb32FImage) -> Result<GetColorsOutput, PilError> {
     getcolors::f32_bands(maxcolors, image)
 }

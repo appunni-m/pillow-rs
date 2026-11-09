@@ -1,5 +1,5 @@
-use crate::compute::registry::support::StrategySelection;
 use crate::compute::registry::support::ModeSupport;
+use crate::compute::registry::support::StrategySelection;
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
@@ -35,9 +35,10 @@ pub(crate) fn apply_text<const RGBA_MASK: bool>(
 }
 
 pub(crate) const MODE: Mode = Mode::ImageI16L;
+pub(crate) const SUPPORT: ModeSupport = super::super::helpers::support::serial_support(MODE);
 
 pub(crate) fn support() -> ModeSupport {
-    super::super::ops::mode_support(MODE)
+    SUPPORT
 }
 
 pub(crate) fn execute(
@@ -47,7 +48,9 @@ pub(crate) fn execute(
 ) -> Result<DynamicImage, PilError> {
     super::super::helpers::strategy::require_default_selection(selection, MODE)?;
     let DynamicImage::ImageI16L(pixels) = image else {
-        return Err(PilError::InternalError("Draw strategy received a different raster variant".into()));
+        return Err(PilError::InternalError(
+            "Draw strategy received a different raster variant".into(),
+        ));
     };
     let output = super::default::draw_impl::execute(pixels, ops)?;
     Ok(DynamicImage::ImageI16L(output))

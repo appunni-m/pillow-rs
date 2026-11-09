@@ -21,7 +21,9 @@ pub(crate) fn merge(
             source,
             remaining,
             Mode::ImageRgb8,
-            MergeLayout::Three { lab_encoding: false },
+            MergeLayout::Three {
+                lab_encoding: false,
+            },
         );
     }
     let bands = merge::collect_bands(source, remaining, pixels)?;
@@ -37,7 +39,9 @@ pub(crate) fn merge(
     merge::preserve_merged_padding(
         &mut image,
         Mode::ImageRgb8,
-        MergeLayout::Three { lab_encoding: false },
+        MergeLayout::Three {
+            lab_encoding: false,
+        },
         pixels,
     )?;
     crate::compute::record_pipeline_allocation(output_len);

@@ -1,5 +1,5 @@
-use crate::raster::DynamicImage;
 use crate::compute::registry::support::{DrawTextMaskKind, PaletteKnowledge};
+use crate::raster::DynamicImage;
 
 /// Prepared inputs shared by exact-mode eager Text implementations.
 pub(crate) struct TextComposeInput<'a> {

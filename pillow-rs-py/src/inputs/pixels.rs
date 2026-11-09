@@ -1,6 +1,6 @@
 use super::{
-    Bound, PyAny, PyBytes, PyErr, PyInt, PyList, PyOverflowError, PyResult, PyTuple,
-    PyTypeError, PyValueError, Python, c_int_from_python, chops_offset_from_python,
+    Bound, PyAny, PyBytes, PyErr, PyInt, PyList, PyOverflowError, PyResult, PyTuple, PyTypeError,
+    PyValueError, Python, c_int_from_python, chops_offset_from_python,
 };
 use pyo3::types::{
     PyAnyMethods, PyFloat, PySequence, PySequenceMethods, PyTupleMethods, PyTypeMethods,
@@ -48,9 +48,8 @@ pub(crate) fn putpixel_component_shape_from_python(
         mode,
         pillow_rs::Mode::ImagePalette8 | pillow_rs::Mode::ImagePaletteAlpha8
     );
-    let palette_list = palette_mode
-        && value.is_instance_of::<PyList>()
-        && matches!(value.len()?, 3 | 4);
+    let palette_list =
+        palette_mode && value.is_instance_of::<PyList>() && matches!(value.len()?, 3 | 4);
     let length = if palette_list {
         Some(value.len()?)
     } else {
@@ -168,11 +167,20 @@ pub(crate) fn new_color_input_from_python(
     // size-callback output/fault cases; allocation-before-fill fault order is
     // still a source-level difference when construction fails for memory.
     let Some(value) = color else {
-        return Ok(new_color_input(None, None, None, None, None, None, None, false));
+        return Ok(new_color_input(
+            None, None, None, None, None, None, None, false,
+        ));
     };
     if let Ok(string) = value.extract::<String>() {
         return Ok(new_color_input(
-            Some(string), None, None, None, None, None, None, true,
+            Some(string),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            true,
         ));
     }
 
@@ -214,7 +222,7 @@ pub(crate) fn new_color_input_from_python(
     let Some(tuple) = tuple else {
         return Err(new_color_type_error(mode));
     };
-    new_color_tuple_input(mode, &tuple)
+    new_color_tuple_input(mode, tuple)
 }
 
 #[allow(
@@ -315,7 +323,16 @@ fn new_color_tuple_input(
 
     let first = new_color_byte(new_color_integer(&values.get_item(0)?)?);
     if bands == 1 {
-        return Ok(new_color_input(None, Some(first), None, None, None, None, None, true));
+        return Ok(new_color_input(
+            None,
+            Some(first),
+            None,
+            None,
+            None,
+            None,
+            None,
+            true,
+        ));
     }
     let second = new_color_byte(i64::from(c_int_from_python(&values.get_item(1)?)?));
     if bands == 2 {
@@ -381,13 +398,13 @@ pub(crate) fn new_size_from_python(
         )));
     }
 
-    let width = new_size_component(&sequence, 0)?;
-    let height = new_size_component(&sequence, 1)?;
+    let width = new_size_component(sequence, 0)?;
+    let height = new_size_component(sequence, 1)?;
     if width < 0 || height < 0 {
         return Err(PyValueError::new_err("Width and height must be >= 0"));
     }
-    let width = u32::try_from(width)
-        .map_err(|_| PyValueError::new_err("Width and height must be >= 0"))?;
+    let width =
+        u32::try_from(width).map_err(|_| PyValueError::new_err("Width and height must be >= 0"))?;
     let height = u32::try_from(height)
         .map_err(|_| PyValueError::new_err("Width and height must be >= 0"))?;
     Ok((width, height))
@@ -427,6 +444,65 @@ pub(crate) fn putpixel_coordinates_from_python(xy: &Bound<'_, PyAny>) -> PyResul
         c_int_from_python(&sequence.get_item(0)?)?,
         c_int_from_python(&sequence.get_item(1)?)?,
     ))
+}
+
+pub(crate) fn pixel_access_coordinates_from_python(xy: &Bound<'_, PyAny>) -> PyResult<(i32, i32)> {
+    // Pillow's PixelAccess accepts tuples only; its C-long coordinates narrow
+    // to C int, and float coordinates truncate toward zero.
+    let tuple = xy
+        .cast::<PyTuple>()
+        .map_err(|_| PyTypeError::new_err("argument must be sequence of length 2"))?;
+    if tuple.len() != 2 {
+        return Err(PyTypeError::new_err(
+            "argument must be sequence of length 2",
+        ));
+    }
+    Ok((
+        pixel_access_coordinate(&tuple.get_item(0)?)?,
+        pixel_access_coordinate(&tuple.get_item(1)?)?,
+    ))
+}
+
+fn pixel_access_coordinate(value: &Bound<'_, PyAny>) -> PyResult<i32> {
+    if value.is_instance_of::<PyInt>() {
+        return value
+            .extract::<std::os::raw::c_long>()
+            .map(|coordinate| coordinate as i32);
+    }
+    if value.is_instance_of::<PyFloat>() {
+        return value.extract::<f64>().map(pixel_access_float_coordinate);
+    }
+    let integer = value
+        .call_method0("__int__")
+        .map_err(|_| PyTypeError::new_err("an integer is required"))?;
+    if !integer.is_instance_of::<PyInt>() {
+        return Err(PyTypeError::new_err("an integer is required"));
+    }
+    integer
+        .extract::<std::os::raw::c_long>()
+        .map(|coordinate| coordinate as i32)
+}
+
+/// Gives float coordinates outside Pillow's C-int cast range stable Rust
+/// semantics: in-range values truncate toward zero, overflow saturates, and
+/// NaN maps to zero. Pillow's C cast has no portable result for those inputs.
+fn pixel_access_float_coordinate(coordinate: f64) -> i32 {
+    if coordinate.is_nan() {
+        return 0;
+    }
+    if coordinate <= f64::from(i32::MIN) {
+        return i32::MIN;
+    }
+    if coordinate >= f64::from(i32::MAX) {
+        return i32::MAX;
+    }
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "the finite coordinate is within i32 bounds and Pillow truncates toward zero"
+    )]
+    {
+        coordinate as i32
+    }
 }
 
 pub(crate) fn transpose_input_from_python(

@@ -548,13 +548,9 @@ pub(super) fn resize_horizontal_bounded_i32_vector_row<
     output_row: &mut [u8],
 ) -> Option<(u64, u64)> {
     match (CHANNELS, PREMULTIPLIED_ALPHA) {
-        (2, true) => resize_horizontal_la_i32_vector_row(
-            source_row,
-            coeffs,
-            plan,
-            output_width,
-            output_row,
-        ),
+        (2, true) => {
+            resize_horizontal_la_i32_vector_row(source_row, coeffs, plan, output_width, output_row)
+        }
         (3, false) => {
             resize_horizontal_hsv_i32_vector_row(source_row, coeffs, plan, output_width, output_row)
         }

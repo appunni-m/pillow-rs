@@ -36,11 +36,7 @@ pub(crate) fn execute_with_fma<F: F64MulAdd>(
     let source_dims = CheckedDims::new_allow_empty(source_width, source_height, 4)?;
     let source = i32_samples_from_le_bytes(input.as_raw(), source_dims.total_pixels());
     if matches!(filter, ResampleFilter::Nearest) {
-        return super::nearest::execute(
-            &source,
-            (source_width, source_height),
-            (width, height),
-        );
+        return super::nearest::execute(&source, (source_width, source_height), (width, height));
     }
     let (horizontal, vertical) = super::super::super::helpers::coefficients::for_resize(
         (source_width, source_height),
@@ -61,7 +57,6 @@ pub(crate) fn execute_with_fma<F: F64MulAdd>(
 
 fn empty(width: u32, height: u32) -> Result<RgbaImage, PilError> {
     let dims = CheckedDims::new_allow_empty(width, height, 4)?;
-    RgbaImage::from_raw(width, height, dims.alloc_buffer()).ok_or_else(|| {
-        PilError::ValueError("resize_i: failed to create output buffer".into())
-    })
+    RgbaImage::from_raw(width, height, dims.alloc_buffer())
+        .ok_or_else(|| PilError::ValueError("resize_i: failed to create output buffer".into()))
 }

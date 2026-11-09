@@ -13,7 +13,12 @@ pub(crate) fn execute(
             "AVX2/FMA Filter3x3 strategy received a non-I raster".into(),
         ));
     };
-    let FilterRequest::Filter3x3 { kernel, scale, offset } = request else {
+    let FilterRequest::Filter3x3 {
+        kernel,
+        scale,
+        offset,
+    } = request
+    else {
         return Err(PilError::InternalError(
             "AVX2/FMA Filter3x3 strategy received a non-3x3 request".into(),
         ));

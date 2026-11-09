@@ -1,7 +1,7 @@
 //! Selected implementation checks for native Resize mode owners.
 
-use crate::compute::{Architecture, Backend, ExecutionContext};
 use crate::compute::registry::support::{OperationId, StrategySelection};
+use crate::compute::{Architecture, Backend, ExecutionContext};
 use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
 
@@ -18,8 +18,7 @@ pub(crate) fn require_default_architecture(
     if !matches!(
         implementation.operation,
         OperationId::Resize | OperationId::ResizeBoxed
-    )
-        || selection.requested_architecture != context.architecture()
+    ) || selection.requested_architecture != context.architecture()
     {
         return Err(PilError::InternalError(
             "Resize mode received a mismatched strategy selection".into(),
@@ -47,8 +46,7 @@ pub(crate) fn require_architecture(
     if !matches!(
         implementation.operation,
         OperationId::Resize | OperationId::ResizeBoxed
-    )
-        || selection.requested_architecture != context.architecture()
+    ) || selection.requested_architecture != context.architecture()
     {
         return Err(PilError::InternalError(
             "Resize mode received a mismatched strategy selection".into(),
@@ -90,7 +88,10 @@ pub(crate) fn resize_byte_nearest<T, const CHANNELS: usize>(
     }
     require_architecture(context, selection)?;
     match architecture {
-        #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
+        #[cfg(all(
+            any(target_arch = "x86", target_arch = "x86_64"),
+            target_feature = "sse2"
+        ))]
         Architecture::Sse2 => (),
         #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
         Architecture::Neon => (),
@@ -135,12 +136,14 @@ pub(crate) fn resize_byte_native<T, const CHANNELS: usize>(
     }
     let _architecture = require_architecture(context, selection)?;
     let output = match (filter, bounds) {
-        (ResampleFilter::Nearest, Some(bounds)) => super::native_nearest::execute_boxed::<CHANNELS>(
-            source,
-            source_size,
-            (width, height),
-            bounds,
-        )?,
+        (ResampleFilter::Nearest, Some(bounds)) => {
+            super::native_nearest::execute_boxed::<CHANNELS>(
+                source,
+                source_size,
+                (width, height),
+                bounds,
+            )?
+        }
         (ResampleFilter::Nearest, None) => {
             super::native_nearest::execute::<CHANNELS>(source, source_size, (width, height))?
         }

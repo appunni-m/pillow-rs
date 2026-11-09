@@ -205,7 +205,10 @@ where
         kmeans_refine_source(source, &mut palette, &mut quantized, kmeans - 1);
     }
 
-    (quantized.iter().map(|&index| index as u8).collect(), palette)
+    (
+        quantized.iter().map(|&index| index as u8).collect(),
+        palette,
+    )
 }
 
 fn maxcoverage_palette<S>(pixel_list: &S, n_quant: usize) -> Vec<[u8; 3]>
@@ -338,8 +341,7 @@ pub(crate) fn kmeans_refine_source<S>(
     palette: &mut [[u8; 3]],
     quantized: &mut [u32],
     threshold: u32,
-)
-where
+) where
     S: RgbPixelSource + ?Sized,
 {
     let n_entries = palette.len();

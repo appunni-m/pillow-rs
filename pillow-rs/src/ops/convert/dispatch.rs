@@ -1,10 +1,10 @@
+use crate::compute::registry::support::{
+    OperationTargetComposition, OperationTargetCompositionKind, OutputModeRule,
+};
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
 use crate::raster::Mode;
-use crate::compute::registry::support::{
-    OperationTargetComposition, OperationTargetCompositionKind, OutputModeRule,
-};
 
 pub(super) fn try_convert_scalar_to_rgbx(
     image: &Image,
@@ -102,9 +102,7 @@ pub(super) fn try_convert_early_modes(
             Some(Mode::ImageLaPremultiplied8)
         }
         (Mode::ImageLaPremultiplied8, Mode::ImageLumaA8) => Some(Mode::ImageLumaA8),
-        (Mode::ImageRgba8, Mode::ImageRgbPremultiplied8) => {
-            Some(Mode::ImageRgbPremultiplied8)
-        }
+        (Mode::ImageRgba8, Mode::ImageRgbPremultiplied8) => Some(Mode::ImageRgbPremultiplied8),
         (Mode::ImageRgbPremultiplied8, Mode::ImageRgba8) => Some(Mode::ImageRgba8),
         (Mode::ImageRgbPremultiplied8, Mode::ImageRgb8) => Some(Mode::ImageRgb8),
         (Mode::ImageRgbPremultiplied8, Mode::ImageRgbx8)
@@ -162,4 +160,3 @@ fn execute_target_composition(
         )),
     }
 }
-

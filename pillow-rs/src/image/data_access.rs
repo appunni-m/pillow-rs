@@ -10,8 +10,7 @@ use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
 
 use super::{
-    FormattedImageData, Image, PutDataInput, PutDataValue, PutDataValueKind,
-    materialization_cache,
+    FormattedImageData, Image, PutDataInput, PutDataValue, PutDataValueKind, materialization_cache,
 };
 
 pub(crate) enum ScalarImageSamples {
@@ -46,7 +45,10 @@ fn putdata_clip_component(value: i128) -> u8 {
 }
 
 pub(super) const fn is_l16_identity(mode: Mode) -> bool {
-    matches!(mode, Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N)
+    matches!(
+        mode,
+        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N
+    )
 }
 
 pub(super) const fn l16_identity_uses_big_endian(mode: Mode) -> bool {
@@ -102,7 +104,10 @@ fn append_two_channel_value(value: &PutDataValue, data: &mut Vec<u8>) -> Result<
             let bytes = packed.to_le_bytes();
             data.extend_from_slice(&[bytes[0], bytes[3]]);
         }
-        PutDataValue::Components(components) if components.len() == 2 => {
+        PutDataValue::Components(components)
+            if (PutDataValueKind::Components { channels: 2 })
+                .accepts_component_arity(components.len()) =>
+        {
             data.extend(components.iter().copied().map(putdata_clip_component));
         }
         PutDataValue::Components(_) => {
@@ -118,7 +123,10 @@ fn append_two_channel_value(value: &PutDataValue, data: &mut Vec<u8>) -> Result<
 fn append_three_channel_value(value: &PutDataValue, data: &mut Vec<u8>) -> Result<(), PilError> {
     match value {
         PutDataValue::Packed(packed) => data.extend_from_slice(&packed.to_le_bytes()[..3]),
-        PutDataValue::Components(components) if matches!(components.len(), 3 | 4) => {
+        PutDataValue::Components(components)
+            if (PutDataValueKind::Components { channels: 3 })
+                .accepts_component_arity(components.len()) =>
+        {
             data.extend(components[..3].iter().copied().map(putdata_clip_component));
         }
         PutDataValue::Components(_) => {
@@ -134,7 +142,10 @@ fn append_three_channel_value(value: &PutDataValue, data: &mut Vec<u8>) -> Resul
 fn append_four_channel_value(value: &PutDataValue, data: &mut Vec<u8>) -> Result<(), PilError> {
     match value {
         PutDataValue::Packed(packed) => data.extend_from_slice(&packed.to_le_bytes()[..4]),
-        PutDataValue::Components(components) if matches!(components.len(), 3 | 4) => {
+        PutDataValue::Components(components)
+            if (PutDataValueKind::Components { channels: 4 })
+                .accepts_component_arity(components.len()) =>
+        {
             data.extend(components[..3].iter().copied().map(putdata_clip_component));
             data.push(
                 components
@@ -170,10 +181,9 @@ fn append_putdata_value(
         Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8 => {
             append_three_channel_value(value, data)
         }
-        Mode::ImageRgba8
-        | Mode::ImageRgbPremultiplied8
-        | Mode::ImageRgbx8
-        | Mode::ImageCmyk8 => append_four_channel_value(value, data),
+        Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8 | Mode::ImageRgbx8 | Mode::ImageCmyk8 => {
+            append_four_channel_value(value, data)
+        }
         _ => Err(unsupported_putdata_mode(mode)),
     }
 }
@@ -220,9 +230,7 @@ fn putdata_hidden_lanes(mode: Mode, value: &PutDataValue) -> Result<Option<[u8; 
         (
             Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8,
             PutDataValue::Packed(packed),
-        ) => {
-            Ok(Some([packed.to_le_bytes()[3], 0]))
-        }
+        ) => Ok(Some([packed.to_le_bytes()[3], 0])),
         (
             Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8,
             PutDataValue::Components(components),
@@ -233,12 +241,11 @@ fn putdata_hidden_lanes(mode: Mode, value: &PutDataValue) -> Result<Option<[u8; 
                 .map_or(u8::MAX, putdata_clip_component),
             0,
         ])),
-        (
-            Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8,
-            _,
-        ) => Err(PilError::InternalError(
-            "putdata LA hidden lanes did not match normalized value".into(),
-        )),
+        (Mode::ImageLumaA8 | Mode::ImageLaPremultiplied8 | Mode::ImagePaletteAlpha8, _) => {
+            Err(PilError::InternalError(
+                "putdata LA hidden lanes did not match normalized value".into(),
+            ))
+        }
         (Mode::ImageRgb8 | Mode::ImageYCbCr8 | Mode::ImageLab8 | Mode::ImageHsv8, _) => {
             Err(PilError::InternalError(
                 "putdata RGB hidden lane did not match normalized value".into(),

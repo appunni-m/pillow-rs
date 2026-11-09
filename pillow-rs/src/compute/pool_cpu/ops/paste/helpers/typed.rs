@@ -14,7 +14,9 @@ pub(crate) fn execute_u16<const CHANNELS: usize>(
         .checked_mul(CHANNELS)
         .ok_or_else(|| overflow("source sample count"))?;
     if plan.destination.len() != destination_samples || source.len() != source_samples {
-        return Err(PilError::InternalError("native u16 Paste storage did not match dimensions".into()));
+        return Err(PilError::InternalError(
+            "native u16 Paste storage did not match dimensions".into(),
+        ));
     }
     let mut output = plan.destination.to_vec();
     if plan.region.is_empty() {
@@ -23,14 +25,13 @@ pub(crate) fn execute_u16<const CHANNELS: usize>(
     let mask_bytes = plan.mask.as_deref().map(|mask| mask.as_bytes());
     let mask_layout = plan.mask_layout;
     let source_width = usize::try_from(plan.source_size.0).map_err(|_| overflow("source width"))?;
-    let destination_width = usize::try_from(plan.destination_size.0)
-        .map_err(|_| overflow("destination width"))?;
+    let destination_width =
+        usize::try_from(plan.destination_size.0).map_err(|_| overflow("destination width"))?;
     let region_width = usize::try_from(plan.source_size.0).map_err(|_| overflow("mask width"))?;
 
     for row in 0..usize::try_from(plan.region.height).map_err(|_| overflow("copy height"))? {
-        let source_y = usize::try_from(plan.region.source_top)
-            .map_err(|_| overflow("source y"))?
-            + row;
+        let source_y =
+            usize::try_from(plan.region.source_top).map_err(|_| overflow("source y"))? + row;
         let destination_y = usize::try_from(plan.region.destination_top)
             .map_err(|_| overflow("destination y"))?
             + row;
@@ -48,7 +49,8 @@ pub(crate) fn execute_u16<const CHANNELS: usize>(
                     .copy_from_slice(&source[source_index..source_index + CHANNELS]);
                 continue;
             };
-            let mask_index = (source_y * region_width + source_x) * layout.channels + layout.value_index;
+            let mask_index =
+                (source_y * region_width + source_x) * layout.channels + layout.value_index;
             let value = mask[mask_index];
             if value == 0 {
                 continue;
@@ -58,7 +60,11 @@ pub(crate) fn execute_u16<const CHANNELS: usize>(
                     .copy_from_slice(&source[source_index..source_index + CHANNELS]);
                 continue;
             }
-            blend_u16::<CHANNELS>(&source[source_index..source_index + CHANNELS], &mut output[destination_index..destination_index + CHANNELS], value);
+            blend_u16::<CHANNELS>(
+                &source[source_index..source_index + CHANNELS],
+                &mut output[destination_index..destination_index + CHANNELS],
+                value,
+            );
         }
     }
     Ok(output)
@@ -76,7 +82,9 @@ pub(crate) fn execute_f32<const CHANNELS: usize>(
         .checked_mul(CHANNELS)
         .ok_or_else(|| overflow("source sample count"))?;
     if plan.destination.len() != destination_samples || source.len() != source_samples {
-        return Err(PilError::InternalError("native f32 Paste storage did not match dimensions".into()));
+        return Err(PilError::InternalError(
+            "native f32 Paste storage did not match dimensions".into(),
+        ));
     }
     let mut output = plan.destination.to_vec();
     if plan.region.is_empty() {
@@ -85,14 +93,13 @@ pub(crate) fn execute_f32<const CHANNELS: usize>(
     let mask_bytes = plan.mask.as_deref().map(|mask| mask.as_bytes());
     let mask_layout = plan.mask_layout;
     let source_width = usize::try_from(plan.source_size.0).map_err(|_| overflow("source width"))?;
-    let destination_width = usize::try_from(plan.destination_size.0)
-        .map_err(|_| overflow("destination width"))?;
+    let destination_width =
+        usize::try_from(plan.destination_size.0).map_err(|_| overflow("destination width"))?;
     let region_width = usize::try_from(plan.source_size.0).map_err(|_| overflow("mask width"))?;
 
     for row in 0..usize::try_from(plan.region.height).map_err(|_| overflow("copy height"))? {
-        let source_y = usize::try_from(plan.region.source_top)
-            .map_err(|_| overflow("source y"))?
-            + row;
+        let source_y =
+            usize::try_from(plan.region.source_top).map_err(|_| overflow("source y"))? + row;
         let destination_y = usize::try_from(plan.region.destination_top)
             .map_err(|_| overflow("destination y"))?
             + row;
@@ -110,7 +117,8 @@ pub(crate) fn execute_f32<const CHANNELS: usize>(
                     .copy_from_slice(&source[source_index..source_index + CHANNELS]);
                 continue;
             };
-            let mask_index = (source_y * region_width + source_x) * layout.channels + layout.value_index;
+            let mask_index =
+                (source_y * region_width + source_x) * layout.channels + layout.value_index;
             let value = mask[mask_index];
             if value == 0 {
                 continue;
@@ -120,7 +128,11 @@ pub(crate) fn execute_f32<const CHANNELS: usize>(
                     .copy_from_slice(&source[source_index..source_index + CHANNELS]);
                 continue;
             }
-            blend_f32::<CHANNELS>(&source[source_index..source_index + CHANNELS], &mut output[destination_index..destination_index + CHANNELS], value);
+            blend_f32::<CHANNELS>(
+                &source[source_index..source_index + CHANNELS],
+                &mut output[destination_index..destination_index + CHANNELS],
+                value,
+            );
         }
     }
     Ok(output)
@@ -131,10 +143,9 @@ fn blend_u16<const CHANNELS: usize>(source: &[u16], destination: &mut [u16], mas
     let weight = u32::from(mask);
     let inverse = 255 - weight;
     for band in 0..CHANNELS {
-        destination[band] = ((u32::from(source[band]) * weight
-            + u32::from(destination[band]) * inverse
-            + 127)
-            / 255) as u16;
+        destination[band] =
+            ((u32::from(source[band]) * weight + u32::from(destination[band]) * inverse + 127)
+                / 255) as u16;
     }
 }
 

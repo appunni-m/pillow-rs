@@ -7,20 +7,19 @@
 //! EffectSpread remaps retained physical lanes with the same relocation
 //! decisions as its selected Default or vector strategy.
 
+use crate::compute::ExecutionContext;
+use crate::compute::pool_cpu::ops::effects::helpers::generator::GeneratedImage;
 use crate::compute::registry::support::{
     InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport, OutputModeRule,
     PaletteKnowledge, RejectionKind, RequestFacts, StrategyInputs, StrategySelection,
 };
-use crate::compute::ExecutionContext;
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
-use crate::compute::pool_cpu::ops::effects::helpers::generator::GeneratedImage;
 
 pub(crate) const SPREAD_INPUTS: &[InputContract] = &[InputContract::EffectSpreadDistance];
 pub(crate) const NOISE_INPUTS: &[InputContract] = &[InputContract::EffectNoiseSigma];
-pub(crate) const MANDELBROT_INPUTS: &[InputContract] =
-    &[InputContract::EffectMandelbrotParameters];
+pub(crate) const MANDELBROT_INPUTS: &[InputContract] = &[InputContract::EffectMandelbrotParameters];
 const NO_INPUTS: &[InputContract] = &[];
 
 pub(crate) enum PreparedLinearGradient {
@@ -175,12 +174,7 @@ impl PreparedMandelbrot {
     }
 
     pub(crate) fn execute(self) -> Result<GeneratedImage, PilError> {
-        super::luma8::ops::execute_mandelbrot(
-            self.strategy,
-            self.size,
-            self.extent,
-            self.quality,
-        )
+        super::luma8::ops::execute_mandelbrot(self.strategy, self.size, self.extent, self.quality)
     }
 }
 
@@ -234,8 +228,9 @@ pub(crate) fn prepare_linear_gradient(
 ) -> Result<PreparedLinearGradient, PilError> {
     let selection = LINEAR_GRADIENT_SUPPORT.for_mode(mode).select_serial(ctx)?;
     match mode {
-        Mode::One => super::one::ops::prepare_linear_gradient(selection)
-            .map(PreparedLinearGradient::One),
+        Mode::One => {
+            super::one::ops::prepare_linear_gradient(selection).map(PreparedLinearGradient::One)
+        }
         Mode::ImageLuma8 => super::luma8::ops::prepare_linear_gradient(selection)
             .map(PreparedLinearGradient::ImageLuma8),
         Mode::ImagePalette8 => super::palette8::ops::prepare_linear_gradient(selection)
@@ -434,19 +429,13 @@ declare_effect_modes! {
 }
 
 /// Exhaustive support contract for native-sample pixel spread.
-pub(crate) static EFFECT_SPREAD_SUPPORT: OperationSupport = OperationSupport::new(
-    OperationId::EffectSpread,
-    SPREAD_INPUTS,
-    classify_spread,
-);
+pub(crate) static EFFECT_SPREAD_SUPPORT: OperationSupport =
+    OperationSupport::new(OperationId::EffectSpread, SPREAD_INPUTS, classify_spread);
 
 /// Exhaustive support contract for L-mode Gaussian noise generation.
-pub(crate) static EFFECT_NOISE_SUPPORT: OperationSupport = OperationSupport::new(
-    OperationId::EffectNoise,
-    NOISE_INPUTS,
-    classify_noise,
-)
-.with_rejected_output(OutputModeRule::Fixed(Mode::ImageLuma8));
+pub(crate) static EFFECT_NOISE_SUPPORT: OperationSupport =
+    OperationSupport::new(OperationId::EffectNoise, NOISE_INPUTS, classify_noise)
+        .with_rejected_output(OutputModeRule::Fixed(Mode::ImageLuma8));
 
 pub(crate) fn prepare_spread<'a>(
     image: &'a DynamicImage,

@@ -7,10 +7,9 @@ use crate::raster::{DynamicImage, Mode, RgbImage, RgbaImage};
 pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, PilError> {
     match target {
         Mode::ImageLumaA8 => convert_luma_alpha(source),
-        Mode::ImageLaPremultiplied8
-        | Mode::ImageRgb8
-        | Mode::ImageRgba8
-        | Mode::ImageRgbx8 => super::alpha::execute(source, target),
+        Mode::ImageLaPremultiplied8 | Mode::ImageRgb8 | Mode::ImageRgba8 | Mode::ImageRgbx8 => {
+            super::alpha::execute(source, target)
+        }
         Mode::ImageCmyk8 => convert_cmyk(source),
         Mode::ImageYCbCr8 => convert_ycbcr(source),
         Mode::ImageHsv8 => convert_hsv(source),
@@ -50,8 +49,9 @@ fn convert_ycbcr(source: &RgbaImage) -> Result<DynamicImage, PilError> {
         Mode::ImageRgbPremultiplied8,
     )?;
     let allocation = bytes.capacity();
-    let output = RgbImage::from_raw(source.width(), source.height(), bytes)
-        .ok_or_else(|| PilError::InternalError("RGBa Convert YCbCr output shape mismatch".into()))?;
+    let output = RgbImage::from_raw(source.width(), source.height(), bytes).ok_or_else(|| {
+        PilError::InternalError("RGBa Convert YCbCr output shape mismatch".into())
+    })?;
     record_vector_output(blocks, allocation);
     Ok(DynamicImage::ImageYCbCr8(output))
 }

@@ -1,8 +1,8 @@
 //! Original constant alpha semantics for `ImagePaletteAlpha8`.
 
+use super::super::super::helpers::put_alpha::{self as helpers, AlphaInput};
 use crate::error::PilError;
 use crate::raster::DynamicImage;
-use super::super::super::helpers::put_alpha::{self as helpers, AlphaInput};
 
 pub(crate) type Input = crate::raster::GrayAlphaImage;
 pub(crate) type Kernel<'a> = AlphaInput<'a, crate::raster::LumaA<u8>>;
@@ -15,5 +15,7 @@ pub(crate) fn prepare(image: &Input, alpha: u8) -> Kernel<'_> {
 #[inline]
 pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
     // Preserve indices independently of the wrapper's retained palette.
-    Ok(DynamicImage::ImagePaletteAlpha8(helpers::replace_luma_alpha(input.image, input.alpha)))
+    Ok(DynamicImage::ImagePaletteAlpha8(
+        helpers::replace_luma_alpha(input.image, input.alpha),
+    ))
 }

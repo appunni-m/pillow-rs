@@ -34,7 +34,11 @@ fn rotate_discrete(
     allow_empty_output: bool,
 ) -> Result<ImageBuffer<Luma<u16>, Vec<u16>>, PilError> {
     let (width, height) = image.dimensions();
-    let (out_width, out_height) = if degree == 180 { (width, height) } else { (height, width) };
+    let (out_width, out_height) = if degree == 180 {
+        (width, height)
+    } else {
+        (height, width)
+    };
     // Archived image-crate fast paths preserve empty 180° and expanded turns.
     let dimensions = if allow_empty_output && (out_width == 0 || out_height == 0) {
         CheckedDims::new_allow_empty(out_width, out_height, 1)?
@@ -63,7 +67,9 @@ fn execute_nearest<const BIG_ENDIAN: bool>(
 ) -> Result<ImageBuffer<Luma<u16>, Vec<u16>>, PilError> {
     let geometry = rotate_geometry(image.width(), image.height(), request);
     let dimensions = CheckedDims::new(geometry.width, geometry.height, 1)?;
-    let fill = request.fill.map_or(0, |color| u16::from_le_bytes([color.0, color.1]));
+    let fill = request
+        .fill
+        .map_or(0, |color| u16::from_le_bytes([color.0, color.1]));
     let (width, height) = image.dimensions();
     let [a, b, c, d, e, f] = geometry.affine;
     let mut output = vec![fill; dimensions.total_pixels()];
@@ -80,8 +86,8 @@ fn execute_nearest<const BIG_ENDIAN: bool>(
                 && source_y >= 0.0
                 && source_y < f64::from(height)
             {
-                output[(y * geometry.width + x) as usize] = image.as_raw()
-                    [(source_y as u32 * width + source_x as u32) as usize];
+                output[(y * geometry.width + x) as usize] =
+                    image.as_raw()[(source_y as u32 * width + source_x as u32) as usize];
             }
         }
     }
@@ -95,7 +101,9 @@ fn execute_filtered<const BIG_ENDIAN: bool>(
 ) -> Result<ImageBuffer<Luma<u16>, Vec<u16>>, PilError> {
     let geometry = rotate_geometry(image.width(), image.height(), request);
     let dimensions = CheckedDims::new(geometry.width, geometry.height, 1)?;
-    let fill_value = request.fill.map_or(0, |fill| u16::from_le_bytes([fill.0, fill.1]));
+    let fill_value = request
+        .fill
+        .map_or(0, |fill| u16::from_le_bytes([fill.0, fill.1]));
     let fill_bytes = encode::<BIG_ENDIAN>(fill_value);
     let mut output = vec![fill_value; dimensions.total_pixels()];
     let [a, b, c, d, e, f] = geometry.affine;
@@ -178,9 +186,17 @@ fn in_support(x: f64, y: f64, width: u32, height: u32) -> bool {
 }
 
 fn encode<const BIG_ENDIAN: bool>(value: u16) -> [u8; 2] {
-    if BIG_ENDIAN { value.to_be_bytes() } else { value.to_le_bytes() }
+    if BIG_ENDIAN {
+        value.to_be_bytes()
+    } else {
+        value.to_le_bytes()
+    }
 }
 
 fn decode<const BIG_ENDIAN: bool>(bytes: [u8; 2]) -> u16 {
-    if BIG_ENDIAN { u16::from_be_bytes(bytes) } else { u16::from_le_bytes(bytes) }
+    if BIG_ENDIAN {
+        u16::from_be_bytes(bytes)
+    } else {
+        u16::from_le_bytes(bytes)
+    }
 }

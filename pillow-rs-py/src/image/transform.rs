@@ -59,9 +59,7 @@ fn validate_transform_resample_membership(
     )))
 }
 
-fn transform_mesh_resample_from_python_after_load(
-    value: &Bound<'_, PyAny>,
-) -> PyResult<i32> {
+fn transform_mesh_resample_from_python_after_load(value: &Bound<'_, PyAny>) -> PyResult<i32> {
     let code = c_int_from_python(value)?;
     if matches!(code, 0 | 2 | 3) {
         return Ok(code);
@@ -73,9 +71,7 @@ fn transform_mesh_resample_from_python_after_load(
     )))
 }
 
-fn transform_mesh_box_from_python(
-    value: &Bound<'_, PyAny>,
-) -> PyResult<(i64, i64, i64, i64)> {
+fn transform_mesh_box_from_python(value: &Bound<'_, PyAny>) -> PyResult<(i64, i64, i64, i64)> {
     let mut coordinates = [0_i64; 4];
     for (index, coordinate) in coordinates.iter_mut().enumerate() {
         let item = value.get_item(index)?;
@@ -89,15 +85,14 @@ fn transform_mesh_box_from_python(
     ))
 }
 
-fn transform_mesh_coefficients_from_python(
-    value: &Bound<'_, PyAny>,
-) -> PyResult<[f64; 8]> {
+fn transform_mesh_coefficients_from_python(value: &Bound<'_, PyAny>) -> PyResult<[f64; 8]> {
     let mut values = [0.0; 8];
     let mut items = value.try_iter()?;
     for value in &mut values {
-        let item = items.next().transpose()?.ok_or_else(|| {
-            pyo3::exceptions::PyIndexError::new_err("tuple index out of range")
-        })?;
+        let item = items
+            .next()
+            .transpose()?
+            .ok_or_else(|| pyo3::exceptions::PyIndexError::new_err("tuple index out of range"))?;
         *value = item.extract::<f64>()?;
     }
     Ok(values)
@@ -134,10 +129,8 @@ impl PyImage {
         let prepared = match pre_size_prepared {
             Some(prepared) => prepared,
             None => {
-                let fill = transform_fill_after_size_from_python(
-                    deferred_fill.or(fillcolor),
-                    mode,
-                )?;
+                let fill =
+                    transform_fill_after_size_from_python(deferred_fill.or(fillcolor), mode)?;
                 let image = slf.bind(py).borrow();
                 image
                     .inner
@@ -162,17 +155,15 @@ impl PyImage {
         py: Python<'_>,
     ) -> PyResult<PyTransformMeshState> {
         let destination = plan.destination.take().ok_or_else(|| {
-            pyo3::exceptions::PyRuntimeError::new_err(
-                "Transform plan has already been consumed",
-            )
+            pyo3::exceptions::PyRuntimeError::new_err("Transform plan has already been consumed")
         })?;
         drop(plan);
         let image = slf.bind(py).borrow();
         let source = image.inner.clone();
         drop(image);
         py.detach(move || source.prepare_transform_mesh_from_output_public(destination))
-        .map(|inner| PyTransformMeshState { inner: Some(inner) })
-        .map_err(map_error)
+            .map(|inner| PyTransformMeshState { inner: Some(inner) })
+            .map_err(map_error)
     }
 
     fn _transform_validate_filter(
@@ -264,9 +255,7 @@ impl PyImage {
         py: Python<'_>,
     ) -> PyResult<PyImage> {
         let destination = plan.destination.take().ok_or_else(|| {
-            pyo3::exceptions::PyRuntimeError::new_err(
-                "Transform plan has already been consumed",
-            )
+            pyo3::exceptions::PyRuntimeError::new_err("Transform plan has already been consumed")
         })?;
         drop(plan);
         let method = data_plan.method;

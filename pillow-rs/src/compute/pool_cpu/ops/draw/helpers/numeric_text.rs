@@ -27,11 +27,7 @@ pub(crate) fn apply<const RGBA_MASK: bool>(
             {
                 continue;
             }
-            canvas.put_pixel(
-                image_x as u32,
-                image_y as u32,
-                crate::raster::Rgba(ink),
-            );
+            canvas.put_pixel(image_x as u32, image_y as u32, crate::raster::Rgba(ink));
         }
     }
 }

@@ -19,9 +19,8 @@ pub(crate) unsafe fn execute(source: &RgbImage) -> Result<DynamicImage, PilError
     let output = {
         // SAFETY: support selection establishes AVX2, source storage was
         // checked by prepare, and the grayscale leaf bounds every vector block.
-        let (bytes, blocks) = unsafe {
-            grayscale_rgb8::avx2::grayscale_impl::execute(kernel.input.as_raw(), pixels)
-        };
+        let (bytes, blocks) =
+            unsafe { grayscale_rgb8::avx2::grayscale_impl::execute(kernel.input.as_raw(), pixels) };
         (bytes, blocks, 0)
     };
 

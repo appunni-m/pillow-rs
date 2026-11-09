@@ -33,7 +33,7 @@ pub(crate) fn map_pixels_to_fixed_palette(
     palette: &[[u8; 3]],
     dither: bool,
 ) -> Result<Vec<u8>, PilError> {
-    map_fixed_palette_source(pixels, width, height, palette, dither)
+    map_native_to_fixed_palette(pixels, width, height, palette, dither)
 }
 
 /// Maps native L samples to an RGB palette without constructing an RGB raster.
@@ -50,10 +50,11 @@ pub(crate) fn map_luma_to_fixed_palette(
             "fixed palette L input buffer shape mismatch".to_owned(),
         ));
     }
-    map_fixed_palette_source(&LumaSamples(pixels), width, height, palette, dither)
+    map_native_to_fixed_palette(&LumaSamples(pixels), width, height, palette, dither)
 }
 
-fn map_fixed_palette_source<S>(
+/// Maps any statically dispatched native RGB sample source to a fixed palette.
+pub(crate) fn map_native_to_fixed_palette<S>(
     pixels: &S,
     width: u32,
     height: u32,

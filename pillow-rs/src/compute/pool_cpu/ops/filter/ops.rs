@@ -8,8 +8,10 @@
 //! Default fallback; freeze non-finite/out-of-i32-range I16 and non-finite I32
 //! kernel cast behavior; add parity cases for UnsharpMask(P), GaussianBlur(PA),
 //! non-rank F32 rejection, Kernel mode-before-parameter
-//! errors, and verify Python load, filter-protocol, and mode-preflight ordering
-//! around `_apply`. Freeze size-3-or-larger rank-filter empty-image behavior
+//! errors, and include Python load, public filter-protocol, and mode-preflight
+//! outcomes in CPU parity. Pillow loads before constructing/checking the filter,
+//! then calls `.filter` directly or splits custom non-multiband filters by band.
+//! Freeze size-3-or-larger rank-filter empty-image behavior
 //! as a safe empty result; Pillow 12.2 reaches an edge read in `ImagingExpand`.
 //! Compact mode lanes follow Pillow's physical-byte rules: Filter.c copies the
 //! border and zeros omitted lanes in its interior, deriving canonical input
@@ -17,6 +19,10 @@
 //! UnsharpMask applies the same blend to the filtered lanes. Native rank and
 //! ModeFilter kernels process omitted bytes independently.
 //! TODO(pillow-rs#3ptb): freeze these physical-lane cases in CPU parity.
+//! Filter3x3/Filter5x5, blur, extrema, and rank mode/architecture paths and
+//! direct/eager callers have source crosswalks in the CPU inventory. TODO
+//! (pillow-rs#3ptb): verify public filter callback/fault behavior and composed
+//! GaussianBlur selection receipts in CPU parity.
 //! Keep Rayon out of this serial owner.
 //!
 //! NO_PILLOW_SUPPORT: rank filters keep zero-sized rasters empty for windows
@@ -59,7 +65,7 @@ pub(super) const fn inputs_for(operation: OperationId) -> &'static [InputContrac
         OperationId::BoxBlurXY => BOX_BLUR_XY_INPUTS,
         OperationId::UnsharpMask => UNSHARP_INPUTS,
         OperationId::MedianFilter | OperationId::MaxFilter | OperationId::MinFilter => RANK_WINDOW,
-        OperationId::RankFilter => RANK_WINDOW_VALUE,
+        OperationId::RankFilter | OperationId::ImagingCorePaletteRankFilter => RANK_WINDOW_VALUE,
         OperationId::ModeFilter => MODE_FILTER_INPUTS,
         _ => NO_INPUTS,
     }
@@ -189,9 +195,7 @@ impl ModeFilterStrategy {
                 super::la_premultiplied8::ops::execute_mode_filter(image, size)
             }
             Self::Palette8 => super::palette8::ops::execute_mode_filter(image, size),
-            Self::PaletteAlpha8 => {
-                super::palette_alpha8::ops::execute_mode_filter(image, size)
-            }
+            Self::PaletteAlpha8 => super::palette_alpha8::ops::execute_mode_filter(image, size),
             Self::Rgb8 => super::rgb8::ops::execute_mode_filter(image, size),
             Self::Rgba8 => super::rgba8::ops::execute_mode_filter(image, size),
             Self::RgbPremultiplied8 => {
@@ -293,28 +297,23 @@ fn unsharp_support_for_mode(mode: Mode) -> ModeSupport {
         | Mode::ImageRgba8
         | Mode::ImageRgbPremultiplied8
         | Mode::ImageRgbx8
-        | Mode::ImageCmyk8 => {
-            ModeSupport::serial(OperationId::UnsharpMask, mode, UNSHARP_INPUTS)
-        }
+        | Mode::ImageCmyk8 => ModeSupport::serial(OperationId::UnsharpMask, mode, UNSHARP_INPUTS),
         _ => rejected(mode, WRONG_UNSHARP_MODE),
     }
 }
 
-pub(crate) static FILTER3X3_SUPPORT: OperationSupport = OperationSupport::new(
-    OperationId::Filter3x3,
-    FILTER3X3_INPUTS,
-    |mode| support_for_mode(OperationId::Filter3x3, mode),
-);
-pub(crate) static FILTER5X5_SUPPORT: OperationSupport = OperationSupport::new(
-    OperationId::Filter5x5,
-    FILTER5X5_INPUTS,
-    |mode| support_for_mode(OperationId::Filter5x5, mode),
-);
-pub(crate) static GAUSSIAN_BLUR_SUPPORT: OperationSupport = OperationSupport::new(
-    OperationId::GaussianBlur,
-    GAUSSIAN_BLUR_INPUTS,
-    |mode| support_for_mode(OperationId::GaussianBlur, mode),
-);
+pub(crate) static FILTER3X3_SUPPORT: OperationSupport =
+    OperationSupport::new(OperationId::Filter3x3, FILTER3X3_INPUTS, |mode| {
+        support_for_mode(OperationId::Filter3x3, mode)
+    });
+pub(crate) static FILTER5X5_SUPPORT: OperationSupport =
+    OperationSupport::new(OperationId::Filter5x5, FILTER5X5_INPUTS, |mode| {
+        support_for_mode(OperationId::Filter5x5, mode)
+    });
+pub(crate) static GAUSSIAN_BLUR_SUPPORT: OperationSupport =
+    OperationSupport::new(OperationId::GaussianBlur, GAUSSIAN_BLUR_INPUTS, |mode| {
+        support_for_mode(OperationId::GaussianBlur, mode)
+    });
 pub(crate) static BOX_BLUR_SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::BoxBlur, BOX_BLUR_INPUTS, |mode| {
         support_for_mode(OperationId::BoxBlur, mode)
@@ -328,26 +327,34 @@ pub(crate) static UNSHARP_MASK_SUPPORT: OperationSupport = OperationSupport::new
     UNSHARP_INPUTS,
     unsharp_support_for_mode,
 );
-pub(crate) static MEDIAN_FILTER_SUPPORT: OperationSupport = OperationSupport::new(
-    OperationId::MedianFilter,
-    RANK_WINDOW,
-    |mode| support_for_mode(OperationId::MedianFilter, mode),
-);
-pub(crate) static MAX_FILTER_SUPPORT: OperationSupport = OperationSupport::new(
-    OperationId::MaxFilter,
-    RANK_WINDOW,
-    |mode| support_for_mode(OperationId::MaxFilter, mode),
-);
-pub(crate) static MIN_FILTER_SUPPORT: OperationSupport = OperationSupport::new(
-    OperationId::MinFilter,
-    RANK_WINDOW,
-    |mode| support_for_mode(OperationId::MinFilter, mode),
-);
-pub(crate) static RANK_FILTER_SUPPORT: OperationSupport = OperationSupport::new(
-    OperationId::RankFilter,
-    RANK_WINDOW_VALUE,
-    |mode| support_for_mode(OperationId::RankFilter, mode),
-);
+pub(crate) static MEDIAN_FILTER_SUPPORT: OperationSupport =
+    OperationSupport::new(OperationId::MedianFilter, RANK_WINDOW, |mode| {
+        support_for_mode(OperationId::MedianFilter, mode)
+    });
+pub(crate) static MAX_FILTER_SUPPORT: OperationSupport =
+    OperationSupport::new(OperationId::MaxFilter, RANK_WINDOW, |mode| {
+        support_for_mode(OperationId::MaxFilter, mode)
+    });
+pub(crate) static MIN_FILTER_SUPPORT: OperationSupport =
+    OperationSupport::new(OperationId::MinFilter, RANK_WINDOW, |mode| {
+        support_for_mode(OperationId::MinFilter, mode)
+    });
+pub(crate) static RANK_FILTER_SUPPORT: OperationSupport =
+    OperationSupport::new(OperationId::RankFilter, RANK_WINDOW_VALUE, |mode| {
+        support_for_mode(OperationId::RankFilter, mode)
+    });
+pub(crate) static IMAGING_CORE_PALETTE_RANK_FILTER_SUPPORT: OperationSupport =
+    OperationSupport::new(
+        OperationId::ImagingCorePaletteRankFilter,
+        RANK_WINDOW_VALUE,
+        |mode| match mode {
+            Mode::ImagePalette8 => super::palette8::ops::imaging_core_rank_filter_support(),
+            _ => rejected(
+                mode,
+                "private ImagingCore palette rank filter requires P mode",
+            ),
+        },
+    );
 pub(crate) static MODE_FILTER_SUPPORT: OperationSupport = OperationSupport::new(
     OperationId::ModeFilter,
     MODE_FILTER_INPUTS,
@@ -368,11 +375,7 @@ impl PreparedUnsharpBlend {
     }
 
     /// Applies the selected implementation to the original and blur buffers.
-    fn execute(
-        self,
-        original: &[u8],
-        blurred_output: &mut [u8],
-    ) -> Result<(), PilError> {
+    fn execute(self, original: &[u8], blurred_output: &mut [u8]) -> Result<(), PilError> {
         if self.selection.implementation.architecture != crate::compute::Architecture::Default {
             if self.mode != Mode::ImageRgb8 {
                 return Err(PilError::InternalError(
@@ -411,7 +414,11 @@ impl PreparedUnsharpMask<'_> {
     }
 
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
-        let Self { original, blur, blend } = self;
+        let Self {
+            original,
+            blur,
+            blend,
+        } = self;
         let percent = blend.percent;
         let threshold = blend.threshold;
         let mut blurred = blur.execute()?;
@@ -432,12 +439,7 @@ impl PreparedUnsharpMask<'_> {
                 "UnsharpMask Gaussian blur could not restore its Pillow physical lanes".into(),
             ));
         }
-        super::helpers::hidden_lanes::finish_unsharp(
-            original,
-            &mut blurred,
-            percent,
-            threshold,
-        )?;
+        super::helpers::hidden_lanes::finish_unsharp(original, &mut blurred, percent, threshold)?;
         Ok(blurred)
     }
 }
@@ -468,7 +470,10 @@ pub(crate) fn prepare_mode_filter<'a>(
     size: u32,
     context: &ExecutionContext,
 ) -> Result<PreparedModeFilter<'a>, PilError> {
-    let inputs = OperationInputs { image, palette: PaletteInput::default() };
+    let inputs = OperationInputs {
+        image,
+        palette: PaletteInput::default(),
+    };
     let (support, strategy) = mode_filter_route(inputs.mode());
     let facts = inputs.facts().with_filter_window(size, None);
     let selection = match support.assess(context, facts)? {
@@ -483,7 +488,12 @@ pub(crate) fn prepare_mode_filter<'a>(
     let strategy = strategy.ok_or_else(|| {
         PilError::InternalError("accepted ModeFilter mode has no typed strategy".into())
     })?;
-    Ok(PreparedModeFilter { image, strategy, size, selection })
+    Ok(PreparedModeFilter {
+        image,
+        strategy,
+        size,
+        selection,
+    })
 }
 
 /// Select the direct UnsharpMask blend from its declared exact-mode strategy.
@@ -494,7 +504,10 @@ fn prepare_unsharp_blend(
     threshold: i32,
     ctx: &ExecutionContext,
 ) -> Result<PreparedUnsharpBlend, PilError> {
-    let inputs = OperationInputs { image, palette: PaletteInput::default() };
+    let inputs = OperationInputs {
+        image,
+        palette: PaletteInput::default(),
+    };
     let mode = inputs.mode();
     let facts = inputs.facts().with_unsharp_mask(sigma, percent, threshold);
     let selection = match UNSHARP_MASK_SUPPORT.for_mode(mode).assess(ctx, facts)? {
@@ -506,7 +519,12 @@ fn prepare_unsharp_blend(
             ));
         }
     };
-    Ok(PreparedUnsharpBlend { mode, percent, threshold, selection })
+    Ok(PreparedUnsharpBlend {
+        mode,
+        percent,
+        threshold,
+        selection,
+    })
 }
 
 /// Selects and composes the mode-specific blend with its GaussianBlur input.
@@ -533,15 +551,40 @@ pub(crate) fn prepare_unsharp_mask<'a>(
 
 #[derive(Clone, Copy)]
 pub(crate) enum FilterRequest {
-    Filter3x3 { kernel: [f32; 9], scale: f32, offset: f32 },
-    Filter5x5 { kernel: [f32; 25], scale: f32, offset: f32 },
-    GaussianBlur { sigma: f32 },
-    BoxBlur { radius: u32 },
-    BoxBlurXY { radius_x: f32, radius_y: f32, passes: u32 },
-    MedianFilter { size: u32 },
-    MaxFilter { size: u32 },
-    MinFilter { size: u32 },
-    RankFilter { size: u32, rank: u32 },
+    Filter3x3 {
+        kernel: [f32; 9],
+        scale: f32,
+        offset: f32,
+    },
+    Filter5x5 {
+        kernel: [f32; 25],
+        scale: f32,
+        offset: f32,
+    },
+    GaussianBlur {
+        sigma: f32,
+    },
+    BoxBlur {
+        radius: u32,
+    },
+    BoxBlurXY {
+        radius_x: f32,
+        radius_y: f32,
+        passes: u32,
+    },
+    MedianFilter {
+        size: u32,
+    },
+    MaxFilter {
+        size: u32,
+    },
+    MinFilter {
+        size: u32,
+    },
+    RankFilter {
+        size: u32,
+        rank: u32,
+    },
 }
 
 impl FilterRequest {
@@ -575,7 +618,12 @@ impl PreparedFilter<'_> {
     }
 
     pub(crate) fn shared_identity_proof(&self) -> Option<bool> {
-        let FilterRequest::Filter3x3 { kernel, scale, offset } = self.request else {
+        let FilterRequest::Filter3x3 {
+            kernel,
+            scale,
+            offset,
+        } = self.request
+        else {
             return None;
         };
         (self.mode == Mode::ImageI32).then(|| {
@@ -601,8 +649,7 @@ impl PreparedFilter<'_> {
                 FilterRequest::GaussianBlur { .. }
                     | FilterRequest::BoxBlur { .. }
                     | FilterRequest::BoxBlurXY { .. }
-            )
-        {
+            ) {
             execute_architecture_blur(image, self.mode, request, selection, &context)
         } else {
             match self.mode {
@@ -616,9 +663,7 @@ impl PreparedFilter<'_> {
                     super::palette_alpha8::ops::execute(image, request, selection)
                 }
                 Mode::ImageRgb8 => super::rgb8::ops::execute(image, request, selection),
-                Mode::ImageRgba8 => {
-                    super::rgba8::ops::execute(image, request, selection, &context)
-                }
+                Mode::ImageRgba8 => super::rgba8::ops::execute(image, request, selection, &context),
                 Mode::ImageRgbPremultiplied8 => {
                     super::rgb_premultiplied8::ops::execute(image, request, selection)
                 }
@@ -678,19 +723,31 @@ fn execute_architecture_blur(
 
 fn request(op: &PipelineOp) -> Result<FilterRequest, PilError> {
     match op {
-        PipelineOp::Filter3x3 { kernel, scale, offset } => Ok(FilterRequest::Filter3x3 {
+        PipelineOp::Filter3x3 {
+            kernel,
+            scale,
+            offset,
+        } => Ok(FilterRequest::Filter3x3 {
             kernel: *kernel,
             scale: *scale,
             offset: *offset,
         }),
-        PipelineOp::Filter5x5 { kernel, scale, offset } => Ok(FilterRequest::Filter5x5 {
+        PipelineOp::Filter5x5 {
+            kernel,
+            scale,
+            offset,
+        } => Ok(FilterRequest::Filter5x5 {
             kernel: *kernel,
             scale: *scale,
             offset: *offset,
         }),
         PipelineOp::GaussianBlur { sigma } => Ok(FilterRequest::GaussianBlur { sigma: *sigma }),
         PipelineOp::BoxBlur { radius } => Ok(FilterRequest::BoxBlur { radius: *radius }),
-        PipelineOp::BoxBlurXY { radius_x, radius_y, passes } => Ok(FilterRequest::BoxBlurXY {
+        PipelineOp::BoxBlurXY {
+            radius_x,
+            radius_y,
+            passes,
+        } => Ok(FilterRequest::BoxBlurXY {
             radius_x: *radius_x,
             radius_y: *radius_y,
             passes: *passes,
@@ -716,16 +773,22 @@ pub(crate) fn prepare_pipeline<'a>(
     let mode = inputs.mode();
     let facts = match request {
         FilterRequest::GaussianBlur { sigma } => inputs.facts().with_gaussian_blur(sigma),
-        FilterRequest::Filter3x3 { kernel, scale, offset } => {
-            inputs.facts().with_filter3x3(&kernel, scale, offset)
-        }
-        FilterRequest::Filter5x5 { kernel, scale, offset } => {
-            inputs.facts().with_filter5x5(&kernel, scale, offset)
-        }
+        FilterRequest::Filter3x3 {
+            kernel,
+            scale,
+            offset,
+        } => inputs.facts().with_filter3x3(&kernel, scale, offset),
+        FilterRequest::Filter5x5 {
+            kernel,
+            scale,
+            offset,
+        } => inputs.facts().with_filter5x5(&kernel, scale, offset),
         FilterRequest::BoxBlur { radius } => inputs.facts().with_box_blur(radius),
-        FilterRequest::BoxBlurXY { radius_x, radius_y, passes } => {
-            inputs.facts().with_box_blur_xy(radius_x, radius_y, passes)
-        }
+        FilterRequest::BoxBlurXY {
+            radius_x,
+            radius_y,
+            passes,
+        } => inputs.facts().with_box_blur_xy(radius_x, radius_y, passes),
         FilterRequest::MedianFilter { size }
         | FilterRequest::MaxFilter { size }
         | FilterRequest::MinFilter { size } => rank_window_facts(inputs, size, None, ctx),
@@ -749,7 +812,9 @@ pub(crate) fn prepare_pipeline<'a>(
         selection,
         context: *ctx,
     };
-    Ok(crate::compute::registry::PreparedOperation::from_filter(plan))
+    Ok(crate::compute::registry::PreparedOperation::from_filter(
+        plan,
+    ))
 }
 
 fn rank_window_facts(

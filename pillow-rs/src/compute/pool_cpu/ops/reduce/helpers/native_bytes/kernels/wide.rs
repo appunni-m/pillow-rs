@@ -1,8 +1,8 @@
 //! Portable wide-lane implementation of the archived native-byte reducer.
 
+use super::super::general::ByteReduceContext;
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
-use super::super::general::ByteReduceContext;
 use wide::u32x8;
 
 const LANES: usize = 8;
@@ -20,8 +20,7 @@ fn average_u32x8(
     multipliers: [u32; LANES],
     amends: [u32; LANES],
 ) -> [u32; LANES] {
-    (((u32x8::new(sums) + u32x8::new(amends)) * u32x8::new(multipliers)) >> 24u32)
-        .to_array()
+    (((u32x8::new(sums) + u32x8::new(amends)) * u32x8::new(multipliers)) >> 24u32).to_array()
 }
 
 #[inline]
@@ -70,9 +69,8 @@ fn reduce_rgb_2x2_block(
                 + u32::from(source[source_bottom + relative_index + 3])
         })
     };
-    let averages: [[u8; LANES]; RGB_BYTES] = std::array::from_fn(|channel| {
-        average_2x2_u32x8(channel_sums(channel)).map(clamp_u8)
-    });
+    let averages: [[u8; LANES]; RGB_BYTES] =
+        std::array::from_fn(|channel| average_2x2_u32x8(channel_sums(channel)).map(clamp_u8));
     for lane in 0..LANES {
         let destination = lane * RGB_BYTES;
         output[destination] = averages[0][lane];
@@ -112,7 +110,11 @@ fn reduce_rgb_3x5_block(
     }
 }
 
-fn write_special_rgb_vector<const CHANNELS: usize, const PREMULTIPLIED: bool, const RGB_3X5: bool>(
+fn write_special_rgb_vector<
+    const CHANNELS: usize,
+    const PREMULTIPLIED: bool,
+    const RGB_3X5: bool,
+>(
     context: &ByteReduceContext<'_, CHANNELS, PREMULTIPLIED>,
     factors: (u32, u32),
     output_x: u32,
@@ -162,9 +164,8 @@ fn write_generic_vector<const CHANNELS: usize, const PREMULTIPLIED: bool>(
     output: &mut [u8],
 ) -> Result<(), PilError> {
     let (main_width, _) = context.main_dimensions();
-    let full_width_batch = valid_pixels != 0
-        && output_x < main_width
-        && valid_pixels as u32 <= main_width - output_x;
+    let full_width_batch =
+        valid_pixels != 0 && output_x < main_width && valid_pixels as u32 <= main_width - output_x;
     let full_width_rounding = if full_width_batch {
         Some(context.full_width_rounding(output_y).ok_or_else(|| {
             PilError::InternalError("Reduce wide full-row rounding facts were unavailable".into())
@@ -177,7 +178,8 @@ fn write_generic_vector<const CHANNELS: usize, const PREMULTIPLIED: bool>(
     let mut amends = [0u32; LANES];
     for lane in 0..valid_pixels {
         let lane_x = output_x + lane as u32;
-        let (pixel_sums, multiplier, amend) = if let Some((multiplier, amend)) = full_width_rounding {
+        let (pixel_sums, multiplier, amend) = if let Some((multiplier, amend)) = full_width_rounding
+        {
             let sums = context.full_width_sums(lane_x, output_y).ok_or_else(|| {
                 PilError::InternalError("Reduce wide full-row bounds were invalid".into())
             })?;
@@ -278,7 +280,11 @@ pub(crate) fn reduce<const CHANNELS: usize, const PREMULTIPLIED: bool, const RGB
         reason = "CheckedDims validated the complete tightly packed output buffer"
     )]
     let row_stride = output_width_usize * CHANNELS;
-    let vector_limit = output_width / LANES_U32 * LANES_U32;
+    let vector_limit = if output_width < LANES_U32 {
+        output_width
+    } else {
+        output_width / LANES_U32 * LANES_U32
+    };
     #[expect(
         clippy::arithmetic_side_effects,
         reason = "CheckedDims validated each row offset and the final row end"

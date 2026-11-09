@@ -1,6 +1,5 @@
 use super::{
-    BufferRange, CheckedDims, DynamicImage, ImageBuffer, Luma, Mode, PilError, RgbaImage,
-    align_up,
+    BufferRange, CheckedDims, DynamicImage, ImageBuffer, Luma, Mode, PilError, RgbaImage, align_up,
 };
 use crate::compute::helpers::put_data::payload_bytes_per_pixel;
 pub(in crate::compute::pool_gpu) fn expand_rgb_into_rgba(

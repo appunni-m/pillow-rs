@@ -20,4 +20,3 @@ pub(crate) fn gather_interleaved_channel<const CHANNELS: usize, const CHANNEL: u
     }
     samples
 }
-

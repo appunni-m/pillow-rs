@@ -1,8 +1,11 @@
 //! ImageRgb8 support and serial Default selection for ConvertLab.
 
-use crate::compute::{Architecture, registry::support::{
-    InputContract, ModeSupport, OperationId, OutputModeRule, StrategySelection,
-}};
+use crate::compute::{
+    Architecture,
+    registry::support::{
+        InputContract, ModeSupport, OperationId, OutputModeRule, StrategySelection,
+    },
+};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode, RgbImage};
 

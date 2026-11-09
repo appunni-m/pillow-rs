@@ -2,11 +2,11 @@
 
 use std::sync::Arc;
 
-use crate::compute::{Architecture, ExecutionContext};
 use crate::compute::registry::support::{
     ImplementationSupport, InputContract, ModeSupport, OperationId, OperationInputs,
     OperationSupport, OutputModeRule, RejectionKind, StrategyGuard, StrategySelection,
 };
+use crate::compute::{Architecture, ExecutionContext};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
@@ -45,11 +45,7 @@ const BLEND_RGBA_INPUT: &[InputContract] = &[blend_input_contract(BLEND_RGBA)];
 
 const BLEND_L_VECTOR_MODES: &[Mode] = &[Mode::ImageLuma8];
 const BLEND_LA_VECTOR_MODES: &[Mode] = &[Mode::ImageLumaA8, Mode::ImageLaPremultiplied8];
-const BLEND_RGB_VECTOR_MODES: &[Mode] = &[
-    Mode::ImageRgb8,
-    Mode::ImageHsv8,
-    Mode::ImageYCbCr8,
-];
+const BLEND_RGB_VECTOR_MODES: &[Mode] = &[Mode::ImageRgb8, Mode::ImageHsv8, Mode::ImageYCbCr8];
 const BLEND_RGBA_VECTOR_MODES: &[Mode] = &[
     Mode::ImageRgba8,
     Mode::ImageCmyk8,
@@ -71,7 +67,10 @@ const fn blend_vector_architectures(
             Architecture::AvxFma,
             cfg!(any(target_arch = "x86", target_arch = "x86_64")),
             BLEND_AVX_FMA,
-            StrategyGuard::BlendNativeVector { channels, compatible_modes },
+            StrategyGuard::BlendNativeVector {
+                channels,
+                compatible_modes,
+            },
         ),
         ImplementationSupport::cpu(
             OperationId::BlendModule,
@@ -79,7 +78,10 @@ const fn blend_vector_architectures(
             Architecture::Neon,
             cfg!(all(target_arch = "aarch64", target_feature = "neon")),
             BLEND_NEON,
-            StrategyGuard::BlendNativeVector { channels, compatible_modes },
+            StrategyGuard::BlendNativeVector {
+                channels,
+                compatible_modes,
+            },
         ),
     ]
 }
@@ -119,10 +121,9 @@ fn blend_support(mode: Mode) -> ModeSupport {
         Mode::ImageYCbCr8 => (BLEND_RGB_INPUT, &BLEND_YCBCR_ARCHITECTURES[..]),
         Mode::ImageRgba8 => (BLEND_RGBA_INPUT, &BLEND_RGBA_ARCHITECTURES[..]),
         Mode::ImageCmyk8 => (BLEND_RGBA_INPUT, &BLEND_CMYK_ARCHITECTURES[..]),
-        Mode::ImageRgbPremultiplied8 => (
-            BLEND_RGBA_INPUT,
-            &BLEND_RGB_PREMULTIPLIED_ARCHITECTURES[..],
-        ),
+        Mode::ImageRgbPremultiplied8 => {
+            (BLEND_RGBA_INPUT, &BLEND_RGB_PREMULTIPLIED_ARCHITECTURES[..])
+        }
         Mode::ImageRgbx8 => (BLEND_RGBA_INPUT, &BLEND_RGBX_ARCHITECTURES[..]),
         Mode::One
         | Mode::ImagePalette8
@@ -188,9 +189,17 @@ pub(crate) fn prepare_blend_module<'a>(
     alpha: f64,
     ctx: &ExecutionContext,
 ) -> Result<PreparedBlendModule<'a>, PilError> {
-    let facts = input.facts().with_blend_inputs(secondary_facts(&other), alpha);
+    let facts = input
+        .facts()
+        .with_blend_inputs(secondary_facts(&other), alpha);
     let selection = select_support(blend_support(input.mode()), facts, ctx, "Blend")?;
-    Ok(PreparedBlendModule { source: input.image, other, alpha, mode: input.mode(), selection })
+    Ok(PreparedBlendModule {
+        source: input.image,
+        other,
+        alpha,
+        mode: input.mode(),
+        selection,
+    })
 }
 
 pub(crate) fn prepare_blend_pipeline<'a>(
@@ -215,13 +224,17 @@ fn execute_blend_mode(
     match mode {
         Mode::ImageLuma8 => super::super::luma8::ops::blend(source, other, alpha, selection),
         Mode::ImageLumaA8 => super::super::luma_a8::ops::blend(source, other, alpha, selection),
-        Mode::ImageLaPremultiplied8 => super::super::la_premultiplied8::ops::blend(source, other, alpha, selection),
+        Mode::ImageLaPremultiplied8 => {
+            super::super::la_premultiplied8::ops::blend(source, other, alpha, selection)
+        }
         Mode::ImageRgb8 => super::super::rgb8::ops::blend(source, other, alpha, selection),
         Mode::ImageLab8 => super::super::lab8::ops::blend(source, other, alpha, selection),
         Mode::ImageHsv8 => super::super::hsv8::ops::blend(source, other, alpha, selection),
         Mode::ImageYCbCr8 => super::super::ycbcr8::ops::blend(source, other, alpha, selection),
         Mode::ImageRgba8 => super::super::rgba8::ops::blend(source, other, alpha, selection),
-        Mode::ImageRgbPremultiplied8 => super::super::rgb_premultiplied8::ops::blend(source, other, alpha, selection),
+        Mode::ImageRgbPremultiplied8 => {
+            super::super::rgb_premultiplied8::ops::blend(source, other, alpha, selection)
+        }
         Mode::ImageRgbx8 => super::super::rgbx8::ops::blend(source, other, alpha, selection),
         Mode::ImageCmyk8 => super::super::cmyk8::ops::blend(source, other, alpha, selection),
         Mode::One
@@ -242,4 +255,3 @@ fn execute_blend_mode(
         )),
     }
 }
-

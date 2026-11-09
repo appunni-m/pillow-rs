@@ -3,32 +3,32 @@
 use crate::compute::ExecutionContext;
 use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
 use crate::compute::registry::support::{
-    InputContract, ModeSupport, OperationId, OutputModeRule, RequestFacts,
-    StrategyInputs,
+    InputContract, ModeSupport, OperationId, OutputModeRule, StrategyInputs,
 };
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 
-const INPUTS: &[InputContract] =
-    &[InputContract::ReduceFactors { identity_only: false }];
+const INPUTS: &[InputContract] = &[InputContract::ReduceFactors {
+    identity_only: true,
+}];
 
-// NO_PILLOW_SUPPORT: the archived native-byte reducer is retained as a Rust
-// extension for bilevel input; Pillow rejects Reduce for mode `1`.
-pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu_core_only(
+/// Factor-one requests copy or crop; non-identity reductions are unsupported.
+/// Pillow 12.2 `_reduce` returns the factor-one crop before calling
+/// `ImagingReduce`, which rejects mode `1` with `image has wrong mode`.
+/// Neither accepted path processes samples, so averaging or thresholding is
+/// neither required for parity nor useful for performance.
+/// A malformed box reports its validation error before One-mode rejects
+/// non-identity reduction.
+pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
     OperationId::Reduce,
     Mode::One,
     OutputModeRule::Preserve,
     INPUTS,
     &[],
-    "native bilevel Reduce extends Pillow, which rejects this mode",
 );
 
 pub(crate) enum ArchitectureStrategy<'a> {
-    Default {
-        input: &'a crate::raster::GrayImage,
-        x_factor: u32,
-        y_factor: u32,
-    },
+    Default { input: &'a crate::raster::GrayImage },
 }
 
 pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
@@ -38,22 +38,15 @@ pub(crate) fn prepare<'a>(
     facts: StrategyInputs,
     ctx: &ExecutionContext,
 ) -> Result<Strategy<'a>, PilError> {
-    let (x_factor, y_factor) = match facts.request {
-        RequestFacts::Reduce { x_factor, y_factor } => (x_factor, y_factor),
-        _ => return Err(PilError::InternalError(
-            "Reduce mode strategy received facts for another operation".into(),
-        )),
-    };
     let selection = super::super::helpers::strategy::select_mode(SUPPORT, facts, ctx)?;
     Ok(Prepared::new(
-        ArchitectureStrategy::Default { input, x_factor, y_factor },
+        ArchitectureStrategy::Default { input },
         selection,
     ))
 }
 
 pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
     match strategy.implementation {
-        ArchitectureStrategy::Default { input, x_factor, y_factor } =>
-            super::default::reduce_impl::execute(input, x_factor, y_factor),
+        ArchitectureStrategy::Default { input } => super::default::reduce_impl::execute(input),
     }
 }

@@ -6,6 +6,9 @@ use crate::error::PilError;
 
 pub(crate) fn execute(input: &Input, request: RotateRequest) -> Result<Input, PilError> {
     crate::compute::pool_cpu::ops::rotate::helpers::byte::execute::<
-        crate::raster::Rgba<u8>, 4, false, true,
+        crate::raster::Rgba<u8>,
+        4,
+        false,
+        true,
     >(input, request)
 }

@@ -8,22 +8,34 @@ use crate::raster::{DynamicImage, Mode};
 
 pub(super) const MODE: Mode = Mode::ImageRgbx8;
 
-static MAX_FILTER_ARCHITECTURES:  [crate::compute::registry::support::ImplementationSupport; 5] = crate::compute::pool_cpu::ops::filter::helpers::native_byte_filter_architectures(
-    OperationId::MaxFilter, MODE,
-    crate::compute::registry::support::StrategyGuard::FilterNativeByteExtrema { channels: 4 },
-);
-static MIN_FILTER_ARCHITECTURES:  [crate::compute::registry::support::ImplementationSupport; 5] = crate::compute::pool_cpu::ops::filter::helpers::native_byte_filter_architectures(
-    OperationId::MinFilter, MODE,
-    crate::compute::registry::support::StrategyGuard::FilterNativeByteExtrema { channels: 4 },
-);
-static MEDIAN_FILTER_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] = crate::compute::pool_cpu::ops::filter::helpers::native_byte_filter_architectures(
-    OperationId::MedianFilter, MODE,
-    crate::compute::registry::support::StrategyGuard::FilterNativeByteRankWindow { channels: 4 },
-);
-static RANK_FILTER_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] = crate::compute::pool_cpu::ops::filter::helpers::native_byte_filter_architectures(
-    OperationId::RankFilter, MODE,
-    crate::compute::registry::support::StrategyGuard::FilterNativeByteRankWindow { channels: 4 },
-);
+static MAX_FILTER_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] =
+    crate::compute::pool_cpu::ops::filter::helpers::native_byte_filter_architectures(
+        OperationId::MaxFilter,
+        MODE,
+        crate::compute::registry::support::StrategyGuard::FilterNativeByteExtrema { channels: 4 },
+    );
+static MIN_FILTER_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] =
+    crate::compute::pool_cpu::ops::filter::helpers::native_byte_filter_architectures(
+        OperationId::MinFilter,
+        MODE,
+        crate::compute::registry::support::StrategyGuard::FilterNativeByteExtrema { channels: 4 },
+    );
+static MEDIAN_FILTER_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] =
+    crate::compute::pool_cpu::ops::filter::helpers::native_byte_filter_architectures(
+        OperationId::MedianFilter,
+        MODE,
+        crate::compute::registry::support::StrategyGuard::FilterNativeByteRankWindow {
+            channels: 4,
+        },
+    );
+static RANK_FILTER_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] =
+    crate::compute::pool_cpu::ops::filter::helpers::native_byte_filter_architectures(
+        OperationId::RankFilter,
+        MODE,
+        crate::compute::registry::support::StrategyGuard::FilterNativeByteRankWindow {
+            channels: 4,
+        },
+    );
 static GAUSSIAN_BLUR_ARCHITECTURES: [ImplementationSupport; 5] =
     crate::compute::pool_cpu::ops::filter::helpers::native_byte_blur_architectures(
         OperationId::GaussianBlur,
@@ -44,15 +56,22 @@ static BOX_BLUR_XY_ARCHITECTURES: [ImplementationSupport; 5] =
     );
 
 crate::compute::pool_cpu::ops::filter::helpers::native_filter3x3_architectures!(MODE, 4);
-crate::compute::pool_cpu::ops::filter::helpers::native_filter3x3_arch_leaf!(ImageRgbx8, RgbaImage, 4);
+crate::compute::pool_cpu::ops::filter::helpers::native_filter3x3_arch_leaf!(
+    ImageRgbx8, RgbaImage, 4
+);
 crate::compute::pool_cpu::ops::filter::helpers::native_filter5x5_architectures!(MODE, 4);
-crate::compute::pool_cpu::ops::filter::helpers::native_filter5x5_arch_leaf!(ImageRgbx8, RgbaImage, 4);
-
+crate::compute::pool_cpu::ops::filter::helpers::native_filter5x5_arch_leaf!(
+    ImageRgbx8, RgbaImage, 4
+);
 
 pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId) -> ModeSupport {
     match operation {
-        OperationId::Filter3x3 => pillow_kernel(OperationId::Filter3x3, MODE, FILTER3X3_ARCHITECTURES),
-        OperationId::Filter5x5 => pillow_kernel(OperationId::Filter5x5, MODE, FILTER5X5_ARCHITECTURES),
+        OperationId::Filter3x3 => {
+            pillow_kernel(OperationId::Filter3x3, MODE, FILTER3X3_ARCHITECTURES)
+        }
+        OperationId::Filter5x5 => {
+            pillow_kernel(OperationId::Filter5x5, MODE, FILTER5X5_ARCHITECTURES)
+        }
         OperationId::GaussianBlur => ModeSupport::cpu(
             OperationId::GaussianBlur,
             MODE,
@@ -76,16 +95,26 @@ pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId)
         ),
         // NO_PILLOW_SUPPORT: Pillow 12.2 rank filters require scalar storage;
         // this native mode strategy filters native channels.
-        OperationId::MedianFilter => core_only(OperationId::MedianFilter, MODE, &MEDIAN_FILTER_ARCHITECTURES),
+        OperationId::MedianFilter => core_only(
+            OperationId::MedianFilter,
+            MODE,
+            &MEDIAN_FILTER_ARCHITECTURES,
+        ),
         // NO_PILLOW_SUPPORT: Pillow 12.2 rank filters require scalar storage;
         // this native mode strategy filters native channels.
-        OperationId::MaxFilter => core_only(OperationId::MaxFilter, MODE, &MAX_FILTER_ARCHITECTURES),
+        OperationId::MaxFilter => {
+            core_only(OperationId::MaxFilter, MODE, &MAX_FILTER_ARCHITECTURES)
+        }
         // NO_PILLOW_SUPPORT: Pillow 12.2 rank filters require scalar storage;
         // this native mode strategy filters native channels.
-        OperationId::MinFilter => core_only(OperationId::MinFilter, MODE, &MIN_FILTER_ARCHITECTURES),
+        OperationId::MinFilter => {
+            core_only(OperationId::MinFilter, MODE, &MIN_FILTER_ARCHITECTURES)
+        }
         // NO_PILLOW_SUPPORT: Pillow 12.2 rank filters require scalar storage;
         // this native mode strategy filters native channels.
-        OperationId::RankFilter => core_only(OperationId::RankFilter, MODE, &RANK_FILTER_ARCHITECTURES),
+        OperationId::RankFilter => {
+            core_only(OperationId::RankFilter, MODE, &RANK_FILTER_ARCHITECTURES)
+        }
         _ => ModeSupport::Rejected {
             mode: MODE,
             reason: "non-filter operation reached filter mode strategy",
@@ -103,13 +132,8 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute_architecture_blur(
     crate::compute::pool_cpu::ops::filter::helpers::validate_native_byte_blur_selection(
         selection, MODE, request, context,
     )?;
-    crate::compute::pool_cpu::ops::filter::helpers::execute_native_byte_blur(
-        image,
-        MODE,
-        4,
-        request,
-        selection,
-        context,
+    crate::compute::pool_cpu::ops::filter::helpers::execute_native_byte_blur::<4>(
+        image, MODE, request, selection, context,
     )
 }
 
@@ -172,12 +196,15 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
         };
     }
     if selection.implementation.architecture != Architecture::Default {
-        return Err(PilError::InternalError("filter selected an unowned architecture".into()));
+        return Err(PilError::InternalError(
+            "filter selected an unowned architecture".into(),
+        ));
     }
     super::default::execute(image, request)
 }
 
-pub(in crate::compute::pool_cpu::ops::filter) fn mode_filter_support() -> crate::compute::registry::support::ModeSupport {
+pub(in crate::compute::pool_cpu::ops::filter) fn mode_filter_support()
+-> crate::compute::registry::support::ModeSupport {
     super::super::ops::serial_mode_filter(MODE)
 }
 

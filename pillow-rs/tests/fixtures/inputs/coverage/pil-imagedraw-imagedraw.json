@@ -579,6 +579,9 @@
           "PIL.ImageDraw.ImageDraw.text.nuanced.raw-p-no-palette-fallback",
           "PIL.ImageDraw.ImageDraw.text.nuanced.attached-palette",
           "PIL.ImageDraw.ImageDraw.text.nuanced.attached-palette-negative-position",
+          "PIL.ImageDraw.ImageDraw.text.nuanced.attached-palette-new-color",
+          "PIL.ImageDraw.ImageDraw.text.nuanced.attached-palette-allocation-before-anchor-error",
+          "PIL.ImageDraw.ImageDraw.text.nuanced.attached-palette-float-tuple-cache-after-error",
           "PIL.ImageDraw.ImageDraw.text.nuanced.canvas-rgb-negative-position",
           "PIL.ImageDraw.ImageDraw.text.nuanced.canvas-la-negative-position",
           "PIL.ImageDraw.ImageDraw.text.nuanced.canvas-cmyk-negative-position",
@@ -1059,7 +1062,10 @@
           "pipeline-composition.matrix-022",
           "pipeline-composition.matrix-023",
           "pipeline-composition.matrix-024",
-          "pipeline-case.drawline.materialized-smoke"
+          "pipeline-case.drawline.materialized-smoke",
+          "pipeline-case.drawrectangle.materialized-smoke",
+          "pipeline-case.drawroundedrect.materialized-smoke",
+          "pipeline-case.drawellipse.materialized-smoke"
         ],
         "command_ids": []
       },

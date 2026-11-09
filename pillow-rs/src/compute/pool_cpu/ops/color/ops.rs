@@ -1,9 +1,12 @@
 //! Color operation support declarations and prepared orchestration.
 
-use crate::compute::{ExecutionContext, registry::support::{
-    InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport,
-    OutputModeRule, RejectionKind, StrategySelection, SupportAssessment,
-}};
+use crate::compute::{
+    ExecutionContext,
+    registry::support::{
+        InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport, OutputModeRule,
+        RejectionKind, StrategySelection, SupportAssessment,
+    },
+};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
@@ -61,12 +64,9 @@ fn classify_convert_lab(mode: Mode) -> ModeSupport {
 }
 
 /// Source-mode contract for typed RGB-family-to-LAB pipeline strategies.
-pub(crate) static SUPPORT: OperationSupport = OperationSupport::new(
-    OperationId::ConvertLab,
-    &[],
-    classify_convert_lab,
-)
-.with_rejected_output(OutputModeRule::Fixed(Mode::ImageLab8));
+pub(crate) static SUPPORT: OperationSupport =
+    OperationSupport::new(OperationId::ConvertLab, &[], classify_convert_lab)
+        .with_rejected_output(OutputModeRule::Fixed(Mode::ImageLab8));
 
 /// Prepared Convert plan exported through the color-family registry facade.
 pub(crate) type PreparedConvert<'a> = super::convert::ops::Prepared<'a>;
@@ -106,12 +106,9 @@ fn classify_remap_palette(mode: Mode) -> ModeSupport {
 }
 
 /// Exact-mode contracts for the native L and P index remapping operation.
-pub(crate) static REMAP_PALETTE_SUPPORT: OperationSupport = OperationSupport::new(
-    OperationId::RemapPalette,
-    &[],
-    classify_remap_palette,
-)
-.with_rejected_output(OutputModeRule::Fixed(Mode::ImagePalette8));
+pub(crate) static REMAP_PALETTE_SUPPORT: OperationSupport =
+    OperationSupport::new(OperationId::RemapPalette, &[], classify_remap_palette)
+        .with_rejected_output(OutputModeRule::Fixed(Mode::ImagePalette8));
 
 /// Prepared RGB-family-to-LAB execution with exact mode and backend selection.
 pub(crate) struct PreparedConvertLab<'a> {
@@ -159,7 +156,10 @@ pub(crate) fn prepare<'a>(
             ));
         }
     };
-    Ok(PreparedConvertLab { source: input.image, selection })
+    Ok(PreparedConvertLab {
+        source: input.image,
+        selection,
+    })
 }
 
 /// Registry entry for ConvertLab; it preserves typed source and output modes.
@@ -203,10 +203,12 @@ pub(crate) fn prepare_remap_palette<'a>(
     ctx: &ExecutionContext,
 ) -> Result<PreparedRemapPalette<'a>, PilError> {
     match input.image {
-        DynamicImage::ImageLuma8(_) => super::luma8::ops::prepare(input, dest_map, ctx)
-            .map(PreparedRemapPalette::Luma8),
-        DynamicImage::ImagePalette8(_) => super::palette8::ops::prepare(input, dest_map, ctx)
-            .map(PreparedRemapPalette::Palette8),
+        DynamicImage::ImageLuma8(_) => {
+            super::luma8::ops::prepare(input, dest_map, ctx).map(PreparedRemapPalette::Luma8)
+        }
+        DynamicImage::ImagePalette8(_) => {
+            super::palette8::ops::prepare(input, dest_map, ctx).map(PreparedRemapPalette::Palette8)
+        }
         _ => {
             let mode = input.mode();
             match REMAP_PALETTE_SUPPORT.for_mode(mode) {

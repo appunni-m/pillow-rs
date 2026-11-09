@@ -83,12 +83,17 @@ fn raw_bytes_to_image_with_empty(
 /// retains the original errors and truncation without recovering image identity
 /// from a channel count; the operation's strategy constructs the exact variant.
 pub(crate) fn typed_bytes_to_buffer<P: crate::raster::Pixel<Subpixel = u8>>(
-    dims: CheckedDims, mut data: Vec<u8>,
+    dims: CheckedDims,
+    mut data: Vec<u8>,
 ) -> Result<crate::raster::ImageBuffer<P, Vec<u8>>, PilError> {
     if data.len() < dims.total_bytes() {
         return Err(PilError::ValueError(format!(
             "raw_bytes_to_image: expected {} bytes for {}×{}×{}, got {}",
-            dims.total_bytes(), dims.width, dims.height, dims.channels, data.len(),
+            dims.total_bytes(),
+            dims.width,
+            dims.height,
+            dims.channels,
+            data.len(),
         )));
     }
     data.truncate(dims.total_bytes());

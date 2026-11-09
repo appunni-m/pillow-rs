@@ -1,7 +1,7 @@
 //! Original CMYK vector arithmetic with its NEON token injected at preparation.
 
-use crate::raster::RgbaImage;
 use super::super::default::grayscale_impl as scalar;
+use crate::raster::RgbaImage;
 use fearless_simd::prelude::{SimdBase, SimdInterleaved, SimdNarrow, SimdWiden};
 use fearless_simd::{Neon, u8x16 as SafeU8x16, u16x8 as SafeU16x8};
 
@@ -11,7 +11,10 @@ pub(crate) struct Kernel<'a> {
 }
 
 pub(crate) fn prepare(input: scalar::Kernel<'_>, neon: Neon) -> Kernel<'_> {
-    Kernel { input: input.input, neon }
+    Kernel {
+        input: input.input,
+        neon,
+    }
 }
 
 /// Convert sixteen native C/M/Y/K pixels directly to Pillow-compatible luma.
@@ -75,10 +78,11 @@ fearless_simd::kernel!(
     }
 );
 
-
 #[inline(always)]
 fn block(neon: Neon, source: &[u8]) -> [u8; 16] {
-    let source = source.try_into().expect("complete CMYK grayscale vector block");
+    let source = source
+        .try_into()
+        .expect("complete CMYK grayscale vector block");
     cmyk_grayscale_block_neon(neon, source)
 }
 

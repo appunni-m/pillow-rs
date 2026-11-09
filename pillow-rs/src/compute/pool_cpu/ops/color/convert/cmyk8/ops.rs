@@ -4,10 +4,13 @@ crate::compute::pool_cpu::ops::color::convert::helpers::binary::declare_mode_str
     crate::raster::Mode::ImageCmyk8
 );
 
-use crate::compute::{Architecture, registry::support::{
-    ImplementationSupport, InputContract, ModeSupport, OperationId, OutputModeRule,
-    StrategyGuard, StrategySelection,
-}};
+use crate::compute::{
+    Architecture,
+    registry::support::{
+        ImplementationSupport, InputContract, ModeSupport, OperationId, OutputModeRule,
+        StrategyGuard, StrategySelection,
+    },
+};
 use crate::error::PilError;
 use crate::pipeline::DitherMethod;
 use crate::raster::{DynamicImage, Mode, RgbaImage};
@@ -112,7 +115,10 @@ pub(crate) unsafe fn execute(
         (Architecture::Default, _) => super::default::convert_impl::execute(source, target),
         #[cfg(target_arch = "x86_64")]
         (Architecture::Ssse3, Mode::ImageRgb8) => super::ssse3::convert_impl::execute(source),
-        #[cfg(any(target_arch = "x86_64", all(target_arch = "x86", target_feature = "sse2")))]
+        #[cfg(any(
+            target_arch = "x86_64",
+            all(target_arch = "x86", target_feature = "sse2")
+        ))]
         (Architecture::Sse2, Mode::ImageRgb8) => super::sse2::convert_impl::execute(source),
         #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
         (Architecture::Neon, Mode::ImageRgb8) => super::neon::convert_impl::execute(source),

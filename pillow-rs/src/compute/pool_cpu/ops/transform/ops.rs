@@ -16,11 +16,10 @@
 //! sampler; filtered LA/La/PA repeats the resulting first band into physical
 //! lanes 1 and 2, while filtered three-band modes retain the output fill byte.
 
-use crate::compute::pool_cpu::ops::transform::helpers::strategy::{
-    self, Strategy,
-};
+use crate::compute::pool_cpu::ops::transform::helpers::strategy::{self, Strategy};
 use crate::compute::registry::support::{
-    InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport, RejectionKind, RequestFacts, StrategySelection,
+    InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport, RejectionKind,
+    RequestFacts, StrategySelection,
 };
 use crate::compute::{Architecture, ExecutionContext};
 use crate::error::PilError;
@@ -111,11 +110,26 @@ fn classify_mode(mode: Mode) -> ModeSupport {
         Mode::ImageI16N => super::i16n::ops::SUPPORT,
         // NO_PILLOW_SUPPORT: these identities are Rust internal high-depth
         // storage modes without a Pillow Transform contract.
-        Mode::ImageLumaA16 => rejected(mode, "Transform does not support internal 16-bit LA samples"),
-        Mode::ImageRgb16 => rejected(mode, "Transform does not support internal 16-bit RGB samples"),
-        Mode::ImageRgba16 => rejected(mode, "Transform does not support internal 16-bit RGBA samples"),
-        Mode::ImageRgb32F => rejected(mode, "Transform does not support internal 32-bit float RGB samples"),
-        Mode::ImageRgba32F => rejected(mode, "Transform does not support internal 32-bit float RGBA samples"),
+        Mode::ImageLumaA16 => rejected(
+            mode,
+            "Transform does not support internal 16-bit LA samples",
+        ),
+        Mode::ImageRgb16 => rejected(
+            mode,
+            "Transform does not support internal 16-bit RGB samples",
+        ),
+        Mode::ImageRgba16 => rejected(
+            mode,
+            "Transform does not support internal 16-bit RGBA samples",
+        ),
+        Mode::ImageRgb32F => rejected(
+            mode,
+            "Transform does not support internal 32-bit float RGB samples",
+        ),
+        Mode::ImageRgba32F => rejected(
+            mode,
+            "Transform does not support internal 32-bit float RGBA samples",
+        ),
     }
 }
 
@@ -260,24 +274,31 @@ impl PreparedTransform<'_> {
                 source_scratch,
             ),
             Mode::ImageI32 => super::i32::default::transform_impl::apply_mesh_record(
-                input, output, request, box_coordinates, coefficients,
-            ),
-            Mode::ImageF32 => super::f32::default::transform_impl::apply_mesh_record(
-                input, output, request, box_coordinates, coefficients,
-            ),
-            Mode::ImageI16
-            | Mode::ImageI16L
-            | Mode::ImageI16B
-            | Mode::ImageI16N => apply_i16_mesh_record(
-                self.mode,
                 input,
                 output,
                 request,
                 box_coordinates,
                 coefficients,
-                source_scratch,
-                i16_output_plane,
             ),
+            Mode::ImageF32 => super::f32::default::transform_impl::apply_mesh_record(
+                input,
+                output,
+                request,
+                box_coordinates,
+                coefficients,
+            ),
+            Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
+                apply_i16_mesh_record(
+                    self.mode,
+                    input,
+                    output,
+                    request,
+                    box_coordinates,
+                    coefficients,
+                    source_scratch,
+                    i16_output_plane,
+                )
+            }
             mode => Err(PilError::InternalError(format!(
                 "rejected Transform MESH mode {mode:?} reached execution"
             ))),
@@ -294,55 +315,44 @@ fn apply_byte_mesh_record(
     coefficients: [f64; 8],
     source_scratch: &mut Vec<u8>,
 ) -> Result<(), PilError> {
+    macro_rules! apply_mode {
+        ($implementation:path) => {
+            $implementation(
+                input,
+                output,
+                request,
+                box_coordinates,
+                coefficients,
+                source_scratch,
+            )
+        };
+    }
+
     match mode {
-        Mode::One => super::one::default::transform_impl::apply_mesh_record(
-            input, output, request, box_coordinates, coefficients, source_scratch,
-        ),
-        Mode::ImageLuma8 => super::luma8::default::transform_impl::apply_mesh_record(
-            input, output, request, box_coordinates, coefficients, source_scratch,
-        ),
-        Mode::ImageLumaA8 => super::luma_a8::default::transform_impl::apply_mesh_record(
-            input, output, request, box_coordinates, coefficients, source_scratch,
-        ),
+        Mode::One => apply_mode!(super::one::default::transform_impl::apply_mesh_record),
+        Mode::ImageLuma8 => apply_mode!(super::luma8::default::transform_impl::apply_mesh_record),
+        Mode::ImageLumaA8 => {
+            apply_mode!(super::luma_a8::default::transform_impl::apply_mesh_record)
+        }
         Mode::ImageLaPremultiplied8 => {
-            super::la_premultiplied8::default::transform_impl::apply_mesh_record(
-                input, output, request, box_coordinates, coefficients, source_scratch,
-            )
+            apply_mode!(super::la_premultiplied8::default::transform_impl::apply_mesh_record)
         }
-        Mode::ImagePalette8 => super::palette8::default::transform_impl::apply_mesh_record(
-            input, output, request, box_coordinates, coefficients, source_scratch,
-        ),
+        Mode::ImagePalette8 => {
+            apply_mode!(super::palette8::default::transform_impl::apply_mesh_record)
+        }
         Mode::ImagePaletteAlpha8 => {
-            super::palette_alpha8::default::transform_impl::apply_mesh_record(
-                input, output, request, box_coordinates, coefficients, source_scratch,
-            )
+            apply_mode!(super::palette_alpha8::default::transform_impl::apply_mesh_record)
         }
-        Mode::ImageRgb8 => super::rgb8::default::transform_impl::apply_mesh_record(
-            input, output, request, box_coordinates, coefficients, source_scratch,
-        ),
-        Mode::ImageRgba8 => super::rgba8::default::transform_impl::apply_mesh_record(
-            input, output, request, box_coordinates, coefficients, source_scratch,
-        ),
+        Mode::ImageRgb8 => apply_mode!(super::rgb8::default::transform_impl::apply_mesh_record),
+        Mode::ImageRgba8 => apply_mode!(super::rgba8::default::transform_impl::apply_mesh_record),
         Mode::ImageRgbPremultiplied8 => {
-            super::rgb_premultiplied8::default::transform_impl::apply_mesh_record(
-                input, output, request, box_coordinates, coefficients, source_scratch,
-            )
+            apply_mode!(super::rgb_premultiplied8::default::transform_impl::apply_mesh_record)
         }
-        Mode::ImageRgbx8 => super::rgbx8::default::transform_impl::apply_mesh_record(
-            input, output, request, box_coordinates, coefficients, source_scratch,
-        ),
-        Mode::ImageCmyk8 => super::cmyk8::default::transform_impl::apply_mesh_record(
-            input, output, request, box_coordinates, coefficients, source_scratch,
-        ),
-        Mode::ImageYCbCr8 => super::ycbcr8::default::transform_impl::apply_mesh_record(
-            input, output, request, box_coordinates, coefficients, source_scratch,
-        ),
-        Mode::ImageLab8 => super::lab8::default::transform_impl::apply_mesh_record(
-            input, output, request, box_coordinates, coefficients, source_scratch,
-        ),
-        Mode::ImageHsv8 => super::hsv8::default::transform_impl::apply_mesh_record(
-            input, output, request, box_coordinates, coefficients, source_scratch,
-        ),
+        Mode::ImageRgbx8 => apply_mode!(super::rgbx8::default::transform_impl::apply_mesh_record),
+        Mode::ImageCmyk8 => apply_mode!(super::cmyk8::default::transform_impl::apply_mesh_record),
+        Mode::ImageYCbCr8 => apply_mode!(super::ycbcr8::default::transform_impl::apply_mesh_record),
+        Mode::ImageLab8 => apply_mode!(super::lab8::default::transform_impl::apply_mesh_record),
+        Mode::ImageHsv8 => apply_mode!(super::hsv8::default::transform_impl::apply_mesh_record),
         _ => Err(PilError::InternalError(
             "non-byte mode reached Transform MESH byte router".into(),
         )),
@@ -361,16 +371,40 @@ fn apply_i16_mesh_record(
 ) -> Result<(), PilError> {
     match mode {
         Mode::ImageI16 => super::i16::default::transform_impl::apply_mesh_record(
-            input, output, request, box_coordinates, coefficients, source_scratch, output_plane,
+            input,
+            output,
+            request,
+            box_coordinates,
+            coefficients,
+            source_scratch,
+            output_plane,
         ),
         Mode::ImageI16L => super::i16l::default::transform_impl::apply_mesh_record(
-            input, output, request, box_coordinates, coefficients, source_scratch, output_plane,
+            input,
+            output,
+            request,
+            box_coordinates,
+            coefficients,
+            source_scratch,
+            output_plane,
         ),
         Mode::ImageI16B => super::i16b::default::transform_impl::apply_mesh_record(
-            input, output, request, box_coordinates, coefficients, source_scratch, output_plane,
+            input,
+            output,
+            request,
+            box_coordinates,
+            coefficients,
+            source_scratch,
+            output_plane,
         ),
         Mode::ImageI16N => super::i16n::default::transform_impl::apply_mesh_record(
-            input, output, request, box_coordinates, coefficients, source_scratch, output_plane,
+            input,
+            output,
+            request,
+            box_coordinates,
+            coefficients,
+            source_scratch,
+            output_plane,
         ),
         _ => Err(PilError::InternalError(
             "non-I;16 mode reached Transform MESH I;16 router".into(),
@@ -446,18 +480,18 @@ pub(crate) fn finish_mesh_records(
     output_plane: Option<&[u8]>,
 ) -> Result<(), PilError> {
     match mode {
-        Mode::ImageI16 => super::i16::default::transform_impl::finish_mesh(
-            output, request, output_plane,
-        ),
-        Mode::ImageI16L => super::i16l::default::transform_impl::finish_mesh(
-            output, request, output_plane,
-        ),
-        Mode::ImageI16B => super::i16b::default::transform_impl::finish_mesh(
-            output, request, output_plane,
-        ),
-        Mode::ImageI16N => super::i16n::default::transform_impl::finish_mesh(
-            output, request, output_plane,
-        ),
+        Mode::ImageI16 => {
+            super::i16::default::transform_impl::finish_mesh(output, request, output_plane)
+        }
+        Mode::ImageI16L => {
+            super::i16l::default::transform_impl::finish_mesh(output, request, output_plane)
+        }
+        Mode::ImageI16B => {
+            super::i16b::default::transform_impl::finish_mesh(output, request, output_plane)
+        }
+        Mode::ImageI16N => {
+            super::i16n::default::transform_impl::finish_mesh(output, request, output_plane)
+        }
         _ => Ok(()),
     }
 }

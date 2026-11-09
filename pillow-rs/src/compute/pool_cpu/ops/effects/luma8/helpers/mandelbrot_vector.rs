@@ -97,8 +97,9 @@ pub(crate) fn execute(
         }
     }
 
-    let image = GrayImage::from_raw(width, height, pixels)
-        .ok_or_else(|| PilError::InternalError("EffectMandelbrot vector buffer shape mismatch".into()))?;
+    let image = GrayImage::from_raw(width, height, pixels).ok_or_else(|| {
+        PilError::InternalError("EffectMandelbrot vector buffer shape mismatch".into())
+    })?;
     Ok(GeneratedImage {
         image: DynamicImage::ImageLuma8(image),
         vector_blocks,

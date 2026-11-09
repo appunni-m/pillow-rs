@@ -1,8 +1,7 @@
 //! Shared selection mechanics for Reduce mode-owned architecture strategies.
 
 use crate::compute::{
-    Architecture,
-    ExecutionContext,
+    Architecture, ExecutionContext,
     registry::support::{
         ImplementationSupport, ModeSupport, OperationId, StrategyGuard, StrategyInputs,
         StrategySelection, SupportAssessment,

@@ -2,9 +2,7 @@
 
 use crate::error::PilError;
 use crate::pipeline::DitherMethod;
-use crate::raster::{
-    DynamicImage, GrayAlphaImage, Mode, RgbImage, Rgba, RgbaImage,
-};
+use crate::raster::{DynamicImage, GrayAlphaImage, Mode, RgbImage, Rgba, RgbaImage};
 
 pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, PilError> {
     if target == Mode::ImageLab8 {
@@ -16,7 +14,10 @@ pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, P
     }
     match target {
         Mode::ImageLuma8 => {
-            let kernel = crate::compute::pool_cpu::ops::grayscale::rgb8::default::grayscale_impl::prepare(source)?;
+            let kernel =
+                crate::compute::pool_cpu::ops::grayscale::rgb8::default::grayscale_impl::prepare(
+                    source,
+                )?;
             crate::compute::pool_cpu::ops::grayscale::rgb8::default::grayscale_impl::execute(kernel)
                 .map(DynamicImage::ImageLuma8)
         }
@@ -32,11 +33,7 @@ pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, P
                 source.height(),
                 1,
             )?;
-            let luma = crate::color::grayscale_rgb_bytes::<3>(
-                source.as_raw(),
-                dimensions,
-                32768,
-            );
+            let luma = crate::color::grayscale_rgb_bytes::<3>(source.as_raw(), dimensions, 32768);
             if luma.capacity() != 0 {
                 crate::compute::record_pipeline_allocation(luma.capacity());
             }
@@ -71,17 +68,21 @@ pub(crate) fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, P
                 Rgba([pixel[0], pixel[1], pixel[2], 255])
             },
         ))),
-        Mode::ImageCmyk8 => Ok(DynamicImage::ImageCmyk8(
-            crate::color::rgb_to_cmyk_inverse(source),
-        )),
+        Mode::ImageCmyk8 => Ok(DynamicImage::ImageCmyk8(crate::color::rgb_to_cmyk_inverse(
+            source,
+        ))),
         Mode::ImageYCbCr8 => Ok(DynamicImage::ImageYCbCr8(
             crate::color::rgb_buffer_to_ycbcr(source),
         )),
-        Mode::ImageHsv8 => Ok(DynamicImage::ImageHsv8(
-            crate::color::rgb_buffer_to_hsv(source),
-        )),
-        Mode::ImageI32 => Ok(crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_i32_rgb8(source)),
-        Mode::ImageF32 => Ok(crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_f32_rgb8(source)),
+        Mode::ImageHsv8 => Ok(DynamicImage::ImageHsv8(crate::color::rgb_buffer_to_hsv(
+            source,
+        ))),
+        Mode::ImageI32 => Ok(
+            crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_i32_rgb8(source),
+        ),
+        Mode::ImageF32 => Ok(
+            crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_f32_rgb8(source),
+        ),
         _ => Err(PilError::ValueError("image has wrong mode".into())),
     }
 }
@@ -122,16 +123,10 @@ pub(crate) fn execute_palette_target(
 }
 
 fn convert_luma_alpha_from_rgb(source: &RgbImage) -> Result<DynamicImage, PilError> {
-    let dimensions = crate::checked_dims::CheckedDims::new_allow_empty(
-        source.width(),
-        source.height(),
-        1,
-    )?;
-    let output_dimensions = crate::checked_dims::CheckedDims::new_allow_empty(
-        source.width(),
-        source.height(),
-        2,
-    )?;
+    let dimensions =
+        crate::checked_dims::CheckedDims::new_allow_empty(source.width(), source.height(), 1)?;
+    let output_dimensions =
+        crate::checked_dims::CheckedDims::new_allow_empty(source.width(), source.height(), 2)?;
     let luma = crate::color::grayscale_rgb_bytes::<3>(source.as_raw(), dimensions, 32768);
     if luma.capacity() != 0 {
         crate::compute::record_pipeline_allocation(luma.capacity());
@@ -149,23 +144,18 @@ fn convert_luma_alpha_from_rgb(source: &RgbImage) -> Result<DynamicImage, PilErr
     if bytes.capacity() != 0 {
         crate::compute::record_pipeline_allocation(bytes.capacity());
     }
-    let output = GrayAlphaImage::from_raw(source.width(), source.height(), bytes).ok_or_else(|| {
-        PilError::InternalError("RGB Convert luma-alpha output shape mismatch".into())
-    })?;
+    let output =
+        GrayAlphaImage::from_raw(source.width(), source.height(), bytes).ok_or_else(|| {
+            PilError::InternalError("RGB Convert luma-alpha output shape mismatch".into())
+        })?;
     Ok(DynamicImage::ImageLumaA8(output))
 }
 
 fn convert_luma_alpha_direct_to_la(source: &RgbImage) -> Result<DynamicImage, PilError> {
-    let source_dims = crate::checked_dims::CheckedDims::new_allow_empty(
-        source.width(),
-        source.height(),
-        3,
-    )?;
-    let output_dims = crate::checked_dims::CheckedDims::new_allow_empty(
-        source.width(),
-        source.height(),
-        2,
-    )?;
+    let source_dims =
+        crate::checked_dims::CheckedDims::new_allow_empty(source.width(), source.height(), 3)?;
+    let output_dims =
+        crate::checked_dims::CheckedDims::new_allow_empty(source.width(), source.height(), 2)?;
     if source.as_raw().len() != source_dims.total_bytes() {
         return Err(PilError::InternalError(
             "RGB Convert source storage did not match its dimensions".into(),
@@ -173,7 +163,11 @@ fn convert_luma_alpha_direct_to_la(source: &RgbImage) -> Result<DynamicImage, Pi
     }
 
     let mut bytes = Vec::with_capacity(output_dims.total_bytes());
-    for pixel in source.as_raw().chunks_exact(3).take(source_dims.total_pixels()) {
+    for pixel in source
+        .as_raw()
+        .chunks_exact(3)
+        .take(source_dims.total_pixels())
+    {
         bytes.extend_from_slice(&[
             crate::color::rgb_to_luma_u8(pixel[0], pixel[1], pixel[2]),
             u8::MAX,
@@ -187,8 +181,10 @@ fn convert_luma_alpha_direct_to_la(source: &RgbImage) -> Result<DynamicImage, Pi
     if bytes.capacity() != 0 {
         crate::compute::record_pipeline_allocation(bytes.capacity());
     }
-    let output = GrayAlphaImage::from_raw(source.width(), source.height(), bytes)
-        .ok_or_else(|| PilError::InternalError("RGB Convert luma-alpha output shape mismatch".into()))?;
+    let output =
+        GrayAlphaImage::from_raw(source.width(), source.height(), bytes).ok_or_else(|| {
+            PilError::InternalError("RGB Convert luma-alpha output shape mismatch".into())
+        })?;
 
     Ok(DynamicImage::ImageLaPremultiplied8(output))
 }

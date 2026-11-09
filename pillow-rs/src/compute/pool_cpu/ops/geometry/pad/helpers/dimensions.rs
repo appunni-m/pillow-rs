@@ -92,48 +92,34 @@ pub(crate) fn full_width_vertical_rows(
     (top != 0 || bottom != 0).then_some(FullWidthVerticalRows { top, bottom })
 }
 
-/// Reproduces the archived CPU contain sizing and its validation order.
+/// Builds Pillow-compatible contain dimensions and centering for Pad.
 pub(crate) fn build(
     source: (u32, u32),
     target: (u32, u32),
     centering: (f64, f64),
     color: Option<(u8, u8, u8, u8)>,
 ) -> Result<PadFrame, PilError> {
-    let (source_width, source_height) = source;
     let (width, height) = target;
-    let image_ratio = f64::from(source_width) / f64::from(source_height);
-    let target_ratio = f64::from(width) / f64::from(height);
-    let (content_width, content_height) = if (image_ratio - target_ratio).abs() < 1e-10 {
-        (width, height)
-    } else if image_ratio > target_ratio {
-        (
-            width,
-            bankers_round(
-                f64::from(source_height) / f64::from(source_width) * f64::from(width),
-            ) as u32,
-        )
-    } else {
-        (
-            bankers_round(
-                f64::from(source_width) / f64::from(source_height) * f64::from(height),
-            ) as u32,
-            height,
-        )
-    };
-    validate_contained_size(source, (content_width, content_height))?;
+    // Pillow Pad delegates containment to ImageOps.contain's exact comparison.
+    let (content_width, content_height) =
+        crate::ops::imageops::contain_dimensions_from_sizes(source, target)?;
+    crate::ops::imageops::validate_aspect_resize_dimensions(
+        source,
+        (content_width, content_height),
+    )?;
     let (offset_x, offset_y) = if content_width != width {
         (
-            bankers_round(
+            crate::ops::imageops::round_positive_ties_even(
                 f64::from(width - content_width) * centering.0.clamp(0.0, 1.0),
-            ) as u32,
+            ),
             0,
         )
     } else {
         (
             0,
-            bankers_round(
+            crate::ops::imageops::round_positive_ties_even(
                 f64::from(height - content_height) * centering.1.clamp(0.0, 1.0),
-            ) as u32,
+            ),
         )
     };
     Ok(PadFrame {
@@ -146,31 +132,6 @@ pub(crate) fn build(
         color,
         native_color: None,
     })
-}
-
-fn validate_contained_size(
-    source: (u32, u32),
-    content: (u32, u32),
-) -> Result<(), PilError> {
-    if source.0 != 0 && source.1 != 0 && (content.0 == 0 || content.1 == 0) {
-        return Err(PilError::ValueError("height and width must be > 0".into()));
-    }
-    if source.0 == 0 && source.1 != 0 && content.1 != source.1 {
-        return Err(PilError::ValueError("height and width must be > 0".into()));
-    }
-    Ok(())
-}
-
-fn bankers_round(value: f64) -> f64 {
-    let floor = value.floor();
-    let fraction = value - floor;
-    if fraction < 0.5 {
-        floor
-    } else if fraction > 0.5 || floor % 2.0 != 0.0 {
-        floor + 1.0
-    } else {
-        floor
-    }
 }
 
 /// Returns the full-width content window used by native Pad resize kernels.

@@ -43,8 +43,8 @@ mod byte_export;
 pub use byte_export::{ImagingCoreBytesInput, imaging_core_to_bytes};
 mod channel_access;
 pub use channel_access::{ChannelSelector, PutAlphaInput};
-pub(crate) mod color_count;
 pub(crate) mod codec_adapter;
+pub(crate) mod color_count;
 mod construction;
 pub use construction::{
     NewColorInput, OpenFormatsInput, OpenModeInput, validate_open_inputs,
@@ -58,24 +58,23 @@ mod entropy;
 mod materialization;
 mod metadata;
 pub(crate) mod mode_boundary;
+use data_access::validate_scalar_storage;
 use metadata::image_mode_name;
 pub use metadata::{ExifCompatFields, prepare_exif_compat};
-use data_access::validate_scalar_storage;
 mod palette;
 pub(crate) use palette::{expand_palette, expand_palette_alpha};
 use palette::{operational_palette, padded_palette};
 #[path = "image/pipeline_admission.rs"]
 mod pipeline_admission;
 mod pipeline_ops;
-pub use pipeline_ops::{
-    MaterializationCache, PipelineModeCache, PipelineOps, PipelinePrefixCache,
-    PipelineShapeCache,
-};
 use pipeline_ops::known_pipeline_op_dimensions;
+pub use pipeline_ops::{
+    MaterializationCache, PipelineModeCache, PipelineOps, PipelinePrefixCache, PipelineShapeCache,
+};
 pub(crate) use pipeline_ops::{
-    cached_pipeline_mode, declared_pipeline_mode, known_pipeline_op_mode,
-    known_pipeline_op_mode_for_source, materialization_cache, pipeline_mode_cache_for,
-    pipeline_shape_cache, PipelineModeState, PipelinePaletteOutput,
+    PipelineModeState, PipelinePaletteOutput, cached_pipeline_mode, declared_pipeline_mode,
+    known_pipeline_op_mode, known_pipeline_op_mode_with_expansion, materialization_cache,
+    pipeline_mode_cache_for, pipeline_shape_cache,
 };
 mod pixel_access;
 pub use pixel_access::{PaletteColorComponent, PutPixelValue};
@@ -187,6 +186,21 @@ pub enum PutDataValueKind {
         /// Number of logical channels in the image mode.
         channels: usize,
     },
+}
+
+impl PutDataValueKind {
+    /// Returns whether a component tuple length is valid for this mode shape.
+    ///
+    /// The Python adapter uses this before extracting tuple items because
+    /// Pillow validates tuple length before coercing individual components.
+    #[doc(hidden)]
+    pub const fn accepts_component_arity(self, component_count: usize) -> bool {
+        match self {
+            Self::Components { channels: 2 } => component_count == 2,
+            Self::Components { channels: 3 | 4 } => component_count == 3 || component_count == 4,
+            Self::Numeric | Self::Components { .. } => false,
+        }
+    }
 }
 
 /// Reusable execution state for callback-driven, synchronous PutData writes.

@@ -37,11 +37,7 @@ fn is_l16_mode(mode: Mode) -> bool {
 pub(super) fn is_single_band_draw_mode(mode: Mode) -> bool {
     matches!(
         mode,
-        Mode::One
-            | Mode::ImageLuma8
-            | Mode::ImagePalette8
-            | Mode::ImageI32
-            | Mode::ImageF32
+        Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 | Mode::ImageI32 | Mode::ImageF32
     ) || is_l16_mode(mode)
 }
 
@@ -218,8 +214,7 @@ fn wide_integer_has_bits_below(magnitude: &[u8], exclusive_bit: usize) -> bool {
     {
         return true;
     }
-    remainder > 0
-        && magnitude[magnitude.len() - full_bytes - 1] & ((1 << remainder) - 1) != 0
+    remainder > 0 && magnitude[magnitude.len() - full_bytes - 1] & ((1 << remainder) - 1) != 0
 }
 
 /// Converts an arbitrary-size integer with Python's nearest-even int-to-f64
@@ -258,7 +253,9 @@ fn wide_integer_as_f64(negative: bool, magnitude: &[u8]) -> Option<f64> {
         exponent += 1;
     }
     let value = (significand as f64) * 2.0_f64.powi(exponent);
-    value.is_finite().then_some(if negative { -value } else { value })
+    value
+        .is_finite()
+        .then_some(if negative { -value } else { value })
 }
 
 fn resolve_wide_integer_color(
@@ -346,9 +343,7 @@ impl Draw {
     pub fn color_with_input(&self, input: DrawColorInput) -> Result<(u8, u8, u8, u8), PilError> {
         let mode = self.effective_mode()?;
         match input {
-            DrawColorInput::None => {
-                Ok(self.default_shape_ink()?.unwrap_or((0, 0, 0, 255)))
-            }
+            DrawColorInput::None => Ok(self.default_shape_ink()?.unwrap_or((0, 0, 0, 255))),
             DrawColorInput::String(value) => {
                 let color = crate::color::parse_color_str(&value)?;
                 if mode == Mode::ImagePalette8 {
@@ -379,9 +374,7 @@ impl Draw {
                 if mode == Mode::ImageF32 && values.len() == 1 =>
             {
                 match &values[0] {
-                    PaletteColorComponent::Integer(value) => {
-                        resolve_integer_color(mode, *value)
-                    }
+                    PaletteColorComponent::Integer(value) => resolve_integer_color(mode, *value),
                     PaletteColorComponent::Float(value) => {
                         let bytes = (*value as f32).to_le_bytes();
                         Ok((bytes[0], bytes[1], bytes[2], bytes[3]))
@@ -394,10 +387,11 @@ impl Draw {
             DrawColorInput::TupleFloatComponents(_) | DrawColorInput::TupleMixedComponents(_)
                 if mode == Mode::ImageF32 =>
             {
-                Err(PilError::TypeError("must be real number, not tuple".to_owned()))
+                Err(PilError::TypeError(
+                    "must be real number, not tuple".to_owned(),
+                ))
             }
-            DrawColorInput::TupleFloatComponents(_)
-            | DrawColorInput::TupleMixedComponents(_)
+            DrawColorInput::TupleFloatComponents(_) | DrawColorInput::TupleMixedComponents(_)
                 if mode == Mode::ImagePalette8 =>
             {
                 Err(draw_single_band_color_error())
@@ -426,8 +420,7 @@ impl Draw {
         &mut self,
         input: DrawColorInput,
     ) -> Result<(u8, u8, u8, u8), PilError> {
-        if self.effective_mode()? == Mode::ImagePalette8
-            && self.image.palette_input().rgb.is_some()
+        if self.effective_mode()? == Mode::ImagePalette8 && self.image.palette_input().rgb.is_some()
         {
             let components = match &input {
                 DrawColorInput::String(value) => {

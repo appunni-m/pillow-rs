@@ -1,6 +1,47 @@
 //! Native GetBBox scans shared by exact-mode Default strategies.
 
-use crate::raster::{GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
+use crate::compute::registry::support::{InputContract, ModeSupport, OperationId, OutputModeRule};
+use crate::raster::{GrayAlphaImage, GrayImage, Mode, RgbImage, RgbaImage};
+
+const ALPHA_MODES: &[Mode] = &[
+    Mode::ImageLumaA8,
+    Mode::ImageLaPremultiplied8,
+    Mode::ImagePaletteAlpha8,
+    Mode::ImageRgba8,
+    Mode::ImageRgbPremultiplied8,
+    Mode::ImageLumaA16,
+    Mode::ImageRgba16,
+    Mode::ImageRgba32F,
+];
+const GET_BBOX_INPUTS: &[InputContract] = &[InputContract::GetBBoxAlphaOnly {
+    alpha_modes: ALPHA_MODES,
+}];
+
+#[derive(Clone, Copy)]
+pub(crate) enum GetBBoxSupportKind {
+    Pillow,
+    CoreOnly,
+}
+
+pub(crate) fn mode_support(mode: Mode, kind: GetBBoxSupportKind) -> ModeSupport {
+    match kind {
+        GetBBoxSupportKind::Pillow => ModeSupport::cpu(
+            OperationId::GetBBox,
+            mode,
+            OutputModeRule::NoRasterResult,
+            GET_BBOX_INPUTS,
+            &[],
+        ),
+        GetBBoxSupportKind::CoreOnly => ModeSupport::cpu_core_only(
+            OperationId::GetBBox,
+            mode,
+            OutputModeRule::NoRasterResult,
+            GET_BBOX_INPUTS,
+            &[],
+            "native high-depth GetBBox extends the Pillow mode contract",
+        ),
+    }
+}
 
 pub(crate) type BBox = Option<(u32, u32, u32, u32)>;
 
@@ -121,19 +162,11 @@ pub(crate) fn rgb8(image: &RgbImage) -> BBox {
             .enumerate()
             .rposition(|(_, row)| row.chunks_exact(3).any(is_nonzero))
     {
-        return Some((
-            0,
-            coordinate(top),
-            image.width(),
-            exclusive_edge(bottom),
-        ));
+        return Some((0, coordinate(top), image.width(), exclusive_edge(bottom)));
     }
 
-    let (mut bbox_left, mut bbox_right, mut bbox_bottom) = (
-        coordinate(left),
-        exclusive_edge(right),
-        exclusive_edge(top),
-    );
+    let (mut bbox_left, mut bbox_right, mut bbox_bottom) =
+        (coordinate(left), exclusive_edge(right), exclusive_edge(top));
     for (y, row) in rows.enumerate().skip(top + 1) {
         let mut pixels = row.chunks_exact(3);
         let Some(row_left) = pixels.clone().position(is_nonzero) else {
@@ -211,9 +244,7 @@ fn i32_row_bounds(row: &[u8]) -> Option<(u32, u32)> {
         word2 |= u64::from_le_bytes(group[16..24].try_into().expect("8-byte word"));
         word3 |= u64::from_le_bytes(group[24..32].try_into().expect("8-byte word"));
     }
-    if word0 | word1 | word2 | word3 == 0
-        && !groups.remainder().iter().any(|&byte| byte != 0)
-    {
+    if word0 | word1 | word2 | word3 == 0 && !groups.remainder().iter().any(|&byte| byte != 0) {
         return None;
     }
 
@@ -312,13 +343,9 @@ pub(crate) fn u16_samples<const CHANNELS: usize>(
     height: u32,
     selected_channel: Option<usize>,
 ) -> BBox {
-    scan_samples::<u16, CHANNELS, _>(
-        samples,
-        width,
-        height,
-        selected_channel,
-        |sample| *sample != 0,
-    )
+    scan_samples::<u16, CHANNELS, _>(samples, width, height, selected_channel, |sample| {
+        *sample != 0
+    })
 }
 
 /// Reproduces Pillow's I;16 GetBBox byte-prefix scan. Pillow inspects only
@@ -367,15 +394,9 @@ pub(crate) fn f32_samples<const CHANNELS: usize>(
     height: u32,
     selected_channel: Option<usize>,
 ) -> BBox {
-    scan_samples::<f32, CHANNELS, _>(
-        samples,
-        width,
-        height,
-        selected_channel,
-        |sample| {
-            sample.to_bits() != 0
-        },
-    )
+    scan_samples::<f32, CHANNELS, _>(samples, width, height, selected_channel, |sample| {
+        sample.to_bits() != 0
+    })
 }
 
 fn scan_samples<T, const CHANNELS: usize, F>(
@@ -409,7 +430,15 @@ where
 }
 
 macro_rules! declare_getbbox_owner {
-    ($module:ident, $mode:ident, $image_ty:ty $(,)?) => {
+    ($module:ident, $mode:ident, $image_ty:ty, $kind:ident $(,)?) => {
+        pub(crate) fn get_bbox_mode_support() ->
+            crate::compute::registry::support::ModeSupport
+        {
+            crate::compute::pool_cpu::ops::analysis::helpers::bbox::mode_support(
+                crate::raster::Mode::$mode,
+                crate::compute::pool_cpu::ops::analysis::helpers::bbox::GetBBoxSupportKind::$kind,
+            )
+        }
         pub(crate) fn execute_getbbox(
             image: &$image_ty,
             alpha_only: bool,

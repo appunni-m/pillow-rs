@@ -26,18 +26,18 @@ pub(crate) fn execute(
         let ci = y as f64 * di + y0;
         for x in 0..width {
             let cr = x as f64 * dr + x0;
-            pixels[row_start + x as usize] = if super::super::helpers::mandelbrot::known_interior(
-                cr, ci, margin,
-            ) {
-                0
-            } else {
-                super::super::helpers::mandelbrot::pixel_value(cr, ci, quality)
-            };
+            pixels[row_start + x as usize] =
+                if super::super::helpers::mandelbrot::known_interior(cr, ci, margin) {
+                    0
+                } else {
+                    super::super::helpers::mandelbrot::pixel_value(cr, ci, quality)
+                };
         }
     }
 
-    let image = GrayImage::from_raw(width, height, pixels)
-        .ok_or_else(|| PilError::InternalError("EffectMandelbrot L buffer shape mismatch".into()))?;
+    let image = GrayImage::from_raw(width, height, pixels).ok_or_else(|| {
+        PilError::InternalError("EffectMandelbrot L buffer shape mismatch".into())
+    })?;
     Ok(GeneratedImage {
         image: DynamicImage::ImageLuma8(image),
         vector_blocks: 0,

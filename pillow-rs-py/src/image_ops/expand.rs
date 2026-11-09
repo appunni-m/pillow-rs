@@ -1,4 +1,10 @@
-use super::*;
+use super::PythonBorderCallbacks;
+use crate::{PyImage, c_int_from_python, imageops_fill_from_python, map_error};
+use pyo3::basic::CompareOp;
+use pyo3::exceptions::PyValueError;
+use pyo3::prelude::{Bound, Py, PyAny, PyErr, PyModule, PyResult, Python};
+use pyo3::types::{PyAnyMethods, PyInt, PyModuleMethods, PyTuple, PyTupleMethods};
+use pyo3::{pyfunction, wrap_pyfunction};
 
 struct PythonExpandCallbacks<'py> {
     geometry: PythonBorderCallbacks<'py>,
@@ -50,44 +56,20 @@ impl<'py> pillow_rs::ImageOpsBorderCallbacks for PythonExpandCallbacks<'py> {
         border: &Self::Value,
         index: usize,
     ) -> Result<Self::Value, Self::Error> {
-        pillow_rs::ImageOpsBorderCallbacks::border_coordinate(
-            &mut self.geometry,
-            border,
-            index,
-        )
-        .map_err(Into::into)
+        pillow_rs::ImageOpsBorderCallbacks::border_coordinate(&mut self.geometry, border, index)
+            .map_err(Into::into)
     }
 }
 
 impl<'py> pillow_rs::ImageOpsExpandGeometryCallbacks for PythonExpandCallbacks<'py> {
     fn image_size_coordinate(&mut self, index: usize) -> Result<Self::Value, Self::Error> {
-        pillow_rs::ImageOpsExpandGeometryCallbacks::image_size_coordinate(
-            &mut self.geometry,
-            index,
-        )
-        .map_err(Into::into)
+        pillow_rs::ImageOpsExpandGeometryCallbacks::image_size_coordinate(&mut self.geometry, index)
+            .map_err(Into::into)
     }
 
     fn add(&mut self, left: &Self::Value, right: &Self::Value) -> Result<Self::Value, Self::Error> {
         pillow_rs::ImageOpsExpandGeometryCallbacks::add(&mut self.geometry, left, right)
             .map_err(Into::into)
-    }
-
-    fn expand_geometry_tuple(
-        &mut self,
-        width: &Self::Value,
-        height: &Self::Value,
-        left: &Self::Value,
-        top: &Self::Value,
-    ) -> Result<Self::Value, Self::Error> {
-        pillow_rs::ImageOpsExpandGeometryCallbacks::expand_geometry_tuple(
-            &mut self.geometry,
-            width,
-            height,
-            left,
-            top,
-        )
-        .map_err(Into::into)
     }
 }
 
@@ -109,7 +91,7 @@ impl<'py> pillow_rs::ImageOpsExpandCallbacks for PythonExpandCallbacks<'py> {
         let string_type = super::imageops_global_or_builtin(self.geometry.py, "str")?;
         is_instance
             .call1((value.clone(), string_type))?
-            .extract::<bool>()
+            .is_truthy()
             .map_err(Into::into)
     }
 
@@ -118,9 +100,8 @@ impl<'py> pillow_rs::ImageOpsExpandCallbacks for PythonExpandCallbacks<'py> {
         fill: &Self::Value,
         mode: &Self::Value,
     ) -> Result<Self::Value, Self::Error> {
-        self.geometry
-            .py
-            .import("pillow_rs.imagecolor")?
+        let image_color = self.geometry.py.import("PIL")?.getattr("ImageColor")?;
+        image_color
             .getattr("getcolor")?
             .call1((fill, mode))
             .map_err(Into::into)
@@ -146,9 +127,7 @@ impl<'py> pillow_rs::ImageOpsExpandCallbacks for PythonExpandCallbacks<'py> {
             .import("pillow_rs.imagepalette")?
             .getattr("ImagePalette")?;
         let data = self.geometry.image.call_method1("getpalette", (mode,))?;
-        constructor
-            .call1((mode, data))
-            .map_err(Into::into)
+        constructor.call1((mode, data)).map_err(Into::into)
     }
 
     fn value_is_tuple(&mut self, value: &Self::Value) -> Result<bool, Self::Error> {
@@ -156,12 +135,20 @@ impl<'py> pillow_rs::ImageOpsExpandCallbacks for PythonExpandCallbacks<'py> {
         let tuple_type = super::imageops_global_or_builtin(self.geometry.py, "tuple")?;
         is_instance
             .call1((value.clone(), tuple_type))?
-            .extract::<bool>()
+            .is_truthy()
             .map_err(Into::into)
     }
 
-    fn value_tuple_length(&mut self, value: &Self::Value) -> Result<usize, Self::Error> {
-        value.len().map_err(Into::into)
+    fn value_length_equals(
+        &mut self,
+        value: &Self::Value,
+        expected: i64,
+    ) -> Result<bool, Self::Error> {
+        let length = super::imageops_global_or_builtin(self.geometry.py, "len")?.call1((value,))?;
+        length
+            .rich_compare(PyInt::new(self.geometry.py, expected), CompareOp::Eq)?
+            .is_truthy()
+            .map_err(Into::into)
     }
 
     fn palette_get_color(
@@ -169,7 +156,9 @@ impl<'py> pillow_rs::ImageOpsExpandCallbacks for PythonExpandCallbacks<'py> {
         palette: &Self::Palette,
         fill: &Self::Value,
     ) -> Result<Self::Value, Self::Error> {
-        palette.call_method1("getcolor", (fill,)).map_err(Into::into)
+        palette
+            .call_method1("getcolor", (fill,))
+            .map_err(Into::into)
     }
 
     fn size_pair(
@@ -182,11 +171,7 @@ impl<'py> pillow_rs::ImageOpsExpandCallbacks for PythonExpandCallbacks<'py> {
             .map_err(Into::into)
     }
 
-    fn size_is_negative(
-        &mut self,
-        size: &Self::Value,
-        index: usize,
-    ) -> Result<bool, Self::Error> {
+    fn size_is_negative(&mut self, size: &Self::Value, index: usize) -> Result<bool, Self::Error> {
         size.cast::<PyTuple>()
             .map_err(PyErr::from)?
             .get_item(index)?
@@ -199,14 +184,14 @@ impl<'py> pillow_rs::ImageOpsExpandCallbacks for PythonExpandCallbacks<'py> {
         size: &Self::Value,
         index: usize,
     ) -> Result<i32, Self::Error> {
-        let value = size.cast::<PyTuple>().map_err(PyErr::from)?.get_item(index)?;
+        let value = size
+            .cast::<PyTuple>()
+            .map_err(PyErr::from)?
+            .get_item(index)?;
         c_int_from_python(&value).map_err(Into::into)
     }
 
-    fn mode_identity(
-        &mut self,
-        value: &Self::Value,
-    ) -> Result<pillow_rs::Mode, Self::Error> {
+    fn mode_identity(&mut self, value: &Self::Value) -> Result<pillow_rs::Mode, Self::Error> {
         let name = value.extract::<String>()?;
         pillow_rs::Mode::from_pillow_name(&name)
             .ok_or_else(|| PyValueError::new_err("unrecognized image mode"))
@@ -260,10 +245,6 @@ impl<'py> pillow_rs::ImageOpsExpandCallbacks for PythonExpandCallbacks<'py> {
             .call1((self.geometry.image.clone(), position))
             .map(|_| ())
             .map_err(Into::into)
-    }
-
-    fn load_output(&mut self, output: &mut Self::Output) -> Result<(), Self::Error> {
-        output.call_method0("load").map(|_| ()).map_err(Into::into)
     }
 }
 

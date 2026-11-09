@@ -1,6 +1,6 @@
 use super::{
-    CheckedDims, DynamicImage, FilterCoeffs, FilterCoeffsF64, GPU_BUFFER_CAPACITY, PipelineOp,
-    Mode, ResampleFilter, gpu_f_resize_f64_is_exact, gpu_f_resize_f64_sample_bits,
+    CheckedDims, DynamicImage, FilterCoeffs, FilterCoeffsF64, GPU_BUFFER_CAPACITY, Mode,
+    PipelineOp, ResampleFilter, gpu_f_resize_f64_is_exact, gpu_f_resize_f64_sample_bits,
     gpu_pad_geometry, transpose_forward, transpose_output_dimensions,
 };
 use crate::raster::GenericImageView;

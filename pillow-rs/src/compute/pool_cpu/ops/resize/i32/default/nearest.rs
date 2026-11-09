@@ -25,16 +25,13 @@ pub(crate) fn execute_boxed(
 ) -> Result<RgbaImage, PilError> {
     let (destination_width, destination_height) = destination_size;
     let (source_width, source_height) = input.dimensions();
-    if source_width == 0
-        || source_height == 0
-        || destination_width == 0
-        || destination_height == 0
+    if source_width == 0 || source_height == 0 || destination_width == 0 || destination_height == 0
     {
         let output_dims = CheckedDims::new_allow_empty(destination_width, destination_height, 4)?;
         let output = output_dims.alloc_buffer();
-        return RgbaImage::from_raw(destination_width, destination_height, output).ok_or_else(|| {
-            PilError::ValueError("resize_i: failed to create output buffer".into())
-        });
+        return RgbaImage::from_raw(destination_width, destination_height, output).ok_or_else(
+            || PilError::ValueError("resize_i: failed to create output buffer".into()),
+        );
     }
 
     let (left, top, right, bottom) = bounds;
@@ -92,16 +89,15 @@ fn ordinary_samples(
     let (source_width, source_height) = source_size;
     let (width, height) = destination_size;
     for y in 0..height {
-        let source_y = (((f64::from(y) + 0.5) * f64::from(source_height)
-            / f64::from(height))
-        .floor() as i64)
+        let source_y = (((f64::from(y) + 0.5) * f64::from(source_height) / f64::from(height))
+            .floor() as i64)
             .clamp(0, i64::from(source_height) - 1) as u32;
         for x in 0..width {
-            let source_x = (((f64::from(x) + 0.5) * f64::from(source_width)
-                / f64::from(width))
-            .floor() as i64)
+            let source_x = (((f64::from(x) + 0.5) * f64::from(source_width) / f64::from(width))
+                .floor() as i64)
                 .clamp(0, i64::from(source_width) - 1) as u32;
-            output[(y * width + x) as usize] = source[(source_y * source_width + source_x) as usize];
+            output[(y * width + x) as usize] =
+                source[(source_y * source_width + source_x) as usize];
         }
     }
 }

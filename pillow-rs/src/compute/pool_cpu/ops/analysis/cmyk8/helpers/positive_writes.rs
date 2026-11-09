@@ -18,7 +18,14 @@ pub(crate) fn execute(width: u32, height: u32, ops: &[PipelineOp]) -> Option<Vec
 
     let (mut x_marks, mut y_marks) = ([0u32; MAX_WRITES], [0u32; MAX_WRITES]);
     for (index, op) in ops.iter().enumerate() {
-        let PipelineOp::PutPixel { x, y, color, palette_index, .. } = op else {
+        let PipelineOp::PutPixel {
+            x,
+            y,
+            color,
+            palette_index,
+            ..
+        } = op
+        else {
             return None;
         };
         if *palette_index
@@ -90,4 +97,3 @@ fn fill_axis(output: &mut [u32], marks: &[u32]) -> (u64, u64) {
         output.len().saturating_sub(vector_len) as u64,
     )
 }
-

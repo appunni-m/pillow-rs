@@ -9,40 +9,40 @@ use crate::raster::{DynamicImage, Mode};
 
 pub(super) const MODE: Mode = Mode::ImageRgb8;
 
-static MAX_FILTER_ARCHITECTURES:  [crate::compute::registry::support::ImplementationSupport; 5] = super::super::helpers::native_byte_filter_architectures(
-    OperationId::MaxFilter, MODE,
-    crate::compute::registry::support::StrategyGuard::FilterNativeByteExtrema { channels: 3 },
-);
-static MIN_FILTER_ARCHITECTURES:  [crate::compute::registry::support::ImplementationSupport; 5] = super::super::helpers::native_byte_filter_architectures(
-    OperationId::MinFilter, MODE,
-    crate::compute::registry::support::StrategyGuard::FilterNativeByteExtrema { channels: 3 },
-);
+static MAX_FILTER_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] =
+    super::super::helpers::native_byte_filter_architectures(
+        OperationId::MaxFilter,
+        MODE,
+        crate::compute::registry::support::StrategyGuard::FilterNativeByteExtrema { channels: 3 },
+    );
+static MIN_FILTER_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] =
+    super::super::helpers::native_byte_filter_architectures(
+        OperationId::MinFilter,
+        MODE,
+        crate::compute::registry::support::StrategyGuard::FilterNativeByteExtrema { channels: 3 },
+    );
 static GAUSSIAN_BLUR_ARCHITECTURES: [ImplementationSupport; 5] =
-    super::super::helpers::native_byte_blur_architectures(
-        OperationId::GaussianBlur,
-        MODE,
-        3,
-    );
+    super::super::helpers::native_byte_blur_architectures(OperationId::GaussianBlur, MODE, 3);
 static BOX_BLUR_ARCHITECTURES: [ImplementationSupport; 5] =
-    super::super::helpers::native_byte_blur_architectures(
-        OperationId::BoxBlur,
-        MODE,
-        3,
-    );
+    super::super::helpers::native_byte_blur_architectures(OperationId::BoxBlur, MODE, 3);
 static BOX_BLUR_XY_ARCHITECTURES: [ImplementationSupport; 5] =
-    super::super::helpers::native_byte_blur_architectures(
-        OperationId::BoxBlurXY,
+    super::super::helpers::native_byte_blur_architectures(OperationId::BoxBlurXY, MODE, 3);
+static MEDIAN_FILTER_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] =
+    super::super::helpers::native_byte_filter_architectures(
+        OperationId::MedianFilter,
         MODE,
-        3,
+        crate::compute::registry::support::StrategyGuard::FilterNativeByteRankWindow {
+            channels: 3,
+        },
     );
-static MEDIAN_FILTER_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] = super::super::helpers::native_byte_filter_architectures(
-    OperationId::MedianFilter, MODE,
-    crate::compute::registry::support::StrategyGuard::FilterNativeByteRankWindow { channels: 3 },
-);
-static RANK_FILTER_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] = super::super::helpers::native_byte_filter_architectures(
-    OperationId::RankFilter, MODE,
-    crate::compute::registry::support::StrategyGuard::FilterNativeByteRankWindow { channels: 3 },
-);
+static RANK_FILTER_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] =
+    super::super::helpers::native_byte_filter_architectures(
+        OperationId::RankFilter,
+        MODE,
+        crate::compute::registry::support::StrategyGuard::FilterNativeByteRankWindow {
+            channels: 3,
+        },
+    );
 
 super::super::helpers::native_filter3x3_architectures!(MODE, 3);
 super::super::helpers::native_filter3x3_arch_leaf!(ImageRgb8, RgbImage, 3);
@@ -54,7 +54,10 @@ const UNSHARP_ARCHITECTURES: &[ImplementationSupport] = &[
         OperationId::UnsharpMask,
         MODE,
         Architecture::Sse2,
-        cfg!(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2")),
+        cfg!(all(
+            any(target_arch = "x86", target_arch = "x86_64"),
+            target_feature = "sse2"
+        )),
         &[Architecture::Sse2],
         StrategyGuard::FilterUnsharpRgb150,
     ),
@@ -101,7 +104,6 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute_unsharp_blend(
     }
 }
 
-
 pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId) -> ModeSupport {
     match operation {
         OperationId::Filter3x3 => ModeSupport::cpu(
@@ -141,16 +143,26 @@ pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId)
         ),
         // NO_PILLOW_SUPPORT: Pillow 12.2 rank filters require scalar storage;
         // this native mode strategy filters native channels.
-        OperationId::MedianFilter => core_only(OperationId::MedianFilter, MODE, &MEDIAN_FILTER_ARCHITECTURES),
+        OperationId::MedianFilter => core_only(
+            OperationId::MedianFilter,
+            MODE,
+            &MEDIAN_FILTER_ARCHITECTURES,
+        ),
         // NO_PILLOW_SUPPORT: Pillow 12.2 rank filters require scalar storage;
         // this native mode strategy filters native channels.
-        OperationId::MaxFilter => core_only(OperationId::MaxFilter, MODE, &MAX_FILTER_ARCHITECTURES),
+        OperationId::MaxFilter => {
+            core_only(OperationId::MaxFilter, MODE, &MAX_FILTER_ARCHITECTURES)
+        }
         // NO_PILLOW_SUPPORT: Pillow 12.2 rank filters require scalar storage;
         // this native mode strategy filters native channels.
-        OperationId::MinFilter => core_only(OperationId::MinFilter, MODE, &MIN_FILTER_ARCHITECTURES),
+        OperationId::MinFilter => {
+            core_only(OperationId::MinFilter, MODE, &MIN_FILTER_ARCHITECTURES)
+        }
         // NO_PILLOW_SUPPORT: Pillow 12.2 rank filters require scalar storage;
         // this native mode strategy filters native channels.
-        OperationId::RankFilter => core_only(OperationId::RankFilter, MODE, &RANK_FILTER_ARCHITECTURES),
+        OperationId::RankFilter => {
+            core_only(OperationId::RankFilter, MODE, &RANK_FILTER_ARCHITECTURES)
+        }
         _ => ModeSupport::Rejected {
             mode: MODE,
             reason: "non-filter operation reached filter mode strategy",
@@ -165,34 +177,27 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute_architecture_blur(
     selection: &StrategySelection,
     context: &crate::compute::ExecutionContext,
 ) -> Result<DynamicImage, PilError> {
-    super::super::helpers::validate_native_byte_blur_selection(
-        selection, MODE, request, context,
-    )?;
+    super::super::helpers::validate_native_byte_blur_selection(selection, MODE, request, context)?;
     match request {
         super::super::ops::FilterRequest::BoxBlur { radius: 1 } => {
             super::helpers::execute_box_blur_radius_one(image, request)
         }
-        super::super::ops::FilterRequest::BoxBlurXY { radius_x, radius_y, passes }
-            if radius_x == 1.0 && radius_y == 1.0 && passes == 1 =>
-        {
+        super::super::ops::FilterRequest::BoxBlurXY {
+            radius_x,
+            radius_y,
+            passes,
+        } if radius_x == 1.0 && radius_y == 1.0 && passes == 1 => {
             super::helpers::execute_box_blur_radius_one(image, request)
         }
         super::super::ops::FilterRequest::GaussianBlur { sigma }
             if (1.0..2.0).contains(
-                &crate::compute::helpers::filters::gaussian_blur_three_pass_radius(
-                    sigma.abs(),
-                ),
+                &crate::compute::helpers::filters::gaussian_blur_three_pass_radius(sigma.abs()),
             ) =>
         {
             super::helpers::execute_gaussian_blur_radius_one(image, sigma)
         }
-        _ => super::super::helpers::execute_native_byte_blur(
-            image,
-            MODE,
-            3,
-            request,
-            selection,
-            context,
+        _ => super::super::helpers::execute_native_byte_blur::<3>(
+            image, MODE, request, selection, context,
         ),
     }
 }
@@ -202,7 +207,10 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
     request: super::super::ops::FilterRequest,
     selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
-    if matches!(request, super::super::ops::FilterRequest::GaussianBlur { .. }) {
+    if matches!(
+        request,
+        super::super::ops::FilterRequest::GaussianBlur { .. }
+    ) {
         return execute_gaussian_blur(image, request, selection);
     }
     if matches!(
@@ -231,9 +239,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
                 | super::super::ops::FilterRequest::RankFilter { .. }
         )
     {
-        return super::super::helpers::execute_native_byte_rank(
-            image, request, MODE, 3, selection,
-        );
+        return super::super::helpers::execute_native_byte_rank(image, request, MODE, 3, selection);
     }
 
     if matches!(request, super::super::ops::FilterRequest::Filter5x5 { .. }) {
@@ -266,7 +272,9 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
         };
     }
     if selection.implementation.architecture != Architecture::Default {
-        return Err(PilError::InternalError("filter selected an unowned architecture".into()));
+        return Err(PilError::InternalError(
+            "filter selected an unowned architecture".into(),
+        ));
     }
     super::default::execute(image, request)
 }
@@ -305,16 +313,15 @@ fn execute_box_blur(
         | Architecture::Avx
         | Architecture::Sse2
         | Architecture::Neon
-        | Architecture::WasmSimd128 => {
-            super::helpers::execute_box_blur_radius_one(image, request)
-        }
+        | Architecture::WasmSimd128 => super::helpers::execute_box_blur_radius_one(image, request),
         _ => Err(PilError::InternalError(
             "filter selected an unowned RGB BoxBlur architecture".into(),
         )),
     }
 }
 
-pub(in crate::compute::pool_cpu::ops::filter) fn mode_filter_support() -> crate::compute::registry::support::ModeSupport {
+pub(in crate::compute::pool_cpu::ops::filter) fn mode_filter_support()
+-> crate::compute::registry::support::ModeSupport {
     super::super::ops::serial_mode_filter(MODE)
 }
 

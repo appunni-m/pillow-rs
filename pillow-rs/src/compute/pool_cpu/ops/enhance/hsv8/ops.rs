@@ -1,12 +1,11 @@
 //! ImageHsv8 Brightness contract and Default strategy.
 
+use crate::compute::Architecture;
 use crate::compute::ExecutionContext;
 use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
 use crate::compute::registry::support::{
-    ImplementationSupport, InputContract, ModeSupport, OperationId, OutputModeRule,
-    StrategyInputs,
+    ImplementationSupport, InputContract, ModeSupport, OperationId, OutputModeRule, StrategyInputs,
 };
-use crate::compute::Architecture;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode, RgbImage};
 
@@ -42,11 +41,8 @@ pub(crate) fn prepare<'a>(
     factor: f64,
     context: &ExecutionContext,
 ) -> Result<Strategy<'a>, PilError> {
-    let selection = crate::compute::pool_cpu::ops::enhance::helpers::strategy::select(
-        SUPPORT,
-        facts,
-        context,
-    )?;
+    let selection =
+        crate::compute::pool_cpu::ops::enhance::helpers::strategy::select(SUPPORT, facts, context)?;
     Ok(Prepared::new((source, factor), selection))
 }
 
@@ -54,8 +50,9 @@ pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> 
     let architecture = strategy.selection().implementation.architecture;
     let (source, factor) = strategy.implementation;
     match architecture {
-        Architecture::Default => super::default::brightness_impl::execute(source, factor)
-            .map(DynamicImage::ImageHsv8),
+        Architecture::Default => {
+            super::default::brightness_impl::execute(source, factor).map(DynamicImage::ImageHsv8)
+        }
         Architecture::Sse2 | Architecture::Neon | Architecture::WasmSimd128 => {
             crate::compute::pool_cpu::ops::enhance::helpers::vector::execute_image(
                 source,
@@ -73,14 +70,14 @@ pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> 
     }
 }
 
-
 const CONTRAST_CHANNELS: u8 = 3;
-const CONTRAST_INPUTS: &[crate::compute::registry::support::InputContract] =
-    &[crate::compute::registry::support::InputContract::ExactNativeBytes {
+const CONTRAST_INPUTS: &[crate::compute::registry::support::InputContract] = &[
+    crate::compute::registry::support::InputContract::ExactNativeBytes {
         channels: CONTRAST_CHANNELS,
         overflow_reason: "Contrast native dimensions overflowed",
         mismatch_reason: "Contrast source bytes did not match its dimensions",
-    }];
+    },
+];
 
 /// Exact-mode support for native Contrast blending.
 pub(crate) const CONTRAST_SUPPORT: crate::compute::registry::support::ModeSupport =
@@ -118,10 +115,12 @@ pub(crate) fn prepare_contrast<'a>(
             "Contrast base was unavailable for a declared exact mode".into(),
         )
     })?;
-    Ok(crate::compute::pool_cpu::helpers::execution::prepared::Prepared::new(
-        (source, base, factor),
-        selection,
-    ))
+    Ok(
+        crate::compute::pool_cpu::helpers::execution::prepared::Prepared::new(
+            (source, base, factor),
+            selection,
+        ),
+    )
 }
 
 /// Execute the strategy selected during preparation without reclassifying mode.
@@ -131,15 +130,15 @@ pub(crate) fn execute_contrast(
     let architecture = strategy.selection().implementation.architecture;
     let (source, base, factor) = strategy.implementation;
     match architecture {
-        crate::compute::Architecture::Default => super::default::contrast_impl::execute(
-            source,
-            &base,
-            factor,
-        )
-        .map(crate::raster::DynamicImage::ImageHsv8),
+        crate::compute::Architecture::Default => {
+            super::default::contrast_impl::execute(source, &base, factor)
+                .map(crate::raster::DynamicImage::ImageHsv8)
+        }
         architecture => Err(crate::error::PilError::InternalError(format!(
             "unexpected {architecture:?} architecture selected for Contrast mode {}",
-            crate::raster::Mode::ImageHsv8.pillow_name().unwrap_or("internal"),
+            crate::raster::Mode::ImageHsv8
+                .pillow_name()
+                .unwrap_or("internal"),
         ))),
     }
 }
@@ -164,7 +163,11 @@ pub(crate) const SHARPNESS_SUPPORT: crate::compute::registry::support::ModeSuppo
         "native Sharpness extension has no Pillow parity contract",
     );
 
-pub(crate) type SharpnessStrategy<'a> = crate::compute::pool_cpu::helpers::execution::prepared::Prepared<(&'a crate::raster::RgbImage, f64)>;
+pub(crate) type SharpnessStrategy<'a> =
+    crate::compute::pool_cpu::helpers::execution::prepared::Prepared<(
+        &'a crate::raster::RgbImage,
+        f64,
+    )>;
 
 pub(crate) fn prepare_sharpness<'a>(
     source: &'a crate::raster::RgbImage,
@@ -173,11 +176,16 @@ pub(crate) fn prepare_sharpness<'a>(
     context: &crate::compute::ExecutionContext,
 ) -> Result<SharpnessStrategy<'a>, crate::error::PilError> {
     let selection = crate::compute::pool_cpu::ops::enhance::helpers::strategy::select(
-        SHARPNESS_SUPPORT, facts.with_sharpness(factor), context,
+        SHARPNESS_SUPPORT,
+        facts.with_sharpness(factor),
+        context,
     )?;
-    Ok(crate::compute::pool_cpu::helpers::execution::prepared::Prepared::new(
-        (source, factor), selection,
-    ))
+    Ok(
+        crate::compute::pool_cpu::helpers::execution::prepared::Prepared::new(
+            (source, factor),
+            selection,
+        ),
+    )
 }
 
 pub(crate) fn execute_sharpness(
@@ -187,11 +195,14 @@ pub(crate) fn execute_sharpness(
     let (source, factor) = strategy.implementation;
     let mut output = match architecture {
         crate::compute::Architecture::Default => {
-            super::default::sharpness_impl::execute(source, factor).map(crate::raster::DynamicImage::ImageHsv8)
+            super::default::sharpness_impl::execute(source, factor)
+                .map(crate::raster::DynamicImage::ImageHsv8)
         }
         architecture => Err(crate::error::PilError::InternalError(format!(
             "unexpected {architecture:?} architecture selected for Sharpness mode {}",
-            crate::raster::Mode::ImageHsv8.pillow_name().unwrap_or("internal"),
+            crate::raster::Mode::ImageHsv8
+                .pillow_name()
+                .unwrap_or("internal"),
         ))),
     }?;
     crate::compute::pool_cpu::ops::enhance::helpers::sharpness::carry_hidden_lanes(

@@ -6,9 +6,10 @@ use crate::raster::{DynamicImage, RgbaImage};
 
 pub(crate) fn execute(source: &RgbaImage) -> Result<DynamicImage, PilError> {
     let kernel = grayscale_impl::prepare(source)?;
-    let output = crate::compute::pool_cpu::ops::grayscale::rgb_premultiplied8::avx2::grayscale_impl::execute(
-        kernel,
-    );
+    let output =
+        crate::compute::pool_cpu::ops::grayscale::rgb_premultiplied8::avx2::grayscale_impl::execute(
+            kernel,
+        );
     let output = crate::compute::pool_cpu::ops::grayscale::helpers::luma::vector_output(
         source.width(),
         source.height(),

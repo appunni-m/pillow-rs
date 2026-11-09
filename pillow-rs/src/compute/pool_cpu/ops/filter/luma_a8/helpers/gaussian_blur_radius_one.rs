@@ -49,8 +49,8 @@ fn scalar_horizontal_pixel(
         let sum = u32::from(source[left * 2 + channel])
             + u32::from(source[center + channel])
             + u32::from(source[right * 2 + channel]);
-        let edge = u32::from(source[far_left * 2 + channel])
-            + u32::from(source[far_right * 2 + channel]);
+        let edge =
+            u32::from(source[far_left * 2 + channel]) + u32::from(source[far_right * 2 + channel]);
         let weighted = sum
             .wrapping_mul(whole_weight)
             .wrapping_add(edge.wrapping_mul(fractional_weight))
@@ -69,14 +69,19 @@ fn horizontal_radius_one_row(
     let interior_end = width.saturating_sub(2);
     let prefix_end = width.min(2);
     for x in 0..prefix_end {
-        scalar_horizontal_pixel(source, destination, width, x, whole_weight, fractional_weight);
+        scalar_horizontal_pixel(
+            source,
+            destination,
+            width,
+            x,
+            whole_weight,
+            fractional_weight,
+        );
     }
     let mut x = 2usize;
     while x + PIXELS_PER_VECTOR <= interior_end {
         let byte_start = x * 2;
-        let load = |pixel: usize| {
-            u32x16::from(u16x16::from(load_u8x16(source, pixel * 2)))
-        };
+        let load = |pixel: usize| u32x16::from(u16x16::from(load_u8x16(source, pixel * 2)));
         let neighbors = load(x - 1) + load(x) + load(x + 1);
         let edges = if fractional_weight == 0 {
             u32x16::splat(0)
@@ -91,10 +96,24 @@ fn horizontal_radius_one_row(
         x += PIXELS_PER_VECTOR;
     }
     for x in x..interior_end {
-        scalar_horizontal_pixel(source, destination, width, x, whole_weight, fractional_weight);
+        scalar_horizontal_pixel(
+            source,
+            destination,
+            width,
+            x,
+            whole_weight,
+            fractional_weight,
+        );
     }
     for x in interior_end.max(prefix_end)..width {
-        scalar_horizontal_pixel(source, destination, width, x, whole_weight, fractional_weight);
+        scalar_horizontal_pixel(
+            source,
+            destination,
+            width,
+            x,
+            whole_weight,
+            fractional_weight,
+        );
     }
 }
 
@@ -114,14 +133,22 @@ fn horizontal_radius_one_three_passes(
         let end = start + row_stride;
         let source_row = &source[start..end];
         let output_row = &mut destination[start..end];
-        horizontal_radius_one_row(source_row, &mut first, width, whole_weight, fractional_weight);
+        horizontal_radius_one_row(
+            source_row,
+            &mut first,
+            width,
+            whole_weight,
+            fractional_weight,
+        );
         horizontal_radius_one_row(&first, &mut second, width, whole_weight, fractional_weight);
         horizontal_radius_one_row(&second, output_row, width, whole_weight, fractional_weight);
     }
     let interior_end = width.saturating_sub(2);
     let blocks_per_row = interior_end.saturating_sub(2) / PIXELS_PER_VECTOR;
     crate::compute::record_pipeline_operation_vector_blocks(
-        blocks_per_row.saturating_mul(dimensions.height as usize).saturating_mul(3) as u64,
+        blocks_per_row
+            .saturating_mul(dimensions.height as usize)
+            .saturating_mul(3) as u64,
     );
     let scalar_tail = width
         .saturating_sub(blocks_per_row * PIXELS_PER_VECTOR)
@@ -153,11 +180,7 @@ fn vertical_radius_one_pass(
                 if count == LANES {
                     u32x16::from(u16x16::from(load_u8x16(source, base + x)))
                 } else {
-                    u32x16::from(u16x16::from(load_padded_u8x16(
-                        source,
-                        base + x,
-                        count,
-                    )))
+                    u32x16::from(u16x16::from(load_padded_u8x16(source, base + x, count)))
                 }
             };
             let sum = load(sum_top) + load(sum_middle) + load(sum_bottom);
@@ -211,11 +234,14 @@ pub(in crate::compute::pool_cpu::ops::filter::luma_a8) fn execute_radius_one(
         super::super::super::helpers::SMALL_UNIFORM_BYTE_MAX_PIXELS,
     ) {
         let mut output = vec![0; input.as_raw().len()];
-        let (blocks, scalar_tail) = crate::compute::pool_cpu::helpers::bytes::vector_copy::copy_native_bytes(
-            input.as_raw(),
-            &mut output,
-        )
-        .ok_or_else(|| PilError::InternalError("LA GaussianBlur identity copy shape mismatch".into()))?;
+        let (blocks, scalar_tail) =
+            crate::compute::pool_cpu::helpers::bytes::vector_copy::copy_native_bytes(
+                input.as_raw(),
+                &mut output,
+            )
+            .ok_or_else(|| {
+                PilError::InternalError("LA GaussianBlur identity copy shape mismatch".into())
+            })?;
         crate::compute::record_pipeline_operation_path("native-copy");
         crate::compute::record_pipeline_operation_vector_blocks(blocks);
         crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
@@ -232,7 +258,13 @@ pub(in crate::compute::pool_cpu::ops::filter::luma_a8) fn execute_radius_one(
             fractional_weight,
         );
         for _ in 0..3 {
-            vertical_radius_one_pass(&work, &mut scratch, dimensions, whole_weight, fractional_weight);
+            vertical_radius_one_pass(
+                &work,
+                &mut scratch,
+                dimensions,
+                whole_weight,
+                fractional_weight,
+            );
             std::mem::swap(&mut work, &mut scratch);
         }
         work

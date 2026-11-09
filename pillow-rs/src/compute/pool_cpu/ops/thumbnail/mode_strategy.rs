@@ -61,11 +61,7 @@ impl ThumbnailModeStrategy {
         }
     }
 
-    pub(super) fn should_reduce(
-        self,
-        filter: ResampleFilter,
-        reducing_gap: Option<f64>,
-    ) -> bool {
+    pub(super) fn should_reduce(self, filter: ResampleFilter, reducing_gap: Option<f64>) -> bool {
         if reducing_gap.is_none() {
             return false;
         }
@@ -108,8 +104,7 @@ impl ThumbnailModeStrategy {
     ) -> bool {
         match self {
             Self::I32 => {
-                factors == (2, 2)
-                    && super::i32::ops::streams_two_by_two(source, output, filter)
+                factors == (2, 2) && super::i32::ops::streams_two_by_two(source, output, filter)
             }
             Self::Standard
             | Self::One

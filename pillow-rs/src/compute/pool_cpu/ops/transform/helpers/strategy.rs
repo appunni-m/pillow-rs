@@ -49,11 +49,8 @@ pub(crate) fn selection<'a>(plan: &'a Strategy<'_>) -> &'a StrategySelection {
     plan.selection()
 }
 
-pub(crate) type ExecuteInto = for<'a> fn(
-    &DynamicImage,
-    TransformRequest<'a>,
-    &mut DynamicImage,
-) -> Result<(), PilError>;
+pub(crate) type ExecuteInto =
+    for<'a> fn(&DynamicImage, TransformRequest<'a>, &mut DynamicImage) -> Result<(), PilError>;
 
 pub(crate) fn execute_into(
     plan: Strategy<'_>,
@@ -69,12 +66,11 @@ pub(crate) fn execute_into(
         | Architecture::Avx
         | Architecture::Sse2
         | Architecture::Neon
-        | Architecture::WasmSimd128 => architecture_specific
-            .ok_or_else(|| {
-                PilError::InternalError(format!(
-                    "Transform {architecture:?} has no direct destination strategy"
-                ))
-            })?(image, request, output),
+        | Architecture::WasmSimd128 => architecture_specific.ok_or_else(|| {
+            PilError::InternalError(format!(
+                "Transform {architecture:?} has no direct destination strategy"
+            ))
+        })?(image, request, output),
         architecture => Err(PilError::InternalError(format!(
             "unexpected {architecture:?} architecture selected for Transform"
         ))),

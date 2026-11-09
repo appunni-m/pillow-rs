@@ -70,7 +70,7 @@ score cannot hide an operation regression.
 The review followed the public enum through its key mapping, backend
 registration, operation support checks, executors, and existing roadmap:
 
-- [`PipelineOp`](../pillow-rs/src/pipeline.rs) defines 84 operations.
+- [`PipelineOp`](../pillow-rs/src/pipeline.rs) defines 87 variants in the current tree: 84 at the restart baseline plus `ExpandTyped`, `PadPositioned`, and `PadTyped`.
 - [`registry.rs`](../pillow-rs/src/compute/registry.rs) maps them to 81 keys.
   `ResizeBoxed` shares `Resize`, `BoxBlurXY` shares `BoxBlur`, and
   `EqualizeMasked` shares `Equalize`. Keep these aliases visible in planning
@@ -115,7 +115,7 @@ registration, operation support checks, executors, and existing roadmap:
   architecture and delivery sequence; it does not mark any existing item
   complete.
 
-The operation inventory is complete for the current 84 variants. The module
+The operation inventory is complete for the current 87 variants. The module
 and capability findings above are source-based. They do not establish exhaustive
 mode-by-mode kernel proof or current performance: the worktree already contains
 uncommitted code, benchmark, and documentation changes. The published
@@ -188,7 +188,7 @@ describe or compute:
 - a conservative work/traffic estimate used to compare a fusion with separate
   stages.
 
-This metadata must have one canonical mapping for all 84 variants. Add a
+This metadata must have one canonical mapping for all 87 variants. Add a
 completeness check so a new `PipelineOp` cannot silently lack a planner
 contract, CPU function, or declared backend capability. Keep existing
 operation-specific validation and kernels as the semantic source of truth;
@@ -410,7 +410,7 @@ row below; they are intentionally not inferred from a shader filename.
 ### K1 — Add the shared operation contract and one-node plan
 
 - Add typed input/output layout, side-input, mutability/alias, shape/mode,
-  scratch, and fusion metadata for all 84 operations.
+  scratch, and fusion metadata for all 87 current variants.
 - Add a semantic `ExecutionPlan` that references the existing `PipelineOp`s;
   initially each op may lower to one node with no fusion.
 - Route materialized pipelines and standalone operations through the same

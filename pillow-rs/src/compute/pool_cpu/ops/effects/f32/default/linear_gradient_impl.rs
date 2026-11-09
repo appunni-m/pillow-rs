@@ -25,9 +25,8 @@ pub(crate) fn execute_vector() -> Result<GeneratedImage, PilError> {
     let mut scalar_tail = 0u64;
     for (y, row) in pixels.chunks_exact_mut(ROW_BYTES).enumerate() {
         let value = (y as f32).to_le_bytes();
-        let (blocks, tail) = super::super::super::helpers::linear_gradient_vector::fill_pattern(
-            row, &value,
-        )?;
+        let (blocks, tail) =
+            super::super::super::helpers::linear_gradient_vector::fill_pattern(row, &value)?;
         vector_blocks = vector_blocks.saturating_add(blocks);
         scalar_tail = scalar_tail.saturating_add(tail);
     }

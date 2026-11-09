@@ -13,16 +13,11 @@ use crate::raster::{DynamicImage, Mode, RgbImage};
     unsafe_code,
     reason = "the caller's strategy selection validates the NEON feature precondition"
 )]
-pub(crate) unsafe fn execute(
-    source: &RgbImage,
-    target: Mode,
-) -> Result<DynamicImage, PilError> {
+pub(crate) unsafe fn execute(source: &RgbImage, target: Mode) -> Result<DynamicImage, PilError> {
     match target {
         Mode::ImageLuma8 => luma8(source),
         Mode::ImageLumaA8 => super::super::helpers::vector::luma_alpha(source, target),
-        Mode::ImageLaPremultiplied8 => {
-            super::super::helpers::vector::luma_alpha(source, target)
-        }
+        Mode::ImageLaPremultiplied8 => super::super::helpers::vector::luma_alpha(source, target),
         Mode::ImageRgb8 => super::super::helpers::vector::identity(source),
         Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8 | Mode::ImageRgbx8 => {
             // SAFETY: the strategy is selected only by the NEON support entry.
@@ -46,10 +41,8 @@ fn luma8(source: &RgbImage) -> Result<DynamicImage, PilError> {
 
     let kernel = grayscale_rgb8::default::grayscale_impl::prepare(source)?;
     let pixels = kernel.dimensions.total_pixels();
-    let (bytes, blocks) = grayscale_rgb8::neon::grayscale_impl::execute(
-        kernel.input.as_raw(),
-        pixels,
-    );
+    let (bytes, blocks) =
+        grayscale_rgb8::neon::grayscale_impl::execute(kernel.input.as_raw(), pixels);
     let output = crate::compute::pool_cpu::ops::grayscale::helpers::luma::vector_output(
         source.width(),
         source.height(),

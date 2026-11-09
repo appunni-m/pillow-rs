@@ -71,8 +71,8 @@ fn operation_for_filter_name(filter_name: &str) -> Option<OperationId> {
         "RankFilter" => Some(OperationId::RankFilter),
         "Kernel" => Some(OperationId::Filter3x3),
         "BLUR" | "SMOOTH_MORE" => Some(OperationId::Filter5x5),
-        "CONTOUR" | "DETAIL" | "EDGE_ENHANCE" | "EDGE_ENHANCE_MORE" | "EMBOSS"
-        | "FIND_EDGES" | "SHARPEN" | "SMOOTH" => Some(OperationId::Filter3x3),
+        "CONTOUR" | "DETAIL" | "EDGE_ENHANCE" | "EDGE_ENHANCE_MORE" | "EMBOSS" | "FIND_EDGES"
+        | "SHARPEN" | "SMOOTH" => Some(OperationId::Filter3x3),
         _ => None,
     }
 }

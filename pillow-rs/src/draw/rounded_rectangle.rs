@@ -20,11 +20,7 @@ pub trait RoundedRectanglePreparationCallbacks {
     /// Apply Python's `round` protocol to one coordinate.
     fn round(&mut self, value: &Self::Value) -> Result<Self::Value, Self::Error>;
     /// Execute Python's less-than comparison and truth conversion.
-    fn less_than(
-        &mut self,
-        left: &Self::Value,
-        right: &Self::Value,
-    ) -> Result<bool, Self::Error>;
+    fn less_than(&mut self, left: &Self::Value, right: &Self::Value) -> Result<bool, Self::Error>;
     /// Execute Python subtraction.
     fn subtract(
         &mut self,
@@ -53,11 +49,7 @@ pub trait RoundedRectanglePreparationCallbacks {
 #[doc(hidden)]
 pub trait RoundedRectangleOutlineCallbacks: RoundedRectanglePreparationCallbacks {
     /// Execute Python addition for a border coordinate.
-    fn add(
-        &mut self,
-        left: &Self::Value,
-        right: &Self::Value,
-    ) -> Result<Self::Value, Self::Error>;
+    fn add(&mut self, left: &Self::Value, right: &Self::Value) -> Result<Self::Value, Self::Error>;
     /// Execute Python's in-place addition protocol for a list item `+=`.
     fn in_place_add(
         &mut self,
@@ -139,9 +131,7 @@ fn apply_border_width<C: RoundedRectangleOutlineCallbacks>(
     Ok(())
 }
 
-fn border_corner_adjustments(
-    kind: RoundedRectangleOutlineBorder,
-) -> (usize, usize, usize, usize) {
+fn border_corner_adjustments(kind: RoundedRectangleOutlineBorder) -> (usize, usize, usize, usize) {
     match kind {
         RoundedRectangleOutlineBorder::Top => (0, 0, 1, 2),
         RoundedRectangleOutlineBorder::Bottom => (3, 0, 2, 2),
@@ -187,10 +177,8 @@ pub fn prepare_rounded_rectangle_with_callbacks<C: RoundedRectanglePreparationCa
     coordinates: [C::Value; 4],
     radius: C::Value,
     callbacks: &mut C,
-) -> Result<
-    RoundedRectanglePreparedGeometry<C::Value>,
-    RoundedRectanglePreparationError<C::Error>,
-> {
+) -> Result<RoundedRectanglePreparedGeometry<C::Value>, RoundedRectanglePreparationError<C::Error>>
+{
     validate_coordinate_order(&coordinates, callbacks)?;
     let two = callbacks
         .integer(2)
@@ -199,11 +187,17 @@ pub fn prepare_rounded_rectangle_with_callbacks<C: RoundedRectanglePreparationCa
         .multiply(&radius, &two)
         .map_err(RoundedRectanglePreparationError::Callback)?;
     let rounded = round_coordinates(coordinates, callbacks)?;
-    let (diameter, full_x, full_y) =
-        clip_full_axes(diameter, &rounded, callbacks)?;
+    let (diameter, full_x, full_y) = clip_full_axes(diameter, &rounded, callbacks)?;
     let early_path = early_path(diameter.clone(), full_x, full_y, callbacks)?;
     if let Some(path) = early_path {
-        return Ok(prepared(rounded, diameter, None, full_x, full_y, Some(path)));
+        return Ok(prepared(
+            rounded,
+            diameter,
+            None,
+            full_x,
+            full_y,
+            Some(path),
+        ));
     }
     let half = callbacks
         .floor_half(&diameter)
@@ -238,17 +232,17 @@ fn validate_coordinate_order<C: RoundedRectanglePreparationCallbacks>(
         .less_than(&coordinates[2], &coordinates[0])
         .map_err(RoundedRectanglePreparationError::Callback)?
     {
-        return Err(RoundedRectanglePreparationError::Core(PilError::ValueError(
-            "x1 must be greater than or equal to x0".into(),
-        )));
+        return Err(RoundedRectanglePreparationError::Core(
+            PilError::ValueError("x1 must be greater than or equal to x0".into()),
+        ));
     }
     if callbacks
         .less_than(&coordinates[3], &coordinates[1])
         .map_err(RoundedRectanglePreparationError::Callback)?
     {
-        return Err(RoundedRectanglePreparationError::Core(PilError::ValueError(
-            "y1 must be greater than or equal to y0".into(),
-        )));
+        return Err(RoundedRectanglePreparationError::Core(
+            PilError::ValueError("y1 must be greater than or equal to y0".into()),
+        ));
     }
     Ok(())
 }

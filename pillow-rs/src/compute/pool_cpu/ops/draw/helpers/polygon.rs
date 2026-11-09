@@ -76,9 +76,9 @@ pub(super) fn draw_polygon_on_canvas<C: DrawCanvas>(
         scanline_polygon_fill(canvas, points, fc, img_w, img_h, false);
     }
 
-    let Some(outline_color) = outline.filter(|color| {
-        Some(*color) != fill && (width != 0 || outline_width.is_some())
-    }) else {
+    let Some(outline_color) =
+        outline.filter(|color| Some(*color) != fill && (width != 0 || outline_width.is_some()))
+    else {
         return;
     };
     if let Some(outline_width) = outline_width {
@@ -133,7 +133,17 @@ fn draw_polygon_outline_with_signed_width<C: DrawCanvas>(
         for index in 0..points.len() {
             let (x0, y0) = points[index];
             let (x1, y1) = points[(index + 1) % points.len()];
-            bresenham_line(canvas, x0, y0, x1, y1, color, image_width, image_height, false);
+            bresenham_line(
+                canvas,
+                x0,
+                y0,
+                x1,
+                y1,
+                color,
+                image_width,
+                image_height,
+                false,
+            );
         }
         return;
     }

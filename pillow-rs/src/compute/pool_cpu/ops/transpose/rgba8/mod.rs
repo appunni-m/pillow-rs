@@ -1,10 +1,12 @@
-
-pub(crate) mod default;
-pub(crate) mod ops;
 #[cfg(target_arch = "x86_64")]
 pub(crate) mod avx2;
+pub(crate) mod default;
+pub(crate) mod ops;
 
-#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
+#[cfg(all(
+    any(target_arch = "x86", target_arch = "x86_64"),
+    target_feature = "sse2"
+))]
 #[path = "sse2/transpose_impl.rs"]
 pub(crate) mod sse2;
 

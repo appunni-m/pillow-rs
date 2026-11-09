@@ -35,13 +35,8 @@ pub(super) fn execute<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA: b
             "boxed native-byte Resize received invalid sparse row facts".into(),
         ));
     }
-    let plan = BoxedResizePlan::new::<CHANNELS>(
-        source,
-        source_size,
-        destination_size,
-        bounds,
-        filter,
-    )?;
+    let plan =
+        BoxedResizePlan::new::<CHANNELS>(source, source_size, destination_size, bounds, filter)?;
     let mut intermediate = plan.intermediate_dims.alloc_buffer();
     let mut output = plan.output_dims.alloc_buffer();
     let mut premultiplied_row = if PREMULTIPLY_STRAIGHT_ALPHA {
@@ -66,11 +61,9 @@ pub(super) fn execute<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA: b
     Ok(output)
 }
 
-fn validate_channels<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA: bool>(
-) -> Result<(), PilError> {
-    if (1..=4).contains(&CHANNELS)
-        && (!PREMULTIPLY_STRAIGHT_ALPHA || matches!(CHANNELS, 2 | 4))
-    {
+fn validate_channels<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA: bool>()
+-> Result<(), PilError> {
+    if (1..=4).contains(&CHANNELS) && (!PREMULTIPLY_STRAIGHT_ALPHA || matches!(CHANNELS, 2 | 4)) {
         Ok(())
     } else {
         Err(PilError::DimensionError(
@@ -129,15 +122,12 @@ impl BoxedResizePlan {
         validate_coefficients(&horizontal, &vertical, source_size)?;
         let need_horizontal = horizontal_stage_needed(source_size.0, destination_size.0, bounds);
         let need_vertical = vertical_stage_needed(source_size.1, destination_size.1, bounds);
-        let (first_source_row, intermediate_rows) = compact_vertical_coefficients(
-            &mut vertical,
-            source_size.1,
-            need_vertical,
-        );
-        let intermediate_width = usize::try_from(destination_size.0)
-            .map_err(|_| invalid_boxed_plan())?;
-        let intermediate_height = u32::try_from(intermediate_rows)
-            .map_err(|_| invalid_boxed_plan())?;
+        let (first_source_row, intermediate_rows) =
+            compact_vertical_coefficients(&mut vertical, source_size.1, need_vertical);
+        let intermediate_width =
+            usize::try_from(destination_size.0).map_err(|_| invalid_boxed_plan())?;
+        let intermediate_height =
+            u32::try_from(intermediate_rows).map_err(|_| invalid_boxed_plan())?;
         let intermediate_dims =
             CheckedDims::new(destination_size.0, intermediate_height, CHANNELS as u8)?;
         let intermediate_stride = intermediate_width
@@ -157,8 +147,7 @@ impl BoxedResizePlan {
         };
         Ok(Self {
             output_width: intermediate_width,
-            output_height: usize::try_from(destination_size.1)
-                .map_err(|_| invalid_boxed_plan())?,
+            output_height: usize::try_from(destination_size.1).map_err(|_| invalid_boxed_plan())?,
             source_stride,
             intermediate_stride,
             first_source_row: usize::try_from(first_source_row)
@@ -206,9 +195,7 @@ fn vertical_stage_needed(
     output_height: u32,
     bounds: (f64, f64, f64, f64),
 ) -> bool {
-    output_height != source_height
-        || bounds.1 != 0.0
-        || bounds.3 != f64::from(output_height as f32)
+    output_height != source_height || bounds.1 != 0.0 || bounds.3 != f64::from(output_height as f32)
 }
 
 fn compact_vertical_coefficients(
@@ -261,7 +248,12 @@ fn horizontal_stage<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA: boo
         output_width: resize.output_width,
         sparse_source_rows,
     };
-    process_horizontal_rows(&rows, resize.intermediate_rows, intermediate, premultiplied_row)
+    process_horizontal_rows(
+        &rows,
+        resize.intermediate_rows,
+        intermediate,
+        premultiplied_row,
+    )
 }
 
 fn process_horizontal_rows<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA: bool>(
@@ -344,7 +336,9 @@ fn copy_horizontal_identity<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_AL
     let source_end = source_start
         .checked_add(intermediate.len())
         .ok_or_else(invalid_boxed_plan)?;
-    let source = source.get(source_start..source_end).ok_or_else(invalid_boxed_plan)?;
+    let source = source
+        .get(source_start..source_end)
+        .ok_or_else(invalid_boxed_plan)?;
     if PREMULTIPLY_STRAIGHT_ALPHA {
         for (source_pixel, output_pixel) in source
             .chunks_exact(CHANNELS)
@@ -431,10 +425,7 @@ fn process_vertical_rows<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA
             output_row.fill(0);
             continue;
         }
-        let (blocks, tail) = resize_vertical_vector_row::<
-            CHANNELS,
-            PREMULTIPLY_STRAIGHT_ALPHA,
-        >(
+        let (blocks, tail) = resize_vertical_vector_row::<CHANNELS, PREMULTIPLY_STRAIGHT_ALPHA>(
             rows.intermediate,
             rows.output_width,
             rows.source_height,

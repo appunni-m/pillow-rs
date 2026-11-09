@@ -77,7 +77,11 @@ pub(crate) fn rgb_projection(image: &RgbImage) -> VectorProjection {
     let mut horizontal = vec![0; width];
     let mut vertical = vec![0; height];
     if width == 0 || height == 0 {
-        return VectorProjection { axes: (horizontal, vertical), vector_blocks: 0, scalar_tail: 0 };
+        return VectorProjection {
+            axes: (horizontal, vertical),
+            vector_blocks: 0,
+            scalar_tail: 0,
+        };
     }
     let mut vector_blocks = 0u64;
     let mut scalar_tail = 0u64;
@@ -151,5 +155,9 @@ pub(crate) fn rgb_projection(image: &RgbImage) -> VectorProjection {
         vertical[y] = u32::from(row_nonzero);
     }
 
-    VectorProjection { axes: (horizontal, vertical), vector_blocks, scalar_tail }
+    VectorProjection {
+        axes: (horizontal, vertical),
+        vector_blocks,
+        scalar_tail,
+    }
 }

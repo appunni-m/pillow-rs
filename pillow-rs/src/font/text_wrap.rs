@@ -55,9 +55,7 @@ impl WrapUnit {
 
     fn concatenate(&self, other: &Self) -> Self {
         match (self, other) {
-            (Self::Unicode(left), Self::Unicode(right)) => {
-                Self::Unicode(format!("{left}{right}"))
-            }
+            (Self::Unicode(left), Self::Unicode(right)) => Self::Unicode(format!("{left}{right}")),
             (Self::Codepoints(left), Self::Codepoints(right)) => {
                 let mut joined = Vec::with_capacity(left.len() + right.len());
                 joined.extend_from_slice(left);
@@ -76,11 +74,9 @@ impl WrapUnit {
 
     fn strip_prefix(&self, prefix: &Self) -> Self {
         match (self, prefix) {
-            (Self::Unicode(text), Self::Unicode(prefix)) => Self::Unicode(
-                text.get(prefix.len()..)
-                    .unwrap_or_default()
-                    .to_owned(),
-            ),
+            (Self::Unicode(text), Self::Unicode(prefix)) => {
+                Self::Unicode(text.get(prefix.len()..).unwrap_or_default().to_owned())
+            }
             (Self::Codepoints(text), Self::Codepoints(prefix)) => {
                 Self::Codepoints(text.get(prefix.len()..).unwrap_or_default().to_vec())
             }
@@ -131,9 +127,7 @@ impl WrapUnit {
             Self::Codepoints(codepoints) => {
                 Self::Codepoints(codepoints.get(position..).unwrap_or_default().to_vec())
             }
-            Self::Bytes(bytes) => {
-                Self::Bytes(bytes.get(position..).unwrap_or_default().to_vec())
-            }
+            Self::Bytes(bytes) => Self::Bytes(bytes.get(position..).unwrap_or_default().to_vec()),
         }
     }
 
@@ -177,7 +171,11 @@ struct NativeWrapCallbacks<'a> {
 impl<C: ImageFontTextWrapCallbacks> WrapState<'_, C> {
     fn add_line(&mut self, line: &WrapUnit) -> Result<bool, C::Error> {
         if self.has_height {
-            let mut candidate = self.lines.iter().map(WrapUnit::as_input).collect::<Vec<_>>();
+            let mut candidate = self
+                .lines
+                .iter()
+                .map(WrapUnit::as_input)
+                .collect::<Vec<_>>();
             candidate.push(line.as_input());
             if !self.callbacks.height_fits(&candidate, &line.as_input())? {
                 return Ok(false);
@@ -199,7 +197,7 @@ impl NativeWrapCallbacks<'_> {
     fn bbox_options(&self) -> ImageFontTextOptions {
         let font_mode = super::text_layout::text_layout_font_mode(self.mode, self.embedded_color);
         ImageFontTextOptions {
-            mode: Some(font_mode.to_owned()),
+            mode: Some(font_mode),
             stroke_width: self.stroke_width,
             ..ImageFontTextOptions::default()
         }
@@ -279,7 +277,10 @@ impl ImageFontTextWrapCallbacks for NativeWrapCallbacks<'_> {
     }
 
     fn scaling_is_shrink(&mut self) -> Result<bool, Self::Error> {
-        Ok(matches!(self.scaling, Some(ImageFontTextScaling::Shrink { .. })))
+        Ok(matches!(
+            self.scaling,
+            Some(ImageFontTextScaling::Shrink { .. })
+        ))
     }
 
     fn initial_size(&mut self, round_up: bool) -> Result<i64, Self::Error> {
@@ -341,9 +342,8 @@ pub(crate) fn wrap_text(
         embedded_color,
         scaling: None,
     };
-    wrap_with_callbacks(&mut callbacks, text, height.is_some(), false)?.ok_or_else(|| {
-        PilError::InternalError("unscaled text wrap returned no result".into())
-    })
+    wrap_with_callbacks(&mut callbacks, text, height.is_some(), false)?
+        .ok_or_else(|| PilError::InternalError("unscaled text wrap returned no result".into()))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -414,7 +414,11 @@ fn wrap_once<C: ImageFontTextWrapCallbacks>(
         .callbacks
         .capture_remaining_text(&remaining, consumed, wrap_id)?;
     Ok(ImageFontTextWrapResult {
-        lines: state.lines.into_iter().map(|line| line.as_input()).collect(),
+        lines: state
+            .lines
+            .into_iter()
+            .map(|line| line.as_input())
+            .collect(),
         remaining,
         consumed,
         wrap_id,
@@ -428,11 +432,7 @@ fn shrink_with_callbacks<C: ImageFontTextWrapCallbacks>(
     has_height: bool,
     next_wrap_id: &mut u64,
 ) -> Result<Option<ImageFontTextWrapResult>, C::Error> {
-    if !callbacks.has_remaining_text(
-        &initial.remaining,
-        initial.consumed,
-        initial.wrap_id,
-    )? {
+    if !callbacks.has_remaining_text(&initial.remaining, initial.consumed, initial.wrap_id)? {
         callbacks.discard_remaining_text(initial.wrap_id);
         return Ok(None);
     }
@@ -461,11 +461,7 @@ fn grow_with_callbacks<C: ImageFontTextWrapCallbacks>(
     has_height: bool,
     next_wrap_id: &mut u64,
 ) -> Result<Option<ImageFontTextWrapResult>, C::Error> {
-    if callbacks.has_remaining_text(
-        &initial.remaining,
-        initial.consumed,
-        initial.wrap_id,
-    )? {
+    if callbacks.has_remaining_text(&initial.remaining, initial.consumed, initial.wrap_id)? {
         callbacks.discard_remaining_text(initial.wrap_id);
         return Err(PilError::ValueError("Text could not be scaled".into()).into());
     }
@@ -677,9 +673,7 @@ fn unicode_leading_newlines(text: &str) -> Vec<WrapUnit> {
     let mut index = 0;
     while index < chars.len() {
         let start = index;
-        while index < chars.len()
-            && chars[index].1 != '\n'
-            && is_python_whitespace(chars[index].1)
+        while index < chars.len() && chars[index].1 != '\n' && is_python_whitespace(chars[index].1)
         {
             index += 1;
         }

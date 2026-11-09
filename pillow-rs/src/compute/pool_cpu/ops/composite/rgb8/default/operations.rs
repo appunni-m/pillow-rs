@@ -11,23 +11,25 @@ pub(crate) fn merge(
     source: &DynamicImage,
     remaining: &[Arc<DynamicImage>],
 ) -> Result<DynamicImage, PilError> {
-    if source.mode() == Mode::ImageLuma8
-        && remaining.len() == 2
-        && remaining
-            .iter()
-            .all(|band| band.mode() == Mode::ImageLuma8)
+    if matches!(
+        source.mode(),
+        Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8
+    ) && remaining.len() == 2
+        && remaining.iter().all(|band| band.mode() == Mode::ImageLuma8)
     {
-        return interleave_luma_bands(source, remaining);
+        return interleave_byte_bands(source, remaining);
     }
     crate::compute::pool_cpu::ops::composite::helpers::merge::interleave(
         source,
         remaining,
         MODE,
-        crate::compute::pool_cpu::ops::composite::ops::MergeLayout::Three { lab_encoding: false },
+        crate::compute::pool_cpu::ops::composite::ops::MergeLayout::Three {
+            lab_encoding: false,
+        },
     )
 }
 
-fn interleave_luma_bands(
+fn interleave_byte_bands(
     source: &DynamicImage,
     remaining: &[Arc<DynamicImage>],
 ) -> Result<DynamicImage, PilError> {
@@ -35,9 +37,7 @@ fn interleave_luma_bands(
     let dimensions = CheckedDims::new_allow_empty(width, height, 3)?;
     let pixels = dimensions.total_bytes() / 3;
     let bands = crate::compute::pool_cpu::ops::composite::helpers::merge::collect_bands(
-        source,
-        remaining,
-        pixels,
+        source, remaining, pixels,
     )?;
     if bands.len() != 3 {
         return Err(PilError::InternalError(
@@ -59,11 +59,7 @@ fn interleave_luma_bands(
     Ok(output)
 }
 
-fn interleave_rgb_luma_bands(
-    red: &[u8],
-    green: &[u8],
-    blue: &[u8],
-) -> Result<Vec<u8>, PilError> {
+fn interleave_rgb_luma_bands(red: &[u8], green: &[u8], blue: &[u8]) -> Result<Vec<u8>, PilError> {
     if red.len() != green.len() || red.len() != blue.len() {
         return Err(PilError::InternalError(
             "RGB merge band lengths do not match".into(),

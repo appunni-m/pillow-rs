@@ -3,21 +3,18 @@
 use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
 use crate::compute::pool_cpu::ops::eval::helpers::{strategy, vector};
 use crate::compute::registry::support::{
-    ImplementationSupport,
-    InputContract,
-    ModeSupport,
-    OperationId,
-    OutputModeRule,
+    ImplementationSupport, InputContract, ModeSupport, OperationId, OutputModeRule,
     StrategySelection,
 };
 use crate::compute::{Architecture, ExecutionContext};
 use crate::error::PilError;
-use crate::raster::{DynamicImage, Mode, GrayImage};
-
+use crate::raster::{DynamicImage, GrayImage, Mode};
 
 const CHANNELS: usize = 1;
 const INPUTS: &[InputContract] = &[
-    InputContract::ByteLutEntries { channels: CHANNELS as u8 },
+    InputContract::ByteLutEntries {
+        channels: CHANNELS as u8,
+    },
     InputContract::ExactNativeBytes {
         channels: CHANNELS as u8,
         overflow_reason: "Eval native byte dimensions overflowed",
@@ -53,7 +50,6 @@ pub(crate) enum ArchitectureStrategy<'a> {
 
 pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
 
-
 pub(crate) fn prepare<'a>(
     input: &'a GrayImage,
     lut: &'a [u8],
@@ -69,10 +65,16 @@ pub(crate) fn prepare<'a>(
     let implementation = match selection.implementation.architecture {
         Architecture::Default => ArchitectureStrategy::Default(super::default::prepare(input, lut)),
         Architecture::Sse2 => ArchitectureStrategy::Sse2(vector::prepare::<CHANNELS>(
-            input.as_raw(), input.width(), input.height(), lut,
+            input.as_raw(),
+            input.width(),
+            input.height(),
+            lut,
         )?),
         Architecture::Neon => ArchitectureStrategy::Neon(vector::prepare::<CHANNELS>(
-            input.as_raw(), input.width(), input.height(), lut,
+            input.as_raw(),
+            input.width(),
+            input.height(),
+            lut,
         )?),
         Architecture::WasmSimd128 => ArchitectureStrategy::WasmSimd128(
             vector::prepare::<CHANNELS>(input.as_raw(), input.width(), input.height(), lut)?,
@@ -96,12 +98,12 @@ pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> 
         ArchitectureStrategy::Default(kernel) => {
             super::default::execute(kernel).map(DynamicImage::One)
         }
-        ArchitectureStrategy::Sse2(kernel) => {
-            vector::execute_sse2(kernel).and_then(from_vector).map(DynamicImage::One)
-        }
-        ArchitectureStrategy::Neon(kernel) => {
-            vector::execute_neon(kernel).and_then(from_vector).map(DynamicImage::One)
-        }
+        ArchitectureStrategy::Sse2(kernel) => vector::execute_sse2(kernel)
+            .and_then(from_vector)
+            .map(DynamicImage::One),
+        ArchitectureStrategy::Neon(kernel) => vector::execute_neon(kernel)
+            .and_then(from_vector)
+            .map(DynamicImage::One),
         ArchitectureStrategy::WasmSimd128(kernel) => vector::execute_wasm_simd128(kernel)
             .and_then(from_vector)
             .map(DynamicImage::One),
@@ -121,11 +123,14 @@ pub(crate) fn execute_float_lut(
     );
     let selection = strategy::select(FLOAT_LUT_SUPPORT, facts, ctx)?;
     let output = match selection.implementation.architecture {
-        Architecture::Default => super::default::eval_float_impl::execute(input, lut)
-            .map(DynamicImage::ImageF32)?,
-        architecture => return Err(PilError::InternalError(format!(
-            "unexpected {architecture:?} architecture selected for PointFloat mode One"
-        ))),
+        Architecture::Default => {
+            super::default::eval_float_impl::execute(input, lut).map(DynamicImage::ImageF32)?
+        }
+        architecture => {
+            return Err(PilError::InternalError(format!(
+                "unexpected {architecture:?} architecture selected for PointFloat mode One"
+            )));
+        }
     };
     Ok((output, selection))
 }

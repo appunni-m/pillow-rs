@@ -9,6 +9,31 @@ fn native_put_alpha_mask(mask: &DynamicImage) -> Option<&crate::raster::GrayImag
 }
 
 #[cfg(target_endian = "little")]
+fn validate_native_rgb_put_alpha_data_layout(
+    rgb: &crate::raster::RgbImage,
+    alpha: &crate::raster::GrayImage,
+    dispatch: NativeRgbPutAlphaDataDispatch,
+    buffer_capacity: u32,
+) -> Result<(u32, u32), PilError> {
+    let (width, height) = rgb.dimensions();
+    let dimensions = CheckedDims::new(width, height, 3)?;
+    let pixel_count = CheckedDims::new(width, height, 1)?.total_pixels();
+    if rgb.dimensions() != alpha.dimensions()
+        || dimensions.total_bytes() != dispatch.rgb_bytes
+        || rgb.as_raw().len() != dispatch.rgb_bytes
+        || alpha.as_raw().len() != dispatch.mask_bytes
+        || pixel_count != dispatch.mask_bytes
+        || CheckedDims::new(width, height, 4)?.total_bytes() != dispatch.output_bytes
+        || dispatch.output_transfer_bytes > u64::from(buffer_capacity) * 4
+    {
+        return Err(PilError::InternalError(
+            "GPU native RGB PutAlphaData layout mismatch".into(),
+        ));
+    }
+    Ok((width, height))
+}
+
+#[cfg(target_endian = "little")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::compute::pool_gpu) struct NativeRgbPutAlphaDispatch {
     pub(in crate::compute::pool_gpu) input_bytes: usize,
@@ -549,21 +574,8 @@ impl GpuInner {
                 "GPU native RGB PutAlphaData requires a one-byte mask".into(),
             ));
         };
-        let (width, height) = rgb.dimensions();
-        let dimensions = CheckedDims::new(width, height, 3)?;
-        let pixel_count = CheckedDims::new(width, height, 1)?.total_pixels();
-        if rgb.dimensions() != alpha.dimensions()
-            || dimensions.total_bytes() != dispatch.rgb_bytes
-            || rgb.as_raw().len() != dispatch.rgb_bytes
-            || alpha.as_raw().len() != dispatch.mask_bytes
-            || pixel_count != dispatch.mask_bytes
-            || CheckedDims::new(width, height, 4)?.total_bytes() != dispatch.output_bytes
-            || dispatch.output_transfer_bytes > u64::from(buffers.capacity) * 4
-        {
-            return Err(PilError::InternalError(
-                "GPU native RGB PutAlphaData layout mismatch".into(),
-            ));
-        }
+        let (width, height) =
+            validate_native_rgb_put_alpha_data_layout(rgb, alpha, dispatch, buffers.capacity)?;
 
         buffers.upload_native_channel_bytes(&self.queue, width, height, 3, rgb.as_raw())?;
         buffers.img3_arena.ensure_capacity(

@@ -95,14 +95,16 @@ impl<'py> PythonDrawTextRouteCallbacks<'py> {
     fn native_coordinate(&self, value: &Bound<'py, PyAny>) -> PyResult<bool> {
         if self.exact_builtin_type::<PyFloat>(value) {
             let coordinate = value.extract::<f64>()?.trunc();
-            return Ok(coordinate.is_finite()
-                && (i32::MIN as f64..=i32::MAX as f64).contains(&coordinate));
+            return Ok(
+                coordinate.is_finite() && (i32::MIN as f64..=i32::MAX as f64).contains(&coordinate)
+            );
         }
         if self.exact_builtin_type::<PyInt>(value) {
             return match value.extract::<i64>() {
-                Ok(value) => Ok((-9_007_199_254_740_992..=9_007_199_254_740_992)
-                    .contains(&value)
-                    && i32::try_from(value).is_ok()),
+                Ok(value) => Ok(
+                    (-9_007_199_254_740_992..=9_007_199_254_740_992).contains(&value)
+                        && i32::try_from(value).is_ok(),
+                ),
                 Err(_) => Ok(false),
             };
         }
@@ -125,11 +127,7 @@ impl<'py> PythonDrawTextRouteCallbacks<'py> {
         if !font_is_builtin {
             return Ok(false);
         }
-        Ok(self
-            .font
-            .getattr("_rust_font")?
-            .cast::<PyFont>()
-            .is_ok())
+        Ok(self.font.getattr("_rust_font")?.cast::<PyFont>().is_ok())
     }
 
     fn default_font_mode(&self) -> PyResult<bool> {
@@ -142,7 +140,9 @@ impl<'py> PythonDrawTextRouteCallbacks<'py> {
         if !self.exact_builtin_type::<PyString>(&fontmode) {
             return Ok(false);
         }
-        let expected = pillow_rs::draw_text_bbox_font_mode(self.draw_mode, false);
+        let expected = pillow_rs::draw_text_bbox_font_mode(self.draw_mode, false)
+            .pillow_name()
+            .expect("font mask mode is a Pillow raster identity");
         fontmode
             .rich_compare(PyString::new(self.py, expected), CompareOp::Eq)?
             .is_truthy()
@@ -220,16 +220,13 @@ impl DrawTextRouteCallbacks for PythonDrawTextRouteCallbacks<'_> {
             }
             DrawTextRouteCheck::ExactFreeTypeFont => {
                 if self.imagefont_module.is_none() {
-                    self.imagefont_module =
-                        Some(PyModule::import(self.py, "pillow_rs.imagefont")?);
+                    self.imagefont_module = Some(PyModule::import(self.py, "pillow_rs.imagefont")?);
                 }
                 let module = Self::module(self.imagefont_module.as_ref(), "ImageFont module")?;
                 let font_type = module.getattr("FreeTypeFont")?;
                 Ok(self.font.get_type().is(&font_type))
             }
-            DrawTextRouteCheck::BuiltinTextAndFontMethods => {
-                self.builtin_text_and_font_methods()
-            }
+            DrawTextRouteCheck::BuiltinTextAndFontMethods => self.builtin_text_and_font_methods(),
             DrawTextRouteCheck::DefaultFontMode => self.default_font_mode(),
             DrawTextRouteCheck::ExactIntegerSpacing => {
                 let spacing = self.image_text.getattr("spacing")?;
@@ -237,15 +234,15 @@ impl DrawTextRouteCallbacks for PythonDrawTextRouteCallbacks<'_> {
                 self.spacing = Some(spacing);
                 Ok(exact_integer)
             }
-            DrawTextRouteCheck::SpacingFitsNativeRange => {
-                Ok(matches!(self.spacing()?.extract::<i64>(), Ok(value) if (-(1_i64 << 31)..(1_i64 << 31)).contains(&value)))
-            }
+            DrawTextRouteCheck::SpacingFitsNativeRange => Ok(
+                matches!(self.spacing()?.extract::<i64>(), Ok(value) if (-(1_i64 << 31)..(1_i64 << 31)).contains(&value)),
+            ),
             DrawTextRouteCheck::ExactIntegerStrokeWidth => {
                 Ok(self.exact_builtin_type::<PyInt>(&self.stroke_width))
             }
-            DrawTextRouteCheck::StrokeWidthFitsNativeRange => {
-                Ok(matches!(self.stroke_width.extract::<i64>(), Ok(value) if (-(1_i64 << 24)..=(1_i64 << 24)).contains(&value)))
-            }
+            DrawTextRouteCheck::StrokeWidthFitsNativeRange => Ok(
+                matches!(self.stroke_width.extract::<i64>(), Ok(value) if (-(1_i64 << 24)..=(1_i64 << 24)).contains(&value)),
+            ),
             DrawTextRouteCheck::ExactEmbeddedColorBoolean => {
                 Ok(self.exact_builtin_type::<PyBool>(&self.embedded_color))
             }

@@ -1,7 +1,7 @@
 //! CMYK wasm_simd128 strategy with validated native storage.
 
-use super::super::default::grayscale_impl as scalar;
 use super::super::super::helpers::cmyk;
+use super::super::default::grayscale_impl as scalar;
 
 pub(crate) type Kernel<'a> = scalar::Kernel<'a>;
 

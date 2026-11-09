@@ -3,7 +3,7 @@
 use crate::checked_dims::CheckedDims;
 use crate::compute::pool_cpu::ops::rotate::helpers::geometry::rotate_geometry;
 use crate::compute::pool_cpu::ops::rotate::helpers::vector_interpolation::{
-    self, RotateSample, LANES,
+    self, LANES, RotateSample,
 };
 use crate::compute::pool_cpu::ops::rotate::ops::RotateRequest;
 use crate::error::PilError;

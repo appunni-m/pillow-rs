@@ -1,7 +1,6 @@
-
-use crate::raster::GenericImageView;
 use super::super::DrawLayout;
 use crate::error::PilError;
+use crate::raster::GenericImageView;
 use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{DynamicImage, Mode};
 
@@ -18,11 +17,7 @@ pub(super) struct SimdDrawSpanWriter {
 }
 
 impl SimdDrawSpanWriter {
-    pub(super) fn new(
-        image: &DynamicImage,
-        layout: DrawLayout,
-        alpha_blend_rgb: bool,
-    ) -> Self {
+    pub(super) fn new(image: &DynamicImage, layout: DrawLayout, alpha_blend_rgb: bool) -> Self {
         let (image_width, image_height) = image.dimensions();
         Self {
             output: image.as_bytes().to_vec(),
@@ -78,7 +73,9 @@ impl SimdDrawSpanWriter {
             self.image_height,
             self.output,
         )
-        .ok_or_else(|| PilError::InternalError("SIMD Draw output dimensions were invalid".into()))?;
+        .ok_or_else(|| {
+            PilError::InternalError("SIMD Draw output dimensions were invalid".into())
+        })?;
         if !image.replace_hidden_pixel_lanes(self.hidden_lanes) {
             return Err(PilError::InternalError(
                 "SIMD Draw hidden pixel lane extent did not match its image".into(),

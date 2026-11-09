@@ -1,13 +1,12 @@
-use super::super::{GuardAssessment, PixelWriteRunFacts, RequestFacts, StrategyGuard, StrategyInputs};
+use super::super::{
+    GuardAssessment, PixelWriteRunFacts, RequestFacts, StrategyGuard, StrategyInputs,
+};
 use super::{checked_native_bytes_guard, native_bytes_guard};
 use crate::compute::registry::support::PUT_ALPHA_DATA_MASK_MODES;
 use crate::pipeline::TransposeMethod;
 use crate::raster::Mode;
 
-pub(crate) fn alpha_composite_vector_guard(
-    input: StrategyInputs,
-    channels: u8,
-) -> GuardAssessment {
+pub(crate) fn alpha_composite_vector_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     if channels != 2 && channels != 4 {
         return GuardAssessment::Ineligible;
     }
@@ -50,9 +49,13 @@ pub(crate) fn paste_l_mask_neon_guard(
         return GuardAssessment::Ineligible;
     }
     let (source, mask, position, region, mask_alpha) = match input.request {
-        RequestFacts::Paste { source, mask, position, region, mask_alpha } => {
-            (source, mask, position, region, mask_alpha)
-        }
+        RequestFacts::Paste {
+            source,
+            mask,
+            position,
+            region,
+            mask_alpha,
+        } => (source, mask, position, region, mask_alpha),
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
         _ => return GuardAssessment::Ineligible,
     };
@@ -103,8 +106,14 @@ fn clipped_paste_size(
     let destination_left = position.0.max(0).min(i64::from(destination.0)) as u32;
     let destination_top = position.1.max(0).min(i64::from(destination.1)) as u32;
     (
-        region.0.saturating_sub(source_left).min(destination.0.saturating_sub(destination_left)),
-        region.1.saturating_sub(source_top).min(destination.1.saturating_sub(destination_top)),
+        region
+            .0
+            .saturating_sub(source_left)
+            .min(destination.0.saturating_sub(destination_left)),
+        region
+            .1
+            .saturating_sub(source_top)
+            .min(destination.1.saturating_sub(destination_top)),
     )
 }
 
@@ -123,7 +132,10 @@ pub(crate) fn merge_rgb_interleave_guard(input: StrategyInputs) -> GuardAssessme
             GuardAssessment::Ineligible
         };
     };
-    if !matches!(first_mode, Mode::ImageLuma8 | Mode::ImagePalette8) {
+    if !matches!(
+        first_mode,
+        Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8
+    ) {
         return GuardAssessment::Ineligible;
     }
     let Some(pixels) = (input.width as usize).checked_mul(input.height as usize) else {
@@ -163,7 +175,10 @@ pub(crate) fn merge_native_interleave_guard(
     };
     if requested_mode != target_mode
         || band_count != usize::from(channels)
-        || !matches!(first_mode, Mode::ImageLuma8 | Mode::ImagePalette8)
+        || !matches!(
+            first_mode,
+            Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8
+        )
         || !remaining_modes_are_luma
         || !dimensions_match
     {
@@ -188,9 +203,7 @@ pub(crate) fn blend_native_vector_guard(
         return GuardAssessment::Ineligible;
     }
     let (other, alpha) = match input.request {
-        RequestFacts::BlendInputs { other, alpha_bits } => {
-            (other, f64::from_bits(alpha_bits))
-        }
+        RequestFacts::BlendInputs { other, alpha_bits } => (other, f64::from_bits(alpha_bits)),
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
         _ => return GuardAssessment::Ineligible,
     };
@@ -230,9 +243,12 @@ pub(crate) fn composite_native_byte_vector_guard(
         return GuardAssessment::Ineligible;
     }
     let (source_mode, destination, mask) = match input.request {
-        RequestFacts::CompositeInputs { source_mode, destination, mask, .. } => {
-            (source_mode, destination, mask)
-        }
+        RequestFacts::CompositeInputs {
+            source_mode,
+            destination,
+            mask,
+            ..
+        } => (source_mode, destination, mask),
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
         _ => return GuardAssessment::Ineligible,
     };
@@ -267,9 +283,7 @@ pub(crate) fn composite_native_byte_vector_guard(
     };
     match (input.byte_len, destination.byte_len, mask.byte_len) {
         (Some(source), Some(destination), Some(mask))
-            if source == source_bytes
-                && destination == destination_bytes
-                && mask == mask_bytes =>
+            if source == source_bytes && destination == destination_bytes && mask == mask_bytes =>
         {
             GuardAssessment::Satisfied
         }
@@ -361,10 +375,7 @@ pub(crate) fn put_alpha_bytes_guard(
     checked_native_bytes_guard(input, channels)
 }
 
-pub(crate) fn extract_band_bytes_guard(
-    input: StrategyInputs,
-    channels: u8,
-) -> GuardAssessment {
+pub(crate) fn extract_band_bytes_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     let layout = checked_native_bytes_guard(input, channels);
     if matches!(layout, GuardAssessment::Ineligible) {
         return GuardAssessment::Ineligible;
@@ -392,10 +403,7 @@ pub(crate) fn put_data_native_guard(
     }
 }
 
-pub(crate) fn effect_spread_bytes_guard(
-    input: StrategyInputs,
-    channels: u8,
-) -> GuardAssessment {
+pub(crate) fn effect_spread_bytes_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
     match input.request {
         // The archived SIMD adapter admitted distance one. Its selected
         // architecture advances the same process RNG and returns the native
@@ -416,7 +424,10 @@ pub(crate) fn effect_noise_vector_guard(input: StrategyInputs) -> GuardAssessmen
     if !sigma.is_finite() || input.width == 0 || input.height == 0 {
         return GuardAssessment::Ineligible;
     }
-    if (input.width as usize).checked_mul(input.height as usize).is_some() {
+    if (input.width as usize)
+        .checked_mul(input.height as usize)
+        .is_some()
+    {
         GuardAssessment::Satisfied
     } else {
         GuardAssessment::Ineligible
@@ -466,8 +477,16 @@ pub(crate) fn expand_vector_guard(input: StrategyInputs, channels: u8) -> GuardA
     }
 }
 
-pub(crate) fn alpha_mask_guard(input: StrategyInputs, channels: u8, minimum_pixels: usize) -> GuardAssessment {
-    let source = StrategyGuard::PutAlphaBytes { channels, minimum_pixels }.assess(input);
+pub(crate) fn alpha_mask_guard(
+    input: StrategyInputs,
+    channels: u8,
+    minimum_pixels: usize,
+) -> GuardAssessment {
+    let source = StrategyGuard::PutAlphaBytes {
+        channels,
+        minimum_pixels,
+    }
+    .assess(input);
     if matches!(source, GuardAssessment::Ineligible) {
         return source;
     }
@@ -535,13 +554,10 @@ fn native_transpose_storage_guard(
     channels: u8,
     allow_empty: bool,
 ) -> GuardAssessment {
-    let expected = crate::checked_dims::CheckedDims::new_allow_empty(
-        input.width,
-        input.height,
-        channels,
-    )
-    .ok()
-    .map(|dimensions| dimensions.total_bytes());
+    let expected =
+        crate::checked_dims::CheckedDims::new_allow_empty(input.width, input.height, channels)
+            .ok()
+            .map(|dimensions| dimensions.total_bytes());
     match (expected, input.byte_len) {
         (None, _) => GuardAssessment::Ineligible,
         (Some(0), _) if !allow_empty => GuardAssessment::Ineligible,
@@ -557,9 +573,12 @@ fn native_transpose_storage_guard(
 pub(crate) fn color3dlut_guard(input: StrategyInputs, source_channels: u8) -> GuardAssessment {
     let (target_mode, channels, size, table_len) = match input.request {
         RequestFacts::Unspecified => return GuardAssessment::Deferred,
-        RequestFacts::Color3DLut { target_mode, channels, size, table_len } => {
-            (target_mode, channels, size, table_len)
-        }
+        RequestFacts::Color3DLut {
+            target_mode,
+            channels,
+            size,
+            table_len,
+        } => (target_mode, channels, size, table_len),
         _ => return GuardAssessment::Ineligible,
     };
     let target_channels = match target_mode {
@@ -585,8 +604,9 @@ pub(crate) fn color3dlut_guard(input: StrategyInputs, source_channels: u8) -> Gu
     let pixels = (input.width as usize).checked_mul(input.height as usize);
     let expected_bytes = pixels.and_then(|count| count.checked_mul(usize::from(source_channels)));
     match (pixels, expected_bytes, input.byte_len) {
-        (Some(pixels), Some(expected), Some(actual))
-            if pixels >= 8 && expected == actual => GuardAssessment::Satisfied,
+        (Some(pixels), Some(expected), Some(actual)) if pixels >= 8 && expected == actual => {
+            GuardAssessment::Satisfied
+        }
         (Some(pixels), _, _) if pixels < 8 => GuardAssessment::Ineligible,
         (Some(_), Some(_), None) => GuardAssessment::Deferred,
         _ => GuardAssessment::Ineligible,
@@ -715,11 +735,7 @@ pub(crate) fn native_crop_bytes_guard(input: StrategyInputs, channels: u8) -> Gu
         } => (left, top, width, height, source_width, source_height),
         _ => return GuardAssessment::Ineligible,
     };
-    if width == 0
-        || height == 0
-        || source_width != input.width
-        || source_height != input.height
-    {
+    if width == 0 || height == 0 || source_width != input.width || source_height != input.height {
         return GuardAssessment::Ineligible;
     }
     let (Some(right), Some(bottom)) = (left.checked_add(width), top.checked_add(height)) else {
@@ -741,7 +757,10 @@ pub(crate) fn native_crop_bytes_guard(input: StrategyInputs, channels: u8) -> Gu
     }
 }
 
-pub(crate) fn native_crop_border_bytes_guard(input: StrategyInputs, channels: u8) -> GuardAssessment {
+pub(crate) fn native_crop_border_bytes_guard(
+    input: StrategyInputs,
+    channels: u8,
+) -> GuardAssessment {
     if channels == 0 {
         return GuardAssessment::Ineligible;
     }
@@ -812,13 +831,13 @@ pub(crate) fn pixel_span_guard(input: StrategyInputs, channels: u8) -> GuardAsse
         | RequestFacts::ChopsBinary { .. }
         | RequestFacts::CropBorder { .. }
         | RequestFacts::Crop { .. }
-        | RequestFacts::Expand { .. } =>
-            return GuardAssessment::Ineligible,
+        | RequestFacts::Expand { .. } => return GuardAssessment::Ineligible,
     };
     if x >= input.width || y >= input.height {
         return GuardAssessment::Ineligible;
     }
-    let expected = (input.width as usize).checked_mul(input.height as usize)
+    let expected = (input.width as usize)
+        .checked_mul(input.height as usize)
         .and_then(|pixels| pixels.checked_mul(usize::from(channels)));
     match (expected, input.byte_len) {
         (None, _) => GuardAssessment::Ineligible,
@@ -836,7 +855,7 @@ pub(crate) fn pixel_write_run_guard(input: StrategyInputs) -> GuardAssessment {
                 return GuardAssessment::Ineligible;
             }
             writes
-        },
+        }
         RequestFacts::Draw { .. }
         | RequestFacts::Quantize { .. }
         | RequestFacts::Transform { .. }
@@ -883,10 +902,10 @@ pub(crate) fn pixel_write_run_guard(input: StrategyInputs) -> GuardAssessment {
         | RequestFacts::ChopsBinary { .. }
         | RequestFacts::CropBorder { .. }
         | RequestFacts::Crop { .. }
-        | RequestFacts::Expand { .. } =>
-            return GuardAssessment::Ineligible,
+        | RequestFacts::Expand { .. } => return GuardAssessment::Ineligible,
     };
-    let expected = (input.width as usize).checked_mul(input.height as usize)
+    let expected = (input.width as usize)
+        .checked_mul(input.height as usize)
         .and_then(|pixels| pixels.checked_mul(4));
     match (expected, input.byte_len) {
         (None, _) | (Some(0..=15), _) => GuardAssessment::Ineligible,
@@ -896,4 +915,3 @@ pub(crate) fn pixel_write_run_guard(input: StrategyInputs) -> GuardAssessment {
         (Some(_), Some(_)) => GuardAssessment::Satisfied,
     }
 }
-

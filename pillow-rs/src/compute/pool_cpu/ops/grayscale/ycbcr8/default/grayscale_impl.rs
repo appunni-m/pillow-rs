@@ -1,11 +1,13 @@
 //! Native Y extraction with the preserved portable packed-word loop.
 
 use crate::checked_dims::CheckedDims;
-use crate::raster::{GrayImage, RgbImage, Luma};
+use crate::raster::{GrayImage, Luma, RgbImage};
 
 pub(crate) type Input = RgbImage;
 pub(crate) type Kernel<'a> = &'a Input;
-pub(crate) fn prepare(input: &Input) -> Kernel<'_> { input }
+pub(crate) fn prepare(input: &Input) -> Kernel<'_> {
+    input
+}
 pub(crate) fn execute(input: Kernel<'_>) -> GrayImage {
     native_ycbcr_luma(input).unwrap_or_else(|| {
         let source = input.clone();
@@ -72,4 +74,3 @@ fn native_ycbcr_luma_packed_blocks(source: &[u8], pixels: usize) -> Vec<u8> {
     debug_assert_eq!(output.len(), pixels);
     output
 }
-

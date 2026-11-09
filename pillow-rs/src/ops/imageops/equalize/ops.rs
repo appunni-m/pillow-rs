@@ -29,6 +29,18 @@ pub trait ImageOpsEqualizeCallbacks {
     /// Host or core error, translated at the binding boundary.
     type Error: From<PilError>;
 
+    /// Evaluate Pillow's initial `image.mode == "P"` wrapper branch.
+    fn image_mode_is_palette(&mut self, image: &Self::Image) -> Result<bool, Self::Error>;
+    /// Evaluate the post-LUT `_lut` `image.mode == "P"` branch.
+    fn lut_mode_is_palette(&mut self, image: &Self::Image) -> Result<bool, Self::Error>;
+    /// Evaluate the post-LUT `_lut` membership check against L and RGB.
+    fn lut_mode_is_luma_or_rgb(&mut self, image: &Self::Image) -> Result<bool, Self::Error>;
+    /// Evaluate the post-LUT `_lut` `image.mode == "RGB"` branch.
+    fn lut_mode_is_rgb(&mut self, image: &Self::Image) -> Result<bool, Self::Error>;
+    /// Return Pillow's `_lut` `NotImplementedError` for mode P.
+    fn palette_mode_error(&mut self) -> Result<Self::Error, Self::Error>;
+    /// Return Pillow's unsupported-mode error for an unrecognized wrapper mode.
+    fn unsupported_mode_error(&mut self, image: &Self::Image) -> Result<Self::Error, Self::Error>;
     /// Convert the palette wrapper to RGB before histogram collection.
     fn convert_to_rgb(&mut self, image: &Self::Image) -> Result<Self::Image, Self::Error>;
     /// Call the current wrapper's public histogram method.
@@ -61,10 +73,7 @@ pub trait ImageOpsEqualizeCallbacks {
         start: &Self::Value,
     ) -> Result<Self::Sequence, Self::Error>;
     /// Iterate one source channel using its host iteration protocol.
-    fn channel_values(
-        &mut self,
-        channel: &Self::Sequence,
-    ) -> Result<Self::Iterator, Self::Error>;
+    fn channel_values(&mut self, channel: &Self::Sequence) -> Result<Self::Iterator, Self::Error>;
     /// Fetch the next host value from a channel iterator.
     fn next_channel_value(
         &mut self,
@@ -81,25 +90,14 @@ pub trait ImageOpsEqualizeCallbacks {
         value: &Self::Value,
     ) -> Result<(), Self::Error>;
     /// Return `len(nonzero_values)` through the host namespace.
-    fn nonzero_value_count(
-        &mut self,
-        values: &Self::Sequence,
-    ) -> Result<Self::Value, Self::Error>;
+    fn nonzero_value_count(&mut self, values: &Self::Sequence) -> Result<Self::Value, Self::Error>;
     /// Evaluate `len(nonzero_values) <= 1` using host comparison semantics.
-    fn nonzero_value_count_at_most_one(
-        &mut self,
-        count: &Self::Value,
-    ) -> Result<bool, Self::Error>;
+    fn nonzero_value_count_at_most_one(&mut self, count: &Self::Value)
+    -> Result<bool, Self::Error>;
     /// Evaluate the host's `sum(nonzero_values)` call.
-    fn sum_nonzero_values(
-        &mut self,
-        values: &Self::Sequence,
-    ) -> Result<Self::Value, Self::Error>;
+    fn sum_nonzero_values(&mut self, values: &Self::Sequence) -> Result<Self::Value, Self::Error>;
     /// Evaluate `nonzero_values[-1]` through the host sequence protocol.
-    fn last_nonzero_value(
-        &mut self,
-        values: &Self::Sequence,
-    ) -> Result<Self::Value, Self::Error>;
+    fn last_nonzero_value(&mut self, values: &Self::Sequence) -> Result<Self::Value, Self::Error>;
     /// Evaluate `left - right` through the host numeric protocol.
     fn subtract_values(
         &mut self,
@@ -147,38 +145,55 @@ pub trait ImageOpsEqualizeCallbacks {
     fn extend_identity_lut(&mut self, lut: &mut Self::Lut) -> Result<(), Self::Error>;
     /// Wrap the native Rust LUT for the host `Image.point` adapter.
     fn native_lut(&mut self, lut: Vec<u8>) -> Result<Self::Lut, Self::Error>;
-    /// Read the current exact mode after histogram and LUT callbacks.
-    fn mode(&mut self, image: &Self::Image) -> Result<Mode, Self::Error>;
     /// Apply the LUT through the current wrapper's public point method.
-    fn point(&mut self, image: &Self::Image, lut: Self::Lut)
-        -> Result<Self::Output, Self::Error>;
+    fn point(&mut self, image: &Self::Image, lut: Self::Lut) -> Result<Self::Output, Self::Error>;
 }
 
-/// Runs the ImageOps Equalize wrapper flow with a typed source mode.
+/// Runs Pillow's ImageOps Equalize wrapper flow through host callbacks.
 ///
 /// The operation support output rule selects the palette-to-RGB conversion
-/// before the public histogram callback. Other modes retain the current image
-/// and defer mode errors until after LUT construction.
-// TODO(pillow-rs#3ptb): freeze wrapper output, mask fault order, and exact-mode
-// admission after public histogram callbacks in the CPU parity matrix.
+/// before the public histogram callback. After building the LUT, separate
+/// wrapper-mode callbacks reproduce Pillow's `_lut` checks before public `point`.
+// TODO(pillow-rs#3ptb): freeze wrapper output, mask fault order, mode-property
+// changes across `_lut` checks, formatting faults, and terminal selection
+// receipts.
 #[doc(hidden)]
 pub fn equalize_with_callbacks<C: ImageOpsEqualizeCallbacks>(
-    source_mode: Mode,
     callbacks: &mut C,
     image: C::Image,
     mask: C::Mask,
 ) -> Result<C::Output, C::Error> {
-    let image = match OperationId::Equalize.support().for_mode(source_mode) {
-        ModeSupport::Supported {
-            output: OutputModeRule::Fixed(Mode::ImageRgb8),
-            ..
-        } => callbacks.convert_to_rgb(&image)?,
-        _ => image,
+    let image = if callbacks.image_mode_is_palette(&image)?
+        && matches!(
+            OperationId::Equalize
+                .support()
+                .for_mode(Mode::ImagePalette8),
+            ModeSupport::Supported {
+                output: OutputModeRule::Fixed(Mode::ImageRgb8),
+                ..
+            }
+        ) {
+        callbacks.convert_to_rgb(&image)?
+    } else {
+        image
     };
     let histogram = callbacks.histogram(&image, &mask)?;
     let lut = equalize_lut_with_callbacks(callbacks, &histogram)?;
-    let mode = callbacks.mode(&image)?;
-    OperationId::Equalize.support().for_mode(mode).validate_mode()?;
+    if callbacks.lut_mode_is_palette(&image)? {
+        return Err(callbacks.palette_mode_error()?);
+    }
+    if !callbacks.lut_mode_is_luma_or_rgb(&image)? {
+        return Err(callbacks.unsupported_mode_error(&image)?);
+    }
+    let mode = if callbacks.lut_mode_is_rgb(&image)? {
+        Mode::ImageRgb8
+    } else {
+        Mode::ImageLuma8
+    };
+    OperationId::Equalize
+        .support()
+        .for_mode(mode)
+        .validate_mode()?;
     callbacks.point(&image, lut)
 }
 
@@ -187,8 +202,10 @@ fn equalize_lut_with_callbacks<C: ImageOpsEqualizeCallbacks>(
     histogram: &C::Histogram,
 ) -> Result<C::Lut, C::Error> {
     if let Some(native_histogram) = callbacks.native_histogram(histogram)?
-        && let Some(lut) = crate::compute::pool_cpu::ops::imageops::helpers::histogram::
-            equalize_lut_from_histogram(&native_histogram)
+        && let Some(lut) =
+            crate::compute::pool_cpu::ops::imageops::helpers::histogram::equalize_lut_from_histogram(
+                &native_histogram,
+            )
     {
         return callbacks.native_lut(lut);
     }
@@ -243,21 +260,26 @@ fn equalize_lut_with_callbacks<C: ImageOpsEqualizeCallbacks>(
 // output, and fallback receipts in the frozen CPU matrix.
 pub fn equalize(image: &Image) -> Result<Image, PilError> {
     let mode = image.mode_identity()?;
-    OperationId::Equalize.support().for_mode(mode).validate_mode()?;
+    OperationId::Equalize
+        .support()
+        .for_mode(mode)
+        .validate_mode()?;
     Ok(Image::push_op(image, PipelineOp::Equalize))
 }
 
 /// Builds the Equalize lookup table from counts collected by a host wrapper.
 #[doc(hidden)]
-pub fn equalize_lut_from_histogram(
-    image: &Image,
-    histogram: &[u32],
-) -> Result<Vec<u8>, PilError> {
-    let lut = crate::compute::pool_cpu::ops::imageops::helpers::histogram::
-        equalize_lut_from_histogram(histogram)
+pub fn equalize_lut_from_histogram(image: &Image, histogram: &[u32]) -> Result<Vec<u8>, PilError> {
+    let lut =
+        crate::compute::pool_cpu::ops::imageops::helpers::histogram::equalize_lut_from_histogram(
+            histogram,
+        )
         .ok_or_else(|| PilError::ValueError("invalid Equalize histogram length".into()))?;
     let mode = image.mode_identity()?;
-    OperationId::Equalize.support().for_mode(mode).validate_mode()?;
+    OperationId::Equalize
+        .support()
+        .for_mode(mode)
+        .validate_mode()?;
     Ok(lut)
 }
 
@@ -271,7 +293,10 @@ pub fn equalize_with_mask(image: &Image, mask: ImageOpsMask) -> Result<Image, Pi
         ImageOpsMask::Image(mask) => {
             validate_imageops_mask(image, ImageOpsMask::Image(mask.clone()))?;
             let mode = image.mode_identity()?;
-            OperationId::Equalize.support().for_mode(mode).validate_mode()?;
+            OperationId::Equalize
+                .support()
+                .for_mode(mode)
+                .validate_mode()?;
             Ok(Image::push_op(
                 image,
                 PipelineOp::EqualizeMasked {

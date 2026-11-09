@@ -342,14 +342,15 @@ macro_rules! declare_native_byte_transpose_mode {
 
 macro_rules! declare_native_luma16_transpose_mode {
     ($mode:ident, $input:ty, $flip_impl:path, $mirror_impl:path, $transpose_impl:path) => {
-        const FLIP_ARCHITECTURES: &[
-            crate::compute::registry::support::ImplementationSupport
-        ] = &[
+        const FLIP_ARCHITECTURES: &[crate::compute::registry::support::ImplementationSupport] = &[
             $crate::compute::registry::support::ImplementationSupport::cpu(
                 crate::compute::registry::support::OperationId::Flip,
                 crate::raster::Mode::$mode,
                 crate::compute::Architecture::Sse2,
-                cfg!(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2")),
+                cfg!(all(
+                    any(target_arch = "x86", target_arch = "x86_64"),
+                    target_feature = "sse2"
+                )),
                 &[crate::compute::Architecture::Sse2],
                 crate::compute::registry::support::StrategyGuard::ExactNativeRows { channels: 2 },
             ),
@@ -370,14 +371,15 @@ macro_rules! declare_native_luma16_transpose_mode {
                 crate::compute::registry::support::StrategyGuard::ExactNativeRows { channels: 2 },
             ),
         ];
-        const MIRROR_ARCHITECTURES: &[
-            crate::compute::registry::support::ImplementationSupport
-        ] = &[
+        const MIRROR_ARCHITECTURES: &[crate::compute::registry::support::ImplementationSupport] = &[
             $crate::compute::registry::support::ImplementationSupport::cpu(
                 crate::compute::registry::support::OperationId::Mirror,
                 crate::raster::Mode::$mode,
                 crate::compute::Architecture::Sse2,
-                cfg!(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2")),
+                cfg!(all(
+                    any(target_arch = "x86", target_arch = "x86_64"),
+                    target_feature = "sse2"
+                )),
                 &[crate::compute::Architecture::Sse2],
                 crate::compute::registry::support::StrategyGuard::ExactNativeRows { channels: 2 },
             ),
@@ -414,14 +416,16 @@ macro_rules! declare_native_luma16_transpose_mode {
                 &[],
                 MIRROR_ARCHITECTURES,
             );
-        const TRANSPOSE_ARCHITECTURES: &[
-            crate::compute::registry::support::ImplementationSupport
-        ] = &[
+        const TRANSPOSE_ARCHITECTURES:
+            &[crate::compute::registry::support::ImplementationSupport] = &[
             $crate::compute::registry::support::ImplementationSupport::cpu(
                 $crate::compute::registry::support::OperationId::Transpose,
                 crate::raster::Mode::$mode,
                 crate::compute::Architecture::Sse2,
-                cfg!(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2")),
+                cfg!(all(
+                    any(target_arch = "x86", target_arch = "x86_64"),
+                    target_feature = "sse2"
+                )),
                 &[crate::compute::Architecture::Sse2],
                 crate::compute::registry::support::StrategyGuard::TransposeNativeBytes {
                     channels: 2,
@@ -468,7 +472,10 @@ macro_rules! declare_native_luma16_transpose_mode {
 
         enum FlipArchitecture<'a> {
             Default(&'a $input),
-            #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
+            #[cfg(all(
+                any(target_arch = "x86", target_arch = "x86_64"),
+                target_feature = "sse2"
+            ))]
             Sse2(&'a $input),
             #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
             Neon(&'a $input),
@@ -477,7 +484,10 @@ macro_rules! declare_native_luma16_transpose_mode {
         }
         enum MirrorArchitecture<'a> {
             Default(&'a $input),
-            #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
+            #[cfg(all(
+                any(target_arch = "x86", target_arch = "x86_64"),
+                target_feature = "sse2"
+            ))]
             Sse2(&'a $input),
             #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
             Neon(&'a $input),
@@ -486,7 +496,10 @@ macro_rules! declare_native_luma16_transpose_mode {
         }
         enum TransposeArchitecture<'a> {
             Default(&'a $input, crate::pipeline::TransposeMethod),
-            #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
+            #[cfg(all(
+                any(target_arch = "x86", target_arch = "x86_64"),
+                target_feature = "sse2"
+            ))]
             Sse2(&'a $input, crate::pipeline::TransposeMethod),
             #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
             Neon(&'a $input, crate::pipeline::TransposeMethod),
@@ -516,7 +529,10 @@ macro_rules! declare_native_luma16_transpose_mode {
                 width: image.width(),
                 height: image.height(),
                 byte_len: Some(
-                    image.as_raw().len().saturating_mul(std::mem::size_of::<u16>()),
+                    image
+                        .as_raw()
+                        .len()
+                        .saturating_mul(std::mem::size_of::<u16>()),
                 ),
                 palette: crate::compute::registry::support::PaletteKnowledge::Unknown,
                 request: crate::compute::registry::support::RequestFacts::Unspecified,
@@ -530,15 +546,20 @@ macro_rules! declare_native_luma16_transpose_mode {
             let selection = FLIP_SUPPORT.select(ctx, native_luma16_facts(image))?;
             let implementation = match selection.implementation.architecture {
                 crate::compute::Architecture::Default => FlipArchitecture::Default(image),
-                #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
+                #[cfg(all(
+                    any(target_arch = "x86", target_arch = "x86_64"),
+                    target_feature = "sse2"
+                ))]
                 crate::compute::Architecture::Sse2 => FlipArchitecture::Sse2(image),
                 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
                 crate::compute::Architecture::Neon => FlipArchitecture::Neon(image),
                 #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
                 crate::compute::Architecture::WasmSimd128 => FlipArchitecture::WasmSimd128(image),
-                _ => return Err(crate::error::PilError::InternalError(
-                    "unbound I;16 flip architecture strategy".into(),
-                )),
+                _ => {
+                    return Err(crate::error::PilError::InternalError(
+                        "unbound I;16 flip architecture strategy".into(),
+                    ))
+                }
             };
             Ok(FlipStrategy {
                 prepared: crate::compute::pool_cpu::helpers::execution::prepared::Prepared::new(
@@ -555,15 +576,20 @@ macro_rules! declare_native_luma16_transpose_mode {
             let selection = MIRROR_SUPPORT.select(ctx, native_luma16_facts(image))?;
             let implementation = match selection.implementation.architecture {
                 crate::compute::Architecture::Default => MirrorArchitecture::Default(image),
-                #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
+                #[cfg(all(
+                    any(target_arch = "x86", target_arch = "x86_64"),
+                    target_feature = "sse2"
+                ))]
                 crate::compute::Architecture::Sse2 => MirrorArchitecture::Sse2(image),
                 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
                 crate::compute::Architecture::Neon => MirrorArchitecture::Neon(image),
                 #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
                 crate::compute::Architecture::WasmSimd128 => MirrorArchitecture::WasmSimd128(image),
-                _ => return Err(crate::error::PilError::InternalError(
-                    "unbound I;16 mirror architecture strategy".into(),
-                )),
+                _ => {
+                    return Err(crate::error::PilError::InternalError(
+                        "unbound I;16 mirror architecture strategy".into(),
+                    ))
+                }
             };
             Ok(MirrorStrategy {
                 prepared: crate::compute::pool_cpu::helpers::execution::prepared::Prepared::new(
@@ -584,21 +610,22 @@ macro_rules! declare_native_luma16_transpose_mode {
                 crate::compute::Architecture::Default => {
                     TransposeArchitecture::Default(image, *method)
                 }
-                #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
-                crate::compute::Architecture::Sse2 => {
-                    TransposeArchitecture::Sse2(image, *method)
-                }
+                #[cfg(all(
+                    any(target_arch = "x86", target_arch = "x86_64"),
+                    target_feature = "sse2"
+                ))]
+                crate::compute::Architecture::Sse2 => TransposeArchitecture::Sse2(image, *method),
                 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-                crate::compute::Architecture::Neon => {
-                    TransposeArchitecture::Neon(image, *method)
-                }
+                crate::compute::Architecture::Neon => TransposeArchitecture::Neon(image, *method),
                 #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
                 crate::compute::Architecture::WasmSimd128 => {
                     TransposeArchitecture::WasmSimd128(image, *method)
                 }
-                _ => return Err(crate::error::PilError::InternalError(
-                    "unbound I;16 transpose architecture strategy".into(),
-                )),
+                _ => {
+                    return Err(crate::error::PilError::InternalError(
+                        "unbound I;16 transpose architecture strategy".into(),
+                    ))
+                }
             };
             Ok(TransposeStrategy {
                 prepared: crate::compute::pool_cpu::helpers::execution::prepared::Prepared::new(
@@ -618,7 +645,10 @@ macro_rules! declare_native_luma16_transpose_mode {
             pub(crate) fn execute(self) -> crate::raster::DynamicImage {
                 match self.prepared.implementation {
                     FlipArchitecture::Default(image) => $flip_impl(image),
-                    #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
+                    #[cfg(all(
+                        any(target_arch = "x86", target_arch = "x86_64"),
+                        target_feature = "sse2"
+                    ))]
                     FlipArchitecture::Sse2(image) => execute_native_flip(image),
                     #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
                     FlipArchitecture::Neon(image) => execute_native_flip(image),
@@ -638,7 +668,10 @@ macro_rules! declare_native_luma16_transpose_mode {
             pub(crate) fn execute(self) -> crate::raster::DynamicImage {
                 match self.prepared.implementation {
                     MirrorArchitecture::Default(image) => $mirror_impl(image),
-                    #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
+                    #[cfg(all(
+                        any(target_arch = "x86", target_arch = "x86_64"),
+                        target_feature = "sse2"
+                    ))]
                     MirrorArchitecture::Sse2(image) => execute_native_mirror(image),
                     #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
                     MirrorArchitecture::Neon(image) => execute_native_mirror(image),
@@ -659,8 +692,13 @@ macro_rules! declare_native_luma16_transpose_mode {
                 self,
             ) -> Result<crate::raster::DynamicImage, crate::error::PilError> {
                 match self.prepared.implementation {
-                    TransposeArchitecture::Default(image, method) => $transpose_impl(image, &method),
-                    #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
+                    TransposeArchitecture::Default(image, method) => {
+                        $transpose_impl(image, &method)
+                    }
+                    #[cfg(all(
+                        any(target_arch = "x86", target_arch = "x86_64"),
+                        target_feature = "sse2"
+                    ))]
                     TransposeArchitecture::Sse2(image, method) => {
                         super::sse2::execute(image, &method)
                     }
@@ -677,13 +715,18 @@ macro_rules! declare_native_luma16_transpose_mode {
         }
 
         #[cfg(any(
-            all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"),
+            all(
+                any(target_arch = "x86", target_arch = "x86_64"),
+                target_feature = "sse2"
+            ),
             all(target_arch = "aarch64", target_feature = "neon"),
             all(target_arch = "wasm32", target_feature = "simd128")
         ))]
         fn execute_native_flip(image: &$input) -> crate::raster::DynamicImage {
             let Some((output, vector_blocks, scalar_tail)) =
-                $crate::compute::pool_cpu::ops::transpose::helpers::native_luma16::flip_image(image)
+                $crate::compute::pool_cpu::ops::transpose::helpers::native_luma16::flip_image(
+                    image,
+                )
             else {
                 return $flip_impl(image);
             };
@@ -694,13 +737,18 @@ macro_rules! declare_native_luma16_transpose_mode {
         }
 
         #[cfg(any(
-            all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"),
+            all(
+                any(target_arch = "x86", target_arch = "x86_64"),
+                target_feature = "sse2"
+            ),
             all(target_arch = "aarch64", target_feature = "neon"),
             all(target_arch = "wasm32", target_feature = "simd128")
         ))]
         fn execute_native_mirror(image: &$input) -> crate::raster::DynamicImage {
             let Some((output, vector_blocks, scalar_tail)) =
-                $crate::compute::pool_cpu::ops::transpose::helpers::native_luma16::mirror_image(image)
+                $crate::compute::pool_cpu::ops::transpose::helpers::native_luma16::mirror_image(
+                    image,
+                )
             else {
                 return $mirror_impl(image);
             };
@@ -712,6 +760,6 @@ macro_rules! declare_native_luma16_transpose_mode {
     };
 }
 
-pub(crate) use declare_transpose_mode;
 pub(crate) use declare_native_byte_transpose_mode;
 pub(crate) use declare_native_luma16_transpose_mode;
+pub(crate) use declare_transpose_mode;

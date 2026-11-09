@@ -1,4 +1,5 @@
 use crate::error::PilError;
+use crate::raster::Mode;
 
 /// Host values needed to place a custom font mask.
 #[doc(hidden)]
@@ -26,7 +27,7 @@ pub trait DrawTextMaskCallbacks {
         line: &Self::Value,
     ) -> Result<DrawTextMaskPosition<Self::Value>, Self::Error>;
     /// Resolve the selected font-mask mode, preserving host values when needed.
-    fn font_mask_mode(&mut self, default: &str) -> Result<Self::Value, Self::Error>;
+    fn font_mask_mode(&mut self, default: Mode) -> Result<Self::Value, Self::Error>;
     /// Apply Pillow's `mode == "RGBA"` branch to the selected host value.
     fn mode_is_rgba(&mut self, mode: &Self::Value) -> Result<bool, Self::Error>;
     /// Call `font.getmask2` with the requested Pillow arguments.
@@ -69,8 +70,11 @@ pub trait DrawTextMaskCallbacks {
     /// Test whether the mask is already an Image instance.
     fn is_image(&mut self, mask: &Self::Value) -> Result<bool, Self::Error>;
     /// Read `mask.mode`, defaulting to the selected font-mask mode.
-    fn mask_mode(&mut self, mask: &Self::Value, default: &Self::Value)
-    -> Result<Self::Value, Self::Error>;
+    fn mask_mode(
+        &mut self,
+        mask: &Self::Value,
+        default: &Self::Value,
+    ) -> Result<Self::Value, Self::Error>;
     /// Call `mask.tobytes()`.
     fn mask_bytes(&mut self, mask: &Self::Value) -> Result<Self::Value, Self::Error>;
     /// Resolve the host's `Image.frombytes` method before reading mask bytes.
@@ -110,7 +114,7 @@ pub fn draw_custom_font_mask_with_callbacks<C: DrawTextMaskCallbacks>(
     line: &C::Value,
     fill: &C::Value,
     ink: i64,
-    mode: &str,
+    mode: Mode,
 ) -> Result<(), C::Error> {
     let mode = callbacks.font_mask_mode(mode)?;
     let mut position = callbacks.position(line)?;
@@ -145,9 +149,7 @@ fn retrieve_custom_mask<C: DrawTextMaskCallbacks>(
         Err(error) if callbacks.is_attribute_error(&error) => {
             match callbacks.getmask(line, mode, &position.start) {
                 Ok(mask) => Ok(mask),
-                Err(error) if callbacks.is_type_error(&error) => {
-                    callbacks.getmask_text_only(line)
-                }
+                Err(error) if callbacks.is_type_error(&error) => callbacks.getmask_text_only(line),
                 Err(error) => Err(error),
             }
         }
@@ -187,4 +189,3 @@ fn custom_mask_image<C: DrawTextMaskCallbacks>(
     let bytes = callbacks.mask_bytes(mask)?;
     callbacks.image_from_bytes(&from_bytes, &mode, &size, &bytes)
 }
-

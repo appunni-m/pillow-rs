@@ -36,7 +36,10 @@ pub(super) fn apply_reducing_gap(
     }
     // Pillow's integer reducer does not accept 16-bit modes, although its
     // ordinary filtered resampler does.
-    if matches!(mode, Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N) {
+    if matches!(
+        mode,
+        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N
+    ) {
         return Err(PilError::ValueError("image has wrong mode".into()));
     }
     super::validate_resize_box(bounds, source_size)?;

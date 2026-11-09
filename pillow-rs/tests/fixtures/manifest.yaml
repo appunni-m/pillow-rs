@@ -4,7 +4,7 @@ scope:
   mode: full
   inventory:
     authority: scripts/migration_parity_inventory.py
-    revision: sha256:c9a9d982b52cc61f5c313f434b6c1da5a6e6e88bc64632642ee16749e72c2927+inventory-rule@2
+    revision: sha256:35bf53485e95506f328d0c3c9ab22696331739aa48300a373069014f64c33542+inventory-rule@2
     command_id: inventory
 oracles:
 - id: pillow
@@ -18377,7 +18377,7 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.ImageFilter.BoxBlur
-      signature: BoxBlur(radius=2)
+      signature: BoxBlur(radius)
       support:
         status: supported
     requirements:
@@ -19309,7 +19309,7 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.ImageFilter.Kernel
-      signature: Kernel(size=(3, 3), kernel=None, scale=None, offset=0)
+      signature: Kernel(size, kernel, scale=None, offset=0)
       support:
         status: supported
     requirements:
@@ -19755,6 +19755,12 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.ImageFilter.ModeFilter.mode.1
+      dimension: mode
+      description: Public behavior for image mode '1'.
+      lanes:
+      - parity
+      - coverage
     - id: PIL.ImageFilter.ModeFilter.mode.l
       dimension: mode
       description: Public behavior for image mode 'L'.
@@ -19767,6 +19773,24 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.ImageFilter.ModeFilter.mode.la-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'La'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageFilter.ModeFilter.mode.p
+      dimension: mode
+      description: Public behavior for image mode 'P'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageFilter.ModeFilter.mode.pa
+      dimension: mode
+      description: Public behavior for image mode 'PA'.
+      lanes:
+      - parity
+      - coverage
     - id: PIL.ImageFilter.ModeFilter.mode.rgb
       dimension: mode
       description: Public behavior for image mode 'RGB'.
@@ -19776,6 +19800,42 @@ surfaces:
     - id: PIL.ImageFilter.ModeFilter.mode.rgba
       dimension: mode
       description: Public behavior for image mode 'RGBA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageFilter.ModeFilter.mode.rgba-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'RGBa'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageFilter.ModeFilter.mode.rgbx
+      dimension: mode
+      description: Public behavior for image mode 'RGBX'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageFilter.ModeFilter.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageFilter.ModeFilter.mode.ycbcr
+      dimension: mode
+      description: Public behavior for image mode 'YCbCr'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageFilter.ModeFilter.mode.lab
+      dimension: mode
+      description: Public behavior for image mode 'LAB'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageFilter.ModeFilter.mode.hsv
+      dimension: mode
+      description: Public behavior for image mode 'HSV'.
       lanes:
       - parity
       - coverage
@@ -19847,7 +19907,7 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.ImageFilter.RankFilter
-      signature: RankFilter(size=3, rank=0)
+      signature: RankFilter(size, rank)
       support:
         status: supported
     requirements:

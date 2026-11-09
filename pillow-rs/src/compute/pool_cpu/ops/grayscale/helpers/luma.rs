@@ -38,8 +38,15 @@ pub(crate) fn native_rgb<S: Copy + ToGrayByte, const CHANNELS: usize>(
     dimensions: CheckedDims,
 ) -> Result<GrayImage, PilError> {
     let mut output = Vec::with_capacity(dimensions.total_pixels());
-    for pixel in source.chunks_exact(CHANNELS).take(dimensions.total_pixels()) {
-        let rgb = [pixel[0].to_gray_byte(), pixel[1].to_gray_byte(), pixel[2].to_gray_byte()];
+    for pixel in source
+        .chunks_exact(CHANNELS)
+        .take(dimensions.total_pixels())
+    {
+        let rgb = [
+            pixel[0].to_gray_byte(),
+            pixel[1].to_gray_byte(),
+            pixel[2].to_gray_byte(),
+        ];
         output.push(crate::color::grayscale_rgb_pixel(&rgb, 32768));
     }
     finish(width, height, output)
@@ -97,7 +104,19 @@ impl ToGrayByte for f32 {
     }
 }
 
-#[cfg(any(target_arch = "x86_64", all(any(target_arch = "x86", target_arch = "x86_64"), any(target_feature = "sse2", target_feature = "ssse3", target_feature = "avx2")), all(target_arch = "wasm32", target_feature = "simd128"), all(target_arch = "aarch64", target_feature = "neon")))]
+#[cfg(any(
+    target_arch = "x86_64",
+    all(
+        any(target_arch = "x86", target_arch = "x86_64"),
+        any(
+            target_feature = "sse2",
+            target_feature = "ssse3",
+            target_feature = "avx2"
+        )
+    ),
+    all(target_arch = "wasm32", target_feature = "simd128"),
+    all(target_arch = "aarch64", target_feature = "neon")
+))]
 pub(crate) fn vector_output(
     width: u32,
     height: u32,
@@ -107,7 +126,10 @@ pub(crate) fn vector_output(
     let (bytes, blocks, tail) = output;
     crate::compute::record_pipeline_operation_vector_blocks(blocks);
     crate::compute::record_pipeline_operation_scalar_tail(tail);
-    crate::compute::record_pipeline_operation_path(if blocks == 0 { "scalar-control" } else { path });
+    crate::compute::record_pipeline_operation_path(if blocks == 0 {
+        "scalar-control"
+    } else {
+        path
+    });
     finish(width, height, bytes)
 }
-

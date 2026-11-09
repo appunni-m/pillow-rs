@@ -19,172 +19,84 @@ const SSE2_AVAILABLE: bool = cfg!(any(
     all(target_arch = "x86", target_feature = "sse2")
 ));
 
-macro_rules! architecture_strategy {
-    ($mode:expr, $target:ident, $architecture:ident, $available:expr, $requirements:expr) => {
+const fn target_architecture_support(mode: Mode, target: Mode) -> [ImplementationSupport; 3] {
+    [
         ImplementationSupport::cpu(
             OperationId::Convert,
-            $mode,
-            Architecture::$architecture,
-            $available,
-            $requirements,
-            StrategyGuard::ConvertTargetMode(Mode::$target),
-        )
-    };
+            mode,
+            Architecture::Sse2,
+            SSE2_AVAILABLE,
+            &[Architecture::Sse2],
+            StrategyGuard::ConvertTargetMode(target),
+        ),
+        ImplementationSupport::cpu(
+            OperationId::Convert,
+            mode,
+            Architecture::Neon,
+            cfg!(all(target_arch = "aarch64", target_feature = "neon")),
+            &[Architecture::Neon],
+            StrategyGuard::ConvertTargetMode(target),
+        ),
+        ImplementationSupport::cpu(
+            OperationId::Convert,
+            mode,
+            Architecture::WasmSimd128,
+            cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
+            &[Architecture::WasmSimd128],
+            StrategyGuard::ConvertTargetMode(target),
+        ),
+    ]
+}
+
+const fn flatten_architecture_support(
+    luma: [ImplementationSupport; 3],
+    luma_alpha: [ImplementationSupport; 3],
+    rgb: [ImplementationSupport; 3],
+    rgba: [ImplementationSupport; 3],
+    rgbx: [ImplementationSupport; 3],
+    cmyk: [ImplementationSupport; 3],
+    i32: [ImplementationSupport; 3],
+    f32: [ImplementationSupport; 3],
+) -> [ImplementationSupport; 24] {
+    [
+        luma[0],
+        luma[1],
+        luma[2],
+        luma_alpha[0],
+        luma_alpha[1],
+        luma_alpha[2],
+        rgb[0],
+        rgb[1],
+        rgb[2],
+        rgba[0],
+        rgba[1],
+        rgba[2],
+        rgbx[0],
+        rgbx[1],
+        rgbx[2],
+        cmyk[0],
+        cmyk[1],
+        cmyk[2],
+        i32[0],
+        i32[1],
+        i32[2],
+        f32[0],
+        f32[1],
+        f32[2],
+    ]
 }
 
 pub(crate) const fn architecture_support(mode: Mode) -> [ImplementationSupport; 24] {
-    [
-        architecture_strategy!(
-            mode,
-            ImageLuma8,
-            Sse2,
-            SSE2_AVAILABLE,
-            &[Architecture::Sse2]
-        ),
-        architecture_strategy!(
-            mode,
-            ImageLuma8,
-            Neon,
-            cfg!(all(target_arch = "aarch64", target_feature = "neon")),
-            &[Architecture::Neon]
-        ),
-        architecture_strategy!(
-            mode,
-            ImageLuma8,
-            WasmSimd128,
-            cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
-            &[Architecture::WasmSimd128]
-        ),
-        architecture_strategy!(
-            mode,
-            ImageLumaA8,
-            Sse2,
-            SSE2_AVAILABLE,
-            &[Architecture::Sse2]
-        ),
-        architecture_strategy!(
-            mode,
-            ImageLumaA8,
-            Neon,
-            cfg!(all(target_arch = "aarch64", target_feature = "neon")),
-            &[Architecture::Neon]
-        ),
-        architecture_strategy!(
-            mode,
-            ImageLumaA8,
-            WasmSimd128,
-            cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
-            &[Architecture::WasmSimd128]
-        ),
-        architecture_strategy!(mode, ImageRgb8, Sse2, SSE2_AVAILABLE, &[Architecture::Sse2]),
-        architecture_strategy!(
-            mode,
-            ImageRgb8,
-            Neon,
-            cfg!(all(target_arch = "aarch64", target_feature = "neon")),
-            &[Architecture::Neon]
-        ),
-        architecture_strategy!(
-            mode,
-            ImageRgb8,
-            WasmSimd128,
-            cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
-            &[Architecture::WasmSimd128]
-        ),
-        architecture_strategy!(
-            mode,
-            ImageRgba8,
-            Sse2,
-            SSE2_AVAILABLE,
-            &[Architecture::Sse2]
-        ),
-        architecture_strategy!(
-            mode,
-            ImageRgba8,
-            Neon,
-            cfg!(all(target_arch = "aarch64", target_feature = "neon")),
-            &[Architecture::Neon]
-        ),
-        architecture_strategy!(
-            mode,
-            ImageRgba8,
-            WasmSimd128,
-            cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
-            &[Architecture::WasmSimd128]
-        ),
-        architecture_strategy!(
-            mode,
-            ImageRgbx8,
-            Sse2,
-            SSE2_AVAILABLE,
-            &[Architecture::Sse2]
-        ),
-        architecture_strategy!(
-            mode,
-            ImageRgbx8,
-            Neon,
-            cfg!(all(target_arch = "aarch64", target_feature = "neon")),
-            &[Architecture::Neon]
-        ),
-        architecture_strategy!(
-            mode,
-            ImageRgbx8,
-            WasmSimd128,
-            cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
-            &[Architecture::WasmSimd128]
-        ),
-        architecture_strategy!(
-            mode,
-            ImageCmyk8,
-            Sse2,
-            SSE2_AVAILABLE,
-            &[Architecture::Sse2]
-        ),
-        architecture_strategy!(
-            mode,
-            ImageCmyk8,
-            Neon,
-            cfg!(all(target_arch = "aarch64", target_feature = "neon")),
-            &[Architecture::Neon]
-        ),
-        architecture_strategy!(
-            mode,
-            ImageCmyk8,
-            WasmSimd128,
-            cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
-            &[Architecture::WasmSimd128]
-        ),
-        architecture_strategy!(mode, ImageI32, Sse2, SSE2_AVAILABLE, &[Architecture::Sse2]),
-        architecture_strategy!(
-            mode,
-            ImageI32,
-            Neon,
-            cfg!(all(target_arch = "aarch64", target_feature = "neon")),
-            &[Architecture::Neon]
-        ),
-        architecture_strategy!(
-            mode,
-            ImageI32,
-            WasmSimd128,
-            cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
-            &[Architecture::WasmSimd128]
-        ),
-        architecture_strategy!(mode, ImageF32, Sse2, SSE2_AVAILABLE, &[Architecture::Sse2]),
-        architecture_strategy!(
-            mode,
-            ImageF32,
-            Neon,
-            cfg!(all(target_arch = "aarch64", target_feature = "neon")),
-            &[Architecture::Neon]
-        ),
-        architecture_strategy!(
-            mode,
-            ImageF32,
-            WasmSimd128,
-            cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
-            &[Architecture::WasmSimd128]
-        ),
-    ]
+    flatten_architecture_support(
+        target_architecture_support(mode, Mode::ImageLuma8),
+        target_architecture_support(mode, Mode::ImageLumaA8),
+        target_architecture_support(mode, Mode::ImageRgb8),
+        target_architecture_support(mode, Mode::ImageRgba8),
+        target_architecture_support(mode, Mode::ImageRgbx8),
+        target_architecture_support(mode, Mode::ImageCmyk8),
+        target_architecture_support(mode, Mode::ImageI32),
+        target_architecture_support(mode, Mode::ImageF32),
+    )
 }
 
 /// Converts a native u16 raster; I;16N changes decode byte order, not sample range.

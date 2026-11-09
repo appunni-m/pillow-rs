@@ -1,8 +1,8 @@
 use crate::compute::pool_cpu::ops::analysis::helpers::get_data as helpers;
 use crate::error::PilError;
-use crate::raster::{Rgba32FImage};
 use crate::raster::FromPrimitive;
 use crate::raster::Mode;
+use crate::raster::Rgba32FImage;
 
 // NO_PILLOW_SUPPORT: this internal high-depth raster exposes native samples through GetData.
 pub(crate) fn get_data(image: &Rgba32FImage) -> Result<Vec<u8>, PilError> {

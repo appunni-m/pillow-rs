@@ -1,7 +1,7 @@
 //! Shared 128-bit native-byte copy kernel for typed I;16 crop strategies.
 
-use crate::compute::pool_cpu::ops::crop::helpers::crop::CropRegion;
 use crate::compute::pool_cpu::helpers::bytes::vector_copy::copy_native_bytes;
+use crate::compute::pool_cpu::ops::crop::helpers::crop::CropRegion;
 use crate::error::PilError;
 use crate::raster::{ImageBuffer, Luma};
 

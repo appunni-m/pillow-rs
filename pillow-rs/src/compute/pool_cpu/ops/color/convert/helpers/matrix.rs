@@ -17,12 +17,10 @@ pub(crate) fn convert_with_matrix(
         DynamicImage::ImageI16(source)
         | DynamicImage::ImageI16L(source)
         | DynamicImage::ImageI16B(source)
-        | DynamicImage::ImageI16N(source) => {
-            apply_source(source, target_mode, matrix, |pixel| {
-                let value = pixel.channels()[0].min(u16::from(u8::MAX)) as u8;
-                Rgb([value; 3])
-            })
-        }
+        | DynamicImage::ImageI16N(source) => apply_source(source, target_mode, matrix, |pixel| {
+            let value = pixel.channels()[0].min(u16::from(u8::MAX)) as u8;
+            Rgb([value; 3])
+        }),
         DynamicImage::ImageLuma8(source) | DynamicImage::ImagePalette8(source) => {
             apply_native_source(source, target_mode, matrix)
         }

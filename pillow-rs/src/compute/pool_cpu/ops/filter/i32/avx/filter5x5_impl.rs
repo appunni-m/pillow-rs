@@ -3,7 +3,7 @@
 // NO_PILLOW_SUPPORT: Pillow's Kernel contract excludes I-mode; this is a native
 // typed core extension that preserves its existing I32 representation.
 
-use super::super::default::{execute_with_fma, F32MulAdd};
+use super::super::default::filter5x5_impl::{F32MulAdd, execute_with_fma};
 use crate::error::PilError;
 use crate::raster::DynamicImage;
 

@@ -1,9 +1,9 @@
 //! Line geometry with native-byte SIMD span writes.
 
+use super::super::super::DrawLayout;
 use super::{
     SimdDrawSpanWriter, clipped_horizontal_span, flush_simd_draw_span, push_simd_draw_point,
 };
-use super::super::super::DrawLayout;
 use crate::draw::{for_each_polygon_fill_span, wide_line_polygon_points};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, GenericImageView};
@@ -29,40 +29,12 @@ pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_line_nat
         return Ok(None);
     }
     if width > 1 {
-        return draw_wide_line(
-            img,
-            x0,
-            y0,
-            x1,
-            y1,
-            fill,
-            width,
-            alpha_blend_rgb,
-            layout,
-        );
+        return draw_wide_line(img, x0, y0, x1, y1, fill, width, alpha_blend_rgb, layout);
     }
     if y0 != y1 {
-        return simd_draw_bresenham_native(
-            img,
-            x0,
-            y0,
-            x1,
-            y1,
-            fill,
-            alpha_blend_rgb,
-            layout,
-        );
+        return simd_draw_bresenham_native(img, x0, y0, x1, y1, fill, alpha_blend_rgb, layout);
     }
-    draw_horizontal_line(
-        img,
-        x0,
-        y0,
-        x1,
-        y1,
-        layout,
-        fill,
-        alpha_blend_rgb,
-    )
+    draw_horizontal_line(img, x0, y0, x1, y1, layout, fill, alpha_blend_rgb)
 }
 
 fn draw_wide_line(
@@ -141,13 +113,7 @@ struct BresenhamSpans {
 impl BresenhamSpans {
     #[inline(always)]
     fn push(&mut self, x: i64, y: i64) -> Result<(), PilError> {
-        push_simd_draw_point(
-            &mut self.span,
-            x,
-            y,
-            &mut self.writer,
-            self.fill,
-        )
+        push_simd_draw_point(&mut self.span, x, y, &mut self.writer, self.fill)
     }
 
     fn finish(

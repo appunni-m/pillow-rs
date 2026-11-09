@@ -8,7 +8,9 @@ pub(crate) fn unpremultiply_block<const CHANNELS: usize>(input: u8x16) -> u8x16 
     let alpha = input.shuffle(u8x16::new(alpha_indices::<CHANNELS>()));
     let alpha_values = alpha.to_array();
     let reciprocals = u32x16::new(std::array::from_fn(|lane| {
-        65_536_u32.checked_div(u32::from(alpha_values[lane])).unwrap_or_default()
+        65_536_u32
+            .checked_div(u32::from(alpha_values[lane]))
+            .unwrap_or_default()
     }));
     let alpha_wide = u32x16::from(u16x16::from(alpha));
     let numerator = u32x16::from(u16x16::from(input)) * u32x16::splat(255);

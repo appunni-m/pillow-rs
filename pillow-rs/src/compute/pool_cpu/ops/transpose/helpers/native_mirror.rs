@@ -1,7 +1,7 @@
 //! Portable wide-lane horizontal reversal for native byte rows.
 
-use wide::u8x16;
 use crate::raster::{ImageBuffer, Pixel};
+use wide::u8x16;
 
 /// Mirrors a typed byte image and preserves its pixel-buffer type.
 pub(crate) fn mirror_image<P>(
@@ -78,7 +78,8 @@ pub(crate) fn mirror_native_row(
         if remainder_pixels != 0 {
             let remainder_len = remainder_pixels.checked_mul(3)?;
             let mut padded = [0u8; 48];
-            padded[48usize.checked_sub(remainder_len)?..].copy_from_slice(source.get(..remainder_len)?);
+            padded[48usize.checked_sub(remainder_len)?..]
+                .copy_from_slice(source.get(..remainder_len)?);
             let block = reverse_rgb_block(&padded)?;
             let output_start = vector_pixels.checked_mul(3)?;
             output[output_start..output_start + remainder_len]

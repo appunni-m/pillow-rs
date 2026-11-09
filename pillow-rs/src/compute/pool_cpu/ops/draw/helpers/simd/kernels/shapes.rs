@@ -1,11 +1,11 @@
+use super::super::super::clipping::{
+    ClipEllipseState, arc_clip_state, chord_clip_state, chord_line_clip_state,
+    for_each_clipped_ellipse_span, normalize_angles, pie_clip_state, pie_side_clip_state,
+};
+use super::super::super::ellipse::for_each_ellipse_span;
 use super::super::DrawLayout;
 use super::SimdDrawSpanWriter;
 use super::spans::simd_draw_rectangle_native;
-use super::super::super::clipping::{
-    arc_clip_state, chord_clip_state, chord_line_clip_state, for_each_clipped_ellipse_span,
-    normalize_angles, pie_clip_state, pie_side_clip_state, ClipEllipseState,
-};
-use super::super::super::ellipse::for_each_ellipse_span;
 use crate::draw::{
     for_each_bresenham_point, for_each_polygon_fill_span, wide_line_polygon_points,
     wide_line_polygon_points_signed,
@@ -14,8 +14,7 @@ use crate::error::PilError;
 use crate::raster::{DynamicImage, GenericImageView};
 
 mod rounded_rect;
-pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) use
-    rounded_rect::simd_draw_rounded_rect_native;
+pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) use rounded_rect::simd_draw_rounded_rect_native;
 
 fn simd_write_ellipse_spans(
     writer: &mut SimdDrawSpanWriter,
@@ -426,9 +425,9 @@ pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_polygon_
     // that mask as compact row intervals rather than materializing a second
     // full-frame image. Stroke spans are still emitted in edge order, so
     // repeated writes and RGB alpha blending retain CPU ordering.
-    if let Some(outline) = outline.filter(|color| {
-        Some(*color) != fill && (width != 0 || outline_width.is_some())
-    }) {
+    if let Some(outline) =
+        outline.filter(|color| Some(*color) != fill && (width != 0 || outline_width.is_some()))
+    {
         let mask = polygon_fill_intervals(points, image_width, image_height);
         for index in 0..points.len() {
             let (x0, y0) = points[index];
@@ -445,9 +444,7 @@ pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_polygon_
             }
 
             let stroke_points = match outline_width {
-                Some(stroke_width) => {
-                    wide_line_polygon_points_signed(x0, y0, x1, y1, stroke_width)
-                }
+                Some(stroke_width) => wide_line_polygon_points_signed(x0, y0, x1, y1, stroke_width),
                 None => {
                     let stroke_width = width.saturating_mul(2).saturating_sub(1);
                     wide_line_polygon_points(x0, y0, x1, y1, stroke_width)

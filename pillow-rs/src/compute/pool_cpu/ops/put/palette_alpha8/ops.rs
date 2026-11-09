@@ -1,7 +1,7 @@
 //! `ImagePaletteAlpha8` band semantics and context-selected architecture strategies.
 
-use crate::compute::registry::support::BandIndexRule;
 use super::super::helpers::extract_band_strategy::{declare_into, declare_strategies};
+use crate::compute::registry::support::BandIndexRule;
 
 declare_strategies! {
     ImagePaletteAlpha8, BandIndexRule::ClampToNative { channels: 2 };
@@ -54,3 +54,9 @@ declare_alpha_data_strategies! {
     WasmSimd128, wasm_simd128, all(target_arch = "wasm32", target_feature = "simd128"), &[crate::compute::Architecture::WasmSimd128];
     Neon, neon, all(target_arch = "aarch64", target_feature = "neon"), &[crate::compute::Architecture::Neon];
 }
+super::super::helpers::scalar_write_support::declare_scalar_write_support!(
+    ImagePaletteAlpha8,
+    true,
+    false,
+    false,
+);

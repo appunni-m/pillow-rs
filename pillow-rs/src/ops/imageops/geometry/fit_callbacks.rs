@@ -83,10 +83,7 @@ where
     fn native_box_tuple(
         &mut self,
         box_: (f64, f64, f64, f64),
-    ) -> Result<
-        <Self as ImageOpsAspectCallbacks>::Value,
-        <Self as ImageOpsAspectCallbacks>::Error,
-    >;
+    ) -> Result<<Self as ImageOpsAspectCallbacks>::Value, <Self as ImageOpsAspectCallbacks>::Error>;
 }
 
 /// Compute Pillow-compatible `ImageOps.fit` crop coordinates with host callbacks.
@@ -111,24 +108,15 @@ pub fn fit_box_with_callbacks<C: ImageOpsFitCallbacks>(
     };
 
     let source_width = callbacks.image_size_coordinate(0)?;
-    let bleed_left = callbacks.arithmetic(
-        ImageOpsAspectArithmetic::Multiply,
-        &bleed,
-        &source_width,
-    )?;
+    let bleed_left =
+        callbacks.arithmetic(ImageOpsAspectArithmetic::Multiply, &bleed, &source_width)?;
     let source_height = callbacks.image_size_coordinate(1)?;
-    let bleed_top = callbacks.arithmetic(
-        ImageOpsAspectArithmetic::Multiply,
-        &bleed,
-        &source_height,
-    )?;
+    let bleed_top =
+        callbacks.arithmetic(ImageOpsAspectArithmetic::Multiply, &bleed, &source_height)?;
     let live_width = live_axis(callbacks, 0, &bleed_left, &two)?;
     let live_height = live_axis(callbacks, 1, &bleed_top, &two)?;
-    let live_ratio = callbacks.arithmetic(
-        ImageOpsAspectArithmetic::Divide,
-        &live_width,
-        &live_height,
-    )?;
+    let live_ratio =
+        callbacks.arithmetic(ImageOpsAspectArithmetic::Divide, &live_width, &live_height)?;
     let target_width = callbacks.size_coordinate(0)?;
     let target_height = callbacks.size_coordinate(1)?;
     let output_ratio = callbacks.arithmetic(
@@ -136,37 +124,46 @@ pub fn fit_box_with_callbacks<C: ImageOpsFitCallbacks>(
         &target_width,
         &target_height,
     )?;
-    let (crop_width, crop_height) = if callbacks.compare(
-        ImageOpsAspectComparison::Equal,
-        &live_ratio,
-        &output_ratio,
-    )? {
-        (live_width.clone(), live_height.clone())
-    } else if callbacks.compare(
-        ImageOpsAspectComparison::GreaterThanOrEqual,
-        &live_ratio,
-        &output_ratio,
-    )? {
-        (
-            callbacks.arithmetic(
-                ImageOpsAspectArithmetic::Multiply,
-                &output_ratio,
-                &live_height,
-            )?,
-            live_height.clone(),
-        )
-    } else {
-        (
-            live_width.clone(),
-            callbacks.arithmetic(
-                ImageOpsAspectArithmetic::Divide,
-                &live_width,
-                &output_ratio,
-            )?,
-        )
-    };
-    let left = offset_axis(callbacks, &bleed_left, &live_width, &crop_width, &centering_x)?;
-    let top = offset_axis(callbacks, &bleed_top, &live_height, &crop_height, &centering_y)?;
+    let (crop_width, crop_height) =
+        if callbacks.compare(ImageOpsAspectComparison::Equal, &live_ratio, &output_ratio)? {
+            (live_width.clone(), live_height.clone())
+        } else if callbacks.compare(
+            ImageOpsAspectComparison::GreaterThanOrEqual,
+            &live_ratio,
+            &output_ratio,
+        )? {
+            (
+                callbacks.arithmetic(
+                    ImageOpsAspectArithmetic::Multiply,
+                    &output_ratio,
+                    &live_height,
+                )?,
+                live_height.clone(),
+            )
+        } else {
+            (
+                live_width.clone(),
+                callbacks.arithmetic(
+                    ImageOpsAspectArithmetic::Divide,
+                    &live_width,
+                    &output_ratio,
+                )?,
+            )
+        };
+    let left = offset_axis(
+        callbacks,
+        &bleed_left,
+        &live_width,
+        &crop_width,
+        &centering_x,
+    )?;
+    let top = offset_axis(
+        callbacks,
+        &bleed_top,
+        &live_height,
+        &crop_height,
+        &centering_y,
+    )?;
     let right = callbacks.arithmetic(ImageOpsAspectArithmetic::Add, &left, &crop_width)?;
     let bottom = callbacks.arithmetic(ImageOpsAspectArithmetic::Add, &top, &crop_height)?;
     callbacks.box_tuple(&left, &top, &right, &bottom)
@@ -177,10 +174,7 @@ pub fn fit_box_with_route_callbacks<C: ImageOpsFitRouteCallbacks>(
     callbacks: &mut C,
     bleed: &<C as ImageOpsAspectCallbacks>::Value,
     centering: &<C as ImageOpsAspectCallbacks>::Value,
-) -> Result<
-    <C as ImageOpsAspectCallbacks>::Value,
-    <C as ImageOpsAspectCallbacks>::Error,
-> {
+) -> Result<<C as ImageOpsAspectCallbacks>::Value, <C as ImageOpsAspectCallbacks>::Error> {
     if let Some((width, height)) = native_size_pair_with_callbacks(callbacks)? {
         if callbacks.native_fit_inputs_are_eligible(bleed, centering)? {
             let image = callbacks.native_image()?;
@@ -206,7 +200,11 @@ fn normalized_centering<C: ImageOpsFitCallbacks>(
 ) -> Result<C::Value, C::Error> {
     let in_range = callbacks.compare(ImageOpsAspectComparison::LessThanOrEqual, zero, value)?
         && callbacks.compare(ImageOpsAspectComparison::LessThanOrEqual, value, one)?;
-    Ok(if in_range { value.clone() } else { half.clone() })
+    Ok(if in_range {
+        value.clone()
+    } else {
+        half.clone()
+    })
 }
 
 fn live_axis<C: ImageOpsFitCallbacks>(
@@ -217,11 +215,7 @@ fn live_axis<C: ImageOpsFitCallbacks>(
 ) -> Result<C::Value, C::Error> {
     let size = callbacks.image_size_coordinate(index)?;
     let bleed_twice = callbacks.arithmetic(ImageOpsAspectArithmetic::Multiply, bleed, two)?;
-    callbacks.arithmetic(
-        ImageOpsAspectArithmetic::Subtract,
-        &size,
-        &bleed_twice,
-    )
+    callbacks.arithmetic(ImageOpsAspectArithmetic::Subtract, &size, &bleed_twice)
 }
 
 fn offset_axis<C: ImageOpsFitCallbacks>(
@@ -232,10 +226,7 @@ fn offset_axis<C: ImageOpsFitCallbacks>(
     centering: &C::Value,
 ) -> Result<C::Value, C::Error> {
     let remaining = callbacks.arithmetic(ImageOpsAspectArithmetic::Subtract, live, crop)?;
-    let centered = callbacks.arithmetic(
-        ImageOpsAspectArithmetic::Multiply,
-        &remaining,
-        centering,
-    )?;
+    let centered =
+        callbacks.arithmetic(ImageOpsAspectArithmetic::Multiply, &remaining, centering)?;
     callbacks.arithmetic(ImageOpsAspectArithmetic::Add, bleed, &centered)
 }

@@ -84,15 +84,10 @@ pub(crate) fn autocontrast_lut(
     mask: Option<&std::sync::Arc<crate::image::Image>>,
 ) -> Result<Vec<u8>, PilError> {
     let no_ignored_bins = options.ignore.as_ref().map_or(true, Vec::is_empty);
-    let zero_cutoff_luma = options.cutoff == (0.0, 0.0)
-        && no_ignored_bins
-        && !options.preserve_tone;
-    let histogram = collect_autocontrast_histogram(
-        img,
-        mask,
-        options.preserve_tone,
-        zero_cutoff_luma,
-    )?;
+    let zero_cutoff_luma =
+        options.cutoff == (0.0, 0.0) && no_ignored_bins && !options.preserve_tone;
+    let histogram =
+        collect_autocontrast_histogram(img, mask, options.preserve_tone, zero_cutoff_luma)?;
     let ignored = normalize_ignored_bins(&options.ignore)?;
     let lut = build_autocontrast_lut(&histogram, options.cutoff, &ignored)?;
     if options.preserve_tone && matches!(img, DynamicImage::ImageRgb8(_)) {
@@ -154,9 +149,7 @@ fn collect_autocontrast_histogram(
     let channels = if tone_luma { 1 } else { source_channels };
     let (width, height) = (img.width(), img.height());
     let image_pixels = CheckedDims::new(width, height, 1)?.total_pixels();
-    let mask = mask
-        .map(|mask| mask.materialize_for_ops())
-        .transpose()?;
+    let mask = mask.map(|mask| mask.materialize_for_ops()).transpose()?;
     // The ImageOps contract admits `1` and `L` masks. Both already use the
     // exact byte plane consumed by Pillow's nonzero mask predicate.
     let mask_raw = match mask.as_ref() {
@@ -200,11 +193,8 @@ fn collect_autocontrast_histogram(
                 }
                 let index = y * stride + x * source_channels;
                 if tone_luma {
-                    let luma = crate::color::rgb_to_luma_u8(
-                        raw[index],
-                        raw[index + 1],
-                        raw[index + 2],
-                    );
+                    let luma =
+                        crate::color::rgb_to_luma_u8(raw[index], raw[index + 1], raw[index + 2]);
                     values[0][usize::from(luma)] += 1;
                 } else {
                     for channel in 0..channels {
@@ -277,10 +267,14 @@ fn normalize_ignored_bins(ignore: &Option<Vec<i64>>) -> Result<Vec<usize>, PilEr
 fn validate_cutoff(total: usize, cutoff: f64) -> Result<(), PilError> {
     let count = total as f64 * cutoff / 100.0;
     if count.is_nan() {
-        return Err(PilError::ValueError("cannot convert float NaN to integer".into()));
+        return Err(PilError::ValueError(
+            "cannot convert float NaN to integer".into(),
+        ));
     }
     if count.is_infinite() {
-        return Err(PilError::OverflowError("cannot convert float infinity to integer".into()));
+        return Err(PilError::OverflowError(
+            "cannot convert float infinity to integer".into(),
+        ));
     }
     Ok(())
 }
@@ -300,7 +294,11 @@ fn cutoff_count(total: usize, cutoff: f64) -> Result<(bool, usize), PilError> {
 
 fn trim_histogram_edge(histogram: &mut [usize; 256], cutoff: (bool, usize), high: bool) {
     if cutoff.0 {
-        let edge = if high { &mut histogram[255] } else { &mut histogram[0] };
+        let edge = if high {
+            &mut histogram[255]
+        } else {
+            &mut histogram[0]
+        };
         *edge = edge.saturating_add(cutoff.1);
         return;
     }
@@ -379,11 +377,7 @@ fn fill_channel_from_bounds(channel: &mut [u8], low: u8, high: u8) {
     fill_autocontrast_lut_from_bounds(channel, usize::from(low), usize::from(high));
 }
 
-pub(crate) fn fill_autocontrast_lut_from_bounds(
-    channel: &mut [u8],
-    low: usize,
-    high: usize,
-) {
+pub(crate) fn fill_autocontrast_lut_from_bounds(channel: &mut [u8], low: usize, high: usize) {
     if high <= low {
         fill_identity_channel(channel);
     } else {
@@ -478,13 +472,7 @@ pub(crate) fn equalize_lut(
     channels: usize,
     mask: Option<&DynamicImage>,
 ) -> Option<Vec<u8>> {
-    equalize_lut_for_bytes(
-        img.as_bytes(),
-        img.width(),
-        img.height(),
-        channels,
-        mask,
-    )
+    equalize_lut_for_bytes(img.as_bytes(), img.width(), img.height(), channels, mask)
 }
 
 pub(crate) fn equalize_lut_for_bytes(
@@ -527,10 +515,7 @@ pub(crate) fn equalize_lut_for_bytes(
     }
 
     let mut lut = vec![0u8; channels * 256];
-    for (histogram, table) in histograms[..channels]
-        .iter()
-        .zip(lut.chunks_exact_mut(256))
-    {
+    for (histogram, table) in histograms[..channels].iter().zip(lut.chunks_exact_mut(256)) {
         fill_equalize_lut_channel(histogram, table);
     }
     Some(lut)
@@ -542,10 +527,7 @@ pub(crate) fn equalize_lut_from_histogram(histogram: &[u32]) -> Option<Vec<u8>> 
         return None;
     }
     let mut lut = vec![0u8; histogram.len()];
-    for (counts, table) in histogram
-        .chunks_exact(256)
-        .zip(lut.chunks_exact_mut(256))
-    {
+    for (counts, table) in histogram.chunks_exact(256).zip(lut.chunks_exact_mut(256)) {
         fill_equalize_lut_channel(counts, table);
     }
     Some(lut)
@@ -624,8 +606,7 @@ pub(crate) fn apply_native_lut(
             .chunks_exact(row_stride)
             .zip(output.chunks_exact_mut(row_stride))
         {
-            for (source_block, output_block) in
-                source_row.chunks(48).zip(output_row.chunks_mut(48))
+            for (source_block, output_block) in source_row.chunks(48).zip(output_row.chunks_mut(48))
             {
                 let active_pixels = source_block.len() / 3;
                 let mut input = [[0u8; 16]; 3];
@@ -677,14 +658,9 @@ pub(crate) fn apply_luma_architecture(
         crate::compute::record_pipeline_operation_path("scalar-lut");
         return crate::image_utils::raw_bytes_to_image(width, height, output, 1);
     }
-    let (output, blocks, tail) = apply_native_lut(
-        input.as_raw(),
-        width as usize,
-        height as usize,
-        1,
-        lut,
-    )
-    .ok_or_else(|| PilError::InternalError("histogram L buffer shape mismatch".into()))?;
+    let (output, blocks, tail) =
+        apply_native_lut(input.as_raw(), width as usize, height as usize, 1, lut)
+            .ok_or_else(|| PilError::InternalError("histogram L buffer shape mismatch".into()))?;
     crate::compute::record_pipeline_operation_vector_blocks(blocks);
     crate::compute::record_pipeline_operation_scalar_tail(tail);
     crate::compute::record_pipeline_operation_path("vector");
@@ -705,14 +681,9 @@ pub(crate) fn apply_rgb_architecture(
         crate::compute::record_pipeline_operation_path("native-copy");
         return Ok(DynamicImage::ImageRgb8(input.clone()));
     }
-    let (output, blocks, tail) = apply_native_lut(
-        input.as_raw(),
-        width as usize,
-        height as usize,
-        3,
-        lut,
-    )
-    .ok_or_else(|| PilError::InternalError("histogram RGB buffer shape mismatch".into()))?;
+    let (output, blocks, tail) =
+        apply_native_lut(input.as_raw(), width as usize, height as usize, 3, lut)
+            .ok_or_else(|| PilError::InternalError("histogram RGB buffer shape mismatch".into()))?;
     crate::compute::record_pipeline_operation_vector_blocks(blocks);
     crate::compute::record_pipeline_operation_scalar_tail(tail);
     crate::compute::record_pipeline_operation_path("vector");
@@ -737,14 +708,10 @@ pub(crate) fn apply_palette_architecture(
         crate::compute::record_pipeline_operation_path("native-copy");
         return Ok(DynamicImage::ImagePalette8(input.clone()));
     }
-    let (output, blocks, tail) = apply_native_lut(
-        input.as_raw(),
-        width as usize,
-        height as usize,
-        1,
-        lut,
-    )
-    .ok_or_else(|| PilError::InternalError("P Autocontrast buffer shape mismatch".into()))?;
+    let (output, blocks, tail) =
+        apply_native_lut(input.as_raw(), width as usize, height as usize, 1, lut).ok_or_else(
+            || PilError::InternalError("P Autocontrast buffer shape mismatch".into()),
+        )?;
     crate::compute::record_pipeline_operation_vector_blocks(blocks);
     crate::compute::record_pipeline_operation_scalar_tail(tail);
     crate::compute::record_pipeline_operation_path("vector");

@@ -15,3 +15,9 @@ use crate::compute::pool_cpu::ops::imageops::helpers::strategy::declare_quantize
 // NO_PILLOW_SUPPORT: Pillow quantizes only L, P, RGB, and RGBA; this adds a
 // native LA strategy that reduces luma and alpha samples directly.
 declare_quantize_native_mode!(u8, "ImageLumaA8", ImageLumaA8);
+
+pub(crate) const CROP_BORDER_SUPPORT: crate::compute::registry::support::ModeSupport =
+    crate::compute::pool_cpu::ops::imageops::helpers::strategy::crop_border_serial_support(
+        crate::raster::Mode::ImageLumaA8,
+        super::super::ops::CROP_BORDER_INPUTS,
+    );

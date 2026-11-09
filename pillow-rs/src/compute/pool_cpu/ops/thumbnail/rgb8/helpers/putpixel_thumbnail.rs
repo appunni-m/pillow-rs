@@ -73,7 +73,10 @@ pub(crate) fn prepare(
     Ok(ReducedRgbThumbnail {
         image: reduced,
         source_dimensions: (source_width, source_height),
-        output_dimensions: ((*w).max(1).min(source_width), (*h).max(1).min(source_height)),
+        output_dimensions: (
+            (*w).max(1).min(source_width),
+            (*h).max(1).min(source_height),
+        ),
         filter: *filter,
         sparse_nonzero_rows,
     })

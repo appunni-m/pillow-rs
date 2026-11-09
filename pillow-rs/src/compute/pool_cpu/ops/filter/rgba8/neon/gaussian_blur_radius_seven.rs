@@ -1,18 +1,17 @@
 //! RGBA GaussianBlur radius-seven horizontal and vertical NEON kernels.
 
 use core::arch::aarch64::{
-    int16x8_t, uint8x8_t, uint8x8x4_t, uint16x8_t, uint16x8x4_t, vadd_u16, vaddq_s16,
-    vaddq_u16, vaddq_u32, vcombine_u16, vdupq_n_s16, vdupq_n_u16, vdupq_n_u32,
-    vextq_s16, vget_high_s16, vget_high_u16, vget_low_s16, vget_low_u16, vgetq_lane_s16, vld4_u8,
-    vmovl_s16, vmovl_u8, vmovl_u16, vmovn_u16, vmovn_u32, vmulq_u32,
-    vreinterpretq_s16_u16, vreinterpretq_u32_s32, vshrq_n_u32, vst4_u8, vsubq_u16,
+    int16x8_t, uint8x8_t, uint8x8x4_t, uint16x8_t, uint16x8x4_t, vadd_u16, vaddq_s16, vaddq_u16,
+    vaddq_u32, vcombine_u16, vdupq_n_s16, vdupq_n_u16, vdupq_n_u32, vextq_s16, vget_high_s16,
+    vget_high_u16, vget_low_s16, vget_low_u16, vgetq_lane_s16, vld4_u8, vmovl_s16, vmovl_u8,
+    vmovl_u16, vmovn_u16, vmovn_u32, vmulq_u32, vreinterpretq_s16_u16, vreinterpretq_u32_s32,
+    vshrq_n_u32, vst4_u8, vsubq_u16,
 };
 
 const CHANNELS: usize = 4;
 const BLOCK_PIXELS: usize = 8;
 const RADIUS: usize = 7;
 const BOX_BLUR_BIAS: u32 = crate::compute::pool_cpu::ops::filter::helpers::BOX_BLUR_BIAS;
-
 
 pub(super) struct NeonKernel;
 
@@ -158,7 +157,6 @@ fn process_horizontal_channel(
     }
 }
 
-
 pub(super) fn blur_vertical_rows(
     source: &[u8],
     destination: &mut [u8],
@@ -228,10 +226,34 @@ fn blur_vector_column_block(
                 vld4_u8(source.as_ptr().add(far_right_y * row_stride + x_bytes)),
             )
         };
-        let red = apply_channel(sums.0, far_left.0, far_right.0, whole_weight, fractional_weight);
-        let green = apply_channel(sums.1, far_left.1, far_right.1, whole_weight, fractional_weight);
-        let blue = apply_channel(sums.2, far_left.2, far_right.2, whole_weight, fractional_weight);
-        let alpha = apply_channel(sums.3, far_left.3, far_right.3, whole_weight, fractional_weight);
+        let red = apply_channel(
+            sums.0,
+            far_left.0,
+            far_right.0,
+            whole_weight,
+            fractional_weight,
+        );
+        let green = apply_channel(
+            sums.1,
+            far_left.1,
+            far_right.1,
+            whole_weight,
+            fractional_weight,
+        );
+        let blue = apply_channel(
+            sums.2,
+            far_left.2,
+            far_right.2,
+            whole_weight,
+            fractional_weight,
+        );
+        let alpha = apply_channel(
+            sums.3,
+            far_left.3,
+            far_right.3,
+            whole_weight,
+            fractional_weight,
+        );
         // SAFETY: this block writes eight complete RGBA pixels in the same
         // validated row-major span used by the reads above.
         unsafe {
@@ -241,14 +263,7 @@ fn blur_vector_column_block(
             );
         }
         if y < last_row {
-            advance_column_sums(
-                source,
-                row_stride,
-                x_bytes,
-                y,
-                last_row,
-                &mut sums,
-            );
+            advance_column_sums(source, row_stride, x_bytes, y, last_row, &mut sums);
         }
     }
 }
@@ -402,11 +417,11 @@ fn blur_scalar_column_rows(
         for (channel, sum) in sums.iter().copied().enumerate() {
             let far_left = u32::from(source[far_left_y * row_stride + x_bytes + channel]);
             let far_right = u32::from(source[far_right_y * row_stride + x_bytes + channel]);
-            destination[y * row_stride + x_bytes + channel] = sum
-                .wrapping_mul(whole_weight)
-                .wrapping_add((far_left + far_right).wrapping_mul(fractional_weight))
-                .wrapping_add(BOX_BLUR_BIAS)
-                .wrapping_shr(24) as u8;
+            destination[y * row_stride + x_bytes + channel] =
+                sum.wrapping_mul(whole_weight)
+                    .wrapping_add((far_left + far_right).wrapping_mul(fractional_weight))
+                    .wrapping_add(BOX_BLUR_BIAS)
+                    .wrapping_shr(24) as u8;
         }
         if y < last_row {
             let leaving_y = y.saturating_sub(RADIUS);

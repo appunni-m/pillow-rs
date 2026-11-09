@@ -1,9 +1,7 @@
 //! NEON implementation of native L Paste with an L mask.
 
 use crate::compute::pool_cpu::ops::paste::helpers::{
-    layout::SourceLayout,
-    plan::BytePlan,
-    region::checked_row_range,
+    layout::SourceLayout, plan::BytePlan, region::checked_row_range,
 };
 use crate::error::PilError;
 use crate::raster::Mode;
@@ -42,12 +40,11 @@ where
 
     let source = plan.source.as_bytes();
     let mask = mask_image.as_bytes();
-    let source_stride = usize::try_from(plan.source_size.0)
-        .map_err(|_| overflow("source stride"))?;
-    let destination_stride = usize::try_from(plan.destination_size.0)
-        .map_err(|_| overflow("destination stride"))?;
-    let mask_stride = usize::try_from(plan.region_size.0)
-        .map_err(|_| overflow("mask stride"))?;
+    let source_stride =
+        usize::try_from(plan.source_size.0).map_err(|_| overflow("source stride"))?;
+    let destination_stride =
+        usize::try_from(plan.destination_size.0).map_err(|_| overflow("destination stride"))?;
+    let mask_stride = usize::try_from(plan.region_size.0).map_err(|_| overflow("mask stride"))?;
     let source_left = plan.region.source_left;
     let destination_left = plan.region.destination_left;
     let source_top = plan.region.source_top;
@@ -61,14 +58,9 @@ where
         let destination_y = destination_top
             .checked_add(row)
             .ok_or_else(|| overflow("destination row"))?;
-        let source_range = checked_row_range(
-            source_y,
-            source_left,
-            plan.region.width,
-            1,
-            source_stride,
-        )
-        .ok_or_else(|| overflow("source row range"))?;
+        let source_range =
+            checked_row_range(source_y, source_left, plan.region.width, 1, source_stride)
+                .ok_or_else(|| overflow("source row range"))?;
         let destination_range = checked_row_range(
             destination_y,
             destination_left,
@@ -77,14 +69,9 @@ where
             destination_stride,
         )
         .ok_or_else(|| overflow("destination row range"))?;
-        let mask_range = checked_row_range(
-            source_y,
-            source_left,
-            plan.region.width,
-            1,
-            mask_stride,
-        )
-        .ok_or_else(|| overflow("mask row range"))?;
+        let mask_range =
+            checked_row_range(source_y, source_left, plan.region.width, 1, mask_stride)
+                .ok_or_else(|| overflow("mask row range"))?;
         let source_row = source
             .get(source_range)
             .ok_or_else(|| invalid_shape("source"))?;
@@ -148,9 +135,8 @@ fn blend_row(source: &[u8], destination: &mut [u8], mask: &[u8]) {
             clippy::arithmetic_side_effects,
             reason = "the convex byte blend is bounded by 255*255 plus its rounding bias"
         )]
-        let weighted = u16::from(source[index]) * weight
-            + u16::from(destination[index]) * inverse
-            + 127;
+        let weighted =
+            u16::from(source[index]) * weight + u16::from(destination[index]) * inverse + 127;
         #[expect(
             clippy::cast_possible_truncation,
             reason = "DIV255 yields an 8-bit convex blend of byte channels"

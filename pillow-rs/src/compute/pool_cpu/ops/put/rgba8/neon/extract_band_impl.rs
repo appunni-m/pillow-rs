@@ -1,9 +1,9 @@
 //! Original neon native-band implementation for `rgba8`.
 
+use super::super::super::helpers::extract_band_vector as vector;
+use super::super::default::extract_band_impl as scalar;
 use crate::error::PilError;
 use crate::raster::DynamicImage;
-use super::super::default::extract_band_impl as scalar;
-use super::super::super::helpers::extract_band_vector as vector;
 
 pub(crate) type Kernel<'a> = vector::NeonBand<'a, crate::raster::Rgba<u8>>;
 

@@ -126,11 +126,11 @@ mod image_utils;
 mod lab;
 /// Reusable image operation implementations.
 mod ops;
-/// Two-dimensional vector paths used by drawing APIs.
-mod path;
 #[cfg(feature = "parallel")]
 /// Approved parallel iteration helpers for pixel and row operations.
 mod par;
+/// Two-dimensional vector paths used by drawing APIs.
+mod path;
 /// Declarative operation pipeline types used by compute backends.
 ///
 /// See [`pipeline::PipelineOp`] for the operation descriptor carried through
@@ -141,13 +141,26 @@ mod raster;
 
 /// Test-build-only controls for deterministic target fault contracts.
 #[cfg(feature = "test-api")]
-pub mod test_api;
+mod test_api;
 
 #[cfg(feature = "test-api")]
-pub use crate::test_api::{
-    backend_cpu_supports, backend_gpu_supports, backend_simd_supports,
-    backend_support_matrix_json, backend_support_registry, BackendSupportEntry,
-};
+pub use crate::test_api::BackendSupportEntry;
+#[cfg(feature = "test-api")]
+pub use crate::test_api::arm_fault;
+#[cfg(feature = "test-api")]
+pub use crate::test_api::backend_cpu_supports;
+#[cfg(feature = "test-api")]
+pub use crate::test_api::backend_gpu_supports;
+#[cfg(feature = "test-api")]
+pub use crate::test_api::backend_simd_supports;
+#[cfg(feature = "test-api")]
+pub use crate::test_api::backend_support_matrix_json;
+#[cfg(feature = "test-api")]
+pub use crate::test_api::backend_support_registry;
+#[cfg(feature = "test-api")]
+pub use crate::test_api::clear_fault;
+#[cfg(feature = "test-api")]
+pub use crate::test_api::set_cpu_architecture as set_migration_test_cpu_architecture;
 
 pub use crate::color::ColorOutputMode;
 pub use crate::color::ColorValue;
@@ -162,15 +175,33 @@ pub use crate::color::palette_to_text;
 pub use crate::color::parse_color_str;
 pub use crate::color::parse_color_str_unclamped;
 pub use crate::color::resolve_new_color;
-pub use crate::compute::Backend;
 pub use crate::compute::Architecture;
+pub use crate::compute::Backend;
 pub use crate::compute::BandIndexRule;
+#[cfg(feature = "gpu")]
+pub use crate::compute::BatchError;
+#[cfg(feature = "gpu")]
+pub use crate::compute::BatchErrorKind;
+#[cfg(feature = "gpu")]
+pub use crate::compute::BatchKey;
+#[cfg(feature = "gpu")]
+pub use crate::compute::BatchOutput;
+#[cfg(feature = "gpu")]
+pub use crate::compute::BatchResult;
 pub use crate::compute::DrawRequestKind;
 pub use crate::compute::DrawTextMaskKind;
 pub use crate::compute::ExecutionContext;
 pub use crate::compute::ExpandFillRule;
 pub use crate::compute::F32RankCompatibility;
 pub use crate::compute::FallbackReason;
+#[cfg(feature = "gpu")]
+pub use crate::compute::GpuBatchConfig;
+#[cfg(feature = "gpu")]
+pub use crate::compute::GpuBatchExecutor;
+#[cfg(feature = "gpu")]
+pub use crate::compute::GpuBatchStats;
+#[cfg(feature = "gpu")]
+pub use crate::compute::GpuImage;
 pub use crate::compute::ImplementationId;
 pub use crate::compute::ImplementationSupport;
 pub use crate::compute::InputContract;
@@ -178,7 +209,6 @@ pub use crate::compute::MergeBandModeRule;
 pub use crate::compute::ModeChannelCapacity;
 pub use crate::compute::ModeSupport;
 pub use crate::compute::OperationId;
-pub use crate::compute::PadFillRule;
 pub use crate::compute::OperationModeRoute;
 pub use crate::compute::OperationModeTransition;
 pub use crate::compute::OperationRouteGuard;
@@ -189,12 +219,18 @@ pub use crate::compute::OperationSupport;
 pub use crate::compute::OperationTargetComposition;
 pub use crate::compute::OperationTargetCompositionKind;
 pub use crate::compute::OperationTransitionSource;
-pub use crate::compute::OutputModeRule;
-pub use crate::compute::PaletteKnowledge;
 pub use crate::compute::OperationValueResult;
+pub use crate::compute::OutputModeRule;
+pub use crate::compute::PadFillRule;
+pub use crate::compute::PaletteKnowledge;
 pub use crate::compute::PasteInputRules;
 pub use crate::compute::PasteMaskRule;
 pub use crate::compute::PayloadOutput;
+pub use crate::compute::PipelineOperationTelemetry;
+pub use crate::compute::PipelineResourceTelemetry;
+#[doc(hidden)]
+pub use crate::compute::PipelineTelemetryOrigin;
+pub use crate::compute::PipelineTelemetrySample;
 pub use crate::compute::PixelValueShape;
 pub use crate::compute::PixelWriteRunFacts;
 pub use crate::compute::RejectionKind;
@@ -206,95 +242,109 @@ pub use crate::compute::StrategySelection;
 pub use crate::compute::SupportAssessment;
 pub use crate::compute::SupportScope;
 pub use crate::compute::UnresolvedGuard;
-#[cfg(feature = "gpu")]
-pub use crate::compute::BatchError;
-#[cfg(feature = "gpu")]
-pub use crate::compute::BatchErrorKind;
-#[cfg(feature = "gpu")]
-pub use crate::compute::BatchKey;
-#[cfg(feature = "gpu")]
-pub use crate::compute::BatchOutput;
-#[cfg(feature = "gpu")]
-pub use crate::compute::BatchResult;
-#[cfg(feature = "gpu")]
-pub use crate::compute::GpuBatchConfig;
-#[cfg(feature = "gpu")]
-pub use crate::compute::GpuBatchExecutor;
-#[cfg(feature = "gpu")]
-pub use crate::compute::GpuBatchStats;
-#[cfg(feature = "gpu")]
-pub use crate::compute::GpuImage;
-pub use crate::compute::PipelineOperationTelemetry;
-pub use crate::compute::PipelineResourceTelemetry;
-#[doc(hidden)]
-pub use crate::compute::PipelineTelemetryOrigin;
-pub use crate::compute::PipelineTelemetrySample;
 pub use crate::compute::active_backends;
 pub use crate::compute::available_backends;
 pub use crate::compute::backend_enabled;
 pub use crate::compute::disable_backend;
 pub use crate::compute::enable_backend;
 pub use crate::draw::Draw;
-#[doc(hidden)]
-pub use crate::draw::DrawCurveJointPlan;
-#[doc(hidden)]
-pub use crate::draw::{
-    execute_floodfill, prepare_floodfill, FloodFillAccess, FloodFillError, PreparedFloodFill,
-};
-pub use crate::path::ImagePath;
 pub use crate::draw::DrawBoxInput;
 pub use crate::draw::DrawCircleCenterInput;
 pub use crate::draw::DrawColorInput;
+#[doc(hidden)]
+pub use crate::draw::DrawCurveJointPlan;
 pub use crate::draw::DrawPointsInput;
 #[doc(hidden)]
 pub use crate::draw::DrawTextFillValue;
 #[doc(hidden)]
-pub use crate::draw::{
-    prepare_rounded_rectangle_with_callbacks, rounded_rectangle_outline_bounds_with_callbacks,
-    RoundedRectangleBounds, RoundedRectangleColor, RoundedRectangleDrawStep,
-    RoundedRectangleEarlyPath, RoundedRectangleOutlineBorder, RoundedRectangleOutlineCallbacks,
-    RoundedRectanglePreparationCallbacks, RoundedRectanglePreparationError,
-    RoundedRectanglePreparedGeometry, RoundedRectangleProgram,
-    RoundedRectangleProgramCallbacks, RoundedRectangleProgramError,
-    RoundedRectangleProgramResponse, RoundedRectangleProgramStep,
-};
+pub use crate::draw::DrawTextLine;
+#[doc(hidden)]
+pub use crate::draw::DrawTextLinesCallbacks;
+#[doc(hidden)]
+pub use crate::draw::DrawTextMaskCallbacks;
+#[doc(hidden)]
+pub use crate::draw::DrawTextMaskPosition;
+#[doc(hidden)]
+pub use crate::draw::DrawTextRouteCallbacks;
+#[doc(hidden)]
+pub use crate::draw::DrawTextRouteCheck;
+#[doc(hidden)]
+pub use crate::draw::FloodFillAccess;
+#[doc(hidden)]
+pub use crate::draw::FloodFillError;
+#[doc(hidden)]
+pub use crate::draw::PreparedFloodFill;
+pub use crate::draw::RegularPolygonCircle;
+pub use crate::draw::RegularPolygonSides;
+#[doc(hidden)]
+pub use crate::draw::RoundedRectangleBounds;
+#[doc(hidden)]
+pub use crate::draw::RoundedRectangleColor;
+#[doc(hidden)]
+pub use crate::draw::RoundedRectangleDrawStep;
+#[doc(hidden)]
+pub use crate::draw::RoundedRectangleEarlyPath;
+#[doc(hidden)]
+pub use crate::draw::RoundedRectangleOutlineBorder;
+#[doc(hidden)]
+pub use crate::draw::RoundedRectangleOutlineCallbacks;
+#[doc(hidden)]
+pub use crate::draw::RoundedRectanglePreparationCallbacks;
+#[doc(hidden)]
+pub use crate::draw::RoundedRectanglePreparationError;
+#[doc(hidden)]
+pub use crate::draw::RoundedRectanglePreparedGeometry;
+#[doc(hidden)]
+pub use crate::draw::RoundedRectangleProgram;
+#[doc(hidden)]
+pub use crate::draw::RoundedRectangleProgramCallbacks;
+#[doc(hidden)]
+pub use crate::draw::RoundedRectangleProgramError;
+#[doc(hidden)]
+pub use crate::draw::RoundedRectangleProgramResponse;
+#[doc(hidden)]
+pub use crate::draw::RoundedRectangleProgramStep;
+#[doc(hidden)]
+pub use crate::draw::draw_custom_font_mask_with_callbacks;
 #[doc(hidden)]
 pub use crate::draw::draw_text_bbox_font_mode;
 #[doc(hidden)]
-pub use crate::draw::{draw_uses_direct_text_route, DrawTextRouteCallbacks, DrawTextRouteCheck};
+pub use crate::draw::draw_text_lines_with_callbacks;
 #[doc(hidden)]
-pub use crate::draw::{
-    draw_custom_font_mask_with_callbacks, DrawTextMaskCallbacks, DrawTextMaskPosition,
-};
+pub use crate::draw::draw_uses_direct_text_route;
 #[doc(hidden)]
-pub use crate::draw::{draw_text_lines_with_callbacks, DrawTextLine, DrawTextLinesCallbacks};
-pub use crate::draw::RegularPolygonCircle;
-pub use crate::draw::RegularPolygonSides;
+pub use crate::draw::execute_floodfill;
 pub use crate::draw::normalize_draw_box;
 pub use crate::draw::normalize_draw_circle_center;
 pub use crate::draw::normalize_draw_width;
 pub use crate::draw::normalize_rounded_rectangle_box;
 pub use crate::draw::outline_curve_points;
+#[doc(hidden)]
+pub use crate::draw::prepare_floodfill;
+#[doc(hidden)]
+pub use crate::draw::prepare_rounded_rectangle_with_callbacks;
+#[doc(hidden)]
+pub use crate::draw::rounded_rectangle_outline_bounds_with_callbacks;
 pub use crate::error::PilError;
 pub use crate::font::FontLengthAndBounds;
 pub use crate::font::FontMaskAndBounds;
 pub use crate::font::FontMaskAndOffset;
 pub use crate::font::FontSizeAndOffset;
 pub use crate::font::FontTextBounds;
-pub use crate::font::ImageFontTextLine;
-pub use crate::font::ImageFontTextBoundsCallbacks;
-pub use crate::font::ImageFontTextPositionArithmetic;
-pub use crate::font::ImageFontTextPositionCallbacks;
-pub use crate::font::ImageFontTextPositionComparison;
 pub use crate::font::FreeTypeFont;
 pub use crate::font::ImageFontBBoxValue;
 pub use crate::font::ImageFontFaceInfo;
 pub use crate::font::ImageFontLoadOptions;
 pub use crate::font::ImageFontSourceInput;
+pub use crate::font::ImageFontTextBoundsCallbacks;
 pub use crate::font::ImageFontTextInput;
+pub use crate::font::ImageFontTextLine;
 pub use crate::font::ImageFontTextOptions;
-pub use crate::font::ImageFontTextWrapCallbacks;
+pub use crate::font::ImageFontTextPositionArithmetic;
+pub use crate::font::ImageFontTextPositionCallbacks;
+pub use crate::font::ImageFontTextPositionComparison;
 pub use crate::font::ImageFontTextScaling;
+pub use crate::font::ImageFontTextWrapCallbacks;
 pub use crate::font::ImageFontTextWrapResult;
 pub use crate::font::ImageFontTextWrapWidthCheck;
 pub use crate::font::ImageFontVariantOptions;
@@ -322,14 +372,15 @@ pub use crate::image::ImagingCoreBytesInput;
 pub use crate::image::NewColorInput;
 pub use crate::image::OpenFormatsInput;
 pub use crate::image::OpenModeInput;
-pub use crate::image::PaletteTransparency;
 pub use crate::image::PaletteColorComponent;
+pub use crate::image::PaletteTransparency;
 pub use crate::image::PutAlphaInput;
-pub use crate::image::PutDataInput;
 pub use crate::image::PutDataExecutionContext;
+pub use crate::image::PutDataInput;
 pub use crate::image::PutDataValue;
 pub use crate::image::PutDataValueKind;
 pub use crate::image::PutPixelValue;
+pub use crate::path::ImagePath;
 // Preserve the original public Rust paths after adopting host-neutral names.
 // Remove these aliases only as part of an explicit breaking-release decision.
 #[doc(hidden)]
@@ -395,42 +446,14 @@ pub use crate::ops::convert::validate_convert_dither as validate_python_convert_
 pub use crate::ops::filter::prepare_kernel;
 pub use crate::ops::filter::validate_kernel_coefficients;
 pub use crate::ops::imageops::CenteringInput;
-pub use crate::ops::imageops::ImageOpsColor;
-pub use crate::ops::imageops::ImageOpsMask;
-pub use crate::pipeline::AutocontrastOptions;
-pub use crate::ops::imageops::SolarizeInput;
-pub use crate::ops::imageops::autocontrast as imageops_autocontrast;
-pub use crate::ops::imageops::autocontrast_with_options as imageops_autocontrast_with_options;
-pub use crate::ops::imageops::autocontrast_with_mask as imageops_autocontrast_with_mask;
-pub use crate::ops::imageops::autocontrast_with_options_and_mask as imageops_autocontrast_with_options_and_mask;
 #[doc(hidden)]
-pub use crate::ops::imageops::autocontrast_lut_from_histogram as imageops_autocontrast_lut_from_histogram;
+pub use crate::ops::imageops::EXIF_XMP_ATTRIBUTE_PREFIX;
 #[doc(hidden)]
-pub use crate::ops::imageops::autocontrast_lut_with_callbacks as
-    imageops_autocontrast_lut_with_callbacks;
+pub use crate::ops::imageops::EXIF_XMP_ATTRIBUTE_SUFFIX;
 #[doc(hidden)]
-pub use crate::ops::imageops::autocontrast_result_from_lut_with_callbacks as
-    imageops_autocontrast_result_from_lut_with_callbacks;
+pub use crate::ops::imageops::EXIF_XMP_ELEMENT_PREFIX;
 #[doc(hidden)]
-pub use crate::ops::imageops::autocontrast_with_callbacks as
-    imageops_autocontrast_with_callbacks;
-#[doc(hidden)]
-pub use crate::ops::imageops::ImageOpsAutocontrastCallbacks;
-#[doc(hidden)]
-pub use crate::ops::imageops::ImageOpsAutocontrastResultCallbacks;
-#[doc(hidden)]
-pub use crate::ops::imageops::ImageOpsAutocontrastSourceCallbacks;
-#[doc(hidden)]
-pub use crate::ops::imageops::equalize_with_callbacks as imageops_equalize_with_callbacks;
-#[doc(hidden)]
-pub use crate::ops::imageops::ImageOpsEqualizeCallbacks;
-#[doc(hidden)]
-pub use crate::ops::imageops::colorize_with_callbacks as imageops_colorize_with_callbacks;
-#[doc(hidden)]
-pub use crate::ops::imageops::ImageOpsColorizeCallbacks;
-pub use crate::ops::imageops::colorize as imageops_colorize;
-pub use crate::ops::imageops::contain as imageops_contain;
-pub use crate::ops::imageops::contain_with_input as imageops_contain_with_input;
+pub use crate::ops::imageops::EXIF_XMP_ELEMENT_SUFFIX;
 #[doc(hidden)]
 pub use crate::ops::imageops::ImageOpsAspectArithmetic;
 #[doc(hidden)]
@@ -440,23 +463,49 @@ pub use crate::ops::imageops::ImageOpsAspectComparison;
 #[doc(hidden)]
 pub use crate::ops::imageops::ImageOpsAspectOperation;
 #[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsAspectRouteCallbacks;
+#[doc(hidden)]
 pub use crate::ops::imageops::ImageOpsAspectSize;
 #[doc(hidden)]
-pub use crate::ops::imageops::ImageOpsFitCallbacks;
+pub use crate::ops::imageops::ImageOpsAutocontrastCallbacks;
 #[doc(hidden)]
-pub use crate::ops::imageops::ImageOpsFitRouteCallbacks;
+pub use crate::ops::imageops::ImageOpsAutocontrastResultCallbacks;
 #[doc(hidden)]
-pub use crate::ops::imageops::ImageOpsFitConstant;
+pub use crate::ops::imageops::ImageOpsAutocontrastSourceCallbacks;
 #[doc(hidden)]
 pub use crate::ops::imageops::ImageOpsBorderCallbacks;
+pub use crate::ops::imageops::ImageOpsColor;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsColorizeCallbacks;
 #[doc(hidden)]
 pub use crate::ops::imageops::ImageOpsCropCallbacks;
 #[doc(hidden)]
 pub use crate::ops::imageops::ImageOpsCropRouteCallbacks;
 #[doc(hidden)]
-pub use crate::ops::imageops::ImageOpsExpandGeometryCallbacks;
+pub use crate::ops::imageops::ImageOpsEqualizeCallbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsExifXmpValue;
 #[doc(hidden)]
 pub use crate::ops::imageops::ImageOpsExpandCallbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsExpandGeometryCallbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsFitCallbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsFitConstant;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsFitRouteCallbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsInvertCallbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsLutBuildCallbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsLutCallbacks;
+pub use crate::ops::imageops::ImageOpsMask;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsNativeSizeCallbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::ImageOpsNativeSizeProperty;
 #[doc(hidden)]
 pub use crate::ops::imageops::ImageOpsPadAxis;
 #[doc(hidden)]
@@ -464,107 +513,96 @@ pub use crate::ops::imageops::ImageOpsPadCallbacks;
 #[doc(hidden)]
 pub use crate::ops::imageops::ImageOpsPadRouteCallbacks;
 #[doc(hidden)]
-pub use crate::ops::imageops::ImageOpsAspectRouteCallbacks;
-#[doc(hidden)]
-pub use crate::ops::imageops::ImageOpsNativeSizeCallbacks;
-#[doc(hidden)]
-pub use crate::ops::imageops::ImageOpsNativeSizeProperty;
+pub use crate::ops::imageops::ImageOpsPosterizeCallbacks;
 #[doc(hidden)]
 pub use crate::ops::imageops::ImageOpsScaleCallbacks;
 #[doc(hidden)]
 pub use crate::ops::imageops::ImageOpsScaleRouteCallbacks;
 #[doc(hidden)]
-pub use crate::ops::imageops::fit_box_with_callbacks as imageops_fit_box_with_callbacks;
+pub use crate::ops::imageops::ImageOpsSolarizeCallbacks;
 #[doc(hidden)]
-pub use crate::ops::imageops::fit_box_with_route_callbacks as
-    imageops_fit_box_with_route_callbacks;
+pub use crate::ops::imageops::PadFillPreflight;
+#[doc(hidden)]
+pub use crate::ops::imageops::PadGeometryPreflight;
+#[doc(hidden)]
+pub use crate::ops::imageops::PadPreflight;
+#[doc(hidden)]
+pub use crate::ops::imageops::PreparedExpandFill;
+pub use crate::ops::imageops::SolarizeInput;
+#[doc(hidden)]
+pub use crate::ops::imageops::aspect_size_with_route_callbacks as imageops_aspect_size_with_route_callbacks;
+pub use crate::ops::imageops::autocontrast as imageops_autocontrast;
+#[doc(hidden)]
+pub use crate::ops::imageops::autocontrast_lut_from_histogram as imageops_autocontrast_lut_from_histogram;
+#[doc(hidden)]
+pub use crate::ops::imageops::autocontrast_lut_with_callbacks as imageops_autocontrast_lut_with_callbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::autocontrast_result_from_lut_with_callbacks as imageops_autocontrast_result_from_lut_with_callbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::autocontrast_with_callbacks as imageops_autocontrast_with_callbacks;
+pub use crate::ops::imageops::autocontrast_with_mask as imageops_autocontrast_with_mask;
+pub use crate::ops::imageops::autocontrast_with_options as imageops_autocontrast_with_options;
+pub use crate::ops::imageops::autocontrast_with_options_and_mask as imageops_autocontrast_with_options_and_mask;
+pub use crate::ops::imageops::colorize as imageops_colorize;
+#[doc(hidden)]
+pub use crate::ops::imageops::colorize_with_callbacks as imageops_colorize_with_callbacks;
+pub use crate::ops::imageops::contain as imageops_contain;
+#[doc(hidden)]
+pub use crate::ops::imageops::contain_geometry_preflight as imageops_contain_geometry_preflight;
+pub use crate::ops::imageops::contain_with_input as imageops_contain_with_input;
+pub use crate::ops::imageops::cover as imageops_cover;
+#[doc(hidden)]
+pub use crate::ops::imageops::cover_geometry_preflight as imageops_cover_geometry_preflight;
+pub use crate::ops::imageops::cover_with_input as imageops_cover_with_input;
+pub use crate::ops::imageops::crop as imageops_crop;
+#[doc(hidden)]
+pub use crate::ops::imageops::crop_box_geometry_preflight as imageops_crop_box_geometry_preflight;
 #[doc(hidden)]
 pub use crate::ops::imageops::crop_box_with_callbacks as imageops_crop_box_with_callbacks;
 #[doc(hidden)]
-pub use crate::ops::imageops::crop_box_with_route_callbacks as
-    imageops_crop_box_with_route_callbacks;
-#[doc(hidden)]
-pub use crate::ops::imageops::expand_with_callbacks as imageops_expand_with_callbacks;
-#[doc(hidden)]
-pub use crate::ops::imageops::pad_fallback_with_callbacks as
-    imageops_pad_fallback_with_callbacks;
-#[doc(hidden)]
-pub use crate::ops::imageops::native_size_pair_with_callbacks as
-    imageops_native_size_pair_with_callbacks;
-#[doc(hidden)]
-pub use crate::ops::imageops::aspect_size_with_route_callbacks as
-    imageops_aspect_size_with_route_callbacks;
-#[doc(hidden)]
-pub use crate::ops::imageops::scale_size_with_callbacks as
-    imageops_scale_size_with_callbacks;
-#[doc(hidden)]
-pub use crate::ops::imageops::scale_with_route_callbacks as
-    imageops_scale_with_route_callbacks;
-#[doc(hidden)]
-pub use crate::ops::imageops::contain_geometry_preflight as imageops_contain_geometry_preflight;
-pub use crate::ops::imageops::cover as imageops_cover;
-pub use crate::ops::imageops::cover_with_input as imageops_cover_with_input;
-#[doc(hidden)]
-pub use crate::ops::imageops::cover_geometry_preflight as imageops_cover_geometry_preflight;
-pub use crate::ops::imageops::crop as imageops_crop;
-#[doc(hidden)]
-pub use crate::ops::imageops::crop_box_geometry_preflight as
-    imageops_crop_box_geometry_preflight;
+pub use crate::ops::imageops::crop_box_with_route_callbacks as imageops_crop_box_with_route_callbacks;
 pub use crate::ops::imageops::equalize as imageops_equalize;
-pub use crate::ops::imageops::equalize_with_mask as imageops_equalize_with_mask;
 #[doc(hidden)]
-pub use crate::ops::imageops::equalize_lut_from_histogram as
-    imageops_equalize_lut_from_histogram;
+pub use crate::ops::imageops::equalize_lut_from_histogram as imageops_equalize_lut_from_histogram;
+#[doc(hidden)]
+pub use crate::ops::imageops::equalize_with_callbacks as imageops_equalize_with_callbacks;
+pub use crate::ops::imageops::equalize_with_mask as imageops_equalize_with_mask;
 pub use crate::ops::imageops::exif_get_orientation;
 pub use crate::ops::imageops::exif_remove_orientation;
 #[doc(hidden)]
 pub use crate::ops::imageops::exif_remove_xmp_orientation;
-#[doc(hidden)]
-pub use crate::ops::imageops::ImageOpsExifXmpValue;
-#[doc(hidden)]
-pub use crate::ops::imageops::EXIF_XMP_ATTRIBUTE_PREFIX;
-#[doc(hidden)]
-pub use crate::ops::imageops::EXIF_XMP_ATTRIBUTE_SUFFIX;
-#[doc(hidden)]
-pub use crate::ops::imageops::EXIF_XMP_ELEMENT_PREFIX;
-#[doc(hidden)]
-pub use crate::ops::imageops::EXIF_XMP_ELEMENT_SUFFIX;
 pub use crate::ops::imageops::exif_transpose as imageops_exif_transpose;
 #[doc(hidden)]
-pub use crate::ops::imageops::exif_transpose_with_orientation as
-    imageops_exif_transpose_with_orientation;
+pub use crate::ops::imageops::exif_transpose_with_orientation as imageops_exif_transpose_with_orientation;
 pub use crate::ops::imageops::expand as imageops_expand;
+#[doc(hidden)]
+pub use crate::ops::imageops::expand_canvas_with_prepared_fill as imageops_expand_canvas_with_prepared_fill;
+#[doc(hidden)]
+pub use crate::ops::imageops::expand_with_callbacks as imageops_expand_with_callbacks;
 pub use crate::ops::imageops::expand_with_input as imageops_expand_with_input;
 pub use crate::ops::imageops::expand_with_margins as imageops_expand_with_margins;
 pub use crate::ops::imageops::expand_with_margins_and_input as imageops_expand_with_margins_and_input;
 #[doc(hidden)]
-pub use crate::ops::imageops::expand_canvas_with_prepared_fill as
-    imageops_expand_canvas_with_prepared_fill;
-#[doc(hidden)]
-pub use crate::ops::imageops::prepare_expand_fill_for_mode as
-    imageops_prepare_expand_fill_for_mode;
-#[doc(hidden)]
-pub use crate::ops::imageops::finish_expand_fill_palette_from_host as
-    imageops_finish_expand_fill_palette_from_host;
-#[doc(hidden)]
-pub use crate::ops::imageops::validate_expand_output_size_for_mode as
-    imageops_validate_expand_output_size_for_mode;
-#[doc(hidden)]
-pub use crate::ops::imageops::validate_prepared_expand_output_size as
-    imageops_validate_prepared_expand_output_size;
-#[doc(hidden)]
-pub use crate::ops::imageops::PreparedExpandFill;
+pub use crate::ops::imageops::finish_expand_fill_palette_from_host as imageops_finish_expand_fill_palette_from_host;
 pub use crate::ops::imageops::fit as imageops_fit;
-pub use crate::ops::imageops::fit_with_input as imageops_fit_with_input;
+#[doc(hidden)]
+pub use crate::ops::imageops::fit_box_with_callbacks as imageops_fit_box_with_callbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::fit_box_with_route_callbacks as imageops_fit_box_with_route_callbacks;
 #[doc(hidden)]
 pub use crate::ops::imageops::fit_geometry_preflight as imageops_fit_geometry_preflight;
-#[doc(hidden)]
-pub use crate::ops::imageops::parse_imageops_filter_input;
+pub use crate::ops::imageops::fit_with_input as imageops_fit_with_input;
 pub use crate::ops::imageops::flip as imageops_flip;
 pub use crate::ops::imageops::grayscale as imageops_grayscale;
 pub use crate::ops::imageops::invert_ops as imageops_invert;
+#[doc(hidden)]
+pub use crate::ops::imageops::invert_with_callbacks as imageops_invert_with_callbacks;
 pub use crate::ops::imageops::mirror as imageops_mirror;
+#[doc(hidden)]
+pub use crate::ops::imageops::native_size_pair_with_callbacks as imageops_native_size_pair_with_callbacks;
 pub use crate::ops::imageops::pad as imageops_pad;
+#[doc(hidden)]
+pub use crate::ops::imageops::pad_fallback_with_callbacks as imageops_pad_fallback_with_callbacks;
 #[doc(hidden)]
 pub use crate::ops::imageops::pad_fill_preflight as imageops_pad_fill_preflight;
 #[doc(hidden)]
@@ -577,28 +615,40 @@ pub use crate::ops::imageops::pad_with_input as imageops_pad_with_input;
 #[doc(hidden)]
 pub use crate::ops::imageops::pad_with_input_and_containment as imageops_pad_with_input_and_containment;
 #[doc(hidden)]
-pub use crate::ops::imageops::pad_with_route_callbacks as imageops_pad_with_route_callbacks;
-#[doc(hidden)]
 pub use crate::ops::imageops::pad_with_preflight as imageops_pad_with_preflight;
 #[doc(hidden)]
 pub use crate::ops::imageops::pad_with_preflight_and_fill as imageops_pad_with_preflight_and_fill;
 #[doc(hidden)]
-pub use crate::ops::imageops::PadFillPreflight;
+pub use crate::ops::imageops::pad_with_route_callbacks as imageops_pad_with_route_callbacks;
 #[doc(hidden)]
-pub use crate::ops::imageops::PadPreflight;
-#[doc(hidden)]
-pub use crate::ops::imageops::PadGeometryPreflight;
+pub use crate::ops::imageops::parse_imageops_filter_input;
 pub use crate::ops::imageops::posterize as imageops_posterize;
-pub use crate::ops::imageops::scale_with_input as imageops_scale_with_input;
+#[doc(hidden)]
+pub use crate::ops::imageops::posterize_with_callbacks as imageops_posterize_with_callbacks;
+#[doc(hidden)]
+pub use crate::ops::imageops::prepare_expand_fill_for_mode as imageops_prepare_expand_fill_for_mode;
 #[doc(hidden)]
 pub use crate::ops::imageops::scale_geometry_preflight as imageops_scale_geometry_preflight;
+#[doc(hidden)]
+pub use crate::ops::imageops::scale_size_with_callbacks as imageops_scale_size_with_callbacks;
+pub use crate::ops::imageops::scale_with_input as imageops_scale_with_input;
+#[doc(hidden)]
+pub use crate::ops::imageops::scale_with_route_callbacks as imageops_scale_with_route_callbacks;
 pub use crate::ops::imageops::solarize as imageops_solarize;
 #[doc(hidden)]
 pub use crate::ops::imageops::solarize_comparison_table as imageops_solarize_comparison_table;
+#[doc(hidden)]
+pub use crate::ops::imageops::solarize_with_callbacks as imageops_solarize_with_callbacks;
 pub use crate::ops::imageops::solarize_with_input as imageops_solarize_with_input;
 pub use crate::ops::imageops::validate_colorize_mode as imageops_validate_colorize_mode;
 pub use crate::ops::imageops::validate_deform_resample as imageops_validate_deform_resample;
+#[doc(hidden)]
+pub use crate::ops::imageops::validate_expand_output_size_for_mode as imageops_validate_expand_output_size_for_mode;
+#[doc(hidden)]
+pub use crate::ops::imageops::validate_prepared_expand_output_size as imageops_validate_prepared_expand_output_size;
 pub use crate::ops::module_fns::EvalInputKind;
+#[doc(hidden)]
+pub use crate::ops::module_fns::MergeCallbackContract;
 pub use crate::ops::module_fns::MergeInput;
 pub use crate::ops::module_fns::alpha_composite as image_alpha_composite;
 pub use crate::ops::module_fns::blend as image_blend;
@@ -622,6 +672,8 @@ pub use crate::ops::module_fns::linear_gradient as image_linear_gradient;
 pub use crate::ops::module_fns::make_float_lut as image_eval_float_lut;
 pub use crate::ops::module_fns::make_lut;
 pub use crate::ops::module_fns::merge as image_merge;
+#[doc(hidden)]
+pub use crate::ops::module_fns::merge_callback_contract as image_merge_callback_contract;
 pub use crate::ops::module_fns::merge_inputs as image_merge_inputs;
 pub use crate::ops::module_fns::radial_gradient as image_radial_gradient;
 pub use crate::ops::module_fns::validate_eval_input;
@@ -633,46 +685,47 @@ pub use crate::ops::param_filters::color3dlut_prepare_table;
 pub use crate::ops::param_filters::color3dlut_repr;
 pub use crate::ops::param_filters::color3dlut_transform_table;
 pub use crate::ops::param_filters::prepare_color3dlut;
+pub use crate::ops::param_filters::prepare_color3dlut_imaging_core;
 pub use crate::ops::paste::AlphaCompositeBox;
 pub use crate::ops::paste::PasteBoxInput;
 #[doc(hidden)]
-pub use crate::ops::paste::PasteBoxPlan;
-#[doc(hidden)]
 pub use crate::ops::paste::PasteBoxInput as PythonPasteBox;
+#[doc(hidden)]
+pub use crate::ops::paste::PasteBoxPlan;
+pub use crate::ops::paste::PasteColorComponent;
 pub use crate::ops::paste::PasteMaskInput;
 #[doc(hidden)]
 pub use crate::ops::paste::PasteMaskInput as PythonPasteMask;
 pub use crate::ops::paste::PasteSource;
-pub use crate::ops::paste::PasteColorComponent;
 pub use crate::ops::paste::PasteSourceInput;
 #[doc(hidden)]
-pub use crate::ops::paste::PasteSourcePlan;
-#[doc(hidden)]
 pub use crate::ops::paste::PasteSourceInput as PythonPasteSource;
+#[doc(hidden)]
+pub use crate::ops::paste::PasteSourcePlan;
 pub use crate::ops::quantize::QuantizePalette;
 pub use crate::ops::resize::ResampleInput;
 #[doc(hidden)]
 pub use crate::ops::resize::ThumbnailPlan;
 pub use crate::ops::resize::parse_resample;
 pub use crate::ops::resize::parse_resample_input;
+#[doc(hidden)]
+pub use crate::ops::rotate::PreparedRotate;
 pub use crate::ops::rotate::RotateExpandInput;
 pub use crate::ops::rotate::RotatePointInput;
 pub use crate::ops::rotate::RotateResampleInput;
 pub use crate::ops::rotate::normalize_rotate;
 #[doc(hidden)]
-pub use crate::ops::rotate::PreparedRotate;
-#[doc(hidden)]
 pub use crate::ops::rotate::normalize_rotate as normalize_python_rotate;
-pub use crate::ops::transform::ReduceBox;
-pub use crate::ops::transform::ReduceFactor;
 #[doc(hidden)]
 pub use crate::ops::transform::PreparedTransformFill;
 #[doc(hidden)]
 pub use crate::ops::transform::PreparedTransformOutput;
-#[doc(hidden)]
-pub use crate::ops::transform::TransformMeshAccumulator;
+pub use crate::ops::transform::ReduceBox;
+pub use crate::ops::transform::ReduceFactor;
 pub use crate::ops::transform::TransformData;
 pub use crate::ops::transform::TransformFill;
+#[doc(hidden)]
+pub use crate::ops::transform::TransformMeshAccumulator;
 #[doc(hidden)]
 pub use crate::ops::transform::transform_resample_public_error;
 pub use crate::ops::transpose::TransposeInput;
@@ -680,6 +733,7 @@ pub use crate::ops::transpose::normalize_transpose_input;
 pub use crate::ops::transpose::normalize_transposed_font_input;
 pub use crate::ops::transpose::transpose_name_from_int;
 pub use crate::ops::utils::align_row_to_32;
+pub use crate::pipeline::AutocontrastOptions;
 pub use crate::pipeline::ColorMode;
 pub use crate::pipeline::DitherMethod;
 pub use crate::pipeline::ExpandMargins;
@@ -687,10 +741,9 @@ pub use crate::pipeline::PipelineOp;
 pub use crate::pipeline::ResampleFilter;
 pub use crate::pipeline::TransformMethod;
 pub use crate::pipeline::TransposeMethod;
-pub use crate::raster::ConvertBuffer;
 pub use crate::raster::ColorType;
+pub use crate::raster::ConvertBuffer;
 pub use crate::raster::DynamicImage;
-pub use crate::raster::Mode;
 pub use crate::raster::EncodableLayout;
 pub use crate::raster::Enlargeable;
 pub use crate::raster::EnumeratePixels;
@@ -707,6 +760,7 @@ pub use crate::raster::GrayImage;
 pub use crate::raster::ImageBuffer;
 pub use crate::raster::Luma;
 pub use crate::raster::LumaA;
+pub use crate::raster::Mode;
 pub use crate::raster::Pixel;
 pub use crate::raster::Pixels;
 pub use crate::raster::PixelsMut;

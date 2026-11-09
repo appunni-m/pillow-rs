@@ -25,13 +25,17 @@ use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
 
-pub(crate) mod helpers;
 #[path = "backend_state.rs"]
 mod backend_state;
 pub(crate) mod eager;
 mod execution;
 mod execution_context;
+pub(crate) mod helpers;
 pub use execution_context::{Architecture, ExecutionContext};
+#[cfg(feature = "test-api")]
+pub(crate) fn set_test_cpu_architecture(architecture: Architecture) {
+    execution_context::set_test_architecture(architecture);
+}
 #[path = "phase_telemetry.rs"]
 mod phase_telemetry;
 #[path = "telemetry.rs"]
@@ -43,33 +47,30 @@ pub use telemetry::{
     GpuShaderDispatchTelemetry, PipelineAllocationTelemetry, PipelineOperationTelemetry,
     PipelineResourceTelemetry,
 };
+pub(crate) use telemetry::{
+    PipelineOperationTelemetryCapture, RestorePipelineOperationOrigins,
+    account_host_buffer_boundary, begin_eager_cpu_operation_telemetry,
+    begin_pipeline_operation_telemetry, cancel_eager_cpu_operation_telemetry,
+    capture_active_origin, clear_pipeline_operation_architecture, enter_operation_origins,
+    finish_eager_cpu_operation_telemetry, finish_eager_cpu_operation_telemetry_with_selection,
+    finish_pipeline_operation_telemetry, host_resource_telemetry,
+    record_eager_cpu_operation_receipt_with_selection,
+    record_eager_cpu_operation_receipt_with_selection_and_receipts, record_pipeline_allocation,
+    record_pipeline_backend_fallback, record_pipeline_operation_handoff,
+    record_pipeline_operation_mode_conversion, record_pipeline_operation_path,
+    record_pipeline_operation_scalar_tail, record_pipeline_operation_selection,
+    record_pipeline_operation_unsupported, record_pipeline_operation_vector_blocks,
+    record_pipeline_resize_coeff_cache_hit, record_pipeline_resize_coeff_cache_miss,
+    record_pipeline_resource_telemetry, reset_pipeline_allocation_telemetry,
+    reset_pipeline_operation_telemetry, take_pipeline_allocation_telemetry,
+    take_pipeline_operation_telemetry,
+};
 use telemetry::{
     PipelineTelemetry, elapsed_ns, pipeline_telemetry_enabled, pipeline_timestamp,
     record_pipeline_telemetry, set_gpu_shader_coverage_enabled, set_pipeline_telemetry_enabled,
     take_gpu_shader_coverage, take_pipeline_backend_override, take_pipeline_dispatch_count,
     take_pipeline_resize_coeff_cache_stats, take_pipeline_resource_telemetry,
     take_pipeline_telemetry,
-};
-pub(crate) use telemetry::{
-    RestorePipelineOperationOrigins, account_host_buffer_boundary,
-    begin_eager_cpu_operation_telemetry, begin_pipeline_operation_telemetry,
-    cancel_eager_cpu_operation_telemetry, capture_active_origin, enter_operation_origins,
-    finish_eager_cpu_operation_telemetry,
-    finish_eager_cpu_operation_telemetry_with_selection,
-    finish_pipeline_operation_telemetry, host_resource_telemetry,
-    record_eager_cpu_operation_receipt_with_selection,
-    record_eager_cpu_operation_receipt_with_selection_and_receipts,
-    record_pipeline_allocation, record_pipeline_backend_fallback,
-    clear_pipeline_operation_architecture,
-    record_pipeline_operation_selection,
-    record_pipeline_operation_handoff, record_pipeline_operation_mode_conversion,
-    record_pipeline_operation_path, record_pipeline_operation_scalar_tail,
-    record_pipeline_operation_unsupported, record_pipeline_operation_vector_blocks,
-    record_pipeline_resize_coeff_cache_hit, record_pipeline_resize_coeff_cache_miss,
-    record_pipeline_resource_telemetry, reset_pipeline_allocation_telemetry,
-    reset_pipeline_operation_telemetry, take_pipeline_allocation_telemetry,
-    take_pipeline_operation_telemetry,
-    PipelineOperationTelemetryCapture,
 };
 #[cfg(feature = "gpu")]
 pub(crate) use telemetry::{
@@ -84,14 +85,13 @@ pub(crate) use backend_state::{
     preferred_active_backend,
 };
 pub(crate) use eager::{
-    execute_eager_cpu_getprojection, execute_eager_cpu_getprojection_with_receipts,
-    execute_eager_cpu_linear_gradient,
-    execute_eager_cpu_mandelbrot, execute_eager_cpu_radial_gradient,
-    execute_eager_cpu_arch_bytes_with_context,
-    execute_eager_cpu_arch_image_operation_with_context,
+    execute_eager_cpu_arch_bytes_with_context, execute_eager_cpu_arch_image_operation_with_context,
     execute_eager_cpu_arch_image_operation_with_context_and_receipts,
-    execute_eager_native_copy_result, execute_eager_native_copy_result_with_receipts,
-    execute_eager_native_identity_result, execute_eager_native_identity_result_with_receipts,
+    execute_eager_cpu_getprojection, execute_eager_cpu_getprojection_with_receipts,
+    execute_eager_cpu_linear_gradient, execute_eager_cpu_mandelbrot,
+    execute_eager_cpu_radial_gradient, execute_eager_native_copy_result,
+    execute_eager_native_copy_result_with_receipts, execute_eager_native_identity_result,
+    execute_eager_native_identity_result_with_receipts,
 };
 
 #[cfg(feature = "gpu")]
@@ -101,9 +101,8 @@ pub(crate) use eager::{
 };
 pub(crate) use execution::{
     PreparedExecution, execute_prepared, execute_prepared_cpu_arch_convert_output,
-    execute_prepared_cpu_arch_operation,
-    execute_prepared_cpu_arch_terminal, execute_prepared_cpu_terminal,
-    execute_prepared_shared_with_palette,
+    execute_prepared_cpu_arch_operation, execute_prepared_cpu_arch_terminal,
+    execute_prepared_cpu_terminal, execute_prepared_shared_with_palette,
     execute_prepared_with_palette, prepare_execution,
 };
 #[cfg(feature = "gpu")]
@@ -351,18 +350,17 @@ pub use registry::support::{
     FallbackReason, ImplementationId, ImplementationSupport, InputContract, MergeBandModeRule,
     ModeChannelCapacity, ModeSupport, OperationId, OperationModeRoute, OperationModeTransition,
     OperationRouteGuard, OperationRouteOutcome, OperationRoutePath, OperationRouteStage,
-    OperationSupport, OperationTargetComposition, OperationTargetCompositionKind, PadFillRule,
-    OperationValueResult, PixelValueShape,
-    OperationTransitionSource, OutputModeRule, PaletteKnowledge, PasteInputRules, PasteMaskRule, PayloadOutput,
-    PixelWriteRunFacts, RejectionKind, RequestFacts, SecondaryInputFacts, StrategyGuard,
-    StrategyInputs, StrategySelection, SupportAssessment, SupportScope, UnresolvedGuard,
+    OperationSupport, OperationTargetComposition, OperationTargetCompositionKind,
+    OperationTransitionSource, OperationValueResult, OutputModeRule, PadFillRule, PaletteKnowledge,
+    PasteInputRules, PasteMaskRule, PayloadOutput, PixelValueShape, PixelWriteRunFacts,
+    RejectionKind, RequestFacts, SecondaryInputFacts, StrategyGuard, StrategyInputs,
+    StrategySelection, SupportAssessment, SupportScope, UnresolvedGuard,
 };
 
 pub(crate) use pool_cpu::CpuPool;
 pub(crate) use pool_cpu::ops::analysis::ops::{
     execute_cmyk8_selected as cpu_cmyk_projection_selected,
-    execute_rgb8_selected as cpu_rgb_projection_selected,
-    prepare as prepare_cpu_getprojection,
+    execute_rgb8_selected as cpu_rgb_projection_selected, prepare as prepare_cpu_getprojection,
 };
 #[cfg(feature = "gpu")]
 pub(crate) use pool_gpu::GpuPool;

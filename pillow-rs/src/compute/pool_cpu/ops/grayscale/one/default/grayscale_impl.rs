@@ -1,11 +1,13 @@
 //! Original scalar sample conversion for one.
 
-use crate::raster::{GrayImage};
+use crate::raster::GrayImage;
 
 pub(crate) type Input = GrayImage;
 pub(crate) type Kernel<'a> = &'a Input;
 
-pub(crate) fn prepare(input: &Input) -> Kernel<'_> { input }
+pub(crate) fn prepare(input: &Input) -> Kernel<'_> {
+    input
+}
 pub(crate) fn execute(input: Kernel<'_>) -> GrayImage {
     let mut gray = input.clone();
     for pixel in gray.pixels_mut() {

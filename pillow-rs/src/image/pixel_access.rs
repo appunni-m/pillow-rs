@@ -22,6 +22,7 @@ pub enum PutPixelValue {
     Invalid,
 }
 
+mod palette;
 mod palette_components;
 
 pub use palette_components::PaletteColorComponent;
@@ -115,18 +116,18 @@ impl Image {
             return Err(PilError::IndexError("image index out of range".into()));
         }
         let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
-        let selection = crate::compute::pool_cpu::ops::analysis::ops::select_get_pixel(
-            img.mode(),
-            &context,
-        )?;
+        let selection =
+            crate::compute::pool_cpu::ops::analysis::ops::select_get_pixel(img.mode(), &context)?;
         let value = crate::compute::pool_cpu::ops::analysis::ops::execute_get_pixel(
             img.as_ref(),
             x,
             y,
             selection,
         )?;
-        let output_bytes = crate::compute::pool_cpu::ops::analysis::helpers::pixel_access::
-            formatted_pixel_bytes(&value);
+        let output_bytes =
+            crate::compute::pool_cpu::ops::analysis::helpers::pixel_access::formatted_pixel_bytes(
+                &value,
+            );
         crate::compute::record_eager_cpu_operation_receipt_with_selection_and_receipts(
             "GetPixel",
             requested_backend,
@@ -257,39 +258,6 @@ impl Image {
         Ok((index as u8, Some(palette)))
     }
 
-    fn palette_allocation_index(
-        &self,
-        entries: usize,
-        reserved: &[u32],
-        reuse_unused: bool,
-    ) -> Result<usize, PilError> {
-        // TODO(pillow-rs#3ptb): freeze P/PA parity for reserved metadata
-        // indices in short palettes and full-palette reuse, including when
-        // public Python `Image.info` overrides a retained palette-alpha marker.
-        // Pillow skips `background`/`transparency`, but appends at the current
-        // palette end even when the returned index is later.
-        let mut next = entries;
-        while next < 256 && reserved.contains(&(next as u32)) {
-            next += 1;
-        }
-        if next < 256 {
-            return Ok(next);
-        }
-        if !reuse_unused {
-            return Err(PilError::ValueError(
-                "cannot allocate more than 256 colors".into(),
-            ));
-        }
-        let mut used = [false; 256];
-        for index in self.tobytes()? {
-            used[usize::from(index)] = true;
-        }
-        (0..256)
-            .rev()
-            .find(|&index| !used[index] && !reserved.contains(&(index as u32)))
-            .ok_or_else(|| PilError::ValueError("cannot allocate more than 256 colors".into()))
-    }
-
     pub(crate) fn ensure_draw_palette_entry_available(
         &self,
         reserved: &[u32],
@@ -392,10 +360,8 @@ impl Image {
         input: crate::compute::pool_cpu::ops::put::ops::PutPixelValueAtInput,
     ) -> Result<(), PilError> {
         let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
-        let selection = crate::compute::pool_cpu::ops::put::ops::select_put_pixel_value_at(
-            mode,
-            &context,
-        )?;
+        let selection =
+            crate::compute::pool_cpu::ops::put::ops::select_put_pixel_value_at(mode, &context)?;
 
         let mut operation_receipts = PipelineOperationTelemetryCapture::begin();
         self.load()?;
@@ -619,8 +585,7 @@ impl Image {
                 PaletteColorComponent::Integer(value) if (0..=255).contains(value) => {
                     integer_color.push(*value);
                 }
-                PaletteColorComponent::Integer(_)
-                | PaletteColorComponent::WideInteger { .. } => {
+                PaletteColorComponent::Integer(_) | PaletteColorComponent::WideInteger { .. } => {
                     return Err(PilError::ValueError(
                         "bytes must be in range(0, 256)".into(),
                     ));
@@ -693,10 +658,7 @@ impl Image {
             })
     }
 
-    fn normalize_palette_float_color(
-        &self,
-        values: &[f64],
-    ) -> Result<(Vec<f64>, bool), PilError> {
+    fn normalize_palette_float_color(&self, values: &[f64]) -> Result<(Vec<f64>, bool), PilError> {
         let rgba_palette = self.palette_mode() == Some("RGBA");
         let mut color = values.to_vec();
         if rgba_palette && color.len() == 3 {
@@ -717,11 +679,11 @@ impl Image {
         values: &[f64],
         reserved: &[u32],
     ) -> Result<PutPixelValue, PilError> {
-        // TODO(pillow-rs#3ptb): parity-check nonstandard tuple arities and
-        // palette-color cache state after `bytes(color)` rejects float values.
-        // Python palette keys compare equal integer and float components
-        // before `bytes(color)` validates a new entry. Normalize tuple arity
-        // first, then preserve Pillow's allocation-error precedence.
+        // NO_PILLOW_SUPPORT: this typed Rust input path cannot mutate the
+        // Python ImagePalette.colors cache. Public Python list/tuple writes
+        // resolve through ImagePalette.getcolor before reaching this helper.
+        // TODO(pillow-rs#3ptb): verify the public wrapper's cache side effects
+        // for float colors and noncanonical tuple arities in frozen parity.
         let pa = self.known_mode_identity() == Some(crate::raster::Mode::ImagePaletteAlpha8);
         let (color, rgba) = self.normalize_palette_float_color(values)?;
         let palette = if rgba {
@@ -893,14 +855,14 @@ impl Image {
                 if mode == Mode::ImageF32 {
                     self.putpixel_mode_scalar_for_mode(x, y, value, mode)
                 } else {
-                    Err(if mode.pillow_name().is_some_and(|name| name.len() == 1) {
+                    Err(if mode.is_single_character_pillow_mode() {
                         PilError::TypeError("color must be int or single-element tuple".into())
                     } else {
                         PilError::TypeError("color must be int or tuple".into())
                     })
                 }
             }
-            PutPixelValue::Invalid => Err(if mode.pillow_name().is_some_and(|name| name.len() == 1) {
+            PutPixelValue::Invalid => Err(if mode.is_single_character_pillow_mode() {
                 PilError::TypeError("color must be int or single-element tuple".into())
             } else {
                 // Pillow routes non-integral component sequences through its
@@ -947,7 +909,7 @@ impl Image {
                 [value] if mode == Mode::ImageF32 => {
                     self.putpixel_mode_scalar_for_mode(x, y, *value, mode)
                 }
-                _ => Err(if mode.pillow_name().is_some_and(|name| name.len() == 1) {
+                _ => Err(if mode.is_single_character_pillow_mode() {
                     PilError::TypeError("color must be int or single-element tuple".into())
                 } else {
                     PilError::TypeError(

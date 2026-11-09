@@ -30,7 +30,8 @@ pub(super) fn gpu_thumbnail_requires_exact_host_control(
         h,
         filter,
         reducing_gap,
-    } = op else {
+    } = op
+    else {
         return false;
     };
     if reducing_gap.is_some_and(|gap| gap < 1.0) {

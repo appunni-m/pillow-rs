@@ -10,4 +10,3 @@ declare_expand_byte_mode!(
     1,
     crate::compute::registry::support::ExpandFillRule::PaletteIndexOrColor,
 );
-

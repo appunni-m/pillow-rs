@@ -78,26 +78,19 @@ fn execute_float_point(image: &Image, lut: &[f64]) -> Result<Image, PilError> {
     }
     operation_receipts.capture();
     let execute = || {
-        crate::compute::pool_cpu::ops::eval::ops::execute_float(
-            input.as_ref(),
-            mode,
-            lut,
-            &context,
-        )
-        .and_then(|(output, selection)| {
-            let output_bytes = output.as_bytes().len();
-            Image::from_dynamic_with_mode(output, Some(Mode::ImageF32))
-                .map(|image| (image, output_bytes, selection))
-        })
+        crate::compute::pool_cpu::ops::eval::ops::execute_float(input.as_ref(), mode, lut, &context)
+            .and_then(|(output, selection)| {
+                let output_bytes = output.as_bytes().len();
+                Image::from_dynamic_with_mode(output, Some(Mode::ImageF32))
+                    .map(|image| (image, output_bytes, selection))
+            })
     };
     if !Backend::pipeline_telemetry_enabled() {
         return execute().map(|(image, _, _)| image);
     }
 
-    let telemetry = crate::compute::begin_eager_cpu_operation_telemetry(
-        "PointFloat",
-        requested_backend,
-    );
+    let telemetry =
+        crate::compute::begin_eager_cpu_operation_telemetry("PointFloat", requested_backend);
     operation_receipts.restore();
     match execute() {
         Ok((image, output_bytes, selection)) => {

@@ -1,10 +1,11 @@
 //! Original image-backed alpha semantics for `ImageI16B`.
 
+use super::super::super::helpers::{
+    alpha_mask::MaskStrategy,
+    put_alpha_data::{self as helpers, AlphaDataInput},
+};
 use crate::error::PilError;
 use crate::raster::DynamicImage;
-use super::super::super::helpers::{
-    alpha_mask::MaskStrategy, put_alpha_data::{self as helpers, AlphaDataInput},
-};
 
 pub(crate) type Input = crate::raster::ImageBuffer<crate::raster::Luma<u16>, Vec<u16>>;
 pub(crate) type Kernel<'a> = AlphaDataInput<'a, crate::raster::Luma<u16>>;
@@ -16,9 +17,8 @@ pub(crate) fn prepare<'a>(image: &'a Input, mask: MaskStrategy<'a>) -> Kernel<'a
 
 #[inline]
 pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
-    let mask = input.mask.samples();
     Ok(DynamicImage::ImageLumaA16(helpers::luma16_mask(
         input.image,
-        mask,
+        input.mask,
     )))
 }

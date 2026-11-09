@@ -1,8 +1,8 @@
 //! `ImageI16B` band semantics and context-selected architecture strategies.
 
 // NO_PILLOW_SUPPORT: native u16-to-LA16 alpha insertion extends Pillow putalpha.
-use crate::compute::registry::support::BandIndexRule;
 use super::super::helpers::extract_band_strategy::declare_strategies;
+use crate::compute::registry::support::BandIndexRule;
 
 declare_strategies! {
     ImageI16B, BandIndexRule::LumaWithOpaqueAlpha;
@@ -25,3 +25,6 @@ use super::super::helpers::put_alpha_data_strategy::declare_strategies as declar
 declare_alpha_data_strategies! {
     ImageI16B, ImageLumaA16, 0, 4;
 }
+super::super::helpers::scalar_write_support::declare_scalar_write_support!(
+    ImageI16B, true, true, true,
+);

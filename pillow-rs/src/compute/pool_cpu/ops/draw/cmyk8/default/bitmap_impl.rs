@@ -16,32 +16,30 @@ pub(crate) fn apply(
     };
     let (image_width, image_height) = canvas.dimensions();
     let ink = [color.0, color.1, color.2, color.3];
-    for mask_y in 0..mask_height {
-        for mask_x in 0..mask_width {
-            let coverage = mask.coverage(mask_x, mask_y);
-            if mask.should_skip(coverage) {
-                continue;
+    let region = BitmapRegion::clipped(x, y, image_width, image_height, mask_width, mask_height);
+    if let Some((image_x_start, image_y_start)) =
+        region.destination_origin(x, y, image_width, image_height)
+    {
+        for mask_y in region.y_start..region.y_end {
+            let image_y = image_y_start + (mask_y - region.y_start);
+            for mask_x in region.x_start..region.x_end {
+                let coverage = mask.coverage(mask_x, mask_y);
+                if mask.should_skip(coverage) {
+                    continue;
+                }
+                let image_x = image_x_start + (mask_x - region.x_start);
+                let existing = canvas.get_pixel(image_x, image_y);
+                canvas.put_pixel(
+                    image_x,
+                    image_y,
+                    Rgba([
+                        mask.blend_byte(ink[0], existing[0], coverage),
+                        mask.blend_byte(ink[1], existing[1], coverage),
+                        mask.blend_byte(ink[2], existing[2], coverage),
+                        mask.blend_byte(ink[3], existing[3], coverage),
+                    ]),
+                );
             }
-            let image_x = x + mask_x as i32;
-            let image_y = y + mask_y as i32;
-            if image_x < 0
-                || image_y < 0
-                || image_x as u32 >= image_width
-                || image_y as u32 >= image_height
-            {
-                continue;
-            }
-            let existing = canvas.get_pixel(image_x as u32, image_y as u32);
-            canvas.put_pixel(
-                image_x as u32,
-                image_y as u32,
-                Rgba([
-                    mask.blend_byte(ink[0], existing[0], coverage),
-                    mask.blend_byte(ink[1], existing[1], coverage),
-                    mask.blend_byte(ink[2], existing[2], coverage),
-                    mask.blend_byte(ink[3], existing[3], coverage),
-                ]),
-            );
         }
     }
     Ok(DynamicImage::ImageCmyk8(canvas))
@@ -61,14 +59,7 @@ pub(crate) fn apply_luma_mask(
         return None;
     };
     let (image_width, image_height) = source.dimensions();
-    let region = BitmapRegion::clipped(
-        x,
-        y,
-        image_width,
-        image_height,
-        mask_width,
-        mask_height,
-    );
+    let region = BitmapRegion::clipped(x, y, image_width, image_height, mask_width, mask_height);
     let mut canvas = source.clone();
     blend_luma_rows(&mut canvas, mask.as_raw(), mask_width, region, x, y, color);
     Some(DynamicImage::ImageCmyk8(canvas))
@@ -84,13 +75,18 @@ fn blend_luma_rows(
     color: (u8, u8, u8, u8),
 ) {
     let row_stride = canvas.width() as usize * 4;
+    let Some((destination_x, destination_y)) =
+        region.destination_origin(x, y, canvas.width(), canvas.height())
+    else {
+        return;
+    };
     let destination = canvas.as_mut();
     let ink = [color.0, color.1, color.2, color.3];
     let clipped_width = (region.x_end - region.x_start) as usize;
-    let destination_x = (i64::from(x) + i64::from(region.x_start)) as usize;
+    let destination_x = destination_x as usize;
     let destination_row_len = clipped_width * 4;
     for mask_y in region.y_start..region.y_end {
-        let image_y = (i64::from(y) + i64::from(mask_y)) as usize;
+        let image_y = (destination_y + (mask_y - region.y_start)) as usize;
         let destination_start = image_y * row_stride + destination_x * 4;
         let destination_row =
             &mut destination[destination_start..destination_start + destination_row_len];

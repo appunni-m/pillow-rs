@@ -1,7 +1,9 @@
 //! ImageOps.expand strategy for exact Rgb32FImage storage.
 
+use crate::compute::registry::support::{
+    InputContract, ModeSupport, OperationId, OutputModeRule, PaletteKnowledge, StrategyInputs,
+};
 use crate::compute::{ExecutionContext, pool_cpu::helpers::execution::prepared::Prepared};
-use crate::compute::registry::support::{InputContract, ModeSupport, OperationId, OutputModeRule, PaletteKnowledge, StrategyInputs};
 use crate::error::PilError;
 use crate::pipeline::NativeColorInput;
 use crate::raster::{DynamicImage, Mode};
@@ -10,7 +12,9 @@ use crate::raster::{DynamicImage, Mode};
 mod default;
 
 const INPUTS: &[InputContract] = &[
-    InputContract::ExpandedDimensions { bytes_per_pixel: 12 },
+    InputContract::ExpandedDimensions {
+        bytes_per_pixel: 12,
+    },
     InputContract::ExpandFill(crate::compute::registry::support::ExpandFillRule::NativeF32),
 ];
 // NO_PILLOW_SUPPORT: this native Rgb32FImage expansion preserves internal
@@ -56,11 +60,16 @@ pub(crate) fn prepare_with_native_fill<'a>(
     .with_expand_border(border);
     let selection = super::super::helpers::strategy::select_expand(SUPPORT, facts, ctx)?;
     let kernel = default::prepare(input, border, fill, native_fill);
-    Ok(Prepared::new(ArchitectureStrategy::Default(kernel), selection))
+    Ok(Prepared::new(
+        ArchitectureStrategy::Default(kernel),
+        selection,
+    ))
 }
 
 pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> {
     match strategy.implementation {
-        ArchitectureStrategy::Default(kernel) => default::execute(kernel).map(DynamicImage::ImageRgb32F),
+        ArchitectureStrategy::Default(kernel) => {
+            default::execute(kernel).map(DynamicImage::ImageRgb32F)
+        }
     }
 }

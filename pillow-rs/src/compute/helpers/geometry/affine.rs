@@ -3,11 +3,7 @@
 /// Computes Pillow's 16.16 nearest-affine coefficients when the map is not a
 /// pure scale and all output corners fit the fixed-point coordinate range.
 #[must_use]
-pub(crate) fn affine_nearest_fixed(
-    data: [f64; 6],
-    width: u32,
-    height: u32,
-) -> Option<[i64; 6]> {
+pub(crate) fn affine_nearest_fixed(data: [f64; 6], width: u32, height: u32) -> Option<[i64; 6]> {
     let [a, b, c, d, e, f] = data;
     if b == 0.0 && d == 0.0 {
         return None;
@@ -19,8 +15,7 @@ pub(crate) fn affine_nearest_fixed(
         (f64::from(width), f64::from(height)),
     ];
     if !corners.into_iter().all(|(x, y)| {
-        (a.mul_add(x, b * y) + c).abs() < 32768.0
-            && (d.mul_add(x, e * y) + f).abs() < 32768.0
+        (a.mul_add(x, b * y) + c).abs() < 32768.0 && (d.mul_add(x, e * y) + f).abs() < 32768.0
     }) {
         return None;
     }

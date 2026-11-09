@@ -18,15 +18,13 @@
 // NO_PILLOW_SUPPORT: Internal high-depth raster identities retain their exact
 // sample types and mode tags through these native transpose strategies.
 
-use crate::compute::{ExecutionContext, registry::support::{
-    ModeSupport,
-    OperationId,
-    OperationInputs,
-    OperationSupport,
-    RequestFacts,
-    StrategyInputs,
-    StrategySelection,
-}};
+use crate::compute::{
+    ExecutionContext,
+    registry::support::{
+        ModeSupport, OperationId, OperationInputs, OperationSupport, RequestFacts, StrategyInputs,
+        StrategySelection,
+    },
+};
 use crate::error::PilError;
 use crate::pipeline::{PipelineOp, TransposeMethod};
 use crate::raster::{DynamicImage, Mode};
@@ -206,19 +204,19 @@ pub(crate) fn prepare_mirror<'a>(
     prepare_mirror_mode(image, ctx)
 }
 
-
-
 pub(crate) fn prepare_transpose<'a>(
     image: &'a DynamicImage,
     method: &TransposeMethod,
     ctx: &ExecutionContext,
 ) -> Result<PreparedTranspose<'a>, PilError> {
-    let mut facts = OperationInputs { image, palette: Default::default() }.facts();
+    let mut facts = OperationInputs {
+        image,
+        palette: Default::default(),
+    }
+    .facts();
     facts.request = RequestFacts::Transpose { method: *method };
     prepare_transpose_mode(image, method, facts, ctx)
 }
-
-
 
 pub(crate) fn prepare_flip_pipeline<'a>(
     input: OperationInputs<'a>,
@@ -239,8 +237,7 @@ pub(crate) fn prepare_mirror_pipeline<'a>(
     if !matches!(op, PipelineOp::Mirror) {
         return Err(PilError::ValueError("expected Mirror op".into()));
     }
-    prepare_mirror(input.image, ctx)
-        .map(crate::compute::registry::PreparedOperation::from_mirror)
+    prepare_mirror(input.image, ctx).map(crate::compute::registry::PreparedOperation::from_mirror)
 }
 
 pub(crate) fn prepare_transpose_pipeline<'a>(

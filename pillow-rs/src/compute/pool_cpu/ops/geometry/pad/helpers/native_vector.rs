@@ -17,7 +17,9 @@ where
 {
     let channels = usize::from(P::CHANNEL_COUNT);
     if !(1..=4).contains(&channels) {
-        return Err(PilError::InternalError("Pad vector mode has invalid channels".into()));
+        return Err(PilError::InternalError(
+            "Pad vector mode has invalid channels".into(),
+        ));
     }
     let output_dims = CheckedDims::new_allow_empty(frame.width, frame.height, channels as u8)?;
     let output_len = output_dims.total_bytes();
@@ -38,10 +40,19 @@ where
     let source_stride = checked_product(source_width, channels, "Pad source row overflow")?;
     let source_len = checked_product(source_stride, source_height, "Pad source size overflow")?;
     if source_len != source.as_raw().len() {
-        return Err(PilError::InternalError("Pad source buffer shape mismatch".into()));
+        return Err(PilError::InternalError(
+            "Pad source buffer shape mismatch".into(),
+        ));
     }
 
-    let window = content_window(frame, channels, target_stride, source_stride, source_width, source_height)?;
+    let window = content_window(
+        frame,
+        channels,
+        target_stride,
+        source_stride,
+        source_width,
+        source_height,
+    )?;
     let mut output = Vec::new();
     output
         .try_reserve_exact(output_len)
@@ -50,7 +61,8 @@ where
     if window.is_identity(source_width, source_height, frame, target_stride) {
         let (blocks, tail) = copy_native_bytes(source.as_raw(), &mut output)
             .ok_or_else(|| PilError::InternalError("Pad vector copy shape mismatch".into()))?;
-        return image_from_raw(frame.width, frame.height, output).map(|image| (image, blocks, tail));
+        return image_from_raw(frame.width, frame.height, output)
+            .map(|image| (image, blocks, tail));
     }
 
     let fill = &fill[..channels];
@@ -85,7 +97,9 @@ where
     };
     let channels = usize::from(P::CHANNEL_COUNT);
     if !(1..=4).contains(&channels) {
-        return Err(PilError::InternalError("Pad vector mode has invalid channels".into()));
+        return Err(PilError::InternalError(
+            "Pad vector mode has invalid channels".into(),
+        ));
     }
     let output_dims = CheckedDims::new_allow_empty(frame.width, frame.height, channels as u8)?;
     let output_len = output_dims.total_bytes();
@@ -108,7 +122,9 @@ where
         "Pad source size overflow",
     )?;
     if source_len != source.as_raw().len() {
-        return Err(PilError::InternalError("Pad source buffer shape mismatch".into()));
+        return Err(PilError::InternalError(
+            "Pad source buffer shape mismatch".into(),
+        ));
     }
 
     let fill = &fill[..channels];
@@ -123,7 +139,9 @@ where
         (fill.repeat(target_stride / channels), 0, 0)
     };
     if fill_row.len() != target_stride {
-        return Err(PilError::InternalError("Pad fill row shape mismatch".into()));
+        return Err(PilError::InternalError(
+            "Pad fill row shape mismatch".into(),
+        ));
     }
     let mut output = Vec::new();
     output
@@ -137,7 +155,9 @@ where
         output.extend_from_slice(&fill_row);
     }
     if output.len() != output_len {
-        return Err(PilError::InternalError("Pad output buffer shape mismatch".into()));
+        return Err(PilError::InternalError(
+            "Pad output buffer shape mismatch".into(),
+        ));
     }
     image_from_raw(frame.width, frame.height, output)
         .map(|image| Some((image, vector_blocks, scalar_tail)))
@@ -196,16 +216,10 @@ fn content_window(
     source_width: usize,
     source_height: usize,
 ) -> Result<ContentWindow, PilError> {
-    let x_window = super::dimensions::clipped_axis(
-        frame.offset_x,
-        source_width,
-        frame.width as usize,
-    );
-    let y_window = super::dimensions::clipped_axis(
-        frame.offset_y,
-        source_height,
-        frame.height as usize,
-    );
+    let x_window =
+        super::dimensions::clipped_axis(frame.offset_x, source_width, frame.width as usize);
+    let y_window =
+        super::dimensions::clipped_axis(frame.offset_y, source_height, frame.height as usize);
     let copy_bytes = checked_product(x_window.length, channels, "Pad content row overflow")?;
     let source_x_start_bytes = checked_product(
         x_window.source_start,
@@ -243,11 +257,17 @@ fn content_window(
         || content_end > target_stride
         || copy_bytes > source_stride
     {
-        return Err(PilError::InternalError("Pad content window exceeds its image".into()));
+        return Err(PilError::InternalError(
+            "Pad content window exceeds its image".into(),
+        ));
     }
     Ok(ContentWindow {
         source_stride,
-        copy_height: if x_window.length == 0 { 0 } else { y_window.length },
+        copy_height: if x_window.length == 0 {
+            0
+        } else {
+            y_window.length
+        },
         copy_bytes,
         source_y_start: y_window.source_start,
         destination_y_start: y_window.destination_start,
@@ -301,13 +321,17 @@ fn fill_row(row: &mut [u8], fill: &[u8]) -> (u64, u64) {
     let vector_len = row.len() / 16 * 16;
     let mut blocks = 0u64;
     for start in (0..vector_len).step_by(16) {
-        let block = u8x16::new(std::array::from_fn(|lane| fill[(start + lane) % fill.len()]));
+        let block = u8x16::new(std::array::from_fn(|lane| {
+            fill[(start + lane) % fill.len()]
+        }));
         row[start..start + 16].copy_from_slice(&block.to_array());
         blocks = blocks.saturating_add(1);
     }
     let tail = row.len() - vector_len;
     if tail != 0 {
-        let block = u8x16::new(std::array::from_fn(|lane| fill[(vector_len + lane) % fill.len()]));
+        let block = u8x16::new(std::array::from_fn(|lane| {
+            fill[(vector_len + lane) % fill.len()]
+        }));
         row[vector_len..].copy_from_slice(&block.to_array()[..tail]);
         blocks = blocks.saturating_add(1);
     }

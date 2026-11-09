@@ -18,14 +18,9 @@ pub(crate) const fn support(
             reason: "conversion from 1 to LA not supported",
             kind: RejectionKind::ValueError,
         },
-        Mode::ImageLaPremultiplied8 => ModeSupport::Rejected {
-            mode,
-            reason: "unsupported putalpha mode: La",
-            kind: RejectionKind::ValueError,
-        },
         Mode::ImageLab8 => ModeSupport::Rejected {
             mode,
-            reason: "unsupported putalpha mode: LAB",
+            reason: "conversion from LAB to RGBA not supported",
             kind: RejectionKind::ValueError,
         },
         Mode::ImageYCbCr8 => ModeSupport::Rejected {
@@ -142,3 +137,32 @@ macro_rules! declare_strategies {
     };
 }
 pub(crate) use declare_strategies;
+
+// Rejected mode/operation pairs retain only their typed support declarations;
+// they do not compile placeholder kernels that can never be selected.
+macro_rules! declare_rejected_strategies {
+    ($mode:ident, $output:ident $(,)? $(;)?) => {
+        pub(crate) const PUT_ALPHA_SUPPORT: crate::compute::registry::support::ModeSupport =
+            $crate::compute::pool_cpu::ops::put::helpers::put_alpha_strategy::support(
+                crate::compute::registry::support::OperationId::PutAlpha,
+                crate::raster::Mode::$mode,
+                crate::compute::registry::support::OutputModeRule::Fixed(
+                    crate::raster::Mode::$output,
+                ),
+                &[],
+                &[],
+            );
+
+        pub(crate) const PUT_ALPHA_DATA_SUPPORT: crate::compute::registry::support::ModeSupport =
+            $crate::compute::pool_cpu::ops::put::helpers::put_alpha_strategy::support(
+                crate::compute::registry::support::OperationId::PutAlphaData,
+                crate::raster::Mode::$mode,
+                crate::compute::registry::support::OutputModeRule::Fixed(
+                    crate::raster::Mode::$output,
+                ),
+                &[],
+                &[],
+            );
+    };
+}
+pub(crate) use declare_rejected_strategies;

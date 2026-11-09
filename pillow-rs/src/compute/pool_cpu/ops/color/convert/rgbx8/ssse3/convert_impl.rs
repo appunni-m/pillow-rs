@@ -9,12 +9,10 @@ use crate::raster::{DynamicImage, RgbaImage};
     not(target_feature = "avx2")
 ))]
 pub(crate) fn execute_luma(source: &RgbaImage) -> Result<DynamicImage, PilError> {
-    let kernel = crate::compute::pool_cpu::ops::grayscale::rgbx8::default::grayscale_impl::prepare(
-        source,
-    )?;
-    let output = crate::compute::pool_cpu::ops::grayscale::rgbx8::ssse3::grayscale_impl::execute(
-        kernel,
-    );
+    let kernel =
+        crate::compute::pool_cpu::ops::grayscale::rgbx8::default::grayscale_impl::prepare(source)?;
+    let output =
+        crate::compute::pool_cpu::ops::grayscale::rgbx8::ssse3::grayscale_impl::execute(kernel);
     let output = crate::compute::pool_cpu::ops::grayscale::helpers::luma::vector_output(
         source.width(),
         source.height(),
@@ -24,12 +22,20 @@ pub(crate) fn execute_luma(source: &RgbaImage) -> Result<DynamicImage, PilError>
     Ok(DynamicImage::ImageLuma8(output))
 }
 
-#[cfg(all(target_arch = "x86_64", target_feature = "ssse3", not(target_feature = "avx2")))]
+#[cfg(all(
+    target_arch = "x86_64",
+    target_feature = "ssse3",
+    not(target_feature = "avx2")
+))]
 /// Converts the native RGBX layout to RGB by dropping its padding byte.
 ///
 /// # Safety
 ///
 /// The caller must use the SSSE3 strategy selected for this source/target.
+#[allow(
+    unsafe_code,
+    reason = "the SSSE3 mode strategy validates the host feature before this kernel is selected"
+)]
 pub(crate) unsafe fn execute_rgb(source: &RgbaImage) -> Result<DynamicImage, PilError> {
     // SAFETY: the strategy is selected only when SSSE3 is available.
     unsafe {

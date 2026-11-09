@@ -11,11 +11,11 @@ macro_rules! gpu_log {
 // GPU init is lazy — happens on first `execute_batch` call.
 
 use crate::checked_dims::CheckedDims;
-use crate::compute::registry;
 use crate::compute::helpers::resampling::{
     luma16_samples::{read as luma16_resample_read, write as luma16_resample_write},
     rounding::round_up,
 };
+use crate::compute::registry;
 use crate::compute::{Backend, BackendImpl, PipelineResourceTelemetry};
 use crate::error::PilError;
 use crate::ops::pil_resize::{
@@ -23,9 +23,7 @@ use crate::ops::pil_resize::{
     i32_samples_from_le_bytes, luma16_resample_big_endian, precompute_coeffs,
     precompute_coeffs_boxed_for_filter, precompute_coeffs_f64,
 };
-use crate::pipeline::{
-    ColorMode, PipelineOp, ResampleFilter, TransformMethod, TransposeMethod,
-};
+use crate::pipeline::{ColorMode, PipelineOp, ResampleFilter, TransformMethod, TransposeMethod};
 #[cfg(target_endian = "little")]
 use crate::raster::RgbImage;
 use crate::raster::{DynamicImage, GenericImageView, ImageBuffer, Luma, Mode, RgbaImage};

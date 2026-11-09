@@ -57,8 +57,10 @@ fn cmyk_to_rgb_rows(source: &[u8], output: &mut RgbImage) {
     }
     let source_stride = output.width() as usize * 4;
     let output_stride = output.width() as usize * 3;
-    for (source, destination) in source.chunks_exact(source_stride)
-        .zip(output.as_mut().chunks_exact_mut(output_stride)) {
+    for (source, destination) in source
+        .chunks_exact(source_stride)
+        .zip(output.as_mut().chunks_exact_mut(output_stride))
+    {
         cmyk_to_rgb_row(source, destination);
     }
 }
@@ -324,16 +326,18 @@ fn ycbcr_tables() -> &'static [[i32; 256]; 8] {
     }
 
     static TABLES: OnceLock<[[i32; 256]; 8]> = OnceLock::new();
-    TABLES.get_or_init(|| [
-        make_table(0.299),
-        make_table(0.587),
-        make_table(0.114),
-        make_table(-0.16874),
-        make_table(-0.33126),
-        make_table(0.5),
-        make_table(-0.41869),
-        make_table(-0.08131),
-    ])
+    TABLES.get_or_init(|| {
+        [
+            make_table(0.299),
+            make_table(0.587),
+            make_table(0.114),
+            make_table(-0.16874),
+            make_table(-0.33126),
+            make_table(0.5),
+            make_table(-0.41869),
+            make_table(-0.08131),
+        ]
+    })
 }
 
 const YCBCR_TO_RGB_R_CR: [i32; 256] = [

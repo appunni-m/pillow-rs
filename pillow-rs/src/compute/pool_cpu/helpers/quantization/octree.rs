@@ -550,15 +550,10 @@ where
             "FASTOCTREE mode source shape mismatch".to_owned(),
         ));
     }
-    quantize_octree_pixels(
-        dimensions.total_pixels(),
-        n_colors,
-        false,
-        |index| {
-            let [red, green, blue] = source.rgb_at(index);
-            [red, green, blue, 255]
-        },
-    )
+    quantize_octree_pixels(dimensions.total_pixels(), n_colors, false, |index| {
+        let [red, green, blue] = source.rgb_at(index);
+        [red, green, blue, 255]
+    })
 }
 
 /// Shared octree reduction over a native-format pixel accessor.

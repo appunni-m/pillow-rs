@@ -17,6 +17,8 @@
 //! covers every supported Bitmap mask against every public byte mode.
 //! TODO(pillow-rs#3ptb): verify direct Bitmap/Text selected-route receipts and
 //! backend fallback selection across operation × mode × architecture.
+//! TODO(pillow-rs#3ptb): add direct Bitmap parity at `i32::MIN`/`i32::MAX`
+//! origins for every supported byte mode after the CPU source migration closes.
 //! The five internal high-depth modes report an explicit ValueError rejection
 //! because no byte-mask Bitmap/Text strategy is implemented for them.
 //! Pillow 12.2's `ImagingFill2` confirms I;16 L masks blend both sample bytes,
@@ -36,17 +38,16 @@
 //! cover selected native modes, F-mode packed ink, and callback/error behavior;
 //! complete output, fault, and route receipts remain parity work.
 
-use crate::compute::{Architecture, Backend, ExecutionContext};
+use super::{BitmapMask, TextComposeInput, TextComposeResult};
 use crate::compute::registry::support::{
-    DrawRequestKind, DrawTextMaskKind, ImplementationSupport, InputContract, ModeSupport,
-    OperationId, OperationInputs, OperationModeRoute, OperationRouteGuard, OperationRoutePath, OperationSupport, OutputModeRule,
-    PaletteKnowledge, RequestFacts, StrategyGuard, StrategyInputs, StrategySelection,
-    SupportAssessment,
+    DrawRequestKind, DrawTextMaskKind, InputContract, ModeSupport, OperationId, OperationInputs,
+    OperationModeRoute, OperationRouteGuard, OperationRoutePath, OperationSupport,
+    PaletteKnowledge, RequestFacts, StrategyInputs, StrategySelection, SupportAssessment,
 };
+use crate::compute::{Architecture, Backend, ExecutionContext};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
-use super::{BitmapMask, TextComposeInput, TextComposeResult};
 
 const BITMAP_MASK_MODES: &[Mode] = &[
     Mode::One,
@@ -54,13 +55,10 @@ const BITMAP_MASK_MODES: &[Mode] = &[
     Mode::ImageRgba8,
     Mode::ImageRgbPremultiplied8,
 ];
-const TEXT_MASK_KINDS: &[DrawTextMaskKind] = &[
-    DrawTextMaskKind::Coverage,
-    DrawTextMaskKind::Rgba,
-];
+const TEXT_MASK_KINDS: &[DrawTextMaskKind] = &[DrawTextMaskKind::Coverage, DrawTextMaskKind::Rgba];
 const PALETTE_MODES: &[Mode] = &[Mode::ImagePalette8, Mode::ImagePaletteAlpha8];
 const TEXT_EMBEDDED_COLOR_MODES: &[Mode] = &[Mode::ImageRgb8, Mode::ImageRgba8];
-const DRAW_INPUTS: &[crate::compute::registry::support::InputContract] = &[
+pub(in crate::compute::pool_cpu::ops::draw) const DRAW_INPUTS: &[InputContract] = &[
     crate::compute::registry::support::InputContract::DrawInputs {
         bitmap_masks: BITMAP_MASK_MODES,
         text_mask_kinds: TEXT_MASK_KINDS,
@@ -72,71 +70,6 @@ const DRAW_INPUTS: &[crate::compute::registry::support::InputContract] = &[
         embedded_color_rejection: "Embedded color supported only in RGB and RGBA modes",
     },
 ];
-const fn draw_vector_architectures(mode: Mode) -> [ImplementationSupport; 3] {
-    [
-        ImplementationSupport::cpu(
-            OperationId::Draw,
-            mode,
-            Architecture::Sse2,
-            cfg!(all(
-                any(target_arch = "x86", target_arch = "x86_64"),
-                target_feature = "sse2"
-            )),
-            &[Architecture::Sse2],
-            StrategyGuard::DrawNativeSpans,
-        ),
-        ImplementationSupport::cpu(
-            OperationId::Draw,
-            mode,
-            Architecture::Neon,
-            cfg!(all(target_arch = "aarch64", target_feature = "neon")),
-            &[Architecture::Neon],
-            StrategyGuard::DrawNativeSpans,
-        ),
-        ImplementationSupport::cpu(
-            OperationId::Draw,
-            mode,
-            Architecture::WasmSimd128,
-            cfg!(all(target_arch = "wasm32", target_feature = "simd128")),
-            &[Architecture::WasmSimd128],
-            StrategyGuard::DrawNativeSpans,
-        ),
-    ]
-}
-
-static ONE_ARCHITECTURES: [ImplementationSupport; 3] =
-    draw_vector_architectures(Mode::One);
-static LUMA8_ARCHITECTURES: [ImplementationSupport; 3] =
-    draw_vector_architectures(Mode::ImageLuma8);
-static LUMA_A8_ARCHITECTURES: [ImplementationSupport; 3] =
-    draw_vector_architectures(Mode::ImageLumaA8);
-static LA_PREMULTIPLIED8_ARCHITECTURES: [ImplementationSupport; 3] =
-    draw_vector_architectures(Mode::ImageLaPremultiplied8);
-static PALETTE8_ARCHITECTURES: [ImplementationSupport; 3] =
-    draw_vector_architectures(Mode::ImagePalette8);
-static PALETTE_ALPHA8_ARCHITECTURES: [ImplementationSupport; 3] =
-    draw_vector_architectures(Mode::ImagePaletteAlpha8);
-static RGB8_ARCHITECTURES: [ImplementationSupport; 3] =
-    draw_vector_architectures(Mode::ImageRgb8);
-static RGBA8_ARCHITECTURES: [ImplementationSupport; 3] =
-    draw_vector_architectures(Mode::ImageRgba8);
-static RGB_PREMULTIPLIED8_ARCHITECTURES: [ImplementationSupport; 3] =
-    draw_vector_architectures(Mode::ImageRgbPremultiplied8);
-static RGBX8_ARCHITECTURES: [ImplementationSupport; 3] =
-    draw_vector_architectures(Mode::ImageRgbx8);
-static CMYK8_ARCHITECTURES: [ImplementationSupport; 3] =
-    draw_vector_architectures(Mode::ImageCmyk8);
-static YCBCR8_ARCHITECTURES: [ImplementationSupport; 3] =
-    draw_vector_architectures(Mode::ImageYCbCr8);
-static LAB8_ARCHITECTURES: [ImplementationSupport; 3] =
-    draw_vector_architectures(Mode::ImageLab8);
-static HSV8_ARCHITECTURES: [ImplementationSupport; 3] =
-    draw_vector_architectures(Mode::ImageHsv8);
-static I32_ARCHITECTURES: [ImplementationSupport; 3] =
-    draw_vector_architectures(Mode::ImageI32);
-static F32_ARCHITECTURES: [ImplementationSupport; 3] =
-    draw_vector_architectures(Mode::ImageF32);
-
 const DRAW_COMPOSED_OPERATIONS: &[OperationId] = &[OperationId::Paste];
 const DRAW_ACCELERATED_BACKENDS: &[Backend] = &[Backend::Gpu, Backend::Simd];
 const DRAW_BITMAP_MASKED_PASTE_ROUTES: &[(Mode, Mode, Mode)] = &[
@@ -242,51 +175,6 @@ impl PreparedDraw<'_> {
     }
 }
 
-pub(crate) fn mode_support(mode: Mode) -> ModeSupport {
-    let architectures: Option<&[ImplementationSupport]> = match mode {
-        Mode::One => Some(&ONE_ARCHITECTURES),
-        Mode::ImageLuma8 => Some(&LUMA8_ARCHITECTURES),
-        Mode::ImageLumaA8 => Some(&LUMA_A8_ARCHITECTURES),
-        Mode::ImageLaPremultiplied8 => Some(&LA_PREMULTIPLIED8_ARCHITECTURES),
-        Mode::ImagePalette8 => Some(&PALETTE8_ARCHITECTURES),
-        Mode::ImagePaletteAlpha8 => Some(&PALETTE_ALPHA8_ARCHITECTURES),
-        Mode::ImageRgb8 => Some(&RGB8_ARCHITECTURES),
-        Mode::ImageRgba8 => Some(&RGBA8_ARCHITECTURES),
-        Mode::ImageRgbPremultiplied8 => Some(&RGB_PREMULTIPLIED8_ARCHITECTURES),
-        Mode::ImageRgbx8 => Some(&RGBX8_ARCHITECTURES),
-        Mode::ImageCmyk8 => Some(&CMYK8_ARCHITECTURES),
-        Mode::ImageYCbCr8 => Some(&YCBCR8_ARCHITECTURES),
-        Mode::ImageLab8 => Some(&LAB8_ARCHITECTURES),
-        Mode::ImageHsv8 => Some(&HSV8_ARCHITECTURES),
-        Mode::ImageI32 => Some(&I32_ARCHITECTURES),
-        Mode::ImageF32 => Some(&F32_ARCHITECTURES),
-        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => Some(&[]),
-        Mode::ImageLumaA16
-        | Mode::ImageRgb16
-        | Mode::ImageRgba16
-        | Mode::ImageRgb32F
-        | Mode::ImageRgba32F => None,
-    };
-    let Some(architectures) = architectures else {
-        return unsupported_mode(mode);
-    };
-    ModeSupport::cpu(
-        OperationId::Draw,
-        mode,
-        OutputModeRule::Preserve,
-        DRAW_INPUTS,
-        architectures,
-    )
-}
-
-pub(crate) fn unsupported_mode(mode: Mode) -> ModeSupport {
-    ModeSupport::Rejected {
-        mode,
-        reason: "unsupported image mode",
-        kind: crate::compute::registry::support::RejectionKind::ValueError,
-    }
-}
-
 /// Selects the exact raster-mode strategy for direct Bitmap execution.
 ///
 /// Direct Bitmap loops do not use the native span kernels selected by Draw's
@@ -371,7 +259,9 @@ fn apply_text_for_mode<const RGBA_MASK: bool>(
             super::la_premultiplied8::ops::apply_text::<RGBA_MASK>(selection, input)
         }
         Mode::ImagePalette8 => super::palette8::ops::apply_text::<RGBA_MASK>(selection, input),
-        Mode::ImagePaletteAlpha8 => super::palette_alpha8::ops::apply_text::<RGBA_MASK>(selection, input),
+        Mode::ImagePaletteAlpha8 => {
+            super::palette_alpha8::ops::apply_text::<RGBA_MASK>(selection, input)
+        }
         Mode::ImageRgb8 => super::rgb8::ops::apply_text::<RGBA_MASK>(selection, input),
         Mode::ImageRgba8 => super::rgba8::ops::apply_text::<RGBA_MASK>(selection, input),
         Mode::ImageRgbPremultiplied8 => {
@@ -409,87 +299,42 @@ pub(crate) fn apply_bitmap(
 ) -> Result<DynamicImage, PilError> {
     let mode = selection.implementation.mode;
     validate_direct_selection(selection, mode)?;
+    macro_rules! apply_mode {
+        ($implementation:path) => {
+            $implementation(
+                &selection,
+                image,
+                x,
+                y,
+                mask_width,
+                mask_height,
+                mask,
+                color,
+            )
+        };
+    }
+
     match mode {
-        Mode::One => super::one::ops::apply_bitmap(
-            &selection,
-            image, x, y, mask_width, mask_height, mask, color,
-        ),
-        Mode::ImageLuma8 => super::luma8::ops::apply_bitmap(
-            &selection,
-            image, x, y, mask_width, mask_height, mask, color,
-        ),
-        Mode::ImageLumaA8 => super::luma_a8::ops::apply_bitmap(
-            &selection,
-            image, x, y, mask_width, mask_height, mask, color,
-        ),
-        Mode::ImageLaPremultiplied8 => super::la_premultiplied8::ops::apply_bitmap(
-            &selection,
-            image, x, y, mask_width, mask_height, mask, color,
-        ),
-        Mode::ImagePalette8 => super::palette8::ops::apply_bitmap(
-            &selection,
-            image, x, y, mask_width, mask_height, mask, color,
-        ),
-        Mode::ImagePaletteAlpha8 => super::palette_alpha8::ops::apply_bitmap(
-            &selection,
-            image, x, y, mask_width, mask_height, mask, color,
-        ),
-        Mode::ImageRgb8 => super::rgb8::ops::apply_bitmap(
-            &selection,
-            image, x, y, mask_width, mask_height, mask, color,
-        ),
-        Mode::ImageRgba8 => super::rgba8::ops::apply_bitmap(
-            &selection,
-            image, x, y, mask_width, mask_height, mask, color,
-        ),
-        Mode::ImageRgbPremultiplied8 => super::rgb_premultiplied8::ops::apply_bitmap(
-            &selection,
-            image, x, y, mask_width, mask_height, mask, color,
-        ),
-        Mode::ImageRgbx8 => super::rgbx8::ops::apply_bitmap(
-            &selection,
-            image, x, y, mask_width, mask_height, mask, color,
-        ),
-        Mode::ImageCmyk8 => super::cmyk8::ops::apply_bitmap(
-            &selection,
-            image, x, y, mask_width, mask_height, mask, color,
-        ),
-        Mode::ImageYCbCr8 => super::ycbcr8::ops::apply_bitmap(
-            &selection,
-            image, x, y, mask_width, mask_height, mask, color,
-        ),
-        Mode::ImageLab8 => super::lab8::ops::apply_bitmap(
-            &selection,
-            image, x, y, mask_width, mask_height, mask, color,
-        ),
-        Mode::ImageHsv8 => super::hsv8::ops::apply_bitmap(
-            &selection,
-            image, x, y, mask_width, mask_height, mask, color,
-        ),
-        Mode::ImageI32 => super::i32::ops::apply_bitmap(
-            &selection,
-            image, x, y, mask_width, mask_height, mask, color,
-        ),
-        Mode::ImageF32 => super::f32::ops::apply_bitmap(
-            &selection,
-            image, x, y, mask_width, mask_height, mask, color,
-        ),
-        Mode::ImageI16 => super::i16::ops::apply_bitmap(
-            &selection,
-            image, x, y, mask_width, mask_height, mask, color,
-        ),
-        Mode::ImageI16L => super::i16l::ops::apply_bitmap(
-            &selection,
-            image, x, y, mask_width, mask_height, mask, color,
-        ),
-        Mode::ImageI16B => super::i16b::ops::apply_bitmap(
-            &selection,
-            image, x, y, mask_width, mask_height, mask, color,
-        ),
-        Mode::ImageI16N => super::i16n::ops::apply_bitmap(
-            &selection,
-            image, x, y, mask_width, mask_height, mask, color,
-        ),
+        Mode::One => apply_mode!(super::one::ops::apply_bitmap),
+        Mode::ImageLuma8 => apply_mode!(super::luma8::ops::apply_bitmap),
+        Mode::ImageLumaA8 => apply_mode!(super::luma_a8::ops::apply_bitmap),
+        Mode::ImageLaPremultiplied8 => apply_mode!(super::la_premultiplied8::ops::apply_bitmap),
+        Mode::ImagePalette8 => apply_mode!(super::palette8::ops::apply_bitmap),
+        Mode::ImagePaletteAlpha8 => apply_mode!(super::palette_alpha8::ops::apply_bitmap),
+        Mode::ImageRgb8 => apply_mode!(super::rgb8::ops::apply_bitmap),
+        Mode::ImageRgba8 => apply_mode!(super::rgba8::ops::apply_bitmap),
+        Mode::ImageRgbPremultiplied8 => apply_mode!(super::rgb_premultiplied8::ops::apply_bitmap),
+        Mode::ImageRgbx8 => apply_mode!(super::rgbx8::ops::apply_bitmap),
+        Mode::ImageCmyk8 => apply_mode!(super::cmyk8::ops::apply_bitmap),
+        Mode::ImageYCbCr8 => apply_mode!(super::ycbcr8::ops::apply_bitmap),
+        Mode::ImageLab8 => apply_mode!(super::lab8::ops::apply_bitmap),
+        Mode::ImageHsv8 => apply_mode!(super::hsv8::ops::apply_bitmap),
+        Mode::ImageI32 => apply_mode!(super::i32::ops::apply_bitmap),
+        Mode::ImageF32 => apply_mode!(super::f32::ops::apply_bitmap),
+        Mode::ImageI16 => apply_mode!(super::i16::ops::apply_bitmap),
+        Mode::ImageI16L => apply_mode!(super::i16l::ops::apply_bitmap),
+        Mode::ImageI16B => apply_mode!(super::i16b::ops::apply_bitmap),
+        Mode::ImageI16N => apply_mode!(super::i16n::ops::apply_bitmap),
         Mode::ImageLumaA16
         | Mode::ImageRgb16
         | Mode::ImageRgba16
@@ -681,51 +526,25 @@ fn execute_mode(
 ) -> Result<DynamicImage, PilError> {
     match mode {
         Mode::One => super::one::ops::execute(image, ops, selection),
-        Mode::ImageLuma8 => {
-            super::luma8::ops::execute(image, ops, selection)
-        }
-        Mode::ImageLumaA8 => {
-            super::luma_a8::ops::execute(image, ops, selection)
-        }
+        Mode::ImageLuma8 => super::luma8::ops::execute(image, ops, selection),
+        Mode::ImageLumaA8 => super::luma_a8::ops::execute(image, ops, selection),
         Mode::ImageLaPremultiplied8 => {
             super::la_premultiplied8::ops::execute(image, ops, selection)
         }
-        Mode::ImagePalette8 => {
-            super::palette8::ops::execute(image, ops, selection)
-        }
-        Mode::ImagePaletteAlpha8 => {
-            super::palette_alpha8::ops::execute(image, ops, selection)
-        }
-        Mode::ImageRgb8 => {
-            super::rgb8::ops::execute(image, ops, selection)
-        }
-        Mode::ImageRgba8 => {
-            super::rgba8::ops::execute(image, ops, selection)
-        }
+        Mode::ImagePalette8 => super::palette8::ops::execute(image, ops, selection),
+        Mode::ImagePaletteAlpha8 => super::palette_alpha8::ops::execute(image, ops, selection),
+        Mode::ImageRgb8 => super::rgb8::ops::execute(image, ops, selection),
+        Mode::ImageRgba8 => super::rgba8::ops::execute(image, ops, selection),
         Mode::ImageRgbPremultiplied8 => {
             super::rgb_premultiplied8::ops::execute(image, ops, selection)
         }
-        Mode::ImageRgbx8 => {
-            super::rgbx8::ops::execute(image, ops, selection)
-        }
-        Mode::ImageCmyk8 => {
-            super::cmyk8::ops::execute(image, ops, selection)
-        }
-        Mode::ImageYCbCr8 => {
-            super::ycbcr8::ops::execute(image, ops, selection)
-        }
-        Mode::ImageLab8 => {
-            super::lab8::ops::execute(image, ops, selection)
-        }
-        Mode::ImageHsv8 => {
-            super::hsv8::ops::execute(image, ops, selection)
-        }
-        Mode::ImageI32 => {
-            super::i32::ops::execute(image, ops, selection)
-        }
-        Mode::ImageF32 => {
-            super::f32::ops::execute(image, ops, selection)
-        }
+        Mode::ImageRgbx8 => super::rgbx8::ops::execute(image, ops, selection),
+        Mode::ImageCmyk8 => super::cmyk8::ops::execute(image, ops, selection),
+        Mode::ImageYCbCr8 => super::ycbcr8::ops::execute(image, ops, selection),
+        Mode::ImageLab8 => super::lab8::ops::execute(image, ops, selection),
+        Mode::ImageHsv8 => super::hsv8::ops::execute(image, ops, selection),
+        Mode::ImageI32 => super::i32::ops::execute(image, ops, selection),
+        Mode::ImageF32 => super::f32::ops::execute(image, ops, selection),
         Mode::ImageI16 => super::i16::ops::execute(image, ops, selection),
         Mode::ImageI16L => super::i16l::ops::execute(image, ops, selection),
         Mode::ImageI16B => super::i16b::ops::execute(image, ops, selection),
@@ -737,7 +556,6 @@ fn execute_mode(
         | Mode::ImageRgba32F => Err(PilError::ValueError("unsupported image mode".into())),
     }
 }
-
 
 pub(crate) fn is_draw_op(op: &PipelineOp) -> bool {
     super::helpers::is_draw_op(op)

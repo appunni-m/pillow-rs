@@ -24,9 +24,8 @@ impl ImageDraw {
     pub fn new(img: &Image, mode: Option<String>) -> Result<ImageDraw, JsValue> {
         let mode = mode
             .map(|mode| {
-                pillow_rs::Mode::from_pillow_name(&mode).ok_or_else(|| {
-                    err(pillow_rs::PilError::ValueError("mode mismatch".to_owned()))
-                })
+                pillow_rs::Mode::from_pillow_name(&mode)
+                    .ok_or_else(|| err(pillow_rs::PilError::ValueError("mode mismatch".to_owned())))
             })
             .transpose()?;
         let draw = Draw::new(img.inner.clone(), mode);

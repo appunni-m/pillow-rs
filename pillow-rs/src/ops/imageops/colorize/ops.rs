@@ -6,9 +6,7 @@ use crate::raster::Mode;
 
 /// Host operations used by the ImageOps Colorize wrapper strategy.
 #[doc(hidden)]
-pub trait ImageOpsColorizeCallbacks {
-    /// Public image wrapper, including subclasses and overridden methods.
-    type Image;
+pub trait ImageOpsColorizeCallbacks: crate::ops::imageops::ImageOpsLutCallbacks {
     /// Python values used by colors, point bounds, and arithmetic.
     type Value;
     /// Python-compatible channel list used to assemble the LUT.
@@ -17,13 +15,8 @@ pub trait ImageOpsColorizeCallbacks {
     type Range;
     /// Iterator produced from a segment range.
     type Iterator;
-    /// Lookup table passed to the public `Image.point` method.
-    type Lut;
-    /// Result returned by public host methods.
-    type Output;
-    /// Host or core error, translated at the binding boundary.
-    type Error: From<PilError>;
-
+    /// Evaluate Pillow's initial `image.mode == "L"` wrapper assertion.
+    fn image_mode_is_luma(&mut self, image: &Self::Image) -> Result<bool, Self::Error>;
     /// Test `0 <= value` with the host's rich-comparison protocol.
     fn point_is_nonnegative(&mut self, value: &Self::Value) -> Result<bool, Self::Error>;
     /// Test one ordered point comparison with the host protocol.
@@ -41,8 +34,11 @@ pub trait ImageOpsColorizeCallbacks {
     /// Create one of Colorize's local channel lists.
     fn new_channel(&mut self) -> Result<Self::Sequence, Self::Error>;
     /// Append one host value to a channel list.
-    fn append(&mut self, channel: &mut Self::Sequence, value: &Self::Value)
-    -> Result<(), Self::Error>;
+    fn append(
+        &mut self,
+        channel: &mut Self::Sequence,
+        value: &Self::Value,
+    ) -> Result<(), Self::Error>;
     /// Call the wrapper's `range(stop)` for one Colorize segment.
     fn range(&mut self, stop: &Self::Value) -> Result<Self::Range, Self::Error>;
     /// Iterate the range object with its host protocol.
@@ -55,8 +51,7 @@ pub trait ImageOpsColorizeCallbacks {
     /// Evaluate `len(range)` at each point where Pillow evaluates it.
     fn range_length(&mut self, range: &Self::Range) -> Result<Self::Value, Self::Error>;
     /// Index a color sequence using the original Python order.
-    fn component(&mut self, color: &Self::Value, index: usize)
-    -> Result<Self::Value, Self::Error>;
+    fn component(&mut self, color: &Self::Value, index: usize) -> Result<Self::Value, Self::Error>;
     /// Evaluate one host subtraction.
     fn subtract(
         &mut self,
@@ -76,11 +71,7 @@ pub trait ImageOpsColorizeCallbacks {
         right: &Self::Value,
     ) -> Result<Self::Value, Self::Error>;
     /// Evaluate one host addition.
-    fn add(
-        &mut self,
-        left: &Self::Value,
-        right: &Self::Value,
-    ) -> Result<Self::Value, Self::Error>;
+    fn add(&mut self, left: &Self::Value, right: &Self::Value) -> Result<Self::Value, Self::Error>;
     /// Concatenate `red + green + blue` in source order.
     fn combine_channels(
         &mut self,
@@ -90,17 +81,15 @@ pub trait ImageOpsColorizeCallbacks {
     ) -> Result<Self::Lut, Self::Error>;
     /// Convert the source through public `Image.convert("RGB")`.
     fn convert_to_rgb(&mut self, image: &Self::Image) -> Result<Self::Image, Self::Error>;
-    /// Apply the completed LUT through the public `Image.point` method.
-    fn point(&mut self, image: &Self::Image, lut: Self::Lut)
-    -> Result<Self::Output, Self::Error>;
 }
 
-/// Runs ImageOps Colorize with typed-mode selection and ordered host callbacks.
-// TODO(pillow-rs#3ptb): freeze comparison, color-index, arithmetic, and
-// Convert/Point callback faults and final mode/architecture receipts.
+/// Runs ImageOps Colorize with wrapper mode admission and ordered callbacks.
+// TODO(pillow-rs#3ptb): freeze wrapper mode-comparison, `isinstance`/`str`
+// lookup and truthiness, ImageColor resolver, color-index, arithmetic,
+// Convert/Point faults, subclass Convert mode overrides, and final
+// mode/output/selection receipts.
 #[doc(hidden)]
 pub fn colorize_with_callbacks<C: ImageOpsColorizeCallbacks>(
-    mode: Mode,
     callbacks: &mut C,
     image: C::Image,
     black: C::Value,
@@ -110,7 +99,13 @@ pub fn colorize_with_callbacks<C: ImageOpsColorizeCallbacks>(
     midpoint: C::Value,
     whitepoint: C::Value,
 ) -> Result<C::Output, C::Error> {
-    validate_colorize_mode_for_mode(mode)?;
+    if !callbacks.image_mode_is_luma(&image)? {
+        return Err(PilError::AssertionError(String::new()).into());
+    }
+    OperationId::ImageOpsColorize
+        .support()
+        .for_mode(Mode::ImageLuma8)
+        .validate_mode()?;
     let points_valid = if mid.is_none() {
         callbacks.point_is_nonnegative(&blackpoint)?
             && callbacks.point_is_at_most(&blackpoint, &whitepoint)?
@@ -135,7 +130,12 @@ pub fn colorize_with_callbacks<C: ImageOpsColorizeCallbacks>(
         &whitepoint,
     )?;
     let image = callbacks.convert_to_rgb(&image)?;
-    callbacks.point(&image, lut)
+    crate::ops::imageops::imageops_lut_with_callbacks(
+        callbacks,
+        &image,
+        lut,
+        OperationId::ImageOpsColorizeLut,
+    )
 }
 
 fn colorize_lut_with_callbacks<C: ImageOpsColorizeCallbacks>(
@@ -172,34 +172,16 @@ fn colorize_lut_with_callbacks<C: ImageOpsColorizeCallbacks>(
         let second_stop = callbacks.subtract(whitepoint, midpoint)?;
         let second = callbacks.range(&second_stop)?;
         append_segment(
-            callbacks,
-            &black,
-            mid,
-            &first,
-            &mut red,
-            &mut green,
-            &mut blue,
+            callbacks, &black, mid, &first, &mut red, &mut green, &mut blue,
         )?;
         append_segment(
-            callbacks,
-            mid,
-            &white,
-            &second,
-            &mut red,
-            &mut green,
-            &mut blue,
+            callbacks, mid, &white, &second, &mut red, &mut green, &mut blue,
         )?;
     } else {
         let stop = callbacks.subtract(whitepoint, blackpoint)?;
         let range = callbacks.range(&stop)?;
         append_segment(
-            callbacks,
-            &black,
-            &white,
-            &range,
-            &mut red,
-            &mut green,
-            &mut blue,
+            callbacks, &black, &white, &range, &mut red, &mut green, &mut blue,
         )?;
     }
 
@@ -278,7 +260,10 @@ pub fn validate_colorize_mode(image: &Image) -> Result<(), PilError> {
 }
 
 fn validate_colorize_mode_for_mode(mode: Mode) -> Result<(), PilError> {
-    OperationId::Colorize.support().for_mode(mode).validate_mode()
+    OperationId::Colorize
+        .support()
+        .for_mode(mode)
+        .validate_mode()
 }
 
 /// Colorizes an `L` image by mapping black and white endpoints.

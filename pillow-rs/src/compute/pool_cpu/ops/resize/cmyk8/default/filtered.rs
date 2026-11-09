@@ -15,11 +15,9 @@ pub(crate) fn execute(
     vertical: &FilterCoeffs,
 ) -> Option<Vec<u8>> {
     let (source_width, source_height) = (source_size.0 as usize, source_size.1 as usize);
-    let (output_width, output_height) =
-        (destination_size.0 as usize, destination_size.1 as usize);
+    let (output_width, output_height) = (destination_size.0 as usize, destination_size.1 as usize);
     let source_dims = CheckedDims::new(source_size.0, source_size.1, 4).ok()?;
-    let intermediate_dims =
-        CheckedDims::new(destination_size.0, source_size.1, 4).ok()?;
+    let intermediate_dims = CheckedDims::new(destination_size.0, source_size.1, 4).ok()?;
     let output_dims = CheckedDims::new(destination_size.0, destination_size.1, 4).ok()?;
     if source_width == 0
         || source_height == 0
@@ -166,13 +164,8 @@ fn vertical_rows(
             }
         } else {
             for (output_x, output_pixel) in output_row.chunks_exact_mut(4).enumerate() {
-                let pixel = vertical_pixel(
-                    intermediate,
-                    row_stride,
-                    first_source,
-                    output_x,
-                    weights,
-                );
+                let pixel =
+                    vertical_pixel(intermediate, row_stride, first_source, output_x, weights);
                 output_pixel.copy_from_slice(&pixel);
             }
         }

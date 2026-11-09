@@ -1,6 +1,15 @@
-use super::*;
+use super::{
+    imageops_global_or_builtin, imageops_mode_equals, imageops_mode_is_luma_or_rgb,
+    imageops_unsupported_mode_error,
+};
+use crate::map_error;
 use pillow_rs::PilError;
-use pyo3::types::{PyIterator, PyList, PyListMethods, PySlice};
+use pyo3::prelude::{Bound, Py, PyAny, PyErr, PyModule, PyResult, Python};
+use pyo3::types::{
+    PyAnyMethods, PyDictMethods, PyInt, PyIterator, PyList, PyListMethods, PyModuleMethods,
+    PySlice, PyTuple, PyTupleMethods, PyTypeMethods,
+};
+use pyo3::{pyfunction, wrap_pyfunction};
 
 enum EqualizeLut<'py> {
     Native(Vec<u8>),
@@ -14,6 +23,31 @@ struct PythonEqualizeCallbacks<'py> {
 enum EqualizeCallbackError {
     Core(pillow_rs::PilError),
     Python(PyErr),
+}
+
+const PY_TPFLAGS_HEAPTYPE: u64 = 1 << 9;
+
+fn is_standard_equalize_builtin(value: &Bound<'_, PyAny>, name: &str) -> PyResult<bool> {
+    // The module snapshot can itself contain replacements installed pre-import.
+    let expected_type = match name {
+        "len" | "sum" => "builtin_function_or_method",
+        "range" | "list" => "type",
+        _ => return Ok(false),
+    };
+    if value.get_type().name()?.to_string() != expected_type {
+        return Ok(false);
+    }
+    if expected_type == "type"
+        && value.getattr("__flags__")?.extract::<u64>()? & PY_TPFLAGS_HEAPTYPE != 0
+    {
+        // Python classes can spoof __module__ and __name__. Reject heap types
+        // so a pre-import replacement for range/list cannot enter the native path.
+        return Ok(false);
+    }
+    Ok(
+        value.getattr("__module__")?.extract::<String>()? == "builtins"
+            && value.getattr("__name__")?.extract::<String>()? == name,
+    )
 }
 
 impl From<pillow_rs::PilError> for EqualizeCallbackError {
@@ -39,10 +73,41 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
     type Output = Bound<'py, PyAny>;
     type Error = EqualizeCallbackError;
 
+    fn image_mode_is_palette(&mut self, image: &Self::Image) -> Result<bool, Self::Error> {
+        let mode = image.getattr("mode")?;
+        imageops_mode_equals(self.py, &mode, "P").map_err(Into::into)
+    }
+
+    fn lut_mode_is_palette(&mut self, image: &Self::Image) -> Result<bool, Self::Error> {
+        let mode = image.getattr("mode")?;
+        imageops_mode_equals(self.py, &mode, "P").map_err(Into::into)
+    }
+
+    fn lut_mode_is_luma_or_rgb(&mut self, image: &Self::Image) -> Result<bool, Self::Error> {
+        let mode = image.getattr("mode")?;
+        imageops_mode_is_luma_or_rgb(self.py, &mode).map_err(Into::into)
+    }
+
+    fn lut_mode_is_rgb(&mut self, image: &Self::Image) -> Result<bool, Self::Error> {
+        let mode = image.getattr("mode")?;
+        imageops_mode_equals(self.py, &mode, "RGB").map_err(Into::into)
+    }
+
+    fn palette_mode_error(&mut self) -> Result<Self::Error, Self::Error> {
+        Ok(EqualizeCallbackError::Python(
+            pyo3::exceptions::PyNotImplementedError::new_err("mode P support coming soon"),
+        ))
+    }
+
+    fn unsupported_mode_error(&mut self, image: &Self::Image) -> Result<Self::Error, Self::Error> {
+        let mode = image.getattr("mode")?;
+        Ok(EqualizeCallbackError::Python(
+            imageops_unsupported_mode_error(self.py, &mode)?,
+        ))
+    }
+
     fn convert_to_rgb(&mut self, image: &Self::Image) -> Result<Self::Image, Self::Error> {
-        image
-            .call_method1("convert", ("RGB",))
-            .map_err(Into::into)
+        image.call_method1("convert", ("RGB",)).map_err(Into::into)
     }
 
     fn histogram(
@@ -57,6 +122,9 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
         &mut self,
         histogram: &Self::Histogram,
     ) -> Result<Option<Vec<u32>>, Self::Error> {
+        // TODO(pillow-rs#3ptb): prove replacements installed before this module
+        // is imported cannot imitate a builtin C callable's type and metadata.
+        // If identity is uncertain, use the host callbacks.
         let imageops = self.py.import("pillow_rs.imageops")?;
         let namespace = imageops.dict();
         let names = ["len", "range", "sum", "list"];
@@ -66,13 +134,11 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
             }
         }
         let expected = imageops.getattr("_EQUALIZE_FAST_BUILTINS")?;
-        let expected = expected
-            .cast::<PyTuple>()
-            .map_err(PyErr::from)?;
+        let expected = expected.cast::<PyTuple>().map_err(PyErr::from)?;
         for (index, name) in names.into_iter().enumerate() {
             let current = imageops_global_or_builtin(self.py, name)?;
             let original = expected.get_item(index)?;
-            if !current.is(&original) {
+            if !current.is(&original) || !is_standard_equalize_builtin(&current, name)? {
                 return Ok(None);
             }
         }
@@ -95,11 +161,7 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
             counts.push(value);
         }
         if counts.chunks_exact(256).any(|channel| {
-            channel
-                .iter()
-                .map(|&count| u64::from(count))
-                .sum::<u64>()
-                > u64::from(u32::MAX)
+            channel.iter().map(|&count| u64::from(count)).sum::<u64>() > u64::from(u32::MAX)
         }) {
             return Ok(None);
         }
@@ -137,10 +199,7 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
         histogram.get_item(slice).map_err(Into::into)
     }
 
-    fn channel_values(
-        &mut self,
-        channel: &Self::Sequence,
-    ) -> Result<Self::Iterator, Self::Error> {
+    fn channel_values(&mut self, channel: &Self::Sequence) -> Result<Self::Iterator, Self::Error> {
         PyIterator::from_object(channel).map_err(Into::into)
     }
 
@@ -168,10 +227,7 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
         Ok(())
     }
 
-    fn nonzero_value_count(
-        &mut self,
-        values: &Self::Sequence,
-    ) -> Result<Self::Value, Self::Error> {
+    fn nonzero_value_count(&mut self, values: &Self::Sequence) -> Result<Self::Value, Self::Error> {
         Ok(imageops_global_or_builtin(self.py, "len")?.call1((values,))?)
     }
 
@@ -182,19 +238,13 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
         Ok(count.le(PyInt::new(self.py, 1))?)
     }
 
-    fn sum_nonzero_values(
-        &mut self,
-        values: &Self::Sequence,
-    ) -> Result<Self::Value, Self::Error> {
+    fn sum_nonzero_values(&mut self, values: &Self::Sequence) -> Result<Self::Value, Self::Error> {
         imageops_global_or_builtin(self.py, "sum")?
             .call1((values,))
             .map_err(Into::into)
     }
 
-    fn last_nonzero_value(
-        &mut self,
-        values: &Self::Sequence,
-    ) -> Result<Self::Value, Self::Error> {
+    fn last_nonzero_value(&mut self, values: &Self::Sequence) -> Result<Self::Value, Self::Error> {
         values.get_item(-1).map_err(Into::into)
     }
 
@@ -290,24 +340,7 @@ impl<'py> pillow_rs::ImageOpsEqualizeCallbacks for PythonEqualizeCallbacks<'py> 
         Ok(EqualizeLut::Native(lut))
     }
 
-    fn mode(&mut self, image: &Self::Image) -> Result<pillow_rs::Mode, Self::Error> {
-        let rust_image = image.getattr("_rust_image")?;
-        let rust_image = rust_image
-            .cast::<PyImage>()
-            .map_err(|error| EqualizeCallbackError::Python(error.into()))?;
-        rust_image
-            .borrow()
-            .inner
-            .mode_identity()
-            .map_err(map_error)
-            .map_err(Into::into)
-    }
-
-    fn point(
-        &mut self,
-        image: &Self::Image,
-        lut: Self::Lut,
-    ) -> Result<Self::Output, Self::Error> {
+    fn point(&mut self, image: &Self::Image, lut: Self::Lut) -> Result<Self::Output, Self::Error> {
         let lut = match lut {
             EqualizeLut::Native(lut) => PyList::new(self.py, lut)?.into_any(),
             EqualizeLut::Python(lut) => lut,
@@ -330,21 +363,15 @@ fn ops_imageops_equalize_with_callbacks(
     mask: &Bound<'_, PyAny>,
 ) -> PyResult<Py<PyAny>> {
     let mut callbacks = PythonEqualizeCallbacks { py };
-    pillow_rs::imageops_equalize_with_callbacks(
-        {
-            let rust_image = image.getattr("_rust_image")?;
-            let rust_image = rust_image.cast::<PyImage>()?;
-            rust_image.borrow().inner.mode_identity().map_err(map_error)?
-        },
-        &mut callbacks,
-        image.clone(),
-        mask.clone(),
-    )
-    .map(|result| result.unbind())
-    .map_err(map_equalize_callback_error)
+    pillow_rs::imageops_equalize_with_callbacks(&mut callbacks, image.clone(), mask.clone())
+        .map(|result| result.unbind())
+        .map_err(map_equalize_callback_error)
 }
 
 pub(super) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    module.add_function(wrap_pyfunction!(ops_imageops_equalize_with_callbacks, module)?)?;
+    module.add_function(wrap_pyfunction!(
+        ops_imageops_equalize_with_callbacks,
+        module
+    )?)?;
     Ok(())
 }

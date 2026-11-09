@@ -26,9 +26,8 @@ pub(crate) fn filter_3x3_binomial_la_rows(
         // SAFETY: The caller checks the full raster length, `source_y` comes
         // from the validated three-row window, and `x + 14 < width` in the
         // vector loop keeps all 16 interleaved pixels inside this source row.
-        let samples = unsafe {
-            neon::vld2q_u8(raw.as_ptr().add(source_y * row_samples + (x - 1) * 2))
-        };
+        let samples =
+            unsafe { neon::vld2q_u8(raw.as_ptr().add(source_y * row_samples + (x - 1) * 2)) };
         let filter_channel = |samples: neon::uint8x16_t| {
             // SAFETY: This module is reachable only on AArch64 with NEON
             // enabled; the values are initialized NEON registers and the
@@ -64,8 +63,7 @@ pub(crate) fn filter_3x3_binomial_la_rows(
                         neon::vaddq_u16(above, below),
                         neon::vaddq_u16(center, center),
                     );
-                    let rounded =
-                        neon::vshrq_n_u16(neon::vaddq_u16(sum, neon::vdupq_n_u16(8)), 4);
+                    let rounded = neon::vshrq_n_u16(neon::vaddq_u16(sum, neon::vdupq_n_u16(8)), 4);
                     neon::vqmovn_u16(rounded)
                 }
             };

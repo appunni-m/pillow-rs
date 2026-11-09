@@ -1,6 +1,6 @@
 use crate::compute::pool_cpu::ops::analysis::helpers::get_data as helpers;
 use crate::error::PilError;
-use crate::raster::{GrayImage};
+use crate::raster::GrayImage;
 use crate::raster::Mode;
 
 pub(crate) fn get_data(image: &GrayImage) -> Result<Vec<u8>, PilError> {

@@ -3,6 +3,123 @@
 use super::OperationSupport;
 use crate::compute::pool_cpu::ops as cpu_ops;
 
+macro_rules! operation_support_match {
+    ($operation:expr) => {
+        match $operation {
+            Self::FloodFill => &cpu_ops::draw::floodfill::ops::SUPPORT,
+            Self::Draw
+            | Self::Crop
+            | Self::CropBorder
+            | Self::Flip
+            | Self::Mirror
+            | Self::Transpose
+            | Self::Resize
+            | Self::ResizeBoxed
+            | Self::Contain
+            | Self::Cover
+            | Self::Fit
+            | Self::Pad
+            | Self::Scale
+            | Self::Thumbnail
+            | Self::Rotate
+            | Self::Transform
+            | Self::Reduce => geometry_support($operation),
+            Self::Filter3x3
+            | Self::Filter5x5
+            | Self::GaussianBlur
+            | Self::BoxBlur
+            | Self::BoxBlurXY
+            | Self::UnsharpMask
+            | Self::MedianFilter
+            | Self::MaxFilter
+            | Self::MinFilter
+            | Self::RankFilter
+            | Self::ImagingCorePaletteRankFilter
+            | Self::ModeFilter => filter_support($operation),
+            Self::Grayscale
+            | Self::Eval
+            | Self::PointScalar
+            | Self::PointFloat
+            | Self::Invert
+            | Self::ImageOpsInvert
+            | Self::ImageOpsPosterize
+            | Self::ImageOpsSolarize
+            | Self::ImageOpsColorize
+            | Self::ImageOpsColorizeLut
+            | Self::Posterize
+            | Self::Solarize
+            | Self::Colorize
+            | Self::Autocontrast
+            | Self::Equalize
+            | Self::Quantize
+            | Self::Expand
+            | Self::ImagingCoreExpand
+            | Self::ExtractBand
+            | Self::Color3DLut => imageops_support($operation),
+            Self::ConvertLab | Self::Convert | Self::ConvertMatrix | Self::RemapPalette => {
+                color_support($operation)
+            }
+            Self::EffectSpread
+            | Self::EffectNoise
+            | Self::LinearGradient
+            | Self::RadialGradient
+            | Self::EffectMandelbrot => effects_support($operation),
+            Self::AlphaComposite | Self::Merge | Self::BlendModule | Self::CompositeModule => {
+                composite_support($operation)
+            }
+            Self::Histogram
+            | Self::Entropy
+            | Self::GetColors
+            | Self::GetPixel
+            | Self::GetPixelRgba
+            | Self::Stat
+            | Self::Split => analysis_support($operation),
+            Self::Paste
+            | Self::PutPixel
+            | Self::PutPixelBatch
+            | Self::PutPixelValueAt
+            | Self::PutData
+            | Self::PutDataL16Bytes
+            | Self::PutDataValueAt
+            | Self::PutAlpha
+            | Self::PutAlphaData
+            | Self::PutBand
+            | Self::FillBand
+            | Self::ImagingCoreSetMode
+            | Self::GetBBox
+            | Self::GetExtrema
+            | Self::GetExtremaBytes
+            | Self::GetProjection
+            | Self::GetData
+            | Self::GetDataBand
+            | Self::GetDataBandInto
+            | Self::GetChannel => mutation_support($operation),
+            Self::Brightness | Self::Contrast | Self::ColorSaturation | Self::Sharpness => {
+                enhance_support($operation)
+            }
+            Self::ChopsAdd
+            | Self::ChopsSubtract
+            | Self::ChopsMultiply
+            | Self::ChopsScreen
+            | Self::ChopsDarker
+            | Self::ChopsLighter
+            | Self::ChopsDifference
+            | Self::ChopsOverlay
+            | Self::ChopsHardLight
+            | Self::ChopsSoftLight
+            | Self::ChopsAddModulo
+            | Self::ChopsSubtractModulo
+            | Self::ChopsLogicalAnd
+            | Self::ChopsLogicalOr
+            | Self::ChopsLogicalXor
+            | Self::ChopsConstant
+            | Self::ChopsOffset
+            | Self::ChopsDuplicate
+            | Self::ChopsInvert => chops_support($operation),
+        }
+    };
+}
+
 /// Identity of an operation with its own strategy and parameter contract.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum OperationId {
@@ -52,8 +169,16 @@ pub enum OperationId {
     PointFloat,
     /// Invert every byte of an image while preserving its exact mode.
     Invert,
-    /// Validate ImageOps inversion before queueing its prepared Invert child.
+    /// Run ImageOps inversion through wrapper-mode checks and the Eval child.
     ImageOpsInvert,
+    /// Run the ImageOps Posterize wrapper through its public LUT/point route.
+    ImageOpsPosterize,
+    /// Run the ImageOps Solarize wrapper through its public LUT/point route.
+    ImageOpsSolarize,
+    /// Run the public ImageOps Colorize wrapper and its declared conversions.
+    ImageOpsColorize,
+    /// Run ImageOps Colorize's converted raster through `_lut` and Eval.
+    ImageOpsColorizeLut,
     /// Reduce the stored high bits of native L or RGB samples.
     Posterize,
     /// Invert native L or RGB samples at or above a threshold.
@@ -82,12 +207,16 @@ pub enum OperationId {
     MinFilter,
     /// Select one sample from each Pillow rank-filter neighborhood.
     RankFilter,
+    /// Run the private ImagingCore rank filter on native P indices.
+    ImagingCorePaletteRankFilter,
     /// Replace each native byte channel with its local most-frequent sample.
     ModeFilter,
     /// Equalize L/RGB samples directly and P samples after palette expansion.
     Equalize,
     /// Add a native-mode border while preserving the exact source identity.
     Expand,
+    /// Replicate native edge samples for Pillow's private ImagingCore callback.
+    ImagingCoreExpand,
     /// Internal band extraction; the public wrapper validates its band selector first.
     ExtractBand,
     /// Apply a 3D color lookup table with a typed target identity.
@@ -136,6 +265,12 @@ pub enum OperationId {
     PutAlpha,
     /// Replace per-pixel alpha from a mode-bearing secondary image.
     PutAlphaData,
+    /// Copy one single-band source into a Pillow ImagingCore band.
+    PutBand,
+    /// Fill one Pillow ImagingCore band with a clipped byte value.
+    FillBand,
+    /// Change ImagingCore's mode through its same, RGB-family, or 1/L paths.
+    ImagingCoreSetMode,
     /// Return the exclusive bounds of non-zero samples in a materialized image.
     GetBBox,
     /// Compute Pillow's 256-bin histogram for each logical image band.
@@ -220,109 +355,20 @@ impl OperationId {
     /// Returns the contract owned by this operation's execution entry point.
     #[must_use]
     pub fn support(self) -> &'static OperationSupport {
-        match self {
-            Self::FloodFill => &cpu_ops::draw::floodfill::ops::SUPPORT,
-            Self::Draw
-            | Self::Crop
-            | Self::CropBorder
-            | Self::Flip
-            | Self::Mirror
-            | Self::Transpose
-            | Self::Resize
-            | Self::ResizeBoxed
-            | Self::Contain
-            | Self::Cover
-            | Self::Fit
-            | Self::Pad
-            | Self::Scale
-            | Self::Thumbnail
-            | Self::Rotate
-            | Self::Transform
-            | Self::Reduce => geometry_support(self),
-            Self::Filter3x3
-            | Self::Filter5x5
-            | Self::GaussianBlur
-            | Self::BoxBlur
-            | Self::BoxBlurXY
-            | Self::UnsharpMask
-            | Self::MedianFilter
-            | Self::MaxFilter
-            | Self::MinFilter
-            | Self::RankFilter
-            | Self::ModeFilter => filter_support(self),
-            Self::Grayscale
-            | Self::Eval
-            | Self::PointScalar
-            | Self::PointFloat
-            | Self::Invert
-            | Self::ImageOpsInvert
-            | Self::Posterize
-            | Self::Solarize
-            | Self::Colorize
-            | Self::Autocontrast
-            | Self::Equalize
-            | Self::Quantize
-            | Self::Expand
-            | Self::ExtractBand
-            | Self::Color3DLut => imageops_support(self),
-            Self::ConvertLab | Self::Convert | Self::ConvertMatrix | Self::RemapPalette => {
-                color_support(self)
-            }
-            Self::EffectSpread
-            | Self::EffectNoise
-            | Self::LinearGradient
-            | Self::RadialGradient
-            | Self::EffectMandelbrot => effects_support(self),
-            Self::AlphaComposite | Self::Merge | Self::BlendModule | Self::CompositeModule => {
-                composite_support(self)
-            }
-            Self::Histogram => &cpu_ops::analysis::ops::HISTOGRAM_SUPPORT,
-            Self::Entropy => &cpu_ops::analysis::ops::ENTROPY_SUPPORT,
-            Self::GetColors => &cpu_ops::analysis::ops::GET_COLORS_SUPPORT,
-            Self::GetPixel => &cpu_ops::analysis::ops::GET_PIXEL_SUPPORT,
-            Self::GetPixelRgba => &cpu_ops::analysis::ops::GET_PIXEL_RGBA_SUPPORT,
-            Self::Stat => &cpu_ops::analysis::ops::STAT_SUPPORT,
-            Self::Split => &cpu_ops::analysis::ops::SPLIT_SUPPORT,
-            Self::Paste
-            | Self::PutPixel
-            | Self::PutPixelBatch
-            | Self::PutPixelValueAt
-            | Self::PutData
-            | Self::PutDataL16Bytes
-            | Self::PutDataValueAt
-            | Self::PutAlpha
-            | Self::PutAlphaData
-            | Self::GetBBox
-            | Self::GetExtrema
-            | Self::GetExtremaBytes
-            | Self::GetProjection
-            | Self::GetData
-            | Self::GetDataBand
-            | Self::GetDataBandInto
-            | Self::GetChannel => mutation_support(self),
-            Self::Brightness | Self::Contrast | Self::ColorSaturation | Self::Sharpness => {
-                enhance_support(self)
-            }
-            Self::ChopsAdd
-            | Self::ChopsSubtract
-            | Self::ChopsMultiply
-            | Self::ChopsScreen
-            | Self::ChopsDarker
-            | Self::ChopsLighter
-            | Self::ChopsDifference
-            | Self::ChopsOverlay
-            | Self::ChopsHardLight
-            | Self::ChopsSoftLight
-            | Self::ChopsAddModulo
-            | Self::ChopsSubtractModulo
-            | Self::ChopsLogicalAnd
-            | Self::ChopsLogicalOr
-            | Self::ChopsLogicalXor
-            | Self::ChopsConstant
-            | Self::ChopsOffset
-            | Self::ChopsDuplicate
-            | Self::ChopsInvert => chops_support(self),
-        }
+        operation_support_match!(self)
+    }
+}
+
+fn analysis_support(id: OperationId) -> &'static OperationSupport {
+    match id {
+        OperationId::Histogram => &cpu_ops::analysis::ops::HISTOGRAM_SUPPORT,
+        OperationId::Entropy => &cpu_ops::analysis::ops::ENTROPY_SUPPORT,
+        OperationId::GetColors => &cpu_ops::analysis::ops::GET_COLORS_SUPPORT,
+        OperationId::GetPixel => &cpu_ops::analysis::ops::GET_PIXEL_SUPPORT,
+        OperationId::GetPixelRgba => &cpu_ops::analysis::ops::GET_PIXEL_RGBA_SUPPORT,
+        OperationId::Stat => &cpu_ops::analysis::ops::STAT_SUPPORT,
+        OperationId::Split => &cpu_ops::analysis::ops::SPLIT_SUPPORT,
+        _ => unreachable!("analysis support received another operation"),
     }
 }
 
@@ -361,6 +407,9 @@ fn filter_support(id: OperationId) -> &'static OperationSupport {
         OperationId::MaxFilter => &cpu_ops::filter::ops::MAX_FILTER_SUPPORT,
         OperationId::MinFilter => &cpu_ops::filter::ops::MIN_FILTER_SUPPORT,
         OperationId::RankFilter => &cpu_ops::filter::ops::RANK_FILTER_SUPPORT,
+        OperationId::ImagingCorePaletteRankFilter => {
+            &cpu_ops::filter::ops::IMAGING_CORE_PALETTE_RANK_FILTER_SUPPORT
+        }
         OperationId::ModeFilter => &cpu_ops::filter::ops::MODE_FILTER_SUPPORT,
         _ => unreachable!("non-filter operation sent to filter support"),
     }
@@ -374,6 +423,14 @@ fn imageops_support(id: OperationId) -> &'static OperationSupport {
         OperationId::PointFloat => &cpu_ops::eval::ops::POINT_FLOAT_SUPPORT,
         OperationId::Invert => &cpu_ops::imageops::ops::INVERT_SUPPORT,
         OperationId::ImageOpsInvert => &cpu_ops::imageops::ops::IMAGEOPS_INVERT_SUPPORT,
+        OperationId::ImageOpsPosterize => &cpu_ops::imageops::ops::IMAGEOPS_POSTERIZE_SUPPORT,
+        OperationId::ImageOpsSolarize => &cpu_ops::imageops::ops::IMAGEOPS_SOLARIZE_SUPPORT,
+        OperationId::ImageOpsColorize => {
+            &cpu_ops::imageops::colorize::ops::IMAGEOPS_COLORIZE_SUPPORT
+        }
+        OperationId::ImageOpsColorizeLut => {
+            &cpu_ops::imageops::colorize::ops::IMAGEOPS_COLORIZE_LUT_SUPPORT
+        }
         OperationId::Posterize => &cpu_ops::imageops::ops::POSTERIZE_SUPPORT,
         OperationId::Solarize => &cpu_ops::imageops::ops::SOLARIZE_SUPPORT,
         OperationId::Colorize => &cpu_ops::imageops::ops::COLORIZE_SUPPORT,
@@ -381,6 +438,7 @@ fn imageops_support(id: OperationId) -> &'static OperationSupport {
         OperationId::Equalize => &cpu_ops::imageops::ops::EQUALIZE_SUPPORT,
         OperationId::Quantize => &cpu_ops::imageops::ops::QUANTIZE_SUPPORT,
         OperationId::Expand => &cpu_ops::imageops::ops::EXPAND_SUPPORT,
+        OperationId::ImagingCoreExpand => &cpu_ops::imageops::ops::IMAGING_CORE_EXPAND_SUPPORT,
         OperationId::ExtractBand => &cpu_ops::put::ops::EXTRACT_BAND_SUPPORT,
         OperationId::Color3DLut => &cpu_ops::color3dlut::ops::SUPPORT,
         _ => unreachable!("non-image operation sent to imageops support"),
@@ -429,6 +487,9 @@ fn mutation_support(id: OperationId) -> &'static OperationSupport {
         OperationId::PutDataValueAt => &cpu_ops::put::ops::PUT_DATA_VALUE_AT_SUPPORT,
         OperationId::PutAlpha => &cpu_ops::put::ops::PUT_ALPHA_SUPPORT,
         OperationId::PutAlphaData => &cpu_ops::put::ops::PUT_ALPHA_DATA_SUPPORT,
+        OperationId::PutBand => &cpu_ops::put::ops::PUT_BAND_SUPPORT,
+        OperationId::FillBand => &cpu_ops::put::ops::FILL_BAND_SUPPORT,
+        OperationId::ImagingCoreSetMode => &cpu_ops::put::ops::IMAGING_CORE_SET_MODE_SUPPORT,
         OperationId::GetBBox => &cpu_ops::analysis::ops::GET_BBOX_SUPPORT,
         OperationId::GetExtrema => &cpu_ops::analysis::ops::GET_EXTREMA_SUPPORT,
         OperationId::GetExtremaBytes => &cpu_ops::analysis::ops::GET_EXTREMA_BYTES_SUPPORT,

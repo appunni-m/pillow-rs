@@ -1,14 +1,14 @@
 //! Direct GetData orchestration over prepared exact-mode owners.
 
-use crate::compute::{Architecture, Backend, ExecutionContext};
 use crate::compute::registry::support::{
     InputContract, ModeSupport, OperationId, StrategySelection,
 };
+use crate::compute::{Architecture, Backend, ExecutionContext};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 
-use super::GET_DATA_BAND_INTO_SUPPORT;
 use super::super::helpers::get_data::{GetDataOutput, GetDataRequest};
+use super::GET_DATA_BAND_INTO_SUPPORT;
 
 /// Returns the band count or the existing mode error for caller-owned reads.
 pub(crate) fn get_data_band_into_count(mode: Mode) -> Result<usize, PilError> {
@@ -79,7 +79,6 @@ pub(crate) fn supports_get_data_band_terminal(
     }
 }
 
-
 fn validate_get_data_selection(
     selection: StrategySelection,
     mode: Mode,
@@ -105,7 +104,9 @@ fn execute_get_data_request(
         ));
     }
     match image {
-        DynamicImage::One(image) => super::super::one::ops::execute_get_data(image, selection, request),
+        DynamicImage::One(image) => {
+            super::super::one::ops::execute_get_data(image, selection, request)
+        }
         DynamicImage::ImageLuma8(image) => {
             super::super::luma8::ops::execute_get_data(image, selection, request)
         }
@@ -202,11 +203,8 @@ pub(crate) fn get_data_band(
     selection: StrategySelection,
 ) -> Result<Vec<u8>, PilError> {
     validate_get_data_selection(selection, image.mode(), OperationId::GetDataBand)?;
-    let dimensions = crate::checked_dims::CheckedDims::new_allow_empty(
-        image.width(),
-        image.height(),
-        1,
-    )?;
+    let dimensions =
+        crate::checked_dims::CheckedDims::new_allow_empty(image.width(), image.height(), 1)?;
     let mut output = dimensions.alloc_buffer();
     super::super::helpers::get_data::validate_band_output(image.width(), image.height(), &output)?;
     get_data_band_into_request(image, band, selection, &mut output)?;
@@ -234,7 +232,10 @@ fn get_data_band_into_request(
     match execute_get_data_request(
         image,
         selection,
-        GetDataRequest::Band { index: band, output },
+        GetDataRequest::Band {
+            index: band,
+            output,
+        },
     )? {
         GetDataOutput::BandWritten => Ok(()),
         GetDataOutput::Bytes(_) => Err(PilError::InternalError(
@@ -250,11 +251,7 @@ pub(crate) fn get_data_palette_indices_band_into(
     selection: StrategySelection,
     output: &mut [u8],
 ) -> Result<(), PilError> {
-    validate_get_data_selection(
-        selection,
-        Mode::ImagePalette8,
-        OperationId::GetDataBandInto,
-    )?;
+    validate_get_data_selection(selection, Mode::ImagePalette8, OperationId::GetDataBandInto)?;
     super::super::palette8::ops::write_palette_indices_band(indices, selection, band, output)
 }
 
@@ -278,10 +275,14 @@ pub(crate) fn get_data_integer_samples(
         (Mode::ImageI16N, DynamicImage::ImageI16N(image)) => {
             super::super::i16n::ops::integer_samples(image, selection)
         }
-        (_, _) if matches!(
-            mode,
-            Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N
-        ) => Err(super::super::helpers::get_data::mode_carrier_mismatch(mode)),
+        (_, _)
+            if matches!(
+                mode,
+                Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N
+            ) =>
+        {
+            Err(super::super::helpers::get_data::mode_carrier_mismatch(mode))
+        }
         _ => Err(PilError::InternalError(
             "GetData integer strategy received a non-I;16 mode".into(),
         )),
@@ -319,7 +320,9 @@ pub(crate) fn get_data_band_byte_view(
 ) -> Result<Option<&[u8]>, PilError> {
     validate_get_data_selection(selection, image.mode(), OperationId::GetData)?;
     match image {
-        DynamicImage::One(image) => super::super::one::ops::get_data_view(image, selection).map(Some),
+        DynamicImage::One(image) => {
+            super::super::one::ops::get_data_view(image, selection).map(Some)
+        }
         DynamicImage::ImageLuma8(image) => {
             super::super::luma8::ops::get_data_view(image, selection).map(Some)
         }
@@ -335,10 +338,6 @@ pub(crate) fn get_data_palette_indices_view(
     indices: &[u8],
     selection: StrategySelection,
 ) -> Result<&[u8], PilError> {
-    validate_get_data_selection(
-        selection,
-        Mode::ImagePalette8,
-        OperationId::GetData,
-    )?;
+    validate_get_data_selection(selection, Mode::ImagePalette8, OperationId::GetData)?;
     super::super::palette8::ops::palette_indices_view(indices, selection)
 }

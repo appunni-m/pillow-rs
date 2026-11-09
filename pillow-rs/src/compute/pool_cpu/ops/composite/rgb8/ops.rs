@@ -1,7 +1,7 @@
 //! Exact-mode strategy entry for ImageRgb8.
 
-use crate::compute::registry::support::{OperationId, StrategySelection};
 use crate::compute::Architecture;
+use crate::compute::registry::support::{OperationId, StrategySelection};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 use std::sync::Arc;
@@ -23,7 +23,10 @@ pub(crate) fn merge(
         Architecture::Default => super::default::operations::merge(source, remaining),
         #[cfg(target_arch = "x86_64")]
         Architecture::Ssse3 => super::ssse3::merge(source, remaining, selection),
-        #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
+        #[cfg(all(
+            any(target_arch = "x86", target_arch = "x86_64"),
+            target_feature = "sse2"
+        ))]
         Architecture::Sse2 => super::sse2::merge_impl::merge(source, remaining),
         #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
         Architecture::Neon => super::neon::merge(source, remaining, selection),
@@ -41,9 +44,7 @@ pub(crate) fn blend(
     alpha: f64,
     selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
-    super::super::helpers::blend::execute_selected(
-        source, other, MODE, 3, alpha, selection,
-    )
+    super::super::helpers::blend::execute_selected(source, other, MODE, 3, alpha, selection)
 }
 
 pub(crate) fn composite(

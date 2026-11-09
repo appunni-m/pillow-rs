@@ -4,11 +4,13 @@ mod result;
 
 pub use result::{StatResult, StatValue, stat_from_histogram, stat_from_list};
 
-use crate::compute::registry::support::OperationId;
 use crate::compute::PipelineOperationTelemetryCapture;
+use crate::compute::registry::support::OperationId;
 use crate::error::PilError;
 
 use super::{FormattedExtrema, FormattedPixelValue, Image};
+
+const GETCOLORS_MAX_TABLE_LIMIT: i32 = 1_073_741_824;
 
 impl Image {
     // ── Immediate ops (force materialize) ──
@@ -62,10 +64,8 @@ impl Image {
         let telemetry = if crate::compute::Backend::pipeline_telemetry_enabled() {
             // This timing/resource sample covers the terminal scan; ordered
             // source and mask graph operation receipts are restored separately.
-            let telemetry = crate::compute::begin_eager_cpu_operation_telemetry(
-                "Stat",
-                requested_backend,
-            );
+            let telemetry =
+                crate::compute::begin_eager_cpu_operation_telemetry("Stat", requested_backend);
             operation_receipts.restore();
             Some(telemetry)
         } else {
@@ -85,10 +85,7 @@ impl Image {
             match result {
                 Ok((statistics, selection)) => {
                     crate::compute::finish_eager_cpu_operation_telemetry_with_selection(
-                        telemetry,
-                        0,
-                        "Stat",
-                        selection,
+                        telemetry, 0, "Stat", selection,
                     );
                     Ok(statistics)
                 }
@@ -122,10 +119,8 @@ impl Image {
         let telemetry = if crate::compute::Backend::pipeline_telemetry_enabled() {
             // This timing/resource sample covers the terminal scan; ordered
             // source graph operation receipts are restored separately.
-            let telemetry = crate::compute::begin_eager_cpu_operation_telemetry(
-                "Stat",
-                requested_backend,
-            );
+            let telemetry =
+                crate::compute::begin_eager_cpu_operation_telemetry("Stat", requested_backend);
             operation_receipts.restore();
             Some(telemetry)
         } else {
@@ -150,10 +145,7 @@ impl Image {
             match result {
                 Ok((statistics, selection)) => {
                     crate::compute::finish_eager_cpu_operation_telemetry_with_selection(
-                        telemetry,
-                        0,
-                        "Stat",
-                        selection,
+                        telemetry, 0, "Stat", selection,
                     );
                     Ok(statistics)
                 }
@@ -190,15 +182,16 @@ impl Image {
         // Pillow loads before selecting its mode-specific histogram or
         // low-level getcolors path; unsupported-mode errors follow decoding.
         let mode = image.mode();
-        OperationId::GetColors.support().for_mode(mode).validate_mode()?;
+        OperationId::GetColors
+            .support()
+            .for_mode(mode)
+            .validate_mode()?;
         let (requested_backend, context) = self.cpu_arch_execution_route_advisory();
         let telemetry = if crate::compute::Backend::pipeline_telemetry_enabled() {
             // This timing/resource sample covers the terminal scan; ordered
             // source graph operation receipts are restored separately.
-            let telemetry = crate::compute::begin_eager_cpu_operation_telemetry(
-                "GetColors",
-                requested_backend,
-            );
+            let telemetry =
+                crate::compute::begin_eager_cpu_operation_telemetry("GetColors", requested_backend);
             operation_receipts.restore();
             Some(telemetry)
         } else {
@@ -249,8 +242,73 @@ impl Image {
         // The public method loads before Pillow's low-level mode rejection,
         // including when a negative limit guarantees a `None` result.
         let mode = image.mode();
-        OperationId::GetColors.support().for_mode(mode).validate_mode()?;
+        OperationId::GetColors
+            .support()
+            .for_mode(mode)
+            .validate_mode()?;
         Ok(None)
+    }
+
+    /// Executes Pillow's public `getcolors` branch selected by visible mode
+    /// `1`, `L`, or `P`.
+    ///
+    /// Those modes use their exact GetColors strategy when the raster has the
+    /// same identity. A visible-mode override over another raster uses the
+    /// first 256 bins of Histogram, represented as scalar byte values.
+    pub fn getcolors_via_histogram_mode(
+        &self,
+    ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {
+        let mode = self.mode_identity()?;
+        if matches!(
+            mode,
+            crate::raster::Mode::One
+                | crate::raster::Mode::ImageLuma8
+                | crate::raster::Mode::ImagePalette8
+        ) {
+            return self.getcolors(u32::MAX);
+        }
+
+        let colors = self
+            .histogram()?
+            .into_iter()
+            .take(256)
+            .enumerate()
+            .filter_map(|(index, count)| {
+                (count > 0).then_some((count, FormattedPixelValue::Scalar(index as u8)))
+            })
+            .collect();
+        Ok(Some(colors))
+    }
+
+    /// Executes Pillow's low-level `getcolors` branch after its visible mode
+    /// selected that route.
+    ///
+    /// A raster in `1`, `L`, or `P` cannot use ImagingGetColors. Pillow checks
+    /// the signed table limit first, so an unrepresentable table size takes
+    /// precedence over that wrong-mode error.
+    pub fn getcolors_via_low_level_mode_with_signed_limit(
+        &self,
+        maxcolors: i32,
+    ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {
+        let image = self.materialized_shared()?;
+        let mode = image.mode();
+        let histogram_mode = matches!(
+            mode,
+            crate::raster::Mode::One
+                | crate::raster::Mode::ImageLuma8
+                | crate::raster::Mode::ImagePalette8
+        );
+        let rejected_mode = matches!(
+            OperationId::GetColors.support().for_mode(mode),
+            crate::compute::registry::support::ModeSupport::Rejected { .. }
+        );
+        if maxcolors >= GETCOLORS_MAX_TABLE_LIMIT && (histogram_mode || rejected_mode) {
+            return Err(PilError::MemoryError(String::new()));
+        }
+        if histogram_mode {
+            return Err(PilError::ValueError("image has wrong mode".into()));
+        }
+        self.getcolors_with_signed_limit(maxcolors)
     }
 
     /// Returns `getcolors` with Pillow's scalar/tuple color shape applied.
@@ -343,5 +401,4 @@ impl Image {
             result.map(|(extrema, _)| extrema)
         }
     }
-
 }

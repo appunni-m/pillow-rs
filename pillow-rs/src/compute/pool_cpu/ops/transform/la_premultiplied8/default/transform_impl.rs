@@ -13,4 +13,3 @@ byte_mode_default!(
 );
 
 byte_mode_mesh_record!(ImageLaPremultiplied8, 2, false, "ImageLaPremultiplied8");
-

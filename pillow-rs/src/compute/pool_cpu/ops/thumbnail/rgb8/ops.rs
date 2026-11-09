@@ -1,7 +1,7 @@
 //! Prepared RGB PutPixel/Thumbnail fusion over native RGB samples.
 
-use crate::compute::{Backend, ExecutionContext};
 use crate::compute::registry::support::{ModeSupport, OperationId, StrategySelection};
+use crate::compute::{Backend, ExecutionContext};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
@@ -28,8 +28,8 @@ pub(crate) fn execute_putpixel_thumbnail(
     let reduced = super::helpers::putpixel_thumbnail::prepare(image, writes, thumbnail)?;
     let (source_width, source_height) = reduced.source_dimensions;
     let (output_width, output_height) = reduced.output_dimensions;
-    let bounds = (resize_selection.implementation.operation == OperationId::ResizeBoxed)
-        .then_some((
+    let bounds =
+        (resize_selection.implementation.operation == OperationId::ResizeBoxed).then_some((
             0.0,
             0.0,
             f64::from(source_width) / 2.0,

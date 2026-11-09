@@ -26,13 +26,13 @@ pub(crate) fn filter_rank_from_python(rank: &Bound<'_, PyAny>) -> PyResult<u32> 
 #[cfg(feature = "test-api")]
 #[pyo3::pyfunction]
 pub(crate) fn _arm_migration_test_fault(point: &str) -> PyResult<()> {
-    pillow_rs::test_api::arm_fault(point).map_err(PyValueError::new_err)
+    pillow_rs::arm_fault(point).map_err(PyValueError::new_err)
 }
 
 #[cfg(feature = "test-api")]
 #[pyo3::pyfunction]
 pub(crate) fn _clear_migration_test_fault() {
-    pillow_rs::test_api::clear_fault();
+    pillow_rs::clear_fault();
 }
 
 pub(crate) fn blur_radius_pair_from_python(

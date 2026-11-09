@@ -3,9 +3,13 @@
 //! Pipeline callbacks for PutPixel, PutData, PutAlpha, and PutAlphaData are
 //! registered and consumed by the serial CPU batch executor. Consecutive
 //! PutPixel runs also compose with the prepared RGB Thumbnail fusion.
-//! TODO(pillow-rs#3ptb): verify PutAlpha/PutAlphaData public mode-change and
-//! validation/error ordering, CoreOnly high-depth outputs, and RGBa alpha
-//! values 0, 1, 254, and 255 with constant and mask inputs in CPU parity.
+//! TODO(pillow-rs#3ptb): verify PutAlpha/PutAlphaData mode changes and
+//! validation/error ordering, including callback-observed promotion and
+//! destination changes, noncanonical One masks, La scalar/mask output, declared
+//! rejections, CoreOnly high-depth outputs, and RGBa alpha values 0, 1, 254,
+//! and 255 with constant and mask inputs in CPU parity. Verify ImagingCore
+//! PutBand/FillBand outputs, error ordering, compact hidden-lane retention, and
+//! serial Default fallback receipts across every declared mode.
 //! Wrapper mode validation and transitions now use these prepared declarations;
 //! source review found no separate Backend/Architecture selection in the
 //! wrappers. Cover callback PutData/PutPixel selection, including La/LAB
@@ -20,11 +24,11 @@
 //! before applying the byte prefix, matching the archived operation. Same-
 //! carrier paths write the exact source carrier directly and preserve its mode.
 //! PutAlpha, PutAlphaData, and ExtractBand conversion routes were compared with
-//! the archive. RGBa alpha replacement is corrected to Pillow's explicit
-//! unpremultiplication before alpha replacement because the archived generic
-//! carrier conversion retained premultiplied samples. Mask-to-L normalization
-//! remains semantic; exact one-channel masks borrow their bytes in Default
-//! paths. Same-carrier alpha outputs keep their single required result copy,
+//! the archive. RGBa and La alpha replacement convert to straight alpha before
+//! replacing alpha because archived generic carrier routes retained
+//! premultiplied samples. One-mask-to-L normalization is fused into exact-mode
+//! Default and vector PutAlphaData loops; L mask samples stay borrowed directly.
+//! Same-carrier alpha outputs keep their single required result copy,
 //! and ExtractBand reads native channels directly. This source review remains
 //! unvalidated.
 // NO_PILLOW_SUPPORT: Internal high-depth raster identities have declared
@@ -36,17 +40,33 @@
 //! P-mode identity before queuing it; GetChannel declares those wrapper routes
 //! at its operation-level support entry.
 
-use crate::compute::{ExecutionContext, registry::support::{
-    ModeSupport, OperationId, OperationInputs, OperationSupport, StrategySelection,
-}};
+use crate::compute::{
+    ExecutionContext,
+    registry::support::{
+        InputContract, ModeSupport, OperationId, OperationInputs, OperationSupport, RejectionKind,
+        StrategySelection,
+    },
+};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
 
+pub(crate) use super::imaging_core_set_mode::{
+    IMAGING_CORE_SET_MODE_SUPPORT, execute as execute_imaging_core_set_mode,
+    select as select_imaging_core_set_mode,
+};
+
 pub(crate) use super::helpers::put_pixel::PixelWrite;
 
+// Keep support classification exhaustive while limiting alpha execution
+// enums to supported modes; accepted and rejected lists make the image match
+// exhaustive so a newly added Mode cannot silently fall through.
 macro_rules! declare_modes {
-    ($($mode:ident => $module:ident),+ $(,)?) => {
+    (
+        all { $($mode:ident => $module:ident),+ $(,)? }
+        alpha { $($alpha_mode:ident => $alpha_module:ident),+ $(,)? }
+        rejected_alpha { $($rejected_mode:ident),+ $(,)? }
+    ) => {
         pub(crate) enum PreparedExtractBand<'a> {
             $($mode(super::$module::ops::Strategy<'a>),)+
         }
@@ -57,10 +77,10 @@ macro_rules! declare_modes {
             ),)+
         }
         pub(crate) enum PreparedPutAlpha<'a> {
-            $($mode(super::$module::ops::AlphaStrategy<'a>),)+
+            $($alpha_mode(super::$alpha_module::ops::AlphaStrategy<'a>),)+
         }
         pub(crate) enum PreparedPutAlphaData<'a> {
-            $($mode(super::$module::ops::AlphaDataStrategy<'a>),)+
+            $($alpha_mode(super::$alpha_module::ops::AlphaDataStrategy<'a>),)+
         }
 
         fn classify_mode(mode: Mode) -> ModeSupport {
@@ -74,6 +94,15 @@ macro_rules! declare_modes {
         }
         fn classify_alpha_data_mode(mode: Mode) -> ModeSupport {
             match mode { $(Mode::$mode => super::$module::ops::PUT_ALPHA_DATA_SUPPORT,)+ }
+        }
+        fn classify_data_value_at_mode(mode: Mode) -> ModeSupport {
+            match mode { $(Mode::$mode => super::$module::ops::PUT_DATA_VALUE_AT_SUPPORT,)+ }
+        }
+        fn classify_pixel_value_at_mode(mode: Mode) -> ModeSupport {
+            match mode { $(Mode::$mode => super::$module::ops::PUT_PIXEL_VALUE_AT_SUPPORT,)+ }
+        }
+        fn classify_put_data_l16_bytes_mode(mode: Mode) -> ModeSupport {
+            match mode { $(Mode::$mode => super::$module::ops::PUT_DATA_L16_BYTES_SUPPORT,)+ }
         }
 
 
@@ -111,8 +140,10 @@ macro_rules! declare_modes {
             image: &'a DynamicImage, alpha: u8, ctx: &ExecutionContext,
         ) -> Result<PreparedPutAlpha<'a>, PilError> {
             match image {
-                $(DynamicImage::$mode(input) => super::$module::ops::prepare_alpha(input, alpha, ctx)
-                    .map(PreparedPutAlpha::$mode),)+
+                $(DynamicImage::$alpha_mode(input) => super::$alpha_module::ops::prepare_alpha(input, alpha, ctx)
+                    .map(PreparedPutAlpha::$alpha_mode),)+
+                $(DynamicImage::$rejected_mode(_) =>
+                    Err(rejected_alpha_mode_error(Mode::$rejected_mode)),)+
             }
         }
 
@@ -120,10 +151,13 @@ macro_rules! declare_modes {
         pub(crate) fn prepare_put_alpha_data<'a>(
             image: &'a DynamicImage, mask: &'a DynamicImage, ctx: &ExecutionContext,
         ) -> Result<PreparedPutAlphaData<'a>, PilError> {
+            classify_alpha_data_mode(image.mode()).validate_mode()?;
             let mask = super::helpers::alpha_mask::MaskStrategy::new(mask)?;
             match image {
-                $(DynamicImage::$mode(input) => super::$module::ops::prepare_alpha_data(input, mask, ctx)
-                    .map(PreparedPutAlphaData::$mode),)+
+                $(DynamicImage::$alpha_mode(input) => super::$alpha_module::ops::prepare_alpha_data(input, mask, ctx)
+                    .map(PreparedPutAlphaData::$alpha_mode),)+
+                $(DynamicImage::$rejected_mode(_) =>
+                    Err(rejected_alpha_data_mode_error(Mode::$rejected_mode)),)+
             }
         }
 
@@ -175,97 +209,107 @@ macro_rules! declare_modes {
 
         impl PreparedPutAlpha<'_> {
             pub(crate) fn selection(&self) -> &StrategySelection {
-                match self { $(Self::$mode(strategy) => strategy.selection(),)+ }
+                match self { $(Self::$alpha_mode(strategy) => strategy.selection(),)+ }
             }
 
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
-                match self { $(Self::$mode(strategy) => strategy.execute(),)+ }
+                match self { $(Self::$alpha_mode(strategy) => strategy.execute(),)+ }
             }
         }
 
         impl PreparedPutAlphaData<'_> {
             pub(crate) fn selection(&self) -> &StrategySelection {
-                match self { $(Self::$mode(strategy) => strategy.selection(),)+ }
+                match self { $(Self::$alpha_mode(strategy) => strategy.selection(),)+ }
             }
 
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
-                match self { $(Self::$mode(strategy) => strategy.execute(),)+ }
+                match self { $(Self::$alpha_mode(strategy) => strategy.execute(),)+ }
             }
         }
     };
 }
 
 declare_modes! {
-    One => one,
-    ImageLuma8 => luma8,
-    ImageLumaA8 => luma_a8,
-    ImageLaPremultiplied8 => la_premultiplied8,
-    ImagePalette8 => palette8,
-    ImagePaletteAlpha8 => palette_alpha8,
-    ImageRgb8 => rgb8,
-    ImageRgba8 => rgba8,
-    ImageRgbPremultiplied8 => rgb_premultiplied8,
-    ImageRgbx8 => rgbx8,
-    ImageCmyk8 => cmyk8,
-    ImageYCbCr8 => ycbcr8,
-    ImageLab8 => lab8,
-    ImageHsv8 => hsv8,
-    ImageI32 => i32,
-    ImageF32 => f32,
-    ImageI16 => i16,
-    ImageI16L => i16l,
-    ImageI16B => i16b,
-    ImageI16N => i16n,
-    ImageLumaA16 => luma_a16,
-    ImageRgb16 => rgb16,
-    ImageRgba16 => rgba16,
-    ImageRgb32F => rgb32f,
-    ImageRgba32F => rgba32f,
-}
-
-pub(crate) static EXTRACT_BAND_SUPPORT: OperationSupport = OperationSupport::new(
-    OperationId::ExtractBand, &[], classify_mode,
-);
-
-pub(crate) static PUT_DATA_SUPPORT: OperationSupport = OperationSupport::new(
-    OperationId::PutData, &[], classify_data_mode,
-);
-
-const PUT_DATA_L16_BYTES_INPUTS: &[crate::compute::registry::support::InputContract] =
-    &[crate::compute::registry::support::InputContract::CallerValidatedRawI16ByteRows];
-
-fn classify_put_data_l16_bytes_mode(mode: Mode) -> ModeSupport {
-    match mode {
-        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
-            ModeSupport::serial(OperationId::PutDataL16Bytes, mode, PUT_DATA_L16_BYTES_INPUTS)
-        }
-        Mode::One
-        | Mode::ImageLuma8
-        | Mode::ImageLumaA8
-        | Mode::ImageLaPremultiplied8
-        | Mode::ImagePalette8
-        | Mode::ImagePaletteAlpha8
-        | Mode::ImageRgb8
-        | Mode::ImageRgba8
-        | Mode::ImageRgbPremultiplied8
-        | Mode::ImageRgbx8
-        | Mode::ImageCmyk8
-        | Mode::ImageYCbCr8
-        | Mode::ImageLab8
-        | Mode::ImageHsv8
-        | Mode::ImageI32
-        | Mode::ImageF32
-        | Mode::ImageLumaA16
-        | Mode::ImageRgb16
-        | Mode::ImageRgba16
-        | Mode::ImageRgb32F
-        | Mode::ImageRgba32F => ModeSupport::Rejected {
-            mode,
-            reason: "putdata I;16 storage mismatch",
-            kind: crate::compute::registry::support::RejectionKind::InternalError,
-        },
+    all {
+        One => one,
+        ImageLuma8 => luma8,
+        ImageLumaA8 => luma_a8,
+        ImageLaPremultiplied8 => la_premultiplied8,
+        ImagePalette8 => palette8,
+        ImagePaletteAlpha8 => palette_alpha8,
+        ImageRgb8 => rgb8,
+        ImageRgba8 => rgba8,
+        ImageRgbPremultiplied8 => rgb_premultiplied8,
+        ImageRgbx8 => rgbx8,
+        ImageCmyk8 => cmyk8,
+        ImageYCbCr8 => ycbcr8,
+        ImageLab8 => lab8,
+        ImageHsv8 => hsv8,
+        ImageI32 => i32,
+        ImageF32 => f32,
+        ImageI16 => i16,
+        ImageI16L => i16l,
+        ImageI16B => i16b,
+        ImageI16N => i16n,
+        ImageLumaA16 => luma_a16,
+        ImageRgb16 => rgb16,
+        ImageRgba16 => rgba16,
+        ImageRgb32F => rgb32f,
+        ImageRgba32F => rgba32f,
+    }
+    alpha {
+        ImageLuma8 => luma8,
+        ImageLumaA8 => luma_a8,
+        ImageLaPremultiplied8 => la_premultiplied8,
+        ImagePalette8 => palette8,
+        ImagePaletteAlpha8 => palette_alpha8,
+        ImageRgb8 => rgb8,
+        ImageRgba8 => rgba8,
+        ImageRgbPremultiplied8 => rgb_premultiplied8,
+        ImageRgbx8 => rgbx8,
+        ImageCmyk8 => cmyk8,
+        ImageI16 => i16,
+        ImageI16L => i16l,
+        ImageI16B => i16b,
+        ImageI16N => i16n,
+        ImageLumaA16 => luma_a16,
+        ImageRgb16 => rgb16,
+        ImageRgba16 => rgba16,
+        ImageRgb32F => rgb32f,
+        ImageRgba32F => rgba32f,
+    }
+    // These six rejections are declared by put_alpha_strategy::support.
+    rejected_alpha {
+        One,
+        ImageYCbCr8,
+        ImageLab8,
+        ImageHsv8,
+        ImageI32,
+        ImageF32,
     }
 }
+
+fn rejected_alpha_mode_error(mode: Mode) -> PilError {
+    classify_alpha_mode(mode)
+        .validate_mode()
+        .err()
+        .unwrap_or_else(|| PilError::InternalError("PutAlpha support has no mode strategy".into()))
+}
+
+fn rejected_alpha_data_mode_error(mode: Mode) -> PilError {
+    classify_alpha_data_mode(mode)
+        .validate_mode()
+        .err()
+        .unwrap_or_else(|| {
+            PilError::InternalError("PutAlphaData support has no mode strategy".into())
+        })
+}
+
+pub(crate) static EXTRACT_BAND_SUPPORT: OperationSupport =
+    OperationSupport::new(OperationId::ExtractBand, &[], classify_mode);
+
+pub(crate) static PUT_DATA_SUPPORT: OperationSupport =
+    OperationSupport::new(OperationId::PutData, &[], classify_data_mode);
 
 pub(crate) static PUT_DATA_L16_BYTES_SUPPORT: OperationSupport = OperationSupport::new(
     OperationId::PutDataL16Bytes,
@@ -303,73 +347,46 @@ pub(crate) fn execute_put_data_l16_bytes(
             "unbound putdata I;16 bytes architecture".into(),
         ));
     }
-    match image {
-        DynamicImage::ImageI16(image) => {
+    match (selection.implementation.mode, image) {
+        (Mode::ImageI16, DynamicImage::ImageI16(image)) => {
             super::i16::default::put_data_impl::execute_l16_bytes(
-                image, data, entry_count, scale, offset,
+                image,
+                data,
+                entry_count,
+                scale,
+                offset,
             )
         }
-        DynamicImage::ImageI16L(image) => {
+        (Mode::ImageI16L, DynamicImage::ImageI16L(image)) => {
             super::i16l::default::put_data_impl::execute_l16_bytes(
-                image, data, entry_count, scale, offset,
+                image,
+                data,
+                entry_count,
+                scale,
+                offset,
             )
         }
-        DynamicImage::ImageI16B(image) => {
+        (Mode::ImageI16B, DynamicImage::ImageI16B(image)) => {
             super::i16b::default::put_data_impl::execute_l16_bytes(
-                image, data, entry_count, scale, offset,
+                image,
+                data,
+                entry_count,
+                scale,
+                offset,
             )
         }
-        DynamicImage::ImageI16N(image) => {
+        (Mode::ImageI16N, DynamicImage::ImageI16N(image)) => {
             super::i16n::default::put_data_impl::execute_l16_bytes(
-                image, data, entry_count, scale, offset,
+                image,
+                data,
+                entry_count,
+                scale,
+                offset,
             )
         }
         _ => Err(PilError::InternalError(
             "putdata I;16 storage mismatch".into(),
         )),
-    }
-}
-
-const PUT_DATA_VALUE_AT_INPUTS: &[crate::compute::registry::support::InputContract] =
-    &[crate::compute::registry::support::InputContract::CallerValidatedPixelIndex];
-
-fn classify_data_value_at_mode(mode: Mode) -> ModeSupport {
-    match mode {
-        Mode::One
-        | Mode::ImageLuma8
-        | Mode::ImageLumaA8
-        | Mode::ImageLaPremultiplied8
-        | Mode::ImagePalette8
-        | Mode::ImagePaletteAlpha8
-        | Mode::ImageRgb8
-        | Mode::ImageRgba8
-        | Mode::ImageRgbPremultiplied8
-        | Mode::ImageRgbx8
-        | Mode::ImageCmyk8
-        | Mode::ImageYCbCr8
-        | Mode::ImageLab8
-        | Mode::ImageHsv8
-        | Mode::ImageI32
-        | Mode::ImageF32
-        | Mode::ImageI16
-        | Mode::ImageI16L
-        | Mode::ImageI16B
-        | Mode::ImageI16N => ModeSupport::cpu(
-            OperationId::PutDataValueAt,
-            mode,
-            crate::compute::registry::support::OutputModeRule::Preserve,
-            PUT_DATA_VALUE_AT_INPUTS,
-            &[],
-        ),
-        Mode::ImageLumaA16
-        | Mode::ImageRgb16
-        | Mode::ImageRgba16
-        | Mode::ImageRgb32F
-        | Mode::ImageRgba32F => ModeSupport::Rejected {
-            mode,
-            reason: "unsupported putdata mode: unknown",
-            kind: crate::compute::registry::support::RejectionKind::ValueError,
-        },
     }
 }
 
@@ -379,40 +396,132 @@ pub(crate) static PUT_DATA_VALUE_AT_SUPPORT: OperationSupport = OperationSupport
     classify_data_value_at_mode,
 );
 
-const PUT_PIXEL_VALUE_AT_INPUTS: &[crate::compute::registry::support::InputContract] =
-    &[crate::compute::registry::support::InputContract::CallerValidatedPixelIndex];
-
-fn classify_pixel_value_at_mode(mode: Mode) -> ModeSupport {
-    match mode {
-        Mode::ImageI32
-        | Mode::ImageF32
-        | Mode::ImageI16
-        | Mode::ImageI16L
-        | Mode::ImageI16B
-        | Mode::ImageI16N => ModeSupport::serial(
-            OperationId::PutPixelValueAt,
-            mode,
-            PUT_PIXEL_VALUE_AT_INPUTS,
-        ),
-        _ => ModeSupport::Rejected {
-            mode,
-            reason: "scalar putpixel value-at requires I, F, or I;16 mode",
-            kind: crate::compute::registry::support::RejectionKind::NotImplementedError,
-        },
-    }
-}
-
 pub(crate) static PUT_PIXEL_VALUE_AT_SUPPORT: OperationSupport = OperationSupport::new(
     OperationId::PutPixelValueAt,
     &[],
     classify_pixel_value_at_mode,
 );
 
+const PUT_BAND_SINGLE_INPUTS: &[InputContract] = &[
+    InputContract::CallerValidatedBandIndex,
+    InputContract::CallerValidatedSameModeSameSizeBandImage,
+];
+const PUT_BAND_MULTI_INPUTS: &[InputContract] = &[
+    InputContract::CallerValidatedBandIndex,
+    InputContract::CallerValidatedSameSizeByteSingleBandImage,
+];
+const FILL_BAND_INPUTS: &[InputContract] = &[InputContract::CallerValidatedBandIndex];
+fn classify_put_band_mode(mode: Mode) -> ModeSupport {
+    match mode {
+        Mode::One
+        | Mode::ImageLuma8
+        | Mode::ImagePalette8
+        | Mode::ImageI32
+        | Mode::ImageF32
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N => {
+            ModeSupport::serial(OperationId::PutBand, mode, PUT_BAND_SINGLE_INPUTS)
+        }
+        Mode::ImageLumaA8
+        | Mode::ImageLaPremultiplied8
+        | Mode::ImagePaletteAlpha8
+        | Mode::ImageRgb8
+        | Mode::ImageRgba8
+        | Mode::ImageRgbPremultiplied8
+        | Mode::ImageRgbx8
+        | Mode::ImageCmyk8
+        | Mode::ImageYCbCr8
+        | Mode::ImageLab8
+        | Mode::ImageHsv8 => ModeSupport::serial(OperationId::PutBand, mode, PUT_BAND_MULTI_INPUTS),
+        Mode::ImageLumaA16
+        | Mode::ImageRgb16
+        | Mode::ImageRgba16
+        | Mode::ImageRgb32F
+        | Mode::ImageRgba32F => ModeSupport::Rejected {
+            mode,
+            reason: "image has wrong mode",
+            kind: RejectionKind::ValueError,
+        },
+    }
+}
+
+fn classify_fill_band_mode(mode: Mode) -> ModeSupport {
+    if super::helpers::imaging_core_band::is_byte_mode(mode) {
+        ModeSupport::serial(OperationId::FillBand, mode, FILL_BAND_INPUTS)
+    } else {
+        ModeSupport::Rejected {
+            mode,
+            reason: "image has wrong mode",
+            kind: RejectionKind::ValueError,
+        }
+    }
+}
+
+pub(crate) static PUT_BAND_SUPPORT: OperationSupport =
+    OperationSupport::new(OperationId::PutBand, &[], classify_put_band_mode);
+
+pub(crate) static FILL_BAND_SUPPORT: OperationSupport =
+    OperationSupport::new(OperationId::FillBand, &[], classify_fill_band_mode);
+
+pub(crate) fn select_put_band(
+    mode: Mode,
+    context: &ExecutionContext,
+) -> Result<StrategySelection, PilError> {
+    PUT_BAND_SUPPORT.for_mode(mode).select_serial(context)
+}
+
+pub(crate) fn select_fill_band(
+    mode: Mode,
+    context: &ExecutionContext,
+) -> Result<StrategySelection, PilError> {
+    FILL_BAND_SUPPORT.for_mode(mode).select_serial(context)
+}
+
+pub(crate) fn execute_put_band(
+    destination: &mut DynamicImage,
+    source: &DynamicImage,
+    band: usize,
+    selection: StrategySelection,
+) -> Result<(), PilError> {
+    validate_band_selection(selection, OperationId::PutBand, destination.mode())?;
+    super::helpers::imaging_core_band::put_band(destination, source, band)
+}
+
+pub(crate) fn execute_fill_band(
+    image: &mut DynamicImage,
+    band: usize,
+    value: u8,
+    selection: StrategySelection,
+) -> Result<(), PilError> {
+    validate_band_selection(selection, OperationId::FillBand, image.mode())?;
+    super::helpers::imaging_core_band::fill_band(image, band, value)
+}
+
+fn validate_band_selection(
+    selection: StrategySelection,
+    operation: OperationId,
+    mode: Mode,
+) -> Result<(), PilError> {
+    if selection.implementation.operation != operation
+        || selection.implementation.mode != mode
+        || selection.implementation.architecture != crate::compute::Architecture::Default
+    {
+        return Err(PilError::InternalError(
+            "ImagingCore band strategy did not match its raster".into(),
+        ));
+    }
+    Ok(())
+}
+
 pub(crate) fn select_put_pixel_value_at(
     mode: Mode,
     context: &ExecutionContext,
 ) -> Result<StrategySelection, PilError> {
-    PUT_PIXEL_VALUE_AT_SUPPORT.for_mode(mode).select_serial(context)
+    PUT_PIXEL_VALUE_AT_SUPPORT
+        .for_mode(mode)
+        .select_serial(context)
 }
 
 pub(crate) fn execute_put_pixel_value_at(
@@ -444,23 +553,27 @@ pub(crate) fn execute_put_pixel_value_at(
             "unbound putpixel value-at architecture".into(),
         ));
     }
-    match (image, input) {
-        (DynamicImage::ImageI32(image), PutPixelValueAtInput::NumericBytes(bytes)) => {
-            super::i32::default::put_pixel_impl::execute_value_at(image, pixel_index, bytes)
-        }
-        (DynamicImage::ImageF32(image), PutPixelValueAtInput::NumericBytes(bytes)) => {
-            super::f32::default::put_pixel_impl::execute_value_at(image, pixel_index, bytes)
-        }
-        (DynamicImage::ImageI16(image), PutPixelValueAtInput::Luma16(sample)) => {
+    match (mode, image, input) {
+        (
+            Mode::ImageI32,
+            DynamicImage::ImageI32(image),
+            PutPixelValueAtInput::NumericBytes(bytes),
+        ) => super::i32::default::put_pixel_impl::execute_value_at(image, pixel_index, bytes),
+        (
+            Mode::ImageF32,
+            DynamicImage::ImageF32(image),
+            PutPixelValueAtInput::NumericBytes(bytes),
+        ) => super::f32::default::put_pixel_impl::execute_value_at(image, pixel_index, bytes),
+        (Mode::ImageI16, DynamicImage::ImageI16(image), PutPixelValueAtInput::Luma16(sample)) => {
             super::i16::default::put_pixel_impl::execute_value_at(image, pixel_index, sample)
         }
-        (DynamicImage::ImageI16L(image), PutPixelValueAtInput::Luma16(sample)) => {
+        (Mode::ImageI16L, DynamicImage::ImageI16L(image), PutPixelValueAtInput::Luma16(sample)) => {
             super::i16l::default::put_pixel_impl::execute_value_at(image, pixel_index, sample)
         }
-        (DynamicImage::ImageI16B(image), PutPixelValueAtInput::Luma16(sample)) => {
+        (Mode::ImageI16B, DynamicImage::ImageI16B(image), PutPixelValueAtInput::Luma16(sample)) => {
             super::i16b::default::put_pixel_impl::execute_value_at(image, pixel_index, sample)
         }
-        (DynamicImage::ImageI16N(image), PutPixelValueAtInput::Luma16(sample)) => {
+        (Mode::ImageI16N, DynamicImage::ImageI16N(image), PutPixelValueAtInput::Luma16(sample)) => {
             super::i16n::default::put_pixel_impl::execute_value_at(image, pixel_index, sample)
         }
         _ => Err(PilError::InternalError(
@@ -478,7 +591,9 @@ pub(crate) fn select_put_data_value_at(
     mode: Mode,
     context: &ExecutionContext,
 ) -> Result<StrategySelection, PilError> {
-    PUT_DATA_VALUE_AT_SUPPORT.for_mode(mode).select_serial(context)
+    PUT_DATA_VALUE_AT_SUPPORT
+        .for_mode(mode)
+        .select_serial(context)
 }
 
 pub(crate) fn execute_put_data_value_at(
@@ -487,10 +602,7 @@ pub(crate) fn execute_put_data_value_at(
     input: super::helpers::put_data_value_at::ValueAtInput,
     selection: StrategySelection,
 ) -> Result<(), PilError> {
-    let mode = image.mode();
-    if selection.implementation.operation != OperationId::PutDataValueAt
-        || selection.implementation.mode != mode
-    {
+    if selection.implementation.operation != OperationId::PutDataValueAt {
         return Err(PilError::InternalError(
             "putdata value-at strategy does not match its raster mode".into(),
         ));
@@ -500,18 +612,30 @@ pub(crate) fn execute_put_data_value_at(
             "unbound putdata value-at architecture".into(),
         ));
     }
-    super::helpers::put_data_value_at::execute(image, mode, pixel_index, input)
+    let mode = selection.implementation.mode;
+    if is_luma16_mode(mode) {
+        super::value_at::execute_luma16_value_at(mode, image, pixel_index, input)
+    } else {
+        super::value_at::execute_byte_value_at(mode, image, pixel_index, input)
+    }
 }
 
-pub(crate) static PUT_ALPHA_SUPPORT: OperationSupport = OperationSupport::new(
-    OperationId::PutAlpha, &[], classify_alpha_mode,
-);
-pub(crate) static PUT_ALPHA_DATA_SUPPORT: OperationSupport = OperationSupport::new(
-    OperationId::PutAlphaData, &[], classify_alpha_data_mode,
-);
+fn is_luma16_mode(mode: Mode) -> bool {
+    matches!(
+        mode,
+        Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N
+    )
+}
+
+pub(crate) static PUT_ALPHA_SUPPORT: OperationSupport =
+    OperationSupport::new(OperationId::PutAlpha, &[], classify_alpha_mode);
+pub(crate) static PUT_ALPHA_DATA_SUPPORT: OperationSupport =
+    OperationSupport::new(OperationId::PutAlphaData, &[], classify_alpha_data_mode);
 
 pub(crate) fn prepare_alpha_pipeline<'a>(
-    input: OperationInputs<'a>, op: &'a PipelineOp, ctx: &ExecutionContext,
+    input: OperationInputs<'a>,
+    op: &'a PipelineOp,
+    ctx: &ExecutionContext,
 ) -> Result<crate::compute::registry::PreparedOperation<'a>, PilError> {
     let PipelineOp::PutAlpha { alpha, mode } = op else {
         return Err(PilError::ValueError("expected PutAlpha op".into()));
@@ -525,9 +649,10 @@ pub(crate) fn prepare_alpha_pipeline<'a>(
         .map(crate::compute::registry::PreparedOperation::from_put_alpha)
 }
 
-
 pub(crate) fn prepare_alpha_data_pipeline<'a>(
-    input: OperationInputs<'a>, op: &'a PipelineOp, ctx: &ExecutionContext,
+    input: OperationInputs<'a>,
+    op: &'a PipelineOp,
+    ctx: &ExecutionContext,
 ) -> Result<crate::compute::registry::PreparedOperation<'a>, PilError> {
     let PipelineOp::PutAlphaData { mask, mode } = op else {
         return Err(PilError::ValueError("expected PutAlphaData op".into()));
@@ -541,9 +666,10 @@ pub(crate) fn prepare_alpha_data_pipeline<'a>(
         .map(crate::compute::registry::PreparedOperation::from_put_alpha_data)
 }
 
-
 pub(crate) fn prepare_pipeline<'a>(
-    input: OperationInputs<'a>, op: &'a PipelineOp, ctx: &ExecutionContext,
+    input: OperationInputs<'a>,
+    op: &'a PipelineOp,
+    ctx: &ExecutionContext,
 ) -> Result<crate::compute::registry::PreparedOperation<'a>, PilError> {
     let PipelineOp::ExtractBand { index } = op else {
         return Err(PilError::ValueError("expected ExtractBand op".into()));
@@ -671,31 +797,42 @@ pub(crate) fn execute_put_pixel(
     prepare_put_pixel(image, write, context)?.execute()
 }
 
-pub(crate) static PUT_PIXEL_SUPPORT: OperationSupport = OperationSupport::new(
-    OperationId::PutPixel, &[], classify_pixel_mode,
-);
-pub(crate) static PUT_PIXEL_BATCH_SUPPORT: OperationSupport = OperationSupport::new(
-    OperationId::PutPixelBatch, &[], classify_pixel_batch_mode,
-);
+pub(crate) static PUT_PIXEL_SUPPORT: OperationSupport =
+    OperationSupport::new(OperationId::PutPixel, &[], classify_pixel_mode);
+pub(crate) static PUT_PIXEL_BATCH_SUPPORT: OperationSupport =
+    OperationSupport::new(OperationId::PutPixelBatch, &[], classify_pixel_batch_mode);
 
 pub(crate) fn prepare_pixel_pipeline<'a>(
-    input: OperationInputs<'a>, op: &'a PipelineOp, ctx: &ExecutionContext,
+    input: OperationInputs<'a>,
+    op: &'a PipelineOp,
+    ctx: &ExecutionContext,
 ) -> Result<crate::compute::registry::PreparedOperation<'a>, PilError> {
     let PipelineOp::PutPixel { x, y, color, .. } = op else {
         return Err(PilError::ValueError("expected PutPixel op".into()));
     };
-    prepare_put_pixel(input.image, PixelWrite { x: *x, y: *y, color: *color }, ctx)
-        .map(crate::compute::registry::PreparedOperation::from_put_pixel)
+    prepare_put_pixel(
+        input.image,
+        PixelWrite {
+            x: *x,
+            y: *y,
+            color: *color,
+        },
+        ctx,
+    )
+    .map(crate::compute::registry::PreparedOperation::from_put_pixel)
 }
 
 pub(crate) fn prepare_data_pipeline<'a>(
-    input: OperationInputs<'a>, op: &'a PipelineOp, ctx: &ExecutionContext,
+    input: OperationInputs<'a>,
+    op: &'a PipelineOp,
+    ctx: &ExecutionContext,
 ) -> Result<crate::compute::registry::PreparedOperation<'a>, PilError> {
     let PipelineOp::PutData {
         data,
         hidden_lanes,
         payload_mode,
-    } = op else {
+    } = op
+    else {
         return Err(PilError::ValueError("expected PutData op".into()));
     };
     prepare_put_data(input.image, data, *payload_mode, hidden_lanes.clone(), ctx)

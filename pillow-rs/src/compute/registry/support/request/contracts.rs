@@ -8,6 +8,8 @@ use crate::error::PilError;
 use crate::pipeline::ExpandMargins;
 use crate::raster::Mode;
 
+mod request;
+
 pub(super) fn assess(
     contract: InputContract,
     input: StrategyInputs,
@@ -37,13 +39,14 @@ pub(super) fn assess(
         | InputContract::PadParameters
         | InputContract::ScaleParameters
         | InputContract::OddRankWindow { .. }
-        | InputContract::ModeFilterWindow => assess_request(contract, input),
+        | InputContract::ModeFilterWindow => request::assess(contract, input),
         InputContract::MergeBandLayout { .. } => assess_merge_band_layout(contract, input),
         InputContract::BlendInputs { .. } => assess_blend_inputs(contract, input),
         InputContract::CompositeInputs { .. } => assess_composite_inputs(contract, input),
-        InputContract::CheckedByteDimensions { bytes_per_pixel, allow_empty } => {
-            assess_checked_dimensions(input, bytes_per_pixel, allow_empty)
-        }
+        InputContract::CheckedByteDimensions {
+            bytes_per_pixel,
+            allow_empty,
+        } => assess_checked_dimensions(input, bytes_per_pixel, allow_empty),
         InputContract::ExpandedDimensions { bytes_per_pixel } => {
             assess_expanded_dimensions(contract, input, bytes_per_pixel)
         }
@@ -60,34 +63,36 @@ pub(super) fn assess(
             core_only_targets,
             core_only_reason,
             rejection_reason,
-        } => {
-            assess_convert_target(
-                input,
-                targets,
-                core_only_targets,
-                core_only_reason,
-                rejection_reason,
-            )
-        }
+        } => assess_convert_target(
+            input,
+            targets,
+            core_only_targets,
+            core_only_reason,
+            rejection_reason,
+        ),
         contract @ InputContract::ChopsBinaryModes { .. } => {
             assess_chops_binary_modes(input, contract)
         }
-        InputContract::SameModeSecondaryImage { mode, rejection_reason } => {
-            assess_same_mode_secondary_image(input, mode, rejection_reason)
-        }
+        InputContract::SameModeSecondaryImage {
+            mode,
+            rejection_reason,
+        } => assess_same_mode_secondary_image(input, mode, rejection_reason),
         contract @ InputContract::DrawInputs { .. } => assess_draw_inputs(input, contract),
         InputContract::PasteInputs { rules } => assess_paste_inputs(input, rules),
         InputContract::CropBorder => assess_crop_border(contract, input),
-        InputContract::ByteDataPayload { modes, rejection_reason } => {
-            assess_byte_data_payload(contract, input, modes, rejection_reason)
-        }
+        InputContract::ByteDataPayload {
+            modes,
+            rejection_reason,
+        } => assess_byte_data_payload(contract, input, modes, rejection_reason),
         InputContract::AlphaMaskLumaPrefix { modes, .. } => {
             assess_alpha_mask(contract, input, modes)
         }
         InputContract::ImageOpsLumaMask => assess_imageops_luma_mask(contract, input),
-        InputContract::ExactNativeBytes { channels, overflow_reason, mismatch_reason } => {
-            assess_exact_native_bytes(contract, input, channels, overflow_reason, mismatch_reason)
-        }
+        InputContract::ExactNativeBytes {
+            channels,
+            overflow_reason,
+            mismatch_reason,
+        } => assess_exact_native_bytes(contract, input, channels, overflow_reason, mismatch_reason),
         // These variants duplicate architecture guards and must not be
         // declared as public input validation contracts.
         InputContract::PaletteMetadata
@@ -98,6 +103,10 @@ pub(super) fn assess(
         | InputContract::CallerValidatedRawI16ByteRows
         | InputContract::CallerValidatedGetDataBandIndex { .. }
         | InputContract::CallerValidatedGetChannelIndex { .. }
+        | InputContract::CallerValidatedBandIndex
+        | InputContract::CallerValidatedSameModeSameSizeBandImage
+        | InputContract::CallerValidatedSameSizeByteSingleBandImage
+        | InputContract::CallerValidatedSetModeTargets { .. }
         | InputContract::GetBBoxAlphaOnly { .. }
         | InputContract::HistogramMask { .. }
         | InputContract::HistogramExtrema { .. }
@@ -129,7 +138,7 @@ fn assess_composite_inputs(
     } = input.request
     else {
         if input.request == RequestFacts::Unspecified {
-            return Ok(Some(UnresolvedGuard::InputContract(contract)));
+            return Ok(Some(UnresolvedGuard::InputContract(Box::new(contract))));
         }
         return Err(wrong_request("CompositeModule"));
     };
@@ -167,7 +176,7 @@ fn assess_blend_inputs(
     };
     let RequestFacts::BlendInputs { other, .. } = input.request else {
         if input.request == RequestFacts::Unspecified {
-            return Ok(Some(UnresolvedGuard::InputContract(contract)));
+            return Ok(Some(UnresolvedGuard::InputContract(Box::new(contract))));
         }
         return Err(wrong_request("Blend"));
     };
@@ -193,6 +202,7 @@ fn assess_merge_band_layout(
         expected_count,
         mode_rule,
         count_rejection,
+        first_mode_rejection,
         mode_rejection,
         size_rejection,
     ) = match contract {
@@ -200,12 +210,14 @@ fn assess_merge_band_layout(
             band_count,
             mode_rule,
             count_rejection,
+            first_mode_rejection,
             mode_rejection,
             size_rejection,
         } => (
             band_count,
             mode_rule,
             count_rejection,
+            first_mode_rejection,
             mode_rejection,
             size_rejection,
         ),
@@ -224,7 +236,7 @@ fn assess_merge_band_layout(
     } = input.request
     else {
         if input.request == RequestFacts::Unspecified {
-            return Ok(Some(UnresolvedGuard::InputContract(contract)));
+            return Ok(Some(UnresolvedGuard::InputContract(Box::new(contract))));
         }
         return Err(PilError::InternalError(
             "Merge input assessment received another operation request".into(),
@@ -233,14 +245,24 @@ fn assess_merge_band_layout(
     if band_count != expected_count {
         return Err(PilError::ValueError(count_rejection.into()));
     }
-    let valid_modes = match mode_rule {
-        MergeBandModeRule::ExactTarget => first_mode == target_mode,
+    let later_modes_are_valid = match mode_rule {
+        MergeBandModeRule::ExactTarget => {
+            if first_mode != target_mode {
+                return Err(PilError::ValueError(first_mode_rejection.into()));
+            }
+            true
+        }
         MergeBandModeRule::LumaOrFirstPalette => {
-            matches!(first_mode, Mode::ImageLuma8 | Mode::ImagePalette8)
-                && remaining_modes_are_luma
+            if !matches!(
+                first_mode,
+                Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8
+            ) {
+                return Err(PilError::ValueError(first_mode_rejection.into()));
+            }
+            remaining_modes_are_luma
         }
     };
-    if !valid_modes {
+    if !later_modes_are_valid {
         return Err(PilError::ValueError(mode_rejection.into()));
     }
     if !dimensions_match {
@@ -259,11 +281,12 @@ fn assess_paste_inputs(
         region,
         mask_alpha,
         ..
-    } = input.request else {
+    } = input.request
+    else {
         if input.request == RequestFacts::Unspecified {
-            return Ok(Some(UnresolvedGuard::InputContract(
+            return Ok(Some(UnresolvedGuard::InputContract(Box::new(
                 InputContract::PasteInputs { rules },
-            )));
+            ))));
         }
         return Err(wrong_request("Paste"));
     };
@@ -314,18 +337,16 @@ fn assess_convert_target(
     rejection_reason: &'static str,
 ) -> Result<Option<UnresolvedGuard>, PilError> {
     match input.request {
-        RequestFacts::Unspecified => Ok(Some(UnresolvedGuard::InputContract(
+        RequestFacts::Unspecified => Ok(Some(UnresolvedGuard::InputContract(Box::new(
             InputContract::ConvertTarget {
                 targets,
                 core_only_targets,
                 core_only_reason,
                 rejection_reason,
             },
-        ))),
+        )))),
         RequestFacts::ConvertTarget { target_mode } if targets.contains(&target_mode) => Ok(None),
-        RequestFacts::ConvertTarget { .. } => {
-            Err(PilError::ValueError(rejection_reason.into()))
-        }
+        RequestFacts::ConvertTarget { .. } => Err(PilError::ValueError(rejection_reason.into())),
         _ => Err(PilError::InternalError(
             "Convert target validation received another operation request".into(),
         )),
@@ -347,13 +368,9 @@ fn assess_chops_binary_modes(
         ));
     };
     match input.request {
-        RequestFacts::Unspecified => Ok(Some(UnresolvedGuard::InputContract(
-            contract,
-        ))),
+        RequestFacts::Unspecified => Ok(Some(UnresolvedGuard::InputContract(Box::new(contract)))),
         RequestFacts::ChopsBinary { other, .. } if modes.contains(&other.mode) => Ok(None),
-        RequestFacts::ChopsBinary { .. } => {
-            Err(PilError::ValueError(rejection_reason.into()))
-        }
+        RequestFacts::ChopsBinary { .. } => Err(PilError::ValueError(rejection_reason.into())),
         _ => Err(wrong_request("ImageChops binary operation")),
     }
 }
@@ -364,9 +381,12 @@ fn assess_same_mode_secondary_image(
     rejection_reason: &'static str,
 ) -> Result<Option<UnresolvedGuard>, PilError> {
     match input.request {
-        RequestFacts::Unspecified => Ok(Some(UnresolvedGuard::InputContract(
-            InputContract::SameModeSecondaryImage { mode, rejection_reason },
-        ))),
+        RequestFacts::Unspecified => Ok(Some(UnresolvedGuard::InputContract(Box::new(
+            InputContract::SameModeSecondaryImage {
+                mode,
+                rejection_reason,
+            },
+        )))),
         RequestFacts::SameModeSecondaryImage { other }
             if other.mode == mode && (other.width, other.height) == (input.width, input.height) =>
         {
@@ -381,9 +401,7 @@ fn assess_same_mode_secondary_image(
         {
             Ok(None)
         }
-        RequestFacts::AlphaComposite { .. } => {
-            Err(PilError::ValueError(rejection_reason.into()))
-        }
+        RequestFacts::AlphaComposite { .. } => Err(PilError::ValueError(rejection_reason.into())),
         _ => Err(wrong_request("same-mode secondary image")),
     }
 }
@@ -422,12 +440,9 @@ fn assess_draw_inputs(
 
     match kind {
         DrawRequestKind::GeometryBatch => Ok(None),
-        DrawRequestKind::Bitmap => assess_draw_bitmap(
-            raster_mode,
-            context_mode,
-            bitmap_mask_mode,
-            contract,
-        ),
+        DrawRequestKind::Bitmap => {
+            assess_draw_bitmap(raster_mode, context_mode, bitmap_mask_mode, contract)
+        }
         DrawRequestKind::Text => assess_draw_text(
             raster_mode,
             context_mode,
@@ -492,17 +507,8 @@ fn assess_draw_text(
     else {
         unreachable!("Draw Text assessment received another contract")
     };
-    let (
-        Some(raster_mode),
-        Some(context_mode),
-        Some(embedded_color),
-        Some(text_mask_kind),
-    ) = (
-        raster_mode,
-        context_mode,
-        embedded_color,
-        text_mask_kind,
-    )
+    let (Some(raster_mode), Some(context_mode), Some(embedded_color), Some(text_mask_kind)) =
+        (raster_mode, context_mode, embedded_color, text_mask_kind)
     else {
         return defer_draw_inputs(contract);
     };
@@ -529,251 +535,8 @@ fn assess_draw_text(
     Ok(None)
 }
 
-fn defer_draw_inputs(
-    contract: InputContract,
-) -> Result<Option<UnresolvedGuard>, PilError> {
-    Ok(Some(UnresolvedGuard::InputContract(contract)))
-}
-
-fn assess_request(
-    contract: InputContract,
-    input: StrategyInputs,
-) -> Result<Option<UnresolvedGuard>, PilError> {
-    match (contract, input.request) {
-        (InputContract::Filter3x3Parameters, RequestFacts::Unspecified)
-        | (InputContract::Filter5x5Parameters, RequestFacts::Unspecified)
-        | (InputContract::GaussianBlurSigma, RequestFacts::Unspecified)
-        | (InputContract::BoxBlurParameters, RequestFacts::Unspecified)
-        | (InputContract::BoxBlurXYParameters, RequestFacts::Unspecified)
-        | (InputContract::UnsharpMaskParameters, RequestFacts::Unspecified)
-        | (InputContract::SharpnessFactor, RequestFacts::Unspecified)
-        | (InputContract::EffectSpreadDistance, RequestFacts::Unspecified)
-        | (InputContract::EffectNoiseSigma, RequestFacts::Unspecified)
-        | (InputContract::EffectMandelbrotParameters, RequestFacts::Unspecified)
-        | (InputContract::QuantizeParameters { .. }, RequestFacts::Unspecified)
-        | (InputContract::Rotate, RequestFacts::Unspecified)
-        | (InputContract::TransformParameters, RequestFacts::Unspecified)
-        | (InputContract::PosterizeBits, RequestFacts::Unspecified)
-        | (InputContract::ByteLutEntries { .. }, RequestFacts::Unspecified)
-        | (InputContract::PointFloatLutEntries { .. }, RequestFacts::Unspecified)
-        | (InputContract::ReduceFactors { .. }, RequestFacts::Unspecified)
-        | (InputContract::Thumbnail, RequestFacts::Unspecified)
-        | (InputContract::ContainParameters, RequestFacts::Unspecified)
-        | (InputContract::CoverParameters, RequestFacts::Unspecified)
-        | (InputContract::FitParameters, RequestFacts::Unspecified)
-        | (InputContract::PadParameters, RequestFacts::Unspecified)
-        | (InputContract::ScaleParameters, RequestFacts::Unspecified)
-        | (InputContract::OddRankWindow { .. }, RequestFacts::Unspecified)
-        | (InputContract::ModeFilterWindow, RequestFacts::Unspecified) => {
-            unresolved_request(contract)
-        }
-        (InputContract::EffectSpreadDistance, RequestFacts::EffectSpread { .. })
-        | (InputContract::EffectNoiseSigma, RequestFacts::EffectNoise { .. }) => Ok(None),
-        (
-            InputContract::QuantizeParameters {
-                min_colors,
-                max_colors,
-                recognized_methods,
-                method_restricted_modes,
-                allowed_methods,
-                palette_mode: expected_palette_mode,
-                palette_sources,
-                unavailable_methods,
-                kmeans_nonnegative,
-                colors_rejection,
-                invalid_method_rejection,
-                pillow_rgba_method_rejection,
-                alpha_method_rejection,
-                palette_mode_rejection,
-                palette_source_rejection,
-                unavailable_method_rejection,
-                kmeans_rejection,
-            },
-            RequestFacts::Quantize {
-                source_mode,
-                colors,
-                method,
-                kmeans,
-                palette_mode,
-            },
-        ) => {
-            if method_restricted_modes.contains(&source_mode)
-                && !allowed_methods.contains(&method)
-            {
-                let rejection = if source_mode == Mode::ImageRgba8 {
-                    pillow_rgba_method_rejection
-                } else {
-                    alpha_method_rejection
-                };
-                return Err(PilError::ValueError(rejection.into()));
-            }
-            if let Some(palette_mode) = palette_mode {
-                if palette_mode != expected_palette_mode {
-                    return Err(PilError::ValueError(palette_mode_rejection.into()));
-                }
-                if !palette_sources.contains(&source_mode) {
-                    return Err(PilError::ValueError(palette_source_rejection.into()));
-                }
-                return Ok(None);
-            }
-            if kmeans_nonnegative && kmeans.is_some_and(|iterations| iterations < 0) {
-                return Err(PilError::ValueError(kmeans_rejection.into()));
-            }
-            if input.width != 0 && input.height != 0 {
-                if colors < min_colors || colors > max_colors {
-                    return Err(PilError::ValueError(colors_rejection.into()));
-                }
-                if !recognized_methods.contains(&method) {
-                    return Err(PilError::ValueError(invalid_method_rejection.into()));
-                }
-                if unavailable_methods.contains(&method) {
-                    return Err(PilError::ValueError(unavailable_method_rejection.into()));
-                }
-            }
-            Ok(None)
-        }
-        (
-            InputContract::EffectMandelbrotParameters,
-            RequestFacts::EffectMandelbrot { extent_bits, quality },
-        ) => {
-            if input.width == 0 || input.height == 0 {
-                return Ok(None);
-            }
-            let (x0, y0, x1, y1) = extent_bits;
-            let extent_width = f64::from_bits(x1) - f64::from_bits(x0);
-            let extent_height = f64::from_bits(y1) - f64::from_bits(y0);
-            if extent_width < 0.0 || extent_height < 0.0 || quality < 2 {
-                Err(PilError::ValueError("unrecognized argument value".into()))
-            } else {
-                Ok(None)
-            }
-        }
-        (InputContract::Rotate, RequestFacts::Rotate { .. }) => Ok(None),
-        (
-            InputContract::TransformParameters,
-            RequestFacts::Transform { method, data_len, .. },
-        ) => match method {
-            0 if data_len != 6 => Err(PilError::ValueError("wrong number of matrix entries".into())),
-            1 | 2 if data_len != 8 => Err(PilError::ValueError("wrong number of data points".into())),
-            0..=3 => Ok(None),
-            _ => Err(wrong_request("Transform")),
-        },
-        (InputContract::Filter3x3Parameters, RequestFacts::Filter3x3 { .. })
-        | (InputContract::Filter5x5Parameters, RequestFacts::Filter5x5 { .. })
-        | (InputContract::GaussianBlurSigma, RequestFacts::GaussianBlur { .. })
-        | (InputContract::BoxBlurParameters, RequestFacts::BoxBlur { .. })
-        | (InputContract::BoxBlurXYParameters, RequestFacts::BoxBlurXY { .. })
-        | (InputContract::UnsharpMaskParameters, RequestFacts::UnsharpMask { .. }) => Ok(None),
-        (InputContract::SharpnessFactor, RequestFacts::Sharpness { .. }) => Ok(None),
-        (InputContract::PosterizeBits, RequestFacts::Posterize { bits })
-            if (1..=8).contains(&bits) => Ok(None),
-        (InputContract::PosterizeBits, _) => Err(PilError::ValueError(
-            "posterize bits must be in range 1..=8".into(),
-        )),
-        (InputContract::ByteLutEntries { channels }, RequestFacts::EvalLut { entries })
-            if entries == usize::from(channels) * 256 => Ok(None),
-        (InputContract::ByteLutEntries { .. }, RequestFacts::EvalLut { .. }) => {
-            Err(PilError::ValueError("wrong number of lut entries".into()))
-        }
-        (
-            InputContract::PointFloatLutEntries { channels },
-            RequestFacts::PointFloatLut { entries },
-        ) if entries == usize::from(channels) * 256 => Ok(None),
-        (InputContract::PointFloatLutEntries { .. }, RequestFacts::PointFloatLut { .. }) => {
-            Err(PilError::ValueError("wrong number of lut entries".into()))
-        }
-        (InputContract::ReduceFactors { identity_only }, RequestFacts::Reduce { x_factor, y_factor }) => {
-            if identity_only && (x_factor.max(1) != 1 || y_factor.max(1) != 1) {
-                Err(PilError::ValueError("image has wrong mode".into()))
-            } else {
-                Ok(None)
-            }
-        }
-        (
-            InputContract::Thumbnail,
-            RequestFacts::Thumbnail {
-                width,
-                height,
-                reducing_gap_bits,
-                ..
-            },
-        ) => {
-            if width == 0 || height == 0 {
-                Err(PilError::ValueError("thumbnail size must be > 0".into()))
-            } else if input.width == 0 || input.height == 0 {
-                Err(PilError::ValueError("height and width must be > 0".into()))
-            } else if reducing_gap_bits.is_some_and(|bits| f64::from_bits(bits) < 1.0) {
-                Err(PilError::ValueError(
-                    "reducing_gap must be 1.0 or greater".into(),
-                ))
-            } else {
-                Ok(None)
-            }
-        }
-        (InputContract::ContainParameters, RequestFacts::Contain { .. })
-        | (InputContract::CoverParameters, RequestFacts::Cover { .. })
-        | (InputContract::FitParameters, RequestFacts::Fit { .. })
-        | (InputContract::PadParameters, RequestFacts::Pad { .. })
-        | (InputContract::ScaleParameters, RequestFacts::Scale { .. }) => Ok(None),
-        (
-            InputContract::OddRankWindow { rank_required },
-            RequestFacts::FilterWindow { size, rank, .. },
-        ) => {
-            let area = size
-                .checked_mul(size)
-                .filter(|_| size > 0 && !size.is_multiple_of(2))
-                .ok_or_else(|| PilError::ValueError("bad filter size".into()))?;
-            if rank_required && rank.is_none() {
-                return Err(PilError::InternalError(
-                    "rank-filter contract requires a rank value".into(),
-                ));
-            }
-            if rank.is_some_and(|value| value >= area) {
-                return Err(PilError::ValueError("bad rank value".into()));
-            }
-            Ok(None)
-        }
-        (InputContract::ModeFilterWindow, RequestFacts::FilterWindow { size, rank, .. }) => {
-            if rank.is_some() {
-                return Err(PilError::InternalError(
-                    "ModeFilter contract received rank-filter facts".into(),
-                ));
-            }
-            size.checked_mul(size)
-                .filter(|_| size == 0 || !size.is_multiple_of(2))
-                .ok_or_else(|| PilError::ValueError("bad filter size".into()))?;
-            Ok(None)
-        }
-        (InputContract::EffectSpreadDistance, _) => Err(wrong_request("EffectSpread")),
-        (InputContract::EffectMandelbrotParameters, _) => {
-            Err(wrong_request("EffectMandelbrot"))
-        }
-        (InputContract::QuantizeParameters { .. }, _) => Err(wrong_request("Quantize")),
-        (InputContract::Filter3x3Parameters, _) => Err(wrong_request("Filter3x3")),
-        (InputContract::Filter5x5Parameters, _) => Err(wrong_request("Filter5x5")),
-        (InputContract::GaussianBlurSigma, _) => Err(wrong_request("GaussianBlur")),
-        (InputContract::BoxBlurParameters, _) => Err(wrong_request("BoxBlur")),
-        (InputContract::BoxBlurXYParameters, _) => Err(wrong_request("BoxBlurXY")),
-        (InputContract::UnsharpMaskParameters, _) => Err(wrong_request("UnsharpMask")),
-        (InputContract::SharpnessFactor, _) => Err(wrong_request("Sharpness")),
-        (InputContract::EffectNoiseSigma, _) => Err(wrong_request("EffectNoise")),
-        (InputContract::Rotate, _) => Err(wrong_request("Rotate")),
-        (InputContract::TransformParameters, _) => Err(wrong_request("Transform")),
-        (InputContract::ByteLutEntries { .. }, _) => Err(wrong_request("Eval")),
-        (InputContract::PointFloatLutEntries { .. }, _) => Err(wrong_request("PointFloat")),
-        (InputContract::ReduceFactors { .. }, _) => Err(wrong_request("Reduce")),
-        (InputContract::Thumbnail, _) => Err(wrong_request("Thumbnail")),
-        (InputContract::ContainParameters, _) => Err(wrong_request("Contain")),
-        (InputContract::CoverParameters, _) => Err(wrong_request("Cover")),
-        (InputContract::FitParameters, _) => Err(wrong_request("Fit")),
-        (InputContract::PadParameters, _) => Err(wrong_request("Pad")),
-        (InputContract::ScaleParameters, _) => Err(wrong_request("Scale")),
-        (InputContract::OddRankWindow { .. }, _) => Err(wrong_request("RankFilter")),
-        (InputContract::ModeFilterWindow, _) => Err(wrong_request("ModeFilter")),
-        _ => Err(PilError::InternalError(
-            "request validation received a non-request input contract".into(),
-        )),
-    }
+fn defer_draw_inputs(contract: InputContract) -> Result<Option<UnresolvedGuard>, PilError> {
+    Ok(Some(UnresolvedGuard::InputContract(Box::new(contract))))
 }
 
 fn assess_checked_dimensions(
@@ -841,10 +604,14 @@ fn assess_color3dlut_target(
     targets: &'static [super::ModeChannelCapacity],
 ) -> Result<Option<UnresolvedGuard>, PilError> {
     match input.request {
-        RequestFacts::Unspecified => Ok(Some(UnresolvedGuard::InputContract(
+        RequestFacts::Unspecified => Ok(Some(UnresolvedGuard::InputContract(Box::new(
             InputContract::Color3DLutTarget { targets },
-        ))),
-        RequestFacts::Color3DLut { target_mode, channels, .. } => {
+        )))),
+        RequestFacts::Color3DLut {
+            target_mode,
+            channels,
+            ..
+        } => {
             let Some(target) = targets.iter().find(|target| target.mode == target_mode) else {
                 return Err(PilError::ValueError("unrecognized image mode".into()));
             };
@@ -867,10 +634,14 @@ fn assess_crop_border(
         _ => return Err(wrong_request("CropBorder")),
     };
     if border > input.width / 2 {
-        return Err(PilError::ValueError("Coordinate 'right' is less than 'left'".into()));
+        return Err(PilError::ValueError(
+            "Coordinate 'right' is less than 'left'".into(),
+        ));
     }
     if border > input.height / 2 {
-        return Err(PilError::ValueError("Coordinate 'lower' is less than 'upper'".into()));
+        return Err(PilError::ValueError(
+            "Coordinate 'lower' is less than 'upper'".into(),
+        ));
     }
     Ok(None)
 }
@@ -951,19 +722,17 @@ fn assess_exact_native_bytes(
         .ok_or_else(|| PilError::InternalError(overflow_reason.into()))?;
     match input.byte_len {
         None => unresolved_request(contract),
-        Some(length) if length != expected => {
-            Err(PilError::InternalError(mismatch_reason.into()))
-        }
+        Some(length) if length != expected => Err(PilError::InternalError(mismatch_reason.into())),
         Some(_) => Ok(None),
     }
 }
 
-fn unresolved_request(
-    contract: InputContract,
-) -> Result<Option<UnresolvedGuard>, PilError> {
-    Ok(Some(UnresolvedGuard::InputContract(contract)))
+fn unresolved_request(contract: InputContract) -> Result<Option<UnresolvedGuard>, PilError> {
+    Ok(Some(UnresolvedGuard::InputContract(Box::new(contract))))
 }
 
 fn wrong_request(operation: &str) -> PilError {
-    PilError::InternalError(format!("{operation} support received facts for another operation"))
+    PilError::InternalError(format!(
+        "{operation} support received facts for another operation"
+    ))
 }

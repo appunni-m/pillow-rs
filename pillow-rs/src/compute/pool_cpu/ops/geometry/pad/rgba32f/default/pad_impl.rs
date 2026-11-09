@@ -14,7 +14,12 @@ pub(crate) fn pad(image: &Rgba32FImage, frame: PadFrame) -> Result<Rgba32FImage,
             input.float_component(3, 255.0) as f32,
         ],
         None => match frame.color {
-            Some(color) => [color.0 as f32, color.1 as f32, color.2 as f32, color.3 as f32],
+            Some(color) => [
+                color.0 as f32,
+                color.1 as f32,
+                color.2 as f32,
+                color.3 as f32,
+            ],
             None => [0.0; 4],
         },
     };

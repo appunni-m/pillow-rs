@@ -148,20 +148,21 @@ fn kernel_catrom(x: f64) -> f64 {
 
 /// Lanczos kernel with window `a`.
 fn kernel_lanczos(x: f64, a: f64) -> f64 {
-    if x.abs() >= a {
+    // Pillow's C filter admits the negative support edge but excludes the
+    // positive edge (`-a <= x && x < a`). Preserve that asymmetry because a
+    // nonzero boundary coefficient can affect the normalized output.
+    if x < -a || x >= a {
         return 0.0;
     }
-    if x.abs() < 1e-10 {
-        return 1.0;
-    }
-    let pix = std::f64::consts::PI * x;
-    let sa = pillow_sin_f64(pix) / pix;
-    // Pillow's src/libImaging/Resample.c forms x/a before multiplying by pi.
-    // Reassociating this as pi*x/a changes a few wide cancellation rows by
-    // one f64 ULP before the final f32 store.
-    let scaled_pix = (x / a) * std::f64::consts::PI;
-    let s = pillow_sin_f64(scaled_pix) / scaled_pix;
-    sa * s
+    let sinc = |value: f64| {
+        if value == 0.0 {
+            1.0
+        } else {
+            let pix = value * std::f64::consts::PI;
+            pillow_sin_f64(pix) / pix
+        }
+    };
+    sinc(x) * sinc(x / a)
 }
 
 /// Hamming kernel.

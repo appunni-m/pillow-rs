@@ -9,8 +9,7 @@ pub(crate) fn execute(
     base: &ContrastBase,
     factor: f64,
 ) -> Result<GrayImage, PilError> {
-    crate::compute::pool_cpu::ops::enhance::helpers::contrast::execute_vector::<
-        _,
-        1,
-    >(source, base, factor)
+    crate::compute::pool_cpu::ops::enhance::helpers::contrast::execute_vector::<_, 1>(
+        source, base, factor,
+    )
 }

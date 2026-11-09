@@ -1,7 +1,7 @@
 //! `One` band semantics and context-selected architecture strategies.
 
-use crate::compute::registry::support::BandIndexRule;
 use super::super::helpers::extract_band_strategy::declare_strategies;
+use crate::compute::registry::support::BandIndexRule;
 
 declare_strategies! {
     One, BandIndexRule::LumaWithOpaqueAlpha;
@@ -29,14 +29,7 @@ declare_data_strategies! {
     Neon, neon, all(target_arch = "aarch64", target_feature = "neon"), &[crate::compute::Architecture::Neon];
 }
 
-use super::super::helpers::put_alpha_strategy::declare_strategies as declare_alpha_strategies;
+use super::super::helpers::put_alpha_strategy::declare_rejected_strategies;
 
-declare_alpha_strategies! {
-    One, ImageLumaA8, 1, 8;
-}
-
-use super::super::helpers::put_alpha_data_strategy::declare_strategies as declare_alpha_data_strategies;
-
-declare_alpha_data_strategies! {
-    One, ImageLumaA8, 0, 4;
-}
+declare_rejected_strategies! { One, ImageLumaA8; }
+super::super::helpers::scalar_write_support::declare_scalar_write_support!(One, true, false, false,);

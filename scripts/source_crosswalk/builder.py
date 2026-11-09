@@ -907,8 +907,20 @@ def build_crosswalk(root: Path = ROOT) -> dict[str, Any]:
             referenced_cpu_names = cpu_registration_references(
                 registration["text"], cpu_imports
             )
-            cpu_names = [name for name in referenced_cpu_names if name in cpu_functions]
-            if not cpu_names:
+            cpu_definitions = []
+            for name in referenced_cpu_names:
+                definitions = cpu_functions.get(name, [])
+                source_path = registration.get("cpu_source_path")
+                if source_path:
+                    module_directory = source_path.rsplit("/", maxsplit=1)[0] + "/"
+                    definitions = [
+                        definition
+                        for definition in definitions
+                        if definition["path"] == source_path
+                        or definition["path"].startswith(module_directory)
+                    ]
+                cpu_definitions.extend((name, definition) for definition in definitions)
+            if not cpu_definitions:
                 findings.append(
                     {
                         "flag": "cpu_registration_function_unresolved",
@@ -917,8 +929,9 @@ def build_crosswalk(root: Path = ROOT) -> dict[str, Any]:
                         "reason_for_review": "The registry expression did not resolve to a function definition under pool_cpu/ops.",
                     }
                 )
+            resolved_names = {name for name, _ in cpu_definitions}
             for name in referenced_cpu_names:
-                if name not in cpu_functions:
+                if name not in resolved_names:
                     findings.append(
                         {
                             "flag": "cpu_registration_function_unresolved",
@@ -927,28 +940,27 @@ def build_crosswalk(root: Path = ROOT) -> dict[str, Any]:
                             "reason_for_review": f"Imported CPU operation symbol {name!r} has no parsed definition under pool_cpu/ops.",
                         }
                     )
-            for name in cpu_names:
-                for definition in cpu_functions[name]:
-                    symbol_id = f"cpu-symbol:{name}:{definition['path']}:{definition['line']}"
-                    nodes.setdefault(
-                        symbol_id,
-                        {
-                            "id": symbol_id,
-                            "kind": "cpu_function",
-                            "symbol": name,
-                            **definition,
-                        },
-                    )
-                    edges.append(
-                        {
-                            "from": key_id,
-                            "relation": "registry_expression_references_cpu_function",
-                            "to": symbol_id,
-                            "site": {"path": registration_path, "line": registration["line"]},
-                            "evidence_kind": "function_symbol_reference",
-                            "status": "static_source_registration",
-                        }
-                    )
+            for name, definition in cpu_definitions:
+                symbol_id = f"cpu-symbol:{name}:{definition['path']}:{definition['line']}"
+                nodes.setdefault(
+                    symbol_id,
+                    {
+                        "id": symbol_id,
+                        "kind": "cpu_function",
+                        "symbol": name,
+                        **definition,
+                    },
+                )
+                edges.append(
+                    {
+                        "from": key_id,
+                        "relation": "registry_expression_references_cpu_function",
+                        "to": symbol_id,
+                        "site": {"path": registration_path, "line": registration["line"]},
+                        "evidence_kind": "function_symbol_reference",
+                        "status": "static_source_registration",
+                    }
+                )
             shader = registration["shader"]
             if shader:
                 shader_path = (SHADER_ROOT / shader).as_posix()

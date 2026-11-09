@@ -6,6 +6,9 @@ pub(crate) fn execute(
     request: RotateRequest,
 ) -> Result<super::super::ops::Input, PilError> {
     crate::compute::pool_cpu::ops::rotate::helpers::vector::execute::<
-        crate::raster::Rgb<u8>, 3, false, false,
+        crate::raster::Rgb<u8>,
+        3,
+        false,
+        false,
     >(input, request)
 }

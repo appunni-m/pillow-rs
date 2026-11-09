@@ -1,4 +1,4 @@
-use super::RsImage;
+use super::{PyImage, RsImage};
 use crate::*;
 use pyo3::exceptions::PyBufferError;
 use pyo3::prelude::PyModule;
@@ -13,9 +13,7 @@ fn palette_alpha_bytes(value: &Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
             "underlying buffer is not C-contiguous",
         ));
     }
-    Ok(memoryview
-        .call_method0("tobytes")?
-        .extract::<Vec<u8>>()?)
+    Ok(memoryview.call_method0("tobytes")?.extract::<Vec<u8>>()?)
 }
 
 struct PreparedPalettePutPixel<'py> {
@@ -110,8 +108,228 @@ fn image_coordinates_in_bounds(
     Ok((x as u32, y as u32))
 }
 
+fn image_sequence_len(width: u32, height: u32) -> PyResult<usize> {
+    let length = (width as usize)
+        .checked_mul(height as usize)
+        .filter(|length| *length <= isize::MAX as usize)
+        .ok_or_else(|| {
+            pyo3::exceptions::PyOverflowError::new_err(
+                "cannot fit 'int' into an index-sized integer",
+            )
+        })?;
+    Ok(length)
+}
+
+fn load_pyimage(image: &Py<PyImage>, py: Python<'_>) -> PyResult<()> {
+    let inner = image.bind(py).borrow().inner.clone();
+    let (result, inner) = py.detach(move || {
+        let mut inner = inner;
+        let result = inner.load();
+        (result, inner)
+    });
+    image.bind(py).borrow_mut().inner = inner;
+    result.map_err(map_error)
+}
+
+fn image_sequence_index(index: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<isize> {
+    if index.is_instance_of::<pyo3::types::PySlice>() {
+        return Err(pyo3::exceptions::PyTypeError::new_err(
+            "sequence index must be integer, not 'slice'",
+        ));
+    }
+
+    let type_name = index.get_type().name()?.to_string();
+    let has_index = index.get_type().hasattr("__index__")?;
+    let index = match py.import("operator")?.getattr("index")?.call1((index,)) {
+        Ok(index) => index,
+        Err(error) if !has_index && error.is_instance_of::<pyo3::exceptions::PyTypeError>(py) => {
+            return Err(pyo3::exceptions::PyTypeError::new_err(format!(
+                "sequence index must be integer, not '{type_name}'"
+            )));
+        }
+        Err(error) => return Err(error),
+    };
+
+    index.extract::<isize>().map_err(|error| {
+        if error.is_instance_of::<pyo3::exceptions::PyOverflowError>(py) {
+            pyo3::exceptions::PyIndexError::new_err("cannot fit 'int' into an index-sized integer")
+        } else {
+            error
+        }
+    })
+}
+
+fn formatted_pixel_to_python(
+    py: Python<'_>,
+    value: pillow_rs::FormattedPixelValue,
+) -> PyResult<Py<PyAny>> {
+    match value {
+        pillow_rs::FormattedPixelValue::Scalar(value) => Ok(value.into_py_any(py)?),
+        pillow_rs::FormattedPixelValue::Integer(value) => Ok(value.into_py_any(py)?),
+        pillow_rs::FormattedPixelValue::Float(value) => Ok(value.into_py_any(py)?),
+        pillow_rs::FormattedPixelValue::Components(values) => {
+            Ok(PyTuple::new(py, values)?.into_py_any(py)?)
+        }
+        pillow_rs::FormattedPixelValue::U16Components(values) => {
+            Ok(PyTuple::new(py, values)?.into_py_any(py)?)
+        }
+        pillow_rs::FormattedPixelValue::FloatComponents(values) => {
+            Ok(PyTuple::new(py, values.into_iter().map(f64::from))?.into_py_any(py)?)
+        }
+        pillow_rs::FormattedPixelValue::InlineComponents { bytes, bands } => {
+            Ok(PyTuple::new(py, bytes.into_iter().take(usize::from(bands)))?.into_py_any(py)?)
+        }
+    }
+}
+
+fn validate_imaging_core_palette_ink(
+    value: &Bound<'_, PyAny>,
+    mode: pillow_rs::Mode,
+) -> PyResult<()> {
+    if !matches!(
+        mode,
+        pillow_rs::Mode::ImagePalette8 | pillow_rs::Mode::ImagePaletteAlpha8
+    ) || value.is_instance_of::<PyInt>()
+    {
+        return Ok(());
+    }
+    let tuple = value.cast::<PyTuple>().ok();
+    let accepted = match mode {
+        pillow_rs::Mode::ImagePalette8 => tuple.is_some_and(|tuple| tuple.len().ok() == Some(1)),
+        pillow_rs::Mode::ImagePaletteAlpha8 => {
+            tuple.is_some_and(|tuple| matches!(tuple.len(), Ok(1 | 2)))
+        }
+        _ => true,
+    };
+    if accepted {
+        return Ok(());
+    }
+    let message = if mode == pillow_rs::Mode::ImagePalette8 {
+        "color must be int or single-element tuple"
+    } else if tuple.is_none() {
+        "color must be int or tuple"
+    } else {
+        "color must be int, or tuple of one or two elements"
+    };
+    Err(pyo3::exceptions::PyTypeError::new_err(message))
+}
+
+fn putpixel_imaging_core(
+    slf: Py<PyImage>,
+    xy: &Bound<'_, PyAny>,
+    value: &Bound<'_, PyAny>,
+    py: Python<'_>,
+) -> PyResult<()> {
+    let coordinates = putpixel_coordinates_from_python(xy)?;
+    putpixel_imaging_core_at(slf, coordinates, value, py)
+}
+
+fn putpixel_imaging_core_at(
+    slf: Py<PyImage>,
+    coordinates: (i32, i32),
+    value: &Bound<'_, PyAny>,
+    py: Python<'_>,
+) -> PyResult<()> {
+    let image = slf.bind(py).borrow().inner.clone();
+    let (x, y) = image_coordinates_in_bounds(&image, coordinates)?;
+    let mode = image.mode_identity().map_err(map_error)?;
+    validate_imaging_core_palette_ink(value, mode)?;
+    let value = putpixel_value_from_python(value, mode)?;
+    slf.bind(py)
+        .borrow_mut()
+        .inner
+        .putpixel_value(x, y, value)
+        .map_err(map_error)
+}
+
+fn getpixel_at(
+    image: pillow_rs::Image,
+    coordinates: (i32, i32),
+    py: Python<'_>,
+) -> PyResult<Py<PyAny>> {
+    let xy = image_coordinates_in_bounds(&image, coordinates)?;
+    if let Some(rgb) = image
+        .getpixel_rgb_if_loaded(xy.0, xy.1)
+        .map_err(map_error)?
+    {
+        return PyTuple::new(py, rgb)?.into_py_any(py);
+    }
+    let value = py
+        .detach(move || image.getpixel_formatted(xy.0, xy.1))
+        .map_err(map_error)?;
+    formatted_pixel_to_python(py, value)
+}
+
 #[pymethods]
 impl PyImage {
+    fn setmode(&mut self, mode: &str) -> PyResult<()> {
+        let target = pillow_rs::Mode::from_pillow_name(mode).ok_or_else(|| {
+            map_error(pillow_rs::PilError::ValueError(
+                "image has wrong mode".into(),
+            ))
+        })?;
+        self.inner.imaging_core_setmode(target).map_err(map_error)
+    }
+
+    fn putband(slf: Py<Self>, source: Py<Self>, band: i32, py: Python<'_>) -> PyResult<()> {
+        let source = source.bind(py).borrow().inner.clone();
+        slf.bind(py)
+            .borrow_mut()
+            .inner
+            .imaging_core_putband(&source, band)
+            .map_err(map_error)
+    }
+
+    fn fillband(&mut self, band: i32, color: i32) -> PyResult<()> {
+        self.inner
+            .imaging_core_fillband(band, color)
+            .map_err(map_error)
+    }
+
+    fn __len__(&self) -> PyResult<usize> {
+        let (width, height) = self.inner.size().map_err(map_error)?;
+        image_sequence_len(width, height)
+    }
+
+    fn __getitem__(slf: Py<Self>, index: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        load_pyimage(&slf, py)?;
+        let index = image_sequence_index(index, py)?;
+        let (width, height) = slf.bind(py).borrow().inner.size().map_err(map_error)?;
+        let length = image_sequence_len(width, height)?;
+        let length = isize::try_from(length).map_err(|_| {
+            pyo3::exceptions::PyOverflowError::new_err(
+                "cannot fit 'int' into an index-sized integer",
+            )
+        })?;
+        let index = if index < 0 {
+            index.saturating_add(length)
+        } else {
+            index
+        };
+        if index < 0 || index >= length {
+            return Err(pyo3::exceptions::PyIndexError::new_err(
+                "image index out of range",
+            ));
+        }
+        let width = isize::try_from(width).map_err(|_| {
+            pyo3::exceptions::PyOverflowError::new_err(
+                "cannot fit 'int' into an index-sized integer",
+            )
+        })?;
+        let x = (index % width) as u32;
+        let y = (index / width) as u32;
+        debug_assert!(y < height);
+
+        let image = slf.bind(py).borrow().inner.clone();
+        if let Some(rgb) = image.getpixel_rgb_if_loaded(x, y).map_err(map_error)? {
+            return PyTuple::new(py, rgb)?.into_py_any(py);
+        }
+        let value = py
+            .detach(move || image.getpixel_formatted(x, y))
+            .map_err(map_error)?;
+        formatted_pixel_to_python(py, value)
+    }
+
     #[pyo3(signature = (rawmode=None))]
     fn getpalette_with_input(
         &self,
@@ -178,11 +396,7 @@ impl PyImage {
             .map_err(map_error)
     }
 
-    fn putpalettealphas(
-        slf: Py<Self>,
-        values: &Bound<'_, PyAny>,
-        py: Python<'_>,
-    ) -> PyResult<()> {
+    fn putpalettealphas(slf: Py<Self>, values: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<()> {
         let values = palette_alpha_bytes(values)?;
         let mut image = slf.bind(py).borrow_mut();
         let image = &mut image.inner;
@@ -238,7 +452,8 @@ impl PyImage {
             if matches!(image, RsImage::Loaded(_) | RsImage::Paletted(_)) {
                 let output_len = image.getdata_band_len(band).map_err(map_error)?;
                 let bytes = PyBytes::new_with(py, output_len, |output| {
-                    py.detach(|| image.getdata_band_into(band, output)).map_err(map_error)
+                    py.detach(|| image.getdata_band_into(band, output))
+                        .map_err(map_error)
                 })?;
                 return Ok(bytes.into());
             }
@@ -247,7 +462,8 @@ impl PyImage {
                 .detach(|| image.getdata_band_len(band))
                 .map_err(map_error)?;
             let bytes = PyBytes::new_with(py, output_len, |output| {
-                py.detach(|| image.getdata_band_into(band, output)).map_err(map_error)
+                py.detach(|| image.getdata_band_into(band, output))
+                    .map_err(map_error)
             })?;
             return Ok(bytes.into());
         }
@@ -306,16 +522,7 @@ impl PyImage {
     ) -> PyResult<Py<PyAny>> {
         // Pillow loads before tuple(xy); conversion can execute user code and
         // therefore must happen after releasing the image borrow.
-        {
-            let inner = slf.bind(py).borrow().inner.clone();
-            let (result, inner) = py.detach(move || {
-                let mut inner = inner;
-                let result = inner.load();
-                (result, inner)
-            });
-            slf.bind(py).borrow_mut().inner = inner;
-            result.map_err(map_error)?;
-        }
+        load_pyimage(&slf, py)?;
         let coordinates = py
             .import("builtins")?
             .getattr("tuple")?
@@ -332,36 +539,59 @@ impl PyImage {
         let x = c_int_from_python(&coordinates.get_item(0)?)?;
         let y = c_int_from_python(&coordinates.get_item(1)?)?;
         let image = slf.bind(py).borrow().inner.clone();
-        let xy = image_coordinates_in_bounds(&image, (x, y))?;
-        if let Some(rgb) = image.getpixel_rgb_if_loaded(xy.0, xy.1).map_err(map_error)? {
-            return PyTuple::new(py, rgb)?.into_py_any(py);
-        }
-        let value = py
-            .detach(move || image.getpixel_formatted(xy.0, xy.1))
-            .map_err(map_error)?;
-        Python::attach(|py| match value {
-            pillow_rs::FormattedPixelValue::Scalar(value) => Ok(value.into_py_any(py)?),
-            pillow_rs::FormattedPixelValue::Integer(value) => Ok(value.into_py_any(py)?),
-            pillow_rs::FormattedPixelValue::Float(value) => Ok(value.into_py_any(py)?),
-            pillow_rs::FormattedPixelValue::Components(values) => {
-                Ok(PyTuple::new(py, values)?.into_py_any(py)?)
-            }
-            pillow_rs::FormattedPixelValue::U16Components(values) => {
-                Ok(PyTuple::new(py, values)?.into_py_any(py)?)
-            }
-            pillow_rs::FormattedPixelValue::FloatComponents(values) => {
-                Ok(PyTuple::new(py, values.into_iter().map(f64::from))?.into_py_any(py)?)
-            }
-            pillow_rs::FormattedPixelValue::InlineComponents { bytes, bands } => Ok(PyTuple::new(
-                py,
-                bytes.into_iter().take(usize::from(bands)),
-            )?
-            .into_py_any(py)?),
-        })
+        getpixel_at(image, (x, y), py)
+    }
+
+    fn getpixel(slf: Py<Self>, xy: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        Self::getpixel_formatted(slf, xy, py)
+    }
+
+    /// Read through a stored PixelAccess view with Pillow's tuple parser.
+    fn pixel_access_getpixel(&self, xy: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let coordinates = pixel_access_coordinates_from_python(xy)?;
+        getpixel_at(self.inner.clone(), coordinates, py)
+    }
+
+    /// Write through a stored PixelAccess view without public palette lookup.
+    fn pixel_access_putpixel(
+        slf: Py<Self>,
+        xy: &Bound<'_, PyAny>,
+        value: &Bound<'_, PyAny>,
+        py: Python<'_>,
+    ) -> PyResult<()> {
+        let coordinates = pixel_access_coordinates_from_python(xy)?;
+        putpixel_imaging_core_at(slf, coordinates, value, py)
+    }
+
+    /// Validate a deletion key; Pillow's PixelAccess deletion is otherwise a no-op.
+    fn pixel_access_delete(&self, xy: &Bound<'_, PyAny>) -> PyResult<()> {
+        let coordinates = pixel_access_coordinates_from_python(xy)?;
+        image_coordinates_in_bounds(&self.inner, coordinates)?;
+        Ok(())
+    }
+
+    /// Write one pixel through the mode-native ImagingCore callback contract.
+    fn putpixel(
+        slf: Py<Self>,
+        xy: &Bound<'_, PyAny>,
+        value: &Bound<'_, PyAny>,
+        py: Python<'_>,
+    ) -> PyResult<()> {
+        putpixel_imaging_core(slf, xy, value, py)
     }
 
     #[pyo3(signature = (data, scale=1.0, offset=0.0))]
     fn putdata_formatted(
+        slf: &Bound<'_, Self>,
+        data: &Bound<'_, PyAny>,
+        scale: f64,
+        offset: f64,
+    ) -> PyResult<()> {
+        putdata::putdata_formatted(slf, data, scale, offset)
+    }
+
+    #[pyo3(signature = (data, scale=1.0, offset=0.0))]
+    fn putdata(
         slf: &Bound<'_, Self>,
         data: &Bound<'_, PyAny>,
         scale: f64,
@@ -386,8 +616,7 @@ impl PyImage {
                 image.inner.palette_mode().map(str::to_owned),
             )
         };
-        let palette_input =
-            prepare_palette_putpixel(value, mode, palette_mode.as_deref(), info)?;
+        let palette_input = prepare_palette_putpixel(value, mode, palette_mode.as_deref(), info)?;
         let (prepared, deferred_alpha) = match palette_input {
             Some(input) => {
                 let PreparedPalettePutPixel {

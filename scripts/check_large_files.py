@@ -15,6 +15,10 @@ LIMIT_BYTES = 1 * 1024 * 1024
 
 # Reviewed exact-path approvals: path -> (maximum bytes, reason).
 APPROVED_FILES: dict[str, tuple[int, str]] = {
+    "docs/CPU_REFACTOR_INVENTORY.md": (
+        1_500_000,
+        "Active mode-by-mode CPU refactor inventory and verification evidence; keep its growth capped.",
+    ),
     "scripts/build_migration_parity_inputs.py": (
         2_500_000,
         "Maintained deterministic generator for the fixed parity and benchmark inputs.",

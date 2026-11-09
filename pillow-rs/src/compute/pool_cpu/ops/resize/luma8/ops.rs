@@ -1,10 +1,22 @@
 //! Exact ImageLuma8 mode dispatch for Resize.
 
+use crate::compute::registry::support::{ImplementationSupport, ModeSupport, StrategySelection};
 use crate::compute::{Architecture, ExecutionContext};
-use crate::compute::registry::support::StrategySelection;
 use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
-use crate::raster::GrayImage;
+use crate::raster::{GrayImage, Mode};
+
+static RESIZE_ARCHITECTURES: [ImplementationSupport; 3] =
+    super::super::helpers::support::native_byte_architectures(Mode::ImageLuma8, 1, false);
+static RESIZE_BOXED_ARCHITECTURES: [ImplementationSupport; 3] =
+    super::super::helpers::support::boxed_byte_architectures(Mode::ImageLuma8, 1, false);
+
+pub(crate) const SUPPORT: ModeSupport =
+    super::super::helpers::support::native_mode_support(Mode::ImageLuma8, &RESIZE_ARCHITECTURES);
+pub(crate) const BOXED_SUPPORT: ModeSupport = super::super::helpers::support::boxed_mode_support(
+    Mode::ImageLuma8,
+    &RESIZE_BOXED_ARCHITECTURES,
+);
 
 pub(crate) fn resize(
     context: &ExecutionContext,
@@ -31,9 +43,7 @@ pub(crate) fn resize(
                             )?,
                         )
                         .ok_or_else(|| {
-                            PilError::ValueError(
-                                "resize_l: failed to create output buffer".into(),
-                            )
+                            PilError::ValueError("resize_l: failed to create output buffer".into())
                         }),
                         None => super::sse2::resize_impl::execute(image, width, height, filter),
                     },
@@ -46,9 +56,7 @@ pub(crate) fn resize(
                             )?,
                         )
                         .ok_or_else(|| {
-                            PilError::ValueError(
-                                "resize_l: failed to create output buffer".into(),
-                            )
+                            PilError::ValueError("resize_l: failed to create output buffer".into())
                         }),
                         None => super::neon::resize_impl::execute(image, width, height, filter),
                     },
@@ -61,11 +69,11 @@ pub(crate) fn resize(
                             )?,
                         )
                         .ok_or_else(|| {
-                            PilError::ValueError(
-                                "resize_l: failed to create output buffer".into(),
-                            )
+                            PilError::ValueError("resize_l: failed to create output buffer".into())
                         }),
-                        None => super::wasm_simd128::resize_impl::execute(image, width, height, filter),
+                        None => {
+                            super::wasm_simd128::resize_impl::execute(image, width, height, filter)
+                        }
                     },
                     _ => unreachable!(),
                 };
@@ -89,8 +97,9 @@ pub(crate) fn resize(
         bounds,
         || super::default::resize_impl::execute(image, width, height, filter, bounds),
         |bytes| {
-            GrayImage::from_raw(width, height, bytes)
-                .ok_or_else(|| PilError::ValueError("resize_l: failed to create output buffer".into()))
+            GrayImage::from_raw(width, height, bytes).ok_or_else(|| {
+                PilError::ValueError("resize_l: failed to create output buffer".into())
+            })
         },
     )
 }

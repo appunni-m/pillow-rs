@@ -6,7 +6,6 @@ use crate::pipeline::NativeColorInput;
 
 pub(super) type Input = Rgba32FImage;
 
-
 pub(crate) struct Kernel<'a> {
     input: &'a Input,
     border: crate::pipeline::ExpandMargins,
@@ -33,7 +32,11 @@ pub(super) fn prepare(
             f32::from(fill.3),
         ],
     };
-    Kernel { input, border, fill }
+    Kernel {
+        input,
+        border,
+        fill,
+    }
 }
 
 pub(super) fn execute(kernel: Kernel<'_>) -> Result<Input, PilError> {

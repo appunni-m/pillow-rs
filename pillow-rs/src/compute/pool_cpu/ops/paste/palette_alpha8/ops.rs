@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
-use crate::compute::pool_cpu::ops::paste::helpers::plan::BytePlan;
 use crate::compute::Architecture;
+use crate::compute::pool_cpu::ops::paste::helpers::plan::BytePlan;
 use crate::compute::registry::support::{
-    ImplementationSupport, OutputModeRule,
-    InputContract, ModeSupport, OperationId, PasteInputRules, StrategySelection,
+    ImplementationSupport, InputContract, ModeSupport, OperationId, OutputModeRule,
+    PasteInputRules, StrategySelection,
 };
 use crate::error::PilError;
-use crate::raster::{DynamicImage, Mode, GrayAlphaImage};
+use crate::raster::{DynamicImage, GrayAlphaImage, Mode};
 
 pub(crate) type Strategy<'a> = BytePlan<'a>;
 
@@ -64,16 +64,17 @@ where
     I: std::ops::Deref<Target = DynamicImage>,
 {
     let architecture = strategy.selection.implementation.architecture;
-    super::super::helpers::plan::execute_with_hidden_lanes(strategy, |strategy| {
-        match architecture {
-        Architecture::Default => super::default::paste_impl::execute(strategy),
-        Architecture::Sse2 => super::sse2::paste_impl::execute(strategy),
-        Architecture::Neon => super::neon::paste_impl::execute(strategy),
-        Architecture::WasmSimd128 => super::wasm_simd128::paste_impl::execute(strategy),
-        architecture => Err(PilError::InternalError(format!(
-            "unbound {architecture:?} Paste strategy for mode {:?}",
-            Mode::ImagePaletteAlpha8
-        ))),
-        }
-    })
+    super::super::helpers::plan::execute_with_hidden_lanes(
+        strategy,
+        |strategy| match architecture {
+            Architecture::Default => super::default::paste_impl::execute(strategy),
+            Architecture::Sse2 => super::sse2::paste_impl::execute(strategy),
+            Architecture::Neon => super::neon::paste_impl::execute(strategy),
+            Architecture::WasmSimd128 => super::wasm_simd128::paste_impl::execute(strategy),
+            architecture => Err(PilError::InternalError(format!(
+                "unbound {architecture:?} Paste strategy for mode {:?}",
+                Mode::ImagePaletteAlpha8
+            ))),
+        },
+    )
 }

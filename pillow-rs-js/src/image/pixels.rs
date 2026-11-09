@@ -235,15 +235,11 @@ impl Image {
         mode: Option<String>,
     ) -> Result<Image, JsValue> {
         let source_mode = self.inner.mode_identity().map_err(err)?;
-        let target_mode = mode
-            .as_deref()
-            .and_then(pillow_rs::Mode::from_pillow_name);
+        let target_mode = mode.as_deref().and_then(pillow_rs::Mode::from_pillow_name);
         if target_mode == Some(pillow_rs::Mode::ImageF32)
             && matches!(
                 source_mode,
-                pillow_rs::Mode::One
-                    | pillow_rs::Mode::ImageLuma8
-                    | pillow_rs::Mode::ImagePalette8
+                pillow_rs::Mode::One | pillow_rs::Mode::ImageLuma8 | pillow_rs::Mode::ImagePalette8
             )
         {
             let lut = pillow_rs::image_eval_float_lut(|sample| {

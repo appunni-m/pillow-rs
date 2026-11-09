@@ -18,15 +18,13 @@ pub(crate) fn execute(
     }
 
     let mut output = dimensions.alloc_buffer();
-    if let (Some(source_pixel), Some(destination_pixel)) = (
-        uniform_rgba_pixel(source),
-        uniform_rgba_pixel(destination),
-    ) {
+    if let (Some(source_pixel), Some(destination_pixel)) =
+        (uniform_rgba_pixel(source), uniform_rgba_pixel(destination))
+    {
         let mut result_pixel = destination_pixel;
-        crate::compute::pool_cpu::ops::composite::helpers::alpha_composite::alpha_composite_pixel::<4>(
-            &source_pixel,
-            &mut result_pixel,
-        );
+        crate::compute::pool_cpu::ops::composite::helpers::alpha_composite::alpha_composite_pixel::<
+            4,
+        >(&source_pixel, &mut result_pixel);
         for pixel in output.chunks_exact_mut(4) {
             pixel.copy_from_slice(&result_pixel);
         }

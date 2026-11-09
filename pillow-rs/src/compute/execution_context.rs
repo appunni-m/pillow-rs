@@ -1,6 +1,8 @@
 //! Immutable backend and CPU architecture selection for image execution.
 
 use super::Backend;
+#[cfg(feature = "test-api")]
+use std::cell::Cell;
 use std::sync::OnceLock;
 
 /// CPU instruction set selected for one routed operation or pipeline.
@@ -75,7 +77,26 @@ impl Architecture {
     pub const fn has_fma(self) -> bool {
         matches!(self, Self::AvxFma | Self::Avx2Fma)
     }
+}
 
+#[cfg(feature = "test-api")]
+std::thread_local! {
+    static TEST_ARCHITECTURE: Cell<Option<Architecture>> = const { Cell::new(None) };
+}
+
+#[cfg(feature = "test-api")]
+pub(super) fn set_test_architecture(architecture: Architecture) {
+    TEST_ARCHITECTURE.set(Some(architecture));
+}
+
+#[cfg(feature = "test-api")]
+fn test_architecture() -> Option<Architecture> {
+    TEST_ARCHITECTURE.get()
+}
+
+#[cfg(not(feature = "test-api"))]
+const fn test_architecture() -> Option<Architecture> {
+    None
 }
 
 /// Independently detected capabilities, kept at the context boundary.
@@ -125,9 +146,17 @@ impl CpuCapabilities {
 
     fn preferred(self) -> Architecture {
         if self.avx2 {
-            if self.fma { Architecture::Avx2Fma } else { Architecture::Avx2 }
+            if self.fma {
+                Architecture::Avx2Fma
+            } else {
+                Architecture::Avx2
+            }
         } else if self.avx {
-            if self.fma { Architecture::AvxFma } else { Architecture::Avx }
+            if self.fma {
+                Architecture::AvxFma
+            } else {
+                Architecture::Avx
+            }
         } else if self.ssse3 {
             Architecture::Ssse3
         } else if self.sse3 {
@@ -158,13 +187,24 @@ impl CpuCapabilities {
         }
         #[cfg(target_arch = "aarch64")]
         {
-            Self { neon: cfg!(target_feature = "neon"), ..Self::PORTABLE }
+            Self {
+                neon: cfg!(target_feature = "neon"),
+                ..Self::PORTABLE
+            }
         }
         #[cfg(target_arch = "wasm32")]
         {
-            Self { wasm_simd128: cfg!(target_feature = "simd128"), ..Self::PORTABLE }
+            Self {
+                wasm_simd128: cfg!(target_feature = "simd128"),
+                ..Self::PORTABLE
+            }
         }
-        #[cfg(not(any(target_arch = "x86", target_arch = "x86_64", target_arch = "aarch64", target_arch = "wasm32")))]
+        #[cfg(not(any(
+            target_arch = "x86",
+            target_arch = "x86_64",
+            target_arch = "aarch64",
+            target_arch = "wasm32"
+        )))]
         {
             Self::PORTABLE
         }
@@ -185,9 +225,16 @@ impl ExecutionContext {
     /// The compatibility SIMD request denotes CPU execution with the centrally
     /// selected host architecture. Ordinary CPU remains explicitly serial Default.
     pub(crate) fn for_routed_backend(backend: Backend) -> Self {
+        let requested_architecture = test_architecture();
         let (backend, architecture) = match backend {
-            Backend::Cpu => (Backend::Cpu, Architecture::Default),
-            Backend::Simd => (Backend::Cpu, Architecture::detected_host()),
+            Backend::Cpu => (
+                Backend::Cpu,
+                requested_architecture.unwrap_or(Architecture::Default),
+            ),
+            Backend::Simd => (
+                Backend::Cpu,
+                requested_architecture.unwrap_or_else(Architecture::detected_host),
+            ),
             Backend::Gpu => (Backend::Gpu, Architecture::Default),
         };
         Self::new(backend, architecture)
@@ -227,26 +274,64 @@ impl ExecutionContext {
     pub const fn permits_architecture(self, implementation: Architecture) -> bool {
         match self.architecture {
             Architecture::Default => matches!(implementation, Architecture::Default),
-            Architecture::Neon => matches!(implementation, Architecture::Default | Architecture::Neon),
-            Architecture::WasmSimd128 => matches!(implementation,
-                Architecture::Default | Architecture::WasmSimd128),
-            Architecture::Sse2 => matches!(implementation, Architecture::Default | Architecture::Sse2),
-            Architecture::Sse3 => matches!(implementation,
-                Architecture::Default | Architecture::Sse2 | Architecture::Sse3),
-            Architecture::Ssse3 => matches!(implementation,
-                Architecture::Default | Architecture::Sse2 | Architecture::Sse3 | Architecture::Ssse3),
-            Architecture::Avx => matches!(implementation,
-                Architecture::Default | Architecture::Sse2 | Architecture::Sse3 | Architecture::Ssse3 | Architecture::Avx),
-            Architecture::AvxFma => matches!(implementation,
-                Architecture::Default | Architecture::Sse2 | Architecture::Sse3 | Architecture::Ssse3
-                    | Architecture::Avx | Architecture::AvxFma),
-            Architecture::Avx2 => matches!(implementation,
-                Architecture::Default | Architecture::Sse2 | Architecture::Sse3 | Architecture::Ssse3
-                    | Architecture::Avx | Architecture::Avx2),
-            Architecture::Avx2Fma => matches!(implementation,
-                Architecture::Default | Architecture::Sse2 | Architecture::Sse3 | Architecture::Ssse3
-                    | Architecture::Avx | Architecture::AvxFma
-                    | Architecture::Avx2 | Architecture::Avx2Fma),
+            Architecture::Neon => {
+                matches!(implementation, Architecture::Default | Architecture::Neon)
+            }
+            Architecture::WasmSimd128 => matches!(
+                implementation,
+                Architecture::Default | Architecture::WasmSimd128
+            ),
+            Architecture::Sse2 => {
+                matches!(implementation, Architecture::Default | Architecture::Sse2)
+            }
+            Architecture::Sse3 => matches!(
+                implementation,
+                Architecture::Default | Architecture::Sse2 | Architecture::Sse3
+            ),
+            Architecture::Ssse3 => matches!(
+                implementation,
+                Architecture::Default
+                    | Architecture::Sse2
+                    | Architecture::Sse3
+                    | Architecture::Ssse3
+            ),
+            Architecture::Avx => matches!(
+                implementation,
+                Architecture::Default
+                    | Architecture::Sse2
+                    | Architecture::Sse3
+                    | Architecture::Ssse3
+                    | Architecture::Avx
+            ),
+            Architecture::AvxFma => matches!(
+                implementation,
+                Architecture::Default
+                    | Architecture::Sse2
+                    | Architecture::Sse3
+                    | Architecture::Ssse3
+                    | Architecture::Avx
+                    | Architecture::AvxFma
+            ),
+            Architecture::Avx2 => matches!(
+                implementation,
+                Architecture::Default
+                    | Architecture::Sse2
+                    | Architecture::Sse3
+                    | Architecture::Ssse3
+                    | Architecture::Avx
+                    | Architecture::Avx2
+            ),
+            Architecture::Avx2Fma => matches!(
+                implementation,
+                Architecture::Default
+                    | Architecture::Sse2
+                    | Architecture::Sse3
+                    | Architecture::Ssse3
+                    | Architecture::Avx
+                    | Architecture::AvxFma
+                    | Architecture::Avx2
+                    | Architecture::Avx2Fma
+            ),
         }
     }
 

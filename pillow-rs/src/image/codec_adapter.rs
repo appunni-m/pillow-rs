@@ -51,11 +51,17 @@ pub(super) const fn raster_mode_from_codec_mode(mode: CodecMode) -> Mode {
 }
 
 fn little_endian_u16_samples(bytes: &[u8]) -> Vec<u16> {
-    bytes.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect()
+    bytes
+        .chunks_exact(2)
+        .map(|c| u16::from_le_bytes([c[0], c[1]]))
+        .collect()
 }
 
 fn native_f32_samples(bytes: &[u8]) -> Vec<f32> {
-    bytes.chunks_exact(4).map(|c| f32::from_ne_bytes([c[0], c[1], c[2], c[3]])).collect()
+    bytes
+        .chunks_exact(4)
+        .map(|c| f32::from_ne_bytes([c[0], c[1], c[2], c[3]]))
+        .collect()
 }
 
 pub(crate) fn raster_to_decoded(image: DynamicImage) -> Result<DecodedImage, PilError> {
@@ -202,11 +208,9 @@ pub(crate) fn decoded_pixels_to_raster(d: &DecodedImage) -> Option<DynamicImage>
         CodecColorType::Rgba8 => {
             DynamicImage::ImageRgba8(RgbaImage::from_raw(d.width, d.height, d.pixels.clone())?)
         }
-        CodecColorType::Cmyk8 => DynamicImage::ImageCmyk8(RgbaImage::from_raw(
-            d.width,
-            d.height,
-            d.pixels.clone(),
-        )?),
+        CodecColorType::Cmyk8 => {
+            DynamicImage::ImageCmyk8(RgbaImage::from_raw(d.width, d.height, d.pixels.clone())?)
+        }
         CodecColorType::L16 => {
             let u16_data = little_endian_u16_samples(&d.pixels);
             DynamicImage::ImageI16(ImageBuffer::from_raw(d.width, d.height, u16_data)?)
@@ -231,16 +235,12 @@ pub(crate) fn decoded_pixels_to_raster(d: &DecodedImage) -> Option<DynamicImage>
             let f32_data = native_f32_samples(&d.pixels);
             DynamicImage::ImageRgba32F(ImageBuffer::from_raw(d.width, d.height, f32_data)?)
         }
-        CodecColorType::L32F => DynamicImage::ImageF32(RgbaImage::from_raw(
-            d.width,
-            d.height,
-            d.pixels.clone(),
-        )?),
-        CodecColorType::L32I => DynamicImage::ImageI32(RgbaImage::from_raw(
-            d.width,
-            d.height,
-            d.pixels.clone(),
-        )?),
+        CodecColorType::L32F => {
+            DynamicImage::ImageF32(RgbaImage::from_raw(d.width, d.height, d.pixels.clone())?)
+        }
+        CodecColorType::L32I => {
+            DynamicImage::ImageI32(RgbaImage::from_raw(d.width, d.height, d.pixels.clone())?)
+        }
         _ => return None,
     };
     Some(img)
@@ -323,9 +323,9 @@ pub(crate) fn attach_decoded_hidden_lanes(
         (Mode::ImageLumaA8, DynamicImage::ImageLumaA8(buffer))
         | (Mode::ImageLaPremultiplied8, DynamicImage::ImageLaPremultiplied8(buffer))
         | (Mode::ImagePaletteAlpha8, DynamicImage::ImagePaletteAlpha8(buffer)) => {
-            let lane_bytes = pixel_count.checked_mul(2).ok_or_else(|| {
-                PilError::DimensionError("decoded LA lane size overflows".into())
-            })?;
+            let lane_bytes = pixel_count
+                .checked_mul(2)
+                .ok_or_else(|| PilError::DimensionError("decoded LA lane size overflows".into()))?;
             let mut values = Vec::with_capacity(lane_bytes);
             for pixel in buffer.pixels() {
                 values.extend_from_slice(&[pixel.0[0], pixel.0[0]]);
@@ -366,18 +366,10 @@ fn retag_decoded_image(image: DynamicImage, header_mode: Mode) -> Result<Dynamic
         (Mode::ImageRgbPremultiplied8, DynamicImage::ImageRgba8(image)) => {
             DynamicImage::ImageRgbPremultiplied8(image)
         }
-        (Mode::ImageRgbx8, DynamicImage::ImageRgba8(image)) => {
-            DynamicImage::ImageRgbx8(image)
-        }
-        (Mode::ImageYCbCr8, DynamicImage::ImageRgb8(image)) => {
-            DynamicImage::ImageYCbCr8(image)
-        }
-        (Mode::ImageLab8, DynamicImage::ImageRgb8(image)) => {
-            DynamicImage::ImageLab8(image)
-        }
-        (Mode::ImageHsv8, DynamicImage::ImageRgb8(image)) => {
-            DynamicImage::ImageHsv8(image)
-        }
+        (Mode::ImageRgbx8, DynamicImage::ImageRgba8(image)) => DynamicImage::ImageRgbx8(image),
+        (Mode::ImageYCbCr8, DynamicImage::ImageRgb8(image)) => DynamicImage::ImageYCbCr8(image),
+        (Mode::ImageLab8, DynamicImage::ImageRgb8(image)) => DynamicImage::ImageLab8(image),
+        (Mode::ImageHsv8, DynamicImage::ImageRgb8(image)) => DynamicImage::ImageHsv8(image),
         (Mode::ImageI16L, DynamicImage::ImageI16(image)) => DynamicImage::ImageI16L(image),
         (Mode::ImageI16B, DynamicImage::ImageI16(image)) => DynamicImage::ImageI16B(image),
         (Mode::ImageI16N, DynamicImage::ImageI16(image)) => DynamicImage::ImageI16N(image),

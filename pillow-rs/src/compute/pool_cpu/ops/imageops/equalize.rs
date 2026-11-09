@@ -2,8 +2,7 @@
 
 use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{
-    InputContract, ModeSupport, OperationInputs, RejectionKind, RequestFacts,
-    StrategySelection,
+    InputContract, ModeSupport, OperationInputs, RejectionKind, RequestFacts, StrategySelection,
 };
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
@@ -80,16 +79,22 @@ pub(crate) fn prepare<'a>(
     let mask = materialized_mask.as_deref();
     match image {
         DynamicImage::ImageLuma8(source) => Ok(PreparedEqualize::Luma(
-            super::luma8::ops::PreparedEqualize::new(source, equalize_lut(image, 1, mask)?, selection),
+            super::luma8::ops::PreparedEqualize::new(
+                source,
+                equalize_lut(image, 1, mask)?,
+                selection,
+            ),
         )),
         DynamicImage::ImageRgb8(source) => Ok(PreparedEqualize::Rgb(
-            super::rgb8::ops::PreparedEqualize::new(source, equalize_lut(image, 3, mask)?, selection),
+            super::rgb8::ops::PreparedEqualize::new(
+                source,
+                equalize_lut(image, 3, mask)?,
+                selection,
+            ),
         )),
         DynamicImage::ImagePalette8(indices) => {
-            let rgb = super::palette8::default::equalize_impl::expand_to_rgb(
-                indices,
-                input.palette,
-            );
+            let rgb =
+                super::palette8::default::equalize_impl::expand_to_rgb(indices, input.palette);
             let lut = super::helpers::histogram::equalize_lut_for_bytes(
                 rgb.as_raw(),
                 rgb.width(),

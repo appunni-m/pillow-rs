@@ -74,19 +74,17 @@ fn apply_mask<
     color: (u8, u8, u8, u8),
 ) {
     let (image_width, image_height) = canvas.dimensions();
-    let region = BitmapRegion::clipped(
-        x,
-        y,
-        image_width,
-        image_height,
-        mask_width,
-        mask_height,
-    );
+    let region = BitmapRegion::clipped(x, y, image_width, image_height, mask_width, mask_height);
+    let Some((image_x_start, image_y_start)) =
+        region.destination_origin(x, y, image_width, image_height)
+    else {
+        return;
+    };
     let row_bytes = image_width as usize * 2;
     let bytes: &mut [u8] = bytemuck::cast_slice_mut(canvas.as_mut());
 
     for mask_y in region.y_start..region.y_end {
-        let image_y = (i64::from(y) + i64::from(mask_y)) as usize;
+        let image_y = (image_y_start + (mask_y - region.y_start)) as usize;
         let row_start = image_y * row_bytes;
         for mask_x in region.x_start..region.x_end {
             let mask_index = mask_y as usize * mask_width as usize + mask_x as usize;
@@ -100,7 +98,7 @@ fn apply_mask<
             if coverage == 0 && !PREMULTIPLIED {
                 continue;
             }
-            let image_x = (i64::from(x) + i64::from(mask_x)) as usize;
+            let image_x = (image_x_start + (mask_x - region.x_start)) as usize;
             if BINARY {
                 let offset = storage_offset::<SWAP_BYTES>(row_start + image_x);
                 bytes[offset] = color.0;

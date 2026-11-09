@@ -15,7 +15,8 @@ pub(crate) fn resize<P: Pixel<Subpixel = f32>>(
         return super::typed_nearest::resize(input, destination_width, destination_height, bounds);
     }
     let (source_width, source_height) = input.dimensions();
-    if source_width == 0 || source_height == 0 || destination_width == 0 || destination_height == 0 {
+    if source_width == 0 || source_height == 0 || destination_width == 0 || destination_height == 0
+    {
         return ImageBuffer::new(destination_width, destination_height);
     }
 

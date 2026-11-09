@@ -208,7 +208,9 @@ where
     }
     let width_usize = usize::try_from(width).map_err(|_| offset_layout_error())?;
     let height_usize = usize::try_from(height).map_err(|_| offset_layout_error())?;
-    let row_len = width_usize.checked_mul(channels).ok_or_else(offset_layout_error)?;
+    let row_len = width_usize
+        .checked_mul(channels)
+        .ok_or_else(offset_layout_error)?;
     let total_len = dimensions.total_bytes();
     let source = image.as_raw();
     let mut output = vec![0u8; total_len];
@@ -253,15 +255,15 @@ where
             let output_slice = output
                 .get_mut(output_row..output_end)
                 .ok_or_else(offset_layout_error)?;
-            let (blocks, tail) =
-                offset_native_row(source_slice, output_slice, shift_bytes)
-                    .ok_or_else(offset_layout_error)?;
+            let (blocks, tail) = offset_native_row(source_slice, output_slice, shift_bytes)
+                .ok_or_else(offset_layout_error)?;
             vector_blocks = vector_blocks.saturating_add(blocks);
             scalar_tail = scalar_tail.saturating_add(tail);
         }
     }
 
-    let mut result = ImageBuffer::from_raw(width, height, output).ok_or_else(offset_layout_error)?;
+    let mut result =
+        ImageBuffer::from_raw(width, height, output).ok_or_else(offset_layout_error)?;
     result
         .remap_hidden_pixel_lanes_from(image, |index| {
             let output_x = index % width_usize;

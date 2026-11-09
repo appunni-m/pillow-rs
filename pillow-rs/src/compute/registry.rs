@@ -27,8 +27,8 @@
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 
-use super::{Backend, ExecutionContext};
 use self::support::OperationInputs;
+use super::{Backend, ExecutionContext};
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
@@ -36,8 +36,8 @@ use std::sync::OnceLock;
 mod gpu_params;
 #[cfg(feature = "gpu")]
 mod gpu_support;
-mod registration;
 mod prepared;
+mod registration;
 pub use prepared::PreparedOperation;
 pub(crate) mod support;
 #[cfg(feature = "gpu")]
@@ -146,9 +146,9 @@ pub fn variant_key(op: &PipelineOp) -> &'static str {
         PipelineOp::Contain { .. } => "Contain",
         PipelineOp::Cover { .. } => "Cover",
         PipelineOp::Fit { .. } => "Fit",
-        PipelineOp::Pad { .. }
-        | PipelineOp::PadTyped { .. }
-        | PipelineOp::PadPositioned { .. } => "Pad",
+        PipelineOp::Pad { .. } | PipelineOp::PadTyped { .. } | PipelineOp::PadPositioned { .. } => {
+            "Pad"
+        }
         PipelineOp::Scale { .. } => "Scale",
         PipelineOp::Expand { .. } | PipelineOp::ExpandTyped { .. } => "Expand",
         PipelineOp::CropBorder { .. } => "CropBorder",
@@ -223,7 +223,9 @@ pub fn prepare_cpu<'a>(
     ctx: &ExecutionContext,
 ) -> Result<PreparedOperation<'a>, PilError> {
     if ctx.backend() != Backend::Cpu {
-        return Err(PilError::InternalError("CPU preparation received a context for another backend".into()));
+        return Err(PilError::InternalError(
+            "CPU preparation received a context for another backend".into(),
+        ));
     }
     let key = variant_key(op);
     let entry = registry()?

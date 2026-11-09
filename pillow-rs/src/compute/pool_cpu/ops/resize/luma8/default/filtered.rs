@@ -1,9 +1,9 @@
 //! Narrow fixed-point Luma8 resampling retained from the serial CPU path.
 
+use crate::checked_dims::CheckedDims;
 use crate::compute::pool_cpu::ops::resize::helpers::coefficients::{
     byte_coefficients_fit_i32, byte_coefficients_fit_source, fixed_point_to_u8_i32,
 };
-use crate::checked_dims::CheckedDims;
 use crate::ops::pil_resize::FilterCoeffs;
 
 pub(crate) fn execute(
@@ -15,7 +15,14 @@ pub(crate) fn execute(
 ) -> Option<Vec<u8>> {
     let output_dims = CheckedDims::new(destination_size.0, destination_size.1, 1).ok()?;
     let mut output = vec![0; output_dims.total_bytes()];
-    execute_into(source, source_size, destination_size, horizontal, vertical, &mut output)?;
+    execute_into(
+        source,
+        source_size,
+        destination_size,
+        horizontal,
+        vertical,
+        &mut output,
+    )?;
     Some(output)
 }
 
@@ -142,7 +149,12 @@ fn vertical_four(
     let row1 = row0 + width;
     let row2 = row1 + width;
     let row3 = row2 + width;
-    let weights = [weights[0] as i32, weights[1] as i32, weights[2] as i32, weights[3] as i32];
+    let weights = [
+        weights[0] as i32,
+        weights[1] as i32,
+        weights[2] as i32,
+        weights[3] as i32,
+    ];
     for (x, pixel) in output.iter_mut().enumerate() {
         let mut sum = i32::from(intermediate[row0 + x]) * weights[0];
         sum += i32::from(intermediate[row1 + x]) * weights[1];
@@ -164,7 +176,13 @@ fn vertical_five(
     let row2 = row1 + width;
     let row3 = row2 + width;
     let row4 = row3 + width;
-    let weights = [weights[0] as i32, weights[1] as i32, weights[2] as i32, weights[3] as i32, weights[4] as i32];
+    let weights = [
+        weights[0] as i32,
+        weights[1] as i32,
+        weights[2] as i32,
+        weights[3] as i32,
+        weights[4] as i32,
+    ];
     for (x, pixel) in output.iter_mut().enumerate() {
         let mut sum = i32::from(intermediate[row0 + x]) * weights[0];
         sum += i32::from(intermediate[row1 + x]) * weights[1];
@@ -188,7 +206,14 @@ fn vertical_six(
     let row3 = row2 + width;
     let row4 = row3 + width;
     let row5 = row4 + width;
-    let weights = [weights[0] as i32, weights[1] as i32, weights[2] as i32, weights[3] as i32, weights[4] as i32, weights[5] as i32];
+    let weights = [
+        weights[0] as i32,
+        weights[1] as i32,
+        weights[2] as i32,
+        weights[3] as i32,
+        weights[4] as i32,
+        weights[5] as i32,
+    ];
     for (x, pixel) in output.iter_mut().enumerate() {
         let mut sum = i32::from(intermediate[row0 + x]) * weights[0];
         sum += i32::from(intermediate[row1 + x]) * weights[1];

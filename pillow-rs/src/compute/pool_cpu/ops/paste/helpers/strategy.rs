@@ -10,10 +10,7 @@ use crate::raster::Mode;
 ///
 /// Each mode passes its exact storage width. The guard only admits a vector
 /// route after its destination bytes match that mode's declared layout.
-pub(crate) const fn cpu_architectures_for(
-    mode: Mode,
-    channels: u8,
-) -> [ImplementationSupport; 3] {
+pub(crate) const fn cpu_architectures_for(mode: Mode, channels: u8) -> [ImplementationSupport; 3] {
     [
         ImplementationSupport::cpu(
             OperationId::Paste,
@@ -153,28 +150,26 @@ macro_rules! luma16_architecture_impl {
         ) -> Result<$crate::raster::DynamicImage, $crate::error::PilError> {
             let (width, height) = strategy.destination_size;
             let source_image = std::sync::Arc::clone(&strategy.source);
-            let source =
-                $crate::compute::pool_cpu::ops::paste::helpers::i16::source_samples(
-                    source_image.as_ref(),
+            let source = $crate::compute::pool_cpu::ops::paste::helpers::i16::source_samples(
+                source_image.as_ref(),
+            )
+            .ok_or_else(|| {
+                $crate::error::PilError::InternalError(
+                    "I;16 vector Paste source mode changed after preparation".into(),
+                )
+            })?;
+            let samples = $crate::compute::pool_cpu::ops::paste::helpers::i16_vector::execute(
+                strategy, source,
+            )?;
+            let image =
+                $crate::raster::ImageBuffer::<$crate::raster::Luma<u16>, Vec<u16>>::from_raw(
+                    width, height, samples,
                 )
                 .ok_or_else(|| {
                     $crate::error::PilError::InternalError(
-                        "I;16 vector Paste source mode changed after preparation".into(),
+                        "I;16 vector Paste output dimensions were invalid".into(),
                     )
                 })?;
-            let samples = $crate::compute::pool_cpu::ops::paste::helpers::i16_vector::execute(
-                strategy,
-                source,
-            )?;
-            let image = $crate::raster::ImageBuffer::<
-                $crate::raster::Luma<u16>,
-                Vec<u16>,
-            >::from_raw(width, height, samples)
-            .ok_or_else(|| {
-                $crate::error::PilError::InternalError(
-                    "I;16 vector Paste output dimensions were invalid".into(),
-                )
-            })?;
             Ok($crate::raster::DynamicImage::$variant(image))
         }
     };

@@ -6,6 +6,7 @@ pub(crate) fn execute(
     request: RotateRequest,
 ) -> Result<super::super::ops::Input, PilError> {
     crate::compute::pool_cpu::ops::rotate::helpers::vector_nearest::execute::<
-        crate::raster::Luma<u8>, 1,
+        crate::raster::Luma<u8>,
+        1,
     >(input, request)
 }

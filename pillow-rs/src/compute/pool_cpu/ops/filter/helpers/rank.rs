@@ -549,13 +549,7 @@ fn rank_filter_impl(
     let area = (size * size) as usize;
     let rank = rank.min((area - 1) as u32) as usize;
 
-    if native_small_uniform_bytes(
-        raw,
-        w_u32,
-        h_u32,
-        channels,
-        SMALL_UNIFORM_BYTE_MAX_PIXELS,
-    ) {
+    if native_small_uniform_bytes(raw, w_u32, h_u32, channels, SMALL_UNIFORM_BYTE_MAX_PIXELS) {
         // Every rank of a uniform byte image is the same source tuple. The
         // bounded scan avoids gathering and selecting an identical window at
         // every output pixel. The mode leaf retains the exact source variant.

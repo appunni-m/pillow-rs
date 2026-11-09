@@ -1,20 +1,14 @@
 //! Native sample helpers shared by the exact-mode GetData strategies.
 
 use crate::compute::Architecture;
-use crate::compute::registry::support::{
-    OperationId, StrategySelection,
-};
+use crate::compute::registry::support::{OperationId, StrategySelection};
 use crate::error::PilError;
 use crate::raster::Mode;
 
-pub(crate) type Luma16Image =
-    crate::raster::ImageBuffer<crate::raster::Luma<u16>, Vec<u16>>;
-pub(crate) type LumaA16Image =
-    crate::raster::ImageBuffer<crate::raster::LumaA<u16>, Vec<u16>>;
-pub(crate) type Rgb16Image =
-    crate::raster::ImageBuffer<crate::raster::Rgb<u16>, Vec<u16>>;
-pub(crate) type Rgba16Image =
-    crate::raster::ImageBuffer<crate::raster::Rgba<u16>, Vec<u16>>;
+pub(crate) type Luma16Image = crate::raster::ImageBuffer<crate::raster::Luma<u16>, Vec<u16>>;
+pub(crate) type LumaA16Image = crate::raster::ImageBuffer<crate::raster::LumaA<u16>, Vec<u16>>;
+pub(crate) type Rgb16Image = crate::raster::ImageBuffer<crate::raster::Rgb<u16>, Vec<u16>>;
+pub(crate) type Rgba16Image = crate::raster::ImageBuffer<crate::raster::Rgba<u16>, Vec<u16>>;
 
 /// Request dispatched through one exact mode's default strategy.
 pub(crate) enum GetDataRequest<'a> {
@@ -82,9 +76,7 @@ pub(crate) fn selected_operation_architecture(
 
 /// Return the error for an architecture without a GetData specialization.
 pub(crate) fn missing_architecture(mode: Mode, architecture: Architecture) -> PilError {
-    PilError::InternalError(format!(
-        "GetData has no {mode:?} {architecture:?} strategy"
-    ))
+    PilError::InternalError(format!("GetData has no {mode:?} {architecture:?} strategy"))
 }
 
 /// Return the error for a mode tag whose native sample buffer is malformed.
@@ -186,12 +178,9 @@ pub(crate) fn write_native_sample_band<T: Copy>(
 }
 
 /// Check the caller's one-byte-per-pixel output contract before writing.
-pub(crate) fn validate_band_output(
-    width: u32,
-    height: u32,
-    output: &[u8],
-) -> Result<(), PilError> {
-    let expected = crate::checked_dims::CheckedDims::new_allow_empty(width, height, 1)?.total_pixels();
+pub(crate) fn validate_band_output(width: u32, height: u32, output: &[u8]) -> Result<(), PilError> {
+    let expected =
+        crate::checked_dims::CheckedDims::new_allow_empty(width, height, 1)?.total_pixels();
     if output.len() != expected {
         return Err(PilError::InternalError(
             "getdata band output length mismatch".into(),

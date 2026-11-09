@@ -57,45 +57,65 @@ pub(crate) fn write_native_luma16(
 }
 
 pub(crate) fn facts<P: Pixel<Subpixel = u8>>(
-    image: &ImageBuffer<P, Vec<u8>>, write: PixelWrite,
+    image: &ImageBuffer<P, Vec<u8>>,
+    write: PixelWrite,
 ) -> StrategyInputs {
     StrategyInputs {
-        width: image.width(), height: image.height(), byte_len: Some(image.as_raw().len()),
+        width: image.width(),
+        height: image.height(),
+        byte_len: Some(image.as_raw().len()),
         palette: PaletteKnowledge::Unknown,
-        request: RequestFacts::PutPixel { x: write.x, y: write.y },
+        request: RequestFacts::PutPixel {
+            x: write.x,
+            y: write.y,
+        },
     }
 }
 
 pub(crate) fn batch_facts<P: Pixel<Subpixel = u8>>(
-    image: &ImageBuffer<P, Vec<u8>>, ops: &[PipelineOp],
+    image: &ImageBuffer<P, Vec<u8>>,
+    ops: &[PipelineOp],
 ) -> StrategyInputs {
     StrategyInputs {
-        width: image.width(), height: image.height(), byte_len: Some(image.as_raw().len()),
+        width: image.width(),
+        height: image.height(),
+        byte_len: Some(image.as_raw().len()),
         palette: PaletteKnowledge::Unknown,
-        request: RequestFacts::PutPixelBatch { count: ops.len(), writes: PixelWriteRunFacts::Unknown },
+        request: RequestFacts::PutPixelBatch {
+            count: ops.len(),
+            writes: PixelWriteRunFacts::Unknown,
+        },
     }
 }
 
 /// Only the RGBA specialization needs this inspection; serial preparation does not scan.
 #[cfg(any(
-    all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"),
+    all(
+        any(target_arch = "x86", target_arch = "x86_64"),
+        target_feature = "sse2"
+    ),
     all(target_arch = "wasm32", target_feature = "simd128"),
     all(target_arch = "aarch64", target_feature = "neon"),
 ))]
 pub(crate) fn rgba_run_facts(
-    image: &crate::raster::RgbaImage, ops: &[PipelineOp],
+    image: &crate::raster::RgbaImage,
+    ops: &[PipelineOp],
 ) -> PixelWriteRunFacts {
-    let Some(expected_bytes) = (image.width() as usize).checked_mul(image.height() as usize)
-        .and_then(|pixels| pixels.checked_mul(4)) else {
+    let Some(expected_bytes) = (image.width() as usize)
+        .checked_mul(image.height() as usize)
+        .and_then(|pixels| pixels.checked_mul(4))
+    else {
         return PixelWriteRunFacts::Ineligible;
     };
     if ops.len() < 2 || expected_bytes < 16 || image.as_raw().len() != expected_bytes {
         return PixelWriteRunFacts::Ineligible;
     }
-    if ops.iter().all(|op| matches!(op,
-        PipelineOp::PutPixel { x, y, palette_index: false, .. }
-            if *x < image.width() && *y < image.height()
-    )) {
+    if ops.iter().all(|op| {
+        matches!(op,
+            PipelineOp::PutPixel { x, y, palette_index: false, .. }
+                if *x < image.width() && *y < image.height()
+        )
+    }) {
         PixelWriteRunFacts::NativeRgba
     } else {
         PixelWriteRunFacts::Ineligible
@@ -104,7 +124,8 @@ pub(crate) fn rgba_run_facts(
 
 #[inline]
 pub(crate) fn write<P: Pixel<Subpixel = u8>>(
-    input: PixelInput<'_, P>, pixel: P,
+    input: PixelInput<'_, P>,
+    pixel: P,
 ) -> ImageBuffer<P, Vec<u8>> {
     // This logical-only writer is for modes without hidden physical lanes;
     // compact 2/3-channel modes use write_with_hidden_lanes below.
@@ -183,7 +204,8 @@ where
 
 #[inline]
 pub(crate) fn write_batch<P: Pixel<Subpixel = u8>>(
-    input: BatchInput<'_, P>, mut pixel_from_color: impl FnMut((u8, u8, u8, u8)) -> P,
+    input: BatchInput<'_, P>,
+    mut pixel_from_color: impl FnMut((u8, u8, u8, u8)) -> P,
 ) -> Result<ImageBuffer<P, Vec<u8>>, PilError> {
     // Compact 2/3-channel mode owners use write_batch_with_hidden_lanes below.
     let mut output = input.image.clone();

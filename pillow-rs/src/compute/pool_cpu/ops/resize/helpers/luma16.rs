@@ -58,7 +58,11 @@ fn horizontal_pass<const BIG_ENDIAN: bool>(
     output_width: u32,
     output_row: &mut [u16],
 ) {
-    for (x, output) in output_row.iter_mut().enumerate().take(output_width as usize) {
+    for (x, output) in output_row
+        .iter_mut()
+        .enumerate()
+        .take(output_width as usize)
+    {
         let first = coefficients.xmin[x];
         let count = coefficients.count[x];
         if count == 0 {

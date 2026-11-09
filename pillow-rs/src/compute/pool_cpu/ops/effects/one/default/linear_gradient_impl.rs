@@ -21,9 +21,8 @@ pub(crate) fn execute_vector() -> Result<GeneratedImage, PilError> {
     let mut scalar_tail = 0u64;
     for (y, row) in pixels.chunks_exact_mut(WIDTH).enumerate() {
         let value = [if y == 0 { 0 } else { 255 }];
-        let (blocks, tail) = super::super::super::helpers::linear_gradient_vector::fill_pattern(
-            row, &value,
-        )?;
+        let (blocks, tail) =
+            super::super::super::helpers::linear_gradient_vector::fill_pattern(row, &value)?;
         vector_blocks = vector_blocks.saturating_add(blocks);
         scalar_tail = scalar_tail.saturating_add(tail);
     }
@@ -35,8 +34,9 @@ fn from_pixels(
     vector_blocks: u64,
     scalar_tail: u64,
 ) -> Result<GeneratedImage, PilError> {
-    let image = GrayImage::from_raw(WIDTH as u32, HEIGHT as u32, pixels)
-        .ok_or_else(|| PilError::InternalError("LinearGradient One buffer shape mismatch".into()))?;
+    let image = GrayImage::from_raw(WIDTH as u32, HEIGHT as u32, pixels).ok_or_else(|| {
+        PilError::InternalError("LinearGradient One buffer shape mismatch".into())
+    })?;
     Ok(GeneratedImage {
         image: DynamicImage::One(image),
         vector_blocks,

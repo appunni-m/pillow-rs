@@ -495,7 +495,9 @@ fn transform_params(op: &PipelineOp) -> Option<Vec<u32>> {
 fn data_mutation_params(op: &PipelineOp) -> Option<Vec<u32>> {
     let params = match op {
         // ── PutData: data length ──
-        PipelineOp::PutData { data, payload_mode, .. } => {
+        PipelineOp::PutData {
+            data, payload_mode, ..
+        } => {
             vec![data.len() as u32, gpu_put_data_mode_code(*payload_mode)?]
         }
 

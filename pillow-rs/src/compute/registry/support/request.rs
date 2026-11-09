@@ -5,6 +5,7 @@ use crate::raster::Mode;
 
 mod contracts;
 mod facts;
+mod guard_assessment;
 mod guards;
 
 pub use facts::{
@@ -54,7 +55,8 @@ pub struct ModeChannelCapacity {
 pub enum MergeBandModeRule {
     /// A single band must have the exact target identity.
     ExactTarget,
-    /// Every band is L, except that the first may be a raw P index plane.
+    /// Bands after the first are L; the first may use a same-byte One, L, or P carrier.
+    /// The variant name is retained for compatibility with the public selector API.
     LumaOrFirstPalette,
 }
 
@@ -124,8 +126,12 @@ pub enum InputContract {
         allowed_methods: &'static [u32],
         /// Exact identity required for a caller-supplied palette image.
         palette_mode: Mode,
-        /// Source modes accepted with a caller-supplied palette.
+        /// Wrapper-visible source modes accepted with a supplied palette.
         palette_sources: &'static [Mode],
+        /// Materialized source modes accepted by the native palette mapper.
+        palette_carriers: &'static [Mode],
+        /// Rejection returned when the materialized carrier cannot map to P.
+        palette_carrier_rejection: &'static str,
         /// Methods unavailable when their optional external dependency is disabled.
         unavailable_methods: &'static [u32],
         /// Whether k-means iteration counts must be nonnegative.
@@ -222,6 +228,17 @@ pub enum InputContract {
     CallerValidatedGetChannelIndex {
         /// Number of logical bands in this exact mode.
         bands: u8,
+    },
+    /// ImagingCore validates the requested band against the exact output mode.
+    CallerValidatedBandIndex,
+    /// ImagingCore's single-band PutBand path requires same-mode, same-size input.
+    CallerValidatedSameModeSameSizeBandImage,
+    /// ImagingCore's multiband PutBand path accepts a same-size byte source band.
+    CallerValidatedSameSizeByteSingleBandImage,
+    /// ImagingCore setmode accepts the same identity plus these exact transitions.
+    CallerValidatedSetModeTargets {
+        /// Additional target identities accepted by this exact source mode.
+        targets: &'static [Mode],
     },
     /// GetBBox inspects alpha alone only for these exact alpha-bearing modes.
     GetBBoxAlphaOnly {
@@ -347,6 +364,8 @@ pub enum InputContract {
         mode_rule: MergeBandModeRule,
         /// Existing error when the number of bands is wrong.
         count_rejection: &'static str,
+        /// Existing error when band zero cannot provide the required first sample.
+        first_mode_rejection: &'static str,
         /// Existing error when one or more band identities are wrong.
         mode_rejection: &'static str,
         /// Existing error when band dimensions differ.
@@ -730,14 +749,14 @@ pub(super) enum GuardAssessment {
 }
 
 /// The next unresolved fact required by an operation's declaration.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnresolvedGuard {
     /// A concrete specialization needs materialized layout facts.
     Implementation(StrategyGuard),
     /// Palette presence or absence has not yet been resolved by the wrapper.
     PaletteMetadata,
     /// A semantic input requirement needs materialized source facts.
-    InputContract(InputContract),
+    InputContract(Box<InputContract>),
 }
 
 impl InputContract {
@@ -752,183 +771,5 @@ impl InputContract {
 
     pub(crate) fn assess(self, input: StrategyInputs) -> Result<Option<UnresolvedGuard>, PilError> {
         contracts::assess(self, input)
-    }
-}
-
-impl StrategyGuard {
-    pub(super) fn assess(self, input: StrategyInputs) -> GuardAssessment {
-        match self {
-            Self::Always => GuardAssessment::Satisfied,
-            Self::DrawNativeSpans => guards::draw_native_spans_guard(input),
-            Self::ResizeFilteredFma => guards::resize_filtered_fma_guard(input),
-            Self::ThumbnailI32Stream2x2 => guards::thumbnail_i32_stream_guard(input),
-            Self::ResizeLuma16Vector => guards::resize_luma16_vector_guard(input),
-            Self::ResizeByteNearestVector { channels } => {
-                guards::resize_byte_nearest_vector_guard(input, channels)
-            }
-            Self::ResizeByteNativeVector { channels } => {
-                guards::resize_byte_native_vector_guard(input, channels)
-            }
-            Self::ResizeByteBoxedVector { channels, straight_alpha } => {
-                guards::resize_byte_boxed_vector_guard(input, channels, straight_alpha)
-            }
-            Self::ResizeByteBoxedNearestVector { channels } => {
-                guards::resize_byte_boxed_nearest_vector_guard(input, channels)
-            }
-            Self::ResizeI32Neon => guards::resize_i32_neon_guard(input),
-            Self::BrightnessVector { channels } => {
-                guards::brightness_vector_guard(input, channels)
-            }
-            Self::ContrastNativeBytesVectorizable { channels } => {
-                guards::contrast_vector_guard(input, channels)
-            }
-            Self::SharpnessNativeBytesVectorizable { channels } => {
-                guards::sharpness_vector_guard(input, channels)
-            }
-            Self::ColorSaturationVector { channels } => {
-                guards::color_saturation_vector_guard(input, channels)
-            }
-            Self::ChopsEqualDimensions { channels } => {
-                guards::chops_equal_dimensions_guard(input, channels)
-            }
-            Self::ChopsAddSubtractVector { channels } => {
-                guards::chops_add_subtract_guard(input, channels)
-            }
-            Self::ChopsOffsetNativeBytes { channels } => {
-                guards::chops_offset_native_bytes_guard(input, channels)
-            }
-            Self::ChopsOffsetNativeI16 => guards::chops_offset_native_i16_guard(input),
-            Self::Filter3x3NativeBytesVectorizable { channels } => {
-                guards::filter3x3_native_bytes_vectorizable_guard(input, channels)
-            }
-            Self::Filter5x5NativeBytesVectorizable { channels } => {
-                guards::filter5x5_native_bytes_vectorizable_guard(input, channels)
-            }
-            Self::Filter5x5I32BinomialFma => {
-                guards::filter5x5_i32_binomial_fma_guard(input)
-            }
-            Self::Filter5x5I32Vectorizable => {
-                guards::filter5x5_i32_vectorizable_guard(input)
-            }
-            Self::FilterNativeByteBlur { channels } => {
-                guards::filter_native_byte_blur_guard(input, channels)
-            }
-            Self::FilterRgbaGaussianBlurRadiusSeven => {
-                guards::filter_rgba_gaussian_blur_radius_seven_guard(input)
-            }
-            Self::FilterLumaRankWindow => guards::filter_luma_rank_window_guard(input),
-            Self::FilterNativeByteExtrema { channels } => {
-                guards::filter_native_byte_extrema_guard(input, channels)
-            }
-            Self::FilterNativeByteRankWindow { channels } => {
-                guards::filter_native_byte_rank_window_guard(input, channels)
-            }
-            Self::FilterF32RankWindow { max_size } => {
-                guards::filter_f32_rank_window_guard(input, max_size)
-            }
-            Self::FilterUnsharpRgb150 => guards::filter_unsharp_rgb150_guard(input),
-            Self::Filter3x3I32Vectorizable { channels } => {
-                guards::filter3x3_i32_vectorizable_guard(input, channels)
-            }
-            Self::ConvertTargetMode(target) => {
-                guards::convert_target_guard(input, target, false)
-            }
-            Self::ConvertTargetModeNonEmpty(target) => {
-                guards::convert_target_guard(input, target, true)
-            }
-            Self::PutAlphaMaskBytes { channels, minimum_pixels } =>
-                guards::alpha_mask_guard(input, channels, minimum_pixels),
-            Self::PutAlphaBytes { channels, minimum_pixels } =>
-                guards::put_alpha_bytes_guard(input, channels, minimum_pixels),
-            Self::ExtractBandBytes { channels } =>
-                guards::extract_band_bytes_guard(input, channels),
-            Self::RotateVectorBytes { channels, force_nearest, bilinear } =>
-                guards::rotate_vector_bytes_guard(input, channels, force_nearest, bilinear),
-            Self::TransformByteKernels {
-                channels,
-                affine_nearest,
-                affine_bilinear,
-                projective_nearest,
-            } => guards::transform_byte_kernels_guard(
-                input,
-                channels,
-                affine_nearest,
-                affine_bilinear,
-                projective_nearest,
-            ),
-            Self::TransformI16Affine { nearest, bilinear } => {
-                guards::transform_i16_affine_guard(input, nearest, bilinear)
-            }
-            Self::PutPixelSpan { channels } => guards::pixel_span_guard(input, channels),
-            Self::RgbaPixelWriteRun => guards::pixel_write_run_guard(input),
-            Self::TransposeRgbaAvx2 => guards::rgba_transpose_avx2_guard(input),
-            Self::TransposeNativeBytes { channels, allow_empty } =>
-                guards::native_transpose_bytes_guard(input, channels, allow_empty),
-            Self::Color3DLutVector { source_channels } =>
-                guards::color3dlut_guard(input, source_channels),
-            Self::ReduceNativeByteVector { channels } =>
-                guards::reduce_native_byte_vector_guard(input, channels),
-            Self::ReduceF32Vector => guards::reduce_f32_vector_guard(input),
-            Self::NativeBytePrefix { channels } =>
-                guards::native_byte_prefix_guard(input, channels),
-            Self::NativeMirrorRows { channels } =>
-                guards::native_mirror_rows_guard(input, channels),
-            Self::NativePointwiseBytes { channels } =>
-                guards::native_pointwise_bytes_guard(input, channels),
-            Self::NativePointwiseBytesIncludingEmpty { channels } => {
-                guards::native_pointwise_bytes_including_empty_guard(input, channels)
-            }
-            Self::NativeCropBytes { channels } =>
-                guards::native_crop_bytes_guard(input, channels),
-            Self::NativeCropBorderBytes { channels } =>
-                guards::native_crop_border_bytes_guard(input, channels),
-            Self::ExactNativeRows { channels } =>
-                guards::exact_native_rows_guard(input, channels),
-            Self::PutDataNative { channels, payloads } =>
-                guards::put_data_native_guard(input, channels, payloads),
-            Self::EffectSpreadBytes { channels } =>
-                guards::effect_spread_bytes_guard(input, channels),
-            Self::EffectNoiseVector => guards::effect_noise_vector_guard(input),
-            Self::EffectMandelbrotVector => guards::effect_mandelbrot_vector_guard(input),
-            Self::NativeBytes { channels } => guards::native_bytes_guard(input, channels),
-            Self::PasteLMaskNeon { mode, channels, minimum_clipped_width } => {
-                guards::paste_l_mask_neon_guard(input, mode, channels, minimum_clipped_width)
-            }
-            Self::AlphaCompositeVector { channels } => {
-                guards::alpha_composite_vector_guard(input, channels)
-            }
-            Self::MergeRgbInterleave => guards::merge_rgb_interleave_guard(input),
-            Self::MergeNativeInterleave { target_mode, channels } =>
-                guards::merge_native_interleave_guard(input, target_mode, channels),
-            Self::BlendNativeVector { channels, compatible_modes } => {
-                guards::blend_native_vector_guard(input, channels, compatible_modes)
-            }
-            Self::CompositeNativeByteVector { mode, channels } => {
-                guards::composite_native_byte_vector_guard(input, mode, channels)
-            }
-            Self::CompositeLMaskNeon { mode, channels, minimum_clipped_width } => {
-                guards::composite_l_mask_neon_guard(input, mode, channels, minimum_clipped_width)
-            }
-            Self::ExpandVector { channels } => guards::expand_vector_guard(input, channels),
-            Self::CheckedNativeBytes { channels } =>
-                guards::checked_native_bytes_guard(input, channels),
-        }
-    }
-
-    pub(super) fn assess_for_mode(
-        self,
-        input: StrategyInputs,
-        source_mode: Mode,
-    ) -> GuardAssessment {
-        // Prepared Convert returns the source identity before reaching a
-        // target kernel, so same-mode requests must select the Default path.
-        if matches!(
-            self,
-            Self::ConvertTargetMode(target) | Self::ConvertTargetModeNonEmpty(target)
-                if target == source_mode
-        ) {
-            return GuardAssessment::Ineligible;
-        }
-        self.assess(input)
     }
 }

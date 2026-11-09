@@ -105,7 +105,25 @@ ORACLE_NAME = os.environ.get("MIGRATION_ORACLE_NAME", "Pillow")
 TIMED_SOURCE_FLAG = "MIGRATION_PARITY_TIMED_SOURCE"
 TARGET_BACKEND = os.environ.get("MIGRATION_TARGET_BACKEND", "cpu").strip().lower()
 TARGET_PROFILE_OVERRIDE = os.environ.get("MIGRATION_TARGET_PROFILE", "").strip().lower()
+TARGET_ARCHITECTURE_EXPLICIT = "MIGRATION_TARGET_ARCHITECTURE" in os.environ
+TARGET_ARCHITECTURE = (
+    os.environ.get("MIGRATION_TARGET_ARCHITECTURE", "default").strip().lower()
+)
+TARGET_ARCHITECTURE_NAMES = {
+    "default",
+    "neon",
+    "sse2",
+    "sse3",
+    "ssse3",
+    "avx",
+    "avx2",
+    "avx_fma",
+    "avx2_fma",
+    "wasm_simd128",
+}
 TARGET_FEATURES = ["pillow-rs-py/default", "pillow-rs/default"]
+if "MIGRATION_TARGET_ARCHITECTURE" in os.environ:
+    TARGET_FEATURES.extend(["pillow-rs-py/test-api", "pillow-rs/test-api"])
 if TARGET_PROFILE_OVERRIDE == "parallel-cpu":
     TARGET_FEATURES.extend(["pillow-rs-py/parallel", "pillow-rs/parallel"])
 elif TARGET_PROFILE_OVERRIDE == "gpu-fault-contract":
@@ -2090,7 +2108,7 @@ def _observation_materializes_pipeline(
     key = (step.get("surface"), step.get("operation"))
     if key in _PIPELINE_FILTER_PARAMETER_OPS:
         return False
-    if key in _TERMINAL_OBSERVATION_OPS:
+    if step.get("operation") in _TERMINAL_OBSERVATION_OPS:
         return True
     return key in _PIPELINE_RESULT_OPS and key not in _PIPELINE_MUTATING_OPS
 
@@ -2875,8 +2893,8 @@ def classify_pipeline_case(
             and requested_height >= 0
         )
 
-    def paste_is_degenerate_solid(step: dict[str, Any]) -> bool:
-        """Return whether ``Image::paste_impl`` takes its solid no-op branch."""
+    def paste_is_proven_noop(step: dict[str, Any]) -> bool:
+        """Return whether a valid solid Paste returns without pixel work."""
 
         if (step.get("surface"), step.get("operation")) != (
             "PIL.Image.Image",
@@ -2896,23 +2914,62 @@ def classify_pipeline_case(
             and all(isinstance(value, int) and not isinstance(value, bool) for value in box)
         ):
             return False
-        return box[2] <= box[0] or box[3] <= box[1]
+        if box[2] <= box[0] or box[3] <= box[1]:
+            return True
+
+        color = source.get("value") if isinstance(source, dict) else None
+        if not (
+            isinstance(source, dict)
+            and source.get("kind") == "literal"
+            and isinstance(color, (list, tuple))
+            and len(color) == 3
+            and all(type(value) is int and 0 <= value <= 255 for value in color)
+            and receiver_source_mode(step) == "RGB"
+        ):
+            return False
+        mask = arguments.get("mask")
+        if mask is not None and not (
+            isinstance(mask, dict)
+            and mask.get("kind") == "literal"
+            and mask.get("value") is None
+        ):
+            return False
+        destination = steps_by_id.get(receiver_binding(step))
+        if destination is None or (
+            destination.get("surface"), destination.get("operation")
+        ) not in _IMAGE_SOURCE_MODE_OPS:
+            return False
+        size = _workflow_literal(destination.get("arguments"), "size")
+        if not (
+            isinstance(size, (list, tuple))
+            and len(size) == 2
+            and all(type(value) is int and value >= 0 for value in size)
+        ):
+            return False
+        width, height = size
+        left, top, right, bottom = box
+        return left >= width or top >= height or right <= 0 or bottom <= 0
 
     def exif_transpose_is_known_noop(step: dict[str, Any]) -> bool:
-        """Return whether a new image proves EXIF transpose has no orientation."""
+        """Return whether a constructed image proves EXIF transpose is identity."""
 
         if (step.get("surface"), step.get("operation")) != (
             "PIL.ImageOps",
             "exif_transpose",
         ):
             return False
+        arguments = step.get("arguments")
+        image = arguments.get("image") if isinstance(arguments, dict) else None
+        if isinstance(image, dict) and image.get("kind") == "literal":
+            value = image.get("value")
+            if isinstance(value, dict) and value.get("protocol") == "image-with-info":
+                info = value.get("info")
+                return not (isinstance(info, dict) and "exif" in info)
+
         source = argument_binding(step, "image")
         if source is None:
             return False
-        if (source.get("surface"), source.get("operation")) == (
-            "PIL.Image",
-            "new",
-        ):
+        if (source.get("surface"), source.get("operation")) in _IMAGE_SOURCE_MODE_OPS:
             return True
         if (source.get("surface"), source.get("operation")) != (
             "PIL.Image",
@@ -2968,6 +3025,8 @@ def classify_pipeline_case(
         key = (step.get("surface"), step.get("operation"))
         if workflow_operation_is_proven_noop(case, step):
             return True
+        if key == ("PIL.Image.Image", "paste"):
+            return paste_is_proven_noop(step)
         if key == ("PIL.ImageDraw.ImageDraw", "bitmap"):
             return bitmap_unpaletted_tuple_fill_is_noop(step)
         if key == ("PIL.ImageDraw.ImageDraw", "line"):
@@ -4135,6 +4194,10 @@ def configure_target_backend() -> dict[str, Any]:
     """
 
     target = importlib.import_module("pillow_rs")
+    if TARGET_ARCHITECTURE not in TARGET_ARCHITECTURE_NAMES:
+        raise ValueError(f"unknown target CPU architecture: {TARGET_ARCHITECTURE!r}")
+    if TARGET_BACKEND != "cpu" and TARGET_ARCHITECTURE_EXPLICIT:
+        raise ValueError("CPU architecture selection requires MIGRATION_TARGET_BACKEND=cpu")
     parallel_enabled = bool(target.parallel_feature_enabled())
     wants_parallel_cpu = TARGET_PROFILE_OVERRIDE == "parallel-cpu"
     wants_gpu_fault_contract = TARGET_PROFILE_OVERRIDE == "gpu-fault-contract"
@@ -4173,10 +4236,25 @@ def configure_target_backend() -> dict[str, Any]:
         raise RuntimeError(
             f"requested target backend {TARGET_BACKEND!r}, but active backend state is {active!r}"
         )
+    architecture_setter = getattr(
+        importlib.import_module("pillow_rs._core"),
+        "_set_migration_target_architecture",
+        None,
+    )
+    if TARGET_ARCHITECTURE_EXPLICIT and architecture_setter is None:
+        raise RuntimeError(
+            "CPU architecture selection requires the test-api build; "
+            "use make build-parity-cpu-architecture"
+        )
+    if TARGET_ARCHITECTURE_EXPLICIT:
+        architecture_setter(TARGET_ARCHITECTURE)
     return {
         "requested": TARGET_BACKEND,
         "available": sorted(available),
         "active": active,
+        "requested_architecture": (
+            TARGET_ARCHITECTURE if TARGET_BACKEND == "cpu" else None
+        ),
     }
 
 

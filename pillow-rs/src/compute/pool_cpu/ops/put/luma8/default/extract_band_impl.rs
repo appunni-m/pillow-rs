@@ -1,8 +1,8 @@
 //! Original serial ExtractBand algorithm for `ImageLuma8`.
 
+use super::super::super::helpers::extract_band::{self as helpers, CheckedBand};
 use crate::error::PilError;
 use crate::raster::DynamicImage;
-use super::super::super::helpers::extract_band::{self as helpers, CheckedBand};
 
 pub(crate) type Input = crate::raster::GrayImage;
 pub(crate) type Kernel<'a> = CheckedBand<'a, crate::raster::Luma<u8>>;

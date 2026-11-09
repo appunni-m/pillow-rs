@@ -5,9 +5,7 @@ use crate::raster::{ImageBuffer, Pixel};
 
 /// Returns the complete native samples belonging to the declared image extent.
 ///
-pub(crate) fn logical_samples<P>(
-    image: &ImageBuffer<P, Vec<P::Subpixel>>,
-) -> &[P::Subpixel]
+pub(crate) fn logical_samples<P>(image: &ImageBuffer<P, Vec<P::Subpixel>>) -> &[P::Subpixel]
 where
     P: Pixel,
 {
@@ -30,11 +28,17 @@ pub(crate) fn byte_bands_1(samples: &[u8]) -> Vec<(u8, u8)> {
 }
 
 pub(crate) fn byte_bands_2(samples: &[u8]) -> Vec<(u8, u8)> {
-    Vec::from(extrema_by_channel::<_, 2, 2>(samples, [0, 1], |sample| sample))
+    Vec::from(extrema_by_channel::<_, 2, 2>(samples, [0, 1], |sample| {
+        sample
+    }))
 }
 
 pub(crate) fn byte_bands_3(samples: &[u8]) -> Vec<(u8, u8)> {
-    Vec::from(extrema_by_channel::<_, 3, 3>(samples, [0, 1, 2], |sample| sample))
+    Vec::from(extrema_by_channel::<_, 3, 3>(
+        samples,
+        [0, 1, 2],
+        |sample| sample,
+    ))
 }
 
 pub(crate) fn byte_bands_4(samples: &[u8]) -> Vec<(u8, u8)> {
@@ -53,9 +57,7 @@ pub(crate) fn clipped_u16_luma(samples: &[u16]) -> Vec<(u8, u8)> {
 
 /// Preserve the old byte API's first two RGBA projection lanes for LA16.
 pub(crate) fn projected_u16_luma_alpha(samples: &[u16]) -> Vec<(u8, u8)> {
-    let luma = extrema_by_channel::<_, 2, 1>(samples, [0], |sample| {
-        u8::from_primitive(sample)
-    })[0];
+    let luma = extrema_by_channel::<_, 2, 1>(samples, [0], |sample| u8::from_primitive(sample))[0];
     vec![luma, luma]
 }
 

@@ -1,20 +1,22 @@
 //! Prepared native-sample point operations for Pillow's scalar modes.
 
+use crate::compute::Architecture;
 use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{
     ModeSupport, OperationId, OperationSupport, RejectionKind, StrategySelection,
 };
-use crate::compute::Architecture;
 use crate::error::PilError;
 use crate::image::Image;
 use crate::raster::{DynamicImage, Mode};
 
 fn classify(mode: Mode) -> ModeSupport {
     match mode {
-        Mode::ImageI32 | Mode::ImageF32 | Mode::ImageI16 | Mode::ImageI16L
-        | Mode::ImageI16B | Mode::ImageI16N => {
-            ModeSupport::serial(OperationId::PointScalar, mode, &[])
-        }
+        Mode::ImageI32
+        | Mode::ImageF32
+        | Mode::ImageI16
+        | Mode::ImageI16L
+        | Mode::ImageI16B
+        | Mode::ImageI16N => ModeSupport::serial(OperationId::PointScalar, mode, &[]),
         mode => ModeSupport::Rejected {
             mode,
             reason: "point operation not supported for this mode",
@@ -66,7 +68,10 @@ pub(crate) fn execute_affine(
     scale: f64,
     offset: f64,
 ) -> Result<Image, PilError> {
-    let PreparedScalarPoint { mut image, selection } = prepared;
+    let PreparedScalarPoint {
+        mut image,
+        selection,
+    } = prepared;
     let mode = selection.implementation.mode;
     match selection.implementation.architecture {
         Architecture::Default => apply_affine(&mut image, mode, scale, offset)?,
@@ -86,7 +91,10 @@ pub(crate) fn execute_callable<F>(
 where
     F: FnMut(f64) -> Result<f64, PilError>,
 {
-    let PreparedScalarPoint { mut image, selection } = prepared;
+    let PreparedScalarPoint {
+        mut image,
+        selection,
+    } = prepared;
     let mode = selection.implementation.mode;
     match selection.implementation.architecture {
         Architecture::Default => apply_callable(&mut image, mode, &mut callback)?,
@@ -129,11 +137,7 @@ fn apply_affine(
     Ok(())
 }
 
-fn apply_callable<F>(
-    image: &mut DynamicImage,
-    mode: Mode,
-    callback: &mut F,
-) -> Result<(), PilError>
+fn apply_callable<F>(image: &mut DynamicImage, mode: Mode, callback: &mut F) -> Result<(), PilError>
 where
     F: FnMut(f64) -> Result<f64, PilError>,
 {
@@ -164,4 +168,3 @@ where
 fn mode_mismatch() -> PilError {
     PilError::InternalError("scalar point mode did not match its DynamicImage variant".into())
 }
-

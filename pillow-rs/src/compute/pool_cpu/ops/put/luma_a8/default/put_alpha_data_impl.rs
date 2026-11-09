@@ -1,10 +1,11 @@
 //! Original image-backed alpha semantics for `ImageLumaA8`.
 
+use super::super::super::helpers::{
+    alpha_mask::MaskStrategy,
+    put_alpha_data::{self as helpers, AlphaDataInput},
+};
 use crate::error::PilError;
 use crate::raster::DynamicImage;
-use super::super::super::helpers::{
-    alpha_mask::MaskStrategy, put_alpha_data::{self as helpers, AlphaDataInput},
-};
 
 pub(crate) type Input = crate::raster::GrayAlphaImage;
 pub(crate) type Kernel<'a> = AlphaDataInput<'a, crate::raster::LumaA<u8>>;
@@ -16,5 +17,8 @@ pub(crate) fn prepare<'a>(image: &'a Input, mask: MaskStrategy<'a>) -> Kernel<'a
 
 #[inline]
 pub(crate) fn execute(input: Kernel<'_>) -> Result<DynamicImage, PilError> {
-    Ok(DynamicImage::ImageLumaA8(helpers::luma_alpha_mask(input.image, input.mask)))
+    Ok(DynamicImage::ImageLumaA8(helpers::luma_alpha_mask(
+        input.image,
+        input.mask,
+    )))
 }

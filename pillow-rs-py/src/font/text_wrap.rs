@@ -9,8 +9,7 @@ use pyo3::exceptions::{PyTypeError, PyUnboundLocalError};
 use pyo3::prelude::{Bound, Py, PyAny, PyErr, PyModule, PyResult, Python};
 use pyo3::pyfunction;
 use pyo3::types::{
-    PyAnyMethods, PyBytes, PyDict, PyDictMethods, PyList, PyListMethods, PyModuleMethods,
-    PyString,
+    PyAnyMethods, PyBytes, PyDict, PyDictMethods, PyList, PyListMethods, PyModuleMethods, PyString,
 };
 use std::collections::HashMap;
 
@@ -46,8 +45,7 @@ impl PythonWrapCallbacks<'_> {
             .active_font
             .as_ref()
             .map_or_else(|| self.py.None(), |font| font.clone().unbind());
-        self.text_object
-            .call_method1("_get_bbox", (text, font))
+        self.text_object.call_method1("_get_bbox", (text, font))
     }
 
     fn current_wrapper_font(&self) -> PyResult<Bound<'_, PyAny>> {
@@ -62,11 +60,7 @@ impl PythonWrapCallbacks<'_> {
         self.input_text.get_item(slice)
     }
 
-    fn take_remaining_text(
-        &mut self,
-        wrap_id: u64,
-        consumed: usize,
-    ) -> PyResult<Bound<'_, PyAny>> {
+    fn take_remaining_text(&mut self, wrap_id: u64, consumed: usize) -> PyResult<Bound<'_, PyAny>> {
         match self.remaining_texts.remove(&wrap_id) {
             Some(value) => Ok(value.bind(self.py).clone()),
             None => self.remaining_text(consumed),
@@ -77,7 +71,11 @@ impl PythonWrapCallbacks<'_> {
         let font = self.current_wrapper_font()?.unbind();
         let kwargs = PyDict::new(self.py);
         kwargs.set_item("size", size)?;
-        self.active_font = Some(font.bind(self.py).call_method("font_variant", (), Some(&kwargs))?);
+        self.active_font = Some(font.bind(self.py).call_method(
+            "font_variant",
+            (),
+            Some(&kwargs),
+        )?);
         self.changed_font = true;
         Ok(())
     }
@@ -95,9 +93,15 @@ impl PythonWrapCallbacks<'_> {
         if shrink {
             let builtins = PyModule::import(self.py, "builtins")?;
             let minimum = builtins.call_method1("max", (self.limit.clone(), 1))?;
-            Ok(size.bind(self.py).rich_compare(&minimum, CompareOp::Eq)?.is_truthy()?)
+            Ok(size
+                .bind(self.py)
+                .rich_compare(&minimum, CompareOp::Eq)?
+                .is_truthy()?)
         } else {
-            Ok(size.bind(self.py).rich_compare(&self.limit, CompareOp::Eq)?.is_truthy()?)
+            Ok(size
+                .bind(self.py)
+                .rich_compare(&self.limit, CompareOp::Eq)?
+                .is_truthy()?)
         }
     }
 
@@ -143,7 +147,9 @@ impl ImageFontTextWrapCallbacks for PythonWrapCallbacks<'_> {
         lines: &[ImageFontTextInput],
         last_line: &ImageFontTextInput,
     ) -> Result<bool, Self::Error> {
-        let lines = self.to_python_lines(lines).map_err(WrapCallbackError::Python)?;
+        let lines = self
+            .to_python_lines(lines)
+            .map_err(WrapCallbackError::Python)?;
         let kwargs = PyDict::new(self.py);
         kwargs
             .set_item("lines", lines)
@@ -160,8 +166,7 @@ impl ImageFontTextWrapCallbacks for PythonWrapCallbacks<'_> {
             .line_bbox(last_line)
             .map_err(WrapCallbackError::Python)?;
         let bottom = bbox.get_item(3).map_err(WrapCallbackError::Python)?;
-        let operator = PyModule::import(self.py, "operator")
-            .map_err(WrapCallbackError::Python)?;
+        let operator = PyModule::import(self.py, "operator").map_err(WrapCallbackError::Python)?;
         let total = operator
             .call_method1("add", (last, bottom))
             .map_err(WrapCallbackError::Python)?;
@@ -197,9 +202,7 @@ impl ImageFontTextWrapCallbacks for PythonWrapCallbacks<'_> {
                 .remaining_text(consumed)
                 .map_err(WrapCallbackError::Python)?,
         };
-        let has_remaining = remaining
-            .is_truthy()
-            .map_err(WrapCallbackError::Python)?;
+        let has_remaining = remaining.is_truthy().map_err(WrapCallbackError::Python)?;
         self.remaining_texts.insert(wrap_id, remaining.unbind());
         Ok(has_remaining)
     }
@@ -209,7 +212,8 @@ impl ImageFontTextWrapCallbacks for PythonWrapCallbacks<'_> {
     }
 
     fn scaling_is_shrink(&mut self) -> Result<bool, Self::Error> {
-        self.selected_scale_name().map_err(WrapCallbackError::Python)
+        self.selected_scale_name()
+            .map_err(WrapCallbackError::Python)
     }
 
     fn initial_size(&mut self, round_up: bool) -> Result<i64, Self::Error> {
@@ -218,17 +222,22 @@ impl ImageFontTextWrapCallbacks for PythonWrapCallbacks<'_> {
         let font = self.initial_font.as_ref().ok_or_else(|| {
             WrapCallbackError::Python(PyTypeError::new_err("missing text scaling font"))
         })?;
-        math.call_method1(function, (font.getattr("size").map_err(WrapCallbackError::Python)?,))
-            .and_then(|size| size.extract::<i64>())
-            .map_err(WrapCallbackError::Python)
+        math.call_method1(
+            function,
+            (font.getattr("size").map_err(WrapCallbackError::Python)?,),
+        )
+        .and_then(|size| size.extract::<i64>())
+        .map_err(WrapCallbackError::Python)
     }
 
     fn shrink_limit_reached(&mut self, size: i64) -> Result<bool, Self::Error> {
-        self.compare_limit(size, true).map_err(WrapCallbackError::Python)
+        self.compare_limit(size, true)
+            .map_err(WrapCallbackError::Python)
     }
 
     fn grow_limit_reached(&mut self, size: i64) -> Result<bool, Self::Error> {
-        self.compare_limit(size, false).map_err(WrapCallbackError::Python)
+        self.compare_limit(size, false)
+            .map_err(WrapCallbackError::Python)
     }
 
     fn font_variant(&mut self, size: i64) -> Result<(), Self::Error> {
@@ -247,7 +256,9 @@ impl ImageFontTextWrapCallbacks for PythonWrapCallbacks<'_> {
             .getattr("size")
             .map_err(WrapCallbackError::Python)?
             .unbind();
-        let size = size.into_py_any(self.py).map_err(WrapCallbackError::Python)?;
+        let size = size
+            .into_py_any(self.py)
+            .map_err(WrapCallbackError::Python)?;
         let changed = size
             .bind(self.py)
             .rich_compare(font_size.bind(self.py), CompareOp::Ne)
@@ -292,9 +303,11 @@ fn imagefont_text_wrap_with_callbacks(
     initial_font: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<Option<(Vec<Py<PyAny>>, Py<PyAny>, Option<Py<PyAny>>, usize)>> {
     let initial_font = if has_scaling {
-        Some(initial_font.cloned().ok_or_else(|| {
-            PyTypeError::new_err("missing text scaling font")
-        })?)
+        Some(
+            initial_font
+                .cloned()
+                .ok_or_else(|| PyTypeError::new_err("missing text scaling font"))?,
+        )
     } else {
         None
     };
@@ -364,11 +377,11 @@ fn wrap_text_input_from_python(
                 // PyBUF_SIMPLE rejects non-contiguous exporters; let the
                 // established regex path produce the same public failure.
             } else {
-            if let Ok(value) = view.call_method0("tobytes") {
-                if let Ok(bytes) = value.extract::<Vec<u8>>() {
-                    return Ok(ImageFontTextInput::Bytes(bytes));
+                if let Ok(value) = view.call_method0("tobytes") {
+                    if let Ok(bytes) = value.extract::<Vec<u8>>() {
+                        return Ok(ImageFontTextInput::Bytes(bytes));
+                    }
                 }
-            }
             }
         }
     }
@@ -380,6 +393,9 @@ fn wrap_text_input_from_python(
 }
 
 pub(super) fn register_functions(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    module.add_function(pyo3::wrap_pyfunction!(imagefont_text_wrap_with_callbacks, module)?)?;
+    module.add_function(pyo3::wrap_pyfunction!(
+        imagefont_text_wrap_with_callbacks,
+        module
+    )?)?;
     Ok(())
 }

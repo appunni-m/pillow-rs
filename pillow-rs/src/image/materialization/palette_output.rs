@@ -18,19 +18,19 @@ pub(super) fn evaluate_palette_target_convert(
     palette: &Option<Vec<u8>>,
     palette_alpha: &Option<Vec<u8>>,
 ) -> Result<Option<(Arc<DynamicImage>, PipelinePaletteOutput)>, PilError> {
-    let [PipelineOp::Convert {
-        mode: target @ (Mode::ImagePalette8 | Mode::ImagePaletteAlpha8),
-        matrix: None,
-        ..
-    }] = ops
+    let [
+        PipelineOp::Convert {
+            mode: target @ (Mode::ImagePalette8 | Mode::ImagePaletteAlpha8),
+            matrix: None,
+            ..
+        },
+    ] = ops
     else {
         return Ok(None);
     };
 
     let resolved_palette = palette.clone().or_else(|| source.extract_palette());
-    let wrapper_palette_alpha = palette_alpha
-        .clone()
-        .or_else(|| source.palette_alpha());
+    let wrapper_palette_alpha = palette_alpha.clone().or_else(|| source.palette_alpha());
     let resolved_alpha = if image.mode() == Mode::ImagePalette8 {
         crate::ops::convert::palette_alpha_for_lazy_convert(source).unwrap_or_default()
     } else {
@@ -43,11 +43,8 @@ pub(super) fn evaluate_palette_target_convert(
             alpha: &resolved_alpha,
         },
     };
-    let output = crate::compute::execute_prepared_cpu_arch_convert_output(
-        prepared,
-        &ops[0],
-        inputs,
-    )?;
+    let output =
+        crate::compute::execute_prepared_cpu_arch_convert_output(prepared, &ops[0], inputs)?;
     let wrapper_metadata = output.wrapper_metadata.ok_or_else(|| {
         PilError::InternalError("palette-target Convert omitted its wrapper metadata policy".into())
     })?;
@@ -78,7 +75,10 @@ pub(super) fn retain_preserved_palette_metadata(
     preserves_palette: bool,
 ) -> Option<PipelinePaletteOutput> {
     if !preserves_palette
-        || !matches!(result.mode(), Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
+        || !matches!(
+            result.mode(),
+            Mode::ImagePalette8 | Mode::ImagePaletteAlpha8
+        )
     {
         return None;
     }

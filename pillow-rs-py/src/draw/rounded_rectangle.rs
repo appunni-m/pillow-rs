@@ -1,7 +1,7 @@
 use super::PyDraw;
 use crate::map_error;
-use pyo3::conversion::IntoPyObjectExt;
 use pyo3::basic::CompareOp;
+use pyo3::conversion::IntoPyObjectExt;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::{Bound, Py, PyAny, PyErr, PyModule, PyModuleMethods, PyResult, Python};
 use pyo3::types::{PyAnyMethods, PyString, PyTuple, PyTupleMethods};
@@ -61,10 +61,7 @@ impl<'py> pillow_rs::RoundedRectanglePreparationCallbacks
 
     fn floor_half(&mut self, value: &Self::Value) -> PyResult<Self::Value> {
         let two = self.integer(2)?;
-        Ok(value
-            .bind(self.py)
-            .floor_div(two.bind(self.py))?
-            .unbind())
+        Ok(value.bind(self.py).floor_div(two.bind(self.py))?.unbind())
     }
 
     fn to_integer(&mut self, value: &Self::Value) -> PyResult<Self::Value> {
@@ -77,19 +74,11 @@ impl<'py> pillow_rs::RoundedRectanglePreparationCallbacks
 }
 
 impl pillow_rs::RoundedRectangleOutlineCallbacks for PythonRoundedRectanglePreparation<'_> {
-    fn add(
-        &mut self,
-        left: &Self::Value,
-        right: &Self::Value,
-    ) -> PyResult<Self::Value> {
+    fn add(&mut self, left: &Self::Value, right: &Self::Value) -> PyResult<Self::Value> {
         Ok(left.bind(self.py).add(right.bind(self.py))?.unbind())
     }
 
-    fn in_place_add(
-        &mut self,
-        left: &Self::Value,
-        right: &Self::Value,
-    ) -> PyResult<Self::Value> {
+    fn in_place_add(&mut self, left: &Self::Value, right: &Self::Value) -> PyResult<Self::Value> {
         self.in_place_numeric(left, right, "iadd")
     }
 
@@ -119,12 +108,7 @@ impl<'py> PythonRoundedRectanglePreparation<'py> {
             .unbind())
     }
 
-    fn compare(
-        &self,
-        left: &Py<PyAny>,
-        right: &Py<PyAny>,
-        operation: CompareOp,
-    ) -> PyResult<bool> {
+    fn compare(&self, left: &Py<PyAny>, right: &Py<PyAny>, operation: CompareOp) -> PyResult<bool> {
         left.bind(self.py)
             .rich_compare(right.bind(self.py), operation)?
             .is_truthy()
@@ -155,19 +139,15 @@ impl PyRoundedRectangleProgram {
         outline_width: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Py<PyAny>> {
         let response = match (corner, width, outline_width) {
-            (Some(value), None, None) => Some(
-                pillow_rs::RoundedRectangleProgramResponse::Corner(value),
-            ),
-            (None, Some(_), None) => {
-                Some(pillow_rs::RoundedRectangleProgramResponse::Width)
+            (Some(value), None, None) => {
+                Some(pillow_rs::RoundedRectangleProgramResponse::Corner(value))
             }
-            (None, None, Some(value)) => Some(
-                pillow_rs::RoundedRectangleProgramResponse::OutlineEnabled(
-                    value
-                        .rich_compare(0, CompareOp::Ne)?
-                        .is_truthy()?,
-                ),
-            ),
+            (None, Some(_), None) => Some(pillow_rs::RoundedRectangleProgramResponse::Width),
+            (None, None, Some(value)) => {
+                Some(pillow_rs::RoundedRectangleProgramResponse::OutlineEnabled(
+                    value.rich_compare(0, CompareOp::Ne)?.is_truthy()?,
+                ))
+            }
             (None, None, None) => None,
             _ => {
                 return Err(PyTypeError::new_err(
@@ -264,12 +244,13 @@ impl PyDraw {
     fn rounded_rectangle_step(&mut self, step: &Bound<'_, PyAny>) -> PyResult<()> {
         let step = step.cast::<PyTuple>()?;
         let kind = step.get_item(1)?.extract::<String>()?;
-        let bounds = super::input::draw_box_input_from_python(&step.get_item(2)?)?;
-        let (x0, y0, x1, y1) =
-            pillow_rs::normalize_draw_box(bounds).map_err(map_error)?;
+        // Pillow parses each primitive's scalar arguments before
+        // PyPath_Flatten converts its bounds; preserve that fault order here.
         match kind.as_str() {
             "rectangle" => {
                 let color = step.get_item(3)?.extract::<(u8, u8, u8, u8)>()?;
+                let bounds = super::input::draw_box_input_from_python(&step.get_item(2)?)?;
+                let (x0, y0, x1, y1) = pillow_rs::normalize_draw_box(bounds).map_err(map_error)?;
                 self.draw
                     .rectangle(x0, y0, x1, y1, Some(color), None, 1)
                     .map_err(map_error)
@@ -278,6 +259,8 @@ impl PyDraw {
                 let start = step.get_item(3)?.extract::<f64>()?;
                 let end = step.get_item(4)?.extract::<f64>()?;
                 let color = step.get_item(5)?.extract::<(u8, u8, u8, u8)>()?;
+                let bounds = super::input::draw_box_input_from_python(&step.get_item(2)?)?;
+                let (x0, y0, x1, y1) = pillow_rs::normalize_draw_box(bounds).map_err(map_error)?;
                 self.draw
                     .pieslice(x0, y0, x1, y1, start, end, Some(color), None, 1)
                     .map_err(map_error)
@@ -287,6 +270,8 @@ impl PyDraw {
                 let end = step.get_item(4)?.extract::<f64>()?;
                 let color = step.get_item(5)?.extract::<(u8, u8, u8, u8)>()?;
                 let width = crate::inputs::c_int_from_python(&step.get_item(6)?)?;
+                let bounds = super::input::draw_box_input_from_python(&step.get_item(2)?)?;
+                let (x0, y0, x1, y1) = pillow_rs::normalize_draw_box(bounds).map_err(map_error)?;
                 self.draw
                     .arc(x0, y0, x1, y1, start, end, color, width.max(0) as u32)
                     .map_err(map_error)
@@ -331,9 +316,11 @@ impl PyDraw {
             &width,
             &mut callbacks,
         )?;
-        Ok(PyTuple::new(py, bounds.into_iter().map(|value| value.into_bound(py)))?
-            .into_any()
-            .unbind())
+        Ok(
+            PyTuple::new(py, bounds.into_iter().map(|value| value.into_bound(py)))?
+                .into_any()
+                .unbind(),
+        )
     }
 }
 
@@ -346,9 +333,7 @@ fn rounded_rectangle_step_to_python(
     step: pillow_rs::RoundedRectangleProgramStep<Py<PyAny>>,
     width: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<Py<PyAny>> {
-    use pillow_rs::{
-        RoundedRectangleDrawStep as DrawStep, RoundedRectangleProgramStep as Step,
-    };
+    use pillow_rs::{RoundedRectangleDrawStep as DrawStep, RoundedRectangleProgramStep as Step};
 
     match step {
         Step::ReadCorner(index) => tuple(
@@ -387,8 +372,7 @@ fn rounded_rectangle_step_to_python(
             [
                 string(py, "draw")?,
                 string(py, "rectangle")?,
-                PyTuple::new(py, bounds.into_iter().map(|value| value.into_bound(py)))?
-                    .into_any(),
+                PyTuple::new(py, bounds.into_iter().map(|value| value.into_bound(py)))?.into_any(),
                 PyTuple::new(py, [color.0, color.1, color.2, color.3])?.into_any(),
             ],
         ),
@@ -402,8 +386,7 @@ fn rounded_rectangle_step_to_python(
             [
                 string(py, "draw")?,
                 string(py, "pieslice")?,
-                PyTuple::new(py, bounds.into_iter().map(|value| value.into_bound(py)))?
-                    .into_any(),
+                PyTuple::new(py, bounds.into_iter().map(|value| value.into_bound(py)))?.into_any(),
                 start.into_py_any(py)?.into_bound(py),
                 end.into_py_any(py)?.into_bound(py),
                 PyTuple::new(py, [color.0, color.1, color.2, color.3])?.into_any(),
@@ -419,8 +402,7 @@ fn rounded_rectangle_step_to_python(
             [
                 string(py, "draw")?,
                 string(py, "arc")?,
-                PyTuple::new(py, bounds.into_iter().map(|value| value.into_bound(py)))?
-                    .into_any(),
+                PyTuple::new(py, bounds.into_iter().map(|value| value.into_bound(py)))?.into_any(),
                 start.into_py_any(py)?.into_bound(py),
                 end.into_py_any(py)?.into_bound(py),
                 PyTuple::new(py, [color.0, color.1, color.2, color.3])?.into_any(),
@@ -454,10 +436,7 @@ fn rounded_rectangle_prepared_to_python<'py>(
     )?
     .into_any();
     let diameter = prepared.diameter.into_bound(py);
-    let radius = prepared
-        .radius
-        .unwrap_or_else(|| py.None())
-        .into_bound(py);
+    let radius = prepared.radius.unwrap_or_else(|| py.None()).into_bound(py);
     tuple(
         py,
         [
@@ -475,10 +454,7 @@ fn string<'py>(py: Python<'py>, value: &str) -> PyResult<Bound<'py, PyAny>> {
     Ok(PyString::new(py, value).into_any())
 }
 
-fn tuple<'py, I>(
-    py: Python<'py>,
-    values: I,
-) -> PyResult<Py<PyAny>>
+fn tuple<'py, I>(py: Python<'py>, values: I) -> PyResult<Py<PyAny>>
 where
     I: IntoIterator<Item = Bound<'py, PyAny>>,
     I::IntoIter: ExactSizeIterator,

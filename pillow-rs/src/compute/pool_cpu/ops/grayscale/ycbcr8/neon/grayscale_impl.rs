@@ -16,14 +16,14 @@ pub(crate) fn execute(source: &[u8]) -> (Vec<u8>, u64, u64) {
     #[allow(unsafe_code)]
     unsafe {
         use core::arch::aarch64 as neon;
-    
+
         macro_rules! extract_y_block {
             ($pixel:expr) => {{
                 let rgb = neon::vld3q_u8(input.as_ptr().add($pixel * 3));
                 neon::vst1q_u8(output.as_mut_ptr().add($pixel), rgb.0);
             }};
         }
-    
+
         let unrolled_pixels = vector_pixels / 64 * 64;
         for pixel in (0..unrolled_pixels).step_by(64) {
             extract_y_block!(pixel);

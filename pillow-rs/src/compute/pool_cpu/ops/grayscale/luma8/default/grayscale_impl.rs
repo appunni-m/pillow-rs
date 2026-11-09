@@ -1,8 +1,8 @@
 //! Archived serial grayscale loop for the exact luma8 identity.
 
+use super::super::super::helpers::luma::{Checked, finish};
 use crate::error::PilError;
 use crate::raster::{GrayImage, Luma};
-use super::super::super::helpers::luma::{Checked, finish};
 
 pub(crate) type Input = GrayImage;
 pub(crate) type Kernel<'a> = Checked<'a, Luma<u8>>;

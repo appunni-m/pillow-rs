@@ -13,6 +13,26 @@ fn image_merge(mode: &str, bands: &Bound<'_, PyAny>) -> PyResult<PyImage> {
 }
 
 #[pyfunction]
+fn image_merge_callback_contract(
+    mode: &str,
+) -> PyResult<(usize, Option<String>, String, String, String)> {
+    let mode = pillow_rs::Mode::from_pillow_name(mode)
+        .ok_or_else(|| map_error(pillow_rs::PilError::KeyError(mode.to_owned())))?;
+    let contract = pillow_rs::image_merge_callback_contract(mode).map_err(map_error)?;
+    let subsequent_band_mode = contract
+        .subsequent_band_mode
+        .and_then(pillow_rs::Mode::pillow_name)
+        .map(str::to_owned);
+    Ok((
+        contract.expected_band_count,
+        subsequent_band_mode,
+        contract.count_rejection.to_owned(),
+        contract.mode_rejection.to_owned(),
+        contract.size_rejection.to_owned(),
+    ))
+}
+
+#[pyfunction]
 fn image_blend(
     image1: &Bound<'_, PyImage>,
     image2: &Bound<'_, PyImage>,
@@ -53,7 +73,9 @@ fn image_alpha_composite(
 #[pyfunction]
 fn image_linear_gradient(mode: &str) -> PyResult<PyImage> {
     let mode = pillow_rs::Mode::from_pillow_name(mode).ok_or_else(|| {
-        map_error(pillow_rs::PilError::ValueError("image has wrong mode".into()))
+        map_error(pillow_rs::PilError::ValueError(
+            "image has wrong mode".into(),
+        ))
     })?;
     let rs = pillow_rs::image_linear_gradient(mode).map_err(map_error)?;
     Ok(PyImage { inner: rs })
@@ -63,7 +85,9 @@ fn image_linear_gradient(mode: &str) -> PyResult<PyImage> {
 #[pyfunction]
 fn image_radial_gradient(mode: &str) -> PyResult<PyImage> {
     let mode = pillow_rs::Mode::from_pillow_name(mode).ok_or_else(|| {
-        map_error(pillow_rs::PilError::ValueError("image has wrong mode".into()))
+        map_error(pillow_rs::PilError::ValueError(
+            "image has wrong mode".into(),
+        ))
     })?;
     let rs = pillow_rs::image_radial_gradient(mode).map_err(map_error)?;
     Ok(PyImage { inner: rs })
@@ -90,6 +114,7 @@ fn image_effect_mandelbrot(
 
 pub(super) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(image_merge, m)?)?;
+    m.add_function(wrap_pyfunction!(image_merge_callback_contract, m)?)?;
     m.add_function(wrap_pyfunction!(image_blend, m)?)?;
     m.add_function(wrap_pyfunction!(image_composite, m)?)?;
     m.add_function(wrap_pyfunction!(image_alpha_composite, m)?)?;

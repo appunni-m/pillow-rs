@@ -126,10 +126,20 @@ fn border_components<C: ImageOpsBorderCallbacks>(
                 callbacks.border_coordinate(border, 2)?,
                 callbacks.border_coordinate(border, 3)?,
             )),
-            _ => Ok((border.clone(), border.clone(), border.clone(), border.clone())),
+            _ => Ok((
+                border.clone(),
+                border.clone(),
+                border.clone(),
+                border.clone(),
+            )),
         }
     } else {
-        Ok((border.clone(), border.clone(), border.clone(), border.clone()))
+        Ok((
+            border.clone(),
+            border.clone(),
+            border.clone(),
+            border.clone(),
+        ))
     }
 }
 
@@ -181,10 +191,7 @@ where
     /// Run native crop geometry without holding the host runtime lock.
     fn run_core<T: Send>(&mut self, operation: impl FnOnce() -> T + Send) -> T;
     /// Convert the native geometry result to the host's crop-box value.
-    fn native_box_tuple(
-        &mut self,
-        box_: (u32, u32, u32, u32),
-    ) -> Result<Self::Value, Self::Error>;
+    fn native_box_tuple(&mut self, box_: (u32, u32, u32, u32)) -> Result<Self::Value, Self::Error>;
 }
 
 /// Expand a scalar, pair, or four-value border and compute its crop box.
@@ -233,14 +240,6 @@ pub trait ImageOpsExpandGeometryCallbacks: ImageOpsBorderCallbacks {
     fn image_size_coordinate(&mut self, index: usize) -> Result<Self::Value, Self::Error>;
     /// Add two host dimensions in operand order.
     fn add(&mut self, left: &Self::Value, right: &Self::Value) -> Result<Self::Value, Self::Error>;
-    /// Return the computed width, height, left, and top values to the wrapper.
-    fn expand_geometry_tuple(
-        &mut self,
-        width: &Self::Value,
-        height: &Self::Value,
-        left: &Self::Value,
-        top: &Self::Value,
-    ) -> Result<Self::Value, Self::Error>;
 }
 
 /// Host protocols required by the core-owned ImageOps Expand workflow.
@@ -283,8 +282,12 @@ where
     fn copy_palette(&mut self, mode: &Self::Value) -> Result<Self::Palette, Self::Error>;
     /// Test Python's `isinstance(fill, tuple)` branch.
     fn value_is_tuple(&mut self, value: &Self::Value) -> Result<bool, Self::Error>;
-    /// Read the tuple length after the tuple branch is selected.
-    fn value_tuple_length(&mut self, value: &Self::Value) -> Result<usize, Self::Error>;
+    /// Evaluate one source-ordered `len(fill) == expected` branch.
+    fn value_length_equals(
+        &mut self,
+        value: &Self::Value,
+        expected: i64,
+    ) -> Result<bool, Self::Error>;
     /// Resolve a tuple fill with the copied palette's public `getcolor` method.
     fn palette_get_color(
         &mut self,
@@ -298,11 +301,7 @@ where
         height: &Self::Value,
     ) -> Result<Self::Value, Self::Error>;
     /// Apply Python's comparison and truth conversion for one size coordinate.
-    fn size_is_negative(
-        &mut self,
-        size: &Self::Value,
-        index: usize,
-    ) -> Result<bool, Self::Error>;
+    fn size_is_negative(&mut self, size: &Self::Value, index: usize) -> Result<bool, Self::Error>;
     /// Extract one size coordinate through the host's C-int conversion.
     fn size_component_as_c_int(
         &mut self,
@@ -310,10 +309,7 @@ where
         index: usize,
     ) -> Result<i32, Self::Error>;
     /// Parse the Pillow mode property into the core's typed mode identity.
-    fn mode_identity(
-        &mut self,
-        value: &Self::Value,
-    ) -> Result<crate::raster::Mode, Self::Error>;
+    fn mode_identity(&mut self, value: &Self::Value) -> Result<crate::raster::Mode, Self::Error>;
     /// Adapt the fill object into the host-neutral typed fill input.
     fn fill_input(
         &mut self,
@@ -342,8 +338,6 @@ where
         left: &Self::Value,
         top: &Self::Value,
     ) -> Result<(), Self::Error>;
-    /// Call the output wrapper's public `load` method after Paste completes.
-    fn load_output(&mut self, output: &mut Self::Output) -> Result<(), Self::Error>;
 }
 
 /// Axis selected by the core-owned ImageOps Pad fallback.
@@ -387,10 +381,7 @@ pub trait ImageOpsPadCallbacks {
         color: &Self::Value,
     ) -> Result<Self::Image, Self::Error>;
     /// Read `resized.palette` and apply its truth test.
-    fn resized_palette_is_truthy(
-        &mut self,
-        resized: &Self::Image,
-    ) -> Result<bool, Self::Error>;
+    fn resized_palette_is_truthy(&mut self, resized: &Self::Image) -> Result<bool, Self::Error>;
     /// Call the public `resized.getpalette()` method.
     fn resized_palette(&mut self, resized: &Self::Image) -> Result<Self::Palette, Self::Error>;
     /// Test whether the returned palette is the Python `None` singleton.
@@ -461,8 +452,7 @@ pub trait ImageOpsNativeSizeCallbacks {
     /// Read one item from the requested size tuple.
     fn size_coordinate(&mut self, index: usize) -> Result<Self::Value, Self::Error>;
     /// Whether a coordinate has the exact built-in integer type.
-    fn coordinate_is_exact_integer(&mut self, value: &Self::Value)
-    -> Result<bool, Self::Error>;
+    fn coordinate_is_exact_integer(&mut self, value: &Self::Value) -> Result<bool, Self::Error>;
     /// Whether an exact integer lies within the unsigned 32-bit range.
     fn coordinate_is_u32(&mut self, value: &Self::Value) -> Result<bool, Self::Error>;
     /// Extract an integer after the core has admitted it to the u32 range.
@@ -527,10 +517,7 @@ pub trait ImageOpsAspectRouteCallbacks:
         &mut self,
         width: u32,
         height: u32,
-    ) -> Result<
-        <Self as ImageOpsAspectCallbacks>::Value,
-        <Self as ImageOpsAspectCallbacks>::Error,
-    >;
+    ) -> Result<<Self as ImageOpsAspectCallbacks>::Value, <Self as ImageOpsAspectCallbacks>::Error>;
 }
 
 pub(super) fn expand_geometry_values_with_callbacks<C: ImageOpsExpandGeometryCallbacks>(
@@ -619,7 +606,9 @@ fn contain_size<C: ImageOpsAspectCallbacks>(
         let target_height = callbacks.size_coordinate(1)?;
         if callbacks.compare(ImageOpsAspectComparison::NotEqual, &height, &target_height)? {
             let width = callbacks.size_coordinate(0)?;
-            return Ok(ImageOpsAspectSize::Resized(callbacks.size_pair(&width, &height)?));
+            return Ok(ImageOpsAspectSize::Resized(
+                callbacks.size_pair(&width, &height)?,
+            ));
         }
         return Ok(ImageOpsAspectSize::Original);
     }
@@ -627,7 +616,9 @@ fn contain_size<C: ImageOpsAspectCallbacks>(
     let target_width = callbacks.size_coordinate(0)?;
     if callbacks.compare(ImageOpsAspectComparison::NotEqual, &width, &target_width)? {
         let height = callbacks.size_coordinate(1)?;
-        return Ok(ImageOpsAspectSize::Resized(callbacks.size_pair(&width, &height)?));
+        return Ok(ImageOpsAspectSize::Resized(
+            callbacks.size_pair(&width, &height)?,
+        ));
     }
     Ok(ImageOpsAspectSize::Original)
 }
@@ -646,7 +637,9 @@ fn cover_size<C: ImageOpsAspectCallbacks>(
         let target_height = callbacks.size_coordinate(1)?;
         if callbacks.compare(ImageOpsAspectComparison::NotEqual, &height, &target_height)? {
             let width = callbacks.size_coordinate(0)?;
-            return Ok(ImageOpsAspectSize::Resized(callbacks.size_pair(&width, &height)?));
+            return Ok(ImageOpsAspectSize::Resized(
+                callbacks.size_pair(&width, &height)?,
+            ));
         }
         return Ok(ImageOpsAspectSize::Original);
     }
@@ -654,7 +647,9 @@ fn cover_size<C: ImageOpsAspectCallbacks>(
     let target_width = callbacks.size_coordinate(0)?;
     if callbacks.compare(ImageOpsAspectComparison::NotEqual, &width, &target_width)? {
         let height = callbacks.size_coordinate(1)?;
-        return Ok(ImageOpsAspectSize::Resized(callbacks.size_pair(&width, &height)?));
+        return Ok(ImageOpsAspectSize::Resized(
+            callbacks.size_pair(&width, &height)?,
+        ));
     }
     Ok(ImageOpsAspectSize::Original)
 }

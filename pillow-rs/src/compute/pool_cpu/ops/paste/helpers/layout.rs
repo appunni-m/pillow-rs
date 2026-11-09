@@ -20,10 +20,7 @@ pub(crate) struct MaskLayout {
     pub(crate) premultiplied: bool,
 }
 
-pub(crate) fn source_layout(
-    destination: Mode,
-    source: Mode,
-) -> Option<SourceLayout> {
+pub(crate) fn source_layout(destination: Mode, source: Mode) -> Option<SourceLayout> {
     if destination == source {
         return Some(SourceLayout::Native);
     }
@@ -32,7 +29,10 @@ pub(crate) fn source_layout(
     if destination.pillow_pixel_size()? != source.pillow_pixel_size()? {
         return None;
     }
-    match (destination.pillow_pixel_size()?, destination.hidden_pixel_lane_count()) {
+    match (
+        destination.pillow_pixel_size()?,
+        destination.hidden_pixel_lane_count(),
+    ) {
         (4, Some(2)) => Some(SourceLayout::PhysicalFourBytesToLumaAlpha),
         (4, Some(1)) => Some(SourceLayout::PhysicalFourBytesToRgb),
         (4, None) => Some(SourceLayout::PhysicalFourBytesToFour),

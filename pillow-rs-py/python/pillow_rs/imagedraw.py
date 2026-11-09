@@ -592,10 +592,7 @@ def floodfill(
     native_image = None
     if type(pixel) is PixelAccess:
         try:
-            pixel_owner = object.__getattribute__(pixel, "_image")
-            image_state = object.__getattribute__(pixel_owner, "__dict__")
+            native_image = object.__getattribute__(pixel, "_image")
         except AttributeError:
             pass
-        else:
-            native_image = image_state.get("_rust_image")
     return RustDraw._floodfill(pixel, x, y, value, border, thresh, native_image)

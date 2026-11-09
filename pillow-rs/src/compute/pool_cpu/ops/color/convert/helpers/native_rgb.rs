@@ -221,8 +221,7 @@ fn rgb_block<const CHANNELS: usize>(
             let byte_start = (start + block_offset) * CHANNELS;
             let byte_length = block_pixels * CHANNELS;
             let mut packed = [0u8; 16];
-            packed[..byte_length]
-                .copy_from_slice(&source[byte_start..byte_start + byte_length]);
+            packed[..byte_length].copy_from_slice(&source[byte_start..byte_start + byte_length]);
             let straight = crate::compute::pool_cpu::ops::color::convert::helpers::alpha::
                 unpremultiply_block::<4>(u8x16::new(packed))
                 .to_array();
@@ -237,13 +236,25 @@ fn rgb_block<const CHANNELS: usize>(
     }
 
     let red = std::array::from_fn(|lane| {
-        if lane < active { source[(start + lane) * CHANNELS] } else { 0 }
+        if lane < active {
+            source[(start + lane) * CHANNELS]
+        } else {
+            0
+        }
     });
     let green = std::array::from_fn(|lane| {
-        if lane < active { source[(start + lane) * CHANNELS + 1] } else { 0 }
+        if lane < active {
+            source[(start + lane) * CHANNELS + 1]
+        } else {
+            0
+        }
     });
     let blue = std::array::from_fn(|lane| {
-        if lane < active { source[(start + lane) * CHANNELS + 2] } else { 0 }
+        if lane < active {
+            source[(start + lane) * CHANNELS + 2]
+        } else {
+            0
+        }
     });
     (red, green, blue)
 }
@@ -263,26 +274,44 @@ fn rgb_block4<const CHANNELS: usize>(
         let straight = crate::compute::pool_cpu::ops::color::convert::helpers::alpha::
             unpremultiply_block::<4>(u8x16::new(packed))
             .to_array();
-        let red = std::array::from_fn(|lane| {
-            if lane < active { straight[lane * 4] } else { 0 }
-        });
+        let red = std::array::from_fn(|lane| if lane < active { straight[lane * 4] } else { 0 });
         let green = std::array::from_fn(|lane| {
-            if lane < active { straight[lane * 4 + 1] } else { 0 }
+            if lane < active {
+                straight[lane * 4 + 1]
+            } else {
+                0
+            }
         });
         let blue = std::array::from_fn(|lane| {
-            if lane < active { straight[lane * 4 + 2] } else { 0 }
+            if lane < active {
+                straight[lane * 4 + 2]
+            } else {
+                0
+            }
         });
         return (red, green, blue);
     }
 
     let red = std::array::from_fn(|lane| {
-        if lane < active { source[(start + lane) * CHANNELS] } else { 0 }
+        if lane < active {
+            source[(start + lane) * CHANNELS]
+        } else {
+            0
+        }
     });
     let green = std::array::from_fn(|lane| {
-        if lane < active { source[(start + lane) * CHANNELS + 1] } else { 0 }
+        if lane < active {
+            source[(start + lane) * CHANNELS + 1]
+        } else {
+            0
+        }
     });
     let blue = std::array::from_fn(|lane| {
-        if lane < active { source[(start + lane) * CHANNELS + 2] } else { 0 }
+        if lane < active {
+            source[(start + lane) * CHANNELS + 2]
+        } else {
+            0
+        }
     });
     (red, green, blue)
 }
@@ -292,8 +321,8 @@ fn luma_i32(red: [u8; 8], green: [u8; 8], blue: [u8; 8]) -> [i32; 8] {
         + u32x8::new(green.map(u32::from)) * u32x8::splat(38470)
         + u32x8::new(blue.map(u32::from)) * u32x8::splat(7471)
         + u32x8::splat(32768))
-        .to_array()
-        .map(|value| (value >> 16) as i32)
+    .to_array()
+    .map(|value| (value >> 16) as i32)
 }
 
 fn rgb_luma_sum(red: [u8; 8], green: [u8; 8], blue: [u8; 8]) -> u32x8 {

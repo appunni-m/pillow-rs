@@ -163,11 +163,20 @@ impl PilFontMask {
     /// sequence.
     pub fn to_image(&self) -> Result<Image, PilError> {
         if self.width == 0 {
-            return Image::new(self.width, self.height, self.mode.raster_mode(), (0, 0, 0, 0));
+            return Image::new(
+                self.width,
+                self.height,
+                self.mode.raster_mode(),
+                (0, 0, 0, 0),
+            );
         }
 
         match self.mode {
-            PilFontMode::Luma => Image::frombytes(crate::raster::Mode::ImageLuma8, (self.width, self.height), &self.pixels),
+            PilFontMode::Luma => Image::frombytes(
+                crate::raster::Mode::ImageLuma8,
+                (self.width, self.height),
+                &self.pixels,
+            ),
             PilFontMode::One => {
                 let row_bytes = (self.width as usize).div_ceil(8);
                 let packed_len = row_bytes
@@ -190,13 +199,20 @@ impl PilFontMask {
     /// mode-1 round trip or a copy of its expanded pixels.
     pub(crate) fn into_image(self) -> Result<Image, PilError> {
         if self.width == 0 || self.height == 0 {
-            return Image::new(self.width, self.height, self.mode.raster_mode(), (0, 0, 0, 0));
+            return Image::new(
+                self.width,
+                self.height,
+                self.mode.raster_mode(),
+                (0, 0, 0, 0),
+            );
         }
 
         match self.mode {
-            PilFontMode::Luma => {
-                Image::frombytes_owned(crate::raster::Mode::ImageLuma8, (self.width, self.height), self.pixels)
-            }
+            PilFontMode::Luma => Image::frombytes_owned(
+                crate::raster::Mode::ImageLuma8,
+                (self.width, self.height),
+                self.pixels,
+            ),
             PilFontMode::One => {
                 // Mode-1 conversion maps every nonzero sample to 255. Keep
                 // that rule in-place, then retain the expanded raster instead
@@ -207,8 +223,7 @@ impl PilFontMask {
                 }
                 let image = crate::raster::GrayImage::from_raw(self.width, self.height, pixels)
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?;
-                Ok(Image::from_dynamic(
-                    crate::raster::DynamicImage::One(image)))
+                Ok(Image::from_dynamic(crate::raster::DynamicImage::One(image)))
             }
         }
     }

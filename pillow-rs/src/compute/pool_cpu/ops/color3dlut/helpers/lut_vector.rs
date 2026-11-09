@@ -77,7 +77,9 @@ fn interpolate_channel(
     shifts: [i32x8; 3],
 ) -> [i32; 8] {
     let left_left = interpolate_vector(
-        i32x8::new(std::array::from_fn(|lane| prepared[bases[lane] + channel] as i32)),
+        i32x8::new(std::array::from_fn(|lane| {
+            prepared[bases[lane] + channel] as i32
+        })),
         i32x8::new(std::array::from_fn(|lane| {
             prepared[bases[lane] + channels + channel] as i32
         })),
@@ -144,9 +146,8 @@ impl Color3DLutKernel<'_> {
             );
             for (lane, value) in values.into_iter().enumerate() {
                 let output_offset = (first_pixel + lane) * self.target_channels;
-                output[output_offset + channel] = ((value + (1 << (PRECISION_BITS - 1)))
-                    >> PRECISION_BITS)
-                    .clamp(0, 255) as u8;
+                output[output_offset + channel] =
+                    ((value + (1 << (PRECISION_BITS - 1))) >> PRECISION_BITS).clamp(0, 255) as u8;
             }
         }
         if self.channels == 3 && self.target_channels == 4 {
@@ -169,7 +170,11 @@ impl Color3DLutKernel<'_> {
                 self.source[source_offset],
                 self.source[source_offset + 1],
                 self.source[source_offset + 2],
-                if self.source_channels == 4 { self.source[source_offset + 3] } else { 255 },
+                if self.source_channels == 4 {
+                    self.source[source_offset + 3]
+                } else {
+                    255
+                },
             ];
             let output_offset = pixel_index * self.target_channels;
             super::lut::write_pixel(
@@ -257,4 +262,3 @@ pub(crate) fn apply(
     super::lut::preserve_target_padding(image, &mut output, channels as u32)?;
     Ok(output)
 }
-

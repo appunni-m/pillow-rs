@@ -2,13 +2,11 @@
 
 use crate::checked_dims::CheckedDims;
 use crate::compute::registry::support::{
-    InputContract, ImplementationSupport, ModeSupport, OperationId, OutputModeRule,
+    ImplementationSupport, InputContract, ModeSupport, OperationId, OutputModeRule,
     PaletteKnowledge, RequestFacts, StrategyInputs,
 };
 use crate::error::PilError;
-use crate::raster::{
-    DynamicImage, GrayImage, ImageBuffer, Luma, Mode, Pixel, Rgb, RgbaImage,
-};
+use crate::raster::{DynamicImage, GrayImage, ImageBuffer, Luma, Mode, Pixel, Rgb, RgbaImage};
 
 pub(crate) struct CheckedBand<'a, P: Pixel> {
     pub(crate) input: &'a ImageBuffer<P, Vec<P::Subpixel>>,
@@ -17,8 +15,10 @@ pub(crate) struct CheckedBand<'a, P: Pixel> {
 }
 
 impl<'a, P: Pixel> CheckedBand<'a, P> {
-    pub(crate) fn new(input: &'a ImageBuffer<P, Vec<P::Subpixel>>, index: u8)
-        -> Result<Self, PilError> {
+    pub(crate) fn new(
+        input: &'a ImageBuffer<P, Vec<P::Subpixel>>,
+        index: u8,
+    ) -> Result<Self, PilError> {
         let source_bytes_per_pixel = usize::from(P::CHANNEL_COUNT)
             .checked_mul(core::mem::size_of::<P::Subpixel>())
             .and_then(|bytes| u8::try_from(bytes).ok())
@@ -27,19 +27,23 @@ impl<'a, P: Pixel> CheckedBand<'a, P> {
                     "ExtractBand source pixel width does not fit its dimension contract".into(),
                 )
             })?;
-        let dimensions = CheckedDims::new_allow_empty(
-            input.width(),
-            input.height(),
-            source_bytes_per_pixel,
-        )?;
-        Ok(Self { input, dimensions, index: usize::from(index) })
+        let dimensions =
+            CheckedDims::new_allow_empty(input.width(), input.height(), source_bytes_per_pixel)?;
+        Ok(Self {
+            input,
+            dimensions,
+            index: usize::from(index),
+        })
     }
 }
 
-pub(crate) fn facts<P: Pixel>(input: &ImageBuffer<P, Vec<P::Subpixel>>, index: u8)
-    -> StrategyInputs {
+pub(crate) fn facts<P: Pixel>(
+    input: &ImageBuffer<P, Vec<P::Subpixel>>,
+    index: u8,
+) -> StrategyInputs {
     StrategyInputs {
-        width: input.width(), height: input.height(),
+        width: input.width(),
+        height: input.height(),
         byte_len: Some(core::mem::size_of_val(input.as_raw().as_slice())),
         palette: PaletteKnowledge::Unknown,
         request: RequestFacts::ExtractBand { index },
@@ -82,7 +86,13 @@ pub(crate) const fn support(
             architectures,
             "native high-depth ExtractBand extends the Pillow mode contract",
         ),
-        _ => ModeSupport::cpu(OperationId::ExtractBand, mode, output, inputs, architectures),
+        _ => ModeSupport::cpu(
+            OperationId::ExtractBand,
+            mode,
+            output,
+            inputs,
+            architectures,
+        ),
     }
 }
 
@@ -104,7 +114,13 @@ fn gray(width: u32, height: u32) -> GrayImage {
 pub(crate) fn luma(input: CheckedBand<'_, Luma<u8>>) -> Result<DynamicImage, PilError> {
     let pixel_count = input.dimensions.total_pixels();
     let samples = if input.index < 3 {
-        input.input.as_raw().iter().copied().take(pixel_count).collect()
+        input
+            .input
+            .as_raw()
+            .iter()
+            .copied()
+            .take(pixel_count)
+            .collect()
     } else {
         vec![u8::MAX; pixel_count]
     };
@@ -115,8 +131,13 @@ pub(crate) fn rgb(input: CheckedBand<'_, Rgb<u8>>) -> Result<DynamicImage, PilEr
     let channel = input.index.min(3);
     let pixel_count = input.dimensions.total_pixels();
     let samples = if channel < 3 {
-        input.input.as_raw().chunks_exact(3).take(pixel_count)
-            .map(|pixel| pixel[channel]).collect()
+        input
+            .input
+            .as_raw()
+            .chunks_exact(3)
+            .take(pixel_count)
+            .map(|pixel| pixel[channel])
+            .collect()
     } else {
         vec![u8::MAX; pixel_count]
     };
@@ -133,16 +154,21 @@ pub(crate) fn grouped<P: Pixel<Subpixel = u8>, const CHANNELS: usize>(
     let output = gray.as_mut();
     let pixel_count = input.dimensions.total_pixels();
     let grouped_pixels = pixel_count / 4 * 4;
-    for (dst, pixels) in output[..grouped_pixels].chunks_exact_mut(4)
-        .zip(source.chunks_exact(CHANNELS * 4).take(grouped_pixels / 4)) {
+    for (dst, pixels) in output[..grouped_pixels]
+        .chunks_exact_mut(4)
+        .zip(source.chunks_exact(CHANNELS * 4).take(grouped_pixels / 4))
+    {
         dst[0] = pixels[band];
         dst[1] = pixels[band + CHANNELS];
         dst[2] = pixels[band + CHANNELS * 2];
         dst[3] = pixels[band + CHANNELS * 3];
     }
     let source_tail = source.get(grouped_pixels * CHANNELS..).unwrap_or_default();
-    for (dst, pixel) in output[grouped_pixels..].iter_mut()
-        .zip(source_tail.chunks_exact(CHANNELS).take(pixel_count - grouped_pixels)) {
+    for (dst, pixel) in output[grouped_pixels..].iter_mut().zip(
+        source_tail
+            .chunks_exact(CHANNELS)
+            .take(pixel_count - grouped_pixels),
+    ) {
         *dst = pixel[band];
     }
     Ok(DynamicImage::ImageLuma8(gray))
@@ -181,10 +207,11 @@ pub(crate) fn grouped_into<P: Pixel<Subpixel = u8>, const CHANNELS: usize>(
         dst[3] = pixels[band + CHANNELS * 3];
     }
     let source_tail = source.get(grouped_pixels * CHANNELS..).unwrap_or_default();
-    for (dst, pixel) in output[grouped_pixels..]
-        .iter_mut()
-        .zip(source_tail.chunks_exact(CHANNELS).take(pixel_count - grouped_pixels))
-    {
+    for (dst, pixel) in output[grouped_pixels..].iter_mut().zip(
+        source_tail
+            .chunks_exact(CHANNELS)
+            .take(pixel_count - grouped_pixels),
+    ) {
         *dst = pixel[band];
     }
     Ok((0, 0, "cpu"))
@@ -199,9 +226,9 @@ pub(crate) fn native_u16<P: Pixel<Subpixel = u16>>(
     let dimensions = CheckedDims::new_allow_empty(input.input.width(), input.input.height(), 2)?;
     let channels = usize::from(P::CHANNEL_COUNT);
     let pixel_count = dimensions.total_pixels();
-    let required_samples = pixel_count.checked_mul(channels).ok_or_else(|| {
-        PilError::InternalError("ExtractBand source length overflow".into())
-    })?;
+    let required_samples = pixel_count
+        .checked_mul(channels)
+        .ok_or_else(|| PilError::InternalError("ExtractBand source length overflow".into()))?;
     let source = input.input.as_raw();
     if source.len() < required_samples {
         return Err(PilError::InternalError(
@@ -214,7 +241,9 @@ pub(crate) fn native_u16<P: Pixel<Subpixel = u16>>(
         samples.push(channel.map_or(u16::MAX, |index| pixel[index]));
     }
     if samples.capacity() != 0 {
-        crate::compute::record_pipeline_allocation(samples.capacity() * core::mem::size_of::<u16>());
+        crate::compute::record_pipeline_allocation(
+            samples.capacity() * core::mem::size_of::<u16>(),
+        );
     }
     let image = ImageBuffer::<Luma<u16>, Vec<u16>>::from_raw(
         input.input.width(),
@@ -233,9 +262,9 @@ pub(crate) fn native_f32<P: Pixel<Subpixel = f32>>(
 ) -> Result<DynamicImage, PilError> {
     let channels = usize::from(P::CHANNEL_COUNT);
     let pixel_count = input.dimensions.total_pixels();
-    let required_samples = pixel_count.checked_mul(channels).ok_or_else(|| {
-        PilError::InternalError("ExtractBand source length overflow".into())
-    })?;
+    let required_samples = pixel_count
+        .checked_mul(channels)
+        .ok_or_else(|| PilError::InternalError("ExtractBand source length overflow".into()))?;
     let source = input.input.as_raw();
     if source.len() < required_samples {
         return Err(PilError::InternalError(
@@ -259,9 +288,7 @@ pub(crate) fn native_f32<P: Pixel<Subpixel = f32>>(
     Ok(DynamicImage::ImageF32(image))
 }
 
-pub(crate) fn clipped_luma16(
-    input: CheckedBand<'_, Luma<u16>>,
-) -> Result<DynamicImage, PilError> {
+pub(crate) fn clipped_luma16(input: CheckedBand<'_, Luma<u16>>) -> Result<DynamicImage, PilError> {
     let pixel_count = input.dimensions.total_pixels();
     let samples = if input.index < 3 {
         input
@@ -279,12 +306,18 @@ pub(crate) fn clipped_luma16(
 
 #[cfg(any(
     target_arch = "x86_64",
-    all(target_arch = "x86", any(target_feature = "sse2", target_feature = "ssse3")),
+    all(
+        target_arch = "x86",
+        any(target_feature = "sse2", target_feature = "ssse3")
+    ),
     all(target_arch = "wasm32", target_feature = "simd128"),
     all(target_arch = "aarch64", target_feature = "neon"),
 ))]
 pub(crate) fn vector_output(
-    width: u32, height: u32, output: (Vec<u8>, u64, u64), path: &'static str,
+    width: u32,
+    height: u32,
+    output: (Vec<u8>, u64, u64),
+    path: &'static str,
 ) -> Result<DynamicImage, PilError> {
     let (output, blocks, tail) = output;
     if blocks != 0 {
@@ -293,7 +326,12 @@ pub(crate) fn vector_output(
     if tail != 0 {
         crate::compute::record_pipeline_operation_scalar_tail(tail);
     }
-    crate::compute::record_pipeline_operation_path(if blocks == 0 { "scalar-gather" } else { path });
-    GrayImage::from_raw(width, height, output).map(DynamicImage::ImageLuma8)
+    crate::compute::record_pipeline_operation_path(if blocks == 0 {
+        "scalar-gather"
+    } else {
+        path
+    });
+    GrayImage::from_raw(width, height, output)
+        .map(DynamicImage::ImageLuma8)
         .ok_or_else(|| PilError::InternalError("SIMD ExtractBand buffer shape mismatch".into()))
 }

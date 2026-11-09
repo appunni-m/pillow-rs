@@ -21,6 +21,8 @@ pub(crate) fn execute(
             super::super::helpers::strategy::require_default_selection(selection, Mode::ImageLab8)?;
             super::default::ops::execute(image, request, other)
         }
-        _ => Err(PilError::InternalError("Chops mode strategy received a different raster variant".into())),
+        _ => Err(PilError::InternalError(
+            "Chops mode strategy received a different raster variant".into(),
+        )),
     }
 }

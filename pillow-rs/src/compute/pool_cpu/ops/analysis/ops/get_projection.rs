@@ -8,58 +8,50 @@ use crate::compute::registry::support::{
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 
+pub(crate) use super::super::helpers::projection::ProjectionOutput;
 use super::super::helpers::projection::{
     native_pixel_bytes, project_lab, project_native_bytes, project_stored_words, storage_error,
 };
-pub(crate) use super::super::helpers::projection::ProjectionOutput;
-use super::{NO_INPUTS, NO_RASTER_OUTPUT};
+use super::NO_INPUTS;
 
 fn classify_mode(mode: Mode) -> ModeSupport {
     match mode {
-        Mode::One
-        | Mode::ImageLuma8
-        | Mode::ImageLumaA8
-        | Mode::ImageLaPremultiplied8
-        | Mode::ImagePalette8
-        | Mode::ImagePaletteAlpha8
-        | Mode::ImageRgba8
-        | Mode::ImageRgbPremultiplied8
-        | Mode::ImageRgbx8
-        | Mode::ImageYCbCr8
-        | Mode::ImageLab8
-        | Mode::ImageHsv8
-        | Mode::ImageI32
-        | Mode::ImageF32
-        | Mode::ImageI16
-        | Mode::ImageI16L
-        | Mode::ImageI16B
-        | Mode::ImageI16N => ModeSupport::cpu(
-            OperationId::GetProjection,
-            mode,
-            NO_RASTER_OUTPUT,
-            NO_INPUTS,
-            &[],
-        ),
+        Mode::One => super::super::one::ops::get_projection_mode_support(),
+        Mode::ImageLuma8 => super::super::luma8::ops::get_projection_mode_support(),
+        Mode::ImageLumaA8 => super::super::luma_a8::ops::get_projection_mode_support(),
+        Mode::ImageLaPremultiplied8 => {
+            super::super::la_premultiplied8::ops::get_projection_mode_support()
+        }
+        Mode::ImagePalette8 => super::super::palette8::ops::get_projection_mode_support(),
+        Mode::ImagePaletteAlpha8 => {
+            super::super::palette_alpha8::ops::get_projection_mode_support()
+        }
         Mode::ImageRgb8 => super::super::rgb8::ops::SUPPORT,
+        Mode::ImageRgba8 => super::super::rgba8::ops::get_projection_mode_support(),
+        Mode::ImageRgbPremultiplied8 => {
+            super::super::rgb_premultiplied8::ops::get_projection_mode_support()
+        }
+        Mode::ImageRgbx8 => super::super::rgbx8::ops::get_projection_mode_support(),
         Mode::ImageCmyk8 => super::super::cmyk8::ops::SUPPORT,
-        // NO_PILLOW_SUPPORT: GetProjection scans internal high-depth rasters
-        // directly using their stored native samples.
-        Mode::ImageLumaA16
-        | Mode::ImageRgb16
-        | Mode::ImageRgba16
-        | Mode::ImageRgb32F
-        | Mode::ImageRgba32F => ModeSupport::cpu_core_only(
-            OperationId::GetProjection,
-            mode,
-            NO_RASTER_OUTPUT,
-            NO_INPUTS,
-            &[],
-            "native high-depth GetProjection extends the Pillow mode contract",
-        ),
+        Mode::ImageYCbCr8 => super::super::ycbcr8::ops::get_projection_mode_support(),
+        Mode::ImageLab8 => super::super::lab8::ops::get_projection_mode_support(),
+        Mode::ImageHsv8 => super::super::hsv8::ops::get_projection_mode_support(),
+        Mode::ImageI32 => super::super::i32::ops::get_projection_mode_support(),
+        Mode::ImageF32 => super::super::f32::ops::get_projection_mode_support(),
+        Mode::ImageI16 => super::super::i16::ops::get_projection_mode_support(),
+        Mode::ImageI16L => super::super::i16l::ops::get_projection_mode_support(),
+        Mode::ImageI16B => super::super::i16b::ops::get_projection_mode_support(),
+        Mode::ImageI16N => super::super::i16n::ops::get_projection_mode_support(),
+        Mode::ImageLumaA16 => super::super::luma_a16::ops::get_projection_mode_support(),
+        Mode::ImageRgb16 => super::super::rgb16::ops::get_projection_mode_support(),
+        Mode::ImageRgba16 => super::super::rgba16::ops::get_projection_mode_support(),
+        Mode::ImageRgb32F => super::super::rgb32f::ops::get_projection_mode_support(),
+        Mode::ImageRgba32F => super::super::rgba32f::ops::get_projection_mode_support(),
     }
 }
 
 /// Exhaustive support declaration for direct materialized GetProjection.
+/// TODO(pillow-rs#3ptb): verify native axes and exact architecture receipts.
 pub(crate) static SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::GetProjection, NO_INPUTS, classify_mode);
 
@@ -102,9 +94,7 @@ impl PreparedProjection<'_> {
             }
             Mode::ImageI32 | Mode::ImageF32 => {
                 let raw = match self.image {
-                    DynamicImage::ImageI32(image) | DynamicImage::ImageF32(image) => {
-                        image.as_raw()
-                    }
+                    DynamicImage::ImageI32(image) | DynamicImage::ImageF32(image) => image.as_raw(),
                     _ => return Err(storage_error(self.mode)),
                 };
                 Ok(ProjectionOutput::serial(project_stored_words(
@@ -132,8 +122,18 @@ pub(crate) fn prepare<'a>(
     context: &ExecutionContext,
 ) -> Result<PreparedProjection<'a>, PilError> {
     let mode = image.mode();
-    let selection = select(context, mode, image.width(), image.height(), image.as_bytes().len())?;
-    Ok(PreparedProjection { image, mode, selection })
+    let selection = select(
+        context,
+        mode,
+        image.width(),
+        image.height(),
+        image.as_bytes().len(),
+    )?;
+    Ok(PreparedProjection {
+        image,
+        mode,
+        selection,
+    })
 }
 
 /// Execute the prepared native RGB8 strategy for terminal CPU fusion.

@@ -43,11 +43,9 @@ impl PreparedGetBBox<'_> {
             DynamicImage::ImageLumaA8(image) => {
                 super::super::luma_a8::ops::execute_getbbox(image, alpha_only, selection)
             }
-            DynamicImage::ImageLaPremultiplied8(image) => super::super::la_premultiplied8::ops::execute_getbbox(
-                image,
-                alpha_only,
-                selection,
-            ),
+            DynamicImage::ImageLaPremultiplied8(image) => {
+                super::super::la_premultiplied8::ops::execute_getbbox(image, alpha_only, selection)
+            }
             DynamicImage::ImagePalette8(image) => {
                 super::super::palette8::ops::execute_getbbox(image, alpha_only, selection)
             }
@@ -60,11 +58,9 @@ impl PreparedGetBBox<'_> {
             DynamicImage::ImageRgba8(image) => {
                 super::super::rgba8::ops::execute_getbbox(image, alpha_only, selection)
             }
-            DynamicImage::ImageRgbPremultiplied8(image) => super::super::rgb_premultiplied8::ops::execute_getbbox(
-                image,
-                alpha_only,
-                selection,
-            ),
+            DynamicImage::ImageRgbPremultiplied8(image) => {
+                super::super::rgb_premultiplied8::ops::execute_getbbox(image, alpha_only, selection)
+            }
             DynamicImage::ImageRgbx8(image) => {
                 super::super::rgbx8::ops::execute_getbbox(image, alpha_only, selection)
             }

@@ -5,10 +5,11 @@ use crate::error::PilError;
 use crate::raster::Pixel;
 use crate::raster::{DynamicImage, Rgba, RgbaImage};
 
-use super::super::super::helpers::crop::{CropRegion, ByteCrop};
+use super::super::super::helpers::crop::{ByteCrop, CropRegion};
 
 pub(crate) const INPUTS: &[InputContract] = &[InputContract::CheckedByteDimensions {
-    allow_empty: false, bytes_per_pixel: <Rgba<u8> as Pixel>::CHANNEL_COUNT,
+    allow_empty: false,
+    bytes_per_pixel: <Rgba<u8> as Pixel>::CHANNEL_COUNT,
 }];
 
 pub(crate) type Input = RgbaImage;

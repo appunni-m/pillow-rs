@@ -18,9 +18,14 @@ pub(crate) fn execute(
 ) -> Result<DynamicImage, PilError> {
     match image {
         DynamicImage::ImageRgb32F(_) => {
-            super::super::helpers::strategy::require_default_selection(selection, Mode::ImageRgb32F)?;
+            super::super::helpers::strategy::require_default_selection(
+                selection,
+                Mode::ImageRgb32F,
+            )?;
             super::default::ops::execute(image, request, other)
         }
-        _ => Err(PilError::InternalError("Chops mode strategy received a different raster variant".into())),
+        _ => Err(PilError::InternalError(
+            "Chops mode strategy received a different raster variant".into(),
+        )),
     }
 }

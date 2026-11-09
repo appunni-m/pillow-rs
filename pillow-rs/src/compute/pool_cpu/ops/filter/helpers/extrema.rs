@@ -1,10 +1,10 @@
 //! Native-byte architecture declarations and MaxFilter/MinFilter kernels.
 
 use crate::checked_dims::CheckedDims;
-use crate::compute::{Architecture, Backend};
 use crate::compute::registry::support::{
     ImplementationSupport, OperationId, StrategyGuard, StrategySelection,
 };
+use crate::compute::{Architecture, Backend};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 use wide::u8x16;
@@ -176,9 +176,12 @@ fn rank_filter_native_bytes(
         let mut output = vec![0; raw.len()];
         let (blocks, scalar_tail) =
             crate::compute::pool_cpu::helpers::bytes::vector_copy::copy_native_bytes(
-                raw, &mut output,
+                raw,
+                &mut output,
             )
-            .ok_or_else(|| PilError::InternalError("byte extrema identity copy shape mismatch".into()))?;
+            .ok_or_else(|| {
+                PilError::InternalError("byte extrema identity copy shape mismatch".into())
+            })?;
         crate::compute::record_pipeline_operation_path("native-copy");
         crate::compute::record_pipeline_operation_vector_blocks(blocks);
         crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
@@ -312,7 +315,11 @@ fn rank_filter_horizontal_row(
                     window_offset,
                     select_max,
                 );
-                selected = if select_max { selected.max(values) } else { selected.min(values) };
+                selected = if select_max {
+                    selected.max(values)
+                } else {
+                    selected.min(values)
+                };
             }
             store_channel_vector(output, channels, channel, x, active, selected);
             x += active;
@@ -353,7 +360,11 @@ fn rank_filter_vertical_row(
                     window_offset,
                     select_max,
                 );
-                selected = if select_max { selected.max(values) } else { selected.min(values) };
+                selected = if select_max {
+                    selected.max(values)
+                } else {
+                    selected.min(values)
+                };
             }
             store_channel_vector(output, channels, channel, x, active, selected);
             x += active;

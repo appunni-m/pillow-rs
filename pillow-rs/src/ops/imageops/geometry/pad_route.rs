@@ -1,9 +1,9 @@
 use super::callbacks::{
     ImageOpsNativeSizeCallbacks, ImageOpsPadCallbacks, native_size_pair_with_callbacks,
 };
+use crate::ResampleInput;
 use crate::ops::imageops::{CenteringInput, ImageOpsColor};
 use crate::raster::Mode;
-use crate::ResampleInput;
 
 /// Host facts and wrapper calls needed to select ImageOps Pad's execution route.
 #[doc(hidden)]
@@ -54,10 +54,7 @@ pub trait ImageOpsPadRouteCallbacks:
         &mut self,
         image: crate::image::Image,
         contained: bool,
-    ) -> Result<
-        <Self as ImageOpsPadCallbacks>::Image,
-        <Self as ImageOpsPadCallbacks>::Error,
-    >;
+    ) -> Result<<Self as ImageOpsPadCallbacks>::Image, <Self as ImageOpsPadCallbacks>::Error>;
 }
 
 /// Select typed Pad or its host-protocol fallback from one core route.
@@ -92,9 +89,8 @@ fn native_pad_with_callbacks<C: ImageOpsPadRouteCallbacks>(
     centering: &<C as ImageOpsPadCallbacks>::Value,
 ) -> Result<<C as ImageOpsPadCallbacks>::Image, <C as ImageOpsPadCallbacks>::Error> {
     let initial = callbacks.native_image_snapshot()?;
-    let geometry = callbacks.run_core(move || {
-        super::pad_geometry_preflight(&initial, dimensions.0, dimensions.1)
-    })?;
+    let geometry = callbacks
+        .run_core(move || super::pad_geometry_preflight(&initial, dimensions.0, dimensions.1))?;
     let filter = callbacks.resample_input(method)?;
     let preflight = callbacks.run_core(move || super::pad_filter_preflight(geometry, filter))?;
     let needs_padding = preflight.needs_padding();
@@ -114,16 +110,14 @@ fn native_pad_with_callbacks<C: ImageOpsPadRouteCallbacks>(
         ImageOpsColor::None
     };
     let fill_image = image.clone();
-    let fill = callbacks.run_core(move || {
-        super::pad_fill_preflight(&fill_image, preflight, fill_input)
-    })?;
+    let fill = callbacks
+        .run_core(move || super::pad_fill_preflight(&fill_image, preflight, fill_input))?;
     let centering = if needs_padding {
         callbacks.centering_input(centering)?
     } else {
         CenteringInput::Default
     };
-    let (image, contained) = callbacks.run_core(move || {
-        super::pad_with_preflight_and_fill(&image, preflight, fill, centering)
-    })?;
+    let (image, contained) = callbacks
+        .run_core(move || super::pad_with_preflight_and_fill(&image, preflight, fill, centering))?;
     callbacks.wrap_native_pad_result(image, contained)
 }

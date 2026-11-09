@@ -1,9 +1,7 @@
 //! Exact native-sample canvas allocation and row copying.
 
 use crate::checked_dims::CheckedDims;
-use crate::compute::pool_cpu::ops::geometry::pad::helpers::dimensions::{
-    self, PadFrame,
-};
+use crate::compute::pool_cpu::ops::geometry::pad::helpers::dimensions::{self, PadFrame};
 use crate::error::PilError;
 use crate::raster::{ImageBuffer, Pixel};
 
@@ -51,7 +49,9 @@ where
         .checked_mul(source_height)
         .ok_or_else(|| PilError::DimensionError("Pad source buffer overflow".into()))?;
     if source_count != source.as_raw().len() {
-        return Err(PilError::InternalError("Pad source buffer shape mismatch".into()));
+        return Err(PilError::InternalError(
+            "Pad source buffer shape mismatch".into(),
+        ));
     }
 
     let x_window = dimensions::clipped_axis(frame.offset_x, source_width, width);
@@ -62,10 +62,10 @@ where
         .checked_mul(channels)
         .ok_or_else(|| PilError::DimensionError("Pad content row overflow".into()))?;
     for y in 0..copy_height {
-        let source_start = (y_window.source_start + y) * source_stride
-            + x_window.source_start * channels;
-        let target_start = (y_window.destination_start + y) * row_samples
-            + x_window.destination_start * channels;
+        let source_start =
+            (y_window.source_start + y) * source_stride + x_window.source_start * channels;
+        let target_start =
+            (y_window.destination_start + y) * row_samples + x_window.destination_start * channels;
         output[target_start..target_start + copy_samples]
             .copy_from_slice(&source.as_raw()[source_start..source_start + copy_samples]);
     }
@@ -73,7 +73,6 @@ where
     ImageBuffer::from_raw(frame.width, frame.height, output)
         .ok_or_else(|| PilError::InternalError("Pad output buffer shape mismatch".into()))
 }
-
 
 /// Builds a vertical Pad by appending complete fill rows around native samples.
 pub(crate) fn pad_vertical_append<P, T>(
@@ -109,11 +108,15 @@ where
         .and_then(|stride| stride.checked_mul(source_height))
         .ok_or_else(|| PilError::DimensionError("Pad source buffer overflow".into()))?;
     if source_samples != source.as_raw().len() {
-        return Err(PilError::InternalError("Pad source buffer shape mismatch".into()));
+        return Err(PilError::InternalError(
+            "Pad source buffer shape mismatch".into(),
+        ));
     }
     let fill_row = fill[..channels].repeat(width);
     if fill_row.len() != row_samples {
-        return Err(PilError::InternalError("Pad fill row shape mismatch".into()));
+        return Err(PilError::InternalError(
+            "Pad fill row shape mismatch".into(),
+        ));
     }
 
     let mut output = Vec::new();
@@ -128,7 +131,9 @@ where
         output.extend_from_slice(&fill_row);
     }
     if output.len() != sample_count {
-        return Err(PilError::InternalError("Pad output buffer shape mismatch".into()));
+        return Err(PilError::InternalError(
+            "Pad output buffer shape mismatch".into(),
+        ));
     }
     ImageBuffer::from_raw(frame.width, frame.height, output)
         .map(Some)

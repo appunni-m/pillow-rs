@@ -1,8 +1,8 @@
 //! Original constant alpha semantics for `ImageRgb16`.
 
+use super::super::super::helpers::put_alpha::{self as helpers, AlphaInput};
 use crate::error::PilError;
 use crate::raster::DynamicImage;
-use super::super::super::helpers::put_alpha::{self as helpers, AlphaInput};
 
 pub(crate) type Input = crate::raster::ImageBuffer<crate::raster::Rgb<u16>, Vec<u16>>;
 pub(crate) type Kernel<'a> = AlphaInput<'a, crate::raster::Rgb<u16>>;

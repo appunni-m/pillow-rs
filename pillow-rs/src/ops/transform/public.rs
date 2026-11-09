@@ -1,6 +1,6 @@
 use super::{PreparedTransformFill, TransformData, TransformFill};
-use crate::compute::{Architecture, ExecutionContext};
 use crate::compute::pool_cpu::ops::transform::ops::{self, TransformRequest};
+use crate::compute::{Architecture, ExecutionContext};
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::{ResampleFilter, TransformMethod};
@@ -19,7 +19,10 @@ fn parse_transform_resample(code: i32) -> Result<ResampleFilter, PilError> {
         1 | 4 | 5 => {
             // Pillow distinguishes known resize-only filters from an
             // unknown integer in Image.transform's public error contract.
-            Err(transform_resample_public_error(Some(code), &code.to_string()))
+            Err(transform_resample_public_error(
+                Some(code),
+                &code.to_string(),
+            ))
         }
         // Image.transform has a narrower public filter contract than resize;
         // Pillow reports only its three accepted filters here.
@@ -124,9 +127,7 @@ fn preflight_transform_data(
             Ok(false)
         }
         4 => preflight_mesh_data(data),
-        _ => Err(PilError::ValueError(
-            "unknown transformation method".into(),
-        )),
+        _ => Err(PilError::ValueError("unknown transformation method".into())),
     }
 }
 
@@ -379,8 +380,9 @@ impl Image {
         let mut output = destination.output;
         let output_lanes = {
             let output = output_dynamic_mut(&mut output)?;
-            crate::compute::pool_cpu::ops::transform::helpers::hidden_lanes::
-                initialize_mesh_output(output)?
+            crate::compute::pool_cpu::ops::transform::helpers::hidden_lanes::initialize_mesh_output(
+                output,
+            )?
         };
         Ok(TransformMeshAccumulator {
             output,
@@ -406,9 +408,7 @@ impl Image {
         let mode = accumulator.prepared.mode;
         let source = self.materialized_shared_for_ops()?;
         if source.mode() != mode {
-            return Err(PilError::ValueError(
-                "image has wrong mode".into(),
-            ));
+            return Err(PilError::ValueError("image has wrong mode".into()));
         }
         let filter = if matches!(mode, Mode::ImagePalette8 | Mode::One) {
             ResampleFilter::Nearest
@@ -478,9 +478,7 @@ impl Image {
         _fill: i32,
     ) -> Result<Image, PilError> {
         if !matches!(method, 0..=4) {
-            return Err(PilError::ValueError(
-                "unknown transformation method".into(),
-            ));
+            return Err(PilError::ValueError("unknown transformation method".into()));
         }
         // Validate typed method data before the filter, matching the wrapper's
         // method-specific preparation order without executing any image work.
@@ -526,9 +524,7 @@ impl Image {
         resample: i32,
     ) -> Result<Image, PilError> {
         if !matches!(method, 0 | 2 | 3) {
-            return Err(PilError::ValueError(
-                "unknown transformation method".into(),
-            ));
+            return Err(PilError::ValueError("unknown transformation method".into()));
         }
         preflight_transform_data(method, destination.size, data.as_ref())?;
         let filter = parse_transform_resample(resample)?;

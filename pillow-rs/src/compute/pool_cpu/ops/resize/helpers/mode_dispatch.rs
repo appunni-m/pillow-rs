@@ -19,45 +19,71 @@ pub(crate) fn execute_byte_mode(
         DynamicImage::One(input) => Ok(DynamicImage::One(super::super::one::ops::resize(
             context, selection, input, width, height, filter, bounds,
         )?)),
-        DynamicImage::ImageLuma8(input) => Ok(DynamicImage::ImageLuma8(
-            super::super::luma8::ops::resize(context, selection, input, width, height, filter, bounds)?,
-        )),
+        DynamicImage::ImageLuma8(input) => {
+            Ok(DynamicImage::ImageLuma8(super::super::luma8::ops::resize(
+                context, selection, input, width, height, filter, bounds,
+            )?))
+        }
         DynamicImage::ImageLumaA8(input) => Ok(DynamicImage::ImageLumaA8(
-            super::super::luma_a8::ops::resize(context, selection, input, width, height, filter, bounds)?,
+            super::super::luma_a8::ops::resize(
+                context, selection, input, width, height, filter, bounds,
+            )?,
         )),
         DynamicImage::ImageLaPremultiplied8(input) => Ok(DynamicImage::ImageLaPremultiplied8(
-            super::super::la_premultiplied8::ops::resize(context, selection, input, width, height, filter, bounds)?,
+            super::super::la_premultiplied8::ops::resize(
+                context, selection, input, width, height, filter, bounds,
+            )?,
         )),
         DynamicImage::ImagePalette8(input) => Ok(DynamicImage::ImagePalette8(
-            super::super::palette8::ops::resize(context, selection, input, width, height, filter, bounds)?,
+            super::super::palette8::ops::resize(
+                context, selection, input, width, height, filter, bounds,
+            )?,
         )),
         DynamicImage::ImagePaletteAlpha8(input) => Ok(DynamicImage::ImagePaletteAlpha8(
-            super::super::palette_alpha8::ops::resize(context, selection, input, width, height, filter, bounds)?,
+            super::super::palette_alpha8::ops::resize(
+                context, selection, input, width, height, filter, bounds,
+            )?,
         )),
-        DynamicImage::ImageRgb8(input) => Ok(DynamicImage::ImageRgb8(
-            super::super::rgb8::ops::resize(context, selection, input, width, height, filter, bounds)?,
-        )),
-        DynamicImage::ImageRgba8(input) => Ok(DynamicImage::ImageRgba8(
-            super::super::rgba8::ops::resize(context, selection, input, width, height, filter, bounds)?,
-        )),
+        DynamicImage::ImageRgb8(input) => {
+            Ok(DynamicImage::ImageRgb8(super::super::rgb8::ops::resize(
+                context, selection, input, width, height, filter, bounds,
+            )?))
+        }
+        DynamicImage::ImageRgba8(input) => {
+            Ok(DynamicImage::ImageRgba8(super::super::rgba8::ops::resize(
+                context, selection, input, width, height, filter, bounds,
+            )?))
+        }
         DynamicImage::ImageRgbPremultiplied8(input) => Ok(DynamicImage::ImageRgbPremultiplied8(
-            super::super::rgb_premultiplied8::ops::resize(context, selection, input, width, height, filter, bounds)?,
+            super::super::rgb_premultiplied8::ops::resize(
+                context, selection, input, width, height, filter, bounds,
+            )?,
         )),
-        DynamicImage::ImageRgbx8(input) => Ok(DynamicImage::ImageRgbx8(
-            super::super::rgbx8::ops::resize(context, selection, input, width, height, filter, bounds)?,
-        )),
-        DynamicImage::ImageCmyk8(input) => Ok(DynamicImage::ImageCmyk8(
-            super::super::cmyk8::ops::resize(context, selection, input, width, height, filter, bounds)?,
-        )),
+        DynamicImage::ImageRgbx8(input) => {
+            Ok(DynamicImage::ImageRgbx8(super::super::rgbx8::ops::resize(
+                context, selection, input, width, height, filter, bounds,
+            )?))
+        }
+        DynamicImage::ImageCmyk8(input) => {
+            Ok(DynamicImage::ImageCmyk8(super::super::cmyk8::ops::resize(
+                context, selection, input, width, height, filter, bounds,
+            )?))
+        }
         DynamicImage::ImageYCbCr8(input) => Ok(DynamicImage::ImageYCbCr8(
-            super::super::ycbcr8::ops::resize(context, selection, input, width, height, filter, bounds)?,
+            super::super::ycbcr8::ops::resize(
+                context, selection, input, width, height, filter, bounds,
+            )?,
         )),
-        DynamicImage::ImageLab8(input) => Ok(DynamicImage::ImageLab8(
-            super::super::lab8::ops::resize(context, selection, input, width, height, filter, bounds)?,
-        )),
-        DynamicImage::ImageHsv8(input) => Ok(DynamicImage::ImageHsv8(
-            super::super::hsv8::ops::resize(context, selection, input, width, height, filter, bounds)?,
-        )),
+        DynamicImage::ImageLab8(input) => {
+            Ok(DynamicImage::ImageLab8(super::super::lab8::ops::resize(
+                context, selection, input, width, height, filter, bounds,
+            )?))
+        }
+        DynamicImage::ImageHsv8(input) => {
+            Ok(DynamicImage::ImageHsv8(super::super::hsv8::ops::resize(
+                context, selection, input, width, height, filter, bounds,
+            )?))
+        }
         _ => Err(PilError::InternalError(
             "byte Resize mode dispatch received a non-byte image".into(),
         )),

@@ -1,4 +1,4 @@
-use crate::compute::pool_cpu::ops::draw::BitmapMask;
+use crate::compute::pool_cpu::ops::draw::{BitmapMask, BitmapRegion};
 use crate::raster::RgbaImage;
 
 /// Blend four stored bytes while leaving the owning mode strategy in control.
@@ -12,30 +12,29 @@ pub(crate) fn apply<const ALPHA_CHANNEL: bool>(
     color: (u8, u8, u8, u8),
 ) {
     let (image_width, image_height) = canvas.dimensions();
-    for mask_y in 0..mask_height {
-        for mask_x in 0..mask_width {
+    let region = BitmapRegion::clipped(x, y, image_width, image_height, mask_width, mask_height);
+    let Some((image_x_start, image_y_start)) =
+        region.destination_origin(x, y, image_width, image_height)
+    else {
+        return;
+    };
+    for mask_y in region.y_start..region.y_end {
+        let image_y = image_y_start + (mask_y - region.y_start);
+        for mask_x in region.x_start..region.x_end {
             let coverage = mask.coverage(mask_x, mask_y);
             if mask.should_skip(coverage) {
                 continue;
             }
-            let image_x = x + mask_x as i32;
-            let image_y = y + mask_y as i32;
-            if image_x < 0
-                || image_y < 0
-                || image_x as u32 >= image_width
-                || image_y as u32 >= image_height
-            {
-                continue;
-            }
-            let background = canvas.get_pixel(image_x as u32, image_y as u32);
+            let image_x = image_x_start + (mask_x - region.x_start);
+            let background = canvas.get_pixel(image_x, image_y);
             let color_coverage = if ALPHA_CHANNEL {
                 mask.luma_coverage_for_alpha(coverage, background[3])
             } else {
                 coverage
             };
             canvas.put_pixel(
-                image_x as u32,
-                image_y as u32,
+                image_x,
+                image_y,
                 crate::raster::Rgba([
                     mask.blend_byte(color.0, background[0], color_coverage),
                     mask.blend_byte(color.1, background[1], color_coverage),

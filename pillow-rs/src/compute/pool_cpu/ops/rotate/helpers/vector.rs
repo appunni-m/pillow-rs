@@ -67,22 +67,38 @@ where
         90 => TransposeMethod::Rotate90,
         180 => TransposeMethod::Rotate180,
         270 => TransposeMethod::Rotate270,
-        _ => return Err(PilError::InternalError("invalid discrete Rotate angle".into())),
+        _ => {
+            return Err(PilError::InternalError(
+                "invalid discrete Rotate angle".into(),
+            ));
+        }
     };
     let (output, vector_blocks, scalar_tail) = match CHANNELS {
         1 => crate::compute::pool_cpu::ops::transpose::helpers::native_transpose::transpose_u8::<
-            P, 1, 16,
+            P,
+            1,
+            16,
         >(image, &method)?,
         2 => crate::compute::pool_cpu::ops::transpose::helpers::native_transpose::transpose_u8::<
-            P, 2, 8,
+            P,
+            2,
+            8,
         >(image, &method)?,
         3 => crate::compute::pool_cpu::ops::transpose::helpers::native_transpose::transpose_u8::<
-            P, 3, 4,
+            P,
+            3,
+            4,
         >(image, &method)?,
         4 => crate::compute::pool_cpu::ops::transpose::helpers::native_transpose::transpose_u8::<
-            P, 4, 4,
+            P,
+            4,
+            4,
         >(image, &method)?,
-        _ => return Err(PilError::InternalError("invalid Rotate channel count".into())),
+        _ => {
+            return Err(PilError::InternalError(
+                "invalid Rotate channel count".into(),
+            ));
+        }
     };
     crate::compute::record_pipeline_operation_path("native-copy");
     crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);

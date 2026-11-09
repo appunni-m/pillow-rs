@@ -22,9 +22,7 @@ pub(crate) fn blend(
     alpha: f64,
     selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
-    super::super::helpers::blend::execute_selected(
-        source, other, MODE, 2, alpha, selection,
-    )
+    super::super::helpers::blend::execute_selected(source, other, MODE, 2, alpha, selection)
 }
 
 pub(crate) fn composite(

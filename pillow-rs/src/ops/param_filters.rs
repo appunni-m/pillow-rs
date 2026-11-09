@@ -206,6 +206,46 @@ pub fn prepare_color3dlut(
     })
 }
 
+/// Prepares the table accepted by Pillow's low-level `ImagingCore` adapter.
+///
+/// Unlike the public `Color3DLUT` constructor, the private callback parser
+/// accepts one and two channels, prepares the table, and then rejects those
+/// channel counts in the native filter with a distinct error. Keep that
+/// observable order at this boundary while returning an executable prepared
+/// value only for the supported three/four-channel cases.
+pub fn prepare_color3dlut_imaging_core(
+    table: Vec<f64>,
+    size: (u32, u32, u32),
+    channels: u32,
+) -> Result<PreparedColor3DLut, PilError> {
+    if !(1..=4).contains(&channels) {
+        return Err(PilError::ValueError(
+            "table_channels should be from 1 to 4".into(),
+        ));
+    }
+    if !(2..=65).contains(&size.0) || !(2..=65).contains(&size.1) || !(2..=65).contains(&size.2) {
+        return Err(PilError::ValueError(
+            "Table size in any dimension should be from 2 to 65".into(),
+        ));
+    }
+    let expected_len = color3dlut_expected_len(size, channels);
+    if table.len() != expected_len {
+        return Err(PilError::ValueError(
+            "The table should have table_channels * size1D * size2D * size3D float items.".into(),
+        ));
+    }
+    if channels < 3 {
+        return Err(PilError::ValueError(
+            "table_channels could be 3 or 4".into(),
+        ));
+    }
+    Ok(PreparedColor3DLut {
+        size,
+        table,
+        channels,
+    })
+}
+
 /// Generates a Color3DLUT table while keeping traversal and callback result
 /// policy in the runtime-independent core.
 pub fn color3dlut_generate_table<E, F, M>(
@@ -327,6 +367,118 @@ where
 }
 
 impl Image {
+    /// Replicates edge pixels for the private Pillow `ImagingCore.expand`
+    /// callback used by user supplied image filters.
+    ///
+    /// This entry point preserves the exact raster mode and native samples;
+    /// ordinary [`Image::expand`] continues to add a caller-selected fill.
+    #[doc(hidden)]
+    pub fn imaging_core_expand(&self, xmargin: i32, ymargin: i32) -> Result<Image, PilError> {
+        // TODO(pillow-rs#3ptb): freeze callback outcomes for negative margins
+        // and empty inputs. Built-in filters use nonnegative margins only.
+        if xmargin < 0 || ymargin < 0 {
+            return Err(PilError::ValueError("bad kernel size".into()));
+        }
+        let (requested_backend, context, fallback_reason) =
+            cpu_only_filter_route(self, "ImagingCoreExpand")?;
+        let (image, mut operation_receipts) = self.materialized_shared_for_ops_with_receipts()?;
+        let output =
+            crate::compute::execute_eager_cpu_arch_image_operation_with_context_and_receipts(
+                "ImagingCoreExpand",
+                image.as_ref(),
+                context,
+                Some(requested_backend),
+                fallback_reason,
+                &mut operation_receipts,
+                |context| {
+                    let prepared = crate::compute::pool_cpu::ops::imageops::expand_edges::prepare(
+                        image.as_ref(),
+                        xmargin as u32,
+                        ymargin as u32,
+                        context,
+                    )?;
+                    let selection = *prepared.selection();
+                    Ok((prepared.execute()?, selection))
+                },
+            )?;
+        self.from_derived_dynamic(output)
+    }
+
+    /// Runs the cropped single-band rank selector exposed by the private
+    /// Pillow `ImagingCore.rankfilter` callback.
+    ///
+    /// Scalar modes compose their existing exact-mode rank strategy with a
+    /// crop; P uses its separately declared native-index strategy.
+    #[doc(hidden)]
+    pub fn imaging_core_rankfilter(&self, size: i32, rank: i32) -> Result<Image, PilError> {
+        // TODO(pillow-rs#3ptb): freeze empty-input and error-order parity for
+        // the private callback independently from public ImageFilter checks.
+        let mode = self.mode_identity()?;
+        if !matches!(
+            mode,
+            Mode::One | Mode::ImageLuma8 | Mode::ImagePalette8 | Mode::ImageI32 | Mode::ImageF32
+        ) {
+            return Err(PilError::ValueError("image has wrong mode".into()));
+        }
+        if size < 0 {
+            return Err(PilError::ValueError("bad filter size".into()));
+        }
+        let size = size as u32;
+        validate_rank_filter_size(size)?;
+        if rank < 0 {
+            return Err(PilError::ValueError("bad rank value".into()));
+        }
+        let rank = rank as u32;
+        let rank_count = size * size;
+        if rank >= rank_count {
+            return Err(PilError::ValueError("bad rank value".into()));
+        }
+        let (width, height) = self.size()?;
+        let margin = size / 2;
+        let right = width
+            .checked_sub(margin)
+            .ok_or_else(|| PilError::ValueError("bad image size".into()))?;
+        let bottom = height
+            .checked_sub(margin)
+            .ok_or_else(|| PilError::ValueError("bad image size".into()))?;
+        if size == 1 && (width == 0 || height == 0) {
+            return Ok(self.copy());
+        }
+
+        if mode == Mode::ImagePalette8 {
+            return self.imaging_core_palette_rankfilter(size, rank);
+        }
+        self.rank_filter(size, rank)?
+            .crop_unsigned((margin, margin, right, bottom))
+    }
+
+    fn imaging_core_palette_rankfilter(&self, size: u32, rank: u32) -> Result<Image, PilError> {
+        let (requested_backend, context, fallback_reason) =
+            cpu_only_filter_route(self, "ImagingCorePaletteRankFilter")?;
+        let (image, mut operation_receipts) = self.materialized_shared_for_ops_with_receipts()?;
+        let output =
+            crate::compute::execute_eager_cpu_arch_image_operation_with_context_and_receipts(
+                "ImagingCorePaletteRankFilter",
+                image.as_ref(),
+                context,
+                Some(requested_backend),
+                fallback_reason,
+                &mut operation_receipts,
+                |context| {
+                    let prepared =
+                        crate::compute::pool_cpu::ops::filter::palette8::ops::prepare_imaging_rank_filter(
+                            image.as_ref(),
+                            size,
+                            rank,
+                            context,
+                        )?;
+                    let selection = *prepared.selection();
+                    Ok((prepared.execute()?, selection))
+                },
+            )?;
+        self.from_derived_dynamic(output)
+    }
+
     /// Applies Gaussian blur with the given radius.
     ///
     /// Larger radius produces more blur.
@@ -419,8 +571,7 @@ impl Image {
         self.validate_filter("UnsharpMask")?;
         let (routed_backend, context, fallback_reason) =
             cpu_only_filter_route(self, "UnsharpMask")?;
-        let (img, mut operation_receipts) =
-            self.materialized_shared_for_ops_with_receipts()?;
+        let (img, mut operation_receipts) = self.materialized_shared_for_ops_with_receipts()?;
         let mode = img.mode();
         let result =
             crate::compute::execute_eager_cpu_arch_image_operation_with_context_and_receipts(
@@ -512,10 +663,8 @@ impl Image {
         let source_mode = self.mode_identity()?;
         let palette = self.palette();
         let palette_alpha = self.palette_alpha();
-        let (image, mut operation_receipts) =
-            self.materialized_shared_for_ops_with_receipts()?;
-        let (routed_backend, context, fallback_reason) =
-            cpu_only_filter_route(self, "ModeFilter")?;
+        let (image, mut operation_receipts) = self.materialized_shared_for_ops_with_receipts()?;
+        let (routed_backend, context, fallback_reason) = cpu_only_filter_route(self, "ModeFilter")?;
         let result =
             crate::compute::execute_eager_cpu_arch_image_operation_with_context_and_receipts(
                 "ModeFilter",
@@ -562,6 +711,9 @@ impl Image {
     /// Applies a rank filter over an odd neighborhood.
     ///
     /// Each pixel becomes the `rank`-th value after sorting the neighborhood.
+    ///
+    /// The private `ImagingCore.rankfilter` callback has a cropped result and
+    /// is exposed separately by [`Image::imaging_core_rankfilter`].
     ///
     /// # Errors
     ///

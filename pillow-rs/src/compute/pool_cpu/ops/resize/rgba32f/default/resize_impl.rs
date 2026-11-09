@@ -10,7 +10,5 @@ pub(crate) fn execute(
     filter: ResampleFilter,
     bounds: super::super::super::helpers::typed_nearest::BoxBounds,
 ) -> Rgba32FImage {
-    super::super::super::helpers::typed_f32::resize_with_alpha(
-        input, width, height, filter, bounds,
-    )
+    super::super::super::helpers::typed_f32::resize_with_alpha(input, width, height, filter, bounds)
 }

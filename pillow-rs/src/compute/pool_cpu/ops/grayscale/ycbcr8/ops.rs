@@ -1,13 +1,16 @@
 //! Mode semantics composed with context-selected concrete architecture strategies.
 
-use crate::compute::{Architecture, ExecutionContext, registry::support::{
-    ImplementationSupport, ModeSupport, OperationId, OutputModeRule, StrategyGuard,
-    StrategyInputs, PaletteKnowledge,
-}};
+use super::default::grayscale_impl;
 use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
+use crate::compute::{
+    Architecture, ExecutionContext,
+    registry::support::{
+        ImplementationSupport, ModeSupport, OperationId, OutputModeRule, PaletteKnowledge,
+        StrategyGuard, StrategyInputs,
+    },
+};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
-use super::default::grayscale_impl;
 
 macro_rules! declare_architectures {
     ($($variant:ident, $cfg:meta, $requirements:expr, $guard:ident, $run:expr, $path:literal);+ $(;)?) => {

@@ -115,12 +115,16 @@ impl PreparedPaste<'_> {
             Self::One(strategy) => super::one::ops::execute(strategy),
             Self::ImageLuma8(strategy) => super::luma8::ops::execute(strategy),
             Self::ImageLumaA8(strategy) => super::luma_a8::ops::execute(strategy),
-            Self::ImageLaPremultiplied8(strategy) => super::la_premultiplied8::ops::execute(strategy),
+            Self::ImageLaPremultiplied8(strategy) => {
+                super::la_premultiplied8::ops::execute(strategy)
+            }
             Self::ImagePalette8(strategy) => super::palette8::ops::execute(strategy),
             Self::ImagePaletteAlpha8(strategy) => super::palette_alpha8::ops::execute(strategy),
             Self::ImageRgb8(strategy) => super::rgb8::ops::execute(strategy),
             Self::ImageRgba8(strategy) => super::rgba8::ops::execute(strategy),
-            Self::ImageRgbPremultiplied8(strategy) => super::rgb_premultiplied8::ops::execute(strategy),
+            Self::ImageRgbPremultiplied8(strategy) => {
+                super::rgb_premultiplied8::ops::execute(strategy)
+            }
             Self::ImageRgbx8(strategy) => super::rgbx8::ops::execute(strategy),
             Self::ImageCmyk8(strategy) => super::cmyk8::ops::execute(strategy),
             Self::ImageYCbCr8(strategy) => super::ycbcr8::ops::execute(strategy),
@@ -146,12 +150,24 @@ pub(crate) fn prepare_pipeline<'a>(
     op: &'a PipelineOp,
     context: &ExecutionContext,
 ) -> Result<crate::compute::registry::PreparedOperation<'a>, PilError> {
-    let PipelineOp::Paste { source, x, y, w, h, mask, mask_alpha } = op else {
+    let PipelineOp::Paste {
+        source,
+        x,
+        y,
+        w,
+        h,
+        mask,
+        mask_alpha,
+    } = op
+    else {
         return Err(PilError::ValueError("expected Paste op".into()));
     };
-    let width = u32::try_from(*w).map_err(|_| PilError::ValueError("images do not match".into()))?;
-    let height = u32::try_from(*h).map_err(|_| PilError::ValueError("images do not match".into()))?;
-    let mut operand_receipts = crate::compute::PipelineOperationTelemetryCapture::begin_preserving_current();
+    let width =
+        u32::try_from(*w).map_err(|_| PilError::ValueError("images do not match".into()))?;
+    let height =
+        u32::try_from(*h).map_err(|_| PilError::ValueError("images do not match".into()))?;
+    let mut operand_receipts =
+        crate::compute::PipelineOperationTelemetryCapture::begin_preserving_current();
     let source = source.materialized_shared_for_ops()?;
     operand_receipts.capture();
     let mask = mask
@@ -162,21 +178,21 @@ pub(crate) fn prepare_pipeline<'a>(
     operand_receipts.restore();
     let source_facts = secondary_facts(source.as_ref());
     let mask_facts = mask.as_deref().map(secondary_facts);
-    let facts = input
-        .facts()
-        .with_paste(
-            source_facts,
-            mask_facts,
-            (i64::from(*x), i64::from(*y)),
-            (width, height),
-            *mask_alpha,
-        );
+    let facts = input.facts().with_paste(
+        source_facts,
+        mask_facts,
+        (i64::from(*x), i64::from(*y)),
+        (width, height),
+        *mask_alpha,
+    );
     let mode_support = classify_mode(input.mode());
     let selection = match mode_support.assess(context, facts)? {
         SupportAssessment::Ready(selection) => selection,
         SupportAssessment::Rejected { reason, kind, .. } => return Err(kind.into_error(reason)),
         SupportAssessment::Deferred { .. } => {
-            return Err(PilError::InternalError("Paste preparation received unresolved input facts".into()));
+            return Err(PilError::InternalError(
+                "Paste preparation received unresolved input facts".into(),
+            ));
         }
     };
     let position = (i64::from(*x), i64::from(*y));
@@ -190,7 +206,9 @@ pub(crate) fn prepare_pipeline<'a>(
         region_size,
         selection,
     )?;
-    Ok(crate::compute::registry::PreparedOperation::from_paste(prepared))
+    Ok(crate::compute::registry::PreparedOperation::from_paste(
+        prepared,
+    ))
 }
 
 fn prepare_mode<'a>(
@@ -206,7 +224,13 @@ fn prepare_mode<'a>(
         ($variant:ident, $module:ident) => {
             if let DynamicImage::$variant(image) = image {
                 return super::$module::ops::prepare(
-                    image, source, mask, mask_alpha, position, region_size, selection,
+                    image,
+                    source,
+                    mask,
+                    mask_alpha,
+                    position,
+                    region_size,
+                    selection,
                 )
                 .map(PreparedPaste::$variant);
             }
@@ -237,7 +261,9 @@ fn prepare_mode<'a>(
     byte_mode!(ImageRgba16, rgba16);
     byte_mode!(ImageRgb32F, rgb32f);
     byte_mode!(ImageRgba32F, rgba32f);
-    Err(PilError::InternalError("Paste mode strategy routing did not match image variant".into()))
+    Err(PilError::InternalError(
+        "Paste mode strategy routing did not match image variant".into(),
+    ))
 }
 
 fn secondary_facts(image: &DynamicImage) -> SecondaryInputFacts {

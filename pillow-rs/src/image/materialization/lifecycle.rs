@@ -1,7 +1,6 @@
 use super::{
     DynamicImage, Image, LoadedData, PalettedData, PilError, declared_pipeline_mode,
-    expand_palette,
-    image_from_materialized, map_codec_error, materialization_cache,
+    expand_palette, image_from_materialized, map_codec_error, materialization_cache,
 };
 impl Image {
     /// Materializes the image for color-space image operations.
@@ -19,7 +18,9 @@ impl Image {
             return Ok(rgb);
         }
         // Pipeline-based P-mode images need palette→RGB conversion
-        if matches!(self, Image::Pipeline { .. }) && self.known_mode_identity() == Some(crate::raster::Mode::ImagePalette8) {
+        if matches!(self, Image::Pipeline { .. })
+            && self.known_mode_identity() == Some(crate::raster::Mode::ImagePalette8)
+        {
             let img = self.materialize()?; // Luma8 indices
             if let Some(palette) = self.palette() {
                 let indices = img.to_luma8();
@@ -153,7 +154,9 @@ impl Image {
                 palette,
                 palette_alpha,
                 ..
-            } => Self::pipeline_to_loaded(self, source, ops, mode, *format, palette, palette_alpha)?,
+            } => {
+                Self::pipeline_to_loaded(self, source, ops, mode, *format, palette, palette_alpha)?
+            }
         };
         *self = loaded;
         Ok(())

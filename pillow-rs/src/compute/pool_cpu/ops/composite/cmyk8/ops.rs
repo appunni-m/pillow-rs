@@ -1,7 +1,7 @@
 //! Exact-mode strategy entry for ImageCmyk8.
 
-use crate::compute::registry::support::{OperationId, StrategySelection};
 use crate::compute::Architecture;
+use crate::compute::registry::support::{OperationId, StrategySelection};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 use std::sync::Arc;
@@ -13,14 +13,13 @@ pub(crate) fn merge(
     remaining: &[Arc<DynamicImage>],
     selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
-    super::super::helpers::strategy::require_operation_mode(
-        selection,
-        OperationId::Merge,
-        MODE,
-    )?;
+    super::super::helpers::strategy::require_operation_mode(selection, OperationId::Merge, MODE)?;
     match selection.implementation.architecture {
         Architecture::Default => super::default::operations::merge(source, remaining),
-        #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
+        #[cfg(all(
+            any(target_arch = "x86", target_arch = "x86_64"),
+            target_feature = "sse2"
+        ))]
         Architecture::Sse2 => super::sse2::merge_impl::merge(source, remaining),
         #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
         Architecture::Neon => super::neon::merge_impl::merge(source, remaining),
@@ -38,9 +37,7 @@ pub(crate) fn blend(
     alpha: f64,
     selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
-    super::super::helpers::blend::execute_selected(
-        source, other, MODE, 4, alpha, selection,
-    )
+    super::super::helpers::blend::execute_selected(source, other, MODE, 4, alpha, selection)
 }
 
 pub(crate) fn composite(

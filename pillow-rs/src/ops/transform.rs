@@ -1,5 +1,8 @@
 //! Pillow-compatible geometric transforms and integer reduction.
 
+use crate::compute::registry::support::{
+    OperationId, PaletteKnowledge, RequestFacts, StrategyInputs,
+};
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::{PipelineOp, ResampleFilter, TransformMethod};
@@ -157,7 +160,12 @@ fn parse_reduce_box_coordinates(
             for (slot, value) in coordinates.iter_mut().zip(values) {
                 *slot = reduce_c_int(value)?;
             }
-            Ok((coordinates[0], coordinates[1], coordinates[2], coordinates[3]))
+            Ok((
+                coordinates[0],
+                coordinates[1],
+                coordinates[2],
+                coordinates[3],
+            ))
         }
         Some(ReduceBox::Sequence(values)) => {
             return Err(PilError::TypeError(format!(
@@ -233,16 +241,31 @@ impl Image {
         };
         validate_reduce_box(coordinates, width, height)?;
 
-        if self.has_palette_mode() && (x_factor != 1 || y_factor != 1) {
-            // Pillow validates scale and box bounds before ImagingReduce
-            // rejects real P-mode downsampling.
-            return Err(PilError::ValueError("image has wrong mode".into()));
+        if let Some(mode) = self.known_mode_identity() {
+            // Reject unsupported non-identity work before queuing it, so the
+            // mode error is not deferred. Factor-one boxes remain crops.
+            let facts = StrategyInputs {
+                width: 0,
+                height: 0,
+                byte_len: None,
+                palette: PaletteKnowledge::Unknown,
+                request: RequestFacts::Unspecified,
+            }
+            .with_reduce_factors(x_factor, y_factor);
+            let _ = OperationId::Reduce
+                .support()
+                .for_mode(mode)
+                .assess_inputs(facts)?;
+        }
+        let full_box = coordinates == (0, 0, width, height);
+        if x_factor == 1 && y_factor == 1 && full_box {
+            return Ok(self.copy());
         }
         if x_factor == 1 && y_factor == 1 {
+            // Pillow's native reducer handles factor-one requests as crops
+            // before applying the mode restriction for non-identity reduces.
             return self.crop(Some(coordinates));
         }
-
-        let full_box = coordinates == (0, 0, width, height);
         if full_box {
             self.reduce(x_factor, y_factor)
         } else {

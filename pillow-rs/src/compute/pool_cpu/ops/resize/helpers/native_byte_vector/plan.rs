@@ -4,10 +4,7 @@ use super::constants::SIMD_RESIZE_LANES;
 use crate::ops::pil_resize::FilterCoeffs;
 
 #[inline]
-pub(super) fn resize_coeff_slice(
-    coeffs: &FilterCoeffs,
-    index: usize,
-) -> Option<&[i64]> {
+pub(super) fn resize_coeff_slice(coeffs: &FilterCoeffs, index: usize) -> Option<&[i64]> {
     let start = *coeffs.offsets.get(index)?;
     let count = *coeffs.count.get(index)?;
     coeffs.weights.get(start..start.checked_add(count)?)

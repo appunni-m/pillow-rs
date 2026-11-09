@@ -1,9 +1,9 @@
 //! Architecture declarations shared by native-byte Pad modes.
 
-use crate::compute::{Architecture, Backend};
 use crate::compute::registry::support::{
     ImplementationSupport, OperationId, StrategyGuard, StrategySelection,
 };
+use crate::compute::{Architecture, Backend};
 use crate::error::PilError;
 use crate::raster::Mode;
 

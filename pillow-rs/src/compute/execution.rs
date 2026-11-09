@@ -5,8 +5,8 @@ use super::backend_state::{active_lock, pools};
 use super::pool_gpu;
 use super::registry;
 use super::{
-    Backend, DynamicImage, ExecutionContext, PilError, PipelineOp, PipelineResourceTelemetry,
-    Mode, PipelineTelemetry, begin_pipeline_operation_telemetry, elapsed_ns,
+    Backend, DynamicImage, ExecutionContext, Mode, PilError, PipelineOp, PipelineResourceTelemetry,
+    PipelineTelemetry, begin_pipeline_operation_telemetry, elapsed_ns,
     finish_pipeline_operation_telemetry, host_resource_telemetry, pipeline_telemetry_enabled,
     pipeline_timestamp, record_pipeline_allocation, record_pipeline_operation_path,
     record_pipeline_operation_scalar_tail, record_pipeline_operation_unsupported,
@@ -16,14 +16,12 @@ use super::{
     take_pipeline_backend_override, take_pipeline_dispatch_count,
     take_pipeline_resize_coeff_cache_stats, take_pipeline_resource_telemetry,
 };
+use crate::compute::registry::support::PaletteInput;
 use std::sync::Arc;
 use std::time::Instant;
-use crate::compute::registry::support::PaletteInput;
 
 mod terminals;
-pub(crate) use terminals::{
-    execute_prepared_cpu_arch_terminal, execute_prepared_cpu_terminal,
-};
+pub(crate) use terminals::{execute_prepared_cpu_arch_terminal, execute_prepared_cpu_terminal};
 #[cfg(feature = "gpu")]
 pub(crate) use terminals::{
     execute_prepared_gpu_cmyk_projection_terminal, execute_prepared_gpu_rgb_projection_terminal,
@@ -194,7 +192,11 @@ pub(crate) fn execute_prepared_cpu_arch_convert_output(
             let operation = registry::prepare_cpu(op, input, context)?;
             let selection = *operation.selection();
             let output = operation.execute_convert_output()?;
-            output_data = Some((output.palette, output.palette_alpha, output.wrapper_metadata));
+            output_data = Some((
+                output.palette,
+                output.palette_alpha,
+                output.wrapper_metadata,
+            ));
             Ok((output.image, selection))
         },
     )?;
@@ -385,7 +387,15 @@ pub(crate) fn execute_prepared_with_palette(
         reset_execution_telemetry();
     }
     let backend_start = timed.then(pipeline_timestamp).flatten();
-    execute_prepared_on_backend(prepared, ops, img, logical_mode, palette, timed, backend_start)
+    execute_prepared_on_backend(
+        prepared,
+        ops,
+        img,
+        logical_mode,
+        palette,
+        timed,
+        backend_start,
+    )
 }
 
 fn empty_convert_result(ops: &[PipelineOp], img: &DynamicImage) -> Option<DynamicImage> {
@@ -601,7 +611,10 @@ pub(crate) fn execute_prepared_shared_with_palette(
     {
         let operation = registry::prepare_cpu(
             &ops[0],
-            crate::compute::registry::support::OperationInputs { image: img.as_ref(), palette },
+            crate::compute::registry::support::OperationInputs {
+                image: img.as_ref(),
+                palette,
+            },
             &prepared.context,
         )?;
         let selection = *operation.selection();
@@ -618,16 +631,16 @@ pub(crate) fn execute_prepared_shared_with_palette(
                 let _ = take_pipeline_resize_coeff_cache_stats();
                 begin_pipeline_operation_telemetry(registry::variant_key(&ops[0]));
                 crate::compute::record_pipeline_operation_selection(&selection);
-                record_pipeline_operation_path(if selection.implementation.architecture
-                    == crate::compute::Architecture::Default
-                {
-                    "cpu"
-                } else {
-                    "scalar-control"
-                });
-                if selection.implementation.architecture
-                    != crate::compute::Architecture::Default
-                {
+                record_pipeline_operation_path(
+                    if selection.implementation.architecture
+                        == crate::compute::Architecture::Default
+                    {
+                        "cpu"
+                    } else {
+                        "scalar-control"
+                    },
+                );
+                if selection.implementation.architecture != crate::compute::Architecture::Default {
                     let bytes = img.as_bytes().len();
                     record_pipeline_operation_vector_blocks((bytes / 16) as u64);
                     record_pipeline_operation_scalar_tail((bytes % 16) as u64);

@@ -1,9 +1,12 @@
 //! EffectSpread Default implementation for exact mode ImagePaletteAlpha8.
 
-use crate::error::PilError;
 use super::super::ops::Input;
+use crate::error::PilError;
 
-pub(crate) type Kernel<'a> = crate::compute::pool_cpu::ops::effects::helpers::spread::Kernel<'a, crate::compute::pool_cpu::ops::effects::helpers::pixel_buffer::PixelOf<Input>>;
+pub(crate) type Kernel<'a> = crate::compute::pool_cpu::ops::effects::helpers::spread::Kernel<
+    'a,
+    crate::compute::pool_cpu::ops::effects::helpers::pixel_buffer::PixelOf<Input>,
+>;
 
 pub(crate) fn prepare(input: &Input, distance: u32) -> Kernel<'_> {
     crate::compute::pool_cpu::ops::effects::helpers::spread::prepare(input, distance)

@@ -25,7 +25,9 @@ pub(crate) fn execute(source: &RgbaImage) -> Result<(GrayAlphaImage, u64, usize)
         ));
     }
     let allocation_bytes = output.capacity();
-    let output = GrayAlphaImage::from_raw(source.width(), source.height(), output)
-        .ok_or_else(|| PilError::InternalError("RGBa Convert luma-alpha output shape mismatch".into()))?;
+    let output =
+        GrayAlphaImage::from_raw(source.width(), source.height(), output).ok_or_else(|| {
+            PilError::InternalError("RGBa Convert luma-alpha output shape mismatch".into())
+        })?;
     Ok((output, vector_blocks, allocation_bytes))
 }

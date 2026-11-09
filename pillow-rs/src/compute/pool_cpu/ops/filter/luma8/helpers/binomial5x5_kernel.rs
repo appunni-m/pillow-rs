@@ -63,16 +63,16 @@ pub(super) fn filter(
     let vector_end = 2 + horizontal_blocks * 8;
     let mut horizontal_rows: [Vec<u16>; 5] = std::array::from_fn(|_| vec![0; width]);
     for source_y in 0..5 {
-        fill_horizontal_row(raw, width, vector_end, source_y, &mut horizontal_rows[source_y])?;
+        fill_horizontal_row(
+            raw,
+            width,
+            vector_end,
+            source_y,
+            &mut horizontal_rows[source_y],
+        )?;
     }
     for y in 2..height - 2 {
-        let rows = [
-            (y - 2) % 5,
-            (y - 1) % 5,
-            y % 5,
-            (y + 1) % 5,
-            (y + 2) % 5,
-        ];
+        let rows = [(y - 2) % 5, (y - 1) % 5, y % 5, (y + 1) % 5, (y + 2) % 5];
         let output_row = y.checked_mul(width)?;
         let mut x = 2usize;
         while x < vector_end {

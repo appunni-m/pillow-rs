@@ -1,11 +1,9 @@
 use crate::compute::Architecture;
 use crate::compute::registry::support::StrategySelection;
 use crate::error::PilError;
-use crate::raster::{Mode, GrayAlphaImage};
+use crate::raster::{GrayAlphaImage, Mode};
 
-use super::super::helpers::get_data::{
-    self as helpers, GetDataOutput, GetDataRequest,
-};
+use super::super::helpers::get_data::{self as helpers, GetDataOutput, GetDataRequest};
 use super::default::get_data_impl;
 
 pub(crate) fn execute_get_data(
@@ -13,7 +11,8 @@ pub(crate) fn execute_get_data(
     selection: StrategySelection,
     request: GetDataRequest<'_>,
 ) -> Result<GetDataOutput, PilError> {
-    let architecture = helpers::selected_architecture(selection, Mode::ImageLaPremultiplied8, &request)?;
+    let architecture =
+        helpers::selected_architecture(selection, Mode::ImageLaPremultiplied8, &request)?;
     match architecture {
         Architecture::Default => match request {
             GetDataRequest::Full => Ok(GetDataOutput::Bytes(get_data_impl::get_data(image)?)),
@@ -22,13 +21,17 @@ pub(crate) fn execute_get_data(
                 Ok(GetDataOutput::BandWritten)
             }
         },
-        architecture => Err(helpers::missing_architecture(Mode::ImageLaPremultiplied8, architecture)),
+        architecture => Err(helpers::missing_architecture(
+            Mode::ImageLaPremultiplied8,
+            architecture,
+        )),
     }
 }
 crate::compute::pool_cpu::ops::analysis::helpers::bbox::declare_getbbox_owner!(
     la_premultiplied8,
     ImageLaPremultiplied8,
     crate::raster::GrayAlphaImage,
+    Pillow,
 );
 
 crate::compute::pool_cpu::ops::analysis::helpers::extrema::declare_getextrema_owner!(
@@ -59,15 +62,13 @@ crate::compute::pool_cpu::ops::analysis::helpers::extrema_bytes_execution::
     crate::compute::pool_cpu::ops::analysis::la_premultiplied8::default::extrema_bytes_impl::execute,
 );
 
-pub(crate) const GET_PIXEL_SUPPORT:
-    crate::compute::registry::support::ModeSupport =
+pub(crate) const GET_PIXEL_SUPPORT: crate::compute::registry::support::ModeSupport =
     crate::compute::pool_cpu::ops::analysis::helpers::pixel_access::pillow_get_pixel_support(
         crate::raster::Mode::ImageLaPremultiplied8,
         crate::compute::registry::support::PixelValueShape::U8Components { bands: 2 },
     );
 
-pub(crate) const GET_PIXEL_RGBA_SUPPORT:
-    crate::compute::registry::support::ModeSupport =
+pub(crate) const GET_PIXEL_RGBA_SUPPORT: crate::compute::registry::support::ModeSupport =
     crate::compute::pool_cpu::ops::analysis::helpers::pixel_access::rgba_get_pixel_support(
         crate::raster::Mode::ImageLaPremultiplied8,
     );
@@ -85,3 +86,49 @@ pub(crate) fn execute_get_pixel(
     )?;
     super::default::get_pixel_impl::execute(image, x, y)
 }
+crate::compute::pool_cpu::ops::analysis::helpers::getcolors_support::declare_getcolors_support!(
+    ImageLaPremultiplied8,
+    pillow,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::extrema_bytes_execution::declare_getextrema_bytes_support!(
+    ImageLaPremultiplied8,
+    pillow,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::extrema_execution::declare_getextrema_support!(
+    ImageLaPremultiplied8,
+    pillow,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::histogram_execution::declare_histogram_support!(
+    ImageLaPremultiplied8,
+    2,
+    pillow,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::stat_execution::declare_stat_support!(
+    ImageLaPremultiplied8,
+    pillow,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::split_support::declare_split_support!(
+    ImageLaPremultiplied8,
+    pillow,
+    Bands,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::get_channel_support::declare_get_channel_route!(
+    ImageLaPremultiplied8,
+    2,
+    Pillow,
+    Child,
+    Luma8,
+);
+
+crate::compute::pool_cpu::ops::analysis::helpers::get_data_support::declare_get_data_support!(
+    ImageLaPremultiplied8,
+    2,
+    Pillow,
+    Pillow,
+    Pillow,
+);
+
+crate::compute::pool_cpu::ops::analysis::helpers::projection_support::declare_projection_support!(
+    ImageLaPremultiplied8,
+    Pillow,
+);

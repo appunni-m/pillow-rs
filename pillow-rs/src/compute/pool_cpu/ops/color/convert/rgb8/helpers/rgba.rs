@@ -4,16 +4,13 @@ use crate::error::PilError;
 use crate::raster::{RgbImage, RgbaImage};
 use wide::u8x16;
 
-const RGB_TO_RGBA_BYTES: u8x16 =
-    u8x16::new([0, 1, 2, 15, 3, 4, 5, 15, 6, 7, 8, 15, 9, 10, 11, 15]);
+const RGB_TO_RGBA_BYTES: u8x16 = u8x16::new([0, 1, 2, 15, 3, 4, 5, 15, 6, 7, 8, 15, 9, 10, 11, 15]);
 
 pub(crate) fn execute(source: &RgbImage) -> Result<RgbaImage, PilError> {
     let pixels = (source.width() as usize)
         .checked_mul(source.height() as usize)
         .ok_or_else(unsupported)?;
-    let source_bytes = pixels
-        .checked_mul(3)
-        .ok_or_else(unsupported)?;
+    let source_bytes = pixels.checked_mul(3).ok_or_else(unsupported)?;
     let output_bytes = pixels
         .checked_mul(4)
         .filter(|&bytes| bytes <= isize::MAX as usize)
@@ -60,7 +57,5 @@ fn rgb_to_rgba_block(source: &[u8], start_pixel: usize) -> [u8; 16] {
     let mut input = [0u8; 16];
     input[..12].copy_from_slice(&source[source_start..source_start + 12]);
     input[15] = u8::MAX;
-    u8x16::new(input)
-        .shuffle(RGB_TO_RGBA_BYTES)
-        .to_array()
+    u8x16::new(input).shuffle(RGB_TO_RGBA_BYTES).to_array()
 }

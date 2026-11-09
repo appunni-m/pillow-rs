@@ -4,11 +4,46 @@
 //! eligible filtered work. Default uses the portable ordered f64 multiply-add
 //! path; nearest, empty, and unboxed identity requests remain Default.
 
+use crate::compute::registry::support::{
+    ImplementationSupport, ModeSupport, OperationId, OutputModeRule, StrategyGuard,
+    StrategySelection,
+};
 use crate::compute::{Architecture, ExecutionContext};
-use crate::compute::registry::support::StrategySelection;
 use crate::error::PilError;
 use crate::pipeline::ResampleFilter;
-use crate::raster::{DynamicImage, RgbaImage};
+use crate::raster::{DynamicImage, Mode, RgbaImage};
+
+static RESIZE_ARCHITECTURES: [ImplementationSupport; 1] = [ImplementationSupport::cpu(
+    OperationId::Resize,
+    Mode::ImageF32,
+    Architecture::AvxFma,
+    cfg!(target_arch = "x86_64"),
+    &[Architecture::AvxFma],
+    StrategyGuard::ResizeFilteredFma,
+)];
+static RESIZE_BOXED_ARCHITECTURES: [ImplementationSupport; 1] = [ImplementationSupport::cpu(
+    OperationId::ResizeBoxed,
+    Mode::ImageF32,
+    Architecture::AvxFma,
+    cfg!(target_arch = "x86_64"),
+    &[Architecture::AvxFma],
+    StrategyGuard::ResizeFilteredFma,
+)];
+
+pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
+    OperationId::Resize,
+    Mode::ImageF32,
+    OutputModeRule::Preserve,
+    super::super::helpers::support::INPUTS,
+    &RESIZE_ARCHITECTURES,
+);
+pub(crate) const BOXED_SUPPORT: ModeSupport = ModeSupport::cpu(
+    OperationId::ResizeBoxed,
+    Mode::ImageF32,
+    OutputModeRule::Preserve,
+    super::super::helpers::support::INPUTS,
+    &RESIZE_BOXED_ARCHITECTURES,
+);
 
 pub(crate) fn resize(
     context: &ExecutionContext,

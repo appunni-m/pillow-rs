@@ -1,9 +1,9 @@
 //! Exact ImageLaPremultiplied8 Transform support and Default strategy.
 
+use crate::compute::ExecutionContext;
 use crate::compute::pool_cpu::ops::transform::helpers::strategy::{self, Strategy};
 use crate::compute::pool_cpu::ops::transform::ops::TransformRequest;
 use crate::compute::registry::support::{ModeSupport, OperationId, OutputModeRule};
-use crate::compute::ExecutionContext;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 
@@ -35,10 +35,7 @@ pub(crate) fn execute(plan: Strategy<'_>) -> Result<DynamicImage, PilError> {
     }
 }
 
-pub(crate) fn execute_into(
-    plan: Strategy<'_>,
-    output: &mut DynamicImage,
-) -> Result<(), PilError> {
+pub(crate) fn execute_into(plan: Strategy<'_>, output: &mut DynamicImage) -> Result<(), PilError> {
     strategy::execute_into(
         plan,
         output,

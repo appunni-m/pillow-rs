@@ -26,16 +26,16 @@ mod default_aileron;
 pub(crate) mod imagingft;
 pub(crate) mod pilfont;
 pub(crate) mod public_api;
-mod text_output;
 pub(crate) mod text_layout;
-pub(crate) mod text_wrap;
-mod text_value;
 mod text_layout_callbacks;
-pub(crate) use text_value::{FontText, FontTextRef};
+mod text_output;
+mod text_value;
+pub(crate) mod text_wrap;
 pub use text_layout_callbacks::{
-    ImageFontTextBoundsCallbacks, ImageFontTextPositionArithmetic,
-    ImageFontTextPositionCallbacks, ImageFontTextPositionComparison,
+    ImageFontTextBoundsCallbacks, ImageFontTextPositionArithmetic, ImageFontTextPositionCallbacks,
+    ImageFontTextPositionComparison,
 };
+pub(crate) use text_value::{FontText, FontTextRef};
 
 /// One positioned line produced by Pillow's multiline text layout.
 #[doc(hidden)]
@@ -306,7 +306,9 @@ pub fn normalize_layout_engine(value: Option<i64>) -> (&'static str, bool) {
 pub struct ImageFontTextOptions {
     /// Pillow `mode` argument. BASIC layout ignores most values, but `RGBA`
     /// requests an RGBA mask from `getmask/getmask2`.
-    pub mode: Option<String>,
+    /// Python bindings translate Pillow spellings to this typed raster identity
+    /// before entering the core.
+    pub mode: Option<crate::raster::Mode>,
     /// Pillow `ImageDraw`'s embedded-color request.
     ///
     /// The flag is kept in the core option record so the binding does not
@@ -362,14 +364,15 @@ impl ImageFontTextOptions {
     /// Return whether this render should use an RGBA font mask.
     #[must_use]
     pub fn uses_color_mask(&self) -> bool {
-        self.mode.as_deref() == Some("RGBA") || (self.embedded_color && self.stroke_width == 0.0)
+        self.mode == Some(crate::raster::Mode::ImageRgba8)
+            || (self.embedded_color && self.stroke_width == 0.0)
     }
 
     /// Return whether the optional layout arguments select Pillow's BASIC
     /// default behavior.
     #[must_use]
     pub(crate) fn uses_default_layout(&self) -> bool {
-        matches!(self.mode.as_deref(), None | Some(""))
+        self.mode.is_none()
             && self.direction.is_none()
             && self.features.is_none()
             && !self.features_invalid
@@ -473,13 +476,7 @@ impl FreeTypeFont {
         align: &str,
         options: &ImageFontTextOptions,
     ) -> Result<(i32, i32, i32, i32), PilError> {
-        self.multiline_textbbox_ref(
-            xy,
-            FontTextRef::String(text),
-            spacing,
-            align,
-            options,
-        )
+        self.multiline_textbbox_ref(xy, FontTextRef::String(text), spacing, align, options)
     }
 
     fn multiline_textbbox_ref(
@@ -703,10 +700,7 @@ impl FreeTypeFont {
     }
 
     /// Return native `_imagingft.Font.getlength()` after host text classification.
-    pub fn native_getlength_26dot6_input(
-        &self,
-        text: ImageFontTextInput,
-    ) -> Result<i32, PilError> {
+    pub fn native_getlength_26dot6_input(&self, text: ImageFontTextInput) -> Result<i32, PilError> {
         let text = text.into_font_text()?;
         imagingft::native_getlength_26dot6_text(self, text.as_ref())
     }

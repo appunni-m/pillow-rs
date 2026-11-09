@@ -1,6 +1,6 @@
 use crate::draw::{
-    custom_font_mask, draw_color_input_from_python, draw_features_presence_from_python,
-    draw_text_input_from_python, text_layout, PyDraw,
+    PyDraw, custom_font_mask, draw_color_input_from_python, draw_features_presence_from_python,
+    draw_text_input_from_python, text_layout,
 };
 use crate::font::PyFont;
 use crate::map_error;
@@ -27,10 +27,7 @@ pub(super) fn draw_multiline_text_impl<'py>(
     stroke_fill: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<()> {
     let default_font = if font.is_none() {
-        Some(
-            pillow_rs::FreeTypeFont::load_default(font_size.unwrap_or(10.0))
-                .map_err(map_error)?,
-        )
+        Some(pillow_rs::FreeTypeFont::load_default(font_size.unwrap_or(10.0)).map_err(map_error)?)
     } else {
         None
     };
@@ -127,7 +124,7 @@ impl<'py> PythonDrawTextLinesCallbacks<'py> {
     fn custom_mask(
         &mut self,
         line: &DrawTextLine<Bound<'py, PyAny>>,
-        default_mode: &str,
+        default_mode: Mode,
         mode: &Bound<'py, PyAny>,
         fill: &Bound<'_, PyAny>,
         ink: i64,
@@ -240,12 +237,9 @@ impl<'py> DrawTextLinesCallbacks for PythonDrawTextLinesCallbacks<'py> {
         if lines.iterator.is_none() {
             lines.iterator = Some(PyIterator::from_object(&lines.source)?);
         }
-        let iterator = lines
-            .iterator
-            .as_mut()
-            .ok_or_else(|| {
-                pyo3::exceptions::PyRuntimeError::new_err("line iterator was not initialized")
-            })?;
+        let iterator = lines.iterator.as_mut().ok_or_else(|| {
+            pyo3::exceptions::PyRuntimeError::new_err("line iterator was not initialized")
+        })?;
         let Some(line) = iterator.next() else {
             return Ok(None);
         };
@@ -257,11 +251,7 @@ impl<'py> DrawTextLinesCallbacks for PythonDrawTextLinesCallbacks<'py> {
         self.embedded_color.is_truthy()
     }
 
-    fn draw_custom_stroke(
-        &mut self,
-        line: &DrawTextLine<Self::Value>,
-        mode: &str,
-    ) -> PyResult<()> {
+    fn draw_custom_stroke(&mut self, line: &DrawTextLine<Self::Value>, mode: Mode) -> PyResult<()> {
         let fill = if self.stroke_fill.is_none() {
             self.fill.clone()
         } else {
@@ -275,7 +265,7 @@ impl<'py> DrawTextLinesCallbacks for PythonDrawTextLinesCallbacks<'py> {
     fn draw_custom_fill(
         &mut self,
         line: &DrawTextLine<Self::Value>,
-        _mode: &str,
+        _mode: Mode,
         embedded_color: bool,
     ) -> PyResult<()> {
         let fontmode = self.fill_fontmode.take().ok_or_else(|| {
@@ -292,7 +282,6 @@ impl<'py> DrawTextLinesCallbacks for PythonDrawTextLinesCallbacks<'py> {
         let fill_ink = self.fill_ink;
         self.custom_mask(line, _mode, &mode, &fill, fill_ink)
     }
-
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -352,14 +341,13 @@ pub(super) fn draw_text_lines<'py>(
     pillow_rs::draw_text_lines_with_callbacks(mode, stroke_ink, fill_ink, &mut callbacks)
 }
 
-fn optional_value<'a, 'py>(
-    value: &'a Bound<'py, PyAny>,
-) -> Option<&'a Bound<'py, PyAny>> {
+fn optional_value<'a, 'py>(value: &'a Bound<'py, PyAny>) -> Option<&'a Bound<'py, PyAny>> {
     (!value.is_none()).then_some(value)
 }
 
-/// TODO(pillow-rs#3ptb): verify direct-route PyFont, Option<String>, and
-/// out-of-range coordinate errors and conversion order against Pillow.
+/// TODO(pillow-rs#3ptb): verify direct-route output/fault parity, including
+/// PyFont and optional-string conversion order. Out-of-range coordinates are
+/// rejected by route selection and use Pillow's `_split` callback path.
 fn optional_string(value: &Bound<'_, PyAny>) -> PyResult<Option<String>> {
     if value.is_none() {
         Ok(None)
@@ -375,4 +363,3 @@ fn optional_i32(value: &Bound<'_, PyAny>) -> PyResult<Option<i32>> {
         value.extract().map(Some)
     }
 }
-

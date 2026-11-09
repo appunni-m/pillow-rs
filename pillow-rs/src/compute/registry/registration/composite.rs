@@ -12,4 +12,3 @@ pub(super) fn register(entries: &mut Registry) -> Result<(), PilError> {
     );
     Ok(())
 }
-

@@ -26,9 +26,8 @@ pub(crate) fn execute(source: &GrayImage, target: Mode) -> Result<DynamicImage, 
     let mut vector_blocks = 0u64;
     for start in (0..pixels).step_by(16) {
         let active = (pixels - start).min(16);
-        let lanes = std::array::from_fn(|lane| {
-            source.as_raw().get(start + lane).copied().unwrap_or(0)
-        });
+        let lanes =
+            std::array::from_fn(|lane| source.as_raw().get(start + lane).copied().unwrap_or(0));
         let bytes = u8x16::new(lanes);
         let expanded = bytes
             .simd_ne(u8x16::ZERO)
@@ -46,15 +45,16 @@ pub(crate) fn execute(source: &GrayImage, target: Mode) -> Result<DynamicImage, 
     crate::compute::record_pipeline_operation_path("vector");
     if samples.capacity() != 0 {
         crate::compute::record_pipeline_allocation(
-            samples.capacity().saturating_mul(std::mem::size_of::<u16>()),
+            samples
+                .capacity()
+                .saturating_mul(std::mem::size_of::<u16>()),
         );
     }
-    let output = ImageBuffer::<Luma<u16>, Vec<u16>>::from_raw(
-        source.width(),
-        source.height(),
-        samples,
-    )
-    .ok_or_else(|| PilError::InternalError("One Convert I;16 output shape mismatch".into()))?;
+    let output =
+        ImageBuffer::<Luma<u16>, Vec<u16>>::from_raw(source.width(), source.height(), samples)
+            .ok_or_else(|| {
+                PilError::InternalError("One Convert I;16 output shape mismatch".into())
+            })?;
     match target {
         Mode::ImageI16 => Ok(DynamicImage::ImageI16(output)),
         Mode::ImageI16L => Ok(DynamicImage::ImageI16L(output)),

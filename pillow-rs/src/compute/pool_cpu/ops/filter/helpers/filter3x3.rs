@@ -1,10 +1,10 @@
-//! CPU implementation for Pillow's 3x3 convolution filter.
+//! Shared native-byte algorithms for Pillow's 3x3 convolution filter.
 
 use super::convolution::{clip8_filter, pillow_kernel_row_3};
 use super::uniform_image::{SMALL_UNIFORM_BYTE_MAX_PIXELS, native_small_uniform_bytes};
 use crate::compute::helpers::filters::binomial3x3_parameters_match;
 
-// ── 3x3 filter (I-mode) ──
+// ── Native-byte 3x3 filter ──
 
 /// Apply one row of the byte 3x3 convolution while preserving Pillow's
 /// per-pixel contraction order.
@@ -194,13 +194,7 @@ pub(crate) fn execute_filter3x3_small_uniform_bytes(
 ) -> Option<Vec<u8>> {
     if width < 3
         || height < 3
-        || !native_small_uniform_bytes(
-            raw,
-            width,
-            height,
-            channels,
-            SMALL_UNIFORM_BYTE_MAX_PIXELS,
-        )
+        || !native_small_uniform_bytes(raw, width, height, channels, SMALL_UNIFORM_BYTE_MAX_PIXELS)
     {
         return None;
     }
@@ -261,13 +255,7 @@ pub(crate) fn execute_filter3x3_native_bytes(
     let rounding_bias = offset + 0.5;
     let mut output = raw.to_vec();
     if uniform_shortcut
-        && native_small_uniform_bytes(
-            raw,
-            width,
-            height,
-            channels,
-            SMALL_UNIFORM_BYTE_MAX_PIXELS,
-        )
+        && native_small_uniform_bytes(raw, width, height, channels, SMALL_UNIFORM_BYTE_MAX_PIXELS)
     {
         filter_3x3_constant_bytes(
             raw,
@@ -305,6 +293,5 @@ pub(crate) fn execute_filter3x3_la_binomial_bytes(
         return None;
     }
     let mut output = raw.to_vec();
-    filter_3x3_binomial_la_rows(raw, &mut output, width as usize, height as usize)
-        .then_some(output)
+    filter_3x3_binomial_la_rows(raw, &mut output, width as usize, height as usize).then_some(output)
 }

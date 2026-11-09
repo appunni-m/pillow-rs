@@ -24,8 +24,9 @@ pub(crate) fn execute(source: &RgbaImage) -> Result<(RgbaImage, u64, usize), Pil
         vector_blocks = vector_blocks.saturating_add(1);
     }
     let allocation_bytes = output.capacity();
-    let output = RgbaImage::from_raw(source.width(), source.height(), output)
-        .ok_or_else(|| PilError::InternalError("RGBA Convert premultiply output shape mismatch".into()))?;
+    let output = RgbaImage::from_raw(source.width(), source.height(), output).ok_or_else(|| {
+        PilError::InternalError("RGBA Convert premultiply output shape mismatch".into())
+    })?;
     Ok((output, vector_blocks, allocation_bytes))
 }
 
@@ -34,9 +35,11 @@ fn alpha_indices() -> [u8; 16] {
 }
 
 fn alpha_lane_mask() -> u8x16 {
-    u8x16::new(std::array::from_fn(|lane| {
-        if lane % 4 == 3 { u8::MAX } else { 0 }
-    }))
+    u8x16::new(std::array::from_fn(
+        |lane| {
+            if lane % 4 == 3 { u8::MAX } else { 0 }
+        },
+    ))
 }
 
 fn premultiply_block(input: u8x16) -> u8x16 {

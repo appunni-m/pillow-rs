@@ -105,8 +105,8 @@ pub(crate) fn effect_spread_indices(
                     && destination_y >= 0
                     && destination_y < height_i32
                 {
-                    let destination = destination_y as usize * width as usize
-                        + destination_x as usize;
+                    let destination =
+                        destination_y as usize * width as usize + destination_x as usize;
                     mapping[destination] = source;
                     mapping[source] = destination;
                 }
@@ -117,10 +117,7 @@ pub(crate) fn effect_spread_indices(
 }
 
 /// Advances the shared stream by the two draws consumed per pixel at distance one.
-pub(crate) fn effect_spread_advance_identity_rng(
-    width: u32,
-    height: u32,
-) -> Result<(), PilError> {
+pub(crate) fn effect_spread_advance_identity_rng(width: u32, height: u32) -> Result<(), PilError> {
     let pixels = checked_pixels(width, height, "effect_spread")?;
     let steps = u64::try_from(pixels)
         .ok()
@@ -175,4 +172,3 @@ fn checked_pixels(width: u32, height: u32, operation: &str) -> Result<usize, Pil
         })
         .ok_or_else(|| PilError::ValueError(format!("{operation} image dimensions overflow")))
 }
-

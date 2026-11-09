@@ -7,11 +7,7 @@ use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{ImageBuffer, Luma, Pixel};
 
 /// Direct writer for one exact byte-backed mode strategy.
-pub(crate) struct NativeByteCanvas<
-    'a,
-    P: Pixel<Subpixel = u8>,
-    const CHANNELS: usize,
-> {
+pub(crate) struct NativeByteCanvas<'a, P: Pixel<Subpixel = u8>, const CHANNELS: usize> {
     width: u32,
     height: u32,
     image: &'a mut ImageBuffer<P, Vec<u8>>,
@@ -21,8 +17,7 @@ pub(crate) struct NativeByteCanvas<
     alpha_blend_rgb: bool,
 }
 
-impl<'a, P: Pixel<Subpixel = u8>, const CHANNELS: usize> NativeByteCanvas<'a, P, CHANNELS>
-{
+impl<'a, P: Pixel<Subpixel = u8>, const CHANNELS: usize> NativeByteCanvas<'a, P, CHANNELS> {
     pub(crate) fn new(
         width: u32,
         height: u32,
@@ -87,22 +82,18 @@ impl<P: Pixel<Subpixel = u8>, const CHANNELS: usize> DrawCanvas
         if self.hidden_lane_count == 0 || (CHANNELS == 3 && alpha_blend_rgb) {
             return;
         }
-        let (lane_values, default, fallback): ([u8; 2], [u8; 2], fn(&P) -> [u8; 2]) =
-            match CHANNELS {
-                2 => {
-                    let luma = color[0];
-                    (
-                        [color[1], color[2]],
-                        [luma, luma],
-                        |pixel| {
-                            let luma = pixel.channels()[0];
-                            [luma, luma]
-                        },
-                    )
-                }
-                3 => ([color[3], 0], [u8::MAX, 0], |_| [u8::MAX, 0]),
-                _ => return,
-            };
+        let (lane_values, default, fallback): ([u8; 2], [u8; 2], fn(&P) -> [u8; 2]) = match CHANNELS
+        {
+            2 => {
+                let luma = color[0];
+                ([color[1], color[2]], [luma, luma], |pixel| {
+                    let luma = pixel.channels()[0];
+                    [luma, luma]
+                })
+            }
+            3 => ([color[3], 0], [u8::MAX, 0], |_| [u8::MAX, 0]),
+            _ => return,
+        };
         if let Err(error) = update_hidden_lanes(
             self.image,
             self.hidden_lanes,
@@ -137,7 +128,10 @@ impl<'a, const DECLARED_BIG_ENDIAN: bool> Luma16Canvas<'a, DECLARED_BIG_ENDIAN> 
     }
 
     fn set_operation_ink_order(&mut self, op: &PipelineOp) {
-        let packed_ink = matches!(op, PipelineOp::DrawLine { .. } | PipelineOp::DrawPoint { .. });
+        let packed_ink = matches!(
+            op,
+            PipelineOp::DrawLine { .. } | PipelineOp::DrawPoint { .. }
+        );
         self.big_endian_ink = DECLARED_BIG_ENDIAN && packed_ink;
     }
 }

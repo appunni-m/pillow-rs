@@ -1,45 +1,85 @@
 //! `ImageRgb8` Color3DLut support and architecture strategy binding.
 
-use crate::compute::{Architecture, ExecutionContext, registry::support::{
-    ImplementationSupport, ModeSupport, OperationId, OutputModeRule, StrategyGuard,
-}};
+use super::default::color3dlut_impl;
+use crate::compute::{
+    Architecture, ExecutionContext,
+    registry::support::{
+        ImplementationSupport, ModeSupport, OperationId, OutputModeRule, StrategyGuard,
+    },
+};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
-use super::default::color3dlut_impl;
 
 const SOURCE_MODE: Mode = Mode::ImageRgb8;
-#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "avx2"))]
+#[cfg(all(
+    any(target_arch = "x86", target_arch = "x86_64"),
+    target_feature = "avx2"
+))]
 const AVX2_SUPPORT: ImplementationSupport = ImplementationSupport::cpu(
-    OperationId::Color3DLut, SOURCE_MODE, Architecture::Avx2, true,
-    &[Architecture::Avx2], StrategyGuard::Color3DLutVector { source_channels: 3 },
+    OperationId::Color3DLut,
+    SOURCE_MODE,
+    Architecture::Avx2,
+    true,
+    &[Architecture::Avx2],
+    StrategyGuard::Color3DLutVector { source_channels: 3 },
 );
-#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2", not(target_feature = "avx2")))]
+#[cfg(all(
+    any(target_arch = "x86", target_arch = "x86_64"),
+    target_feature = "sse2",
+    not(target_feature = "avx2")
+))]
 const SSE2_SUPPORT: ImplementationSupport = ImplementationSupport::cpu(
-    OperationId::Color3DLut, SOURCE_MODE, Architecture::Sse2, true,
-    &[Architecture::Sse2], StrategyGuard::Color3DLutVector { source_channels: 3 },
+    OperationId::Color3DLut,
+    SOURCE_MODE,
+    Architecture::Sse2,
+    true,
+    &[Architecture::Sse2],
+    StrategyGuard::Color3DLutVector { source_channels: 3 },
 );
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 const NEON_SUPPORT: ImplementationSupport = ImplementationSupport::cpu(
-    OperationId::Color3DLut, SOURCE_MODE, Architecture::Neon, true,
-    &[Architecture::Neon], StrategyGuard::Color3DLutVector { source_channels: 3 },
+    OperationId::Color3DLut,
+    SOURCE_MODE,
+    Architecture::Neon,
+    true,
+    &[Architecture::Neon],
+    StrategyGuard::Color3DLutVector { source_channels: 3 },
 );
 #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
 const WASM_SIMD128_SUPPORT: ImplementationSupport = ImplementationSupport::cpu(
-    OperationId::Color3DLut, SOURCE_MODE, Architecture::WasmSimd128, true,
-    &[Architecture::WasmSimd128], StrategyGuard::Color3DLutVector { source_channels: 3 },
+    OperationId::Color3DLut,
+    SOURCE_MODE,
+    Architecture::WasmSimd128,
+    true,
+    &[Architecture::WasmSimd128],
+    StrategyGuard::Color3DLutVector { source_channels: 3 },
 );
 
-#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "avx2"))]
+#[cfg(all(
+    any(target_arch = "x86", target_arch = "x86_64"),
+    target_feature = "avx2"
+))]
 const ARCHITECTURES: &[ImplementationSupport] = &[AVX2_SUPPORT];
-#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2", not(target_feature = "avx2")))]
+#[cfg(all(
+    any(target_arch = "x86", target_arch = "x86_64"),
+    target_feature = "sse2",
+    not(target_feature = "avx2")
+))]
 const ARCHITECTURES: &[ImplementationSupport] = &[SSE2_SUPPORT];
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 const ARCHITECTURES: &[ImplementationSupport] = &[NEON_SUPPORT];
 #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
 const ARCHITECTURES: &[ImplementationSupport] = &[WASM_SIMD128_SUPPORT];
 #[cfg(not(any(
-    all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "avx2"),
-    all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2", not(target_feature = "avx2")),
+    all(
+        any(target_arch = "x86", target_arch = "x86_64"),
+        target_feature = "avx2"
+    ),
+    all(
+        any(target_arch = "x86", target_arch = "x86_64"),
+        target_feature = "sse2",
+        not(target_feature = "avx2")
+    ),
     all(target_arch = "aarch64", target_feature = "neon"),
     all(target_arch = "wasm32", target_feature = "simd128")
 )))]
@@ -62,7 +102,14 @@ pub(crate) fn prepare<'a>(
     ctx: &ExecutionContext,
 ) -> Result<super::super::helpers::strategy::Strategy<'a>, PilError> {
     super::super::helpers::strategy::Strategy::prepare(
-        image, SOURCE_MODE, size, table, channels, target_mode, SUPPORT, ctx,
+        image,
+        SOURCE_MODE,
+        size,
+        table,
+        channels,
+        target_mode,
+        SUPPORT,
+        ctx,
     )
 }
 
@@ -74,25 +121,31 @@ pub(crate) fn execute(
         Architecture::Default => {
             color3dlut_impl::execute(image, size, table, channels, target_mode)
         }
-        #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2", not(target_feature = "avx2")))]
-        Architecture::Sse2 => super::sse2::color3dlut_impl::execute(
-            image, size, table, channels, target_mode,
-        ),
-        #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "avx2"))]
-        Architecture::Avx2 => super::avx2::color3dlut_impl::execute(
-            image, size, table, channels, target_mode,
-        ),
+        #[cfg(all(
+            any(target_arch = "x86", target_arch = "x86_64"),
+            target_feature = "sse2",
+            not(target_feature = "avx2")
+        ))]
+        Architecture::Sse2 => {
+            super::sse2::color3dlut_impl::execute(image, size, table, channels, target_mode)
+        }
+        #[cfg(all(
+            any(target_arch = "x86", target_arch = "x86_64"),
+            target_feature = "avx2"
+        ))]
+        Architecture::Avx2 => {
+            super::avx2::color3dlut_impl::execute(image, size, table, channels, target_mode)
+        }
         #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-        Architecture::Neon => super::neon::color3dlut_impl::execute(
-            image, size, table, channels, target_mode,
-        ),
+        Architecture::Neon => {
+            super::neon::color3dlut_impl::execute(image, size, table, channels, target_mode)
+        }
         #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
-        Architecture::WasmSimd128 => super::wasm_simd128::color3dlut_impl::execute(
-            image, size, table, channels, target_mode,
-        ),
+        Architecture::WasmSimd128 => {
+            super::wasm_simd128::color3dlut_impl::execute(image, size, table, channels, target_mode)
+        }
         _ => Err(PilError::InternalError(
             "selected Color3DLut architecture has no ImageRgb8 implementation".into(),
         )),
     }
 }
-

@@ -1,16 +1,14 @@
 //! Shared mode-strategy assessment for native palette remapping.
 
-use crate::compute::{Architecture, ExecutionContext};
 use crate::compute::registry::support::{
     ImplementationSupport, ModeSupport, OperationId, OperationInputs, StrategyGuard,
     StrategySelection, SupportAssessment,
 };
+use crate::compute::{Architecture, ExecutionContext};
 use crate::error::PilError;
 use crate::raster::Mode;
 
-pub(crate) const fn palette_remap_architectures(
-    mode: Mode,
-) -> [ImplementationSupport; 3] {
+pub(crate) const fn palette_remap_architectures(mode: Mode) -> [ImplementationSupport; 3] {
     let operation = OperationId::RemapPalette;
     let guard = StrategyGuard::NativePointwiseBytesIncludingEmpty { channels: 1 };
     [

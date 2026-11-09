@@ -17,7 +17,9 @@ pub(crate) fn execute(source: &GrayImage) -> Result<(Vec<u8>, u64), PilError> {
                 0
             }
         });
-        let y = i32x8::new(luma).to_array().map(|value| value.clamp(0, 255) as u8);
+        let y = i32x8::new(luma)
+            .to_array()
+            .map(|value| value.clamp(0, 255) as u8);
         for value in y.into_iter().take(active) {
             output.extend_from_slice(&[value, 128, 128]);
         }

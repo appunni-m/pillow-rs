@@ -9,7 +9,10 @@ pub(crate) struct Prepared<S> {
 
 impl<S> Prepared<S> {
     pub(crate) fn new(implementation: S, selection: StrategySelection) -> Self {
-        Self { implementation, selection }
+        Self {
+            implementation,
+            selection,
+        }
     }
 
     pub(crate) fn selection(&self) -> &StrategySelection {

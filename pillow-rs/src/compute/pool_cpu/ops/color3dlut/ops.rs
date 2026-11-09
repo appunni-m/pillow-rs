@@ -9,10 +9,13 @@
 //! Pillow's three-channel LUT copies the fourth physical byte through when the
 //! target is RGB; Default and architecture paths preserve it on compact output.
 
-use crate::compute::{ExecutionContext, registry::support::{
-    InputContract, ModeChannelCapacity, ModeSupport, OperationId, OperationInputs,
-    OperationSupport, OutputModeRule, RejectionKind,
-}};
+use crate::compute::{
+    ExecutionContext,
+    registry::support::{
+        InputContract, ModeChannelCapacity, ModeSupport, OperationId, OperationInputs,
+        OperationSupport, OutputModeRule, RejectionKind,
+    },
+};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
@@ -20,9 +23,18 @@ use crate::raster::{DynamicImage, Mode};
 const SOURCE_MODE_ERROR: &str = "image has wrong mode";
 const PALETTE_MODE_ERROR: &str = "cannot filter palette images";
 pub(super) const TARGET_MODES: &[ModeChannelCapacity] = &[
-    ModeChannelCapacity { mode: Mode::ImageRgb8, channels: 3 },
-    ModeChannelCapacity { mode: Mode::ImageRgba8, channels: 4 },
-    ModeChannelCapacity { mode: Mode::ImageCmyk8, channels: 4 },
+    ModeChannelCapacity {
+        mode: Mode::ImageRgb8,
+        channels: 3,
+    },
+    ModeChannelCapacity {
+        mode: Mode::ImageRgba8,
+        channels: 4,
+    },
+    ModeChannelCapacity {
+        mode: Mode::ImageCmyk8,
+        channels: 4,
+    },
 ];
 pub(super) const TARGET_INPUTS: [InputContract; 1] = [InputContract::Color3DLutTarget {
     targets: TARGET_MODES,
@@ -74,24 +86,18 @@ impl Color3DLutModeStrategy {
         ctx: &ExecutionContext,
     ) -> Result<PreparedColor3DLut<'a>, PilError> {
         match self {
-            Self::Rgb8 => super::rgb8::ops::prepare(
-                image, size, table, channels, target_mode, ctx,
-            ),
-            Self::Rgba8 => super::rgba8::ops::prepare(
-                image, size, table, channels, target_mode, ctx,
-            ),
-            Self::Cmyk8 => super::cmyk8::ops::prepare(
-                image, size, table, channels, target_mode, ctx,
-            ),
-            Self::Ycbcr8 => super::ycbcr8::ops::prepare(
-                image, size, table, channels, target_mode, ctx,
-            ),
-            Self::Lab8 => super::lab8::ops::prepare(
-                image, size, table, channels, target_mode, ctx,
-            ),
-            Self::Hsv8 => super::hsv8::ops::prepare(
-                image, size, table, channels, target_mode, ctx,
-            ),
+            Self::Rgb8 => super::rgb8::ops::prepare(image, size, table, channels, target_mode, ctx),
+            Self::Rgba8 => {
+                super::rgba8::ops::prepare(image, size, table, channels, target_mode, ctx)
+            }
+            Self::Cmyk8 => {
+                super::cmyk8::ops::prepare(image, size, table, channels, target_mode, ctx)
+            }
+            Self::Ycbcr8 => {
+                super::ycbcr8::ops::prepare(image, size, table, channels, target_mode, ctx)
+            }
+            Self::Lab8 => super::lab8::ops::prepare(image, size, table, channels, target_mode, ctx),
+            Self::Hsv8 => super::hsv8::ops::prepare(image, size, table, channels, target_mode, ctx),
         }
     }
 }
@@ -112,12 +118,9 @@ fn classify_mode(mode: Mode) -> ModeSupport {
     }
 }
 
-pub(crate) static SUPPORT: OperationSupport = OperationSupport::new(
-    OperationId::Color3DLut,
-    &TARGET_INPUTS,
-    classify_mode,
-)
-.with_rejected_output(OutputModeRule::ByTargetMode);
+pub(crate) static SUPPORT: OperationSupport =
+    OperationSupport::new(OperationId::Color3DLut, &TARGET_INPUTS, classify_mode)
+        .with_rejected_output(OutputModeRule::ByTargetMode);
 
 pub(crate) fn prepare<'a>(
     mode: Mode,
@@ -150,7 +153,8 @@ pub(crate) fn prepare_pipeline<'a>(
         channels,
         source_mode,
         target_mode,
-    } = op else {
+    } = op
+    else {
         return Err(PilError::ValueError("expected Color3DLut op".into()));
     };
     let mode = input.mode();
@@ -159,6 +163,14 @@ pub(crate) fn prepare_pipeline<'a>(
             "Color3DLut source mode did not match the materialized image".into(),
         ));
     }
-    let plan = prepare(mode, input.image, *size, table, *channels, *target_mode, ctx)?;
+    let plan = prepare(
+        mode,
+        input.image,
+        *size,
+        table,
+        *channels,
+        *target_mode,
+        ctx,
+    )?;
     Ok(crate::compute::registry::PreparedOperation::from_color3dlut(plan))
 }

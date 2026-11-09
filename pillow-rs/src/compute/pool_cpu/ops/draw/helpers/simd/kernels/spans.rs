@@ -1,5 +1,5 @@
-use super::super::arithmetic::{draw_div255, draw_pack_u16x16};
 use super::super::DrawLayout;
+use super::super::arithmetic::{draw_div255, draw_pack_u16x16};
 use super::super::{has_visible_draw_point, has_visible_draw_rectangle};
 use super::SimdDrawSpanWriter;
 use crate::error::PilError;
@@ -240,11 +240,7 @@ fn push_simd_draw_point(
         }
         return Ok(());
     }
-    flush_simd_draw_span(
-        span,
-        writer,
-        fill,
-    )?;
+    flush_simd_draw_span(span, writer, fill)?;
     *span = Some((x, x, x, y));
     Ok(())
 }
@@ -271,19 +267,9 @@ pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_points_n
     let mut writer = SimdDrawSpanWriter::new(img, layout, alpha_blend_rgb);
     let mut span = None;
     for &(x, y) in points {
-        push_simd_draw_point(
-            &mut span,
-            i64::from(x),
-            i64::from(y),
-            &mut writer,
-            fill,
-        )?;
+        push_simd_draw_point(&mut span, i64::from(x), i64::from(y), &mut writer, fill)?;
     }
-    flush_simd_draw_span(
-        &mut span,
-        &mut writer,
-        fill,
-    )?;
+    flush_simd_draw_span(&mut span, &mut writer, fill)?;
 
     if writer.vector_blocks == 0 {
         crate::compute::record_pipeline_operation_path("scalar-control");
@@ -412,26 +398,11 @@ pub(in crate::compute::pool_cpu::ops::draw::helpers::simd) fn simd_draw_rectangl
     let mut writer = SimdDrawSpanWriter::new(img, layout, alpha_blend_rgb);
 
     if let Some(fill) = fill {
-        draw_rectangle_fill_spans(
-            &mut writer,
-            x0,
-            y0,
-            x1,
-            y1,
-            fill,
-        )?;
+        draw_rectangle_fill_spans(&mut writer, x0, y0, x1, y1, fill)?;
     }
 
     if let Some(outline) = outline.filter(|_| width != 0) {
-        draw_rectangle_outline_spans(
-            &mut writer,
-            x0,
-            y0,
-            x1,
-            y1,
-            outline,
-            width,
-        )?;
+        draw_rectangle_outline_spans(&mut writer, x0, y0, x1, y1, outline, width)?;
     }
 
     if writer.vector_blocks == 0 {

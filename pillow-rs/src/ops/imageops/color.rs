@@ -24,9 +24,7 @@ impl PartialEq for ImageOpsColor {
                     components: right,
                     fallback: right_fallback,
                 },
-            ) => {
-                palette_components_equal(left, right) && left_fallback == right_fallback
-            }
+            ) => palette_components_equal(left, right) && left_fallback == right_fallback,
             (
                 Self::WideTupleComponents {
                     components: left,
@@ -36,9 +34,7 @@ impl PartialEq for ImageOpsColor {
                     components: right,
                     fallback: right_fallback,
                 },
-            ) => {
-                palette_components_equal(left, right) && left_fallback == right_fallback
-            }
+            ) => palette_components_equal(left, right) && left_fallback == right_fallback,
             (Self::ListNumericComponents(left), Self::ListNumericComponents(right)) => {
                 palette_components_equal(left, right)
             }
@@ -76,27 +72,30 @@ fn palette_components_equal(
     right: &[crate::image::PaletteColorComponent],
 ) -> bool {
     left.len() == right.len()
-        && left.iter().zip(right).all(|(left, right)| match (left, right) {
-            (
-                crate::image::PaletteColorComponent::Integer(left),
-                crate::image::PaletteColorComponent::Integer(right),
-            ) => left == right,
-            (
-                crate::image::PaletteColorComponent::WideInteger {
-                    negative: left_negative,
-                    magnitude: left_magnitude,
-                },
-                crate::image::PaletteColorComponent::WideInteger {
-                    negative: right_negative,
-                    magnitude: right_magnitude,
-                },
-            ) => left_negative == right_negative && left_magnitude == right_magnitude,
-            (
-                crate::image::PaletteColorComponent::Float(left),
-                crate::image::PaletteColorComponent::Float(right),
-            ) => left.to_bits() == right.to_bits(),
-            _ => false,
-        })
+        && left
+            .iter()
+            .zip(right)
+            .all(|(left, right)| match (left, right) {
+                (
+                    crate::image::PaletteColorComponent::Integer(left),
+                    crate::image::PaletteColorComponent::Integer(right),
+                ) => left == right,
+                (
+                    crate::image::PaletteColorComponent::WideInteger {
+                        negative: left_negative,
+                        magnitude: left_magnitude,
+                    },
+                    crate::image::PaletteColorComponent::WideInteger {
+                        negative: right_negative,
+                        magnitude: right_magnitude,
+                    },
+                ) => left_negative == right_negative && left_magnitude == right_magnitude,
+                (
+                    crate::image::PaletteColorComponent::Float(left),
+                    crate::image::PaletteColorComponent::Float(right),
+                ) => left.to_bits() == right.to_bits(),
+                _ => false,
+            })
 }
 
 pub(crate) fn resolve_imageops_color(
@@ -109,9 +108,7 @@ pub(crate) fn resolve_imageops_color(
         ImageOpsColor::Name(name) => resolve_named_color(&name, mode).map(Some),
         ImageOpsColor::Scalar(value) => Ok(Some(scalar_color(value, mode))),
         ImageOpsColor::Components(values) => resolve_color_components(&values, mode).map(Some),
-        ImageOpsColor::TupleComponents(values) => {
-            resolve_color_components(&values, mode).map(Some)
-        }
+        ImageOpsColor::TupleComponents(values) => resolve_color_components(&values, mode).map(Some),
         ImageOpsColor::TupleNumericComponents(components) if mode == Mode::ImagePalette8 => {
             resolve_palette_tuple_fill(&components).map(Some)
         }
@@ -121,9 +118,7 @@ pub(crate) fn resolve_imageops_color(
         ImageOpsColor::TupleComponentsWithFallback {
             components: _,
             fallback,
-        } => {
-            resolve_imageops_color(*fallback, mode)
-        }
+        } => resolve_imageops_color(*fallback, mode),
         ImageOpsColor::WideTupleComponents {
             components,
             fallback: _,
@@ -172,13 +167,11 @@ pub(crate) fn palette_fill_components(
                 .map(crate::image::PaletteColorComponent::Integer)
                 .collect()
         }
-        ImageOpsColor::FloatingComponents(values) if matches!(values.len(), 3 | 4) => {
-            values
-                .iter()
-                .copied()
-                .map(crate::image::PaletteColorComponent::Float)
-                .collect()
-        }
+        ImageOpsColor::FloatingComponents(values) if matches!(values.len(), 3 | 4) => values
+            .iter()
+            .copied()
+            .map(crate::image::PaletteColorComponent::Float)
+            .collect(),
         ImageOpsColor::TupleNumericComponents(values)
         | ImageOpsColor::ListNumericComponents(values)
             if matches!(values.len(), 3 | 4) =>
@@ -234,10 +227,7 @@ pub(crate) fn resolve_pad_palette_fill(
     Ok(Some((0, palette, alpha)))
 }
 
-fn resolve_python_integer_list(
-    values: &[i64],
-    mode: Mode,
-) -> Result<(u8, u8, u8, u8), PilError> {
+fn resolve_python_integer_list(values: &[i64], mode: Mode) -> Result<(u8, u8, u8, u8), PilError> {
     if mode == Mode::ImagePalette8 && matches!(values.len(), 3 | 4) {
         return resolve_color_components(values, mode);
     }
@@ -348,11 +338,7 @@ fn resolve_named_color(name: &str, mode: Mode) -> Result<(u8, u8, u8, u8), PilEr
         // ImageColor.getcolor("...", "P") returns RGB, after which
         // Image.new builds a temporary RGB palette and stores its index.
         let (red, green, blue, _) = crate::color::parse_color_str_unclamped(name)?;
-        validate_palette_rgb_components(&[
-            i64::from(red),
-            i64::from(green),
-            i64::from(blue),
-        ])?;
+        validate_palette_rgb_components(&[i64::from(red), i64::from(green), i64::from(blue)])?;
         return Ok((0, 0, 0, u8::MAX));
     }
     let (red, green, blue, alpha) = crate::color::parse_color_str(name)?;
@@ -402,10 +388,10 @@ fn resolve_color_components(values: &[i64], mode: Mode) -> Result<(u8, u8, u8, u
             ) =>
         {
             Ok((
-            clamp_color_component(*value),
-            clamp_color_component(*value),
-            clamp_color_component(*value),
-            clamp_color_component(*alpha),
+                clamp_color_component(*value),
+                clamp_color_component(*value),
+                clamp_color_component(*value),
+                clamp_color_component(*alpha),
             ))
         }
         [red, green, blue] | [red, green, blue, _]
@@ -469,24 +455,18 @@ pub(crate) fn resolve_palette_tuple_bytes(
 
 fn palette_component_matches_opaque(value: &crate::image::PaletteColorComponent) -> bool {
     match value {
-        crate::image::PaletteColorComponent::Integer(value) => {
-            *value == i64::from(u8::MAX)
-        }
+        crate::image::PaletteColorComponent::Integer(value) => *value == i64::from(u8::MAX),
         crate::image::PaletteColorComponent::WideInteger { .. } => false,
         crate::image::PaletteColorComponent::Float(value) => *value == f64::from(u8::MAX),
     }
 }
 
-fn palette_component_byte(
-    value: &crate::image::PaletteColorComponent,
-) -> Result<u8, PilError> {
+fn palette_component_byte(value: &crate::image::PaletteColorComponent) -> Result<u8, PilError> {
     match value {
         crate::image::PaletteColorComponent::Integer(value) => {
             u8::try_from(*value).map_err(|_| palette_byte_range_error())
         }
-        crate::image::PaletteColorComponent::WideInteger { .. } => {
-            Err(palette_byte_range_error())
-        }
+        crate::image::PaletteColorComponent::WideInteger { .. } => Err(palette_byte_range_error()),
         crate::image::PaletteColorComponent::Float(_) => Err(PilError::TypeError(
             "'float' object cannot be interpreted as an integer".into(),
         )),
@@ -498,7 +478,10 @@ fn palette_byte_range_error() -> PilError {
 }
 
 fn validate_palette_rgb_components(values: &[i64; 3]) -> Result<(), PilError> {
-    if values.iter().any(|value| !(0..=i64::from(u8::MAX)).contains(value)) {
+    if values
+        .iter()
+        .any(|value| !(0..=i64::from(u8::MAX)).contains(value))
+    {
         return Err(PilError::ValueError(
             "bytes must be in range(0, 256)".into(),
         ));
@@ -559,7 +542,11 @@ fn scalar_color(value: i64, mode: Mode) -> (u8, u8, u8, u8) {
     if mode == Mode::ImagePalette8 {
         return (value, 0, 0, u8::MAX);
     }
-    let alpha = if mode == Mode::ImageLumaA16 { 0 } else { u8::MAX };
+    let alpha = if mode == Mode::ImageLumaA16 {
+        0
+    } else {
+        u8::MAX
+    };
     (value, 0, 0, alpha)
 }
 

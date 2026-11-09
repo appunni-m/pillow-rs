@@ -32,7 +32,10 @@ fn validate_operation_mode(image: &Image, operation: OperationId) -> Result<Mode
 }
 
 fn has_prepared_mode_strategy(operation: OperationId, mode: Mode) -> bool {
-    operation.support().route_for_mode(mode).has_prepared_strategy()
+    operation
+        .support()
+        .route_for_mode(mode)
+        .has_prepared_strategy()
 }
 
 impl Image {
@@ -183,14 +186,12 @@ impl Image {
                     .ok_or_else(|| {
                         PilError::DimensionError("Contrast base lane extent overflow".into())
                     })?;
-                let lanes =
-                    contrast_base_hidden_lanes(source_mode, &base, pixel_count).ok_or_else(
-                        || {
-                            PilError::InternalError(
-                                "Contrast base hidden-lane layout was invalid".into(),
-                            )
-                        },
-                    )?;
+                let lanes = contrast_base_hidden_lanes(source_mode, &base, pixel_count)
+                    .ok_or_else(|| {
+                        PilError::InternalError(
+                            "Contrast base hidden-lane layout was invalid".into(),
+                        )
+                    })?;
                 if !image.replace_hidden_pixel_lanes(Some(lanes)) {
                     return Err(PilError::InternalError(
                         "Contrast base lanes did not match its mode".into(),
@@ -211,10 +212,20 @@ impl Image {
             let sum: u64 = samples.iter().map(|&value| u64::from(value)).sum();
             (sum as f64 / samples.len() as f64 + 0.5) as u8
         };
-        let mut base = Image::new(gray.width(), gray.height(), crate::raster::Mode::ImageLuma8, (mean, mean, mean, 255))?;
+        let mut base = Image::new(
+            gray.width(),
+            gray.height(),
+            crate::raster::Mode::ImageLuma8,
+            (mean, mean, mean, 255),
+        )?;
         if source.mode() == Mode::ImageRgbx8 {
             // L -> RGBX fills X with 255; it is a blended sample, not alpha.
-            base = Image::new(gray.width(), gray.height(), crate::raster::Mode::ImageRgbx8, (mean, mean, mean, 255))?;
+            base = Image::new(
+                gray.width(),
+                gray.height(),
+                crate::raster::Mode::ImageRgbx8,
+                (mean, mean, mean, 255),
+            )?;
         } else if source.mode() == Mode::ImageRgbPremultiplied8 {
             return Err(PilError::ValueError(
                 "conversion from L to RGBa not supported".into(),

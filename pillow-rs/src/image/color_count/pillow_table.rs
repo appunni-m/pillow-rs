@@ -45,10 +45,7 @@ pub(crate) fn pillow_color_table_parameters(maxcolors: u32) -> Option<(u32, u32)
 
 pub(in crate::image) const PILLOW_COLOR_DIRECT_TABLE_MAX_BYTES: usize = 8 * 1024 * 1024;
 
-pub(crate) fn pillow_color_direct_table_slots(
-    code_mask: u32,
-    pixel_count: usize,
-) -> Option<usize> {
+pub(crate) fn pillow_color_direct_table_slots(code_mask: u32, pixel_count: usize) -> Option<usize> {
     let slots = usize::try_from(code_mask).ok()?.checked_add(1)?;
     if code_mask <= 1023 {
         return Some(slots);
@@ -65,11 +62,7 @@ pub(crate) enum PillowColorCounts {
 }
 
 impl PillowColorCounts {
-    pub(crate) fn new(
-        code_mask: u32,
-        sparse_capacity: usize,
-        pixel_count: usize,
-    ) -> Self {
+    pub(crate) fn new(code_mask: u32, sparse_capacity: usize, pixel_count: usize) -> Self {
         // Keep large tables sparse for small images or memory-heavy limits.
         // Dense slots avoid a second randomized hash probe per input pixel
         // when a bounded table is well amortized by the scan.
@@ -150,10 +143,7 @@ impl PillowColorCounts {
         }
     }
 
-    pub(crate) fn into_slot_order(
-        self,
-        distinct_colors: usize,
-    ) -> Vec<(u32, (u32, u32))> {
+    pub(crate) fn into_slot_order(self, distinct_colors: usize) -> Vec<(u32, (u32, u32))> {
         match self {
             Self::Direct(slots) => {
                 let mut result = Vec::with_capacity(distinct_colors);

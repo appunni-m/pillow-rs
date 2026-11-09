@@ -3,20 +3,17 @@
 use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
 use crate::compute::pool_cpu::ops::eval::helpers::{strategy, vector};
 use crate::compute::registry::support::{
-    ImplementationSupport,
-    InputContract,
-    ModeSupport,
-    OperationId,
-    OutputModeRule,
+    ImplementationSupport, InputContract, ModeSupport, OperationId, OutputModeRule,
 };
 use crate::compute::{Architecture, ExecutionContext};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode, RgbImage};
 
-
 const CHANNELS: usize = 3;
 const INPUTS: &[InputContract] = &[
-    InputContract::ByteLutEntries { channels: CHANNELS as u8 },
+    InputContract::ByteLutEntries {
+        channels: CHANNELS as u8,
+    },
     InputContract::ExactNativeBytes {
         channels: CHANNELS as u8,
         overflow_reason: "Eval native byte dimensions overflowed",
@@ -44,21 +41,31 @@ pub(crate) enum ArchitectureStrategy<'a> {
 
 pub(crate) type Strategy<'a> = Prepared<ArchitectureStrategy<'a>>;
 
-
 pub(crate) fn prepare<'a>(
     input: &'a RgbImage,
     lut: &'a [u8],
     ctx: &ExecutionContext,
 ) -> Result<Strategy<'a>, PilError> {
-    let facts = strategy::facts(input.width(), input.height(), input.as_raw().len(), lut.len());
+    let facts = strategy::facts(
+        input.width(),
+        input.height(),
+        input.as_raw().len(),
+        lut.len(),
+    );
     let selection = strategy::select(SUPPORT, facts, ctx)?;
     let implementation = match selection.implementation.architecture {
         Architecture::Default => ArchitectureStrategy::Default(super::default::prepare(input, lut)),
         Architecture::Sse2 => ArchitectureStrategy::Sse2(vector::prepare::<CHANNELS>(
-            input.as_raw(), input.width(), input.height(), lut,
+            input.as_raw(),
+            input.width(),
+            input.height(),
+            lut,
         )?),
         Architecture::Neon => ArchitectureStrategy::Neon(vector::prepare::<CHANNELS>(
-            input.as_raw(), input.width(), input.height(), lut,
+            input.as_raw(),
+            input.width(),
+            input.height(),
+            lut,
         )?),
         Architecture::WasmSimd128 => ArchitectureStrategy::WasmSimd128(
             vector::prepare::<CHANNELS>(input.as_raw(), input.width(), input.height(), lut)?,
@@ -82,12 +89,12 @@ pub(crate) fn execute(strategy: Strategy<'_>) -> Result<DynamicImage, PilError> 
         ArchitectureStrategy::Default(kernel) => {
             super::default::execute(kernel).map(DynamicImage::ImageYCbCr8)
         }
-        ArchitectureStrategy::Sse2(kernel) => {
-            vector::execute_sse2(kernel).and_then(from_vector).map(DynamicImage::ImageYCbCr8)
-        }
-        ArchitectureStrategy::Neon(kernel) => {
-            vector::execute_neon(kernel).and_then(from_vector).map(DynamicImage::ImageYCbCr8)
-        }
+        ArchitectureStrategy::Sse2(kernel) => vector::execute_sse2(kernel)
+            .and_then(from_vector)
+            .map(DynamicImage::ImageYCbCr8),
+        ArchitectureStrategy::Neon(kernel) => vector::execute_neon(kernel)
+            .and_then(from_vector)
+            .map(DynamicImage::ImageYCbCr8),
         ArchitectureStrategy::WasmSimd128(kernel) => vector::execute_wasm_simd128(kernel)
             .and_then(from_vector)
             .map(DynamicImage::ImageYCbCr8),

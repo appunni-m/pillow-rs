@@ -11,7 +11,9 @@ pub(crate) fn execute(
     request: TransformRequest<'_>,
 ) -> Result<DynamicImage, PilError> {
     let DynamicImage::ImageF32(source) = input else {
-        return Err(PilError::InternalError("Transform F source identity mismatch".into()));
+        return Err(PilError::InternalError(
+            "Transform F source identity mismatch".into(),
+        ));
     };
     let dimensions = source.dimensions();
     let bytes = if matches!(request.filter, ResampleFilter::Nearest) {
@@ -52,8 +54,9 @@ pub(crate) fn execute(
             )?,
         }
     };
-    let output = RgbaImage::from_raw(request.width, request.height, bytes)
-        .ok_or_else(|| PilError::InternalError("Transform F output buffer shape mismatch".into()))?;
+    let output = RgbaImage::from_raw(request.width, request.height, bytes).ok_or_else(|| {
+        PilError::InternalError("Transform F output buffer shape mismatch".into())
+    })?;
     Ok(DynamicImage::ImageF32(output))
 }
 
@@ -63,16 +66,18 @@ pub(crate) fn execute_into(
     output: &mut DynamicImage,
 ) -> Result<(), PilError> {
     let (DynamicImage::ImageF32(source), DynamicImage::ImageF32(_)) = (input, &*output) else {
-        return Err(PilError::InternalError("Transform F destination mode mismatch".into()));
+        return Err(PilError::InternalError(
+            "Transform F destination mode mismatch".into(),
+        ));
     };
     if matches!(request.method, TransformMethod::Mesh) {
         return Err(PilError::InternalError(
             "Transform MESH must use the record accumulator".into(),
         ));
     }
-    let destination = output
-        .as_bytes_mut()
-        .ok_or_else(|| PilError::InternalError("Transform F destination storage mismatch".into()))?;
+    let destination = output.as_bytes_mut().ok_or_else(|| {
+        PilError::InternalError("Transform F destination storage mismatch".into())
+    })?;
     if matches!(request.filter, ResampleFilter::Nearest) {
         return byte::execute_into::<4, true, false>(
             input,
@@ -118,11 +123,13 @@ pub(crate) fn apply_mesh_record(
     coefficients: [f64; 8],
 ) -> Result<(), PilError> {
     let (DynamicImage::ImageF32(source), DynamicImage::ImageF32(_)) = (input, &*output) else {
-        return Err(PilError::InternalError("Transform F MESH mode mismatch".into()));
+        return Err(PilError::InternalError(
+            "Transform F MESH mode mismatch".into(),
+        ));
     };
-    let output = output
-        .as_bytes_mut()
-        .ok_or_else(|| PilError::InternalError("Transform F MESH output storage mismatch".into()))?;
+    let output = output.as_bytes_mut().ok_or_else(|| {
+        PilError::InternalError("Transform F MESH output storage mismatch".into())
+    })?;
     scalar::transform_mesh_scalar32_record_with_coefficients::<true>(
         source.as_raw(),
         source.width(),
@@ -139,4 +146,3 @@ pub(crate) fn apply_mesh_record(
     );
     Ok(())
 }
-

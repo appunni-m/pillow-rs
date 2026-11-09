@@ -137,18 +137,18 @@ fn blend_hidden_lanes(
         .0
         .checked_mul(dimensions.1)
         .ok_or_else(|| PilError::DimensionError("Blend lane extent overflow".into()))?;
-    if let Some(lanes) = left.filter(|lanes| {
-        lanes.lane_count() != lane_count || lanes.pixel_count() != pixel_count
-    }) {
+    if let Some(lanes) =
+        left.filter(|lanes| lanes.lane_count() != lane_count || lanes.pixel_count() != pixel_count)
+    {
         return Err(PilError::InternalError(format!(
             "Blend source hidden lane shape is {} lanes across {} pixels, expected {lane_count} lanes across {pixel_count} pixels",
             lanes.lane_count(),
             lanes.pixel_count(),
         )));
     }
-    if let Some(lanes) = right.filter(|lanes| {
-        lanes.lane_count() != lane_count || lanes.pixel_count() != pixel_count
-    }) {
+    if let Some(lanes) =
+        right.filter(|lanes| lanes.lane_count() != lane_count || lanes.pixel_count() != pixel_count)
+    {
         return Err(PilError::InternalError(format!(
             "Blend input hidden lane shape is {} lanes across {} pixels, expected {lane_count} lanes across {pixel_count} pixels",
             lanes.lane_count(),
@@ -174,19 +174,15 @@ fn blend_hidden_lanes(
     } else {
         None
     };
-    let left = left.or(left_fallback.as_ref()).ok_or_else(|| {
-        PilError::InternalError("Blend omitted left physical-lane state".into())
-    })?;
-    let right = right.or(right_fallback.as_ref()).ok_or_else(|| {
-        PilError::InternalError("Blend omitted right physical-lane state".into())
-    })?;
-    left.zip_map_clipped(
-        right,
-        dimensions,
-        dimensions,
-        dimensions,
-        |left, right| blend_raw_sample(left, right, alpha),
-    )
+    let left = left
+        .or(left_fallback.as_ref())
+        .ok_or_else(|| PilError::InternalError("Blend omitted left physical-lane state".into()))?;
+    let right = right
+        .or(right_fallback.as_ref())
+        .ok_or_else(|| PilError::InternalError("Blend omitted right physical-lane state".into()))?;
+    left.zip_map_clipped(right, dimensions, dimensions, dimensions, |left, right| {
+        blend_raw_sample(left, right, alpha)
+    })
     .map(Some)
     .ok_or_else(|| PilError::InternalError("Blend physical lane extents did not match".into()))
 }
@@ -291,7 +287,8 @@ where
         let mut other_block = [0u8; 16];
         source_block[..remainder.len()].copy_from_slice(source_chunks.remainder());
         other_block[..remainder.len()].copy_from_slice(other_chunks.remainder());
-        remainder.copy_from_slice(&blend_block(source_block, other_block, alpha)[..remainder.len()]);
+        remainder
+            .copy_from_slice(&blend_block(source_block, other_block, alpha)[..remainder.len()]);
         vector_blocks += 1;
         0
     } else {
@@ -321,8 +318,7 @@ pub(crate) fn execute_selected(
     selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
     super::strategy::require_operation_mode(selection, OperationId::BlendModule, mode)?;
-    if source.mode() != mode || source.dimensions() != other.dimensions()
-    {
+    if source.mode() != mode || source.dimensions() != other.dimensions() {
         return Err(PilError::ValueError("images do not match".into()));
     }
     let mut output = match selection.implementation.architecture {

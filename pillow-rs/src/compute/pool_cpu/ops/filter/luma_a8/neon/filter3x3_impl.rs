@@ -14,7 +14,12 @@ pub(crate) fn execute(
             "NEON Filter3x3 strategy received a non-LA raster".into(),
         ));
     };
-    let FilterRequest::Filter3x3 { kernel, scale, offset } = request else {
+    let FilterRequest::Filter3x3 {
+        kernel,
+        scale,
+        offset,
+    } = request
+    else {
         return Err(PilError::InternalError(
             "NEON Filter3x3 strategy received a non-3x3 request".into(),
         ));

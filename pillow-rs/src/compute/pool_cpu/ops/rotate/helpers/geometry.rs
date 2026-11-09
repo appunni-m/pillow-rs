@@ -31,7 +31,10 @@ pub(crate) fn rotate_geometry(width: u32, height: u32, request: RotateRequest) -
     let mut f = d * (-center_x - translate_x) + e * (-center_y - translate_y) + center_y;
     let (min_x, min_y, max_x, max_y) = transformed_bounds(a, b, c, d, e, f, sw, sh);
     let (destination_width, destination_height) = if request.expand {
-        ((max_x.ceil() - min_x.floor()) as u32, (max_y.ceil() - min_y.floor()) as u32)
+        (
+            (max_x.ceil() - min_x.floor()) as u32,
+            (max_y.ceil() - min_y.floor()) as u32,
+        )
     } else {
         (width, height)
     };
@@ -96,11 +99,7 @@ pub(crate) fn identity_contract(request: RotateRequest) -> bool {
         && request.angle.rem_euclid(360.0).abs() <= f64::EPSILON
 }
 
-pub(crate) fn discrete_fast_angle(
-    request: RotateRequest,
-    width: u32,
-    height: u32,
-) -> Option<u32> {
+pub(crate) fn discrete_fast_angle(request: RotateRequest, width: u32, height: u32) -> Option<u32> {
     let angle = discrete_angle(request)?;
     (angle == 180 || request.expand || width == height).then_some(angle)
 }

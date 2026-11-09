@@ -112,4 +112,3 @@ pub(crate) fn execute(plan: Strategy<'_>) -> Result<DynamicImage, PilError> {
     }?;
     Ok(DynamicImage::ImageI32(output))
 }
-

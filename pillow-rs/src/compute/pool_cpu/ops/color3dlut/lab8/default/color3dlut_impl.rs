@@ -18,12 +18,5 @@ pub(crate) fn execute(
             "LAB Color3DLut received another raster mode".into(),
         ));
     };
-    lut::apply_native_rgb_samples(
-        image,
-        size,
-        table,
-        channels,
-        target_mode,
-    )
+    lut::apply_native_rgb_samples(image, size, table, channels, target_mode)
 }
-

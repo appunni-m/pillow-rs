@@ -9,32 +9,24 @@ use crate::raster::{DynamicImage, Mode};
 
 pub(super) const MODE: Mode = Mode::ImageLuma8;
 
-static MAX_FILTER_ARCHITECTURES:  [crate::compute::registry::support::ImplementationSupport; 5] = super::super::helpers::native_byte_filter_architectures(
-    OperationId::MaxFilter, MODE,
-    crate::compute::registry::support::StrategyGuard::FilterNativeByteExtrema { channels: 1 },
-);
-static MIN_FILTER_ARCHITECTURES:  [crate::compute::registry::support::ImplementationSupport; 5] = super::super::helpers::native_byte_filter_architectures(
-    OperationId::MinFilter, MODE,
-    crate::compute::registry::support::StrategyGuard::FilterNativeByteExtrema { channels: 1 },
-);
+static MAX_FILTER_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] =
+    super::super::helpers::native_byte_filter_architectures(
+        OperationId::MaxFilter,
+        MODE,
+        crate::compute::registry::support::StrategyGuard::FilterNativeByteExtrema { channels: 1 },
+    );
+static MIN_FILTER_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] =
+    super::super::helpers::native_byte_filter_architectures(
+        OperationId::MinFilter,
+        MODE,
+        crate::compute::registry::support::StrategyGuard::FilterNativeByteExtrema { channels: 1 },
+    );
 static GAUSSIAN_BLUR_ARCHITECTURES: [ImplementationSupport; 5] =
-    super::super::helpers::native_byte_blur_architectures(
-        OperationId::GaussianBlur,
-        MODE,
-        1,
-    );
+    super::super::helpers::native_byte_blur_architectures(OperationId::GaussianBlur, MODE, 1);
 static BOX_BLUR_ARCHITECTURES: [ImplementationSupport; 5] =
-    super::super::helpers::native_byte_blur_architectures(
-        OperationId::BoxBlur,
-        MODE,
-        1,
-    );
+    super::super::helpers::native_byte_blur_architectures(OperationId::BoxBlur, MODE, 1);
 static BOX_BLUR_XY_ARCHITECTURES: [ImplementationSupport; 5] =
-    super::super::helpers::native_byte_blur_architectures(
-        OperationId::BoxBlurXY,
-        MODE,
-        1,
-    );
+    super::super::helpers::native_byte_blur_architectures(OperationId::BoxBlurXY, MODE, 1);
 
 super::super::helpers::native_filter3x3_architectures!(MODE, 1);
 super::super::helpers::native_filter3x3_arch_leaf!(ImageLuma8, GrayImage, 1);
@@ -181,16 +173,16 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute_architecture_blur(
     selection: &StrategySelection,
     context: &crate::compute::ExecutionContext,
 ) -> Result<DynamicImage, PilError> {
-    super::super::helpers::validate_native_byte_blur_selection(
-        selection, MODE, request, context,
-    )?;
+    super::super::helpers::validate_native_byte_blur_selection(selection, MODE, request, context)?;
     match request {
         super::super::ops::FilterRequest::BoxBlur { radius: 1 } => {
             super::helpers::execute_box_blur_radius_one(image)
         }
-        super::super::ops::FilterRequest::BoxBlurXY { radius_x, radius_y, passes }
-            if radius_x == 1.0 && radius_y == 1.0 && passes == 1 =>
-        {
+        super::super::ops::FilterRequest::BoxBlurXY {
+            radius_x,
+            radius_y,
+            passes,
+        } if radius_x == 1.0 && radius_y == 1.0 && passes == 1 => {
             super::helpers::execute_box_blur_radius_one(image)
         }
         super::super::ops::FilterRequest::GaussianBlur { sigma }
@@ -198,13 +190,8 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute_architecture_blur(
         {
             super::helpers::execute_gaussian_blur_radius_one(image, sigma)
         }
-        _ => super::super::helpers::execute_native_byte_blur(
-            image,
-            MODE,
-            1,
-            request,
-            selection,
-            context,
+        _ => super::super::helpers::execute_native_byte_blur::<1>(
+            image, MODE, request, selection, context,
         ),
     }
 }
@@ -232,7 +219,10 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
     ) {
         return execute_rank(image, request, selection);
     }
-    if matches!(request, super::super::ops::FilterRequest::GaussianBlur { .. }) {
+    if matches!(
+        request,
+        super::super::ops::FilterRequest::GaussianBlur { .. }
+    ) {
         return execute_gaussian_blur(image, request, selection);
     }
     if matches!(
@@ -249,7 +239,9 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
         return execute_filter3x3(image, request, selection);
     }
     if selection.implementation.architecture != Architecture::Default {
-        return Err(PilError::InternalError("filter selected an unowned architecture".into()));
+        return Err(PilError::InternalError(
+            "filter selected an unowned architecture".into(),
+        ));
     }
     super::default::execute(image, request)
 }
@@ -377,7 +369,8 @@ fn execute_filter3x3(
     }
 }
 
-pub(in crate::compute::pool_cpu::ops::filter) fn mode_filter_support() -> crate::compute::registry::support::ModeSupport {
+pub(in crate::compute::pool_cpu::ops::filter) fn mode_filter_support()
+-> crate::compute::registry::support::ModeSupport {
     super::super::ops::serial_mode_filter(MODE)
 }
 

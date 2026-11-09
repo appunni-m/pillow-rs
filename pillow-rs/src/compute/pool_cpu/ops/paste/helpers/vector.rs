@@ -3,8 +3,8 @@
 use std::ops::Deref;
 
 use crate::compute::pool_cpu::ops::paste::helpers::bytes::{
-    Native, PhysicalFourBytesToFour, PhysicalFourBytesToLumaAlpha,
-    PhysicalFourBytesToRgb, SourceMap,
+    Native, PhysicalFourBytesToFour, PhysicalFourBytesToLumaAlpha, PhysicalFourBytesToRgb,
+    SourceMap,
 };
 use crate::compute::pool_cpu::ops::paste::helpers::plan::BytePlan;
 use crate::compute::pool_cpu::ops::paste::helpers::{bytes, layout::SourceLayout};
@@ -60,7 +60,9 @@ where
         return execute_unmasked_mapped::<SOURCE, DESTINATION, M, I>(plan);
     }
     let Some(mask_layout) = plan.mask_layout else {
-        return Err(PilError::InternalError("Paste vector mask layout was missing".into()));
+        return Err(PilError::InternalError(
+            "Paste vector mask layout was missing".into(),
+        ));
     };
     let mask = plan
         .mask
@@ -73,27 +75,21 @@ where
         return Ok(output);
     }
 
-    let source_width = usize::try_from(plan.source_size.0)
-        .map_err(|_| overflow("source width"))?;
-    let destination_width = usize::try_from(plan.destination_size.0)
-        .map_err(|_| overflow("destination width"))?;
-    let region_width = usize::try_from(plan.region_size.0)
-        .map_err(|_| overflow("region width"))?;
+    let source_width = usize::try_from(plan.source_size.0).map_err(|_| overflow("source width"))?;
+    let destination_width =
+        usize::try_from(plan.destination_size.0).map_err(|_| overflow("destination width"))?;
+    let region_width = usize::try_from(plan.region_size.0).map_err(|_| overflow("region width"))?;
     let source_stride = checked_stride(source_width, SOURCE)?;
     let destination_stride = checked_stride(destination_width, DESTINATION)?;
     let mask_stride = checked_stride(region_width, mask_layout.channels)?;
-    let source_left = usize::try_from(plan.region.source_left)
-        .map_err(|_| overflow("source x"))?;
-    let destination_left = usize::try_from(plan.region.destination_left)
-        .map_err(|_| overflow("destination x"))?;
-    let source_top = usize::try_from(plan.region.source_top)
-        .map_err(|_| overflow("source y"))?;
-    let destination_top = usize::try_from(plan.region.destination_top)
-        .map_err(|_| overflow("destination y"))?;
-    let copy_width = usize::try_from(plan.region.width)
-        .map_err(|_| overflow("copy width"))?;
-    let copy_height = usize::try_from(plan.region.height)
-        .map_err(|_| overflow("copy height"))?;
+    let source_left = usize::try_from(plan.region.source_left).map_err(|_| overflow("source x"))?;
+    let destination_left =
+        usize::try_from(plan.region.destination_left).map_err(|_| overflow("destination x"))?;
+    let source_top = usize::try_from(plan.region.source_top).map_err(|_| overflow("source y"))?;
+    let destination_top =
+        usize::try_from(plan.region.destination_top).map_err(|_| overflow("destination y"))?;
+    let copy_width = usize::try_from(plan.region.width).map_err(|_| overflow("copy width"))?;
+    let copy_height = usize::try_from(plan.region.height).map_err(|_| overflow("copy height"))?;
     let region_bytes = copy_width
         .checked_mul(DESTINATION)
         .ok_or_else(|| overflow("copy row bytes"))?;
@@ -108,21 +104,30 @@ where
             &plan.source_bytes()[start..start + source_stride]
         };
         let destination_start = destination_y * destination_stride;
-        let destination_row = &mut output[destination_start..destination_start + destination_stride];
+        let destination_row =
+            &mut output[destination_start..destination_start + destination_stride];
         let mask_start = source_y * mask_stride;
         let mask_row = &mask[mask_start..mask_start + mask_stride];
-        apply_vector_row::<SOURCE, DESTINATION, M>(VectorRow {
-            source: source_row,
-            destination: destination_row,
-            mask: mask_row,
-            mask_layout,
-            source_left,
-            destination_left,
-            source_width,
-            region_width,
-        }, copy_width)?;
+        apply_vector_row::<SOURCE, DESTINATION, M>(
+            VectorRow {
+                source: source_row,
+                destination: destination_row,
+                mask: mask_row,
+                mask_layout,
+                source_left,
+                destination_left,
+                source_width,
+                region_width,
+            },
+            copy_width,
+        )?;
     }
-    record_vector_work(region_bytes, copy_height, mask_layout, plan.selection.implementation.mode);
+    record_vector_work(
+        region_bytes,
+        copy_height,
+        mask_layout,
+        plan.selection.implementation.mode,
+    );
     crate::compute::record_pipeline_operation_path("vector");
     Ok(output)
 }
@@ -138,24 +143,19 @@ where
     if plan.region.is_empty() {
         return Ok(output);
     }
-    let source_width = usize::try_from(plan.source_size.0)
-        .map_err(|_| overflow("source width"))?;
-    let destination_width = usize::try_from(plan.destination_size.0)
-        .map_err(|_| overflow("destination width"))?;
+    let source_width = usize::try_from(plan.source_size.0).map_err(|_| overflow("source width"))?;
+    let destination_width =
+        usize::try_from(plan.destination_size.0).map_err(|_| overflow("destination width"))?;
     let source_stride = checked_stride(source_width, SOURCE)?;
     let destination_stride = checked_stride(destination_width, DESTINATION)?;
-    let source_left = usize::try_from(plan.region.source_left)
-        .map_err(|_| overflow("source x"))?;
-    let destination_left = usize::try_from(plan.region.destination_left)
-        .map_err(|_| overflow("destination x"))?;
-    let source_top = usize::try_from(plan.region.source_top)
-        .map_err(|_| overflow("source y"))?;
-    let destination_top = usize::try_from(plan.region.destination_top)
-        .map_err(|_| overflow("destination y"))?;
-    let copy_width = usize::try_from(plan.region.width)
-        .map_err(|_| overflow("copy width"))?;
-    let copy_height = usize::try_from(plan.region.height)
-        .map_err(|_| overflow("copy height"))?;
+    let source_left = usize::try_from(plan.region.source_left).map_err(|_| overflow("source x"))?;
+    let destination_left =
+        usize::try_from(plan.region.destination_left).map_err(|_| overflow("destination x"))?;
+    let source_top = usize::try_from(plan.region.source_top).map_err(|_| overflow("source y"))?;
+    let destination_top =
+        usize::try_from(plan.region.destination_top).map_err(|_| overflow("destination y"))?;
+    let copy_width = usize::try_from(plan.region.width).map_err(|_| overflow("copy width"))?;
+    let copy_height = usize::try_from(plan.region.height).map_err(|_| overflow("copy height"))?;
     let row_bytes = copy_width
         .checked_mul(DESTINATION)
         .ok_or_else(|| overflow("copy row bytes"))?;
@@ -171,8 +171,7 @@ where
             let start = source_y * source_stride;
             &plan.source_bytes()[start..start + source_stride]
         };
-        let destination_start = destination_y * destination_stride
-            + destination_left * DESTINATION;
+        let destination_start = destination_y * destination_stride + destination_left * DESTINATION;
         let destination_row = &mut output[destination_start..destination_start + row_bytes];
         for start in (0..row_bytes).step_by(16) {
             let active = (row_bytes - start).min(16);
@@ -252,7 +251,8 @@ where
     let region_bytes = copy_width
         .checked_mul(DESTINATION)
         .ok_or_else(|| overflow("copy row bytes"))?;
-    let destination_start = row.destination_left
+    let destination_start = row
+        .destination_left
         .checked_mul(DESTINATION)
         .ok_or_else(|| overflow("destination x"))?;
     let vector_16_bytes = region_bytes / 16 * 16;
@@ -264,11 +264,8 @@ where
             start,
             16,
         );
-        let destination_block = load_destination_block(
-            row.destination,
-            destination_start + start,
-            16,
-        );
+        let destination_block =
+            load_destination_block(row.destination, destination_start + start, 16);
         let mask_block = mask_block(
             row.mask,
             row.mask_layout,
@@ -278,12 +275,7 @@ where
             16,
             DESTINATION,
         );
-        let result = blend_block(
-            source_block,
-            destination_block,
-            mask_block,
-            row.mask_layout,
-        );
+        let result = blend_block(source_block, destination_block, mask_block, row.mask_layout);
         row.destination[destination_start + start..destination_start + start + 16]
             .copy_from_slice(&result);
     }
@@ -312,11 +304,8 @@ where
                 vector_16_bytes,
                 tail,
             );
-            let destination_block = load_destination_block(
-                row.destination,
-                destination_start + vector_16_bytes,
-                tail,
-            );
+            let destination_block =
+                load_destination_block(row.destination, destination_start + vector_16_bytes, tail);
             let mask_block = mask_block(
                 row.mask,
                 row.mask_layout,
@@ -326,14 +315,8 @@ where
                 tail,
                 DESTINATION,
             );
-            let result = blend_block(
-                source_block,
-                destination_block,
-                mask_block,
-                row.mask_layout,
-            );
-            row.destination[destination_start + vector_16_bytes
-                ..destination_start + region_bytes]
+            let result = blend_block(source_block, destination_block, mask_block, row.mask_layout);
+            row.destination[destination_start + vector_16_bytes..destination_start + region_bytes]
                 .copy_from_slice(&result[..tail]);
         }
     }
@@ -356,11 +339,8 @@ where
         start,
         active,
     );
-    let destination_block = load_destination_block(
-        row.destination,
-        destination_start + start,
-        active,
-    );
+    let destination_block =
+        load_destination_block(row.destination, destination_start + start, active);
     let mask_block = mask_block(
         row.mask,
         row.mask_layout,
@@ -424,8 +404,7 @@ fn blend_block8(
     let inverse = u16x8::splat(255) - weight;
     let values = if layout.premultiplied {
         let scaled = destination * inverse + u16x8::splat(128);
-        crate::compute::pool_cpu::ops::color::convert::helpers::wide::div255_u16x8(scaled)
-            + source
+        crate::compute::pool_cpu::ops::color::convert::helpers::wide::div255_u16x8(scaled) + source
     } else {
         let weighted = source * weight + destination * inverse + u16x8::splat(127);
         crate::compute::pool_cpu::ops::color::convert::helpers::wide::div255_u16x8(weighted)
@@ -471,8 +450,7 @@ fn blend_block(
     let inverse = u16x16::splat(255) - weight;
     let values = if layout.premultiplied {
         let scaled = destination * inverse + u16x16::splat(128);
-        crate::compute::pool_cpu::ops::color::convert::helpers::wide::div255_u16x16(scaled)
-            + source
+        crate::compute::pool_cpu::ops::color::convert::helpers::wide::div255_u16x16(scaled) + source
     } else {
         let weighted = source * weight + destination * inverse + u16x16::splat(127);
         crate::compute::pool_cpu::ops::color::convert::helpers::wide::div255_u16x16(weighted)
@@ -515,7 +493,9 @@ pub(crate) fn blend_l_masked_block16(
 }
 
 fn checked_stride(width: usize, channels: usize) -> Result<usize, PilError> {
-    width.checked_mul(channels).ok_or_else(|| overflow("row stride"))
+    width
+        .checked_mul(channels)
+        .ok_or_else(|| overflow("row stride"))
 }
 
 fn overflow(part: &str) -> PilError {

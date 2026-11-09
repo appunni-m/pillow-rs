@@ -98,4 +98,3 @@ pub(crate) fn execute(source: &[u8], pixels: usize) -> (Vec<u8>, u64) {
 
     (output, pixels.div_ceil(16) as u64)
 }
-

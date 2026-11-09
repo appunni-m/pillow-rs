@@ -6,8 +6,8 @@ use std::arch::aarch64::{
     vqmovn_s64, vst1_s32,
 };
 
-use super::plan::HorizontalBlock;
 use super::LANES;
+use super::plan::HorizontalBlock;
 
 #[allow(unsafe_code)]
 #[inline]

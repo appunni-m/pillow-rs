@@ -114,8 +114,9 @@ fn transform_affine_f32_pixels(
                         dx_fraction,
                     );
                     let start = output_index * 4;
-                    output[start..start + 4]
-                        .copy_from_slice(&((bottom - top).mul_add(dy_fraction, top) as f32).to_le_bytes());
+                    output[start..start + 4].copy_from_slice(
+                        &((bottom - top).mul_add(dy_fraction, top) as f32).to_le_bytes(),
+                    );
                 }
                 ResampleFilter::Bicubic => {
                     let x = floor_x - 1;

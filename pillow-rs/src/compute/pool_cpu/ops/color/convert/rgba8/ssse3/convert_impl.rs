@@ -9,6 +9,10 @@ use crate::raster::{DynamicImage, Mode, RgbImage, RgbaImage};
 ///
 /// The caller must ensure that the host supports SSSE3.
 #[cfg(target_arch = "x86_64")]
+#[allow(
+    unsafe_code,
+    reason = "the SSSE3 mode strategy validates the host feature before this kernel is selected"
+)]
 pub(crate) unsafe fn execute(source: &RgbaImage) -> Result<DynamicImage, PilError> {
     let pixels = (source.width() as usize)
         .checked_mul(source.height() as usize)
@@ -60,12 +64,10 @@ pub(crate) unsafe fn execute(source: &RgbaImage) -> Result<DynamicImage, PilErro
     not(target_feature = "avx2")
 ))]
 pub(crate) fn execute_luma(source: &RgbaImage) -> Result<DynamicImage, PilError> {
-    let kernel = crate::compute::pool_cpu::ops::grayscale::rgba8::default::grayscale_impl::prepare(
-        source,
-    )?;
-    let output = crate::compute::pool_cpu::ops::grayscale::rgba8::ssse3::grayscale_impl::execute(
-        kernel,
-    );
+    let kernel =
+        crate::compute::pool_cpu::ops::grayscale::rgba8::default::grayscale_impl::prepare(source)?;
+    let output =
+        crate::compute::pool_cpu::ops::grayscale::rgba8::ssse3::grayscale_impl::execute(kernel);
     let output = crate::compute::pool_cpu::ops::grayscale::helpers::luma::vector_output(
         source.width(),
         source.height(),
@@ -88,8 +90,7 @@ unsafe fn rgba_to_rgb_ssse3(source: &[u8], vector_pixels: usize, output: &mut Ve
     // full output, and selected this target-feature function through SSSE3.
     unsafe {
         let rgb_lanes = _mm_setr_epi8(0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14, -1, -1, -1, -1);
-        let low_twelve =
-            _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0);
+        let low_twelve = _mm_setr_epi8(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0);
         let output_pointer = output.as_mut_ptr();
         for pixel in (0..vector_pixels).step_by(16) {
             let source_start = pixel * 4;

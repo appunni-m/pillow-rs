@@ -26,6 +26,21 @@ impl PyImage {
     }
 
     #[getter]
+    fn bands(&self) -> PyResult<usize> {
+        self.inner
+            .mode_identity()
+            .map(|mode| mode.band_count())
+            .map_err(map_error)
+    }
+
+    #[getter]
+    fn readonly(&self) -> i32 {
+        // The Python adapter copies buffer and array inputs into Rust-owned
+        // pixel storage, so a loaded core image is always writable.
+        0
+    }
+
+    #[getter]
     fn format(&self) -> Option<String> {
         self.inner.format_name()
     }

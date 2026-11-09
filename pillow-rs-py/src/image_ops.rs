@@ -1,10 +1,10 @@
 use crate::*;
 use pyo3::basic::CompareOp;
 use pyo3::prelude::{PyErr, PyModule};
-use pyo3::{PyRef, pyfunction, wrap_pyfunction};
 use pyo3::types::{
-    PyAnyMethods, PyDictMethods, PyFloat, PyInt, PyModuleMethods, PyTuple, PyTupleMethods,
+    PyAnyMethods, PyDictMethods, PyFloat, PyInt, PyModuleMethods, PyString, PyTuple, PyTupleMethods,
 };
+use pyo3::{PyRef, pyfunction, wrap_pyfunction};
 
 mod autocontrast;
 mod colorize;
@@ -12,23 +12,38 @@ mod equalize;
 mod exif;
 mod expand;
 mod pad;
+pub(super) mod point;
 mod size_route;
 
-fn imageops_global_or_builtin<'py>(
-    py: Python<'py>,
-    name: &str,
-) -> PyResult<Bound<'py, PyAny>> {
+fn imageops_mode_equals(py: Python<'_>, mode: &Bound<'_, PyAny>, expected: &str) -> PyResult<bool> {
+    mode.rich_compare(PyString::new(py, expected), CompareOp::Eq)?
+        .is_truthy()
+}
+
+fn imageops_mode_is_luma_or_rgb(py: Python<'_>, mode: &Bound<'_, PyAny>) -> PyResult<bool> {
+    PyTuple::new(py, ["L", "RGB"])?.contains(mode)
+}
+
+fn imageops_unsupported_mode_error(py: Python<'_>, mode: &Bound<'_, PyAny>) -> PyResult<PyErr> {
+    // Pillow's f-string uses the empty format spec, which can differ from str().
+    let message = PyString::new(py, "not supported for mode {}")
+        .call_method1("format", (mode,))?
+        .extract::<String>()?;
+    Ok(pyo3::exceptions::PyOSError::new_err(message))
+}
+
+fn imageops_global_or_builtin<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyAny>> {
     let namespace = py.import("pillow_rs.imageops")?.dict();
     if let Some(value) = namespace.get_item(name)? {
         return Ok(value);
     }
-    let builtins = namespace
-        .get_item("__builtins__")?
-        .ok_or_else(|| pyo3::exceptions::PyNameError::new_err(format!("name '{name}' is not defined")))?;
+    let builtins = namespace.get_item("__builtins__")?.ok_or_else(|| {
+        pyo3::exceptions::PyNameError::new_err(format!("name '{name}' is not defined"))
+    })?;
     if let Ok(builtins) = builtins.cast::<PyDict>() {
-        return builtins
-            .get_item(name)?
-            .ok_or_else(|| pyo3::exceptions::PyNameError::new_err(format!("name '{name}' is not defined")));
+        return builtins.get_item(name)?.ok_or_else(|| {
+            pyo3::exceptions::PyNameError::new_err(format!("name '{name}' is not defined"))
+        });
     }
     builtins.getattr(name).map_err(|_| {
         pyo3::exceptions::PyNameError::new_err(format!("name '{name}' is not defined"))
@@ -48,14 +63,6 @@ fn ops_equalize(image: &Bound<'_, PyImage>, mask: Option<&Bound<'_, PyAny>>) -> 
 }
 
 #[pyfunction]
-fn ops_invert(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
-    let inner = image.borrow().inner.clone();
-    let rs =
-        Python::attach(|py| py.detach(|| pillow_rs::imageops_invert(&inner))).map_err(map_error)?;
-    Ok(PyImage { inner: rs })
-}
-
-#[pyfunction]
 fn ops_flip(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
     let rs =
@@ -68,47 +75,6 @@ fn ops_mirror(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
     let rs =
         Python::attach(|py| py.detach(|| pillow_rs::imageops_mirror(&inner))).map_err(map_error)?;
-    Ok(PyImage { inner: rs })
-}
-
-#[pyfunction]
-fn ops_posterize(image: &Bound<'_, PyImage>, bits: u8) -> PyResult<PyImage> {
-    let inner = image.borrow().inner.clone();
-    let rs = Python::attach(|py| py.detach(|| pillow_rs::imageops_posterize(&inner, bits)))
-        .map_err(map_error)?;
-    Ok(PyImage { inner: rs })
-}
-
-#[pyfunction]
-fn ops_solarize(image: &Bound<'_, PyImage>, threshold: &Bound<'_, PyAny>) -> PyResult<PyImage> {
-    let py = image.py();
-    let input = if threshold.is_exact_instance_of::<PyInt>()
-        || threshold.is_exact_instance_of::<PyBool>()
-    {
-        // Compare before narrowing so arbitrarily large Python integers retain
-        // the same byte-domain behavior without integer or float overflow.
-        let value = if threshold.lt(0)? {
-            0.0
-        } else if threshold.gt(255)? {
-            256.0
-        } else {
-            f64::from(threshold.extract::<u8>()?)
-        };
-        pillow_rs::SolarizeInput::Threshold(value)
-    } else if threshold.is_exact_instance_of::<PyFloat>() {
-        pillow_rs::SolarizeInput::Threshold(threshold.extract::<f64>()?)
-    } else {
-        let below = pillow_rs::imageops_solarize_comparison_table(|sample| {
-            sample.into_pyobject_or_pyerr(py)?.lt(threshold)
-        })?;
-        pillow_rs::SolarizeInput::Comparisons(below)
-    };
-    // Custom comparisons can mutate the input image. Snapshot its current
-    // Rust handle only after those calls, and propagate their first exception.
-    let inner = image.borrow().inner.clone();
-    let rs = py
-        .detach(|| pillow_rs::imageops_solarize_with_input(&inner, input))
-        .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -185,7 +151,7 @@ impl<'py> pillow_rs::ImageOpsBorderCallbacks for PythonBorderCallbacks<'py> {
         let tuple_type = imageops_global_or_builtin(self.py, "tuple")?;
         is_instance
             .call1((border.clone(), tuple_type))?
-            .extract::<bool>()
+            .is_truthy()
             .map_err(Into::into)
     }
 
@@ -210,27 +176,8 @@ impl<'py> pillow_rs::ImageOpsExpandGeometryCallbacks for PythonBorderCallbacks<'
             .map_err(Into::into)
     }
 
-    fn add(
-        &mut self,
-        left: &Self::Value,
-        right: &Self::Value,
-    ) -> Result<Self::Value, Self::Error> {
+    fn add(&mut self, left: &Self::Value, right: &Self::Value) -> Result<Self::Value, Self::Error> {
         left.add(right).map_err(Into::into)
-    }
-
-    fn expand_geometry_tuple(
-        &mut self,
-        width: &Self::Value,
-        height: &Self::Value,
-        left: &Self::Value,
-        top: &Self::Value,
-    ) -> Result<Self::Value, Self::Error> {
-        PyTuple::new(
-            self.py,
-            [width.clone(), height.clone(), left.clone(), top.clone()],
-        )
-        .map(|value| value.into_any())
-        .map_err(Into::into)
     }
 }
 
@@ -269,10 +216,7 @@ impl<'py> pillow_rs::ImageOpsCropCallbacks for PythonBorderCallbacks<'py> {
 impl<'py> pillow_rs::ImageOpsCropRouteCallbacks for PythonBorderCallbacks<'py> {
     fn image_is_exact_base_type(&mut self) -> Result<bool, Self::Error> {
         let type_function = imageops_global_or_builtin(self.py, "type")?;
-        let image_type = self
-            .py
-            .import("pillow_rs.imageops")?
-            .getattr("Image")?;
+        let image_type = self.py.import("pillow_rs.imageops")?.getattr("Image")?;
         Ok(type_function.call1((self.image.clone(),))?.is(&image_type))
     }
 
@@ -295,7 +239,10 @@ impl<'py> pillow_rs::ImageOpsCropRouteCallbacks for PythonBorderCallbacks<'py> {
     fn instance_crop_is_absent(&mut self) -> Result<bool, Self::Error> {
         let attributes = self.image.getattr("__dict__")?;
         let attributes = attributes.cast::<PyDict>().map_err(PyErr::from)?;
-        attributes.contains("crop").map(|present| !present).map_err(Into::into)
+        attributes
+            .contains("crop")
+            .map(|present| !present)
+            .map_err(Into::into)
     }
 
     fn border_is_exact_integer(&mut self, border: &Self::Value) -> Result<bool, Self::Error> {
@@ -335,18 +282,13 @@ impl<'py> pillow_rs::ImageOpsCropRouteCallbacks for PythonBorderCallbacks<'py> {
 }
 
 impl<'py> PythonAspectCallbacks<'py> {
-    fn new(
-        py: Python<'py>,
-        image: &Bound<'py, PyAny>,
-        size: &Bound<'py, PyAny>,
-    ) -> Self {
+    fn new(py: Python<'py>, image: &Bound<'py, PyAny>, size: &Bound<'py, PyAny>) -> Self {
         Self {
             py,
             image: image.clone(),
             size: size.clone(),
         }
     }
-
 }
 
 impl<'py> pillow_rs::ImageOpsAspectCallbacks for PythonAspectCallbacks<'py> {
@@ -565,9 +507,7 @@ impl<'py> pillow_rs::ImageOpsFitCallbacks for PythonAspectCallbacks<'py> {
             pillow_rs::ImageOpsFitConstant::Zero => PyFloat::new(self.py, 0.0).into_any(),
             pillow_rs::ImageOpsFitConstant::Half => PyFloat::new(self.py, 0.5).into_any(),
             pillow_rs::ImageOpsFitConstant::One => PyFloat::new(self.py, 1.0).into_any(),
-            pillow_rs::ImageOpsFitConstant::Two => {
-                pyo3::types::PyInt::new(self.py, 2).into_any()
-            }
+            pillow_rs::ImageOpsFitConstant::Two => pyo3::types::PyInt::new(self.py, 2).into_any(),
         };
         Ok(value)
     }
@@ -591,10 +531,7 @@ impl<'py> pillow_rs::ImageOpsFitRouteCallbacks for PythonAspectCallbacks<'py> {
         wrapped_image_snapshot(&self.image).map_err(Into::into)
     }
 
-    fn bleed_as_f64(
-        &mut self,
-        bleed: &Bound<'py, PyAny>,
-    ) -> Result<f64, AspectCallbackError> {
+    fn bleed_as_f64(&mut self, bleed: &Bound<'py, PyAny>) -> Result<f64, AspectCallbackError> {
         imageops_global_or_builtin(self.py, "float")?
             .call1((bleed,))?
             .extract::<f64>()
@@ -697,11 +634,7 @@ fn ops_exif_transpose(
         let inner = image.borrow().inner.clone();
         Python::attach(|py| {
             py.detach(|| {
-                pillow_rs::imageops_exif_transpose_with_orientation(
-                    &inner,
-                    orientation,
-                    in_place,
-                )
+                pillow_rs::imageops_exif_transpose_with_orientation(&inner, orientation, in_place)
             })
         })
         .map_err(map_error)?
@@ -726,11 +659,9 @@ pub(super) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(ops_crop_box_with_route_callbacks, m)?)?;
     m.add_function(wrap_pyfunction!(ops_equalize, m)?)?;
     equalize::register(m)?;
-    m.add_function(wrap_pyfunction!(ops_invert, m)?)?;
+    point::register(m)?;
     m.add_function(wrap_pyfunction!(ops_flip, m)?)?;
     m.add_function(wrap_pyfunction!(ops_mirror, m)?)?;
-    m.add_function(wrap_pyfunction!(ops_posterize, m)?)?;
-    m.add_function(wrap_pyfunction!(ops_solarize, m)?)?;
     m.add_function(wrap_pyfunction!(ops_grayscale, m)?)?;
     colorize::register(m)?;
     expand::register(m)?;

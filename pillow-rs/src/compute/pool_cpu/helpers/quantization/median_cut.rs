@@ -289,10 +289,7 @@ pub(crate) fn median_cut_quantize_rgb(pixels: &[u8], n_colors: usize) -> (Vec<u8
 }
 
 /// Quantizes a mode-specific RGB sample view without creating a converted raster.
-pub(crate) fn median_cut_quantize_source<S>(
-    source: &S,
-    n_colors: usize,
-) -> (Vec<u8>, Vec<[u8; 3]>)
+pub(crate) fn median_cut_quantize_source<S>(source: &S, n_colors: usize) -> (Vec<u8>, Vec<[u8; 3]>)
 where
     S: RgbPixelSource + ?Sized,
 {

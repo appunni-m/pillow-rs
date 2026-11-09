@@ -21,7 +21,11 @@ pub(crate) fn color(index: u8, palette: PaletteInput<'_>) -> [u8; 3] {
 
 #[inline]
 pub(crate) fn alpha(index: u8, palette: PaletteInput<'_>) -> u8 {
-    palette.alpha.get(usize::from(index)).copied().unwrap_or(u8::MAX)
+    palette
+        .alpha
+        .get(usize::from(index))
+        .copied()
+        .unwrap_or(u8::MAX)
 }
 
 pub(crate) fn web_alpha_from_rgb_samples(
@@ -133,8 +137,7 @@ pub(crate) fn palette_alpha_output(
         return Err(PilError::ValueError("palette conversion failed".into()));
     }
     let mut image = GrayAlphaImage::new(width, height);
-    for (position, (destination, index)) in
-        image.pixels_mut().zip(indices.into_iter()).enumerate()
+    for (position, (destination, index)) in image.pixels_mut().zip(indices.into_iter()).enumerate()
     {
         *destination = LumaA([index, alpha(position)]);
     }

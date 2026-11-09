@@ -1,48 +1,52 @@
 use super::super::ops::{core_only, inputs_for, pillow_kernel};
 use crate::compute::Architecture;
 use crate::compute::registry::support::{
-    ImplementationSupport, ModeSupport, OperationId, OutputModeRule,
-    StrategySelection,
+    ImplementationSupport, ModeSupport, OperationId, OutputModeRule, StrategySelection,
 };
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
 
 pub(super) const MODE: Mode = Mode::ImageLumaA8;
 
-static MAX_FILTER_ARCHITECTURES:  [crate::compute::registry::support::ImplementationSupport; 5] = super::super::helpers::native_byte_filter_architectures(
-    OperationId::MaxFilter, MODE,
-    crate::compute::registry::support::StrategyGuard::FilterNativeByteExtrema { channels: 2 },
-);
-static MIN_FILTER_ARCHITECTURES:  [crate::compute::registry::support::ImplementationSupport; 5] = super::super::helpers::native_byte_filter_architectures(
-    OperationId::MinFilter, MODE,
-    crate::compute::registry::support::StrategyGuard::FilterNativeByteExtrema { channels: 2 },
-);
+// Keep the archived LA radius-one Gaussian path's six byte-rounded passes
+// and row-sized horizontal scratch layout intact during this refactor.
+// TODO(pillow-rs#3ptb): freeze LA GaussianBlur output/receipts and remeasure
+// the known ARM64 vector-latency regression in the CPU benchmark phase.
+
+static MAX_FILTER_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] =
+    super::super::helpers::native_byte_filter_architectures(
+        OperationId::MaxFilter,
+        MODE,
+        crate::compute::registry::support::StrategyGuard::FilterNativeByteExtrema { channels: 2 },
+    );
+static MIN_FILTER_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] =
+    super::super::helpers::native_byte_filter_architectures(
+        OperationId::MinFilter,
+        MODE,
+        crate::compute::registry::support::StrategyGuard::FilterNativeByteExtrema { channels: 2 },
+    );
 static GAUSSIAN_BLUR_ARCHITECTURES: [ImplementationSupport; 5] =
-    super::super::helpers::native_byte_blur_architectures(
-        OperationId::GaussianBlur,
-        MODE,
-        2,
-    );
+    super::super::helpers::native_byte_blur_architectures(OperationId::GaussianBlur, MODE, 2);
 static BOX_BLUR_ARCHITECTURES: [ImplementationSupport; 5] =
-    super::super::helpers::native_byte_blur_architectures(
-        OperationId::BoxBlur,
-        MODE,
-        2,
-    );
+    super::super::helpers::native_byte_blur_architectures(OperationId::BoxBlur, MODE, 2);
 static BOX_BLUR_XY_ARCHITECTURES: [ImplementationSupport; 5] =
-    super::super::helpers::native_byte_blur_architectures(
-        OperationId::BoxBlurXY,
+    super::super::helpers::native_byte_blur_architectures(OperationId::BoxBlurXY, MODE, 2);
+static MEDIAN_FILTER_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] =
+    super::super::helpers::native_byte_filter_architectures(
+        OperationId::MedianFilter,
         MODE,
-        2,
+        crate::compute::registry::support::StrategyGuard::FilterNativeByteRankWindow {
+            channels: 2,
+        },
     );
-static MEDIAN_FILTER_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] = super::super::helpers::native_byte_filter_architectures(
-    OperationId::MedianFilter, MODE,
-    crate::compute::registry::support::StrategyGuard::FilterNativeByteRankWindow { channels: 2 },
-);
-static RANK_FILTER_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] = super::super::helpers::native_byte_filter_architectures(
-    OperationId::RankFilter, MODE,
-    crate::compute::registry::support::StrategyGuard::FilterNativeByteRankWindow { channels: 2 },
-);
+static RANK_FILTER_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 5] =
+    super::super::helpers::native_byte_filter_architectures(
+        OperationId::RankFilter,
+        MODE,
+        crate::compute::registry::support::StrategyGuard::FilterNativeByteRankWindow {
+            channels: 2,
+        },
+    );
 
 super::super::helpers::native_filter3x3_architectures!(MODE, 2);
 super::super::helpers::native_filter3x3_arch_leaf!(ImageLumaA8, GrayAlphaImage, 2, true);
@@ -51,8 +55,12 @@ super::super::helpers::native_filter5x5_arch_leaf!(ImageLumaA8, GrayAlphaImage, 
 
 pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId) -> ModeSupport {
     match operation {
-        OperationId::Filter3x3 => pillow_kernel(OperationId::Filter3x3, MODE, FILTER3X3_ARCHITECTURES),
-        OperationId::Filter5x5 => pillow_kernel(OperationId::Filter5x5, MODE, FILTER5X5_ARCHITECTURES),
+        OperationId::Filter3x3 => {
+            pillow_kernel(OperationId::Filter3x3, MODE, FILTER3X3_ARCHITECTURES)
+        }
+        OperationId::Filter5x5 => {
+            pillow_kernel(OperationId::Filter5x5, MODE, FILTER5X5_ARCHITECTURES)
+        }
         OperationId::GaussianBlur => ModeSupport::cpu(
             OperationId::GaussianBlur,
             MODE,
@@ -76,16 +84,26 @@ pub(in crate::compute::pool_cpu::ops::filter) fn support(operation: OperationId)
         ),
         // NO_PILLOW_SUPPORT: Pillow 12.2 rank filters require scalar storage;
         // this native mode strategy filters native channels.
-        OperationId::MedianFilter => core_only(OperationId::MedianFilter, MODE, &MEDIAN_FILTER_ARCHITECTURES),
+        OperationId::MedianFilter => core_only(
+            OperationId::MedianFilter,
+            MODE,
+            &MEDIAN_FILTER_ARCHITECTURES,
+        ),
         // NO_PILLOW_SUPPORT: Pillow 12.2 rank filters require scalar storage;
         // this native mode strategy filters native channels.
-        OperationId::MaxFilter => core_only(OperationId::MaxFilter, MODE, &MAX_FILTER_ARCHITECTURES),
+        OperationId::MaxFilter => {
+            core_only(OperationId::MaxFilter, MODE, &MAX_FILTER_ARCHITECTURES)
+        }
         // NO_PILLOW_SUPPORT: Pillow 12.2 rank filters require scalar storage;
         // this native mode strategy filters native channels.
-        OperationId::MinFilter => core_only(OperationId::MinFilter, MODE, &MIN_FILTER_ARCHITECTURES),
+        OperationId::MinFilter => {
+            core_only(OperationId::MinFilter, MODE, &MIN_FILTER_ARCHITECTURES)
+        }
         // NO_PILLOW_SUPPORT: Pillow 12.2 rank filters require scalar storage;
         // this native mode strategy filters native channels.
-        OperationId::RankFilter => core_only(OperationId::RankFilter, MODE, &RANK_FILTER_ARCHITECTURES),
+        OperationId::RankFilter => {
+            core_only(OperationId::RankFilter, MODE, &RANK_FILTER_ARCHITECTURES)
+        }
         _ => ModeSupport::Rejected {
             mode: MODE,
             reason: "non-filter operation reached filter mode strategy",
@@ -100,22 +118,13 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute_architecture_blur(
     selection: &StrategySelection,
     context: &crate::compute::ExecutionContext,
 ) -> Result<DynamicImage, PilError> {
-    super::super::helpers::validate_native_byte_blur_selection(
-        selection, MODE, request, context,
-    )?;
+    super::super::helpers::validate_native_byte_blur_selection(selection, MODE, request, context)?;
     if let super::super::ops::FilterRequest::GaussianBlur { sigma } = request {
         if super::super::helpers::gaussian_blur_box_parameters(sigma).0 == 1 {
             return super::helpers::execute_gaussian_blur_radius_one(image, sigma);
         }
     }
-    super::super::helpers::execute_native_byte_blur(
-        image,
-        MODE,
-        2,
-        request,
-        selection,
-        context,
-    )
+    super::super::helpers::execute_native_byte_blur::<2>(image, MODE, request, selection, context)
 }
 
 pub(in crate::compute::pool_cpu::ops::filter) fn execute(
@@ -123,7 +132,10 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
     request: super::super::ops::FilterRequest,
     selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
-    if matches!(request, super::super::ops::FilterRequest::GaussianBlur { .. }) {
+    if matches!(
+        request,
+        super::super::ops::FilterRequest::GaussianBlur { .. }
+    ) {
         return execute_gaussian_blur(image, request, selection);
     }
     if selection.implementation.architecture != Architecture::Default
@@ -145,9 +157,7 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
                 | super::super::ops::FilterRequest::RankFilter { .. }
         )
     {
-        return super::super::helpers::execute_native_byte_rank(
-            image, request, MODE, 2, selection,
-        );
+        return super::super::helpers::execute_native_byte_rank(image, request, MODE, 2, selection);
     }
 
     if matches!(request, super::super::ops::FilterRequest::Filter5x5 { .. }) {
@@ -201,7 +211,9 @@ pub(in crate::compute::pool_cpu::ops::filter) fn execute(
                 "NEON filter selection received a non-convolution request".into(),
             )),
         },
-        _ => Err(PilError::InternalError("filter selected an unowned architecture".into())),
+        _ => Err(PilError::InternalError(
+            "filter selected an unowned architecture".into(),
+        )),
     }
 }
 
@@ -228,7 +240,8 @@ fn execute_gaussian_blur(
     }
 }
 
-pub(in crate::compute::pool_cpu::ops::filter) fn mode_filter_support() -> crate::compute::registry::support::ModeSupport {
+pub(in crate::compute::pool_cpu::ops::filter) fn mode_filter_support()
+-> crate::compute::registry::support::ModeSupport {
     super::super::ops::serial_mode_filter(MODE)
 }
 

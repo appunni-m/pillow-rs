@@ -43,7 +43,9 @@ where
         .map(|sample| u16::from_ne_bytes([sample[0], sample[1]]))
         .collect::<Vec<_>>();
     if !chunks.remainder().is_empty() {
-        return Err(PilError::InternalError("native u16 transpose returned a partial sample".into()));
+        return Err(PilError::InternalError(
+            "native u16 transpose returned a partial sample".into(),
+        ));
     }
     let output = ImageBuffer::from_raw(output_width, output_height, output_samples)
         .ok_or_else(|| PilError::InternalError("native u16 transpose shape mismatch".into()))?;
@@ -58,7 +60,9 @@ fn transpose_bytes<const CHANNELS: usize, const TILE: usize>(
 ) -> Result<(Vec<u8>, u32, u32, u64, u64), PilError> {
     let input = crate::checked_dims::CheckedDims::new_allow_empty(width, height, CHANNELS as u8)?;
     let Some(source) = source.get(..input.total_bytes()) else {
-        return Err(PilError::InternalError("native transpose source shape mismatch".into()));
+        return Err(PilError::InternalError(
+            "native transpose source shape mismatch".into(),
+        ));
     };
     let swaps_axes = matches!(
         method,
@@ -108,7 +112,13 @@ fn transpose_bytes<const CHANNELS: usize, const TILE: usize>(
             }
         }
     };
-    Ok((output, output_width, output_height, vector_blocks, scalar_tail))
+    Ok((
+        output,
+        output_width,
+        output_height,
+        vector_blocks,
+        scalar_tail,
+    ))
 }
 
 fn transpose_tiled<const CHANNELS: usize, const TILE: usize>(
@@ -148,7 +158,8 @@ fn transpose_same_dimensions<const CHANNELS: usize>(
     height: usize,
     method: &TransposeMethod,
 ) -> Result<(u64, u64), PilError> {
-    let row_bytes = width.checked_mul(CHANNELS)
+    let row_bytes = width
+        .checked_mul(CHANNELS)
         .ok_or_else(|| PilError::InternalError("native transpose row size overflow".into()))?;
     let mut vector_blocks = 0u64;
     let mut scalar_tail = 0u64;
@@ -157,9 +168,11 @@ fn transpose_same_dimensions<const CHANNELS: usize>(
             TransposeMethod::FlipLeftRight => (y, true),
             TransposeMethod::FlipTopBottom => (height - 1 - y, false),
             TransposeMethod::Rotate180 => (height - 1 - y, true),
-            _ => return Err(PilError::InternalError(
-                "native same-dimension transpose selected for an axis swap".into(),
-            )),
+            _ => {
+                return Err(PilError::InternalError(
+                    "native same-dimension transpose selected for an axis swap".into(),
+                ));
+            }
         };
         let source_start = source_y * row_bytes;
         let output_start = y * row_bytes;
@@ -167,15 +180,14 @@ fn transpose_same_dimensions<const CHANNELS: usize>(
         let output_row = &mut output[output_start..output_start + row_bytes];
         let (blocks, tail) = if mirror {
             crate::compute::pool_cpu::ops::transpose::helpers::native_mirror::mirror_native_row(
-                source_row,
-                output_row,
-                width,
-                CHANNELS,
+                source_row, output_row, width, CHANNELS,
             )
         } else {
             copy_native_bytes(source_row, output_row)
         }
-        .ok_or_else(|| PilError::InternalError("native same-dimension transpose shape mismatch".into()))?;
+        .ok_or_else(|| {
+            PilError::InternalError("native same-dimension transpose shape mismatch".into())
+        })?;
         vector_blocks = vector_blocks.saturating_add(blocks);
         scalar_tail = scalar_tail.saturating_add(tail);
     }
@@ -205,7 +217,9 @@ fn transpose_gathered_axis_swap<const CHANNELS: usize>(
             source_x,
             reverse_source_y,
         )
-        .ok_or_else(|| PilError::InternalError("native gathered transpose shape mismatch".into()))?;
+        .ok_or_else(|| {
+            PilError::InternalError("native gathered transpose shape mismatch".into())
+        })?;
         vector_blocks = vector_blocks.saturating_add(blocks);
         scalar_tail = scalar_tail.saturating_add(tail);
     }
@@ -377,12 +391,25 @@ fn transpose_row_group<const CHANNELS: usize, const TILE: usize>(
     for block_x in (0..full_columns).step_by(32) {
         for local_y in (0..full_rows).step_by(TILE) {
             let output_y = output_y_start + local_y;
-            let source_x = if reverse_x { width - output_y - TILE } else { output_y };
+            let source_x = if reverse_x {
+                width - output_y - TILE
+            } else {
+                output_y
+            };
             for output_x in (block_x..(block_x + 32).min(full_columns)).step_by(TILE) {
-                let source_y = if reverse_y { height - output_x - TILE } else { output_x };
-                let columns = transpose_tile::<CHANNELS, TILE>(source, source_stride, source_x, source_y);
+                let source_y = if reverse_y {
+                    height - output_x - TILE
+                } else {
+                    output_x
+                };
+                let columns =
+                    transpose_tile::<CHANNELS, TILE>(source, source_stride, source_x, source_y);
                 for (column_index, column) in columns.into_iter().enumerate() {
-                    let row = if reverse_x { TILE - 1 - column_index } else { column_index };
+                    let row = if reverse_x {
+                        TILE - 1 - column_index
+                    } else {
+                        column_index
+                    };
                     let start = (local_y + row) * output_stride + output_x * CHANNELS;
                     let column = if CHANNELS == 3 || reverse_y {
                         column.shuffle(store_mask)
@@ -397,10 +424,18 @@ fn transpose_row_group<const CHANNELS: usize, const TILE: usize>(
     }
     for (local_y, row) in output.chunks_exact_mut(output_stride).enumerate() {
         let output_y = output_y_start + local_y;
-        let source_x = if reverse_x { width - 1 - output_y } else { output_y };
+        let source_x = if reverse_x {
+            width - 1 - output_y
+        } else {
+            output_y
+        };
         let first_x = if local_y < full_rows { full_columns } else { 0 };
         for output_x in first_x..height {
-            let source_y = if reverse_y { height - 1 - output_x } else { output_x };
+            let source_y = if reverse_y {
+                height - 1 - output_x
+            } else {
+                output_x
+            };
             let source_start = source_y * source_stride + source_x * CHANNELS;
             let output_start = output_x * CHANNELS;
             row[output_start..output_start + CHANNELS]

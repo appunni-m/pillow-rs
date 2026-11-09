@@ -24,19 +24,14 @@ impl Image {
         let telemetry = if Backend::pipeline_telemetry_enabled() {
             // This timing/resource sample covers the terminal scan; ordered
             // source graph operation receipts are restored separately.
-            let telemetry = crate::compute::begin_eager_cpu_operation_telemetry(
-                "GetBBox",
-                requested_backend,
-            );
+            let telemetry =
+                crate::compute::begin_eager_cpu_operation_telemetry("GetBBox", requested_backend);
             operation_receipts.restore();
             Some(telemetry)
         } else {
             None
         };
-        let result: Result<
-            (Option<(u32, u32, u32, u32)>, StrategySelection),
-            PilError,
-        > = (|| {
+        let result: Result<(Option<(u32, u32, u32, u32)>, StrategySelection), PilError> = (|| {
             let prepared = crate::compute::pool_cpu::ops::analysis::ops::prepare_get_bbox(
                 image.as_ref(),
                 alpha_only,
@@ -44,15 +39,13 @@ impl Image {
             )?;
             let selection = *prepared.selection();
             Ok((prepared.execute()?, selection))
-        })();
+        })(
+        );
         if let Some(telemetry) = telemetry {
             match result {
                 Ok((bounds, selection)) => {
                     crate::compute::finish_eager_cpu_operation_telemetry_with_selection(
-                        telemetry,
-                        0,
-                        "GetBBox",
-                        selection,
+                        telemetry, 0, "GetBBox", selection,
                     );
                     Ok(bounds)
                 }

@@ -21,9 +21,8 @@ pub(crate) fn execute_vector() -> Result<GeneratedImage, PilError> {
     for y in 0..HEIGHT {
         let value = [y as u8];
         let mut row = [0u8; WIDTH];
-        let (blocks, _) = super::super::super::helpers::linear_gradient_vector::fill_pattern(
-            &mut row, &value,
-        )?;
+        let (blocks, _) =
+            super::super::super::helpers::linear_gradient_vector::fill_pattern(&mut row, &value)?;
         vector_blocks = vector_blocks.saturating_add(blocks);
         pixels.extend_from_slice(&row);
     }

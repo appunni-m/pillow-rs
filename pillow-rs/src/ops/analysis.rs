@@ -2,8 +2,8 @@
 //!
 //! These methods materialize lazy pipelines before scanning pixels. Results are
 //! returned as Rust primitives instead of Python tuples or lists.
-use crate::compute::registry::support::OperationId;
 use crate::compute::PipelineOperationTelemetryCapture;
+use crate::compute::registry::support::OperationId;
 use crate::error::PilError;
 use crate::image::Image;
 use crate::raster::Mode;
@@ -98,9 +98,7 @@ impl Image {
     ) -> Result<f64, PilError> {
         match mask {
             ImageAnalysisMask::None => self.entropy_with_extrema(extrema),
-            ImageAnalysisMask::Image(mask) => {
-                self.entropy_with_mask_and_extrema(Some(&mask), None)
-            }
+            ImageAnalysisMask::Image(mask) => self.entropy_with_mask_and_extrema(Some(&mask), None),
             ImageAnalysisMask::Invalid(type_name) => Err(PilError::AttributeError(format!(
                 "'{type_name}' object has no attribute 'load'"
             ))),
@@ -176,5 +174,4 @@ impl Image {
             result.map(|(extrema, _)| extrema)
         }
     }
-
 }

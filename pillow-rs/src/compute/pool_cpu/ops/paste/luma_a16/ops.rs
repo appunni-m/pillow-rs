@@ -5,7 +5,7 @@ use crate::compute::registry::support::{
     InputContract, ModeSupport, OperationId, PasteInputRules, StrategySelection,
 };
 use crate::error::PilError;
-use crate::raster::{DynamicImage, ImageBuffer, Mode, LumaA};
+use crate::raster::{DynamicImage, ImageBuffer, LumaA, Mode};
 
 // NO_PILLOW_SUPPORT: this internal high-depth identity has no Pillow Paste mode contract.
 pub(crate) type Strategy<'a> = NativeU16Plan<'a>;

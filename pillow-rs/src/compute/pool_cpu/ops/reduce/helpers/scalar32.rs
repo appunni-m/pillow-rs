@@ -1,8 +1,8 @@
 //! Native scalar reducers for the Pillow `I` and `F` byte carriers.
 
 use crate::checked_dims::CheckedDims;
-use crate::error::PilError;
 use crate::compute::helpers::resampling::rounding::round_up;
+use crate::error::PilError;
 use crate::raster::RgbaImage;
 
 fn scalar_index(x: u32, y: u32, width: u32) -> usize {
@@ -10,11 +10,19 @@ fn scalar_index(x: u32, y: u32, width: u32) -> usize {
 }
 
 fn read_i32(source: &[u8], index: usize) -> i32 {
-    i32::from_le_bytes(source[index..index + 4].try_into().expect("scalar sample has four bytes"))
+    i32::from_le_bytes(
+        source[index..index + 4]
+            .try_into()
+            .expect("scalar sample has four bytes"),
+    )
 }
 
 fn read_f32(source: &[u8], index: usize) -> f32 {
-    f32::from_le_bytes(source[index..index + 4].try_into().expect("scalar sample has four bytes"))
+    f32::from_le_bytes(
+        source[index..index + 4]
+            .try_into()
+            .expect("scalar sample has four bytes"),
+    )
 }
 
 fn output_bytes(width: u32, height: u32) -> Result<Vec<u8>, PilError> {
@@ -60,16 +68,31 @@ fn reduce_i32_interior_sum(
         let mut dx = 0;
         while dx + 1 < block_width {
             let top = read_i32(source, scalar_index(source_x + dx, source_y + dy, width));
-            let top_right = read_i32(source, scalar_index(source_x + dx + 1, source_y + dy, width));
-            let bottom = read_i32(source, scalar_index(source_x + dx, source_y + dy + 1, width));
-            let bottom_right =
-                read_i32(source, scalar_index(source_x + dx + 1, source_y + dy + 1, width));
-            sum += f64::from(top.wrapping_add(top_right).wrapping_add(bottom).wrapping_add(bottom_right));
+            let top_right = read_i32(
+                source,
+                scalar_index(source_x + dx + 1, source_y + dy, width),
+            );
+            let bottom = read_i32(
+                source,
+                scalar_index(source_x + dx, source_y + dy + 1, width),
+            );
+            let bottom_right = read_i32(
+                source,
+                scalar_index(source_x + dx + 1, source_y + dy + 1, width),
+            );
+            sum += f64::from(
+                top.wrapping_add(top_right)
+                    .wrapping_add(bottom)
+                    .wrapping_add(bottom_right),
+            );
             dx += 2;
         }
         if dx < block_width {
             let first = read_i32(source, scalar_index(source_x + dx, source_y + dy, width));
-            let second = read_i32(source, scalar_index(source_x + dx, source_y + dy + 1, width));
+            let second = read_i32(
+                source,
+                scalar_index(source_x + dx, source_y + dy + 1, width),
+            );
             sum += f64::from(first.wrapping_add(second));
         }
         dy += 2;
@@ -78,7 +101,10 @@ fn reduce_i32_interior_sum(
         for dx in (0..block_width).step_by(2) {
             let first = read_i32(source, scalar_index(source_x + dx, source_y + dy, width));
             if dx + 1 < block_width {
-                let second = read_i32(source, scalar_index(source_x + dx + 1, source_y + dy, width));
+                let second = read_i32(
+                    source,
+                    scalar_index(source_x + dx + 1, source_y + dy, width),
+                );
                 sum += f64::from(first.wrapping_add(second));
             } else {
                 sum += f64::from(first);
@@ -127,9 +153,23 @@ fn reduce_i32_general(
             let source_x = x * x_factor;
             let block_width = x_factor.min(source_width - source_x);
             let sum = if x < main_width && y < main_height {
-                reduce_i32_interior_sum(source, source_width, source_x, source_y, block_width, block_height)
+                reduce_i32_interior_sum(
+                    source,
+                    source_width,
+                    source_x,
+                    source_y,
+                    block_width,
+                    block_height,
+                )
             } else {
-                reduce_i32_edge_sum(source, source_width, source_x, source_y, block_width, block_height)
+                reduce_i32_edge_sum(
+                    source,
+                    source_width,
+                    source_x,
+                    source_y,
+                    block_width,
+                    block_height,
+                )
             };
             let count = f64::from(block_width) * f64::from(block_height);
             let value = round_up(sum / count) as i32;
@@ -156,7 +196,15 @@ pub(crate) fn reduce_i32(
     let output = if x_factor == 2 && y_factor == 2 && width % 2 == 0 && height % 2 == 0 {
         reduce_i32_2x2(source, width, output_width, output_height)?
     } else {
-        reduce_i32_general(source, width, height, output_width, output_height, x_factor, y_factor)?
+        reduce_i32_general(
+            source,
+            width,
+            height,
+            output_width,
+            output_height,
+            x_factor,
+            y_factor,
+        )?
     };
     RgbaImage::from_raw(output_width, output_height, output)
         .ok_or_else(|| PilError::InternalError("failed to construct I Reduce output".into()))
@@ -200,17 +248,28 @@ fn reduce_f32_interior_sum(
         let mut dx = 0;
         while dx + 1 < block_width {
             let top = read_f32(source, scalar_index(source_x + dx, source_y + dy, width));
-            let top_right = read_f32(source, scalar_index(source_x + dx + 1, source_y + dy, width));
-            let bottom = read_f32(source, scalar_index(source_x + dx, source_y + dy + 1, width));
-            let bottom_right =
-                read_f32(source, scalar_index(source_x + dx + 1, source_y + dy + 1, width));
+            let top_right = read_f32(
+                source,
+                scalar_index(source_x + dx + 1, source_y + dy, width),
+            );
+            let bottom = read_f32(
+                source,
+                scalar_index(source_x + dx, source_y + dy + 1, width),
+            );
+            let bottom_right = read_f32(
+                source,
+                scalar_index(source_x + dx + 1, source_y + dy + 1, width),
+            );
             let quartet = ((top + top_right) + bottom) + bottom_right;
             sum += f64::from(quartet);
             dx += 2;
         }
         if dx < block_width {
             let first = read_f32(source, scalar_index(source_x + dx, source_y + dy, width));
-            let second = read_f32(source, scalar_index(source_x + dx, source_y + dy + 1, width));
+            let second = read_f32(
+                source,
+                scalar_index(source_x + dx, source_y + dy + 1, width),
+            );
             sum += f64::from(first + second);
         }
         dy += 2;
@@ -219,7 +278,10 @@ fn reduce_f32_interior_sum(
         for dx in (0..block_width).step_by(2) {
             let first = read_f32(source, scalar_index(source_x + dx, source_y + dy, width));
             if dx + 1 < block_width {
-                let second = read_f32(source, scalar_index(source_x + dx + 1, source_y + dy, width));
+                let second = read_f32(
+                    source,
+                    scalar_index(source_x + dx + 1, source_y + dy, width),
+                );
                 sum += f64::from(first + second);
             } else {
                 sum += f64::from(first);
@@ -268,9 +330,23 @@ fn reduce_f32_general(
             let source_x = x * x_factor;
             let block_width = x_factor.min(source_width - source_x);
             let sum = if x < main_width && y < main_height {
-                reduce_f32_interior_sum(source, source_width, source_x, source_y, block_width, block_height)
+                reduce_f32_interior_sum(
+                    source,
+                    source_width,
+                    source_x,
+                    source_y,
+                    block_width,
+                    block_height,
+                )
             } else {
-                reduce_f32_edge_sum(source, source_width, source_x, source_y, block_width, block_height)
+                reduce_f32_edge_sum(
+                    source,
+                    source_width,
+                    source_x,
+                    source_y,
+                    block_width,
+                    block_height,
+                )
             };
             let count = f64::from(block_width) * f64::from(block_height);
             let value = (sum * (1.0 / count)) as f32;
@@ -282,7 +358,11 @@ fn reduce_f32_general(
 }
 
 /// Reduces the float scalar samples stored in the F-mode four-byte carrier.
-pub(crate) fn reduce_f32(image: &RgbaImage, x_factor: u32, y_factor: u32) -> Result<RgbaImage, PilError> {
+pub(crate) fn reduce_f32(
+    image: &RgbaImage,
+    x_factor: u32,
+    y_factor: u32,
+) -> Result<RgbaImage, PilError> {
     let width = image.width();
     let height = image.height();
     let x_factor = x_factor.max(1);
@@ -293,7 +373,15 @@ pub(crate) fn reduce_f32(image: &RgbaImage, x_factor: u32, y_factor: u32) -> Res
     let output = if x_factor == 2 && y_factor == 2 && width % 2 == 0 && height % 2 == 0 {
         reduce_f32_2x2(source, width, output_width, output_height)?
     } else {
-        reduce_f32_general(source, width, height, output_width, output_height, x_factor, y_factor)?
+        reduce_f32_general(
+            source,
+            width,
+            height,
+            output_width,
+            output_height,
+            x_factor,
+            y_factor,
+        )?
     };
     RgbaImage::from_raw(output_width, output_height, output)
         .ok_or_else(|| PilError::InternalError("failed to construct F Reduce output".into()))

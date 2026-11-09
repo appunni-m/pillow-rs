@@ -1,42 +1,36 @@
 //! Exact ImageF32 EffectSpread and EffectNoise strategies.
 
+use super::default::{effect_noise_impl as noise_impl, effect_spread_impl as spread_impl};
+use super::{
+    neon::effect_noise_impl as neon_noise, neon::effect_spread_impl as neon_spread,
+    sse2::effect_noise_impl as sse2_noise, sse2::effect_spread_impl as sse2_spread,
+    wasm_simd128::effect_noise_impl as wasm_noise, wasm_simd128::effect_spread_impl as wasm_spread,
+};
 use crate::compute::pool_cpu::helpers::execution::prepared::Prepared;
-use crate::compute::pool_cpu::ops::effects::helpers::spread_vector;
 use crate::compute::pool_cpu::ops::effects::helpers::noise_vector;
+use crate::compute::pool_cpu::ops::effects::helpers::spread_vector;
 use crate::compute::pool_cpu::ops::effects::helpers::strategy;
 use crate::compute::registry::support::{
-    ImplementationSupport, ModeSupport, OperationId, OutputModeRule, RequestFacts,
-    StrategyGuard,
+    ImplementationSupport, ModeSupport, OperationId, OutputModeRule, RequestFacts, StrategyGuard,
 };
 use crate::compute::{Architecture, ExecutionContext};
 use crate::error::PilError;
-use crate::raster::{DynamicImage, Mode};
 use crate::raster::RgbaImage;
-use super::default::{effect_noise_impl as noise_impl, effect_spread_impl as spread_impl};
-use super::{
-    sse2::effect_noise_impl as sse2_noise,
-    neon::effect_noise_impl as neon_noise,
-    wasm_simd128::effect_noise_impl as wasm_noise,
-    sse2::effect_spread_impl as sse2_spread,
-    neon::effect_spread_impl as neon_spread,
-    wasm_simd128::effect_spread_impl as wasm_spread,
-};
+use crate::raster::{DynamicImage, Mode};
 
 /// Exact native buffer type carried by `DynamicImage::ImageF32`.
 pub(crate) type Input = RgbaImage;
 
-static SPREAD_ARCHITECTURES: [ImplementationSupport; 3] =
-    strategy::vector_architectures_for(
-        OperationId::EffectSpread,
-        Mode::ImageF32,
-        StrategyGuard::EffectSpreadBytes { channels: 4 },
-    );
-static NOISE_ARCHITECTURES: [ImplementationSupport; 3] =
-    strategy::vector_architectures_for(
-        OperationId::EffectNoise,
-        Mode::ImageF32,
-        StrategyGuard::EffectNoiseVector,
-    );
+static SPREAD_ARCHITECTURES: [ImplementationSupport; 3] = strategy::vector_architectures_for(
+    OperationId::EffectSpread,
+    Mode::ImageF32,
+    StrategyGuard::EffectSpreadBytes { channels: 4 },
+);
+static NOISE_ARCHITECTURES: [ImplementationSupport; 3] = strategy::vector_architectures_for(
+    OperationId::EffectNoise,
+    Mode::ImageF32,
+    StrategyGuard::EffectNoiseVector,
+);
 
 pub(crate) enum SpreadImplementation<'a> {
     Default(spread_impl::Kernel<'a>),
@@ -81,17 +75,38 @@ pub(crate) fn prepare_spread<'a>(
     let facts = strategy::facts(input, RequestFacts::EffectSpread { distance });
     let selection = strategy::select(SPREAD_SUPPORT, facts, ctx)?;
     let implementation = match selection.implementation.architecture {
-        Architecture::Default => SpreadImplementation::Default(spread_impl::prepare(input, distance)),
-        Architecture::Sse2 => SpreadImplementation::Sse2(sse2_spread::prepare(input.as_raw(), input.width(), input.height(), 4, distance)),
-        Architecture::Neon => SpreadImplementation::Neon(neon_spread::prepare(input.as_raw(), input.width(), input.height(), 4, distance)),
-        Architecture::WasmSimd128 => SpreadImplementation::WasmSimd128(wasm_spread::prepare(input.as_raw(), input.width(), input.height(), 4, distance)),
-        architecture => return Err(PilError::InternalError(format!(
-            "unexpected {architecture:?} architecture selected for EffectSpread mode ImageF32"
-        ))),
+        Architecture::Default => {
+            SpreadImplementation::Default(spread_impl::prepare(input, distance))
+        }
+        Architecture::Sse2 => SpreadImplementation::Sse2(sse2_spread::prepare(
+            input.as_raw(),
+            input.width(),
+            input.height(),
+            4,
+            distance,
+        )),
+        Architecture::Neon => SpreadImplementation::Neon(neon_spread::prepare(
+            input.as_raw(),
+            input.width(),
+            input.height(),
+            4,
+            distance,
+        )),
+        Architecture::WasmSimd128 => SpreadImplementation::WasmSimd128(wasm_spread::prepare(
+            input.as_raw(),
+            input.width(),
+            input.height(),
+            4,
+            distance,
+        )),
+        architecture => {
+            return Err(PilError::InternalError(format!(
+                "unexpected {architecture:?} architecture selected for EffectSpread mode ImageF32"
+            )));
+        }
     };
     Ok(Prepared::new(implementation, selection))
 }
-
 
 fn from_spread_vector(output: spread_vector::Output) -> Result<Input, PilError> {
     Input::from_raw(output.width, output.height, output.bytes)
@@ -100,10 +115,18 @@ fn from_spread_vector(output: spread_vector::Output) -> Result<Input, PilError> 
 
 pub(crate) fn execute_spread(plan: SpreadStrategy<'_>) -> Result<DynamicImage, PilError> {
     match plan.implementation {
-        SpreadImplementation::Default(kernel) => spread_impl::execute(kernel).map(DynamicImage::ImageF32),
-        SpreadImplementation::Sse2(kernel) => sse2_spread::execute(kernel).and_then(from_spread_vector).map(DynamicImage::ImageF32),
-        SpreadImplementation::Neon(kernel) => neon_spread::execute(kernel).and_then(from_spread_vector).map(DynamicImage::ImageF32),
-        SpreadImplementation::WasmSimd128(kernel) => wasm_spread::execute(kernel).and_then(from_spread_vector).map(DynamicImage::ImageF32),
+        SpreadImplementation::Default(kernel) => {
+            spread_impl::execute(kernel).map(DynamicImage::ImageF32)
+        }
+        SpreadImplementation::Sse2(kernel) => sse2_spread::execute(kernel)
+            .and_then(from_spread_vector)
+            .map(DynamicImage::ImageF32),
+        SpreadImplementation::Neon(kernel) => neon_spread::execute(kernel)
+            .and_then(from_spread_vector)
+            .map(DynamicImage::ImageF32),
+        SpreadImplementation::WasmSimd128(kernel) => wasm_spread::execute(kernel)
+            .and_then(from_spread_vector)
+            .map(DynamicImage::ImageF32),
     }
 }
 
@@ -112,26 +135,49 @@ pub(crate) fn prepare_noise<'a>(
     sigma: f64,
     ctx: &ExecutionContext,
 ) -> Result<NoiseStrategy<'a>, PilError> {
-    let facts = strategy::facts(input, RequestFacts::EffectNoise { sigma_bits: sigma.to_bits() });
+    let facts = strategy::facts(
+        input,
+        RequestFacts::EffectNoise {
+            sigma_bits: sigma.to_bits(),
+        },
+    );
     let selection = strategy::select(NOISE_SUPPORT, facts, ctx)?;
     let implementation = match selection.implementation.architecture {
         Architecture::Default => NoiseImplementation::Default(noise_impl::prepare(input, sigma)),
-        Architecture::Sse2 => NoiseImplementation::Sse2(sse2_noise::prepare(input.width(), input.height(), sigma)),
-        Architecture::Neon => NoiseImplementation::Neon(neon_noise::prepare(input.width(), input.height(), sigma)),
-        Architecture::WasmSimd128 => NoiseImplementation::WasmSimd128(wasm_noise::prepare(input.width(), input.height(), sigma)),
-        architecture => return Err(PilError::InternalError(format!(
-            "unexpected {architecture:?} architecture selected for EffectNoise mode ImageF32"
-        ))),
+        Architecture::Sse2 => {
+            NoiseImplementation::Sse2(sse2_noise::prepare(input.width(), input.height(), sigma))
+        }
+        Architecture::Neon => {
+            NoiseImplementation::Neon(neon_noise::prepare(input.width(), input.height(), sigma))
+        }
+        Architecture::WasmSimd128 => NoiseImplementation::WasmSimd128(wasm_noise::prepare(
+            input.width(),
+            input.height(),
+            sigma,
+        )),
+        architecture => {
+            return Err(PilError::InternalError(format!(
+                "unexpected {architecture:?} architecture selected for EffectNoise mode ImageF32"
+            )));
+        }
     };
     Ok(Prepared::new(implementation, selection))
 }
 
 pub(crate) fn execute_noise(plan: NoiseStrategy<'_>) -> Result<DynamicImage, PilError> {
     match plan.implementation {
-        NoiseImplementation::Default(kernel) => noise_impl::execute(kernel).map(DynamicImage::ImageLuma8),
-        NoiseImplementation::Sse2(kernel) => sse2_noise::execute(kernel).map(DynamicImage::ImageLuma8),
-        NoiseImplementation::Neon(kernel) => neon_noise::execute(kernel).map(DynamicImage::ImageLuma8),
-        NoiseImplementation::WasmSimd128(kernel) => wasm_noise::execute(kernel).map(DynamicImage::ImageLuma8),
+        NoiseImplementation::Default(kernel) => {
+            noise_impl::execute(kernel).map(DynamicImage::ImageLuma8)
+        }
+        NoiseImplementation::Sse2(kernel) => {
+            sse2_noise::execute(kernel).map(DynamicImage::ImageLuma8)
+        }
+        NoiseImplementation::Neon(kernel) => {
+            neon_noise::execute(kernel).map(DynamicImage::ImageLuma8)
+        }
+        NoiseImplementation::WasmSimd128(kernel) => {
+            wasm_noise::execute(kernel).map(DynamicImage::ImageLuma8)
+        }
     }
 }
 
@@ -166,9 +212,11 @@ pub(crate) fn prepare_linear_gradient(
         Architecture::Sse2 => LinearGradientImplementation::Sse2,
         Architecture::Neon => LinearGradientImplementation::Neon,
         Architecture::WasmSimd128 => LinearGradientImplementation::WasmSimd128,
-        architecture => return Err(PilError::InternalError(format!(
-            "unexpected {architecture:?} architecture selected for LinearGradient mode ImageF32"
-        ))),
+        architecture => {
+            return Err(PilError::InternalError(format!(
+                "unexpected {architecture:?} architecture selected for LinearGradient mode ImageF32"
+            )));
+        }
     };
     Ok(Prepared::new(implementation, selection))
 }

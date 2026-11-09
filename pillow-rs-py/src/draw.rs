@@ -1,17 +1,17 @@
 use crate::font::PyFont;
 use crate::*;
-use pyo3::{pyclass, pymethods, Py, Python};
 use pyo3::types::PyInt;
+use pyo3::{Py, Python, pyclass, pymethods};
 
-mod input;
-mod floodfill;
 pub(super) mod custom_font_mask;
+mod floodfill;
+mod input;
 mod rounded_rectangle;
 mod text_lines;
 
 use input::{
-    draw_box_input_from_python, draw_circle_center_input_from_python,
-    draw_bitmap_position_from_python, draw_points_input_from_python,
+    draw_bitmap_position_from_python, draw_box_input_from_python,
+    draw_circle_center_input_from_python, draw_points_input_from_python,
 };
 
 fn draw_line_with_input(
@@ -28,8 +28,7 @@ fn draw_line_with_input(
     Ok(width)
 }
 pub(crate) use input::{
-    draw_color_input_from_python, draw_features_presence_from_python,
-    draw_text_input_from_python,
+    draw_color_input_from_python, draw_features_presence_from_python, draw_text_input_from_python,
 };
 
 pub(super) mod text_layout;
@@ -126,10 +125,7 @@ impl PyDraw {
 
     #[new]
     #[pyo3(signature = (image, mode=None))]
-    fn new(
-        image: &Bound<'_, PyImage>,
-        mode: Option<&Bound<'_, PyAny>>,
-    ) -> PyResult<Self> {
+    fn new(image: &Bound<'_, PyImage>, mode: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
         // Pillow's ImageDraw constructor loads the target before validating an
         // explicit drawing mode. Keep direct calls to this binding ordered the
         // same way as the Python facade; accept the raw object so PyO3 does not
@@ -152,9 +148,7 @@ impl PyDraw {
     }
 
     fn _set_palette(&mut self, data: Vec<u8>, mode: &str) -> PyResult<()> {
-        self.draw
-            .set_palette_data(&data, mode)
-            .map_err(map_error)
+        self.draw.set_palette_data(&data, mode).map_err(map_error)
     }
 
     fn _validate_embedded_color(&self) -> PyResult<()> {
@@ -200,8 +194,7 @@ impl PyDraw {
         let Ok(angles) = <[f64; 2]>::try_from(angles) else {
             return Ok(None);
         };
-        let Some(plan) = self.draw.curve_joint_plan_from_angles(angles)
-        else {
+        let Some(plan) = self.draw.curve_joint_plan_from_angles(angles) else {
             return Ok(None);
         };
         Py::new(py, PyLineCurveJointPlan { plan }).map(Some)
@@ -225,8 +218,8 @@ impl PyDraw {
         } else {
             None
         };
-        let xy = pillow_rs::normalize_draw_box(draw_box_input_from_python(xy)?)
-            .map_err(map_error)?;
+        let xy =
+            pillow_rs::normalize_draw_box(draw_box_input_from_python(xy)?).map_err(map_error)?;
         self.draw
             .rectangle(
                 xy.0,
@@ -258,8 +251,8 @@ impl PyDraw {
         } else {
             None
         };
-        let xy = pillow_rs::normalize_draw_box(draw_box_input_from_python(xy)?)
-            .map_err(map_error)?;
+        let xy =
+            pillow_rs::normalize_draw_box(draw_box_input_from_python(xy)?).map_err(map_error)?;
         self.draw
             .ellipse(
                 xy.0,
@@ -288,9 +281,7 @@ impl PyDraw {
         // Keep flat and single-nested coordinate pairs on that path.
         let (x, y) = draw_bitmap_position_from_python(xy)?;
         let bmp = bitmap.borrow();
-        self.draw
-            .bitmap(x, y, &bmp.inner, fill)
-            .map_err(map_error)
+        self.draw.bitmap(x, y, &bmp.inner, fill).map_err(map_error)
     }
 
     fn text_ink(&mut self, fill: Option<&Bound<'_, PyAny>>) -> PyResult<i64> {
@@ -497,8 +488,8 @@ impl PyDraw {
         width: Option<u32>,
     ) -> PyResult<()> {
         let color = self.color(fill)?;
-        let xy = pillow_rs::normalize_draw_box(draw_box_input_from_python(xy)?)
-            .map_err(map_error)?;
+        let xy =
+            pillow_rs::normalize_draw_box(draw_box_input_from_python(xy)?).map_err(map_error)?;
         self.draw
             .arc(
                 xy.0,
@@ -525,8 +516,8 @@ impl PyDraw {
     ) -> PyResult<()> {
         let fc = fill.map(|_| self.color(fill)).transpose()?;
         let oc = outline.map(|_| self.color(outline)).transpose()?;
-        let xy = pillow_rs::normalize_draw_box(draw_box_input_from_python(xy)?)
-            .map_err(map_error)?;
+        let xy =
+            pillow_rs::normalize_draw_box(draw_box_input_from_python(xy)?).map_err(map_error)?;
         self.draw
             .chord(
                 xy.0,
@@ -554,8 +545,8 @@ impl PyDraw {
     ) -> PyResult<()> {
         let fc = fill.map(|_| self.color(fill)).transpose()?;
         let oc = outline.map(|_| self.color(outline)).transpose()?;
-        let xy = pillow_rs::normalize_draw_box(draw_box_input_from_python(xy)?)
-            .map_err(map_error)?;
+        let xy =
+            pillow_rs::normalize_draw_box(draw_box_input_from_python(xy)?).map_err(map_error)?;
         self.draw
             .pieslice(
                 xy.0,
@@ -765,7 +756,6 @@ impl PyDraw {
         let ink = val.extract::<i32>()?;
         self.draw.color_from_draw_ink(ink).map_err(map_error)
     }
-
 }
 
 pub(super) fn register_classes(m: &Bound<'_, PyModule>) -> PyResult<()> {

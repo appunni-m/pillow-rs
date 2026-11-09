@@ -70,7 +70,8 @@ pub(crate) fn getmask2_text_with_start(
     start: (f64, f64),
 ) -> Result<FontMaskAndOffset, PilError> {
     validate_text_length(text)?;
-    let (width, height, pixels, bbox) = mask_from_run_with_start_and_bbox(font, text, TGT_NORM, start)?;
+    let (width, height, pixels, bbox) =
+        mask_from_run_with_start_and_bbox(font, text, TGT_NORM, start)?;
     Ok((width, height, pixels, (bbox.0, bbox.1)))
 }
 

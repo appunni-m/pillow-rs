@@ -3,8 +3,7 @@
 use crate::error::PilError;
 use crate::pipeline::DitherMethod;
 use crate::raster::{
-    DynamicImage, GrayAlphaImage, GrayImage, LumaA, Mode, Rgb, RgbImage,
-    Rgba, RgbaImage,
+    DynamicImage, GrayAlphaImage, GrayImage, LumaA, Mode, Rgb, RgbImage, Rgba, RgbaImage,
 };
 
 pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, PilError> {
@@ -122,7 +121,9 @@ fn ycbcr(source: &RgbaImage) -> RgbImage {
     crate::color::rgb_pixels_to_ycbcr(
         source.width(),
         source.height(),
-        source.pixels().map(|pixel| crate::color::cmyk_pixel_to_rgb(pixel.0)),
+        source
+            .pixels()
+            .map(|pixel| crate::color::cmyk_pixel_to_rgb(pixel.0)),
     )
 }
 
@@ -130,7 +131,9 @@ fn hsv(source: &RgbaImage) -> RgbImage {
     crate::color::rgb_pixels_to_hsv(
         source.width(),
         source.height(),
-        source.pixels().map(|pixel| crate::color::cmyk_pixel_to_rgb(pixel.0)),
+        source
+            .pixels()
+            .map(|pixel| crate::color::cmyk_pixel_to_rgb(pixel.0)),
     )
 }
 
@@ -138,9 +141,11 @@ fn to_i32(source: &RgbaImage) -> RgbaImage {
     let mut output = RgbaImage::new(source.width(), source.height());
     for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
         let [red, green, blue] = crate::color::cmyk_pixel_to_rgb(pixel.0);
-        *destination = Rgba(crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_i32_rgb(
-            red, green, blue,
-        ));
+        *destination = Rgba(
+            crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_i32_rgb(
+                red, green, blue,
+            ),
+        );
     }
     output
 }
@@ -149,9 +154,11 @@ fn to_f32(source: &RgbaImage) -> RgbaImage {
     let mut output = RgbaImage::new(source.width(), source.height());
     for (destination, pixel) in output.pixels_mut().zip(source.pixels()) {
         let [red, green, blue] = crate::color::cmyk_pixel_to_rgb(pixel.0);
-        *destination = Rgba(crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_f32_rgb(
-            red, green, blue,
-        ));
+        *destination = Rgba(
+            crate::compute::pool_cpu::ops::color::convert::helpers::pixel::scalar_f32_rgb(
+                red, green, blue,
+            ),
+        );
     }
     output
 }

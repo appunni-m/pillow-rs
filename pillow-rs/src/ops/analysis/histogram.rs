@@ -1,9 +1,7 @@
 //! Pillow-compatible Histogram wrapper.
 
-use crate::compute::pool_cpu::ops::analysis::helpers::histogram_execution::{
-    prepare_histogram_mask,
-};
 use crate::compute::PipelineOperationTelemetryCapture;
+use crate::compute::pool_cpu::ops::analysis::helpers::histogram_execution::prepare_histogram_mask;
 use crate::compute::registry::support::StrategySelection;
 use crate::error::PilError;
 use crate::image::Image;
@@ -58,10 +56,14 @@ impl Image {
             None
         } else {
             match (image.mode(), extrema) {
-                (crate::raster::Mode::ImageI32, Some(value @ HistogramExtrema::ImageI32 { .. }))
-                | (crate::raster::Mode::ImageF32, Some(value @ HistogramExtrema::ImageF32 { .. })) => {
-                    Some(value)
-                }
+                (
+                    crate::raster::Mode::ImageI32,
+                    Some(value @ HistogramExtrema::ImageI32 { .. }),
+                )
+                | (
+                    crate::raster::Mode::ImageF32,
+                    Some(value @ HistogramExtrema::ImageF32 { .. }),
+                ) => Some(value),
                 (_, None) => None,
                 _ => {
                     return Err(PilError::ValueError(
@@ -73,10 +75,8 @@ impl Image {
         let telemetry = if crate::compute::Backend::pipeline_telemetry_enabled() {
             // This timing/resource sample covers the terminal scan; ordered
             // source and mask graph operation receipts are restored separately.
-            let telemetry = crate::compute::begin_eager_cpu_operation_telemetry(
-                "Histogram",
-                requested_backend,
-            );
+            let telemetry =
+                crate::compute::begin_eager_cpu_operation_telemetry("Histogram", requested_backend);
             operation_receipts.restore();
             Some(telemetry)
         } else {

@@ -163,12 +163,14 @@ fn nearest_indices(source_size: u32, output_size: u32) -> Result<Vec<usize>, Pil
     let mut indices = Vec::with_capacity(capacity);
     for _ in 0..output_size {
         let index = position as u32;
-        indices.push(usize::try_from(if index >= source_size {
-            source_size - 1
-        } else {
-            index
-        })
-        .map_err(|_| unsupported("nearest source index conversion failed"))?);
+        indices.push(
+            usize::try_from(if index >= source_size {
+                source_size - 1
+            } else {
+                index
+            })
+            .map_err(|_| unsupported("nearest source index conversion failed"))?,
+        );
         position += scale;
     }
     Ok(indices)
@@ -186,12 +188,8 @@ fn filtered_output<const BIG_ENDIAN: bool>(
         filter,
         None,
     );
-    let (intermediate, horizontal_blocks) = horizontal_pass::<BIG_ENDIAN>(
-        source,
-        source_dimensions,
-        output_dimensions.0,
-        &horizontal,
-    )?;
+    let (intermediate, horizontal_blocks) =
+        horizontal_pass::<BIG_ENDIAN>(source, source_dimensions, output_dimensions.0, &horizontal)?;
     let (output, vertical_blocks) = vertical_pass::<BIG_ENDIAN>(
         &intermediate,
         output_dimensions,
@@ -239,20 +237,20 @@ fn horizontal_pass<const BIG_ENDIAN: bool>(
                     let Some(&weight) = lane_weights.get(tap) else {
                         continue;
                     };
-                    let source_x = usize::try_from(*coefficients.xmin.get(output_index).ok_or_else(
-                        || unsupported("horizontal coefficient origin is missing"),
-                    )?)
-                    .map_err(|_| unsupported("horizontal source origin is negative"))?
-                    .checked_add(tap)
-                    .ok_or_else(|| unsupported("horizontal source index overflowed"))?;
+                    let source_x =
+                        usize::try_from(*coefficients.xmin.get(output_index).ok_or_else(|| {
+                            unsupported("horizontal coefficient origin is missing")
+                        })?)
+                        .map_err(|_| unsupported("horizontal source origin is negative"))?
+                        .checked_add(tap)
+                        .ok_or_else(|| unsupported("horizontal source index overflowed"))?;
                     let source_index = source_row
                         .checked_add(source_x)
                         .ok_or_else(|| unsupported("horizontal source offset overflowed"))?;
-                    values[lane] = f64::from(read::<BIG_ENDIAN>(
-                        *source
-                            .get(source_index)
-                            .ok_or_else(|| unsupported("horizontal source sample is missing"))?,
-                    ));
+                    values[lane] =
+                        f64::from(read::<BIG_ENDIAN>(*source.get(source_index).ok_or_else(
+                            || unsupported("horizontal source sample is missing"),
+                        )?));
                     weights[lane] = weight;
                 }
                 sums = f64x8::new(weights).mul_add(f64x8::new(values), sums);

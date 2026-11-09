@@ -155,26 +155,19 @@ fn horizontal_pass<const FINITE_OPERANDS: bool, F: F64MulAdd>(
                     fma,
                 );
             }
-            for (offset, output) in row[*first_eight_tap..end_eight_tap]
-                .iter_mut()
-                .enumerate()
-            {
+            for (offset, output) in row[*first_eight_tap..end_eight_tap].iter_mut().enumerate() {
                 let destination_x = *first_eight_tap + offset;
                 let (source_x, weights) = fixed_weights[offset];
-                *output = horizontal_eight_tap::<FINITE_OPERANDS, _>(
-                    source_row,
-                    source_x,
-                    &weights,
-                    fma,
-                )
-                .unwrap_or_else(|| {
-                    horizontal_sample::<FINITE_OPERANDS, _>(
-                        source_row,
-                        coefficients.xmin[destination_x],
-                        &coefficients.weights[destination_x],
-                        fma,
-                    )
-                });
+                *output =
+                    horizontal_eight_tap::<FINITE_OPERANDS, _>(source_row, source_x, &weights, fma)
+                        .unwrap_or_else(|| {
+                            horizontal_sample::<FINITE_OPERANDS, _>(
+                                source_row,
+                                coefficients.xmin[destination_x],
+                                &coefficients.weights[destination_x],
+                                fma,
+                            )
+                        });
             }
             for (offset, output) in row[end_eight_tap..].iter_mut().enumerate() {
                 let destination_x = end_eight_tap + offset;
@@ -243,60 +236,41 @@ fn horizontal_eight_tap<const FINITE_OPERANDS: bool, F: F64MulAdd>(
         weight7,
     ] = weights;
     let samples = source_row.get(source_x..)?.get(..8)?;
-    let [sample0, sample1, sample2, sample3, sample4, sample5, sample6, sample7] = samples else {
+    let [
+        sample0,
+        sample1,
+        sample2,
+        sample3,
+        sample4,
+        sample5,
+        sample6,
+        sample7,
+    ] = samples
+    else {
         return None;
     };
     let mut accumulator = mul_add::<FINITE_OPERANDS, _>(fma, *weight0, f64::from(*sample0), 0.0);
-    accumulator = mul_add::<FINITE_OPERANDS, _>(
-        fma,
-        *weight1,
-        f64::from(*sample1),
-        accumulator,
-    );
-    accumulator = mul_add::<FINITE_OPERANDS, _>(
-        fma,
-        *weight2,
-        f64::from(*sample2),
-        accumulator,
-    );
-    accumulator = mul_add::<FINITE_OPERANDS, _>(
-        fma,
-        *weight3,
-        f64::from(*sample3),
-        accumulator,
-    );
-    accumulator = mul_add::<FINITE_OPERANDS, _>(
-        fma,
-        *weight4,
-        f64::from(*sample4),
-        accumulator,
-    );
-    accumulator = mul_add::<FINITE_OPERANDS, _>(
-        fma,
-        *weight5,
-        f64::from(*sample5),
-        accumulator,
-    );
-    accumulator = mul_add::<FINITE_OPERANDS, _>(
-        fma,
-        *weight6,
-        f64::from(*sample6),
-        accumulator,
-    );
-    accumulator = mul_add::<FINITE_OPERANDS, _>(
-        fma,
-        *weight7,
-        f64::from(*sample7),
-        accumulator,
-    );
+    accumulator = mul_add::<FINITE_OPERANDS, _>(fma, *weight1, f64::from(*sample1), accumulator);
+    accumulator = mul_add::<FINITE_OPERANDS, _>(fma, *weight2, f64::from(*sample2), accumulator);
+    accumulator = mul_add::<FINITE_OPERANDS, _>(fma, *weight3, f64::from(*sample3), accumulator);
+    accumulator = mul_add::<FINITE_OPERANDS, _>(fma, *weight4, f64::from(*sample4), accumulator);
+    accumulator = mul_add::<FINITE_OPERANDS, _>(fma, *weight5, f64::from(*sample5), accumulator);
+    accumulator = mul_add::<FINITE_OPERANDS, _>(fma, *weight6, f64::from(*sample6), accumulator);
+    accumulator = mul_add::<FINITE_OPERANDS, _>(fma, *weight7, f64::from(*sample7), accumulator);
     Some(accumulator as f32)
 }
 
 fn contiguous_eight_tap_coefficients(
     coefficients: &FilterCoeffsF64,
 ) -> Option<(usize, Vec<(usize, [f64; 8])>)> {
-    let first = coefficients.weights.iter().position(|weights| weights.len() == 8)?;
-    let last = coefficients.weights.iter().rposition(|weights| weights.len() == 8)?;
+    let first = coefficients
+        .weights
+        .iter()
+        .position(|weights| weights.len() == 8)?;
+    let last = coefficients
+        .weights
+        .iter()
+        .rposition(|weights| weights.len() == 8)?;
     let mut fixed = Vec::with_capacity(last - first + 1);
     for index in first..=last {
         let source_x = usize::try_from(*coefficients.xmin.get(index)?).ok()?;
@@ -375,12 +349,8 @@ fn accumulate_row<const FINITE_OPERANDS: bool, F: F64MulAdd>(
         let source_row_start = (source_y + offset as i64) as usize * source_row_stride;
         let source_row = &source[source_row_start..source_row_start + source_row_stride];
         for (accumulator, &sample) in accumulators.iter_mut().zip(source_row) {
-            *accumulator = mul_add::<FINITE_OPERANDS, _>(
-                fma,
-                weight,
-                f64::from(sample),
-                *accumulator,
-            );
+            *accumulator =
+                mul_add::<FINITE_OPERANDS, _>(fma, weight, f64::from(sample), *accumulator);
         }
     }
 }
@@ -406,7 +376,10 @@ fn encode(width: u32, height: u32, samples: &[f32]) -> Result<RgbaImage, PilErro
             "F32 Resize result sample count does not match its dimensions".into(),
         ));
     }
-    let bytes = samples.iter().flat_map(|sample| sample.to_le_bytes()).collect();
+    let bytes = samples
+        .iter()
+        .flat_map(|sample| sample.to_le_bytes())
+        .collect();
     RgbaImage::from_raw(width, height, bytes).ok_or_else(|| {
         PilError::ValueError("resize_f output shape must match its dimensions".into())
     })

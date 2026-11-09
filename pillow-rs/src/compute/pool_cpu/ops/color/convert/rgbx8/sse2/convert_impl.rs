@@ -17,12 +17,10 @@ pub(crate) fn execute(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
     not(target_feature = "avx2")
 ))]
 fn luma8(source: &RgbaImage) -> Result<DynamicImage, PilError> {
-    let kernel = crate::compute::pool_cpu::ops::grayscale::rgbx8::default::grayscale_impl::prepare(
-        source,
-    )?;
-    let output = crate::compute::pool_cpu::ops::grayscale::rgbx8::sse2::grayscale_impl::execute(
-        kernel,
-    );
+    let kernel =
+        crate::compute::pool_cpu::ops::grayscale::rgbx8::default::grayscale_impl::prepare(source)?;
+    let output =
+        crate::compute::pool_cpu::ops::grayscale::rgbx8::sse2::grayscale_impl::execute(kernel);
     let output = crate::compute::pool_cpu::ops::grayscale::helpers::luma::vector_output(
         source.width(),
         source.height(),

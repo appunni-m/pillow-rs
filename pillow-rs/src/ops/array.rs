@@ -194,11 +194,7 @@ pub fn resolve_array_layout(
     let mode = explicit_mode.unwrap_or(entry.mode);
     let dimensions = shape.len();
     let maximum_dimensions = match mode {
-        Mode::One
-        | Mode::ImageLuma8
-        | Mode::ImageI32
-        | Mode::ImagePalette8
-        | Mode::ImageF32 => 2,
+        Mode::One | Mode::ImageLuma8 | Mode::ImageI32 | Mode::ImagePalette8 | Mode::ImageF32 => 2,
         Mode::ImageRgb8 => 3,
         _ => 4,
     };

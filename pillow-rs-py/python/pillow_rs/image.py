@@ -744,7 +744,45 @@ class Image:
     def filter(self, filter_type) -> "Image":
         # Pillow loads before validating the filter argument.
         self.load()
-        return self._new(self._rust_image.filter(filter_type))
+        if callable(filter_type):
+            filter_type = filter_type()
+        # Pillow accepts duck-typed filters; Filter inheritance is not checked.
+        if not hasattr(filter_type, "filter"):
+            raise TypeError(
+                "filter argument should be ImageFilter.Filter instance or class"
+            )
+
+        from . import imagefilter
+
+        # Pass the native Rust image handle, not the public Image wrapper. The
+        # built-in filters in this package use typed Rust operations directly.
+        # Pillow's callback receives its private ImagingCore. PyImage mirrors
+        # its mode, size, bands, readonly, flat sequence access, get/put pixel
+        # and data, analysis methods, band extraction and mutation, nearest-edge
+        # `expand`, and cropped native `rankfilter` behavior. PixelAccess keeps
+        # the loaded PyImage handle and uses dedicated mapping callbacks. Float
+        # coordinates truncate in range, saturate at i32 bounds, and map NaN to
+        # zero; freeze these adapter-defined edge results in parity. The raw C
+        # pointer is outside the behavior target.
+        if len(self._rust_image.getbands()) == 1 or isinstance(
+            filter_type, imagefilter.MultibandFilter
+        ):
+            return self._new(filter_type.filter(self._rust_image))
+
+        filtered_bands = []
+        for band_index in range(self._rust_image.bands):
+            # Pillow extracts each band immediately before invoking the
+            # callback. A callback may mutate the source before the next band
+            # is read, so do not snapshot all bands with split() up front.
+            band = self._rust_image.getband(band_index)
+            filtered_bands.append(self._new(filter_type.filter(band)))
+
+        # Pillow wraps each callback result immediately and module-level merge
+        # copies info state from the first wrapped band. Preserve that timing
+        # and source when callbacks mutate metadata or return invalid results.
+        from .operations import merge
+
+        return merge(self.mode, filtered_bands)
 
     def thumbnail(
         self,
@@ -834,13 +872,39 @@ class Image:
         # pixel value. This also materializes any pending Rust pipeline before
         # the in-place write becomes visible.
         self.load()
+        original_value = value
+        python_palette_resolved = False
+        # Keep palette callbacks ahead of the core lookup so reentrant mode or
+        # wrapper changes use the same post-callback target as Pillow.
+        # TODO(pillow-rs#3ptb): verify palette mutation, callback faults, and
+        # coordinate/value ordering in the frozen CPU parity matrix.
+        # ImagePalette retains this callback boundary; its base implementation
+        # delegates ordinary slot selection to Rust.
+        if (
+            self.mode in ("P", "PA")
+            and isinstance(value, (list, tuple))
+            and len(value) in [3, 4]
+        ):
+            if self.mode == "PA":
+                alpha = value[3] if len(value) == 4 else 255
+                value = value[:3]
+            assert self.palette is not None
+            palette_index = self.palette.getcolor(tuple(value), self)
+            value = (palette_index, alpha) if self.mode == "PA" else palette_index
+            python_palette_resolved = True
         try:
             self._rust_image.putpixel_mode(xy, value, self._info)
         finally:
-            # A retained public palette observes allocation, including when
-            # coordinate or alpha validation subsequently raises.
+            # Low-level Rust calls can still allocate a palette color. Mirror
+            # that core mutation for an already-retained Python palette; the
+            # public P/PA route above keeps ImagePalette's own dirty state.
             palette = self.__dict__.get("_palette_object")
-            if palette is not None and isinstance(value, (tuple, list)) and len(value) in (3, 4):
+            if (
+                not python_palette_resolved
+                and palette is not None
+                and isinstance(original_value, (tuple, list))
+                and len(original_value) in (3, 4)
+            ):
                 palette.palette = bytearray(self.getpalette(palette.mode) or [])
 
     def quantize(self, colors: int = 256, method=None, kmeans: int = 0,
@@ -848,12 +912,11 @@ class Image:
         """Reduce colors using median cut algorithm."""
         # Pillow loads the source before defaulting or validating the method.
         self.load()
-        method_to_check = method
-        if method_to_check is None:
-            method_to_check = 0
-            if self.mode == "RGBA":
-                method_to_check = 2
-        if self.mode == "RGBA" and method_to_check not in (2, 3):
+        default_mode = None
+        if method is None:
+            default_mode = self.mode
+            method = 2 if default_mode == "RGBA" else 0
+        if self.mode == "RGBA" and method not in (2, 3):
             # Pillow rejects RGBA methods before evaluating palette truthiness
             # or invoking any palette callbacks.
             raise ValueError(
@@ -869,18 +932,32 @@ class Image:
                 raise ValueError("bad mode for palette image")
             if self.mode not in {"RGB", "L"}:
                 raise ValueError("only RGB or L mode images can be quantized to a palette")
-            if not isinstance(palette, Image):
-                # TODO(pillow-rs#3ptb): Adapt arbitrary valid ImagingCore
-                # carriers and preserve host mode overrides. Pillow reaches
-                # palette.im after these checks.
-                palette.im
-                raise TypeError("palette must be a Pillow-rs Image")
-            return self._new(
-                self._rust_image.quantize(256, None, 0, dither, palette)
+            native_method = method
+            if default_mode == self._rust_image.mode:
+                native_method = None
+            # The native boundary accepts this binding's typed PyImage carrier.
+            # Other foreign ImagingCore implementations still need an explicit
+            # adapter; do not copy their pixels into a second quantization path.
+            # TODO(pillow-rs#3ptb): adapt non-PyImage palette.im carriers and
+            # freeze subclass source-mode, palette-copy, and fault outcomes.
+            quantized = self._rust_image.quantize(
+                256, native_method, 0, dither, palette.im, self.mode
             )
+            result = self._new(quantized)
+            assert palette.palette is not None
+            result._palette_object = palette.palette.copy()
+            return result
 
+        # Keep the core's exact-mode default for ordinary images, including
+        # CoreOnly modes. A subclass can override ``mode``; in that case pass
+        # Pillow's wrapper-resolved default through to the native strategy.
+        native_method = method
+        if default_mode == self._rust_image.mode:
+            native_method = None
         # Pillow does not consume dither on its no-palette quantize path.
-        return self._new(self._rust_image.quantize(colors, method, kmeans, None, None))
+        return self._new(
+            self._rust_image.quantize(colors, native_method, kmeans, None, None)
+        )
 
     def getbbox(self, *, alpha_only: bool = True):
         """Bounding box of non-zero regions."""
@@ -937,14 +1014,12 @@ class Image:
                 # mask. For supported 1/L masks, load the actual wrapper so its
                 # materialized and observed-info state is retained.
                 self._rust_image.validate_putalpha_data_destination()
+                # Pillow promotes before reading the mask mode or calling its
+                # load method. Make the target mode visible to those callbacks;
+                # PutAlphaData later replaces this provisional alpha.
+                self._rust_image.prepare_putalpha_data_input()
                 if alpha.mode in ("1", "L"):
-                    try:
-                        alpha.load()
-                    except BaseException:
-                        # Pillow promotes the destination before mask loading;
-                        # preserve that visible mutation when loading fails.
-                        self._rust_image.prepare_putalpha_data_input()
-                        raise
+                    alpha.load()
                 self._rust_image.putalpha_image_input(alpha._rust_image)
             else:
                 is_builtin_integer = type(alpha) is int or type(alpha) is bool
@@ -1003,7 +1078,7 @@ class Image:
         self._realize_dirty_palette()
         self._rust_image.load()
         self._sync_observed_info()
-        return PixelAccess(self)
+        return PixelAccess(self._rust_image)
 
     def alpha_composite(self, im, dest=(0, 0), source=(0, 0)):
         """Alpha composite im over self in-place through the Rust core."""
@@ -1014,8 +1089,8 @@ class Image:
         """Return list of [count, color] pairs or None if too many colors."""
         # Pillow loads before mode-specific maxcolors handling.
         self.load()
-        # Keep Pillow's public mode check here, while the adapter owns the
-        # Histogram/GetColors call and Python maxcolors comparison protocol.
+        # The public mode selects Pillow's route; core owns its image work,
+        # while the adapter preserves Python maxcolors conversion/comparison.
         histogram_mode = self.mode in ("1", "L", "P")
         return self._rust_image.getcolors_formatted(maxcolors, histogram_mode)
 
@@ -1531,6 +1606,11 @@ class Image:
         return self._rust_image.mode
 
     @property
+    def im(self):
+        """Expose the native raster carrier used by Pillow's image methods."""
+        return self._rust_image
+
+    @property
     def format(self) -> Optional[str]:
         return self._rust_image.format
 
@@ -1609,14 +1689,18 @@ class PixelAccess:
 
     __slots__ = ("_image",)
 
-    def __init__(self, image):
-        self._image = image
+    def __init__(self, rust_image):
+        self._image = rust_image
 
     def __getitem__(self, xy):
-        return self._image.getpixel(xy)
+        # PixelAccess uses the low-level core path, not public getpixel logic.
+        return self._image.pixel_access_getpixel(xy)
 
     def __setitem__(self, xy, value):
-        self._image.putpixel(xy, value)
+        self._image.pixel_access_putpixel(xy, value)
+
+    def __delitem__(self, xy):
+        self._image.pixel_access_delete(xy)
 
     def __str__(self):
         return f'<PixelAccess object at 0x{id(self):x}>'

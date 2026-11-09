@@ -1,13 +1,11 @@
 //! Prepared exact-mode CPU strategy dispatch for GetColors.
 
+use super::super::ops::GET_COLORS_SUPPORT;
 use super::getcolors::GetColorsOutput;
 use crate::compute::ExecutionContext;
-use crate::compute::registry::support::{
-    OperationId, StrategySelection,
-};
+use crate::compute::registry::support::{OperationId, StrategySelection};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
-use super::super::ops::GET_COLORS_SUPPORT;
 
 /// Generates the exact-mode Default owner for one GetColors implementation.
 macro_rules! declare_getcolors_owner {
@@ -85,7 +83,9 @@ fn execute_getcolors_mode(
     maxcolors: u32,
 ) -> Result<GetColorsOutput, PilError> {
     match image {
-        DynamicImage::One(image) => super::super::one::ops::execute_getcolors(image, selection, maxcolors),
+        DynamicImage::One(image) => {
+            super::super::one::ops::execute_getcolors(image, selection, maxcolors)
+        }
         DynamicImage::ImageLuma8(image) => {
             super::super::luma8::ops::execute_getcolors(image, selection, maxcolors)
         }
@@ -134,9 +134,7 @@ fn execute_getcolors_mode(
         DynamicImage::ImageI16(_)
         | DynamicImage::ImageI16L(_)
         | DynamicImage::ImageI16B(_)
-        | DynamicImage::ImageI16N(_) => {
-            Err(PilError::ValueError("image has wrong mode".into()))
-        }
+        | DynamicImage::ImageI16N(_) => Err(PilError::ValueError("image has wrong mode".into())),
         DynamicImage::ImageLumaA16(image) => {
             super::super::luma_a16::ops::execute_getcolors(image, selection, maxcolors)
         }
@@ -163,5 +161,10 @@ pub(crate) fn prepare_getcolors<'a>(
 ) -> Result<PreparedGetColors<'a>, PilError> {
     let mode = image.mode();
     let selection = GET_COLORS_SUPPORT.for_mode(mode).select_serial(context)?;
-    Ok(PreparedGetColors { image, mode, maxcolors, selection })
+    Ok(PreparedGetColors {
+        image,
+        mode,
+        maxcolors,
+        selection,
+    })
 }

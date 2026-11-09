@@ -1,9 +1,11 @@
 //! Native four-channel CMYK-to-RGB arithmetic shared by architecture routes.
 
 use crate::checked_dims::CheckedDims;
+use crate::compute::pool_cpu::helpers::channel::{
+    gather::gather_interleaved_channel, wide::simd_pack_u16x16,
+};
 use crate::error::PilError;
 use crate::raster::{RgbImage, RgbaImage};
-use crate::compute::pool_cpu::helpers::channel::{gather::gather_interleaved_channel, wide::simd_pack_u16x16};
 use wide::{u8x16, u16x16};
 
 pub(crate) fn execute_wide(source: &RgbaImage) -> Result<RgbImage, PilError> {
@@ -46,7 +48,11 @@ fn append_wide_block(source: &[u8], active_pixels: usize, output: &mut Vec<u8>) 
     let mut padded = [0u8; 64];
     padded[..source.len()].copy_from_slice(source);
     let blocks = [0, 16, 32, 48].map(|offset| {
-        u8x16::new(padded[offset..offset + 16].try_into().expect("CMYK vector block"))
+        u8x16::new(
+            padded[offset..offset + 16]
+                .try_into()
+                .expect("CMYK vector block"),
+        )
     });
     append_channels(
         gather_interleaved_channel::<4, 0>(&blocks).to_array(),
@@ -59,6 +65,10 @@ fn append_wide_block(source: &[u8], active_pixels: usize, output: &mut Vec<u8>) 
 }
 
 #[cfg(target_arch = "x86_64")]
+#[allow(
+    unsafe_code,
+    reason = "the SSSE3 mode strategy validates the host feature before this kernel is selected"
+)]
 fn append_ssse3_block(source: &[u8], output: &mut Vec<u8>) {
     let mut channels = [[0u8; 16]; 4];
     for (channel, samples) in channels.iter_mut().enumerate() {
@@ -74,7 +84,14 @@ fn append_ssse3_block(source: &[u8], output: &mut Vec<u8>) {
             );
         }
     }
-    append_channels(channels[0], channels[1], channels[2], channels[3], 16, output);
+    append_channels(
+        channels[0],
+        channels[1],
+        channels[2],
+        channels[3],
+        16,
+        output,
+    );
 }
 
 fn append_channels(
@@ -87,7 +104,7 @@ fn append_channels(
 ) {
     let cyan = u16x16::from(u8x16::new(cyan));
     let magenta = u16x16::from(u8x16::new(magenta));
-    let yellow = u16x16::from(u8x16::new( yellow));
+    let yellow = u16x16::from(u8x16::new(yellow));
     let black = u16x16::from(u8x16::new(black));
     let ink = u16x16::splat(u8::MAX.into()) - black;
     let muldiv255 = |value: u16x16| {

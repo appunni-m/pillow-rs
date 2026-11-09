@@ -1,4 +1,4 @@
-use crate::compute::pool_cpu::ops::draw::BitmapMask;
+use crate::compute::pool_cpu::ops::draw::{BitmapMask, BitmapRegion};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Luma};
 
@@ -16,31 +16,26 @@ pub(crate) fn apply(
     };
     let (image_width, image_height) = canvas.dimensions();
     let ink = color.0;
-    for mask_y in 0..mask_height {
-        for mask_x in 0..mask_width {
+    let region = BitmapRegion::clipped(x, y, image_width, image_height, mask_width, mask_height);
+    let Some((image_x_start, image_y_start)) =
+        region.destination_origin(x, y, image_width, image_height)
+    else {
+        return Ok(DynamicImage::ImageLuma8(canvas));
+    };
+    for mask_y in region.y_start..region.y_end {
+        let image_y = image_y_start + (mask_y - region.y_start);
+        for mask_x in region.x_start..region.x_end {
             let coverage = mask.coverage(mask_x, mask_y);
             if mask.should_skip(coverage) {
                 continue;
             }
-            let image_x = x + mask_x as i32;
-            let image_y = y + mask_y as i32;
-            if image_x < 0
-                || image_y < 0
-                || image_x as u32 >= image_width
-                || image_y as u32 >= image_height
-            {
-                continue;
-            }
+            let image_x = image_x_start + (mask_x - region.x_start);
             let pixel = if coverage == 255 {
                 ink
             } else {
-                mask.blend_byte(
-                    ink,
-                    canvas.get_pixel(image_x as u32, image_y as u32)[0],
-                    coverage,
-                )
+                mask.blend_byte(ink, canvas.get_pixel(image_x, image_y)[0], coverage)
             };
-            canvas.put_pixel(image_x as u32, image_y as u32, Luma([pixel]));
+            canvas.put_pixel(image_x, image_y, Luma([pixel]));
         }
     }
     Ok(DynamicImage::ImageLuma8(canvas))

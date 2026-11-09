@@ -1,15 +1,9 @@
 use super::*;
 
-pub(super) fn put_alpha_output(
-    result: DynamicImage,
-    mode: Mode,
-) -> Result<DynamicImage, PilError> {
+pub(super) fn put_alpha_output(result: DynamicImage, mode: Mode) -> Result<DynamicImage, PilError> {
     if matches!(
         mode,
-        Mode::ImageLuma8
-            | Mode::ImageLumaA8
-            | Mode::ImagePalette8
-            | Mode::ImagePaletteAlpha8
+        Mode::ImageLuma8 | Mode::ImageLumaA8 | Mode::ImagePalette8 | Mode::ImagePaletteAlpha8
     ) {
         let rgba = match result {
             // Native LA/PA byte dispatch already returned the public
@@ -46,9 +40,8 @@ fn extract_effect_spread_or_lut_auxiliary(
             let (width, height) = primary_dimensions.ok_or_else(|| {
                 PilError::InternalError("GPU EffectSpread is missing primary dimensions".into())
             })?;
-            let mapping = crate::compute::helpers::effects::effect_spread_mapping(
-                width, height, *distance,
-            )?;
+            let mapping =
+                crate::compute::helpers::effects::effect_spread_mapping(width, height, *distance)?;
             let mut bytes = Vec::with_capacity(mapping.len().saturating_mul(4));
             for value in mapping {
                 bytes.extend_from_slice(&value.to_le_bytes());
@@ -167,8 +160,7 @@ pub(super) fn extract_second_image(
         let (width, height) = primary_dimensions.ok_or_else(|| {
             PilError::InternalError("GPU EffectNoise is missing primary dimensions".into())
         })?;
-        let values =
-            crate::compute::helpers::effects::effect_noise_values(width, height, *sigma)?;
+        let values = crate::compute::helpers::effects::effect_noise_values(width, height, *sigma)?;
         let mut bytes = Vec::with_capacity(values.len().saturating_mul(4));
         for value in values {
             bytes.extend_from_slice(&[value, 0, 0, 255]);
@@ -304,9 +296,7 @@ pub(super) fn resolve_batch_auxiliary_images(
             let source = draw_preview.as_ref().unwrap_or(image);
             let single_op = std::slice::from_ref(op);
             let selection = crate::compute::pool_cpu::ops::draw::ops::prepare_batch(
-                source,
-                single_op,
-                context,
+                source, single_op, context,
             )?;
             Some(crate::compute::pool_cpu::ops::draw::ops::execute_batch(
                 source,

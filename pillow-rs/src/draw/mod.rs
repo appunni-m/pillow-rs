@@ -14,25 +14,18 @@ mod color_input;
 pub(crate) mod floodfill;
 mod line_joint;
 #[doc(hidden)]
-pub use line_joint::DrawCurveJointPlan;
-#[doc(hidden)]
 pub use floodfill::{
-    execute_floodfill, prepare_floodfill, FloodFillAccess, FloodFillError, PreparedFloodFill,
+    FloodFillAccess, FloodFillError, PreparedFloodFill, execute_floodfill, prepare_floodfill,
 };
+#[doc(hidden)]
+pub use line_joint::DrawCurveJointPlan;
 
-use color_input::{
-    is_double_band_draw_mode, is_single_band_draw_mode,
-};
+use color_input::{is_double_band_draw_mode, is_single_band_draw_mode};
 
 type DrawColor = (u8, u8, u8, u8);
 type ShapeInks = (Option<DrawColor>, Option<DrawColor>);
 
-pub(crate) fn validate_rounded_rect(
-    x0: i32,
-    y0: i32,
-    x1: i32,
-    y1: i32,
-) -> Result<(), PilError> {
+pub(crate) fn validate_rounded_rect(x0: i32, y0: i32, x1: i32, y1: i32) -> Result<(), PilError> {
     if x1 < x0 {
         return Err(PilError::ValueError(
             "x1 must be greater than or equal to x0".to_owned(),
@@ -493,9 +486,9 @@ impl Draw {
                             return None;
                         }
                         match value {
-                            ImageInfoValue::Integer(index) => u32::try_from(index)
-                                .ok()
-                                .filter(|index| *index < 256),
+                            ImageInfoValue::Integer(index) => {
+                                u32::try_from(index).ok().filter(|index| *index < 256)
+                            }
                             _ => None,
                         }
                     })
@@ -566,9 +559,7 @@ impl Draw {
             return Ok(());
         };
         let actual = self.image.mode_identity()?;
-        if requested != actual
-            && !(requested == Mode::ImageRgba8 && actual == Mode::ImageRgb8)
-        {
+        if requested != actual && !(requested == Mode::ImageRgba8 && actual == Mode::ImageRgb8) {
             return Err(PilError::ValueError("mode mismatch".to_owned()));
         }
         Ok(())
@@ -590,8 +581,7 @@ impl Draw {
 
     /// Whether Pillow requested an RGBA drawing context over an RGB image.
     fn alpha_blend_rgb(&self) -> bool {
-        self.draw_mode == Some(Mode::ImageRgba8)
-            && self.orig_mode == Some(Mode::ImageRgb8)
+        self.draw_mode == Some(Mode::ImageRgba8) && self.orig_mode == Some(Mode::ImageRgb8)
     }
 
     /// Validate text options against the destination's Pillow mode.
@@ -600,10 +590,7 @@ impl Draw {
         options: &crate::font::ImageFontTextOptions,
     ) -> Result<(), PilError> {
         if options.embedded_color
-            && !matches!(
-                self.effective_mode()?,
-                Mode::ImageRgb8 | Mode::ImageRgba8
-            )
+            && !matches!(self.effective_mode()?, Mode::ImageRgb8 | Mode::ImageRgba8)
         {
             return Err(PilError::ValueError(
                 "Embedded color supported only in RGB and RGBA modes".into(),
@@ -638,7 +625,8 @@ impl Draw {
             return Ok(None);
         }
         let mode = self.effective_mode()?;
-        if let DrawColorInput::Components(values) | DrawColorInput::TupleComponents(values) = &input {
+        if let DrawColorInput::Components(values) | DrawColorInput::TupleComponents(values) = &input
+        {
             if is_single_band_draw_mode(mode) && mode != Mode::ImagePalette8 && values.len() != 1 {
                 if mode == Mode::ImageF32 {
                     return Err(PilError::TypeError(
@@ -698,9 +686,7 @@ impl Draw {
             | Mode::ImagePaletteAlpha8
             | Mode::ImageCmyk8
             | Mode::ImageYCbCr8
-            | Mode::ImageHsv8 => {
-                Some((255, 255, 255, 255))
-            }
+            | Mode::ImageHsv8 => Some((255, 255, 255, 255)),
             // I/F contexts initialize their ink with draw_ink(1). These
             // tuples are the native little-endian representations carried by
             // the explicit-mode RGBA canvas used by this crate.
@@ -725,9 +711,7 @@ impl Draw {
     /// explicit RGBA context over an RGB image; this method restores RGB.
     pub fn image_clone(&self) -> Result<Image, PilError> {
         let img = self.image.clone();
-        if self.orig_mode != Some(Mode::ImageRgb8)
-            || img.mode_identity()? == Mode::ImageRgb8
-        {
+        if self.orig_mode != Some(Mode::ImageRgb8) || img.mode_identity()? == Mode::ImageRgb8 {
             return Ok(img);
         }
 
@@ -754,22 +738,19 @@ mod rounded_rectangle;
 mod text;
 mod text_lines;
 mod text_mask;
+pub use self::text::draw_text_bbox_font_mode;
+pub use self::text::{DrawTextRouteCallbacks, DrawTextRouteCheck, draw_uses_direct_text_route};
+pub use self::text_lines::{DrawTextLine, DrawTextLinesCallbacks, draw_text_lines_with_callbacks};
+pub use self::text_mask::{
+    DrawTextMaskCallbacks, DrawTextMaskPosition, draw_custom_font_mask_with_callbacks,
+};
 pub use rounded_rectangle::{
-    prepare_rounded_rectangle_with_callbacks, rounded_rectangle_outline_bounds_with_callbacks,
     RoundedRectangleBounds, RoundedRectangleColor, RoundedRectangleDrawStep,
     RoundedRectangleEarlyPath, RoundedRectangleOutlineBorder, RoundedRectangleOutlineCallbacks,
     RoundedRectanglePreparationCallbacks, RoundedRectanglePreparationError,
-    RoundedRectanglePreparedGeometry, RoundedRectangleProgram,
-    RoundedRectangleProgramCallbacks, RoundedRectangleProgramError,
-    RoundedRectangleProgramResponse, RoundedRectangleProgramStep,
-};
-pub use self::text::draw_text_bbox_font_mode;
-pub use self::text::{draw_uses_direct_text_route, DrawTextRouteCallbacks, DrawTextRouteCheck};
-pub use self::text_mask::{
-    draw_custom_font_mask_with_callbacks, DrawTextMaskCallbacks, DrawTextMaskPosition,
-};
-pub use self::text_lines::{
-    draw_text_lines_with_callbacks, DrawTextLine, DrawTextLinesCallbacks,
+    RoundedRectanglePreparedGeometry, RoundedRectangleProgram, RoundedRectangleProgramCallbacks,
+    RoundedRectangleProgramError, RoundedRectangleProgramResponse, RoundedRectangleProgramStep,
+    prepare_rounded_rectangle_with_callbacks, rounded_rectangle_outline_bounds_with_callbacks,
 };
 
 pub use geometry::outline_curve_points;

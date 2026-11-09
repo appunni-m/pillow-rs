@@ -1,6 +1,9 @@
-use super::*;
+use crate::{PyImage, map_error};
+use pyo3::basic::CompareOp;
 use pyo3::prelude::Py;
-use pyo3::types::{PyDict, PyDictMethods, PyIterator};
+use pyo3::prelude::{Bound, PyAny, PyErr, PyModule, PyResult, Python};
+use pyo3::types::{PyAnyMethods, PyDict, PyDictMethods, PyIterator, PyModuleMethods};
+use pyo3::{pyfunction, wrap_pyfunction};
 
 struct PythonPadCallbacks<'py> {
     aspect: super::PythonAspectCallbacks<'py>,
@@ -42,11 +45,7 @@ impl<'py> PythonPadCallbacks<'py> {
         operation(&mut self.aspect).map_err(Into::into)
     }
 
-    fn exact_type_is(
-        &self,
-        value: &Bound<'py, PyAny>,
-        expected_name: &str,
-    ) -> PyResult<bool> {
+    fn exact_type_is(&self, value: &Bound<'py, PyAny>, expected_name: &str) -> PyResult<bool> {
         let type_function = super::imageops_global_or_builtin(self.aspect.py, "type")?;
         let actual = type_function.call1((value,))?;
         let expected = super::imageops_global_or_builtin(self.aspect.py, expected_name)?;
@@ -58,35 +57,20 @@ impl<'py> PythonPadCallbacks<'py> {
         let actual = type_function.call1((value,))?;
         let integer = super::imageops_global_or_builtin(self.aspect.py, "int")?;
         let floating = super::imageops_global_or_builtin(self.aspect.py, "float")?;
-        Ok(Self::type_matches(&actual, &integer)?
-            || Self::type_matches(&actual, &floating)?)
+        Ok(Self::type_matches(&actual, &integer)? || Self::type_matches(&actual, &floating)?)
     }
 
-    fn type_matches(
-        actual: &Bound<'py, PyAny>,
-        expected: &Bound<'py, PyAny>,
-    ) -> PyResult<bool> {
+    fn type_matches(actual: &Bound<'py, PyAny>, expected: &Bound<'py, PyAny>) -> PyResult<bool> {
         if actual.is(expected) {
             return Ok(true);
         }
-        actual
-            .rich_compare(expected, CompareOp::Eq)?
-            .is_truthy()
+        actual.rich_compare(expected, CompareOp::Eq)?.is_truthy()
     }
 
     fn instance_has_pad_overrides(&self) -> PyResult<bool> {
-        let attributes = self
-            .aspect
-            .image
-            .getattr("__dict__")?;
+        let attributes = self.aspect.image.getattr("__dict__")?;
         let attributes = attributes.cast::<PyDict>().map_err(PyErr::from)?;
-        for name in [
-            "mode",
-            "resize",
-            "copy",
-            "_new",
-            "_realize_dirty_palette",
-        ] {
+        for name in ["mode", "resize", "copy", "_new", "_realize_dirty_palette"] {
             if attributes.contains(name)? {
                 return Ok(true);
             }
@@ -94,10 +78,7 @@ impl<'py> PythonPadCallbacks<'py> {
         Ok(false)
     }
 
-    fn values_have_non_native_numeric_types(
-        &self,
-        values: &Bound<'py, PyAny>,
-    ) -> PyResult<bool> {
+    fn values_have_non_native_numeric_types(&self, values: &Bound<'py, PyAny>) -> PyResult<bool> {
         for value in PyIterator::from_object(values)? {
             let value = value?;
             if !self.exact_number_type(&value)? {
@@ -114,11 +95,7 @@ impl<'py> PythonPadCallbacks<'py> {
             .getattr("Image")
     }
 
-    fn image_class_member_matches_base(
-        &self,
-        member: &str,
-        baseline: &str,
-    ) -> PyResult<bool> {
+    fn image_class_member_matches_base(&self, member: &str, baseline: &str) -> PyResult<bool> {
         let current = self.image_class()?.getattr(member)?;
         let expected = self
             .aspect
@@ -258,10 +235,7 @@ impl<'py> pillow_rs::ImageOpsPadCallbacks for PythonPadCallbacks<'py> {
         constructor.call1((mode, size, color)).map_err(Into::into)
     }
 
-    fn resized_palette_is_truthy(
-        &mut self,
-        resized: &Self::Image,
-    ) -> Result<bool, Self::Error> {
+    fn resized_palette_is_truthy(&mut self, resized: &Self::Image) -> Result<bool, Self::Error> {
         resized.getattr("palette")?.is_truthy().map_err(Into::into)
     }
 
@@ -367,9 +341,7 @@ impl<'py> pillow_rs::ImageOpsNativeSizeCallbacks for PythonPadCallbacks<'py> {
         property: pillow_rs::ImageOpsNativeSizeProperty,
     ) -> Result<bool, Self::Error> {
         self.with_native_size_callbacks(|callbacks| {
-            pillow_rs::ImageOpsNativeSizeCallbacks::image_property_matches_base(
-                callbacks, property,
-            )
+            pillow_rs::ImageOpsNativeSizeCallbacks::image_property_matches_base(callbacks, property)
         })
     }
 
@@ -391,10 +363,7 @@ impl<'py> pillow_rs::ImageOpsNativeSizeCallbacks for PythonPadCallbacks<'py> {
         })
     }
 
-    fn coordinate_is_exact_integer(
-        &mut self,
-        value: &Self::Value,
-    ) -> Result<bool, Self::Error> {
+    fn coordinate_is_exact_integer(&mut self, value: &Self::Value) -> Result<bool, Self::Error> {
         self.with_native_size_callbacks(|callbacks| {
             pillow_rs::ImageOpsNativeSizeCallbacks::coordinate_is_exact_integer(callbacks, value)
         })
@@ -415,7 +384,8 @@ impl<'py> pillow_rs::ImageOpsNativeSizeCallbacks for PythonPadCallbacks<'py> {
 
 impl<'py> pillow_rs::ImageOpsPadRouteCallbacks for PythonPadCallbacks<'py> {
     fn native_pad_wrapper_is_eligible(&mut self) -> Result<bool, PadCallbackError> {
-        self.native_pad_wrapper_is_eligible_host().map_err(Into::into)
+        self.native_pad_wrapper_is_eligible_host()
+            .map_err(Into::into)
     }
 
     fn native_pad_arguments_are_eligible(
@@ -508,15 +478,9 @@ fn ops_pad_with_route_callbacks(
     let mut callbacks = PythonPadCallbacks {
         aspect: super::PythonAspectCallbacks::new(py, image, size),
     };
-    pillow_rs::imageops_pad_with_route_callbacks(
-        &mut callbacks,
-        size,
-        method,
-        color,
-        centering,
-    )
-    .map(|result| result.unbind())
-    .map_err(pad_callback_error)
+    pillow_rs::imageops_pad_with_route_callbacks(&mut callbacks, size, method, color, centering)
+        .map(|result| result.unbind())
+        .map_err(pad_callback_error)
 }
 
 pub(super) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {

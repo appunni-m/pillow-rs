@@ -17,11 +17,18 @@ pub(crate) fn execute(
     channels: u8,
     alpha: f64,
 ) -> Result<DynamicImage, PilError> {
-    super::execute_vector(source, other, mode, channels, alpha, |left, right, alpha| {
-        // SAFETY: this entry is reachable only from a prepared AvxFma strategy;
-        // its capability requirement checks AVX and FMA before execution.
-        unsafe { blend_block(left, right, alpha) }
-    })
+    super::execute_vector(
+        source,
+        other,
+        mode,
+        channels,
+        alpha,
+        |left, right, alpha| {
+            // SAFETY: this entry is reachable only from a prepared AvxFma strategy;
+            // its capability requirement checks AVX and FMA before execution.
+            unsafe { blend_block(left, right, alpha) }
+        },
+    )
 }
 
 #[allow(unsafe_code)]
@@ -52,10 +59,7 @@ unsafe fn blend_block(left: [u8; 16], right: [u8; 16], alpha: f32) -> [u8; 16] {
         }
 
         let channels = arch::_mm_or_si128(
-            arch::_mm_or_si128(
-                blend_channel!(0),
-                blend_channel!(8),
-            ),
+            arch::_mm_or_si128(blend_channel!(0), blend_channel!(8)),
             arch::_mm_or_si128(blend_channel!(16), blend_channel!(24)),
         );
         let mut output = [0u8; 16];

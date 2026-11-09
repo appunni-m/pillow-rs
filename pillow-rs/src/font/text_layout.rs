@@ -80,7 +80,11 @@ fn vertical_positions<C: ImageFontTextPositionCallbacks>(
     let mut positioned = Vec::new();
     while let Some(line) = callbacks.next_line()? {
         positioned.push(callbacks.positioned_line(&left, &top, anchor, &line)?);
-        left = callbacks.arithmetic(ImageFontTextPositionArithmetic::AddAssign, &left, line_spacing)?;
+        left = callbacks.arithmetic(
+            ImageFontTextPositionArithmetic::AddAssign,
+            &left,
+            line_spacing,
+        )?;
     }
     Ok(positioned)
 }
@@ -100,11 +104,8 @@ fn horizontal_positions<C: ImageFontTextPositionCallbacks>(
         let Some(line) = callbacks.next_line()? else {
             break;
         };
-        let width_difference = callbacks.arithmetic(
-            ImageFontTextPositionArithmetic::Subtract,
-            &max_width,
-            width,
-        )?;
+        let width_difference =
+            callbacks.arithmetic(ImageFontTextPositionArithmetic::Subtract, &max_width, width)?;
         let mut left = callbacks.origin_x()?;
         apply_alignment(callbacks, &mut left, &width_difference)?;
         if should_justify(callbacks, &width_difference, index)? {
@@ -126,7 +127,11 @@ fn horizontal_positions<C: ImageFontTextPositionCallbacks>(
         }
         adjust_anchor(callbacks, &mut left, anchor, &width_difference, true)?;
         positioned.push(callbacks.positioned_line(&left, &top, anchor, &line)?);
-        top = callbacks.arithmetic(ImageFontTextPositionArithmetic::AddAssign, &top, line_spacing)?;
+        top = callbacks.arithmetic(
+            ImageFontTextPositionArithmetic::AddAssign,
+            &top,
+            line_spacing,
+        )?;
     }
     Ok(positioned)
 }
@@ -178,14 +183,22 @@ fn vertical_origin<C: ImageFontTextPositionCallbacks>(
     if vertical_middle || vertical_descender {
         let line_count = callbacks.line_count()?;
         let count = callbacks.integer(line_count as i64 - 1)?;
-        let offset = callbacks.arithmetic(ImageFontTextPositionArithmetic::Multiply, &count, line_spacing)?;
+        let offset = callbacks.arithmetic(
+            ImageFontTextPositionArithmetic::Multiply,
+            &count,
+            line_spacing,
+        )?;
         let offset = if vertical_middle {
             let two = callbacks.float(2.0)?;
             callbacks.arithmetic(ImageFontTextPositionArithmetic::Divide, &offset, &two)?
         } else {
             offset
         };
-        top = callbacks.arithmetic(ImageFontTextPositionArithmetic::SubtractAssign, &top, &offset)?;
+        top = callbacks.arithmetic(
+            ImageFontTextPositionArithmetic::SubtractAssign,
+            &top,
+            &offset,
+        )?;
     }
     Ok(top)
 }
@@ -197,7 +210,11 @@ fn apply_alignment<C: ImageFontTextPositionCallbacks>(
 ) -> Result<(), C::Error> {
     if callbacks.alignment_is("center")? {
         let two = callbacks.float(2.0)?;
-        let offset = callbacks.arithmetic(ImageFontTextPositionArithmetic::Divide, width_difference, &two)?;
+        let offset = callbacks.arithmetic(
+            ImageFontTextPositionArithmetic::Divide,
+            width_difference,
+            &two,
+        )?;
         *left = callbacks.arithmetic(ImageFontTextPositionArithmetic::AddAssign, left, &offset)?;
     } else if callbacks.alignment_is("right")? {
         *left = callbacks.arithmetic(
@@ -250,17 +267,28 @@ fn justify_words<C: ImageFontTextPositionCallbacks>(
         .map(|word| callbacks.line_width(word, font_mode))
         .collect::<Result<Vec<_>, C::Error>>()?;
     let total = sum_widths(callbacks, &word_widths)?;
-    let extra = callbacks.arithmetic(ImageFontTextPositionArithmetic::Subtract, max_width, &total)?;
+    let extra =
+        callbacks.arithmetic(ImageFontTextPositionArithmetic::Subtract, max_width, &total)?;
     let mut word_x = left.clone();
     let word_anchor = callbacks.justified_anchor(anchor)?;
     for (word, word_width) in words.iter().zip(&word_widths) {
         positioned.push(callbacks.positioned_line(&word_x, top, &word_anchor, word)?);
         let gap_count = callbacks.integer(words.len() as i64 - 1)?;
-        let gap = callbacks.arithmetic(ImageFontTextPositionArithmetic::Divide, &extra, &gap_count)?;
-        let advance = callbacks.arithmetic(ImageFontTextPositionArithmetic::Add, word_width, &gap)?;
-        word_x = callbacks.arithmetic(ImageFontTextPositionArithmetic::AddAssign, &word_x, &advance)?;
+        let gap =
+            callbacks.arithmetic(ImageFontTextPositionArithmetic::Divide, &extra, &gap_count)?;
+        let advance =
+            callbacks.arithmetic(ImageFontTextPositionArithmetic::Add, word_width, &gap)?;
+        word_x = callbacks.arithmetic(
+            ImageFontTextPositionArithmetic::AddAssign,
+            &word_x,
+            &advance,
+        )?;
     }
-    *top = callbacks.arithmetic(ImageFontTextPositionArithmetic::AddAssign, top, line_spacing)?;
+    *top = callbacks.arithmetic(
+        ImageFontTextPositionArithmetic::AddAssign,
+        top,
+        line_spacing,
+    )?;
     Ok(())
 }
 
@@ -374,24 +402,27 @@ fn resolve_multiline_anchor(
     })
 }
 
-pub(crate) fn text_layout_font_mode(mode: Mode, embedded_color: bool) -> &'static str {
+pub(crate) fn text_layout_font_mode(mode: Mode, embedded_color: bool) -> Mode {
     if embedded_color {
-        "RGBA"
-    } else if matches!(mode, Mode::One | Mode::ImagePalette8 | Mode::ImageI32 | Mode::ImageF32) {
-        "1"
+        Mode::ImageRgba8
+    } else if matches!(
+        mode,
+        Mode::One | Mode::ImagePalette8 | Mode::ImageI32 | Mode::ImageF32
+    ) {
+        Mode::One
     } else {
-        "L"
+        Mode::ImageLuma8
     }
 }
 
 fn multiline_line_spacing(
     font: &crate::font::FreeTypeFont,
     options: &crate::font::ImageFontTextOptions,
-    font_mode: &str,
+    font_mode: Mode,
     spacing: f64,
 ) -> Result<f64, PilError> {
     let mut bbox_options = options.clone();
-    bbox_options.mode = Some(font_mode.to_owned());
+    bbox_options.mode = Some(font_mode);
     bbox_options.embedded_color = false;
     bbox_options.direction = None;
     bbox_options.anchor = None;
@@ -427,12 +458,12 @@ fn horizontal_text_positions<'a>(
     lines: &[FontTextRef<'a>],
     font: &crate::font::FreeTypeFont,
     options: &crate::font::ImageFontTextOptions,
-    font_mode: &str,
+    font_mode: Mode,
     line_spacing: f64,
     anchor: &MultilineAnchor,
 ) -> Result<Vec<PositionedTextLine<'a>>, PilError> {
     let mut width_options = options.clone();
-    width_options.mode = Some(font_mode.to_owned());
+    width_options.mode = Some(font_mode);
     width_options.embedded_color = false;
     width_options.stroke_width = 0.0;
     width_options.anchor = None;
@@ -477,7 +508,10 @@ fn horizontal_text_positions<'a>(
                     .map(|word| font.getlength_text_with_options(*word, &width_options))
                     .collect::<Result<Vec<_>, _>>()?;
                 let extra = (max_width
-                    - word_widths.iter().map(|width| f64::from(*width)).sum::<f64>())
+                    - word_widths
+                        .iter()
+                        .map(|width| f64::from(*width))
+                        .sum::<f64>())
                     / (words.len() - 1) as f64;
                 let word_anchor = format!("l{}", anchor.vertical);
                 for (word, width) in words.into_iter().zip(word_widths) {

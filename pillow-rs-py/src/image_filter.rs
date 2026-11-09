@@ -98,17 +98,11 @@ fn color3dlut_repr(
     pillow_rs::color3dlut_repr(table_type, size, channels, target_mode)
 }
 
-#[pyfunction]
-fn kernel_validate_coefficients(kernel: Option<Vec<f64>>, size: (u32, u32)) -> PyResult<()> {
-    pillow_rs::validate_kernel_coefficients(kernel.as_deref(), size).map_err(map_error)
-}
-
 pub(super) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(color3dlut_check_size, m)?)?;
     m.add_function(wrap_pyfunction!(color3dlut_new, m)?)?;
     m.add_function(wrap_pyfunction!(color3dlut_generate, m)?)?;
     m.add_function(wrap_pyfunction!(color3dlut_transform, m)?)?;
     m.add_function(wrap_pyfunction!(color3dlut_repr, m)?)?;
-    m.add_function(wrap_pyfunction!(kernel_validate_coefficients, m)?)?;
     Ok(())
 }

@@ -1,9 +1,9 @@
-use crate::draw::pil_blend;
 use crate::compute::pool_cpu::helpers::bytes::hidden_lanes::{
     hidden_lanes_for_pixel, update_hidden_lanes,
 };
 use crate::compute::pool_cpu::helpers::bytes::preblend;
 use crate::compute::pool_cpu::ops::draw::{BitmapMask, BitmapRegion};
+use crate::draw::pil_blend;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode, RgbImage};
 
@@ -18,12 +18,8 @@ impl<'a> NativeMask<'a> {
     fn from_image(mode: Mode, image: &'a DynamicImage) -> Option<Self> {
         match (mode, image) {
             (Mode::One, DynamicImage::One(image)) => Some(Self::One(image.as_raw())),
-            (Mode::ImageLuma8, DynamicImage::ImageLuma8(image)) => {
-                Some(Self::Luma(image.as_raw()))
-            }
-            (Mode::ImageRgba8, DynamicImage::ImageRgba8(image)) => {
-                Some(Self::Rgba(image.as_raw()))
-            }
+            (Mode::ImageLuma8, DynamicImage::ImageLuma8(image)) => Some(Self::Luma(image.as_raw())),
+            (Mode::ImageRgba8, DynamicImage::ImageRgba8(image)) => Some(Self::Rgba(image.as_raw())),
             (Mode::ImageRgbPremultiplied8, DynamicImage::ImageRgbPremultiplied8(image)) => {
                 Some(Self::RgbPremultiplied(image.as_raw()))
             }
@@ -147,15 +143,19 @@ fn draw_mask<const PREMULTIPLIED: bool, C>(
     color: (u8, u8, u8, u8),
     coverage_at: C,
     hidden_lanes: &mut Option<crate::raster::buffer::HiddenPixelLanes>,
-)
- -> Result<(), PilError>
+) -> Result<(), PilError>
 where
     C: Fn(usize) -> u8,
 {
     let width = image.width();
     let row_stride = width as usize * 3;
+    let Some((image_x_start, image_y_start)) =
+        region.destination_origin(x, y, width, image.height())
+    else {
+        return Ok(());
+    };
     for source_y in region.y_start..region.y_end {
-        let image_y = (i64::from(y) + i64::from(source_y)) as usize;
+        let image_y = (image_y_start + (source_y - region.y_start)) as usize;
         let destination_row = image_y * row_stride;
         for source_x in region.x_start..region.x_end {
             let pixel_index = source_y as usize * mask_width as usize + source_x as usize;
@@ -163,23 +163,14 @@ where
             if coverage == 0 && !PREMULTIPLIED {
                 continue;
             }
-            let image_x = (i64::from(x) + i64::from(source_x)) as usize;
+            let image_x = (image_x_start + (source_x - region.x_start)) as usize;
             let destination_offset = destination_row + image_x * 3;
             let destination_index = image_y * width as usize + image_x;
-            let previous_hidden = hidden_lanes_for_pixel(
-                hidden_lanes,
-                destination_index,
-                1,
-                [u8::MAX, 0],
-            )?;
+            let previous_hidden =
+                hidden_lanes_for_pixel(hidden_lanes, destination_index, 1, [u8::MAX, 0])?;
             {
                 let destination = image.as_mut();
-                blend_pixel::<PREMULTIPLIED>(
-                    destination,
-                    destination_offset,
-                    coverage,
-                    color,
-                );
+                blend_pixel::<PREMULTIPLIED>(destination, destination_offset, coverage, color);
             }
             let lane = if coverage == 255 && !PREMULTIPLIED {
                 color.3
@@ -216,16 +207,10 @@ fn blend_pixel<const PREMULTIPLIED: bool>(
     } else if PREMULTIPLIED {
         destination[destination_offset] =
             preblend::apply(color.0, destination[destination_offset], coverage);
-        destination[destination_offset + 1] = preblend::apply(
-            color.1,
-            destination[destination_offset + 1],
-            coverage,
-        );
-        destination[destination_offset + 2] = preblend::apply(
-            color.2,
-            destination[destination_offset + 2],
-            coverage,
-        );
+        destination[destination_offset + 1] =
+            preblend::apply(color.1, destination[destination_offset + 1], coverage);
+        destination[destination_offset + 2] =
+            preblend::apply(color.2, destination[destination_offset + 2], coverage);
     } else {
         destination[destination_offset] =
             pil_blend(color.0, destination[destination_offset], coverage);

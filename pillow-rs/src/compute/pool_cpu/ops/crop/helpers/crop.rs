@@ -26,8 +26,10 @@ impl CropRegion {
         bottom: u32,
     ) -> Result<Self, PilError> {
         debug_assert!(
-            left < image_width && top < image_height
-                && right <= image_width && bottom <= image_height,
+            left < image_width
+                && top < image_height
+                && right <= image_width
+                && bottom <= image_height,
             "crop pipeline coordinates must be normalized before execution"
         );
         let width = right.checked_sub(left).ok_or_else(|| {
@@ -64,7 +66,12 @@ impl<'a, P: Pixel<Subpixel = u8>> ByteCrop<'a, P> {
         shape_error: &'static str,
     ) -> Result<Self, PilError> {
         let dimensions = Self::dimensions(region)?;
-        Ok(Self { image, region, dimensions, shape_error })
+        Ok(Self {
+            image,
+            region,
+            dimensions,
+            shape_error,
+        })
     }
 
     pub(crate) fn execute(self) -> Result<ImageBuffer<P, Vec<u8>>, PilError> {
@@ -85,11 +92,14 @@ impl<'a, P: Pixel<Subpixel = u8>> ByteCrop<'a, P> {
         let left = self.region.left as usize;
         let top = self.region.top as usize;
         let output_width = self.region.width as usize;
-        if output.remap_hidden_pixel_lanes_from(self.image, |destination_index| {
-            let x = destination_index % output_width;
-            let y = destination_index / output_width;
-            (top + y) * source_width + left + x
-        }).is_none() {
+        if output
+            .remap_hidden_pixel_lanes_from(self.image, |destination_index| {
+                let x = destination_index % output_width;
+                let y = destination_index / output_width;
+                (top + y) * source_width + left + x
+            })
+            .is_none()
+        {
             return Err(PilError::InternalError(
                 "crop hidden pixel lanes did not match the output extent".into(),
             ));

@@ -2,6 +2,8 @@
 import array
 from . import _core
 
+_NATIVE_ALLOCATION_UNAVAILABLE = object()
+
 
 class ImagePalette:
     """Color palette for palette-mapped images."""
@@ -81,24 +83,79 @@ class ImagePalette:
     def _new_color_index(self, image=None, error=None):
         if not isinstance(self.palette, bytearray):
             self._palette = bytearray(self.palette)
-        index = len(self.palette) // len(self.mode)
+        entries = len(self.palette) // len(self.mode)
         special_colors = ()
         if image:
             special_colors = (
                 image.info.get("background"),
                 image.info.get("transparency"),
             )
+        native_index = self._native_allocation_index(
+            image, entries, special_colors, []
+        )
+        if native_index is _NATIVE_ALLOCATION_UNAVAILABLE:
+            index = entries
             while index in special_colors:
                 index += 1
+        else:
+            index = 256 if native_index is None else native_index
         if index >= 256:
             if image:
-                for candidate, count in reversed(list(enumerate(image.histogram()))):
-                    if count == 0 and candidate not in special_colors:
-                        index = candidate
-                        break
+                histogram = image.histogram()
+                native_index = self._native_allocation_index(
+                    image, entries, special_colors, histogram
+                )
+                if native_index is _NATIVE_ALLOCATION_UNAVAILABLE:
+                    for candidate, count in reversed(list(enumerate(histogram))):
+                        if count == 0 and candidate not in special_colors:
+                            index = candidate
+                            break
+                elif native_index is not None:
+                    index = native_index
+                else:
+                    index = 256
             if index >= 256:
                 raise ValueError("cannot allocate more than 256 colors") from error
         return index
+
+    def _native_allocation_index(self, image, entries, special_colors, histogram):
+        # Delegate exact built-in slot selection to core. Keep Python's path for
+        # subclasses and values whose comparison or iteration is observable.
+        # TODO(pillow-rs#3ptb): add parity coverage for these callback paths.
+        from .image import Image
+
+        if type(self) is not ImagePalette or type(self.mode) is not str:
+            return _NATIVE_ALLOCATION_UNAVAILABLE
+        if image is not None and type(image) is not Image:
+            return _NATIVE_ALLOCATION_UNAVAILABLE
+        if type(histogram) is not list:
+            return _NATIVE_ALLOCATION_UNAVAILABLE
+        if any(
+            type(count) is not int or count < 0 or count > 0xFFFFFFFFFFFFFFFF
+            for count in histogram
+        ):
+            return _NATIVE_ALLOCATION_UNAVAILABLE
+
+        reserved = []
+        for value in special_colors:
+            if value is None:
+                continue
+            if type(value) is bool:
+                index = int(value)
+            elif type(value) is int:
+                index = value
+            elif type(value) is float and value.is_integer():
+                index = int(value)
+            elif type(value) is float:
+                continue
+            else:
+                return _NATIVE_ALLOCATION_UNAVAILABLE
+            if 0 <= index <= 0xFFFFFFFF:
+                reserved.append(index)
+
+        return _core._palette_allocation_index_from_histogram(
+            entries, reserved, histogram
+        )
 
     def getdata(self):
         """Return palette data as (mode, raw_data)."""

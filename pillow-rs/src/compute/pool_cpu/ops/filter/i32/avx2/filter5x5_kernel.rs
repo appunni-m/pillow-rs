@@ -48,7 +48,11 @@ fn native_filter_5x5_i32_vector(
         total += row(-2, 20);
         let values = total.to_array();
         return std::array::from_fn(|lane| {
-            if values[lane] >= 0.0 { values[lane] as i32 } else { 0 }
+            if values[lane] >= 0.0 {
+                values[lane] as i32
+            } else {
+                0
+            }
         });
     }
 
@@ -60,9 +64,9 @@ fn native_filter_5x5_i32_vector(
             for tap in 0..5 {
                 let source_x = x + tap - 2;
                 let base = (source_y * width + source_x) * 4;
-                samples[tap][lane] = i32::from_le_bytes([
-                    raw[base], raw[base + 1], raw[base + 2], raw[base + 3],
-                ]) as f32;
+                samples[tap][lane] =
+                    i32::from_le_bytes([raw[base], raw[base + 1], raw[base + 2], raw[base + 3]])
+                        as f32;
             }
         }
         let sum = f32x8::from(samples[1]) * f32x8::splat(kernel[kernel_start + 1]);
@@ -80,7 +84,11 @@ fn native_filter_5x5_i32_vector(
     total += row(-2, 20);
     let values = total.to_array();
     std::array::from_fn(|lane| {
-        if values[lane] >= 0.0 { values[lane] as i32 } else { 0 }
+        if values[lane] >= 0.0 {
+            values[lane] as i32
+        } else {
+            0
+        }
     })
 }
 

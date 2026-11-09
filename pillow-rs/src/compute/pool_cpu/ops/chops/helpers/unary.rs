@@ -6,11 +6,7 @@ use crate::raster::traits::Pixel;
 use crate::raster::{DynamicImage, GrayImage, Luma};
 
 pub(crate) fn constant(width: u32, height: u32, value: u8) -> DynamicImage {
-    DynamicImage::ImageLuma8(GrayImage::from_pixel(
-        width,
-        height,
-        Luma([value]),
-    ))
+    DynamicImage::ImageLuma8(GrayImage::from_pixel(width, height, Luma([value])))
 }
 
 pub(crate) fn duplicate(image: &DynamicImage) -> DynamicImage {
@@ -73,11 +69,11 @@ pub(crate) fn carry_inverted_lane_fallback(
     if pixel_count == 0 {
         return Ok(());
     }
-    let fallback = crate::compute::pool_cpu::helpers::bytes::hidden_lanes::
-        default_hidden_pixel_lanes(mode, 0)
-        .ok_or_else(|| {
-            PilError::InternalError("Chops mode omitted its physical-lane fallback".into())
-        })?;
+    let fallback =
+        crate::compute::pool_cpu::helpers::bytes::hidden_lanes::default_hidden_pixel_lanes(mode, 0)
+            .ok_or_else(|| {
+                PilError::InternalError("Chops mode omitted its physical-lane fallback".into())
+            })?;
     let lanes = HiddenPixelLanes::constant(1, pixel_count, [!fallback[0], 0])
         .ok_or_else(|| PilError::InternalError("Chops inverted lane result was invalid".into()))?;
     if output.mode() != mode || !output.replace_hidden_pixel_lanes(Some(lanes)) {

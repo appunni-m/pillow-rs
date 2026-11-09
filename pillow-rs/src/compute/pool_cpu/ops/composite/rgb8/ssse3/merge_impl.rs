@@ -22,11 +22,27 @@ const fn rgb_ssse3_mask(output_chunk: usize, source_channel: usize) -> [u8; 16] 
 }
 
 const RGB_SSSE3_MASKS: [[[u8; 16]; 3]; 3] = [
-    [rgb_ssse3_mask(0, 0), rgb_ssse3_mask(0, 1), rgb_ssse3_mask(0, 2)],
-    [rgb_ssse3_mask(1, 0), rgb_ssse3_mask(1, 1), rgb_ssse3_mask(1, 2)],
-    [rgb_ssse3_mask(2, 0), rgb_ssse3_mask(2, 1), rgb_ssse3_mask(2, 2)],
+    [
+        rgb_ssse3_mask(0, 0),
+        rgb_ssse3_mask(0, 1),
+        rgb_ssse3_mask(0, 2),
+    ],
+    [
+        rgb_ssse3_mask(1, 0),
+        rgb_ssse3_mask(1, 1),
+        rgb_ssse3_mask(1, 2),
+    ],
+    [
+        rgb_ssse3_mask(2, 0),
+        rgb_ssse3_mask(2, 1),
+        rgb_ssse3_mask(2, 2),
+    ],
 ];
 
+#[allow(
+    unsafe_code,
+    reason = "the SSSE3 architecture strategy and merge guard validate this kernel's preconditions"
+)]
 pub(crate) fn merge(
     source: &DynamicImage,
     remaining: &[Arc<DynamicImage>],
@@ -54,14 +70,15 @@ pub(crate) fn merge(
     let output_len = dimensions.total_bytes();
     // SAFETY: the prepared Merge declaration requires SSSE3 capability and
     // its request guard validates the exact RGB band layout and vector size.
-    let (output, vector_blocks, scalar_tail) = unsafe {
-        interleave_rgb_ssse3(red, green, blue, pixels, output_len)
-    };
+    let (output, vector_blocks, scalar_tail) =
+        unsafe { interleave_rgb_ssse3(red, green, blue, pixels, output_len) };
     let mut image = native_bytes::construct(width, height, Mode::ImageRgb8, output)?;
     merge::preserve_merged_padding(
         &mut image,
         Mode::ImageRgb8,
-        MergeLayout::Three { lab_encoding: false },
+        MergeLayout::Three {
+            lab_encoding: false,
+        },
         pixels,
     )?;
     crate::compute::record_pipeline_allocation(output_len);
@@ -138,7 +155,9 @@ unsafe fn interleave_rgb_ssse3(
         for pixel in vector_pixels..pixels {
             let offset = pixel * 3;
             output_ptr.add(offset).write(*red.get_unchecked(pixel));
-            output_ptr.add(offset + 1).write(*green.get_unchecked(pixel));
+            output_ptr
+                .add(offset + 1)
+                .write(*green.get_unchecked(pixel));
             output_ptr.add(offset + 2).write(*blue.get_unchecked(pixel));
         }
         output.set_len(output_len);

@@ -10,7 +10,10 @@ use crate::raster::Mode;
 pub fn gpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
     if let PipelineOp::Autocontrast { options, mask } = op
         && mask.is_some()
-        && (options.ignore.as_ref().is_some_and(|values| !values.is_empty())
+        && (options
+            .ignore
+            .as_ref()
+            .is_some_and(|values| !values.is_empty())
             || options.preserve_tone
             || options.cutoff.0 != options.cutoff.1
             || options.cutoff != (0.0, 0.0))
@@ -576,7 +579,11 @@ fn gpu_auxiliary_shader_contract(op: &PipelineOp) -> Option<bool> {
         // the source storage contract before uploading those bytes.
         // TODO(pillow-rs#3ptb): add a GPU PutData result strategy that retains
         // compact-carrier lanes before admitting these payload modes.
-        PipelineOp::PutData { payload_mode, hidden_lanes, .. } => {
+        PipelineOp::PutData {
+            payload_mode,
+            hidden_lanes,
+            ..
+        } => {
             hidden_lanes.is_none()
                 && matches!(
                     payload_mode,

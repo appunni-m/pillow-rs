@@ -1,7 +1,8 @@
 //! Exact ImageF32 Transform support and mode strategy.
 
 use crate::compute::pool_cpu::ops::transform::helpers::{
-    architecture_support, strategy::{self, Strategy},
+    architecture_support,
+    strategy::{self, Strategy},
 };
 use crate::compute::pool_cpu::ops::transform::ops::TransformRequest;
 use crate::compute::registry::support::{ModeSupport, OperationId, OutputModeRule};
@@ -60,10 +61,7 @@ pub(crate) fn execute(plan: Strategy<'_>) -> Result<DynamicImage, PilError> {
     }
 }
 
-pub(crate) fn execute_into(
-    plan: Strategy<'_>,
-    output: &mut DynamicImage,
-) -> Result<(), PilError> {
+pub(crate) fn execute_into(plan: Strategy<'_>, output: &mut DynamicImage) -> Result<(), PilError> {
     strategy::execute_into(
         plan,
         output,

@@ -1,7 +1,7 @@
 //! Existing eight-lane perspective and quadrilateral nearest sampling.
 
-use crate::error::PilError;
 use super::vector_samples;
+use crate::error::PilError;
 use wide::f64x8;
 
 const LANES: usize = 8;
@@ -81,13 +81,7 @@ pub(crate) fn execute_into<const CHANNELS: usize>(
     for y in 0..output_height as usize {
         for x in (0..output_width as usize).step_by(LANES) {
             let count = (output_width as usize - x).min(LANES);
-            let (source_x, source_y) = source_points(
-                coefficients,
-                quad,
-                x,
-                y,
-                count,
-            );
+            let (source_x, source_y) = source_points(coefficients, quad, x, y, count);
             for lane in 0..count {
                 let output_pixel = y * output_width as usize + x + lane;
                 let output_start = output_pixel * CHANNELS;
@@ -144,23 +138,17 @@ fn source_points(
     if quad {
         let x = x + f64x8::splat(0.5);
         let y = y + f64x8::splat(0.5);
-        let source_x = f64x8::splat(a)
-            + f64x8::splat(b) * x
-            + f64x8::splat(c) * y
-            + f64x8::splat(d) * x * y;
-        let source_y = f64x8::splat(e)
-            + f64x8::splat(f) * x
-            + f64x8::splat(g) * y
-            + f64x8::splat(h) * x * y;
+        let source_x =
+            f64x8::splat(a) + f64x8::splat(b) * x + f64x8::splat(c) * y + f64x8::splat(d) * x * y;
+        let source_y =
+            f64x8::splat(e) + f64x8::splat(f) * x + f64x8::splat(g) * y + f64x8::splat(h) * x * y;
         (source_x.to_array(), source_y.to_array())
     } else {
         let x = x + f64x8::splat(0.5);
         let y = y + f64x8::splat(0.5);
         let denominator = f64x8::splat(g) * x + f64x8::splat(h) * y + f64x8::splat(1.0);
-        let source_x = (f64x8::splat(a) * x + f64x8::splat(b) * y + f64x8::splat(c))
-            / denominator;
-        let source_y = (f64x8::splat(d) * x + f64x8::splat(e) * y + f64x8::splat(f))
-            / denominator;
+        let source_x = (f64x8::splat(a) * x + f64x8::splat(b) * y + f64x8::splat(c)) / denominator;
+        let source_y = (f64x8::splat(d) * x + f64x8::splat(e) * y + f64x8::splat(f)) / denominator;
         (source_x.to_array(), source_y.to_array())
     }
 }

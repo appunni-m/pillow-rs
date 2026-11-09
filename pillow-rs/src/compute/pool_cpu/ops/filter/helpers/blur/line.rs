@@ -182,10 +182,6 @@ pub(super) fn blur_one_row(
     );
 }
 
-
-
-
-
 pub(super) fn blur_columns(
     source: &[u8],
     destination: &mut [u8],
@@ -213,7 +209,6 @@ pub(super) fn blur_columns(
         accumulator,
     );
 }
-
 
 pub(super) fn blur_rows(
     source: &[u8],

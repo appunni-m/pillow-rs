@@ -11,8 +11,8 @@
 //! ImageFont rows pass; fix the real lower implementation instead.
 
 use super::{
-    FontLengthAndBounds, FontMaskAndBounds, FontMaskAndOffset, FontSizeAndOffset, FreeTypeFont,
-    FontTextRef, ImageFontFaceInfo, ImageFontLoadOptions, ImageFontTextOptions,
+    FontLengthAndBounds, FontMaskAndBounds, FontMaskAndOffset, FontSizeAndOffset, FontTextRef,
+    FreeTypeFont, ImageFontFaceInfo, ImageFontLoadOptions, ImageFontTextOptions,
     ImageFontVariantOptions, ImageFontVariationAxis,
 };
 use crate::error::PilError;
@@ -38,8 +38,8 @@ pub(crate) use layout::{
 #[cfg(feature = "test-api")]
 pub(crate) use render::render_text_binary;
 pub(crate) use render::{
-    getmask2, getmask2_text_with_options, getmask2_text_with_start,
-    getmask_text, getmask_text_with_options, native_render, native_render_text,
+    getmask_text, getmask_text_with_options, getmask2, getmask2_text_with_options,
+    getmask2_text_with_start, native_render, native_render_text,
 };
 pub(crate) use variation::{
     font_variant, font_variant_with_options, get_variation_axes, get_variation_names,

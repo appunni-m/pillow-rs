@@ -1,10 +1,10 @@
 //! RGB GaussianBlur and BoxBlur radius-one kernels over native interleaved bytes.
 
+use super::super::super::ops::FilterRequest;
 use crate::checked_dims::CheckedDims;
 use crate::compute::helpers::filters::gaussian_blur_three_pass_radius;
 use crate::error::PilError;
 use crate::raster::{DynamicImage, RgbImage};
-use super::super::super::ops::FilterRequest;
 use wide::{i16x8, i32x8, u8x16, u16x16, u32x16};
 
 const LANES: usize = 16;
@@ -107,13 +107,15 @@ fn horizontal_radius_one_row_with_vectors(
     let mut byte_index = prefix_end;
     while byte_index + LANES <= interior_end {
         let load = |offset: usize| u16x16::from(load_u8x16(source, offset));
-        let neighbors = u32x16::from(load(byte_index - 3) + load(byte_index) + load(byte_index + 3));
+        let neighbors =
+            u32x16::from(load(byte_index - 3) + load(byte_index) + load(byte_index + 3));
         let edges = if fractional_weight == 0 {
             u32x16::splat(0)
         } else {
             u32x16::from(load(byte_index - 6) + load(byte_index + 6))
         };
-        let weighted = neighbors * whole_weight_vector + edges * fractional_weight_vector + rounding_bias;
+        let weighted =
+            neighbors * whole_weight_vector + edges * fractional_weight_vector + rounding_bias;
         let packed = pack_bytes(weighted >> 24u32);
         destination[byte_index..byte_index + LANES].copy_from_slice(&packed);
         byte_index += LANES;
@@ -154,10 +156,12 @@ fn horizontal_radius_one_pass(
     let prefix_end = width.min(2) * 3;
     let blocks_per_row = interior_end.saturating_sub(prefix_end) / LANES;
     crate::compute::record_pipeline_operation_vector_blocks(
-        blocks_per_row.saturating_mul(height) as u64,
+        blocks_per_row.saturating_mul(height) as u64
     );
     let scalar_bytes = row_stride.saturating_sub(blocks_per_row * LANES);
-    crate::compute::record_pipeline_operation_scalar_tail(scalar_bytes.saturating_mul(height) as u64);
+    crate::compute::record_pipeline_operation_scalar_tail(
+        scalar_bytes.saturating_mul(height) as u64
+    );
     for y in 0..height {
         let start = y * row_stride;
         let end = start + row_stride;
@@ -197,11 +201,7 @@ fn vertical_radius_one_pass(
                 if count == LANES {
                     u32x16::from(u16x16::from(load_u8x16(source, base + x)))
                 } else {
-                    u32x16::from(u16x16::from(load_padded_u8x16(
-                        source,
-                        base + x,
-                        count,
-                    )))
+                    u32x16::from(u16x16::from(load_padded_u8x16(source, base + x, count)))
                 }
             };
             let sum = load(sum_top) + load(sum_middle) + load(sum_bottom);
@@ -251,11 +251,14 @@ pub(in crate::compute::pool_cpu::ops::filter::rgb8) fn execute_radius_one(
         super::super::super::helpers::SMALL_UNIFORM_BYTE_MAX_PIXELS,
     ) {
         let mut output = vec![0; input.as_raw().len()];
-        let (blocks, scalar_tail) = crate::compute::pool_cpu::helpers::bytes::vector_copy::copy_native_bytes(
-            input.as_raw(),
-            &mut output,
-        )
-        .ok_or_else(|| PilError::InternalError("RGB GaussianBlur identity copy shape mismatch".into()))?;
+        let (blocks, scalar_tail) =
+            crate::compute::pool_cpu::helpers::bytes::vector_copy::copy_native_bytes(
+                input.as_raw(),
+                &mut output,
+            )
+            .ok_or_else(|| {
+                PilError::InternalError("RGB GaussianBlur identity copy shape mismatch".into())
+            })?;
         crate::compute::record_pipeline_operation_path("native-copy");
         crate::compute::record_pipeline_operation_vector_blocks(blocks);
         crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
@@ -305,10 +308,12 @@ fn box_blur_radius_one_rows(
     let prefix_end = width.min(2) * 3;
     let blocks_per_row = interior_end.saturating_sub(prefix_end) / LANES;
     crate::compute::record_pipeline_operation_vector_blocks(
-        blocks_per_row.saturating_mul(height) as u64,
+        blocks_per_row.saturating_mul(height) as u64
     );
     let scalar_bytes = row_stride.saturating_sub(blocks_per_row * LANES);
-    crate::compute::record_pipeline_operation_scalar_tail(scalar_bytes.saturating_mul(height) as u64);
+    crate::compute::record_pipeline_operation_scalar_tail(
+        scalar_bytes.saturating_mul(height) as u64
+    );
 
     let whole_weight = BLUR_SCALE / 3;
     if height == 1 {
@@ -372,9 +377,7 @@ fn box_blur_radius_one_rows(
                     u16x16::from(load_padded_u8x16(&ring, start + x, count))
                 }
             };
-            let sum = u32x16::from(
-                load(top_start) + load(center_start) + load(bottom_start),
-            );
+            let sum = u32x16::from(load(top_start) + load(center_start) + load(bottom_start));
             let weighted = sum * vertical_weight_vector + vertical_rounding_bias;
             let packed = pack_bytes(weighted >> 24u32);
             destination[output_start + x..output_start + x + count]

@@ -74,7 +74,7 @@ pub(crate) fn getlength_text_with_options(
 ) -> Result<f32, PilError> {
     validate_text_length(text)?;
     validate_basic_layout_options(options)?;
-    if options.mode.as_deref() != Some("1") {
+    if options.mode != Some(crate::raster::Mode::One) {
         return getlength_text(font, text);
     }
     Ok(length_from_basic_layout_with_flags(font, text, text_load_flags(options))? as f32 / 64.0)
@@ -141,7 +141,7 @@ pub(crate) fn validate_basic_layout_options(
 }
 
 pub(super) fn text_load_flags(options: &ImageFontTextOptions) -> i32 {
-    let target = if options.mode.as_deref() == Some("1") {
+    let target = if options.mode == Some(crate::raster::Mode::One) {
         TGT_MONO
     } else {
         TGT_NORM

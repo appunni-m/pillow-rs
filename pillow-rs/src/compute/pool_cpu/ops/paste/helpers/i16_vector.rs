@@ -9,20 +9,20 @@ use wide::u16x8;
     clippy::arithmetic_side_effects,
     reason = "prepared extents validate every sample and mask access"
 )]
-pub(crate) fn execute(
-    plan: Luma16Plan<'_>,
-    source: &[u16],
-) -> Result<Vec<u16>, PilError> {
+pub(crate) fn execute(plan: Luma16Plan<'_>, source: &[u16]) -> Result<Vec<u16>, PilError> {
     let source_width = usize::try_from(plan.source_size.0).map_err(|_| overflow("source width"))?;
-    let source_height = usize::try_from(plan.source_size.1).map_err(|_| overflow("source height"))?;
-    let destination_width = usize::try_from(plan.destination_size.0)
-        .map_err(|_| overflow("destination width"))?;
-    let destination_height = usize::try_from(plan.destination_size.1)
-        .map_err(|_| overflow("destination height"))?;
+    let source_height =
+        usize::try_from(plan.source_size.1).map_err(|_| overflow("source height"))?;
+    let destination_width =
+        usize::try_from(plan.destination_size.0).map_err(|_| overflow("destination width"))?;
+    let destination_height =
+        usize::try_from(plan.destination_size.1).map_err(|_| overflow("destination height"))?;
     if source.len() != sample_count(source_width, source_height)?
         || plan.destination.len() != sample_count(destination_width, destination_height)?
     {
-        return Err(PilError::InternalError("I;16 Paste storage did not match dimensions".into()));
+        return Err(PilError::InternalError(
+            "I;16 Paste storage did not match dimensions".into(),
+        ));
     }
     let mut output = plan.destination.to_vec();
     let mut copy_vector_blocks = 0_u64;
@@ -192,15 +192,20 @@ fn blend_fractional_region(
                 source_bytes[lane] = ((source[source_index] >> source_shift) & 0xff) as u8;
                 destination_bytes[lane] =
                     ((output[destination_index] >> destination_shift) & 0xff) as u8;
-                let mask_index = (source_y * mask_width + source_byte_x) * layout.channels
-                    + layout.value_index;
+                let mask_index =
+                    (source_y * mask_width + source_byte_x) * layout.channels + layout.value_index;
                 masks[lane] = mask[mask_index];
                 destination_samples[lane] = destination_index;
                 destination_shifts[lane] = destination_shift;
             }
-            let blended =
-                blend_group(source_bytes, destination_bytes, masks, layout.premultiplied);
-            write_byte_lanes(output, blended, destination_samples, destination_shifts, active);
+            let blended = blend_group(source_bytes, destination_bytes, masks, layout.premultiplied);
+            write_byte_lanes(
+                output,
+                blended,
+                destination_samples,
+                destination_shifts,
+                active,
+            );
         }
     }
     Ok(())

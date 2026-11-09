@@ -16,7 +16,10 @@ pub(crate) fn histogram_extrema_from_python(
     match mode {
         pillow_rs::Mode::ImageI32 => {
             let (minimum, maximum) = integer_extrema(extrema)?;
-            Ok(Some(pillow_rs::HistogramExtrema::ImageI32 { minimum, maximum }))
+            Ok(Some(pillow_rs::HistogramExtrema::ImageI32 {
+                minimum,
+                maximum,
+            }))
         }
         pillow_rs::Mode::ImageF32 => {
             let (minimum, maximum) = float_extrema(extrema)?;

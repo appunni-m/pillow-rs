@@ -1,10 +1,7 @@
 use crate::error::PilError;
 use crate::raster::DynamicImage;
 
-pub(crate) fn execute(
-    image: &DynamicImage,
-    size: u32,
-) -> Result<DynamicImage, PilError> {
+pub(crate) fn execute(image: &DynamicImage, size: u32) -> Result<DynamicImage, PilError> {
     let DynamicImage::One(input) = image else {
         return Err(PilError::InternalError(
             "ModeFilter mode strategy received a mismatched raster variant".into(),

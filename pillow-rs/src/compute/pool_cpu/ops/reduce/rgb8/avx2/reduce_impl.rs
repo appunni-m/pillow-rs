@@ -4,8 +4,9 @@ use crate::error::PilError;
 use crate::raster::{DynamicImage, RgbImage};
 
 fn make_output(width: u32, height: u32, bytes: Vec<u8>) -> Result<DynamicImage, PilError> {
-    let image = RgbImage::from_raw(width, height, bytes)
-        .ok_or_else(|| PilError::InternalError("failed to construct ImageRgb8 Reduce output".into()))?;
+    let image = RgbImage::from_raw(width, height, bytes).ok_or_else(|| {
+        PilError::InternalError("failed to construct ImageRgb8 Reduce output".into())
+    })?;
     Ok(DynamicImage::ImageRgb8(image))
 }
 
@@ -33,8 +34,17 @@ pub(crate) fn execute(
             return make_output(output_width, output_height, bytes);
         }
     }
-    let bytes = crate::compute::pool_cpu::ops::reduce::helpers::native_bytes::kernels::avx2::reduce::<
-        3, false, true,
-    >(input.as_raw(), input.width(), input.height(), x_factor, y_factor)?;
+    let bytes =
+        crate::compute::pool_cpu::ops::reduce::helpers::native_bytes::kernels::avx2::reduce::<
+            3,
+            false,
+            true,
+        >(
+            input.as_raw(),
+            input.width(),
+            input.height(),
+            x_factor,
+            y_factor,
+        )?;
     make_output(output_width, output_height, bytes)
 }

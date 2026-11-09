@@ -2,11 +2,11 @@
 
 use std::sync::Arc;
 
-use crate::compute::{Architecture, Backend, ExecutionContext};
 use crate::compute::registry::support::{
     ImplementationSupport, InputContract, ModeSupport, OperationId, OutputModeRule,
     PaletteKnowledge, StrategyGuard, StrategyInputs, StrategySelection,
 };
+use crate::compute::{Architecture, Backend, ExecutionContext};
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode, RgbaImage};
 
@@ -22,7 +22,10 @@ const ARCHITECTURES: &[ImplementationSupport] = &[
         OperationId::AlphaComposite,
         Mode::ImageRgba8,
         Architecture::Sse2,
-        cfg!(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2")),
+        cfg!(all(
+            any(target_arch = "x86", target_arch = "x86_64"),
+            target_feature = "sse2"
+        )),
         &[Architecture::Sse2],
         StrategyGuard::AlphaCompositeVector { channels: 4 },
     ),
@@ -55,7 +58,10 @@ pub(crate) const SUPPORT: ModeSupport = ModeSupport::cpu(
 #[derive(Clone, Copy)]
 enum ArchitectureStrategy {
     Default,
-    #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
+    #[cfg(all(
+        any(target_arch = "x86", target_arch = "x86_64"),
+        target_feature = "sse2"
+    ))]
     Sse2,
     #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
     Neon,
@@ -103,12 +109,21 @@ impl Strategy<'_> {
             ArchitectureStrategy::Default => {
                 super::default::alpha_composite_impl::execute(source, self.destination)?
             }
-            #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
-            ArchitectureStrategy::Sse2 => super::sse2::alpha_composite_impl::execute(source, self.destination)?,
+            #[cfg(all(
+                any(target_arch = "x86", target_arch = "x86_64"),
+                target_feature = "sse2"
+            ))]
+            ArchitectureStrategy::Sse2 => {
+                super::sse2::alpha_composite_impl::execute(source, self.destination)?
+            }
             #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-            ArchitectureStrategy::Neon => super::neon::alpha_composite_impl::execute(source, self.destination)?,
+            ArchitectureStrategy::Neon => {
+                super::neon::alpha_composite_impl::execute(source, self.destination)?
+            }
             #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
-            ArchitectureStrategy::WasmSimd128 => super::wasm_simd128::alpha_composite_impl::execute(source, self.destination)?,
+            ArchitectureStrategy::WasmSimd128 => {
+                super::wasm_simd128::alpha_composite_impl::execute(source, self.destination)?
+            }
         };
         Ok(DynamicImage::ImageRgba8(output))
     }
@@ -120,7 +135,12 @@ pub(crate) fn prepare<'a>(
     selection: StrategySelection,
 ) -> Result<Strategy<'a>, PilError> {
     let architecture = bind_architecture(&selection)?;
-    Ok(Strategy { destination, source, architecture, selection })
+    Ok(Strategy {
+        destination,
+        source,
+        architecture,
+        selection,
+    })
 }
 
 fn bind_architecture(selection: &StrategySelection) -> Result<ArchitectureStrategy, PilError> {
@@ -137,7 +157,10 @@ fn bind_architecture(selection: &StrategySelection) -> Result<ArchitectureStrate
     }
     let strategy = match implementation.architecture {
         Architecture::Default => ArchitectureStrategy::Default,
-        #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
+        #[cfg(all(
+            any(target_arch = "x86", target_arch = "x86_64"),
+            target_feature = "sse2"
+        ))]
         Architecture::Sse2 => ArchitectureStrategy::Sse2,
         #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
         Architecture::Neon => ArchitectureStrategy::Neon,
@@ -220,15 +243,29 @@ impl MirrorFusionStrategy<'_> {
             ));
         };
         let (width, height) = self.destination.dimensions();
-        let (output, composite_vector_blocks, composite_scalar_tail,
-            mirror_vector_blocks, mirror_scalar_tail) = match self.architecture {
+        let (
+            output,
+            composite_vector_blocks,
+            composite_scalar_tail,
+            mirror_vector_blocks,
+            mirror_scalar_tail,
+        ) = match self.architecture {
             ArchitectureStrategy::Default => (
                 super::default::alpha_composite_mirror_impl::execute(
-                    source.as_raw(), self.destination.as_raw(), width, height,
+                    source.as_raw(),
+                    self.destination.as_raw(),
+                    width,
+                    height,
                 )?,
-                0, 0, 0, 0,
+                0,
+                0,
+                0,
+                0,
             ),
-            #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
+            #[cfg(all(
+                any(target_arch = "x86", target_arch = "x86_64"),
+                target_feature = "sse2"
+            ))]
             ArchitectureStrategy::Sse2 => fused_vector_output(source, self.destination)?,
             #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
             ArchitectureStrategy::Neon => fused_vector_output(source, self.destination)?,
@@ -266,14 +303,13 @@ pub(crate) fn merge(
     remaining: &[Arc<DynamicImage>],
     selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
-    super::super::helpers::strategy::require_operation_mode(
-        selection,
-        OperationId::Merge,
-        MODE,
-    )?;
+    super::super::helpers::strategy::require_operation_mode(selection, OperationId::Merge, MODE)?;
     match selection.implementation.architecture {
         Architecture::Default => super::default::operations::merge(source, remaining),
-        #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2"))]
+        #[cfg(all(
+            any(target_arch = "x86", target_arch = "x86_64"),
+            target_feature = "sse2"
+        ))]
         Architecture::Sse2 => super::sse2::merge_impl::merge(source, remaining),
         #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
         Architecture::Neon => super::neon::merge_impl::merge(source, remaining),
@@ -291,9 +327,7 @@ pub(crate) fn blend(
     alpha: f64,
     selection: &StrategySelection,
 ) -> Result<DynamicImage, PilError> {
-    super::super::helpers::blend::execute_selected(
-        source, other, MODE, 4, alpha, selection,
-    )
+    super::super::helpers::blend::execute_selected(source, other, MODE, 4, alpha, selection)
 }
 
 pub(crate) fn composite(
@@ -314,4 +348,3 @@ pub(crate) fn composite(
         |plan| crate::compute::pool_cpu::ops::paste::rgba8::ops::execute(plan),
     )
 }
-

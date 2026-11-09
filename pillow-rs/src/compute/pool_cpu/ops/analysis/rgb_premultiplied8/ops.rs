@@ -3,9 +3,7 @@ use crate::compute::registry::support::StrategySelection;
 use crate::error::PilError;
 use crate::raster::{Mode, RgbaImage};
 
-use super::super::helpers::get_data::{
-    self as helpers, GetDataOutput, GetDataRequest,
-};
+use super::super::helpers::get_data::{self as helpers, GetDataOutput, GetDataRequest};
 use super::default::get_data_impl;
 
 pub(crate) fn execute_get_data(
@@ -13,7 +11,8 @@ pub(crate) fn execute_get_data(
     selection: StrategySelection,
     request: GetDataRequest<'_>,
 ) -> Result<GetDataOutput, PilError> {
-    let architecture = helpers::selected_architecture(selection, Mode::ImageRgbPremultiplied8, &request)?;
+    let architecture =
+        helpers::selected_architecture(selection, Mode::ImageRgbPremultiplied8, &request)?;
     match architecture {
         Architecture::Default => match request {
             GetDataRequest::Full => Ok(GetDataOutput::Bytes(get_data_impl::get_data(image)?)),
@@ -22,13 +21,17 @@ pub(crate) fn execute_get_data(
                 Ok(GetDataOutput::BandWritten)
             }
         },
-        architecture => Err(helpers::missing_architecture(Mode::ImageRgbPremultiplied8, architecture)),
+        architecture => Err(helpers::missing_architecture(
+            Mode::ImageRgbPremultiplied8,
+            architecture,
+        )),
     }
 }
 crate::compute::pool_cpu::ops::analysis::helpers::bbox::declare_getbbox_owner!(
     rgb_premultiplied8,
     ImageRgbPremultiplied8,
     crate::raster::RgbaImage,
+    Pillow,
 );
 
 crate::compute::pool_cpu::ops::analysis::helpers::extrema::declare_getextrema_owner!(
@@ -59,15 +62,13 @@ crate::compute::pool_cpu::ops::analysis::helpers::extrema_bytes_execution::
     crate::compute::pool_cpu::ops::analysis::rgb_premultiplied8::default::extrema_bytes_impl::execute,
 );
 
-pub(crate) const GET_PIXEL_SUPPORT:
-    crate::compute::registry::support::ModeSupport =
+pub(crate) const GET_PIXEL_SUPPORT: crate::compute::registry::support::ModeSupport =
     crate::compute::pool_cpu::ops::analysis::helpers::pixel_access::pillow_get_pixel_support(
         crate::raster::Mode::ImageRgbPremultiplied8,
         crate::compute::registry::support::PixelValueShape::U8Components { bands: 4 },
     );
 
-pub(crate) const GET_PIXEL_RGBA_SUPPORT:
-    crate::compute::registry::support::ModeSupport =
+pub(crate) const GET_PIXEL_RGBA_SUPPORT: crate::compute::registry::support::ModeSupport =
     crate::compute::pool_cpu::ops::analysis::helpers::pixel_access::rgba_get_pixel_support(
         crate::raster::Mode::ImageRgbPremultiplied8,
     );
@@ -85,3 +86,49 @@ pub(crate) fn execute_get_pixel(
     )?;
     super::default::get_pixel_impl::execute(image, x, y)
 }
+crate::compute::pool_cpu::ops::analysis::helpers::getcolors_support::declare_getcolors_support!(
+    ImageRgbPremultiplied8,
+    pillow,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::extrema_bytes_execution::declare_getextrema_bytes_support!(
+    ImageRgbPremultiplied8,
+    pillow,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::extrema_execution::declare_getextrema_support!(
+    ImageRgbPremultiplied8,
+    pillow,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::histogram_execution::declare_histogram_support!(
+    ImageRgbPremultiplied8,
+    4,
+    pillow,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::stat_execution::declare_stat_support!(
+    ImageRgbPremultiplied8,
+    pillow,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::split_support::declare_split_support!(
+    ImageRgbPremultiplied8,
+    pillow,
+    Bands,
+);
+crate::compute::pool_cpu::ops::analysis::helpers::get_channel_support::declare_get_channel_route!(
+    ImageRgbPremultiplied8,
+    4,
+    Pillow,
+    Child,
+    Luma8,
+);
+
+crate::compute::pool_cpu::ops::analysis::helpers::get_data_support::declare_get_data_support!(
+    ImageRgbPremultiplied8,
+    4,
+    Pillow,
+    Pillow,
+    Pillow,
+);
+
+crate::compute::pool_cpu::ops::analysis::helpers::projection_support::declare_projection_support!(
+    ImageRgbPremultiplied8,
+    Pillow,
+);

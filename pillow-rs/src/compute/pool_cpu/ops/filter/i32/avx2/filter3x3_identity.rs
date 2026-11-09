@@ -16,9 +16,7 @@ pub(in crate::compute::pool_cpu::ops::filter::i32) fn uniform_i32_filter3x3_is_i
     let Some(pixel_count) = width.checked_mul(height) else {
         return false;
     };
-    if pixel_count == 0
-        || pixel_count > super::super::default::I32_UNIFORM_FILTER3X3_MAX_PIXELS
-    {
+    if pixel_count == 0 || pixel_count > super::super::default::I32_UNIFORM_FILTER3X3_MAX_PIXELS {
         return false;
     }
     let Some(expected_len) = pixel_count.checked_mul(4) else {

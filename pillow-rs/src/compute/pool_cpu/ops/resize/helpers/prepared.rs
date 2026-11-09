@@ -44,8 +44,13 @@ pub(crate) const fn effective_filter(mode: Mode, requested: ResampleFilter) -> R
 
 #[derive(Clone, Copy)]
 enum ResizeRequest {
-    Standard { filter: ResampleFilter },
-    Boxed { filter: ResampleFilter, bounds: (f64, f64, f64, f64) },
+    Standard {
+        filter: ResampleFilter,
+    },
+    Boxed {
+        filter: ResampleFilter,
+        bounds: (f64, f64, f64, f64),
+    },
 }
 
 /// Exact mode and architecture choice retained through execution.
@@ -68,11 +73,7 @@ impl PreparedResize<'_> {
             self.request,
             ResizeRequest::Standard { filter } if !matches!(filter, ResampleFilter::Nearest)
         );
-        super::super::helpers::pad_window::supports(
-            self.image,
-            &self.selection,
-            filtered,
-        )
+        super::super::helpers::pad_window::supports(self.image, &self.selection, filtered)
     }
 
     /// Executes the retained mode and architecture strategy into a Pad window.
@@ -221,58 +222,26 @@ fn execute_mode(
         | Mode::ImageYCbCr8
         | Mode::ImageLab8
         | Mode::ImageHsv8 => super::super::helpers::mode_dispatch::execute_byte_mode(
-            image,
-            &context,
-            &selection,
-            width,
-            height,
-            filter,
-            bounds,
+            image, &context, &selection, width, height, filter, bounds,
         ),
         Mode::ImageI32 => super::super::i32::ops::resize(
-            &context,
-            image,
-            width,
-            height,
-            filter,
-            bounds,
-            &selection,
+            &context, image, width, height, filter, bounds, &selection,
         ),
         Mode::ImageF32 => super::super::f32::ops::resize(
-            &context,
-            image,
-            width,
-            height,
-            filter,
-            bounds,
-            &selection,
+            &context, image, width, height, filter, bounds, &selection,
         ),
         Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
             super::super::helpers::mode_dispatch::execute_luma16_mode(
-                image,
-                &context,
-                &selection,
-                width,
-                height,
-                filter,
-                bounds,
+                image, &context, &selection, width, height, filter, bounds,
             )
         }
         Mode::ImageLumaA16
         | Mode::ImageRgb16
         | Mode::ImageRgba16
         | Mode::ImageRgb32F
-        | Mode::ImageRgba32F => {
-            super::super::helpers::mode_dispatch::execute_typed_mode(
-                image,
-                &context,
-                &selection,
-                width,
-                height,
-                filter,
-                bounds,
-            )
-        }
+        | Mode::ImageRgba32F => super::super::helpers::mode_dispatch::execute_typed_mode(
+            image, &context, &selection, width, height, filter, bounds,
+        ),
     }
 }
 
@@ -395,11 +364,19 @@ pub(crate) fn prepare_pipeline<'a>(
             ResizeRequest::Standard { filter: *filter },
             &SUPPORT,
         ),
-        PipelineOp::ResizeBoxed { w, h, filter, box_coords } => (
+        PipelineOp::ResizeBoxed {
+            w,
+            h,
+            filter,
+            box_coords,
+        } => (
             *w,
             *h,
             *filter,
-            ResizeRequest::Boxed { filter: *filter, bounds: *box_coords },
+            ResizeRequest::Boxed {
+                filter: *filter,
+                bounds: *box_coords,
+            },
             &BOXED_SUPPORT,
         ),
         _ => return Err(PilError::ValueError("expected Resize op".into())),
@@ -429,5 +406,7 @@ pub(crate) fn prepare_pipeline<'a>(
         request,
         selection: selected,
     };
-    Ok(crate::compute::registry::PreparedOperation::from_resize(plan))
+    Ok(crate::compute::registry::PreparedOperation::from_resize(
+        plan,
+    ))
 }

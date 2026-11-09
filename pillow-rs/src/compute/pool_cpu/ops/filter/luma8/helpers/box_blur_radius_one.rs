@@ -79,11 +79,7 @@ fn filter_radius_one(raw: &[u8], output: &mut [u8], width: usize, height: usize)
         let output_row = &mut output[output_start..output_start + width];
 
         for x in (0..width).step_by(16) {
-            let top = u32x16::from(u16x16::from(load_radius_one_block(
-                top,
-                x,
-                top[width - 1],
-            )));
+            let top = u32x16::from(u16x16::from(load_radius_one_block(top, x, top[width - 1])));
             let center = u32x16::from(u16x16::from(load_radius_one_block(
                 center,
                 x,
@@ -137,7 +133,9 @@ pub(in crate::compute::pool_cpu::ops::filter::luma8) fn execute_radius_one(
     let mut output = vec![0u8; expected];
     filter_radius_one(input.as_raw(), &mut output, width, height);
     crate::compute::record_pipeline_operation_path("vector");
-    crate::compute::record_pipeline_operation_vector_blocks(width.div_ceil(16) as u64 * height as u64 * 2);
+    crate::compute::record_pipeline_operation_vector_blocks(
+        width.div_ceil(16) as u64 * height as u64 * 2,
+    );
     GrayImage::from_raw(input.width(), input.height(), output)
         .map(DynamicImage::ImageLuma8)
         .ok_or_else(|| PilError::ValueError("BoxBlur output buffer does not match L mode".into()))

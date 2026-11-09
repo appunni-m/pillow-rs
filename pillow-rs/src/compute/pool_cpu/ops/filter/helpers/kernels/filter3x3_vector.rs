@@ -98,10 +98,8 @@ pub(crate) fn apply_la_binomial(
             };
             let weighted = load(above) + load(center) * u16x16::splat(2) + load(below);
             let rounded = (weighted + u16x16::splat(8)) >> 4u32;
-            let bytes = crate::compute::pool_cpu::helpers::channel::wide::simd_pack_u16x16(
-                rounded,
-            )
-            .to_array();
+            let bytes = crate::compute::pool_cpu::helpers::channel::wide::simd_pack_u16x16(rounded)
+                .to_array();
             output[output_row + sample_start..output_row + sample_start + active_bytes]
                 .copy_from_slice(&bytes[..active_bytes]);
             x += active_bytes / 2;
@@ -202,16 +200,7 @@ fn apply_channel_rows(
         let mut x = 1;
         while x < width - 1 {
             let active = (width - 1 - x).min(8);
-            let values = channel_block(
-                raw,
-                width,
-                channels,
-                channel,
-                y,
-                x,
-                kernel,
-                rounding_bias,
-            );
+            let values = channel_block(raw, width, channels, channel, y, x, kernel, rounding_bias);
             for (lane, value) in values.into_iter().enumerate().take(active) {
                 row[(x + lane) * channels + channel] = value;
             }

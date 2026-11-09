@@ -1,6 +1,6 @@
 //! Draw operation registration.
 
-use super::{prelude::Registry, prelude::PilError};
+use super::{prelude::PilError, prelude::Registry};
 
 pub(super) fn register(entries: &mut Registry) -> Result<(), PilError> {
     let prepare = crate::compute::pool_cpu::ops::draw::ops::prepare_pipeline;

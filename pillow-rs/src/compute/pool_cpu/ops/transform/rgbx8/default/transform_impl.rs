@@ -13,4 +13,3 @@ byte_mode_default!(
 );
 
 byte_mode_mesh_record!(ImageRgbx8, 4, false, "ImageRgbx8");
-

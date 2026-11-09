@@ -36,16 +36,12 @@ fn transform_fill_arity_error(mode: Mode) -> PilError {
         | Mode::ImageI16
         | Mode::ImageI16L
         | Mode::ImageI16B
-        | Mode::ImageI16N => {
-            "color must be int or single-element tuple"
-        }
+        | Mode::ImageI16N => "color must be int or single-element tuple",
         Mode::ImageF32 => "must be real number, not tuple",
         Mode::ImageLumaA8
         | Mode::ImageLaPremultiplied8
         | Mode::ImagePaletteAlpha8
-        | Mode::ImageLumaA16 => {
-            "color must be int, or tuple of one or two elements"
-        }
+        | Mode::ImageLumaA16 => "color must be int, or tuple of one or two elements",
         _ => "color must be int, or tuple of one, three or four elements",
     };
     PilError::TypeError(message.into())
@@ -61,9 +57,7 @@ fn transform_scalar_type_error(mode: Mode) -> PilError {
         | Mode::ImageI16
         | Mode::ImageI16L
         | Mode::ImageI16B
-        | Mode::ImageI16N => {
-            "color must be int or single-element tuple"
-        }
+        | Mode::ImageI16N => "color must be int or single-element tuple",
         _ => "color must be int or tuple",
     };
     PilError::TypeError(message.into())
@@ -254,10 +248,7 @@ fn single_i16_component_fill(mode: Mode, values: &[i64]) -> Result<(u8, u8, u8, 
     }
 }
 
-fn luma_alpha_component_fill(
-    mode: Mode,
-    values: &[i64],
-) -> Result<(u8, u8, u8, u8), PilError> {
+fn luma_alpha_component_fill(mode: Mode, values: &[i64]) -> Result<(u8, u8, u8, u8), PilError> {
     match values {
         [value] => {
             let gray = clamp_transform_component(*value);
@@ -271,10 +262,7 @@ fn luma_alpha_component_fill(
     }
 }
 
-fn luma_alpha16_component_fill(
-    mode: Mode,
-    values: &[i64],
-) -> Result<(u8, u8, u8, u8), PilError> {
+fn luma_alpha16_component_fill(mode: Mode, values: &[i64]) -> Result<(u8, u8, u8, u8), PilError> {
     match values {
         [value] => Ok((clamp_transform_component(*value), 0, 0, 0)),
         [gray, alpha] => Ok((
@@ -364,9 +352,7 @@ pub(crate) fn public_transform_fill(
         }
         Some(TransformFill::Scalar(value)) => {
             let fill = match mode {
-                Mode::One | Mode::ImageLuma8 => {
-                    (clamp_transform_component(value), 0, 0, 0)
-                }
+                Mode::One | Mode::ImageLuma8 => (clamp_transform_component(value), 0, 0, 0),
                 Mode::ImageF32 => packed_transform_float(value),
                 Mode::ImageI32 => packed_transform_scalar(value),
                 Mode::ImageI16 | Mode::ImageI16L | Mode::ImageI16B | Mode::ImageI16N => {
@@ -381,8 +367,7 @@ pub(crate) fn public_transform_fill(
             transform_components_fill(mode, &values, default_palette_fill)
         }
         Some(TransformFill::PaletteComponents(values)) if palette_mode => {
-            let [red, green, blue] =
-                crate::ops::imageops::resolve_palette_tuple_bytes(&values)?;
+            let [red, green, blue] = crate::ops::imageops::resolve_palette_tuple_bytes(&values)?;
             Ok((
                 (0, 0, 0, u8::MAX),
                 default_palette_fill,
@@ -403,11 +388,7 @@ pub(crate) fn public_transform_fill(
                     transform_component(i64::from(g))?,
                     transform_component(i64::from(b))?,
                 ];
-                return Ok((
-                    (0, 0, 0, 255),
-                    default_palette_fill,
-                    Some(palette),
-                ));
+                return Ok(((0, 0, 0, 255), default_palette_fill, Some(palette)));
             }
             let color = crate::color::getcolor_for_mode(r, g, b, a, mode);
             Ok((transform_color_value_fill(mode, color)?, None, None))
@@ -429,4 +410,3 @@ pub(crate) fn public_transform_fill(
         Some(TransformFill::InvalidList) => Err(transform_list_error(mode)),
     }
 }
-

@@ -48,19 +48,14 @@ pub(crate) fn construct(
                 _ => Err(invalid_target("three-channel")),
             }
         }
-        Mode::ImageRgba8
-        | Mode::ImageRgbPremultiplied8
-        | Mode::ImageRgbx8
-        | Mode::ImageCmyk8 => {
+        Mode::ImageRgba8 | Mode::ImageRgbPremultiplied8 | Mode::ImageRgbx8 | Mode::ImageCmyk8 => {
             let buffer = crate::image_utils::typed_bytes_to_buffer::<Rgba<u8>>(
                 CheckedDims::new_allow_empty(width, height, 4)?,
                 bytes,
             )?;
             match mode {
                 Mode::ImageRgba8 => Ok(DynamicImage::ImageRgba8(buffer)),
-                Mode::ImageRgbPremultiplied8 => {
-                    Ok(DynamicImage::ImageRgbPremultiplied8(buffer))
-                }
+                Mode::ImageRgbPremultiplied8 => Ok(DynamicImage::ImageRgbPremultiplied8(buffer)),
                 Mode::ImageRgbx8 => Ok(DynamicImage::ImageRgbx8(buffer)),
                 Mode::ImageCmyk8 => Ok(DynamicImage::ImageCmyk8(buffer)),
                 _ => Err(invalid_target("four-channel")),

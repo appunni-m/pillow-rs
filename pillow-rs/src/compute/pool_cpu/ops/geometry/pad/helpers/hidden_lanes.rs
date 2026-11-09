@@ -83,21 +83,20 @@ pub(crate) fn preserve_same_size_content(
         .hidden_pixel_lanes()
         .or(fallback_lanes.as_ref())
         .ok_or_else(invalid_lane_output)?;
-    let lanes = if source_lanes.is_constant()
-        && source_lanes.for_pixel(0) == Some(&fill[..lane_count])
-    {
-        HiddenPixelLanes::constant(lane_count, output_pixels, fill)
-            .ok_or_else(invalid_lane_output)?
-    } else {
-        compose_lanes(
-            source_lanes,
-            lane_count,
-            (source_width, source_height),
-            (output_width, output_height),
-            (frame.offset_x, frame.offset_y),
-            fill,
-        )?
-    };
+    let lanes =
+        if source_lanes.is_constant() && source_lanes.for_pixel(0) == Some(&fill[..lane_count]) {
+            HiddenPixelLanes::constant(lane_count, output_pixels, fill)
+                .ok_or_else(invalid_lane_output)?
+        } else {
+            compose_lanes(
+                source_lanes,
+                lane_count,
+                (source_width, source_height),
+                (output_width, output_height),
+                (frame.offset_x, frame.offset_y),
+                fill,
+            )?
+        };
     if !output.replace_hidden_pixel_lanes(Some(lanes)) {
         return Err(PilError::InternalError(
             "Pad output rejected its physical lane payload".into(),
@@ -151,16 +150,10 @@ fn compose_lanes(
     let value_count = output_pixels
         .checked_mul(lane_count)
         .ok_or_else(|| PilError::DimensionError("Pad lane storage extent overflow".into()))?;
-    let x_window = super::dimensions::clipped_axis(
-        offset.0,
-        source_dimensions.0,
-        output_dimensions.0,
-    );
-    let y_window = super::dimensions::clipped_axis(
-        offset.1,
-        source_dimensions.1,
-        output_dimensions.1,
-    );
+    let x_window =
+        super::dimensions::clipped_axis(offset.0, source_dimensions.0, output_dimensions.0);
+    let y_window =
+        super::dimensions::clipped_axis(offset.1, source_dimensions.1, output_dimensions.1);
     let mut values = Vec::new();
     values
         .try_reserve_exact(value_count)
@@ -193,8 +186,7 @@ fn compose_lanes(
             }
         }
     }
-    HiddenPixelLanes::per_pixel(lane_count, output_pixels, values)
-        .ok_or_else(invalid_lane_output)
+    HiddenPixelLanes::per_pixel(lane_count, output_pixels, values).ok_or_else(invalid_lane_output)
 }
 
 fn invalid_lane_output() -> PilError {
