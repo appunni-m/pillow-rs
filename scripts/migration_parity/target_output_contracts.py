@@ -101,6 +101,205 @@ SHARPNESS_CORE_ONLY_MODES: tuple[
 )
 
 
+# These modes have native Brightness paths, but Pillow's Image.blend cannot
+# serve as their output oracle. Their fixed result samples are the target-only
+# contract for that extension.
+BRIGHTNESS_CORE_ONLY_MODES: tuple[
+    tuple[
+        str,
+        str,
+        str,
+        tuple[int | float, ...],
+        tuple[int | float, ...],
+        tuple[int | float, ...],
+        tuple[int | float, ...],
+    ],
+    ...,
+] = (
+    (
+        "I", "core-only-i", "i32n", (-7, 13, 12345), (0, 0, 0),
+        (-7, 13, 12345), (-14, 26, 24690),
+    ),
+    (
+        "F", "core-only-f", "f32n", (-7.5, 13.0, 12345.5), (-0.0, 0.0, 0.0),
+        (-7.5, 13.0, 12345.5), (-15.0, 26.0, 24691.0),
+    ),
+    (
+        "I;16", "core-only-i16", "u16n", (1000, 40000, 65535), (0, 0, 0),
+        (1000, 40000, 65535), (2000, 65535, 65535),
+    ),
+    (
+        "I;16L", "core-only-i16l", "u16le", (1000, 40000, 65535), (0, 0, 0),
+        (1000, 40000, 65535), (2000, 65535, 65535),
+    ),
+    (
+        "I;16B", "core-only-i16b", "u16be", (1000, 40000, 65535), (0, 0, 0),
+        (1000, 40000, 65535), (2000, 65535, 65535),
+    ),
+    (
+        "I;16N", "core-only-i16n", "u16n", (1000, 40000, 65535), (0, 0, 0),
+        (1000, 40000, 65535), (2000, 65535, 65535),
+    ),
+    (
+        "ImageLumaA16", "core-only-luma-a16", "u16n",
+        (1000, 65530, 40000, 1234, 65535, 4321),
+        (0, 65530, 0, 1234, 0, 4321),
+        (1000, 65530, 40000, 1234, 65535, 4321),
+        (2000, 65530, 65535, 1234, 65535, 4321),
+    ),
+    (
+        "ImageRgb16", "core-only-rgb16", "u16n",
+        (1000, 2000, 3000, 40000, 32000, 24000, 65535, 32768, 1),
+        (0, 0, 0, 0, 0, 0, 0, 0, 0),
+        (1000, 2000, 3000, 40000, 32000, 24000, 65535, 32768, 1),
+        (2000, 4000, 6000, 65535, 64000, 48000, 65535, 65535, 2),
+    ),
+    (
+        "ImageRgba16", "core-only-rgba16", "u16n",
+        (1000, 2000, 3000, 65530, 40000, 32000, 24000, 1234, 65535, 32768, 1, 4321),
+        (0, 0, 0, 65530, 0, 0, 0, 1234, 0, 0, 0, 4321),
+        (1000, 2000, 3000, 65530, 40000, 32000, 24000, 1234, 65535, 32768, 1, 4321),
+        (2000, 4000, 6000, 65530, 65535, 64000, 48000, 1234, 65535, 65535, 2, 4321),
+    ),
+    (
+        "ImageRgb32F", "core-only-rgb32f", "f32n",
+        (1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0),
+        (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+        (1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0),
+        (2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0),
+    ),
+    (
+        "ImageRgba32F", "core-only-rgba32f", "f32n",
+        (1.0, 2.0, 3.0, 10.0, 4.0, 5.0, 6.0, 20.0, 7.0, 8.0, 9.0, 30.0),
+        (0.0, 0.0, 0.0, 10.0, 0.0, 0.0, 0.0, 20.0, 0.0, 0.0, 0.0, 30.0),
+        (1.0, 2.0, 3.0, 10.0, 4.0, 5.0, 6.0, 20.0, 7.0, 8.0, 9.0, 30.0),
+        (2.0, 4.0, 6.0, 10.0, 8.0, 10.0, 12.0, 20.0, 14.0, 16.0, 18.0, 30.0),
+    ),
+)
+
+BRIGHTNESS_PILLOW_MODES: tuple[tuple[str, str], ...] = (
+    ("L", "l"), ("LA", "la"), ("La", "la-premultiplied"),
+    ("RGB", "rgb"), ("RGBA", "rgba"), ("RGBa", "rgb-premultiplied"),
+    ("RGBX", "rgbx"), ("CMYK", "cmyk"), ("YCbCr", "ycbcr"),
+    ("HSV", "hsv"),
+)
+
+BRIGHTNESS_TARGET_ONLY_MODES = (
+    (
+        "LAB", "lab", "u8", (10, 20, 30, 100, 128, 200, 250, 1, 255),
+        (0, 0, 0, 0, 0, 0, 0, 0, 0),
+        (10, 20, 30, 100, 128, 200, 250, 1, 255),
+        (20, 40, 60, 200, 255, 255, 255, 2, 255),
+    ),
+    *BRIGHTNESS_CORE_ONLY_MODES,
+)
+
+BRIGHTNESS_REJECTED_MODES: tuple[tuple[str, str], ...] = (
+    ("1", "1"), ("P", "p"), ("PA", "pa"),
+)
+
+
+def brightness_target_output_cases() -> list[dict[str, Any]]:
+    """Return fixed no-Pillow Brightness outputs through public Python."""
+
+    cases: list[dict[str, Any]] = []
+    for mode, mode_id, kind, source, black, identity, doubled in BRIGHTNESS_TARGET_ONLY_MODES:
+        raw = _native_samples(kind, source)
+        factors = (("zero", 0.0, black), ("identity", 1.0, identity), ("double", 2.0, doubled))
+        cases.append(
+            {
+                "case_id": f"PIL.ImageEnhance.Brightness.expected-output.{mode_id}.native-3x1",
+                "surface": "PIL.ImageEnhance.Brightness",
+                "operation": "enhance",
+                "verification": "expected-output",
+                "covers": [f"PIL.ImageEnhance.Brightness.enhance.mode.{mode_id}"],
+                "assets": [
+                    {
+                        "id": "brightness-source",
+                        "kind": "inline",
+                        "encoding": "base64",
+                        "data": base64.b64encode(raw).decode("ascii"),
+                        "sha256": hashlib.sha256(raw).hexdigest(),
+                        "media_type": "application/octet-stream",
+                    }
+                ],
+                "steps": [
+                    {
+                        "step_id": "image",
+                        "surface": "PIL.Image",
+                        "operation": "frombytes",
+                        "receiver": None,
+                        "arguments": {
+                            "mode": {"kind": "literal", "value": mode},
+                            "size": {"kind": "literal", "value": [3, 1]},
+                            "data": {"kind": "asset", "asset_id": "brightness-source"},
+                        },
+                    },
+                    {
+                        "step_id": "enhancer",
+                        "surface": "PIL.ImageEnhance",
+                        "operation": "Brightness",
+                        "receiver": None,
+                        "arguments": {"image": {"kind": "binding", "step_id": "image"}},
+                    },
+                    *[
+                        {
+                            "step_id": "result-" + name,
+                            "surface": "PIL.ImageEnhance.Brightness",
+                            "operation": "enhance",
+                            "receiver": {"kind": "binding", "step_id": "enhancer"},
+                            "arguments": {"factor": {"kind": "literal", "value": factor}},
+                        }
+                        for name, factor, _samples in factors
+                    ],
+                ],
+                "observations": ["result-" + name for name, _factor, _samples in factors],
+                "target_expectation": {
+                    "observations": [
+                        {
+                            "step_id": "result-" + name,
+                            "value": _brightness_result_record(mode, kind, samples),
+                        }
+                        for name, _factor, samples in factors
+                    ]
+                },
+            }
+        )
+    return cases
+
+
+def _brightness_result_record(
+    mode: str,
+    sample_kind: str,
+    samples: tuple[int | float, ...],
+) -> dict[str, Any]:
+    return {
+        "kind": "image",
+        "mode": mode,
+        "size": [3, 1],
+        "format": None,
+        "info": {},
+        "palette": None,
+        "bytes": base64.b64encode(_native_samples(sample_kind, samples)).decode("ascii"),
+    }
+
+
+def _native_samples(sample_kind: str, samples: tuple[int | float, ...]) -> bytes:
+    if sample_kind == "u8":
+        return bytes(int(sample) for sample in samples)
+    if sample_kind == "i32n":
+        return struct.pack(f"={len(samples)}i", *(int(sample) for sample in samples))
+    if sample_kind == "f32n":
+        return struct.pack(f"={len(samples)}f", *(float(sample) for sample in samples))
+    if sample_kind == "u16n":
+        return struct.pack(f"={len(samples)}H", *(int(sample) for sample in samples))
+    if sample_kind == "u16le":
+        return struct.pack(f"<{len(samples)}H", *(int(sample) for sample in samples))
+    if sample_kind == "u16be":
+        return struct.pack(f">{len(samples)}H", *(int(sample) for sample in samples))
+    raise ValueError(f"unknown native sample kind: {sample_kind}")
+
+
 def sharpness_core_only_cases() -> list[dict[str, Any]]:
     """Return recorded native Sharpness results through public Python calls."""
 

@@ -17972,6 +17972,156 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.ImageEnhance.Brightness.enhance.mode.l
+      dimension: mode
+      description: Public behavior for image mode 'L'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageEnhance.Brightness.enhance.mode.la
+      dimension: mode
+      description: Public behavior for image mode 'LA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageEnhance.Brightness.enhance.mode.la-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'La'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageEnhance.Brightness.enhance.mode.rgb
+      dimension: mode
+      description: Public behavior for image mode 'RGB'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageEnhance.Brightness.enhance.mode.rgba
+      dimension: mode
+      description: Public behavior for image mode 'RGBA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageEnhance.Brightness.enhance.mode.rgb-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'RGBa'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageEnhance.Brightness.enhance.mode.rgbx
+      dimension: mode
+      description: Public behavior for image mode 'RGBX'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageEnhance.Brightness.enhance.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageEnhance.Brightness.enhance.mode.ycbcr
+      dimension: mode
+      description: Public behavior for image mode 'YCbCr'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageEnhance.Brightness.enhance.mode.hsv
+      dimension: mode
+      description: Public behavior for image mode 'HSV'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageEnhance.Brightness.enhance.mode.1
+      dimension: mode
+      description: Brightness rejection behavior for mode '1'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageEnhance.Brightness.enhance.mode.p
+      dimension: mode
+      description: Brightness rejection behavior for mode 'P'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageEnhance.Brightness.enhance.mode.pa
+      dimension: mode
+      description: Brightness rejection behavior for mode 'PA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.ImageEnhance.Brightness.enhance.mode.lab
+      dimension: mode
+      description: Native Brightness output for lab; no Pillow result contract (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageEnhance.Brightness.enhance.mode.core-only-i
+      dimension: mode
+      description: Native Brightness output for core-only-i; no Pillow result contract (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageEnhance.Brightness.enhance.mode.core-only-f
+      dimension: mode
+      description: Native Brightness output for core-only-f; no Pillow result contract (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageEnhance.Brightness.enhance.mode.core-only-i16
+      dimension: mode
+      description: Native Brightness output for core-only-i16; no Pillow result contract (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageEnhance.Brightness.enhance.mode.core-only-i16l
+      dimension: mode
+      description: Native Brightness output for core-only-i16l; no Pillow result contract (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageEnhance.Brightness.enhance.mode.core-only-i16b
+      dimension: mode
+      description: Native Brightness output for core-only-i16b; no Pillow result contract (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageEnhance.Brightness.enhance.mode.core-only-i16n
+      dimension: mode
+      description: Native Brightness output for core-only-i16n; no Pillow result contract (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageEnhance.Brightness.enhance.mode.core-only-luma-a16
+      dimension: mode
+      description: Native Brightness output for core-only-luma-a16; no Pillow result contract (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageEnhance.Brightness.enhance.mode.core-only-rgb16
+      dimension: mode
+      description: Native Brightness output for core-only-rgb16; no Pillow result contract (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageEnhance.Brightness.enhance.mode.core-only-rgba16
+      dimension: mode
+      description: Native Brightness output for core-only-rgba16; no Pillow result contract (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageEnhance.Brightness.enhance.mode.core-only-rgb32f
+      dimension: mode
+      description: Native Brightness output for core-only-rgb32f; no Pillow result contract (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.ImageEnhance.Brightness.enhance.mode.core-only-rgba32f
+      dimension: mode
+      description: Native Brightness output for core-only-rgba32f; no Pillow result contract (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
     - id: PIL.ImageEnhance.Brightness.enhance.performance.standard
       dimension: performance
       description: Deterministic standard workload for PIL.ImageEnhance.Brightness.enhance.

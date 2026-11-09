@@ -39,11 +39,17 @@ except ModuleNotFoundError:
 
 try:
     from migration_parity.target_output_contracts import (
+        BRIGHTNESS_PILLOW_MODES,
+        BRIGHTNESS_REJECTED_MODES,
+        BRIGHTNESS_TARGET_ONLY_MODES,
         CORE_ONLY_RAW_MODES,
         SHARPNESS_CORE_ONLY_MODES,
     )
 except ModuleNotFoundError:
     from scripts.migration_parity.target_output_contracts import (
+        BRIGHTNESS_PILLOW_MODES,
+        BRIGHTNESS_REJECTED_MODES,
+        BRIGHTNESS_TARGET_ONLY_MODES,
         CORE_ONLY_RAW_MODES,
         SHARPNESS_CORE_ONLY_MODES,
     )
@@ -915,6 +921,10 @@ def operation_requirements(
             )
         )
     supported_modes = merged_legacy_values(endpoint, row_map, "supported_modes")
+    if endpoint.source_path == "PIL.ImageEnhance.Brightness.enhance":
+        # Keep the complete typed Brightness denominator visible: Pillow byte
+        # modes, CoreOnly target-output extensions, and the three rejected modes.
+        supported_modes = [mode for mode, _mode_id in BRIGHTNESS_PILLOW_MODES]
     if (
         endpoint.surface == "PIL.ImageEnhance"
         and endpoint.operation in {"Brightness", "Color", "Contrast", "Sharpness"}
@@ -933,12 +943,19 @@ def operation_requirements(
         # lane, and the public mode is Pillow-defined.
         supported_modes.append("RGBX")
     for mode in supported_modes:
-        mode_id = (
-            mode_slug(str(mode))
-            if endpoint.surface == "PIL.ImageFilter"
-            and endpoint.operation == "ModeFilter"
-            else slug(str(mode))
-        )
+        if endpoint.source_path == "PIL.ImageEnhance.Brightness.enhance":
+            mode_id = next(
+                mode_id
+                for mode_name, mode_id in BRIGHTNESS_PILLOW_MODES
+                if mode_name == mode
+            )
+        else:
+            mode_id = (
+                mode_slug(str(mode))
+                if endpoint.surface == "PIL.ImageFilter"
+                and endpoint.operation == "ModeFilter"
+                else slug(str(mode))
+            )
         requirements.append(
             requirement(
                 f"{prefix}.mode.{mode_id}",
@@ -968,13 +985,33 @@ def operation_requirements(
             mode_id,
             _sample_kind,
             _center,
-            _active_channels,
+            _degenerate,
+            _sharpened,
         ) in SHARPNESS_CORE_ONLY_MODES:
             requirements.append(
                 requirement(
                     f"{prefix}.mode.{mode_id}",
                     "mode",
                     f"Native Sharpness extension for {mode_id} (NO_PILLOW_SUPPORT).",
+                    ["target_output", "coverage"],
+                )
+            )
+    if endpoint.source_path == "PIL.ImageEnhance.Brightness.enhance":
+        for mode, mode_id in BRIGHTNESS_REJECTED_MODES:
+            requirements.append(
+                requirement(
+                    f"{prefix}.mode.{mode_id}",
+                    "mode",
+                    f"Brightness rejection behavior for mode {mode!r}.",
+                    ["parity", "coverage"],
+                )
+            )
+        for _mode, mode_id, *_samples in BRIGHTNESS_TARGET_ONLY_MODES:
+            requirements.append(
+                requirement(
+                    f"{prefix}.mode.{mode_id}",
+                    "mode",
+                    f"Native Brightness output for {mode_id}; no Pillow result contract (NO_PILLOW_SUPPORT).",
                     ["target_output", "coverage"],
                 )
             )

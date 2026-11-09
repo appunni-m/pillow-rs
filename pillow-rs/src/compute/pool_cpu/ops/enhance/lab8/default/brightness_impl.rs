@@ -2,6 +2,8 @@ use crate::compute::pool_cpu::ops::enhance::helpers::native;
 use crate::error::PilError;
 use crate::raster::RgbImage;
 
+// NO_PILLOW_SUPPORT: Pillow's Brightness constructor fails while building its
+// LAB blend base; this native byte strategy extends that operation.
 pub(crate) fn execute(source: &RgbImage, factor: f64) -> Result<RgbImage, PilError> {
     if factor == 1.0 {
         return Ok(source.clone());

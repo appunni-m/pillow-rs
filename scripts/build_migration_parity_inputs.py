@@ -76,11 +76,13 @@ except ModuleNotFoundError:
 
 try:
     from migration_parity.target_output_contracts import (
+        brightness_target_output_cases,
         core_only_frombytes_cases,
         sharpness_core_only_cases,
     )
 except ModuleNotFoundError:
     from scripts.migration_parity.target_output_contracts import (
+        brightness_target_output_cases,
         core_only_frombytes_cases,
         sharpness_core_only_cases,
     )
@@ -2202,10 +2204,12 @@ def requirement_mode(requirement: dict[str, Any]) -> str | None:
         "i": "I",
         "l": "L",
         "la": "LA",
+        "la-premultiplied": "La",
         "p": "P",
         "pa": "PA",
         "rgb": "RGB",
         "rgba": "RGBA",
+        "rgb-premultiplied": "RGBa",
         "ycbcr": "YCbCr",
     }.get(value, value.upper())
 
@@ -44162,6 +44166,7 @@ def build_nuanced_cases(
     cases.extend(composite_pixel_parity_cases(surface_id))
     cases.extend(contrast_pixel_parity_cases(surface_id))
     cases.extend(brightness_pixel_parity_cases(surface_id))
+    cases.extend(brightness_mode_variant_parity_cases(surface_id))
     cases.extend(quantize_fast_octree_rgb_performance_parity_cases(surface_id))
     cases.extend(quantize_boundary_parity_cases(surface_id))
     cases.extend(color_pixel_parity_cases(surface_id))
@@ -47652,6 +47657,80 @@ def brightness_pixel_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             "observations": ["enhancer", "call", "materialize"],
         }
     )
+    return cases
+
+
+def brightness_mode_variant_parity_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Exercise non-identity Brightness for premultiplied and RGBX modes."""
+
+    target = "PIL.ImageEnhance.Brightness"
+    if surface_id != target:
+        return []
+    cases = []
+    mode_samples = (
+        ("La", "la-premultiplied", bytes((140, 200, 33, 71, 222, 250))),
+        (
+            "RGBa",
+            "rgb-premultiplied",
+            bytes((16, 32, 48, 64, 32, 64, 96, 128, 48, 96, 144, 192)),
+        ),
+        (
+            "RGBX",
+            "rgbx",
+            bytes((17, 83, 149, 2, 251, 13, 76, 251, 128, 250, 1, 99)),
+        ),
+    )
+    for mode, mode_id, raw in mode_samples:
+        case_id = f"{target}.enhance.nuanced.mode-active-{mode_id}"
+        cases.append(
+            {
+                "case_id": case_id,
+                "surface": target,
+                "operation": "enhance",
+                "covers": [f"{target}.enhance.mode.{mode_id}"],
+                "assets": [
+                    {
+                        "id": "pixels",
+                        "kind": "inline",
+                        "encoding": "base64",
+                        "data": base64.b64encode(raw).decode("ascii"),
+                        "sha256": hashlib.sha256(raw).hexdigest(),
+                        "media_type": "application/octet-stream",
+                    }
+                ],
+                "steps": [
+                    {
+                        "step_id": "image",
+                        "surface": "PIL.Image",
+                        "operation": "frombytes",
+                        "receiver": None,
+                        "arguments": {
+                            "mode": literal(mode),
+                            "size": literal([3, 1]),
+                            "data": asset_value("pixels"),
+                        },
+                    },
+                    {
+                        "step_id": "enhancer",
+                        "surface": "PIL.ImageEnhance",
+                        "operation": "Brightness",
+                        "receiver": None,
+                        "arguments": {"image": binding("image")},
+                    },
+                    *[
+                        {
+                            "step_id": "result-" + name,
+                            "surface": target,
+                            "operation": "enhance",
+                            "receiver": binding("enhancer"),
+                            "arguments": {"factor": literal(factor)},
+                        }
+                        for name, factor in (("half", 0.5), ("double", 2.0))
+                    ],
+                ],
+                "observations": ["result-half", "result-double"],
+            }
+        )
     return cases
 
 
@@ -57774,6 +57853,10 @@ def build_inputs(
             # Every native-only exact-mode Sharpness route gets a recorded
             # output contract through the public Python facade.
             nuanced_cases.extend(sharpness_core_only_cases())
+        if surface_id == "PIL.ImageEnhance.Brightness":
+            # Native Brightness routes without a Pillow output contract have
+            # fixed expected results through the public Python facade.
+            nuanced_cases.extend(brightness_target_output_cases())
         if surface_id == "PIL.Image.Image":
             # The full-size native F resize parity case is the exact public
             # workflow used by its standard benchmark workload. Carry that
