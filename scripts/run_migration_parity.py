@@ -4850,15 +4850,21 @@ def compare_case(
             item["step_id"]: item["value"]
             for item in case["target_expectation"]["observations"]
         }
+        expects_error = any(
+            expected.get("kind") == "expected_error"
+            for expected in expected_observations.values()
+            if isinstance(expected, dict)
+        )
+        expected_status = "not_run" if expects_error else "completed"
         diffs = []
-        if target.get("status") != "completed":
+        if target.get("status") != expected_status:
             diffs.append(
                 _diff(
                     "status",
                     "expected_output_status_mismatch",
-                    "completed",
+                    expected_status,
                     target.get("status"),
-                    "target-only expected-output workflow did not complete",
+                    "target-only workflow status differs from its recorded contract",
                 )
             )
         if set(target_observations) != set(expected_observations):
@@ -4874,16 +4880,35 @@ def compare_case(
         steps = {step["step_id"]: step for step in case["steps"]}
         for step_id, expected in expected_observations.items():
             actual = target_observations.get(step_id)
-            if actual is None or actual.get("status") != "ok":
+            expects_step_error = (
+                isinstance(expected, dict)
+                and expected.get("kind") == "expected_error"
+            )
+            expected_step_status = "error" if expects_step_error else "ok"
+            if actual is None or actual.get("status") != expected_step_status:
                 diffs.append(
                     _diff(
                         f"{step_id}.status",
                         "expected_output_step_mismatch",
-                        "ok",
+                        expected_step_status,
                         None if actual is None else actual.get("status"),
-                        "target-only expected-output step did not succeed",
+                        "target-only step differs from its recorded contract",
                     )
                 )
+                continue
+            if expects_step_error:
+                expected_error = expected.get("error")
+                actual_error = actual.get("error")
+                if actual_error != expected_error:
+                    diffs.append(
+                        _diff(
+                            f"{step_id}.error",
+                            "expected_output_error_mismatch",
+                            expected_error,
+                            actual_error,
+                            "target-only error differs from the recorded contract",
+                        )
+                    )
                 continue
             step = steps[step_id]
             diffs.extend(

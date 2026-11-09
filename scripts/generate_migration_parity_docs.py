@@ -189,9 +189,9 @@ def target_output_page(
     lines = [
         "# Migration target-output status",
         "",
-        "This is a generated record of successful Rust-only outputs. These cases",
-        "are checked against recorded expectations and are kept separate from",
-        "Pillow parity and injected-fault results.",
+        "This is a generated record of Rust-only output and error contracts.",
+        "These cases are checked against recorded expectations and are kept",
+        "separate from Pillow parity and injected-fault results.",
         "",
         "```yaml",
         marker(manifest, manifest_path),
@@ -220,7 +220,7 @@ def target_output_page(
             "",
             "## Recorded expectations",
             "",
-            "| Case ID | Operation | Mode | Size | Expected output record |",
+            "| Case ID | Operation | Mode | Size | Recorded target result |",
             "| --- | --- | --- | --- | --- |",
         )
     )

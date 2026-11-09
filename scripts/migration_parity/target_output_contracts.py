@@ -26,7 +26,7 @@ CORE_ONLY_RAW_MODES: tuple[tuple[str, str, bytes], ...] = (
 
 
 def core_only_frombytes_cases() -> list[dict[str, Any]]:
-    """Return thin-Python, recorded-output cases for all five internal modes."""
+    """Return thin-Python output and error contracts for internal modes."""
 
     cases: list[dict[str, Any]] = []
     for mode, mode_id, raw in CORE_ONLY_RAW_MODES:
@@ -79,4 +79,101 @@ def core_only_frombytes_cases() -> list[dict[str, Any]]:
                 },
             }
         )
+        cases.extend(core_only_frombytes_boundary_cases(mode, mode_id, raw))
     return cases
+
+
+def core_only_frombytes_boundary_cases(
+    mode: str, mode_id: str, raw: bytes
+) -> list[dict[str, Any]]:
+    """Cover short samples and accepted empty raster dimensions."""
+
+    short_data = raw[:-1]
+    cases = [
+        _target_case(
+            mode,
+            mode_id,
+            "short-data",
+            (1, 1),
+            short_data,
+            {
+                "kind": "expected_error",
+                "mode": mode,
+                "error": {
+                    "class": "ValueError",
+                    "kind": "invalid_argument",
+                    "message": "not enough image data",
+                    "stage": "call",
+                    "code": None,
+                },
+            },
+        )
+    ]
+    for edge, size in (("empty-width", (0, 1)), ("empty-height", (1, 0))):
+        cases.append(
+            _target_case(
+                mode,
+                mode_id,
+                edge,
+                size,
+                b"",
+                {
+                    "kind": "image",
+                    "mode": mode,
+                    "size": list(size),
+                    "format": None,
+                    "info": {},
+                    "palette": None,
+                    "bytes": "",
+                },
+            )
+        )
+    return cases
+
+
+def _target_case(
+    mode: str,
+    mode_id: str,
+    edge: str,
+    size: tuple[int, int],
+    raw: bytes,
+    expected: dict[str, Any],
+) -> dict[str, Any]:
+    encoded = base64.b64encode(raw).decode("ascii")
+    if expected.get("kind") == "expected_error":
+        expected = {**expected, "size": list(size)}
+    return {
+        "case_id": f"PIL.Image.frombytes.expected-output.{mode_id}.{edge}",
+        "surface": "PIL.Image",
+        "operation": "frombytes",
+        "verification": "expected-output",
+        "covers": [
+            "PIL.Image.frombytes.behavior.default",
+            f"PIL.Image.frombytes.mode.{mode_id}",
+        ],
+        "assets": [
+            {
+                "id": "raw-mode-data",
+                "kind": "inline",
+                "encoding": "base64",
+                "data": encoded,
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "media_type": "application/octet-stream",
+            }
+        ],
+        "steps": [
+            {
+                "step_id": "image",
+                "surface": "PIL.Image",
+                "operation": "frombytes",
+                "receiver": None,
+                "arguments": {
+                    "mode": {"kind": "literal", "value": mode},
+                    "size": {"kind": "literal", "value": list(size)},
+                    "data": {"kind": "asset", "asset_id": "raw-mode-data"},
+                },
+            }
+        ],
+        "observations": ["image"],
+        "target_expectation": {"observations": [{"step_id": "image", "value": expected}]},
+    }
