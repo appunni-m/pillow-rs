@@ -91,21 +91,31 @@ active `pool_cpu` source line coverage was 39.0%. This broad figure identifies
 unexercised code but does not prove complete operation × Mode × Architecture
 behavior.
 
-The current working tree has CPU source edits and parity-builder/fixture
-changes after that clean evidence revision, including typed-u16 Chops Offset
-strategies and their expected-output cases. Fixture generation on 2026-11-10
-produced 25,003 cases: the CPU profile selects 25,002 (24,750 Pillow-parity
-cases and 252 recorded expected outputs, excluding one GPU-only fault
-contract). The ImageChops input contains 10,070 cases, including 204 expected
-outputs. A previous WIP passed `make quality` on 2026-11-10 before the latest
-LAB and Offset changes; that result is historical. The current fixture rebuild,
-determinism check, and manifest contract validation pass, while the final
-quality and compile gates remain pending.
-The frozen CPU case IDs have SHA-256
+The current CPU source includes typed-u16 Chops Offset strategies and recorded
+expected-output contracts. Fixture generation on 2026-11-10 produced 25,003
+cases: the CPU profile selects 25,002 (24,750 Pillow-parity cases and 252
+recorded expected outputs, excluding one GPU-only fault contract). The
+ImageChops input contains 10,070 cases, including 204 expected outputs. The
+frozen CPU case IDs have SHA-256
 `a2005623bb7f9bcf243c030cc5e12ff4e028858b423427a892247e1fc96cf619`.
-Remaining CPU work is the full CPU parity/receipt campaign for Default, Neon,
-SSE2, SSE3, SSSE3, AVX, AVX2, AVX+FMA, and AVX2+FMA; the external I32-to-PNG
-encoder gap with image-slash-star; native x86 execution; and CPU performance.
+
+Full CPU parity and execution receipts ran on 2026-11-10 for Default, Neon,
+SSE2, SSE3, SSSE3, AVX, AVX2, AVX+FMA, and AVX2+FMA. Each selector executed all
+25,002 cases: 25,001 passed, including all 252 recorded expected outputs, and
+one Pillow-parity case failed. The sole failure is
+`PIL.Image.Image.save.nuanced.i-png`: Pillow successfully writes the I-mode
+image, while the current image-slash-star PNG encoder returns
+`PNG cannot encode this image mode`. There were zero infrastructure errors.
+This is tracked as `image-slash-star#9h5w`. Reports and execution receipts are
+under `build/migration-parity/cpu-architecture/`. The x86 selectors used their
+declared fallback on this ARM64 host, so native x86 execution remains
+unproven.
+
+The final parity gate is therefore blocked only by that external encoding
+case. After it is fixed and rebuilt, rerun the affected case on all CPU
+selectors and establish the final full CPU parity result under that build.
+Native x86 execution and CPU performance remain pending. See the append-only
+checkpoint notes below for operation-specific evidence.
 The public support declarations classify 113 operation identities across 25
 source modes; parameterized targets, secondary inputs, and route guards add
 cases beyond that source-mode denominator. `pool_parallel` remains future work
