@@ -12,12 +12,9 @@
 use crate::error::PilError;
 use crate::raster::{ImageBuffer, Pixel};
 
-/// Counts the stored byte channels directly, without constructing another raster.
-// Pillow 12.2's unpackLA handles LA, La, and PA raw inputs by repeating the
-// first band into physical lanes 1 and 2. `_imaging.c::getink` does the same
-// for two-component tuple inks, and Access.c reads the pair from lanes 0 and 3.
-// The typed carrier stores only that pair, so ordinary inputs carry the
-// omitted lanes in the raster payload; legacy carriers without them use band 0.
+/// Counts byte channels directly, without constructing another raster.
+// Exact-mode owners opt into the repeated hidden lane only for two-band modes
+// whose masked Histogram result uses it. Plain LA keeps its stored alpha band.
 pub(crate) fn byte_bands<P, const MASKED_SECOND_FROM_FIRST_BAND: bool>(
     image: &ImageBuffer<P, Vec<u8>>,
     mask_raw: Option<&[u8]>,
@@ -35,8 +32,8 @@ where
             }
             let samples = pixel.channels();
             for (band, &stored_sample) in samples.iter().enumerate() {
-                // Masked Pillow Histo.c reads raw lane 1; the unmasked two-band
-                // path reads lane 3. Recover lane 1 for ordinary two-band inputs.
+                // Some exact two-band modes expose their masked second-band
+                // value through the repeated hidden lane.
                 let sample = if MASKED_SECOND_FROM_FIRST_BAND && band == 1 {
                     hidden_lanes
                         .filter(|lanes| lanes.lane_count() > 0)

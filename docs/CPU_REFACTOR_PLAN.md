@@ -165,6 +165,15 @@ with the existing native typed-sample scan passes all eight affected cases
 full corpus has not been rerun after this correction; the latest 105-failure
 report therefore still includes these eight now-passing cases.
 
+Focused masked-LA Histogram correction (2026-11-10): Pillow 13.0 counts the
+stored luma and alpha samples when an `LA` image is histogrammed through an
+`L` mask. The LA strategy now reads both typed samples directly instead of
+substituting its first band for alpha. All eight previously failing cases and
+one existing masked-LA guard pass (9/9; run
+`migration-parity-7d5185a8599a4170911c0cdd6138b503`, case-ID SHA-256
+`4cedb507a406e1967ced5129ec03690b4c294f070a1ef274f2fd0452f54dfe01`). The
+full corpus has not been rerun after either focused fix.
+
 Pad follow-up (2026-11-10): after the full-corpus baseline above, the maintained
 Pad route was updated for Pillow 13 zero-axis containment, P-mode fill palettes,
 and native typed color-name handling. All 292 active parity cases that call
@@ -910,7 +919,7 @@ matrix; each operation's support view must come from its own declarations.
 | Coverage area | Existing evidence | Required for CPU acceptance |
 | --- | --- | --- |
 | Input corpus | Active Pillow 13.0 corpus: 25,022 total, 25,021 CPU-selected (24,790 Pillow comparisons and 231 recorded outputs), ID SHA-256 `42905f5f4dab5716889c6d227bf86b599398208700fec23ea3e955300e9678f9`. Current full run `migration-parity-1f1b8167163a424bbafdf84b592cba20` at `147add214`: 24,916/25,021 passed and 105 failed, zero infrastructure errors. | Fix remaining failures, complete the support-derived operation × Mode × Architecture corpus, then execute each CPU selector against Pillow 13.0. |
-| Recorded differences | The 105 failures in the latest full report include ImageDraw rounded_rectangle (15), ImageOps colorize (14), Image.frombytes (14), GetBBox and Histogram (8 each), Convert (7), and the remaining endpoints listed in the inventory. Pad, Resize, and Thumbnail have no failures in this run. A focused native-u16 GetBBox correction now passes all eight I;16-family cases; the full-corpus count has not been refreshed after it. Report: `build/migration-parity/pillow13-cpu-post-pad-resize-thumbnail/parity-result.json`. | Fix each remaining observed public output/error/status mismatch; preserve the case set and comparisons. Keep image-slash-star encoding work outside pillow-rs. |
+| Recorded differences | The 105 failures in the latest full report include ImageDraw rounded_rectangle (15), ImageOps colorize (14), Image.frombytes (14), GetBBox and Histogram (8 each), Convert (7), and the remaining endpoints listed in the inventory. Pad, Resize, and Thumbnail have no failures in this run. Focused typed-u16 GetBBox (8/8) and masked-LA Histogram (9/9 including a guard) now pass; the full-corpus count has not been refreshed after either fix. Report: `build/migration-parity/pillow13-cpu-post-pad-resize-thumbnail/parity-result.json`. | Fix each remaining observed public output/error/status mismatch; preserve the case set and comparisons. Keep image-slash-star encoding work outside pillow-rs. |
 | Mode identity stimulus | Current inputs include all 20 Pillow spellings and five internal high-depth Mode identities. All 231 recorded target outputs passed on the default CPU profile. This does not prove every operation/mode route or any non-default architecture. | Finish the support-derived denominator for every operation and mode, then collect output and exact identity evidence on every CPU Architecture selector. |
 | Mode strategies | The current corpus includes selected accepted and rejected mode routes, but does not contain one case for every `OperationId` × `Mode` outcome. The full operation/mode support cross-product remains unverified. | For every operation, exercise each exact mode’s declared output or rejection, including metadata, fault order, native CoreOnly outputs, and relevant target-mode transitions. |
 | Architecture strategies | The Pillow 13.0 full-corpus run used the default CPU profile only. Historical 12.2 receipts cover nine selectors, with x86 falling back on ARM64; focused current-oracle Offset cases passed on default CPU. | After fixing current failures, verify every declared operation/mode specialization or fallback on all selectors; run native x86 specializations on an x86 host. |
