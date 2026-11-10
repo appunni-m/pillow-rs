@@ -3,6 +3,28 @@
 use crate::compute::registry::support::{OperationId, OperationSupport};
 use crate::pipeline::PipelineOp;
 
+/// Typed arguments to ImageOps autocontrast.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AutocontrastOptions {
+    /// Percent removed from the low and high ends of each histogram.
+    pub cutoff: (f64, f64),
+    /// Histogram bins to ignore, with negative indices counting from 255.
+    pub ignore: Option<Vec<i64>>,
+    /// Build one luma histogram and apply that LUT to every source channel.
+    pub preserve_tone: bool,
+}
+
+impl AutocontrastOptions {
+    /// Creates the Pillow-default request with one cutoff used at both ends.
+    pub fn symmetric(cutoff: f64) -> Self {
+        Self {
+            cutoff: (cutoff, cutoff),
+            ignore: None,
+            preserve_tone: false,
+        }
+    }
+}
+
 /// Resampling filter used by resize-like operations.
 // TODO(pillow-rs#3ptb): implement Pillow 13's MKS2013/MKS2021 kernels. The
 // current enum and numeric parser cover Pillow's earlier six filter values.

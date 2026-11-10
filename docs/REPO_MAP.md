@@ -892,6 +892,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |   |-- luma16.rs
 |   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- strategy.rs
+|   |   |   |       |   |   |-- three_band.rs
 |   |   |   |       |   |   |-- unary.rs
 |   |   |   |       |   |   `-- vector.rs
 |   |   |   |       |   |-- hsv8/

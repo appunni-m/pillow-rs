@@ -44,7 +44,9 @@ use std::sync::Arc;
 
 mod support;
 pub(crate) use support::TransposeTransform;
-pub use support::{ColorMode, DitherMethod, ResampleFilter, TransformMethod, TransposeMethod};
+pub use support::{
+    AutocontrastOptions, ColorMode, DitherMethod, ResampleFilter, TransformMethod, TransposeMethod,
+};
 
 /// Independent margins used by the Pillow `ImageOps.expand` operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -977,26 +979,4 @@ pub enum PipelineOp {
         /// Blend RGBA ink into an RGB destination instead of replacing pixels.
         alpha_blend_rgb: bool,
     },
-}
-
-/// Typed arguments to ImageOps autocontrast.
-#[derive(Debug, Clone, PartialEq)]
-pub struct AutocontrastOptions {
-    /// Percent removed from the low and high ends of each histogram.
-    pub cutoff: (f64, f64),
-    /// Histogram bins to ignore, with negative indices counting from 255.
-    pub ignore: Option<Vec<i64>>,
-    /// Build one luma histogram and apply that LUT to every source channel.
-    pub preserve_tone: bool,
-}
-
-impl AutocontrastOptions {
-    /// Creates the Pillow-default request with one cutoff used at both ends.
-    pub fn symmetric(cutoff: f64) -> Self {
-        Self {
-            cutoff: (cutoff, cutoff),
-            ignore: None,
-            preserve_tone: false,
-        }
-    }
 }
