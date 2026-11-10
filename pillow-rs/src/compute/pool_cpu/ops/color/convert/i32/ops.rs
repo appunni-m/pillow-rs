@@ -12,8 +12,8 @@ use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode, RgbaImage};
 
 // The declared I source/target row includes Pillow's L-derived results where
-// a direct I converter is absent. I;16N clips through L before widening; this
-// owner writes that final result without constructing an intermediate raster.
+// a direct I converter is absent. I;16 targets retain their full unsigned
+// 16-bit range; the selected identity determines the byte order.
 // TODO(pillow-rs#3ptb): after Default parity, assess whether an exact typed-I32
 // architecture strategy is justified; do not dispatch the raw four-byte path.
 const INPUTS: &[InputContract] = &[InputContract::ConvertTarget {

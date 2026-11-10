@@ -146,10 +146,9 @@ impl Image {
         if let Some(matrix) = matrix.as_ref()
             && !matches!(matrix.len(), 4 | 12)
         {
-            return Err(PilError::TypeError(format!(
-                "argument 2 must be sequence of length 12, not {}",
-                matrix.len()
-            )));
+            return Err(PilError::TypeError(
+                "matrix must be tuple of length 4 or 12".to_owned(),
+            ));
         }
 
         let palette = match palette {

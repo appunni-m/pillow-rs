@@ -9294,3 +9294,28 @@ three-case Neon confirmation is under
 `build/migration-parity/pillow13-thumbnail-neon-vertical-first.*`. No coverage
 or benchmark ran. The complete CPU operation/mode/architecture matrix and
 performance gate remain open.
+
+Convert I;16N native-width parity correction (2026-11-10): Pillow 13.0
+confirms that `I;16N` samples widen to `I` and `F` without clipping, and that
+`I` converts to the unsigned 16-bit range for all `I;16` identities. The CPU
+Convert path previously clamped I;16N widening and I→I;16N to 255. The scalar
+and architecture-vector helpers now preserve u16 samples for `I;16N`→`I/F`,
+and I→I;16N uses the same saturating-u16 conversion as the other I;16 targets.
+The invalid RGB matrix length case now returns Pillow's observed `TypeError`
+and message (`matrix must be tuple of length 4 or 12`).
+
+Focused frozen Pillow 13.0 CPU parity passed 17/17 under Default and the same
+17/17 under requested Neon, with zero infrastructure errors. Case-ID SHA-256 is
+`82c2a96733d6a2b6faf9b21be078822831a0a2bccbfaf32fc0ad0f7981bb64d1`; manifest
+SHA-256 is `6143e61a3ca1d6b31c430ed43c6dd04f599a0a0447bf3879e7bbdfa916846a8c`.
+Default run `migration-parity-5d1e9642dd4245c58d49dd1cfca1379c` is under
+`build/migration-parity/i16n-convert-contract-cpu-default-final/`; Neon run
+`migration-parity-6960e820937744c8b8315d2e9d6afd8c` is under
+`build/migration-parity/i16n-convert-contract-cpu-neon/`. Receipts show the
+NEON vector strategy for I;16N→I/F/L; I→I;16N selects the documented Default
+fallback due to missing specialization. The full-corpus report still predates
+these changes. `make quality` passed on the current working tree after
+formatting: 0 functions over 100 lines, 0 files over 1,000 lines, and 17,401
+existing Clippy warnings across 30 categories. The binding-layer checker
+reported 403 existing migration findings as warnings and passed. Full CPU
+parity and performance remain pending; no benchmark or coverage ran.
