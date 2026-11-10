@@ -15,8 +15,10 @@ pub trait ImageOpsColorizeCallbacks: crate::ops::imageops::ImageOpsLutCallbacks 
     type Range;
     /// Iterator produced from a segment range.
     type Iterator;
-    /// Evaluate Pillow's initial `image.mode == "L"` wrapper assertion.
+    /// Evaluate Pillow's initial `image.mode == "L"` wrapper comparison.
     fn image_mode_is_luma(&mut self, image: &Self::Image) -> Result<bool, Self::Error>;
+    /// Return `str(image.mode)` after the wrapper rejects a non-`L` mode.
+    fn image_mode_name(&mut self, image: &Self::Image) -> Result<String, Self::Error>;
     /// Test `0 <= value` with the host's rich-comparison protocol.
     fn point_is_nonnegative(&mut self, value: &Self::Value) -> Result<bool, Self::Error>;
     /// Test one ordered point comparison with the host protocol.
@@ -100,7 +102,8 @@ pub fn colorize_with_callbacks<C: ImageOpsColorizeCallbacks>(
     whitepoint: C::Value,
 ) -> Result<C::Output, C::Error> {
     if !callbacks.image_mode_is_luma(&image)? {
-        return Err(PilError::AssertionError(String::new()).into());
+        let mode = callbacks.image_mode_name(&image)?;
+        return Err(PilError::ValueError(format!("mode must be L, not {mode}")).into());
     }
     OperationId::ImageOpsColorize
         .support()
@@ -117,7 +120,12 @@ pub fn colorize_with_callbacks<C: ImageOpsColorizeCallbacks>(
             && callbacks.point_is_at_most_255(&whitepoint)?
     };
     if !points_valid {
-        return Err(PilError::AssertionError(String::new()).into());
+        let message = if mid.is_some() {
+            "midpoint must be between or equal to blackpoint and whitepoint"
+        } else {
+            "blackpoint and whitepoint must each be between or equal to 0 and 255, with blackpoint less than or equal to whitepoint"
+        };
+        return Err(PilError::ValueError(message.into()).into());
     }
 
     let lut = colorize_lut_with_callbacks(
@@ -260,10 +268,17 @@ pub fn validate_colorize_mode(image: &Image) -> Result<(), PilError> {
 }
 
 fn validate_colorize_mode_for_mode(mode: Mode) -> Result<(), PilError> {
-    OperationId::Colorize
-        .support()
-        .for_mode(mode)
-        .validate_mode()
+    let support = OperationId::Colorize.support().for_mode(mode);
+    if support.scope().is_some() {
+        return Ok(());
+    }
+    let mode_name = mode
+        .pillow_name()
+        .or_else(|| mode.rust_name())
+        .unwrap_or("unknown");
+    Err(PilError::ValueError(format!(
+        "mode must be L, not {mode_name}"
+    )))
 }
 
 /// Colorizes an `L` image by mapping black and white endpoints.
@@ -281,10 +296,14 @@ pub fn colorize(
     validate_colorize_mode(image)?;
     if mid.is_some() {
         if !(blackpoint <= midpoint && midpoint <= whitepoint) {
-            return Err(PilError::AssertionError(String::new()));
+            return Err(PilError::ValueError(
+                "midpoint must be between or equal to blackpoint and whitepoint".into(),
+            ));
         }
     } else if blackpoint > whitepoint {
-        return Err(PilError::AssertionError(String::new()));
+        return Err(PilError::ValueError(
+            "blackpoint and whitepoint must each be between or equal to 0 and 255, with blackpoint less than or equal to whitepoint".into(),
+        ));
     }
     Ok(Image::push_op(
         image,

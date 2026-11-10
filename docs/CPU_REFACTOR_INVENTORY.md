@@ -2972,7 +2972,7 @@ Remaining put-family work includes typed wrapper boundaries and complete caller 
 
 - Public ImageOps mode admission in `ops/imageops/point.rs` now matches typed `Mode` identities rather than Pillow strings. Exact mode lookup uses the wrapper's cached identity. `Image::mode_identity()` reads encoded header modes and follows operation-declared output transitions without decoding or materializing pixels when those facts suffice. The remaining materialization fallback is limited to palette-dependent P/PA expansion without palette facts, rejected raw descriptors without a declared output identity, and operations with no raster result; it preserves the existing expansion and execution-error timing and is tracked for CPU parity rather than as blanket mode inference.
 - `imageops/ops.rs` owns an exhaustive classifier for all 25 exact modes. The byte modes have per-mode strategy owners and preserve their exact mode identity. Numeric I/F and internal high-depth carriers retain their existing shape-error behavior for bytewise Invert, Posterize, and Solarize. Invert's P, LA, PA, RGBA, and CMYK routes are explicitly CoreOnly because the Pillow wrapper rejects those identities; each owner has a nearby `NO_PILLOW_SUPPORT` comment. The P/PA routes invert native samples and keep attached palette metadata, so indexed materialization must not expand them before prepared dispatch.
-- CropBorder declares CoreOnly support for the five internal high-depth identities with nearby `NO_PILLOW_SUPPORT` comments and preserves each exact raster mode. Colorize declares Pillow support only for exact `ImageLuma8`; its other 24 mode identities are explicitly rejected with the same empty `AssertionError` as the public wrapper. This removes the legacy non-L-to-L projection from the prepared path and keeps Colorize native to its actual Pillow input mode.
+- CropBorder declares CoreOnly support for the five internal high-depth identities with nearby `NO_PILLOW_SUPPORT` comments and preserves each exact raster mode. Colorize declares Pillow support only for exact `ImageLuma8`; its other 24 mode identities are explicitly rejected with Pillow's `ValueError` mode message. This removes the legacy non-L-to-L projection from the prepared path and keeps Colorize native to its actual Pillow input mode.
 - Each mode's `default/invert_impl.rs` performs the same `255 - byte` transform as `legacy/ops/imageops/pixel.rs::op_invert`; the scalar byte loop is shared in `imageops/helpers/pixel.rs`. Strategy preparation receives `ExecutionContext`, and registry preparation now returns the closed `PreparedOperation` plan.
 - Named Expand and Pad colors now stay on the typed `Mode` path through `color::getcolor_for_mode`; they no longer format a Pillow spelling only to resolve the same mode again. The shared resolver marks its internal high-depth color results `NO_PILLOW_SUPPORT`; operation support still decides whether a core-only route can execute.
 - Source review compared the archived native-byte adapter's exact One/L/P, LA/PA, RGB, and RGBA/CMYK admissions and its SSE2/NEON/Wasm SIMD128 wide-kernel path. Maintained mode owners retain native-byte inversion and same-mode output. The Pillow wrapper rejects P/LA/PA/RGBA/CMYK, so their explicit `NO_PILLOW_SUPPORT` routes are CoreOnly. P/PA now stay indexed, invert their native samples, and retain attached palette metadata. Maintained LA/PA/RGBA strategies invert every stored byte; the archived ImageOps SIMD adapter preserved alpha in those modes. CMYK inverts all four bytes in both paths. The separate SIMD registration is no longer active.
@@ -9319,3 +9319,18 @@ formatting: 0 functions over 100 lines, 0 files over 1,000 lines, and 17,401
 existing Clippy warnings across 30 categories. The binding-layer checker
 reported 403 existing migration findings as warnings and passed. Full CPU
 parity and performance remain pending; no benchmark or coverage ran.
+
+ImageOps Colorize Pillow 13 error-contract correction (2026-11-10): the
+Python-facing mode rejection now reports `ValueError("mode must be L, not
+<mode>")`; the direct Rust API uses the same mode-specific message. Invalid
+black/white endpoints and invalid three-color midpoint ordering now return
+Pillow's corresponding `ValueError` messages instead of an empty
+`AssertionError`. The Pillow adapter retrieves and stringifies the rejected
+mode only after the initial comparison fails, preserving wrapper ordering.
+All 45 frozen Colorize cases pass against Pillow 13.0.0, including the 14
+previous mismatches, with zero infrastructure errors. Run
+`migration-parity-cefaba0bb4924709ae287fc13b47fb30`; the manifest SHA-256 is
+`6143e61a3ca1d6b31c430ed43c6dd04f599a0a0447bf3879e7bbdfa916846a8c`.
+Report: `build/migration-parity/pillow13-colorize-case-result.json`. The full
+CPU corpus has not been rerun, so its aggregate remains historical. No
+benchmark or coverage ran.

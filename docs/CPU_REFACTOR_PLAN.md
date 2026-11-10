@@ -4696,6 +4696,15 @@ mode checks, LUT expansion, and public Point. Subclass mode overrides, output
 metadata, faults, and Eval selection/fallback receipts remain TODO. No
 validation ran.
 
+ImageOps Colorize Pillow 13 error-contract correction (2026-11-10): rejected
+modes now return Pillow's `ValueError("mode must be L, not <mode>")`, and
+invalid black/white or three-color point ordering returns Pillow's exact
+`ValueError` text. The adapter fetches and stringifies `image.mode` only after
+the initial mode comparison rejects the image. The full 45-case Colorize
+selection passed against Pillow 13.0.0; see the current evidence entry in
+`CPU_REFACTOR_INVENTORY.md`. This focused result does not replace full CPU
+parity or architecture receipt requirements.
+
 Draw Bitmap clipped-region continuation (2026-11-07): every byte-mode
 Default Bitmap writer now traverses only the `BitmapRegion::clipped`
 intersection and maps the destination origin once, then advances within the

@@ -667,8 +667,8 @@ macro_rules! declare_colorize_modes {
 fn rejected_colorize_mode(mode: Mode) -> ModeSupport {
     ModeSupport::Rejected {
         mode,
-        reason: "",
-        kind: RejectionKind::AssertionError,
+        reason: "mode must be L",
+        kind: RejectionKind::ValueError,
     }
 }
 

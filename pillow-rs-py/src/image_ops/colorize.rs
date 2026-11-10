@@ -20,6 +20,10 @@ impl<'py> pillow_rs::ImageOpsColorizeCallbacks for PythonImageOpsCallbacks<'py> 
             .is_truthy()?)
     }
 
+    fn image_mode_name(&mut self, image: &Self::Image) -> Result<String, Self::Error> {
+        image.getattr("mode")?.str()?.extract().map_err(Into::into)
+    }
+
     fn point_is_nonnegative(&mut self, value: &Self::Value) -> Result<bool, Self::Error> {
         PyInt::new(self.py, 0).le(value).map_err(Into::into)
     }
