@@ -7599,6 +7599,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   `-- specialized.rs
 |   |   |   |-- color_count.rs
 |   |   |   |-- construction/
+|   |   |   |   |-- empty.rs
 |   |   |   |   `-- internal_samples.rs
 |   |   |   |-- construction.rs
 |   |   |   |-- data_access/
