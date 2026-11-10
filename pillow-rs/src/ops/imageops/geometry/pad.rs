@@ -1,5 +1,8 @@
 use super::callbacks::{ImageOpsPadAxis, ImageOpsPadCallbacks};
-use super::{native_geometry_color_input, pad_containment_dimensions, parse_imageops_filter};
+use super::{
+    contain_returns_empty_image, native_geometry_color_input, pad_containment_dimensions,
+    parse_imageops_filter,
+};
 use crate::compute::registry::support::{InputContract, ModeSupport, OperationId, PadFillRule};
 use crate::error::PilError;
 use crate::image::Image;
@@ -19,6 +22,13 @@ pub struct PadGeometryPreflight {
     source_height: u32,
     containment_dimensions: Option<(u32, u32)>,
     containment_axes: Option<(bool, bool)>,
+}
+
+impl PadGeometryPreflight {
+    pub(crate) fn contain_returns_empty_image(&self) -> bool {
+        self.containment_dimensions
+            .is_some_and(contain_returns_empty_image)
+    }
 }
 
 /// Validated mode-independent inputs for the ImageOps.pad orchestration.
@@ -147,12 +157,17 @@ fn prepare_pad_fill(
         PadFillRule::NativeU16 | PadFillRule::NativeF32 => native_geometry_color_input(&color),
         PadFillRule::ModeEncodedBytes | PadFillRule::PaletteIndexOrColor => None,
     };
-    let palette = resolve_pad_palette_fill(image, fill_rule, &color)?;
-    let (resolved_color, output_palette) = match palette {
+    let palette = resolve_pad_palette_fill(fill_rule, &color)?;
+    let (resolved_color, palette_output) = match palette {
         Some((index, palette, alpha)) => {
             (Some((index, index, index, u8::MAX)), Some((palette, alpha)))
         }
         None => (resolve_imageops_color(color.clone(), mode)?, None),
+    };
+    let output_palette = if mode == crate::raster::Mode::ImagePalette8 {
+        Some(palette_output.unwrap_or((Vec::new(), Some(Vec::new()))))
+    } else {
+        palette_output
     };
     Ok(PadFillPreflight {
         mode,
@@ -215,10 +230,12 @@ pub fn pad_geometry_preflight(
     h: u32,
 ) -> Result<PadGeometryPreflight, PilError> {
     let (source_width, source_height) = image.size()?;
-    let dimensions = pad_containment_dimensions(source_width, source_height, w, h);
-    if source_height == 0 || h == 0 {
-        return Err(PilError::ZeroDivisionError("division by zero".into()));
-    }
+    let dimensions = Some(pad_containment_dimensions(
+        source_width,
+        source_height,
+        w,
+        h,
+    ));
     let containment_axes = dimensions.map(|(new_w, new_h)| (new_w != w, new_h != h));
     Ok(PadGeometryPreflight {
         width: w,
@@ -231,6 +248,9 @@ pub fn pad_geometry_preflight(
 }
 
 fn validate_pad_resize_dimensions(geometry: PadGeometryPreflight) -> Result<(), PilError> {
+    if geometry.contain_returns_empty_image() {
+        return Ok(());
+    }
     let PadGeometryPreflight {
         width,
         height,
@@ -262,7 +282,11 @@ pub fn pad_filter_preflight(
         Some(ResampleInput::Code(code)) => Some(*code),
         Some(ResampleInput::Name(_)) | None => None,
     };
-    let filter = parse_imageops_filter(filter)?;
+    let filter = if geometry.contain_returns_empty_image() {
+        parse_imageops_filter(None)?
+    } else {
+        parse_imageops_filter(filter)?
+    };
     validate_pad_resize_dimensions(geometry)?;
     Ok(PadPreflight {
         geometry,
@@ -345,6 +369,39 @@ fn resize_after_pad_preflight_mutation(
     Ok(Some((contained, preflight)))
 }
 
+fn pad_contained_result(
+    image: &Image,
+    source: &Image,
+    preflight: PadPreflight,
+    contains_empty: bool,
+) -> Result<Option<(Image, bool)>, PilError> {
+    let geometry = preflight.geometry;
+    if geometry.containment_axes != Some((false, false)) {
+        return Ok(None);
+    }
+
+    if contains_empty {
+        return Ok(Some((source.clone(), true)));
+    }
+    if (geometry.source_width, geometry.source_height) == (geometry.width, geometry.height) {
+        // ImageOps.pad returns an independent copy for an exact identity.
+        return Ok(Some((image.copy(), true)));
+    }
+    Ok(Some((
+        Image::push_op(
+            source,
+            PipelineOp::Pad {
+                w: geometry.width,
+                h: geometry.height,
+                filter: preflight.filter,
+                color: None,
+                centering: (0.5, 0.5),
+            },
+        ),
+        true,
+    )))
+}
+
 fn pad_with_resolved_preflight(
     image: &Image,
     preflight: PadPreflight,
@@ -370,35 +427,23 @@ fn pad_with_resolved_preflight(
     // TODO(pillow-rs#3ptb): verify callback-driven source pixel/palette writes
     // and `getdata` identity in CPU parity.
     let containment_axes = planned_geometry.containment_axes;
-
-    // Pillow's `pad` calls `contain` before touching either optional boundary
-    // argument. If the resized image already has the requested dimensions,
-    // malformed color/centering values are intentionally ignored.
-    if containment_axes == Some((false, false)) {
-        if (
-            planned_geometry.source_width,
-            planned_geometry.source_height,
-        ) == (w, h)
-        {
-            // ImageOps.pad still returns an independent copy when the input
-            // already has the requested size. Match Image.copy semantics
-            // (including clearing source format metadata) without scheduling
-            // a no-op Pad pass on CPU, SIMD, or GPU.
-            return Ok((image.copy(), true));
-        }
-        return Ok((
-            Image::push_op(
-                image,
-                PipelineOp::Pad {
-                    w,
-                    h,
-                    filter,
-                    color: None,
-                    centering: (0.5, 0.5),
-                },
-            ),
-            true,
-        ));
+    let contained_size = planned_geometry.containment_dimensions.unwrap_or((
+        planned_geometry.source_width,
+        planned_geometry.source_height,
+    ));
+    let contains_empty = contain_returns_empty_image(contained_size);
+    let empty_source = if contains_empty {
+        Some(Image::new_empty_with_mode(
+            contained_size.0,
+            contained_size.1,
+            fill.mode,
+        )?)
+    } else {
+        None
+    };
+    let source = empty_source.as_ref().unwrap_or(image);
+    if let Some(result) = pad_contained_result(image, source, preflight, contains_empty)? {
+        return Ok(result);
     }
 
     let (width_padded, height_padded) = containment_axes.unwrap_or((true, true));
@@ -415,8 +460,14 @@ fn pad_with_resolved_preflight(
             None,
         ),
     };
+    if contains_empty && (w == 0 || h == 0) {
+        return Ok((
+            Image::new_empty_with_mode(w, h, fill.mode)?,
+            contained_size == (w, h),
+        ));
+    }
     if position.is_none() && filter_was_none && fill.color_was_none && centering == (0.5, 0.5) {
-        return pad(image, w, h, None, color, centering).map(|mut result| {
+        return pad(source, w, h, None, color, centering).map(|mut result| {
             result.suppress_pipeline_source_info();
             (result, false)
         });
@@ -449,7 +500,7 @@ fn pad_with_resolved_preflight(
             },
         }
     };
-    let mut output = Image::push_op(image, op);
+    let mut output = Image::push_op(source, op);
     output.suppress_pipeline_source_info();
     if let Some((palette, alpha)) = fill.output_palette {
         output.set_pipeline_output_palette(Some(palette), alpha);
@@ -501,15 +552,40 @@ pub fn pad(
     centering: (f64, f64),
 ) -> Result<Image, PilError> {
     let geometry = pad_geometry_preflight(image, w, h)?;
-    let filter = parse_resample(filter)?;
+    let contains_empty = geometry.contain_returns_empty_image();
+    let filter = if contains_empty {
+        parse_resample(None)?
+    } else {
+        parse_resample(filter)?
+    };
+    let content_size = geometry
+        .containment_dimensions
+        .unwrap_or((geometry.source_width, geometry.source_height));
+    let empty_source = if contains_empty {
+        Some(Image::new_empty_with_mode(
+            content_size.0,
+            content_size.1,
+            image.mode_identity()?,
+        )?)
+    } else {
+        None
+    };
+    let source = empty_source.as_ref().unwrap_or(image);
+    if contains_empty && (w == 0 || h == 0) {
+        return Image::new_empty_with_mode(w, h, image.mode_identity()?);
+    }
     if w > 0 && h > 0 && image.size()? == (w, h) {
         // `ImageOps.pad` returns an independent copy when no resize or border
         // is needed. Skip a queued Pad pass so every backend avoids the
         // identity placement work, including callers below the Python facade.
-        return Ok(image.copy());
+        return Ok(if contains_empty {
+            source.clone()
+        } else {
+            image.copy()
+        });
     }
     let mut output = Image::push_op(
-        image,
+        source,
         PipelineOp::Pad {
             w,
             h,

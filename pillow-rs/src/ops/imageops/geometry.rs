@@ -1,4 +1,5 @@
 use super::*;
+use crate::ops::resize::RESAMPLE_GUIDANCE;
 
 mod callbacks;
 mod fit_callbacks;
@@ -112,37 +113,38 @@ pub(crate) fn round_positive_ties_even(value: f64) -> u32 {
     rounded.max(0.0).min(f64::from(u32::MAX)) as u32
 }
 
-/// Return the exact contain dimensions Pillow computes before `Image.resize`.
-/// A rounded axis of zero is intentionally preserved: Pillow passes that
-/// result to `resize`, which raises `ValueError("height and width must be > 0")`
-/// rather than silently clamping the axis to one.
+/// Return the exact dimensions Pillow computes before its empty-image return
+/// or `Image.resize` call.
 fn pad_containment_dimensions(
     source_w: u32,
     source_h: u32,
     target_w: u32,
     target_h: u32,
-) -> Option<(u32, u32)> {
-    if source_h == 0 || target_h == 0 {
-        return None;
+) -> (u32, u32) {
+    if source_h == 0 {
+        return (target_w, 0);
+    }
+    if target_h == 0 {
+        return (0, 0);
     }
     let source_ratio = f64::from(source_w) / f64::from(source_h);
     let destination_ratio = f64::from(target_w) / f64::from(target_h);
     if source_ratio == destination_ratio {
-        Some((target_w, target_h))
+        (target_w, target_h)
     } else if source_ratio > destination_ratio {
-        Some((
+        (
             target_w,
             round_positive_ties_even(
                 f64::from(source_h) / f64::from(source_w) * f64::from(target_w),
             ),
-        ))
+        )
     } else {
-        Some((
+        (
             round_positive_ties_even(
                 f64::from(source_w) / f64::from(source_h) * f64::from(target_h),
             ),
             target_h,
-        ))
+        )
     }
 }
 
@@ -154,22 +156,18 @@ pub(crate) fn contain_dimensions_from_sizes(
     source: (u32, u32),
     target: (u32, u32),
 ) -> Result<(u32, u32), PilError> {
-    if source.1 == 0 || target.1 == 0 {
-        return Err(PilError::ZeroDivisionError("division by zero".into()));
-    }
-    Ok(
-        pad_containment_dimensions(source.0, source.1, target.0, target.1)
-            .expect("non-zero contain heights were validated above"),
-    )
+    Ok(pad_containment_dimensions(
+        source.0, source.1, target.0, target.1,
+    ))
 }
 
-/// Return the dimensions that `ImageOps.contain` passes to `Image.resize`.
-///
-/// Pillow evaluates both aspect-ratio divisions in `ImageOps.contain` before
-/// it calls `Image.resize`, so zero source/target heights must be reported as
-/// `ZeroDivisionError` at this public boundary.  Rounded-zero output axes are
-/// deliberately returned for the later resize validation step: Pillow parses
-/// the resampling filter before `Image.resize` rejects those dimensions.
+/// Pillow's `ImageOps.contain` returns `Image.new` instead of resizing when
+/// either computed output dimension is zero.
+pub(crate) const fn contain_returns_empty_image(dimensions: (u32, u32)) -> bool {
+    dimensions.0 == 0 || dimensions.1 == 0
+}
+
+/// Return the dimensions that `ImageOps.contain` computes for its result.
 fn contain_dimensions(image: &Image, w: u32, h: u32) -> Result<AspectDimensions, PilError> {
     let source = image.size()?;
     let dimensions = contain_dimensions_from_sizes(source, (w, h))?;
@@ -255,10 +253,7 @@ fn parse_imageops_filter(
         // Keep this distinction visible instead of making the four method
         // error cases accidentally succeed.
         Some(ResampleInput::Name(name)) => Err(PilError::ValueError(format!(
-            "Unknown resampling filter ({name}). Use Image.Resampling.NEAREST (0), \
-             Image.Resampling.LANCZOS (1), Image.Resampling.BILINEAR (2), \
-             Image.Resampling.BICUBIC (3), Image.Resampling.BOX (4) or \
-             Image.Resampling.HAMMING (5)"
+            "Unknown resampling filter ({name}). {RESAMPLE_GUIDANCE}"
         ))),
         input => parse_resample_input(input),
     }
@@ -286,6 +281,9 @@ pub fn validate_deform_resample(input: Option<ResampleInput>) -> Result<(), PilE
 /// Returns [`PilError::ValueError`] when `filter` is unknown.
 pub fn contain(image: &Image, w: u32, h: u32, filter: Option<&str>) -> Result<Image, PilError> {
     let (source, dimensions) = contain_dimensions(image, w, h)?;
+    if contain_returns_empty_image(dimensions) {
+        return Image::new_empty_with_mode(dimensions.0, dimensions.1, image.mode_identity()?);
+    }
     let filter = parse_resample(filter)?;
     validate_aspect_resize_dimensions(source, dimensions)?;
     Ok(Image::push_op(image, PipelineOp::Contain { w, h, filter }))
@@ -302,6 +300,9 @@ pub fn contain_with_input(
         return contain(image, w, h, None);
     }
     let (source, dimensions) = contain_dimensions(image, w, h)?;
+    if contain_returns_empty_image(dimensions) {
+        return Image::new_empty_with_mode(dimensions.0, dimensions.1, image.mode_identity()?);
+    }
     let filter = parse_imageops_filter(filter)?;
     validate_aspect_resize_dimensions(source, dimensions)?;
     Ok(Image::push_op(image, PipelineOp::Contain { w, h, filter }))

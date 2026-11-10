@@ -56,8 +56,8 @@ pub use geometry::{
     validate_prepared_expand_output_size,
 };
 pub(crate) use geometry::{
-    contain_dimensions_from_sizes, cover_dimensions_from_sizes, round_positive_ties_even,
-    validate_aspect_resize_dimensions,
+    contain_dimensions_from_sizes, contain_returns_empty_image, cover_dimensions_from_sizes,
+    round_positive_ties_even, validate_aspect_resize_dimensions,
 };
 pub(crate) use geometry::{normalize_fit_bleed, normalize_fit_centering};
 pub(crate) use geometry::{scale_dimension_to_u32, scale_dimensions_preflight};

@@ -1,7 +1,6 @@
 use super::ImageOpsColor;
 use crate::compute::registry::support::PadFillRule;
 use crate::error::PilError;
-use crate::image::Image;
 use crate::raster::Mode;
 
 impl PartialEq for ImageOpsColor {
@@ -199,7 +198,6 @@ pub(crate) fn palette_fill_components(
 }
 
 pub(crate) fn resolve_pad_palette_fill(
-    image: &Image,
     fill_rule: PadFillRule,
     fill: &ImageOpsColor,
 ) -> Result<Option<(u8, Vec<u8>, Option<Vec<u8>>)>, PilError> {
@@ -207,24 +205,16 @@ pub(crate) fn resolve_pad_palette_fill(
         return Ok(None);
     }
     if let ImageOpsColor::PaletteFill { index, palette } = fill {
-        let (output_palette, alpha) = match image.palette() {
-            Some(palette) => (palette, image.palette_alpha()),
-            None => (palette.clone(), None),
-        };
-        return Ok(Some((*index, output_palette, alpha)));
+        return Ok(Some((*index, palette.clone(), Some(Vec::new()))));
     }
     let Some(components) = palette_fill_components(fill)? else {
         return Ok(None);
     };
     // Native Rust fills use index zero and derive their temporary RGB palette
-    // from components. A Python-prepared PaletteFill above retains its exact
-    // host-selected index and palette bytes.
+    // from components. ImageOps.pad builds a new canvas from this fill, so its
+    // palette comes from the fill rather than the source image.
     let color = resolve_palette_tuple_bytes(&components)?;
-    let (palette, alpha) = match image.palette() {
-        Some(palette) => (palette, image.palette_alpha()),
-        None => (color.to_vec(), None),
-    };
-    Ok(Some((0, palette, alpha)))
+    Ok(Some((0, color.to_vec(), Some(Vec::new()))))
 }
 
 fn resolve_python_integer_list(values: &[i64], mode: Mode) -> Result<(u8, u8, u8, u8), PilError> {

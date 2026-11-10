@@ -91,7 +91,11 @@ fn native_pad_with_callbacks<C: ImageOpsPadRouteCallbacks>(
     let initial = callbacks.native_image_snapshot()?;
     let geometry = callbacks
         .run_core(move || super::pad_geometry_preflight(&initial, dimensions.0, dimensions.1))?;
-    let filter = callbacks.resample_input(method)?;
+    let filter = if geometry.contain_returns_empty_image() {
+        None
+    } else {
+        callbacks.resample_input(method)?
+    };
     let preflight = callbacks.run_core(move || super::pad_filter_preflight(geometry, filter))?;
     let needs_padding = preflight.needs_padding();
 

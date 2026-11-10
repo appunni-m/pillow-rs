@@ -182,6 +182,9 @@ impl<'py> PythonPadCallbacks<'py> {
         if color.is_none() || self.exact_number_type(color)? {
             return Ok(true);
         }
+        if self.exact_type_is(color, "str")? {
+            return Ok(true);
+        }
         if !self.exact_type_is(color, "tuple")? {
             return Ok(false);
         }

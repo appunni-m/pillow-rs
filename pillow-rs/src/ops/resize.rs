@@ -32,10 +32,11 @@ impl ThumbnailPlan {
     }
 }
 
-const RESAMPLE_GUIDANCE: &str = concat!(
+pub(crate) const RESAMPLE_GUIDANCE: &str = concat!(
     "Use Image.Resampling.NEAREST (0), Image.Resampling.LANCZOS (1), ",
     "Image.Resampling.BILINEAR (2), Image.Resampling.BICUBIC (3), ",
-    "Image.Resampling.BOX (4) or Image.Resampling.HAMMING (5)"
+    "Image.Resampling.BOX (4), Image.Resampling.HAMMING (5), ",
+    "Image.Resampling.MKS2013 (6) or Image.Resampling.MKS2021 (7)"
 );
 
 fn unknown_resample(value: impl std::fmt::Display) -> PilError {

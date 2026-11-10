@@ -4,6 +4,8 @@ use crate::compute::registry::support::{OperationId, OperationSupport};
 use crate::pipeline::PipelineOp;
 
 /// Resampling filter used by resize-like operations.
+// TODO(pillow-rs#3ptb): implement Pillow 13's MKS2013/MKS2021 kernels. The
+// current enum and numeric parser cover Pillow's earlier six filter values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResampleFilter {
     /// Nearest-neighbor sampling.

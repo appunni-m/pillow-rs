@@ -461,7 +461,7 @@ pub(crate) fn prepare_pipeline<'a>(
             | Mode::ImageCmyk8
     ) && (inputs.image.width(), inputs.image.height())
         == (frame.content_width, frame.content_height);
-    let resize = if native_identity {
+    let resize = if frame.content_width == 0 || frame.content_height == 0 || native_identity {
         None
     } else {
         Some(crate::compute::pool_cpu::ops::resize::ops::prepare_direct(

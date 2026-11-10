@@ -103,10 +103,12 @@ pub(crate) fn build(
     // Pillow Pad delegates containment to ImageOps.contain's exact comparison.
     let (content_width, content_height) =
         crate::ops::imageops::contain_dimensions_from_sizes(source, target)?;
-    crate::ops::imageops::validate_aspect_resize_dimensions(
-        source,
-        (content_width, content_height),
-    )?;
+    if !crate::ops::imageops::contain_returns_empty_image((content_width, content_height)) {
+        crate::ops::imageops::validate_aspect_resize_dimensions(
+            source,
+            (content_width, content_height),
+        )?;
+    }
     let (offset_x, offset_y) = if content_width != width {
         (
             crate::ops::imageops::round_positive_ties_even(
