@@ -4,12 +4,12 @@ scope:
   mode: full
   inventory:
     authority: scripts/migration_parity_inventory.py
-    revision: sha256:11b1e47393f220465450711938faf8e7a15b065586890b1f7b0cab12352a27e6+inventory-rule@2
+    revision: sha256:6658418089b52e3f9a6a2eed27f3f98a54beaa76732949e74d5da897910557f9+inventory-rule@2
     command_id: inventory
 oracles:
 - id: pillow
   name: Pillow
-  version: 12.2.0
+  version: 13.0.0
   runtime: CPython 3.12
   identity_command_id: oracle-identity
   contract: Public observable PIL behavior
@@ -1698,7 +1698,7 @@ surfaces:
     source:
       oracle_id: pillow
       path: PIL.Image.frombuffer
-      signature: 'frombuffer(mode: ''str'', size: ''tuple[int, int]'', data: ''bytes | SupportsArrayInterface'',
+      signature: 'frombuffer(mode: ''str'', size: ''tuple[int, int]'', data: ''bytes | bytearray | SupportsArrayInterface'',
         decoder_name: ''str'' = ''raw'', *args: ''Any'') -> ''Image'''
       parameters:
       - id: mode
@@ -1840,8 +1840,8 @@ surfaces:
     source:
       oracle_id: pillow
       path: PIL.Image.frombytes
-      signature: 'frombytes(mode: ''str'', size: ''tuple[int, int]'', data: ''bytes | bytearray | SupportsArrayInterface'',
-        decoder_name: ''str'' = ''raw'', *args: ''Any'') -> ''Image'''
+      signature: 'frombytes(mode: ''str'', size: ''tuple[int, int]'', data: ''DecoderInput'', decoder_name:
+        ''str'' = ''raw'', *args: ''Any'') -> ''Image'''
       parameters:
       - id: mode
         style: positional_or_keyword
@@ -1859,8 +1859,7 @@ surfaces:
       - id: data
         style: positional_or_keyword
         value_types:
-        - bytes
-        - record
+        - sequence
         omission:
           kind: required
       - id: decoder_name
@@ -3265,9 +3264,9 @@ surfaces:
     source:
       oracle_id: pillow
       path: PIL.Image.Image.convert
-      signature: 'convert(self, mode: ''str | None'' = None, matrix: ''tuple[float, ...] | None'' = None,
-        dither: ''Dither | None'' = None, palette: ''Palette'' = <Palette.WEB: 0>, colors: ''int'' = 256)
-        -> ''Image'''
+      signature: 'convert(self, mode: ''str | None'' = None, matrix: ''list[float] | tuple[float, ...]
+        | None'' = None, dither: ''Dither | None'' = None, palette: ''Palette'' = <Palette.WEB: 0>, colors:
+        ''int'' = 256) -> ''Image'''
       parameters:
       - id: self
         style: receiver
@@ -3816,6 +3815,90 @@ surfaces:
       description: Public behavior for image mode 'YCbCr'.
       lanes:
       - parity
+      - coverage
+    - id: PIL.Image.Image.crop.mode.la-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'La'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.crop.mode.pa
+      dimension: mode
+      description: Public behavior for image mode 'PA'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.crop.mode.rgba-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'RGBa'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.crop.mode.rgbx
+      dimension: mode
+      description: Public behavior for image mode 'RGBX'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.crop.mode.lab
+      dimension: mode
+      description: Public behavior for image mode 'LAB'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.crop.mode.i16
+      dimension: mode
+      description: Public behavior for image mode 'I;16'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.crop.mode.i16l
+      dimension: mode
+      description: Public behavior for image mode 'I;16L'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.crop.mode.i16b
+      dimension: mode
+      description: Public behavior for image mode 'I;16B'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.crop.mode.i16n
+      dimension: mode
+      description: Public behavior for image mode 'I;16N'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.crop.mode.core-only-luma-a16
+      dimension: mode
+      description: Native Crop output for core-only-luma-a16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image.crop.mode.core-only-rgb16
+      dimension: mode
+      description: Native Crop output for core-only-rgb16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image.crop.mode.core-only-rgba16
+      dimension: mode
+      description: Native Crop output for core-only-rgba16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image.crop.mode.core-only-rgb32f
+      dimension: mode
+      description: Native Crop output for core-only-rgb32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image.crop.mode.core-only-rgba32f
+      dimension: mode
+      description: Native Crop output for core-only-rgba32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
       - coverage
     - id: PIL.Image.Image.crop.parameter-combination.legacy-001
       dimension: parameter_combination
@@ -4625,8 +4708,8 @@ surfaces:
     source:
       oracle_id: pillow
       path: PIL.Image.Image.frombytes
-      signature: 'frombytes(self, data: ''bytes | bytearray | SupportsArrayInterface'', decoder_name:
-        ''str'' = ''raw'', *args: ''Any'') -> ''None'''
+      signature: 'frombytes(self, data: ''DecoderInput'', decoder_name: ''str'' = ''raw'', *args: ''Any'')
+        -> ''None'''
       parameters:
       - id: self
         style: receiver
@@ -4637,8 +4720,7 @@ surfaces:
       - id: data
         style: positional_or_keyword
         value_types:
-        - bytes
-        - record
+        - sequence
         omission:
           kind: required
       - id: decoder_name
@@ -4771,9 +4853,9 @@ surfaces:
     lifecycle:
       status: current
     source:
-      oracle_id: pillow
+      oracle_id: null
       path: PIL.Image.Image.get_child_images
-      signature: get_child_images(self) -> 'list[ImageFile.ImageFile]'
+      signature: get_child_images(self)
       parameters:
       - id: self
         style: receiver
@@ -4782,17 +4864,13 @@ surfaces:
         omission:
           kind: required
       result:
-        shape: image
+        shape: record
         observations:
         - path: value
           value_types:
-          - image
+          - record
           comparison:
-            kind: image
-            pixel_mode: exact
-            maximum_channel_delta: 0
-            metadata_mode: exact
-            reason: null
+            kind: exact
         error:
           fields:
           - class
@@ -4813,39 +4891,25 @@ surfaces:
     requirements:
     - id: PIL.Image.Image.get_child_images.behavior.default
       dimension: success_path
-      description: Default public behavior of PIL.Image.Image.get_child_images.
+      description: Return the target's child image list for a materialized image.
       lanes:
-      - parity
+      - target_output
       - coverage
     - id: PIL.Image.Image.get_child_images.mode.l
       dimension: mode
-      description: Public behavior for image mode 'L'.
+      description: Target-only child image result for l mode.
       lanes:
-      - parity
+      - target_output
       - coverage
     - id: PIL.Image.Image.get_child_images.mode.rgb
       dimension: mode
-      description: Public behavior for image mode 'RGB'.
+      description: Target-only child image result for rgb mode.
       lanes:
-      - parity
+      - target_output
       - coverage
-    - id: PIL.Image.Image.get_child_images.parameter-combination.legacy-001
-      dimension: parameter_combination
-      description: 'Deprecated-authority parameter combination: {}'
-      lanes:
-      - parity
-      - coverage
-    - id: PIL.Image.Image.get_child_images.performance.standard
-      dimension: performance
-      description: Deterministic standard workload for PIL.Image.Image.get_child_images.
-      lanes:
-      - parity
-      - benchmark
     parity:
-      applicability: required
-    fault_contract:
       applicability: not_applicable
-      reason: The operation has no deterministic target-only fault contract.
+      reason: Pillow 13 removed this deprecated Image.Image method.
     coverage:
       applicability: required
       target_profiles:
@@ -4853,12 +4917,11 @@ surfaces:
       component_ids:
       - image-core
     benchmark:
-      applicability: required
-      target_profiles:
-      - python-cpu
-      metrics:
-      - latency
-      - throughput
+      applicability: not_applicable
+      reason: Pillow 13 has no matching public operation to compare.
+    fault_contract:
+      applicability: not_applicable
+      reason: The retained method has no injected fault contract.
   - id: get_flattened_data
     kind: method
     classification: endpoint
@@ -6312,7 +6375,7 @@ surfaces:
     source:
       oracle_id: pillow
       path: PIL.Image.Image.getxmp
-      signature: getxmp(self) -> 'dict[str, Any]'
+      signature: 'getxmp(self, *, strip_namespaces: ''bool'' = True) -> ''dict[str, Any]'''
       parameters:
       - id: self
         style: receiver
@@ -6320,6 +6383,13 @@ surfaces:
         - handle
         omission:
           kind: required
+      - id: strip_namespaces
+        style: keyword
+        value_types:
+        - boolean
+        omission:
+          kind: literal
+          value: true
       result:
         shape: mapping
         observations:
@@ -6349,6 +6419,12 @@ surfaces:
     - id: PIL.Image.Image.getxmp.behavior.default
       dimension: success_path
       description: Default public behavior of PIL.Image.Image.getxmp.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.getxmp.parameter.strip-namespaces
+      dimension: parameter
+      description: Public parameter strip_namespaces with its declared type union and omission semantics.
       lanes:
       - parity
       - coverage
@@ -7472,8 +7548,8 @@ surfaces:
     source:
       oracle_id: pillow
       path: PIL.Image.Image.putdata
-      signature: 'putdata(self, data: ''Sequence[float] | Sequence[Sequence[int]] | core.ImagingCore |
-        NumpyArray'', scale: ''float'' = 1.0, offset: ''float'' = 0.0) -> ''None'''
+      signature: 'putdata(self, data: ''Sequence[float] | Sequence[Sequence[int]] | NumpyArray'', scale:
+        ''float'' = 1.0, offset: ''float'' = 0.0) -> ''None'''
       parameters:
       - id: self
         style: receiver
@@ -7486,7 +7562,6 @@ surfaces:
         value_types:
         - integer
         - number
-        - image
         - sequence
         - record
         omission:
@@ -7772,8 +7847,8 @@ surfaces:
     source:
       oracle_id: pillow
       path: PIL.Image.Image.putpixel
-      signature: 'putpixel(self, xy: ''tuple[int, int]'', value: ''float | tuple[int, ...] | list[int]'')
-        -> ''None'''
+      signature: 'putpixel(self, xy: ''tuple[int, int] | list[int]'', value: ''float | tuple[int, ...]
+        | list[int]'') -> ''None'''
       parameters:
       - id: self
         style: receiver
@@ -14352,31 +14427,27 @@ surfaces:
       - coverage
     - id: PIL.ImageChops.offset.mode.i16
       dimension: mode
-      description: Typed-sample Offset behavior for Pillow mode 'I;16'; Pillow 12.2 leaves part of the
-        output unwritten; Pillow 13.0 fixes it.
+      description: Public behavior for image mode 'I;16'.
       lanes:
-      - target_output
+      - parity
       - coverage
     - id: PIL.ImageChops.offset.mode.i16l
       dimension: mode
-      description: Typed-sample Offset behavior for Pillow mode 'I;16L'; Pillow 12.2 leaves part of the
-        output unwritten; Pillow 13.0 fixes it.
+      description: Public behavior for image mode 'I;16L'.
       lanes:
-      - target_output
+      - parity
       - coverage
     - id: PIL.ImageChops.offset.mode.i16b
       dimension: mode
-      description: Typed-sample Offset behavior for Pillow mode 'I;16B'; Pillow 12.2 leaves part of the
-        output unwritten; Pillow 13.0 fixes it.
+      description: Public behavior for image mode 'I;16B'.
       lanes:
-      - target_output
+      - parity
       - coverage
     - id: PIL.ImageChops.offset.mode.i16n
       dimension: mode
-      description: Typed-sample Offset behavior for Pillow mode 'I;16N'; Pillow 12.2 leaves part of the
-        output unwritten; Pillow 13.0 fixes it.
+      description: Public behavior for image mode 'I;16N'.
       lanes:
-      - target_output
+      - parity
       - coverage
     - id: PIL.ImageChops.offset.mode.core-only-luma-a16
       dimension: mode
@@ -17000,7 +17071,7 @@ surfaces:
     source:
       oracle_id: pillow
       path: PIL.ImageDraw.ImageDraw.getfont
-      signature: getfont(self) -> 'ImageFont.ImageFont | ImageFont.FreeTypeFont | ImageFont.TransposedFont'
+      signature: getfont(self) -> 'ImageFont.BaseImageFont'
       parameters:
       - id: self
         style: receiver
@@ -17078,7 +17149,7 @@ surfaces:
     source:
       oracle_id: pillow
       path: PIL.ImageDraw.ImageDraw.line
-      signature: 'line(self, xy: ''Coords'', fill: ''_Ink | None'' = None, width: ''int'' = 0, joint:
+      signature: 'line(self, xy: ''Coords'', fill: ''_Ink | None'' = None, width: ''int'' = 1, joint:
         ''str | None'' = None) -> ''None'''
       parameters:
       - id: self
@@ -17111,7 +17182,7 @@ surfaces:
         - integer
         omission:
           kind: literal
-          value: 0
+          value: 1
       - id: joint
         style: positional_or_keyword
         value_types:
@@ -17270,11 +17341,10 @@ surfaces:
       oracle_id: pillow
       path: PIL.ImageDraw.ImageDraw.multiline_text
       signature: 'multiline_text(self, xy: ''tuple[float, float]'', text: ''AnyStr'', fill: ''_Ink | None''
-        = None, font: ''ImageFont.ImageFont | ImageFont.FreeTypeFont | ImageFont.TransposedFont | None''
-        = None, anchor: ''str | None'' = None, spacing: ''float'' = 4, align: ''str'' = ''left'', direction:
-        ''str | None'' = None, features: ''list[str] | None'' = None, language: ''str | None'' = None,
-        stroke_width: ''float'' = 0, stroke_fill: ''_Ink | None'' = None, embedded_color: ''bool'' = False,
-        *, font_size: ''float | None'' = None) -> ''None'''
+        = None, font: ''ImageFont.BaseImageFont | None'' = None, anchor: ''str | None'' = None, spacing:
+        ''float'' = 4, align: ''str'' = ''left'', direction: ''str | None'' = None, features: ''list[str]
+        | None'' = None, language: ''str | None'' = None, stroke_width: ''float'' = 0, stroke_fill: ''_Ink
+        | None'' = None, embedded_color: ''bool'' = False, *, font_size: ''float | None'' = None) -> ''None'''
       parameters:
       - id: self
         style: receiver
@@ -17311,8 +17381,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
-        - font
-        - enum
+        - any_json
         omission:
           kind: literal
           value: null
@@ -17596,11 +17665,11 @@ surfaces:
     source:
       oracle_id: pillow
       path: PIL.ImageDraw.ImageDraw.multiline_textbbox
-      signature: 'multiline_textbbox(self, xy: ''tuple[float, float]'', text: ''AnyStr'', font: ''ImageFont.ImageFont
-        | ImageFont.FreeTypeFont | ImageFont.TransposedFont | None'' = None, anchor: ''str | None'' =
-        None, spacing: ''float'' = 4, align: ''str'' = ''left'', direction: ''str | None'' = None, features:
-        ''list[str] | None'' = None, language: ''str | None'' = None, stroke_width: ''float'' = 0, embedded_color:
-        ''bool'' = False, *, font_size: ''float | None'' = None) -> ''tuple[float, float, float, float]'''
+      signature: 'multiline_textbbox(self, xy: ''tuple[float, float]'', text: ''AnyStr'', font: ''ImageFont.BaseImageFont
+        | None'' = None, anchor: ''str | None'' = None, spacing: ''float'' = 4, align: ''str'' = ''left'',
+        direction: ''str | None'' = None, features: ''list[str] | None'' = None, language: ''str | None''
+        = None, stroke_width: ''float'' = 0, embedded_color: ''bool'' = False, *, font_size: ''float |
+        None'' = None) -> ''tuple[float, float, float, float]'''
       parameters:
       - id: self
         style: receiver
@@ -17626,8 +17695,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
-        - font
-        - enum
+        - any_json
         omission:
           kind: literal
           value: null
@@ -19158,11 +19226,11 @@ surfaces:
       oracle_id: pillow
       path: PIL.ImageDraw.ImageDraw.text
       signature: 'text(self, xy: ''tuple[float, float]'', text: ''AnyStr | ImageText.Text[AnyStr]'', fill:
-        ''_Ink | None'' = None, font: ''ImageFont.ImageFont | ImageFont.FreeTypeFont | ImageFont.TransposedFont
-        | None'' = None, anchor: ''str | None'' = None, spacing: ''float'' = 4, align: ''str'' = ''left'',
-        direction: ''str | None'' = None, features: ''list[str] | None'' = None, language: ''str | None''
-        = None, stroke_width: ''float'' = 0, stroke_fill: ''_Ink | None'' = None, embedded_color: ''bool''
-        = False, *args: ''Any'', **kwargs: ''Any'') -> ''None'''
+        ''_Ink | None'' = None, font: ''ImageFont.BaseImageFont | None'' = None, anchor: ''str | None''
+        = None, spacing: ''float'' = 4, align: ''str'' = ''left'', direction: ''str | None'' = None, features:
+        ''list[str] | None'' = None, language: ''str | None'' = None, stroke_width: ''float'' = 0, stroke_fill:
+        ''_Ink | None'' = None, embedded_color: ''bool'' = False, *args: ''Any'', **kwargs: ''Any'') ->
+        ''None'''
       parameters:
       - id: self
         style: receiver
@@ -19199,8 +19267,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
-        - font
-        - enum
+        - any_json
         omission:
           kind: literal
           value: null
@@ -19495,11 +19562,11 @@ surfaces:
     source:
       oracle_id: pillow
       path: PIL.ImageDraw.ImageDraw.textbbox
-      signature: 'textbbox(self, xy: ''tuple[float, float]'', text: ''AnyStr'', font: ''ImageFont.ImageFont
-        | ImageFont.FreeTypeFont | ImageFont.TransposedFont | None'' = None, anchor: ''str | None'' =
-        None, spacing: ''float'' = 4, align: ''str'' = ''left'', direction: ''str | None'' = None, features:
-        ''list[str] | None'' = None, language: ''str | None'' = None, stroke_width: ''float'' = 0, embedded_color:
-        ''bool'' = False, *, font_size: ''float | None'' = None) -> ''tuple[float, float, float, float]'''
+      signature: 'textbbox(self, xy: ''tuple[float, float]'', text: ''AnyStr'', font: ''ImageFont.BaseImageFont
+        | None'' = None, anchor: ''str | None'' = None, spacing: ''float'' = 4, align: ''str'' = ''left'',
+        direction: ''str | None'' = None, features: ''list[str] | None'' = None, language: ''str | None''
+        = None, stroke_width: ''float'' = 0, embedded_color: ''bool'' = False, *, font_size: ''float |
+        None'' = None) -> ''tuple[float, float, float, float]'''
       parameters:
       - id: self
         style: receiver
@@ -19525,8 +19592,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
-        - font
-        - enum
+        - any_json
         omission:
           kind: literal
           value: null
@@ -19762,10 +19828,9 @@ surfaces:
     source:
       oracle_id: pillow
       path: PIL.ImageDraw.ImageDraw.textlength
-      signature: 'textlength(self, text: ''AnyStr'', font: ''ImageFont.ImageFont | ImageFont.FreeTypeFont
-        | ImageFont.TransposedFont | None'' = None, direction: ''str | None'' = None, features: ''list[str]
-        | None'' = None, language: ''str | None'' = None, embedded_color: ''bool'' = False, *, font_size:
-        ''float | None'' = None) -> ''float'''
+      signature: 'textlength(self, text: ''AnyStr'', font: ''ImageFont.BaseImageFont | None'' = None,
+        direction: ''str | None'' = None, features: ''list[str] | None'' = None, language: ''str | None''
+        = None, embedded_color: ''bool'' = False, *, font_size: ''float | None'' = None) -> ''float'''
       parameters:
       - id: self
         style: receiver
@@ -19783,8 +19848,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
-        - font
-        - enum
+        - any_json
         omission:
           kind: literal
           value: null
@@ -23887,7 +23951,7 @@ surfaces:
     source:
       oracle_id: pillow
       path: PIL.ImageFont.load
-      signature: 'load(filename: ''str'') -> ''ImageFont'''
+      signature: 'load(filename: ''str | os.PathLike[str]'') -> ''ImageFont'''
       parameters:
       - id: filename
         style: positional_or_keyword
@@ -24119,13 +24183,11 @@ surfaces:
     source:
       oracle_id: pillow
       path: PIL.ImageFont.load_path
-      signature: 'load_path(filename: ''str | bytes'') -> ''ImageFont'''
+      signature: 'load_path(filename: ''StrOrBytesPath'') -> ''ImageFont'''
       parameters:
       - id: filename
         style: positional_or_keyword
         value_types:
-        - string
-        - bytes
         - path
         - stream
         omission:
@@ -24634,8 +24696,8 @@ surfaces:
     source:
       oracle_id: pillow
       path: PIL.ImageFont.FreeTypeFont.getbbox
-      signature: 'getbbox(self, text: ''str | bytes'', mode: ''str'' = '''', direction: ''str | None''
-        = None, features: ''list[str] | None'' = None, language: ''str | None'' = None, stroke_width:
+      signature: 'getbbox(self, text: ''str | bytes | bytearray'', mode: ''str'' = '''', direction: ''str
+        | None'' = None, features: ''list[str] | None'' = None, language: ''str | None'' = None, stroke_width:
         ''float'' = 0, anchor: ''str | None'' = None) -> ''tuple[float, float, float, float]'''
       parameters:
       - id: self
@@ -26057,8 +26119,8 @@ surfaces:
     source:
       oracle_id: pillow
       path: PIL.ImageFont.TransposedFont.getbbox
-      signature: 'getbbox(self, text: ''str | bytes'', *args: ''Any'', **kwargs: ''Any'') -> ''tuple[int,
-        int, float, float]'''
+      signature: 'getbbox(self, text: ''str | bytes | bytearray'', *args: ''Any'', **kwargs: ''Any'')
+        -> ''tuple[int, int, float, float]'''
       parameters:
       - id: self
         style: receiver
@@ -27029,7 +27091,7 @@ surfaces:
     source:
       oracle_id: pillow
       path: PIL.ImageOps.crop
-      signature: 'crop(image: ''Image.Image'', border: ''int'' = 0) -> ''Image.Image'''
+      signature: 'crop(image: ''Image.Image'', border: ''int | tuple[int, ...]'' = 0) -> ''Image.Image'''
       parameters:
       - id: image
         style: positional_or_keyword
@@ -27041,6 +27103,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - integer
+        - sequence
         omission:
           kind: literal
           value: 0
@@ -29085,7 +29148,7 @@ surfaces:
     source:
       oracle_id: pillow
       path: PIL.ImagePalette.ImagePalette.getdata
-      signature: getdata(self) -> 'tuple[str, Sequence[int] | bytes | bytearray]'
+      signature: getdata(self) -> 'tuple[str, bytes]'
       parameters:
       - id: self
         style: receiver
@@ -29470,7 +29533,7 @@ surfaces:
     source:
       oracle_id: pillow
       path: PIL.ImageSequence.Iterator.__iter__
-      signature: __iter__(self) -> 'Iterator'
+      signature: __iter__(self) -> 'Self'
       parameters:
       - id: self
         style: receiver
@@ -30763,9 +30826,9 @@ surfaces:
     source:
       oracle_id: pillow
       path: PIL.ImageText.Text
-      signature: 'Text(text: ''AnyStr'', font: ''Font | None'' = None, mode: ''str'' = ''RGB'', spacing:
-        ''float'' = 4, direction: ''str | None'' = None, features: ''list[str] | None'' = None, language:
-        ''str | None'' = None) -> ''None'''
+      signature: 'Text(text: ''AnyStr'', font: ''ImageFont.BaseImageFont | None'' = None, mode: ''str''
+        = ''RGB'', spacing: ''float'' = 4, direction: ''str | None'' = None, features: ''list[str] | None''
+        = None, language: ''str | None'' = None) -> ''None'''
       parameters:
       - id: text
         style: positional_or_keyword
@@ -30778,7 +30841,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
-        - font
+        - any_json
         omission:
           kind: literal
           value: null

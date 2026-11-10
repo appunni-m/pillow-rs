@@ -30,7 +30,7 @@ DEFAULT_RESULT = ROOT / "build" / "migration-parity" / "coverage-result.json"
 DEFAULT_REPORT = ROOT / "target" / "coverage" / "migration-parity-python.json"
 TARGET_PROFILE = "python-cpu"
 TARGET_ID = "pillow-rs-python"
-ORACLE_VERSION = "12.2.0"
+ORACLE_VERSION = "13.0.0"
 
 sys.path.insert(0, str(ROOT / "scripts"))
 from run_migration_parity import (  # noqa: E402

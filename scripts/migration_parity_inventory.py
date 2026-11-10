@@ -27,9 +27,9 @@ WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
 AUTHORITY_PATH = WORKSPACE_ROOT / "scripts" / "data" / "migration-authority-v0.yaml"
 
 EXPECTED_AUTHORITY_VERSION = "0.2.0"
-EXPECTED_PILLOW_VERSION = "12.2.0"
+EXPECTED_PILLOW_VERSION = "13.0.0"
 EXPECTED_AUTHORITY_SHA256 = (
-    "11b1e47393f220465450711938faf8e7a15b065586890b1f7b0cab12352a27e6"
+    "6658418089b52e3f9a6a2eed27f3f98a54beaa76732949e74d5da897910557f9"
 )
 EXPECTED_MODULES = (
     "Image",
@@ -567,6 +567,9 @@ def derive_inventory(
             raise ValueError(
                 f"{surface}::{operation}: merged rows disagree on binding"
             )
+        removed_from_pillow_13 = (
+            surface == "PIL.Image.Image" and operation == "get_child_images"
+        )
         endpoints.append(
             Endpoint(
                 surface=surface,
@@ -574,8 +577,18 @@ def derive_inventory(
                 kind=first.kind,
                 source_path=first.source_path,
                 classification="endpoint",
-                authority="deprecated-project-manifest-v0",
+                authority=(
+                    "target-only-contract"
+                    if removed_from_pillow_13
+                    else "deprecated-project-manifest-v0"
+                ),
                 legacy_refs=tuple(seed.legacy_ref for seed in group),
+                correction_reason=(
+                    "Pillow 13 removed this deprecated Image.Image method; "
+                    "pillow-rs retains it as a target-only convenience API."
+                    if removed_from_pillow_13
+                    else None
+                ),
             )
         )
 

@@ -77,6 +77,9 @@ except ModuleNotFoundError:
 try:
     from migration_parity.target_output_contracts import (
         brightness_target_output_cases,
+        crop_core_only_target_output_cases,
+        CROP_PILLOW_MODE_CASES,
+        crop_pillow_mode_parity_cases,
         CHOPS_BINARY_OPERATIONS,
         CHOPS_BINARY_PILLOW_MODES,
         CHOPS_BINARY_REJECTED_PILLOW_MODES,
@@ -90,14 +93,17 @@ try:
         chops_binary_target_output_cases,
         chops_logical_target_output_cases,
         CHOPS_OFFSET_PILLOW_MODES,
-        chops_offset_campaign_target_expectation,
         chops_offset_target_output_cases,
         core_only_frombytes_cases,
+        get_child_images_target_output_cases,
         sharpness_core_only_cases,
     )
 except ModuleNotFoundError:
     from scripts.migration_parity.target_output_contracts import (
         brightness_target_output_cases,
+        crop_core_only_target_output_cases,
+        CROP_PILLOW_MODE_CASES,
+        crop_pillow_mode_parity_cases,
         CHOPS_BINARY_OPERATIONS,
         CHOPS_BINARY_PILLOW_MODES,
         CHOPS_BINARY_REJECTED_PILLOW_MODES,
@@ -111,9 +117,9 @@ except ModuleNotFoundError:
         chops_binary_target_output_cases,
         chops_logical_target_output_cases,
         CHOPS_OFFSET_PILLOW_MODES,
-        chops_offset_campaign_target_expectation,
         chops_offset_target_output_cases,
         core_only_frombytes_cases,
+        get_child_images_target_output_cases,
         sharpness_core_only_cases,
     )
 
@@ -44103,12 +44109,6 @@ def build_nuanced_cases(
             scenario_outline_empty=spec.get("outline_empty", False),
             scenario_comparisons=spec.get("comparisons"),
         )
-        offset_target_expectation = chops_offset_campaign_target_expectation(case)
-        if offset_target_expectation is not None:
-            mode_id, target_expectation = offset_target_expectation
-            case["verification"] = "expected-output"
-            case["covers"] = [f"PIL.ImageChops.offset.mode.{mode_id}"]
-            case["target_expectation"] = target_expectation
         independent_steps = spec.get("independent_steps_after_call", [])
         if independent_steps:
             call_index = next(
@@ -47999,7 +47999,7 @@ def _chops_binary_mode_case(
 
 
 def chops_offset_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
-    """Exercise Pillow Offset modes with deterministic byte-level outputs."""
+    """Exercise Pillow Offset modes with deterministic pixel inputs."""
 
     target = "PIL.ImageChops"
     if surface_id != target:
@@ -48054,11 +48054,9 @@ def chops_offset_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
             "observations": ["result"],
         }
 
-    unstable_i16_modes = {"I;16", "I;16L", "I;16B", "I;16N"}
     cases = [
         mode_case(mode, mode_id, bytes_per_pixel, 31, 17, "mode-active")
         for mode, mode_id, bytes_per_pixel in CHOPS_OFFSET_PILLOW_MODES
-        if mode not in unstable_i16_modes
     ]
     mode_rows = {mode: (mode_id, bpp) for mode, mode_id, bpp in CHOPS_OFFSET_PILLOW_MODES}
     for mode, width, height in (
@@ -48072,6 +48070,16 @@ def chops_offset_mode_parity_cases(surface_id: str) -> list[dict[str, Any]]:
         cases.append(
             mode_case(mode, mode_id, bytes_per_pixel, width, height, "narrow-row")
         )
+    for mode in ("I;16", "I;16L", "I;16B", "I;16N"):
+        mode_id, bytes_per_pixel = mode_rows[mode]
+        for label, width, height in (
+            ("narrow-row", 3, 3),
+            ("empty-width", 0, 3),
+            ("empty-height", 3, 0),
+        ):
+            cases.append(
+                mode_case(mode, mode_id, bytes_per_pixel, width, height, label)
+            )
     return cases
 
 
@@ -58246,6 +58254,24 @@ def build_inputs(
                 if "benchmark" in requirement["lanes"]:
                     benchmark_requirements.append((operation, requirement))
 
+        crop_cases_by_requirement: dict[str, dict[str, Any]] = {}
+        if surface_id == "PIL.Image.Image":
+            crop_cases_by_requirement = {
+                case["covers"][0]: case for case in crop_pillow_mode_parity_cases()
+            }
+            for index, parity_case in enumerate(parity_candidates):
+                replacement = next(
+                    (
+                        crop_cases_by_requirement[requirement_id]
+                        for requirement_id in parity_case["covers"]
+                        if requirement_id in crop_cases_by_requirement
+                    ),
+                    None,
+                )
+                if replacement is not None:
+                    replacement["covers"] = parity_case["covers"]
+                    parity_candidates[index] = replacement
+
         parity_cases, local_case_by_requirement, duplicate_count = (
             merge_duplicate_cases(parity_candidates)
         )
@@ -58281,6 +58307,17 @@ def build_inputs(
             nuanced_cases.extend(chops_constant_target_output_cases())
             nuanced_cases.extend(chops_offset_target_output_cases())
         if surface_id == "PIL.Image.Image":
+            nuanced_cases.extend(get_child_images_target_output_cases())
+            crop_generic_mode_ids = {
+                case["case_id"] for case in crop_cases_by_requirement.values()
+            }
+            nuanced_cases = [
+                case for case in nuanced_cases
+                if case["case_id"] not in crop_generic_mode_ids
+            ]
+            # The typed Crop extension has fixed native-sample contracts for
+            # the five internal pixel carriers.
+            nuanced_cases.extend(crop_core_only_target_output_cases())
             # The full-size native F resize parity case is the exact public
             # workflow used by its standard benchmark workload. Carry that
             # requirement onto the case so evidence admission can prove the

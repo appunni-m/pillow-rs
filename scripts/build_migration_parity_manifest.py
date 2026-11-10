@@ -3,7 +3,7 @@
 
 This is a deterministic migration aid for the manifest@3 conversion.
 It joins the frozen deprecated authority inventory with the pinned Pillow
-12.2.0 public signatures and the current public PIL facade signatures backed
+13.0.0 public signatures and the current public PIL facade signatures backed
 by the internal pillow_rs binding.
 It writes specification only: no test outcomes, counts, percentages, timings,
 coverage observations, or current target revision.
@@ -55,6 +55,8 @@ try:
         CHOPS_CONSTANT_PILLOW_MODES,
         CHOPS_OFFSET_CORE_ONLY_MODES,
         CHOPS_OFFSET_PILLOW_MODES,
+        CROP_CORE_ONLY_MODES,
+        CROP_PILLOW_MODE_CASES,
         CORE_ONLY_RAW_MODES,
         SHARPNESS_CORE_ONLY_MODES,
     )
@@ -76,6 +78,8 @@ except ModuleNotFoundError:
         CHOPS_CONSTANT_PILLOW_MODES,
         CHOPS_OFFSET_CORE_ONLY_MODES,
         CHOPS_OFFSET_PILLOW_MODES,
+        CROP_CORE_ONLY_MODES,
+        CROP_PILLOW_MODE_CASES,
         CORE_ONLY_RAW_MODES,
         SHARPNESS_CORE_ONLY_MODES,
     )
@@ -550,6 +554,8 @@ def target_candidates(endpoint: Endpoint) -> list[str]:
     surface = endpoint.surface
     operation = endpoint.operation
     if endpoint.authority == "target-only-contract":
+        if endpoint.operation == "get_child_images":
+            return ["pillow_rs.Image.get_child_images"]
         if endpoint.kind == "type":
             return ["pillow_rs.gpu_batch.GpuBatchExecutor"]
         if endpoint.operation == "submit":
@@ -990,9 +996,15 @@ def operation_requirements(
             mode for mode, _mode_id, _bytes_per_pixel in CHOPS_LOGICAL_PILLOW_MODES
         ]
     elif endpoint.source_path == "PIL.ImageChops.offset":
-        # Pillow 12.2 has an unwritten-byte bug in the four I;16* Offset paths;
-        # those outputs use fixed sample-level contracts instead of that oracle.
         supported_modes = [mode for mode, _mode_id, _bytes_per_pixel in CHOPS_OFFSET_PILLOW_MODES]
+    elif endpoint.source_path == "PIL.Image.Image.crop":
+        # Crop's public contract covers every exact Pillow mode and the five
+        # internal typed carriers with target-only native-sample contracts.
+        supported_modes = list(dict.fromkeys([
+            *supported_modes,
+            *(mode for mode, _mode_id, *_rest in CROP_PILLOW_MODE_CASES),
+            *(mode for mode, _mode_id, *_rest in CROP_CORE_ONLY_MODES),
+        ]))
     if (
         endpoint.surface == "PIL.ImageEnhance"
         and endpoint.operation in {"Brightness", "Color", "Contrast", "Sharpness"}
@@ -1056,6 +1068,22 @@ def operation_requirements(
                 for mode_name, mode_id, _bytes_per_pixel in CHOPS_OFFSET_PILLOW_MODES
                 if mode_name == mode
             )
+        elif endpoint.source_path == "PIL.Image.Image.crop" and any(
+            mode_name == mode for mode_name, mode_id, *_rest in CROP_PILLOW_MODE_CASES
+        ):
+            mode_id = next(
+                mode_id
+                for mode_name, mode_id, *_rest in CROP_PILLOW_MODE_CASES
+                if mode_name == mode
+            )
+        elif endpoint.source_path == "PIL.Image.Image.crop" and any(
+            mode_name == mode for mode_name, _mode_id, *_rest in CROP_CORE_ONLY_MODES
+        ):
+            mode_id = next(
+                mode_id
+                for mode_name, mode_id, *_rest in CROP_CORE_ONLY_MODES
+                if mode_name == mode
+            )
         else:
             mode_id = (
                 mode_slug(str(mode))
@@ -1063,21 +1091,22 @@ def operation_requirements(
                 and endpoint.operation == "ModeFilter"
                 else slug(str(mode))
             )
-        offset_i16_output = (
-            endpoint.source_path == "PIL.ImageChops.offset"
-            and mode in {"I;16", "I;16L", "I;16B", "I;16N"}
+        crop_core_only_output = (
+            endpoint.source_path == "PIL.Image.Image.crop"
+            and any(
+                mode_name == mode
+                for mode_name, _mode_id, *_rest in CROP_CORE_ONLY_MODES
+            )
         )
         lanes = (
             ["target_output", "coverage"]
-            if offset_i16_output
+            if crop_core_only_output
             else ["parity", "coverage"]
         )
-        description = (
-            f"Typed-sample Offset behavior for Pillow mode {mode!r}; "
-            "Pillow 12.2 leaves part of the output unwritten; Pillow 13.0 fixes it."
-            if offset_i16_output
-            else f"Public behavior for image mode {mode!r}."
-        )
+        if crop_core_only_output:
+            description = f"Native Crop output for {mode_id} (NO_PILLOW_SUPPORT)."
+        else:
+            description = f"Public behavior for image mode {mode!r}."
         requirements.append(
             requirement(
                 f"{prefix}.mode.{mode_id}",
@@ -1271,6 +1300,8 @@ def operation_requirements(
 def component_for(endpoint: Endpoint) -> str:
     surface = endpoint.surface
     if endpoint.authority == "target-only-contract":
+        if endpoint.operation == "get_child_images":
+            return "image-core"
         return "gpu-batch"
     if surface.startswith("PIL.ImageText"):
         return "image-text"
@@ -1329,6 +1360,64 @@ def operation_contract(
         parameters = parameters_from_signature(
             target_signature, kind=endpoint.kind
         )
+        if endpoint.operation == "get_child_images":
+            result = result_contract(endpoint, target_signature)
+            requirements = [
+                requirement(
+                    "PIL.Image.Image.get_child_images.behavior.default",
+                    "success_path",
+                    "Return the target's child image list for a materialized image.",
+                    ["target_output", "coverage"],
+                ),
+                *[
+                    requirement(
+                        f"PIL.Image.Image.get_child_images.mode.{mode}",
+                        "mode",
+                        f"Target-only child image result for {mode} mode.",
+                        ["target_output", "coverage"],
+                    )
+                    for mode in ("l", "rgb")
+                ],
+            ]
+            return {
+                "id": endpoint.operation,
+                "kind": endpoint.kind,
+                "classification": endpoint.classification,
+                "lifecycle": {"status": "current"},
+                "source": {
+                    "oracle_id": None,
+                    "path": endpoint.source_path,
+                    "signature": signature_text(endpoint, target_signature),
+                    "parameters": parameters,
+                    "result": result,
+                },
+                "targets": [
+                    {
+                        "target_id": TARGET_ID,
+                        "path": target_path,
+                        "signature": signature_text(endpoint, target_signature),
+                        "support": {"status": "supported"},
+                    }
+                ],
+                "requirements": requirements,
+                "parity": {
+                    "applicability": "not_applicable",
+                    "reason": "Pillow 13 removed this deprecated Image.Image method.",
+                },
+                "coverage": {
+                    "applicability": "required",
+                    "target_profiles": [TARGET_PROFILE],
+                    "component_ids": [component_for(endpoint)],
+                },
+                "benchmark": {
+                    "applicability": "not_applicable",
+                    "reason": "Pillow 13 has no matching public operation to compare.",
+                },
+                "fault_contract": {
+                    "applicability": "not_applicable",
+                    "reason": "The retained method has no injected fault contract.",
+                },
+            }
         if endpoint.operation == "submit":
             pipeline = next(
                 (item for item in parameters if item["id"] == "pipeline"),
@@ -1428,6 +1517,10 @@ def operation_contract(
         if "text" in parameters_by_id:
             # AnyStr is the public str-or-bytes text contract.
             parameters_by_id["text"]["value_types"] = ["string", "bytes"]
+        if "font" in parameters_by_id:
+            # The harness resolves workflow-local metric overrides to a font
+            # instance before constructing the public Text object.
+            add_unique(parameters_by_id["font"]["value_types"], "any_json")
     if endpoint.source_path == "PIL.ImageShow.register":
         viewer_parameter = next(
             (parameter for parameter in parameters if parameter["id"] == "viewer"),
@@ -1469,6 +1562,10 @@ def operation_contract(
         # normalizers' Invalid variants can be exercised by input-only parity.
         for parameter in parameters:
             if parameter["id"] == "xy":
+                add_unique(parameter["value_types"], "any_json")
+            if parameter["id"] == "font":
+                # Workflow-local font metric overrides resolve to an
+                # ImageFont instance before this public call.
                 add_unique(parameter["value_types"], "any_json")
     if endpoint.source_path == "PIL.Image.Image.convert":
         # Pillow validates the public mode argument before conversion. Keep an

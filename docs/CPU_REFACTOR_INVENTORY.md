@@ -7581,16 +7581,16 @@ executed. No validation ran.
 | --- | --- | --- | --- |
 | Buildability | `make migration-parity-test-cpu-architectures` rebuilt the release CPU facade with the test-api Architecture selector hook for the 2026-11-10 run; the current source was exercised on all nine requested selectors. | Rebuild after any later behavior-changing Rust edit. | The current CPU source builds; native x86 execution is still unavailable on this ARM64 host. |
 | Stat support regression guard | `PIL.ImageStat.Stat.mean.behavior.default` passes 1/1 after the Stat support declarations became functions. Run `migration-parity-be69434023334f9cb2c953f489aeab7e`; manifest SHA-256 `6dcb1bcf4b8f6122302c726cf4a9995b7da8a7c1ec901d19e28a2b42d87963cc`; target dirty. | Verify the full supported Stat mode set and selection receipts in the frozen CPU matrix. | One focused case passed; full mode coverage remains open. |
-| Latest full CPU selector run | The frozen 25,002-case selection ran on 2026-11-10 under Default, Neon, SSE2, SSE3, SSSE3, AVX, AVX+FMA, AVX2, and AVX2+FMA. Each selector executed 25,002 cases: 24,749 Pillow comparisons and all 252 recorded target outputs passed; the remaining Pillow comparison is the image-slash-star I-to-PNG encoder failure. Infrastructure errors: zero. Case-ID SHA-256: `a2005623bb7f9bcf243c030cc5e12ff4e028858b423427a892247e1fc96cf619`; reports and sidecars are under `build/migration-parity/cpu-architecture/`. | Add the missing declared mode and strategy cases, then execute the expanded frozen matrix. Keep the encoder failure visible and rerun it after its external fix. | Current corpus executed; full support matrix and native x86 remain open. |
-| Execution receipt classification | The 2026-11-10 sidecars report 15,896/15,896 applicable pipeline cases complete, 9,106 not applicable, and zero missing, partial, or indeterminate pipeline receipts. They also contain 8,081 cases with no recorded strategy receipt, which need classification against direct, identity, public-error, and other non-dispatch contracts. x86 selectors fell back as unavailable hardware on ARM64. | Join evidence to every declared operation/mode/architecture route, confirming exact execution or the documented fallback/rejection reason; run native x86 on matching hardware. | Pipeline receipt dimensions are complete for this corpus; strategy coverage remains incomplete. |
-| Mode identity stimulus | The current corpus contains the 20 Pillow spellings and the five internal high-depth Mode identities. All 252 recorded expected-output cases pass on each of the nine selectors. This proves only generated workflows, not every operation/mode route. | Include all support-declared outcomes for every exact Mode, using target-only expected outputs for `NO_PILLOW_SUPPORT` routes and checking exact result identity. | All 25 Mode identities have input stimulus; operation/mode evidence remains incomplete. |
-| Live failing case | The 2026-11-10 full reports confirm `PIL.Image.Image.save.nuanced.i-png`: Pillow completes the I-to-PNG save, while image-slash-star returns `OSError: unsupported Png: encode: PNG cannot encode this image mode`. This is the single failure on each of the nine selectors; infrastructure errors are zero. | Implement the mode/format transfer in image-slash-star under `image-slash-star#9h5w`, then rerun this exact case. Do not add an encoder to pillow-rs. | Open codec blocker, tracked outside pillow-rs. |
-| Focused reruns on rebuilt source | All 16 historical I;16 Convert mismatch IDs pass (run `migration-parity-5f2492ddf65f43f380b856d343f5cf59`). The selected status/codec set passes 26/27; the sole failure is the I-to-PNG case above (run `migration-parity-a0036ac6dbc44f08a8c584fbeb0403c7`). Both use the same manifest and dirty target revision as the successful rebuild. | Retain these focused results for their exact IDs; run affected guards again after relevant source changes. | Focused only; not a full-corpus result. |
-| Operation × Mode | The live support API classifies 113 `OperationId` variants across 25 `Mode` identities: 2,825 source-mode outcomes (1,394 Pillow-supported, 472 CoreOnly-supported, 959 rejected). The current 25,002-case corpus proves only a subset of those outcomes. | Verify every declared output or rejection through the public Python facade, including operation parameters, target modes, secondary inputs, metadata, and error order. | Denominator established; complete operation × Mode evidence remains open. |
-| Operation × Mode × Architecture | The current corpus ran under nine requested selectors, but it does not exercise every declared implementation or guard. The live declarations bind 4,521 concrete implementations across supported source-mode cells. x86 selectors used unavailable-hardware fallback on ARM64. | Verify each eligible implementation and its declared fallback/rejection with observable receipts, including target-mode and secondary-input relations. Run native x86 selectors on matching hardware. | Full strategy cross-product and native x86 execution remain open. |
+| Latest executed full CPU selector run | The prior 25,002-case selection ran on 2026-11-10 under Pillow 12.2 on nine selectors. Each selector passed 25,001 cases and failed the same I-to-PNG encoder case; infrastructure errors were zero. The active Pillow 13.0 corpus selects 25,021 CPU cases and has not run in full. A focused default-CPU run passed all 20 I;16-family Offset cases (run `migration-parity-a666e1ff6f744ffabf568ec61af9c7ca`). | Complete the support-derived input matrix, then execute the frozen corpus. Keep the external encoder failure visible; run native x86 selectors on matching hardware. | Historical full corpus executed; current full corpus, support matrix, and native x86 remain open. |
+| Execution receipt classification | The existing selector sidecars (15,896 applicable pipeline receipts and 8,081 cases without strategy receipts) belong to the historical Pillow 12.2 run. x86 selectors fell back as unavailable hardware on ARM64. The active Pillow 13.0 corpus has one focused 20-case Default CPU parity run and no complete selector receipt matrix. | Classify receipts for every declared operation/mode/architecture route in the active Pillow 13.0 run, confirming exact execution or documented fallback/rejection; run native x86 on matching hardware. | Historical pipeline receipts are complete for their corpus; focused current parity passed, but the full corpus has no receipts and strategy coverage remains incomplete. |
+| Mode identity stimulus | The Pillow 13.0 generated inputs cover all 20 Pillow spellings and five internal high-depth Mode identities. The active corpus has 231 recorded expected-output workflows; none has receipts from a 13.0 run. | Include all support-declared outcomes for every exact Mode, use target-only expected outputs for `NO_PILLOW_SUPPORT`, and check exact result identity. | Input stimulus exists for all 25 identities; current outputs and the broader operation/mode matrix remain unverified. |
+| Live failing case | The historical 12.2 run reports `PIL.Image.Image.save.nuanced.i-png`: Pillow completes the I-to-PNG save while image-slash-star returns `PNG cannot encode this image mode`. The active 13.0 corpus has not rerun the case. | Implement the mode/format transfer in image-slash-star under `image-slash-star#9h5w`, then rerun this case. Do not add an encoder to pillow-rs. | External codec issue remains open; current oracle outcome is not yet observed. |
+| Focused reruns on rebuilt source | The 16 I;16 Convert mismatch IDs and selected 26/27 status/codec cases were run against historical manifests; the sole failure was the I-to-PNG encoder case. These receipts predate the active Pillow 13.0 manifest and are not current evidence. | Retain these results only for their exact historical IDs; rerun affected guards under the active oracle after the input matrix is frozen. | Historical focused results only; not current parity. |
+| Operation × Mode | The live support API classifies 113 `OperationId` variants across 25 `Mode` identities: 2,825 source-mode outcomes (1,406 Pillow-supported, 460 CoreOnly-supported, 959 rejected). The active Pillow 13.0 CPU corpus selects 25,021 cases but still proves only a subset of those outcomes. | Verify every declared output or rejection through the public Python facade, including parameters, target modes, secondary inputs, metadata, and error order. | Denominator refreshed 2026-11-10; complete operation × Mode evidence remains open. |
+| Operation × Mode × Architecture | The previous 25,002-case corpus ran under nine selectors, but did not exercise every declared implementation or guard. Its 4,521 concrete implementation bindings remain the source denominator; x86 selectors used unavailable-hardware fallback on ARM64. The active Pillow 13.0 corpus has one focused 20-case I;16 Offset run on default CPU and no complete architecture matrix. | Verify each eligible implementation and its declared fallback/rejection with observable receipts, including target-mode and secondary-input relations. Run native x86 selectors on matching hardware. | Full strategy cross-product and native x86 execution remain open. |
 | Fault contracts | The current manifest defines one target-only injected fault contract: GPU batch admission device failure. It defines no CPU fault point. CPU validation, unsupported-mode errors, and fault ordering are reached by ordinary inputs and belong in parity cases. | Add a CPU fault injection only if a deterministic internal failure with a distinct externally observable contract is identified. Keep ordinary input-driven errors in parity. | No CPU fault-contract case is currently required; CPU error and fault-order parity remains part of the operation × Mode matrix. |
 | Rust-only mode reachability | `PIL.Image.frombytes` accepts five explicit Rust mode names through the public Python facade and records exact mode, dimensions, metadata, and bytes for samples, short-buffer errors, and empty dimensions. The clean normal CPU target profile passes 20/20 (`migration-parity-929d200d41e24d748fef68c0235026dd`); all nine selector settings pass 180/180. The generated target-output page shows CPU pass and keeps other profiles `not_proven`. | Keep this extension marked `NO_PILLOW_SUPPORT`; keep the wrapper limited to name translation and host conversion. The aggregate reports target-output mapping and outcomes separately in status schema @2; these rows remain excluded from Pillow parity. Do not add a separate test-only Rust entry. | The five `frombytes` identities and construction boundaries are proven on this host; operation × Mode coverage and native x86 execution remain open; target-output reporting is generated separately. |
-| Benchmarks | Input sets are reconciled against `3f9dfd403`: all 1,032 baseline workload IDs remain unchanged in the current 1,034-ID set, with no removals. The only current additions are `pil-imagetext-text.wrap.standard` and `pil-imagetext.text.standard`. | After the CPU parity gate, collect compatible baseline timings for the common workloads, compare each operation/mode, and measure current-only workloads against Pillow within the approved tolerance. | Workload selection is reconciled; compatible baseline timing evidence is not established and no performance run was made. |
+| Benchmarks | Baseline `3f9dfd403` has 1,032 workload IDs; the current tree has 1,033. There are 1,031 identical shared definitions, one Pillow 13 removal (`pil-image-image.get-child-images.standard`), and two ImageText additions. | After the CPU parity gate, collect compatible baseline timings for common workloads and compare each operation/mode; measure current-only workloads against Pillow within the approved tolerance. | Workload IDs are reconciled; compatible baseline timing evidence is not established and no performance run was made. |
 | Coverage instrumentation | On clean `ba4fc8e9c4832ad0c360eeb30a88ed89a926451a`, coverage completed 27/27 plans, 17,377 cases passed, zero failed, and zero infrastructure errors. LLVM reports 70,624/182,663 Rust lines (38.7%) overall and 41,078/105,284 active `pool_cpu` lines (39.0%), with 3,641/10,623 CPU branches (34.3%). Large zero-hit areas include Resize bounded native-byte vectors, Enhance sharpness, Chops, Draw SIMD shapes, Paste, Convert native RGB, and Filter rank/blur. | Review zero-hit code against mode/architecture guards and add reachable public Python parity cases; reassess architecture-specific paths on compatible hardware. Keep Python thin and do not add test-only Rust entries or ordinary unit tests. | Coverage identifies substantial unproven strategy paths; operation × Mode coverage remains incomplete. |
 
 The saved 17,436-case historical run and its 56 differences use an older
@@ -8986,16 +8986,17 @@ at `build/evidence/cpu-source-crosswalk-20261109.json` (SHA-256
 `f237b18bebdc2968d3637fabfd4d68cc03ef5131d187b1eec0410c1fd060686b`). These
 are audit-tool corrections only; no image behavior changed.
 
-The benchmark input tree at `3f9dfd403` has 1,032 unique workload IDs and
-sorted newline-delimited SHA-256
-`639e358082276c924343618d5a3b09c6945de012c91c1a80ac5a8ee2121ccb84`. The
-current input tree has 1,034 IDs and SHA-256
-`66a153abc9a40aadb4cfeb5297108ffc0f19b89f40879186619c899ebcd112f9`. All 1,032
-baseline IDs remain with identical definitions, there are no removed IDs,
-and only `pil-imagetext-text.wrap.standard` and
-`pil-imagetext.text.standard` were added. The selection discrepancy is
-reconciled; compatible baseline timing evidence and the CPU performance gate
-remain pending.
+Historical benchmark reconciliation before the Pillow 13 oracle migration:
+the `3f9dfd403` input tree has 1,032 unique workload IDs and sorted
+newline-delimited SHA-256
+`639e358082276c924343618d5a3b09c6945de012c1a80ac5a8ee2121ccb84`. The current
+tree has 1,033 IDs and SHA-256
+`e134adf04711dfd5bfdd638ef4ca3c580b725b6f0832aff591dc15e07c5000b1`. Of these,
+1,031 shared workload definitions are unchanged; Pillow 13 removed
+`pil-image-image.get-child-images.standard`, and
+`pil-imagetext-text.wrap.standard` plus `pil-imagetext.text.standard` were
+added. Compatible baseline timing evidence and the CPU performance gate remain
+pending.
 
 Complete CPU matrix and Rust coverage refresh (2026-11-09): on clean
 `develop` commit `ba4fc8e9c4832ad0c360eeb30a88ed89a926451a`, the full 17,616
@@ -9031,14 +9032,16 @@ quality/compilation checks, native x86 execution, the public error/fault matrix,
 and the benchmark comparison.
 
 
-Live operation support denominator (2026-11-09): a read-only executable audit
+Live operation support denominator (2026-11-10): a read-only executable audit
 called the public `OperationId::support().for_mode()` API for every current
 operation identity and every `Mode::ALL` value. This produced 113 × 25 = 2,825
-source-mode outcomes: 1,394 Pillow-supported, 472 CoreOnly-supported, and 959
-rejected. The supported cells bind 4,521 concrete implementations, including
-Default and declared architecture specializations. Specialization counts are
-Neon 781, SSE2 743, Wasm SIMD128 743, AVX2 154, AVX 122, AVX+FMA 53, AVX2+FMA
-34, and SSSE3 25; no SSE3-specific implementation is declared. Resize and
+source-mode outcomes: 1,406 Pillow-supported, 460 CoreOnly-supported, and 959
+rejected. The prior 2026-11-09 census counted 1,394 Pillow-supported and 472
+CoreOnly-supported outcomes; use the current values for the active source.
+The supported cells bind 4,521 concrete implementations, including Default
+and declared architecture specializations. Specialization counts are Neon
+781, SSE2 743, Wasm SIMD128 743, AVX2 154, AVX 122, AVX+FMA 53, AVX2+FMA 34,
+and SSSE3 25; no SSE3-specific implementation is declared. Resize and
 ResizeBoxed each support all 25 source identities, including five CoreOnly
 modes. This census covers source-mode classification only: target-mode pairs,
 secondary inputs, request guards, callbacks, and runtime selection receipts add
@@ -9105,3 +9108,51 @@ Chops binary operations, Offset, or fusion. Artifacts are under
 The operation × Mode × Architecture matrix, native x86 execution, full CPU
 parity, public error/fault matrix, external I32-to-PNG codec gap, and benchmark
 gate remain open.
+
+Crop mode matrix slice (2026-11-10): the manifest now declares all 25 exact
+Crop source modes: 20 Pillow identities and five internal typed identities.
+Nine previously missing Pillow modes use nonzero 2x2 `Image.frombytes` inputs
+and a right-column crop; five internal-mode cases record exact native-sample
+outputs for that crop. The other eleven Pillow modes were already represented.
+The generator reports 25,017 cases total and 25,016 selected for CPU, with
+24,759 Pillow comparisons and 257 expected-output workflows. The CPU case-ID
+SHA-256 is
+`f15216d07ae2ce0025596e00a3f9b902d44359782f918cf0cf44136f86da470f`.
+`make migration-parity-inputs-check` passed after the final generator change.
+The fourteen added Crop cases have not run through CPU parity; older receipts
+do not cover them.
+
+Crop input-strengthening follow-up (2026-11-10): all 20 Pillow Crop mode
+workflows now use distinct nonzero 2x2 `Image.frombytes` inputs. Ten earlier
+direct mode workflows changed from zero-filled 16x16 inputs, so their prior
+execution receipts are stale. Nine previously missing mode workflows and a
+dedicated RGB mode workflow are now explicit, while the existing default RGB
+behavior case remains. Five CoreOnly typed-output workflows remain target-only.
+The regenerated corpus has 25,018 cases; CPU selects 25,017 (24,760 Pillow
+comparisons and 257 expected outputs), with case-ID SHA-256
+`eb98a8100c1927f5b34a499e20c06a566f895ded3da6003490a951398c30ca94`.
+Input-contract validation and CPU parity for these current Crop inputs remain
+pending.
+
+Pillow 13 oracle migration (2026-11-10): the parity manifest and runner now pin
+Pillow 13.0.0. Pillow 12.2's I;16 `Offset` wrote one byte per pixel into
+16-bit storage, leaving output bytes uninitialized; Pillow 13 fixes the bug.
+The native u16 wrapping contract is compared directly to the live 13.0 oracle,
+with no recorded-output escape hatch. Pillow 13 removed
+`PIL.Image.Image.get_child_images`; pillow-rs keeps this API as a target-only
+contract with recorded empty-list results. The generated 13.0 input corpus has
+25,022 cases, of which 25,021 select for CPU: 24,790 Pillow comparisons and 231
+recorded outputs, excluding one GPU-only fault. CPU case-ID SHA-256:
+`42905f5f4dab5716889c6d227bf86b599398208700fec23ea3e955300e9678f9`.
+`make migration-parity-inputs-check PYTHON=.venv/bin/python` passed; live CPU
+parity has not run on these inputs. The source identity command reports Pillow
+13.0.0. Pillow 12.2 parity receipts do not match the active oracle identity.
+
+Focused Pillow 13 I;16 Offset parity (2026-11-10): the default CPU profile
+executed 20 I;16/I;16L/I;16B/I;16N Offset cases and passed all 20 with zero
+infrastructure errors. Run `migration-parity-a666e1ff6f744ffabf568ec61af9c7ca`,
+manifest SHA-256 `6143e61a3ca1d6b31c430ed43c6dd04f599a0a0447bf3879e7bbdfa916846a8c`,
+target revision `0d036467fc087854bdb2b1d617d566be29830578` (dirty worktree),
+Pillow 13.0.0, CPU backend, default architecture selection. This verifies the
+former 12.2 unwritten-byte gap against the fixed oracle; it does not replace the
+full mode/architecture matrix or full CPU parity run.

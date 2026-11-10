@@ -27,7 +27,7 @@ DEFAULT_MANIFEST = FIXTURE_ROOT / "manifest.yaml"
 DEFAULT_OUTPUT = ROOT / "build" / "migration-parity" / "pillow-oracle-coverage-result.json"
 DEFAULT_REPORT = ROOT / "target" / "coverage" / "migration-parity-pillow.json"
 DEFAULT_DATA = ROOT / "target" / "coverage" / ".migration-parity-pillow"
-ORACLE_VERSION = "12.2.0"
+ORACLE_VERSION = "13.0.0"
 
 sys.path.insert(0, str(ROOT / "scripts"))
 from run_migration_coverage import (  # noqa: E402

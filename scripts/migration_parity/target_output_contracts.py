@@ -26,6 +26,73 @@ CORE_ONLY_RAW_MODES: tuple[tuple[str, str, bytes], ...] = (
 )
 
 
+# A distinct 2x2 source and fixed right-column result for each internal
+# carrier. The expected samples are stated independently of the Crop code.
+CROP_CORE_ONLY_MODES: tuple[
+    tuple[str, str, str, tuple[int | float, ...], tuple[int | float, ...]], ...
+] = (
+    (
+        "ImageLumaA16", "core-only-luma-a16", "u16n",
+        (1, 2, 3, 4, 5, 6, 7, 8), (3, 4, 7, 8),
+    ),
+    (
+        "ImageRgb16", "core-only-rgb16", "u16n",
+        tuple(range(1, 13)), (4, 5, 6, 10, 11, 12),
+    ),
+    (
+        "ImageRgba16", "core-only-rgba16", "u16n",
+        tuple(range(1, 17)), (5, 6, 7, 8, 13, 14, 15, 16),
+    ),
+    (
+        "ImageRgb32F", "core-only-rgb32f", "f32n",
+        tuple(float(sample) for sample in range(1, 13)),
+        (4.0, 5.0, 6.0, 10.0, 11.0, 12.0),
+    ),
+    (
+        "ImageRgba32F", "core-only-rgba32f", "f32n",
+        tuple(float(sample) for sample in range(1, 17)),
+        (5.0, 6.0, 7.0, 8.0, 13.0, 14.0, 15.0, 16.0),
+    ),
+)
+
+
+# Nonzero native samples exercise byte and typed copies for all Pillow modes.
+CROP_PILLOW_MODE_CASES: tuple[tuple[str, str, str, tuple[int | float, ...]], ...] = (
+    ("1", "1", "raw", (0x40, 0x80)),
+    ("L", "l", "u8", (17, 53, 101, 229)),
+    ("LA", "la", "u8", (17, 31, 101, 131, 205, 211, 229, 251)),
+    ("La", "la-premultiplied", "u8", (17, 31, 101, 131, 205, 211, 229, 251)),
+    ("P", "p", "u8", (7, 33, 129, 250)),
+    ("PA", "pa", "u8", (7, 17, 33, 47, 129, 151, 250, 239)),
+    ("RGB", "rgb", "u8", (11, 22, 33, 44, 55, 66, 77, 88, 99, 111, 122, 133)),
+    (
+        "RGBA", "rgba", "u8",
+        (11, 22, 33, 44, 55, 66, 77, 88, 99, 111, 122, 133, 144, 155, 166, 177),
+    ),
+    (
+        "RGBa", "rgba-premultiplied", "u8",
+        (11, 22, 33, 44, 55, 66, 77, 88, 99, 111, 122, 133, 144, 155, 166, 177),
+    ),
+    (
+        "RGBX", "rgbx", "u8",
+        (11, 22, 33, 44, 55, 66, 77, 88, 99, 111, 122, 133, 144, 155, 166, 177),
+    ),
+    (
+        "CMYK", "cmyk", "u8",
+        (11, 22, 33, 44, 55, 66, 77, 88, 99, 111, 122, 133, 144, 155, 166, 177),
+    ),
+    ("YCbCr", "ycbcr", "u8", (11, 22, 33, 44, 55, 66, 77, 88, 99, 111, 122, 133)),
+    ("LAB", "lab", "u8", (11, 22, 33, 44, 55, 66, 77, 88, 99, 111, 122, 133)),
+    ("HSV", "hsv", "u8", (11, 22, 33, 44, 55, 66, 77, 88, 99, 111, 122, 133)),
+    ("I", "i", "i32n", (12345, -23456, 67890, -1)),
+    ("F", "f", "f32n", (1.25, -2.5, 100.75, -0.5)),
+    ("I;16", "i16", "u16n", (0x1020, 0x3040, 0x5060, 0x7080)),
+    ("I;16L", "i16l", "u16le", (0x1020, 0x3040, 0x5060, 0x7080)),
+    ("I;16B", "i16b", "u16be", (0x1020, 0x3040, 0x5060, 0x7080)),
+    ("I;16N", "i16n", "u16n", (0x1020, 0x3040, 0x5060, 0x7080)),
+)
+
+
 # Sharpness has exact native strategies for these 16 modes, but no Pillow
 # parity contract. Store explicit degenerate, identity, and over-unity outputs
 # so the expected values do not depend on the Rust blend implementation.
@@ -284,16 +351,6 @@ CHOPS_OFFSET_PILLOW_MODES: tuple[tuple[str, str, int], ...] = (
     ("I;16L", "i16l", 2),
     ("I;16B", "i16b", 2),
     ("I;16N", "i16n", 2),
-)
-
-# Pillow 12.2 leaves half of each I;16* Offset row unwritten. Pillow 13.0
-# fixes the bug; record deterministic typed-sample expectations here so the
-# 12.2 oracle cannot define those four results.
-CHOPS_OFFSET_I16_EXPECTED_MODES: tuple[tuple[str, str, str], ...] = (
-    ("I;16", "i16", "u16n"),
-    ("I;16L", "i16l", "u16le"),
-    ("I;16B", "i16b", "u16be"),
-    ("I;16N", "i16n", "u16n"),
 )
 
 CHOPS_OFFSET_CORE_ONLY_MODES = tuple(
@@ -733,94 +790,9 @@ def _chops_binary_target_case(
 
 
 def chops_offset_target_output_cases() -> list[dict[str, Any]]:
-    """Return fixed typed-sample outputs for I;16 and internal modes."""
+    """Return fixed native-sample outputs for internal-only modes."""
 
     cases: list[dict[str, Any]] = []
-    for mode, mode_id, sample_kind in CHOPS_OFFSET_I16_EXPECTED_MODES:
-        for label, width, height, xoffset, yoffset in (
-            ("odd-wide", 31, 17, -4, 3),
-            ("narrow", 3, 3, 2, -1),
-            ("empty-width", 0, 3, 2, -1),
-            ("empty-height", 3, 0, 2, -1),
-        ):
-            sample_count = width * height
-            samples = tuple(
-                (0x1234 + index * 0x1F3D) & 0xFFFF
-                for index in range(sample_count)
-            )
-            source = _native_samples(sample_kind, samples)
-            shifted = bytearray()
-            for output_y in range(height):
-                source_y = (output_y - yoffset) % height
-                for output_x in range(width):
-                    source_x = (output_x - xoffset) % width
-                    source_index = source_y * width + source_x
-                    shifted.extend(source[source_index * 2 : source_index * 2 + 2])
-            output = bytes(shifted)
-            cases.append(
-                {
-                    "case_id": (
-                        "PIL.ImageChops.offset.expected-output."
-                        f"{mode_id}.{label}"
-                    ),
-                    "surface": "PIL.ImageChops",
-                    "operation": "offset",
-                    "verification": "expected-output",
-                    "covers": [f"PIL.ImageChops.offset.mode.{mode_id}"],
-                    "assets": [
-                        {
-                            "id": "offset-source",
-                            "kind": "inline",
-                            "encoding": "base64",
-                            "data": base64.b64encode(source).decode("ascii"),
-                            "sha256": hashlib.sha256(source).hexdigest(),
-                            "media_type": "application/octet-stream",
-                        }
-                    ],
-                    "steps": [
-                        {
-                            "step_id": "image",
-                            "surface": "PIL.Image",
-                            "operation": "frombytes",
-                            "receiver": None,
-                            "arguments": {
-                                "mode": {"kind": "literal", "value": mode},
-                                "size": {
-                                    "kind": "literal",
-                                    "value": [width, height],
-                                },
-                                "data": {
-                                    "kind": "asset",
-                                    "asset_id": "offset-source",
-                                },
-                            },
-                        },
-                        {
-                            "step_id": "result",
-                            "surface": "PIL.ImageChops",
-                            "operation": "offset",
-                            "receiver": None,
-                            "arguments": {
-                                "image": {"kind": "binding", "step_id": "image"},
-                                "xoffset": {"kind": "literal", "value": xoffset},
-                                "yoffset": {"kind": "literal", "value": yoffset},
-                            },
-                        },
-                    ],
-                    "observations": ["result"],
-                    "target_expectation": {
-                        "observations": [
-                            {
-                                "step_id": "result",
-                                "value": _native_image_result_record(
-                                    mode, output, width, height
-                                ),
-                            }
-                        ]
-                    },
-                }
-            )
-
     for mode, mode_id, sample_kind, samples in CHOPS_OFFSET_CORE_ONLY_MODES:
         source = _native_samples(sample_kind, samples)
         pixel_size = len(source) // 3
@@ -883,90 +855,6 @@ def chops_offset_target_output_cases() -> list[dict[str, Any]]:
     return cases
 
 
-def chops_offset_campaign_target_expectation(
-    case: dict[str, Any],
-) -> tuple[str, dict[str, Any]] | None:
-    """Return typed-pixel outputs for campaign cases the pinned oracle corrupts."""
-
-    if case.get("surface") != "PIL.ImageChops" or case.get("operation") != "offset":
-        return None
-    setup = next(
-        (
-            step
-            for step in case["steps"]
-            if step["surface"] == "PIL.Image" and step["operation"] == "frombytes"
-        ),
-        None,
-    )
-    if setup is None:
-        return None
-    arguments = setup["arguments"]
-    mode = arguments["mode"]["value"]
-    mode_ids = {name: mode_id for name, mode_id, _kind in CHOPS_OFFSET_I16_EXPECTED_MODES}
-    mode_id = mode_ids.get(mode)
-    if mode_id is None:
-        return None
-
-    data = arguments["data"]
-    if data.get("kind") != "asset":
-        raise ValueError(f"{case['case_id']}: I;16 Offset input must use raw bytes")
-    asset = next(
-        item for item in case["assets"] if item["id"] == data["asset_id"]
-    )
-    source = base64.b64decode(asset["data"], validate=True)
-    width, height = arguments["size"]["value"]
-    if len(source) != width * height * 2:
-        raise ValueError(f"{case['case_id']}: I;16 Offset source has an invalid size")
-
-    offset_step = next(
-        step
-        for step in case["steps"]
-        if step["surface"] == "PIL.ImageChops" and step["operation"] == "offset"
-    )
-    offset_arguments = offset_step["arguments"]
-
-    def literal_argument(name: str, default: Any = None) -> Any:
-        descriptor = offset_arguments.get(name)
-        if descriptor is None:
-            return default
-        if descriptor.get("kind") != "literal":
-            raise ValueError(f"{case['case_id']}: Offset {name} must be literal")
-        return descriptor["value"]
-
-    xoffset = literal_argument("xoffset")
-    if xoffset is None:
-        raise ValueError(f"{case['case_id']}: Offset xoffset is required")
-    yoffset = literal_argument("yoffset")
-    if yoffset is None:
-        yoffset = xoffset
-    output = bytearray()
-    if width and height:
-        for y in range(height):
-            source_y = (y - yoffset) % height
-            for x in range(width):
-                source_x = (x - xoffset) % width
-                index = (source_y * width + source_x) * 2
-                output.extend(source[index : index + 2])
-
-    values = []
-    for step_id in case["observations"]:
-        observed_step = next(
-            step for step in case["steps"] if step["step_id"] == step_id
-        )
-        if observed_step["operation"] == "offset":
-            value = _native_image_result_record(mode, bytes(output), width, height)
-        elif observed_step["operation"] == "tobytes":
-            value = {
-                "kind": "bytes",
-                "encoding": "base64",
-                "data": base64.b64encode(output).decode("ascii"),
-            }
-        else:
-            raise ValueError(f"{case['case_id']}: unsupported observed Offset step")
-        values.append({"step_id": step_id, "value": value})
-    return mode_id, {"observations": values}
-
-
 def _brightness_result_record(
     mode: str,
     sample_kind: str,
@@ -1006,6 +894,125 @@ def _native_samples(sample_kind: str, samples: tuple[int | float, ...]) -> bytes
     if sample_kind == "u16be":
         return struct.pack(f">{len(samples)}H", *(int(sample) for sample in samples))
     raise ValueError(f"unknown native sample kind: {sample_kind}")
+
+
+def crop_core_only_target_output_cases() -> list[dict[str, Any]]:
+    """Return fixed Crop outputs for each internal native pixel carrier."""
+
+    cases: list[dict[str, Any]] = []
+    for mode, mode_id, sample_kind, source_samples, output_samples in CROP_CORE_ONLY_MODES:
+        source = _native_samples(sample_kind, source_samples)
+        encoded_source = base64.b64encode(source).decode("ascii")
+        output = _native_samples(sample_kind, output_samples)
+        cases.append(
+            {
+                "case_id": (
+                    f"PIL.Image.Image.crop.expected-output.{mode_id}.right-column-2x2"
+                ),
+                "surface": "PIL.Image.Image",
+                "operation": "crop",
+                "verification": "expected-output",
+                "covers": [f"PIL.Image.Image.crop.mode.{mode_id}"],
+                "assets": [
+                    {
+                        "id": "crop-source",
+                        "kind": "inline",
+                        "encoding": "base64",
+                        "data": encoded_source,
+                        "sha256": hashlib.sha256(source).hexdigest(),
+                        "media_type": "application/octet-stream",
+                    }
+                ],
+                "steps": [
+                    {
+                        "step_id": "image",
+                        "surface": "PIL.Image",
+                        "operation": "frombytes",
+                        "receiver": None,
+                        "arguments": {
+                            "mode": {"kind": "literal", "value": mode},
+                            "size": {"kind": "literal", "value": [2, 2]},
+                            "data": {"kind": "asset", "asset_id": "crop-source"},
+                        },
+                    },
+                    {
+                        "step_id": "result",
+                        "surface": "PIL.Image.Image",
+                        "operation": "crop",
+                        "receiver": {"kind": "binding", "step_id": "image"},
+                        "arguments": {
+                            "box": {"kind": "literal", "value": [1, 0, 2, 2]}
+                        },
+                    },
+                ],
+                "observations": ["result"],
+                "target_expectation": {
+                    "observations": [
+                        {
+                            "step_id": "result",
+                            "value": _native_image_result_record(
+                                mode, output, width=1, height=2
+                            ),
+                        }
+                    ]
+                },
+            }
+        )
+    return cases
+
+
+def crop_pillow_mode_parity_cases() -> list[dict[str, Any]]:
+    """Return nonzero Pillow-oracle Crop workflows for all 20 Pillow modes."""
+
+    cases: list[dict[str, Any]] = []
+    for mode, mode_id, sample_kind, samples in CROP_PILLOW_MODE_CASES:
+        source = (
+            bytes(int(sample) for sample in samples)
+            if sample_kind == "raw"
+            else _native_samples(sample_kind, samples)
+        )
+        cases.append(
+            {
+                "case_id": f"PIL.Image.Image.crop.mode.{mode_id}",
+                "surface": "PIL.Image.Image",
+                "operation": "crop",
+                "covers": [f"PIL.Image.Image.crop.mode.{mode_id}"],
+                "assets": [
+                    {
+                        "id": "crop-source",
+                        "kind": "inline",
+                        "encoding": "base64",
+                        "data": base64.b64encode(source).decode("ascii"),
+                        "sha256": hashlib.sha256(source).hexdigest(),
+                        "media_type": "application/octet-stream",
+                    }
+                ],
+                "steps": [
+                    {
+                        "step_id": "image",
+                        "surface": "PIL.Image",
+                        "operation": "frombytes",
+                        "receiver": None,
+                        "arguments": {
+                            "mode": {"kind": "literal", "value": mode},
+                            "size": {"kind": "literal", "value": [2, 2]},
+                            "data": {"kind": "asset", "asset_id": "crop-source"},
+                        },
+                    },
+                    {
+                        "step_id": "result",
+                        "surface": "PIL.Image.Image",
+                        "operation": "crop",
+                        "receiver": {"kind": "binding", "step_id": "image"},
+                        "arguments": {
+                            "box": {"kind": "literal", "value": [1, 0, 2, 2]}
+                        },
+                    },
+                ],
+                "observations": ["result"],
+            }
+        )
+    return cases
 
 
 def sharpness_core_only_cases() -> list[dict[str, Any]]:
@@ -1210,6 +1217,53 @@ def core_only_frombytes_cases() -> list[dict[str, Any]]:
             }
         )
         cases.extend(core_only_frombytes_boundary_cases(mode, mode_id, raw))
+    return cases
+
+
+def get_child_images_target_output_cases() -> list[dict[str, Any]]:
+    """Record the retained Rust-only child-image convenience method."""
+
+    cases: list[dict[str, Any]] = []
+    for mode, mode_id in (("L", "l"), ("RGB", "rgb")):
+        cases.append(
+            {
+                "case_id": (
+                    "PIL.Image.Image.get_child_images.expected-output."
+                    f"{mode_id}"
+                ),
+                "surface": "PIL.Image.Image",
+                "operation": "get_child_images",
+                "verification": "expected-output",
+                "covers": [
+                    "PIL.Image.Image.get_child_images.behavior.default",
+                    f"PIL.Image.Image.get_child_images.mode.{mode_id}",
+                ],
+                "assets": [],
+                "steps": [
+                    {
+                        "step_id": "image",
+                        "surface": "PIL.Image",
+                        "operation": "new",
+                        "receiver": None,
+                        "arguments": {
+                            "mode": {"kind": "literal", "value": mode},
+                            "size": {"kind": "literal", "value": [2, 2]},
+                        },
+                    },
+                    {
+                        "step_id": "result",
+                        "surface": "PIL.Image.Image",
+                        "operation": "get_child_images",
+                        "receiver": {"kind": "binding", "step_id": "image"},
+                        "arguments": {},
+                    },
+                ],
+                "observations": ["result"],
+                "target_expectation": {
+                    "observations": [{"step_id": "result", "value": []}]
+                },
+            }
+        )
     return cases
 
 

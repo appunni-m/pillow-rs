@@ -236,7 +236,7 @@ def check_identity(
             differences.append(f"{prefix}.sha256")
 
     if lane == "parity":
-        if not identity["oracles"] or identity["oracles"][0]["version"] != "12.2.0":
+        if not identity["oracles"] or identity["oracles"][0]["version"] != "13.0.0":
             differences.append("identity.oracles[0].version")
     for index, target in enumerate(identity["targets"]):
         prefix = f"identity.targets[{index}]"

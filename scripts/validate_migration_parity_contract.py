@@ -451,11 +451,17 @@ def _validate_manifest_operation(operation: dict[str, Any], surface_id: str, req
             )
     else:
         raise _error(f"{path}.fault_contract.applicability", "unsupported applicability")
+    has_target_output = any(
+        "target_output" in requirement["lanes"] for requirement in requirements
+    )
     if source["oracle_id"] is None and (
         operation["parity"].get("applicability") != "not_applicable"
-        or fault_applicability != "required"
+        or (fault_applicability != "required" and not has_target_output)
     ):
-        raise _error(f"{path}.source.oracle_id", "null oracle is reserved for target-only fault contracts")
+        raise _error(
+            f"{path}.source.oracle_id",
+            "null oracle requires a target-only fault or output contract",
+        )
 
 
 def _validate_comparison(value: Any, path: str) -> None:

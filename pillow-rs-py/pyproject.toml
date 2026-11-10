@@ -35,7 +35,7 @@ Documentation = "https://github.com/appunni-m/pillow-rs#readme"
 dev = [
     "coverage==7.10.7; python_version >= '3.10'",
     "pyyaml==6.0.3",
-    "pillow==12.2.0; python_version >= '3.10'",
+    "pillow==13.0.0; python_version >= '3.10'",
     "numpy==2.2.6; python_version >= '3.10'",
 ]
 parallel = ["pillow-rs-parallel==12.2.3"]
