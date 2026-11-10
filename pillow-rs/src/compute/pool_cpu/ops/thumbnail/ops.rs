@@ -7,7 +7,8 @@
 //! Mode-specific filter, reducing-gap, and I32/F32 resize decisions are
 //! selected through `mode_strategy` before execution.
 //! Pillow's Resize path forces nearest for `1` and `P`; `PA` keeps the
-//! requested filter. Straight-alpha `LA` and `RGBA` skip reducing-gap;
+//! requested filter. Straight-alpha `LA` and `RGBA` pass reducing-gap to the
+//! exact ResizeBoxed strategy instead of adding a separate Reduce child;
 //! premultiplied `La` reduces its stored samples like the archived
 //! implementation. F32 and I32 use exact typed owners; all other modes
 //! compose native Reduce and Resize. No active caller uses the archived
@@ -242,6 +243,7 @@ pub(crate) struct PreparedThumbnail<'a> {
     factors: (u32, u32),
     effective_filter: ResampleFilter,
     use_unboxed_resize: bool,
+    resize_reducing_gap: Option<f64>,
     stream_i32: bool,
     context: ExecutionContext,
     selection: StrategySelection,
@@ -256,12 +258,25 @@ struct ThumbnailChildren<'a> {
     selections: Vec<StrategySelection>,
 }
 
+#[derive(Clone, Copy)]
 struct ThumbnailResizeRequest {
     source: (u32, u32),
     output: (u32, u32),
     factors: (u32, u32),
     filter: ResampleFilter,
     use_unboxed_resize: bool,
+    resize_reducing_gap: Option<f64>,
+}
+
+impl ThumbnailResizeRequest {
+    fn bounds(self) -> (f64, f64, f64, f64) {
+        (
+            0.0,
+            0.0,
+            f64::from(self.source.0) / f64::from(self.factors.0),
+            f64::from(self.source.1) / f64::from(self.factors.1),
+        )
+    }
 }
 
 impl PreparedThumbnail<'_> {
@@ -324,6 +339,7 @@ pub(crate) fn prepare_pipeline<'a>(
     let mode = inputs.mode();
     let mode_strategy = ThumbnailModeStrategy::for_mode(mode);
     let effective_filter = mode_strategy.effective_filter(*filter);
+    let resize_reducing_gap = mode_strategy.resize_reducing_gap(effective_filter, *reducing_gap);
     let selection = select_mode(inputs, mode, *w, *h, *filter, *reducing_gap, context)?;
     let reduce = mode_strategy.should_reduce(effective_filter, *reducing_gap);
     let source = (inputs.image.width(), inputs.image.height());
@@ -336,14 +352,15 @@ pub(crate) fn prepare_pipeline<'a>(
     let stream_i32 = *w > 0
         && *h > 0
         && mode_strategy.streams_i32_thumbnail(source, output, effective_filter, factors);
-    let use_unboxed_resize =
-        factors == (1, 1) || mode_strategy.uses_unboxed_resize(source, output, factors);
+    let use_unboxed_resize = resize_reducing_gap.is_none()
+        && (factors == (1, 1) || mode_strategy.uses_unboxed_resize(source, output, factors));
     let resize_request = ThumbnailResizeRequest {
         source,
         output,
         factors,
         filter: effective_filter,
         use_unboxed_resize,
+        resize_reducing_gap,
     };
     let children = prepare_composed_strategies(inputs, mode, resize_request, stream_i32, context)?;
     Ok(crate::compute::registry::PreparedOperation::from_thumbnail(
@@ -356,6 +373,7 @@ pub(crate) fn prepare_pipeline<'a>(
             factors,
             effective_filter,
             use_unboxed_resize,
+            resize_reducing_gap,
             stream_i32,
             context: *context,
             selection,
@@ -396,23 +414,26 @@ fn prepare_composed_strategies<'a>(
     }
 
     let mut resize_facts = reduced_resize_facts(inputs, request.factors)?;
-    resize_facts = match request.use_unboxed_resize {
-        true => resize_facts.with_resize(request.output.0, request.output.1, request.filter, false),
-        false => resize_facts.with_boxed_resize(
+    let support = if request.resize_reducing_gap.is_some() {
+        resize_facts = resize_facts.with_boxed_resize(
             request.output.0,
             request.output.1,
             request.filter,
-            (
-                0.0,
-                0.0,
-                f64::from(request.source.0) / f64::from(request.factors.0),
-                f64::from(request.source.1) / f64::from(request.factors.1),
-            ),
-        ),
-    };
-    let support = match request.use_unboxed_resize {
-        true => &crate::compute::pool_cpu::ops::resize::ops::SUPPORT,
-        false => &crate::compute::pool_cpu::ops::resize::ops::BOXED_SUPPORT,
+            request.bounds(),
+        );
+        crate::compute::pool_cpu::ops::resize::ops::alpha_reducing_gap_support()
+    } else if request.use_unboxed_resize {
+        resize_facts =
+            resize_facts.with_resize(request.output.0, request.output.1, request.filter, false);
+        &crate::compute::pool_cpu::ops::resize::ops::SUPPORT
+    } else {
+        resize_facts = resize_facts.with_boxed_resize(
+            request.output.0,
+            request.output.1,
+            request.filter,
+            request.bounds(),
+        );
+        &crate::compute::pool_cpu::ops::resize::ops::BOXED_SUPPORT
     };
     let resize_selection = select_child_mode(support, mode, resize_facts, context)?;
     selections.push(resize_selection);
@@ -518,6 +539,7 @@ fn execute_thumbnail(plan: PreparedThumbnail<'_>) -> Result<DynamicImage, PilErr
             factors,
             filter,
             use_unboxed_resize: plan.use_unboxed_resize,
+            resize_reducing_gap: plan.resize_reducing_gap,
         },
         resize_selection,
         &plan.context,
@@ -532,20 +554,31 @@ fn resize_thumbnail_work_image(
     context: &ExecutionContext,
 ) -> Result<DynamicImage, PilError> {
     let inputs = OperationInputs { image, palette };
-    let bounds = (!request.use_unboxed_resize).then_some((
-        0.0,
-        0.0,
-        f64::from(request.source.0) / f64::from(request.factors.0),
-        f64::from(request.source.1) / f64::from(request.factors.1),
-    ));
-    crate::compute::pool_cpu::ops::resize::ops::prepare_direct_with_selection(
-        inputs,
-        request.output.0,
-        request.output.1,
-        request.filter,
-        bounds,
-        context,
-        selection,
-    )?
-    .execute()
+    let resize = match request.resize_reducing_gap {
+        Some(gap) => {
+            crate::compute::pool_cpu::ops::resize::ops::prepare_direct_with_reducing_gap_selection(
+                inputs,
+                request.output.0,
+                request.output.1,
+                request.filter,
+                request.bounds(),
+                gap,
+                context,
+                selection,
+            )?
+        }
+        None => {
+            let bounds = (!request.use_unboxed_resize).then_some(request.bounds());
+            crate::compute::pool_cpu::ops::resize::ops::prepare_direct_with_selection(
+                inputs,
+                request.output.0,
+                request.output.1,
+                request.filter,
+                bounds,
+                context,
+                selection,
+            )?
+        }
+    };
+    resize.execute()
 }

@@ -1,4 +1,7 @@
-//! Pillow luma-alpha Thumbnail reducing-gap policy.
+//! Pillow luma-alpha Thumbnail reduction policy.
+//!
+//! Keep the separate Reduce child disabled; `mode_strategy` passes the gap to
+//! ResizeBoxed's native straight-alpha strategy.
 
 use crate::compute::registry::support::{ModeSupport, OperationId};
 use crate::pipeline::ResampleFilter;

@@ -226,6 +226,15 @@ fn gpu_resize_dimensions_require_cpu(
 pub(super) fn gpu_operation_mode_requires_cpu(op: &PipelineOp, image: &DynamicImage) -> bool {
     if matches!(
         op,
+        PipelineOp::ResizeBoxed {
+            reducing_gap: Some(_),
+            ..
+        }
+    ) {
+        return true;
+    }
+    if matches!(
+        op,
         PipelineOp::PutAlpha { mode, .. } | PipelineOp::PutAlphaData { mode, .. }
             if *mode != image.mode()
     ) {

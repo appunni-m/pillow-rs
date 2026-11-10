@@ -5916,3 +5916,22 @@ This interim target-output contract was removed when the active oracle moved
 to Pillow 13.0, which fixes I;16 Offset. The full 12.2 snapshot still includes
 the single I32-to-PNG encoder failure tracked by
 `image-slash-star#9h5w`, and native x86 execution remains unproven.
+
+Thumbnail vertical-first SIMD correction (2026-11-10): Pillow 13.0 parity
+initially exposed three Neon differences in tall, reducing-gap L/RGB
+thumbnails. The straight-alpha `LA`/`RGBA` path now passes `reducing_gap` to
+the prepared ResizeBoxed child, matching Pillow's resize route without a
+separate Reduce stage. The shared native-byte vector executor now transposes
+vertical-first requests, reuses the selected architecture kernel in Pillow's
+pass order, and restores the output layout; sparse row facts are recomputed
+from the transposed pixels when supplied. The frozen 188-case Thumbnail
+selection passed under all nine CPU architecture selectors (1,692/1,692,
+zero failures and infrastructure errors). Neon passed all cases; this ARM64
+host cannot establish native x86 execution. Selected case-ID SHA-256:
+`6c56b6059ab0f2c65367b1ac1ef16f6d3899794ac7bfea9ae3fc52800c946e6f`;
+manifest SHA-256: `6143e61a3ca1d6b31c430ed43c6dd04f599a0a0447bf3879e7bbdfa916846a8c`.
+The direct three-case Neon rerun and the full final matrix artifacts are under
+`build/migration-parity/pillow13-thumbnail-neon-vertical-first.*` and
+`build/migration-parity/pillow13-thumbnail-cpu-architectures-checked-channels/`.
+No coverage or benchmark ran. Full CPU operation/mode/architecture parity and
+the CPU performance gate remain pending.

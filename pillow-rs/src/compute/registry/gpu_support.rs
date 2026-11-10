@@ -343,6 +343,10 @@ fn gpu_geometry_shader_contract(op: &PipelineOp) -> Option<bool> {
         // ResizeBoxed is lowered to the exact separable resize shaders after
         // its float32 bounds have been converted into host-built coefficient
         // tables; the device never approximates the source box.
+        PipelineOp::ResizeBoxed {
+            reducing_gap: Some(_),
+            ..
+        } => false,
         PipelineOp::ResizeBoxed { .. } => true,
         // NEAREST is a single-dispatch relocation. The other filters expand
         // into the pool's exact horizontal/vertical fixed-point kernels; the

@@ -1,10 +1,11 @@
 //! Native-byte Resize orchestration for an already selected architecture.
 
+use super::super::byte_samples::transpose_samples;
 use super::{bounded_i32, boxed, convolution, plan, telemetry};
 
 use crate::checked_dims::CheckedDims;
 use crate::compute::pool_cpu::ops::resize::helpers::coefficients::{
-    byte_coefficients_fit_i32, byte_coefficients_fit_source,
+    byte_coefficients_fit_i32, byte_coefficients_fit_source, horizontal_first,
 };
 use crate::error::PilError;
 use crate::ops::pil_resize::precompute_coeffs;
@@ -17,7 +18,7 @@ pub(crate) fn execute_boxed<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_AL
     bounds: (f64, f64, f64, f64),
     filter: ResampleFilter,
 ) -> Result<Vec<u8>, PilError> {
-    boxed::execute::<CHANNELS, PREMULTIPLY_STRAIGHT_ALPHA>(
+    execute_boxed_with_row_facts::<CHANNELS, PREMULTIPLY_STRAIGHT_ALPHA>(
         source,
         source_size,
         destination_size,
@@ -38,7 +39,7 @@ pub(crate) fn execute_boxed_with_sparse_rows<
     filter: ResampleFilter,
     sparse_source_rows: &[bool],
 ) -> Result<Vec<u8>, PilError> {
-    boxed::execute::<CHANNELS, PREMULTIPLY_STRAIGHT_ALPHA>(
+    execute_boxed_with_row_facts::<CHANNELS, PREMULTIPLY_STRAIGHT_ALPHA>(
         source,
         source_size,
         destination_size,
@@ -46,6 +47,165 @@ pub(crate) fn execute_boxed_with_sparse_rows<
         filter,
         Some(sparse_source_rows),
     )
+}
+
+fn execute_boxed_with_row_facts<const CHANNELS: usize, const PREMULTIPLY_STRAIGHT_ALPHA: bool>(
+    source: &[u8],
+    source_size: (u32, u32),
+    destination_size: (u32, u32),
+    bounds: (f64, f64, f64, f64),
+    filter: ResampleFilter,
+    sparse_source_rows: Option<&[bool]>,
+) -> Result<Vec<u8>, PilError> {
+    if !needs_vertical_first(source_size, destination_size)
+        || matches!(filter, ResampleFilter::Nearest)
+    {
+        return boxed::execute::<CHANNELS, PREMULTIPLY_STRAIGHT_ALPHA>(
+            source,
+            source_size,
+            destination_size,
+            bounds,
+            filter,
+            sparse_source_rows,
+        );
+    }
+    validate_sparse_rows(sparse_source_rows, source_size.1)?;
+    let transposed_source = transpose_source::<CHANNELS>(
+        source,
+        source_size,
+        "boxed native-byte Resize received invalid source buffer",
+    )?;
+    let transposed_sparse_rows = sparse_source_rows
+        .map(|_| nonzero_rows::<CHANNELS>(&transposed_source, source_size.1, source_size.0))
+        .transpose()?;
+    let (left, top, right, bottom) = bounds;
+    let transposed_output = boxed::execute::<CHANNELS, PREMULTIPLY_STRAIGHT_ALPHA>(
+        &transposed_source,
+        (source_size.1, source_size.0),
+        (destination_size.1, destination_size.0),
+        (top, left, bottom, right),
+        filter,
+        transposed_sparse_rows.as_deref(),
+    )?;
+    let output_dims = CheckedDims::new(
+        destination_size.0,
+        destination_size.1,
+        checked_channel_count::<CHANNELS>()?,
+    )?;
+    Ok(transpose_samples::<CHANNELS>(
+        &transposed_output,
+        destination_size.0,
+        destination_size.1,
+        output_dims,
+    ))
+}
+
+fn validate_sparse_rows(sparse_rows: Option<&[bool]>, height: u32) -> Result<(), PilError> {
+    if sparse_rows.is_some_and(|rows| usize::try_from(height).ok() != Some(rows.len())) {
+        Err(PilError::InternalError(
+            "boxed native-byte Resize received invalid sparse row facts".into(),
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+fn checked_channel_count<const CHANNELS: usize>() -> Result<u8, PilError> {
+    u8::try_from(CHANNELS)
+        .ok()
+        .filter(|channels| (1..=4).contains(channels))
+        .ok_or_else(|| {
+            PilError::DimensionError("native-byte Resize requires one to four channels".into())
+        })
+}
+
+fn transpose_source<const CHANNELS: usize>(
+    source: &[u8],
+    source_size: (u32, u32),
+    invalid_source: &'static str,
+) -> Result<Vec<u8>, PilError> {
+    let dimensions = CheckedDims::new(
+        source_size.0,
+        source_size.1,
+        checked_channel_count::<CHANNELS>()?,
+    )?;
+    if source.len() != dimensions.total_bytes() {
+        return Err(PilError::InternalError(invalid_source.into()));
+    }
+    Ok(transpose_samples::<CHANNELS>(
+        source,
+        source_size.1,
+        source_size.0,
+        dimensions,
+    ))
+}
+
+fn nonzero_rows<const CHANNELS: usize>(
+    source: &[u8],
+    width: u32,
+    height: u32,
+) -> Result<Vec<bool>, PilError> {
+    let dimensions = CheckedDims::new(width, height, checked_channel_count::<CHANNELS>()?)?;
+    if source.len() != dimensions.total_bytes() {
+        return Err(PilError::InternalError(
+            "transposed native-byte Resize has an invalid source buffer".into(),
+        ));
+    }
+    let row_stride = dimensions.row_stride();
+    Ok(source
+        .chunks_exact(row_stride)
+        .map(|row| row.iter().any(|&sample| sample != 0))
+        .collect())
+}
+
+fn needs_vertical_first(source: (u32, u32), destination: (u32, u32)) -> bool {
+    source.0 != destination.0 && source.1 != destination.1 && !horizontal_first(source, destination)
+}
+
+fn execute_vertical_first<
+    const CHANNELS: usize,
+    const PREMULTIPLIED_ALPHA: bool,
+    const USE_BOUNDED_I32: bool,
+>(
+    source: &[u8],
+    source_size: (u32, u32),
+    destination_size: (u32, u32),
+    filter: ResampleFilter,
+    sparse_source_rows: Option<&[bool]>,
+    output_dims: CheckedDims,
+    output: &mut [u8],
+) -> Result<(), PilError> {
+    let transposed_source = transpose_source::<CHANNELS>(
+        source,
+        source_size,
+        "filtered native-byte Resize received an invalid source buffer",
+    )?;
+    let transposed_sparse_rows = sparse_source_rows
+        .map(|_| nonzero_rows::<CHANNELS>(&transposed_source, source_size.1, source_size.0))
+        .transpose()?;
+    let transposed_output_dims = CheckedDims::new(
+        destination_size.1,
+        destination_size.0,
+        checked_channel_count::<CHANNELS>()?,
+    )?;
+    let mut transposed_output = transposed_output_dims.alloc_buffer();
+    execute_into_with_row_facts::<CHANNELS, PREMULTIPLIED_ALPHA, USE_BOUNDED_I32>(
+        &transposed_source,
+        (source_size.1, source_size.0),
+        (destination_size.1, destination_size.0),
+        filter,
+        transposed_sparse_rows.as_deref(),
+        transposed_output_dims,
+        &mut transposed_output,
+    )?;
+    let restored_output = transpose_samples::<CHANNELS>(
+        &transposed_output,
+        destination_size.0,
+        destination_size.1,
+        output_dims,
+    );
+    output.copy_from_slice(&restored_output);
+    Ok(())
 }
 
 pub(crate) fn execute<
@@ -175,6 +335,24 @@ fn execute_into_with_row_facts<
             "filtered native-byte Resize received an invalid output buffer".into(),
         ));
     }
+    if sparse_source_rows
+        .is_some_and(|rows| usize::try_from(source_size.1).ok() != Some(rows.len()))
+    {
+        return Err(PilError::InternalError(
+            "native-byte Resize received invalid sparse row facts".into(),
+        ));
+    }
+    if needs_vertical_first(source_size, destination_size) {
+        return execute_vertical_first::<CHANNELS, PREMULTIPLIED_ALPHA, USE_BOUNDED_I32>(
+            source,
+            source_size,
+            destination_size,
+            filter,
+            sparse_source_rows,
+            output_dims,
+            output,
+        );
+    }
 
     let horizontal = precompute_coeffs(destination_size.0, source_size.0, filter);
     let vertical = precompute_coeffs(destination_size.1, source_size.1, filter);
@@ -186,11 +364,6 @@ fn execute_into_with_row_facts<
         .map_err(|_| PilError::DimensionError("Resize width is too large".into()))?;
     let output_height = usize::try_from(destination_size.1)
         .map_err(|_| PilError::DimensionError("Resize height is too large".into()))?;
-    if sparse_source_rows.is_some_and(|rows| rows.len() != source_height) {
-        return Err(PilError::InternalError(
-            "native-byte Resize received invalid sparse row facts".into(),
-        ));
-    }
     validate_coefficients(&horizontal, &vertical, source_width, source_height)?;
     let plan = plan::build_resize_horizontal_plan::<CHANNELS>(&horizontal, output_width)
         .ok_or_else(invalid_kernel_plan)?;

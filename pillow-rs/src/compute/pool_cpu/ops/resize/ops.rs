@@ -93,6 +93,6 @@ pub(crate) static BOXED_SUPPORT: OperationSupport = OperationSupport::new(
 #[path = "helpers/prepared.rs"]
 mod prepared;
 pub(crate) use prepared::{
-    PreparedResize, effective_filter, prepare_direct, prepare_direct_with_selection,
-    prepare_pipeline,
+    PreparedResize, alpha_reducing_gap_support, effective_filter, prepare_direct,
+    prepare_direct_with_reducing_gap_selection, prepare_direct_with_selection, prepare_pipeline,
 };

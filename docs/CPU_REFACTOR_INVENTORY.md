@@ -9221,3 +9221,25 @@ without a focused comparison. The later current-source Pad run passes all 292
 Pad-call cases, superseding the baseline's 109 Pad failures; remaining family
 counts have not been refreshed. The full report and this inventory remain the
 baseline triage list.
+
+Thumbnail vertical-first SIMD correction (2026-11-10): supersedes the earlier
+source note that left the declared-architecture matrix pending. Pillow 13.0
+parity exposed three Neon differences in tall, reducing-gap L/RGB thumbnails.
+Straight-alpha LA/RGBA now passes the reducing gap into its prepared
+ResizeBoxed child instead of adding a separate Reduce stage. The shared
+native-byte vector executor transposes vertical-first requests, runs the
+selected architecture kernel in Pillow's pass order, then restores the output
+layout; when sparse row facts are present, it derives transposed facts from
+the transposed samples. The frozen 188-case Thumbnail selection passed on all
+nine CPU selectors: 1,692/1,692, zero failures and infrastructure errors. The
+ARM64 host exercised Default and Neon; x86 native execution remains
+unverified. Case-ID SHA-256 is
+`6c56b6059ab0f2c65367b1ac1ef16f6d3899794ac7bfea9ae3fc52800c946e6f`, and the
+manifest SHA-256 is
+`6143e61a3ca1d6b31c430ed43c6dd04f599a0a0447bf3879e7bbdfa916846a8c`. Reports
+are under
+`build/migration-parity/pillow13-thumbnail-cpu-architectures-checked-channels/`; the
+three-case Neon confirmation is under
+`build/migration-parity/pillow13-thumbnail-neon-vertical-first.*`. No coverage
+or benchmark ran. The complete CPU operation/mode/architecture matrix and
+performance gate remain open.

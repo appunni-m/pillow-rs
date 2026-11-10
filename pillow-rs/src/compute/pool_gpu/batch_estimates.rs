@@ -297,6 +297,7 @@ fn resize_coefficient_word_counts(
             h,
             filter,
             box_coords,
+            ..
         } => Some((*w, *h, *filter, Some(*box_coords))),
         PipelineOp::Pad { filter, .. } => {
             gpu_pad_geometry(op, source_dimensions.0, source_dimensions.1)

@@ -71,6 +71,10 @@ static ALPHA_REDUCING_GAP_SUPPORT: OperationSupport = OperationSupport::new(
     classify_alpha_reducing_gap,
 );
 
+pub(crate) const fn alpha_reducing_gap_support() -> &'static OperationSupport {
+    &ALPHA_REDUCING_GAP_SUPPORT
+}
+
 /// Exact mode and architecture choice retained through execution.
 pub(crate) struct PreparedResize<'a> {
     image: &'a DynamicImage,
@@ -393,9 +397,50 @@ pub(crate) fn prepare_direct_with_selection<'a>(
     ctx: &ExecutionContext,
     selected: StrategySelection,
 ) -> Result<PreparedResize<'a>, PilError> {
+    prepare_direct_with_request(inputs, width, height, filter, bounds, None, ctx, selected)
+}
+
+/// Binds a prepared straight-alpha reducing-gap strategy to its image input.
+pub(crate) fn prepare_direct_with_reducing_gap_selection<'a>(
+    inputs: OperationInputs<'a>,
+    width: u32,
+    height: u32,
+    filter: ResampleFilter,
+    bounds: (f64, f64, f64, f64),
+    reducing_gap: f64,
+    ctx: &ExecutionContext,
+    selected: StrategySelection,
+) -> Result<PreparedResize<'a>, PilError> {
+    prepare_direct_with_request(
+        inputs,
+        width,
+        height,
+        filter,
+        Some(bounds),
+        Some(reducing_gap),
+        ctx,
+        selected,
+    )
+}
+
+fn prepare_direct_with_request<'a>(
+    inputs: OperationInputs<'a>,
+    width: u32,
+    height: u32,
+    filter: ResampleFilter,
+    bounds: Option<(f64, f64, f64, f64)>,
+    reducing_gap: Option<f64>,
+    ctx: &ExecutionContext,
+    selected: StrategySelection,
+) -> Result<PreparedResize<'a>, PilError> {
     if effective_filter(inputs.mode(), filter) != filter {
         return Err(PilError::InternalError(
             "prepared Resize selection uses a non-effective mode filter".into(),
+        ));
+    }
+    if reducing_gap.is_some() && !matches!(inputs.mode(), Mode::ImageLumaA8 | Mode::ImageRgba8) {
+        return Err(PilError::InternalError(
+            "prepared reducing-gap Resize requires a straight-alpha mode".into(),
         ));
     }
     let bounds = match bounds {
@@ -405,7 +450,7 @@ pub(crate) fn prepare_direct_with_selection<'a>(
         )?),
         None => None,
     };
-    let expected_operation = if bounds.is_some() {
+    let expected_operation = if bounds.is_some() || reducing_gap.is_some() {
         OperationId::ResizeBoxed
     } else {
         OperationId::Resize
@@ -423,7 +468,7 @@ pub(crate) fn prepare_direct_with_selection<'a>(
         Some(bounds) => ResizeRequest::Boxed {
             filter,
             bounds,
-            reducing_gap: None,
+            reducing_gap,
         },
         None => ResizeRequest::Standard { filter },
     };

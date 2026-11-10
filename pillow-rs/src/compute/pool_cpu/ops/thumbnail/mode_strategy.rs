@@ -76,6 +76,27 @@ impl ThumbnailModeStrategy {
         }
     }
 
+    pub(super) fn resize_reducing_gap(
+        self,
+        filter: ResampleFilter,
+        reducing_gap: Option<f64>,
+    ) -> Option<f64> {
+        match self {
+            Self::LumaA8 | Self::Rgba8 if !matches!(filter, ResampleFilter::Nearest) => {
+                reducing_gap
+            }
+            Self::Standard
+            | Self::One
+            | Self::Palette8
+            | Self::LumaA8
+            | Self::LaPremultiplied8
+            | Self::PaletteAlpha8
+            | Self::Rgba8
+            | Self::I32
+            | Self::F32 => None,
+        }
+    }
+
     pub(super) fn uses_unboxed_resize(
         self,
         source: (u32, u32),

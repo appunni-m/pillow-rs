@@ -410,6 +410,7 @@ fn gpu_resize_boxed_host_control_reason(
         h,
         filter,
         box_coords,
+        ..
     } = op
     else {
         return None;
