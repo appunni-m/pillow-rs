@@ -8,5 +8,7 @@ pub(crate) fn execute(
     height: u32,
     filter: ResampleFilter,
 ) -> Result<ImageBuffer<Luma<u16>, Vec<u16>>, PilError> {
-    super::super::super::helpers::luma16_vector::resize::<true>(input, width, height, filter)
+    super::super::super::helpers::luma16_vector::resize::<{ super::super::ops::RESIZE_IS_BIG_ENDIAN }>(
+        input, width, height, filter,
+    )
 }

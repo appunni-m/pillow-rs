@@ -29,7 +29,7 @@ pub(crate) use filters::filter_from_resample;
 #[cfg(target_arch = "x86_64")]
 pub(crate) use float::X86FmaToken;
 pub(crate) use float::{
-    F64MulAdd, PortableFma, f_resize_coefficients_allow_finite_fma,
+    F64MulAdd, PortableFma, PortableSeparateMulAdd, f_resize_coefficients_allow_finite_fma,
     f_resize_samples_allow_finite_fma,
 };
 pub(crate) use horizontal_passes::horizontal_pass_rgb_row;

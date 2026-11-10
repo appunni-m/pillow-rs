@@ -1,7 +1,11 @@
-//! Exact ImageI16N strategy with Pillow's historical big-endian branch.
+//! Exact ImageI16N strategy using the host's native byte order.
 
 use crate::compute::registry::support::{ModeSupport, OperationId, StrategySelection};
 use crate::raster::{DynamicImage, ImageBuffer, Luma, Mode};
+
+// Pillow's `I;16N` Resize result uses big-endian sample bytes on every host.
+// Keep this separate from the mode's native-endian input and export rules.
+pub(crate) const RESIZE_IS_BIG_ENDIAN: bool = true;
 
 static RESIZE_ARCHITECTURES: [crate::compute::registry::support::ImplementationSupport; 3] =
     super::super::helpers::support::luma16_architectures(Mode::ImageI16N);

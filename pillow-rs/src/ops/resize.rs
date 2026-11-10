@@ -3,7 +3,7 @@ use crate::image::Image;
 use crate::pipeline::{PipelineOp, ResampleFilter};
 use crate::raster::Mode;
 
-mod reducing_gap;
+pub(crate) mod reducing_gap;
 use reducing_gap::apply_reducing_gap;
 
 /// Public resampling input accepted by Pillow resize-like methods.
@@ -151,7 +151,7 @@ impl Image {
     /// Resizes a floating source region, optionally reducing by integer factors first.
     ///
     /// `reducing_gap` follows Pillow: values below one are invalid, and
-    /// nearest resampling plus filtered LA/RGBA paths ignore a valid gap.
+    /// nearest resampling ignores a valid gap.
     ///
     /// # Errors
     ///
@@ -194,21 +194,25 @@ impl Image {
             return Ok(identity_resize);
         }
         let mut source = self.clone();
-        // Pillow's alpha recursion omits reducing_gap after premultiplying.
-        // Applying reduction to ordinary RGBA/LA first changes its rounding.
+        let mut reducing_gap_for_kernel = None;
         if let Some(gap) = reducing_gap
             && !matches!(filter, ResampleFilter::Nearest)
-            && !matches!(mode, Mode::ImageLumaA8 | Mode::ImageRgba8)
         {
-            (source, bounds) = apply_reducing_gap(
-                source,
-                bounds,
-                gap,
-                filter,
-                mode,
-                (w, h),
-                (source_w, source_h),
-            )?;
+            if matches!(mode, Mode::ImageLumaA8 | Mode::ImageRgba8) {
+                reducing_gap_for_kernel =
+                    reducing_gap::prepare(bounds, gap, filter, (w, h), (source_w, source_h))?
+                        .map(|_| gap);
+            } else {
+                (source, bounds) = apply_reducing_gap(
+                    source,
+                    bounds,
+                    gap,
+                    filter,
+                    mode,
+                    (w, h),
+                    (source_w, source_h),
+                )?;
+            }
         }
         let source_size = source.size()?;
         let bounds = validate_resize_box(bounds, source_size)?;
@@ -216,7 +220,7 @@ impl Image {
         let vertical_first = u64::from(source_size.1) > u64::from(source_size.0) * 100
             && h < source_size.1
             && w != source_size.0;
-        if bounds == full_source && !vertical_first {
+        if bounds == full_source && !vertical_first && reducing_gap_for_kernel.is_none() {
             return source.resize_with_filter((w, h), filter, mode);
         }
         Ok(Image::push_op(
@@ -226,6 +230,7 @@ impl Image {
                 h,
                 filter,
                 box_coords: bounds,
+                reducing_gap: reducing_gap_for_kernel,
             },
         ))
     }

@@ -54,17 +54,19 @@ pub(crate) fn execute_with_fma<F: F64MulAdd>(
         return repeated(width, height, constant);
     }
 
-    let tall_vertical_first = bounds.is_none()
-        && u64::from(source_height) > u64::from(source_width) * 100
-        && height < source_height
-        && width != source_width;
+    let vertical_first = source_width != width
+        && source_height != height
+        && !super::super::super::helpers::coefficients::horizontal_first(
+            (source_width, source_height),
+            (width, height),
+        );
     super::filtered::execute(
         &samples,
         (source_width, source_height),
         (width, height),
         filter,
         bounds,
-        tall_vertical_first,
+        vertical_first,
         fma,
     )
 }

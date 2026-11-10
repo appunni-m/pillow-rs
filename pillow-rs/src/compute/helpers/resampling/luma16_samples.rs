@@ -11,18 +11,15 @@ pub(crate) fn read<const BIG_ENDIAN: bool>(sample: u16) -> u16 {
     }
 }
 
-fn clip_u8(value: i64) -> u8 {
-    value.clamp(0, 255) as u8
-}
-
-/// Applies Pillow's ordered round and per-byte clipping to one sample.
+/// Applies Pillow's ordered round and full-sample clipping to one u16 sample.
 #[inline(always)]
 pub(crate) fn write<const BIG_ENDIAN: bool>(value: f64) -> u16 {
     let rounded = super::rounding::round_up(value) as i64;
-    // Resample.c clips each output byte independently rather than clipping the
-    // complete u16 value, including for negative-filter overshoot.
-    let low = clip_u8(rounded % 256);
-    let high = clip_u8(rounded >> 8);
-    let bytes = if BIG_ENDIAN { [high, low] } else { [low, high] };
+    let sample = rounded.clamp(0, i64::from(u16::MAX)) as u16;
+    let bytes = if BIG_ENDIAN {
+        sample.to_be_bytes()
+    } else {
+        sample.to_le_bytes()
+    };
     u16::from_ne_bytes(bytes)
 }

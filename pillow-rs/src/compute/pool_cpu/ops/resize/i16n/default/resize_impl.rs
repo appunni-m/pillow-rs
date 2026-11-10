@@ -10,5 +10,7 @@ pub(crate) fn execute(
     filter: ResampleFilter,
     bounds: super::super::super::helpers::typed_nearest::BoxBounds,
 ) -> ImageBuffer<Luma<u16>, Vec<u16>> {
-    super::super::super::helpers::luma16::resize::<true>(input, width, height, filter, bounds)
+    super::super::super::helpers::luma16::resize::<{ super::super::ops::RESIZE_IS_BIG_ENDIAN }>(
+        input, width, height, filter, bounds,
+    )
 }

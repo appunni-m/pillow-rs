@@ -203,6 +203,8 @@ pub enum PipelineOp {
         filter: ResampleFilter,
         /// Floating source bounds, narrowed to Pillow's float32 box domain.
         box_coords: (f64, f64, f64, f64),
+        /// Deferred reducing-gap factor for native straight-alpha execution.
+        reducing_gap: Option<f64>,
     },
     /// Crop to a rectangular box.
     Crop {

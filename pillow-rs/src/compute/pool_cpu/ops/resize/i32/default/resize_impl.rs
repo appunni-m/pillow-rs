@@ -2,7 +2,7 @@
 
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
-use crate::ops::pil_resize::{F64MulAdd, PortableFma, i32_samples_from_le_bytes};
+use crate::ops::pil_resize::{F64MulAdd, PortableSeparateMulAdd, i32_samples_from_le_bytes};
 use crate::pipeline::ResampleFilter;
 use crate::raster::RgbaImage;
 
@@ -15,7 +15,14 @@ pub(crate) fn execute(
     filter: ResampleFilter,
     bounds: BoxBounds,
 ) -> Result<RgbaImage, PilError> {
-    execute_with_fma(input, width, height, filter, bounds, &PortableFma)
+    execute_with_fma(
+        input,
+        width,
+        height,
+        filter,
+        bounds,
+        &PortableSeparateMulAdd,
+    )
 }
 
 pub(crate) fn execute_with_fma<F: F64MulAdd>(

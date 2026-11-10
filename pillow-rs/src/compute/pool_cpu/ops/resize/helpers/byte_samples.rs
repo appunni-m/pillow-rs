@@ -313,6 +313,40 @@ pub(crate) fn filtered_standard_with_coefficients<const CHANNELS: usize>(
     horizontal: &FilterCoeffs,
     vertical: &FilterCoeffs,
 ) -> Result<Vec<u8>, PilError> {
+    if source_size.0 != destination_size.0
+        && source_size.1 != destination_size.1
+        && !super::coefficients::horizontal_first(source_size, destination_size)
+    {
+        let source_dims = CheckedDims::new_allow_empty(
+            source_size.0,
+            source_size.1,
+            checked_channels::<CHANNELS>()?,
+        )?;
+        let source =
+            transpose_samples::<CHANNELS>(source, source_size.1, source_size.0, source_dims);
+        let transposed = filtered_with_coefficients::<CHANNELS>(ResizePlan {
+            source: &source,
+            sparse_source_rows: None,
+            source_row_offset: 0,
+            source_size: (source_size.1, source_size.0),
+            destination_size: (destination_size.1, destination_size.0),
+            horizontal: vertical,
+            vertical: horizontal,
+            need_horizontal: true,
+            need_vertical: true,
+        })?;
+        let output_dims = CheckedDims::new(
+            destination_size.0,
+            destination_size.1,
+            checked_channels::<CHANNELS>()?,
+        )?;
+        return Ok(transpose_samples::<CHANNELS>(
+            &transposed,
+            destination_size.0,
+            destination_size.1,
+            output_dims,
+        ));
+    }
     filtered_with_coefficients::<CHANNELS>(ResizePlan {
         source,
         sparse_source_rows: None,
@@ -343,6 +377,20 @@ pub(crate) fn filtered_standard_into<const CHANNELS: usize>(
             "byte-sample Resize window received an invalid buffer".into(),
         ));
     }
+    if source_size.0 != destination_size.0
+        && source_size.1 != destination_size.1
+        && !super::coefficients::horizontal_first(source_size, destination_size)
+    {
+        let resized = filtered_standard_with_coefficients::<CHANNELS>(
+            source,
+            source_size,
+            destination_size,
+            horizontal,
+            vertical,
+        )?;
+        output.copy_from_slice(&resized);
+        return Ok(());
+    }
     filtered_with_coefficients_into::<CHANNELS>(
         ResizePlan {
             source,
@@ -367,6 +415,38 @@ fn filtered_boxed<const CHANNELS: usize>(
     bounds: (f64, f64, f64, f64),
     sparse_source_rows: Option<&[bool]>,
 ) -> Result<Vec<u8>, PilError> {
+    if source_size.0 != destination_size.0
+        && source_size.1 != destination_size.1
+        && !super::coefficients::horizontal_first(source_size, destination_size)
+    {
+        let dimensions = CheckedDims::new_allow_empty(
+            source_size.0,
+            source_size.1,
+            checked_channels::<CHANNELS>()?,
+        )?;
+        let transposed =
+            transpose_samples::<CHANNELS>(source, source_size.1, source_size.0, dimensions);
+        let (left, top, right, bottom) = bounds;
+        let output = filtered_boxed::<CHANNELS>(
+            &transposed,
+            (source_size.1, source_size.0),
+            (destination_size.1, destination_size.0),
+            filter,
+            (top, left, bottom, right),
+            None,
+        )?;
+        let output_dims = CheckedDims::new(
+            destination_size.0,
+            destination_size.1,
+            checked_channels::<CHANNELS>()?,
+        )?;
+        return Ok(transpose_samples::<CHANNELS>(
+            &output,
+            destination_size.0,
+            destination_size.1,
+            output_dims,
+        ));
+    }
     let (source_width, source_height) = source_size;
     let (destination_width, destination_height) = destination_size;
     let (left, top, right, bottom) = bounds;

@@ -4,8 +4,8 @@ use super::{BOXED_SUPPORT, SUPPORT};
 use crate::compute::{
     Architecture, ExecutionContext,
     registry::support::{
-        OperationId, OperationInputs, OperationSupport, StrategyInputs, StrategySelection,
-        SupportAssessment,
+        ModeSupport, OperationId, OperationInputs, OperationSupport, StrategyInputs,
+        StrategySelection, SupportAssessment,
     },
 };
 use crate::error::PilError;
@@ -50,8 +50,26 @@ enum ResizeRequest {
     Boxed {
         filter: ResampleFilter,
         bounds: (f64, f64, f64, f64),
+        reducing_gap: Option<f64>,
     },
 }
+
+fn classify_alpha_reducing_gap(mode: Mode) -> ModeSupport {
+    match mode {
+        Mode::ImageLumaA8 | Mode::ImageRgba8 => ModeSupport::serial(
+            OperationId::ResizeBoxed,
+            mode,
+            super::super::helpers::support::INPUTS,
+        ),
+        _ => super::classify_boxed_resize(mode),
+    }
+}
+
+static ALPHA_REDUCING_GAP_SUPPORT: OperationSupport = OperationSupport::new(
+    OperationId::ResizeBoxed,
+    super::super::helpers::support::INPUTS,
+    classify_alpha_reducing_gap,
+);
 
 /// Exact mode and architecture choice retained through execution.
 pub(crate) struct PreparedResize<'a> {
@@ -95,7 +113,22 @@ impl PreparedResize<'_> {
     }
 
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
-        if let ResizeRequest::Boxed { filter, bounds } = self.request
+        if let ResizeRequest::Boxed {
+            filter,
+            bounds,
+            reducing_gap: Some(gap),
+        } = self.request
+        {
+            return execute_alpha_reducing_gap(
+                self.image,
+                (self.width, self.height),
+                filter,
+                bounds,
+                gap,
+                &self.selection,
+            );
+        }
+        if let ResizeRequest::Boxed { filter, bounds, .. } = self.request
             && let Some(mut output) = super::super::helpers::tall_boxed::execute(
                 self.image,
                 &self.context,
@@ -113,7 +146,7 @@ impl PreparedResize<'_> {
             return Ok(output);
         }
         if self.selection.implementation.architecture == Architecture::Default
-            && let ResizeRequest::Boxed { filter, bounds } = self.request
+            && let ResizeRequest::Boxed { filter, bounds, .. } = self.request
             && let Some(cropped) = super::super::helpers::boxed_crop::execute_default(
                 self.image,
                 (self.width, self.height),
@@ -125,7 +158,7 @@ impl PreparedResize<'_> {
         }
         let (filter, bounds) = match self.request {
             ResizeRequest::Standard { filter } => (filter, None),
-            ResizeRequest::Boxed { filter, bounds } => (filter, Some(bounds)),
+            ResizeRequest::Boxed { filter, bounds, .. } => (filter, Some(bounds)),
         };
         let mut output = execute_mode(
             self.image,
@@ -161,7 +194,7 @@ impl PreparedResize<'_> {
         };
         let (filter, bounds) = match self.request {
             ResizeRequest::Standard { filter } => (filter, None),
-            ResizeRequest::Boxed { filter, bounds } => (filter, Some(bounds)),
+            ResizeRequest::Boxed { filter, bounds, .. } => (filter, Some(bounds)),
         };
         let expected_operation = if bounds.is_some() {
             OperationId::ResizeBoxed
@@ -195,6 +228,56 @@ impl PreparedResize<'_> {
         let mut output = DynamicImage::ImageRgb8(output);
         super::super::helpers::hidden_lanes::finish(self.image, &mut output, filter, bounds)?;
         Ok(output)
+    }
+}
+
+fn execute_alpha_reducing_gap(
+    image: &DynamicImage,
+    destination: (u32, u32),
+    filter: ResampleFilter,
+    bounds: (f64, f64, f64, f64),
+    gap: f64,
+    selection: &StrategySelection,
+) -> Result<DynamicImage, PilError> {
+    if selection.implementation.architecture != Architecture::Default {
+        return Err(PilError::InternalError(
+            "straight-alpha reducing-gap Resize requires its Default strategy".into(),
+        ));
+    }
+    match image {
+        DynamicImage::ImageLumaA8(input) => {
+            let bytes = super::super::helpers::alpha_samples::resize_with_reducing_gap::<2>(
+                input.as_raw(),
+                input.dimensions(),
+                destination,
+                filter,
+                bounds,
+                gap,
+            )?;
+            crate::raster::GrayAlphaImage::from_raw(destination.0, destination.1, bytes)
+                .map(DynamicImage::ImageLumaA8)
+                .ok_or_else(|| {
+                    PilError::ValueError("resize_la: failed to create output buffer".into())
+                })
+        }
+        DynamicImage::ImageRgba8(input) => {
+            let bytes = super::super::helpers::alpha_samples::resize_with_reducing_gap::<4>(
+                input.as_raw(),
+                input.dimensions(),
+                destination,
+                filter,
+                bounds,
+                gap,
+            )?;
+            crate::raster::RgbaImage::from_raw(destination.0, destination.1, bytes)
+                .map(DynamicImage::ImageRgba8)
+                .ok_or_else(|| {
+                    PilError::ValueError("resize_rgba: failed to create output buffer".into())
+                })
+        }
+        _ => Err(PilError::InternalError(
+            "straight-alpha reducing-gap Resize received a different raster mode".into(),
+        )),
     }
 }
 
@@ -337,7 +420,11 @@ pub(crate) fn prepare_direct_with_selection<'a>(
         ));
     }
     let request = match bounds {
-        Some(bounds) => ResizeRequest::Boxed { filter, bounds },
+        Some(bounds) => ResizeRequest::Boxed {
+            filter,
+            bounds,
+            reducing_gap: None,
+        },
         None => ResizeRequest::Standard { filter },
     };
     Ok(PreparedResize {
@@ -369,6 +456,7 @@ pub(crate) fn prepare_pipeline<'a>(
             h,
             filter,
             box_coords,
+            reducing_gap,
         } => (
             *w,
             *h,
@@ -376,20 +464,35 @@ pub(crate) fn prepare_pipeline<'a>(
             ResizeRequest::Boxed {
                 filter: *filter,
                 bounds: *box_coords,
+                reducing_gap: *reducing_gap,
             },
-            &BOXED_SUPPORT,
+            if reducing_gap.is_some() {
+                if !matches!(inputs.mode(), Mode::ImageLumaA8 | Mode::ImageRgba8) {
+                    return Err(PilError::InternalError(
+                        "reducing-gap ResizeBoxed is limited to straight-alpha modes".into(),
+                    ));
+                }
+                &ALPHA_REDUCING_GAP_SUPPORT
+            } else {
+                &BOXED_SUPPORT
+            },
         ),
         _ => return Err(PilError::ValueError("expected Resize op".into())),
     };
     let filter = effective_filter(inputs.mode(), filter);
     let request = match request {
         ResizeRequest::Standard { .. } => ResizeRequest::Standard { filter },
-        ResizeRequest::Boxed { bounds, .. } => ResizeRequest::Boxed {
+        ResizeRequest::Boxed {
+            bounds,
+            reducing_gap,
+            ..
+        } => ResizeRequest::Boxed {
             filter,
             bounds: super::super::helpers::boxed_crop::validate_bounds(
                 bounds,
                 (inputs.image.width(), inputs.image.height()),
             )?,
+            reducing_gap,
         },
     };
     let bounds = match request {

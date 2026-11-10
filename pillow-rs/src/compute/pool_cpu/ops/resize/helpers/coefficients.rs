@@ -59,6 +59,17 @@ pub(crate) fn resample_pass_requirements(
     }
 }
 
+/// Match Pillow's CPU resampler pass order for unboxed and boxed requests.
+///
+/// Pillow runs the vertical pass first when height is reduced by more than
+/// twice the horizontal size change. The comparison uses image dimensions,
+/// including when the source box is narrower than the full image.
+pub(crate) fn horizontal_first(source: (u32, u32), destination: (u32, u32)) -> bool {
+    let horizontal_reduction = i64::from(source.0) - i64::from(destination.0);
+    let vertical_reduction = i64::from(source.1) - i64::from(destination.1);
+    !(vertical_reduction > 0 && vertical_reduction > horizontal_reduction * 2)
+}
+
 pub(crate) fn byte_coefficients_fit_i32(coefficients: &FilterCoeffs) -> bool {
     if coefficients.count.len() != coefficients.offsets.len()
         || coefficients.xmin.len() != coefficients.offsets.len()

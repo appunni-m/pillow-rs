@@ -11,7 +11,14 @@ use crate::raster::RgbaImage;
 
 type Bounds = super::super::super::helpers::typed_nearest::BoxBounds;
 
+// Pillow 13.0's AArch64 F-mode output matches four separately rounded
+// products followed by fused tail accumulation. Other architectures retain
+// their existing block width pending oracle verification.
+#[cfg(target_arch = "aarch64")]
+const F_RESIZE_VECTOR_WIDTH: usize = 4;
+#[cfg(not(target_arch = "aarch64"))]
 const F_RESIZE_VECTOR_WIDTH: usize = 16;
+// TODO(pillow-rs#3ptb): verify the F-mode product block width on x86_64 and wasm.
 
 pub(crate) fn execute<F: F64MulAdd>(
     source: &[f32],
@@ -19,11 +26,11 @@ pub(crate) fn execute<F: F64MulAdd>(
     destination_size: (u32, u32),
     filter: ResampleFilter,
     bounds: Bounds,
-    tall_vertical_first: bool,
+    vertical_first: bool,
     fma: &F,
 ) -> Result<RgbaImage, PilError> {
-    if tall_vertical_first {
-        return execute_tall(source, source_size, destination_size, filter, fma);
+    if vertical_first {
+        return execute_vertical_first(source, source_size, destination_size, filter, bounds, fma);
     }
     let (source_width, source_height) = source_size;
     let (width, height) = destination_size;
@@ -82,11 +89,12 @@ pub(crate) fn execute<F: F64MulAdd>(
     }
 }
 
-fn execute_tall<F: F64MulAdd>(
+fn execute_vertical_first<F: F64MulAdd>(
     source: &[f32],
     source_size: (u32, u32),
     destination_size: (u32, u32),
     filter: ResampleFilter,
+    bounds: Bounds,
     fma: &F,
 ) -> Result<RgbaImage, PilError> {
     let (source_width, _) = source_size;
@@ -95,7 +103,7 @@ fn execute_tall<F: F64MulAdd>(
         source_size,
         (source_width, height),
         filter,
-        None,
+        bounds,
     );
     let vertical_dims = CheckedDims::new_allow_empty(source_width, height, 1)?;
     let mut vertical_output = vec![0.0; vertical_dims.total_pixels()];
@@ -112,7 +120,7 @@ fn execute_tall<F: F64MulAdd>(
         (source_width, height),
         destination_size,
         filter,
-        None,
+        bounds,
     );
     let output_dims = CheckedDims::new_allow_empty(width, height, 1)?;
     let mut output = vec![0.0; output_dims.total_pixels()];

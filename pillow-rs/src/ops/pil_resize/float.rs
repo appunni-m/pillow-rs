@@ -43,6 +43,18 @@ pub(crate) fn f_resize_coefficients_allow_finite_fma(coefficients: &FilterCoeffs
     })
 }
 
+/// Pillow's scalar reference accumulates each product before adding it to the
+/// running sum; this path must not fuse the multiply and add.
+pub(crate) struct PortableSeparateMulAdd;
+
+impl F64MulAdd for PortableSeparateMulAdd {
+    #[inline(always)]
+    fn mul_add(&self, weight: f64, sample: f64, accumulator: f64) -> f64 {
+        weight * sample + accumulator
+    }
+}
+
+/// Portable fused accumulator for F-mode CPU resampling.
 pub(crate) struct PortableFma;
 
 impl F64MulAdd for PortableFma {

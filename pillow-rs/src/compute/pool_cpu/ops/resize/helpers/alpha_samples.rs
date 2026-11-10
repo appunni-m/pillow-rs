@@ -23,6 +23,7 @@ struct AlphaResizePlan<'a> {
     vertical: &'a FilterCoeffs,
     need_horizontal: bool,
     need_vertical: bool,
+    source_is_premultiplied: bool,
 }
 
 pub(crate) fn resize<const CHANNELS: usize>(
@@ -71,10 +72,83 @@ pub(crate) fn resize<const CHANNELS: usize>(
     }
     match bounds {
         Some(bounds) => {
-            filtered_boxed::<CHANNELS>(source, source_size, destination_size, filter, bounds)
+            filtered_boxed::<CHANNELS>(source, source_size, destination_size, filter, bounds, false)
         }
-        None => filtered_standard::<CHANNELS>(source, source_size, destination_size, filter),
+        None => filtered_standard::<CHANNELS>(source, source_size, destination_size, filter, false),
     }
+}
+
+pub(crate) fn resize_with_reducing_gap<const CHANNELS: usize>(
+    source: &[u8],
+    source_size: (u32, u32),
+    destination_size: (u32, u32),
+    filter: ResampleFilter,
+    bounds: (f64, f64, f64, f64),
+    gap: f64,
+) -> Result<Vec<u8>, PilError> {
+    let Some(plan) = crate::ops::resize::reducing_gap::prepare(
+        bounds,
+        gap,
+        filter,
+        destination_size,
+        source_size,
+    )?
+    else {
+        return resize::<CHANNELS>(source, source_size, destination_size, filter, Some(bounds));
+    };
+    let (safe_left, safe_top, safe_right, safe_bottom) = plan.safe_box;
+    let reduced_width = safe_right - safe_left;
+    let reduced_height = safe_bottom - safe_top;
+    let premultiplied = crop_and_premultiply::<CHANNELS>(
+        source,
+        source_size,
+        (safe_left, safe_top, safe_right, safe_bottom),
+    )?;
+    let reduced = crate::compute::pool_cpu::ops::reduce::helpers::native_bytes::reduce_bytes::<
+        CHANNELS,
+        false,
+    >(
+        &premultiplied,
+        reduced_width,
+        reduced_height,
+        plan.x_factor,
+        plan.y_factor,
+    )?;
+    let reduced_size = (
+        reduced_width.div_ceil(plan.x_factor),
+        reduced_height.div_ceil(plan.y_factor),
+    );
+    filtered_boxed::<CHANNELS>(
+        &reduced,
+        reduced_size,
+        destination_size,
+        filter,
+        plan.resized_bounds,
+        true,
+    )
+}
+
+fn crop_and_premultiply<const CHANNELS: usize>(
+    source: &[u8],
+    source_size: (u32, u32),
+    crop: (u32, u32, u32, u32),
+) -> Result<Vec<u8>, PilError> {
+    let (left, top, right, bottom) = crop;
+    let width = right - left;
+    let height = bottom - top;
+    let dims = CheckedDims::new(width, height, CHANNELS as u8)?;
+    let mut output = dims.alloc_buffer();
+    let source_stride = source_size.0 as usize * CHANNELS;
+    let row_stride = width as usize * CHANNELS;
+    for y in 0..height as usize {
+        let source_start = (top as usize + y) * source_stride + left as usize * CHANNELS;
+        let output_start = y * row_stride;
+        premultiply_row::<CHANNELS>(
+            &source[source_start..source_start + row_stride],
+            &mut output[output_start..output_start + row_stride],
+        );
+    }
+    Ok(output)
 }
 
 fn is_empty(source_size: (u32, u32), destination_size: (u32, u32)) -> bool {
@@ -108,20 +182,69 @@ fn filtered_standard<const CHANNELS: usize>(
     source_size: (u32, u32),
     destination_size: (u32, u32),
     filter: ResampleFilter,
+    source_is_premultiplied: bool,
 ) -> Result<Vec<u8>, PilError> {
     let horizontal = precompute_coeffs(destination_size.0, source_size.0, filter);
     let vertical = precompute_coeffs(destination_size.1, source_size.1, filter);
-    let coefficients_fit = byte_coefficients_fit_source(&horizontal, source_size.0 as usize)
-        && byte_coefficients_fit_source(&vertical, source_size.1 as usize)
-        && byte_coefficients_fit_i32(&horizontal)
-        && byte_coefficients_fit_i32(&vertical);
+    if source_size.0 != destination_size.0
+        && source_size.1 != destination_size.1
+        && !super::coefficients::horizontal_first(source_size, destination_size)
+    {
+        let dimensions =
+            CheckedDims::new_allow_empty(source_size.0, source_size.1, CHANNELS as u8)?;
+        let transposed = byte_samples::transpose_samples::<CHANNELS>(
+            source,
+            source_size.1,
+            source_size.0,
+            dimensions,
+        );
+        let output = filtered_standard_ordered::<CHANNELS>(
+            &transposed,
+            (source_size.1, source_size.0),
+            (destination_size.1, destination_size.0),
+            &vertical,
+            &horizontal,
+            source_is_premultiplied,
+        )?;
+        let output_dimensions =
+            CheckedDims::new(destination_size.0, destination_size.1, CHANNELS as u8)?;
+        return Ok(byte_samples::transpose_samples::<CHANNELS>(
+            &output,
+            destination_size.0,
+            destination_size.1,
+            output_dimensions,
+        ));
+    }
+    filtered_standard_ordered::<CHANNELS>(
+        source,
+        source_size,
+        destination_size,
+        &horizontal,
+        &vertical,
+        source_is_premultiplied,
+    )
+}
+
+fn filtered_standard_ordered<const CHANNELS: usize>(
+    source: &[u8],
+    source_size: (u32, u32),
+    destination_size: (u32, u32),
+    horizontal: &FilterCoeffs,
+    vertical: &FilterCoeffs,
+    source_is_premultiplied: bool,
+) -> Result<Vec<u8>, PilError> {
+    let coefficients_fit = byte_coefficients_fit_source(horizontal, source_size.0 as usize)
+        && byte_coefficients_fit_source(vertical, source_size.1 as usize)
+        && byte_coefficients_fit_i32(horizontal)
+        && byte_coefficients_fit_i32(vertical);
     if coefficients_fit
         && let Some(output) = filtered_standard_i32::<CHANNELS>(
             source,
             source_size,
             destination_size,
-            &horizontal,
-            &vertical,
+            horizontal,
+            vertical,
+            source_is_premultiplied,
         )
     {
         return Ok(output);
@@ -130,10 +253,11 @@ fn filtered_standard<const CHANNELS: usize>(
         source,
         source_size,
         destination_size,
-        horizontal: &horizontal,
-        vertical: &vertical,
+        horizontal,
+        vertical,
         need_horizontal: true,
         need_vertical: true,
+        source_is_premultiplied,
     })
 }
 
@@ -143,7 +267,38 @@ fn filtered_boxed<const CHANNELS: usize>(
     destination_size: (u32, u32),
     filter: ResampleFilter,
     bounds: (f64, f64, f64, f64),
+    source_is_premultiplied: bool,
 ) -> Result<Vec<u8>, PilError> {
+    if source_size.0 != destination_size.0
+        && source_size.1 != destination_size.1
+        && !super::coefficients::horizontal_first(source_size, destination_size)
+    {
+        let dimensions =
+            CheckedDims::new_allow_empty(source_size.0, source_size.1, CHANNELS as u8)?;
+        let transposed = byte_samples::transpose_samples::<CHANNELS>(
+            source,
+            source_size.1,
+            source_size.0,
+            dimensions,
+        );
+        let (left, top, right, bottom) = bounds;
+        let output = filtered_boxed::<CHANNELS>(
+            &transposed,
+            (source_size.1, source_size.0),
+            (destination_size.1, destination_size.0),
+            filter,
+            (top, left, bottom, right),
+            source_is_premultiplied,
+        )?;
+        let output_dimensions =
+            CheckedDims::new(destination_size.0, destination_size.1, CHANNELS as u8)?;
+        return Ok(byte_samples::transpose_samples::<CHANNELS>(
+            &output,
+            destination_size.0,
+            destination_size.1,
+            output_dimensions,
+        ));
+    }
     let (source_width, source_height) = source_size;
     let (destination_width, destination_height) = destination_size;
     let (left, top, right, bottom) = bounds;
@@ -173,6 +328,7 @@ fn filtered_boxed<const CHANNELS: usize>(
         vertical: &vertical,
         need_horizontal,
         need_vertical,
+        source_is_premultiplied,
     })
 }
 
@@ -182,6 +338,7 @@ fn filtered_standard_i32<const CHANNELS: usize>(
     destination_size: (u32, u32),
     horizontal: &FilterCoeffs,
     vertical: &FilterCoeffs,
+    source_is_premultiplied: bool,
 ) -> Option<Vec<u8>> {
     let (source_width, source_height) = source_size;
     let (destination_width, destination_height) = destination_size;
@@ -199,16 +356,19 @@ fn filtered_standard_i32<const CHANNELS: usize>(
     let source_stride = source_width as usize * CHANNELS;
     let output_stride = destination_width as usize * CHANNELS;
     let mut intermediate = intermediate_dims.alloc_buffer();
-    let mut premultiplied_row = vec![0; source_stride];
+    let mut premultiplied_row = (!source_is_premultiplied).then(|| vec![0; source_stride]);
     for source_y in 0..source_height as usize {
         let source_start = source_y * source_stride;
         let output_start = source_y * output_stride;
-        premultiply_row::<CHANNELS>(
-            &source[source_start..source_start + source_stride],
-            &mut premultiplied_row,
-        );
+        let source_row = &source[source_start..source_start + source_stride];
+        let filter_source: &[u8] = if let Some(premultiplied_row) = &mut premultiplied_row {
+            premultiply_row::<CHANNELS>(source_row, premultiplied_row);
+            premultiplied_row
+        } else {
+            source_row
+        };
         horizontal_row_i32::<CHANNELS>(
-            &premultiplied_row,
+            filter_source,
             horizontal,
             &mut intermediate[output_start..output_start + output_stride],
         );
@@ -296,17 +456,26 @@ fn filtered_with_coefficients<const CHANNELS: usize>(
     let source_stride = source_width as usize * CHANNELS;
     let output_stride = destination_width as usize * CHANNELS;
     let mut intermediate = intermediate_dims.alloc_buffer();
-    let mut premultiplied_row = vec![0; source_stride];
+    let mut premultiplied_row = (!plan.source_is_premultiplied).then(|| vec![0; source_stride]);
     for source_y in 0..source_height as usize {
         let source_start = source_y * source_stride;
         let output_start = source_y * output_stride;
         let source_row = &plan.source[source_start..source_start + source_stride];
         let intermediate_row = &mut intermediate[output_start..output_start + output_stride];
-        premultiply_row::<CHANNELS>(source_row, &mut premultiplied_row);
         if plan.need_horizontal {
-            horizontal_row::<CHANNELS>(&premultiplied_row, plan.horizontal, intermediate_row);
+            if let Some(premultiplied_row) = &mut premultiplied_row {
+                premultiply_row::<CHANNELS>(source_row, premultiplied_row);
+                horizontal_row::<CHANNELS>(premultiplied_row, plan.horizontal, intermediate_row);
+            } else {
+                horizontal_row::<CHANNELS>(source_row, plan.horizontal, intermediate_row);
+            }
         } else {
-            intermediate_row.copy_from_slice(&premultiplied_row);
+            if let Some(premultiplied_row) = &mut premultiplied_row {
+                premultiply_row::<CHANNELS>(source_row, premultiplied_row);
+                intermediate_row.copy_from_slice(premultiplied_row);
+            } else {
+                intermediate_row.copy_from_slice(source_row);
+            }
         }
     }
     let mut output = output_dims.alloc_buffer();
