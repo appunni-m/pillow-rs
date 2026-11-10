@@ -137,8 +137,15 @@ outputs. The 13.0 generator and input validation pass. The current corpus has
 25,022 cases; CPU selects 25,021 (24,790 Pillow comparisons and 231 recorded
 outputs), with case-ID SHA-256
 `42905f5f4dab5716889c6d227bf86b599398208700fec23ea3e955300e9678f9`. A focused default-CPU run passed all 20 selected I;16-family Offset cases
-(run `migration-parity-a666e1ff6f744ffabf568ec61af9c7ca`). The active 25,021-case
-CPU corpus then ran once on default CPU: 24,718 passed, 303 failed, and zero
+(run `migration-parity-a666e1ff6f744ffabf568ec61af9c7ca`). This selection was
+refreshed against Pillow 13.0.0 on the current `develop` checkout: all 20 cases
+passed under each of the nine CPU architecture selectors (180/180, zero
+infrastructure errors). Receipts are under
+`build/migration-parity/pillow13-i16-offset-refresh/`; the input SHA-256 is
+`8252392cd4a619347f3fb784a279d18b57d0cd51731531870116dd4b00092440`. On this
+ARM64 host the x86 selectors use their declared fallbacks, so native x86
+execution remains unverified. The active 25,021-case CPU corpus then ran once
+on default CPU: 24,718 passed, 303 failed, and zero
 infrastructure errors (run `migration-parity-d122153930244ee5b72d0cd5722c7196`).
 Its per-operation failure list is in the inventory; it does not cover the full
 mode/architecture matrix. Pillow 12.2 receipts are historical and incompatible
@@ -156,6 +163,20 @@ classifies 16,002 pipeline-applicable cases: 15,935 complete, 66 missing a
 pipeline receipt, and one partial. This remains default-architecture evidence,
 not the full strategy matrix. All Pad, Resize, and Thumbnail cases pass in
 this run.
+
+Rounded-rectangle correction (2026-11-10): the Pillow adapter now groups flat
+coordinates into pairs before unpacking, preserving Pillow's malformed-input
+error. Rust computes the initial diameter as `min(width, height, 2 * radius)`
+before rounding coordinates, matching Pillow's behavior for zero-height boxes.
+All 31 frozen rounded-rectangle cases pass against Pillow 13.0.0 under all nine
+CPU architecture selectors (279/279, zero failures and infrastructure
+errors). Receipts are under
+`build/migration-parity/pillow13-rounded-rectangle-cpu-architectures/`; the
+input SHA-256 is
+`b2caf6f94976c15261372f0f7121bc4a82cfe34e4a7a6925feda156c49e0999b`. This
+ARM64 run exercises Default and Neon; native x86 execution remains unverified.
+The latest full-corpus report still predates this correction, so its 15
+rounded-rectangle failures are historical. No benchmark or coverage ran.
 
 Focused GetBBox correction (2026-11-10): `I;16`, `I;16L`, `I;16B`, and `I;16N`
 must scan typed u16 samples as logical pixels. Replacing the byte-prefix scan

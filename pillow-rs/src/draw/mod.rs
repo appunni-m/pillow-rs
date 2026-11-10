@@ -232,8 +232,8 @@ pub fn normalize_draw_box(input: DrawBoxInput) -> Result<(i32, i32, i32, i32), P
     }
 }
 
-/// Normalizes the rounded-rectangle box, preserving its two-scalar Pillow
-/// diagnostic before falling back to the shared box validation.
+/// Normalizes the rounded-rectangle box after Pillow groups flat coordinates
+/// into pairs, preserving its pair-unpacking diagnostic.
 pub fn normalize_rounded_rectangle_box(
     input: DrawBoxInput,
 ) -> Result<(i32, i32, i32, i32), PilError> {
@@ -241,7 +241,7 @@ pub fn normalize_rounded_rectangle_box(
         || matches!(&input, DrawBoxInput::PillowCoordinates(values) if values.len() == 2)
     {
         return Err(PilError::ValueError(
-            "not enough values to unpack (expected 4, got 2)".into(),
+            "not enough values to unpack (expected 2, got 1)".into(),
         ));
     }
     normalize_draw_box(input)

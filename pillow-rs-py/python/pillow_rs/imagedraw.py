@@ -324,13 +324,11 @@ class ImageDraw:
         *,
         corners: tuple[bool, bool, bool, bool] | None = None,
     ) -> None:
-        # Keep Pillow's sequence unpacking here; Rust owns the ordered numeric
-        # geometry. Public ellipse/rectangle override dispatch stays here.
+        # Keep Pillow's normalized sequence unpacking here; Rust owns the
+        # ordered numeric geometry. Public ellipse/rectangle override dispatch
+        # stays here.
         original_xy = xy
-        if isinstance(xy[0], (list, tuple)):
-            (x0, y0), (x1, y1) = xy
-        else:
-            x0, y0, x1, y1 = xy
+        (x0, y0), (x1, y1) = self._normalize_coords(xy)
         if corners is None:
             corners = (True, True, True, True)
         geometry = self._draw._prepare_rounded_rectangle(
@@ -355,6 +353,12 @@ class ImageDraw:
                 full_x,
                 full_y,
             )
+
+    def _normalize_coords(self, xy: Coords):
+        """Normalize flat coordinates into pairs as Pillow's draw wrapper does."""
+        if isinstance(xy[0], (list, tuple)):
+            return xy
+        return [tuple(xy[index : index + 2]) for index in range(0, len(xy), 2)]
 
     def bitmap(self, xy, bitmap, fill=None):
         """Draw a bitmap. Pixel iteration done in Rust."""

@@ -180,12 +180,7 @@ pub fn prepare_rounded_rectangle_with_callbacks<C: RoundedRectanglePreparationCa
 ) -> Result<RoundedRectanglePreparedGeometry<C::Value>, RoundedRectanglePreparationError<C::Error>>
 {
     validate_coordinate_order(&coordinates, callbacks)?;
-    let two = callbacks
-        .integer(2)
-        .map_err(RoundedRectanglePreparationError::Callback)?;
-    let diameter = callbacks
-        .multiply(&radius, &two)
-        .map_err(RoundedRectanglePreparationError::Callback)?;
+    let diameter = initial_diameter(&coordinates, &radius, callbacks)?;
     let rounded = round_coordinates(coordinates, callbacks)?;
     let (diameter, full_x, full_y) = clip_full_axes(diameter, &rounded, callbacks)?;
     let early_path = early_path(diameter.clone(), full_x, full_y, callbacks)?;
@@ -213,6 +208,41 @@ pub fn prepare_rounded_rectangle_with_callbacks<C: RoundedRectanglePreparationCa
         full_y,
         None,
     ))
+}
+
+fn initial_diameter<C: RoundedRectanglePreparationCallbacks>(
+    coordinates: &[C::Value; 4],
+    radius: &C::Value,
+    callbacks: &mut C,
+) -> Result<C::Value, RoundedRectanglePreparationError<C::Error>> {
+    let width = callbacks
+        .subtract(&coordinates[2], &coordinates[0])
+        .map_err(RoundedRectanglePreparationError::Callback)?;
+    let height = callbacks
+        .subtract(&coordinates[3], &coordinates[1])
+        .map_err(RoundedRectanglePreparationError::Callback)?;
+    let two = callbacks
+        .integer(2)
+        .map_err(RoundedRectanglePreparationError::Callback)?;
+    let doubled_radius = callbacks
+        .multiply(radius, &two)
+        .map_err(RoundedRectanglePreparationError::Callback)?;
+    let smaller_extent = if callbacks
+        .less_than(&height, &width)
+        .map_err(RoundedRectanglePreparationError::Callback)?
+    {
+        height
+    } else {
+        width
+    };
+    if callbacks
+        .less_than(&doubled_radius, &smaller_extent)
+        .map_err(RoundedRectanglePreparationError::Callback)?
+    {
+        Ok(doubled_radius)
+    } else {
+        Ok(smaller_extent)
+    }
 }
 
 /// Core error versus a failure raised by a host numeric protocol.

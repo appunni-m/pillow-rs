@@ -9334,3 +9334,28 @@ previous mismatches, with zero infrastructure errors. Run
 Report: `build/migration-parity/pillow13-colorize-case-result.json`. The full
 CPU corpus has not been rerun, so its aggregate remains historical. No
 benchmark or coverage ran.
+
+Pillow 13 oracle refresh for I;16 Offset (2026-11-10): the designated `.venv`
+uses Pillow 13.0.0. The 20 frozen I;16/I;16L/I;16B/I;16N Offset cases passed
+under all nine CPU architecture selectors (180/180, zero failures or
+infrastructure errors) on the current `develop` checkout. Receipts are under
+`build/migration-parity/pillow13-i16-offset-refresh/`; the parity reports
+record oracle 13.0.0 and input SHA-256
+`8252392cd4a619347f3fb784a279d18b57d0cd51731531870116dd4b00092440`. The
+x86 selectors use their declared fallback on this ARM64 host. This confirms
+the Pillow 13 typed-u16 Offset contract; Pillow 12.2's unstable unwritten
+bytes remain historical behavior and are not the parity target.
+
+Rounded-rectangle focused correction (2026-11-10): malformed flat coordinate
+sequences are grouped into pairs in the Pillow adapter, preserving Pillow's
+unpacking error. Rust now initializes the corner diameter from the minimum of
+the unrounded width, height, and doubled radius, matching Pillow's ordering
+for degenerate boxes. All 31 frozen rounded-rectangle cases pass on all nine
+CPU architecture selectors (279/279, zero failures and infrastructure
+errors). Reports and execution sidecars are under
+`build/migration-parity/pillow13-rounded-rectangle-cpu-architectures/`; input
+SHA-256 is
+`b2caf6f94976c15261372f0f7121bc4a82cfe34e4a7a6925feda156c49e0999b`.
+Default and Neon execute on ARM64; native x86 execution remains unverified.
+The historical full-corpus report's 15 rounded-rectangle failures predate
+this correction. No benchmark or coverage ran.
