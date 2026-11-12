@@ -11,6 +11,7 @@ mod operations;
 mod point;
 mod properties;
 mod put_alpha;
+mod quantize;
 mod sequence;
 mod transform;
 use point::PyPointTransform;

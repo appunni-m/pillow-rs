@@ -920,7 +920,7 @@ class Image:
             ):
                 palette.palette = bytearray(self.getpalette(palette.mode) or [])
 
-    # VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    # VERIFY: source=reviewed@2026-11-12; parity=pass@quantize-supplied-palette-20261112-cpu-default; benchmark=pending
     def quantize(self, colors: int = 256, method=None, kmeans: int = 0,
                  palette=None, dither: int = 1):
         """Reduce colors using median cut algorithm."""
@@ -949,10 +949,8 @@ class Image:
             native_method = method
             if default_mode == self._rust_image.mode:
                 native_method = None
-            # The native boundary accepts this binding's typed PyImage carrier.
-            # TODO(pillow-rs#3ptb): adapt foreign palette.im carriers at the
-            # host boundary into the existing Rust palette mapper; preserve
-            # visible-mode checks, palette copy, subclass behavior, and faults.
+            # The native boundary accepts this binding's typed carrier and
+            # adapts foreign Pillow-compatible ImagingCore palette metadata.
             quantized = self._rust_image.quantize(
                 256, native_method, 0, dither, palette.im, self.mode
             )

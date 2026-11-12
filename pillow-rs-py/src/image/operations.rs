@@ -1,6 +1,7 @@
 use super::RsImage;
 use super::arrays::image_info_value_to_python;
 use super::point::point_transform_from_python;
+use super::quantize::quantize_palette_from_python;
 use crate::*;
 use pyo3::types::PyModuleMethods;
 use pyo3::{pyclass, pyfunction, pymethods};
@@ -499,7 +500,7 @@ impl PyImage {
         result.map_err(map_error)
     }
 
-    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+    // VERIFY: source=reviewed@2026-11-12; parity=pass@quantize-supplied-palette-20261112-cpu-default; benchmark=pending
     #[pyo3(signature = (colors=None, method=None, kmeans=None, dither=None, palette=None, visible_mode=None))]
     fn quantize(
         slf: Py<Self>,
@@ -511,13 +512,10 @@ impl PyImage {
         visible_mode: Option<&str>,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
-        let palette = match palette {
-            None => pillow_rs::QuantizePalette::None,
-            Some(value) => image_from_python(value)
-                .map_or(pillow_rs::QuantizePalette::Other, |image| {
-                    pillow_rs::QuantizePalette::Image(Box::new(image))
-                }),
-        };
+        let palette = palette
+            .map(quantize_palette_from_python)
+            .transpose()?
+            .unwrap_or(pillow_rs::QuantizePalette::None);
         let visible_mode = visible_mode.and_then(pillow_rs::Mode::from_pillow_name);
         let inner = slf.bind(py).borrow().inner.clone();
         let rs = py

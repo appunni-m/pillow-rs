@@ -112,7 +112,7 @@ pub enum InputContract {
     EffectNoiseSigma,
     /// EffectMandelbrot consumes output dimensions, extent, and quality.
     EffectMandelbrotParameters,
-    /// Quantize consumes palette size, method, optional palette mode, and k-means count.
+    /// Quantize consumes palette size, method, palette mode/entry count, and k-means count.
     QuantizeParameters {
         /// Inclusive minimum palette size.
         min_colors: u32,
@@ -126,6 +126,8 @@ pub enum InputContract {
         allowed_methods: &'static [u32],
         /// Exact identity required for a caller-supplied palette image.
         palette_mode: Mode,
+        /// Rejection returned when an attached palette contains no entries.
+        empty_palette_rejection: &'static str,
         /// Wrapper-visible source modes accepted with a supplied palette.
         palette_sources: &'static [Mode],
         /// Materialized source modes accepted by the native palette mapper.

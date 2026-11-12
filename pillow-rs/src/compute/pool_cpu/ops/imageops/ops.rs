@@ -164,6 +164,7 @@ pub(super) const QUANTIZE_INPUT: InputContract = InputContract::QuantizeParamete
     method_restricted_modes: QUANTIZE_METHOD_RESTRICTED_MODES,
     allowed_methods: QUANTIZE_ALLOWED_ALPHA_METHODS,
     palette_mode: Mode::ImagePalette8,
+    empty_palette_rejection: "empty palette",
     palette_sources: QUANTIZE_PALETTE_SOURCES,
     palette_carriers: QUANTIZE_PALETTE_CARRIERS,
     palette_carrier_rejection: "conversion not supported",

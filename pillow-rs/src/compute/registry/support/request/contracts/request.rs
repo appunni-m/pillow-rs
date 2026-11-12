@@ -101,7 +101,7 @@ fn assess_effect_request(
     }
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-12; parity=pass@quantize-supplied-palette-20261112-cpu-default; benchmark=pending
 fn assess_quantize_request(
     contract: InputContract,
     input: StrategyInputs,
@@ -113,6 +113,7 @@ fn assess_quantize_request(
         method_restricted_modes,
         allowed_methods,
         palette_mode: expected_palette_mode,
+        empty_palette_rejection,
         palette_sources,
         palette_carriers,
         palette_carrier_rejection,
@@ -137,6 +138,7 @@ fn assess_quantize_request(
         method,
         kmeans,
         palette_mode,
+        palette_entries,
     } = input.request
     else {
         return Err(wrong_request("Quantize"));
@@ -160,6 +162,9 @@ fn assess_quantize_request(
         }
         if !palette_carriers.contains(&source_mode) {
             return Err(PilError::ValueError(palette_carrier_rejection.into()));
+        }
+        if palette_entries == Some(0) {
+            return Err(PilError::ValueError(empty_palette_rejection.into()));
         }
         return Ok(None);
     }

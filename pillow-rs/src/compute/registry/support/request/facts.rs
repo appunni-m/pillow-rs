@@ -85,6 +85,8 @@ pub enum RequestFacts {
         kmeans: Option<i64>,
         /// Exact palette image identity, when the caller supplied one.
         palette_mode: Option<Mode>,
+        /// Number of RGB entries in a supplied palette, absent for auto-quantize.
+        palette_entries: Option<usize>,
     },
     /// Expanded byte lookup table supplied to the exact-mode Eval operation.
     EvalLut {

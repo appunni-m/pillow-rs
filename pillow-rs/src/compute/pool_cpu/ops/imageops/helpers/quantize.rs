@@ -150,6 +150,7 @@ pub(crate) fn prepare<'image, 'palette>(
         Some(i64::from(kmeans)),
         None,
         None,
+        None,
         context,
     )?;
     Ok(PreparedQuantize {
@@ -165,7 +166,7 @@ pub(crate) fn prepare<'image, 'palette>(
 }
 
 /// Maps a wrapper-admitted source carrier to a supplied P palette.
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-12; parity=pass@quantize-supplied-palette-20261112-cpu-default; benchmark=pending
 pub(crate) fn execute_with_palette(
     image: &DynamicImage,
     palette_image: &Image,
@@ -177,6 +178,11 @@ pub(crate) fn execute_with_palette(
 ) -> Result<(Image, StrategySelection), PilError> {
     let mode = image.mode();
     let palette_mode = palette_image.mode_identity()?;
+    let palette_entries = palette_image
+        .palette_input()
+        .rgb
+        .map(|rgb| rgb.len() / 3)
+        .unwrap_or(0);
     let selection = select_quantize_request(
         image,
         PaletteKnowledge::Absent,
@@ -184,6 +190,7 @@ pub(crate) fn execute_with_palette(
         method,
         None,
         Some(palette_mode),
+        Some(palette_entries),
         visible_mode,
         context,
     )?;
@@ -241,7 +248,7 @@ pub(crate) fn execute_with_palette(
     ))
 }
 
-// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+// VERIFY: source=reviewed@2026-11-12; parity=pass@quantize-supplied-palette-20261112-cpu-default; benchmark=pending
 fn select_quantize_request(
     image: &DynamicImage,
     source_palette: PaletteKnowledge,
@@ -249,6 +256,7 @@ fn select_quantize_request(
     method: u32,
     kmeans: Option<i64>,
     palette_mode: Option<Mode>,
+    palette_entries: Option<usize>,
     visible_mode: Option<Mode>,
     context: &ExecutionContext,
 ) -> Result<StrategySelection, PilError> {
@@ -265,6 +273,7 @@ fn select_quantize_request(
             method,
             kmeans,
             palette_mode,
+            palette_entries,
         },
     };
     match QUANTIZE_SUPPORT.for_mode(mode).assess(context, input)? {
