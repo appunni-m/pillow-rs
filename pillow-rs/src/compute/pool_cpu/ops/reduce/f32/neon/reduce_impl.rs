@@ -6,7 +6,7 @@ use crate::raster::{DynamicImage, RgbaImage};
 const OUTPUT_LANES: usize = 8;
 const NEON_LANES: usize = 4;
 
-// VERIFY: source=reviewed@2026-11-13; parity=pass@f32-reduce-neon-pillow; benchmark=pending
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn execute(
     input: &RgbaImage,
     x_factor: u32,
