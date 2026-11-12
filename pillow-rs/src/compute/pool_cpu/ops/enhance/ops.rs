@@ -59,6 +59,7 @@ macro_rules! declare_color_saturation_modes {
             strategy: PreparedColorSaturationMode<'a>,
         }
 
+        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
         fn classify_color_saturation_mode(mode: Mode) -> ModeSupport {
             match mode {
                 $(Mode::$mode => super::$module::ops::COLOR_SATURATION_SUPPORT,)+
@@ -88,6 +89,7 @@ macro_rules! declare_color_saturation_modes {
             }
         }
 
+        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
         fn prepare_color_saturation_mode<'a>(
             image: &'a DynamicImage,
             facts: crate::compute::registry::support::StrategyInputs,
@@ -127,12 +129,14 @@ macro_rules! declare_color_saturation_modes {
         }
 
         impl PreparedColorSaturation<'_> {
+            // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
             pub(crate) fn selection(&self) -> &StrategySelection {
                 match &self.strategy {
                     $(PreparedColorSaturationMode::$mode(strategy) => strategy.selection(),)+
                 }
             }
 
+            // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
                 let source = self.source;
                 let factor = self.factor;
@@ -288,6 +292,7 @@ fn classify_color_saturation_route(mode: Mode) -> OperationModeRoute {
 }
 
 trait ContrastLaneContext {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn lane_context(&self) -> Option<(ContrastBase, f64)>;
 }
 
@@ -295,12 +300,14 @@ impl<'a, P> ContrastLaneContext for Prepared<(&'a ImageBuffer<P, Vec<u8>>, Contr
 where
     P: Pixel<Subpixel = u8>,
 {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn lane_context(&self) -> Option<(ContrastBase, f64)> {
         Some((self.implementation.1, self.implementation.2))
     }
 }
 
 impl<'a> ContrastLaneContext for super::lab8::ops::ContrastStrategy<'a> {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     fn lane_context(&self) -> Option<(ContrastBase, f64)> {
         None
     }
@@ -318,6 +325,7 @@ macro_rules! declare_contrast_modes {
             strategy: PreparedContrastMode<'a>,
         }
 
+        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
         pub(super) fn classify_contrast_mode(mode: Mode) -> ModeSupport {
             match mode {
                 $(Mode::$mode => super::$module::ops::CONTRAST_SUPPORT,)+
@@ -352,6 +360,7 @@ macro_rules! declare_contrast_modes {
             }
         }
 
+        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
         pub(super) fn prepare_contrast_mode<'a>(
             image: &'a DynamicImage,
             facts: crate::compute::registry::support::StrategyInputs,
@@ -388,18 +397,21 @@ macro_rules! declare_contrast_modes {
         }
 
         impl PreparedContrast<'_> {
+            // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
             pub(crate) fn selection(&self) -> &StrategySelection {
                 match &self.strategy {
                     $(PreparedContrastMode::$mode(strategy) => strategy.selection(),)+
                 }
             }
 
+            // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
             pub(crate) fn composed_selections(&self) -> &[StrategySelection] {
                 match &self.strategy {
                     $(PreparedContrastMode::$mode(strategy) => strategy.composed_selections(),)+
                 }
             }
 
+            // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
                 let source = self.source;
                 let lane_context = self.lane_context;
@@ -446,6 +458,7 @@ macro_rules! declare_brightness_modes {
             strategy: PreparedBrightnessMode<'a>,
         }
 
+        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
         fn classify_mode(mode: Mode) -> ModeSupport {
             match mode {
                 $(Mode::$mode => super::$module::ops::SUPPORT,)+
@@ -457,6 +470,7 @@ macro_rules! declare_brightness_modes {
             }
         }
 
+        // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
         fn prepare_mode<'a>(
             image: &'a DynamicImage,
             facts: crate::compute::registry::support::StrategyInputs,
@@ -475,12 +489,14 @@ macro_rules! declare_brightness_modes {
         }
 
         impl PreparedBrightness<'_> {
+            // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
             pub(crate) fn selection(&self) -> &StrategySelection {
                 match &self.strategy {
                     $(PreparedBrightnessMode::$mode(strategy) => strategy.selection(),)+
                 }
             }
 
+            // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
             pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
                 let source = self.source;
                 let factor = self.factor;
@@ -525,6 +541,7 @@ declare_brightness_modes! {
 
 const SHARPNESS_INPUTS: &[InputContract] = &[InputContract::SharpnessFactor];
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn classify_sharpness_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::One => ModeSupport::Rejected {
@@ -601,6 +618,7 @@ pub(crate) enum PreparedSharpness<'a> {
 }
 
 impl PreparedSharpness<'_> {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         match self {
             Self::ImageLuma8(strategy) => strategy.selection(),
@@ -628,6 +646,7 @@ impl PreparedSharpness<'_> {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         match self {
             Self::ImageLuma8(strategy) => super::luma8::ops::execute_sharpness(strategy),
@@ -660,6 +679,7 @@ impl PreparedSharpness<'_> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn prepare_sharpness<'a>(
     input: OperationInputs<'a>,
     factor: f64,
@@ -668,6 +688,7 @@ fn prepare_sharpness<'a>(
     prepare_sharpness_mode(input.image, input.facts(), factor, context)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn prepare_sharpness_mode<'a>(
     image: &'a DynamicImage,
     facts: crate::compute::registry::support::StrategyInputs,
@@ -769,6 +790,7 @@ fn prepare_sharpness_mode<'a>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn rejected_sharpness_error(mode: Mode) -> PilError {
     match SHARPNESS_SUPPORT.for_mode(mode) {
         ModeSupport::Rejected { reason, kind, .. } => kind.into_error(reason),
@@ -778,6 +800,7 @@ fn rejected_sharpness_error(mode: Mode) -> PilError {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_sharpness_pipeline<'a>(
     input: OperationInputs<'a>,
     operation: &'a PipelineOp,
@@ -817,6 +840,7 @@ pub(crate) static COLOR_SATURATION_SUPPORT: OperationSupport = OperationSupport:
     COLOR_SATURATION_CHILDREN,
 );
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn rejected_error(mode: Mode) -> PilError {
     match SUPPORT.for_mode(mode) {
         ModeSupport::Rejected { reason, kind, .. } => kind.into_error(reason),
@@ -826,6 +850,7 @@ fn rejected_error(mode: Mode) -> PilError {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn rejected_color_saturation_error(mode: Mode) -> PilError {
     match COLOR_SATURATION_SUPPORT.for_mode(mode) {
         ModeSupport::Rejected { reason, kind, .. } => kind.into_error(reason),
@@ -835,6 +860,7 @@ fn rejected_color_saturation_error(mode: Mode) -> PilError {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn rejected_contrast_error(mode: Mode) -> PilError {
     match CONTRAST_SUPPORT.for_mode(mode) {
         ModeSupport::Rejected { reason, kind, .. } => kind.into_error(reason),
@@ -844,6 +870,7 @@ fn rejected_contrast_error(mode: Mode) -> PilError {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     input: OperationInputs<'a>,
     factor: f64,
@@ -861,6 +888,7 @@ pub(crate) fn prepare<'a>(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     input: OperationInputs<'a>,
     operation: &'a PipelineOp,
@@ -873,6 +901,7 @@ pub(crate) fn prepare_pipeline<'a>(
         .map(crate::compute::registry::PreparedOperation::from_brightness)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_color_saturation<'a>(
     input: OperationInputs<'a>,
     factor: f64,
@@ -881,6 +910,7 @@ pub(crate) fn prepare_color_saturation<'a>(
     prepare_color_saturation_mode(input.image, input.facts(), factor, context)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_color_saturation_pipeline<'a>(
     input: OperationInputs<'a>,
     operation: &'a PipelineOp,

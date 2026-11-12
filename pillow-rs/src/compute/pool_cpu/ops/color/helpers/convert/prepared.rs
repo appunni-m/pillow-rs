@@ -409,6 +409,7 @@ impl Prepared<'_> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     input: OperationInputs<'a>,
     target: Mode,
@@ -440,6 +441,7 @@ pub(crate) fn prepare<'a>(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_matrix<'a>(
     input: OperationInputs<'a>,
     target: Mode,
@@ -466,6 +468,7 @@ pub(crate) fn prepare_matrix<'a>(
     })
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,

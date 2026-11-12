@@ -721,6 +721,7 @@ fn execute_architecture_blur(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn request(op: &PipelineOp) -> Result<FilterRequest, PilError> {
     match op {
         PipelineOp::Filter3x3 {
@@ -763,6 +764,7 @@ fn request(op: &PipelineOp) -> Result<FilterRequest, PilError> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     inputs: OperationInputs<'a>,
     op: &PipelineOp,
@@ -817,6 +819,7 @@ pub(crate) fn prepare_pipeline<'a>(
     ))
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn rank_window_facts(
     inputs: OperationInputs<'_>,
     size: u32,

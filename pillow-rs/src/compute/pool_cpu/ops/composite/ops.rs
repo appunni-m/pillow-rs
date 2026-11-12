@@ -26,6 +26,7 @@ pub(crate) enum PreparedAlphaComposite<'a> {
     ImageRgba8(super::rgba8::ops::Strategy<'a>),
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 fn classify_mode(mode: Mode) -> ModeSupport {
     match mode {
         Mode::ImageLumaA8 => super::luma_a8::ops::SUPPORT,
@@ -65,6 +66,7 @@ pub(crate) static ALPHA_COMPOSITE_SUPPORT: OperationSupport =
     OperationSupport::new(OperationId::AlphaComposite, &[], classify_mode);
 
 impl PreparedAlphaComposite<'_> {
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn selection(&self) -> &StrategySelection {
         match self {
             Self::ImageLumaA8(strategy) => strategy.selection(),
@@ -72,6 +74,7 @@ impl PreparedAlphaComposite<'_> {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
     pub(crate) fn execute(self) -> Result<DynamicImage, PilError> {
         match self {
             Self::ImageLumaA8(strategy) => strategy.execute(),
@@ -80,6 +83,7 @@ impl PreparedAlphaComposite<'_> {
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn assess(
     inputs: OperationInputs<'_>,
     source: crate::compute::registry::support::SecondaryInputFacts,
@@ -93,6 +97,7 @@ pub(crate) fn assess(
     classify_mode(inputs.mode()).assess(ctx, facts)
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare<'a>(
     input: OperationInputs<'a>,
     source: Arc<DynamicImage>,
@@ -129,6 +134,7 @@ pub(crate) fn prepare<'a>(
     }
 }
 
+// VERIFY: source=reviewed@2026-11-13; parity=pending; benchmark=pending
 pub(crate) fn prepare_pipeline<'a>(
     input: OperationInputs<'a>,
     op: &'a PipelineOp,

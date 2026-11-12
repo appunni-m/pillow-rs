@@ -7155,3 +7155,30 @@ parity. Stage 5 still has family/helper/call-graph source review and exact
 function/file-size proof outstanding. `make docs-lint`, `make fmt`, and
 `make clippy` passed on 2026-11-13; Clippy reported the repository's existing
 warning diagnostics. No tests, parity, benchmark, or coverage command ran.
+
+2026-11-13 CPU preparation-entry source follow-up: inspected the previously
+unmarked Composite, Brightness/ColorSaturation, Contrast/Sharpness, Filter, and
+Convert preparation paths against their exact-mode support assessment and
+injected `ExecutionContext`. Filter carries typed request parameters into its
+declared facts; architecture-specific rank-window facts are only an eligibility
+guard, and `PreparedFilter` retains the same context. Composite validates the
+operation variant and primary-mode contract before materializing its secondary
+image, then composes the exact LA or RGBA strategy. Convert preserves its typed
+target and separate direct/matrix declarations; its registry alias points to
+the same prepared helper. Enhancement's macro-generated mode selectors match
+the `DynamicImage` variants and call exact mode owners; Contrast records its
+conversion-first routes, while Sharpness has exhaustive exact-mode support.
+Those prepared routes keep the injected context through their mode strategies.
+All 19 `prepare_pipeline` definitions under `pool_cpu/ops` and the reviewed
+Contrast/Sharpness wrappers now carry adjacent source-review markers. The 17
+static crosswalk route candidates remain candidates rather than dead-code
+findings; registry ownership is explicit, while compiler-backed reachability
+remains a later gate. An exact workspace-root file scan covered 5,495 tracked
+Rust files, including tests, examples, benches, build scripts, and the legacy
+archives: the largest is `pipeline.rs` at 982 physical lines, and none exceed
+1,000. The preceding `make clippy` report counted zero functions over 100
+Clippy body lines; this follow-up changes only comments and docs, which do not
+add counted body lines. The automated size gate still reruns after source
+closure. VERIFY markers record source review only; parity and benchmark
+evidence are still pending. No build, formatting, checkstyle, lint, test,
+parity, benchmark, or coverage command ran for this source-only follow-up.

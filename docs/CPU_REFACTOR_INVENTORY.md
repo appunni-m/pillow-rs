@@ -10251,3 +10251,26 @@ proof remain pending. Existing per-path parity and backend TODOs remain with
 their operation owners. `make docs-lint`, `make fmt`, and `make clippy` passed
 on 2026-11-13; Clippy reported the repository's existing warning diagnostics.
 No tests, parity, benchmark, or coverage command ran.
+
+2026-11-13 CPU preparation-entry source follow-up: source-reviewed the
+previously unmarked Composite, Brightness/ColorSaturation, Contrast/Sharpness,
+Filter, and Convert preparation paths, including typed request facts,
+exact-mode contract assessment, context propagation, and mode-owned strategy
+composition. Filter retains the injected context through preparation and uses
+architecture-specific rank-window facts only as a guard. Composite keeps its
+LA/RGBA owners and secondary-image validation; Convert's registry alias
+resolves to the shared prepared Convert helper. Enhancement's generated mode
+selectors dispatch exact `DynamicImage` variants to their mode owners and pass
+the routed context through preparation. All 19 `prepare_pipeline` definitions
+beneath `pool_cpu/ops` and the reviewed Contrast/Sharpness wrappers now have
+adjacent source markers. The operation-source crosswalk's 17 route candidates
+are still not dead-code findings: registry ownership is explicit, and
+compiler-backed reachability remains for a later gate. A workspace-root scan
+matching the Rust size-policy scope counted 5,495 tracked Rust files, including
+tests, examples, benches, build scripts, and legacy archives; the maximum was
+982 physical lines in `pillow-rs/src/pipeline.rs`, with no file over 1,000. The
+preceding `make clippy` report counted zero functions over 100 Clippy body
+lines. This follow-up adds only comments and docs, and the automated size gate
+still reruns after source closure. Parity and benchmark tags remain pending.
+No build, formatting, checkstyle, lint, test, parity, benchmark, or coverage
+command ran for this source-only follow-up.
