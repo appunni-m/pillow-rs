@@ -47,6 +47,7 @@ EXPECTED_MODULES = (
 )
 EXPECTED_LEGACY_ROWS = 199
 EXPECTED_LEGACY_UNIQUE_ENDPOINTS = 197
+EXPECTED_ENDPOINT_COUNT = 217
 
 @dataclass(frozen=True, order=True)
 class LegacyRef:
@@ -638,6 +639,7 @@ def render_ids(endpoints: list[Endpoint]) -> str:
     return "".join(f"{endpoint.id}\n" for endpoint in endpoints)
 
 
+# VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=n/a
 def validate_inventory() -> dict[str, int]:
     """Run the frozen inventory invariants used to replace unit assertions."""
 
@@ -688,7 +690,8 @@ def validate_inventory() -> dict[str, int]:
     ):
         raise ValueError("font endpoints are not on canonical public surfaces")
     payload = render_json(endpoints, legacy_rows)
-    if EXPECTED_AUTHORITY_SHA256 not in payload or '"endpoint_count": 216' not in payload:
+    expected_count = f'"endpoint_count": {EXPECTED_ENDPOINT_COUNT}'
+    if EXPECTED_AUTHORITY_SHA256 not in payload or expected_count not in payload:
         raise ValueError("diagnostic inventory does not record frozen authority metadata")
     return {
         "legacy_rows": legacy_rows,

@@ -20,6 +20,7 @@ from build_migration_parity_inputs import (
     indexed_generated_asset_paths,
     load_manifest,
     prepare_asset_overlay,
+    retained_unindexed_generated_asset_paths,
 )
 from validate_migration_parity_contract import validate_inputs
 
@@ -94,6 +95,7 @@ def validate_crash_quarantine(path: Path) -> None:
     _reject_output_fields(document, str(path))
 
 
+# VERIFY: source=reviewed@2026-11-12; parity=n/a; benchmark=n/a
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -144,6 +146,9 @@ def main() -> None:
                     )
         validate_inputs(manifest, active_root)
         referenced_assets = indexed_generated_asset_paths(active_root, manifest)
+        referenced_assets.update(
+            retained_unindexed_generated_asset_paths(active_root, manifest)
+        )
         active_generated_assets = active_root / "assets" / "generated"
         active_asset_paths = {
             path.relative_to(active_generated_assets).as_posix()

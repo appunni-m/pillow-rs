@@ -296,7 +296,8 @@ pub(crate) static MATRIX_SUPPORT: OperationSupport =
         .with_rejected_output(OutputModeRule::ByTargetMode);
 
 pub(crate) use super::helpers::convert::prepared::{
-    ConvertWrapperMetadata, Prepared, PreparedConvertOutput, prepare_pipeline as prepare_convert_pipeline,
+    ConvertWrapperMetadata, Prepared, PreparedConvertOutput,
+    prepare_pipeline as prepare_convert_pipeline,
 };
 
 // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending

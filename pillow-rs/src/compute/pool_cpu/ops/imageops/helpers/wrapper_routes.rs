@@ -63,41 +63,12 @@ fn imageops_lut_wrapper_rejection(mode: Mode) -> Option<(&'static str, Rejection
 
 fn classify_imageops_lut_route(mode: Mode) -> OperationModeRoute {
     let support_scope = scope_for_wrapper_mode(mode);
-    let (support, operations, scope, outcome) = match (
-        imageops_lut_wrapper_rejection(mode),
-        imageops_lut_mode_support(mode),
-    ) {
-        (Some((reason, kind)), _) => (
-            ModeSupport::Rejected { mode, reason, kind },
-            &[][..],
-            support_scope,
-            OperationRouteOutcome::Rejects {
-                stage: OperationRouteStage::WrapperGuard,
-                reason,
-                kind,
-            },
-        ),
-        (None, Some(support @ ModeSupport::Supported { scope, .. })) => (
-            support,
-            IMAGEOPS_LUT_CHILDREN,
-            scope,
-            OperationRouteOutcome::Produces,
-        ),
-        (None, Some(support @ ModeSupport::Rejected { reason, kind, .. })) => (
-            support,
-            IMAGEOPS_LUT_CHILDREN,
-            support_scope,
-            OperationRouteOutcome::Rejects {
-                stage: OperationRouteStage::ChildAdmission,
-                reason,
-                kind,
-            },
-        ),
-        (None, None) => {
-            let reason = crate::compute::pool_cpu::ops::imageops::helpers::strategy::
-                unsupported_mode_reason(mode);
-            let kind = RejectionKind::OsError;
-            (
+    let (support, operations, scope, outcome) =
+        match (
+            imageops_lut_wrapper_rejection(mode),
+            imageops_lut_mode_support(mode),
+        ) {
+            (Some((reason, kind)), _) => (
                 ModeSupport::Rejected { mode, reason, kind },
                 &[][..],
                 support_scope,
@@ -106,9 +77,39 @@ fn classify_imageops_lut_route(mode: Mode) -> OperationModeRoute {
                     reason,
                     kind,
                 },
-            )
-        }
-    };
+            ),
+            (None, Some(support @ ModeSupport::Supported { scope, .. })) => (
+                support,
+                IMAGEOPS_LUT_CHILDREN,
+                scope,
+                OperationRouteOutcome::Produces,
+            ),
+            (None, Some(support @ ModeSupport::Rejected { reason, kind, .. })) => (
+                support,
+                IMAGEOPS_LUT_CHILDREN,
+                support_scope,
+                OperationRouteOutcome::Rejects {
+                    stage: OperationRouteStage::ChildAdmission,
+                    reason,
+                    kind,
+                },
+            ),
+            (None, None) => {
+                let reason = crate::compute::pool_cpu::ops::imageops::helpers::strategy::
+                unsupported_mode_reason(mode);
+                let kind = RejectionKind::OsError;
+                (
+                    ModeSupport::Rejected { mode, reason, kind },
+                    &[][..],
+                    support_scope,
+                    OperationRouteOutcome::Rejects {
+                        stage: OperationRouteStage::WrapperGuard,
+                        reason,
+                        kind,
+                    },
+                )
+            }
+        };
     OperationModeRoute::ComposedFallback {
         mode,
         intermediate_mode: None,
@@ -219,40 +220,41 @@ pub(crate) fn classify_imageops_colorize_route(mode: Mode) -> OperationModeRoute
 
 pub(crate) fn classify_imageops_colorize_lut_route(mode: Mode) -> OperationModeRoute {
     let scope = scope_for_wrapper_mode(mode);
-    let (support, operations, outcome) = match mode {
-        Mode::ImageLuma8 | Mode::ImageRgb8 => (
-            OperationId::Eval.support().for_mode(mode),
-            IMAGEOPS_COLORIZE_LUT_CHILDREN,
-            OperationRouteOutcome::Produces,
-        ),
-        Mode::ImagePalette8 => {
-            let reason = "mode P support coming soon";
-            let kind = RejectionKind::NotImplementedError;
-            (
-                ModeSupport::Rejected { mode, reason, kind },
-                &[][..],
-                OperationRouteOutcome::Rejects {
-                    stage: OperationRouteStage::WrapperGuard,
-                    reason,
-                    kind,
-                },
-            )
-        }
-        _ => {
-            let reason = crate::compute::pool_cpu::ops::imageops::helpers::strategy::
+    let (support, operations, outcome) =
+        match mode {
+            Mode::ImageLuma8 | Mode::ImageRgb8 => (
+                OperationId::Eval.support().for_mode(mode),
+                IMAGEOPS_COLORIZE_LUT_CHILDREN,
+                OperationRouteOutcome::Produces,
+            ),
+            Mode::ImagePalette8 => {
+                let reason = "mode P support coming soon";
+                let kind = RejectionKind::NotImplementedError;
+                (
+                    ModeSupport::Rejected { mode, reason, kind },
+                    &[][..],
+                    OperationRouteOutcome::Rejects {
+                        stage: OperationRouteStage::WrapperGuard,
+                        reason,
+                        kind,
+                    },
+                )
+            }
+            _ => {
+                let reason = crate::compute::pool_cpu::ops::imageops::helpers::strategy::
                 unsupported_mode_reason(mode);
-            let kind = RejectionKind::OsError;
-            (
-                ModeSupport::Rejected { mode, reason, kind },
-                &[][..],
-                OperationRouteOutcome::Rejects {
-                    stage: OperationRouteStage::WrapperGuard,
-                    reason,
-                    kind,
-                },
-            )
-        }
-    };
+                let kind = RejectionKind::OsError;
+                (
+                    ModeSupport::Rejected { mode, reason, kind },
+                    &[][..],
+                    OperationRouteOutcome::Rejects {
+                        stage: OperationRouteStage::WrapperGuard,
+                        reason,
+                        kind,
+                    },
+                )
+            }
+        };
     OperationModeRoute::ComposedFallback {
         mode,
         intermediate_mode: None,

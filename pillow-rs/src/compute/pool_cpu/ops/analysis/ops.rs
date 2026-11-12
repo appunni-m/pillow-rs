@@ -4,7 +4,8 @@
 
 use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{
-    InputContract, ModeSupport, OperationId, OperationModeRoute, OperationSupport, PaletteKnowledge, RequestFacts, StrategyInputs, StrategySelection,
+    InputContract, ModeSupport, OperationId, OperationModeRoute, OperationSupport,
+    PaletteKnowledge, RequestFacts, StrategyInputs, StrategySelection,
 };
 use crate::error::PilError;
 use crate::raster::{DynamicImage, Mode};
@@ -14,7 +15,6 @@ pub(crate) use super::helpers::extrema_bytes_execution::prepare as prepare_get_e
 pub(crate) use super::helpers::extrema_execution::prepare as prepare_get_extrema;
 pub(crate) use super::helpers::getcolors_execution::prepare_getcolors;
 pub(crate) use super::helpers::stat_execution::prepare_stat;
-
 
 const NO_INPUTS: &[InputContract] = &[];
 const HISTOGRAM_MASK_MODES: &[Mode] = &[Mode::One, Mode::ImageLuma8];
@@ -638,16 +638,12 @@ fn classify_get_bbox_mode(mode: Mode) -> ModeSupport {
         Mode::One => super::one::ops::get_bbox_mode_support(),
         Mode::ImageLuma8 => super::luma8::ops::get_bbox_mode_support(),
         Mode::ImageLumaA8 => super::luma_a8::ops::get_bbox_mode_support(),
-        Mode::ImageLaPremultiplied8 => {
-            super::la_premultiplied8::ops::get_bbox_mode_support()
-        }
+        Mode::ImageLaPremultiplied8 => super::la_premultiplied8::ops::get_bbox_mode_support(),
         Mode::ImagePalette8 => super::palette8::ops::get_bbox_mode_support(),
         Mode::ImagePaletteAlpha8 => super::palette_alpha8::ops::get_bbox_mode_support(),
         Mode::ImageRgb8 => super::rgb8::ops::get_bbox_mode_support(),
         Mode::ImageRgba8 => super::rgba8::ops::get_bbox_mode_support(),
-        Mode::ImageRgbPremultiplied8 => {
-            super::rgb_premultiplied8::ops::get_bbox_mode_support()
-        }
+        Mode::ImageRgbPremultiplied8 => super::rgb_premultiplied8::ops::get_bbox_mode_support(),
         Mode::ImageRgbx8 => super::rgbx8::ops::get_bbox_mode_support(),
         Mode::ImageCmyk8 => super::cmyk8::ops::get_bbox_mode_support(),
         Mode::ImageYCbCr8 => super::ycbcr8::ops::get_bbox_mode_support(),
@@ -684,13 +680,9 @@ fn classify_mode(mode: Mode) -> ModeSupport {
         Mode::One => super::one::ops::get_projection_mode_support(),
         Mode::ImageLuma8 => super::luma8::ops::get_projection_mode_support(),
         Mode::ImageLumaA8 => super::luma_a8::ops::get_projection_mode_support(),
-        Mode::ImageLaPremultiplied8 => {
-            super::la_premultiplied8::ops::get_projection_mode_support()
-        }
+        Mode::ImageLaPremultiplied8 => super::la_premultiplied8::ops::get_projection_mode_support(),
         Mode::ImagePalette8 => super::palette8::ops::get_projection_mode_support(),
-        Mode::ImagePaletteAlpha8 => {
-            super::palette_alpha8::ops::get_projection_mode_support()
-        }
+        Mode::ImagePaletteAlpha8 => super::palette_alpha8::ops::get_projection_mode_support(),
         Mode::ImageRgb8 => super::rgb8::ops::SUPPORT,
         Mode::ImageRgba8 => super::rgba8::ops::get_projection_mode_support(),
         Mode::ImageRgbPremultiplied8 => {

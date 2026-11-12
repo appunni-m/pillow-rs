@@ -123,7 +123,11 @@ pub(crate) fn execute(
             "Convert selected an undeclared LA architecture".into(),
         )),
     }?;
-    super::super::helpers::convert::physical_lanes::preserve_luma_alpha_lane(source, target, &mut output)?;
+    super::super::helpers::convert::physical_lanes::preserve_luma_alpha_lane(
+        source,
+        target,
+        &mut output,
+    )?;
     Ok(output)
 }
 

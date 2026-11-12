@@ -34,8 +34,10 @@ pub(crate) fn pad(
             "Pad mode dispatch received a different raster".into(),
         ));
     };
-    let architecture =
-        super::super::helpers::pad_strategies::selected_architecture(selection, Mode::ImagePalette8)?;
+    let architecture = super::super::helpers::pad_strategies::selected_architecture(
+        selection,
+        Mode::ImagePalette8,
+    )?;
     match architecture {
         Architecture::Default => super::default::pad_impl::pad(image, frame)
             .map(|output| (DynamicImage::ImagePalette8(output), 0, 0)),

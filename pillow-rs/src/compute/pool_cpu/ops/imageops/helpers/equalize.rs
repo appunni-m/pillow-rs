@@ -3,9 +3,7 @@
 use std::sync::Arc;
 
 use crate::compute::ExecutionContext;
-use crate::compute::registry::support::{
-    OperationInputs, OperationSupport, StrategySelection,
-};
+use crate::compute::registry::support::{OperationInputs, OperationSupport, StrategySelection};
 use crate::error::PilError;
 use crate::image::Image;
 use crate::raster::DynamicImage;

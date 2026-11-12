@@ -195,6 +195,9 @@ pub use crate::compute::ExpandFillRule;
 pub use crate::compute::F32RankCompatibility;
 pub use crate::compute::FallbackReason;
 #[cfg(feature = "gpu")]
+#[doc(hidden)]
+pub use crate::compute::GpuAdapterInfo;
+#[cfg(feature = "gpu")]
 pub use crate::compute::GpuBatchConfig;
 #[cfg(feature = "gpu")]
 pub use crate::compute::GpuBatchExecutor;
@@ -202,15 +205,6 @@ pub use crate::compute::GpuBatchExecutor;
 pub use crate::compute::GpuBatchStats;
 #[cfg(feature = "gpu")]
 pub use crate::compute::GpuImage;
-#[cfg(feature = "gpu")]
-#[doc(hidden)]
-pub use crate::compute::GpuAdapterInfo;
-#[cfg(feature = "gpu")]
-#[doc(hidden)]
-pub use crate::compute::gpu_adapter_inventory;
-#[cfg(feature = "gpu")]
-#[doc(hidden)]
-pub use crate::compute::selected_gpu_adapter_info;
 pub use crate::compute::ImplementationId;
 pub use crate::compute::ImplementationSupport;
 pub use crate::compute::InputContract;
@@ -256,6 +250,12 @@ pub use crate::compute::available_backends;
 pub use crate::compute::backend_enabled;
 pub use crate::compute::disable_backend;
 pub use crate::compute::enable_backend;
+#[cfg(feature = "gpu")]
+#[doc(hidden)]
+pub use crate::compute::gpu_adapter_inventory;
+#[cfg(feature = "gpu")]
+#[doc(hidden)]
+pub use crate::compute::selected_gpu_adapter_info;
 pub use crate::draw::Draw;
 pub use crate::draw::DrawBoxInput;
 pub use crate::draw::DrawCircleCenterInput;
@@ -377,7 +377,6 @@ pub use crate::image::FormattedImageData;
 pub use crate::image::FormattedPixelValue;
 pub use crate::image::Image;
 pub use crate::image::ImageInfoValue;
-pub use crate::image::RawDecoderPlan;
 pub use crate::image::ImagingCoreBytesInput;
 pub use crate::image::NewColorInput;
 pub use crate::image::OpenFormatsInput;
@@ -390,6 +389,7 @@ pub use crate::image::PutDataInput;
 pub use crate::image::PutDataValue;
 pub use crate::image::PutDataValueKind;
 pub use crate::image::PutPixelValue;
+pub use crate::image::RawDecoderPlan;
 pub use crate::path::ImagePath;
 // Preserve the original public Rust paths after adopting host-neutral names.
 // Remove these aliases only as part of an explicit breaking-release decision.

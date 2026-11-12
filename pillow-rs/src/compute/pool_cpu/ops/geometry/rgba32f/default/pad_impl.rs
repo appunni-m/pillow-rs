@@ -1,7 +1,9 @@
 //! Native-sample default Pad kernel for ImageRgba32F.
 // NO_PILLOW_SUPPORT: internal high-depth native samples have no Pillow Pad mode identity.
 
-use crate::compute::pool_cpu::ops::geometry::helpers::{pad_dimensions::PadFrame, pad_samples as samples};
+use crate::compute::pool_cpu::ops::geometry::helpers::{
+    pad_dimensions::PadFrame, pad_samples as samples,
+};
 use crate::error::PilError;
 use crate::raster::Rgba32FImage;
 

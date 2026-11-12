@@ -14,11 +14,12 @@ pub(crate) fn execute(source: &RgbaImage) -> Result<(GrayAlphaImage, u64, usize)
     }
 
     let mut output = Vec::with_capacity(output_dims.total_bytes());
-    let vector_blocks = crate::compute::pool_cpu::ops::color::helpers::convert::four_byte_to_luma_alpha::append(
-        source.as_raw(),
-        &mut output,
-        crate::raster::Mode::ImageRgba8,
-    );
+    let vector_blocks =
+        crate::compute::pool_cpu::ops::color::helpers::convert::four_byte_to_luma_alpha::append(
+            source.as_raw(),
+            &mut output,
+            crate::raster::Mode::ImageRgba8,
+        );
     if output.len() != output_dims.total_bytes() {
         return Err(PilError::InternalError(
             "RGBA Convert luma-alpha output shape mismatch".into(),

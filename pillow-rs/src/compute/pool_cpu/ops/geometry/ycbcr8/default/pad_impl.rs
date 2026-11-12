@@ -1,6 +1,8 @@
 //! Native-sample default Pad kernel for ImageYCbCr8.
 
-use crate::compute::pool_cpu::ops::geometry::helpers::{pad_dimensions::PadFrame, pad_samples as samples};
+use crate::compute::pool_cpu::ops::geometry::helpers::{
+    pad_dimensions::PadFrame, pad_samples as samples,
+};
 use crate::error::PilError;
 use crate::raster::RgbImage;
 

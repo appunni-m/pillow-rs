@@ -10,10 +10,8 @@
 // NO_PILLOW_SUPPORT: internal high-depth raster identities compose their
 // native Resize strategies, although Pillow has no corresponding mode names.
 
-use super::helpers::{
-    contain_dimensions, cover_dimensions, fit_box, pad_dimensions as dimensions,
-};
 use super::helpers::pad_dimensions::PadFrame;
+use super::helpers::{contain_dimensions, cover_dimensions, fit_box, pad_dimensions as dimensions};
 use crate::compute::{
     Architecture, ExecutionContext,
     registry::support::{
@@ -425,7 +423,6 @@ pub(crate) fn prepare_pipeline<'a>(
         _ => Err(PilError::ValueError("expected a geometry op".into())),
     }
 }
-
 
 #[derive(PartialEq, Eq)]
 pub(crate) enum PadContentSource {

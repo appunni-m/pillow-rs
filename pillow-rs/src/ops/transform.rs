@@ -11,10 +11,10 @@ use crate::raster::Mode;
 mod fill;
 mod public;
 pub(crate) use fill::public_transform_fill;
+pub(crate) use public::validate_transform_resample_filter;
 pub use public::{
     PreparedTransformOutput, TransformMeshAccumulator, transform_resample_public_error,
 };
-pub(crate) use public::validate_transform_resample_filter;
 
 /// Host-neutral transform data after the binding has performed only Python
 /// sequence extraction.

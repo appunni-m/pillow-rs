@@ -10,6 +10,7 @@ use crate::error::PilError;
 use crate::pipeline::{DitherMethod, PipelineOp};
 use crate::raster::{DynamicImage, Mode};
 
+use super::super::super as color_ops;
 use super::super::super::ops::{CONVERT_SUPPORT, MATRIX_SUPPORT};
 
 /// Raster output plus wrapper-owned palette data for eager palette conversion.
@@ -121,6 +122,7 @@ impl Prepared<'_> {
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn execute_palette_target(self) -> Result<PreparedConvertOutput, PilError> {
         let input = self.input;
         let target = self.target;
@@ -128,16 +130,16 @@ impl Prepared<'_> {
         let selection = self.selection;
         match input.image {
             DynamicImage::One(source) => {
-                super::super::super::one::ops::execute_palette_target(source, target, selection)
+                color_ops::one::ops::execute_palette_target(source, target, selection)
             }
             DynamicImage::ImageLuma8(source) => {
-                super::super::super::luma8::convert::execute_palette_target(source, target, selection)
+                color_ops::luma8::convert::execute_palette_target(source, target, selection)
             }
             DynamicImage::ImageLumaA8(source) => {
-                super::super::super::luma_a8::ops::execute_palette_target(source, target, selection)
+                color_ops::luma_a8::ops::execute_palette_target(source, target, selection)
             }
             DynamicImage::ImagePalette8(source) => {
-                super::super::super::palette8::convert::execute_palette_target(
+                color_ops::palette8::convert::execute_palette_target(
                     source,
                     input.palette,
                     target,
@@ -145,70 +147,66 @@ impl Prepared<'_> {
                 )
             }
             DynamicImage::ImagePaletteAlpha8(source) => {
-                super::super::super::palette_alpha8::ops::execute_palette_target(source, target, selection)
+                color_ops::palette_alpha8::ops::execute_palette_target(source, target, selection)
             }
             DynamicImage::ImageRgb8(source) => {
-                super::super::super::rgb8::convert::execute_palette_target(source, target, dither, selection)
+                color_ops::rgb8::convert::execute_palette_target(source, target, dither, selection)
             }
             DynamicImage::ImageRgba8(source) => {
-                super::super::super::rgba8::convert::execute_palette_target(source, target, selection)
+                color_ops::rgba8::convert::execute_palette_target(source, target, selection)
             }
             DynamicImage::ImageRgbPremultiplied8(source) => {
-                super::super::super::rgb_premultiplied8::ops::execute_palette_target(
+                color_ops::rgb_premultiplied8::ops::execute_palette_target(
                     source, target, dither, selection,
                 )
             }
             DynamicImage::ImageRgbx8(source) => {
-                super::super::super::rgbx8::convert::execute_palette_target(source, target, dither, selection)
+                color_ops::rgbx8::convert::execute_palette_target(source, target, dither, selection)
             }
             DynamicImage::ImageCmyk8(source) => {
-                super::super::super::cmyk8::ops::execute_palette_target(source, target, dither, selection)
+                color_ops::cmyk8::ops::execute_palette_target(source, target, dither, selection)
             }
             DynamicImage::ImageYCbCr8(source) => {
-                super::super::super::ycbcr8::ops::execute_palette_target(source, target, dither, selection)
+                color_ops::ycbcr8::ops::execute_palette_target(source, target, dither, selection)
             }
             DynamicImage::ImageHsv8(source) => {
-                super::super::super::hsv8::ops::execute_palette_target(source, target, dither, selection)
+                color_ops::hsv8::ops::execute_palette_target(source, target, dither, selection)
             }
             DynamicImage::ImageLab8(source) => {
-                super::super::super::lab8::ops::execute_palette_target(source, target, dither, selection)
+                color_ops::lab8::ops::execute_palette_target(source, target, dither, selection)
             }
             DynamicImage::ImageI32(source) => {
-                super::super::super::i32::ops::execute_palette_target(source, target, selection)
+                color_ops::i32::ops::execute_palette_target(source, target, selection)
             }
             DynamicImage::ImageF32(source) => {
-                super::super::super::f32::ops::execute_palette_target(source, target, selection)
+                color_ops::f32::ops::execute_palette_target(source, target, selection)
             }
             DynamicImage::ImageI16(source) => {
-                super::super::super::i16::ops::execute_palette_target(source, target, selection)
+                color_ops::i16::ops::execute_palette_target(source, target, selection)
             }
             DynamicImage::ImageI16L(source) => {
-                super::super::super::i16l::ops::execute_palette_target(source, target, selection)
+                color_ops::i16l::ops::execute_palette_target(source, target, selection)
             }
             DynamicImage::ImageI16B(source) => {
-                super::super::super::i16b::ops::execute_palette_target(source, target, selection)
+                color_ops::i16b::ops::execute_palette_target(source, target, selection)
             }
             DynamicImage::ImageI16N(source) => {
-                super::super::super::i16n::ops::execute_palette_target(source, target, selection)
+                color_ops::i16n::ops::execute_palette_target(source, target, selection)
             }
             DynamicImage::ImageLumaA16(source) => {
-                super::super::super::luma_a16::ops::execute_palette_target(
-                    source, target, dither, selection,
-                )
+                color_ops::luma_a16::ops::execute_palette_target(source, target, dither, selection)
             }
             DynamicImage::ImageRgb16(source) => {
-                super::super::super::rgb16::ops::execute_palette_target(source, target, dither, selection)
+                color_ops::rgb16::ops::execute_palette_target(source, target, dither, selection)
             }
             DynamicImage::ImageRgba16(source) => {
-                super::super::super::rgba16::ops::execute_palette_target(source, target, dither, selection)
+                color_ops::rgba16::ops::execute_palette_target(source, target, dither, selection)
             }
             DynamicImage::ImageRgb32F(source) => {
-                super::super::super::rgb32f::ops::execute_palette_target(source, target, dither, selection)
+                color_ops::rgb32f::ops::execute_palette_target(source, target, dither, selection)
             }
             DynamicImage::ImageRgba32F(source) => {
-                super::super::super::rgba32f::ops::execute_palette_target(
-                    source, target, dither, selection,
-                )
+                color_ops::rgba32f::ops::execute_palette_target(source, target, dither, selection)
             }
             _ => Err(PilError::InternalError(
                 "Convert selected an undeclared palette target strategy".into(),
@@ -227,66 +225,66 @@ impl Prepared<'_> {
     ) -> Result<DynamicImage, PilError> {
         match input.image {
             DynamicImage::One(source) => {
-                return super::super::super::one::ops::execute(source, target, selection);
+                return color_ops::one::ops::execute(source, target, selection);
             }
             DynamicImage::ImageLuma8(source) => {
-                return super::super::super::luma8::convert::execute(source, target, selection);
+                return color_ops::luma8::convert::execute(source, target, selection);
             }
             DynamicImage::ImageLumaA8(source) => {
-                return super::super::super::luma_a8::ops::execute(source, target, selection);
+                return color_ops::luma_a8::ops::execute(source, target, selection);
             }
             DynamicImage::ImageRgb8(source) => {
                 // SAFETY: prepare retained the exact source, target, and
                 // context used to select this declared mode strategy.
-                return unsafe { super::super::super::rgb8::convert::execute(source, target, selection) };
+                return unsafe { color_ops::rgb8::convert::execute(source, target, selection) };
             }
             DynamicImage::ImageRgba8(source) => {
                 // SAFETY: `prepare` computed this selection from the same
                 // source mode, target, and injected context retained here.
-                return unsafe { super::super::super::rgba8::convert::execute(source, target, selection) };
+                return unsafe { color_ops::rgba8::convert::execute(source, target, selection) };
             }
             DynamicImage::ImageRgbPremultiplied8(source) => {
-                return super::super::super::rgb_premultiplied8::ops::execute(source, target, selection);
+                return color_ops::rgb_premultiplied8::ops::execute(source, target, selection);
             }
             DynamicImage::ImageRgbx8(source) => {
                 // SAFETY: prepare selected this strategy from the RGBX
                 // contract using the same source, target, and context retained here.
-                return unsafe { super::super::super::rgbx8::convert::execute(source, target, selection) };
+                return unsafe { color_ops::rgbx8::convert::execute(source, target, selection) };
             }
             DynamicImage::ImageI32(source) => {
-                return super::super::super::i32::ops::execute(source, target, selection);
+                return color_ops::i32::ops::execute(source, target, selection);
             }
             DynamicImage::ImageF32(source) => {
-                return super::super::super::f32::ops::execute(source, target, selection);
+                return color_ops::f32::ops::execute(source, target, selection);
             }
             DynamicImage::ImageI16(source) => {
-                return super::super::super::i16::ops::execute(source, target, selection);
+                return color_ops::i16::ops::execute(source, target, selection);
             }
             DynamicImage::ImageI16L(source) => {
-                return super::super::super::i16l::ops::execute(source, target, selection);
+                return color_ops::i16l::ops::execute(source, target, selection);
             }
             DynamicImage::ImageI16B(source) => {
-                return super::super::super::i16b::ops::execute(source, target, selection);
+                return color_ops::i16b::ops::execute(source, target, selection);
             }
             DynamicImage::ImageI16N(source) => {
-                return super::super::super::i16n::ops::execute(source, target, selection);
+                return color_ops::i16n::ops::execute(source, target, selection);
             }
             DynamicImage::ImageLaPremultiplied8(source) => {
-                return super::super::super::la_premultiplied8::ops::execute(source, target, selection);
+                return color_ops::la_premultiplied8::ops::execute(source, target, selection);
             }
             DynamicImage::ImageCmyk8(source) => {
                 // SAFETY: prepare selected this strategy from the CMYK
                 // contract using the same source, target, and context retained here.
-                return unsafe { super::super::super::cmyk8::ops::execute(source, target, selection) };
+                return unsafe { color_ops::cmyk8::ops::execute(source, target, selection) };
             }
             DynamicImage::ImageYCbCr8(source) => {
-                return super::super::super::ycbcr8::ops::execute(source, target, selection);
+                return color_ops::ycbcr8::ops::execute(source, target, selection);
             }
             DynamicImage::ImageHsv8(source) => {
-                return super::super::super::hsv8::ops::execute(source, target, selection);
+                return color_ops::hsv8::ops::execute(source, target, selection);
             }
             DynamicImage::ImagePalette8(source) => {
-                return super::super::super::palette8::convert::execute(
+                return color_ops::palette8::convert::execute(
                     source,
                     input.palette,
                     target,
@@ -294,7 +292,7 @@ impl Prepared<'_> {
                 );
             }
             DynamicImage::ImagePaletteAlpha8(source) => {
-                return super::super::super::palette_alpha8::ops::execute(
+                return color_ops::palette_alpha8::ops::execute(
                     source,
                     input.palette,
                     target,
@@ -302,109 +300,110 @@ impl Prepared<'_> {
                 );
             }
             DynamicImage::ImageLab8(source) => {
-                return super::super::super::lab8::ops::execute(source, target, selection);
+                return color_ops::lab8::ops::execute(source, target, selection);
             }
             DynamicImage::ImageLumaA16(source) => {
-                return super::super::super::luma_a16::ops::execute(source, target, selection);
+                return color_ops::luma_a16::ops::execute(source, target, selection);
             }
             DynamicImage::ImageRgb16(source) => {
-                return super::super::super::rgb16::ops::execute(source, target, selection);
+                return color_ops::rgb16::ops::execute(source, target, selection);
             }
             DynamicImage::ImageRgba16(source) => {
-                return super::super::super::rgba16::ops::execute(source, target, selection);
+                return color_ops::rgba16::ops::execute(source, target, selection);
             }
             DynamicImage::ImageRgb32F(source) => {
-                return super::super::super::rgb32f::ops::execute(source, target, selection);
+                return color_ops::rgb32f::ops::execute(source, target, selection);
             }
             DynamicImage::ImageRgba32F(source) => {
-                return super::super::super::rgba32f::ops::execute(source, target, selection);
+                return color_ops::rgba32f::ops::execute(source, target, selection);
             }
         }
     }
 
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     fn execute_binary(self) -> Result<DynamicImage, PilError> {
         let input = self.input;
         let dither = self.dither;
         let selection = self.selection;
         match input.image {
             DynamicImage::One(_) => {
-                super::super::super::one::ops::execute_binary(input, dither.as_ref(), selection)
+                color_ops::one::ops::execute_binary(input, dither.as_ref(), selection)
             }
             DynamicImage::ImageLuma8(_) => {
-                super::super::super::luma8::convert::execute_binary(input, dither.as_ref(), selection)
+                color_ops::luma8::convert::execute_binary(input, dither.as_ref(), selection)
             }
             DynamicImage::ImageLumaA8(_) => {
-                super::super::super::luma_a8::ops::execute_binary(input, dither.as_ref(), selection)
+                color_ops::luma_a8::ops::execute_binary(input, dither.as_ref(), selection)
             }
             DynamicImage::ImageLaPremultiplied8(_) => Err(PilError::ValueError(
                 "conversion from La to L not supported".into(),
             )),
             DynamicImage::ImagePalette8(_) => {
-                super::super::super::palette8::convert::execute_binary(input, dither.as_ref(), selection)
+                color_ops::palette8::convert::execute_binary(input, dither.as_ref(), selection)
             }
             DynamicImage::ImagePaletteAlpha8(_) => {
-                super::super::super::palette_alpha8::ops::execute_binary(input, dither.as_ref(), selection)
+                color_ops::palette_alpha8::ops::execute_binary(input, dither.as_ref(), selection)
             }
             DynamicImage::ImageRgb8(_) => {
-                super::super::super::rgb8::convert::execute_binary(input, dither.as_ref(), selection)
+                color_ops::rgb8::convert::execute_binary(input, dither.as_ref(), selection)
             }
             DynamicImage::ImageRgba8(_) => {
-                super::super::super::rgba8::convert::execute_binary(input, dither.as_ref(), selection)
+                color_ops::rgba8::convert::execute_binary(input, dither.as_ref(), selection)
             }
             DynamicImage::ImageRgbPremultiplied8(_) => {
-                super::super::super::rgb_premultiplied8::ops::execute_binary(
+                color_ops::rgb_premultiplied8::ops::execute_binary(
                     input,
                     dither.as_ref(),
                     selection,
                 )
             }
             DynamicImage::ImageRgbx8(_) => {
-                super::super::super::rgbx8::convert::execute_binary(input, dither.as_ref(), selection)
+                color_ops::rgbx8::convert::execute_binary(input, dither.as_ref(), selection)
             }
             DynamicImage::ImageCmyk8(_) => {
-                super::super::super::cmyk8::ops::execute_binary(input, dither.as_ref(), selection)
+                color_ops::cmyk8::ops::execute_binary(input, dither.as_ref(), selection)
             }
             DynamicImage::ImageYCbCr8(_) => {
-                super::super::super::ycbcr8::ops::execute_binary(input, dither.as_ref(), selection)
+                color_ops::ycbcr8::ops::execute_binary(input, dither.as_ref(), selection)
             }
             DynamicImage::ImageLab8(_) => {
-                super::super::super::lab8::ops::execute_binary(input, dither.as_ref(), selection)
+                color_ops::lab8::ops::execute_binary(input, dither.as_ref(), selection)
             }
             DynamicImage::ImageHsv8(_) => {
-                super::super::super::hsv8::ops::execute_binary(input, dither.as_ref(), selection)
+                color_ops::hsv8::ops::execute_binary(input, dither.as_ref(), selection)
             }
             DynamicImage::ImageI32(_) => {
-                super::super::super::i32::ops::execute_binary(input, dither.as_ref(), selection)
+                color_ops::i32::ops::execute_binary(input, dither.as_ref(), selection)
             }
             DynamicImage::ImageF32(_) => {
-                super::super::super::f32::ops::execute_binary(input, dither.as_ref(), selection)
+                color_ops::f32::ops::execute_binary(input, dither.as_ref(), selection)
             }
             DynamicImage::ImageI16(_) => {
-                super::super::super::i16::ops::execute_binary(input, dither.as_ref(), selection)
+                color_ops::i16::ops::execute_binary(input, dither.as_ref(), selection)
             }
             DynamicImage::ImageI16L(_) => {
-                super::super::super::i16l::ops::execute_binary(input, dither.as_ref(), selection)
+                color_ops::i16l::ops::execute_binary(input, dither.as_ref(), selection)
             }
             DynamicImage::ImageI16B(_) => {
-                super::super::super::i16b::ops::execute_binary(input, dither.as_ref(), selection)
+                color_ops::i16b::ops::execute_binary(input, dither.as_ref(), selection)
             }
             DynamicImage::ImageI16N(_) => {
-                super::super::super::i16n::ops::execute_binary(input, dither.as_ref(), selection)
+                color_ops::i16n::ops::execute_binary(input, dither.as_ref(), selection)
             }
             DynamicImage::ImageLumaA16(_) => {
-                super::super::super::luma_a16::ops::execute_binary(input, dither.as_ref(), selection)
+                color_ops::luma_a16::ops::execute_binary(input, dither.as_ref(), selection)
             }
             DynamicImage::ImageRgb16(_) => {
-                super::super::super::rgb16::ops::execute_binary(input, dither.as_ref(), selection)
+                color_ops::rgb16::ops::execute_binary(input, dither.as_ref(), selection)
             }
             DynamicImage::ImageRgba16(_) => {
-                super::super::super::rgba16::ops::execute_binary(input, dither.as_ref(), selection)
+                color_ops::rgba16::ops::execute_binary(input, dither.as_ref(), selection)
             }
             DynamicImage::ImageRgb32F(_) => {
-                super::super::super::rgb32f::ops::execute_binary(input, dither.as_ref(), selection)
+                color_ops::rgb32f::ops::execute_binary(input, dither.as_ref(), selection)
             }
             DynamicImage::ImageRgba32F(_) => {
-                super::super::super::rgba32f::ops::execute_binary(input, dither.as_ref(), selection)
+                color_ops::rgba32f::ops::execute_binary(input, dither.as_ref(), selection)
             }
         }
     }

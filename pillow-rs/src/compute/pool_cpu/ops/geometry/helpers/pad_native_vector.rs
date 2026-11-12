@@ -92,7 +92,8 @@ pub(crate) fn pad_vertical_append<P, const VECTOR_FILL_ROW: bool>(
 where
     P: Pixel<Subpixel = u8>,
 {
-    let Some(rows) = super::pad_dimensions::full_width_vertical_rows(source.dimensions(), frame) else {
+    let Some(rows) = super::pad_dimensions::full_width_vertical_rows(source.dimensions(), frame)
+    else {
         return Ok(None);
     };
     let channels = usize::from(P::CHANNEL_COUNT);

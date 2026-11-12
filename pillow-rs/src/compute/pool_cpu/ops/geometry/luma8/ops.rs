@@ -75,17 +75,17 @@ pub(crate) fn try_vertical_append(
             )
             .map(|output| output.map(|output| (DynamicImage::ImageLuma8(output), 0, 0)))
         }
-        (
-            Input,
-            Architecture::Sse2 | Architecture::Neon | Architecture::WasmSimd128,
-        ) => super::super::helpers::pad_native_vector::pad_vertical_append::<_, false>(
-            image,
-            frame,
-            super::default::pad_impl::fill(frame.color),
-        )
-        .map(|output| {
-            output.map(|(output, blocks, tail)| (DynamicImage::ImageLuma8(output), blocks, tail))
-        }),
+        (Input, Architecture::Sse2 | Architecture::Neon | Architecture::WasmSimd128) => {
+            super::super::helpers::pad_native_vector::pad_vertical_append::<_, false>(
+                image,
+                frame,
+                super::default::pad_impl::fill(frame.color),
+            )
+            .map(|output| {
+                output
+                    .map(|(output, blocks, tail)| (DynamicImage::ImageLuma8(output), blocks, tail))
+            })
+        }
         _ => Ok(None),
     }
 }
@@ -99,10 +99,8 @@ pub(crate) fn try_direct_resize_into_canvas(
     let Some(resize) = resize else {
         return Ok(None);
     };
-    let architecture = super::super::helpers::pad_strategies::selected_architecture(
-        selection,
-        Mode::ImageLuma8,
-    )?;
+    let architecture =
+        super::super::helpers::pad_strategies::selected_architecture(selection, Mode::ImageLuma8)?;
     if resize.selection().implementation.architecture != architecture {
         return Ok(None);
     }

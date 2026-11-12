@@ -75,9 +75,7 @@ impl Image {
             );
         }
         let kmeans = kmeans.unwrap_or(0);
-        crate::compute::pool_cpu::ops::imageops::ops::validate_kmeans_count(i64::from(
-            kmeans,
-        ))?;
+        crate::compute::pool_cpu::ops::imageops::ops::validate_kmeans_count(i64::from(kmeans))?;
         self.quantize(
             colors as u32,
             kmeans as u32,

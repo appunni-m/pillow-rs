@@ -28,6 +28,9 @@ pub(crate) fn pad(
             "Pad mode dispatch received a different raster".into(),
         ));
     };
-    super::super::helpers::pad_strategies::require_default_selection(selection, Mode::ImageRgba32F)?;
+    super::super::helpers::pad_strategies::require_default_selection(
+        selection,
+        Mode::ImageRgba32F,
+    )?;
     pad_impl::pad(image, frame).map(DynamicImage::ImageRgba32F)
 }

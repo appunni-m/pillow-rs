@@ -132,7 +132,11 @@ fn wrap_prepared_palette(
     let (source_format, info, exif) = match metadata {
         crate::compute::pool_cpu::ops::color::ops::ConvertWrapperMetadata::PreserveSource
         | crate::compute::pool_cpu::ops::color::ops::ConvertWrapperMetadata::PreserveSourceLoaded => {
-            (image.source_format(), image.image_info(), image.exif_metadata())
+            (
+                image.source_format(),
+                image.image_info(),
+                image.exif_metadata(),
+            )
         }
         crate::compute::pool_cpu::ops::color::ops::ConvertWrapperMetadata::ExifOnly => {
             (None, None, image.exif_metadata())

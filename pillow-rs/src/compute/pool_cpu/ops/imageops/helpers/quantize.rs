@@ -5,6 +5,7 @@
 use std::sync::Arc;
 
 use crate::compute::ExecutionContext;
+use crate::compute::registry::support::PaletteInput;
 use crate::compute::registry::support::{
     OperationId, PaletteKnowledge, RequestFacts, StrategyInputs, StrategySelection,
     SupportAssessment,
@@ -12,12 +13,9 @@ use crate::compute::registry::support::{
 use crate::error::PilError;
 use crate::image::{Image, PalettedData, PipelineOps};
 use crate::raster::{DynamicImage, Mode};
-use crate::compute::registry::support::PaletteInput;
 
 use super::super as imageops;
-use super::super::ops::{
-    quantize_mode_strategy, QuantizeSource, QUANTIZE_INPUT, QUANTIZE_SUPPORT,
-};
+use super::super::ops::{QUANTIZE_INPUT, QUANTIZE_SUPPORT, QuantizeSource, quantize_mode_strategy};
 
 /// Returns the mode strategy's default quantization method.
 // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
@@ -269,10 +267,7 @@ fn select_quantize_request(
             palette_mode,
         },
     };
-    match QUANTIZE_SUPPORT
-        .for_mode(mode)
-        .assess(context, input)?
-    {
+    match QUANTIZE_SUPPORT.for_mode(mode).assess(context, input)? {
         SupportAssessment::Ready(selection) => Ok(selection),
         SupportAssessment::Rejected { reason, kind, .. } => Err(kind.into_error(reason)),
         SupportAssessment::Deferred { guard, .. } => Err(PilError::InternalError(format!(
@@ -441,7 +436,12 @@ fn quantize_native_source(
         }
         DynamicImage::ImagePaletteAlpha8(samples) => {
             imageops::palette_alpha8::ops::execute_quantize_with_palette(
-                samples.as_raw(), palette, width, height, colors, selection,
+                samples.as_raw(),
+                palette,
+                width,
+                height,
+                colors,
+                selection,
             )?
         }
         DynamicImage::ImageCmyk8(samples) => {

@@ -10,9 +10,9 @@ pub(crate) fn execute(source: &Samples, target: Mode) -> Result<DynamicImage, Pi
         return crate::compute::pool_cpu::ops::color::helpers::convert::lab_target::execute(
             source.width(),
             source.height(),
-            source
-                .pixels()
-                .map(|pixel| [crate::compute::pool_cpu::ops::color::helpers::convert::luma16::clip(pixel[0]); 3]),
+            source.pixels().map(|pixel| {
+                [crate::compute::pool_cpu::ops::color::helpers::convert::luma16::clip(pixel[0]); 3]
+            }),
         );
     }
     crate::compute::pool_cpu::ops::color::helpers::convert::luma16::execute_mode(source, target)

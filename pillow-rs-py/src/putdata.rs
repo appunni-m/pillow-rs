@@ -282,21 +282,14 @@ fn putdata_native_component_tuples(
         let tuple = item.cast_exact::<PyTuple>().ok()?;
         let packed_native_tuple = matches!(kind, PutDataValueKind::NativeU16Components { .. })
             && tuple.len() == 1
-            && tuple
-                .get_item(0)
-                .ok()?
-                .cast_exact::<PyInt>()
-                .is_ok();
+            && tuple.get_item(0).ok()?.cast_exact::<PyInt>().is_ok();
         if !packed_native_tuple && !kind.accepts_component_arity(tuple.len()) {
             return None;
         }
         let exact_components = tuple.iter().all(|component| match kind {
-            PutDataValueKind::NativeU16Components { .. } => {
-                component.cast_exact::<PyInt>().is_ok()
-            }
+            PutDataValueKind::NativeU16Components { .. } => component.cast_exact::<PyInt>().is_ok(),
             PutDataValueKind::FloatComponents { .. } => {
-                component.cast_exact::<PyInt>().is_ok()
-                    || component.cast_exact::<PyFloat>().is_ok()
+                component.cast_exact::<PyInt>().is_ok() || component.cast_exact::<PyFloat>().is_ok()
             }
             PutDataValueKind::Numeric | PutDataValueKind::Components { .. } => false,
         });

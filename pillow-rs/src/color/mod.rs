@@ -48,5 +48,5 @@ pub(crate) use conversion::{
     rgb_bytes_to_ycbcr, rgb_pixels_to_hsv, rgb_pixels_to_ycbcr, ycbcr_buffer_to_rgb,
     ycbcr_pixel_to_rgb,
 };
-pub(crate) use photo_ycc::photo_ycc_pixel_to_rgb;
 pub(crate) use grayscale::cmyk_muldiv255_byte as grayscale_cmyk_muldiv255_byte;
+pub(crate) use photo_ycc::photo_ycc_pixel_to_rgb;

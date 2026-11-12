@@ -25,17 +25,14 @@ impl Image {
     /// Preserve `info`, EXIF, and a palette only for indexed P/PA outputs;
     /// operation-created images do not retain the encoded source format.
     // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
-    pub(crate) fn from_mode_changed_dynamic(
-        &self,
-        image: DynamicImage,
-    ) -> Result<Image, PilError> {
+    pub(crate) fn from_mode_changed_dynamic(&self, image: DynamicImage) -> Result<Image, PilError> {
         let mode = image.mode();
         let info = self.image_info();
         let exif = self.exif_metadata();
         let palette = matches!(mode, Mode::ImagePalette8 | Mode::ImagePaletteAlpha8)
             .then(|| self.palette().unwrap_or_default());
-        let palette_alpha = (mode == Mode::ImagePaletteAlpha8)
-            .then(|| self.palette_alpha().unwrap_or_default());
+        let palette_alpha =
+            (mode == Mode::ImagePaletteAlpha8).then(|| self.palette_alpha().unwrap_or_default());
         if mode == Mode::ImagePalette8 {
             let DynamicImage::ImagePalette8(_) = &image else {
                 return Err(PilError::InternalError(

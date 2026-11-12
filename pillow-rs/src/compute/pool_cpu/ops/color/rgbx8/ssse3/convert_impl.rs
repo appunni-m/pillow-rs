@@ -38,7 +38,5 @@ pub(crate) fn execute_luma(source: &RgbaImage) -> Result<DynamicImage, PilError>
 )]
 pub(crate) unsafe fn execute_rgb(source: &RgbaImage) -> Result<DynamicImage, PilError> {
     // SAFETY: the strategy is selected only when SSSE3 is available.
-    unsafe {
-        crate::compute::pool_cpu::ops::color::rgba8::ssse3::convert_impl::execute(source)
-    }
+    unsafe { crate::compute::pool_cpu::ops::color::rgba8::ssse3::convert_impl::execute(source) }
 }

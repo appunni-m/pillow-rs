@@ -41,9 +41,8 @@
 use super::{BitmapMask, TextComposeInput, TextComposeResult};
 use crate::compute::registry::support::{
     DrawRequestKind, DrawTextMaskKind, InputContract, ModeSupport, OperationId, OperationInputs,
-    OperationModeRoute, OperationRouteGuard, OperationRoutePath, OperationSupport,
-    OutputModeRule, PaletteKnowledge, RequestFacts, StrategyInputs, StrategySelection,
-    SupportAssessment,
+    OperationModeRoute, OperationRouteGuard, OperationRoutePath, OperationSupport, OutputModeRule,
+    PaletteKnowledge, RequestFacts, StrategyInputs, StrategySelection, SupportAssessment,
 };
 use crate::compute::{Architecture, Backend, ExecutionContext};
 use crate::draw::{FloodFillAccess, FloodFillError, PreparedFloodFill};

@@ -16,8 +16,8 @@ use crate::raster::Mode;
 
 mod point;
 pub use point::{
-    EvalInputKind, eval, eval_callable, eval_float, eval_point_callable, eval_point_transform,
-    eval_point_mode, eval_point_mode_replicated_for_image, eval_replicated,
+    EvalInputKind, eval, eval_callable, eval_float, eval_point_callable, eval_point_mode,
+    eval_point_mode_replicated_for_image, eval_point_transform, eval_replicated,
     eval_replicated_for_image, eval_validated, make_float_lut, make_lut, validate_eval_input,
 };
 

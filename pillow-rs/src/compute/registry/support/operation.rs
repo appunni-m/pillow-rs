@@ -431,12 +431,8 @@ fn imageops_support(id: OperationId) -> &'static OperationSupport {
         OperationId::ImageOpsInvert => &cpu_ops::imageops::ops::IMAGEOPS_INVERT_SUPPORT,
         OperationId::ImageOpsPosterize => &cpu_ops::imageops::ops::IMAGEOPS_POSTERIZE_SUPPORT,
         OperationId::ImageOpsSolarize => &cpu_ops::imageops::ops::IMAGEOPS_SOLARIZE_SUPPORT,
-        OperationId::ImageOpsColorize => {
-            &cpu_ops::imageops::ops::IMAGEOPS_COLORIZE_SUPPORT
-        }
-        OperationId::ImageOpsColorizeLut => {
-            &cpu_ops::imageops::ops::IMAGEOPS_COLORIZE_LUT_SUPPORT
-        }
+        OperationId::ImageOpsColorize => &cpu_ops::imageops::ops::IMAGEOPS_COLORIZE_SUPPORT,
+        OperationId::ImageOpsColorizeLut => &cpu_ops::imageops::ops::IMAGEOPS_COLORIZE_LUT_SUPPORT,
         OperationId::Posterize => &cpu_ops::imageops::ops::POSTERIZE_SUPPORT,
         OperationId::Solarize => &cpu_ops::imageops::ops::SOLARIZE_SUPPORT,
         OperationId::Colorize => &cpu_ops::imageops::ops::COLORIZE_SUPPORT,

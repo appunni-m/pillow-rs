@@ -14,13 +14,16 @@ pub(crate) fn execute(
     if target == Mode::ImageLab8 {
         // Pillow promotes P to RGBA before its LAB transform; retain that
         // palette alpha in LAB's omitted physical byte.
-        let mut output = crate::compute::pool_cpu::ops::color::helpers::convert::lab_target::execute(
-            source.width(),
-            source.height(),
-            source
-                .pixels()
-                .map(|index| crate::compute::pool_cpu::ops::color::helpers::convert::palette::color(index[0], palette)),
-        )?;
+        let mut output =
+            crate::compute::pool_cpu::ops::color::helpers::convert::lab_target::execute(
+                source.width(),
+                source.height(),
+                source.pixels().map(|index| {
+                    crate::compute::pool_cpu::ops::color::helpers::convert::palette::color(
+                        index[0], palette,
+                    )
+                }),
+            )?;
         crate::compute::pool_cpu::ops::color::helpers::convert::physical_lanes::preserve_target_lane_values(
             Mode::ImageLab8,
             source.width(),
@@ -58,7 +61,9 @@ pub(crate) fn execute_palette_target(
     }
     let mut output = GrayAlphaImage::new(source.width(), source.height());
     for (destination, index) in output.pixels_mut().zip(source.pixels()) {
-        let alpha = crate::compute::pool_cpu::ops::color::helpers::convert::palette::alpha(index[0], palette);
+        let alpha = crate::compute::pool_cpu::ops::color::helpers::convert::palette::alpha(
+            index[0], palette,
+        );
         *destination = LumaA([index[0], alpha]);
     }
     Ok(super::super::super::ops::PreparedConvertOutput {
@@ -72,7 +77,10 @@ pub(crate) fn execute_palette_target(
 fn luma(source: &GrayImage, palette: PaletteInput<'_>) -> GrayImage {
     let mut output = GrayImage::new(source.width(), source.height());
     for (destination, index) in output.pixels_mut().zip(source.pixels()) {
-        let [red, green, blue] = crate::compute::pool_cpu::ops::color::helpers::convert::palette::color(index[0], palette);
+        let [red, green, blue] =
+            crate::compute::pool_cpu::ops::color::helpers::convert::palette::color(
+                index[0], palette,
+            );
         *destination = Luma([crate::color::rgb_to_luma_u8(red, green, blue)]);
     }
     output
@@ -81,9 +89,14 @@ fn luma(source: &GrayImage, palette: PaletteInput<'_>) -> GrayImage {
 fn luma_alpha(source: &GrayImage, palette: PaletteInput<'_>) -> GrayAlphaImage {
     let mut output = GrayAlphaImage::new(source.width(), source.height());
     for (destination, index) in output.pixels_mut().zip(source.pixels()) {
-        let [red, green, blue] = crate::compute::pool_cpu::ops::color::helpers::convert::palette::color(index[0], palette);
+        let [red, green, blue] =
+            crate::compute::pool_cpu::ops::color::helpers::convert::palette::color(
+                index[0], palette,
+            );
         let luma = crate::color::rgb_to_luma_u8(red, green, blue);
-        let alpha = crate::compute::pool_cpu::ops::color::helpers::convert::palette::alpha(index[0], palette);
+        let alpha = crate::compute::pool_cpu::ops::color::helpers::convert::palette::alpha(
+            index[0], palette,
+        );
         *destination = LumaA([luma, alpha]);
     }
     output
@@ -92,9 +105,11 @@ fn luma_alpha(source: &GrayImage, palette: PaletteInput<'_>) -> GrayAlphaImage {
 fn rgb(source: &GrayImage, palette: PaletteInput<'_>) -> RgbImage {
     let mut output = RgbImage::new(source.width(), source.height());
     for (destination, index) in output.pixels_mut().zip(source.pixels()) {
-        *destination = Rgb(crate::compute::pool_cpu::ops::color::helpers::convert::palette::color(
-            index[0], palette,
-        ));
+        *destination = Rgb(
+            crate::compute::pool_cpu::ops::color::helpers::convert::palette::color(
+                index[0], palette,
+            ),
+        );
     }
     output
 }
@@ -102,8 +117,12 @@ fn rgb(source: &GrayImage, palette: PaletteInput<'_>) -> RgbImage {
 fn rgba(source: &GrayImage, palette: PaletteInput<'_>) -> RgbaImage {
     let mut output = RgbaImage::new(source.width(), source.height());
     for (destination, index) in output.pixels_mut().zip(source.pixels()) {
-        let color = crate::compute::pool_cpu::ops::color::helpers::convert::palette::color(index[0], palette);
-        let alpha = crate::compute::pool_cpu::ops::color::helpers::convert::palette::alpha(index[0], palette);
+        let color = crate::compute::pool_cpu::ops::color::helpers::convert::palette::color(
+            index[0], palette,
+        );
+        let alpha = crate::compute::pool_cpu::ops::color::helpers::convert::palette::alpha(
+            index[0], palette,
+        );
         *destination = Rgba([color[0], color[1], color[2], alpha]);
     }
     output
@@ -112,8 +131,12 @@ fn rgba(source: &GrayImage, palette: PaletteInput<'_>) -> RgbaImage {
 fn rgbx(source: &GrayImage, palette: PaletteInput<'_>) -> RgbaImage {
     let mut output = RgbaImage::new(source.width(), source.height());
     for (destination, index) in output.pixels_mut().zip(source.pixels()) {
-        let color = crate::compute::pool_cpu::ops::color::helpers::convert::palette::color(index[0], palette);
-        let padding = crate::compute::pool_cpu::ops::color::helpers::convert::palette::alpha(index[0], palette);
+        let color = crate::compute::pool_cpu::ops::color::helpers::convert::palette::color(
+            index[0], palette,
+        );
+        let padding = crate::compute::pool_cpu::ops::color::helpers::convert::palette::alpha(
+            index[0], palette,
+        );
         *destination = Rgba([color[0], color[1], color[2], padding]);
     }
     output
@@ -122,7 +145,10 @@ fn rgbx(source: &GrayImage, palette: PaletteInput<'_>) -> RgbaImage {
 fn cmyk(source: &GrayImage, palette: PaletteInput<'_>) -> RgbaImage {
     let mut output = RgbaImage::new(source.width(), source.height());
     for (destination, index) in output.pixels_mut().zip(source.pixels()) {
-        let [red, green, blue] = crate::compute::pool_cpu::ops::color::helpers::convert::palette::color(index[0], palette);
+        let [red, green, blue] =
+            crate::compute::pool_cpu::ops::color::helpers::convert::palette::color(
+                index[0], palette,
+            );
         *destination = Rgba([u8::MAX - red, u8::MAX - green, u8::MAX - blue, 0]);
     }
     output
@@ -132,9 +158,11 @@ fn ycbcr(source: &GrayImage, palette: PaletteInput<'_>) -> RgbImage {
     crate::color::rgb_pixels_to_ycbcr(
         source.width(),
         source.height(),
-        source
-            .pixels()
-            .map(|index| crate::compute::pool_cpu::ops::color::helpers::convert::palette::color(index[0], palette)),
+        source.pixels().map(|index| {
+            crate::compute::pool_cpu::ops::color::helpers::convert::palette::color(
+                index[0], palette,
+            )
+        }),
     )
 }
 
@@ -142,16 +170,21 @@ fn hsv(source: &GrayImage, palette: PaletteInput<'_>) -> RgbImage {
     crate::color::rgb_pixels_to_hsv(
         source.width(),
         source.height(),
-        source
-            .pixels()
-            .map(|index| crate::compute::pool_cpu::ops::color::helpers::convert::palette::color(index[0], palette)),
+        source.pixels().map(|index| {
+            crate::compute::pool_cpu::ops::color::helpers::convert::palette::color(
+                index[0], palette,
+            )
+        }),
     )
 }
 
 fn to_i32(source: &GrayImage, palette: PaletteInput<'_>) -> RgbaImage {
     let mut output = RgbaImage::new(source.width(), source.height());
     for (destination, index) in output.pixels_mut().zip(source.pixels()) {
-        let [red, green, blue] = crate::compute::pool_cpu::ops::color::helpers::convert::palette::color(index[0], palette);
+        let [red, green, blue] =
+            crate::compute::pool_cpu::ops::color::helpers::convert::palette::color(
+                index[0], palette,
+            );
         *destination = Rgba(
             crate::compute::pool_cpu::ops::color::helpers::convert::pixel::scalar_i32_rgb(
                 red, green, blue,
@@ -164,7 +197,10 @@ fn to_i32(source: &GrayImage, palette: PaletteInput<'_>) -> RgbaImage {
 fn to_f32(source: &GrayImage, palette: PaletteInput<'_>) -> RgbaImage {
     let mut output = RgbaImage::new(source.width(), source.height());
     for (destination, index) in output.pixels_mut().zip(source.pixels()) {
-        let [red, green, blue] = crate::compute::pool_cpu::ops::color::helpers::convert::palette::color(index[0], palette);
+        let [red, green, blue] =
+            crate::compute::pool_cpu::ops::color::helpers::convert::palette::color(
+                index[0], palette,
+            );
         *destination = Rgba(
             crate::compute::pool_cpu::ops::color::helpers::convert::pixel::scalar_f32_rgb(
                 red, green, blue,

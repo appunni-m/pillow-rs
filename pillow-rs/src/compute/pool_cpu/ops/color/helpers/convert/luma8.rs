@@ -52,7 +52,9 @@ where
                 image: DynamicImage::ImagePalette8(indices),
                 palette: Some(identity_palette),
                 palette_alpha: None,
-                wrapper_metadata: Some(super::super::super::ops::ConvertWrapperMetadata::PreserveSource),
+                wrapper_metadata: Some(
+                    super::super::super::ops::ConvertWrapperMetadata::PreserveSource,
+                ),
             })
         }
         Mode::ImagePaletteAlpha8 => {

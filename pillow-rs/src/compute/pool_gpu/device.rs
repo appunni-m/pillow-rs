@@ -38,10 +38,7 @@ fn requested_adapter_index() -> Result<Option<usize>, PilError> {
     })
 }
 
-fn adapter_identity(
-    selection_index: Option<usize>,
-    info: wgpu::AdapterInfo,
-) -> GpuAdapterInfo {
+fn adapter_identity(selection_index: Option<usize>, info: wgpu::AdapterInfo) -> GpuAdapterInfo {
     GpuAdapterInfo {
         selection_index,
         name: info.name,
@@ -99,7 +96,71 @@ fn format_adapter_inventory(adapters: &[wgpu::Adapter]) -> String {
     format!("enumerated={} adapters={infos:?}", adapters.len())
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+fn select_adapter(
+    instance: &wgpu::Instance,
+    instance_descriptor: &wgpu::InstanceDescriptor,
+    requested_adapter_index: Option<usize>,
+) -> Result<wgpu::Adapter, PilError> {
+    let request_options = wgpu::RequestAdapterOptions {
+        power_preference: wgpu::PowerPreference::HighPerformance,
+        force_fallback_adapter: false,
+        compatible_surface: None,
+    };
+
+    #[cfg(not(target_arch = "wasm32"))]
+    let enumerated_adapters = instance.enumerate_adapters(instance_descriptor.backends);
+    #[cfg(not(target_arch = "wasm32"))]
+    let adapter_inventory = format_adapter_inventory(&enumerated_adapters);
+
+    // Prefer wgpu's normal selection because it applies power preference and
+    // compatibility rules. Some embedded/native-library contexts have been
+    // observed to return None even though direct enumeration succeeds.
+    let adapter = match requested_adapter_index {
+        Some(index) => {
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                enumerated_adapters.into_iter().nth(index)
+            }
+            #[cfg(target_arch = "wasm32")]
+            {
+                let _ = index;
+                None
+            }
+        }
+        None => pollster::block_on(instance.request_adapter(&request_options)).or_else(|| {
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                enumerated_adapters.into_iter().next()
+            }
+            #[cfg(target_arch = "wasm32")]
+            {
+                None
+            }
+        }),
+    };
+    adapter.ok_or_else(|| {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            PilError::ValueError(format!(
+                "GPU adapter not available: requested={:?}, enabled={:?}, {}",
+                instance_descriptor.backends,
+                wgpu::Instance::enabled_backend_features(),
+                adapter_inventory,
+            ))
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            PilError::ValueError(format!(
+                "GPU adapter not available: requested={:?}",
+                instance_descriptor.backends,
+            ))
+        }
+    })
+}
+
 impl GpuInner {
+    // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
     pub(super) fn new() -> Result<Self, PilError> {
         // `Instance::default()` does not apply WGPU_BACKEND. Use the explicit
         // descriptor so backend selection is deterministic and debuggable in
@@ -107,68 +168,12 @@ impl GpuInner {
         let instance_descriptor = wgpu::InstanceDescriptor::from_env_or_default();
         let instance = wgpu::Instance::new(&instance_descriptor);
         let requested_adapter_index = requested_adapter_index()?;
-        let request_options = wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            force_fallback_adapter: false,
-            compatible_surface: None,
-        };
-
-        #[cfg(not(target_arch = "wasm32"))]
-        let enumerated_adapters = instance.enumerate_adapters(instance_descriptor.backends);
-        #[cfg(not(target_arch = "wasm32"))]
-        let adapter_inventory = format_adapter_inventory(&enumerated_adapters);
-
-        // Prefer wgpu's normal selection because it applies power preference
-        // and compatibility rules. Some embedded/native-library contexts have
-        // been observed to return None here even though direct enumeration
-        // succeeds; use that already-enumerated adapter instead of rejecting
-        // a usable device in that case.
-        let adapter = match requested_adapter_index {
-            Some(index) => {
-                #[cfg(not(target_arch = "wasm32"))]
-                {
-                    enumerated_adapters.into_iter().nth(index)
-                }
-                #[cfg(target_arch = "wasm32")]
-                {
-                    let _ = index;
-                    None
-                }
-            }
-            None => pollster::block_on(instance.request_adapter(&request_options)).or_else(|| {
-                #[cfg(not(target_arch = "wasm32"))]
-                {
-                    enumerated_adapters.into_iter().next()
-                }
-                #[cfg(target_arch = "wasm32")]
-                {
-                    None
-                }
-            }),
-        };
-        let adapter = adapter.ok_or_else(|| {
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                PilError::ValueError(format!(
-                    "GPU adapter not available: requested={:?}, enabled={:?}, {}",
-                    instance_descriptor.backends,
-                    wgpu::Instance::enabled_backend_features(),
-                    adapter_inventory,
-                ))
-            }
-            #[cfg(target_arch = "wasm32")]
-            {
-                PilError::ValueError(format!(
-                    "GPU adapter not available: requested={:?}",
-                    instance_descriptor.backends,
-                ))
-            }
-        })?;
+        let adapter = select_adapter(&instance, &instance_descriptor, requested_adapter_index)?;
         let selected_info = adapter.get_info();
         gpu_log!("[GPU] adapter selected: {:?}", selected_info);
         let direct_primary_readback = direct_primary_readback_supported(
-            selected_info.backend.clone(),
-            selected_info.device_type.clone(),
+            selected_info.backend,
+            selected_info.device_type,
             adapter.features(),
         );
         let adapter_info = adapter_identity(requested_adapter_index, selected_info);

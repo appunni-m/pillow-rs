@@ -11,8 +11,8 @@ use crate::format::parse_format_str;
 use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::{DynamicImage, Mode};
 
-mod empty;
 mod dynamic;
+mod empty;
 mod frombytes;
 mod internal_samples;
 mod palette_policy;

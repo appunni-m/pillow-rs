@@ -139,10 +139,10 @@ impl Image {
 
         let mut context = self.putdata_execution_context();
         context.operation_receipts.capture();
-        let first = crate::compute::pool_cpu::ops::put::helpers::put_data_value_at::native_value_at_input(
-            mode,
-            &values[0],
-        )?;
+        let first =
+            crate::compute::pool_cpu::ops::put::helpers::put_data_value_at::native_value_at_input(
+                mode, &values[0],
+            )?;
         let requested_backend = context.requested_backend;
         let selection = self.putdata_value_at_selection(mode, &mut context)?;
         self.load()?;
@@ -151,13 +151,14 @@ impl Image {
         let mut completed = 0;
         let result = match self {
             Image::Loaded(data) => {
-                let result = crate::compute::pool_cpu::ops::put::ops::execute_core_only_put_data_values(
-                    Arc::make_mut(&mut data.image),
-                    values,
-                    first,
-                    selection,
-                    &mut completed,
-                );
+                let result =
+                    crate::compute::pool_cpu::ops::put::ops::execute_core_only_put_data_values(
+                        Arc::make_mut(&mut data.image),
+                        values,
+                        first,
+                        selection,
+                        &mut completed,
+                    );
                 if completed != 0 {
                     data.known_zero_fill = false;
                 }
@@ -530,8 +531,7 @@ impl Image {
             )
         } else if uses_native_value_at_putdata(image_mode) {
             crate::compute::pool_cpu::ops::put::helpers::put_data_value_at::native_value_at_input(
-                image_mode,
-                value,
+                image_mode, value,
             )?
         } else {
             putdata_byte_width(image_mode).ok_or_else(|| unsupported_putdata_mode(image_mode))?;

@@ -67,26 +67,25 @@ pub(crate) fn try_vertical_append(
         ));
     };
     match (content_source, architecture) {
-        (
-            Input,
-            Architecture::Sse2 | Architecture::Neon | Architecture::WasmSimd128,
-        ) => super::super::helpers::pad_native_vector::pad_vertical_append::<_, false>(
-            image,
-            frame,
-            super::default::pad_impl::fill(frame.color),
-        )
-        .map(|output| {
-            output.map(|(output, blocks, tail)| (DynamicImage::ImageRgbx8(output), blocks, tail))
-        }),
-        (
-            super::super::ops::PadContentSource::Resized,
-            Architecture::Default,
-        ) => super::super::helpers::pad_samples::pad_vertical_append(
-            image,
-            frame,
-            super::default::pad_impl::fill(frame.color),
-        )
-        .map(|output| output.map(|output| (DynamicImage::ImageRgbx8(output), 0, 0))),
+        (Input, Architecture::Sse2 | Architecture::Neon | Architecture::WasmSimd128) => {
+            super::super::helpers::pad_native_vector::pad_vertical_append::<_, false>(
+                image,
+                frame,
+                super::default::pad_impl::fill(frame.color),
+            )
+            .map(|output| {
+                output
+                    .map(|(output, blocks, tail)| (DynamicImage::ImageRgbx8(output), blocks, tail))
+            })
+        }
+        (super::super::ops::PadContentSource::Resized, Architecture::Default) => {
+            super::super::helpers::pad_samples::pad_vertical_append(
+                image,
+                frame,
+                super::default::pad_impl::fill(frame.color),
+            )
+            .map(|output| output.map(|output| (DynamicImage::ImageRgbx8(output), 0, 0)))
+        }
         _ => Ok(None),
     }
 }
@@ -100,10 +99,8 @@ pub(crate) fn try_direct_resize_into_canvas(
     let Some(resize) = resize else {
         return Ok(None);
     };
-    let architecture = super::super::helpers::pad_strategies::selected_architecture(
-        selection,
-        Mode::ImageRgbx8,
-    )?;
+    let architecture =
+        super::super::helpers::pad_strategies::selected_architecture(selection, Mode::ImageRgbx8)?;
     if resize.selection().implementation.architecture != architecture {
         return Ok(None);
     }

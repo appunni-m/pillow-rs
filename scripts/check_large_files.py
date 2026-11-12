@@ -36,8 +36,8 @@ APPROVED_FILES: dict[str, tuple[int, str]] = {
         "Generated mode/size target-output evidence index; keep its expanded matrix capped.",
     ),
     "pillow-rs/tests/fixtures/inputs/benchmark/pil-image-image.json": (
-        45_000_000,
-        "Fixed mode/size Image benchmark matrix inputs required for CPU and architecture replay.",
+        52_000_000,
+        "Expanded fixed mode/size Image benchmark matrix inputs for CPU and architecture replay.",
     ),
     "pillow-rs/tests/fixtures/inputs/benchmark/pil-image.json": (
         9_000_000,
@@ -62,6 +62,10 @@ APPROVED_FILES: dict[str, tuple[int, str]] = {
     "pillow-rs/tests/fixtures/inputs/coverage/pil-imagechops.json": (
         1_200_000,
         "Generated mode/size coverage requirements for ImageChops; keep the matrix capped.",
+    ),
+    "pillow-rs/tests/fixtures/inputs/coverage/pil-image-image.json": (
+        1_500_000,
+        "Generated Image mode/size coverage requirements for the expanded matrix; keep its growth capped.",
     ),
     "pillow-rs/tests/fixtures/manifest.yaml": (
         1_500_000,

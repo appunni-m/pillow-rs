@@ -47,12 +47,13 @@ pub(crate) fn native_value_at_input(
     value: &crate::image::PutDataValue,
 ) -> Result<ValueAtInput, PilError> {
     match mode {
-        Mode::ImageLumaA16 => native_u16_components::<2>(value, 2, u16::MAX)
-            .map(ValueAtInput::LumaA16),
-        Mode::ImageRgb16 => native_u16_components::<3>(value, 3, u16::MAX)
-            .map(ValueAtInput::Rgb16),
-        Mode::ImageRgba16 => native_u16_components::<4>(value, 4, u16::MAX)
-            .map(ValueAtInput::Rgba16),
+        Mode::ImageLumaA16 => {
+            native_u16_components::<2>(value, 2, u16::MAX).map(ValueAtInput::LumaA16)
+        }
+        Mode::ImageRgb16 => native_u16_components::<3>(value, 3, u16::MAX).map(ValueAtInput::Rgb16),
+        Mode::ImageRgba16 => {
+            native_u16_components::<4>(value, 4, u16::MAX).map(ValueAtInput::Rgba16)
+        }
         Mode::ImageRgb32F => native_f32_components::<3>(value, 3).map(ValueAtInput::Rgb32F),
         Mode::ImageRgba32F => native_f32_components::<4>(value, 4).map(ValueAtInput::Rgba32F),
         _ => Err(PilError::InternalError(
@@ -243,9 +244,9 @@ where
     let mut destinations = samples.chunks_exact_mut(CHANNELS);
     for (index, value) in values.iter().enumerate() {
         let pixel = if index == 0 { first } else { normalize(value)? };
-        let destination = destinations.next().ok_or_else(|| {
-            PilError::InternalError("putdata native offset out of bounds".into())
-        })?;
+        let destination = destinations
+            .next()
+            .ok_or_else(|| PilError::InternalError("putdata native offset out of bounds".into()))?;
         destination.copy_from_slice(&pixel);
         *completed += 1;
     }

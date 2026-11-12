@@ -23,7 +23,13 @@ pub(super) fn transform_row(
             source_lanes,
             source_lanes_per_pixel,
             output_lanes_per_pixel,
-        } => channel_order(source_lanes, source_lanes_per_pixel, output_lanes_per_pixel, input, output),
+        } => channel_order(
+            source_lanes,
+            source_lanes_per_pixel,
+            output_lanes_per_pixel,
+            input,
+            output,
+        ),
         RawDecoderTransform::ChannelOrderWithPadding {
             source_lanes,
             source_bytes_per_pixel,
@@ -39,15 +45,12 @@ pub(super) fn transform_row(
     }
 }
 
-fn interleaved_row(
-    transform: RawDecoderTransform,
-    width: usize,
-    input: &[u8],
-    output: &mut [u8],
-) {
+fn interleaved_row(transform: RawDecoderTransform, width: usize, input: &[u8], output: &mut [u8]) {
     match transform {
         RawDecoderTransform::InterleavedTwoBandLine => interleave_two_bands(width, input, output),
-        RawDecoderTransform::InterleavedThreeBandLine => interleave_three_bands(width, input, output),
+        RawDecoderTransform::InterleavedThreeBandLine => {
+            interleave_three_bands(width, input, output)
+        }
         RawDecoderTransform::InterleavedThreeBandLineWithPadding { padding } => {
             interleave_three_bands_with_padding(width, padding, input, output);
         }
@@ -110,7 +113,11 @@ fn storage_transform_row(
 ) {
     match transform {
         RawDecoderTransform::PackBilevelBytes => pack_bilevel_bytes(width, input, output),
-        RawDecoderTransform::PackedLuma { bits, reverse, invert } => {
+        RawDecoderTransform::PackedLuma {
+            bits,
+            reverse,
+            invert,
+        } => {
             packed_luma(width, bits, reverse, invert, input, output);
         }
         RawDecoderTransform::PackedPalette { bits, bit_planes } => {
@@ -227,12 +234,7 @@ fn interleave_three_bands(width: usize, input: &[u8], output: &mut [u8]) {
     }
 }
 
-fn interleave_three_bands_with_padding(
-    width: usize,
-    padding: u8,
-    input: &[u8],
-    output: &mut [u8],
-) {
+fn interleave_three_bands_with_padding(width: usize, padding: u8, input: &[u8], output: &mut [u8]) {
     for x in 0..width {
         let destination = x * 4;
         output[destination] = input[x];
@@ -292,9 +294,8 @@ fn unpremultiply_rgba(
         .chunks_exact(source_bytes_per_pixel)
         .zip(output.chunks_exact_mut(4))
     {
-        let component = |lane: usize| {
-            source[usize::from(source_lanes[lane]) * sample_bytes + high_byte_offset]
-        };
+        let component =
+            |lane: usize| source[usize::from(source_lanes[lane]) * sample_bytes + high_byte_offset];
         let alpha = component(3);
         destination[3] = alpha;
         if alpha == 0 {
@@ -348,9 +349,8 @@ fn ycca_to_rgba(input: &[u8], output: &mut [u8]) {
         let ycc = if alpha == 0 {
             [0; 3]
         } else {
-            [source[0], source[1], source[2]].map(|channel| {
-                (u16::from(channel) * 255 / u16::from(alpha)) as u8
-            })
+            [source[0], source[1], source[2]]
+                .map(|channel| (u16::from(channel) * 255 / u16::from(alpha)) as u8)
         };
         let rgb = crate::color::photo_ycc_pixel_to_rgb(ycc[0], ycc[1], ycc[2]);
         destination[..3].copy_from_slice(&rgb);
@@ -371,7 +371,14 @@ fn pack_bilevel_bytes(width: usize, input: &[u8], output: &mut [u8]) {
     }
 }
 
-fn packed_luma(width: usize, bits: u8, reverse: bool, invert: bool, input: &[u8], output: &mut [u8]) {
+fn packed_luma(
+    width: usize,
+    bits: u8,
+    reverse: bool,
+    invert: bool,
+    input: &[u8],
+    output: &mut [u8],
+) {
     let mask = (1u8 << bits) - 1;
     let scale = 255 / usize::from(mask);
     for x in 0..width {
@@ -382,7 +389,11 @@ fn packed_luma(width: usize, bits: u8, reverse: bool, invert: bool, input: &[u8]
         };
         let shift = 8 - bits - ((x * usize::from(bits)) % 8) as u8;
         let value = usize::from((source >> shift) & mask) * scale;
-        output[x] = if invert { 255 - value as u8 } else { value as u8 };
+        output[x] = if invert {
+            255 - value as u8
+        } else {
+            value as u8
+        };
     }
 }
 
@@ -446,7 +457,11 @@ fn packed_color_16(
     input: &[u8],
     output: &mut [u8],
 ) {
-    for (x, destination) in output.chunks_exact_mut(output_lanes).take(width).enumerate() {
+    for (x, destination) in output
+        .chunks_exact_mut(output_lanes)
+        .take(width)
+        .enumerate()
+    {
         let start = x * 2;
         let pixel = u16::from_le_bytes([input[start], input[start + 1]]);
         let (red, green, blue, alpha) = match format {
@@ -526,7 +541,11 @@ fn unpack_12_to_16(width: usize, input: &[u8], output: &mut [u8]) {
     let mut x = 0;
     let mut input_offset = 0;
     while x + 1 < width {
-        write_native_u16(output, x, (u16::from(input[input_offset]) << 4) | u16::from(input[input_offset + 1] >> 4));
+        write_native_u16(
+            output,
+            x,
+            (u16::from(input[input_offset]) << 4) | u16::from(input[input_offset + 1] >> 4),
+        );
         write_native_u16(
             output,
             x + 1,
@@ -549,22 +568,12 @@ fn write_native_u16(output: &mut [u8], sample: usize, value: u16) {
     output[start..start + 2].copy_from_slice(&value.to_ne_bytes());
 }
 
-fn channel_band(
-    width: usize,
-    format: ChannelBandFormat,
-    input: &[u8],
-    output: &mut [u8],
-) {
+fn channel_band(width: usize, format: ChannelBandFormat, input: &[u8], output: &mut [u8]) {
     output.fill(0);
     for x in 0..width {
-        let source = input[
-            x * format.source_bytes_per_sample + format.source_offset
-        ];
-        output[x * format.output_lanes + format.output_lane] = if format.invert {
-            !source
-        } else {
-            source
-        };
+        let source = input[x * format.source_bytes_per_sample + format.source_offset];
+        output[x * format.output_lanes + format.output_lane] =
+            if format.invert { !source } else { source };
     }
 }
 

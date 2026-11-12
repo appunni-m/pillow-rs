@@ -185,10 +185,7 @@ impl GpuPool {
     }
 
     pub(super) fn selected_adapter_info() -> Option<super::GpuAdapterInfo> {
-        GPU.get()?
-            .as_ref()
-            .ok()
-            .map(|gpu| gpu.adapter_info.clone())
+        GPU.get()?.as_ref().ok().map(|gpu| gpu.adapter_info.clone())
     }
 
     fn ensure_init() -> Result<&'static GpuInner, PilError> {

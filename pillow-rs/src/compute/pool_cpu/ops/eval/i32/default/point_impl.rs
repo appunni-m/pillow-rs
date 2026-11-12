@@ -34,7 +34,6 @@ pub(crate) fn to_luma(input: &RgbaImage, lut: &[u8]) -> Result<GrayImage, PilErr
         let sample = i32::from_le_bytes(pixel.0).clamp(0, 65_535) as usize;
         bytes.push(lut[sample]);
     }
-    GrayImage::from_raw(input.width(), input.height(), bytes).ok_or_else(|| {
-        PilError::InternalError("Point I32 output dimensions were invalid".into())
-    })
+    GrayImage::from_raw(input.width(), input.height(), bytes)
+        .ok_or_else(|| PilError::InternalError("Point I32 output dimensions were invalid".into()))
 }

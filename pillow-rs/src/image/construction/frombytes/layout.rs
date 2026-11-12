@@ -18,9 +18,13 @@ pub(super) enum RawDecoderTransform {
     },
     InterleavedTwoBandLine,
     InterleavedThreeBandLine,
-    InterleavedThreeBandLineWithPadding { padding: u8 },
+    InterleavedThreeBandLineWithPadding {
+        padding: u8,
+    },
     InterleavedFourBandLine,
-    RgbTriplets { source_lanes: [u8; 3] },
+    RgbTriplets {
+        source_lanes: [u8; 3],
+    },
     LumaAlphaToRgba {
         source_bytes_per_pixel: usize,
         luma_high_byte_offset: usize,
@@ -35,14 +39,25 @@ pub(super) enum RawDecoderTransform {
     InvertRgbKeepAlpha,
     CmykToRgb,
     /// Raw YCC triples are converted to RGB; four-lane outputs pad with 255.
-    YccToRgb { output_lanes: usize },
+    YccToRgb {
+        output_lanes: usize,
+    },
     /// Raw YCCA pixels convert their first three lanes and preserve alpha.
     YccaToRgba,
     LabBias,
     PackBilevelBytes,
-    PackedLuma { bits: u8, reverse: bool, invert: bool },
-    PackedPalette { bits: u8, bit_planes: u8 },
-    HighByte16 { offset: usize },
+    PackedLuma {
+        bits: u8,
+        reverse: bool,
+        invert: bool,
+    },
+    PackedPalette {
+        bits: u8,
+        bit_planes: u8,
+    },
+    HighByte16 {
+        offset: usize,
+    },
     HighBytes16 {
         source_lanes: [u8; 4],
         source_bytes_per_pixel: usize,
@@ -119,8 +134,12 @@ pub(super) enum RawDecoderHiddenLane {
         component: usize,
         high_byte_offset: usize,
     },
-    PackedAlphaBit15 { inverted: bool },
-    SourcePlaneByte { plane: usize },
+    PackedAlphaBit15 {
+        inverted: bool,
+    },
+    SourcePlaneByte {
+        plane: usize,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -287,14 +306,8 @@ fn rgb_raw_layout(rawmode: &str) -> Option<RawDecoderLayout> {
 
 fn rgb_byte_layout(rawmode: &str) -> Option<RawDecoderLayout> {
     let layout = match rawmode {
-        "RGB;L" => RawDecoderLayout::new(
-            24,
-            1,
-            RawDecoderTransform::InterleavedThreeBandLine,
-        ),
-        "RGB;R" => {
-            RawDecoderLayout::new(24, 1, RawDecoderTransform::ReverseBits)
-        }
+        "RGB;L" => RawDecoderLayout::new(24, 1, RawDecoderTransform::InterleavedThreeBandLine),
+        "RGB;R" => RawDecoderLayout::new(24, 1, RawDecoderTransform::ReverseBits),
         "BGR" => RawDecoderLayout::new(
             24,
             1,
@@ -314,40 +327,13 @@ fn rgb_byte_layout(rawmode: &str) -> Option<RawDecoderLayout> {
                 offset: 3,
             },
         ),
-        "BGRX" => channel_layout(
-            32,
-            [2, 1, 0, 3],
-            4,
-            3,
-            RawDecoderHiddenLane::Default,
-        ),
-        "BGXR" => channel_layout(
-            32,
-            [3, 1, 0, 2],
-            4,
-            3,
-            RawDecoderHiddenLane::Default,
-        ),
-        "XRGB" => channel_layout(
-            32,
-            [1, 2, 3, 0],
-            4,
-            3,
-            RawDecoderHiddenLane::Default,
-        ),
-        "XBGR" => channel_layout(
-            32,
-            [3, 2, 1, 0],
-            4,
-            3,
-            RawDecoderHiddenLane::Default,
-        ),
+        "BGRX" => channel_layout(32, [2, 1, 0, 3], 4, 3, RawDecoderHiddenLane::Default),
+        "BGXR" => channel_layout(32, [3, 1, 0, 2], 4, 3, RawDecoderHiddenLane::Default),
+        "XRGB" => channel_layout(32, [1, 2, 3, 0], 4, 3, RawDecoderHiddenLane::Default),
+        "XBGR" => channel_layout(32, [3, 2, 1, 0], 4, 3, RawDecoderHiddenLane::Default),
         "RGBXX" | "RGBXXX" => {
-            let (input_bits, source_bytes_per_pixel) = if rawmode == "RGBXX" {
-                (40, 5)
-            } else {
-                (48, 6)
-            };
+            let (input_bits, source_bytes_per_pixel) =
+                if rawmode == "RGBXX" { (40, 5) } else { (48, 6) };
             channel_layout(
                 input_bits,
                 [0, 1, 2, 3],
@@ -359,12 +345,10 @@ fn rgb_byte_layout(rawmode: &str) -> Option<RawDecoderLayout> {
                 },
             )
         }
-        "RGBX;L" | "RGBA;L" => RawDecoderLayout::new(
-            32,
-            1,
-            RawDecoderTransform::InterleavedThreeBandLine,
-        )
-        .with_hidden_lane(RawDecoderHiddenLane::SourcePlaneByte { plane: 3 }),
+        "RGBX;L" | "RGBA;L" => {
+            RawDecoderLayout::new(32, 1, RawDecoderTransform::InterleavedThreeBandLine)
+                .with_hidden_lane(RawDecoderHiddenLane::SourcePlaneByte { plane: 3 })
+        }
         _ => return None,
     };
     Some(layout)
@@ -377,18 +361,16 @@ fn rgb_word_layout(rawmode: &str) -> Option<RawDecoderLayout> {
         }
         "RGBX;16L" | "RGBX;16B" | "RGBX;16N" => {
             let order = rawmode_byte_order(rawmode, "RGBX;16L", "RGBX;16B");
-            high_bytes_layout(4, 3, order).with_hidden_lane(RawDecoderHiddenLane::SourcePixelWordByte {
-                source_bytes_per_pixel: 8,
-                component: 3,
-                high_byte_offset: high_byte_offset(order),
-            })
+            high_bytes_layout(4, 3, order).with_hidden_lane(
+                RawDecoderHiddenLane::SourcePixelWordByte {
+                    source_bytes_per_pixel: 8,
+                    component: 3,
+                    high_byte_offset: high_byte_offset(order),
+                },
+            )
         }
-        "R;16L" | "G;16L" | "B;16L" => {
-            channel_band_layout(16, 1, 3, false, rgb_band(rawmode))
-        }
-        "R;16B" | "G;16B" | "B;16B" => {
-            channel_band_layout(16, 0, 3, false, rgb_band(rawmode))
-        }
+        "R;16L" | "G;16L" | "B;16L" => channel_band_layout(16, 1, 3, false, rgb_band(rawmode)),
+        "R;16B" | "G;16B" | "B;16B" => channel_band_layout(16, 0, 3, false, rgb_band(rawmode)),
         "R;16N" | "G;16N" | "B;16N" => channel_band_layout(
             16,
             high_byte_offset(RawByteOrder::Native),
@@ -418,11 +400,7 @@ fn rgb_packed_layout(rawmode: &str) -> Option<RawDecoderLayout> {
 fn rgb_band_or_special_layout(rawmode: &str) -> Option<RawDecoderLayout> {
     let layout = match rawmode {
         "CMYK" => RawDecoderLayout::new(32, 1, RawDecoderTransform::CmykToRgb),
-        "YCC;P" => RawDecoderLayout::new(
-            24,
-            1,
-            RawDecoderTransform::YccToRgb { output_lanes: 3 },
-        ),
+        "YCC;P" => RawDecoderLayout::new(24, 1, RawDecoderTransform::YccToRgb { output_lanes: 3 }),
         "R" | "G" | "B" => channel_band_layout(8, 0, 3, false, rgb_band(rawmode)),
         _ => return None,
     };
@@ -509,7 +487,11 @@ fn packed_color_layout(format: PackedColorFormat, output_lanes: usize) -> RawDec
     )
 }
 
-fn high_bytes_layout(channels: usize, output_lanes: usize, order: RawByteOrder) -> RawDecoderLayout {
+fn high_bytes_layout(
+    channels: usize,
+    output_lanes: usize,
+    order: RawByteOrder,
+) -> RawDecoderLayout {
     high_bytes_layout_ordered(
         channels,
         [0, 1, 2, 3],
@@ -609,9 +591,7 @@ fn cmyk_raw_layout(rawmode: &str) -> Option<RawDecoderLayout> {
             let order = rawmode_byte_order(rawmode, "CMYK;16L", "CMYK;16B");
             Some(high_bytes_layout(4, 4, order))
         }
-        "C" | "M" | "Y" | "K" => {
-            Some(channel_band_layout(8, 0, 4, false, cmyk_band(rawmode)))
-        }
+        "C" | "M" | "Y" | "K" => Some(channel_band_layout(8, 0, 4, false, cmyk_band(rawmode))),
         "C;I" | "M;I" | "Y;I" | "K;I" => {
             Some(channel_band_layout(8, 0, 4, true, cmyk_band(rawmode)))
         }
@@ -631,24 +611,32 @@ fn cmyk_band(rawmode: &str) -> usize {
 fn i16_raw_layout(mode: Mode, rawmode: &str) -> Option<RawDecoderLayout> {
     // The four public I;16 identities retain their declared byte order.
     match (mode, rawmode) {
-        (Mode::ImageI16, "I;16B") if cfg!(target_endian = "little") => {
-            Some(RawDecoderLayout::new(16, 1, RawDecoderTransform::SwapBytes16))
-        }
+        (Mode::ImageI16, "I;16B") if cfg!(target_endian = "little") => Some(RawDecoderLayout::new(
+            16,
+            1,
+            RawDecoderTransform::SwapBytes16,
+        )),
         (Mode::ImageI16, "I;16B" | "I;16N") => {
             Some(RawDecoderLayout::new(16, 1, RawDecoderTransform::Native))
         }
-        (Mode::ImageI16, "I;16R") => {
-            Some(RawDecoderLayout::new(16, 1, RawDecoderTransform::ReverseBits))
-        }
-        (Mode::ImageI16, "I;12") => {
-            Some(RawDecoderLayout::new(12, 1, RawDecoderTransform::Unpack12To16))
-        }
-        (Mode::ImageI16B, "I;16N") if cfg!(target_endian = "little") => {
-            Some(RawDecoderLayout::new(16, 1, RawDecoderTransform::SwapBytes16))
-        }
-        (Mode::ImageI16L, "I;16N") if cfg!(target_endian = "big") => {
-            Some(RawDecoderLayout::new(16, 1, RawDecoderTransform::SwapBytes16))
-        }
+        (Mode::ImageI16, "I;16R") => Some(RawDecoderLayout::new(
+            16,
+            1,
+            RawDecoderTransform::ReverseBits,
+        )),
+        (Mode::ImageI16, "I;12") => Some(RawDecoderLayout::new(
+            12,
+            1,
+            RawDecoderTransform::Unpack12To16,
+        )),
+        (Mode::ImageI16B, "I;16N") if cfg!(target_endian = "little") => Some(
+            RawDecoderLayout::new(16, 1, RawDecoderTransform::SwapBytes16),
+        ),
+        (Mode::ImageI16L, "I;16N") if cfg!(target_endian = "big") => Some(RawDecoderLayout::new(
+            16,
+            1,
+            RawDecoderTransform::SwapBytes16,
+        )),
         (Mode::ImageI16L, "I;16N") => {
             Some(RawDecoderLayout::new(16, 1, RawDecoderTransform::Native))
         }
@@ -695,20 +683,76 @@ fn integer32_raw_layout(rawmode: &str) -> Option<RawDecoderLayout> {
 
 fn float32_raw_layout(rawmode: &str) -> Option<RawDecoderLayout> {
     let (sample_bytes, byte_order, sample_type) = match rawmode {
-        "F;8" => (1, RawByteOrder::Native, RawScalarType::Integer { signed: false }),
-        "F;8S" => (1, RawByteOrder::Native, RawScalarType::Integer { signed: true }),
-        "F;16" => (2, RawByteOrder::Little, RawScalarType::Integer { signed: false }),
-        "F;16S" => (2, RawByteOrder::Little, RawScalarType::Integer { signed: true }),
-        "F;16B" => (2, RawByteOrder::Big, RawScalarType::Integer { signed: false }),
-        "F;16BS" => (2, RawByteOrder::Big, RawScalarType::Integer { signed: true }),
-        "F;16N" => (2, RawByteOrder::Native, RawScalarType::Integer { signed: false }),
-        "F;16NS" => (2, RawByteOrder::Native, RawScalarType::Integer { signed: true }),
-        "F;32" => (4, RawByteOrder::Little, RawScalarType::Integer { signed: false }),
-        "F;32S" => (4, RawByteOrder::Little, RawScalarType::Integer { signed: true }),
-        "F;32B" => (4, RawByteOrder::Big, RawScalarType::Integer { signed: false }),
-        "F;32BS" => (4, RawByteOrder::Big, RawScalarType::Integer { signed: true }),
-        "F;32N" => (4, RawByteOrder::Native, RawScalarType::Integer { signed: false }),
-        "F;32NS" => (4, RawByteOrder::Native, RawScalarType::Integer { signed: true }),
+        "F;8" => (
+            1,
+            RawByteOrder::Native,
+            RawScalarType::Integer { signed: false },
+        ),
+        "F;8S" => (
+            1,
+            RawByteOrder::Native,
+            RawScalarType::Integer { signed: true },
+        ),
+        "F;16" => (
+            2,
+            RawByteOrder::Little,
+            RawScalarType::Integer { signed: false },
+        ),
+        "F;16S" => (
+            2,
+            RawByteOrder::Little,
+            RawScalarType::Integer { signed: true },
+        ),
+        "F;16B" => (
+            2,
+            RawByteOrder::Big,
+            RawScalarType::Integer { signed: false },
+        ),
+        "F;16BS" => (
+            2,
+            RawByteOrder::Big,
+            RawScalarType::Integer { signed: true },
+        ),
+        "F;16N" => (
+            2,
+            RawByteOrder::Native,
+            RawScalarType::Integer { signed: false },
+        ),
+        "F;16NS" => (
+            2,
+            RawByteOrder::Native,
+            RawScalarType::Integer { signed: true },
+        ),
+        "F;32" => (
+            4,
+            RawByteOrder::Little,
+            RawScalarType::Integer { signed: false },
+        ),
+        "F;32S" => (
+            4,
+            RawByteOrder::Little,
+            RawScalarType::Integer { signed: true },
+        ),
+        "F;32B" => (
+            4,
+            RawByteOrder::Big,
+            RawScalarType::Integer { signed: false },
+        ),
+        "F;32BS" => (
+            4,
+            RawByteOrder::Big,
+            RawScalarType::Integer { signed: true },
+        ),
+        "F;32N" => (
+            4,
+            RawByteOrder::Native,
+            RawScalarType::Integer { signed: false },
+        ),
+        "F;32NS" => (
+            4,
+            RawByteOrder::Native,
+            RawScalarType::Integer { signed: true },
+        ),
         "F;32F" => (4, RawByteOrder::Little, RawScalarType::Float32),
         "F;32BF" => (4, RawByteOrder::Big, RawScalarType::Float32),
         "F;32NF" => (4, RawByteOrder::Native, RawScalarType::Float32),

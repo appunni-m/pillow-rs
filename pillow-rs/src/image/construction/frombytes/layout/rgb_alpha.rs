@@ -72,9 +72,7 @@ fn rgba_alpha_input_layout(rawmode: &str) -> Option<RawDecoderLayout> {
         )),
         "RGBAX" | "RGBAXX" => raw_rgba_four_lane_skip(rawmode),
         "RGBa" | "RGBaX" | "RGBaXX" => raw_rgba_unpremultiply(rawmode),
-        "RGBa;16L" | "RGBa;16B" | "RGBa;16N" => {
-            Some(raw_rgba_unpremultiply_16(rawmode))
-        }
+        "RGBa;16L" | "RGBa;16B" | "RGBa;16N" => Some(raw_rgba_unpremultiply_16(rawmode)),
         "BGR" => Some(RawDecoderLayout::new(
             24,
             1,
@@ -163,17 +161,9 @@ fn rgba_typed_layout(rawmode: &str) -> Option<RawDecoderLayout> {
             } else {
                 RawByteOrder::Big
             };
-            Some(high_bytes_layout_ordered(
-                4,
-                [2, 1, 0, 3],
-                4,
-                order,
-                None,
-            ))
+            Some(high_bytes_layout_ordered(4, [2, 1, 0, 3], 4, order, None))
         }
-        "R" | "G" | "B" | "A" => {
-            Some(channel_band_layout(8, 0, 4, false, rgba_band(rawmode)))
-        }
+        "R" | "G" | "B" | "A" => Some(channel_band_layout(8, 0, 4, false, rgba_band(rawmode))),
         "R;16L" | "G;16L" | "B;16L" | "A;16L" => {
             Some(channel_band_layout(16, 1, 4, false, rgba_band(rawmode)))
         }
@@ -277,9 +267,7 @@ fn rgbx_byte_layout(rawmode: &str) -> Option<RawDecoderLayout> {
         "RGB;L" => Some(RawDecoderLayout::new(
             24,
             1,
-            RawDecoderTransform::InterleavedThreeBandLineWithPadding {
-                padding: u8::MAX,
-            },
+            RawDecoderTransform::InterleavedThreeBandLineWithPadding { padding: u8::MAX },
         )),
         "RGBX;L" => Some(RawDecoderLayout::new(
             32,
@@ -298,9 +286,7 @@ fn rgbx_byte_layout(rawmode: &str) -> Option<RawDecoderLayout> {
                 },
             ));
         }
-        "R" | "G" | "B" | "X" => {
-            Some(channel_band_layout(8, 0, 4, false, rgba_band(rawmode)))
-        }
+        "R" | "G" | "B" | "X" => Some(channel_band_layout(8, 0, 4, false, rgba_band(rawmode))),
         _ => None,
     }
 }

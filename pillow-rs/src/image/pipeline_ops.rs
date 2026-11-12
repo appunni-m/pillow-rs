@@ -41,8 +41,7 @@ pub(crate) struct PipelinePaletteOutput {
     pub(crate) mode: Mode,
     pub(crate) palette: Option<Vec<u8>>,
     pub(crate) palette_alpha: Option<Vec<u8>>,
-    pub(crate) wrapper_metadata:
-        crate::compute::pool_cpu::ops::color::ops::ConvertWrapperMetadata,
+    pub(crate) wrapper_metadata: crate::compute::pool_cpu::ops::color::ops::ConvertWrapperMetadata,
 }
 
 #[derive(Debug)]

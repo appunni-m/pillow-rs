@@ -79,6 +79,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |-- mod.rs
 |   |   |   |-- palette.rs
 |   |   |   |-- parse.rs
+|   |   |   |-- photo_ycc.rs
 |   |   |   `-- resolve.rs
 |   |   |-- compute/
 |   |   |   |-- backend_state.rs
@@ -710,9 +711,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |   `-- stat_impl.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
-|   |   |   |       |   |-- ops/
-|   |   |   |       |   |   |-- get_bbox.rs
-|   |   |   |       |   |   `-- get_projection.rs
 |   |   |   |       |   |-- ops.rs
 |   |   |   |       |   |-- palette8/
 |   |   |   |       |   |   |-- default/
@@ -1132,35 +1130,35 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |       `-- wasm_simd128/
 |   |   |   |       |           `-- mod.rs
 |   |   |   |       |-- color/
-|   |   |   |       |   |-- convert/
-|   |   |   |       |   |   |-- cmyk8/
-|   |   |   |       |   |   |   |-- default/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- helpers/
-|   |   |   |       |   |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   |   `-- to_rgb.rs
-|   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   |-- neon/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- ops.rs
-|   |   |   |       |   |   |   |-- sse2/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- ssse3/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   `-- wasm_simd128/
-|   |   |   |       |   |   |       |-- convert_impl.rs
-|   |   |   |       |   |   |       `-- mod.rs
-|   |   |   |       |   |   |-- f32/
-|   |   |   |       |   |   |   |-- default/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   `-- ops.rs
+|   |   |   |       |   |-- cmyk8/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- helpers/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- to_rgb.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   |-- neon/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- ops.rs
+|   |   |   |       |   |   |-- sse2/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- ssse3/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   `-- wasm_simd128/
+|   |   |   |       |   |       |-- convert_impl.rs
+|   |   |   |       |   |       `-- mod.rs
+|   |   |   |       |   |-- f32/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   `-- ops.rs
+|   |   |   |       |   |-- helpers/
+|   |   |   |       |   |   |-- convert/
 |   |   |   |       |   |   |   |-- alpha.rs
 |   |   |   |       |   |   |   |-- binary.rs
 |   |   |   |       |   |   |   |-- four_byte_layout.rs
@@ -1179,353 +1177,195 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |   |-- prepared.rs
 |   |   |   |       |   |   |   |-- target_compositions.rs
 |   |   |   |       |   |   |   `-- wide.rs
-|   |   |   |       |   |   |-- hsv8/
-|   |   |   |       |   |   |   |-- default/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   `-- ops.rs
-|   |   |   |       |   |   |-- i16/
-|   |   |   |       |   |   |   |-- default/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   |-- neon/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- ops.rs
-|   |   |   |       |   |   |   |-- sse2/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   `-- wasm_simd128/
-|   |   |   |       |   |   |       |-- convert_impl.rs
-|   |   |   |       |   |   |       `-- mod.rs
-|   |   |   |       |   |   |-- i16b/
-|   |   |   |       |   |   |   |-- default/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   |-- neon/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- ops.rs
-|   |   |   |       |   |   |   |-- sse2/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   `-- wasm_simd128/
-|   |   |   |       |   |   |       |-- convert_impl.rs
-|   |   |   |       |   |   |       `-- mod.rs
-|   |   |   |       |   |   |-- i16l/
-|   |   |   |       |   |   |   |-- default/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   |-- neon/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- ops.rs
-|   |   |   |       |   |   |   |-- sse2/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   `-- wasm_simd128/
-|   |   |   |       |   |   |       |-- convert_impl.rs
-|   |   |   |       |   |   |       `-- mod.rs
-|   |   |   |       |   |   |-- i16n/
-|   |   |   |       |   |   |   |-- default/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   |-- neon/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- ops.rs
-|   |   |   |       |   |   |   |-- sse2/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   `-- wasm_simd128/
-|   |   |   |       |   |   |       |-- convert_impl.rs
-|   |   |   |       |   |   |       `-- mod.rs
-|   |   |   |       |   |   |-- i32/
-|   |   |   |       |   |   |   |-- default/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   `-- ops.rs
-|   |   |   |       |   |   |-- la_premultiplied8/
-|   |   |   |       |   |   |   |-- default/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- helpers/
-|   |   |   |       |   |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   |   `-- unpremultiply.rs
-|   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   |-- neon/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- ops.rs
-|   |   |   |       |   |   |   |-- sse2/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   `-- wasm_simd128/
-|   |   |   |       |   |   |       |-- convert_impl.rs
-|   |   |   |       |   |   |       `-- mod.rs
-|   |   |   |       |   |   |-- lab8/
-|   |   |   |       |   |   |   |-- default/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- helpers/
-|   |   |   |       |   |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   |   `-- to_srgb.rs
-|   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   `-- ops.rs
-|   |   |   |       |   |   |-- luma8/
-|   |   |   |       |   |   |   |-- default/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- helpers/
-|   |   |   |       |   |   |   |   |-- cmyk.rs
-|   |   |   |       |   |   |   |   |-- expand_color.rs
-|   |   |   |       |   |   |   |   |-- hsv.rs
-|   |   |   |       |   |   |   |   |-- layout.rs
-|   |   |   |       |   |   |   |   |-- luma_alpha.rs
-|   |   |   |       |   |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   |   |-- typed.rs
-|   |   |   |       |   |   |   |   |-- vector.rs
-|   |   |   |       |   |   |   |   `-- ycbcr.rs
-|   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   |-- neon/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- ops.rs
-|   |   |   |       |   |   |   |-- sse2/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   `-- wasm_simd128/
-|   |   |   |       |   |   |       |-- convert_impl.rs
-|   |   |   |       |   |   |       `-- mod.rs
-|   |   |   |       |   |   |-- luma_a16/
-|   |   |   |       |   |   |   |-- default/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   `-- ops.rs
-|   |   |   |       |   |   |-- luma_a8/
-|   |   |   |       |   |   |   |-- default/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- helpers/
-|   |   |   |       |   |   |   |   |-- cmyk.rs
-|   |   |   |       |   |   |   |   |-- expand_color.rs
-|   |   |   |       |   |   |   |   |-- hsv.rs
-|   |   |   |       |   |   |   |   |-- layout.rs
-|   |   |   |       |   |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   |   |-- premultiply.rs
-|   |   |   |       |   |   |   |   |-- typed.rs
-|   |   |   |       |   |   |   |   |-- vector.rs
-|   |   |   |       |   |   |   |   `-- ycbcr.rs
-|   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   |-- neon/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- ops.rs
-|   |   |   |       |   |   |   |-- sse2/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   `-- wasm_simd128/
-|   |   |   |       |   |   |       |-- convert_impl.rs
-|   |   |   |       |   |   |       `-- mod.rs
-|   |   |   |       |   |   |-- mod.rs
-|   |   |   |       |   |   |-- one/
-|   |   |   |       |   |   |   |-- default/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- helpers/
-|   |   |   |       |   |   |   |   |-- i16.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   |-- neon/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- ops.rs
-|   |   |   |       |   |   |   |-- sse2/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   `-- wasm_simd128/
-|   |   |   |       |   |   |       |-- convert_impl.rs
-|   |   |   |       |   |   |       `-- mod.rs
-|   |   |   |       |   |   |-- ops.rs
-|   |   |   |       |   |   |-- palette8/
-|   |   |   |       |   |   |   |-- default/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   `-- ops.rs
-|   |   |   |       |   |   |-- palette_alpha8/
-|   |   |   |       |   |   |   |-- default/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   `-- ops.rs
-|   |   |   |       |   |   |-- rgb16/
-|   |   |   |       |   |   |   |-- default/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   `-- ops.rs
-|   |   |   |       |   |   |-- rgb32f/
-|   |   |   |       |   |   |   |-- default/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   `-- ops.rs
-|   |   |   |       |   |   |-- rgb8/
-|   |   |   |       |   |   |   |-- avx2/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- default/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- helpers/
-|   |   |   |       |   |   |   |   |-- layout.rs
-|   |   |   |       |   |   |   |   |-- luma_alpha.rs
-|   |   |   |       |   |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   |   |-- rgba.rs
-|   |   |   |       |   |   |   |   `-- vector.rs
-|   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   |-- neon/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   |   `-- rgba_impl.rs
-|   |   |   |       |   |   |   |-- ops.rs
-|   |   |   |       |   |   |   |-- sse2/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- ssse3/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   `-- wasm_simd128/
-|   |   |   |       |   |   |       |-- convert_impl.rs
-|   |   |   |       |   |   |       `-- mod.rs
-|   |   |   |       |   |   |-- rgb_premultiplied8/
-|   |   |   |       |   |   |   |-- avx2/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- default/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- helpers/
-|   |   |   |       |   |   |   |   |-- alpha.rs
-|   |   |   |       |   |   |   |   |-- luma_alpha.rs
-|   |   |   |       |   |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   |   `-- vector.rs
-|   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   |-- neon/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- ops.rs
-|   |   |   |       |   |   |   |-- sse2/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- ssse3/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   `-- wasm_simd128/
-|   |   |   |       |   |   |       |-- convert_impl.rs
-|   |   |   |       |   |   |       `-- mod.rs
-|   |   |   |       |   |   |-- rgba16/
-|   |   |   |       |   |   |   |-- default/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   `-- ops.rs
-|   |   |   |       |   |   |-- rgba32f/
-|   |   |   |       |   |   |   |-- default/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   `-- ops.rs
-|   |   |   |       |   |   |-- rgba8/
-|   |   |   |       |   |   |   |-- avx2/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- default/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- helpers/
-|   |   |   |       |   |   |   |   |-- luma_alpha.rs
-|   |   |   |       |   |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   |   |-- opaque_padding.rs
-|   |   |   |       |   |   |   |   |-- premultiply.rs
-|   |   |   |       |   |   |   |   `-- vector.rs
-|   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   |-- neon/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- ops.rs
-|   |   |   |       |   |   |   |-- sse2/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- ssse3/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   `-- wasm_simd128/
-|   |   |   |       |   |   |       |-- convert_impl.rs
-|   |   |   |       |   |   |       `-- mod.rs
-|   |   |   |       |   |   |-- rgbx8/
-|   |   |   |       |   |   |   |-- avx2/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- default/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- helpers/
-|   |   |   |       |   |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   |   `-- vector.rs
-|   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   |-- neon/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- ops.rs
-|   |   |   |       |   |   |   |-- sse2/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   |-- ssse3/
-|   |   |   |       |   |   |   |   |-- convert_impl.rs
-|   |   |   |       |   |   |   |   `-- mod.rs
-|   |   |   |       |   |   |   `-- wasm_simd128/
-|   |   |   |       |   |   |       |-- convert_impl.rs
-|   |   |   |       |   |   |       `-- mod.rs
-|   |   |   |       |   |   `-- ycbcr8/
-|   |   |   |       |   |       |-- default/
-|   |   |   |       |   |       |   |-- convert_impl.rs
-|   |   |   |       |   |       |   `-- mod.rs
-|   |   |   |       |   |       |-- mod.rs
-|   |   |   |       |   |       `-- ops.rs
-|   |   |   |       |   |-- helpers/
 |   |   |   |       |   |   |-- lab_kernel.rs
 |   |   |   |       |   |   |-- lab_to_srgb.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   |-- remap_palette.rs
 |   |   |   |       |   |   `-- strategy.rs
-|   |   |   |       |   |-- luma8/
+|   |   |   |       |   |-- hsv8/
 |   |   |   |       |   |   |-- default/
-|   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   `-- remap_palette_impl.rs
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   `-- ops.rs
+|   |   |   |       |   |-- i16/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   |-- neon/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- ops.rs
+|   |   |   |       |   |   |-- sse2/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   `-- wasm_simd128/
+|   |   |   |       |   |       |-- convert_impl.rs
+|   |   |   |       |   |       `-- mod.rs
+|   |   |   |       |   |-- i16b/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   |-- neon/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- ops.rs
+|   |   |   |       |   |   |-- sse2/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   `-- wasm_simd128/
+|   |   |   |       |   |       |-- convert_impl.rs
+|   |   |   |       |   |       `-- mod.rs
+|   |   |   |       |   |-- i16l/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   |-- neon/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- ops.rs
+|   |   |   |       |   |   |-- sse2/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   `-- wasm_simd128/
+|   |   |   |       |   |       |-- convert_impl.rs
+|   |   |   |       |   |       `-- mod.rs
+|   |   |   |       |   |-- i16n/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   |-- neon/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- ops.rs
+|   |   |   |       |   |   |-- sse2/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   `-- wasm_simd128/
+|   |   |   |       |   |       |-- convert_impl.rs
+|   |   |   |       |   |       `-- mod.rs
+|   |   |   |       |   |-- i32/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   `-- ops.rs
+|   |   |   |       |   |-- la_premultiplied8/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- helpers/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- unpremultiply.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   |-- neon/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- ops.rs
+|   |   |   |       |   |   |-- sse2/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   `-- wasm_simd128/
+|   |   |   |       |   |       |-- convert_impl.rs
+|   |   |   |       |   |       `-- mod.rs
+|   |   |   |       |   |-- lab8/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- helpers/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- to_srgb.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   `-- ops.rs
+|   |   |   |       |   |-- luma8/
+|   |   |   |       |   |   |-- convert.rs
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- remap_palette_impl.rs
+|   |   |   |       |   |   |-- helpers/
+|   |   |   |       |   |   |   |-- cmyk.rs
+|   |   |   |       |   |   |   |-- expand_color.rs
+|   |   |   |       |   |   |   |-- hsv.rs
+|   |   |   |       |   |   |   |-- layout.rs
+|   |   |   |       |   |   |   |-- luma_alpha.rs
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   |-- typed.rs
+|   |   |   |       |   |   |   |-- vector.rs
+|   |   |   |       |   |   |   `-- ycbcr.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   |-- neon/
+|   |   |   |       |   |   |   |-- convert_impl.rs
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- remap_palette_impl.rs
 |   |   |   |       |   |   |-- ops.rs
 |   |   |   |       |   |   |-- sse2/
+|   |   |   |       |   |   |   |-- convert_impl.rs
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- remap_palette_impl.rs
 |   |   |   |       |   |   `-- wasm_simd128/
+|   |   |   |       |   |       |-- convert_impl.rs
 |   |   |   |       |   |       |-- mod.rs
 |   |   |   |       |   |       `-- remap_palette_impl.rs
+|   |   |   |       |   |-- luma_a16/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   `-- ops.rs
+|   |   |   |       |   |-- luma_a8/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- helpers/
+|   |   |   |       |   |   |   |-- cmyk.rs
+|   |   |   |       |   |   |   |-- expand_color.rs
+|   |   |   |       |   |   |   |-- hsv.rs
+|   |   |   |       |   |   |   |-- layout.rs
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   |-- premultiply.rs
+|   |   |   |       |   |   |   |-- typed.rs
+|   |   |   |       |   |   |   |-- vector.rs
+|   |   |   |       |   |   |   `-- ycbcr.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   |-- neon/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- ops.rs
+|   |   |   |       |   |   |-- sse2/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   `-- wasm_simd128/
+|   |   |   |       |   |       |-- convert_impl.rs
+|   |   |   |       |   |       `-- mod.rs
 |   |   |   |       |   |-- mod.rs
+|   |   |   |       |   |-- one/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- helpers/
+|   |   |   |       |   |   |   |-- i16.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   |-- neon/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- ops.rs
+|   |   |   |       |   |   |-- sse2/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   `-- wasm_simd128/
+|   |   |   |       |   |       |-- convert_impl.rs
+|   |   |   |       |   |       `-- mod.rs
 |   |   |   |       |   |-- ops.rs
 |   |   |   |       |   |-- palette8/
+|   |   |   |       |   |   |-- convert.rs
 |   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- convert_impl.rs
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- remap_palette_impl.rs
 |   |   |   |       |   |   |-- mod.rs
@@ -1539,21 +1379,150 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   `-- wasm_simd128/
 |   |   |   |       |   |       |-- mod.rs
 |   |   |   |       |   |       `-- remap_palette_impl.rs
-|   |   |   |       |   |-- rgb8/
+|   |   |   |       |   |-- palette_alpha8/
 |   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   `-- ops.rs
+|   |   |   |       |   |-- rgb16/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   `-- ops.rs
+|   |   |   |       |   |-- rgb32f/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   `-- ops.rs
+|   |   |   |       |   |-- rgb8/
+|   |   |   |       |   |   |-- avx2/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- convert.rs
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- convert_impl.rs
 |   |   |   |       |   |   |   |-- convert_lab_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- helpers/
+|   |   |   |       |   |   |   |-- layout.rs
+|   |   |   |       |   |   |   |-- luma_alpha.rs
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   |-- rgba.rs
+|   |   |   |       |   |   |   `-- vector.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   |-- neon/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- rgba_impl.rs
+|   |   |   |       |   |   |-- ops.rs
+|   |   |   |       |   |   |-- sse2/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- ssse3/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   `-- wasm_simd128/
+|   |   |   |       |   |       |-- convert_impl.rs
+|   |   |   |       |   |       `-- mod.rs
+|   |   |   |       |   |-- rgb_premultiplied8/
+|   |   |   |       |   |   |-- avx2/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- helpers/
+|   |   |   |       |   |   |   |-- alpha.rs
+|   |   |   |       |   |   |   |-- luma_alpha.rs
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- vector.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   |-- neon/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- ops.rs
+|   |   |   |       |   |   |-- sse2/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- ssse3/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   `-- wasm_simd128/
+|   |   |   |       |   |       |-- convert_impl.rs
+|   |   |   |       |   |       `-- mod.rs
+|   |   |   |       |   |-- rgba16/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   `-- ops.rs
+|   |   |   |       |   |-- rgba32f/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- convert_impl.rs
 |   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- rgba8/
+|   |   |   |       |   |   |-- avx2/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- convert.rs
 |   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- convert_impl.rs
 |   |   |   |       |   |   |   |-- convert_lab_impl.rs
 |   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- helpers/
+|   |   |   |       |   |   |   |-- luma_alpha.rs
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   |-- opaque_padding.rs
+|   |   |   |       |   |   |   |-- premultiply.rs
+|   |   |   |       |   |   |   `-- vector.rs
 |   |   |   |       |   |   |-- mod.rs
-|   |   |   |       |   |   `-- ops.rs
-|   |   |   |       |   `-- rgbx8/
+|   |   |   |       |   |   |-- neon/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- ops.rs
+|   |   |   |       |   |   |-- sse2/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- ssse3/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   `-- wasm_simd128/
+|   |   |   |       |   |       |-- convert_impl.rs
+|   |   |   |       |   |       `-- mod.rs
+|   |   |   |       |   |-- rgbx8/
+|   |   |   |       |   |   |-- avx2/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- convert.rs
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   |-- convert_lab_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- helpers/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- vector.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   |-- neon/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- ops.rs
+|   |   |   |       |   |   |-- sse2/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   |-- ssse3/
+|   |   |   |       |   |   |   |-- convert_impl.rs
+|   |   |   |       |   |   |   `-- mod.rs
+|   |   |   |       |   |   `-- wasm_simd128/
+|   |   |   |       |   |       |-- convert_impl.rs
+|   |   |   |       |   |       `-- mod.rs
+|   |   |   |       |   `-- ycbcr8/
 |   |   |   |       |       |-- default/
-|   |   |   |       |       |   |-- convert_lab_impl.rs
+|   |   |   |       |       |   |-- convert_impl.rs
 |   |   |   |       |       |   `-- mod.rs
 |   |   |   |       |       |-- mod.rs
 |   |   |   |       |       `-- ops.rs
@@ -1709,6 +1678,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   |-- numeric.rs
 |   |   |   |       |   |   |   `-- output.rs
+|   |   |   |       |   |   |-- composite_module_support.rs
 |   |   |   |       |   |   |-- merge.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   |-- native_bytes.rs
@@ -1799,10 +1769,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |   `-- operations.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
-|   |   |   |       |   |-- ops/
-|   |   |   |       |   |   |-- blend.rs
-|   |   |   |       |   |   |-- composite_module.rs
-|   |   |   |       |   |   `-- merge.rs
 |   |   |   |       |   |-- ops.rs
 |   |   |   |       |   |-- palette8/
 |   |   |   |       |   |   |-- default/
@@ -2128,12 +2094,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   `-- wasm_simd128/
 |   |   |   |       |   |       |-- draw_impl.rs
 |   |   |   |       |   |       `-- mod.rs
-|   |   |   |       |   |-- floodfill/
-|   |   |   |       |   |   |-- default/
-|   |   |   |       |   |   |   |-- mod.rs
-|   |   |   |       |   |   |   `-- operations.rs
-|   |   |   |       |   |   |-- mod.rs
-|   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- helpers/
 |   |   |   |       |   |   |-- arcs.rs
 |   |   |   |       |   |   |-- bitmap_mask.rs
@@ -2142,6 +2102,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- clipping.rs
 |   |   |   |       |   |   |-- dispatch.rs
 |   |   |   |       |   |   |-- ellipse.rs
+|   |   |   |       |   |   |-- floodfill.rs
 |   |   |   |       |   |   |-- gray_alpha_bitmap.rs
 |   |   |   |       |   |   |-- gray_alpha_text.rs
 |   |   |   |       |   |   |-- hidden_lanes.rs
@@ -2990,7 +2951,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       |-- contrast_impl.rs
 |   |   |   |       |   |       |-- mod.rs
 |   |   |   |       |   |       `-- sharpness_impl.rs
-|   |   |   |       |   |-- contrast.rs
 |   |   |   |       |   |-- f32/
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- brightness_impl.rs
@@ -3001,6 +2961,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |-- helpers/
 |   |   |   |       |   |   |-- color_saturation.rs
 |   |   |   |       |   |   |-- contrast.rs
+|   |   |   |       |   |   |-- contrast_route.rs
 |   |   |   |       |   |   |-- contrast_vector.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   |-- native.rs
@@ -3278,6 +3239,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   |-- point_float.rs
 |   |   |   |       |   |   |-- scalar.rs
+|   |   |   |       |   |   |-- scalar_point.rs
 |   |   |   |       |   |   |-- strategy.rs
 |   |   |   |       |   |   `-- vector.rs
 |   |   |   |       |   |-- hsv8/
@@ -3310,7 +3272,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   `-- point_impl.rs
-|   |   |   |       |   |   `-- mod.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- la_premultiplied8/
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- eval_impl.rs
@@ -3385,7 +3348,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |   `-- mod.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
-|   |   |   |       |   |-- scalar.rs
 |   |   |   |       |   `-- ycbcr8/
 |   |   |   |       |       |-- default/
 |   |   |   |       |       |   |-- eval_impl.rs
@@ -3626,294 +3588,289 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |       |-- mod.rs
 |   |   |   |       |       `-- ops.rs
 |   |   |   |       |-- geometry/
+|   |   |   |       |   |-- cmyk8/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   |-- neon/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- ops.rs
+|   |   |   |       |   |   |-- sse2/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   `-- wasm_simd128/
+|   |   |   |       |   |       |-- mod.rs
+|   |   |   |       |   |       `-- pad_impl.rs
+|   |   |   |       |   |-- f32/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   |-- neon/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- ops.rs
+|   |   |   |       |   |   |-- sse2/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   `-- wasm_simd128/
+|   |   |   |       |   |       |-- mod.rs
+|   |   |   |       |   |       `-- pad_impl.rs
 |   |   |   |       |   |-- helpers/
 |   |   |   |       |   |   |-- dimensions.rs
-|   |   |   |       |   |   `-- mod.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   |-- pad_dimensions.rs
+|   |   |   |       |   |   |-- pad_hidden_lanes.rs
+|   |   |   |       |   |   |-- pad_native_vector.rs
+|   |   |   |       |   |   |-- pad_samples.rs
+|   |   |   |       |   |   `-- pad_strategies.rs
+|   |   |   |       |   |-- hsv8/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   |-- neon/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- ops.rs
+|   |   |   |       |   |   |-- sse2/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   `-- wasm_simd128/
+|   |   |   |       |   |       |-- mod.rs
+|   |   |   |       |   |       `-- pad_impl.rs
+|   |   |   |       |   |-- i16/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   `-- ops.rs
+|   |   |   |       |   |-- i16b/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   `-- ops.rs
+|   |   |   |       |   |-- i16l/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   `-- ops.rs
+|   |   |   |       |   |-- i16n/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   `-- ops.rs
+|   |   |   |       |   |-- i32/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   |-- neon/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- ops.rs
+|   |   |   |       |   |   |-- sse2/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   `-- wasm_simd128/
+|   |   |   |       |   |       |-- mod.rs
+|   |   |   |       |   |       `-- pad_impl.rs
+|   |   |   |       |   |-- la_premultiplied8/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   `-- ops.rs
+|   |   |   |       |   |-- lab8/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   `-- ops.rs
+|   |   |   |       |   |-- luma8/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- helpers/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- resize_window.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   |-- neon/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- ops.rs
+|   |   |   |       |   |   |-- sse2/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   `-- wasm_simd128/
+|   |   |   |       |   |       |-- mod.rs
+|   |   |   |       |   |       `-- pad_impl.rs
+|   |   |   |       |   |-- luma_a16/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   `-- ops.rs
+|   |   |   |       |   |-- luma_a8/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   |-- neon/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- ops.rs
+|   |   |   |       |   |   |-- sse2/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   `-- wasm_simd128/
+|   |   |   |       |   |       |-- mod.rs
+|   |   |   |       |   |       `-- pad_impl.rs
 |   |   |   |       |   |-- mod.rs
+|   |   |   |       |   |-- one/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   |-- neon/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- ops.rs
+|   |   |   |       |   |   |-- sse2/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   `-- wasm_simd128/
+|   |   |   |       |   |       |-- mod.rs
+|   |   |   |       |   |       `-- pad_impl.rs
 |   |   |   |       |   |-- ops.rs
-|   |   |   |       |   `-- pad/
-|   |   |   |       |       |-- cmyk8/
-|   |   |   |       |       |   |-- default/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
+|   |   |   |       |   |-- palette8/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   |-- neon/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- ops.rs
+|   |   |   |       |   |   |-- sse2/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   `-- wasm_simd128/
+|   |   |   |       |   |       |-- mod.rs
+|   |   |   |       |   |       `-- pad_impl.rs
+|   |   |   |       |   |-- palette_alpha8/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   |-- neon/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- ops.rs
+|   |   |   |       |   |   |-- sse2/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   `-- wasm_simd128/
+|   |   |   |       |   |       |-- mod.rs
+|   |   |   |       |   |       `-- pad_impl.rs
+|   |   |   |       |   |-- rgb16/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   `-- ops.rs
+|   |   |   |       |   |-- rgb32f/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   `-- ops.rs
+|   |   |   |       |   |-- rgb8/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   |-- neon/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- ops.rs
+|   |   |   |       |   |   |-- sse2/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   `-- wasm_simd128/
+|   |   |   |       |   |       |-- mod.rs
+|   |   |   |       |   |       `-- pad_impl.rs
+|   |   |   |       |   |-- rgb_premultiplied8/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   `-- ops.rs
+|   |   |   |       |   |-- rgba16/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   `-- ops.rs
+|   |   |   |       |   |-- rgba32f/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   `-- ops.rs
+|   |   |   |       |   |-- rgba8/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   |-- neon/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- ops.rs
+|   |   |   |       |   |   |-- sse2/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   `-- wasm_simd128/
+|   |   |   |       |   |       |-- mod.rs
+|   |   |   |       |   |       `-- pad_impl.rs
+|   |   |   |       |   |-- rgbx8/
+|   |   |   |       |   |   |-- default/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- helpers/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- resize_window.rs
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   |-- neon/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   |-- ops.rs
+|   |   |   |       |   |   |-- sse2/
+|   |   |   |       |   |   |   |-- mod.rs
+|   |   |   |       |   |   |   `-- pad_impl.rs
+|   |   |   |       |   |   `-- wasm_simd128/
+|   |   |   |       |   |       |-- mod.rs
+|   |   |   |       |   |       `-- pad_impl.rs
+|   |   |   |       |   `-- ycbcr8/
+|   |   |   |       |       |-- default/
 |   |   |   |       |       |   |-- mod.rs
-|   |   |   |       |       |   |-- neon/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- ops.rs
-|   |   |   |       |       |   |-- sse2/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   `-- wasm_simd128/
-|   |   |   |       |       |       |-- mod.rs
-|   |   |   |       |       |       `-- pad_impl.rs
-|   |   |   |       |       |-- f32/
-|   |   |   |       |       |   |-- default/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- mod.rs
-|   |   |   |       |       |   |-- neon/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- ops.rs
-|   |   |   |       |       |   |-- sse2/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   `-- wasm_simd128/
-|   |   |   |       |       |       |-- mod.rs
-|   |   |   |       |       |       `-- pad_impl.rs
-|   |   |   |       |       |-- helpers/
-|   |   |   |       |       |   |-- dimensions.rs
-|   |   |   |       |       |   |-- hidden_lanes.rs
-|   |   |   |       |       |   |-- mod.rs
-|   |   |   |       |       |   |-- native_vector.rs
-|   |   |   |       |       |   |-- samples.rs
-|   |   |   |       |       |   `-- strategies.rs
-|   |   |   |       |       |-- hsv8/
-|   |   |   |       |       |   |-- default/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- mod.rs
-|   |   |   |       |       |   |-- neon/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- ops.rs
-|   |   |   |       |       |   |-- sse2/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   `-- wasm_simd128/
-|   |   |   |       |       |       |-- mod.rs
-|   |   |   |       |       |       `-- pad_impl.rs
-|   |   |   |       |       |-- i16/
-|   |   |   |       |       |   |-- default/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- mod.rs
-|   |   |   |       |       |   `-- ops.rs
-|   |   |   |       |       |-- i16b/
-|   |   |   |       |       |   |-- default/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- mod.rs
-|   |   |   |       |       |   `-- ops.rs
-|   |   |   |       |       |-- i16l/
-|   |   |   |       |       |   |-- default/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- mod.rs
-|   |   |   |       |       |   `-- ops.rs
-|   |   |   |       |       |-- i16n/
-|   |   |   |       |       |   |-- default/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- mod.rs
-|   |   |   |       |       |   `-- ops.rs
-|   |   |   |       |       |-- i32/
-|   |   |   |       |       |   |-- default/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- mod.rs
-|   |   |   |       |       |   |-- neon/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- ops.rs
-|   |   |   |       |       |   |-- sse2/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   `-- wasm_simd128/
-|   |   |   |       |       |       |-- mod.rs
-|   |   |   |       |       |       `-- pad_impl.rs
-|   |   |   |       |       |-- la_premultiplied8/
-|   |   |   |       |       |   |-- default/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- mod.rs
-|   |   |   |       |       |   `-- ops.rs
-|   |   |   |       |       |-- lab8/
-|   |   |   |       |       |   |-- default/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- mod.rs
-|   |   |   |       |       |   `-- ops.rs
-|   |   |   |       |       |-- luma8/
-|   |   |   |       |       |   |-- default/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- helpers/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- resize_window.rs
-|   |   |   |       |       |   |-- mod.rs
-|   |   |   |       |       |   |-- neon/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- ops.rs
-|   |   |   |       |       |   |-- sse2/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   `-- wasm_simd128/
-|   |   |   |       |       |       |-- mod.rs
-|   |   |   |       |       |       `-- pad_impl.rs
-|   |   |   |       |       |-- luma_a16/
-|   |   |   |       |       |   |-- default/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- mod.rs
-|   |   |   |       |       |   `-- ops.rs
-|   |   |   |       |       |-- luma_a8/
-|   |   |   |       |       |   |-- default/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- mod.rs
-|   |   |   |       |       |   |-- neon/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- ops.rs
-|   |   |   |       |       |   |-- sse2/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   `-- wasm_simd128/
-|   |   |   |       |       |       |-- mod.rs
-|   |   |   |       |       |       `-- pad_impl.rs
+|   |   |   |       |       |   `-- pad_impl.rs
 |   |   |   |       |       |-- mod.rs
-|   |   |   |       |       |-- one/
-|   |   |   |       |       |   |-- default/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
+|   |   |   |       |       |-- neon/
 |   |   |   |       |       |   |-- mod.rs
-|   |   |   |       |       |   |-- neon/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- ops.rs
-|   |   |   |       |       |   |-- sse2/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   `-- wasm_simd128/
-|   |   |   |       |       |       |-- mod.rs
-|   |   |   |       |       |       `-- pad_impl.rs
+|   |   |   |       |       |   `-- pad_impl.rs
 |   |   |   |       |       |-- ops.rs
-|   |   |   |       |       |-- palette8/
-|   |   |   |       |       |   |-- default/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
+|   |   |   |       |       |-- sse2/
 |   |   |   |       |       |   |-- mod.rs
-|   |   |   |       |       |   |-- neon/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- ops.rs
-|   |   |   |       |       |   |-- sse2/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   `-- wasm_simd128/
-|   |   |   |       |       |       |-- mod.rs
-|   |   |   |       |       |       `-- pad_impl.rs
-|   |   |   |       |       |-- palette_alpha8/
-|   |   |   |       |       |   |-- default/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- mod.rs
-|   |   |   |       |       |   |-- neon/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- ops.rs
-|   |   |   |       |       |   |-- sse2/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   `-- wasm_simd128/
-|   |   |   |       |       |       |-- mod.rs
-|   |   |   |       |       |       `-- pad_impl.rs
-|   |   |   |       |       |-- rgb16/
-|   |   |   |       |       |   |-- default/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- mod.rs
-|   |   |   |       |       |   `-- ops.rs
-|   |   |   |       |       |-- rgb32f/
-|   |   |   |       |       |   |-- default/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- mod.rs
-|   |   |   |       |       |   `-- ops.rs
-|   |   |   |       |       |-- rgb8/
-|   |   |   |       |       |   |-- default/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- mod.rs
-|   |   |   |       |       |   |-- neon/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- ops.rs
-|   |   |   |       |       |   |-- sse2/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   `-- wasm_simd128/
-|   |   |   |       |       |       |-- mod.rs
-|   |   |   |       |       |       `-- pad_impl.rs
-|   |   |   |       |       |-- rgb_premultiplied8/
-|   |   |   |       |       |   |-- default/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- mod.rs
-|   |   |   |       |       |   `-- ops.rs
-|   |   |   |       |       |-- rgba16/
-|   |   |   |       |       |   |-- default/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- mod.rs
-|   |   |   |       |       |   `-- ops.rs
-|   |   |   |       |       |-- rgba32f/
-|   |   |   |       |       |   |-- default/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- mod.rs
-|   |   |   |       |       |   `-- ops.rs
-|   |   |   |       |       |-- rgba8/
-|   |   |   |       |       |   |-- default/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- mod.rs
-|   |   |   |       |       |   |-- neon/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- ops.rs
-|   |   |   |       |       |   |-- sse2/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   `-- wasm_simd128/
-|   |   |   |       |       |       |-- mod.rs
-|   |   |   |       |       |       `-- pad_impl.rs
-|   |   |   |       |       |-- rgbx8/
-|   |   |   |       |       |   |-- default/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- helpers/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- resize_window.rs
-|   |   |   |       |       |   |-- mod.rs
-|   |   |   |       |       |   |-- neon/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   |-- ops.rs
-|   |   |   |       |       |   |-- sse2/
-|   |   |   |       |       |   |   |-- mod.rs
-|   |   |   |       |       |   |   `-- pad_impl.rs
-|   |   |   |       |       |   `-- wasm_simd128/
-|   |   |   |       |       |       |-- mod.rs
-|   |   |   |       |       |       `-- pad_impl.rs
-|   |   |   |       |       `-- ycbcr8/
-|   |   |   |       |           |-- default/
-|   |   |   |       |           |   |-- mod.rs
-|   |   |   |       |           |   `-- pad_impl.rs
+|   |   |   |       |       |   `-- pad_impl.rs
+|   |   |   |       |       `-- wasm_simd128/
 |   |   |   |       |           |-- mod.rs
-|   |   |   |       |           |-- neon/
-|   |   |   |       |           |   |-- mod.rs
-|   |   |   |       |           |   `-- pad_impl.rs
-|   |   |   |       |           |-- ops.rs
-|   |   |   |       |           |-- sse2/
-|   |   |   |       |           |   |-- mod.rs
-|   |   |   |       |           |   `-- pad_impl.rs
-|   |   |   |       |           `-- wasm_simd128/
-|   |   |   |       |               |-- mod.rs
-|   |   |   |       |               `-- pad_impl.rs
+|   |   |   |       |           `-- pad_impl.rs
 |   |   |   |       |-- grayscale/
 |   |   |   |       |   |-- cmyk8/
 |   |   |   |       |   |   |-- avx2/
@@ -4168,7 +4125,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |           |-- grayscale_impl.rs
 |   |   |   |       |           `-- mod.rs
 |   |   |   |       |-- imageops/
-|   |   |   |       |   |-- autocontrast.rs
 |   |   |   |       |   |-- cmyk8/
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- expand_impl.rs
@@ -4187,12 +4143,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   `-- wasm_simd128/
 |   |   |   |       |   |       |-- invert_impl.rs
 |   |   |   |       |   |       `-- mod.rs
-|   |   |   |       |   |-- colorize/
-|   |   |   |       |   |   |-- mod.rs
-|   |   |   |       |   |   `-- ops.rs
-|   |   |   |       |   |-- equalize.rs
-|   |   |   |       |   |-- expand.rs
-|   |   |   |       |   |-- expand_edges.rs
 |   |   |   |       |   |-- f32/
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- expand_impl.rs
@@ -4202,8 +4152,11 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- helpers/
+|   |   |   |       |   |   |-- autocontrast.rs
 |   |   |   |       |   |   |-- colorize.rs
+|   |   |   |       |   |   |-- equalize.rs
 |   |   |   |       |   |   |-- expand.rs
+|   |   |   |       |   |   |-- expand_edges.rs
 |   |   |   |       |   |   |-- expand_vector.rs
 |   |   |   |       |   |   |-- hidden_lanes.rs
 |   |   |   |       |   |   |-- histogram.rs
@@ -4211,8 +4164,11 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- native_bytes.rs
 |   |   |   |       |   |   |-- pixel.rs
 |   |   |   |       |   |   |-- point_lut.rs
+|   |   |   |       |   |   |-- point_support.rs
+|   |   |   |       |   |   |-- quantize.rs
 |   |   |   |       |   |   |-- quantize_rgb_source.rs
-|   |   |   |       |   |   `-- strategy.rs
+|   |   |   |       |   |   |-- strategy.rs
+|   |   |   |       |   |   `-- wrapper_routes.rs
 |   |   |   |       |   |-- hsv8/
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- expand_impl.rs
@@ -4413,7 +4369,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   `-- wasm_simd128/
 |   |   |   |       |   |       |-- invert_impl.rs
 |   |   |   |       |   |       `-- mod.rs
-|   |   |   |       |   |-- quantize.rs
 |   |   |   |       |   |-- rgb16/
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- expand_impl.rs
@@ -4945,6 +4900,7 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- extract_band_vector.rs
 |   |   |   |       |   |   |-- imaging_core_band.rs
 |   |   |   |       |   |   |-- imaging_core_mode.rs
+|   |   |   |       |   |   |-- imaging_core_set_mode.rs
 |   |   |   |       |   |   |-- masked_store.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   |-- put_alpha.rs
@@ -4961,7 +4917,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- put_pixel.rs
 |   |   |   |       |   |   |-- put_pixel_strategy.rs
 |   |   |   |       |   |   |-- put_pixel_vector.rs
-|   |   |   |       |   |   `-- scalar_write_support.rs
+|   |   |   |       |   |   |-- scalar_write_support.rs
+|   |   |   |       |   |   `-- value_at.rs
 |   |   |   |       |   |-- hsv8/
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extract_band_impl.rs
@@ -5048,7 +5005,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       |-- mod.rs
 |   |   |   |       |   |       |-- put_data_impl.rs
 |   |   |   |       |   |       `-- put_pixel_impl.rs
-|   |   |   |       |   |-- imaging_core_set_mode.rs
 |   |   |   |       |   |-- la_premultiplied8/
 |   |   |   |       |   |   |-- default/
 |   |   |   |       |   |   |   |-- extract_band_impl.rs
@@ -5123,7 +5079,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   |-- put_alpha_data_impl.rs
 |   |   |   |       |   |   |   |-- put_alpha_impl.rs
-|   |   |   |       |   |   |   `-- put_data_impl.rs
+|   |   |   |       |   |   |   |-- put_data_impl.rs
+|   |   |   |       |   |   |   `-- put_data_value_at_impl.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- luma_a8/
@@ -5244,7 +5201,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   |-- put_alpha_data_impl.rs
 |   |   |   |       |   |   |   |-- put_alpha_impl.rs
-|   |   |   |       |   |   |   `-- put_data_impl.rs
+|   |   |   |       |   |   |   |-- put_data_impl.rs
+|   |   |   |       |   |   |   `-- put_data_value_at_impl.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- rgb32f/
@@ -5253,7 +5211,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   |-- put_alpha_data_impl.rs
 |   |   |   |       |   |   |   |-- put_alpha_impl.rs
-|   |   |   |       |   |   |   `-- put_data_impl.rs
+|   |   |   |       |   |   |   |-- put_data_impl.rs
+|   |   |   |       |   |   |   `-- put_data_value_at_impl.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- rgb8/
@@ -5324,7 +5283,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   |-- put_alpha_data_impl.rs
 |   |   |   |       |   |   |   |-- put_alpha_impl.rs
-|   |   |   |       |   |   |   `-- put_data_impl.rs
+|   |   |   |       |   |   |   |-- put_data_impl.rs
+|   |   |   |       |   |   |   `-- put_data_value_at_impl.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- rgba32f/
@@ -5333,7 +5293,8 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |   |-- mod.rs
 |   |   |   |       |   |   |   |-- put_alpha_data_impl.rs
 |   |   |   |       |   |   |   |-- put_alpha_impl.rs
-|   |   |   |       |   |   |   `-- put_data_impl.rs
+|   |   |   |       |   |   |   |-- put_data_impl.rs
+|   |   |   |       |   |   |   `-- put_data_value_at_impl.rs
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- rgba8/
@@ -5401,7 +5362,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |       |-- put_alpha_impl.rs
 |   |   |   |       |   |       |-- put_data_impl.rs
 |   |   |   |       |   |       `-- put_pixel_impl.rs
-|   |   |   |       |   |-- value_at.rs
 |   |   |   |       |   `-- ycbcr8/
 |   |   |   |       |       |-- default/
 |   |   |   |       |       |   |-- extract_band_impl.rs
@@ -6412,6 +6372,9 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |-- f32/
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
+|   |   |   |       |   |-- helpers/
+|   |   |   |       |   |   |-- mod.rs
+|   |   |   |       |   |   `-- mode_strategy.rs
 |   |   |   |       |   |-- i32/
 |   |   |   |       |   |   |-- avx/
 |   |   |   |       |   |   |   |-- mod.rs
@@ -6432,7 +6395,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
 |   |   |   |       |   |-- mod.rs
-|   |   |   |       |   |-- mode_strategy.rs
 |   |   |   |       |   |-- one/
 |   |   |   |       |   |   |-- mod.rs
 |   |   |   |       |   |   `-- ops.rs
@@ -7599,8 +7561,16 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   `-- specialized.rs
 |   |   |   |-- color_count.rs
 |   |   |   |-- construction/
+|   |   |   |   |-- dynamic.rs
 |   |   |   |   |-- empty.rs
-|   |   |   |   `-- internal_samples.rs
+|   |   |   |   |-- frombytes/
+|   |   |   |   |   |-- layout/
+|   |   |   |   |   |   `-- rgb_alpha.rs
+|   |   |   |   |   |-- layout.rs
+|   |   |   |   |   `-- transform.rs
+|   |   |   |   |-- frombytes.rs
+|   |   |   |   |-- internal_samples.rs
+|   |   |   |   `-- palette_policy.rs
 |   |   |   |-- construction.rs
 |   |   |   |-- data_access/
 |   |   |   |   |-- get.rs
@@ -7697,8 +7667,6 @@ It is a navigation aid, not an API-support or coverage claim.
 |   |   |   |   |-- horizontal_passes.rs
 |   |   |   |   |-- luma16.rs
 |   |   |   |   |-- samples.rs
-|   |   |   |   |-- vertical_passes/
-|   |   |   |   |   `-- transpose.rs
 |   |   |   |   `-- vertical_passes.rs
 |   |   |   |-- pil_resize.rs
 |   |   |   |-- quantize/
@@ -7931,6 +7899,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |   |-- __init__.py
     |   `-- audit.py
     |-- lint.sh
+    |-- list_migration_gpu_adapters.py
     |-- migration_benchmark_adapter.py
     |-- migration_benchmark_samples.py
     |-- migration_build_witness.py
@@ -7943,6 +7912,7 @@ It is a navigation aid, not an API-support or coverage claim.
     |   |-- display_inputs.py
     |   |-- fault_contracts.py
     |   |-- gpu_batch_inputs.py
+    |   |-- mode_size_matrix.py
     |   |-- pipeline_contract.py
     |   |-- quantize_inputs.py
     |   `-- target_output_contracts.py

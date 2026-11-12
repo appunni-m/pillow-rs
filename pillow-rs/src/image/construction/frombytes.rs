@@ -4,8 +4,8 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 use crate::error::PilError;
-use crate::raster::buffer::HiddenPixelLanes;
 use crate::raster::Mode;
+use crate::raster::buffer::HiddenPixelLanes;
 
 use super::{FromBytesMode, Image};
 
@@ -101,11 +101,7 @@ impl RawDecoderPlan {
                 hidden_lanes: None,
             });
         }
-        let input_row_bytes = decoder_input_row_bytes(
-            width,
-            self.input_bits,
-            self.bit_planes,
-        )?;
+        let input_row_bytes = decoder_input_row_bytes(width, self.input_bits, self.bit_planes)?;
         let output_row_bytes = raw_row_bytes(self.mode, width)?;
         let stride = effective_stride(self.stride, input_row_bytes)?;
         let required = required_input_bytes(input_row_bytes, stride, height)?;
@@ -158,9 +154,9 @@ impl RawDecoderPlan {
         if self.hidden_lane == RawDecoderHiddenLane::Default {
             return Ok(None);
         }
-        let pixel_count = width
-            .checked_mul(height)
-            .ok_or_else(|| PilError::DimensionError("physical pixel lane count overflows".into()))?;
+        let pixel_count = width.checked_mul(height).ok_or_else(|| {
+            PilError::DimensionError("physical pixel lane count overflows".into())
+        })?;
         let lane_bytes = pixel_count
             .checked_mul(1)
             .ok_or_else(|| PilError::DimensionError("physical pixel lane size overflows".into()))?;
@@ -195,7 +191,9 @@ impl RawDecoderHiddenLane {
             Self::SourcePixelByte {
                 source_bytes_per_pixel,
                 offset,
-            } => row.get(x.checked_mul(source_bytes_per_pixel)?.checked_add(offset)?).copied(),
+            } => row
+                .get(x.checked_mul(source_bytes_per_pixel)?.checked_add(offset)?)
+                .copied(),
             Self::SourcePixelWordByte {
                 source_bytes_per_pixel,
                 component,
@@ -213,7 +211,9 @@ impl RawDecoderHiddenLane {
                 let opaque = pixel & 0x8000 != 0;
                 Some(if opaque ^ inverted { u8::MAX } else { 0 })
             }
-            Self::SourcePlaneByte { plane } => row.get(plane.checked_mul(width)?.checked_add(x)?).copied(),
+            Self::SourcePlaneByte { plane } => {
+                row.get(plane.checked_mul(width)?.checked_add(x)?).copied()
+            }
         }
     }
 }
@@ -286,16 +286,10 @@ fn raw_row_bytes(mode: Mode, width: u32) -> Result<usize, PilError> {
         .ok_or_else(|| PilError::DimensionError("image buffer size overflow".into()))
 }
 
-fn decoder_input_row_bytes(
-    width: u32,
-    input_bits: u8,
-    bit_planes: u8,
-) -> Result<usize, PilError> {
+fn decoder_input_row_bytes(width: u32, input_bits: u8, bit_planes: u8) -> Result<usize, PilError> {
     let width = width as usize;
     let row_bytes = if bit_planes > 1 {
-        width
-            .div_ceil(8)
-            .checked_mul(usize::from(bit_planes))
+        width.div_ceil(8).checked_mul(usize::from(bit_planes))
     } else {
         width
             .checked_mul(usize::from(input_bits))
@@ -316,11 +310,7 @@ fn effective_stride(stride: i32, row_bytes: usize) -> Result<usize, PilError> {
     Ok(stride)
 }
 
-fn required_input_bytes(
-    row_bytes: usize,
-    stride: usize,
-    height: u32,
-) -> Result<usize, PilError> {
+fn required_input_bytes(row_bytes: usize, stride: usize, height: u32) -> Result<usize, PilError> {
     (height as usize - 1)
         .checked_mul(stride)
         .and_then(|rows| rows.checked_add(row_bytes))

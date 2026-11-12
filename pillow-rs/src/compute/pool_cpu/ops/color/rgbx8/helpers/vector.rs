@@ -51,9 +51,7 @@ fn convert_luma_alpha(source: &RgbaImage, target: Mode) -> Result<DynamicImage, 
 
 fn convert_rgba(source: &RgbaImage, target: Mode) -> Result<DynamicImage, PilError> {
     let output =
-        crate::compute::pool_cpu::ops::color::rgba8::helpers::opaque_padding::execute(
-            source,
-        )?;
+        crate::compute::pool_cpu::ops::color::rgba8::helpers::opaque_padding::execute(source)?;
     match target {
         Mode::ImageRgba8 => Ok(DynamicImage::ImageRgba8(output)),
         // NO_PILLOW_SUPPORT: the archived Pillow Convert table rejects RGBX to RGBa.

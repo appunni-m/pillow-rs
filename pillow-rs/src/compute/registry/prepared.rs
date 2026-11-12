@@ -141,8 +141,7 @@ impl PreparedOperation<'_> {
     /// Executes Convert while retaining palette metadata for the Image wrapper.
     pub(crate) fn execute_convert_output(
         self,
-    ) -> Result<crate::compute::pool_cpu::ops::color::ops::PreparedConvertOutput, PilError>
-    {
+    ) -> Result<crate::compute::pool_cpu::ops::color::ops::PreparedConvertOutput, PilError> {
         match self.implementation {
             Implementation::Convert(plan) => plan.execute_with_output(),
             _ => Err(PilError::InternalError(

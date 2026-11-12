@@ -75,17 +75,17 @@ pub(crate) fn try_vertical_append(
             )
             .map(|output| output.map(|output| (DynamicImage::ImageCmyk8(output), 0, 0)))
         }
-        (
-            Input,
-            Architecture::Sse2 | Architecture::Neon | Architecture::WasmSimd128,
-        ) => super::super::helpers::pad_native_vector::pad_vertical_append::<_, false>(
-            image,
-            frame,
-            super::default::pad_impl::fill(frame.color),
-        )
-        .map(|output| {
-            output.map(|(output, blocks, tail)| (DynamicImage::ImageCmyk8(output), blocks, tail))
-        }),
+        (Input, Architecture::Sse2 | Architecture::Neon | Architecture::WasmSimd128) => {
+            super::super::helpers::pad_native_vector::pad_vertical_append::<_, false>(
+                image,
+                frame,
+                super::default::pad_impl::fill(frame.color),
+            )
+            .map(|output| {
+                output
+                    .map(|(output, blocks, tail)| (DynamicImage::ImageCmyk8(output), blocks, tail))
+            })
+        }
         _ => Ok(None),
     }
 }

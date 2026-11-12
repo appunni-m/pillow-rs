@@ -2,20 +2,20 @@
 
 use std::sync::Arc;
 
-use crate::compute::{Architecture, ExecutionContext};
+use super::helpers::composite_module_support::COMPOSITE_MODULE_INPUTS;
+pub(crate) use super::helpers::{
+    composite_wrapper_mask_alpha, validate_composite_wrapper_dimensions,
+};
 use crate::compute::registry::support::{
     ImplementationSupport, InputContract, MergeBandModeRule, ModeSupport, OperationId,
     OperationInputs, OperationSupport, OutputModeRule, RejectionKind, SecondaryInputFacts,
     StrategyGuard, StrategyInputs, StrategySelection, SupportAssessment,
 };
+use crate::compute::{Architecture, ExecutionContext};
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
-use super::helpers::composite_module_support::COMPOSITE_MODULE_INPUTS;
-pub(crate) use super::helpers::{
-    composite_wrapper_mask_alpha, validate_composite_wrapper_dimensions,
-};
 
 // TODO(pillow-rs#3ptb): include CompositeModule, Merge, and BlendModule in CPU
 // parity for every supported mode/architecture pair, including exact output
@@ -946,9 +946,7 @@ fn execute_merge_mode(
             super::la_premultiplied8::ops::merge(source, remaining, selection)
         }
         Mode::ImagePalette8 => super::palette8::ops::merge(source, remaining, selection),
-        Mode::ImagePaletteAlpha8 => {
-            super::palette_alpha8::ops::merge(source, remaining, selection)
-        }
+        Mode::ImagePaletteAlpha8 => super::palette_alpha8::ops::merge(source, remaining, selection),
         Mode::ImageRgb8 => super::rgb8::ops::merge(source, remaining, selection),
         Mode::ImageRgba8 => super::rgba8::ops::merge(source, remaining, selection),
         Mode::ImageRgbPremultiplied8 => {

@@ -52232,6 +52232,51 @@ def _insert_observation_after(
     return observation_id
 
 
+# VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
+def _copy_target_observation(
+    case: dict[str, Any],
+    destination_step_id: str,
+    source_step_id: str,
+) -> None:
+    """Mirror a recorded target value for an equivalent added observation."""
+
+    expectation = case.get("target_expectation")
+    if not isinstance(expectation, dict):
+        return
+    observations = expectation.get("observations")
+    if not isinstance(observations, list):
+        raise ValueError(f"{case.get('case_id')}: target observations must be an array")
+    existing = next(
+        (
+            observation
+            for observation in observations
+            if isinstance(observation, dict)
+            and observation.get("step_id") == destination_step_id
+        ),
+        None,
+    )
+    if existing is not None:
+        return
+    source = next(
+        (
+            observation
+            for observation in observations
+            if isinstance(observation, dict)
+            and observation.get("step_id") == source_step_id
+        ),
+        None,
+    )
+    if source is None or "value" not in source:
+        raise ValueError(
+            f"{case.get('case_id')}: cannot mirror target observation "
+            f"{source_step_id!r} to {destination_step_id!r}"
+        )
+    observations.append(
+        {"step_id": destination_step_id, "value": copy.deepcopy(source["value"])}
+    )
+
+
+# VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 def strengthen_pixel_parity_cases(
     cases: list[dict[str, Any]],
     operations: dict[tuple[str, str], dict[str, Any]],
@@ -52300,12 +52345,17 @@ def strengthen_pixel_parity_cases(
                 and operation == "load"
             ):
                 if isinstance(receiver_id, str):
-                    _insert_observation_after(
+                    observation_id = _insert_observation_after(
                         case,
                         step_id,
                         "PIL.Image.Image",
                         "tobytes",
                         receiver_id,
+                    )
+                    _copy_target_observation(
+                        case,
+                        observation_id,
+                        "observe-receiver",
                     )
 
             if (
@@ -52316,12 +52366,17 @@ def strengthen_pixel_parity_cases(
                 and operation == "putdata"
             ):
                 if isinstance(receiver_id, str):
-                    _insert_observation_after(
+                    observation_id = _insert_observation_after(
                         case,
                         step_id,
                         "PIL.Image.Image",
                         "tobytes",
                         receiver_id,
+                    )
+                    _copy_target_observation(
+                        case,
+                        observation_id,
+                        "observe-receiver",
                     )
                 if case.get("operation") == "putdata" and case.get("case_id", "").endswith(
                     ".putdata.behavior.default"

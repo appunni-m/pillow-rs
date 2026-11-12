@@ -68,9 +68,7 @@ pub(crate) fn execute(
         selection,
     } = strategy;
     let output = match selection.implementation.architecture {
-        crate::compute::Architecture::Default => {
-            super::default::point_impl::to_luma(input, lut)?
-        }
+        crate::compute::Architecture::Default => super::default::point_impl::to_luma(input, lut)?,
         architecture => {
             return Err(PilError::InternalError(format!(
                 "unexpected {architecture:?} architecture selected for PointModeOutput mode I"

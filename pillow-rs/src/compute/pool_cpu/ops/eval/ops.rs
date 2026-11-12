@@ -10,7 +10,8 @@
 //! public-call benchmark cases after Stage 5 CPU source closure.
 use crate::compute::ExecutionContext;
 use crate::compute::registry::support::{
-    ModeSupport, OperationId, OperationInputs, OperationSupport, RejectionKind, StrategySelection,
+    ModeSupport, OperationId, OperationInputs, OperationSupport, OutputModeRule, RejectionKind,
+    StrategySelection,
 };
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;

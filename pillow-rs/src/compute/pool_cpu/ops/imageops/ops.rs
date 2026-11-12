@@ -20,20 +20,18 @@ use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, Mode};
 
-pub(crate) use super::helpers::expand::PreparedExpand;
 pub(crate) use super::helpers::autocontrast::PreparedAutocontrast;
 pub(crate) use super::helpers::equalize::PreparedEqualize;
-pub(crate) use super::helpers::{
-    IMAGEOPS_COLORIZE_CHILDREN, IMAGEOPS_COLORIZE_LUT_CHILDREN, IMAGEOPS_INVERT_CHILDREN,
-    IMAGEOPS_LUT_CHILDREN,
-};
+pub(crate) use super::helpers::expand::PreparedExpand;
+use super::helpers::expand::{prepare as prepare_expand, prepare_with_native_fill};
 use super::helpers::wrapper_routes::{
     classify_imageops_colorize_lut_route, classify_imageops_colorize_route,
     classify_imageops_invert_route, classify_imageops_posterize_route,
     classify_imageops_solarize_route,
 };
-use super::helpers::expand::{
-    prepare as prepare_expand, prepare_with_native_fill,
+pub(crate) use super::helpers::{
+    IMAGEOPS_COLORIZE_CHILDREN, IMAGEOPS_COLORIZE_LUT_CHILDREN, IMAGEOPS_INVERT_CHILDREN,
+    IMAGEOPS_LUT_CHILDREN,
 };
 pub(crate) use super::luma8::ops::PreparedColorize;
 
@@ -89,11 +87,8 @@ pub(crate) static EQUALIZE_SUPPORT: OperationSupport = OperationSupport::new(
 );
 
 /// Complete exact-mode support for native ImageOps.expand.
-pub(crate) static EXPAND_SUPPORT: OperationSupport = OperationSupport::new(
-    OperationId::Expand,
-    &[],
-    classify_expand_mode,
-);
+pub(crate) static EXPAND_SUPPORT: OperationSupport =
+    OperationSupport::new(OperationId::Expand, &[], classify_expand_mode);
 
 macro_rules! declare_expand_mode_contract {
     ($($mode:ident => $module:ident),+ $(,)?) => {
@@ -303,7 +298,7 @@ pub(crate) fn prepare_autocontrast_pipeline<'a>(
         &AUTOCONTRAST_SUPPORT,
         ctx,
     )
-        .map(crate::compute::registry::PreparedOperation::from_autocontrast)
+    .map(crate::compute::registry::PreparedOperation::from_autocontrast)
 }
 
 // VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending

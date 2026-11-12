@@ -59,10 +59,8 @@ pub(crate) fn try_vertical_append(
 ) -> Result<Option<(DynamicImage, u64, u64)>, PilError> {
     use super::super::ops::PadContentSource::Input;
 
-    let architecture = super::super::helpers::pad_strategies::selected_architecture(
-        selection,
-        Mode::ImageRgba8,
-    )?;
+    let architecture =
+        super::super::helpers::pad_strategies::selected_architecture(selection, Mode::ImageRgba8)?;
     let DynamicImage::ImageRgba8(image) = raster else {
         return Err(PilError::InternalError(
             "ImageRgba8 Pad strategy received a different raster".into(),
@@ -75,17 +73,17 @@ pub(crate) fn try_vertical_append(
             super::default::pad_impl::fill(frame.color),
         )
         .map(|output| output.map(|output| (DynamicImage::ImageRgba8(output), 0, 0))),
-        (
-            Input,
-            Architecture::Sse2 | Architecture::Neon | Architecture::WasmSimd128,
-        ) => super::super::helpers::pad_native_vector::pad_vertical_append::<_, true>(
-            image,
-            frame,
-            super::default::pad_impl::fill(frame.color),
-        )
-        .map(|output| {
-            output.map(|(output, blocks, tail)| (DynamicImage::ImageRgba8(output), blocks, tail))
-        }),
+        (Input, Architecture::Sse2 | Architecture::Neon | Architecture::WasmSimd128) => {
+            super::super::helpers::pad_native_vector::pad_vertical_append::<_, true>(
+                image,
+                frame,
+                super::default::pad_impl::fill(frame.color),
+            )
+            .map(|output| {
+                output
+                    .map(|(output, blocks, tail)| (DynamicImage::ImageRgba8(output), blocks, tail))
+            })
+        }
         _ => Ok(None),
     }
 }

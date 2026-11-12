@@ -90,13 +90,11 @@ pub(crate) fn execute_core_only_values(
     use super::put_data_value_at::ValueAtInput;
 
     match (mode, image, first) {
-        (
-            Mode::ImageLumaA16,
-            DynamicImage::ImageLumaA16(image),
-            ValueAtInput::LumaA16(pixel),
-        ) => super::super::luma_a16::default::put_data_value_at_impl::execute_values(
-            image, values, pixel, completed,
-        ),
+        (Mode::ImageLumaA16, DynamicImage::ImageLumaA16(image), ValueAtInput::LumaA16(pixel)) => {
+            super::super::luma_a16::default::put_data_value_at_impl::execute_values(
+                image, values, pixel, completed,
+            )
+        }
         (Mode::ImageRgb16, DynamicImage::ImageRgb16(image), ValueAtInput::Rgb16(pixel)) => {
             super::super::rgb16::default::put_data_value_at_impl::execute_values(
                 image, values, pixel, completed,
@@ -112,13 +110,11 @@ pub(crate) fn execute_core_only_values(
                 image, values, pixel, completed,
             )
         }
-        (
-            Mode::ImageRgba32F,
-            DynamicImage::ImageRgba32F(image),
-            ValueAtInput::Rgba32F(pixel),
-        ) => super::super::rgba32f::default::put_data_value_at_impl::execute_values(
-            image, values, pixel, completed,
-        ),
+        (Mode::ImageRgba32F, DynamicImage::ImageRgba32F(image), ValueAtInput::Rgba32F(pixel)) => {
+            super::super::rgba32f::default::put_data_value_at_impl::execute_values(
+                image, values, pixel, completed,
+            )
+        }
         _ => Err(PilError::InternalError(
             "native putdata input does not match its selected mode".into(),
         )),

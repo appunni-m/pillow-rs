@@ -462,6 +462,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-17x19-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-17x19-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-17x19-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x19-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x19-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x19-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x19-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x19-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x19-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x19-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x19-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x19-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x19-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x19-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x19-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x19-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x19-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x19-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x19-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x19-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x19-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-17x19-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-17x19-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-17x19-core-only-rgba16-resize.json
@@ -482,6 +500,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-33x25-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-33x25-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-33x25-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-33x25-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-33x25-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-33x25-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-33x25-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-33x25-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-33x25-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-33x25-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-33x25-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-33x25-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-33x25-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-33x25-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-33x25-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-33x25-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-33x25-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-33x25-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-33x25-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-33x25-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-33x25-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-33x25-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-33x25-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-33x25-core-only-rgba16-resize.json
@@ -502,6 +538,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-256x192-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-256x192-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-256x192-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-256x192-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-256x192-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-256x192-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-256x192-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-256x192-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-256x192-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-256x192-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-256x192-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-256x192-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-256x192-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-256x192-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-256x192-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-256x192-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-256x192-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-256x192-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-256x192-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-256x192-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-256x192-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-256x192-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-256x192-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-256x192-core-only-rgba16-resize.json
@@ -522,6 +576,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-257x193-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-257x193-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-257x193-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-257x193-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-257x193-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-257x193-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-257x193-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-257x193-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-257x193-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-257x193-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-257x193-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-257x193-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-257x193-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-257x193-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-257x193-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-257x193-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-257x193-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-257x193-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-257x193-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-257x193-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-257x193-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-257x193-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-257x193-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-257x193-core-only-rgba16-resize.json
@@ -542,6 +614,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-5x7-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-5x7-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-5x7-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-5x7-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-5x7-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-5x7-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-5x7-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-5x7-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-5x7-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-5x7-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-5x7-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-5x7-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-5x7-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-5x7-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-5x7-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-5x7-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-5x7-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-5x7-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-5x7-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-5x7-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-5x7-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-5x7-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-5x7-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-5x7-core-only-rgba16-resize.json
@@ -562,6 +652,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-65x47-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-65x47-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-65x47-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-65x47-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-65x47-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-65x47-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-65x47-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-65x47-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-65x47-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-65x47-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-65x47-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-65x47-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-65x47-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-65x47-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-65x47-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-65x47-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-65x47-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-65x47-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-65x47-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-65x47-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-65x47-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-65x47-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-65x47-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-65x47-core-only-rgba16-resize.json
@@ -582,6 +690,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-512x384-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-512x384-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-512x384-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-512x384-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-512x384-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-512x384-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-512x384-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-512x384-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-512x384-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-512x384-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-512x384-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-512x384-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-512x384-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-512x384-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-512x384-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-512x384-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-512x384-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-512x384-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-512x384-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-512x384-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-512x384-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-512x384-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-512x384-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-512x384-core-only-rgba16-resize.json
@@ -602,6 +728,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-513x385-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-513x385-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-513x385-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-513x385-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-513x385-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-513x385-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-513x385-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-513x385-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-513x385-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-513x385-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-513x385-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-513x385-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-513x385-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-513x385-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-513x385-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-513x385-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-513x385-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-513x385-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-513x385-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-513x385-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-513x385-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-513x385-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-513x385-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-513x385-core-only-rgba16-resize.json
@@ -622,6 +766,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-64x64-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-64x64-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-64x64-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-64x64-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-64x64-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-64x64-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-64x64-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-64x64-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-64x64-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-64x64-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-64x64-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-64x64-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-64x64-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-64x64-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-64x64-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-64x64-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-64x64-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-64x64-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-64x64-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-64x64-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-64x64-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-64x64-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-64x64-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-64x64-core-only-rgba16-resize.json
@@ -642,6 +804,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-128x128-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-128x128-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-128x128-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-128x128-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-128x128-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-128x128-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-128x128-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-128x128-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-128x128-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-128x128-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-128x128-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-128x128-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-128x128-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-128x128-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-128x128-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-128x128-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-128x128-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-128x128-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-128x128-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-128x128-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-128x128-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-128x128-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-128x128-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-128x128-core-only-rgba16-resize.json
@@ -662,6 +842,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-1024x768-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-1024x768-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-1024x768-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1024x768-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1024x768-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1024x768-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1024x768-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1024x768-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1024x768-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1024x768-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1024x768-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1024x768-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1024x768-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1024x768-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1024x768-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1024x768-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1024x768-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1024x768-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1024x768-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1024x768-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1024x768-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-1024x768-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-1024x768-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-1024x768-core-only-rgba16-resize.json
@@ -682,6 +880,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-1025x769-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-1025x769-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-1025x769-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1025x769-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1025x769-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1025x769-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1025x769-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1025x769-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1025x769-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1025x769-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1025x769-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1025x769-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1025x769-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1025x769-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1025x769-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1025x769-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1025x769-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1025x769-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1025x769-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1025x769-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1025x769-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-1025x769-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-1025x769-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-1025x769-core-only-rgba16-resize.json
@@ -702,6 +918,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-1x1-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-1x1-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-1x1-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x1-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x1-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x1-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x1-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x1-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x1-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x1-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x1-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x1-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x1-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x1-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x1-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x1-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x1-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x1-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x1-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x1-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x1-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-1x1-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-1x1-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-1x1-core-only-rgba16-resize.json
@@ -722,6 +956,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-1x17-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-1x17-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-1x17-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x17-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x17-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x17-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x17-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x17-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x17-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x17-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x17-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x17-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x17-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x17-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x17-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x17-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x17-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x17-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x17-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x17-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x17-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-1x17-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-1x17-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-1x17-core-only-rgba16-resize.json
@@ -742,6 +994,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-17x1-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-17x1-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-17x1-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x1-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x1-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x1-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x1-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x1-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x1-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x1-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x1-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x1-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x1-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x1-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x1-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x1-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x1-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x1-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x1-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x1-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-17x1-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-17x1-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-17x1-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-17x1-core-only-rgba16-resize.json
@@ -762,6 +1032,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-15x17-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-15x17-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-15x17-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-15x17-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-15x17-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-15x17-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-15x17-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-15x17-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-15x17-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-15x17-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-15x17-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-15x17-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-15x17-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-15x17-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-15x17-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-15x17-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-15x17-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-15x17-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-15x17-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-15x17-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-15x17-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-15x17-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-15x17-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-15x17-core-only-rgba16-resize.json
@@ -782,6 +1070,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-31x33-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-31x33-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-31x33-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-31x33-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-31x33-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-31x33-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-31x33-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-31x33-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-31x33-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-31x33-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-31x33-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-31x33-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-31x33-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-31x33-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-31x33-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-31x33-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-31x33-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-31x33-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-31x33-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-31x33-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-31x33-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-31x33-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-31x33-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-31x33-core-only-rgba16-resize.json
@@ -802,6 +1108,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-32x32-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-32x32-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-32x32-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-32x32-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-32x32-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-32x32-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-32x32-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-32x32-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-32x32-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-32x32-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-32x32-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-32x32-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-32x32-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-32x32-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-32x32-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-32x32-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-32x32-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-32x32-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-32x32-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-32x32-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-32x32-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-32x32-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-32x32-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-32x32-core-only-rgba16-resize.json
@@ -822,6 +1146,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-63x65-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-63x65-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-63x65-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-63x65-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-63x65-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-63x65-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-63x65-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-63x65-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-63x65-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-63x65-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-63x65-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-63x65-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-63x65-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-63x65-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-63x65-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-63x65-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-63x65-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-63x65-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-63x65-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-63x65-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-63x65-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-63x65-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-63x65-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-63x65-core-only-rgba16-resize.json
@@ -842,6 +1184,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-127x129-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-127x129-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-127x129-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-127x129-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-127x129-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-127x129-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-127x129-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-127x129-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-127x129-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-127x129-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-127x129-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-127x129-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-127x129-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-127x129-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-127x129-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-127x129-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-127x129-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-127x129-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-127x129-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-127x129-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-127x129-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-127x129-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-127x129-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-127x129-core-only-rgba16-resize.json
@@ -862,6 +1222,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-255x257-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-255x257-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-255x257-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-255x257-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-255x257-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-255x257-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-255x257-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-255x257-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-255x257-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-255x257-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-255x257-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-255x257-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-255x257-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-255x257-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-255x257-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-255x257-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-255x257-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-255x257-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-255x257-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-255x257-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-255x257-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-255x257-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-255x257-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-255x257-core-only-rgba16-resize.json
@@ -882,6 +1260,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-2x2-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-2x2-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-2x2-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2x2-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2x2-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2x2-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2x2-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2x2-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2x2-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2x2-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2x2-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2x2-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2x2-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2x2-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2x2-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2x2-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2x2-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2x2-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2x2-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2x2-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2x2-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-2x2-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-2x2-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-2x2-core-only-rgba16-resize.json
@@ -902,6 +1298,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-3x5-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-3x5-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-3x5-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-3x5-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-3x5-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-3x5-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-3x5-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-3x5-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-3x5-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-3x5-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-3x5-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-3x5-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-3x5-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-3x5-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-3x5-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-3x5-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-3x5-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-3x5-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-3x5-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-3x5-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-3x5-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-3x5-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-3x5-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-3x5-core-only-rgba16-resize.json
@@ -922,6 +1336,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-8x8-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-8x8-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-8x8-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-8x8-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-8x8-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-8x8-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-8x8-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-8x8-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-8x8-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-8x8-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-8x8-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-8x8-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-8x8-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-8x8-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-8x8-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-8x8-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-8x8-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-8x8-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-8x8-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-8x8-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-8x8-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-8x8-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-8x8-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-8x8-core-only-rgba16-resize.json
@@ -942,6 +1374,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-16x16-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-16x16-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-16x16-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-16x16-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-16x16-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-16x16-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-16x16-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-16x16-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-16x16-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-16x16-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-16x16-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-16x16-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-16x16-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-16x16-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-16x16-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-16x16-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-16x16-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-16x16-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-16x16-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-16x16-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-16x16-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-16x16-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-16x16-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-16x16-core-only-rgba16-resize.json
@@ -962,6 +1412,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-48x33-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-48x33-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-48x33-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-48x33-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-48x33-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-48x33-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-48x33-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-48x33-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-48x33-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-48x33-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-48x33-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-48x33-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-48x33-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-48x33-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-48x33-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-48x33-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-48x33-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-48x33-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-48x33-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-48x33-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-48x33-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-48x33-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-48x33-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-48x33-core-only-rgba16-resize.json
@@ -982,6 +1450,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-129x65-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-129x65-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-129x65-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-129x65-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-129x65-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-129x65-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-129x65-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-129x65-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-129x65-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-129x65-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-129x65-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-129x65-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-129x65-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-129x65-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-129x65-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-129x65-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-129x65-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-129x65-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-129x65-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-129x65-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-129x65-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-129x65-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-129x65-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-129x65-core-only-rgba16-resize.json
@@ -1002,6 +1488,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-320x240-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-320x240-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-320x240-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-320x240-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-320x240-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-320x240-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-320x240-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-320x240-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-320x240-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-320x240-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-320x240-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-320x240-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-320x240-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-320x240-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-320x240-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-320x240-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-320x240-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-320x240-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-320x240-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-320x240-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-320x240-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-320x240-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-320x240-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-320x240-core-only-rgba16-resize.json
@@ -1022,6 +1526,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-640x480-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-640x480-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-640x480-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-640x480-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-640x480-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-640x480-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-640x480-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-640x480-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-640x480-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-640x480-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-640x480-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-640x480-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-640x480-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-640x480-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-640x480-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-640x480-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-640x480-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-640x480-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-640x480-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-640x480-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-640x480-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-640x480-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-640x480-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-640x480-core-only-rgba16-resize.json
@@ -1042,6 +1564,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-1280x720-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-1280x720-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-1280x720-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1280x720-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1280x720-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1280x720-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1280x720-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1280x720-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1280x720-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1280x720-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1280x720-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1280x720-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1280x720-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1280x720-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1280x720-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1280x720-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1280x720-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1280x720-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1280x720-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1280x720-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1280x720-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-1280x720-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-1280x720-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-1280x720-core-only-rgba16-resize.json
@@ -1062,6 +1602,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-1600x900-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-1600x900-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-1600x900-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1600x900-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1600x900-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1600x900-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1600x900-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1600x900-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1600x900-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1600x900-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1600x900-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1600x900-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1600x900-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1600x900-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1600x900-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1600x900-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1600x900-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1600x900-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1600x900-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1600x900-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1600x900-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-1600x900-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-1600x900-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-1600x900-core-only-rgba16-resize.json
@@ -1082,6 +1640,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-1920x1080-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-1920x1080-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-1920x1080-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1920x1080-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1920x1080-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1920x1080-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1920x1080-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1920x1080-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1920x1080-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1920x1080-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1920x1080-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1920x1080-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1920x1080-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1920x1080-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1920x1080-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1920x1080-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1920x1080-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1920x1080-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1920x1080-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1920x1080-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1920x1080-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-1920x1080-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-1920x1080-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-1920x1080-core-only-rgba16-resize.json
@@ -1102,6 +1678,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-1080x1920-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-1080x1920-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-1080x1920-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1080x1920-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1080x1920-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1080x1920-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1080x1920-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1080x1920-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1080x1920-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1080x1920-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1080x1920-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1080x1920-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1080x1920-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1080x1920-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1080x1920-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1080x1920-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1080x1920-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1080x1920-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1080x1920-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1080x1920-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1080x1920-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-1080x1920-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-1080x1920-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-1080x1920-core-only-rgba16-resize.json
@@ -1122,6 +1716,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-1921x1080-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-1921x1080-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-1921x1080-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1921x1080-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1921x1080-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1921x1080-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1921x1080-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1921x1080-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1921x1080-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1921x1080-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1921x1080-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1921x1080-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1921x1080-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1921x1080-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1921x1080-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1921x1080-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1921x1080-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1921x1080-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1921x1080-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1921x1080-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1921x1080-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-1921x1080-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-1921x1080-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-1921x1080-core-only-rgba16-resize.json
@@ -1142,6 +1754,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-2048x1-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-2048x1-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-2048x1-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2048x1-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2048x1-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2048x1-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2048x1-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2048x1-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2048x1-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2048x1-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2048x1-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2048x1-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2048x1-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2048x1-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2048x1-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2048x1-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2048x1-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2048x1-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2048x1-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2048x1-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2048x1-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-2048x1-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-2048x1-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-2048x1-core-only-rgba16-resize.json
@@ -1162,6 +1792,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-2049x1-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-2049x1-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-2049x1-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2049x1-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2049x1-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2049x1-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2049x1-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2049x1-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2049x1-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2049x1-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2049x1-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2049x1-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2049x1-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2049x1-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2049x1-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2049x1-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2049x1-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2049x1-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2049x1-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2049x1-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-2049x1-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-2049x1-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-2049x1-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-2049x1-core-only-rgba16-resize.json
@@ -1182,6 +1830,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-1x2048-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-1x2048-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-1x2048-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2048-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2048-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2048-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2048-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2048-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2048-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2048-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2048-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2048-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2048-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2048-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2048-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2048-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2048-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2048-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2048-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2048-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2048-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-1x2048-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-1x2048-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-1x2048-core-only-rgba16-resize.json
@@ -1202,6 +1868,24 @@ input_index:
   - inputs/parity/pil-image-image-mode-size-target-output-1x2049-core-only-rgba16-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-1x2049-core-only-rgb32f-getbbox.json
   - inputs/parity/pil-image-image-mode-size-target-output-1x2049-core-only-rgba32f-getbbox.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2049-i16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2049-i16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2049-i16l-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2049-i16l-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2049-i16b-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2049-i16b-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2049-i16n-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2049-i16n-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2049-core-only-luma-a16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2049-core-only-luma-a16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2049-core-only-rgb16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2049-core-only-rgb16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2049-core-only-rgba16-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2049-core-only-rgba16-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2049-core-only-rgb32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2049-core-only-rgb32f-reduce-factor-2x3.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2049-core-only-rgba32f-reduce-factor-2x2.json
+  - inputs/parity/pil-image-image-mode-size-target-output-1x2049-core-only-rgba32f-reduce-factor-2x3.json
   - inputs/parity/pil-image-image-mode-size-target-output-1x2049-core-only-luma-a16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-1x2049-core-only-rgb16-resize.json
   - inputs/parity/pil-image-image-mode-size-target-output-1x2049-core-only-rgba16-resize.json
@@ -4323,6 +5007,10 @@ coverage_components:
   - pillow-rs-py/python/PIL/Image.py
   - pillow-rs-py/python/pillow_rs/image.py
   - pillow-rs-py/python/pillow_rs/operations.py
+  - pillow-rs-py/src/image/creation.rs
+  - pillow-rs-py/src/image/data.rs
+  - pillow-rs-py/src/image/operations.rs
+  - pillow-rs-py/src/image/properties.rs
   - pillow-rs/src/image.rs
   - pillow-rs/src/pipeline.rs
   - pillow-rs/src/ops/module_fns.rs
@@ -4337,6 +5025,7 @@ coverage_components:
   - pillow-rs/src/ops/split.rs
   - pillow-rs/src/ops/transform.rs
   - pillow-rs/src/ops/transpose.rs
+  - pillow-rs/src/compute/pool_cpu/ops/transpose/ops.rs
   - pillow-rs/src/compute/pool_cpu/ops/geometry/ops.rs
   dimensions:
   - function
@@ -6915,6 +7604,266 @@ surfaces:
   source_path: PIL.Image.Image
   storage_slug: pil-image-image
   operations:
+  - id: _migration_direct_rotate
+    kind: method
+    classification: endpoint
+    lifecycle:
+      status: current
+    source:
+      oracle_id: null
+      path: PIL.Image.Image._migration_direct_rotate
+      signature: _migration_direct_rotate(self, /, angle, expand=False)
+      parameters:
+      - id: self
+        style: receiver
+        value_types:
+        - handle
+        omission:
+          kind: required
+      - id: angle
+        style: positional_or_keyword
+        value_types:
+        - number
+        omission:
+          kind: required
+      - id: expand
+        style: positional_or_keyword
+        value_types:
+        - boolean
+        omission:
+          kind: literal
+          value: false
+      result:
+        shape: image
+        observations:
+        - path: value
+          value_types:
+          - image
+          comparison:
+            kind: image
+            pixel_mode: exact
+            maximum_channel_delta: 0
+            metadata_mode: exact
+            reason: null
+        error:
+          fields:
+          - class
+          - kind
+          - message
+          - stage
+          - code
+          message:
+            mode: exact
+            transforms: []
+            reason: null
+    targets:
+    - target_id: pillow-rs-python
+      path: pillow_rs._core.Image._migration_direct_rotate
+      signature: _migration_direct_rotate(self, /, angle, expand=False)
+      support:
+        status: supported
+    requirements:
+    - id: PIL.Image.Image._migration_direct_rotate.behavior.default
+      dimension: success_path
+      description: Run the direct Rust Rotate shortcut and preserve the exact mode.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.mode.1
+      dimension: mode
+      description: Direct Rust Rotate identity behavior for 1 mode.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.mode.l
+      dimension: mode
+      description: Direct Rust Rotate identity behavior for L mode.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.mode.la
+      dimension: mode
+      description: Direct Rust Rotate identity behavior for LA mode.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.mode.la-premultiplied
+      dimension: mode
+      description: Direct Rust Rotate identity behavior for La mode.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.mode.p
+      dimension: mode
+      description: Direct Rust Rotate identity behavior for P mode.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.mode.pa
+      dimension: mode
+      description: Direct Rust Rotate identity behavior for PA mode.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.mode.rgb
+      dimension: mode
+      description: Direct Rust Rotate identity behavior for RGB mode.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.mode.rgba
+      dimension: mode
+      description: Direct Rust Rotate identity behavior for RGBA mode.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.mode.rgba-premultiplied
+      dimension: mode
+      description: Direct Rust Rotate identity behavior for RGBa mode.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.mode.rgbx
+      dimension: mode
+      description: Direct Rust Rotate identity behavior for RGBX mode.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.mode.cmyk
+      dimension: mode
+      description: Direct Rust Rotate identity behavior for CMYK mode.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.mode.ycbcr
+      dimension: mode
+      description: Direct Rust Rotate identity behavior for YCbCr mode.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.mode.lab
+      dimension: mode
+      description: Direct Rust Rotate identity behavior for LAB mode.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.mode.hsv
+      dimension: mode
+      description: Direct Rust Rotate identity behavior for HSV mode.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.mode.i
+      dimension: mode
+      description: Direct Rust Rotate identity behavior for I mode.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.mode.f
+      dimension: mode
+      description: Direct Rust Rotate identity behavior for F mode.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.mode.i-16
+      dimension: mode
+      description: Direct Rust Rotate identity behavior for I;16 mode.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.mode.i-16l
+      dimension: mode
+      description: Direct Rust Rotate identity behavior for I;16L mode.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.mode.i-16b
+      dimension: mode
+      description: Direct Rust Rotate identity behavior for I;16B mode.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.mode.i-16n
+      dimension: mode
+      description: Direct Rust Rotate identity behavior for I;16N mode.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.mode.imagelumaa16
+      dimension: mode
+      description: Direct Rust Rotate identity behavior for ImageLumaA16 mode.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.mode.imagergb16
+      dimension: mode
+      description: Direct Rust Rotate identity behavior for ImageRgb16 mode.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.mode.imagergba16
+      dimension: mode
+      description: Direct Rust Rotate identity behavior for ImageRgba16 mode.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.mode.imagergb32f
+      dimension: mode
+      description: Direct Rust Rotate identity behavior for ImageRgb32F mode.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.mode.imagergba32f
+      dimension: mode
+      description: Direct Rust Rotate identity behavior for ImageRgba32F mode.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.fast-path.identity
+      dimension: boundary
+      description: Direct Rust Rotate identity shortcut.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.fast-path.half-turn
+      dimension: boundary
+      description: Direct Rust Rotate half-turn shortcut.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.fast-path.quarter-turn-90
+      dimension: boundary
+      description: Direct Rust Rotate 90-degree quarter-turn shortcut.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.fast-path.quarter-turn-270
+      dimension: boundary
+      description: Direct Rust Rotate 270-degree quarter-turn shortcut.
+      lanes:
+      - target_output
+      - coverage
+    - id: PIL.Image.Image._migration_direct_rotate.fast-path.quarter-turn-expand
+      dimension: boundary
+      description: Direct Rust Rotate expanded non-square quarter-turn shortcut.
+      lanes:
+      - target_output
+      - coverage
+    parity:
+      applicability: not_applicable
+      reason: Pillow has no direct Rust entry-point equivalent.
+    coverage:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      component_ids:
+      - image-core
+    benchmark:
+      applicability: not_applicable
+      reason: The test-api-only hook is not a production workload.
+    fault_contract:
+      applicability: not_applicable
+      reason: The direct Rotate hook has no injected fault contract.
   - id: alpha_composite
     kind: method
     classification: endpoint
@@ -12518,9 +13467,9 @@ surfaces:
       lanes:
       - parity
       - coverage
-    - id: PIL.Image.Image.reduce.mode.cmyk
+    - id: PIL.Image.Image.reduce.mode.1
       dimension: mode
-      description: Public behavior for image mode 'CMYK'.
+      description: Public behavior for image mode '1'.
       lanes:
       - parity
       - coverage
@@ -12536,6 +13485,24 @@ surfaces:
       lanes:
       - parity
       - coverage
+    - id: PIL.Image.Image.reduce.mode.la-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'La'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.reduce.mode.p
+      dimension: mode
+      description: Public behavior for image mode 'P'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.reduce.mode.pa
+      dimension: mode
+      description: Public behavior for image mode 'PA'.
+      lanes:
+      - parity
+      - coverage
     - id: PIL.Image.Image.reduce.mode.rgb
       dimension: mode
       description: Public behavior for image mode 'RGB'.
@@ -12547,6 +13514,117 @@ surfaces:
       description: Public behavior for image mode 'RGBA'.
       lanes:
       - parity
+      - coverage
+    - id: PIL.Image.Image.reduce.mode.rgba-premultiplied
+      dimension: mode
+      description: Public behavior for image mode 'RGBa'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.reduce.mode.rgbx
+      dimension: mode
+      description: Public behavior for image mode 'RGBX'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.reduce.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.reduce.mode.ycbcr
+      dimension: mode
+      description: Public behavior for image mode 'YCbCr'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.reduce.mode.lab
+      dimension: mode
+      description: Public behavior for image mode 'LAB'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.reduce.mode.hsv
+      dimension: mode
+      description: Public behavior for image mode 'HSV'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.reduce.mode.i
+      dimension: mode
+      description: Public behavior for image mode 'I'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.reduce.mode.f
+      dimension: mode
+      description: Public behavior for image mode 'F'.
+      lanes:
+      - parity
+      - coverage
+    - id: PIL.Image.Image.reduce.mode.i16
+      dimension: mode
+      description: Native typed Reduce output for i16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - benchmark
+      - coverage
+    - id: PIL.Image.Image.reduce.mode.i16l
+      dimension: mode
+      description: Native typed Reduce output for i16l (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - benchmark
+      - coverage
+    - id: PIL.Image.Image.reduce.mode.i16b
+      dimension: mode
+      description: Native typed Reduce output for i16b (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - benchmark
+      - coverage
+    - id: PIL.Image.Image.reduce.mode.i16n
+      dimension: mode
+      description: Native typed Reduce output for i16n (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - benchmark
+      - coverage
+    - id: PIL.Image.Image.reduce.mode.core-only-luma-a16
+      dimension: mode
+      description: Native typed Reduce output for core-only-luma-a16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - benchmark
+      - coverage
+    - id: PIL.Image.Image.reduce.mode.core-only-rgb16
+      dimension: mode
+      description: Native typed Reduce output for core-only-rgb16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - benchmark
+      - coverage
+    - id: PIL.Image.Image.reduce.mode.core-only-rgba16
+      dimension: mode
+      description: Native typed Reduce output for core-only-rgba16 (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - benchmark
+      - coverage
+    - id: PIL.Image.Image.reduce.mode.core-only-rgb32f
+      dimension: mode
+      description: Native typed Reduce output for core-only-rgb32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - benchmark
+      - coverage
+    - id: PIL.Image.Image.reduce.mode.core-only-rgba32f
+      dimension: mode
+      description: Native typed Reduce output for core-only-rgba32f (NO_PILLOW_SUPPORT).
+      lanes:
+      - target_output
+      - benchmark
       - coverage
     - id: PIL.Image.Image.reduce.parameter-combination.legacy-001
       dimension: parameter_combination

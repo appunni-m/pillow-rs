@@ -22,7 +22,9 @@ pub(crate) fn execute(source: &Source, target: Mode) -> Result<DynamicImage, Pil
         return Ok(DynamicImage::ImageRgbx8(rgbx(source)));
     }
     if crate::compute::pool_cpu::ops::color::helpers::convert::luma16::is_luma16_target(target) {
-        return crate::compute::pool_cpu::ops::color::helpers::convert::high_depth::execute_i16(source, target);
+        return crate::compute::pool_cpu::ops::color::helpers::convert::high_depth::execute_i16(
+            source, target,
+        );
     }
     if target == Mode::ImageLuma8 {
         let kernel =
@@ -52,5 +54,7 @@ pub(crate) fn execute_palette_target(
     target: Mode,
     dither: Option<DitherMethod>,
 ) -> Result<super::super::super::ops::PreparedConvertOutput, PilError> {
-    crate::compute::pool_cpu::ops::color::helpers::convert::high_depth::execute_palette_target(source, target, dither)
+    crate::compute::pool_cpu::ops::color::helpers::convert::high_depth::execute_palette_target(
+        source, target, dither,
+    )
 }

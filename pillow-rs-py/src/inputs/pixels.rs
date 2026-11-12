@@ -424,8 +424,8 @@ pub(crate) fn frombytes_size_from_python(
 ) -> PyResult<(u32, u32)> {
     let width = c_int_from_python(width)?;
     let height = c_int_from_python(height)?;
-    let width = u32::try_from(width)
-        .map_err(|_| PyValueError::new_err("Width and height must be >= 0"))?;
+    let width =
+        u32::try_from(width).map_err(|_| PyValueError::new_err("Width and height must be >= 0"))?;
     let height = u32::try_from(height)
         .map_err(|_| PyValueError::new_err("Width and height must be >= 0"))?;
     Ok((width, height))

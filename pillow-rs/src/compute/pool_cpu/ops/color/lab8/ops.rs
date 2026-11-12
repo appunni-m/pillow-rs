@@ -121,6 +121,10 @@ pub(crate) fn execute(
             "Convert selected an undeclared LAB8 architecture".into(),
         )),
     }?;
-    super::super::helpers::convert::physical_lanes::preserve_compact_rgb_lane(source, target, &mut output)?;
+    super::super::helpers::convert::physical_lanes::preserve_compact_rgb_lane(
+        source,
+        target,
+        &mut output,
+    )?;
     Ok(output)
 }

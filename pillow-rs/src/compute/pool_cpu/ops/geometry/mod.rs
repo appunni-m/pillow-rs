@@ -1,9 +1,8 @@
 //! Mode-preserving geometry operations composed from prepared CPU strategies.
 
-mod helpers;
-pub(crate) mod ops;
 pub(crate) mod cmyk8;
 pub(crate) mod f32;
+mod helpers;
 pub(crate) mod hsv8;
 pub(crate) mod i16;
 pub(crate) mod i16b;
@@ -16,6 +15,7 @@ pub(crate) mod luma8;
 pub(crate) mod luma_a16;
 pub(crate) mod luma_a8;
 pub(crate) mod one;
+pub(crate) mod ops;
 pub(crate) mod palette8;
 pub(crate) mod palette_alpha8;
 pub(crate) mod rgb16;

@@ -33,9 +33,7 @@ fn parse_transform_resample(code: i32) -> Result<ResampleFilter, PilError> {
     }
 }
 
-pub(crate) fn validate_transform_resample_filter(
-    filter: ResampleFilter,
-) -> Result<(), PilError> {
+pub(crate) fn validate_transform_resample_filter(filter: ResampleFilter) -> Result<(), PilError> {
     let code = match filter {
         ResampleFilter::Nearest => 0,
         ResampleFilter::Lanczos => 1,

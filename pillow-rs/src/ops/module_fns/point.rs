@@ -158,10 +158,8 @@ fn execute_mode_point(image: &Image, target: Mode, lut: &[u8]) -> Result<Image, 
         return execute().map(|(image, _, _)| image);
     }
 
-    let telemetry = crate::compute::begin_eager_cpu_operation_telemetry(
-        "PointModeOutput",
-        requested_backend,
-    );
+    let telemetry =
+        crate::compute::begin_eager_cpu_operation_telemetry("PointModeOutput", requested_backend);
     operation_receipts.restore();
     match execute() {
         Ok((image, output_bytes, selection)) => {
