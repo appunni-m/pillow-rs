@@ -745,13 +745,13 @@ impl Image {
                 PipelineModeState::Planned(None) => {}
             }
         }
-        // TODO(pillow-rs#3ptb): finish the PipelineOp/support crosswalk, then
-        // freeze fallback parity for unresolved upstream pipelines, P-preserving
-        // palette expansion without an attached palette, rejected descriptors
-        // without a declared output, and PutData payloads absent from the
-        // operation's ByPayload table. Keep this fallback until those output
-        // identities and execution-time errors are established without
-        // changing lazy error order.
+        // TODO(pillow-rs#3ptb): freeze focused CPU parity for the remaining
+        // materialization boundaries: resolve an upstream Planned(None) before
+        // this node; preserve fallback for palette-dependent P operations when
+        // no palette gives a known expansion identity; and let rejected raw
+        // descriptors without a declared output or PutData payloads absent
+        // from ByPayload reach their existing execution errors. Verify mode
+        // access, result identity, and error order together.
         Ok(self.materialized_shared()?.mode())
     }
 

@@ -7015,20 +7015,27 @@ order, empty-mesh palette retention, sampler parity, fallback receipts, and
 complete mode/architecture parity remain open. Source review only; no
 verification ran.
 
-2026-11-12 lazy Mode resolver follow-up: read `Image::mode_identity`,
-`known_pipeline_op_mode_with_expansion`, pipeline output planning, and
-`Image::palette_expansion_mode` together. PA expansion is already statically
-RGBA without consulting palette metadata; P with an attached palette resolves
-to RGB or RGBA from its alpha table. Identified fallback cases include P
-palette-dependent transitions without an attached palette and rejected raw
-pipeline descriptors without a declared rejected output, PutData descriptors
-whose payload mode has no matching `ByPayload` result, and upstream pipelines
-whose mode remains unresolved. The rule review found that target-bearing
-pipeline contracts are Convert/ConvertMatrix, Merge, and Color3DLut, all
-handled by `target_mode_for_pipeline_op`; PutData is the sole `ByPayload`
-pipeline operation; and `NoRasterResult` is not declared by the raster-producing
-`PipelineOp` variants. The defensive target/payload mismatch branches remain
-source-contract risks. Kept materialization fallback because output identity
-or execution-time error may depend on facts unavailable from the lazy graph.
-The complete variant-to-support caller audit and focused parity remain open.
-Updated the source TODO and inventory. No runtime validation ran.
+2026-11-12 lazy Mode resolver source crosswalk: enumerated all 87
+`PipelineOp` variants and followed the exhaustive `operation_id()` match to 75
+operation identities; `PipelineOp::support()` delegates directly to those
+family-owned declarations. The grouped forms are Convert/ConvertMatrix,
+Equalize/EqualizeMasked, three Pad forms, two Expand forms, and ten Draw forms.
+`Image::push_op` creates the declared output through
+`pipeline_output_metadata -> pipeline_output_mode`; a mode query replans only
+when that cached identity is absent, resolving the upstream image first. Lazy
+materialization verifies that the producer's exact `DynamicImage` variant
+matches a declared identity. PA expansion is always RGBA, while P expansion
+requires an attached palette and resolves to RGB/RGBA from its alpha table.
+The declared target rules are Convert/ConvertMatrix, Merge, and Color3DLut;
+PutData is the only `ByPayload` pipeline operation; and no raster-producing
+PipelineOp maps to `NoRasterResult`. The only remaining materialization
+boundaries are unresolved upstream pipelines, palette-dependent P operations
+without an attached palette, rejected raw descriptors without a declared
+output, and PutData payloads outside its 16-entry table. The defensive
+target/payload mismatch branches have no active mapping in the reviewed
+declarations. The source crosswalk is complete; exact mode, fault-order, and
+fallback-receipt parity remains gated on full Stage 5 closure. The GPU graph
+planner is a separate caller of `known_pipeline_op_mode`; its current
+string-to-Mode conversion and missing palette-expansion input stay assigned to
+the later GPU stage. Updated the source TODO and inventory. No runtime
+validation ran.
