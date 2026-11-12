@@ -5053,18 +5053,25 @@ Autocontrast host cutoff arithmetic (2026-11-03): the PyO3 adapter now invokes P
 - Autocontrast callback-order source correction (2026-11-04): Pillow 12.2 and the current facade both materialize the source (or perform preserve-tone L conversion), then compute Histogram, then process `ignore` and cutoff. `Image.histogram` loads the source before evaluating mask truthiness and loading a truthy mask; cutoff's tuple indexing, numeric multiplication/floor-division, and `int()` callbacks run later in `ops_autocontrast_lut`. This supersedes the 2026-11-03 note that claimed the facade coerced options before mask/histogram. No code change was needed. Exact pixels, callback faults, and mode/backend parity remain pending; source reference: [Pillow 12.2 ImageOps.autocontrast](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageOps.py#L62-L152). Source-only; no build, formatter, checkstyle, lint, tests, parity, benchmark, or coverage ran.
 - Composite execution-context source audit (2026-11-04): AlphaComposite, CompositeModule, BlendModule, and Merge prepare from the injected `ExecutionContext` and retain the resulting `StrategySelection` in their prepared owner. Exact-mode dispatch passes that selection into each mode owner; mode owners bind or validate the selected architecture without reselecting. Pipeline entrypoints keep CompositeModule's mask-before-destination materialization order and pass the same context onward. The RGBA Composite+Mirror fusion stores both child selections. Direct module functions build lazy pipeline operations that resolve the image's backend/architecture when materialized. This closes the Composite family context-flow source review; output, mode, error-order, and selected/fallback receipt parity remain pending. No build, formatter, checkstyle, lint, tests, parity, benchmark, or coverage ran.
 
-- ImageOps Python-wrapper composition (2026-11-04): `grayscale` uses the
-  established `Image.convert("L")` route; `flip` and `mirror` use
+- ImageOps Python-wrapper composition (2026-11-04; source correction
+  2026-11-12): `grayscale` uses the established `Image.convert("L")` route;
+  `flip` and `mirror` use
   `Image.transpose`; palette `equalize` first converts through the public
   `Image.convert("RGB")` path to commit dirty palette edits and translate
-  conversion metadata before prepared Equalize. TODO(pillow-rs#3ptb): Equalize
-  still defers histogram computation to Rust materialization, unlike Pillow's
-  eager `image.histogram(mask)` step; preserve its host callback and fault order
-  with a prepared-LUT entrypoint. Posterize/Solarize P-index routes are marked
-  `NO_PILLOW_SUPPORT` and remain Rust extensions. Source-only; output, fault,
-  mode × Architecture selection, and fallback receipt parity remain pending.
-  No build, formatter, checkstyle, lint, tests, parity, benchmark, or coverage
-  ran. Sources: [Pillow 12.2 ImageOps `_lut` and Equalize](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageOps.py#L1735-L1757),
+  conversion metadata before prepared Equalize. Posterize/Solarize P-index
+  routes are marked `NO_PILLOW_SUPPORT` and remain Rust extensions.
+  Equalize's Python ImageOps entry now uses the Rust callback orchestrator:
+  after the palette conversion callback, it calls the current wrapper's public
+  `histogram(mask)` before building the LUT, then performs Pillow's post-LUT
+  mode checks and public `point(lut)` call. The guarded native LUT path is used
+  only when the histogram and relevant builtins have exact inert types; other
+  inputs retain Python iteration and numeric callbacks. This is separate from
+  the direct Rust `equalize_with_mask` API, which intentionally queues a lazy
+  pipeline operation and computes pixels at materialization. Source review
+  closes the previous host-ordering debt; output, fault, mode × Architecture
+  selection, and fallback receipt parity remain pending. No build, formatter,
+  checkstyle, lint, tests, parity, benchmark, or coverage ran. Sources:
+  [Pillow 12.2 ImageOps `_lut` and Equalize](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageOps.py#L1735-L1757),
   [Pillow 12.2 ImageOps Equalize](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageOps.py#L2408-L2460),
   [Pillow 12.2 ImageOps Flip/Grayscale/Invert/Posterize/Solarize](https://github.com/python-pillow/Pillow/blob/12.2.0/src/PIL/ImageOps.py#L2656-L2757).
 - ImageOps Colorize host ordering (2026-11-04): Python now asserts exact L

@@ -65,6 +65,7 @@ def autocontrast(image: Image, cutoff: Union[float, Tuple[float, float]] = 0, ig
     )
 
 
+# VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 def equalize(image: Image, mask=None) -> Image:
     return _core.ops_imageops_equalize_with_callbacks(image, mask)
 
