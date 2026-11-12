@@ -15,6 +15,7 @@ use crate::raster::DynamicImage;
 
 /// Prepare and execute each operation in order, preserving the mode returned
 /// by each operation as the next operation's typed input identity.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(super) fn execute_batch(
     ops: &[PipelineOp],
     image: &DynamicImage,
@@ -47,6 +48,7 @@ pub(super) fn execute_batch(
     Ok(output)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn execute_batch_step(
     ops: &[PipelineOp],
     index: usize,
@@ -80,6 +82,7 @@ fn execute_batch_step(
     Ok(index + 1)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn execute_owned_special(
     op: &PipelineOp,
     context: &ExecutionContext,
@@ -113,6 +116,7 @@ fn execute_owned_special(
     Ok(false)
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn execute_prepared_operation(
     op: &PipelineOp,
     image: &DynamicImage,
@@ -159,6 +163,7 @@ fn execute_prepared_operation(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn finish_batch_output(
     ops: &[PipelineOp],
     image: &DynamicImage,
@@ -191,6 +196,7 @@ enum OwnedInvertKind {
     Chops,
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn execute_owned_chops_affine(
     image: &mut DynamicImage,
     op: &PipelineOp,
@@ -244,6 +250,7 @@ fn execute_owned_chops_affine(
     Ok(())
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn prepare_owned_invert(
     image: &DynamicImage,
     op: &PipelineOp,
@@ -300,6 +307,7 @@ fn prepare_owned_invert(
 
 // TODO(pillow-rs#3ptb): verify raw-byte Paste follow-on parity for both
 // in-place inversion lane policies before closing this source path.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn execute_owned_invert(image: &mut DynamicImage, plan: &OwnedInvertPlan) -> Result<(), PilError> {
     if image.mode() != plan.mode {
         return Err(PilError::InternalError(
@@ -355,6 +363,7 @@ struct FusedStep {
     operations: usize,
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn execute_fused_run(
     ops: &[PipelineOp],
     start: usize,

@@ -398,6 +398,7 @@ fn execute_eager_cpu_arch_bytes_with_route(
 }
 
 /// Executes one CPU architecture strategy with caller-routed context and phase timings.
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 pub(crate) fn execute_cpu_arch_operation(
     operation: &'static str,
     input: &DynamicImage,
@@ -429,6 +430,7 @@ pub(crate) fn execute_cpu_arch_operation(
     )
 }
 
+// VERIFY: source=reviewed@2026-11-12; parity=pending; benchmark=pending
 fn execute_cpu_arch_operation_with_receipts(
     operation: &'static str,
     input: &DynamicImage,
